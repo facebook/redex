@@ -179,9 +179,10 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
     }
   }
 
-  auto code = method->get_code();
+  always_assert(method->get_code()->editable_cfg_built());
+  auto& cfg = method->get_code()->cfg();
 
-  for (const auto& it : InstructionIterable(code)) {
+  for (const auto& it : cfg::InstructionIterable(cfg)) {
     auto insn = it.insn;
     switch (insn->opcode()) {
     case OPCODE_INVOKE_STATIC: {

@@ -133,7 +133,7 @@ void analyze_scope(
   ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>
       concurrent_dependencies;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    code.build_cfg(/* editable */ true);
+    always_assert(code.editable_cfg_built());
     LazyUnorderedMap<DexMethod*, bool> is_not_overridden([&](auto* m) {
       return !m->is_virtual() ||
              !mog::any_overriding_methods(method_override_graph, m);
@@ -1725,9 +1725,6 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   Stats stats;
   reduce(stores, scope, conf, init_classes_with_side_effects, method_summaries,
          root_methods, &stats, m_max_inline_size);
-
-  walk::parallel::code(scope,
-                       [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
 
   TRACE(OEA, 1, "[object escape analysis] total savings: %zu",
         (size_t)stats.total_savings);

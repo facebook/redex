@@ -149,7 +149,9 @@ std::unordered_set<DexMethod*> find_private_methods(
 void fix_call_sites_private(const std::vector<DexClass*>& scope,
                             const std::unordered_set<DexMethod*>& privates) {
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
-    for (const MethodItemEntry& mie : InstructionIterable(code)) {
+    always_assert(code.editable_cfg_built());
+    auto& cfg = code.cfg();
+    for (const MethodItemEntry& mie : cfg::InstructionIterable(cfg)) {
       IRInstruction* insn = mie.insn;
       if (!insn->has_method()) continue;
       auto callee =

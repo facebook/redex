@@ -43,8 +43,6 @@ class AccessMarkingPass : public Pass {
          "Mark every eligible method as private.");
   }
 
-  bool is_cfg_legacy() override { return true; }
-
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:

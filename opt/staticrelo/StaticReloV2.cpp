@@ -102,7 +102,12 @@ void build_call_graph(const std::vector<DexClass*>& candidate_classes,
   for (auto& meth_id : graph.method_id_map) {
     DexMethod* caller = meth_id.first;
     int caller_id = meth_id.second;
-    for (const auto& mie : InstructionIterable(caller->get_code())) {
+    if (!caller->get_code()) {
+      continue;
+    }
+    always_assert(caller->get_code()->editable_cfg_built());
+    for (const auto& mie :
+         cfg::InstructionIterable(caller->get_code()->cfg())) {
       if (mie.insn->has_method()) {
         if (mie.insn->opcode() != OPCODE_INVOKE_STATIC) {
           continue;
@@ -159,7 +164,9 @@ void color_from_a_class(StaticCallGraph& graph, DexClass* cls, int color) {
     if (code == nullptr) {
       return;
     }
-    for (const auto& mie : InstructionIterable(code)) {
+    always_assert(code->editable_cfg_built());
+    auto& cfg = code->cfg();
+    for (const auto& mie : cfg::InstructionIterable(cfg)) {
       if (mie.insn->has_method()) {
         if (mie.insn->opcode() != OPCODE_INVOKE_STATIC) {
           continue;
