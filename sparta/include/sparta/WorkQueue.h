@@ -22,6 +22,7 @@
 #include <utility>
 
 #include <sparta/Arity.h>
+#include <sparta/ThreadPool.h>
 
 namespace sparta {
 
@@ -51,8 +52,8 @@ inline std::vector<unsigned int> create_permutation(unsigned int num,
   std::vector<unsigned int> attempts(num);
   std::iota(attempts.begin(), attempts.end(), 0);
   auto seed = std::chrono::system_clock::now().time_since_epoch().count();
-  std::shuffle(
-      attempts.begin(), attempts.end(), std::default_random_engine(seed));
+  std::shuffle(attempts.begin(), attempts.end(),
+               std::default_random_engine(seed));
   std::iter_swap(attempts.begin(),
                  std::find(attempts.begin(), attempts.end(), thread_idx));
   return attempts;
@@ -190,6 +191,11 @@ class WorkQueue {
   size_t m_insert_idx{0};
   workqueue_impl::StateCounters m_state_counters;
   const bool m_can_push_task{false};
+  AsyncRunner* m_async_runner;
+
+  // Run the worker on m_num_threads many threads, and wait for them to finish.
+  template <typename Worker>
+  void run_in_parallel(const Worker& worker);
 
  public:
   explicit WorkQueue(Executor,
@@ -202,7 +208,8 @@ class WorkQueue {
                      // * When this flag is false, threads can
                      //   exit as soon as there is no more work (to avoid
                      //   preempting a thread that has useful work)
-                     bool push_tasks_while_running = false);
+                     bool push_tasks_while_running = false,
+                     AsyncRunner* async_runner = nullptr);
 
   // copies are not allowed
   WorkQueue(const WorkQueue&) = delete;
@@ -227,11 +234,13 @@ class WorkQueue {
 template <class Input, typename Executor>
 WorkQueue<Input, Executor>::WorkQueue(Executor executor,
                                       unsigned int num_threads,
-                                      bool push_tasks_while_running)
+                                      bool push_tasks_while_running,
+                                      AsyncRunner* async_runner)
     : m_executor(executor),
       m_num_threads(num_threads),
       m_state_counters(num_threads),
-      m_can_push_task(push_tasks_while_running) {
+      m_can_push_task(push_tasks_while_running),
+      m_async_runner(async_runner) {
   assert(num_threads >= 1);
   for (unsigned int i = 0; i < m_num_threads; ++i) {
     m_states.emplace_back(std::make_unique<WorkerState<Input>>(
@@ -332,15 +341,7 @@ void WorkQueue<Input, Executor>::run_all() {
     }
   }
 
-  std::vector<std::thread> all_threads;
-  all_threads.reserve(m_num_threads);
-  for (size_t i = 0; i < m_num_threads; ++i) {
-    all_threads.emplace_back(worker, m_states[i].get(), i);
-  }
-
-  for (auto& thread : all_threads) {
-    thread.join();
-  }
+  run_in_parallel(worker);
 
   for (size_t i = 0; i < m_num_threads; ++i) {
     assert(!m_states[i]->m_running);
@@ -352,6 +353,51 @@ void WorkQueue<Input, Executor>::run_all() {
 
   for (size_t i = 0; i < m_num_threads; ++i) {
     assert(m_states[i]->m_queue.empty());
+  }
+}
+
+template <class Input, typename Executor>
+template <typename Worker>
+void WorkQueue<Input, Executor>::run_in_parallel(const Worker& worker) {
+  if (m_async_runner) {
+    // We have been given a custom way to run work asynchronously, so we use
+    // that (instead of spawning and joining threads explicitly).
+
+    // We need some scaffolding to track how many spawned async runs are still
+    // in progress.
+    std::condition_variable condition_variable;
+    std::mutex mutex;
+    size_t remaining = m_num_threads;
+    auto func = [&](size_t i) {
+      worker(m_states[i].get(), i);
+      bool notify;
+      {
+        std::lock_guard<std::mutex> lock(mutex);
+        notify = --remaining == 0;
+      }
+      if (notify) {
+        condition_variable.notify_one();
+      }
+    };
+
+    for (size_t i = 0; i < m_num_threads; ++i) {
+      m_async_runner->run_async(func, i);
+    }
+
+    // Wait for all spawned async runs to finish.
+    std::unique_lock<std::mutex> lock(mutex);
+    condition_variable.wait(lock, [&]() { return remaining == 0; });
+    return;
+  }
+
+  std::vector<std::thread> all_threads;
+  all_threads.reserve(m_num_threads);
+  for (size_t i = 0; i < m_num_threads; ++i) {
+    all_threads.emplace_back(worker, m_states[i].get(), i);
+  }
+
+  for (auto& thread : all_threads) {
+    thread.join();
   }
 }
 
@@ -378,11 +424,11 @@ template <class Input,
 WorkQueue<Input, workqueue_impl::NoStateWorkQueueHelper<Input, Fn>> work_queue(
     const Fn& fn,
     unsigned int num_threads = parallel::default_num_threads(),
-    bool push_tasks_while_running = false) {
+    bool push_tasks_while_running = false,
+    AsyncRunner* async_runner = nullptr) {
   return WorkQueue<Input, workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>(
-      workqueue_impl::NoStateWorkQueueHelper<Input, Fn>{fn},
-      num_threads,
-      push_tasks_while_running);
+      workqueue_impl::NoStateWorkQueueHelper<Input, Fn>{fn}, num_threads,
+      push_tasks_while_running, async_runner);
 }
 template <class Input,
           typename Fn,
@@ -390,11 +436,11 @@ template <class Input,
 WorkQueue<Input, workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>
 work_queue(const Fn& fn,
            unsigned int num_threads = parallel::default_num_threads(),
-           bool push_tasks_while_running = false) {
+           bool push_tasks_while_running = false,
+           AsyncRunner* async_runner = nullptr) {
   return WorkQueue<Input, workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>(
-      workqueue_impl::WithStateWorkQueueHelper<Input, Fn>{fn},
-      num_threads,
-      push_tasks_while_running);
+      workqueue_impl::WithStateWorkQueueHelper<Input, Fn>{fn}, num_threads,
+      push_tasks_while_running, async_runner);
 }
 
 } // namespace sparta
