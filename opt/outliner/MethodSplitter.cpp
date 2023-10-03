@@ -209,6 +209,9 @@ DexMethod* split_method(const SplittableClosure& splittable_closure,
   if (method->rstate.too_large_for_inlining_into()) {
     split_method->rstate.set_too_large_for_inlining_into();
   }
+  if (method->rstate.no_optimizations()) {
+    split_method->rstate.set_no_optimizations();
+  }
 
   auto make_new_sb = [&](auto* method, auto& template_sb) {
     auto new_sb = std::make_unique<SourceBlock>(*template_sb);
