@@ -74,6 +74,7 @@
 #include "SanitizersConfig.h"
 #include "ScopedMemStats.h"
 #include "Show.h"
+#include "ThreadPool.h"
 #include "Timer.h"
 #include "ToolsCommon.h"
 #include "Walkers.h"
@@ -857,6 +858,12 @@ Json::Value get_times(double cpu_time_s) {
     Json::Value cpu_element;
     cpu_element["cpu_time"] = std::round(cpu_time_s * 10) / 10.0;
     list.append(cpu_element);
+  }
+  {
+    Json::Value thread_pool_element;
+    thread_pool_element["thread_pool_size"] =
+        redex_thread_pool::ThreadPool::get_instance()->size() * 1.0;
+    list.append(thread_pool_element);
   }
   return list;
 }
