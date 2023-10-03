@@ -25,10 +25,13 @@ TEST(WorkQueueTest, EmptyQueue) {
   wq.run_all();
 }
 
-TEST(WorkQueueTest, foreachTest) {
+static void foreachTest(sparta::AsyncRunner* async_runner = nullptr) {
   std::array<int, NUM_INTS> array = {0};
 
-  auto wq = sparta::work_queue<int*>([](int* a) { (*a)++; });
+  auto wq = sparta::work_queue<int*>([](int* a) { (*a)++; },
+                                     sparta::parallel::default_num_threads(),
+                                     /* push_tasks_while_running */ false,
+                                     async_runner);
 
   for (int idx = 0; idx < NUM_INTS; ++idx) {
     wq.add_item(&array[idx]);
@@ -37,6 +40,13 @@ TEST(WorkQueueTest, foreachTest) {
   for (int idx = 0; idx < NUM_INTS; ++idx) {
     ASSERT_EQ(1, array[idx]);
   }
+}
+
+TEST(WorkQueueTest, foreachTest) { foreachTest(); }
+
+TEST(WorkQueueTest, foreachThreadPoolTest) {
+  sparta::ThreadPool<> thread_pool;
+  foreachTest(&thread_pool);
 }
 
 TEST(WorkQueueTest, singleThreadTest) {
@@ -101,17 +111,27 @@ TEST(WorkQueueTest, preciseScheduling) {
   }
 }
 
-TEST(WorkQueueTest, exceptionPropagation) {
-  auto wq = sparta::work_queue<int>([](int i) {
-    if (i == 666) {
-      throw std::logic_error("exception!");
-    }
-  });
+static void exceptionPropagation(sparta::AsyncRunner* async_runner = nullptr) {
+  auto wq = sparta::work_queue<int>(
+      [](int i) {
+        if (i == 666) {
+          throw std::logic_error("exception!");
+        }
+      },
+      sparta::parallel::default_num_threads(),
+      /* push_tasks_while_running */ false, async_runner);
 
   for (int idx = 0; idx < NUM_INTS; ++idx) {
     wq.add_item(idx);
   }
   ASSERT_THROW(wq.run_all(), std::logic_error);
+}
+
+TEST(WorkQueueTest, exceptionPropagation) { exceptionPropagation(); }
+
+TEST(WorkQueueTest, exceptionPropagationThreadPool) {
+  sparta::ThreadPool<> thread_pool;
+  exceptionPropagation(&thread_pool);
 }
 
 TEST(WorkQueueTest, multipleExceptions) {
