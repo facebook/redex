@@ -101,8 +101,8 @@ class DelSuper {
                                         const IRInstruction* insn) {
     redex_assert(insn->opcode() == OPCODE_INVOKE_SUPER);
     size_t src_idx{0};
-    for (const auto& mie :
-         InstructionIterable(meth->get_code()->get_param_instructions())) {
+    for (const auto& mie : InstructionIterable(
+             meth->get_code()->cfg().get_param_instructions())) {
       auto load_param = mie.insn;
       if (load_param->dest() != insn->src(src_idx++)) {
         return false;
@@ -141,7 +141,7 @@ class DelSuper {
    * super.
    */
   DexMethod* get_trivial_return_invoke_super(const DexMethod* meth) {
-    const auto* code = meth->get_code();
+    auto* code = (const_cast<DexMethod*>(meth))->get_code();
 
     // Must have code
     if (!code) {
@@ -150,8 +150,10 @@ class DelSuper {
 
     // TODO: rewrite the following code to not require a random-access
     // container of instructions
+    always_assert(code->editable_cfg_built());
+    auto& cfg = code->cfg();
     std::vector<IRInstruction*> insns;
-    for (const auto& mie : InstructionIterable(meth->get_code())) {
+    for (const auto& mie : cfg::InstructionIterable(cfg)) {
       if (opcode::is_a_load_param(mie.insn->opcode())) {
         continue;
       }

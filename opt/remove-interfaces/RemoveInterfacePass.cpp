@@ -324,7 +324,9 @@ size_t exclude_unremovables(const Scope& scope,
     if (!code) {
       return current_excluded;
     }
-    for (const auto& mie : InstructionIterable(code)) {
+    always_assert(code->editable_cfg_built());
+    auto& cfg = code->cfg();
+    for (const auto& mie : cfg::InstructionIterable(cfg)) {
       auto insn = mie.insn;
       if (!insn->has_type() || insn->get_type() == nullptr) {
         continue;
@@ -510,6 +512,7 @@ TypeSet RemoveInterfacePass::remove_leaf_interfaces(
       auto dispatch =
           generate_dispatch(replacement_type, dispatch_targets, meth,
                             m_keep_debug_info, m_interface_dispatch_anno);
+      dispatch->get_code()->build_cfg();
       local_dispatch_stats[dispatch_targets.size()]++;
       local_intf_meth_to_dispatch[meth] = dispatch;
     }
