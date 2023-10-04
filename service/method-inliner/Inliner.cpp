@@ -645,7 +645,8 @@ size_t MultiMethodInliner::inline_inlinables(
     }
 
     if (inlinable.no_return) {
-      if (!m_config.throw_after_no_return) {
+      if (!m_config.throw_after_no_return ||
+          caller_method->rstate.no_optimizations()) {
         continue;
       }
       // we are not actually inlining, but just cutting off control-flow
@@ -728,7 +729,7 @@ size_t MultiMethodInliner::inline_inlinables(
                                     estimated_caller_size, inlinable.insn_size,
                                     &caller_too_large_);
       if (!not_inlinable && m_config.intermediate_shrinking &&
-          m_shrinker.enabled()) {
+          m_shrinker.enabled() && !caller_method->rstate.no_optimizations()) {
         intermediate_shrinkings++;
         m_shrinker.shrink_method(caller_method);
         cfg_next_caller_reg = caller->cfg().get_registers_size();
@@ -933,6 +934,9 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
   TraceContext context{caller};
   if (caller_too_large_) {
     *caller_too_large_ = false;
+  }
+  if (caller->rstate.no_optimizations()) {
+    return false;
   }
   // don't inline cross store references
   if (cross_store_reference(caller, callee)) {
@@ -1851,7 +1855,7 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
       // concrete ctors we can handle because they stay invoke_direct
       return false;
     }
-    if (!can_rename(method)) {
+    if (!can_rename(method) || method->rstate.no_optimizations()) {
       info.need_vmethod++;
       return true;
     }
