@@ -192,6 +192,10 @@ constexpr size_t MAX_CLASS_NAMELEN = 8 * 1024;
 
 DexType* make_dextype_from_cref(std::vector<cp_entry>& cpool, uint16_t cref) {
   char nbuffer[MAX_CLASS_NAMELEN];
+  if (cref >= cpool.size()) {
+    std::cerr << "Illegal cref, Bailing\n";
+    return nullptr;
+  }
   if (cpool[cref].tag != CP_CONST_CLASS) {
     std::cerr << "Non-class ref in get_class_name, Bailing\n";
     return nullptr;
@@ -436,6 +440,10 @@ bool parse_class(uint8_t* buffer,
   }
 
   DexType* self = make_dextype_from_cref(cpool, clazz);
+  if (self == nullptr) {
+    std::cerr << "Bad class cpool index " << clazz << ", Bailing\n";
+    return false;
+  }
   DexClass* cls = type_class(self);
   if (cls) {
     // We are seeing duplicate classes when parsing jar file
@@ -471,6 +479,10 @@ bool parse_class(uint8_t* buffer,
   cc.set_external();
   if (super != 0) {
     DexType* sclazz = make_dextype_from_cref(cpool, super);
+    if (self == nullptr) {
+      std::cerr << "Bad super class cpool index " << super << ", Bailing\n";
+      return false;
+    }
     cc.set_super(sclazz);
   }
   cc.set_access((DexAccessFlags)aflags);
