@@ -47,7 +47,7 @@ void IntTypePatcherPass::run(DexMethod* m) {
   }
 
   IRCode* code = m->get_code();
-  if (!code) {
+  if (!code || m->rstate.no_optimizations()) {
     return;
   }
   always_assert(code->editable_cfg_built());
