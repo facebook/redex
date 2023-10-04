@@ -718,7 +718,9 @@ MethodReferencesGatherer::get_instantiable_dependency(const IRInstruction* insn,
     }
     auto* ra = m_shared_state->reachable_aspects;
     return ra->instantiable_types.count(cls) ||
-           ra->deserializable_types.count(cls);
+           ra->deserializable_types.count(cls) ||
+           (ra->parcelable_type &&
+            type::check_cast(cls->get_type(), ra->parcelable_type));
   };
   if (!res.cls || is_class_instantiable(res.cls) ||
       (res.cls->is_external() && !type::is_void(res.cls->get_type()))) {

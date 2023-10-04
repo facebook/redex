@@ -372,6 +372,7 @@ struct ReachableAspects {
   std::vector<DexMethod*> zombie_methods;
   std::unordered_set<const DexClass*> deserializable_types{};
   uint64_t instructions_unvisited{0};
+  const DexType* parcelable_type = DexType::get_type("Landroid/os/Parcelable;");
   void finish(const ConditionallyMarked& cond_marked,
               const ReachableObjects& reachable_objects);
 };
