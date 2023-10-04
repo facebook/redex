@@ -189,7 +189,7 @@ class RemoveClasses {
     std::vector<DexMethod*> methods;
 
     walk::parallel::methods(m_scope, [&](DexMethod* method) {
-      if (!method || !method->get_code()) {
+      if (!method || !method->get_code() || method->rstate.no_optimizations()) {
         return;
       }
 
