@@ -456,14 +456,18 @@ void StringBuilderOutlinerPass::run_pass(DexStoresVector& stores,
   Outliner outliner(m_config);
   // 1) Determine which methods have candidates for outlining.
   walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
-    outliner.analyze(code);
+    if (!method->rstate.no_optimizations()) {
+      outliner.analyze(code);
+    }
   });
   // 2) Determine which candidates occur frequently enough to be worth
   // outlining. Build the corresponding outline helper functions.
   outliner.create_outline_helpers(&stores);
   // 3) Actually do the outlining.
   walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
-    outliner.transform(&code);
+    if (!method->rstate.no_optimizations()) {
+      outliner.transform(&code);
+    }
   });
 
   mgr.incr_metric("stringbuilders_removed",
