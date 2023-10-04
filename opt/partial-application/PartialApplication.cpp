@@ -275,6 +275,9 @@ void gather_caller_callees(
       concurrent_callee_caller_classes;
 
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
+    if (caller->rstate.no_optimizations()) {
+      return;
+    }
     always_assert(code.editable_cfg_built());
     CanOutlineBlockDecider block_decider(
         profile_guidance_config, sufficiently_warm_methods.count(caller),
@@ -956,34 +959,36 @@ void rewrite_callers(
   };
 
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
-    if (selected_callers.count(caller)) {
-      bool any_changes{false};
-      auto& cfg = code.cfg();
-      cfg::CFGMutation mutation(cfg);
-      auto ii = InstructionIterable(cfg);
-      size_t removed_srcs{0};
-      for (auto it = ii.begin(); it != ii.end(); it++) {
-        auto new_invoke_insn =
-            make_partial_application_invoke_insn(caller, it->insn);
-        if (!new_invoke_insn) {
-          continue;
-        }
-        removed_srcs += it->insn->srcs_size() - new_invoke_insn->srcs_size();
-        std::vector<IRInstruction*> new_insns{new_invoke_insn};
-        auto move_result_it = cfg.move_result_of(it);
-        if (!move_result_it.is_end()) {
-          new_insns.push_back(new IRInstruction(*move_result_it->insn));
-        }
-        mutation.replace(it, new_insns);
-        any_changes = true;
+    if (!selected_callers.count(caller)) {
+      return;
+    }
+    always_assert(!caller->rstate.no_optimizations());
+    bool any_changes{false};
+    auto& cfg = code.cfg();
+    cfg::CFGMutation mutation(cfg);
+    auto ii = InstructionIterable(cfg);
+    size_t removed_srcs{0};
+    for (auto it = ii.begin(); it != ii.end(); it++) {
+      auto new_invoke_insn =
+          make_partial_application_invoke_insn(caller, it->insn);
+      if (!new_invoke_insn) {
+        continue;
       }
-      mutation.flush();
-      if (any_changes) {
-        TRACE(PA, 6, "[PartialApplication] Rewrote %s:\n%s", SHOW(caller),
-              SHOW(cfg));
-        shrinker.shrink_method(caller);
-        (*removed_args) += removed_srcs;
+      removed_srcs += it->insn->srcs_size() - new_invoke_insn->srcs_size();
+      std::vector<IRInstruction*> new_insns{new_invoke_insn};
+      auto move_result_it = cfg.move_result_of(it);
+      if (!move_result_it.is_end()) {
+        new_insns.push_back(new IRInstruction(*move_result_it->insn));
       }
+      mutation.replace(it, new_insns);
+      any_changes = true;
+    }
+    mutation.flush();
+    if (any_changes) {
+      TRACE(PA, 6, "[PartialApplication] Rewrote %s:\n%s", SHOW(caller),
+            SHOW(cfg));
+      shrinker.shrink_method(caller);
+      (*removed_args) += removed_srcs;
     }
   });
 }
