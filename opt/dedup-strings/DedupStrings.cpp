@@ -89,7 +89,8 @@ bool is_hot(cfg::Block* b) {
 // initialization code paths, or often.
 bool treat_all_blocks_as_hot(size_t dexnr, DexMethod* method) {
   return dexnr == 0 || method::is_clinit(method) ||
-         type_class(method->get_class())->rstate.outlined();
+         type_class(method->get_class())->rstate.outlined() ||
+         method->rstate.no_optimizations();
 }
 } // namespace
 
