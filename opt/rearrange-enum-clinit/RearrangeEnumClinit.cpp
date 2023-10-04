@@ -371,6 +371,7 @@ void RearrangeEnumClinitPass::run_pass(DexStoresVector& stores,
   std::atomic<size_t> cnt_below_threshold{0};
   std::atomic<size_t> cnt_failed{0};
   std::atomic<size_t> cnt_changed{0};
+  std::atomic<size_t> cnt_no_optimizations{0};
 
   walk::parallel::classes(build_class_scope(stores), [&](DexClass* c) {
     if (c->is_external() || !is_enum(c)) {
@@ -389,6 +390,11 @@ void RearrangeEnumClinitPass::run_pass(DexStoresVector& stores,
 
     if (m->get_code()->count_opcodes() < m_threshold) {
       cnt_below_threshold.fetch_add(1, std::memory_order_relaxed);
+      return;
+    }
+
+    if (m->rstate.no_optimizations()) {
+      cnt_no_optimizations.fetch_add(1, std::memory_order_relaxed);
       return;
     }
 
@@ -416,6 +422,7 @@ void RearrangeEnumClinitPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("failed", cnt_failed.load());
   mgr.set_metric("no_clinit", cnt_no_clinit.load());
   mgr.set_metric("below_threshold", cnt_below_threshold.load());
+  mgr.set_metric("no_optimizations", cnt_no_optimizations.load());
   mgr.set_metric("not_one_block", cnt_not_one_block.load());
   mgr.set_metric("all_enum", cnt_all.load());
 }
