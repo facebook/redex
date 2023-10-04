@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "ConcurrentContainers.h"
 #include "MethodClosures.h"
 
 namespace method_splitting_impl {
@@ -47,6 +48,8 @@ struct SplittableClosure {
 // Selects splittable closures for a given set of methods.
 std::unordered_map<DexType*, std::vector<SplittableClosure>>
 select_splittable_closures(const std::unordered_set<DexMethod*>& methods,
-                           const Config& config);
+                           const Config& config,
+                           ConcurrentMap<DexMethod*, size_t>*
+                               concurrent_splittable_no_optimizations_methods);
 
 } // namespace method_splitting_impl

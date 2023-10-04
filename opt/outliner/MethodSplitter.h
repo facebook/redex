@@ -34,15 +34,17 @@ struct Stats {
   std::unordered_set<DexMethod*> added_methods;
 };
 
-void split_methods_in_stores(DexStoresVector& stores,
-                             int32_t min_sdk,
-                             const Config& config,
-                             bool create_init_class_insns,
-                             size_t reserved_mrefs,
-                             size_t reserved_trefs,
-                             Stats* stats,
-                             const std::string& name_infix = "",
-                             ConcurrentMap<DexMethod*, DexMethod*>*
-                                 concurrent_new_hot_methods = nullptr);
+void split_methods_in_stores(
+    DexStoresVector& stores,
+    int32_t min_sdk,
+    const Config& config,
+    bool create_init_class_insns,
+    size_t reserved_mrefs,
+    size_t reserved_trefs,
+    Stats* stats,
+    const std::string& name_infix = "",
+    ConcurrentMap<DexMethod*, DexMethod*>* concurrent_new_hot_methods = nullptr,
+    ConcurrentMap<DexMethod*, size_t>*
+        concurrent_splittable_no_optimizations_methods = nullptr);
 
 } // namespace method_splitting_impl

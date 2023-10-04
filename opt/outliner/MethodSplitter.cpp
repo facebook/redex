@@ -404,7 +404,9 @@ void split_methods_in_stores(
     size_t reserved_trefs,
     Stats* stats,
     const std::string& name_infix,
-    ConcurrentMap<DexMethod*, DexMethod*>* concurrent_new_hot_methods) {
+    ConcurrentMap<DexMethod*, DexMethod*>* concurrent_new_hot_methods,
+    ConcurrentMap<DexMethod*, size_t>*
+        concurrent_splittable_no_optimizations_methods) {
   auto scope = build_class_scope(stores);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, create_init_class_insns);
@@ -426,7 +428,8 @@ void split_methods_in_stores(
   while (!methods.empty() && iteration < config.max_iteration) {
     TRACE(MS, 2, "=== iteration[%zu]", iteration);
     Timer t("iteration " + std::to_string(iteration++));
-    auto splittable_closures = select_splittable_closures(methods, config);
+    auto splittable_closures = select_splittable_closures(
+        methods, config, concurrent_splittable_no_optimizations_methods);
     ConcurrentSet<DexMethod*> concurrent_added_methods;
     methods = split_splittable_closures(
         dexen, min_sdk, init_classes_with_side_effects, reserved_trefs,

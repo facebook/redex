@@ -68,10 +68,13 @@ void MethodSplittingPass::run_pass(DexStoresVector& stores,
   auto name_infix = "$" + std::to_string(m_iteration) + "$";
   Stats stats;
   ConcurrentMap<DexMethod*, DexMethod*> concurrent_new_hot_methods;
+  ConcurrentMap<DexMethod*, size_t>
+      concurrent_splittable_no_optimizations_methods;
   split_methods_in_stores(stores, mgr.get_redex_options().min_sdk, m_config,
                           conf.create_init_class_insns(), reserved_mrefs,
                           reserved_trefs, &stats, name_infix,
-                          &concurrent_new_hot_methods);
+                          &concurrent_new_hot_methods,
+                          &concurrent_splittable_no_optimizations_methods);
 
   auto& method_profiles = conf.get_method_profiles();
   size_t derived_method_profile_stats{0};
@@ -95,6 +98,9 @@ void MethodSplittingPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("derived_method_profile_stats", derived_method_profile_stats);
   TRACE(MS, 1, "Split out %zu methods", stats.added_methods.size());
 
+  for (auto [method, size] : concurrent_splittable_no_optimizations_methods) {
+    mgr.set_metric("no_optimizations_" + show_deobfuscated(method), size);
+  }
   m_iteration++;
 }
 

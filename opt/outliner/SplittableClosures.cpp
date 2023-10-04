@@ -459,7 +459,9 @@ std::vector<SplittableClosure> to_splittable_closures(
 namespace method_splitting_impl {
 std::unordered_map<DexType*, std::vector<SplittableClosure>>
 select_splittable_closures(const std::unordered_set<DexMethod*>& methods,
-                           const Config& config) {
+                           const Config& config,
+                           ConcurrentMap<DexMethod*, size_t>*
+                               concurrent_splittable_no_optimizations_methods) {
   Timer t("select_splittable_closures");
   ConcurrentMap<DexType*, std::vector<SplittableClosure>>
       concurrent_splittable_closures;
@@ -484,6 +486,13 @@ select_splittable_closures(const std::unordered_set<DexMethod*>& methods,
       scored_closures = get_scored_closures(config, *mcs, r);
     }
     if (scored_closures.empty()) {
+      return;
+    }
+    if (method->rstate.no_optimizations()) {
+      if (concurrent_splittable_no_optimizations_methods) {
+        concurrent_splittable_no_optimizations_methods->emplace(
+            method, mcs->original_size + adjustment);
+      }
       return;
     }
     auto splittable_closures =
