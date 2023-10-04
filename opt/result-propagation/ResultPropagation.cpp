@@ -524,7 +524,7 @@ void ResultPropagationPass::run_pass(DexStoresVector& stores,
   const auto stats = walk::parallel::methods<ResultPropagation::Stats>(
       scope, [&](DexMethod* m) {
         const auto code = m->get_code();
-        if (code == nullptr) {
+        if (code == nullptr || m->rstate.no_optimizations()) {
           return ResultPropagation::Stats();
         }
 
