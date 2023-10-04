@@ -371,7 +371,7 @@ void UpCodeMotionPass::run_pass(DexStoresVector& stores,
 
   Stats stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
     const auto code = method->get_code();
-    if (!code) {
+    if (!code || method->rstate.no_optimizations()) {
       return Stats{};
     }
 
