@@ -194,6 +194,10 @@ void MethodDevirtualizer::verify_and_split(
       TRACE(VIRT, 2, "failed to devirt method %s: keep", SHOW(m));
       continue;
     }
+    if (m->rstate.no_optimizations()) {
+      TRACE(VIRT, 2, "failed to devirt method %s: no_optimizations", SHOW(m));
+      continue;
+    }
     if (m->is_external() || is_abstract(m) || is_native(m)) {
       TRACE(VIRT,
             2,
