@@ -170,6 +170,9 @@ class RemoveUnusedFields final {
     // Replace reads to unwritten fields with appropriate const-0 instructions,
     // and remove the writes to unread fields.
     walk::parallel::code(m_scope, [&](const DexMethod* method, IRCode& code) {
+      if (method->rstate.no_optimizations()) {
+        return;
+      }
       always_assert(code.editable_cfg_built());
       auto& cfg = code.cfg();
       cfg::CFGMutation m(cfg);
