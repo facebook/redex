@@ -68,6 +68,9 @@ struct Stats {
 };
 
 bool should_consider_method(DexMethod* method) {
+  if (method->rstate.no_optimizations()) {
+    return false;
+  }
   auto proto = method->get_proto();
   auto args = proto->get_args();
   for (size_t i = 0; i < args->size(); i++) {
