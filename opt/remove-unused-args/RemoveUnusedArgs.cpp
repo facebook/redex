@@ -169,7 +169,8 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
        &defined_protos](DexMethod* caller) {
         auto caller_proto = caller->get_proto();
         defined_protos.insert(caller_proto);
-        if (!can_rename(caller) || is_native(caller)) {
+        if (!can_rename(caller) || is_native(caller) ||
+            caller->rstate.no_optimizations()) {
           record_fixed_proto(caller_proto, 1);
         } else if (caller->is_virtual()) {
           auto is_interface_method =
@@ -585,6 +586,9 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
     // param that might make the method static. For now do not remove any unused
     // arguments for this.
     if (has_any_annotation(method, no_devirtualize_annos)) {
+      return;
+    }
+    if (method->rstate.no_optimizations()) {
       return;
     }
 
