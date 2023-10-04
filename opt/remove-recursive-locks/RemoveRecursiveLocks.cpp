@@ -760,7 +760,7 @@ void run_impl(DexStoresVector& stores,
   Stats stats =
       walk::parallel::methods<Stats>(scope, [](DexMethod* method) -> Stats {
         auto code = method->get_code();
-        if (code != nullptr) {
+        if (code != nullptr && !method->rstate.no_optimizations()) {
           return run_locks_removal(method, code);
         }
         return Stats{};
