@@ -639,7 +639,7 @@ void BranchPrefixHoistingPass::run_pass(DexStoresVector& stores,
   int total_insns_hoisted = walk::parallel::methods<int>(
       scope, [can_allocate_regs](DexMethod* method) -> int {
         const auto code = method->get_code();
-        if (!code) {
+        if (!code || method->rstate.no_optimizations()) {
           return 0;
         }
         TraceContext context{method};
