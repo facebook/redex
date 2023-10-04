@@ -608,6 +608,10 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
     InlinedCodeSizeEstimator inlined_code_size_estimator(method_summaries);
     std::vector<DexMethod*> methods;
     for (auto& [method, allocation_insns] : inline_anchors_of_type) {
+      if (method->rstate.no_optimizations()) {
+        always_assert(!complete);
+        continue;
+      }
       auto it2 = method_summaries.find(method);
       if (it2 != method_summaries.end() && it2->second.allocation_insn &&
           resolve_inlinable(method_summaries, it2->second.allocation_insn)
