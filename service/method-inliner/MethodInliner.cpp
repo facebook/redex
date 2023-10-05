@@ -445,21 +445,66 @@ void gather_true_virtual_methods(
           m.caller_insns[caller].emplace(callsite);
         });
   };
-  auto add_other_call_site = [&](const DexMethod* callee) {
-    concurrent_true_virtual_callers.update(
-        callee, [&](const DexMethod*, CallerInsns& m, bool) {
-          m.other_call_sites = true;
-        });
-  };
+  auto add_other_call_site =
+      [&](const DexMethod* callee,
+          bool other_call_sites_overriding_methods_added = false) {
+        bool res;
+        concurrent_true_virtual_callers.update(
+            callee, [&](const DexMethod*, CallerInsns& m, bool) {
+              m.other_call_sites = true;
+              res = m.other_call_sites_overriding_methods_added;
+              if (other_call_sites_overriding_methods_added) {
+                m.other_call_sites_overriding_methods_added = true;
+              }
+            });
+        return res;
+      };
   auto add_candidate = [&](const DexMethod* callee) {
     concurrent_true_virtual_callers.emplace(callee, CallerInsns());
+  };
+
+  struct Key {
+    DexMethod* callee;
+    DexType* static_base_type;
+    bool operator==(const Key& other) const {
+      return callee == other.callee &&
+             static_base_type == other.static_base_type;
+    }
+  };
+  struct Hash {
+    size_t operator()(const Key& key) const {
+      size_t hash = 0;
+      boost::hash_combine(hash, key.callee);
+      boost::hash_combine(hash, key.static_base_type);
+      return hash;
+    }
+  };
+  InsertOnlyConcurrentMap<Key, std::vector<const DexMethod*>, Hash>
+      concurrent_overriding_methods;
+  auto get_overriding_methods =
+      [&](DexMethod* callee,
+          DexType* static_base_type) -> const std::vector<const DexMethod*>& {
+    return *concurrent_overriding_methods
+                .get_or_create_and_assert_equal(
+                    Key{callee, static_base_type},
+                    [&](const Key&) {
+                      auto overriding_methods = mog::get_overriding_methods(
+                          method_override_graph, callee,
+                          /* include_interfaces */ false, static_base_type);
+                      std20::erase_if(overriding_methods, [&](auto* m) {
+                        return !method::may_be_invoke_target(m);
+                      });
+                      return overriding_methods;
+                    })
+                .first;
   };
 
   walk::parallel::methods(scope, [&non_virtual, &method_override_graph,
                                   &add_monomorphic_call_site,
                                   &add_other_call_site, &add_candidate,
                                   &same_implementation_invokes,
-                                  &same_implementation_map](DexMethod* method) {
+                                  &same_implementation_map,
+                                  &get_overriding_methods](DexMethod* method) {
     if (method->is_virtual() && !non_virtual.count(method)) {
       add_candidate(method);
       if (root(method)) {
@@ -499,15 +544,16 @@ void gather_true_virtual_methods(
         }
         auto static_base_type = insn_method->get_class();
         if (can_have_unknown_implementations(method_override_graph, callee)) {
-          add_other_call_site(callee);
-          if (insn->opcode() != OPCODE_INVOKE_SUPER) {
-            auto overriding_methods = mog::get_overriding_methods(
-                method_override_graph, callee, /* include_interfaces */ false,
-                static_base_type);
+          bool consider_overriding_methods =
+              insn->opcode() != OPCODE_INVOKE_SUPER;
+          if (!add_other_call_site(callee, consider_overriding_methods) &&
+              consider_overriding_methods) {
+            const auto& overriding_methods =
+                get_overriding_methods(callee, static_base_type);
             for (auto overriding_method : overriding_methods) {
-              if (method::may_be_invoke_target(overriding_method)) {
-                add_other_call_site(overriding_method);
-              }
+              add_other_call_site(
+                  overriding_method,
+                  /* other_call_sites_overriding_methods_added */ true);
             }
           }
           continue;
@@ -527,12 +573,8 @@ void gather_true_virtual_methods(
           same_implementation_invokes.emplace(insn, it->second.get());
           continue;
         }
-        auto overriding_methods = mog::get_overriding_methods(
-            method_override_graph, callee, /* include_interfaces */ false,
-            static_base_type);
-        std20::erase_if(overriding_methods, [&](auto* m) {
-          return !method::may_be_invoke_target(m);
-        });
+        const auto& overriding_methods =
+            get_overriding_methods(callee, static_base_type);
         if (overriding_methods.empty()) {
           // There is no override for this method
           add_monomorphic_call_site(method, insn, callee);
@@ -542,9 +584,14 @@ void gather_true_virtual_methods(
           auto implementing_method = *overriding_methods.begin();
           add_monomorphic_call_site(method, insn, implementing_method);
         } else {
-          add_other_call_site(callee);
-          for (auto overriding_method : overriding_methods) {
-            add_other_call_site(overriding_method);
+          if (!add_other_call_site(
+                  callee,
+                  /* other_call_sites_overriding_methods_added */ true)) {
+            for (auto overriding_method : overriding_methods) {
+              add_other_call_site(
+                  overriding_method,
+                  /* other_call_sites_overriding_methods_added */ true);
+            }
           }
         }
       }

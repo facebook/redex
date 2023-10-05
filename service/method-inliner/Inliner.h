@@ -54,6 +54,7 @@ struct CallerInsns {
   std::unordered_map<IRInstruction*, DexType*> inlined_invokes_need_cast;
   // Whether there may be any other unknown call-sites.
   bool other_call_sites{false};
+  bool other_call_sites_overriding_methods_added{false};
   bool empty() const { return caller_insns.empty() && !other_call_sites; }
 };
 
