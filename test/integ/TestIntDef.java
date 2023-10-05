@@ -14,6 +14,7 @@ import java.lang.annotation.RetentionPolicy;
 @Retention(RetentionPolicy.RUNTIME)
 @SafeIntDef
 public @interface TestIntDef {
+    int ZERO = 0;
     int ONE = 1;
     int TWO = 2;
     int THREE = 3;

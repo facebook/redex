@@ -8,10 +8,13 @@
 #pragma once
 
 #include "ConcurrentContainers.h"
-#include "ConstantPropagationAnalysis.h"
 #include "ControlFlow.h"
+#include "LiveRange.h"
 #include "Pass.h"
 #include "TypeInference.h"
+
+using TypeEnvironments =
+    std::unordered_map<const IRInstruction*, type_inference::TypeEnvironment>;
 
 /*
  * This pass checks that typedef annotations usages are value safe
@@ -46,7 +49,7 @@ class TypedefAnnoCheckerPass : public Pass {
  private:
   void gather_typedef_values(
       const DexClass* cls,
-      ConcurrentMap<const DexClass*, std::unordered_set<std::string>>&
+      ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>&
           strdef_constants,
       ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>>&
           intdef_constants);
@@ -74,7 +77,7 @@ struct Stats {
 class TypedefAnnoChecker {
  public:
   explicit TypedefAnnoChecker(
-      ConcurrentMap<const DexClass*, std::unordered_set<std::string>>&
+      ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>&
           strdef_constants,
       ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>>&
           intdef_constants,
@@ -88,17 +91,18 @@ class TypedefAnnoChecker {
   void check_instruction(
       DexMethod* m,
       type_inference::TypeInference* inference,
-      type_inference::TypeEnvironment& env,
       IRInstruction* insn,
-      IROpcode* opcode,
       const boost::optional<const DexType*>& return_annotation,
-      const ConstantEnvironment& const_env);
+      live_range::UseDefChains* ud_chains,
+      TypeEnvironments& envs);
 
   void check_typedef_value(DexMethod* m,
-                           const type_inference::TypeEnvironment* env,
                            const boost::optional<const DexType*>& annotation,
-                           reg_t reg,
-                           const ConstantEnvironment& const_env);
+                           live_range::UseDefChains* ud_chains,
+                           IRInstruction* insn,
+                           const src_index_t src,
+                           type_inference::TypeInference* inference,
+                           TypeEnvironments& envs);
 
   bool complete() { return m_good; }
 
@@ -109,7 +113,7 @@ class TypedefAnnoChecker {
   std::string m_error;
   TypedefAnnoCheckerPass::Config m_config;
 
-  const ConcurrentMap<const DexClass*, std::unordered_set<std::string>>&
+  const ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>&
       m_strdef_constants;
   const ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>>&
       m_intdef_constants;

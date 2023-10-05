@@ -25,7 +25,7 @@ struct TypedefAnnoCheckerTest : public RedexIntegrationTest {
   void gather_typedef_values(
       TypedefAnnoCheckerPass pass,
       DexClass* cls,
-      ConcurrentMap<const DexClass*, std::unordered_set<std::string>>&
+      ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>&
           strdef_constants,
       ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>>&
           intdef_constants) {
@@ -42,7 +42,7 @@ TEST_F(TypedefAnnoCheckerTest, TestValidIntAnnoReturn) {
 
   IRCode* code = method->get_code();
   code->build_cfg();
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoChecker checker =
@@ -66,7 +66,7 @@ TEST_F(TypedefAnnoCheckerTest, TestValidStrAnnoReturn) {
 
   IRCode* code = method->get_code();
   code->build_cfg();
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoChecker checker =
@@ -87,7 +87,7 @@ TEST_F(TypedefAnnoCheckerTest, TestIntAnnoInvokeStatic) {
 
   IRCode* code = method->get_code();
   code->build_cfg();
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoChecker checker =
@@ -111,7 +111,7 @@ TEST_F(TypedefAnnoCheckerTest, TestStringAnnoInvokeStatic) {
 
   IRCode* code = method->get_code();
   code->build_cfg();
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoChecker checker =
@@ -135,7 +135,7 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongAnnotationReturned) {
 
   IRCode* code = method->get_code();
   code->build_cfg();
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoChecker checker =
@@ -149,10 +149,10 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongAnnotationReturned) {
       checker.error() ==
       "TypedefAnnoCheckerPass: The method "
       "Lcom/facebook/redextest/"
-      "TypedefAnnoCheckerTest;.testWrongAnnotationReturned:(Ljava/"
-      "lang/String;)Ljava/lang/String; has an annotation Linteg/TestIntDef; in "
-      "its method signature, but the returned value contains the annotation  "
-      "Linteg/TestStringDef; instead");
+      "TypedefAnnoCheckerTest;.testWrongAnnotationReturned:(Ljava/lang/"
+      "String;)Ljava/lang/String; has an annotation Linteg/TestIntDef; in its "
+      "method signature, but the returned value contains the annotation  "
+      "Linteg/TestStringDef; instead. failed instruction: RETURN_OBJECT v0.");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestWrongAnnoInvokeStatic) {
@@ -164,7 +164,7 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongAnnoInvokeStatic) {
 
   IRCode* code = method->get_code();
   code->build_cfg();
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoChecker checker =
@@ -174,16 +174,17 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongAnnoInvokeStatic) {
   code->clear_cfg();
 
   EXPECT_FALSE(checker.complete());
-  EXPECT_TRUE(
-      checker.error() ==
-      "TypedefAnnoCheckerPass: while invoking "
-      "Lcom/facebook/redextest/"
-      "TypedefAnnoCheckerTest;.testValidIntAnnoReturn:(I)I in "
-      "method "
-      "Lcom/facebook/redextest/"
-      "TypedefAnnoCheckerTest;.testWrongAnnoInvokeStatic:(I)I, parameter 0 has "
-      "the annotation  Linteg/TestStringDef; , but the method expects the "
-      "annotation to be Linteg/TestIntDef;");
+  EXPECT_TRUE(checker.error() ==
+              "TypedefAnnoCheckerPass: while invoking "
+              "Lcom/facebook/redextest/"
+              "TypedefAnnoCheckerTest;.testValidIntAnnoReturn:(I)I in method "
+              "Lcom/facebook/redextest/"
+              "TypedefAnnoCheckerTest;.testWrongAnnoInvokeStatic:(I)I, "
+              "parameter 0 has the annotation  Linteg/TestStringDef; , but the "
+              "method expects the annotation to be Linteg/TestIntDef; failed "
+              "instruction: INVOKE_STATIC v1, "
+              "Lcom/facebook/redextest/"
+              "TypedefAnnoCheckerTest;.testValidIntAnnoReturn:(I)I.");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestIntField) {
@@ -195,7 +196,7 @@ TEST_F(TypedefAnnoCheckerTest, TestIntField) {
 
   IRCode* code = method->get_code();
   code->build_cfg();
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoChecker checker =
@@ -216,7 +217,7 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongIntField) {
 
   IRCode* code = method->get_code();
   code->build_cfg();
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoChecker checker =
@@ -231,7 +232,9 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongIntField) {
       "TypedefAnnoCheckerPass: The method "
       "Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testWrongIntField:(I)V "
       "assigned a field wrong_anno_field with annotation  "
-      "Linteg/TestStringDef; to a value with annotation  Linteg/TestIntDef;");
+      "Linteg/TestStringDef; to a value with annotation  Linteg/TestIntDef; "
+      "failed instruction: IPUT v1, v0, "
+      "Lcom/facebook/redextest/TypedefAnnoCheckerTest;.wrong_anno_field:I");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestStringField) {
@@ -244,7 +247,7 @@ TEST_F(TypedefAnnoCheckerTest, TestStringField) {
 
   IRCode* code = method->get_code();
   code->build_cfg();
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoChecker checker =
@@ -268,7 +271,7 @@ TEST_F(TypedefAnnoCheckerTest, TestConstReturn) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -296,7 +299,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstReturn) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -311,11 +314,12 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstReturn) {
 
   EXPECT_FALSE(checker.complete());
   EXPECT_TRUE(checker.error() ==
-              "TypedefAnnoCheckerPass: the value 5 in method "
+              "TypedefAnnoCheckerPass: in method "
               "Lcom/facebook/redextest/"
-              "TypedefAnnoCheckerTest;.testInvalidConstReturn:()I either does "
-              "not have the typedef annotation  Linteg/TestIntDef; or was not "
-              "declared as one of the possible values in the annotation.");
+              "TypedefAnnoCheckerTest;.testInvalidConstReturn:()I , the int "
+              "value 5 does not have the typedef annotation  "
+              "Linteg/TestIntDef; attached to it. Check that the value is "
+              "annotated and exists in its typedef annotation class.");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestInvalidConstReturn2) {
@@ -330,7 +334,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstReturn2) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -345,11 +349,12 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstReturn2) {
 
   EXPECT_FALSE(checker.complete());
   EXPECT_TRUE(checker.error() ==
-              "TypedefAnnoCheckerPass: the value 5 in method "
+              "TypedefAnnoCheckerPass: in method "
               "Lcom/facebook/redextest/"
-              "TypedefAnnoCheckerTest;.testInvalidConstReturn2:()I either does "
-              "not have the typedef annotation  Linteg/TestIntDef; or was not "
-              "declared as one of the possible values in the annotation.");
+              "TypedefAnnoCheckerTest;.testInvalidConstReturn2:()I , the int "
+              "value 5 does not have the typedef annotation  "
+              "Linteg/TestIntDef; attached to it. Check that the value is "
+              "annotated and exists in its typedef annotation class.");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestInvalidConstStrReturn) {
@@ -366,7 +371,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstStrReturn) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -382,11 +387,12 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstStrReturn) {
   EXPECT_FALSE(checker.complete());
   EXPECT_TRUE(
       checker.error() ==
-      "TypedefAnnoCheckerPass: the value five in method "
+      "TypedefAnnoCheckerPass: in method "
       "Lcom/facebook/redextest/"
       "TypedefAnnoCheckerTest;.testInvalidConstStrReturn:()Ljava/lang/String; "
-      "either does not have the typedef annotation  Linteg/TestStringDef; or "
-      "was not declared as one of the possible values in the annotation.");
+      ", the string value five does not have the typedef annotation  "
+      "Linteg/TestStringDef; attached to it. Check that the value is annotated "
+      "and exists in the typedef annotation class");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic) {
@@ -401,7 +407,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -416,14 +422,15 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic) {
 
   EXPECT_FALSE(checker.complete());
   EXPECT_TRUE(checker.error() ==
-              "TypedefAnnoCheckerPass: the value 5 in method "
+              "TypedefAnnoCheckerPass: in method "
               "Lcom/facebook/redextest/"
-              "TypedefAnnoCheckerTest;.testInvalidConstInvokeStatic:()I either "
-              "does not have the typedef annotation  Linteg/TestIntDef; or was "
-              "not declared as one of the possible values in the annotation. "
-              "This error occured while invoking the method "
+              "TypedefAnnoCheckerTest;.testInvalidConstInvokeStatic:()I , the "
+              "int value 5 does not have the typedef annotation  "
+              "Linteg/TestIntDef; attached to it. Check that the value is "
+              "annotated and exists in its typedef annotation class. This "
+              "error occured while trying to invoke the method "
               "Lcom/facebook/redextest/"
-              "TypedefAnnoCheckerTest;.testIntAnnoInvokeStatic:(I)I");
+              "TypedefAnnoCheckerTest;.testIntAnnoInvokeStatic:(I)I .");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic2) {
@@ -438,7 +445,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic2) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -453,14 +460,15 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic2) {
 
   EXPECT_FALSE(checker.complete());
   EXPECT_TRUE(checker.error() ==
-              "TypedefAnnoCheckerPass: the value 5 in method "
+              "TypedefAnnoCheckerPass: in method "
               "Lcom/facebook/redextest/"
-              "TypedefAnnoCheckerTest;.testInvalidConstInvokeStatic2:()I "
-              "either does not have the typedef annotation  Linteg/TestIntDef; "
-              "or was not declared as one of the possible values in the "
-              "annotation. This error occured while invoking the method "
+              "TypedefAnnoCheckerTest;.testInvalidConstInvokeStatic2:()I , the "
+              "int value 5 does not have the typedef annotation  "
+              "Linteg/TestIntDef; attached to it. Check that the value is "
+              "annotated and exists in its typedef annotation class. This "
+              "error occured while trying to invoke the method "
               "Lcom/facebook/redextest/"
-              "TypedefAnnoCheckerTest;.testIntAnnoInvokeStatic:(I)I");
+              "TypedefAnnoCheckerTest;.testIntAnnoInvokeStatic:(I)I .");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestMultipleBlocksInt) {
@@ -473,7 +481,7 @@ TEST_F(TypedefAnnoCheckerTest, TestMultipleBlocksInt) {
   IRCode* code = method->get_code();
   code->build_cfg();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -502,7 +510,7 @@ TEST_F(TypedefAnnoCheckerTest, TestMultipleBlocksString) {
   IRCode* code = method->get_code();
   code->build_cfg();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -530,7 +538,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidMultipleBlocksString) {
   IRCode* code = method->get_code();
   code->build_cfg();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -545,11 +553,12 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidMultipleBlocksString) {
 
   EXPECT_FALSE(checker.complete());
   EXPECT_TRUE(checker.error() ==
-              "TypedefAnnoCheckerPass: the method "
-              "Lcom/facebook/redextest/"
+              "TypedefAnnoCheckerPass: in the "
+              "method Lcom/facebook/redextest/"
               "TypedefAnnoCheckerTest;.testInvalidMultipleBlocksString:(Ljava/"
-              "lang/String;)Ljava/lang/String; changes a value with annotation "
-              " Linteg/TestStringDef; midway, which is unsafe.");
+              "lang/String;)Ljava/lang/String; , the source of the value with "
+              "annotation  Linteg/TestStringDef; is produced by invoking an "
+              "unresolveable callee, so the value safety is not guaranteed.");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestNonConstInt) {
@@ -561,69 +570,7 @@ TEST_F(TypedefAnnoCheckerTest, TestNonConstInt) {
   IRCode* code = method->get_code();
   code->build_cfg();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
-  checker.run(method);
-  code->clear_cfg();
-
-  EXPECT_FALSE(checker.complete());
-  EXPECT_TRUE(
-      checker.error() ==
-      "TypedefAnnoCheckerPass: the annotation  Linteg/TestIntDef; annotates a "
-      "non-constant integral in method "
-      "Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testNonConstInt:(I)I . "
-      "Check that the type and annotation in the method signature are valid "
-      "and the value has not changed throughout the method.");
-}
-
-TEST_F(TypedefAnnoCheckerTest, TestInvalidType) {
-  auto scope = build_class_scope(stores);
-  auto method = DexMethod::get_method(
-                    "Lcom/facebook/redextest/"
-                    "TypedefAnnoCheckerTest;.testInvalidType:(Lcom/facebook/"
-                    "redextest/I;)Lcom/facebook/redextest/I;")
-                    ->as_def();
-  IRCode* code = method->get_code();
-  code->build_cfg();
-
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
-  checker.run(method);
-  code->clear_cfg();
-
-  EXPECT_FALSE(checker.complete());
-  EXPECT_TRUE(
-      checker.error() ==
-      "TypedefAnnoCheckerPass: the annotation  Linteg/TestIntDef; annotates a "
-      "value with an incompatible type or a non-constant value in method "
-      "Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testInvalidType:(Lcom/"
-      "facebook/redextest/I;)Lcom/facebook/redextest/I;");
-}
-
-TEST_F(TypedefAnnoCheckerTest, TestJoiningTwoAnnotations) {
-  auto scope = build_class_scope(stores);
-  auto method =
-      DexMethod::get_method(
-          "Lcom/facebook/redextest/"
-          "TypedefAnnoCheckerTest;.testJoiningTwoAnnotations:(Ljava/lang/"
-          "String;Ljava/lang/String;)Ljava/lang/String;")
-          ->as_def();
-
-  IRCode* code = method->get_code();
-  code->build_cfg();
-
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -640,10 +587,73 @@ TEST_F(TypedefAnnoCheckerTest, TestJoiningTwoAnnotations) {
   EXPECT_TRUE(
       checker.error() ==
       "TypedefAnnoCheckerPass: the method "
-      "Lcom/facebook/redextest/"
-      "TypedefAnnoCheckerTest;.testJoiningTwoAnnotations:(Ljava/lang/"
-      "String;Ljava/lang/String;)Ljava/lang/String; changes a value "
-      "with annotation  Linteg/TestStringDef; midway, which is unsafe.");
+      "Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testNonConstInt:(I)I "
+      "does not guarantee value safety for the value with typedef annotation  "
+      "Linteg/TestIntDef; . Check that this value does not change within the "
+      "method");
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestInvalidType) {
+  auto scope = build_class_scope(stores);
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testInvalidType:(Lcom/facebook/"
+                    "redextest/I;)Lcom/facebook/redextest/I;")
+                    ->as_def();
+  IRCode* code = method->get_code();
+  code->build_cfg();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  TypedefAnnoChecker checker =
+      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  checker.run(method);
+  code->clear_cfg();
+
+  EXPECT_FALSE(checker.complete());
+  EXPECT_TRUE(
+      checker.error() ==
+      "TypedefAnnoCheckerPass: the annotation  Linteg/TestIntDef; annotates a "
+      "value with an incompatible type or a non-constant value in method "
+      "Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testInvalidType:(Lcom/"
+      "facebook/redextest/I;)Lcom/facebook/redextest/I; .");
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestJoiningTwoAnnotations) {
+  auto scope = build_class_scope(stores);
+  auto method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerTest;.testJoiningTwoAnnotations:(Ljava/lang/"
+          "String;Ljava/lang/String;)Ljava/lang/String;")
+          ->as_def();
+
+  IRCode* code = method->get_code();
+  code->build_cfg();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker =
+      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  checker.run(method);
+  code->clear_cfg();
+
+  EXPECT_FALSE(checker.complete());
+  EXPECT_TRUE(checker.error() ==
+              "TypedefAnnoCheckerPass: in method "
+              "Lcom/facebook/redextest/"
+              "TypedefAnnoCheckerTest;.testJoiningTwoAnnotations:(Ljava/lang/"
+              "String;Ljava/lang/String;)Ljava/lang/String; , one of the "
+              "parameters needs to have the typedef annotation  "
+              "Linteg/TestStringDef; attached to it. Check that the value is "
+              "annotated and exists in the typedef annotation class");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestJoiningTwoAnnotations2) {
@@ -658,7 +668,7 @@ TEST_F(TypedefAnnoCheckerTest, TestJoiningTwoAnnotations2) {
   IRCode* code = method->get_code();
   code->build_cfg();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -684,7 +694,112 @@ TEST_F(TypedefAnnoCheckerTest, TestReassigningInt) {
   IRCode* code = method->get_code();
   code->build_cfg();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<std::string>>
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker =
+      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  checker.run(method);
+  code->clear_cfg();
+
+  EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestIfElse) {
+  auto scope = build_class_scope(stores);
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testIfElse:()I")
+                    ->as_def();
+
+  IRCode* code = method->get_code();
+  code->build_cfg();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker =
+      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  checker.run(method);
+  code->clear_cfg();
+
+  EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestIfElseParam) {
+  auto scope = build_class_scope(stores);
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testIfElseParam:(Z)I")
+                    ->as_def();
+
+  IRCode* code = method->get_code();
+  code->build_cfg();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker =
+      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  checker.run(method);
+  code->clear_cfg();
+
+  EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestIfElseString) {
+  auto scope = build_class_scope(stores);
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testIfElseString:(Z)Ljava/lang/"
+                    "String;")
+                    ->as_def();
+
+  IRCode* code = method->get_code();
+  code->build_cfg();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker =
+      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  checker.run(method);
+  code->clear_cfg();
+
+  EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestXORIfElse) {
+  auto scope = build_class_scope(stores);
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testXORIfElse:(Z)I")
+                    ->as_def();
+
+  IRCode* code = method->get_code();
+  code->build_cfg();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
       strdef_constants;
   ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
