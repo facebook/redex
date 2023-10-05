@@ -1015,31 +1015,52 @@ bool ImmutableAttributeAnalyzerState::is_jvm_cached_object(
 
 DexType* ImmutableAttributeAnalyzerState::initialized_type(
     const DexMethod* initialize_method) {
-  return method::is_init(initialize_method)
-             ? initialize_method->get_class()
-             : initialize_method->get_proto()->get_rtype();
+  auto res = method::is_init(initialize_method)
+                 ? initialize_method->get_class()
+                 : initialize_method->get_proto()->get_rtype();
+  always_assert(!type::is_primitive(res));
+  always_assert(res != type::java_lang_Object());
+  always_assert(!type::is_array(res));
+  return res;
 }
 
 bool ImmutableAttributeAnalyzerState::may_be_initialized_type(
     DexType* type) const {
-  auto res = may_be_initialized_types.get(type, std::nullopt);
-  if (!res) {
-    res = false;
-    for (auto* initialized_type : initialized_types) {
-      if (type::check_cast(type, initialized_type)) {
-        res = true;
-        break;
-      }
-    }
-    may_be_initialized_types.update(type, [&](auto*, auto& value, bool exists) {
-      if (exists) {
-        always_assert(value == res);
-      } else {
-        value = res;
-      }
-    });
+  if (type == nullptr || type::is_array(type)) {
+    return false;
   }
-  return *res;
+  always_assert(!type::is_primitive(type));
+  return *may_be_initialized_types
+              .get_or_create_and_assert_equal(
+                  type,
+                  [&](DexType*) {
+                    return compute_may_be_initialized_type(type);
+                  })
+              .first;
+}
+
+bool ImmutableAttributeAnalyzerState::compute_may_be_initialized_type(
+    DexType* type) const {
+  // Here we effectively check if check_cast(type, x) for any x in
+  // initialized_types.
+  always_assert(type != nullptr);
+  if (initialized_types.count_unsafe(type)) {
+    return true;
+  }
+  auto cls = type_class(type);
+  if (cls == nullptr) {
+    return false;
+  }
+  if (may_be_initialized_type(cls->get_super_class())) {
+    return true;
+  }
+  auto intfs = cls->get_interfaces();
+  for (auto intf : *intfs) {
+    if (may_be_initialized_type(intf)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool ImmutableAttributeAnalyzer::analyze_iget(

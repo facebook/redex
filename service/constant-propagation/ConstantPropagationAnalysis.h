@@ -319,7 +319,7 @@ struct ImmutableAttributeAnalyzerState {
   ConcurrentSet<DexField*> attribute_fields;
   std::unordered_map<DexMethod*, CachedBoxedObjects> cached_boxed_objects;
   ConcurrentSet<DexType*> initialized_types;
-  mutable ConcurrentMap<DexType*, std::optional<bool>> may_be_initialized_types;
+  mutable InsertOnlyConcurrentMap<DexType*, bool> may_be_initialized_types;
 
   ImmutableAttributeAnalyzerState();
 
@@ -337,6 +337,9 @@ struct ImmutableAttributeAnalyzerState {
   static DexType* initialized_type(const DexMethod* initialize_method);
 
   bool may_be_initialized_type(DexType* type) const;
+
+ private:
+  bool compute_may_be_initialized_type(DexType* type) const;
 };
 
 class ImmutableAttributeAnalyzer final
