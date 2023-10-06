@@ -154,6 +154,15 @@ class PatriciaTreeSet final {
     return *this;
   }
 
+  /*
+   * Visit all elements.
+   * This does NOT allocate memory, unlike the iterators.
+   */
+  template <typename Visitor> // void(const Element&)
+  void visit(Visitor&& visitor) const {
+    m_core.visit_all_leafs(std::forward<Visitor>(visitor));
+  }
+
   bool erase_all_matching(Element element_mask) {
     return m_core.erase_all_matching(element_mask);
   }

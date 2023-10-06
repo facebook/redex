@@ -269,6 +269,17 @@ TEST_F(PatriciaTreeMapAbstractEnvironmentTest, transform) {
   EXPECT_TRUE(e1.is_top());
 }
 
+TEST_F(PatriciaTreeMapAbstractEnvironmentTest, visit) {
+  Environment e1({
+      {1, Domain({"a", "b"})},
+      {2, Domain({"a", "b"})},
+      {3, Domain({"a", "b"})},
+  });
+  size_t sum = 0;
+  e1.visit([&sum](const auto& binding) { sum += binding.first; });
+  EXPECT_EQ(sum, 6);
+}
+
 TEST_F(PatriciaTreeMapAbstractEnvironmentTest, prettyPrinting) {
   using StringEnvironment =
       PatriciaTreeMapAbstractEnvironment<std::string*, Domain>;

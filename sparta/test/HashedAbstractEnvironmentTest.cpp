@@ -161,3 +161,13 @@ TEST(HashedAbstractEnvironmentTest, destructiveOperations) {
   EXPECT_THAT(e2.get("v3").elements(),
               ::testing::UnorderedElementsAre("g", "h"));
 }
+
+TEST(HashedAbstractEnvironmentTest, visit) {
+  Environment e1({{"v1", Domain({"a", "b"})},
+                  {"v2", Domain("c")},
+                  {"v3", Domain({"d", "e", "f"})},
+                  {"v4", Domain({"a", "f"})}});
+  auto all = Domain{};
+  e1.visit([&all](const auto& binding) { all.join_with(binding.second); });
+  EXPECT_EQ(all, Domain({"a", "b", "c", "d", "e", "f"}));
+}

@@ -239,6 +239,13 @@ class FlatMap final {
     }
   }
 
+  template <typename Visitor> // void(const value_type&)
+  void visit(Visitor&& visitor) const {
+    for (const auto& binding : m_map) {
+      visitor(binding);
+    }
+  }
+
   template <typename Predicate> // bool(const Key&, const ValueType&)
   FlatMap& filter(Predicate&& predicate) {
     switch (m_map.size()) {

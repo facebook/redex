@@ -226,6 +226,13 @@ class HashMap final {
     return *this;
   }
 
+  template <typename Visitor> // void(const value_type&)
+  void visit(Visitor&& visitor) const {
+    for (const auto& binding : m_map) {
+      visitor(binding);
+    }
+  }
+
   template <typename Predicate> // bool(const Key&, const ValueType&)
   HashMap& filter(Predicate&& predicate) {
     auto it = m_map.begin(), end = m_map.end();

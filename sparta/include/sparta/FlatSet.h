@@ -113,6 +113,13 @@ class FlatSet final {
     return *this;
   }
 
+  template <typename Visitor> // void (const Element&)
+  void visit(Visitor&& visitor) const {
+    for (const auto& element : m_set) {
+      visitor(element);
+    }
+  }
+
   template <typename Predicate> // bool(const Element&)
   FlatSet& filter(Predicate&& predicate) {
     auto container = m_set.extract_sequence();
