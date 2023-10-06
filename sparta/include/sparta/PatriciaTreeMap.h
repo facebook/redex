@@ -57,6 +57,9 @@ namespace sparta {
  *     // must be implemented. Additionally, value::type must be an
  *     // implementation of an AbstractDomain.
  *     static bool leq(const type& x, const type& y);
+ *
+ *     // Whether the default value is top, bottom, or an arbitrary value.
+ *     constexpr static AbstractValueKind default_value_kind;
  *   }
  *
  * Patricia trees can only handle unsigned integers. Arbitrary objects can be
