@@ -213,7 +213,7 @@ class HashMap final {
   }
 
   template <typename MappingFunction> // void(mapped_type*)
-  HashMap& map(MappingFunction&& f) {
+  HashMap& transform(MappingFunction&& f) {
     auto it = m_map.begin(), end = m_map.end();
     while (it != end) {
       f(&it->second);

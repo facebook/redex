@@ -163,10 +163,10 @@ class PatriciaTreeHashMap final {
   }
 
   template <typename MappingFunction> // void(mapped_type*)
-  bool map(MappingFunction&& f) {
-    return m_tree.map(
+  bool transform(MappingFunction&& f) {
+    return m_tree.transform(
         [f = std::forward<MappingFunction>(f)](FlatMapT flat_map) -> FlatMapT {
-          flat_map.map(f);
+          flat_map.transform(f);
           return flat_map;
         });
   }
@@ -183,7 +183,7 @@ class PatriciaTreeHashMap final {
 
   template <typename Predicate> // bool(const Key&, const ValueType&)
   PatriciaTreeHashMap& filter(const Predicate& predicate) {
-    m_tree.map([&predicate](FlatMapT flat_map) -> FlatMapT {
+    m_tree.transform([&predicate](FlatMapT flat_map) -> FlatMapT {
       flat_map.filter(predicate);
       return flat_map;
     });

@@ -128,11 +128,11 @@ class HashedAbstractPartition final
   }
 
   template <typename Operation> // void(Domain*)
-  void map(Operation&& f) {
+  void transform(Operation&& f) {
     if (is_top()) {
       return;
     }
-    m_map.map(std::forward<Operation>(f));
+    m_map.transform(std::forward<Operation>(f));
   }
 
   bool is_top() const { return m_is_top; }

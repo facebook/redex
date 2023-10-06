@@ -150,7 +150,7 @@ class PatriciaTreeMap final {
   }
 
   template <typename MappingFunction> // mapped_type(const mapped_type&)
-  bool map(MappingFunction&& f) {
+  bool transform(MappingFunction&& f) {
     return m_core.update_all_leafs(
         apply_leafs(std::forward<MappingFunction>(f)));
   }
