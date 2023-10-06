@@ -103,11 +103,11 @@ class PatriciaTreeHashMapAbstractEnvironment final
   }
 
   template <typename Operation> // void(Domain*)
-  bool map(Operation&& f) {
+  bool transform(Operation&& f) {
     if (this->is_bottom()) {
       return false;
     }
-    bool res = this->get_value()->map(std::forward<Operation>(f));
+    bool res = this->get_value()->transform(std::forward<Operation>(f));
     this->normalize();
     return res;
   }
@@ -272,8 +272,8 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
   }
 
   template <typename Operation> // void(Domain*)
-  bool map(Operation&& f) {
-    return m_map.map(std::forward<Operation>(f));
+  bool transform(Operation&& f) {
+    return m_map.transform(std::forward<Operation>(f));
   }
 
   template <typename Operation> // void(Domain*, const Domain&)

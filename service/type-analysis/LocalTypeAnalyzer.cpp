@@ -357,7 +357,7 @@ bool RegisterTypeAnalyzer::analyze_invoke(const IRInstruction* insn,
     if (!array_nullness.is_top() && array_nullness.get_length() &&
         *array_nullness.get_length() > 0 && dex_type) {
       env->mutate_reg_environment([&](RegTypeEnvironment* env) {
-        env->map([&](const DexTypeDomain& domain) {
+        env->transform([&](const DexTypeDomain& domain) {
           auto dex_type_local = domain.get_dex_type();
           if (dex_type_local && *dex_type == *dex_type_local) {
             return DexTypeDomain(*dex_type_local,

@@ -459,7 +459,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
         }
       });
       current_state->mutate_ref_env([mask, &any_changes](RefEnvironment* env) {
-        bool any_map_changes = env->map([mask](ValueIdDomain domain) {
+        bool any_map_changes = env->transform([mask](ValueIdDomain domain) {
           auto c = domain.get_constant();
           always_assert(c);
           auto value_id = *c;

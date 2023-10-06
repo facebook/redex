@@ -245,12 +245,12 @@ TEST(PatriciaTreeHashMapAbstractPartitionTest, destructiveOperations) {
   EXPECT_TRUE(p6.is_top());
 }
 
-TEST(PatriciaTreeHashMapAbstractPartitionTest, map) {
+TEST(PatriciaTreeHashMapAbstractPartitionTest, transform) {
   Partition p1({{1, Domain({"a", "b"})}});
-  bool any_changes = p1.map([](Domain*) {});
+  bool any_changes = p1.transform([](Domain*) {});
   EXPECT_FALSE(any_changes);
 
-  any_changes = p1.map([](Domain* d) { d->set_to_bottom(); });
+  any_changes = p1.transform([](Domain* d) { d->set_to_bottom(); });
   EXPECT_TRUE(any_changes);
   EXPECT_TRUE(p1.is_bottom());
 }

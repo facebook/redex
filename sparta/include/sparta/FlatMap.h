@@ -226,7 +226,7 @@ class FlatMap final {
   }
 
   template <typename MappingFunction> // void(mapped_type*)
-  void map(MappingFunction&& f) {
+  void transform(MappingFunction&& f) {
     bool has_default_value = false;
     for (auto& p : m_map) {
       f(&p.second);

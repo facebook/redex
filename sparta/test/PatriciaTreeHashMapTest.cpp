@@ -65,14 +65,14 @@ TEST(PatriciaTreeHashMapTest, map) {
   constexpr uint32_t default_value = 0;
   pth_map m1 = create_pth_map({{0, 1}, {1, 2}, {2, 4}});
 
-  bool any_changes = m1.map([](uint32_t*) {});
+  bool any_changes = m1.transform([](uint32_t*) {});
   EXPECT_FALSE(any_changes);
   EXPECT_EQ(3, m1.size());
   EXPECT_EQ(m1.at(0), 1);
   EXPECT_EQ(m1.at(1), 2);
   EXPECT_EQ(m1.at(2), 4);
 
-  any_changes = m1.map([](uint32_t* value) { --(*value); });
+  any_changes = m1.transform([](uint32_t* value) { --(*value); });
   EXPECT_TRUE(any_changes);
   EXPECT_EQ(2, m1.size());
   EXPECT_EQ(m1.at(0), default_value);
