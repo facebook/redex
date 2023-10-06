@@ -171,6 +171,18 @@ class PatriciaTreeHashMap final {
         });
   }
 
+  /*
+   * Visit all key-value pairs.
+   * This does NOT allocate memory, unlike the iterators.
+   */
+  template <typename Visitor> // void(const value_type&)
+  void visit(Visitor&& visitor) const {
+    m_tree.visit([visitor = std::forward<Visitor>(visitor)](
+                     const std::pair<size_t, FlatMapT>& binding) {
+      binding.second.visit(visitor);
+    });
+  }
+
   PatriciaTreeHashMap& remove(const Key& key) {
     m_tree.update(
         [&key](FlatMapT flat_map) -> FlatMapT {

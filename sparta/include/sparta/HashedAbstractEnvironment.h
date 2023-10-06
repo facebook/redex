@@ -158,6 +158,14 @@ class HashedAbstractEnvironment final
     return *this;
   }
 
+  template <typename Visitor> // void(const std::pair<Variable, Domain>&)
+  void visit(Visitor&& visitor) const {
+    if (this->is_bottom()) {
+      return;
+    }
+    this->get_value()->m_map.visit(std::forward<Visitor>(visitor));
+  }
+
   static HashedAbstractEnvironment bottom() {
     return HashedAbstractEnvironment(AbstractValueKind::Bottom);
   }

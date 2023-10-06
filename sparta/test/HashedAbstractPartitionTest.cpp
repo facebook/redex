@@ -293,3 +293,13 @@ TEST(HashedAbstractPartitionTest, difference) {
               {{"b", Domain{"a"}}, {"d", Domain{"a"}}, {"e", Domain{"c"}}})),
       Partition({{"a", Domain{"c"}}, {"c", Domain{"c"}}, {"d", Domain{"c"}}}));
 }
+
+TEST(HashedAbstractPartitionTest, visit) {
+  Partition p1({{"v1", Domain({"a", "b"})},
+                {"v2", Domain("c")},
+                {"v3", Domain({"d", "e", "f"})},
+                {"v4", Domain({"a", "f"})}});
+  auto all = Domain{};
+  p1.visit([&all](const auto& binding) { all.join_with(binding.second); });
+  EXPECT_EQ(all, Domain({"a", "b", "c", "d", "e", "f"}));
+}

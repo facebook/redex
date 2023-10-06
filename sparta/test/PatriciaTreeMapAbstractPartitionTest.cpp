@@ -258,3 +258,14 @@ TEST(PatriciaTreeMapAbstractPartitionTest, transform) {
   EXPECT_TRUE(any_changes);
   EXPECT_TRUE(p1.is_bottom());
 }
+
+TEST(PatriciaTreeMapAbstractPartitionTest, visit) {
+  Partition p1({
+      {1, Domain({"a", "b"})},
+      {2, Domain({"a", "b"})},
+      {3, Domain({"a", "b"})},
+  });
+  size_t sum = 0;
+  p1.visit([&sum](const auto& binding) { sum += binding.first; });
+  EXPECT_EQ(sum, 6);
+}

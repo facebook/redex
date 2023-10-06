@@ -965,6 +965,21 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> update_all_leafs(
   }
 }
 
+template <typename IntegerType, typename Value, typename Visitor>
+inline void visit_all_leafs(
+    Visitor&& visitor,
+    const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& tree) {
+  if (tree == nullptr) {
+    return;
+  } else if (const auto* leaf = tree->as_leaf(); leaf != nullptr) {
+    visitor(leaf->data());
+  } else {
+    const auto* branch = tree->as_branch();
+    visit_all_leafs(visitor, branch->left_tree());
+    visit_all_leafs(visitor, branch->right_tree());
+  }
+}
+
 template <typename IntegerType, typename Value, typename LeafCombine>
 inline intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>> combine_leafs(
     LeafCombine&& leaf_combine,
@@ -1406,6 +1421,15 @@ class PatriciaTreeCore {
     auto old_tree = std::exchange(m_tree, std::move(new_tree));
 
     return m_tree != old_tree;
+  }
+
+  template <typename Visitor>
+  inline void visit_all_leafs(Visitor&& visitor) const {
+    pt_core::visit_all_leafs(
+        [visitor = std::forward<Visitor>(visitor)](const auto& data) {
+          visitor(Codec::decode(data));
+        },
+        m_tree);
   }
 
   template <typename LeafCombine>

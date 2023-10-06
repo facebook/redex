@@ -158,6 +158,15 @@ class PatriciaTreeMap final {
         apply_leafs(std::forward<MappingFunction>(f)));
   }
 
+  /*
+   * Visit all key-value pairs.
+   * This does NOT allocate memory, unlike the iterators.
+   */
+  template <typename Visitor> // void(const value_type&)
+  void visit(Visitor&& visitor) const {
+    m_core.visit_all_leafs(std::forward<Visitor>(visitor));
+  }
+
   PatriciaTreeMap& remove(Key key) {
     m_core.remove(key);
     return *this;

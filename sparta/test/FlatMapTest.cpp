@@ -610,3 +610,14 @@ TEST_F(FlatMapTest, difference) {
                        IntFlatMap({{2, 1}, {4, 1}, {6, 1}})),
             IntFlatMap({{1, 3}, {3, 3}, {5, 3}}));
 }
+
+TEST_F(FlatMapTest, visit) {
+  auto m = IntFlatMap({
+      {1, 2},
+      {2, 3},
+      {4, 5},
+  });
+  size_t sum = 0;
+  m.visit([&sum](const auto& binding) { sum += binding.second; });
+  EXPECT_EQ(sum, 10);
+}

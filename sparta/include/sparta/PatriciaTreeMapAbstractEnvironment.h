@@ -115,6 +115,14 @@ class PatriciaTreeMapAbstractEnvironment final
     return res;
   }
 
+  template <typename Visitor> // void(const std::pair<Variable, Domain>&)
+  void visit(Visitor&& visitor) const {
+    if (this->is_bottom()) {
+      return;
+    }
+    this->get_value()->visit(std::forward<Visitor>(visitor));
+  }
+
   bool erase_all_matching(const Variable& variable_mask) {
     if (this->is_bottom()) {
       return false;
@@ -287,6 +295,11 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
   template <typename Operation> // Domain(const Domain&)
   bool transform(Operation&& f) {
     return m_map.transform(std::forward<Operation>(f));
+  }
+
+  template <typename Visitor> // void(const std::pair<Variable, Domain>&)
+  void visit(Visitor&& visitor) const {
+    return m_map.visit(std::forward<Visitor>(visitor));
   }
 
   bool erase_all_matching(const Variable& variable_mask) {

@@ -121,6 +121,14 @@ class PatriciaTreeHashMapAbstractPartition final
     return m_map.transform(std::forward<Operation>(f));
   }
 
+  template <typename Visitor> // void(const std::pair<Label, Domain>&)
+  void visit(Visitor&& visitor) const {
+    if (is_top()) {
+      return;
+    }
+    m_map.visit(std::forward<Visitor>(visitor));
+  }
+
   bool is_top() const { return m_is_top; }
 
   bool is_bottom() const { return !m_is_top && m_map.empty(); }
