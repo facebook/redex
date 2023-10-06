@@ -109,6 +109,8 @@ class FlattenIterator {
 
   reference operator*() { return *m_inner->begin; }
 
+  pointer operator->() const { return &*m_inner->begin; }
+
  private:
   /* Advance the iterator until we find an element. */
   void advance_empty() {
