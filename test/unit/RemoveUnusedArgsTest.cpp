@@ -23,6 +23,7 @@
 struct RemoveUnusedArgsTest : public RedexTest {
   remove_unused_args::RemoveArgs* m_remove_args;
   std::vector<std::string> m_blocklist;
+  std::unordered_set<DexMethodRef*> m_pure_methods;
 
   RemoveUnusedArgsTest() {
     Scope dummy_scope;
@@ -34,7 +35,8 @@ struct RemoveUnusedArgsTest : public RedexTest {
     auto dummy_cls = create_internal_class(dummy_t, obj_t, {});
     dummy_scope.push_back(dummy_cls);
     m_remove_args = new remove_unused_args::RemoveArgs(
-        dummy_scope, dummy_init_classes_with_side_effects, m_blocklist);
+        dummy_scope, dummy_init_classes_with_side_effects, m_blocklist,
+        m_pure_methods);
   }
 
   ~RemoveUnusedArgsTest() {}

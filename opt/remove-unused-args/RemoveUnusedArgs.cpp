@@ -23,6 +23,7 @@
 #include "OptData.h"
 #include "OptDataDefs.h"
 #include "PassManager.h"
+#include "Purity.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "Walkers.h"
@@ -533,9 +534,9 @@ void run_cleanup(DexMethod* method,
                  cfg::ControlFlowGraph& cfg,
                  const init_classes::InitClassesWithSideEffects*
                      init_classes_with_side_effects,
+                 const std::unordered_set<DexMethodRef*>& pure_methods,
                  std::mutex& mutex,
                  LocalDce::Stats& stats) {
-  std::unordered_set<DexMethodRef*> pure_methods;
   auto local_dce = LocalDce(init_classes_with_side_effects, pure_methods);
   local_dce.dce(cfg, /* normalize_new_instances */ true, method->get_class());
   const auto& local_stats = local_dce.get_stats();
@@ -667,6 +668,7 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
         run_cleanup(method,
                     cfg,
                     &m_init_classes_with_side_effects,
+                    m_pure_methods,
                     local_dce_stats_mutex,
                     local_dce_stats);
       }
@@ -745,6 +747,7 @@ std::pair<size_t, LocalDce::Stats> RemoveArgs::update_callsites() {
           run_cleanup(method,
                       cfg,
                       &m_init_classes_with_side_effects,
+                      m_pure_methods,
                       local_dce_stats_mutex,
                       local_dce_stats);
         }
@@ -768,10 +771,11 @@ void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
   size_t num_method_protos_reordered_count = 0;
   size_t num_iterations = 0;
   LocalDce::Stats local_dce_stats;
+  auto pure_methods = get_pure_methods();
   while (true) {
     num_iterations++;
     RemoveArgs rm_args(scope, init_classes_with_side_effects, m_blocklist,
-                       m_total_iterations++);
+                       pure_methods, m_total_iterations++);
     auto pass_stats = rm_args.run(conf);
     if (pass_stats.methods_updated_count == 0) {
       break;
