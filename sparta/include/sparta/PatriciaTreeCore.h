@@ -606,11 +606,7 @@ inline bool is_tree_leq(
       std::is_same_v<decltype(Value::leq(std::declval<ValueType>(),
                                          std::declval<ValueType>())),
                      bool>;
-  constexpr bool kIsAbstractDomain =
-      std::is_base_of_v<AbstractDomain<ValueType>, ValueType>;
-  static_assert(!kHasLeq || kIsAbstractDomain,
-                "Value::leq() is defined, but Value::type is not an "
-                "implementation of AbstractDomain");
+  static_assert(kHasLeq, "Value::leq() is not defined");
 
   static_assert(Value::default_value_kind == AbstractValueKind::Top ||
                 Value::default_value_kind == AbstractValueKind::Bottom);
