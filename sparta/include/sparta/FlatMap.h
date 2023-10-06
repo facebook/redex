@@ -241,18 +241,35 @@ class FlatMap final {
 
   template <typename Predicate> // bool(const Key&, const ValueType&)
   FlatMap& filter(Predicate&& predicate) {
-    // Use boost `flat_map` API to get the underlying container and
-    // apply a remove_if + erase. This allows to perform a filter in O(n).
-    auto container = m_map.extract_sequence();
-    container.erase(std::remove_if(container.begin(),
-                                   container.end(),
-                                   [predicate = std::forward<Predicate>(
-                                        predicate)](const auto& p) {
-                                     return !predicate(p.first, p.second);
-                                   }),
-                    container.end());
-    m_map.adopt_sequence(boost::container::ordered_unique_range,
-                         std::move(container));
+    switch (m_map.size()) {
+    case 0:
+      break;
+    case 1: {
+      // Special case to avoid the copy of `extract_sequence` when using
+      // `boost::container::small_vector` with size=1.
+      auto it = m_map.begin();
+      if (!predicate(it->first, it->second)) {
+        m_map.clear();
+      }
+      break;
+    }
+    default: {
+      // Use boost `flat_map` API to get the underlying container and
+      // apply a remove_if + erase. This allows to perform a filter in O(n).
+      auto container = m_map.extract_sequence();
+      container.erase(std::remove_if(container.begin(),
+                                     container.end(),
+                                     [predicate = std::forward<Predicate>(
+                                          predicate)](const auto& p) {
+                                       return !predicate(p.first, p.second);
+                                     }),
+                      container.end());
+      m_map.adopt_sequence(boost::container::ordered_unique_range,
+                           std::move(container));
+      break;
+    }
+    }
+
     return *this;
   }
 
