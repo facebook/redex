@@ -15,6 +15,7 @@
 
 #include <boost/container/small_vector.hpp>
 
+#include <sparta/AbstractMapValue.h>
 #include <sparta/Exceptions.h>
 #include <sparta/FlatMap.h>
 #include <sparta/FlattenIterator.h>
@@ -32,19 +33,18 @@ namespace sparta {
  * See `PatriciaTreeMap` for more information about patricia trees.
  */
 template <typename Key,
-          typename ValueType,
-          typename Value = pt_core::SimpleValue<ValueType>,
+          typename Value,
+          typename ValueInterface = pt_core::SimpleValue<Value>,
           typename KeyHash = std::hash<Key>,
           typename KeyCompare = std::less<Key>,
           typename KeyEqual = std::equal_to<Key>>
 class PatriciaTreeHashMap final {
  private:
-  using SmallVector =
-      boost::container::small_vector<std::pair<Key, ValueType>, 1>;
+  using SmallVector = boost::container::small_vector<std::pair<Key, Value>, 1>;
   using FlatMapT =
-      FlatMap<Key, ValueType, Value, KeyCompare, KeyEqual, SmallVector>;
+      FlatMap<Key, Value, ValueInterface, KeyCompare, KeyEqual, SmallVector>;
 
-  struct FlatMapValue {
+  struct FlatMapValue final : public AbstractMapValue<FlatMapValue> {
     using type = FlatMapT;
 
     static FlatMapT default_value() { return FlatMapT(); }
@@ -58,7 +58,7 @@ class PatriciaTreeHashMap final {
     static bool leq(const type& x, const type& y) { return x.leq(y); }
 
     constexpr static AbstractValueKind default_value_kind =
-        Value::default_value_kind;
+        ValueInterface::default_value_kind;
   };
   using PatriciaTreeT = PatriciaTreeMap<std::size_t, FlatMapT, FlatMapValue>;
 
@@ -80,7 +80,7 @@ class PatriciaTreeHashMap final {
  public:
   // C++ container concept member types
   using key_type = Key;
-  using mapped_type = typename Value::type;
+  using mapped_type = typename ValueInterface::type;
   using value_type = typename FlatMapT::value_type;
   using iterator = FlattenIteratorT;
   using const_iterator = FlattenIteratorT;
@@ -89,8 +89,14 @@ class PatriciaTreeHashMap final {
   using const_reference = typename FlattenIteratorT::reference;
   using const_pointer = typename FlattenIteratorT::pointer;
 
-  static_assert(std::is_same_v<ValueType, mapped_type>,
-                "ValueType must be equal to Value::type");
+  ~PatriciaTreeHashMap() {
+    static_assert(std::is_same_v<Value, mapped_type>,
+                  "Value must be equal to ValueInterface::type");
+    static_assert(std::is_base_of<AbstractMapValue<ValueInterface>,
+                                  ValueInterface>::value,
+                  "ValueInterface doesn't inherit from AbstractMapValue");
+    ValueInterface::check_interface();
+  }
 
   bool empty() const { return m_tree.empty(); }
 
@@ -193,7 +199,7 @@ class PatriciaTreeHashMap final {
     return *this;
   }
 
-  template <typename Predicate> // bool(const Key&, const ValueType&)
+  template <typename Predicate> // bool(const Key&, const mapped_type&)
   PatriciaTreeHashMap& filter(const Predicate& predicate) {
     m_tree.transform([&predicate](FlatMapT flat_map) -> FlatMapT {
       flat_map.filter(predicate);

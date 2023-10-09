@@ -15,43 +15,17 @@
 #include <vector>
 
 #include <sparta/AbstractDomain.h>
+#include <sparta/TypeTraits.h>
 
 namespace sparta {
 
-// To achieve a high level of metaprogramming, we use a little C++ trick to
-// check for existence of a member function. This is implemented with SFINAE.
-//
-// More details:
-// https://en.wikibooks.org/wiki/More_C%2B%2B_Idioms/Member_Detector
-// https://stackoverflow.com/questions/257288/templated-check-for-the-existence-of-a-class-member-function
-
-#define HAS_MEM_FUNC(func, name)                                \
-  template <typename T, typename Sign>                          \
-  struct name {                                                 \
-    typedef char yes[1];                                        \
-    typedef char no[2];                                         \
-    template <typename U, U>                                    \
-    struct type_check;                                          \
-    template <typename _1>                                      \
-    static yes& chk(type_check<Sign, &_1::func>*);              \
-    template <typename>                                         \
-    static no& chk(...);                                        \
-    static bool const value = sizeof(chk<T>(0)) == sizeof(yes); \
-  }
-
-template <bool C, typename T = void>
-struct enable_if {
-  typedef T type;
-};
-
-template <typename T>
-struct enable_if<false, T> {};
-
-HAS_MEM_FUNC(analyze_edge, has_analyze_edge);
+namespace {
+SPARTA_HAS_MEMBER_FUNCTION_WITH_SIGNATURE(analyze_edge, has_analyze_edge);
+}
 
 // The compiler is going to optionally enable either of the following
 template <typename Callsite, typename Edge, typename Domain>
-typename enable_if<
+typename std::enable_if<
     has_analyze_edge<Callsite,
                      Domain (Callsite::*)(const Edge&, const Domain&)>::value,
     Domain>::type
@@ -63,7 +37,7 @@ optionally_analyze_edge_if_exist(Callsite*,
 }
 
 template <typename Callsite, typename Edge, typename Domain>
-typename enable_if<
+typename std::enable_if<
     !has_analyze_edge<Callsite,
                       Domain (Callsite::*)(const Edge&, const Domain&)>::value,
     Domain>::type

@@ -16,6 +16,7 @@
 
 #include <boost/optional.hpp>
 
+#include <sparta/AbstractMapValue.h>
 #include <sparta/Exceptions.h>
 #include <sparta/PatriciaTreeCore.h>
 #include <sparta/PatriciaTreeUtil.h>
@@ -37,9 +38,10 @@ namespace sparta {
  * save space by implicitly mapping all unbound keys to the default value. As a
  * consequence, the default value must be either Top or Bottom.
  *
- * Value is a structure that should contain the following components:
+ * ValueInterface is a structure that must inherit from `AbstractMapValue`. It
+ * should contain the following components:
  *
- *   struct Value {
+ *   struct ValueInterface {
  *     // The type of elements used as values in the map.
  *     using type = ...;
  *
@@ -68,10 +70,10 @@ namespace sparta {
  * unsigned integers or pointers to objects.
  */
 template <typename Key,
-          typename ValueType,
-          typename Value = pt_core::SimpleValue<ValueType>>
+          typename Value,
+          typename ValueInterface = pt_core::SimpleValue<Value>>
 class PatriciaTreeMap final {
-  using Core = pt_core::PatriciaTreeCore<Key, Value>;
+  using Core = pt_core::PatriciaTreeCore<Key, ValueInterface>;
   using Codec = typename Core::Codec;
 
  public:
@@ -88,8 +90,14 @@ class PatriciaTreeMap final {
 
   using IntegerType = typename Codec::IntegerType;
 
-  static_assert(std::is_same_v<ValueType, mapped_type>,
-                "ValueType must be equal to Value::type");
+  ~PatriciaTreeMap() {
+    static_assert(std::is_same_v<Value, mapped_type>,
+                  "Value must be equal to ValueInterface::type");
+    static_assert(std::is_base_of<AbstractMapValue<ValueInterface>,
+                                  ValueInterface>::value,
+                  "ValueInterface doesn't inherit from AbstractMapValue");
+    ValueInterface::check_interface();
+  }
 
   bool empty() const { return m_core.empty(); }
 
@@ -172,7 +180,7 @@ class PatriciaTreeMap final {
     return *this;
   }
 
-  template <typename Predicate> // bool(const Key&, const ValueType&)
+  template <typename Predicate> // bool(const Key&, const mapped_type&)
   PatriciaTreeMap& filter(Predicate&& predicate) {
     m_core.filter(std::forward<Predicate>(predicate));
     return *this;
@@ -257,7 +265,7 @@ class PatriciaTreeMap final {
   template <typename Func>
   inline static auto apply_leafs(Func&& func) {
     return [func = std::forward<Func>(func)](const auto&... leaf_ptrs) {
-      auto default_value = Value::default_value();
+      auto default_value = ValueInterface::default_value();
       auto return_value =
           func((leaf_ptrs ? leaf_ptrs->value() : default_value)...);
 
@@ -267,7 +275,7 @@ class PatriciaTreeMap final {
 
   inline static boost::optional<mapped_type> keep_if_non_default(
       mapped_type value) {
-    if (Value::is_default_value(value)) {
+    if (ValueInterface::is_default_value(value)) {
       return boost::none;
     } else {
       return value;

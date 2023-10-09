@@ -252,7 +252,7 @@ class MapValue final
     : public AbstractValue<
           MapValue<Variable, Domain, VariableHash, VariableEqual>> {
  public:
-  struct ValueInterface {
+  struct ValueInterface final : public AbstractMapValue<ValueInterface> {
     using type = Domain;
 
     static type default_value() { return type::top(); }
