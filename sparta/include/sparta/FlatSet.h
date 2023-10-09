@@ -14,6 +14,7 @@
 
 #include <boost/container/flat_set.hpp>
 
+#include <sparta/AbstractSet.h>
 #include <sparta/PatriciaTreeUtil.h>
 
 namespace sparta {
@@ -30,7 +31,9 @@ template <typename Element,
           typename Equal = std::equal_to<Element>,
           typename AllocatorOrContainer =
               boost::container::new_allocator<Element>>
-class FlatSet final {
+class FlatSet final
+    : public AbstractSet<
+          FlatSet<Element, Compare, Equal, AllocatorOrContainer>> {
  private:
   using BoostFlatSet =
       boost::container::flat_set<Element, Compare, AllocatorOrContainer>;
@@ -95,14 +98,6 @@ class FlatSet final {
                       other.m_set.end(), Equal());
   }
 
-  friend bool operator==(const FlatSet& s1, const FlatSet& s2) {
-    return s1.equals(s2);
-  }
-
-  friend bool operator!=(const FlatSet& s1, const FlatSet& s2) {
-    return !s1.equals(s2);
-  }
-
   FlatSet& insert(Element key) {
     m_set.insert(key);
     return *this;
@@ -117,6 +112,18 @@ class FlatSet final {
   void visit(Visitor&& visitor) const {
     for (const auto& element : m_set) {
       visitor(element);
+    }
+  }
+
+  /*
+   * If the set is a singleton, returns a pointer to the element.
+   * Otherwise, returns nullptr.
+   */
+  const Element* singleton() const {
+    if (m_set.size() == 1) {
+      return &*m_set.begin();
+    } else {
+      return nullptr;
     }
   }
 

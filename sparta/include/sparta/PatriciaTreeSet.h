@@ -15,6 +15,7 @@
 #include <type_traits>
 #include <utility>
 
+#include <sparta/AbstractSet.h>
 #include <sparta/Exceptions.h>
 #include <sparta/PatriciaTreeCore.h>
 #include <sparta/PatriciaTreeUtil.h>
@@ -48,7 +49,7 @@ namespace sparta {
  * or pointers to objects.
  */
 template <typename Element>
-class PatriciaTreeSet final {
+class PatriciaTreeSet final : public AbstractSet<PatriciaTreeSet<Element>> {
   using Empty = pt_core::EmptyValue;
   using Core = pt_core::PatriciaTreeCore<Element, Empty>;
   using Codec = typename Core::Codec;
@@ -100,14 +101,6 @@ class PatriciaTreeSet final {
 
   bool equals(const PatriciaTreeSet& other) const {
     return m_core.equals(other.m_core);
-  }
-
-  friend bool operator==(const PatriciaTreeSet& s1, const PatriciaTreeSet& s2) {
-    return s1.equals(s2);
-  }
-
-  friend bool operator!=(const PatriciaTreeSet& s1, const PatriciaTreeSet& s2) {
-    return !s1.equals(s2);
   }
 
   /*
@@ -184,24 +177,6 @@ class PatriciaTreeSet final {
     // For diff, empty value without empty value is no value.
     m_core.diff([](const auto&...) { return nullptr; }, other.m_core);
     return *this;
-  }
-
-  PatriciaTreeSet get_union_with(const PatriciaTreeSet& other) const {
-    auto result = *this;
-    result.union_with(other);
-    return result;
-  }
-
-  PatriciaTreeSet get_intersection_with(const PatriciaTreeSet& other) const {
-    auto result = *this;
-    result.intersection_with(other);
-    return result;
-  }
-
-  PatriciaTreeSet get_difference_with(const PatriciaTreeSet& other) const {
-    auto result = *this;
-    result.difference_with(other);
-    return result;
   }
 
   /*
