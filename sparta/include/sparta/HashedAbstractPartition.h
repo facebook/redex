@@ -45,7 +45,7 @@ class HashedAbstractPartition final
     : public AbstractDomain<
           HashedAbstractPartition<Label, Domain, LabelHash, LabelEqual>> {
  public:
-  struct ValueInterface {
+  struct ValueInterface final : public AbstractMapValue<ValueInterface> {
     using type = Domain;
 
     static type default_value() { return type::bottom(); }

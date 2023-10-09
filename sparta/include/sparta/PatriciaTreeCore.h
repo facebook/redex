@@ -22,6 +22,7 @@
 #include <boost/optional.hpp>
 
 #include <sparta/AbstractDomain.h>
+#include <sparta/AbstractMapValue.h>
 #include <sparta/Exceptions.h>
 #include <sparta/PatriciaTreeUtil.h>
 
@@ -60,7 +61,7 @@ class PatriciaTreeIterator;
  * are default-constructible and equality-comparable.
  */
 template <typename T>
-struct SimpleValue {
+struct SimpleValue final : public AbstractMapValue<SimpleValue<T>> {
   using type = T;
 
   static T default_value() { return T(); }

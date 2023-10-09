@@ -14,6 +14,7 @@
 
 #include <boost/container/flat_map.hpp>
 
+#include <sparta/AbstractMapValue.h>
 #include <sparta/PatriciaTreeCore.h>
 
 namespace sparta {
@@ -26,21 +27,21 @@ namespace sparta {
  * `PatriciaTreeMap`.
  */
 template <typename Key,
-          typename ValueType,
-          typename Value = pt_core::SimpleValue<ValueType>,
+          typename Value,
+          typename ValueInterface = pt_core::SimpleValue<Value>,
           typename KeyCompare = std::less<Key>,
           typename KeyEqual = std::equal_to<Key>,
           typename AllocatorOrContainer =
-              boost::container::new_allocator<std::pair<Key, ValueType>>>
+              boost::container::new_allocator<std::pair<Key, Value>>>
 class FlatMap final {
  private:
-  using BoostFlatMap = boost::container::
-      flat_map<Key, ValueType, KeyCompare, AllocatorOrContainer>;
+  using BoostFlatMap =
+      boost::container::flat_map<Key, Value, KeyCompare, AllocatorOrContainer>;
 
  public:
   // C++ container concept member types
   using key_type = Key;
-  using mapped_type = typename Value::type;
+  using mapped_type = typename ValueInterface::type;
   using value_type = typename BoostFlatMap::value_type;
   using iterator = typename BoostFlatMap::const_iterator;
   using const_iterator = iterator;
@@ -49,8 +50,14 @@ class FlatMap final {
   using const_reference = typename BoostFlatMap::const_reference;
   using const_pointer = typename BoostFlatMap::const_pointer;
 
-  static_assert(std::is_same_v<ValueType, mapped_type>,
-                "ValueType must be equal to Value::type");
+  ~FlatMap() {
+    static_assert(std::is_same_v<Value, mapped_type>,
+                  "Value must be equal to ValueInterface::type");
+    static_assert(std::is_base_of<AbstractMapValue<ValueInterface>,
+                                  ValueInterface>::value,
+                  "ValueInterface doesn't inherit from AbstractMapValue");
+    ValueInterface::check_interface();
+  }
 
  private:
   struct ComparePairWithKey {
@@ -62,20 +69,20 @@ class FlatMap final {
   struct PairEqual {
     bool operator()(const value_type& left, const value_type& right) const {
       return KeyEqual()(left.first, right.first) &&
-             Value::equals(left.second, right.second);
+             ValueInterface::equals(left.second, right.second);
     }
   };
 
   void erase_default_values() {
     this->filter([](const Key&, const mapped_type& value) {
-      return !Value::is_default_value(value);
+      return !ValueInterface::is_default_value(value);
     });
   }
 
  public:
   explicit FlatMap() = default;
 
-  explicit FlatMap(std::initializer_list<std::pair<Key, ValueType>> l) {
+  explicit FlatMap(std::initializer_list<std::pair<Key, Value>> l) {
     for (const auto& p : l) {
       insert_or_assign(p.first, p.second);
     }
@@ -94,7 +101,7 @@ class FlatMap final {
   const mapped_type& at(const Key& key) const {
     auto it = m_map.find(key);
     if (it == m_map.end()) {
-      static const ValueType default_value = Value::default_value();
+      static const Value default_value = ValueInterface::default_value();
       return default_value;
     } else {
       return it->second;
@@ -108,7 +115,7 @@ class FlatMap final {
 
   template <typename V>
   FlatMap& insert_or_assign(const Key& key, V&& value) {
-    if (Value::is_default_value(value)) {
+    if (ValueInterface::is_default_value(value)) {
       remove(key);
     } else {
       m_map.insert_or_assign(key, std::forward<V>(value));
@@ -118,9 +125,10 @@ class FlatMap final {
 
   template <typename Operation> // void(mapped_type*)
   FlatMap& update(Operation&& operation, const Key& key) {
-    auto [it, inserted] = m_map.try_emplace(key, Value::default_value());
+    auto [it, inserted] =
+        m_map.try_emplace(key, ValueInterface::default_value());
     operation(&it->second);
-    if (Value::is_default_value(it->second)) {
+    if (ValueInterface::is_default_value(it->second)) {
       m_map.erase(it);
     }
     return *this;
@@ -149,7 +157,7 @@ class FlatMap final {
       if (it == end || !KeyEqual()(it->first, other_it->first)) {
         return false;
       }
-      if (!Value::leq(it->second, other_it->second)) {
+      if (!ValueInterface::leq(it->second, other_it->second)) {
         return false;
       } else {
         ++it;
@@ -182,7 +190,7 @@ class FlatMap final {
       if (other_it == other_end || !KeyEqual()(it->first, other_it->first)) {
         return false;
       }
-      if (!Value::leq(it->second, other_it->second)) {
+      if (!ValueInterface::leq(it->second, other_it->second)) {
         return false;
       } else {
         ++it;
@@ -195,20 +203,22 @@ class FlatMap final {
 
  public:
   bool leq(const FlatMap& other) const {
-    static_assert(std::is_base_of_v<AbstractDomain<ValueType>, ValueType>,
+    static_assert(std::is_base_of_v<AbstractDomain<Value>, Value>,
                   "leq can only be used when Value implements AbstractDomain");
 
-    // Assumes Value::default_value() is either Top or Bottom.
-    if constexpr (Value::default_value_kind == AbstractValueKind::Top) {
+    // Assumes ValueInterface::default_value() is either Top or Bottom.
+    if constexpr (ValueInterface::default_value_kind ==
+                  AbstractValueKind::Top) {
       return this->leq_when_default_is_top(other);
-    } else if constexpr (Value::default_value_kind ==
+    } else if constexpr (ValueInterface::default_value_kind ==
                          AbstractValueKind::Bottom) {
       return this->leq_when_default_is_bottom(other);
     } else {
       static_assert(
-          Value::default_value_kind == AbstractValueKind::Top ||
-              Value::default_value_kind == AbstractValueKind::Bottom,
-          "leq can only be used when Value::default_value() is top or bottom");
+          ValueInterface::default_value_kind == AbstractValueKind::Top ||
+              ValueInterface::default_value_kind == AbstractValueKind::Bottom,
+          "leq can only be used when ValueInterface::default_value() is top or "
+          "bottom");
     }
   }
 
@@ -230,7 +240,7 @@ class FlatMap final {
     bool has_default_value = false;
     for (auto& p : m_map) {
       f(&p.second);
-      if (Value::is_default_value(p.second)) {
+      if (ValueInterface::is_default_value(p.second)) {
         has_default_value = true;
       }
     }
@@ -246,7 +256,7 @@ class FlatMap final {
     }
   }
 
-  template <typename Predicate> // bool(const Key&, const ValueType&)
+  template <typename Predicate> // bool(const Key&, const mapped_type&)
   FlatMap& filter(Predicate&& predicate) {
     switch (m_map.size()) {
     case 0:
@@ -323,7 +333,7 @@ class FlatMap final {
         ++it;
         ++other_it;
       } else {
-        it->second = Value::default_value();
+        it->second = ValueInterface::default_value();
         ++it;
       }
     }

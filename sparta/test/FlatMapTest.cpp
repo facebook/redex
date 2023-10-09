@@ -116,7 +116,8 @@ TEST_F(FlatMapTest, updates) {
   EXPECT_EQ(0, m1.at(20));
 }
 
-struct StringSetPartitionInterface {
+struct StringSetPartitionInterface final
+    : public AbstractMapValue<StringSetPartitionInterface> {
   using type = StringAbstractSet;
 
   static type default_value() { return type::bottom(); }
@@ -225,7 +226,8 @@ TEST_F(FlatMapTest, partitionLeq) {
   }
 }
 
-struct StringSetEnvironmentInterface {
+struct StringSetEnvironmentInterface final
+    : public AbstractMapValue<StringSetEnvironmentInterface> {
   using type = StringAbstractSet;
 
   static type default_value() { return type::top(); }

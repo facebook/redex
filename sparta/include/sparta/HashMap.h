@@ -14,6 +14,7 @@
 #include <ostream>
 #include <unordered_map>
 
+#include <sparta/AbstractMapValue.h>
 #include <sparta/PatriciaTreeCore.h>
 
 namespace sparta {
@@ -26,17 +27,17 @@ namespace sparta {
  * `PatriciaTreeMap`.
  */
 template <typename Key,
-          typename ValueType,
-          typename Value = pt_core::SimpleValue<ValueType>,
+          typename Value,
+          typename ValueInterface = pt_core::SimpleValue<Value>,
           typename KeyHash = std::hash<Key>,
           typename KeyEqual = std::equal_to<Key>>
 class HashMap final {
  public:
-  using StdUnorderedMap = std::unordered_map<Key, ValueType, KeyHash, KeyEqual>;
+  using StdUnorderedMap = std::unordered_map<Key, Value, KeyHash, KeyEqual>;
 
   // C++ container concept member types
   using key_type = Key;
-  using mapped_type = typename Value::type;
+  using mapped_type = typename ValueInterface::type;
   using value_type = typename StdUnorderedMap::value_type;
   using iterator = typename StdUnorderedMap::const_iterator;
   using const_iterator = iterator;
@@ -45,12 +46,18 @@ class HashMap final {
   using const_reference = typename StdUnorderedMap::const_reference;
   using const_pointer = typename StdUnorderedMap::const_pointer;
 
-  static_assert(std::is_same_v<ValueType, mapped_type>,
-                "ValueType must be equal to Value::type");
+  ~HashMap() {
+    static_assert(std::is_same_v<Value, mapped_type>,
+                  "Value must be equal to ValueInterface::type");
+    static_assert(std::is_base_of<AbstractMapValue<ValueInterface>,
+                                  ValueInterface>::value,
+                  "ValueInterface doesn't inherit from AbstractMapValue");
+    ValueInterface::check_interface();
+  }
 
   explicit HashMap() = default;
 
-  explicit HashMap(std::initializer_list<std::pair<Key, ValueType>> l) {
+  explicit HashMap(std::initializer_list<std::pair<Key, Value>> l) {
     for (const auto& p : l) {
       insert_or_assign(p.first, p.second);
     }
@@ -69,7 +76,7 @@ class HashMap final {
   const mapped_type& at(const Key& key) const {
     auto it = m_map.find(key);
     if (it == m_map.end()) {
-      static const ValueType default_value = Value::default_value();
+      static const Value default_value = ValueInterface::default_value();
       return default_value;
     } else {
       return it->second;
@@ -82,7 +89,7 @@ class HashMap final {
   }
 
   HashMap& insert_or_assign(const Key& key, const mapped_type& value) {
-    if (Value::is_default_value(value)) {
+    if (ValueInterface::is_default_value(value)) {
       remove(key);
     } else {
       m_map.insert_or_assign(key, value);
@@ -91,7 +98,7 @@ class HashMap final {
   }
 
   HashMap& insert_or_assign(const Key& key, mapped_type&& value) {
-    if (Value::is_default_value(value)) {
+    if (ValueInterface::is_default_value(value)) {
       remove(key);
     } else {
       m_map.insert_or_assign(key, std::move(value));
@@ -106,12 +113,12 @@ class HashMap final {
     auto it = m_map.find(key);
     bool existing = it != m_map.end();
 
-    ValueType new_value = Value::default_value();
-    ValueType* value = existing ? &it->second : &new_value;
+    Value new_value = ValueInterface::default_value();
+    Value* value = existing ? &it->second : &new_value;
 
     operation(value);
 
-    if (Value::is_default_value(*value)) {
+    if (ValueInterface::is_default_value(*value)) {
       if (existing) {
         m_map.erase(it);
       }
@@ -140,7 +147,7 @@ class HashMap final {
         // not Top.
         return false;
       }
-      if (!Value::leq(it->second, binding.second)) {
+      if (!ValueInterface::leq(it->second, binding.second)) {
         return false;
       }
     }
@@ -162,7 +169,7 @@ class HashMap final {
         // The other value is Bottom.
         return false;
       }
-      if (!Value::leq(binding.second, it->second)) {
+      if (!ValueInterface::leq(binding.second, it->second)) {
         return false;
       }
     }
@@ -171,20 +178,22 @@ class HashMap final {
 
  public:
   bool leq(const HashMap& other) const {
-    static_assert(std::is_base_of_v<AbstractDomain<ValueType>, ValueType>,
+    static_assert(std::is_base_of_v<AbstractDomain<Value>, Value>,
                   "leq can only be used when Value implements AbstractDomain");
 
-    // Assumes Value::default_value_kind is either Top or Bottom.
-    if constexpr (Value::default_value_kind == AbstractValueKind::Top) {
+    // Assumes ValueInterface::default_value_kind is either Top or Bottom.
+    if constexpr (ValueInterface::default_value_kind ==
+                  AbstractValueKind::Top) {
       return this->leq_when_default_is_top(other);
-    } else if constexpr (Value::default_value_kind ==
+    } else if constexpr (ValueInterface::default_value_kind ==
                          AbstractValueKind::Bottom) {
       return this->leq_when_default_is_bottom(other);
     } else {
       static_assert(
-          Value::default_value_kind == AbstractValueKind::Top ||
-              Value::default_value_kind == AbstractValueKind::Bottom,
-          "leq can only be used when Value::default_value() is top or bottom");
+          ValueInterface::default_value_kind == AbstractValueKind::Top ||
+              ValueInterface::default_value_kind == AbstractValueKind::Bottom,
+          "leq can only be used when ValueInterface::default_value() is top or "
+          "bottom");
     }
   }
 
@@ -197,7 +206,7 @@ class HashMap final {
       if (it == other.m_map.end()) {
         return false;
       }
-      if (!Value::equals(binding.second, it->second)) {
+      if (!ValueInterface::equals(binding.second, it->second)) {
         return false;
       }
     }
@@ -217,7 +226,7 @@ class HashMap final {
     auto it = m_map.begin(), end = m_map.end();
     while (it != end) {
       f(&it->second);
-      if (Value::is_default_value(it->second)) {
+      if (ValueInterface::is_default_value(it->second)) {
         it = m_map.erase(it);
       } else {
         ++it;
@@ -233,7 +242,7 @@ class HashMap final {
     }
   }
 
-  template <typename Predicate> // bool(const Key&, const ValueType&)
+  template <typename Predicate> // bool(const Key&, const Value&)
   HashMap& filter(Predicate&& predicate) {
     auto it = m_map.begin(), end = m_map.end();
     while (it != end) {
@@ -256,7 +265,7 @@ class HashMap final {
         m_map.emplace(other_binding.first, other_binding.second);
       } else {
         combine(&binding->second, other_binding.second);
-        if (Value::is_default_value(binding->second)) {
+        if (ValueInterface::is_default_value(binding->second)) {
           m_map.erase(binding);
         }
       }
@@ -274,7 +283,7 @@ class HashMap final {
         it = m_map.erase(it);
       } else {
         combine(&it->second, other_binding->second);
-        if (Value::is_default_value(it->second)) {
+        if (ValueInterface::is_default_value(it->second)) {
           it = m_map.erase(it);
         } else {
           ++it;
@@ -292,7 +301,7 @@ class HashMap final {
       auto binding = m_map.find(other_binding.first);
       if (binding != m_map.end()) {
         combine(&binding->second, other_binding.second);
-        if (Value::is_default_value(binding->second)) {
+        if (ValueInterface::is_default_value(binding->second)) {
           m_map.erase(binding);
         }
       }
