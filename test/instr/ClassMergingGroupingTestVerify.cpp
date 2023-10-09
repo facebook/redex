@@ -44,18 +44,18 @@ TEST_F(PostVerify, ShapeWithGrouping) {
   // The 1st hierarhcy only produce one shape. The trailing subgroup of size 1
   // is not merged.
   auto gb0 = find_class_named(
-      classes, "Lcom/facebook/redextest/GroupingBaseShape0S0000000;");
+      classes, "Lcom/facebook/redextest/GroupingBaseShape_S0000000_0;");
   ASSERT_NE(gb0, nullptr);
   auto gb1 = find_class_named(
-      classes, "Lcom/facebook/redextest/GroupingBaseShape1S0000000_1;");
+      classes, "Lcom/facebook/redextest/GroupingBaseShape_S0000000_1_1;");
   ASSERT_EQ(gb1, nullptr);
 
   // The 2nd hierarchy produces two shapes. The size of the trailing subgroup is
   // greater than one.
   auto gs0 = find_class_named(
-      classes, "Lcom/facebook/redextest/GroupingSBaseShape1S0000000;");
+      classes, "Lcom/facebook/redextest/GroupingSBaseShape_S0000000_1;");
   ASSERT_NE(gs0, nullptr);
   auto gs1 = find_class_named(
-      classes, "Lcom/facebook/redextest/GroupingSBaseShape2S0000000_1;");
+      classes, "Lcom/facebook/redextest/GroupingSBaseShape_S0000000_2_1;");
   ASSERT_NE(gs1, nullptr);
 }
