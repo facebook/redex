@@ -114,11 +114,11 @@ class PatriciaTreeHashMapAbstractPartition final
   }
 
   template <typename Operation> // void(Domain*)
-  bool transform(Operation&& f) {
+  void transform(Operation&& f) {
     if (is_top()) {
-      return false;
+      return;
     }
-    return m_map.transform(std::forward<Operation>(f));
+    m_map.transform(std::forward<Operation>(f));
   }
 
   template <typename Visitor> // void(const std::pair<Label, Domain>&)
