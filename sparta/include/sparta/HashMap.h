@@ -14,6 +14,7 @@
 #include <ostream>
 #include <unordered_map>
 
+#include <sparta/AbstractMap.h>
 #include <sparta/AbstractMapValue.h>
 #include <sparta/PatriciaTreeCore.h>
 
@@ -31,7 +32,9 @@ template <typename Key,
           typename ValueInterface = pt_core::SimpleValue<Value>,
           typename KeyHash = std::hash<Key>,
           typename KeyEqual = std::equal_to<Key>>
-class HashMap final {
+class HashMap final
+    : public AbstractMap<
+          HashMap<Key, Value, ValueInterface, KeyHash, KeyEqual>> {
  public:
   using StdUnorderedMap = std::unordered_map<Key, Value, KeyHash, KeyEqual>;
 
@@ -45,6 +48,9 @@ class HashMap final {
   using size_type = typename StdUnorderedMap::size_type;
   using const_reference = typename StdUnorderedMap::const_reference;
   using const_pointer = typename StdUnorderedMap::const_pointer;
+
+  constexpr static AbstractMapMutability mutability =
+      AbstractMapMutability::Mutable;
 
   ~HashMap() {
     static_assert(std::is_same_v<Value, mapped_type>,
@@ -213,16 +219,8 @@ class HashMap final {
     return true;
   }
 
-  friend bool operator==(const HashMap& m1, const HashMap& m2) {
-    return m1.equals(m2);
-  }
-
-  friend bool operator!=(const HashMap& m1, const HashMap& m2) {
-    return !m1.equals(m2);
-  }
-
   template <typename MappingFunction> // void(mapped_type*)
-  HashMap& transform(MappingFunction&& f) {
+  void transform(MappingFunction&& f) {
     auto it = m_map.begin(), end = m_map.end();
     while (it != end) {
       f(&it->second);
@@ -232,7 +230,6 @@ class HashMap final {
         ++it;
       }
     }
-    return *this;
   }
 
   template <typename Visitor> // void(const value_type&)
@@ -258,7 +255,7 @@ class HashMap final {
   // Requires CombiningFunction to coerce to
   // std::function<void(mapped_type*, const mapped_type&)>
   template <typename CombiningFunction>
-  void union_with(CombiningFunction&& combine, const HashMap& other) {
+  HashMap& union_with(CombiningFunction&& combine, const HashMap& other) {
     for (const auto& other_binding : other.m_map) {
       auto binding = m_map.find(other_binding.first);
       if (binding == m_map.end()) {
@@ -270,12 +267,14 @@ class HashMap final {
         }
       }
     }
+    return *this;
   }
 
   // Requires CombiningFunction to coerce to
   // std::function<void(mapped_type*, const mapped_type&)>
   template <typename CombiningFunction>
-  void intersection_with(CombiningFunction&& combine, const HashMap& other) {
+  HashMap& intersection_with(CombiningFunction&& combine,
+                             const HashMap& other) {
     auto it = m_map.begin(), end = m_map.end();
     while (it != end) {
       auto other_binding = other.m_map.find(it->first);
@@ -290,13 +289,14 @@ class HashMap final {
         }
       }
     }
+    return *this;
   }
 
   // Requires CombiningFunction to coerce to
   // std::function<void(mapped_type*, const mapped_type&)>
   // Requires `combine(bottom, ...)` to be a no-op.
   template <typename CombiningFunction>
-  void difference_with(CombiningFunction&& combine, const HashMap& other) {
+  HashMap& difference_with(CombiningFunction&& combine, const HashMap& other) {
     for (const auto& other_binding : other.m_map) {
       auto binding = m_map.find(other_binding.first);
       if (binding != m_map.end()) {
@@ -306,6 +306,7 @@ class HashMap final {
         }
       }
     }
+    return *this;
   }
 
   void clear() { m_map.clear(); }

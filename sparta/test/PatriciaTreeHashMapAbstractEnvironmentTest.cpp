@@ -244,11 +244,10 @@ TEST_F(PatriciaTreeHashMapAbstractEnvironmentTest, whiteBox) {
 
 TEST_F(PatriciaTreeHashMapAbstractEnvironmentTest, transform) {
   Environment e1({{1, Domain({"a", "b"})}});
-  bool any_changes = e1.transform([](Domain*) {});
-  EXPECT_FALSE(any_changes);
+  e1.transform([](Domain*) {});
+  EXPECT_EQ(e1.size(), 1);
 
-  any_changes = e1.transform([](Domain* d) { d->set_to_top(); });
-  EXPECT_TRUE(any_changes);
+  e1.transform([](Domain* d) { d->set_to_top(); });
   EXPECT_TRUE(e1.is_top());
 }
 

@@ -16,6 +16,7 @@
 
 #include <boost/optional.hpp>
 
+#include <sparta/AbstractMap.h>
 #include <sparta/AbstractMapValue.h>
 #include <sparta/Exceptions.h>
 #include <sparta/PatriciaTreeCore.h>
@@ -72,7 +73,8 @@ namespace sparta {
 template <typename Key,
           typename Value,
           typename ValueInterface = pt_core::SimpleValue<Value>>
-class PatriciaTreeMap final {
+class PatriciaTreeMap final
+    : public AbstractMap<PatriciaTreeMap<Key, Value, ValueInterface>> {
   using Core = pt_core::PatriciaTreeCore<Key, ValueInterface>;
   using Codec = typename Core::Codec;
 
@@ -89,6 +91,9 @@ class PatriciaTreeMap final {
   using const_pointer = const value_type*;
 
   using IntegerType = typename Codec::IntegerType;
+
+  constexpr static AbstractMapMutability mutability =
+      AbstractMapMutability::Immutable;
 
   ~PatriciaTreeMap() {
     static_assert(std::is_same_v<Value, mapped_type>,
@@ -117,14 +122,6 @@ class PatriciaTreeMap final {
 
   bool equals(const PatriciaTreeMap& other) const {
     return m_core.equals(other.m_core);
-  }
-
-  friend bool operator==(const PatriciaTreeMap& m1, const PatriciaTreeMap& m2) {
-    return m1.equals(m2);
-  }
-
-  friend bool operator!=(const PatriciaTreeMap& m1, const PatriciaTreeMap& m2) {
-    return !m1.equals(m2);
   }
 
   /*
@@ -215,30 +212,6 @@ class PatriciaTreeMap final {
     m_core.diff(apply_leafs(std::forward<CombiningFunction>(combine)),
                 other.m_core);
     return *this;
-  }
-
-  template <typename CombiningFunction>
-  PatriciaTreeMap get_union_with(CombiningFunction&& combine,
-                                 const PatriciaTreeMap& other) const {
-    auto result = *this;
-    result.union_with(std::forward<CombiningFunction>(combine), other);
-    return result;
-  }
-
-  template <typename CombiningFunction>
-  PatriciaTreeMap get_intersection_with(CombiningFunction&& combine,
-                                        const PatriciaTreeMap& other) const {
-    auto result = *this;
-    result.intersection_with(std::forward<CombiningFunction>(combine), other);
-    return result;
-  }
-
-  template <typename CombiningFunction>
-  PatriciaTreeMap get_difference_with(CombiningFunction&& combine,
-                                      const PatriciaTreeMap& other) const {
-    auto result = *this;
-    result.difference_with(std::forward<CombiningFunction>(combine), other);
-    return result;
   }
 
   void clear() { m_core.clear(); }

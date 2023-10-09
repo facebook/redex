@@ -15,6 +15,7 @@
 
 #include <boost/container/small_vector.hpp>
 
+#include <sparta/AbstractMap.h>
 #include <sparta/AbstractMapValue.h>
 #include <sparta/Exceptions.h>
 #include <sparta/FlatMap.h>
@@ -38,7 +39,13 @@ template <typename Key,
           typename KeyHash = std::hash<Key>,
           typename KeyCompare = std::less<Key>,
           typename KeyEqual = std::equal_to<Key>>
-class PatriciaTreeHashMap final {
+class PatriciaTreeHashMap final
+    : public AbstractMap<PatriciaTreeHashMap<Key,
+                                             Value,
+                                             ValueInterface,
+                                             KeyHash,
+                                             KeyCompare,
+                                             KeyEqual>> {
  private:
   using SmallVector = boost::container::small_vector<std::pair<Key, Value>, 1>;
   using FlatMapT =
@@ -89,6 +96,9 @@ class PatriciaTreeHashMap final {
   using const_reference = typename FlattenIteratorT::reference;
   using const_pointer = typename FlattenIteratorT::pointer;
 
+  constexpr static AbstractMapMutability mutability =
+      AbstractMapMutability::Mutable;
+
   ~PatriciaTreeHashMap() {
     static_assert(std::is_same_v<Value, mapped_type>,
                   "Value must be equal to ValueInterface::type");
@@ -128,16 +138,6 @@ class PatriciaTreeHashMap final {
     return m_tree.equals(other.m_tree);
   }
 
-  friend bool operator==(const PatriciaTreeHashMap& m1,
-                         const PatriciaTreeHashMap& m2) {
-    return m1.equals(m2);
-  }
-
-  friend bool operator!=(const PatriciaTreeHashMap& m1,
-                         const PatriciaTreeHashMap& m2) {
-    return !m1.equals(m2);
-  }
-
   /* See `PatriciaTreeMap::reference_equals` */
   bool reference_equals(const PatriciaTreeHashMap& other) const {
     return m_tree.reference_equals(other.m_tree);
@@ -169,8 +169,8 @@ class PatriciaTreeHashMap final {
   }
 
   template <typename MappingFunction> // void(mapped_type*)
-  bool transform(MappingFunction&& f) {
-    return m_tree.transform(
+  void transform(MappingFunction&& f) {
+    m_tree.transform(
         [f = std::forward<MappingFunction>(f)](FlatMapT flat_map) -> FlatMapT {
           flat_map.transform(f);
           return flat_map;
@@ -247,32 +247,6 @@ class PatriciaTreeHashMap final {
         },
         other.m_tree);
     return *this;
-  }
-
-  template <typename CombiningFunction>
-  PatriciaTreeHashMap get_union_with(const CombiningFunction& combine,
-                                     const PatriciaTreeHashMap& other) const {
-    auto result = *this;
-    result.union_with(combine, other);
-    return result;
-  }
-
-  template <typename CombiningFunction>
-  PatriciaTreeHashMap get_intersection_with(
-      const CombiningFunction& combine,
-      const PatriciaTreeHashMap& other) const {
-    auto result = *this;
-    result.intersection_with(combine, other);
-    return result;
-  }
-
-  template <typename CombiningFunction>
-  PatriciaTreeHashMap get_difference_with(
-      const CombiningFunction& combine,
-      const PatriciaTreeHashMap& other) const {
-    auto result = *this;
-    result.difference_with(combine, other);
-    return result;
   }
 
   void clear() { m_tree.clear(); }

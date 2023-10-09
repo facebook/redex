@@ -14,6 +14,7 @@
 
 #include <boost/container/flat_map.hpp>
 
+#include <sparta/AbstractMap.h>
 #include <sparta/AbstractMapValue.h>
 #include <sparta/PatriciaTreeCore.h>
 
@@ -33,7 +34,12 @@ template <typename Key,
           typename KeyEqual = std::equal_to<Key>,
           typename AllocatorOrContainer =
               boost::container::new_allocator<std::pair<Key, Value>>>
-class FlatMap final {
+class FlatMap final : public AbstractMap<FlatMap<Key,
+                                                 Value,
+                                                 ValueInterface,
+                                                 KeyCompare,
+                                                 KeyEqual,
+                                                 AllocatorOrContainer>> {
  private:
   using BoostFlatMap =
       boost::container::flat_map<Key, Value, KeyCompare, AllocatorOrContainer>;
@@ -49,6 +55,9 @@ class FlatMap final {
   using size_type = typename BoostFlatMap::size_type;
   using const_reference = typename BoostFlatMap::const_reference;
   using const_pointer = typename BoostFlatMap::const_pointer;
+
+  constexpr static AbstractMapMutability mutability =
+      AbstractMapMutability::Mutable;
 
   ~FlatMap() {
     static_assert(std::is_same_v<Value, mapped_type>,
@@ -227,14 +236,6 @@ class FlatMap final {
                       other.m_map.end(), PairEqual());
   }
 
-  friend bool operator==(const FlatMap& m1, const FlatMap& m2) {
-    return m1.equals(m2);
-  }
-
-  friend bool operator!=(const FlatMap& m1, const FlatMap& m2) {
-    return !m1.equals(m2);
-  }
-
   template <typename MappingFunction> // void(mapped_type*)
   void transform(MappingFunction&& f) {
     bool has_default_value = false;
@@ -293,7 +294,7 @@ class FlatMap final {
   // Requires CombiningFunction to coerce to
   // std::function<void(mapped_type*, const mapped_type&)>
   template <typename CombiningFunction>
-  void union_with(CombiningFunction&& combine, const FlatMap& other) {
+  FlatMap& union_with(CombiningFunction&& combine, const FlatMap& other) {
     auto it = m_map.begin(), end = m_map.end();
     auto other_it = other.m_map.begin(), other_end = other.m_map.end();
     while (other_it != other_end) {
@@ -313,12 +314,14 @@ class FlatMap final {
       ++other_it;
     }
     erase_default_values();
+    return *this;
   }
 
   // Requires CombiningFunction to coerce to
   // std::function<void(mapped_type*, const mapped_type&)>
   template <typename CombiningFunction>
-  void intersection_with(CombiningFunction&& combine, const FlatMap& other) {
+  FlatMap& intersection_with(CombiningFunction&& combine,
+                             const FlatMap& other) {
     auto it = m_map.begin(), end = m_map.end();
     auto other_it = other.m_map.begin(), other_end = other.m_map.end();
     while (it != end) {
@@ -338,19 +341,20 @@ class FlatMap final {
       }
     }
     erase_default_values();
+    return *this;
   }
 
   // Requires CombiningFunction to coerce to
   // std::function<void(mapped_type*, const mapped_type&)>
   // Requires `combine(bottom, ...)` to be a no-op.
   template <typename CombiningFunction>
-  void difference_with(CombiningFunction&& combine, const FlatMap& other) {
+  FlatMap& difference_with(CombiningFunction&& combine, const FlatMap& other) {
     auto it = m_map.begin(), end = m_map.end();
     auto other_it = other.m_map.begin(), other_end = other.m_map.end();
     while (other_it != other_end) {
       it = std::lower_bound(it, end, other_it->first, ComparePairWithKey());
       if (it == end) {
-        return;
+        break;
       }
       if (KeyEqual()(it->first, other_it->first)) {
         combine(&it->second, other_it->second);
@@ -359,6 +363,7 @@ class FlatMap final {
       ++other_it;
     }
     erase_default_values();
+    return *this;
   }
 
   void clear() { m_map.clear(); }
