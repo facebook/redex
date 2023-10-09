@@ -852,15 +852,17 @@ bool BundleResources::rename_classes_in_layout(
 
 namespace {
 
-std::vector<std::string> find_subdir_in_modules(
-    const std::string& extracted_dir, const std::string& subdir) {
+std::vector<std::string> find_subdirs_in_modules(
+    const std::string& extracted_dir, const std::vector<std::string>& subdirs) {
   std::vector<std::string> dirs;
   boost::filesystem::path dir(extracted_dir);
   for (auto& entry : boost::make_iterator_range(
            boost::filesystem::directory_iterator(dir), {})) {
-    auto maybe = entry.path() / subdir;
-    if (boost::filesystem::exists(maybe)) {
-      dirs.emplace_back(maybe.string());
+    for (const auto& subdir : subdirs) {
+      auto maybe = entry.path() / subdir;
+      if (boost::filesystem::exists(maybe)) {
+        dirs.emplace_back(maybe.string());
+      }
     }
   }
   return dirs;
@@ -869,11 +871,11 @@ std::vector<std::string> find_subdir_in_modules(
 } // namespace
 
 std::vector<std::string> BundleResources::find_res_directories() {
-  return find_subdir_in_modules(m_directory, "res");
+  return find_subdirs_in_modules(m_directory, {"res"});
 }
 
 std::vector<std::string> BundleResources::find_lib_directories() {
-  return find_subdir_in_modules(m_directory, "lib");
+  return find_subdirs_in_modules(m_directory, {"lib", "assets/lib"});
 }
 
 std::string BundleResources::get_base_assets_dir() {
