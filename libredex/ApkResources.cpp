@@ -818,7 +818,7 @@ std::vector<std::string> ApkResources::find_res_directories() {
 }
 
 std::vector<std::string> ApkResources::find_lib_directories() {
-  return {m_directory + "/lib"};
+  return {m_directory + "/lib", m_directory + "/assets/lib"};
 }
 
 std::string ApkResources::get_base_assets_dir() {
