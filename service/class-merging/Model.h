@@ -9,6 +9,7 @@
 
 #include <boost/optional.hpp>
 #include <json/value.h>
+#include <string>
 
 #include "ApproximateShapeMerging.h"
 #include "DexClass.h"
@@ -360,6 +361,10 @@ class Model {
 
   // Number of merger types created with the same shape per model.
   std::map<MergerType::Shape, size_t, MergerType::ShapeComp> m_shape_to_count;
+  // Cache of the mergeable hashes looked up by the matching Shape. We use this
+  // cache to detect potential hash collisions.
+  std::unordered_map<MergerType::Shape, std::unordered_set<size_t>>
+      m_shape_hash_cache;
 
   const Scope& m_scope;
   ConfigFiles& m_conf;
@@ -400,8 +405,7 @@ class Model {
       const TypeSet& intf_set,
       const boost::optional<size_t>& dex_id,
       const ConstTypeVector& group_values,
-      const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
-      const InterdexSubgroupIdx subgroup_idx);
+      const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx);
   void create_mergers_helper(
       const DexType* merger_type,
       const MergerType::Shape& shape,

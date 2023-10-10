@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <boost/regex.hpp>
+
 #include "Show.h"
 #include "verify/VerifyUtil.h"
 
@@ -44,18 +46,20 @@ TEST_F(PostVerify, ShapeWithGrouping) {
   // The 1st hierarhcy only produce one shape. The trailing subgroup of size 1
   // is not merged.
   auto gb0 = find_class_named(
-      classes, "Lcom/facebook/redextest/GroupingBaseShape_S0000000_0;");
+      classes,
+      "Lcom/facebook/redextest/GroupingBaseShape_S0000000_24c066211e046fbe;");
   ASSERT_NE(gb0, nullptr);
-  auto gb1 = find_class_named(
-      classes, "Lcom/facebook/redextest/GroupingBaseShape_S0000000_1_1;");
-  ASSERT_EQ(gb1, nullptr);
+  auto s6 = find_class_named(classes, "Lcom/facebook/redextest/S6;");
+  ASSERT_NE(s6, nullptr);
 
   // The 2nd hierarchy produces two shapes. The size of the trailing subgroup is
   // greater than one.
   auto gs0 = find_class_named(
-      classes, "Lcom/facebook/redextest/GroupingSBaseShape_S0000000_1;");
+      classes,
+      "Lcom/facebook/redextest/GroupingSBaseShape_S0000000_a364d4b93718f80c;");
   ASSERT_NE(gs0, nullptr);
   auto gs1 = find_class_named(
-      classes, "Lcom/facebook/redextest/GroupingSBaseShape_S0000000_2_1;");
+      classes,
+      "Lcom/facebook/redextest/GroupingSBaseShape_S0000000_f1a9ad8f2a98e410;");
   ASSERT_NE(gs1, nullptr);
 }

@@ -17,6 +17,7 @@ namespace class_merging {
 std::string get_type_name_tag(const DexType* root_type);
 
 using FieldsMap = std::unordered_map<const DexType*, std::vector<DexField*>>;
+using ConstTypeVector = std::vector<const DexType*>;
 
 /**
  * A type that "represents" a set of other types that can be coalesced.
@@ -106,11 +107,12 @@ struct MergerType {
     std::string build_type_name(
         const std::string& prefix,
         const DexType* root_type,
+        const ConstTypeVector& mergeables_set,
         const TypeSet& intf_set,
+        size_t group_count,
         const boost::optional<size_t>& opt_dex_id,
-        size_t count,
         const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
-        const InterdexSubgroupIdx subgroup_idx) const;
+        std::unordered_set<size_t>& hash_cache) const;
 
     /**
      * Returns if this shape includes another shape
