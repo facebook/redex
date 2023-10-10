@@ -8,12 +8,13 @@ set -e
 
 # Expects the executable and an .apk file, which will have its manifest
 # attribute values rewritten to new values
-if [ "$#" -le 1 ]; then
-    echo "xml_editor binary and target apk required"
+if [ "$#" -le 2 ]; then
+    echo "xml_editor binary, target apk and aapt binary required"
     exit 1
 fi
 EDITOR_BIN=$1
 APK=$2
+AAPT=$3
 TMP_DIR=$(mktemp -d)
 
 unzip "$APK" AndroidManifest.xml -d "$TMP_DIR"
@@ -25,7 +26,7 @@ pushd "$TMP_DIR"
 zip test_str.zip AndroidManifest.xml
 popd
 
-aapt d --values xmltree "$TMP_DIR/test_str.zip" AndroidManifest.xml | grep -q "package=\"com.facebook.bananas\""
+$AAPT d --values xmltree "$TMP_DIR/test_str.zip" AndroidManifest.xml | grep -q "package=\"com.facebook.bananas\""
 echo "package attribute was rewritten successfully"
 
 echo "Rewriting versionCode"
@@ -34,7 +35,7 @@ pushd "$TMP_DIR"
 zip test_ver.zip AndroidManifest.xml
 popd
 
-aapt d --values xmltree "$TMP_DIR/test_ver.zip" AndroidManifest.xml | grep -q -E "android:versionCode.*0x200$"
+$AAPT d --values xmltree "$TMP_DIR/test_ver.zip" AndroidManifest.xml | grep -q -E "android:versionCode.*0x200$"
 echo "versionCode was rewritten successfully"
 
 rm -rf "$TMP_DIR"
