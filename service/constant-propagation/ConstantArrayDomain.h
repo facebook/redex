@@ -93,11 +93,7 @@ class ConstantArrayDomain final
   }
 
   // NOTE: This will throw if array_values() is Top.
-  const typename sparta::PatriciaTreeMapAbstractEnvironment<uint32_t,
-                                                            Domain>::MapType&
-  bindings() const {
-    return array_values().bindings();
-  }
+  const auto& bindings() const { return array_values().bindings(); }
 
   Domain get(uint32_t idx) const {
     if (this->is_top()) {

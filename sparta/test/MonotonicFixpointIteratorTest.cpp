@@ -703,19 +703,19 @@ class IntegerSetAbstractDomain final
   bool m_top;
 };
 
-using AbstractEnvironment =
+using AbstractEnvironmentT =
     PatriciaTreeMapAbstractEnvironment<std::string*, IntegerSetAbstractDomain>;
 
 template <template <typename GraphInterface, typename Domain, typename NodeHash>
           class FixpointIteratorBase>
 class FixpointEngine final : public FixpointIteratorBase<
                                  ProgramInterface,
-                                 AbstractEnvironment,
+                                 AbstractEnvironmentT,
                                  std::hash<typename ProgramInterface::NodeId>> {
  private:
   using Base =
       FixpointIteratorBase<ProgramInterface,
-                           AbstractEnvironment,
+                           AbstractEnvironmentT,
                            std::hash<typename ProgramInterface::NodeId>>;
   using NodeId = typename Base::NodeId;
   using EdgeId = typename Base::EdgeId;
@@ -724,14 +724,14 @@ class FixpointEngine final : public FixpointIteratorBase<
   explicit FixpointEngine(const Program& program) : Base(program) {}
 
   void analyze_node(const NodeId& bb,
-                    AbstractEnvironment* current_state) const override {
+                    AbstractEnvironmentT* current_state) const override {
     for (const auto& statement : bb->statements()) {
       analyze_statement(statement.get(), current_state);
     }
   }
 
   void analyze_statement(Statement* statement,
-                         AbstractEnvironment* current_state) const {
+                         AbstractEnvironmentT* current_state) const {
     if (auto* assign = dynamic_cast<Assignment*>(statement)) {
       current_state->set(assign->variable,
                          IntegerSetAbstractDomain{assign->value});
@@ -745,8 +745,8 @@ class FixpointEngine final : public FixpointIteratorBase<
     }
   }
 
-  AbstractEnvironment analyze_edge(
-      const EdgeId&, const AbstractEnvironment& state) const override {
+  AbstractEnvironmentT analyze_edge(
+      const EdgeId&, const AbstractEnvironmentT& state) const override {
     return state;
   }
 };
@@ -798,9 +798,9 @@ TYPED_TEST(MonotonicFixpointIteratorNumericalTest, program1) {
   program.set_exit(bb4);
 
   TypeParam fp(program);
-  fp.run(AbstractEnvironment::top());
+  fp.run(AbstractEnvironmentT::top());
 
-  EXPECT_EQ(fp.get_entry_state_at(bb1), AbstractEnvironment::top());
+  EXPECT_EQ(fp.get_entry_state_at(bb1), AbstractEnvironmentT::top());
   EXPECT_EQ(fp.get_exit_state_at(bb1).get(&x), IntegerSetAbstractDomain{1});
   EXPECT_EQ(fp.get_exit_state_at(bb1).get(&y), IntegerSetAbstractDomain::top());
 
@@ -847,9 +847,9 @@ TYPED_TEST(MonotonicFixpointIteratorNumericalTest, program2) {
   program.set_exit(bb3);
 
   TypeParam fp(program);
-  fp.run(AbstractEnvironment::top());
+  fp.run(AbstractEnvironmentT::top());
 
-  EXPECT_EQ(fp.get_entry_state_at(bb1), AbstractEnvironment::top());
+  EXPECT_EQ(fp.get_entry_state_at(bb1), AbstractEnvironmentT::top());
   EXPECT_EQ(fp.get_exit_state_at(bb1).get(&x), IntegerSetAbstractDomain{1});
 
   EXPECT_EQ(fp.get_entry_state_at(bb2).get(&x),
