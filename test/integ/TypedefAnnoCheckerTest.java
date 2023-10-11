@@ -175,4 +175,10 @@ public class TypedefAnnoCheckerTest {
     int res = flag ? TestIntDef.ZERO : TestIntDef.ONE;
     return res;
   }
+
+  static @TestIntDef int testXORIfElseZero() {
+    boolean flag = false;
+    int res = flag ? TestIntDef.ZERO : TestIntDef.ONE;
+    return res;
+  }
 }

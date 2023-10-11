@@ -814,3 +814,44 @@ TEST_F(TypedefAnnoCheckerTest, TestXORIfElse) {
 
   EXPECT_TRUE(checker.complete());
 }
+
+TEST_F(TypedefAnnoCheckerTest, TestXORIfElseZero) {
+  auto scope = build_class_scope(stores);
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testXORIfElseZero:()I")
+                    ->as_def();
+
+  IRCode* code = method->get_code();
+  code->build_cfg();
+  auto& cfg = code->cfg();
+
+  type_inference::TypeInference inference(cfg);
+  inference.run(method);
+
+  auto block = cfg.blocks().at(0);
+  auto env = inference.get_entry_state_at(block);
+  for (auto& mie : InstructionIterable(block)) {
+    auto insn = mie.insn;
+    if (insn->opcode() == OPCODE_XOR_INT_LIT) {
+      EXPECT_EQ(env.get_type(insn->src(0)),
+                type_inference::TypeDomain(IRType::ZERO));
+    }
+    inference.analyze_instruction(insn, &env);
+  }
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker =
+      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  checker.run(method);
+  code->clear_cfg();
+
+  EXPECT_TRUE(checker.complete());
+}
