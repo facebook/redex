@@ -76,7 +76,8 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
         },
         [&](DexMethod* meth, const IRCode& code) {
           auto base_cls = meth->get_class();
-          for (auto& mie : InstructionIterable(meth->get_code())) {
+          always_assert(meth->get_code()->editable_cfg_built());
+          for (auto& mie : cfg::InstructionIterable(meth->get_code()->cfg())) {
             auto inst = mie.insn;
             DexType* called_cls = nullptr;
             if (inst->has_method()) {
@@ -1184,6 +1185,12 @@ DexClass* InterDex::get_canary_cls(EmittingState& emitting_state,
     std::lock_guard<std::mutex> lock_guard(canary_mutex);
     canary_cls = create_canary(dexnum);
     set_clinit_methods_if_needed(canary_cls);
+    for (auto* m : canary_cls->get_all_methods()) {
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      m->get_code()->build_cfg();
+    }
   }
   MethodRefs clazz_mrefs;
   FieldRefs clazz_frefs;
@@ -1279,6 +1286,14 @@ void InterDex::post_process_dex(EmittingState& emitting_state,
       TRACE(IDEX, 4, "IDEX: Emitting %s-plugin-generated class :: %s",
             plugin->name().c_str(), SHOW(cls));
       classes.push_back(cls);
+      // For the plugin cls, make sure all methods are editable cfg built.
+      for (auto* m : cls->get_all_methods()) {
+        if (m->get_code() == nullptr) {
+          continue;
+        }
+        m->get_code()->build_cfg();
+      }
+
       // If this is the primary dex, or if there are any betamap-ordered
       // classes in this dex, then we treat the additional classes as
       // perf-sensitive, to be conservative.

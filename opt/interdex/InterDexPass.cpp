@@ -13,6 +13,7 @@
 #include "PassManager.h"
 #include "Show.h"
 #include "StlUtil.h"
+#include "Walkers.h"
 #include "WorkQueue.h"
 
 namespace {
