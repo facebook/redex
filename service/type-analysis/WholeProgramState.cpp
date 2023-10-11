@@ -15,14 +15,12 @@
 
 using namespace type_analyzer;
 
-std::ostream& operator<<(std::ostream& out, const DexField* field) {
-  out << SHOW(field);
-  return out;
+std::ostream& operator<<(std::ostream& out, const DexField& field) {
+  return out << show(static_cast<const DexFieldRef*>(&field));
 }
 
-std::ostream& operator<<(std::ostream& out, const DexMethod* method) {
-  out << SHOW(method);
-  return out;
+std::ostream& operator<<(std::ostream& out, const DexMethod& method) {
+  return out << show(static_cast<const DexMethodRef*>(&method));
 }
 
 /* Map of method to known return type - Esepecially for the Boxed values. TODO
@@ -347,7 +345,8 @@ std::string WholeProgramState::print_field_partition_diff(
     return ss.str();
   }
   const auto& this_field_bindings = m_field_partition.bindings();
-  const auto& other_field_bindings = other.m_field_partition.bindings();
+  const auto& other_field_bindings =
+      other.m_field_partition.bindings();
   for (auto& pair : this_field_bindings) {
     auto field = pair.first;
     if (!other_field_bindings.count(field)) {
@@ -383,7 +382,8 @@ std::string WholeProgramState::print_method_partition_diff(
     return ss.str();
   }
   const auto& this_method_bindings = m_method_partition.bindings();
-  const auto& other_method_bindings = other.m_method_partition.bindings();
+  const auto& other_method_bindings =
+      other.m_method_partition.bindings();
   for (auto& pair : this_method_bindings) {
     auto method = pair.first;
     if (!other_method_bindings.count(method)) {

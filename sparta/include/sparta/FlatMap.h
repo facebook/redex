@@ -291,6 +291,10 @@ class FlatMap final : public AbstractMap<FlatMap<Key,
     return *this;
   }
 
+  bool erase_all_matching(const Key& key_mask) {
+    throw std::logic_error("not implemented");
+  }
+
   // Requires CombiningFunction to coerce to
   // std::function<void(mapped_type*, const mapped_type&)>
   template <typename CombiningFunction>

@@ -16,9 +16,9 @@
 #include "InstructionAnalyzer.h"
 #include "Trace.h"
 
-std::ostream& operator<<(std::ostream& out, const DexField* field);
+std::ostream& operator<<(std::ostream& out, const DexField& field);
 
-std::ostream& operator<<(std::ostream& out, const DexMethod* method);
+std::ostream& operator<<(std::ostream& out, const DexMethod& method);
 
 namespace type_analyzer {
 

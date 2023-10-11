@@ -123,6 +123,17 @@ class AbstractMap {
         "Derived::filter(Predicate&&) does not exist");
 
     /*
+     * Erase all keys matching with the given pattern, i.e `key & pattern != 0`.
+     * This is only implemented by patricia trees.
+     */
+    // bool erase_all_matching(const Key& key);
+    static_assert(
+        std::is_same<decltype(std::declval<Derived>().erase_all_matching(
+                         std::declval<const Key>())),
+                     bool>::value,
+        "Derived::erase_all_matching(const Key&) does not exist");
+
+    /*
      * The partial order relation.
      */
     // bool leq(const Derived& other) const;
