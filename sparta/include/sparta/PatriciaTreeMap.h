@@ -91,7 +91,7 @@ class PatriciaTreeMap final
   using const_pointer = const value_type*;
 
   using IntegerType = typename Codec::IntegerType;
-
+  using value_interface = ValueInterface;
   constexpr static AbstractMapMutability mutability =
       AbstractMapMutability::Immutable;
 

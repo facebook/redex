@@ -96,6 +96,7 @@ class PatriciaTreeHashMap final
   using const_reference = typename FlattenIteratorT::reference;
   using const_pointer = typename FlattenIteratorT::pointer;
 
+  using value_interface = ValueInterface;
   constexpr static AbstractMapMutability mutability =
       AbstractMapMutability::Mutable;
 
@@ -206,6 +207,10 @@ class PatriciaTreeHashMap final
       return flat_map;
     });
     return *this;
+  }
+
+  bool erase_all_matching(const Key& key_mask) {
+    throw std::logic_error("not implemented");
   }
 
   // Requires CombiningFunction to coerce to

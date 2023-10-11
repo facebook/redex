@@ -15,14 +15,12 @@
 
 using namespace type_analyzer;
 
-std::ostream& operator<<(std::ostream& out, const DexField* field) {
-  out << SHOW(field);
-  return out;
+std::ostream& operator<<(std::ostream& out, const DexField& field) {
+  return out << show(static_cast<const DexFieldRef*>(&field));
 }
 
-std::ostream& operator<<(std::ostream& out, const DexMethod* method) {
-  out << SHOW(method);
-  return out;
+std::ostream& operator<<(std::ostream& out, const DexMethod& method) {
+  return out << show(static_cast<const DexMethodRef*>(&method));
 }
 
 /* Map of method to known return type - Esepecially for the Boxed values. TODO

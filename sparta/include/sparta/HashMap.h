@@ -49,6 +49,7 @@ class HashMap final
   using const_reference = typename StdUnorderedMap::const_reference;
   using const_pointer = typename StdUnorderedMap::const_pointer;
 
+  using value_interface = ValueInterface;
   constexpr static AbstractMapMutability mutability =
       AbstractMapMutability::Mutable;
 
@@ -111,8 +112,6 @@ class HashMap final
     }
     return *this;
   }
-
-  const StdUnorderedMap& bindings() const { return m_map; }
 
   template <typename Operation> // void(mapped_type*)
   HashMap& update(Operation&& operation, const Key& key) {
@@ -252,6 +251,10 @@ class HashMap final
     return *this;
   }
 
+  bool erase_all_matching(const Key& key_mask) {
+    throw std::logic_error("not implemented");
+  }
+
   // Requires CombiningFunction to coerce to
   // std::function<void(mapped_type*, const mapped_type&)>
   template <typename CombiningFunction>
@@ -310,6 +313,8 @@ class HashMap final
   }
 
   void clear() { m_map.clear(); }
+
+  size_t count(const Key& key) const { return m_map.count(key); }
 
   friend std::ostream& operator<<(std::ostream& o, const HashMap& m) {
     using namespace sparta;
