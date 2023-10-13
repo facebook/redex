@@ -25,8 +25,10 @@ template <typename Container, size_t n_slots>
 class ConcurrentContainerIterator;
 
 inline AccumulatingTimer s_destructor{};
+inline AccumulatingTimer s_move{};
 
 inline double get_destructor_seconds() { return s_destructor.get_seconds(); }
+inline double get_move_seconds() { return s_move.get_seconds(); }
 
 inline size_t s_concurrent_destruction_threshold{
     std::numeric_limits<size_t>::max()};
@@ -211,6 +213,7 @@ class ConcurrentContainer {
    * This operation is not thread-safe.
    */
   Container move_to_container() {
+    auto timer_scope = cc_impl::s_move.scope();
     Container res;
     res.reserve(size());
     for (size_t slot = 0; slot < n_slots; ++slot) {

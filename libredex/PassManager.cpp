@@ -1459,6 +1459,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
                    get_compute_locations_closure_wto_seconds());
   Timer::add_timer("cc_impl::destructor_second",
                    cc_impl::get_destructor_seconds());
+  Timer::add_timer("cc_impl::move_second", cc_impl::get_move_seconds());
 }
 
 PassManager::ActivatedPasses PassManager::compute_activated_passes(
