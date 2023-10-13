@@ -139,7 +139,6 @@ libredex_la_SOURCES = \
 	libredex/GlobalConfig.cpp \
 	libredex/GraphVisualizer.cpp \
 	libredex/HierarchyUtil.cpp \
-	libredex/InitCollisionFinder.cpp \
 	libredex/InitClassesWithSideEffects.cpp \
 	libredex/InlinerConfig.cpp \
 	libredex/InstructionLowering.cpp \
