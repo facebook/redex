@@ -10,15 +10,19 @@
 #error "You must define REDEX_PROPS!"
 #endif
 
-// REDEX_PROPS(Name,                   Negative, DefaultInitial, DefaultFinal, DefaultPreserve)
-REDEX_PROPS(DexLimitsObeyed,           false,    false,          true,         false)
-REDEX_PROPS(HasSourceBlocks,           false,    false,          false,        true)
-REDEX_PROPS(InitialRenameClass,        false,    false,          false,        false)
-REDEX_PROPS(NeedsEverythingPublic,     true,     false,          false,        false)
-REDEX_PROPS(NeedsInjectionIdLowering,  true,     false,          false,        false)
-REDEX_PROPS(NoInitClassInstructions,   false,    true,           true,         false)
-REDEX_PROPS(NoResolvablePureRefs,      false,    false,          false,        false)
-REDEX_PROPS(NoSpuriousGetClassCalls,   true,     false,          false,        false)
-REDEX_PROPS(NoUnreachableInstructions, false,    true,           true,         false)
-REDEX_PROPS(RenameClass,               false,    false,          false,        false)
-REDEX_PROPS(UltralightCodePatterns,    false,    true,           false,        false)
+// REDEX_PROPS(Name,                       Negative, DefaultInitial, DefaultFinal, DefaultPreserve)
+REDEX_PROPS(DexLimitsObeyed,               false,    false,          true,         false)
+REDEX_PROPS(HasSourceBlocks,               false,    false,          false,        true)
+REDEX_PROPS(InitialRenameClass,            false,    false,          false,        false)
+REDEX_PROPS(NeedsEverythingPublic,         true,     false,          false,        false)
+REDEX_PROPS(NeedsInjectionIdLowering,      true,     false,          false,        false)
+REDEX_PROPS(NoInitClassInstructions,       false,    true,           true,         false)
+REDEX_PROPS(NoResolvablePureRefs,          false,    false,          false,        false)
+REDEX_PROPS(NoSpuriousGetClassCalls,       false,    false,          false,        false)
+REDEX_PROPS(NoUnreachableInstructions,     false,    true,           true,         false)
+REDEX_PROPS(RenameClass,                   false,    false,          false,        false)
+// This is different from above because it is only a marker that signals interning happened,
+// but the property is not checked. New spurious getClass calls may be produced, but were
+// cannot have been input-code null-checks.
+REDEX_PROPS(SpuriousGetClassCallsInterned, true,     false,          false,        false)
+REDEX_PROPS(UltralightCodePatterns,        false,    true,           false,        false)

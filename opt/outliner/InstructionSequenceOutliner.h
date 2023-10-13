@@ -42,7 +42,7 @@ class InstructionSequenceOutliner : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, RequiresAndEstablishes},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Establishes},
+        {SpuriousGetClassCallsInterned, RequiresAndEstablishes},
         {InitialRenameClass, Preserves},
     };
   }

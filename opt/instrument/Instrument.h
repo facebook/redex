@@ -46,7 +46,7 @@ class InstrumentPass : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Requires},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, RequiresAndPreserves},
+        {SpuriousGetClassCallsInterned, RequiresAndPreserves},
         {RenameClass, Preserves},
     };
   }

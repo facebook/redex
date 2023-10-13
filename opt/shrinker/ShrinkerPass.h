@@ -23,7 +23,7 @@ class ShrinkerPass : public Pass {
         {NoResolvablePureRefs, Preserves},
         // This may be too conservative as the shrinker can be configured not to
         // DCE.
-        {NoSpuriousGetClassCalls, RequiresAndPreserves},
+        {SpuriousGetClassCallsInterned, RequiresAndPreserves},
     };
   }
 

@@ -46,9 +46,9 @@ class MaterializeNullChecksPass : public Pass {
         {InitialRenameClass, Preserves},
         {NoInitClassInstructions, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Requires},
         {NoUnreachableInstructions, Preserves},
         {RenameClass, Preserves},
+        {SpuriousGetClassCallsInterned, Requires},
     };
   }
 

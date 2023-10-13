@@ -50,7 +50,7 @@ class PassImpl : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, RequiresAndPreserves},
+        {SpuriousGetClassCallsInterned, RequiresAndPreserves},
     };
   }
 

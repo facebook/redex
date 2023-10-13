@@ -23,7 +23,7 @@ class LocalDcePass : public Pass {
         {NoInitClassInstructions, Preserves},
         {NoUnreachableInstructions, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, RequiresAndPreserves},
+        {SpuriousGetClassCallsInterned, RequiresAndPreserves},
         {RenameClass, Preserves},
         {InitialRenameClass, Preserves},
     };

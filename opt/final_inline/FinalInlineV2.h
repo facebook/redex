@@ -34,7 +34,7 @@ class FinalInlinePassV2 : public Pass {
     using namespace redex_properties::names;
     return {
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, RequiresAndPreserves},
+        {SpuriousGetClassCallsInterned, RequiresAndPreserves},
     };
   }
 

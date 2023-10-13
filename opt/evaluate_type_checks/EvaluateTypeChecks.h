@@ -29,7 +29,7 @@ class EvaluateTypeChecksPass : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, RequiresAndPreserves},
+        {SpuriousGetClassCallsInterned, RequiresAndPreserves},
         {InitialRenameClass, Preserves},
     };
   }

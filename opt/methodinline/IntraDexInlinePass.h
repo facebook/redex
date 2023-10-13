@@ -23,7 +23,7 @@ class IntraDexInlinePass : public Pass {
         {NoResolvablePureRefs, Preserves},
         // This may be too conservative as the inliner can be configured not
         // to DCE in the shrinker.
-        {NoSpuriousGetClassCalls, RequiresAndPreserves},
+        {SpuriousGetClassCallsInterned, RequiresAndPreserves},
         {InitialRenameClass, Preserves},
     };
   }
