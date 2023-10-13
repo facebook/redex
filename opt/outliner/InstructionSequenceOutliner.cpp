@@ -3214,7 +3214,7 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
       auto total_methods = count_methods(dex);
       if (total_methods > 0) {
         mgr.incr_metric(std::string("percent_methods_affected_in_Dex") +
-                            std::to_string(dex_id),
+                            std::to_string(dex_id) + "_" + store.get_name(),
                         affected_methods * 100 / total_methods);
       }
     }
