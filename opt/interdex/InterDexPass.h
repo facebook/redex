@@ -84,6 +84,8 @@ class InterDexPass : public Pass {
     ++m_eval;
   }
 
+  bool is_cfg_legacy() override { return true; }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   bool minimize_cross_dex_refs() const { return m_minimize_cross_dex_refs; }
