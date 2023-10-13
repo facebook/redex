@@ -1287,9 +1287,12 @@ struct CandidateInfo {
 // store. Order vector is used for keeping the track of the order of each
 // candidate stored.
 struct ReusableOutlinedMethods {
-  std::unordered_map<Candidate,
-                     std::deque<std::pair<DexMethod*, std::set<uint32_t>>>,
-                     CandidateHasher>
+  struct OutlinedMethod {
+    const DexStore* store;
+    DexMethod* method;
+    std::set<uint32_t> pattern_ids;
+  };
+  std::unordered_map<Candidate, std::deque<OutlinedMethod>, CandidateHasher>
       map;
   std::vector<Candidate> order;
 };
@@ -1399,6 +1402,8 @@ std::unordered_set<const DexType*> get_referenced_types(const Candidate& c) {
 // Finds an outlined method that either resides in an outlined helper class, or
 // a common base class, or is co-located with its references.
 static DexMethod* find_reusable_method(
+    const DexStore* store,
+    const DexStoreDependencies& store_dependencies,
     const Candidate& c,
     const CandidateInfo& ci,
     const ReusableOutlinedMethods& outlined_methods,
@@ -1411,10 +1416,11 @@ static DexMethod* find_reusable_method(
   if (it == outlined_methods.map.end()) {
     return nullptr;
   }
-  auto& method_pattern_pairs = it->second;
   DexMethod* helper_class_method{nullptr};
-  for (const auto& vec_entry : method_pattern_pairs) {
-    auto method = vec_entry.first;
+  for (auto&& [other_store, method, _] : it->second) {
+    if (store != other_store && !store_dependencies.count(other_store)) {
+      continue;
+    }
     auto cls = type_class(method->get_class());
     if (cls->rstate.outlined()) {
       helper_class_method = method;
@@ -1435,6 +1441,8 @@ static DexMethod* find_reusable_method(
 }
 
 static size_t get_savings(const Config& config,
+                          const DexStore* store,
+                          const DexStoreDependencies& store_dependencies,
                           const Candidate& c,
                           const CandidateInfo& ci,
                           const ReusableOutlinedMethods& outlined_methods) {
@@ -1443,7 +1451,7 @@ static size_t get_savings(const Config& config,
       COST_METHOD_METADATA +
       (c.res_type ? COST_INVOKE_WITH_RESULT : COST_INVOKE_WITHOUT_RESULT) *
           ci.count;
-  if (find_reusable_method(c, ci, outlined_methods,
+  if (find_reusable_method(store, store_dependencies, c, ci, outlined_methods,
                            config.reuse_outlined_methods_across_dexes) ==
       nullptr) {
     outlined_cost += COST_METHOD_BODY + c.size;
@@ -1478,7 +1486,9 @@ struct CandidateWithInfo {
 static void get_beneficial_candidates(
     const Config& config,
     PassManager& mgr,
-    const Scope& scope,
+    const DexStore* store,
+    const DexStoreDependencies& store_dependencies,
+    const Scope& dex,
     const RefChecker& ref_checker,
     const CandidateInstructionCoresSet& recurring_cores,
     const ConcurrentMap<DexMethod*, CanOutlineBlockDecider>& block_deciders,
@@ -1489,9 +1499,9 @@ static void get_beneficial_candidates(
   ConcurrentMap<Candidate, CandidateInfo, CandidateHasher>
       concurrent_candidates;
   FindCandidatesStats stats;
-  walk::parallel::code(scope, [&config, &ref_checker, &recurring_cores,
-                               &concurrent_candidates, &block_deciders,
-                               &stats](DexMethod* method, IRCode& code) {
+  walk::parallel::code(dex, [&config, &ref_checker, &recurring_cores,
+                             &concurrent_candidates, &block_deciders,
+                             &stats](DexMethod* method, IRCode& code) {
     if (!can_outline_from_method(method)) {
       return;
     }
@@ -1516,7 +1526,8 @@ static void get_beneficial_candidates(
       candidates_by_methods;
   size_t beneficial_count{0}, maleficial_count{0};
   for (auto& p : concurrent_candidates) {
-    if (get_savings(config, p.first, p.second, *outlined_methods) > 0) {
+    if (get_savings(config, store, store_dependencies, p.first, p.second,
+                    *outlined_methods) > 0) {
       beneficial_count += p.second.count;
       for (auto& q : p.second.methods) {
         candidates_by_methods[q.first].insert(p.first);
@@ -2309,6 +2320,8 @@ using NewlyOutlinedMethods =
 
 // Outlining all occurrences of a particular candidate.
 bool outline_candidate(const Config& config,
+                       const DexStore* store,
+                       const DexStoreDependencies& store_dependencies,
                        const Candidate& c,
                        const CandidateInfo& ci,
                        ReusableOutlinedMethods* outlined_methods,
@@ -2328,8 +2341,9 @@ bool outline_candidate(const Config& config,
   auto rtype = c.res_type ? c.res_type : type::_void();
   type_refs_to_insert.insert(const_cast<DexType*>(rtype));
 
-  DexMethod* outlined_method{find_reusable_method(
-      c, ci, *outlined_methods, reuse_outlined_methods_across_dexes)};
+  DexMethod* outlined_method{
+      find_reusable_method(store, store_dependencies, c, ci, *outlined_methods,
+                           reuse_outlined_methods_across_dexes)};
   if (outlined_method) {
     type_refs_to_insert.insert(outlined_method->get_class());
     if (!dex_state->can_insert_type_refs(type_refs_to_insert)) {
@@ -2337,16 +2351,14 @@ bool outline_candidate(const Config& config,
     }
 
     if (config.full_dbg_positions) {
-      auto& pairs = outlined_methods->map.at(c);
-      auto it = std::find_if(
-          pairs.begin(), pairs.end(),
-          [&outlined_method](
-              const std::pair<DexMethod*, std::set<uint32_t>>& pair) {
-            return pair.first == outlined_method;
-          });
-      auto& pattern_ids = it->second;
-      outlined_method_creator->add_outlined_dbg_position_patterns(c, ci,
-                                                                  &pattern_ids);
+      auto& c_outlined_methods = outlined_methods->map.at(c);
+      auto it =
+          std::find_if(c_outlined_methods.begin(), c_outlined_methods.end(),
+                       [outlined_method](const auto& p) {
+                         return p.method == outlined_method;
+                       });
+      outlined_method_creator->add_outlined_dbg_position_patterns(
+          c, ci, &it->pattern_ids);
     }
     (*num_reused_methods)++;
 
@@ -2378,7 +2390,8 @@ bool outline_candidate(const Config& config,
     outlined_method = outlined_method_creator->create_outlined_method(
         c, ci, host_class, &position_pattern_ids);
     outlined_methods->order.push_back(c);
-    outlined_methods->map[c].push_back({outlined_method, position_pattern_ids});
+    outlined_methods->map[c].push_back(
+        {store, outlined_method, position_pattern_ids});
     auto& methods = (*newly_outlined_methods)[outlined_method];
     for (auto& p : ci.methods) {
       methods.push_back(p.first);
@@ -2421,6 +2434,8 @@ bool outline_candidate(const Config& config,
 static NewlyOutlinedMethods outline(
     const Config& config,
     PassManager& mgr,
+    const DexStore* store,
+    const DexStoreDependencies& store_dependencies,
     DexState& dex_state,
     int min_sdk,
     std::vector<CandidateWithInfo>* candidates_with_infos,
@@ -2441,11 +2456,12 @@ static NewlyOutlinedMethods outline(
   // impacted candidates, until there is no more beneficial candidate left.
   using Priority = uint64_t;
   MutablePriorityQueue<CandidateId, Priority> pq;
-  auto get_priority = [&config, &candidates_with_infos,
+  auto get_priority = [&config, store, &store_dependencies,
+                       &candidates_with_infos,
                        outlined_methods](CandidateId id) {
     auto& cwi = candidates_with_infos->at(id);
-    auto savings =
-        get_savings(config, cwi.candidate, cwi.info, *outlined_methods);
+    auto savings = get_savings(config, store, store_dependencies, cwi.candidate,
+                               cwi.info, *outlined_methods);
     auto size = cwi.candidate.size;
     auto count = cwi.info.count;
     Priority primary_priority = (savings + 1) * 100000 / (size * count);
@@ -2481,8 +2497,8 @@ static NewlyOutlinedMethods outline(
 
     auto id = pq.front();
     auto& cwi = candidates_with_infos->at(id);
-    auto savings =
-        get_savings(config, cwi.candidate, cwi.info, *outlined_methods);
+    auto savings = get_savings(config, store, store_dependencies, cwi.candidate,
+                               cwi.info, *outlined_methods);
     always_assert(savings > 0);
     total_savings += savings;
     outlined_count += cwi.info.count;
@@ -2492,10 +2508,10 @@ static NewlyOutlinedMethods outline(
           "[invoke sequence outliner] %4zx(%3zu) [%zu]: %zu byte savings",
           cwi.info.count, cwi.info.methods.size(), cwi.candidate.size,
           2 * savings);
-    if (outline_candidate(config, cwi.candidate, cwi.info, outlined_methods,
-                          &newly_outlined_methods, &dex_state,
-                          &host_class_selector, &outlined_method_creator,
-                          num_reused_methods,
+    if (outline_candidate(config, store, store_dependencies, cwi.candidate,
+                          cwi.info, outlined_methods, &newly_outlined_methods,
+                          &dex_state, &host_class_selector,
+                          &outlined_method_creator, num_reused_methods,
                           config.reuse_outlined_methods_across_dexes)) {
       dex_state.insert_method_ref();
     } else {
@@ -2532,8 +2548,9 @@ static NewlyOutlinedMethods outline(
     // Update priorities of affected candidates
     for (auto other_id : other_candidate_ids_with_changes) {
       auto& other_cwi = candidates_with_infos->at(other_id);
-      auto other_savings = get_savings(config, other_cwi.candidate,
-                                       other_cwi.info, *outlined_methods);
+      auto other_savings =
+          get_savings(config, store, store_dependencies, other_cwi.candidate,
+                      other_cwi.info, *outlined_methods);
       if (other_savings == 0) {
         erase(other_id, other_cwi);
       } else {
@@ -2962,12 +2979,14 @@ class OutlinedMethodBodySetter {
   // set body for each method stored in ReusableOutlinedMethod
   void set_method_body(ReusableOutlinedMethods& outlined_methods) {
     for (auto& c : outlined_methods.order) {
-      auto& method_pattern_pairs = outlined_methods.map[c];
-      auto& outlined_method = method_pattern_pairs.front().first;
-      auto& position_pattern_ids = method_pattern_pairs.front().second;
-      always_assert(!position_pattern_ids.empty());
+      auto it = outlined_methods.map.find(c);
+      always_assert(it != outlined_methods.map.end());
+      auto& c_outlined_methods = it->second;
+      auto& front = c_outlined_methods.front();
+      auto& outlined_method = front.method;
+      always_assert(!front.pattern_ids.empty());
       outlined_method->set_code(
-          get_outlined_code(outlined_method, c, position_pattern_ids));
+          get_outlined_code(outlined_method, c, front.pattern_ids));
       change_visibility(outlined_method->get_code(),
                         outlined_method->get_class(), outlined_method);
       outlined_method->get_code()->build_cfg();
@@ -2975,8 +2994,13 @@ class OutlinedMethodBodySetter {
             SHOW(outlined_method), SHOW(outlined_method->get_code()));
       m_outlined_method_body_set++;
       // pop up the front pair to avoid duplicate
-      method_pattern_pairs.pop_front();
+      c_outlined_methods.pop_front();
+      if (c_outlined_methods.empty()) {
+        outlined_methods.map.erase(c);
+      }
     }
+    always_assert(outlined_methods.map.empty());
+    outlined_methods.order.clear();
   }
 };
 
@@ -3024,6 +3048,25 @@ size_t update_method_profiles(
   }
   method_profiles.resolve_method_descriptor_tokens(map);
   return count;
+}
+
+std::vector<DexStore*> get_stores(DexStoresVector& stores,
+                                  XStoreRefs& xstores) {
+  std::vector<DexStore*> res;
+  res.reserve(stores.size());
+  for (auto& store : stores) {
+    res.emplace_back(&store);
+  }
+  std::sort(res.begin(), res.end(), [&xstores](DexStore* s, DexStore* t) {
+    if (xstores.get_transitive_resolved_dependencies(t).count(s)) {
+      return true;
+    }
+    if (xstores.get_transitive_resolved_dependencies(s).count(t)) {
+      return false;
+    }
+    return s->get_name() < t->get_name();
+  });
+  return res;
 }
 
 } // namespace
@@ -3154,11 +3197,12 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
   // keep track of the outlined methods and scope for reordering later
   OutlinedMethodsToReorder outlined_methods_to_reorder;
   size_t num_reused_methods{0};
-  boost::optional<size_t> last_store_idx;
   auto iteration = m_iteration++;
   bool is_primary_dex{true};
-  for (auto& store : stores) {
-    for (auto& dex : store.get_dexen()) {
+  for (auto* store : get_stores(stores, xstores)) {
+    auto store_dependencies =
+        xstores.get_transitive_resolved_dependencies(store);
+    for (auto& dex : store->get_dexen()) {
       if (is_primary_dex) {
         is_primary_dex = false;
         if (!m_config.outline_from_primary_dex) {
@@ -3175,19 +3219,6 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
                                    return xstores.get_store_idx(
                                               cls->get_type()) != store_idx;
                                  }) == dex.end());
-      if (last_store_idx &&
-          xstores.illegal_ref_between_stores(store_idx, *last_store_idx)) {
-        // TODO: Keep around all store dependencies and reuse when possible
-        // set method body before the storage is cleared.
-        outlined_method_body_setter.set_method_body(outlined_methods);
-        TRACE(ISO, 3,
-              "Clearing reusable outlined methods when transitioning from "
-              "store %zu to %zu",
-              *last_store_idx, store_idx);
-        outlined_methods.map.clear();
-        outlined_methods.order.clear();
-      }
-      last_store_idx = store_idx;
       RefChecker ref_checker{&xstores, store_idx, min_sdk_api};
       CandidateInstructionCoresSet recurring_cores;
       ConcurrentMap<DexMethod*, CanOutlineBlockDecider> block_deciders;
@@ -3197,24 +3228,25 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
       std::vector<CandidateWithInfo> candidates_with_infos;
       std::unordered_map<DexMethod*, std::unordered_set<CandidateId>>
           candidate_ids_by_methods;
-      get_beneficial_candidates(
-          m_config, mgr, dex, ref_checker, recurring_cores, block_deciders,
-          &outlined_methods, &candidates_with_infos, &candidate_ids_by_methods);
+      get_beneficial_candidates(m_config, mgr, store, store_dependencies, dex,
+                                ref_checker, recurring_cores, block_deciders,
+                                &outlined_methods, &candidates_with_infos,
+                                &candidate_ids_by_methods);
 
       // TODO: Merge candidates that are equivalent except that one returns
       // something and the other doesn't. Affects around 1.5% of candidates.
       DexState dex_state(mgr, init_classes_with_side_effects, dex, dex_id++,
                          reserved_trefs, reserved_mrefs);
       auto newly_outlined_methods =
-          outline(m_config, mgr, dex_state, min_sdk, &candidates_with_infos,
-                  &candidate_ids_by_methods, &outlined_methods, iteration,
-                  &num_reused_methods);
+          outline(m_config, mgr, store, store_dependencies, dex_state, min_sdk,
+                  &candidates_with_infos, &candidate_ids_by_methods,
+                  &outlined_methods, iteration, &num_reused_methods);
       outlined_methods_to_reorder.push_back({&dex, newly_outlined_methods});
       auto affected_methods = count_affected_methods(newly_outlined_methods);
       auto total_methods = count_methods(dex);
       if (total_methods > 0) {
         mgr.incr_metric(std::string("percent_methods_affected_in_Dex") +
-                            std::to_string(dex_id) + "_" + store.get_name(),
+                            std::to_string(dex_id) + "_" + store->get_name(),
                         affected_methods * 100 / total_methods);
       }
     }
