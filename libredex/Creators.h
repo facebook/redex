@@ -517,6 +517,7 @@ struct ClassCreator {
     m_cls->m_anno = nullptr;
     m_cls->m_external = false;
     m_cls->m_perf_sensitive = PerfSensitiveGroup::NONE;
+    m_cls->m_dynamically_dead = false;
     m_cls->set_deobfuscated_name(type->get_name()->c_str());
   }
 

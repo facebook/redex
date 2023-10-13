@@ -617,7 +617,7 @@ struct DebugLineItem {
  */
 enum class DexDebugEntryType { Instruction, Position };
 
-enum class PerfSensitiveGroup {
+enum class PerfSensitiveGroup : uint8_t {
   NONE,
   BETAMAP_ORDERED,
   OUTLINED,
@@ -1149,6 +1149,7 @@ class DexClass {
   DexAccessFlags m_access_flags;
   bool m_external;
   PerfSensitiveGroup m_perf_sensitive;
+  bool m_dynamically_dead;
 
   explicit DexClass(const DexLocation* location);
   void load_class_annotations(DexIdx* idx, uint32_t anno_off);
@@ -1345,6 +1346,9 @@ class DexClass {
     m_perf_sensitive = value;
   }
   PerfSensitiveGroup get_perf_sensitive() { return m_perf_sensitive; }
+
+  bool is_dynamically_dead() const { return m_dynamically_dead; }
+  void set_dynamically_dead() { m_dynamically_dead = true; }
 
   // Find methods and fields from a class using its obfuscated name.
   DexField* find_field_from_simple_deobfuscated_name(
