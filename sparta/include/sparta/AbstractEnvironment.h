@@ -266,8 +266,7 @@ class MapValue final : public AbstractValue<MapValue<Map>> {
   AbstractValueKind kind() const {
     // If the map is empty, then all variables are implicitly bound to Top,
     // i.e., the abstract environment itself is Top.
-    return (m_map.size() == 0) ? AbstractValueKind::Top
-                               : AbstractValueKind::Value;
+    return m_map.empty() ? AbstractValueKind::Top : AbstractValueKind::Value;
   }
 
   bool leq(const MapValue& other) const { return m_map.leq(other.m_map); }
