@@ -97,8 +97,8 @@ class MethodSplitterTest : public RedexTest {
       expected_map.insert(p);
     }
     expected_map.emplace("", code_str);
-    auto compare = [&](DexMethod* m) {
-      const auto name = m->str();
+    auto compare = [&](DexMethod* mm) {
+      const auto name = mm->str();
       size_t index = name.find('$');
       std::string suffix;
       if (index != std::string::npos) {
@@ -106,13 +106,13 @@ class MethodSplitterTest : public RedexTest {
       }
       auto it = expected_map.find(suffix);
       if (it == expected_map.end()) {
-        return show(m) + "(" + suffix + ") not expected.";
+        return show(mm) + "(" + suffix + ") not expected.";
       }
-      if (m->get_code()->cfg_built()) {
-        m->get_code()->clear_cfg();
+      if (mm->get_code()->cfg_built()) {
+        mm->get_code()->clear_cfg();
       }
       std::string out_str =
-          replace_count(assembler::to_string(m->get_code()), m);
+          replace_count(assembler::to_string(mm->get_code()), mm);
       auto exp_ir = assembler::ircode_from_string(it->second);
       std::string exp_str = assembler::to_string(exp_ir.get());
       if (out_str != exp_str) {
