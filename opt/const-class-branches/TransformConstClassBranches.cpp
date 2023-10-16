@@ -238,7 +238,6 @@ Stats apply_transform(const PassState& pass_state,
   }
 
   // Install a new static string field for the encoded types and their ordinals.
-  // NOTE: would it be better to make this just a const-string???
   auto encoded_str =
       StringTreeMap<int16_t>::encode_string_tree_map(string_tree_items);
   result.string_tree_size = encoded_str.size();
@@ -248,20 +247,6 @@ Stats apply_transform(const PassState& pass_state,
   TRACE(CCB, 2, "Removing last prologue instruction: %s", SHOW(transform.insn));
 
   std::vector<IRInstruction*> replacements;
-  auto string_name_reg = cfg.allocate_temp();
-  auto class_getname =
-      DexMethod::get_method("Ljava/lang/Class;.getName:()Ljava/lang/String;");
-  always_assert(class_getname != nullptr);
-  auto invoke_getname = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
-  invoke_getname->set_srcs_size(1);
-  invoke_getname->set_src(0, transform.determining_reg);
-  invoke_getname->set_method(class_getname);
-  replacements.push_back(invoke_getname);
-
-  auto move_class_name = new IRInstruction(OPCODE_MOVE_RESULT_OBJECT);
-  move_class_name->set_dest(string_name_reg);
-  replacements.push_back(move_class_name);
-
   auto encoded_str_reg = cfg.allocate_temp();
   auto const_string_insn =
       (new IRInstruction(OPCODE_CONST_STRING))->set_string(encoded_dex_str);
@@ -279,7 +264,7 @@ Stats apply_transform(const PassState& pass_state,
   auto invoke_string_tree = new IRInstruction(OPCODE_INVOKE_STATIC);
   invoke_string_tree->set_method(pass_state.lookup_method);
   invoke_string_tree->set_srcs_size(3);
-  invoke_string_tree->set_src(0, string_name_reg);
+  invoke_string_tree->set_src(0, transform.determining_reg);
   invoke_string_tree->set_src(1, encoded_str_reg);
   invoke_string_tree->set_src(2, default_value_reg);
   replacements.push_back(invoke_string_tree);
@@ -306,18 +291,6 @@ Stats apply_transform(const PassState& pass_state,
     if (edge->type() == cfg::EDGE_GOTO) {
       cfg.set_edge_target(edge, default_case);
     }
-  }
-
-  // Split the block before the getName invoke we introduced, to insert a null
-  // check.
-  auto getname_it = cfg.find_insn(invoke_getname);
-  auto should_reset_entry = cfg.entry_block() == getname_it.block();
-  auto null_check_block = cfg.split_block_before(getname_it);
-  auto null_check = new IRInstruction(OPCODE_IF_EQZ);
-  null_check->set_src(0, transform.determining_reg);
-  cfg.create_branch(null_check_block, null_check, nullptr, default_case);
-  if (should_reset_entry) {
-    cfg.set_entry_block(null_check_block);
   }
 
   // Last step is to prune leaf blocks which are now unreachable. Do this before
