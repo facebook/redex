@@ -234,6 +234,14 @@ class SmallSetDexTypeDomain final
 };
 
 /*
+ * Domain for StringDef and IntDef annotations, where the DexType will track the
+ * annotation name. This will enforce null safety and prevent the joins of two
+ * different annotations.
+ * https://developer.android.com/studio/write/annotations#enum-annotations
+ */
+using TypedefAnnotationDomain = SingletonDexTypeDomain;
+
+/*
  *
  * ArrayConstNullnessDomain X SingletonDexTypeDomain X SmallSetDexTypeDomain
  *
@@ -245,7 +253,8 @@ class DexTypeDomain final
     : public sparta::ReducedProductAbstractDomain<DexTypeDomain,
                                                   ArrayConstNullnessDomain,
                                                   SingletonDexTypeDomain,
-                                                  SmallSetDexTypeDomain> {
+                                                  SmallSetDexTypeDomain,
+                                                  TypedefAnnotationDomain> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
@@ -253,7 +262,8 @@ class DexTypeDomain final
       sparta::ReducedProductAbstractDomain<DexTypeDomain,
                                            ArrayConstNullnessDomain,
                                            SingletonDexTypeDomain,
-                                           SmallSetDexTypeDomain>;
+                                           SmallSetDexTypeDomain,
+                                           TypedefAnnotationDomain>;
 
   // Some older compilers complain that the class is not default
   // constructible. We intended to use the default constructors of the base
@@ -265,33 +275,40 @@ class DexTypeDomain final
       : ReducedProductAbstractDomain(
             std::make_tuple(ConstNullnessDomain(v),
                             SingletonDexTypeDomain(),
-                            SmallSetDexTypeDomain::top())) {}
+                            SmallSetDexTypeDomain::top(),
+                            TypedefAnnotationDomain())) {}
 
   explicit DexTypeDomain(const DexType* array_type, uint32_t array_length)
       : ReducedProductAbstractDomain(
             std::make_tuple(ArrayNullnessDomain(array_length),
                             SingletonDexTypeDomain(array_type),
-                            SmallSetDexTypeDomain(array_type))) {}
+                            SmallSetDexTypeDomain(array_type),
+                            TypedefAnnotationDomain())) {}
 
-  explicit DexTypeDomain(const DexType* dex_type)
+  explicit DexTypeDomain(const DexType* dex_type,
+                         const DexType* annotation = nullptr)
       : ReducedProductAbstractDomain(
             std::make_tuple(ConstNullnessDomain(NOT_NULL),
                             SingletonDexTypeDomain(dex_type),
-                            SmallSetDexTypeDomain(dex_type))) {}
+                            SmallSetDexTypeDomain(dex_type),
+                            TypedefAnnotationDomain(annotation))) {}
 
   explicit DexTypeDomain(const DexType* dex_type,
                          const Nullness nullness,
-                         bool is_dex_type_exact)
-      : ReducedProductAbstractDomain(std::make_tuple(
-            ConstNullnessDomain(nullness),
-            SingletonDexTypeDomain(dex_type),
-            is_dex_type_exact ? SmallSetDexTypeDomain(dex_type)
-                              : SmallSetDexTypeDomain::top())) {}
+                         bool is_dex_type_exact,
+                         const DexType* annotation = nullptr)
+      : ReducedProductAbstractDomain(
+            std::make_tuple(ConstNullnessDomain(nullness),
+                            SingletonDexTypeDomain(dex_type),
+                            is_dex_type_exact ? SmallSetDexTypeDomain(dex_type)
+                                              : SmallSetDexTypeDomain::top(),
+                            TypedefAnnotationDomain(annotation))) {}
 
-  static void reduce_product(std::tuple<ArrayConstNullnessDomain,
-                                        SingletonDexTypeDomain,
-                                        SmallSetDexTypeDomain>& /* product */) {
-  }
+  static void reduce_product(
+      std::tuple<ArrayConstNullnessDomain,
+                 SingletonDexTypeDomain,
+                 SmallSetDexTypeDomain,
+                 TypedefAnnotationDomain>& /* product */) {}
 
   static DexTypeDomain null() { return DexTypeDomain(IS_NULL); }
 
@@ -351,8 +368,14 @@ class DexTypeDomain final
 
   SingletonDexTypeDomain get_single_domain() const { return get<1>(); }
 
+  TypedefAnnotationDomain get_annotation_domain() const { return get<3>(); }
+
   boost::optional<const DexType*> get_dex_type() const {
     return get<1>().get_dex_type();
+  }
+
+  boost::optional<const DexType*> get_annotation_type() const {
+    return get<3>().get_dex_type();
   }
 
   boost::optional<const DexClass*> get_dex_cls() const {
@@ -375,7 +398,8 @@ class DexTypeDomain final
       : ReducedProductAbstractDomain(
             std::make_tuple(ConstNullnessDomain(nullness),
                             SingletonDexTypeDomain::none(),
-                            SmallSetDexTypeDomain())) {}
+                            SmallSetDexTypeDomain(),
+                            TypedefAnnotationDomain::none())) {}
 };
 
 /*
