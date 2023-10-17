@@ -157,11 +157,6 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
     for (auto overriding_method : overriding_methods) {
       add_root_method_overrides(overriding_method);
     }
-    const auto& overiden_methods =
-        mog::get_overridden_methods(m_method_override_graph, method);
-    for (auto overiden_method : overiden_methods) {
-      add_root_method_overrides(overiden_method);
-    }
   });
   // Gather methods that override or implement external or native methods
   // as well.
@@ -270,11 +265,6 @@ RootAndDynamic CompleteCallGraphStrategy::get_roots() const {
         mog::get_overriding_methods(m_method_override_graph, method);
     for (auto overriding_method : overriding_methods) {
       add_root_method_overrides(overriding_method);
-    }
-    const auto& overiden_methods =
-        mog::get_overridden_methods(m_method_override_graph, method);
-    for (auto overiden_method : overiden_methods) {
-      add_root_method_overrides(overiden_method);
     }
   });
   // Gather methods that override or implement external methods
