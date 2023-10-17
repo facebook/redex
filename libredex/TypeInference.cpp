@@ -250,33 +250,26 @@ void set_int(TypeEnvironment* state,
              reg_t reg,
              const boost::optional<const DexType*>& annotation = boost::none) {
   state->set_type(reg, IntTypeDomain(IntType::INT));
-  if (annotation == boost::none) {
-    state->reset_dex_type(reg);
-  }
   set_integral(state, reg, annotation);
 }
 
 void set_char(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, IntTypeDomain(IntType::CHAR));
-  state->reset_dex_type(reg);
   set_integral(state, reg);
 }
 
 void set_short(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, IntTypeDomain(IntType::SHORT));
-  state->reset_dex_type(reg);
   set_integral(state, reg);
 }
 
 void set_boolean(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, IntTypeDomain(IntType::BOOLEAN));
-  state->reset_dex_type(reg);
   set_integral(state, reg);
 }
 
 void set_byte(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, IntTypeDomain(IntType::BYTE));
-  state->reset_dex_type(reg);
   set_integral(state, reg);
 }
 
@@ -501,31 +494,26 @@ void TypeInference::refine_double(TypeEnvironment* state, reg_t reg) const {
 
 void TypeInference::refine_int(TypeEnvironment* state, reg_t reg) const {
   refine_type(state, reg, /* expected1 */ IntType::INT);
-  state->reset_dex_type(reg);
   refine_integral(state, reg);
 }
 
 void TypeInference::refine_char(TypeEnvironment* state, reg_t reg) const {
   refine_type(state, reg, /* expected1 */ IntType::CHAR);
-  state->reset_dex_type(reg);
   refine_integral(state, reg);
 }
 
 void TypeInference::refine_boolean(TypeEnvironment* state, reg_t reg) const {
   refine_type(state, reg, /* expected1 */ IntType::BOOLEAN);
-  state->reset_dex_type(reg);
   refine_integral(state, reg);
 }
 
 void TypeInference::refine_short(TypeEnvironment* state, reg_t reg) const {
   refine_type(state, reg, /* expected1 */ IntType::SHORT);
-  state->reset_dex_type(reg);
   refine_integral(state, reg);
 }
 
 void TypeInference::refine_byte(TypeEnvironment* state, reg_t reg) const {
   refine_type(state, reg, /* expected1 */ IntType::BYTE);
-  state->reset_dex_type(reg);
   refine_integral(state, reg);
 }
 
