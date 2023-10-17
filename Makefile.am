@@ -463,6 +463,7 @@ libopt_la_SOURCES = \
 	opt/track_resources/TrackResources.cpp \
 	opt/optimize_resources/OptimizeResources.cpp \
 	opt/throw-propagation/ThrowPropagationPass.cpp \
+	opt/typedef-anno-checker/TypedefAnnoCheckerPass.cpp \
 	opt/type-analysis/CallGraphFileGenerationPass.cpp \
 	opt/type-analysis/GlobalTypeAnalysisPass.cpp \
 	opt/type-analysis/TypeAnalysisCallGraphGenerationPass.cpp \
