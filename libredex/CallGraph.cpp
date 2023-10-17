@@ -313,7 +313,6 @@ MultipleCalleeStrategy::MultipleCalleeStrategy(
     : MultipleCalleeBaseStrategy(method_override_graph, scope) {
   // Gather big overrides true virtual methods.
   ConcurrentSet<const DexMethod*> concurrent_callees;
-  ConcurrentSet<const DexMethod*> concurrent_big_overrides;
   walk::parallel::opcodes(
       scope, [&](const DexMethod* method, IRInstruction* insn) {
         if (opcode::is_an_invoke(insn->opcode())) {
@@ -336,14 +335,13 @@ MultipleCalleeStrategy::MultipleCalleeStrategy(
             }
           }
           if (num_override > big_override_threshold) {
-            concurrent_big_overrides.emplace(callee);
+            m_big_override.emplace(callee);
             for (auto overriding_method : overriding_methods) {
-              concurrent_big_overrides.emplace(overriding_method);
+              m_big_override.emplace(overriding_method);
             }
           }
         }
       });
-  m_big_override = concurrent_big_overrides.move_to_container();
 }
 
 CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
@@ -363,7 +361,7 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
           if (is_definitely_virtual(callee)) {
             // For true virtual callees, add the callee itself and all of its
             // overrides if they are not in big overrides.
-            if (m_big_override.count(callee)) {
+            if (m_big_override.count_unsafe(callee)) {
               return editable_cfg_adapter::LOOP_CONTINUE;
             }
             if (callee->get_code()) {
@@ -410,10 +408,6 @@ Graph::Graph(const BuildStrategy& strat)
   Timer t("Graph::Graph");
   // Obtain the callsites of each method recursively, building the graph in the
   // process.
-  ConcurrentMap<const DexMethod*, NodeId> concurrent_nodes;
-  ConcurrentMap<const IRInstruction*, std::unordered_set<const DexMethod*>>
-      concurrent_insn_to_callee;
-  std::mutex nodes_mutex;
   struct MethodEdges {
     const DexMethod* method;
     std::vector<std::shared_ptr<Edge>> edges;
@@ -484,17 +478,10 @@ Graph::Graph(const BuildStrategy& strat)
         for (auto& callee_partition : callee_partitions) {
           auto callee = callee_partition.callee;
           auto& callee_invoke_insns = callee_partition.invoke_insns;
-          NodeId callee_node{};
-          bool added{false};
-          concurrent_nodes.update(callee, [&](auto, auto& n, bool exists) {
-            if (!exists) {
-              added = true;
-              std::lock_guard<std::mutex> lock_guard(nodes_mutex);
-              n = this->make_node(callee);
-            }
-            callee_node = n;
-          });
-          if (added) {
+          auto [const_callee_node, emplaced] =
+              m_nodes.get_or_emplace_and_assert_equal(callee, callee);
+          NodeId callee_node = const_cast<NodeId>(const_callee_node);
+          if (emplaced) {
             worker_state->push_task(
                 (WorkItem){callee, callee_node, /* is_root */ false});
           }
@@ -514,7 +501,7 @@ Graph::Graph(const BuildStrategy& strat)
 
         // Populate concurrent_insn_to_callee
         for (auto&& [invoke_insn, callees] : insn_to_callee) {
-          concurrent_insn_to_callee.emplace(invoke_insn, std::move(callees));
+          m_insn_to_callee.emplace(invoke_insn, std::move(callees));
         }
       },
       redex_parallel::default_num_threads(),
@@ -524,8 +511,7 @@ Graph::Graph(const BuildStrategy& strat)
   const auto& roots = root_and_dynamic.roots;
   m_dynamic_methods = std::move(root_and_dynamic.dynamic_methods);
   for (const DexMethod* root : roots) {
-    auto root_node = make_node(root);
-    auto emplaced = concurrent_nodes.emplace_unsafe(root, root_node);
+    auto [root_node, emplaced] = m_nodes.emplace_unsafe(root, root);
     always_assert(emplaced);
     wq.add_item((WorkItem){root, root_node, /* is_root */ true});
   }
@@ -553,28 +539,9 @@ Graph::Graph(const BuildStrategy& strat)
   wq2.add_item(m_entry.get());
   wq2.add_item(m_exit.get());
   for (auto&& [_, node] : m_nodes) {
-    wq2.add_item(node.get());
+    wq2.add_item(&node);
   }
   wq2.run_all();
-
-  m_insn_to_callee = concurrent_insn_to_callee.move_to_container();
-}
-
-NodeId Graph::make_node(const DexMethod* m) {
-  auto [it, inserted] = m_nodes.emplace(m, nullptr);
-  if (inserted) {
-    it->second = std::make_shared<Node>(m);
-  }
-
-  return it->second.get();
-}
-
-void Graph::add_edge(const NodeId& caller,
-                     const NodeId& callee,
-                     IRInstruction* invoke_insn) {
-  auto edge = std::make_shared<Edge>(caller, callee, invoke_insn);
-  caller->m_successors.emplace_back(edge);
-  callee->m_predecessors.emplace_back(std::move(edge));
 }
 
 const MethodSet& resolve_callees_in_graph(const Graph& graph,

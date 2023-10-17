@@ -440,14 +440,13 @@ class ConcurrentMapContainer
   }
 
   template <typename... Args>
-  bool emplace_unsafe(Args&&... args) {
+  std::pair<Value*, bool> emplace_unsafe(Args&&... args) {
     std::pair<Key, Value> entry(std::forward<Args>(args)...);
     size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
-    return map
-        .emplace(KeyProjection()(std::move(entry.first)),
-                 std::move(entry.second))
-        .second;
+    auto [it, emplaced] = map.emplace(KeyProjection()(std::move(entry.first)),
+                                      std::move(entry.second));
+    return std::make_pair(&it->second, emplaced);
   }
 
   /*
@@ -742,14 +741,13 @@ class InsertOnlyConcurrentMapContainer
   }
 
   template <typename... Args>
-  bool emplace_unsafe(Args&&... args) {
+  std::pair<Value*, bool> emplace_unsafe(Args&&... args) {
     std::pair<Key, Value> entry(std::forward<Args>(args)...);
     size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
-    return map
-        .emplace(KeyProjection()(std::move(entry.first)),
-                 std::move(entry.second))
-        .second;
+    auto [it, emplaced] = map.emplace(KeyProjection()(std::move(entry.first)),
+                                      std::move(entry.second));
+    return std::make_pair(&it->second, emplaced);
   }
 
   template <

@@ -104,6 +104,10 @@ class Node {
   bool is_entry() { return m_type == GHOST_ENTRY; }
   bool is_exit() { return m_type == GHOST_EXIT; }
 
+  bool operator==(const Node& other) const {
+    return m_method == other.m_method && m_type == other.m_type;
+  }
+
  private:
   const DexMethod* m_method;
   Edges m_predecessors;
@@ -143,18 +147,19 @@ class Graph final {
   NodeId exit() const { return m_exit.get(); }
 
   bool has_node(const DexMethod* m) const {
-    return m_nodes.count(const_cast<DexMethod*>(m)) != 0;
+    return m_nodes.count_unsafe(const_cast<DexMethod*>(m)) != 0;
   }
 
+  // TODO: Return a (const NodeId*), instead of a mutable node.
   NodeId node(const DexMethod* m) const {
     if (m == nullptr) {
       return this->entry();
     }
-    return m_nodes.at(m).get();
+    return const_cast<NodeId>(m_nodes.get_unsafe(m));
   }
 
-  const std::unordered_map<const IRInstruction*,
-                           std::unordered_set<const DexMethod*>>&
+  const ConcurrentMap<const IRInstruction*,
+                      std::unordered_set<const DexMethod*>>&
   get_insn_to_callee() const {
     return m_insn_to_callee;
   }
@@ -168,16 +173,10 @@ class Graph final {
   static double get_seconds();
 
  private:
-  NodeId make_node(const DexMethod*);
-
-  void add_edge(const NodeId& caller,
-                const NodeId& callee,
-                IRInstruction* invoke_insn);
-
   std::shared_ptr<Node> m_entry;
   std::shared_ptr<Node> m_exit;
-  std::unordered_map<const DexMethod*, std::shared_ptr<Node>> m_nodes;
-  std::unordered_map<const IRInstruction*, std::unordered_set<const DexMethod*>>
+  InsertOnlyConcurrentMap<const DexMethod*, Node> m_nodes;
+  ConcurrentMap<const IRInstruction*, std::unordered_set<const DexMethod*>>
       m_insn_to_callee;
   mutable InsertOnlyConcurrentMap<const DexMethod*, MethodVector>
       m_callee_to_callers;
@@ -251,7 +250,7 @@ class MultipleCalleeStrategy : public MultipleCalleeBaseStrategy {
  protected:
   std::vector<const DexMethod*> get_additional_roots(
       const MethodSet& existing_roots) const override;
-  MethodSet m_big_override;
+  ConcurrentSet<const DexMethod*> m_big_override;
 };
 
 // A static-method-only API for use with the monotonic fixpoint iterator.
