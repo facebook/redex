@@ -151,6 +151,7 @@ class DexType;
   TM(SWIN)              \
   TM(SWITCH_EQUIV)      \
   TM(SYNT)              \
+  TM(TAC)               \
   TM(TIME)              \
   TM(TP)                \
   TM(TRACKRESOURCES)    \

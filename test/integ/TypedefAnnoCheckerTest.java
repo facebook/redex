@@ -154,4 +154,25 @@ public class TypedefAnnoCheckerTest {
     val = val2;
     return val;
   }
+
+  static @TestIntDef int testIfElse() {
+    boolean flag = true;
+    int res = flag ? TestIntDef.ONE : TestIntDef.ZERO;
+    return res;
+  }
+
+  static @TestIntDef int testIfElseParam(boolean flag) {
+    int res = flag ? TestIntDef.ONE : TestIntDef.ZERO;
+    return res;
+  }
+
+  static @TestStringDef String testIfElseString(boolean flag) {
+    String res = flag ? TestStringDef.ONE : TestStringDef.TWO;
+    return res;
+  }
+
+  static @TestIntDef int testXORIfElse(boolean flag) {
+    int res = flag ? TestIntDef.ZERO : TestIntDef.ONE;
+    return res;
+  }
 }
