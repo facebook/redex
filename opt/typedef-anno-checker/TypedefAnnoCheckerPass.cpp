@@ -12,18 +12,20 @@
 #include "AnnoUtils.h"
 #include "IROpcode.h"
 #include "PassManager.h"
+#include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"
 #include "TypeUtil.h"
 #include "Walkers.h"
 
-constexpr const char* ACCESS_PREFIX = "acccess$";
-constexpr const char* DEFAULT_SUFFIX = "$defaul";
+constexpr const char* ACCESS_PREFIX = "access$";
+constexpr const char* DEFAULT_SUFFIX = "$default";
 
 namespace {
 bool is_int(const type_inference::TypeEnvironment* env, reg_t reg) {
   return env->get_type(reg).element() == IRType::INT ||
-         env->get_type(reg).element() == IRType::CONST;
+         env->get_type(reg).element() == IRType::CONST ||
+         env->get_type(reg).element() == IRType::ZERO;
 }
 
 bool is_string(const type_inference::TypeEnvironment* env, reg_t reg) {
@@ -65,7 +67,7 @@ void TypedefAnnoChecker::run(DexMethod* m) {
     }
   }
   if (!m_good) {
-    TRACE(TAC, 1, "%s", SHOW(cfg));
+    TRACE(TAC, 1, "%s\n%s", SHOW(m), SHOW(cfg));
   }
 }
 
@@ -87,11 +89,15 @@ void TypedefAnnoChecker::check_instruction(
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE: {
-    DexMethodRef* ref_method = insn->get_method();
-    if (!ref_method->is_def()) {
+    auto def_method =
+        resolve_method(insn->get_method(), opcode_to_search(insn), m);
+    if (def_method == nullptr && opcode == OPCODE_INVOKE_VIRTUAL) {
+      def_method =
+          resolve_method(insn->get_method(), MethodSearch::InterfaceVirtual);
+    }
+    if (!def_method) {
       return;
     }
-    DexMethod* def_method = ref_method->as_def();
     // some methods are called through their access or defaul
     // counterpart, which do not retain the typedef annotation.
     // In these cases, we will skip the checker
@@ -143,15 +149,15 @@ void TypedefAnnoChecker::check_instruction(
                      type_inference::TypeDomain(IRType::INT)) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: the annotation " << SHOW(annotation)
-            << " annotates a parameter with an incompatible type or a "
-               "non-constant parameter in method "
-            << SHOW(m) << " while trying to invoke the method "
-            << SHOW(def_method) << " .";
+            << " annotates a parameter with an incompatible type "
+            << SHOW(env.get_type(reg))
+            << " or a non-constant parameter in method " << SHOW(m)
+            << " while trying to invoke the method " << SHOW(def_method)
+            << " .";
         m_error = out.str();
         m_good = false;
       } else if (env_anno == boost::none) {
         // TypeInference didn't infer anything
-        TRACE(TAC, 1, "invoke method: %s", SHOW(def_method));
         check_typedef_value(m, annotation, ud_chains, insn, param_index,
                             inference, envs);
         if (!m_good) {
@@ -159,6 +165,7 @@ void TypedefAnnoChecker::check_instruction(
           out << " This error occured while trying to invoke the method "
               << SHOW(def_method) << " .";
           m_error += out.str();
+          TRACE(TAC, 1, "invoke method: %s", SHOW(def_method));
         }
       }
     }
@@ -323,27 +330,30 @@ void TypedefAnnoChecker::check_typedef_value(
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_STATIC:
     case OPCODE_INVOKE_INTERFACE: {
-      if (def->get_method()->is_def()) {
-        boost::optional<const DexType*> anno =
-            inference->get_typedef_anno_from_member(
-                def->get_method()->as_def());
-        if (anno == boost::none || anno != annotation) {
-          std::ostringstream out;
-          out << "TypedefAnnoCheckerPass: the method "
-              << SHOW(def->get_method()->as_def())
-              << " needs to return a value with the anotation "
-              << SHOW(annotation)
-              << " and include it in it's method signature.";
-          m_good = false;
-          m_error += out.str();
-          return;
-        }
-      } else {
+      auto def_method =
+          resolve_method(def->get_method(), opcode_to_search(def), m);
+      if (def_method == nullptr && def->opcode() == OPCODE_INVOKE_VIRTUAL) {
+        def_method =
+            resolve_method(def->get_method(), MethodSearch::InterfaceVirtual);
+      }
+      if (!def_method) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: in the method " << SHOW(m)
             << " , the source of the value with annotation " << SHOW(annotation)
             << " is produced by invoking an unresolveable callee, so the value "
                "safety is not guaranteed.";
+        m_good = false;
+        m_error += out.str();
+        return;
+      }
+      boost::optional<const DexType*> anno =
+          inference->get_typedef_anno_from_member(def_method);
+      if (anno == boost::none || anno != annotation) {
+        std::ostringstream out;
+        out << "TypedefAnnoCheckerPass: the method "
+            << SHOW(def->get_method()->as_def())
+            << " needs to return a value with the anotation "
+            << SHOW(annotation) << " and include it in it's method signature.";
         m_good = false;
         m_error += out.str();
         return;
