@@ -35,11 +35,21 @@ void FullyQualifyLayouts::run_pass(DexStoresVector& /* unused */,
   auto resources = create_resource_reader(zip_dir);
   auto res_table = resources->load_res_table();
 
-  auto ids = res_table->get_res_ids_by_type_name("layout");
+  auto type_ids = res_table->get_types_by_name_prefixes({"layout"});
   std::unordered_set<std::string> all_files;
-  for (const auto& id : ids) {
-    auto files = res_table->get_files_by_rid(id, ResourcePathType::ZipPath);
-    all_files.insert(files.begin(), files.end());
+  for (const auto& id : res_table->sorted_res_ids) {
+    uint32_t type_id = id & TYPE_MASK_BIT;
+    if (type_ids.count(type_id) > 0) {
+      auto files = res_table->get_files_by_rid(id, ResourcePathType::ZipPath);
+      if (!files.empty() && traceEnabled(RES, 8)) {
+        TRACE(RES, 8, "ID 0x%x -> {", id);
+        for (const auto& s : files) {
+          TRACE(RES, 8, "  %s", s.c_str());
+        }
+        TRACE(RES, 8, "}");
+      }
+      all_files.insert(files.begin(), files.end());
+    }
   }
 
   workqueue_run<std::string>(
