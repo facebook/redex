@@ -58,7 +58,100 @@ public class TypedefAnnoCheckerTest {
     return testValidIntAnnoReturn(val);
   }
 
+  static @NotSafeAnno @TestIntDef int testIrrelevantAnnos(@TestIntDef int val) {
+    return val;
+  }
+
+  static @TestIntDef int testConstReturn() {
+    @TestIntDef int val = TestIntDef.FOUR;
+    return val;
+  }
+
+  static @TestIntDef int testInvalidConstReturn() {
+    int val = 5;
+    return val;
+  }
+
+  static @TestIntDef int testInvalidConstReturn2() {
+    @TestIntDef int val = 5;
+    return val;
+  }
+
+  static @TestStringDef String testConstStrReturn() {
+   String val = "one";
+    return val;
+  }
+
+  static @TestStringDef String testInvalidConstStrReturn() {
+    @TestStringDef String val = "five";
+    return val;
+  }
+
+  static @TestIntDef int testInvalidConstInvokeStatic() {
+    int val = 5;
+    return testIntAnnoInvokeStatic(val);
+  }
+
+  static @TestIntDef int testInvalidConstInvokeStatic2() {
+    @TestIntDef int val = 5;
+    return testIntAnnoInvokeStatic(val);
+  }
+
+  static @TestIntDef int testMultipleBlocksInt(@TestIntDef int val) {
+    if (val > TestIntDef.TWO) {
+      return val;
+    }
+    return TestIntDef.FOUR;
+  }
+
+  static @TestStringDef String testMultipleBlocksString(@TestStringDef String val) {
+    if (val.equals(TestStringDef.THREE)) {
+      return val;
+    }
+    return TestStringDef.ONE;
+  }
+
+  static @TestStringDef String testInvalidMultipleBlocksString(@TestStringDef String val) {
+    if (val.equals(TestStringDef.THREE)) {
+      val = val.concat("five");
+      return val;
+    }
+    return TestStringDef.ONE;
+  }
+
+  static @TestIntDef int testNonConstInt(@TestIntDef int val) {
+    val += 2;
+    return val;
+  }
+
   static @TestIntDef I testInvalidType(@TestIntDef I val) {
+    return val;
+  }
+
+  static @TestStringDef String testJoiningTwoAnnotations(@TestStringDef String val, @TestIntDef String val2) {
+    int flag = 1;
+    @TestStringDef String s = val;
+    if (flag == 1) {
+      s = val;
+    } else {
+      s = val2;
+    }
+    return s;
+  }
+
+  static @TestStringDef String testJoiningTwoAnnotations2(@TestStringDef String val, @TestStringDef String val2) {
+    int flag = 1;
+    @TestStringDef String s = val;
+    if (flag == 1) {
+      s = val;
+    } else {
+      s = val2;
+    }
+    return s;
+  }
+
+  static @TestIntDef int testReassigningInt(@TestStringDef int val, @TestIntDef int val2) {
+    val = val2;
     return val;
   }
 }
