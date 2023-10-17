@@ -45,8 +45,10 @@ using namespace ir_analyzer;
 FixpointIterator::FixpointIterator(
     const local_pointers::FixpointIterator& pointers_fp_iter,
     side_effects::InvokeToSummaryMap invoke_to_summary_map,
-    const cfg::ControlFlowGraph& cfg)
+    const cfg::ControlFlowGraph& cfg,
+    const DexMethod* method)
     : BaseBackwardsIRAnalyzer<UsedVarsSet>(cfg),
+      m_method(method),
       m_insn_env_map(gen_instruction_environment_map(cfg, pointers_fp_iter)),
       m_invoke_to_summary_map(std::move(invoke_to_summary_map)) {}
 
@@ -173,10 +175,12 @@ bool FixpointIterator::is_required(const IRInstruction* insn,
   case OPCODE_SPUT_SHORT: {
     return true;
   }
+  case OPCODE_INVOKE_SUPER:
+  case OPCODE_INVOKE_INTERFACE:
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_VIRTUAL: {
-    auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    auto method = resolve_invoke_method(insn, m_method);
     if (method == nullptr) {
       return true;
     }
@@ -205,10 +209,6 @@ bool FixpointIterator::is_required(const IRInstruction* insn,
         mod_params.begin(), mod_params.end(), [&](param_idx_t idx) {
           return is_used_or_escaping_write(env, used_vars, insn->src(idx));
         });
-  }
-  case OPCODE_INVOKE_SUPER:
-  case OPCODE_INVOKE_INTERFACE: {
-    return true;
   }
   default: {
     if (insn->has_dest()) {

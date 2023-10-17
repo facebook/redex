@@ -65,7 +65,11 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
       if (opcode::is_an_invoke(insn->opcode())) {
         auto callee =
             resolve_method(insn->get_method(), opcode_to_search(insn), method);
-        if (callee == nullptr || may_be_overridden(callee)) {
+        if (callee == nullptr) {
+          continue;
+        }
+        if (!opcode::is_invoke_super(insn->opcode()) &&
+            may_be_overridden(callee)) {
           continue;
         }
         callsites.emplace_back(callee, insn);
@@ -170,8 +174,7 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
     auto& cfg = code.cfg();
     uv::FixpointIterator used_vars_fp_iter(
         *ptrs_fp_iter_map.at_unsafe(method),
-        build_summary_map(effect_summaries, call_graph, method),
-        cfg);
+        build_summary_map(effect_summaries, call_graph, method), cfg, method);
     used_vars_fp_iter.run(uv::UsedVarsSet());
 
     cfg::CFGMutation mutator(cfg);

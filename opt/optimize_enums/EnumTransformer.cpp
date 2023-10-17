@@ -1536,7 +1536,7 @@ class EnumTransformer final {
     cfg.calculate_exit_block();
     ptrs::FixpointIterator fp_iter(cfg);
     fp_iter.run(ptrs::Environment());
-    used_vars::FixpointIterator uv_fpiter(fp_iter, summaries, cfg);
+    used_vars::FixpointIterator uv_fpiter(fp_iter, summaries, cfg, ctor);
     uv_fpiter.run(used_vars::UsedVarsSet());
     auto dead_instructions = used_vars::get_dead_instructions(cfg, uv_fpiter);
     for (const auto& insn : dead_instructions) {

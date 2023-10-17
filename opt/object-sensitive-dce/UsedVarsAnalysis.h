@@ -68,7 +68,8 @@ class FixpointIterator final
  public:
   FixpointIterator(const local_pointers::FixpointIterator& pointers_fp_iter,
                    side_effects::InvokeToSummaryMap invoke_to_summary_map,
-                   const cfg::ControlFlowGraph& cfg);
+                   const cfg::ControlFlowGraph& cfg,
+                   const DexMethod* method = nullptr);
 
   void analyze_instruction(IRInstruction* insn,
                            UsedVarsSet* used_vars) const override;
@@ -91,6 +92,7 @@ class FixpointIterator final
   }
 
  private:
+  const DexMethod* m_method;
   std::unordered_map<const IRInstruction*, local_pointers::Environment>
       m_insn_env_map;
   side_effects::InvokeToSummaryMap m_invoke_to_summary_map;

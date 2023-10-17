@@ -172,13 +172,8 @@ void SummaryBuilder::analyze_instruction_effects(
     classify_heap_write(env, insn->src(0), summary);
     break;
   }
-
   case OPCODE_INVOKE_SUPER:
-  case OPCODE_INVOKE_INTERFACE: {
-    TRACE(OSDCE, 3, "Unknown invoke: %s", SHOW(insn));
-    summary->effects |= EFF_UNKNOWN_INVOKE;
-    break;
-  }
+  case OPCODE_INVOKE_INTERFACE:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_VIRTUAL: {

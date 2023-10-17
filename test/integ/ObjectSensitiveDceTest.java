@@ -13,6 +13,11 @@ class ObjectSensitiveDceTest {
     useless.foo();
   }
 
+  public static void invoke_super() {
+    UselessDerived useless = new UselessDerived();
+    useless.foo();
+  }
+
   public static void clinit_with_side_effects() {
     UselessWithClInitWithSideEffects useless = new UselessWithClInitWithSideEffects();
     useless.foo();
@@ -29,6 +34,21 @@ class Useless {
   public Useless() {}
   public void foo() {
     F = 42;
+  }
+}
+
+class UselessBase {
+  int F;
+  public UselessBase() {}
+  public void foo() {
+    F = 42;
+  }
+}
+
+class UselessDerived extends UselessBase {
+  public UselessDerived() {}
+  public void foo() {
+    super.foo();
   }
 }
 
