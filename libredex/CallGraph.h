@@ -83,10 +83,56 @@ class BuildStrategy {
 };
 
 class Edge;
-using EdgeId = std::shared_ptr<Edge>;
-using Edges = std::vector<std::shared_ptr<Edge>>;
+using EdgeId = const Edge*;
 
-class Node {
+// This exposes a `EdgesVector` as a iterable of `const Edge*`.
+class EdgesAdapter {
+ public:
+  explicit EdgesAdapter(const std::vector<Edge>* edges) : m_edges(edges) {}
+
+  class iterator {
+   public:
+    using value_type = const Edge*;
+    using difference_type = std::ptrdiff_t;
+    using pointer = const value_type*;
+    using reference = const value_type&;
+    using iterator_category = std::input_iterator_tag;
+
+    explicit iterator(value_type current) : m_current(current) {}
+
+    reference operator*() const { return m_current; }
+
+    pointer operator->() const { return &(this->operator*()); }
+
+    bool operator==(const iterator& other) const {
+      return m_current == other.m_current;
+    }
+
+    bool operator!=(iterator& other) const { return !(*this == other); }
+
+    iterator operator++(int) {
+      auto result = *this;
+      ++(*this);
+      return result;
+    }
+
+    iterator& operator++();
+
+   private:
+    value_type m_current;
+  };
+
+  iterator begin() const { return iterator(&*m_edges->begin()); }
+
+  iterator end() const { return iterator(&*m_edges->end()); }
+
+  size_t size() const { return m_edges->size(); }
+
+ private:
+  const std::vector<Edge>* m_edges;
+};
+
+class Node final {
   enum NodeType {
     GHOST_ENTRY,
     GHOST_EXIT,
@@ -98,8 +144,8 @@ class Node {
   explicit Node(NodeType type) : m_method(nullptr), m_type(type) {}
 
   const DexMethod* method() const { return m_method; }
-  const Edges& callers() const { return m_predecessors; }
-  const Edges& callees() const { return m_successors; }
+  const std::vector<const Edge*>& callers() const { return m_predecessors; }
+  EdgesAdapter callees() const { return EdgesAdapter(&m_successors); }
 
   bool is_entry() const { return m_type == GHOST_ENTRY; }
   bool is_exit() const { return m_type == GHOST_EXIT; }
@@ -110,8 +156,8 @@ class Node {
 
  private:
   const DexMethod* m_method;
-  Edges m_predecessors;
-  Edges m_successors;
+  std::vector<const Edge*> m_predecessors;
+  std::vector<Edge> m_successors;
   NodeType m_type;
 
   friend class Graph;
@@ -132,6 +178,11 @@ class Edge {
   IRInstruction* m_invoke_insn;
 };
 
+inline EdgesAdapter::iterator& EdgesAdapter::iterator::operator++() {
+  ++m_current;
+  return *this;
+}
+
 class Graph final {
  public:
   explicit Graph(const BuildStrategy&);
@@ -139,7 +190,7 @@ class Graph final {
   Graph(Graph&&) = default;
   Graph& operator=(Graph&&) = default;
 
-  // Copying the callgraph accidentally is expensive, we don't allow that.
+  // The call graph cannot be copied.
   Graph(const Graph&) = delete;
   Graph& operator=(const Graph&) = delete;
 
@@ -172,8 +223,8 @@ class Graph final {
   static double get_seconds();
 
  private:
-  std::shared_ptr<Node> m_entry;
-  std::shared_ptr<Node> m_exit;
+  std::unique_ptr<Node> m_entry;
+  std::unique_ptr<Node> m_exit;
   InsertOnlyConcurrentMap<const DexMethod*, Node> m_nodes;
   ConcurrentMap<const IRInstruction*, std::unordered_set<const DexMethod*>>
       m_insn_to_callee;
@@ -257,22 +308,19 @@ class GraphInterface {
  public:
   using Graph = call_graph::Graph;
   using NodeId = const Node*;
-  using EdgeId = std::shared_ptr<Edge>;
+  using EdgeId = const Edge*;
 
   static NodeId entry(const Graph& graph) { return graph.entry(); }
   static NodeId exit(const Graph& graph) { return graph.exit(); }
-  static const Edges& predecessors(const Graph& graph, const NodeId& m) {
+  static const std::vector<const Edge*>& predecessors(const Graph&,
+                                                      const NodeId& m) {
     return m->callers();
   }
-  static const Edges& successors(const Graph& graph, const NodeId& m) {
+  static EdgesAdapter successors(const Graph&, const NodeId& m) {
     return m->callees();
   }
-  static NodeId source(const Graph& graph, const EdgeId& e) {
-    return e->caller();
-  }
-  static NodeId target(const Graph& graph, const EdgeId& e) {
-    return e->callee();
-  }
+  static NodeId source(const Graph&, const EdgeId& e) { return e->caller(); }
+  static NodeId target(const Graph&, const EdgeId& e) { return e->callee(); }
 };
 
 const MethodSet& resolve_callees_in_graph(const Graph& graph,

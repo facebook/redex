@@ -100,7 +100,7 @@ class FixpointIterator : public sparta::ParallelMonotonicFixpointIterator<
   void analyze_node(const call_graph::NodeId& node,
                     Domain* current_state) const override;
 
-  Domain analyze_edge(const std::shared_ptr<call_graph::Edge>& edge,
+  Domain analyze_edge(const call_graph::EdgeId& edge,
                       const Domain& exit_state_at_source) const override;
 
   std::unique_ptr<IntraproceduralAnalysis> get_intraprocedural_analysis(

@@ -178,7 +178,7 @@ void GlobalTypeAnalyzer::analyze_node(
 }
 
 ArgumentTypePartition GlobalTypeAnalyzer::analyze_edge(
-    const std::shared_ptr<call_graph::Edge>& edge,
+    const call_graph::EdgeId& edge,
     const ArgumentTypePartition& exit_state_at_source) const {
   ArgumentTypePartition entry_state_at_dest;
   auto insn = edge->invoke_insn();

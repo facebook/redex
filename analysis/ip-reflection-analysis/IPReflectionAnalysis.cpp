@@ -33,8 +33,7 @@ struct Caller {
   using Domain = PatriciaTreeMapAbstractPartition<const DexMethod*,
                                                   reflection::CallingContext>;
 
-  Domain analyze_edge(const std::shared_ptr<call_graph::Edge>& edge,
-                      const Domain& original) {
+  Domain analyze_edge(const call_graph::EdgeId edge, const Domain& original) {
     auto callee = edge->callee()->method();
     if (!callee) {
       return Domain::bottom();

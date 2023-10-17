@@ -127,8 +127,7 @@ void FixpointIterator::analyze_node(call_graph::NodeId const& node,
 }
 
 Domain FixpointIterator::analyze_edge(
-    const std::shared_ptr<call_graph::Edge>& edge,
-    const Domain& exit_state_at_source) const {
+    const call_graph::EdgeId& edge, const Domain& exit_state_at_source) const {
   Domain entry_state_at_dest;
   auto insn = edge->invoke_insn();
   if (insn == nullptr) {

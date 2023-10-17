@@ -402,104 +402,145 @@ Edge::Edge(NodeId caller, NodeId callee, IRInstruction* invoke_insn)
 double Graph::get_seconds() { return s_timer.get_seconds(); }
 
 Graph::Graph(const BuildStrategy& strat)
-    : m_entry(std::make_shared<Node>(Node::GHOST_ENTRY)),
-      m_exit(std::make_shared<Node>(Node::GHOST_EXIT)) {
+    : m_entry(std::make_unique<Node>(Node::GHOST_ENTRY)),
+      m_exit(std::make_unique<Node>(Node::GHOST_EXIT)) {
   auto timer_scope = s_timer.scope();
   Timer t("Graph::Graph");
+
+  auto root_and_dynamic = strat.get_roots();
+  m_dynamic_methods = std::move(root_and_dynamic.dynamic_methods);
+  std::vector<Node*> root_nodes;
+
   // Obtain the callsites of each method recursively, building the graph in the
   // process.
-  struct MethodEdges {
-    const DexMethod* method;
-    std::vector<std::shared_ptr<Edge>> edges;
-  };
-  ConcurrentMap<NodeId, std::vector<MethodEdges>> concurrent_preds;
-  ConcurrentMap<NodeId, std::vector<MethodEdges>> concurrent_succs;
-  auto record_trivial_edge = [&](auto caller_node, auto callee_node) {
-    auto edge = std::make_shared<Edge>(caller_node, callee_node,
-                                       /* invoke_insn */ nullptr);
-    concurrent_preds.update(callee_node, [&](auto, auto& v, bool) {
-      v.emplace_back((MethodEdges){caller_node->method(), {edge}});
+  ConcurrentMap<NodeId, std::list<std::vector<const Edge*>>> concurrent_preds;
+  std::mutex predecessors_wq_mutex;
+  auto predecessors_wq = workqueue_foreach<Node*>([&](Node* callee_node) {
+    auto& preds = concurrent_preds.at_unsafe(callee_node);
+    std::vector<std::vector<const Edge*>> callee_edges;
+    callee_edges.reserve(preds.size());
+    size_t size = 0;
+    for (auto& edges : preds) {
+      size += edges.size();
+      callee_edges.emplace_back(std::move(edges));
+    }
+    std::sort(callee_edges.begin(), callee_edges.end(), [](auto& p, auto& q) {
+      return compare_dexmethods(p.front()->caller()->method(),
+                                q.front()->caller()->method());
     });
-    concurrent_succs.update(caller_node, [&](auto, auto& w, bool) {
-      w.emplace_back((MethodEdges){callee_node->method(), {std::move(edge)}});
-    });
-  };
+    auto& callee_predecessors = callee_node->m_predecessors;
+    callee_predecessors.reserve(size);
+    for (auto& edges : callee_edges) {
+      callee_predecessors.insert(callee_predecessors.end(), edges.begin(),
+                                 edges.end());
+    }
+  });
+
   struct WorkItem {
     const DexMethod* caller;
-    NodeId caller_node;
-    bool caller_is_root;
+    Node* caller_node;
   };
-  auto wq = workqueue_foreach<WorkItem>(
+  constexpr IRInstruction* no_insn = nullptr;
+  auto successors_wq = workqueue_foreach<WorkItem>(
       [&](sparta::WorkerState<WorkItem>* worker_state,
           const WorkItem& work_item) {
-        auto caller = work_item.caller;
-        auto caller_node = work_item.caller_node;
-        auto caller_is_root = work_item.caller_is_root;
+        auto get_node = [&](const DexMethod* method) -> Node* {
+          auto [const_node, node_created] =
+              m_nodes.get_or_emplace_and_assert_equal(method, method);
+          Node* node = const_cast<Node*>(const_node);
+          if (node_created) {
+            worker_state->push_task((WorkItem){method, node});
+          }
+          return node;
+        };
 
-        if (caller_is_root) {
-          // Add edges from the single "ghost" entry node to all the "real"
-          // entry nodes in the graph.
-          record_trivial_edge(this->entry(), caller_node);
-        }
-
-        auto callsites = strat.get_callsites(caller);
-        if (callsites.empty()) {
-          // Add edges from the single "ghost" exit node to all the "real" exit
-          // nodes in the graph.
-          record_trivial_edge(caller_node, this->exit());
-          return;
-        }
-
-        // Gather and create all callee nodes, and kick off new concurrent work
-        std::unordered_map<const DexMethod*, size_t> callee_indices;
+        using Insns = std::vector<IRInstruction*>;
         struct CalleePartition {
-          const DexMethod* callee;
-          std::vector<IRInstruction*> invoke_insns{};
+          Node* callee_node;
+          Insns invoke_insns;
+          CalleePartition(Node* callee_node, Insns invoke_insns)
+              : callee_node(callee_node),
+                invoke_insns(std::move(invoke_insns)) {}
         };
         std::vector<CalleePartition> callee_partitions;
         std::unordered_map<const IRInstruction*,
                            std::unordered_set<const DexMethod*>>
             insn_to_callee;
-        for (const auto& callsite : callsites) {
-          auto callee = callsite.callee;
-          auto [it, emplaced] =
-              callee_indices.emplace(callee, callee_indices.size());
-          if (emplaced) {
-            callee_partitions.push_back(CalleePartition{callee});
+        size_t caller_successors_size;
+
+        auto* caller = work_item.caller;
+        if (caller == nullptr) {
+          // Add edges from the single "ghost" entry node to all the "real" root
+          // entry nodes in the graph.
+          callee_partitions.reserve(root_nodes.size());
+          for (auto root_node : root_nodes) {
+            callee_partitions.emplace_back(root_node, Insns{no_insn});
           }
-          auto& callee_partition = callee_partitions[it->second];
-          callee_partition.invoke_insns.push_back(callsite.invoke_insn);
-          insn_to_callee[callsite.invoke_insn].emplace(callee);
+          caller_successors_size = root_nodes.size();
+        } else {
+          auto callsites = strat.get_callsites(caller);
+          if (callsites.empty()) {
+            // Add edges from the single "ghost" exit node to all the "real"
+            // exit nodes in the graph.
+            callee_partitions.emplace_back(m_exit.get(), Insns{no_insn});
+            caller_successors_size = 1;
+          } else {
+            // Gather and create all "real" callee nodes, and kick off new
+            // concurrent work
+            std::unordered_map<const DexMethod*, size_t> callee_indices;
+            for (const auto& callsite : callsites) {
+              auto callee = callsite.callee;
+              auto [it, emplaced] =
+                  callee_indices.emplace(callee, callee_indices.size());
+              if (emplaced) {
+                callee_partitions.emplace_back(get_node(callee), Insns());
+              }
+              auto& callee_partition = callee_partitions[it->second];
+              callee_partition.invoke_insns.push_back(callsite.invoke_insn);
+              insn_to_callee[callsite.invoke_insn].emplace(callee);
+            }
+            caller_successors_size = callsites.size();
+          }
         }
 
-        // Record all edges (we actually add them in a deterministic way later)
-        std::vector<MethodEdges> w;
-        w.reserve(callee_partitions.size());
-        for (auto& callee_partition : callee_partitions) {
-          auto callee = callee_partition.callee;
-          auto& callee_invoke_insns = callee_partition.invoke_insns;
-          auto [const_callee_node, emplaced] =
-              m_nodes.get_or_emplace_and_assert_equal(callee, callee);
-          NodeId callee_node = const_cast<NodeId>(const_callee_node);
-          if (emplaced) {
-            worker_state->push_task(
-                (WorkItem){callee, callee_node, /* is_root */ false});
-          }
-
-          std::vector<std::shared_ptr<Edge>> edges;
-          edges.reserve(callee_invoke_insns.size());
+        // Record all edges
+        auto* caller_node = work_item.caller_node;
+        auto& caller_successors = caller_node->m_successors;
+        caller_successors.reserve(caller_successors_size);
+        std::sort(callee_partitions.begin(), callee_partitions.end(),
+                  [](auto& p, auto& q) {
+                    return compare_dexmethods(p.callee_node->method(),
+                                              q.callee_node->method());
+                  });
+        std::vector<Node*> added_preds;
+        for (auto&& [callee_node, callee_invoke_insns] : callee_partitions) {
+          std::vector<const Edge*> callee_edges;
+          callee_edges.reserve(callee_invoke_insns.size());
           for (auto* invoke_insn : callee_invoke_insns) {
-            edges.push_back(
-                std::make_shared<Edge>(caller_node, callee_node, invoke_insn));
+            caller_successors.emplace_back(caller_node, callee_node,
+                                           invoke_insn);
+            callee_edges.push_back(&caller_successors.back());
           }
-          concurrent_preds.update(callee_node, [&](auto, auto& v, bool) {
-            v.push_back((MethodEdges){caller, edges});
-          });
-          w.push_back((MethodEdges){callee, std::move(edges)});
+          bool preds_added;
+          concurrent_preds.update(callee_node,
+                                  [&](auto, auto& preds, bool exists) {
+                                    preds_added = !exists;
+                                    preds.emplace_back(std::move(callee_edges));
+                                  });
+          if (preds_added) {
+            added_preds.push_back(callee_node);
+          }
         }
-        concurrent_succs.emplace(caller_node, std::move(w));
 
-        // Populate concurrent_insn_to_callee
+        // Schedule postprocessing of predecessors of newly-added preds.
+        if (!added_preds.empty()) {
+          std::lock_guard<std::mutex> lock_guard(predecessors_wq_mutex);
+          for (auto* node : added_preds) {
+            predecessors_wq.add_item(node);
+          }
+        }
+
+        // Populate insn-to-callee map
         for (auto&& [invoke_insn, callees] : insn_to_callee) {
           m_insn_to_callee.emplace(invoke_insn, std::move(callees));
         }
@@ -507,41 +548,16 @@ Graph::Graph(const BuildStrategy& strat)
       redex_parallel::default_num_threads(),
       /*push_tasks_while_running=*/true);
 
-  auto root_and_dynamic = strat.get_roots();
-  const auto& roots = root_and_dynamic.roots;
-  m_dynamic_methods = std::move(root_and_dynamic.dynamic_methods);
-  for (const DexMethod* root : roots) {
+  successors_wq.add_item((WorkItem){/* caller */ nullptr, m_entry.get()});
+  root_nodes.reserve(root_and_dynamic.roots.size());
+  for (const DexMethod* root : root_and_dynamic.roots) {
     auto [root_node, emplaced] = m_nodes.emplace_unsafe(root, root);
     always_assert(emplaced);
-    wq.add_item((WorkItem){root, root_node, /* is_root */ true});
+    successors_wq.add_item((WorkItem){root, root_node});
+    root_nodes.emplace_back(root_node);
   }
-  wq.run_all();
-
-  // Fill in all predecessors and successors, and sort them
-  auto wq2 = workqueue_foreach<Node*>([&](Node* node) {
-    auto linearize = [node](auto& m, auto& res) {
-      auto it = m.find(node);
-      if (it == m.end()) {
-        return;
-      }
-      auto& v = it->second;
-      std::sort(v.begin(), v.end(), [](auto& p, auto& q) {
-        return compare_dexmethods(p.method, q.method);
-      });
-      for (auto& me : v) {
-        res.insert(res.end(), std::make_move_iterator(me.edges.begin()),
-                   std::make_move_iterator(me.edges.end()));
-      }
-    };
-    linearize(concurrent_succs, node->m_successors);
-    linearize(concurrent_preds, node->m_predecessors);
-  });
-  wq2.add_item(m_entry.get());
-  wq2.add_item(m_exit.get());
-  for (auto&& [_, node] : m_nodes) {
-    wq2.add_item(&node);
-  }
-  wq2.run_all();
+  successors_wq.run_all();
+  predecessors_wq.run_all();
 }
 
 const MethodSet& resolve_callees_in_graph(const Graph& graph,
