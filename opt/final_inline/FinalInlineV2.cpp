@@ -371,7 +371,7 @@ class ClassInitStrategy final : public call_graph::SingleCalleeStrategy {
 
     walk::methods(m_scope, [&](DexMethod* method) {
       if (method::is_clinit(method)) {
-        roots.emplace_back(method);
+        roots.insert(method);
       }
     });
     return root_and_dynamic;

@@ -78,7 +78,7 @@ RootAndDynamic SingleCalleeStrategy::get_roots() const {
   walk::code(m_scope, [&](DexMethod* method, IRCode& /* code */) {
     if (is_definitely_virtual(method) || root(method) ||
         method::is_clinit(method) || method::is_argless_init(method)) {
-      roots.emplace_back(method);
+      roots.insert(method);
     }
   });
   return root_and_dynamic;
@@ -120,7 +120,6 @@ MultipleCalleeBaseStrategy::init_ordered_overriding_methods_with_code(
 RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
   Timer t("get_roots");
   RootAndDynamic root_and_dynamic;
-  MethodSet emplaced_methods;
   auto& roots = root_and_dynamic.roots;
   auto& dynamic_methods = root_and_dynamic.dynamic_methods;
   // Gather clinits and root methods, and the methods that override or
@@ -130,14 +129,11 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
       // No need to add root methods, they will be added anyway.
       return;
     }
-    if (emplaced_methods.emplace(method).second) {
-      roots.emplace_back(method);
-    }
+    roots.insert(method);
   };
   walk::methods(m_scope, [&](DexMethod* method) {
     if (method::is_clinit(method)) {
-      roots.emplace_back(method);
-      emplaced_methods.emplace(method);
+      roots.insert(method);
       return;
     }
     // For methods marked with DoNotInline, we also add to dynamic methods set
@@ -158,8 +154,8 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
         !can_rename(method)) {
       dynamic_methods.emplace(method);
     }
-    if (method->get_code() && emplaced_methods.emplace(method).second) {
-      roots.emplace_back(method);
+    if (method->get_code()) {
+      roots.insert(method);
     }
     const auto& overriding_methods =
         mog::get_overriding_methods(m_method_override_graph, method);
@@ -184,9 +180,8 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
         if (overriding->is_external()) {
           dynamic_methods.emplace(overriding);
         }
-        if (!overriding->is_external() && overriding->get_code() &&
-            emplaced_methods.emplace(overriding).second) {
-          roots.emplace_back(overriding);
+        if (!overriding->is_external() && overriding->get_code()) {
+          roots.insert(overriding);
         }
       }
       // Internal methods might be overriden by external methods. Add such
@@ -211,9 +206,6 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
       }
     }
   }
-  // Add additional roots if needed.
-  auto additional_roots = get_additional_roots(emplaced_methods);
-  roots.insert(roots.end(), additional_roots.begin(), additional_roots.end());
   return root_and_dynamic;
 }
 
@@ -256,20 +248,17 @@ CallSites CompleteCallGraphStrategy::get_callsites(
 
 RootAndDynamic CompleteCallGraphStrategy::get_roots() const {
   RootAndDynamic root_and_dynamic;
-  MethodSet emplaced_methods;
   auto& roots = root_and_dynamic.roots;
   auto add_root_method_overrides = [&](const DexMethod* method) {
-    if (!root(method) && emplaced_methods.emplace(method).second) {
+    if (!root(method)) {
       // No need to add root methods, they will be added anyway.
-      roots.emplace_back(method);
+      roots.insert(method);
     }
   };
   walk::methods(m_scope, [&](DexMethod* method) {
     if (root(method) || method::is_clinit(method) ||
         method::is_argless_init(method)) {
-      if (emplaced_methods.emplace(method).second) {
-        roots.emplace_back(method);
-      }
+      roots.insert(method);
     }
     if (!root(method) && !(method->is_virtual() &&
                            is_interface(type_class(method->get_class())) &&
@@ -297,9 +286,7 @@ RootAndDynamic CompleteCallGraphStrategy::get_roots() const {
       const auto& overriding_methods =
           mog::get_overriding_methods(m_method_override_graph, method, true);
       for (auto* overriding : overriding_methods) {
-        if (emplaced_methods.emplace(overriding).second) {
-          roots.emplace_back(overriding);
-        }
+        roots.insert(overriding);
       }
     }
   }
@@ -387,16 +374,14 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
 }
 
 // Add big override methods to root as well.
-std::vector<const DexMethod*> MultipleCalleeStrategy::get_additional_roots(
-    const MethodSet& existing_roots) const {
-  std::vector<const DexMethod*> additional_roots;
+RootAndDynamic MultipleCalleeStrategy::get_roots() const {
+  auto root_and_dynamic = MultipleCalleeBaseStrategy::get_roots();
   for (auto method : m_big_override) {
-    if (!method->is_external() && !existing_roots.count(method) &&
-        method->get_code()) {
-      additional_roots.emplace_back(method);
+    if (!method->is_external() && method->get_code()) {
+      root_and_dynamic.roots.insert(method);
     }
   }
-  return additional_roots;
+  return root_and_dynamic;
 }
 
 Edge::Edge(NodeId caller, NodeId callee, IRInstruction* invoke_insn)

@@ -82,10 +82,8 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
   // but as it stands, properly optimizing them is a size win for us.
   call_graph::RootAndDynamic get_roots() const override {
     call_graph::RootAndDynamic root_and_dynamic;
-    auto& roots = root_and_dynamic.roots;
-
     walk::code(m_scope, [&](DexMethod* method, IRCode& code) {
-      roots.emplace_back(method);
+      root_and_dynamic.roots.insert(method);
     });
     return root_and_dynamic;
   }

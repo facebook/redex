@@ -62,8 +62,8 @@ using MethodSet = std::unordered_set<const DexMethod*>;
 using MethodVector = std::vector<const DexMethod*>;
 
 struct RootAndDynamic {
-  std::vector<const DexMethod*> roots;
-  std::unordered_set<const DexMethod*> dynamic_methods;
+  MethodSet roots;
+  MethodSet dynamic_methods;
 };
 
 /*
@@ -265,12 +265,6 @@ class MultipleCalleeBaseStrategy : public SingleCalleeStrategy {
   RootAndDynamic get_roots() const override;
 
  protected:
-  virtual std::vector<const DexMethod*> get_additional_roots(
-      const MethodSet& /* existing_roots */) const {
-    // No additional roots by default.
-    return std::vector<const DexMethod*>();
-  }
-
   const std::vector<const DexMethod*>& get_ordered_overriding_methods_with_code(
       const DexMethod* method) const;
 
@@ -302,8 +296,7 @@ class MultipleCalleeStrategy : public MultipleCalleeBaseStrategy {
   CallSites get_callsites(const DexMethod* method) const override;
 
  protected:
-  std::vector<const DexMethod*> get_additional_roots(
-      const MethodSet& existing_roots) const override;
+  RootAndDynamic get_roots() const override;
   ConcurrentSet<const DexMethod*> m_big_override;
 };
 
