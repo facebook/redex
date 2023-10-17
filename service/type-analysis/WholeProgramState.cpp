@@ -482,8 +482,7 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
   }
 
   if (whole_program_state->has_call_graph()) {
-    auto method = resolve_invoke_method(insn);
-    if (method == nullptr || whole_program_state->method_is_dynamic(method)) {
+    if (whole_program_state->invoke_is_dynamic(insn)) {
       env->set(RESULT_REGISTER, DexTypeDomain::top());
       return false;
     }

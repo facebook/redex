@@ -136,11 +136,6 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
       roots.insert(method);
       return;
     }
-    // For methods marked with DoNotInline, we also add to dynamic methods set
-    // to avoid propagating return value.
-    if (method->rstate.dont_inline()) {
-      dynamic_methods.emplace(method);
-    }
     if (!root(method) && !method::is_argless_init(method) &&
         !(method->is_virtual() &&
           is_interface(type_class(method->get_class())) &&
@@ -307,7 +302,7 @@ MultipleCalleeStrategy::MultipleCalleeStrategy(
           if (callee == nullptr) {
             return;
           }
-          if (!callee->is_virtual()) {
+          if (!callee->is_virtual() || insn->opcode() == OPCODE_INVOKE_SUPER) {
             return;
           }
           if (!concurrent_callees.insert(callee)) {
@@ -348,7 +343,8 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
           if (callee == nullptr) {
             return editable_cfg_adapter::LOOP_CONTINUE;
           }
-          if (is_definitely_virtual(callee)) {
+          if (is_definitely_virtual(callee) &&
+              insn->opcode() != OPCODE_INVOKE_SUPER) {
             // For true virtual callees, add the callee itself and all of its
             // overrides if they are not in big overrides.
             if (m_big_override.count_unsafe(callee)) {
@@ -357,12 +353,10 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
             if (callee->get_code()) {
               callsites.emplace_back(callee, insn);
             }
-            if (insn->opcode() != OPCODE_INVOKE_SUPER) {
-              const auto& overriding_methods =
-                  get_ordered_overriding_methods_with_code(callee);
-              for (auto overriding_method : overriding_methods) {
-                callsites.emplace_back(overriding_method, insn);
-              }
+            const auto& overriding_methods =
+                get_ordered_overriding_methods_with_code(callee);
+            for (auto overriding_method : overriding_methods) {
+              callsites.emplace_back(overriding_method, insn);
             }
           } else if (callee->is_concrete()) {
             callsites.emplace_back(callee, insn);
@@ -559,8 +553,21 @@ const MethodSet& resolve_callees_in_graph(const Graph& graph,
   return no_methods;
 }
 
-bool method_is_dynamic(const Graph& graph, const DexMethod* method) {
-  return graph.get_dynamic_methods().count(method);
+bool invoke_is_dynamic(const Graph& graph, const IRInstruction* insn) {
+  auto* callee = resolve_invoke_method(insn);
+  if (callee == nullptr) {
+    return true;
+  }
+  // For methods marked with DoNotInline, we also treat them like dynamic
+  // methods to avoid propagating return value.
+  if (callee->rstate.dont_inline()) {
+    return true;
+  }
+  if (insn->opcode() != OPCODE_INVOKE_VIRTUAL &&
+      insn->opcode() != OPCODE_INVOKE_INTERFACE) {
+    return false;
+  }
+  return graph.get_dynamic_methods().count(callee);
 }
 
 CallgraphStats get_num_nodes_edges(const Graph& graph) {

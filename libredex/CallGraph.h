@@ -326,7 +326,7 @@ const MethodSet& resolve_callees_in_graph(const Graph& graph,
 const MethodVector& get_callee_to_callers(const Graph& graph,
                                           const DexMethod* callee);
 
-bool method_is_dynamic(const Graph& graph, const DexMethod* method);
+bool invoke_is_dynamic(const Graph& graph, const IRInstruction* insn);
 
 struct CallgraphStats {
   uint32_t num_nodes;

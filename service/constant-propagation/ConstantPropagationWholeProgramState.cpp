@@ -358,11 +358,7 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
     return false;
   }
   if (whole_program_state->has_call_graph()) {
-    auto method = resolve_invoke_method(insn);
-    if (method == nullptr) {
-      return false;
-    }
-    if (whole_program_state->method_is_dynamic(method)) {
+    if (whole_program_state->invoke_is_dynamic(insn)) {
       return false;
     }
     auto value = whole_program_state->get_return_value_from_cg(insn);

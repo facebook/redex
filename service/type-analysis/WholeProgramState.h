@@ -154,8 +154,8 @@ class WholeProgramState {
     return ret;
   }
 
-  bool method_is_dynamic(const DexMethod* method) const {
-    return call_graph::method_is_dynamic(*m_call_graph, method);
+  bool invoke_is_dynamic(const IRInstruction* insn) const {
+    return call_graph::invoke_is_dynamic(*m_call_graph, insn);
   }
 
   // For debugging
