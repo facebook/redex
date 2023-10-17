@@ -160,3 +160,48 @@ TEST_F(TypedefAnnosTest, test_no_anno_inference) {
     EXPECT_FALSE(exit_env.get_annotation(insn->src(0)));
   }
 }
+
+TEST_F(TypedefAnnosTest, test_int_field) {
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnosTest;.testIntField:(I)V")
+                    ->as_def();
+  auto& cfg = get_cfg(method);
+  const auto& val = get_annotation_set();
+  type_inference::TypeInference inference(cfg, false, val);
+  inference.run(method);
+
+  auto exit_block = cfg.exit_block();
+  auto env = inference.get_entry_state_at(exit_block);
+  for (auto& mie : InstructionIterable(exit_block)) {
+    auto insn = mie.insn;
+    inference.analyze_instruction(insn, &env);
+    if (insn->opcode() == OPCODE_IPUT) {
+      EXPECT_EQ(*(env.get_annotation(insn->src(1))),
+                DexType::get_type("Linteg/TestIntDef;"));
+    }
+  }
+}
+
+TEST_F(TypedefAnnosTest, test_str_field) {
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnosTest;.testStringField:(Ljava/lang/"
+                    "String;)V")
+                    ->as_def();
+  auto& cfg = get_cfg(method);
+  const auto& val = get_annotation_set();
+  type_inference::TypeInference inference(cfg, false, val);
+  inference.run(method);
+
+  auto exit_block = cfg.exit_block();
+  auto env = inference.get_entry_state_at(exit_block);
+  for (auto& mie : InstructionIterable(exit_block)) {
+    auto insn = mie.insn;
+    inference.analyze_instruction(insn, &env);
+    if (insn->opcode() == OPCODE_IPUT_OBJECT) {
+      EXPECT_EQ(*(env.get_annotation(insn->src(1))),
+                DexType::get_type("Linteg/TestStringDef;"));
+    }
+  }
+}
