@@ -145,6 +145,10 @@ class WholeProgramState {
     }
     DexTypeDomain ret = DexTypeDomain::bottom();
     for (const DexMethod* callee : callees) {
+      if (!callee->get_code()) {
+        always_assert(is_native(callee));
+        return DexTypeDomain::top();
+      }
       auto val = m_method_partition.get(callee);
       ret.join_with(val);
     }

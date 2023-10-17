@@ -94,21 +94,22 @@ MultipleCalleeBaseStrategy::MultipleCalleeBaseStrategy(
       m_method_override_graph(method_override_graph) {}
 
 const std::vector<const DexMethod*>&
-MultipleCalleeBaseStrategy::get_ordered_overriding_methods_with_code(
+MultipleCalleeBaseStrategy::get_ordered_overriding_methods_with_code_or_native(
     const DexMethod* method) const {
   auto res = m_overriding_methods_cache.get(method);
   if (res) {
     return *res;
   }
-  return init_ordered_overriding_methods_with_code(
+  return init_ordered_overriding_methods_with_code_or_native(
       method, mog::get_overriding_methods(m_method_override_graph, method));
 }
 
 const std::vector<const DexMethod*>&
-MultipleCalleeBaseStrategy::init_ordered_overriding_methods_with_code(
+MultipleCalleeBaseStrategy::init_ordered_overriding_methods_with_code_or_native(
     const DexMethod* method,
     std::vector<const DexMethod*> overriding_methods) const {
-  std20::erase_if(overriding_methods, [](auto* m) { return !m->get_code(); });
+  std20::erase_if(overriding_methods,
+                  [](auto* m) { return !m->get_code() && !is_native(m); });
   std::sort(overriding_methods.begin(), overriding_methods.end(),
             compare_dexmethods);
   return *m_overriding_methods_cache
@@ -185,19 +186,6 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
         }
       }
     }
-    if (is_native(method)) {
-      dynamic_methods.emplace(method);
-      const auto& overriding_methods =
-          mog::get_overriding_methods(m_method_override_graph, method, true);
-      for (auto m : overriding_methods) {
-        dynamic_methods.emplace(m);
-      }
-      const auto& overiden_methods =
-          mog::get_overridden_methods(m_method_override_graph, method, true);
-      for (auto m : overiden_methods) {
-        dynamic_methods.emplace(m);
-      }
-    }
   }
   return root_and_dynamic;
 }
@@ -221,16 +209,15 @@ CallSites CompleteCallGraphStrategy::get_callsites(
           if (callee == nullptr) {
             return editable_cfg_adapter::LOOP_CONTINUE;
           }
-          if (callee->is_concrete()) {
+          if (callee->get_code() || is_native(callee)) {
             callsites.emplace_back(callee, insn);
           }
           if (opcode::is_invoke_virtual(insn->opcode()) ||
               opcode::is_invoke_interface(insn->opcode())) {
             const auto& overriding_methods =
-                get_ordered_overriding_methods_with_code(callee);
-
-            for (auto m : overriding_methods) {
-              callsites.emplace_back(m, insn);
+                get_ordered_overriding_methods_with_code_or_native(callee);
+            for (auto overriding_method : overriding_methods) {
+              callsites.emplace_back(overriding_method, insn);
             }
           }
         }
@@ -310,7 +297,7 @@ MultipleCalleeStrategy::MultipleCalleeStrategy(
             }
           }
           if (num_override <= big_override_threshold) {
-            init_ordered_overriding_methods_with_code(
+            init_ordered_overriding_methods_with_code_or_native(
                 callee, std::move(overriding_methods));
           } else {
             m_big_override.emplace(callee);
@@ -343,11 +330,11 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
             if (m_big_override.count_unsafe(callee)) {
               return editable_cfg_adapter::LOOP_CONTINUE;
             }
-            if (callee->get_code()) {
+            if (callee->get_code() || is_native(callee)) {
               callsites.emplace_back(callee, insn);
             }
             const auto& overriding_methods =
-                get_ordered_overriding_methods_with_code(callee);
+                get_ordered_overriding_methods_with_code_or_native(callee);
             for (auto overriding_method : overriding_methods) {
               callsites.emplace_back(overriding_method, insn);
             }

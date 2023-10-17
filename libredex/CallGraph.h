@@ -265,11 +265,12 @@ class MultipleCalleeBaseStrategy : public SingleCalleeStrategy {
   RootAndDynamic get_roots() const override;
 
  protected:
-  const std::vector<const DexMethod*>& get_ordered_overriding_methods_with_code(
+  const std::vector<const DexMethod*>&
+  get_ordered_overriding_methods_with_code_or_native(
       const DexMethod* method) const;
 
   const std::vector<const DexMethod*>&
-  init_ordered_overriding_methods_with_code(
+  init_ordered_overriding_methods_with_code_or_native(
       const DexMethod* method, std::vector<const DexMethod*>) const;
 
   const method_override_graph::Graph& m_method_override_graph;
