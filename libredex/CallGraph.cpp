@@ -96,25 +96,25 @@ MultipleCalleeBaseStrategy::MultipleCalleeBaseStrategy(
 const std::vector<const DexMethod*>&
 MultipleCalleeBaseStrategy::get_ordered_overriding_methods_with_code(
     const DexMethod* method) const {
-  auto res = m_overriding_methods_cache.get(method, nullptr);
-  if (!res) {
-    auto overriding_methods =
-        mog::get_overriding_methods(m_method_override_graph, method);
-    std20::erase_if(overriding_methods, [](auto* m) { return !m->get_code(); });
-    std::sort(overriding_methods.begin(), overriding_methods.end(),
-              compare_dexmethods);
-    m_overriding_methods_cache.update(
-        method, [&overriding_methods, &res](auto, auto& p, bool exists) {
-          if (exists) {
-            always_assert(*p == overriding_methods);
-          } else {
-            p = std::make_shared<std::vector<const DexMethod*>>(
-                std::move(overriding_methods));
-          }
-          res = p;
-        });
+  auto res = m_overriding_methods_cache.get(method);
+  if (res) {
+    return *res;
   }
-  return *res;
+  return init_ordered_overriding_methods_with_code(
+      method, mog::get_overriding_methods(m_method_override_graph, method));
+}
+
+const std::vector<const DexMethod*>&
+MultipleCalleeBaseStrategy::init_ordered_overriding_methods_with_code(
+    const DexMethod* method,
+    std::vector<const DexMethod*> overriding_methods) const {
+  std20::erase_if(overriding_methods, [](auto* m) { return !m->get_code(); });
+  std::sort(overriding_methods.begin(), overriding_methods.end(),
+            compare_dexmethods);
+  return *m_overriding_methods_cache
+              .get_or_emplace_and_assert_equal(method,
+                                               std::move(overriding_methods))
+              .first;
 }
 
 RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
@@ -326,7 +326,7 @@ MultipleCalleeStrategy::MultipleCalleeStrategy(
           if (!concurrent_callees.insert(callee)) {
             return;
           }
-          const auto& overriding_methods =
+          auto overriding_methods =
               mog::get_overriding_methods(m_method_override_graph, callee);
           uint32_t num_override = 0;
           for (auto overriding_method : overriding_methods) {
@@ -334,7 +334,10 @@ MultipleCalleeStrategy::MultipleCalleeStrategy(
               ++num_override;
             }
           }
-          if (num_override > big_override_threshold) {
+          if (num_override <= big_override_threshold) {
+            init_ordered_overriding_methods_with_code(
+                callee, std::move(overriding_methods));
+          } else {
             m_big_override.emplace(callee);
             for (auto overriding_method : overriding_methods) {
               m_big_override.emplace(overriding_method);
