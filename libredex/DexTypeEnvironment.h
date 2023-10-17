@@ -234,6 +234,18 @@ class SmallSetDexTypeDomain final
 };
 
 /*
+ * create a DexType wrapper for annotations
+ */
+class DexAnnoType {
+ public:
+  explicit DexAnnoType(const boost::optional<const DexType*>& type) {
+    m_type = type ? *type : nullptr;
+  }
+
+  const DexType* m_type;
+};
+
+/*
  * Domain for StringDef and IntDef annotations, where the DexType will track the
  * annotation name. This will enforce null safety and prevent the joins of two
  * different annotations.
@@ -286,23 +298,35 @@ class DexTypeDomain final
                             TypedefAnnotationDomain())) {}
 
   explicit DexTypeDomain(const DexType* dex_type,
-                         const DexType* annotation = nullptr)
+                         const DexAnnoType* annotation = nullptr)
       : ReducedProductAbstractDomain(
             std::make_tuple(ConstNullnessDomain(NOT_NULL),
                             SingletonDexTypeDomain(dex_type),
                             SmallSetDexTypeDomain(dex_type),
-                            TypedefAnnotationDomain(annotation))) {}
+                            (annotation && annotation->m_type)
+                                ? TypedefAnnotationDomain(annotation->m_type)
+                                : TypedefAnnotationDomain())) {}
 
   explicit DexTypeDomain(const DexType* dex_type,
                          const Nullness nullness,
                          bool is_dex_type_exact,
-                         const DexType* annotation = nullptr)
+                         const DexAnnoType* annotation = nullptr)
       : ReducedProductAbstractDomain(
             std::make_tuple(ConstNullnessDomain(nullness),
                             SingletonDexTypeDomain(dex_type),
                             is_dex_type_exact ? SmallSetDexTypeDomain(dex_type)
                                               : SmallSetDexTypeDomain::top(),
-                            TypedefAnnotationDomain(annotation))) {}
+                            (annotation && annotation->m_type)
+                                ? TypedefAnnotationDomain(annotation->m_type)
+                                : TypedefAnnotationDomain())) {}
+
+  explicit DexTypeDomain(const DexAnnoType* annotation)
+      : ReducedProductAbstractDomain(std::make_tuple(
+            ConstNullnessDomain(),
+            SingletonDexTypeDomain(),
+            SmallSetDexTypeDomain::top(),
+            annotation->m_type ? TypedefAnnotationDomain(annotation->m_type)
+                               : TypedefAnnotationDomain())) {}
 
   static void reduce_product(
       std::tuple<ArrayConstNullnessDomain,
