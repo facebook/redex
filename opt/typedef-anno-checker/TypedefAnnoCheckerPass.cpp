@@ -89,10 +89,12 @@ void TypedefAnnoChecker::check_instruction(
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE: {
-    DexMethodRef* ref_method = insn->get_method();
-    bool resolved_virtual_to_interface;
     auto def_method =
-        resolve_invoke_method(insn, m, &resolved_virtual_to_interface);
+        resolve_method(insn->get_method(), opcode_to_search(insn), m);
+    if (def_method == nullptr && opcode == OPCODE_INVOKE_VIRTUAL) {
+      def_method =
+          resolve_method(insn->get_method(), MethodSearch::InterfaceVirtual);
+    }
     if (!def_method) {
       return;
     }
@@ -340,9 +342,12 @@ bool TypedefAnnoChecker::check_typedef_value(
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_STATIC:
     case OPCODE_INVOKE_INTERFACE: {
-      bool resolved_virtual_to_interface;
       auto def_method =
-          resolve_invoke_method(def, m, &resolved_virtual_to_interface);
+          resolve_method(def->get_method(), opcode_to_search(def), m);
+      if (def_method == nullptr && def->opcode() == OPCODE_INVOKE_VIRTUAL) {
+        def_method =
+            resolve_method(def->get_method(), MethodSearch::InterfaceVirtual);
+      }
       if (!def_method) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: in the method " << SHOW(m)
