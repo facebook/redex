@@ -172,19 +172,22 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
       const auto& overriding_methods =
           mog::get_overriding_methods(m_method_override_graph, method);
       for (auto* overriding : overriding_methods) {
-        if (overriding->is_external()) {
-          dynamic_methods.emplace(overriding);
-        }
+        // We don't need to add overriding to dynamic_methods here, as that will
+        // happen anyway.
         if (!overriding->is_external() && overriding->get_code()) {
           roots.insert(overriding);
         }
       }
-      // Internal methods might be overriden by external methods. Add such
-      // methods to dynamic methods to avoid return value propagation as well.
-      const auto& overiden_methods =
+      // We don't need to add overridden external methods to dynamic_methods, as
+      // that will happen anyway. Internal interface methods can be overridden
+      // by external methods as well.
+      const auto& overridden_methods =
           mog::get_overridden_methods(m_method_override_graph, method, true);
-      for (auto m : overiden_methods) {
-        dynamic_methods.emplace(m);
+      for (auto m : overridden_methods) {
+        if (!m->is_external()) {
+          always_assert(is_interface(type_class(m->get_class())));
+          dynamic_methods.emplace(m);
+        }
       }
     }
     if (is_native(method)) {
