@@ -518,7 +518,7 @@ Graph::Graph(const BuildStrategy& strat)
   wq.run_all();
 
   // Fill in all predecessors and successors, and sort them
-  auto wq2 = workqueue_foreach<NodeId>([&](NodeId node) {
+  auto wq2 = workqueue_foreach<Node*>([&](Node* node) {
     auto linearize = [node](auto& m, auto& res) {
       auto it = m.find(node);
       if (it == m.end()) {

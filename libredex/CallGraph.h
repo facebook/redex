@@ -101,8 +101,8 @@ class Node {
   const Edges& callers() const { return m_predecessors; }
   const Edges& callees() const { return m_successors; }
 
-  bool is_entry() { return m_type == GHOST_ENTRY; }
-  bool is_exit() { return m_type == GHOST_EXIT; }
+  bool is_entry() const { return m_type == GHOST_ENTRY; }
+  bool is_exit() const { return m_type == GHOST_EXIT; }
 
   bool operator==(const Node& other) const {
     return m_method == other.m_method && m_type == other.m_type;
@@ -117,7 +117,7 @@ class Node {
   friend class Graph;
 };
 
-using NodeId = Node*;
+using NodeId = const Node*;
 
 class Edge {
  public:
@@ -150,12 +150,11 @@ class Graph final {
     return m_nodes.count_unsafe(const_cast<DexMethod*>(m)) != 0;
   }
 
-  // TODO: Return a (const NodeId*), instead of a mutable node.
   NodeId node(const DexMethod* m) const {
     if (m == nullptr) {
       return this->entry();
     }
-    return const_cast<NodeId>(m_nodes.get_unsafe(m));
+    return m_nodes.get_unsafe(m);
   }
 
   const ConcurrentMap<const IRInstruction*,
@@ -257,7 +256,7 @@ class MultipleCalleeStrategy : public MultipleCalleeBaseStrategy {
 class GraphInterface {
  public:
   using Graph = call_graph::Graph;
-  using NodeId = Node*;
+  using NodeId = const Node*;
   using EdgeId = std::shared_ptr<Edge>;
 
   static NodeId entry(const Graph& graph) { return graph.entry(); }
