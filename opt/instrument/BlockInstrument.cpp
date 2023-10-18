@@ -1225,7 +1225,7 @@ MethodInfo instrument_basic_blocks(
 
   using namespace cfg;
 
-  code.build_cfg(/*editable*/ true);
+  always_assert(code.editable_cfg_built());
   ControlFlowGraph& cfg = code.cfg();
 
   std::string before_cfg =
@@ -1450,7 +1450,6 @@ MethodInfo instrument_basic_blocks(
     TRACE(INSTRUMENT, 7, "%s", SHOW(cfg));
   }
 
-  code.clear_cfg();
   return info;
 }
 
@@ -1859,12 +1858,12 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   // Create Buildable CFG so we can inline functions correctly.
   if (options.inline_onBlockHit) {
     IRCode* blockHit_code = onBlockHit->get_code();
-    blockHit_code->build_cfg(true);
+    always_assert(blockHit_code->editable_cfg_built());
   }
 
   for (auto& en : onNonLoopBlockHit_map) {
     IRCode* nonLoopBlockHit_code = en.second->get_code();
-    nonLoopBlockHit_code->build_cfg(true);
+    always_assert(nonLoopBlockHit_code->editable_cfg_built());
   }
 
   DexMethod* binaryIncrementer;
@@ -1885,7 +1884,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
     break;
   }
   IRCode* binaryIncrementer_code = binaryIncrementer->get_code();
-  binaryIncrementer_code->build_cfg(true);
+  always_assert(binaryIncrementer_code->editable_cfg_built());
 
   // This method_offset is used in sMethodStats[] to locate a method profile.
   // We have a small header in the beginning of sMethodStats.
@@ -2014,19 +2013,6 @@ void BlockInstrumentHelper::do_basic_block_tracing(
     method_offset += 2 + method_info.num_vectors;
     hit_offset += method_info.num_hit_blocks;
   });
-
-  // Destroy the CFG because we are done Instrumenting
-  if (options.inline_onBlockHit) {
-    IRCode* blockHit_code = onBlockHit->get_code();
-    blockHit_code->clear_cfg();
-  }
-
-  for (auto& en : onNonLoopBlockHit_map) {
-    IRCode* nonLoopBlockHit_code = en.second->get_code();
-    nonLoopBlockHit_code->clear_cfg();
-  }
-
-  binaryIncrementer_code->clear_cfg();
 
   // Patch static fields.
   const auto field_name = array_fields.at(1)->get_name()->str();

@@ -79,10 +79,12 @@ void instrument_onMethodBegin(DexMethod* method,
                               DexMethod* method_onMethodBegin) {
   IRCode* code = method->get_code();
   assert(code != nullptr);
+  always_assert(code->editable_cfg_built());
+  auto& cfg = code->cfg();
 
   IRInstruction* const_inst = new IRInstruction(OPCODE_CONST);
   const_inst->set_literal(index);
-  const auto reg_dest = code->allocate_temp();
+  const auto reg_dest = cfg.allocate_temp();
   const_inst->set_dest(reg_dest);
 
   IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
@@ -90,47 +92,25 @@ void instrument_onMethodBegin(DexMethod* method,
   invoke_inst->set_srcs_size(1);
   invoke_inst->set_src(0, reg_dest);
 
-  // TODO(minjang): Consider using get_param_instructions.
   // Try to find a right insertion point: the entry point of the method.
   // We skip any fall throughs and IOPCODE_LOAD_PARRM*.
-  auto insert_point = std::find_if_not(
-      code->begin(), code->end(), [&](const MethodItemEntry& mie) {
-        return mie.type == MFLOW_FALLTHROUGH ||
-               (mie.type == MFLOW_OPCODE &&
-                opcode::is_a_load_param(mie.insn->opcode()));
-      });
-
-  if (insert_point == code->end()) {
-    // No load params. So just insert before the head.
-    insert_point = code->begin();
-  } else if (insert_point->type == MFLOW_DEBUG) {
-    // Right after the load params, there could be DBG_SET_PROLOGUE_END.
-    // Skip if there is a following POSITION, too. For example:
-    // 1: OPCODE: IOPCODE_LOAD_PARAM_OBJECT v1
-    // 2: OPCODE: IOPCODE_LOAD_PARAM_OBJECT v2
-    // 3: DEBUG: DBG_SET_PROLOGUE_END
-    // 4: POSITION: foo.java:42 (this might be optional.)
-    // <== Instrumentation code will be inserted here.
-    //
-    std::advance(insert_point,
-                 std::next(insert_point)->type != MFLOW_POSITION ? 1 : 2);
-  } else {
-    // Otherwise, insert_point can be used directly.
-  }
-
-  code->insert_before(code->insert_before(insert_point, invoke_inst),
-                      const_inst);
+  auto entry_block = cfg.entry_block();
+  auto insert_point = entry_block->get_first_non_param_loading_insn();
+  auto cfg_insert_point =
+      entry_block->to_cfg_instruction_iterator(insert_point);
+  cfg.insert_before(cfg_insert_point, {const_inst, invoke_inst});
 
   if (instr_debug) {
-    for (auto it = code->begin(); it != code->end(); ++it) {
-      if (it == insert_point) {
+    auto ii = cfg::InstructionIterable(cfg);
+    for (auto it = ii.begin(); it != ii.end(); ++it) {
+      if (it == cfg_insert_point) {
         TRACE(INSTRUMENT, 9, "<==== insertion");
         TRACE(INSTRUMENT, 9, "%s", SHOW(*it));
         ++it;
-        if (it != code->end()) {
+        if (it != ii.end()) {
           TRACE(INSTRUMENT, 9, "%s", SHOW(*it));
           ++it;
-          if (it != code->end()) {
+          if (it != ii.end()) {
             TRACE(INSTRUMENT, 9, "%s", SHOW(*it));
           }
         }
@@ -190,7 +170,8 @@ void do_simple_method_tracing(DexClass* analysis_cls,
       return 0;
     }
 
-    const size_t sum_opcode_sizes = method->get_code()->sum_opcode_sizes();
+    const size_t sum_opcode_sizes =
+        method->get_code()->cfg().sum_opcode_sizes();
     total_size += sum_opcode_sizes;
 
     // Excluding analysis methods myselves.
@@ -381,28 +362,32 @@ void count_source_block_chain_length(DexStoresVector& stores, PassManager& pm) {
       return;
     }
     boost::optional<size_t> last_known = boost::none;
-    for (auto& mie : *code) {
-      if (mie.type == MFLOW_SOURCE_BLOCK) {
-        size_t len = 0;
-        for (auto* sb = mie.src_block.get(); sb != nullptr;
-             sb = sb->next.get()) {
-          ++len;
-        }
-        count.fetch_add(1);
-        sum.fetch_add(len);
-
-        if (last_known && *last_known >= len) {
-          continue;
-        }
-        for (;;) {
-          auto cur = longest_list.load();
-          if (cur >= len) {
-            last_known = cur;
-            break;
+    always_assert(code->editable_cfg_built());
+    auto& cfg = code->cfg();
+    for (const auto* b : cfg.blocks()) {
+      for (const auto& mie : *b) {
+        if (mie.type == MFLOW_SOURCE_BLOCK) {
+          size_t len = 0;
+          for (auto* sb = mie.src_block.get(); sb != nullptr;
+               sb = sb->next.get()) {
+            ++len;
           }
-          if (longest_list.compare_exchange_strong(cur, len)) {
-            last_known = len;
-            break;
+          count.fetch_add(1);
+          sum.fetch_add(len);
+
+          if (last_known && *last_known >= len) {
+            continue;
+          }
+          for (;;) {
+            auto cur = longest_list.load();
+            if (cur >= len) {
+              last_known = cur;
+              break;
+            }
+            if (longest_list.compare_exchange_strong(cur, len)) {
+              last_known = len;
+              break;
+            }
           }
         }
       }
@@ -426,6 +411,8 @@ void InstrumentPass::patch_array_size(DexClass* analysis_cls,
   always_assert(clinit != nullptr);
 
   auto* code = clinit->get_code();
+  always_assert(code->editable_cfg_built());
+  auto& cfg = code->cfg();
   bool patched = false;
   walk::matching_opcodes_in_block(
       *clinit,
@@ -447,12 +434,13 @@ void InstrumentPass::patch_array_size(DexClass* analysis_cls,
 
         IRInstruction* const_inst = new IRInstruction(OPCODE_CONST);
         const_inst->set_literal(array_size);
-        const auto reg_dest = code->allocate_temp();
+        const auto reg_dest = cfg.allocate_temp();
         const_inst->set_dest(reg_dest);
         insts[0]->set_src(0, reg_dest);
-        for (auto& mie : InstructionIterable(code)) {
-          if (mie.insn == insts[0]) {
-            code->insert_before(code->iterator_to(mie), const_inst);
+        auto ii = cfg::InstructionIterable(cfg);
+        for (auto it = ii.begin(); it != ii.end(); ++it) {
+          if (it->insn == insts[0]) {
+            cfg.insert_before(it, const_inst);
             patched = true;
             return;
           }
@@ -462,7 +450,7 @@ void InstrumentPass::patch_array_size(DexClass* analysis_cls,
   if (!patched) {
     std::cerr << "[InstrumentPass] error: cannot patch array size."
               << std::endl;
-    std::cerr << show(clinit->get_code()) << std::endl;
+    std::cerr << show(clinit->get_code()->cfg()) << std::endl;
     exit(1);
   }
 
@@ -477,40 +465,51 @@ void InstrumentPass::patch_static_field(DexClass* analysis_cls,
   always_assert(clinit != nullptr);
 
   // Find the sput with the given field name.
-  auto* code = clinit->get_code();
-  IRInstruction* sput_inst = nullptr;
-  IRList::iterator insert_point;
-  for (auto& mie : InstructionIterable(code)) {
-    auto* insn = mie.insn;
-    if (insn->opcode() == OPCODE_SPUT &&
-        insn->get_field()->get_name()->str() == field_name) {
-      sput_inst = insn;
-      insert_point = code->iterator_to(mie);
-      break;
+  auto code = clinit->get_code();
+  always_assert(code->editable_cfg_built());
+  auto& cfg = code->cfg();
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    auto* sput_inst = it->insn;
+    if (sput_inst->opcode() != OPCODE_SPUT ||
+        sput_inst->get_field()->get_name()->str() != field_name) {
+      continue;
     }
+    // Find the SPUT.
+    // Create a new const instruction just like patch_stat_array_size.
+    IRInstruction* const_inst = new IRInstruction(OPCODE_CONST);
+    const_inst->set_literal(new_number);
+    const auto reg_dest = cfg.allocate_temp();
+    const_inst->set_dest(reg_dest);
+    sput_inst->set_src(0, reg_dest);
+    cfg.insert_before(it, const_inst);
+    TRACE(INSTRUMENT, 2, "%s was patched: %d", SHOW(field_name), new_number);
+    return;
   }
-
   // SPUT can be null if the original field value was encoded in the
   // static_values_off array. And consider simplifying using make_concrete.
-  if (sput_inst == nullptr) {
-    TRACE(INSTRUMENT, 2, "sput %s was deleted; creating it", SHOW(field_name));
-    sput_inst = new IRInstruction(OPCODE_SPUT);
-    sput_inst->set_field(
-        DexField::make_field(DexType::make_type(analysis_cls->get_name()),
-                             DexString::make_string(field_name),
-                             DexType::make_type("I")));
-    insert_point =
-        code->insert_after(code->get_param_instructions().end(), sput_inst);
-  }
-
-  // Create a new const instruction just like patch_stat_array_size.
+  TRACE(INSTRUMENT, 2, "sput %s was deleted; creating it", SHOW(field_name));
+  auto sput_inst = new IRInstruction(OPCODE_SPUT);
+  sput_inst->set_field(
+      DexField::make_field(DexType::make_type(analysis_cls->get_name()),
+                           DexString::make_string(field_name),
+                           DexType::make_type("I")));
   IRInstruction* const_inst = new IRInstruction(OPCODE_CONST);
   const_inst->set_literal(new_number);
-  const auto reg_dest = code->allocate_temp();
+  const auto reg_dest = cfg.allocate_temp();
   const_inst->set_dest(reg_dest);
-
   sput_inst->set_src(0, reg_dest);
-  code->insert_before(insert_point, const_inst);
+  auto entry_block = cfg.entry_block();
+  auto last_param = entry_block->get_last_param_loading_insn();
+  // always_assert(last_param != entry_block->end());
+  if (last_param != entry_block->end()) {
+    auto cfg_last_param = entry_block->to_cfg_instruction_iterator(last_param);
+    cfg.insert_after(cfg_last_param, {const_inst, sput_inst});
+  } else {
+    auto first_insn = entry_block->get_first_non_param_loading_insn();
+    auto cfg_first_insn = entry_block->to_cfg_instruction_iterator(first_insn);
+    cfg.insert_before(cfg_first_insn, {const_inst, sput_inst});
+  }
   TRACE(INSTRUMENT, 2, "%s was patched: %d", SHOW(field_name), new_number);
 }
 
@@ -754,6 +753,7 @@ InstrumentPass::generate_sharded_analysis_methods(
     always_assert_log(patched, "Failed to patch sMethodStats1 in %s\n",
                       SHOW(new_method));
     method_names.insert(new_name);
+    new_method->get_code()->build_cfg();
     new_analysis_methods[i] = new_method;
     TRACE(INSTRUMENT, 2, "Created %s with %s", SHOW(new_method),
           SHOW(array_fields.at(i)));
@@ -786,6 +786,8 @@ InstrumentPass::patch_sharded_arrays(
   always_assert(num_shards > 0);
   DexMethod* clinit = cls->get_clinit();
   IRCode* code = clinit->get_code();
+  always_assert(code->editable_cfg_built());
+  auto& cfg = code->cfg();
   std::unordered_map<int /*shard_num*/, DexFieldRef*> fields;
   bool patched = false;
   walk::matching_opcodes_in_block(
@@ -832,6 +834,7 @@ InstrumentPass::patch_sharded_arrays(
 
         // Clone the matched three instructions, but with new field names.
         for (size_t i = num_shards; i >= 1; --i) {
+          auto pos_it = cfg.find_insn(insts[2]);
           auto new_insts = {
               (new IRInstruction(OPCODE_NEW_ARRAY))
                   ->set_type(insts[0]->get_type())
@@ -842,9 +845,9 @@ InstrumentPass::patch_sharded_arrays(
                   ->set_src(0, insts[2]->src(0))
                   ->set_field(fields.at(i))};
           if (i == 1) {
-            code->replace_opcode(insts[2], new_insts);
+            cfg.replace_insns(pos_it, new_insts);
           } else {
-            code->insert_after(insts[2], new_insts);
+            cfg.insert_after(pos_it, new_insts);
           }
         }
         patched = true;
@@ -852,7 +855,7 @@ InstrumentPass::patch_sharded_arrays(
       });
 
   always_assert_log(patched, "Failed to insert sMethodStatsN:\n%s",
-                    SHOW(clinit->get_code()));
+                    SHOW(clinit->get_code()->cfg()));
 
   // static short[][] sMethodStatsArray = new short[][] {
   //   sMethodStats1, <== Add
@@ -887,11 +890,12 @@ InstrumentPass::patch_sharded_arrays(
         }
 
         const reg_t vX = insts[1]->dest();
-        const reg_t vY = code->allocate_temp();
-        const reg_t vN = code->allocate_temp();
+        const reg_t vY = cfg.allocate_temp();
+        const reg_t vN = cfg.allocate_temp();
         for (size_t i = num_shards; i >= 1; --i) {
-          code->insert_after(
-              insts[2],
+          auto pos_it = cfg.find_insn(insts[2]);
+          cfg.insert_after(
+              pos_it,
               {(new IRInstruction(OPCODE_SGET_OBJECT))->set_field(fields.at(i)),
                (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
                    ->set_dest(vY),
@@ -909,7 +913,7 @@ InstrumentPass::patch_sharded_arrays(
 
   always_assert_log(patched,
                     "Failed to insert sMethodStatsN to sMethodStatsArray:\n%s",
-                    SHOW(clinit->get_code()));
+                    SHOW(clinit->get_code()->cfg()));
 
   return fields;
 }
