@@ -270,3 +270,23 @@ TEST_F(ObjectSensitiveDceTest, pure_method) {
   ASSERT_TRUE(it != ii.end());
   ASSERT_EQ(it->insn->opcode(), OPCODE_RETURN_VOID);
 }
+
+TEST_F(ObjectSensitiveDceTest, array_clone) {
+  auto method_ref = DexMethod::get_method(
+      "Lcom/facebook/redextest/"
+      "ObjectSensitiveDceTest;.array_clone:()V");
+  EXPECT_NE(method_ref, nullptr);
+  auto method = method_ref->as_def();
+  EXPECT_NE(method, nullptr);
+
+  std::vector<Pass*> passes = {
+      new ObjectSensitiveDcePass(),
+  };
+
+  run_passes(passes);
+
+  auto ii = InstructionIterable(method->get_code());
+  auto it = ii.begin();
+  ASSERT_TRUE(it != ii.end());
+  ASSERT_EQ(it->insn->opcode(), OPCODE_RETURN_VOID);
+}

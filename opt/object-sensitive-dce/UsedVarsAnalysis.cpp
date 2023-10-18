@@ -180,17 +180,16 @@ bool FixpointIterator::is_required(const IRInstruction* insn,
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_VIRTUAL: {
     auto method = resolve_invoke_method(insn, m_method);
-    if (method == nullptr) {
-      return true;
-    }
-    if (assumenosideeffects(method)) {
-      return used_vars.contains(RESULT_REGISTER);
-    }
     const auto& env = m_insn_env_map.at(insn);
-    if (method::is_init(method) &&
-        (used_vars.contains(insn->src(0)) ||
-         is_used_or_escaping_write(env, used_vars, insn->src(0)))) {
-      return true;
+    if (method != nullptr) {
+      if (assumenosideeffects(method)) {
+        return used_vars.contains(RESULT_REGISTER);
+      }
+      if (method::is_init(method) &&
+          (used_vars.contains(insn->src(0)) ||
+           is_used_or_escaping_write(env, used_vars, insn->src(0)))) {
+        return true;
+      }
     }
     if (!m_invoke_to_summary_map.count(insn)) {
       return true;

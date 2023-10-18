@@ -200,8 +200,6 @@ struct EscapeSummary {
 
   EscapeSummary() = default;
 
-  EscapeSummary(std::initializer_list<uint16_t> l) : escaping_parameters(l) {}
-
   EscapeSummary(ParamSet ps, std::initializer_list<uint16_t> l)
       : escaping_parameters(l), returned_parameters(std::move(ps)) {}
 
@@ -334,5 +332,8 @@ EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
 
 /* Whether a method is virtual but not final, or in a final class. */
 bool may_be_overridden(const DexMethod*);
+
+// Whether a given method ref is a method called "clone" defined on an array.
+bool is_array_clone(const DexMethodRef*);
 
 } // namespace local_pointers

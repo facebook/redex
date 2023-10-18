@@ -62,6 +62,12 @@ class ObjectSensitiveDceTest {
     Useless useless = new Useless();
     useless.getClass();
   }
+
+  public static void array_clone() {
+    int[] a = new int[1];
+    a = a.clone();
+    a.clone();
+  }
 }
 
 class Useless {

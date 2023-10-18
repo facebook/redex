@@ -233,9 +233,17 @@ InvokeToSummaryMap build_summary_map(const SummaryMap& summary_map,
       }
       auto invoke_insn = edge->invoke_insn();
       auto& callee_summary = invoke_to_summary_map[invoke_insn];
-      auto it = summary_map.find(edge->callee()->method());
+      auto* callee = edge->callee()->method();
+      auto it = summary_map.find(callee);
       if (it != summary_map.end()) {
         callee_summary.join_with(it->second);
+      } else if (callee == nullptr &&
+                 ptrs::is_array_clone(invoke_insn->get_method())) {
+        // The array clone method doesn't have any effects, and doesn't modify
+        // any parameters; but may read heap locations (the elements of the
+        // array it clones).
+        callee_summary.join_with(
+            Summary(EFF_NONE, {}, /* may_read_external */ true));
       }
     }
   }

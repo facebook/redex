@@ -380,9 +380,15 @@ std::pair<std::unique_ptr<FixpointIterator>, EscapeSummary> analyze_method(
       }
       auto invoke_insn = edge->invoke_insn();
       auto& callee_summary = invoke_to_summary_map[invoke_insn];
-      auto it = summary_map.find(edge->callee()->method());
+      auto* callee = edge->callee()->method();
+      auto it = summary_map.find(callee);
       if (it != summary_map.end()) {
         callee_summary.join_with(it->second);
+      } else if (callee == nullptr &&
+                 is_array_clone(invoke_insn->get_method())) {
+        // The array clone method doesn't escape or return any parameters; it
+        // returns a new array.
+        callee_summary.join_with(EscapeSummary(ParamSet{FRESH_RETURN}, {}));
       }
     }
   }
@@ -615,6 +621,11 @@ void EscapeSummary::join_with(const EscapeSummary& other) {
 bool may_be_overridden(const DexMethod* method) {
   return method->is_virtual() && !is_final(method) &&
          !is_final(type_class(method->get_class()));
+}
+
+bool is_array_clone(const DexMethodRef* mref) {
+  return type::is_array(mref->get_class()) &&
+         mref->get_name()->str() == "clone";
 }
 
 } // namespace local_pointers

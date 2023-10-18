@@ -103,6 +103,11 @@ class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
       }
       auto callee = resolve_invoke_method(insn, method);
       if (callee == nullptr) {
+        if (ptrs::is_array_clone(insn->get_method())) {
+          // We'll synthesize appropriate summaries for array clone methods on
+          // the fly.
+          callsites.emplace_back(/* callee */ nullptr, insn);
+        }
         continue;
       }
       if (is_pure(insn)) {
