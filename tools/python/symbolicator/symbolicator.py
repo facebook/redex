@@ -14,12 +14,12 @@ import os
 import signal
 import sys
 
-from debug_line_map import DebugLineMap  # pyre-fixme[21]
-from dexdump import DexdumpSymbolicator  # pyre-fixme[21]
-from iodi import IODIMetadata  # pyre-fixme[21]
-from line_unmap import PositionMap  # pyre-fixme[21]
-from logcat import LogcatSymbolicator  # pyre-fixme[21]
-from symbol_files import SymbolFiles  # pyre-fixme[21]
+from debug_line_map import DebugLineMap
+from dexdump import DexdumpSymbolicator
+from iodi import IODIMetadata
+from line_unmap import PositionMap
+from logcat import LogcatSymbolicator
+from symbol_files import SymbolFiles
 
 
 # A simple symbolicator for line-based input,
