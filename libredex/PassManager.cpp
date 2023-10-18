@@ -138,7 +138,7 @@ class CheckerConfig {
           "input with `-J ir_type_checker.run_on_input_ignore_access=true`.\n "
           "You may turn off all input checking with `-J "
           "ir_type_checker.run_on_input=false`.";
-      fail_error(msg);
+      fail_error(std::move(msg));
     }
 
     res = check_no_overwrite_this(false).validate_access(false).run_verifier(
@@ -152,7 +152,7 @@ class CheckerConfig {
     msg +=
         "\n If you are confident that this does not matter, turn off input "
         "checking with `-J ir_type_checker.run_on_input=false`.";
-    fail_error(msg);
+    fail_error(std::move(msg));
   }
 
   bool run_after_pass(const Pass* pass) {
@@ -275,12 +275,14 @@ class CheckerConfig {
     return boost::none;
   }
 
-  static void fail_error(const std::string& error_msg, size_t errors = 1) {
-    std::cerr << error_msg << std::endl;
+  static void fail_error(std::string error_msg, size_t errors = 1) {
     if (errors > 1) {
-      std::cerr << "(" << (errors - 1) << " more issues!)" << std::endl;
+      error_msg.append("\n(");
+      error_msg.append(std::to_string(errors - 1));
+      error_msg.append(" more issues!)");
     }
-    _exit(EXIT_FAILURE);
+    assert_fail_impl("type-checker", RedexError::TYPE_CHECK_ERROR, "%s",
+                     error_msg.c_str());
   }
 
  private:

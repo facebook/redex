@@ -1633,6 +1633,10 @@ int main(int argc, char* argv[]) {
   redex_debug::disable_stack_trace_for_exc_type(
       RedexError::REJECTED_CODING_PATTERN);
 
+  // Input type check issues are a straight issue, not a Redex crash.
+  redex_debug::set_exc_type_as_abort(RedexError::TYPE_CHECK_ERROR);
+  redex_debug::disable_stack_trace_for_exc_type(RedexError::TYPE_CHECK_ERROR);
+
   auto maybe_global_profile =
       ScopedCommandProfiling::maybe_from_env("GLOBAL_", "global");
 
