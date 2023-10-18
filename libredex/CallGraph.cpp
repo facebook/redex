@@ -300,10 +300,9 @@ MultipleCalleeStrategy::MultipleCalleeStrategy(
             init_ordered_overriding_methods_with_code_or_native(
                 callee, std::move(overriding_methods));
           } else {
-            m_big_override.emplace(callee);
-            for (auto overriding_method : overriding_methods) {
-              m_big_override.emplace(overriding_method);
-            }
+            m_big_virtuals.emplace(callee);
+            m_big_virtual_overrides.insert(overriding_methods.begin(),
+                                           overriding_methods.end());
           }
         }
       });
@@ -326,8 +325,8 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
           if (is_definitely_virtual(callee) &&
               insn->opcode() != OPCODE_INVOKE_SUPER) {
             // For true virtual callees, add the callee itself and all of its
-            // overrides if they are not in big overrides.
-            if (m_big_override.count_unsafe(callee)) {
+            // overrides if they are not in big virtuals.
+            if (m_big_virtuals.count_unsafe(callee)) {
               return editable_cfg_adapter::LOOP_CONTINUE;
             }
             if (callee->get_code() || is_native(callee)) {
@@ -350,11 +349,14 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
 // Add big override methods to root as well.
 RootAndDynamic MultipleCalleeStrategy::get_roots() const {
   auto root_and_dynamic = MultipleCalleeBaseStrategy::get_roots();
-  for (auto method : m_big_override) {
+  auto add_root = [&](auto* method) {
     if (!method->is_external() && method->get_code()) {
       root_and_dynamic.roots.insert(method);
     }
-  }
+  };
+  std::for_each(m_big_virtuals.begin(), m_big_virtuals.end(), add_root);
+  std::for_each(m_big_virtual_overrides.begin(), m_big_virtual_overrides.end(),
+                add_root);
   return root_and_dynamic;
 }
 

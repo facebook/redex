@@ -298,7 +298,8 @@ class MultipleCalleeStrategy : public MultipleCalleeBaseStrategy {
 
  protected:
   RootAndDynamic get_roots() const override;
-  ConcurrentSet<const DexMethod*> m_big_override;
+  ConcurrentSet<const DexMethod*> m_big_virtuals;
+  ConcurrentSet<const DexMethod*> m_big_virtual_overrides;
 };
 
 // A static-method-only API for use with the monotonic fixpoint iterator.

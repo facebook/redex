@@ -231,9 +231,17 @@ TEST_F(CallGraphTest, test_multiple_callee_graph_clinit) {
   auto clinit_callees = get_callees(*multiple_graph, clinit);
   EXPECT_THAT(clinit_callees,
               ::testing::UnorderedElementsAre(
-                  calls_returns_int, base_foo, extended_init, less_impl3_init,
-                  more_impl1_init, less_impl1_return, less_impl2_return,
-                  less_impl3_return, less_impl4_return,
+                  calls_returns_int,
+                  base_foo,
+                  extended_init,
+                  less_impl3_init,
+                  more_impl1_init,
+                  more_impl1_init,
+                  more_impl1_return,
+                  less_impl1_return,
+                  less_impl2_return,
+                  less_impl3_return,
+                  less_impl4_return,
                   more_than_5_class_extends_1_init,
                   more_than_5_class_extends_1_return_super_num));
 }

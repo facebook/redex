@@ -15,6 +15,8 @@ public class CallGraphTest {
     Extended.foo();
     MoreThan5 moreThan5 = new MoreThan5Impl1();
     int get1 = moreThan5.returnNum();
+    MoreThan5Impl1 moreThan5Impl1 = new MoreThan5Impl1();
+    int get2 = moreThan5Impl1.returnNum();
     LessThan5 lessThan5 = new LessThan5Impl3();
     int get3 = lessThan5.returnNum();
     MoreThan5ClassExtends1 moreThan5ClassExtends1 = new MoreThan5ClassExtends1();
