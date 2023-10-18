@@ -143,6 +143,7 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
   if (m_external_escape_summaries_file) {
     std::ifstream file_input(*m_external_escape_summaries_file);
     summary_serialization::read(file_input, &escape_summaries);
+    mgr.incr_metric("external_escape_summaries", escape_summaries.size());
   }
   auto ptrs_fp_iter_map =
       ptrs::analyze_scope(scope, call_graph, &escape_summaries);
@@ -151,14 +152,17 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
   if (m_external_side_effect_summaries_file) {
     std::ifstream file_input(*m_external_side_effect_summaries_file);
     summary_serialization::read(file_input, &effect_summaries);
+    mgr.incr_metric("external_side_effect_summaries", effect_summaries.size());
   }
   side_effects::analyze_scope(init_classes_with_side_effects, scope, call_graph,
                               ptrs_fp_iter_map, &effect_summaries);
 
   std::atomic<size_t> removed{0};
   std::atomic<size_t> init_class_instructions_added{0};
-  init_classes::Stats init_class_stats;
   std::mutex init_class_stats_mutex;
+  init_classes::Stats init_class_stats;
+  std::mutex invokes_with_summaries_mutex;
+  std::unordered_map<uint16_t, size_t> invokes_with_summaries{0};
 
   // For LocalDCE. Easier to set up the shrinker for everything.
   shrinker::ShrinkerConfig shrinker_config{};
@@ -172,9 +176,15 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
     }
     always_assert(code.editable_cfg_built());
     auto& cfg = code.cfg();
-    uv::FixpointIterator used_vars_fp_iter(
-        *ptrs_fp_iter_map.at_unsafe(method),
-        build_summary_map(effect_summaries, call_graph, method), cfg, method);
+    auto summary_map = build_summary_map(effect_summaries, call_graph, method);
+    std::unordered_map<uint32_t, size_t> local_invokes_with_summaries;
+    for (auto&& [insn, summary] : summary_map) {
+      if (!summary.effects) {
+        local_invokes_with_summaries[insn->opcode()]++;
+      }
+    }
+    uv::FixpointIterator used_vars_fp_iter(*ptrs_fp_iter_map.at_unsafe(method),
+                                           std::move(summary_map), cfg, method);
     used_vars_fp_iter.run(uv::UsedVarsSet());
 
     cfg::CFGMutation mutator(cfg);
@@ -220,6 +230,11 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
         init_class_stats += init_class_pruner.get_stats();
       }
     }
+
+    std::lock_guard<std::mutex> lock(invokes_with_summaries_mutex);
+    for (auto&& [opcode, count] : local_invokes_with_summaries) {
+      invokes_with_summaries[opcode] += count;
+    }
   });
   mgr.set_metric("removed_instructions", removed);
   mgr.set_metric("init_class_instructions_added",
@@ -228,6 +243,29 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
                   init_class_stats.init_class_instructions_removed);
   mgr.incr_metric("init_class_instructions_refined",
                   init_class_stats.init_class_instructions_refined);
+
+  size_t methods_with_summaries{0};
+  size_t modified_params{0};
+  for (auto&& [_, summary] : effect_summaries) {
+    if (!summary.effects) {
+      methods_with_summaries++;
+    }
+    modified_params += summary.modified_params.size();
+  }
+  mgr.set_metric("methods_with_summaries", methods_with_summaries);
+  mgr.set_metric("modified_params", modified_params);
+  mgr.set_metric("invoke_direct_with_summaries",
+                 invokes_with_summaries[OPCODE_INVOKE_DIRECT]);
+  mgr.set_metric("invoke_static_with_summaries",
+                 invokes_with_summaries[OPCODE_INVOKE_STATIC]);
+  mgr.set_metric("invoke_interface_with_summaries",
+                 invokes_with_summaries[OPCODE_INVOKE_INTERFACE]);
+  mgr.set_metric("invoke_virtual_with_summaries",
+                 invokes_with_summaries[OPCODE_INVOKE_VIRTUAL]);
+  mgr.set_metric("invoke_super_with_summaries",
+                 invokes_with_summaries[OPCODE_INVOKE_SUPER]);
+  TRACE(OSDCE, 1, "%zu methods with summaries, removed %zu instructions",
+        methods_with_summaries, (size_t)removed);
 }
 
 static ObjectSensitiveDcePass s_pass;
