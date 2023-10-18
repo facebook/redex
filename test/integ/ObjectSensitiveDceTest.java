@@ -13,9 +13,24 @@ class ObjectSensitiveDceTest {
     useless.foo();
   }
 
+  public static void recursive() {
+    Useless useless = new Useless();
+    useless.recursive_foo(100);
+  }
+
+  public static void mutually_recursive() {
+    Useless useless = new Useless();
+    useless.mutually_recursive_foo(100);
+  }
+
   public static void invoke_super() {
     UselessDerived useless = new UselessDerived();
     useless.foo();
+  }
+
+  public static void non_termination() {
+    Useless useless = new Useless();
+    useless.non_terminating_foo();
   }
 
   public static void clinit_with_side_effects() {
@@ -34,6 +49,30 @@ class Useless {
   public Useless() {}
   public void foo() {
     F = 42;
+  }
+  public void non_terminating_foo() {
+    while (true) {}
+  }
+  public void recursive_foo(int x) {
+    if (x<=0) {
+      F = 42;
+    } else {
+      recursive_foo(x-1);
+    }
+  }
+  public void mutually_recursive_foo(int x) {
+    if (x<=0) {
+      F = 42;
+    } else {
+      mutually_recursive_bar(x-1);
+    }
+  }
+  public void mutually_recursive_bar(int x) {
+    if (x<=0) {
+      F = 42;
+    } else {
+      mutually_recursive_foo(x-1);
+    }
   }
 }
 
