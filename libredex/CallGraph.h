@@ -53,6 +53,7 @@ struct CallSite {
   const DexMethod* callee;
   IRInstruction* invoke_insn;
 
+  CallSite() { not_reached(); }
   CallSite(const DexMethod* callee, IRInstruction* invoke_insn)
       : callee(callee), invoke_insn(invoke_insn) {}
 };
@@ -295,9 +296,9 @@ class MultipleCalleeStrategy : public MultipleCalleeBaseStrategy {
                                   const Scope& scope,
                                   uint32_t big_override_threshold);
   CallSites get_callsites(const DexMethod* method) const override;
+  RootAndDynamic get_roots() const override;
 
  protected:
-  RootAndDynamic get_roots() const override;
   ConcurrentSet<const DexMethod*> m_big_virtuals;
   ConcurrentSet<const DexMethod*> m_big_virtual_overrides;
 };

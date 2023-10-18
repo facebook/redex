@@ -48,15 +48,31 @@ namespace hier = hierarchy_util;
 namespace ptrs = local_pointers;
 namespace uv = used_vars;
 
-class CallGraphStrategy final : public call_graph::BuildStrategy {
+namespace {
+
+class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
  public:
-  explicit CallGraphStrategy(const Scope& scope,
+  explicit CallGraphStrategy(const method_override_graph::Graph& graph,
+                             const Scope& scope,
                              const ptrs::SummaryMap& escape_summaries,
-                             const side_effects::SummaryMap& effect_summaries)
-      : m_scope(scope),
+                             const side_effects::SummaryMap& effect_summaries,
+                             uint32_t big_override_threshold)
+      : call_graph::MultipleCalleeStrategy(
+            graph, scope, big_override_threshold),
         m_escape_summaries(escape_summaries),
-        m_effect_summaries(effect_summaries),
-        m_non_overridden_virtuals(scope) {}
+        m_effect_summaries(effect_summaries) {
+    // XXX(jezng): We make every single method a root in order that all methods
+    // are seen as reachable. Unreachable methods will not have `get_callsites`
+    // run on them and will not have their outgoing edges added to the call
+    // graph, which means that the dead code removal will not optimize them
+    // fully. I'm not sure why these "unreachable" methods are not ultimately
+    // removed by RMU, but as it stands, properly optimizing them is a size win
+    // for us.
+    m_root_and_dynamic = MultipleCalleeStrategy::get_roots();
+    walk::code(m_scope, [&](DexMethod* method, IRCode&) {
+      m_root_and_dynamic.roots.insert(method);
+    });
+  }
 
   call_graph::CallSites get_callsites(const DexMethod* method) const override {
     call_graph::CallSites callsites;
@@ -64,23 +80,50 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
     if (code == nullptr) {
       return callsites;
     }
-    auto& cfg = code->cfg();
-    for (auto& mie : InstructionIterable(cfg)) {
+    always_assert(code->editable_cfg_built());
+    for (auto& mie : InstructionIterable(code->cfg())) {
       auto insn = mie.insn;
-      if (opcode::is_an_invoke(insn->opcode())) {
-        auto callee =
-            resolve_method(insn->get_method(), opcode_to_search(insn), method);
-        if (callee == nullptr) {
+      if (!opcode::is_an_invoke(insn->opcode())) {
+        continue;
+      }
+      auto callee = resolve_invoke_method(insn, method);
+      if (callee == nullptr) {
+        continue;
+      }
+      if (callee->is_external()) {
+        if ((opcode::is_invoke_super(insn->opcode()) ||
+             !ptrs::may_be_overridden(callee)) &&
+            has_summaries(callee)) {
+          callsites.emplace_back(callee, insn);
+        }
+        continue;
+      }
+
+      if (is_definitely_virtual(callee) &&
+          insn->opcode() != OPCODE_INVOKE_SUPER) {
+        if (m_root_and_dynamic.dynamic_methods.count(callee)) {
           continue;
         }
-        if (!callee->get_code() &&
-            (!callee->is_external() || !has_summaries(callee))) {
+
+        // For true virtual callees, add the callee itself and all of its
+        // overrides if they are not in big virtuals.
+        if (m_big_virtuals.count_unsafe(callee)) {
           continue;
         }
-        if (!opcode::is_invoke_super(insn->opcode()) &&
-            may_be_overridden(callee)) {
+        const auto& overriding_methods =
+            get_ordered_overriding_methods_with_code_or_native(callee);
+        if (is_native(callee) ||
+            std::any_of(overriding_methods.begin(), overriding_methods.end(),
+                        [](auto* method) { return is_native(method); })) {
           continue;
         }
+        if (callee->get_code()) {
+          callsites.emplace_back(callee, insn);
+        }
+        for (auto overriding_method : overriding_methods) {
+          callsites.emplace_back(overriding_method, insn);
+        }
+      } else if (callee->is_concrete() && !is_native(callee)) {
         callsites.emplace_back(callee, insn);
       }
     }
@@ -94,18 +137,10 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
   // not sure why these "unreachable" methods are not ultimately removed by RMU,
   // but as it stands, properly optimizing them is a size win for us.
   call_graph::RootAndDynamic get_roots() const override {
-    call_graph::RootAndDynamic root_and_dynamic;
-    walk::code(m_scope, [&](DexMethod* method, IRCode& code) {
-      root_and_dynamic.roots.insert(method);
-    });
-    return root_and_dynamic;
+    return m_root_and_dynamic;
   }
 
  private:
-  bool may_be_overridden(DexMethod* method) const {
-    return method->is_virtual() && m_non_overridden_virtuals.count(method) == 0;
-  }
-
   bool has_summaries(DexMethod* method) const {
     if (m_escape_summaries.count(method) && m_effect_summaries.count(method)) {
       return true;
@@ -113,11 +148,12 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
     return method == method::java_lang_Object_ctor();
   }
 
-  const Scope& m_scope;
   const ptrs::SummaryMap& m_escape_summaries;
   const side_effects::SummaryMap& m_effect_summaries;
-  hier::NonOverriddenVirtuals m_non_overridden_virtuals;
+  call_graph::RootAndDynamic m_root_and_dynamic;
 };
+
+} // namespace
 
 void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
                                       ConfigFiles& conf,
@@ -128,8 +164,9 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
       "init-class instructions.");
 
   auto scope = build_class_scope(stores);
+  auto method_override_graph = method_override_graph::build_graph(scope);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
-      scope, conf.create_init_class_insns());
+      scope, conf.create_init_class_insns(), method_override_graph.get());
 
   walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
     always_assert(code.editable_cfg_built());
@@ -151,7 +188,8 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
   }
 
   auto call_graph = call_graph::Graph(
-      CallGraphStrategy(scope, escape_summaries, effect_summaries));
+      CallGraphStrategy(*method_override_graph, scope, escape_summaries,
+                        effect_summaries, m_big_override_threshold));
 
   auto ptrs_fp_iter_map =
       ptrs::analyze_scope(scope, call_graph, &escape_summaries);

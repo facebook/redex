@@ -232,10 +232,12 @@ InvokeToSummaryMap build_summary_map(const SummaryMap& summary_map,
       if (!callee) {
         continue;
       }
-      auto it = summary_map.find(callee);
-      invoke_to_summary_map.emplace(edge->invoke_insn(), it != summary_map.end()
-                                                             ? it->second
-                                                             : Summary());
+      auto invoke_insn = edge->invoke_insn();
+      auto& callee_summary = invoke_to_summary_map[invoke_insn];
+      auto it = summary_map.find(edge->callee()->method());
+      if (it != summary_map.end()) {
+        callee_summary.join_with(it->second);
+      }
     }
   }
   return invoke_to_summary_map;
@@ -342,6 +344,24 @@ s_expr to_s_expr(const Summary& summary) {
   return s_expr(s_exprs);
 }
 
+std::ostream& operator<<(std::ostream& o, const Summary& summary) {
+  o << "Effects: " << summary.effects << ", ";
+  o << "Modified parameters: ";
+  std::vector<param_idx_t> modified_params(summary.modified_params.begin(),
+                                           summary.modified_params.end());
+  std::sort(modified_params.begin(), modified_params.end());
+  bool first{true};
+  for (auto p_idx : summary.modified_params) {
+    if (!first) {
+      o << ", ";
+    }
+    o << p_idx;
+    first = false;
+  }
+  o << "May-read-external: " << summary.may_read_external << ", ";
+  return o;
+}
+
 Summary Summary::from_s_expr(const s_expr& expr) {
   Summary summary;
   always_assert(expr.size() == 2);
@@ -354,4 +374,12 @@ Summary Summary::from_s_expr(const s_expr& expr) {
   return summary;
 }
 
+void Summary::join_with(const Summary& other) {
+  effects |= other.effects;
+  modified_params.insert(other.modified_params.begin(),
+                         other.modified_params.end());
+  if (other.may_read_external) {
+    may_read_external = true;
+  }
+}
 } // namespace side_effects

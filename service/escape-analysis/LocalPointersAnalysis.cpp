@@ -379,10 +379,12 @@ std::pair<std::unique_ptr<FixpointIterator>, EscapeSummary> analyze_method(
       if (!callee) {
         continue;
       }
-      auto it = summary_map.find(callee);
-      invoke_to_summary_map.emplace(edge->invoke_insn(),
-                                    it != summary_map.end() ? it->second
-                                                            : EscapeSummary());
+      auto invoke_insn = edge->invoke_insn();
+      auto& callee_summary = invoke_to_summary_map[invoke_insn];
+      auto it = summary_map.find(edge->callee()->method());
+      if (it != summary_map.end()) {
+        callee_summary.join_with(it->second);
+      }
     }
   }
 
@@ -499,6 +501,7 @@ EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
 
   switch (returned_ptrs.kind()) {
   case sparta::AbstractValueKind::Value: {
+    summary.returned_parameters = ParamSet();
     for (auto insn : returned_ptrs.elements()) {
       if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
         summary.returned_parameters.add(param_indexes.at(insn));
@@ -594,11 +597,23 @@ EscapeSummary EscapeSummary::from_s_expr(const sparta::s_expr& expr) {
     }
   } else {
     always_assert(returned_params_s_expr.is_list());
+    summary.returned_parameters = ParamSet();
     for (size_t i = 0; i < returned_params_s_expr.size(); ++i) {
       summary.returned_parameters.add(returned_params_s_expr[i].get_int32());
     }
   }
   return summary;
+}
+
+void EscapeSummary::join_with(const EscapeSummary& other) {
+  escaping_parameters.insert(other.escaping_parameters.begin(),
+                             other.escaping_parameters.end());
+  returned_parameters.join_with(other.returned_parameters);
+}
+
+bool may_be_overridden(const DexMethod* method) {
+  return method->is_virtual() && !is_final(method) &&
+         !is_final(type_class(method->get_class()));
 }
 
 } // namespace local_pointers

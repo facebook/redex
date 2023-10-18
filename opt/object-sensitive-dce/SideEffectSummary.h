@@ -93,10 +93,14 @@ struct Summary {
     }
   }
 
+  void join_with(const Summary& other);
+
   static Summary from_s_expr(const sparta::s_expr&);
 };
 
 sparta::s_expr to_s_expr(const Summary&);
+
+std::ostream& operator<<(std::ostream& o, const Summary& summary);
 
 using SummaryMap = std::unordered_map<const DexMethodRef*, Summary>;
 

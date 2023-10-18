@@ -28,6 +28,21 @@ class ObjectSensitiveDceTest {
     useless.foo();
   }
 
+  public static void invoke_virtual_with_overrides() {
+    UselessBase useless = new UselessDerived();
+    useless.bar();
+  }
+
+  public static void invoke_virtual_with_overrides_with_side_effect() {
+    UselessBase useless = new UselessDerived();
+    useless.bar_where_override_has_side_effect();
+  }
+
+  public static void invoke_virtual_with_too_many_overrides() {
+    UselessBase useless = new UselessDerived();
+    useless.bar_with_invoke_virtual_with_too_many_overrides();
+  }
+
   public static void non_termination() {
     Useless useless = new Useless();
     useless.non_terminating_foo();
@@ -82,12 +97,62 @@ class UselessBase {
   public void foo() {
     F = 42;
   }
+  public void bar() {
+    F = 42;
+  }
+  public void bar_where_override_has_side_effect() {
+    F = 42;
+  }
+  public void bar_with_invoke_virtual_with_too_many_overrides() {
+    F = 42;
+  }
 }
 
 class UselessDerived extends UselessBase {
   public UselessDerived() {}
   public void foo() {
     super.foo();
+  }
+  public void bar() {
+    F = 42;
+  }
+  public void bar_where_override_has_side_effect() {
+    try {
+      System.loadLibrary("boo"); // side effect
+    } catch (Throwable t) { }
+  }
+  public void bar_with_invoke_virtual_with_too_many_overrides() {
+    F = 42;
+  }
+}
+
+class UselessDerived2 extends UselessBase {
+  public void bar_with_invoke_virtual_with_too_many_overrides() {
+    F = 42;
+  }
+}
+
+class UselessDerived3 extends UselessBase {
+  public void bar_with_invoke_virtual_with_too_many_overrides() {
+    F = 42;
+  }
+}
+
+class UselessDerived4 extends UselessBase {
+  public void bar_with_invoke_virtual_with_too_many_overrides() {
+    F = 42;
+  }
+}
+
+class UselessDerived5 extends UselessBase {
+  public void bar_with_invoke_virtual_with_too_many_overrides() {
+    F = 42;
+  }
+}
+
+class UselessDerived6 extends UselessBase {
+  public void bar_with_invoke_virtual_with_too_many_overrides() {
+    F = 42;
   }
 }
 

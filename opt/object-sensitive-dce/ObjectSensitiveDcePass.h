@@ -36,6 +36,7 @@ class ObjectSensitiveDcePass final : public Pass {
     bind("escape_summaries", {boost::none}, m_external_escape_summaries_file,
          "TODO: Document me!",
          Configurable::bindflags::optionals::skip_empty_string);
+    bind("big_override_threshold", UINT32_C(5), m_big_override_threshold);
 
     if (!m_external_escape_summaries_file ||
         !m_external_side_effect_summaries_file) {
@@ -50,4 +51,5 @@ class ObjectSensitiveDcePass final : public Pass {
  private:
   boost::optional<std::string> m_external_side_effect_summaries_file;
   boost::optional<std::string> m_external_escape_summaries_file;
+  uint32_t m_big_override_threshold;
 };

@@ -196,7 +196,7 @@ struct EscapeSummary {
   // Note that if only some of the returned values are parameters, this will be
   // set to Top. A non-extremal value indicates that the return value must be
   // an element of the set.
-  ParamSet returned_parameters;
+  ParamSet returned_parameters = ParamSet::bottom();
 
   EscapeSummary() = default;
 
@@ -211,6 +211,8 @@ struct EscapeSummary {
     return escaping_parameters == other.escaping_parameters &&
            returned_parameters == other.returned_parameters;
   }
+
+  void join_with(const EscapeSummary& other);
 };
 
 std::ostream& operator<<(std::ostream& o, const EscapeSummary& summary);
@@ -329,4 +331,8 @@ void collect_exiting_pointers(const FixpointIterator& fp_iter,
  */
 EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
                                  const IRCode& code);
+
+/* Whether a method is virtual but not final, or in a final class. */
+bool may_be_overridden(const DexMethod*);
+
 } // namespace local_pointers
