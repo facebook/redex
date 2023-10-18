@@ -66,6 +66,8 @@ TEST_F(UsedVarsTest, simple) {
       (new-instance "LFoo;")
       (move-result-pseudo-object v0)
       (invoke-direct (v0) "LFoo;.<init>:()V")
+      (check-cast v0 "LFoo;")
+      (move-result-pseudo-object v0)
       (const v1 0)
       (iput v1 v0 "LFoo;.bar:I")
       (return-void)
