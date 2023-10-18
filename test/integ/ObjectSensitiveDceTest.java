@@ -57,6 +57,11 @@ class ObjectSensitiveDceTest {
     UselessWithMethodNeedingInitClass useless = new UselessWithMethodNeedingInitClass();
     useless.foo();
   }
+
+  public static void pure_method() {
+    Useless useless = new Useless();
+    useless.getClass();
+  }
 }
 
 class Useless {

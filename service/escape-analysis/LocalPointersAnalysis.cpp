@@ -353,7 +353,7 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
       const auto& summary = m_invoke_to_summary_map.at(insn);
       analyze_invoke_with_summary(summary, insn, env);
     } else {
-      default_instruction_handler(insn, env);
+      analyze_generic_invoke(insn, env);
     }
   } else if (may_alloc(op)) {
     env->set_fresh_pointer(RESULT_REGISTER, insn);
@@ -375,8 +375,7 @@ std::pair<std::unique_ptr<FixpointIterator>, EscapeSummary> analyze_method(
   if (call_graph.has_node(method)) {
     const auto& callee_edges = call_graph.node(method)->callees();
     for (const auto& edge : callee_edges) {
-      auto* callee = edge->callee()->method();
-      if (!callee) {
+      if (edge->callee() == call_graph.exit()) {
         continue;
       }
       auto invoke_insn = edge->invoke_insn();
@@ -391,7 +390,9 @@ std::pair<std::unique_ptr<FixpointIterator>, EscapeSummary> analyze_method(
   auto* code = method->get_code();
   auto& cfg = code->cfg();
   auto fp_iter =
-      std::make_unique<FixpointIterator>(cfg, std::move(invoke_to_summary_map));
+      std::make_unique<FixpointIterator>(cfg,
+                                         std::move(invoke_to_summary_map),
+                                         /* escape_check_cast */ false);
   fp_iter->run(Environment());
 
   auto summary = get_escape_summary(*fp_iter, *code);

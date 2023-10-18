@@ -19,6 +19,7 @@
 #include "InitClassesWithSideEffects.h"
 #include "LocalPointersAnalysis.h"
 #include "PassManager.h"
+#include "Purity.h"
 #include "ScopedCFG.h"
 #include "Shrinker.h"
 #include "ShrinkerConfig.h"
@@ -52,13 +53,16 @@ namespace {
 
 class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
  public:
-  explicit CallGraphStrategy(const method_override_graph::Graph& graph,
-                             const Scope& scope,
-                             const ptrs::SummaryMap& escape_summaries,
-                             const side_effects::SummaryMap& effect_summaries,
-                             uint32_t big_override_threshold)
+  explicit CallGraphStrategy(
+      const method_override_graph::Graph& graph,
+      const Scope& scope,
+      const std::unordered_set<DexMethodRef*>& pure_methods,
+      const ptrs::SummaryMap& escape_summaries,
+      const side_effects::SummaryMap& effect_summaries,
+      uint32_t big_override_threshold)
       : call_graph::MultipleCalleeStrategy(
             graph, scope, big_override_threshold),
+        m_pure_methods(pure_methods),
         m_escape_summaries(escape_summaries),
         m_effect_summaries(effect_summaries) {
     // XXX(jezng): We make every single method a root in order that all methods
@@ -72,6 +76,19 @@ class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
     walk::code(m_scope, [&](DexMethod* method, IRCode&) {
       m_root_and_dynamic.roots.insert(method);
     });
+  }
+
+  bool is_pure(IRInstruction* insn) const {
+    // This is what LocalDce does.
+    auto ref = insn->get_method();
+    const auto meth = resolve_method(ref, opcode_to_search(insn));
+    if (meth == nullptr) {
+      return false;
+    }
+    if (::assumenosideeffects(meth)) {
+      return true;
+    }
+    return m_pure_methods.count(ref);
   }
 
   call_graph::CallSites get_callsites(const DexMethod* method) const override {
@@ -88,6 +105,13 @@ class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
       }
       auto callee = resolve_invoke_method(insn, method);
       if (callee == nullptr) {
+        continue;
+      }
+      if (is_pure(insn)) {
+        // By including this in the call-graph with an empty callee, it will by
+        // default get trivial summaries, representing no interactions with
+        // objects, and no side effects.
+        callsites.emplace_back(/* callee */ nullptr, insn);
         continue;
       }
       if (callee->is_external()) {
@@ -148,6 +172,7 @@ class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
     return method == method::java_lang_Object_ctor();
   }
 
+  const std::unordered_set<DexMethodRef*>& m_pure_methods;
   const ptrs::SummaryMap& m_escape_summaries;
   const side_effects::SummaryMap& m_effect_summaries;
   call_graph::RootAndDynamic m_root_and_dynamic;
@@ -168,6 +193,13 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns(), method_override_graph.get());
 
+  auto pure_methods = get_pure_methods();
+  auto configured_pure_methods = conf.get_pure_methods();
+  pure_methods.insert(configured_pure_methods.begin(),
+                      configured_pure_methods.end());
+  auto immutable_getters = get_immutable_getters(scope);
+  pure_methods.insert(immutable_getters.begin(), immutable_getters.end());
+
   walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
     always_assert(code.editable_cfg_built());
     // The backwards uv::FixpointIterator analysis will need it later.
@@ -180,6 +212,7 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
     summary_serialization::read(file_input, &escape_summaries);
     mgr.incr_metric("external_escape_summaries", escape_summaries.size());
   }
+
   side_effects::SummaryMap effect_summaries;
   if (m_external_side_effect_summaries_file) {
     std::ifstream file_input(*m_external_side_effect_summaries_file);
@@ -187,9 +220,9 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
     mgr.incr_metric("external_side_effect_summaries", effect_summaries.size());
   }
 
-  auto call_graph = call_graph::Graph(
-      CallGraphStrategy(*method_override_graph, scope, escape_summaries,
-                        effect_summaries, m_big_override_threshold));
+  auto call_graph = call_graph::Graph(CallGraphStrategy(
+      *method_override_graph, scope, pure_methods, escape_summaries,
+      effect_summaries, m_big_override_threshold));
 
   auto ptrs_fp_iter_map =
       ptrs::analyze_scope(scope, call_graph, &escape_summaries);

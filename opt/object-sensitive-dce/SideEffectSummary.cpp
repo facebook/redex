@@ -228,8 +228,7 @@ InvokeToSummaryMap build_summary_map(const SummaryMap& summary_map,
   if (call_graph.has_node(method)) {
     const auto& callee_edges = call_graph.node(method)->callees();
     for (const auto& edge : callee_edges) {
-      auto* callee = edge->callee()->method();
-      if (!callee) {
+      if (edge->callee() == call_graph.exit()) {
         continue;
       }
       auto invoke_insn = edge->invoke_insn();

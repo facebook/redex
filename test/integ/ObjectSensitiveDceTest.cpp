@@ -250,3 +250,23 @@ TEST_F(ObjectSensitiveDceTest, method_needing_init_class) {
   ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_DIRECT}), 1);
   ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_VIRTUAL}), 1);
 }
+
+TEST_F(ObjectSensitiveDceTest, pure_method) {
+  auto method_ref = DexMethod::get_method(
+      "Lcom/facebook/redextest/"
+      "ObjectSensitiveDceTest;.pure_method:()V");
+  EXPECT_NE(method_ref, nullptr);
+  auto method = method_ref->as_def();
+  EXPECT_NE(method, nullptr);
+
+  std::vector<Pass*> passes = {
+      new ObjectSensitiveDcePass(),
+  };
+
+  run_passes(passes);
+
+  auto ii = InstructionIterable(method->get_code());
+  auto it = ii.begin();
+  ASSERT_TRUE(it != ii.end());
+  ASSERT_EQ(it->insn->opcode(), OPCODE_RETURN_VOID);
+}
