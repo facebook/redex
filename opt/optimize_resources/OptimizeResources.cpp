@@ -403,6 +403,7 @@ void remap_resource_class_clinit(
       std::vector<uint16_t> filtered_op_data_entries;
 
       uint16_t header_entry = *(op_data->data());
+      int deleted_array_element_count = 0;
       auto array_ints = get_fill_array_data_payload<uint32_t>(op_data);
       for (uint32_t entry_x : array_ints) {
         if (entry_x > PACKAGE_RESID_START) {
@@ -419,6 +420,8 @@ void remap_resource_class_clinit(
             if (c_name.find("R$styleable") != std::string::npos) {
               filtered_op_data_entries.push_back(0);
               filtered_op_data_entries.push_back(0);
+            } else {
+              ++deleted_array_element_count;
             }
           }
         } else {
@@ -615,7 +618,7 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
                                      PassManager& mgr) {
   std::string zip_dir;
   conf.get_json_config().get("apk_dir", "", zip_dir);
-  always_assert(!zip_dir.empty());
+  always_assert(zip_dir.size());
 
   // 1. Get all known resource ID's from either resources.pb(AAB) or
   // resources.arsc(APK) file.
