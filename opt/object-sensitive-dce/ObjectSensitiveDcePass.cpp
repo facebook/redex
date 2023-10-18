@@ -21,8 +21,6 @@
 #include "PassManager.h"
 #include "Purity.h"
 #include "ScopedCFG.h"
-#include "Shrinker.h"
-#include "ShrinkerConfig.h"
 #include "SummarySerialization.h"
 #include "Walkers.h"
 
@@ -237,12 +235,6 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
   std::mutex invokes_with_summaries_mutex;
   std::unordered_map<uint16_t, size_t> invokes_with_summaries{0};
 
-  // For LocalDCE. Easier to set up the shrinker for everything.
-  shrinker::ShrinkerConfig shrinker_config{};
-  shrinker_config.run_local_dce = true;
-  shrinker::Shrinker shrinker(stores, scope, init_classes_with_side_effects,
-                              shrinker_config, mgr.get_redex_options().min_sdk);
-
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     if (method->get_code() == nullptr || method->rstate.no_optimizations()) {
       return;
@@ -289,11 +281,6 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
     TRACE(OSDCE, 5, "After:\n%s", SHOW(cfg));
     if (!dead_instructions.empty()) {
       removed += dead_instructions.size();
-
-      // Run LocalDCE to ensure NoSpuriousGetClass.
-      shrinker.local_dce(&code, /*normalize_new_instances=*/true,
-                         method->get_class());
-
       if (local_init_class_instructions_added > 0) {
         init_class_instructions_added += local_init_class_instructions_added;
         init_classes::InitClassPruner init_class_pruner(
