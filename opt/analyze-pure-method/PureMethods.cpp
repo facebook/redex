@@ -36,7 +36,7 @@ bool AnalyzePureMethodsPass::analyze_and_check_pure_method_helper(
                                    /* analyze_external_reads */ true)
           .build();
 
-  return side_effect_summary.is_pure();
+  return !side_effect_summary.has_side_effects();
 }
 
 void AnalyzePureMethodsPass::run_pass(DexStoresVector& stores,

@@ -31,8 +31,8 @@
  * Now supposing that there are no other side effects in the method (such as
  * throwing an exception), we can use this classification as follows:
  *
- *   - Methods containing only #1 are always pure and can be elided if their
- *     return values are unused.
+ *   - Methods containing only #1 are always side-effect-free and can be elided
+ *     if their return values are unused.
  *   - Methods containing only #1 and #2 can be elided if their arguments are
  *     all non-escaping and unused, and if their return values are unused.
  */
@@ -76,8 +76,8 @@ struct Summary {
   Summary(const std::initializer_list<param_idx_t>& modified_params)
       : modified_params(modified_params) {}
 
-  bool is_pure() const {
-    return effects == EFF_NONE && modified_params.empty() && !may_read_external;
+  bool has_side_effects() const {
+    return effects != EFF_NONE || !modified_params.empty() || may_read_external;
   }
 
   friend bool operator==(const Summary& a, const Summary& b) {

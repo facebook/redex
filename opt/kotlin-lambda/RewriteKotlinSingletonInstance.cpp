@@ -50,7 +50,7 @@ bool check_inits_has_side_effects(
                                    /* analyze_external_reads */ true)
           .build();
 
-  return side_effect_summary.is_pure();
+  return !side_effect_summary.has_side_effects();
 }
 bool init_for_type_has_side_effects(
     const init_classes::InitClassesWithSideEffects&
