@@ -221,6 +221,23 @@ void SummaryBuilder::classify_heap_write(const ptrs::Environment& env,
   }
 }
 
+InvokeToSummaryMap build_summary_map(const SummaryMap& summary_map,
+                                     const call_graph::Graph& call_graph,
+                                     const DexMethod* method) {
+  InvokeToSummaryMap invoke_to_summary_map;
+  if (call_graph.has_node(method)) {
+    const auto& callee_edges = call_graph.node(method)->callees();
+    for (const auto& edge : callee_edges) {
+      auto* callee = edge->callee()->method();
+      auto it = summary_map.find(callee);
+      if (it != summary_map.end()) {
+        invoke_to_summary_map.emplace(edge->invoke_insn(), it->second);
+      }
+    }
+  }
+  return invoke_to_summary_map;
+}
+
 /*
  * Analyze :method.
  */
@@ -230,21 +247,12 @@ Summary analyze_method(const init_classes::InitClassesWithSideEffects&
                        const call_graph::Graph& call_graph,
                        const ptrs::FixpointIteratorMap& ptrs_fp_iter_map,
                        const SummaryMap& summary_map) {
-  InvokeToSummaryMap invoke_to_summary_cmap;
-  if (call_graph.has_node(method)) {
-    const auto& callee_edges = call_graph.node(method)->callees();
-    for (const auto& edge : callee_edges) {
-      auto* callee = edge->callee()->method();
-      auto it = summary_map.find(callee);
-      if (it != summary_map.end()) {
-        invoke_to_summary_cmap.emplace(edge->invoke_insn(), it->second);
-      }
-    }
-  }
+  auto invoke_to_summary_map =
+      build_summary_map(summary_map, call_graph, method);
 
   const auto& ptrs_fp_iter = *ptrs_fp_iter_map.at_unsafe(method);
   auto summary =
-      SummaryBuilder(init_classes_with_side_effects, invoke_to_summary_cmap,
+      SummaryBuilder(init_classes_with_side_effects, invoke_to_summary_map,
                      ptrs_fp_iter, method->get_code())
           .build();
   if (method->rstate.no_optimizations()) {

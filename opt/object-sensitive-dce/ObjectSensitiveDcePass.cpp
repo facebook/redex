@@ -119,24 +119,6 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
   hier::NonOverriddenVirtuals m_non_overridden_virtuals;
 };
 
-static side_effects::InvokeToSummaryMap build_summary_map(
-    const side_effects::SummaryMap& effect_summaries,
-    const call_graph::Graph& call_graph,
-    DexMethod* method) {
-  side_effects::InvokeToSummaryMap invoke_to_summary_map;
-  if (call_graph.has_node(method)) {
-    const auto& callee_edges = call_graph.node(method)->callees();
-    for (const auto& edge : callee_edges) {
-      auto* callee = edge->callee()->method();
-      if (effect_summaries.count(callee) != 0) {
-        invoke_to_summary_map.emplace(edge->invoke_insn(),
-                                      effect_summaries.at(callee));
-      }
-    }
-  }
-  return invoke_to_summary_map;
-}
-
 void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
                                       ConfigFiles& conf,
                                       PassManager& mgr) {

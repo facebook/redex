@@ -134,6 +134,11 @@ class SummaryBuilder final {
   reaching_defs::MoveAwareFixpointIterator* m_reaching_defs_fixpoint_iter;
 };
 
+// Builds a caller-specific summary from.
+InvokeToSummaryMap build_summary_map(const SummaryMap& summary_map,
+                                     const call_graph::Graph& call_graph,
+                                     const DexMethod* method);
+
 // For testing.
 Summary analyze_code(const init_classes::InitClassesWithSideEffects&
                          init_classes_with_side_effects,
