@@ -229,10 +229,13 @@ InvokeToSummaryMap build_summary_map(const SummaryMap& summary_map,
     const auto& callee_edges = call_graph.node(method)->callees();
     for (const auto& edge : callee_edges) {
       auto* callee = edge->callee()->method();
-      auto it = summary_map.find(callee);
-      if (it != summary_map.end()) {
-        invoke_to_summary_map.emplace(edge->invoke_insn(), it->second);
+      if (!callee) {
+        continue;
       }
+      auto it = summary_map.find(callee);
+      invoke_to_summary_map.emplace(edge->invoke_insn(), it != summary_map.end()
+                                                             ? it->second
+                                                             : Summary());
     }
   }
   return invoke_to_summary_map;

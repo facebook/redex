@@ -111,11 +111,10 @@ TEST_F(ObjectSensitiveDceTest, recursive) {
 
   run_passes(passes);
 
-  // Nothing could get optimized away.
-  auto code = method->get_code();
-  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_NEW_INSTANCE}), 1);
-  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_DIRECT}), 1);
-  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_VIRTUAL}), 1);
+  auto ii = InstructionIterable(method->get_code());
+  auto it = ii.begin();
+  ASSERT_TRUE(it != ii.end());
+  ASSERT_EQ(it->insn->opcode(), OPCODE_RETURN_VOID);
 }
 
 TEST_F(ObjectSensitiveDceTest, mutually_recursive) {
@@ -131,11 +130,10 @@ TEST_F(ObjectSensitiveDceTest, mutually_recursive) {
 
   run_passes(passes);
 
-  // Nothing could get optimized away.
-  auto code = method->get_code();
-  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_NEW_INSTANCE}), 1);
-  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_DIRECT}), 1);
-  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_VIRTUAL}), 1);
+  auto ii = InstructionIterable(method->get_code());
+  auto it = ii.begin();
+  ASSERT_TRUE(it != ii.end());
+  ASSERT_EQ(it->insn->opcode(), OPCODE_RETURN_VOID);
 }
 
 TEST_F(ObjectSensitiveDceTest, clinit_with_side_effects) {
