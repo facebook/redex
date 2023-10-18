@@ -287,8 +287,7 @@ void analyze_scope(const init_classes::InitClassesWithSideEffects&
   // be called before a newly-allocated object gets used in any way. We can
   // model this by treating the method as modifying its `this` parameter --
   // changing it from uninitialized to initialized.
-  (*effect_summaries)[DexMethod::get_method("Ljava/lang/Object;.<init>:()V")] =
-      Summary({0});
+  (*effect_summaries)[method::java_lang_Object_ctor()] = Summary({0});
 
   auto affected_methods = std::make_unique<ConcurrentSet<const DexMethod*>>();
   walk::parallel::code(scope, [&](const DexMethod* method, IRCode&) {

@@ -401,8 +401,7 @@ FixpointIteratorMap analyze_scope(const Scope& scope,
   if (summary_map_ptr == nullptr) {
     summary_map_ptr = &summary_map;
   }
-  summary_map_ptr->emplace(
-      DexMethod::get_method("Ljava/lang/Object;.<init>:()V"), EscapeSummary{});
+  summary_map_ptr->emplace(method::java_lang_Object_ctor(), EscapeSummary{});
 
   auto affected_methods = std::make_unique<ConcurrentSet<const DexMethod*>>();
   walk::parallel::code(scope, [&](const DexMethod* method, IRCode&) {

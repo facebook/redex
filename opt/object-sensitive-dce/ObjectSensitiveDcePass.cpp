@@ -50,8 +50,13 @@ namespace uv = used_vars;
 
 class CallGraphStrategy final : public call_graph::BuildStrategy {
  public:
-  explicit CallGraphStrategy(const Scope& scope)
-      : m_scope(scope), m_non_overridden_virtuals(scope) {}
+  explicit CallGraphStrategy(const Scope& scope,
+                             const ptrs::SummaryMap& escape_summaries,
+                             const side_effects::SummaryMap& effect_summaries)
+      : m_scope(scope),
+        m_escape_summaries(escape_summaries),
+        m_effect_summaries(effect_summaries),
+        m_non_overridden_virtuals(scope) {}
 
   call_graph::CallSites get_callsites(const DexMethod* method) const override {
     call_graph::CallSites callsites;
@@ -66,6 +71,10 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
         auto callee =
             resolve_method(insn->get_method(), opcode_to_search(insn), method);
         if (callee == nullptr) {
+          continue;
+        }
+        if (!callee->get_code() &&
+            (!callee->is_external() || !has_summaries(callee))) {
           continue;
         }
         if (!opcode::is_invoke_super(insn->opcode()) &&
@@ -97,7 +106,16 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
     return method->is_virtual() && m_non_overridden_virtuals.count(method) == 0;
   }
 
+  bool has_summaries(DexMethod* method) const {
+    if (m_escape_summaries.count(method) && m_effect_summaries.count(method)) {
+      return true;
+    }
+    return method == method::java_lang_Object_ctor();
+  }
+
   const Scope& m_scope;
+  const ptrs::SummaryMap& m_escape_summaries;
+  const side_effects::SummaryMap& m_effect_summaries;
   hier::NonOverriddenVirtuals m_non_overridden_virtuals;
 };
 
@@ -137,23 +155,25 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
     code.cfg().calculate_exit_block();
   });
 
-  auto call_graph = call_graph::Graph(CallGraphStrategy(scope));
-
   ptrs::SummaryMap escape_summaries;
   if (m_external_escape_summaries_file) {
     std::ifstream file_input(*m_external_escape_summaries_file);
     summary_serialization::read(file_input, &escape_summaries);
     mgr.incr_metric("external_escape_summaries", escape_summaries.size());
   }
-  auto ptrs_fp_iter_map =
-      ptrs::analyze_scope(scope, call_graph, &escape_summaries);
-
   side_effects::SummaryMap effect_summaries;
   if (m_external_side_effect_summaries_file) {
     std::ifstream file_input(*m_external_side_effect_summaries_file);
     summary_serialization::read(file_input, &effect_summaries);
     mgr.incr_metric("external_side_effect_summaries", effect_summaries.size());
   }
+
+  auto call_graph = call_graph::Graph(
+      CallGraphStrategy(scope, escape_summaries, effect_summaries));
+
+  auto ptrs_fp_iter_map =
+      ptrs::analyze_scope(scope, call_graph, &escape_summaries);
+
   side_effects::analyze_scope(init_classes_with_side_effects, scope, call_graph,
                               ptrs_fp_iter_map, &effect_summaries);
 
