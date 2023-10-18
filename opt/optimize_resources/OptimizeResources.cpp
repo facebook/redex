@@ -402,6 +402,7 @@ void remap_resource_class_clinit(
       std::vector<uint16_t> filtered_op_data_entries;
 
       uint16_t header_entry = *(op_data->data());
+      int deleted_array_element_count = 0;
       auto array_ints = get_fill_array_data_payload<uint32_t>(op_data);
       for (uint32_t entry_x : array_ints) {
         if (entry_x > PACKAGE_RESID_START) {
@@ -418,6 +419,8 @@ void remap_resource_class_clinit(
             if (c_name.find("R$styleable") != std::string::npos) {
               filtered_op_data_entries.push_back(0);
               filtered_op_data_entries.push_back(0);
+            } else {
+              ++deleted_array_element_count;
             }
           }
         } else {
