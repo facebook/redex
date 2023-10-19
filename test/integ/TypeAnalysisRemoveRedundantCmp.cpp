@@ -48,16 +48,12 @@ TEST_F(TypeAnalysisTransformTest, MethodHasNoEqDefined) {
       DexMethod::get_method(
           "LTypeAnalysisRemoveRedundantCmp;.getYy:()Ljava/lang/String;")
           ->as_def();
-  bool found_cmpz = false;
   auto codey = y_method->get_code();
   ASSERT_NE(nullptr, codey);
   auto jj = InstructionIterable(y_method->get_code());
   auto end2 = jj.end();
   for (auto it = jj.begin(); it != end2; ++it) {
     auto insn = it->insn;
-    if (insn->opcode() == OPCODE_IF_EQZ || insn->opcode() == OPCODE_IF_NEZ) {
-      found_cmpz = true;
-    }
   }
 }
 
