@@ -19,6 +19,7 @@ class TestCFGPass : public Pass {
     using namespace redex_properties::names;
     return {};
   }
+  // This pass is no longer in use.
   bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

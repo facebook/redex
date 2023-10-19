@@ -276,7 +276,6 @@ DexMethod* create_split(DexMethod* orig_method,
     cfg.simplify();
   }
 
-  cloned_code->clear_cfg();
   return create_dex_method(orig_method, std::move(cloned_code));
 }
 
@@ -760,13 +759,15 @@ Stats run_split_dexes(DexStoresVector& stores,
             continue;
           }
           left -= required;
-          size_t orig_size = data.m->get_code()->estimate_code_units();
+          always_assert(data.m->get_code());
+          always_assert(data.m->get_code()->editable_cfg_built());
+          size_t orig_size = data.m->get_code()->cfg().estimate_code_units();
           auto new_methods =
               run_split(data, data.m, data.m->get_code(), case_threshold);
-          size_t new_size = data.m->get_code()->estimate_code_units();
+          size_t new_size = data.m->get_code()->cfg().estimate_code_units();
           for (DexMethod* m : new_methods) {
             type_class(m->get_class())->add_method(m);
-            new_size += m->get_code()->estimate_code_units();
+            new_size += m->get_code()->cfg().estimate_code_units();
           }
 
           std::lock_guard<std::mutex> lock_guard(mutex);
