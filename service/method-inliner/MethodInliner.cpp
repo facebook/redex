@@ -334,10 +334,22 @@ SameImplementationMap get_same_implementation_map(
     SameImplementation same_implementation{nullptr, {}};
     auto consider_method = [&](DexMethod* method) {
       always_assert(method->get_code());
-      if (same_implementation.representative != nullptr &&
-          !method->get_code()->structural_equals(
-              *same_implementation.representative->get_code())) {
-        return false;
+      // TODO "structural_equals" feature of editable cfg hasn't been
+      // implenmented yet. Currently, we still need to use
+      // irlist::structural_equals. Therefore, we need to clear_cfg before
+      // finding equivalent methods. Once structural_equals of editable cfg is
+      // added, the following clear_cfg will be removed.
+      if (same_implementation.representative != nullptr) {
+        method->get_code()->clear_cfg();
+        same_implementation.representative->get_code()->clear_cfg();
+        if (!method->get_code()->structural_equals(
+                *same_implementation.representative->get_code())) {
+          method->get_code()->build_cfg();
+          same_implementation.representative->get_code()->build_cfg();
+          return false;
+        }
+        method->get_code()->build_cfg();
+        same_implementation.representative->get_code()->build_cfg();
       }
       if (same_implementation.representative == nullptr ||
           compare_dexmethods(method, same_implementation.representative)) {
@@ -801,10 +813,6 @@ void run_inliner(DexStoresVector& stores,
         get_same_implementation_map(scope, *method_override_graph));
   }
 
-  walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ true);
-  });
-
   if (inliner_config.virtual_inline && inliner_config.true_virtual_inline) {
     gather_true_virtual_methods(*method_override_graph, *non_virtual, scope,
                                 *same_implementation_map,
@@ -840,9 +848,6 @@ void run_inliner(DexStoresVector& stores,
       cross_dex_penalty,
       /* configured_finalish_field_names */ {}, local_only);
   inliner.inline_methods(/* need_deconstruct */ false);
-
-  walk::parallel::code(scope,
-                       [](DexMethod*, IRCode& code) { code.clear_cfg(); });
 
   // delete all methods that can be deleted
   auto inlined = inliner.get_inlined();
