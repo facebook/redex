@@ -1908,7 +1908,7 @@ std::unordered_set<uint32_t> ResourcesPbFile::get_types_by_name_prefixes(
     const auto& type_name = pair.second;
     if (std::find_if(type_name_prefixes.begin(), type_name_prefixes.end(),
                      [&](const std::string& prefix) {
-                       return type_name.find(prefix) != std::string::npos;
+                       return type_name.find(prefix) == 0;
                      }) != type_name_prefixes.end()) {
       type_ids.emplace((pair.first) << TYPE_INDEX_BIT_SHIFT);
     }

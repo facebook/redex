@@ -2563,7 +2563,7 @@ std::unordered_set<uint32_t> ResourcesArscFile::get_types_by_name_prefixes(
     const auto& type_name = all_types.at(i);
     if (std::find_if(type_name_prefixes.begin(), type_name_prefixes.end(),
                      [&](const std::string& prefix) {
-                       return type_name.find(prefix) != std::string::npos;
+                       return type_name.find(prefix) == 0;
                      }) != type_name_prefixes.end()) {
       type_ids.emplace((i + 1) << TYPE_INDEX_BIT_SHIFT);
     }
