@@ -208,7 +208,7 @@ class WholeProgramStateAccessor {
     }
     for (const DexMethod* callee : callees) {
       if (!callee->get_code()) {
-        always_assert(is_native(callee));
+        always_assert(is_abstract(callee) || is_native(callee));
         return ConstantValue::top();
       }
     }
