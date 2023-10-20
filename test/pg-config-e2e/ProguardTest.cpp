@@ -157,9 +157,8 @@ TEST_F(ProguardTest, assortment) {
 
   Scope scope = build_class_scope(dexen);
   apply_deobfuscated_names(dexen, proguard_map);
-  ConcurrentSet<const keep_rules::KeepSpec*> unused_rules =
-      process_proguard_rules(proguard_map, scope, external_classes, pg_config,
-                             true);
+  auto proguard_rule_recorder = process_proguard_rules(
+      proguard_map, scope, external_classes, pg_config, true);
 
   // Check the top level Android activity class
   {
@@ -931,21 +930,35 @@ TEST_F(ProguardTest, assortment) {
       EXPECT_FALSE(root(omega_gamma));
     }
   }
-  { // check some keep rules are not used
-    EXPECT_EQ(unused_rules.size(), 4);
-    std::vector<std::string> unused_rule_strings;
-    for (const keep_rules::KeepSpec* keep_rule : unused_rules) {
-      unused_rule_strings.push_back(keep_rules::show_keep(*keep_rule, false));
+  { // check some proguard rules are not used
+    EXPECT_EQ(proguard_rule_recorder.unused_keep_rules.size(), 3);
+    std::vector<std::string> unused_keep_rule_strings;
+    for (const keep_rules::KeepSpec* keep_rule :
+         proguard_rule_recorder.unused_keep_rules) {
+      unused_keep_rule_strings.push_back(
+          keep_rules::show_keep(*keep_rule, false));
     }
     EXPECT_THAT(
-        unused_rule_strings,
+        unused_keep_rule_strings,
         ::testing::UnorderedElementsAre(
             "-keep android.support.test.runner.AndroidJUnitRunner {  (...)V "
             "<init>(); }",
-            "-keepclassmembers com.facebook.redex.test.proguard.Delta$U { ()V "
-            "logger(); }",
             "-keepclasseswithmembernames * { native  *(); }",
             "-keep androidx.test.runner.AndroidJUnitRunner {  (...)V "
             "<init>(); }"));
+
+    EXPECT_EQ(proguard_rule_recorder.unused_assumenosideeffect_rules.size(), 0);
+    EXPECT_EQ(proguard_rule_recorder.used_assumenosideeffect_rules.size(), 1);
+    std::vector<std::string> used_assumenosideeffects_rule_strings;
+    for (const keep_rules::KeepSpec* keep_rule :
+         proguard_rule_recorder.used_assumenosideeffect_rules) {
+      used_assumenosideeffects_rule_strings.push_back(
+          keep_rules::show_assumenosideeffect(*keep_rule, false));
+    }
+    EXPECT_THAT(used_assumenosideeffects_rule_strings,
+                ::testing::UnorderedElementsAre(
+                    "-assumenosideeffects "
+                    "com.facebook.redex.test.proguard.Delta$U { ()V "
+                    "logger(); }"));
   }
 }

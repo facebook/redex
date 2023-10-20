@@ -986,33 +986,39 @@ void process_proguard_rules(ConfigFiles& conf,
   conf.get_json_config().get("keep_all_annotation_classes", true,
                              keep_all_annotation_classes);
 
-  ConcurrentSet<const keep_rules::KeepSpec*> unused_rules =
+  bool record_used_rules;
+  conf.get_json_config().get("record_accessed_rules", true, record_used_rules);
+
+  bool unused_rule_abort;
+  conf.get_json_config().get("unused_keep_rule_abort", false,
+                             unused_rule_abort);
+  auto proguard_rule_recorder =
       process_proguard_rules(conf.get_proguard_map(), scope, external_classes,
                              pg_config, keep_all_annotation_classes);
-  if (!unused_rules.empty()) {
-    std::vector<std::string> out;
-    for (const keep_rules::KeepSpec* keep_rule : unused_rules) {
-      out.push_back(keep_rules::show_keep(*keep_rule));
+  if (record_used_rules) {
+    proguard_rule_recorder.record_accessed_rules(
+        conf.metafile("redex-used-proguard-rules.txt"),
+        conf.metafile("redex-unused-proguard-rules.txt"));
+  }
+  if (unused_rule_abort) {
+    std::vector<std::string> unused_out;
+    for (const keep_rules::KeepSpec* keep_rule :
+         proguard_rule_recorder.unused_keep_rules) {
+      unused_out.push_back(keep_rules::show_keep(*keep_rule));
     }
     // Make output deterministic
-    std::sort(out.begin(), out.end());
-    bool unused_rule_abort;
-    conf.get_json_config().get("unused_keep_rule_abort", false,
-                               unused_rule_abort);
-    always_assert_log(!unused_rule_abort, "%s",
-                      [&]() {
-                        std::string tmp;
-                        for (const auto& s : out) {
-                          tmp += s;
-                          tmp += " not used\n";
-                        }
-                        return tmp;
-                      }()
-                          .c_str());
-
-    std::ofstream ofs{conf.metafile("redex-unused-keep-rules.txt")};
-    for (const auto& s : out) {
-      ofs << s << "\n";
+    if (!unused_out.empty()) {
+      std::sort(unused_out.begin(), unused_out.end());
+      always_assert_log(false, "%s",
+                        [&]() {
+                          std::string tmp;
+                          for (const auto& s : unused_out) {
+                            tmp += s;
+                            tmp += " not used\n";
+                          }
+                          return tmp;
+                        }()
+                            .c_str());
     }
   }
 }

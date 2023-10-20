@@ -16,7 +16,17 @@ namespace keep_rules {
 
 using Scope = std::vector<DexClass*>;
 
-ConcurrentSet<const KeepSpec*> process_proguard_rules(
+struct ProguardRuleRecorder {
+ public:
+  void record_accessed_rules(const std::string& used_rule_path,
+                             const std::string& unused_rule_path);
+  ConcurrentSet<const KeepSpec*> unused_keep_rules;
+  ConcurrentSet<const KeepSpec*> used_keep_rules;
+  ConcurrentSet<const KeepSpec*> unused_assumenosideeffect_rules;
+  ConcurrentSet<const KeepSpec*> used_assumenosideeffect_rules;
+};
+
+ProguardRuleRecorder process_proguard_rules(
     const ProguardMap& pg_map,
     const Scope& classes,
     const Scope& external_classes,

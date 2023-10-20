@@ -104,6 +104,7 @@ struct KeepSpec {
   KeepSpec(const KeepSpec&) = delete;
 
   friend bool operator==(const KeepSpec& lhs, const KeepSpec& rhs);
+  friend std::ostream& operator<<(std::ostream&, const KeepSpec&);
 };
 
 size_t hash_value(const KeepSpec&);

@@ -1250,6 +1250,16 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             None,
             CompressionLevel.FAST,  # May be quite large.
         ),
+        CompressionEntry(
+            "Redex Accessed Proguard Rules",
+            lambda args: True,
+            True,
+            [],
+            ["redex-used-proguard-rules.txt", "redex-unused-proguard-rules.txt"],
+            "redex-accessed-proguard-rules.zip",
+            None,
+            CompressionLevel.BETTER,  # Usually small enough.
+        ),
     ]
 
 

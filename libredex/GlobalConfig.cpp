@@ -166,6 +166,7 @@ void GlobalConfig::bind_config() {
   bind("instruction_size_bitwidth_limit", 0u, uint32_param);
   bind("json_serde_supercls", {}, string_vector_param);
   bind("keep_all_annotation_classes", true, bool_param);
+  bind("record_accessed_rules", true, bool_param);
   bind("keep_methods", {}, string_vector_param);
   bind("keep_packages", {}, string_vector_param);
   bind("legacy_reflection_reachability", false, bool_param);

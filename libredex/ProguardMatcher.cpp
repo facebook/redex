@@ -7,10 +7,12 @@
 
 #include <algorithm>
 #include <boost/regex.hpp>
+#include <fstream>
 #include <iostream>
 #include <mutex>
 #include <sstream>
 #include <thread>
+#include <unordered_map>
 #include <unordered_set>
 
 #include "ClassHierarchy.h"
@@ -389,6 +391,9 @@ class ProguardMatcher {
   void process_proguard_rules(const ProguardConfiguration& pg_config);
   void mark_all_annotation_classes_as_keep();
 
+  void classify_rules(const KeepRuleMatcher& rule_matcher,
+                      const RuleType& rule_type,
+                      const KeepSpec* keep_rule);
   void process_keep(KeepSpecSet::iterator keep_rules_begin,
                     KeepSpecSet::iterator keep_rules_end,
                     RuleType rule_type,
@@ -396,16 +401,14 @@ class ProguardMatcher {
 
   DexClass* find_single_class(const std::string& descriptor) const;
 
-  const ConcurrentSet<const KeepSpec*>& get_unused_rules() const {
-    return m_unused_rules;
-  }
+  ProguardRuleRecorder steal_recorder() { return std::move(m_recorder); }
 
  private:
   const ProguardMap& m_pg_map;
   const Scope& m_classes;
   const Scope& m_external_classes;
   ClassHierarchy m_hierarchy;
-  ConcurrentSet<const KeepSpec*> m_unused_rules;
+  ProguardRuleRecorder m_recorder;
 };
 
 template <class DexMember>
@@ -788,7 +791,7 @@ void KeepRuleMatcher::process_whyareyoukeeping(DexClass* cls) {
 // This function is also executed concurrently.
 void KeepRuleMatcher::process_assumenosideeffects(DexClass* cls) {
   cls->rstate.set_assumenosideeffects();
-
+  ++m_class_matches;
   // Apply any method-level keep specifications.
   apply_method_keeps(cls);
 }
@@ -823,6 +826,7 @@ void KeepRuleMatcher::apply_rule(DexMember* member) {
     break;
   }
   case RuleType::ASSUME_NO_SIDE_EFFECTS:
+    ++m_member_matches;
     member->rstate.set_assumenosideeffects();
     break;
   }
@@ -854,6 +858,24 @@ DexClass* ProguardMatcher::find_single_class(
     }
   }
   return type_class(typ);
+}
+
+void ProguardMatcher::classify_rules(const KeepRuleMatcher& rule_matcher,
+                                     const RuleType& rule_type,
+                                     const KeepSpec* keep_rule) {
+  if (rule_type == RuleType::KEEP) {
+    if (rule_matcher.is_unused()) {
+      m_recorder.unused_keep_rules.insert(keep_rule);
+    } else {
+      m_recorder.used_keep_rules.insert(keep_rule);
+    }
+  } else if (rule_type == RuleType::ASSUME_NO_SIDE_EFFECTS) {
+    if (rule_matcher.is_unused()) {
+      m_recorder.unused_assumenosideeffect_rules.insert(keep_rule);
+    } else {
+      m_recorder.used_assumenosideeffect_rules.insert(keep_rule);
+    }
+  }
 }
 
 void ProguardMatcher::process_keep(KeepSpecSet::iterator keep_rules_begin,
@@ -899,9 +921,7 @@ void ProguardMatcher::process_keep(KeepSpecSet::iterator keep_rules_begin,
       }
     }
 
-    if (rule_matcher.is_unused()) {
-      m_unused_rules.insert(keep_rule);
-    }
+    classify_rules(rule_matcher, rule_type, keep_rule);
   });
 
   RegexMap regex_map;
@@ -921,9 +941,7 @@ void ProguardMatcher::process_keep(KeepSpecSet::iterator keep_rules_begin,
           DexClass* cls = find_single_class(className.name);
           KeepRuleMatcher rule_matcher(rule_type, keep_rule, regex_map);
           process_single_keep(class_match, rule_matcher, cls);
-          if (rule_matcher.is_unused()) {
-            m_unused_rules.insert(&keep_rule);
-          }
+          classify_rules(rule_matcher, rule_type, &keep_rule);
         } else {
           class_with_wildcard = true;
         }
@@ -944,9 +962,7 @@ void ProguardMatcher::process_keep(KeepSpecSet::iterator keep_rules_begin,
           for (auto const* type : children) {
             process_single_keep(class_match, rule_matcher, type_class(type));
           }
-          if (rule_matcher.is_unused()) {
-            m_unused_rules.insert(&keep_rule);
-          }
+          classify_rules(rule_matcher, rule_type, &keep_rule);
         }
         continue;
       }
@@ -1005,7 +1021,43 @@ void ProguardMatcher::mark_all_annotation_classes_as_keep() {
 
 namespace keep_rules {
 
-ConcurrentSet<const KeepSpec*> process_proguard_rules(
+void ProguardRuleRecorder::record_accessed_rules(
+    const std::string& used_rule_path, const std::string& unused_rule_path) {
+  {
+    std::vector<std::string> used_out;
+    for (const keep_rules::KeepSpec* keep_rule : used_keep_rules) {
+      used_out.push_back(keep_rules::show_keep(*keep_rule));
+    }
+    for (const keep_rules::KeepSpec* keep_rule :
+         used_assumenosideeffect_rules) {
+      used_out.push_back(keep_rules::show_assumenosideeffect(*keep_rule));
+    }
+    // Make output deterministic
+    std::sort(used_out.begin(), used_out.end());
+    std::ofstream ofs{used_rule_path};
+    for (const auto& s : used_out) {
+      ofs << s << "\n";
+    }
+  }
+  {
+    std::vector<std::string> unused_out;
+    for (const keep_rules::KeepSpec* keep_rule : unused_keep_rules) {
+      unused_out.push_back(keep_rules::show_keep(*keep_rule));
+    }
+    for (const keep_rules::KeepSpec* keep_rule :
+         unused_assumenosideeffect_rules) {
+      unused_out.push_back(keep_rules::show_assumenosideeffect(*keep_rule));
+    }
+    // Make output deterministic
+    std::sort(unused_out.begin(), unused_out.end());
+    std::ofstream ofs{unused_rule_path};
+    for (const auto& s : unused_out) {
+      ofs << s << "\n";
+    }
+  }
+}
+
+ProguardRuleRecorder process_proguard_rules(
     const ProguardMap& pg_map,
     const Scope& classes,
     const Scope& external_classes,
@@ -1016,7 +1068,7 @@ ConcurrentSet<const KeepSpec*> process_proguard_rules(
   if (keep_all_annotation_classes) {
     pg_matcher.mark_all_annotation_classes_as_keep();
   }
-  return pg_matcher.get_unused_rules();
+  return pg_matcher.steal_recorder();
 }
 
 namespace testing {
