@@ -416,7 +416,7 @@ def argparse_yes_no_flag(
     parser.add_argument(
         f"--{on_prefix}{flag_name}",
         f"--{off_prefix}{flag_name}",
-        dest=flag_name,
+        dest=flag_name.replace("-", "_"),
         action=FlagAction,
         default=False,
         **kwargs,
