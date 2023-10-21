@@ -30,8 +30,14 @@ Transform::Stats ConstantPropagation::run(
   TRACE(CONSTP, 5, "CFG: %s", SHOW(*cfg));
   Transform::Stats local_stats;
   {
-    intraprocedural::FixpointIterator fp_iter(*cfg,
-                                              ConstantPrimitiveAnalyzer());
+    intraprocedural::FixpointIterator fp_iter(
+        *cfg,
+        ConstantPrimitiveAndBoxedAnalyzer(
+            m_immut_analyzer_state, m_immut_analyzer_state,
+            constant_propagation::EnumFieldAnalyzerState::get(),
+            constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr,
+            constant_propagation::ApiLevelAnalyzerState::get(m_min_sdk),
+            nullptr));
     fp_iter.run({});
     constant_propagation::Transform tf(m_config.transform, &runtime_cache);
     tf.apply(fp_iter, WholeProgramState(), code->cfg(), xstores,
@@ -49,6 +55,7 @@ Transform::Stats ConstantPropagation::run(DexMethod* method,
 Transform::Stats ConstantPropagation::run(const Scope& scope,
                                           XStoreRefs* xstores) {
   Transform::RuntimeCache runtime_cache{};
+  constant_propagation::ImmutableAttributeAnalyzerState immut_analyzer_state;
   return walk::parallel::methods<Transform::Stats>(
       scope,
       [&](DexMethod* method) { return run(method, xstores, runtime_cache); });
