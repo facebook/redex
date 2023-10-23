@@ -125,45 +125,45 @@ void TypedefAnnoChecker::check_instruction(
         std::ostringstream out;
         if (env_anno.value() == DexType::make_type("Ljava/lang/Object;")) {
           out << "TypedefAnnoCheckerPass: while invoking " << SHOW(def_method)
-              << "\n in method " << SHOW(m) << "\n parameter "
-              << param_anno.first << "should have the annotation "
+              << " in method " << SHOW(m) << ", parameter " << param_anno.first
+              << "should have the annotation "
               << annotation.value()->get_name()->c_str()
-              << "\n but it instead contains an ambiguous annotation, "
+              << " but it instead contains an ambiguous annotation, "
                  "implying that the parameter was joined with another "
-                 "typedef annotation \n before the method invokation. The "
+                 "typedef annotation before the method invokation. The "
                  "ambiguous annotation is unsafe, and typedef annotations "
-                 "should not be mixed.\n"
-              << " failed instruction: " << SHOW(insn) << "\n\n";
+                 "should not be mixed. "
+              << "failed instruction: " << SHOW(insn) << ".";
         } else {
           out << "TypedefAnnoCheckerPass: while invoking " << SHOW(def_method)
-              << "\n in method " << SHOW(m) << "\n parameter "
-              << param_anno.first << " has the annotation " << SHOW(env_anno)
-              << "\n but the method expects the annotation to be "
+              << " in method " << SHOW(m) << ", parameter " << param_anno.first
+              << " has the annotation " << SHOW(env_anno)
+              << " , but the method expects the annotation to be "
               << annotation.value()->get_name()->c_str()
-              << ".\n failed instruction: " << SHOW(insn) << "\n\n";
+              << " failed instruction: " << SHOW(insn) << ".";
         }
-        m_error += out.str();
+        m_error = out.str();
         m_good = false;
       } else if (!is_int(&env, reg) && !is_string(&env, reg) &&
                  env.get_type(insn->src(0)) !=
                      type_inference::TypeDomain(IRType::INT)) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: the annotation " << SHOW(annotation)
-            << "\n annotates a parameter with an incompatible type "
+            << " annotates a parameter with an incompatible type "
             << SHOW(env.get_type(reg))
-            << "\n or a non-constant parameter in method " << SHOW(m)
-            << "\n while trying to invoke the method " << SHOW(def_method)
-            << ".\n failed instruction: " << SHOW(insn) << "\n\n";
-        m_error += out.str();
+            << " or a non-constant parameter in method " << SHOW(m)
+            << " while trying to invoke the method " << SHOW(def_method)
+            << " .";
+        m_error = out.str();
         m_good = false;
       } else if (env_anno == boost::none) {
         // TypeInference didn't infer anything
-        bool good = check_typedef_value(m, annotation, ud_chains, insn,
-                                        param_index, inference, envs);
-        if (!good) {
+        check_typedef_value(m, annotation, ud_chains, insn, param_index,
+                            inference, envs);
+        if (!m_good) {
           std::ostringstream out;
-          out << " Error invoking " << SHOW(def_method) << "\n";
-          out << " Incorrect parameter's index: " << param_index << "\n\n";
+          out << " This error occured while trying to invoke the method "
+              << SHOW(def_method) << " .";
           m_error += out.str();
           TRACE(TAC, 1, "invoke method: %s", SHOW(def_method));
         }
@@ -181,11 +181,11 @@ void TypedefAnnoChecker::check_instruction(
         env_anno.value() != field_anno.value()) {
       std::ostringstream out;
       out << "TypedefAnnoCheckerPass: The method " << SHOW(m)
-          << "\n assigned a field " << insn->get_field()->c_str()
-          << "\n with annotation " << SHOW(field_anno)
-          << "\n to a value with annotation " << SHOW(env_anno)
-          << ".\n failed instruction: " << SHOW(insn) << "\n\n";
-      m_error += out.str();
+          << " assigned a field " << insn->get_field()->c_str()
+          << " with annotation " << SHOW(field_anno)
+          << " to a value with annotation " << SHOW(env_anno)
+          << " failed instruction: " << SHOW(insn);
+      m_error = out.str();
       m_good = false;
     }
     break;
@@ -202,24 +202,24 @@ void TypedefAnnoChecker::check_instruction(
         std::ostringstream out;
         if (env_anno.value() == DexType::make_type("Ljava/lang/Object;")) {
           out << "TypedefAnnoCheckerPass: The method " << SHOW(m)
-              << "\n has an annotation "
+              << " has an annotation "
               << return_annotation.value()->get_name()->c_str()
-              << "\n in its method signature, but the returned value has an "
-                 "ambiguous annotation, implying that the value was joined \n"
+              << " in its method signature, but the returned value has an "
+                 "ambiguous annotation, implying that the value was joined "
                  "with another typedef annotation within the method. The "
-                 "ambiguous annotation is unsafe, \nand typedef annotations "
-                 "should not be mixed. \n"
-              << "failed instruction: " << SHOW(insn) << "\n\n";
+                 "ambiguous annotation is unsafe, and typedef annotations "
+                 "should not be mixed. "
+              << "failed instruction: " << SHOW(insn);
         } else {
           out << "TypedefAnnoCheckerPass: The method " << SHOW(m)
-              << "\n has an annotation "
+              << " has an annotation "
               << return_annotation.value()->get_name()->c_str()
-              << "\n in its method signature, but the returned value "
-                 "contains the annotation \n"
-              << SHOW(env_anno) << " instead.\n"
-              << " failed instruction: " << SHOW(insn) << "\n\n";
+              << " in its method signature, but the returned value "
+                 "contains the annotation "
+              << SHOW(env_anno) << " instead. "
+              << "failed instruction: " << SHOW(insn) << ".";
         }
-        m_error += out.str();
+        m_error = out.str();
         m_good = false;
       } else if (!is_int(&env, reg) && !is_string(&env, reg) &&
                  env.get_type(insn->src(0)) !=
@@ -227,20 +227,14 @@ void TypedefAnnoChecker::check_instruction(
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: the annotation "
             << SHOW(return_annotation)
-            << "\n annotates a value with an incompatible type or a "
-               "non-constant value in method\n "
-            << SHOW(m) << " .\n"
-            << " failed instruction: " << SHOW(insn) << "\n\n";
-        m_error += out.str();
+            << " annotates a value with an incompatible type or a "
+               "non-constant value in method "
+            << SHOW(m) << " .";
+        m_error = out.str();
         m_good = false;
       } else if (env_anno == boost::none) {
-        bool good = check_typedef_value(m, return_annotation, ud_chains, insn,
-                                        0, inference, envs);
-        if (!good) {
-          std::ostringstream out;
-          out << " Error caught when returning the faulty value\n\n";
-          m_error += out.str();
-        }
+        check_typedef_value(m, return_annotation, ud_chains, insn, 0, inference,
+                            envs);
       }
     }
     break;
@@ -250,7 +244,7 @@ void TypedefAnnoChecker::check_instruction(
   }
 }
 
-bool TypedefAnnoChecker::check_typedef_value(
+void TypedefAnnoChecker::check_typedef_value(
     DexMethod* m,
     const boost::optional<const DexType*>& annotation,
     live_range::UseDefChains* ud_chains,
@@ -271,15 +265,13 @@ bool TypedefAnnoChecker::check_typedef_value(
       if (value_set.count(const_value) == 0) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: in method " << SHOW(m)
-            << "\n the string value " << SHOW(const_value)
-            << " does not have the typedef annotation \n"
-            << SHOW(annotation)
-            << " attached to it. \n Check that the value is annotated and "
-               "exists in the typedef annotation class.\n"
-            << " failed instruction: " << SHOW(def) << "\n";
+            << " , the string value " << SHOW(const_value)
+            << " does not have the typedef annotation " << SHOW(annotation)
+            << " attached to it. Check that the value is annotated and exists "
+               "in the typedef annotation class";
         m_good = false;
         m_error += out.str();
-        return false;
+        return;
       }
       break;
     }
@@ -289,15 +281,13 @@ bool TypedefAnnoChecker::check_typedef_value(
       if (value_set.count(const_value) == 0) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: in method " << SHOW(m)
-            << "\n the int value " << SHOW(const_value)
-            << " does not have the typedef annotation \n"
-            << SHOW(annotation)
-            << " attached to it. \n Check that the value is annotated and "
-               "exists in its typedef annotation class.\n"
-            << " failed instruction: " << SHOW(def) << "\n";
+            << " , the int value " << SHOW(const_value)
+            << " does not have the typedef annotation " << SHOW(annotation)
+            << " attached to it. Check that the value is annotated and exists "
+               "in its typedef annotation class.";
         m_good = false;
         m_error += out.str();
-        return false;
+        return;
       }
       break;
     }
@@ -313,12 +303,11 @@ bool TypedefAnnoChecker::check_typedef_value(
         if (value_set.count(0) == 0 || value_set.count(1) == 0) {
           std::ostringstream out;
           out << "TypedefAnnoCheckerPass: the method" << SHOW(m)
-              << "\n assigns a int with typedef annotation " << SHOW(annotation)
-              << "\n to either 0 or 1, which is invalid because the typedef "
-                 "annotation class does not contain both the values 0 and 1.\n"
-              << " failed instruction: " << SHOW(def) << "\n";
+              << " assigns a int with typedef annotation " << SHOW(annotation)
+              << " to either 0 or 1, which is invalid because the typedef "
+                 "annotation class does not contain both the values 0 and 1.";
           m_good = false;
-          return false;
+          return;
         }
         break;
       }
@@ -326,14 +315,13 @@ bool TypedefAnnoChecker::check_typedef_value(
       if (anno == boost::none || anno != annotation) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: in method " << SHOW(m)
-            << "\n one of the parameters needs to have the typedef annotation "
+            << " , one of the parameters needs to have the typedef annotation "
             << SHOW(annotation)
-            << "\n attached to it. Check that the value is annotated and "
-               "exists in the typedef annotation class.\n"
-            << " failed instruction: " << SHOW(def) << "\n";
+            << " attached to it. Check that the value is annotated and exists "
+               "in the typedef annotation class";
         m_good = false;
         m_error += out.str();
-        return false;
+        return;
       }
       break;
     }
@@ -351,13 +339,12 @@ bool TypedefAnnoChecker::check_typedef_value(
       if (!def_method) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: in the method " << SHOW(m)
-            << "\n the source of the value with annotation " << SHOW(annotation)
-            << "\n is produced by invoking an unresolveable callee, so the "
-               "value safety is not guaranteed.\n"
-            << " failed instruction: " << SHOW(def) << "\n";
+            << " , the source of the value with annotation " << SHOW(annotation)
+            << " is produced by invoking an unresolveable callee, so the value "
+               "safety is not guaranteed.";
         m_good = false;
         m_error += out.str();
-        return false;
+        return;
       }
       boost::optional<const DexType*> anno =
           inference->get_typedef_anno_from_member(def_method);
@@ -365,13 +352,11 @@ bool TypedefAnnoChecker::check_typedef_value(
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: the method "
             << SHOW(def->get_method()->as_def())
-            << "\n needs to return a value with the anotation "
-            << SHOW(annotation)
-            << "\n and include it in it's method signature.\n"
-            << " failed instruction: " << SHOW(def) << "\n";
+            << " needs to return a value with the anotation "
+            << SHOW(annotation) << " and include it in it's method signature.";
         m_good = false;
         m_error += out.str();
-        return false;
+        return;
       }
       break;
     }
@@ -386,30 +371,27 @@ bool TypedefAnnoChecker::check_typedef_value(
       if (value_set.count(0) == 0 || value_set.count(1) == 0) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: the method" << SHOW(m)
-            << "\n assigns a int with typedef annotation " << SHOW(annotation)
-            << "\n to either 0 or 1, which is invalid because the typedef "
-               "annotation class does not contain both the values 0 and 1.\n"
-            << " failed instruction: " << SHOW(def) << "\n";
+            << " assigns a int with typedef annotation " << SHOW(annotation)
+            << " to either 0 or 1, which is invalid because the typedef "
+               "annotation class does not contain both the values 0 and 1.";
         m_good = false;
-        return false;
+        return;
       }
       break;
     }
     default: {
       std::ostringstream out;
       out << "TypedefAnnoCheckerPass: the method " << SHOW(m)
-          << "\n does not guarantee value safety for the value with typedef "
+          << " does not guarantee value safety for the value with typedef "
              "annotation "
           << SHOW(annotation)
-          << " .\n Check that this value does not change within the method\n"
-          << " failed instruction: " << SHOW(def) << "\n";
+          << " . Check that this value does not change within the method";
       m_good = false;
       m_error += out.str();
-      return false;
+      return;
     }
     }
   }
-  return true;
 }
 
 void TypedefAnnoCheckerPass::run_pass(DexStoresVector& stores,
@@ -437,23 +419,8 @@ void TypedefAnnoCheckerPass::run_pass(DexStoresVector& stores,
 
   if (stats.m_count > 0) {
     std::ostringstream out;
-    out << "###################################################################"
-           "\n"
-        << "###################################################################"
-           "\n"
-        << "############ Typedef Annotation Value Safety Violation "
-           "############\n"
-        << "######### Please find the most recent diff that triggered "
-           "#########\n"
-        << "####### the error below and revert or add a fix to the diff "
-           "#######\n"
-        << "###################################################################"
-           "\n"
-        << "###################################################################"
-           "\n"
-        << "Encountered " << stats.m_count
-        << " faulty methods. The errors are \n"
-        << stats.m_errors << "\n";
+    out << "Encountered " << stats.m_count << " errors. The first error is \n"
+        << stats.m_error << "\n";
     always_assert_log(false, "%s", out.str().c_str());
   }
 }

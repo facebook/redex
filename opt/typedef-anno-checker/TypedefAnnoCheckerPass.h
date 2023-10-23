@@ -61,18 +61,16 @@ class TypedefAnnoCheckerPass : public Pass {
 };
 
 struct Stats {
-  std::string m_errors;
+  std::string m_error;
   size_t m_count{0};
 
-  explicit Stats(std::string error) : m_errors(std::move(error)), m_count(1) {}
+  explicit Stats(std::string error) : m_error(std::move(error)), m_count(1) {}
   Stats() = default;
 
   Stats& operator+=(const Stats& other) {
     m_count += other.m_count;
-    if (m_errors.empty()) {
-      m_errors = other.m_errors;
-    } else {
-      m_errors = m_errors + other.m_errors;
+    if (m_error.empty()) {
+      m_error = other.m_error;
     }
     return *this;
   }
@@ -100,7 +98,7 @@ class TypedefAnnoChecker {
       live_range::UseDefChains* ud_chains,
       TypeEnvironments& envs);
 
-  bool check_typedef_value(DexMethod* m,
+  void check_typedef_value(DexMethod* m,
                            const boost::optional<const DexType*>& annotation,
                            live_range::UseDefChains* ud_chains,
                            IRInstruction* insn,
