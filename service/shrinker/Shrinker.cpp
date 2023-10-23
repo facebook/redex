@@ -56,6 +56,9 @@ Shrinker::ShrinkerForest load(const std::string& filename) {
 }
 
 bool should_shrink(IRCode* code, const Shrinker::ShrinkerForest& forest) {
+  if (!code->editable_cfg_built()) {
+    code->build_cfg(/* editable= */ true);
+  }
   const auto& cfg = code->cfg();
 
   size_t regs = cfg.get_registers_size();
@@ -206,10 +209,12 @@ void Shrinker::shrink_code(
     DexType* declaring_type,
     DexProto* proto,
     const std::function<std::string()>& method_describer) {
-  always_assert(code->editable_cfg_built());
+  bool editable_cfg_built = code->editable_cfg_built();
   // force simplification/linearization of any existing editable cfg once, and
   // forget existing cfg for a clean start
-  code->cfg().recompute_registers_size();
+  if (editable_cfg_built) {
+    code->cfg().recompute_registers_size();
+  }
   code->clear_cfg();
 
   constant_propagation::Transform::Stats const_prop_stats;
@@ -218,9 +223,12 @@ void Shrinker::shrink_code(
   LocalDce::Stats local_dce_stats;
   dedup_blocks_impl::Stats dedup_blocks_stats;
 
-  code->build_cfg();
   if (m_config.run_const_prop) {
     auto timer = m_const_prop_timer.scope();
+    if (!code->editable_cfg_built()) {
+      code->build_cfg(/* editable */ true);
+    }
+
     constant_propagation::Transform::Config config;
     config.pure_methods = &m_pure_methods;
     const_prop_stats = constant_propagation(is_static, declaring_type, proto,
@@ -229,6 +237,10 @@ void Shrinker::shrink_code(
 
   if (m_config.run_cse) {
     auto timer = m_cse_timer.scope();
+    if (!code->editable_cfg_built()) {
+      code->build_cfg(/* editable */ true);
+    }
+
     cse_impl::CommonSubexpressionElimination cse(
         m_cse_shared_state.get(), code->cfg(), is_static, is_init_or_clinit,
         declaring_type, proto->get_args());
@@ -238,6 +250,10 @@ void Shrinker::shrink_code(
 
   if (m_config.run_copy_prop) {
     auto timer = m_copy_prop_timer.scope();
+    if (!code->editable_cfg_built()) {
+      code->build_cfg(/* editable */ true);
+    }
+
     copy_prop_stats =
         copy_propagation(code, is_static, declaring_type, proto->get_rtype(),
                          proto->get_args(), method_describer);
@@ -245,6 +261,10 @@ void Shrinker::shrink_code(
 
   if (m_config.run_local_dce) {
     auto timer = m_local_dce_timer.scope();
+    if (!code->editable_cfg_built()) {
+      code->build_cfg(/* editable */ true);
+    }
+
     local_dce_stats =
         local_dce(code, /* normalize_new_instances */ true, declaring_type);
   }
@@ -253,6 +273,9 @@ void Shrinker::shrink_code(
   auto get_features = [&code](size_t mminl_level) -> stats_t {
     if (!traceEnabled(MMINL, mminl_level)) {
       return stats_t{};
+    }
+    if (!code->editable_cfg_built()) {
+      code->build_cfg(/* editable= */ true);
     }
     const auto& cfg = code->cfg();
 
@@ -297,6 +320,10 @@ void Shrinker::shrink_code(
 
   if (m_config.run_fast_reg_alloc) {
     auto timer = m_reg_alloc_timer.scope();
+    if (!code->editable_cfg_built()) {
+      code->build_cfg(/* editable= */ true);
+    }
+
     auto allocator =
         fastregalloc::LinearScanAllocator(code, is_static, method_describer);
     allocator.allocate();
@@ -304,6 +331,10 @@ void Shrinker::shrink_code(
 
   if (m_config.run_dedup_blocks) {
     auto timer = m_dedup_blocks_timer.scope();
+    if (!code->editable_cfg_built()) {
+      code->build_cfg(/* editable */ true);
+    }
+
     dedup_blocks_impl::Config config;
     dedup_blocks_impl::DedupBlocks dedup_blocks(
         &config, code, is_static, declaring_type, proto->get_args());
@@ -320,6 +351,12 @@ void Shrinker::shrink_code(
         std::get<2>(data_before_reg_alloc), std::get<3>(data_before_reg_alloc),
         std::get<0>(data_after_dedup), std::get<1>(data_after_dedup),
         std::get<2>(data_after_dedup), std::get<3>(data_after_dedup));
+  }
+
+  if (editable_cfg_built && !code->editable_cfg_built()) {
+    code->build_cfg(/* editable */ true);
+  } else if (!editable_cfg_built && code->editable_cfg_built()) {
+    code->clear_cfg();
   }
 
   std::lock_guard<std::mutex> guard(m_stats_mutex);
