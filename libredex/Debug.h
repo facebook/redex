@@ -33,38 +33,27 @@ void disable_stack_trace_for_exc_type(RedexError type);
 
 #ifdef _MSC_VER
 #define DEBUG_ONLY
+#define UNREACHABLE() __assume(false)
+#define PRETTY_FUNC() __func__
+#else
+#define DEBUG_ONLY __attribute__((unused))
+#define UNREACHABLE() __builtin_unreachable()
+#define PRETTY_FUNC() __PRETTY_FUNCTION__
+#endif // _MSC_VER
 
 #define not_reached()    \
   do {                   \
     redex_assert(false); \
-    __assume(false);     \
+    UNREACHABLE();       \
   } while (true)
 #define not_reached_log(msg, ...)          \
   do {                                     \
     assert_log(false, msg, ##__VA_ARGS__); \
-    __assume(false);                       \
+    UNREACHABLE();                         \
   } while (true)
 
 #define assert_fail_impl(e, type, msg, ...) \
-  assert_fail(#e, __FILE__, __LINE__, __func__, type, msg, ##__VA_ARGS__)
-#else
-#define DEBUG_ONLY __attribute__((unused))
-
-#define not_reached()        \
-  do {                       \
-    redex_assert(false);     \
-    __builtin_unreachable(); \
-  } while (true)
-#define not_reached_log(msg, ...)          \
-  do {                                     \
-    assert_log(false, msg, ##__VA_ARGS__); \
-    __builtin_unreachable();               \
-  } while (true)
-
-#define assert_fail_impl(e, type, msg, ...) \
-  assert_fail(                              \
-      #e, __FILE__, __LINE__, __PRETTY_FUNCTION__, type, msg, ##__VA_ARGS__)
-#endif
+  assert_fail(#e, __FILE__, __LINE__, PRETTY_FUNC(), type, msg, ##__VA_ARGS__)
 
 [[noreturn]] void assert_fail(const char* expr,
                               const char* file,
