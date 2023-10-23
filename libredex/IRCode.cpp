@@ -19,6 +19,7 @@
 
 #include "ControlFlow.h"
 #include "Debug.h"
+#include "DebugUtils.h"
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
 #include "DexInstruction.h"

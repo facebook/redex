@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include "Debug.h"
+#include "DebugUtils.h"
 #include "Pass.h"
 #include "PassManager.h"
 #include "Show.h"

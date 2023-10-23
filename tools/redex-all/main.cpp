@@ -42,6 +42,7 @@
 #include "ConfigFiles.h"
 #include "ControlFlow.h" // To set DEBUG.
 #include "Debug.h"
+#include "DebugUtils.h"
 #include "DexClass.h"
 #include "DexHasher.h"
 #include "DexLoader.h"
