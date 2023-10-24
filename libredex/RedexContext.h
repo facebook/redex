@@ -328,11 +328,34 @@ struct RedexContext {
   };
 
   template <size_t n_slots = 31>
-  using ConcurrentProjectedStringSet = InsertOnlyConcurrentSetContainer<
-      std::set<StringSetKey, StringSetKeyCompare>,
-      StringSetKey,
-      StringSetKeyHash,
-      n_slots>;
+  class ConcurrentProjectedStringSet {
+    std::array<std::set<StringSetKey, StringSetKeyCompare>, n_slots> m_slots;
+    mutable std::array<std::mutex, n_slots> m_locks;
+
+   public:
+    const StringSetKey* get(StringSetKey str) const {
+      size_t i = StringSetKeyHash()(str) % n_slots;
+      auto& map = m_slots[i];
+      std::lock_guard<std::mutex> lock(m_locks[i]);
+      auto it = map.find(str);
+      return it == map.end() ? nullptr : &*it;
+    }
+    std::pair<const StringSetKey*, bool> insert(StringSetKey str) {
+      size_t i = StringSetKeyHash()(str) % n_slots;
+      auto& map = m_slots[i];
+      std::lock_guard<std::mutex> lock(m_locks[i]);
+      auto [it, emplaced] = map.emplace(str);
+      return std::make_pair(&*it, emplaced);
+    }
+    void release() {
+      for (auto& set : m_slots) {
+        for (auto* s : set) {
+          delete s;
+        }
+        set.clear();
+      }
+    }
+  };
 
   template <size_t n_slots, size_t m_slots>
   struct LargeStringSet {

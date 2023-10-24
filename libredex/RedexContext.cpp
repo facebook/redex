@@ -175,12 +175,8 @@ RedexContext::~RedexContext() {
         std::vector<std::function<void()>> fns;
         fns.reserve(s_string_set.slots());
         for (auto& segment : s_string_set) {
-          fns.push_back([&segment, index = segment_index++]() {
-            for (auto* v : segment) {
-              delete v;
-            }
-            segment.clear();
-          });
+          fns.push_back(
+              [&segment, index = segment_index++]() { segment.release(); });
         }
         return fns;
       }(),
