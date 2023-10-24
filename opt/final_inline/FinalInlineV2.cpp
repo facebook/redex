@@ -69,7 +69,7 @@ std::ostream& operator<<(std::ostream& o,
 
 auto compute_deps(const Scope& scope,
                   const std::unordered_set<const DexClass*>& scope_set) {
-  ConcurrentMap<DexClass*, std::vector<DexClass*>> deps_parallel;
+  InsertOnlyConcurrentMap<DexClass*, std::vector<DexClass*>> deps_parallel;
   ConcurrentMap<DexClass*, std::vector<DexClass*>> reverse_deps_parallel;
   ConcurrentSet<DexClass*> is_target;
   ConcurrentSet<DexClass*> maybe_roots;
