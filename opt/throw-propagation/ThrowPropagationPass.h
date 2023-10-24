@@ -44,12 +44,12 @@ class ThrowPropagationPass : public Pass {
 
   void bind_config() override;
 
-  static std::unordered_set<DexMethod*> get_no_return_methods(
-      const Config& config, const Scope& scope);
+  static ConcurrentSet<DexMethod*> get_no_return_methods(const Config& config,
+                                                         const Scope& scope);
 
   static Stats run(
       const Config& config,
-      const std::unordered_set<DexMethod*>& no_return_methods,
+      const ConcurrentSet<DexMethod*>& no_return_methods,
       const method_override_graph::Graph& graph,
       IRCode* code,
       std::unordered_set<DexMethod*>* no_return_methods_checked = nullptr);

@@ -94,7 +94,7 @@ bool ThrowPropagationPass::is_no_return_method(const Config& config,
   return !can_return;
 }
 
-std::unordered_set<DexMethod*> ThrowPropagationPass::get_no_return_methods(
+ConcurrentSet<DexMethod*> ThrowPropagationPass::get_no_return_methods(
     const Config& config, const Scope& scope) {
   ConcurrentSet<DexMethod*> concurrent_no_return_methods;
   walk::parallel::methods(scope, [&](DexMethod* method) {
@@ -102,12 +102,12 @@ std::unordered_set<DexMethod*> ThrowPropagationPass::get_no_return_methods(
       concurrent_no_return_methods.insert(method);
     }
   });
-  return concurrent_no_return_methods.move_to_container();
+  return concurrent_no_return_methods;
 }
 
 ThrowPropagationPass::Stats ThrowPropagationPass::run(
     const Config& config,
-    const std::unordered_set<DexMethod*>& no_return_methods,
+    const ConcurrentSet<DexMethod*>& no_return_methods,
     const method_override_graph::Graph& graph,
     IRCode* code,
     std::unordered_set<DexMethod*>* no_return_methods_checked) {
@@ -137,7 +137,7 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
       if (exclude_method(other_method)) {
         return false;
       }
-      if (!no_return_methods.count(other_method)) {
+      if (!no_return_methods.count_unsafe(other_method)) {
         return_methods.push_back(other_method);
       }
       return true;
@@ -192,7 +192,7 @@ void ThrowPropagationPass::run_pass(DexStoresVector& stores,
                                     PassManager& mgr) {
   Scope scope = build_class_scope(stores);
   auto override_graph = method_override_graph::build_graph(scope);
-  std::unordered_set<DexMethod*> no_return_methods;
+  ConcurrentSet<DexMethod*> no_return_methods;
   {
     Timer t("get_no_return_methods");
     no_return_methods = get_no_return_methods(m_config, scope);
@@ -236,7 +236,7 @@ void ThrowPropagationPass::run_pass(DexStoresVector& stores,
             });
           }
           if (local_stats.throws_inserted > 0) {
-            if (!no_return_methods.count(method) &&
+            if (!no_return_methods.count_unsafe(method) &&
                 is_no_return_method(m_config, method)) {
               std::lock_guard<std::mutex> lock_guard(
                   new_no_return_methods_mutex);
