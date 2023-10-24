@@ -1180,6 +1180,13 @@ class ConcurrentMap final
     return ptr->second;
   }
 
+  Value get_unsafe(const Key& key, Value default_value) const {
+    size_t slot = Hash()(key) % n_slots;
+    const auto& map = this->get_container(slot);
+    const auto* ptr = map.get(key);
+    return ptr ? ptr->second : default_value;
+  }
+
   /*
    * The Boolean return value denotes whether the insertion took place.
    * This operation is always thread-safe.

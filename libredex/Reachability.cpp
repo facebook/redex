@@ -2392,7 +2392,7 @@ void dump_graph(std::ostream& os, const ReachableObjectGraph& retainers_of) {
         if (!retainers_of.count(obj)) {
           return {};
         }
-        const auto& preds = retainers_of.at(obj);
+        const auto& preds = retainers_of.at_unsafe(obj);
         std::vector<ReachableObject> preds_vec(preds.begin(), preds.end());
         // Gotta sort the reachables or the output is nondeterministic.
         std::sort(preds_vec.begin(), preds_vec.end(), compare);
