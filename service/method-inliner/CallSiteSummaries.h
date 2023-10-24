@@ -26,6 +26,10 @@ struct CallSiteSummary {
                                const ConstantValue& value);
 };
 
+inline bool operator==(const CallSiteSummary& a, const CallSiteSummary& b) {
+  return a.result_used == b.result_used && a.arguments.equals(b.arguments);
+}
+
 struct CalleeCallSiteSummary {
   const DexMethod* method;
   const CallSiteSummary* call_site_summary;
@@ -89,14 +93,13 @@ class CallSiteSummarizer {
   /**
    * For all (reachable) invoke instructions, constant arguments
    */
-  ConcurrentMap<const IRInstruction*, const CallSiteSummary*>
+  InsertOnlyConcurrentMap<const IRInstruction*, const CallSiteSummary*>
       m_invoke_call_site_summaries;
 
   /**
    * Internalized call-site summaries.
    */
-  ConcurrentMap<std::string, std::unique_ptr<const CallSiteSummary>>
-      m_call_site_summaries;
+  InsertOnlyConcurrentMap<std::string, CallSiteSummary> m_call_site_summaries;
 
   /**
    * For all (reachable) invoke instructions in a given method, collect
