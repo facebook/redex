@@ -654,13 +654,14 @@ VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
     const method_profiles::MethodProfiles& profiles,
     Strategy strategy,
     VirtualMergingStats& stats) const {
-  ConcurrentMap<const VirtualScope*, LocalStats> local_stats;
+  InsertOnlyConcurrentMap<const VirtualScope*, LocalStats> local_stats;
   std::vector<const VirtualScope*> virtual_scopes;
   for (auto& p : m_mergeable_scope_methods) {
     virtual_scopes.push_back(p.first);
   }
-  ConcurrentMap<const VirtualScope*,
-                std::vector<std::pair<const DexMethod*, const DexMethod*>>>
+  InsertOnlyConcurrentMap<
+      const VirtualScope*,
+      std::vector<std::pair<const DexMethod*, const DexMethod*>>>
       mergeable_pairs_by_virtual_scopes;
   SimpleOrderingProvider ordering_provider{profiles};
   walk::parallel::virtual_scopes(
