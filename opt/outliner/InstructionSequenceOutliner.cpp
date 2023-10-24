@@ -1210,8 +1210,7 @@ static void get_recurring_cores(
     CandidateInstructionCoresSet* recurring_cores,
     InsertOnlyConcurrentMap<DexMethod*, CanOutlineBlockDecider>*
         block_deciders) {
-  ConcurrentMap<CandidateInstructionCores, size_t,
-                CandidateInstructionCoresHasher>
+  AtomicMap<CandidateInstructionCores, size_t, CandidateInstructionCoresHasher>
       concurrent_cores;
   walk::parallel::code(
       scope, [&config, &ref_checker, &sufficiently_warm_methods,
@@ -1249,10 +1248,7 @@ static void get_recurring_cores(
             }
             cores_builder.push_back(insn);
             if (cores_builder.has_value()) {
-              concurrent_cores.update(cores_builder.get_value(),
-                                      [](const CandidateInstructionCores&,
-                                         size_t& occurrences,
-                                         bool /* exists */) { occurrences++; });
+              concurrent_cores.fetch_add(cores_builder.get_value(), 1);
             }
           }
         }
@@ -1260,8 +1256,9 @@ static void get_recurring_cores(
       });
   size_t singleton_cores{0};
   for (auto& p : concurrent_cores) {
-    always_assert(p.second > 0);
-    if (p.second > 1) {
+    auto count = p.second.load();
+    always_assert(count > 0);
+    if (count > 1) {
       recurring_cores->insert(p.first);
     } else {
       singleton_cores++;
