@@ -246,8 +246,10 @@ ArgExclusivityVector get_arg_exclusivity(const UseDefChains& use_def_chains,
   return aev;
 }
 
+using InsnsArgExclusivity =
+    ConcurrentMap<const IRInstruction*, ArgExclusivityVector>;
 using CalleeCallerClasses =
-    std::unordered_map<const DexMethod*, std::unordered_set<const DexType*>>;
+    ConcurrentMap<const DexMethod*, std::unordered_set<const DexType*>>;
 // Gather all (caller, callee) pairs. Also compute arg exclusivity, which invoke
 // instructions we should exclude, and how many classes calls are distributed
 // over.
@@ -259,17 +261,10 @@ void gather_caller_callees(
     const GetCalleeFunction& get_callee_fn,
     ConcurrentMethodToMethodOccurrences* callee_caller,
     ConcurrentMethodToMethodOccurrences* caller_callee,
-    std::unordered_map<const IRInstruction*, ArgExclusivityVector>*
-        arg_exclusivity,
-    std::unordered_set<const IRInstruction*>* excluded_invoke_insns,
+    InsnsArgExclusivity* arg_exclusivity,
+    ConcurrentSet<const IRInstruction*>* excluded_invoke_insns,
     CalleeCallerClasses* callee_caller_classes) {
   Timer timer("gather_caller_callees");
-  ConcurrentSet<const IRInstruction*> concurrent_excluded_invoke_insns;
-  ConcurrentMap<const IRInstruction*, ArgExclusivityVector>
-      concurrent_arg_exclusivity;
-  ConcurrentMap<const DexMethod*, std::unordered_set<const DexType*>>
-      concurrent_callee_caller_classes;
-
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
     if (caller->rstate.no_optimizations()) {
       return;
@@ -291,14 +286,14 @@ void gather_caller_callees(
           continue;
         }
         if (!can_outline) {
-          concurrent_excluded_invoke_insns.insert(insn);
+          excluded_invoke_insns->insert(insn);
           continue;
         }
         auto needs_range = analyze_args(callee).second;
         auto ae = get_arg_exclusivity(use_def_chains, def_use_chains,
                                       needs_range, insn);
         if (ae.empty()) {
-          concurrent_excluded_invoke_insns.insert(insn);
+          excluded_invoke_insns->insert(insn);
           continue;
         }
         callee_caller->update(
@@ -311,8 +306,8 @@ void gather_caller_callees(
             [callee](const DexMethod*,
                      std::unordered_map<DexMethod*, size_t>& v,
                      bool) { ++v[callee]; });
-        concurrent_arg_exclusivity.emplace(insn, std::move(ae));
-        concurrent_callee_caller_classes.update(
+        arg_exclusivity->emplace(insn, std::move(ae));
+        callee_caller_classes->update(
             callee,
             [caller](const DexMethod*,
                      std::unordered_set<const DexType*>& value,
@@ -320,10 +315,6 @@ void gather_caller_callees(
       }
     }
   });
-
-  *excluded_invoke_insns = concurrent_excluded_invoke_insns.move_to_container();
-  *arg_exclusivity = concurrent_arg_exclusivity.move_to_container();
-  *callee_caller_classes = concurrent_callee_caller_classes.move_to_container();
 }
 
 using InvokeCallSiteSummaries =
@@ -390,8 +381,7 @@ class CalleeInvocationSelector {
   EnumUtilsCache& m_enum_utils_cache;
   CallSiteSummarizer& m_call_site_summarizer;
   const DexMethod* m_callee;
-  const std::unordered_map<const IRInstruction*, ArgExclusivityVector>&
-      m_arg_exclusivity;
+  const InsnsArgExclusivity& m_arg_exclusivity;
   size_t m_callee_caller_classes;
 
   param_index_t m_src_regs;
@@ -546,13 +536,11 @@ class CalleeInvocationSelector {
   MutablePriorityQueue<const CallSiteSummary*, Priority> m_pq;
 
  public:
-  CalleeInvocationSelector(
-      EnumUtilsCache& enum_utils_cache,
-      CallSiteSummarizer& call_site_summarizer,
-      const DexMethod* callee,
-      const std::unordered_map<const IRInstruction*, ArgExclusivityVector>&
-          arg_exclusivity,
-      size_t callee_caller_classes)
+  CalleeInvocationSelector(EnumUtilsCache& enum_utils_cache,
+                           CallSiteSummarizer& call_site_summarizer,
+                           const DexMethod* callee,
+                           const InsnsArgExclusivity& arg_exclusivity,
+                           size_t callee_caller_classes)
       : m_enum_utils_cache(enum_utils_cache),
         m_call_site_summarizer(call_site_summarizer),
         m_callee(callee),
@@ -592,7 +580,7 @@ class CalleeInvocationSelector {
         continue;
       }
       m_call_site_invoke_summaries.emplace_back(invoke_insn, css);
-      auto& aev = arg_exclusivity.at(invoke_insn);
+      auto& aev = arg_exclusivity.at_unsafe(invoke_insn);
       auto& aaem = m_aggregated_arg_exclusivity[css];
       for (auto& p : aev) {
         auto& aae = aaem[p.first];
@@ -747,7 +735,7 @@ class CalleeInvocationSelector {
       // other invokes with the same css was beneficial on average. Check
       // (and filter out) if it's not actually beneficial for this particular
       // invoke.
-      auto& aev = m_arg_exclusivity.at(invoke_insn);
+      auto& aev = m_arg_exclusivity.at_unsafe(invoke_insn);
       const auto& bindings = reduced_css->arguments.bindings();
       if (std::find_if(aev.begin(), aev.end(), [&bindings](auto& q) {
             return !bindings.at(q.first).is_top();
@@ -806,8 +794,7 @@ void select_invokes_and_callers(
     EnumUtilsCache& enum_utils_cache,
     CallSiteSummarizer& call_site_summarizer,
     const ConcurrentMethodToMethodOccurrences& callee_caller,
-    const std::unordered_map<const IRInstruction*, ArgExclusivityVector>&
-        arg_exclusivity,
+    const InsnsArgExclusivity& arg_exclusivity,
     const CalleeCallerClasses& callee_caller_classes,
     size_t iteration,
     std::atomic<size_t>* total_estimated_savings,
@@ -829,9 +816,9 @@ void select_invokes_and_callers(
 
   workqueue_run<const DexMethod*>(
       [&](const DexMethod* callee) {
-        CalleeInvocationSelector cis(enum_utils_cache, call_site_summarizer,
-                                     callee, arg_exclusivity,
-                                     callee_caller_classes.at(callee).size());
+        CalleeInvocationSelector cis(
+            enum_utils_cache, call_site_summarizer, callee, arg_exclusivity,
+            callee_caller_classes.at_unsafe(callee).size());
         cis.fill_pq();
         cis.reduce_pq();
         cis.select_invokes(total_estimated_savings,
@@ -1176,7 +1163,7 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
   Shrinker shrinker(stores, scope, init_classes_with_side_effects,
                     shrinker_config, min_sdk);
 
-  std::unordered_set<const IRInstruction*> excluded_invoke_insns;
+  ConcurrentSet<const IRInstruction*> excluded_invoke_insns;
   auto get_callee_fn = [&excluded_classes, &excluded_invoke_insns](
                            DexMethod* caller,
                            IRInstruction* insn) -> DexMethod* {
@@ -1211,8 +1198,7 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
 
   ConcurrentMethodToMethodOccurrences callee_caller;
   ConcurrentMethodToMethodOccurrences caller_callee;
-  std::unordered_map<const IRInstruction*, ArgExclusivityVector>
-      arg_exclusivity;
+  InsnsArgExclusivity arg_exclusivity;
   CalleeCallerClasses callee_caller_classes;
   gather_caller_callees(
       m_profile_guidance_config, scope, sufficiently_warm_methods,
