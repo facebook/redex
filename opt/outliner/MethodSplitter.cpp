@@ -296,7 +296,8 @@ ConcurrentSet<DexMethod*> split_splittable_closures(
     Stats* stats,
     std::unordered_map<DexClasses*, std::unique_ptr<DexState>>* dex_states,
     ConcurrentSet<DexMethod*>* concurrent_added_methods,
-    ConcurrentMap<DexMethod*, DexMethod*>* concurrent_new_hot_methods) {
+    InsertOnlyConcurrentMap<DexMethod*, DexMethod*>*
+        concurrent_new_hot_methods) {
   Timer t("split");
   ConcurrentSet<DexMethod*> concurrent_affected_methods;
   auto process_dex = [&](DexClasses* dex) {
@@ -365,8 +366,8 @@ ConcurrentSet<DexMethod*> split_splittable_closures(
       case HotSplitKind::Hot: {
         stats->hot_split_count++;
         if (concurrent_new_hot_methods) {
-          auto hot_root_method =
-              concurrent_new_hot_methods->get(method, method);
+          auto* ptr = concurrent_new_hot_methods->get(method);
+          auto* hot_root_method = ptr ? *ptr : method;
           concurrent_new_hot_methods->emplace(new_method, hot_root_method);
         }
         break;
@@ -404,8 +405,8 @@ void split_methods_in_stores(
     size_t reserved_trefs,
     Stats* stats,
     const std::string& name_infix,
-    ConcurrentMap<DexMethod*, DexMethod*>* concurrent_new_hot_methods,
-    ConcurrentMap<DexMethod*, size_t>*
+    InsertOnlyConcurrentMap<DexMethod*, DexMethod*>* concurrent_new_hot_methods,
+    InsertOnlyConcurrentMap<DexMethod*, size_t>*
         concurrent_splittable_no_optimizations_methods) {
   auto scope = build_class_scope(stores);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(

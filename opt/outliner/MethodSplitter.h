@@ -43,8 +43,9 @@ void split_methods_in_stores(
     size_t reserved_trefs,
     Stats* stats,
     const std::string& name_infix = "",
-    ConcurrentMap<DexMethod*, DexMethod*>* concurrent_new_hot_methods = nullptr,
-    ConcurrentMap<DexMethod*, size_t>*
+    InsertOnlyConcurrentMap<DexMethod*, DexMethod*>*
+        concurrent_new_hot_methods = nullptr,
+    InsertOnlyConcurrentMap<DexMethod*, size_t>*
         concurrent_splittable_no_optimizations_methods = nullptr);
 
 } // namespace method_splitting_impl

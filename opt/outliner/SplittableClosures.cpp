@@ -460,7 +460,7 @@ namespace method_splitting_impl {
 ConcurrentMap<DexType*, std::vector<SplittableClosure>>
 select_splittable_closures(const ConcurrentSet<DexMethod*>& methods,
                            const Config& config,
-                           ConcurrentMap<DexMethod*, size_t>*
+                           InsertOnlyConcurrentMap<DexMethod*, size_t>*
                                concurrent_splittable_no_optimizations_methods) {
   Timer t("select_splittable_closures");
   ConcurrentMap<DexType*, std::vector<SplittableClosure>>

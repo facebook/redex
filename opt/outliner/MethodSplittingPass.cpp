@@ -67,8 +67,8 @@ void MethodSplittingPass::run_pass(DexStoresVector& stores,
 
   auto name_infix = "$" + std::to_string(m_iteration) + "$";
   Stats stats;
-  ConcurrentMap<DexMethod*, DexMethod*> concurrent_new_hot_methods;
-  ConcurrentMap<DexMethod*, size_t>
+  InsertOnlyConcurrentMap<DexMethod*, DexMethod*> concurrent_new_hot_methods;
+  InsertOnlyConcurrentMap<DexMethod*, size_t>
       concurrent_splittable_no_optimizations_methods;
   split_methods_in_stores(stores, mgr.get_redex_options().min_sdk, m_config,
                           conf.create_init_class_insns(), reserved_mrefs,
