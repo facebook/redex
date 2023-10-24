@@ -39,6 +39,7 @@ class DexMethodHandle;
 class DexMethodRef;
 class DexProto;
 class DexString;
+struct DexStringRepr;
 class DexType;
 class DexTypeList;
 class PositionPatternSwitchManager;
@@ -344,6 +345,7 @@ struct RedexContext {
       auto it = map.find(str);
       return it == map.end() ? nullptr : &*it;
     }
+
     std::pair<const StringSetKey*, bool> insert(StringSetKey str) {
       size_t i = StringSetKeyHash()(str) % n_slots;
       auto& map = m_slots[i];
@@ -351,6 +353,15 @@ struct RedexContext {
       auto [it, emplaced] = map.emplace(str);
       return std::make_pair(&*it, emplaced);
     }
+
+    size_t size() const {
+      size_t res = 0;
+      for (auto& set : m_slots) {
+        res += set.size();
+      }
+      return res;
+    }
+
     void release() {
       for (auto& set : m_slots) {
         for (auto* s : set) {
@@ -391,13 +402,27 @@ struct RedexContext {
     size_t operator()(StringSetKey k);
   };
 
+  struct DexStringReprHash {
+    size_t operator()(const DexStringRepr& k) const;
+  };
+  struct DexStringReprEqual {
+    bool operator()(const DexStringRepr& a, const DexStringRepr& b) const;
+  };
+
   // DexString
-  LargeStringSet<31, 127> s_string_set;
+  LargeStringSet<31, 127> s_large_string_set;
+  std::array<InsertOnlyConcurrentSet<DexStringRepr,
+                                     DexStringReprHash,
+                                     DexStringReprEqual>*,
+             128>
+      s_small_string_set;
 
   // We maintain three kinds of raw string storage
   ConcurrentStringStorage s_small_string_storage;
   ConcurrentStringStorage s_medium_string_storage;
   ConcurrentStringStorage s_large_string_storage;
+
+  char* store_string(std::string_view);
 
   // DexType
   ConcurrentMap<const DexString*, DexType*> s_type_map;

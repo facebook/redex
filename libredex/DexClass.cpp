@@ -121,6 +121,8 @@ std::string get_simple_deobf_name(const T* ref) {
 }
 } // namespace
 
+static_assert(sizeof(DexString) == sizeof(DexStringRepr));
+
 const std::string DexString::EMPTY;
 
 const DexString* DexString::make_string(std::string_view nstr) {

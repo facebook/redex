@@ -84,26 +84,28 @@ using Scope = std::vector<DexClass*>;
 extern "C" bool strcmp_less(const char* str1, const char* str2);
 #endif
 
+// Internal representation of a DexString; used by RedexContext to construct
+// DexString instances.
+struct DexStringRepr {
+  const char* storage;
+  const uint32_t length;
+  const uint32_t utfsize;
+};
+
 class DexString {
-  friend struct RedexContext;
-
-  const char* m_storage;
-  const uint32_t m_length;
-  const uint32_t m_utfsize;
-
   // See UNIQUENESS above for the rationale for the private constructor pattern.
   explicit DexString(const char* storage, uint32_t length, uint32_t utfsize)
-      : m_storage(storage), m_length(length), m_utfsize(utfsize) {}
+      : m_repr({storage, length, utfsize}) {}
 
  public:
   DexString() = delete;
   DexString(DexString&&) = delete;
   DexString(const DexString&) = delete;
 
-  uint32_t size() const { return m_length; }
+  uint32_t size() const { return m_repr.length; }
 
   // UTF-aware length
-  uint32_t length() const { return m_utfsize; }
+  uint32_t length() const { return m_repr.utfsize; }
 
   int32_t java_hashcode() const;
 
@@ -118,23 +120,32 @@ class DexString {
 
   static const std::string EMPTY;
 
-  bool is_simple() const { return size() == m_utfsize; }
+  bool is_simple() const { return size() == m_repr.utfsize; }
 
-  const char* c_str() const { return m_storage; }
-  std::string_view str() const { return std::string_view(m_storage, m_length); }
-  std::string str_copy() const { return std::string(m_storage, m_length); }
+  const char* c_str() const { return m_repr.storage; }
+  std::string_view str() const {
+    return std::string_view(m_repr.storage, m_repr.length);
+  }
+  std::string str_copy() const {
+    return std::string(m_repr.storage, m_repr.length);
+  }
 
   uint32_t get_entry_size() const {
-    uint32_t len = uleb128_encoding_size(m_utfsize);
+    uint32_t len = uleb128_encoding_size(m_repr.utfsize);
     len += size();
     len++; // NULL byte
     return len;
   }
 
   void encode(uint8_t* output) const {
-    output = write_uleb128(output, m_utfsize);
+    output = write_uleb128(output, m_repr.utfsize);
     strcpy((char*)output, c_str());
   }
+
+ private:
+  DexStringRepr m_repr;
+
+  friend struct RedexContext;
 };
 
 /* Non-optimizing DexSpec compliant ordering */

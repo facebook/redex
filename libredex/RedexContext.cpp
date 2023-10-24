@@ -37,7 +37,13 @@ RedexContext::RedexContext(bool allow_class_duplicates)
       s_medium_string_storage{65536, 2000,
                               boost::thread::hardware_concurrency() / 4},
       s_large_string_storage{0, 0, boost::thread::hardware_concurrency()},
-      m_allow_class_duplicates(allow_class_duplicates) {}
+      m_allow_class_duplicates(allow_class_duplicates) {
+  for (size_t i = 0; i < s_small_string_set.size(); ++i) {
+    s_small_string_set[i] =
+        new InsertOnlyConcurrentSet<DexStringRepr, DexStringReprHash,
+                                    DexStringReprEqual>();
+  }
+}
 
 RedexContext::~RedexContext() {
   // We parallelize destruction for efficiency.
@@ -52,6 +58,9 @@ RedexContext::~RedexContext() {
           [](const std::function<void()>& fn) { fn(); }, fns);
     }
   };
+
+  size_t small_strings_size = 0;
+  size_t large_strings_size = 0;
 
   parallel_run({[&] {
                   Timer timer("Delete DexTypes", /* indent */ false);
@@ -171,12 +180,16 @@ RedexContext::~RedexContext() {
 
   parallel_run(
       [&]() {
-        size_t segment_index{0};
         std::vector<std::function<void()>> fns;
-        fns.reserve(s_string_set.slots());
-        for (auto& segment : s_string_set) {
-          fns.push_back(
-              [&segment, index = segment_index++]() { segment.release(); });
+        fns.reserve(s_small_string_set.size() + s_large_string_set.slots());
+        for (size_t i = 0; i < s_small_string_set.size(); ++i) {
+          auto* small_string_set = s_small_string_set[i];
+          small_strings_size += small_string_set->size();
+          fns.push_back([small_string_set]() { delete small_string_set; });
+        }
+        for (auto& segment : s_large_string_set) {
+          large_strings_size += segment.size();
+          fns.push_back([&segment]() { segment.release(); });
         }
         return fns;
       }(),
@@ -197,7 +210,9 @@ RedexContext::~RedexContext() {
   log_stats("small", s_small_string_storage);
   log_stats("medium", s_medium_string_storage);
   log_stats("large", s_large_string_storage);
-  TRACE(PM, 1, "String storage @ %u hardware concurrency:%s",
+  TRACE(PM, 1,
+        "String storage of %zu + %zu strings @ %u hardware concurrency:%s",
+        small_strings_size, large_strings_size,
         boost::thread::hardware_concurrency(), oss.str().c_str());
 }
 
@@ -346,20 +361,7 @@ RedexContext::ConcurrentStringStorage::Context::~Context() {
   }
 }
 
-const DexString* RedexContext::make_string(std::string_view str) {
-  // We are creating a DexString key that is just "defined enough" to be used as
-  // a key into our string set. The provided string does not have to be zero
-  // terminated, and we won't compute the utf size, as neither is needed for
-  // this purpose.
-  uint32_t dummy_utfsize{0};
-  const DexString key(str.data(), str.size(), dummy_utfsize);
-  auto& segment = s_string_set.at(&key);
-
-  auto rv_ptr = segment.get(&key);
-  if (rv_ptr != nullptr) {
-    return *rv_ptr;
-  }
-
+char* RedexContext::store_string(std::string_view str) {
   ConcurrentStringStorage& concurrent_string_storage =
       str.length() < s_small_string_storage.max_allocation
           ? s_small_string_storage
@@ -377,7 +379,37 @@ const DexString* RedexContext::make_string(std::string_view str) {
   }
   memcpy(storage, str.data(), str.length());
   storage[str.length()] = 0;
+  return storage;
+}
 
+const DexString* RedexContext::make_string(std::string_view str) {
+  // We are creating a DexString key that is just "defined enough" to be used as
+  // a key into our string set. The provided string does not have to be zero
+  // terminated, and we won't compute the utf size, as neither is needed for
+  // this purpose.
+  uint32_t dummy_utfsize{0};
+  DexStringRepr repr{str.data(), (uint32_t)str.size(), dummy_utfsize};
+  if (str.size() < s_small_string_set.size()) {
+    auto* rv_ptr = s_small_string_set[str.size()]->get(repr);
+    if (rv_ptr != nullptr) {
+      return reinterpret_cast<const DexString*>(rv_ptr);
+    }
+    char* storage = store_string(str);
+    uint32_t utfsize = length_of_utf8_string(storage);
+    return reinterpret_cast<const DexString*>(
+        s_small_string_set[str.size()]
+            ->insert(DexStringRepr{storage, (uint32_t)str.length(), utfsize})
+            .first);
+    // If unsuccessful, we have wasted a bit of string storage. Oh well...
+  }
+
+  auto* key = reinterpret_cast<const DexString*>(&repr);
+  auto& segment = s_large_string_set.at(key);
+  auto rv_ptr = segment.get(key);
+  if (rv_ptr != nullptr) {
+    return *rv_ptr;
+  }
+  char* storage = store_string(str);
   uint32_t utfsize = length_of_utf8_string(storage);
   std::unique_ptr<DexString> string(
       new DexString(storage, str.length(), utfsize));
@@ -407,11 +439,30 @@ size_t RedexContext::TruncatedStringHash::operator()(StringSetKey k) {
   return boost::hash_range(s + start, s + len);
 }
 
+size_t RedexContext::DexStringReprHash::operator()(
+    const DexStringRepr& k) const {
+  return boost::hash_range(k.storage, k.storage + k.length);
+}
+
+bool RedexContext::DexStringReprEqual::operator()(
+    const DexStringRepr& a, const DexStringRepr& b) const {
+  if (a.length != b.length) {
+    return false;
+  }
+  return memcmp(a.storage, b.storage, a.length) == 0;
+}
+
 const DexString* RedexContext::get_string(std::string_view str) {
   uint32_t dummy_utfsize{0};
-  const DexString key(str.data(), str.size(), dummy_utfsize);
-  const auto& segment = s_string_set.at(&key);
-  auto rv_ptr = segment.get(&key);
+  DexStringRepr repr{str.data(), (uint32_t)str.size(), dummy_utfsize};
+  if (str.size() < s_small_string_set.size()) {
+    return reinterpret_cast<const DexString*>(
+        s_small_string_set[str.size()]->get(repr));
+  }
+
+  auto* key = reinterpret_cast<const DexString*>(&repr);
+  const auto& segment = s_large_string_set.at(key);
+  auto rv_ptr = segment.get(key);
   return rv_ptr == nullptr ? nullptr : *rv_ptr;
 }
 
