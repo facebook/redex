@@ -282,14 +282,14 @@ DexMethod* split_method(const SplittableClosure& splittable_closure,
   return split_method;
 }
 
-std::unordered_set<DexMethod*> split_splittable_closures(
+ConcurrentSet<DexMethod*> split_splittable_closures(
     const std::vector<DexClasses*>& dexen,
     int32_t min_sdk,
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
     size_t reserved_trefs,
     size_t reserved_mrefs,
-    const std::unordered_map<DexType*, std::vector<SplittableClosure>>&
+    const ConcurrentMap<DexType*, std::vector<SplittableClosure>>&
         splittable_closures,
     const std::string& name_infix,
     ConcurrentMap<std::string, size_t>* uniquifiers,
@@ -388,7 +388,7 @@ std::unordered_set<DexMethod*> split_splittable_closures(
                                        affected_methods.end());
   };
   workqueue_run<DexClasses*>(process_dex, dexen);
-  return concurrent_affected_methods.move_to_container();
+  return concurrent_affected_methods;
 }
 
 } // namespace
@@ -411,17 +411,17 @@ void split_methods_in_stores(
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, create_init_class_insns);
 
-  std::unordered_set<DexMethod*> methods;
+  ConcurrentSet<DexMethod*> methods;
   std::vector<DexClasses*> dexen;
   std::unordered_map<DexClasses*, std::unique_ptr<DexState>> dex_states;
   for (auto& store : stores) {
     for (auto& dex : store.get_dexen()) {
       dexen.push_back(&dex);
       dex_states[&dex];
-      walk::code(dex,
-                 [&](DexMethod* method, IRCode&) { methods.insert(method); });
     }
   }
+  walk::parallel::code(
+      scope, [&](DexMethod* method, IRCode&) { methods.insert(method); });
 
   size_t iteration{0};
   ConcurrentMap<std::string, size_t> uniquifiers;
