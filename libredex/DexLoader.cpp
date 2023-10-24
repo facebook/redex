@@ -623,7 +623,7 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
 }
 
 static void balloon_all(const Scope& scope, bool throw_on_error) {
-  ConcurrentMap<DexMethod*, std::string> ir_balloon_errors;
+  InsertOnlyConcurrentMap<DexMethod*, std::string> ir_balloon_errors;
   walk::parallel::methods(scope, [&](DexMethod* m) {
     if (m->get_dex_code()) {
       try {
