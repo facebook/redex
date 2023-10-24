@@ -654,16 +654,17 @@ def unpack_tar_xz(input: str, output_dir: str) -> None:
     if shutil.which("tar"):
         xz = get_xz_path()
 
+        env = dict(os.environ)
+        env["XZ_OPT"] = "-T6"
         if xz is not None:
             cmd = [
-                "XZ_OPT=-T6",
                 "tar",
                 f"--use-compress-program={xz}",
                 input,
                 "-C",
                 output_dir,
             ]
-            subprocess.check_call(cmd)
+            subprocess.check_call(cmd, env=env)
             return
 
     _warn_xz()
