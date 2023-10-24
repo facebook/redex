@@ -425,10 +425,10 @@ struct RedexContext {
   char* store_string(std::string_view);
 
   // DexType
-  ConcurrentMap<const DexString*, DexType*> s_type_map;
+  AtomicMap<const DexString*, DexType*> s_type_map;
 
   // DexFieldRef
-  ConcurrentMap<DexFieldSpec, DexFieldRef*> s_field_map;
+  AtomicMap<DexFieldSpec, DexFieldRef*> s_field_map;
   std::mutex s_field_lock;
 
   // DexTypeList
@@ -443,10 +443,10 @@ struct RedexContext {
       return lhs == rhs || *lhs == *rhs;
     }
   };
-  ConcurrentMap<const DexTypeListContainerType*,
-                DexTypeList*,
-                DexTypeListContainerTypePtrHash,
-                DexTypeListContainerTypePtrEquals>
+  AtomicMap<const DexTypeListContainerType*,
+            DexTypeList*,
+            DexTypeListContainerTypePtrHash,
+            DexTypeListContainerTypePtrEquals>
       s_typelist_map;
 
   // DexProto
@@ -460,7 +460,7 @@ struct RedexContext {
       s_proto_set;
 
   // DexMethod
-  ConcurrentMap<DexMethodSpec, DexMethodRef*> s_method_map;
+  AtomicMap<DexMethodSpec, DexMethodRef*> s_method_map;
   std::mutex s_method_lock;
 
   // DexLocation
@@ -470,7 +470,7 @@ struct RedexContext {
       return std::hash<std::string_view>()(k.second);
     }
   };
-  ConcurrentMap<ClassLocationKey, DexLocation*, ClassLocationKeyHash>
+  AtomicMap<ClassLocationKey, DexLocation*, ClassLocationKeyHash>
       s_location_map;
 
   // DexPositionSwitch and DexPositionPattern
