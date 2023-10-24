@@ -357,7 +357,7 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
 
   const auto scope = build_class_scope(stores);
 
-  ConcurrentMap<DexClass*, DexClass*> map;
+  InsertOnlyConcurrentMap<DexClass*, DexClass*> map;
   ConcurrentSet<DexClass*> bad;
   std::unordered_map<DexClass*, unsigned> outer_cls_count;
   std::unordered_set<DexType*> do_not_inline_set;
