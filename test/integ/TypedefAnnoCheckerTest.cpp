@@ -22,13 +22,10 @@ struct TypedefAnnoCheckerTest : public RedexIntegrationTest {
     return m_config;
   }
 
-  void gather_typedef_values(
-      TypedefAnnoCheckerPass pass,
-      DexClass* cls,
-      ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>&
-          strdef_constants,
-      ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>>&
-          intdef_constants) {
+  void gather_typedef_values(TypedefAnnoCheckerPass pass,
+                             DexClass* cls,
+                             StrDefConstants& strdef_constants,
+                             IntDefConstants& intdef_constants) {
     pass.gather_typedef_values(cls, strdef_constants, intdef_constants);
   }
 };
@@ -42,9 +39,8 @@ TEST_F(TypedefAnnoCheckerTest, TestValidIntAnnoReturn) {
 
   IRCode* code = method->get_code();
   code->build_cfg();
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
 
@@ -66,9 +62,8 @@ TEST_F(TypedefAnnoCheckerTest, TestValidStrAnnoReturn) {
 
   IRCode* code = method->get_code();
   code->build_cfg();
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
 
@@ -87,9 +82,8 @@ TEST_F(TypedefAnnoCheckerTest, TestIntAnnoInvokeStatic) {
 
   IRCode* code = method->get_code();
   code->build_cfg();
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
 
@@ -111,9 +105,8 @@ TEST_F(TypedefAnnoCheckerTest, TestStringAnnoInvokeStatic) {
 
   IRCode* code = method->get_code();
   code->build_cfg();
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
 
@@ -135,9 +128,8 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongAnnotationReturned) {
 
   IRCode* code = method->get_code();
   code->build_cfg();
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
 
@@ -163,9 +155,8 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongAnnoInvokeStatic) {
 
   IRCode* code = method->get_code();
   code->build_cfg();
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
 
@@ -191,9 +182,8 @@ TEST_F(TypedefAnnoCheckerTest, TestIntField) {
 
   IRCode* code = method->get_code();
   code->build_cfg();
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
 
@@ -212,9 +202,8 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongIntField) {
 
   IRCode* code = method->get_code();
   code->build_cfg();
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
 
@@ -241,9 +230,8 @@ TEST_F(TypedefAnnoCheckerTest, TestStringField) {
 
   IRCode* code = method->get_code();
   code->build_cfg();
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
 
@@ -265,9 +253,8 @@ TEST_F(TypedefAnnoCheckerTest, TestConstReturn) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
   for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
@@ -293,9 +280,8 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstReturn) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
   for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
@@ -329,9 +315,8 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstReturn2) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
   for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
@@ -367,9 +352,8 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstStrReturn) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
   for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
@@ -403,9 +387,8 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
   for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
@@ -440,9 +423,8 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic2) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
   for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
@@ -475,9 +457,8 @@ TEST_F(TypedefAnnoCheckerTest, TestMultipleBlocksInt) {
   IRCode* code = method->get_code();
   code->build_cfg();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
   for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
@@ -504,9 +485,8 @@ TEST_F(TypedefAnnoCheckerTest, TestMultipleBlocksString) {
   IRCode* code = method->get_code();
   code->build_cfg();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
   for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
@@ -532,9 +512,8 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidMultipleBlocksString) {
   IRCode* code = method->get_code();
   code->build_cfg();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
   for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
@@ -564,9 +543,8 @@ TEST_F(TypedefAnnoCheckerTest, TestNonConstInt) {
   IRCode* code = method->get_code();
   code->build_cfg();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
   for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
@@ -597,9 +575,8 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidType) {
   IRCode* code = method->get_code();
   code->build_cfg();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
   checker.run(method);
@@ -625,9 +602,8 @@ TEST_F(TypedefAnnoCheckerTest, TestJoiningTwoAnnotations) {
   IRCode* code = method->get_code();
   code->build_cfg();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
   for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
@@ -660,9 +636,8 @@ TEST_F(TypedefAnnoCheckerTest, TestJoiningTwoAnnotations2) {
   IRCode* code = method->get_code();
   code->build_cfg();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
   for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
@@ -686,9 +661,8 @@ TEST_F(TypedefAnnoCheckerTest, TestReassigningInt) {
   IRCode* code = method->get_code();
   code->build_cfg();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
   for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
@@ -712,9 +686,8 @@ TEST_F(TypedefAnnoCheckerTest, TestIfElse) {
   IRCode* code = method->get_code();
   code->build_cfg();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
   for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
@@ -738,9 +711,8 @@ TEST_F(TypedefAnnoCheckerTest, TestIfElseParam) {
   IRCode* code = method->get_code();
   code->build_cfg();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
   for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
@@ -765,9 +737,8 @@ TEST_F(TypedefAnnoCheckerTest, TestIfElseString) {
   IRCode* code = method->get_code();
   code->build_cfg();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
   for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
@@ -791,9 +762,8 @@ TEST_F(TypedefAnnoCheckerTest, TestXORIfElse) {
   IRCode* code = method->get_code();
   code->build_cfg();
 
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
   for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
@@ -832,9 +802,8 @@ TEST_F(TypedefAnnoCheckerTest, TestXORIfElseZero) {
     inference.analyze_instruction(insn, &env);
   }
 
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
   for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);

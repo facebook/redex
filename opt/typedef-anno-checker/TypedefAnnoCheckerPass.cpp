@@ -418,9 +418,8 @@ void TypedefAnnoCheckerPass::run_pass(DexStoresVector& stores,
   assert(m_config.int_typedef != nullptr);
   assert(m_config.str_typedef != nullptr);
   auto scope = build_class_scope(stores);
-  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
-      strdef_constants;
-  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
   walk::parallel::classes(scope, [&](DexClass* cls) {
     gather_typedef_values(cls, strdef_constants, intdef_constants);
   });
@@ -460,10 +459,8 @@ void TypedefAnnoCheckerPass::run_pass(DexStoresVector& stores,
 
 void TypedefAnnoCheckerPass::gather_typedef_values(
     const DexClass* cls,
-    ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>&
-        strdef_constants,
-    ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>>&
-        intdef_constants) {
+    StrDefConstants& strdef_constants,
+    IntDefConstants& intdef_constants) {
   const std::vector<DexField*>& fields = cls->get_sfields();
   if (get_annotation(cls, m_config.str_typedef)) {
     std::unordered_set<const DexString*> str_values;
@@ -472,13 +469,13 @@ void TypedefAnnoCheckerPass::gather_typedef_values(
           static_cast<DexEncodedValueString*>(field->get_static_value())
               ->string());
     }
-    strdef_constants.insert(std::pair(cls, std::move(str_values)));
+    strdef_constants.emplace(cls, std::move(str_values));
   } else if (get_annotation(cls, m_config.int_typedef)) {
     std::unordered_set<uint64_t> int_values;
     for (auto* field : fields) {
       int_values.emplace(field->get_static_value()->value());
     }
-    intdef_constants.insert(std::pair(cls, std::move(int_values)));
+    intdef_constants.emplace(cls, std::move(int_values));
   }
 }
 
