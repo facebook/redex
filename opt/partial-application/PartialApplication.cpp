@@ -151,7 +151,7 @@ const api::AndroidSDK* get_min_sdk_api(ConfigFiles& conf, PassManager& mgr) {
   }
 }
 
-using EnumUtilsCache = ConcurrentMap<int32_t, DexField*>;
+using EnumUtilsCache = InsertOnlyConcurrentMap<int32_t, DexField*>;
 
 // Check if we have a boxed value for which there is a $EnumUtils field.
 DexField* try_get_enum_utils_f_field(EnumUtilsCache& cache,
@@ -166,19 +166,22 @@ DexField* try_get_enum_utils_f_field(EnumUtilsCache& cache,
       object.attributes.front().value.get<SignedConstantDomain>();
   auto c = signed_value.get_constant();
   always_assert(c);
-  DexField* res;
-  cache.update(*c, [&res](int32_t key, DexField*& value, bool exists) {
-    if (!exists) {
-      auto cls = type_class(DexType::make_type("Lredex/$EnumUtils;"));
-      if (cls) {
-        std::string field_name = "f" + std::to_string(key);
-        value = cls->find_sfield(field_name.c_str(), type::java_lang_Integer());
-        always_assert(!value || is_static(value));
-      }
-    }
-    res = value;
-  });
-  return res;
+  return *cache
+              .get_or_create_and_assert_equal(
+                  *c,
+                  [&](int32_t key) -> DexField* {
+                    auto cls =
+                        type_class(DexType::make_type("Lredex/$EnumUtils;"));
+                    if (!cls) {
+                      return nullptr;
+                    }
+                    std::string field_name = "f" + std::to_string(key);
+                    auto* field = cls->find_sfield(field_name.c_str(),
+                                                   type::java_lang_Integer());
+                    always_assert(!field || is_static(field));
+                    return field;
+                  })
+              .first;
 }
 
 // Identify how many argument slots an invocation needs after expansion of wide
@@ -247,7 +250,7 @@ ArgExclusivityVector get_arg_exclusivity(const UseDefChains& use_def_chains,
 }
 
 using InsnsArgExclusivity =
-    ConcurrentMap<const IRInstruction*, ArgExclusivityVector>;
+    InsertOnlyConcurrentMap<const IRInstruction*, ArgExclusivityVector>;
 using CalleeCallerClasses =
     ConcurrentMap<const DexMethod*, std::unordered_set<const DexType*>>;
 // Gather all (caller, callee) pairs. Also compute arg exclusivity, which invoke
@@ -786,9 +789,10 @@ uint64_t get_stable_hash(const std::string& s) {
   return stable_hash;
 }
 
-using PaMethodRefs = ConcurrentMap<CalleeCallSiteSummary,
-                                   DexMethodRef*,
-                                   boost::hash<CalleeCallSiteSummary>>;
+using PaMethodRefs =
+    InsertOnlyConcurrentMap<CalleeCallSiteSummary,
+                            DexMethodRef*,
+                            boost::hash<CalleeCallSiteSummary>>;
 // Run the analysis over all callees.
 void select_invokes_and_callers(
     EnumUtilsCache& enum_utils_cache,
