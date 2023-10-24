@@ -50,7 +50,7 @@ void write_violations_to_file(const app_module_usage::Violations& violations,
 
 void write_method_module_usages_to_file(
     const app_module_usage::MethodStoresReferenced& method_store_refs,
-    const ConcurrentMap<DexType*, DexStore*>& type_store_map,
+    const InsertOnlyConcurrentMap<DexType*, DexStore*>& type_store_map,
     const std::string& path) {
 
   TRACE(APP_MOD_USE, 4, "Outputting module usages at %s", path.c_str());
@@ -200,7 +200,7 @@ void AppModuleUsagePass::load_preexisting_violations(DexStoresVector& stores) {
   ifs.close();
 }
 
-ConcurrentMap<DexMethod*, app_module_usage::StoresReferenced>
+app_module_usage::MethodStoresReferenced
 AppModuleUsagePass::analyze_method_xstore_references(const Scope& scope) {
 
   auto get_type_ref_for_insn = [](IRInstruction* insn) -> DexType* {
@@ -214,8 +214,7 @@ AppModuleUsagePass::analyze_method_xstore_references(const Scope& scope) {
     return nullptr;
   };
 
-  ConcurrentMap<DexMethod*, app_module_usage::StoresReferenced>
-      method_store_refs;
+  app_module_usage::MethodStoresReferenced method_store_refs;
   reflection::MetadataCache refl_metadata_cache;
 
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
@@ -292,9 +291,9 @@ AppModuleUsagePass::analyze_method_xstore_references(const Scope& scope) {
   return method_store_refs;
 }
 
-ConcurrentMap<DexField*, DexStore*>
+InsertOnlyConcurrentMap<DexField*, DexStore*>
 AppModuleUsagePass::analyze_field_xstore_references(const Scope& scope) {
-  ConcurrentMap<DexField*, DexStore*> ret;
+  InsertOnlyConcurrentMap<DexField*, DexStore*> ret;
   walk::parallel::fields(scope, [&](DexField* field) {
     auto field_store = m_type_store_map.at(field->get_class());
 
@@ -314,7 +313,7 @@ AppModuleUsagePass::analyze_field_xstore_references(const Scope& scope) {
 
 unsigned AppModuleUsagePass::gather_violations(
     const app_module_usage::MethodStoresReferenced& method_store_refs,
-    const ConcurrentMap<DexField*, DexStore*>& field_store_refs,
+    const InsertOnlyConcurrentMap<DexField*, DexStore*>& field_store_refs,
     app_module_usage::Violations& violations) const {
   int trace_level = m_crash_with_violations ? 0 : 1;
 

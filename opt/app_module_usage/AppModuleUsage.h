@@ -18,7 +18,8 @@
 namespace app_module_usage {
 using StoresReferenced =
     std::unordered_map<DexStore*, bool /* used_only_reflectively */>;
-using MethodStoresReferenced = ConcurrentMap<DexMethod*, StoresReferenced>;
+using MethodStoresReferenced =
+    InsertOnlyConcurrentMap<DexMethod*, StoresReferenced>;
 
 using Violations = std::map<std::string /* entrypoint */,
                             std::set<std::string /* module name */>>;
@@ -79,13 +80,13 @@ class AppModuleUsagePass : public Pass {
   app_module_usage::MethodStoresReferenced analyze_method_xstore_references(
       const Scope& scope);
 
-  ConcurrentMap<DexField*, DexStore*> analyze_field_xstore_references(
+  InsertOnlyConcurrentMap<DexField*, DexStore*> analyze_field_xstore_references(
       const Scope& scope);
 
   // Returns number of violations.
   unsigned gather_violations(
       const app_module_usage::MethodStoresReferenced& method_store_refs,
-      const ConcurrentMap<DexField*, DexStore*>& field_store_refs,
+      const InsertOnlyConcurrentMap<DexField*, DexStore*>& field_store_refs,
       app_module_usage::Violations& violations) const;
 
   // returns true if the given entrypoint name is allowed to use the given store
@@ -101,7 +102,7 @@ class AppModuleUsagePass : public Pass {
       m_preexisting_violations;
 
   // To quickly look up wich DexStore ("module") a DexType is from
-  ConcurrentMap<DexType*, DexStore*> m_type_store_map;
+  InsertOnlyConcurrentMap<DexType*, DexStore*> m_type_store_map;
 
   bool m_output_module_use;
   bool m_crash_with_violations;
