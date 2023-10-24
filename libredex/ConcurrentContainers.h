@@ -440,6 +440,23 @@ class ConcurrentMapContainer
   }
 
   /*
+   * This operation atomically observes an entry in the map if it exists.
+   */
+  template <
+      typename ObserveFn = const std::function<void(const Key&, const Value&)>&>
+  bool observe(const Key& key, ObserveFn observer) const {
+    size_t slot = Hash()(key) % n_slots;
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
+    const auto& map = this->get_container(slot);
+    auto it = map.find(KeyProjection()(key));
+    if (it == map.end()) {
+      return false;
+    }
+    observer(it->first, it->second);
+    return true;
+  }
+
+  /*
    * This operation atomically modifies an entry in the map. If the entry
    * doesn't exist, it is created. The third argument of the updater function is
    * a Boolean flag denoting whether the entry exists or not.

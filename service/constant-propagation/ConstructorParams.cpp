@@ -132,24 +132,28 @@ class InitFixpointIterator final
           env->set(RESULT_REGISTER, ParamIdxDomain::top());
           return;
         }
-        std::unique_lock<std::mutex> lock(
-            m_state.method_initializers.get_lock(method));
-        auto it = m_state.method_initializers.find(method);
-        if (it != m_state.method_initializers.end()) {
-          for (auto& initializer : it->second) {
-            if (initializer->attr.is_method()) {
-              env->set(initializer->attr.val.method,
-                       env->get(insn->src(initializer->insn_src_id_of_attr)));
-            } else { // is_field
-              env->set(initializer->attr.val.field,
-                       env->get(insn->src(initializer->insn_src_id_of_attr)));
-            }
-          }
-          auto& first_initializer = *it->second.begin();
-          if (first_initializer->obj_is_dest()) {
-            env->set(RESULT_REGISTER, obj_domain);
-            return;
-          }
+        bool first_initializer_obj_is_dest = false;
+        m_state.method_initializers.observe(
+            method, [&](auto*, const auto& initializers) {
+              for (auto& initializer : initializers) {
+                if (initializer->attr.is_method()) {
+                  env->set(
+                      initializer->attr.val.method,
+                      env->get(insn->src(initializer->insn_src_id_of_attr)));
+                } else { // is_field
+                  env->set(
+                      initializer->attr.val.field,
+                      env->get(insn->src(initializer->insn_src_id_of_attr)));
+                }
+              }
+              auto& first_initializer = *initializers.begin();
+              if (first_initializer->obj_is_dest()) {
+                env->set(RESULT_REGISTER, obj_domain);
+                first_initializer_obj_is_dest = true;
+              }
+            });
+        if (first_initializer_obj_is_dest) {
+          return;
         }
       }
     }
