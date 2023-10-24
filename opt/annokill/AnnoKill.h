@@ -104,9 +104,9 @@ class AnnoKill {
   AnnoSet m_keep;
   AnnoKillStats m_stats;
 
-  mutable ConcurrentMap<std::string_view, size_t> m_build_anno_map;
-  mutable ConcurrentMap<std::string_view, size_t> m_runtime_anno_map;
-  mutable ConcurrentMap<std::string_view, size_t> m_system_anno_map;
+  mutable AtomicMap<std::string_view, size_t> m_build_anno_map;
+  mutable AtomicMap<std::string_view, size_t> m_runtime_anno_map;
+  mutable AtomicMap<std::string_view, size_t> m_system_anno_map;
   std::unordered_map<const DexType*, std::unordered_set<const DexType*>>
       m_anno_class_hierarchy_keep;
   std::unordered_map<const DexType*, std::unordered_set<const DexType*>>

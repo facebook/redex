@@ -360,20 +360,19 @@ AnnoKill::AnnoSet AnnoKill::get_removable_annotation_instances() {
 
 void AnnoKill::count_annotation(const DexAnnotation* da,
                                 AnnoKillStats& stats) const {
-  auto inc_counter = [](auto&, auto& c, auto) { c++; };
   if (da->system_visible()) {
     if (traceEnabled(ANNO, 3)) {
-      m_system_anno_map.update(da->type()->get_name()->str(), inc_counter);
+      m_system_anno_map.fetch_add(da->type()->get_name()->str(), 1);
     }
     stats.visibility_system_count++;
   } else if (da->runtime_visible()) {
     if (traceEnabled(ANNO, 3)) {
-      m_runtime_anno_map.update(da->type()->get_name()->str(), inc_counter);
+      m_runtime_anno_map.fetch_add(da->type()->get_name()->str(), 1);
     }
     stats.visibility_runtime_count++;
   } else if (da->build_visible()) {
     if (traceEnabled(ANNO, 3)) {
-      m_build_anno_map.update(da->type()->get_name()->str(), inc_counter);
+      m_build_anno_map.fetch_add(da->type()->get_name()->str(), 1);
     }
     stats.visibility_build_count++;
   }
@@ -635,21 +634,27 @@ bool AnnoKill::kill_annotations() {
 
   if (traceEnabled(ANNO, 3)) {
     for (const auto& p : m_build_anno_map) {
-      TRACE(
-          ANNO, 3, "Build anno: %zu, %s", p.second, str_copy(p.first).c_str());
+      TRACE(ANNO,
+            3,
+            "Build anno: %zu, %s",
+            p.second.load(),
+            str_copy(p.first).c_str());
     }
 
     for (const auto& p : m_runtime_anno_map) {
       TRACE(ANNO,
             3,
             "Runtime anno: %zu, %s",
-            p.second,
+            p.second.load(),
             str_copy(p.first).c_str());
     }
 
     for (const auto& p : m_system_anno_map) {
-      TRACE(
-          ANNO, 3, "System anno: %zu, %s", p.second, str_copy(p.first).c_str());
+      TRACE(ANNO,
+            3,
+            "System anno: %zu, %s",
+            p.second.load(),
+            str_copy(p.first).c_str());
     }
   }
 
