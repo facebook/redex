@@ -84,7 +84,8 @@ struct EnumUtil {
   ConcurrentSet<DexMethod*> m_instance_methods;
 
   // Store methods for getting instance fields to be generated later.
-  ConcurrentMap<DexFieldRef*, DexMethodRef*> m_get_instance_field_methods;
+  InsertOnlyConcurrentMap<DexFieldRef*, DexMethodRef*>
+      m_get_instance_field_methods;
 
   DexMethodRef* m_values_method_ref = nullptr;
 
@@ -293,15 +294,19 @@ struct EnumUtil {
    * Store the method ref at the same time.
    */
   DexMethodRef* add_get_ifield_method(DexType* enum_type, DexFieldRef* ifield) {
-    if (m_get_instance_field_methods.count(ifield)) {
-      return m_get_instance_field_methods.at(ifield);
-    }
-    auto proto = DexProto::make_proto(
-        ifield->get_type(), DexTypeList::make_type_list({INTEGER_TYPE}));
-    auto method_name = DexString::make_string("redex$OE$get_" + ifield->str());
-    auto method = DexMethod::make_method(enum_type, method_name, proto);
-    m_get_instance_field_methods.insert(std::make_pair(ifield, method));
-    return method;
+    return *m_get_instance_field_methods
+                .get_or_create_and_assert_equal(
+                    ifield,
+                    [&](auto*) {
+                      auto proto = DexProto::make_proto(
+                          ifield->get_type(),
+                          DexTypeList::make_type_list({INTEGER_TYPE}));
+                      auto method_name = DexString::make_string(
+                          "redex$OE$get_" + ifield->str());
+                      return DexMethod::make_method(enum_type, method_name,
+                                                    proto);
+                    })
+                .first;
   }
 
   /**
@@ -309,18 +314,21 @@ struct EnumUtil {
    * `Enum.toString()`. Return `nullptr` if `Enum.toString()` is not overridden.
    */
   DexMethod* get_user_defined_tostring_method(DexClass* cls) {
-    static ConcurrentMap<DexClass*, DexMethod*> cache;
-    if (cache.count(cls)) {
-      return cache.at(cls);
-    }
-    for (auto vmethod : cls->get_vmethods()) {
-      if (method::signatures_match(vmethod, ENUM_TOSTRING_METHOD)) {
-        cache.insert(std::make_pair(cls, vmethod));
-        return vmethod;
-      }
-    }
-    cache.insert(std::make_pair(cls, nullptr));
-    return nullptr;
+    // TODO: Don't have a *static* cache.
+    static InsertOnlyConcurrentMap<DexClass*, DexMethod*> cache;
+    return *cache
+                .get_or_create_and_assert_equal(
+                    cls,
+                    [&](auto*) -> DexMethod* {
+                      for (auto vmethod : cls->get_vmethods()) {
+                        if (method::signatures_match(vmethod,
+                                                     ENUM_TOSTRING_METHOD)) {
+                          return vmethod;
+                        }
+                      }
+                      return nullptr;
+                    })
+                .first;
   }
 
  private:
