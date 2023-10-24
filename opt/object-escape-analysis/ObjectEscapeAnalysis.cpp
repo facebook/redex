@@ -123,15 +123,10 @@ using Locations = std::vector<std::pair<DexMethod*, const IRInstruction*>>;
 void analyze_scope(
     const Scope& scope,
     const mog::Graph& method_override_graph,
-    std::unordered_map<DexType*, Locations>* new_instances,
-    std::unordered_map<DexMethod*, Locations>* invokes,
-    std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>>*
-        dependencies) {
+    ConcurrentMap<DexType*, Locations>* new_instances,
+    ConcurrentMap<DexMethod*, Locations>* invokes,
+    ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>* dependencies) {
   Timer t("analyze_scope");
-  ConcurrentMap<DexType*, Locations> concurrent_new_instances;
-  ConcurrentMap<DexMethod*, Locations> concurrent_invokes;
-  ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>
-      concurrent_dependencies;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     always_assert(code.editable_cfg_built());
     LazyUnorderedMap<DexMethod*, bool> is_not_overridden([&](auto* m) {
@@ -143,30 +138,27 @@ void analyze_scope(
       if (insn->opcode() == OPCODE_NEW_INSTANCE) {
         auto cls = type_class(insn->get_type());
         if (cls && !cls->is_external()) {
-          concurrent_new_instances.update(
-              insn->get_type(),
-              [&](auto*, auto& vec, bool) { vec.emplace_back(method, insn); });
+          new_instances->update(insn->get_type(), [&](auto*, auto& vec, bool) {
+            vec.emplace_back(method, insn);
+          });
         }
       } else if (opcode::is_an_invoke(insn->opcode())) {
         auto callee =
             resolve_method(insn->get_method(), opcode_to_search(insn));
         if (callee && callee->get_code() && !callee->is_external() &&
             is_not_overridden[callee]) {
-          concurrent_invokes.update(callee, [&](auto*, auto& vec, bool) {
+          invokes->update(callee, [&](auto*, auto& vec, bool) {
             vec.emplace_back(method, insn);
           });
           if (is_not_overridden[method]) {
-            concurrent_dependencies.update(
-                callee,
-                [method](auto, auto& set, auto) { set.insert(method); });
+            dependencies->update(callee, [method](auto, auto& set, auto) {
+              set.insert(method);
+            });
           }
         }
       }
     }
   });
-  *new_instances = concurrent_new_instances.move_to_container();
-  *invokes = concurrent_invokes.move_to_container();
-  *dependencies = concurrent_dependencies.move_to_container();
 }
 
 // A benign method invocation can be ignored during the escape analysis.
@@ -366,7 +358,7 @@ class Analyzer final : public BaseIRAnalyzer<Environment> {
 MethodSummaries compute_method_summaries(
     PassManager& mgr,
     const Scope& scope,
-    const std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>>&
+    const ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>&
         dependencies,
     const mog::Graph& method_override_graph) {
   Timer t("compute_method_summaries");
@@ -475,10 +467,10 @@ std::pair<DexMethod*, DexType*> resolve_inlinable(
 
 using InlineAnchorsOfType =
     std::unordered_map<DexMethod*, std::unordered_set<IRInstruction*>>;
-std::unordered_map<DexType*, InlineAnchorsOfType> compute_inline_anchors(
+ConcurrentMap<DexType*, InlineAnchorsOfType> compute_inline_anchors(
     const Scope& scope, const MethodSummaries& method_summaries) {
   Timer t("compute_inline_anchors");
-  ConcurrentMap<DexType*, InlineAnchorsOfType> concurrent_inline_anchors;
+  ConcurrentMap<DexType*, InlineAnchorsOfType> inline_anchors;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     Analyzer analyzer(method_summaries, /* incomplete_marker_method */ nullptr,
                       code.cfg());
@@ -487,11 +479,11 @@ std::unordered_map<DexType*, InlineAnchorsOfType> compute_inline_anchors(
       auto [callee, type] = resolve_inlinable(method_summaries, insn);
       TRACE(OEA, 3, "[object escape analysis] inline anchor [%s] %s",
             SHOW(method), SHOW(insn));
-      concurrent_inline_anchors.update(
+      inline_anchors.update(
           type, [&](auto*, auto& map, bool) { map[method].insert(insn); });
     }
   });
-  return concurrent_inline_anchors.move_to_container();
+  return inline_anchors;
 }
 
 class InlinedCodeSizeEstimator {
@@ -591,10 +583,10 @@ using InlinableTypes = std::unordered_map<DexType*, InlinableTypeKind>;
 
 std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
     PassManager& mgr,
-    const std::unordered_map<DexType*, Locations>& new_instances,
-    const std::unordered_map<DexMethod*, Locations>& invokes,
+    const ConcurrentMap<DexType*, Locations>& new_instances,
+    const ConcurrentMap<DexMethod*, Locations>& invokes,
     const MethodSummaries& method_summaries,
-    const std::unordered_map<DexType*, InlineAnchorsOfType>& inline_anchors) {
+    const ConcurrentMap<DexType*, InlineAnchorsOfType>& inline_anchors) {
   Timer t("compute_root_methods");
   std::array<size_t, (size_t)(InlinableTypeKind::Last) + 1> candidate_types{
       0, 0, 0};
@@ -604,7 +596,7 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
   std::mutex mutex; // protects candidate_types and root_methods
   std::atomic<size_t> incomplete_estimated_delta_threshold_exceeded{0};
   auto concurrent_add_root_methods = [&](DexType* type, bool complete) {
-    const auto& inline_anchors_of_type = inline_anchors.at(type);
+    const auto& inline_anchors_of_type = inline_anchors.at_unsafe(type);
     InlinedCodeSizeEstimator inlined_code_size_estimator(method_summaries);
     std::vector<DexMethod*> methods;
     for (auto& [method, allocation_insns] : inline_anchors_of_type) {
@@ -665,8 +657,8 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
   }
   workqueue_run<DexType*>(
       [&](DexType* type) {
-        const auto& method_insn_pairs = new_instances.at(type);
-        const auto& inline_anchors_of_type = inline_anchors.at(type);
+        const auto& method_insn_pairs = new_instances.at_unsafe(type);
+        const auto& inline_anchors_of_type = inline_anchors.at_unsafe(type);
 
         std::function<bool(const std::pair<DexMethod*, const IRInstruction*>&)>
             is_anchored;
@@ -1712,9 +1704,9 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns(), method_override_graph.get());
 
-  std::unordered_map<DexType*, Locations> new_instances;
-  std::unordered_map<DexMethod*, Locations> invokes;
-  std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>> dependencies;
+  ConcurrentMap<DexType*, Locations> new_instances;
+  ConcurrentMap<DexMethod*, Locations> invokes;
+  ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>> dependencies;
   analyze_scope(scope, *method_override_graph, &new_instances, &invokes,
                 &dependencies);
 
