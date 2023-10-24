@@ -564,7 +564,7 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
     DexProto* original_proto;
     DexProto* reordered_proto;
   };
-  ConcurrentMap<DexMethod*, Entry> unordered_entries;
+  InsertOnlyConcurrentMap<DexMethod*, Entry> unordered_entries;
   walk::parallel::methods(m_scope, [&](DexMethod* method) {
     std::deque<uint16_t> live_arg_idxs;
     std::vector<cfg::InstructionIterator> dead_insns;
