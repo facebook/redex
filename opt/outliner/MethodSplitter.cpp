@@ -292,7 +292,7 @@ ConcurrentSet<DexMethod*> split_splittable_closures(
     const ConcurrentMap<DexType*, std::vector<SplittableClosure>>&
         splittable_closures,
     const std::string& name_infix,
-    ConcurrentMap<std::string, size_t>* uniquifiers,
+    AtomicMap<std::string, size_t>* uniquifiers,
     Stats* stats,
     std::unordered_map<DexClasses*, std::unique_ptr<DexState>>* dex_states,
     ConcurrentSet<DexMethod*>* concurrent_added_methods,
@@ -342,8 +342,7 @@ ConcurrentSet<DexMethod*> split_splittable_closures(
       auto method = splittable_closure->method_closures->method;
       std::string id =
           method->get_class()->str() + "." + method->get_name()->str();
-      size_t index{0};
-      uniquifiers->update(id, [&index](auto, auto& v, bool) { index = v++; });
+      size_t index = uniquifiers->fetch_add(id, 1);
       auto new_method =
           split_method(*splittable_closure, name_infix, index, dex_state.get());
       if (!new_method) {
@@ -425,7 +424,7 @@ void split_methods_in_stores(
       scope, [&](DexMethod* method, IRCode&) { methods.insert(method); });
 
   size_t iteration{0};
-  ConcurrentMap<std::string, size_t> uniquifiers;
+  AtomicMap<std::string, size_t> uniquifiers;
   while (!methods.empty() && iteration < config.max_iteration) {
     TRACE(MS, 2, "=== iteration[%zu]", iteration);
     Timer t("iteration " + std::to_string(iteration++));
