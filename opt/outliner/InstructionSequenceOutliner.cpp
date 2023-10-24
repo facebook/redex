@@ -1208,7 +1208,8 @@ static void get_recurring_cores(
     const std::unordered_set<DexMethod*>& sufficiently_hot_methods,
     const RefChecker& ref_checker,
     CandidateInstructionCoresSet* recurring_cores,
-    ConcurrentMap<DexMethod*, CanOutlineBlockDecider>* block_deciders) {
+    InsertOnlyConcurrentMap<DexMethod*, CanOutlineBlockDecider>*
+        block_deciders) {
   ConcurrentMap<CandidateInstructionCores, size_t,
                 CandidateInstructionCoresHasher>
       concurrent_cores;
@@ -1491,7 +1492,8 @@ static void get_beneficial_candidates(
     const Scope& dex,
     const RefChecker& ref_checker,
     const CandidateInstructionCoresSet& recurring_cores,
-    const ConcurrentMap<DexMethod*, CanOutlineBlockDecider>& block_deciders,
+    const InsertOnlyConcurrentMap<DexMethod*, CanOutlineBlockDecider>&
+        block_deciders,
     const ReusableOutlinedMethods* outlined_methods,
     std::vector<CandidateWithInfo>* candidates_with_infos,
     std::unordered_map<DexMethod*, std::unordered_set<CandidateId>>*
@@ -3221,7 +3223,8 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
                                  }) == dex.end());
       RefChecker ref_checker{&xstores, store_idx, min_sdk_api};
       CandidateInstructionCoresSet recurring_cores;
-      ConcurrentMap<DexMethod*, CanOutlineBlockDecider> block_deciders;
+      InsertOnlyConcurrentMap<DexMethod*, CanOutlineBlockDecider>
+          block_deciders;
       get_recurring_cores(m_config, mgr, dex, sufficiently_warm_methods,
                           sufficiently_hot_methods, ref_checker,
                           &recurring_cores, &block_deciders);
