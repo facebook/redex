@@ -59,9 +59,9 @@ void gather_cg_information(
   always_assert(cg_stats.num_nodes == nodes->size());
 }
 
-void gather_method_positions(
-    const Scope& scope,
-    ConcurrentMap<DexMethod*, std::string>* method_to_first_position) {
+void gather_method_positions(const Scope& scope,
+                             InsertOnlyConcurrentMap<DexMethod*, std::string>*
+                                 method_to_first_position) {
   walk::parallel::code(
       scope, [&method_to_first_position](DexMethod* method, IRCode& code) {
         always_assert(code.editable_cfg_built());
@@ -98,7 +98,7 @@ void write_out_callgraph(const Scope& scope,
   std::unordered_map<call_graph::NodeId, uint32_t> nodes_to_ids;
   std::unordered_map<call_graph::NodeId, std::set<uint32_t>> nodes_to_succs;
   gather_cg_information(cg, &nodes, &nodes_to_ids, &nodes_to_succs);
-  ConcurrentMap<DexMethod*, std::string> method_to_first_position;
+  InsertOnlyConcurrentMap<DexMethod*, std::string> method_to_first_position;
   gather_method_positions(scope, &method_to_first_position);
   size_t bit_32_size = sizeof(uint32_t);
   always_assert(nodes.size() <= std::numeric_limits<uint32_t>::max());
