@@ -553,19 +553,22 @@ class MultiMethodInliner {
   InsertOnlyConcurrentMap<const DexMethod*, bool> m_should_inline;
 
   // Optional cache for get_callee_insn_size function
-  std::unique_ptr<ConcurrentMap<const DexMethod*, size_t>> m_callee_insn_sizes;
+  std::unique_ptr<InsertOnlyConcurrentMap<const DexMethod*, size_t>>
+      m_callee_insn_sizes;
 
   // Optional cache for get_callee_type_refs function
   std::unique_ptr<
-      ConcurrentMap<const DexMethod*, std::shared_ptr<std::vector<DexType*>>>>
+      InsertOnlyConcurrentMap<const DexMethod*,
+                              std::shared_ptr<std::vector<DexType*>>>>
       m_callee_type_refs;
 
   // Optional cache for get_callee_code_refs function
-  std::unique_ptr<ConcurrentMap<const DexMethod*, std::shared_ptr<CodeRefs>>>
+  std::unique_ptr<
+      InsertOnlyConcurrentMap<const DexMethod*, std::shared_ptr<CodeRefs>>>
       m_callee_code_refs;
 
   // Optional cache for get_callee_caller_res function
-  std::unique_ptr<ConcurrentMap<const DexMethod*, CalleeCallerRefs>>
+  std::unique_ptr<InsertOnlyConcurrentMap<const DexMethod*, CalleeCallerRefs>>
       m_callee_caller_refs;
 
   // Cache of whether a constructor can be unconditionally inlined.

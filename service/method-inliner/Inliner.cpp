@@ -267,16 +267,15 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
   // - whether all callers are in the same class, and are called from how many
   //   classes
   m_callee_insn_sizes =
-      std::make_unique<ConcurrentMap<const DexMethod*, size_t>>();
-  m_callee_type_refs =
-      std::make_unique<ConcurrentMap<const DexMethod*,
-                                     std::shared_ptr<std::vector<DexType*>>>>();
+      std::make_unique<InsertOnlyConcurrentMap<const DexMethod*, size_t>>();
+  m_callee_type_refs = std::make_unique<InsertOnlyConcurrentMap<
+      const DexMethod*, std::shared_ptr<std::vector<DexType*>>>>();
   if (m_ref_checkers) {
     m_callee_code_refs = std::make_unique<
-        ConcurrentMap<const DexMethod*, std::shared_ptr<CodeRefs>>>();
+        InsertOnlyConcurrentMap<const DexMethod*, std::shared_ptr<CodeRefs>>>();
   }
-  m_callee_caller_refs =
-      std::make_unique<ConcurrentMap<const DexMethod*, CalleeCallerRefs>>();
+  m_callee_caller_refs = std::make_unique<
+      InsertOnlyConcurrentMap<const DexMethod*, CalleeCallerRefs>>();
 
   // Instead of changing visibility as we inline, blocking other work on the
   // critical path, we do it all in parallel at the end.
@@ -1123,10 +1122,9 @@ bool MultiMethodInliner::should_inline_always(const DexMethod* callee) {
 
 size_t MultiMethodInliner::get_callee_insn_size(const DexMethod* callee) {
   if (m_callee_insn_sizes) {
-    const auto absent = std::numeric_limits<size_t>::max();
-    auto size = m_callee_insn_sizes->get(callee, absent);
-    if (size != absent) {
-      return size;
+    auto* res = m_callee_insn_sizes->get(callee);
+    if (res) {
+      return *res;
     }
   }
 
@@ -1977,9 +1975,9 @@ bool MultiMethodInliner::check_android_os_version(IRInstruction* insn) {
 std::shared_ptr<CodeRefs> MultiMethodInliner::get_callee_code_refs(
     const DexMethod* callee) {
   if (m_callee_code_refs) {
-    auto cached = m_callee_code_refs->get(callee, nullptr);
-    if (cached) {
-      return cached;
+    auto* res = m_callee_code_refs->get(callee);
+    if (res) {
+      return *res;
     }
   }
 
@@ -1993,9 +1991,9 @@ std::shared_ptr<CodeRefs> MultiMethodInliner::get_callee_code_refs(
 std::shared_ptr<std::vector<DexType*>> MultiMethodInliner::get_callee_type_refs(
     const DexMethod* callee) {
   if (m_callee_type_refs) {
-    auto cached = m_callee_type_refs->get(callee, nullptr);
-    if (cached) {
-      return cached;
+    auto* res = m_callee_type_refs->get(callee);
+    if (res) {
+      return *res;
     }
   }
 
@@ -2042,10 +2040,9 @@ std::shared_ptr<std::vector<DexType*>> MultiMethodInliner::get_callee_type_refs(
 CalleeCallerRefs MultiMethodInliner::get_callee_caller_refs(
     const DexMethod* callee) {
   if (m_callee_caller_refs) {
-    CalleeCallerRefs absent = {false, std::numeric_limits<size_t>::max()};
-    auto cached = m_callee_caller_refs->get(callee, absent);
-    if (cached.classes != absent.classes) {
-      return cached;
+    auto* res = m_callee_caller_refs->get(callee);
+    if (res) {
+      return *res;
     }
   }
 
