@@ -478,8 +478,8 @@ get_wto_successors(
 
   // In subsequent iteration, besides computing the sorted root successors
   // again, we also filter all previously sorted inverse_dependencies entries.
-  auto concurrent_cache = std::make_shared<
-      ConcurrentMap<const DexMethod*, std::vector<const DexMethod*>>>();
+  auto concurrent_cache = std::make_shared<InsertOnlyConcurrentMap<
+      const DexMethod*, std::vector<const DexMethod*>>>();
   workqueue_run<const DexMethod*>(
       [&impacted_methods, &get_sorted_impacted_methods, &inverse_dependencies,
        concurrent_cache](const DexMethod* m) {
@@ -516,7 +516,8 @@ size_t compute_locations_closure(
     std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result) {
   // 1. Let's initialize known method read locations and dependencies by
   //    scanning method bodies
-  ConcurrentMap<const DexMethod*, LocationsAndDependencies> method_lads;
+  InsertOnlyConcurrentMap<const DexMethod*, LocationsAndDependencies>
+      method_lads;
   walk::parallel::methods(scope, [&](DexMethod* method) {
     auto lads = init_func(method);
     if (lads) {
