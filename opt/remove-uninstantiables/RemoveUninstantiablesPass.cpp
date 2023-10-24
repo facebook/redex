@@ -57,7 +57,7 @@ class OverriddenVirtualScopesAnalysis {
   void compute_transitively_defined_virtual_scope(
       const std::unordered_map<DexType*, std::unordered_set<DexType*>>&
           instantiable_children,
-      const ConcurrentMap<const DexType*, VirtualScopeIdSet>&
+      const InsertOnlyConcurrentMap<const DexType*, VirtualScopeIdSet>&
           defined_virtual_scopes,
       DexType* t) {
     auto it = m_transitively_defined_virtual_scopes.find(t);
@@ -147,7 +147,8 @@ class OverriddenVirtualScopesAnalysis {
 
     scan_code(scope);
 
-    ConcurrentMap<const DexType*, VirtualScopeIdSet> defined_virtual_scopes;
+    InsertOnlyConcurrentMap<const DexType*, VirtualScopeIdSet>
+        defined_virtual_scopes;
     walk::parallel::classes(scope, [&](DexClass* cls) {
       VirtualScopeIdSet virtual_scopes;
       for (auto method : cls->get_vmethods()) {
