@@ -191,9 +191,7 @@ void Outliner::gather_outline_candidate_typelists(
   for (const auto& p : tostring_instruction_to_state) {
     const auto& state = p.second;
     auto typelist = typelist_from_state(state);
-    m_outline_typelists.update(
-        typelist,
-        [](const DexTypeList*, size_t& n, bool /* exists */) { ++n; });
+    m_outline_typelists.fetch_add(typelist, 1);
   }
 }
 
@@ -236,7 +234,7 @@ void Outliner::create_outline_helpers(DexStoresVector* stores) {
   bool did_create_helper{false};
   for (const auto& p : m_outline_typelists) {
     const auto* typelist = p.first;
-    auto count = p.second;
+    auto count = p.second.load();
 
     if (count < m_config.min_outline_count ||
         typelist->size() > m_config.max_outline_length) {

@@ -251,7 +251,7 @@ class Outliner {
 
   // Map typelists of potentially outlinable StringBuilder call sequence to
   // their number of occurrences.
-  ConcurrentMap<const DexTypeList*, size_t> m_outline_typelists;
+  AtomicMap<const DexTypeList*, size_t> m_outline_typelists;
   // Typelists of call sequences we have chosen to outline -> generated outline
   // helper method.
   std::unordered_map<const DexTypeList*, DexMethod*> m_outline_helpers;
