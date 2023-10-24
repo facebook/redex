@@ -182,6 +182,8 @@ concurrent_containers_test_SOURCES = ConcurrentContainersTest.cpp
 
 concurrent_hashtable_test_SOURCES = ConcurrentHashtableTest.cpp
 
+atomic_map_test_SOURCES = AtomicMapTest.cpp
+
 configurable_test_SOURCES = ConfigurableTest.cpp
 configurable_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
@@ -489,6 +491,7 @@ TESTS = \
     class_checker_test \
     concurrent_containers_test \
     concurrent_hashtable_test \
+    atomic_map_test \
     configurable_test \
     constructor_analysis_test \
     control_flow_test \

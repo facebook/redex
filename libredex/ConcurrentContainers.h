@@ -1079,10 +1079,17 @@ class ConcurrentContainer {
  * A concurrent container with map semantics, also allowing erasing and updating
  * values.
  *
- * Prefer using an InsertOnlyConcurrentMap when possibly, as it more clearly
- * conveys the possible intent of an insertion-only map whose elements cannot be
- * mutated, and it allows safely reading values without requiring copying them
- * under a lock.
+ * Compared to other concurrent datatypes, the ConcurrentMap has additional
+ * overhead: It maintains another set mutexes, one per slot, and even reading a
+ * value safely requires aquiring a lock.
+ *
+ * Prefer using an InsertOnlyConcurrentMap or an AtomicMap when possibly:
+ * - InsertOnlyConcurrentMap more clearly conveys the possible intent of an
+ * insertion-only map whose elements cannot be mutated, and it allows safely
+ * reading values without requiring copying them under a lock.
+ * - AtomicMap typically allows for lock free reads and writes, and even
+ * supports all common lock-free atomic mutations typically found on
+ * std::atomic<>.
  */
 template <typename Key,
           typename Value,
@@ -1362,7 +1369,7 @@ class ConcurrentMap final
 /**
  * A concurrent container with map semantics that only accepts insertions.
  *
- * This allows accessing constant references on values safely.
+ * This allows accessing constant references on values safely and lock-free.
  */
 template <typename Key,
           typename Value,
@@ -1641,6 +1648,205 @@ class InsertOnlyConcurrentMap final
   }
 
   size_t erase(const Key& key) = delete;
+};
+
+/**
+ * A concurrent container with map semantics that holds atomic values.
+ *
+ * This typically allows for lock free reads and writes (if the underlying
+ * std::atomic<> data types allows), and even supports all common lock-free
+ * atomic mutations typically found on std::atomic<>.
+ */
+template <typename Key,
+          typename Value,
+          typename Hash = std::hash<Key>,
+          typename KeyEqual = std::equal_to<Key>,
+          size_t n_slots = 31>
+class AtomicMap final
+    : public ConcurrentContainer<
+          std::unordered_map<Key, std::atomic<Value>, Hash, KeyEqual>,
+          n_slots> {
+ public:
+  using Base = ConcurrentContainer<
+      std::unordered_map<Key, std::atomic<Value>, Hash, KeyEqual>,
+      n_slots>;
+  using typename Base::const_iterator;
+  using typename Base::iterator;
+
+  using Base::end;
+  using Base::m_slots;
+
+  AtomicMap() = default;
+
+  AtomicMap(const AtomicMap& container) noexcept : Base(container) {}
+
+  AtomicMap(AtomicMap&& container) noexcept : Base(std::move(container)) {}
+
+  AtomicMap& operator=(AtomicMap&& container) noexcept {
+    Base::operator=(std::move(container));
+    return *this;
+  }
+
+  AtomicMap& operator=(const AtomicMap& container) noexcept {
+    if (this != &container) {
+      Base::operator=(container);
+    }
+    return *this;
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  Value load(const Key& key, Value default_value = Value()) const {
+    size_t slot = Hash()(key) % n_slots;
+    const auto& map = this->get_container(slot);
+    const auto* ptr = map.get(key);
+    return ptr ? ptr->second.load() : default_value;
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  std::atomic<Value>* store(const Key& key, const Value& arg) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& map = this->get_container(slot);
+    auto insertion_result = map.try_emplace(key, arg);
+    if (!insertion_result.success) {
+      insertion_result.stored_value_ptr->second.store(arg);
+    }
+    return &insertion_result.stored_value_ptr->second;
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  std::atomic<Value>* store(Key&& key, Value&& arg) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& map = this->get_container(slot);
+    auto insertion_result =
+        map.try_emplace(std::forward<Key>(key), std::forward<Value>(arg));
+    if (!insertion_result->success) {
+      auto* constructed_value =
+          insertion_result.incidentally_constructed_value();
+      if (constructed_value) {
+        insertion_result.stored_value_ptr->second.store(
+            std::move(constructed_value->second));
+      } else {
+        insertion_result.stored_value_ptr->second = std::forward<Value>(arg);
+      }
+    }
+    return &insertion_result.stored_value_ptr->second;
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  template <typename... Args>
+  std::pair<std::atomic<Value>*, bool> emplace(const Key& key, Args&&... args) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& map = this->get_container(slot);
+    auto insertion_result = map.try_emplace(key, std::forward<Args>(args)...);
+    return std::make_pair(&insertion_result.stored_value_ptr->second,
+                          insertion_result.success);
+  }
+
+  template <typename... Args>
+  std::pair<std::atomic<Value>*, bool> emplace(Key&& key, Args&&... args) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& map = this->get_container(slot);
+    auto insertion_result =
+        map.try_emplace(std::forward<Key>(key), std::forward<Args>(args)...);
+    return std::make_pair(&insertion_result.stored_value_ptr->second,
+                          insertion_result.success);
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  Value exchange(const Key& key, Value desired, Value default_value = Value()) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& map = this->get_container(slot);
+    auto insertion_result = map.try_emplace(key, desired);
+    if (insertion_result.success) {
+      return default_value;
+    }
+    return insertion_result.stored_value_ptr->second.exchange(desired);
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  bool compare_exchange(const Key& key,
+                        Value& expected,
+                        Value desired,
+                        Value default_value = Value()) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& map = this->get_container(slot);
+    if (expected == default_value) {
+      auto insertion_result = map.try_emplace(key, desired);
+      if (insertion_result.success) {
+        return true;
+      }
+      return insertion_result.stored_value_ptr->second.compare_exchange_strong(
+          expected, desired);
+    }
+    auto ptr = map.get(key);
+    if (ptr == nullptr) {
+      expected = default_value;
+      return false;
+    }
+    return ptr->second.compare_exchange_strong(expected, desired);
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  Value fetch_add(const Key& key, Value arg, Value default_value = 0) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& map = this->get_container(slot);
+    auto insertion_result = map.try_emplace(key, default_value);
+    return insertion_result.stored_value_ptr->second.fetch_add(arg);
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  Value fetch_sub(const Key& key, Value arg, Value default_value = 0) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& map = this->get_container(slot);
+    auto insertion_result = map.try_insert(key, default_value);
+    return insertion_result.stored_value_ptr->second.fetch_sub(arg);
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  Value fetch_and(const Key& key, Value arg, Value default_value = 0) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& map = this->get_container(slot);
+    auto insertion_result = map.try_insert(key, default_value);
+    return insertion_result.stored_value_ptr->second.fetch_and(arg);
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  Value fetch_or(const Key& key, Value arg, Value default_value = 0) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& map = this->get_container(slot);
+    auto insertion_result = map.try_insert(key, default_value);
+    return insertion_result.stored_value_ptr->second.fetch_or(arg);
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  Value fetch_xor(const Key& key, Value arg, Value default_value = 0) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& map = this->get_container(slot);
+    auto insertion_result = map.try_insert(key, default_value);
+    return insertion_result.stored_value_ptr->second.fetch_xor(arg);
+  }
 };
 
 /*
