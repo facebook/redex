@@ -421,7 +421,8 @@ FixpointIteratorMap analyze_scope(const Scope& scope,
   });
 
   while (!affected_methods->empty()) {
-    ConcurrentMap<const DexMethod*, EscapeSummary> changed_effect_summaries;
+    InsertOnlyConcurrentMap<const DexMethod*, EscapeSummary>
+        changed_effect_summaries;
     auto next_affected_methods =
         std::make_unique<ConcurrentSet<const DexMethod*>>();
     workqueue_run<const DexMethod*>(
