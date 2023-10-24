@@ -164,10 +164,6 @@ MultiMethodInliner::MultiMethodInliner(
   // IntraDex, we properly exclude invocations where the caller is located in
   // another dex from the callee, and remember all such x-dex callees.
   ConcurrentSet<DexMethod*> concurrent_x_dex_callees;
-  ConcurrentMap<const DexMethod*, std::unordered_map<DexMethod*, size_t>>
-      concurrent_callee_caller;
-  ConcurrentMap<const DexMethod*, std::unordered_map<DexMethod*, size_t>>
-      concurrent_caller_callee;
   std::unique_ptr<XDexMethodRefs> x_dex;
   if (mode == IntraDex) {
     x_dex = std::make_unique<XDexMethodRefs>(stores);
@@ -201,21 +197,17 @@ MultiMethodInliner::MultiMethodInliner(
           concurrent_x_dex_callees.insert(callee);
           return;
         }
-        concurrent_callee_caller.update(
-            callee,
-            [caller](const DexMethod*,
-                     std::unordered_map<DexMethod*, size_t>& v,
-                     bool) { ++v[caller]; });
-        concurrent_caller_callee.update(
-            caller,
-            [callee](const DexMethod*,
-                     std::unordered_map<DexMethod*, size_t>& v,
-                     bool) { ++v[callee]; });
+        callee_caller.update(callee,
+                             [caller](const DexMethod*,
+                                      std::unordered_map<DexMethod*, size_t>& v,
+                                      bool) { ++v[caller]; });
+        caller_callee.update(caller,
+                             [callee](const DexMethod*,
+                                      std::unordered_map<DexMethod*, size_t>& v,
+                                      bool) { ++v[callee]; });
       });
   m_x_dex_callees.insert(concurrent_x_dex_callees.begin(),
                          concurrent_x_dex_callees.end());
-  callee_caller = concurrent_callee_caller.move_to_container();
-  caller_callee = concurrent_caller_callee.move_to_container();
   for (const auto& callee_callers : true_virtual_callers) {
     auto callee = callee_callers.first;
     for (const auto& caller_insns : callee_callers.second.caller_insns) {
@@ -226,8 +218,17 @@ MultiMethodInliner::MultiMethodInliner(
       }
       auto count = caller_insns.second.size();
       always_assert(count > 0);
-      callee_caller[callee][caller] += count;
-      if ((caller_callee[caller][callee] += count) == count) {
+      callee_caller.update_unsafe(callee,
+                                  [&](const DexMethod*,
+                                      std::unordered_map<DexMethod*, size_t>& v,
+                                      bool) { v[caller] += count; });
+      bool added_virtual_only = false;
+      caller_callee.update_unsafe(
+          caller,
+          [&](const DexMethod*,
+              std::unordered_map<DexMethod*, size_t>& v,
+              bool) { added_virtual_only = (v[callee] += count) == count; });
+      if (added_virtual_only) {
         // We added a new callee that is only valid via m_caller_virtual_callees
         m_caller_virtual_callees[caller].exclusive_callees.insert(callee);
       }
@@ -850,7 +851,7 @@ void MultiMethodInliner::postprocess_method(DexMethod* method) {
     m_shrinker.shrink_method(method);
   }
 
-  bool is_callee = !!callee_caller.count(method);
+  bool is_callee = !!callee_caller.count_unsafe(method);
   if (!is_callee) {
     // This method isn't the callee of another caller, so we can stop here.
     return;
@@ -1085,7 +1086,7 @@ bool MultiMethodInliner::should_inline_fast(const DexMethod* callee) {
 
   // non-root methods that are only ever called once should always be inlined,
   // as the method can be removed afterwards
-  const auto& callers = callee_caller.at(callee);
+  const auto& callers = callee_caller.at_unsafe(callee);
   if (callers.size() == 1 && callers.begin()->second == 1 && !root(callee) &&
       !method::is_argless_init(callee) && !m_recursive_callees.count(callee) &&
       !m_x_dex_callees.count(callee) &&
@@ -1578,7 +1579,7 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
     can_delete_callee = false;
   }
 
-  const auto& callers = callee_caller.at(callee);
+  const auto& callers = callee_caller.at_unsafe(callee);
 
   // Can we inline the init-callee into all callers?
   // If not, then we can give up, as there's no point in making the case that
@@ -2048,7 +2049,7 @@ CalleeCallerRefs MultiMethodInliner::get_callee_caller_refs(
     }
   }
 
-  const auto& callers = callee_caller.at(callee);
+  const auto& callers = callee_caller.at_unsafe(callee);
   std::unordered_set<DexType*> caller_classes;
   for (auto& p : callers) {
     auto caller = p.first;

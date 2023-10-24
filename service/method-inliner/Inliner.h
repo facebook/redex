@@ -485,9 +485,9 @@ class MultiMethodInliner {
   // Maps from callee to callers and reverse map from caller to callees.
   // Those are used to perform bottom up inlining.
   //
-  MethodToMethodOccurrences callee_caller;
+  ConcurrentMethodToMethodOccurrences callee_caller;
 
-  MethodToMethodOccurrences caller_callee;
+  ConcurrentMethodToMethodOccurrences caller_callee;
 
   // Auxiliary data for a caller that contains true virtual callees
   struct CallerVirtualCallees {

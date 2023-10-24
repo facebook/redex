@@ -10,8 +10,8 @@
 namespace inliner {
 
 RecursionPruner::RecursionPruner(
-    MethodToMethodOccurrences& callee_caller,
-    MethodToMethodOccurrences& caller_callee,
+    ConcurrentMethodToMethodOccurrences& callee_caller,
+    ConcurrentMethodToMethodOccurrences& caller_callee,
     std::function<bool(DexMethod*, DexMethod*)> exclude_fn)
     : m_callee_caller(callee_caller),
       m_caller_callee(caller_callee),
@@ -83,7 +83,7 @@ size_t RecursionPruner::recurse(
     if (callees.empty()) {
       m_caller_callee.erase(caller);
     }
-    auto& callers = m_callee_caller.at(callee);
+    auto& callers = m_callee_caller.at_unsafe(callee);
     callers.erase(caller);
     if (callers.empty()) {
       m_callee_caller.erase(callee);

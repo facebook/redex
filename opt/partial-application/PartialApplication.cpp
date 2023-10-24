@@ -257,17 +257,13 @@ void gather_caller_callees(
     const std::unordered_set<DexMethod*>& sufficiently_warm_methods,
     const std::unordered_set<DexMethod*>& sufficiently_hot_methods,
     const GetCalleeFunction& get_callee_fn,
-    MethodToMethodOccurrences* callee_caller,
-    MethodToMethodOccurrences* caller_callee,
+    ConcurrentMethodToMethodOccurrences* callee_caller,
+    ConcurrentMethodToMethodOccurrences* caller_callee,
     std::unordered_map<const IRInstruction*, ArgExclusivityVector>*
         arg_exclusivity,
     std::unordered_set<const IRInstruction*>* excluded_invoke_insns,
     CalleeCallerClasses* callee_caller_classes) {
   Timer timer("gather_caller_callees");
-  using ConcurrentMethodToMethodOccurrences =
-      ConcurrentMap<const DexMethod*, std::unordered_map<DexMethod*, size_t>>;
-  ConcurrentMethodToMethodOccurrences concurrent_callee_caller;
-  ConcurrentMethodToMethodOccurrences concurrent_caller_callee;
   ConcurrentSet<const IRInstruction*> concurrent_excluded_invoke_insns;
   ConcurrentMap<const IRInstruction*, ArgExclusivityVector>
       concurrent_arg_exclusivity;
@@ -305,12 +301,12 @@ void gather_caller_callees(
           concurrent_excluded_invoke_insns.insert(insn);
           continue;
         }
-        concurrent_callee_caller.update(
+        callee_caller->update(
             callee,
             [caller](const DexMethod*,
                      std::unordered_map<DexMethod*, size_t>& v,
                      bool) { ++v[caller]; });
-        concurrent_caller_callee.update(
+        caller_callee->update(
             caller,
             [callee](const DexMethod*,
                      std::unordered_map<DexMethod*, size_t>& v,
@@ -325,8 +321,6 @@ void gather_caller_callees(
     }
   });
 
-  *callee_caller = concurrent_callee_caller.move_to_container();
-  *caller_callee = concurrent_caller_callee.move_to_container();
   *excluded_invoke_insns = concurrent_excluded_invoke_insns.move_to_container();
   *arg_exclusivity = concurrent_arg_exclusivity.move_to_container();
   *callee_caller_classes = concurrent_callee_caller_classes.move_to_container();
@@ -811,7 +805,7 @@ using PaMethodRefs = ConcurrentMap<CalleeCallSiteSummary,
 void select_invokes_and_callers(
     EnumUtilsCache& enum_utils_cache,
     CallSiteSummarizer& call_site_summarizer,
-    const MethodToMethodOccurrences& callee_caller,
+    const ConcurrentMethodToMethodOccurrences& callee_caller,
     const std::unordered_map<const IRInstruction*, ArgExclusivityVector>&
         arg_exclusivity,
     const CalleeCallerClasses& callee_caller_classes,
@@ -904,7 +898,7 @@ void select_invokes_and_callers(
           std::lock_guard<std::mutex> lock_guard(mutex);
           selected_invokes->insert(callee_selected_invokes.begin(),
                                    callee_selected_invokes.end());
-          for (auto& p : callee_caller.at(callee)) {
+          for (auto& p : callee_caller.at_unsafe(callee)) {
             selected_callers->insert(p.first);
           }
         }
@@ -1215,8 +1209,8 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
     return callee;
   };
 
-  MethodToMethodOccurrences callee_caller;
-  MethodToMethodOccurrences caller_callee;
+  ConcurrentMethodToMethodOccurrences callee_caller;
+  ConcurrentMethodToMethodOccurrences caller_callee;
   std::unordered_map<const IRInstruction*, ArgExclusivityVector>
       arg_exclusivity;
   CalleeCallerClasses callee_caller_classes;

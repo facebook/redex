@@ -158,8 +158,8 @@ namespace inliner {
 
 CallSiteSummarizer::CallSiteSummarizer(
     shrinker::Shrinker& shrinker,
-    const MethodToMethodOccurrences& callee_caller,
-    const MethodToMethodOccurrences& caller_callee,
+    const ConcurrentMethodToMethodOccurrences& callee_caller,
+    const ConcurrentMethodToMethodOccurrences& caller_callee,
     GetCalleeFunction get_callee_fn,
     HasCalleeOtherCallSitesPredicate has_callee_other_call_sites_fn,
     std::function<bool(const ConstantValue&)>* filter_fn,
@@ -259,7 +259,7 @@ void CallSiteSummarizer::summarize() {
       m_stats->constant_invoke_callers_unreachable++;
       return;
     }
-    auto& callees = m_caller_callee.at(method);
+    auto& callees = m_caller_callee.at_unsafe(method);
     ConstantEnvironment initial_env =
         constant_propagation::interprocedural::env_with_params(
             is_static(method), method->get_code(), arguments);

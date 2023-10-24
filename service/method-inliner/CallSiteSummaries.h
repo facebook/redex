@@ -50,9 +50,9 @@ struct InvokeCallSiteSummariesAndDeadBlocks {
 
 using CallSiteSummaryOccurrences = std::pair<const CallSiteSummary*, size_t>;
 
-using MethodToMethodOccurrences =
-    std::unordered_map<const DexMethod*,
-                       std::unordered_map<DexMethod*, size_t>>;
+using ConcurrentMethodToMethodOccurrences =
+    ConcurrentMap<const DexMethod*, std::unordered_map<DexMethod*, size_t>>;
+
 namespace inliner {
 
 using GetCalleeFunction = std::function<DexMethod*(DexMethod*, IRInstruction*)>;
@@ -67,8 +67,8 @@ struct CallSiteSummaryStats {
 
 class CallSiteSummarizer {
   shrinker::Shrinker& m_shrinker;
-  const MethodToMethodOccurrences& m_callee_caller;
-  const MethodToMethodOccurrences& m_caller_callee;
+  const ConcurrentMethodToMethodOccurrences& m_callee_caller;
+  const ConcurrentMethodToMethodOccurrences& m_caller_callee;
   GetCalleeFunction m_get_callee_fn;
   HasCalleeOtherCallSitesPredicate m_has_callee_other_call_sites_fn;
   std::function<bool(const ConstantValue&)>* m_filter_fn;
@@ -111,8 +111,8 @@ class CallSiteSummarizer {
  public:
   CallSiteSummarizer(
       shrinker::Shrinker& shrinker,
-      const MethodToMethodOccurrences& callee_caller,
-      const MethodToMethodOccurrences& caller_callee,
+      const ConcurrentMethodToMethodOccurrences& callee_caller,
+      const ConcurrentMethodToMethodOccurrences& caller_callee,
       GetCalleeFunction get_callee_fn,
       HasCalleeOtherCallSitesPredicate has_callee_other_call_sites_fn,
       std::function<bool(const ConstantValue&)>* filter_fn,
