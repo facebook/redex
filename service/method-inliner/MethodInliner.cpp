@@ -434,7 +434,7 @@ void gather_true_virtual_methods(
     CalleeCallerInsns* true_virtual_callers) {
   Timer t("gather_true_virtual_methods");
   ConcurrentMap<const DexMethod*, CallerInsns> concurrent_true_virtual_callers;
-  ConcurrentMap<IRInstruction*, SameImplementation*>
+  InsertOnlyConcurrentMap<IRInstruction*, SameImplementation*>
       same_implementation_invokes;
   // Add mapping from callee to monomorphic callsites.
   auto add_monomorphic_call_site = [&](const DexMethod* caller,
