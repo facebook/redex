@@ -157,12 +157,10 @@ static bool any_external(const Collection& methods) {
  * that are externally defined or not-renamable.
  */
 void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
-  ConcurrentMap<DexProto*, size_t> fixed_protos;
+  AtomicMap<DexProto*, size_t> fixed_protos;
   ConcurrentSet<DexProto*> defined_protos;
   auto record_fixed_proto = [&fixed_protos](DexProto* proto, size_t increment) {
-    fixed_protos.update(proto,
-                        [increment](DexProto*, size_t& count,
-                                    bool /* exists */) { count += increment; });
+    fixed_protos.fetch_add(proto, increment);
   };
   walk::parallel::methods(
       m_scope,
@@ -217,8 +215,11 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
         }
       });
 
-  std::vector<std::pair<DexProto*, size_t>> ordered_fixed_protos(
-      fixed_protos.begin(), fixed_protos.end());
+  std::vector<std::pair<DexProto*, size_t>> ordered_fixed_protos;
+  ordered_fixed_protos.reserve(fixed_protos.size());
+  for (auto&& [proto, count] : fixed_protos) {
+    ordered_fixed_protos.emplace_back(proto, count.load());
+  }
   std::sort(ordered_fixed_protos.begin(), ordered_fixed_protos.end(),
             compare_weighted_dexprotos);
   std::unordered_map<DexProto*, DexProto*> fixed_representatives;
