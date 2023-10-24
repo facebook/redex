@@ -209,8 +209,8 @@ class Graph final {
     return m_nodes.get_unsafe(m);
   }
 
-  const ConcurrentMap<const IRInstruction*,
-                      std::unordered_set<const DexMethod*>>&
+  const InsertOnlyConcurrentMap<const IRInstruction*,
+                                std::unordered_set<const DexMethod*>>&
   get_insn_to_callee() const {
     return m_insn_to_callee;
   }
@@ -227,7 +227,8 @@ class Graph final {
   std::unique_ptr<Node> m_entry;
   std::unique_ptr<Node> m_exit;
   InsertOnlyConcurrentMap<const DexMethod*, Node> m_nodes;
-  ConcurrentMap<const IRInstruction*, std::unordered_set<const DexMethod*>>
+  InsertOnlyConcurrentMap<const IRInstruction*,
+                          std::unordered_set<const DexMethod*>>
       m_insn_to_callee;
   mutable InsertOnlyConcurrentMap<const DexMethod*, MethodVector>
       m_callee_to_callers;
