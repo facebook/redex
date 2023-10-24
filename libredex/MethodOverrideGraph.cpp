@@ -46,12 +46,14 @@ struct ClassSignatureMap {
   SignatureMap unimplemented;
 };
 
-using ClassSignatureMaps = ConcurrentMap<const DexClass*, ClassSignatureMap>;
+using ClassSignatureMaps =
+    InsertOnlyConcurrentMap<const DexClass*, ClassSignatureMap>;
 
-using InterfaceSignatureMaps = ConcurrentMap<const DexClass*, SignatureMap>;
+using InterfaceSignatureMaps =
+    InsertOnlyConcurrentMap<const DexClass*, SignatureMap>;
 
 using UnifiedInterfacesSignatureMaps =
-    ConcurrentMap<const DexTypeList*, SignatureMap>;
+    InsertOnlyConcurrentMap<const DexTypeList*, SignatureMap>;
 
 void update_signature_map(const DexMethod* method,
                           MethodSet value,
@@ -96,8 +98,9 @@ class GraphBuilder {
  private:
   ClassSignatureMap analyze_non_interface(const DexClass* cls) {
     always_assert(!is_interface(cls));
-    if (m_class_signature_maps.count(cls) != 0) {
-      return m_class_signature_maps.at(cls);
+    auto* res = m_class_signature_maps.get(cls);
+    if (res) {
+      return *res;
     }
 
     // Initialize the signature maps from those of the superclass.
@@ -185,8 +188,9 @@ class GraphBuilder {
 
   SignatureMap analyze_interface(const DexClass* cls) {
     always_assert(is_interface(cls));
-    if (m_interface_signature_maps.count(cls) != 0) {
-      return m_interface_signature_maps.at(cls);
+    auto* res = m_interface_signature_maps.get(cls);
+    if (res) {
+      return *res;
     }
 
     SignatureMap interface_signatures = unify_super_interface_signatures(cls);
@@ -230,8 +234,9 @@ class GraphBuilder {
 
   SignatureMap unify_super_interface_signatures(const DexClass* cls) {
     auto* type_list = cls->get_interfaces();
-    if (m_unified_interfaces_signature_maps.count(type_list)) {
-      return m_unified_interfaces_signature_maps.at(type_list);
+    auto* res = m_unified_interfaces_signature_maps.get(type_list);
+    if (res) {
+      return *res;
     }
 
     SignatureMap super_interface_signatures;
