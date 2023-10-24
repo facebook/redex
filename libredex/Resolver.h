@@ -74,8 +74,9 @@ struct MethodRefCacheKeyHash {
 using MethodRefCache =
     std::unordered_map<MethodRefCacheKey, DexMethod*, MethodRefCacheKeyHash>;
 
-using ConcurrentMethodRefCache =
-    ConcurrentMap<MethodRefCacheKey, DexMethod*, MethodRefCacheKeyHash>;
+using ConcurrentMethodRefCache = InsertOnlyConcurrentMap<MethodRefCacheKey,
+                                                         DexMethod*,
+                                                         MethodRefCacheKeyHash>;
 
 /**
  * Helper to map an opcode to a MethodSearch rule.
@@ -273,10 +274,9 @@ inline DexMethod* resolve_method(DexMethodRef* method,
   if (m) {
     return m;
   }
-  auto def =
-      concurrent_ref_cache.get(MethodRefCacheKey{method, search}, nullptr);
-  if (def != nullptr) {
-    return def;
+  auto res = concurrent_ref_cache.get(MethodRefCacheKey{method, search});
+  if (res) {
+    return *res;
   }
   auto mdef = resolve_method(method, search, caller);
   if (mdef != nullptr) {
