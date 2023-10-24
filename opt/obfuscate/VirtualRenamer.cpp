@@ -107,8 +107,7 @@ DexMethod* find_method(const DexClass* cls,
 
 // keep a map from defs to all refs resolving to that def
 using RefsMap =
-    std::unordered_map<DexMethod*,
-                       std::set<DexMethodRef*, dexmethods_comparator>>;
+    ConcurrentMap<DexMethod*, std::set<DexMethodRef*, dexmethods_comparator>>;
 
 // Uncomment and use this as a prefix for virtual method
 // names for debugging
@@ -482,8 +481,6 @@ int VirtualRenamer::rename_virtual_scopes(const DexType* type, int& seed) {
  * Collect all method refs to concrete methods (definitions).
  */
 void collect_refs(Scope& scope, RefsMap& def_refs) {
-  ConcurrentMap<DexMethod*, std::set<DexMethodRef*, dexmethods_comparator>>
-      concurrent_def_refs;
   walk::parallel::opcodes(
       scope, [](DexMethod*) { return true; },
       [&](DexMethod*, IRInstruction* insn) {
@@ -511,10 +508,9 @@ void collect_refs(Scope& scope, RefsMap& def_refs) {
         redex_assert(type_class(top->get_class()) != nullptr);
         if (type_class(top->get_class())->is_external()) return;
         // it's a top definition on an internal class, save it
-        concurrent_def_refs.update(
-            top, [&](auto*, auto& set, bool) { set.insert(callee); });
+        def_refs.update(top,
+                        [&](auto*, auto& set, bool) { set.insert(callee); });
       });
-  def_refs = concurrent_def_refs.move_to_container();
 }
 
 } // namespace
