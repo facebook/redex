@@ -1511,7 +1511,8 @@ std::unordered_map<DexMethod*, size_t> select_reduced_methods(
   // global net savings analysis.
 
   ConcurrentSet<DexType*> concurrent_irreducible_types;
-  ConcurrentMap<DexMethod*, size_t> concurrent_selected_reduced_methods;
+  InsertOnlyConcurrentMap<DexMethod*, size_t>
+      concurrent_selected_reduced_methods;
 
   // A family of reduced methods for which we'll look at the combined global net
   // savings

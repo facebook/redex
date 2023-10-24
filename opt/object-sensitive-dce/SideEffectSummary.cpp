@@ -20,7 +20,8 @@ namespace ptrs = local_pointers;
 
 namespace side_effects {
 
-using SummaryConcurrentMap = ConcurrentMap<const DexMethodRef*, Summary>;
+using SummaryConcurrentMap =
+    InsertOnlyConcurrentMap<const DexMethodRef*, Summary>;
 
 SummaryBuilder::SummaryBuilder(
     const init_classes::InitClassesWithSideEffects&
