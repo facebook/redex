@@ -2266,7 +2266,7 @@ remove_uninstantiables_impl::Stats sweep_uncallable_virtual_methods(
         }
       },
       reachable_aspects.directly_instantiable_types);
-  std::unordered_set<DexMethod*> uncallable_instance_methods;
+  ConcurrentSet<DexMethod*> uncallable_instance_methods;
   for (auto* cls : scope) {
     if (is_interface(cls)) {
       // TODO: Is this needed?

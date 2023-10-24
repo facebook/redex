@@ -282,7 +282,7 @@ void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
       });
 
   stats += remove_uninstantiables_impl::reduce_uncallable_instance_methods(
-      scope, uncallable_instance_methods.move_to_container(),
+      scope, uncallable_instance_methods,
       [&](const DexMethod* m) { return false; });
 
   stats.report(mgr);
