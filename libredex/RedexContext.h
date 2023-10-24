@@ -219,6 +219,10 @@ struct RedexContext {
   ConcurrentSet<const DexClass*> blanket_native_root_classes;
   ConcurrentSet<const DexMethod*> blanket_native_root_methods;
 
+  // Release memory used by erased items and old ConcurrentHashtable storage
+  // versions.
+  void compact();
+
  private:
   struct Strcmp;
   struct TruncatedStringHash;

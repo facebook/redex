@@ -1385,6 +1385,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
         });
       }
 
+      g_redex->compact();
+
       trace_cls.dump(pass->name());
 
       cpu_time = cpu_time_end - cpu_time_start;

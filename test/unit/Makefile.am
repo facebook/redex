@@ -180,6 +180,8 @@ class_checker_test_SOURCES = ClassCheckerTest.cpp ScopeHelper.cpp
 
 concurrent_containers_test_SOURCES = ConcurrentContainersTest.cpp
 
+concurrent_hashtable_test_SOURCES = ConcurrentHashtableTest.cpp
+
 configurable_test_SOURCES = ConfigurableTest.cpp
 configurable_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
@@ -486,6 +488,7 @@ TESTS = \
     check_cast_analysis_test \
     class_checker_test \
     concurrent_containers_test \
+    concurrent_hashtable_test \
     configurable_test \
     constructor_analysis_test \
     control_flow_test \

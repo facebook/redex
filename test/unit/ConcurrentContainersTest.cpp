@@ -364,3 +364,22 @@ TEST_F(ConcurrentContainersTest, insertOnlyConcurrentMapTest) {
 
   EXPECT_EQ(m_data_set.size(), map.size());
 }
+
+TEST_F(ConcurrentContainersTest, move) {
+  ConcurrentMap<void*, void*> map1;
+  map1.emplace(nullptr, nullptr);
+  EXPECT_EQ(1, map1.size());
+  auto map2 = std::move(map1);
+  EXPECT_EQ(1, map2.size());
+  map1 = std::move(map2);
+  EXPECT_EQ(1, map1.size());
+}
+
+TEST_F(ConcurrentContainersTest, copy) {
+  ConcurrentMap<void*, void*> map1;
+  map1.emplace(nullptr, nullptr);
+  EXPECT_EQ(1, map1.size());
+  auto map2 = map1;
+  EXPECT_EQ(1, map1.size());
+  EXPECT_EQ(1, map2.size());
+}

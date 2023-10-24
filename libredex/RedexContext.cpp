@@ -851,3 +851,22 @@ void RedexContext::set_sb_interaction_index(
     const std::unordered_map<std::string, size_t>& input) {
   m_sb_interaction_indices = input;
 }
+
+void RedexContext::compact() {
+  // We parallelize destruction for efficiency.
+  auto parallel_run = [](const std::vector<std::function<void()>>& fns) {
+    workqueue_run<std::function<void()>>(
+        [](const std::function<void()>& fn) { fn(); }, fns);
+  };
+
+  parallel_run({
+      [&] { s_type_map.compact(); },
+      [&] { s_field_map.compact(); },
+      [&] { s_typelist_map.compact(); },
+      [&] { s_proto_set.compact(); },
+      [&] { s_method_map.compact(); },
+      [&] { s_location_map.compact(); },
+      [&] { field_values.compact(); },
+      [&] { method_return_values.compact(); },
+  });
+}

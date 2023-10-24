@@ -7,10 +7,15 @@
 
 #pragma once
 
+#include <boost/intrusive/pointer_plus_bits.hpp>
+#include <cstring>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
+#include <memory>
 #include <mutex>
+#include <queue>
+#include <stack>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -18,7 +23,6 @@
 #include "Debug.h"
 #include "Timer.h"
 
-// Forward declaration.
 namespace cc_impl {
 
 template <typename Container, size_t n_slots>
@@ -36,6 +40,823 @@ inline size_t s_concurrent_destruction_threshold{
 void workqueue_run_for(size_t start,
                        size_t end,
                        const std::function<void(size_t)>& fn);
+
+template <typename ConcurrentHashtable>
+class ConcurrentHashtableIterator;
+
+template <typename ConcurrentHashtable>
+class ConcurrentHashtableInsertionResult;
+
+size_t get_prime_number_greater_or_equal_to(size_t i);
+
+/*
+ * This ConcurrentHashtable supports inserting (and "emplacing"), getting (the
+ * address of inserted key-value pairs), and erasing key-value pairs. There is
+ * no built-in support for mutation of previously inserted elements; however,
+ * once inserted, a key-value is assigned a fixed storage location that will
+ * remain valid until the concurrent hashtable is destroyed, or a destructive
+ * NOT thread-safe function such as `compact` is called.
+ *
+ * Some guiding principles for concurrency are:
+ * - All insertions/erasures performed on the current thread are reflected when
+ *   calling get on the current thread.
+ * - Insertions/erasures performed by other threads will become visible
+ *   eventually, but with no ordering guarantees.
+ *
+ * The concurrent hashtable has the following performance characteristics:
+ * - getting and inserting is O(1) on average, lock-free, and not blocked by
+ *   resizing or erasing
+ * - erasing is O(1) on average, but needs to acquire a table-wide mutex
+ * - resizing is O(n) on the current thread, and also acquires the table-wide
+ *   mutex
+ *
+ * Resizing is automatically triggered when an insertion causes the table to
+ * exceed the (hard-coded) load factor, and then this insertion blocks the
+ * current thread while it is busy resizing. However, concurrent gets and
+ * insertions can proceed; new insertions will go into the enlarged table
+ * version, possibly (temporarily) exceeding the load factor. All key-value
+ * pairs are stored in a fixed memory location, and are not moved during
+ * resizing, similar to how std::unordered_set/map manages memory. Erasing a key
+ * does not immediately destroy the key-value pair, but keeps (a reference to)
+ * it until the concurrent hashtable is destroyed, copied, moved, or
+ * `compact` is called. This ensures that get always return a valid
+ * reference, even in the face of concurrent erasing.
+ *
+ * TODO: Right now, we use the (default) std::memory_order_seq_cst everywhere.
+ * Acquire/release semantics should be sufficient.
+ */
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+class ConcurrentHashtable final {
+ public:
+  using key_type = Key;
+  using value_type = Value;
+  using pointer = Value*;
+  using const_pointer = const Value*;
+  using reference = Value&;
+  using const_reference = const Value&;
+  using iterator = ConcurrentHashtableIterator<
+      ConcurrentHashtable<Key, Value, Hash, KeyEqual>>;
+  using const_iterator = ConcurrentHashtableIterator<
+      const ConcurrentHashtable<Key, Value, Hash, KeyEqual>>;
+  using hasher = Hash;
+  using key_equal = KeyEqual;
+  using insertion_result = ConcurrentHashtableInsertionResult<
+      ConcurrentHashtable<Key, Value, Hash, KeyEqual>>;
+
+  struct const_key_projection {
+    template <typename key_type2 = key_type,
+              typename = typename std::enable_if_t<
+                  std::is_same_v<key_type2, value_type>>>
+    const key_type2& operator()(const key_type2& key) {
+      return key;
+    }
+
+    template <typename key_type2 = key_type,
+              typename = typename std::enable_if_t<
+                  !std::is_same_v<key_type2, value_type>>>
+    const key_type2& operator()(const value_type& key) {
+      return key.first;
+    }
+  };
+
+  /*
+   * This operation by itself is always thread-safe. However, any mutating
+   * operations (concurrent or synchronous) invalidate all iterators.
+   */
+  iterator begin() {
+    auto* storage = m_storage.load();
+    auto* ptr = storage->ptrs[0].load();
+    return iterator(storage, 0, get_node(ptr));
+  }
+
+  /*
+   * This operation by itself is always thread-safe. However, any mutating
+   * operations (concurrent or synchronous) invalidate all iterators.
+   */
+  iterator end() {
+    auto* storage = m_storage.load();
+    return iterator(storage, storage->size, nullptr);
+  }
+
+  /*
+   * This operation by itself is always thread-safe. However, any mutating
+   * operations (concurrent or synchronous) invalidate all iterators.
+   */
+  const_iterator begin() const {
+    auto* storage = m_storage.load();
+    auto* ptr = storage->ptrs[0].load();
+    return const_iterator(storage, 0, get_node(ptr));
+  }
+
+  /*
+   * This operation by itself is always thread-safe. However, any mutating
+   * operations (concurrent or synchronous) invalidate all iterators.
+   */
+  const_iterator end() const {
+    auto* storage = m_storage.load();
+    return const_iterator(storage, storage->size, nullptr);
+  }
+
+  /*
+   * This operation by itself is always thread-safe. However, any mutating
+   * operations (concurrent or synchronous) invalidate all iterators.
+   */
+  iterator find(const key_type& key) {
+    auto hash = hasher()(key);
+    auto* storage = m_storage.load();
+    auto* ptrs = storage->ptrs;
+    size_t i = hash % storage->size;
+    auto* root_loc = &ptrs[i];
+    auto* root = root_loc->load();
+    for (auto* ptr = root; ptr;) {
+      auto* node = get_node(ptr);
+      if (key_equal()(const_key_projection()(node->value), key)) {
+        return iterator(storage, i, node);
+      }
+      ptr = node->prev.load();
+    }
+    return end();
+  }
+
+  /*
+   * This operation by itself is always thread-safe. However, any mutating
+   * operations (concurrent or synchronous) invalidate all iterators.
+   */
+  const_iterator find(const key_type& key) const {
+    auto hash = hasher()(key);
+    auto* storage = m_storage.load();
+    auto* ptrs = storage->ptrs;
+    size_t i = hash % storage->size;
+    auto* root_loc = &ptrs[i];
+    auto* root = root_loc->load();
+    for (auto* ptr = root; ptr;) {
+      auto* node = get_node(ptr);
+      if (key_equal()(const_key_projection()(node->value), key)) {
+        return const_iterator(storage, i, node);
+      }
+      ptr = node->prev.load();
+    }
+    return end();
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  size_t size() const { return m_count.load(); }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  bool empty() const { return size() == 0; }
+
+  /*
+   * This operation is NOT thread-safe.
+   */
+  void clear(size_t size = INITIAL_SIZE) {
+    if (m_count.load() > 0) {
+      Storage::destroy(m_storage.exchange(Storage::create(size, nullptr)));
+      m_count.store(0);
+    }
+    compact();
+  }
+
+  ConcurrentHashtable() noexcept : m_storage(Storage::create()), m_count(0) {}
+
+  /*
+   * This operation is NOT thread-safe.
+   */
+  ConcurrentHashtable(const ConcurrentHashtable& container) noexcept
+      : m_storage(Storage::create(container.size() / LOAD_FACTOR + 1, nullptr)),
+        m_count(0) {
+    for (const auto& p : container) {
+      try_insert(p);
+    }
+  }
+
+  /*
+   * This operation is NOT thread-safe.
+   */
+  ConcurrentHashtable(ConcurrentHashtable&& container) noexcept
+      : m_storage(container.m_storage.exchange(Storage::create())),
+        m_count(container.m_count.exchange(0)),
+        m_erased(std::move(container.m_erased)) {
+    compact();
+  }
+
+  /*
+   * This operation is NOT thread-safe.
+   */
+  ConcurrentHashtable& operator=(ConcurrentHashtable&& container) noexcept {
+    clear();
+    container.compact();
+    m_storage.store(container.m_storage.exchange(m_storage.load()));
+    m_count.store(container.m_count.exchange(0));
+    return *this;
+  }
+
+  /*
+   * This operation is NOT thread-safe.
+   */
+  ConcurrentHashtable& operator=(
+      const ConcurrentHashtable& container) noexcept {
+    if (this != &container) {
+      clear(container.size() / LOAD_FACTOR + 1);
+      for (const auto& p : container) {
+        try_insert(p);
+      }
+    }
+    return *this;
+  }
+
+  ~ConcurrentHashtable() {
+    compact();
+    Storage::destroy(m_storage.exchange(nullptr));
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  value_type* get(const key_type& key) {
+    auto hash = hasher()(key);
+    auto* storage = m_storage.load();
+    do {
+      auto* ptrs = storage->ptrs;
+      auto* root_loc = &ptrs[hash % storage->size];
+      auto* root = root_loc->load();
+      for (auto* node = get_node(root); node;
+           node = get_node(node->prev.load())) {
+        if (key_equal()(const_key_projection()(node->value), key)) {
+          return &node->value;
+        }
+      }
+      storage = storage->next.load();
+    } while (storage);
+    return nullptr;
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  const value_type* get(const key_type& key) const {
+    auto hash = hasher()(key);
+    auto* storage = m_storage.load();
+    do {
+      auto* ptrs = storage->ptrs;
+      auto* root_loc = &ptrs[hash % storage->size];
+      auto* root = root_loc->load();
+      for (auto* node = get_node(root); node;
+           node = get_node(node->prev.load())) {
+        if (key_equal()(const_key_projection()(node->value), key)) {
+          return &node->value;
+        }
+      }
+      storage = storage->next.load();
+    } while (storage);
+    return nullptr;
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  template <typename... Args>
+  insertion_result try_emplace(const key_type& key, Args&&... args) {
+    Node* new_node = nullptr;
+    auto hash = hasher()(key);
+    auto* storage = m_storage.load();
+    while (true) {
+      auto* ptrs = storage->ptrs;
+      auto* root_loc = &ptrs[hash % storage->size];
+      auto* root = root_loc->load();
+      for (auto* node = get_node(root); node;
+           node = get_node(node->prev.load())) {
+        if (key_equal()(const_key_projection()(node->value), key)) {
+          return insertion_result(&node->value, new_node);
+        }
+      }
+      if (is_begin_or_end_during_resizing(root)) {
+        storage = storage->next.load();
+        continue;
+      }
+      if (load_factor_exceeded(storage) && reserve(storage->size * 2)) {
+        storage = m_storage.load();
+        continue;
+      }
+      if (!new_node) {
+        new_node = new Node(key, std::forward<Args>(args)...);
+      }
+      new_node->prev = root;
+      if (root_loc->compare_exchange_strong(root, new_node)) {
+        m_count.fetch_add(1);
+        return insertion_result(&new_node->value);
+      }
+      // We lost a race with another insertion
+    }
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  template <typename... Args>
+  insertion_result try_emplace(key_type&& key, Args&&... args) {
+    Node* new_node = nullptr;
+    auto hash = hasher()(key);
+    auto* storage = m_storage.load();
+    const key_type* key_ptr = &key;
+    while (true) {
+      auto* ptrs = storage->ptrs;
+      auto* root_loc = &ptrs[hash % storage->size];
+      auto* root = root_loc->load();
+      for (auto* node = get_node(root); node;
+           node = get_node(node->prev.load())) {
+        if (key_equal()(const_key_projection()(node->value), *key_ptr)) {
+          return insertion_result(&node->value, new_node);
+        }
+      }
+      if (is_begin_or_end_during_resizing(root)) {
+        storage = storage->next.load();
+        continue;
+      }
+      if (load_factor_exceeded(storage) && reserve(storage->size * 2)) {
+        storage = m_storage.load();
+        continue;
+      }
+      if (!new_node) {
+        new_node =
+            new Node(std::forward<key_type>(key), std::forward<Args>(args)...);
+        key_ptr = &const_key_projection()(new_node->value);
+      }
+      new_node->prev = root;
+      if (root_loc->compare_exchange_strong(root, new_node)) {
+        m_count.fetch_add(1);
+        return insertion_result(&new_node->value);
+      }
+      // We lost a race with another insertion
+    }
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  insertion_result try_insert(const value_type& value) {
+    Node* new_node = nullptr;
+    auto hash = hasher()(const_key_projection()(value));
+    auto* storage = m_storage.load();
+    while (true) {
+      auto* ptrs = storage->ptrs;
+      auto* root_loc = &ptrs[hash % storage->size];
+      auto* root = root_loc->load();
+      for (auto* node = get_node(root); node;
+           node = get_node(node->prev.load())) {
+        if (key_equal()(const_key_projection()(node->value),
+                        const_key_projection()(value))) {
+          return insertion_result(&node->value, new_node);
+        }
+      }
+      if (is_begin_or_end_during_resizing(root)) {
+        storage = storage->next.load();
+        continue;
+      }
+      if (load_factor_exceeded(storage) && reserve(storage->size * 2)) {
+        storage = m_storage.load();
+        continue;
+      }
+      if (!new_node) {
+        new_node = new Node{value};
+      }
+      new_node->prev = root;
+      if (root_loc->compare_exchange_strong(root, new_node)) {
+        m_count.fetch_add(1);
+        return insertion_result(&new_node->value);
+      }
+      // We lost a race with another insertion
+    }
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  insertion_result try_insert(value_type&& value) {
+    Node* new_node = nullptr;
+    auto hash = hasher()(const_key_projection()(value));
+    auto* storage = m_storage.load();
+    auto* value_ptr = &value;
+    while (true) {
+      auto* ptrs = storage->ptrs;
+      auto* root_loc = &ptrs[hash % storage->size];
+      auto* root = root_loc->load();
+      for (auto* node = get_node(root); node;
+           node = get_node(node->prev.load())) {
+        if (key_equal()(const_key_projection()(node->value),
+                        const_key_projection()(*value_ptr))) {
+          // We lost a race with an equivalent insertion
+          return insertion_result(&node->value, new_node);
+        }
+      }
+      if (is_begin_or_end_during_resizing(root)) {
+        storage = storage->next.load();
+        continue;
+      }
+      if (load_factor_exceeded(storage) && reserve(storage->size * 2)) {
+        storage = m_storage.load();
+        continue;
+      }
+      if (!new_node) {
+        new_node = new Node{std::forward<value_type>(value)};
+        value_ptr = &new_node->value;
+      }
+      new_node->prev = root;
+      if (root_loc->compare_exchange_strong(root, new_node)) {
+        m_count.fetch_add(1);
+        return insertion_result(&new_node->value);
+      }
+      // We lost a race with another insertion
+    }
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  bool reserve(size_t capacity) {
+    std::unique_lock<std::mutex> lock(m_mutex, std::defer_lock);
+    if (!lock.try_lock()) {
+      return false;
+    }
+    auto* storage = m_storage.load();
+    if (storage->size >= capacity) {
+      return true;
+    }
+    auto new_capacity = get_prime_number_greater_or_equal_to(capacity);
+    auto* ptrs = storage->ptrs;
+    auto* new_storage = Storage::create(new_capacity, storage);
+    storage->next.store(new_storage);
+    std::stack<std::atomic<Ptr>*> locs;
+    for (size_t i = 0; i < storage->size; ++i) {
+      std::atomic<Ptr>* loc = &ptrs[i];
+      Ptr ptr = nullptr;
+      // If the chain is empty, try to store the forward marker. This might fail
+      // due to a race with an insertion.
+      if (loc->compare_exchange_strong(ptr, end_during_resizing())) {
+        continue;
+      }
+      // The chain is not empty. Try to mark the first node to indicate that
+      // forwarding is in progress, preventing any further insertions. This
+      // might fail due to a race with an insertion.
+      always_assert(ptr);
+      auto* node = get_node(ptr);
+      while (!loc->compare_exchange_strong(ptr, begin_during_resizing(node))) {
+        node = get_node(ptr);
+      }
+      // Okay, we have a non-empty chain, and there won't be any more insertions
+      // in this storage version on this chain. Lets rewire the nodes from the
+      // back to the new storage version.
+      locs.push(loc);
+      auto* prev_loc = &node->prev;
+      auto* prev_ptr = prev_loc->load();
+      while (prev_ptr) {
+        loc = prev_loc;
+        locs.push(loc);
+        ptr = prev_ptr;
+        node = get_node(ptr);
+        prev_loc = &node->prev;
+        prev_ptr = prev_loc->load();
+      }
+      while (!locs.empty()) {
+        loc = locs.top();
+        locs.pop();
+        ptr = loc->load();
+        node = get_node(ptr);
+        prev_loc = &node->prev;
+        prev_ptr = prev_loc->load();
+        always_assert(prev_ptr == nullptr ||
+                      is_begin_or_end_during_resizing(prev_ptr));
+        auto new_hash = hasher()(const_key_projection()(node->value));
+        auto* new_loc = &new_storage->ptrs[new_hash % new_storage->size];
+        auto* new_ptr = new_loc->load();
+        // Rewiring the node happens in three steps:
+        do {
+          // 1. Set the (null) prev node pointer to the first chain element in
+          // the new storage version. This is ultimately what we want it to be;
+          // it might allow a racing read operation to scan irrelevant nodes,
+          // but that is not a problem for correctness.
+          prev_loc->store(new_ptr);
+          // 2. Wire up the current node pointer to be the first chain element
+          // in the new storage version. This may fail due to a race with
+          // another thread inserting into the same chain. But then we'll just
+          // retry.
+        } while (!new_loc->compare_exchange_strong(new_ptr, node));
+        // 3. Detach the current node pointer from the end of the old chain.
+        auto* old_ptr = loc->exchange(end_during_resizing());
+        always_assert(old_ptr == ptr);
+      }
+    }
+    auto* old_storage = m_storage.exchange(new_storage);
+    always_assert(old_storage == storage);
+    return true;
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  bool erase(const key_type& key) {
+    auto hash = hasher()(key);
+    std::unique_lock<std::mutex> lock(m_mutex);
+    auto* storage = m_storage.load();
+    auto* ptrs = storage->ptrs;
+    while (true) {
+      auto* loc = &ptrs[hash % storage->size];
+      auto* ptr = loc->load();
+      auto* node = get_node(ptr);
+      for (; node && !key_equal()(const_key_projection()(node->value), key);
+           loc = &node->prev, ptr = loc->load(), node = get_node(ptr)) {
+      }
+      if (!node) {
+        return false;
+      }
+      if (loc->compare_exchange_strong(ptr, node->prev.load())) {
+        if (!m_erased) {
+          m_erased = std::make_unique<std::queue<Node*>>();
+        }
+        m_erased->push(node);
+        m_count.fetch_sub(1);
+        return true;
+      }
+      // We lost a race with an insertion.
+    }
+  }
+
+  /*
+   * This operation is NOT thread-safe.
+   */
+  void compact() {
+    if (m_erased) {
+      while (!m_erased->empty()) {
+        delete m_erased->front();
+        m_erased->pop();
+      }
+    }
+    auto* storage = m_storage.load();
+    always_assert(storage->next.load() == nullptr);
+    Storage* prev_storage = nullptr;
+    std::swap(storage->prev, prev_storage);
+    Storage::destroy(prev_storage);
+  }
+
+ private:
+  static constexpr float LOAD_FACTOR = 0.75;
+  static constexpr size_t INITIAL_SIZE = 5;
+
+  // We store Node pointers as tagged values, to indicate, and be able to
+  // atomically update, whether a location where a node pointer is stored is
+  // currently involved in a resizing operation.
+  using Ptr = void*;
+  enum PtrBits : size_t {
+    END_DURING_RESIZING = 1,
+    BEGIN_DURING_RESIZING = 2,
+  };
+  using PtrPlusBits = boost::intrusive::pointer_plus_bits<Ptr, 2>;
+
+  struct Node {
+    value_type value;
+    std::atomic<Ptr> prev{nullptr};
+
+    template <typename key_type2 = key_type,
+              typename = typename std::enable_if_t<
+                  std::is_same_v<key_type2, value_type>>>
+    explicit Node(const key_type2& key) : value(key) {}
+
+    template <typename key_type2 = key_type,
+              typename = typename std::enable_if_t<
+                  std::is_same_v<key_type2, value_type>>>
+    explicit Node(key_type2&& key) : value(std::forward<key_type2>(key)) {}
+
+    template <typename key_type2 = key_type,
+              typename = typename std::enable_if_t<
+                  !std::is_same_v<key_type2, value_type>>,
+              typename... Args>
+    explicit Node(const key_type2& key, Args&&... args)
+        : value(std::piecewise_construct,
+                std::forward_as_tuple(key),
+                std::forward_as_tuple(std::forward<Args>(args)...)) {}
+
+    template <typename key_type2 = key_type,
+              typename = typename std::enable_if_t<
+                  !std::is_same_v<key_type2, value_type>>,
+              typename... Args>
+    explicit Node(key_type2&& key, Args&&... args)
+        : value(std::piecewise_construct,
+                std::forward_as_tuple(std::forward<key_type2>(key)),
+                std::forward_as_tuple(std::forward<Args>(args)...)) {}
+  };
+
+  // Initially, and every time we resize, a new Storage version is created.
+  struct Storage {
+    size_t size;
+    Storage* prev;
+    std::atomic<Storage*> next;
+    std::atomic<Ptr> ptrs[1];
+
+    // Only create instances via `create`.
+    Storage() = delete;
+
+    static Storage* create(size_t size, Storage* prev) {
+      always_assert(size > 0);
+      size_t bytes = sizeof(Storage) + sizeof(std::atomic<Ptr>) * (size - 1);
+      auto* storage = (Storage*)malloc(bytes);
+      always_assert(storage);
+      memset(storage, 0, bytes);
+      storage->size = size;
+      storage->prev = prev;
+      return storage;
+    }
+
+    static Storage* create() { return create(INITIAL_SIZE, nullptr); }
+
+    static void destroy(Storage* t) {
+      for (auto* s = t; s; s = t) {
+        if (s->next.load() == nullptr) {
+          for (size_t i = 0; i < s->size; i++) {
+            auto* loc = &s->ptrs[i];
+            auto* ptr = loc->load();
+            for (auto* node = get_node(ptr); node; node = get_node(ptr)) {
+              ptr = node->prev.load();
+              delete node;
+            }
+          }
+        }
+        t = s->prev;
+        free(s);
+      }
+    }
+  };
+
+  std::atomic<Storage*> m_storage;
+  std::atomic<size_t> m_count;
+  mutable std::mutex m_mutex;
+  std::unique_ptr<std::queue<Node*>> m_erased;
+
+  bool load_factor_exceeded(const Storage* storage) const {
+    return m_count.load() > storage->size * LOAD_FACTOR;
+  }
+
+  // Only applicable to the root of a node chain: Whether the node chain is in
+  // the process of being resized; if so, any additional nodes must go to the
+  // next Storage version.
+  static bool is_begin_or_end_during_resizing(Ptr ptr) {
+    return PtrPlusBits::get_bits(ptr) != 0;
+  }
+
+  static Node* get_node(Ptr ptr) {
+    return static_cast<Node*>(PtrPlusBits::get_pointer(ptr));
+  }
+
+  // Creates a tagged `Ptr` indicating that this is a sentinel during resizing;
+  // if so, additional nodes may be found in the next Storage version.
+  static Ptr end_during_resizing() {
+    Ptr ptr = nullptr;
+    PtrPlusBits::set_bits(ptr, END_DURING_RESIZING);
+    return ptr;
+  }
+
+  // Creates a tagged root node indicating that the node chain is in the process
+  // of being resized; if so, any additional nodes must go to the
+  // next Storage version.
+  static Ptr begin_during_resizing(Node* node) {
+    always_assert(node);
+    Ptr ptr = node;
+    PtrPlusBits::set_bits(ptr, BEGIN_DURING_RESIZING);
+    return ptr;
+  }
+
+  friend class ConcurrentHashtableIterator<
+      ConcurrentHashtable<Key, Value, Hash, KeyEqual>>;
+  friend class ConcurrentHashtableIterator<
+      const ConcurrentHashtable<Key, Value, Hash, KeyEqual>>;
+  friend class ConcurrentHashtableInsertionResult<
+      ConcurrentHashtable<Key, Value, Hash, KeyEqual>>;
+};
+
+/*
+ * Helper class to represent result of an (attmpted) insertion. What's
+ * interesting is that even when insertion fails, because a value with the same
+ * key is already present in the hashtable, a new value might have been
+ * incidentally constructed, possibly moving the supplied arguments in the
+ * process. This result value captures such an incidentally created value, and
+ * allows checking for equality with the stored value.
+ */
+template <typename ConcurrentHashtable>
+class ConcurrentHashtableInsertionResult final {
+  using value_type = typename ConcurrentHashtable::value_type;
+  using Node = typename ConcurrentHashtable::Node;
+  std::unique_ptr<Node> m_node;
+  explicit ConcurrentHashtableInsertionResult(value_type* stored_value_ptr)
+      : stored_value_ptr(stored_value_ptr), success(true) {}
+  ConcurrentHashtableInsertionResult(value_type* stored_value_ptr, Node* node)
+      : m_node(node), stored_value_ptr(stored_value_ptr), success(false) {}
+
+ public:
+  value_type* stored_value_ptr;
+  bool success;
+
+  value_type* incidentally_constructed_value() const {
+    return m_node ? &m_node->value : nullptr;
+  }
+
+  friend ConcurrentHashtable;
+};
+
+template <typename ConcurrentHashtable>
+class ConcurrentHashtableIterator final {
+ public:
+  using difference_type = std::ptrdiff_t;
+  using value_type = typename ConcurrentHashtable::value_type;
+  using pointer =
+      std::conditional_t<std::is_const<ConcurrentHashtable>::value,
+                         typename ConcurrentHashtable::const_pointer,
+                         typename ConcurrentHashtable::pointer>;
+  using const_pointer = typename ConcurrentHashtable::const_pointer;
+  using reference =
+      std::conditional_t<std::is_const<ConcurrentHashtable>::value,
+                         typename ConcurrentHashtable::const_reference,
+                         typename ConcurrentHashtable::reference>;
+  using const_reference = typename ConcurrentHashtable::const_reference;
+  using iterator_category = std::forward_iterator_tag;
+
+ private:
+  using Storage = typename ConcurrentHashtable::Storage;
+  using Node = typename ConcurrentHashtable::Node;
+
+  Storage* m_storage;
+  size_t m_index;
+  Node* m_node;
+
+  bool is_end() const { return m_index == m_storage->size; }
+
+  void advance() {
+    if (m_node) {
+      m_node = ConcurrentHashtable::get_node(m_node->prev.load());
+      if (m_node) {
+        return;
+      }
+    }
+    do {
+      if (++m_index == m_storage->size) {
+        return;
+      }
+      m_node = ConcurrentHashtable::get_node(m_storage->ptrs[m_index].load());
+    } while (!m_node);
+  }
+
+  ConcurrentHashtableIterator(Storage* storage, size_t index, Node* node)
+      : m_storage(storage), m_index(index), m_node(node) {
+    if (!node && index < storage->size) {
+      advance();
+    }
+  }
+
+ public:
+  ConcurrentHashtableIterator& operator++() {
+    always_assert(!is_end());
+    advance();
+    return *this;
+  }
+
+  ConcurrentHashtableIterator& operator++(int) {
+    ConcurrentHashtableIterator retval = *this;
+    ++(*this);
+    return retval;
+  }
+
+  bool operator==(const ConcurrentHashtableIterator& other) const {
+    return m_storage == other.m_storage && m_index == other.m_index &&
+           m_node == other.m_node;
+  }
+
+  bool operator!=(const ConcurrentHashtableIterator& other) const {
+    return !(*this == other);
+  }
+
+  reference operator*() {
+    always_assert(!is_end());
+    return m_node->value;
+  }
+
+  pointer operator->() {
+    always_assert(!is_end());
+    return &m_node->value;
+  }
+
+  const_reference operator*() const {
+    always_assert(!is_end());
+    return m_node->value;
+  }
+
+  const_pointer operator->() const {
+    always_assert(!is_end());
+    return &m_node->value;
+  }
+
+  friend ConcurrentHashtable;
+};
 
 } // namespace cc_impl
 
@@ -60,15 +881,14 @@ class ConcurrentContainerConcurrentDestructionScope {
 
 /*
  * This class implements the common functionalities of concurrent sets and maps.
- * A concurrent container is just a collection of STL hash maps/sets
- * (unordered_map/unordered_set) arranged in slots. Whenever a thread performs a
- * concurrent operation on an element, the slot uniquely determined by the hash
- * code of the element is locked and the corresponding operation is performed on
- * the underlying STL container. This is a very simple design, which offers
- * reasonable performance in practice. A high number of slots may help reduce
- * thread contention at the expense of a larger memory footprint. It is advised
- * to use a prime number for `n_slots`, so as to ensure a more even spread of
- * elements across slots.
+ * A concurrent container is a collection of a ConcurrentHashtable
+ * (providing functionality similar yo unordered_map/unordered_set) arranged in
+ * slots. Whenever a thread performs a concurrent operation on an element, the
+ * slot is uniquely determined by the hash code of the element. A sharded lock
+ * is obtained if the operation in question cannot be performed lock-free. A
+ * high number of slots may help reduce thread contention at the expense of a
+ * larger memory footprint. It is advised to use a prime number for `n_slots`,
+ * so as to ensure a more even spread of elements across slots.
  *
  * There are two major modes in which a concurrent container is thread-safe:
  *  - Read only: multiple threads access the contents of the container but do
@@ -78,26 +898,35 @@ class ConcurrentContainerConcurrentDestructionScope {
  * The few operations that are thread-safe regardless of the access mode are
  * documented as such.
  */
-template <typename Container, typename Key, typename Hash, size_t n_slots>
+template <typename Container, size_t n_slots>
 class ConcurrentContainer {
  public:
   static_assert(n_slots > 0, "The concurrent container has no slots");
 
-  using iterator = cc_impl::ConcurrentContainerIterator<Container, n_slots>;
+  using Key = typename Container::key_type;
+  using Hash = typename Container::hasher;
+  using KeyEqual = typename Container::key_equal;
+  using Value = typename Container::value_type;
+
+  using ConcurrentHashtable =
+      cc_impl::ConcurrentHashtable<Key, Value, Hash, KeyEqual>;
+
+  using iterator =
+      cc_impl::ConcurrentContainerIterator<ConcurrentHashtable, n_slots>;
 
   using const_iterator =
-      cc_impl::ConcurrentContainerIterator<const Container, n_slots>;
+      cc_impl::ConcurrentContainerIterator<const ConcurrentHashtable, n_slots>;
 
   virtual ~ConcurrentContainer() {
     auto timer_scope = cc_impl::s_destructor.scope();
     if (size() <= cc_impl::s_concurrent_destruction_threshold) {
       for (size_t slot = 0; slot < n_slots; ++slot) {
-        m_slots[slot] = Container();
+        m_slots[slot].clear();
       }
       return;
     }
-    cc_impl::workqueue_run_for(
-        0, n_slots, [this](size_t slot) { m_slots[slot] = Container(); });
+    cc_impl::workqueue_run_for(0, n_slots,
+                               [this](size_t slot) { m_slots[slot].clear(); });
   }
 
   /*
@@ -137,6 +966,9 @@ class ConcurrentContainer {
     return const_iterator(&m_slots[0], slot, it);
   }
 
+  /*
+   * This operation is always thread-safe.
+   */
   size_t size() const {
     size_t s = 0;
     for (size_t slot = 0; slot < n_slots; ++slot) {
@@ -145,6 +977,9 @@ class ConcurrentContainer {
     return s;
   }
 
+  /*
+   * This operation is always thread-safe.
+   */
   bool empty() const {
     for (size_t slot = 0; slot < n_slots; ++slot) {
       if (!m_slots[slot].empty()) {
@@ -154,6 +989,9 @@ class ConcurrentContainer {
     return true;
   }
 
+  /*
+   * This operation is always thread-safe.
+   */
   void reserve(size_t capacity) {
     size_t slot_capacity = capacity / n_slots;
     if (slot_capacity > 0) {
@@ -169,50 +1007,31 @@ class ConcurrentContainer {
     }
   }
 
+  void compact() {
+    for (size_t slot = 0; slot < n_slots; ++slot) {
+      m_slots[slot].compact();
+    }
+  }
+
   /*
    * This operation is always thread-safe.
    */
   size_t count(const Key& key) const {
     size_t slot = Hash()(key) % n_slots;
-    std::unique_lock<std::mutex> lock{m_locks[slot]};
-    return m_slots[slot].count(key);
+    return m_slots[slot].get(key) != nullptr;
   }
 
-  size_t count_unsafe(const Key& key) const {
-    size_t slot = Hash()(key) % n_slots;
-    return m_slots[slot].count(key);
-  }
+  size_t count_unsafe(const Key& key) const { return count(key); }
 
   /*
    * This operation is always thread-safe.
    */
   size_t erase(const Key& key) {
     size_t slot = Hash()(key) % n_slots;
-    std::unique_lock<std::mutex> lock{m_locks[slot]};
     return m_slots[slot].erase(key);
   }
 
-  size_t erase_unsafe(const Key& key) {
-    size_t slot = Hash()(key) % n_slots;
-    return m_slots[slot].erase(key);
-  }
-
-  /*
-   * This operation is not thread-safe.
-   */
-  size_t bucket_size(size_t i) const {
-    always_assert(i < n_slots);
-    return m_slots[i].size();
-  }
-
-  /*
-   * WARNING: Only use with unsafe functions, or risk deadlock or undefined
-   * behavior!
-   */
-  std::mutex& get_lock(const Key& key) const {
-    size_t slot = Hash()(key) % n_slots;
-    return get_lock_by_slot(slot);
-  }
+  size_t erase_unsafe(const Key& key) { return erase(key); }
 
  protected:
   // Only derived classes may be instantiated or copied.
@@ -247,68 +1066,64 @@ class ConcurrentContainer {
     return *this;
   }
 
-  Container& get_container(size_t slot) { return m_slots[slot]; }
+  ConcurrentHashtable& get_container(size_t slot) { return m_slots[slot]; }
 
-  const Container& get_container(size_t slot) const { return m_slots[slot]; }
-
-  std::mutex& get_lock_by_slot(size_t slot) const { return m_locks[slot]; }
-
-  mutable std::mutex m_locks[n_slots];
-  Container m_slots[n_slots];
-};
-
-struct Identity {
-  template <typename T>
-  T&& operator()(T&& t) const {
-    return std::forward<T>(t);
+  const ConcurrentHashtable& get_container(size_t slot) const {
+    return m_slots[slot];
   }
+
+  ConcurrentHashtable m_slots[n_slots];
 };
 
-// A concurrent container with map semantics.
-//
-// Note: `KeyProjection` allows to use a different key for the
-//       `ConcurrentMapContainer` vs the internal sharded storage.
-//
-//       This is in general possible without, but may have storage overhead.
-//       An example is a `pair` key, where the first component is
-//       used for sharding, and the second component for the internal
-//       map. This could be simulated by a `pair` key in the internal map
-//       and corresponding hash/compare/equals functions,
-
-template <typename MapContainer,
-          typename Key,
+/*
+ * A concurrent container with map semantics, also allowing erasing and updating
+ * values.
+ *
+ * Prefer using an InsertOnlyConcurrentMap when possibly, as it more clearly
+ * conveys the possible intent of an insertion-only map whose elements cannot be
+ * mutated, and it allows safely reading values without requiring copying them
+ * under a lock.
+ */
+template <typename Key,
           typename Value,
           typename Hash = std::hash<Key>,
-          typename KeyProjection = Identity,
+          typename KeyEqual = std::equal_to<Key>,
           size_t n_slots = 31>
-class ConcurrentMapContainer
-    : public ConcurrentContainer<MapContainer, Key, Hash, n_slots> {
+class ConcurrentMap final
+    : public ConcurrentContainer<std::unordered_map<Key, Value, Hash, KeyEqual>,
+                                 n_slots> {
  public:
-  using typename ConcurrentContainer<MapContainer, Key, Hash, n_slots>::
-      const_iterator;
-  using
-      typename ConcurrentContainer<MapContainer, Key, Hash, n_slots>::iterator;
+  using Base =
+      ConcurrentContainer<std::unordered_map<Key, Value, Hash, KeyEqual>,
+                          n_slots>;
 
-  using ConcurrentContainer<MapContainer, Key, Hash, n_slots>::m_slots;
-  using ConcurrentContainer<MapContainer, Key, Hash, n_slots>::end;
+  using typename Base::const_iterator;
+  using typename Base::iterator;
 
-  ConcurrentMapContainer() = default;
+  using Base::end;
+  using Base::m_slots;
 
-  ConcurrentMapContainer(const ConcurrentMapContainer& container)
-      : ConcurrentContainer<MapContainer, Key, Hash, n_slots>(container) {}
+  ConcurrentMap() = default;
 
-  ConcurrentMapContainer(ConcurrentMapContainer&& container) noexcept
-      : ConcurrentContainer<MapContainer, Key, Hash, n_slots>(
-            std::move(container)) {}
+  ConcurrentMap(const ConcurrentMap& container) noexcept : Base(container) {}
 
-  ConcurrentMapContainer& operator=(ConcurrentMapContainer&&) noexcept =
-      default;
+  ConcurrentMap(ConcurrentMap&& container) noexcept
+      : Base(std::move(container)) {}
 
-  ConcurrentMapContainer& operator=(const ConcurrentMapContainer&) noexcept =
-      default;
+  ConcurrentMap& operator=(ConcurrentMap&& container) noexcept {
+    Base::operator=(std::move(container));
+    return *this;
+  }
+
+  ConcurrentMap& operator=(const ConcurrentMap& container) noexcept {
+    if (this != &container) {
+      Base::operator=(container);
+    }
+    return *this;
+  }
 
   template <typename InputIt>
-  ConcurrentMapContainer(InputIt first, InputIt last) {
+  ConcurrentMap(InputIt first, InputIt last) {
     insert(first, last);
   }
 
@@ -321,36 +1136,27 @@ class ConcurrentMapContainer
    */
   Value at(const Key& key) const {
     size_t slot = Hash()(key) % n_slots;
+    const auto& map = this->get_container(slot);
+    const auto* ptr = map.get(key);
+    always_assert(ptr);
     std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
-    return this->get_container(slot).at(KeyProjection()(key));
+    return ptr->second;
   }
 
   const Value& at_unsafe(const Key& key) const {
     size_t slot = Hash()(key) % n_slots;
-    return this->get_container(slot).at(KeyProjection()(key));
+    const auto& map = this->get_container(slot);
+    const auto* ptr = map.get(key);
+    always_assert(ptr);
+    return ptr->second;
   }
 
   Value& at_unsafe(const Key& key) {
     size_t slot = Hash()(key) % n_slots;
-    return this->get_container(slot).at(KeyProjection()(key));
-  }
-
-  iterator find(const Key& key) {
-    size_t slot = Hash()(key) % n_slots;
-    const auto& it = m_slots[slot].find(KeyProjection()(key));
-    if (it == m_slots[slot].end()) {
-      return end();
-    }
-    return iterator(&m_slots[0], slot, it);
-  }
-
-  const_iterator find(const Key& key) const {
-    size_t slot = Hash()(key) % n_slots;
-    const auto& it = m_slots[slot].find(KeyProjection()(key));
-    if (it == m_slots[slot].end()) {
-      return end();
-    }
-    return const_iterator(&m_slots[0], slot, it);
+    auto& map = this->get_container(slot);
+    auto* ptr = map.get(key);
+    always_assert(ptr);
+    return ptr->second;
   }
 
   /*
@@ -358,13 +1164,13 @@ class ConcurrentMapContainer
    */
   Value get(const Key& key, Value default_value) const {
     size_t slot = Hash()(key) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     const auto& map = this->get_container(slot);
-    const auto& it = map.find(KeyProjection()(key));
-    if (it == map.end()) {
+    const auto* ptr = map.get(key);
+    if (!ptr) {
       return default_value;
     }
-    return it->second;
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
+    return ptr->second;
   }
 
   /*
@@ -378,11 +1184,14 @@ class ConcurrentMapContainer
    */
   bool insert(const std::pair<Key, Value>& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     auto& map = this->get_container(slot);
-    return map
-        .insert(std::make_pair(KeyProjection()(entry.first), entry.second))
-        .second;
+    return map.try_insert(entry).success;
+  }
+
+  bool insert(std::pair<Key, Value>&& entry) {
+    size_t slot = Hash()(entry.first) % n_slots;
+    auto& map = this->get_container(slot);
+    return map.try_insert(std::forward<std::pair<Key, Value>>(entry)).success;
   }
 
   /*
@@ -409,34 +1218,75 @@ class ConcurrentMapContainer
    */
   void insert_or_assign(const std::pair<Key, Value>& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     auto& map = this->get_container(slot);
-    map[KeyProjection()(entry.first)] = entry.second;
+    auto insertion_result = map.try_insert(entry);
+    if (insertion_result.success) {
+      return;
+    }
+    auto* constructed_value = insertion_result.incidentally_constructed_value();
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
+    if (constructed_value) {
+      insertion_result.stored_value_ptr->second =
+          std::move(constructed_value->second);
+    } else {
+      insertion_result.stored_value_ptr->second = entry.second;
+    }
+  }
+
+  void insert_or_assign(std::pair<Key, Value>&& entry) {
+    size_t slot = Hash()(entry.first) % n_slots;
+    auto& map = this->get_container(slot);
+    auto insertion_result =
+        map.try_insert(std::forward<std::pair<Key, Value>>(entry));
+    if (insertion_result.success) {
+      return;
+    }
+    auto* constructed_value = insertion_result.incidentally_constructed_value();
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
+    if (constructed_value) {
+      insertion_result.stored_value_ptr->second =
+          std::move(constructed_value->second);
+    } else {
+      insertion_result.stored_value_ptr->second =
+          std::forward<Value>(entry.second);
+    }
   }
 
   /*
    * This operation is always thread-safe.
    */
   template <typename... Args>
-  bool emplace(Args&&... args) {
-    std::pair<Key, Value> entry(std::forward<Args>(args)...);
-    size_t slot = Hash()(entry.first) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
+  bool emplace(const Key& key, Args&&... args) {
+    size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
-    return map
-        .emplace(KeyProjection()(std::move(entry.first)),
-                 std::move(entry.second))
-        .second;
+    return map.try_emplace(key, std::forward<Args>(args)...).success;
   }
 
   template <typename... Args>
-  std::pair<Value*, bool> emplace_unsafe(Args&&... args) {
-    std::pair<Key, Value> entry(std::forward<Args>(args)...);
-    size_t slot = Hash()(entry.first) % n_slots;
+  bool emplace(Key&& key, Args&&... args) {
+    size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
-    auto [it, emplaced] = map.emplace(KeyProjection()(std::move(entry.first)),
-                                      std::move(entry.second));
-    return std::make_pair(&it->second, emplaced);
+    return map.try_emplace(std::forward<Key>(key), std::forward<Args>(args)...)
+        .success;
+  }
+
+  template <typename... Args>
+  std::pair<Value*, bool> emplace_unsafe(const Key& key, Args&&... args) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& map = this->get_container(slot);
+    auto insertion_result = map.try_emplace(key, std::forward<Args>(args)...);
+    return std::make_pair(&insertion_result.stored_value_ptr->second,
+                          insertion_result.success);
+  }
+
+  template <typename... Args>
+  std::pair<Value*, bool> emplace_unsafe(Key&& key, Args&&... args) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& map = this->get_container(slot);
+    auto insertion_result =
+        map.try_emplace(std::forward<Key>(key), std::forward<Args>(args)...);
+    return std::make_pair(&insertion_result.stored_value_ptr->second,
+                          insertion_result.success);
   }
 
   /*
@@ -446,13 +1296,13 @@ class ConcurrentMapContainer
       typename ObserveFn = const std::function<void(const Key&, const Value&)>&>
   bool observe(const Key& key, ObserveFn observer) const {
     size_t slot = Hash()(key) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     const auto& map = this->get_container(slot);
-    auto it = map.find(KeyProjection()(key));
-    if (it == map.end()) {
+    const auto* ptr = map.get(key);
+    if (!ptr) {
       return false;
     }
-    observer(it->first, it->second);
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
+    observer(ptr->first, ptr->second);
     return true;
   }
 
@@ -465,14 +1315,22 @@ class ConcurrentMapContainer
       typename UpdateFn = const std::function<void(const Key&, Value&, bool)>&>
   void update(const Key& key, UpdateFn updater) {
     size_t slot = Hash()(key) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     auto& map = this->get_container(slot);
-    auto it = map.find(KeyProjection()(key));
-    if (it == map.end()) {
-      updater(KeyProjection()(key), map[KeyProjection()(key)], false);
-    } else {
-      updater(it->first, it->second, true);
-    }
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
+    auto insertion_result = map.try_emplace(key);
+    auto* ptr = insertion_result.stored_value_ptr;
+    updater(ptr->first, ptr->second, !insertion_result.success);
+  }
+
+  template <
+      typename UpdateFn = const std::function<void(const Key&, Value&, bool)>&>
+  void update(Key&& key, UpdateFn updater) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& map = this->get_container(slot);
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
+    auto insertion_result = map.try_emplace(std::forward<Key>(key));
+    auto* ptr = insertion_result.stored_value_ptr;
+    updater(ptr->first, ptr->second, !insertion_result.success);
   }
 
   template <
@@ -480,69 +1338,74 @@ class ConcurrentMapContainer
   void update_unsafe(const Key& key, UpdateFn updater) {
     size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
-    auto it = map.find(KeyProjection()(key));
-    if (it == map.end()) {
-      updater(KeyProjection()(key), map[KeyProjection()(key)], false);
-    } else {
-      updater(it->first, it->second, true);
-    }
+    auto insertion_result = map.try_emplace(key);
+    auto* ptr = insertion_result.stored_value_ptr;
+    updater(ptr->first, ptr->second, !insertion_result.success);
   }
-};
 
-template <typename Key,
-          typename Value,
-          typename Hash = std::hash<Key>,
-          typename Equal = std::equal_to<Key>,
-          size_t n_slots = 31>
-using ConcurrentMap =
-    ConcurrentMapContainer<std::unordered_map<Key, Value, Hash, Equal>,
-                           Key,
-                           Value,
-                           Hash,
-                           Identity,
-                           n_slots>;
+  template <
+      typename UpdateFn = const std::function<void(const Key&, Value&, bool)>&>
+  void update_unsafe(Key&& key, UpdateFn updater) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& map = this->get_container(slot);
+    auto insertion_result = map.try_emplace(std::forward<Key>(key));
+    auto* ptr = insertion_result.stored_value_ptr;
+    updater(ptr->first, ptr->second, !insertion_result.success);
+  }
+
+ private:
+  std::mutex& get_lock_by_slot(size_t slot) const { return m_locks[slot]; }
+
+  mutable std::mutex m_locks[n_slots];
+};
 
 /**
  * A concurrent container with map semantics that only accepts insertions.
  *
  * This allows accessing constant references on values safely.
  */
-template <typename MapContainer,
-          typename Key,
+template <typename Key,
           typename Value,
           typename Hash = std::hash<Key>,
-          typename KeyProjection = Identity,
+          typename KeyEqual = std::equal_to<Key>,
           size_t n_slots = 31>
-class InsertOnlyConcurrentMapContainer
-    : public ConcurrentContainer<MapContainer, Key, Hash, n_slots> {
+class InsertOnlyConcurrentMap final
+    : public ConcurrentContainer<std::unordered_map<Key, Value, Hash, KeyEqual>,
+                                 n_slots> {
  public:
-  using typename ConcurrentContainer<MapContainer, Key, Hash, n_slots>::
-      const_iterator;
-  using
-      typename ConcurrentContainer<MapContainer, Key, Hash, n_slots>::iterator;
+  using Base =
+      ConcurrentContainer<std::unordered_map<Key, Value, Hash, KeyEqual>,
+                          n_slots>;
+  using typename Base::const_iterator;
+  using typename Base::iterator;
 
-  using ConcurrentContainer<MapContainer, Key, Hash, n_slots>::m_slots;
-  using ConcurrentContainer<MapContainer, Key, Hash, n_slots>::end;
+  using Base::end;
+  using Base::m_slots;
 
-  InsertOnlyConcurrentMapContainer() = default;
+  InsertOnlyConcurrentMap() = default;
 
-  InsertOnlyConcurrentMapContainer(
-      const InsertOnlyConcurrentMapContainer& container)
-      : ConcurrentContainer<MapContainer, Key, Hash, n_slots>(container) {}
+  InsertOnlyConcurrentMap(const InsertOnlyConcurrentMap& container) noexcept
+      : Base(container) {}
 
-  InsertOnlyConcurrentMapContainer(
-      InsertOnlyConcurrentMapContainer&& container) noexcept
-      : ConcurrentContainer<MapContainer, Key, Hash, n_slots>(
-            std::move(container)) {}
+  InsertOnlyConcurrentMap(InsertOnlyConcurrentMap&& container) noexcept
+      : Base(std::move(container)) {}
 
-  InsertOnlyConcurrentMapContainer& operator=(
-      InsertOnlyConcurrentMapContainer&&) noexcept = default;
+  InsertOnlyConcurrentMap& operator=(
+      InsertOnlyConcurrentMap&& container) noexcept {
+    Base::operator=(std::move(container));
+    return *this;
+  }
 
-  InsertOnlyConcurrentMapContainer& operator=(
-      const InsertOnlyConcurrentMapContainer&) noexcept = default;
+  InsertOnlyConcurrentMap& operator=(
+      const InsertOnlyConcurrentMap& container) noexcept {
+    if (this != &container) {
+      Base::operator=(container);
+    }
+    return *this;
+  }
 
   template <typename InputIt>
-  InsertOnlyConcurrentMapContainer(InputIt first, InputIt last) {
+  InsertOnlyConcurrentMap(InputIt first, InputIt last) {
     insert(first, last);
   }
 
@@ -551,34 +1414,19 @@ class InsertOnlyConcurrentMapContainer
    */
   const Value* get(const Key& key) const {
     size_t slot = Hash()(key) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     const auto& map = this->get_container(slot);
-    const auto& it = map.find(KeyProjection()(key));
-    if (it == map.end()) {
-      return nullptr;
-    }
-    return &it->second;
+    const auto* ptr = map.get(key);
+    return ptr ? &ptr->second : nullptr;
   }
 
   Value* get_unsafe(const Key& key) {
     size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
-    const auto& it = map.find(KeyProjection()(key));
-    if (it == map.end()) {
-      return nullptr;
-    }
-    return &it->second;
+    auto* ptr = map.get(key);
+    return ptr ? &ptr->second : nullptr;
   }
 
-  const Value* get_unsafe(const Key& key) const {
-    size_t slot = Hash()(key) % n_slots;
-    auto& map = this->get_container(slot);
-    const auto& it = map.find(KeyProjection()(key));
-    if (it == map.end()) {
-      return nullptr;
-    }
-    return &it->second;
-  }
+  const Value* get_unsafe(const Key& key) const { return get(key); }
 
   /*
    * This operation is always thread-safe. If you are reading from a
@@ -587,39 +1435,21 @@ class InsertOnlyConcurrentMapContainer
    */
   const Value& at(const Key& key) const {
     size_t slot = Hash()(key) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
-    return this->get_container(slot).at(KeyProjection()(key));
+    const auto& map = this->get_container(slot);
+    const auto* ptr = map.get(key);
+    always_assert(ptr);
+    return ptr->second;
   }
 
   Value& at_unsafe(const Key& key) {
     size_t slot = Hash()(key) % n_slots;
-    return this->get_container(slot).at(KeyProjection()(key));
+    auto& map = this->get_container(slot);
+    auto* ptr = map.get(key);
+    always_assert(ptr);
+    return ptr->second;
   }
 
-  const Value& at_unsafe(const Key& key) const {
-    size_t slot = Hash()(key) % n_slots;
-    return this->get_container(slot).at(KeyProjection()(key));
-  }
-
-  /* NOT thread-safe */
-  iterator find(const Key& key) {
-    size_t slot = Hash()(key) % n_slots;
-    const auto& it = m_slots[slot].find(KeyProjection()(key));
-    if (it == m_slots[slot].end()) {
-      return end();
-    }
-    return iterator(&m_slots[0], slot, it);
-  }
-
-  /* NOT thread-safe */
-  const_iterator find(const Key& key) const {
-    size_t slot = Hash()(key) % n_slots;
-    const auto& it = m_slots[slot].find(KeyProjection()(key));
-    if (it == m_slots[slot].end()) {
-      return end();
-    }
-    return const_iterator(&m_slots[0], slot, it);
-  }
+  const Value& at_unsafe(const Key& key) const { return at(key); }
 
   /*
    * The Boolean return value denotes whether the insertion took place.
@@ -632,11 +1462,14 @@ class InsertOnlyConcurrentMapContainer
    */
   bool insert(const std::pair<Key, Value>& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     auto& map = this->get_container(slot);
-    return map
-        .insert(std::make_pair(KeyProjection()(entry.first), entry.second))
-        .second;
+    return map.try_insert(entry).success;
+  }
+
+  bool insert(std::pair<Key, Value>&& entry) {
+    size_t slot = Hash()(entry.first) % n_slots;
+    auto& map = this->get_container(slot);
+    return map.try_insert(std::forward<std::pair<Key, Value>>(entry)).success;
   }
 
   /*
@@ -661,7 +1494,35 @@ class InsertOnlyConcurrentMapContainer
   void insert_or_assign_unsafe(const std::pair<Key, Value>& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
-    map[KeyProjection()(entry.first)] = entry.second;
+    auto insertion_result = map.try_emplace(entry);
+    if (insertion_result.success) {
+      return;
+    }
+    auto* constructed_value = insertion_result.incidentally_constructed_value();
+    if (constructed_value) {
+      insertion_result.stored_value_ptr->second =
+          std::move(constructed_value->second);
+    } else {
+      insertion_result.stored_value_ptr->second = entry.second;
+    }
+  }
+
+  void insert_or_assign_unsafe(std::pair<Key, Value>&& entry) {
+    size_t slot = Hash()(entry.first) % n_slots;
+    auto& map = this->get_container(slot);
+    auto insertion_result =
+        map.try_emplace(std::forward<std::pair<Key, Value>>(entry));
+    if (insertion_result.success) {
+      return;
+    }
+    auto* constructed_value = insertion_result.incidentally_constructed_value();
+    if (constructed_value) {
+      insertion_result.stored_value_ptr->second =
+          std::move(constructed_value->second);
+    } else {
+      insertion_result.stored_value_ptr->second =
+          std::forward<Value>(entry.second);
+    }
   }
 
   /*
@@ -671,12 +1532,18 @@ class InsertOnlyConcurrentMapContainer
   bool emplace(Args&&... args) {
     std::pair<Key, Value> entry(std::forward<Args>(args)...);
     size_t slot = Hash()(entry.first) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     auto& map = this->get_container(slot);
-    return map
-        .emplace(KeyProjection()(std::move(entry.first)),
-                 std::move(entry.second))
-        .second;
+    return map.try_insert(std::move(entry)).success;
+  }
+
+  template <typename... Args>
+  std::pair<Value*, bool> emplace_unsafe(Args&&... args) {
+    std::pair<Key, Value> entry(std::forward<Args>(args)...);
+    size_t slot = Hash()(entry.first) % n_slots;
+    auto& map = this->get_container(slot);
+    auto insertion_result = map.try_insert(std::move(entry));
+    return std::make_pair(&insertion_result.stored_value_ptr->second,
+                          insertion_result.success);
   }
 
   /*
@@ -685,16 +1552,20 @@ class InsertOnlyConcurrentMapContainer
   template <typename ValueEqual = std::equal_to<Value>, typename... Args>
   std::pair<const Value*, bool> get_or_emplace_and_assert_equal(
       Key&& key, Args&&... args) {
-    size_t slot = Hash()(std::forward<Key>(key)) % n_slots;
-    auto&& [it, emplaced] = [&]() {
-      std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
-      auto& map = this->get_container(slot);
-      return map.try_emplace(KeyProjection()(std::forward<Key>(key)),
-                             std::forward<Args>(args)...);
-    }();
-    always_assert(emplaced ||
-                  ValueEqual()(it->second, Value(std::forward<Args>(args)...)));
-    return std::make_pair(&it->second, emplaced);
+    size_t slot = Hash()(key) % n_slots;
+    auto& map = this->get_container(slot);
+    auto insertion_result =
+        map.try_emplace(std::forward<Key>(key), std::forward<Args>(args)...);
+    always_assert(
+        insertion_result.success ||
+        (insertion_result.incidentally_constructed_value()
+             ? ValueEqual()(
+                   insertion_result.stored_value_ptr->second,
+                   insertion_result.incidentally_constructed_value()->second)
+             : ValueEqual()(insertion_result.stored_value_ptr->second,
+                            Value(std::forward<Args>(args)...))));
+    auto* ptr = insertion_result.stored_value_ptr;
+    return {&ptr->second, insertion_result.success};
   }
 
   /*
@@ -704,14 +1575,18 @@ class InsertOnlyConcurrentMapContainer
   std::pair<const Value*, bool> get_or_emplace_and_assert_equal(
       const Key& key, Args&&... args) {
     size_t slot = Hash()(key) % n_slots;
-    auto&& [it, emplaced] = [&]() {
-      std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
-      auto& map = this->get_container(slot);
-      return map.try_emplace(KeyProjection()(key), std::forward<Args>(args)...);
-    }();
-    always_assert(emplaced ||
-                  ValueEqual()(it->second, Value(std::forward<Args>(args)...)));
-    return std::make_pair(&it->second, emplaced);
+    auto& map = this->get_container(slot);
+    auto insertion_result = map.try_emplace(key, std::forward<Args>(args)...);
+    always_assert(
+        insertion_result.success ||
+        (insertion_result.incidentally_constructed_value()
+             ? ValueEqual()(
+                   insertion_result.stored_value_ptr->second,
+                   insertion_result.incidentally_constructed_value()->second)
+             : ValueEqual()(insertion_result.stored_value_ptr->second,
+                            Value(std::forward<Args>(args)...))));
+    auto* ptr = insertion_result.stored_value_ptr;
+    return {&ptr->second, insertion_result.success};
   }
 
   /*
@@ -724,7 +1599,7 @@ class InsertOnlyConcurrentMapContainer
       const Key& key, const Creator& creator, Args&&... args) {
     auto* ptr = get(key);
     if (ptr) {
-      return std::make_pair(ptr, false);
+      return {ptr, false};
     }
     return get_or_emplace_and_assert_equal<ValueEqual>(
         key, creator(key, std::forward<Args>(args)...));
@@ -740,21 +1615,11 @@ class InsertOnlyConcurrentMapContainer
       Key&& key, const Creator& creator, Args&&... args) {
     auto* ptr = get(key);
     if (ptr) {
-      return std::make_pair(ptr, false);
+      return {ptr, false};
     }
     return get_or_emplace_and_assert_equal<ValueEqual>(
         std::forward<Key>(key),
         creator(std::forward<Key>(key), std::forward<Args>(args)...));
-  }
-
-  template <typename... Args>
-  std::pair<Value*, bool> emplace_unsafe(Args&&... args) {
-    std::pair<Key, Value> entry(std::forward<Args>(args)...);
-    size_t slot = Hash()(entry.first) % n_slots;
-    auto& map = this->get_container(slot);
-    auto [it, emplaced] = map.emplace(KeyProjection()(std::move(entry.first)),
-                                      std::move(entry.second));
-    return std::make_pair(&it->second, emplaced);
   }
 
   template <
@@ -762,57 +1627,53 @@ class InsertOnlyConcurrentMapContainer
   void update_unsafe(const Key& key, UpdateFn updater) {
     size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
-    auto it = map.find(KeyProjection()(key));
-    if (it == map.end()) {
-      updater(KeyProjection()(key), map[KeyProjection()(key)], false);
-    } else {
-      updater(it->first, it->second, true);
-    }
+    auto [ptr, emplaced] = map.try_emplace(key);
+    updater(ptr->first, ptr->second, !emplaced);
+  }
+
+  template <
+      typename UpdateFn = const std::function<void(const Key&, Value&, bool)>&>
+  void update_unsafe(Key&& key, UpdateFn updater) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& map = this->get_container(slot);
+    auto [ptr, emplaced] = map.try_emplace(std::forward<Key>(key));
+    updater(ptr->first, ptr->second, !emplaced);
   }
 
   size_t erase(const Key& key) = delete;
 };
 
-template <typename Key,
-          typename Value,
-          typename Hash = std::hash<Key>,
-          typename Equal = std::equal_to<Key>,
-          size_t n_slots = 31>
-using InsertOnlyConcurrentMap = InsertOnlyConcurrentMapContainer<
-    std::unordered_map<Key, Value, Hash, Equal>,
-    Key,
-    Value,
-    Hash,
-    Identity,
-    n_slots>;
-
+/*
+ * A concurrent container with set semantics, also allowing erasing values.
+ */
 template <typename Key,
           typename Hash = std::hash<Key>,
-          typename Equal = std::equal_to<Key>,
+          typename KeyEqual = std::equal_to<Key>,
           size_t n_slots = 31>
 class ConcurrentSet final
-    : public ConcurrentContainer<std::unordered_set<Key, Hash, Equal>,
-                                 Key,
-                                 Hash,
+    : public ConcurrentContainer<std::unordered_set<Key, Hash, KeyEqual>,
                                  n_slots> {
  public:
+  using Base =
+      ConcurrentContainer<std::unordered_set<Key, Hash, KeyEqual>, n_slots>;
+
   ConcurrentSet() = default;
 
-  ConcurrentSet(const ConcurrentSet& set)
-      : ConcurrentContainer<std::unordered_set<Key, Hash, Equal>,
-                            Key,
-                            Hash,
-                            n_slots>(set) {}
+  ConcurrentSet(const ConcurrentSet& set) noexcept : Base(set) {}
 
-  ConcurrentSet(ConcurrentSet&& set) noexcept
-      : ConcurrentContainer<std::unordered_set<Key, Hash, Equal>,
-                            Key,
-                            Hash,
-                            n_slots>(std::move(set)) {}
+  ConcurrentSet(ConcurrentSet&& set) noexcept : Base(std::move(set)) {}
 
-  ConcurrentSet& operator=(ConcurrentSet&&) noexcept = default;
+  ConcurrentSet& operator=(ConcurrentSet&& container) noexcept {
+    Base::operator=(std::move(container));
+    return *this;
+  }
 
-  ConcurrentSet& operator=(const ConcurrentSet&) noexcept = default;
+  ConcurrentSet& operator=(const ConcurrentSet& container) noexcept {
+    if (this != &container) {
+      Base::operator=(container);
+    }
+    return *this;
+  }
 
   /*
    * The Boolean return value denotes whether the insertion took place.
@@ -820,9 +1681,14 @@ class ConcurrentSet final
    */
   bool insert(const Key& key) {
     size_t slot = Hash()(key) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     auto& set = this->get_container(slot);
-    return set.insert(key).second;
+    return set.try_insert(key).success;
+  }
+
+  bool insert(Key&& key) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& set = this->get_container(slot);
+    return set.try_insert(std::forward<Key>(key)).success;
   }
 
   /*
@@ -851,9 +1717,8 @@ class ConcurrentSet final
   bool emplace(Args&&... args) {
     Key key(std::forward<Args>(args)...);
     size_t slot = Hash()(key) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     auto& set = this->get_container(slot);
-    return set.emplace(std::move(key)).second;
+    return set.try_insert(std::move(key)).success;
   }
 };
 
@@ -862,27 +1727,38 @@ class ConcurrentSet final
  *
  * This allows accessing constant references on elements safely.
  */
-template <typename SetContainer,
-          typename Key,
+template <typename Key,
           typename Hash = std::hash<Key>,
+          typename KeyEqual = std::equal_to<Key>,
           size_t n_slots = 31>
-class InsertOnlyConcurrentSetContainer final
-    : public ConcurrentContainer<SetContainer, Key, Hash, n_slots> {
+class InsertOnlyConcurrentSet final
+    : public ConcurrentContainer<std::unordered_set<Key, Hash, KeyEqual>,
+                                 n_slots> {
  public:
-  InsertOnlyConcurrentSetContainer() = default;
+  using Base =
+      ConcurrentContainer<std::unordered_set<Key, Hash, KeyEqual>, n_slots>;
 
-  InsertOnlyConcurrentSetContainer(const InsertOnlyConcurrentSetContainer& set)
-      : ConcurrentContainer<SetContainer, Key, Hash, n_slots>(set) {}
+  InsertOnlyConcurrentSet() = default;
 
-  InsertOnlyConcurrentSetContainer(
-      InsertOnlyConcurrentSetContainer&& set) noexcept
-      : ConcurrentContainer<SetContainer, Key, Hash, n_slots>(std::move(set)) {}
+  InsertOnlyConcurrentSet(const InsertOnlyConcurrentSet& set) noexcept
+      : Base(set) {}
 
-  InsertOnlyConcurrentSetContainer& operator=(
-      InsertOnlyConcurrentSetContainer&&) noexcept = default;
+  InsertOnlyConcurrentSet(InsertOnlyConcurrentSet&& set) noexcept
+      : Base(std::move(set)) {}
 
-  InsertOnlyConcurrentSetContainer& operator=(
-      const InsertOnlyConcurrentSetContainer&) noexcept = default;
+  InsertOnlyConcurrentSet& operator=(
+      InsertOnlyConcurrentSet&& container) noexcept {
+    Base::operator=(std::move(container));
+    return *this;
+  }
+
+  InsertOnlyConcurrentSet& operator=(
+      const InsertOnlyConcurrentSet& container) noexcept {
+    if (this != &container) {
+      Base::operator=(container);
+    }
+    return *this;
+  }
 
   /*
    * Returns a pair consisting of a pointer on the inserted element (or the
@@ -891,12 +1767,16 @@ class InsertOnlyConcurrentSetContainer final
    */
   std::pair<const Key*, bool> insert(const Key& key) {
     size_t slot = Hash()(key) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     auto& set = this->get_container(slot);
-    // `std::unordered_set::insert` does not invalidate references,
-    // thus it is safe to return a reference on the object.
-    auto result = set.insert(key);
-    return {&*result.first, result.second};
+    auto insertion_result = set.try_insert(key);
+    return {insertion_result.stored_value_ptr, insertion_result.success};
+  }
+
+  std::pair<const Key*, bool> insert(Key&& key) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& set = this->get_container(slot);
+    auto insertion_result = set.try_insert(std::forward<Key>(key));
+    return {insertion_result.stored_value_ptr, insertion_result.success};
   }
 
   /*
@@ -905,33 +1785,12 @@ class InsertOnlyConcurrentSetContainer final
    */
   const Key* get(const Key& key) const {
     size_t slot = Hash()(key) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     const auto& set = this->get_container(slot);
-    auto result = set.find(key);
-    if (result == set.end()) {
-      return nullptr;
-    } else {
-      return &*result;
-    }
+    return set.get(key);
   }
 
   size_t erase(const Key& key) = delete;
 };
-
-/**
- * A concurrent set that only accepts insertions.
- *
- * This allows accessing constant references on elements safely.
- */
-template <typename Key,
-          typename Hash = std::hash<Key>,
-          typename Equal = std::equal_to<Key>,
-          size_t n_slots = 31>
-using InsertOnlyConcurrentSet =
-    InsertOnlyConcurrentSetContainer<std::unordered_set<Key, Hash, Equal>,
-                                     Key,
-                                     Hash,
-                                     n_slots>;
 
 namespace cc_impl {
 
