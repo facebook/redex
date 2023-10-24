@@ -53,10 +53,10 @@ namespace {
 
 // Lint will complain about this, but it is better than having to
 // forward-declare all of concurrent containers.
-std::unique_ptr<ConcurrentMap<keep_reason::Reason*,
-                              keep_reason::Reason*,
-                              keep_reason::ReasonPtrHash,
-                              keep_reason::ReasonPtrEqual>>
+std::unique_ptr<InsertOnlyConcurrentMap<keep_reason::Reason*,
+                                        keep_reason::Reason*,
+                                        keep_reason::ReasonPtrHash,
+                                        keep_reason::ReasonPtrEqual>>
     s_keep_reasons{nullptr};
 
 } // namespace
@@ -66,7 +66,7 @@ bool Reason::s_record_keep_reasons = false;
 void Reason::set_record_keep_reasons(bool v) {
   s_record_keep_reasons = v;
   if (v && s_keep_reasons == nullptr) {
-    s_keep_reasons = std::make_unique<ConcurrentMap<
+    s_keep_reasons = std::make_unique<InsertOnlyConcurrentMap<
         keep_reason::Reason*, keep_reason::Reason*, keep_reason::ReasonPtrHash,
         keep_reason::ReasonPtrEqual>>();
   }
