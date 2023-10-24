@@ -1018,7 +1018,7 @@ SharedState::SharedState(
   }
 
   if (traceEnabled(CSE, 2)) {
-    m_barriers.reset(new ConcurrentMap<Barrier, size_t, BarrierHasher>());
+    m_barriers.reset(new AtomicMap<Barrier, size_t, BarrierHasher>());
   }
 
   const std::vector<DexType*> boxing_types = {
@@ -1270,8 +1270,7 @@ CseUnorderedLocationSet SharedState::get_relevant_written_locations(
 
 void SharedState::log_barrier(const Barrier& barrier) {
   if (m_barriers) {
-    m_barriers->update(
-        barrier, [](const Barrier, size_t& v, bool /* exists */) { v++; });
+    m_barriers->fetch_add(barrier, 1);
   }
 }
 
@@ -1338,8 +1337,11 @@ void SharedState::cleanup() {
     return;
   }
 
-  std::vector<std::pair<Barrier, size_t>> ordered_barriers(m_barriers->begin(),
-                                                           m_barriers->end());
+  std::vector<std::pair<Barrier, size_t>> ordered_barriers;
+  ordered_barriers.reserve(m_barriers->size());
+  for (auto&& [barrier, count] : *m_barriers) {
+    ordered_barriers.emplace_back(barrier, count.load());
+  }
   std::sort(
       ordered_barriers.begin(), ordered_barriers.end(),
       [](const std::pair<Barrier, size_t>& a,
