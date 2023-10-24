@@ -256,7 +256,7 @@ class Outliner {
   // helper method.
   std::unordered_map<const DexTypeList*, DexMethod*> m_outline_helpers;
 
-  ConcurrentMap<const IRCode*, BuilderStateMap> m_builder_state_maps;
+  InsertOnlyConcurrentMap<const IRCode*, BuilderStateMap> m_builder_state_maps;
 };
 
 class StringBuilderOutlinerPass : public Pass {
