@@ -39,11 +39,32 @@ struct Escapes {
 // Escape information for instructions define a value
 using InstructionEscapes = std::unordered_map<IRInstruction*, Escapes>;
 
+bool operator==(const Escapes& a, const Escapes& b) {
+  return a.put_value_fields == b.put_value_fields &&
+         a.invoked_ctors == b.invoked_ctors && a.other == b.other;
+}
+
+bool operator==(const InstructionEscapes& a, const InstructionEscapes& b) {
+  if (a.size() != b.size()) {
+    return false;
+  }
+  for (auto&& [insn, escapes] : a) {
+    auto it = b.find(insn);
+    if (it == b.end()) {
+      return false;
+    }
+    if (!(it->second == escapes)) {
+      return false;
+    }
+  }
+  return true;
+};
+
 class WritesAnalyzer {
  private:
   const field_op_tracker::TypeLifetimes* m_type_lifetimes;
   const field_op_tracker::FieldStatsMap& m_field_stats;
-  mutable ConcurrentMap<const DexMethod*, std::shared_ptr<InstructionEscapes>>
+  mutable InsertOnlyConcurrentMap<const DexMethod*, InstructionEscapes>
       m_method_insn_escapes;
 
   bool has_lifetime(const DexType* t) const {
@@ -52,19 +73,10 @@ class WritesAnalyzer {
   }
 
   const InstructionEscapes& get_insn_escapes(const DexMethod* method) const {
-    auto res = m_method_insn_escapes.get(method, nullptr);
-    if (!res) {
-      res = std::make_shared<InstructionEscapes>(compute_insn_escapes(method));
-      m_method_insn_escapes.update(method,
-                                   [&](auto*, auto& value, bool exists) {
-                                     if (exists) {
-                                       res = value;
-                                     } else {
-                                       value = res;
-                                     }
-                                   });
-    }
-    return *res;
+    return *m_method_insn_escapes
+                .get_or_create_and_assert_equal(
+                    method, [&](auto*) { return compute_insn_escapes(method); })
+                .first;
   }
 
   // Compute information about which values (represented by

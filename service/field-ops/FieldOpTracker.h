@@ -38,7 +38,6 @@ class TypeLifetimes {
  private:
   std::unordered_set<const DexType*> m_ignored_types;
   const DexType* m_java_lang_Enum;
-  mutable ConcurrentMap<const DexMethodRef*, boost::optional<bool>> m_cache;
 
  public:
   TypeLifetimes();
