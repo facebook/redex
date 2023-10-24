@@ -192,6 +192,11 @@ class ConcurrentContainer {
     return m_slots[slot].erase(key);
   }
 
+  size_t erase_unsafe(const Key& key) {
+    size_t slot = Hash()(key) % n_slots;
+    return m_slots[slot].erase(key);
+  }
+
   /*
    * This operation is not thread-safe.
    */

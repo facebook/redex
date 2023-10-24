@@ -516,17 +516,13 @@ size_t compute_locations_closure(
     std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result) {
   // 1. Let's initialize known method read locations and dependencies by
   //    scanning method bodies
-  ConcurrentMap<const DexMethod*, LocationsAndDependencies>
-      concurrent_method_lads;
+  ConcurrentMap<const DexMethod*, LocationsAndDependencies> method_lads;
   walk::parallel::methods(scope, [&](DexMethod* method) {
     auto lads = init_func(method);
     if (lads) {
-      concurrent_method_lads.emplace(method, std::move(*lads));
+      method_lads.emplace(method, std::move(*lads));
     }
   });
-
-  std::unordered_map<const DexMethod*, LocationsAndDependencies> method_lads =
-      concurrent_method_lads.move_to_container();
 
   // 2. Compute inverse dependencies so that we know what needs to be recomputed
   // during the fixpoint computation, and determine set of methods that are
@@ -578,7 +574,7 @@ size_t compute_locations_closure(
 
     std::vector<const DexMethod*> changed_methods;
     for (const DexMethod* method : ordered_impacted_methods) {
-      auto& lads = method_lads.at(method);
+      auto& lads = method_lads.at_unsafe(method);
       bool unknown = false;
       size_t lads_locations_size = lads.locations.size();
       for (const DexMethod* d : lads.dependencies) {
@@ -597,7 +593,7 @@ size_t compute_locations_closure(
         // something changed
         changed_methods.push_back(method);
         if (unknown) {
-          method_lads.erase(method);
+          method_lads.erase_unsafe(method);
         }
       }
     }
@@ -612,7 +608,8 @@ size_t compute_locations_closure(
 
       // remove inverse dependency entries as appropriate
       auto& entries = it->second;
-      std20::erase_if(entries, [&](auto* m) { return !method_lads.count(m); });
+      std20::erase_if(entries,
+                      [&](auto* m) { return !method_lads.count_unsafe(m); });
 
       if (entries.empty()) {
         // remove inverse dependency
