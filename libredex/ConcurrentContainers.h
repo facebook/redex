@@ -214,21 +214,6 @@ class ConcurrentContainer {
     return get_lock_by_slot(slot);
   }
 
-  /*
-   * This operation is not thread-safe.
-   */
-  Container move_to_container() {
-    auto timer_scope = cc_impl::s_move.scope();
-    Container res;
-    res.reserve(size());
-    for (size_t slot = 0; slot < n_slots; ++slot) {
-      auto& c = m_slots[slot];
-      res.merge(c);
-      always_assert(c.empty());
-    }
-    return res;
-  }
-
  protected:
   // Only derived classes may be instantiated or copied.
   ConcurrentContainer() = default;
