@@ -60,7 +60,7 @@ class RemoveArgs {
   const Scope& m_scope;
   const init_classes::InitClassesWithSideEffects&
       m_init_classes_with_side_effects;
-  ConcurrentMap<DexMethod*, std::deque<uint16_t>> m_live_arg_idxs_map;
+  InsertOnlyConcurrentMap<DexMethod*, std::deque<uint16_t>> m_live_arg_idxs_map;
   // Data structure to remember running indices to make method names unique when
   // we reorder prototypes across virtual scopes, or do other general changes to
   // non-virtuals.
