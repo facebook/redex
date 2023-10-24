@@ -79,14 +79,14 @@ class RtypeSpecialization final {
       const method_override_graph::Graph& override_graph,
       DexMethod* meth,
       const DexType* better_rtype,
-      ConcurrentMap<DexMethod*, const DexType*>& virtual_roots,
+      InsertOnlyConcurrentMap<DexMethod*, const DexType*>& virtual_roots,
       RtypeStats& stats) const;
 
   void specialize_true_virtuals(
       const method_override_graph::Graph& override_graph,
       DexMethod* meth,
       const DexType* better_rtype,
-      ConcurrentMap<DexMethod*, const DexType*>& virtual_roots,
+      InsertOnlyConcurrentMap<DexMethod*, const DexType*>& virtual_roots,
       RtypeStats& stats) const;
   bool shares_identical_rtype_candidate(DexMethod* meth,
                                         const DexType* better_rtype) const;
