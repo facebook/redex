@@ -118,7 +118,7 @@ class InitClassFields {
 
  private:
   std::vector<std::unordered_set<DexFieldRef*>> m_dex_referenced_sfields;
-  ConcurrentMap<DexType*, size_t> m_class_dex_indices;
+  InsertOnlyConcurrentMap<DexType*, size_t> m_class_dex_indices;
   const DexString* m_field_name = DexString::make_string(redex_field_name);
   mutable std::atomic<size_t> m_fields_added{0};
   struct InitClassField {
