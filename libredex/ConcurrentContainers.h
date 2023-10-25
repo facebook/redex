@@ -342,7 +342,8 @@ class ConcurrentHashtable final {
         continue;
       }
       if (!new_node) {
-        new_node = new Node(key, std::forward<Args>(args)...);
+        new_node =
+            new Node(ConstRefKeyArgsTag(), key, std::forward<Args>(args)...);
       }
       new_node->prev = root;
       if (root_loc->compare_exchange_strong(root, new_node)) {
@@ -381,8 +382,8 @@ class ConcurrentHashtable final {
         continue;
       }
       if (!new_node) {
-        new_node =
-            new Node(std::forward<key_type>(key), std::forward<Args>(args)...);
+        new_node = new Node(RvalueRefKeyArgsTag(), std::forward<key_type>(key),
+                            std::forward<Args>(args)...);
         key_ptr = &const_key_projection()(new_node->value);
       }
       new_node->prev = root;
@@ -421,7 +422,7 @@ class ConcurrentHashtable final {
         continue;
       }
       if (!new_node) {
-        new_node = new Node{value};
+        new_node = new Node(ConstRefValueTag(), value);
       }
       new_node->prev = root;
       if (root_loc->compare_exchange_strong(root, new_node)) {
@@ -461,7 +462,8 @@ class ConcurrentHashtable final {
         continue;
       }
       if (!new_node) {
-        new_node = new Node{std::forward<value_type>(value)};
+        new_node =
+            new Node(RvalueRefValueTag(), std::forward<value_type>(value));
         value_ptr = &new_node->value;
       }
       new_node->prev = root;
@@ -615,25 +617,36 @@ class ConcurrentHashtable final {
   };
   using PtrPlusBits = boost::intrusive::pointer_plus_bits<Ptr, 2>;
 
+  struct ConstRefValueTag {};
+  struct RvalueRefValueTag {};
+  struct ConstRefKeyArgsTag {};
+  struct RvalueRefKeyArgsTag {};
+
   struct Node {
     value_type value;
     std::atomic<Ptr> prev{nullptr};
 
-    template <typename key_type2 = key_type,
-              typename = typename std::enable_if_t<
-                  std::is_same_v<key_type2, value_type>>>
-    explicit Node(const key_type2& key) : value(key) {}
+    explicit Node(ConstRefValueTag, const value_type& value) : value(value) {}
+
+    explicit Node(RvalueRefValueTag, value_type&& value)
+        : value(std::forward<value_type>(value)) {}
 
     template <typename key_type2 = key_type,
               typename = typename std::enable_if_t<
                   std::is_same_v<key_type2, value_type>>>
-    explicit Node(key_type2&& key) : value(std::forward<key_type2>(key)) {}
+    explicit Node(ConstRefKeyArgsTag, const key_type2& key) : value(key) {}
+
+    template <typename key_type2 = key_type,
+              typename = typename std::enable_if_t<
+                  std::is_same_v<key_type2, value_type>>>
+    explicit Node(RvalueRefKeyArgsTag, key_type2&& key)
+        : value(std::forward<key_type2>(key)) {}
 
     template <typename key_type2 = key_type,
               typename = typename std::enable_if_t<
                   !std::is_same_v<key_type2, value_type>>,
               typename... Args>
-    explicit Node(const key_type2& key, Args&&... args)
+    explicit Node(ConstRefKeyArgsTag, const key_type2& key, Args&&... args)
         : value(std::piecewise_construct,
                 std::forward_as_tuple(key),
                 std::forward_as_tuple(std::forward<Args>(args)...)) {}
@@ -642,7 +655,7 @@ class ConcurrentHashtable final {
               typename = typename std::enable_if_t<
                   !std::is_same_v<key_type2, value_type>>,
               typename... Args>
-    explicit Node(key_type2&& key, Args&&... args)
+    explicit Node(RvalueRefKeyArgsTag, key_type2&& key, Args&&... args)
         : value(std::piecewise_construct,
                 std::forward_as_tuple(std::forward<key_type2>(key)),
                 std::forward_as_tuple(std::forward<Args>(args)...)) {}
