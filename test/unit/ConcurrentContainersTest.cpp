@@ -413,3 +413,14 @@ TEST_F(ConcurrentContainersTest, insert_or_assign) {
     EXPECT_EQ(x + 1, *p);
   }
 }
+
+TEST_F(ConcurrentContainersTest, atThrows) {
+  ConcurrentMap<void*, void*> empty;
+  bool threw = false;
+  try {
+    empty.at(nullptr);
+  } catch (const std::out_of_range&) {
+    threw = true;
+  }
+  EXPECT_TRUE(threw);
+}

@@ -1160,7 +1160,9 @@ class ConcurrentMap final
     size_t slot = Hash()(key) % n_slots;
     const auto& map = this->get_container(slot);
     const auto* ptr = map.get(key);
-    always_assert(ptr);
+    if (ptr == nullptr) {
+      throw std::out_of_range("at");
+    }
     std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     return ptr->second;
   }
@@ -1169,7 +1171,9 @@ class ConcurrentMap final
     size_t slot = Hash()(key) % n_slots;
     const auto& map = this->get_container(slot);
     const auto* ptr = map.get(key);
-    always_assert(ptr);
+    if (ptr == nullptr) {
+      throw std::out_of_range("at_unsafe");
+    }
     return ptr->second;
   }
 
@@ -1177,7 +1181,9 @@ class ConcurrentMap final
     size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
     auto* ptr = map.get(key);
-    always_assert(ptr);
+    if (ptr == nullptr) {
+      throw std::out_of_range("at_unsafe");
+    }
     return ptr->second;
   }
 
@@ -1467,7 +1473,9 @@ class InsertOnlyConcurrentMap final
     size_t slot = Hash()(key) % n_slots;
     const auto& map = this->get_container(slot);
     const auto* ptr = map.get(key);
-    always_assert(ptr);
+    if (ptr == nullptr) {
+      throw std::out_of_range("at");
+    }
     return ptr->second;
   }
 
@@ -1475,7 +1483,9 @@ class InsertOnlyConcurrentMap final
     size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
     auto* ptr = map.get(key);
-    always_assert(ptr);
+    if (ptr == nullptr) {
+      throw std::out_of_range("at_unsafe");
+    }
     return ptr->second;
   }
 
