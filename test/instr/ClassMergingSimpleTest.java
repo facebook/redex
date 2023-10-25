@@ -165,6 +165,27 @@ class SecondC extends SecondBase {
   String foo() { return "C"; }
 }
 
+abstract class ThirdBase {
+  abstract String foo();
+}
+abstract class ThirdMid extends ThirdBase {
+  @Override
+  String foo() { return "mid"; };
+}
+class ThirdA extends ThirdMid {
+  int getA() { return 1; }
+  @Override
+  String foo() { return "A"; }
+}
+class ThirdB extends ThirdMid {
+  int getB() { return 2; }
+  @Override
+  String foo() { return "B"; }
+}
+class ThirdC extends ThirdMid {
+  int getC() { return 3; }
+}
+
 public class ClassMergingSimpleTest {
 
   @Test
@@ -375,5 +396,15 @@ public class ClassMergingSimpleTest {
     assertThat(a.foo()).isEqualTo("A");
     assertThat(b.foo()).isEqualTo("B");
     assertThat(c.foo()).isEqualTo("C");
+  }
+
+  @Test
+  public void testThirdRootAbstractPartialOverridden() {
+    ThirdA a = new ThirdA();
+    ThirdB b = new ThirdB();
+    ThirdC c = new ThirdC();
+    assertThat(a.foo()).isEqualTo("A");
+    assertThat(b.foo()).isEqualTo("B");
+    assertThat(c.foo()).isEqualTo("mid");
   }
 }

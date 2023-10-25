@@ -987,12 +987,13 @@ void Model::distribute_virtual_methods(
                                          const VirtualMethod& top_def,
                                          DexMethod* virt_meth) {
         always_assert(virt_meth->is_def());
-        if (overridden_meth == nullptr && is_miranda(top_def.second)) {
+        if (overridden_meth == nullptr &&
+            (is_top_def(top_def.second) || is_miranda(top_def.second))) {
           const auto* cls = virt_meth->get_class();
           const auto& mergeables = merger.mergeables;
           always_assert(!mergeables.empty());
           const auto* a_mergeable = *mergeables.begin();
-          if (type::is_subclass(cls, a_mergeable)) {
+          if (cls != a_mergeable && type::is_subclass(cls, a_mergeable)) {
             overridden_meth = virt_meth;
             TRACE(CLMG, 9, "Update overridden_meth to %s for top_def %s",
                   SHOW(virt_meth), SHOW(top_def.first));
