@@ -345,6 +345,7 @@ s_expr to_s_expr(const Summary& summary) {
   std::vector<s_expr> s_exprs;
   s_exprs.emplace_back(std::to_string(summary.effects));
   std::vector<s_expr> mod_param_s_exprs;
+  mod_param_s_exprs.reserve(summary.modified_params.size());
   for (auto idx : summary.modified_params) {
     mod_param_s_exprs.emplace_back(idx);
   }

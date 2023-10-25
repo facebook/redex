@@ -1375,6 +1375,8 @@ void VirtualMerging::merge_methods(
 // Part 5: Remove methods within classes.
 void VirtualMerging::remove_methods() {
   std::vector<DexClass*> classes_with_virtual_methods_to_remove;
+  classes_with_virtual_methods_to_remove.reserve(
+      m_virtual_methods_to_remove.size());
   for (auto& p : m_virtual_methods_to_remove) {
     classes_with_virtual_methods_to_remove.push_back(p.first);
   }

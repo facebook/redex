@@ -1738,6 +1738,7 @@ class OutlinedMethodCreator {
     auto manager = g_redex->get_position_pattern_switch_manager();
     // Order methods to make sure we get deterministic pattern-ids.
     std::vector<DexMethod*> ordered_methods;
+    ordered_methods.reserve(ci.methods.size());
     for (auto& p : ci.methods) {
       ordered_methods.push_back(p.first);
     }
