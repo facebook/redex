@@ -383,3 +383,33 @@ TEST_F(ConcurrentContainersTest, copy) {
   EXPECT_EQ(1, map1.size());
   EXPECT_EQ(1, map2.size());
 }
+
+TEST_F(ConcurrentContainersTest, insert_or_assign) {
+  ConcurrentMap<uint32_t, std::unique_ptr<uint32_t>> map;
+  run_on_samples([&map](const std::vector<uint32_t>& sample) {
+    for (auto x : sample) {
+      map.insert_or_assign(std::make_pair(x, std::make_unique<uint32_t>(x)));
+    }
+  });
+  EXPECT_EQ(m_data_set.size(), map.size());
+  for (uint32_t x : m_data) {
+    EXPECT_TRUE(map.count(x));
+    auto& p = map.at_unsafe(x);
+    EXPECT_TRUE(p);
+    EXPECT_EQ(x, *p);
+  }
+
+  run_on_samples([&map](const std::vector<uint32_t>& sample) {
+    for (auto x : sample) {
+      map.insert_or_assign(
+          std::make_pair(x, std::make_unique<uint32_t>(x + 1)));
+    }
+  });
+  EXPECT_EQ(m_data_set.size(), map.size());
+  for (uint32_t x : m_data) {
+    EXPECT_TRUE(map.count(x));
+    auto& p = map.at_unsafe(x);
+    EXPECT_TRUE(p);
+    EXPECT_EQ(x + 1, *p);
+  }
+}

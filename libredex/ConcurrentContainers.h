@@ -1123,6 +1123,8 @@ class ConcurrentMap final
   using Base::end;
   using Base::m_slots;
 
+  using KeyValuePair = typename Base::Value;
+
   ConcurrentMap() = default;
 
   ConcurrentMap(const ConcurrentMap& container) noexcept : Base(container) {}
@@ -1209,22 +1211,22 @@ class ConcurrentMap final
    * here as any operations on a returned iterator are not guaranteed to be
    * thread-safe.
    */
-  bool insert(const std::pair<Key, Value>& entry) {
+  bool insert(const KeyValuePair& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
     return map.try_insert(entry).success;
   }
 
-  bool insert(std::pair<Key, Value>&& entry) {
+  bool insert(KeyValuePair&& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
-    return map.try_insert(std::forward<std::pair<Key, Value>>(entry)).success;
+    return map.try_insert(std::forward<KeyValuePair>(entry)).success;
   }
 
   /*
    * This operation is always thread-safe.
    */
-  void insert(std::initializer_list<std::pair<Key, Value>> l) {
+  void insert(std::initializer_list<KeyValuePair> l) {
     for (const auto& entry : l) {
       insert(entry);
     }
@@ -1243,7 +1245,7 @@ class ConcurrentMap final
   /*
    * This operation is always thread-safe.
    */
-  void insert_or_assign(const std::pair<Key, Value>& entry) {
+  void insert_or_assign(const KeyValuePair& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
     auto insertion_result = map.try_insert(entry);
@@ -1260,11 +1262,10 @@ class ConcurrentMap final
     }
   }
 
-  void insert_or_assign(std::pair<Key, Value>&& entry) {
+  void insert_or_assign(KeyValuePair&& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
-    auto insertion_result =
-        map.try_insert(std::forward<std::pair<Key, Value>>(entry));
+    auto insertion_result = map.try_insert(std::forward<KeyValuePair>(entry));
     if (insertion_result.success) {
       return;
     }
@@ -1409,6 +1410,8 @@ class InsertOnlyConcurrentMap final
   using Base::end;
   using Base::m_slots;
 
+  using KeyValuePair = typename Base::Value;
+
   InsertOnlyConcurrentMap() = default;
 
   InsertOnlyConcurrentMap(const InsertOnlyConcurrentMap& container) noexcept
@@ -1487,22 +1490,22 @@ class InsertOnlyConcurrentMap final
    * here as any operations on a returned iterator are not guaranteed to be
    * thread-safe.
    */
-  bool insert(const std::pair<Key, Value>& entry) {
+  bool insert(const KeyValuePair& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
     return map.try_insert(entry).success;
   }
 
-  bool insert(std::pair<Key, Value>&& entry) {
+  bool insert(KeyValuePair&& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
-    return map.try_insert(std::forward<std::pair<Key, Value>>(entry)).success;
+    return map.try_insert(std::forward<KeyValuePair>(entry)).success;
   }
 
   /*
    * This operation is always thread-safe.
    */
-  void insert(std::initializer_list<std::pair<Key, Value>> l) {
+  void insert(std::initializer_list<KeyValuePair> l) {
     for (const auto& entry : l) {
       insert(entry);
     }
@@ -1518,7 +1521,7 @@ class InsertOnlyConcurrentMap final
     }
   }
 
-  void insert_or_assign_unsafe(const std::pair<Key, Value>& entry) {
+  void insert_or_assign_unsafe(const KeyValuePair& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
     auto insertion_result = map.try_emplace(entry);
@@ -1534,11 +1537,10 @@ class InsertOnlyConcurrentMap final
     }
   }
 
-  void insert_or_assign_unsafe(std::pair<Key, Value>&& entry) {
+  void insert_or_assign_unsafe(KeyValuePair&& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
-    auto insertion_result =
-        map.try_emplace(std::forward<std::pair<Key, Value>>(entry));
+    auto insertion_result = map.try_emplace(std::forward<KeyValuePair>(entry));
     if (insertion_result.success) {
       return;
     }
@@ -1557,7 +1559,7 @@ class InsertOnlyConcurrentMap final
    */
   template <typename... Args>
   bool emplace(Args&&... args) {
-    std::pair<Key, Value> entry(std::forward<Args>(args)...);
+    KeyValuePair entry(std::forward<Args>(args)...);
     size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
     return map.try_insert(std::move(entry)).success;
@@ -1565,7 +1567,7 @@ class InsertOnlyConcurrentMap final
 
   template <typename... Args>
   std::pair<Value*, bool> emplace_unsafe(Args&&... args) {
-    std::pair<Key, Value> entry(std::forward<Args>(args)...);
+    KeyValuePair entry(std::forward<Args>(args)...);
     size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
     auto insertion_result = map.try_insert(std::move(entry));
