@@ -25,7 +25,6 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from enum import Enum
 
-from pyredex.utils import get_xz_path
 
 timer: typing.Callable[[], float] = timeit.default_timer
 
@@ -200,13 +199,11 @@ def _compress_xz(
     from_file: str, to_file: str, compression_level: CompressionLevel
 ) -> None:
     comp = _get_xz_compress_level(compression_level)
-    xz = get_xz_path()
-    if xz is not None:
-        cmd = [xz, "-z", comp[0], "-T10"]
-        with open(from_file, "rb") as fin:
-            with open(to_file, "wb") as fout:
-                subprocess.check_call(cmd, stdin=fin, stdout=fout)
-                return
+    if shutil.which("xz"):
+        logging.debug("Using command line xz")
+        cmd = f'cat "{from_file}" | xz -z {comp[0]} -T10 - > "{to_file}"'
+        subprocess.check_call(cmd, shell=True)  # noqa: P204
+        return
 
     with lzma.open(filename=to_file, mode="wb", preset=comp[1]) as xz:
         with open(from_file, "rb") as f_in:

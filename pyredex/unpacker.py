@@ -30,7 +30,6 @@ from pyredex.logger import log
 from pyredex.utils import (
     abs_glob,
     ensure_libs_dir,
-    get_xz_path,
     make_temp_dir,
     remove_signature_files,
 )
@@ -584,13 +583,11 @@ def _warn_xz() -> None:
 
 
 def unpack_xz(input: str, output: str) -> None:
-    xz = get_xz_path()
-    if xz is not None:
-        with open(input, "rb") as fin:
-            with open(output, "wb") as fout:
-                cmd = [xz, "-d", "--threads", "6"]
-                subprocess.check_call(cmd, stdin=fin, stdout=fout)
-                return
+    # See whether the `xz` binary exists. It may be faster because of multithreaded decoding.
+    if shutil.which("xz"):
+        cmd = 'cat "{}" | xz -d --threads 6 > "{}"'.format(input, output)
+        subprocess.check_call(cmd, shell=True)  # noqa: P204
+        return
 
     _warn_xz()
 
@@ -651,20 +648,10 @@ def pack_xz(
 
 def unpack_tar_xz(input: str, output_dir: str) -> None:
     # See whether the `xz` binary exists. It may be faster because of multithreaded decoding.
-    if shutil.which("tar"):
-        xz = get_xz_path()
-
-        if xz is not None:
-            cmd = [
-                "XZ_OPT=-T6",
-                "tar",
-                f"--use-compress-program={xz}",
-                input,
-                "-C",
-                output_dir,
-            ]
-            subprocess.check_call(cmd)
-            return
+    if shutil.which("xz") and shutil.which("tar"):
+        cmd = f'XZ_OPT=-T6 tar xf "{input}" -C "{output_dir}"'
+        subprocess.check_call(cmd, shell=True)  # noqa: P204
+        return
 
     _warn_xz()
 
