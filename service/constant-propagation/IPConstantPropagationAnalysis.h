@@ -149,6 +149,10 @@ class FixpointIterator : public sparta::ParallelMonotonicFixpointIterator<
  */
 void set_encoded_values(const DexClass* cls, ConstantEnvironment* env);
 
+/**
+ * Bind all eligible fields to SignedConstantDomain(0) in :env, since all
+ * fields are initialized to zero by default at runtime.
+ */
 void set_ifield_values(const DexClass* cls,
                        const EligibleIfields& eligible_ifields,
                        ConstantEnvironment* env);

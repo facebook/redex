@@ -561,10 +561,13 @@ cp::WholeProgramState analyze_and_simplify_clinits(
   cp::Transform::RuntimeCache runtime_cache{};
 
   for (DexClass* cls : reverse_tsort_by_clinit_deps(scope, init_cycles)) {
+    auto clinit = cls->get_clinit();
+    if (clinit != nullptr && clinit->get_code() == nullptr) {
+      continue;
+    }
     ConstantEnvironment env;
     cp::set_encoded_values(cls, &env);
-    auto clinit = cls->get_clinit();
-    if (clinit != nullptr && clinit->get_code() != nullptr) {
+    if (clinit != nullptr) {
       auto* code = clinit->get_code();
       {
         auto& cfg = code->cfg();
@@ -636,7 +639,6 @@ cp::WholeProgramState analyze_and_simplify_inits(
     if (cls->is_external()) {
       continue;
     }
-    ConstantEnvironment env;
     auto ctors = cls->get_ctors();
     if (ctors.size() > 1) {
       continue;
@@ -653,31 +655,35 @@ cp::WholeProgramState analyze_and_simplify_inits(
         continue;
       }
     }
+    ConstantEnvironment env;
     cp::set_ifield_values(cls, eligible_ifields, &env);
+    always_assert(ctors.size() <= 1);
     if (ctors.size() == 1) {
       auto ctor = ctors[0];
-      if (ctor->get_code() != nullptr) {
-        auto* code = ctor->get_code();
-        auto& cfg = code->cfg();
-        cfg.calculate_exit_block();
-        constant_propagation::WholeProgramStateAccessor wps_accessor(wps);
-        cp::intraprocedural::FixpointIterator intra_cp(
-            cfg,
-            CombinedInitAnalyzer(cls->get_type(), &wps_accessor, nullptr,
-                                 nullptr, nullptr));
-        intra_cp.run(env);
-        env = intra_cp.get_exit_state_at(cfg.exit_block());
-
-        // Remove redundant iputs in inits
-        cp::Transform::Config transform_config;
-        transform_config.class_under_init = cls->get_type();
-        cp::Transform(transform_config)
-            .legacy_apply_constants_and_prune_unreachable(
-                intra_cp, wps, cfg, xstores, cls->get_type());
-        // Delete the instructions rendered dead by the removal of those iputs.
-        LocalDce(&init_classes_with_side_effects, pure_methods)
-            .dce(cfg, /* normalize_new_instances */ true, ctor->get_class());
+      if (ctor->get_code() == nullptr) {
+        continue;
       }
+      cp::set_ifield_values(cls, eligible_ifields, &env);
+      auto* code = ctor->get_code();
+      auto& cfg = code->cfg();
+      cfg.calculate_exit_block();
+      constant_propagation::WholeProgramStateAccessor wps_accessor(wps);
+      cp::intraprocedural::FixpointIterator intra_cp(
+          cfg,
+          CombinedInitAnalyzer(cls->get_type(), &wps_accessor, nullptr, nullptr,
+                               nullptr));
+      intra_cp.run(env);
+      env = intra_cp.get_exit_state_at(cfg.exit_block());
+
+      // Remove redundant iputs in inits
+      cp::Transform::Config transform_config;
+      transform_config.class_under_init = cls->get_type();
+      cp::Transform(transform_config)
+          .legacy_apply_constants_and_prune_unreachable(
+              intra_cp, wps, cfg, xstores, cls->get_type());
+      // Delete the instructions rendered dead by the removal of those iputs.
+      LocalDce(&init_classes_with_side_effects, pure_methods)
+          .dce(cfg, /* normalize_new_instances */ true, ctor->get_class());
     }
     wps.collect_instance_finals(cls, eligible_ifields,
                                 env.get_field_environment());

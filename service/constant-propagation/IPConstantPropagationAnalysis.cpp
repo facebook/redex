@@ -219,10 +219,9 @@ FixpointIterator::find_matching_method_cache_entry(
 } // namespace interprocedural
 
 void set_encoded_values(const DexClass* cls, ConstantEnvironment* env) {
+  always_assert(!cls->is_external());
   for (auto* sfield : cls->get_sfields()) {
-    if (sfield->is_external()) {
-      continue;
-    }
+    always_assert(!sfield->is_external());
     auto value = sfield->get_static_value();
     if (value == nullptr || value->evtype() == DEVT_NULL) {
       env->set(sfield, SignedConstantDomain(0));
@@ -245,19 +244,15 @@ void set_encoded_values(const DexClass* cls, ConstantEnvironment* env) {
 }
 
 /**
- * Bind all eligible fields to SignedConstantDomain(0) in :env, since all
- * fields are initialized to zero by default at runtime. This function is
- * much simpler than set_ifield_values since there are no DexEncodedValues
- * to handle.
+ * This function is much simpler than set_ifield_values since there are no
+ * DexEncodedValues to handle.
  */
 void set_ifield_values(const DexClass* cls,
                        const EligibleIfields& eligible_ifields,
                        ConstantEnvironment* env) {
   always_assert(!cls->is_external());
-  if (cls->get_ctors().size() > 1) {
-    return;
-  }
   for (auto* ifield : cls->get_ifields()) {
+    always_assert(!ifield->is_external());
     if (!eligible_ifields.count(ifield)) {
       // If the field is not a eligible ifield, move on.
       continue;
