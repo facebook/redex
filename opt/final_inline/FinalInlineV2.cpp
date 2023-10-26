@@ -564,8 +564,7 @@ cp::WholeProgramState analyze_and_simplify_clinits(
     ConstantEnvironment env;
     cp::set_encoded_values(cls, &env);
     auto clinit = cls->get_clinit();
-    if (clinit != nullptr && clinit->get_code() != nullptr &&
-        !clinit->rstate.no_optimizations()) {
+    if (clinit != nullptr && clinit->get_code() != nullptr) {
       auto* code = clinit->get_code();
       {
         auto& cfg = code->cfg();
@@ -657,7 +656,7 @@ cp::WholeProgramState analyze_and_simplify_inits(
     cp::set_ifield_values(cls, eligible_ifields, &env);
     if (ctors.size() == 1) {
       auto ctor = ctors[0];
-      if (ctor->get_code() != nullptr && !ctor->rstate.no_optimizations()) {
+      if (ctor->get_code() != nullptr) {
         auto* code = ctor->get_code();
         auto& cfg = code->cfg();
         cfg.calculate_exit_block();
@@ -1102,9 +1101,6 @@ FinalInlinePassV2::Stats inline_final_gets(
 
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     if (field_type == cp::FieldType::STATIC && method::is_clinit(method)) {
-      return;
-    }
-    if (method->rstate.no_optimizations()) {
       return;
     }
     cfg::CFGMutation mutation(code.cfg());
