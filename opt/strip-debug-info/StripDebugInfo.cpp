@@ -126,16 +126,20 @@ Stats StripDebugInfo::run(IRCode& code, bool should_drop_synth) {
   ++stats.num_matches;
   bool debug_info_empty = true;
   bool force_discard = m_config.drop_all_dbg_info || should_drop_synth;
-
-  for (auto it = code.begin(); it != code.end();) {
-    const auto& mie = *it;
-    if (should_remove(mie, stats) || (force_discard && is_debug_entry(mie))) {
-      // Even though force_discard will drop the debug item below, preventing
-      // any of the debug entries for :meth to be output, we still want to
-      // erase those entries here so that transformations like inlining won't
-      // move these entries into a method that does have a debug item.
-      it = code.erase(it);
-    } else {
+  always_assert(code.editable_cfg_built());
+  auto& cfg = code.cfg();
+  for (auto* b : cfg.blocks()) {
+    auto it = b->begin();
+    while (it != b->end()) {
+      const auto& mie = *it;
+      if (should_remove(mie, stats) || (force_discard && is_debug_entry(mie))) {
+        // Even though force_discard will drop the debug item below, preventing
+        // any of the debug entries for :meth to be output, we still want to
+        // erase those entries here so that transformations like inlining won't
+        // move these entries into a method that does have a debug item.
+        it = b->remove_mie(it);
+        continue;
+      }
       switch (mie.type) {
       case MFLOW_DEBUG:
         // Any debug information op other than an end sequence means

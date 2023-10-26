@@ -24,7 +24,9 @@ void test(const StripDebugInfoPass::Config& config,
           const char* o) {
   auto code = assembler::ircode_from_string(i);
   code->set_registers_size(3);
+  code->build_cfg();
   StripDebugInfo(config).run(*code);
+  code->clear_cfg();
   auto expected_code = assembler::ircode_from_string(o);
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
