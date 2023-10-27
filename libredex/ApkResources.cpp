@@ -187,8 +187,10 @@ bool XmlFileEditor::visit_global_strings(android::ResStringPool_header* pool) {
   return true;
 }
 
-bool XmlFileEditor::visit_attribute_ids(uint32_t* id, size_t count) {
-  arsc::XmlFileVisitor::visit_attribute_ids(id, count);
+bool XmlFileEditor::visit_attribute_ids(android::ResChunk_header* header,
+                                        uint32_t* id,
+                                        size_t count) {
+  arsc::XmlFileVisitor::visit_attribute_ids(header, id, count);
   m_attribute_ids_start = id;
   m_attribute_id_count = count;
   return true;

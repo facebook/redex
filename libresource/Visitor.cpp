@@ -620,6 +620,7 @@ bool XmlFileVisitor::visit(void* data, size_t len) {
   }
   android::ResStringPool_header* global_string_pool = nullptr;
   android::ResChunk_header* attribute_ids_header = nullptr;
+  uint32_t* ids_ptr = nullptr;
   size_t attr_count;
   android::ResXMLTree_node* node = nullptr;
   ResChunkPullParser parser(get_data(header), get_data_len(header));
@@ -650,11 +651,10 @@ bool XmlFileVisitor::visit(void* data, size_t len) {
       attr_count = (dtohl(attribute_ids_header->size) -
                     dtohs(attribute_ids_header->headerSize)) /
                    sizeof(uint32_t);
-      if (attr_count > 0) {
-        if (!visit_attribute_ids((uint32_t*)get_data(attribute_ids_header),
-                                 attr_count)) {
-          return false;
-        }
+      ids_ptr =
+          attr_count > 0 ? (uint32_t*)get_data(attribute_ids_header) : nullptr;
+      if (!visit_attribute_ids(attribute_ids_header, ids_ptr, attr_count)) {
+        return false;
       }
       break;
     default:
@@ -682,10 +682,17 @@ bool XmlFileVisitor::visit_global_strings(android::ResStringPool_header* pool) {
   return true;
 }
 
-bool XmlFileVisitor::visit_attribute_ids(uint32_t* id, size_t count) {
-  LOGVV("visit attribute id, offset = %ld, count = %zu",
-        get_file_offset(id),
-        count);
+bool XmlFileVisitor::visit_attribute_ids(android::ResChunk_header* header,
+                                         uint32_t* id,
+                                         size_t count) {
+  if (count == 0) {
+    LOGVV("visit attributes, header offset = %ld (no ids)",
+          get_file_offset(header));
+  } else {
+    LOGVV("visit attributes, first id offset = %ld, count = %zu",
+          get_file_offset(id),
+          count);
+  }
   return true;
 }
 

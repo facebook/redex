@@ -36,11 +36,6 @@ class XmlAttributeSetter : public arsc::SimpleXmlParser {
         m_attribute_id(attribute_id),
         m_data(data_input) {}
 
-  bool visit_attribute_ids(uint32_t* id, size_t count) override {
-    m_ids = id;
-    return arsc::SimpleXmlParser::visit_attribute_ids(id, count);
-  }
-
   // give a stringPool ref of a name, return name in string format.
   std::string get_name_string(
       const struct android::ResStringPool_ref& name_ref) {
@@ -73,10 +68,10 @@ class XmlAttributeSetter : public arsc::SimpleXmlParser {
       auto attr_idx = dtohl(attribute->name.index);
       bool found_attribute = false;
       if (m_is_using_attr_id && attr_idx < attribute_count() &&
-          m_ids[attr_idx] == m_attribute_id) {
-        std::cout << "Found target attribute 0x" << std::hex << m_ids[attr_idx]
-                  << " at file offset 0x" << get_file_offset(attribute)
-                  << std::endl;
+          get_attribute_id(attr_idx) == m_attribute_id) {
+        std::cout << "Found target attribute 0x" << std::hex
+                  << get_attribute_id(attr_idx) << " at file offset 0x"
+                  << get_file_offset(attribute) << std::endl;
         found_attribute = true;
       } else if (attr_name == m_attribute) {
         std::cout << "Found target attribute " << m_attribute
@@ -102,7 +97,6 @@ class XmlAttributeSetter : public arsc::SimpleXmlParser {
   const char* m_attribute;
   uint32_t m_attribute_id = 0;
   uint32_t m_data;
-  uint32_t* m_ids;
   // State
   bool m_found_tag = false;
 };
