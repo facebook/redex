@@ -673,7 +673,7 @@ ManifestClassInfo extract_classes_from_manifest(const char* data, size_t size) {
         }
       } else if (tag == instrumentation) {
         std::string classname = get_string_attribute_value(parser, name);
-        always_assert(classname.size());
+        always_assert(!classname.empty());
         manifest_classes.instrumentation_classes.emplace(
             java_names::external_to_internal(classname));
       } else if (tag == queries) {
@@ -683,7 +683,7 @@ ManifestClassInfo extract_classes_from_manifest(const char* data, size_t size) {
       } else if (string_to_tag.count(tag)) {
         std::string classname = get_string_attribute_value(
             parser, tag != activity_alias ? name : target_activity);
-        always_assert(classname.size());
+        always_assert(!classname.empty());
 
         bool has_exported_attribute = has_bool_attribute(parser, exported);
         android::Res_value ignore_output;
@@ -2417,6 +2417,7 @@ size_t ResourcesArscFile::serialize() {
       // Refer to the re-parsed data at initial step to get full details of the
       // entries, flags and values for the new type.
       std::vector<uint32_t> flags;
+      flags.reserve(type_def.source_res_ids.size());
       for (auto& id : type_def.source_res_ids) {
         flags.emplace_back(table_parser.m_res_id_to_flags.at(id));
       }
