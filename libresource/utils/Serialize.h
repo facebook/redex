@@ -495,6 +495,13 @@ class ResFileManipulator {
       written_bytes += t_size;
     }
 
+    void write_vec(const android::Vector<char>& vec) {
+      char* dest = buffer.get() + written_bytes;
+      auto v_size = vec.size();
+      memcpy(dest, vec.array(), v_size);
+      written_bytes += v_size;
+    }
+
     std::unique_ptr<char[]> buffer;
     size_t size;
     size_t written_bytes{0};
@@ -513,6 +520,14 @@ class ResFileManipulator {
   void add_at(void* pos, const T& item) {
     Block block(sizeof(T));
     block.write(item);
+    m_additions.emplace((char*)pos, std::move(block));
+  }
+  template <typename T>
+  void add_serializable_at(void* pos, T& builder) {
+    android::Vector<char> vec;
+    builder.serialize(&vec);
+    Block block(vec.size());
+    block.write_vec(vec);
     m_additions.emplace((char*)pos, std::move(block));
   }
   // Shorthand for deleting N bytes at the position and adding N different
