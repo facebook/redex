@@ -199,6 +199,19 @@ int ensure_strings_in_xml_pool(
     android::Vector<char>* out_data,
     std::unordered_map<std::string, uint32_t>* string_to_idx);
 
+// Like above, but return the index at which the attribute with the given name
+// (and optional id) is present in the document. If the attribute does not exist
+// in the doc, it will be added and the outputted data will be remapped to be
+// consistent. If the id exists in the doc with a conflicting name, an error
+// will be returned. If adding an attribute with no id, pass in 0 and this
+// function will be equivalent to ensure_string_in_xml_pool.
+int ensure_attribute_in_xml_doc(const void* data,
+                                const size_t len,
+                                const std::string& attribute_name,
+                                const uint32_t& attribute_id,
+                                android::Vector<char>* out_data,
+                                size_t* idx);
+
 using EntryValueData = PtrLen<uint8_t>;
 using EntryOffsetData = std::pair<EntryValueData, uint32_t>;
 
@@ -468,6 +481,15 @@ class ResTableBuilder {
   std::vector<
       std::pair<std::shared_ptr<ResPackageBuilder>, android::ResTable_package*>>
       m_packages;
+};
+
+class ResXmlIdsBuilder {
+ public:
+  void add_id(uint32_t id) { m_ids.emplace_back(id); }
+  void serialize(android::Vector<char>* out);
+
+ private:
+  std::vector<uint32_t> m_ids;
 };
 
 // Helper to organize edits to a binary chunk of data that is assumed to start

@@ -10,6 +10,8 @@
 
 #include <boost/optional.hpp>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "androidfw/ResourceTypes.h"
@@ -235,6 +237,30 @@ class SimpleXmlParser : public arsc::XmlFileVisitor {
   android::ResChunk_header* m_attribute_ids_header{nullptr};
   size_t m_attribute_count{0};
   uint32_t* m_attribute_ids{nullptr};
+};
+
+// Takes a mapping of old to new string indices, and applies them throughout the
+// document.
+class XmlStringRefRemapper : public SimpleXmlParser {
+ public:
+  XmlStringRefRemapper(const std::unordered_map<uint32_t, uint32_t>& mapping)
+      : m_mapping(mapping) {}
+  ~XmlStringRefRemapper() override {}
+
+  bool visit_string_ref(android::ResStringPool_ref* ref) override {
+    if (m_seen.count(ref) == 0) {
+      m_seen.emplace(ref);
+      auto search = m_mapping.find(dtohl(ref->index));
+      if (search != m_mapping.end()) {
+        ref->index = htodl(search->second);
+      }
+    }
+    return SimpleXmlParser::visit_string_ref(ref);
+  }
+
+ private:
+  std::unordered_map<uint32_t, uint32_t> m_mapping;
+  std::unordered_set<android::ResStringPool_ref*> m_seen;
 };
 } // namespace arsc
 #endif
