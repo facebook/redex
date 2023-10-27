@@ -26,6 +26,7 @@ check_PROGRAMS = \
     check_breadcrumbs_test \
     check_cast_analysis_test \
     concurrent_containers_test \
+    concurrent_hashtable_test \
     configurable_test \
     constructor_analysis_test \
     control_flow_test \
