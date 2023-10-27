@@ -76,7 +76,8 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
         },
         [&](DexMethod* meth, const IRCode& code) {
           auto base_cls = meth->get_class();
-          for (auto& mie : InstructionIterable(meth->get_code())) {
+          always_assert(meth->get_code()->editable_cfg_built());
+          for (auto& mie : cfg::InstructionIterable(meth->get_code()->cfg())) {
             auto inst = mie.insn;
             DexType* called_cls = nullptr;
             if (inst->has_method()) {
@@ -1165,6 +1166,7 @@ void InterDex::set_clinit_methods_if_needed(DexClass* cls) const {
   }
   code->set_registers_size(max_size);
   code->push_back(dasm(OPCODE_RETURN_VOID));
+  code->build_cfg();
 }
 
 // Creates a canary class if necessary. (In particular, the primary dex never
@@ -1279,6 +1281,14 @@ void InterDex::post_process_dex(EmittingState& emitting_state,
       TRACE(IDEX, 4, "IDEX: Emitting %s-plugin-generated class :: %s",
             plugin->name().c_str(), SHOW(cls));
       classes.push_back(cls);
+      // For the plugin cls, make sure all methods are editable cfg built.
+      for (auto* m : cls->get_all_methods()) {
+        if (m->get_code() == nullptr) {
+          continue;
+        }
+        m->get_code()->build_cfg();
+      }
+
       // If this is the primary dex, or if there are any betamap-ordered
       // classes in this dex, then we treat the additional classes as
       // perf-sensitive, to be conservative.
