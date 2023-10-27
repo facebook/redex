@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "ConcurrentContainers.h"
 #include "Debug.h"
 #include "DexClass.h"
 
@@ -169,10 +170,10 @@ std::unordered_set<const DexType*> get_root_store_types(
 class XStoreRefs {
  private:
   /**
-   * Set of classes in each logical store. A primary DEX goes in its own
+   * Map of classes to their logical store index. A primary DEX goes in its own
    * bucket (first element in the array).
    */
-  std::vector<std::unordered_set<const DexType*>> m_xstores;
+  InsertOnlyConcurrentMap<const DexType*, size_t> m_xstores;
 
   /**
    * Pointers to original stores in the same order as used to populate
@@ -239,8 +240,9 @@ class XStoreRefs {
    * api.
    */
   size_t get_store_idx(const DexType* type) const {
-    for (size_t store_idx = 0; store_idx < m_xstores.size(); store_idx++) {
-      if (m_xstores[store_idx].count(type) > 0) return store_idx;
+    auto* res = m_xstores.get(type);
+    if (res) {
+      return *res;
     }
     not_reached_log("type %s not in the current APK", show_type(type).c_str());
   }
@@ -252,17 +254,13 @@ class XStoreRefs {
    * the current scope.
    */
   bool is_in_root_store(const DexType* type) const {
-    for (size_t store_idx = 0; store_idx < m_root_stores; store_idx++) {
-      if (m_xstores[store_idx].count(type) > 0) {
-        return true;
-      }
-    }
-
-    return false;
+    auto* res = m_xstores.get(type);
+    return res && *res < m_root_stores;
   }
 
   bool is_in_primary_dex(const DexType* type) const {
-    return !m_xstores.empty() && m_xstores[0].count(type);
+    auto* res = m_xstores.get(type);
+    return res && *res == 0;
   }
 
   const DexStore* get_store(size_t idx) const { return m_stores[idx]; }
@@ -298,15 +296,14 @@ class XStoreRefs {
     if (type_class_internal(type) == nullptr) return false;
     // Temporary HACK: optimizations may leave references to dead classes and
     // if we just call get_store_idx() - as we should - the assert will fire...
-    size_t type_store_idx = 0;
-    for (; type_store_idx < m_xstores.size(); type_store_idx++) {
-      if (m_xstores[type_store_idx].count(type) > 0) break;
+    if (store_idx >= m_xstores.size()) {
+      return false;
     }
-    if ((store_idx >= m_xstores.size()) ||
-        (type_store_idx >= m_xstores.size())) {
-      return type_store_idx > store_idx;
+    auto* res = m_xstores.get(type);
+    if (!res) {
+      return true;
     }
-    return illegal_ref_between_stores(store_idx, type_store_idx);
+    return illegal_ref_between_stores(store_idx, *res);
   }
 
   bool illegal_ref_between_stores(size_t caller_store_idx,
