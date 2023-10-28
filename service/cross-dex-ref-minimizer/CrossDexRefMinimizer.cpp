@@ -222,7 +222,13 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
     add_weight(type, m_config.type_ref_weight, m_config.type_seed_weight);
   }
   for (auto string : cls_refs.strings) {
-    add_weight(string, m_config.string_ref_weight, m_config.string_seed_weight);
+    if (string->length() > m_config.min_large_string_size) {
+      add_weight(string, m_config.small_string_ref_weight,
+                 m_config.large_string_seed_weight);
+    } else {
+      add_weight(string, m_config.large_string_ref_weight,
+                 m_config.small_string_seed_weight);
+    }
   }
   for (auto fref : cls_refs.field_refs) {
     add_weight(fref, m_config.field_ref_weight, m_config.field_seed_weight);

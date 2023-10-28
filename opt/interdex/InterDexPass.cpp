@@ -71,9 +71,15 @@ void InterDexPass::bind_config() {
   bind("minimize_cross_dex_refs_type_ref_weight",
        m_minimize_cross_dex_refs_config.type_ref_weight,
        m_minimize_cross_dex_refs_config.type_ref_weight);
-  bind("minimize_cross_dex_refs_string_ref_weight",
-       m_minimize_cross_dex_refs_config.string_ref_weight,
-       m_minimize_cross_dex_refs_config.string_ref_weight);
+  bind("minimize_cross_dex_refs_large_string_ref_weight",
+       m_minimize_cross_dex_refs_config.large_string_ref_weight,
+       m_minimize_cross_dex_refs_config.large_string_ref_weight);
+  bind("minimize_cross_dex_refs_small_string_ref_weight",
+       m_minimize_cross_dex_refs_config.small_string_ref_weight,
+       m_minimize_cross_dex_refs_config.small_string_ref_weight);
+  bind("minimize_cross_dex_refs_min_large_string_size",
+       m_minimize_cross_dex_refs_config.min_large_string_size,
+       m_minimize_cross_dex_refs_config.min_large_string_size);
   bind("minimize_cross_dex_refs_method_seed_weight",
        m_minimize_cross_dex_refs_config.method_seed_weight,
        m_minimize_cross_dex_refs_config.method_seed_weight);
@@ -83,9 +89,12 @@ void InterDexPass::bind_config() {
   bind("minimize_cross_dex_refs_type_seed_weight",
        m_minimize_cross_dex_refs_config.type_seed_weight,
        m_minimize_cross_dex_refs_config.type_seed_weight);
-  bind("minimize_cross_dex_refs_string_seed_weight",
-       m_minimize_cross_dex_refs_config.string_seed_weight,
-       m_minimize_cross_dex_refs_config.string_seed_weight);
+  bind("minimize_cross_dex_refs_large_string_seed_weight",
+       m_minimize_cross_dex_refs_config.large_string_seed_weight,
+       m_minimize_cross_dex_refs_config.large_string_seed_weight);
+  bind("minimize_cross_dex_refs_large_string_seed_weight",
+       m_minimize_cross_dex_refs_config.small_string_seed_weight,
+       m_minimize_cross_dex_refs_config.small_string_seed_weight);
   bind("minimize_cross_dex_refs_emit_json", false,
        m_minimize_cross_dex_refs_config.emit_json);
   bind("minimize_cross_dex_refs_explore_alternatives", 1,

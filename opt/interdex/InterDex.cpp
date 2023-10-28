@@ -698,17 +698,21 @@ void InterDex::init_cross_dex_ref_minimizer() {
   TRACE(IDEX, 2,
         "[dex ordering] Cross-dex-ref-minimizer active with method ref weight "
         "%" PRIu64 ", field ref weight %" PRIu64 ", type ref weight %" PRIu64
-        ", string ref weight %" PRIu64 ", method seed weight %" PRIu64
+        ", large string ref weight %" PRIu64
+        ", small string ref weight %" PRIu64 ", method seed weight %" PRIu64
         ", field seed weight %" PRIu64 ", type seed weight %" PRIu64
-        ", string seed weight %" PRIu64 ".",
+        ", large string seed weight %" PRIu64
+        ", small string seed weight %" PRIu64 ".",
         m_cross_dex_ref_minimizer.get_config().method_ref_weight,
         m_cross_dex_ref_minimizer.get_config().field_ref_weight,
         m_cross_dex_ref_minimizer.get_config().type_ref_weight,
-        m_cross_dex_ref_minimizer.get_config().string_ref_weight,
+        m_cross_dex_ref_minimizer.get_config().large_string_ref_weight,
+        m_cross_dex_ref_minimizer.get_config().small_string_ref_weight,
         m_cross_dex_ref_minimizer.get_config().method_seed_weight,
         m_cross_dex_ref_minimizer.get_config().field_seed_weight,
         m_cross_dex_ref_minimizer.get_config().type_seed_weight,
-        m_cross_dex_ref_minimizer.get_config().string_seed_weight);
+        m_cross_dex_ref_minimizer.get_config().large_string_seed_weight,
+        m_cross_dex_ref_minimizer.get_config().small_string_seed_weight);
 
   std::vector<DexClass*> classes_to_insert;
   // Emit classes using some algorithm to group together classes which
