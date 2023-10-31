@@ -127,10 +127,6 @@ void verify(DexStoresVector& stores) {
     }
     build_refs(scope, class_refs);
   }
-  int references = 0;
-  for (const auto& refs : class_refs) {
-    references += (int)refs.second.size();
-  }
 
   // Build allowed stor (references) map
   allowed_store_map_t allowed_store_map;
