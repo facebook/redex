@@ -145,6 +145,9 @@ struct EnumUtil {
   DexMethodRef* STRING_EQ_METHOD =
       DexMethod::make_method("Ljava/lang/String;.equals:(Ljava/lang/Object;)Z");
 
+  InsertOnlyConcurrentMap<DexClass*, DexMethod*>
+      m_user_defined_tostring_method_cache;
+
   explicit EnumUtil(const Config& config) : m_config(config) {}
 
   void create_util_class(DexStoresVector* stores, uint32_t fields_count) {
@@ -314,9 +317,7 @@ struct EnumUtil {
    * `Enum.toString()`. Return `nullptr` if `Enum.toString()` is not overridden.
    */
   DexMethod* get_user_defined_tostring_method(DexClass* cls) {
-    // TODO: Don't have a *static* cache.
-    static InsertOnlyConcurrentMap<DexClass*, DexMethod*> cache;
-    return *cache
+    return *m_user_defined_tostring_method_cache
                 .get_or_create_and_assert_equal(
                     cls,
                     [&](auto*) -> DexMethod* {
