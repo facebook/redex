@@ -16,6 +16,7 @@ check_PROGRAMS = \
     aliased_registers_test \
     analysis_usage_test \
     array_propagation_test \
+    atomic_map_test \
     blaming_escape_test \
     boxed_boolean_propagation_test \
     branch_prefix_hoisting_test \
