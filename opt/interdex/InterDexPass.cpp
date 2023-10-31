@@ -92,7 +92,7 @@ void InterDexPass::bind_config() {
   bind("minimize_cross_dex_refs_large_string_seed_weight",
        m_minimize_cross_dex_refs_config.large_string_seed_weight,
        m_minimize_cross_dex_refs_config.large_string_seed_weight);
-  bind("minimize_cross_dex_refs_large_string_seed_weight",
+  bind("minimize_cross_dex_refs_small_string_seed_weight",
        m_minimize_cross_dex_refs_config.small_string_seed_weight,
        m_minimize_cross_dex_refs_config.small_string_seed_weight);
   bind("minimize_cross_dex_refs_emit_json", false,
