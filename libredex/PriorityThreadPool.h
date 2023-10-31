@@ -33,6 +33,7 @@
  */
 class PriorityThreadPool {
  private:
+  std::vector<boost::thread> m_pool;
   size_t m_threads{0};
   // The following data structures are guarded by this mutex.
   std::mutex m_mutex;
@@ -78,10 +79,25 @@ class PriorityThreadPool {
       std::unique_lock<std::mutex> lock{m_mutex};
       m_running = num_threads;
     }
+
+    if (num_threads == 0) {
+      return;
+    }
+
     sparta::AsyncRunner* async_runner =
         redex_thread_pool::ThreadPool::get_instance();
+    if (async_runner) {
+      for (int i = 0; i < num_threads; ++i) {
+        async_runner->run_async(&PriorityThreadPool::run, this);
+      }
+      return;
+    }
+
+    boost::thread::attributes attrs;
+    attrs.set_stack_size(8 * 1024 * 1024); // 8MB stack.
+
     for (int i = 0; i < num_threads; ++i) {
-      async_runner->run_async(&PriorityThreadPool::run, this);
+      m_pool.emplace_back(attrs, [this]() { this->run(); });
     }
   }
 
@@ -122,9 +138,14 @@ class PriorityThreadPool {
       m_work_condition.notify_all();
     }
     wait(/*init_shutdown=*/allow_new_work);
-    std::unique_lock<std::mutex> lock{m_mutex};
-    while (m_running > 0) {
-      m_not_running_condition.wait(lock);
+    {
+      std::unique_lock<std::mutex> lock{m_mutex};
+      while (m_running > 0) {
+        m_not_running_condition.wait(lock);
+      }
+    }
+    for (auto& thread : m_pool) {
+      thread.join();
     }
   }
 

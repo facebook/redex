@@ -20,6 +20,10 @@ class ThreadPool : public sparta::ThreadPool<boost::thread> {
  public:
   static ThreadPool* get_instance();
 
+  static void create();
+
+  static void destroy();
+
  protected:
   boost::thread create_thread(std::function<void()> bound_f) override;
 };

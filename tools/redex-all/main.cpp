@@ -1733,6 +1733,8 @@ int main(int argc, char* argv[]) {
   auto maybe_global_profile =
       ScopedCommandProfiling::maybe_from_env("GLOBAL_", "global");
 
+  redex_thread_pool::ThreadPool::create();
+
   ConcurrentContainerConcurrentDestructionScope
       concurrent_container_destruction_scope;
 
@@ -1879,6 +1881,8 @@ int main(int argc, char* argv[]) {
           pretty_bytes(vm_stats.vm_peak).c_str(),
           pretty_bytes(vm_stats.vm_hwm).c_str());
   }
+
+  redex_thread_pool::ThreadPool::destroy();
 
   return 0;
 }
