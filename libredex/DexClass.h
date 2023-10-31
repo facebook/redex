@@ -1355,6 +1355,8 @@ class DexClass {
   // DexMethod::estimated_size().
   size_t estimated_size() const;
 
+  std::string show_structure() const;
+
  private:
   void sort_methods();
   void sort_fields();
