@@ -2220,6 +2220,51 @@ std::string DexField::self_show() const { return show(this); }
 std::string DexMethod::self_show() const { return show(this); }
 std::string DexClass::self_show() const { return show(m_self); }
 
+std::string DexClass::show_structure() const {
+  std::string tmp = vshow(m_self);
+  if (!get_sfields().empty() || !get_ifields().empty()) {
+    tmp += "\nFields:";
+    auto add_field = [&](auto* f, const char* prefix) {
+      tmp += "\n  ";
+      tmp += prefix;
+      tmp += show(f);
+    };
+    for (auto* f : get_sfields()) {
+      add_field(f, "static ");
+    }
+    for (auto* f : get_ifields()) {
+      add_field(f, "instance ");
+    }
+  }
+  auto ctors = get_ctors();
+  if (!ctors.empty()) {
+    tmp += "\nConstructors:";
+    for (auto* m : ctors) {
+      tmp += "\n  ";
+      tmp += show(m);
+    }
+  }
+
+  if (!get_dmethods().empty() || !get_vmethods().empty()) {
+    tmp += "\nMethods:";
+    auto add_method = [&](auto* m, const char* prefix) {
+      if (m->get_name()->str() == "<init>") {
+        return;
+      }
+      tmp += "\n  ";
+      tmp += prefix;
+      tmp += show(m);
+    };
+    for (auto* m : get_dmethods()) {
+      add_method(m, "direct ");
+    }
+    for (auto* m : get_vmethods()) {
+      add_method(m, "virtual ");
+    }
+  }
+  return tmp;
+}
+
 void DexMethodRef::erase_method(DexMethodRef* mref) {
   g_redex->erase_method(mref);
   if (mref->is_def()) {

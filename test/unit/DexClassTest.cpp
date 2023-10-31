@@ -172,3 +172,45 @@ TEST_F(DexClassTest, testObfuscatedNames) {
   EXPECT_EQ(field->get_deobfuscated_name_or_empty(), "Lbaz;.bar:I");
   EXPECT_EQ(field->get_simple_deobfuscated_name(), "bar");
 }
+
+TEST_F(DexClassTest, testShowStructure) {
+  auto* c = assembler::class_with_methods("LShowStructure;",
+                                          {
+                                              // Constructor.
+                                              assembler::method_from_string(R"(
+(method (public constructor) "LShowStructure;.<init>:()V"
+  ((load-param-object v0)
+   (return-void))
+))"),
+                                              // Direct
+                                              assembler::method_from_string(R"(
+(method (private) "LShowStructure;.foo:()V"
+  ((load-param-object v0)
+   (return-void))
+))"),
+                                              // Virtual
+                                              assembler::method_from_string(R"(
+(method (public) "LShowStructure;.bar:()V"
+  ((load-param-object v0)
+   (return-void))
+))"),
+                                          });
+  // Static field.
+  c->add_field(DexField::make_field("LShowStructure;.staticField:I")
+                   ->make_concrete(ACC_STATIC));
+  // Instance field.
+  c->add_field(DexField::make_field("LShowStructure;.staticField:I")
+                   ->make_concrete(ACC_PUBLIC));
+
+  auto expected = R"(ShowStructure
+Fields:
+  static LShowStructure;.staticField:I
+  instance LShowStructure;.staticField:I
+Constructors:
+  LShowStructure;.<init>:()V
+Methods:
+  direct LShowStructure;.foo:()V
+  virtual LShowStructure;.bar:()V)";
+
+  EXPECT_EQ(c->show_structure(), expected);
+}
