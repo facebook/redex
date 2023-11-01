@@ -15,8 +15,6 @@
 #include "Pass.h"
 #include "Util.h"
 
-namespace interdex {
-
 unsigned estimate_linear_alloc(const DexClass* clazz);
 
 struct ReserveRefsInfo {
@@ -75,8 +73,8 @@ class DexStructure {
   bool add_class_if_fits(const MethodRefs& clazz_mrefs,
                          const FieldRefs& clazz_frefs,
                          const TypeRefs& clazz_trefs,
-                         const interdex::TypeRefs& pending_init_class_fields,
-                         const interdex::TypeRefs& pending_init_class_types,
+                         const TypeRefs& pending_init_class_fields,
+                         const TypeRefs& pending_init_class_types,
                          size_t linear_alloc_limit,
                          size_t field_refs_limit,
                          size_t method_refs_limit,
@@ -86,16 +84,16 @@ class DexStructure {
   void add_class_no_checks(const MethodRefs& clazz_mrefs,
                            const FieldRefs& clazz_frefs,
                            const TypeRefs& clazz_trefs,
-                           const interdex::TypeRefs& pending_init_class_fields,
-                           const interdex::TypeRefs& pending_init_class_types,
+                           const TypeRefs& pending_init_class_fields,
+                           const TypeRefs& pending_init_class_types,
                            unsigned laclazz,
                            DexClass* clazz);
 
   void add_refs_no_checks(const MethodRefs& clazz_mrefs,
                           const FieldRefs& clazz_frefs,
                           const TypeRefs& clazz_trefs,
-                          const interdex::TypeRefs& pending_init_class_fields,
-                          const interdex::TypeRefs& pending_init_class_types);
+                          const TypeRefs& pending_init_class_fields,
+                          const TypeRefs& pending_init_class_types);
 
   /* Remove \p clazz from current dex, and update the refs.
 This implementation is conservative, in that it leave behind the counters in a
@@ -107,18 +105,18 @@ also reject some legal cases.
                     const MethodRefs& clazz_mrefs,
                     const FieldRefs& clazz_frefs,
                     const TypeRefs& clazz_trefs,
-                    const interdex::TypeRefs& pending_init_class_fields,
-                    const interdex::TypeRefs& pending_init_class_types,
+                    const TypeRefs& pending_init_class_fields,
+                    const TypeRefs& pending_init_class_types,
                     unsigned laclazz,
                     DexClass* clazz);
 
   void resolve_init_classes(const init_classes::InitClassesWithSideEffects*
                                 init_classes_with_side_effects,
-                            const interdex::FieldRefs& frefs,
-                            const interdex::TypeRefs& trefs,
-                            const interdex::TypeRefs& itrefs,
-                            interdex::TypeRefs* pending_init_class_fields,
-                            interdex::TypeRefs* pending_init_class_types);
+                            const FieldRefs& frefs,
+                            const TypeRefs& trefs,
+                            const TypeRefs& itrefs,
+                            TypeRefs* pending_init_class_fields,
+                            TypeRefs* pending_init_class_types);
 
   bool has_tref(DexType* type) const { return m_trefs.count(type); }
 
@@ -152,8 +150,8 @@ also reject some legal cases.
   std::unordered_map<DexType*, size_t> m_trefs;
   std::unordered_map<DexMethodRef*, size_t> m_mrefs;
   std::unordered_map<DexFieldRef*, size_t> m_frefs;
-  interdex::TypeRefs m_pending_init_class_fields;
-  interdex::TypeRefs m_pending_init_class_types;
+  TypeRefs m_pending_init_class_fields;
+  TypeRefs m_pending_init_class_types;
   std::list<DexClass*> m_classes;
   std::unordered_map<DexClass*, std::list<DexClass*>::iterator>
       m_classes_iterators;
@@ -251,11 +249,11 @@ class DexesStructure {
                           const TypeRefs& clazz_trefs,
                           const TypeRefs& clazz_itrefs);
 
-  void resolve_init_classes(const interdex::FieldRefs& frefs,
-                            const interdex::TypeRefs& trefs,
-                            const interdex::TypeRefs& itrefs,
-                            interdex::TypeRefs* pending_init_class_fields,
-                            interdex::TypeRefs* pending_init_class_types);
+  void resolve_init_classes(const FieldRefs& frefs,
+                            const TypeRefs& trefs,
+                            const TypeRefs& itrefs,
+                            TypeRefs* pending_init_class_fields,
+                            TypeRefs* pending_init_class_types);
 
   /**
    * It returns the classes contained in this dex and moves on to the next dex.
@@ -314,5 +312,3 @@ class DexesStructure {
 
   OverflowStats m_overflow_stats{};
 };
-
-} // namespace interdex

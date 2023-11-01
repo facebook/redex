@@ -315,8 +315,8 @@ class TransformConstClassBranchesInterDexPlugin
  public:
   explicit TransformConstClassBranchesInterDexPlugin() {}
 
-  interdex::ReserveRefsInfo reserve_refs() override {
-    return interdex::ReserveRefsInfo(/* frefs */ 0,
+  ReserveRefsInfo reserve_refs() override {
+    return ReserveRefsInfo(/* frefs */ 0,
                                      /* trefs */ 0,
                                      /* mrefs */ 2);
   }

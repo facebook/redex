@@ -727,8 +727,8 @@ class DedupStringsInterDexPlugin : public interdex::InterDexPassPlugin {
   explicit DedupStringsInterDexPlugin(size_t max_factory_methods)
       : m_max_factory_methods(max_factory_methods) {}
 
-  interdex::ReserveRefsInfo reserve_refs() override {
-    return interdex::ReserveRefsInfo(/* frefs */ 0,
+ ReserveRefsInfo reserve_refs() override {
+    return ReserveRefsInfo(/* frefs */ 0,
                                      /* trefs */ m_max_factory_methods,
                                      /* mrefs */ m_max_factory_methods);
   }

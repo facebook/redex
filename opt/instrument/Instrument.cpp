@@ -59,8 +59,8 @@ class InstrumentInterDexPlugin : public interdex::InterDexPassPlugin {
   InstrumentInterDexPlugin(size_t frefs, size_t trefs, size_t mrefs)
       : m_frefs(frefs), m_trefs(trefs), m_mrefs(mrefs) {}
 
-  interdex::ReserveRefsInfo reserve_refs() override {
-    return interdex::ReserveRefsInfo(m_frefs, m_trefs, m_mrefs);
+  ReserveRefsInfo reserve_refs() override {
+    return ReserveRefsInfo(m_frefs, m_trefs, m_mrefs);
   }
 
  private:

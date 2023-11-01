@@ -55,7 +55,7 @@ constexpr const char* SCROLL_SET_END_FORMAT = "LScrollSetEnd";
 constexpr const char* BG_SET_START_FORMAT = "LBackgroundSetStart";
 constexpr const char* BG_SET_END_FORMAT = "LBackgroundSetEnd";
 
-static interdex::DexInfo EMPTY_DEX_INFO;
+static DexInfo EMPTY_DEX_INFO;
 
 std::string get_canary_name(int dexnum, const DexString* store_name) {
   if (store_name) {
@@ -157,10 +157,10 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
 void gather_refs(
     const std::vector<std::unique_ptr<interdex::InterDexPassPlugin>>& plugins,
     const DexClass* cls,
-    interdex::MethodRefs* mrefs,
-    interdex::FieldRefs* frefs,
-    interdex::TypeRefs* trefs,
-    interdex::TypeRefs* itrefs) {
+    MethodRefs* mrefs,
+    FieldRefs* frefs,
+    TypeRefs* trefs,
+    TypeRefs* itrefs) {
   std::vector<DexMethodRef*> method_refs;
   std::vector<DexFieldRef*> field_refs;
   std::vector<DexType*> type_refs;
@@ -181,7 +181,7 @@ void gather_refs(
   itrefs->insert(init_type_refs.begin(), init_type_refs.end());
 }
 
-void print_stats(interdex::DexesStructure* dexes_structure) {
+void print_stats(DexesStructure* dexes_structure) {
   TRACE(IDEX, 2, "InterDex Stats:");
   TRACE(IDEX, 2, "\t dex count: %zu", dexes_structure->get_num_dexes());
   TRACE(IDEX, 2, "\t secondary dex count: %zu",
