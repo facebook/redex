@@ -13,7 +13,7 @@ void AddSecondaryDexPass::run_pass(DexStoresVector& stores,
                                    PassManager&) {
   redex_assert(!stores.empty());
   auto& root_dexen = stores[0].get_dexen();
-  root_dexen.emplace_back(1, interdex::create_canary(root_dexen.size()));
+  root_dexen.emplace_back(1, create_canary(root_dexen.size()));
 }
 
 static AddSecondaryDexPass s_pass;

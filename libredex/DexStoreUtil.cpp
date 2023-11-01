@@ -7,6 +7,45 @@
 
 #include "DexStoreUtil.h"
 
+bool is_canary(DexClass* clazz) {
+  const char* cname = clazz->get_type()->get_name()->c_str();
+  return strncmp(cname, SECONDARY_CANARY_PREFIX,
+                 strlen(SECONDARY_CANARY_PREFIX)) == 0;
+}
+
+std::string get_canary_name(int dexnum, const DexString* store_name) {
+  if (store_name) {
+    char buf[STORE_CANARY_CLASS_BUFSIZE];
+    int store_id = store_name->java_hashcode() & 0xFFFF;
+    // Yes, there could be collisions. We assume that is handled outside of
+    // Redex.
+    snprintf(buf, sizeof(buf), STORE_CANARY_CLASS_FORMAT, store_id, dexnum + 1);
+    return std::string(buf);
+  } else {
+    char buf[SECONDARY_CANARY_CLASS_BUFSIZE];
+    snprintf(buf, sizeof(buf), SECONDARY_CANARY_CLASS_FORMAT, dexnum);
+    return std::string(buf);
+  }
+}
+
+DexClass* create_canary(int dexnum, const DexString* store_name) {
+  std::string canary_name = get_canary_name(dexnum, store_name);
+  auto canary_type = DexType::get_type(canary_name);
+  if (!canary_type) {
+    canary_type = DexType::make_type(canary_name);
+  }
+  auto canary_cls = type_class(canary_type);
+  if (!canary_cls) {
+    ClassCreator cc(canary_type);
+    cc.set_access(ACC_PUBLIC | ACC_ABSTRACT);
+    cc.set_super(type::java_lang_Object());
+    canary_cls = cc.create();
+    // Don't rename the Canary we've created
+    canary_cls->rstate.set_keepnames();
+  }
+  return canary_cls;
+}
+
 bool is_in_non_root_store(const DexType* type,
                           const DexStoresVector& stores,
                           const XStoreRefs& xstores,

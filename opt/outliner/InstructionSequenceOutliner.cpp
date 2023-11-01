@@ -2103,8 +2103,7 @@ class DexState {
   // insert at beginning of dex, but after canary class, if any
   void insert_outlined_class(DexClass* outlined_cls) {
     auto it = m_dex.begin();
-    for (; it != m_dex.end() &&
-           (interdex::is_canary(*it) || (*it)->rstate.outlined());
+    for (; it != m_dex.end() && (is_canary(*it) || (*it)->rstate.outlined());
          it++) {
     }
     m_dex.insert(it, outlined_cls);

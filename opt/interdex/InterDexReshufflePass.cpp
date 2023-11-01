@@ -454,7 +454,7 @@ class Impl {
 
   bool can_move(DexClass* cls) {
     return (!m_order_interdex || !cls->is_perf_sensitive()) &&
-           !interdex::is_canary(cls);
+           !is_canary(cls);
   }
 
   ConfigFiles& m_conf;

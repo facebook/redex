@@ -234,7 +234,7 @@ DexMethod* DedupStrings::make_const_string_loader_method(
   host_cls->set_perf_sensitive(true);
   // Insert class at beginning of dex, but after canary class, if any
   auto dex_it = dex.begin();
-  for (; dex_it != dex.end() && interdex::is_canary(*dex_it); dex_it++) {
+  for (; dex_it != dex.end() && is_canary(*dex_it); dex_it++) {
   }
   dex.insert(dex_it, host_cls);
 

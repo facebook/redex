@@ -12,6 +12,7 @@
 #include "AssetManager.h"
 #include "CrossDexRefMinimizer.h"
 #include "DexClass.h"
+#include "DexStoreUtil.h"
 #include "DexStructure.h"
 #include "DexUtil.h"
 #include "InitClassesWithSideEffects.h"
@@ -23,10 +24,6 @@ class XStoreRefs;
 namespace interdex {
 
 constexpr size_t MAX_DEX_NUM = 99;
-
-bool is_canary(DexClass* clazz);
-
-DexClass* create_canary(int dexnum, const DexString* store_name = nullptr);
 
 class InterDex {
  private:
