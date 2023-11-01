@@ -370,22 +370,10 @@ std::map<SwitchIndices, DexMethod*> ModelMethodMerger::get_dedupped_indices_map(
     const std::vector<DexMethod*>& targets) {
   always_assert(targets.size());
   std::map<SwitchIndices, DexMethod*> indices_to_callee;
-
-  // TODO "structural_equals" feature of editable cfg hasn't been implenmented
-  // yet. Currently, we still need to use irlist::structural_equals. Therefore,
-  // we need to clear_cfg before finding equivalent methods. Once
-  // structural_equals of editable cfg is added, the following clear_cfg will be
-  // removed.
-  for (size_t i = 0; i < targets.size(); i++) {
-    targets[i]->get_code()->clear_cfg();
-  }
   // Find equivalent methods.
   std::vector<MethodOrderedSet> duplicates =
       method_dedup::group_identical_methods(
           targets, m_model_spec.dedup_fill_in_stack_trace);
-  for (size_t i = 0; i < targets.size(); i++) {
-    targets[i]->get_code()->build_cfg();
-  }
   for (const auto& duplicate : duplicates) {
     SwitchIndices switch_indices;
     for (auto& meth : duplicate) {
@@ -789,20 +777,9 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
     auto new_to_old_optional =
         boost::optional<std::unordered_map<DexMethod*, MethodOrderedSet>>(
             new_to_old);
-    // TODO "structural_equals" feature of editable cfg hasn't been implenmented
-    // yet. Currently, we still need to use irlist::structural_equals.
-    // Therefore, we need to clear_cfg before finding equivalent methods. Once
-    // structural_equals of editable cfg is added, the following clear_cfg will
-    // be removed.
-    for (size_t i = 0; i < to_dedup.size(); i++) {
-      to_dedup[i]->get_code()->clear_cfg();
-    }
     m_stats.m_num_static_non_virt_dedupped += method_dedup::dedup_methods(
         m_scope, to_dedup, m_model_spec.dedup_fill_in_stack_trace, replacements,
         new_to_old_optional);
-    for (size_t i = 0; i < replacements.size(); i++) {
-      replacements[i]->get_code()->build_cfg();
-    }
     // Relocate the remainders.
     std::set<DexMethod*, dexmethods_comparator> to_relocate(
         replacements.begin(), replacements.end());

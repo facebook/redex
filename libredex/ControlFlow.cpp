@@ -10,6 +10,7 @@
 #include <boost/dynamic_bitset.hpp>
 #include <boost/numeric/conversion/cast.hpp>
 #include <iterator>
+#include <queue>
 #include <stack>
 #include <utility>
 
@@ -28,6 +29,33 @@
 
 std::atomic<size_t> build_cfg_counter{0};
 namespace {
+
+bool edge_type_structural_equals(std::vector<cfg::Edge*> e1,
+                                 std::vector<cfg::Edge*> e2) {
+  if (e1.empty() && e2.empty()) {
+    return true;
+  }
+
+  if (e1.empty() || e2.empty()) {
+    return false;
+  }
+
+  if (e1.size() != e2.size()) {
+    return false;
+  }
+  std::unordered_map<cfg::EdgeType, int> edge_types;
+  for (size_t i = 0; i < e1.size(); i++) {
+    edge_types[e1[i]->type()] += 1;
+    edge_types[e2[i]->type()] -= 1;
+  }
+
+  for (auto pair : edge_types) {
+    if (pair.second != 0) {
+      return false;
+    }
+  }
+  return true;
+}
 
 // return true if `it` should be the last instruction of this block
 bool end_of_block(const IRList* ir, const IRList::iterator& it, bool in_try) {
@@ -616,6 +644,17 @@ std::vector<Edge*> Block::get_outgoing_throws_in_order() const {
   return result;
 }
 
+std::vector<Edge*> Block::get_outgoing_branches_in_order() const {
+  std::vector<Edge*> result =
+      m_parent->get_succ_edges_of_type(this, EDGE_BRANCH);
+  if (result.size() > 1) {
+    std::sort(result.begin(), result.end(), [](const Edge* e1, const Edge* e2) {
+      return e1->case_key() < e2->case_key();
+    });
+  }
+  return result;
+}
+
 // These assume that the iterator is inside this block
 cfg::InstructionIterator Block::to_cfg_instruction_iterator(
     const ir_list::InstructionIterator& list_it, bool next_on_end) {
@@ -682,8 +721,12 @@ bool Block::push_back(const std::vector<IRInstruction*>& insns) {
 bool Block::push_back(IRInstruction* insn) {
   return m_parent->push_back(this, insn);
 }
-
 bool Block::structural_equals(const Block* other) const {
+  return this->structural_equals(other, std::equal_to<const IRInstruction&>());
+}
+
+bool Block::structural_equals(
+    const Block* other, const InstructionEquality& instruction_equals) const {
   auto iterable1 = ir_list::ConstInstructionIterable(this);
   auto iterable2 = ir_list::ConstInstructionIterable(other);
   auto it1 = iterable1.begin();
@@ -693,12 +736,21 @@ bool Block::structural_equals(const Block* other) const {
     auto& mie1 = *it1;
     auto& mie2 = *it2;
 
-    if (*mie1.insn != *mie2.insn) {
+    if (!instruction_equals(*mie1.insn, *mie2.insn)) {
       return false;
     }
   }
 
   return it1 == iterable1.end() && it2 == iterable2.end();
+}
+
+bool Block::extended_structural_equals(
+    const Block* other, const InstructionEquality& instruction_equals) const {
+  if (!edge_type_structural_equals(this->preds(), other->preds()) ||
+      !edge_type_structural_equals(this->succs(), other->succs())) {
+    return false;
+  }
+  return this->structural_equals(other, instruction_equals);
 }
 
 std::ostream& operator<<(std::ostream& os, const Edge& e) {
@@ -3095,6 +3147,104 @@ ControlFlowGraph::EdgeSet ControlFlowGraph::remove_pred_edges(Block* b,
   return remove_pred_edge_if(
       iterable.begin(), iterable.end(), [](const Edge*) { return true; },
       cleanup);
+}
+
+bool ControlFlowGraph::structural_equals(const ControlFlowGraph& other) const {
+  return this->structural_equals(other, std::equal_to<const IRInstruction&>());
+}
+
+bool ControlFlowGraph::structural_equals(
+    const ControlFlowGraph& other,
+    const InstructionEquality& instruction_equals) const {
+  if (this->num_blocks() != other.num_blocks() ||
+      this->num_edges() != other.num_edges()) {
+    return false;
+  }
+
+  std::queue<Block*> this_blocks;
+  std::queue<Block*> other_blocks;
+  std::unordered_set<BlockId> block_visited;
+  // Check entry block.
+  if (!this->entry_block()->extended_structural_equals(other.entry_block(),
+                                                       instruction_equals)) {
+    return false;
+  }
+
+  // Check exit_block. Then no need to check EDGE_GHOST later.
+  if (this->exit_block()) {
+    if (!this->exit_block()->extended_structural_equals(other.exit_block(),
+                                                        instruction_equals)) {
+      return false;
+    }
+  } else if (other.exit_block()) {
+    return false;
+  }
+
+  this_blocks.push(this->entry_block());
+  other_blocks.push(other.entry_block());
+  block_visited.emplace(this->entry_block()->id());
+  while (!this_blocks.empty()) {
+    always_assert(!other_blocks.empty());
+    auto b1 = this_blocks.front();
+    auto b2 = other_blocks.front();
+    this_blocks.pop();
+    other_blocks.pop();
+    // Push b1, b2's GOTO succes into queue;
+    auto goto1 = b1->goes_to();
+    auto goto2 = b2->goes_to();
+    if (goto1) {
+      if (!goto1->extended_structural_equals(goto2, instruction_equals)) {
+        return false;
+      }
+      if (block_visited.count(goto1->id()) == 0) {
+        this_blocks.push(goto1);
+        other_blocks.push(goto2);
+        block_visited.emplace(goto1->id());
+      }
+    } else if (goto2) {
+      return false;
+    }
+
+    // Push b1, b2's THROW succes into queue;
+    auto throw1_edges = b1->get_outgoing_throws_in_order();
+    auto throw2_edges = b2->get_outgoing_throws_in_order();
+    if (throw1_edges.size() != throw2_edges.size()) {
+      return false;
+    }
+    for (size_t i = 0; i < throw1_edges.size(); i++) {
+      auto throw1 = throw1_edges[i]->target();
+      auto throw2 = throw2_edges[i]->target();
+      if (!throw1->extended_structural_equals(throw2, instruction_equals)) {
+        return false;
+      }
+      if (block_visited.count(throw1->id()) == 0) {
+        this_blocks.push(throw1);
+        other_blocks.push(throw2);
+        block_visited.emplace(throw1->id());
+      }
+    }
+
+    // Push b1, b2's BRANCH into queue;
+    auto branch1_edges = b1->get_outgoing_branches_in_order();
+    auto branch2_edges = b2->get_outgoing_branches_in_order();
+    if (branch1_edges.size() != branch2_edges.size()) {
+      return false;
+    }
+    for (size_t i = 0; i < branch1_edges.size(); i++) {
+      auto branch1 = branch1_edges[i]->target();
+      auto branch2 = branch2_edges[i]->target();
+      if (!branch1->extended_structural_equals(branch2, instruction_equals)) {
+        return false;
+      }
+      if (block_visited.count(branch1->id()) == 0) {
+        this_blocks.push(branch1);
+        other_blocks.push(branch2);
+        block_visited.emplace(branch1->id());
+      }
+    }
+  }
+
+  return true;
 }
 
 DexPosition* ControlFlowGraph::get_dbg_pos(const cfg::InstructionIterator& it) {

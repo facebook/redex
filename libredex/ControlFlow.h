@@ -373,6 +373,8 @@ class Block final {
   // TODO?: Should we just always store the throws in index order?
   std::vector<Edge*> get_outgoing_throws_in_order() const;
 
+  std::vector<Edge*> get_outgoing_branches_in_order() const;
+
   // These assume that the iterator is inside this block
   InstructionIterator to_cfg_instruction_iterator(
       const ir_list::InstructionIterator& list_it, bool next_on_end = false);
@@ -417,6 +419,11 @@ class Block final {
                     std::unique_ptr<SourceBlock> sb);
 
   bool structural_equals(const Block* other) const;
+  bool structural_equals(const Block* other,
+                         const InstructionEquality& instruction_equals) const;
+
+  bool extended_structural_equals(
+      const Block* other, const InstructionEquality& instruction_equals) const;
 
  private:
   friend class ControlFlowGraph;
@@ -1028,6 +1035,11 @@ class ControlFlowGraph {
   std::vector<IRInstruction*> release_removed_instructions() {
     return std::move(m_removed_insns);
   }
+
+  bool structural_equals(const ControlFlowGraph& other) const;
+
+  bool structural_equals(const ControlFlowGraph& other,
+                         const InstructionEquality& instruction_equals) const;
 
  private:
   friend class Block;
