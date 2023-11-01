@@ -37,6 +37,8 @@ inline double get_move_seconds() { return s_move.get_seconds(); }
 inline size_t s_concurrent_destruction_threshold{
     std::numeric_limits<size_t>::max()};
 
+bool is_thread_pool_active();
+
 void workqueue_run_for(size_t start,
                        size_t end,
                        const std::function<void(size_t)>& fn);
@@ -268,10 +270,17 @@ class ConcurrentHashtable final {
     return *this;
   }
 
-  ~ConcurrentHashtable() {
-    compact();
+  /*
+   * This operation releases all memory and leaves behind the object in an
+   * uninitialized state.
+   */
+  void destroy() {
     Storage::destroy(m_storage.exchange(nullptr));
+    m_count.store(0);
+    process_erased();
   }
+
+  ~ConcurrentHashtable() { destroy(); }
 
   /*
    * This operation is always thread-safe.
@@ -590,12 +599,7 @@ class ConcurrentHashtable final {
    * This operation is NOT thread-safe.
    */
   void compact() {
-    if (m_erased) {
-      while (!m_erased->empty()) {
-        delete m_erased->front();
-        m_erased->pop();
-      }
-    }
+    process_erased();
     auto* storage = m_storage.load();
     always_assert(storage->next.load() == nullptr);
     Storage* prev_storage = nullptr;
@@ -738,6 +742,16 @@ class ConcurrentHashtable final {
     Ptr ptr = node;
     PtrPlusBits::set_bits(ptr, BEGIN_DURING_RESIZING);
     return ptr;
+  }
+
+  void process_erased() {
+    if (m_erased) {
+      while (!m_erased->empty()) {
+        delete m_erased->front();
+        m_erased->pop();
+      }
+      m_erased = nullptr;
+    }
   }
 
   friend class ConcurrentHashtableIterator<
@@ -932,14 +946,15 @@ class ConcurrentContainer {
 
   virtual ~ConcurrentContainer() {
     auto timer_scope = cc_impl::s_destructor.scope();
-    if (size() <= cc_impl::s_concurrent_destruction_threshold) {
+    if (!cc_impl::is_thread_pool_active() ||
+        size() <= cc_impl::s_concurrent_destruction_threshold) {
       for (size_t slot = 0; slot < n_slots; ++slot) {
-        m_slots[slot].clear();
+        m_slots[slot].destroy();
       }
       return;
     }
-    cc_impl::workqueue_run_for(0, n_slots,
-                               [this](size_t slot) { m_slots[slot].clear(); });
+    cc_impl::workqueue_run_for(
+        0, n_slots, [this](size_t slot) { m_slots[slot].destroy(); });
   }
 
   /*

@@ -11,6 +11,10 @@
 
 namespace cc_impl {
 
+bool is_thread_pool_active() {
+  return redex_thread_pool::ThreadPool::get_instance() != nullptr;
+}
+
 void workqueue_run_for(size_t start,
                        size_t end,
                        const std::function<void(size_t)>& fn) {
