@@ -334,10 +334,14 @@ SameImplementationMap get_same_implementation_map(
     SameImplementation same_implementation{nullptr, {}};
     auto consider_method = [&](DexMethod* method) {
       always_assert(method->get_code());
-      if (same_implementation.representative != nullptr &&
-          !method->get_code()->structural_equals(
-              *same_implementation.representative->get_code())) {
-        return false;
+      always_assert(method->get_code()->editable_cfg_built());
+      if (same_implementation.representative != nullptr) {
+        always_assert(same_implementation.representative->get_code()
+                          ->editable_cfg_built());
+        if (!method->get_code()->cfg().structural_equals(
+                same_implementation.representative->get_code()->cfg())) {
+          return false;
+        }
       }
       if (same_implementation.representative == nullptr ||
           compare_dexmethods(method, same_implementation.representative)) {
@@ -801,10 +805,6 @@ void run_inliner(DexStoresVector& stores,
         get_same_implementation_map(scope, *method_override_graph));
   }
 
-  walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ true);
-  });
-
   if (inliner_config.virtual_inline && inliner_config.true_virtual_inline) {
     gather_true_virtual_methods(*method_override_graph, *non_virtual, scope,
                                 *same_implementation_map,
@@ -840,9 +840,6 @@ void run_inliner(DexStoresVector& stores,
       cross_dex_penalty,
       /* configured_finalish_field_names */ {}, local_only);
   inliner.inline_methods(/* need_deconstruct */ false);
-
-  walk::parallel::code(scope,
-                       [](DexMethod*, IRCode& code) { code.clear_cfg(); });
 
   // delete all methods that can be deleted
   auto inlined = inliner.get_inlined();

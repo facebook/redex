@@ -570,7 +570,7 @@ size_t MultiMethodInliner::inline_inlinables(
   }
 
   // attempt to inline all inlinable candidates
-  size_t estimated_caller_size = caller->estimate_code_units();
+  size_t estimated_caller_size = caller->cfg().estimate_code_units();
 
   // Prefer inlining smaller methods first, so that we are less likely to hit
   // overall size limit.
