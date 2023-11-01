@@ -76,14 +76,14 @@ RedexContext::~RedexContext() {
                   s_type_map.clear();
                 },
                 [&] {
-                  Timer timer("DexTypeLists", /* indent */ false);
+                  Timer timer("Delete DexTypeLists", /* indent */ false);
                   for (auto const& p : s_typelist_map) {
                     delete p.second;
                   }
                   s_typelist_map.clear();
                 },
                 [&] {
-                  Timer timer("Delete DexProtos.", /* indent */ false);
+                  Timer timer("Delete DexProtos", /* indent */ false);
                   for (auto* proto : s_proto_set) {
                     delete proto;
                   }
@@ -185,7 +185,10 @@ RedexContext::~RedexContext() {
         for (size_t i = 0; i < s_small_string_set.size(); ++i) {
           auto* small_string_set = s_small_string_set[i];
           small_strings_size += small_string_set->size();
-          fns.push_back([small_string_set]() { delete small_string_set; });
+          fns.push_back([small_string_set]() {
+            small_string_set->clear();
+            delete small_string_set;
+          });
         }
         for (auto& segment : s_large_string_set) {
           large_strings_size += segment.size();

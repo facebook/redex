@@ -66,6 +66,7 @@
 #include "ScopedMetrics.h"
 #include "Show.h"
 #include "SourceBlocks.h"
+#include "ThreadPool.h"
 #include "Timer.h"
 #include "Walkers.h"
 
