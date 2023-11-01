@@ -107,6 +107,7 @@ libredex_la_SOURCES = \
 	libredex/DexHasher.cpp \
 	libredex/DexIdx.cpp \
 	libredex/DexInstruction.cpp \
+	libredex/DexLimitsInfo.cpp  \
 	libredex/DexLoader.cpp \
 	libredex/DexMemberRefs.cpp \
 	libredex/DexMethodHandle.cpp \

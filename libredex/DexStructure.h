@@ -145,6 +145,8 @@ also reject some legal cases.
 
   size_t get_num_frefs() const { return m_frefs.size(); }
 
+  const OverflowStats& get_overflow_stats() const { return m_overflow_stats; }
+
  private:
   size_t m_linear_alloc_size;
   std::unordered_map<DexType*, size_t> m_trefs;
