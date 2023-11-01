@@ -4,6 +4,7 @@ InheritParentConfig: true
 Checks: '
 bugprone-*,
 -bugprone-branch-clone,
+-bugprone-implicit-widening-of-multiplication-result,
 -bugprone-narrowing-conversions,
 -bugprone-too-small-loop-variable,
 -bugprone-unchecked-optional-access,
