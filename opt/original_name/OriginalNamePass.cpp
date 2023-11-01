@@ -10,6 +10,9 @@
 #include "ConfigFiles.h"
 #include "DexAnnotation.h"
 #include "DexLimitsInfo.h"
+
+#include "DexStoreUtil.h"
+
 #include "DexUtil.h"
 #include "PassManager.h"
 #include "RenameClassesV2.h"
@@ -87,6 +90,7 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
     // Backup dex, in case we exceed field limits. We assuem there is at most 1
     // new dex for each store.
     DexClasses new_dex;
+    bool canary_inserted = false;
     size_t dex_id = 0;
     for (auto& dex : store.get_dexen()) {
       DexLimitsInfo dex_limits(&init_classes_with_side_effects);
@@ -115,8 +119,8 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
             cls->get_deobfuscated_name_or_empty());
         auto lastDot = external_name.find_last_of('.');
         auto simple_name = (lastDot != std::string::npos)
-                               ? external_name.substr(lastDot + 1)
-                               : external_name;
+          ? external_name.substr(lastDot + 1)
+          : external_name;
         auto simple_name_s = DexString::make_string(simple_name.c_str());
         always_assert_log(
             DexField::get_field(cls_type, field_name, string_type) == nullptr,
@@ -128,10 +132,10 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
             "field %s already exists!",
             redex_field_name);
         DexField* f =
-            DexField::make_field(cls_type, field_name, string_type)
-                ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL,
-                                std::unique_ptr<DexEncodedValue>(
-                                    new DexEncodedValueString(simple_name_s)));
+          DexField::make_field(cls_type, field_name, string_type)
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL,
+                          std::unique_ptr<DexEncodedValue>(
+                              new DexEncodedValueString(simple_name_s)));
         // These fields are accessed reflectively, so make sure we do not remove
         // them.
         f->rstate.set_root();
@@ -144,7 +148,7 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
 
         mgr.incr_metric(METRIC_ORIGINAL_NAME_COUNT, 1);
         mgr.incr_metric(std::string(METRIC_ORIGINAL_NAME_COUNT) +
-                            "::" + to_annotate[cls_type],
+                        "::" + to_annotate[cls_type],
                         1);
       }
       TRACE(ORIGINALNAME, 2,
@@ -162,6 +166,26 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
             "rest number is %zu\n",
             overflow_classes.size(), removed, dex_id, store.get_name().c_str(),
             dex.size());
+        if (new_dex.empty()) {
+          // A canary_cls need to be added when a new dex is created.
+          int dexnum = store.get_dexen().size();
+          DexClass* canary_cls;
+          if (store.is_root_store()) {
+            canary_cls = create_canary(dexnum);
+          } else {
+            canary_cls =
+              create_canary(dexnum, DexString::make_string(store.get_name()));
+          }
+          for (auto* m : canary_cls->get_all_methods()) {
+            if (m->get_code() == nullptr) {
+              continue;
+            }
+            m->get_code()->build_cfg();
+          }
+          always_assert(!canary_inserted);
+          new_dex.push_back(canary_cls);
+          canary_inserted = true;
+        }
         new_dex.insert(new_dex.end(), overflow_classes.begin(),
                        overflow_classes.end());
       }
