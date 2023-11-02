@@ -222,7 +222,9 @@ class BlameMap {
     const BlameStore::Value m_value;
   };
 
-  explicit BlameMap(BlameStore::Domain domain) : m_domain(std::move(domain)) {}
+  // TODO: Tidy complains about an unnecessary copy when using a value type.
+  //       This indicates that a move constructor may be missing for Domain.
+  explicit BlameMap(const BlameStore::Domain& domain) : m_domain(domain) {}
 
   size_t size() const { return m_domain.size(); }
 

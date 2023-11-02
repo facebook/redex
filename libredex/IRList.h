@@ -551,16 +551,16 @@ class IRList {
 
   // transfer all of `other` into `this` starting at `pos`
   // memory ownership is also transferred
-  void splice(IRList::const_iterator pos, IRList& other) {
+  void splice(const IRList::const_iterator& pos, IRList& other) {
     m_list.splice(pos, other.m_list);
   }
 
   // transfer `other[begin]` to `other[end]` into `this` starting at `pos`
   // memory ownership is also transferred
-  void splice_selection(IRList::const_iterator pos,
+  void splice_selection(const IRList::const_iterator& pos,
                         IRList& other,
-                        IRList::const_iterator begin,
-                        IRList::const_iterator end) {
+                        const IRList::const_iterator& begin,
+                        const IRList::const_iterator& end) {
     m_list.splice(pos, other.m_list, begin, end);
   }
 
