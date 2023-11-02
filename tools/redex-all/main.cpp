@@ -1520,17 +1520,25 @@ void redex_backend(ConfigFiles& conf,
     auto method_move_map =
         conf.metafile(json_config.get("method_move_map", std::string()));
     if (needs_addresses) {
+      Timer t2{"Writing debug line mapping"};
       write_debug_line_mapping(debug_line_map_filename, method_to_id,
                                code_debug_lines, stores,
                                needs_debug_line_mapping);
     }
     if (is_iodi(dik)) {
+      Timer t2{"Writing IODI metadata"};
       iodi_metadata.write(iodi_metadata_filename, method_to_id);
     }
-    pos_mapper->write_map();
-    stats["output_stats"] =
-        get_output_stats(output_totals, output_dexes_stats, manager,
-                         instruction_lowering_stats, pos_mapper.get());
+    {
+      Timer t2{"Writing position map"};
+      pos_mapper->write_map();
+    }
+    {
+      Timer t2{"Collecting output stats"};
+      stats["output_stats"] =
+          get_output_stats(output_totals, output_dexes_stats, manager,
+                           instruction_lowering_stats, pos_mapper.get());
+    }
     print_warning_summary();
 
     if (dex_output_config.write_class_sizes) {
