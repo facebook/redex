@@ -462,4 +462,11 @@ void fill_source_block(
     uint32_t id,
     const std::optional<SourceBlock::Val>& opt_val = std::nullopt);
 
+// Fill a source block with the maximum values of the provided many
+// source-blocks.
+void fill_source_block(SourceBlock& sb,
+                       DexMethod* ref,
+                       uint32_t id,
+                       const std::vector<SourceBlock*>& many);
+
 } // namespace source_blocks
