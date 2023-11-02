@@ -25,6 +25,8 @@
 
 namespace cc_impl {
 
+constexpr size_t kDefaultSlots = 83;
+
 template <typename Container, size_t n_slots>
 class ConcurrentContainerIterator;
 
@@ -1123,7 +1125,7 @@ template <typename Key,
           typename Value,
           typename Hash = std::hash<Key>,
           typename KeyEqual = std::equal_to<Key>,
-          size_t n_slots = 31>
+          size_t n_slots = cc_impl::kDefaultSlots>
 class ConcurrentMap final
     : public ConcurrentContainer<std::unordered_map<Key, Value, Hash, KeyEqual>,
                                  n_slots> {
@@ -1417,7 +1419,7 @@ template <typename Key,
           typename Value,
           typename Hash = std::hash<Key>,
           typename KeyEqual = std::equal_to<Key>,
-          size_t n_slots = 31>
+          size_t n_slots = cc_impl::kDefaultSlots>
 class InsertOnlyConcurrentMap final
     : public ConcurrentContainer<std::unordered_map<Key, Value, Hash, KeyEqual>,
                                  n_slots> {
@@ -1708,7 +1710,7 @@ template <typename Key,
           typename Value,
           typename Hash = std::hash<Key>,
           typename KeyEqual = std::equal_to<Key>,
-          size_t n_slots = 31>
+          size_t n_slots = cc_impl::kDefaultSlots>
 class AtomicMap final
     : public ConcurrentContainer<
           std::unordered_map<Key, std::atomic<Value>, Hash, KeyEqual>,
@@ -1902,7 +1904,7 @@ class AtomicMap final
 template <typename Key,
           typename Hash = std::hash<Key>,
           typename KeyEqual = std::equal_to<Key>,
-          size_t n_slots = 31>
+          size_t n_slots = cc_impl::kDefaultSlots>
 class ConcurrentSet final
     : public ConcurrentContainer<std::unordered_set<Key, Hash, KeyEqual>,
                                  n_slots> {
@@ -1983,7 +1985,7 @@ class ConcurrentSet final
 template <typename Key,
           typename Hash = std::hash<Key>,
           typename KeyEqual = std::equal_to<Key>,
-          size_t n_slots = 31>
+          size_t n_slots = cc_impl::kDefaultSlots>
 class InsertOnlyConcurrentSet final
     : public ConcurrentContainer<std::unordered_set<Key, Hash, KeyEqual>,
                                  n_slots> {
