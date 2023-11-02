@@ -164,7 +164,7 @@ VRegAliveRangeInBlock get_check_cast_throw_targets_live_range(
     const std::unordered_set<vreg_t>& vregs) {
   VRegAliveRangeInBlock vreg_block_range;
   const LivenessDomain& live_in = fixpoint_iter.get_live_in_vars_at(block);
-  auto elements = live_in.elements();
+  const auto& elements = live_in.elements();
   for (auto vreg : vregs) {
     if (!elements.contains(vreg)) {
       LiveIntervalPoint first = LiveIntervalPoint::get_block_begin(block);
