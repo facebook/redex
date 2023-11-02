@@ -7,6 +7,7 @@
 
 #include "ObfuscateResourcesPass.h"
 
+#include <algorithm>
 #include <boost/algorithm/string.hpp>
 #include <boost/format.hpp>
 #include <cstdio>
@@ -37,19 +38,21 @@ const std::string RESFILE_MAPPING = "resource-mapping.txt";
 const std::string DOT_DELIM = ".";
 const std::string RES_START = std::string(RES_DIRECTORY) + "/";
 const std::string SHORTEN_START = std::string(OBFUSCATED_RES_DIRECTORY) + "/";
-const std::string PORT_CHAR = "abcdefghijklmnopqrstuvwxyz0123456789_-";
+constexpr std::string_view PORT_CHAR = "abcdefghijklmnopqrstuvwxyz0123456789_-";
 const std::string FONT_DIR = "/font/";
 
 std::string get_short_name_from_index(size_t index) {
   always_assert(index >= 0);
   std::string to_return;
   auto PORT_CHAR_length = PORT_CHAR.length();
+  to_return.reserve(1 + index / PORT_CHAR_length);
   while (index >= PORT_CHAR_length) {
     size_t i = index % PORT_CHAR_length;
-    to_return = PORT_CHAR[i] + to_return;
+    to_return += PORT_CHAR[i];
     index = index / PORT_CHAR_length;
   }
-  to_return = PORT_CHAR[index] + to_return;
+  to_return += PORT_CHAR[index];
+  std::reverse(to_return.begin(), to_return.end());
   return to_return;
 }
 

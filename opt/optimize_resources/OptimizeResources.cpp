@@ -192,9 +192,9 @@ void compute_transitive_closure(
   while (!potential_file_paths.empty()) {
     for (auto& str : potential_file_paths) {
       if (is_resource_xml(str)) {
-        auto r_str = zip_dir + "/" + str;
+        auto r_str = std::string(zip_dir).append("/").append(str);
         if (explored_xml_files->find(r_str) == explored_xml_files->end()) {
-          next_xml_files.emplace(r_str);
+          next_xml_files.emplace(std::move(r_str));
         }
       }
     }
