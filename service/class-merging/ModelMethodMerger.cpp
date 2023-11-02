@@ -864,6 +864,8 @@ void ModelMethodMerger::merge_virt_itf_methods() {
                               ? m_type_tag_fields.at(merger)
                               : nullptr;
     std::vector<MergerType::VirtualMethod> virt_methods;
+    virt_methods.reserve(merger->vmethods.size() +
+                         merger->intfs_methods.size());
 
     for (auto& vm_lst : merger->vmethods) {
       virt_methods.emplace_back(vm_lst);

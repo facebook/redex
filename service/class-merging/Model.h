@@ -246,6 +246,7 @@ class Model {
   const std::string& get_name() const { return m_spec.name; }
   std::vector<const DexType*> get_roots() const {
     std::vector<const DexType*> res;
+    res.reserve(m_roots.size());
     for (const auto root_merger : m_roots) {
       res.push_back(root_merger->type);
     }

@@ -351,7 +351,9 @@ dexmethod_to_idx GatheredTypes::get_method_index(cmp_dmethod cmp) {
 }
 
 dexproto_to_idx GatheredTypes::get_proto_index(cmp_dproto cmp) {
+  // TODO: Profile and see whether a set first would be more efficient.
   std::vector<DexProto*> protos;
+  protos.reserve(m_lmethod.size() + m_lcallsite.size());
   for (auto const& m : m_lmethod) {
     protos.push_back(m->get_proto());
   }

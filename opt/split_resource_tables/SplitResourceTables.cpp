@@ -457,6 +457,7 @@ void SplitResourceTablesPass::run_pass(DexStoresVector& stores,
   // Set up the new types that will actually be created by the next step.
   for (const auto& t : new_types) {
     std::vector<android::ResTable_config*> config_ptrs;
+    config_ptrs.reserve(t.configs.size());
     for (auto& config : t.configs) {
       config_ptrs.emplace_back(const_cast<android::ResTable_config*>(&config));
     }
