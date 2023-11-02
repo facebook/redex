@@ -56,6 +56,7 @@
 #include "JemallocUtil.h"
 #include "KeepReason.h"
 #include "Macros.h"
+#include "MallocDebug.h"
 #include "MonitorCount.h"
 #include "NoOptimizationsMatcher.h"
 #include "OptData.h"
@@ -1883,6 +1884,8 @@ int main(int argc, char* argv[]) {
   }
 
   redex_thread_pool::ThreadPool::destroy();
+
+  malloc_debug::set_shutdown();
 
   return 0;
 }
