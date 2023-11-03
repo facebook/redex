@@ -31,10 +31,10 @@ template <typename Container, size_t n_slots>
 class ConcurrentContainerIterator;
 
 inline AccumulatingTimer s_destructor{};
-inline AccumulatingTimer s_move{};
+inline AccumulatingTimer s_reserving{};
 
 inline double get_destructor_seconds() { return s_destructor.get_seconds(); }
-inline double get_move_seconds() { return s_move.get_seconds(); }
+inline double get_reserving_seconds() { return s_reserving.get_seconds(); }
 
 inline size_t s_concurrent_destruction_threshold{
     std::numeric_limits<size_t>::max()};
@@ -498,6 +498,7 @@ class ConcurrentHashtable final {
     if (storage->size >= capacity) {
       return true;
     }
+    auto timer_scope = s_reserving.scope();
     auto new_capacity = get_prime_number_greater_or_equal_to(capacity);
     auto* ptrs = storage->ptrs;
     auto* new_storage = Storage::create(new_capacity, storage);
