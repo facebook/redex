@@ -245,7 +245,7 @@ size_t estimate_num_switch_dispatch_needed(
 DexMethod* create_simple_switch_dispatch(
     const dispatch::Spec& spec,
     const std::map<SwitchIndices, DexMethod*>& indices_to_callee) {
-  always_assert(indices_to_callee.size());
+  always_assert(!indices_to_callee.empty());
   TRACE(SDIS,
         5,
         "creating leaf switch dispatch %s.%s for targets of size %zu",

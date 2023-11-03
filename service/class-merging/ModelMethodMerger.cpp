@@ -56,7 +56,7 @@ void staticize_with_new_arg_head(DexMethod* meth, DexType* new_head) {
   mutators::make_static(meth, mutators::KeepThis::Yes);
   DexMethodSpec spec;
   auto args = meth->get_proto()->get_args();
-  always_assert(args->size());
+  always_assert(!args->empty());
   auto new_type_list = args->replace_head(new_head);
   auto new_proto =
       DexProto::make_proto(meth->get_proto()->get_rtype(), new_type_list);
@@ -350,7 +350,7 @@ std::vector<IRInstruction*> ModelMethodMerger::make_check_cast(DexType* type,
 
 dispatch::DispatchMethod ModelMethodMerger::create_dispatch_method(
     const dispatch::Spec& spec, const std::vector<DexMethod*>& targets) {
-  always_assert(targets.size());
+  always_assert(!targets.empty());
   TRACE(CLMG,
         5,
         "creating dispatch %s.%s for targets of size %zu",
@@ -368,7 +368,7 @@ dispatch::DispatchMethod ModelMethodMerger::create_dispatch_method(
 
 std::map<SwitchIndices, DexMethod*> ModelMethodMerger::get_dedupped_indices_map(
     const std::vector<DexMethod*>& targets) {
-  always_assert(targets.size());
+  always_assert(!targets.empty());
   std::map<SwitchIndices, DexMethod*> indices_to_callee;
   // Find equivalent methods.
   std::vector<MethodOrderedSet> duplicates =
@@ -555,7 +555,7 @@ void ModelMethodMerger::merge_virtual_methods(
   DexClass* target_cls = type_class(target_type);
   for (auto& virt_meth : virt_methods) {
     auto& meth_lst = virt_meth.overrides;
-    always_assert(meth_lst.size());
+    always_assert(!meth_lst.empty());
     auto overridden_meth = virt_meth.base;
     auto front_meth = meth_lst.front();
     auto access = front_meth->get_access();

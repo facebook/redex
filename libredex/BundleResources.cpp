@@ -299,14 +299,14 @@ void read_single_manifest(const std::string& manifest,
                   }
                 } else if (tag == "instrumentation") {
                   auto classname = get_string_attribute_value(element, "name");
-                  always_assert(classname.size());
+                  always_assert(!classname.empty());
                   manifest_classes->instrumentation_classes.emplace(
                       fully_qualified_external(package_name, classname));
                 } else if (string_to_tag.count(tag)) {
                   std::string classname = get_string_attribute_value(
                       element,
                       tag != "activity-alias" ? "name" : "targetActivity");
-                  always_assert(classname.size());
+                  always_assert(!classname.empty());
 
                   bool has_exported_attribute = has_primitive_attribute(
                       element, "exported", aapt::pb::Primitive::kBooleanValue);

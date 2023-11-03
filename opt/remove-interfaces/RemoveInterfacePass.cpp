@@ -281,7 +281,7 @@ size_t exclude_unremovables(const Scope& scope,
                             const std::vector<DexType*>& excluded_interfaces,
                             TypeSet& candidates) {
   size_t count = 0;
-  always_assert(stores.size());
+  always_assert(!stores.empty());
   XStoreRefs xstores(stores);
 
   // Excluded by config

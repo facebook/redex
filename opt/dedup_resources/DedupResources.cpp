@@ -416,7 +416,7 @@ void DedupResourcesPass::run_pass(DexStoresVector& stores,
                                   PassManager& mgr) {
   std::string apk_dir;
   conf.get_json_config().get("apk_dir", "", apk_dir);
-  always_assert(apk_dir.size());
+  always_assert(!apk_dir.empty());
 
   // 1. Basic information about what shoudln't be operate on.
   std::unordered_set<uint32_t> disallowed_types;

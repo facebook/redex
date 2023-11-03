@@ -348,7 +348,7 @@ void SplitResourceTablesPass::run_pass(DexStoresVector& stores,
                                        PassManager& mgr) {
   std::string zip_dir;
   cfg.get_json_config().get("apk_dir", "", zip_dir);
-  always_assert(zip_dir.size());
+  always_assert(!zip_dir.empty());
 
   TRACE(SPLIT_RES, 2, "Begin SplitResourceTablesPass");
   auto resources = create_resource_reader(zip_dir);

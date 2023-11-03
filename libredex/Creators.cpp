@@ -507,7 +507,7 @@ MethodBlock* MethodBlock::switch_op(Location test,
   // Copy initialized case blocks back.
   for (const auto& it : indices_cases) {
     SwitchIndices indices = it.first;
-    always_assert(indices.size());
+    always_assert(!indices.empty());
     int idx = *indices.begin();
     cases[idx] = it.second;
   }
