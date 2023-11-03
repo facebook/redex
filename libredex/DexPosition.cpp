@@ -7,6 +7,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <type_traits>
 
 #include "DexClass.h"
 #include "DexPosition.h"
@@ -312,7 +313,7 @@ void RealPositionMapper::write_map_v2() {
   std::unordered_map<std::string_view, uint32_t> string_ids;
   std::vector<std::unique_ptr<std::string>> string_pool;
 
-  auto id_of_string = [&](const std::string_view s) -> uint32_t {
+  auto id_of_string = [&](std::string_view s) -> uint32_t {
     auto it = string_ids.find(s);
     if (it == string_ids.end()) {
       auto p = std::make_unique<std::string>(s);
@@ -323,6 +324,11 @@ void RealPositionMapper::write_map_v2() {
   };
 
   size_t unregistered_parent_positions{0};
+
+  static_assert(std::is_same<decltype(m_positions[0]->line), uint32_t>::value);
+  static_assert(std::is_same<decltype(id_of_string("")), uint32_t>::value);
+  std::vector<uint32_t> pos_data;
+  pos_data.reserve(5 * m_positions.size());
 
   for (auto pos : m_positions) {
     uint32_t parent_line = 0;
@@ -345,12 +351,13 @@ void RealPositionMapper::write_map_v2() {
     auto class_id = id_of_string(class_name);
     auto method_id = id_of_string(method_name);
     auto file_id = id_of_string(pos->file->str());
-    pos_out.write((const char*)&class_id, sizeof(class_id));
-    pos_out.write((const char*)&method_id, sizeof(method_id));
-    pos_out.write((const char*)&file_id, sizeof(file_id));
-    pos_out.write((const char*)&pos->line, sizeof(pos->line));
-    pos_out.write((const char*)&parent_line, sizeof(parent_line));
+    pos_data.push_back(class_id);
+    pos_data.push_back(method_id);
+    pos_data.push_back(file_id);
+    pos_data.push_back(pos->line);
+    pos_data.push_back(parent_line);
   }
+  always_assert(pos_data.size() == 5 * m_positions.size());
 
   if (unregistered_parent_positions > 0 && !traceEnabled(OPUT, 1)) {
     TRACE(OPUT, 0,
@@ -374,7 +381,7 @@ void RealPositionMapper::write_map_v2() {
   }
   uint32_t pos_count = m_positions.size();
   ofs.write((const char*)&pos_count, sizeof(pos_count));
-  ofs << pos_out.str();
+  ofs.write((const char*)pos_data.data(), sizeof(uint32_t) * pos_data.size());
 }
 
 PositionMapper* PositionMapper::make(const std::string& map_filename_v2) {
