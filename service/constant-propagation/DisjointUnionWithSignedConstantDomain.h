@@ -15,6 +15,7 @@
 #include <sparta/AbstractDomain.h>
 #include <sparta/DisjointUnionAbstractDomain.h>
 
+#include "Debug.h"
 #include "ObjectWithImmutAttr.h"
 #include "SignedConstantDomain.h"
 #include "SingletonObject.h"

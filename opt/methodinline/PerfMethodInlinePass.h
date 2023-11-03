@@ -12,7 +12,7 @@
 
 class PerfMethodInlinePass : public Pass {
  public:
-  PerfMethodInlinePass() : Pass("PerfMethodInlinePass") {}
+  PerfMethodInlinePass();
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
@@ -37,5 +37,5 @@ class PerfMethodInlinePass : public Pass {
 
  private:
   struct Config;
-  std::unique_ptr<Config> m_config;
+  std::unique_ptr<Config> m_config{nullptr};
 };

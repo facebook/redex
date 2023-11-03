@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+#include "Debug.h"
+
 /*
  * Quickly concatenate std::strings
  *

@@ -889,6 +889,8 @@ enum class IFSMode {
 
 } // namespace
 
+PerfMethodInlinePass::PerfMethodInlinePass() : Pass("PerfMethodInlinePass") {}
+
 PerfMethodInlinePass::~PerfMethodInlinePass() {}
 
 struct PerfMethodInlinePass::Config {

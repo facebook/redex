@@ -14,11 +14,10 @@
 
 #pragma once
 
+#include "Model.h"
 #include "Pass.h"
 
 namespace class_merging {
-
-struct ModelSpec;
 
 class IntraDexClassMergingPass : public Pass {
  public:

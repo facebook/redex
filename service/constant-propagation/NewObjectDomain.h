@@ -7,12 +7,11 @@
 
 #pragma once
 
-#include <ostream>
-
 #include <sparta/ConstantAbstractDomain.h>
 #include <sparta/ReducedProductAbstractDomain.h>
 
 #include "DexClass.h"
+#include "IRInstruction.h"
 #include "Show.h"
 #include "SignedConstantDomain.h"
 

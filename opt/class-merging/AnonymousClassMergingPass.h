@@ -7,11 +7,10 @@
 
 #pragma once
 
+#include "Model.h"
 #include "Pass.h"
 
 namespace class_merging {
-
-struct ModelSpec;
 
 class AnonymousClassMergingPass : public Pass {
  public:
