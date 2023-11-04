@@ -278,7 +278,9 @@ TEST_F(ConcurrentContainersTest, concurrentMapTest) {
 
   run_on_subset_samples([&map](const std::vector<uint32_t>& sample) {
     for (size_t i = 0; i < sample.size(); ++i) {
-      map.erase(std::to_string(sample[i]));
+      auto* p = map.get_and_erase(std::to_string(sample[i]));
+      EXPECT_TRUE(p);
+      EXPECT_EQ(*p, sample[i] + 1);
     }
   });
 

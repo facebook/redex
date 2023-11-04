@@ -571,7 +571,7 @@ class ConcurrentHashtable final {
   /*
    * This operation is always thread-safe.
    */
-  bool erase(const key_type& key) {
+  value_type* erase(const key_type& key) {
     auto hash = hasher()(key);
     std::unique_lock<std::mutex> lock(m_mutex);
     auto* storage = m_storage.load();
@@ -584,7 +584,7 @@ class ConcurrentHashtable final {
            loc = &node->prev, ptr = loc->load(), node = get_node(ptr)) {
       }
       if (!node) {
-        return false;
+        return nullptr;
       }
       if (loc->compare_exchange_strong(ptr, node->prev.load())) {
         if (!m_erased) {
@@ -592,7 +592,7 @@ class ConcurrentHashtable final {
         }
         m_erased->push(node);
         m_count.fetch_sub(1);
-        return true;
+        return &node->value;
       }
       // We lost a race with an insertion.
     }
@@ -1059,7 +1059,7 @@ class ConcurrentContainer {
    */
   size_t erase(const Key& key) {
     size_t slot = Hash()(key) % n_slots;
-    return m_slots[slot].erase(key);
+    return m_slots[slot].erase(key) ? 1 : 0;
   }
 
   size_t erase_unsafe(const Key& key) { return erase(key); }
@@ -1403,6 +1403,20 @@ class ConcurrentMap final
     auto insertion_result = map.try_emplace(std::forward<Key>(key));
     auto* ptr = insertion_result.stored_value_ptr;
     updater(ptr->first, ptr->second, !insertion_result.success);
+  }
+
+  /*
+   * This operation is always thread-safe. If the key exists, a non-null pointer
+   * to the corresponding value is returned. This pointer is valid until this
+   * container is destroyed, or the compact function is called. Note that there
+   * may be other threads that are also reading or even updating the value. If
+   * the key is added to the map again, its new value would be stored in a new
+   * independent location.
+   */
+  Value* get_and_erase(const Key& key) {
+    size_t slot = Hash()(key) % n_slots;
+    auto ptr = m_slots[slot].erase(key);
+    return ptr ? &ptr->second : nullptr;
   }
 
  private:
