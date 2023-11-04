@@ -58,21 +58,15 @@ class PriorityThreadPoolDAGScheduler {
     if (m_wait_counts.at(task).fetch_sub(1) != 1) {
       return;
     }
-    // TODO: This count/update/erase sequence seems silly. Have a new primitive
-    // in the ConcurrentMap.
-    if (m_concurrent_continuations->count(task)) {
-      Continuations continuations;
-      m_concurrent_continuations->update(
-          task, [&continuations](Task, Continuations& value, bool) {
-            continuations = std::move(value);
-          });
-      m_concurrent_continuations->erase(task);
-
-      always_assert(!continuations.empty());
+    auto* continuations = m_concurrent_continuations->get_and_erase(task);
+    if (continuations) {
+      // Since the current wait-count is 0, there are not other threads that may
+      // read from or append to the continuations of this task.
+      always_assert(!continuations->empty());
       auto priority = m_priorities->at(task);
-      auto wait_count = increment_wait_count(task, continuations.size());
+      auto wait_count = increment_wait_count(task, continuations->size());
       always_assert(wait_count == 0);
-      for (auto& f : continuations) {
+      for (auto& f : *continuations) {
         m_priority_thread_pool.post(priority, [this, task, f = std::move(f)] {
           f();
           decrement_wait_count(task);
