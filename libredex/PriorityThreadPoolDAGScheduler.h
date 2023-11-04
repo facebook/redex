@@ -20,70 +20,58 @@ class PriorityThreadPoolDAGScheduler {
   PriorityThreadPool m_priority_thread_pool;
   Executor m_executor;
   std::unordered_map<Task, std::unordered_set<Task>> m_waiting_for;
-  std::unordered_map<Task, uint32_t> m_wait_counts;
+  std::unordered_map<Task, std::atomic<uint32_t>> m_wait_counts;
   std::unique_ptr<std::unordered_map<Task, int>> m_priorities;
   int m_max_priority{-1};
-  struct ConcurrentState {
-    uint32_t wait_count{0};
-    std::vector<std::function<void()>> continuations{};
-  };
-  std::unique_ptr<ConcurrentMap<Task, ConcurrentState>> m_concurrent_states;
+  using Continuations = std::vector<std::function<void()>>;
+  std::unique_ptr<ConcurrentMap<Task, Continuations>>
+      m_concurrent_continuations;
 
   int compute_priority(Task task) {
-    auto it = m_priorities->find(task);
-    if (it != m_priorities->end()) {
-      return it->second;
+    auto [it, success] = m_priorities->emplace(task, 0);
+    auto& priority = it->second;
+    if (!success) {
+      return priority;
     }
-    auto value = 0;
     auto it2 = m_waiting_for.find(task);
     if (it2 != m_waiting_for.end()) {
       for (auto other_task : it2->second) {
-        value = std::max(value, compute_priority(other_task) + 1);
+        priority = std::max(priority, compute_priority(other_task) + 1);
       }
     }
-    m_priorities->emplace(task, value);
-    m_max_priority = std::max(m_max_priority, value);
-    return value;
+    m_max_priority = std::max(m_max_priority, priority);
+    return priority;
   }
 
   uint32_t increment_wait_count(Task task, uint32_t count = 1) {
-    uint32_t res = 0;
-    m_concurrent_states->update(
-        task, [&res, count](Task, ConcurrentState& state, bool) {
-          res = state.wait_count;
-          state.wait_count += count;
-        });
-    return res;
+    return m_wait_counts.at(task).fetch_add(count);
   }
 
-  uint32_t push_back_continuation(Task task, std::function<void()> f) {
-    uint32_t res = 0;
-    m_concurrent_states->update(task,
-                                [f, &res](Task, ConcurrentState& state, bool) {
-                                  state.continuations.push_back(f);
-                                  res = state.wait_count;
-                                });
-    return res;
+  void push_back_continuation(Task task, std::function<void()> f) {
+    m_concurrent_continuations->update(
+        task, [f = std::move(f)](Task, Continuations& continuations, bool) {
+          continuations.push_back(std::move(f));
+        });
   }
 
   void decrement_wait_count(Task task) {
-    bool task_ready = false;
-    std::vector<std::function<void()>> continuations;
-    m_concurrent_states->update(
-        task,
-        [&task_ready, &continuations](Task, ConcurrentState& state, bool) {
-          if (--state.wait_count == 0) {
-            task_ready = true;
-            continuations = std::move(state.continuations);
-          }
-        });
-    if (!task_ready) {
+    if (m_wait_counts.at(task).fetch_sub(1) != 1) {
       return;
     }
+    // TODO: This count/update/erase sequence seems silly. Have a new primitive
+    // in the ConcurrentMap.
+    if (m_concurrent_continuations->count(task)) {
+      Continuations continuations;
+      m_concurrent_continuations->update(
+          task, [&continuations](Task, Continuations& value, bool) {
+            continuations = std::move(value);
+          });
+      m_concurrent_continuations->erase(task);
 
-    if (!continuations.empty()) {
+      always_assert(!continuations.empty());
       auto priority = m_priorities->at(task);
-      increment_wait_count(task, continuations.size());
+      auto wait_count = increment_wait_count(task, continuations.size());
+      always_assert(wait_count == 0);
       for (auto& f : continuations) {
         m_priority_thread_pool.post(priority, [this, task, f = std::move(f)] {
           f();
@@ -96,15 +84,7 @@ class PriorityThreadPoolDAGScheduler {
     auto it = m_waiting_for.find(task);
     if (it != m_waiting_for.end()) {
       for (auto waiting_task : m_waiting_for.at(task)) {
-        bool waiting_task_ready = false;
-        m_concurrent_states->update(
-            waiting_task,
-            [&waiting_task_ready](Task, ConcurrentState& state, bool) {
-              if (--state.wait_count == 0) {
-                waiting_task_ready = true;
-              }
-            });
-        if (waiting_task_ready) {
+        if (m_wait_counts.at(waiting_task).fetch_sub(1) == 1) {
           schedule(waiting_task);
         }
       }
@@ -113,7 +93,8 @@ class PriorityThreadPoolDAGScheduler {
 
   void schedule(Task task) {
     auto priority = m_priorities->at(task);
-    increment_wait_count(task);
+    auto wait_count = increment_wait_count(task);
+    always_assert(wait_count == 0);
     m_priority_thread_pool.post(priority, [this, task] {
       m_executor(task);
       decrement_wait_count(task);
@@ -132,9 +113,10 @@ class PriorityThreadPoolDAGScheduler {
 
   // The dependency must be scheduled before the task
   void add_dependency(Task task, Task dependency) {
-    always_assert(!m_concurrent_states);
+    always_assert(!m_concurrent_continuations);
     m_waiting_for[dependency].insert(task);
-    ++m_wait_counts[task];
+    auto& wait_count = m_wait_counts.emplace(task, 0).first->second;
+    wait_count.fetch_add(1, std::memory_order_relaxed);
   }
 
   // While the given task is running, register another function that needs to
@@ -143,13 +125,12 @@ class PriorityThreadPoolDAGScheduler {
   // associated with this task have finished running.
   void augment(Task task, std::function<void()> f, bool continuation = false) {
     if (continuation) {
-      auto active = push_back_continuation(task, std::move(f));
-      always_assert(active);
+      push_back_continuation(task, std::move(f));
       return;
     }
-    auto active = increment_wait_count(task);
-    always_assert(active);
     auto priority = m_priorities->at(task);
+    auto wait_count = increment_wait_count(task);
+    always_assert(wait_count > 0);
     m_priority_thread_pool.post(priority, [this, task, f = std::move(f)] {
       f();
       decrement_wait_count(task);
@@ -158,40 +139,35 @@ class PriorityThreadPoolDAGScheduler {
 
   template <class ForwardIt>
   uint32_t run(const ForwardIt& begin, const ForwardIt& end) {
-    always_assert(!m_concurrent_states);
+    always_assert(!m_concurrent_continuations);
     m_priorities = std::make_unique<std::unordered_map<Task, int>>();
+    std::vector<std::vector<Task>> ready_tasks;
     for (auto it = begin; it != end; it++) {
-      compute_priority(*it);
+      int priority = compute_priority(*it);
+      auto& wait_count = m_wait_counts.emplace(*it, 0).first->second;
+      if (wait_count.load(std::memory_order_relaxed) != 0) {
+        continue;
+      }
+      always_assert(priority >= 0);
+      if ((uint32_t)priority >= ready_tasks.size()) {
+        ready_tasks.resize(priority * 2 + 1);
+      }
+      ready_tasks[priority].push_back(*it);
     }
-    for (auto& p : *m_priorities) {
-      auto it = m_wait_counts.find(p.first);
-      p.second =
-          (p.second << 16) + (it == m_wait_counts.end() ? 0 : it->second);
-    }
-
-    m_concurrent_states =
-        std::make_unique<ConcurrentMap<Task, ConcurrentState>>();
-    for (auto& p : m_wait_counts) {
-      m_concurrent_states->emplace(p.first, (ConcurrentState){p.second});
-    }
-    std::vector<Task> tasks(begin, end);
-    std::stable_sort(tasks.begin(),
-                     tasks.end(),
-                     [priorities = m_priorities.get()](Task a, Task b) {
-                       return priorities->at(a) > priorities->at(b);
-                     });
-    for (auto task : tasks) {
-      if (!m_wait_counts.count(task)) {
+    m_concurrent_continuations =
+        std::make_unique<ConcurrentMap<Task, Continuations>>();
+    for (size_t i = ready_tasks.size(); i > 0; --i) {
+      for (auto task : ready_tasks[i - 1]) {
         schedule(task);
       }
     }
-    m_wait_counts.clear();
     m_priority_thread_pool.join();
-    for (auto& p : *m_concurrent_states) {
-      always_assert(p.second.wait_count == 0);
-      always_assert(p.second.continuations.empty());
+    always_assert(m_concurrent_continuations->empty());
+    m_concurrent_continuations = nullptr;
+    for (auto& p : m_wait_counts) {
+      always_assert(p.second.load(std::memory_order_relaxed) == 0);
     }
-    m_concurrent_states = nullptr;
+    m_wait_counts.clear();
     m_waiting_for.clear();
     m_priorities = nullptr;
     auto max_priority = m_max_priority;
