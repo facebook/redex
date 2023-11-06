@@ -681,9 +681,10 @@ class ConcurrentHashtable final {
     static Storage* create(size_t size, Storage* prev) {
       always_assert(size > 0);
       size_t bytes = sizeof(Storage) + sizeof(std::atomic<Ptr>) * (size - 1);
-      auto* storage = (Storage*)malloc(bytes);
+      always_assert(bytes % sizeof(size_t) == 0);
+      auto* storage = (Storage*)calloc(bytes / sizeof(size_t), sizeof(size_t));
       always_assert(storage);
-      memset(storage, 0, bytes);
+      always_assert(storage->prev == nullptr);
       storage->size = size;
       storage->prev = prev;
       return storage;
