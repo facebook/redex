@@ -181,7 +181,8 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
           mog::get_overridden_methods(m_method_override_graph, method, true);
       for (auto m : overridden_methods) {
         if (!m->is_external()) {
-          always_assert(is_interface(type_class(m->get_class())));
+          auto* cls = type_class(m->get_class());
+          always_assert(is_interface(cls) || is_abstract(cls));
           dynamic_methods.emplace(m);
         }
       }

@@ -40,6 +40,9 @@ class RegisterTypeAnalyzer final
   static bool analyze_default(const IRInstruction* insn,
                               DexTypeEnvironment* env);
 
+  static bool analyze_check_cast(const IRInstruction* insn,
+                                 DexTypeEnvironment* env);
+
   static bool analyze_const(const IRInstruction* insn, DexTypeEnvironment* env);
 
   static bool analyze_const_string(const IRInstruction*,

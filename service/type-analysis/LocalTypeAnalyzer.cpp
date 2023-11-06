@@ -51,6 +51,16 @@ bool RegisterTypeAnalyzer::analyze_default(const IRInstruction* insn,
   return true;
 }
 
+bool RegisterTypeAnalyzer::analyze_check_cast(const IRInstruction* insn,
+                                              DexTypeEnvironment* env) {
+  if (type::is_array(insn->get_type())) {
+    env->set(RESULT_REGISTER, DexTypeDomain::top());
+  } else {
+    env->set(RESULT_REGISTER, env->get(insn->src(0)));
+  }
+  return true;
+}
+
 bool RegisterTypeAnalyzer::analyze_const(const IRInstruction* insn,
                                          DexTypeEnvironment* env) {
   if (insn->opcode() != OPCODE_CONST) {
