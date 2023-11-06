@@ -22,16 +22,20 @@ constexpr const char* ACCESS_PREFIX = "access$";
 constexpr const char* DEFAULT_SUFFIX = "$default";
 
 namespace {
-bool is_int(const type_inference::TypeEnvironment* env, reg_t reg) {
-  return env->get_type(reg).element() == IRType::INT ||
-         env->get_type(reg).element() == IRType::CONST ||
-         env->get_type(reg).element() == IRType::ZERO;
+
+bool is_int(const type_inference::TypeEnvironment& env, reg_t reg) {
+  return !env.get_int_type(reg).is_top() && !env.get_int_type(reg).is_bottom();
 }
 
-bool is_string(const type_inference::TypeEnvironment* env, reg_t reg) {
-  return env->get_dex_type(reg) &&
-         env->get_dex_type(reg).value() == type::java_lang_String();
+bool is_string(const type_inference::TypeEnvironment& env, reg_t reg) {
+  return env.get_dex_type(reg) &&
+         *env.get_dex_type(reg) == type::java_lang_String();
 }
+
+bool is_not_str_nor_int(const type_inference::TypeEnvironment& env, reg_t reg) {
+  return !is_string(env, reg) && !is_int(env, reg);
+}
+
 } // namespace
 
 void TypedefAnnoChecker::run(DexMethod* m) {
@@ -118,12 +122,13 @@ void TypedefAnnoChecker::check_instruction(
                             ? param_anno.first
                             : param_anno.first + 1;
       reg_t reg = insn->src(param_index);
-      auto env_anno = env.get_annotation(reg);
+      auto anno_type = env.get_annotation(reg);
+      auto type = env.get_dex_type(reg);
 
       // TypeInference inferred a different annotation
-      if (env_anno != boost::none && env_anno != annotation) {
+      if (anno_type && anno_type != annotation) {
         std::ostringstream out;
-        if (env_anno.value() == DexType::make_type("Ljava/lang/Object;")) {
+        if (anno_type.value() == type::java_lang_Object()) {
           out << "TypedefAnnoCheckerPass: while invoking " << SHOW(def_method)
               << "\n in method " << SHOW(m) << "\n parameter "
               << param_anno.first << "should have the annotation "
@@ -137,26 +142,24 @@ void TypedefAnnoChecker::check_instruction(
         } else {
           out << "TypedefAnnoCheckerPass: while invoking " << SHOW(def_method)
               << "\n in method " << SHOW(m) << "\n parameter "
-              << param_anno.first << " has the annotation " << SHOW(env_anno)
+              << param_anno.first << " has the annotation " << SHOW(anno_type)
               << "\n but the method expects the annotation to be "
               << annotation.value()->get_name()->c_str()
               << ".\n failed instruction: " << SHOW(insn) << "\n\n";
         }
         m_error += out.str();
         m_good = false;
-      } else if (!is_int(&env, reg) && !is_string(&env, reg) &&
-                 env.get_type(insn->src(0)) !=
-                     type_inference::TypeDomain(IRType::INT)) {
+      } else if (is_not_str_nor_int(env, reg)) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: the annotation " << SHOW(annotation)
             << "\n annotates a parameter with an incompatible type "
-            << SHOW(env.get_type(reg))
-            << "\n or a non-constant parameter in method " << SHOW(m)
-            << "\n while trying to invoke the method " << SHOW(def_method)
-            << ".\n failed instruction: " << SHOW(insn) << "\n\n";
+            << SHOW(type) << "\n or a non-constant parameter in method "
+            << SHOW(m) << "\n while trying to invoke the method "
+            << SHOW(def_method) << ".\n failed instruction: " << SHOW(insn)
+            << "\n\n";
         m_error += out.str();
         m_good = false;
-      } else if (env_anno == boost::none) {
+      } else if (!anno_type) {
         // TypeInference didn't infer anything
         bool good = check_typedef_value(m, annotation, ud_chains, insn,
                                         param_index, inference, envs);
@@ -197,10 +200,10 @@ void TypedefAnnoChecker::check_instruction(
   case OPCODE_RETURN_OBJECT: {
     if (return_annotation) {
       reg_t reg = insn->src(0);
-      auto env_anno = env.get_annotation(reg);
-      if (env_anno != boost::none && env_anno != return_annotation) {
+      auto anno_type = env.get_annotation(reg);
+      if (anno_type && anno_type != return_annotation) {
         std::ostringstream out;
-        if (env_anno.value() == DexType::make_type("Ljava/lang/Object;")) {
+        if (anno_type.value() == type::java_lang_Object()) {
           out << "TypedefAnnoCheckerPass: The method " << SHOW(m)
               << "\n has an annotation "
               << return_annotation.value()->get_name()->c_str()
@@ -216,14 +219,12 @@ void TypedefAnnoChecker::check_instruction(
               << return_annotation.value()->get_name()->c_str()
               << "\n in its method signature, but the returned value "
                  "contains the annotation \n"
-              << SHOW(env_anno) << " instead.\n"
+              << SHOW(anno_type) << " instead.\n"
               << " failed instruction: " << SHOW(insn) << "\n\n";
         }
         m_error += out.str();
         m_good = false;
-      } else if (!is_int(&env, reg) && !is_string(&env, reg) &&
-                 env.get_type(insn->src(0)) !=
-                     type_inference::TypeDomain(IRType::INT)) {
+      } else if (is_not_str_nor_int(env, reg)) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: the annotation "
             << SHOW(return_annotation)
@@ -233,7 +234,7 @@ void TypedefAnnoChecker::check_instruction(
             << " failed instruction: " << SHOW(insn) << "\n\n";
         m_error += out.str();
         m_good = false;
-      } else if (env_anno == boost::none) {
+      } else if (!anno_type) {
         bool good = check_typedef_value(m, return_annotation, ud_chains, insn,
                                         0, inference, envs);
         if (!good) {
