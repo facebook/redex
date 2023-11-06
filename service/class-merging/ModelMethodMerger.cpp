@@ -236,14 +236,16 @@ ModelMethodMerger::ModelMethodMerger(
     const TypeTags* type_tags,
     const std::unordered_map<DexMethod*, std::string>& method_debug_map,
     const ModelSpec& model_spec,
-    boost::optional<size_t> max_num_dispatch_target)
+    boost::optional<size_t> max_num_dispatch_target,
+    boost::optional<method_profiles::MethodProfiles*> method_profiles)
     : m_scope(scope),
       m_mergers(mergers),
       m_type_tag_fields(type_tag_fields),
       m_type_tags(type_tags),
       m_method_debug_map(method_debug_map),
       m_model_spec(model_spec),
-      m_max_num_dispatch_target(max_num_dispatch_target) {
+      m_max_num_dispatch_target(max_num_dispatch_target),
+      m_method_profiles(method_profiles) {
   for (const auto& mtf : type_tag_fields) {
     auto type_tag_field = mtf.second;
     if (model_spec.generate_type_tag()) {
@@ -589,6 +591,11 @@ void ModelMethodMerger::merge_virtual_methods(
     for (const auto& m : meth_lst) {
       old_to_new_callee[m] = dispatch.main_dispatch;
     }
+    if (m_method_profiles != boost::none) {
+      m_stats.m_updated_profile_method +=
+          m_method_profiles.get()->substitute_stats(dispatch.main_dispatch,
+                                                    meth_lst);
+    }
     // Populating method dedup map
     for (auto& type_to_sig : meth_signatures) {
       auto type = type_to_sig.first;
@@ -688,6 +695,10 @@ void ModelMethodMerger::merge_ctors() {
       dispatch->get_code()->build_cfg();
       for (const auto& m : ctors) {
         old_to_new_callee[m] = dispatch;
+      }
+      if (m_method_profiles != boost::none) {
+        m_stats.m_updated_profile_method +=
+            m_method_profiles.get()->substitute_stats(dispatch, ctors);
       }
       std::vector<std::pair<DexType*, DexMethod*>> not_inlined_ctors;
       type_class(target_type)->add_method(dispatch);
@@ -806,6 +817,11 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
     // Update method dedup map
     for (auto& pair : new_to_old) {
       auto old_list = pair.second;
+      if (m_method_profiles != boost::none) {
+        std::vector<DexMethod*> old_list_vec{old_list.begin(), old_list.end()};
+        m_stats.m_updated_profile_method +=
+            m_method_profiles.get()->substitute_stats(pair.first, old_list_vec);
+      }
       for (auto old_meth : old_list) {
         auto type = old_meth->get_class();
         if (m_mergeable_to_merger_ctor.count(type) == 0) {

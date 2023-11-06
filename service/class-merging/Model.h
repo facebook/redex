@@ -215,6 +215,7 @@ struct ModelStats {
   uint32_t m_num_static_non_virt_dedupped = 0;
   uint32_t m_num_vmethods_dedupped = 0;
   uint32_t m_num_const_lifted_methods = 0;
+  uint32_t m_updated_profile_method = 0;
 
   ModelStats& operator+=(const ModelStats& stats);
 

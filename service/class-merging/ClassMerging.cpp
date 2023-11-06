@@ -135,9 +135,12 @@ ModelStats merge_model(const TypeSystem& type_system,
   auto model =
       Model::build_model(scope, stores, conf, spec, type_system, *refchecker);
   ModelStats stats = model.get_model_stats();
-
+  bool update_method_profiles_stats;
+  conf.get_json_config().get(
+      "update_method_profiles_stats", false, update_method_profiles_stats);
   ModelMerger mm;
-  auto merger_classes = mm.merge_model(scope, stores, conf, model);
+  auto merger_classes =
+      mm.merge_model(scope, stores, conf, model, update_method_profiles_stats);
   auto num_dedupped = method_dedup::dedup_constructors(merger_classes, scope);
   mm.increase_ctor_dedupped_stats(num_dedupped);
   stats += mm.get_model_stats();

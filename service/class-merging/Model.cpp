@@ -1282,6 +1282,7 @@ ModelStats& ModelStats::operator+=(const ModelStats& stats) {
   m_num_static_non_virt_dedupped += stats.m_num_static_non_virt_dedupped;
   m_num_vmethods_dedupped += stats.m_num_vmethods_dedupped;
   m_num_const_lifted_methods += stats.m_num_const_lifted_methods;
+  m_updated_profile_method += stats.m_updated_profile_method;
   return *this;
 }
 
@@ -1318,6 +1319,7 @@ void ModelStats::update_redex_stats(const std::string& prefix,
   mgr.incr_metric(prefix + "_static_non_virt_dedupped",
                   m_num_static_non_virt_dedupped);
   mgr.incr_metric(prefix + "_vmethods_dedupped", m_num_vmethods_dedupped);
+  mgr.incr_metric(prefix + "_updated_profile_method", m_updated_profile_method);
   mgr.set_metric(prefix + "_const_lifted_methods", m_num_const_lifted_methods);
 }
 

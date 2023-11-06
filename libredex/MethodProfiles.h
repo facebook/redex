@@ -139,6 +139,10 @@ class MethodProfiles {
   size_t derive_stats(DexMethod* target,
                       const std::vector<DexMethod*>& sources);
 
+  // Substitute target method's stat with derived stats from given sources.
+  size_t substitute_stats(DexMethod* target,
+                          const std::vector<DexMethod*>& sources);
+
  private:
   static AccumulatingTimer s_process_unresolved_lines_timer;
   AllInteractions m_method_stats;

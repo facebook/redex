@@ -522,10 +522,12 @@ void ModelMerger::update_stats(const std::string& model_name,
   m_stats += mm.get_stats();
 }
 
-std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
-                                                DexStoresVector& stores,
-                                                const ConfigFiles& conf,
-                                                Model& model) {
+std::vector<DexClass*> ModelMerger::merge_model(
+    Scope& scope,
+    DexStoresVector& stores,
+    ConfigFiles& conf,
+    Model& model,
+    bool update_method_profiles_stats) {
   Timer t("merge_model");
   std::vector<const MergerType*> to_materialize;
   std::vector<DexClass*> merger_classes;
@@ -614,13 +616,18 @@ std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
       scope, to_materialize, mergeable_to_merger, m_merger_fields);
 
   // Merge methods
-  ModelMethodMerger mm(scope,
-                       to_materialize,
-                       type_tag_fields,
-                       &type_tags,
-                       method_debug_map,
-                       model.get_model_spec(),
-                       model.get_model_spec().max_num_dispatch_target);
+  method_profiles::MethodProfiles& method_profile = conf.get_method_profiles();
+  ModelMethodMerger mm(
+      scope,
+      to_materialize,
+      type_tag_fields,
+      &type_tags,
+      method_debug_map,
+      model.get_model_spec(),
+      model.get_model_spec().max_num_dispatch_target,
+      update_method_profiles_stats
+          ? boost::optional<method_profiles::MethodProfiles*>(&method_profile)
+          : boost::none);
   auto mergeable_to_merger_ctor = mm.merge_methods();
   update_stats(model.get_name(), to_materialize, mm);
 
