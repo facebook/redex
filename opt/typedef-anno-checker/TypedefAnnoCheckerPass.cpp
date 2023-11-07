@@ -260,6 +260,18 @@ bool TypedefAnnoChecker::check_typedef_value(
     TypeEnvironments& envs) {
 
   auto anno_class = type_class(annotation.value());
+  const auto str_value_set = m_strdef_constants.find(anno_class);
+  const auto int_value_set = m_intdef_constants.find(anno_class);
+
+  if (str_value_set != m_strdef_constants.end() && str_value_set->second.empty()) {
+    TRACE(TAC, 1, "%s contains no annotation constants", SHOW(anno_class));
+    return true;
+  }
+  if (int_value_set != m_intdef_constants.end() && int_value_set->second.empty()) {
+    TRACE(TAC, 1, "%s contains no annotation constants", SHOW(anno_class));
+    return true;
+  }
+
   live_range::Use use_of_id{insn, src};
   auto udchains_it = ud_chains->find(use_of_id);
 
@@ -267,8 +279,7 @@ bool TypedefAnnoChecker::check_typedef_value(
     switch (def->opcode()) {
     case OPCODE_CONST_STRING: {
       auto const const_value = def->get_string();
-      const auto& value_set = m_strdef_constants.at_unsafe(anno_class);
-      if (value_set.count(const_value) == 0) {
+      if (str_value_set->second.count(const_value) == 0) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: in method " << SHOW(m)
             << "\n the string value " << SHOW(const_value)
@@ -285,8 +296,7 @@ bool TypedefAnnoChecker::check_typedef_value(
     }
     case OPCODE_CONST: {
       auto const const_value = def->get_literal();
-      const auto& value_set = m_intdef_constants.at_unsafe(anno_class);
-      if (value_set.count(const_value) == 0) {
+      if (int_value_set->second.count(const_value) == 0) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: in method " << SHOW(m)
             << "\n the int value " << SHOW(const_value)
@@ -309,8 +319,7 @@ bool TypedefAnnoChecker::check_typedef_value(
       auto env = envs.find(def);
       if (env->second.get_int_type(def->dest()).element() ==
           (IntType::BOOLEAN)) {
-        const auto& value_set = m_intdef_constants.at_unsafe(anno_class);
-        if (value_set.count(0) == 0 || value_set.count(1) == 0) {
+        if (int_value_set->second.count(0) == 0 || int_value_set->second.count(1) == 0) {
           std::ostringstream out;
           out << "TypedefAnnoCheckerPass: the method" << SHOW(m)
               << "\n assigns a int with typedef annotation " << SHOW(annotation)
@@ -382,8 +391,7 @@ bool TypedefAnnoChecker::check_typedef_value(
       // of 1. We essentially end up with
       // mNotificationsSharedPrefsHelper.get().getAppBadgeEnabledStatus() ? 0 :
       // 1 which gets optimized to an XOR by the compiler
-      const auto& value_set = m_intdef_constants.at_unsafe(anno_class);
-      if (value_set.count(0) == 0 || value_set.count(1) == 0) {
+      if (int_value_set->second.count(0) == 0 || int_value_set->second.count(1) == 0) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: the method" << SHOW(m)
             << "\n assigns a int with typedef annotation " << SHOW(annotation)
