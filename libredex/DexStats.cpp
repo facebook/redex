@@ -21,6 +21,7 @@ dex_stats_t& dex_stats_t::operator+=(const dex_stats_t& rhs) {
   num_type_lists += rhs.num_type_lists;
   num_bytes += rhs.num_bytes;
   num_instructions += rhs.num_instructions;
+  num_tries += rhs.num_tries;
   num_unique_types += rhs.num_unique_types;
   num_unique_protos += rhs.num_unique_protos;
   num_unique_strings += rhs.num_unique_strings;

@@ -660,6 +660,7 @@ Json::Value get_stats(const dex_stats_t& stats) {
   val["num_annotations"] = stats.num_annotations;
   val["num_bytes"] = stats.num_bytes;
   val["num_instructions"] = stats.num_instructions;
+  val["num_tries"] = stats.num_tries;
 
   val["num_unique_types"] = stats.num_unique_types;
   val["num_unique_protos"] = stats.num_unique_protos;

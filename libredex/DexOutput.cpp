@@ -1084,6 +1084,7 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
         ((const dex_code_item*)(m_output.get() + m_offset))->insns_size;
     inc_offset(size);
     m_stats.num_instructions += code->get_instructions().size();
+    m_stats.num_tries += code->get_tries().size();
     m_stats.instruction_bytes += insns_size * 2;
   }
   /// insert_map_item returns early if m_code_item_emits is empty

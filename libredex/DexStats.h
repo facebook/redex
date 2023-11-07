@@ -27,6 +27,7 @@ struct dex_stats_t {
   int num_instructions = 0;
   int num_callsites = 0;
   int num_methodhandles = 0;
+  int num_tries = 0;
 
   int num_unique_strings = 0;
   int num_unique_types = 0;
