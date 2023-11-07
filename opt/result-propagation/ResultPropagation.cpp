@@ -233,19 +233,6 @@ class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-std::unordered_map<const IRInstruction*, ParamIndex> get_load_param_map(
-    const cfg::ControlFlowGraph& cfg) {
-  std::unordered_map<const IRInstruction*, ParamIndex> map;
-  const auto param_insns = InstructionIterable(cfg.get_param_instructions());
-  ParamIndex index = 0;
-  for (auto it = param_insns.begin(); it != param_insns.end(); it++) {
-    const auto insn = it->insn;
-    always_assert(opcode::is_a_load_param(insn->opcode()));
-    map.insert({insn, index++});
-  }
-  return map;
-}
-
 boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
     const IRInstruction* insn,
     const std::unordered_map<const DexMethod*, ParamIndex>&

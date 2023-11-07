@@ -172,6 +172,7 @@ class DexType;
   TM(KOTLIN_INSTANCE)   \
   TM(KOTLIN_STATS)      \
   TM(KOTLIN_OBJ_INLINE) \
+  TM(ACC)               \
   /* End of list */
 
 enum TraceModule : int {
