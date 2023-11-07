@@ -53,6 +53,11 @@ inline void write_bytes_to_file(const android::Vector<char>& vector,
   LOG_ALWAYS_FATAL_IF(!ofs, "Unable to write to %s", filename.c_str());
 }
 
+template <typename T>
+inline void push_struct(const T& item, android::Vector<char>* vec) {
+  vec->appendArray((const char*)&item, sizeof(T));
+}
+
 // Returns the size of the entry and the value data structure(s) that follow it.
 size_t compute_entry_value_length(android::ResTable_entry* entry);
 // Return in device order the flags for the entry in the type
@@ -157,6 +162,8 @@ class ResStringPoolBuilder {
   void serialize(android::Vector<char>* out);
 
   size_t string_count() { return non_style_string_count() + style_count(); }
+
+  std::string get_string(size_t idx);
 
  private:
   uint32_t m_flags;

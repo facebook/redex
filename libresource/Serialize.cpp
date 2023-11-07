@@ -661,6 +661,21 @@ void ResStringPoolBuilder::add_style(std::string s, SpanVector spans) {
   m_styles.emplace_back(std::move(info));
 }
 
+std::string ResStringPoolBuilder::get_string(size_t idx) {
+  arsc::StringHolder holder = m_strings.at(idx);
+  if (holder.kind == StringKind::STRING_8) {
+    return std::string(holder.string8);
+  }
+  if (holder.kind == StringKind::STRING_16) {
+    android::String16 s16(holder.string16, holder.length);
+    android::String8 s8(s16);
+    return std::string(s8.string());
+  }
+  else {
+    return holder.str;
+  }
+}
+
 namespace {
 void write_string8(StringHolder& holder, android::Vector<char>* out) {
   if (holder.kind == StringKind::STRING_8) {
