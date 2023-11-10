@@ -816,3 +816,74 @@ TEST_F(TypedefAnnoCheckerTest, TestXORIfElseZero) {
 
   EXPECT_TRUE(checker.complete());
 }
+
+TEST_F(TypedefAnnoCheckerTest, testSynthAccessor) {
+  auto scope = build_class_scope(stores);
+  auto accessor = DexMethod::get_method(
+                      "Lcom/facebook/redextest/"
+                      "TypedefAnnoCheckerKtTest;.access$takesStrConst:(Lcom/"
+                      "facebook/redextest/TypedefAnnoCheckerKtTest;Ljava/lang/"
+                      "String;)Ljava/lang/String;")
+                      ->as_def();
+
+  EXPECT_TRUE(accessor != nullptr);
+  IRCode* code = accessor->get_code();
+  code->build_cfg();
+  // auto& cfg = code->cfg();
+
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  auto config = get_config();
+  TypedefAnnoChecker checker =
+      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
+  checker.run(accessor);
+
+  // Without patching the accessor, the checker will fail.
+  EXPECT_FALSE(checker.complete());
+  EXPECT_EQ(
+      checker.error(),
+      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.access$takesStrConst:(Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;Ljava/lang/String;)Ljava/lang/String;\n\
+ one of the parameters needs to have the typedef annotation  Linteg/TestStringDef;\n\
+ attached to it. Check that the value is annotated and exists in the typedef annotation class.\n\
+ failed instruction: IOPCODE_LOAD_PARAM_OBJECT v2\n\
+ Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.takesStrConst:(Ljava/lang/String;)Ljava/lang/String;\n\
+ Incorrect parameter's index: 1\n\n");
+
+  SynthAccessorPatcher patcher(config);
+  patcher.run(scope);
+
+  TypedefAnnoChecker checker2 =
+      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
+  checker2.run(accessor);
+  // After patching the accessor, the checker should succeed.
+  EXPECT_TRUE(checker2.complete());
+
+  auto accessor_caller = DexMethod::get_method(
+                             "Lcom/facebook/redextest/"
+                             "TypedefAnnoCheckerKtTest$testSynthAccessor$lmd$1;"
+                             ".invoke:()Ljava/lang/String;")
+                             ->as_def();
+  EXPECT_TRUE(accessor_caller != nullptr);
+  code = accessor_caller->get_code();
+  code->build_cfg();
+
+  TypedefAnnoChecker checker3 =
+      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
+  checker3.run(accessor_caller);
+  // The caller of the accessor has the actual violation.
+  EXPECT_FALSE(checker3.complete());
+  EXPECT_EQ(
+      checker3.error(),
+      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest$testSynthAccessor$lmd$1;.invoke:()Ljava/lang/String;\n\
+ the string value liu does not have the typedef annotation \n\
+ Linteg/TestStringDef; attached to it. \n\
+ Check that the value is annotated and exists in the typedef annotation class.\n\
+ failed instruction: CONST_STRING \"liu\"\n\
+ Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.access$takesStrConst:(Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;Ljava/lang/String;)Ljava/lang/String;\n\
+ Incorrect parameter's index: 1\n\n");
+}
