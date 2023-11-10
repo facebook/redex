@@ -7,10 +7,7 @@
 
 #include "TypedefAnnoCheckerPass.h"
 
-#include <boost/none.hpp>
-
 #include "AnnoUtils.h"
-#include "IROpcode.h"
 #include "PassManager.h"
 #include "Resolver.h"
 #include "Show.h"
@@ -36,7 +33,108 @@ bool is_not_str_nor_int(const type_inference::TypeEnvironment& env, reg_t reg) {
   return !is_string(env, reg) && !is_int(env, reg);
 }
 
+DexMethod* resolve_method(DexMethod* caller, IRInstruction* insn) {
+  auto def_method =
+      resolve_method(insn->get_method(), opcode_to_search(insn), caller);
+  if (def_method == nullptr && insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
+    def_method =
+        resolve_method(insn->get_method(), MethodSearch::InterfaceVirtual);
+  }
+  return def_method;
+}
+
+bool is_synthetic_accessor(DexMethod* m) {
+  return boost::starts_with(m->get_simple_deobfuscated_name(), ACCESS_PREFIX) ||
+         boost::ends_with(m->get_simple_deobfuscated_name(), DEFAULT_SUFFIX);
+}
+
+void collect_from_instruction(
+    TypeEnvironments& envs,
+    type_inference::TypeInference& inference,
+    DexMethod* caller,
+    IRInstruction* insn,
+    std::vector<std::pair<int, DexAnnotationSet&>>& missing_param_annos) {
+  always_assert(opcode::is_an_invoke(insn->opcode()));
+  auto* def_method = resolve_method(caller, insn);
+  if (!def_method || !def_method->get_param_anno()) {
+    // callee cannot be resolved or has no param annotation.
+    return;
+  }
+  if (ACCESS_PREFIX + def_method->get_simple_deobfuscated_name() !=
+          caller->get_simple_deobfuscated_name() &&
+      def_method->get_simple_deobfuscated_name() + DEFAULT_SUFFIX !=
+          caller->get_simple_deobfuscated_name()) {
+    // Not a matching synthetic accessor.
+    return;
+  }
+
+  auto& env = envs.find(insn)->second;
+  for (auto const& param_anno : *def_method->get_param_anno()) {
+    auto annotation =
+        inference.get_typedef_annotation(param_anno.second->get_annotations());
+    if (!annotation) {
+      continue;
+    }
+    int param_index = insn->opcode() == OPCODE_INVOKE_STATIC
+                          ? param_anno.first
+                          : param_anno.first + 1;
+    reg_t param_reg = insn->src(param_index);
+    auto anno_type = env.get_annotation(param_reg);
+    if (anno_type && anno_type == annotation) {
+      // Safe assignment. Nothing to do.
+      continue;
+    }
+    DexAnnotationSet& param_anno_set = *param_anno.second;
+    missing_param_annos.push_back({param_index, param_anno_set});
+    TRACE(TAC, 2, "Missing param annotation %s in %s", SHOW(&param_anno_set),
+          SHOW(caller));
+  }
+}
+
 } // namespace
+
+void SynthAccessorPatcher::run(const Scope& scope) {
+  walk::parallel::methods(scope, [this](DexMethod* m) {
+    if (is_synthetic(m) && is_synthetic_accessor(m)) {
+      collect_accessors(m);
+    }
+  });
+}
+
+void SynthAccessorPatcher::collect_accessors(DexMethod* m) {
+  IRCode* code = m->get_code();
+  if (!code) {
+    return;
+  }
+
+  always_assert(code->editable_cfg_built());
+  auto& cfg = code->cfg();
+  type_inference::TypeInference inference(cfg, false, m_typedef_annos);
+  inference.run(m);
+
+  TypeEnvironments& envs = inference.get_type_environments();
+  std::vector<std::pair<int, DexAnnotationSet&>> missing_param_annos;
+  for (cfg::Block* b : cfg.blocks()) {
+    for (auto& mie : InstructionIterable(b)) {
+      auto* insn = mie.insn;
+      IROpcode opcode = insn->opcode();
+      if (!opcode::is_an_invoke(opcode)) {
+        continue;
+      }
+      collect_from_instruction(envs, inference, m, insn, missing_param_annos);
+    }
+  }
+
+  // Patch missing param annotations
+  for (auto& pair : missing_param_annos) {
+    int param_index = pair.first;
+    always_assert(is_static(m));
+    m->attach_param_annotation_set(
+        param_index, std::make_unique<DexAnnotationSet>(pair.second));
+    TRACE(TAC, 2, "Add param annotation %s at %d to %s", SHOW(&pair.second),
+          param_index, SHOW(m));
+  }
+}
 
 void TypedefAnnoChecker::run(DexMethod* m) {
   IRCode* code = m->get_code();
@@ -93,12 +191,7 @@ void TypedefAnnoChecker::check_instruction(
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE: {
-    auto def_method =
-        resolve_method(insn->get_method(), opcode_to_search(insn), m);
-    if (def_method == nullptr && opcode == OPCODE_INVOKE_VIRTUAL) {
-      def_method =
-          resolve_method(insn->get_method(), MethodSearch::InterfaceVirtual);
-    }
+    auto def_method = resolve_method(m, insn);
     if (!def_method) {
       return;
     }
@@ -106,8 +199,6 @@ void TypedefAnnoChecker::check_instruction(
     // counterpart, which do not retain the typedef annotation.
     // In these cases, we will skip the checker
     if (!def_method->get_param_anno() ||
-        ACCESS_PREFIX + def_method->get_simple_deobfuscated_name() ==
-            m->get_simple_deobfuscated_name() ||
         def_method->get_simple_deobfuscated_name() + DEFAULT_SUFFIX ==
             m->get_simple_deobfuscated_name()) {
       return;
@@ -352,12 +443,7 @@ bool TypedefAnnoChecker::check_typedef_value(
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_STATIC:
     case OPCODE_INVOKE_INTERFACE: {
-      auto def_method =
-          resolve_method(def->get_method(), opcode_to_search(def), m);
-      if (def_method == nullptr && def->opcode() == OPCODE_INVOKE_VIRTUAL) {
-        def_method =
-            resolve_method(def->get_method(), MethodSearch::InterfaceVirtual);
-      }
+      auto def_method = resolve_method(m, def);
       if (!def_method) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: in the method " << SHOW(m)
@@ -432,6 +518,10 @@ void TypedefAnnoCheckerPass::run_pass(DexStoresVector& stores,
   walk::parallel::classes(scope, [&](DexClass* cls) {
     gather_typedef_values(cls, strdef_constants, intdef_constants);
   });
+
+  SynthAccessorPatcher patcher(m_config);
+  patcher.run(scope);
+  TRACE(TAC, 2, "Finish patching synth accessors");
 
   auto stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* m) {
     TypedefAnnoChecker checker =

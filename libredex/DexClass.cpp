@@ -947,8 +947,9 @@ void DexMethod::attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset) {
 }
 void DexMethod::attach_param_annotation_set(
     int paramno, std::unique_ptr<DexAnnotationSet> aset) {
-  always_assert_type_log(!m_concrete, RedexError::BAD_ANNOTATION,
-                         "method %s is concrete\n", self_show().c_str());
+  always_assert_type_log(!m_concrete || is_synthetic(get_access()),
+                         RedexError::BAD_ANNOTATION, "method %s is concrete\n",
+                         self_show().c_str());
   always_assert_type_log(
       m_param_anno == nullptr || m_param_anno->count(paramno) == 0,
       RedexError::BAD_ANNOTATION, "param %d annotation to method %s exists\n",

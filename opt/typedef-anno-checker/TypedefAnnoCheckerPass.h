@@ -84,15 +84,26 @@ using StrDefConstants =
 using IntDefConstants =
     InsertOnlyConcurrentMap<const DexClass*, std::unordered_set<uint64_t>>;
 
+class SynthAccessorPatcher {
+ public:
+  explicit SynthAccessorPatcher(const TypedefAnnoCheckerPass::Config& config) {
+    m_typedef_annos.insert(config.int_typedef);
+    m_typedef_annos.insert(config.str_typedef);
+  }
+
+  void run(const Scope& scope);
+
+ private:
+  void collect_accessors(DexMethod* method);
+
+  std::unordered_set<DexType*> m_typedef_annos;
+};
+
 class TypedefAnnoChecker {
  public:
-  explicit TypedefAnnoChecker(
-      InsertOnlyConcurrentMap<const DexClass*,
-                              std::unordered_set<const DexString*>>&
-          strdef_constants,
-      InsertOnlyConcurrentMap<const DexClass*, std::unordered_set<uint64_t>>&
-          intdef_constants,
-      const TypedefAnnoCheckerPass::Config& config)
+  explicit TypedefAnnoChecker(const StrDefConstants& strdef_constants,
+                              const IntDefConstants& intdef_constants,
+                              const TypedefAnnoCheckerPass::Config& config)
       : m_config(config),
         m_strdef_constants(strdef_constants),
         m_intdef_constants(intdef_constants) {}
