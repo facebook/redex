@@ -78,23 +78,24 @@ class CustomSort {
   }
 
   bool operator()(const T* a, const T* b) const {
-    bool a_in = m_map.count(a);
-    bool b_in = m_map.count(b);
-    if (!a_in && !b_in) {
+    const auto end_it = m_map.end();
+    const auto a_it = m_map.find(a);
+    const auto b_it = m_map.find(b);
+    if (a_it == end_it && b_it == end_it) {
       return m_cmp(a, b);
-    } else if (a_in && b_in) {
-      auto const a_idx = m_map.at(a);
-      auto const b_idx = m_map.at(b);
+    }
+    if (a_it != end_it && b_it != end_it) {
+      const auto a_idx = a_it->second;
+      const auto b_idx = b_it->second;
       if (a_idx != b_idx) {
         return a_idx < b_idx;
-      } else {
-        return m_cmp(a, b);
       }
-    } else if (a_in) {
-      return true;
-    } else {
-      return false;
+      return m_cmp(a, b);
     }
+    if (a_it != end_it) {
+      return true;
+    }
+    return false;
   }
 };
 
