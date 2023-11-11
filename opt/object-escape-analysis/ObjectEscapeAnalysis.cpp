@@ -118,6 +118,19 @@ constexpr int64_t COST_NEW_INSTANCE = 20;
 
 using Locations = std::vector<std::pair<DexMethod*, const IRInstruction*>>;
 
+std::unordered_set<DexClass*> get_excluded_classes(
+    const mog::Graph& method_override_graph) {
+  std::unordered_set<DexClass*> res;
+  for (auto* overriding_method : method_override_graph::get_overriding_methods(
+           method_override_graph, method::java_lang_Object_finalize())) {
+    auto* cls = type_class(overriding_method->get_class());
+    if (cls && !cls->is_external()) {
+      res.insert(cls);
+    }
+  }
+  return res;
+};
+
 // Collect all allocation and invoke instructions, as well as non-virtual
 // invocation dependencies.
 void analyze_scope(
@@ -209,10 +222,12 @@ using MethodSummaries = std::unordered_map<DexMethod*, MethodSummary>;
 // - which allocations return
 class Analyzer final : public BaseIRAnalyzer<Environment> {
  public:
-  explicit Analyzer(const MethodSummaries& method_summaries,
+  explicit Analyzer(const std::unordered_set<DexClass*>& excluded_classes,
+                    const MethodSummaries& method_summaries,
                     DexMethodRef* incomplete_marker_method,
                     cfg::ControlFlowGraph& cfg)
       : BaseIRAnalyzer(cfg),
+        m_excluded_classes(excluded_classes),
         m_method_summaries(method_summaries),
         m_incomplete_marker_method(incomplete_marker_method) {
     MonotonicFixpointIterator::run(Environment::top());
@@ -245,7 +260,7 @@ class Analyzer final : public BaseIRAnalyzer<Environment> {
     if (insn->opcode() == OPCODE_NEW_INSTANCE) {
       auto type = insn->get_type();
       auto cls = type_class(type);
-      if (cls && !cls->is_external()) {
+      if (cls && !cls->is_external() && !m_excluded_classes.count(cls)) {
         m_escapes[insn];
         current_state->set(RESULT_REGISTER, Domain(insn));
         return;
@@ -344,6 +359,7 @@ class Analyzer final : public BaseIRAnalyzer<Environment> {
   }
 
  private:
+  const std::unordered_set<DexClass*>& m_excluded_classes;
   const MethodSummaries& m_method_summaries;
   DexMethodRef* m_incomplete_marker_method;
   mutable Escapes m_escapes;
@@ -360,7 +376,8 @@ MethodSummaries compute_method_summaries(
     const Scope& scope,
     const ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>&
         dependencies,
-    const mog::Graph& method_override_graph) {
+    const mog::Graph& method_override_graph,
+    const std::unordered_set<DexClass*>& excluded_classes) {
   Timer t("compute_method_summaries");
 
   std::unordered_set<DexMethod*> impacted_methods;
@@ -382,7 +399,7 @@ MethodSummaries compute_method_summaries(
     workqueue_run<DexMethod*>(
         [&](DexMethod* method) {
           auto& cfg = method->get_code()->cfg();
-          Analyzer analyzer(method_summaries,
+          Analyzer analyzer(excluded_classes, method_summaries,
                             /* incomplete_marker_method */ nullptr, cfg);
           const auto& escapes = analyzer.get_escapes();
           const auto& returns = analyzer.get_returns();
@@ -468,12 +485,14 @@ std::pair<DexMethod*, DexType*> resolve_inlinable(
 using InlineAnchorsOfType =
     std::unordered_map<DexMethod*, std::unordered_set<IRInstruction*>>;
 ConcurrentMap<DexType*, InlineAnchorsOfType> compute_inline_anchors(
-    const Scope& scope, const MethodSummaries& method_summaries) {
+    const Scope& scope,
+    const MethodSummaries& method_summaries,
+    const std::unordered_set<DexClass*>& excluded_classes) {
   Timer t("compute_inline_anchors");
   ConcurrentMap<DexType*, InlineAnchorsOfType> inline_anchors;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    Analyzer analyzer(method_summaries, /* incomplete_marker_method */ nullptr,
-                      code.cfg());
+    Analyzer analyzer(excluded_classes, method_summaries,
+                      /* incomplete_marker_method */ nullptr, code.cfg());
     auto inlinables = analyzer.get_inlinables();
     for (auto insn : inlinables) {
       auto [callee, type] = resolve_inlinable(method_summaries, insn);
@@ -860,6 +879,7 @@ class RootMethodReducer {
   DexMethodRef* m_incomplete_marker_method;
   MultiMethodInliner& m_inliner;
   const MethodSummaries& m_method_summaries;
+  const std::unordered_set<DexClass*>& m_excluded_classes;
   Stats* m_stats;
   bool m_is_init_or_clinit;
   DexMethod* m_method;
@@ -873,6 +893,7 @@ class RootMethodReducer {
                     DexMethodRef* incomplete_marker_method,
                     MultiMethodInliner& inliner,
                     const MethodSummaries& method_summaries,
+                    const std::unordered_set<DexClass*>& excluded_classes,
                     Stats* stats,
                     bool is_init_or_clinit,
                     DexMethod* method,
@@ -882,6 +903,7 @@ class RootMethodReducer {
         m_incomplete_marker_method(incomplete_marker_method),
         m_inliner(inliner),
         m_method_summaries(method_summaries),
+        m_excluded_classes(excluded_classes),
         m_stats(stats),
         m_is_init_or_clinit(is_init_or_clinit),
         m_method(method),
@@ -1009,7 +1031,8 @@ class RootMethodReducer {
   bool inline_anchors() {
     auto& cfg = m_method->get_code()->cfg();
     for (int iteration = 0; true; iteration++) {
-      Analyzer analyzer(m_method_summaries, m_incomplete_marker_method, cfg);
+      Analyzer analyzer(m_excluded_classes, m_method_summaries,
+                        m_incomplete_marker_method, cfg);
       std::unordered_set<IRInstruction*> invokes_to_inline;
       auto inlinables = analyzer.get_inlinables();
       Lazy<live_range::DefUseChains> du_chains([&]() {
@@ -1365,6 +1388,7 @@ compute_reduced_methods(
     ExpandableMethodParams& expandable_method_params,
     MultiMethodInliner& inliner,
     const MethodSummaries& method_summaries,
+    const std::unordered_set<DexClass*>& excluded_classes,
     const std::unordered_map<DexMethod*, InlinableTypes>& root_methods,
     std::unordered_set<DexType*>* irreducible_types,
     Stats* stats,
@@ -1448,6 +1472,7 @@ compute_reduced_methods(
                                               incomplete_marker_method,
                                               inliner,
                                               method_summaries,
+                                              excluded_classes,
                                               stats,
                                               method::is_init(method) ||
                                                   method::is_clinit(method),
@@ -1632,6 +1657,7 @@ void reduce(DexStoresVector& stores,
             const init_classes::InitClassesWithSideEffects&
                 init_classes_with_side_effects,
             const MethodSummaries& method_summaries,
+            const std::unordered_set<DexClass*>& excluded_classes,
             const std::unordered_map<DexMethod*, InlinableTypes>& root_methods,
             Stats* stats,
             size_t max_inline_size) {
@@ -1658,8 +1684,8 @@ void reduce(DexStoresVector& stores,
   ExpandableMethodParams expandable_method_params(scope);
   std::unordered_set<DexType*> irreducible_types;
   auto reduced_methods = compute_reduced_methods(
-      expandable_method_params, inliner, method_summaries, root_methods,
-      &irreducible_types, stats, max_inline_size);
+      expandable_method_params, inliner, method_summaries, excluded_classes,
+      root_methods, &irreducible_types, stats, max_inline_size);
   stats->reduced_methods = reduced_methods.size();
 
   // Second, we select reduced methods that will result in net savings
@@ -1705,23 +1731,26 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns(), method_override_graph.get());
 
+  auto excluded_classes = get_excluded_classes(*method_override_graph);
+
   ConcurrentMap<DexType*, Locations> new_instances;
   ConcurrentMap<DexMethod*, Locations> invokes;
   ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>> dependencies;
   analyze_scope(scope, *method_override_graph, &new_instances, &invokes,
                 &dependencies);
 
-  auto method_summaries = compute_method_summaries(mgr, scope, dependencies,
-                                                   *method_override_graph);
+  auto method_summaries = compute_method_summaries(
+      mgr, scope, dependencies, *method_override_graph, excluded_classes);
 
-  auto inline_anchors = compute_inline_anchors(scope, method_summaries);
+  auto inline_anchors =
+      compute_inline_anchors(scope, method_summaries, excluded_classes);
 
   auto root_methods = compute_root_methods(mgr, new_instances, invokes,
                                            method_summaries, inline_anchors);
 
   Stats stats;
   reduce(stores, scope, conf, init_classes_with_side_effects, method_summaries,
-         root_methods, &stats, m_max_inline_size);
+         excluded_classes, root_methods, &stats, m_max_inline_size);
 
   TRACE(OEA, 1, "[object escape analysis] total savings: %zu",
         (size_t)stats.total_savings);

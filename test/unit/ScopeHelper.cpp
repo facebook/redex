@@ -83,16 +83,12 @@ DexClass* create_java_lang_object() {
   method->set_external();
   obj_cls->add_method(method);
 
+  // protected java.lang.Object.finalize()V
   method = static_cast<DexMethod*>(
-      DexMethod::get_method(obj_t, finalize, void_void));
-  if (method == nullptr) {
-    // protected java.lang.Object.finalize()V
-    method = static_cast<DexMethod*>(
-        DexMethod::make_method(obj_t, finalize, void_void));
-    method->set_access(ACC_PROTECTED);
-    method->set_virtual(true);
-    method->set_external();
-  }
+      DexMethod::make_method(obj_t, finalize, void_void));
+  method->set_access(ACC_PROTECTED);
+  method->set_virtual(true);
+  method->set_external();
   obj_cls->add_method(method);
 
   method = static_cast<DexMethod*>(

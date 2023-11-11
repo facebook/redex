@@ -383,3 +383,23 @@ TEST_F(ObjectEscapeAnalysisTest, reduceTo42IncompleteInlinableTypeB) {
 )");
   ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
 }
+
+TEST_F(ObjectEscapeAnalysisTest, doNotReduceTo42Finalize) {
+  run();
+
+  auto actual = get_s_expr(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest;.doNotReduceTo42Finalize:()I");
+  auto expected = assembler::ircode_from_string(R"(
+   (
+      (new-instance "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$P;")
+      (move-result-pseudo-object v0)
+      (const v1 42)
+      (invoke-direct (v0 v1) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$P;.<init>:(I)V")
+      (invoke-virtual (v0) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$P;.getX:()I")
+      (move-result v1)
+      (return v1)
+    )
+)");
+  ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
+}

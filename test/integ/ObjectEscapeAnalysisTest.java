@@ -337,4 +337,24 @@ public class ObjectEscapeAnalysisTest {
     O.instance = new O(16);
     return o.getX();
   }
+
+  public static class P {
+    int x;
+
+    public P(int x) {
+      this.x = x;
+    }
+
+    public int getX() {
+      return this.x;
+    }
+
+    protected void finalize() {}
+  }
+
+  public static int doNotReduceTo42Finalize() {
+    // This object creation can NOT be reduced
+    P p = new P(42);
+    return p.getX();
+  }
 }
