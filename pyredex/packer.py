@@ -245,7 +245,7 @@ def _compress(
         return
 
     with _warning_timer(item.name, 1.0) as _:
-        logging.info("Compressing %s...", item.name)
+        logging.debug("Compressing %s...", item.name)
 
         # If an output name is given, use it. If not, ensure that it is only
         # one file.
