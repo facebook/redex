@@ -7,7 +7,6 @@
 
 package com.facebook.redextest
 
-
 import integ.TestStringDef
 
 public class TypedefAnnoCheckerKtTest {
