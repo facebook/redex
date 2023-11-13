@@ -55,9 +55,6 @@ from pyredex.utils import (
 IS_WINDOWS: bool = os.name == "nt"
 
 
-timer: typing.Callable[[], float] = timeit.default_timer
-
-
 # Pyre helper.
 T = typing.TypeVar("T")
 
@@ -338,7 +335,6 @@ def run_redex_binary(
         if debugger is not None
         else []
     )
-    start = timer()
 
     if state.args.debug:
         print("cd %s && %s" % (os.getcwd(), " ".join(prefix + list(map(quote, args)))))
@@ -415,8 +411,6 @@ def run_redex_binary(
             if err.errno == errno.ETXTBSY and i < 4:
                 continue
             raise err
-
-    logging.debug("Dex processing finished in {:.2f} seconds".format(timer() - start))
 
 
 def zipalign(
@@ -945,7 +939,7 @@ def _check_shrinker_heuristics(args: argparse.Namespace) -> None:
         logging.info("Found embedded shrinker heuristics")
         tmp_dir = make_temp_dir("shrinker_heuristics")
         filename = os.path.join(tmp_dir, "shrinker.forest")
-        logging.info("Writing shrinker heuristics to %s", filename)
+        logging.debug("Writing shrinker heuristics to %s", filename)
         with open(filename, "wb") as f:
             f.write(SHRINKER_HEURISTICS_FILE)
         arg = arg_template + filename
@@ -969,7 +963,7 @@ def _check_android_sdk_api(args: argparse.Namespace) -> None:
         levels = ga.get_api_levels()
         logging.info("Found embedded API levels: %s", levels)
         api_dir = make_temp_dir("api_levels")
-        logging.info("Writing API level files to %s", api_dir)
+        logging.debug("Writing API level files to %s", api_dir)
         for level in levels:
             blob = ga.get_api_level_file(level)
             filename = os.path.join(api_dir, f"framework_classes_api_{level}.txt")
@@ -1122,58 +1116,57 @@ def prepare_redex(args: argparse.Namespace) -> State:
                 raise e
 
     with BuckPartScope("redex::Unpacking", "Unpacking Redex input"):
-        logging.debug("Unpacking...")
-        unpack_start_time = timer()
-        if not extracted_apk_dir:
-            extracted_apk_dir = make_temp_dir(".redex_extracted_apk", debug_mode)
+        with BuckPartScope("redex::UnpackApk", "Unpacking APK"):
+            logging.debug("Unpacking...")
+            if not extracted_apk_dir:
+                extracted_apk_dir = make_temp_dir(".redex_extracted_apk", debug_mode)
 
-        directory = make_temp_dir(".redex_unaligned", False)
-        unaligned_apk_path = join(directory, "redex-unaligned." + file_ext)
-        zip_manager = ZipManager(args.input_apk, extracted_apk_dir, unaligned_apk_path)
-        zip_manager.__enter__()
+            directory = make_temp_dir(".redex_unaligned", False)
+            unaligned_apk_path = join(directory, "redex-unaligned." + file_ext)
+            zip_manager = ZipManager(
+                args.input_apk, extracted_apk_dir, unaligned_apk_path
+            )
+            zip_manager.__enter__()
 
-        if not dex_dir:
-            dex_dir = make_temp_dir(".redex_dexen", debug_mode)
+            if not dex_dir:
+                dex_dir = make_temp_dir(".redex_dexen", debug_mode)
 
-        is_bundle = isfile(join(extracted_apk_dir, "BundleConfig.pb"))
-        unpack_manager = UnpackManager(
-            args.input_apk,
-            extracted_apk_dir,
-            dex_dir,
-            have_locators=config_dict.get("emit_locator_strings"),
-            debug_mode=debug_mode,
-            fast_repackage=args.dev,
-            reset_timestamps=args.reset_zip_timestamps or args.dev,
-            is_bundle=is_bundle,
+            is_bundle = isfile(join(extracted_apk_dir, "BundleConfig.pb"))
+            unpack_manager = UnpackManager(
+                args.input_apk,
+                extracted_apk_dir,
+                dex_dir,
+                have_locators=config_dict.get("emit_locator_strings"),
+                debug_mode=debug_mode,
+                fast_repackage=args.dev,
+                reset_timestamps=args.reset_zip_timestamps or args.dev,
+                is_bundle=is_bundle,
+            )
+            store_files = unpack_manager.__enter__()
+
+            lib_manager = LibraryManager(extracted_apk_dir, is_bundle=is_bundle)
+            lib_manager.__enter__()
+
+            if args.unpack_only:
+                print("APK: " + extracted_apk_dir)
+                print("DEX: " + dex_dir)
+                sys.exit()
+
+        # Unpack profiles, if they exist.
+        _handle_profiles(args)
+        _handle_secondary_method_profiles(args)
+
+        logging.debug("Moving contents to expected structure...")
+        # Move each dex to a separate temporary directory to be operated by
+        # redex.
+        preserve_input_dexes = config_dict.get("preserve_input_dexes")
+        dexen = relocate_dexen_to_directories(
+            dex_dir, dex_glob(dex_dir), preserve_input_dexes
         )
-        store_files = unpack_manager.__enter__()
+        dexen_initial_state = DexenSnapshot(dex_dir) if preserve_input_dexes else None
 
-        lib_manager = LibraryManager(extracted_apk_dir, is_bundle=is_bundle)
-        lib_manager.__enter__()
-
-        if args.unpack_only:
-            print("APK: " + extracted_apk_dir)
-            print("DEX: " + dex_dir)
-            sys.exit()
-
-    # Unpack profiles, if they exist.
-    _handle_profiles(args)
-    _handle_secondary_method_profiles(args)
-
-    logging.debug("Moving contents to expected structure...")
-    # Move each dex to a separate temporary directory to be operated by
-    # redex.
-    preserve_input_dexes = config_dict.get("preserve_input_dexes")
-    dexen = relocate_dexen_to_directories(
-        dex_dir, dex_glob(dex_dir), preserve_input_dexes
-    )
-    dexen_initial_state = DexenSnapshot(dex_dir) if preserve_input_dexes else None
-
-    for store in sorted(store_files):
-        dexen.append(store)
-    logging.debug(
-        "Unpacking APK finished in {:.2f} seconds".format(timer() - unpack_start_time)
-    )
+        for store in sorted(store_files):
+            dexen.append(store)
 
     if args.side_effect_summaries is not None:
         args.passthru_json.append(
@@ -1310,6 +1303,7 @@ def get_compression_list() -> typing.List[CompressionEntry]:
 
 def finalize_redex(state: State) -> None:
     if state.args.verify_dexes:
+        # with BuckPartScope("Redex::VerifyDexes", "Verifying output dex files"):
         verify_dexes(state.dex_dir, state.args.verify_dexes)
 
     if state.dexen_initial_state is not None:
@@ -1320,75 +1314,76 @@ def finalize_redex(state: State) -> None:
 
     _assert_val(state.lib_manager).__exit__(*sys.exc_info())
 
-    repack_start_time = timer()
+    with BuckPartScope("Redex::OutputAPK", "Creating output APK"):
+        with BuckPartScope("Redex::UnUnpack", "Undoing unpack"):
+            _assert_val(state.unpack_manager).__exit__(*sys.exc_info())
 
-    _assert_val(state.unpack_manager).__exit__(*sys.exc_info())
-
-    meta_file_dir = join(state.dex_dir, "meta/")
-    assert os.path.isdir(meta_file_dir), "meta dir %s does not exist" % meta_file_dir
-
-    resource_file_mapping = join(meta_file_dir, "resource-mapping.txt")
-    if os.path.exists(resource_file_mapping):
-        _assert_val(state.zip_manager).set_resource_file_mapping(resource_file_mapping)
-    _assert_val(state.zip_manager).__exit__(*sys.exc_info())
-
-    align_and_sign_output_apk(
-        _assert_val(state.zip_manager).output_apk,
-        state.args.out,
-        # In dev mode, reset timestamps.
-        state.args.reset_zip_timestamps or state.args.dev,
-        state.args.sign,
-        state.args.keystore,
-        state.args.keyalias,
-        state.args.keypass,
-        state.args.ignore_zipalign,
-        state.args.ignore_apksigner,
-        state.args.page_align_libs,
-    )
-
-    logging.debug(
-        "Creating output APK finished in {:.2f} seconds".format(
-            timer() - repack_start_time
+        meta_file_dir = join(state.dex_dir, "meta/")
+        assert os.path.isdir(meta_file_dir), (
+            "meta dir %s does not exist" % meta_file_dir
         )
-    )
 
-    compress_entries(
-        get_compression_list(),
-        meta_file_dir,
-        os.path.dirname(state.args.out),
-        state.args,
-    )
+        with BuckPartScope("Redex::ReZip", "Rezipping"):
+            resource_file_mapping = join(meta_file_dir, "resource-mapping.txt")
+            if os.path.exists(resource_file_mapping):
+                _assert_val(state.zip_manager).set_resource_file_mapping(
+                    resource_file_mapping
+                )
+            _assert_val(state.zip_manager).__exit__(*sys.exc_info())
 
-    copy_all_file_to_out_dir(
-        meta_file_dir, state.args.out, "*", "all redex generated artifacts"
-    )
-
-    redex_stats_filename = state.config_dict.get("stats_output", "redex-stats.txt")
-    redex_stats_file = join(dirname(meta_file_dir), redex_stats_filename)
-    if isfile(redex_stats_file):
-        with open(redex_stats_file, "r") as fr:
-            apk_input_size = getsize(state.args.input_apk)
-            apk_output_size = getsize(state.args.out)
-            redex_stats_json = json.load(fr)
-            redex_stats_json["input_stats"]["total_stats"][
-                "num_compressed_apk_bytes"
-            ] = apk_input_size
-            redex_stats_json["output_stats"]["total_stats"][
-                "num_compressed_apk_bytes"
-            ] = apk_output_size
-            update_redex_stats_file = join(
-                dirname(state.args.out), redex_stats_filename
+        with BuckPartScope("Redex::AlignAndSign", "Aligning and signing"):
+            align_and_sign_output_apk(
+                _assert_val(state.zip_manager).output_apk,
+                state.args.out,
+                # In dev mode, reset timestamps.
+                state.args.reset_zip_timestamps or state.args.dev,
+                state.args.sign,
+                state.args.keystore,
+                state.args.keyalias,
+                state.args.keypass,
+                state.args.ignore_zipalign,
+                state.args.ignore_apksigner,
+                state.args.page_align_libs,
             )
-            with open(update_redex_stats_file, "w") as fw:
-                json.dump(redex_stats_json, fw)
 
-    # Write invocation file
-    with open(join(dirname(state.args.out), "redex.py-invocation.txt"), "w") as f:
-        print("%s" % " ".join(map(shlex.quote, sys.argv)), file=f)
+    with BuckPartScope("Redex::OutputDir", "Arranging output dir"):
+        compress_entries(
+            get_compression_list(),
+            meta_file_dir,
+            os.path.dirname(state.args.out),
+            state.args,
+        )
 
-    copy_all_file_to_out_dir(
-        state.dex_dir, state.args.out, "*.dot", "approximate shape graphs"
-    )
+        copy_all_file_to_out_dir(
+            meta_file_dir, state.args.out, "*", "all redex generated artifacts"
+        )
+
+        redex_stats_filename = state.config_dict.get("stats_output", "redex-stats.txt")
+        redex_stats_file = join(dirname(meta_file_dir), redex_stats_filename)
+        if isfile(redex_stats_file):
+            with open(redex_stats_file, "r") as fr:
+                apk_input_size = getsize(state.args.input_apk)
+                apk_output_size = getsize(state.args.out)
+                redex_stats_json = json.load(fr)
+                redex_stats_json["input_stats"]["total_stats"][
+                    "num_compressed_apk_bytes"
+                ] = apk_input_size
+                redex_stats_json["output_stats"]["total_stats"][
+                    "num_compressed_apk_bytes"
+                ] = apk_output_size
+                update_redex_stats_file = join(
+                    dirname(state.args.out), redex_stats_filename
+                )
+                with open(update_redex_stats_file, "w") as fw:
+                    json.dump(redex_stats_json, fw)
+
+        # Write invocation file
+        with open(join(dirname(state.args.out), "redex.py-invocation.txt"), "w") as f:
+            print("%s" % " ".join(map(shlex.quote, sys.argv)), file=f)
+
+        copy_all_file_to_out_dir(
+            state.dex_dir, state.args.out, "*.dot", "approximate shape graphs"
+        )
 
 
 def _init_logging(level_str: str) -> None:

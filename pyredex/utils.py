@@ -23,6 +23,7 @@ import tempfile
 import timeit
 import typing
 import zipfile
+from contextlib import contextmanager
 from os.path import basename, dirname, isfile, join
 
 from pyredex.logger import log
@@ -65,7 +66,10 @@ def with_temp_cleanup(
         success = True
     finally:
         if success:
-            remove_temp_dirs()
+            from pyredex.buck import BuckPartScope  # Circular dependency...
+
+            with BuckPartScope("Redex::TempDirs", "Cleaning up temporary directories"):
+                remove_temp_dirs()
 
 
 class _FindAndroidBuildToolHelper:
@@ -499,18 +503,23 @@ def get_file_ext(file_name: str) -> str:
 
 
 def _verify_dex(dex_file: str, cmd: str) -> bool:
-    logging.debug("Verifying %s...", dex_file)
-
-    res = subprocess.run(
-        f"{cmd} '{dex_file}'", shell=True, text=False, capture_output=True
-    )
-    if res.returncode == 0:
-        return True
-
     try:
-        stderr_str = res.stderr.decode("utf-8")
-    except BaseException:
-        stderr_str = "<unable to decode, contains non-UTF8>"
+        logging.info("Verifying %s...", dex_file)
+
+        res = subprocess.run(
+            f"{cmd} '{dex_file}'", shell=True, text=False, capture_output=True
+        )
+        if res.returncode == 0:
+            return True
+
+        try:
+            stderr_str = res.stderr.decode("utf-8")
+        except BaseException:
+            stderr_str = "<unable to decode, contains non-UTF8>"
+
+    except BaseException as e:
+        logging.exception("Error for dex file %s", dex_file)
+        stderr_str = f"{e}"
 
     logging.error("Failed verification for %s:\n%s", dex_file, stderr_str)
     return False
@@ -557,3 +566,28 @@ def get_xz_path() -> typing.Optional[str]:
         logging.debug("Using command line xz")
         xz = "xz"
     return xz
+
+
+_TIME_IT_DEPTH: int = 0
+
+
+@contextmanager
+def time_it(
+    fmt: str, *args: typing.Any, **kwargs: str
+) -> typing.Generator[int, None, None]:
+    global _TIME_IT_DEPTH
+    this_depth = _TIME_IT_DEPTH
+    _TIME_IT_DEPTH += 1
+
+    if "start" in kwargs:
+        logging.info("-" * this_depth + kwargs["start"])
+
+    timer = timeit.default_timer
+    start_time = timer()
+    try:
+        yield 1  # Irrelevant
+    finally:
+        end_time = timer()
+        logging.info("-" * this_depth + fmt.format(time=end_time - start_time), *args)
+
+        _TIME_IT_DEPTH -= 1
