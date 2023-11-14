@@ -98,3 +98,39 @@ TEST_F(ConcurrentHashtableTest, concurrentInsertGet) {
   }
   EXPECT_EQ(nullptr, set.get(N));
 }
+
+TEST_F(ConcurrentHashtableTest, primeProgression) {
+  size_t i = 5;
+  i = cc_impl::get_prime_number_greater_or_equal_to(i * 2);
+  ASSERT_EQ(i, 13);
+  i = cc_impl::get_prime_number_greater_or_equal_to(i * 2);
+  ASSERT_EQ(i, 29);
+  i = cc_impl::get_prime_number_greater_or_equal_to(i * 2);
+  ASSERT_EQ(i, 61);
+  i = cc_impl::get_prime_number_greater_or_equal_to(i * 2);
+  ASSERT_EQ(i, 113);
+  i = cc_impl::get_prime_number_greater_or_equal_to(i * 2);
+  ASSERT_EQ(i, 251);
+  i = cc_impl::get_prime_number_greater_or_equal_to(i * 2);
+  ASSERT_EQ(i, 509);
+  i = cc_impl::get_prime_number_greater_or_equal_to(i * 2);
+  ASSERT_EQ(i, 1021);
+  i = cc_impl::get_prime_number_greater_or_equal_to(i * 2);
+  ASSERT_EQ(i, 2039);
+  i = cc_impl::get_prime_number_greater_or_equal_to(i * 2);
+  ASSERT_EQ(i, 4093);
+  i = cc_impl::get_prime_number_greater_or_equal_to(i * 2);
+  ASSERT_EQ(i, 8179);
+  i = cc_impl::get_prime_number_greater_or_equal_to(i * 2);
+  ASSERT_EQ(i, 16381);
+  i = cc_impl::get_prime_number_greater_or_equal_to(i * 2);
+  ASSERT_EQ(i, 32749);
+
+  i = 1073741789;
+  i = cc_impl::get_prime_number_greater_or_equal_to(i * 2);
+  ASSERT_EQ(i, 2147483647);
+  i = cc_impl::get_prime_number_greater_or_equal_to(i * 2);
+  ASSERT_EQ(i, 4294967295);
+  i = cc_impl::get_prime_number_greater_or_equal_to(i * 2);
+  ASSERT_EQ(i, 8589934591);
+}

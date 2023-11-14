@@ -47,7 +47,7 @@ class ConcurrentHashtableIterator;
 template <typename ConcurrentHashtable>
 class ConcurrentHashtableInsertionResult;
 
-size_t get_prime_number_greater_or_equal_to(size_t i);
+size_t get_prime_number_greater_or_equal_to(size_t);
 
 /*
  * This ConcurrentHashtable supports inserting (and "emplacing"), getting (the
