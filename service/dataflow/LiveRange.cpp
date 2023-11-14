@@ -14,8 +14,11 @@
 #include "IRCode.h"
 #include "ScopedCFG.h"
 #include "Show.h"
+#include "Timer.h"
 
 namespace {
+
+AccumulatingTimer s_timer("live_range");
 
 using namespace live_range;
 
@@ -77,6 +80,8 @@ void replay_analysis_with_callback(const cfg::ControlFlowGraph& cfg,
                                    const Iter& iter,
                                    bool ignore_unreachable,
                                    Fn f) {
+  auto timer_scope = s_timer.scope();
+
   for (cfg::Block* block : cfg.blocks()) {
     auto defs_in = iter.get_entry_state_at(block);
     if (ignore_unreachable && defs_in.is_bottom()) {
@@ -136,6 +141,7 @@ bool Use::operator==(const Use& that) const {
 
 Chains::Chains(const cfg::ControlFlowGraph& cfg, bool ignore_unreachable)
     : m_cfg(cfg), m_fp_iter(cfg), m_ignore_unreachable(ignore_unreachable) {
+  auto timer_scope = s_timer.scope();
   m_fp_iter.run(reaching_defs::Environment());
 }
 
@@ -150,6 +156,7 @@ DefUseChains Chains::get_def_use_chains() const {
 MoveAwareChains::MoveAwareChains(const cfg::ControlFlowGraph& cfg,
                                  bool ignore_unreachable)
     : m_cfg(cfg), m_fp_iter(cfg), m_ignore_unreachable(ignore_unreachable) {
+  auto timer_scope = s_timer.scope();
   m_fp_iter.run(reaching_defs::Environment());
 }
 
