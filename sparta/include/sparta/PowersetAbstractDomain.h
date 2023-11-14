@@ -51,6 +51,11 @@ class PowersetImplementation : public AbstractValue<Derived> {
                      Snapshot>::value,
         "Derived::elements() does not exist");
 
+    // bool size() const;
+    static_assert(std::is_same<decltype(std::declval<const Derived>().empty()),
+                               bool>::value,
+                  "Derived::empty() does not exist");
+
     // size_t size() const;
     static_assert(std::is_same<decltype(std::declval<const Derived>().size()),
                                size_t>::value,
@@ -135,6 +140,14 @@ class PowersetAbstractDomain
                       << expected_kind(AbstractValueKind::Value)
                       << actual_kind(this->kind()));
     return this->get_value()->elements();
+  }
+
+  bool empty() const {
+    RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
+                  invalid_abstract_value()
+                      << expected_kind(AbstractValueKind::Value)
+                      << actual_kind(this->kind()));
+    return this->get_value()->empty();
   }
 
   size_t size() const {

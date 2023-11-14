@@ -93,9 +93,12 @@ void replay_analysis_with_callback(const cfg::ControlFlowGraph& cfg,
         Use use{insn, i};
         auto src = insn->src(i);
         const auto& defs = defs_in.get(src);
-        always_assert_log(
-            !defs.is_top() && !defs.is_bottom() && defs.size() > 0,
-            "Found use without def when processing [0x%p]%s", &mie, SHOW(insn));
+        always_assert_log(!defs.is_top() && !defs.empty(),
+                          "Found use without def when processing [0x%p]%s",
+                          &mie, SHOW(insn));
+        always_assert_log(!defs.is_bottom(),
+                          "Found unreachable use when processing [0x%p]%s",
+                          &mie, SHOW(insn));
         f(use, defs);
       }
       iter.analyze_instruction(insn, &defs_in);
