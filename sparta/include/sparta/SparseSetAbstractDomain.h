@@ -164,6 +164,8 @@ class SparseSetValue final
     return AbstractValueKind::Value;
   }
 
+  bool empty() const { return m_element_num == 0; }
+
   size_t size() const { return m_element_num; }
 
   friend std::ostream& operator<<(std::ostream& o,

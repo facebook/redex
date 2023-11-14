@@ -91,6 +91,8 @@ class SetValue final : public PowersetImplementation<typename Set::value_type,
 
   const Set& elements() const { return m_set; }
 
+  bool empty() const { return m_set.empty(); }
+
   size_t size() const { return m_set.size(); }
 
   bool contains(const Element& e) const { return m_set.contains(e); }
