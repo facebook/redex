@@ -14,7 +14,6 @@
 #include <iterator>
 #include <memory>
 #include <mutex>
-#include <queue>
 #include <stack>
 #include <unordered_map>
 #include <unordered_set>
@@ -65,22 +64,24 @@ size_t get_prime_number_greater_or_equal_to(size_t i);
  *   eventually, but with no ordering guarantees.
  *
  * The concurrent hashtable has the following performance characteristics:
- * - getting and inserting is O(1) on average, lock-free, and not blocked by
- *   resizing or erasing
- * - erasing is O(1) on average, but needs to acquire a table-wide mutex
- * - resizing is O(n) on the current thread, and also acquires the table-wide
- *   mutex
+ * - getting, inserting and erasing is O(1) on average, lock-free (*), and not
+ *   blocked by resizing
+ * - resizing is O(n) on the current thread, and acquires a table-wide mutex
+ *
+ * (*) While implemented without locks, there is effectively some spinning on
+ * individual buckets when competing operations are in progress on that bucket.
  *
  * Resizing is automatically triggered when an insertion causes the table to
  * exceed the (hard-coded) load factor, and then this insertion blocks the
- * current thread while it is busy resizing. However, concurrent gets and
- * insertions can proceed; new insertions will go into the enlarged table
- * version, possibly (temporarily) exceeding the load factor. All key-value
- * pairs are stored in a fixed memory location, and are not moved during
- * resizing, similar to how std::unordered_set/map manages memory. Erasing a key
- * does not immediately destroy the key-value pair, but keeps (a reference to)
- * it until the concurrent hashtable is destroyed, copied, moved, or
- * `compact` is called. This ensures that get always return a valid
+ * current thread while it is busy resizing. However, concurrent gets,
+ * insertions and erasures can proceed; new insertions will go into the enlarged
+ * table version, possibly (temporarily) exceeding the load factor.
+ *
+ * All key-value pairs are stored in a fixed memory location, and are not moved
+ * during resizing, similar to how std::unordered_set/map manages memory.
+ * Erasing a key does not immediately destroy the key-value pair, but keeps (a
+ * reference to) it until the concurrent hashtable is destroyed, copied, moved,
+ * or `compact` is called. This ensures that get always returns a valid
  * reference, even in the face of concurrent erasing.
  *
  * TODO: Right now, we use the (default) std::memory_order_seq_cst everywhere.
@@ -221,14 +222,16 @@ class ConcurrentHashtable final {
     compact();
   }
 
-  ConcurrentHashtable() noexcept : m_storage(Storage::create()), m_count(0) {}
+  ConcurrentHashtable() noexcept
+      : m_storage(Storage::create()), m_count(0), m_erased(nullptr) {}
 
   /*
    * This operation is NOT thread-safe.
    */
   ConcurrentHashtable(const ConcurrentHashtable& container) noexcept
       : m_storage(Storage::create(container.size() / LOAD_FACTOR + 1, nullptr)),
-        m_count(0) {
+        m_count(0),
+        m_erased(nullptr) {
     for (const auto& p : container) {
       try_insert(p);
     }
@@ -240,7 +243,7 @@ class ConcurrentHashtable final {
   ConcurrentHashtable(ConcurrentHashtable&& container) noexcept
       : m_storage(container.m_storage.exchange(Storage::create())),
         m_count(container.m_count.exchange(0)),
-        m_erased(std::move(container.m_erased)) {
+        m_erased(container.m_erased.exchange(nullptr)) {
     compact();
   }
 
@@ -341,9 +344,13 @@ class ConcurrentHashtable final {
           return insertion_result(&node->value, new_node);
         }
       }
-      if (is_begin_or_end_during_resizing(root)) {
-        storage = storage->next.load();
-        continue;
+      if (is_moved_or_locked(root)) {
+        if (auto* next_storage = storage->next.load()) {
+          storage = next_storage;
+          continue;
+        }
+        // We are racing with an erasure; assume it's not affecting us.
+        root = get_node(root);
       }
       if (load_factor_exceeded(storage) && reserve(storage->size * 2)) {
         storage = m_storage.load();
@@ -381,9 +388,13 @@ class ConcurrentHashtable final {
           return insertion_result(&node->value, new_node);
         }
       }
-      if (is_begin_or_end_during_resizing(root)) {
-        storage = storage->next.load();
-        continue;
+      if (is_moved_or_locked(root)) {
+        if (auto* next_storage = storage->next.load()) {
+          storage = next_storage;
+          continue;
+        }
+        // We are racing with an erasure; assume it's not affecting us.
+        root = get_node(root);
       }
       if (load_factor_exceeded(storage) && reserve(storage->size * 2)) {
         storage = m_storage.load();
@@ -421,9 +432,13 @@ class ConcurrentHashtable final {
           return insertion_result(&node->value, new_node);
         }
       }
-      if (is_begin_or_end_during_resizing(root)) {
-        storage = storage->next.load();
-        continue;
+      if (is_moved_or_locked(root)) {
+        if (auto* next_storage = storage->next.load()) {
+          storage = next_storage;
+          continue;
+        }
+        // We are racing with an erasure; assume it's not affecting us.
+        root = get_node(root);
       }
       if (load_factor_exceeded(storage) && reserve(storage->size * 2)) {
         storage = m_storage.load();
@@ -461,9 +476,13 @@ class ConcurrentHashtable final {
           return insertion_result(&node->value, new_node);
         }
       }
-      if (is_begin_or_end_during_resizing(root)) {
-        storage = storage->next.load();
-        continue;
+      if (is_moved_or_locked(root)) {
+        if (auto* next_storage = storage->next.load()) {
+          storage = next_storage;
+          continue;
+        }
+        // We are racing with an erasure; assume it's not affecting us.
+        root = get_node(root);
       }
       if (load_factor_exceeded(storage) && reserve(storage->size * 2)) {
         storage = m_storage.load();
@@ -487,12 +506,13 @@ class ConcurrentHashtable final {
    * This operation is always thread-safe.
    */
   bool reserve(size_t capacity) {
-    std::unique_lock<std::mutex> lock(m_mutex, std::defer_lock);
-    if (!lock.try_lock()) {
+    bool resizing = false;
+    if (!m_resizing.compare_exchange_strong(resizing, true)) {
       return false;
     }
     auto* storage = m_storage.load();
     if (storage->size >= capacity) {
+      m_resizing.store(false);
       return true;
     }
     auto timer_scope = s_reserving.scope();
@@ -503,23 +523,18 @@ class ConcurrentHashtable final {
     std::stack<std::atomic<Ptr>*> locs;
     for (size_t i = 0; i < storage->size; ++i) {
       std::atomic<Ptr>* loc = &ptrs[i];
+      // Lock the bucket (or mark the bucket as moved if its empty). This might
+      // fail due to a race with an insertion or erasure
       Ptr ptr = nullptr;
-      // If the chain is empty, try to store the forward marker. This might fail
-      // due to a race with an insertion.
-      if (loc->compare_exchange_strong(ptr, end_during_resizing())) {
+      Node* node = nullptr;
+      while (!loc->compare_exchange_strong(ptr, moved_or_lock(node))) {
+        node = get_node(ptr);
+        ptr = node;
+      }
+      if (node == nullptr) {
         continue;
       }
-      // The chain is not empty. Try to mark the first node to indicate that
-      // forwarding is in progress, preventing any further insertions. This
-      // might fail due to a race with an insertion.
-      always_assert(ptr);
-      auto* node = get_node(ptr);
-      while (!loc->compare_exchange_strong(ptr, begin_during_resizing(node))) {
-        node = get_node(ptr);
-      }
-      // Okay, we have a non-empty chain, and there won't be any more insertions
-      // in this storage version on this chain. Lets rewire the nodes from the
-      // back to the new storage version.
+      // Lets rewire the nodes from the back to the new storage version.
       locs.push(loc);
       auto* prev_loc = &node->prev;
       auto* prev_ptr = prev_loc->load();
@@ -538,13 +553,14 @@ class ConcurrentHashtable final {
         node = get_node(ptr);
         prev_loc = &node->prev;
         prev_ptr = prev_loc->load();
-        always_assert(prev_ptr == nullptr ||
-                      is_begin_or_end_during_resizing(prev_ptr));
+        always_assert(prev_ptr == nullptr || is_moved_or_locked(prev_ptr));
         auto new_hash = hasher()(const_key_projection()(node->value));
         auto* new_loc = &new_storage->ptrs[new_hash % new_storage->size];
         auto* new_ptr = new_loc->load();
         // Rewiring the node happens in three steps:
         do {
+          // Assume there is no race with an erasure.
+          new_ptr = get_node(new_ptr);
           // 1. Set the (null) prev node pointer to the first chain element in
           // the new storage version. This is ultimately what we want it to be;
           // it might allow a racing read operation to scan irrelevant nodes,
@@ -552,16 +568,16 @@ class ConcurrentHashtable final {
           prev_loc->store(new_ptr);
           // 2. Wire up the current node pointer to be the first chain element
           // in the new storage version. This may fail due to a race with
-          // another thread inserting into the same chain. But then we'll just
-          // retry.
+          // another thread inserting into or erasing from the same chain. But
+          // then we'll just retry.
         } while (!new_loc->compare_exchange_strong(new_ptr, node));
         // 3. Detach the current node pointer from the end of the old chain.
-        auto* old_ptr = loc->exchange(end_during_resizing());
-        always_assert(old_ptr == ptr);
+        loc->store(moved());
       }
     }
     auto* old_storage = m_storage.exchange(new_storage);
     always_assert(old_storage == storage);
+    m_resizing.store(false);
     return true;
   }
 
@@ -570,28 +586,44 @@ class ConcurrentHashtable final {
    */
   value_type* erase(const key_type& key) {
     auto hash = hasher()(key);
-    std::unique_lock<std::mutex> lock(m_mutex);
     auto* storage = m_storage.load();
-    auto* ptrs = storage->ptrs;
     while (true) {
-      auto* loc = &ptrs[hash % storage->size];
-      auto* ptr = loc->load();
-      auto* node = get_node(ptr);
-      for (; node && !key_equal()(const_key_projection()(node->value), key);
-           loc = &node->prev, ptr = loc->load(), node = get_node(ptr)) {
-      }
-      if (!node) {
+      auto* ptrs = storage->ptrs;
+      auto* root_loc = &ptrs[hash % storage->size];
+      auto* root = root_loc->load();
+      if (root == nullptr) {
         return nullptr;
       }
-      if (loc->compare_exchange_strong(ptr, node->prev.load())) {
-        if (!m_erased) {
-          m_erased = std::make_unique<std::queue<Node*>>();
-        }
-        m_erased->push(node);
-        m_count.fetch_sub(1);
-        return &node->value;
+      if (root == moved()) {
+        storage = storage->next.load();
+        continue;
       }
-      // We lost a race with an insertion.
+      // The chain is not empty. Try to lock the bucket. This might fail due
+      // to a race with an insertion, erasure, or resizing.
+      auto* node = get_node(root);
+      always_assert(node);
+      root = node;
+      if (!root_loc->compare_exchange_strong(root, lock(node))) {
+        continue;
+      }
+      auto* loc = root_loc;
+      for (; node && !key_equal()(const_key_projection()(node->value), key);
+           loc = &node->prev, node = get_node(loc->load())) {
+      }
+      if (node) {
+        // Erase node.
+        loc->store(node->prev.load());
+        m_count.fetch_sub(1);
+        // Store erased node for later actual deletion.
+        auto* erased = new Erased{node, nullptr};
+        while (!m_erased.compare_exchange_strong(erased->prev, erased)) {
+        }
+      }
+      if (loc != root_loc) {
+        // Unlock root node (as we didn't erase it).
+        root_loc->store(root);
+      }
+      return node ? &node->value : nullptr;
     }
   }
 
@@ -613,13 +645,10 @@ class ConcurrentHashtable final {
 
   // We store Node pointers as tagged values, to indicate, and be able to
   // atomically update, whether a location where a node pointer is stored is
-  // currently involved in a resizing operation.
+  // currently involved in an erasure or resizing operation.
   using Ptr = void*;
-  enum PtrBits : size_t {
-    END_DURING_RESIZING = 1,
-    BEGIN_DURING_RESIZING = 2,
-  };
-  using PtrPlusBits = boost::intrusive::pointer_plus_bits<Ptr, 2>;
+  static const size_t MOVED_OR_LOCKED = 1;
+  using PtrPlusBits = boost::intrusive::pointer_plus_bits<Ptr, 1>;
 
   struct ConstRefValueTag {};
   struct RvalueRefValueTag {};
@@ -709,17 +738,20 @@ class ConcurrentHashtable final {
 
   std::atomic<Storage*> m_storage;
   std::atomic<size_t> m_count;
-  mutable std::mutex m_mutex;
-  std::unique_ptr<std::queue<Node*>> m_erased;
+  std::atomic<bool> m_resizing{false};
+  struct Erased {
+    Node* node;
+    Erased* prev;
+  };
+  std::atomic<Erased*> m_erased;
 
   bool load_factor_exceeded(const Storage* storage) const {
     return m_count.load() > storage->size * LOAD_FACTOR;
   }
 
-  // Only applicable to the root of a node chain: Whether the node chain is in
-  // the process of being resized; if so, any additional nodes must go to the
-  // next Storage version.
-  static bool is_begin_or_end_during_resizing(Ptr ptr) {
+  // Whether more elements can be found in the next Storage version, or if an
+  // erasure is ongoing.
+  static bool is_moved_or_locked(Ptr ptr) {
     return PtrPlusBits::get_bits(ptr) != 0;
   }
 
@@ -727,32 +759,40 @@ class ConcurrentHashtable final {
     return static_cast<Node*>(PtrPlusBits::get_pointer(ptr));
   }
 
-  // Creates a tagged `Ptr` indicating that this is a sentinel during resizing;
+  // Creates a tagged `Ptr` indicating that this is a sentinel due to resizing;
   // if so, additional nodes may be found in the next Storage version.
-  static Ptr end_during_resizing() {
+  static Ptr moved() {
     Ptr ptr = nullptr;
-    PtrPlusBits::set_bits(ptr, END_DURING_RESIZING);
+    PtrPlusBits::set_bits(ptr, MOVED_OR_LOCKED);
     return ptr;
   }
 
   // Creates a tagged root node indicating that the node chain is in the process
-  // of being resized; if so, any additional nodes must go to the
-  // next Storage version.
-  static Ptr begin_during_resizing(Node* node) {
+  // of being resized or part of it is being erased. If there is a next Storage
+  // version, any additional nodes must go to it.
+  static Ptr lock(Node* node) {
     always_assert(node);
     Ptr ptr = node;
-    PtrPlusBits::set_bits(ptr, BEGIN_DURING_RESIZING);
+    PtrPlusBits::set_bits(ptr, MOVED_OR_LOCKED);
+    return ptr;
+  }
+
+  // Creates a tagged `Ptr` either indicating that the bucket moved if the node
+  // is absent, or locking the given node.
+  static Ptr moved_or_lock(Node* node) {
+    Ptr ptr = node;
+    PtrPlusBits::set_bits(ptr, MOVED_OR_LOCKED);
     return ptr;
   }
 
   void process_erased() {
-    if (m_erased) {
-      while (!m_erased->empty()) {
-        delete m_erased->front();
-        m_erased->pop();
-      }
-      m_erased = nullptr;
+    for (auto* erased = m_erased.load(); erased != nullptr;) {
+      delete erased->node;
+      auto* prev = erased->prev;
+      delete erased;
+      erased = prev;
     }
+    m_erased.store(nullptr);
   }
 
   friend class ConcurrentHashtableIterator<
