@@ -314,6 +314,8 @@ method_inline_test_SOURCES = MethodInlineTest.cpp
 
 method_splitting_test_SOURCES = MethodSplittingTest.cpp
 
+add_check_cast_test = AddCheckCastTest.cpp
+
 method_util_test_SOURCES = MethodUtilTest.cpp
 
 monitor_count_test_SOURCES = MonitorCountTest.cpp
@@ -479,6 +481,7 @@ string_tree_test_SOURCES = StringTreeTest.cpp
 
 
 TESTS = \
+    add_check_cast_test \
     aliased_registers_test \
     analysis_usage_test \
     array_propagation_test \
