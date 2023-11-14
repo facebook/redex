@@ -47,7 +47,8 @@ bool empty_column(std::string_view sv) { return sv.empty() || sv == "\n"; }
 
 } // namespace
 
-AccumulatingTimer MethodProfiles::s_process_unresolved_lines_timer;
+AccumulatingTimer MethodProfiles::s_process_unresolved_lines_timer(
+    "MethodProfiles::process_unresolved_lines");
 
 const StatsMap& MethodProfiles::method_stats(
     const std::string& interaction_id) const {
@@ -381,10 +382,6 @@ boost::optional<uint32_t> MethodProfiles::get_interaction_count(
   } else {
     return search->second;
   }
-}
-
-double MethodProfiles::get_process_unresolved_lines_seconds() {
-  return s_process_unresolved_lines_timer.get_seconds();
 }
 
 void MethodProfiles::process_unresolved_lines() {

@@ -221,8 +221,6 @@ class Graph final {
 
   const MethodVector& get_callers(const DexMethod* callee) const;
 
-  static double get_seconds();
-
  private:
   std::unique_ptr<Node> m_entry;
   std::unique_ptr<Node> m_exit;

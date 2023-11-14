@@ -30,11 +30,8 @@ constexpr size_t kDefaultSlots = 83;
 template <typename Container, size_t n_slots>
 class ConcurrentContainerIterator;
 
-inline AccumulatingTimer s_destructor{};
-inline AccumulatingTimer s_reserving{};
-
-inline double get_destructor_seconds() { return s_destructor.get_seconds(); }
-inline double get_reserving_seconds() { return s_reserving.get_seconds(); }
+inline AccumulatingTimer s_destructor("cc_impl::destructor_seconds");
+inline AccumulatingTimer s_reserving("cc_impl::reserving_seconds");
 
 inline size_t s_concurrent_destruction_threshold{
     std::numeric_limits<size_t>::max()};

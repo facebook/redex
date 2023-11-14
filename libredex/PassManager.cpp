@@ -72,6 +72,10 @@
 
 namespace {
 
+AccumulatingTimer m_hashers_timer{"PassManager.Hashers"};
+AccumulatingTimer m_check_unique_deobfuscateds_timer{
+    "PassManager.CheckUniqueDeobfuscateds"};
+
 constexpr const char* INCOMING_HASHES = "incoming_hashes.txt";
 constexpr const char* OUTGOING_HASHES = "outgoing_hashes.txt";
 constexpr const char* REMOVABLE_NATIVES = "redex-removable-natives.txt";
@@ -1452,20 +1456,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   sanitizers::lsan_do_recoverable_leak_check();
 
-  Timer::add_timer("PassManager.Hashers", m_hashers_timer.get_seconds());
-  Timer::add_timer("PassManager.CheckUniqueDeobfuscateds",
-                   m_check_unique_deobfuscateds_timer.get_seconds());
-  Timer::add_timer("CFGMutation", cfg::CFGMutation::get_seconds());
-  Timer::add_timer("CallGraph", call_graph::Graph::get_seconds());
-  Timer::add_timer(
-      "MethodProfiles::process_unresolved_lines",
-      method_profiles::MethodProfiles::get_process_unresolved_lines_seconds());
-  Timer::add_timer("compute_locations_closure_wto",
-                   get_compute_locations_closure_wto_seconds());
-  Timer::add_timer("cc_impl::destructor_seconds",
-                   cc_impl::get_destructor_seconds());
-  Timer::add_timer("cc_impl::reserving_seconds",
-                   cc_impl::get_reserving_seconds());
+  for (auto& [name, seconds] : AccumulatingTimer::get_times()) {
+    Timer::add_timer(std::move(name), seconds);
+  }
 }
 
 PassManager::ActivatedPasses PassManager::compute_activated_passes(

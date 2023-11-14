@@ -21,7 +21,7 @@ namespace mog = method_override_graph;
 
 namespace {
 
-static AccumulatingTimer s_timer;
+AccumulatingTimer s_timer("CallGraph");
 
 } // namespace
 
@@ -363,8 +363,6 @@ RootAndDynamic MultipleCalleeStrategy::get_roots() const {
 
 Edge::Edge(NodeId caller, NodeId callee, IRInstruction* invoke_insn)
     : m_caller(caller), m_callee(callee), m_invoke_insn(invoke_insn) {}
-
-double Graph::get_seconds() { return s_timer.get_seconds(); }
 
 Graph::Graph(const BuildStrategy& strat)
     : m_entry(std::make_unique<Node>(Node::GHOST_ENTRY)),

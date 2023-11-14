@@ -125,8 +125,6 @@ class MethodProfiles {
   // Try to resolve previously unresolved lines
   void process_unresolved_lines();
 
-  static double get_process_unresolved_lines_seconds();
-
   std::unordered_set<dex_member_refs::MethodDescriptorTokens>
   get_unresolved_method_descriptor_tokens() const;
 

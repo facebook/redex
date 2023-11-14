@@ -18,6 +18,7 @@
 #include "Resolver.h"
 #include "Show.h"
 #include "StlUtil.h"
+#include "Timer.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
@@ -414,10 +415,7 @@ bool process_base_and_overriding_methods(
   return true;
 }
 
-static AccumulatingTimer s_wto_timer;
-double get_compute_locations_closure_wto_seconds() {
-  return s_wto_timer.get_seconds();
-}
+static AccumulatingTimer s_wto_timer("compute_locations_closure_wto");
 
 static constexpr const DexMethod* WTO_ROOT = nullptr;
 static std::function<const std::vector<const DexMethod*>&(const DexMethod*)>

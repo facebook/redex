@@ -23,7 +23,6 @@
 #include "RedexOptions.h"
 #include "RedexProperties.h"
 #include "RedexPropertyCheckerRegistry.h"
-#include "Timer.h"
 
 struct ConfigFiles;
 class DexStore;
@@ -189,8 +188,6 @@ class PassManager {
   Pass* m_malloc_profile_pass{nullptr};
 
   boost::optional<hashing::DexHash> m_initial_hash;
-  AccumulatingTimer m_hashers_timer;
-  AccumulatingTimer m_check_unique_deobfuscateds_timer;
 
   std::vector<std::unique_ptr<Pass>> m_cloned_passes;
 
