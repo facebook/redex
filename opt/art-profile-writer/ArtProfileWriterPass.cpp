@@ -112,10 +112,17 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   for (size_t dex_idx = 0; dex_idx < end; dex_idx++) {
     auto& dex = dexen.at(dex_idx);
     for (auto* cls : dex) {
+      bool should_include_class = false;
       for (auto* method : cls->get_all_methods()) {
         auto it = method_flags.find(method);
         if (it == method_flags.end()) {
           continue;
+        }
+        // hot method's class should be included.
+        // In addition, if we include non-hot startup method, we also need to
+        // include its class.
+        if (it->second.hot || (it->second.startup && !it->second.not_startup)) {
+          should_include_class = true;
         }
         std::string descriptor = show_deobfuscated(method);
         // reformat it into manual profile pattern so baseline profile generator
@@ -124,6 +131,9 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
         boost::replace_all(descriptor, ":(", "(");
         ofs << it->second << descriptor << std::endl;
         methods_with_baseline_profile++;
+      }
+      if (should_include_class) {
+        ofs << show_deobfuscated(cls) << std::endl;
       }
     }
   }
