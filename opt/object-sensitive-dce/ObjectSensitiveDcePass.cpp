@@ -213,15 +213,15 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
   if (m_external_escape_summaries_file) {
     std::ifstream file_input(*m_external_escape_summaries_file);
     summary_serialization::read(file_input, &escape_summaries);
-    mgr.incr_metric("external_escape_summaries", escape_summaries.size());
   }
+  mgr.incr_metric("external_escape_summaries", escape_summaries.size());
 
   side_effects::SummaryMap effect_summaries;
   if (m_external_side_effect_summaries_file) {
     std::ifstream file_input(*m_external_side_effect_summaries_file);
     summary_serialization::read(file_input, &effect_summaries);
-    mgr.incr_metric("external_side_effect_summaries", effect_summaries.size());
   }
+  mgr.incr_metric("external_side_effect_summaries", effect_summaries.size());
 
   auto call_graph = call_graph::Graph(CallGraphStrategy(
       *method_override_graph, scope, pure_methods, escape_summaries,
