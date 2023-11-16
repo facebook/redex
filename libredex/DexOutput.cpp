@@ -265,6 +265,57 @@ void GatheredTypes::sort_dexmethod_emitlist_cls_order(
                                                       compare_dexmethods));
 }
 
+void GatheredTypes::sort_dexmethod_emitlist_coldstart_order(
+    std::vector<DexMethod*>& lmeth) {
+  const auto& coldstart_methods = m_config->get_coldstart_methods();
+
+  if (coldstart_methods.empty()) {
+    return;
+  }
+
+  std::unordered_map<const DexMethod*, unsigned int> coldstart_method_ordering;
+  for (auto& method : coldstart_methods) {
+    DexMethodRef* method_ref = DexMethod::get_method(method);
+    if (method_ref == nullptr || !method_ref->is_def()) {
+      continue;
+    }
+    auto* meth = method_ref->as_def();
+    always_assert_log(coldstart_method_ordering.count(meth) == 0,
+                      "%s already found at position %u", SHOW(meth),
+                      coldstart_method_ordering.at(meth));
+    coldstart_method_ordering[meth] = coldstart_method_ordering.size();
+  }
+
+  std::unordered_map<const DexMethodRef*, size_t> initial_ordering;
+  for (auto* m : lmeth) {
+    initial_ordering[m] = initial_ordering.size();
+  }
+
+  auto coldstart_cmp = [&initial_ordering, &coldstart_method_ordering](
+                           const DexMethod* a, const DexMethod* b) {
+    const auto end_it = coldstart_method_ordering.end();
+    const auto a_it = coldstart_method_ordering.find(a);
+    const auto b_it = coldstart_method_ordering.find(b);
+    if (a_it == end_it && b_it == end_it) {
+      return initial_ordering.at(a) < initial_ordering.at(b);
+    }
+    if (a_it != end_it && b_it != end_it) {
+      const auto a_idx = a_it->second;
+      const auto b_idx = b_it->second;
+      if (a_idx != b_idx) {
+        return a_idx < b_idx;
+      }
+      return initial_ordering.at(a) < initial_ordering.at(b);
+    }
+    if (a_it != end_it) {
+      return true;
+    }
+    return false;
+  };
+
+  std::stable_sort(lmeth.begin(), lmeth.end(), coldstart_cmp);
+}
+
 void GatheredTypes::sort_dexmethod_emitlist_profiled_order(
     std::vector<DexMethod*>& lmeth) {
   // Use std::ref to avoid comparator copies.
@@ -1066,6 +1117,10 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
     case SortMode::METHOD_PROFILED_ORDER:
       TRACE(CUSTOMSORT, 2, "using method profiled order for bytecode sorting");
       m_gtypes->sort_dexmethod_emitlist_profiled_order(lmeth);
+      break;
+    case SortMode::METHOD_COLDSTART_ORDER:
+      TRACE(CUSTOMSORT, 2, "using bps ordering for coldstart");
+      m_gtypes->sort_dexmethod_emitlist_coldstart_order(lmeth);
       break;
     case SortMode::CLINIT_FIRST:
       TRACE(CUSTOMSORT, 2,
@@ -3010,6 +3065,8 @@ static SortMode make_sort_bytecode(const std::string& sort_bytecode) {
     return SortMode::METHOD_PROFILED_ORDER;
   } else if (sort_bytecode == "method_similarity_order") {
     return SortMode::METHOD_SIMILARITY;
+  } else if (sort_bytecode == "method_coldstart_order") {
+    return SortMode::METHOD_COLDSTART_ORDER;
   } else {
     return SortMode::DEFAULT;
   }

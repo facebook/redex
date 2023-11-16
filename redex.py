@@ -982,6 +982,18 @@ def _handle_profiles(args: argparse.Namespace) -> None:
     else:
         logging.info("No block profiles found in %s", args.packed_profiles)
 
+    coldstart_method_ordering_str = join_str.join(
+        f"{f.path}"
+        for f in os.scandir(directory)
+        if f.is_file() and f.name.startswith("coldstart_method_ordering")
+    )
+    if coldstart_method_ordering_str:
+        logging.debug("Found coldstart ordering: %s", coldstart_method_ordering_str)
+        # Assume there's at most one.
+        args.passthru.append(f"coldstart_methods_file={coldstart_method_ordering_str}")
+    else:
+        logging.info("No coldstart ordering found in %s", args.packed_profiles)
+
 
 def _handle_secondary_method_profiles(args: argparse.Namespace) -> None:
     if not args.secondary_packed_profiles:

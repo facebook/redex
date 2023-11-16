@@ -71,6 +71,8 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
       m_proguard_map(
           new ProguardMap(config.get("proguard_map", "").asString(),
                           config.get("use_new_rename_map", 0).asBool())),
+      m_coldstart_methods_filename(
+          config.get("coldstart_methods_file", "").asString()),
       m_printseeds(config.get("printseeds", "").asString()),
       m_method_profiles(new method_profiles::MethodProfiles()),
       m_secondary_method_profiles(new method_profiles::MethodProfiles()) {
@@ -186,6 +188,7 @@ const std::unordered_set<DexType*>& ConfigFiles::get_do_not_devirt_anon() {
   }
   return m_no_devirtualize_annos;
 }
+
 /**
  * Read an interdex list file and return as a vector of appropriately-formatted
  * classname strings.
@@ -238,6 +241,30 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
         m_proguard_map->translate_class("L" + clzname));
   }
   return coldstart_classes;
+}
+
+/**
+ * Read a method ordering file for coldstart and return as a vector of
+ * appropriately-formatted methodname strings.
+ */
+std::vector<std::string> ConfigFiles::load_coldstart_methods() {
+  if (m_coldstart_methods_filename.empty()) {
+    return {};
+  }
+  std::vector<std::string> coldstart_methods;
+  std::ifstream input(m_coldstart_methods_filename);
+  if (!input) {
+    throw RedexException(
+        RedexError::INTERNAL_ERROR,
+        "[error] Can not open <coldstart_meth_ordering> file, path is "s +
+            m_coldstart_methods_filename);
+  }
+
+  std::string method;
+  while (input >> method) {
+    coldstart_methods.emplace_back(method);
+  }
+  return coldstart_methods;
 }
 
 /**

@@ -55,6 +55,13 @@ struct ConfigFiles {
     return m_coldstart_classes;
   }
 
+  const std::vector<std::string>& get_coldstart_methods() {
+    if (m_coldstart_methods.empty()) {
+      m_coldstart_methods = load_coldstart_methods();
+    }
+    return m_coldstart_methods;
+  }
+
   /**
    * NOTE: ONLY use if you know what you are doing!
    */
@@ -196,6 +203,7 @@ struct ConfigFiles {
   std::string outdir;
   GlobalConfig m_global_config;
 
+  std::vector<std::string> load_coldstart_methods();
   std::vector<std::string> load_coldstart_classes();
   std::unordered_map<std::string, std::vector<std::string>> load_class_lists();
   void ensure_agg_method_stats_loaded() const;
@@ -212,7 +220,9 @@ struct ConfigFiles {
   bool m_load_class_lists_attempted{false};
   std::unique_ptr<ProguardMap> m_proguard_map;
   std::string m_coldstart_class_filename;
+  std::string m_coldstart_methods_filename;
   std::vector<std::string> m_coldstart_classes;
+  std::vector<std::string> m_coldstart_methods;
   std::unordered_map<std::string, std::vector<std::string>> m_class_lists;
   bool m_dead_class_list_attempted{false};
   std::string m_printseeds; // Filename to dump computed seeds.
