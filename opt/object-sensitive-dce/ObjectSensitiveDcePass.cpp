@@ -141,6 +141,8 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
     std::ifstream file_input(*m_external_escape_summaries_file);
     summary_serialization::read(file_input, &escape_summaries);
   }
+  mgr.incr_metric("external_escape_summaries", escape_summaries.size());
+
   ptrs::SummaryCMap escape_summaries_cmap(escape_summaries.begin(),
                                           escape_summaries.end());
   auto ptrs_fp_iter_map =
@@ -151,6 +153,8 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
     std::ifstream file_input(*m_external_side_effect_summaries_file);
     summary_serialization::read(file_input, &effect_summaries);
   }
+  mgr.incr_metric("external_side_effect_summaries", effect_summaries.size());
+
   side_effects::analyze_scope(init_classes_with_side_effects, scope, call_graph,
                               *ptrs_fp_iter_map, &effect_summaries);
 
