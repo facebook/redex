@@ -1,0 +1,10 @@
+LDexOutputTest$PerfSensitiveClass;.<init>:(LDexOutputTest;)V
+LDexOutputTest$PerfSensitiveClass;.someRandomNonExistantMethod1:(I)I
+LDexOutputTest2$Class;.someRandomMethodNotInDex:(I)I
+LDexOutputTest$SecondPerfSensitiveClass;.<init>:(LDexOutputTest;)V
+LDexOutputTest$PerfSensitiveClass;.EjustReturnFive:()I
+LDexOutputTest$PerfSensitiveClass;.someRandomNonExistantMethod2:(I)I
+LDexOutputTest$SecondPerfSensitiveClass;.EjustReturnFive:()I
+LDexOutputTest$SecondPerfSensitiveClass;.FsomeLogic:(I)I
+LDexOutputTest$PerfSensitiveClass;.FsomeLogic:(I)I
+LDexOutputTest$PerfSensitiveClass;.someRandomNonExistantMethod3:(I)I
