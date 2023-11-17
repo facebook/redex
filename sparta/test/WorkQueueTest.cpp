@@ -97,6 +97,33 @@ TEST(WorkQueueTest, checkDynamicallyAddingTasks) {
   EXPECT_EQ(55, result);
 }
 
+// Similar checkDynamicallyAddingTasks, but do much more work.
+TEST(WorkQueueTest, stress) {
+  for (size_t num_threads = 8; num_threads <= 128; num_threads *= 2) {
+    std::atomic<int> result{0};
+    auto wq = sparta::work_queue<int>(
+        [&](sparta::WorkerState<int>* worker_state, int a) {
+          if (a > 0) {
+            worker_state->push_task(a - 1);
+            result++;
+          }
+        },
+        num_threads,
+        /*push_tasks_while_running=*/true);
+    const size_t N = 200;
+    for (size_t i = 0; i <= N; i++) {
+      wq.add_item(10 * i);
+    }
+    wq.run_all();
+
+    // 10 * N + 10 * (N - 1) + ... + 10
+    // = 10 * (N + (N - 1) + ... + 1 + 0)
+    // = 10 * (N * (N + 1) / 2)
+    // = 201000 // for N = 200
+    EXPECT_EQ(201000, result);
+  }
+}
+
 TEST(WorkQueueTest, preciseScheduling) {
   std::array<int, NUM_INTS> array = {0};
 
