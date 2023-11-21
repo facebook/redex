@@ -9,12 +9,14 @@
 #include <sstream>
 #include <type_traits>
 
+#include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
 #include "RedexContext.h"
 #include "Show.h"
 #include "Trace.h"
+#include "WorkQueue.h"
 
 DexPosition::DexPosition(const DexString* file, uint32_t line)
     : file(file), line(line) {
@@ -154,40 +156,46 @@ void RealPositionMapper::process_pattern_switch_positions() {
 
   // First. we find all reachable patterns, switches and cases.
   auto switches = manager->get_switches();
-  std::unordered_set<uint32_t> reachable_patterns;
-  std::unordered_set<uint32_t> reachable_switches;
-  std::unordered_set<DexPosition*> visited;
-  std::unordered_map<uint32_t, std::vector<PositionCase>> pending;
+  ConcurrentMap<uint32_t, std::vector<PositionCase>> reachable_patterns;
+  InsertOnlyConcurrentSet<uint32_t> reachable_switches;
+  InsertOnlyConcurrentSet<DexPosition*> visited;
   std::function<void(DexPosition*)> visit;
   visit = [&](DexPosition* pos) {
     always_assert(pos);
     for (; pos && visited.insert(pos).second; pos = pos->parent) {
       if (manager->is_pattern_position(pos)) {
-        if (reachable_patterns.insert(pos->line).second) {
-          auto it = pending.find(pos->line);
-          if (it != pending.end()) {
-            for (auto c : it->second) {
-              visit(c.position);
-            }
-            pending.erase(pos->line);
-          }
+        std::vector<PositionCase> cases;
+        reachable_patterns.update(pos->line,
+                                  [&](auto, auto& pending, bool exists) {
+                                    if (exists) {
+                                      cases = std::move(pending);
+                                    }
+                                  });
+        for (auto& c : cases) {
+          visit(c.position);
         }
       } else if (manager->is_switch_position(pos)) {
         if (reachable_switches.insert(pos->line).second) {
           for (auto& c : switches.at(pos->line)) {
-            if (reachable_patterns.count(c.pattern_id)) {
+            bool pattern_reachable = false;
+            reachable_patterns.update(c.pattern_id,
+                                      [&](auto, auto& pending, bool exists) {
+                                        if (exists && pending.empty()) {
+                                          pattern_reachable = true;
+                                          return;
+                                        }
+                                        pending.push_back(c);
+                                      });
+            if (pattern_reachable) {
               visit(c.position);
-            } else {
-              pending[c.pattern_id].push_back(c);
             }
           }
         }
       }
     }
   };
-  for (auto pos : m_positions) {
-    visit(pos);
-  }
+
+  workqueue_run<DexPosition*>(visit, m_positions);
 
   auto count_string = DexString::make_string("Lredex/$Position;.count:()V");
   auto case_string = DexString::make_string("Lredex/$Position;.case:()V");
