@@ -8,6 +8,7 @@
 #pragma once
 
 #include "DexClass.h"
+#include "MethodInliner.h"
 #include "Pass.h"
 
 class MethodInlinePass : public Pass {
@@ -26,5 +27,10 @@ class MethodInlinePass : public Pass {
     };
   }
 
+  void bind_config() override;
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+ private:
+  InlinerCostConfig m_inliner_cost_config;
 };

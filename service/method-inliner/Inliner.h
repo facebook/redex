@@ -45,6 +45,61 @@ enum MultiMethodInlinerMode {
   IntraDex,
 };
 
+struct InlinerCostConfig {
+  // The following costs are in terms of code-units (2 bytes).
+  // Typical overhead of calling a method, without move-result overhead.
+  float cost_invoke;
+
+  // Typical overhead of having move-result instruction.
+  float cost_move_result;
+
+  // Overhead of having a method and its metadata.
+  size_t cost_method;
+
+  // Typical savings in caller when callee doesn't use any argument.
+  float unused_args_discount;
+
+  size_t reg_threshold_1;
+
+  size_t reg_threshold_2;
+
+  size_t op_init_class_cost;
+
+  size_t op_injection_id_cost;
+
+  size_t op_unreachable_cost;
+
+  size_t op_move_exception_cost;
+
+  size_t insn_cost_1;
+
+  size_t insn_has_data_cost;
+
+  size_t insn_has_lit_cost_1;
+
+  size_t insn_has_lit_cost_2;
+
+  size_t insn_has_lit_cost_3;
+};
+
+const struct InlinerCostConfig DEFAULT_COST_CONFIG = {
+    3.7f, // cost_invoke
+    3.0f, // cost_move_result
+    16, // cost_method
+    1.0f, // unused_args_discount
+    3, // reg_threshold_1
+    2, // reg_threshold_2
+    2, // op_init_class_cost
+    3, // op_injection_id_cost
+    1, // op_unreachable_cost
+    8, // op_move_exception_cost
+    1, // insn_cost_1
+    4, // insn_has_data_cost
+    4, // insn_has_lit_cost_1
+    2, // insn_has_lit_cost_2
+    1, // insn_has_lit_cost_3
+};
+
 // All call-sites of a callee.
 struct CallerInsns {
   // Invoke instructions per caller
@@ -159,7 +214,8 @@ class MultiMethodInliner {
       bool cross_dex_penalty = false,
       const std::unordered_set<const DexString*>&
           configured_finalish_field_names = {},
-      bool local_only = false);
+      bool local_only = false,
+      InlinerCostConfig m_inliner_cost_config = DEFAULT_COST_CONFIG);
 
   ~MultiMethodInliner() { delayed_invoke_direct_to_static(); }
 
@@ -649,6 +705,8 @@ class MultiMethodInliner {
       DexField::get_field("Landroid/os/Build$VERSION;.SDK_INT:I");
 
   bool m_local_only;
+
+  InlinerCostConfig m_inliner_cost_config;
 
  public:
   const InliningInfo& get_info() { return info; }

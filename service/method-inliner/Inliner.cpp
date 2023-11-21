@@ -40,21 +40,6 @@ using namespace opt_metadata;
 using namespace outliner;
 
 namespace {
-
-// The following costs are in terms of code-units (2 bytes).
-
-// Typical overhead of calling a method, without move-result overhead.
-const float COST_INVOKE = 3.7f;
-
-// Typical overhead of having move-result instruction.
-const float COST_MOVE_RESULT = 3.0f;
-
-// Overhead of having a method and its metadata.
-const size_t COST_METHOD = 16;
-
-// Typical savings in caller when callee doesn't use any argument.
-const float UNUSED_ARGS_DISCOUNT = 1.0f;
-
 /*
  * This is the maximum size of method that Dex bytecode can encode.
  * The table of instructions is indexed by a 32 bit unsigned integer.
@@ -108,7 +93,8 @@ MultiMethodInliner::MultiMethodInliner(
     const api::AndroidSDK* min_sdk_api,
     bool cross_dex_penalty,
     const std::unordered_set<const DexString*>& configured_finalish_field_names,
-    bool local_only)
+    bool local_only,
+    InlinerCostConfig inliner_cost_config)
     : m_concurrent_resolver(std::move(concurrent_resolve_fn)),
       m_scheduler(
           [this](DexMethod* method) {
@@ -143,7 +129,8 @@ MultiMethodInliner::MultiMethodInliner(
                  min_sdk,
                  configured_pure_methods,
                  configured_finalish_field_names),
-      m_local_only(local_only) {
+      m_local_only(local_only),
+      m_inliner_cost_config(inliner_cost_config) {
   Timer t("MultiMethodInliner construction");
   for (const auto& callee_callers : true_virtual_callers) {
     auto callee = callee_callers.first;
@@ -1139,10 +1126,11 @@ size_t MultiMethodInliner::get_callee_insn_size(const DexMethod* callee) {
 /*
  * Estimate additional costs if an instruction takes many source registers.
  */
-static size_t get_inlined_regs_cost(size_t regs) {
+static size_t get_inlined_regs_cost(size_t regs,
+                                    const InlinerCostConfig& cost_config) {
   size_t cost{0};
-  if (regs > 3) {
-    if (regs > 5) {
+  if (regs > cost_config.reg_threshold_1) {
+    if (regs > cost_config.reg_threshold_1 + cost_config.reg_threshold_2) {
       // invoke with many args will likely need extra moves
       cost += regs;
     } else {
@@ -1152,9 +1140,13 @@ static size_t get_inlined_regs_cost(size_t regs) {
   return cost;
 }
 
-static float get_invoke_cost(const DexMethod* callee, float result_used) {
-  float invoke_cost = COST_INVOKE + result_used * COST_MOVE_RESULT;
-  invoke_cost += get_inlined_regs_cost(callee->get_proto()->get_args()->size());
+static float get_invoke_cost(const InlinerCostConfig& cost_config,
+                             const DexMethod* callee,
+                             float result_used) {
+  float invoke_cost =
+      cost_config.cost_invoke + result_used * cost_config.cost_move_result;
+  invoke_cost += get_inlined_regs_cost(callee->get_proto()->get_args()->size(),
+                                       cost_config);
   return invoke_cost;
 }
 
@@ -1167,39 +1159,41 @@ static float get_invoke_cost(const DexMethod* callee, float result_used) {
  * - Remove return opcodes, as they will disappear when gluing things
  * together.
  */
-static size_t get_inlined_cost(IRInstruction* insn) {
+static size_t get_inlined_cost(IRInstruction* insn,
+                               const InlinerCostConfig& cost_config) {
   auto op = insn->opcode();
   size_t cost{0};
   if (opcode::is_an_internal(op) || opcode::is_a_move(op) ||
       opcode::is_a_return(op)) {
     if (op == IOPCODE_INIT_CLASS) {
-      cost += 2;
+      cost += cost_config.op_init_class_cost;
     } else if (op == IOPCODE_INJECTION_ID) {
-      cost += 3;
+      cost += cost_config.op_injection_id_cost;
     } else if (op == IOPCODE_UNREACHABLE) {
-      cost += 1;
+      cost += cost_config.op_unreachable_cost;
     }
   } else {
     cost++;
     auto regs = insn->srcs_size() +
                 ((insn->has_dest() || insn->has_move_result_pseudo()) ? 1 : 0);
-    cost += get_inlined_regs_cost(regs);
+    cost += get_inlined_regs_cost(regs, cost_config);
     if (op == OPCODE_MOVE_EXCEPTION) {
-      cost += 8; // accounting for book-keeping overhead of throw-blocks
+      cost += cost_config.op_move_exception_cost; // accounting for book-keeping
+                                                  // overhead of throw-blocks
     } else if (insn->has_method() || insn->has_field() || insn->has_type() ||
                insn->has_string()) {
-      cost++;
+      cost += cost_config.insn_cost_1;
     } else if (insn->has_data()) {
-      cost += 4 + insn->get_data()->size();
+      cost += cost_config.insn_has_data_cost + insn->get_data()->size();
     } else if (insn->has_literal()) {
       auto lit = insn->get_literal();
       if (lit < -2147483648 || lit > 2147483647) {
-        cost += 4;
+        cost += cost_config.insn_has_lit_cost_1;
       } else if (lit < -32768 || lit > 32767) {
-        cost += 2;
+        cost += cost_config.insn_has_lit_cost_2;
       } else if ((opcode::is_a_const(op) && (lit < -8 || lit > 7)) ||
                  (!opcode::is_a_const(op) && (lit < -128 || lit > 127))) {
-        cost++;
+        cost += cost_config.insn_has_lit_cost_3;
       }
     }
   }
@@ -1214,7 +1208,8 @@ static size_t get_inlined_cost(IRInstruction* insn) {
  */
 static size_t get_inlined_cost(const std::vector<cfg::Block*>& blocks,
                                size_t index,
-                               const std::vector<cfg::Edge*>& succs) {
+                               const std::vector<cfg::Edge*>& succs,
+                               const InlinerCostConfig& cost_config) {
   auto block = blocks.at(index);
   switch (block->branchingness()) {
   case opcode::Branchingness::BRANCH_GOTO:
@@ -1343,10 +1338,11 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
       auto block = blocks.at(i);
       for (auto& mie : InstructionIterable(block)) {
         auto insn = mie.insn;
-        cost += ::get_inlined_cost(insn);
+        cost += ::get_inlined_cost(insn, m_inliner_cost_config);
         analyze_refs(insn);
       }
-      cost += ::get_inlined_cost(blocks, i, block->succs());
+      cost +=
+          ::get_inlined_cost(blocks, i, block->succs(), m_inliner_cost_config);
       if (block->branchingness() == opcode::Branchingness::BRANCH_RETURN) {
         returns++;
       }
@@ -1366,7 +1362,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
   } else {
     editable_cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
       auto insn = mie.insn;
-      cost += ::get_inlined_cost(insn);
+      cost += ::get_inlined_cost(insn, m_inliner_cost_config);
       if (opcode::is_a_return(insn->opcode())) {
         returns++;
       }
@@ -1631,7 +1627,8 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   for (auto& p : callers) {
     caller_count += p.second;
   }
-  float invoke_cost = get_invoke_cost(callee, inlined_cost->result_used);
+  float invoke_cost =
+      get_invoke_cost(m_inliner_cost_config, callee, inlined_cost->result_used);
   TRACE(INLINE, 3,
         "[too_many_callers] %zu calls to %s; cost: inlined %f + %f, invoke %f",
         caller_count, SHOW(callee), inlined_cost->code, cross_dex_penalty,
@@ -1643,13 +1640,14 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   if (can_delete_callee) {
     // The cost of keeping a method amounts of somewhat fixed metadata overhead,
     // plus the method body, which we approximate with the inlined cost.
-    method_cost = COST_METHOD + inlined_cost->full_code;
+    method_cost = m_inliner_cost_config.cost_method + inlined_cost->full_code;
   }
 
   // If we inline invocations to this method everywhere, we could delete the
   // method. Is this worth it, given the number of callsites and costs
   // involved?
-  if ((inlined_cost->code - inlined_cost->unused_args * UNUSED_ARGS_DISCOUNT) *
+  if ((inlined_cost->code -
+       inlined_cost->unused_args * m_inliner_cost_config.unused_args_discount) *
               caller_count +
           classes * cross_dex_penalty >
       invoke_cost * caller_count + method_cost) {
@@ -1710,8 +1708,11 @@ bool MultiMethodInliner::should_inline_at_call_site(
     }
   }
 
-  float invoke_cost = get_invoke_cost(callee, inlined_cost->result_used);
-  if (inlined_cost->code - inlined_cost->unused_args * UNUSED_ARGS_DISCOUNT +
+  float invoke_cost =
+      get_invoke_cost(m_inliner_cost_config, callee, inlined_cost->result_used);
+  if (inlined_cost->code -
+          inlined_cost->unused_args *
+              m_inliner_cost_config.unused_args_discount +
           cross_dex_penalty >
       invoke_cost) {
     if (no_return) {

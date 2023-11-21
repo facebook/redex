@@ -21,7 +21,6 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "Inliner.h"
 #include "LiveRange.h"
 #include "MethodOverrideGraph.h"
 #include "MethodProfiles.h"
@@ -722,13 +721,15 @@ void gather_true_virtual_methods(
 } // namespace
 
 namespace inliner {
-void run_inliner(DexStoresVector& stores,
-                 PassManager& mgr,
-                 ConfigFiles& conf,
-                 bool intra_dex /* false */,
-                 InlineForSpeed* inline_for_speed /* nullptr */,
-                 bool inline_bridge_synth_only /* false */,
-                 bool local_only /* false */) {
+void run_inliner(
+    DexStoresVector& stores,
+    PassManager& mgr,
+    ConfigFiles& conf,
+    InlinerCostConfig inliner_cost_config /* DEFAULT_COST_CONFIG */,
+    bool intra_dex /* false */,
+    InlineForSpeed* inline_for_speed /* nullptr */,
+    bool inline_bridge_synth_only /* false */,
+    bool local_only /* false */) {
   always_assert_log(
       !mgr.init_class_lowering_has_run(),
       "Implementation limitation: The inliner could introduce new "
@@ -842,7 +843,8 @@ void run_inliner(DexStoresVector& stores,
       intra_dex ? IntraDex : InterDex, true_virtual_callers, inline_for_speed,
       analyze_and_prune_inits, conf.get_pure_methods(), min_sdk_api,
       cross_dex_penalty,
-      /* configured_finalish_field_names */ {}, local_only);
+      /* configured_finalish_field_names */ {}, local_only,
+      inliner_cost_config);
   inliner.inline_methods(/* need_deconstruct */ false);
 
   // delete all methods that can be deleted
