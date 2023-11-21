@@ -280,7 +280,9 @@ RemoveNullcheckStringArg::Stats RemoveNullcheckStringArg::change_in_cfg(
     param_index.insert(std::make_pair(load_insn->dest(), arg_index++));
   }
 
-  live_range::MoveAwareChains chains(cfg);
+  live_range::MoveAwareChains chains(
+      cfg, /* ignore_unreachable */ false,
+      [&](auto* insn) { return opcode::is_a_load_param(insn->opcode()); });
   live_range::DefUseChains du_chains = chains.get_def_use_chains();
 
   for (cfg::Block* block : cfg.blocks()) {
@@ -354,7 +356,7 @@ RemoveNullcheckStringArg::Stats RemoveNullcheckStringArg::change_in_cfg(
       } else {
         // Handle null check for expr. Get the proper wrapper function to throw
         // more accurate exception message.
-        always_assert(defs.size() > 0);
+        always_assert(!defs.empty());
         auto def = *defs.elements().begin();
         NullErrSrc err_msg;
         if (defs.size() > 1) {
