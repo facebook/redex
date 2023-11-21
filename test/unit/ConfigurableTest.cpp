@@ -113,12 +113,12 @@ TEST_F(ConfigurableTest, OptionalBindings) {
 
 struct PrimitiveBindings : public Base {
   void bind_config() override {
-    bind("int_param", {0}, m_int_param);
-    bind("float_param", {0}, m_float_param);
+    bind("int_param", 0, m_int_param);
+    bind("float_param", 0, m_float_param);
     bind("bool_param", false, m_bool_param);
-    bind("uint_param", {0}, m_uint_param);
-    bind("int64_param", {0}, m_int64_param);
-    bind("uint64_param", {0}, m_uint64_param);
+    bind("uint_param", 0, m_uint_param);
+    bind("int64_param", 0, m_int64_param);
+    bind("uint64_param", 0, m_uint64_param);
     bind("string_param", "", m_string_param);
     bind("json_param", {}, m_json_param);
     bind("vector_of_string_param", {}, m_vector_of_string_param);
@@ -196,12 +196,12 @@ TEST_F(ConfigurableTest, PrimitiveBindings) {
 
 struct DefaultBindings : public Base {
   void bind_config() override {
-    bind("int_param", {10}, m_int_param);
-    bind("float_param", {11.0f}, m_float_param);
+    bind("int_param", 10, m_int_param);
+    bind("float_param", 11.0f, m_float_param);
     bind("bool_param", true, m_bool_param);
-    bind("uint_param", {0xffffffff}, m_uint_param);
-    bind("int64_param", {-5000000000}, m_int64_param);
-    bind("uint64_param", {5000000000}, m_uint64_param);
+    bind("uint_param", 0xffffffff, m_uint_param);
+    bind("int64_param", -5000000000, m_int64_param);
+    bind("uint64_param", 5000000000, m_uint64_param);
     bind("string_param", "a string", m_string_param);
     bind("json_param", getFooBarObject(), m_json_param);
     bind("vector_of_string_param", getFooBarBazVector(),

@@ -1775,7 +1775,7 @@ TEST_F(ControlFlowTest, test_first_non_param_loading_insn) {
 
   auto it = entry_block->get_first_non_param_loading_insn();
   auto non_param = entry_block->to_cfg_instruction_iterator(it);
-  entry_block->insert_before(non_param, {dasm(OPCODE_RETURN, {0_v})});
+  entry_block->insert_before(non_param, dasm(OPCODE_RETURN, {0_v}));
   code->clear_cfg();
 
   auto expected = assembler::ircode_from_string(R"(
