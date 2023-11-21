@@ -333,7 +333,8 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
   }
 
   cfg::CFGMutation mutation(cfg);
-  reaching_defs::MoveAwareFixpointIterator fp_iter(cfg);
+  reaching_defs::MoveAwareFixpointIterator fp_iter(
+      cfg, [&](auto* insn) { return opcode::is_new_instance(insn->opcode()); });
   fp_iter.run({});
   for (cfg::Block* block : cfg.blocks()) {
     auto env = fp_iter.get_entry_state_at(block);
@@ -353,18 +354,12 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
       const auto& defs = env.get(reg);
       always_assert(!defs.is_top());
       always_assert(!defs.is_bottom());
-      IRInstruction* old_new_instance_insn{nullptr};
-      for (auto def : defs.elements()) {
-        if (def->opcode() == OPCODE_NEW_INSTANCE) {
-          always_assert(old_new_instance_insn == nullptr);
-          old_new_instance_insn = def;
-          always_assert(def->get_type() == type);
-        }
-      }
-      if (old_new_instance_insn == nullptr) {
+      if (defs.empty()) {
         // base constructor invocation
         continue;
       }
+      always_assert(defs.size() == 1);
+      IRInstruction* old_new_instance_insn = *defs.elements().begin();
       if (last_insn != end &&
           last_insn->insn->opcode() == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT &&
           last_insn->insn->dest() == reg) {
