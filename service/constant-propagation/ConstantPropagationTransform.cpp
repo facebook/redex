@@ -965,6 +965,10 @@ bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
                                        DexType* declaring_type,
                                        DexProto* proto,
                                        const XStoreRefs* xstores) {
+  static AccumulatingTimer s_timer(
+      "constant_propagation::Transform::has_problematic_return");
+  auto t = s_timer.scope();
+
   // Nothing to check without method information
   if (!declaring_type || !proto) {
     return false;
