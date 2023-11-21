@@ -312,6 +312,9 @@ bool LocalDce::assumenosideeffects(DexMethodRef* ref, DexMethod* meth) {
 }
 
 void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
+  static AccumulatingTimer s_timer("LocalDce::normalize_new_instances");
+  auto t = s_timer.scope();
+
   // TODO: This normalization optimization doesn't really belong to local-dce,
   // but it combines nicely as local-dce will clean-up redundant new-instance
   // instructions and moves afterwards.
