@@ -513,7 +513,9 @@ class InlinedCodeSizeEstimator {
   LazyUnorderedMap<DeltaKey, int64_t, boost::hash<DeltaKey>> m_deltas;
 
  public:
-  explicit InlinedCodeSizeEstimator(const MethodSummaries& method_summaries)
+  explicit InlinedCodeSizeEstimator(
+      const MethodSummaries& method_summaries,
+      const std::unordered_set<const IRInstruction*>& all_allocation_insns)
       : m_inlined_code_sizes([](DexMethod* method) {
           uint32_t code_size{0};
           auto& cfg = method->get_code()->cfg();
@@ -529,12 +531,20 @@ class InlinedCodeSizeEstimator {
           }
           return code_size;
         }),
-        m_du_chains([](DexMethod* method) {
-          live_range::MoveAwareChains chains(method->get_code()->cfg());
+        m_du_chains([&](DexMethod* method) {
+          live_range::MoveAwareChains chains(
+              method->get_code()->cfg(),
+              /* ignore_unreachable */ false,
+              [&](const IRInstruction* insn) {
+                return all_allocation_insns.count(insn) ||
+                       opcode::is_a_load_param(insn->opcode());
+              });
           return chains.get_def_use_chains();
         }),
         m_deltas([&](DeltaKey key) {
           auto [method, allocation_insn] = key;
+          always_assert(all_allocation_insns.count(allocation_insn) ||
+                        opcode::is_a_load_param(allocation_insn->opcode()));
           int64_t delta = 0;
           auto& du_chains = m_du_chains[method];
           if (opcode::is_an_invoke(allocation_insn->opcode())) {
@@ -614,9 +624,23 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
 
   std::mutex mutex; // protects candidate_types and root_methods
   std::atomic<size_t> incomplete_estimated_delta_threshold_exceeded{0};
+  std::unordered_set<const IRInstruction*> all_allocation_insns;
+  for (auto&& [_, method_summary] : method_summaries) {
+    if (method_summary.allocation_insn) {
+      all_allocation_insns.insert(method_summary.allocation_insn);
+    }
+  }
+  for (auto&& [type, inline_anchors_of_type] : inline_anchors) {
+    for (auto& [_, allocation_insns] : inline_anchors_of_type) {
+      all_allocation_insns.insert(allocation_insns.begin(),
+                                  allocation_insns.end());
+    }
+  }
+
   auto concurrent_add_root_methods = [&](DexType* type, bool complete) {
     const auto& inline_anchors_of_type = inline_anchors.at_unsafe(type);
-    InlinedCodeSizeEstimator inlined_code_size_estimator(method_summaries);
+    InlinedCodeSizeEstimator inlined_code_size_estimator(method_summaries,
+                                                         all_allocation_insns);
     std::vector<DexMethod*> methods;
     for (auto& [method, allocation_insns] : inline_anchors_of_type) {
       if (method->rstate.no_optimizations()) {
@@ -1036,7 +1060,10 @@ class RootMethodReducer {
       std::unordered_set<IRInstruction*> invokes_to_inline;
       auto inlinables = analyzer.get_inlinables();
       Lazy<live_range::DefUseChains> du_chains([&]() {
-        live_range::MoveAwareChains chains(cfg);
+        live_range::MoveAwareChains chains(
+            cfg, /* ignore_unreachable */ false, [&](auto* insn) {
+              return inlinables.count(const_cast<IRInstruction*>(insn));
+            });
         return chains.get_def_use_chains();
       });
       cfg::CFGMutation mutation(cfg);
@@ -1090,12 +1117,12 @@ class RootMethodReducer {
     }
   }
 
-  bool is_inlinable_new_instance(IRInstruction* insn) const {
+  bool is_inlinable_new_instance(const IRInstruction* insn) const {
     return insn->opcode() == OPCODE_NEW_INSTANCE &&
            m_types.count(insn->get_type());
   }
 
-  bool is_incomplete_marker(IRInstruction* insn) const {
+  bool is_incomplete_marker(const IRInstruction* insn) const {
     return insn->opcode() == OPCODE_INVOKE_STATIC &&
            insn->get_method() == m_incomplete_marker_method;
   }
@@ -1117,11 +1144,14 @@ class RootMethodReducer {
     return nullptr;
   }
 
-  std::optional<std::pair<live_range::DefUseChains, IRInstruction*>>
+  std::optional<std::pair<IRInstruction*, std::unordered_set<live_range::Use>>>
   find_inlinable_new_instance() const {
     auto& cfg = m_method->get_code()->cfg();
     Lazy<live_range::DefUseChains> du_chains([&]() {
-      live_range::MoveAwareChains chains(cfg);
+      live_range::MoveAwareChains chains(
+          cfg,
+          /* ignore_unreachable */ false,
+          [&](auto* insn) { return is_inlinable_new_instance(insn); });
       return chains.get_def_use_chains();
     });
     for (auto& mie : InstructionIterable(cfg)) {
@@ -1130,11 +1160,12 @@ class RootMethodReducer {
         continue;
       }
       auto type = insn->get_type();
+      auto& p = *du_chains->find(insn);
       if (m_types.at(type) == InlinableTypeKind::Incomplete &&
-          !has_incomplete_marker((*du_chains)[insn])) {
+          !has_incomplete_marker(p.second)) {
         continue;
       }
-      return std::make_optional(std::pair(std::move(*du_chains), insn));
+      return std::make_optional(std::move(p));
     }
     return std::nullopt;
   }
@@ -1170,7 +1201,10 @@ class RootMethodReducer {
       std::unordered_set<IRInstruction*> invokes_to_inline;
       std::unordered_map<IRInstruction*, param_index_t> invokes_to_expand;
 
-      live_range::MoveAwareChains chains(cfg);
+      live_range::MoveAwareChains chains(
+          cfg,
+          /* ignore_unreachable */ false,
+          [&](auto* insn) { return is_inlinable_new_instance(insn); });
       auto du_chains = chains.get_def_use_chains();
       std::unordered_map<IRInstruction*,
                          std::unordered_map<src_index_t, DexType*>>
@@ -1246,8 +1280,9 @@ class RootMethodReducer {
   // Given a new-instance instruction whose (main) uses are as the receiver in
   // iget- and iput- instruction, transform all such field accesses into
   // accesses to registers, one per field.
-  bool stackify(live_range::DefUseChains& du_chains,
-                IRInstruction* new_instance_insn) {
+  bool stackify(
+      IRInstruction* new_instance_insn,
+      const std::unordered_set<live_range::Use>& new_instance_insn_uses) {
     auto& cfg = m_method->get_code()->cfg();
     std::unordered_map<DexField*, reg_t> field_regs;
     std::vector<DexField*> ordered_fields;
@@ -1264,10 +1299,9 @@ class RootMethodReducer {
       return it->second;
     };
 
-    auto& uses = du_chains[new_instance_insn];
     std::unordered_set<IRInstruction*> instructions_to_replace;
     bool identity_matters{false};
-    for (auto& use : uses) {
+    for (auto& use : new_instance_insn_uses) {
       auto opcode = use.insn->opcode();
       if (opcode::is_an_iput(opcode)) {
         always_assert(use.src_index == 1);

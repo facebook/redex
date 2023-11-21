@@ -93,9 +93,13 @@ void replay_analysis_with_callback(const cfg::ControlFlowGraph& cfg,
         Use use{insn, i};
         auto src = insn->src(i);
         const auto& defs = defs_in.get(src);
-        always_assert_log(!defs.is_top() && !defs.empty(),
-                          "Found use without def when processing [0x%p]%s",
+        if (defs.is_top() || defs.empty()) {
+          if (iter.has_filter()) {
+            continue;
+          }
+          not_reached_log("Found use without def when processing [0x%p]%s",
                           &mie, SHOW(insn));
+        }
         always_assert_log(!defs.is_bottom(),
                           "Found unreachable use when processing [0x%p]%s",
                           &mie, SHOW(insn));
@@ -142,8 +146,12 @@ bool Use::operator==(const Use& that) const {
   return insn == that.insn && src_index == that.src_index;
 }
 
-Chains::Chains(const cfg::ControlFlowGraph& cfg, bool ignore_unreachable)
-    : m_cfg(cfg), m_fp_iter(cfg), m_ignore_unreachable(ignore_unreachable) {
+Chains::Chains(const cfg::ControlFlowGraph& cfg,
+               bool ignore_unreachable,
+               reaching_defs::Filter filter)
+    : m_cfg(cfg),
+      m_fp_iter(cfg, std::move(filter)),
+      m_ignore_unreachable(ignore_unreachable) {
   auto timer_scope = s_timer.scope();
   m_fp_iter.run(reaching_defs::Environment());
 }
@@ -157,8 +165,11 @@ DefUseChains Chains::get_def_use_chains() const {
 }
 
 MoveAwareChains::MoveAwareChains(const cfg::ControlFlowGraph& cfg,
-                                 bool ignore_unreachable)
-    : m_cfg(cfg), m_fp_iter(cfg), m_ignore_unreachable(ignore_unreachable) {
+                                 bool ignore_unreachable,
+                                 reaching_defs::Filter filter)
+    : m_cfg(cfg),
+      m_fp_iter(cfg, std::move(filter)),
+      m_ignore_unreachable(ignore_unreachable) {
   auto timer_scope = s_timer.scope();
   m_fp_iter.run(reaching_defs::Environment());
 }

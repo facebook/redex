@@ -90,7 +90,10 @@ ExpandableMethodParams::MethodInfo ExpandableMethodParams::create_method_info(
     if (!code || method->rstate.no_optimizations()) {
       continue;
     }
-    live_range::MoveAwareChains chains(code->cfg());
+    live_range::MoveAwareChains chains(
+        code->cfg(),
+        /* ignore_unreachable */ false,
+        [](auto* insn) { return opcode::is_a_load_param(insn->opcode()); });
     auto du_chains = chains.get_def_use_chains();
     param_index_t param_index{0};
     auto ii = code->cfg().get_param_instructions();
@@ -206,7 +209,9 @@ DexMethod* ExpandableMethodParams::make_expanded_method_concrete(
   // Replace all igets on the (newly created) object with moves from the new
   // field value load-params. No other (non-move) uses of the (newly created)
   // object can exist.
-  live_range::MoveAwareChains chains(cfg);
+  live_range::MoveAwareChains chains(
+      cfg, /* ignore_unreachable */ false,
+      [](auto* insn) { return opcode::is_a_load_param(insn->opcode()); });
   auto du_chains = chains.get_def_use_chains();
   std::unordered_set<IRInstruction*> use_insns;
   for (auto& use : du_chains[load_param_it->insn]) {
