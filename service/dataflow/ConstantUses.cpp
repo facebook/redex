@@ -89,13 +89,17 @@ ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg,
                            DexTypeList* args,
                            const std::function<std::string()>& method_describer,
                            bool force_type_inference)
-    : m_reaching_definitions(cfg), m_rtype(rtype) {
+    : m_rtype(rtype) {
+  static AccumulatingTimer s_timer("ConstantUses::ConstantUses");
+  auto t = s_timer.scope();
+
   always_assert(!force_type_inference || args);
-  m_reaching_definitions.run(reaching_defs::Environment());
+  reaching_defs::MoveAwareFixpointIterator reaching_definitions(cfg);
+  reaching_definitions.run(reaching_defs::Environment());
 
   bool need_type_inference = false;
   for (cfg::Block* block : cfg.blocks()) {
-    auto env = m_reaching_definitions.get_entry_state_at(block);
+    auto env = reaching_definitions.get_entry_state_at(block);
     for (auto& mie : InstructionIterable(block)) {
       IRInstruction* insn = mie.insn;
       for (size_t src_index = 0; src_index < insn->srcs_size(); src_index++) {
@@ -132,7 +136,7 @@ ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg,
           }
         }
       }
-      m_reaching_definitions.analyze_instruction(insn, &env);
+      reaching_definitions.analyze_instruction(insn, &env);
     }
   }
 

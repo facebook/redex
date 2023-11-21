@@ -62,7 +62,6 @@ class ConstantUses {
   TypeDemand get_type_demand(IRInstruction* insn, size_t src_index) const;
 
   mutable std::unique_ptr<type_inference::TypeInference> m_type_inference;
-  reaching_defs::MoveAwareFixpointIterator m_reaching_definitions;
   std::unordered_map<IRInstruction*,
                      std::vector<std::pair<IRInstruction*, size_t>>>
       m_constant_uses;
