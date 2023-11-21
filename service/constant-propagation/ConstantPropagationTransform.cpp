@@ -983,10 +983,22 @@ bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
   // No return issues when there are no try/catch blocks
   auto blocks = cfg.blocks();
   bool has_catch =
-      std::find_if(blocks.begin(), blocks.end(), [](cfg::Block* block) {
-        return block->is_catch();
-      }) != blocks.end();
+      std::any_of(blocks.begin(), blocks.end(),
+                  [](cfg::Block* block) { return block->is_catch(); });
   if (!has_catch) {
+    return false;
+  }
+
+  auto is_relevant_def = [](auto* insn) {
+    auto op = insn->opcode();
+    return insn->has_type() || insn->has_method() || op == OPCODE_IGET_OBJECT ||
+           op == OPCODE_SGET_OBJECT || op == OPCODE_AGET_OBJECT;
+  };
+  auto ii = InstructionIterable(cfg);
+  auto has_relevant_def = std::any_of(ii.begin(), ii.end(), [&](auto& mie) {
+    return is_relevant_def(mie.insn);
+  });
+  if (!has_relevant_def) {
     return false;
   }
 
@@ -1017,7 +1029,7 @@ bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
           t_idx, SHOW(insn));
     return true;
   };
-  reaching_defs::MoveAwareFixpointIterator fp_iter(cfg);
+  reaching_defs::MoveAwareFixpointIterator fp_iter(cfg, is_relevant_def);
   fp_iter.run({});
   std::unique_ptr<type_inference::TypeInference> ti;
   for (cfg::Block* block : blocks) {
@@ -1028,8 +1040,9 @@ bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
     for (auto& mie : InstructionIterable(block)) {
       IRInstruction* insn = mie.insn;
       if (opcode::is_a_return(insn->opcode())) {
-        auto defs = env.get(insn->src(0));
-        always_assert(!defs.is_bottom() && !defs.is_top());
+        const auto& defs = env.get(insn->src(0));
+        always_assert(!defs.is_bottom());
+        always_assert(!defs.is_top());
         for (auto def : defs.elements()) {
           auto op = def->opcode();
           if (def->has_type()) {
@@ -1059,6 +1072,8 @@ bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
                     type::get_array_component_type(*dex_type), def)) {
               return true;
             }
+          } else {
+            not_reached();
           }
         }
       }
