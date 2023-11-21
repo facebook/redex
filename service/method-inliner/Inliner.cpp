@@ -1351,8 +1351,10 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
         returns++;
       }
     }
-    live_range::MoveAwareChains chains(*cfg,
-                                       /* ignore_unreachable */ !reduced_code);
+    live_range::MoveAwareChains chains(
+        *cfg,
+        /* ignore_unreachable */ !reduced_code,
+        [&](auto* insn) { return opcode::is_a_load_param(insn->opcode()); });
     auto def_use_chains = chains.get_def_use_chains();
     for (auto& mie : cfg->get_param_instructions()) {
       auto uses = def_use_chains[mie.insn];

@@ -626,9 +626,13 @@ void gather_true_virtual_methods(
         // a cast.
         std::unordered_set<live_range::Use> first_load_param_uses;
         {
-          live_range::MoveAwareChains chains(code->cfg());
           auto ii = InstructionIterable(code->cfg().get_param_instructions());
           auto first_load_param = ii.begin()->insn;
+          live_range::MoveAwareChains chains(code->cfg(),
+                                             /* ignore_unreachable */ false,
+                                             [first_load_param](auto* insn) {
+                                               return insn == first_load_param;
+                                             });
           first_load_param_uses =
               std::move(chains.get_def_use_chains()[first_load_param]);
         }
