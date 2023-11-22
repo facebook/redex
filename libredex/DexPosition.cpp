@@ -128,6 +128,7 @@ std::unique_ptr<DexPosition> PositionPatternSwitchManager::make_switch_position(
 
 void RealPositionMapper::register_position(DexPosition* pos) {
   always_assert(pos->file);
+  m_possibly_incomplete_positions.push(pos);
   m_pos_line_map[pos] = -1;
 }
 
@@ -292,9 +293,10 @@ uint32_t RealPositionMapper::size() const { return m_positions.size(); }
 void RealPositionMapper::write_map_v2() {
   // to ensure that the line numbers in the Dex are as compact as possible,
   // we put the emitted positions at the start of the list and rest at the end
-  for (auto& p : m_pos_line_map) {
-    auto pos = p.first;
-    auto& line = p.second;
+  while (!m_possibly_incomplete_positions.empty()) {
+    auto* pos = m_possibly_incomplete_positions.front();
+    m_possibly_incomplete_positions.pop();
+    auto& line = m_pos_line_map[pos];
     if (line == -1) {
       auto idx = m_positions.size();
       m_positions.emplace_back(pos);

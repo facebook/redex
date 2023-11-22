@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <queue>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -167,6 +168,7 @@ class RealPositionMapper : public PositionMapper {
   std::string m_filename_v2;
   std::vector<DexPosition*> m_positions;
   std::unordered_map<DexPosition*, int64_t> m_pos_line_map;
+  std::queue<DexPosition*> m_possibly_incomplete_positions;
   std::vector<std::unique_ptr<DexPosition>> m_owned_auxiliary_positions;
 
   void process_pattern_switch_positions();
