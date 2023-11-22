@@ -396,24 +396,28 @@ void RealPositionMapper::write_map_v2() {
   ofs.write((const char*)&version, sizeof(version));
   uint32_t spool_count = string_pool.size();
   ofs.write((const char*)&spool_count, sizeof(spool_count));
-  std::unordered_map<uint32_t, uint32_t> map;
+  always_assert(string_pool.size() < std::numeric_limits<uint32_t>::max());
+  auto map = std::make_unique<uint32_t[]>(string_pool.size());
+  const uint32_t unmapped = 0;
+  const uint32_t first_mapped = 1;
+  uint32_t next_mapped = first_mapped;
   auto order = [&](uint32_t& string_id) {
-    const auto& s = string_pool.at(string_id);
-    auto it = map.find(string_id);
-    if (it == map.end()) {
+    auto& mapped = map[string_id];
+    if (mapped == unmapped) {
+      const auto& s = string_pool.at(string_id);
       uint32_t ssize = s->size();
       ofs.write((const char*)&ssize, sizeof(ssize));
       ofs << *s;
-      it = map.emplace(string_id, map.size()).first;
+      mapped = next_mapped++;
     }
-    string_id = it->second;
+    string_id = mapped - first_mapped;
   };
   for (size_t idx = 0; idx < m_positions.size(); ++idx) {
     order(pos_data[5 * idx + 0]); // class_id
     order(pos_data[5 * idx + 1]); // method_id
     order(pos_data[5 * idx + 2]); // file_id
   }
-  always_assert(map.size() == string_pool.size());
+  always_assert(next_mapped - first_mapped == string_pool.size());
   uint32_t pos_count = m_positions.size();
   ofs.write((const char*)&pos_count, sizeof(pos_count));
   ofs.write((const char*)pos_data.data(), sizeof(uint32_t) * pos_data.size());
