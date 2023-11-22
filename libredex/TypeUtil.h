@@ -8,7 +8,9 @@
 #pragma once
 
 #include "DexClass.h"
+#include "FrameworkApi.h"
 #include "WellKnownTypes.h"
+#include <Lazy.h>
 
 /**
  * Basic datatypes used by bytecode.
@@ -297,4 +299,13 @@ bool is_kotlin_lambda(const DexClass* cls);
  */
 bool is_kotlin_non_capturing_lambda(const DexClass* cls);
 
+bool is_min_sdk_acceptable(const DexType* source_type,
+                           const DexType* target_type,
+                           const api::AndroidSDK& api);
+
+bool is_min_sdk_acceptable_impl(const DexType* source_type,
+                                const DexType* cur_type,
+                                const DexType* target_type,
+                                const api::AndroidSDK& api,
+                                Lazy<std::ostringstream>& msg);
 }; // namespace type
