@@ -160,6 +160,7 @@ void TypedefAnnoChecker::run(DexMethod* m) {
         inference.get_typedef_annotation(return_annos->get_annotations());
   }
   TypeEnvironments& envs = inference.get_type_environments();
+  TRACE(TAC, 2, "Start checking %s\n%s", SHOW(m), SHOW(cfg));
   for (cfg::Block* b : cfg.blocks()) {
     for (auto& mie : InstructionIterable(b)) {
       auto* insn = mie.insn;
@@ -169,7 +170,7 @@ void TypedefAnnoChecker::run(DexMethod* m) {
     }
   }
   if (!m_good) {
-    TRACE(TAC, 1, "%s\n%s", SHOW(m), SHOW(cfg));
+    TRACE(TAC, 2, "Done checking %s", SHOW(m));
   }
 }
 
@@ -352,14 +353,14 @@ bool TypedefAnnoChecker::check_typedef_value(
     TypeEnvironments& envs) {
 
   auto anno_class = type_class(annotation.value());
-  const auto str_value_set = m_strdef_constants.get_unsafe(anno_class);
-  const auto int_value_set = m_intdef_constants.get_unsafe(anno_class);
+  const auto* str_value_set = m_strdef_constants.get_unsafe(anno_class);
+  const auto* int_value_set = m_intdef_constants.get_unsafe(anno_class);
 
-  if (str_value_set && str_value_set->empty()) {
-    TRACE(TAC, 1, "%s contains no annotation constants", SHOW(anno_class));
-    return true;
-  }
-  if (int_value_set && int_value_set->empty()) {
+  bool has_str_vals = str_value_set != nullptr && !str_value_set->empty();
+  bool has_int_vals = int_value_set != nullptr && !int_value_set->empty();
+  always_assert_log(has_int_vals ^ has_str_vals,
+                    "%s has both str and int const values", SHOW(anno_class));
+  if (!has_str_vals && !has_int_vals) {
     TRACE(TAC, 1, "%s contains no annotation constants", SHOW(anno_class));
     return true;
   }
@@ -388,6 +389,11 @@ bool TypedefAnnoChecker::check_typedef_value(
     }
     case OPCODE_CONST: {
       auto const const_value = def->get_literal();
+      if (has_str_vals && const_value == 0) {
+        // Null assigned to a StringDef value. This is valid. We don't enforce
+        // nullness.
+        break;
+      }
       if (int_value_set->count(const_value) == 0) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: in method " << SHOW(m)
