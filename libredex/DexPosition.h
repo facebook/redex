@@ -174,6 +174,7 @@ class RealPositionMapper : public PositionMapper {
   void process_pattern_switch_positions();
 
  protected:
+  int64_t add_position(DexPosition* pos);
   uint32_t get_line(DexPosition*);
   void write_map_v2();
 

@@ -128,8 +128,19 @@ std::unique_ptr<DexPosition> PositionPatternSwitchManager::make_switch_position(
 
 void RealPositionMapper::register_position(DexPosition* pos) {
   always_assert(pos->file);
-  m_possibly_incomplete_positions.push(pos);
-  m_pos_line_map[pos] = -1;
+  auto [_, emplaced] = m_pos_line_map.emplace(pos, -1);
+  if (emplaced) {
+    m_possibly_incomplete_positions.push(pos);
+  }
+}
+
+int64_t RealPositionMapper::add_position(DexPosition* pos) {
+  auto [it, _] = m_pos_line_map.emplace(pos, -1);
+  if (it->second == -1) {
+    it->second = m_positions.size();
+    m_positions.push_back(pos);
+  }
+  return it->second;
 }
 
 uint32_t RealPositionMapper::get_line(DexPosition* pos) {
@@ -137,10 +148,7 @@ uint32_t RealPositionMapper::get_line(DexPosition* pos) {
 }
 
 uint32_t RealPositionMapper::position_to_line(DexPosition* pos) {
-  auto idx = m_positions.size();
-  m_positions.emplace_back(pos);
-  m_pos_line_map[pos] = idx;
-  return get_line(pos);
+  return add_position(pos) + 1;
 }
 
 void RealPositionMapper::write_map() {
@@ -228,14 +236,12 @@ void RealPositionMapper::process_pattern_switch_positions() {
         continue;
       }
       for (auto pos = c.position; pos && pos->file; pos = pos->parent) {
-        auto it = m_pos_line_map.find(pos);
-        if (it != m_pos_line_map.end()) {
+        auto [it, emplaced] = m_pos_line_map.emplace(pos, m_positions.size());
+        if (emplaced) {
+          m_positions.push_back(pos);
+        } else {
           always_assert(it->second != -1);
-          break;
         }
-        auto idx = m_positions.size();
-        m_positions.emplace_back(pos);
-        m_pos_line_map.emplace(pos, idx);
       }
       reachable_cases.push_back(c);
     }
@@ -251,9 +257,7 @@ void RealPositionMapper::process_pattern_switch_positions() {
       auto count_pos = new DexPosition(count_string, unknown_source_string,
                                        reachable_cases.size());
       m_owned_auxiliary_positions.emplace_back(count_pos);
-      auto idx = m_positions.size();
-      m_positions.emplace_back(count_pos);
-      m_pos_line_map[count_pos] = idx;
+      add_position(count_pos);
     }
     // Then we emit consecutive list of cases
     for (auto& c : reachable_cases) {
@@ -263,9 +267,7 @@ void RealPositionMapper::process_pattern_switch_positions() {
       always_assert(c.position);
       always_assert(c.position->file);
       case_pos->parent = c.position;
-      auto idx = m_positions.size();
-      m_positions.emplace_back(case_pos);
-      m_pos_line_map[case_pos] = idx;
+      add_position(case_pos);
     }
   }
 
