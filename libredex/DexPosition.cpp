@@ -321,69 +321,98 @@ void RealPositionMapper::write_map_v2() {
    * string_length (4 bytes)
    * char[string_length]
    */
-  std::ostringstream pos_out;
-  InsertOnlyConcurrentMap<std::string_view, uint32_t> string_ids;
-  std::array<std::mutex, cc_impl::kDefaultSlots> string_ids_mutex;
-  InsertOnlyConcurrentMap<size_t, std::unique_ptr<std::string>> string_pool;
-  std::atomic<size_t> next_string_id{0};
 
-  auto id_of_string = [&](std::string_view s) -> uint32_t {
-    const uint32_t* opt_id = string_ids.get(s);
+  // We initially build a somewhat dense mapping of strings to ids; the exact
+  // ids are not deterministic, and there might be some skipped ids due to
+  // races.
+  InsertOnlyConcurrentMap<std::string_view, uint32_t> semi_dense_string_ids;
+  InsertOnlyConcurrentMap<uint32_t, std::unique_ptr<std::string>> string_pool;
+  std::atomic<uint32_t> next_semi_dense_string_id{0};
+  auto semi_dense_id_of_string = [&](std::string_view s) -> uint32_t {
+    // Fast path
+    const uint32_t* opt_id = semi_dense_string_ids.get(s);
     if (opt_id) {
       return *opt_id;
     }
+
+    // Slow path
+    auto id = next_semi_dense_string_id.fetch_add(1);
+    always_assert(id < std::numeric_limits<uint32_t>::max());
     auto p = std::make_unique<std::string>(s);
-    size_t bucket = std::hash<std::string_view>{}(s) % string_ids_mutex.size();
-    size_t id;
-    {
-      std::lock_guard<std::mutex> lock(string_ids_mutex[bucket]);
-      opt_id = string_ids.get(s);
-      if (opt_id) {
-        return *opt_id;
-      }
-      id = next_string_id.fetch_add(1);
-      string_ids.emplace(*p, id);
+    auto [id_ptr, emplaced] = semi_dense_string_ids.emplace(*p, id);
+    if (emplaced) {
+      string_pool.emplace(id, std::move(p));
+    } // else, we wasted a string-id. Oh well... We'll renumber densely later.
+    return *id_ptr;
+  };
+
+  // Many DexPositions refer to the same method. We cache its class and method
+  // string ids.
+  struct MethodInfo {
+    uint32_t class_id;
+    uint32_t method_id;
+    bool operator==(const MethodInfo& other) const {
+      return class_id == other.class_id && method_id == other.method_id;
     }
-    string_pool.emplace(id, std::move(p));
-    return id;
+  };
+  InsertOnlyConcurrentMap<const DexString*, MethodInfo> method_infos;
+  auto get_method_info = [&](const DexString* method) -> const MethodInfo& {
+    return *method_infos
+                .get_or_create_and_assert_equal(
+                    method,
+                    [&semi_dense_id_of_string](auto* m) {
+                      // of the form
+                      // "class_name.method_name:(arg_types)return_type"
+                      const auto full_method_name = m->str();
+                      // strip out the args and return type
+                      const auto qualified_method_name =
+                          full_method_name.substr(0,
+                                                  full_method_name.find(':'));
+                      auto class_name = java_names::internal_to_external(
+                          qualified_method_name.substr(
+                              0, qualified_method_name.rfind('.')));
+                      auto method_name = qualified_method_name.substr(
+                          qualified_method_name.rfind('.') + 1);
+                      auto class_id = semi_dense_id_of_string(class_name);
+                      auto method_id = semi_dense_id_of_string(method_name);
+                      return MethodInfo{class_id, method_id};
+                    })
+                .first;
   };
 
   std::atomic<size_t> unregistered_parent_positions{0};
 
   static_assert(std::is_same<decltype(m_positions[0]->line), uint32_t>::value);
-  static_assert(std::is_same<decltype(id_of_string("")), uint32_t>::value);
-  std::vector<uint32_t> pos_data;
-  pos_data.resize(5 * m_positions.size());
+  static_assert(
+      std::is_same<decltype(semi_dense_id_of_string("")), uint32_t>::value);
+  std::vector<uint32_t> pos_data(5 * m_positions.size());
 
-  workqueue_run_for<size_t>(0, m_positions.size(), [&](size_t idx) {
-    auto* pos = m_positions[idx];
-    uint32_t parent_line = 0;
-    try {
-      parent_line = pos->parent == nullptr ? 0 : get_line(pos->parent);
-    } catch (std::out_of_range& e) {
-      ++unregistered_parent_positions;
-      TRACE(OPUT, 1, "Parent position %s of %s was not registered",
-            SHOW(pos->parent), SHOW(pos));
-    }
-    // of the form "class_name.method_name:(arg_types)return_type"
-    const auto full_method_name = pos->method->str();
-    // strip out the args and return type
-    const auto qualified_method_name =
-        full_method_name.substr(0, full_method_name.find(':'));
-    auto class_name = java_names::internal_to_external(
-        qualified_method_name.substr(0, qualified_method_name.rfind('.')));
-    auto method_name =
-        qualified_method_name.substr(qualified_method_name.rfind('.') + 1);
-    auto class_id = id_of_string(class_name);
-    auto method_id = id_of_string(method_name);
-    auto file_id = id_of_string(pos->file->str());
-    pos_data[5 * idx + 0] = class_id;
-    pos_data[5 * idx + 1] = method_id;
-    pos_data[5 * idx + 2] = file_id;
-    pos_data[5 * idx + 3] = pos->line;
-    pos_data[5 * idx + 4] = parent_line;
-  });
+  // We process positions in parallel in batches to benefit from cache locality.
+  const size_t BATCH_SIZE = 100;
+  workqueue_run_for<size_t>(
+      0, (m_positions.size() + BATCH_SIZE - 1) / BATCH_SIZE, [&](size_t batch) {
+        auto end = std::min(m_positions.size(), (batch + 1) * BATCH_SIZE);
+        for (size_t idx = batch * BATCH_SIZE; idx < end; ++idx) {
+          auto* pos = m_positions[idx];
+          uint32_t parent_line = 0;
+          try {
+            parent_line = pos->parent == nullptr ? 0 : get_line(pos->parent);
+          } catch (std::out_of_range& e) {
+            ++unregistered_parent_positions;
+            TRACE(OPUT, 1, "Parent position %s of %s was not registered",
+                  SHOW(pos->parent), SHOW(pos));
+          }
+          auto [class_id, method_id] = get_method_info(pos->method);
+          auto file_id = semi_dense_id_of_string(pos->file->str());
+          pos_data[5 * idx + 0] = class_id;
+          pos_data[5 * idx + 1] = method_id;
+          pos_data[5 * idx + 2] = file_id;
+          pos_data[5 * idx + 3] = pos->line;
+          pos_data[5 * idx + 4] = parent_line;
+        }
+      });
   always_assert(pos_data.size() == 5 * m_positions.size());
+  always_assert(semi_dense_string_ids.size() == string_pool.size());
 
   if (unregistered_parent_positions.load() > 0 && !traceEnabled(OPUT, 1)) {
     TRACE(OPUT, 0,
@@ -401,7 +430,10 @@ void RealPositionMapper::write_map_v2() {
   uint32_t spool_count = string_pool.size();
   ofs.write((const char*)&spool_count, sizeof(spool_count));
   always_assert(string_pool.size() < std::numeric_limits<uint32_t>::max());
-  auto map = std::make_unique<uint32_t[]>(string_pool.size());
+
+  // Finally, rewrite the string-ids following the deterministic ordering of the
+  // positions.
+  auto map = std::make_unique<uint32_t[]>(next_semi_dense_string_id.load());
   const uint32_t unmapped = 0;
   const uint32_t first_mapped = 1;
   uint32_t next_mapped = first_mapped;
@@ -411,7 +443,7 @@ void RealPositionMapper::write_map_v2() {
       const auto& s = string_pool.at(string_id);
       uint32_t ssize = s->size();
       ofs.write((const char*)&ssize, sizeof(ssize));
-      ofs << *s;
+      ofs.write(s->data(), ssize * sizeof(char));
       mapped = next_mapped++;
     }
     string_id = mapped - first_mapped;
@@ -425,6 +457,11 @@ void RealPositionMapper::write_map_v2() {
   uint32_t pos_count = m_positions.size();
   ofs.write((const char*)&pos_count, sizeof(pos_count));
   ofs.write((const char*)pos_data.data(), sizeof(uint32_t) * pos_data.size());
+
+  TRACE(OPUT, 2,
+        "positions: %zu, string pool size: %zu, semi-dense string ids: %u",
+        m_positions.size(), string_pool.size(),
+        next_semi_dense_string_id.load());
 }
 
 PositionMapper* PositionMapper::make(const std::string& map_filename_v2) {
