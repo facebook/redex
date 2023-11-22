@@ -16,18 +16,6 @@ class ControlFlowGraph;
 } // namespace cfg
 
 /*
- * An index into the list of load-param instructions.
- */
-using ParamIndex = uint32_t;
-
-/*
- * A helper function that computes the mapping of load param instructions
- * to their respective indices.
- */
-std::unordered_map<const IRInstruction*, ParamIndex> get_load_param_map(
-    const cfg::ControlFlowGraph& cfg);
-
-/*
  * A helper class for figuring out whether the regular return value of
  * methods and invocations is always a particular incoming parameter.
  */
