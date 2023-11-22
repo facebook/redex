@@ -53,8 +53,7 @@ namespace {
 
 // Lint will complain about this, but it is better than having to
 // forward-declare all of concurrent containers.
-std::unique_ptr<InsertOnlyConcurrentMap<keep_reason::Reason*,
-                                        keep_reason::Reason*,
+std::unique_ptr<InsertOnlyConcurrentSet<keep_reason::Reason*,
                                         keep_reason::ReasonPtrHash,
                                         keep_reason::ReasonPtrEqual>>
     s_keep_reasons{nullptr};
@@ -66,17 +65,18 @@ bool Reason::s_record_keep_reasons = false;
 void Reason::set_record_keep_reasons(bool v) {
   s_record_keep_reasons = v;
   if (v && s_keep_reasons == nullptr) {
-    s_keep_reasons = std::make_unique<InsertOnlyConcurrentMap<
-        keep_reason::Reason*, keep_reason::Reason*, keep_reason::ReasonPtrHash,
+    s_keep_reasons = std::make_unique<InsertOnlyConcurrentSet<
+        keep_reason::Reason*, keep_reason::ReasonPtrHash,
         keep_reason::ReasonPtrEqual>>();
   }
 }
 
 Reason* Reason::try_insert(std::unique_ptr<Reason> to_insert) {
-  if (s_keep_reasons->emplace(to_insert.get(), to_insert.get())) {
+  auto [reason_ptr, emplaced] = s_keep_reasons->insert(to_insert.get());
+  if (emplaced) {
     return to_insert.release();
   }
-  return s_keep_reasons->at(to_insert.get());
+  return const_cast<Reason*>(*reason_ptr);
 }
 
 void Reason::release_keep_reasons() { s_keep_reasons.reset(); }

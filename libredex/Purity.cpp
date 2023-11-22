@@ -495,7 +495,8 @@ get_wto_successors(
             }
           }
         }
-        auto emplaced = concurrent_cache->emplace(m, std::move(successors));
+        auto [_, emplaced] =
+            concurrent_cache->emplace(m, std::move(successors));
         always_assert(emplaced);
       },
       wto_nodes);

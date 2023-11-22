@@ -1562,24 +1562,45 @@ class InsertOnlyConcurrentMap final
   const Value& at_unsafe(const Key& key) const { return at(key); }
 
   /*
-   * The Boolean return value denotes whether the insertion took place.
-   * This operation is always thread-safe.
-   *
-   * Note that while the STL containers' insert() methods return both an
-   * iterator and a boolean success value, we only return the boolean value
-   * here as any operations on a returned iterator are not guaranteed to be
-   * thread-safe.
+   * Returns a pair consisting of a pointer on the inserted element (or the
+   * element that prevented the insertion) and a boolean denoting whether the
+   * insertion took place. This operation is always thread-safe.
    */
-  bool insert(const KeyValuePair& entry) {
+  std::pair<const Value*, bool> insert(const KeyValuePair& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
-    return map.try_insert(entry).success;
+    auto insertion_result = map.try_insert(entry);
+    return std::make_pair(&insertion_result.stored_value_ptr->second,
+                          insertion_result.success);
   }
 
-  bool insert(KeyValuePair&& entry) {
+  /*
+   * Returns a pair consisting of a pointer on the inserted element (or the
+   * element that prevented the insertion) and a boolean denoting whether the
+   * insertion took place. This operation is always thread-safe.
+   */
+  std::pair<const Value*, bool> insert(KeyValuePair&& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
-    return map.try_insert(std::forward<KeyValuePair>(entry)).success;
+    auto insertion_result = map.try_insert(std::move(entry));
+    return std::make_pair(&insertion_result.stored_value_ptr->second,
+                          insertion_result.success);
+  }
+
+  std::pair<Value*, bool> insert_unsafe(const KeyValuePair& entry) {
+    size_t slot = Hash()(entry.first) % n_slots;
+    auto& map = this->get_container(slot);
+    auto insertion_result = map.try_insert(entry);
+    return std::make_pair(&insertion_result.stored_value_ptr->second,
+                          insertion_result.success);
+  }
+
+  std::pair<Value*, bool> insert_unsafe(KeyValuePair entry) {
+    size_t slot = Hash()(entry.first) % n_slots;
+    auto& map = this->get_container(slot);
+    auto insertion_result = map.try_insert(std::move(entry));
+    return std::make_pair(&insertion_result.stored_value_ptr->second,
+                          insertion_result.success);
   }
 
   /*
@@ -1601,28 +1622,12 @@ class InsertOnlyConcurrentMap final
     }
   }
 
-  void insert_or_assign_unsafe(const KeyValuePair& entry) {
-    size_t slot = Hash()(entry.first) % n_slots;
-    auto& map = this->get_container(slot);
-    auto insertion_result = map.try_emplace(entry);
-    if (insertion_result.success) {
-      return;
-    }
-    auto* constructed_value = insertion_result.incidentally_constructed_value();
-    if (constructed_value) {
-      insertion_result.stored_value_ptr->second =
-          std::move(constructed_value->second);
-    } else {
-      insertion_result.stored_value_ptr->second = entry.second;
-    }
-  }
-
-  void insert_or_assign_unsafe(KeyValuePair&& entry) {
+  std::pair<Value*, bool> insert_or_assign_unsafe(KeyValuePair&& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
     auto insertion_result = map.try_emplace(std::forward<KeyValuePair>(entry));
     if (insertion_result.success) {
-      return;
+      return std::make_pair(&insertion_result.stored_value_ptr->second, true);
     }
     auto* constructed_value = insertion_result.incidentally_constructed_value();
     if (constructed_value) {
@@ -1632,17 +1637,20 @@ class InsertOnlyConcurrentMap final
       insertion_result.stored_value_ptr->second =
           std::forward<Value>(entry.second);
     }
+    return std::make_pair(&insertion_result.stored_value_ptr->second, false);
   }
 
   /*
    * This operation is always thread-safe.
    */
   template <typename... Args>
-  bool emplace(Args&&... args) {
+  std::pair<const Value*, bool> emplace(Args&&... args) {
     KeyValuePair entry(std::forward<Args>(args)...);
     size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
-    return map.try_insert(std::move(entry)).success;
+    auto insertion_result = map.try_insert(std::move(entry));
+    return std::make_pair(&insertion_result.stored_value_ptr->second,
+                          insertion_result.success);
   }
 
   template <typename... Args>
@@ -2080,7 +2088,26 @@ class InsertOnlyConcurrentSet final
     return {insertion_result.stored_value_ptr, insertion_result.success};
   }
 
+  /*
+   * Returns a pair consisting of a pointer on the inserted element (or the
+   * element that prevented the insertion) and a boolean denoting whether the
+   * insertion took place. This operation is always thread-safe.
+   */
   std::pair<const Key*, bool> insert(Key&& key) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& set = this->get_container(slot);
+    auto insertion_result = set.try_insert(std::forward<Key>(key));
+    return {insertion_result.stored_value_ptr, insertion_result.success};
+  }
+
+  std::pair<Key*, bool> insert_unsafe(const Key& key) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& set = this->get_container(slot);
+    auto insertion_result = set.try_insert(key);
+    return {insertion_result.stored_value_ptr, insertion_result.success};
+  }
+
+  std::pair<Key*, bool> insert_unsafe(Key&& key) {
     size_t slot = Hash()(key) % n_slots;
     auto& set = this->get_container(slot);
     auto insertion_result = set.try_insert(std::forward<Key>(key));

@@ -96,7 +96,7 @@ class GraphBuilder {
   }
 
  private:
-  ClassSignatureMap analyze_non_interface(const DexClass* cls) {
+  const ClassSignatureMap& analyze_non_interface(const DexClass* cls) {
     always_assert(!is_interface(cls));
     auto* res = m_class_signature_maps.get(cls);
     if (res) {
@@ -155,7 +155,9 @@ class GraphBuilder {
                            &class_signatures.unimplemented);
     }
 
-    if (m_class_signature_maps.emplace(cls, class_signatures)) {
+    auto [map_ptr, emplaced] =
+        m_class_signature_maps.emplace(cls, class_signatures);
+    if (emplaced) {
       // Mark all overriding methods as reachable via their parent method ref.
       for (auto* method : cls->get_vmethods()) {
         const auto& overridden_set =
@@ -181,12 +183,12 @@ class GraphBuilder {
           }
         }
       }
-      return class_signatures;
     }
-    return m_class_signature_maps.at(cls);
+
+    return *map_ptr;
   }
 
-  SignatureMap analyze_interface(const DexClass* cls) {
+  const SignatureMap& analyze_interface(const DexClass* cls) {
     always_assert(is_interface(cls));
     auto* res = m_interface_signature_maps.get(cls);
     if (res) {
@@ -199,7 +201,9 @@ class GraphBuilder {
       update_signature_map(method, MethodSet{method}, &interface_signatures);
     }
 
-    if (m_interface_signature_maps.emplace(cls, interface_signatures)) {
+    auto [map_ptr, emplaced] =
+        m_interface_signature_maps.emplace(cls, interface_signatures);
+    if (emplaced) {
       for (auto* method : cls->get_vmethods()) {
         const auto& overridden_set =
             inherited_interface_signatures.at(method->get_name())
@@ -226,13 +230,12 @@ class GraphBuilder {
                             method, /* overriding_is_interface */ true);
         }
       }
-
-      return interface_signatures;
     }
-    return m_interface_signature_maps.at(cls);
+
+    return *map_ptr;
   }
 
-  SignatureMap unify_super_interface_signatures(const DexClass* cls) {
+  const SignatureMap& unify_super_interface_signatures(const DexClass* cls) {
     auto* type_list = cls->get_interfaces();
     auto* res = m_unified_interfaces_signature_maps.get(type_list);
     if (res) {
@@ -248,11 +251,9 @@ class GraphBuilder {
       }
     }
 
-    if (m_unified_interfaces_signature_maps.emplace(
-            type_list, super_interface_signatures)) {
-      return super_interface_signatures;
-    }
-    return m_unified_interfaces_signature_maps.at(type_list);
+    auto [map_ptr, _] = m_unified_interfaces_signature_maps.emplace(
+        type_list, super_interface_signatures);
+    return *map_ptr;
   }
 
   std::unique_ptr<Graph> m_graph;
