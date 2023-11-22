@@ -318,27 +318,41 @@ void RealPositionMapper::write_map_v2() {
    * char[string_length]
    */
   std::ostringstream pos_out;
-  std::unordered_map<std::string_view, uint32_t> string_ids;
-  std::vector<std::unique_ptr<std::string>> string_pool;
+  InsertOnlyConcurrentMap<std::string_view, uint32_t> string_ids;
+  std::array<std::mutex, cc_impl::kDefaultSlots> string_ids_mutex;
+  InsertOnlyConcurrentMap<size_t, std::unique_ptr<std::string>> string_pool;
+  std::atomic<size_t> next_string_id{0};
 
   auto id_of_string = [&](std::string_view s) -> uint32_t {
-    auto it = string_ids.find(s);
-    if (it == string_ids.end()) {
-      auto p = std::make_unique<std::string>(s);
-      it = string_ids.emplace(*p, string_pool.size()).first;
-      string_pool.push_back(std::move(p));
+    const uint32_t* opt_id = string_ids.get(s);
+    if (opt_id) {
+      return *opt_id;
     }
-    return it->second;
+    auto p = std::make_unique<std::string>(s);
+    size_t bucket = std::hash<std::string_view>{}(s) % string_ids_mutex.size();
+    size_t id;
+    {
+      std::lock_guard<std::mutex> lock(string_ids_mutex[bucket]);
+      opt_id = string_ids.get(s);
+      if (opt_id) {
+        return *opt_id;
+      }
+      id = next_string_id.fetch_add(1);
+      string_ids.emplace(*p, id);
+    }
+    string_pool.emplace(id, std::move(p));
+    return id;
   };
 
-  size_t unregistered_parent_positions{0};
+  std::atomic<size_t> unregistered_parent_positions{0};
 
   static_assert(std::is_same<decltype(m_positions[0]->line), uint32_t>::value);
   static_assert(std::is_same<decltype(id_of_string("")), uint32_t>::value);
   std::vector<uint32_t> pos_data;
-  pos_data.reserve(5 * m_positions.size());
+  pos_data.resize(5 * m_positions.size());
 
-  for (auto pos : m_positions) {
+  workqueue_run_for<size_t>(0, m_positions.size(), [&](size_t idx) {
+    auto* pos = m_positions[idx];
     uint32_t parent_line = 0;
     try {
       parent_line = pos->parent == nullptr ? 0 : get_line(pos->parent);
@@ -359,19 +373,19 @@ void RealPositionMapper::write_map_v2() {
     auto class_id = id_of_string(class_name);
     auto method_id = id_of_string(method_name);
     auto file_id = id_of_string(pos->file->str());
-    pos_data.push_back(class_id);
-    pos_data.push_back(method_id);
-    pos_data.push_back(file_id);
-    pos_data.push_back(pos->line);
-    pos_data.push_back(parent_line);
-  }
+    pos_data[5 * idx + 0] = class_id;
+    pos_data[5 * idx + 1] = method_id;
+    pos_data[5 * idx + 2] = file_id;
+    pos_data[5 * idx + 3] = pos->line;
+    pos_data[5 * idx + 4] = parent_line;
+  });
   always_assert(pos_data.size() == 5 * m_positions.size());
 
-  if (unregistered_parent_positions > 0 && !traceEnabled(OPUT, 1)) {
+  if (unregistered_parent_positions.load() > 0 && !traceEnabled(OPUT, 1)) {
     TRACE(OPUT, 0,
           "%zu parent positions had not been registered. Run with TRACE=OPUT:1 "
           "to list them.",
-          unregistered_parent_positions);
+          unregistered_parent_positions.load());
   }
 
   std::ofstream ofs(m_filename_v2.c_str(),
@@ -382,7 +396,9 @@ void RealPositionMapper::write_map_v2() {
   ofs.write((const char*)&version, sizeof(version));
   uint32_t spool_count = string_pool.size();
   ofs.write((const char*)&spool_count, sizeof(spool_count));
-  for (const auto& s : string_pool) {
+  size_t string_id_end = next_string_id.load();
+  for (size_t string_id = 0; string_id < string_id_end; ++string_id) {
+    const auto& s = string_pool.at(string_id);
     uint32_t ssize = s->size();
     ofs.write((const char*)&ssize, sizeof(ssize));
     ofs << *s;
