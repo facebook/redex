@@ -102,7 +102,8 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
            !opcode::is_invoke_super(invoke->opcode());
   }
 
-  void gather_methods_on_virtual_call(const DexTypeEnvironment& env,
+  void gather_methods_on_virtual_call(const DexMethod* method,
+                                      const DexTypeEnvironment& env,
                                       DexMethod* resolved_callee,
                                       IRInstruction* invoke,
                                       MethodReferences& refs) const {
@@ -129,10 +130,11 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
       num_unreachable_invokes++;
       return;
     } else if (domain.is_null()) {
-      // no need to look for callees to mark them as invoke-virtual targets,
-      // this will throw NPE
+      // nullness information is not currently accurate; we treat it like top.
       num_null_invokes++;
-      return;
+      TRACE(TRMU, 5, "Setting is_null() domain to top in [%s] %s", SHOW(method),
+            SHOW(invoke));
+      domain.set_to_top();
     }
 
     // Can we leverage exact types?
@@ -300,7 +302,8 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
                 SHOW(insn), SHOW(resolved_callee));
           continue;
         }
-        gather_methods_on_virtual_call(env, resolved_callee, insn, refs);
+        gather_methods_on_virtual_call(method, env, resolved_callee, insn,
+                                       refs);
       }
     }
     return insns_refs;
