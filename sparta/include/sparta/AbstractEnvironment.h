@@ -104,18 +104,18 @@ class AbstractEnvironment final
   bool is_value() const { return this->kind() == AbstractValueKind::Value; }
 
   size_t size() const {
-    RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
-                  invalid_abstract_value()
-                      << expected_kind(AbstractValueKind::Value)
-                      << actual_kind(this->kind()));
+    SPARTA_RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
+                         invalid_abstract_value()
+                             << expected_kind(AbstractValueKind::Value)
+                             << actual_kind(this->kind()));
     return this->get_value()->m_map.size();
   }
 
   const MapType& bindings() const {
-    RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
-                  invalid_abstract_value()
-                      << expected_kind(AbstractValueKind::Value)
-                      << actual_kind(this->kind()));
+    SPARTA_RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
+                         invalid_abstract_value()
+                             << expected_kind(AbstractValueKind::Value)
+                             << actual_kind(this->kind()));
     return this->get_value()->m_map;
   }
 
@@ -324,7 +324,7 @@ class MapValue final : public AbstractValue<MapValue<Map>> {
   void insert_binding(const Variable& variable, D&& value) {
     // The Bottom value is handled in AbstractEnvironment and should
     // never occur here.
-    RUNTIME_CHECK(!value.is_bottom(), internal_error());
+    SPARTA_RUNTIME_CHECK(!value.is_bottom(), internal_error());
     m_map.insert_or_assign(variable, std::forward<D>(value));
   }
 

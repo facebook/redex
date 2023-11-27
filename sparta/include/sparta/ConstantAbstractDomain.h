@@ -171,8 +171,8 @@ class ConstantAbstractDomain final
    */
   explicit ConstantAbstractDomain(AbstractValueKind kind) {
     m_repr.set(kind);
-    RUNTIME_CHECK(kind != AbstractValueKind::Value,
-                  invalid_abstract_value() << actual_kind(kind));
+    SPARTA_RUNTIME_CHECK(kind != AbstractValueKind::Value,
+                         invalid_abstract_value() << actual_kind(kind));
   }
 
   boost::optional<Constant> get_constant() const {

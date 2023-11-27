@@ -77,7 +77,7 @@ class AbstractPartition final : public AbstractDomain<AbstractPartition<Map>> {
    * AbstractPartition is set to Top.
    */
   size_t size() const {
-    RUNTIME_CHECK(!is_top(), undefined_operation());
+    SPARTA_RUNTIME_CHECK(!is_top(), undefined_operation());
     return m_map.size();
   }
 
@@ -86,7 +86,7 @@ class AbstractPartition final : public AbstractDomain<AbstractPartition<Map>> {
    * This operation is not defined if the partition is set to Top.
    */
   const MapType& bindings() const {
-    RUNTIME_CHECK(!is_top(), undefined_operation());
+    SPARTA_RUNTIME_CHECK(!is_top(), undefined_operation());
     return m_map;
   }
 

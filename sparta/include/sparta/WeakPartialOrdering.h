@@ -100,7 +100,7 @@ class WpoNode final {
 
   // Get number of outer predecessors w.r.t. the component (for exits only).
   const std::unordered_map<WpoIdx, uint32_t>& get_num_outer_preds() const {
-    RUNTIME_CHECK(m_type == Type::Exit, undefined_operation());
+    SPARTA_RUNTIME_CHECK(m_type == Type::Exit, undefined_operation());
     return m_num_outer_preds;
   }
 
@@ -121,7 +121,7 @@ class WpoNode final {
 
   // Increment the number of outer predecessors.
   void inc_num_outer_preds(WpoIdx idx) {
-    RUNTIME_CHECK(m_type == Type::Exit, internal_error());
+    SPARTA_RUNTIME_CHECK(m_type == Type::Exit, internal_error());
     m_num_outer_preds[idx]++;
   }
 

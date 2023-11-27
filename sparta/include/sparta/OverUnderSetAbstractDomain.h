@@ -69,18 +69,18 @@ class OverUnderSetAbstractDomain final
   bool empty() const { return this->is_value() && this->get_value()->empty(); }
 
   const Set& over() const {
-    RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
-                  invalid_abstract_value()
-                      << expected_kind(AbstractValueKind::Value)
-                      << actual_kind(this->kind()));
+    SPARTA_RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
+                         invalid_abstract_value()
+                             << expected_kind(AbstractValueKind::Value)
+                             << actual_kind(this->kind()));
     return this->get_value()->over();
   }
 
   const Set& under() const {
-    RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
-                  invalid_abstract_value()
-                      << expected_kind(AbstractValueKind::Value)
-                      << actual_kind(this->kind()));
+    SPARTA_RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
+                         invalid_abstract_value()
+                             << expected_kind(AbstractValueKind::Value)
+                             << actual_kind(this->kind()));
     return this->get_value()->under();
   }
 

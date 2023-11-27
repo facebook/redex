@@ -62,7 +62,7 @@ using operation_name =
 /*
  * An assert-like macro that throws an exception.
  */
-#define RUNTIME_CHECK(C, E)        \
+#define SPARTA_RUNTIME_CHECK(C, E) \
   do                               \
     if (BOOST_UNLIKELY(!(C))) {    \
       SPARTA_THROW_EXCEPTION((E)); \

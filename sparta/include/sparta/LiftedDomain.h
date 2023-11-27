@@ -69,12 +69,12 @@ class LiftedDomain final : public AbstractDomain<LiftedDomain<D>> {
   bool is_lifted() const { return !is_bottom(); }
 
   D& lowered() {
-    RUNTIME_CHECK(is_lifted(), undefined_operation());
+    SPARTA_RUNTIME_CHECK(is_lifted(), undefined_operation());
     return *m_underlying;
   }
 
   const D& lowered() const {
-    RUNTIME_CHECK(is_lifted(), undefined_operation());
+    SPARTA_RUNTIME_CHECK(is_lifted(), undefined_operation());
     return *m_underlying;
   }
 
