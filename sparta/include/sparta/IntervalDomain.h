@@ -7,13 +7,13 @@
 
 #pragma once
 
-#include <cassert>
 #include <limits>
 #include <ostream>
 
 #include <boost/functional/hash.hpp>
 
 #include <sparta/AbstractDomain.h>
+#include <sparta/Exceptions.h>
 
 namespace sparta {
 
@@ -55,21 +55,21 @@ class IntervalDomain final : public AbstractDomain<IntervalDomain<Num>> {
 
   /* [lb, ub] */
   static IntervalDomain finite(Num lb, Num ub) {
-    assert(MIN < lb && "interval not bounded below.");
-    assert(lb <= ub && "interval inverted.");
-    assert(ub < MAX && "interval not bounded above.");
+    SPARTA_ASSERT(MIN < lb && "interval not bounded below.");
+    SPARTA_ASSERT(lb <= ub && "interval inverted.");
+    SPARTA_ASSERT(ub < MAX && "interval not bounded above.");
     return {lb, ub};
   }
 
   /* [lb, +inf] */
   static IntervalDomain bounded_below(Num lb) {
-    assert(MIN < lb && "interval underflow");
+    SPARTA_ASSERT(MIN < lb && "interval underflow");
     return {lb, MAX};
   }
 
   /* [-inf, ub] */
   static IntervalDomain bounded_above(Num ub) {
-    assert(ub < MAX && "interval overflow.");
+    SPARTA_ASSERT(ub < MAX && "interval overflow.");
     return {MIN, ub};
   }
 
@@ -87,7 +87,7 @@ class IntervalDomain final : public AbstractDomain<IntervalDomain<Num>> {
 
   /* Inclusive lower-bound of the interval, assuming interval is not bottom. */
   Num lower_bound() const {
-    assert(!is_bottom());
+    SPARTA_ASSERT(!is_bottom());
     return m_lb;
   }
 
@@ -96,7 +96,7 @@ class IntervalDomain final : public AbstractDomain<IntervalDomain<Num>> {
    * Guaranteed to be greater than or equal to lower_bound().
    */
   Num upper_bound() const {
-    assert(!is_bottom());
+    SPARTA_ASSERT(!is_bottom());
     return m_ub;
   }
 
