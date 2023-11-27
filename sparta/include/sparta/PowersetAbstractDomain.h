@@ -135,26 +135,26 @@ class PowersetAbstractDomain
       : AbstractDomainScaffolding<Powerset, Derived>(kind) {}
 
   Snapshot elements() const {
-    RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
-                  invalid_abstract_value()
-                      << expected_kind(AbstractValueKind::Value)
-                      << actual_kind(this->kind()));
+    SPARTA_RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
+                         invalid_abstract_value()
+                             << expected_kind(AbstractValueKind::Value)
+                             << actual_kind(this->kind()));
     return this->get_value()->elements();
   }
 
   bool empty() const {
-    RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
-                  invalid_abstract_value()
-                      << expected_kind(AbstractValueKind::Value)
-                      << actual_kind(this->kind()));
+    SPARTA_RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
+                         invalid_abstract_value()
+                             << expected_kind(AbstractValueKind::Value)
+                             << actual_kind(this->kind()));
     return this->get_value()->empty();
   }
 
   size_t size() const {
-    RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
-                  invalid_abstract_value()
-                      << expected_kind(AbstractValueKind::Value)
-                      << actual_kind(this->kind()));
+    SPARTA_RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
+                         invalid_abstract_value()
+                             << expected_kind(AbstractValueKind::Value)
+                             << actual_kind(this->kind()));
     return this->get_value()->size();
   }
 

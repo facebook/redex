@@ -534,8 +534,8 @@ class List final : public Component {
   }
 
   s_expr tail(size_t index) const {
-    RUNTIME_CHECK(index <= m_list.size(),
-                  invalid_argument() << argument_name("index"));
+    SPARTA_RUNTIME_CHECK(index <= m_list.size(),
+                         invalid_argument() << argument_name("index"));
     // If index == m_list.size(), the function returns the empty list.
     return s_expr(std::next(m_list.begin(), index), m_list.end());
   }
@@ -757,30 +757,30 @@ inline bool s_expr::is_list() const {
 }
 
 inline int32_t s_expr::get_int32() const {
-  RUNTIME_CHECK(is_int32(), undefined_operation());
+  SPARTA_RUNTIME_CHECK(is_int32(), undefined_operation());
   return boost::static_pointer_cast<s_expr_impl::Int32Atom>(m_component)
       ->get_value();
 }
 
 inline const std::string& s_expr::get_string() const {
-  RUNTIME_CHECK(is_string(), undefined_operation());
+  SPARTA_RUNTIME_CHECK(is_string(), undefined_operation());
   return boost::static_pointer_cast<s_expr_impl::StringAtom>(m_component)
       ->get_string();
 }
 
 inline size_t s_expr::size() const {
-  RUNTIME_CHECK(is_list(), undefined_operation());
+  SPARTA_RUNTIME_CHECK(is_list(), undefined_operation());
   return boost::static_pointer_cast<s_expr_impl::List>(m_component)->size();
 }
 
 inline s_expr s_expr::operator[](size_t index) const {
-  RUNTIME_CHECK(is_list(), undefined_operation());
+  SPARTA_RUNTIME_CHECK(is_list(), undefined_operation());
   return boost::static_pointer_cast<s_expr_impl::List>(m_component)
       ->get_element(index);
 }
 
 inline s_expr s_expr::tail(size_t index) const {
-  RUNTIME_CHECK(is_list(), undefined_operation());
+  SPARTA_RUNTIME_CHECK(is_list(), undefined_operation());
   return boost::static_pointer_cast<s_expr_impl::List>(m_component)
       ->tail(index);
 }
@@ -807,9 +807,10 @@ inline std::string s_expr::str() const {
 }
 
 inline void s_expr::add_element(s_expr element) {
-  RUNTIME_CHECK(m_component->kind() == s_expr_impl::ComponentKind::List,
-                invalid_argument() << argument_name("element")
-                                   << operation_name("s_expr::add_element()"));
+  SPARTA_RUNTIME_CHECK(m_component->kind() == s_expr_impl::ComponentKind::List,
+                       invalid_argument()
+                           << argument_name("element")
+                           << operation_name("s_expr::add_element()"));
   auto list = boost::static_pointer_cast<s_expr_impl::List>(m_component);
   list->add_element(std::move(element));
 }
@@ -991,10 +992,10 @@ inline bool s_patn::match_with(const s_expr& expr) {
 }
 
 inline void s_patn::must_match(const s_expr& expr, std::string_view msg) {
-  RUNTIME_CHECK(m_pattern->match_with(expr),
-                pattern_matching_error()
-                    << error_msg("Could not find match against " + expr.str() +
-                                 ": " + std::string(msg)));
+  SPARTA_RUNTIME_CHECK(m_pattern->match_with(expr),
+                       pattern_matching_error()
+                           << error_msg("Could not find match against " +
+                                        expr.str() + ": " + std::string(msg)));
 }
 
 } // namespace sparta

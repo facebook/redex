@@ -377,7 +377,7 @@ class PatriciaTreePostOrder final {
 
   void advance() {
     // We disallow incrementing beyond the end.
-    RUNTIME_CHECK(m_leaf != nullptr, undefined_operation());
+    SPARTA_RUNTIME_CHECK(m_leaf != nullptr, undefined_operation());
 
     if (m_stack.empty()) {
       // This means that we were on the rightmost leaf. We've reached the end
@@ -423,7 +423,7 @@ class PatriciaTreePostOrder final {
 
       t = branch->left_tree().get();
       // A branch node always has two children.
-      RUNTIME_CHECK(t != nullptr, internal_error());
+      SPARTA_RUNTIME_CHECK(t != nullptr, internal_error());
     }
 
     m_leaf = t->as_leaf();

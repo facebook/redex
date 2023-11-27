@@ -49,7 +49,7 @@ class WtoComponentIterator final {
   using reference = value_type&;
 
   WtoComponentIterator& operator++() {
-    RUNTIME_CHECK(m_component != m_end, undefined_operation());
+    SPARTA_RUNTIME_CHECK(m_component != m_end, undefined_operation());
     // All components of a WTO are stored linearly inside a vector in reverse
     // order. The subcomponents of an SCC are stored between the head node and
     // the next component in the WTO.
@@ -72,12 +72,12 @@ class WtoComponentIterator final {
   }
 
   const WtoComponent<NodeId>& operator*() {
-    RUNTIME_CHECK(m_component != m_end, undefined_operation());
+    SPARTA_RUNTIME_CHECK(m_component != m_end, undefined_operation());
     return *m_component;
   }
 
   const WtoComponent<NodeId>* operator->() {
-    RUNTIME_CHECK(m_component != m_end, undefined_operation());
+    SPARTA_RUNTIME_CHECK(m_component != m_end, undefined_operation());
     return m_component;
   }
 
@@ -113,7 +113,7 @@ class WtoComponent final {
                int32_t position,
                int32_t next_component_position)
       : m_node(node), m_kind(kind) {
-    RUNTIME_CHECK(position > next_component_position, internal_error());
+    SPARTA_RUNTIME_CHECK(position > next_component_position, internal_error());
     // When a component is constructed, its position inside the vector is
     // specified by its absolute index. Since we want to navigate the WTO by
     // recursively exploring SCCs, it's more efficient to maintain relative
@@ -138,7 +138,7 @@ class WtoComponent final {
   bool is_scc() const { return m_kind == Kind::Scc; }
 
   iterator begin() const {
-    RUNTIME_CHECK(is_scc(), undefined_operation());
+    SPARTA_RUNTIME_CHECK(is_scc(), undefined_operation());
     // All the components of a WTO are stored linearly inside a vector. A vector
     // guarantees that all its elements are stored adjacently in a contiguous
     // block of memory, which allows us to safely perform pointer arithmetic
@@ -148,7 +148,7 @@ class WtoComponent final {
   }
 
   iterator end() const {
-    RUNTIME_CHECK(is_scc(), undefined_operation());
+    SPARTA_RUNTIME_CHECK(is_scc(), undefined_operation());
     auto end_ptr = this - m_next_component_offset;
     return iterator(end_ptr, end_ptr);
   }

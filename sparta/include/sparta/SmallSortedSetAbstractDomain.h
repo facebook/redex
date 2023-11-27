@@ -126,18 +126,18 @@ class SmallSortedSetAbstractDomain final
   bool empty() const { return this->is_value() && this->get_value()->empty(); }
 
   const FlatSet<Element>& elements() const {
-    RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
-                  invalid_abstract_value()
-                      << expected_kind(AbstractValueKind::Value)
-                      << actual_kind(this->kind()));
+    SPARTA_RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
+                         invalid_abstract_value()
+                             << expected_kind(AbstractValueKind::Value)
+                             << actual_kind(this->kind()));
     return this->get_value()->elements();
   }
 
   std::size_t size() const {
-    RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
-                  invalid_abstract_value()
-                      << expected_kind(AbstractValueKind::Value)
-                      << actual_kind(this->kind()));
+    SPARTA_RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
+                         invalid_abstract_value()
+                             << expected_kind(AbstractValueKind::Value)
+                             << actual_kind(this->kind()));
     return this->get_value()->size();
   }
 

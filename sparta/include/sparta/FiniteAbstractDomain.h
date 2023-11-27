@@ -496,14 +496,14 @@ class BitVectorSemiLattice final {
     // For efficiency we will require elements be integer-like and in a
     // continuous range [0, K). We could relax this in various ways and have
     // fallback cases, but every current usage satisfies this restriction.
-    RUNTIME_CHECK(elements.size() == kCardinality,
-                  invalid_argument()
-                      << argument_name("elements")
-                      << operation_name("BitVectorSemiLattice()"));
-    RUNTIME_CHECK(is_zero_based_integer_range(elements),
-                  invalid_argument()
-                      << argument_name("elements")
-                      << operation_name("BitVectorSemiLattice()"));
+    SPARTA_RUNTIME_CHECK(elements.size() == kCardinality,
+                         invalid_argument()
+                             << argument_name("elements")
+                             << operation_name("BitVectorSemiLattice()"));
+    SPARTA_RUNTIME_CHECK(is_zero_based_integer_range(elements),
+                         invalid_argument()
+                             << argument_name("elements")
+                             << operation_name("BitVectorSemiLattice()"));
 
     // We populate the Boolean matrix by traversing the Hasse diagram of the
     // partial order.
@@ -606,15 +606,16 @@ class BitVectorSemiLattice final {
 
   inline const Encoding& encode(const Element& element) const {
     const auto element_idx = element_to_index(element);
-    RUNTIME_CHECK(element_idx < m_index_to_encoding.size(),
-                  undefined_operation() << error_msg("Invalid element"));
+    SPARTA_RUNTIME_CHECK(element_idx < m_index_to_encoding.size(),
+                         undefined_operation() << error_msg("Invalid element"));
     return m_index_to_encoding[element_idx];
   }
 
   inline Element decode(const Encoding& encoding) const {
     const auto encoding_clz = count_leading_zeros(encoding);
-    RUNTIME_CHECK(encoding_clz < m_clz_to_index.size(),
-                  undefined_operation() << error_msg("Invalid encoding"));
+    SPARTA_RUNTIME_CHECK(encoding_clz < m_clz_to_index.size(),
+                         undefined_operation()
+                             << error_msg("Invalid encoding"));
     return index_to_element(m_clz_to_index[encoding_clz]);
   }
 
@@ -672,69 +673,70 @@ class BitVectorSemiLattice final {
 
       const auto x_popcount = popcount(x);
       if (x_popcount == kCardinality) {
-        RUNTIME_CHECK(!found_all_bits_are_set,
-                      internal_error()
-                          << error_msg("Duplicate top element encoding"));
+        SPARTA_RUNTIME_CHECK(
+            !found_all_bits_are_set,
+            internal_error() << error_msg("Duplicate top element encoding"));
         found_all_bits_are_set = true;
       } else if (x_popcount == 1) {
-        RUNTIME_CHECK(!found_one_bit_is_set,
-                      internal_error()
-                          << error_msg("Duplicate bottom element encoding"));
+        SPARTA_RUNTIME_CHECK(
+            !found_one_bit_is_set,
+            internal_error() << error_msg("Duplicate bottom element encoding"));
         found_one_bit_is_set = true;
       }
 
       const auto x_clz = count_leading_zeros(x);
-      RUNTIME_CHECK(x_clz < kCardinality,
-                    internal_error()
-                        << error_msg("Out of range leading zeros count"));
-      RUNTIME_CHECK(!found_clz[x_clz],
-                    internal_error()
-                        << error_msg("Duplicate leading zeros count"));
+      SPARTA_RUNTIME_CHECK(
+          x_clz < kCardinality,
+          internal_error() << error_msg("Out of range leading zeros count"));
+      SPARTA_RUNTIME_CHECK(!found_clz[x_clz],
+                           internal_error()
+                               << error_msg("Duplicate leading zeros count"));
       found_clz[x_clz] = true;
 
       if (x_popcount == kCardinality) {
-        RUNTIME_CHECK(x_clz == 0,
-                      internal_error() << error_msg(
-                          "Top element encoding has leading zeros"));
+        SPARTA_RUNTIME_CHECK(x_clz == 0,
+                             internal_error() << error_msg(
+                                 "Top element encoding has leading zeros"));
       } else if (x_popcount == 1) {
-        RUNTIME_CHECK(x_clz == kCardinality - 1,
-                      internal_error() << error_msg(
-                          "Bottom element encoding missing leading zeros"));
+        SPARTA_RUNTIME_CHECK(
+            x_clz == kCardinality - 1,
+            internal_error()
+                << error_msg("Bottom element encoding missing leading zeros"));
       }
 
-      RUNTIME_CHECK(decode(x) == x_element,
-                    internal_error() << error_msg("Incorrect decoding"));
+      SPARTA_RUNTIME_CHECK(decode(x) == x_element,
+                           internal_error() << error_msg("Incorrect decoding"));
 
       for (size_t j = 0; j < kCardinality; ++j) {
         const auto y_element = index_to_element(j);
         const auto y = encode(y_element);
-        RUNTIME_CHECK((x_element == y_element) == equals(x, y),
-                      internal_error()
-                          << error_msg("Incorrect encoding equality"));
+        SPARTA_RUNTIME_CHECK((x_element == y_element) == equals(x, y),
+                             internal_error()
+                                 << error_msg("Incorrect encoding equality"));
 
         const auto x_meet_y = meet(x, y);
         const auto x_meet_y_iter = std::find(
             m_index_to_encoding.begin(), m_index_to_encoding.end(), x_meet_y);
-        RUNTIME_CHECK(x_meet_y_iter != m_index_to_encoding.end(),
-                      internal_error()
-                          << error_msg("Meet element encoding missing"));
+        SPARTA_RUNTIME_CHECK(x_meet_y_iter != m_index_to_encoding.end(),
+                             internal_error()
+                                 << error_msg("Meet element encoding missing"));
 
         const auto x_meet_y_index = x_meet_y_iter - m_index_to_encoding.begin();
         const auto x_meet_y_element = index_to_element(x_meet_y_index);
-        RUNTIME_CHECK(decode(x_meet_y) == x_meet_y_element,
-                      internal_error()
-                          << error_msg("Meet encoding invalid decoding"));
+        SPARTA_RUNTIME_CHECK(
+            decode(x_meet_y) == x_meet_y_element,
+            internal_error() << error_msg("Meet encoding invalid decoding"));
       }
     }
-    RUNTIME_CHECK(found_all_bits_are_set,
-                  internal_error()
-                      << error_msg("Missing top element encoding"));
-    RUNTIME_CHECK(found_one_bit_is_set,
-                  internal_error()
-                      << error_msg("Missing bottom element encoding"));
-    RUNTIME_CHECK(found_clz.all(),
-                  internal_error()
-                      << error_msg("Missing leading zeros count encoding"));
+    SPARTA_RUNTIME_CHECK(found_all_bits_are_set,
+                         internal_error()
+                             << error_msg("Missing top element encoding"));
+    SPARTA_RUNTIME_CHECK(found_one_bit_is_set,
+                         internal_error()
+                             << error_msg("Missing bottom element encoding"));
+    SPARTA_RUNTIME_CHECK(
+        found_clz.all(),
+        internal_error() << error_msg("Missing leading zeros count encoding"));
   }
 
   std::array<Encoding, kCardinality> m_index_to_encoding;
@@ -795,9 +797,9 @@ class BitVectorSemiLatticeCompletion final {
       const auto element = SemiLattice::index_to_element(element_idx);
       const auto& encoding = semi.encode(element);
       const auto encoding_clz = count_leading_zeros(encoding);
-      RUNTIME_CHECK(encoding_clz < kCardinality,
-                    internal_error()
-                        << error_msg("Out of range leading zeros count"));
+      SPARTA_RUNTIME_CHECK(
+          encoding_clz < kCardinality,
+          internal_error() << error_msg("Out of range leading zeros count"));
 
       // The actual row this encoding would be at in the relabelled matrix.
       const auto relabelled_index = kCardinality - encoding_clz - 1;
@@ -832,15 +834,17 @@ class BitVectorSemiLatticeCompletion final {
  private:
   const ReversedEncoding& to_reversed(const Encoding& encoding) const {
     const auto encoding_clz = count_leading_zeros(encoding);
-    RUNTIME_CHECK(encoding_clz < m_clz_to_reversed_encoding.size(),
-                  undefined_operation() << error_msg("Invalid encoding"));
+    SPARTA_RUNTIME_CHECK(encoding_clz < m_clz_to_reversed_encoding.size(),
+                         undefined_operation()
+                             << error_msg("Invalid encoding"));
     return m_clz_to_reversed_encoding[encoding_clz];
   }
 
   const Encoding& from_reversed(const ReversedEncoding& encoding) const {
     const auto encoding_clz = count_leading_zeros(encoding.inner);
-    RUNTIME_CHECK(encoding_clz < m_reversed_clz_to_encoding.size(),
-                  undefined_operation() << error_msg("Invalid encoding"));
+    SPARTA_RUNTIME_CHECK(encoding_clz < m_reversed_clz_to_encoding.size(),
+                         undefined_operation()
+                             << error_msg("Invalid encoding"));
     return m_reversed_clz_to_encoding[encoding_clz];
   }
 
@@ -854,34 +858,34 @@ class BitVectorSemiLatticeCompletion final {
       const auto& x_reversed = to_reversed(x);
 
       const auto x_reversed_clz = count_leading_zeros(x_reversed.inner);
-      RUNTIME_CHECK(x_reversed_clz < kCardinality,
-                    internal_error()
-                        << error_msg("Out of range leading zeros count"));
-      RUNTIME_CHECK(!found_reversed_clz[x_reversed_clz],
-                    internal_error()
-                        << error_msg("Duplicate leading zeros count"));
+      SPARTA_RUNTIME_CHECK(
+          x_reversed_clz < kCardinality,
+          internal_error() << error_msg("Out of range leading zeros count"));
+      SPARTA_RUNTIME_CHECK(!found_reversed_clz[x_reversed_clz],
+                           internal_error()
+                               << error_msg("Duplicate leading zeros count"));
       found_reversed_clz[x_reversed_clz] = true;
 
-      RUNTIME_CHECK(from_reversed(x_reversed) == x,
-                    internal_error()
-                        << error_msg("Incorrect reverse encoding mapping"));
+      SPARTA_RUNTIME_CHECK(
+          from_reversed(x_reversed) == x,
+          internal_error() << error_msg("Incorrect reverse encoding mapping"));
 
       for (size_t j = 0; j < kCardinality; ++j) {
         const auto y_element = SemiLattice::index_to_element(j);
         const auto& y = semi.encode(y_element);
 
         const auto x_join_y = join(x, y);
-        RUNTIME_CHECK(semi.geq(x_join_y, x),
-                      internal_error()
-                          << error_msg("Join element out of order"));
-        RUNTIME_CHECK(semi.geq(x_join_y, y),
-                      internal_error()
-                          << error_msg("Join element out of order"));
+        SPARTA_RUNTIME_CHECK(semi.geq(x_join_y, x),
+                             internal_error()
+                                 << error_msg("Join element out of order"));
+        SPARTA_RUNTIME_CHECK(semi.geq(x_join_y, y),
+                             internal_error()
+                                 << error_msg("Join element out of order"));
       }
     }
-    RUNTIME_CHECK(found_reversed_clz.all(),
-                  internal_error()
-                      << error_msg("Missing leading zeros count encoding"));
+    SPARTA_RUNTIME_CHECK(
+        found_reversed_clz.all(),
+        internal_error() << error_msg("Missing leading zeros count encoding"));
   }
 
   std::array<ReversedEncoding, kCardinality> m_clz_to_reversed_encoding;

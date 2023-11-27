@@ -453,8 +453,8 @@ class AbstractDomainScaffolding
    * A convenience constructor for creating Bottom and Top.
    */
   explicit AbstractDomainScaffolding(AbstractValueKind kind) : m_kind(kind) {
-    RUNTIME_CHECK(kind != AbstractValueKind::Value,
-                  invalid_abstract_value() << actual_kind(kind));
+    SPARTA_RUNTIME_CHECK(kind != AbstractValueKind::Value,
+                         invalid_abstract_value() << actual_kind(kind));
   }
 
   AbstractValueKind kind() const { return m_kind; }
@@ -488,14 +488,14 @@ class AbstractDomainScaffolding
     if (is_top()) {
       return false;
     }
-    RUNTIME_CHECK(m_kind == AbstractValueKind::Value,
-                  invalid_abstract_value()
-                      << expected_kind(AbstractValueKind::Value)
-                      << actual_kind(m_kind));
-    RUNTIME_CHECK(other.m_kind == AbstractValueKind::Value,
-                  invalid_abstract_value()
-                      << expected_kind(AbstractValueKind::Value)
-                      << actual_kind(other.m_kind));
+    SPARTA_RUNTIME_CHECK(m_kind == AbstractValueKind::Value,
+                         invalid_abstract_value()
+                             << expected_kind(AbstractValueKind::Value)
+                             << actual_kind(m_kind));
+    SPARTA_RUNTIME_CHECK(other.m_kind == AbstractValueKind::Value,
+                         invalid_abstract_value()
+                             << expected_kind(AbstractValueKind::Value)
+                             << actual_kind(other.m_kind));
     return m_value.leq(other.m_value);
   }
 
@@ -506,10 +506,10 @@ class AbstractDomainScaffolding
     if (is_top()) {
       return other.is_top();
     }
-    RUNTIME_CHECK(m_kind == AbstractValueKind::Value,
-                  invalid_abstract_value()
-                      << expected_kind(AbstractValueKind::Value)
-                      << actual_kind(m_kind));
+    SPARTA_RUNTIME_CHECK(m_kind == AbstractValueKind::Value,
+                         invalid_abstract_value()
+                             << expected_kind(AbstractValueKind::Value)
+                             << actual_kind(m_kind));
     if (other.m_kind != AbstractValueKind::Value) {
       return false;
     }
