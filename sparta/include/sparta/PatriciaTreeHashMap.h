@@ -23,6 +23,15 @@
 #include <sparta/PatriciaTreeMap.h>
 
 namespace sparta {
+namespace pthm_impl {
+template <typename Key,
+          typename Value,
+          typename ValueInterface,
+          typename KeyHash,
+          typename KeyCompare,
+          typename KeyEqual>
+class PatriciaTreeHashMapStaticAssert;
+}
 
 /*
  * This structure implements a generalized hash map on top of patricia trees.
@@ -45,7 +54,13 @@ class PatriciaTreeHashMap final
                                              ValueInterface,
                                              KeyHash,
                                              KeyCompare,
-                                             KeyEqual>> {
+                                             KeyEqual>>,
+      private pthm_impl::PatriciaTreeHashMapStaticAssert<Key,
+                                                         Value,
+                                                         ValueInterface,
+                                                         KeyHash,
+                                                         KeyCompare,
+                                                         KeyEqual> {
  private:
   using SmallVector = boost::container::small_vector<std::pair<Key, Value>, 1>;
   using FlatMapT =
@@ -99,15 +114,6 @@ class PatriciaTreeHashMap final
   using value_interface = ValueInterface;
   constexpr static AbstractMapMutability mutability =
       AbstractMapMutability::Mutable;
-
-  ~PatriciaTreeHashMap() {
-    static_assert(std::is_same_v<Value, mapped_type>,
-                  "Value must be equal to ValueInterface::type");
-    static_assert(std::is_base_of<AbstractMapValue<ValueInterface>,
-                                  ValueInterface>::value,
-                  "ValueInterface doesn't inherit from AbstractMapValue");
-    ValueInterface::check_interface();
-  }
 
   bool empty() const { return m_tree.empty(); }
 
@@ -273,5 +279,25 @@ class PatriciaTreeHashMap final
  private:
   PatriciaTreeT m_tree;
 };
+
+namespace pthm_impl {
+template <typename Key,
+          typename Value,
+          typename ValueInterface,
+          typename KeyHash,
+          typename KeyCompare,
+          typename KeyEqual>
+class PatriciaTreeHashMapStaticAssert {
+ protected:
+  ~PatriciaTreeHashMapStaticAssert() {
+    static_assert(std::is_same_v<Value, typename ValueInterface::type>,
+                  "Value must be equal to ValueInterface::type");
+    static_assert(std::is_base_of<AbstractMapValue<ValueInterface>,
+                                  ValueInterface>::value,
+                  "ValueInterface doesn't inherit from AbstractMapValue");
+    ValueInterface::check_interface();
+  }
+};
+} // namespace pthm_impl
 
 } // namespace sparta

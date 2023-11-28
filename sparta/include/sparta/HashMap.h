@@ -19,6 +19,14 @@
 #include <sparta/PatriciaTreeCore.h>
 
 namespace sparta {
+namespace hm_impl {
+template <typename Key,
+          typename Value,
+          typename ValueInterface,
+          typename KeyHash,
+          typename KeyEqual>
+class HashMapStaticAssert;
+}
 
 /*
  * A hash map.
@@ -34,7 +42,9 @@ template <typename Key,
           typename KeyEqual = std::equal_to<Key>>
 class HashMap final
     : public AbstractMap<
-          HashMap<Key, Value, ValueInterface, KeyHash, KeyEqual>> {
+          HashMap<Key, Value, ValueInterface, KeyHash, KeyEqual>>,
+      private hm_impl::
+          HashMapStaticAssert<Key, Value, ValueInterface, KeyHash, KeyEqual> {
  public:
   using StdUnorderedMap = std::unordered_map<Key, Value, KeyHash, KeyEqual>;
 
@@ -52,15 +62,6 @@ class HashMap final
   using value_interface = ValueInterface;
   constexpr static AbstractMapMutability mutability =
       AbstractMapMutability::Mutable;
-
-  ~HashMap() {
-    static_assert(std::is_same_v<Value, mapped_type>,
-                  "Value must be equal to ValueInterface::type");
-    static_assert(std::is_base_of<AbstractMapValue<ValueInterface>,
-                                  ValueInterface>::value,
-                  "ValueInterface doesn't inherit from AbstractMapValue");
-    ValueInterface::check_interface();
-  }
 
   explicit HashMap() = default;
 
@@ -332,5 +333,24 @@ class HashMap final
  private:
   StdUnorderedMap m_map;
 };
+
+namespace hm_impl {
+template <typename Key,
+          typename Value,
+          typename ValueInterface,
+          typename KeyHash,
+          typename KeyEqual>
+class HashMapStaticAssert {
+ protected:
+  ~HashMapStaticAssert() {
+    static_assert(std::is_same_v<Value, typename ValueInterface::type>,
+                  "Value must be equal to ValueInterface::type");
+    static_assert(std::is_base_of<AbstractMapValue<ValueInterface>,
+                                  ValueInterface>::value,
+                  "ValueInterface doesn't inherit from AbstractMapValue");
+    ValueInterface::check_interface();
+  };
+};
+} // namespace hm_impl
 
 } // namespace sparta

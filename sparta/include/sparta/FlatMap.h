@@ -19,6 +19,15 @@
 #include <sparta/PatriciaTreeCore.h>
 
 namespace sparta {
+namespace fm_impl {
+template <typename Key,
+          typename Value,
+          typename ValueInterface,
+          typename KeyCompare,
+          typename KeyEqual,
+          typename AllocatorOrContainer>
+class FlatMapStaticAssert;
+}
 
 /*
  * Represents a map implemented with a sorted vector.
@@ -34,12 +43,19 @@ template <typename Key,
           typename KeyEqual = std::equal_to<Key>,
           typename AllocatorOrContainer =
               boost::container::new_allocator<std::pair<Key, Value>>>
-class FlatMap final : public AbstractMap<FlatMap<Key,
-                                                 Value,
-                                                 ValueInterface,
-                                                 KeyCompare,
-                                                 KeyEqual,
-                                                 AllocatorOrContainer>> {
+class FlatMap final
+    : public AbstractMap<FlatMap<Key,
+                                 Value,
+                                 ValueInterface,
+                                 KeyCompare,
+                                 KeyEqual,
+                                 AllocatorOrContainer>>,
+      private fm_impl::FlatMapStaticAssert<Key,
+                                           Value,
+                                           ValueInterface,
+                                           KeyCompare,
+                                           KeyEqual,
+                                           AllocatorOrContainer> {
  private:
   using BoostFlatMap =
       boost::container::flat_map<Key, Value, KeyCompare, AllocatorOrContainer>;
@@ -58,15 +74,6 @@ class FlatMap final : public AbstractMap<FlatMap<Key,
 
   constexpr static AbstractMapMutability mutability =
       AbstractMapMutability::Mutable;
-
-  ~FlatMap() {
-    static_assert(std::is_same_v<Value, mapped_type>,
-                  "Value must be equal to ValueInterface::type");
-    static_assert(std::is_base_of<AbstractMapValue<ValueInterface>,
-                                  ValueInterface>::value,
-                  "ValueInterface doesn't inherit from AbstractMapValue");
-    ValueInterface::check_interface();
-  }
 
  private:
   struct ComparePairWithKey {
@@ -388,5 +395,26 @@ class FlatMap final : public AbstractMap<FlatMap<Key,
  private:
   BoostFlatMap m_map;
 };
+
+namespace fm_impl {
+template <typename Key,
+          typename Value,
+          typename ValueInterface,
+          typename KeyCompare,
+          typename KeyEqual,
+          typename AllocatorOrContainer>
+class FlatMapStaticAssert {
+ protected:
+  ~FlatMapStaticAssert() {
+
+    static_assert(std::is_same_v<Value, typename ValueInterface::type>,
+                  "Value must be equal to ValueInterface::type");
+    static_assert(std::is_base_of<AbstractMapValue<ValueInterface>,
+                                  ValueInterface>::value,
+                  "ValueInterface doesn't inherit from AbstractMapValue");
+    ValueInterface::check_interface();
+  }
+};
+} // namespace fm_impl
 
 } // namespace sparta
