@@ -64,7 +64,7 @@ class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
     if (code == nullptr) {
       return callsites;
     }
-    auto lta = m_gta->get_local_analysis(method);
+    auto lta = m_gta->get_replayable_local_analysis(method);
     for (const auto& block : code->cfg().blocks()) {
       auto env = lta->get_entry_state_at(block);
       if (env.is_bottom()) {

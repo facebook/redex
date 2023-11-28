@@ -251,7 +251,7 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
     auto* code = const_cast<IRCode*>(method->get_code());
     always_assert(code);
     always_assert(code->editable_cfg_built());
-    auto lta = gta->get_local_analysis(method);
+    auto lta = gta->get_replayable_local_analysis(method);
     MethodRefCache resolved_refs;
     for (const auto& block : code->cfg().blocks()) {
       auto env = lta->get_entry_state_at(block);

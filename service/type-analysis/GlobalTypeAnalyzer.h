@@ -86,7 +86,7 @@ class GlobalTypeAnalyzer : public sparta::ParallelMonotonicFixpointIterator<
    * Run local analysis for the given method and return the LocalAnalyzer with
    * the end state.
    */
-  std::unique_ptr<local::LocalTypeAnalyzer> get_local_analysis(
+  std::unique_ptr<local::LocalTypeAnalyzer> get_replayable_local_analysis(
       const DexMethod*) const;
 
   const WholeProgramState& get_whole_program_state() const { return *m_wps; }
@@ -103,10 +103,23 @@ class GlobalTypeAnalyzer : public sparta::ParallelMonotonicFixpointIterator<
   std::unique_ptr<const WholeProgramState> m_wps;
   std::shared_ptr<const call_graph::Graph> m_call_graph;
 
+  /*
+   * An unsafe variant that runs the local analysis on the given method, and
+   * returns the LocalAnalyzer with the end state. This is only used for
+   * collecting global states. This is not meant to be used to replay analysis
+   * after the global type analysis. It doesn't always fall back to the
+   * WholeProgramState.
+   */
+  std::unique_ptr<local::LocalTypeAnalyzer> get_internal_local_analysis(
+      const DexMethod*) const;
+
   std::unique_ptr<local::LocalTypeAnalyzer> analyze_method(
       const DexMethod* method,
       const WholeProgramState& wps,
-      ArgumentTypeEnvironment args) const;
+      ArgumentTypeEnvironment args,
+      const bool is_replayable = false) const;
+
+  friend class type_analyzer::WholeProgramState;
 };
 
 class GlobalTypeAnalysis {

@@ -210,7 +210,7 @@ TEST_F(GlobalTypeAnalysisTest, ReturnTypeTest) {
   auto wps = gta->get_whole_program_state();
   EXPECT_EQ(wps.get_return_type(meth_bar), get_type_domain("LO;"));
 
-  auto lta = gta->get_local_analysis(meth_foo);
+  auto lta = gta->get_replayable_local_analysis(meth_foo);
   auto code = meth_foo->get_code();
   auto bar_exit_env = lta->get_exit_state_at(code->cfg().exit_block());
   EXPECT_EQ(bar_exit_env.get_reg_environment().get(0), get_type_domain("LO;"));
@@ -280,7 +280,7 @@ TEST_F(GlobalTypeAnalysisTest, SimpleFieldTypeTest) {
             get_type_domain("LO;").join(DexTypeDomain::null()));
   EXPECT_EQ(wps.get_return_type(meth_bar),
             get_type_domain("LO;").join(DexTypeDomain::null()));
-  auto lta = gta->get_local_analysis(meth_foo);
+  auto lta = gta->get_replayable_local_analysis(meth_foo);
   auto code = meth_foo->get_code();
   auto foo_exit_env = lta->get_exit_state_at(code->cfg().exit_block());
   EXPECT_EQ(foo_exit_env.get_reg_environment().get(1),
@@ -361,7 +361,7 @@ TEST_F(GlobalTypeAnalysisTest, ClinitSimpleTest) {
             get_type_domain("LO;").join(DexTypeDomain::null()));
   EXPECT_EQ(wps.get_return_type(meth_bar),
             get_type_domain("LO;").join(DexTypeDomain::null()));
-  auto lta = gta->get_local_analysis(meth_foo);
+  auto lta = gta->get_replayable_local_analysis(meth_foo);
   auto code = meth_foo->get_code();
   auto foo_exit_env = lta->get_exit_state_at(code->cfg().exit_block());
   EXPECT_EQ(foo_exit_env.get_reg_environment().get(1),

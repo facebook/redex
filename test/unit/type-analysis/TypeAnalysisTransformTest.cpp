@@ -76,7 +76,7 @@ struct TypeAnalysisTransformTest : public RedexTest {
 
           type_analyzer::Transform::NullAssertionSet null_assertion_set =
               kotlin_nullcheck_wrapper::get_kotlin_null_assertions();
-          auto lta = gta->get_local_analysis(method);
+          auto lta = gta->get_replayable_local_analysis(method);
           Transform tf(config);
           return tf.apply(*lta, wps, method, null_assertion_set);
         });

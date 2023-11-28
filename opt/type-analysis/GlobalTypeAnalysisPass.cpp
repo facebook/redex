@@ -147,7 +147,7 @@ void GlobalTypeAnalysisPass::optimize(
     if (method->get_code() == nullptr) {
       return Stats();
     }
-    auto lta = gta.get_local_analysis(method);
+    auto lta = gta.get_replayable_local_analysis(method);
 
     if (m_config.trace_global_local_diff) {
       trace_analysis_diff(method, *lta);

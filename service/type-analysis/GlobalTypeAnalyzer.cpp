@@ -151,7 +151,7 @@ void GlobalTypeAnalyzer::analyze_node(
     return;
   }
   auto& cfg = code->cfg();
-  auto intra_ta = get_local_analysis(method);
+  auto intra_ta = get_internal_local_analysis(method);
   const auto outgoing_edges =
       call_graph::GraphInterface::successors(*m_call_graph, node);
   std::unordered_set<IRInstruction*> outgoing_insns;
@@ -193,15 +193,26 @@ ArgumentTypePartition GlobalTypeAnalyzer::analyze_edge(
 }
 
 std::unique_ptr<local::LocalTypeAnalyzer>
-GlobalTypeAnalyzer::get_local_analysis(const DexMethod* method) const {
+GlobalTypeAnalyzer::get_internal_local_analysis(const DexMethod* method) const {
   auto args = ArgumentTypePartition::bottom();
 
   if (m_call_graph->has_node(method)) {
     args = this->get_entry_state_at(m_call_graph->node(method));
   }
-  return analyze_method(method,
-                        this->get_whole_program_state(),
+  return analyze_method(method, this->get_whole_program_state(),
                         args.get(CURRENT_PARTITION_LABEL));
+}
+
+std::unique_ptr<local::LocalTypeAnalyzer>
+GlobalTypeAnalyzer::get_replayable_local_analysis(
+    const DexMethod* method) const {
+  auto args = ArgumentTypePartition::bottom();
+
+  if (m_call_graph->has_node(method)) {
+    args = this->get_entry_state_at(m_call_graph->node(method));
+  }
+  return analyze_method(method, this->get_whole_program_state(),
+                        args.get(CURRENT_PARTITION_LABEL), true);
 }
 
 bool GlobalTypeAnalyzer::is_reachable(const DexMethod* method) const {
@@ -220,10 +231,15 @@ using CombinedAnalyzer =
                                 local::CtorFieldAnalyzer,
                                 local::RegisterTypeAnalyzer>;
 
+using CombinedReplayAnalyzer =
+    InstructionAnalyzerCombiner<WholeProgramAwareAnalyzer,
+                                local::RegisterTypeAnalyzer>;
+
 std::unique_ptr<local::LocalTypeAnalyzer> GlobalTypeAnalyzer::analyze_method(
     const DexMethod* method,
     const WholeProgramState& wps,
-    ArgumentTypeEnvironment args) const {
+    ArgumentTypeEnvironment args,
+    const bool is_replayable) const {
   TRACE(TYPE, 5, "[global] analyzing %s", SHOW(method));
   always_assert(method->get_code() != nullptr);
   auto& code = *method->get_code();
@@ -244,8 +260,13 @@ std::unique_ptr<local::LocalTypeAnalyzer> GlobalTypeAnalyzer::analyze_method(
     ctor_type = method->get_class();
   }
   TRACE(TYPE, 5, "%s", SHOW(code.cfg()));
-  auto local_ta = std::make_unique<local::LocalTypeAnalyzer>(
-      code.cfg(), CombinedAnalyzer(clinit_type, &wps, ctor_type, nullptr));
+  auto local_ta =
+      is_replayable
+          ? std::make_unique<local::LocalTypeAnalyzer>(
+                code.cfg(), CombinedReplayAnalyzer(&wps, nullptr))
+          : std::make_unique<local::LocalTypeAnalyzer>(
+                code.cfg(),
+                CombinedAnalyzer(clinit_type, &wps, ctor_type, nullptr));
   local_ta->run(env);
 
   return local_ta;

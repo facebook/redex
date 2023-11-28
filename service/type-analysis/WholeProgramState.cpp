@@ -122,8 +122,7 @@ void set_ifields_in_partition(const DexClass* cls,
       TRACE(TYPE, 5, "%s has type %s after <init>", SHOW(field), SHOW(domain));
       always_assert(field->get_class() == cls->get_type());
     } else {
-      TRACE(TYPE, 5, "%s has null type after <init>", SHOW(field));
-      domain = DexTypeDomain::null();
+      TRACE(TYPE, 5, "%s has unknown type after <init>", SHOW(field));
     }
     field_partition->update(field, [&domain](auto* current_type) {
       current_type->join_with(domain);
@@ -245,7 +244,7 @@ void WholeProgramState::analyze_clinits_and_ctors(
       if (clinit) {
         IRCode* code = clinit->get_code();
         auto& cfg = code->cfg();
-        auto lta = gta.get_local_analysis(clinit);
+        auto lta = gta.get_internal_local_analysis(clinit);
         const auto& env = lta->get_exit_state_at(cfg.exit_block());
         set_sfields_in_partition(cls, env, &cls_field_partition);
       } else {
@@ -262,7 +261,7 @@ void WholeProgramState::analyze_clinits_and_ctors(
       }
       IRCode* code = ctor->get_code();
       auto& cfg = code->cfg();
-      auto lta = gta.get_local_analysis(ctor);
+      auto lta = gta.get_internal_local_analysis(ctor);
       const auto& env = lta->get_exit_state_at(cfg.exit_block());
       set_ifields_in_partition(cls, env, &cls_field_partition);
     }
@@ -286,7 +285,7 @@ void WholeProgramState::collect(const Scope& scope,
       return;
     }
     auto& cfg = code->cfg();
-    auto lta = gta.get_local_analysis(method);
+    auto lta = gta.get_internal_local_analysis(method);
     for (cfg::Block* b : cfg.blocks()) {
       auto env = lta->get_entry_state_at(b);
       for (auto& mie : InstructionIterable(b)) {
