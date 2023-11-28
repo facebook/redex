@@ -54,7 +54,6 @@
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "Resolver.h"
-#include "ScopedCFG.h"
 #include "SourceBlocks.h"
 #include "StlUtil.h"
 #include "TypeSystem.h"
@@ -1088,11 +1087,11 @@ VirtualMergingStats apply_ordering(
         auto overriding_method =
             const_cast<DexMethod*>(overriding_method_const);
         size_t estimated_callee_size =
-            overriding_method->get_code()->estimate_code_units();
+            overriding_method->get_code()->cfg().estimate_code_units();
         size_t estimated_insn_size =
             is_abstract(overridden_method)
                 ? 64 // we'll need some extra instruction; 64 is conservative
-                : overridden_method->get_code()->estimate_code_units();
+                : overridden_method->get_code()->cfg().estimate_code_units();
         bool is_inlineable =
             inliner.is_inlinable(overridden_method, overriding_method,
                                  nullptr /* invoke_virtual_insn */,
@@ -1166,7 +1165,7 @@ VirtualMergingStats apply_ordering(
           allocate_wide_temp = [=]() {
             return overridden_code->allocate_wide_temp();
           };
-          cleanup = [=]() { overridden_code->build_cfg(/* editable */ true); };
+          cleanup = [=]() { overridden_code->build_cfg(); };
         } else {
           // We are dealing with a non-abstract method. In this case, we'll
           // first insert an if-instruction to decide whether to run the
@@ -1174,7 +1173,7 @@ VirtualMergingStats apply_ordering(
           // old method body.
           overridden_code = overridden_method->get_code();
           always_assert(overridden_code);
-          overridden_code->build_cfg(/* editable */ true);
+          overridden_code->build_cfg();
           auto& overridden_cfg = overridden_code->cfg();
 
           // Find block with load-param instructions
@@ -1315,8 +1314,8 @@ VirtualMergingStats apply_ordering(
         }
 
         cleanup();
-
-        overriding_method->get_code()->build_cfg(/* editable */ true);
+        overridden_method->get_code()->build_cfg();
+        overriding_method->get_code()->build_cfg();
         inliner::inline_with_cfg(
             overridden_method, overriding_method, invoke_virtual_insn,
             /* needs_receiver_cast */ nullptr, /* needs_init_class */ nullptr,
@@ -1324,15 +1323,12 @@ VirtualMergingStats apply_ordering(
         inliner.visibility_changes_apply_and_record_make_static(
             get_visibility_changes(overriding_method,
                                    overridden_method->get_class()));
-        overriding_method->get_code()->clear_cfg();
 
         // Check if everything was inlined.
         for (const auto& mie :
              cfg::InstructionIterable(overridden_code->cfg())) {
           redex_assert(invoke_virtual_insn != mie.insn);
         }
-
-        overridden_code->clear_cfg();
 
         virtual_methods_to_remove[type_class(overriding_method->get_class())]
             .push_back(overriding_method);
