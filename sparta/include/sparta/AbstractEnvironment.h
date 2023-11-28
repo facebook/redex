@@ -22,6 +22,9 @@ namespace sparta {
 namespace environment_impl {
 
 template <typename Map>
+class AbstractEnvironmentStaticAssert;
+
+template <typename Map>
 class MapValue;
 
 class value_is_bottom {};
@@ -60,23 +63,12 @@ class value_is_bottom {};
 template <typename Map>
 class AbstractEnvironment final
     : public AbstractDomainScaffolding<environment_impl::MapValue<Map>,
-                                       AbstractEnvironment<Map>> {
+                                       AbstractEnvironment<Map>>,
+      private environment_impl::AbstractEnvironmentStaticAssert<Map> {
  public:
   using Variable = typename Map::key_type;
   using Domain = typename Map::mapped_type;
   using MapType = Map;
-
-  ~AbstractEnvironment() {
-    static_assert(std::is_base_of<AbstractMap<Map>, Map>::value,
-                  "Map doesn't inherit from AbstractMap");
-
-    using ValueInterface = typename Map::value_interface;
-    static_assert(std::is_base_of<AbstractMapValue<ValueInterface>,
-                                  ValueInterface>::value,
-                  "ValueInterface doesn't inherit from AbstractMapValue");
-    static_assert(ValueInterface::default_value_kind == AbstractValueKind::Top,
-                  "ValueInterface::default_value_kind is not Top");
-  }
 
   /*
    * The default constructor produces the Top value.
@@ -238,6 +230,22 @@ class AbstractEnvironment final
 };
 
 namespace environment_impl {
+
+template <typename Map>
+class AbstractEnvironmentStaticAssert {
+ protected:
+  ~AbstractEnvironmentStaticAssert() {
+    static_assert(std::is_base_of<AbstractMap<Map>, Map>::value,
+                  "Map doesn't inherit from AbstractMap");
+
+    using ValueInterface = typename Map::value_interface;
+    static_assert(std::is_base_of<AbstractMapValue<ValueInterface>,
+                                  ValueInterface>::value,
+                  "ValueInterface doesn't inherit from AbstractMapValue");
+    static_assert(ValueInterface::default_value_kind == AbstractValueKind::Top,
+                  "ValueInterface::default_value_kind is not Top");
+  }
+};
 
 /*
  * The definition of an element of an abstract environment, i.e., a map from a

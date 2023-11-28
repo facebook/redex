@@ -18,6 +18,8 @@ namespace sparta {
 namespace set_impl {
 
 template <typename Set>
+class SetAbstractDomainStaticAssert;
+template <typename Set>
 class SetValue;
 
 } // namespace set_impl
@@ -30,15 +32,11 @@ class SetAbstractDomain final
     : public PowersetAbstractDomain<typename Set::value_type,
                                     set_impl::SetValue<Set>,
                                     const Set&,
-                                    SetAbstractDomain<Set>> {
+                                    SetAbstractDomain<Set>>,
+      private set_impl::SetAbstractDomainStaticAssert<Set> {
  public:
   using Value = set_impl::SetValue<Set>;
   using Element = typename Set::value_type;
-
-  ~SetAbstractDomain() {
-    static_assert(std::is_base_of<AbstractSet<Set>, Set>::value,
-                  "Set doesn't inherit from AbstractSet");
-  }
 
   SetAbstractDomain()
       : PowersetAbstractDomain<Element,
@@ -72,6 +70,15 @@ class SetAbstractDomain final
 };
 
 namespace set_impl {
+
+template <typename Set>
+class SetAbstractDomainStaticAssert {
+ protected:
+  ~SetAbstractDomainStaticAssert() {
+    static_assert(std::is_base_of<AbstractSet<Set>, Set>::value,
+                  "Set doesn't inherit from AbstractSet");
+  }
+};
 
 template <typename Set>
 class SetValue final : public PowersetImplementation<typename Set::value_type,

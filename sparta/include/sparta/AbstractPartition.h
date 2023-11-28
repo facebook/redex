@@ -18,6 +18,10 @@
 #include <sparta/AbstractMapValue.h>
 
 namespace sparta {
+namespace ap_impl {
+template <typename Map>
+class AbstractPartitionStaticAssert;
+}
 
 /*
  * An abstract partition based on a given abstract map.
@@ -41,24 +45,13 @@ namespace sparta {
  * This makes for a much simpler implementation.
  */
 template <typename Map>
-class AbstractPartition final : public AbstractDomain<AbstractPartition<Map>> {
+class AbstractPartition final
+    : public AbstractDomain<AbstractPartition<Map>>,
+      private ap_impl::AbstractPartitionStaticAssert<Map> {
  public:
   using Label = typename Map::key_type;
   using Domain = typename Map::mapped_type;
   using MapType = Map;
-
-  ~AbstractPartition() {
-    static_assert(std::is_base_of<AbstractMap<Map>, Map>::value,
-                  "Map doesn't inherit from AbstractMap");
-
-    using ValueInterface = typename Map::value_interface;
-    static_assert(std::is_base_of<AbstractMapValue<ValueInterface>,
-                                  ValueInterface>::value,
-                  "ValueInterface doesn't inherit from AbstractMapValue");
-    static_assert(ValueInterface::default_value_kind ==
-                      AbstractValueKind::Bottom,
-                  "ValueInterface::default_value_kind is not Bottom");
-  }
 
   /*
    * The default constructor produces the Bottom value.
@@ -307,6 +300,25 @@ struct BottomValueInterface final
   constexpr static AbstractValueKind default_value_kind =
       AbstractValueKind::Bottom;
 };
+
+namespace ap_impl {
+template <typename Map>
+class AbstractPartitionStaticAssert {
+ protected:
+  ~AbstractPartitionStaticAssert() {
+    static_assert(std::is_base_of<AbstractMap<Map>, Map>::value,
+                  "Map doesn't inherit from AbstractMap");
+
+    using ValueInterface = typename Map::value_interface;
+    static_assert(std::is_base_of<AbstractMapValue<ValueInterface>,
+                                  ValueInterface>::value,
+                  "ValueInterface doesn't inherit from AbstractMapValue");
+    static_assert(ValueInterface::default_value_kind ==
+                      AbstractValueKind::Bottom,
+                  "ValueInterface::default_value_kind is not Bottom");
+  }
+};
+} // namespace ap_impl
 
 } // namespace sparta
 

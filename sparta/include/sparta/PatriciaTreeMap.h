@@ -23,6 +23,10 @@
 #include <sparta/PatriciaTreeUtil.h>
 
 namespace sparta {
+namespace ptm_impl {
+template <typename Key, typename Value, typename ValueInterface>
+class PatriciaTreeMapStaticAssert;
+}
 
 /*
  * This structure implements a map of integer/pointer keys and AbstractDomain
@@ -74,7 +78,9 @@ template <typename Key,
           typename Value,
           typename ValueInterface = pt_core::SimpleValue<Value>>
 class PatriciaTreeMap final
-    : public AbstractMap<PatriciaTreeMap<Key, Value, ValueInterface>> {
+    : public AbstractMap<PatriciaTreeMap<Key, Value, ValueInterface>>,
+      private ptm_impl::
+          PatriciaTreeMapStaticAssert<Key, Value, ValueInterface> {
   using Core = pt_core::PatriciaTreeCore<Key, ValueInterface>;
   using Codec = typename Core::Codec;
 
@@ -94,15 +100,6 @@ class PatriciaTreeMap final
   using value_interface = ValueInterface;
   constexpr static AbstractMapMutability mutability =
       AbstractMapMutability::Immutable;
-
-  ~PatriciaTreeMap() {
-    static_assert(std::is_same_v<Value, mapped_type>,
-                  "Value must be equal to ValueInterface::type");
-    static_assert(std::is_base_of<AbstractMapValue<ValueInterface>,
-                                  ValueInterface>::value,
-                  "ValueInterface doesn't inherit from AbstractMapValue");
-    ValueInterface::check_interface();
-  }
 
   bool empty() const { return m_core.empty(); }
 
@@ -257,5 +254,23 @@ class PatriciaTreeMap final
 
   Core m_core;
 };
+
+namespace ptm_impl {
+template <typename Key, typename Value, typename ValueInterface>
+class PatriciaTreeMapStaticAssert {
+ protected:
+  ~PatriciaTreeMapStaticAssert() {
+    static_assert(
+        std::is_same_v<
+            Value,
+            typename pt_core::PatriciaTreeCore<Key, ValueInterface>::ValueType>,
+        "Value must be equal to ValueInterface::type");
+    static_assert(std::is_base_of<AbstractMapValue<ValueInterface>,
+                                  ValueInterface>::value,
+                  "ValueInterface doesn't inherit from AbstractMapValue");
+    ValueInterface::check_interface();
+  }
+};
+} // namespace ptm_impl
 
 } // namespace sparta
