@@ -43,10 +43,6 @@ class VirtualMergingTest : public RedexTest {
       auto ctor = DexMethod::make_method(std::string(name) + ".<init>:()V")
                       ->make_concrete(ACC_PUBLIC, false);
       cls_creator.add_method(ctor);
-      if (ctor->get_code()) {
-        ctor->get_code()->build_cfg();
-      }
-
       // Should add a super call here, but...
 
       auto make_code = [](int32_t val, auto mref, float sb_val) {
@@ -69,14 +65,14 @@ class VirtualMergingTest : public RedexTest {
                                  make_code(foo_val, foo_ref, idx / 100.0f),
                                  /*is_virtual=*/true);
       cls_creator.add_method(foo);
-      foo->get_code()->build_cfg();
+
       auto bar_ref = DexMethod::make_method(std::string(name) + ".bar:()I");
       auto bar =
           bar_ref->make_concrete(ACC_PUBLIC,
                                  make_code(bar_val, bar_ref, idx / 100.0f),
                                  /*is_virtual=*/true);
       cls_creator.add_method(bar);
-      bar->get_code()->build_cfg();
+
       DexClass* res = cls_creator.create();
       if (super_class != nullptr) {
         subtypes[super_class].push_back(res);
@@ -150,8 +146,8 @@ class VirtualMergingTest : public RedexTest {
   ::testing::AssertionResult instanceof_dominators(
       const DexMethod* m,
       const std::vector<std::vector<const DexType*>>& order) {
-    always_assert(m->get_code()->editable_cfg_built());
-    auto& cfg = (const_cast<DexMethod*>(m))->get_code()->cfg();
+    cfg::ScopedCFG cfg(const_cast<DexMethod*>(m)->get_code());
+
     auto all_types = [&]() {
       std::unordered_set<const DexType*> ret;
       for (const auto& v : order) {
@@ -163,7 +159,7 @@ class VirtualMergingTest : public RedexTest {
     std::unordered_map<const DexType*, cfg::Block*> all_blocks;
     {
       std::unordered_set<const DexType*> found;
-      for (auto it = cfg::ConstInstructionIterator(cfg, true); !it.is_end();
+      for (auto it = cfg::ConstInstructionIterator(*cfg, true); !it.is_end();
            ++it) {
         if (it->insn->opcode() == OPCODE_INSTANCE_OF) {
           auto t = it->insn->get_type();
@@ -190,7 +186,7 @@ class VirtualMergingTest : public RedexTest {
       }
     };
 
-    auto dom = dominators::SimpleFastDominators<cfg::GraphInterface>(cfg);
+    auto dom = dominators::SimpleFastDominators<cfg::GraphInterface>(*cfg);
 
     OptFail fail;
 
@@ -237,10 +233,9 @@ class VirtualMergingTest : public RedexTest {
   // Test that all `if` instructions after `instance-of` or the given opcode.
   ::testing::AssertionResult test_if_direction(const DexMethod* m,
                                                IROpcode expected) {
+    cfg::ScopedCFG cfg(const_cast<DexMethod*>(m)->get_code());
     OptFail fail;
-    always_assert(m->get_code()->editable_cfg_built());
-    auto& cfg = const_cast<DexMethod*>(m)->get_code()->cfg();
-    for (auto b : cfg.blocks()) {
+    for (auto b : cfg->blocks()) {
       // Check if there's an INSTANCE_OF here.
       if (!b->contains_opcode(OPCODE_INSTANCE_OF)) {
         continue;
@@ -277,6 +272,7 @@ TEST_F(VirtualMergingTest, MergedFooNoProfiles) {
   profile_data.emplace(get_method(23, "foo"), make_call_count_stat(100));
   profile_data.emplace(get_method(21, "foo"), make_call_count_stat(50));
   profile_data.emplace(get_method(1, "foo"), make_call_count_stat(100));
+
   VirtualMerging vm{stores, inliner_config, 100};
   vm.run(method_profiles::MethodProfiles::initialize(
              method_profiles::COLD_START, std::move(profile_data)),
@@ -298,13 +294,12 @@ TEST_F(VirtualMergingTest, MergedFooNoProfiles) {
 
   // Check that we got source blocks inserted correctly.
   {
-    always_assert(a_foo->get_code()->editable_cfg_built());
-    auto& cfg = const_cast<DexMethod*>(a_foo)->get_code()->cfg();
-    auto blocks = cfg.blocks();
+    cfg::ScopedCFG cfg(const_cast<DexMethod*>(a_foo)->get_code());
+    auto blocks = cfg->blocks();
     bool all = std::all_of(blocks.begin(), blocks.end(), [](auto* b) {
       return source_blocks::has_source_blocks(b);
     });
-    EXPECT_TRUE(all) << show(cfg);
+    EXPECT_TRUE(all) << show(*cfg);
   }
 }
 
