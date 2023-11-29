@@ -182,13 +182,13 @@ bool FixpointIterator::is_required(const IRInstruction* insn,
     auto method = resolve_invoke_method(insn, m_method);
     const auto& env = m_insn_env_map.at(insn);
     if (method != nullptr) {
-      if (assumenosideeffects(method)) {
+      if (method::is_init(method)) {
+        if (used_vars.contains(insn->src(0)) ||
+            is_used_or_escaping_write(env, used_vars, insn->src(0))) {
+          return true;
+        }
+      } else if (assumenosideeffects(method)) {
         return used_vars.contains(RESULT_REGISTER);
-      }
-      if (method::is_init(method) &&
-          (used_vars.contains(insn->src(0)) ||
-           is_used_or_escaping_write(env, used_vars, insn->src(0)))) {
-        return true;
       }
     }
     if (!m_invoke_to_summary_map.count(insn)) {
