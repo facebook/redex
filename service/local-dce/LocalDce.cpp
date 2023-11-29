@@ -253,7 +253,8 @@ bool LocalDce::is_required(const cfg::ControlFlowGraph& cfg,
       if (meth == nullptr) {
         return true;
       }
-      if (!assumenosideeffects(inst->get_method(), meth)) {
+      if (!assumenosideeffects(inst->get_method(), meth) ||
+          method::is_init(meth)) {
         return true;
       }
       if (!m_init_classes_with_side_effects &&
