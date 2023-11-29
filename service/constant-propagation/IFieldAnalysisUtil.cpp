@@ -326,7 +326,7 @@ ConcurrentSet<DexField*> get_ifields_read_in_callees(
 
 namespace constant_propagation {
 
-EligibleIfields gather_ifield_candidates(
+EligibleIfields gather_safely_inferable_ifield_candidates(
     const Scope& scope,
     const std::unordered_set<std::string>& allowlist_method_names) {
   EligibleIfields eligible_ifields;

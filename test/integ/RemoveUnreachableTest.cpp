@@ -22,8 +22,16 @@
 #include "RemoveUnreachable.h"
 #include "Show.h"
 #include "TypeAnalysisAwareRemoveUnreachable.h"
+#include "VirtualScope.h"
 
-class RemoveUnreachableTest : public RedexIntegrationTest {};
+class RemoveUnreachableTest : public RedexIntegrationTest {
+  void SetUp() override {
+    virt_scope::get_vmethods(type::java_lang_Object());
+    auto cls = type_class(type::java_lang_Object());
+    // To make the assertion in reachability analysis happy
+    cls->set_external();
+  }
+};
 
 TEST_F(RemoveUnreachableTest, InheritanceTest) {
   // Make sure some unreachable things exist before we start.

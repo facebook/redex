@@ -492,6 +492,20 @@ bool CtorFieldAnalyzer::analyze_move_result(const DexType* class_under_init,
   return false;
 }
 
+bool CtorFieldAnalyzer::analyze_invoke(const DexType* class_under_init,
+                                       const IRInstruction* insn,
+                                       DexTypeEnvironment* env) {
+  // Similar to the logic in constant_propagation::InitFieldAnalyzer, we try to
+  // be conservative when the ctor invokes other virtual methods on the same
+  // class, and reset the field environment.
+  auto opcode = insn->opcode();
+  if ((opcode == OPCODE_INVOKE_VIRTUAL || opcode == OPCODE_INVOKE_DIRECT) &&
+      class_under_init == insn->get_method()->get_class()) {
+    env->clear_field_environment();
+  }
+  return false;
+}
+
 } // namespace local
 
 } // namespace type_analyzer

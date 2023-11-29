@@ -110,9 +110,10 @@ void set_sfields_in_partition(const DexClass* cls,
  */
 void set_ifields_in_partition(const DexClass* cls,
                               const DexTypeEnvironment& env,
+                              const EligibleIfields& eligible_ifields,
                               DexTypeFieldPartition* field_partition) {
   for (auto& field : cls->get_ifields()) {
-    if (!is_reference(field)) {
+    if (!is_reference(field) || eligible_ifields.count(field) == 0) {
       continue;
     }
     auto domain = env.get(field);
@@ -153,7 +154,8 @@ WholeProgramState::WholeProgramState(
     const Scope& scope,
     const global::GlobalTypeAnalyzer& gta,
     const std::unordered_set<DexMethod*>& non_true_virtuals,
-    const ConcurrentSet<const DexMethod*>& any_init_reachables)
+    const ConcurrentSet<const DexMethod*>& any_init_reachables,
+    const EligibleIfields& eligible_ifields)
     : m_any_init_reachables(&any_init_reachables) {
   // Exclude fields we cannot correctly analyze.
   walk::fields(scope, [&](DexField* field) {
@@ -183,8 +185,8 @@ WholeProgramState::WholeProgramState(
     }
   });
   setup_known_method_returns();
-  analyze_clinits_and_ctors(scope, gta, &m_field_partition);
-  collect(scope, gta);
+  analyze_clinits_and_ctors(scope, gta, eligible_ifields, &m_field_partition);
+  collect(scope, gta, eligible_ifields);
 }
 
 WholeProgramState::WholeProgramState(
@@ -192,8 +194,13 @@ WholeProgramState::WholeProgramState(
     const global::GlobalTypeAnalyzer& gta,
     const std::unordered_set<DexMethod*>& non_true_virtuals,
     const ConcurrentSet<const DexMethod*>& any_init_reachables,
+    const EligibleIfields& eligible_ifields,
     std::shared_ptr<const call_graph::Graph> call_graph)
-    : WholeProgramState(scope, gta, non_true_virtuals, any_init_reachables) {
+    : WholeProgramState(scope,
+                        gta,
+                        non_true_virtuals,
+                        any_init_reachables,
+                        eligible_ifields) {
   m_call_graph = std::move(call_graph);
 }
 
@@ -233,6 +240,7 @@ void WholeProgramState::setup_known_method_returns() {
 void WholeProgramState::analyze_clinits_and_ctors(
     const Scope& scope,
     const global::GlobalTypeAnalyzer& gta,
+    const EligibleIfields& eligible_ifields,
     DexTypeFieldPartition* field_partition) {
 
   std::mutex mutex;
@@ -263,7 +271,8 @@ void WholeProgramState::analyze_clinits_and_ctors(
       auto& cfg = code->cfg();
       auto lta = gta.get_internal_local_analysis(ctor);
       const auto& env = lta->get_exit_state_at(cfg.exit_block());
-      set_ifields_in_partition(cls, env, &cls_field_partition);
+      set_ifields_in_partition(cls, env, eligible_ifields,
+                               &cls_field_partition);
     }
 
     std::lock_guard<std::mutex> lock_guard(mutex);
@@ -272,7 +281,8 @@ void WholeProgramState::analyze_clinits_and_ctors(
 }
 
 void WholeProgramState::collect(const Scope& scope,
-                                const global::GlobalTypeAnalyzer& gta) {
+                                const global::GlobalTypeAnalyzer& gta,
+                                const EligibleIfields& eligible_ifields) {
   ConcurrentMap<const DexField*, DexTypeDomain> fields_tmp;
   ConcurrentMap<const DexMethod*, DexTypeDomain> methods_tmp;
 
@@ -291,7 +301,7 @@ void WholeProgramState::collect(const Scope& scope,
       for (auto& mie : InstructionIterable(b)) {
         auto* insn = mie.insn;
         lta->analyze_instruction(insn, &env);
-        collect_field_types(insn, env, &fields_tmp);
+        collect_field_types(insn, env, eligible_ifields, &fields_tmp);
         collect_return_types(insn, env, method, &methods_tmp);
       }
     }
@@ -311,6 +321,7 @@ void WholeProgramState::collect(const Scope& scope,
 void WholeProgramState::collect_field_types(
     const IRInstruction* insn,
     const DexTypeEnvironment& env,
+    const EligibleIfields& eligible_ifields,
     ConcurrentMap<const DexField*, DexTypeDomain>* field_tmp) {
   if (!opcode::is_an_sput(insn->opcode()) &&
       !opcode::is_an_iput(insn->opcode())) {
@@ -318,6 +329,11 @@ void WholeProgramState::collect_field_types(
   }
   auto field = resolve_field(insn->get_field());
   if (!field || !type::is_object(field->get_type())) {
+    return;
+  }
+  if (opcode::is_an_iput(insn->opcode()) &&
+      eligible_ifields.count(field) == 0) {
+    // Skip writes to non-eligible instance fields.
     return;
   }
   auto type = env.get(insn->src(0));

@@ -835,7 +835,8 @@ void FinalInlinePassV2::run_pass(DexStoresVector& stores,
   FinalInlinePassV2::Stats ifield_stats{};
   if (m_config.inline_instance_field) {
     cp::EligibleIfields eligible_ifields =
-        cp::gather_ifield_candidates(scope, m_config.allowlist_method_names);
+        cp::gather_safely_inferable_ifield_candidates(
+            scope, m_config.allowlist_method_names);
     ifield_stats =
         run_inline_ifields(scope, min_sdk, init_classes_with_side_effects,
                            &xstores, eligible_ifields, m_config, &stores);

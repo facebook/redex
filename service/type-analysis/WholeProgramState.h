@@ -29,6 +29,8 @@ class GlobalTypeAnalyzer;
 
 } // namespace global
 
+using EligibleIfields = std::unordered_set<DexField*>;
+
 using DexTypeFieldPartition =
     sparta::HashedAbstractPartition<const DexField*, DexTypeDomain>;
 
@@ -43,12 +45,14 @@ class WholeProgramState {
   WholeProgramState(const Scope&,
                     const global::GlobalTypeAnalyzer&,
                     const std::unordered_set<DexMethod*>& non_true_virtuals,
-                    const ConcurrentSet<const DexMethod*>& any_init_reachables);
+                    const ConcurrentSet<const DexMethod*>& any_init_reachables,
+                    const EligibleIfields& eligible_ifields);
 
   WholeProgramState(const Scope&,
                     const global::GlobalTypeAnalyzer&,
                     const std::unordered_set<DexMethod*>&,
                     const ConcurrentSet<const DexMethod*>&,
+                    const EligibleIfields&,
                     std::shared_ptr<const call_graph::Graph> call_graph);
 
   void set_to_top() {
@@ -184,14 +188,18 @@ class WholeProgramState {
  private:
   void analyze_clinits_and_ctors(const Scope&,
                                  const global::GlobalTypeAnalyzer&,
+                                 const EligibleIfields&,
                                  DexTypeFieldPartition*);
   void setup_known_method_returns();
 
-  void collect(const Scope& scope, const global::GlobalTypeAnalyzer&);
+  void collect(const Scope& scope,
+               const global::GlobalTypeAnalyzer&,
+               const EligibleIfields&);
 
   void collect_field_types(
       const IRInstruction* insn,
       const DexTypeEnvironment& env,
+      const EligibleIfields& eligible_ifields,
       ConcurrentMap<const DexField*, DexTypeDomain>* field_tmp);
 
   void collect_return_types(

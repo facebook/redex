@@ -241,10 +241,8 @@ TEST_F(GlobalTypeAnalysisTest, IFieldsNullnessTest) {
             SingletonDexTypeDomain(get_type("TestI$Foo")));
   auto one_m2 = get_field("TestI$One;.m2:Lcom/facebook/redextest/TestI$Foo;");
   ftype = wps.get_field_type(one_m2);
-  EXPECT_FALSE(ftype.is_top());
+  EXPECT_TRUE(ftype.is_top());
   EXPECT_TRUE(ftype.is_nullable());
-  EXPECT_EQ(ftype.get_single_domain(),
-            SingletonDexTypeDomain(get_type("TestI$Foo")));
 
   auto two_m1 = get_field("TestI$Two;.m1:Lcom/facebook/redextest/TestI$Foo;");
   ftype = wps.get_field_type(two_m1);
@@ -284,10 +282,8 @@ TEST_F(GlobalTypeAnalysisTest, InstanceSensitiveCtorTest) {
 
   auto field_f = get_field("TestK$Foo;.f:Lcom/facebook/redextest/TestK$A;");
   auto ftype = wps.get_field_type(field_f);
-  EXPECT_FALSE(ftype.is_top());
+  EXPECT_TRUE(ftype.is_top());
   EXPECT_TRUE(ftype.is_nullable());
-  EXPECT_EQ(ftype.get_single_domain(),
-            SingletonDexTypeDomain(get_type("TestK$A")));
 }
 
 TEST_F(GlobalTypeAnalysisTest, InstanceSensitiveCtorNullnessTest) {

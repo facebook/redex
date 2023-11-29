@@ -20,8 +20,16 @@
 
 #include "RemoveUnreachable.h"
 #include "TypeAnalysisAwareRemoveUnreachable.h"
+#include "VirtualScope.h"
 
-class TypeAnalysisRemoveUnreachableTest : public RedexIntegrationTest {};
+class TypeAnalysisRemoveUnreachableTest : public RedexIntegrationTest {
+  void SetUp() override {
+    virt_scope::get_vmethods(type::java_lang_Object());
+    auto cls = type_class(type::java_lang_Object());
+    // To make the assertion in reachability analysis happy
+    cls->set_external();
+  }
+};
 
 TEST_F(TypeAnalysisRemoveUnreachableTest, TypeAnalysisRMUTest1) {
   // I and Sub are both used within testMethod(), while Super is not
