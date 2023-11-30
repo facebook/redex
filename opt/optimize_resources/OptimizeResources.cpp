@@ -218,10 +218,21 @@ void compute_transitive_closure(
  * Delete unvisited res ids from res table.
  */
 std::unordered_set<uint32_t> delete_unvisited_resources(
+    const std::string& out_file,
     const std::map<uint32_t, std::string>& id_to_name,
+    const std::vector<std::string>& all_types,
     const std::unordered_set<uint32_t>& nodes_visited,
     ResourceTableFile* table,
     std::unordered_set<std::string>* out_files_to_delete) {
+  std::fstream out(out_file, std::ios_base::app);
+  bool write_to_file = true;
+  if (!out.is_open()) {
+    fprintf(stderr, "Unable to write the removed symbols into file %s\n",
+            out_file.c_str());
+    write_to_file = false;
+  } else {
+    TRACE(OPTRES, 1, "Writing removed resources to %s", out_file.c_str());
+  }
   std::unordered_set<uint32_t> deleted_resources;
   std::unordered_set<std::string> files_to_keep;
   for (auto& p : id_to_name) {
@@ -229,6 +240,11 @@ std::unordered_set<uint32_t> delete_unvisited_resources(
       // Collect any res/ files we can now delete. This will influence
       // reachability of Java classes. When handling an .aab input, resolve the
       // on-device file paths to their path relative to unpack dir.
+      if (write_to_file) {
+        out << all_types.at(
+                   ((p.first & TYPE_MASK_BIT) >> TYPE_INDEX_BIT_SHIFT) - 1)
+            << "/" << p.second << std::endl;
+      }
       const auto& files =
           table->get_files_by_rid(p.first, ResourcePathType::ZipPath);
       for (const auto& file_path : files) {
@@ -702,9 +718,11 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
   //    files happens in step 11 (if configured) and cleanup of unused strings
   //    will happen from main.cpp (if configured by global options).
   std::unordered_set<std::string> files_to_delete;
+  std::vector<std::string> type_names;
+  res_table->get_type_names(&type_names);
   std::unordered_set<uint32_t> deleted_resources = delete_unvisited_resources(
-      res_table->id_to_name, nodes_visited, res_table.get(), &files_to_delete);
-
+      conf.metafile("redex-removed-resources.txt"), res_table->id_to_name,
+      type_names, nodes_visited, res_table.get(), &files_to_delete);
   report_metric(OPTRES, "num_deleted_resources", deleted_resources.size(), mgr);
 
   if (!m_assume_id_inlined) {
