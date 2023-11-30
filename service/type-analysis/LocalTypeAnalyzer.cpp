@@ -413,18 +413,6 @@ bool field_put_helper(const DexType* class_under_init,
 
 } // namespace
 
-bool ClinitFieldAnalyzer::analyze_sget(const DexType* class_under_init,
-                                       const IRInstruction* insn,
-                                       DexTypeEnvironment* env) {
-  return field_get_helper(class_under_init, insn, env);
-}
-
-bool ClinitFieldAnalyzer::analyze_sput(const DexType* class_under_init,
-                                       const IRInstruction* insn,
-                                       DexTypeEnvironment* env) {
-  return field_put_helper(class_under_init, insn, env);
-}
-
 bool CtorFieldAnalyzer::analyze_default(const DexType* class_under_init,
                                         const IRInstruction* insn,
                                         DexTypeEnvironment* env) {

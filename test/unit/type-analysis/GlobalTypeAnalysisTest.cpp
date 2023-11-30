@@ -357,15 +357,12 @@ TEST_F(GlobalTypeAnalysisTest, ClinitSimpleTest) {
   GlobalTypeAnalysis analysis;
   auto gta = analysis.analyze(scope);
   auto wps = gta->get_whole_program_state();
-  EXPECT_EQ(wps.get_field_type(field_1),
-            get_type_domain("LO;").join(DexTypeDomain::null()));
-  EXPECT_EQ(wps.get_return_type(meth_bar),
-            get_type_domain("LO;").join(DexTypeDomain::null()));
+  EXPECT_TRUE(wps.get_field_type(field_1).is_top());
+  EXPECT_TRUE(wps.get_return_type(meth_bar).is_top());
   auto lta = gta->get_replayable_local_analysis(meth_foo);
   auto code = meth_foo->get_code();
   auto foo_exit_env = lta->get_exit_state_at(code->cfg().exit_block());
-  EXPECT_EQ(foo_exit_env.get_reg_environment().get(1),
-            get_type_domain("LO;").join(DexTypeDomain::null()));
+  EXPECT_TRUE(foo_exit_env.get_reg_environment().get(1).is_top());
 }
 
 TEST_F(GlobalTypeAnalysisTest, StaticFieldWithEncodedValueTest) {

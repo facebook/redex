@@ -85,39 +85,6 @@ class RegisterTypeAnalyzer final
 };
 
 /*
- * Unlike in other methods where we always propagate field type info from
- * the WholeProgramState, in <clinit>s, we directly propagate static field type
- * info through the local FieldTypeEnvironment. This is similar to what we do
- * for constant values in IPCP.
- *
- * The reason is that the <clinit> is the 1st method of the class being executed
- * after class loading. Therefore, the field 'writes' in the <clinit> happens
- * before other 'writes' to the same field. In other words, the field type state
- * of <clinit>s are self-contained. Note that we are limiting ourselves to
- * static fields belonging to the same class here.
- *
- * We don't throw away our results if there're invoke-statics in the <clinit>.
- * Since the field 'write' in the invoke-static callee will be aggregated in the
- * final type mapping in WholeProgramState. Before that happens, we do not
- * propagate incomplete field type info to other methods. As stated above, we
- * only propagate field type info from WholeProgramState computed in the
- * previous global iteration.
- */
-class ClinitFieldAnalyzer final
-    : public InstructionAnalyzerBase<ClinitFieldAnalyzer,
-                                     DexTypeEnvironment,
-                                     DexType* /* class_under_init */> {
- public:
-  static bool analyze_sget(const DexType* class_under_init,
-                           const IRInstruction* insn,
-                           DexTypeEnvironment* env);
-
-  static bool analyze_sput(const DexType* class_under_init,
-                           const IRInstruction* insn,
-                           DexTypeEnvironment* env);
-};
-
-/*
  * Similarly CtorFieldAnalyzer populates local FieldTypeEnvironment when
  * analyzing a ctor. We only do so for instance fields that belong to the class
  * the ctor is under. When collecting the WholeProgramState, we first collect
