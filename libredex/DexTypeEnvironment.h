@@ -290,13 +290,6 @@ class DexTypeDomain final
                             SmallSetDexTypeDomain::top(),
                             TypedefAnnotationDomain())) {}
 
-  explicit DexTypeDomain(const DexType* array_type, uint32_t array_length)
-      : ReducedProductAbstractDomain(
-            std::make_tuple(ArrayNullnessDomain(array_length),
-                            SingletonDexTypeDomain(array_type),
-                            SmallSetDexTypeDomain(array_type),
-                            TypedefAnnotationDomain())) {}
-
   explicit DexTypeDomain(const DexType* dex_type,
                          const DexAnnoType* annotation = nullptr)
       : ReducedProductAbstractDomain(

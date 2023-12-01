@@ -1090,58 +1090,6 @@ TEST_F(DexTypeEnvironmentTest, ArrayNullnessDomainTest) {
   EXPECT_TRUE(a1.get_element(1).is_top());
 }
 
-TEST_F(DexTypeEnvironmentTest, ArrayConstNullnessDomain) {
-  auto array1 = DexTypeDomain(m_string_array, 1);
-  EXPECT_EQ(array1.get_array_nullness().get_nullness(),
-            NullnessDomain(NOT_NULL));
-  EXPECT_EQ(*array1.get_array_nullness().get_length(), 1);
-  EXPECT_EQ(array1.get_array_element_nullness(0),
-            NullnessDomain(UNINITIALIZED));
-
-  array1.set_array_element_nullness(0, NullnessDomain(NOT_NULL));
-  EXPECT_EQ(array1.get_array_element_nullness(0), NullnessDomain(NOT_NULL));
-  EXPECT_TRUE(array1.get_array_element_nullness(1).is_top());
-
-  array1.set_array_element_nullness(1, NullnessDomain(NOT_NULL));
-  EXPECT_TRUE(array1.get_array_element_nullness(1).is_top());
-
-  EXPECT_TRUE(array1.get_array_element_nullness(-1).is_top());
-  array1.set_array_element_nullness(-1, NullnessDomain(NOT_NULL));
-  EXPECT_TRUE(array1.get_array_nullness().get_elements().is_top());
-
-  auto array2 = DexTypeDomain(m_string_array, 2);
-  EXPECT_EQ(array2.get_array_nullness().get_nullness(),
-            NullnessDomain(NOT_NULL));
-  EXPECT_EQ(*array2.get_array_nullness().get_length(), 2);
-  EXPECT_EQ(array2.get_array_element_nullness(0),
-            NullnessDomain(UNINITIALIZED));
-  EXPECT_EQ(array2.get_array_element_nullness(1),
-            NullnessDomain(UNINITIALIZED));
-  array2.set_array_element_nullness(0, NullnessDomain(NOT_NULL));
-  array2.set_array_element_nullness(1, NullnessDomain(NOT_NULL));
-  EXPECT_EQ(array2.get_array_element_nullness(0), NullnessDomain(NOT_NULL));
-  EXPECT_EQ(array2.get_array_element_nullness(1), NullnessDomain(NOT_NULL));
-
-  array1.join_with(array2);
-  EXPECT_EQ(array2.get_array_nullness().get_nullness(),
-            NullnessDomain(NOT_NULL));
-  EXPECT_TRUE(array1.get_array_nullness().get<1>().is_top());
-  EXPECT_TRUE(array1.get_array_nullness().get_elements().is_top());
-
-  // DisjoinUnion crossing access
-  EXPECT_FALSE(DexTypeDomain::top().get_constant());
-  EXPECT_EQ(*DexTypeDomain::null().get_constant(), 0);
-  EXPECT_FALSE(DexTypeDomain(m_string_array, 3).get_constant());
-  EXPECT_FALSE(DexTypeDomain(m_string_array).get_constant());
-
-  EXPECT_TRUE(DexTypeDomain::top().get_array_nullness().is_top());
-  EXPECT_TRUE(DexTypeDomain::null().get_array_nullness().is_top());
-  EXPECT_FALSE(DexTypeDomain(m_string_array, 3).get_array_nullness().is_top());
-  EXPECT_FALSE(
-      DexTypeDomain(m_string_array, 3).get_array_nullness().is_bottom());
-  EXPECT_TRUE(DexTypeDomain(m_string_array).get_array_nullness().is_top());
-}
-
 TEST_F(DexTypeEnvironmentTest, BaseClassInterfaceJoinTest) {
   auto abs_me = SingletonDexTypeDomain(m_abs_map_entry);
   auto intf = SingletonDexTypeDomain(m_map_entry);

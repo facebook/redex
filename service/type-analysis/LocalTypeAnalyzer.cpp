@@ -370,8 +370,7 @@ bool RegisterTypeAnalyzer::analyze_invoke(const IRInstruction* insn,
         env->transform([&](const DexTypeDomain& domain) {
           auto dex_type_local = domain.get_dex_type();
           if (dex_type_local && *dex_type == *dex_type_local) {
-            return DexTypeDomain(*dex_type_local,
-                                 domain.get_nullness().element());
+            return DexTypeDomain(*dex_type_local, NN_TOP, false);
           }
           return domain;
         });
