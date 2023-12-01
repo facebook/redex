@@ -771,7 +771,7 @@ size_t MultiMethodInliner::inline_inlinables(
     } else {
       visibility_changes_for.insert(callee_method);
     }
-    if (is_static(callee_method)) {
+    if (needs_init_class) {
       init_classes++;
     }
 
