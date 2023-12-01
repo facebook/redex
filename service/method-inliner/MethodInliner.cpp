@@ -995,10 +995,10 @@ void run_inliner(
                   shrinker.get_cse_stats().instructions_eliminated);
   mgr.incr_metric("instructions_eliminated_copy_prop",
                   shrinker.get_copy_prop_stats().moves_eliminated);
-  mgr.incr_metric(
-      "instructions_eliminated_localdce",
-      shrinker.get_local_dce_stats().dead_instruction_count +
-          shrinker.get_local_dce_stats().unreachable_instruction_count);
+  mgr.incr_metric("instructions_eliminated_localdce_dead",
+                  shrinker.get_local_dce_stats().dead_instruction_count);
+  mgr.incr_metric("instructions_eliminated_localdce_unreachable",
+                  shrinker.get_local_dce_stats().unreachable_instruction_count);
   mgr.incr_metric("instructions_eliminated_unreachable",
                   inliner.get_info().unreachable_insns);
   mgr.incr_metric("instructions_eliminated_dedup_blocks",
