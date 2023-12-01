@@ -2319,8 +2319,6 @@ void report(PassManager& pm,
   pm.incr_metric("zombie_implementation_methods",
                  reachable_aspects.zombie_implementation_methods.size());
   pm.incr_metric("zombie_methods", reachable_aspects.zombie_methods.size());
-  pm.incr_metric("non_returning_dependencies",
-                 reachable_aspects.non_returning_dependencies.size());
   pm.incr_metric("returning_methods",
                  reachable_aspects.returning_methods.size());
 }
