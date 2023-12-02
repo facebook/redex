@@ -138,8 +138,6 @@ struct EnumUtil {
   DexMethodRef* INTEGER_COMPARETO_METHOD = DexMethod::make_method(
       "Ljava/lang/Integer;.compareTo:(Ljava/lang/Integer;)I");
   DexMethodRef* INTEGER_VALUEOF_METHOD = method::java_lang_Integer_valueOf();
-  DexMethodRef* RTEXCEPTION_CTOR_METHOD =
-      method::java_lang_RuntimeException_init_String();
   DexMethodRef* ILLEGAL_ARG_CONSTRUCT_METHOD = DexMethod::make_method(
       "Ljava/lang/IllegalArgumentException;.<init>:(Ljava/lang/String;)V");
   DexMethodRef* STRING_EQ_METHOD =
