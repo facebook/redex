@@ -632,7 +632,8 @@ enum class PerfSensitiveGroup : uint8_t {
   NONE,
   BETAMAP_ORDERED,
   OUTLINED,
-  STRINGS_LOOKUP
+  STRINGS_LOOKUP,
+  UNREACHABLE,
 };
 
 struct DexDebugEntry final {
