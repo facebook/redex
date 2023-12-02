@@ -2203,7 +2203,7 @@ std::pair<remove_uninstantiables_impl::Stats, size_t> sweep_code(
     auto non_returning_it = reachable_aspects.non_returning_insns.find(method);
     if (non_returning_it != reachable_aspects.non_returning_insns.end()) {
       auto& non_returning_insns = non_returning_it->second;
-      throw_propagation_impl::ThrowPropagator impl(cfg, /* debug */ false);
+      throw_propagation_impl::ThrowPropagator impl(cfg);
       for (auto block : cfg.blocks()) {
         auto ii = InstructionIterable(block);
         for (auto it = ii.begin(); it != ii.end(); it++) {

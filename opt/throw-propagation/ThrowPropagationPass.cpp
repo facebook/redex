@@ -65,7 +65,6 @@ bool exclude_method(DexMethod* method) {
 } // namespace
 
 void ThrowPropagationPass::bind_config() {
-  bind("debug", false, m_config.debug);
   bind("blocklist",
        {},
        m_config.blocklist,
@@ -160,7 +159,7 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
     return return_methods.empty();
   };
 
-  throw_propagation_impl::ThrowPropagator impl(cfg, config.debug);
+  throw_propagation_impl::ThrowPropagator impl(cfg);
   for (auto block : cfg.blocks()) {
     auto ii = InstructionIterable(block);
     for (auto it = ii.begin(); it != ii.end(); it++) {

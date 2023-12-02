@@ -97,11 +97,7 @@ TEST_F(ThrowPropagationTest, cannot_return_simple) {
   auto expected_str = R"(
     (
       (invoke-static () "LFoo;.bar:()V")
-      (new-instance "Ljava/lang/RuntimeException;")
-      (move-result-pseudo-object v0)
-      (const-string "Redex: Unreachable code after no-return invoke")
-      (move-result-pseudo-object v1)
-      (invoke-direct (v0 v1) "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V")
+      (const v0 0)
       (throw v0)
     )
   )";
@@ -133,11 +129,7 @@ TEST_F(ThrowPropagationTest, cannot_return_remove_move_result) {
   auto expected_str = R"(
     (
       (invoke-static () "LFoo;.bar:()I")
-      (new-instance "Ljava/lang/RuntimeException;")
-      (move-result-pseudo-object v2)
-      (const-string "Redex: Unreachable code after no-return invoke")
-      (move-result-pseudo-object v3)
-      (invoke-direct (v2 v3) "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V")
+      (const v2 0)
       (throw v2)
     )
   )";
