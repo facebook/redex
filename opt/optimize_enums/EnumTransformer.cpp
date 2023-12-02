@@ -675,8 +675,8 @@ class CodeTransformer final {
       auto type = insn->get_type();
       auto new_type = try_convert_to_int_type(type);
       if (new_type) {
-        auto possible_src_types = env.get(insn->src(0));
-        if (possible_src_types.size() != 0) {
+        const auto& possible_src_types = env.get(insn->src(0));
+        if (!possible_src_types.empty()) {
           DexType* candidate_type =
               extract_candidate_enum_type(possible_src_types);
           always_assert(candidate_type == type);
@@ -1004,7 +1004,7 @@ class CodeTransformer final {
     } else if (!m_enum_util->is_super_type_of_candidate_enum(target_type)) {
       return nullptr;
     }
-    auto type_set = reg_types.elements();
+    const auto& type_set = reg_types.elements();
     if (type_set.empty()) {
       // Register holds null value, we infer the type in instruction.
       return candidate_type;
