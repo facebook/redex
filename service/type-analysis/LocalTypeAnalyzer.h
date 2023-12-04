@@ -53,11 +53,6 @@ class RegisterTypeAnalyzer final
 
   static bool analyze_aget(const IRInstruction* insn, DexTypeEnvironment* env);
 
-  static bool analyze_binop_lit(const IRInstruction* insn,
-                                DexTypeEnvironment* env);
-
-  static bool analyze_binop(const IRInstruction* insn, DexTypeEnvironment* env);
-
   static bool analyze_move(const IRInstruction* insn, DexTypeEnvironment* env);
 
   static bool analyze_move_result(const IRInstruction* insn,

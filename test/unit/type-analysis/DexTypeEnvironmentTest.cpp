@@ -1047,49 +1047,6 @@ TEST_F(DexTypeEnvironmentTest, DexTypeDomainReduceProductTest) {
   EXPECT_TRUE(domain_c1.get_set_domain().is_top());
 }
 
-TEST_F(DexTypeEnvironmentTest, ConstNullnessDomainTest) {
-  auto c1 = DexTypeDomain(1);
-  EXPECT_FALSE(c1.is_top());
-  EXPECT_EQ(*c1.get_constant(), 1);
-
-  auto nl = DexTypeDomain::null();
-  EXPECT_FALSE(nl.is_top());
-  EXPECT_TRUE(nl.is_null());
-
-  c1.join_with(nl);
-  EXPECT_TRUE(c1.is_top());
-  EXPECT_TRUE(c1.get<0>().const_domain().is_top());
-  EXPECT_TRUE(c1.get_nullness().is_top());
-  EXPECT_TRUE(c1.is_nullable());
-}
-
-TEST_F(DexTypeEnvironmentTest, ArrayNullnessDomainTest) {
-  auto a1 = ArrayNullnessDomain(1);
-  EXPECT_FALSE(a1.is_top());
-  EXPECT_FALSE(a1.is_bottom());
-  EXPECT_FALSE(a1.get_nullness().is_top());
-  EXPECT_EQ(a1.get_nullness(), NullnessDomain(NOT_NULL));
-  EXPECT_EQ(*a1.get_length(), 1);
-  EXPECT_EQ(a1.get_element(0), NullnessDomain(UNINITIALIZED));
-  EXPECT_TRUE(a1.get_element(1).is_top());
-
-  auto a2 = ArrayNullnessDomain(2);
-  EXPECT_FALSE(a2.is_top());
-  EXPECT_FALSE(a2.is_bottom());
-  EXPECT_EQ(a2.get_nullness(), NullnessDomain(NOT_NULL));
-  EXPECT_EQ(*a2.get_length(), 2);
-  EXPECT_EQ(a2.get_element(0), NullnessDomain(UNINITIALIZED));
-  EXPECT_EQ(a2.get_element(1), NullnessDomain(UNINITIALIZED));
-
-  a1.join_with(a2);
-  EXPECT_FALSE(a1.is_top());
-  EXPECT_FALSE(a1.is_bottom());
-  EXPECT_EQ(a1.get_nullness(), NullnessDomain(NOT_NULL));
-  EXPECT_TRUE(a1.get<1>().is_top());
-  EXPECT_TRUE(a1.get_element(0).is_top());
-  EXPECT_TRUE(a1.get_element(1).is_top());
-}
-
 TEST_F(DexTypeEnvironmentTest, BaseClassInterfaceJoinTest) {
   auto abs_me = SingletonDexTypeDomain(m_abs_map_entry);
   auto intf = SingletonDexTypeDomain(m_map_entry);

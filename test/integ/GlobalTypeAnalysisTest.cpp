@@ -157,9 +157,7 @@ TEST_F(GlobalTypeAnalysisTest, ConstNullnessDomainTest) {
   auto lta = gta->get_replayable_local_analysis(meth_foo);
   auto code = meth_foo->get_code();
   auto foo_exit_env = lta->get_exit_state_at(code->cfg().exit_block());
-  EXPECT_FALSE(foo_exit_env.get_reg_environment().get(0).is_top());
-  EXPECT_EQ(*foo_exit_env.get_reg_environment().get(0).get_constant(), 1);
-  EXPECT_TRUE(foo_exit_env.get_reg_environment().get(0).is_not_null());
+  EXPECT_TRUE(foo_exit_env.get_reg_environment().get(0).is_top());
 }
 
 TEST_F(GlobalTypeAnalysisTest, ArrayConstNullnessDomainTest) {

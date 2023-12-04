@@ -181,7 +181,7 @@ TEST_F(TypedefAnnosTest, test_int_field) {
                 DexType::get_type("Linteg/TestIntDef;"));
       auto domain = env.get_type_domain(insn->src(1));
       auto dex_type = DexType::make_type("I");
-      EXPECT_EQ(domain.get<0>(), ConstNullnessDomain(Nullness::NOT_NULL));
+      EXPECT_TRUE(domain.is_not_null());
       EXPECT_EQ(domain.get<1>(), SingletonDexTypeDomain(dex_type));
       EXPECT_EQ(domain.get<2>(), SmallSetDexTypeDomain(dex_type));
     }
@@ -210,7 +210,7 @@ TEST_F(TypedefAnnosTest, test_str_field) {
           DexType::make_type("Lcom/facebook/redextest/TypedefAnnosTest;");
       EXPECT_EQ(*(env.get_annotation(insn->src(1))),
                 DexType::get_type("Linteg/TestStringDef;"));
-      EXPECT_EQ(domain.get<0>(), ConstNullnessDomain(Nullness::NOT_NULL));
+      EXPECT_TRUE(domain.is_not_null());
       EXPECT_EQ(domain.get<1>(), SingletonDexTypeDomain(dex_type));
       EXPECT_EQ(domain.get<2>(), SmallSetDexTypeDomain(dex_type));
     }
