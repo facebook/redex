@@ -829,7 +829,6 @@ TEST_F(TypedefAnnoCheckerTest, testSynthAccessor) {
   EXPECT_TRUE(accessor != nullptr);
   IRCode* code = accessor->get_code();
   code->build_cfg();
-  // auto& cfg = code->cfg();
 
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
@@ -886,4 +885,30 @@ TEST_F(TypedefAnnoCheckerTest, testSynthAccessor) {
  failed instruction: CONST_STRING \"liu\"\n\
  Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.access$takesStrConst:(Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;Ljava/lang/String;)Ljava/lang/String;\n\
  Incorrect parameter's index: 1\n\n");
+}
+
+TEST_F(TypedefAnnoCheckerTest, testAssignNullToString) {
+  auto scope = build_class_scope(stores);
+  auto method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerTest;.testAssignNullToString:()Ljava/lang/String;")
+          ->as_def();
+
+  IRCode* code = method->get_code();
+  code->build_cfg();
+
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker =
+      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  checker.run(method);
+  code->clear_cfg();
+
+  EXPECT_TRUE(checker.complete());
 }

@@ -181,4 +181,8 @@ public class TypedefAnnoCheckerTest {
     int res = flag ? TestIntDef.ZERO : TestIntDef.ONE;
     return res;
   }
+
+  static @TestStringDef String testAssignNullToString() {
+    return null;
+  }
 }
