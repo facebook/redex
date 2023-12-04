@@ -255,7 +255,7 @@ using TypedefAnnotationDomain = SingletonDexTypeDomain;
 
 /*
  *
- * ArrayConstNullnessDomain X SingletonDexTypeDomain X SmallSetDexTypeDomain
+ * ConstNullnessDomain X SingletonDexTypeDomain X SmallSetDexTypeDomain
  *
  *
  * When the SmallSetDexTypeDomain has elements, then they represent an exact set
@@ -263,7 +263,7 @@ using TypedefAnnotationDomain = SingletonDexTypeDomain;
  */
 class DexTypeDomain final
     : public sparta::ReducedProductAbstractDomain<DexTypeDomain,
-                                                  ArrayConstNullnessDomain,
+                                                  ConstNullnessDomain,
                                                   SingletonDexTypeDomain,
                                                   SmallSetDexTypeDomain,
                                                   TypedefAnnotationDomain> {
@@ -272,7 +272,7 @@ class DexTypeDomain final
 
   using BaseType =
       sparta::ReducedProductAbstractDomain<DexTypeDomain,
-                                           ArrayConstNullnessDomain,
+                                           ConstNullnessDomain,
                                            SingletonDexTypeDomain,
                                            SmallSetDexTypeDomain,
                                            TypedefAnnotationDomain>;
@@ -322,21 +322,14 @@ class DexTypeDomain final
                                : TypedefAnnotationDomain())) {}
 
   static void reduce_product(
-      std::tuple<ArrayConstNullnessDomain,
+      std::tuple<ConstNullnessDomain,
                  SingletonDexTypeDomain,
                  SmallSetDexTypeDomain,
                  TypedefAnnotationDomain>& /* product */) {}
 
   static DexTypeDomain null() { return DexTypeDomain(IS_NULL); }
 
-  NullnessDomain get_nullness() const {
-    auto domain = get<0>();
-    if (domain.which() == 0) {
-      return domain.get<ConstNullnessDomain>().get_nullness();
-    } else {
-      return domain.get<ArrayNullnessDomain>().get_nullness();
-    }
-  }
+  NullnessDomain get_nullness() const { return get<0>().get_nullness(); }
 
   bool is_null() const { return get_nullness().element() == IS_NULL; }
 
@@ -345,42 +338,7 @@ class DexTypeDomain final
   bool is_nullable() const { return get_nullness().is_top(); }
 
   boost::optional<ConstantDomain::ConstantType> get_constant() const {
-    if (auto const_nullness = get<0>().maybe_get<ConstNullnessDomain>()) {
-      return const_nullness->const_domain().get_constant();
-    }
-    return boost::none;
-  }
-
-  ArrayNullnessDomain get_array_nullness() const {
-    if (auto array_nullness = get<0>().maybe_get<ArrayNullnessDomain>()) {
-      return *array_nullness;
-    }
-    return ArrayNullnessDomain::top();
-  }
-
-  NullnessDomain get_array_element_nullness(
-      boost::optional<int64_t> idx) const {
-    if (!ArrayNullnessDomain::is_valid_array_idx(idx)) {
-      return NullnessDomain::top();
-    }
-    return get_array_nullness().get_element(*idx);
-  }
-
-  void set_array_element_nullness(boost::optional<int64_t> idx,
-                                  const NullnessDomain& nullness) {
-    if (!ArrayNullnessDomain::is_valid_array_idx(idx)) {
-      apply<0>([&](ArrayConstNullnessDomain* d) {
-        d->apply<ArrayNullnessDomain>([&](ArrayNullnessDomain* array_nullness) {
-          array_nullness->reset_elements();
-        });
-      });
-      return;
-    }
-    apply<0>([&](ArrayConstNullnessDomain* d) {
-      d->apply<ArrayNullnessDomain>([&](ArrayNullnessDomain* array_nullness) {
-        array_nullness->set_element(*idx, nullness);
-      });
-    });
+    return get<0>().const_domain().get_constant();
   }
 
   const SingletonDexTypeDomain& get_single_domain() const { return get<1>(); }

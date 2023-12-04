@@ -1058,7 +1058,7 @@ TEST_F(DexTypeEnvironmentTest, ConstNullnessDomainTest) {
 
   c1.join_with(nl);
   EXPECT_TRUE(c1.is_top());
-  EXPECT_TRUE(c1.get<0>().get<ConstNullnessDomain>().const_domain().is_top());
+  EXPECT_TRUE(c1.get<0>().const_domain().is_top());
   EXPECT_TRUE(c1.get_nullness().is_top());
   EXPECT_TRUE(c1.is_nullable());
 }

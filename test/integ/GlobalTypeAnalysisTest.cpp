@@ -264,7 +264,6 @@ TEST_F(GlobalTypeAnalysisTest, PrimitiveArrayTest) {
   EXPECT_TRUE(rtype.is_not_null());
   EXPECT_EQ(rtype.get_single_domain(),
             SingletonDexTypeDomain(get_type_simple("[B")));
-  EXPECT_TRUE(rtype.get_array_nullness().is_top());
 }
 
 TEST_F(GlobalTypeAnalysisTest, InstanceSensitiveCtorTest) {
@@ -309,7 +308,6 @@ TEST_F(GlobalTypeAnalysisTest, ArrayNullnessEscapeTest) {
   EXPECT_EQ(rtype.get_single_domain(),
             SingletonDexTypeDomain(
                 get_type_simple("Lcom/facebook/redextest/TestM$A;")));
-  EXPECT_TRUE(rtype.get_array_nullness().is_top());
 }
 
 TEST_F(GlobalTypeAnalysisTest, ArrayNullnessEscape2Test) {
@@ -329,7 +327,6 @@ TEST_F(GlobalTypeAnalysisTest, ArrayNullnessEscape2Test) {
   EXPECT_EQ(rtype.get_single_domain(),
             SingletonDexTypeDomain(
                 get_type_simple("Lcom/facebook/redextest/TestN$A;")));
-  EXPECT_TRUE(rtype.get_array_nullness().is_top());
 
   auto dance2 = get_method("TestN;.danceWithArray2", "",
                            "Lcom/facebook/redextest/TestN$A;");
@@ -340,7 +337,6 @@ TEST_F(GlobalTypeAnalysisTest, ArrayNullnessEscape2Test) {
   EXPECT_EQ(rtype.get_single_domain(),
             SingletonDexTypeDomain(
                 get_type_simple("Lcom/facebook/redextest/TestN$A;")));
-  EXPECT_TRUE(rtype.get_array_nullness().is_top());
 }
 
 TEST_F(GlobalTypeAnalysisTest, MultipleCalleeTest) {
