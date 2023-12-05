@@ -14,6 +14,8 @@
 #include "ConfigFiles.h"
 #include "DexUtil.h"
 #include "IOUtil.h"
+#include "InitClassesWithSideEffects.h"
+#include "LocalDce.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "Show.h"
@@ -176,6 +178,18 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
   // Store names of removed classes and methods
   ConcurrentSet<std::string> removed_symbols;
 
+  auto sweep_code = m_prune_uninstantiable_insns || m_throw_propagation;
+  auto scope = build_class_scope(stores);
+  always_assert(!pm.unreliable_virtual_scopes());
+  auto method_override_graph = mog::build_graph(scope);
+  std::unique_ptr<init_classes::InitClassesWithSideEffects>
+      init_classes_with_side_effects;
+  if (sweep_code && !pm.init_class_lowering_has_run()) {
+    init_classes_with_side_effects =
+        std::make_unique<init_classes::InitClassesWithSideEffects>(
+            scope, conf.create_init_class_insns(), method_override_graph.get());
+  }
+
   root_metrics(stores, pm);
 
   bool emit_graph_this_run =
@@ -193,8 +207,8 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
   int num_ignore_check_strings = 0;
   reachability::ReachableAspects reachable_aspects;
   auto reachables = this->compute_reachable_objects(
-      stores, pm, &num_ignore_check_strings, &reachable_aspects,
-      emit_graph_this_run, m_relaxed_keep_class_members,
+      scope, *method_override_graph, pm, &num_ignore_check_strings,
+      &reachable_aspects, emit_graph_this_run, m_relaxed_keep_class_members,
       m_prune_unreferenced_interfaces, m_prune_uninstantiable_insns,
       m_prune_uncallable_instance_method_bodies, m_throw_propagation,
       m_remove_no_argument_constructors);
@@ -219,7 +233,7 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
   auto abstracted_classes = reachability::mark_classes_abstract(
       stores, *reachables, reachable_aspects);
   pm.incr_metric("abstracted_classes", abstracted_classes.size());
-  if (m_prune_uninstantiable_insns || m_throw_propagation) {
+  if (sweep_code) {
     remove_uninstantiables_impl::Stats remove_uninstantiables_stats;
     std::atomic<size_t> throws_inserted{0};
     InsertOnlyConcurrentSet<DexMethod*> affected_methods;
@@ -230,6 +244,23 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
     remove_uninstantiables_stats.report(pm);
     pm.incr_metric("throws_inserted", (size_t)throws_inserted);
     pm.incr_metric("methods_with_code_changes", affected_methods.size());
+    std::unordered_set<DexMethodRef*> pure_methods;
+    LocalDce::Stats dce_stats;
+    std::mutex dce_stats_mutex;
+    workqueue_run<DexMethod*>(
+        [&](DexMethod* method) {
+          LocalDce dce(init_classes_with_side_effects.get(), pure_methods);
+          dce.dce(method->get_code()->cfg(), /* normalize_new_instances */ true,
+                  method->get_class());
+          auto local_stats = dce.get_stats();
+          std::lock_guard<std::mutex> lock(dce_stats_mutex);
+          dce_stats += local_stats;
+        },
+        affected_methods);
+    pm.incr_metric("instructions_eliminated_localdce_dead",
+                   dce_stats.dead_instruction_count);
+    pm.incr_metric("instructions_eliminated_localdce_unreachable",
+                   dce_stats.unreachable_instruction_count);
   }
   reachability::sweep(stores, *reachables,
                       output_unreachable_symbols ? &removed_symbols : nullptr,
@@ -268,7 +299,7 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
     {
       std::ofstream os;
       open_or_die(conf.metafile("method-override-graph"), &os);
-      auto method_override_graph = mog::build_graph(build_class_scope(stores));
+      method_override_graph = mog::build_graph(build_class_scope(stores));
       method_override_graph->dump(os);
     }
   }
@@ -301,7 +332,8 @@ void RemoveUnreachablePassBase::write_out_removed_symbols(
 
 std::unique_ptr<reachability::ReachableObjects>
 RemoveUnreachablePass::compute_reachable_objects(
-    const DexStoresVector& stores,
+    const Scope& scope,
+    const method_override_graph::Graph& method_override_graph,
     PassManager& /* pm */,
     int* num_ignore_check_strings,
     reachability::ReachableAspects* reachable_aspects,
@@ -313,11 +345,11 @@ RemoveUnreachablePass::compute_reachable_objects(
     bool cfg_gathering_check_returning,
     bool remove_no_argument_constructors) {
   return reachability::compute_reachable_objects(
-      stores, m_ignore_sets, num_ignore_check_strings, reachable_aspects,
-      emit_graph_this_run, relaxed_keep_class_members, relaxed_keep_interfaces,
-      cfg_gathering_check_instantiable, cfg_gathering_check_instance_callable,
-      cfg_gathering_check_returning, false, nullptr,
-      remove_no_argument_constructors);
+      scope, method_override_graph, m_ignore_sets, num_ignore_check_strings,
+      reachable_aspects, emit_graph_this_run, relaxed_keep_class_members,
+      relaxed_keep_interfaces, cfg_gathering_check_instantiable,
+      cfg_gathering_check_instance_callable, cfg_gathering_check_returning,
+      false, remove_no_argument_constructors);
 }
 
 static RemoveUnreachablePass s_pass;

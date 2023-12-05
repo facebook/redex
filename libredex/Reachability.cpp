@@ -1895,7 +1895,8 @@ void ReachableAspects::finish(const ConditionallyMarked& cond_marked,
 }
 
 std::unique_ptr<ReachableObjects> compute_reachable_objects(
-    const DexStoresVector& stores,
+    const Scope& scope,
+    const method_override_graph::Graph& method_override_graph,
     const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
     ReachableAspects* reachable_aspects,
@@ -1906,16 +1907,13 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     bool cfg_gathering_check_instance_callable,
     bool cfg_gathering_check_returning,
     bool should_mark_all_as_seed,
-    std::unique_ptr<const mog::Graph>* out_method_override_graph,
     bool remove_no_argument_constructors) {
   Timer t("Marking");
-  auto scope = build_class_scope(stores);
   auto reachable_objects = std::make_unique<ReachableObjects>();
   ConditionallyMarked cond_marked;
-  auto method_override_graph = mog::build_graph(scope);
 
   ConcurrentSet<ReachableObject, ReachableObjectHash> root_set;
-  RootSetMarker root_set_marker(*method_override_graph, record_reachability,
+  RootSetMarker root_set_marker(method_override_graph, record_reachability,
                                 relaxed_keep_class_members,
                                 remove_no_argument_constructors, &cond_marked,
                                 reachable_objects.get(), &root_set);
@@ -1930,7 +1928,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
   Stats stats;
   TransitiveClosureMarkerSharedState shared_state{
       &ignore_sets,
-      method_override_graph.get(),
+      &method_override_graph,
       record_reachability,
       relaxed_keep_class_members,
       relaxed_keep_interfaces,
@@ -1951,15 +1949,11 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
       },
       root_set, num_threads,
       /*push_tasks_while_running=*/true);
-  compute_zombie_methods(*method_override_graph, *reachable_objects,
+  compute_zombie_methods(method_override_graph, *reachable_objects,
                          *reachable_aspects);
 
   if (num_ignore_check_strings != nullptr) {
     *num_ignore_check_strings = (int)stats.num_ignore_check_strings;
-  }
-
-  if (out_method_override_graph) {
-    *out_method_override_graph = std::move(method_override_graph);
   }
 
   reachable_aspects->finish(cond_marked, *reachable_objects);

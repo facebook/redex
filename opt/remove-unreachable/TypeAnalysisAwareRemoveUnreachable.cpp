@@ -339,7 +339,8 @@ class TypeAnalysisAwareClosureMarkerWorker final
 };
 
 std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
-    const DexStoresVector& stores,
+    const Scope& scope,
+    const method_override_graph::Graph& method_override_graph,
     const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
     ReachableAspects* reachable_aspects,
@@ -355,17 +356,15 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
     int* num_unreachable_invokes,
     int* num_null_invokes) {
   Timer t("Marking");
-  auto scope = build_class_scope(stores);
   walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
     code.cfg().calculate_exit_block();
   });
   auto reachable_objects = std::make_unique<ReachableObjects>();
   ConditionallyMarked cond_marked;
-  auto method_override_graph = mog::build_graph(scope);
 
   ConcurrentSet<ReachableObject, ReachableObjectHash> root_set;
   bool remove_no_argument_constructors = false;
-  RootSetMarker root_set_marker(*method_override_graph, record_reachability,
+  RootSetMarker root_set_marker(method_override_graph, record_reachability,
                                 relaxed_keep_class_members,
                                 remove_no_argument_constructors, &cond_marked,
                                 reachable_objects.get(), &root_set);
@@ -374,7 +373,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
   size_t num_threads = redex_parallel::default_num_threads();
   Stats stats;
   TypeAnalysisAwareClosureMarkerSharedState shared_state{
-      {&ignore_sets, method_override_graph.get(), record_reachability,
+      {&ignore_sets, &method_override_graph, record_reachability,
        relaxed_keep_class_members, relaxed_keep_interfaces,
        cfg_gathering_check_instantiable, cfg_gathering_check_instance_callable,
        cfg_gathering_check_returning, &cond_marked, reachable_objects.get(),
@@ -391,7 +390,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
       },
       root_set, num_threads,
       /* push_tasks_while_running*/ true);
-  compute_zombie_methods(*method_override_graph, *reachable_objects,
+  compute_zombie_methods(method_override_graph, *reachable_objects,
                          *reachable_aspects);
 
   if (num_ignore_check_strings != nullptr) {
@@ -416,7 +415,8 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
 
 std::unique_ptr<reachability::ReachableObjects>
 TypeAnalysisAwareRemoveUnreachablePass::compute_reachable_objects(
-    const DexStoresVector& stores,
+    const Scope& scope,
+    const method_override_graph::Graph& method_override_graph,
     PassManager& pm,
     int* num_ignore_check_strings,
     reachability::ReachableAspects* reachable_aspects,
@@ -437,11 +437,12 @@ TypeAnalysisAwareRemoveUnreachablePass::compute_reachable_objects(
   int num_unreachable_invokes;
   int num_null_invokes;
   auto res = compute_reachable_objects_with_type_anaysis(
-      stores, m_ignore_sets, num_ignore_check_strings, reachable_aspects,
-      emit_graph_this_run, relaxed_keep_class_members, relaxed_keep_interfaces,
-      cfg_gathering_check_instantiable, cfg_gathering_check_instance_callable,
-      cfg_gathering_check_returning, gta.get(), remove_no_argument_constructors,
-      &num_exact_resolved_callees, &num_unreachable_invokes, &num_null_invokes);
+      scope, method_override_graph, m_ignore_sets, num_ignore_check_strings,
+      reachable_aspects, emit_graph_this_run, relaxed_keep_class_members,
+      relaxed_keep_interfaces, cfg_gathering_check_instantiable,
+      cfg_gathering_check_instance_callable, cfg_gathering_check_returning,
+      gta.get(), remove_no_argument_constructors, &num_exact_resolved_callees,
+      &num_unreachable_invokes, &num_null_invokes);
   pm.incr_metric("num_exact_resolved_callees", num_exact_resolved_callees);
   pm.incr_metric("num_unreachable_invokes", num_unreachable_invokes);
   pm.incr_metric("num_null_invokes", num_null_invokes);

@@ -31,9 +31,11 @@ TEST_F(FlowSensitiveReachabilityTest,
   reachability::ReachableAspects reachable_aspects;
   auto scope = build_class_scope(stores);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
+  auto method_override_graph = method_override_graph::build_graph(scope);
 
   auto reachable_objects = reachability::compute_reachable_objects(
-      stores, ig_sets, &num_ignore_check_strings, &reachable_aspects, false,
+      scope, *method_override_graph, ig_sets, &num_ignore_check_strings,
+      &reachable_aspects, false,
       /* relaxed_keep_class_members */ true,
       /* relaxed_keep_interfaces */ false,
       /* cfg_gathering_check_instantiable */ true);
@@ -112,9 +114,11 @@ TEST_F(FlowSensitiveReachabilityTest, cfg_gathering_check_instance_callable) {
   reachability::ReachableAspects reachable_aspects;
   auto scope = build_class_scope(stores);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
+  auto method_override_graph = method_override_graph::build_graph(scope);
 
   auto reachable_objects = reachability::compute_reachable_objects(
-      stores, ig_sets, &num_ignore_check_strings, &reachable_aspects, false,
+      scope, *method_override_graph, ig_sets, &num_ignore_check_strings,
+      &reachable_aspects, false,
       /* relaxed_keep_class_members */ true,
       /* relaxed_keep_interfaces */ false,
       /* cfg_gathering_check_instantiable */ true,
@@ -195,9 +199,11 @@ TEST_F(FlowSensitiveReachabilityTest, sweep_uncallable_virtual_methods) {
   reachability::ReachableAspects reachable_aspects;
   auto scope = build_class_scope(stores);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
+  auto method_override_graph = method_override_graph::build_graph(scope);
 
   auto reachable_objects = reachability::compute_reachable_objects(
-      stores, ig_sets, &num_ignore_check_strings, &reachable_aspects, false,
+      scope, *method_override_graph, ig_sets, &num_ignore_check_strings,
+      &reachable_aspects, false,
       /* relaxed_keep_class_members */ true,
       /* relaxed_keep_interfaces */ false,
       /* cfg_gathering_check_instantiable */ true,
@@ -288,9 +294,11 @@ TEST_F(FlowSensitiveReachabilityTest, abstract_overrides_non_abstract) {
   reachability::ReachableAspects reachable_aspects;
   auto scope = build_class_scope(stores);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
+  auto method_override_graph = method_override_graph::build_graph(scope);
 
   auto reachable_objects = reachability::compute_reachable_objects(
-      stores, ig_sets, &num_ignore_check_strings, &reachable_aspects, false,
+      scope, *method_override_graph, ig_sets, &num_ignore_check_strings,
+      &reachable_aspects, false,
       /* relaxed_keep_class_members */ true,
       /* relaxed_keep_interfaces */ false,
       /* cfg_gathering_check_instantiable */ true);
@@ -333,9 +341,11 @@ TEST_F(FlowSensitiveReachabilityTest, throw_propagation) {
   reachability::ReachableAspects reachable_aspects;
   auto scope = build_class_scope(stores);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
+  auto method_override_graph = method_override_graph::build_graph(scope);
 
   auto reachable_objects = reachability::compute_reachable_objects(
-      stores, ig_sets, &num_ignore_check_strings, &reachable_aspects, false,
+      scope, *method_override_graph, ig_sets, &num_ignore_check_strings,
+      &reachable_aspects, false,
       /* relaxed_keep_class_members */ true,
       /* relaxed_keep_interfaces */ true,
       /* cfg_gathering_check_instantiable */ true,

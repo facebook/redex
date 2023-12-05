@@ -64,17 +64,19 @@ class RemoveUnreachablePassBase : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   virtual std::unique_ptr<reachability::ReachableObjects>
-  compute_reachable_objects(const DexStoresVector& stores,
-                            PassManager& pm,
-                            int* num_ignore_check_strings,
-                            reachability::ReachableAspects* reachable_aspects,
-                            bool emit_graph_this_run,
-                            bool relaxed_keep_class_members,
-                            bool relaxed_keep_interfaces,
-                            bool cfg_gathering_check_instantiable,
-                            bool cfg_gathering_check_instance_callable,
-                            bool cfg_gathering_check_returning,
-                            bool remove_no_argument_constructors) = 0;
+  compute_reachable_objects(
+      const Scope& scope,
+      const method_override_graph::Graph& method_override_graph,
+      PassManager& pm,
+      int* num_ignore_check_strings,
+      reachability::ReachableAspects* reachable_aspects,
+      bool emit_graph_this_run,
+      bool relaxed_keep_class_members,
+      bool relaxed_keep_interfaces,
+      bool cfg_gathering_check_instantiable,
+      bool cfg_gathering_check_instance_callable,
+      bool cfg_gathering_check_returning,
+      bool remove_no_argument_constructors) = 0;
 
   void write_out_removed_symbols(
       const std::string& filepath,
@@ -101,7 +103,8 @@ class RemoveUnreachablePass : public RemoveUnreachablePassBase {
       : RemoveUnreachablePassBase("RemoveUnreachablePass") {}
 
   std::unique_ptr<reachability::ReachableObjects> compute_reachable_objects(
-      const DexStoresVector& stores,
+      const Scope& scope,
+      const method_override_graph::Graph& method_override_graph,
       PassManager& pm,
       int* num_ignore_check_strings,
       reachability::ReachableAspects* reachable_aspects,
