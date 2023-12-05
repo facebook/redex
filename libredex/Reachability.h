@@ -504,6 +504,7 @@ class RootSetMarker {
 class TransitiveClosureMarkerWorker;
 
 struct TransitiveClosureMarkerSharedState {
+  std::unordered_set<const DexClass*> scope_set;
   const IgnoreSets* ignore_sets;
   const method_override_graph::Graph* method_override_graph;
   bool record_reachability;

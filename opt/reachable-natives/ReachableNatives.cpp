@@ -69,6 +69,7 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
       ("ReachableNativesPass Run "s + std::to_string(m_run_number)).c_str());
 
   auto scope = build_class_scope(stores);
+  std::unordered_set<const DexClass*> scope_set(scope.begin(), scope.end());
   auto reachable_objects = std::make_unique<reachability::ReachableObjects>();
   reachability::ReachableAspects reachable_aspects;
   reachability::ConditionallyMarked cond_marked;
@@ -94,6 +95,7 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
   reachability::IgnoreSets ignore_sets;
   reachability::Stats stats;
   reachability::TransitiveClosureMarkerSharedState shared_state{
+      std::move(scope_set),
       &ignore_sets,
       method_override_graph.get(),
       false,

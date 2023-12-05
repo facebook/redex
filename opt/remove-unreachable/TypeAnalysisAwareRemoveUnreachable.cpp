@@ -356,6 +356,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
     int* num_unreachable_invokes,
     int* num_null_invokes) {
   Timer t("Marking");
+  std::unordered_set<const DexClass*> scope_set(scope.begin(), scope.end());
   walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
     code.cfg().calculate_exit_block();
   });
@@ -373,8 +374,8 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
   size_t num_threads = redex_parallel::default_num_threads();
   Stats stats;
   TypeAnalysisAwareClosureMarkerSharedState shared_state{
-      {&ignore_sets, &method_override_graph, record_reachability,
-       relaxed_keep_class_members, relaxed_keep_interfaces,
+      {std::move(scope_set), &ignore_sets, &method_override_graph,
+       record_reachability, relaxed_keep_class_members, relaxed_keep_interfaces,
        cfg_gathering_check_instantiable, cfg_gathering_check_instance_callable,
        cfg_gathering_check_returning, &cond_marked, reachable_objects.get(),
        reachable_aspects, &stats},

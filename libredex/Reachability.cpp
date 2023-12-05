@@ -378,6 +378,15 @@ void TransitiveClosureMarkerWorker::push(const Parent* parent,
   if (!cls) {
     return;
   }
+  if (!m_shared_state->scope_set.count(cls)) {
+    if (!cls->is_external()) {
+      TRACE(REACH, 2,
+            "Warning: push([%s], class [%s]) where child class is not external "
+            "and not in scope!",
+            SHOW(parent), SHOW(cls));
+    }
+    return;
+  }
   record_reachability(parent, cls);
   if (!m_shared_state->reachable_objects->mark(cls)) {
     return;
@@ -1307,6 +1316,7 @@ void TransitiveClosureMarkerWorker::push_typelike_strings(
 }
 
 void TransitiveClosureMarkerWorker::visit_cls(const DexClass* cls) {
+  always_assert(m_shared_state->scope_set.count(cls));
   TRACE(REACH, 4, "Visiting class: %s", SHOW(cls));
   auto is_interface_instantiable = [](const DexClass* interface) {
     if (is_annotation(interface) || root(interface) || !can_rename(interface)) {
@@ -1909,6 +1919,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     bool should_mark_all_as_seed,
     bool remove_no_argument_constructors) {
   Timer t("Marking");
+  std::unordered_set<const DexClass*> scope_set(scope.begin(), scope.end());
   auto reachable_objects = std::make_unique<ReachableObjects>();
   ConditionallyMarked cond_marked;
 
@@ -1927,6 +1938,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
   size_t num_threads = redex_parallel::default_num_threads();
   Stats stats;
   TransitiveClosureMarkerSharedState shared_state{
+      std::move(scope_set),
       &ignore_sets,
       &method_override_graph,
       record_reachability,
