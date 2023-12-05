@@ -2146,6 +2146,10 @@ void sweep(DexStoresVector& stores,
       }
       cls->get_dmethods().clear();
       cls->get_vmethods().clear();
+      auto anno_set = cls->get_anno_set();
+      if (anno_set) {
+        anno_set->get_annotations().clear();
+      }
       return;
     }
     sweep_if_unmarked(reachables, DexField::delete_field_DO_NOT_USE,
