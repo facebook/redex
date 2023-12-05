@@ -722,11 +722,13 @@ void sweep(DexStoresVector& stores,
 
 void reanimate_zombie_methods(const ReachableAspects& reachable_aspects);
 
-std::pair<remove_uninstantiables_impl::Stats, size_t> sweep_code(
+void sweep_code(
     DexStoresVector& stores,
     bool prune_uncallable_instance_method_bodies,
     bool skip_uncallable_virtual_methods,
-    const ReachableAspects& reachable_aspects);
+    const ReachableAspects& reachable_aspects,
+    remove_uninstantiables_impl::Stats* remove_uninstantiables_stats,
+    std::atomic<size_t>* throws_inserted);
 
 remove_uninstantiables_impl::Stats sweep_uncallable_virtual_methods(
     DexStoresVector& stores, const ReachableAspects& reachable_aspects);

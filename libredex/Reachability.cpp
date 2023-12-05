@@ -2163,11 +2163,13 @@ void reanimate_zombie_methods(const ReachableAspects& reachable_aspects) {
   }
 }
 
-std::pair<remove_uninstantiables_impl::Stats, size_t> sweep_code(
+void sweep_code(
     DexStoresVector& stores,
     bool prune_uncallable_instance_method_bodies,
     bool skip_uncallable_virtual_methods,
-    const ReachableAspects& reachable_aspects) {
+    const ReachableAspects& reachable_aspects,
+    remove_uninstantiables_impl::Stats* remove_uninstantiables_stats,
+    std::atomic<size_t>* throws_inserted) {
   Timer t("Sweep Code");
   auto scope = build_class_scope(stores);
   std::unordered_set<DexType*> uninstantiable_types;
@@ -2191,8 +2193,7 @@ std::pair<remove_uninstantiables_impl::Stats, size_t> sweep_code(
     }
   }
   uninstantiable_types.insert(type::java_lang_Void());
-  std::atomic<size_t> throws_inserted{0};
-  auto res = walk::parallel::methods<
+  *remove_uninstantiables_stats = walk::parallel::methods<
       remove_uninstantiables_impl::Stats>(scope, [&](DexMethod* method) {
     auto code = method->get_code();
     if (!code || method->rstate.no_optimizations()) {
@@ -2211,7 +2212,7 @@ std::pair<remove_uninstantiables_impl::Stats, size_t> sweep_code(
             continue;
           }
           if (impl.try_apply(block->to_cfg_instruction_iterator(it))) {
-            throws_inserted++;
+            (*throws_inserted)++;
           }
           // Stop processing more instructions in this block
           break;
@@ -2231,7 +2232,6 @@ std::pair<remove_uninstantiables_impl::Stats, size_t> sweep_code(
     cfg.remove_unreachable_blocks();
     return stats;
   });
-  return std::make_pair(res, (size_t)throws_inserted);
 }
 
 remove_uninstantiables_impl::Stats sweep_uncallable_virtual_methods(
