@@ -2169,7 +2169,8 @@ void sweep_code(
     bool skip_uncallable_virtual_methods,
     const ReachableAspects& reachable_aspects,
     remove_uninstantiables_impl::Stats* remove_uninstantiables_stats,
-    std::atomic<size_t>* throws_inserted) {
+    std::atomic<size_t>* throws_inserted,
+    InsertOnlyConcurrentSet<DexMethod*>* affected_methods) {
   Timer t("Sweep Code");
   auto scope = build_class_scope(stores);
   std::unordered_set<DexType*> uninstantiable_types;
@@ -2219,17 +2220,22 @@ void sweep_code(
         }
       }
       cfg.remove_unreachable_blocks();
+      affected_methods->insert(method);
     }
     if (uncallable_instance_methods.count(method)) {
       if (skip_uncallable_virtual_methods && method->is_virtual()) {
         return remove_uninstantiables_impl::Stats();
       }
+      affected_methods->insert(method);
       return remove_uninstantiables_impl::replace_all_with_unreachable_throw(
           cfg);
     }
     auto stats = remove_uninstantiables_impl::replace_uninstantiable_refs(
         uninstantiable_types, cfg);
-    cfg.remove_unreachable_blocks();
+    if (stats.sum()) {
+      cfg.remove_unreachable_blocks();
+      affected_methods->insert(method);
+    }
     return stats;
   });
 }

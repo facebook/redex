@@ -222,12 +222,14 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
   if (m_prune_uninstantiable_insns || m_throw_propagation) {
     remove_uninstantiables_impl::Stats remove_uninstantiables_stats;
     std::atomic<size_t> throws_inserted{0};
+    InsertOnlyConcurrentSet<DexMethod*> affected_methods;
     reachability::sweep_code(stores, m_prune_uncallable_instance_method_bodies,
                              m_prune_uncallable_virtual_methods,
                              reachable_aspects, &remove_uninstantiables_stats,
-                             &throws_inserted);
+                             &throws_inserted, &affected_methods);
     remove_uninstantiables_stats.report(pm);
     pm.incr_metric("throws_inserted", (size_t)throws_inserted);
+    pm.incr_metric("methods_with_code_changes", affected_methods.size());
   }
   reachability::sweep(stores, *reachables,
                       output_unreachable_symbols ? &removed_symbols : nullptr,

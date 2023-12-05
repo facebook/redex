@@ -83,10 +83,11 @@ TEST_F(FlowSensitiveReachabilityTest,
   // Code sweeping
   remove_uninstantiables_impl::Stats remove_uninstantiables_stats;
   std::atomic<size_t> throws_inserted{0};
+  InsertOnlyConcurrentSet<DexMethod*> affected_methods;
   reachability::sweep_code(
       stores, /* prune_uncallable_instance_method_bodies */ false,
       /* skip_uncallable_virtual_methods */ false, reachable_aspects,
-      &remove_uninstantiables_stats, &throws_inserted);
+      &remove_uninstantiables_stats, &throws_inserted, &affected_methods);
   EXPECT_EQ(remove_uninstantiables_stats.field_accesses_on_uninstantiable, 3);
   EXPECT_EQ(remove_uninstantiables_stats.invokes, 7);
   EXPECT_EQ(remove_uninstantiables_stats.check_casts, 1);
@@ -164,10 +165,11 @@ TEST_F(FlowSensitiveReachabilityTest, cfg_gathering_check_instance_callable) {
   // Code sweeping
   remove_uninstantiables_impl::Stats remove_uninstantiables_stats;
   std::atomic<size_t> throws_inserted{0};
+  InsertOnlyConcurrentSet<DexMethod*> affected_methods;
   reachability::sweep_code(
       stores, /* prune_uncallable_instance_method_bodies */ true,
       /* skip_uncallable_virtual_methods */ false, reachable_aspects,
-      &remove_uninstantiables_stats, &throws_inserted);
+      &remove_uninstantiables_stats, &throws_inserted, &affected_methods);
   EXPECT_EQ(remove_uninstantiables_stats.field_accesses_on_uninstantiable, 1);
   EXPECT_EQ(remove_uninstantiables_stats.invokes, 5);
   EXPECT_EQ(remove_uninstantiables_stats.check_casts, 1);
@@ -246,10 +248,11 @@ TEST_F(FlowSensitiveReachabilityTest, sweep_uncallable_virtual_methods) {
   // Code sweeping
   remove_uninstantiables_impl::Stats remove_uninstantiables_stats;
   std::atomic<size_t> throws_inserted{0};
+  InsertOnlyConcurrentSet<DexMethod*> affected_methods;
   reachability::sweep_code(
       stores, /* prune_uncallable_instance_method_bodies */ true,
       /* skip_uncallable_virtual_methods */ true, reachable_aspects,
-      &remove_uninstantiables_stats, &throws_inserted);
+      &remove_uninstantiables_stats, &throws_inserted, &affected_methods);
   EXPECT_EQ(remove_uninstantiables_stats.field_accesses_on_uninstantiable, 1);
   EXPECT_EQ(remove_uninstantiables_stats.invokes, 5);
   EXPECT_EQ(remove_uninstantiables_stats.check_casts, 1);
@@ -351,10 +354,11 @@ TEST_F(FlowSensitiveReachabilityTest, throw_propagation) {
   // Code sweeping
   remove_uninstantiables_impl::Stats remove_uninstantiables_stats;
   std::atomic<size_t> throws_inserted{0};
+  InsertOnlyConcurrentSet<DexMethod*> affected_methods;
   reachability::sweep_code(
       stores, /* prune_uncallable_instance_method_bodies */ true,
       /* skip_uncallable_virtual_methods */ true, reachable_aspects,
-      &remove_uninstantiables_stats, &throws_inserted);
+      &remove_uninstantiables_stats, &throws_inserted, &affected_methods);
 
   walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
 

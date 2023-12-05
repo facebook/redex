@@ -728,7 +728,8 @@ void sweep_code(
     bool skip_uncallable_virtual_methods,
     const ReachableAspects& reachable_aspects,
     remove_uninstantiables_impl::Stats* remove_uninstantiables_stats,
-    std::atomic<size_t>* throws_inserted);
+    std::atomic<size_t>* throws_inserted,
+    InsertOnlyConcurrentSet<DexMethod*>* affected_methods);
 
 remove_uninstantiables_impl::Stats sweep_uncallable_virtual_methods(
     DexStoresVector& stores, const ReachableAspects& reachable_aspects);

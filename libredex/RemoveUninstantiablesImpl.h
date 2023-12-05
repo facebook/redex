@@ -30,6 +30,13 @@ struct Stats {
   int invoke_uninstantiables = 0;
   int check_casts = 0;
 
+  int sum() const {
+    return instance_ofs + invokes + field_accesses_on_uninstantiable +
+           throw_null_methods + abstracted_classes + abstracted_vmethods +
+           removed_vmethods + get_uninstantiables + invoke_uninstantiables +
+           check_casts;
+  }
+
   Stats& operator+=(const Stats&);
   Stats operator+(const Stats&) const;
 
