@@ -42,15 +42,16 @@ class WholeProgramState {
   // By default, the field and method partitions are initialized to Bottom.
   WholeProgramState() = default;
 
-  WholeProgramState(const Scope&,
-                    const global::GlobalTypeAnalyzer&,
-                    const std::unordered_set<DexMethod*>& non_true_virtuals,
-                    const ConcurrentSet<const DexMethod*>& any_init_reachables,
-                    const EligibleIfields& eligible_ifields);
+  WholeProgramState(
+      const Scope&,
+      const global::GlobalTypeAnalyzer&,
+      const InsertOnlyConcurrentSet<DexMethod*>& non_true_virtuals,
+      const ConcurrentSet<const DexMethod*>& any_init_reachables,
+      const EligibleIfields& eligible_ifields);
 
   WholeProgramState(const Scope&,
                     const global::GlobalTypeAnalyzer&,
-                    const std::unordered_set<DexMethod*>&,
+                    const InsertOnlyConcurrentSet<DexMethod*>&,
                     const ConcurrentSet<const DexMethod*>&,
                     const EligibleIfields&,
                     std::shared_ptr<const call_graph::Graph> call_graph);

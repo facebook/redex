@@ -17,7 +17,7 @@ namespace init_classes {
 const InitClasses* InitClassesWithSideEffects::compute(
     const DexClass* cls,
     const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
-    const std::unordered_set<DexMethod*>* non_true_virtuals) {
+    const InsertOnlyConcurrentSet<DexMethod*>* non_true_virtuals) {
   const DexType* key = cls->get_type();
   auto [ptr, emplaced] =
       m_init_classes.get_or_create_and_assert_equal(key, [&](const auto*) {
@@ -53,9 +53,9 @@ InitClassesWithSideEffects::InitClassesWithSideEffects(
     const method_override_graph::Graph* method_override_graph)
     : m_create_init_class_insns(create_init_class_insns) {
   Timer t("InitClassesWithSideEffects");
-  std::unique_ptr<std::unordered_set<DexMethod*>> non_true_virtuals;
+  std::unique_ptr<InsertOnlyConcurrentSet<DexMethod*>> non_true_virtuals;
   if (method_override_graph) {
-    non_true_virtuals = std::make_unique<std::unordered_set<DexMethod*>>(
+    non_true_virtuals = std::make_unique<InsertOnlyConcurrentSet<DexMethod*>>(
         method_override_graph::get_non_true_virtuals(*method_override_graph,
                                                      scope));
   }

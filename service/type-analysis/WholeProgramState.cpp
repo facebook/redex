@@ -153,7 +153,7 @@ namespace type_analyzer {
 WholeProgramState::WholeProgramState(
     const Scope& scope,
     const global::GlobalTypeAnalyzer& gta,
-    const std::unordered_set<DexMethod*>& non_true_virtuals,
+    const InsertOnlyConcurrentSet<DexMethod*>& non_true_virtuals,
     const ConcurrentSet<const DexMethod*>& any_init_reachables,
     const EligibleIfields& eligible_ifields)
     : m_any_init_reachables(&any_init_reachables) {
@@ -192,7 +192,7 @@ WholeProgramState::WholeProgramState(
 WholeProgramState::WholeProgramState(
     const Scope& scope,
     const global::GlobalTypeAnalyzer& gta,
-    const std::unordered_set<DexMethod*>& non_true_virtuals,
+    const InsertOnlyConcurrentSet<DexMethod*>& non_true_virtuals,
     const ConcurrentSet<const DexMethod*>& any_init_reachables,
     const EligibleIfields& eligible_ifields,
     std::shared_ptr<const call_graph::Graph> call_graph)

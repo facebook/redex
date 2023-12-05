@@ -57,7 +57,7 @@ class WholeProgramState {
 
   WholeProgramState(const Scope&,
                     const interprocedural::FixpointIterator&,
-                    const std::unordered_set<DexMethod*>&,
+                    const InsertOnlyConcurrentSet<DexMethod*>&,
                     const std::unordered_set<const DexType*>&,
                     const std::unordered_set<const DexField*>&,
                     std::shared_ptr<const call_graph::Graph> call_graph);

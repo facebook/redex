@@ -101,30 +101,30 @@ size_t mark_fields_final(const Scope& scope,
   return n_fields_finalized;
 }
 
-std::vector<DexMethod*> direct_methods(const std::vector<DexClass*>& scope) {
-  std::vector<DexMethod*> ret;
-  for (auto cls : scope) {
-    for (auto m : cls->get_dmethods()) {
-      ret.push_back(m);
-    }
-  }
-  return ret;
-}
-
-std::unordered_set<DexMethod*> find_private_methods(
+ConcurrentSet<DexMethod*> find_private_methods(
     const std::vector<DexClass*>& scope, const mog::Graph& override_graph) {
-  auto candidates = mog::get_non_true_virtuals(override_graph, scope);
-  auto dmethods = direct_methods(scope);
-  for (auto* dmethod : dmethods) {
-    candidates.emplace(dmethod);
-  }
-  std20::erase_if(candidates, [](auto* m) {
+  ConcurrentSet<DexMethod*> candidates;
+  auto is_excluded = [](DexMethod* m) {
     TRACE(ACCESS, 3, "Considering for privatization: %s", SHOW(m));
     return method::is_clinit(m) || !can_rename(m) || is_abstract(m) ||
            is_private(m);
-  });
+  };
+  workqueue_run<DexClass*>(
+      [&](DexClass* cls) {
+        for (auto m : cls->get_dmethods()) {
+          if (!is_excluded(m)) {
+            candidates.insert(m);
+          }
+        }
+        for (auto m : cls->get_vmethods()) {
+          if (!is_excluded(m) &&
+              !method_override_graph::is_true_virtual(override_graph, m)) {
+            candidates.insert(m);
+          }
+        }
+      },
+      scope);
 
-  ConcurrentSet<DexMethod*> externally_referenced;
   walk::parallel::opcodes(
       scope,
       [](DexMethod*) { return true; },
@@ -137,17 +137,14 @@ std::unordered_set<DexMethod*> find_private_methods(
         if (callee == nullptr || callee->get_class() == caller->get_class()) {
           return;
         }
-        externally_referenced.emplace(callee);
+        candidates.erase(callee);
       });
 
-  for (auto* m : externally_referenced) {
-    candidates.erase(m);
-  }
   return candidates;
 }
 
 void fix_call_sites_private(const std::vector<DexClass*>& scope,
-                            const std::unordered_set<DexMethod*>& privates) {
+                            const ConcurrentSet<DexMethod*>& privates) {
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
     always_assert(code.editable_cfg_built());
     auto& cfg = code.cfg();
@@ -157,7 +154,7 @@ void fix_call_sites_private(const std::vector<DexClass*>& scope,
       auto callee =
           resolve_method(insn->get_method(), opcode_to_search(insn), caller);
       // should be safe to read `privates` here because there are no writers
-      if (callee != nullptr && privates.count(callee)) {
+      if (callee != nullptr && privates.count_unsafe(callee)) {
         insn->set_method(callee);
         if (!is_static(callee)) {
           insn->set_opcode(OPCODE_INVOKE_DIRECT);
@@ -167,7 +164,7 @@ void fix_call_sites_private(const std::vector<DexClass*>& scope,
   });
 }
 
-void mark_methods_private(const std::unordered_set<DexMethod*>& privates) {
+void mark_methods_private(const ConcurrentSet<DexMethod*>& privates) {
   // Compute an ordered representation of the methods. This matters, as
   // the dmethods and vmethods are not necessarily sorted, but add_method does
   // a best-effort of inserting in an ordered matter.

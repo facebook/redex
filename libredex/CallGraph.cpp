@@ -85,7 +85,7 @@ RootAndDynamic SingleCalleeStrategy::get_roots() const {
 }
 
 bool SingleCalleeStrategy::is_definitely_virtual(DexMethod* method) const {
-  return method->is_virtual() && m_non_virtual.count(method) == 0;
+  return method->is_virtual() && m_non_virtual.count_unsafe(method) == 0;
 }
 
 MultipleCalleeBaseStrategy::MultipleCalleeBaseStrategy(

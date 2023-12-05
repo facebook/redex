@@ -253,7 +253,7 @@ class SingleCalleeStrategy : public BuildStrategy {
   bool is_definitely_virtual(DexMethod* method) const;
 
   const Scope& m_scope;
-  std::unordered_set<DexMethod*> m_non_virtual;
+  InsertOnlyConcurrentSet<DexMethod*> m_non_virtual;
 };
 
 class MultipleCalleeBaseStrategy : public SingleCalleeStrategy {

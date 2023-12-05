@@ -138,7 +138,7 @@ namespace constant_propagation {
 WholeProgramState::WholeProgramState(
     const Scope& scope,
     const interprocedural::FixpointIterator& fp_iter,
-    const std::unordered_set<DexMethod*>& non_true_virtuals,
+    const InsertOnlyConcurrentSet<DexMethod*>& non_true_virtuals,
     const std::unordered_set<const DexType*>& field_blocklist,
     const std::unordered_set<const DexField*>& definitely_assigned_ifields,
     std::shared_ptr<const call_graph::Graph> call_graph)

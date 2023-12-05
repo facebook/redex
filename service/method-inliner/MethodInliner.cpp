@@ -226,7 +226,7 @@ static void filter_candidates_local_only(
  */
 std::unordered_set<DexMethod*> gather_non_virtual_methods(
     Scope& scope,
-    const std::unordered_set<DexMethod*>* non_virtual,
+    const InsertOnlyConcurrentSet<DexMethod*>* non_virtual,
     const std::unordered_set<DexType*>& no_devirtualize_anno) {
   // trace counter
   size_t all_methods = 0;
@@ -431,7 +431,7 @@ bool can_have_unknown_implementations(const mog::Graph& method_override_graph,
  */
 void gather_true_virtual_methods(
     const mog::Graph& method_override_graph,
-    const std::unordered_set<DexMethod*>& non_virtual,
+    const InsertOnlyConcurrentSet<DexMethod*>& non_virtual,
     const Scope& scope,
     const SameImplementationMap& same_implementation_map,
     CalleeCallerInsns* true_virtual_callers) {
@@ -508,7 +508,7 @@ void gather_true_virtual_methods(
                                   &same_implementation_invokes,
                                   &same_implementation_map,
                                   &get_overriding_methods](DexMethod* method) {
-    if (method->is_virtual() && !non_virtual.count(method)) {
+    if (method->is_virtual() && !non_virtual.count_unsafe(method)) {
       add_candidate(method);
       if (root(method)) {
         add_other_call_site(method);
@@ -541,7 +541,7 @@ void gather_true_virtual_methods(
         if (callee == nullptr) {
           continue;
         }
-        if (non_virtual.count(callee) != 0) {
+        if (non_virtual.count_unsafe(callee) != 0) {
           // Not true virtual, no need to continue;
           continue;
         }
@@ -786,10 +786,10 @@ void run_inliner(
   inliner_config.unique_inlined_registers = false;
 
   std::unique_ptr<const mog::Graph> method_override_graph;
-  std::unique_ptr<const std::unordered_set<DexMethod*>> non_virtual;
+  std::unique_ptr<const InsertOnlyConcurrentSet<DexMethod*>> non_virtual;
   if (inliner_config.virtual_inline) {
     method_override_graph = mog::build_graph(scope);
-    non_virtual = std::make_unique<const std::unordered_set<DexMethod*>>(
+    non_virtual = std::make_unique<const InsertOnlyConcurrentSet<DexMethod*>>(
         mog::get_non_true_virtuals(*method_override_graph, scope));
   }
 

@@ -19,7 +19,7 @@ class ClInitSideEffectsAnalysis {
  private:
   bool m_allow_benign_method_invocations;
   const method::ClInitHasNoSideEffectsPredicate* m_clinit_has_no_side_effects;
-  const std::unordered_set<DexMethod*>* m_non_true_virtuals;
+  const InsertOnlyConcurrentSet<DexMethod*>* m_non_true_virtuals;
   std::unordered_set<DexMethodRef*> m_active;
   std::unordered_set<DexType*> m_initialized;
 
@@ -27,7 +27,7 @@ class ClInitSideEffectsAnalysis {
   explicit ClInitSideEffectsAnalysis(
       bool allow_benign_method_invocations,
       const method::ClInitHasNoSideEffectsPredicate* clinit_has_no_side_effects,
-      const std::unordered_set<DexMethod*>* non_true_virtuals)
+      const InsertOnlyConcurrentSet<DexMethod*>* non_true_virtuals)
       : m_allow_benign_method_invocations(allow_benign_method_invocations),
         m_clinit_has_no_side_effects(clinit_has_no_side_effects),
         m_non_true_virtuals(non_true_virtuals) {}
@@ -107,7 +107,7 @@ class ClInitSideEffectsAnalysis {
       return true;
     }
     if (opcode::is_invoke_virtual(insn->opcode()) &&
-        (!m_non_true_virtuals || !m_non_true_virtuals->count(method))) {
+        (!m_non_true_virtuals || !m_non_true_virtuals->count_unsafe(method))) {
       return true;
     }
     if (opcode::is_invoke_static(insn->opcode()) &&
@@ -496,7 +496,7 @@ const DexClass* clinit_may_have_side_effects(
     const DexClass* cls,
     bool allow_benign_method_invocations,
     const ClInitHasNoSideEffectsPredicate* clinit_has_no_side_effects,
-    const std::unordered_set<DexMethod*>* non_true_virtuals) {
+    const InsertOnlyConcurrentSet<DexMethod*>* non_true_virtuals) {
   ClInitSideEffectsAnalysis analysis(allow_benign_method_invocations,
                                      clinit_has_no_side_effects,
                                      non_true_virtuals);

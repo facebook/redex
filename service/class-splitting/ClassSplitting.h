@@ -144,7 +144,7 @@ class ClassSplitter final {
   std::vector<std::pair<DexMethod*, DexClass*>> m_methods_to_relocate;
   std::vector<std::pair<DexMethod*, DexMethod*>> m_methods_to_trampoline;
   ClassSplittingStats m_stats;
-  std::unordered_set<DexMethod*> m_non_true_virtual_methods;
+  InsertOnlyConcurrentSet<DexMethod*> m_non_true_virtual_methods;
   ClassSplittingConfig m_config;
   PassManager& m_mgr;
   const std::unordered_set<DexMethod*>& m_sufficiently_popular_methods;

@@ -34,7 +34,7 @@ class InitClassesWithSideEffects {
   const InitClasses* compute(
       const DexClass* cls,
       const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
-      const std::unordered_set<DexMethod*>* non_true_virtuals);
+      const InsertOnlyConcurrentSet<DexMethod*>* non_true_virtuals);
 
  public:
   InitClassesWithSideEffects(

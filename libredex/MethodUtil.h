@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "ConcurrentContainers.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "IROpcode.h"
@@ -65,7 +66,7 @@ const DexClass* clinit_may_have_side_effects(
     const DexClass* cls,
     bool allow_benign_method_invocations,
     const ClInitHasNoSideEffectsPredicate* clinit_has_no_side_effects = nullptr,
-    const std::unordered_set<DexMethod*>* non_true_virtuals = nullptr);
+    const InsertOnlyConcurrentSet<DexMethod*>* non_true_virtuals = nullptr);
 
 /**
  * Check that the method contains no invoke-super instruction; this is a

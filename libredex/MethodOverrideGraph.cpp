@@ -403,16 +403,18 @@ bool is_true_virtual(const Graph& graph, const DexMethod* method) {
   return !node.parents.empty() || !node.children.empty();
 }
 
-std::unordered_set<DexMethod*> get_non_true_virtuals(const Graph& graph,
-                                                     const Scope& scope) {
-  std::unordered_set<DexMethod*> non_true_virtuals;
-  for (const auto* cls : scope) {
-    for (auto* method : cls->get_vmethods()) {
-      if (!is_true_virtual(graph, method)) {
-        non_true_virtuals.emplace(method);
-      }
-    }
-  }
+InsertOnlyConcurrentSet<DexMethod*> get_non_true_virtuals(const Graph& graph,
+                                                          const Scope& scope) {
+  InsertOnlyConcurrentSet<DexMethod*> non_true_virtuals;
+  workqueue_run<DexClass*>(
+      [&](DexClass* cls) {
+        for (auto* method : cls->get_vmethods()) {
+          if (!is_true_virtual(graph, method)) {
+            non_true_virtuals.insert(method);
+          }
+        }
+      },
+      scope);
   return non_true_virtuals;
 }
 

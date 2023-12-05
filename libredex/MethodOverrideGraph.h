@@ -57,8 +57,8 @@ bool is_true_virtual(const Graph& graph, const DexMethod* method);
 /*
  * Return all non-true-virtuals in scope.
  */
-std::unordered_set<DexMethod*> get_non_true_virtuals(const Graph& graph,
-                                                     const Scope& scope);
+InsertOnlyConcurrentSet<DexMethod*> get_non_true_virtuals(const Graph& graph,
+                                                          const Scope& scope);
 
 /*
  * When a class method implements interface methods only in a subclass of the
