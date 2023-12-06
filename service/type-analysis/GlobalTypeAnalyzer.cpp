@@ -457,21 +457,26 @@ std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
       {CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
   auto non_true_virtuals =
       mog::get_non_true_virtuals(*method_override_graph, scope);
-  EligibleIfields eligible_ifields =
-      constant_propagation::gather_safely_inferable_ifield_candidates(scope,
-                                                                      {});
+  EligibleIfields eligible_ifields;
+  if (m_only_aggregate_safely_inferrable_fields) {
+    eligible_ifields =
+        constant_propagation::gather_safely_inferable_ifield_candidates(scope,
+                                                                        {});
+  }
   size_t iteration_cnt = 0;
 
   for (size_t i = 0; i < m_max_global_analysis_iteration; ++i) {
     // Build an approximation of all the field values and method return values.
     TRACE(TYPE, 2, "[global] Collecting WholeProgramState");
-    auto wps = m_use_multiple_callee_callgraph
-                   ? std::make_unique<WholeProgramState>(
-                         scope, *gta, non_true_virtuals, m_any_init_reachables,
-                         eligible_ifields, cg)
-                   : std::make_unique<WholeProgramState>(
-                         scope, *gta, non_true_virtuals, m_any_init_reachables,
-                         eligible_ifields);
+    auto wps =
+        m_use_multiple_callee_callgraph
+            ? std::make_unique<WholeProgramState>(
+                  scope, *gta, non_true_virtuals, m_any_init_reachables,
+                  eligible_ifields, m_only_aggregate_safely_inferrable_fields,
+                  cg)
+            : std::make_unique<WholeProgramState>(
+                  scope, *gta, non_true_virtuals, m_any_init_reachables,
+                  eligible_ifields, m_only_aggregate_safely_inferrable_fields);
     trace_whole_program_state(*wps);
     trace_stats(*wps);
     trace_whole_program_state_diff(gta->get_whole_program_state(), *wps);

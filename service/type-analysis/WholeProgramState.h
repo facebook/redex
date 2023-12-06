@@ -47,13 +47,15 @@ class WholeProgramState {
       const global::GlobalTypeAnalyzer&,
       const InsertOnlyConcurrentSet<DexMethod*>& non_true_virtuals,
       const ConcurrentSet<const DexMethod*>& any_init_reachables,
-      const EligibleIfields& eligible_ifields);
+      const EligibleIfields& eligible_ifields,
+      const bool only_aggregate_safely_inferrable_fields);
 
   WholeProgramState(const Scope&,
                     const global::GlobalTypeAnalyzer&,
                     const InsertOnlyConcurrentSet<DexMethod*>&,
                     const ConcurrentSet<const DexMethod*>&,
                     const EligibleIfields&,
+                    const bool,
                     std::shared_ptr<const call_graph::Graph> call_graph);
 
   void set_to_top() {
@@ -231,6 +233,7 @@ class WholeProgramState {
   DexTypeFieldPartition m_field_partition;
   DexTypeMethodPartition m_method_partition;
   std::unordered_map<const DexMethodRef*, DexTypeDomain> m_known_method_returns;
+  bool m_only_aggregate_safely_inferrable_fields = false;
 };
 
 class WholeProgramAwareAnalyzer final
