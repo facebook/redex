@@ -416,6 +416,9 @@ class ReferencedState {
   void set_too_large_for_inlining_into() {
     inner_struct.m_too_large_for_inlining_into = true;
   }
+  void reset_too_large_for_inlining_into() {
+    inner_struct.m_too_large_for_inlining_into = false;
+  }
   bool too_large_for_inlining_into() const {
     return inner_struct.m_too_large_for_inlining_into;
   }

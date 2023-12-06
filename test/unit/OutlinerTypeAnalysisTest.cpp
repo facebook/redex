@@ -9,6 +9,7 @@
 
 #include "IRAssembler.h"
 #include "OutlinerTypeAnalysis.h"
+#include "PartialCandidateAdapter.h"
 #include "RedexTest.h"
 
 class OutlinerTypeAnalysisTest : public RedexTest {};
@@ -46,7 +47,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_primitive) {
         (xor-int v2 v2 v2)
         (return-void)
       )))");
-  foo_method->get_code()->build_cfg(true);
+  foo_method->get_code()->build_cfg();
   outliner_impl::OutlinerTypeAnalysis ota(foo_method);
 
   {
@@ -129,7 +130,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_object) {
         (load-param-object v2)
         (load-param-object v3)
       )))");
-  foo_method->get_code()->build_cfg(true);
+  foo_method->get_code()->build_cfg();
   foo_creator.add_method(foo_method);
   object_creator.create();
   auto foo_type = foo_creator.create()->get_type();
@@ -205,7 +206,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_object_with_interfaces) {
         (load-param-object v2)
         (return-void)
       )))");
-  foo_method->get_code()->build_cfg(true);
+  foo_method->get_code()->build_cfg();
   foo_creator.add_method(foo_method);
   object_creator.create();
   auto foo_type = foo_creator.create()->get_type();
@@ -250,9 +251,11 @@ static std::shared_ptr<outliner_impl::PartialCandidateNode> create_node(
           std::move(insns), {}, std::move(succs)});
 }
 
-static outliner_impl::PartialCandidate create_candidate(
+static outliner_impl::PartialCandidateAdapter create_candidate(
+    outliner_impl::OutlinerTypeAnalysis& ota,
     const std::shared_ptr<outliner_impl::PartialCandidateNode>& root) {
-  return {{}, *root};
+  outliner_impl::PartialCandidate pc{{}, *root};
+  return outliner_impl::PartialCandidateAdapter(ota, std::move(pc));
 }
 
 TEST_F(OutlinerTypeAnalysisTest, get_type_demand_primitive) {
@@ -267,16 +270,15 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_primitive) {
         (xor-int v2 v2 v2)
         (return v2)
       )))");
-  foo_method->get_code()->build_cfg(true);
+  foo_method->get_code()->build_cfg();
   outliner_impl::OutlinerTypeAnalysis ota(foo_method);
 
   {
     // type demand of src(0) of 'add-int' is int
     auto insn = find_insn(foo_method, OPCODE_ADD_INT);
     auto root = create_node({insn});
-    auto candidate = create_candidate(root);
-    auto result_type =
-        ota.get_type_demand(candidate, insn->src(0), boost::none, nullptr);
+    auto candidate = create_candidate(ota, root);
+    auto result_type = ota.get_type_demand(candidate, insn->src(0));
     EXPECT_EQ(result_type, type::_int());
   }
 
@@ -284,9 +286,8 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_primitive) {
     // type demand of src(0) of 'return' of foo is boolean
     auto insn = find_insn(foo_method, OPCODE_RETURN);
     auto root = create_node({insn});
-    auto candidate = create_candidate(root);
-    auto result_type =
-        ota.get_type_demand(candidate, insn->src(0), boost::none, nullptr);
+    auto candidate = create_candidate(ota, root);
+    auto result_type = ota.get_type_demand(candidate, insn->src(0));
     EXPECT_EQ(result_type, type::_boolean());
   }
 
@@ -294,9 +295,9 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_primitive) {
     // type demand of src(0) of 'xor' with boolean out is boolean
     auto insn = find_insn(foo_method, OPCODE_XOR_INT);
     auto root = create_node({insn});
-    auto candidate = create_candidate(root);
-    auto result_type = ota.get_type_demand(candidate, insn->src(0),
-                                           insn->dest(), type::_boolean());
+    auto candidate = create_candidate(ota, root);
+    candidate.set_result(insn->dest(), type::_boolean());
+    auto result_type = ota.get_type_demand(candidate, insn->src(0));
     EXPECT_EQ(result_type, type::_boolean());
   }
 
@@ -305,9 +306,8 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_primitive) {
     auto insn1 = find_insn(foo_method, OPCODE_OR_INT);
     auto insn2 = find_insn(foo_method, OPCODE_SUB_INT);
     auto root = create_node({insn1, insn2});
-    auto candidate = create_candidate(root);
-    auto result_type =
-        ota.get_type_demand(candidate, insn1->src(0), boost::none, nullptr);
+    auto candidate = create_candidate(ota, root);
+    auto result_type = ota.get_type_demand(candidate, insn1->src(0));
     EXPECT_EQ(result_type, type::_int());
   }
 }
@@ -320,7 +320,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_sputs_of_zero) {
         (sput-object v0 "LFoo;.s2:LBar2;")
         (return-void)
       )))");
-  foo_method->get_code()->build_cfg(true);
+  foo_method->get_code()->build_cfg();
   outliner_impl::OutlinerTypeAnalysis ota(foo_method);
 
   {
@@ -328,9 +328,8 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_sputs_of_zero) {
     auto insn1 = find_insn(foo_method, OPCODE_SPUT_OBJECT, 1);
     auto insn2 = find_insn(foo_method, OPCODE_SPUT_OBJECT, 2);
     auto root = create_node({insn1, insn2});
-    auto candidate = create_candidate(root);
-    auto result_type =
-        ota.get_type_demand(candidate, insn1->src(0), boost::none, nullptr);
+    auto candidate = create_candidate(ota, root);
+    auto result_type = ota.get_type_demand(candidate, insn1->src(0));
     EXPECT_EQ(result_type, nullptr);
   }
 }
@@ -345,7 +344,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_if_of_zero) {
         (return-void)
       ))";
   auto code = assembler::ircode_from_string(src);
-  code->build_cfg(true);
+  code->build_cfg();
   auto foo_method =
       DexMethod::make_method("LFoo;.foo:()V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, std::move(code),
@@ -357,9 +356,8 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_if_of_zero) {
     // with zero (could be object or int)
     auto insn = find_insn(foo_method, OPCODE_IF_EQ);
     auto root = create_node({insn});
-    auto candidate = create_candidate(root);
-    auto result_type =
-        ota.get_type_demand(candidate, insn->src(0), boost::none, nullptr);
+    auto candidate = create_candidate(ota, root);
+    auto result_type = ota.get_type_demand(candidate, insn->src(0));
     EXPECT_EQ(result_type, nullptr);
   }
 }
@@ -374,7 +372,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_if_of_nonzero) {
         (return-void)
       ))";
   auto code = assembler::ircode_from_string(src);
-  code->build_cfg(true);
+  code->build_cfg();
   auto foo_method =
       DexMethod::make_method("LFoo;.foo:()V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, std::move(code),
@@ -384,9 +382,8 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_if_of_nonzero) {
   {
     auto insn = find_insn(foo_method, OPCODE_IF_EQ);
     auto root = create_node({insn});
-    auto candidate = create_candidate(root);
-    auto result_type =
-        ota.get_type_demand(candidate, insn->src(0), boost::none, nullptr);
+    auto candidate = create_candidate(ota, root);
+    auto result_type = ota.get_type_demand(candidate, insn->src(0));
     EXPECT_EQ(result_type, type::_int());
   }
 }
@@ -401,7 +398,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_if_of_large_constants) {
         (return-void)
       ))";
   auto code = assembler::ircode_from_string(src);
-  code->build_cfg(true);
+  code->build_cfg();
   auto foo_method =
       DexMethod::make_method("LFoo;.foo:()V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, std::move(code),
@@ -413,12 +410,10 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_if_of_large_constants) {
     // type. The particular values here allow us to pick specific types.
     auto insn = find_insn(foo_method, OPCODE_IF_EQ);
     auto root = create_node({insn});
-    auto candidate = create_candidate(root);
-    auto result_type0 =
-        ota.get_type_demand(candidate, insn->src(0), boost::none, nullptr);
+    auto candidate = create_candidate(ota, root);
+    auto result_type0 = ota.get_type_demand(candidate, insn->src(0));
     EXPECT_EQ(result_type0, type::_short());
-    auto result_type1 =
-        ota.get_type_demand(candidate, insn->src(1), boost::none, nullptr);
+    auto result_type1 = ota.get_type_demand(candidate, insn->src(1));
     EXPECT_EQ(result_type1, type::_char());
   }
 }
@@ -434,7 +429,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_primitive_narrow) {
         (return-void)
       ))";
   auto code = assembler::ircode_from_string(src);
-  code->build_cfg(true);
+  code->build_cfg();
   auto foo_method = DexMethod::make_method("LFoo;.foo:()V")
                         ->make_concrete(ACC_PUBLIC, std::move(code),
                                         /*is_virtual=*/false);
@@ -446,9 +441,8 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_primitive_narrow) {
     auto insn2 = find_insn(foo_method, OPCODE_IPUT_BYTE);
     auto insn3 = find_insn(foo_method, OPCODE_IPUT);
     auto root = create_node({insn1, insn2, insn3});
-    auto candidate = create_candidate(root);
-    auto result_type =
-        ota.get_type_demand(candidate, insn1->src(0), boost::none, nullptr);
+    auto candidate = create_candidate(ota, root);
+    auto result_type = ota.get_type_demand(candidate, insn1->src(0));
     EXPECT_EQ(result_type, type::_byte());
   }
 }
@@ -463,7 +457,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_aput_object) {
         (return-void)
       ))";
   auto code = assembler::ircode_from_string(src);
-  code->build_cfg(true);
+  code->build_cfg();
   auto foo_method = DexMethod::make_method(
                         "LFoo;.foo:(Ljava/lang/String;[Ljava/lang/String;)V")
                         ->make_concrete(ACC_PUBLIC, std::move(code),
@@ -473,11 +467,9 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_aput_object) {
   {
     auto insn = find_insn(foo_method, OPCODE_APUT_OBJECT);
     auto root = create_node({insn});
-    auto candidate = create_candidate(root);
-    auto type0 =
-        ota.get_type_demand(candidate, insn->src(0), boost::none, nullptr);
-    auto type1 =
-        ota.get_type_demand(candidate, insn->src(1), boost::none, nullptr);
+    auto candidate = create_candidate(ota, root);
+    auto type0 = ota.get_type_demand(candidate, insn->src(0));
+    auto type1 = ota.get_type_demand(candidate, insn->src(1));
     EXPECT_EQ(type0, type::java_lang_Object());
     EXPECT_EQ(type1, DexType::make_type("[Ljava/lang/Object;"));
   }
@@ -508,7 +500,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_inference) {
         (return-void)
       ))";
   auto code = assembler::ircode_from_string(src);
-  code->build_cfg(true);
+  code->build_cfg();
   auto foo_method = DexMethod::make_method("LFoo;.foo:(LBar;)V")
                         ->make_concrete(ACC_PUBLIC, std::move(code),
                                         /*is_virtual=*/false);
@@ -521,9 +513,8 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_inference) {
     auto insn1 = find_insn(foo_method, OPCODE_IPUT_OBJECT, 1);
     auto insn2 = find_insn(foo_method, OPCODE_IPUT_OBJECT, 2);
     auto root = create_node({insn1, insn2});
-    auto candidate = create_candidate(root);
-    auto result_type =
-        ota.get_type_demand(candidate, insn1->src(0), boost::none, nullptr);
+    auto candidate = create_candidate(ota, root);
+    auto result_type = ota.get_type_demand(candidate, insn1->src(0));
     EXPECT_EQ(result_type, bar_type);
   }
 }
