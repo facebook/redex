@@ -54,6 +54,8 @@ void MethodSplittingPass::bind_config() {
        "Maximum number of live-in registers");
   bind("max_iteration", m_config.max_iteration, m_config.max_iteration,
        "Maximum number of top-level iterations");
+  bind("excluded_prefices", m_config.excluded_prefices,
+       m_config.excluded_prefices);
 }
 
 void MethodSplittingPass::run_pass(DexStoresVector& stores,
@@ -96,6 +98,7 @@ void MethodSplittingPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("split_code_size", (size_t)stats.split_code_size);
   mgr.set_metric("new_hot_methods", concurrent_new_hot_methods.size());
   mgr.set_metric("derived_method_profile_stats", derived_method_profile_stats);
+  mgr.set_metric("excluded_methods", (size_t)stats.excluded_methods);
   TRACE(MS, 1, "Split out %zu methods", stats.added_methods.size());
 
   for (auto [method, size] : concurrent_splittable_no_optimizations_methods) {

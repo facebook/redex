@@ -420,8 +420,23 @@ void split_methods_in_stores(
       dex_states[&dex];
     }
   }
-  walk::parallel::code(
-      scope, [&](DexMethod* method, IRCode&) { methods.insert(method); });
+
+  auto is_excluded = [&](DexMethod* method) {
+    auto name = method->get_deobfuscated_name_or_empty();
+    for (const auto& prefix : config.excluded_prefices) {
+      if (name.substr(0, prefix.size()) == prefix) {
+        return true;
+      }
+    }
+    return false;
+  };
+  walk::parallel::code(scope, [&](DexMethod* method, IRCode&) {
+    if (is_excluded(method)) {
+      stats->excluded_methods++;
+      return;
+    }
+    methods.insert(method);
+  });
 
   size_t iteration{0};
   AtomicMap<std::string, size_t> uniquifiers;

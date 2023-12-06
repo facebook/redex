@@ -9,6 +9,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <vector>
 
 namespace method_splitting_impl {
 
@@ -29,6 +31,8 @@ struct Config {
   size_t cost_split_method{16};
   size_t cost_split_switch{6};
   size_t cost_split_switch_case{4};
+
+  std::vector<std::string> excluded_prefices;
 };
 
 } // namespace method_splitting_impl

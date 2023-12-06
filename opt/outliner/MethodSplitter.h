@@ -32,6 +32,7 @@ struct Stats {
   std::atomic<size_t> added_code_size{0};
   std::atomic<size_t> split_code_size{0};
   std::unordered_set<DexMethod*> added_methods;
+  std::atomic<size_t> excluded_methods{0};
 };
 
 void split_methods_in_stores(
