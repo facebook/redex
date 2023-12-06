@@ -40,11 +40,8 @@ TEST_F(ReachabilityTest, ReachabilityFromProguardTest) {
   reachability::ReachableAspects reachable_aspects;
   auto scope = build_class_scope(stores);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
-  auto method_override_graph = method_override_graph::build_graph(scope);
-
   auto reachable_objects = reachability::compute_reachable_objects(
-      scope, *method_override_graph, ig_sets, &num_ignore_check_strings,
-      &reachable_aspects);
+      stores, ig_sets, &num_ignore_check_strings, &reachable_aspects);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
 
   reachability::mark_classes_abstract(stores, *reachable_objects,
@@ -85,17 +82,14 @@ TEST_F(ReachabilityTest, ReachabilityMarkAllTest) {
   reachability::ReachableAspects reachable_aspects;
   auto scope = build_class_scope(stores);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
-  auto method_override_graph = method_override_graph::build_graph(scope);
-
   auto reachable_objects = reachability::compute_reachable_objects(
-      scope, *method_override_graph, ig_sets, &num_ignore_check_strings,
-      &reachable_aspects,
+      stores, ig_sets, &num_ignore_check_strings, &reachable_aspects,
       /* record_reachability */ false, /* relaxed_keep_class_members */ false,
       /* relaxed_keep_interfaces */ false,
       /* cfg_gathering_check_instantiable */ false,
       /* cfg_gathering_check_instance_callable */ false,
       /* cfg_gathering_check_returning */ false,
-      /* should_mark_all_as_seed */ true);
+      /* should_mark_all_as_seed */ true, nullptr);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
 
   reachability::mark_classes_abstract(stores, *reachable_objects,
@@ -127,11 +121,8 @@ TEST_F(ReachabilityTest, NotDireclyInstantiatedClassesBecomeAbstract) {
   reachability::ReachableAspects reachable_aspects;
   auto scope = build_class_scope(stores);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
-  auto method_override_graph = method_override_graph::build_graph(scope);
-
   auto reachable_objects = reachability::compute_reachable_objects(
-      scope, *method_override_graph, ig_sets, &num_ignore_check_strings,
-      &reachable_aspects);
+      stores, ig_sets, &num_ignore_check_strings, &reachable_aspects);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
   auto abstracted_classes = reachability::mark_classes_abstract(
       stores, *reachable_objects, reachable_aspects);
@@ -182,11 +173,8 @@ TEST_F(ReachabilityTest, SharpeningCreatesMoreZombies) {
   reachability::ReachableAspects reachable_aspects;
   auto scope = build_class_scope(stores);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
-  auto method_override_graph = method_override_graph::build_graph(scope);
-
   auto reachable_objects = reachability::compute_reachable_objects(
-      scope, *method_override_graph, ig_sets, &num_ignore_check_strings,
-      &reachable_aspects);
+      stores, ig_sets, &num_ignore_check_strings, &reachable_aspects);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
 
   auto is_callable_instance_method = [&](const auto& s) {

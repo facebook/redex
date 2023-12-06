@@ -32,11 +32,9 @@ TEST_F(VirtualTargetsReachabilityTest, invoke_super_subtlety) {
   reachability::ReachableAspects reachable_aspects;
   auto scope = build_class_scope(stores);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
-  auto method_override_graph = method_override_graph::build_graph(scope);
 
   auto reachable_objects = reachability::compute_reachable_objects(
-      scope, *method_override_graph, ig_sets, &num_ignore_check_strings,
-      &reachable_aspects, false,
+      stores, ig_sets, &num_ignore_check_strings, &reachable_aspects, false,
       /* relaxed_keep_class_members */ true,
       /* relaxed_keep_interfaces */ false,
       /* cfg_gathering_check_instantiable */ true);

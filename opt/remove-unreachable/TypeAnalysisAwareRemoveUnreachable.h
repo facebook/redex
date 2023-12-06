@@ -23,8 +23,7 @@ class TypeAnalysisAwareRemoveUnreachablePass
   }
 
   std::unique_ptr<reachability::ReachableObjects> compute_reachable_objects(
-      const Scope& scope,
-      const method_override_graph::Graph& method_override_graph,
+      const DexStoresVector& stores,
       PassManager& pm,
       int* num_ignore_check_strings,
       reachability::ReachableAspects* reachable_aspects,

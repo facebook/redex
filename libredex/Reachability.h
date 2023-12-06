@@ -691,8 +691,7 @@ class TransitiveClosureMarkerWorker {
  * (e.g. proguard rules).
  */
 std::unique_ptr<ReachableObjects> compute_reachable_objects(
-    const Scope& scope,
-    const method_override_graph::Graph& method_override_graph,
+    const DexStoresVector& stores,
     const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
     ReachableAspects* reachable_aspects,
@@ -703,6 +702,8 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     bool cfg_gathering_check_instance_callable = false,
     bool cfg_gathering_check_returning = false,
     bool should_mark_all_as_seed = false,
+    std::unique_ptr<const method_override_graph::Graph>*
+        out_method_override_graph = nullptr,
     bool remove_no_argument_constructors = false);
 
 void compute_zombie_methods(
