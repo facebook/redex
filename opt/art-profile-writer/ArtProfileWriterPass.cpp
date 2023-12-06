@@ -17,10 +17,13 @@
 #include <fstream>
 #include <string>
 
+#include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
+#include "IRCode.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "Show.h"
+#include "Walkers.h"
 
 namespace {
 const std::string BASELINE_PROFILES_FILE = "additional-baseline-profiles.list";
@@ -108,7 +111,7 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
   mgr.incr_metric("min_sdk", min_sdk);
   auto end = min_sdk >= 21 ? dexen.size() : 1;
-  size_t methods_with_baseline_profile = 0;
+  InsertOnlyConcurrentSet<DexMethod*> methods_with_baseline_profile;
   for (size_t dex_idx = 0; dex_idx < end; dex_idx++) {
     auto& dex = dexen.at(dex_idx);
     for (auto* cls : dex) {
@@ -130,7 +133,7 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
         boost::replace_all(descriptor, ".", "->");
         boost::replace_all(descriptor, ":(", "(");
         ofs << it->second << descriptor << std::endl;
-        methods_with_baseline_profile++;
+        methods_with_baseline_profile.insert(method);
       }
       if (should_include_class) {
         ofs << show_deobfuscated(cls) << std::endl;
@@ -138,8 +141,19 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     }
   }
 
+  auto scope = build_class_scope(stores);
+  std::atomic<size_t> methods_with_baseline_profile_code_units{0};
+  walk::parallel::code(scope, [&] (DexMethod* method, IRCode& code) {
+    if (methods_with_baseline_profile.count(method)) {
+      methods_with_baseline_profile_code_units += code.estimate_code_units();
+    }
+  });
+
   mgr.incr_metric("methods_with_baseline_profile",
-                  methods_with_baseline_profile);
+                  methods_with_baseline_profile.size());
+
+  mgr.incr_metric("methods_with_baseline_profile_code_units",
+                  (size_t)methods_with_baseline_profile_code_units);
 }
 
 static ArtProfileWriterPass s_pass;
