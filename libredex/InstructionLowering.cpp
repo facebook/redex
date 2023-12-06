@@ -365,30 +365,13 @@ void lower_fill_array_data(DexMethod*, IRCode* code, IRList::iterator* it_) {
   it->replace_ir_with_dex(dex_insn);
 }
 
-/*
- * Necessary condition for an instruction to be converted to /range form
- */
-bool has_contiguous_srcs(const IRInstruction* insn) {
-  if (insn->srcs_size() == 0) {
-    return true;
-  }
-  auto last = insn->src(0);
-  for (size_t i = 1; i < insn->srcs_size(); ++i) {
-    if (insn->src(i) - last != 1) {
-      return false;
-    }
-    last = insn->src(i);
-  }
-  return true;
-}
-
 void lower_to_range_instruction(DexMethod* method,
                                 IRCode* code,
                                 IRList::iterator* it_) {
   auto& it = *it_;
   const auto* insn = it->insn;
   always_assert_log(
-      has_contiguous_srcs(insn),
+      insn->has_contiguous_range_srcs_denormalized(),
       "Instruction %s has non-contiguous srcs in method %s.\nContext:\n%s\n",
       SHOW(insn),
       SHOW(method),

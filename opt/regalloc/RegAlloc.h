@@ -28,6 +28,7 @@ class RegAllocPass : public Pass {
         {NoResolvablePureRefs, Preserves},
         {NoUnreachableInstructions, Preserves},
         {RenameClass, Preserves},
+        {MethodRegister, Establishes},
     };
   }
 

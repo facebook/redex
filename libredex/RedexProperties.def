@@ -21,6 +21,7 @@ REDEX_PROPS(NoResolvablePureRefs,          false,    false,          false,     
 REDEX_PROPS(NoSpuriousGetClassCalls,       false,    false,          false,        false)
 REDEX_PROPS(NoUnreachableInstructions,     false,    true,           true,         false)
 REDEX_PROPS(RenameClass,                   false,    false,          false,        false)
+REDEX_PROPS(MethodRegister,                false,    false,          true,         true)
 // This is different from above because it is only a marker that signals interning happened,
 // but the property is not checked. New spurious getClass calls may be produced, but were
 // cannot have been input-code null-checks.
