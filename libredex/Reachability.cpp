@@ -1870,8 +1870,10 @@ void ReachableAspects::finish(const ConditionallyMarked& cond_marked,
     add(map);
   }
   for (auto&& [method, mrefs_gatherer] : remaining_mrefs_gatherers) {
-    non_returning_insns.emplace(method,
-                                mrefs_gatherer->get_non_returning_insns());
+    auto set = mrefs_gatherer->get_non_returning_insns();
+    if (!set.empty()) {
+      non_returning_insns.emplace(method, std::move(set));
+    }
   }
   std::atomic<uint64_t> concurrent_instructions_unvisited{0};
   workqueue_run<std::pair<const DexMethod*, const MethodReferencesGatherer*>>(
