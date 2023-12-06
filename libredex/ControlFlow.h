@@ -313,7 +313,7 @@ class Block final {
   void remove_insn(const IRList::iterator& it);
 
   // Any removed instruction will be freed when the cfg is destroyed.
-  void remove_mie(const IRList::iterator& it);
+  IRList::iterator remove_mie(const IRList::iterator& it);
 
   // Removes a subset of MFLOW_DEBUG instructions from the block. valid_regs
   // is an accumulator set of registers used by either DBG_START_LOCAL
@@ -327,7 +327,7 @@ class Block final {
   // acknowledged by the descendant block.
   void cleanup_debug(std::unordered_set<reg_t>& valid_regs);
 
-  opcode::Branchingness branchingness();
+  opcode::Branchingness branchingness() const;
 
   // returns true if there are no MethodItemEntries (not IRInstructions)
   bool empty() const { return m_entries.empty(); }
@@ -935,6 +935,10 @@ class ControlFlowGraph {
   // similar to sum_opcode_sizes, but takes into account non-opcode payloads
   uint32_t estimate_code_units() const;
 
+  // The editable cfg is missing plain OPCODE_GOTOs; this function computes a
+  // size adjustment to account for that.
+  uint32_t get_size_adjustment(bool assume_no_unreachable_blocks = false);
+
   reg_t allocate_temp() { return m_registers_size++; }
 
   reg_t allocate_wide_temp() {
@@ -1011,9 +1015,12 @@ class ControlFlowGraph {
   ConstInstructionIterator find_insn(IRInstruction* insn,
                                      Block* hint = nullptr) const;
 
-  // choose an order of blocks for output
+  // choose an order of blocks for output; note that unless
+  // assume_no_unreachable_blocks is set to true, this function may mutate the
+  // cfg by simplifying it
   std::vector<Block*> order(
-      const std::unique_ptr<LinearizationStrategy>& custom_strategy = nullptr);
+      const std::unique_ptr<LinearizationStrategy>& custom_strategy = nullptr,
+      bool assume_no_unreachable_blocks = false);
 
   /*
    * Find the first debug position preceding an instruction

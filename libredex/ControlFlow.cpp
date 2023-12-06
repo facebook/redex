@@ -265,15 +265,15 @@ void Block::remove_insn(const IRList::iterator& it) {
   remove_insn(to_cfg_instruction_iterator(it));
 }
 
-void Block::remove_mie(const IRList::iterator& it) {
+IRList::iterator Block::remove_mie(const IRList::iterator& it) {
   if (it->type == MFLOW_OPCODE) {
     m_parent->m_removed_insns.push_back(it->insn);
   }
 
-  m_entries.erase_and_dispose(it);
+  return m_entries.erase_and_dispose(it);
 }
 
-opcode::Branchingness Block::branchingness() {
+opcode::Branchingness Block::branchingness() const {
   // TODO (cnli): put back 'always_assert(m_parent->editable());'
   // once ModelMethodMerger::sink_common_ctor_to_return_block update
   // to editable CFG.
@@ -1460,6 +1460,32 @@ uint32_t ControlFlowGraph::estimate_code_units() const {
   return code_units;
 }
 
+uint32_t ControlFlowGraph::get_size_adjustment(
+    bool assume_no_unreachable_blocks) {
+  auto ordering =
+      order(/* custom_strategy */ nullptr, assume_no_unreachable_blocks);
+  uint32_t adjustment{0};
+  for (auto it = ordering.begin(); it != ordering.end(); ++it) {
+    cfg::Block* b = *it;
+
+    for (const cfg::Edge* edge : b->succs()) {
+      if (edge->type() == cfg::EDGE_GOTO) {
+        auto next_it = std::next(it);
+        if (next_it != ordering.end()) {
+          cfg::Block* next = *next_it;
+          if (edge->target() == next) {
+            // Don't need a goto because this will fall through to `next`
+            continue;
+          }
+        }
+        // We need a goto
+        adjustment++;
+      }
+    }
+  }
+  return adjustment;
+}
+
 Block* ControlFlowGraph::get_first_block_with_insns() const {
   always_assert(editable());
   Block* block = entry_block();
@@ -1731,9 +1757,12 @@ ConstInstructionIterator ControlFlowGraph::find_insn(IRInstruction* insn,
 }
 
 std::vector<Block*> ControlFlowGraph::order(
-    const std::unique_ptr<LinearizationStrategy>& custom_strategy) {
-  // We must simplify first to remove any unreachable blocks
-  simplify();
+    const std::unique_ptr<LinearizationStrategy>& custom_strategy,
+    bool assume_no_unreachable_blocks) {
+  if (!assume_no_unreachable_blocks) {
+    // We must simplify first to remove any unreachable blocks
+    simplify();
+  }
 
   // This is a modified Weak Topological Ordering (WTO). We create "chains" of
   // blocks that will be kept together, then feed these chains to WTO for it to

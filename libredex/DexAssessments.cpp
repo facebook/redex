@@ -246,29 +246,6 @@ class Assessor {
 
 } // namespace dex_position
 
-size_t adjust_size(cfg::ControlFlowGraph& cfg) {
-  auto ordering = cfg.order();
-  size_t adjustment{0};
-  for (auto it = ordering.begin(); it != ordering.end(); ++it) {
-    cfg::Block* b = *it;
-
-    for (const cfg::Edge* edge : b->succs()) {
-      if (edge->type() == cfg::EDGE_GOTO) {
-        auto next_it = std::next(it);
-        if (next_it != ordering.end()) {
-          cfg::Block* next = *next_it;
-          if (edge->target() == next) {
-            // Don't need a goto because this will fall through to `next`
-            continue;
-          }
-        }
-        // We need a goto
-        adjustment++;
-      }
-    }
-  }
-  return adjustment;
-}
 } // namespace
 
 namespace assessments {
@@ -398,9 +375,7 @@ DexAssessment DexScopeAssessor::run() {
                                             std::memory_order_relaxed);
     auto sum_opcode_sizes = code->sum_opcode_sizes();
     if (code->editable_cfg_built()) {
-      // The editable cfg is missing plain OPCODE_GOTOs; let's figure out how
-      // many we are missing.
-      sum_opcode_sizes += adjust_size(code->cfg());
+      sum_opcode_sizes += code->cfg().get_size_adjustment();
     }
     method_stats.sum_opcodes.fetch_add(sum_opcode_sizes,
                                        std::memory_order_relaxed);
@@ -411,9 +386,7 @@ DexAssessment DexScopeAssessor::run() {
     }
     auto code_units = code->estimate_code_units();
     if (code->editable_cfg_built()) {
-      // The editable cfg is missing plain OPCODE_GOTOs; let's figure out how
-      // many we are missing.
-      code_units += adjust_size(code->cfg());
+      code_units += code->cfg().get_size_adjustment();
     }
     method_stats.code_units.fetch_add(code_units, std::memory_order_relaxed);
   });
