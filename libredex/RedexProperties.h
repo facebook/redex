@@ -40,18 +40,30 @@ struct PropertyInteraction {
 };
 
 namespace interactions {
+// Not specified property will have Destroys interaction for
+// passes by default unless specified with Negative or DefaultPreserve
 inline const PropertyInteraction Destroys = // default
     PropertyInteraction(false, false, false, false);
+// Preserve established property for passes.
+// DefaultPreserve will preserve the property by default.
 inline const PropertyInteraction Preserves =
     PropertyInteraction(false, false, true, false);
+// Requires property for passes will be checked if they have
+// already been established.
 inline const PropertyInteraction Requires =
     PropertyInteraction(false, true, false, false);
+// Establishes a property for passes. DefaultInitial property
+// will be established at beginning by default.
+// In deep check mode, after each pass eastablished property
+// will be running their own checks.
 inline const PropertyInteraction Establishes =
     PropertyInteraction(true, false, false, false);
 inline const PropertyInteraction RequiresAndEstablishes =
     PropertyInteraction(true, true, true, false);
 inline const PropertyInteraction RequiresAndPreserves =
     PropertyInteraction(false, true, true, false);
+// Establish a property and add it to final require list with other
+// default finals.
 inline const PropertyInteraction EstablishesAndRequiresFinally =
     PropertyInteraction(true, false, false, true);
 } // namespace interactions

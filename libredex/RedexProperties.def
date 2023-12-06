@@ -10,6 +10,15 @@
 #error "You must define REDEX_PROPS!"
 #endif
 
+/**
+ * Negative: This property is by default preserved, and need to be explicitly destroyed
+ *     before final state.
+ * DefaultInitial: This property will be established at beginning of all Redex passes
+ *     (unless disabled explicitly) by default.
+ * DefaultFinal: This property will be required at end of all Redex passes (unless
+ *     disabled explicitly) by default.
+ * DefaultPreserve: This property will be preserved by default after establised.
+ */
 // REDEX_PROPS(Name,                       Negative, DefaultInitial, DefaultFinal, DefaultPreserve)
 REDEX_PROPS(DexLimitsObeyed,               false,    false,          true,         false)
 REDEX_PROPS(HasSourceBlocks,               false,    false,          false,        true)
