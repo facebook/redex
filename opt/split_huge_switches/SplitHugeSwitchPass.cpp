@@ -83,11 +83,13 @@ using Stats = SplitHugeSwitchPass::Stats;
 
 namespace {
 
-bool has_switch(IRCode* code) {
-  for (const auto& mie : InstructionIterable(*code)) {
-    auto opcode = mie.insn->opcode();
-    if (opcode::is_switch(opcode)) {
-      return true;
+bool has_switch(cfg::ControlFlowGraph& cfg) {
+  for (auto* block : cfg.blocks()) {
+    for (const auto& mie : InstructionIterable(block)) {
+      auto opcode = mie.insn->opcode();
+      if (opcode::is_switch(opcode)) {
+        return true;
+      }
     }
   }
   return false;
@@ -529,14 +531,14 @@ AnalysisData analyze(DexMethod* m,
   data.under_code_units_threshold = false;
   // stats.large_methods_set.emplace(m);
 
-  if (!has_switch(code)) {
+  cfg::ScopedCFG scoped_cfg(code);
+
+  if (!has_switch(*scoped_cfg)) {
     data.no_switch = true;
     return data;
   }
   data.no_switch = false;
   // stats.switch_methods_set.emplace(m);
-
-  cfg::ScopedCFG scoped_cfg(code);
 
   auto switch_it = find_large_switch(*scoped_cfg, case_threshold);
   if (switch_it.is_end()) {
