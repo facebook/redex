@@ -76,13 +76,15 @@ bool RegisterTypeAnalyzer::analyze_const(const IRInstruction* insn,
 
 bool RegisterTypeAnalyzer::analyze_const_string(const IRInstruction*,
                                                 DexTypeEnvironment* env) {
-  env->set(RESULT_REGISTER, DexTypeDomain(type::java_lang_String()));
+  env->set(RESULT_REGISTER,
+           DexTypeDomain::create_not_null(type::java_lang_String()));
   return true;
 }
 
 bool RegisterTypeAnalyzer::analyze_const_class(const IRInstruction*,
                                                DexTypeEnvironment* env) {
-  env->set(RESULT_REGISTER, DexTypeDomain(type::java_lang_Class()));
+  env->set(RESULT_REGISTER,
+           DexTypeDomain::create_not_null(type::java_lang_Class()));
   return true;
 }
 
@@ -97,12 +99,7 @@ bool RegisterTypeAnalyzer::analyze_aget(const IRInstruction* insn,
   always_assert_log(type::is_array(*array_type), "Wrong array type %s in %s",
                     SHOW(*array_type), SHOW(insn));
   const auto ctype = type::get_array_component_type(*array_type);
-  auto cls = type_class(ctype);
-  bool is_type_exact = cls && !cls->is_external() && is_final(cls);
-  // is_type_exact is to decide whether to populate the
-  // small-set-dex-type-domain, which should only hold exact (non-interface)
-  // class (and possibly java.lang.Throwable, but we ignore that here).
-  env->set(RESULT_REGISTER, DexTypeDomain(ctype, NN_TOP, is_type_exact));
+  env->set(RESULT_REGISTER, DexTypeDomain::create_nullable(ctype));
   return true;
 }
 
@@ -122,26 +119,27 @@ bool RegisterTypeAnalyzer::analyze_move_exception(const IRInstruction* insn,
                                                   DexTypeEnvironment* env) {
   // We don't know where to grab the type of the just-caught exception.
   // Simply set to j.l.Throwable here.
-  env->set(insn->dest(), DexTypeDomain(type::java_lang_Throwable()));
+  env->set(insn->dest(),
+           DexTypeDomain::create_nullable(type::java_lang_Throwable()));
   return true;
 }
 
 bool RegisterTypeAnalyzer::analyze_new_instance(const IRInstruction* insn,
                                                 DexTypeEnvironment* env) {
-  env->set(RESULT_REGISTER, DexTypeDomain(insn->get_type()));
+  env->set(RESULT_REGISTER, DexTypeDomain::create_not_null(insn->get_type()));
   return true;
 }
 
 bool RegisterTypeAnalyzer::analyze_new_array(const IRInstruction* insn,
                                              DexTypeEnvironment* env) {
   // Skip array element nullness domains.
-  env->set(RESULT_REGISTER, DexTypeDomain(insn->get_type()));
+  env->set(RESULT_REGISTER, DexTypeDomain::create_not_null(insn->get_type()));
   return true;
 }
 
 bool RegisterTypeAnalyzer::analyze_filled_new_array(const IRInstruction* insn,
                                                     DexTypeEnvironment* env) {
-  env->set(RESULT_REGISTER, DexTypeDomain(insn->get_type()));
+  env->set(RESULT_REGISTER, DexTypeDomain::create_not_null(insn->get_type()));
   return true;
 }
 

@@ -284,16 +284,7 @@ class DexTypeDomain final
   // catch this. So we insert a redundant '= default'.
   DexTypeDomain() = default;
 
-  explicit DexTypeDomain(const DexType* dex_type,
-                         const DexAnnoType* annotation = nullptr)
-      : ReducedProductAbstractDomain(
-            std::make_tuple(NullnessDomain(NOT_NULL),
-                            SingletonDexTypeDomain(dex_type),
-                            SmallSetDexTypeDomain(dex_type),
-                            (annotation && annotation->m_type)
-                                ? TypedefAnnotationDomain(annotation->m_type)
-                                : TypedefAnnotationDomain())) {}
-
+ private:
   explicit DexTypeDomain(const DexType* dex_type,
                          const Nullness nullness,
                          bool is_dex_type_exact,
@@ -315,11 +306,34 @@ class DexTypeDomain final
             annotation->m_type ? TypedefAnnotationDomain(annotation->m_type)
                                : TypedefAnnotationDomain())) {}
 
+ public:
   static void reduce_product(
       std::tuple<NullnessDomain,
                  SingletonDexTypeDomain,
                  SmallSetDexTypeDomain,
                  TypedefAnnotationDomain>& /* product */) {}
+
+  static DexTypeDomain create_nullable(
+      const DexType* dex_type, const DexAnnoType* annotation = nullptr) {
+    return DexTypeDomain(dex_type, NN_TOP, false, annotation);
+  }
+
+  /*
+   * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+   * Only create not_null domain when you are absolutely sure about the nullness
+   * of the value!!!
+   * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+   * Usually it means the value is created via new-instance or alike. If the
+   * nullness info is incorrect from the source, it could lead to incorrect
+   * analysis result.
+   */
+  static DexTypeDomain create_not_null(const DexType* dex_type) {
+    return DexTypeDomain(dex_type, NOT_NULL, true);
+  }
+
+  static DexTypeDomain create_for_anno(const DexAnnoType* annotation) {
+    return DexTypeDomain(annotation);
+  }
 
   static DexTypeDomain null() { return DexTypeDomain(IS_NULL); }
 
@@ -357,6 +371,7 @@ class DexTypeDomain final
   const SmallSetDexTypeDomain& get_set_domain() const { return get<2>(); }
 
   const sparta::PatriciaTreeSet<const DexType*>& get_type_set() const {
+    always_assert(!get<2>().is_top() && !get<2>().is_bottom());
     return get<2>().get_types();
   }
 

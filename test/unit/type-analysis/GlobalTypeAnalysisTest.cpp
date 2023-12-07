@@ -39,7 +39,8 @@ struct GlobalTypeAnalysisTest : public RedexTest {
   void prepare_scope(Scope& scope) { scope.push_back(m_cls_o); }
 
   DexTypeDomain get_type_domain(const std::string& type_name) {
-    return DexTypeDomain(DexType::make_type(DexString::make_string(type_name)));
+    return DexTypeDomain::create_not_null(
+        DexType::make_type(DexString::make_string(type_name)));
   }
 
   SingletonDexTypeDomain get_singleton_type_domain(
@@ -473,15 +474,17 @@ TEST_F(GlobalTypeAnalysisTest, StaticFieldWithEncodedValueTest) {
   EXPECT_EQ(wps.get_field_type(field_1), DexTypeDomain::null());
   EXPECT_EQ(wps.get_return_type(meth_bar), DexTypeDomain::null());
 
-  EXPECT_EQ(
-      wps.get_field_type(field_2),
-      DexTypeDomain(type::java_lang_String()).join(DexTypeDomain::null()));
-  EXPECT_EQ(
-      wps.get_return_type(meth_baz),
-      DexTypeDomain(type::java_lang_String()).join(DexTypeDomain::null()));
+  EXPECT_EQ(wps.get_field_type(field_2),
+            DexTypeDomain::create_not_null(type::java_lang_String())
+                .join(DexTypeDomain::null()));
+  EXPECT_EQ(wps.get_return_type(meth_baz),
+            DexTypeDomain::create_not_null(type::java_lang_String())
+                .join(DexTypeDomain::null()));
 
   EXPECT_EQ(wps.get_field_type(field_3),
-            DexTypeDomain(type::java_lang_Class()).join(DexTypeDomain::null()));
+            DexTypeDomain::create_not_null(type::java_lang_Class())
+                .join(DexTypeDomain::null()));
   EXPECT_EQ(wps.get_return_type(meth_buk),
-            DexTypeDomain(type::java_lang_Class()).join(DexTypeDomain::null()));
+            DexTypeDomain::create_not_null(type::java_lang_Class())
+                .join(DexTypeDomain::null()));
 }

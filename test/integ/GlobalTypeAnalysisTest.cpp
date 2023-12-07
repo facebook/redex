@@ -59,28 +59,28 @@ TEST_F(GlobalTypeAnalysisTest, ConstsAndAGETTest) {
 
   auto meth_pass_string = get_method("TestB;.passString", "Ljava/lang/String;",
                                      "Ljava/lang/String;");
-  EXPECT_EQ(wps.get_return_type(meth_pass_string),
-            get_type_domain_simple("Ljava/lang/String;"));
+  EXPECT_EQ(
+      wps.get_return_type(meth_pass_string),
+      get_type_domain_simple("Ljava/lang/String;", /* is_not_null */ true));
 
   auto meth_pass_class =
       get_method("TestB;.passClass", "Ljava/lang/Class;", "Ljava/lang/Class;");
-  EXPECT_EQ(wps.get_return_type(meth_pass_class),
-            get_type_domain_simple("Ljava/lang/Class;"));
+  EXPECT_EQ(
+      wps.get_return_type(meth_pass_class),
+      get_type_domain_simple("Ljava/lang/Class;", /* is_not_null */ true));
 
   auto meth_array_comp = get_method("TestB;.getStringArrayComponent",
                                     "[Ljava/lang/String;",
                                     "Ljava/lang/String;");
   EXPECT_EQ(wps.get_return_type(meth_array_comp),
-            get_type_domain_simple("Ljava/lang/String;", Nullness::NN_TOP,
-                                   /* is_dex_type_exact */ false));
+            get_type_domain_simple("Ljava/lang/String;"));
 
   auto meth_nested_array_comp =
       get_method("TestB;.getNestedStringArrayComponent",
                  "[[Ljava/lang/String;",
                  "[Ljava/lang/String;");
   EXPECT_EQ(wps.get_return_type(meth_nested_array_comp),
-            get_type_domain_simple("[Ljava/lang/String;", Nullness::NN_TOP,
-                                   /* is_dex_type_exact */ false));
+            get_type_domain_simple("[Ljava/lang/String;"));
 }
 
 TEST_F(GlobalTypeAnalysisTest, NullableFieldTypeTest) {

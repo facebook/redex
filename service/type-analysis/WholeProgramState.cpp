@@ -66,10 +66,11 @@ void set_encoded_values(const DexClass* cls, DexTypeEnvironment* env) {
       env->set(sfield, DexTypeDomain::null());
     } else if (sfield->get_type() == type::java_lang_String() &&
                value->evtype() == DEVT_STRING) {
-      env->set(sfield, DexTypeDomain(type::java_lang_String()));
+      env->set(sfield,
+               DexTypeDomain::create_not_null(type::java_lang_String()));
     } else if (sfield->get_type() == type::java_lang_Class() &&
                value->evtype() == DEVT_TYPE) {
-      env->set(sfield, DexTypeDomain(type::java_lang_Class()));
+      env->set(sfield, DexTypeDomain::create_not_null(type::java_lang_Class()));
     } else {
       env->set(sfield, DexTypeDomain::top());
     }
@@ -219,9 +220,8 @@ std::string WholeProgramState::show_method(const DexMethod* m) {
 void WholeProgramState::setup_known_method_returns() {
   for (auto& p : STATIC_METHOD_TO_TYPE_MAP) {
     auto method = DexMethod::make_method(p.first);
-    auto type =
-        DexTypeDomain(DexType::make_type(DexString::make_string(p.second)),
-                      NOT_NULL, /* is_dex_type_exact */ true);
+    auto type = DexTypeDomain::create_not_null(
+        DexType::make_type(DexString::make_string(p.second)));
     m_known_method_returns.insert(std::make_pair(method, type));
   }
 }
