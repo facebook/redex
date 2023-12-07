@@ -19,4 +19,22 @@ public class TypedefAnnoCheckerKtTest {
   private fun takesStrConst(@TestStringDef str: String): String {
     return str
   }
+
+  fun wrongDefaultCaller(@TestStringDef arg: String) {
+    wrongDefaultArg(arg)
+    wrongDefaultArg()
+  }
+
+  private fun wrongDefaultArg(@TestStringDef str: String = "default"): String {
+    return str
+  }
+
+  fun rightDefaultCaller(@TestStringDef arg: String) {
+    rightDefaultArg(arg)
+    rightDefaultArg()
+  }
+
+  private fun rightDefaultArg(@TestStringDef str: String = "one"): String {
+    return str
+  }
 }

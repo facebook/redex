@@ -107,7 +107,7 @@ void SynthAccessorPatcher::collect_accessors(DexMethod* m) {
     return;
   }
 
-  always_assert(code->editable_cfg_built());
+  always_assert_log(code->editable_cfg_built(), "%s has no cfg built", SHOW(m));
   auto& cfg = code->cfg();
   type_inference::TypeInference inference(cfg, false, m_typedef_annos);
   inference.run(m);
@@ -192,19 +192,12 @@ void TypedefAnnoChecker::check_instruction(
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE: {
-    auto def_method = resolve_method(m, insn);
-    if (!def_method) {
+    auto* callee_def = resolve_method(m, insn);
+    if (!callee_def || !callee_def->get_param_anno()) {
+      // Callee does not expect any Typedef value. Nothing to do.
       return;
     }
-    // some methods are called through their access or defaul
-    // counterpart, which do not retain the typedef annotation.
-    // In these cases, we will skip the checker
-    if (!def_method->get_param_anno() ||
-        def_method->get_simple_deobfuscated_name() + DEFAULT_SUFFIX ==
-            m->get_simple_deobfuscated_name()) {
-      return;
-    }
-    for (auto const& param_anno : *def_method->get_param_anno()) {
+    for (auto const& param_anno : *callee_def->get_param_anno()) {
       auto annotation = inference->get_typedef_annotation(
           param_anno.second->get_annotations());
       if (annotation == boost::none) {
@@ -221,7 +214,7 @@ void TypedefAnnoChecker::check_instruction(
       if (anno_type && anno_type != annotation) {
         std::ostringstream out;
         if (anno_type.value() == type::java_lang_Object()) {
-          out << "TypedefAnnoCheckerPass: while invoking " << SHOW(def_method)
+          out << "TypedefAnnoCheckerPass: while invoking " << SHOW(callee_def)
               << "\n in method " << SHOW(m) << "\n parameter "
               << param_anno.first << "should have the annotation "
               << annotation.value()->get_name()->c_str()
@@ -232,7 +225,7 @@ void TypedefAnnoChecker::check_instruction(
                  "should not be mixed.\n"
               << " failed instruction: " << SHOW(insn) << "\n\n";
         } else {
-          out << "TypedefAnnoCheckerPass: while invoking " << SHOW(def_method)
+          out << "TypedefAnnoCheckerPass: while invoking " << SHOW(callee_def)
               << "\n in method " << SHOW(m) << "\n parameter "
               << param_anno.first << " has the annotation " << SHOW(anno_type)
               << "\n but the method expects the annotation to be "
@@ -247,7 +240,7 @@ void TypedefAnnoChecker::check_instruction(
             << "\n annotates a parameter with an incompatible type "
             << SHOW(type) << "\n or a non-constant parameter in method "
             << SHOW(m) << "\n while trying to invoke the method "
-            << SHOW(def_method) << ".\n failed instruction: " << SHOW(insn)
+            << SHOW(callee_def) << ".\n failed instruction: " << SHOW(insn)
             << "\n\n";
         m_error += out.str();
         m_good = false;
@@ -257,10 +250,10 @@ void TypedefAnnoChecker::check_instruction(
                                         param_index, inference, envs);
         if (!good) {
           std::ostringstream out;
-          out << " Error invoking " << SHOW(def_method) << "\n";
+          out << " Error invoking " << SHOW(callee_def) << "\n";
           out << " Incorrect parameter's index: " << param_index << "\n\n";
           m_error += out.str();
-          TRACE(TAC, 1, "invoke method: %s", SHOW(def_method));
+          TRACE(TAC, 1, "invoke method: %s", SHOW(callee_def));
         }
       }
     }
@@ -367,8 +360,9 @@ bool TypedefAnnoChecker::check_typedef_value(
 
   live_range::Use use_of_id{insn, src};
   auto udchains_it = ud_chains->find(use_of_id);
+  auto defs_set = udchains_it->second;
 
-  for (IRInstruction* def : udchains_it->second) {
+  for (IRInstruction* def : defs_set) {
     switch (def->opcode()) {
     case OPCODE_CONST_STRING: {
       auto const const_value = def->get_string();
