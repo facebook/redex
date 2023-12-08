@@ -400,6 +400,7 @@ libopt_la_SOURCES = \
 	opt/int_type_patcher/IntTypePatcher.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/interdex/InterDexPass.cpp \
+	opt/interdex/InterDexReshuffleImpl.cpp \
 	opt/interdex/InterDexReshufflePass.cpp \
 	opt/interdex/SortRemainingClassesPass.cpp \
 	opt/kotlin-lambda/RewriteKotlinSingletonInstance.cpp \

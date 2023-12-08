@@ -9,6 +9,7 @@
 
 #include "DexClass.h"
 #include "InterDex.h"
+#include "InterDexReshuffleImpl.h"
 #include "Pass.h"
 
 /* This pass impls Local Search Algotithm to minize cross-dex refs by
@@ -42,19 +43,6 @@ for batch_idx in 1, ..., num_batches:
  */
 class InterDexReshufflePass : public Pass {
  public:
-  struct Config {
-    size_t reserved_extra_frefs{0};
-
-    size_t reserved_extra_trefs{0};
-
-    size_t reserved_extra_mrefs{0};
-
-    size_t extra_linear_alloc_limit{0};
-
-    size_t max_batches{20};
-
-    size_t max_batch_size{200000};
-  };
   explicit InterDexReshufflePass() : Pass("InterDexReshufflePass") {}
 
   redex_properties::PropertyInteractions get_property_interactions()
@@ -104,5 +92,5 @@ class InterDexReshufflePass : public Pass {
   }
 
  private:
-  Config m_config;
+  ReshuffleConfig m_config;
 };
