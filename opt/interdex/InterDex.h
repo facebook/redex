@@ -53,7 +53,6 @@ class InterDex {
            const ReserveRefsInfo& reserve_refs,
            const XStoreRefs* xstore_refs,
            int min_sdk,
-           std::vector<std::string> methods_for_canary_clinit_reference,
            const init_classes::InitClassesWithSideEffects&
                init_classes_with_side_effects,
            bool transitively_close_interdex_order,
@@ -80,8 +79,6 @@ class InterDex {
         m_original_scope(original_scope),
         m_scope(build_class_scope(m_dexen)),
         m_xstore_refs(xstore_refs),
-        m_methods_for_canary_clinit_reference(
-            std::move(methods_for_canary_clinit_reference)),
         m_transitively_close_interdex_order(transitively_close_interdex_order),
         m_minimize_cross_dex_refs_explore_alternatives(
             minimize_cross_dex_refs_explore_alternatives),
@@ -189,8 +186,6 @@ class InterDex {
   void post_process_dex(EmittingState& emitting_state,
                         const FlushOutDexResult&) const;
 
-  void set_clinit_methods_if_needed(DexClass* cls) const;
-
   /**
    * Stores in m_interdex_order a list of coldstart types. It will only contain:
    * * classes that still exist in the current scope
@@ -237,7 +232,6 @@ class InterDex {
   std::vector<DexType*> m_interdex_types;
   const XStoreRefs* m_xstore_refs;
   size_t m_current_classes_when_emitting_remaining{0};
-  std::vector<std::string> m_methods_for_canary_clinit_reference;
 
   size_t m_transitive_closure_added{0};
   size_t m_transitive_closure_moved{0};

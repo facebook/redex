@@ -1113,66 +1113,6 @@ void InterDex::add_dexes_from_store(const DexStore& store) {
   post_process_dex(m_emitting_state, fodr);
 }
 
-void InterDex::set_clinit_methods_if_needed(DexClass* cls) const {
-  using namespace dex_asm;
-
-  if (m_methods_for_canary_clinit_reference.empty()) {
-    // No methods to call from clinit; don't create clinit.
-    return;
-  }
-
-  if (cls->get_clinit()) {
-    // We already created and added a clinit.
-    return;
-  }
-
-  // Create a clinit static method.
-  auto proto =
-      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-  DexMethod* clinit =
-      DexMethod::make_method(cls->get_type(),
-                             DexString::make_string("<clinit>"), proto)
-          ->make_concrete(ACC_STATIC | ACC_CONSTRUCTOR, false);
-  clinit->set_code(std::make_unique<IRCode>());
-  cls->add_method(clinit);
-  clinit->set_deobfuscated_name(show_deobfuscated(clinit));
-
-  // Add code to clinit to call the other methods.
-  auto code = clinit->get_code();
-  size_t max_size = 0;
-  for (const auto& method_name : m_methods_for_canary_clinit_reference) {
-    // No need to do anything if this method isn't present in the build.
-    if (DexMethodRef* method = DexMethod::get_method(method_name)) {
-      std::vector<Operand> reg_operands;
-      int64_t reg = 0;
-      for (auto* dex_type : *method->get_proto()->get_args()) {
-        Operand reg_operand = {VREG, reg};
-        switch (dex_type->get_name()->c_str()[0]) {
-        case 'J':
-        case 'D':
-          // 8 bytes
-          code->push_back(dasm(OPCODE_CONST_WIDE, {reg_operand, 0_L}));
-          reg_operands.push_back(reg_operand);
-          reg += 2;
-          break;
-        default:
-          // 4 or fewer bytes
-          code->push_back(dasm(OPCODE_CONST, {reg_operand, 0_L}));
-          reg_operands.push_back(reg_operand);
-          ++reg;
-          break;
-        }
-      }
-      max_size = std::max(max_size, (size_t)reg);
-      code->push_back(dasm(OPCODE_INVOKE_STATIC, method, reg_operands.begin(),
-                           reg_operands.end()));
-    }
-  }
-  code->set_registers_size(max_size);
-  code->push_back(dasm(OPCODE_RETURN_VOID));
-  code->build_cfg();
-}
-
 // Creates a canary class if necessary. (In particular, the primary dex never
 // has a canary class.) This method should be called after flush_out_dex when
 // beginning a new dex. As canary classes are added in the end without checks,
@@ -1189,7 +1129,6 @@ DexClass* InterDex::get_canary_cls(EmittingState& emitting_state,
     static std::mutex canary_mutex;
     std::lock_guard<std::mutex> lock_guard(canary_mutex);
     canary_cls = create_canary(dexnum);
-    set_clinit_methods_if_needed(canary_cls);
   }
   MethodRefs clazz_mrefs;
   FieldRefs clazz_frefs;

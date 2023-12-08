@@ -107,10 +107,6 @@ void InterDexPass::bind_config() {
   bind("can_touch_coldstart_extended_cls", false,
        m_can_touch_coldstart_extended_cls);
   bind("expect_order_list", false, m_expect_order_list);
-  bind("methods_for_canary_clinit_reference", {},
-       m_methods_for_canary_clinit_reference,
-       "If set, canary classes will have a clinit generated which call the "
-       "specified methods, if they exist");
 
   bind("transitively_close_interdex_order", m_transitively_close_interdex_order,
        m_transitively_close_interdex_order);
@@ -153,15 +149,15 @@ void InterDexPass::run_pass(
   bool force_single_dex = conf.get_json_config().get("force_single_dex", false);
   mgr.set_metric("config.force_single_dex", force_single_dex);
 
-  InterDex interdex(
-      original_scope, dexen, mgr.asset_manager(), conf, plugins,
-      m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
-      m_keep_primary_order, force_single_dex, m_order_interdex, m_emit_canaries,
-      m_minimize_cross_dex_refs, m_fill_last_coldstart_dex,
-      m_minimize_cross_dex_refs_config, refs_info, &xstore_refs,
-      mgr.get_redex_options().min_sdk, m_methods_for_canary_clinit_reference,
-      init_classes_with_side_effects, m_transitively_close_interdex_order,
-      m_minimize_cross_dex_refs_explore_alternatives, cache);
+  InterDex interdex(original_scope, dexen, mgr.asset_manager(), conf, plugins,
+                    m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
+                    m_keep_primary_order, force_single_dex, m_order_interdex,
+                    m_emit_canaries, m_minimize_cross_dex_refs,
+                    m_fill_last_coldstart_dex, m_minimize_cross_dex_refs_config,
+                    refs_info, &xstore_refs, mgr.get_redex_options().min_sdk,
+                    init_classes_with_side_effects,
+                    m_transitively_close_interdex_order,
+                    m_minimize_cross_dex_refs_explore_alternatives, cache);
 
   if (m_expect_order_list) {
     always_assert_log(
@@ -251,8 +247,7 @@ void InterDexPass::run_pass_on_nonroot_store(
       false /* emit canaries */, false /* minimize_cross_dex_refs */,
       /* fill_last_coldstart_dex=*/false, cross_dex_refs_config, refs_info,
       &xstore_refs, mgr.get_redex_options().min_sdk,
-      m_methods_for_canary_clinit_reference, init_classes_with_side_effects,
-      m_transitively_close_interdex_order,
+      init_classes_with_side_effects, m_transitively_close_interdex_order,
       m_minimize_cross_dex_refs_explore_alternatives, cache);
 
   interdex.run_on_nonroot_store();
