@@ -117,9 +117,9 @@ class MethodContextContext {
     // Somewhat expensive.
     loop_impl::LoopInfo info(*cfg);
     res.m_num_loops = info.num_loops();
-    for (auto* loop : info) {
+    for (auto& loop : info) {
       res.m_deepest_loop =
-          std::max(res.m_deepest_loop, (uint32_t)loop->get_loop_depth());
+          std::max(res.m_deepest_loop, (uint32_t)loop.get_loop_depth());
     }
 
     return res;

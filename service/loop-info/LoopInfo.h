@@ -128,11 +128,10 @@ class Loop {
 
 class LoopInfo {
  public:
-  using iterator = std::vector<Loop*>::iterator;
-  using reverse_iterator = std::vector<Loop*>::reverse_iterator;
+  using iterator = std::deque<Loop>::iterator;
+  using reverse_iterator = std::deque<Loop>::reverse_iterator;
   explicit LoopInfo(const cfg::ControlFlowGraph& cfg);
   explicit LoopInfo(cfg::ControlFlowGraph& cfg);
-  ~LoopInfo();
   Loop* get_loop_for(cfg::Block* block);
   size_t num_loops();
   iterator begin();
@@ -144,7 +143,7 @@ class LoopInfo {
   template <typename Cfg, typename Fn>
   void init(Cfg& cfg, Fn fn);
 
-  std::vector<Loop*> m_loops;
+  std::deque<Loop> m_loops;
   std::unordered_map<cfg::Block*, int> m_loop_depth;
   std::unordered_map<cfg::Block*, Loop*> m_block_location;
 };

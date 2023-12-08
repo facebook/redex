@@ -489,8 +489,8 @@ std::string create_inlining_trace_msg(const DexMethod* caller,
       loop_impl::LoopInfo info(code->cfg());
       oss << "!" << info.num_loops();
       size_t max_depth{0};
-      for (auto* loop : info) {
-        max_depth = std::max(max_depth, (size_t)loop->get_loop_depth());
+      for (auto& loop : info) {
+        max_depth = std::max(max_depth, (size_t)loop.get_loop_depth());
       }
       oss << "!" << max_depth;
       if (insn != nullptr) {
