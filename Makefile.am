@@ -488,6 +488,7 @@ libopt_la_SOURCES = \
 	opt/split_huge_switches/SplitHugeSwitchPass.cpp \
 	opt/split_resource_tables/SplitResourceTables.cpp \
 	opt/object-escape-analysis/ExpandableMethodParams.cpp \
+	opt/object-escape-analysis/ObjectEscapeAnalysisImpl.cpp \
 	opt/object-escape-analysis/ObjectEscapeAnalysis.cpp \
 	opt/staticrelo/StaticReloV2.cpp \
 	opt/string_concatenator/StringConcatenator.cpp \
