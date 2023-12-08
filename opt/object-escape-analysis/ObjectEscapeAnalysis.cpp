@@ -414,15 +414,16 @@ MethodSummaries compute_method_summaries(
             }
             src_index++;
           }
-          const IRInstruction* allocation_insn;
-          if (returns.size() == 1 &&
-              (allocation_insn = *returns.begin()) != NO_ALLOCATION &&
-              escapes.at(allocation_insn).empty() &&
-              allocation_insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT) {
-            recomputed_method_summaries.update(
-                method, [allocation_insn](DexMethod*, auto& ms, bool) {
-                  ms.allocation_insn = allocation_insn;
-                });
+          if (returns.size() == 1) {
+            const auto* allocation_insn = *returns.begin();
+            if (allocation_insn != NO_ALLOCATION &&
+                escapes.at(allocation_insn).empty() &&
+                allocation_insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT) {
+              recomputed_method_summaries.update(
+                  method, [allocation_insn](DexMethod*, auto& ms, bool) {
+                    ms.allocation_insn = allocation_insn;
+                  });
+            }
           }
         },
         impacted_methods);

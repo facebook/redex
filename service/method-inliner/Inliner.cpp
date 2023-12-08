@@ -1481,15 +1481,16 @@ const InlinedCost* MultiMethodInliner::get_average_inlined_cost(
     auto fully_inlined_cost = get_fully_inlined_cost(callee);
     always_assert(fully_inlined_cost);
 
-    const std::vector<CallSiteSummaryOccurrences>*
-        callee_call_site_summary_occurrences;
     if (fully_inlined_cost->full_code >
-            m_config.max_cost_for_constant_propagation ||
-        !(callee_call_site_summary_occurrences =
-              m_call_site_summarizer
-                  ? m_call_site_summarizer
-                        ->get_callee_call_site_summary_occurrences(callee)
-                  : nullptr)) {
+        m_config.max_cost_for_constant_propagation) {
+      return *fully_inlined_cost;
+    }
+    const auto* callee_call_site_summary_occurrences =
+        m_call_site_summarizer
+            ? m_call_site_summarizer->get_callee_call_site_summary_occurrences(
+                  callee)
+            : nullptr;
+    if (!callee_call_site_summary_occurrences) {
       return *fully_inlined_cost;
     }
     InlinedCost inlined_cost((InlinedCost){fully_inlined_cost->full_code,
