@@ -154,6 +154,106 @@ TEST_F(SourceBlocksTest, minimal_serialize) {
   EXPECT_EQ(res.serialized, "(0)");
 }
 
+TEST_F(SourceBlocksTest, visit_in_order_rec_vs_iter) {
+  auto method = create_method();
+  method->get_code()->build_cfg();
+  auto& cfg = method->get_code()->cfg();
+
+  ASSERT_EQ(cfg.num_blocks(), 1u);
+  auto b = cfg.blocks()[0];
+
+  // We're gonna just focus on blocks and edges, no instruction constraints.
+  auto b1 = cfg.create_block();
+  auto b2 = cfg.create_block();
+  auto b3 = cfg.create_block();
+  auto b4 = cfg.create_block();
+
+  cfg.add_edge(b, b1, EDGE_GOTO);
+  cfg.add_edge(b, b2, EDGE_BRANCH);
+  cfg.add_edge(b1, b3, EDGE_GOTO);
+  cfg.add_edge(b2, b3, EDGE_GOTO);
+  cfg.add_edge(b1, b4, method->get_class(), 0);
+  cfg.add_edge(b4, b3, EDGE_GOTO);
+
+  struct Recorder {
+    struct Event {
+      const Block* block_start{nullptr};
+      const Block* block_end{nullptr};
+      const Block* const edge_src{nullptr};
+      const Edge* edge{nullptr};
+      Event(const Block* block_start,
+            const Block* block_end,
+            const Block* edge_src,
+            const Edge* edge)
+          : block_start(block_start),
+            block_end(block_end),
+            edge_src(edge_src),
+            edge(edge) {}
+
+      bool operator==(const Event& other) const {
+        return block_start == other.block_start &&
+               block_end == other.block_end && edge_src == other.edge_src &&
+               edge == other.edge;
+      }
+
+      std::string to_string() const {
+        if (block_start != nullptr) {
+          return "S" + std::to_string(block_start->id());
+        }
+        if (block_end != nullptr) {
+          return "E" + std::to_string(block_end->id());
+        }
+        redex_assert(edge_src != nullptr && edge != nullptr);
+        return "e" + std::to_string(edge_src->id()) + "-" +
+               std::to_string(edge->type()) + "-" +
+               std::to_string(edge->target()->id());
+      }
+    };
+
+    std::vector<Event> events;
+
+    void block_start(const Block* b) {
+      events.emplace_back(b, nullptr, nullptr, nullptr);
+    }
+    void block_end(const Block* b) {
+      events.emplace_back(nullptr, b, nullptr, nullptr);
+    }
+    void edge(const Block* src, const Edge* e) {
+      events.emplace_back(nullptr, nullptr, src, e);
+    }
+
+    bool operator==(const Recorder& other) const {
+      return events == other.events;
+    }
+
+    std::string to_string() const {
+      return "[" + [&]() {
+        std::string tmp;
+        for (auto& e : events) {
+          tmp += e.to_string() + ",";
+        }
+        return tmp;
+      }() + "]";
+    }
+  };
+
+  Recorder recursive;
+  impl::visit_in_order_rec(
+      &cfg, [&recursive](auto b) { recursive.block_start(b); },
+      [&recursive](auto b, auto e) { recursive.edge(b, e); },
+      [&recursive](auto b) { recursive.block_end(b); });
+
+  Recorder iterative;
+  impl::visit_in_order(
+      &cfg, [&iterative](auto b) { iterative.block_start(b); },
+      [&iterative](auto b, auto e) { iterative.edge(b, e); },
+      [&iterative](auto b) { iterative.block_end(b); });
+
+  EXPECT_EQ(recursive, iterative)
+      << "Recursive: "
+      << recursive.to_string() + "\nIterative: " + iterative.to_string();
+}
+
 TEST_F(SourceBlocksTest, complex_serialize) {
   auto method = create_method();
   method->get_code()->build_cfg();

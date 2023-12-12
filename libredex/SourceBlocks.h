@@ -107,11 +107,12 @@ inline std::vector<Edge*> get_sorted_edges(Block* b) {
   return succs;
 }
 
+// This is the technical source-of-truth recursive implementation.
 template <typename BlockStartFn, typename EdgeFn, typename BlockEndFn>
-void visit_in_order(const ControlFlowGraph* cfg,
-                    const BlockStartFn& block_start_fn,
-                    const EdgeFn& edge_fn,
-                    const BlockEndFn& block_end_fn) {
+void visit_in_order_rec(const ControlFlowGraph* cfg,
+                        const BlockStartFn& block_start_fn,
+                        const EdgeFn& edge_fn,
+                        const BlockEndFn& block_end_fn) {
   // Do not rely on `blocks()`, as there are no ordering guarantees. For now,
   // do a simple DFS with explicitly ordered edges.
 
@@ -138,6 +139,65 @@ void visit_in_order(const ControlFlowGraph* cfg,
       cfg->entry_block());
 
   redex_assert(visited.size() == cfg->num_blocks());
+}
+
+// This is the iterative implementation for stack-size reasons. It is
+// compared in a test against the recursive version.
+template <typename BlockStartFn, typename EdgeFn, typename BlockEndFn>
+void visit_in_order(const ControlFlowGraph* cfg,
+                    const BlockStartFn& block_start_fn,
+                    const EdgeFn& edge_fn,
+                    const BlockEndFn& block_end_fn) {
+  std::unordered_set<Block*> visited;
+
+  struct StackFrame {
+    Block* cur{nullptr}; // The handled block.
+    Edge* edge{nullptr}; // Edge to use for edge_fn.
+    bool initial{true}; // Is this the start of the recursive call?
+    StackFrame(Block* cur, Edge* edge, bool initial)
+        : cur(cur), edge(edge), initial(initial) {}
+  };
+  std::stack<StackFrame> stack;
+  stack.emplace(cfg->entry_block(), nullptr, true);
+
+  while (!stack.empty()) {
+    auto* cur = stack.top().cur;
+
+    if (stack.top().initial) {
+      if (visited.count(cur)) {
+        stack.pop();
+        continue;
+      }
+      visited.insert(cur);
+
+      block_start_fn(cur);
+
+      stack.top().initial = false;
+
+      auto sorted = get_sorted_edges(cur);
+      for (auto it = sorted.rbegin(); it != sorted.rend(); ++it) {
+        auto edge = *it;
+        if (edge->type() == EDGE_GHOST) {
+          continue;
+        }
+        stack.emplace(edge->target(), nullptr, true);
+        stack.emplace(cur, edge, false);
+      }
+    } else {
+      auto* edge = stack.top().edge;
+      stack.pop();
+      if (edge != nullptr) {
+        edge_fn(cur, edge);
+      } else {
+        block_end_fn(cur);
+      }
+    }
+  }
+
+  assert_log(visited.size() == cfg->num_blocks(),
+             "%zu vs %zu",
+             visited.size(),
+             cfg->num_blocks());
 }
 
 } // namespace impl
