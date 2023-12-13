@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <memory>
 #include <unordered_map>
 #include <vector>
 
@@ -508,7 +509,7 @@ struct ClassCreator {
     if (location == nullptr) {
       location = DexLocation::make_location("", "");
     }
-    m_cls = new DexClass(location);
+    m_cls = std::unique_ptr<DexClass>(new DexClass(location));
     m_cls->m_self = type;
     m_cls->m_access_flags = (DexAccessFlags)0;
     m_cls->m_super_class = nullptr;
@@ -524,7 +525,7 @@ struct ClassCreator {
   /**
    * Return the DexClass associated with this creator.
    */
-  DexClass* get_class() const { return m_cls; }
+  DexClass* get_class() const { return m_cls.get(); }
 
   /**
    * Return the DexType associated with this creator.
@@ -550,7 +551,7 @@ struct ClassCreator {
    * Set the external bit for the DexClass.
    */
   void set_external() {
-    m_cls->set_deobfuscated_name(show_cls(m_cls));
+    m_cls->set_deobfuscated_name(show_cls(m_cls.get()));
     m_cls->m_external = true;
   }
 
@@ -584,6 +585,6 @@ struct ClassCreator {
   static std::string show_cls(const DexClass* cls);
   static std::string show_type(const DexType* type);
 
-  DexClass* m_cls;
+  std::unique_ptr<DexClass> m_cls;
   DexTypeList::ContainerType m_interfaces;
 };

@@ -1006,8 +1006,8 @@ DexClass* class_with_methods(const std::string& class_name,
   for (const auto& method : methods) {
     class_creator.add_method(method);
   }
-  class_creator.create();
-  return class_creator.get_class();
+  auto cls = class_creator.create();
+  return cls;
 }
 
 } // namespace assembler
