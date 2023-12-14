@@ -79,8 +79,8 @@ TEST_F(ConstantValueTest, meet) {
   EXPECT_EQ(meet(ConstantValue::top(), owia), owia);
   EXPECT_EQ(meet(owia, ConstantValue::top()), owia);
 
-  EXPECT_EQ(meet(sod, owia), ConstantValue::top());
-  EXPECT_EQ(meet(owia, sod), ConstantValue::top());
+  EXPECT_EQ(meet(sod, owia), nez);
+  EXPECT_EQ(meet(owia, sod), nez);
 
   EXPECT_EQ(meet(sd_a, sd_b), ConstantValue::bottom());
   EXPECT_EQ(meet(sd_b, sd_a), ConstantValue::bottom());
@@ -103,8 +103,8 @@ TEST_F(ConstantValueTest, join) {
   EXPECT_EQ(join(ConstantValue::top(), owia), ConstantValue::top());
   EXPECT_EQ(join(owia, ConstantValue::top()), ConstantValue::top());
 
-  EXPECT_EQ(join(sod, owia), ConstantValue::top());
-  EXPECT_EQ(join(owia, sod), ConstantValue::top());
+  EXPECT_EQ(join(sod, owia), nez);
+  EXPECT_EQ(join(owia, sod), nez);
 
   EXPECT_EQ(join(sd_a, sd_b), nez);
   EXPECT_EQ(join(sd_b, sd_a), nez);

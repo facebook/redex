@@ -228,14 +228,6 @@ void DisjointUnionWithSignedConstantDomain<IsObject, Domains...>::join_with(
   if (other.is_bottom()) {
     return;
   }
-  // SingletonObjectDomain and ObjectWithImmutAttrDomain both represent object
-  // references and they have intersection.
-  // Handle their meet operator specially.
-  if ((this->is_singleton_object() && other.is_object_with_immutable_attr()) ||
-      (other.is_singleton_object() && this->is_object_with_immutable_attr())) {
-    this->set_to_top();
-    return;
-  }
   auto nez = (this->is_nez() || this->is_object()) &&
              (other.is_nez() || other.is_object());
   boost::apply_visitor(sparta::duad_impl::join_visitor(), this->m_variant,
@@ -269,7 +261,7 @@ void DisjointUnionWithSignedConstantDomain<IsObject, Domains...>::meet_with(
   // Handle their meet operator specially.
   if ((this->is_singleton_object() && other.is_object_with_immutable_attr()) ||
       (other.is_singleton_object() && this->is_object_with_immutable_attr())) {
-    this->set_to_top();
+    this->m_variant = SignedConstantDomain(sign_domain::Interval::NEZ);
     return;
   }
 
