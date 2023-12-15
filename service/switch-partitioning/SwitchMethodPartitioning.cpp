@@ -92,7 +92,7 @@ std::unique_ptr<SwitchMethodPartitioning> SwitchMethodPartitioning::create(
   }
 
   // Method is supported, munge into simpler format expected by callers.
-  std::unordered_map<int32_t, cfg::Block*> key_to_block;
+  std::map<int32_t, cfg::Block*> key_to_block;
   for (auto&& [key, block] : finder->key_to_case()) {
     if (!SwitchEquivFinder::is_default_case(key)) {
       auto i = boost::get<int32_t>(key);

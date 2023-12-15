@@ -53,20 +53,19 @@ class SwitchMethodPartitioning final {
     return m_prologue_blocks;
   }
 
-  const std::unordered_map<int32_t, cfg::Block*>& get_key_to_block() const {
+  const std::map<int32_t, cfg::Block*>& get_key_to_block() const {
     return m_key_to_block;
   }
 
  private:
-  SwitchMethodPartitioning(
-      cfg::ScopedCFG cfg,
-      std::vector<cfg::Block*> prologue_blocks,
-      std::unordered_map<int32_t, cfg::Block*> key_to_block)
+  SwitchMethodPartitioning(cfg::ScopedCFG cfg,
+                           std::vector<cfg::Block*> prologue_blocks,
+                           std::map<int32_t, cfg::Block*> key_to_block)
       : m_prologue_blocks(std::move(prologue_blocks)),
         m_key_to_block(std::move(key_to_block)),
         m_cfg(std::move(cfg)) {}
 
   std::vector<cfg::Block*> m_prologue_blocks;
-  std::unordered_map<int32_t, cfg::Block*> m_key_to_block;
+  std::map<int32_t, cfg::Block*> m_key_to_block;
   cfg::ScopedCFG m_cfg;
 };
