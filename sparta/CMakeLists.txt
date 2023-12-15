@@ -6,6 +6,7 @@
 cmake_minimum_required(VERSION 3.0.2)
 project("sparta")
 
+include(CTest)
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake_modules" ${CMAKE_MODULE_PATH})
 include(Commons)
 
@@ -25,7 +26,7 @@ add_library(sparta INTERFACE)
 
 target_include_directories(sparta INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
 target_link_libraries(sparta INTERFACE ${Boost_LIBRARIES})
@@ -53,17 +54,6 @@ export(TARGETS sparta FILE sparta_target.cmake)
 ###################################################
 # test
 ###################################################
-file(GLOB test "test/*.cpp")
-
-include(CTest)
-# ${test} contains all paths to the test cpps
-foreach(testfile ${test})
-  # ${testfile} is in the format of test/SomeTest.cpp
-  string(REPLACE ".cpp" "_test" no_ext_name ${testfile})
-  # ${no_ext_name} is in the format of test/SomeTest_test
-  get_filename_component(test_bin ${no_ext_name} NAME)
-  # ${test_bin} is in the format of SomeTest_test
-  add_executable(${test_bin} ${testfile})
-  target_link_libraries(${test_bin} PRIVATE sparta gmock_main)
-  add_test(NAME ${testfile} COMMAND ${test_bin})
-endforeach()
+if (BUILD_TESTING)
+  add_subdirectory(test)
+endif()
