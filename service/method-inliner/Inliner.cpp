@@ -16,7 +16,6 @@
 #include "ConstantPropagationWholeProgramState.h"
 #include "ConstructorAnalysis.h"
 #include "DexInstruction.h"
-#include "EditableCfgAdapter.h"
 #include "GraphUtil.h"
 #include "InlineForSpeed.h"
 #include "InlinerConfig.h"
@@ -57,18 +56,18 @@ std::unordered_set<DexType*> gather_resolved_init_class_types(
         init_classes_with_side_effects) {
   std::unordered_set<DexType*> refined_init_class_types;
 
-  editable_cfg_adapter::iterate(m->get_code(), [&](const MethodItemEntry& mie) {
+  always_assert(m->get_code()->editable_cfg_built());
+  for (auto& mie : InstructionIterable(m->get_code()->cfg())) {
     auto insn = mie.insn;
     if (insn->opcode() != IOPCODE_INIT_CLASS) {
-      return editable_cfg_adapter::LOOP_CONTINUE;
+      continue;
     }
     auto* refined_type =
         init_classes_with_side_effects.refine(insn->get_type());
     if (refined_type != nullptr) {
       refined_init_class_types.insert(const_cast<DexType*>(refined_type));
     }
-    return editable_cfg_adapter::LOOP_CONTINUE;
-  });
+  }
 
   return refined_init_class_types;
 }
@@ -349,61 +348,60 @@ void MultiMethodInliner::inline_callees(
   {
     auto timer = m_inline_callees_timer.scope();
 
+    always_assert(caller->get_code()->editable_cfg_built());
+    auto ii = InstructionIterable(caller->get_code()->cfg());
     // walk the caller opcodes collecting all candidates to inline
     // Build a callee to opcode map
-    editable_cfg_adapter::iterate_with_iterator(
-        caller->get_code(), [&](const IRList::iterator& it) {
-          auto insn = it->insn;
-          auto callee = get_callee(caller, insn);
-          if (!callee || !callees.count(callee)) {
-            return editable_cfg_adapter::LOOP_CONTINUE;
+    for (auto it = ii.begin(); it != ii.end(); ++it) {
+      auto insn = it->insn;
+      auto callee = get_callee(caller, insn);
+      if (!callee || !callees.count(callee)) {
+        continue;
+      }
+      std::shared_ptr<ReducedCode> reduced_code;
+      bool no_return{false};
+      size_t insn_size{0};
+      if (filter_via_should_inline) {
+        auto timer2 = m_inline_callees_should_inline_timer.scope();
+        // Cost model is based on fully inlining callee everywhere; let's
+        // see if we can get more detailed call-site specific information
+        if (should_inline_at_call_site(caller, insn, callee, &no_return,
+                                       &reduced_code, &insn_size)) {
+          always_assert(!no_return);
+          // Yes, we know might have dead_blocks and a refined insn_size
+        } else if (should_inline_always(callee)) {
+          // We'll fully inline the callee without any adjustments
+          no_return = false;
+          insn_size = get_callee_insn_size(callee);
+        } else if (no_return) {
+          always_assert(insn_size == 0);
+          always_assert(!reduced_code);
+        } else {
+          continue;
+        }
+      } else {
+        insn_size = get_callee_insn_size(callee);
+      }
+      always_assert(callee->is_concrete());
+      if (m_analyze_and_prune_inits && method::is_init(callee) && !no_return) {
+        auto timer2 = m_inline_callees_init_timer.scope();
+        if (!callee->get_code()->editable_cfg_built()) {
+          continue;
+        }
+        if (!can_inline_init(callee)) {
+          if (!method::is_init(caller) ||
+              caller->get_class() != callee->get_class() ||
+              !caller->get_code()->editable_cfg_built() ||
+              !constructor_analysis::can_inline_inits_in_same_class(
+                  caller, callee, insn)) {
+            continue;
           }
-          std::shared_ptr<ReducedCode> reduced_code;
-          bool no_return{false};
-          size_t insn_size{0};
-          if (filter_via_should_inline) {
-            auto timer2 = m_inline_callees_should_inline_timer.scope();
-            // Cost model is based on fully inlining callee everywhere; let's
-            // see if we can get more detailed call-site specific information
-            if (should_inline_at_call_site(caller, insn, callee, &no_return,
-                                           &reduced_code, &insn_size)) {
-              always_assert(!no_return);
-              // Yes, we know might have dead_blocks and a refined insn_size
-            } else if (should_inline_always(callee)) {
-              // We'll fully inline the callee without any adjustments
-              no_return = false;
-              insn_size = get_callee_insn_size(callee);
-            } else if (no_return) {
-              always_assert(insn_size == 0);
-              always_assert(!reduced_code);
-            } else {
-              return editable_cfg_adapter::LOOP_CONTINUE;
-            }
-          } else {
-            insn_size = get_callee_insn_size(callee);
-          }
-          always_assert(callee->is_concrete());
-          if (m_analyze_and_prune_inits && method::is_init(callee) &&
-              !no_return) {
-            auto timer2 = m_inline_callees_init_timer.scope();
-            if (!callee->get_code()->editable_cfg_built()) {
-              return editable_cfg_adapter::LOOP_CONTINUE;
-            }
-            if (!can_inline_init(callee)) {
-              if (!method::is_init(caller) ||
-                  caller->get_class() != callee->get_class() ||
-                  !caller->get_code()->editable_cfg_built() ||
-                  !constructor_analysis::can_inline_inits_in_same_class(
-                      caller, callee, insn)) {
-                return editable_cfg_adapter::LOOP_CONTINUE;
-              }
-            }
-          }
+        }
+      }
 
-          inlinables.push_back((Inlinable){callee, insn, no_return,
-                                           std::move(reduced_code), insn_size});
-          return editable_cfg_adapter::LOOP_CONTINUE;
-        });
+      inlinables.push_back((Inlinable){callee, insn, no_return,
+                                       std::move(reduced_code), insn_size});
+    }
   }
   if (!inlinables.empty()) {
     inline_inlinables(caller, inlinables);
@@ -416,20 +414,19 @@ size_t MultiMethodInliner::inline_callees(
     std::vector<IRInstruction*>* deleted_insns) {
   TraceContext context{caller};
   std::vector<Inlinable> inlinables;
-  editable_cfg_adapter::iterate_with_iterator(
-      caller->get_code(), [&](const IRList::iterator& it) {
-        auto insn = it->insn;
-        if (insns.count(insn)) {
-          auto callee = get_callee(caller, insn);
-          if (callee == nullptr) {
-            return editable_cfg_adapter::LOOP_CONTINUE;
-          }
-          always_assert(callee->is_concrete());
-          inlinables.push_back((Inlinable){callee, insn, false, nullptr,
-                                           get_callee_insn_size(callee)});
-        }
-        return editable_cfg_adapter::LOOP_CONTINUE;
-      });
+  always_assert(caller->get_code()->editable_cfg_built());
+  for (auto& mie : InstructionIterable(caller->get_code()->cfg())) {
+    auto insn = mie.insn;
+    if (insns.count(insn)) {
+      auto callee = get_callee(caller, insn);
+      if (callee == nullptr) {
+        continue;
+      }
+      always_assert(callee->is_concrete());
+      inlinables.push_back((Inlinable){callee, insn, false, nullptr,
+                                       get_callee_insn_size(callee)});
+    }
+  }
 
   return inline_inlinables(caller, inlinables, deleted_insns);
 }
@@ -1279,48 +1276,36 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
   };
   size_t insn_size;
   float unused_args{0};
-  if (code->editable_cfg_built()) {
-    reduced_code = apply_call_site_summary(is_static, declaring_type, proto,
-                                           code->cfg(), call_site_summary);
-    auto cfg = &(reduced_code ? &reduced_code->code() : code)->cfg();
-    auto blocks = cfg->blocks();
-    for (size_t i = 0; i < blocks.size(); ++i) {
-      auto block = blocks.at(i);
-      for (auto& mie : InstructionIterable(block)) {
-        auto insn = mie.insn;
-        cost += ::get_inlined_cost(insn, m_inliner_cost_config);
-        analyze_refs(insn);
-      }
-      cost +=
-          ::get_inlined_cost(blocks, i, block->succs(), m_inliner_cost_config);
-      if (block->branchingness() == opcode::Branchingness::BRANCH_RETURN) {
-        returns++;
-      }
-    }
-    live_range::MoveAwareChains chains(
-        *cfg,
-        /* ignore_unreachable */ !reduced_code,
-        [&](auto* insn) { return opcode::is_a_load_param(insn->opcode()); });
-    auto def_use_chains = chains.get_def_use_chains();
-    for (auto& mie : cfg->get_param_instructions()) {
-      auto uses = def_use_chains[mie.insn];
-      if (uses.empty()) {
-        unused_args++;
-      }
-    }
-    insn_size = cfg->estimate_code_units();
-  } else {
-    editable_cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
+  always_assert(code->editable_cfg_built());
+  reduced_code = apply_call_site_summary(is_static, declaring_type, proto,
+                                         code->cfg(), call_site_summary);
+  auto cfg = &(reduced_code ? &reduced_code->code() : code)->cfg();
+  auto blocks = cfg->blocks();
+  for (size_t i = 0; i < blocks.size(); ++i) {
+    auto block = blocks.at(i);
+    for (auto& mie : InstructionIterable(block)) {
       auto insn = mie.insn;
       cost += ::get_inlined_cost(insn, m_inliner_cost_config);
-      if (opcode::is_a_return(insn->opcode())) {
-        returns++;
-      }
       analyze_refs(insn);
-      return editable_cfg_adapter::LOOP_CONTINUE;
-    });
-    insn_size = code->estimate_code_units();
+    }
+    cost +=
+        ::get_inlined_cost(blocks, i, block->succs(), m_inliner_cost_config);
+    if (block->branchingness() == opcode::Branchingness::BRANCH_RETURN) {
+      returns++;
+    }
   }
+  live_range::MoveAwareChains chains(
+      *cfg,
+      /* ignore_unreachable */ !reduced_code,
+      [&](auto* insn) { return opcode::is_a_load_param(insn->opcode()); });
+  auto def_use_chains = chains.get_def_use_chains();
+  for (auto& mie : cfg->get_param_instructions()) {
+    auto uses = def_use_chains[mie.insn];
+    if (uses.empty()) {
+      unused_args++;
+    }
+  }
+  insn_size = cfg->estimate_code_units();
   if (returns > 1) {
     // if there's more than one return, gotos will get introduced to merge
     // control flow
@@ -1532,15 +1517,13 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   // If not, then we can give up, as there's no point in making the case that
   // we can eliminate the callee method based on pervasive inlining.
   if (m_analyze_and_prune_inits && method::is_init(callee)) {
-    if (!callee->get_code()->editable_cfg_built()) {
-      return true;
-    }
+    always_assert(callee->get_code()->editable_cfg_built());
     if (!can_inline_init(callee)) {
       for (auto& p : callers) {
         auto caller = p.first;
+        always_assert(caller->get_code()->editable_cfg_built());
         if (!method::is_init(caller) ||
             caller->get_class() != callee->get_class() ||
-            !caller->get_code()->editable_cfg_built() ||
             !constructor_analysis::can_inline_inits_in_same_class(
                 caller, callee,
                 /* callsite_insn */ nullptr)) {
