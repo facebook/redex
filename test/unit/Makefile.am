@@ -132,7 +132,6 @@ check_PROGRAMS = \
     strip_debug_info_test \
     switch_dispatch_test \
     switch_equiv_test \
-    switch_partitioning_test \
     timer_test \
     trace_multithreading_test \
     true_virtuals_test \
@@ -430,8 +429,6 @@ switch_dispatch_test_SOURCES = SwitchDispatchTest.cpp
 switch_equiv_test_SOURCES = SwitchEquivFinderTest.cpp
 switch_equiv_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
-switch_partitioning_test_SOURCES = SwitchPartitioningTest.cpp
-
 # throw_propagation_test_SOURCES = ThrowPropagationTest.cpp
 # throw_propagation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
@@ -591,7 +588,6 @@ TESTS = \
     strip_debug_info_test \
     switch_dispatch_test \
     switch_equiv_test \
-    switch_partitioning_test \
     timer_test \
     trace_multithreading_test \
     true_virtuals_test \
