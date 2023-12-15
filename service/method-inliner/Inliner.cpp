@@ -400,7 +400,7 @@ void MultiMethodInliner::inline_callees(
             }
           }
 
-          inlinables.push_back((Inlinable){callee, it, insn, no_return,
+          inlinables.push_back((Inlinable){callee, insn, no_return,
                                            std::move(reduced_code), insn_size});
           return editable_cfg_adapter::LOOP_CONTINUE;
         });
@@ -425,7 +425,7 @@ size_t MultiMethodInliner::inline_callees(
             return editable_cfg_adapter::LOOP_CONTINUE;
           }
           always_assert(callee->is_concrete());
-          inlinables.push_back((Inlinable){callee, it, insn, false, nullptr,
+          inlinables.push_back((Inlinable){callee, insn, false, nullptr,
                                            get_callee_insn_size(callee)});
         }
         return editable_cfg_adapter::LOOP_CONTINUE;

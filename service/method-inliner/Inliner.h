@@ -127,8 +127,6 @@ class ReducedCode {
 
 struct Inlinable {
   DexMethod* callee;
-  // Only used when not using cfg; iterator to invoke instruction to callee
-  IRList::iterator iterator;
   // Invoke instruction to callee
   IRInstruction* insn;
   // Whether the invocation at a particular call-site is guaranteed to not
