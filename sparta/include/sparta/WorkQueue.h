@@ -132,7 +132,7 @@ class WorkerState final {
    * `WorkQueue::add_item()` as the latter is not thread-safe.
    */
   void push_task(Input task) {
-    SPARTA_ASSERT(m_can_push_task);
+    SPARTA_RUNTIME_CHECK(m_can_push_task, internal_error());
     auto* node = new Node{std::move(task), m_additional_tasks.load()};
     do {
       if (node->prev == nullptr) {
@@ -152,7 +152,7 @@ class WorkerState final {
   void set_running(bool running) {
     if (m_running && !running) {
       auto num = m_state_counters->num_running.fetch_sub(1);
-      SPARTA_ASSERT(num > 0);
+      SPARTA_RUNTIME_CHECK(num > 0, internal_error());
       SPARTA_UNUSED_VARIABLE(num);
     } else if (!m_running && running) {
       m_state_counters->num_running.fetch_add(1);
@@ -179,7 +179,7 @@ class WorkerState final {
     if (i < size) {
       if (size - 1 == i) {
         auto num = m_state_counters->num_non_empty_initial.fetch_sub(1);
-        SPARTA_ASSERT(num > 0);
+        SPARTA_RUNTIME_CHECK(num > 0, internal_error());
         SPARTA_UNUSED_VARIABLE(num);
       }
       other->set_running(true);
@@ -196,7 +196,7 @@ class WorkerState final {
         // node holds the element we intend to remove.
         if (node->prev == nullptr) {
           auto num = m_state_counters->num_non_empty_additional.fetch_sub(1);
-          SPARTA_ASSERT(num > 0);
+          SPARTA_RUNTIME_CHECK(num > 0, internal_error());
           SPARTA_UNUSED_VARIABLE(num);
         }
         // We can't just delete the node right here, as there may be racing
@@ -294,7 +294,8 @@ WorkQueue<Input, Executor>::WorkQueue(Executor executor,
       m_state_counters(num_threads),
       m_can_push_task(push_tasks_while_running),
       m_async_runner(async_runner) {
-  SPARTA_ASSERT(num_threads >= 1);
+  SPARTA_RUNTIME_CHECK(num_threads >= 1, invalid_argument()
+                                             << argument_name("num_threads"));
   for (unsigned int i = 0; i < m_num_threads; ++i) {
     m_states.emplace_back(std::make_unique<WorkerState<Input>>(
         i, &m_state_counters, m_can_push_task));
@@ -304,13 +305,14 @@ WorkQueue<Input, Executor>::WorkQueue(Executor executor,
 template <class Input, typename Executor>
 void WorkQueue<Input, Executor>::add_item(Input task) {
   m_insert_idx = (m_insert_idx + 1) % m_num_threads;
-  SPARTA_ASSERT(m_insert_idx < m_states.size());
+  SPARTA_RUNTIME_CHECK(m_insert_idx < m_states.size(), internal_error());
   m_states[m_insert_idx]->m_initial_tasks.push_back(std::move(task));
 }
 
 template <class Input, typename Executor>
 void WorkQueue<Input, Executor>::add_item(Input task, size_t worker_id) {
-  SPARTA_ASSERT(worker_id < m_states.size());
+  SPARTA_RUNTIME_CHECK(worker_id < m_states.size(),
+                       invalid_argument() << argument_name("worker_id"));
   m_states[worker_id]->m_initial_tasks.push_back(std::move(task));
 }
 
@@ -400,7 +402,7 @@ void WorkQueue<Input, Executor>::run_all() {
   run_in_parallel(worker);
 
   for (size_t i = 0; i < m_num_threads; ++i) {
-    SPARTA_ASSERT(!m_states[i]->m_running);
+    SPARTA_RUNTIME_CHECK(!m_states[i]->m_running, internal_error());
   }
 
   if (exception) {
@@ -408,11 +410,13 @@ void WorkQueue<Input, Executor>::run_all() {
   }
 
   for (size_t i = 0; i < m_num_threads; ++i) {
-    SPARTA_ASSERT(
+    SPARTA_RUNTIME_CHECK(
         m_states[i]->m_next_initial_task.load(std::memory_order_relaxed) ==
-        m_states[i]->m_initial_tasks.size());
-    SPARTA_ASSERT(m_states[i]->m_additional_tasks.load(
-                      std::memory_order_relaxed) == nullptr);
+            m_states[i]->m_initial_tasks.size(),
+        internal_error());
+    SPARTA_RUNTIME_CHECK(m_states[i]->m_additional_tasks.load(
+                             std::memory_order_relaxed) == nullptr,
+                         internal_error());
   }
 }
 

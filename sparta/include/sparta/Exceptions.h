@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <cassert>
 #include <exception>
 
 #include <boost/config.hpp>
@@ -69,11 +68,6 @@ using operation_name =
       SPARTA_THROW_EXCEPTION((E)); \
     }                              \
   while (0)
-
-/*
- * An assert-like macro that terminates the program.
- */
-#define SPARTA_ASSERT(m) assert(m)
 
 /*
  * Indicates that the given variable is unused, to prevent compiler warnings.
