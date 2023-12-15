@@ -87,7 +87,6 @@ class DexEncodedValue : public Gatherable {
   uint64_t value() const { return m_val.m_value; }
   static std::unique_ptr<DexEncodedValue> get_encoded_value(
       DexIdx* idx, const uint8_t*& encdata);
-  DexEncodedValueTypes evtype() { return m_evtype; }
   virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
   void vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes);
 
