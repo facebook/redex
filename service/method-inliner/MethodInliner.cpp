@@ -845,7 +845,7 @@ void run_inliner(
       cross_dex_penalty,
       /* configured_finalish_field_names */ {}, local_only,
       inliner_cost_config);
-  inliner.inline_methods(/* need_deconstruct */ false);
+  inliner.inline_methods();
 
   // delete all methods that can be deleted
   auto inlined = inliner.get_inlined();

@@ -100,8 +100,9 @@ MultiMethodInliner::MultiMethodInliner(
           [this](DexMethod* method) {
             auto it = caller_callee.find(method);
             if (it != caller_callee.end()) {
-              always_assert(!inline_inlinables_need_deconstruct(method));
+              always_assert(method->get_code()->editable_cfg_built());
               std::unordered_set<DexMethod*> callees;
+              callees.reserve(it->second.size());
               for (auto& p : it->second) {
                 callees.insert(p.first);
               }
@@ -223,29 +224,7 @@ MultiMethodInliner::MultiMethodInliner(
   }
 }
 
-void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
-  std::unordered_set<IRCode*> need_deconstruct;
-  if (methods_need_deconstruct) {
-    for (auto& p : caller_callee) {
-      need_deconstruct.insert(const_cast<IRCode*>(p.first->get_code()));
-    }
-    for (auto& p : callee_caller) {
-      need_deconstruct.insert(const_cast<IRCode*>(p.first->get_code()));
-    }
-    for (auto it = need_deconstruct.begin(); it != need_deconstruct.end();) {
-      if ((*it)->editable_cfg_built()) {
-        it = need_deconstruct.erase(it);
-      } else {
-        it++;
-      }
-    }
-    if (!need_deconstruct.empty()) {
-      workqueue_run<IRCode*>(
-          [](IRCode* code) { code->build_cfg(/* editable */ true); },
-          need_deconstruct);
-    }
-  }
-
+void MultiMethodInliner::inline_methods() {
   // The order in which we inline is such that once a callee is considered to
   // be inlined, it's code will no longer change. So we can cache...
   // - its size
@@ -338,11 +317,6 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
   delayed_visibility_changes_apply();
   delayed_invoke_direct_to_static();
   info.waited_seconds = m_scheduler.get_thread_pool().get_waited_seconds();
-
-  if (!need_deconstruct.empty()) {
-    workqueue_run<IRCode*>([](IRCode* code) { code->clear_cfg(); },
-                           need_deconstruct);
-  }
 }
 
 DexMethod* MultiMethodInliner::get_callee(DexMethod* caller,
@@ -460,12 +434,6 @@ size_t MultiMethodInliner::inline_callees(
   return inline_inlinables(caller, inlinables, deleted_insns);
 }
 
-bool MultiMethodInliner::inline_inlinables_need_deconstruct(DexMethod* method) {
-  // The mixed CFG, IRCode is used by Switch Inline (only?) where the caller is
-  // an IRCode and the callee is a CFG.
-  return !method->get_code()->editable_cfg_built();
-}
-
 namespace {
 
 // Helper method, as computing inline for a trace could be too expensive.
@@ -540,21 +508,7 @@ size_t MultiMethodInliner::inline_inlinables(
     std::vector<IRInstruction*>* deleted_insns) {
   auto timer = m_inline_inlinables_timer.scope();
   auto caller = caller_method->get_code();
-  std::unordered_set<IRCode*> need_deconstruct;
-  if (inline_inlinables_need_deconstruct(caller_method)) {
-    need_deconstruct.reserve(1 + inlinables.size());
-    need_deconstruct.insert(caller);
-    for (const auto& inlinable : inlinables) {
-      need_deconstruct.insert(inlinable.callee->get_code());
-    }
-    for (auto code : need_deconstruct) {
-      always_assert(!code->editable_cfg_built());
-      code->build_cfg(/* editable */ true);
-      // if (deleted_insns != nullptr) {
-      //   code->cfg().set_removed_insn_ownership(false);
-      // }
-    }
-  }
+  always_assert(caller->editable_cfg_built());
 
   // attempt to inline all inlinable candidates
   size_t estimated_caller_size = caller->cfg().estimate_code_units();
@@ -795,10 +749,6 @@ size_t MultiMethodInliner::inline_inlinables(
       }
     }
     m_inlined.insert(inlined_callees.begin(), inlined_callees.end());
-  }
-
-  for (IRCode* code : need_deconstruct) {
-    code->clear_cfg(nullptr, deleted_insns);
   }
 
   info.calls_inlined += inlined_callees.size();

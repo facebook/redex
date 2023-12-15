@@ -1159,7 +1159,18 @@ bool BuilderTransform::inline_methods(
       }
     }
 
+    always_assert(!to_inline.count(method));
+    always_assert(!method->get_code()->editable_cfg_built());
+    method->get_code()->build_cfg();
+    for (auto* m : to_inline) {
+      always_assert(!m->get_code()->editable_cfg_built());
+      m->get_code()->build_cfg();
+    }
     m_inliner->inline_callees(method, to_inline);
+    method->get_code()->clear_cfg();
+    for (auto* m : to_inline) {
+      m->get_code()->clear_cfg();
+    }
 
     // Check all possible methods were inlined.
     previous_to_inline = to_inline;

@@ -195,6 +195,7 @@ TEST_F(SourceBlocksTest, source_blocks) {
   {
     inliner::InlinerConfig conf{};
     auto scope = build_class_scope(stores);
+    walk::parallel::code(scope, [&](auto*, IRCode& code) { code.build_cfg(); });
     conf.populate(scope);
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
@@ -215,6 +216,8 @@ TEST_F(SourceBlocksTest, source_blocks) {
                                std::ref(concurrent_method_resolver), conf,
                                min_sdk, MultiMethodInlinerMode::IntraDex);
     inliner.inline_methods();
+    walk::parallel::code(scope, [&](auto*, IRCode& code) { code.clear_cfg(); });
+
     ASSERT_EQ(inliner.get_inlined().size(), 1u);
 
     auto bar_ref = DexMethod::get_method(
@@ -429,6 +432,7 @@ TEST_F(SourceBlocksTest, scaling) {
   {
     inliner::InlinerConfig conf{};
     auto scope = build_class_scope(stores);
+    walk::parallel::code(scope, [&](auto*, IRCode& code) { code.build_cfg(); });
     conf.populate(scope);
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
@@ -444,6 +448,8 @@ TEST_F(SourceBlocksTest, scaling) {
                                std::ref(concurrent_method_resolver), conf,
                                min_sdk, MultiMethodInlinerMode::IntraDex);
     inliner.inline_methods();
+    walk::parallel::code(scope, [&](auto*, IRCode& code) { code.clear_cfg(); });
+
     ASSERT_EQ(inliner.get_inlined().size(), 1u);
     ASSERT_EQ(inliner.get_info().calls_inlined, 4u);
 

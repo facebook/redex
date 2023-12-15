@@ -222,7 +222,7 @@ class MultiMethodInliner {
   /**
    * attempt inlining for all candidates.
    */
-  void inline_methods(bool methods_need_deconstruct = true);
+  void inline_methods();
 
   /**
    * Return the set of unique inlined methods.
@@ -508,12 +508,6 @@ class MultiMethodInliner {
    * dedup-blocks) synchronously.
    */
   void shrink_method(DexMethod* method);
-
-  /**
-   * Whether inline_inlinables needs to deconstruct the caller's and callees'
-   * code.
-   */
-  bool inline_inlinables_need_deconstruct(DexMethod* method);
 
   // Checks that...
   // - there are no assignments to (non-inherited) instance fields before
