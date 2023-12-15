@@ -47,7 +47,7 @@
 class SwitchMethodPartitioning final {
  public:
   static std::unique_ptr<SwitchMethodPartitioning> create(
-      IRCode* code, bool verify_default_case = true);
+      IRCode* code, bool verify_default_case_throws = true);
 
   const std::vector<cfg::Block*>& get_prologue_blocks() const {
     return m_prologue_blocks;
