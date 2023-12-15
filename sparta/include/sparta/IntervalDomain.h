@@ -55,21 +55,33 @@ class IntervalDomain final : public AbstractDomain<IntervalDomain<Num>> {
 
   /* [lb, ub] */
   static IntervalDomain finite(Num lb, Num ub) {
-    SPARTA_ASSERT(MIN < lb && "interval not bounded below.");
-    SPARTA_ASSERT(lb <= ub && "interval inverted.");
-    SPARTA_ASSERT(ub < MAX && "interval not bounded above.");
+    SPARTA_RUNTIME_CHECK(MIN < lb,
+                         invalid_argument()
+                             << argument_name("lb")
+                             << error_msg("interval not bounded below."));
+    SPARTA_RUNTIME_CHECK(lb <= ub,
+                         invalid_argument() << argument_name("lb")
+                                            << error_msg("interval inverted."));
+    SPARTA_RUNTIME_CHECK(ub < MAX,
+                         invalid_argument()
+                             << argument_name("ub")
+                             << error_msg("interval not bounded above."));
     return {lb, ub};
   }
 
   /* [lb, +inf] */
   static IntervalDomain bounded_below(Num lb) {
-    SPARTA_ASSERT(MIN < lb && "interval underflow");
+    SPARTA_RUNTIME_CHECK(MIN < lb,
+                         invalid_argument() << argument_name("lb")
+                                            << error_msg("interval underflow"));
     return {lb, MAX};
   }
 
   /* [-inf, ub] */
   static IntervalDomain bounded_above(Num ub) {
-    SPARTA_ASSERT(ub < MAX && "interval overflow.");
+    SPARTA_RUNTIME_CHECK(ub < MAX,
+                         invalid_argument() << argument_name("ub")
+                                            << error_msg("interval overflow."));
     return {MIN, ub};
   }
 
@@ -87,7 +99,9 @@ class IntervalDomain final : public AbstractDomain<IntervalDomain<Num>> {
 
   /* Inclusive lower-bound of the interval, assuming interval is not bottom. */
   Num lower_bound() const {
-    SPARTA_ASSERT(!is_bottom());
+    SPARTA_RUNTIME_CHECK(
+        !is_bottom(),
+        invalid_argument() << error_msg("cannot call lower_bound() on bottom"));
     return m_lb;
   }
 
@@ -96,7 +110,9 @@ class IntervalDomain final : public AbstractDomain<IntervalDomain<Num>> {
    * Guaranteed to be greater than or equal to lower_bound().
    */
   Num upper_bound() const {
-    SPARTA_ASSERT(!is_bottom());
+    SPARTA_RUNTIME_CHECK(
+        !is_bottom(),
+        invalid_argument() << error_msg("cannot call upper_bound() on bottom"));
     return m_ub;
   }
 

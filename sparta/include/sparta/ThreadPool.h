@@ -80,7 +80,7 @@ class ThreadPool : public AsyncRunner {
   void run_async_bound(std::function<void()> bound_f) override {
     {
       std::lock_guard<std::mutex> lock(m_mutex);
-      SPARTA_ASSERT(!m_joining);
+      SPARTA_RUNTIME_CHECK(!m_joining, internal_error());
       if (m_waiting == 0) {
         m_threads.push_back(create_thread(std::move(bound_f)));
         return;
