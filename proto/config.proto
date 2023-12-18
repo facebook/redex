@@ -37,6 +37,9 @@ message BundleConfig {
     ASSET_ONLY = 2;
   }
   BundleType type = 8;
+
+  // Configuration for locales.
+  Locales locales = 9;
 }
 
 message Bundletool {
@@ -108,7 +111,7 @@ message Optimizations {
   // This is for uncompressing native libraries on M+ devices (L+ devices on
   // instant apps).
   UncompressNativeLibraries uncompress_native_libraries = 2;
-  // This is for uncompressing dex files on P+ devices.
+  // This is for uncompressing dex files.
   UncompressDexFiles uncompress_dex_files = 3;
   // Configuration for the generation of standalone APKs.
   // If no StandaloneConfig is set, the configuration is inherited from
@@ -123,32 +126,121 @@ message Optimizations {
 }
 
 message ResourceOptimizations {
+  enum SparseEncoding {
+    // Previously 'ENFORCED'. This option is deprecated because of issues found
+    // in Android O up to Android Sv2 and causes segfaults in
+    // Resources#getIdentifier.
+    reserved 1;
+    reserved "ENFORCED";
+
+    // Disables sparse encoding.
+    UNSPECIFIED = 0;
+    // Generates special APKs for Android SDK +32 with sparse resource tables.
+    // Devices with Android SDK below 32 will still receive APKs with regular
+    // resource tables.
+    VARIANT_FOR_SDK_32 = 2;
+  }
+
+  // Pair of resource type and name, like 'layout/foo', 'string/bar'.
+  message ResourceTypeAndName {
+    string type = 1;
+    string name = 2;
+  }
+
+  // Optimizations related to collapsed resource names.
+  message CollapsedResourceNames {
+    // Whether to collapse resource names.
+    // Resources with collapsed resource names are only accessible by their
+    // ids. These names are not stored inside 'resources.arsc'.
+    bool collapse_resource_names = 1;
+
+    // Instructs to not collapse resource names for specific resources which
+    // makes certain resources to be accessible by their names.
+    //
+    // Applicable only if 'collapse_resource_names' is 'true'.
+    repeated ResourceTypeAndName no_collapse_resources = 2;
+
+    // Instructs to not collapse all resources of certain types.
+    //
+    // Applicable only if 'collapse_resource_names' is 'true'.
+    repeated string no_collapse_resource_types = 4;
+
+    // Whether to store only unique resource entries in 'resources.arsc'.
+    //
+    // For example if there are 3 'bool' resources defined with 'true' value
+    // with this flag only one 'true' entry is stored and all 3 resources
+    // are referencing this entry. By default all 3 entries are stored.
+    //
+    // This only works with resources where names are collapsed (either using
+    // 'collapse_resource_names' flag or manually) because resource name is a
+    // part of resource entry and if names are preserved - all entries are
+    // unique.
+    bool deduplicate_resource_entries = 3;
+  }
+
   // Whether to use sparse encoding for resource tables.
   // Resources in sparse resource table are accessed using a binary search tree.
   // This decreases APK size at the cost of resource retrieval performance.
   SparseEncoding sparse_encoding = 1;
 
-  enum SparseEncoding {
-    // Disables sparse encoding.
-    UNSPECIFIED = 0;
-    // Forces sparse resourse tables in all produced variants. This mode is
-    // available only for applications with minSdk >= 26 because sparse
-    // resource table support was added in Android O.
-    ENFORCED = 1;
-  }
+  // Optimizations related to collapsed resource names.
+  CollapsedResourceNames collapsed_resource_names = 2;
 }
 
-message UncompressNativeLibraries { bool enabled = 1; }
+message UncompressNativeLibraries {
+  bool enabled = 1;
 
-message UncompressDexFiles { bool enabled = 1; }
+  enum PageAlignment {
+    PAGE_ALIGNMENT_UNSPECIFIED = 0;
+    PAGE_ALIGNMENT_4K = 1;
+    PAGE_ALIGNMENT_16K = 2;
+    PAGE_ALIGNMENT_64K = 3;
+  }
+
+  // This is an experimental setting. It's behavior might be changed or
+  // completely removed.
+  //
+  // Alignment used for uncompressed native libraries inside APKs generated
+  // by bundletool.
+  //
+  // PAGE_ALIGNMENT_4K by default.
+  PageAlignment alignment = 2;
+}
+
+message UncompressDexFiles {
+  //  A new variant with uncompressed dex will be generated. The sdk targeting
+  //  of the variant is determined by 'uncompressed_dex_target_sdk'.
+  bool enabled = 1;
+
+  //  If 'enabled' field is set, this will determine the sdk targeting of the
+  //  generated variant.
+  UncompressedDexTargetSdk uncompressed_dex_target_sdk = 2;
+
+  enum UncompressedDexTargetSdk {
+    // Q+ variant will be generated.
+    UNSPECIFIED = 0;
+    // S+ variant will be generated.
+    SDK_31 = 1;
+  }
+}
 
 message StoreArchive {
   // Archive is an app state that allows an official app store to reclaim device
   // storage and disable app functionality temporarily until the user interacts
   // with the app again. Upon interaction the latest available version of the
-  // app will be restored while leaving user data unaffected. Disabled by
-  // default.
+  // app will be restored while leaving user data unaffected.
+  // Enabled by default.
   bool enabled = 1;
+}
+
+message Locales {
+  // Instructs bundletool to generate locale config and inject it into
+  // AndroidManifest.xml. A locale is marked as supported by the application if
+  // there is at least one resource value in this locale. Be very careful with
+  // this setting because if some of your libraries expose resources in some
+  // locales which are not actually supported by your application it will mark
+  // this locale as supported. Disabled by default.
+  bool inject_locale_config = 1;
 }
 
 // Optimization configuration used to generate Split APKs.
@@ -177,6 +269,19 @@ message StandaloneConfig {
     // application developers.
     NEVER_MERGE = 1;
   }
+
+  // Defines how to deal with feature modules in standalone variants (minSdk <
+  // 21).
+  FeatureModulesMode feature_modules_mode = 4;
+
+  enum FeatureModulesMode {
+    // Default mode which fuses feature modules with respect to its
+    // fusing attribute into base.apk.
+    FUSED_FEATURE_MODULES = 0;
+    // Advanced mode, which allows to generate a single separate apk per each
+    // feature module in variants with minSdk < 21.
+    SEPARATE_FEATURE_MODULES = 1;
+  }
 }
 
 message SplitDimension {
@@ -187,6 +292,7 @@ message SplitDimension {
     LANGUAGE = 3;
     TEXTURE_COMPRESSION_FORMAT = 4;
     DEVICE_TIER = 6;
+    COUNTRY_SET = 7;
   }
   Value value = 1;
 
@@ -228,7 +334,14 @@ message SuffixStripping {
 message ApexConfig {
   // Configuration for processing of APKs embedded in an APEX image.
   repeated ApexEmbeddedApkConfig apex_embedded_apk_config = 1;
+
+  // Explicit list of supported ABIs.
+  // Default: See ApexBundleValidator.REQUIRED_ONE_OF_ABI_SETS
+  repeated SupportedAbiSet supported_abi_set = 2;
 }
+
+// Represents a set of ABIs which must be supported by a single APEX image.
+message SupportedAbiSet { repeated string abi = 1; }
 
 message ApexEmbeddedApkConfig {
   // Android package name of the APK.
