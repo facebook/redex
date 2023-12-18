@@ -74,6 +74,16 @@ proto_res_header_out = $(addprefix protores/, $(notdir ${proto_res_in:.proto=.pb
 proto_res_body_out = $(addprefix protores/, $(notdir ${proto_res_in:.proto=.pb.cc}))
 BUILT_SOURCES = $(proto_res_header_out)
 
+proto_cfg_in = \
+	proto/config.proto
+
+protocfg/%.pb.cc protocfg/%.pb.h: proto/config.proto | mdir ; $(PROTOC) --proto_path=$(dir $^) --cpp_out=$(top_srcdir)/protocfg $^
+mdir: ; mkdir -p $(top_srcdir)/protocfg
+
+proto_cfg_header_out = $(addprefix protocfg/, $(notdir ${proto_cfg_in:.proto=.pb.h}))
+proto_cfg_body_out = $(addprefix protocfg/, $(notdir ${proto_cfg_in:.proto=.pb.cc}))
+BUILT_SOURCES += $(proto_cfg_header_out)
+
 endif
 
 #
@@ -335,7 +345,8 @@ libredex_la_LIBADD = \
 if SET_PROTOBUF
 libredex_la_SOURCES += \
 	protores/Resources.pb.cc \
-	protores/Configuration.pb.cc
+	protores/Configuration.pb.cc \
+	protocfg/config.pb.cc
 
 libredex_la_LIBADD += \
 	$(LIBPROTOBUF_LIBS)

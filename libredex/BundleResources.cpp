@@ -28,6 +28,7 @@
 #include <google/protobuf/text_format.h>
 
 #include "Debug.h"
+#include "DetectBundle.h"
 #include "DexUtil.h"
 #include "ReadMaybeMapped.h"
 #include "RedexMappedFile.h"
@@ -2297,6 +2298,28 @@ void BundleResources::obfuscate_xml_files(
   }
   for (const auto& path : xml_paths) {
     obfuscate_xml_attributes(path, do_not_obfuscate_elements);
+  }
+}
+
+void BundleResources::finalize_bundle_config(const ResourceConfig& config) {
+  if (!config.canonical_entry_types.empty() && has_bundle_config(m_directory)) {
+    std::string bundle_config_path =
+        (boost::filesystem::path(m_directory) / "BundleConfig.pb").string();
+    read_protobuf_file_contents(
+        bundle_config_path,
+        [&](google::protobuf::io::CodedInputStream& input, size_t size) {
+          android::bundle::BundleConfig bundle_config;
+          always_assert_log(bundle_config.ParseFromCodedStream(&input),
+                            "BundleResource failed to read %s",
+                            bundle_config_path.c_str());
+          auto pb_resource_optimizations =
+              bundle_config.mutable_optimizations()
+                  ->mutable_resource_optimizations();
+          pb_resource_optimizations->mutable_collapsed_resource_names()
+              ->set_deduplicate_resource_entries(true);
+          std::ofstream out(bundle_config_path, std::ofstream::binary);
+          always_assert(bundle_config.SerializeToOstream(&out));
+        });
   }
 }
 

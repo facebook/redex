@@ -18,7 +18,9 @@
 #include <unordered_set>
 #include <vector>
 
+#include "GlobalConfig.h"
 #include "androidfw/ResourceTypes.h"
+#include "protocfg/config.pb.h"
 #include "protores/Resources.pb.h"
 #include <google/protobuf/repeated_field.h>
 
@@ -125,6 +127,7 @@ class BundleResources : public AndroidResources {
   void obfuscate_xml_files(const std::unordered_set<std::string>& allowed_types,
                            const std::unordered_set<std::string>&
                                do_not_obfuscate_elements) override;
+  void finalize_bundle_config(const ResourceConfig& config) override;
 
  protected:
   std::vector<std::string> find_res_directories() override;

@@ -314,6 +314,14 @@ void ObfuscateResourcesPass::run_pass(DexStoresVector& stores,
       m_keep_resource_name_prefixes, keep_resource_names_specific);
   mgr.incr_metric("num_anonymized_resource_names", changed);
   mgr.incr_metric("num_anonymized_resource_files", filepath_old_to_new.size());
+
+  // Obfuscation may create duplicate entry/value structures. Make sure to set
+  // relevant values in BundleConfig.pb to take advantage of that (if
+  // configured).
+  const auto& global_config = conf.get_global_config();
+  auto global_resources_config =
+      global_config.get_config_by_name<ResourceConfig>("resources");
+  resources->finalize_bundle_config(*global_resources_config);
 }
 
 static ObfuscateResourcesPass s_pass;

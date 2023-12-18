@@ -331,6 +331,9 @@ class AndroidResources {
       const std::string& dirname);
   // Classnames present in native libraries (lib/*/*.so)
   std::unordered_set<std::string> get_native_classes();
+  // Sets up BundleConfig.pb file with relevant options for resource
+  // optimizations that need to executed by bundletool/aapt2.
+  virtual void finalize_bundle_config(const ResourceConfig& config);
 
   const std::string& get_directory() { return m_directory; }
 
