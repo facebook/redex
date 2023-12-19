@@ -7,7 +7,7 @@ cmake_minimum_required(VERSION 3.0.2)
 project("sparta")
 
 include(CTest)
-set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake_modules" ${CMAKE_MODULE_PATH})
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules" ${CMAKE_MODULE_PATH})
 include(Commons)
 
 if (NOT CMAKE_BUILD_TYPE)
@@ -31,6 +31,8 @@ target_include_directories(sparta INTERFACE
 
 target_link_libraries(sparta INTERFACE ${Boost_LIBRARIES})
 
+add_library(sparta::sparta ALIAS sparta)
+
 ###################################################
 # install and export
 ###################################################
@@ -46,10 +48,29 @@ install(TARGETS sparta EXPORT sparta_target
 )
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-install(EXPORT sparta_target DESTINATION cmake)
+install(EXPORT sparta_target
+  FILE sparta_target.cmake
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/sparta"
+  NAMESPACE sparta::
+)
 
 # This makes the project importable from the build directory
-export(TARGETS sparta FILE sparta_target.cmake)
+export(TARGETS sparta
+  FILE sparta_target.cmake
+  NAMESPACE sparta::
+)
+
+# Generate CMake config file that can be used in other projects
+include(CMakePackageConfigHelpers)
+configure_package_config_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/sparta-config.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/sparta-config.cmake"
+  INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/sparta"
+)
+install(FILES
+  "${CMAKE_CURRENT_BINARY_DIR}/sparta-config.cmake"
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/sparta"
+)
 
 ###################################################
 # test

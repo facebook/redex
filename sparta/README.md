@@ -88,6 +88,35 @@ To copy the header files into `/usr/local/include/sparta` and set up a cmake lib
 sudo make install
 ```
 
+### CMake Setup
+
+If you are using CMake for your project, you can also use SPARTA in the following ways:
+
+* A system-wide installation of SPARTA will contain a CMake configuration file that exports the library as `sparta::sparta`. This enables the use of `find_package` to locate SPARTA. For example:
+
+  ```cmake
+  find_package(Boost REQUIRED COMPONENTS thread) # required by SPARTA
+  find_package(sparta REQUIRED)
+  add_library(MyAnalysisLibrary)
+  target_link_libraries(MyAnalysisLibrary PUBLIC sparta::sparta)
+  ```
+
+* If you have cloned and "built" SPARTA locally, you can use a `find_package` call (such as the one above) and run CMake with the `-Dsparta_DIR=<your_sparta_build_dir>` to load the library:
+
+  ```sh
+  # Assuming you are at the top-level of your project that uses SPARTA
+  mkdir build && cd build
+  cmake .. -Dsparta_DIR=path/to/your/sparta/build
+  ```
+
+* SPARTA can be added as a subdirectory in your project:
+
+  ```cmake
+  # assuming you have cloned SPARTA into a folder named sparta
+  add_subdirectory(sparta)
+  add_library(MyAnalysisLibrary)
+  target_link_libraries(MyAnalysisLibrary PUBLIC sparta::sparta)
+  ```
 
 ## Issues
 
