@@ -138,6 +138,9 @@ struct Inlinable {
   std::shared_ptr<ReducedCode> reduced_code;
   // Estimated size of callee, possibly reduced by call-site specific knowledge
   size_t insn_size;
+  // Whether the callee is a virtual method different from the one referenced in
+  // the invoke instruction.
+  DexType* needs_receiver_cast;
 };
 
 struct CalleeCallerRefs {

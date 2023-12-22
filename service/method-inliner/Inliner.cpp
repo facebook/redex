@@ -399,8 +399,12 @@ void MultiMethodInliner::inline_callees(
         }
       }
 
+      auto it2 = m_inlined_invokes_need_cast.find(insn);
+      auto needs_receiver_cast =
+          it2 == m_inlined_invokes_need_cast.end() ? nullptr : it2->second;
       inlinables.push_back((Inlinable){callee, insn, no_return,
-                                       std::move(reduced_code), insn_size});
+                                       std::move(reduced_code), insn_size,
+                                       needs_receiver_cast});
     }
   }
   if (!inlinables.empty()) {
@@ -423,8 +427,12 @@ size_t MultiMethodInliner::inline_callees(
         continue;
       }
       always_assert(callee->is_concrete());
+      auto it2 = m_inlined_invokes_need_cast.find(insn);
+      auto needs_receiver_cast =
+          it2 == m_inlined_invokes_need_cast.end() ? nullptr : it2->second;
       inlinables.push_back((Inlinable){callee, insn, false, nullptr,
-                                       get_callee_insn_size(callee)});
+                                       get_callee_insn_size(callee),
+                                       needs_receiver_cast});
     }
   }
 
@@ -699,15 +707,13 @@ size_t MultiMethodInliner::inline_inlinables(
       cfg_next_caller_reg = caller->cfg().get_registers_size();
     }
     auto timer2 = m_inline_with_cfg_timer.scope();
-    auto it = m_inlined_invokes_need_cast.find(callsite_insn);
-    auto needs_receiver_cast =
-        it == m_inlined_invokes_need_cast.end() ? nullptr : it->second;
     auto needs_init_class = get_needs_init_class(callee_method);
     const auto& reduced_code = inlinable.reduced_code;
     const auto* reduced_cfg = reduced_code ? &reduced_code->cfg() : nullptr;
     bool success = inliner::inline_with_cfg(
-        caller_method, callee_method, callsite_insn, needs_receiver_cast,
-        needs_init_class, *cfg_next_caller_reg, reduced_cfg);
+        caller_method, callee_method, callsite_insn,
+        inlinable.needs_receiver_cast, needs_init_class, *cfg_next_caller_reg,
+        reduced_cfg);
     if (!success) {
       calls_not_inlined++;
       continue;
