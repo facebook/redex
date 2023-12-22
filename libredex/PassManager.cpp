@@ -233,7 +233,8 @@ class CheckerConfig {
           }
         });
       }
-      return show(dex_method->get_code());
+      auto* code = dex_method->get_code();
+      return code->editable_cfg_built() ? show(code->cfg()) : show(code);
     };
 
     auto res =
