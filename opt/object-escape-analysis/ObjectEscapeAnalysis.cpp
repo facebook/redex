@@ -128,13 +128,14 @@ class InlinedCodeSizeEstimator {
  private:
   using DeltaKey = std::pair<DexMethod*, const IRInstruction*>;
   LazyUnorderedMap<DexMethod*, uint32_t> m_inlined_code_sizes;
-  LazyUnorderedMap<DexMethod*, live_range::DefUseChains> m_du_chains;
+  LazyUnorderedMap<DeltaKey,
+                   std::unordered_set<live_range::Use>,
+                   boost::hash<DeltaKey>>
+      m_uses;
   LazyUnorderedMap<DeltaKey, int64_t, boost::hash<DeltaKey>> m_deltas;
 
  public:
-  explicit InlinedCodeSizeEstimator(
-      const MethodSummaries& method_summaries,
-      const std::unordered_set<const IRInstruction*>& all_allocation_insns)
+  explicit InlinedCodeSizeEstimator(const MethodSummaries& method_summaries)
       : m_inlined_code_sizes([](DexMethod* method) {
           uint32_t code_size{0};
           auto& cfg = method->get_code()->cfg();
@@ -150,23 +151,22 @@ class InlinedCodeSizeEstimator {
           }
           return code_size;
         }),
-        m_du_chains([&](DexMethod* method) {
-          live_range::MoveAwareChains chains(
-              method->get_code()->cfg(),
-              /* ignore_unreachable */ false,
-              [&](const IRInstruction* insn) {
-                return all_allocation_insns.count(insn) ||
-                       opcode::is_load_param_object(insn->opcode());
-              });
-          return chains.get_def_use_chains();
+        m_uses([&](DeltaKey key) {
+          auto allocation_insn = const_cast<IRInstruction*>(key.second);
+          live_range::MoveAwareChains chains(key.first->get_code()->cfg(),
+                                             /* ignore_unreachable */ false,
+                                             [&](const IRInstruction* insn) {
+                                               return insn == allocation_insn;
+                                             });
+          return chains.get_def_use_chains()[allocation_insn];
         }),
         m_deltas([&](DeltaKey key) {
           auto [method, allocation_insn] = key;
           always_assert(
-              all_allocation_insns.count(allocation_insn) ||
+              opcode::is_new_instance(allocation_insn->opcode()) ||
+              opcode::is_an_invoke(allocation_insn->opcode()) ||
               opcode::is_load_param_object(allocation_insn->opcode()));
           int64_t delta = 0;
-          auto& du_chains = m_du_chains[method];
           if (opcode::is_an_invoke(allocation_insn->opcode())) {
             auto callee = resolve_method(allocation_insn->get_method(),
                                          opcode_to_search(allocation_insn));
@@ -180,8 +180,7 @@ class InlinedCodeSizeEstimator {
           } else if (allocation_insn->opcode() == OPCODE_NEW_INSTANCE) {
             delta -= COST_NEW_INSTANCE;
           }
-          for (auto& use :
-               du_chains[const_cast<IRInstruction*>(allocation_insn)]) {
+          for (auto& use : m_uses[key]) {
             if (opcode::is_an_invoke(use.insn->opcode())) {
               delta -= COST_INVOKE;
               auto callee = resolve_method(use.insn->get_method(),
@@ -245,23 +244,10 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
 
   std::mutex mutex; // protects candidate_types and root_methods
   std::atomic<size_t> incomplete_estimated_delta_threshold_exceeded{0};
-  std::unordered_set<const IRInstruction*> all_allocation_insns;
-  for (auto&& [_, method_summary] : method_summaries) {
-    if (method_summary.allocation_insn) {
-      all_allocation_insns.insert(method_summary.allocation_insn);
-    }
-  }
-  for (auto&& [type, inline_anchors_of_type] : inline_anchors) {
-    for (auto& [_, allocation_insns] : inline_anchors_of_type) {
-      all_allocation_insns.insert(allocation_insns.begin(),
-                                  allocation_insns.end());
-    }
-  }
 
   auto concurrent_add_root_methods = [&](DexType* type, bool complete) {
     const auto& inline_anchors_of_type = inline_anchors.at_unsafe(type);
-    InlinedCodeSizeEstimator inlined_code_size_estimator(method_summaries,
-                                                         all_allocation_insns);
+    InlinedCodeSizeEstimator inlined_code_size_estimator(method_summaries);
     std::vector<DexMethod*> methods;
     for (auto& [method, allocation_insns] : inline_anchors_of_type) {
       if (method->rstate.no_optimizations()) {
