@@ -156,14 +156,15 @@ class InlinedCodeSizeEstimator {
               /* ignore_unreachable */ false,
               [&](const IRInstruction* insn) {
                 return all_allocation_insns.count(insn) ||
-                       opcode::is_a_load_param(insn->opcode());
+                       opcode::is_load_param_object(insn->opcode());
               });
           return chains.get_def_use_chains();
         }),
         m_deltas([&](DeltaKey key) {
           auto [method, allocation_insn] = key;
-          always_assert(all_allocation_insns.count(allocation_insn) ||
-                        opcode::is_a_load_param(allocation_insn->opcode()));
+          always_assert(
+              all_allocation_insns.count(allocation_insn) ||
+              opcode::is_load_param_object(allocation_insn->opcode()));
           int64_t delta = 0;
           auto& du_chains = m_du_chains[method];
           if (opcode::is_an_invoke(allocation_insn->opcode())) {
@@ -194,7 +195,8 @@ class InlinedCodeSizeEstimator {
               auto* load_param_insn =
                   std::next(load_param_insns.begin(), use.src_index)->insn;
               always_assert(load_param_insn);
-              always_assert(opcode::is_a_load_param(load_param_insn->opcode()));
+              always_assert(
+                  opcode::is_load_param_object(load_param_insn->opcode()));
               delta += 10 * (int64_t)m_inlined_code_sizes[callee] +
                        get_delta(callee, load_param_insn);
               if (!callee->get_proto()->is_void()) {
