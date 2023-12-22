@@ -199,7 +199,9 @@ class InlinedCodeSizeEstimator {
                 delta -= COST_MOVE_RESULT;
               }
             } else if (opcode::is_an_iget(use.insn->opcode()) ||
-                       opcode::is_an_iput(use.insn->opcode())) {
+                       opcode::is_an_iput(use.insn->opcode()) ||
+                       opcode::is_instance_of(use.insn->opcode()) ||
+                       opcode::is_a_monitor(use.insn->opcode())) {
               delta -= 10 * (int64_t)use.insn->size();
             }
           }
