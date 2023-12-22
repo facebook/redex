@@ -47,8 +47,7 @@ bool is_benign(const DexMethodRef* method_ref);
 
 // For each allocating instruction that escapes (not including returns), all
 // uses by which it escapes.
-using Escapes = std::unordered_map<const IRInstruction*,
-                                   std::unordered_set<live_range::Use>>;
+using Escapes = std::unordered_map<const IRInstruction*, live_range::Uses>;
 
 // For each object, we track which instruction might have allocated it:
 // - new-instance, invoke-, and load-param-object instructions might represent

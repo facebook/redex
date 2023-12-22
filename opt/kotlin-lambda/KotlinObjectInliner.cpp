@@ -74,7 +74,7 @@ bool uses_this(const DexMethod* method, bool strict = false) {
   }
   always_assert(!iterable.empty());
   live_range::MoveAwareChains chains(cfg);
-  std::unordered_set<live_range::Use> first_load_param_uses;
+  live_range::Uses first_load_param_uses;
 
   auto first_load_param = iterable.begin()->insn;
   first_load_param_uses =

@@ -128,10 +128,7 @@ class InlinedCodeSizeEstimator {
  private:
   using DeltaKey = std::pair<DexMethod*, const IRInstruction*>;
   LazyUnorderedMap<DexMethod*, uint32_t> m_inlined_code_sizes;
-  LazyUnorderedMap<DeltaKey,
-                   std::unordered_set<live_range::Use>,
-                   boost::hash<DeltaKey>>
-      m_uses;
+  LazyUnorderedMap<DeltaKey, live_range::Uses, boost::hash<DeltaKey>> m_uses;
   LazyUnorderedMap<DeltaKey, int64_t, boost::hash<DeltaKey>> m_deltas;
 
  public:
@@ -734,8 +731,7 @@ class RootMethodReducer {
            insn->get_method() == m_incomplete_marker_method;
   }
 
-  bool has_incomplete_marker(
-      const std::unordered_set<live_range::Use>& uses) const {
+  bool has_incomplete_marker(const live_range::Uses& uses) const {
     return std::any_of(uses.begin(), uses.end(), [&](auto& use) {
       return is_incomplete_marker(use.insn);
     });
@@ -751,7 +747,7 @@ class RootMethodReducer {
     return nullptr;
   }
 
-  std::optional<std::pair<IRInstruction*, std::unordered_set<live_range::Use>>>
+  std::optional<std::pair<IRInstruction*, live_range::Uses>>
   find_inlinable_new_instance() const {
     auto& cfg = m_method->get_code()->cfg();
     Lazy<live_range::DefUseChains> du_chains([&]() {
@@ -887,9 +883,8 @@ class RootMethodReducer {
   // Given a new-instance instruction whose (main) uses are as the receiver in
   // iget- and iput- instruction, transform all such field accesses into
   // accesses to registers, one per field.
-  bool stackify(
-      IRInstruction* new_instance_insn,
-      const std::unordered_set<live_range::Use>& new_instance_insn_uses) {
+  bool stackify(IRInstruction* new_instance_insn,
+                const live_range::Uses& new_instance_insn_uses) {
     auto& cfg = m_method->get_code()->cfg();
     std::unordered_map<DexField*, reg_t> field_regs;
     std::vector<DexField*> ordered_fields;

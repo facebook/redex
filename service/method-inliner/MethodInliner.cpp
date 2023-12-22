@@ -623,7 +623,7 @@ void gather_true_virtual_methods(
         }
         // Figure out if candidates use the receiver in a way that does require
         // a cast.
-        std::unordered_set<live_range::Use> first_load_param_uses;
+        live_range::Uses first_load_param_uses;
         {
           auto ii = InstructionIterable(code->cfg().get_param_instructions());
           auto first_load_param = ii.begin()->insn;

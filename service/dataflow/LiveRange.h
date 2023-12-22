@@ -56,6 +56,7 @@ struct hash<live_range::Use> {
 namespace live_range {
 
 using UseDefChains = std::unordered_map<Use, sparta::PatriciaTreeSet<Def>>;
+using Uses = std::unordered_set<Use>;
 using DefUseChains = std::unordered_map<Def, std::unordered_set<Use>>;
 
 class Chains {
