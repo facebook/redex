@@ -903,6 +903,8 @@ IROpcode get_invoke_opcode(const DexMethod* callee) {
                               : OPCODE_INVOKE_DIRECT;
 }
 
+using PaCallers = ConcurrentMap<DexMethodRef*, std::vector<DexMethod*>>;
+
 // Given the analysis results, rewrite all callers to invoke the new helper
 // methods with bound arguments.
 void rewrite_callers(
@@ -913,7 +915,8 @@ void rewrite_callers(
         selected_invokes,
     const std::unordered_set<DexMethod*>& selected_callers,
     PaMethodRefs& pa_method_refs,
-    std::atomic<size_t>* removed_args) {
+    std::atomic<size_t>* removed_args,
+    PaCallers* pa_callers) {
   Timer t("rewrite_callers");
 
   auto make_partial_application_invoke_insn =
@@ -953,6 +956,7 @@ void rewrite_callers(
     cfg::CFGMutation mutation(cfg);
     auto ii = InstructionIterable(cfg);
     size_t removed_srcs{0};
+    std::unordered_set<DexMethodRef*> pas;
     for (auto it = ii.begin(); it != ii.end(); it++) {
       auto new_invoke_insn =
           make_partial_application_invoke_insn(caller, it->insn);
@@ -966,6 +970,11 @@ void rewrite_callers(
         new_insns.push_back(new IRInstruction(*move_result_it->insn));
       }
       mutation.replace(it, new_insns);
+      auto pa = new_invoke_insn->get_method();
+      if (pas.insert(pa).second) {
+        pa_callers->update(
+            pa, [caller](auto*, auto& vec, bool) { vec.push_back(caller); });
+      }
       any_changes = true;
     }
     mutation.flush();
@@ -1098,6 +1107,18 @@ void create_partial_application_methods(EnumUtilsCache& enum_utils_cache,
   }
 }
 
+size_t derive_method_profiles_stats(ConfigFiles& config,
+                                    const PaCallers& pa_callers) {
+  auto& method_profiles = config.get_method_profiles();
+  size_t res = 0;
+  for (auto& [pa_method_ref, callers] : pa_callers) {
+    auto pa_method = pa_method_ref->as_def();
+    always_assert(pa_method);
+    res += method_profiles.derive_stats(pa_method, callers);
+  }
+  return res;
+}
+
 } // namespace
 
 void PartialApplicationPass::bind_config() {
@@ -1120,6 +1141,10 @@ void PartialApplicationPass::bind_config() {
        pg.method_profiles_warm_call_count,
        pg.method_profiles_warm_call_count,
        "Loops are not outlined from warm methods");
+  bind("derive_method_profiles_stats",
+       m_derive_method_profiles_stats,
+       m_derive_method_profiles_stats,
+       "Whether to derive method profile stats for generated methods");
   std::string perf_sensitivity_str;
   bind("perf_sensitivity", "always-hot", perf_sensitivity_str);
   bind("block_profiles_hits",
@@ -1242,10 +1267,18 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
       &pa_method_refs, &selected_invokes, &selected_callers);
 
   std::atomic<size_t> removed_args{0};
+  PaCallers pa_callers;
   rewrite_callers(scope, shrinker, get_callee_fn, selected_invokes,
-                  selected_callers, pa_method_refs, &removed_args);
+                  selected_callers, pa_method_refs, &removed_args, &pa_callers);
 
   create_partial_application_methods(enum_utils_cache, pa_method_refs);
+
+  if (m_derive_method_profiles_stats) {
+    size_t derived_method_profile_stats =
+        derive_method_profiles_stats(conf, pa_callers);
+    mgr.incr_metric("num_derived_method_profile_stats",
+                    derived_method_profile_stats);
+  }
 
   TRACE(PA, 1,
         "[PartialApplication] Created %zu methods with particular constant "
