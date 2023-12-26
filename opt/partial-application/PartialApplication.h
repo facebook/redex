@@ -30,4 +30,5 @@ class PartialApplicationPass : public Pass {
  private:
   size_t m_iteration{0};
   outliner::ProfileGuidanceConfig m_profile_guidance_config;
+  bool m_derive_method_profiles_stats{false};
 };
