@@ -1310,6 +1310,7 @@ void reduce(DexStoresVector& stores,
   inliner_config.shrinker.run_cse = true;
   inliner_config.shrinker.run_copy_prop = true;
   inliner_config.shrinker.run_local_dce = true;
+  inliner_config.shrinker.normalize_new_instances = false;
   inliner_config.shrinker.compute_pure_methods = false;
   int min_sdk = 0;
   MultiMethodInliner inliner(

@@ -23,6 +23,8 @@ struct ShrinkerConfig {
   bool run_fast_reg_alloc{false};
   bool run_dedup_blocks{false};
 
+  bool normalize_new_instances{true};
+
   // Internally used option that decides whether to compute pure methods with a
   // relatively expensive analysis over the scope
   bool compute_pure_methods{true};

@@ -14,6 +14,7 @@
 #include <string>
 #include <unistd.h>
 
+#include "BranchPrefixHoisting.h"
 #include "ControlFlow.h"
 #include "DexAsm.h"
 #include "DexClass.h"
@@ -53,6 +54,7 @@ class ObjectEscapeAnalysisTest : public RedexIntegrationTest {
     config_file >> cfg;
 
     std::vector<Pass*> passes = {
+        new BranchPrefixHoistingPass(),
         new ObjectEscapeAnalysisPass(),
     };
 
@@ -290,9 +292,9 @@ TEST_F(ObjectEscapeAnalysisTest, reduceTo42WithExpandedCtor) {
       "redextest/ObjectEscapeAnalysisTest$N;");
   auto expected = assembler::ircode_from_string(R"(
    (
-      (const v3 42)
       (new-instance "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$N;")
       (move-result-pseudo-object v0)
+      (const v3 42)
       (invoke-direct (v0 v3) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$N;.<init>:(I)V")
       (return-object v0)
     )
@@ -372,14 +374,41 @@ TEST_F(ObjectEscapeAnalysisTest, reduceTo42IncompleteInlinableTypeB) {
       "ObjectEscapeAnalysisTest;.reduceTo42IncompleteInlinableTypeB:()I");
   auto expected = assembler::ircode_from_string(R"(
    (
-      (const v2 16)
       (new-instance "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$O;")
       (move-result-pseudo-object v1)
+      (const v2 16)
       (invoke-direct (v1 v2) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$O;.<init>:(I)V")
       (sput-object v1 "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$O;.instance:Lcom/facebook/redextest/ObjectEscapeAnalysisTest$O;")
       (const v1 42)
       (return v1)
    )
+)");
+  ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
+}
+
+TEST_F(ObjectEscapeAnalysisTest, reduceIncompleteInlinableType) {
+  run();
+
+  auto actual = get_s_expr(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest;.reduceIncompleteInlinableType:(Z)I");
+  // We reduce away the creation of the "O" type, but not yet the D type, as
+  // that's a second-order problem...
+  auto expected = assembler::ircode_from_string(R"(
+   (
+      (load-param v5)
+      (const v8 42)
+      (invoke-static (v8) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$D;.allocator:(I)Lcom/facebook/redextest/ObjectEscapeAnalysisTest$D;")
+      (move-result-object v6)
+      (invoke-virtual (v6) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$D;.getX:()I")
+      (if-eqz v5 :L1)
+      (const v20 42)
+      (:L0)
+      (return v20)
+      (:L1)
+      (const v20 23)
+      (goto :L0)
+    )
 )");
   ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
 }

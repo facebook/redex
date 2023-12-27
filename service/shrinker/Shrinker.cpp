@@ -246,7 +246,7 @@ void Shrinker::shrink_code(
   if (m_config.run_local_dce) {
     auto timer = m_local_dce_timer.scope();
     local_dce_stats =
-        local_dce(code, /* normalize_new_instances */ true, declaring_type);
+        local_dce(code, m_config.normalize_new_instances, declaring_type);
   }
 
   using stats_t = std::tuple<size_t, size_t, size_t, size_t>;
