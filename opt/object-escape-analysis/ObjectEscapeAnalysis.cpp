@@ -1107,8 +1107,8 @@ compute_reduced_methods(
       [&](const std::pair<DexMethod*, InlinableTypes>& p) {
         auto* method = p.first;
         const auto& types = p.second;
-        auto copy_name_str =
-            method->get_name()->str() + "$oea$" + std::to_string(types.size());
+        auto copy_name_str = method->get_name()->str() + "$oea$internal$" +
+                             std::to_string(types.size());
         auto copy = DexMethod::make_method_from(
             method, method->get_class(), DexString::make_string(copy_name_str));
         RootMethodReducer root_method_reducer{expandable_method_params,
