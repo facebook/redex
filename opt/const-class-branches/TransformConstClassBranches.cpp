@@ -30,6 +30,7 @@ constexpr const char* METRIC_CONST_CLASS_INSTRUCTIONS_REMOVED =
     "num_const_class_instructions_removed";
 constexpr const char* METRIC_TOTAL_STRING_SIZE = "total_string_size";
 
+// Holder for the pass's configuration options.
 struct PassState {
   DexMethodRef* lookup_method;
   bool consider_external_classes;
@@ -38,19 +39,21 @@ struct PassState {
   std::mutex& transforms_mutex;
 };
 
-// Denotes a branch within a method that can be successfully
-// represented/transformed. Used to gather up possibilities and execute them in
-// order of biggest gain. This pass may be configured to run late in the pass
-// list, and thus should be mindful for number of fields to create.
-struct PendingTransform {
-  DexClass* cls;
-  DexMethod* method;
-  cfg::Block* last_prologue_block;
+// Denotes a branch and successor blocks within a method that can be
+// successfully represented/transformed.
+struct BranchTransform {
+  cfg::Block* block;
   IRInstruction* insn;
   reg_t determining_reg;
+  std::unique_ptr<SwitchEquivFinder> switch_equiv;
+};
+
+// Denotes a method that will have one or many transforms.
+struct MethodTransform {
+  DexMethod* method;
   std::unique_ptr<IRCode> code_copy;
   std::unique_ptr<cfg::ScopedCFG> scoped_cfg;
-  std::unique_ptr<SwitchEquivFinder> switch_equiv;
+  std::vector<BranchTransform> transforms;
 };
 
 struct Stats {
@@ -65,20 +68,6 @@ struct Stats {
   }
 };
 
-bool should_consider_method(DexMethod* method) {
-  if (method->rstate.no_optimizations()) {
-    return false;
-  }
-  auto proto = method->get_proto();
-  auto args = proto->get_args();
-  for (size_t i = 0; i < args->size(); i++) {
-    if (args->at(i) == type::java_lang_Class()) {
-      return method->get_code() != nullptr;
-    }
-  }
-  return false;
-}
-
 size_t num_const_class_opcodes(const cfg::ControlFlowGraph* cfg) {
   size_t result{0};
   for (auto& mie : InstructionIterable(*cfg)) {
@@ -89,207 +78,262 @@ size_t num_const_class_opcodes(const cfg::ControlFlowGraph* cfg) {
   return result;
 }
 
+// This pass cares about comparing objects, so only eq, ne are relevant at the
+// end of a block.
+bool ends_in_if_statment(const cfg::Block* b) {
+  auto it = b->get_last_insn();
+  if (it == b->end()) {
+    return false;
+  }
+  auto op = it->insn->opcode();
+  return opcode::is_if_eq(op) || opcode::is_if_ne(op);
+}
+
+// Meant to be a quick guess, to skip some of the preliminary work in deciding
+// for real if the method should be operated upon if nothing looks relevant.
+bool should_consider_method(const PassState& pass_state, DexMethod* method) {
+  if (method->rstate.no_optimizations()) {
+    return false;
+  }
+  auto code = method->get_code();
+  if (code == nullptr) {
+    return false;
+  }
+  auto& cfg = code->cfg();
+  bool found_branch = false;
+  for (const auto* b : cfg.blocks()) {
+    // Note: SwitchEquivFinder assumes the non-leaf blocks (the blocks that
+    // perform equals checks) have no throw edges. Avoid considering such a
+    // method early on.
+    if (b->is_catch()) {
+      return false;
+    }
+    if (ends_in_if_statment(b)) {
+      found_branch = true;
+      break;
+    }
+  }
+  return found_branch && num_const_class_opcodes(&cfg) >= pass_state.min_cases;
+}
+
+// True if the finder is successful, has a default block and does not have some
+// edge cases we don't wanna deal with right now.
+bool finder_results_are_supported(SwitchEquivFinder* finder) {
+  return finder->success() &&
+         finder->are_keys_uniform(SwitchEquivFinder::KeyKind::CLASS) &&
+         finder->extra_loads().empty() && finder->default_case();
+}
+
+// Rather than looping over the cfg blocks, explicitly start from the entry
+// block and bfs through the graph. Makes sure that even if the cfg got
+// manipulated such that entry block is not the smallest id, we will start
+// looking for eligible transforms roughly from that point.
+void order_blocks(const cfg::ControlFlowGraph& cfg,
+                  std::vector<cfg::Block*>* out) {
+  std::stack<cfg::Block*> to_visit;
+  std::unordered_set<cfg::BlockId> visited;
+  to_visit.push(cfg.entry_block());
+  while (!to_visit.empty()) {
+    cfg::Block* b = to_visit.top();
+    to_visit.pop();
+
+    if (visited.count(b->id()) > 0) {
+      continue;
+    }
+    visited.emplace(b->id());
+    out->emplace_back(b);
+    for (cfg::Edge* e : b->succs()) {
+      to_visit.push(e->target());
+    }
+  }
+}
+
 namespace cp = constant_propagation;
 
 void gather_possible_transformations(
     const PassState& pass_state,
-    DexClass* cls,
     DexMethod* method,
-    std::vector<PendingTransform>* pending_transforms) {
+    std::vector<MethodTransform>* method_transforms) {
   // First step is to operate on a simplified copy of the code. If the transform
   // is applicable, this copy will take effect.
   auto code_copy = std::make_unique<IRCode>(*method->get_code());
   SwitchEquivEditor::simplify_moves(code_copy.get());
   auto scoped_cfg = std::make_unique<cfg::ScopedCFG>(code_copy.get());
   auto& cfg = **scoped_cfg;
-  // Many checks to see if this method conforms to the types of patterns that
-  // are able to be easily represented without losing information. At the time
-  // of writing this just looks for 1 branching point in the beginning of the
-  // method, but this should get addressed to be applicable anywhere in the
-  // method.
-  std::vector<cfg::Block*> prologue_blocks;
-  if (!gather_linear_prologue_blocks(&cfg, &prologue_blocks)) {
-    return;
-  }
-  auto last_prologue_block = prologue_blocks.back();
-  auto last_prologue_insn = last_prologue_block->get_last_insn();
-  if (last_prologue_insn->insn->opcode() == OPCODE_SWITCH) {
-    // Not the expected form
-    return;
-  }
+
+  std::vector<BranchTransform> transforms;
 
   TRACE(CCB, 3, "Checking for const-class branching in %s", SHOW(method));
   auto fixpoint = std::make_shared<cp::intraprocedural::FixpointIterator>(
       cfg, SwitchEquivFinder::Analyzer());
   fixpoint->run(ConstantEnvironment());
-  reg_t determining_reg;
-  if (!find_determining_reg(*fixpoint, prologue_blocks.back(),
-                            &determining_reg)) {
-    TRACE(CCB, 2, "Cannot find determining_reg; bailing.");
-    return;
-  }
-  TRACE(CCB, 2, "determining_reg is %d", determining_reg);
 
-  auto finder = std::make_unique<SwitchEquivFinder>(
-      &cfg, cfg.find_insn(last_prologue_insn->insn), determining_reg,
-      SwitchEquivFinder::NO_LEAF_DUPLICATION, fixpoint,
-      SwitchEquivFinder::EXECUTION_ORDER);
-  if (!finder->success() ||
-      !finder->are_keys_uniform(SwitchEquivFinder::KeyKind::CLASS)) {
-    TRACE(CCB, 2, "SwitchEquivFinder failed!");
-    return;
-  }
-  TRACE(CCB, 2, "SwitchEquivFinder succeeded for branch at: %s",
-        SHOW(last_prologue_insn->insn));
-  if (!finder->extra_loads().empty()) {
-    TRACE(CCB, 2,
-          "Not supporting extra const-class loads during switch; bailing.");
-    return;
-  }
-
-  const auto& key_to_case = finder->key_to_case();
-  size_t relevant_case_count{0};
-  for (auto&& [key, block] : key_to_case) {
-    if (!SwitchEquivFinder::is_default_case(key)) {
-      auto dtype = boost::get<const DexType*>(key);
-      auto case_class = type_class(dtype);
-      if (pass_state.consider_external_classes ||
-          (case_class != nullptr && !case_class->is_external())) {
-        relevant_case_count++;
+  std::vector<cfg::Block*> blocks;
+  order_blocks(cfg, &blocks);
+  std::unordered_set<cfg::Block*> blocks_considered;
+  for (const auto& b : blocks) {
+    if (blocks_considered.count(b) > 0) {
+      continue;
+    }
+    blocks_considered.emplace(b);
+    reg_t determining_reg;
+    if (ends_in_if_statment(b) &&
+        find_determining_reg(*fixpoint, b, &determining_reg)) {
+      // Keep going, maybe this block is a useful starting point.
+      TRACE(CCB, 2, "determining_reg is %d for B%zu", determining_reg, b->id());
+      auto last_insn = b->get_last_insn()->insn;
+      auto root_branch = cfg.find_insn(last_insn);
+      auto finder = std::make_unique<SwitchEquivFinder>(
+          &cfg, root_branch, determining_reg,
+          SwitchEquivFinder::NO_LEAF_DUPLICATION, fixpoint,
+          SwitchEquivFinder::EXECUTION_ORDER);
+      if (finder_results_are_supported(finder.get())) {
+        TRACE(CCB, 2, "SwitchEquivFinder succeeded on B%zu for branch at: %s",
+              b->id(), SHOW(last_insn));
+        auto visited = finder->visited_blocks();
+        std::copy(visited.begin(), visited.end(),
+                  std::inserter(blocks_considered, blocks_considered.end()));
+        const auto& key_to_case = finder->key_to_case();
+        size_t relevant_case_count{0};
+        for (auto&& [key, leaf] : key_to_case) {
+          if (!SwitchEquivFinder::is_default_case(key)) {
+            auto dtype = boost::get<const DexType*>(key);
+            auto case_class = type_class(dtype);
+            if (pass_state.consider_external_classes ||
+                (case_class != nullptr && !case_class->is_external())) {
+              relevant_case_count++;
+            }
+          }
+        }
+        if (relevant_case_count > pass_state.max_cases ||
+            relevant_case_count < pass_state.min_cases) {
+          TRACE(CCB, 2, "Not considering branch due to number of cases.");
+          continue;
+        }
+        // Part of this method should conform to expectations, note this.
+        BranchTransform transform{b, last_insn, determining_reg,
+                                  std::move(finder)};
+        transforms.emplace_back(std::move(transform));
       }
     }
   }
-  if (finder->default_case() == boost::none) {
-    TRACE(CCB, 2, "Default block not found; bailing.");
-    return;
+  if (!transforms.empty()) {
+    std::lock_guard<std::mutex> lock(pass_state.transforms_mutex);
+    MethodTransform mt{method, std::move(code_copy), std::move(scoped_cfg),
+                       std::move(transforms)};
+    method_transforms->emplace_back(std::move(mt));
   }
-  if (relevant_case_count > pass_state.max_cases ||
-      relevant_case_count < pass_state.min_cases) {
-    TRACE(CCB, 2, "Not operating on method due to size.");
-    return;
-  }
-  // Method should conform to expectations!
-  std::lock_guard<std::mutex> lock(pass_state.transforms_mutex);
-  PendingTransform t{cls,
-                     method,
-                     last_prologue_block,
-                     last_prologue_insn->insn,
-                     determining_reg,
-                     std::move(code_copy),
-                     std::move(scoped_cfg),
-                     std::move(finder)};
-  pending_transforms->emplace_back(std::move(t));
 }
 
-Stats apply_transform(const PassState& pass_state,
-                      PendingTransform& transform) {
+Stats apply_transform(const PassState& pass_state, MethodTransform& mt) {
   Stats result;
-  auto method = transform.method;
-  auto& cfg = **transform.scoped_cfg;
-  TRACE(CCB, 3, "Transforming const-class branching in %s %s", SHOW(method),
-        SHOW(cfg));
-  auto finder = transform.switch_equiv.get();
-
-  // Determine stable order of the types that are being switched on.
-  std::set<const DexType*, dextypes_comparator> ordered_types;
-  const auto& key_to_case = finder->key_to_case();
-  cfg::Block* default_case{nullptr};
-  for (auto&& [key, block] : key_to_case) {
-    if (!SwitchEquivFinder::is_default_case(key)) {
-      auto dtype = boost::get<const DexType*>(key);
-      ordered_types.emplace(dtype);
-    } else {
-      TRACE(CCB, 3, "DEFAULT -> B%zu\n%s", block->id(), SHOW(block));
-      default_case = block;
-    }
-  }
-  // Create ordinals for each type being switched on, reserving zero to denote
-  // an explicit default case.
+  auto method = mt.method;
+  auto& cfg = **mt.scoped_cfg;
   auto before_const_class_count = num_const_class_opcodes(&cfg);
-  std::map<std::string, int16_t> string_tree_items;
-  std::vector<std::pair<int32_t, cfg::Block*>> new_edges;
-  constexpr int16_t STRING_TREE_NO_ENTRY = 0;
-  int16_t counter = STRING_TREE_NO_ENTRY + 1;
-  for (const auto& type : ordered_types) {
-    auto string_name = java_names::internal_to_external(type->str_copy());
-    int16_t ordinal = counter++;
-    string_tree_items.emplace(string_name, ordinal);
-    auto block = key_to_case.at(type);
-    new_edges.emplace_back(ordinal, block);
-    TRACE(CCB, 3, "%s (%s) -> B%zu\n%s", SHOW(type), string_name.c_str(),
-          block->id(), SHOW(block));
-  }
+  TRACE(CCB, 3,
+        "Processing const-class branching in %s (transform size = %zu) %s",
+        SHOW(method), mt.transforms.size(), SHOW(cfg));
 
-  // Install a new static string field for the encoded types and their ordinals.
-  auto encoded_str =
-      StringTreeMap<int16_t>::encode_string_tree_map(string_tree_items);
-  result.string_tree_size = encoded_str.size();
-  auto encoded_dex_str = DexString::make_string(encoded_str);
+  for (auto& transform : mt.transforms) {
+    // Determine stable order of the types that are being switched on.
+    std::set<const DexType*, dextypes_comparator> ordered_types;
+    const auto& key_to_case = transform.switch_equiv->key_to_case();
+    cfg::Block* default_case{nullptr};
+    for (auto&& [key, block] : key_to_case) {
+      if (!SwitchEquivFinder::is_default_case(key)) {
+        auto dtype = boost::get<const DexType*>(key);
+        ordered_types.emplace(dtype);
+      } else {
+        TRACE(CCB, 3, "DEFAULT -> B%zu\n%s", block->id(), SHOW(block));
+        default_case = block;
+      }
+    }
+    // Create ordinals for each type being switched on, reserving zero to denote
+    // an explicit default case.
+    std::map<std::string, int16_t> string_tree_items;
+    std::vector<std::pair<int32_t, cfg::Block*>> new_edges;
+    constexpr int16_t STRING_TREE_NO_ENTRY = 0;
+    int16_t counter = STRING_TREE_NO_ENTRY + 1;
+    for (const auto& type : ordered_types) {
+      auto string_name = java_names::internal_to_external(type->str_copy());
+      int16_t ordinal = counter++;
+      string_tree_items.emplace(string_name, ordinal);
+      auto block = key_to_case.at(type);
+      new_edges.emplace_back(ordinal, block);
+      TRACE(CCB, 3, "%s (%s) -> B%zu\n%s", SHOW(type), string_name.c_str(),
+            block->id(), SHOW(block));
+    }
 
-  // Fiddle with the prologue block and install an actual switch
-  TRACE(CCB, 2, "Removing last prologue instruction: %s", SHOW(transform.insn));
+    auto encoded_str =
+        StringTreeMap<int16_t>::encode_string_tree_map(string_tree_items);
+    result.string_tree_size = encoded_str.size();
+    auto encoded_dex_str = DexString::make_string(encoded_str);
 
-  std::vector<IRInstruction*> replacements;
-  auto encoded_str_reg = cfg.allocate_temp();
-  auto const_string_insn =
-      (new IRInstruction(OPCODE_CONST_STRING))->set_string(encoded_dex_str);
-  replacements.push_back(const_string_insn);
-  auto move_string_insn = (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
-                              ->set_dest(encoded_str_reg);
-  replacements.push_back(move_string_insn);
+    // Fiddle with the block's last instruction and install an actual switch
+    TRACE(CCB, 2, "Removing B%zu's last instruction: %s", transform.block->id(),
+          SHOW(transform.insn));
 
-  auto default_value_reg = cfg.allocate_temp();
-  auto default_value_const = new IRInstruction(OPCODE_CONST);
-  default_value_const->set_literal(STRING_TREE_NO_ENTRY);
-  default_value_const->set_dest(default_value_reg);
-  replacements.push_back(default_value_const);
+    std::vector<IRInstruction*> replacements;
+    auto encoded_str_reg = cfg.allocate_temp();
+    auto const_string_insn =
+        (new IRInstruction(OPCODE_CONST_STRING))->set_string(encoded_dex_str);
+    replacements.push_back(const_string_insn);
+    auto move_string_insn =
+        (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+            ->set_dest(encoded_str_reg);
+    replacements.push_back(move_string_insn);
 
-  auto invoke_string_tree = new IRInstruction(OPCODE_INVOKE_STATIC);
-  invoke_string_tree->set_method(pass_state.lookup_method);
-  invoke_string_tree->set_srcs_size(3);
-  invoke_string_tree->set_src(0, transform.determining_reg);
-  invoke_string_tree->set_src(1, encoded_str_reg);
-  invoke_string_tree->set_src(2, default_value_reg);
-  replacements.push_back(invoke_string_tree);
+    auto default_value_reg = cfg.allocate_temp();
+    auto default_value_const = new IRInstruction(OPCODE_CONST);
+    default_value_const->set_literal(STRING_TREE_NO_ENTRY);
+    default_value_const->set_dest(default_value_reg);
+    replacements.push_back(default_value_const);
 
-  // Just reuse a reg we don't need anymore
-  auto switch_result_reg = default_value_reg;
-  auto move_lookup_result = new IRInstruction(OPCODE_MOVE_RESULT);
-  move_lookup_result->set_dest(switch_result_reg);
-  replacements.push_back(move_lookup_result);
+    auto invoke_string_tree = new IRInstruction(OPCODE_INVOKE_STATIC);
+    invoke_string_tree->set_method(pass_state.lookup_method);
+    invoke_string_tree->set_srcs_size(3);
+    invoke_string_tree->set_src(0, transform.determining_reg);
+    invoke_string_tree->set_src(1, encoded_str_reg);
+    invoke_string_tree->set_src(2, default_value_reg);
+    replacements.push_back(invoke_string_tree);
 
-  auto new_switch = new IRInstruction(OPCODE_SWITCH);
-  new_switch->set_src(0, switch_result_reg);
-  // Note: it seems instruction "new_switch" gets appended via create_branch; no
-  // need to push to replacements
+    // Just reuse a reg we don't need anymore
+    auto switch_result_reg = default_value_reg;
+    auto move_lookup_result = new IRInstruction(OPCODE_MOVE_RESULT);
+    move_lookup_result->set_dest(switch_result_reg);
+    replacements.push_back(move_lookup_result);
 
-  cfg.replace_insns(cfg.find_insn(transform.insn), replacements);
-  // We are explicitly covering the default block via the default return value
-  // from the string tree. Not needed here.
-  cfg.create_branch(transform.last_prologue_block, new_switch, nullptr,
-                    new_edges);
+    auto new_switch = new IRInstruction(OPCODE_SWITCH);
+    new_switch->set_src(0, switch_result_reg);
+    // Note: it seems instruction "new_switch" gets appended via create_branch;
+    // no need to push to replacements
 
-  // Reset successor of last prologue block to implement the default case.
-  for (auto& edge : transform.last_prologue_block->succs()) {
-    if (edge->type() == cfg::EDGE_GOTO) {
-      cfg.set_edge_target(edge, default_case);
+    cfg.replace_insns(cfg.find_insn(transform.insn), replacements);
+    // We are explicitly covering the default block via the default return value
+    // from the string tree. Not needed here.
+    cfg.create_branch(transform.block, new_switch, nullptr, new_edges);
+
+    // Reset successor of last prologue block to implement the default case.
+    for (auto& edge : transform.block->succs()) {
+      if (edge->type() == cfg::EDGE_GOTO) {
+        cfg.set_edge_target(edge, default_case);
+      }
     }
   }
-
-  // Last step is to prune leaf blocks which are now unreachable. Do this before
-  // computing metrics (so we know if this pass is doing anything useful) but
-  // be sure to not dereference any Block ptrs from here on out!
+  // Last step is to prune leaf blocks which are now unreachable. Do this
+  // before computing metrics (so we know if this pass is doing anything
+  // useful) but be sure to not dereference any Block ptrs from here on out!
   cfg.remove_unreachable_blocks();
   TRACE(CCB, 3, "POST EDIT %s", SHOW(cfg));
   result.methods_transformed = 1;
-  // Metric is not entirely accurate as we don't do dce on the prologue block
-  // (eehhh close enough).
+  // Metric is not entirely accurate as we don't do dce on the first block that
+  // starts the if chain (eehhh close enough).
   result.const_class_instructions_removed =
       before_const_class_count - num_const_class_opcodes(&cfg);
   always_assert(result.const_class_instructions_removed >= 0);
 
   // Make the copy take effect.
-  transform.method->set_code(std::move(transform.code_copy));
+  method->set_code(std::move(mt.code_copy));
   return result;
 }
 
@@ -334,20 +378,19 @@ void TransformConstClassBranchesPass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  std::vector<PendingTransform> transforms;
+  std::vector<MethodTransform> method_transforms;
   std::mutex transforms_mutex;
   PassState pass_state{string_tree_lookup_method, m_consider_external_classes,
                        m_min_cases, m_max_cases, transforms_mutex};
   walk::parallel::methods(scope, [&](DexMethod* method) {
-    if (should_consider_method(method)) {
-      gather_possible_transformations(
-          pass_state, type_class(method->get_class()), method, &transforms);
+    if (should_consider_method(pass_state, method)) {
+      gather_possible_transformations(pass_state, method, &method_transforms);
     }
   });
 
   Stats stats;
-  for (auto& transform : transforms) {
-    stats += apply_transform(pass_state, transform);
+  for (auto& mt : method_transforms) {
+    stats += apply_transform(pass_state, mt);
   }
   mgr.incr_metric(METRIC_METHODS_TRANSFORMED, stats.methods_transformed);
   mgr.incr_metric(METRIC_CONST_CLASS_INSTRUCTIONS_REMOVED,
