@@ -78,17 +78,17 @@ class CallSiteSummarizer {
   std::function<bool(const ConstantValue&)>* m_filter_fn;
   CallSiteSummaryStats* m_stats;
 
-  /**
-   * For all (reachable) invoked methods, list of call-site summaries
-   */
-  std::unordered_map<const DexMethod*, std::vector<CallSiteSummaryOccurrences>>
-      m_callee_call_site_summary_occurrences;
+  struct CalleeInfo {
+    std::unordered_map<const CallSiteSummary*, size_t> indices;
+    std::vector<CallSiteSummaryOccurrences> occurrences;
+    std::vector<const IRInstruction*> invokes;
+  };
 
   /**
-   * For all (reachable) invoked methods, list of vinoke instructions
+   * For all (reachable) invoked methods, call-site summaries and invoke
+   * instructions
    */
-  std::unordered_map<const DexMethod*, std::vector<const IRInstruction*>>
-      m_callee_call_site_invokes;
+  ConcurrentMap<const DexMethod*, CalleeInfo> m_callee_infos;
 
   /**
    * For all (reachable) invoke instructions, constant arguments
