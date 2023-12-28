@@ -198,8 +198,7 @@ void CallSiteSummarizer::summarize() {
   // virtual methods.
   PriorityThreadPoolDAGScheduler<DexMethod*> summaries_scheduler;
 
-  ConcurrentMap<DexMethod*, std::shared_ptr<CalleeInfo>>
-      concurrent_callee_infos;
+  ConcurrentMap<DexMethod*, CalleeInfo> concurrent_callee_infos;
 
   // Helper function to retrieve a list of callers of a callee such that all
   // possible call-sites to the callee are in the returned callers.
@@ -222,7 +221,10 @@ void CallSiteSummarizer::summarize() {
       // constant arguments.
       arguments = CallSiteArguments::top();
     } else {
-      auto ci = concurrent_callee_infos.get(method, nullptr);
+      const CalleeInfo* ci = nullptr;
+      auto success = concurrent_callee_infos.observe(
+          method, [&](auto*, auto& val) { ci = &val; });
+      always_assert(success == !!ci);
       if (!ci) {
         // All callers were unreachable
         arguments = CallSiteArguments::bottom();
@@ -252,16 +254,11 @@ void CallSiteSummarizer::summarize() {
       auto insn = p.first;
       auto callee = m_get_callee_fn(method, insn);
       auto call_site_summary = p.second;
-      concurrent_callee_infos.update(callee,
-                                     [&](const DexMethod*,
-                                         std::shared_ptr<CalleeInfo>& ci,
-                                         bool /* exists */) {
-                                       if (!ci) {
-                                         ci = std::make_shared<CalleeInfo>();
-                                       }
-                                       ci->occurrences[call_site_summary]++;
-                                       ci->invokes.push_back(insn);
-                                     });
+      concurrent_callee_infos.update(
+          callee, [&](const DexMethod*, CalleeInfo& ci, bool /* exists */) {
+            ci.occurrences[call_site_summary]++;
+            ci.invokes.push_back(insn);
+          });
       m_invoke_call_site_summaries.emplace(insn, call_site_summary);
     }
     m_stats->constant_invoke_callers_analyzed++;
@@ -286,13 +283,13 @@ void CallSiteSummarizer::summarize() {
     auto callee = p.first;
     auto& v = m_callee_call_site_summary_occurrences[callee];
     auto& ci = p.second;
-    for (const auto& q : ci->occurrences) {
+    for (const auto& q : ci.occurrences) {
       const auto call_site_summary = q.first;
       const auto count = q.second;
       v.emplace_back(call_site_summary, count);
     }
     auto& invokes = m_callee_call_site_invokes[callee];
-    invokes.insert(invokes.end(), ci->invokes.begin(), ci->invokes.end());
+    invokes.insert(invokes.end(), ci.invokes.begin(), ci.invokes.end());
   }
 }
 
