@@ -971,19 +971,28 @@ class CodeTransformer final {
 
     // If this is toString() and there is no CandidateEnum.toString(), then we
     // call Enum.name() instead.
+    DexMethod* method = nullptr;
     if (method::signatures_match(method_ref,
-                                 m_enum_util->ENUM_TOSTRING_METHOD) &&
-        m_enum_util->get_user_defined_tostring_method(
-            type_class(candidate_type)) == nullptr) {
-      update_invoke_name(env, cfg, block, mie);
-    } else {
-      auto method = resolve_method(method_ref, opcode_to_search(insn));
-      always_assert(method);
-      auto new_insn = (new IRInstruction(*insn))
-                          ->set_opcode(OPCODE_INVOKE_STATIC)
-                          ->set_method(method);
-      m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
+                                 m_enum_util->ENUM_TOSTRING_METHOD)) {
+      method = m_enum_util->get_user_defined_tostring_method(
+          type_class(candidate_type));
+      if (method == nullptr) {
+        update_invoke_name(env, cfg, block, mie);
+        return;
+      }
     }
+    if (method == nullptr) {
+      method = resolve_method(method_ref, opcode_to_search(insn));
+    }
+    always_assert(method);
+    always_assert_log(
+        !method->is_external() || is_static(method),
+        "[%s] with candidate type %s resolved to external non-static method %s",
+        SHOW(insn), SHOW(candidate_type), SHOW(method));
+    auto new_insn = (new IRInstruction(*insn))
+                        ->set_opcode(OPCODE_INVOKE_STATIC)
+                        ->set_method(method);
+    m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
   }
 
   /**
