@@ -559,9 +559,20 @@ class RootMethodReducer {
     }
 
     auto* insn = find_incomplete_marker_methods();
-    always_assert_log(!insn,
-                      "Incomplete marker {%s} present after reduction in\n%s",
-                      SHOW(insn), SHOW(m_method->get_code()->cfg()));
+    auto describe = [&]() {
+      std::ostringstream oss;
+      for (auto [type, kind] : m_types) {
+        oss << show(type) << ":"
+            << (kind == InlinableTypeKind::Incomplete ? "incomplete" : "")
+            << ", ";
+      }
+      return oss.str();
+    };
+    always_assert_log(
+        !insn,
+        "Incomplete marker {%s} present in {%s} after reduction of %s in\n%s",
+        SHOW(insn), SHOW(m_method), describe().c_str(),
+        SHOW(m_method->get_code()->cfg()));
 
     shrink();
     return (ReducedMethod){
