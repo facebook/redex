@@ -371,9 +371,9 @@ size_t get_code_size(DexMethod* method) {
 
 struct Stats {
   std::atomic<size_t> total_savings{0};
-  std::atomic<size_t> reduced_methods{0};
+  size_t reduced_methods{0};
   std::atomic<size_t> reduced_methods_variants{0};
-  std::atomic<size_t> selected_reduced_methods{0};
+  size_t selected_reduced_methods{0};
   std::atomic<size_t> invokes_not_inlinable_callee_unexpandable{0};
   std::atomic<size_t> invokes_not_inlinable_callee_inconcrete{0};
   std::atomic<size_t> invokes_not_inlinable_callee_too_many_params_to_expand{0};
@@ -387,6 +387,9 @@ struct Stats {
   std::atomic<size_t> expanded_methods{0};
   std::atomic<size_t> calls_inlined{0};
   std::atomic<size_t> new_instances_eliminated{0};
+  size_t inlined_methods_removed{0};
+  size_t inlinable_methods_kept{0};
+  size_t inlined_methods_mispredicted{0};
 };
 
 // Data structure to derive local or accumulated global net savings
@@ -403,7 +406,8 @@ struct NetSavings {
   }
 
   // Estimate how many code units will be saved.
-  int get_value() const {
+  int get_value(
+      const InsertOnlyConcurrentSet<DexMethod*>* methods_kept = nullptr) const {
     int net_savings{local};
     // A class will only eventually get deleted if all static methods are
     // inlined.
@@ -419,7 +423,8 @@ struct NetSavings {
       }
     }
     for (auto method : methods) {
-      if (can_delete(method) && !method::is_argless_init(method)) {
+      if (can_delete(method) && !method::is_argless_init(method) &&
+          (!methods_kept || !methods_kept->count(method))) {
         auto code_size = get_code_size(method);
         net_savings += COST_METHOD + code_size;
         if (is_static(method)) {
@@ -1161,11 +1166,13 @@ compute_reduced_methods(
 // Select all those reduced methods which will result in overall size savings,
 // either by looking at local net savings for just a single reduced method, or
 // by considering families of reduced methods that affect the same classes.
-std::unordered_map<DexMethod*, size_t> select_reduced_methods(
+void select_reduced_methods(
     const std::unordered_map<DexMethod*, std::vector<ReducedMethod>>&
         reduced_methods,
     std::unordered_set<DexType*>* irreducible_types,
-    Stats* stats) {
+    Stats* stats,
+    InsertOnlyConcurrentMap<DexMethod*, size_t>*
+        concurrent_selected_reduced_methods) {
   Timer t("select_reduced_methods");
 
   // First, we are going to identify all reduced methods which will result in
@@ -1173,9 +1180,10 @@ std::unordered_map<DexMethod*, size_t> select_reduced_methods(
   // We'll also build up families of reduced methods for which we can later do a
   // global net savings analysis.
 
-  ConcurrentSet<DexType*> concurrent_irreducible_types;
-  InsertOnlyConcurrentMap<DexMethod*, size_t>
-      concurrent_selected_reduced_methods;
+  InsertOnlyConcurrentSet<DexType*> concurrent_irreducible_types;
+  InsertOnlyConcurrentSet<DexMethod*> concurrent_inlined_methods_removed;
+  InsertOnlyConcurrentSet<DexMethod*> concurrent_inlinable_methods_kept;
+  InsertOnlyConcurrentSet<DexMethod*> concurrent_kept_methods;
 
   // A family of reduced methods for which we'll look at the combined global net
   // savings
@@ -1193,31 +1201,44 @@ std::unordered_map<DexMethod*, size_t> select_reduced_methods(
         auto update_irreducible_types = [&](size_t i) {
           const auto& reduced_method = reduced_methods_variants.at(i);
           const auto& reduced_types = reduced_method.types;
-          for (auto&& [type, kind] : reduced_methods_variants.at(0).types) {
+          const auto& inlined_methods = reduced_method.inlined_methods;
+          const auto& largest_reduced_method = reduced_methods_variants.at(0);
+          for (auto&& [type, kind] : largest_reduced_method.types) {
             if (!reduced_types.count(type) &&
                 kind != InlinableTypeKind::Incomplete) {
               concurrent_irreducible_types.insert(type);
+            }
+          }
+          for (auto&& [inlined_method, _] :
+               largest_reduced_method.inlined_methods) {
+            if (!inlined_methods.count(inlined_method)) {
+              concurrent_inlinable_methods_kept.insert(inlined_method);
             }
           }
         };
         // We'll try to find the maximal (involving most inlined non-incomplete
         // types) reduced method variant for which we can make the largest
         // non-negative local cost determination.
-        boost::optional<std::pair<size_t, int>> best_candidate;
+        struct Candidate {
+          size_t index;
+          NetSavings net_savings;
+          int value;
+        };
+        boost::optional<Candidate> best_candidate;
         for (size_t i = 0; i < reduced_methods_variants.size(); i++) {
           // If we couldn't accommodate any types, we'll need to add them to the
           // irreducible types set. Except for the last variant with the least
           // inlined types, for which might below try to make a global cost
           // determination.
           const auto& reduced_method = reduced_methods_variants.at(i);
-          auto savings =
-              reduced_method.get_net_savings(*irreducible_types).get_value();
-          if (!best_candidate || savings > best_candidate->second) {
-            best_candidate = std::make_pair(i, savings);
+          auto net_savings = reduced_method.get_net_savings(*irreducible_types);
+          auto value = net_savings.get_value();
+          if (!best_candidate || value > best_candidate->value) {
+            best_candidate = (Candidate){i, std::move(net_savings), value};
           }
           // If there are no incomplete types left, we can stop here
           const auto& reduced_types = reduced_method.types;
-          if (best_candidate && best_candidate->second >= 0 &&
+          if (best_candidate && best_candidate->value >= 0 &&
               !std::any_of(reduced_types.begin(), reduced_types.end(),
                            [](auto& p) {
                              return p.second == InlinableTypeKind::Incomplete;
@@ -1225,11 +1246,14 @@ std::unordered_map<DexMethod*, size_t> select_reduced_methods(
             break;
           }
         }
-        if (best_candidate && best_candidate->second >= 0) {
-          auto [i, savings] = *best_candidate;
-          stats->total_savings += savings;
-          concurrent_selected_reduced_methods.emplace(method, i);
-          update_irreducible_types(i);
+        if (best_candidate && best_candidate->value >= 0) {
+          stats->total_savings += best_candidate->value;
+          concurrent_selected_reduced_methods->emplace(method,
+                                                       best_candidate->index);
+          update_irreducible_types(best_candidate->index);
+          for (auto* inlined_method : best_candidate->net_savings.methods) {
+            concurrent_inlined_methods_removed.insert(inlined_method);
+          }
           return;
         }
         update_irreducible_types(reduced_methods_variants.size() - 1);
@@ -1263,30 +1287,44 @@ std::unordered_map<DexMethod*, size_t> select_reduced_methods(
         for (auto [type, kind] : smallest_reduced_method.types) {
           concurrent_irreducible_types.insert(type);
         }
+        for (auto&& [inlined_method, _] :
+             smallest_reduced_method.inlined_methods) {
+          concurrent_inlinable_methods_kept.insert(inlined_method);
+        }
       },
       reduced_methods);
   irreducible_types->insert(concurrent_irreducible_types.begin(),
                             concurrent_irreducible_types.end());
+  stats->inlinable_methods_kept = concurrent_inlinable_methods_kept.size();
 
   // Second, perform global net savings analysis
   workqueue_run<std::pair<DexType*, Family>>(
       [&](const std::pair<DexType*, Family>& p) {
         auto& [type, family] = p;
         if (irreducible_types->count(type) ||
-            family.global_net_savings.get_value() < 0) {
+            family.global_net_savings.get_value(
+                &concurrent_inlinable_methods_kept) < 0) {
           stats->too_costly_globally += family.reduced_methods.size();
           return;
         }
-        stats->total_savings += family.global_net_savings.get_value();
+        stats->total_savings += family.global_net_savings.get_value(
+            &concurrent_inlinable_methods_kept);
         for (auto& [method, i] : family.reduced_methods) {
-          concurrent_selected_reduced_methods.emplace(method, i);
+          concurrent_selected_reduced_methods->emplace(method, i);
+        }
+        for (auto* inlined_method : family.global_net_savings.methods) {
+          concurrent_inlined_methods_removed.insert(inlined_method);
         }
       },
       concurrent_families);
 
-  return std::unordered_map<DexMethod*, size_t>(
-      concurrent_selected_reduced_methods.begin(),
-      concurrent_selected_reduced_methods.end());
+  stats->inlined_methods_removed = concurrent_inlined_methods_removed.size();
+
+  for (auto* method : concurrent_inlined_methods_removed) {
+    if (concurrent_inlinable_methods_kept.count_unsafe(method)) {
+      stats->inlined_methods_mispredicted++;
+    }
+  }
 }
 
 void reduce(DexStoresVector& stores,
@@ -1328,8 +1366,9 @@ void reduce(DexStoresVector& stores,
   stats->reduced_methods = reduced_methods.size();
 
   // Second, we select reduced methods that will result in net savings
-  auto selected_reduced_methods =
-      select_reduced_methods(reduced_methods, &irreducible_types, stats);
+  InsertOnlyConcurrentMap<DexMethod*, size_t> selected_reduced_methods;
+  select_reduced_methods(reduced_methods, &irreducible_types, stats,
+                         &selected_reduced_methods);
   stats->selected_reduced_methods = selected_reduced_methods.size();
 
   // Finally, we are going to apply those selected methods, and clean up all
@@ -1407,10 +1446,10 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
       "inlinable after too many iterations, %zu stackify returned objects, "
       "%zu too costly with irreducible classes, %zu too costly with multiple "
       "conditional classes, %zu too costly globally; %zu expanded methods; %zu "
-      "calls inlined; %zu new-instances eliminated",
-      root_methods.size(), (size_t)stats.reduced_methods,
-      (size_t)stats.reduced_methods_variants,
-      (size_t)stats.selected_reduced_methods,
+      "calls inlined; %zu new-instances eliminated; %zu/%zu/%zu inlinable "
+      "methods removed/kept/mispredicted",
+      root_methods.size(), stats.reduced_methods,
+      (size_t)stats.reduced_methods_variants, stats.selected_reduced_methods,
       (size_t)stats.anchors_not_inlinable_inlining,
       (size_t)stats.invokes_not_inlinable_callee_unexpandable,
       (size_t)stats.invokes_not_inlinable_callee_too_many_params_to_expand,
@@ -1421,15 +1460,16 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
       (size_t)stats.too_costly_irreducible_classes,
       (size_t)stats.too_costly_multiple_conditional_classes,
       (size_t)stats.too_costly_globally, (size_t)stats.expanded_methods,
-      (size_t)stats.calls_inlined, (size_t)stats.new_instances_eliminated);
+      (size_t)stats.calls_inlined, (size_t)stats.new_instances_eliminated,
+      stats.inlined_methods_removed, stats.inlinable_methods_kept,
+      stats.inlined_methods_mispredicted);
 
   mgr.incr_metric("total_savings", stats.total_savings);
   mgr.incr_metric("root_methods", root_methods.size());
-  mgr.incr_metric("reduced_methods", (size_t)stats.reduced_methods);
+  mgr.incr_metric("reduced_methods", stats.reduced_methods);
   mgr.incr_metric("reduced_methods_variants",
                   (size_t)stats.reduced_methods_variants);
-  mgr.incr_metric("selected_reduced_methods",
-                  (size_t)stats.selected_reduced_methods);
+  mgr.incr_metric("selected_reduced_methods", stats.selected_reduced_methods);
   mgr.incr_metric("root_method_anchors_not_inlinable_inlining",
                   (size_t)stats.anchors_not_inlinable_inlining);
   mgr.incr_metric("root_method_invokes_not_inlinable_callee_unexpandable",
@@ -1456,6 +1496,10 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric("calls_inlined", (size_t)stats.calls_inlined);
   mgr.incr_metric("new_instances_eliminated",
                   (size_t)stats.new_instances_eliminated);
+  mgr.incr_metric("inlined_methods_removed", stats.inlined_methods_removed);
+  mgr.incr_metric("inlinable_methods_kept", stats.inlinable_methods_kept);
+  mgr.incr_metric("inlined_methods_mispredicted",
+                  stats.inlined_methods_mispredicted);
 }
 
 static ObjectEscapeAnalysisPass s_pass;
