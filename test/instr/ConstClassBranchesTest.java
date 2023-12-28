@@ -49,4 +49,26 @@ public class ConstClassBranchesTest {
     assertThat(ConstClassBranches.Duplicates.get(java.lang.String.class)).isNull();
     assertThat(ConstClassBranches.Duplicates.get(null)).isNull();
   }
+
+  @Test
+  public void testMultipleTransformsInMethod() {
+    String s = "a";
+    assertThat(ConstClassBranches.Complicated.get(java.util.Map.class, s)).isEqualTo(1000);
+    assertThat(ConstClassBranches.Complicated.get(java.util.List.class, s)).isEqualTo(1);
+    assertThat(ConstClassBranches.Complicated.get(java.util.Set.class, s)).isEqualTo(2);
+    assertThat(ConstClassBranches.Complicated.get(java.util.Deque.class, s)).isEqualTo(3);
+    assertThat(ConstClassBranches.Complicated.get(java.util.Iterator.class, s)).isEqualTo(4);
+    assertThat(ConstClassBranches.Complicated.get(java.util.Collection.class, s)).isEqualTo(5);
+    assertThat(ConstClassBranches.Complicated.get(java.lang.String.class, s)).isNull();
+    assertThat(ConstClassBranches.Complicated.get(null, s)).isNull();
+    s = "b";
+    assertThat(ConstClassBranches.Complicated.get(java.util.Date.class, s)).isEqualTo(1000);
+    assertThat(ConstClassBranches.Complicated.get(java.util.List.class, s)).isEqualTo(1001);
+    assertThat(ConstClassBranches.Complicated.get(java.util.Set.class, s)).isEqualTo(1002);
+    assertThat(ConstClassBranches.Complicated.get(java.util.Deque.class, s)).isEqualTo(1003);
+    assertThat(ConstClassBranches.Complicated.get(java.util.Iterator.class, s)).isEqualTo(1004);
+    assertThat(ConstClassBranches.Complicated.get(java.util.Collection.class, s)).isEqualTo(1005);
+    assertThat(ConstClassBranches.Complicated.get(java.lang.String.class, s)).isNull();
+    assertThat(ConstClassBranches.Complicated.get(null, s)).isNull();
+  }
 }

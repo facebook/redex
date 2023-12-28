@@ -76,4 +76,40 @@ public class ConstClassBranches {
       }
     }
   }
+
+  public static class Complicated {
+    Complicated() {}
+
+    public static final Integer get(Class clazz, String s) {
+      if ("a".equals(s)) {
+          if (clazz == java.util.Map.class) {
+              // See if this is the same block of code as the below case.
+              return floop(1000);
+          } else if (clazz == java.util.List.class) {
+              return floop(1);
+          } else if (clazz == java.util.Set.class) {
+              return floop(2);
+          } else if (clazz == java.util.Deque.class) {
+              return floop(3);
+          } else if (clazz == java.util.Iterator.class) {
+              return floop(4);
+          } else {
+              return clazz == java.util.Collection.class ? floop(5) : null;
+          }
+      }
+      if (clazz == java.util.Date.class) {
+          return floop(1000);
+      } else if (clazz == java.util.List.class) {
+          return floop(1001);
+      } else if (clazz == java.util.Set.class) {
+          return floop(1002);
+      } else if (clazz == java.util.Deque.class) {
+          return floop(1003);
+      } else if (clazz == java.util.Iterator.class) {
+          return floop(1004);
+      } else {
+          return clazz == java.util.Collection.class ? floop(1005) : null;
+      }
+    }
+  }
 }
