@@ -47,7 +47,6 @@ struct PendingTransform {
   DexMethod* method;
   cfg::Block* last_prologue_block;
   IRInstruction* insn;
-  size_t insn_idx;
   reg_t determining_reg;
   std::unique_ptr<IRCode> code_copy;
   std::unique_ptr<cfg::ScopedCFG> scoped_cfg;
@@ -78,23 +77,6 @@ bool should_consider_method(DexMethod* method) {
     }
   }
   return false;
-}
-
-// Like ControlFlowGraph::find_insn, return an iterator to the instruction but
-// also spit out the index of the instruction (used for compares if needed).
-cfg::InstructionIterator find_insn_and_idx(cfg::ControlFlowGraph& cfg,
-                                           IRInstruction* insn,
-                                           size_t* insn_idx) {
-  size_t idx = 0;
-  auto iterable = InstructionIterable(cfg);
-  for (auto it = iterable.begin(); it != iterable.end(); ++it) {
-    if (it->insn == insn) {
-      *insn_idx = idx;
-      return it;
-    }
-    idx++;
-  }
-  not_reached();
 }
 
 size_t num_const_class_opcodes(const cfg::ControlFlowGraph* cfg) {
@@ -148,10 +130,9 @@ void gather_possible_transformations(
   }
   TRACE(CCB, 2, "determining_reg is %d", determining_reg);
 
-  size_t insn_idx{0};
   auto finder = std::make_unique<SwitchEquivFinder>(
-      &cfg, find_insn_and_idx(cfg, last_prologue_insn->insn, &insn_idx),
-      determining_reg, SwitchEquivFinder::NO_LEAF_DUPLICATION, fixpoint,
+      &cfg, cfg.find_insn(last_prologue_insn->insn), determining_reg,
+      SwitchEquivFinder::NO_LEAF_DUPLICATION, fixpoint,
       SwitchEquivFinder::EXECUTION_ORDER);
   if (!finder->success() ||
       !finder->are_keys_uniform(SwitchEquivFinder::KeyKind::CLASS)) {
@@ -193,7 +174,6 @@ void gather_possible_transformations(
                      method,
                      last_prologue_block,
                      last_prologue_insn->insn,
-                     insn_idx,
                      determining_reg,
                      std::move(code_copy),
                      std::move(scoped_cfg),
