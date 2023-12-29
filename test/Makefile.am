@@ -2,22 +2,22 @@ SUBDIRS = . integ unit
 
 check_LTLIBRARIES = libgtest.la libgtest_main.la libgmock_main.la
 
-libgtest_la_CPPFLAGS = -Igoogletest-release-1.14.0/googletest -Igoogletest-release-1.14.0/googletest/src -Igoogletest-release-1.14.0/googletest/include
-libgtest_la_SOURCES = googletest-release-1.14.0/googletest/src/gtest-all.cc
+libgtest_la_CPPFLAGS = -Igoogletest-release-1.10.0/googletest -Igoogletest-release-1.10.0/googletest/src -Igoogletest-release-1.10.0/googletest/include
+libgtest_la_SOURCES = googletest-release-1.10.0/googletest/src/gtest-all.cc
 
-libgtest_main_la_CPPFLAGS = -Igoogletest-release-1.14.0/googletest -Igoogletest-release-1.14.0/googletest/src -Igoogletest-release-1.14.0/googletest/include
-libgtest_main_la_SOURCES = googletest-release-1.14.0/googletest/src/gtest_main.cc
+libgtest_main_la_CPPFLAGS = -Igoogletest-release-1.10.0/googletest -Igoogletest-release-1.10.0/googletest/src -Igoogletest-release-1.10.0/googletest/include
+libgtest_main_la_SOURCES = googletest-release-1.10.0/googletest/src/gtest_main.cc
 libgtest_main_la_LIBADD = libgtest.la
 
-libgmock_main_la_CPPFLAGS = -Igoogletest-release-1.14.0/googlemock -Igoogletest-release-1.14.0/googlemock/src -Igoogletest-release-1.14.0/googlemock/include -Igoogletest-release-1.14.0/googletest/include
-libgmock_main_la_SOURCES = googletest-release-1.14.0/googlemock/src/gmock-all.cc googletest-release-1.14.0/googlemock/src/gmock_main.cc
+libgmock_main_la_CPPFLAGS = -Igoogletest-release-1.10.0/googlemock -Igoogletest-release-1.10.0/googlemock/src -Igoogletest-release-1.10.0/googlemock/include -Igoogletest-release-1.10.0/googletest/include
+libgmock_main_la_SOURCES = googletest-release-1.10.0/googlemock/src/gmock-all.cc googletest-release-1.10.0/googlemock/src/gmock_main.cc
 
 # Hack: auto-download googletest.
 
-googletest-release-1.14.0/googletest/src/gtest-all.cc \
-googletest-release-1.14.0/googletest/src/gtest_main.cc \
-googletest-release-1.14.0/googlemock/src/gmock-all.cc \
-googletest-release-1.14.0/googlemock/src/gmock_main.cc: setup_gtest
+googletest-release-1.10.0/googletest/src/gtest-all.cc \
+googletest-release-1.10.0/googletest/src/gtest_main.cc \
+googletest-release-1.10.0/googlemock/src/gmock-all.cc \
+googletest-release-1.10.0/googlemock/src/gmock_main.cc: setup_gtest
 
 setup_gtest:
 	./setup.sh
