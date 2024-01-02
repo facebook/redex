@@ -11,6 +11,7 @@
 #include "RedexException.h"
 
 #include <cstdint>
+#include <type_traits>
 
 constexpr bool debug =
 #ifdef NDEBUG
@@ -77,3 +78,9 @@ extern bool slow_invariants_debug;
   always_assert_log(!debug || e, msg, ##__VA_ARGS__)
 #define assert_type_log(e, type, msg, ...) \
   always_assert_type_log(!debug || e, type, msg, ##__VA_ARGS__)
+
+// Helper for const assertions.
+#define CONSTP(e)                                                  \
+  static_cast<std::add_pointer<typename std::add_const<            \
+      typename std::remove_pointer<typename std::remove_reference< \
+          decltype(e)>::type>::type>::type>::type>(e)

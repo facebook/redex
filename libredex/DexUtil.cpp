@@ -174,6 +174,7 @@ void load_root_dexen(DexStore& store,
                      int support_dex_version) {
   namespace fs = boost::filesystem;
   fs::path dexen_dir_path(dexen_dir_str);
+  // NOLINTNEXTLINE(bugprone-assert-side-effect)
   redex_assert(fs::is_directory(dexen_dir_path));
 
   // Discover dex files

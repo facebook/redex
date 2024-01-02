@@ -260,7 +260,7 @@ void AnalysisImpl::escape_with_clinit() {
 void AnalysisImpl::escape_with_sfields() {
   for (auto const& intf_it : single_impls) {
     auto intf_cls = type_class(intf_it.first);
-    redex_assert(intf_cls->get_ifields().empty());
+    redex_assert(CONSTP(intf_cls)->get_ifields().empty());
     always_assert(!intf_cls->is_external());
     const auto& sfields = intf_cls->get_sfields();
     if (sfields.empty()) continue;

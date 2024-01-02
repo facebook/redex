@@ -158,7 +158,7 @@ static void find_common_ctor_invocations(
       return;
     }
     auto last_non_goto_insn = target->get_last_insn();
-    assert_log(last_non_goto_insn != target->end(),
+    assert_log(last_non_goto_insn != CONSTP(target)->end(),
                "Should have at least one insn!");
 
     if (!opcode::is_invoke_direct(last_non_goto_insn->insn->opcode())) {

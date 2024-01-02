@@ -294,14 +294,14 @@ ComputeRDefsResult compute_rdefs(ControlFlowGraph& cfg) {
   std::unordered_map<const IRInstruction*, Block*> block_map;
   auto get_rdef = [&](IRInstruction* insn, reg_t reg) -> IRInstruction* {
     auto it = block_map.find(insn);
-    redex_assert(it != block_map.end());
+    redex_assert(it != block_map.cend());
     auto defs = get_defs(it->second, insn);
     return get_singleton(defs, reg);
   };
 
   auto print_rdefs = [&](IRInstruction* insn, reg_t reg) -> std::string {
     auto it = block_map.find(insn);
-    redex_assert(it != block_map.end());
+    redex_assert(it != block_map.cend());
     auto defs = get_defs(it->second, insn);
     const auto& defs0 = defs.get(reg);
     if (defs0.is_top()) {
@@ -590,7 +590,7 @@ size_t remove(ControlFlowGraph& cfg, AnalysisResult& analysis) {
     for (const auto& insn_it : ir_list::InstructionIterable{b}) {
       if (opcode::is_a_monitor(insn_it.insn->opcode())) {
         auto it = analysis.rdefs.find(insn_it.insn);
-        redex_assert(it != analysis.rdefs.end());
+        redex_assert(it != analysis.rdefs.cend());
         auto def = it->second;
 
         auto& bindings = state.bindings();

@@ -176,7 +176,7 @@ struct Rearranger {
   }
 
   reg_t move_new_array_to_front() {
-    redex_assert(array_new_array != b->begin());
+    redex_assert(array_new_array != CONSTP(b)->begin());
     auto orig_new_array_size_it = std::prev(array_new_array);
     redex_assert(orig_new_array_size_it->type == MFLOW_OPCODE);
     redex_assert(orig_new_array_size_it->insn->opcode() == OPCODE_CONST);
@@ -214,7 +214,7 @@ struct Rearranger {
   IRInstruction* find_singleton_def(IRInstruction* use_insn,
                                     src_index_t src_index) {
     auto it = use_def.find(live_range::Use{use_insn, src_index});
-    redex_assert(it != use_def.end());
+    redex_assert(it != use_def.cend());
     redex_assert(it->second.size() == 1);
     return *it->second.begin();
   }
@@ -222,7 +222,7 @@ struct Rearranger {
   std::pair<IRList::iterator, reg_t> find_move_point_new_instance(
       IRInstruction* object_insn) {
     auto it = def_use.find(object_insn);
-    redex_assert(it != def_use.end());
+    redex_assert(it != def_use.cend());
     std::optional<reg_t> which_reg{};
     std::optional<IRList::iterator> which_it{};
     for (auto& obj_use : it->second) {
@@ -285,7 +285,7 @@ struct Rearranger {
     // Find all the users of the array. This should be aput-object things.
     {
       auto new_array_uses_it = def_use.find(array_new_array->insn);
-      redex_assert(new_array_uses_it != def_use.end());
+      redex_assert(new_array_uses_it != def_use.cend());
       std::optional<reg_t> extra_reg{};
       for (auto& use : new_array_uses_it->second) {
         // Skip the sput.

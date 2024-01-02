@@ -655,7 +655,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
                        if (mergeable_to_merger.count(cls->get_type())) {
                          cls->set_interfaces(no_interface);
                          cls->set_super_class(type::java_lang_Object());
-                         redex_assert(cls->get_vmethods().empty());
+                         redex_assert(CONSTP(cls)->get_vmethods().empty());
                          if (!cls->get_clinit() && cls->get_sfields().empty()) {
                            // Purge merged cls w/o static fields.
                            return true;

@@ -1868,7 +1868,7 @@ std::vector<Block*> ControlFlowGraph::order(
                     m_blocks.size());
 
   // The entry block must always be first.
-  redex_assert(m_entry_block == result.at(0));
+  redex_assert(m_entry_block == std::as_const(result).at(0));
 
   return result;
 }
@@ -1916,7 +1916,7 @@ void ControlFlowGraph::build_chains(
             // throw block in the middle.
             TRACE(CFG, 5, "Need to collapse goto chain with move result!");
             auto* goto_chain = block_to_chain->at(goto_block);
-            redex_assert(goto_chain->at(0) == goto_block);
+            redex_assert(CONSTP(goto_chain)->at(0) == goto_block);
             for (auto* gcb : *goto_chain) {
               chain->push_back(gcb);
               (*block_to_chain)[gcb] = chain;
@@ -1924,7 +1924,7 @@ void ControlFlowGraph::build_chains(
             auto it = std::find_if(
                 chains->begin(), chains->end(),
                 [&](const auto& uptr) { return uptr.get() == goto_chain; });
-            redex_assert(it != chains->end());
+            redex_assert(it != chains->cend());
             chains->erase(it);
           }
           break;
@@ -1942,7 +1942,7 @@ void ControlFlowGraph::build_chains(
   redex_assert(m_entry_block != nullptr);
   if (DEBUG) {
     auto it = m_blocks.find(m_entry_block->id());
-    redex_assert(it != m_blocks.end());
+    redex_assert(it != m_blocks.cend());
     redex_assert(it->second == m_entry_block);
   }
   handle_block(m_entry_block);
@@ -2273,7 +2273,7 @@ std::vector<Block*> ControlFlowGraph::blocks_reverse_post_deprecated() const {
       return true;
     }();
     if (all_succs_visited) {
-      redex_assert(curr == stack.top());
+      redex_assert(curr == std::as_const(stack).top());
       postorder.push_back(curr);
       stack.pop();
     }

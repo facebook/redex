@@ -259,7 +259,7 @@ std::vector<IRInstruction> get_insns_to_hoist(
         // all conditions satisfied
         insns_to_hoist.push_back(*common_insn);
         for (size_t i = 0; i != block_iters.size(); ++i) {
-          redex_assert(block_iters[i] != succ_blocks[i]->end());
+          redex_assert(block_iters[i] != CONSTP(succ_blocks[i])->end());
           redex_assert(block_iters[i]->type == MFLOW_OPCODE);
           redex_assert(*block_iters[i]->insn == *common_insn);
           ++block_iters[i];
@@ -391,7 +391,7 @@ size_t hoist_insns_for_block(
       for (auto& p : succs) {
         auto* b = p.first;
         auto& it = p.second;
-        redex_assert(it != b->end()); // Should have instructions.
+        redex_assert(it != CONSTP(b)->end()); // Should have instructions.
         IRList::iterator next;
         for (; it != b->end(); it = next) {
           next = std::next(it);
@@ -441,7 +441,7 @@ size_t hoist_insns_for_block(
             not_reached();
           }
         }
-        redex_assert(it != b->end());
+        redex_assert(it != CONSTP(b)->end());
       }
     }
 
@@ -465,7 +465,7 @@ size_t hoist_insns_for_block(
     for (auto& p : succs) {
       auto* b = p.first;
       auto& it = p.second;
-      redex_assert(it != b->end());
+      redex_assert(it != CONSTP(b)->end());
       redex_assert(it->type == MFLOW_OPCODE);
       redex_assert(*it->insn == insn);
 

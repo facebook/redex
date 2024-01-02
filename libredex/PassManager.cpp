@@ -82,6 +82,7 @@ constexpr const char* REMOVABLE_NATIVES = "redex-removable-natives.txt";
 const std::string PASS_ORDER_KEY = "pass_order";
 
 const Pass* get_profiled_pass(const PassManager& mgr) {
+  // NOLINTNEXTLINE(bugprone-assert-side-effect)
   redex_assert(getenv("PROFILE_PASS") != nullptr);
   // Resolve the pass in the constructor so that any typos / references to
   // nonexistent passes are caught as early as possible

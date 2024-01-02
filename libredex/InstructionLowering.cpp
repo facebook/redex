@@ -466,7 +466,7 @@ Stats lower(DexMethod* method, bool lower_with_cfg, ConfigFiles* conf) {
       // Remove any source blocks. They are no longer necessary and slow down
       // iteration.
       if (it->type == MFLOW_SOURCE_BLOCK) {
-        redex_assert(it != code->begin());
+        redex_assert(it != code->cbegin());
         auto prev = std::prev(it);
         code->erase_and_dispose(it);
         it = prev;

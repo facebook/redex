@@ -103,7 +103,7 @@ cfg::InstructionIterator find_large_switch(cfg::ControlFlowGraph& cfg,
       continue;
     }
     auto block = it.block();
-    redex_assert(it->insn == block->get_last_insn()->insn);
+    redex_assert(it->insn == CONSTP(block)->get_last_insn()->insn);
     if (block->succs().size() >= case_threshold) {
       break;
     }
@@ -212,7 +212,7 @@ struct SwitchRange {
 SwitchRange get_switch_range(const cfg::ControlFlowGraph& cfg,
                              cfg::Block* b,
                              size_t split_into) {
-  redex_assert(b->get_last_insn()->insn->opcode() == OPCODE_SWITCH);
+  redex_assert(CONSTP(b)->get_last_insn()->insn->opcode() == OPCODE_SWITCH);
   std::vector<int32_t> cases;
   for (const auto* e : cfg.get_succ_edges_of_type(b, cfg::EDGE_BRANCH)) {
     cases.push_back(*e->case_key());

@@ -642,6 +642,7 @@ auto insert_prologue_insts(cfg::ControlFlowGraph& cfg,
         }
         return false;
       };
+      // NOLINTNEXTLINE(bugprone-assert-side-effect)
       assert_log(b.block->end() == b.it || is_in_block(), "%s\n%s",
                  SHOW(b.block), SHOW(**b.it));
     }
@@ -1129,8 +1130,9 @@ auto get_blocks_to_instrument(const DexMethod* m,
       info->bit_id = id++;
     }
   }
+  // NOLINTNEXTLINE(bugprone-assert-side-effect)
   redex_assert(std::all_of(
-      block_info_list.begin(), block_info_list.end(),
+      block_info_list.cbegin(), block_info_list.cend(),
       [](const auto& bi) { return bi.type != BlockType::Unspecified; }));
 
   return std::make_tuple(block_info_list, id, hit_id, false);
@@ -1403,9 +1405,10 @@ MethodInfo instrument_basic_blocks(
   info.num_instrumented_blocks = num_to_instrument;
   always_assert(count(BlockType::Instrumentable) == num_to_instrument);
 
-  redex_assert(std::none_of(blocks.begin(), blocks.end(), [](const auto& b) {
-    return std::find(b.merge_in.begin(), b.merge_in.end(), b.block) !=
-           b.merge_in.end();
+  // NOLINTNEXTLINE(bugprone-assert-side-effect)
+  redex_assert(std::none_of(blocks.cbegin(), blocks.cend(), [](const auto& b) {
+    return std::find(b.merge_in.cbegin(), b.merge_in.cend(), b.block) !=
+           b.merge_in.cend();
   }));
   info.num_merged = std::accumulate(
       blocks.begin(), blocks.end(), 0,

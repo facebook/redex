@@ -98,8 +98,9 @@ class IODITest : public ::testing::Test {
     if (mids) {
       for (auto& iter : method_to_id) {
         DexMethod* method = iter.first;
-        redex_assert(method->get_dex_code() != nullptr);
-        redex_assert(method->get_dex_code()->get_debug_item() != nullptr);
+        redex_assert(CONSTP(method)->get_dex_code() != nullptr);
+        redex_assert(CONSTP(method)->get_dex_code()->get_debug_item() !=
+                     nullptr);
         mids->emplace(show(method), iter.second);
       }
     }

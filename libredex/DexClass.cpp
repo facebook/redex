@@ -814,7 +814,7 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
     always_assert_log(that->get_code() != nullptr, "%s", vshow(that).c_str());
     m->set_code(std::make_unique<IRCode>(*that->get_code()));
   } else {
-    redex_assert(that->get_code() == nullptr);
+    redex_assert(CONSTP(that)->get_code() == nullptr);
   }
 
   m->m_access = that->m_access;
@@ -1434,7 +1434,7 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
         auto aset = DexAnnotationSet::get_annotation_set(idx, off);
         if (aset != nullptr) {
           method->attach_param_annotation_set(j, std::move(aset));
-          redex_assert(method->get_param_anno());
+          redex_assert(CONSTP(method)->get_param_anno());
         }
       }
     }

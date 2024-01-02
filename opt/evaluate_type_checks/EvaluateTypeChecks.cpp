@@ -151,6 +151,7 @@ void analyze_true_instance_ofs(
             return true;
           }
           // Just an integrity check.
+          // NOLINTNEXTLINE(bugprone-assert-side-effect) Can't figure this out.
           redex_assert(*it->second.begin() == mie->insn);
           return false;
         });

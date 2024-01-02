@@ -70,7 +70,7 @@ int main(int argc, char* argv[]) {
                    "Lcom/facebook/redex/equivalence/EquivalenceMain;");
       });
 
-  redex_assert(runner_cls != classes.end());
+  always_assert(runner_cls != classes.end());
 
   EquivalenceTest::generate_all(*runner_cls);
 

@@ -29,7 +29,7 @@ class SourceBlocksTest : public RedexIntegrationTest {
   SourceBlocksTest() {
     // The loading code in integ-test does not insert deobfuscated names.
     walk::methods(*classes, [](auto* m) {
-      redex_assert(m->get_deobfuscated_name_or_null() == nullptr);
+      always_assert(m->get_deobfuscated_name_or_null() == nullptr);
       m->set_deobfuscated_name(show(m));
     });
   }
