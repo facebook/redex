@@ -94,6 +94,7 @@ class IODITest : public ::testing::Test {
                      &method_to_id,
                      &code_debug_lines);
     output.prepare(
+        // NOLINTNEXTLINE(bugprone-string-literal-with-embedded-nul)
         SortMode::DEFAULT, {SortMode::DEFAULT}, dummy_cfg, "dex\n035\0");
     if (mids) {
       for (auto& iter : method_to_id) {
@@ -583,8 +584,8 @@ class IODIEncodingTest : public IODITest {
         if (layered) {
           auto layer = get_iodi_layer(*debug_item);
           if (layer) {
-            pretty_name = IODIMetadata::get_layered_name(
-                pretty_name, *layer, pretty_name);
+            pretty_name = IODIMetadata::get_layered_name(pretty_name, *layer,
+                                                         pretty_name);
           }
         }
         if (is_plain) {
