@@ -104,7 +104,10 @@ commands:
       # It is OK to generically restore boost, even if it is not used.
       - restore_cache:
           keys:
-            - boost-1-71-0-v1
+            - boost-1-71-0-v4
+      - restore_cache:
+          keys:
+            - protobuf3-v2
       - run:
           name: Setup
           command: |
@@ -115,8 +118,12 @@ commands:
           steps:
             - save_cache:
                 paths:
-                  - boost_cache
-                key: boost-1-71-0-v1
+                  - dl_cache/boost_cache
+                key: boost-1-71-0-v4
+            - save_cache:
+                paths:
+                  - dl_cache/protobuf
+                key: protobuf3-v2
 
   # For testing, need additional dependencies not provided by the image.
 
@@ -378,6 +385,7 @@ jobs:
     steps:
       - build_debian:
           use_sdk: false
+          save_boost_cache: true
 
   build-20_04:
     docker:
@@ -385,8 +393,7 @@ jobs:
     # GCC is hungry.
     resource_class: large
     steps:
-      - build_debian:
-          save_boost_cache: true
+      - build_debian
 
   build-22_04:
     docker:
