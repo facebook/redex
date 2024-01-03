@@ -194,7 +194,6 @@ struct Tracer {
     }
   }
 
- private:
   FILE* m_file{nullptr};
   long m_level{0};
   std::array<long, N_TRACE_MODULES> m_traces;

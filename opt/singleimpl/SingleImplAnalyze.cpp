@@ -51,7 +51,6 @@ struct AnalysisImpl : SingleImplAnalysis {
   void filter_list(const std::vector<std::string>& list, bool keep_match);
   void filter_by_annotations(const std::vector<std::string>& blocklist);
 
- private:
   const Scope& scope;
   const ProguardMap& pg_map;
   XStoreRefs xstores;
