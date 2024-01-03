@@ -183,13 +183,17 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg,
     const IRList::iterator& it = pair.second;
     auto insn = it->insn;
     auto cfg_it = b->to_cfg_instruction_iterator(it);
-    DexMethod* method;
+    auto has_no_implementors = [&](auto* method) {
+      if (method == nullptr) {
+        return false;
+      }
+      return !has_implementor(m_method_override_graph, method);
+    };
     if (m_may_allocate_registers && m_method_override_graph &&
         (insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
          insn->opcode() == OPCODE_INVOKE_INTERFACE) &&
-        (method = resolve_method(insn->get_method(), opcode_to_search(insn))) !=
-            nullptr &&
-        !has_implementor(m_method_override_graph, method)) {
+        has_no_implementors(
+            resolve_method(insn->get_method(), opcode_to_search(insn)))) {
       TRACE(DCE, 2, "DEAD NPE: %s", SHOW(insn));
       if (!npe_creator) {
         npe_creator = std::make_unique<npe::NullPointerExceptionCreator>(&cfg);

@@ -2584,9 +2584,11 @@ void ControlFlowGraph::cleanup_deleted_edges(const EdgeSet& edges) {
     if (last_it != pred_block->end()) {
       auto last_insn = last_it->insn;
       auto op = last_insn->opcode();
-      Edge* fwd_edge;
-      if ((opcode::is_a_conditional_branch(op) || opcode::is_switch(op)) &&
-          (fwd_edge = get_singleton_normal_forward_edge(pred_block))) {
+      if (!opcode::is_a_conditional_branch(op) && !opcode::is_switch(op)) {
+        continue;
+      }
+      auto* fwd_edge = get_singleton_normal_forward_edge(pred_block);
+      if (fwd_edge != nullptr) {
         m_removed_insns.push_back(last_insn);
         pred_block->m_entries.erase_and_dispose(last_it);
         fwd_edge->set_type(EDGE_GOTO);

@@ -7,6 +7,7 @@
 
 #include "ReflectionAnalysis.h"
 
+#include <functional>
 #include <iomanip>
 #include <ostream>
 #include <unordered_map>
@@ -419,6 +420,20 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
         m_summary_query_fn(summary_query_fn),
         m_cache(cache) {}
 
+  static std::optional<std::reference_wrapper<const AbstractObjectDomain>>
+  maybe_get_value_type_parameter(CallingContext* context,
+                                 param_index_t param_position) {
+    if (context == nullptr) {
+      return std::nullopt;
+    }
+    // This is a regular parameter of the method.
+    auto& param_abstract_obj = context->get(param_position);
+    if (param_abstract_obj.is_value()) {
+      return param_abstract_obj;
+    }
+    return std::nullopt;
+  }
+
   void run(CallingContext* context) {
     // We need to compute the initial environment by assigning the parameter
     // registers their correct abstract object derived from the method's
@@ -446,16 +461,13 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
           // `this`.
           update_non_string_input(&init_state, insn, m_dex_method->get_class());
         } else {
-          // This is a regular parameter of the method.
-          AbstractObjectDomain param_abstract_obj;
-
           DexType* type = *sig_it;
           always_assert(sig_it++ != signature->end());
-          if (context && (param_abstract_obj = context->get(param_position),
-                          param_abstract_obj.is_value())) {
+          auto maybe_value_param =
+              maybe_get_value_type_parameter(context, param_position);
+          if (maybe_value_param) {
             // Parameter domain is provided with the calling context.
-            init_state.set_abstract_obj(insn->dest(),
-                                        context->get(param_position));
+            init_state.set_abstract_obj(insn->dest(), maybe_value_param->get());
           } else {
             update_non_string_input(&init_state, insn, type);
           }

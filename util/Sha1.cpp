@@ -232,8 +232,8 @@ void sha1_update(Sha1Context* context,
   index = (unsigned int)((context->count[0] >> 3) & 0x3F);
 
   /* Update number of bits */
-  if ((context->count[0] += ((unsigned int)inputLen << 3)) <
-      ((unsigned int)inputLen << 3)) {
+  context->count[0] += ((unsigned int)inputLen << 3);
+  if (context->count[0] < ((unsigned int)inputLen << 3)) {
     context->count[1]++;
   }
   context->count[1] += ((unsigned int)inputLen >> 29);
