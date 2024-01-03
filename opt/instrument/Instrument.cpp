@@ -966,8 +966,8 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
   }
 
   // Get the analysis class.
-  DexType* analysis_class_type = g_redex->get_type(
-      DexString::get_string(m_options.analysis_class_name.c_str()));
+  DexType* analysis_class_type =
+      g_redex->get_type(DexString::get_string(m_options.analysis_class_name));
   if (analysis_class_type == nullptr) {
     std::cerr << "[InstrumentPass] error: cannot find analysis class: "
               << m_options.analysis_class_name << std::endl;

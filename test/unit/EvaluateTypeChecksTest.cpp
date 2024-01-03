@@ -22,7 +22,7 @@ class EvaluateTypeChecksTest : public RedexTest {
  public:
   void SetUp() override {
     auto simple_class = [](const std::string& name, const DexType* super_type) {
-      ClassCreator cc(DexType::make_type(name.c_str()));
+      ClassCreator cc(DexType::make_type(name));
       cc.set_super(const_cast<DexType*>(super_type));
       return cc.create()->get_type();
     };

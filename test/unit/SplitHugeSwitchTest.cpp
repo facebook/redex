@@ -33,7 +33,7 @@ class SplitHugeSwitchTest : public RedexTest {
     // Create a totally new class.
     size_t c = s_counter.fetch_add(1);
     std::string name = std::string("LFoo") + std::to_string(c) + ";";
-    ClassCreator cc{DexType::make_type(name.c_str())};
+    ClassCreator cc{DexType::make_type(name)};
     cc.set_super(type::java_lang_Object());
 
     auto m =

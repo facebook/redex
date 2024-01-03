@@ -62,8 +62,8 @@ void test_object_inliner(
     const std::vector<uint16_t>& srcs,
     const std::string& expected_str,
     boost::optional<const std::string> callee_ctor_str = boost::none) {
-  DexType* callee_type = DexType::make_type(callee_class.c_str());
-  DexType* caller_type = DexType::make_type(caller_class.c_str());
+  DexType* callee_type = DexType::make_type(callee_class);
+  DexType* caller_type = DexType::make_type(caller_class);
 
   std::vector<DexFieldRef*> field_refs = {};
   for (const auto& field_data : fields) {

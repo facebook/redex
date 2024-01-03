@@ -51,7 +51,7 @@ class InitClassLoweringPassTest : public RedexTest {
     add_sfield(c_type, type::_double());
 
     std::string class_name = "LTest;";
-    ClassCreator creator(DexType::make_type(class_name.c_str()));
+    ClassCreator creator(DexType::make_type(class_name));
     creator.set_super(type::java_lang_Object());
     auto signature = class_name + ".foo:()V";
     auto method = DexMethod::make_method(signature)->make_concrete(

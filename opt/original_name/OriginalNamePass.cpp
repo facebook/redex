@@ -108,7 +108,7 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
         auto simple_name = (lastDot != std::string::npos)
                                ? external_name.substr(lastDot + 1)
                                : external_name;
-        auto simple_name_s = DexString::make_string(simple_name.c_str());
+        auto simple_name_s = DexString::make_string(simple_name);
         always_assert_log(
             DexField::get_field(cls_type, field_name, string_type) == nullptr,
             "field %s already exists!",

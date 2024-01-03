@@ -50,7 +50,7 @@ void optimize(const uv::FixpointIterator& fp_iter, cfg::ControlFlowGraph& cfg) {
 // will call resolve_method() during its analysis. resolve_method() needs the
 // method to reside in a class hierarchy in order to work correctly.
 DexClass* create_simple_class(const std::string& name) {
-  ClassCreator cc(DexType::make_type(name.c_str()));
+  ClassCreator cc(DexType::make_type(name));
   cc.set_super(type::java_lang_Object());
   auto* ctor = DexMethod::make_method(name + ".<init>:()V")
                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
