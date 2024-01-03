@@ -683,6 +683,7 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
       }
       return *reg;
     }
+    // NOLINTNEXTLINE(google-explicit-constructor)
     operator bool() const { return reg.has_value(); }
   };
 
