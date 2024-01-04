@@ -15,8 +15,15 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 # Temporary directory for toolchain sources. Build artifacts will be
 # installed to /usr/local.
-TMP=$(mktemp -d 2>/dev/null)
-trap 'rm -r $TMP' EXIT
+# Under CircleCI ignore this for caching, we need a stable path.
+# Note: It seems CIRCLECI is not set, somehow, so use HOME.
+if [ "$HOME" = "/home/circleci" ] ; then
+  echo "Operating under CircleCI, using TMP=."
+  TMP="."
+else
+  TMP=$(mktemp -d 2>/dev/null)
+  trap 'rm -r $TMP' EXIT
+fi
 
 if [ "$1" = "32" ] ; then
   BITNESS="32"
@@ -44,17 +51,6 @@ BOOST_DEB_UBUNTU_PKGS="libboost-filesystem-dev$BITNESS_SUFFIX
 PROTOBUF_DEB_UBUNTU_PKGS="libprotobuf-dev$BITNESS_SUFFIX
                           protobuf-compiler"
 
-function install_python36_from_source {
-    pushd "$TMP"
-    wget https://www.python.org/ftp/python/3.6.10/Python-3.6.10.tgz
-    tar -xvf Python-3.6.10.tgz
-    pushd Python-3.6.10
-
-    # Always compile Python as host-preferred.
-    ./configure
-    make V=0 && make install V=0
-}
-
 function install_boost_from_source {
     pushd "$TMP"
     "$ROOT"/get_boost.sh
@@ -62,8 +58,14 @@ function install_boost_from_source {
 
 function install_protobuf3_from_source {
     pushd "$TMP"
-    wget https://github.com/protocolbuffers/protobuf/releases/download/v3.17.3/protobuf-cpp-3.17.3.tar.gz
-    tar -xvf protobuf-cpp-3.17.3.tar.gz --no-same-owner
+    mkdir -p dl_cache/protobuf
+    if [ ! -f dl_cache/protobuf/protobuf-cpp-3.17.3.tar.gz ] ; then
+      wget https://github.com/protocolbuffers/protobuf/releases/download/v3.17.3/protobuf-cpp-3.17.3.tar.gz -O dl_cache/protobuf/protobuf-cpp-3.17.3.tar.gz
+    fi
+
+    mkdir -p toolchain_install/protobuf
+    pushd toolchain_install/protobuf
+    tar -xvf ../../dl_cache/protobuf/protobuf-cpp-3.17.3.tar.gz --no-same-owner
 
     pushd protobuf-3.17.3
     ./configure $BITNESS_CONFIGURE
