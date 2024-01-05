@@ -96,6 +96,7 @@ class AnnoKill {
   void count_annotation(const DexAnnotation* da, AnnoKillStats& stats) const;
 
   Scope& m_scope;
+  std::unordered_set<DexClass*> m_scope_set;
   const bool m_only_force_kill;
   const bool m_kill_bad_signatures;
   AnnoSet m_kill;
@@ -123,6 +124,7 @@ class AnnoKillPass : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
     };
   }
@@ -138,6 +140,8 @@ class AnnoKillPass : public Pass {
     bind("annotated_keep_annos", {}, m_annotated_keep_annos);
     bind("only_force_kill", false, m_only_force_kill);
   }
+
+  bool is_cfg_legacy() override { return true; }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

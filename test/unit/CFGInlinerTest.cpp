@@ -30,11 +30,11 @@ void test_inliner(const std::string& caller_str,
                   DexType* needs_receiver_cast = nullptr,
                   DexType* needs_init_class = nullptr) {
   auto caller_code = assembler::ircode_from_string(caller_str);
-  caller_code->build_cfg(true);
+  caller_code->build_cfg();
   auto& caller = caller_code->cfg();
 
   auto callee_code = assembler::ircode_from_string(callee_str);
-  callee_code->build_cfg(true);
+  callee_code->build_cfg();
   auto& callee = callee_code->cfg();
 
   cfg::CFGInliner::inline_cfg(&caller,

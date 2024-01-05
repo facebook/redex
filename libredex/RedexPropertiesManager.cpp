@@ -43,7 +43,8 @@ CollectionT filter_out_disabled_properties(const CollectionT& c,
 
 const std::unordered_set<PropertyName>& Manager::get_default_initial() {
   using namespace names;
-  static const std::unordered_set<PropertyName> default_initial_properties{};
+  static const std::unordered_set<PropertyName> default_initial_properties{
+      UltralightCodePatterns};
   return default_initial_properties;
 }
 
@@ -54,7 +55,7 @@ std::unordered_set<PropertyName> Manager::get_initial() const {
 const std::unordered_set<PropertyName>& Manager::get_default_final() {
   using namespace names;
   static const std::unordered_set<PropertyName> default_final_properties{
-      NoInitClassInstructions, DexLimitsObeyed};
+      NoInitClassInstructions, NoUnreachableInstructions, DexLimitsObeyed};
   return default_final_properties;
 }
 
@@ -68,15 +69,19 @@ std::unordered_set<PropertyName> Manager::get_final() const {
 std::vector<PropertyName> Manager::get_all_properties() {
   using namespace names;
   return {
-      NoInitClassInstructions, DexLimitsObeyed,         NeedsEverythingPublic,
-      HasSourceBlocks,         NoSpuriousGetClassCalls, RenameClass,
+      NoInitClassInstructions,  NoUnreachableInstructions,
+      DexLimitsObeyed,          NeedsEverythingPublic,
+      NeedsInjectionIdLowering, HasSourceBlocks,
+      NoSpuriousGetClassCalls,  RenameClass,
+      UltralightCodePatterns,
   };
 }
 
 // TODO: This should really be with the RedexProperties definitions.
 bool Manager::is_negative(const PropertyName& property) {
   using namespace names;
-  return property == NeedsEverythingPublic;
+  return property == NeedsEverythingPublic ||
+         property == NeedsInjectionIdLowering;
 }
 
 std::unordered_set<PropertyName> Manager::get_required(

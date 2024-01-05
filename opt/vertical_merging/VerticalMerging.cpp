@@ -8,6 +8,7 @@
 #include "VerticalMerging.h"
 
 #include "ClassHierarchy.h"
+#include "ControlFlow.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -15,6 +16,7 @@
 #include "IROpcode.h"
 #include "PassManager.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Trace.h"
 #include "TypeReference.h"
 #include "Walkers.h"
@@ -139,11 +141,13 @@ void get_call_to_super(
     DexClass* parent_mergeable,
     std::unordered_map<DexMethodRef*, std::vector<IRInstruction*>>*
         callee_to_insns,
-    std::unordered_map<DexMethod*, std::vector<IRCode*>>* init_callers) {
+    std::unordered_map<DexMethod*, std::vector<cfg::ControlFlowGraph*>>*
+        init_callers) {
   if (!method->get_code()) {
     return;
   }
-  for (auto& mie : InstructionIterable(method->get_code())) {
+  auto& cfg = method->get_code()->cfg();
+  for (auto& mie : cfg::InstructionIterable(cfg)) {
     auto insn = mie.insn;
     if (!insn->has_method()) {
       continue;
@@ -153,7 +157,7 @@ void get_call_to_super(
       if (method::is_init(insn_method)) {
         auto insn_method_def = insn_method->as_def();
         redex_assert(insn_method_def);
-        (*init_callers)[insn_method_def].push_back(method->get_code());
+        (*init_callers)[insn_method_def].push_back(&cfg);
         TRACE(VMERGE, 5, "Changing init call %s", SHOW(insn));
       } else if (opcode::is_invoke_super(insn->opcode())) {
         (*callee_to_insns)[insn_method].push_back(insn);
@@ -164,7 +168,7 @@ void get_call_to_super(
 }
 
 using SuperCall = std::pair<DexMethodRef*, std::vector<IRInstruction*>>;
-using InitCall = std::pair<DexMethod*, std::vector<IRCode*>>;
+using InitCall = std::pair<DexMethod*, std::vector<cfg::ControlFlowGraph*>>;
 
 /**
  * Relocate callee methods in IRInstruction from mergeable class to merger
@@ -215,7 +219,8 @@ void handle_invoke_super(
  * call to ctors and modify IRinstruction accordingly.
  */
 void handle_invoke_init(
-    const std::unordered_map<DexMethod*, std::vector<IRCode*>>& init_callers,
+    const std::unordered_map<DexMethod*, std::vector<cfg::ControlFlowGraph*>>&
+        init_callers,
     DexClass* merger,
     DexClass* mergeable) {
   std::vector<InitCall> initcalls(init_callers.begin(), init_callers.end());
@@ -231,10 +236,9 @@ void handle_invoke_init(
     size_t num_add_args = new_proto->get_args()->size() - num_orig_args;
     size_t num_orig_src = num_orig_args + 1;
     callee->add_load_params(num_add_args);
-    for (auto code : callee_to_insn.second) {
-      auto ii = InstructionIterable(code);
-      auto end = ii.end();
-      for (auto it = ii.begin(); it != end; ++it) {
+    for (auto* cfg : callee_to_insn.second) {
+      auto ii = cfg::InstructionIterable(*cfg);
+      for (auto it = ii.begin(); it != ii.end(); ++it) {
         auto* insn = it->insn;
         if (insn->opcode() != OPCODE_INVOKE_DIRECT) {
           continue;
@@ -245,11 +249,11 @@ void handle_invoke_init(
           size_t current_add = 0;
           insn->set_srcs_size(num_add_args + num_orig_src);
           while (current_add < num_add_args) {
-            auto temp = code->allocate_temp();
+            auto temp = cfg->allocate_temp();
             IRInstruction* new_insn = new IRInstruction(OPCODE_CONST);
             new_insn->set_literal(0);
             new_insn->set_dest(temp);
-            code->insert_before(it.unwrap(), new_insn);
+            cfg->insert_before(it, new_insn);
             insn->set_src(num_orig_src + current_add, temp);
             ++current_add;
           }
@@ -758,7 +762,8 @@ void VerticalMergingPass::change_super_calls(
   auto process_subclass_methods = [&](DexClass* child, DexClass* parent) {
     std::unordered_map<DexMethodRef*, std::vector<IRInstruction*>>
         callee_to_insns;
-    std::unordered_map<DexMethod*, std::vector<IRCode*>> init_callers;
+    std::unordered_map<DexMethod*, std::vector<cfg::ControlFlowGraph*>>
+        init_callers;
     for (DexMethod* method : child->get_dmethods()) {
       get_call_to_super(method, parent, &callee_to_insns, &init_callers);
     }

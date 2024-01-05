@@ -25,7 +25,7 @@ void test(const std::string& code_str,
   auto code = assembler::ircode_from_string(code_str);
   auto expected = assembler::ircode_from_string(expected_str);
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   ReduceArrayLiterals ral(code->cfg(), max_filled_elements, min_sdk, arch);
   ral.patch();
   code->clear_cfg();

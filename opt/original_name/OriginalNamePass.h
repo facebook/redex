@@ -21,6 +21,7 @@ class OriginalNamePass : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves},
         {RenameClass, Preserves},
     };
   }

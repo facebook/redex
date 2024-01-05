@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "DexClass.h"
+#include "DexStoreUtil.h"
 #include "InitClassesWithSideEffects.h"
 #include "Pass.h"
 #include "Util.h"
@@ -63,8 +64,36 @@ class DexStructure {
 
   bool empty() const { return m_classes_iterators.empty(); }
 
-  DexClasses get_classes() const {
-    return DexClasses(m_classes.begin(), m_classes.end());
+  DexClasses get_classes(bool perf_based = false) const {
+    DexClasses dex = DexClasses(m_classes.begin(), m_classes.end());
+    if (!perf_based) {
+      return dex;
+    }
+    // Sort classes to make sure all perf_sensitive classes are before non-perf
+    // but after canary if there is any.
+    size_t perf_idx = 0;
+    size_t idx = 0;
+    while (true) {
+      while (idx < dex.size() &&
+             (dex[idx]->is_perf_sensitive() || is_canary(dex[idx]))) {
+        idx++;
+      }
+      if (idx >= dex.size()) {
+        break;
+      }
+      perf_idx = idx + 1;
+      while (perf_idx < dex.size() && !dex[perf_idx]->is_perf_sensitive()) {
+        perf_idx++;
+      }
+      if (perf_idx >= dex.size()) {
+        break;
+      }
+      DexClass* tmp = dex[perf_idx];
+      dex[perf_idx] = dex[idx];
+      dex[idx] = tmp;
+    }
+
+    return dex;
   }
 
   /**
@@ -141,9 +170,28 @@ also reject some legal cases.
 
   size_t get_num_classes() const { return m_classes.size(); }
 
+  size_t get_num_trefs() const { return m_trefs.size(); }
+  const std::unordered_map<DexType*, size_t>& get_trefs() const {
+    return m_trefs;
+  }
+
   size_t get_num_mrefs() const { return m_mrefs.size(); }
+  const std::unordered_map<DexMethodRef*, size_t>& get_mrefs() const {
+    return m_mrefs;
+  }
 
   size_t get_num_frefs() const { return m_frefs.size(); }
+  const std::unordered_map<DexFieldRef*, size_t>& get_frefs() const {
+    return m_frefs;
+  }
+
+  const TypeRefs& get_pending_init_class_fields() const {
+    return m_pending_init_class_fields;
+  }
+
+  const TypeRefs& get_pending_init_class_types() const {
+    return m_pending_init_class_types;
+  }
 
   const OverflowStats& get_overflow_stats() const { return m_overflow_stats; }
 

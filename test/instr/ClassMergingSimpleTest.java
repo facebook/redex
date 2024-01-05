@@ -149,14 +149,40 @@ class D extends Base {
   }
 }
 
-abstract class SecondBase {}
+abstract class SecondBase {
+  abstract String foo();
+}
 class SecondA extends SecondBase {
   int getA() { return 1; }
+  String foo() { return "A"; }
 }
 class SecondB extends SecondBase {
   int getB() { return 2; }
+  String foo() { return "B"; }
 }
 class SecondC extends SecondBase {
+  int getC() { return 3; }
+  String foo() { return "C"; }
+}
+
+abstract class ThirdBase {
+  abstract String foo();
+}
+abstract class ThirdMid extends ThirdBase {
+  @Override
+  String foo() { return "mid"; };
+}
+class ThirdA extends ThirdMid {
+  int getA() { return 1; }
+  @Override
+  String foo() { return "A"; }
+}
+class ThirdB extends ThirdMid {
+  int getB() { return 2; }
+  @Override
+  String foo() { return "B"; }
+}
+class ThirdC extends ThirdMid {
   int getC() { return 3; }
 }
 
@@ -360,5 +386,25 @@ public class ClassMergingSimpleTest {
     assertThat(a.getA()).isEqualTo(1);
     assertThat(b.getB()).isEqualTo(2);
     assertThat(c.getC()).isEqualTo(3);
+  }
+
+  @Test
+  public void testSecondRootAbstractOverridden() {
+    SecondA a = new SecondA();
+    SecondB b = new SecondB();
+    SecondC c = new SecondC();
+    assertThat(a.foo()).isEqualTo("A");
+    assertThat(b.foo()).isEqualTo("B");
+    assertThat(c.foo()).isEqualTo("C");
+  }
+
+  @Test
+  public void testThirdRootAbstractPartialOverridden() {
+    ThirdA a = new ThirdA();
+    ThirdB b = new ThirdB();
+    ThirdC c = new ThirdC();
+    assertThat(a.foo()).isEqualTo("A");
+    assertThat(b.foo()).isEqualTo("B");
+    assertThat(c.foo()).isEqualTo("mid");
   }
 }

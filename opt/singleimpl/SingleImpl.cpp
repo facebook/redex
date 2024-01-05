@@ -150,8 +150,8 @@ void SingleImplPass::run_pass(DexStoresVector& stores,
         SingleImplAnalysis::analyze(scope, stores, single_impl, intfs, pg_map,
                                     m_pass_config);
 
-    auto optimized_stats =
-        optimize(std::move(single_impls), ch, scope, m_pass_config, android_sdk);
+    auto optimized_stats = optimize(std::move(single_impls), ch, scope,
+                                    m_pass_config, android_sdk);
     stats += optimized_stats;
     if (optimized_stats.removed_interfaces == 0 || ++max_steps >= MAX_PASSES) {
       break;

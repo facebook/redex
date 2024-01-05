@@ -33,6 +33,7 @@ IRInstruction::IRInstruction(const IRInstruction& other)
       m_num_inline_srcs(other.m_num_inline_srcs),
       m_dest(other.m_dest),
       m_literal(other.m_literal) {
+  always_assert(!other.has_data());
   if (m_num_inline_srcs <= MAX_NUM_INLINE_SRCS) {
     for (auto i = 0; i < m_num_inline_srcs; ++i) {
       m_inline_srcs[i] = other.m_inline_srcs[i];
@@ -46,6 +47,16 @@ IRInstruction::~IRInstruction() {
   if (m_num_inline_srcs > MAX_NUM_INLINE_SRCS) {
     delete m_srcs;
   }
+  if (has_data()) {
+    delete m_data;
+  }
+}
+
+IRInstruction* IRInstruction::set_data(std::unique_ptr<DexOpcodeData> data) {
+  always_assert(has_data());
+  delete m_data;
+  m_data = data.release();
+  return this;
 }
 
 // Structural equality of opcodes except branches offsets are ignored
@@ -151,7 +162,7 @@ IRInstruction* IRInstruction::set_srcs_size(size_t count) {
 uint16_t IRInstruction::size() const {
   auto op = m_opcode;
   if (opcode::is_an_internal(op)) {
-    return opcode::is_injection_id(op) ? 2 : 0;
+    return opcode::is_injection_id(op) ? 2 : opcode::is_unreachable(op) ? 1 : 0;
   }
   static int args[] = {
       0, /* FMT_f00x   */

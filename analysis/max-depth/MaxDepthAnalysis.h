@@ -26,6 +26,7 @@ class MaxDepthAnalysisPass : public Pass {
   }
 
   void bind_config() override { bind("max_iteration", 20U, m_max_iteration); }
+  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   using Result = std::unordered_map<const DexMethod*, int>;

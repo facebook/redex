@@ -6,6 +6,7 @@
  */
 
 #pragma once
+#include <functional>
 #include <limits>
 
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
@@ -15,6 +16,7 @@
 #include "ControlFlow.h"
 #include "DexUtil.h"
 #include "EnumConfig.h"
+#include "OptimizeEnumsUnsafeType.h"
 
 namespace optimize_enums {
 
@@ -55,5 +57,8 @@ class EnumFixpointIterator final
   const DexType* OBJECT_TYPE = type::java_lang_Object();
 };
 
-void reject_unsafe_enums(const std::vector<DexClass*>& classes, Config* config);
+void reject_unsafe_enums(
+    const std::vector<DexClass*>& classes,
+    Config* config,
+    const std::function<void(const DexType*, UnsafeType u)>& reject_fn);
 } // namespace optimize_enums

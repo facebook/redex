@@ -339,6 +339,8 @@ class Block final {
   // similar to sum_opcode_sizes, but takes into account non-opcode payloads
   uint32_t estimate_code_units() const;
 
+  bool is_unreachable() const;
+
   // return an iterator to the last MFLOW_OPCODE, or end() if there are none
   IRList::iterator get_last_insn();
   IRList::const_iterator get_last_insn() const;

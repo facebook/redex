@@ -19,7 +19,7 @@ namespace redex_properties {
 
 #define WEAK_HAS_SOURCE_BLOCKS_CHECKER
 void HasSourceBlocksChecker::run_checker(DexStoresVector& stores,
-                                         ConfigFiles& config,
+                                         ConfigFiles& /*config*/,
                                          PassManager&,
                                          bool established) {
   if (!established) {

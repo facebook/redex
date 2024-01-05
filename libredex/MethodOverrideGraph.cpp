@@ -49,6 +49,9 @@ using ClassSignatureMaps = ConcurrentMap<const DexClass*, ClassSignatureMap>;
 
 using InterfaceSignatureMaps = ConcurrentMap<const DexClass*, SignatureMap>;
 
+using UnifiedInterfacesSignatureMaps =
+    ConcurrentMap<const DexTypeList*, SignatureMap>;
+
 void update_signature_map(const DexMethod* method,
                           MethodSet value,
                           SignatureMap* map) {
@@ -110,23 +113,18 @@ class GraphBuilder {
     unify_signature_maps(unify_super_interface_signatures(cls),
                          &class_signatures.unimplemented);
 
-    // Mark all overriding methods as reachable via their parent method ref.
+    auto inherited_implemented = class_signatures.implemented;
     for (auto* method : cls->get_vmethods()) {
-      const auto& overridden_set =
-          class_signatures.implemented.at(method->get_name())
-              .at(method->get_proto());
-      for (auto overridden : overridden_set) {
-        m_graph->add_edge(overridden, method);
-      }
       // Replace the overridden methods by the overriding ones.
-      update_signature_map(
-          method, MethodSet{method}, &class_signatures.implemented);
+      update_signature_map(method, MethodSet{method},
+                           &class_signatures.implemented);
     }
 
-    // Mark all implementation methods as reachable via their interface methods.
+    // Find all implementation methods reachable via their interface methods.
     // Note that an interface method can be implemented by a method inherited
     // from a superclass.
-    std::vector<const DexMethod*> new_implementations;
+    std::vector<std::pair<MethodSet, const DexMethod*>>
+        unimplemented_implementations;
     for (const auto& protos_pair : class_signatures.unimplemented) {
       auto name = protos_pair.first;
       const auto& named_implemented_protos =
@@ -142,20 +140,43 @@ class GraphBuilder {
         }
         always_assert(implemented_set.size() == 1);
         auto implementation = *implemented_set.begin();
-        for (auto unimplemented : ms_pair.second) {
-          m_graph->add_edge(unimplemented, implementation);
-        }
-        new_implementations.push_back(implementation);
+        unimplemented_implementations.emplace_back(ms_pair.second,
+                                                   implementation);
       }
     }
     // Remove the newly implemented methods from the set of unimplemented
     // interface methods.
-    for (auto implementation : new_implementations) {
-      update_signature_map(
-          implementation, MethodSet{}, &class_signatures.unimplemented);
+    for (auto&& [_, implementation] : unimplemented_implementations) {
+      update_signature_map(implementation, MethodSet{},
+                           &class_signatures.unimplemented);
     }
 
     if (m_class_signature_maps.emplace(cls, class_signatures)) {
+      // Mark all overriding methods as reachable via their parent method ref.
+      for (auto* method : cls->get_vmethods()) {
+        const auto& overridden_set =
+            inherited_implemented.at(method->get_name())
+                .at(method->get_proto());
+        for (auto overridden : overridden_set) {
+          m_graph->add_edge(overridden, /* overridden_is_interface */ false,
+                            method, /* overriding_is_interface */ false);
+        }
+      }
+      // Mark all implementation methods as reachable via their interface
+      // methods.
+      for (auto&& [unimplementeds, implementation] :
+           unimplemented_implementations) {
+        for (auto unimplemented : unimplementeds) {
+          if (implementation->get_class() == cls->get_type() ||
+              m_graph->add_other_implementation_class(unimplemented,
+                                                      implementation, cls)) {
+            m_graph->add_edge(unimplemented,
+                              /* overridden_is_interface */ true,
+                              implementation,
+                              /* overriding_is_interface */ false);
+          }
+        }
+      }
       return class_signatures;
     }
     return m_class_signature_maps.at(cls);
@@ -168,69 +189,96 @@ class GraphBuilder {
     }
 
     SignatureMap interface_signatures = unify_super_interface_signatures(cls);
+    auto inherited_interface_signatures = interface_signatures;
     for (auto* method : cls->get_vmethods()) {
-      const auto& overridden_set =
-          interface_signatures.at(method->get_name()).at(method->get_proto());
-      // These edges connect a method in a superinterface to the overriding
-      // methods in a subinterface. A reference to the superinterface's method
-      // will not resolve to the subinterface's method at runtime, but these
-      // edges are critical because we do not add an edge between overridden
-      // superinterface methods and their implementors. Concretely, given the
-      // following code:
-      //
-      //   interface IA { void m(); }
-      //   interface IB extends IA { void m(); }
-      //   class C implements IB { void m(); }
-      //
-      // Our graph will contain an edge between IA::m and IB::m, and an edge
-      // between IB::m and C::m. It will *not* contain an edge between IA::m and
-      // C::m, even though C::m does implement IA::m as well. Therefore to get
-      // all the implementors of IA::m, we need to traverse the edges added here
-      // to find them. This design reduces the number of edges necessary for
-      // building the graph.
-      for (auto overridden : overridden_set) {
-        m_graph->add_edge(overridden, method);
-      }
       update_signature_map(method, MethodSet{method}, &interface_signatures);
     }
 
     if (m_interface_signature_maps.emplace(cls, interface_signatures)) {
+      for (auto* method : cls->get_vmethods()) {
+        const auto& overridden_set =
+            inherited_interface_signatures.at(method->get_name())
+                .at(method->get_proto());
+        // These edges connect a method in a superinterface to the overriding
+        // methods in a subinterface. A reference to the superinterface's method
+        // will not resolve to the subinterface's method at runtime, but these
+        // edges are critical because we do not add an edge between overridden
+        // superinterface methods and their implementors. Concretely, given the
+        // following code:
+        //
+        //   interface IA { void m(); }
+        //   interface IB extends IA { void m(); }
+        //   class C implements IB { void m(); }
+        //
+        // Our graph will contain an edge between IA::m and IB::m, and an edge
+        // between IB::m and C::m. It will *not* contain an edge between IA::m
+        // and C::m, even though C::m does implement IA::m as well. Therefore to
+        // get all the implementors of IA::m, we need to traverse the edges
+        // added here to find them. This design reduces the number of edges
+        // necessary for building the graph.
+        for (auto overridden : overridden_set) {
+          m_graph->add_edge(overridden, /* overridden_is_interface */ true,
+                            method, /* overriding_is_interface */ true);
+        }
+      }
+
       return interface_signatures;
     }
     return m_interface_signature_maps.at(cls);
   }
 
   SignatureMap unify_super_interface_signatures(const DexClass* cls) {
+    auto* type_list = cls->get_interfaces();
+    if (m_unified_interfaces_signature_maps.count(type_list)) {
+      return m_unified_interfaces_signature_maps.at(type_list);
+    }
+
     SignatureMap super_interface_signatures;
-    for (auto* intf : *cls->get_interfaces()) {
+    for (auto* intf : *type_list) {
       auto intf_cls = type_class(intf);
       if (intf_cls != nullptr) {
         unify_signature_maps(analyze_interface(intf_cls),
                              &super_interface_signatures);
       }
     }
-    return super_interface_signatures;
+
+    if (m_unified_interfaces_signature_maps.emplace(
+            type_list, super_interface_signatures)) {
+      return super_interface_signatures;
+    }
+    return m_unified_interfaces_signature_maps.at(type_list);
   }
 
   std::unique_ptr<Graph> m_graph;
   ClassSignatureMaps m_class_signature_maps;
   InterfaceSignatureMaps m_interface_signature_maps;
+  UnifiedInterfacesSignatureMaps m_unified_interfaces_signature_maps;
   const Scope& m_scope;
 };
-
-bool may_be_interface_method(const DexMethod* method) {
-  if (method == nullptr) {
-    return false;
-  }
-  auto method_cls = type_class(method->get_class());
-  return method_cls == nullptr || is_interface(method_cls);
-}
 
 } // namespace
 
 namespace method_override_graph {
 
 Node Graph::empty_node;
+
+bool Node::overrides(const DexMethod* current, const DexType* base_type) const {
+  // Trivial case.
+  if (type::check_cast(current->get_class(), base_type)) {
+    return true;
+  }
+  // We also check if the current method was fulfilling an implementation
+  // demand for any class that can be cast to the given base_type.
+  if (!other_interface_implementations) {
+    return false;
+  }
+  for (auto* cls : other_interface_implementations->classes) {
+    if (type::check_cast(cls->get_type(), base_type)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 const Node& Graph::get_node(const DexMethod* method) const {
   auto it = m_nodes.find(method);
@@ -241,14 +289,51 @@ const Node& Graph::get_node(const DexMethod* method) const {
 }
 
 void Graph::add_edge(const DexMethod* overridden, const DexMethod* overriding) {
-  m_nodes.update(overridden,
-                 [&](const DexMethod*, Node& node, bool /* exists */) {
-                   node.children.insert(overriding);
-                 });
-  m_nodes.update(overriding,
-                 [&](const DexMethod*, Node& node, bool /* exists */) {
-                   node.parents.insert(overridden);
-                 });
+  // The type-class lookup should only ever fail during testing if the
+  // environment isn't fully build up.
+  auto may_be_interface = [](DexType* t) {
+    auto cls = type_class(t);
+    return !cls || is_interface(cls);
+  };
+  add_edge(overridden, may_be_interface(overridden->get_class()), overriding,
+           may_be_interface(overridden->get_class()));
+}
+
+void Graph::add_edge(const DexMethod* overridden,
+                     bool overridden_is_interface,
+                     const DexMethod* overriding,
+                     bool overriding_is_interface) {
+  m_nodes.update(overridden, [&](const DexMethod*, Node& node, bool exists) {
+    node.children.push_back(overriding);
+    if (exists) {
+      always_assert(node.is_interface == overridden_is_interface);
+    } else {
+      node.is_interface = overridden_is_interface;
+    }
+  });
+  m_nodes.update(overriding, [&](const DexMethod*, Node& node, bool exists) {
+    node.parents.push_back(overridden);
+    if (exists) {
+      always_assert(node.is_interface == overriding_is_interface);
+    } else {
+      node.is_interface = overriding_is_interface;
+    }
+  });
+}
+
+bool Graph::add_other_implementation_class(const DexMethod* overridden,
+                                           const DexMethod* overriding,
+                                           const DexClass* cls) {
+  bool parent_inserted = false;
+  m_nodes.update(overriding, [&](const DexMethod*, Node& node, bool) {
+    auto& oii = node.other_interface_implementations;
+    if (!oii) {
+      oii = std::make_unique<OtherInterfaceImplementations>();
+    }
+    oii->classes.push_back(cls);
+    parent_inserted = oii->parents.insert(overridden).second;
+  });
+  return parent_inserted;
 }
 
 void Graph::dump(std::ostream& os) const {
@@ -276,37 +361,46 @@ std::unique_ptr<const Graph> build_graph(const Scope& scope) {
 
 std::vector<const DexMethod*> get_overriding_methods(const Graph& graph,
                                                      const DexMethod* method,
-                                                     bool include_interfaces) {
+                                                     bool include_interfaces,
+                                                     const DexType* base_type) {
   std::vector<const DexMethod*> overrides;
-  if (may_be_interface_method(method)) {
-    std::unordered_set<const DexMethod*> visited;
-    std::function<bool(const DexMethod*)> visit =
-        [&](const DexMethod* current) {
-          if (!visited.emplace(current).second) {
-            return false;
-          }
-          const Node& node = graph.get_node(current);
-          for (const auto* child : node.children) {
-            if (visit(child) &&
-                (include_interfaces ||
-                 !is_interface(type_class(child->get_class())))) {
-              overrides.push_back(child);
-            }
-          }
-          return true;
-        };
-    visit(method);
-  } else {
-    // optimized code path
+  const Node& root = graph.get_node(method);
+  if (base_type && method->get_class() == base_type) {
+    base_type = nullptr;
+  }
+  if (root.is_interface) {
+    std::unordered_set<const DexMethod*> visited{method};
     std::function<void(const DexMethod*)> visit =
         [&](const DexMethod* current) {
+          if (!visited.emplace(current).second) {
+            return;
+          }
           const Node& node = graph.get_node(current);
           for (const auto* child : node.children) {
             visit(child);
-            overrides.push_back(child);
+          }
+          if ((include_interfaces || !node.is_interface) &&
+              (!base_type || node.overrides(current, base_type))) {
+            overrides.push_back(current);
           }
         };
-    visit(method);
+    for (const auto* child : root.children) {
+      visit(child);
+    }
+    return overrides;
+  }
+  // optimized code path
+  std::function<void(const DexMethod*)> visit = [&](const DexMethod* current) {
+    const Node& node = graph.get_node(current);
+    for (const auto* child : node.children) {
+      visit(child);
+    }
+    if (!base_type || node.overrides(current, base_type)) {
+      overrides.push_back(current);
+    }
+  };
+  for (const auto* child : root.children) {
+    visit(child);
   }
   return overrides;
 }
@@ -315,22 +409,45 @@ std::vector<const DexMethod*> get_overridden_methods(const Graph& graph,
                                                      const DexMethod* method,
                                                      bool include_interfaces) {
   std::vector<const DexMethod*> overridden;
-  std::unordered_set<const DexMethod*> visited;
-  std::function<bool(const DexMethod*)> visit = [&](const DexMethod* current) {
-    if (!visited.emplace(current).second) {
-      return false;
+  const Node& root = graph.get_node(method);
+  if (include_interfaces) {
+    std::unordered_set<const DexMethod*> visited{method};
+    std::function<void(const DexMethod*)> visit =
+        [&](const DexMethod* current) {
+          if (!visited.emplace(current).second) {
+            return;
+          }
+          const Node& node = graph.get_node(current);
+          if (!include_interfaces && node.is_interface) {
+            return;
+          }
+          for (const auto* parent : node.parents) {
+            visit(parent);
+          }
+          overridden.push_back(current);
+        };
+    for (const auto* parent : root.parents) {
+      visit(parent);
     }
+    return overridden;
+  }
+  if (root.is_interface) {
+    return overridden;
+  }
+  // optimized code path
+  std::function<void(const DexMethod*)> visit = [&](const DexMethod* current) {
     const Node& node = graph.get_node(current);
-    for (const auto* parent : node.parents) {
-      if ((include_interfaces ||
-           !is_interface(type_class(parent->get_class()))) &&
-          visit(parent)) {
-        overridden.push_back(parent);
-      }
+    if (!include_interfaces && node.is_interface) {
+      return;
     }
-    return true;
+    for (const auto* parent : node.parents) {
+      visit(parent);
+    }
+    overridden.push_back(current);
   };
-  visit(method);
+  for (const auto* parent : root.parents) {
+    visit(parent);
+  }
   return overridden;
 }
 

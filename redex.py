@@ -43,10 +43,11 @@ from pyredex.utils import (
     get_android_sdk_path,
     get_file_ext,
     make_temp_dir,
-    move_dexen_to_directories,
     omit_sdk_tool_discovery,
+    relocate_dexen_to_directories,
     remove_comments,
     sign_apk,
+    verify_dexes,
     with_temp_cleanup,
 )
 
@@ -187,6 +188,16 @@ class ExceptionMessageFormatter:
         )
 
 
+class DexenSnapshot(object):
+    def __init__(self, dex_dir: str) -> None:
+        self.files_and_sizes: typing.Dict[str, int] = {
+            dexpath: os.path.getsize(dexpath) for dexpath in dex_glob(dex_dir)
+        }
+
+    def equals(self, other: "DexenSnapshot") -> bool:
+        return self.files_and_sizes == other.files_and_sizes
+
+
 class State(object):
     # This structure is only used for passing arguments between prepare_redex,
     # launch_redex_binary, finalize_redex
@@ -202,6 +213,7 @@ class State(object):
         lib_manager: typing.Optional[LibraryManager],
         unpack_manager: typing.Optional[UnpackManager],
         zip_manager: typing.Optional[ZipManager],
+        dexen_initial_state: typing.Optional[DexenSnapshot],
     ) -> None:
         self.args = args
         self.config_dict = config_dict
@@ -213,6 +225,7 @@ class State(object):
         self.lib_manager = lib_manager
         self.unpack_manager = unpack_manager
         self.zip_manager = zip_manager
+        self.dexen_initial_state = dexen_initial_state
 
 
 class RedexRunException(Exception):
@@ -494,13 +507,27 @@ def copy_all_file_to_out_dir(
 
 def validate_args(args: argparse.Namespace) -> None:
     if args.sign:
-        for arg_name in ["keystore", "keyalias", "keypass"]:
-            if getattr(args, arg_name) is None:
-                raise argparse.ArgumentTypeError(
-                    "Could not find a suitable default for --{} and no value "
-                    "was provided.  This argument is required when --sign "
-                    "is used".format(arg_name)
-                )
+
+        def raise_error(arg_name: str) -> None:
+            raise argparse.ArgumentTypeError(
+                "Could not find a suitable default for --{} and no value "
+                "was provided.  This argument is required when --sign "
+                "is used".format(arg_name)
+            )
+
+        if not args.keystore:
+            raise_error("keystore")
+
+        if not args.keyalias:
+            raise_error("keyalias")
+
+        if not args.keypass:
+            raise_error("keypass")
+
+        if not isfile(args.keystore):
+            raise argparse.ArgumentTypeError(
+                f'Keystore path "{args.keystore}" is invalid.'
+            )
 
 
 def arg_parser(
@@ -751,6 +778,10 @@ Given an APK, produce a better APK!
         default=None,
         type=str,
         help="Path to JNI summary directory of json files.",
+    )
+
+    parser.add_argument(
+        "--verify-dexes", type=str, help="Verify dex files with the supplied command"
     )
 
     # Manual tool paths.
@@ -1098,7 +1129,7 @@ def prepare_redex(args: argparse.Namespace) -> State:
             if e.errno != errno.EEXIST:
                 raise e
 
-    with BuckPartScope("Redex::Unpack", "Unpacking input"):
+    with BuckPartScope("redex::Unpacking", "Unpacking Redex input"):
         with BuckPartScope("redex::UnpackApk", "Unpacking APK"):
             logging.debug("Unpacking...")
             if not extracted_apk_dir:
@@ -1142,7 +1173,12 @@ def prepare_redex(args: argparse.Namespace) -> State:
         logging.debug("Moving contents to expected structure...")
         # Move each dex to a separate temporary directory to be operated by
         # redex.
-        dexen = move_dexen_to_directories(dex_dir, dex_glob(dex_dir))
+        preserve_input_dexes = config_dict.get("preserve_input_dexes")
+        dexen = relocate_dexen_to_directories(
+            dex_dir, dex_glob(dex_dir), preserve_input_dexes
+        )
+        dexen_initial_state = DexenSnapshot(dex_dir) if preserve_input_dexes else None
+
         for store in sorted(store_files):
             dexen.append(store)
 
@@ -1205,6 +1241,7 @@ def prepare_redex(args: argparse.Namespace) -> State:
         lib_manager=lib_manager,
         unpack_manager=unpack_manager,
         zip_manager=zip_manager,
+        dexen_initial_state=dexen_initial_state,
     )
 
 
@@ -1256,6 +1293,16 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             CompressionLevel.FAST,  # May be quite large.
         ),
         CompressionEntry(
+            "Redex Unsafe Enums List",
+            lambda args: True,
+            True,
+            [],
+            ["redex-unsafe-enums.txt"],
+            None,
+            None,
+            CompressionLevel.BETTER,  # Usually small enough.
+        ),
+        CompressionEntry(
             "Redex Accessed Proguard Rules",
             lambda args: True,
             True,
@@ -1269,6 +1316,15 @@ def get_compression_list() -> typing.List[CompressionEntry]:
 
 
 def finalize_redex(state: State) -> None:
+    if state.args.verify_dexes:
+        verify_dexes(state.dex_dir, state.args.verify_dexes)
+
+    if state.dexen_initial_state is not None:
+        dexen_final_state = DexenSnapshot(state.dex_dir)
+        assert _assert_val(state.dexen_initial_state).equals(
+            dexen_final_state
+        ), "initial state of preserved dex files does not match final state"
+
     _assert_val(state.lib_manager).__exit__(*sys.exc_info())
 
     with BuckPartScope("Redex::OutputAPK", "Creating output APK"):
@@ -1378,6 +1434,7 @@ def run_redex_passthrough(
         lib_manager=None,
         unpack_manager=None,
         zip_manager=None,
+        dexen_initial_state=None,
     )
     run_redex_binary(state, exception_formatter, output_line_handler)
 

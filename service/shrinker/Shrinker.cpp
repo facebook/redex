@@ -153,7 +153,8 @@ constant_propagation::Transform::Stats Shrinker::constant_propagation(
           &m_immut_analyzer_state, &m_immut_analyzer_state,
           constant_propagation::EnumFieldAnalyzerState::get(),
           constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr,
-          constant_propagation::ApiLevelAnalyzerState::get(m_min_sdk), nullptr),
+          constant_propagation::ApiLevelAnalyzerState::get(m_min_sdk), nullptr,
+          &m_immut_analyzer_state, nullptr),
       /* imprecise_switches */ true);
   fp_iter.run(initial_env);
   constant_propagation::Transform tf(config, &m_runtime_cache);

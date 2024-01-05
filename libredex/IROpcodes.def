@@ -225,7 +225,7 @@ OP(CONST_METHOD_HANDLE        , const_method_handle       , Ref::MethodHandle, "
 OP(CONST_METHOD_TYPE          , const_method_type         , Ref::Proto, "const-method-type")
 
 // Internal opcodes cannot be mapped to a corresponding DexOpcode.
-OPRANGE(an_internal , IOPCODE_LOAD_PARAM, IOPCODE_INJECTION_ID)
+OPRANGE(an_internal , IOPCODE_LOAD_PARAM, IOPCODE_UNREACHABLE)
 OPRANGE(a_load_param, IOPCODE_LOAD_PARAM, IOPCODE_LOAD_PARAM_WIDE)
 IOP(LOAD_PARAM                , load_param                , Ref::None, "load-param")
 IOP(LOAD_PARAM_OBJECT         , load_param_object         , Ref::None, "load-param-object")
@@ -238,6 +238,7 @@ IOP(MOVE_RESULT_PSEUDO_WIDE   , move_result_pseudo_wide   , Ref::None, "move-res
 
 IOP(INIT_CLASS , init_class , Ref::Type, "init-class")
 IOP(INJECTION_ID , injection_id , Ref::Literal, "injection-id")
+IOP(UNREACHABLE , unreachable , Ref::None, "unreachable")
 
 // clang-format on
 

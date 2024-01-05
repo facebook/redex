@@ -28,7 +28,7 @@ const DexMethodRef* get_invoked_method(cfg::ControlFlowGraph* cfg) {
 void test_get_return_param_index(const std::string& code_str,
                                  boost::optional<ParamIndex> expected) {
   auto code = assembler::ircode_from_string(code_str);
-  code->build_cfg(true);
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   method_override_graph::Graph graph;

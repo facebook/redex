@@ -822,6 +822,44 @@ void apply_rename_map(const std::map<std::string, std::string>& rename_map,
     }
   }
 }
+
+void fully_qualify_element(
+    const std::unordered_map<std::string, std::string>& element_to_class_name,
+    aapt::pb::XmlNode* node,
+    size_t* out_num_changed) {
+  if (node->has_element()) {
+    auto element = node->mutable_element();
+    auto search = element_to_class_name.find(element->name());
+    if (search != element_to_class_name.end()) {
+      bool can_edit = true;
+      auto attr_size = element->attribute_size();
+      for (int i = 0; i < attr_size; i++) {
+        const auto& pb_attr = element->attribute(i);
+        if (pb_attr.name() == "class") {
+          // this would be ambiguous if there is already a class attribute; do
+          // not change this element but consider its children.
+          can_edit = false;
+          break;
+        }
+      }
+      if (can_edit) {
+        element->set_name("view");
+        auto mutable_attributes = element->mutable_attribute();
+        auto class_attribute = new aapt::pb::XmlAttribute();
+        class_attribute->set_name("class");
+        class_attribute->set_value(search->second);
+        mutable_attributes->AddAllocated(class_attribute);
+        (*out_num_changed)++;
+      }
+    }
+
+    auto child_size = element->child_size();
+    for (int i = 0; i < child_size; i++) {
+      auto child = element->mutable_child(i);
+      fully_qualify_element(element_to_class_name, child, out_num_changed);
+    }
+  }
+}
 } // namespace
 
 bool BundleResources::rename_classes_in_layout(
@@ -848,6 +886,29 @@ bool BundleResources::rename_classes_in_layout(
         }
       });
   return !write_failed;
+}
+
+void BundleResources::fully_qualify_layout(
+    const std::unordered_map<std::string, std::string>& element_to_class_name,
+    const std::string& file_path,
+    size_t* changes) {
+  read_protobuf_file_contents(
+      file_path,
+      [&](google::protobuf::io::CodedInputStream& input, size_t size) {
+        aapt::pb::XmlNode pb_node;
+        always_assert_log(pb_node.ParseFromCodedStream(&input),
+                          "BundleResoource failed to read %s",
+                          file_path.c_str());
+        size_t elements_changed = 0;
+        fully_qualify_element(element_to_class_name, &pb_node,
+                              &elements_changed);
+        if (elements_changed > 0) {
+          std::ofstream out(file_path, std::ofstream::binary);
+          if (pb_node.SerializeToOstream(&out)) {
+            *changes = elements_changed;
+          }
+        }
+      });
 }
 
 namespace {

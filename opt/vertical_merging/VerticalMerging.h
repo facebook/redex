@@ -8,7 +8,6 @@
 #pragma once
 
 #include "DexClass.h"
-#include "Inliner.h"
 #include "Pass.h"
 
 /**
@@ -32,6 +31,7 @@ class VerticalMergingPass : public Pass {
     using namespace redex_properties::names;
     return {
         {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
         {NeedsEverythingPublic, Establishes}, // TT150850158
     };

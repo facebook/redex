@@ -29,6 +29,7 @@ class ProcessUsesNamesAnnoPass : public Pass {
     using namespace redex_properties::names;
     return {
         {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
     };
   }
@@ -43,6 +44,7 @@ class ProcessUsesNamesAnnoPass : public Pass {
          m_uses_names_trans_annotation);
   }
 
+  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:

@@ -689,7 +689,8 @@ struct Matcher {
           replace->set_type(matched_types.at(Type::B));
           break;
         default:
-          not_reached_log("Unexpected type directive 0x%x", (int)replace_info.type);
+          not_reached_log("Unexpected type directive 0x%x",
+                          (int)replace_info.type);
         }
       } else if (replace_info.kind == DexPattern::Kind::field) {
         switch (replace_info.field) {

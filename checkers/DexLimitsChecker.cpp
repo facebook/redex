@@ -7,22 +7,199 @@
 
 #include "DexLimitsChecker.h"
 
+#include <iterator>
+#include <optional>
 #include <sstream>
 
+#include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexClass.h"
+#include "DexLimitsInfo.h"
+#include "DexUtil.h"
+#include "InitClassesWithSideEffects.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"
 
 namespace redex_properties {
 
+namespace {
+
+using dex_data_map_t =
+    std::unordered_map<std::string, std::vector<DexLimitsChecker::DexData>>;
+
+template <typename T>
+std::unordered_set<T> extract(const std::unordered_map<T, size_t>& input) {
+  // No insert iterator for unordered_set, have to go through vector.
+  std::vector<T> tmp{};
+  tmp.reserve(input.size());
+  std::transform(input.begin(),
+                 input.end(),
+                 std::back_inserter(tmp),
+                 [](auto& p) { return p.first; });
+  return std::unordered_set<T>(tmp.begin(), tmp.end());
+}
+
+dex_data_map_t create_data(
+    DexStoresVector& stores,
+    init_classes::InitClassesWithSideEffects* init_classes) {
+  dex_data_map_t tmp;
+
+  for (const auto& store : stores) {
+    std::vector<DexLimitsChecker::DexData> dexes_data;
+    dexes_data.reserve(store.num_dexes());
+
+    for (const auto& classes : store.get_dexen()) {
+      DexLimitsInfo dex_limits(init_classes);
+      for (const auto& cls : classes) {
+        dex_limits.update_refs_by_always_adding_class(cls);
+      }
+
+      auto& dex_struct = dex_limits.get_dex();
+
+      dexes_data.emplace_back(DexLimitsChecker::DexData{
+          extract(dex_struct.get_frefs()),
+          extract(dex_struct.get_mrefs()),
+          extract(dex_struct.get_trefs()),
+          dex_struct.get_pending_init_class_fields(),
+          dex_struct.get_pending_init_class_types(),
+      });
+    }
+    tmp.emplace(store.get_name(), std::move(dexes_data));
+  }
+
+  return tmp;
+}
+
+struct IssueIndex {
+  const DexStore* store{nullptr};
+  size_t dex_id{0};
+  bool field_overflow{false};
+  bool method_overflow{false};
+  bool type_overflow{false};
+};
+
+std::string print_new_entries(const dex_data_map_t& old_map,
+                              const dex_data_map_t& new_map,
+                              const std::vector<IssueIndex>& issues) {
+  std::ostringstream oss;
+
+  for (auto& i : issues) {
+    auto& store_name = i.store->get_name();
+    auto st_it = old_map.find(store_name);
+    if (st_it == old_map.end()) {
+      // Totally new store, log that.
+      oss << "\nStore " << store_name << " is newly created.\n";
+      continue;
+    }
+
+    // See whether we have the dex before. This may not match when dexes are
+    // deleted, best effort really.
+    auto& old_dexes = st_it->second;
+    if (old_dexes.size() <= i.dex_id) {
+      oss << "\nStore " << store_name << " dex " << i.dex_id
+          << " seems newly created.\n";
+      continue;
+    }
+
+    auto new_st_it = new_map.find(store_name);
+    redex_assert(new_st_it != new_map.end());
+
+    auto& new_dexes = new_st_it->second;
+    redex_assert(new_dexes.size() > i.dex_id);
+
+    auto print_differences =
+        [&](const auto& old_data, const auto& new_data, const char* prefix) {
+          // Won't be sorted, but sorting would be a template pain.
+          bool have_changes = false;
+          for (auto* entry : new_data) {
+            if (old_data.count(entry) != 0) {
+              continue;
+            }
+            if (!have_changes) {
+              have_changes = true;
+              oss << prefix << show(entry);
+            } else {
+              oss << ", " << show(entry);
+            }
+          }
+          if (have_changes) {
+            oss << "\n";
+          }
+          return have_changes;
+        };
+
+    bool had_fields{false};
+    if (i.field_overflow) {
+      had_fields =
+          print_differences(old_dexes[i.dex_id].fields,
+                            new_dexes[i.dex_id].fields,
+                            "Fields: ") ||
+          print_differences(old_dexes[i.dex_id].pending_init_class_fields,
+                            new_dexes[i.dex_id].pending_init_class_fields,
+                            "Pending init-class Fields For: ");
+      if (!had_fields) {
+        oss << "Failed detecting field changes for " << store_name << "@"
+            << i.dex_id << "\n";
+      }
+    }
+    bool had_methods{false};
+    if (i.method_overflow) {
+      had_methods = print_differences(old_dexes[i.dex_id].methods,
+                                      new_dexes[i.dex_id].methods,
+                                      "Methods: ");
+      if (!had_methods) {
+        oss << "Failed detecting method changes for " << store_name << "@"
+            << i.dex_id << "\n";
+      }
+    }
+    bool had_types{false};
+    if (i.type_overflow) {
+      had_types =
+          print_differences(old_dexes[i.dex_id].types,
+                            new_dexes[i.dex_id].types,
+                            "Types: ") ||
+          print_differences(old_dexes[i.dex_id].pending_init_class_types,
+                            new_dexes[i.dex_id].pending_init_class_types,
+                            "Pending init-class Types: ");
+      if (!had_types) {
+        oss << "Failed detecting type changes for " << store_name << "@"
+            << i.dex_id << "\n";
+      }
+    }
+    if (!had_fields && !had_methods && !had_types) {
+      // Run the other things, maybe there's a misdetection.
+      if (!i.field_overflow) {
+        print_differences(
+            old_dexes[i.dex_id].fields, new_dexes[i.dex_id].fields, "Fields: ");
+        print_differences(old_dexes[i.dex_id].pending_init_class_fields,
+                          new_dexes[i.dex_id].pending_init_class_fields,
+                          "Pending init-class Fields For: ");
+      }
+      if (!i.method_overflow) {
+        print_differences(old_dexes[i.dex_id].methods,
+                          new_dexes[i.dex_id].methods,
+                          "Methods: ");
+      }
+      if (!i.type_overflow) {
+        print_differences(
+            old_dexes[i.dex_id].types, new_dexes[i.dex_id].types, "Types: ");
+        print_differences(old_dexes[i.dex_id].pending_init_class_types,
+                          new_dexes[i.dex_id].pending_init_class_types,
+                          "Pending init-class Types: ");
+      }
+    }
+  }
+
+  return oss.str();
+}
+
+} // namespace
+
 void DexLimitsChecker::run_checker(DexStoresVector& stores,
-                                   ConfigFiles& /* conf */,
+                                   ConfigFiles& conf,
                                    PassManager& mgr,
                                    bool established) {
-  // Temporary work around.
-  return;
   if (!established) {
     return;
   }
@@ -34,46 +211,72 @@ void DexLimitsChecker::run_checker(DexStoresVector& stores,
   }
 
   std::ostringstream result;
+  Scope scope = build_class_scope(stores);
+  std::unique_ptr<init_classes::InitClassesWithSideEffects>
+      init_classes_with_side_effects;
+  if (!mgr.init_class_lowering_has_run()) {
+    init_classes_with_side_effects =
+        std::make_unique<init_classes::InitClassesWithSideEffects>(
+            scope, conf.create_init_class_insns());
+  }
 
-  auto check_ref_num = [&pass_name, &result](const DexClasses& classes,
-                                             const DexStore& store,
-                                             size_t dex_id) {
-    constexpr size_t limit = 65536;
-    std::unordered_set<DexMethodRef*> total_method_refs;
-    std::unordered_set<DexFieldRef*> total_field_refs;
-    std::unordered_set<DexType*> total_type_refs;
-    for (const auto cls : classes) {
-      std::vector<DexMethodRef*> method_refs;
-      std::vector<DexFieldRef*> field_refs;
-      std::vector<DexType*> type_refs;
-      cls->gather_methods(method_refs);
-      cls->gather_fields(field_refs);
-      cls->gather_types(type_refs);
-      total_type_refs.insert(type_refs.begin(), type_refs.end());
-      total_field_refs.insert(field_refs.begin(), field_refs.end());
-      total_method_refs.insert(method_refs.begin(), method_refs.end());
+  auto check_ref_num = [&init_classes_with_side_effects, &pass_name, &result](
+                           const DexClasses& classes,
+                           const DexStore& store,
+                           size_t dex_id) -> std::optional<IssueIndex> {
+    DexLimitsInfo dex_limits(init_classes_with_side_effects.get());
+    bool field_overflow{false};
+    bool method_overflow{false};
+    bool type_overflow{false};
+    for (const auto& cls : classes) {
+      if (!dex_limits.update_refs_by_adding_class(cls)) {
+        method_overflow |= dex_limits.is_method_overflow();
+        field_overflow |= dex_limits.is_field_overflow();
+        type_overflow |= dex_limits.is_type_overflow();
+      }
     }
-    TRACE(PM, 2, "dex %s: method refs %zu, field refs %zu, type refs %zu",
-          dex_name(store, dex_id).c_str(), total_method_refs.size(),
-          total_field_refs.size(), total_type_refs.size());
-    auto check = [&](auto& c, const char* type) {
-      if (c.size() > limit) {
-        result << pass_name << " adds too many " << type << " refs in dex "
+    auto add_overflow_msg = [&](bool check, const char* type_str) {
+      if (check) {
+        result << pass_name << " adds too many " << type_str << " refs in dex "
                << dex_name(store, dex_id) << "\n";
       }
     };
-    check(total_method_refs, "method");
-    check(total_field_refs, "field");
-    check(total_type_refs, "type");
+    add_overflow_msg(field_overflow, "field");
+    add_overflow_msg(method_overflow, "method");
+    add_overflow_msg(type_overflow, "type");
+
+    if (field_overflow || method_overflow || type_overflow) {
+      TRACE(PM,
+            0,
+            "Recording overflow %d / %d / %d",
+            field_overflow,
+            method_overflow,
+            type_overflow);
+      return IssueIndex{&store, dex_id, field_overflow, method_overflow,
+                        type_overflow};
+    }
+
+    return std::nullopt;
   };
+
+  std::vector<IssueIndex> issues;
   for (const auto& store : stores) {
     size_t dex_id = 0;
     for (const auto& classes : store.get_dexen()) {
-      check_ref_num(classes, store, dex_id++);
+      auto maybe_issue = check_ref_num(classes, store, dex_id++);
+      if (maybe_issue) {
+        issues.emplace_back(*maybe_issue);
+      }
     }
   }
-  auto result_str = result.str();
-  always_assert_log(result_str.empty(), "%s", result_str.c_str());
+
+  auto old_data = std::move(m_data);
+  m_data = create_data(stores, init_classes_with_side_effects.get());
+  TRACE(PM, 0, "%s", result.str().c_str());
+  always_assert_log(issues.empty(),
+                    "%s\n%s",
+                    result.str().c_str(),
+                    print_new_entries(old_data, m_data, issues).c_str());
 }
 
 } // namespace redex_properties

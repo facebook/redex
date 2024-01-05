@@ -13,6 +13,7 @@
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
+#include "Walkers.h"
 
 struct FinalInlineTest : public RedexTest {
  public:
@@ -38,9 +39,12 @@ struct FinalInlineTest : public RedexTest {
                                       bool create_init_class_insns = false) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, create_init_class_insns);
+    walk::code(scope, [&](DexMethod*, IRCode& code) { code.build_cfg(); });
     int min_sdk = 0;
-    return FinalInlinePassV2::run(
+    auto res = FinalInlinePassV2::run(
         scope, min_sdk, init_classes_with_side_effects, xstores);
+    walk::code(scope, [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
+    return res;
   }
 
   std::unique_ptr<ClassCreator> m_cc;

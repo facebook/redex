@@ -9,6 +9,7 @@
 
 #include <boost/range/any_range.hpp>
 #include <limits>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -357,11 +358,7 @@ class IRInstruction final {
     return m_data;
   }
 
-  IRInstruction* set_data(DexOpcodeData* data) {
-    always_assert(has_data());
-    m_data = data;
-    return this;
-  }
+  IRInstruction* set_data(std::unique_ptr<DexOpcodeData> data);
 
   DexProto* get_proto() const {
     always_assert(has_proto());

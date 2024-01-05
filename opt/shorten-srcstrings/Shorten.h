@@ -20,6 +20,7 @@ class ShortenSrcStringsPass : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves},
         {RenameClass, Preserves},
     };
   }
@@ -28,6 +29,8 @@ class ShortenSrcStringsPass : public Pass {
     bind("filename_mappings", "redex-src-strings-map.txt", m_filename_mappings);
     trait(Traits::Pass::unique, true);
   }
+
+  bool is_cfg_legacy() override { return true; }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

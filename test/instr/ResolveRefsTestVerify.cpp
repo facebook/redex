@@ -272,3 +272,24 @@ TEST_F(PostVerify, ResolveMirandaToInterface) {
   auto comp_getreal = find_vmethod_named(*comp_cls, "getReal");
   ASSERT_EQ(comp_getreal->get_proto()->get_rtype(), comp_cls->get_type());
 }
+
+TEST_F(PreVerify, ResolveObjectArrayClone) {
+  auto cp_cls = find_class_named(classes, "Lcom/facebook/redextest/Copiable;");
+  ASSERT_NE(nullptr, cp_cls);
+
+  auto cp_to_array = find_vmethod_named(*cp_cls, "copyToArray");
+  ASSERT_NE(nullptr, cp_to_array);
+  ASSERT_NE(nullptr, find_invoke(cp_to_array, DOPCODE_INVOKE_VIRTUAL, "clone",
+                                 type::make_array_type(cp_cls->get_type())));
+}
+
+TEST_F(PostVerify, ResolveObjectArrayClone) {
+  auto cp_cls = find_class_named(classes, "Lcom/facebook/redextest/Copiable;");
+  ASSERT_NE(nullptr, cp_cls);
+
+  auto cp_to_array = find_vmethod_named(*cp_cls, "copyToArray");
+  ASSERT_NE(nullptr, cp_to_array);
+  ASSERT_NE(nullptr,
+            find_invoke(cp_to_array, DOPCODE_INVOKE_VIRTUAL, "clone",
+                        type::make_array_type(type::java_lang_Object())));
+}

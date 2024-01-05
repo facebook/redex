@@ -20,6 +20,7 @@ class SortRemainingClassesPass : public Pass {
     return {
         {DexLimitsObeyed, RequiresAndEstablishes},
         {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves},
     };
   }
 
@@ -29,6 +30,8 @@ class SortRemainingClassesPass : public Pass {
     bind("sort_primary_dex", false, m_sort_primary_dex,
          "Whether to sort classes in primary dex.");
   }
+
+  bool is_cfg_legacy() override { return true; }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

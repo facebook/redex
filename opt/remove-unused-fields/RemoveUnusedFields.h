@@ -50,6 +50,7 @@ class PassImpl : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
     };
   }
@@ -84,6 +85,8 @@ class PassImpl : public Pass {
          m_export_removed,
          "Write all removed fields to " + std::string(REMOVED_FIELDS_FILENAME));
   }
+
+  bool is_cfg_legacy() override { return true; }
 
   void run_pass(DexStoresVector& stores,
                 ConfigFiles& conf,

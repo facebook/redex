@@ -17,7 +17,7 @@ TEST_F(BranchPrefixWhenTest, switch_test) {
   auto meth =
       DexMethod::get_method("Lcom/facebook/redextest/Foo;.bar_packed:(I)V");
   auto code = meth->as_def()->get_code();
-  code->build_cfg(true);
+  code->build_cfg();
   Lazy<const constant_uses::ConstantUses> constant_uses([&] {
     return std::make_unique<const constant_uses::ConstantUses>(
         code->cfg(), meth->as_def(),

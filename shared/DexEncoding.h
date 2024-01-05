@@ -42,10 +42,10 @@ namespace details {
  */
 inline uint32_t read_uleb128(const uint8_t** _ptr) {
   const uint8_t* ptr = *_ptr;
-  int result = *(ptr++);
+  uint32_t result = *(ptr++);
 
   if (result > 0x7f) {
-    int cur = *(ptr++);
+    uint32_t cur = *(ptr++);
     result = (result & 0x7f) | ((cur & 0x7f) << 7);
     if (cur > 0x7f) {
       cur = *(ptr++);

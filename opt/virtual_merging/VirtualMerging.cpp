@@ -779,7 +779,7 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
               q.second.end(),
               [&](const auto* m) {
                 size_t estimated_callee_size =
-                    m->get_code()->sum_opcode_sizes();
+                    m->get_code()->estimate_code_units();
                 if (estimated_callee_size >
                     max_overriding_method_instructions) {
                   TRACE(VM,
@@ -795,7 +795,7 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
                     is_abstract(overridden_method)
                         ? 64 // we'll need some extra instruction; 64
                              // is conservative
-                        : overridden_method->get_code()->sum_opcode_sizes();
+                        : overridden_method->get_code()->estimate_code_units();
                 if (!inliner.is_inlinable(
                         overridden_method, m, nullptr /* invoke_virtual_insn */,
                         estimated_caller_size, estimated_callee_size)) {
@@ -818,11 +818,11 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
       size_t sum = is_abstract(overridden_method)
                        ? 64 // we'll need some extra instruction; 64
                             // is conservative
-                       : overridden_method->get_code()->sum_opcode_sizes();
+                       : overridden_method->get_code()->estimate_code_units();
 
       auto method_inline_estimate = [](const DexMethod* m) {
         return 20 // if + invoke + return ~= 20.
-               + m->get_code()->sum_opcode_sizes();
+               + m->get_code()->estimate_code_units();
       };
 
       size_t num_methods = 0;
@@ -1087,11 +1087,11 @@ VirtualMergingStats apply_ordering(
         auto overriding_method =
             const_cast<DexMethod*>(overriding_method_const);
         size_t estimated_callee_size =
-            overriding_method->get_code()->sum_opcode_sizes();
+            overriding_method->get_code()->estimate_code_units();
         size_t estimated_insn_size =
             is_abstract(overridden_method)
                 ? 64 // we'll need some extra instruction; 64 is conservative
-                : overridden_method->get_code()->sum_opcode_sizes();
+                : overridden_method->get_code()->estimate_code_units();
         bool is_inlineable =
             inliner.is_inlinable(overridden_method, overriding_method,
                                  nullptr /* invoke_virtual_insn */,

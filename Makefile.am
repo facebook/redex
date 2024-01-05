@@ -20,6 +20,7 @@ DISABLED_WARNINGS_HARD = \
 # TODO: Minimize this list.
 DISABLED_WARNINGS = \
   $(DISABLED_WARNINGS_HARD) \
+  -Wno-array-bounds \
   -Wno-class-memaccess \
   -Wno-deprecated-declarations \
   -Wno-format-truncation \
@@ -27,20 +28,25 @@ DISABLED_WARNINGS = \
   -Wno-invalid-offsetof \
   -Wno-maybe-uninitialized \
   -Wno-parentheses \
+  -Wno-range-loop-analysis \
+  -Wno-redundant-move \
   -Wno-return-type \
   -Wno-shift-count-overflow \
   -Wno-sign-compare \
   -Wno-strict-aliasing \
   -Wno-stringop-overflow \
   -Wno-stringop-overread \
+  -Wno-type-limits \
   -Wno-uninitialized \
   -Wno-unused-but-set-variable \
   -Wno-unused-function \
+  -Wno-unused-parameter \
   -Wno-unused-private-field \
   -Wno-unused-result \
+  -Wno-unused-value \
   -Wno-unused-variable
 
-AM_CXXFLAGS = --std=gnu++17 -O3 -Wall -Werror $(DISABLED_WARNINGS) -g
+AM_CXXFLAGS = --std=gnu++17 -O3 -Wall -Werror -Wextra $(DISABLED_WARNINGS) -g
 
 include $(top_srcdir)/Makefile.inc
 
@@ -76,10 +82,13 @@ endif
 libredex_la_SOURCES = \
 	checkers/DexLimitsChecker.cpp \
 	checkers/NoInitClassInstructionsChecker.cpp \
+	checkers/NoResolvablePureRefsChecker.cpp \
+	checkers/NoUnreachableInstructionsChecker.cpp \
 	liblocator/locator.cpp \
 	libredex/AggregateException.cpp \
 	libredex/AnalysisUsage.cpp \
 	libredex/AnnoUtils.cpp \
+	libredex/AnnotationSignatureParser.cpp \
 	libredex/ApiLevelChecker.cpp \
 	libredex/ApkResources.cpp \
 	libredex/AssetManager.cpp \
@@ -91,6 +100,7 @@ libredex_la_SOURCES = \
 	libredex/ClassHierarchy.cpp \
 	libredex/ClassUtil.cpp \
 	libredex/ClassChecker.cpp \
+	libredex/ClassReferencesCache.cpp \
 	libredex/ConcurrentContainers.cpp \
 	libredex/ConfigFiles.cpp \
 	libredex/Configurable.cpp \
@@ -117,7 +127,7 @@ libredex_la_SOURCES = \
 	libredex/DexStats.cpp \
 	libredex/DexStore.cpp \
 	libredex/DexStoreUtil.cpp \
-        libredex/DexStructure.cpp \
+	libredex/DexStructure.cpp \
 	libredex/DexTypeEnvironment.cpp \
 	libredex/DexUtil.cpp \
 	libredex/DexStoreUtil.cpp \
@@ -130,7 +140,7 @@ libredex_la_SOURCES = \
 	libredex/GraphVisualizer.cpp \
 	libredex/HierarchyUtil.cpp \
 	libredex/InitCollisionFinder.cpp \
-        libredex/InitClassesWithSideEffects.cpp \
+	libredex/InitClassesWithSideEffects.cpp \
 	libredex/InlinerConfig.cpp \
 	libredex/InstructionLowering.cpp \
 	libredex/InteractiveDebugging.cpp \
@@ -151,6 +161,7 @@ libredex_la_SOURCES = \
 	libredex/MatchFlow.cpp \
 	libredex/MatchFlowDetail.cpp \
 	libredex/MethodDevirtualizer.cpp \
+	libredex/MethodFixup.cpp \
 	libredex/MethodOverrideGraph.cpp \
 	libredex/MethodProfiles.cpp \
 	libredex/MethodSimilarityCompressionConsciousOrderer.cpp \
@@ -194,6 +205,7 @@ libredex_la_SOURCES = \
 	libredex/RedexResources.cpp \
 	libredex/ReflectionAnalysis.cpp \
 	libredex/RefChecker.cpp \
+	libredex/RemoveUninstantiablesImpl.cpp \
 	libredex/Resolver.cpp \
 	libredex/ScopedMetrics.cpp \
 	libredex/Show.cpp \
@@ -201,6 +213,7 @@ libredex_la_SOURCES = \
 	libredex/SourceBlocks.cpp \
 	libredex/StringTreeSet.cpp \
 	libredex/Timer.cpp \
+	libredex/ThrowPropagationImpl.cpp \
 	libredex/Trace.cpp \
 	libredex/Transform.cpp \
 	libredex/TypeInference.cpp \
@@ -237,13 +250,13 @@ libredex_la_SOURCES = \
 	service/class-merging/TypeTagUtils.cpp \
 	service/class-splitting/ClassSplitting.cpp \
 	service/cross-dex-ref-minimizer/CrossDexRefMinimizer.cpp \
-	service/constant-propagation/ConstantEnvironment.cpp \
 	service/constant-propagation/ConstantPropagationAnalysis.cpp \
 	service/constant-propagation/ConstantPropagation.cpp \
 	service/constant-propagation/ConstantPropagationTransform.cpp \
 	service/constant-propagation/ConstantPropagationWholeProgramState.cpp \
 	service/constant-propagation/ConstructorParams.cpp \
 	service/constant-propagation/DefinitelyAssignedIFields.cpp \
+	service/constant-propagation/IFieldAnalysisUtil.cpp \
 	service/constant-propagation/IPConstantPropagationAnalysis.cpp \
 	service/constant-propagation/ObjectDomain.cpp \
 	service/constant-propagation/SignDomain.cpp \
@@ -336,7 +349,9 @@ endif
 
 libopt_la_SOURCES = \
 	checkers/HasSourceBlocksChecker.cpp \
+	checkers/InjectionIdInstructionsChecker.cpp \
 	checkers/NoInitClassInstructionsChecker.cpp \
+	checkers/NoUnreachableInstructionsChecker.cpp \
 	checkers/NoSpuriousGetClassCallsChecker.cpp \
 	checkers/RenameClassChecker.cpp \
 	analysis/max-depth/MaxDepthAnalysis.cpp \
@@ -347,7 +362,6 @@ libopt_la_SOURCES = \
 	opt/analyze-pure-method/PureMethods.cpp \
 	opt/app_module_usage/AppModuleUsage.cpp \
 	opt/art-profile-writer/ArtProfileWriterPass.cpp \
-	opt/basic-block/BasicBlockProfile.cpp \
 	opt/builder_pattern/BuilderAnalysis.cpp \
 	opt/builder_pattern/BuilderTransform.cpp \
 	opt/builder_pattern/RemoveBuilderPattern.cpp \
@@ -374,10 +388,12 @@ libopt_la_SOURCES = \
 	opt/evaluate_type_checks/EvaluateTypeChecks.cpp \
 	opt/final_inline/FinalInline.cpp \
 	opt/final_inline/FinalInlineV2.cpp \
+	opt/fully-qualify-layouts/FullyQualifyLayouts.cpp \
 	opt/init-classes/InitClassLoweringPass.cpp \
 	opt/insert-source-blocks/InsertSourceBlocks.cpp \
 	opt/instrument/BlockInstrument.cpp \
 	opt/instrument/Instrument.cpp \
+	opt/int_type_patcher/IntTypePatcher.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/interdex/InterDexPass.cpp \
 	opt/interdex/InterDexReshufflePass.cpp \
@@ -410,7 +426,8 @@ libopt_la_SOURCES = \
 	opt/peephole/RedundantCheckCastRemover.cpp \
 	opt/print-kotlin-stats/PrintKotlinStats.cpp \
 	opt/print-members/PrintMembers.cpp \
-  opt/reachable-natives/ReachableNatives.cpp \
+	opt/reachable-natives/ReachableNatives.cpp \
+	opt/rearrange-enum-clinit/RearrangeEnumClinit.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
 	opt/regalloc/RegAlloc.cpp \
 	opt/regalloc-fast/FastRegAlloc.cpp \
@@ -429,6 +446,7 @@ libopt_la_SOURCES = \
 	opt/remove-unused-fields/RemoveUnusedFields.cpp \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
 	opt/remove-unused-args/RemoveUnusedArgs.cpp \
+	opt/renameclasses/InitialRenameClassesPass.cpp \
 	opt/renameclasses/RenameClassesV2.cpp \
 	opt/reorder-interfaces-decl/ReorderInterfacesDecl.cpp \
 	opt/reduce-array-literals/ReduceArrayLiterals.cpp \
@@ -441,6 +459,7 @@ libopt_la_SOURCES = \
 	opt/resolve-proguard-values/ResolveProguardAssumeValues.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
 	opt/shrinker/ShrinkerPass.cpp \
+	opt/unreachable/UnreachableLoweringPass.cpp \
 	opt/make-public/MakePublicPass.cpp \
 	opt/methodinline/IntraDexInlinePass.cpp \
 	opt/methodinline/LocalMethodInlinePass.cpp \
@@ -470,7 +489,6 @@ libopt_la_SOURCES = \
 	opt/stringbuilder-outliner/StringBuilderOutliner.cpp \
 	opt/strip-debug-info/StripDebugInfo.cpp \
 	opt/test_cfg/TestCFG.cpp \
-	opt/track_resources/TrackResources.cpp \
 	opt/optimize_resources/OptimizeResources.cpp \
 	opt/throw-propagation/ThrowPropagationPass.cpp \
 	opt/typedef-anno-checker/TypedefAnnoCheckerPass.cpp \

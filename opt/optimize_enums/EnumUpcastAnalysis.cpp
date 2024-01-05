@@ -50,41 +50,21 @@ std::unordered_set<DexType*> discard_primitives(const EnumTypes& types) {
 }
 
 /**
- * The reason why an enum can not be converted to Integer object.
- * We can figure out more possible optimizations based on the logged reasons and
- * may be able to refactor Java code to optimize more enums.
- * Note: Some enums may be rejected by multiple reasons and we don't log all of
- * them.
- */
-enum Reason {
-  UNKNOWN = 0,
-  CAST_WHEN_RETURN = 1,
-  CAST_THIS_POINTER = 2,
-  CAST_PARAMETER = 3,
-  USED_AS_CLASS_OBJECT = 4,
-  CAST_CHECK_CAST = 5,
-  CAST_ISPUT_OBJECT = 6,
-  CAST_APUT_OBJECT = 7,
-  MULTI_ENUM_TYPES = 8,
-  UNSAFE_INVOCATION_ON_CANDIDATE_ENUM = 9,
-  IFIELD_SET_OUTSIDE_INIT = 10,
-  CAST_ENUM_ARRAY_TO_OBJECT = 11,
-  USED_IN_INSTANCE_OF = 12,
-};
-
-/**
  * Inspect instructions to reject enum class that may be casted to another type.
  */
+template <typename RejectFn>
 class EnumUpcastDetector {
  public:
-  EnumUpcastDetector(const DexMethod* method, Config* config)
+  EnumUpcastDetector(const DexMethod* method,
+                     Config* config,
+                     const RejectFn& reject_fn)
       : m_method(method),
         m_config(config),
-        m_candidate_enums(&config->candidate_enums) {}
+        m_candidate_enums(&config->candidate_enums),
+        m_reject_fn(reject_fn) {}
 
   void run(const EnumFixpointIterator& engine,
-           const cfg::ControlFlowGraph& cfg,
-           ConcurrentSet<DexType*>* rejected_enums) {
+           const cfg::ControlFlowGraph& cfg) {
     for (const auto& block : cfg.blocks()) {
       EnumTypeEnvironment env = engine.get_entry_state_at(block);
       if (env.is_bottom()) {
@@ -92,7 +72,7 @@ class EnumUpcastDetector {
       }
       for (const auto& mie : InstructionIterable(block)) {
         engine.analyze_instruction(mie.insn, &env);
-        process_instruction(mie.insn, &env, rejected_enums);
+        process_instruction(mie.insn, &env);
       }
     }
   }
@@ -102,8 +82,7 @@ class EnumUpcastDetector {
    * Process instructions when we reach the fixpoint.
    */
   void process_instruction(const IRInstruction* insn,
-                           const EnumTypeEnvironment* env,
-                           ConcurrentSet<DexType*>* rejected_enums) {
+                           const EnumTypeEnvironment* env) {
     switch (insn->opcode()) {
     case OPCODE_CHECK_CAST: {
       auto type = insn->get_type();
@@ -111,38 +90,38 @@ class EnumUpcastDetector {
       // the value is escaping.
       if (type != OBJECT_TYPE) {
         reject_if_inconsistent(insn, env->get(insn->src(0)), type,
-                               rejected_enums, CAST_CHECK_CAST);
+                               UnsafeType::kUsageCastCheckCast);
       }
     } break;
     case OPCODE_CONST_CLASS:
-      reject(insn, insn->get_type(), rejected_enums, USED_AS_CLASS_OBJECT);
+      reject(insn, insn->get_type(), UnsafeType::kUsageUsedAsClassObject);
       break;
     case OPCODE_INSTANCE_OF:
-      reject(insn, insn->get_type(), rejected_enums, USED_IN_INSTANCE_OF);
+      reject(insn, insn->get_type(), UnsafeType::kUsageUsedInInstanceOf);
       break;
     case OPCODE_INVOKE_INTERFACE:
     case OPCODE_INVOKE_SUPER:
-      process_general_invocation(insn, env, rejected_enums);
+      process_general_invocation(insn, env);
       break;
     case OPCODE_INVOKE_DIRECT:
-      process_direct_invocation(insn, env, rejected_enums);
+      process_direct_invocation(insn, env);
       break;
     case OPCODE_INVOKE_STATIC:
-      process_static_invocation(insn, env, rejected_enums);
+      process_static_invocation(insn, env);
       break;
     case OPCODE_INVOKE_VIRTUAL:
-      process_virtual_invocation(insn, env, rejected_enums);
+      process_virtual_invocation(insn, env);
       break;
     case OPCODE_RETURN_OBJECT:
-      process_return_object(insn, env, rejected_enums);
+      process_return_object(insn, env);
       break;
     case OPCODE_APUT_OBJECT:
-      process_aput_object(insn, env, rejected_enums);
+      process_aput_object(insn, env);
       break;
     case OPCODE_IPUT_OBJECT:
-      process_isput_object(insn, env, rejected_enums);
-      reject(insn, insn->get_field()->get_class(), rejected_enums,
-             IFIELD_SET_OUTSIDE_INIT);
+      process_isput_object(insn, env);
+      reject(insn, insn->get_field()->get_class(),
+             UnsafeType::kUsageIFieldSetOutsideInit);
       break;
     case OPCODE_IPUT:
     case OPCODE_IPUT_WIDE:
@@ -150,11 +129,11 @@ class EnumUpcastDetector {
     case OPCODE_IPUT_BYTE:
     case OPCODE_IPUT_CHAR:
     case OPCODE_IPUT_SHORT:
-      reject(insn, insn->get_field()->get_class(), rejected_enums,
-             IFIELD_SET_OUTSIDE_INIT);
+      reject(insn, insn->get_field()->get_class(),
+             UnsafeType::kUsageIFieldSetOutsideInit);
       break;
     case OPCODE_SPUT_OBJECT:
-      process_isput_object(insn, env, rejected_enums);
+      process_isput_object(insn, env);
       break;
     default:
       break;
@@ -165,14 +144,13 @@ class EnumUpcastDetector {
    * Process return-object instruction when we reach the fixpoint.
    */
   void process_return_object(const IRInstruction* insn,
-                             const EnumTypeEnvironment* env,
-                             ConcurrentSet<DexType*>* rejected_enums) const {
+                             const EnumTypeEnvironment* env) const {
     DexType* return_type = m_method->get_proto()->get_rtype();
     always_assert_log(env->get(insn->src(0)).is_value(),
                       "method %s\ninsn %s %s\n", SHOW(m_method), SHOW(insn),
                       SHOW(m_method->get_code()->cfg()));
     reject_if_inconsistent(insn, env->get(insn->src(0)), return_type,
-                           rejected_enums, CAST_WHEN_RETURN);
+                           UnsafeType::kUsageCastWhenReturn);
   }
 
   /**
@@ -180,20 +158,18 @@ class EnumUpcastDetector {
    * point.
    */
   void process_isput_object(const IRInstruction* insn,
-                            const EnumTypeEnvironment* env,
-                            ConcurrentSet<DexType*>* rejected_enums) const {
+                            const EnumTypeEnvironment* env) const {
     auto arg_reg = insn->src(0);
     DexType* field_type = insn->get_field()->get_type();
-    reject_if_inconsistent(insn, env->get(arg_reg), field_type, rejected_enums,
-                           CAST_ISPUT_OBJECT);
+    reject_if_inconsistent(insn, env->get(arg_reg), field_type,
+                           UnsafeType::kUsageCastISPutObject);
   }
 
   /**
    * Process aput-object instruction when we reach the fixpoint.
    */
   void process_aput_object(const IRInstruction* insn,
-                           const EnumTypeEnvironment* env,
-                           ConcurrentSet<DexType*>* rejected_enums) const {
+                           const EnumTypeEnvironment* env) const {
     // It's possible that the array_types contains non-array types or is
     // array of primitives. Just ignore them.
     EnumTypes array_types = env->get(insn->src(1));
@@ -208,12 +184,12 @@ class EnumUpcastDetector {
     if (acceptable_elem_types.size() > 1) {
       // If a register might be an array of multiple types, it's hard to do
       // further analysis so that we simply reject the types here.
-      reject(insn, elem_types, rejected_enums, CAST_APUT_OBJECT);
-      reject(insn, acceptable_elem_types, rejected_enums, CAST_APUT_OBJECT);
+      reject(insn, elem_types, UnsafeType::kUsageCastAputObject);
+      reject(insn, acceptable_elem_types, UnsafeType::kUsageCastAputObject);
     } else if (acceptable_elem_types.size() == 1) {
       DexType* acceptable = *acceptable_elem_types.begin();
-      reject_if_inconsistent(insn, elem_types, acceptable, rejected_enums,
-                             CAST_APUT_OBJECT);
+      reject_if_inconsistent(insn, elem_types, acceptable,
+                             UnsafeType::kUsageCastAputObject);
     }
   }
 
@@ -222,10 +198,8 @@ class EnumUpcastDetector {
    * candidate enum constructor invocations in the enum classes'
    * <clinit>.
    */
-  void process_direct_invocation(
-      const IRInstruction* insn,
-      const EnumTypeEnvironment* env,
-      ConcurrentSet<DexType*>* rejected_enums) const {
+  void process_direct_invocation(const IRInstruction* insn,
+                                 const EnumTypeEnvironment* env) const {
     always_assert(insn->opcode() == OPCODE_INVOKE_DIRECT);
     auto invoked = insn->get_method();
     auto container = invoked->get_class();
@@ -233,7 +207,7 @@ class EnumUpcastDetector {
         method::is_init(invoked) && method::is_clinit(m_method)) {
       return;
     }
-    process_general_invocation(insn, env, rejected_enums);
+    process_general_invocation(insn, env);
   }
 
   /**
@@ -246,13 +220,12 @@ class EnumUpcastDetector {
    * summary data.
    */
   void process_static_invocation(const IRInstruction* insn,
-                                 const EnumTypeEnvironment* env,
-                                 ConcurrentSet<DexType*>* rejected_enums) {
+                                 const EnumTypeEnvironment* env) {
     always_assert(insn->opcode() == OPCODE_INVOKE_STATIC);
     auto method_ref = insn->get_method();
     if (method_ref == STRING_VALUEOF_METHOD) {
       EnumTypes types = env->get(insn->src(0));
-      check_object_cast(types, insn, rejected_enums);
+      check_object_cast(types, insn);
       return;
     }
     auto container = method_ref->get_class();
@@ -263,7 +236,7 @@ class EnumUpcastDetector {
     }
     auto method = resolve_method(method_ref, MethodSearch::Static);
     if (!method || !params_contain_object_type(method, OBJECT_TYPE)) {
-      process_general_invocation(insn, env, rejected_enums);
+      process_general_invocation(insn, env);
       return;
     }
     auto summary_it = m_config->param_summary_map.find(method);
@@ -280,7 +253,7 @@ class EnumUpcastDetector {
         continue;
       }
       reject_if_inconsistent(insn, env->get(insn->src(arg_id)), *it,
-                             rejected_enums, CAST_PARAMETER);
+                             UnsafeType::kUsageCastParameter);
     }
   }
 
@@ -309,10 +282,8 @@ class EnumUpcastDetector {
    *  INVOKE_VIRTUAL ordinal:()I
    *  INVOKE_VIRTUAL hashCode:()I
    */
-  void process_virtual_invocation(
-      const IRInstruction* insn,
-      const EnumTypeEnvironment* env,
-      ConcurrentSet<DexType*>* rejected_enums) const {
+  void process_virtual_invocation(const IRInstruction* insn,
+                                  const EnumTypeEnvironment* env) const {
     always_assert(insn->opcode() == OPCODE_INVOKE_VIRTUAL);
     const DexMethodRef* method = insn->get_method();
     DexType* container = method->get_class();
@@ -331,8 +302,8 @@ class EnumUpcastDetector {
         // Reject multiple types in the registers.
         if (this_types.size() > 1 || that_types.size() > 1 ||
             (this_type && that_type && this_type != that_type)) {
-          reject(insn, this_types, rejected_enums, CAST_THIS_POINTER);
-          reject(insn, that_types, rejected_enums, CAST_PARAMETER);
+          reject(insn, this_types, UnsafeType::kUsageCastThisPointer);
+          reject(insn, that_types, UnsafeType::kUsageCastParameter);
         }
         return;
       } else if (method::signatures_match(method, ENUM_TOSTRING_METHOD) ||
@@ -340,27 +311,25 @@ class EnumUpcastDetector {
                  method::signatures_match(method, ENUM_NAME_METHOD) ||
                  method::signatures_match(method, ENUM_ORDINAL_METHOD)) {
         if (this_types.size() > 1) {
-          reject(insn, this_types, rejected_enums, MULTI_ENUM_TYPES);
+          reject(insn, this_types, UnsafeType::kUsageMultiEnumTypes);
         }
         return;
       }
     } else if (method == STRINGBUILDER_APPEND_METHOD) {
       EnumTypes b_types = env->get(insn->src(1));
-      check_object_cast(b_types, insn, rejected_enums);
+      check_object_cast(b_types, insn);
       return;
     }
     // If not special cases, do the general processing.
-    process_general_invocation(insn, env, rejected_enums);
+    process_general_invocation(insn, env);
   }
 
   /**
    * Analyze invoke instruction's arguments, if the type of arguments are not
    * consistent with the method signature, reject these types.
    */
-  void process_general_invocation(
-      const IRInstruction* insn,
-      const EnumTypeEnvironment* env,
-      ConcurrentSet<DexType*>* rejected_enums) const {
+  void process_general_invocation(const IRInstruction* insn,
+                                  const EnumTypeEnvironment* env) const {
     always_assert(insn->has_method());
     auto method = insn->get_method();
     auto proto = method->get_proto();
@@ -373,14 +342,14 @@ class EnumUpcastDetector {
     if (insn->srcs_size() == args->size() + 1) {
       // this pointer
       reject_if_inconsistent(insn, env->get(insn->src(arg_id)), container,
-                             rejected_enums, CAST_THIS_POINTER);
+                             UnsafeType::kUsageCastThisPointer);
       arg_id++;
     }
     // Arguments
     auto it = args->begin();
     for (; arg_id < insn->srcs_size(); ++arg_id, ++it) {
       reject_if_inconsistent(insn, env->get(insn->src(arg_id)), *it,
-                             rejected_enums, CAST_PARAMETER);
+                             UnsafeType::kUsageCastParameter);
     }
   }
 
@@ -393,13 +362,12 @@ class EnumUpcastDetector {
   }
 
   void check_object_cast(const EnumTypes& types,
-                         const IRInstruction* insn,
-                         ConcurrentSet<DexType*>* rejected_enums) const {
+                         const IRInstruction* insn) const {
     auto that_types = discard_primitives(types);
     if (that_types.size() > 1) {
-      reject(insn, that_types, rejected_enums, MULTI_ENUM_TYPES);
+      reject(insn, that_types, UnsafeType::kUsageMultiEnumTypes);
     } else if (that_types.size() == 1 && type::is_array(*that_types.begin())) {
-      reject(insn, that_types, rejected_enums, CAST_ENUM_ARRAY_TO_OBJECT);
+      reject(insn, that_types, UnsafeType::kUsageCastEnumArrayToObject);
     }
   }
 
@@ -410,54 +378,50 @@ class EnumUpcastDetector {
   void reject_if_inconsistent(const IRInstruction* insn,
                               const EnumTypes& types,
                               DexType* required_type,
-                              ConcurrentSet<DexType*>* rejected_enums,
-                              Reason reason = UNKNOWN) const {
+                              UnsafeType reason = UnsafeType::kUsage) const {
     if (is_candidate(required_type)) {
       bool need_delete = false;
       for (auto possible_type : types.elements()) {
         if (!type::is_primitive(possible_type) &&
             possible_type != required_type) {
           need_delete = true;
-          reject(insn, possible_type, rejected_enums, reason);
+          reject(insn, possible_type, reason);
         }
       }
       if (need_delete) {
-        reject(insn, required_type, rejected_enums, reason);
+        reject(insn, required_type, reason);
       }
     } else {
       for (auto possible_type : types.elements()) {
-        reject(insn, possible_type, rejected_enums, reason);
+        reject(insn, possible_type, reason);
       }
     }
   }
 
   void reject(const IRInstruction* insn,
               const std::unordered_set<DexType*>& types,
-              ConcurrentSet<DexType*>* rejected_enums,
-              Reason reason = UNKNOWN) const {
+              UnsafeType reason = UnsafeType::kUsage) const {
     for (DexType* type : types) {
-      reject(insn, type, rejected_enums, reason);
+      reject(insn, type, reason);
     }
   }
 
   void reject(const IRInstruction* insn,
               const EnumTypes& types,
-              ConcurrentSet<DexType*>* rejected_enums,
-              Reason reason = UNKNOWN) const {
+              UnsafeType reason = UnsafeType::kUsage) const {
     for (DexType* type : types.elements()) {
-      reject(insn, type, rejected_enums, reason);
+      reject(insn, type, reason);
     }
   }
 
   void reject(const IRInstruction* insn,
               DexType* type,
-              ConcurrentSet<DexType*>* rejected_enums,
-              Reason reason = UNKNOWN) const {
+              UnsafeType reason = UnsafeType::kUsage) const {
     type = const_cast<DexType*>(type::get_element_type_if_array(type));
     if (m_candidate_enums->count_unsafe(type)) {
-      rejected_enums->insert(type);
-      TRACE(ENUM, 9, "reject %s %d %s %s", SHOW(type), (int)reason, SHOW(m_method),
-            SHOW(insn));
+      m_reject_fn(type, reason);
+      TRACE(ENUM, 9, "reject %s %d %s %s", SHOW(type), (int)reason,
+            SHOW(m_method), SHOW(insn));
     }
   }
 
@@ -483,6 +447,7 @@ class EnumUpcastDetector {
   const DexMethod* m_method;
   Config* m_config;
   const ConcurrentSet<DexType*>* m_candidate_enums;
+  const RejectFn& m_reject_fn;
 };
 
 bool is_static_method_on_enum_class(const DexMethodRef* ref) {
@@ -679,13 +644,15 @@ void reject_enums_for_colliding_constructors(
   }
 }
 
-void reject_unsafe_enums(const std::vector<DexClass*>& classes,
-                         Config* config) {
+void reject_unsafe_enums(
+    const std::vector<DexClass*>& classes,
+    Config* config,
+    const std::function<void(const DexType*, UnsafeType u)>& reject_fn) {
   auto candidate_enums = &config->candidate_enums;
   ConcurrentSet<DexType*> rejected_enums;
 
   walk::parallel::fields(
-      classes, [candidate_enums, &rejected_enums](DexField* field) {
+      classes, [candidate_enums, &rejected_enums, &reject_fn](DexField* field) {
         if (can_rename(field)) {
           return;
         }
@@ -700,6 +667,7 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
             type::get_element_type_if_array(field->get_type()));
         if (candidate_enums->count_unsafe(type)) {
           rejected_enums.insert(type);
+          reject_fn(type, UnsafeType::kUsageUnrenamableFieldType);
         }
       });
 
@@ -713,7 +681,7 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
       return;
     }
 
-    auto reject_proto_types = [&](DexMethod* method) {
+    auto reject_proto_types = [&](DexMethod* method, UnsafeType u) {
       std::vector<DexType*> types;
       method->get_proto()->gather_types(types);
       for (auto type : types) {
@@ -723,13 +691,14 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
           TRACE(ENUM, 5,
                 "Rejecting %s due to !can_rename or usage from annotation",
                 SHOW(elem_type));
+          reject_fn(elem_type, u);
           rejected_enums.insert(elem_type);
         }
       }
     };
 
     if (!can_rename(method)) {
-      reject_proto_types(method);
+      reject_proto_types(method, UnsafeType::kUsageUnrenamableMethodRef);
       if (!is_static(method) &&
           candidate_enums->count_unsafe(method->get_class())) {
         rejected_enums.insert(method->get_class());
@@ -738,7 +707,7 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
 
     auto method_cls = type_class(method->get_class());
     if (method_cls != nullptr && is_annotation(method_cls)) {
-      reject_proto_types(method);
+      reject_proto_types(method, UnsafeType::kUsageAnnotationMethodRef);
     }
 
     if (!need_analyze(method, *candidate_enums, rejected_enums)) {
@@ -750,8 +719,13 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
     EnumFixpointIterator engine(cfg, *config);
     engine.run(env);
 
-    EnumUpcastDetector detector(method, config);
-    detector.run(engine, cfg, &rejected_enums);
+    auto local_reject_fn = [&](DexType* type, UnsafeType u) {
+      rejected_enums.insert(type);
+      reject_fn(type, u);
+    };
+
+    EnumUpcastDetector detector(method, config, local_reject_fn);
+    detector.run(engine, cfg);
   });
 
   for (DexType* type : rejected_enums) {

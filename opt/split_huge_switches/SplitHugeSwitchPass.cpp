@@ -442,7 +442,7 @@ struct AnalysisData {
 
   DexMethod* m{nullptr};
   bool no_code{false};
-  bool under_insn_threshold{false};
+  bool under_code_units_threshold{false};
   bool no_switch{false};
   bool no_large_switch{false};
   bool no_easy_expr{false};
@@ -466,7 +466,7 @@ Stats analysis_data_to_stats(const AnalysisData& data, DexMethod* m) {
     return ret;
   }
 
-  if (data.under_insn_threshold) {
+  if (data.under_code_units_threshold) {
     return ret;
   }
   ret.large_methods_set.emplace(m);
@@ -510,7 +510,7 @@ Stats analysis_data_to_stats(const AnalysisData& data, DexMethod* m) {
 
 AnalysisData analyze(DexMethod* m,
                      IRCode* code,
-                     size_t insn_threshold,
+                     size_t code_units_threshold,
                      size_t case_threshold,
                      const method_profiles::MethodProfiles& method_profiles,
                      double hotness_threshold) {
@@ -522,12 +522,12 @@ AnalysisData analyze(DexMethod* m,
   }
   data.no_code = false;
 
-  auto size = code->sum_opcode_sizes();
-  if (size <= insn_threshold) {
-    data.under_insn_threshold = true;
+  auto size = code->estimate_code_units();
+  if (size <= code_units_threshold) {
+    data.under_code_units_threshold = true;
     return data;
   }
-  data.under_insn_threshold = false;
+  data.under_code_units_threshold = false;
   // stats.large_methods_set.emplace(m);
 
   if (!has_switch(code)) {
@@ -554,7 +554,7 @@ AnalysisData analyze(DexMethod* m,
   }
   data.no_easy_expr = false;
 
-  size_t nr_splits = (size_t)std::ceil(((float)size) / insn_threshold);
+  size_t nr_splits = (size_t)std::ceil(((float)size) / code_units_threshold);
   redex_assert(nr_splits > 1);
   auto switch_range =
       get_switch_range(*scoped_cfg, switch_it.block(), nr_splits);
@@ -760,13 +760,13 @@ Stats run_split_dexes(DexStoresVector& stores,
             continue;
           }
           left -= required;
-          size_t orig_size = data.m->get_code()->sum_opcode_sizes();
+          size_t orig_size = data.m->get_code()->estimate_code_units();
           auto new_methods =
               run_split(data, data.m, data.m->get_code(), case_threshold);
-          size_t new_size = data.m->get_code()->sum_opcode_sizes();
+          size_t new_size = data.m->get_code()->estimate_code_units();
           for (DexMethod* m : new_methods) {
             type_class(m->get_class())->add_method(m);
-            new_size += m->get_code()->sum_opcode_sizes();
+            new_size += m->get_code()->estimate_code_units();
           }
 
           std::lock_guard<std::mutex> lock_guard(mutex);
@@ -804,13 +804,13 @@ Stats& Stats::operator+=(const Stats& rhs) {
 Stats SplitHugeSwitchPass::run(
     DexMethod* m,
     IRCode* code,
-    size_t insn_threshold,
+    size_t code_units_threshold,
     size_t case_threshold,
     const method_profiles::MethodProfiles& method_profiles,
     double hotness_threshold) {
   AnalysisData data = analyze(m,
                               m->get_code(),
-                              insn_threshold,
+                              code_units_threshold,
                               case_threshold,
                               method_profiles,
                               hotness_threshold);

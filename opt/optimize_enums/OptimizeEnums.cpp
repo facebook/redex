@@ -7,8 +7,16 @@
 
 #include "OptimizeEnums.h"
 
+#include <algorithm>
+#include <fstream>
+#include <ostream>
+#include <set>
+#include <sstream>
+#include <unordered_set>
+
 #include "ClassAssemblingUtils.h"
 #include "ConfigFiles.h"
+#include "DexClass.h"
 #include "EnumAnalyzeGeneratedMethods.h"
 #include "EnumClinitAnalysis.h"
 #include "EnumTransformer.h"
@@ -17,6 +25,7 @@
 #include "MatchFlow.h"
 #include "OptimizeEnumsAnalysis.h"
 #include "OptimizeEnumsUnmap.h"
+#include "OptimizeEnumsUnsafeType.h"
 #include "PassManager.h"
 #include "ProguardMap.h"
 #include "Resolver.h"
@@ -39,6 +48,8 @@
  */
 
 namespace {
+
+using namespace optimize_enums;
 
 // Map the field holding the lookup table to its associated enum type.
 using LookupTableToEnum = std::unordered_map<DexField*, DexType*>;
@@ -122,7 +133,7 @@ bool analyze_enum_ctors(
 
   // TODO: We could order them instead of looping ...
   for (; !delegating_calls.empty(); delegating_calls.pop()) {
-    auto dc = std::move(delegating_calls.front());
+    auto dc = delegating_calls.front();
 
     auto* delegate =
         resolve_method(dc.invoke->get_method(), MethodSearch::Direct);
@@ -131,7 +142,7 @@ bool analyze_enum_ctors(
     { // Only proceed if the delegate constructor has already been processed.
       auto it = ctor_to_arg_ordinal.find(delegate);
       if (it == ctor_to_arg_ordinal.end()) {
-        delegating_calls.emplace(std::move(dc));
+        delegating_calls.emplace(dc);
         continue;
       } else {
         delegate_ordinal = it->second;
@@ -207,19 +218,19 @@ void collect_generated_switch_cases(
                      MethodSearch::Virtual);
   always_assert(Enum_ordinal);
 
-  auto m__generated_field = m::has_field(
+  auto m_generated_field = m::has_field(
       m::member_of<DexFieldRef>(m::equals(generated_cls->get_type())));
-  auto m__lookup = m::sget_object_(m__generated_field) || m::new_array_();
-  auto m__sget_enum = m::sget_object_(m::has_field(
+  auto m_lookup = m::sget_object_(m_generated_field) || m::new_array_();
+  auto m_sget_enum = m::sget_object_(m::has_field(
       m::member_of<DexFieldRef>(m::in<DexType*>(collected_enums))));
-  auto m__invoke_ordinal = m::invoke_virtual_(m::has_method(
+  auto m_invoke_ordinal = m::invoke_virtual_(m::has_method(
       m::resolve_method(MethodSearch::Virtual, m::equals(Enum_ordinal))));
 
   auto uniq = mf::alias | mf::unique;
-  auto look = f.insn(m__lookup);
-  auto gete = f.insn(m__sget_enum);
+  auto look = f.insn(m_lookup);
+  auto gete = f.insn(m_sget_enum);
   auto kase = f.insn(m::const_());
-  auto ordi = f.insn(m__invoke_ordinal).src(0, gete, uniq);
+  auto ordi = f.insn(m_invoke_ordinal).src(0, gete, uniq);
   auto aput = f.insn(m::aput_())
                   .src(0, kase, uniq)
                   .src(1, look, uniq)
@@ -239,10 +250,10 @@ void collect_generated_switch_cases(
   if (!new_array_to_sput.empty()) {
     mf::flow_t g;
 
-    auto m__sput_lookup = m::sput_object_(m__generated_field);
+    auto m_sput_lookup = m::sput_object_(m_generated_field);
 
     auto newa = g.insn(m::in<IRInstruction*>(new_array_to_sput));
-    auto sput = g.insn(m__sput_lookup).src(0, newa, uniq);
+    auto sput = g.insn(m_sput_lookup).src(0, newa, uniq);
 
     auto res_sputs = g.find(clinit_cfg, sput);
     for (auto* insn_sput : res_sputs.matching(sput)) {
@@ -297,6 +308,15 @@ class OptimizeEnums {
       : m_stores(stores), m_pg_map(conf.get_proguard_map()) {
     m_scope = build_class_scope(stores);
     m_java_enum_ctor = get_java_enum_ctor();
+
+    // Collect number of all enum classes.
+    std::atomic<size_t> cnt{0};
+    walk::parallel::classes(m_scope, [&](auto* klass) {
+      if (is_enum(klass) && !klass->is_external()) {
+        ++cnt;
+      }
+    });
+    m_stats.num_all_enum_classes = cnt.load();
   }
 
   void remove_redundant_generated_classes() {
@@ -345,14 +365,19 @@ class OptimizeEnums {
            m_stats.num_candidate_generated_methods);
     report(METRIC_NUM_REMOVED_GENERATED_METHODS,
            m_stats.num_removed_generated_methods);
+    report("num_all_enum_classes", m_stats.num_all_enum_classes);
   }
 
   /**
    * Replace enum with Boxed Integer object
    */
-  void replace_enum_with_int(int max_enum_size,
-                             bool skip_sanity_check,
-                             const std::vector<DexType*>& allowlist) {
+  void replace_enum_with_int(
+      PassManager& mgr,
+      int max_enum_size,
+      bool skip_sanity_check,
+      const std::vector<DexType*>& allowlist,
+      ConfigFiles& conf,
+      std::unordered_map<UnsafeType, size_t>& unsafe_counts) {
     if (max_enum_size <= 0) {
       return;
     }
@@ -361,60 +386,128 @@ class OptimizeEnums {
     calculate_param_summaries(m_scope, *override_graph,
                               &config.param_summary_map);
 
+    auto base_enum_check = [](const DexClass* cls) {
+      return is_enum(cls) && !cls->is_external();
+    };
+
     /**
      * An enum is safe if it not external, has no interfaces, and has only one
      * simple enum constructor. Static fields, primitive or string instance
      * fields, and virtual methods are safe.
      */
-    auto is_safe_enum = [this](const DexClass* cls) {
-      if (is_enum(cls) && !cls->is_external() && is_final(cls) &&
-          can_delete(cls) && cls->get_interfaces()->empty() &&
-          only_one_static_synth_field(cls)) {
 
-        const auto& ctors = cls->get_ctors();
-        if (ctors.size() != 1 ||
-            !is_simple_enum_constructor(cls, ctors.front())) {
-          return false;
-        }
-
-        for (auto& dmethod : cls->get_dmethods()) {
-          if (is_static(dmethod) || method::is_constructor(dmethod)) {
-            continue;
-          }
-          if (!can_rename(dmethod)) {
-            return false;
-          }
-        }
-
-        for (auto& vmethod : cls->get_vmethods()) {
-          if (!can_rename(vmethod)) {
-            return false;
-          }
-        }
-
-        const auto& ifields = cls->get_ifields();
-        return std::all_of(ifields.begin(), ifields.end(), [](DexField* field) {
-          auto type = field->get_type();
-          return type::is_primitive(type) || type == type::java_lang_String();
-        });
+    auto is_safe_enum = [this, &base_enum_check](const DexClass* cls,
+                                                 UnsafeTypes& utypes) {
+      if (!base_enum_check(cls)) {
+        return false;
       }
-      return false;
+
+      if (!is_final(cls)) {
+        utypes.insert(UnsafeType::kNotFinal);
+      }
+      if (!can_delete(cls)) {
+        utypes.insert(UnsafeType::kCannotDelete);
+      }
+      if (!cls->get_interfaces()->empty()) {
+        utypes.insert(UnsafeType::kHasInterfaces);
+      }
+      if (!only_one_static_synth_field(cls)) {
+        utypes.insert(UnsafeType::kMoreThanOneSynthField);
+      }
+
+      const auto& ctors = cls->get_ctors();
+      if (ctors.size() != 1) {
+        utypes.insert(UnsafeType::kMultipleCtors);
+      } else if (!is_simple_enum_constructor(cls, ctors.front())) {
+        utypes.insert(UnsafeType::kComplexCtor);
+      }
+
+      for (auto& dmethod : cls->get_dmethods()) {
+        if (is_static(dmethod) || method::is_constructor(dmethod)) {
+          continue;
+        }
+        if (!can_rename(dmethod)) {
+          utypes.insert(UnsafeType::kUnrenamableDmethod);
+          break;
+        }
+      }
+
+      for (auto& vmethod : cls->get_vmethods()) {
+        if (!can_rename(vmethod)) {
+          utypes.insert(UnsafeType::kUnrenamableVmethod);
+          break;
+        }
+      }
+
+      const auto& ifields = cls->get_ifields();
+      bool all_of =
+          std::all_of(ifields.begin(), ifields.end(), [](DexField* field) {
+            auto type = field->get_type();
+            return type::is_primitive(type) || type == type::java_lang_String();
+          });
+      if (!all_of) {
+        utypes.insert(UnsafeType::kComplexField);
+      }
+
+      return utypes.empty();
     };
 
-    walk::parallel::classes(m_scope, [&config, is_safe_enum](DexClass* cls) {
-      if (is_safe_enum(cls)) {
-        config.candidate_enums.insert(cls->get_type());
+    ConcurrentMap<const DexType*, UnsafeTypes> unsafe_enums;
+    walk::parallel::classes(m_scope, [&config, is_safe_enum, &base_enum_check,
+                                      &unsafe_enums](DexClass* cls) {
+      if (base_enum_check(cls)) {
+        UnsafeTypes utypes;
+        if (is_safe_enum(cls, utypes)) {
+          config.candidate_enums.insert(cls->get_type());
+        } else {
+          unsafe_enums.emplace(cls->get_type(), std::move(utypes));
+        }
       }
     });
 
-    optimize_enums::reject_unsafe_enums(m_scope, &config);
+    // Need to remember to understand what was rejected.
+    std::unordered_set<DexType*> orig_candidates{config.candidate_enums.begin(),
+                                                 config.candidate_enums.end()};
+
+    auto add_unsafe_usage = [&](const DexType* type, UnsafeType u) {
+      // May be called in parallel.
+      unsafe_enums.update(
+          type, [&](auto, UnsafeTypes& utypes, auto) { utypes.insert(u); });
+    };
+
+    optimize_enums::reject_unsafe_enums(m_scope, &config, add_unsafe_usage);
     if (traceEnabled(ENUM, 4)) {
       for (auto cls : config.candidate_enums) {
         TRACE(ENUM, 4, "candidate_enum %s", SHOW(cls));
       }
     }
+
+    for (auto* t : orig_candidates) {
+      if (config.candidate_enums.count_unsafe(t) == 0) {
+        unsafe_enums.emplace_unsafe(t, UnsafeTypes{UnsafeType::kUsage});
+      }
+    }
+
+    // Write unsafe enums to file.
+    {
+      std::ofstream ofs(conf.metafile("redex-unsafe-enums.txt"),
+                        std::ofstream::out | std::ofstream::app);
+      std::vector<const DexType*> unsafe_types;
+      unsafe_types.reserve(unsafe_enums.size());
+      std::transform(unsafe_enums.begin(), unsafe_enums.end(),
+                     std::back_inserter(unsafe_types),
+                     [](const auto& p) { return p.first; });
+      std::sort(unsafe_types.begin(), unsafe_types.end(), compare_dextypes);
+      for (auto* t : unsafe_types) {
+        ofs << show(t) << ":" << unsafe_enums.at(t) << "\n";
+        for (auto u : unsafe_enums.at(t)) {
+          ++unsafe_counts[u];
+        }
+      }
+    }
+
     m_stats.num_enum_objs = optimize_enums::transform_enums(
-        config, &m_stores, &m_stats.num_int_objs);
+        mgr, config, &m_stores, &m_stats.num_int_objs);
     m_stats.num_enum_classes = config.candidate_enums.size();
   }
 
@@ -711,17 +804,17 @@ class OptimizeEnums {
                                         LookupTableToEnum& mapping) {
     mf::flow_t f;
 
-    auto m__invoke_values = m::invoke_static_(m::has_method(
+    auto m_invoke_values = m::invoke_static_(m::has_method(
         m::named<DexMethodRef>("values") &&
         m::member_of<DexMethodRef>(m::in<DexType*>(collected_enums))));
-    auto m__sput_lookup = m::sput_object_(m::has_field(
+    auto m_sput_lookup = m::sput_object_(m::has_field(
         m::member_of<DexFieldRef>(m::equals(generated_cls->get_type()))));
 
     auto uniq = mf::alias | mf::unique;
-    auto vals = f.insn(m__invoke_values);
+    auto vals = f.insn(m_invoke_values);
     auto alen = f.insn(m::array_length_()).src(0, vals, uniq);
     auto newa = f.insn(m::new_array_()).src(0, alen, uniq);
-    auto sput = f.insn(m__sput_lookup).src(0, newa, uniq);
+    auto sput = f.insn(m_sput_lookup).src(0, newa, uniq);
 
     auto res = f.find(clinit_cfg, sput);
     for (auto* insn_sput : res.matching(sput)) {
@@ -751,6 +844,7 @@ class OptimizeEnums {
     std::atomic<size_t> num_switch_equiv_finder_failures{0};
     size_t num_candidate_generated_methods{0};
     size_t num_removed_generated_methods{0};
+    size_t num_all_enum_classes{0};
   };
   Stats m_stats;
 
@@ -779,10 +873,17 @@ void OptimizeEnumsPass::run_pass(DexStoresVector& stores,
                                  PassManager& mgr) {
   OptimizeEnums opt_enums(stores, conf);
   opt_enums.remove_redundant_generated_classes();
-  opt_enums.replace_enum_with_int(m_max_enum_size, m_skip_sanity_check,
-                                  m_enum_to_integer_allowlist);
+  std::unordered_map<UnsafeType, size_t> unsafe_counts;
+  opt_enums.replace_enum_with_int(mgr, m_max_enum_size, m_skip_sanity_check,
+                                  m_enum_to_integer_allowlist, conf,
+                                  unsafe_counts);
   opt_enums.remove_enum_generated_methods();
   opt_enums.stats(mgr);
+  for (auto& p : unsafe_counts) {
+    std::ostringstream oss;
+    oss << "reason." << p.first;
+    mgr.set_metric(oss.str(), p.second);
+  }
 }
 
 static OptimizeEnumsPass s_pass;

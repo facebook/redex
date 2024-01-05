@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "ControlFlow.h"
 #include "GlobalTypeAnalyzer.h"
 #include "IRCode.h"
 #include "LocalTypeAnalyzer.h"
@@ -89,14 +90,16 @@ class Transform final {
                                     cfg::Block* block,
                                     Stats& stats);
   void remove_redundant_type_checks(const DexTypeEnvironment& env,
-                                    IRList::iterator& it,
+                                    cfg::InstructionIterator& it,
+                                    cfg::ControlFlowGraph& cfg,
                                     Stats& stats);
 
   const Config m_config;
   // A set of methods excluded from null check removal
   ConcurrentSet<DexMethod*> m_excluded_for_null_check_removal;
-  std::vector<std::pair<IRInstruction*, IRInstruction*>> m_replacements;
-  std::vector<IRList::iterator> m_deletes;
+  std::vector<std::pair<cfg::InstructionIterator, IRInstruction*>>
+      m_replacements;
+  std::vector<cfg::InstructionIterator> m_deletes;
 };
 
 } // namespace type_analyzer

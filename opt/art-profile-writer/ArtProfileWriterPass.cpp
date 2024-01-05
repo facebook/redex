@@ -143,7 +143,7 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
 
   auto scope = build_class_scope(stores);
   std::atomic<size_t> methods_with_baseline_profile_code_units{0};
-  walk::parallel::code(scope, [&] (DexMethod* method, IRCode& code) {
+  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     if (methods_with_baseline_profile.count(method)) {
       methods_with_baseline_profile_code_units += code.estimate_code_units();
     }

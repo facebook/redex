@@ -465,7 +465,7 @@ uint32_t estimate_deduplicatable_ctor_code_size(const DexClass* cls) {
     if (!summary) {
       continue;
     }
-    estimated_size += method->get_code()->sum_opcode_sizes() +
+    estimated_size += method->get_code()->estimate_code_units() +
                       /*estimated encoded_method size*/ 2 +
                       /*method_id_item size*/ 8;
   }
@@ -556,7 +556,7 @@ uint32_t dedup_constructors(const std::vector<DexClass*>& classes,
     redex_assert(new_callee != old_callee);
     auto new_field_id_to_arg_id =
         methods_summaries[new_callee]->field_id_to_origin;
-    auto insn = callsite.mie->insn;
+    auto* insn = callsite.insn;
     insn->set_method(new_callee);
     reorder_callsite_args(old_field_id_to_arg_id, new_field_id_to_arg_id, insn);
   }

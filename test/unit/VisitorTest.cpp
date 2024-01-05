@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 #include <unordered_set>
 
+#include "Debug.h"
 #include "androidfw/ResourceTypes.h"
 #include "utils/ByteOrder.h"
 #include "utils/Visitor.h"
@@ -139,6 +140,35 @@ class StringTestVisitor : public arsc::StringPoolRefVisitor {
   std::unordered_set<uint32_t> m_key_strings_seen;
 };
 
+class XmlStringCollector : public arsc::SimpleXmlParser {
+ public:
+  ~XmlStringCollector() override {}
+
+  XmlStringCollector() {}
+
+  std::string get_global_string(const android::ResStringPool_ref& ref) {
+    auto idx = dtohl(ref.index);
+    size_t len;
+    auto& pool = global_strings();
+    auto chars = pool.stringAt(idx, &len);
+    always_assert_log(chars != nullptr, "invalid string ref %d", idx);
+    android::String16 s16(chars, len);
+    android::String8 s8(s16);
+    return std::string(s8.string());
+  }
+
+  bool visit_string_ref(android::ResStringPool_ref* ref) override {
+    auto ret = SimpleXmlParser::visit_string_ref(ref);
+    auto idx = dtohl(ref->index);
+    if (idx != 0xFFFFFFFF) {
+      auto str = get_global_string(*ref);
+      m_encountered_strings[str]++;
+    }
+    return ret;
+  }
+
+  std::unordered_map<std::string, size_t> m_encountered_strings;
+};
 } // namespace
 
 TEST(Visitor, ParsePackageAndTypes) {
@@ -174,4 +204,25 @@ TEST(Visitor, VisitAllStrings) {
     EXPECT_EQ(visitor.m_key_strings_seen.count(i), 1)
         << "Did not visit key string index " << i;
   }
+}
+
+TEST(Visitor, VisitXmlStrings) {
+  auto f = RedexMappedFile::open(std::getenv("xml_path"));
+  XmlStringCollector collector;
+  collector.visit(const_cast<char*>(f.const_data()), f.size());
+  EXPECT_EQ(collector.m_encountered_strings.size(), 8);
+  // Twice for the start/end node.
+  EXPECT_EQ(collector.m_encountered_strings.at("Button"), 2);
+  EXPECT_EQ(collector.m_encountered_strings.at("background"), 1);
+  EXPECT_EQ(collector.m_encountered_strings.at("padding"), 1);
+  EXPECT_EQ(collector.m_encountered_strings.at("layout_width"), 1);
+  EXPECT_EQ(collector.m_encountered_strings.at("layout_height"), 1);
+  EXPECT_EQ(collector.m_encountered_strings.at("text"), 1);
+  // Twice for start/end namespace.
+  EXPECT_EQ(collector.m_encountered_strings.at("android"), 2);
+  // Twice for the start/end namespace, plus 5 for each attribute in the
+  // namespace (note that attribute string ref points to the uri not the name).
+  EXPECT_EQ(collector.m_encountered_strings.at(
+                "http://schemas.android.com/apk/res/android"),
+            7);
 }
