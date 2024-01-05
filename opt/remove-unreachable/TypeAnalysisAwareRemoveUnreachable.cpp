@@ -229,7 +229,7 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
     refs.base_invoke_virtual_target_if_class_instantiable =
         std::make_pair(base_type, resolved_callee);
     auto base_cls = type_class(base_type);
-    if (base_cls == nullptr || base_cls->is_external() ||
+    if (base_cls->is_external() ||
         (!is_abstract(resolved_callee) && resolved_callee->is_external())) {
       refs.unknown_invoke_virtual_targets = true;
     } else if (opcode::is_invoke_interface(invoke->opcode()) &&
