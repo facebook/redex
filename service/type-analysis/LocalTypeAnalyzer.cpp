@@ -84,8 +84,8 @@ bool RegisterTypeAnalyzer::analyze_aget(const IRInstruction* insn,
     return true;
   }
 
-  always_assert_log(type::is_array(*array_type), "Wrong array type %s in %s",
-                    SHOW(*array_type), SHOW(insn));
+  always_assert_log(type::is_array(*array_type), "Wrong array type %s",
+                    SHOW(*array_type));
   auto idx_opt = env->get(insn->src(1)).get_constant();
   auto nullness = env->get(insn->src(0)).get_array_element_nullness(idx_opt);
   const auto ctype = type::get_array_component_type(*array_type);
@@ -479,20 +479,6 @@ bool CtorFieldAnalyzer::analyze_move_result(const DexType* class_under_init,
     return false;
   }
   env->set_this_ptr(insn->dest(), env->get_this_ptr(RESULT_REGISTER));
-  return false;
-}
-
-bool CtorFieldAnalyzer::analyze_invoke(const DexType* class_under_init,
-                                       const IRInstruction* insn,
-                                       DexTypeEnvironment* env) {
-  // Similar to the logic in constant_propagation::InitFieldAnalyzer, we try to
-  // be conservative when the ctor invokes other virtual methods on the same
-  // class, and reset the field environment.
-  auto opcode = insn->opcode();
-  if ((opcode == OPCODE_INVOKE_VIRTUAL || opcode == OPCODE_INVOKE_DIRECT) &&
-      class_under_init == insn->get_method()->get_class()) {
-    env->clear_field_environment();
-  }
   return false;
 }
 

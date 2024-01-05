@@ -61,13 +61,6 @@ bool verify_model_spec(const std::vector<ModelSpec>& model_specs,
         root,
         "[ClassMerging] Wrong specification: model %s must have \"roots\"",
         model_spec.name.c_str());
-    if (type_class(root) == nullptr) {
-      TRACE(CLMG, 2,
-            "[ClassMerging] Wrong specification: model %s has \"root\" %s w/o "
-            "definition",
-            model_spec.name.c_str(), SHOW(root));
-      return false;
-    }
   }
 
   for (const auto& spec : model_specs) {

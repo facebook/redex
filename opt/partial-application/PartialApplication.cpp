@@ -364,12 +364,6 @@ bool filter(const RefChecker& ref_checker,
   } else if (const auto& string_value = value.maybe_get<StringDomain>()) {
     // TODO: Support strings.
     return false;
-  } else if (const auto& class_or_none =
-                 value.maybe_get<ConstantClassObjectDomain>()) {
-    // TODO: Support class objects.
-    return false;
-  } else if (const auto& new_obj_or_none = value.maybe_get<NewObjectDomain>()) {
-    return false;
   } else {
     not_reached_log("unexpected value: %s", SHOW(value));
   }
@@ -1219,7 +1213,8 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
       return nullptr;
     }
     auto cls = type_class(callee->get_class());
-    if (!cls || cls->is_external() || excluded_classes.count(cls->get_type())) {
+    if (!cls || cls->is_external() || is_native(cls) ||
+        excluded_classes.count(cls->get_type())) {
       return nullptr;
     }
     // We'd add helper methods to the class, so we also want to avoid that it's

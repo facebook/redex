@@ -22,7 +22,6 @@ class ClassSplittingPass : public Pass {
     using namespace redex_properties::names;
     return {
         {HasSourceBlocks, RequiresAndEstablishes},
-        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
     };
   }

@@ -11,11 +11,9 @@
 #include "DexStore.h"
 #include "EnumClinitAnalysis.h"
 #include "EnumConfig.h"
-#include "PassManager.h"
 
 namespace optimize_enums {
-int transform_enums(PassManager& mgr,
-                    const Config& config,
+int transform_enums(const Config& config,
                     DexStoresVector* stores,
                     size_t* num_int_objs);
 } // namespace optimize_enums

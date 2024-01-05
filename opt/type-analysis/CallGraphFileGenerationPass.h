@@ -19,7 +19,6 @@ class CallGraphFileGenerationPass : Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
-        {UltralightCodePatterns, Preserves},
     };
   }
 

@@ -98,7 +98,7 @@ constexpr size_t MAX_INLINE_SIZE = 48;
 
 // Don't even try to inline an incompletely inlinable type if a very rough
 // estimate predicts an increase exceeding this threshold in code units.
-constexpr int64_t INCOMPLETE_ESTIMATED_DELTA_THRESHOLD = 0;
+constexpr float INCOMPLETE_ESTIMATED_DELTA_THRESHOLD = 0;
 
 // Overhead of having a method and its metadata.
 constexpr size_t COST_METHOD = 16;
@@ -109,14 +109,14 @@ constexpr size_t COST_CLASS = 48;
 // Overhead of having a field and its metadata.
 constexpr size_t COST_FIELD = 8;
 
-// Typical overhead of calling a method, without move-result overhead, times 10.
-constexpr int64_t COST_INVOKE = 47;
+// Typical overhead of calling a method, without move-result overhead.
+constexpr float COST_INVOKE = 4.7f;
 
-// Typical overhead of having move-result instruction, times 10.
-constexpr int64_t COST_MOVE_RESULT = 30;
+// Typical overhead of having move-result instruction.
+constexpr float COST_MOVE_RESULT = 3.0f;
 
-// Overhead of a new-instance instruction, times 10.
-constexpr int64_t COST_NEW_INSTANCE = 20;
+// Overhead of a new-instance instruction.
+constexpr float COST_NEW_INSTANCE = 2.0f;
 
 using Locations = std::vector<std::pair<DexMethod*, const IRInstruction*>>;
 
@@ -494,14 +494,14 @@ std::unordered_map<DexType*, InlineAnchorsOfType> compute_inline_anchors(
 class InlinedCodeSizeEstimator {
  private:
   using DeltaKey = std::pair<DexMethod*, const IRInstruction*>;
-  LazyUnorderedMap<DexMethod*, uint32_t> m_inlined_code_sizes;
+  LazyUnorderedMap<DexMethod*, size_t> m_inlined_code_sizes;
   LazyUnorderedMap<DexMethod*, live_range::DefUseChains> m_du_chains;
-  LazyUnorderedMap<DeltaKey, int64_t, boost::hash<DeltaKey>> m_deltas;
+  LazyUnorderedMap<DeltaKey, float, boost::hash<DeltaKey>> m_deltas;
 
  public:
   explicit InlinedCodeSizeEstimator(const MethodSummaries& method_summaries)
       : m_inlined_code_sizes([](DexMethod* method) {
-          uint32_t code_size{0};
+          size_t code_size{0};
           auto& cfg = method->get_code()->cfg();
           for (auto& mie : InstructionIterable(cfg)) {
             auto* insn = mie.insn;
@@ -521,7 +521,7 @@ class InlinedCodeSizeEstimator {
         }),
         m_deltas([&](DeltaKey key) {
           auto [method, allocation_insn] = key;
-          int64_t delta = 0;
+          float delta = 0;
           auto& du_chains = m_du_chains[method];
           if (opcode::is_an_invoke(allocation_insn->opcode())) {
             auto callee = resolve_method(allocation_insn->get_method(),
@@ -530,7 +530,7 @@ class InlinedCodeSizeEstimator {
             auto* callee_allocation_insn =
                 method_summaries.at(callee).allocation_insn;
             always_assert(callee_allocation_insn);
-            delta += 10 * (int64_t)m_inlined_code_sizes[callee] +
+            delta += m_inlined_code_sizes[callee] +
                      get_delta(callee, callee_allocation_insn) - COST_INVOKE -
                      COST_MOVE_RESULT;
           } else if (allocation_insn->opcode() == OPCODE_NEW_INSTANCE) {
@@ -552,21 +552,20 @@ class InlinedCodeSizeEstimator {
                   std::next(load_param_insns.begin(), use.src_index)->insn;
               always_assert(load_param_insn);
               always_assert(opcode::is_a_load_param(load_param_insn->opcode()));
-              delta += 10 * (int64_t)m_inlined_code_sizes[callee] +
+              delta += m_inlined_code_sizes[callee] +
                        get_delta(callee, load_param_insn);
               if (!callee->get_proto()->is_void()) {
                 delta -= COST_MOVE_RESULT;
               }
             } else if (opcode::is_an_iget(use.insn->opcode()) ||
                        opcode::is_an_iput(use.insn->opcode())) {
-              delta -= 10 * (int64_t)use.insn->size();
+              delta -= use.insn->size();
             }
           }
           return delta;
         }) {}
 
-  // Gets estimated delta size in terms of code units, times 10.
-  int64_t get_delta(DexMethod* method, const IRInstruction* allocation_insn) {
+  float get_delta(DexMethod* method, const IRInstruction* allocation_insn) {
     return m_deltas[std::make_pair(method, allocation_insn)];
   }
 };
@@ -612,7 +611,7 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
         continue;
       }
       if (!complete) {
-        int64_t delta = 0;
+        float delta = 0;
         for (auto allocation_insn : allocation_insns) {
           delta +=
               inlined_code_size_estimator.get_delta(method, allocation_insn);
@@ -718,7 +717,7 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
 }
 
 size_t get_code_size(DexMethod* method) {
-  return method->get_code()->estimate_code_units();
+  return method->get_code()->cfg().sum_opcode_sizes();
 }
 
 struct Stats {

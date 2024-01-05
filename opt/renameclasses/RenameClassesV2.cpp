@@ -475,13 +475,12 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
   for (auto clazz : scope) {
     // Short circuit force renames
     if (force_rename_hierarchies.count(clazz->get_type())) {
-      clazz->rstate.set_force_rename();
+      m_force_rename_classes.insert(clazz);
       continue;
     }
 
     // Don't rename annotations
     if (!rename_annotations && is_annotation(clazz)) {
-      clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Annotations,
                                       norule};
       continue;
@@ -491,7 +490,6 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
     bool annotated = false;
     for (const auto& anno : dont_rename_annotated) {
       if (has_anno(clazz, anno)) {
-        clazz->rstate.set_dont_rename();
         m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Annotated,
                                         anno->str_copy()};
         annotated = true;
@@ -505,7 +503,6 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
     // compute resource reachability, or we're doing it ourselves).
     if (referenced_by_layouts(clazz) &&
         !is_allowed_layout_class(clazz, m_allow_layout_rename_packages)) {
-      clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Resources, norule};
       continue;
     }
@@ -514,7 +511,6 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
 
     // Don't rename anythings in the direct name blocklist (hierarchy ignored)
     if (m_dont_rename_specific.count(strname)) {
-      clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Specific,
                                       std::move(strname)};
       continue;
@@ -526,7 +522,6 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
       if (strname.rfind("L" + pkg) == 0) {
         TRACE(RENAME, 2, "%s excluded by pkg rule %s", strname.c_str(),
               pkg.c_str());
-        clazz->rstate.set_dont_rename();
         m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Packages, pkg};
         package_blocklisted = true;
         break;
@@ -535,27 +530,23 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
     if (package_blocklisted) continue;
 
     if (dont_rename_class_name_literals.count(strname)) {
-      clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::ClassNameLiterals,
                                       norule};
       continue;
     }
 
     if (dont_rename_class_for_types_with_reflection.count(strname)) {
-      clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {
           DontRenameReasonCode::ClassForTypesWithReflection, norule};
       continue;
     }
 
     if (dont_rename_canaries.count(strname)) {
-      clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Canaries, norule};
       continue;
     }
 
     if (dont_rename_native_bindings.count(clazz->get_type())) {
-      clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::NativeBindings,
                                       norule};
       continue;
@@ -563,13 +554,11 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
 
     if (dont_rename_hierarchies.count(clazz->get_type())) {
       std::string rule = dont_rename_hierarchies[clazz->get_type()];
-      clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Hierarchy, rule};
       continue;
     }
 
     if (dont_rename_serde_relationships.count(clazz->get_type())) {
-      clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::SerdeRelationships,
                                       norule};
       continue;
@@ -578,7 +567,6 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
     if (!can_rename_if_also_renaming_xml(clazz)) {
       const auto& keep_reasons = clazz->rstate.keep_reasons();
       auto rule = !keep_reasons.empty() ? show(*keep_reasons.begin()) : "";
-      clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::ProguardCantRename,
                                       get_keep_rule(clazz)};
       continue;
@@ -653,7 +641,7 @@ std::unordered_set<DexClass*> RenameClassesPassV2::get_renamable_classes(
     Scope& scope) {
   std::unordered_set<DexClass*> renamable_classes;
   for (auto clazz : scope) {
-    if (clazz->rstate.is_force_rename() ||
+    if (m_force_rename_classes.count(clazz) ||
         !m_dont_rename_reasons.count(clazz)) {
       renamable_classes.insert(clazz);
     }
@@ -671,32 +659,29 @@ void RenameClassesPassV2::rename_classes(
     auto dtype = clazz->get_type();
     auto oldname = dtype->get_name();
 
-    if (clazz->rstate.is_force_rename()) {
+    if (m_force_rename_classes.count(clazz)) {
       mgr.incr_metric(METRIC_FORCE_RENAMED_CLASSES, 1);
       TRACE(RENAME, 2, "Forced renamed: '%s'", oldname->c_str());
-    } else if (!clazz->rstate.is_renamable_initialized_and_renamable() ||
-               clazz->rstate.is_generated()) {
-      // Either cls is not renamble, or it is a Redex newly generated class.
-      if (m_dont_rename_reasons.find(clazz) != m_dont_rename_reasons.end()) {
-        auto reason = m_dont_rename_reasons[clazz];
-        std::string metric = dont_rename_reason_to_metric(reason.code);
-        mgr.incr_metric(metric, 1);
-        if (dont_rename_reason_to_metric_per_rule(reason.code)) {
-          std::string str = metric + "::" + std::string(reason.rule);
-          mgr.incr_metric(str, 1);
-          TRACE(RENAME, 2, "'%s' NOT RENAMED due to %s'", oldname->c_str(),
-                str.c_str());
-        } else {
-          TRACE(RENAME, 2, "'%s' NOT RENAMED due to %s'", oldname->c_str(),
-                metric.c_str());
-        }
-        sequence++;
-        always_assert(!renamable_classes.count(clazz));
-        continue;
+    } else if (m_dont_rename_reasons.find(clazz) !=
+               m_dont_rename_reasons.end()) {
+      auto reason = m_dont_rename_reasons[clazz];
+      std::string metric = dont_rename_reason_to_metric(reason.code);
+      mgr.incr_metric(metric, 1);
+      if (dont_rename_reason_to_metric_per_rule(reason.code)) {
+        std::string str = metric + "::" + std::string(reason.rule);
+        mgr.incr_metric(str, 1);
+        TRACE(RENAME, 2, "'%s' NOT RENAMED due to %s'", oldname->c_str(),
+              str.c_str());
+      } else {
+        TRACE(RENAME, 2, "'%s' NOT RENAMED due to %s'", oldname->c_str(),
+              metric.c_str());
       }
+      sequence++;
+      always_assert(!renamable_classes.count(clazz));
+      continue;
     }
-
     always_assert(renamable_classes.count(clazz));
+
     mgr.incr_metric(METRIC_RENAMED_CLASSES, 1);
 
     char descriptor[Locator::encoded_global_class_index_max];
@@ -756,7 +741,7 @@ void RenameClassesPassV2::rename_classes(
       continue;
     }
     auto clazz = type_class(type);
-    if (clazz && clazz->rstate.is_force_rename()) {
+    if (clazz && m_force_rename_classes.count(clazz)) {
       force_rename_map.add_type_name(pair.first, pair.second);
     }
   }
@@ -777,9 +762,8 @@ void RenameClassesPassV2::rename_classes(
 
 void RenameClassesPassV2::rename_classes_in_layouts(
     const rewriter::TypeStringMap& name_mapping, PassManager& mgr) {
-  // Sync up ResStringPool entries in XML layouts. Class names should appear
-  // in their "external" name, i.e. java.lang.String instead of
-  // Ljava/lang/String;
+  // Sync up ResStringPool entries in XML layouts. Class names should appear in
+  // their "external" name, i.e. java.lang.String instead of Ljava/lang/String;
   std::map<std::string, std::string> aliases_for_layouts;
   for (const auto& apair : name_mapping.get_class_map()) {
     aliases_for_layouts.emplace(

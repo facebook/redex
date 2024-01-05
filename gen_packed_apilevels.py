@@ -9,7 +9,6 @@ import base64
 import io
 import logging
 import os
-import shutil
 import zipfile
 from collections import namedtuple
 
@@ -58,9 +57,7 @@ def compress_zip(inputs):
         for input in inputs:
             logging.info("Adding %s", input)
             with open(input, "rb") as f:
-                # Files are multi-MB, try to do it smartly.
-                with zf.open(os.path.basename(input), mode="w") as f2:
-                    shutil.copyfileobj(f, f2)
+                zf.writestr(os.path.basename(input), f)
     buf.seek(0)
     return buf
 
@@ -147,7 +144,7 @@ _ZIP = zipfile.ZipFile(io.BytesIO(base64.b64decode(_BASE64BLOB)), "r")
 
 def _load(name):
     global _ZIP
-    return _ZIP.read(name)
+    return _ZIP.read(names)
 
 
 def _all():

@@ -93,7 +93,7 @@ static void validate_dex_header(const dex_header* dh,
       dex_methodhandle_id* methodhandle_ids =
           (dex_methodhandle_id*)((uint8_t*)dh + item.offset);
       auto methodhandle_ids_limit =
-          methodhandle_ids_off + item.size * sizeof(dex_methodhandle_id);
+          methodhandle_ids_off + item.size * sizeof(dex_callsite_id);
       always_assert_log(methodhandle_ids_limit < dexsize,
                         "inavlid methodhandle_ids size");
     } break;
@@ -166,13 +166,11 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
     auto anno_off = class_def->annotations_off;
     if (anno_off) {
       const dex_annotations_directory_item* anno_dir =
-          m_idx->get_data<dex_annotations_directory_item>(anno_off);
+          (const dex_annotations_directory_item*)m_idx->get_uint_data(anno_off);
       auto class_anno_off = anno_dir->class_annotations_off;
       if (class_anno_off) {
         const uint32_t* anno_data = m_idx->get_uint_data(class_anno_off);
         uint32_t count = *anno_data++;
-        always_assert(anno_data <= anno_data + count);
-        always_assert((uint8_t*)(anno_data + count) <= m_idx->end());
         for (uint32_t aidx = 0; aidx < count; ++aidx) {
           anno_offsets.insert(anno_data[aidx]);
         }
@@ -192,8 +190,6 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
         if (xrefoff != 0) {
           const uint32_t* annoxref = m_idx->get_uint_data(xrefoff);
           uint32_t count = *annoxref++;
-          always_assert(annoxref < annoxref + count);
-          always_assert((uint8_t*)(annoxref + count) <= m_idx->end());
           for (uint32_t j = 0; j < count; j++) {
             uint32_t off = annoxref[j];
             anno_offsets.insert(off);
@@ -538,7 +534,8 @@ void DexLoader::load_dex_class(int num) {
         annotations_off + sizeof(dex_annotations_directory_item) <= dexsize,
         "Invalid cdef->annotations_off");
     const dex_annotations_directory_item* annodir =
-        idx->get_data<dex_annotations_directory_item>(annotations_off);
+        (const dex_annotations_directory_item*)idx->get_uint_data(
+            annotations_off);
     auto cls_annos_off = annodir->class_annotations_off;
     always_assert_log(cls_annos_off < dexsize,
                       "Invalid annodir->class_annotations_off");

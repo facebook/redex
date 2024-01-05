@@ -32,7 +32,6 @@ class SingleImplPass : public Pass {
     using namespace redex_properties::names;
     return {
         {HasSourceBlocks, Preserves},
-        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
     };
   }
@@ -52,7 +51,6 @@ class SingleImplPass : public Pass {
          m_pass_config.filter_proguard_special_interfaces);
   }
 
-  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   // count of removed interfaces

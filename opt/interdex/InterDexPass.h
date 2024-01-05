@@ -72,7 +72,6 @@ class InterDexPass : public Pass {
     return {
         {DexLimitsObeyed, Establishes},
         {HasSourceBlocks, Preserves},
-        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
     };
   }
@@ -84,8 +83,6 @@ class InterDexPass : public Pass {
                  PassManager& mgr) override {
     ++m_eval;
   }
-
-  bool is_cfg_legacy() override { return true; }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
@@ -122,8 +119,7 @@ class InterDexPass : public Pass {
                         std::vector<std::unique_ptr<InterDexPassPlugin>>&,
                         ConfigFiles&,
                         PassManager&,
-                        const ReserveRefsInfo&,
-                        ClassReferencesCache& cache);
+                        const ReserveRefsInfo&);
 
   void run_pass_on_nonroot_store(const Scope&,
                                  const XStoreRefs&,
@@ -132,8 +128,7 @@ class InterDexPass : public Pass {
                                  DexClassesVector&,
                                  ConfigFiles&,
                                  PassManager&,
-                                 const ReserveRefsInfo&,
-                                 ClassReferencesCache& cache);
+                                 const ReserveRefsInfo&);
 };
 
 } // namespace interdex

@@ -1672,7 +1672,6 @@ bool dest_is_object(IROpcode op) {
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
     return false;
   case IOPCODE_INJECTION_ID:
-  case IOPCODE_UNREACHABLE:
     return false;
   default:
     not_reached_log("Unknown opcode %02x\n", op);

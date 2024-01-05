@@ -143,10 +143,6 @@ struct enhanced_dex_stats_t : public dex_stats_t {
   }
 };
 
-SortMode get_string_sort_mode(ConfigFiles& conf);
-std::vector<SortMode> get_code_sort_mode(ConfigFiles& conf,
-                                         const std::string& store_name);
-
 enhanced_dex_stats_t write_classes_to_dex(
     const std::string& filename,
     DexClasses* classes,
@@ -163,9 +159,7 @@ enhanced_dex_stats_t write_classes_to_dex(
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
     const DexOutputConfig& dex_output_config = DexOutputConfig{},
-    int min_sdk = 0,
-    const std::vector<SortMode>& code_sort_mode = {SortMode::CLASS_ORDER},
-    SortMode string_sort_mode = SortMode::DEFAULT);
+    int min_sdk = 0);
 
 using cmp_dstring = bool (*)(const DexString*, const DexString*);
 using cmp_dtype = bool (*)(const DexType*, const DexType*);

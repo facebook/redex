@@ -38,9 +38,10 @@ bool throws(cfg::Block* block) {
 }
 } // namespace
 
-std::unique_ptr<SwitchMethodPartitioning> SwitchMethodPartitioning::create(
+boost::optional<SwitchMethodPartitioning> SwitchMethodPartitioning::create(
     IRCode* code, bool verify_default_case_throws) {
-  cfg::ScopedCFG cfg(code);
+  code->build_cfg(/* editable */ true);
+  auto cfg = &code->cfg();
   // Check for a throw only method up front. SwitchEquivFinder will not
   // represent this out of the box, so convert directly to
   // SwitchMethodPartitioning representation.
@@ -48,9 +49,7 @@ std::unique_ptr<SwitchMethodPartitioning> SwitchMethodPartitioning::create(
     TRACE(SW, 3, "Special case: method always throws");
     std::vector<cfg::Block*> entry_blocks;
     entry_blocks.emplace_back(cfg->entry_block());
-    return std::unique_ptr<SwitchMethodPartitioning>(
-        new SwitchMethodPartitioning(std::move(cfg), std::move(entry_blocks),
-                                     {}));
+    return SwitchMethodPartitioning(code, std::move(entry_blocks), {});
   }
 
   // Note that a single-case switch can be compiled as either a switch opcode or
@@ -58,9 +57,9 @@ std::unique_ptr<SwitchMethodPartitioning> SwitchMethodPartitioning::create(
   // cases uniformly: to determine the case key, we use the inferred value of
   // the operand to the branching opcode in the successor blocks.
   std::vector<cfg::Block*> prologue_blocks;
-  if (!gather_linear_prologue_blocks(cfg.get(), &prologue_blocks)) {
+  if (!gather_linear_prologue_blocks(cfg, &prologue_blocks)) {
     TRACE(SW, 3, "Prologue blocks do not have expected branching");
-    return nullptr;
+    return boost::none;
   }
   auto fixpoint = std::make_shared<cp::intraprocedural::FixpointIterator>(
       *cfg, SwitchEquivFinder::Analyzer());
@@ -69,18 +68,18 @@ std::unique_ptr<SwitchMethodPartitioning> SwitchMethodPartitioning::create(
   if (!find_determining_reg(*fixpoint, prologue_blocks.back(),
                             &determining_reg)) {
     TRACE(SW, 3, "Unknown const for branching");
-    return nullptr;
+    return boost::none;
   }
   auto last_prologue_block = prologue_blocks.back();
   auto last_prologue_insn = last_prologue_block->get_last_insn();
   auto root_branch = cfg->find_insn(last_prologue_insn->insn);
   auto finder = std::make_unique<SwitchEquivFinder>(
-      cfg.get(), root_branch, determining_reg, DEFAULT_LEAF_DUP_THRESHOLD,
+      cfg, root_branch, determining_reg, DEFAULT_LEAF_DUP_THRESHOLD,
       fixpoint, SwitchEquivFinder::EXECUTION_ORDER);
   if (!finder->success() ||
       !finder->are_keys_uniform(SwitchEquivFinder::KeyKind::INT)) {
     TRACE(SW, 3, "Cannot represent method as switch equivalent");
-    return nullptr;
+    return boost::none;
   }
 
   if (verify_default_case_throws) {
@@ -99,6 +98,6 @@ std::unique_ptr<SwitchMethodPartitioning> SwitchMethodPartitioning::create(
       key_to_block.emplace(i, block);
     }
   }
-  return std::unique_ptr<SwitchMethodPartitioning>(new SwitchMethodPartitioning(
-      std::move(cfg), std::move(prologue_blocks), std::move(key_to_block)));
+  return SwitchMethodPartitioning(code, std::move(prologue_blocks),
+                                  std::move(key_to_block));
 }

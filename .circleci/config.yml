@@ -20,76 +20,11 @@ orbs:
 commands:
   # Setup container.
   debian-based-image-build-setup:
-    parameters:
-      mode_32:
-        type: boolean
-        default: false
-      install_clang:
-        type: boolean
-        default: false
-      install_clang_llvm_org:
-        type: integer
-        default: -1  # Off
     steps:
       - run:
           name: Update Apt Data
           command: |
-            sudo apt-get update || ( apt-get update && apt-get install --no-install-recommends -y sudo ; )
-      - when:
-          condition: << parameters.mode_32 >>
-          steps:
-            - run:
-                name: Add 32-bit Arch
-                command: |
-                  sudo dpkg --add-architecture i386 && sudo apt-get update
-      - when:
-          condition: << parameters.install_clang >>
-          steps:
-            - run:
-                name: Install Clang
-                command: |
-                  sudo apt-get install -y --no-install-recommends clang
-      # Clang from llvm.org
-      #
-      # add-apt-repository in the install script needs to be rewritten:
-      #   * -y to not ask for input
-      #   * seemingly the first run does not insert the source, so need to run twice
-      #
-      # We symlink the clang-X binary, there is no update-alternatives it seems.
-      # For simplicity assume there is only one version installed.
-      #
-      # 1. 0 = default version
-      - when:
-          condition:
-            equal: [0, << parameters.install_clang_llvm_org >> ]
-          steps:
-            - run:
-                name: Install Clang (apt.llvm.org)
-                # Link the numbered version so it's easier to use.
-                command: |
-                  sudo apt-get install -y --no-install-recommends lsb-release wget software-properties-common gnupg
-                  sudo /bin/bash -c "$(wget -O - https://apt.llvm.org/llvm.sh | sed -e 's/^add-apt-repository.*$/& -y\n& -y/')"
-                  ls /usr/bin/clang*
-                  sudo ln -s /usr/bin/clang-?? /usr/bin/clang
-                  sudo ln -s /usr/bin/clang++-?? /usr/bin/clang++
-      # 2. >0 = specific version
-      - when:
-          condition:
-            and:
-              - not:
-                  equal: [-1, << parameters.install_clang_llvm_org >> ]
-              - not:
-                  equal: [0, << parameters.install_clang_llvm_org >> ]
-          steps:
-            - run:
-                name: Install Clang (apt.llvm.org)
-                # Link the numbered version so it's easier to use.
-                command: |
-                  sudo apt-get install -y --no-install-recommends lsb-release wget software-properties-common gnupg
-                  sudo /bin/bash -c "$(wget -O - https://apt.llvm.org/llvm.sh | sed -e 's/^add-apt-repository.*$/& -y\n& -y/')" "llvm.sh" << parameters.install_clang_llvm_org >>
-                  ls /usr/bin/clang*
-                  sudo ln -s /usr/bin/clang-?? /usr/bin/clang
-                  sudo ln -s /usr/bin/clang++-?? /usr/bin/clang++
+            sudo apt-get update
 
   # Setup. Includes boost.
   base-build-setup:
@@ -97,9 +32,6 @@ commands:
       save_boost_cache:
         type: boolean
         default: false
-      setup_toolchain_extra:
-        type: string
-        default: ""
     steps:
       # It is OK to generically restore boost, even if it is not used.
       - restore_cache:
@@ -108,7 +40,7 @@ commands:
       - run:
           name: Setup
           command: |
-            sudo ./setup_oss_toolchain.sh << parameters.setup_toolchain_extra >>
+            sudo ./setup_oss_toolchain.sh
       # Only save the cache when asked, e.g., hopefully when it was populated.
       - when:
           condition: << parameters.save_boost_cache >>
@@ -119,9 +51,7 @@ commands:
                 key: boost-1-71-0-v1
 
   # For testing, need additional dependencies not provided by the image.
-
-  # Version where dx is available as a package. May remove this eventually.
-  test-build-setup-no-sdk:
+  test-build-setup:
     steps:
       - run:
           name: Setup for tests
@@ -194,56 +124,27 @@ commands:
             - ~/sdk
           key: android-build-tools-{{ checksum "cache_version.rev" }}
 
-  test-build-setup:
-    parameters:
-      use_sdk:
-        type: boolean
-        default: true
+  install-clang:
     steps:
-      - when:
-          condition: << parameters.use_sdk >>
-          steps:
-            - test-build-setup-sdk
-      - when:
-          condition:
-            not: << parameters.use_sdk >>
-          steps:
-            - test-build-setup-no-sdk
+      - run:
+          name: Install Clang (Deb Testing)
+          command: |
+            sudo apt-get install -y --no-install-recommends clang
 
-  # Level of indirection because there seems to be no way to set parameters
-  # in the steps.
-  setup-build-and-test-w-make-impl:
-    description: "Prepare, build and test ReDex"
+  configure-and-build-w-make:
     parameters:
-      setup_toolchain_extra:
-        type: string
-        default: ""
       configure_extra:
         default: ""
         type: string
-      save_boost_cache:
-        type: boolean
-        default: false
-      run_tests:
-        type: boolean
-        default: true
-      use_sdk:
-        type: boolean
-        default: true
     steps:
-      - base-build-setup:
-          save_boost_cache: << parameters.save_boost_cache >>
-          setup_toolchain_extra: << parameters.setup_toolchain_extra >>
-
-      - test-build-setup:
-          use_sdk: << parameters.use_sdk >>
-
+      # Configure.
       - run:
           name: Configure
           command: |
             autoreconf -ivf
-            ./configure --enable-protobuf << parameters.configure_extra >>
+            ./configure << parameters.configure_extra >>
 
+      # Actual build.
       - run:
           name: Build
           # The old Travis limit. Hopefully ensures GCC does
@@ -251,87 +152,60 @@ commands:
           command: |
             make -j4 V=0
 
+  # Build & run tests.
+  test-w-make:
+    description: "Test ReDex with make"
+    steps:
       - run:
           name: Build tests
           command: |
             make -j4 check TESTS= V=0
-
-      - when:
-          condition: << parameters.run_tests >>
-          steps:
-            - run:
-                name: Run tests
-                command: |
-                  mkdir -p /tmp/test-results
-                  export GTEST_OUTPUT=xml:/tmp/test-results/
-                  make -j4 check V=0
-            - store_test_results:
-                path: /tmp/test-results
+      - run:
+          name: Run tests
+          command: |
+            mkdir -p /tmp/test-results
+            export GTEST_OUTPUT=xml:/tmp/test-results/
+            make -j4 check V=0
+      - store_test_results:
+          path: /tmp/test-results
 
   setup-build-and-test-w-make:
     description: "Prepare, build and test ReDex"
     parameters:
+      configure_extra:
+        default: ""
+        type: string
       save_boost_cache:
         type: boolean
         default: false
-      # Whether to build 32-bit.
-      mode_32:
-        type: boolean
-        default: false
-      # Download DX from the Android SDK.
-      use_sdk:
-        type: boolean
-        default: true
     steps:
-      - when:
-          condition: << parameters.mode_32 >>
-          steps:
-            - setup-build-and-test-w-make-impl:
-                save_boost_cache: << parameters.save_boost_cache >>
-                use_sdk: << parameters.use_sdk >>
-                setup_toolchain_extra: "32"
-                # Would be nice to properly use environment, but that's only at
-                # the jobs or run level.
-                configure_extra: "--host=i686-linux-gnu CFLAGS=-m32 CXXFLAGS=-m32 LDFLAGS=-m32"
-                # Some tests segfault in 32-bit mode.
-                run_tests: false
-      # "else" not supported.
-      - when:
-          condition:
-            not: << parameters.mode_32 >>
-          steps:
-            - setup-build-and-test-w-make-impl:
-                save_boost_cache: << parameters.save_boost_cache >>
-                use_sdk: << parameters.use_sdk >>
-
-  build_debian:
-    description: "(Modern) Debian build and test"
-    parameters:
-      save_boost_cache:
-        type: boolean
-        default: false
-      install_clang:
-        type: boolean
-        default: false
-      install_clang_llvm_org:
-        type: integer
-        default: -1
-      mode_32:
-        type: boolean
-        default: false
-      use_sdk:
-        type: boolean
-        default: true
-    steps:
-      - checkout
-      - debian-based-image-build-setup:
-          install_clang: << parameters.install_clang>>
-          install_clang_llvm_org: << parameters.install_clang_llvm_org >>
-          mode_32: << parameters.mode_32>>
-      - setup-build-and-test-w-make:
+      - base-build-setup:
           save_boost_cache: << parameters.save_boost_cache >>
-          use_sdk: << parameters.use_sdk >>
-          mode_32: << parameters.mode_32>>
+      - test-build-setup
+
+      - configure-and-build-w-make:
+          configure_extra: << parameters.configure_extra >>
+
+      - test-w-make
+
+  setup-build-and-test-w-make-sdk:
+    description: "Prepare, build and test ReDex"
+    parameters:
+      configure_extra:
+        default: ""
+        type: string
+      save_boost_cache:
+        type: boolean
+        default: false
+    steps:
+      - base-build-setup:
+          save_boost_cache: << parameters.save_boost_cache >>
+      - test-build-setup-sdk
+
+      - configure-and-build-w-make:
+          configure_extra: << parameters.configure_extra >>
+
+      - test-w-make
 
   setup-build-and-test-windows:
     description: "Prepare, build and test ReDex on Windows with MSYS2"
@@ -366,18 +240,15 @@ commands:
           command: cd build && make -j 4 package V=0
 
 jobs:
-  ##########
-  # UBUNTU #
-  ##########
-
   build-18_04:
     docker:
       - image: circleci/buildpack-deps:bionic
     # GCC is hungry.
     resource_class: large
     steps:
-      - build_debian:
-          use_sdk: false
+      - checkout
+      - debian-based-image-build-setup
+      - setup-build-and-test-w-make
 
   build-20_04:
     docker:
@@ -385,108 +256,43 @@ jobs:
     # GCC is hungry.
     resource_class: large
     steps:
-      - build_debian:
+      - checkout
+      - debian-based-image-build-setup
+      - setup-build-and-test-w-make:
           save_boost_cache: true
-
-  build-22_04:
-    docker:
-      - image: cimg/base:current-22.04
-    # GCC is hungry.
-    resource_class: large
-    steps:
-      - build_debian
-
-  ##########
-  # DEBIAN #
-  ##########
-
-  # Should be Debian 10 at time of writing.
-  build-deb_oldoldstable:
-    docker:
-      - image: buildpack-deps:oldoldstable-scm
-    # GCC is hungry.
-    resource_class: large
-    steps:
-      - build_debian:
-          use_sdk: false
 
   build-deb_stable:
     docker:
-      - image: buildpack-deps:stable-scm
+      - image: circleci/buildpack-deps:stable
     # GCC is hungry.
     resource_class: large
     steps:
-      - build_debian
+      - checkout
+      - debian-based-image-build-setup
+      - setup-build-and-test-w-make
 
-  build-deb_stable-w-clang:
+  build-deb_testing:
     docker:
-      - image: buildpack-deps:stable-scm
+      - image: circleci/buildpack-deps:testing
+    # GCC is hungry.
+    resource_class: large
+    steps:
+      - checkout
+      - debian-based-image-build-setup
+      - setup-build-and-test-w-make-sdk
+
+  build-deb_testing-w-clang:
+    docker:
+      - image: circleci/buildpack-deps:testing
     resource_class: large
     environment:
       CC: clang
       CXX: clang++
     steps:
-      - build_debian:
-          install_clang: true
-
-  build-deb_stable-32:
-    docker:
-      - image: buildpack-deps:stable-scm
-    # GCC is hungry.
-    resource_class: large
-    steps:
-      - build_debian:
-          mode_32: true
-
-  build-deb_stable-w-clang-llvm-org:
-    docker:
-      - image: buildpack-deps:stable-scm
-    resource_class: large
-    environment:
-      CC: clang
-      CXX: clang++
-    parameters:
-      clang_version:
-        type: integer
-        default: 0
-    steps:
-      - build_debian:
-          install_clang_llvm_org: << parameters.clang_version>>
-
-  # Note: buildpack-deps:testing is the same as stable at time of writing,
-  #       so jump to unstable directly.
-
-  build-deb_unstable:
-    docker:
-      - image: buildpack-deps:unstable-scm
-    # GCC is hungry.
-    resource_class: large
-    steps:
-      - build_debian
-
-  build-deb_unstable-w-clang:
-    docker:
-      - image: buildpack-deps:unstable-scm
-    resource_class: large
-    environment:
-      CC: clang
-      CXX: clang++
-    steps:
-      - build_debian:
-          install_clang: true
-
-  build-deb_unstable-32:
-    docker:
-      - image: buildpack-deps:unstable-scm
-    # GCC is hungry.
-    resource_class: large
-    steps:
-      - build_debian:
-          mode_32: true
-
-  ###########
-  # WINDOWS #
-  ###########
+      - checkout
+      - debian-based-image-build-setup
+      - install-clang
+      - setup-build-and-test-w-make-sdk
 
   build-windows:
     executor:
@@ -525,27 +331,8 @@ workflows:
   version: 2.1
   build_main:
     jobs:
-      # Oldest officially supported Ubuntu build. Will go away soon.
       - build-18_04:
           filters: *filter-only-main
-      # Current Ubuntu LTS.
-      - build-20_04:
-          filters: *filter-only-main
-      # Oldest officially supported Debian build.
-      - build-deb_oldoldstable:
-          filters: *filter-only-main
-      # For better format strings checking.
-      - build-deb_stable-32:
-          filters: *filter-only-main
-      # For newer compilers.
-      - build-deb_unstable:
-          filters: *filter-only-main
-      - build-deb_unstable-w-clang:
-          filters: *filter-only-main
-      # At least one Clang check.
-      - build-deb_stable-w-clang-llvm-org:
-          filters: *filter-only-main
-      # For compatibility.
       - build-windows:
           filters: *filter-only-main
 
@@ -559,18 +346,9 @@ workflows:
           filters: *filter-not-gh-pages-not-main
       - build-deb_stable:
           filters: *filter-not-gh-pages-not-main
-      - build-deb_stable-32:
+      - build-deb_testing:
           filters: *filter-not-gh-pages-not-main
-      # Only use the default (supposed stable) version on diffs.
-      - build-deb_stable-w-clang-llvm-org:
-          filters: *filter-not-gh-pages-not-main
-      - build-deb_oldoldstable:
-          filters: *filter-not-gh-pages-not-main
-      - build-deb_unstable:
-          filters: *filter-not-gh-pages-not-main
-      - build-deb_unstable-w-clang:
-          filters: *filter-not-gh-pages-not-main
-      - build-deb_unstable-32:
+      - build-deb_testing-w-clang:
           filters: *filter-not-gh-pages-not-main
       - build-windows:
           filters: *filter-not-gh-pages-not-main
@@ -581,19 +359,8 @@ workflows:
           cron: "0 0 * * *"
           filters: *filter-only-main
     jobs:
-      - build-18_04
       - build-20_04
-      - build-22_04
-      - build-deb_oldoldstable
       - build-deb_stable
-      - build-deb_stable-w-clang
-      - build-deb_stable-32
-      - build-deb_unstable
-      - build-deb_unstable-w-clang
-      - build-deb_unstable-32
+      - build-deb_testing
+      - build-deb_testing-w-clang
       - build-windows-artifacts
-      # All llvm.org versions. Keep this up-to-date. Ignore the duplicate.
-      - build-deb_stable-w-clang-llvm-org:
-          matrix:
-            parameters:
-              clang_version: [0, 15, 16, 17]

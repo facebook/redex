@@ -168,23 +168,13 @@ class DexIdx {
     return m_proto_cache[pidx];
   }
 
-  uint32_t get_file_size() const { return ((dex_header*)m_dexbase)->file_size; }
-
-  template <typename T>
-  const T* get_data(uint32_t offset) {
-    always_assert(offset < offset + sizeof(T));
-    always_assert(offset + sizeof(T) <= get_file_size());
-    return (T*)(m_dexbase + offset);
-  }
-
   const uint32_t* get_uint_data(uint32_t offset) {
-    return get_data<uint32_t>(offset);
+    always_assert(offset < ((dex_header*)m_dexbase)->file_size);
+    return (uint32_t*)(m_dexbase + offset);
   }
-
-  const uint8_t* end() const { return m_dexbase + get_file_size(); }
 
   const uint8_t* get_uleb_data(uint32_t offset) {
-    always_assert(offset < get_file_size()); // Best effort.
+    always_assert(offset < ((dex_header*)m_dexbase)->file_size);
     return m_dexbase + offset;
   }
 

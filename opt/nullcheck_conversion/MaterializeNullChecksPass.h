@@ -45,13 +45,12 @@ class MaterializeNullChecksPass : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
         {NoInitClassInstructions, Preserves},
-        {NoResolvablePureRefs, Preserves},
-        {NoUnreachableInstructions, Preserves},
         {RenameClass, Preserves},
     };
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  bool is_editable_cfg_friendly() override { return true; }
   Stats rewrite_null_check(DexMethod* method);
 
  private:

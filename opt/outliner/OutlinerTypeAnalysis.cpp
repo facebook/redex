@@ -190,7 +190,6 @@ const DexType* OutlinerTypeAnalysis::get_result_type_helper(
   case OPCODE_AND_INT_LIT:
   case OPCODE_OR_INT_LIT:
   case OPCODE_XOR_INT_LIT:
-  case IOPCODE_UNREACHABLE:
     // These (must) get a special handling by caller
     not_reached();
 
@@ -467,7 +466,6 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(IRInstruction* insn,
   case OPCODE_SGET_OBJECT:
   case IOPCODE_INIT_CLASS:
   case IOPCODE_INJECTION_ID:
-  case IOPCODE_UNREACHABLE:
     not_reached();
 
   case OPCODE_RETURN:
@@ -954,7 +952,6 @@ const DexType* OutlinerTypeAnalysis::get_type_of_defs(
         return false;
       case OPCODE_CONST:
       case OPCODE_CONST_WIDE:
-      case IOPCODE_UNREACHABLE:
         const_insns.insert(def);
         return false;
       default:

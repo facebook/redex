@@ -79,7 +79,7 @@ std::vector<MethodOrderedSet> group_similar_methods(
   // Split based on size.
   std::unordered_map<size_t, std::unordered_set<DexMethod*>> size_to_methods;
   for (const auto& method : methods) {
-    size_to_methods[method->get_code()->estimate_code_units()].emplace(method);
+    size_to_methods[method->get_code()->sum_opcode_sizes()].emplace(method);
   }
 
   std::vector<MethodOrderedSet> result;
@@ -208,6 +208,43 @@ size_t dedup_methods(
     replacements = {};
   }
   return total_dedup_count;
+}
+
+/**
+ * Fixup references to removed methods
+ */
+void fixup_references_to_removed_methods(
+    const Scope& scope,
+    std::unordered_map<DexMethodRef*, DexMethodRef*>& removed_vmethods) {
+  // Forward chains.
+  using iterator = std::unordered_map<DexMethodRef*, DexMethodRef*>::iterator;
+  std::function<DexMethodRef*(iterator&)> forward;
+  forward = [&forward, &removed_vmethods](iterator& it) {
+    auto it2 = removed_vmethods.find(it->second);
+    if (it2 != removed_vmethods.end()) {
+      it->second = forward(it2);
+    }
+    return it->second;
+  };
+  for (auto it = removed_vmethods.begin(); it != removed_vmethods.end(); it++) {
+    forward(it);
+  }
+
+  // Fixup references in code to deleted vmathods to point to the base one.
+  walk::parallel::code(scope, [&](DexMethod*, IRCode& code) {
+    editable_cfg_adapter::iterate(&code, [&](MethodItemEntry& mie) {
+      auto insn = mie.insn;
+      if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
+        auto it = removed_vmethods.find(insn->get_method());
+        if (it != removed_vmethods.end()) {
+          insn->set_method(it->second);
+        }
+      }
+      always_assert(!insn->has_method() ||
+                    !removed_vmethods.count(insn->get_method()));
+      return editable_cfg_adapter::LOOP_CONTINUE;
+    });
+  });
 }
 
 } // namespace method_dedup

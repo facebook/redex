@@ -62,8 +62,6 @@ class FinalInlinePass : public Pass {
                                              bool inline_string_fields,
                                              bool inline_wide_fields);
 
-  bool is_cfg_legacy() override { return true; }
-
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   struct Config {

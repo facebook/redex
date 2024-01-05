@@ -169,7 +169,7 @@ TEST_F(PreVerify, InlineFinalInstanceField) {
   for (auto& meth : read_ctors_cls2->get_dmethods()) {
     IRCode* code = new IRCode(meth);
     ASSERT_NE(code, nullptr);
-    code->build_cfg();
+    code->build_cfg(/* editable */ true);
     EXPECT_EQ(1, count_igets(code->cfg()));
   }
 
@@ -184,7 +184,7 @@ TEST_F(PreVerify, InlineFinalInstanceField) {
     ++count;
     IRCode* code = new IRCode(meth);
     ASSERT_NE(code, nullptr);
-    code->build_cfg();
+    code->build_cfg(/* editable */ true);
     EXPECT_EQ(3, count_igets(code->cfg()));
   }
   // Make sure there is a testReadInCtors function
@@ -193,7 +193,7 @@ TEST_F(PreVerify, InlineFinalInstanceField) {
   method = find_vmethod_named(*test_cls, "testString");
   ASSERT_NE(nullptr, method);
   IRCode* code = new IRCode(method);
-  code->build_cfg();
+  code->build_cfg(/* editable */ true);
   EXPECT_EQ(4, count_igets(code->cfg()));
 }
 
@@ -318,13 +318,13 @@ TEST_F(PostVerify, InlineFinalInstanceField) {
   for (auto& meth : read_ctors_cls1->get_dmethods()) {
     IRCode* code = new IRCode(meth);
     ASSERT_NE(code, nullptr);
-    code->build_cfg();
+    code->build_cfg(/* editable */ true);
     EXPECT_EQ(0, count_igets(code->cfg()));
   }
   for (auto& meth : read_ctors_cls2->get_dmethods()) {
     IRCode* code = new IRCode(meth);
     ASSERT_NE(code, nullptr);
-    code->build_cfg();
+    code->build_cfg(/* editable */ true);
     EXPECT_EQ(0, count_igets(code->cfg()));
   }
 
@@ -339,7 +339,7 @@ TEST_F(PostVerify, InlineFinalInstanceField) {
     ++count;
     IRCode* code = new IRCode(meth);
     ASSERT_NE(code, nullptr);
-    code->build_cfg();
+    code->build_cfg(/* editable */ true);
     EXPECT_EQ(0, count_igets(code->cfg()));
   }
   // Make sure there is a testReadInCtors function
@@ -348,6 +348,6 @@ TEST_F(PostVerify, InlineFinalInstanceField) {
   method = find_vmethod_named(*test_cls, "testString");
   ASSERT_NE(nullptr, method);
   IRCode* code = new IRCode(method);
-  code->build_cfg();
+  code->build_cfg(/* editable */ true);
   EXPECT_EQ(3, count_igets(code->cfg()));
 }

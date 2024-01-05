@@ -143,7 +143,6 @@ DexType* CheckCastAnalysis::get_type_demand(IRInstruction* insn,
   case OPCODE_SPUT_WIDE:
   case IOPCODE_INIT_CLASS:
   case IOPCODE_INJECTION_ID:
-  case IOPCODE_UNREACHABLE:
     not_reached();
 
   case OPCODE_FILLED_NEW_ARRAY:
@@ -348,8 +347,7 @@ CheckCastAnalysis::CheckCastAnalysis(const CheckCastConfig& config,
                                      const api::AndroidSDK& api)
     : m_class_cast_exception_type(
           DexType::make_type("Ljava/lang/ClassCastException;")),
-      m_method(method),
-      m_api(api) {
+      m_method(method), m_api(api) {
   always_assert(m_class_cast_exception_type);
   if (!method || !method->get_code()) {
     return;

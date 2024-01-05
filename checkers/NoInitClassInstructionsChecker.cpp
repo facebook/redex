@@ -16,7 +16,7 @@ namespace redex_properties {
 
 void NoInitClassInstructionsChecker::run_checker(DexStoresVector& stores,
                                                  ConfigFiles& /* conf */,
-                                                 PassManager& /*mgr*/,
+                                                 PassManager& mgr,
                                                  bool established) {
   if (!established) {
     return;

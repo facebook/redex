@@ -179,12 +179,12 @@ class DedupStringsPass : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, RequiresAndEstablishes},
-        {NoResolvablePureRefs, Preserves},
     };
   }
 
   void bind_config() override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  bool is_editable_cfg_friendly() override { return true; }
 
  private:
   int64_t m_max_factory_methods;

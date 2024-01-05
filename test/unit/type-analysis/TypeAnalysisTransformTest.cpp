@@ -76,7 +76,8 @@ struct TypeAnalysisTransformTest : public RedexTest {
 
           type_analyzer::Transform::NullAssertionSet null_assertion_set =
               kotlin_nullcheck_wrapper::get_kotlin_null_assertions();
-          auto lta = gta->get_replayable_local_analysis(method);
+          auto lta = gta->get_local_analysis(method);
+          auto& code = *method->get_code();
           Transform tf(config);
           return tf.apply(*lta, wps, method, null_assertion_set);
         });
@@ -119,7 +120,6 @@ TEST_F(TypeAnalysisTransformTest, SimpleArgumentPassingTest) {
   creator.add_method(meth_foo);
   scope.push_back(creator.create());
   run_opt(scope);
-  m_method_call->get_code()->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
        (
@@ -167,8 +167,6 @@ TEST_F(TypeAnalysisTransformTest, NegativeArgumentPassingTest) {
   creator.add_method(meth_foo);
   scope.push_back(creator.create());
   run_opt(scope);
-
-  m_method_call->get_code()->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
        (
@@ -218,7 +216,6 @@ TEST_F(TypeAnalysisTransformTest, MultiArgumentPassingTest) {
   creator.add_method(meth_foo);
   scope.push_back(creator.create());
   run_opt(scope);
-  m_method_call->get_code()->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
        (

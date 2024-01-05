@@ -12,16 +12,15 @@
 #include <memory>
 #include <secure_lib/secure_string.h>
 
+#include "ApkResources.h"
 #include "androidfw/ResourceTypes.h"
 #include "utils/ByteOrder.h"
 #include "utils/Errors.h"
 #include "utils/Log.h"
-#include "utils/Serialize.h"
-#include "utils/Vector.h"
 #include "utils/Visitor.h"
 
 namespace {
-class XmlAttributeSetter : public arsc::SimpleXmlParser {
+class XmlAttributeSetter : public arsc::XmlFileVisitor {
  public:
   ~XmlAttributeSetter() override {}
 
@@ -36,9 +35,17 @@ class XmlAttributeSetter : public arsc::SimpleXmlParser {
         m_attribute_id(attribute_id),
         m_data(data_input) {}
 
+  bool visit_global_strings(android::ResStringPool_header* pool) override {
+    LOG_ALWAYS_FATAL_IF(m_global_strings.setTo(pool, dtohl(pool->header.size),
+                                               true) != android::NO_ERROR,
+                        "Invalid string pool");
+    return true;
+  }
+
   bool visit_attribute_ids(uint32_t* id, size_t count) override {
     m_ids = id;
-    return arsc::SimpleXmlParser::visit_attribute_ids(id, count);
+    m_attribute_count = count;
+    return true;
   }
 
   // give a stringPool ref of a name, return name in string format.
@@ -46,8 +53,7 @@ class XmlAttributeSetter : public arsc::SimpleXmlParser {
       const struct android::ResStringPool_ref& name_ref) {
     auto idx = dtohl(name_ref.index);
     size_t len;
-    auto& pool = global_strings();
-    auto chars = pool.stringAt(idx, &len);
+    auto chars = m_global_strings.stringAt(idx, &len);
     if (chars != nullptr) {
       android::String16 s16(chars, len);
       android::String8 s8(s16);
@@ -62,7 +68,7 @@ class XmlAttributeSetter : public arsc::SimpleXmlParser {
     auto current_name = get_name_string(extension->name);
     // you cannot give a empty string as m_tag_name
     m_found_tag = m_tag_name == current_name;
-    return SimpleXmlParser::visit_start_tag(node, extension);
+    return XmlFileVisitor::visit_start_tag(node, extension);
   }
 
   bool visit_attribute(android::ResXMLTree_node* node,
@@ -72,7 +78,7 @@ class XmlAttributeSetter : public arsc::SimpleXmlParser {
       std::string attr_name = get_name_string(attribute->name);
       auto attr_idx = dtohl(attribute->name.index);
       bool found_attribute = false;
-      if (m_is_using_attr_id && attr_idx < attribute_count() &&
+      if (m_is_using_attr_id && attr_idx < m_attribute_count &&
           m_ids[attr_idx] == m_attribute_id) {
         std::cout << "Found target attribute 0x" << std::hex << m_ids[attr_idx]
                   << " at file offset 0x" << get_file_offset(attribute)
@@ -91,7 +97,7 @@ class XmlAttributeSetter : public arsc::SimpleXmlParser {
         }
       }
     }
-    return arsc::SimpleXmlParser::visit_attribute(node, extension, attribute);
+    return arsc::XmlFileVisitor::visit_attribute(node, extension, attribute);
   }
 
   // Item to find and data to set
@@ -102,38 +108,18 @@ class XmlAttributeSetter : public arsc::SimpleXmlParser {
   const char* m_attribute;
   uint32_t m_attribute_id = 0;
   uint32_t m_data;
+  // Parsed structures in the file
+  android::ResStringPool m_global_strings;
   uint32_t* m_ids;
+  uint32_t m_attribute_count;
   // State
   bool m_found_tag = false;
 };
 } // namespace
 
-// Writes the new string into the file's pool, if necessary and returns the pool
-// index (or a negative value on error).
-ssize_t ensure_string_in_xml_string_pool(const std::string& path,
-                                         const std::string& new_string) {
-  android::Vector<char> new_bytes;
-  size_t idx{0};
-  {
-    auto map = std::make_unique<boost::iostreams::mapped_file>();
-    auto mode = (std::ios_base::openmode)std::ios_base::in;
-    map->open(path, mode);
-    if (!map->is_open()) {
-      std::cerr << "Could not map " << path << std::endl;
-      return -1;
-    }
-
-    auto result = arsc::ensure_string_in_xml_pool(
-        map->const_data(), map->size(), new_string, &new_bytes, &idx);
-    if (result != android::OK) {
-      std::cerr << "Unable to parse " << path << std::endl;
-      return -1;
-    }
-  }
-  if (!new_bytes.empty()) {
-    arsc::write_bytes_to_file(new_bytes, path);
-  }
-  return idx;
+size_t append_in_xml_string_pool(const std::string& path,
+                                 const std::string& new_string) {
+  return ApkResources::add_string_to_xml_file(path, new_string);
 }
 
 // This tool accepts a tag name, attribute ID as defined in the Android SDK, see
@@ -159,12 +145,7 @@ int main(int argc, char** argv) {
     data = strtol(argv[4], nullptr, 0);
   } else {
     std::cout << "adding " << argv[4] << " into string pool" << std::endl;
-    auto ensure_result =
-        ensure_string_in_xml_string_pool(path, std::string(argv[4]));
-    if (ensure_result < 0) {
-      return 1;
-    }
-    data = (uint32_t)ensure_result;
+    data = (uint32_t)(append_in_xml_string_pool(path, std::string(argv[4])));
     std::cout << "finished appending string pool with new idx " << data
               << std::endl;
   }

@@ -301,8 +301,6 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
     return RegisterType::OBJECT;
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
     return RegisterType::WIDE;
-  case IOPCODE_UNREACHABLE:
-    return RegisterType::ZERO;
   default:
     not_reached_log("Unknown opcode %02x\n", op);
   }

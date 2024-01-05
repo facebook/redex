@@ -8,11 +8,8 @@
 #ifndef _FB_ANDROID_SERIALIZE_H
 #define _FB_ANDROID_SERIALIZE_H
 
-#include <fstream>
-#include <functional>
 #include <map>
 #include <memory>
-#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -29,8 +26,6 @@
 #include "utils/Vector.h"
 
 namespace arsc {
-// Used for things like offsets to denote no value.
-constexpr uint32_t NO_VALUE = 0xFFFFFFFF;
 
 constexpr uint32_t PACKAGE_NAME_ARR_LENGTH = 128;
 
@@ -40,18 +35,6 @@ void push_long(uint32_t data, android::Vector<char>* vec);
 void push_u8_length(size_t len, android::Vector<char>* vec);
 void encode_string8(const android::String8& s, android::Vector<char>* vec);
 void encode_string16(const android::String16& s, android::Vector<char>* vec);
-
-// Write the data to the file; overwrite existing data. Asserts that is was
-// successful.
-inline void write_bytes_to_file(const android::Vector<char>& vector,
-                                const std::string& filename) {
-  std::ofstream ofs(filename,
-                    std::ofstream::out | std::ofstream::trunc |
-                        std::ofstream::binary);
-  ofs.write(vector.array(), vector.size());
-  ofs.close();
-  LOG_ALWAYS_FATAL_IF(!ofs, "Unable to write to %s", filename.c_str());
-}
 
 // Returns the size of the entry and the value data structure(s) that follow it.
 size_t compute_entry_value_length(android::ResTable_entry* entry);
@@ -66,35 +49,6 @@ bool are_configs_equivalent(android::ResTable_config* a,
 float complex_value(uint32_t complex);
 // For a Res_value marked with FLAG_COMPLEX, return the unit part.
 uint32_t complex_unit(uint32_t complex, bool isFraction);
-
-// Returns whether or not idx is a non null string.
-inline bool is_valid_string_idx(const android::ResStringPool& pool,
-                                size_t idx) {
-  size_t u16_len;
-  return pool.stringAt(idx, &u16_len) != nullptr;
-}
-
-// Converts the string at given index, if needed, to utf-8 and returns it as
-// std::string for convenience.
-inline std::string get_string_from_pool(const android::ResStringPool& pool,
-                                        size_t idx) {
-  size_t u16_len;
-  auto wide_chars = pool.stringAt(idx, &u16_len);
-  android::String16 s16(wide_chars, u16_len);
-  android::String8 string8(s16);
-  return std::string(string8.string());
-}
-
-// Given a node, return the zero based ordinal where "new_attr" would appear,
-// or -1 if the attribute already exists. This takes a callback function that is
-// capable of returning the string bytes for a given index to follow the sorting
-// convention used by aapt2.
-ssize_t find_attribute_ordinal(
-    android::ResXMLTree_node* node,
-    android::ResXMLTree_attrExt* extension,
-    android::ResXMLTree_attribute* new_attr,
-    const size_t& attribute_id_count,
-    const std::function<std::string(uint32_t)>& pool_lookup);
 
 enum StringKind { STD_STRING, STRING_8, STRING_16 };
 
@@ -140,17 +94,6 @@ class ResStringPoolBuilder {
   void add_string(std::string);
   void add_string(const char*, size_t);
   void add_string(const char16_t*, size_t);
-  // Insert string data from the given pool at the given index to the builder.
-  void add_string(const android::ResStringPool& string_pool, size_t idx) {
-    size_t length;
-    if (string_pool.isUTF8()) {
-      auto s = string_pool.string8At(idx, &length);
-      add_string(s, length);
-    } else {
-      auto s = string_pool.stringAt(idx, &length);
-      add_string(s, length);
-    }
-  }
   void add_style(std::string, SpanVector);
   void add_style(const char*, size_t, SpanVector);
   void add_style(const char16_t*, size_t, SpanVector);
@@ -179,25 +122,6 @@ void replace_xml_string_pool(android::ResChunk_header* data,
                              size_t len,
                              ResStringPoolBuilder& builder,
                              android::Vector<char>* out);
-
-// Parse the given binary xml bytes, and augments the string pool (if needed) to
-// ensure that the given string is present and usable as a string ref. Return
-// value will indicate whether or not the file was parsed successfully, and if
-// parsed, the index of the given string is supplied to the output param
-// (whether or not the pool was modified).
-int ensure_string_in_xml_pool(const void* data,
-                              const size_t len,
-                              const std::string& new_string,
-                              android::Vector<char>* out_data,
-                              size_t* idx);
-// Like above, but takes an ordered set of strings and returns a map to their
-// indices.
-int ensure_strings_in_xml_pool(
-    const void* data,
-    const size_t len,
-    const std::set<std::string>& strings_to_add,
-    android::Vector<char>* out_data,
-    std::unordered_map<std::string, uint32_t>* string_to_idx);
 
 using EntryValueData = PtrLen<uint8_t>;
 using EntryOffsetData = std::pair<EntryValueData, uint32_t>;
@@ -463,73 +387,6 @@ class ResTableBuilder {
   std::vector<
       std::pair<std::shared_ptr<ResPackageBuilder>, android::ResTable_package*>>
       m_packages;
-};
-
-// Helper to organize edits to a binary chunk of data that is assumed to start
-// in a ResChunk_header. It takes a chunk of original data, and allows for
-// noting edits at certain positions and applying them later. Some basic
-// conventions:
-// 1) The deletions/additions are not expected to be disjointed. As a result,
-//    deleting a range of data will not apply an addition within it (you can
-//    delete bytes at pos N and add bytes at pos N, just not add at N+1).
-// 2) Resulting file size will be computed, but this assumes that all the
-//    operations are sensible, not disjointed, and don't ask for any change that
-//    is out of bounds.
-class ResFileManipulator {
- public:
-  struct Block {
-    Block(size_t s) : buffer(std::unique_ptr<char[]>(new char[s]())), size(s) {}
-
-    template <typename T>
-    void write(const T& item) {
-      auto t_size = sizeof(T);
-      LOG_ALWAYS_FATAL_IF(t_size + written_bytes > size,
-                          "Will not write beyond the allocated size %zu", size);
-      char* dest = buffer.get() + written_bytes;
-      memcpy(dest, &item, t_size);
-      written_bytes += t_size;
-    }
-
-    std::unique_ptr<char[]> buffer;
-    size_t size;
-    size_t written_bytes{0};
-  };
-
-  ResFileManipulator(char* data, size_t length)
-      : m_data(data), m_length(length) {}
-
-  void delete_at(void* pos, size_t size) {
-    m_deletions.emplace((char*)pos, size);
-  }
-  void add_at(void* pos, Block block) {
-    m_additions.emplace((char*)pos, std::move(block));
-  }
-  template <typename T>
-  void add_at(void* pos, const T& item) {
-    Block block(sizeof(T));
-    block.write(item);
-    m_additions.emplace((char*)pos, std::move(block));
-  }
-  // Shorthand for deleting N bytes at the position and adding N different
-  // bytes.
-  template <typename T>
-  void replace_at(void* pos, const T& item) {
-    delete_at(pos, sizeof(T));
-    add_at(pos, item);
-  }
-
-  // Build the final file to the given vector.
-  void serialize(android::Vector<char>* out);
-
- private:
-  // At a given position, how many bytes to delete.
-  std::unordered_map<char*, size_t> m_deletions;
-  // Data that will be written in the given position.
-  std::unordered_map<char*, Block> m_additions;
-
-  // The original file data
-  char* m_data;
-  size_t m_length;
 };
 } // namespace arsc
 #endif

@@ -260,8 +260,7 @@ AppModuleUsagePass::analyze_method_xstore_references(const Scope& scope) {
     };
 
     app_module_usage::StoresReferenced stores_referenced;
-    auto& cfg = code.cfg();
-    for (const auto& mie : cfg::InstructionIterable(cfg)) {
+    for (const auto& mie : InstructionIterable(code)) {
       IRInstruction* insn = mie.insn;
       auto maybe_type_ref = get_type_ref_for_insn(insn);
       if (maybe_type_ref) {

@@ -22,7 +22,5 @@ class RemoveEmptyClassesPass : public Pass {
     };
   }
 
-  bool is_cfg_legacy() override { return true; }
-
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

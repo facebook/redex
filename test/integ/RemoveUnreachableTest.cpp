@@ -20,18 +20,9 @@
 
 #include "GlobalTypeAnalysisPass.h"
 #include "RemoveUnreachable.h"
-#include "Show.h"
 #include "TypeAnalysisAwareRemoveUnreachable.h"
-#include "VirtualScope.h"
 
-class RemoveUnreachableTest : public RedexIntegrationTest {
-  void SetUp() override {
-    virt_scope::get_vmethods(type::java_lang_Object());
-    auto cls = type_class(type::java_lang_Object());
-    // To make the assertion in reachability analysis happy
-    cls->set_external();
-  }
-};
+class RemoveUnreachableTest : public RedexIntegrationTest {};
 
 TEST_F(RemoveUnreachableTest, InheritanceTest) {
   // Make sure some unreachable things exist before we start.
@@ -122,12 +113,7 @@ TEST_F(RemoveUnreachableTest, Inheritance3Test) {
 
   // Another tricky inheritance case.
   ASSERT_TRUE(find_class(*classes, "LHoneyBadger;"));
-  ASSERT_FALSE(find_dmethod(*classes, "LHoneyBadger;", "V", "<init>", {"Z"}));
-  ASSERT_FALSE(find_vmethod(*classes, "LHoneyBadger;", "Z", "isAwesome", {}));
-  ASSERT_TRUE(
-      find_dmethod(*classes, "LHoneyBadgerInstantiated;", "V", "<init>", {}));
-  ASSERT_TRUE(find_vmethod(
-      *classes, "LHoneyBadgerInstantiated;", "Z", "isAwesome", {}));
+  ASSERT_TRUE(find_vmethod(*classes, "LHoneyBadger;", "Z", "isAwesome", {}));
   // You might think that HogBadger.isAwesome() can be removed, since it
   // doesn't extend Badger.  But it's very tricky to remove this while still
   // getting the Guava Hasher case (below) correct.
@@ -261,12 +247,7 @@ TEST_F(RemoveUnreachableTest, TypeAnalysisInheritance3Test) {
 
   // Another tricky inheritance case.
   ASSERT_TRUE(find_class(*classes, "LHoneyBadger;"));
-  ASSERT_FALSE(find_dmethod(*classes, "LHoneyBadger;", "V", "<init>", {"Z"}));
-  ASSERT_FALSE(find_vmethod(*classes, "LHoneyBadger;", "Z", "isAwesome", {}));
-  ASSERT_TRUE(
-      find_dmethod(*classes, "LHoneyBadgerInstantiated;", "V", "<init>", {}));
-  ASSERT_TRUE(find_vmethod(
-      *classes, "LHoneyBadgerInstantiated;", "Z", "isAwesome", {}));
+  ASSERT_TRUE(find_vmethod(*classes, "LHoneyBadger;", "Z", "isAwesome", {}));
   // You might think that HogBadger.isAwesome() can be removed, since it
   // doesn't extend Badger.  But it's very tricky to remove this while still
   // getting the Guava Hasher case (below) correct.
@@ -334,37 +315,4 @@ TEST_F(RemoveUnreachableTest, StaticInitializerTest) {
   ASSERT_TRUE(d);
   ASSERT_FALSE(a->get_clinit());
   ASSERT_TRUE(d->get_clinit());
-}
-
-TEST_F(RemoveUnreachableTest, UnreferencedInterfaces) {
-  // Make sure some things exist before we start.
-  auto* cls = find_class(*classes, "LClassImplementingUnreferencedInterface;");
-  ASSERT_TRUE(cls);
-  const auto* interfaces = cls->get_interfaces();
-  ASSERT_EQ(show(interfaces), "LUnreferencedInterface;");
-
-  const auto& dexen = stores[0].get_dexen();
-  auto pg_config = process_and_get_proguard_config(dexen, R"(
-    -keepclasseswithmembers public class RemoveUnreachableTest {
-      public void unreferencedInterface();
-    }
-  )");
-
-  ASSERT_TRUE(pg_config->ok);
-  ASSERT_EQ(pg_config->keep_rules.size(), 1);
-
-  Json::Value config(Json::objectValue);
-  config["redex"] = Json::objectValue;
-  config["redex"]["passes"] = Json::arrayValue;
-  config["redex"]["passes"].append("RemoveUnreachablePass");
-  config["RemoveUnreachablePass"] = Json::objectValue;
-  config["RemoveUnreachablePass"]["prune_unreferenced_interfaces"] = true;
-
-  run_passes({new RemoveUnreachablePass()}, std::move(pg_config), config);
-
-  ASSERT_TRUE(find_class(*classes, "LClassImplementingUnreferencedInterface;"));
-  ASSERT_TRUE(find_class(*classes, "LReferencedInterface;"));
-  ASSERT_FALSE(find_class(*classes, "LUnreferencedInterface;"));
-  interfaces = cls->get_interfaces();
-  ASSERT_EQ(show(interfaces), "LReferencedInterface;");
 }

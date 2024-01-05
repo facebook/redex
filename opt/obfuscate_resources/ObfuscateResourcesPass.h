@@ -38,8 +38,6 @@ class ObfuscateResourcesPass : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
         {NoInitClassInstructions, Preserves},
-        {NoResolvablePureRefs, Preserves},
-        {NoUnreachableInstructions, Preserves},
         {RenameClass, Preserves},
     };
   }
@@ -87,8 +85,6 @@ class ObfuscateResourcesPass : public Pass {
     bind("code_references_okay_to_obfuscate", {},
          m_code_references_okay_to_obfuscate);
   }
-
-  bool is_cfg_legacy() override { return true; }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

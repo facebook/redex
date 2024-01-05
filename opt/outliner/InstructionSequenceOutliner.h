@@ -41,14 +41,13 @@ class InstructionSequenceOutliner : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, RequiresAndEstablishes},
-        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Establishes},
     };
   }
 
-  void bind_config() override;
+  bool is_editable_cfg_friendly() override { return true; }
 
-  bool is_cfg_legacy() override { return true; }
+  void bind_config() override;
 
   void run_pass(DexStoresVector& stores,
                 ConfigFiles& config,

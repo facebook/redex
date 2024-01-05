@@ -742,12 +742,6 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     set_type(current_state, insn->dest(), IntTypeDomain(IntType::BOOLEAN));
     break;
   }
-  case IOPCODE_UNREACHABLE: {
-    current_state->set_dex_type(insn->dest(), DexTypeDomain::null());
-    set_type(current_state, insn->dest(), TypeDomain(IRType::ZERO));
-    set_type(current_state, insn->dest(), IntTypeDomain(IntType::BOOLEAN));
-    break;
-  }
   case OPCODE_CONST_WIDE: {
     set_type(current_state, insn->dest(), TypeDomain(IRType::CONST1));
     set_type(current_state, insn->dest() + 1, TypeDomain(IRType::CONST2));

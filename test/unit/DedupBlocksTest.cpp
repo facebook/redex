@@ -53,7 +53,7 @@ struct DedupBlocksTest : public RedexTest {
   void run_dedup_blocks() {
     walk::code(std::vector<DexClass*>{m_class},
                [&](DexMethod* method, IRCode& code) {
-                 code.build_cfg();
+                 code.build_cfg(/* editable */ true);
                  auto& cfg = code.cfg();
                  dedup_blocks_impl::Config config;
                  dedup_blocks_impl::DedupBlocks impl(&config, method);
@@ -64,7 +64,7 @@ struct DedupBlocksTest : public RedexTest {
 
   void run_dedup_blocks_with_iteration(DexMethod* method,
                                        uint32_t max_iteration) {
-    method->get_code()->build_cfg();
+    method->get_code()->build_cfg(/* editable */ true);
 
     auto& cfg = method->get_code()->cfg();
     dedup_blocks_impl::Config config;
@@ -855,7 +855,7 @@ TEST_F(DedupBlocksTest, dedupCatchBlocks) {
     )
   )";
   auto expect_code = assembler::ircode_from_string(expect_str);
-  expect_code->build_cfg();
+  expect_code->build_cfg(true);
   expect_code->clear_cfg();
 
   EXPECT_CODE_EQ(expect_code.get(), code);
@@ -890,7 +890,7 @@ TEST_F(DedupBlocksTest, dontDedupCatchBlockAndNonCatchBlock) {
   run_dedup_blocks();
 
   auto expect_code = assembler::ircode_from_string(str_code);
-  expect_code->build_cfg();
+  expect_code->build_cfg(true);
   expect_code->clear_cfg();
 
   EXPECT_CODE_EQ(expect_code.get(), code);

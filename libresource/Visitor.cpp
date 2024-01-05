@@ -58,13 +58,6 @@ inline static uint8_t* get_data(android::ResChunk_header* chunk) {
   return reinterpret_cast<uint8_t*>(chunk) + dtohs(chunk->headerSize);
 }
 
-inline static uint8_t* assert_and_get_data(android::ResChunk_header* chunk) {
-  auto header_size = dtohs(chunk->headerSize);
-  auto total_size = dtohl(chunk->size);
-  LOG_FATAL_IF(total_size <= header_size, "No data available beyond chunk.");
-  return reinterpret_cast<uint8_t*>(chunk) + header_size;
-}
-
 inline static uint32_t get_data_len(android::ResChunk_header* chunk) {
   return dtohl(chunk->size) - dtohs(chunk->headerSize);
 }
@@ -142,7 +135,7 @@ class ResChunkPullParser {
     const std::ptrdiff_t diff =
         (const char*)m_current_chunk - (const char*)m_data;
     LOG_FATAL_IF(diff < 0, "diff is negative");
-    const size_t offset = static_cast<size_t>(diff);
+    const size_t offset = static_cast<const size_t>(diff);
 
     if (offset == m_len) {
       m_current_chunk = nullptr;
@@ -185,27 +178,6 @@ void collect_spans(android::ResStringPool_span* ptr,
          android::ResStringPool_span::END) {
     out->emplace_back(ptr);
     ptr++;
-  }
-}
-
-android::ResXMLTree_attribute* get_attribute_pointer(
-    android::ResXMLTree_attrExt* extension) {
-  auto count = dtohl(extension->attributeCount);
-  if (count == 0) {
-    return nullptr;
-  }
-  auto start = dtohs(extension->attributeStart);
-  return (android::ResXMLTree_attribute*)((uint8_t*)extension + start);
-}
-
-void collect_attributes(android::ResXMLTree_attrExt* extension,
-                        std::vector<android::ResXMLTree_attribute*>* out) {
-  auto attribute_ptr = get_attribute_pointer(extension);
-  if (attribute_ptr != nullptr) {
-    auto count = dtohl(extension->attributeCount);
-    for (size_t i = 0; i < count; i++, attribute_ptr++) {
-      out->emplace_back(attribute_ptr);
-    }
   }
 }
 
@@ -437,11 +409,10 @@ bool ResourceTableVisitor::visit_type(android::ResTable_package* package,
   return true;
 }
 
-bool ResourceTableVisitor::begin_visit_entry(
-    android::ResTable_package* package,
-    android::ResTable_typeSpec* type_spec,
-    android::ResTable_type* type,
-    android::ResTable_entry* entry) {
+bool ResourceTableVisitor::begin_visit_entry(android::ResTable_package* package,
+                                            android::ResTable_typeSpec* type_spec,
+                                            android::ResTable_type* type,
+                                            android::ResTable_entry* entry) {
   if (!entry) {
     return true;
   }
@@ -454,7 +425,7 @@ bool ResourceTableVisitor::begin_visit_entry(
     for (size_t i = 0; i < entry_count; i++) {
       android::ResTable_map* value =
           (android::ResTable_map*)((uint8_t*)entry + dtohl(entry->size) +
-                                   i * sizeof(android::ResTable_map));
+                                    i * sizeof(android::ResTable_map));
       if (!visit_map_value(package, type_spec, type, map_entry, value)) {
         return false;
       }
@@ -613,11 +584,6 @@ bool XmlFileVisitor::visit(void* data, size_t len) {
     ALOGE("Bad file size, expected %d", dtohl(header->size));
     return false;
   }
-  if (len <= sizeof(android::ResChunk_header)) {
-    // No more chunks to process, just return early.
-    LOGVV("No chunks beyond xml header");
-    return true;
-  }
   android::ResStringPool_header* global_string_pool = nullptr;
   android::ResChunk_header* attribute_ids_header = nullptr;
   size_t attr_count;
@@ -671,7 +637,7 @@ bool XmlFileVisitor::visit(void* data, size_t len) {
     }
   }
   if (parser.event() == ResChunkPullParser::Event::BadDocument) {
-    ALOGE("corrupt document");
+    ALOGE("corrupt resource table");
     return false;
   }
   return true;
@@ -692,26 +658,21 @@ bool XmlFileVisitor::visit_attribute_ids(uint32_t* id, size_t count) {
 bool XmlFileVisitor::visit_node(android::ResXMLTree_node* node) {
   auto node_type = dtohs(node->header.type);
   LOGVV("visit node (0x%x), offset = %ld", node_type, get_file_offset(node));
-  visit_string_ref(&node->comment);
   if (node_type == android::RES_XML_START_NAMESPACE_TYPE) {
     return visit_start_namespace(
-        node,
-        (android::ResXMLTree_namespaceExt*)assert_and_get_data(&node->header));
+        node, (android::ResXMLTree_namespaceExt*)get_data(&node->header));
   } else if (node_type == android::RES_XML_END_NAMESPACE_TYPE) {
     return visit_end_namespace(
-        node,
-        (android::ResXMLTree_namespaceExt*)assert_and_get_data(&node->header));
+        node, (android::ResXMLTree_namespaceExt*)get_data(&node->header));
   } else if (node_type == android::RES_XML_START_ELEMENT_TYPE) {
     return visit_start_tag(
-        node, (android::ResXMLTree_attrExt*)assert_and_get_data(&node->header));
+        node, (android::ResXMLTree_attrExt*)get_data(&node->header));
   } else if (node_type == android::RES_XML_END_ELEMENT_TYPE) {
     return visit_end_tag(
-        node,
-        (android::ResXMLTree_endElementExt*)assert_and_get_data(&node->header));
+        node, (android::ResXMLTree_endElementExt*)get_data(&node->header));
   } else if (node_type == android::RES_XML_CDATA_TYPE) {
-    return visit_cdata(
-        node,
-        (android::ResXMLTree_cdataExt*)assert_and_get_data(&node->header));
+    return visit_cdata(node,
+                       (android::ResXMLTree_cdataExt*)get_data(&node->header));
   }
   return true;
 }
@@ -720,8 +681,6 @@ bool XmlFileVisitor::visit_start_namespace(
     android::ResXMLTree_node* node,
     android::ResXMLTree_namespaceExt* extension) {
   LOGVV("visit start namespace ext, offset = %ld", get_file_offset(extension));
-  visit_string_ref(&extension->prefix);
-  visit_string_ref(&extension->uri);
   return true;
 }
 
@@ -729,8 +688,6 @@ bool XmlFileVisitor::visit_end_namespace(
     android::ResXMLTree_node* node,
     android::ResXMLTree_namespaceExt* extension) {
   LOGVV("visit end namespace ext, offset = %ld", get_file_offset(extension));
-  visit_string_ref(&extension->prefix);
-  visit_string_ref(&extension->uri);
   return true;
 }
 
@@ -738,12 +695,9 @@ bool XmlFileVisitor::visit_start_tag(android::ResXMLTree_node* node,
                                      android::ResXMLTree_attrExt* extension) {
   LOGVV("visit start element ext, offset = %ld", get_file_offset(extension));
   auto count = dtohl(extension->attributeCount);
-  auto attribute = get_attribute_pointer(extension);
-  LOG_FATAL_IF(
-      dtohs(extension->attributeSize) != sizeof(android::ResXMLTree_attribute),
-      "Unable to read attribute, ResXMLTree_attribute struct mismatch");
-  visit_string_ref(&extension->ns);
-  visit_string_ref(&extension->name);
+  auto attribute =
+      (android::ResXMLTree_attribute*)((uint8_t*)extension +
+                                       dtohs(extension->attributeStart));
   for (size_t i = 0; i < count; i++) {
     if (!visit_attribute(node, extension, attribute++)) {
       return false;
@@ -758,9 +712,6 @@ bool XmlFileVisitor::visit_attribute(android::ResXMLTree_node* node,
   LOGVV("visit attribute, offset = %ld for tag starting at %ld",
         get_file_offset(attribute),
         get_file_offset(node));
-  visit_string_ref(&attribute->ns);
-  visit_string_ref(&attribute->name);
-  visit_string_ref(&attribute->rawValue);
   visit_typed_data(&attribute->typedValue);
   return true;
 }
@@ -769,26 +720,18 @@ bool XmlFileVisitor::visit_end_tag(
     android::ResXMLTree_node* node,
     android::ResXMLTree_endElementExt* extension) {
   LOGVV("visit end element ext, offset = %ld", get_file_offset(extension));
-  visit_string_ref(&extension->ns);
-  visit_string_ref(&extension->name);
   return true;
 }
 
 bool XmlFileVisitor::visit_cdata(android::ResXMLTree_node* node,
                                  android::ResXMLTree_cdataExt* extension) {
   LOGVV("visit cdata ext, offset = %ld", get_file_offset(extension));
-  visit_string_ref(&extension->data);
   visit_typed_data(&extension->typedData);
   return true;
 }
 
 bool XmlFileVisitor::visit_typed_data(android::Res_value* value) {
   LOGVV("visit value, offset = %ld", get_file_offset(value));
-  return true;
-}
-
-bool XmlFileVisitor::visit_string_ref(android::ResStringPool_ref* ref) {
-  LOGVV("visit string ref, offset = %ld", get_file_offset(ref));
   return true;
 }
 

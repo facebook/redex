@@ -22,15 +22,10 @@ namespace method_reference {
 // A callsite instruction in caller. mie should always contain an IRInstruction.
 struct CallSite {
   DexMethod* caller;
-  MethodItemEntry* mie; // Note: this will be removed once editable cfg is fully
-                        // updated.
-  IRInstruction* insn;
+  MethodItemEntry* mie;
   DexMethod* callee;
-  CallSite(DexMethod* caller,
-           MethodItemEntry* mie,
-           IRInstruction* insn,
-           DexMethod* callee)
-      : caller(caller), mie(mie), insn(insn), callee(callee) {}
+  CallSite(DexMethod* caller, MethodItemEntry* mie, DexMethod* callee)
+      : caller(caller), mie(mie), callee(callee) {}
 };
 
 using CallSites = std::vector<CallSite>;

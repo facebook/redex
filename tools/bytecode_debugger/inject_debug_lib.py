@@ -7,13 +7,7 @@ import subprocess
 import sys
 
 from pyredex.unpacker import LibraryManager, UnpackManager, ZipManager
-from pyredex.utils import (
-    add_tool_override,
-    dex_glob,
-    make_temp_dir,
-    relocate_dexen_to_directories,
-    sign_apk,
-)
+from pyredex.utils import dex_glob, make_temp_dir, move_dexen_to_directories, sign_apk
 
 
 def run_debug_injector(args):
@@ -23,7 +17,7 @@ def run_debug_injector(args):
     with ZipManager(args.input_apk, extracted_apk_dir, args.output_apk), UnpackManager(
         args.input_apk, extracted_apk_dir, dex_dir
     ) as store_files, LibraryManager(extracted_apk_dir):
-        dexen = relocate_dexen_to_directories(dex_dir, dex_glob(dex_dir)) + store_files
+        dexen = move_dexen_to_directories(dex_dir, dex_glob(dex_dir)) + store_files
         try:
             subprocess.check_output(
                 [args.bin_path, "-o", dex_dir, "--dex-files"] + dexen,
@@ -38,7 +32,5 @@ def run_debug_injector(args):
         args.keystore is not None
         and args.keyalias is not None
         and args.keypass is not None
-        and args.apksigner_path is not None
     ):
-        add_tool_override("apksigner", args.apksigner_path)
         sign_apk(args.keystore, args.keypass, args.keyalias, args.output_apk)

@@ -642,7 +642,7 @@ class OatClasses {
     case Type::kOatClassMax:
       return "kOatClassMax";
     default:
-      return "<UNKNOWN>";
+      return "<UKNOWN>";
     }
   }
 
@@ -1531,6 +1531,9 @@ class SamsungLookupTables {
   };
 
   struct LookupTable {
+    LookupTable(LookupTable&&) = default;
+    LookupTable& operator=(LookupTable&&) = default;
+
     std::unique_ptr<LookupTableEntry[]> data;
     uint32_t size;
 

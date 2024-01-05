@@ -7,7 +7,6 @@
 
 #include "TypeReference.h"
 
-#include "ControlFlow.h"
 #include "MethodReference.h"
 #include "Resolver.h"
 #include "Show.h"
@@ -498,30 +497,15 @@ void update_method_signature_type_references(
 
   // Ensure that no method references left that still refer old types.
   walk::parallel::code(scope, [&old_types](DexMethod*, IRCode& code) {
-    if (code.editable_cfg_built()) {
-      auto& cfg = code.cfg();
-      for (auto& mie : InstructionIterable(cfg)) {
-        auto insn = mie.insn;
-        if (insn->has_method()) {
-          auto proto = insn->get_method()->get_proto();
-          always_assert_log(
-              !proto_has_reference_to(proto, old_types),
-              "Find old type in method reference %s, please make sure that "
-              "ReBindRefsPass is enabled before the crashed pass.\n",
-              SHOW(insn));
-        }
-      }
-    } else {
-      for (auto& mie : InstructionIterable(code)) {
-        auto insn = mie.insn;
-        if (insn->has_method()) {
-          auto proto = insn->get_method()->get_proto();
-          always_assert_log(
-              !proto_has_reference_to(proto, old_types),
-              "Find old type in method reference %s, please make sure that "
-              "ReBindRefsPass is enabled before the crashed pass.\n",
-              SHOW(insn));
-        }
+    for (auto& mie : InstructionIterable(code)) {
+      auto insn = mie.insn;
+      if (insn->has_method()) {
+        auto proto = insn->get_method()->get_proto();
+        always_assert_log(
+            !proto_has_reference_to(proto, old_types),
+            "Find old type in method reference %s, please make sure that "
+            "ReBindRefsPass is enabled before the crashed pass.\n",
+            SHOW(insn));
       }
     }
   });
@@ -548,32 +532,16 @@ void update_field_type_references(
   walk::parallel::fields(scope, update_field);
 
   walk::parallel::code(scope, [&old_to_new](DexMethod*, IRCode& code) {
-    if (code.editable_cfg_built()) {
-      auto& cfg = code.cfg();
-      for (auto& mie : InstructionIterable(cfg)) {
-        auto insn = mie.insn;
-        if (insn->has_field()) {
-          const auto ref_type = insn->get_field()->get_type();
-          const auto type = type::get_element_type_if_array(ref_type);
-          always_assert_log(
-              old_to_new.count(type) == 0,
-              "Find old type in field reference %s, please make sure that "
-              "ReBindRefsPass is enabled before ClassMergingPass\n",
-              SHOW(insn));
-        }
-      }
-    } else {
-      for (auto& mie : InstructionIterable(code)) {
-        auto insn = mie.insn;
-        if (insn->has_field()) {
-          const auto ref_type = insn->get_field()->get_type();
-          const auto type = type::get_element_type_if_array(ref_type);
-          always_assert_log(
-              old_to_new.count(type) == 0,
-              "Find old type in field reference %s, please make sure that "
-              "ReBindRefsPass is enabled before ClassMergingPass\n",
-              SHOW(insn));
-        }
+    for (auto& mie : InstructionIterable(code)) {
+      auto insn = mie.insn;
+      if (insn->has_field()) {
+        const auto ref_type = insn->get_field()->get_type();
+        const auto type = type::get_element_type_if_array(ref_type);
+        always_assert_log(
+            old_to_new.count(type) == 0,
+            "Find old type in field reference %s, please make sure that "
+            "ReBindRefsPass is enabled before ClassMergingPass\n",
+            SHOW(insn));
       }
     }
   });
@@ -607,32 +575,12 @@ void fix_colliding_dmethods(
     num_additional_args[meth] = arg_count;
 
     auto code = meth->get_code();
-    if (code->editable_cfg_built()) {
-      auto& cfg = code->cfg();
-      auto block = cfg.entry_block();
-      auto last_loading = block->get_last_param_loading_insn();
-      for (size_t i = 0; i < arg_count; ++i) {
-        auto new_param_reg = cfg.allocate_temp();
-        auto new_param_load = new IRInstruction(IOPCODE_LOAD_PARAM);
-        new_param_load->set_dest(new_param_reg);
-        if (last_loading != block->end()) {
-          cfg.insert_after(block->to_cfg_instruction_iterator(last_loading),
-                           new_param_load);
-        } else {
-          cfg.insert_before(block->to_cfg_instruction_iterator(
-                                block->get_first_non_param_loading_insn()),
-                            new_param_load);
-        }
-        last_loading = block->get_last_param_loading_insn();
-      }
-    } else {
-      for (size_t i = 0; i < arg_count; ++i) {
-        auto new_param_reg = code->allocate_temp();
-        auto params = code->get_param_instructions();
-        auto new_param_load = new IRInstruction(IOPCODE_LOAD_PARAM);
-        new_param_load->set_dest(new_param_reg);
-        code->insert_before(params.end(), new_param_load);
-      }
+    for (size_t i = 0; i < arg_count; ++i) {
+      auto new_param_reg = code->allocate_temp();
+      auto params = code->get_param_instructions();
+      auto new_param_load = new IRInstruction(IOPCODE_LOAD_PARAM);
+      new_param_load->set_dest(new_param_reg);
+      code->insert_before(params.end(), new_param_load);
     }
     TRACE(REFU,
           9,
@@ -643,37 +591,19 @@ void fix_colliding_dmethods(
 
   walk::parallel::code(scope, [&](DexMethod* meth, IRCode& code) {
     method_reference::CallSites callsites;
-    if (code.editable_cfg_built()) {
-      auto& cfg = code.cfg();
-      for (auto& mie : InstructionIterable(cfg)) {
-        auto insn = mie.insn;
-        if (!insn->has_method()) {
-          continue;
-        }
-        const auto callee = resolve_method(
-            insn->get_method(),
-            opcode_to_search(const_cast<IRInstruction*>(insn)), meth);
-        if (callee == nullptr ||
-            num_additional_args.find(callee) == num_additional_args.end()) {
-          continue;
-        }
-        callsites.emplace_back(meth, &mie, insn, callee);
+    for (auto& mie : InstructionIterable(code)) {
+      auto insn = mie.insn;
+      if (!insn->has_method()) {
+        continue;
       }
-    } else {
-      for (auto& mie : InstructionIterable(code)) {
-        auto insn = mie.insn;
-        if (!insn->has_method()) {
-          continue;
-        }
-        const auto callee = resolve_method(
-            insn->get_method(),
-            opcode_to_search(const_cast<IRInstruction*>(insn)), meth);
-        if (callee == nullptr ||
-            num_additional_args.find(callee) == num_additional_args.end()) {
-          continue;
-        }
-        callsites.emplace_back(meth, &mie, insn, callee);
+      const auto callee = resolve_method(
+          insn->get_method(),
+          opcode_to_search(const_cast<IRInstruction*>(insn)), meth);
+      if (callee == nullptr ||
+          num_additional_args.find(callee) == num_additional_args.end()) {
+        continue;
       }
+      callsites.emplace_back(meth, &mie, callee);
     }
 
     for (const auto& callsite : callsites) {

@@ -8,7 +8,6 @@
 #include "TypeAnalysisTransform.h"
 
 #include "DexInstruction.h"
-#include "IRInstruction.h"
 #include "KotlinNullCheckMethods.h"
 #include "Show.h"
 
@@ -88,13 +87,10 @@ void Transform::remove_redundant_null_checks(const DexTypeEnvironment& env,
   auto result =
       evaluate_branch(last_insn->opcode(), domain.get_nullness().element());
   if (result == ALWAYS_TAKEN) {
-    // In editable cfg, there is no OPCODE_GOTO. We just put an tempary GOTO
-    // insn here, and will be handled during actual code tranform.
-    m_replacements.push_back({block->to_cfg_instruction_iterator(insn_it),
-                              new IRInstruction(OPCODE_GOTO)});
+    m_replacements.push_back({last_insn, new IRInstruction(OPCODE_GOTO)});
     stats.null_check_removed++;
   } else if (result == NEVER_TAKEN) {
-    m_deletes.emplace_back(block->to_cfg_instruction_iterator(insn_it));
+    m_deletes.emplace_back(insn_it);
     stats.null_check_removed++;
   } else if (!is_supported_branch_type(last_insn->opcode())) {
     stats.unsupported_branch++;
@@ -102,14 +98,13 @@ void Transform::remove_redundant_null_checks(const DexTypeEnvironment& env,
 }
 
 void Transform::remove_redundant_type_checks(const DexTypeEnvironment& env,
-                                             cfg::InstructionIterator& it,
-                                             cfg::ControlFlowGraph& cfg,
+                                             IRList::iterator& it,
                                              Stats& stats) {
 
   auto insn = it->insn;
-  auto move_res = cfg.move_result_of(it);
+  auto move_res = (++it)->insn;
   always_assert(insn->opcode() == OPCODE_INSTANCE_OF);
-  always_assert(opcode::is_move_result_any(move_res->insn->opcode()));
+  always_assert(opcode::is_move_result_any(move_res->opcode()));
   auto val = env.get(insn->src(0));
   if (val.is_top() || val.is_bottom()) {
     return;
@@ -118,8 +113,8 @@ void Transform::remove_redundant_type_checks(const DexTypeEnvironment& env,
   if (val.is_null()) {
     // always 0
     auto eval_val = new IRInstruction(OPCODE_CONST);
-    eval_val->set_literal(0)->set_dest(move_res->insn->dest());
-    m_replacements.push_back({it, eval_val});
+    eval_val->set_literal(0)->set_dest(move_res->dest());
+    m_replacements.push_back({insn, eval_val});
     stats.type_check_removed++;
   } else if (val.is_not_null() && val_type) {
     // can be evaluated
@@ -129,8 +124,8 @@ void Transform::remove_redundant_type_checks(const DexTypeEnvironment& env,
       return;
     }
     auto eval_val = new IRInstruction(OPCODE_CONST);
-    eval_val->set_literal(*eval_res)->set_dest(move_res->insn->dest());
-    m_replacements.push_back({it, eval_val});
+    eval_val->set_literal(*eval_res)->set_dest(move_res->dest());
+    m_replacements.push_back({insn, eval_val});
     stats.type_check_removed++;
   } else if (val.is_nullable() && val_type) {
     // check can be converted to null checks
@@ -159,7 +154,7 @@ Transform::Stats Transform::apply(
       continue;
     }
     for (auto& mie : InstructionIterable(block)) {
-      auto it = block->to_cfg_instruction_iterator(mie);
+      auto it = code->iterator_to(mie);
       auto* insn = mie.insn;
       lta.analyze_instruction(insn, &env);
 
@@ -178,7 +173,7 @@ Transform::Stats Transform::apply(
       }
       if (m_config.remove_redundant_type_checks &&
           insn->opcode() == OPCODE_INSTANCE_OF) {
-        remove_redundant_type_checks(env, it, code->cfg(), stats);
+        remove_redundant_type_checks(env, it, stats);
       }
     }
     if (m_config.remove_redundant_null_checks) {
@@ -191,26 +186,12 @@ Transform::Stats Transform::apply(
 
 void Transform::apply_changes(DexMethod* method) {
   auto* code = method->get_code();
-  always_assert(code->editable_cfg_built());
-  auto& cfg = code->cfg();
   for (auto const& p : m_replacements) {
-    const cfg::InstructionIterator& it = p.first;
-    auto old_op = it->insn;
-    if (opcode::is_a_testz_branch(old_op->opcode())) {
-      always_assert(p.second->opcode() == OPCODE_GOTO);
-      cfg::Edge* branch_edge =
-          cfg.get_succ_edge_of_type(it.block(), cfg::EDGE_BRANCH);
-      always_assert(branch_edge != nullptr);
-      cfg::Edge* goto_edge =
-          cfg.get_succ_edge_of_type(it.block(), cfg::EDGE_GOTO);
-      always_assert(goto_edge != nullptr);
-      // Set the target of EDGE_GOTO to the target of EDGE_BRANCH, and delete
-      // EDGE_BRANCH.
-      cfg.set_edge_target(goto_edge, branch_edge->target());
-      cfg.delete_edge(branch_edge);
+    IRInstruction* old_op = p.first;
+    if (opcode::is_branch(old_op->opcode())) {
+      code->replace_branch(old_op, p.second);
     } else {
-      always_assert(!opcode::is_branch(p.second->opcode()));
-      cfg.replace_insn(p.first, p.second);
+      code->replace_opcode(old_op, p.second);
     }
     TRACE(TYPE_TRANSFORM,
           9,
@@ -220,24 +201,13 @@ void Transform::apply_changes(DexMethod* method) {
           SHOW(method));
   }
   for (const auto& it : m_deletes) {
-    auto old_op = it->insn;
-    if (opcode::is_a_testz_branch(old_op->opcode())) {
-      // If current insn is a IF insn, also need to delete edge between blocks.
-      cfg::Edge* branch_edge =
-          cfg.get_succ_edge_of_type(it.block(), cfg::EDGE_BRANCH);
-      always_assert(branch_edge != nullptr);
-      // Delete EDGE_BRANCH.
-      cfg.delete_edge(branch_edge);
-    } else {
-      cfg.remove_insn(it);
-    }
     TRACE(TYPE_TRANSFORM,
           9,
           "Removing instruction %s in %s",
           SHOW(it->insn),
           SHOW(method));
+    code->remove_opcode(it);
   }
-  cfg.simplify();
 }
 
 } // namespace type_analyzer

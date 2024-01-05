@@ -50,7 +50,6 @@ class ReflectionAnalysisTest : public RedexTest {
       code->push_back(insn);
     }
     insns->set_insn_ownership(false);
-    code->build_cfg();
   }
 
   std::string to_string(const ReflectionSites& reflection_sites) {

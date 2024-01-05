@@ -302,8 +302,6 @@ class IRCode {
 
   bool has_try_blocks() const;
 
-  bool is_unreachable() const;
-
   IRList::iterator begin() { return m_ir_list->begin(); }
   IRList::iterator end() { return m_ir_list->end(); }
   IRList::const_iterator begin() const { return m_ir_list->begin(); }

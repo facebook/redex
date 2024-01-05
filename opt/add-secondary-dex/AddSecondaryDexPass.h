@@ -21,8 +21,6 @@ class AddSecondaryDexPass : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
         {NoInitClassInstructions, Preserves},
-        {NoResolvablePureRefs, Preserves},
-        {NoUnreachableInstructions, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
         {RenameClass, Preserves},
     };

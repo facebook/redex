@@ -57,8 +57,7 @@ class InterDex {
            const init_classes::InitClassesWithSideEffects&
                init_classes_with_side_effects,
            bool transitively_close_interdex_order,
-           int64_t minimize_cross_dex_refs_explore_alternatives,
-           ClassReferencesCache& class_references_cache)
+           int64_t minimize_cross_dex_refs_explore_alternatives)
       : m_dexen(dexen),
         m_asset_manager(asset_manager),
         m_conf(conf),
@@ -75,8 +74,7 @@ class InterDex {
         m_emitting_bg_set(false),
         m_emitted_bg_set(false),
         m_emitting_extended(false),
-        m_cross_dex_ref_minimizer(cross_dex_refs_config,
-                                  class_references_cache),
+        m_cross_dex_ref_minimizer(cross_dex_refs_config),
         m_original_scope(original_scope),
         m_scope(build_class_scope(m_dexen)),
         m_xstore_refs(xstore_refs),
@@ -84,8 +82,7 @@ class InterDex {
             std::move(methods_for_canary_clinit_reference)),
         m_transitively_close_interdex_order(transitively_close_interdex_order),
         m_minimize_cross_dex_refs_explore_alternatives(
-            minimize_cross_dex_refs_explore_alternatives),
-        m_class_references_cache(class_references_cache) {
+            minimize_cross_dex_refs_explore_alternatives) {
     m_emitting_state.dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
     m_emitting_state.dexes_structure.set_reserve_frefs(reserve_refs.frefs);
     m_emitting_state.dexes_structure.set_reserve_trefs(reserve_refs.trefs);
@@ -151,6 +148,8 @@ class InterDex {
   struct EmitResult {
     bool emitted{false};
     bool overflowed{false};
+
+    operator bool() const { return emitted; }
   };
 
   struct FlushOutDexResult {
@@ -243,8 +242,6 @@ class InterDex {
   size_t m_transitive_closure_moved{0};
   const bool m_transitively_close_interdex_order;
   const int64_t m_minimize_cross_dex_refs_explore_alternatives;
-
-  ClassReferencesCache& m_class_references_cache;
 };
 
 } // namespace interdex

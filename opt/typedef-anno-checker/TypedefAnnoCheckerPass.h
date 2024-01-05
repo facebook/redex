@@ -46,6 +46,8 @@ class TypedefAnnoCheckerPass : public Pass {
                 ConfigFiles& conf,
                 PassManager& mgr) override;
 
+  bool is_editable_cfg_friendly() override { return true; }
+
  private:
   void gather_typedef_values(
       const DexClass* cls,

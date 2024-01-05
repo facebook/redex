@@ -7,7 +7,6 @@
 
 class FooDelagates {
   val lazyValue: String by lazy { expensiveFn() }
-
   fun expensiveFn(): String {
     return "Help"
   }

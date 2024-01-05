@@ -85,7 +85,7 @@ DexMethod* create_an_init_method(
   main_block->ret_void();
   auto method = mc.create();
   cls->add_method(method);
-  method->get_code()->build_cfg();
+  method->get_code()->build_cfg(true);
   return method;
 }
 

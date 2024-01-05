@@ -431,10 +431,8 @@ int VirtualRenamer::rename_virtual_scopes(const DexType* type, int& seed) {
                                                 b_method->get_proto());
                 }
                 // then by access...
-                auto a_access =
-                    a_method->is_def() ? (uint32_t)a_method->get_access() : 0;
-                auto b_access =
-                    b_method->is_def() ? (uint32_t)b_method->get_access() : 0;
+                auto a_access = a_method->is_def() ? a_method->get_access() : 0;
+                auto b_access = b_method->is_def() ? b_method->get_access() : 0;
                 if (a_access != b_access) {
                   return a_access < b_access;
                 }

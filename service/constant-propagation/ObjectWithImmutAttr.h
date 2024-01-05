@@ -441,7 +441,7 @@ class ObjectWithImmutAttrDomain final
     if (other.is_top()) {
       return true;
     }
-    return m_value->type == other.m_value->type && m_value->leq(*other.m_value);
+    return m_value->leq(*other.m_value);
   }
 
   bool equals(const ObjectWithImmutAttrDomain& other) const {

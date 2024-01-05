@@ -23,7 +23,7 @@ TEST_F(DexInstructionTest, test_encode_fill_array_data_payload_8) {
   // DexOpcodeData constructor ignored the FOPCODE_FILL_ARRAY
   EXPECT_EQ(udata16[0], 1); // width
 
-  auto result = get_fill_array_data_payload<int8_t>(payload.get());
+  auto result = get_fill_array_data_payload<int8_t>(payload);
   EXPECT_EQ(result.size(), 5);
   EXPECT_EQ(result[0], 1);
   EXPECT_EQ(result[1], 2);
@@ -41,7 +41,7 @@ TEST_F(DexInstructionTest, test_encode_fill_array_data_payload_16) {
   // DexOpcodeData constructor ignored the FOPCODE_FILL_ARRAY
   EXPECT_EQ(udata16[0], 2); // width
 
-  auto result = get_fill_array_data_payload<uint16_t>(payload.get());
+  auto result = get_fill_array_data_payload<uint16_t>(payload);
   EXPECT_EQ(result.size(), 5);
   EXPECT_EQ(result[0], 1);
   EXPECT_EQ(result[1], 2);
@@ -61,7 +61,7 @@ TEST_F(DexInstructionTest, test_encode_fill_array_data_payload_32) {
   // DexOpcodeData constructor ignored the FOPCODE_FILL_ARRAY
   EXPECT_EQ(udata16[0], 4); // width
 
-  auto result = get_fill_array_data_payload<int32_t>(payload.get());
+  auto result = get_fill_array_data_payload<int32_t>(payload);
   EXPECT_EQ(result.size(), 5);
   EXPECT_EQ(result[0], 1);
   EXPECT_EQ(result[1], 2);

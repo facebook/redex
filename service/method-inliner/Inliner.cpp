@@ -570,7 +570,9 @@ size_t MultiMethodInliner::inline_inlinables(
   }
 
   // attempt to inline all inlinable candidates
-  size_t estimated_caller_size = caller->estimate_code_units();
+  size_t estimated_caller_size = caller->editable_cfg_built()
+                                     ? caller->cfg().sum_opcode_sizes()
+                                     : caller->sum_opcode_sizes();
 
   // Prefer inlining smaller methods first, so that we are less likely to hit
   // overall size limit.
@@ -663,12 +665,13 @@ size_t MultiMethodInliner::inline_inlinables(
         }
         // Copying to avoid cfg limitation
         auto* callsite_copy = new IRInstruction(*callsite_it->insn);
-        auto* unreachable_insn =
-            (new IRInstruction(IOPCODE_UNREACHABLE))->set_dest(temp_reg);
+        auto* const_insn = (new IRInstruction(OPCODE_CONST))
+                               ->set_dest(temp_reg)
+                               ->set_literal(0);
         auto* throw_insn =
             (new IRInstruction(OPCODE_THROW))->set_src(0, temp_reg);
         caller_cfg.replace_insns(callsite_it,
-                                 {callsite_copy, unreachable_insn, throw_insn});
+                                 {callsite_copy, const_insn, throw_insn});
         auto p = caller_cfg.remove_unreachable_blocks();
         auto unreachable_insn_count = p.first;
         auto registers_size_possibly_reduced = p.second;
@@ -681,7 +684,7 @@ size_t MultiMethodInliner::inline_inlinables(
           unreachable_insns += unreachable_insn_count;
           recompute_remaining_callsites();
         }
-        estimated_caller_size = caller_cfg.estimate_code_units();
+        estimated_caller_size = caller_cfg.sum_opcode_sizes();
         no_returns++;
       }
       continue;
@@ -718,7 +721,7 @@ size_t MultiMethodInliner::inline_inlinables(
         caller->cfg().recompute_registers_size();
         cfg_next_caller_reg = caller->cfg().get_registers_size();
       }
-      estimated_caller_size = caller->cfg().estimate_code_units();
+      estimated_caller_size = caller->cfg().sum_opcode_sizes();
       recompute_remaining_callsites();
       if (!remaining_callsites->count(callsite_insn)) {
         calls_not_inlined++;
@@ -732,7 +735,7 @@ size_t MultiMethodInliner::inline_inlinables(
         intermediate_shrinkings++;
         m_shrinker.shrink_method(caller_method);
         cfg_next_caller_reg = caller->cfg().get_registers_size();
-        estimated_caller_size = caller->cfg().estimate_code_units();
+        estimated_caller_size = caller->cfg().sum_opcode_sizes();
         recompute_remaining_callsites();
         if (!remaining_callsites->count(callsite_insn)) {
           calls_not_inlined++;
@@ -1128,7 +1131,8 @@ size_t MultiMethodInliner::get_callee_insn_size(const DexMethod* callee) {
   }
 
   const IRCode* code = callee->get_code();
-  auto size = code->estimate_code_units();
+  auto size = code->editable_cfg_built() ? code->cfg().sum_opcode_sizes()
+                                         : code->sum_opcode_sizes();
   if (m_callee_insn_sizes) {
     m_callee_insn_sizes->emplace(callee, size);
   }
@@ -1175,8 +1179,6 @@ static size_t get_inlined_cost(IRInstruction* insn) {
       cost += 2;
     } else if (op == IOPCODE_INJECTION_ID) {
       cost += 3;
-    } else if (op == IOPCODE_UNREACHABLE) {
-      cost += 1;
     }
   } else {
     cost++;
@@ -1359,7 +1361,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
         unused_args++;
       }
     }
-    insn_size = cfg->estimate_code_units();
+    insn_size = cfg->sum_opcode_sizes();
   } else {
     editable_cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
       auto insn = mie.insn;
@@ -1370,7 +1372,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
       analyze_refs(insn);
       return editable_cfg_adapter::LOOP_CONTINUE;
     });
-    insn_size = code->estimate_code_units();
+    insn_size = code->sum_opcode_sizes();
   }
   if (returns > 1) {
     // if there's more than one return, gotos will get introduced to merge

@@ -29,8 +29,3 @@ class B extends A implements IB, IC {
   public void m() {}
   // A's definition of `n` will implement IB::n.
 }
-
-class C extends A implements IB {
-  public void m() {}
-  // A's definition of `n` will implement IB::n.
-}

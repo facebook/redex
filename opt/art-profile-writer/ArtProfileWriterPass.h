@@ -15,9 +15,18 @@ class ArtProfileWriterPass : public Pass {
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
-    return redex_properties::simple::preserves_all();
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
+        {NoInitClassInstructions, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
+        {RenameClass, Preserves},
+    };
   }
 
+  bool is_editable_cfg_friendly() override { return true; }
   void bind_config() override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

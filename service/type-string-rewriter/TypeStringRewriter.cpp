@@ -7,7 +7,6 @@
 
 #include "TypeStringRewriter.h"
 
-#include "ControlFlow.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -166,7 +165,8 @@ const DexString* TypeStringMap::get_new_type_name(
 
 void rewrite_dalvik_annotation_signature(const Scope& scope,
                                          const TypeStringMap& mapping) {
-  DexType* dalviksig = type::dalvik_annotation_Signature();
+  static DexType* dalviksig =
+      DexType::get_type("Ldalvik/annotation/Signature;");
   walk::parallel::annotations(scope, [&](DexAnnotation* anno) {
     if (anno->type() != dalviksig) return;
     auto& elems = anno->anno_elems();
@@ -194,9 +194,7 @@ uint32_t rewrite_string_literal_instructions(const Scope& scope,
                                              const TypeStringMap& mapping) {
   std::atomic<uint32_t> total_updates(0);
   walk::parallel::code(scope, [&](DexMethod* meth, IRCode& code) {
-    always_assert(code.editable_cfg_built());
-    auto& cfg = code.cfg();
-    for (const auto& mie : InstructionIterable(cfg)) {
+    for (const auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
       if (insn->opcode() != OPCODE_CONST_STRING) {
         continue;

@@ -282,23 +282,24 @@ DexMethod* split_method(const SplittableClosure& splittable_closure,
   return split_method;
 }
 
-std::unordered_set<DexMethod*> split_splittable_closures(
+void split_splittable_closures(
     const std::vector<DexClasses*>& dexen,
     int32_t min_sdk,
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
     size_t reserved_trefs,
     size_t reserved_mrefs,
-    const std::unordered_map<DexType*, std::vector<SplittableClosure>>&
+    const ConcurrentMap<DexType*, std::vector<SplittableClosure>>&
         splittable_closures,
     const std::string& name_infix,
     ConcurrentMap<std::string, size_t>* uniquifiers,
     Stats* stats,
     std::unordered_map<DexClasses*, std::unique_ptr<DexState>>* dex_states,
     ConcurrentSet<DexMethod*>* concurrent_added_methods,
-    ConcurrentMap<DexMethod*, DexMethod*>* concurrent_new_hot_methods) {
+    ConcurrentMap<DexMethod*, DexMethod*>*
+        concurrent_new_hot_methods,
+    ConcurrentSet<DexMethod*>* concurrent_affected_methods) {
   Timer t("split");
-  ConcurrentSet<DexMethod*> concurrent_affected_methods;
   auto process_dex = [&](DexClasses* dex) {
     std::vector<const SplittableClosure*> ranked_splittable_closures;
     for (auto* cls : *dex) {
@@ -341,8 +342,8 @@ std::unordered_set<DexMethod*> split_splittable_closures(
       auto method = splittable_closure->method_closures->method;
       std::string id =
           method->get_class()->str() + "." + method->get_name()->str();
-      size_t index{0};
-      uniquifiers->update(id, [&index](auto, auto& v, bool) { index = v++; });
+      size_t index;
+      uniquifiers->update(id, [&](const auto&, auto& value, bool) { index = value++; });
       auto new_method =
           split_method(*splittable_closure, name_infix, index, dex_state.get());
       if (!new_method) {
@@ -365,8 +366,7 @@ std::unordered_set<DexMethod*> split_splittable_closures(
       case HotSplitKind::Hot: {
         stats->hot_split_count++;
         if (concurrent_new_hot_methods) {
-          auto hot_root_method =
-              concurrent_new_hot_methods->get(method, method);
+          auto* hot_root_method = concurrent_new_hot_methods->get(method, method);
           concurrent_new_hot_methods->emplace(new_method, hot_root_method);
         }
         break;
@@ -384,11 +384,10 @@ std::unordered_set<DexMethod*> split_splittable_closures(
       affected_methods.insert(new_method);
       concurrent_added_methods->insert(new_method);
     }
-    concurrent_affected_methods.insert(affected_methods.begin(),
-                                       affected_methods.end());
+    concurrent_affected_methods->insert(affected_methods.begin(),
+                                        affected_methods.end());
   };
   workqueue_run<DexClasses*>(process_dex, dexen);
-  return concurrent_affected_methods.move_to_container();
 }
 
 } // namespace
@@ -404,10 +403,22 @@ void split_methods_in_stores(
     size_t reserved_trefs,
     Stats* stats,
     const std::string& name_infix,
-    ConcurrentMap<DexMethod*, DexMethod*>* concurrent_new_hot_methods) {
+    ConcurrentMap<DexMethod*, DexMethod*>* concurrent_new_hot_methods,
+    ConcurrentMap<DexMethod*, size_t>*
+        concurrent_splittable_no_optimizations_methods) {
   auto scope = build_class_scope(stores);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, create_init_class_insns);
+
+  ConcurrentSet<DexMethod*> methods;
+  std::vector<DexClasses*> dexen;
+  std::unordered_map<DexClasses*, std::unique_ptr<DexState>> dex_states;
+  for (auto& store : stores) {
+    for (auto& dex : store.get_dexen()) {
+      dexen.push_back(&dex);
+      dex_states[&dex];
+    }
+  }
 
   auto is_excluded = [&](DexMethod* method) {
     auto name = method->get_deobfuscated_name_or_empty();
@@ -418,35 +429,27 @@ void split_methods_in_stores(
     }
     return false;
   };
-
-  std::unordered_set<DexMethod*> methods;
-  std::vector<DexClasses*> dexen;
-  std::unordered_map<DexClasses*, std::unique_ptr<DexState>> dex_states;
-  for (auto& store : stores) {
-    for (auto& dex : store.get_dexen()) {
-      dexen.push_back(&dex);
-      dex_states[&dex];
-      walk::code(dex, [&](DexMethod* method, IRCode&) {
-        if (is_excluded(method)) {
-          stats->excluded_methods++;
-          return;
-        }
-        methods.insert(method);
-      });
+  walk::parallel::code(scope, [&](DexMethod* method, IRCode&) {
+    if (is_excluded(method)) {
+      stats->excluded_methods++;
+      return;
     }
-  }
+    methods.insert(method);
+  });
 
   size_t iteration{0};
   ConcurrentMap<std::string, size_t> uniquifiers;
   while (!methods.empty() && iteration < config.max_iteration) {
     TRACE(MS, 2, "=== iteration[%zu]", iteration);
     Timer t("iteration " + std::to_string(iteration++));
-    auto splittable_closures = select_splittable_closures(methods, config);
+    auto splittable_closures = select_splittable_closures(
+        methods, config, concurrent_splittable_no_optimizations_methods);
     ConcurrentSet<DexMethod*> concurrent_added_methods;
-    methods = split_splittable_closures(
+    methods.clear();
+    split_splittable_closures(
         dexen, min_sdk, init_classes_with_side_effects, reserved_trefs,
         reserved_mrefs, splittable_closures, name_infix, &uniquifiers, stats,
-        &dex_states, &concurrent_added_methods, concurrent_new_hot_methods);
+        &dex_states, &concurrent_added_methods, concurrent_new_hot_methods, &methods);
     stats->added_methods.insert(concurrent_added_methods.begin(),
                                 concurrent_added_methods.end());
     TRACE(MS, 1, "[%zu] Split out %zu methods", iteration,

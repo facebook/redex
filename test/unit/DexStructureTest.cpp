@@ -25,8 +25,6 @@ TEST_F(DexStructureTest, remove_class) {
   DexStoresVector stores;
   auto foo_cls = create_a_class("Lfoo;");
   auto bar_cls = create_a_class("Lbar;");
-  bar_cls->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
-
   {
     DexStore store("root");
     store.add_classes({foo_cls, bar_cls});
@@ -61,16 +59,6 @@ TEST_F(DexStructureTest, remove_class) {
   EXPECT_EQ(dex1.get_fref_occurrences(f3), 1);
 
   EXPECT_EQ(dex1.get_tref_occurrences(ty), 2);
-
-  // Check perf based classes sorting.
-  auto classes = dex1.get_classes();
-  EXPECT_EQ(classes.size(), 2);
-  EXPECT_EQ(classes[0]->is_perf_sensitive(), false);
-  EXPECT_EQ(classes[1]->is_perf_sensitive(), true);
-
-  classes = dex1.get_classes(true);
-  EXPECT_EQ(classes[0]->is_perf_sensitive(), true);
-  EXPECT_EQ(classes[1]->is_perf_sensitive(), false);
 
   // Remove foo1_cls.
   dex1.remove_class(&init_classes_with_side_effects, {m1}, {f2}, {ty}, {}, {},

@@ -30,13 +30,10 @@ class InsertSourceBlocksPass : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Establishes},
         {NoSpuriousGetClassCalls, Preserves},
-        {UltralightCodePatterns, Preserves},
     };
   }
 
   void bind_config() override;
-
-  bool is_cfg_legacy() override { return true; }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
