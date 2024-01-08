@@ -104,26 +104,28 @@ commands:
       # It is OK to generically restore boost, even if it is not used.
       - restore_cache:
           keys:
-            - boost-1-71-0-v4
+            - boost-1-71-0-v5
       - restore_cache:
           keys:
-            - protobuf3-v2
+            - protobuf3-v3
       - run:
           name: Setup
+          environment:
+            TOOLCHAIN_TMP: /tmp/toolchain
           command: |
-            sudo ./setup_oss_toolchain.sh << parameters.setup_toolchain_extra >>
+            sudo -E ./setup_oss_toolchain.sh << parameters.setup_toolchain_extra >>
       # Only save the cache when asked, e.g., hopefully when it was populated.
       - when:
           condition: << parameters.save_boost_cache >>
           steps:
             - save_cache:
                 paths:
-                  - dl_cache/boost_cache
-                key: boost-1-71-0-v4
+                  - /tmp/toolchain/dl_cache/boost_cache
+                key: boost-1-71-0-v5
             - save_cache:
                 paths:
-                  - dl_cache/protobuf
-                key: protobuf3-v2
+                  - /tmp/toolchain/dl_cache/protobuf
+                key: protobuf3-v3
 
   # For testing, need additional dependencies not provided by the image.
 
