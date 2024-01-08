@@ -456,8 +456,10 @@ def dex_glob(directory: str) -> typing.List[str]:
     return [primary] + secondaries
 
 
-def move_dexen_to_directories(
-    root: str, dexpaths: typing.Iterable[str]
+def relocate_dexen_to_directories(
+    root: str,
+    dexpaths: typing.Iterable[str],
+    should_copy: bool = False,
 ) -> typing.List[str]:
     """
     Move each dex file to its own directory within root and return a list of the
@@ -469,7 +471,14 @@ def move_dexen_to_directories(
         dexname = basename(dexpath)
         dirpath = join(root, "dex" + str(idx))
         os.mkdir(dirpath)
-        shutil.move(dexpath, dirpath)
+        if should_copy:
+            shutil.copyfile(dexpath, os.path.join(dirpath, dexname))
+            log(
+                "relocate_dexen_to_directories creating copy: %s -> %s"
+                % (dexpath, os.path.join(dirpath, dexname))
+            )
+        else:
+            shutil.move(dexpath, dirpath)
         res.append(join(dirpath, dexname))
 
     return res

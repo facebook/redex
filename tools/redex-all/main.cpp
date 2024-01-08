@@ -1359,7 +1359,14 @@ void redex_backend(ConfigFiles& conf,
       *conf.get_global_config().get_config_by_name<DexOutputConfig>(
           "dex_output");
 
-  {
+  bool should_preserve_input_dexes =
+      conf.get_json_config().get("preserve_input_dexes", false);
+  if (should_preserve_input_dexes) {
+    always_assert_log(
+        !post_lowering,
+        "post lowering should be off when preserving input dex option is on");
+    TRACE(MAIN, 1, "Skipping writing output dexes as configured");
+  } else {
     ScopedMemStats wod_mem_stats{mem_stats_enabled, reset_hwm};
     for (size_t store_number = 0; store_number < stores.size();
          ++store_number) {
