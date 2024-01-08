@@ -220,6 +220,10 @@ DexType* make_dextype_from_cref(std::vector<cp_entry>& cpool, uint16_t cref) {
 bool extract_utf8(std::vector<cp_entry>& cpool,
                   uint16_t utf8ref,
                   std::string_view* out) {
+  if (utf8ref >= cpool.size()) {
+    std::cerr << "utf8 ref out of bound, bailing\n";
+    return false;
+  }
   const cp_entry& utf8cpe = cpool[utf8ref];
   if (utf8cpe.tag != CP_CONST_UTF8) {
     std::cerr << "Non-utf8 ref in get_utf8, bailing\n";
