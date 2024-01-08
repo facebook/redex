@@ -15,14 +15,13 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 # Temporary directory for toolchain sources. Build artifacts will be
 # installed to /usr/local.
-# Under CircleCI ignore this for caching, we need a stable path.
-# Note: It seems CIRCLECI is not set, somehow, so use HOME.
-if [ "$HOME" = "/home/circleci" ] ; then
-  echo "Operating under CircleCI, using TMP=."
-  TMP="."
+echo "toolchain tmp = $TOOLCHAIN_TMP"
+if [ -z "$TOOLCHAIN_TMP" ] ; then
+  TOOLCHAIN_TMP=$(mktemp -d 2>/dev/null)
+  trap 'rm -r $TOOLCHAIN_TMP' EXIT
 else
-  TMP=$(mktemp -d 2>/dev/null)
-  trap 'rm -r $TMP' EXIT
+  echo "Using toolchain tmp $TOOLCHAIN_TMP"
+  mkdir -p "$TOOLCHAIN_TMP"
 fi
 
 if [ "$1" = "32" ] ; then
@@ -52,12 +51,12 @@ PROTOBUF_DEB_UBUNTU_PKGS="libprotobuf-dev$BITNESS_SUFFIX
                           protobuf-compiler"
 
 function install_boost_from_source {
-    pushd "$TMP"
+    pushd "$TOOLCHAIN_TMP"
     "$ROOT"/get_boost.sh
 }
 
 function install_protobuf3_from_source {
-    pushd "$TMP"
+    pushd "$TOOLCHAIN_TMP"
     mkdir -p dl_cache/protobuf
     if [ ! -f dl_cache/protobuf/protobuf-cpp-3.17.3.tar.gz ] ; then
       wget https://github.com/protocolbuffers/protobuf/releases/download/v3.17.3/protobuf-cpp-3.17.3.tar.gz -O dl_cache/protobuf/protobuf-cpp-3.17.3.tar.gz
