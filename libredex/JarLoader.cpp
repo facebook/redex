@@ -210,11 +210,15 @@ DexType* make_dextype_from_cref(std::vector<cp_entry>& cpool, uint16_t cref) {
     std::cerr << "classname is greater than max, bailing";
     return nullptr;
   }
-  nbuffer[0] = 'L';
-  memcpy(nbuffer + 1, utf8cpe.data, utf8cpe.len);
-  nbuffer[1 + utf8cpe.len] = ';';
-  nbuffer[2 + utf8cpe.len] = '\0';
-  return DexType::make_type(nbuffer);
+  try {
+    nbuffer[0] = 'L';
+    memcpy(nbuffer + 1, utf8cpe.data, utf8cpe.len);
+    nbuffer[1 + utf8cpe.len] = ';';
+    nbuffer[2 + utf8cpe.len] = '\0';
+    return DexType::make_type(nbuffer);
+  } catch (std::invalid_argument&) {
+    return nullptr;
+  }
 }
 
 bool extract_utf8(std::vector<cp_entry>& cpool,
@@ -483,7 +487,7 @@ bool parse_class(uint8_t* buffer,
   cc.set_external();
   if (super != 0) {
     DexType* sclazz = make_dextype_from_cref(cpool, super);
-    if (self == nullptr) {
+    if (sclazz == nullptr) {
       std::cerr << "Bad super class cpool index " << super << ", Bailing\n";
       return false;
     }
@@ -494,6 +498,10 @@ bool parse_class(uint8_t* buffer,
     for (int i = 0; i < ifcount; i++) {
       uint16_t iface = read16(buffer, buffer_end);
       DexType* iftype = make_dextype_from_cref(cpool, iface);
+      if (iftype == nullptr) {
+        std::cerr << "Bad interface cpool index " << super << ", Bailing\n";
+        return false;
+      }
       cc.add_interface(iftype);
     }
   }
