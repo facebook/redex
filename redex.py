@@ -740,6 +740,8 @@ Given an APK, produce a better APK!
         help="Do not look attempt to search for SDK tools via path construction. Use the provided tool path overrides or the buck defaults",
     )
 
+    parser.add_argument("--addr2line", help="Path to addr2line for crash symbolication")
+
     parser.add_argument(
         "--log-level",
         default="warning",
@@ -1043,6 +1045,9 @@ def prepare_redex(args: argparse.Namespace) -> State:
 
     if args.omit_sdk_tool_discovery:
         omit_sdk_tool_discovery()
+
+    if args.addr2line:
+        bintools.set_addr2line_path(args.addr2line)
 
     # avoid accidentally mixing up file formats since we now support
     # both apk files and Android bundle files

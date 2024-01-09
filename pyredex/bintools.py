@@ -13,6 +13,7 @@ import itertools
 import os
 import platform
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -59,26 +60,45 @@ def _should_skip_line(line: str) -> bool:
     return False
 
 
+ADDR2LINE_PATH: typing.Optional[str] = None
+
+
+def set_addr2line_path(path: str) -> None:
+    global ADDR2LINE_PATH
+    ADDR2LINE_PATH = path
+
+
 # Check whether addr2line is available
 def _has_addr2line() -> bool:
     try:
+        global ADDR2LINE_PATH
+        path = ADDR2LINE_PATH
+        if path:
+            if os.path.exists(path) or shutil.which(path):
+                return True
+
         subprocess.check_call(
             ["addr2line", "-v"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
+        ADDR2LINE_PATH = "addr2line"
         return True
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
 
 
-_ADDR2LINE_BASE = ["addr2line", "-f", "-i", "-C", "-e"]
+_ADDR2LINE_BASE_ARGS = ["-f", "-i", "-C", "-e"]
 
 
 def _symbolize(filename: str, offset: str) -> typing.List[str]:
     # It's good enough not to use server mode.
     try:
-        output = subprocess.check_output(_ADDR2LINE_BASE + [filename, offset])
+        path = ADDR2LINE_PATH
+        assert path
+        output = subprocess.check_output(
+            [path] + _ADDR2LINE_BASE_ARGS + [filename, offset]
+        )
         return output.decode(sys.stderr.encoding).splitlines()
     except subprocess.CalledProcessError:
         return ["<addr2line error>"]
