@@ -105,6 +105,10 @@ commands:
       - restore_cache:
           keys:
             - boost-1-71-0-v5
+      # Temporarily to bypass jfrog downtime.
+      - restore_cache:
+          keys:
+            - boost-1-71-0-v4
       - restore_cache:
           keys:
             - protobuf3-v3
