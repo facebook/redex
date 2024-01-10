@@ -64,7 +64,7 @@ function install_protobuf3_from_source {
 
     mkdir -p toolchain_install/protobuf
     pushd toolchain_install/protobuf
-    tar -xvf ../../dl_cache/protobuf/protobuf-cpp-3.17.3.tar.gz --no-same-owner
+    tar -xf ../../dl_cache/protobuf/protobuf-cpp-3.17.3.tar.gz --no-same-owner
 
     pushd protobuf-3.17.3
     ./configure $BITNESS_CONFIGURE
@@ -88,8 +88,8 @@ function install_from_apt {
         make
         wget
         zlib1g-dev$BITNESS_SUFFIX $BITNESS_PKGS $*"
-  apt-get update
-  apt-get install --no-install-recommends -y ${PKGS}
+  apt-get update -q
+  apt-get install -q --no-install-recommends -y ${PKGS}
 }
 
 function handle_debian {
