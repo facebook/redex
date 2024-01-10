@@ -931,3 +931,30 @@ TEST_F(TypedefAnnoCheckerTest, testAssignNullToString) {
   checker.run(method);
   EXPECT_TRUE(checker.complete());
 }
+
+TEST_F(TypedefAnnoCheckerTest, TestNoAnnoField) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerTest;.testNoAnnoField:()I")
+                     ->as_def();
+
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto* cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker =
+      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  checker.run(method);
+  EXPECT_FALSE(checker.complete());
+  EXPECT_EQ(
+      checker.error(),
+      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testNoAnnoField:()I\n\
+ the field no_anno_field\n\
+ needs to have the annotation  Linteg/TestIntDef;.\n\
+ failed instruction: IGET v1, Lcom/facebook/redextest/TypedefAnnoCheckerTest;.no_anno_field:I\n");
+}
