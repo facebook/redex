@@ -14,6 +14,37 @@
 #include <algorithm>
 #include <cinttypes>
 #include <string>
+#include <unordered_set>
+
+/// populate_reshuffable_classes_types collects type of classes that are in cold
+/// start but below 20pct appear count. These classes can be considered not as
+/// perf sensitive, thus should be movable.
+void populate_reshuffable_classes_types(
+    std::unordered_set<std::string>& reshuffable_classes, ConfigFiles& conf) {
+  const auto& betamap_classes = conf.get_coldstart_classes();
+  bool seen_coldstart_20pct_end = false;
+  bool seen_coldstart_1pct_end = false;
+  constexpr const char* coldstart_20pct_end = "ColdStart20PctEnd";
+  constexpr const char* coldstart_1pct_end = "ColdStart1PctEnd";
+  for (const auto& cls_name : betamap_classes) {
+    if (cls_name.find(coldstart_20pct_end) != std::string::npos) {
+      seen_coldstart_20pct_end = true;
+    }
+    if (cls_name.find(coldstart_1pct_end) != std::string::npos) {
+      seen_coldstart_1pct_end = true;
+    }
+    if (seen_coldstart_20pct_end && !seen_coldstart_1pct_end) {
+      reshuffable_classes.insert(cls_name);
+    }
+  }
+}
+
+bool is_reshuffable_class(
+    const DexClass* cls,
+    const std::unordered_set<std::string>& reshuffable_classes) {
+  return reshuffable_classes.find(cls->get_type()->str_copy()) !=
+         reshuffable_classes.end();
+}
 
 InterDexReshuffleImpl::InterDexReshuffleImpl(ConfigFiles& conf,
                                              PassManager& mgr,
@@ -46,19 +77,26 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(ConfigFiles& conf,
 
   Timer t("init");
   DexClasses classes;
+  std::unordered_set<std::string> reshuffable_classes;
+  if (config.exclude_below20pct_coldstart_classes) {
+    populate_reshuffable_classes_types(reshuffable_classes, conf);
+  }
   for (size_t dex_index = m_first_dex_index; dex_index < dexen.size();
        dex_index++) {
     auto& dex = dexen.at(dex_index);
     if (dex_index == m_first_dex_index &&
         !std::any_of(dex.begin(), dex.end(),
-                     [this](auto* cls) { return can_move(cls); })) {
+                     [this, &reshuffable_classes](auto* cls) {
+                       return can_move(cls) ||
+                              is_reshuffable_class(cls, reshuffable_classes);
+                     })) {
       m_first_dex_index++;
       continue;
     }
     for (auto cls : dex) {
       classes.push_back(cls);
       m_class_refs.emplace(cls, Refs());
-      if (!can_move(cls)) {
+      if (!can_move(cls) && !is_reshuffable_class(cls, reshuffable_classes)) {
         continue;
       }
       m_movable_classes.push_back(cls);

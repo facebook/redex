@@ -29,6 +29,7 @@ struct ReshuffleConfig {
   size_t extra_linear_alloc_limit{0};
   size_t max_batches{20};
   size_t max_batch_size{200000};
+  bool exclude_below20pct_coldstart_classes{false};
 };
 
 // Compute gain powers by reference occurrences. We don't use the upper 20 (19,

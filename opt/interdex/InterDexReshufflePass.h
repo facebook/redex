@@ -89,6 +89,12 @@ class InterDexReshufflePass : public Pass {
          m_config.max_batch_size,
          "How many class to move per batch. More might yield better results, "
          "but might take longer.");
+    bind("exclude_below20pct_coldstart_classes",
+         false,
+         m_config.exclude_below20pct_coldstart_classes,
+         "Whether to exclude coldstart classes in between 1pctColdStart and "
+         "20pctColdStart marker"
+         "from the reshuffle.");
   }
 
  private:
