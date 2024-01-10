@@ -466,6 +466,10 @@ RefStats ResolveRefsPass::refine_virtual_callsites(const XStoreRefs& xstores,
       stats.num_bailed_on_min_sdk_mismatch++;
       continue;
     }
+    if (!opcode::is_invoke_interface(opcode) && is_interface(def_cls)) {
+      TRACE(RESO, 4, "Bailed on incorrect opcode %s", SHOW(def_meth));
+      continue;
+    }
     TRACE(RESO, 3, "Resolving %s\n\t=>%s", SHOW(mref), SHOW(def_meth));
     insn->set_method(def_meth);
     if (opcode::is_invoke_interface(opcode) && !is_interface(def_cls)) {
