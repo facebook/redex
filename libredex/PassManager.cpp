@@ -688,6 +688,8 @@ class AfterPassSizes {
       tmp_dir = dir_name;
     }
 
+    redex_thread_pool::ThreadPool::get_instance()->join();
+
     pid_t p = fork();
 
     if (p < 0) {
@@ -804,8 +806,14 @@ class AfterPassSizes {
     }
     // Better run MakePublicPass.
     maybe_run("MakePublicPass");
-    // May need register allocation.
+    // Run ReBindRefsPass to not get a 'trying to encode too many method refs in
+    // dex' error
+    maybe_run("ReBindRefsPass");
+    // May need register allocation. Run InjectionIdLoweringPass too so
+    // RegAllocPass doesn't fail on injection-id opcodes
     if (!m_mgr->regalloc_has_run()) {
+      maybe_run("IntrinsifyInjectionIdsPass");
+      maybe_run("InjectionIdLoweringPass");
       maybe_run("RegAllocPass");
     }
 
@@ -1339,6 +1347,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   /////////////////////
   // MAIN PASS LOOP. //
   /////////////////////
+  bool handled_child = false;
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     const size_t pass_run = ++runs[pass];
@@ -1421,7 +1430,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     process_method_profiles(*this, conf);
     process_secondary_method_profiles(*this, conf);
 
-    if (after_pass_size.handle(m_current_pass_info, &stores, &conf)) {
+    handled_child = after_pass_size.handle(m_current_pass_info, &stores, &conf);
+    if (handled_child) {
       // Measuring child. Return to write things out.
       break;
     }
@@ -1454,8 +1464,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   jni_native_context_helper.post_passes(scope, conf);
 
   check_unique_deobfuscated.run_finally(scope);
-
-  check_unreleased_reserved_refs();
+  if (!handled_child) {
+    check_unreleased_reserved_refs();
+  }
 
   graph_visualizer.finalize();
 
