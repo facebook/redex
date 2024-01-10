@@ -27,9 +27,17 @@
 #include "RedexTestUtils.h"
 
 struct RedexTest : public testing::Test {
+ public:
   RedexTest() { g_redex = new RedexContext(); }
 
   ~RedexTest() { delete g_redex; }
+
+  std::string android_sdk_jar_path() {
+    const char* android_sdk = std::getenv("sdk_path");
+    std::string android_target(std::getenv("android_target"));
+    return std::string(android_sdk) + "/platforms/" + android_target +
+           "/android.jar";
+  }
 };
 
 struct RedexIntegrationTest : public RedexTest {
