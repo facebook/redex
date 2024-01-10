@@ -881,8 +881,14 @@ class TraceClassAfterEachPass {
     }
     for (auto* v : methods) {
       fprintf(fd, "Method %s\n", SHOW(v));
-      if (v->get_code()) {
-        fprintf(fd, "%s\n", SHOW(v->get_code()));
+      auto code = v->get_code();
+      if (code != nullptr) {
+        if (code->editable_cfg_built()) {
+          auto& cfg = code->cfg();
+          fprintf(fd, "%s\n", SHOW(cfg));
+        } else {
+          fprintf(fd, "%s\n", SHOW(code));
+        }
       }
     }
   }
