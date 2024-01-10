@@ -900,7 +900,7 @@ void MethodReferencesGatherer::default_gather_mie(const MethodItemEntry& mie,
           .insert(base_type);
       auto* base_cls = type_class(base_type);
       always_assert(base_cls);
-      if (base_cls->is_external() ||
+      if (base_cls == nullptr || base_cls->is_external() ||
           (!is_abstract(resolved_callee) && resolved_callee->is_external())) {
         refs->unknown_invoke_virtual_targets = true;
       } else if (opcode::is_invoke_interface(op) && is_interface(base_cls)) {
