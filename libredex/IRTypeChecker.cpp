@@ -825,6 +825,16 @@ void validate_invoke_virtual(const DexMethod* caller,
   }
 
   if (callee->as_def()->is_virtual()) {
+    // Make sure the callee is not known to be an interface.
+    auto callee_type = callee->as_def()->get_class();
+    auto callee_cls = type_class(callee_type);
+    if (callee_cls != nullptr && is_interface(callee_cls)) {
+      std::ostringstream out;
+      out << "\nillegal invoke-virtual to interface type "
+          << show_deobfuscated(callee) << " in " << show_deobfuscated(caller);
+      throw TypeCheckingException(out.str());
+    }
+    // Otherwise okay.
     return;
   }
 
