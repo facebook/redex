@@ -68,6 +68,8 @@ class OverUnderSetAbstractDomain final
 
   bool empty() const { return this->is_value() && this->get_value()->empty(); }
 
+  /* Returns elements in the over-approximation, excluding elements in the
+   * under-approximation. */
   const Set& over() const {
     SPARTA_RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
                          invalid_abstract_value()
@@ -76,12 +78,22 @@ class OverUnderSetAbstractDomain final
     return this->get_value()->over();
   }
 
+  /* Returns elements in the under-approximation. */
   const Set& under() const {
     SPARTA_RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
                          invalid_abstract_value()
                              << expected_kind(AbstractValueKind::Value)
                              << actual_kind(this->kind()));
     return this->get_value()->under();
+  }
+
+  /* Returns all elements (union of over and under approximation). */
+  Set elements() const {
+    SPARTA_RUNTIME_CHECK(this->kind() == AbstractValueKind::Value,
+                         invalid_abstract_value()
+                             << expected_kind(AbstractValueKind::Value)
+                             << actual_kind(this->kind()));
+    return this->get_value()->elements();
   }
 
   void add_over(const Element& e) { add_over_internal(e); }
@@ -136,7 +148,7 @@ class OverUnderSetAbstractDomain final
     } else if (this->is_bottom()) {
       this->set_to_value(Value(
           /* over */ Set(std::forward<T>(element_or_set)),
-          /* under */ {}));
+          /* under */ Set{}));
     }
   }
 
@@ -159,57 +171,73 @@ class OverUnderSetValue final : public AbstractValue<OverUnderSetValue<Set>> {
 
   OverUnderSetValue() = default;
 
-  explicit OverUnderSetValue(Element e)
-      : OverUnderSetValue(Set{std::move(e)}) {}
+  explicit OverUnderSetValue(Element e) : m_under{std::move(e)}, m_over{} {}
 
   explicit OverUnderSetValue(std::initializer_list<Element> l)
-      : OverUnderSetValue(Set(l)) {}
+      : m_under{l}, m_over{} {}
 
-  explicit OverUnderSetValue(Set over_and_under)
-      : m_over(over_and_under), m_under(std::move(over_and_under)) {
-    // Union is unnecessary.
-  }
+  explicit OverUnderSetValue(Set under) : m_under(std::move(under)), m_over{} {}
 
   OverUnderSetValue(Set over, Set under)
-      : m_over(std::move(over)), m_under(std::move(under)) {
-    m_over.union_with(m_under);
+      : m_under(std::move(under)), m_over(std::move(over)) {
+    // Enforce the class invariant.
+    m_over.difference_with(m_under);
   }
 
   void clear() {
-    m_over.clear();
     m_under.clear();
+    m_over.clear();
   }
 
   AbstractValueKind kind() const { return AbstractValueKind::Value; }
 
-  bool empty() const { return m_over.empty(); }
-
-  const Set& over() const { return m_over; }
+  bool empty() const { return m_under.empty() && m_over.empty(); }
 
   const Set& under() const { return m_under; }
 
-  void add_over(const Element& e) { m_over.insert(e); }
+  const Set& over() const { return m_over; }
 
-  void add_over(const Set& set) { m_over.union_with(set); }
+  Set elements() const { return m_under.get_union_with(m_over); }
+
+  void add_over(const Element& e) {
+    if (!m_under.contains(e)) {
+      m_over.insert(e);
+    }
+  }
+
+  void add_over(Set set) {
+    set.difference_with(m_under);
+    m_over.union_with(set);
+  }
 
   void add_under(const Element& e) {
-    m_over.insert(e);
     m_under.insert(e);
+    m_over.remove(e);
   }
 
   void add_under(const Set& set) {
-    m_over.union_with(set);
     m_under.union_with(set);
+    m_over.difference_with(set);
   }
 
   void add(const OverUnderSetValue& other) {
-    m_over.union_with(other.m_over);
     m_under.union_with(other.m_under);
+    m_over.union_with(other.m_over);
+
+    // Preserve the class invariant.
+    m_over.difference_with(m_under);
   }
 
   bool leq(const OverUnderSetValue& other) const {
-    return m_over.is_subset_of(other.m_over) &&
-           other.m_under.is_subset_of(m_under);
+    // b_under ⊆ a_under
+    if (!other.m_under.is_subset_of(m_under)) {
+      return false;
+    }
+
+    // a_over* ⊆ b_over* = (a_over ∪ a_under) ⊆ (b_over ∪ b_under)
+    Set other_elements = other.elements();
+    return m_under.is_subset_of(other_elements) &&
+           m_over.is_subset_of(other_elements);
   }
 
   bool equals(const OverUnderSetValue& other) const {
@@ -217,8 +245,34 @@ class OverUnderSetValue final : public AbstractValue<OverUnderSetValue<Set>> {
   }
 
   AbstractValueKind join_with(const OverUnderSetValue& other) {
-    m_over.union_with(other.m_over);
-    m_under.intersection_with(other.m_under);
+    /*
+     * The mathematical operation (with the over set including the under set,
+     * annotated `*` here) - is:
+     *  result_under = a_under ∩ b_under
+     *  result_over* = a_over* ∪ b_over*
+     *
+     * This gives us:
+     *  result_under = a_under ∩ b_under (unchanged) (1)
+     *  result_over = (a_over ∪ a_under ∪ b_over ∪ b_under) - result_under
+     *              = a_over - result_under (2)
+     *              ∪ b_over - result_under (3)
+     *              ∪ a_under - result_under (4)
+     *              ∪ b_under - result_under (5)
+     *
+     * Also note that:
+     *  a_over - result_under = a_over (2) : since a_over is disjoint with
+     *  a_under, hence disjoint with result_under.
+     *  b_over - result_under = b_over (3) with the same logic.
+     */
+    Set original_under = m_under;
+
+    m_under.intersection_with(other.m_under); // (1)
+    m_over.union_with(other.m_over); // (2) ∪ (3)
+
+    // Add under elements that became over elements.
+    m_over.union_with(original_under.get_difference_with(m_under)); // (4)
+    m_over.union_with(other.m_under.get_difference_with(m_under)); // (5)
+
     return AbstractValueKind::Value;
   }
 
@@ -227,10 +281,31 @@ class OverUnderSetValue final : public AbstractValue<OverUnderSetValue<Set>> {
   }
 
   AbstractValueKind meet_with(const OverUnderSetValue& other) {
-    m_over.intersection_with(other.m_over);
-    m_under.union_with(other.m_under);
-    return m_under.is_subset_of(m_over) ? AbstractValueKind::Value
-                                        : AbstractValueKind::Bottom;
+    /*
+     * The mathematical operation (with the over set including the under set,
+     * annotated `*` here) - is:
+     *  result_under = a_under ∪ b_under
+     *  result_over* = a_over* ∩ b_over*
+     *
+     * This gives us:
+     *  result_under = a_under ∪ b_under (unchanged) (1)
+     *  result_over = (
+     *                 (a_over ∪ a_under) (2)
+     *                 ∩ (b_over ∪ b_under) (3)
+     *                )
+     *                - result_under (4)
+     */
+    m_over.union_with(m_under); // (2)
+    m_over.intersection_with(other.m_over.get_union_with(other.m_under)); // (3)
+    m_under.union_with(other.m_under); // (1)
+
+    if (!m_under.is_subset_of(m_over)) {
+      return AbstractValueKind::Bottom;
+    }
+
+    // Preserve the class invariant.
+    m_over.difference_with(m_under); // (4)
+    return AbstractValueKind::Value;
   }
 
   AbstractValueKind narrow_with(const OverUnderSetValue& other) {
@@ -248,9 +323,9 @@ class OverUnderSetValue final : public AbstractValue<OverUnderSetValue<Set>> {
   }
 
  private:
-  // Invariant: m_under.is_subset_of(m_over)
-  Set m_over;
+  // Invariant: m_under.get_intersection_with(m_over).empty()
   Set m_under;
+  Set m_over;
 };
 
 } // namespace over_under_set_impl

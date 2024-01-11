@@ -18,12 +18,14 @@ class PatriciaTreeOverUnderSetAbstractDomainTest : public ::testing::Test {};
 
 TEST_F(PatriciaTreeOverUnderSetAbstractDomainTest, constructor) {
   EXPECT_TRUE(Domain().is_value());
-  EXPECT_EQ(Domain(1).over(), Set{1});
+  EXPECT_EQ(Domain(1).over(), Set{});
   EXPECT_EQ(Domain(1).under(), Set{1});
-  EXPECT_EQ((Domain{1, 2}.over()), (Set{1, 2}));
+  EXPECT_EQ((Domain{1, 2}.over()), Set{});
   EXPECT_EQ((Domain{1, 2}.under()), (Set{1, 2}));
-  EXPECT_EQ(Domain(/* over */ Set{1}, /* under */ Set{2}).over(), (Set{1, 2}));
+  EXPECT_EQ(Domain(/* over */ Set{1}, /* under */ Set{2}).over(), Set{1});
   EXPECT_EQ(Domain(/* over */ Set{1}, /* under */ Set{2}).under(), Set{2});
+  EXPECT_EQ(Domain(/* over */ Set{1, 2}, /* under */ Set{2}).over(), Set{1});
+  EXPECT_EQ(Domain(/* over */ Set{1, 2}, /* under */ Set{2}).under(), Set{2});
 }
 
 TEST_F(PatriciaTreeOverUnderSetAbstractDomainTest, leq) {
