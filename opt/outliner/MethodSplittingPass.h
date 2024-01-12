@@ -20,12 +20,12 @@ class MethodSplittingPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
-        {HasSourceBlocks, RequiresAndEstablishes},
-        {NoSpuriousGetClassCalls, Establishes},
+        {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 
-  bool is_editable_cfg_friendly() override { return true; }
   void bind_config() override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

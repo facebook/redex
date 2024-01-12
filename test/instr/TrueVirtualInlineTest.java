@@ -183,6 +183,18 @@ class ExtendedExtended extends Extended {
   public int get() { return 42; }
 }
 
+interface MirandaI {
+  public int foo();
+}
+abstract class MirandaC implements MirandaI {
+}
+class MirandaD extends MirandaC {
+  public int foo() { return 42; }
+}
+class MirandaE implements MirandaI {
+  public int foo() { return 666; }
+}
+
 public class TrueVirtualInlineTest {
 
   // CHECK: method: virtual redex.TrueVirtualInlineTest.test_do_something
@@ -336,5 +348,20 @@ public class TrueVirtualInlineTest {
     // POSTCHECK: const{{.*}}42
     // POSTCHECK: invoke-static {{.*}}assertThat
     e.test();
+  }
+
+  // CHECK: method: virtual redex.TrueVirtualInlineTest.test_miranda
+  @Test
+  public void test_miranda() {
+    // CHECK: invoke-direct {{.*}} redex.MirandaD.<init>:()void
+    MirandaC c = new MirandaD();
+    // PRECHECK: invoke-virtual {{.*}} redex.MirandaC.foo
+
+    // The following c.foo() call is getting inlined.
+
+    // POSTCHECK: const{{.*}}42
+    // POSTCHECK: const{{.*}}42
+    int i = c.foo();
+    assertThat(i == 42).isTrue();
   }
 }

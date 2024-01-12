@@ -10,10 +10,6 @@
 #include "DexStore.h"
 #include "Pass.h"
 
-namespace cfg {
-class ControlFlowGraph;
-} // namespace cfg
-
 /// Looks for mentions of classes that have no constructors and use the fact
 /// they can't be instantiated to simplify those mentions:
 ///
@@ -42,47 +38,17 @@ class RemoveUninstantiablesPass : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
     };
   }
-
-  /// Counts of references to uninstantiable classes removed.
-  struct Stats {
-    int instance_ofs = 0;
-    int invokes = 0;
-    int field_accesses_on_uninstantiable = 0;
-    int throw_null_methods = 0;
-    int abstracted_classes = 0;
-    int abstracted_vmethods = 0;
-    int removed_vmethods = 0;
-    int get_uninstantiables = 0;
-    int invoke_uninstantiables = 0;
-    int check_casts = 0;
-
-    Stats& operator+=(const Stats&);
-    Stats operator+(const Stats&) const;
-
-    /// Updates metrics tracked by \p mgr corresponding to these statistics.
-    /// Simultaneously prints the statistics via TRACE.
-    void report(PassManager& mgr) const;
-  };
 
   static std::unordered_set<DexType*> compute_scoped_uninstantiable_types(
       const Scope& scope,
       std::unordered_map<DexType*, std::unordered_set<DexType*>>*
           instantiable_children = nullptr);
 
-  /// Look for mentions of uninstantiable classes in \p cfg and modify them
-  /// in-place.
-  static Stats replace_uninstantiable_refs(
-      const std::unordered_set<DexType*>& scoped_uninstantiable_types,
-      cfg::ControlFlowGraph& cfg);
-
-  /// Replace the instructions in \p cfg with `throw null;`.  Preserves the
-  /// initial run of load-param instructions in the ControlFlowGraph.
-  ///
-  /// \pre Assumes that \p cfg is a non-empty instance method body.
-  static Stats replace_all_with_throw(cfg::ControlFlowGraph& cfg);
+  bool is_cfg_legacy() override { return true; }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

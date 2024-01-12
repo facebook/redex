@@ -50,6 +50,7 @@ class SplitHugeSwitchPass : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
     };
   }
@@ -57,11 +58,12 @@ class SplitHugeSwitchPass : public Pass {
   SplitHugeSwitchPass() : Pass("SplitHugeSwitchPass") {}
 
   void bind_config() override;
+  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   static Stats run(DexMethod* m,
                    IRCode* code,
-                   size_t insn_threshold,
+                   size_t code_units_threshold,
                    size_t case_threshold,
                    const method_profiles::MethodProfiles& method_profiles,
                    double hotness_threshold);

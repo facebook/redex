@@ -29,7 +29,7 @@ TEST_F(TypeInferenceTest, const0) {
     )
   )");
   auto code = method->get_code();
-  code->build_cfg(/* editable */ false);
+  code->build_cfg();
   auto& cfg = code->cfg();
   type_inference::TypeInference inference(cfg);
   inference.run(method);

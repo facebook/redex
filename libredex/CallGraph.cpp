@@ -262,11 +262,14 @@ CallSites CompleteCallGraphStrategy::get_callsites(
           if (callee->is_concrete()) {
             callsites.emplace_back(callee, insn);
           }
-          const auto& overriding_methods =
-              get_ordered_overriding_methods_with_code(callee);
+          if (opcode::is_invoke_virtual(insn->opcode()) ||
+              opcode::is_invoke_interface(insn->opcode())) {
+            const auto& overriding_methods =
+                get_ordered_overriding_methods_with_code(callee);
 
-          for (auto m : overriding_methods) {
-            callsites.emplace_back(m, insn);
+            for (auto m : overriding_methods) {
+              callsites.emplace_back(m, insn);
+            }
           }
         }
         return editable_cfg_adapter::LOOP_CONTINUE;
@@ -394,7 +397,6 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
             // overrides if they are not in big overrides.
             if (m_big_override.count(callee)) {
               return editable_cfg_adapter::LOOP_CONTINUE;
-              ;
             }
             if (callee->get_code()) {
               callsites.emplace_back(callee, insn);

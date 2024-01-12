@@ -22,10 +22,14 @@ class DedupBlocksPass : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
         {NoInitClassInstructions, Preserves},
+        {NoUnreachableInstructions, Preserves},
+        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
         {RenameClass, Preserves},
     };
   }
+
+  bool is_cfg_legacy() override { return true; }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

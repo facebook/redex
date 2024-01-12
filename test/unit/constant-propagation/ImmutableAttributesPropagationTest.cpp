@@ -494,7 +494,7 @@ TEST_F(ImmutableTest, enum_constructor) {
     )
     )
   )");
-  method->get_code()->build_cfg(false);
+  method->get_code()->build_cfg();
   auto creator = ClassCreator(method->get_class());
   creator.set_super(type::java_lang_Enum());
   creator.set_access(ACC_PUBLIC | ACC_ENUM);

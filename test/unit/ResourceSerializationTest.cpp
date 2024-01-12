@@ -119,12 +119,7 @@ bool are_files_equal(const std::string& p1, const std::string& p2) {
 
 void write_to_file(const std::string& output_path,
                    android::Vector<char>& data) {
-  std::ofstream fout(output_path,
-                     std::ios::out | std::ios::binary | std::ios::trunc);
-  always_assert_log(fout.is_open(), "Could not open path %s for writing",
-                    output_path.c_str());
-  fout.write(data.array(), data.size());
-  fout.close();
+  arsc::write_bytes_to_file(data, output_path);
 }
 
 // Runs `aapt d --values resources <an .apk file>` against a zip file containing
@@ -431,20 +426,75 @@ ParsedAaptOutput aapt_dump_and_parse(const std::string& arsc_path,
 } // namespace
 
 TEST(ResStringPool, AppendStringInXmlLayout) {
+  std::string to_add("test_test");
   auto f = RedexMappedFile::open(std::getenv("test_layout_path"));
+
   android::Vector<char> serialized;
   size_t new_idx;
-  int status = ApkResources::appened_xml_string_pool(f.const_data(), f.size(),
-                                                     std::string("test_test"),
-                                                     &serialized, &new_idx);
-  EXPECT_EQ(status, android::OK);
+  EXPECT_EQ(arsc::ensure_string_in_xml_pool(f.const_data(), f.size(), to_add,
+                                            &serialized, &new_idx),
+            android::OK);
   EXPECT_EQ(new_idx, 19);
+  EXPECT_FALSE(serialized.empty());
+  auto serialized_data = (char*)serialized.array();
   const auto chunk_size = sizeof(android::ResChunk_header);
   auto pool_ptr =
-      (android::ResStringPool_header*)((char*)(&(serialized[0])) + chunk_size);
+      (android::ResStringPool_header*)(serialized_data + chunk_size);
   android::ResStringPool pool(pool_ptr, dtohl(pool_ptr->header.size));
-  auto new_str = apk::get_string_from_pool(pool, new_idx);
+  auto new_str = arsc::get_string_from_pool(pool, new_idx);
   EXPECT_EQ(new_str, "test_test");
+
+  // Append the data again, we should get a successful result with the same
+  // index and no outputted binary data.
+  android::Vector<char> again;
+  size_t again_idx;
+  EXPECT_EQ(arsc::ensure_string_in_xml_pool(serialized_data, serialized.size(),
+                                            to_add, &again, &again_idx),
+            android::OK);
+  EXPECT_EQ(again_idx, new_idx);
+  EXPECT_TRUE(again.empty());
+}
+
+TEST(ResStringPool, AppendStringsInXmlLayout) {
+  // The test will request 3 strings to be added, one of which will already
+  // exist in the file's pool. We should get back sensible data with the two new
+  // ones added at the back of pool.
+  std::set<std::string> strings_to_add{"TextView", "aaaaa", "bbbbb"};
+  std::unordered_map<std::string, uint32_t> string_to_idx;
+  auto f = RedexMappedFile::open(std::getenv("test_layout_path"));
+
+  android::Vector<char> serialized;
+  EXPECT_EQ(arsc::ensure_strings_in_xml_pool(f.const_data(), f.size(),
+                                             strings_to_add, &serialized,
+                                             &string_to_idx),
+            android::OK);
+
+  EXPECT_EQ(string_to_idx.at("TextView"), 11);
+  EXPECT_EQ(string_to_idx.at("aaaaa"), 19);
+  EXPECT_EQ(string_to_idx.at("bbbbb"), 20);
+  EXPECT_FALSE(serialized.empty());
+  auto serialized_data = (char*)serialized.array();
+  auto pool_ptr =
+      (android::ResStringPool_header*)(serialized_data +
+                                       sizeof(android::ResChunk_header));
+  android::ResStringPool pool(pool_ptr, dtohl(pool_ptr->header.size));
+  EXPECT_EQ(arsc::get_string_from_pool(pool, 11), "TextView");
+  EXPECT_EQ(arsc::get_string_from_pool(pool, 19), "aaaaa");
+  EXPECT_EQ(arsc::get_string_from_pool(pool, 20), "bbbbb");
+
+  // Append the data again, we should get a successful result with the same
+  // index and no outputted binary data.
+  android::Vector<char> again;
+  std::unordered_map<std::string, uint32_t> again_idx;
+  EXPECT_EQ(arsc::ensure_strings_in_xml_pool(serialized_data, serialized.size(),
+                                             strings_to_add, &again,
+                                             &again_idx),
+            android::OK);
+  EXPECT_EQ(again_idx.size(), 3);
+  EXPECT_EQ(again_idx.at("TextView"), 11);
+  EXPECT_EQ(again_idx.at("aaaaa"), 19);
+  EXPECT_EQ(again_idx.at("bbbbb"), 20);
+  EXPECT_TRUE(again.empty());
 }
 
 TEST(ResStringPool, ReplaceStringsInXmlLayout) {
@@ -467,7 +517,7 @@ TEST(ResStringPool, ReplaceStringsInXmlLayout) {
 
   EXPECT_EQ(num_renamed, 3);
   android::ResXMLTree parser;
-  parser.setTo(&serialized[0], serialized.size());
+  parser.setTo(serialized.array(), serialized.size());
   EXPECT_EQ(android::NO_ERROR, parser.getError())
       << "Error parsing layout after rename";
 
@@ -715,12 +765,12 @@ TEST(ResStringPoolBuilder, TestAllTheOptions) {
     EXPECT_EQ(pool.setTo(data, size, true), 0);
     EXPECT_EQ(pool.styleCount(), 1);
     EXPECT_EQ(pool.size(), 5);
-    EXPECT_STREQ(apk::get_string_from_pool(pool, 0).c_str(), "Hello world!");
-    EXPECT_STREQ(apk::get_string_from_pool(pool, 1).c_str(), "foo");
-    EXPECT_STREQ(apk::get_string_from_pool(pool, 2).c_str(), "bar");
-    EXPECT_STREQ(apk::get_string_from_pool(pool, 3).c_str(),
+    EXPECT_STREQ(arsc::get_string_from_pool(pool, 0).c_str(), "Hello world!");
+    EXPECT_STREQ(arsc::get_string_from_pool(pool, 1).c_str(), "foo");
+    EXPECT_STREQ(arsc::get_string_from_pool(pool, 2).c_str(), "bar");
+    EXPECT_STREQ(arsc::get_string_from_pool(pool, 3).c_str(),
                  big_std_string.c_str());
-    EXPECT_STREQ(apk::get_string_from_pool(pool, 4).c_str(), "em");
+    EXPECT_STREQ(arsc::get_string_from_pool(pool, 4).c_str(), "em");
   };
 
   {
@@ -1097,7 +1147,7 @@ TEST(ResTable, DeleteAllEntriesInType) {
           EXPECT_EQ(pool.size(), 3);
           std::unordered_set<std::string> string_values;
           for (size_t i = 0; i < pool.size(); i++) {
-            string_values.emplace(apk::get_string_from_pool(pool, i));
+            string_values.emplace(arsc::get_string_from_pool(pool, i));
           }
           EXPECT_EQ(string_values.count("fourth"), 0);
           EXPECT_EQ(string_values.count("first"), 1);
@@ -1109,7 +1159,7 @@ TEST(ResTable, DeleteAllEntriesInType) {
           EXPECT_EQ(load_type_strings(built_arsc_file, &pool), 0);
           std::unordered_set<std::string> string_values;
           for (size_t i = 0; i < pool.size(); i++) {
-            string_values.emplace(apk::get_string_from_pool(pool, i));
+            string_values.emplace(arsc::get_string_from_pool(pool, i));
           }
           EXPECT_EQ(string_values.count("dimen"), 1);
           EXPECT_EQ(string_values.count("style"), 0);
@@ -1651,5 +1701,293 @@ TEST(ResTable, BuildDumpAndParseSparseType) {
     EXPECT_EQ(types.at(1)->header.size,
               sizeof(android::ResTable_type) + size_of_entry_value_and_offset)
         << "Expected small type size due to sparse encoding";
+  }
+}
+
+constexpr uint32_t WRAP_CONTENT = 0xFFFFFFFE;
+// A class which will mess around with the first Button element it finds, wiping
+// out all its attributes and replacing them with layout_width/layout_height.
+class ButtonFiddler : public arsc::SimpleXmlParser {
+ public:
+  explicit ButtonFiddler(arsc::ResFileManipulator* file_manupulator)
+      : m_file_manipulator(file_manupulator) {}
+
+  bool find_string_idx(const std::string& target, uint32_t* out_idx) {
+    auto& string_pool = global_strings();
+    for (size_t i = 0; i < string_pool.size(); i++) {
+      auto s = arsc::get_string_from_pool(string_pool, i);
+      if (s == target) {
+        *out_idx = i;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool visit_start_tag(android::ResXMLTree_node* node,
+                       android::ResXMLTree_attrExt* extension) override {
+    auto& string_pool = global_strings();
+    auto element_name =
+        arsc::get_string_from_pool(string_pool, dtohl(extension->name.index));
+    if (element_name == "Button") {
+      // Read some basic info about the file's strings. We will simply reuse
+      // existing string data and clobber the node and its attributes down to a
+      // node with only layout_width and layout_height (both set to
+      // "wrap_content").
+      uint32_t layout_width_idx;
+      uint32_t layout_height_idx;
+      uint32_t uri_idx;
+      always_assert_log(find_string_idx("layout_width", &layout_width_idx),
+                        "pool did not have expected width string");
+      always_assert_log(find_string_idx("layout_height", &layout_height_idx),
+                        "pool did not have expected height string");
+      always_assert_log(
+          find_string_idx("http://schemas.android.com/apk/res/android",
+                          &uri_idx),
+          "pool did not have expected uri string");
+
+      // Build up all the structs we will be inserting
+      auto new_data_size = sizeof(android::ResXMLTree_node) +
+                           sizeof(android::ResXMLTree_attrExt) +
+                           2 * sizeof(android::ResXMLTree_attribute);
+      arsc::ResFileManipulator::Block block(new_data_size);
+
+      // Start filling out the data. Copy existing and change small details.
+      android::ResXMLTree_node new_node = *node;
+      new_node.header.size = new_data_size;
+      block.write(new_node);
+
+      android::ResXMLTree_attrExt new_extension = *extension;
+      new_extension.attributeCount = 2;
+      new_extension.idIndex = 0;
+      new_extension.classIndex = 0;
+      new_extension.styleIndex = 0;
+      block.write(new_extension);
+
+      // Attributes are built up from scratch.
+      android::ResXMLTree_attribute layout_width;
+      layout_width.ns.index = uri_idx;
+      layout_width.name.index = layout_width_idx;
+      layout_width.rawValue.index = 0xFFFFFFFF;
+      layout_width.typedValue.size = sizeof(android::Res_value);
+      layout_width.typedValue.dataType = android::Res_value::TYPE_INT_DEC;
+      layout_width.typedValue.data = WRAP_CONTENT;
+      block.write(layout_width);
+
+      android::ResXMLTree_attribute layout_height;
+      layout_height.ns.index = uri_idx;
+      layout_height.name.index = layout_height_idx;
+      layout_height.rawValue.index = 0xFFFFFFFF;
+      layout_height.typedValue.size = sizeof(android::Res_value);
+      layout_height.typedValue.dataType = android::Res_value::TYPE_INT_DEC;
+      layout_height.typedValue.data = WRAP_CONTENT;
+      block.write(layout_height);
+
+      m_file_manipulator->add_at(node, std::move(block));
+      m_file_manipulator->delete_at(node, dtohl(node->header.size));
+      m_changes++;
+    }
+    return arsc::SimpleXmlParser::visit_start_tag(node, extension);
+  }
+
+  size_t changes() { return m_changes; }
+
+  arsc::ResFileManipulator* m_file_manipulator;
+  size_t m_changes{0};
+};
+
+class AttributeCounter : public arsc::SimpleXmlParser {
+ public:
+  bool visit_start_tag(android::ResXMLTree_node* node,
+                       android::ResXMLTree_attrExt* extension) override {
+    return arsc::SimpleXmlParser::visit_start_tag(node, extension);
+  }
+
+  bool visit_attribute(android::ResXMLTree_node* node,
+                       android::ResXMLTree_attrExt* extension,
+                       android::ResXMLTree_attribute* attribute) override {
+    m_attributes++;
+    auto& string_pool = global_strings();
+    auto attribute_name =
+        arsc::get_string_from_pool(string_pool, dtohl(attribute->name.index));
+    m_found_attributes.emplace(attribute_name);
+    return arsc::SimpleXmlParser::visit_attribute(node, extension, attribute);
+  }
+
+  size_t m_attributes{0};
+  std::unordered_set<std::string> m_found_attributes;
+};
+
+TEST(FileManipulator, RebuildXmlFile) {
+  auto path = std::getenv("xml_path");
+  auto f = RedexMappedFile::open(path);
+  auto data = (char*)f.const_data();
+
+  arsc::ResFileManipulator file_manipulator(data, f.size());
+  ButtonFiddler fiddler(&file_manipulator);
+  fiddler.visit(data, f.size());
+  EXPECT_EQ(fiddler.changes(), 1);
+  android::Vector<char> serialized;
+  file_manipulator.serialize(&serialized);
+
+  // Read the serialized data with visitor API, should encounter start/end tag
+  // with two attributes.
+  AttributeCounter counter;
+  EXPECT_TRUE(counter.visit((char*)serialized.array(), serialized.size()));
+  EXPECT_EQ(counter.m_attributes, 2);
+  EXPECT_EQ(counter.m_found_attributes.count("layout_width"), 1);
+  EXPECT_EQ(counter.m_found_attributes.count("layout_height"), 1);
+}
+
+TEST(FileManipulator, AppendAtEnd) {
+  auto path = std::getenv("xml_path");
+  auto f = RedexMappedFile::open(path);
+  auto data_ptr = (char*)f.const_data();
+
+  arsc::ResFileManipulator file_manipulator(data_ptr, f.size());
+  android::ResChunk_header new_data;
+  new_data.type = 0x99;
+  new_data.headerSize = sizeof(android::ResChunk_header);
+  new_data.size = 0xCCCC;
+  // append at the very end of the file, make sure it actually works.
+  for (size_t i = 0; i < f.size(); i++, data_ptr++) {
+    // simulate doing something...
+    if (i % 10 == 0) {
+      file_manipulator.replace_at(data_ptr, *data_ptr);
+    }
+  }
+  file_manipulator.add_at(data_ptr, new_data);
+
+  android::Vector<char> serialized;
+  file_manipulator.serialize(&serialized);
+}
+
+TEST(Xml, AttributeSorting) {
+  constexpr uint32_t ATTR_ID_COUNT = 4;
+  // Fictional string pool
+  std::vector<std::string> strings = {
+      "id",
+      "layout_width",
+      "layout_height",
+      "layout_margin",
+      "Button",
+      "yolo",
+      "class",
+      "style",
+      "http://schemas.android.com/apk/res/android"};
+  constexpr uint32_t ID_INDEX = 0;
+  constexpr uint32_t LAYOUT_WIDTH_INDEX = 1;
+  constexpr uint32_t LAYOUT_HEIGHT_INDEX = 2;
+  constexpr uint32_t LAYOUT_MARGIN_INDEX = 3;
+  constexpr uint32_t BUTTON_INDEX = 4;
+  constexpr uint32_t YOLO_INDEX = 5;
+  constexpr uint32_t CLASS_INDEX = 6;
+  constexpr uint32_t STYLE_INDEX = 7;
+  constexpr uint32_t URI_INDEX = 8;
+  auto pool_lookup = [&](uint32_t idx) { return strings.at(idx); };
+
+  auto extension_and_attributes_size =
+      sizeof(android::ResXMLTree_attrExt) +
+      4 * sizeof(android::ResXMLTree_attribute);
+
+  android::ResXMLTree_node node{};
+  node.header.type = android::RES_XML_START_ELEMENT_TYPE;
+  node.header.headerSize = sizeof(android::ResXMLTree_node);
+  node.header.size =
+      sizeof(android::ResXMLTree_node) + extension_and_attributes_size;
+  node.comment.index = arsc::NO_VALUE;
+  node.lineNumber = 2;
+
+  // Set up fictional xml element data with 4 sequential attributes
+  arsc::ResFileManipulator::Block block(extension_and_attributes_size);
+  android::ResXMLTree_attrExt extension{};
+  extension.attributeCount = 4;
+  extension.attributeSize = sizeof(android::ResXMLTree_attribute);
+  extension.attributeStart = sizeof(android::ResXMLTree_attrExt);
+  extension.ns.index = arsc::NO_VALUE;
+  extension.idIndex = 0;
+  extension.classIndex = 0;
+  extension.styleIndex = 3;
+  block.write(extension);
+
+  // Attributes
+  android::ResXMLTree_attribute layout_width;
+  layout_width.ns.index = URI_INDEX;
+  layout_width.name.index = LAYOUT_WIDTH_INDEX;
+  layout_width.rawValue.index = arsc::NO_VALUE;
+  layout_width.typedValue.size = sizeof(android::Res_value);
+  layout_width.typedValue.dataType = android::Res_value::TYPE_INT_DEC;
+  layout_width.typedValue.data = WRAP_CONTENT;
+  block.write(layout_width);
+
+  android::ResXMLTree_attribute layout_height;
+  layout_height.ns.index = URI_INDEX;
+  layout_height.name.index = LAYOUT_HEIGHT_INDEX;
+  layout_height.rawValue.index = arsc::NO_VALUE;
+  layout_height.typedValue.size = sizeof(android::Res_value);
+  layout_height.typedValue.dataType = android::Res_value::TYPE_INT_DEC;
+  layout_height.typedValue.data = WRAP_CONTENT;
+  block.write(layout_height);
+
+  android::ResXMLTree_attribute layout_margin;
+  layout_margin.ns.index = URI_INDEX;
+  layout_margin.name.index = LAYOUT_MARGIN_INDEX;
+  layout_margin.rawValue.index = arsc::NO_VALUE;
+  layout_margin.typedValue.size = sizeof(android::Res_value);
+  layout_margin.typedValue.dataType = android::Res_value::TYPE_INT_DEC;
+  layout_margin.typedValue.data = 123;
+  block.write(layout_margin);
+
+  android::ResXMLTree_attribute style_attr;
+  style_attr.ns.index = arsc::NO_VALUE;
+  style_attr.name.index = STYLE_INDEX;
+  style_attr.rawValue.index = arsc::NO_VALUE;
+  style_attr.typedValue.size = sizeof(android::Res_value);
+  style_attr.typedValue.dataType = android::Res_value::TYPE_REFERENCE;
+  style_attr.typedValue.data = 0x7f050005;
+  block.write(style_attr);
+
+  auto extension_ptr = (android::ResXMLTree_attrExt*)block.buffer.get();
+
+  // class attribute should come before style.
+  {
+    android::ResXMLTree_attribute class_attr;
+    class_attr.ns.index = arsc::NO_VALUE;
+    class_attr.name.index = CLASS_INDEX;
+    class_attr.rawValue.index = BUTTON_INDEX;
+    class_attr.typedValue.size = sizeof(android::Res_value);
+    class_attr.typedValue.dataType = android::Res_value::TYPE_STRING;
+    class_attr.typedValue.data = BUTTON_INDEX;
+    EXPECT_EQ(arsc::find_attribute_ordinal(&node, extension_ptr, &class_attr,
+                                           ATTR_ID_COUNT, pool_lookup),
+              3);
+  }
+  // id attribute should come before all others (id has a lower id, lol).
+  {
+    android::ResXMLTree_attribute id_attr;
+    id_attr.ns.index = URI_INDEX;
+    id_attr.name.index = ID_INDEX;
+    id_attr.rawValue.index = arsc::NO_VALUE;
+    id_attr.typedValue.size = sizeof(android::Res_value);
+    id_attr.typedValue.dataType = android::Res_value::TYPE_REFERENCE;
+    id_attr.typedValue.data = 0x7f030001;
+    EXPECT_EQ(arsc::find_attribute_ordinal(&node, extension_ptr, &id_attr,
+                                           ATTR_ID_COUNT, pool_lookup),
+              0);
+  }
+  // This is a fictional attribute, but should exercise this un-namespaced
+  // attribute coming last
+  {
+    android::ResXMLTree_attribute yolo;
+    yolo.ns.index = arsc::NO_VALUE;
+    yolo.name.index = YOLO_INDEX;
+    // yolo="yolo" of course
+    yolo.rawValue.index = YOLO_INDEX;
+    yolo.typedValue.size = sizeof(android::Res_value);
+    yolo.typedValue.dataType = android::Res_value::TYPE_STRING;
+    yolo.typedValue.data = YOLO_INDEX;
+    EXPECT_EQ(arsc::find_attribute_ordinal(&node, extension_ptr, &yolo,
+                                           ATTR_ID_COUNT, pool_lookup),
+              4);
   }
 }

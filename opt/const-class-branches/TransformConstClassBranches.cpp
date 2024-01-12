@@ -317,8 +317,8 @@ class TransformConstClassBranchesInterDexPlugin
 
   ReserveRefsInfo reserve_refs() override {
     return ReserveRefsInfo(/* frefs */ 0,
-                                     /* trefs */ 0,
-                                     /* mrefs */ 2);
+                           /* trefs */ 0,
+                           /* mrefs */ 2);
   }
 };
 } // namespace

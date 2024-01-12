@@ -11,6 +11,39 @@
 #include <cmath>
 #include <unordered_map>
 
+namespace {
+constexpr uint8_t BITS_PER_PAYLOAD_UNIT = 6;
+constexpr uint8_t FLAG_PAYLOAD_UNIT = 1 << BITS_PER_PAYLOAD_UNIT;
+constexpr uint8_t PAYLOAD_MASK = FLAG_PAYLOAD_UNIT - 1;
+constexpr uint8_t FLAG_NONTERMINAL = 1 << 4;
+constexpr uint8_t FLAG_NO_PAYLOAD = 1 << 3;
+constexpr uint8_t PAYLOAD_UNITS_MASK = FLAG_NO_PAYLOAD - 1;
+
+template <typename ValueType>
+size_t payload_unit_count(ValueType value) {
+  size_t max =
+      std::ceil((double)(sizeof(ValueType) * 8) / BITS_PER_PAYLOAD_UNIT);
+  // NOLINTNEXTLINE(bugprone-branch-clone)
+  if (value < 0) {
+    return max;
+  } else if (value == 0) {
+    return 0;
+  } else if (value < 64) {
+    return 1;
+  } else if (value < 4096) {
+    return 2;
+  } else if (value < 262144) {
+    return 3;
+  } else if (value < 16777216) {
+    return 4;
+  } else if (value < 1073741824) {
+    return 5;
+  } else {
+    return max;
+  }
+}
+} // namespace
+
 template <typename ValueType>
 void StringTreeMap<ValueType>::insert(const std::string& s,
                                       ValueType value,
@@ -40,14 +73,7 @@ void StringTreeMap<ValueType>::encode(std::ostringstream& oss) const {
   // B = payload is zero?
   // CDE = how many payload chars come next, each char will have 0x40 set and
   // use lowest 6 bits to denote the value.
-  constexpr uint8_t BITS_PER_PAYLOAD_UNIT = 6;
-  constexpr uint8_t FLAG_PAYLOAD_UNIT = 1 << BITS_PER_PAYLOAD_UNIT;
-  constexpr uint8_t PAYLOAD_MASK = FLAG_PAYLOAD_UNIT - 1;
-  constexpr uint8_t FLAG_NONTERMINAL = 1 << 4;
-  constexpr uint8_t FLAG_NO_PAYLOAD = 1 << 3;
-  constexpr uint8_t PAYLOAD_UNITS_MASK = FLAG_NO_PAYLOAD - 1;
-  size_t num_payload_chars =
-      std::ceil((double)(sizeof(ValueType) * 8) / BITS_PER_PAYLOAD_UNIT);
+  size_t num_payload_chars = payload_unit_count(m_value);
   always_assert(num_payload_chars < FLAG_NO_PAYLOAD);
   char header = m_terminal
                     ? (m_value == 0 ? FLAG_NO_PAYLOAD : num_payload_chars)

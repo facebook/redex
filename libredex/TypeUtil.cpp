@@ -465,8 +465,8 @@ bool is_uninstantiable_class(DexType* type) {
   }
 
   auto cls = type_class(type);
-  if (cls == nullptr || is_interface(cls) || is_native(cls) ||
-      cls->is_external() || !cls->rstate.can_delete()) {
+  if (cls == nullptr || is_interface(cls) || cls->is_external() ||
+      !cls->rstate.can_delete()) {
     return false;
   }
   return is_abstract(cls) || !cls->has_ctors();

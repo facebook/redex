@@ -23,6 +23,7 @@ import tarfile
 import typing
 import zipfile
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from os.path import basename, dirname, getsize, isdir, isfile, join, normpath
 
 from pyredex.logger import log
@@ -922,6 +923,10 @@ def create_dex_jar(
         ZipReset.reset_file(jarpath)
 
 
+def count_files_recursive(directory: str) -> int:
+    return sum(len(files) for _, _, files in os.walk(directory))
+
+
 class ZipManager:
     """
     __enter__: Unzips input_apk into extracted_apk_dir
@@ -938,10 +943,32 @@ class ZipManager:
 
     def __enter__(self) -> None:
         log("Extracting apk...")
+        # Check for file case issues, complain loudly if the file system
+        # unpacked to does not seem to gracefully handle the casing of .apk file
+        # contents.
+        file_count = count_files_recursive(self.extracted_apk_dir)
+        file_casing_dict = defaultdict(set)
         with zipfile.ZipFile(self.input_apk) as z:
+            expected_files = len(z.infolist())
             for info in z.infolist():
                 self.per_file_compression[info.filename] = info.compress_type
+                file_casing_dict[info.filename.lower()].add(info.filename)
             z.extractall(self.extracted_apk_dir)
+
+        file_count = count_files_recursive(self.extracted_apk_dir) - file_count
+        if expected_files != file_count:
+            detail_str = ""
+            for v in file_casing_dict.values():
+                if len(v) > 1:
+                    detail_str += "\n{ "
+                    detail_str += ", ".join(v)
+                    detail_str += " }"
+            if len(detail_str) > 0:
+                raise RuntimeError(
+                    "ZipManager did not unpack expected number of files; is this a case insensitive file system? Potentially conflicting files:{}".format(
+                        detail_str
+                    )
+                )
 
     def set_resource_file_mapping(self, path: str) -> None:
         with open(path) as f:

@@ -9,6 +9,7 @@
 
 #include <boost/algorithm/string.hpp>
 
+#include "ControlFlow.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "Reachability.h"
@@ -37,81 +38,59 @@ MethodSearch get_method_search(const DexClass* analysis_cls,
   return ms;
 }
 
-class TypeAnaysisAwareClosureMarker final
-    : public reachability::TransitiveClosureMarker {
- public:
-  explicit TypeAnaysisAwareClosureMarker(
-      const IgnoreSets& ignore_sets,
-      const method_override_graph::Graph& method_override_graph,
-      bool record_reachability,
-      ConditionallyMarked* cond_marked,
-      ReachableObjects* reachable_objects,
-      MarkWorkerState* worker_state,
-      Stats* stats,
-      std::shared_ptr<type_analyzer::global::GlobalTypeAnalyzer> gta)
-      : reachability::TransitiveClosureMarker(ignore_sets,
-                                              method_override_graph,
-                                              record_reachability,
-                                              cond_marked,
-                                              reachable_objects,
-                                              worker_state,
-                                              stats),
-        m_gta(std::move(gta)) {}
-
-  References gather(const DexMethod* method) const override {
-    References refs;
-    method->gather_strings(refs.strings);
-    method->gather_types(refs.types);
-    method->gather_fields(refs.fields);
-    // Gather from code
-    gather_methods_on_code(method, refs);
-    // Gather from annotations
-    method->gather_methods_from_annos(refs.methods);
-    return refs;
+struct MethodReferences {
+  std::vector<DexMethodRef*> methods;
+  std::vector<const DexMethod*>
+      exact_invoke_virtual_targets_if_class_instantiable;
+  std::optional<std::pair<const DexType*, const DexMethod*>>
+      base_invoke_virtual_target_if_class_instantiable;
+  bool unknown_invoke_virtual_targets{false};
+  const DexMethod* invoke_super_target{nullptr};
+  void add_to(References* refs) const {
+    refs->methods.insert(refs->methods.end(), methods.begin(), methods.end());
+    refs->exact_invoke_virtual_targets_if_class_instantiable.insert(
+        exact_invoke_virtual_targets_if_class_instantiable.begin(),
+        exact_invoke_virtual_targets_if_class_instantiable.end());
+    if (base_invoke_virtual_target_if_class_instantiable) {
+      refs->base_invoke_virtual_targets_if_class_instantiable
+          [base_invoke_virtual_target_if_class_instantiable->second]
+              .insert(base_invoke_virtual_target_if_class_instantiable->first);
+    }
+    if (unknown_invoke_virtual_targets) {
+      refs->unknown_invoke_virtual_targets = true;
+    }
+    if (invoke_super_target) {
+      refs->invoke_super_targets.insert(invoke_super_target);
+    }
   }
+};
 
-  void visit_method_ref(const DexMethodRef* method) override {
-    TRACE(REACH, 4, "Visiting method: %s", SHOW(method));
-    auto resolved_method =
-        resolve_without_context(method, type_class(method->get_class()));
-    if (resolved_method != nullptr) {
-      TRACE(REACH, 5, "    Resolved to: %s", SHOW(resolved_method));
-      this->push(method, resolved_method);
-      gather_and_push(resolved_method);
-    }
-    push(method, method->get_class());
-    push(method, method->get_proto()->get_rtype());
-    for (auto const& t : *method->get_proto()->get_args()) {
-      push(method, t);
-    }
+using InsnsMethods = std::unordered_map<const IRInstruction*, MethodReferences>;
 
-    auto m = method->as_def();
-    if (!m || !root(m) || m->is_external()) {
-      return;
-    }
-    // We still have to conditionally mark root overrides. RootSetMarker already
-    // covers external overrides, so we skip them here.
-    if (m->is_virtual() || !m->is_concrete()) {
-      const auto& overriding_methods =
-          mog::get_overriding_methods(m_method_override_graph, m);
-      if (!overriding_methods.empty()) {
-        TRACE(REACH, 3, "root with overrides: %zu %s",
-              overriding_methods.size(), SHOW(m));
+struct TypeAnalysisAwareClosureMarkerSharedState final
+    : public reachability::TransitiveClosureMarkerSharedState {
+  type_analyzer::global::GlobalTypeAnalyzer* gta;
+  mutable std::atomic<int> num_exact_resolved_callees{0};
+  mutable std::atomic<int> num_unreachable_invokes{0};
+  mutable std::atomic<int> num_null_invokes{0};
+
+  void gather_mie(const std::shared_ptr<InsnsMethods>& insns_methods_cache,
+                  MethodReferencesGatherer* mrefs_gatherer,
+                  const MethodItemEntry& mie,
+                  reachability::References* refs) const {
+    bool default_gather_methods =
+        mie.type != MFLOW_OPCODE || !opcode::is_an_invoke(mie.insn->opcode());
+    mrefs_gatherer->default_gather_mie(mie, refs, default_gather_methods);
+    if (!default_gather_methods) {
+      if (insns_methods_cache->empty()) {
+        auto* method = mrefs_gatherer->get_method();
+        *insns_methods_cache = gather_methods_on_insns(method);
       }
-      for (auto* overriding : overriding_methods) {
-        push_cond(overriding);
-        TRACE(REACH, 3, "marking root override: %s", SHOW(overriding));
-      }
+      insns_methods_cache->at(mie.insn).add_to(refs);
     }
   }
 
  private:
-  DexMethod* resolve_callee(const DexMethod* caller,
-                            IRInstruction* invoke) const {
-    return resolve_method(invoke->get_method(), opcode_to_search(invoke),
-                          m_resolved_refs, caller);
-  }
-
   bool is_potentially_true_virtual(const DexMethod* resolved_callee,
                                    IRInstruction* invoke) const {
     if (resolved_callee == nullptr) {
@@ -119,43 +98,112 @@ class TypeAnaysisAwareClosureMarker final
       return opcode::is_invoke_virtual(invoke->opcode());
     }
 
-    return mog::is_true_virtual(m_method_override_graph, resolved_callee) &&
+    return mog::is_true_virtual(*method_override_graph, resolved_callee) &&
            !opcode::is_invoke_super(invoke->opcode());
   }
 
-  void gather_methods_on_virtual_call(const DexTypeEnvironment& env,
+  void gather_methods_on_virtual_call(const DexMethod* method,
+                                      const DexTypeEnvironment& env,
                                       DexMethod* resolved_callee,
                                       IRInstruction* invoke,
-                                      References& refs) const {
+                                      MethodReferences& refs) const {
     TRACE(TRMU, 5, "Gathering method from true virtual call %s", SHOW(invoke));
+    auto op = invoke->opcode();
+    always_assert(opcode::is_invoke_virtual(op) ||
+                  opcode::is_invoke_interface(op));
     auto* callee_ref = invoke->get_method();
     // If we failed to resolve the callee earlier and we know this is might be a
     // true virtual call, resolve the callee in a more conservative way to
     // ensure we don't miss potential callees.
-    if (resolved_callee == nullptr &&
-        opcode::is_invoke_virtual(invoke->opcode())) {
-      resolved_callee = resolve_without_context(
-          callee_ref, type_class(callee_ref->get_class()));
+    if (resolved_callee == nullptr && opcode::is_invoke_virtual(op)) {
+      resolved_callee = const_cast<DexMethod*>(resolve_without_context(
+          callee_ref, type_class(callee_ref->get_class())));
     }
     // Push the resolved method ref
     TRACE(TRMU, 5, "Push resolved callee %s", SHOW(resolved_callee));
     refs.methods.push_back(resolved_callee);
 
     auto domain = env.get(invoke->src(0));
+    if (domain.is_bottom()) {
+      // no need to look for callees to mark them as invoke-virtual targets,
+      // this is unreachable
+      num_unreachable_invokes++;
+      return;
+    } else if (domain.is_null()) {
+      // nullness information is not currently accurate; we treat it like top.
+      num_null_invokes++;
+      TRACE(TRMU, 5, "Setting is_null() domain to top in [%s] %s", SHOW(method),
+            SHOW(invoke));
+      domain.set_to_top();
+    }
+
+    // Can we leverage exact types?
+    const auto& set_domain = domain.get_set_domain();
+    if (!set_domain.is_top()) {
+      const auto& types = set_domain.get_types();
+      if (!types.contains(type::java_lang_Throwable())) {
+        std::vector<std::pair<DexClass*, DexMethod*>> analysis_resolved_callees;
+        for (auto* type : types) {
+          auto analysis_cls = type_class(type);
+          if (!analysis_cls) {
+            break;
+          }
+          always_assert(!is_interface(analysis_cls));
+          if (analysis_cls->is_external()) {
+            refs.unknown_invoke_virtual_targets = true;
+          }
+          auto method_search = get_method_search(analysis_cls, invoke);
+          auto analysis_resolved_callee =
+              resolve_method(analysis_cls, callee_ref->get_name(),
+                             callee_ref->get_proto(), method_search);
+          if (!analysis_resolved_callee) {
+            break;
+          }
+          analysis_resolved_callees.emplace_back(analysis_cls,
+                                                 analysis_resolved_callee);
+        }
+        if (analysis_resolved_callees.size() == types.size()) {
+          always_assert_log(!analysis_resolved_callees.empty(), "%s",
+                            SHOW(domain));
+          for (auto [analysis_cls, analysis_resolved_callee] :
+               analysis_resolved_callees) {
+            TRACE(TRMU, 5, "Exact resolved callee %s for analysis cls %s",
+                  SHOW(analysis_resolved_callee), SHOW(analysis_cls));
+            always_assert(analysis_resolved_callee->is_virtual());
+            if (!analysis_resolved_callee->is_external()) {
+              always_assert(!is_abstract(analysis_resolved_callee));
+              refs.exact_invoke_virtual_targets_if_class_instantiable.push_back(
+                  analysis_resolved_callee);
+            } else {
+              refs.unknown_invoke_virtual_targets = true;
+            }
+          }
+          num_exact_resolved_callees++;
+          return;
+        }
+      }
+    }
+
+    // Can we leverage best known approximation?
     auto analysis_cls = domain.get_dex_cls();
     DexMethod* analysis_resolved_callee = nullptr;
+    auto base_type = callee_ref->get_class();
     if (analysis_cls) {
+      // If the analysis_cls is actually more precise than static_base_type,
+      // then we can use that. However, sometimes it falls back to a too generic
+      // object type that cannot represent all interface demands, and then the
+      // following check-cast fails, and we cannot use the analysis_cls.
+      if (type::check_cast((*analysis_cls)->get_type(), base_type)) {
+        base_type = (*analysis_cls)->get_type();
+      }
       auto method_search = get_method_search(*analysis_cls, invoke);
       analysis_resolved_callee =
           resolve_method(*analysis_cls, callee_ref->get_name(),
                          callee_ref->get_proto(), method_search);
       TRACE(TRMU, 5, "Analysis type %s", SHOW(*analysis_cls));
       if (analysis_resolved_callee) {
-        if (analysis_resolved_callee != resolved_callee) {
-          TRACE(TRMU, 5, "Push analysis resolved callee %s",
-                SHOW(analysis_resolved_callee));
-          refs.methods.push_back(analysis_resolved_callee);
-        }
+        TRACE(TRMU, 5, "Push analysis resolved callee %s",
+              SHOW(analysis_resolved_callee));
         resolved_callee = analysis_resolved_callee;
         TRACE(TRMU, 5, "Resolved callee %s for analysis cls %s",
               SHOW(resolved_callee), SHOW(*analysis_cls));
@@ -167,26 +215,44 @@ class TypeAnaysisAwareClosureMarker final
               SHOW(invoke), SHOW(*analysis_cls));
       }
     }
-    always_assert(!opcode::is_invoke_super(invoke->opcode()));
-    const auto& overriding_methods =
-        mog::get_overriding_methods(m_method_override_graph, resolved_callee);
-    for (auto overriding_method : overriding_methods) {
-      TRACE(TRMU, 5, "Gather conditional method ref %s",
-            SHOW(overriding_method));
-      refs.cond_methods.push_back(overriding_method);
+
+    if (!resolved_callee) {
+      // Typically clone() on an array, or other obscure external references
+      TRACE(TRMU, 2, "Unresolved callee at %s without analysis cls",
+            SHOW(invoke));
+      refs.unknown_invoke_virtual_targets = true;
+      return;
+    }
+
+    always_assert(resolved_callee);
+    always_assert(!refs.base_invoke_virtual_target_if_class_instantiable);
+    refs.base_invoke_virtual_target_if_class_instantiable =
+        std::make_pair(base_type, resolved_callee);
+    auto base_cls = type_class(base_type);
+    if (base_cls == nullptr || base_cls->is_external() ||
+        (!is_abstract(resolved_callee) && resolved_callee->is_external())) {
+      refs.unknown_invoke_virtual_targets = true;
+    } else if (opcode::is_invoke_interface(invoke->opcode()) &&
+               is_interface(base_cls)) {
+      // Why can_rename? To mirror what VirtualRenamer looks at.
+      if (root(resolved_callee) || !can_rename(resolved_callee)) {
+        // We cannot rule out that there are dynamically added classes, possibly
+        // even created at runtime via Proxy.newProxyInstance, that override
+        // this method. So we assume the worst.
+        refs.unknown_invoke_virtual_targets = true;
+      } else if (is_annotation(base_cls)) {
+        refs.unknown_invoke_virtual_targets = true;
+      }
     }
   }
 
-  void gather_methods_on_code(const DexMethod* method, References& refs) const {
+  InsnsMethods gather_methods_on_insns(const DexMethod* method) const {
+    InsnsMethods insns_refs;
     auto* code = const_cast<IRCode*>(method->get_code());
-    if (code == nullptr) {
-      return;
-    }
-    if (!code->cfg_built()) {
-      code->gather_methods(refs.methods);
-      return;
-    }
-    auto lta = m_gta->get_local_analysis(method);
+    always_assert(code);
+    always_assert(code->editable_cfg_built());
+    auto lta = gta->get_replayable_local_analysis(method);
+    MethodRefCache resolved_refs;
     for (const auto& block : code->cfg().blocks()) {
       auto env = lta->get_entry_state_at(block);
       if (env.is_bottom()) {
@@ -200,72 +266,149 @@ class TypeAnaysisAwareClosureMarker final
         if (!opcode::is_an_invoke(insn->opcode())) {
           continue;
         }
-        auto* resolved_callee = this->resolve_callee(method, insn);
+        auto* method_ref = insn->get_method();
+        auto* resolved_callee = resolve_method(
+            method_ref, opcode_to_search(insn), resolved_refs, method);
+        auto& refs = insns_refs[insn];
         if (!is_potentially_true_virtual(resolved_callee, insn)) {
           // Gather declared method ref
-          auto* method_ref = insn->get_method();
+          auto op = insn->opcode();
           always_assert(method_ref);
           refs.methods.push_back(method_ref);
+          if (opcode::is_invoke_super(op)) {
+            if (resolved_callee && !resolved_callee->is_external()) {
+              always_assert(resolved_callee->is_virtual());
+              always_assert(refs.invoke_super_target == nullptr);
+              if (is_abstract(resolved_callee)) {
+                TRACE(REACH, 1,
+                      "invoke super target of {%s} is abstract method %s in %s",
+                      SHOW(insn), SHOW(resolved_callee), SHOW(method));
+              } else {
+                refs.invoke_super_target = resolved_callee;
+              }
+            }
+          } else if (opcode::is_invoke_virtual(op) ||
+                     opcode::is_invoke_interface(op)) {
+            if (resolved_callee && !resolved_callee->is_external()) {
+              always_assert(resolved_callee->is_virtual());
+              always_assert(!is_abstract(resolved_callee));
+              refs.exact_invoke_virtual_targets_if_class_instantiable.push_back(
+                  resolved_callee);
+            } else {
+              refs.unknown_invoke_virtual_targets = true;
+            }
+          }
           TRACE(TRMU, 5, "Gather non-true-virtual at %s resolved as %s",
                 SHOW(insn), SHOW(resolved_callee));
           continue;
         }
-        gather_methods_on_virtual_call(env, resolved_callee, insn, refs);
+        gather_methods_on_virtual_call(method, env, resolved_callee, insn,
+                                       refs);
       }
     }
+    return insns_refs;
+  }
+};
+
+class TypeAnalysisAwareClosureMarkerWorker final
+    : public reachability::TransitiveClosureMarkerWorker {
+ public:
+  TypeAnalysisAwareClosureMarkerWorker(
+      const TypeAnalysisAwareClosureMarkerSharedState* shared_state,
+      reachability::TransitiveClosureMarkerWorkerState* worker_state)
+      : reachability::TransitiveClosureMarkerWorker(shared_state, worker_state),
+        m_shared_state(shared_state) {}
+
+  void gather_and_push(const DexMethod* method) override {
+    GatherMieFunction gather_mie =
+        std::bind(&TypeAnalysisAwareClosureMarkerSharedState::gather_mie,
+                  m_shared_state,
+                  std::make_shared<InsnsMethods>(),
+                  std::placeholders::_1,
+                  std::placeholders::_2,
+                  std::placeholders::_3);
+    reachability::TransitiveClosureMarkerWorker::gather_and_push(
+        create_method_references_gatherer(method,
+                                          /* consider_code */ true,
+                                          std::move(gather_mie)),
+        reachability::MethodReferencesGatherer::Advance::initial());
   }
 
-  std::shared_ptr<type_analyzer::global::GlobalTypeAnalyzer> m_gta;
-  mutable MethodRefCache m_resolved_refs;
+ private:
+  const TypeAnalysisAwareClosureMarkerSharedState* const m_shared_state;
 };
 
 std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
     const DexStoresVector& stores,
     const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
+    ReachableAspects* reachable_aspects,
     bool record_reachability,
-    std::shared_ptr<type_analyzer::global::GlobalTypeAnalyzer> gta,
-    bool /*unused*/) {
+    bool relaxed_keep_class_members,
+    bool relaxed_keep_interfaces,
+    bool cfg_gathering_check_instantiable,
+    bool cfg_gathering_check_instance_callable,
+    bool cfg_gathering_check_returning,
+    type_analyzer::global::GlobalTypeAnalyzer* gta,
+    bool /*unused*/,
+    int* num_exact_resolved_callees,
+    int* num_unreachable_invokes,
+    int* num_null_invokes) {
   Timer t("Marking");
   auto scope = build_class_scope(stores);
-  // Rebuild uneditable CFGs.
+  std::unordered_set<const DexClass*> scope_set(scope.begin(), scope.end());
   walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ false);
     code.cfg().calculate_exit_block();
   });
-
   auto reachable_objects = std::make_unique<ReachableObjects>();
   ConditionallyMarked cond_marked;
   auto method_override_graph = mog::build_graph(scope);
 
   ConcurrentSet<ReachableObject, ReachableObjectHash> root_set;
-  RootSetMarker root_set_marker(*method_override_graph,
-                                record_reachability,
-                                &cond_marked,
-                                reachable_objects.get(),
-                                &root_set);
+  bool remove_no_argument_constructors = false;
+  RootSetMarker root_set_marker(*method_override_graph, record_reachability,
+                                relaxed_keep_class_members,
+                                remove_no_argument_constructors, &cond_marked,
+                                reachable_objects.get(), &root_set);
   root_set_marker.mark(scope);
 
   size_t num_threads = redex_parallel::default_num_threads();
-  auto stats_arr = std::make_unique<Stats[]>(num_threads);
+  Stats stats;
+  TypeAnalysisAwareClosureMarkerSharedState shared_state{
+      {std::move(scope_set), &ignore_sets, method_override_graph.get(),
+       record_reachability, relaxed_keep_class_members, relaxed_keep_interfaces,
+       cfg_gathering_check_instantiable, cfg_gathering_check_instance_callable,
+       cfg_gathering_check_returning, &cond_marked, reachable_objects.get(),
+       reachable_aspects, &stats},
+      gta};
+
   workqueue_run<ReachableObject>(
-      [&](MarkWorkerState* worker_state, const ReachableObject& obj) {
-        TypeAnaysisAwareClosureMarker transitive_closure_marker(
-            ignore_sets, *method_override_graph, record_reachability,
-            &cond_marked, reachable_objects.get(), worker_state,
-            &stats_arr[worker_state->worker_id()], gta);
-        transitive_closure_marker.visit(obj);
+      [&](TransitiveClosureMarkerWorkerState* worker_state,
+          const ReachableObject& obj) {
+        TypeAnalysisAwareClosureMarkerWorker worker(&shared_state,
+                                                    worker_state);
+        worker.visit(obj);
         return nullptr;
       },
-      root_set,
-      num_threads,
-      /*push_tasks_while_running=*/true);
+      root_set, num_threads,
+      /* push_tasks_while_running*/ true);
+  compute_zombie_methods(*method_override_graph, *reachable_objects,
+                         *reachable_aspects);
 
   if (num_ignore_check_strings != nullptr) {
-    for (size_t i = 0; i < num_threads; ++i) {
-      *num_ignore_check_strings += stats_arr[i].num_ignore_check_strings;
-    }
+    *num_ignore_check_strings = (int)stats.num_ignore_check_strings;
   }
+  if (num_exact_resolved_callees != nullptr) {
+    *num_exact_resolved_callees = (int)shared_state.num_exact_resolved_callees;
+  }
+  if (num_unreachable_invokes != nullptr) {
+    *num_unreachable_invokes = (int)shared_state.num_unreachable_invokes;
+  }
+  if (num_null_invokes != nullptr) {
+    *num_null_invokes = (int)shared_state.num_null_invokes;
+  }
+
+  reachable_aspects->finish(cond_marked, *reachable_objects);
 
   return reachable_objects;
 }
@@ -277,7 +420,13 @@ TypeAnalysisAwareRemoveUnreachablePass::compute_reachable_objects(
     const DexStoresVector& stores,
     PassManager& pm,
     int* num_ignore_check_strings,
+    reachability::ReachableAspects* reachable_aspects,
     bool emit_graph_this_run,
+    bool relaxed_keep_class_members,
+    bool relaxed_keep_interfaces,
+    bool cfg_gathering_check_instantiable,
+    bool cfg_gathering_check_instance_callable,
+    bool cfg_gathering_check_returning,
     bool remove_no_argument_constructors) {
   // Fetch analysis result
   auto analysis = pm.template get_preserved_analysis<GlobalTypeAnalysisPass>();
@@ -285,9 +434,23 @@ TypeAnalysisAwareRemoveUnreachablePass::compute_reachable_objects(
   auto gta = analysis->get_result();
   always_assert(gta);
 
-  return compute_reachable_objects_with_type_anaysis(
-      stores, m_ignore_sets, num_ignore_check_strings, emit_graph_this_run, gta,
-      remove_no_argument_constructors);
+  int num_exact_resolved_callees;
+  int num_unreachable_invokes;
+  int num_null_invokes;
+  auto res = compute_reachable_objects_with_type_anaysis(
+      stores, m_ignore_sets, num_ignore_check_strings, reachable_aspects,
+      emit_graph_this_run, relaxed_keep_class_members, relaxed_keep_interfaces,
+      cfg_gathering_check_instantiable, cfg_gathering_check_instance_callable,
+      cfg_gathering_check_returning, gta.get(), remove_no_argument_constructors,
+      &num_exact_resolved_callees, &num_unreachable_invokes, &num_null_invokes);
+  pm.incr_metric("num_exact_resolved_callees", num_exact_resolved_callees);
+  pm.incr_metric("num_unreachable_invokes", num_unreachable_invokes);
+  pm.incr_metric("num_null_invokes", num_null_invokes);
+  TRACE(TRMU, 1,
+        "num_exact_resolved_callees %d, num_unreachable_invokes %d, "
+        "num_null_invokes %d",
+        num_exact_resolved_callees, num_unreachable_invokes, num_null_invokes);
+  return res;
 }
 
 static TypeAnalysisAwareRemoveUnreachablePass s_pass;

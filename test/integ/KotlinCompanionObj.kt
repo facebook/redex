@@ -10,6 +10,7 @@ class CompanionClass {
   companion object {
     var someStr: String = "Foo"
   }
+
   fun get(): String {
     return someStr
   }
@@ -18,6 +19,7 @@ class CompanionClass {
 class AnotherCompanionClass {
   companion object Test {
     @JvmStatic var someOtherStr: String = "Bar"
+
     @JvmStatic
     fun funX(): String {
       return someOtherStr

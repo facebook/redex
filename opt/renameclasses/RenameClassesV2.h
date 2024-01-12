@@ -48,6 +48,7 @@ class RenameClassesPassV2 : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves},
         {RenameClass, EstablishesAndRequiresFinally},
     };
   }
@@ -69,6 +70,7 @@ class RenameClassesPassV2 : public Pass {
   void eval_pass(DexStoresVector& stores,
                  ConfigFiles& conf,
                  PassManager& mgr) override;
+
   void run_pass(DexStoresVector& stores,
                 ConfigFiles& conf,
                 PassManager& mgr) override;
@@ -76,6 +78,10 @@ class RenameClassesPassV2 : public Pass {
   std::unordered_set<DexClass*> get_renamable_classes(Scope& scope,
                                                       ConfigFiles& conf,
                                                       PassManager& mgr);
+
+  void eval_classes_post(Scope& scope,
+                         const ClassHierarchy& class_hierarchy,
+                         PassManager& mgr);
 
  private:
   std::unordered_map<const DexType*, std::string>
@@ -98,10 +104,9 @@ class RenameClassesPassV2 : public Pass {
                     ConfigFiles& conf,
                     bool rename_annotations,
                     PassManager& mgr);
-  void eval_classes_post(Scope& scope,
-                         const ClassHierarchy& class_hierarchy,
-                         PassManager& mgr);
+
   std::unordered_set<DexClass*> get_renamable_classes(Scope& scope);
+
   void rename_classes(Scope& scope,
                       const std::unordered_set<DexClass*>& renamable_classes,
                       PassManager& mgr);
@@ -126,7 +131,6 @@ class RenameClassesPassV2 : public Pass {
   std::string m_package_prefix;
 
   // Decisions we made in the eval_classes pass
-  std::unordered_set<const DexClass*> m_force_rename_classes;
   std::unordered_map<const DexClass*, DontRenameReason> m_dont_rename_reasons;
 
   std::string m_apk_dir;

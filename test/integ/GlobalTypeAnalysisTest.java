@@ -393,3 +393,49 @@ class TestN {
     danceWithArray2();
   }
 }
+
+class TestO {
+  static interface I {}
+  static class A implements I {}
+  static class B implements I {}
+
+  static class Base {
+    I same() { return new B(); }
+    I diff() { return new A(); }
+  }
+  static class Sub extends Base {
+    @Override
+    I same() {
+      return new B();
+    }
+    @Override
+    I diff() {
+      return new B();
+    }
+  }
+
+  static I callSame(int i) {
+    if (i > 1) {
+      Base b1 = new Base();
+      return b1.same();
+    } else {
+      Base b2 = new Sub();
+      return b2.same();
+    }
+  }
+
+  static I callDiff(int i) {
+    if (i > 1) {
+      Base b1 = new Base();
+      return b1.diff();
+    } else {
+      Base b2 = new Sub();
+      return b2.diff();
+    }
+  }
+
+  static void main() {
+    callSame(42);
+    callDiff(3);
+  }
+}

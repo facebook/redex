@@ -320,9 +320,8 @@ Arguments parse_args(int argc, char* argv[]) {
   od.add_options()(
       "properties-check",
       "parse configuration, perform a stack properties check and exit");
-  od.add_options()(
-      "properties-check-allow-disabled",
-      "accept the disable flag in the configuration");
+  od.add_options()("properties-check-allow-disabled",
+                   "accept the disable flag in the configuration");
   od.add_options()("apkdir,a",
                    // We allow overwrites to most of the options but will take
                    // only the last one.
@@ -761,9 +760,72 @@ Json::Value get_pass_hashes(const PassManager& mgr) {
 }
 
 Json::Value get_lowering_stats(const instruction_lowering::Stats& stats) {
+  using namespace instruction_lowering;
+
   Json::Value obj(Json::ValueType::objectValue);
   obj["num_2addr_instructions"] = Json::UInt(stats.to_2addr);
   obj["num_move_added_for_check_cast"] = Json::UInt(stats.move_for_check_cast);
+
+  if (!stats.sparse_switches.data.empty()) {
+    // Some statistics.
+    Json::Value sparse_switches(Json::ValueType::objectValue);
+    sparse_switches["min"] =
+        Json::UInt(stats.sparse_switches.data.begin()->first);
+    sparse_switches["max"] =
+        Json::UInt(stats.sparse_switches.data.rbegin()->first);
+    sparse_switches["avg100"] = Json::UInt([&]() {
+      size_t cnt = 0;
+      size_t sum = 0;
+      for (auto& p : stats.sparse_switches.data) {
+        cnt += p.second.all;
+        sum += p.second.all * p.first;
+      }
+      return sum * 100 / cnt;
+    }());
+
+    auto span = stats.sparse_switches.data.rbegin()->first -
+                stats.sparse_switches.data.begin()->first;
+    constexpr size_t kBuckets = 10;
+    if (span > kBuckets) {
+      const auto first = stats.sparse_switches.data.begin()->first;
+      const auto last = stats.sparse_switches.data.rbegin()->first;
+
+      auto it = stats.sparse_switches.data.begin();
+      auto end = stats.sparse_switches.data.end();
+      Json::Value buckets(Json::ValueType::objectValue);
+
+      auto per_bucket = span / kBuckets;
+      size_t cur_bucket_start = it->first;
+      for (size_t i = 0; i != kBuckets; ++i) {
+        auto start_size = first + i * per_bucket;
+        auto end_size = first + (i + 1) * per_bucket;
+        if (i == kBuckets - 1) {
+          end_size = last + 1;
+        }
+        redex_assert(it->first >= start_size);
+        redex_assert(end_size > start_size);
+
+        Stats::SparseSwitches::Data tmp{};
+        for (; it != end && it->first < end_size; ++it) {
+          tmp += it->second;
+        }
+
+        if (tmp.all != 0) {
+          Json::Value bucket(Json::ValueType::objectValue);
+          bucket["all"] = Json::UInt(tmp.all);
+          bucket["in_hot_methods"] = Json::UInt(tmp.in_hot_methods);
+          bucket["min"] = Json::UInt(start_size);
+          bucket["max"] = Json::UInt(end_size);
+          buckets[std::to_string(i)] = bucket;
+        }
+      }
+      redex_assert(it == end);
+      sparse_switches["buckets"] = buckets;
+    }
+
+    obj["sparse_switches"] = sparse_switches;
+  }
+
   return obj;
 }
 
@@ -1300,7 +1362,7 @@ void redex_backend(ConfigFiles& conf,
     conf.get_json_config().get("lower_with_cfg", true, lower_with_cfg);
     Timer t("Instruction lowering");
     instruction_lowering_stats =
-        instruction_lowering::run(stores, lower_with_cfg);
+        instruction_lowering::run(stores, lower_with_cfg, &conf);
   }
 
   sanitizers::lsan_do_recoverable_leak_check();
@@ -1359,6 +1421,8 @@ void redex_backend(ConfigFiles& conf,
       *conf.get_global_config().get_config_by_name<DexOutputConfig>(
           "dex_output");
 
+  auto string_sort_mode = get_string_sort_mode(conf);
+
   bool should_preserve_input_dexes =
       conf.get_json_config().get("preserve_input_dexes", false);
   if (should_preserve_input_dexes) {
@@ -1367,27 +1431,32 @@ void redex_backend(ConfigFiles& conf,
         "post lowering should be off when preserving input dex option is on");
     TRACE(MAIN, 1, "Skipping writing output dexes as configured");
   } else {
+    redex_assert(!stores.empty());
+    const auto& dex_magic = stores[0].get_dex_magic();
+    auto min_sdk = manager.get_redex_options().min_sdk;
     ScopedMemStats wod_mem_stats{mem_stats_enabled, reset_hwm};
     for (size_t store_number = 0; store_number < stores.size();
          ++store_number) {
       auto& store = stores[store_number];
+      const auto& store_name = store.get_name();
+      auto code_sort_mode = get_code_sort_mode(conf, store_name);
       Timer t("Writing optimized dexes");
       for (size_t i = 0; i < store.get_dexen().size(); i++) {
-        auto gtypes = std::make_shared<GatheredTypes>(&store.get_dexen()[i]);
+        DexClasses* classes = &store.get_dexen()[i];
+        auto gtypes = std::make_shared<GatheredTypes>(classes);
 
         if (post_lowering) {
-          post_lowering->load_dex_indexes(
-              conf, manager.get_redex_options().min_sdk, &store.get_dexen()[i],
-              *gtypes, store.get_name(), i);
+          post_lowering->load_dex_indexes(conf, min_sdk, classes, *gtypes,
+                                          store_name, i);
         }
 
         auto this_dex_stats = write_classes_to_dex(
             redex::get_dex_output_name(output_dir, store, i),
-            &store.get_dexen()[i],
+            classes,
             gtypes,
             locator_index,
             store_number,
-            &store.get_name(),
+            &store_name,
             i,
             conf,
             pos_mapper.get(),
@@ -1395,9 +1464,11 @@ void redex_backend(ConfigFiles& conf,
             needs_addresses ? &method_to_id : nullptr,
             needs_addresses ? &code_debug_lines : nullptr,
             is_iodi(dik) ? &iodi_metadata : nullptr,
-            stores[0].get_dex_magic(),
+            dex_magic,
             dex_output_config,
-            manager.get_redex_options().min_sdk);
+            min_sdk,
+            code_sort_mode,
+            string_sort_mode);
 
         output_totals += this_dex_stats;
         // Remove class sizes here to free up memory.

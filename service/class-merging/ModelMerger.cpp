@@ -7,6 +7,7 @@
 
 #include "ModelMerger.h"
 
+#include "CFGMutation.h"
 #include "ClassAssemblingUtils.h"
 #include "ConfigFiles.h"
 #include "DexUtil.h"
@@ -116,12 +117,13 @@ void update_code_type_refs(
     mergeables.insert(pair.first);
   }
   auto patcher = [&](DexMethod* meth, IRCode& code) {
-    auto ii = InstructionIterable(code);
+    auto& cfg = code.cfg();
+    auto ii = cfg::InstructionIterable(cfg);
     for (auto it = ii.begin(); it != ii.end(); ++it) {
       auto insn = it->insn;
 
       /////////////////////////////////////////////////////
-      // Rebind method refs referencing a mergeable to defs
+      // Resolve method refs referencing a mergeable to defs
       /////////////////////////////////////////////////////
       if (insn->has_method()) {
         auto meth_ref = insn->get_method();
@@ -135,14 +137,15 @@ void update_code_type_refs(
         }
         const auto meth_def =
             resolve_method(meth_ref, opcode_to_search(insn), meth);
-        // This is a very tricky case where RebindRefs cannot resolve a
+        // This is a very tricky case where ResolveRefs cannot resolve a
         // MethodRef to MethodDef. It is a invoke-virtual with a MethodRef
         // referencing an interface method implmentation defined in a subclass
         // of the referenced type. To resolve the actual def we need to go
         // through another interface method search. Maybe we should fix it in
-        // ReBindRefs.
+        // ResolveRefs.
         if (meth_def == nullptr) {
-          auto intf_def = resolve_method(meth_ref, MethodSearch::Interface);
+          auto intf_def =
+              resolve_method(meth_ref, MethodSearch::InterfaceVirtual);
           always_assert(insn->opcode() == OPCODE_INVOKE_VIRTUAL && intf_def);
           auto new_proto =
               type_reference::get_new_proto(proto, mergeable_to_merger);
@@ -197,7 +200,8 @@ void update_refs_to_mergeable_fields(
   }
   TRACE(CLMG, 8, "  Updating field refs");
   walk::parallel::code(scope, [&](DexMethod* meth, IRCode& code) {
-    auto ii = InstructionIterable(code);
+    auto& cfg = code.cfg();
+    auto ii = cfg::InstructionIterable(cfg);
     for (auto it = ii.begin(); it != ii.end(); ++it) {
       auto insn = it->insn;
       if (!insn->has_field()) {
@@ -229,9 +233,9 @@ void update_refs_to_mergeable_fields(
         field_type = mergeable_to_merger.count(field_type) > 0
                          ? mergeable_to_merger.at(field_type)
                          : field_type;
-        patch_iget(meth, it.unwrap(), field_type);
+        patch_iget(cfg, it, field_type);
       } else if (opcode::is_an_iput(insn->opcode())) {
-        patch_iput(it.unwrap());
+        patch_iput(it);
       }
     }
   });
@@ -283,7 +287,10 @@ void update_instance_of(
         merger_to_instance_of_meth,
     const TypeTags& type_tags) {
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
-    auto ii = InstructionIterable(code);
+    always_assert(code.editable_cfg_built());
+    auto& cfg = code.cfg();
+    cfg::CFGMutation mutation(cfg);
+    auto ii = cfg::InstructionIterable(cfg);
     for (auto it = ii.begin(); it != ii.end(); ++it) {
       auto insn = it->insn;
       if (!insn->has_type() || insn->opcode() != OPCODE_INSTANCE_OF) {
@@ -299,7 +306,7 @@ void update_instance_of(
           CLMG, 9, " patching INSTANCE_OF at %s %s", SHOW(insn), SHOW(caller));
       // Load type_tag.
       auto type_tag = type_tags.get_type_tag(type);
-      auto type_tag_reg = code.allocate_temp();
+      auto type_tag_reg = cfg.allocate_temp();
       auto load_type_tag =
           method_reference::make_load_const(type_tag_reg, type_tag);
       // Replace INSTANCE_OF with INVOKE_STATIC to instance_of_meth.
@@ -313,13 +320,14 @@ void update_instance_of(
       // MOVE_RESULT to dst of INSTANCE_OF.
       auto move_res = new IRInstruction(OPCODE_MOVE_RESULT);
       move_res->set_dest(std::next(it)->insn->dest());
-      code.insert_after(
-          insn, std::vector<IRInstruction*>{load_type_tag, invoke, move_res});
+      mutation.insert_after(
+          it, std::vector<IRInstruction*>{load_type_tag, invoke, move_res});
       // remove original INSTANCE_OF.
-      code.remove_opcode(insn);
+      mutation.remove(it);
 
-      TRACE(CLMG, 9, " patched INSTANCE_OF in \n%s", SHOW(&code));
+      TRACE(CLMG, 9, " patched INSTANCE_OF in \n%s", SHOW(cfg));
     }
+    mutation.flush();
   });
 }
 
@@ -327,7 +335,9 @@ void update_instance_of_no_type_tag(
     const Scope& scope,
     const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger) {
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
-    auto ii = InstructionIterable(code);
+    always_assert(code.editable_cfg_built());
+    auto& cfg = code.cfg();
+    auto ii = cfg::InstructionIterable(cfg);
     for (auto it = ii.begin(); it != ii.end(); ++it) {
       auto insn = it->insn;
       if (!insn->has_type() || insn->opcode() != OPCODE_INSTANCE_OF) {
@@ -341,7 +351,7 @@ void update_instance_of_no_type_tag(
       always_assert(type_class(type));
       auto merger_type = mergeable_to_merger.at(type);
       insn->set_type(merger_type);
-      TRACE(CLMG, 9, " patched INSTANCE_OF no type tag in \n%s", SHOW(&code));
+      TRACE(CLMG, 9, " patched INSTANCE_OF no type tag in \n%s", SHOW(cfg));
     }
   });
 }
@@ -375,6 +385,7 @@ void update_refs_to_mergeable_types(
     auto type = merger->type;
     auto type_tag_field = type_tag_fields.at(merger);
     auto instance_of_meth = create_instanceof_method(type, type_tag_field);
+    instance_of_meth->get_code()->build_cfg();
     merger_to_instance_of_meth[type] = instance_of_meth;
     type_class(type)->add_method(instance_of_meth);
   }
@@ -432,11 +443,6 @@ void fix_existing_merger_cls(const Model& model,
   const auto& intfs = model.get_interfaces(type);
   set_interfaces(cls, intfs);
   cls->set_super_class(const_cast<DexType*>(model.get_parent(type)));
-  if (merger.kill_fields) {
-    for (const auto& field : cls->get_ifields()) {
-      cls->remove_field(field);
-    }
-  }
   TRACE(CLMG,
         5,
         "create hierarhcy: updated DexClass from MergerType: %s",
@@ -646,8 +652,27 @@ std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
                          cls->set_super_class(type::java_lang_Object());
                          redex_assert(cls->get_vmethods().empty());
                          if (!cls->get_clinit() && cls->get_sfields().empty()) {
-                           redex_assert(cls->get_dmethods().empty());
+                           // Purge merged cls w/o static fields.
                            return true;
+                         } else {
+                           // Purge dmethods other than the clinit.
+                           // For the original dmethods on the merged classes,
+                           // we dedup them and relocate the selected ones to
+                           // the merger. We remove the replaced ones in
+                           // `ModelMethodMerger::dedup_non_ctor_non_virt_methods`.
+                           // What's left here are staticized virtual methods
+                           // left by the virtual method merging process. We did
+                           // inline their entries in the merged dispatch or
+                           // relocate if inlining failed. So what's left here
+                           // are not reachable anymore, and safe to be purged.
+                           auto dmethods = cls->get_dmethods();
+                           for (auto* m : dmethods) {
+                             if (!method::is_clinit(m)) {
+                               cls->remove_method(m);
+                               DexMethod::erase_method(m);
+                               DexMethod::delete_method(m);
+                             }
+                           }
                          }
                        }
                        return false;

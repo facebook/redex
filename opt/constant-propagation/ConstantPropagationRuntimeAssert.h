@@ -38,10 +38,14 @@ class RuntimeAssertTransform {
              DexMethod*);
 
  private:
-  ir_list::InstructionIterator insert_field_assert(
-      const WholeProgramState&, IRCode*, ir_list::InstructionIterator);
-  ir_list::InstructionIterator insert_return_value_assert(
-      const WholeProgramState&, IRCode*, ir_list::InstructionIterator);
+  // \returns true if any insn is inserted.
+  bool insert_field_assert(const WholeProgramState&,
+                           cfg::ControlFlowGraph&,
+                           cfg::InstructionIterator&);
+  // \returns true if any insns is instered.
+  bool insert_return_value_assert(const WholeProgramState&,
+                                  cfg::ControlFlowGraph&,
+                                  cfg::InstructionIterator&);
 
   void insert_param_asserts(const ConstantEnvironment&, DexMethod* method);
 

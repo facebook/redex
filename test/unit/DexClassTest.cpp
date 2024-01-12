@@ -173,30 +173,6 @@ TEST_F(DexClassTest, testObfuscatedNames) {
   EXPECT_EQ(field->get_simple_deobfuscated_name(), "bar");
 }
 
-TEST_F(DexClassTest, testSizeEstimation) {
-  auto method = assembler::class_with_method("LTestSizeEstimation;",
-                                             R"(
-      (method (public) "LTestSizeEstimation;.sampleSize:(I)V"
-       (
-        (load-param v1)
-        (add-int v2 v1 v1)
-        (return-void)
-       )
-      )
-    )");
-
-  auto type = DexType::get_type("LTestSizeEstimation;");
-  auto clazz = type_class(type);
-
-  EXPECT_EQ(method->estimated_size(), 23);
-  EXPECT_EQ(clazz->estimated_size(), 71);
-
-  auto field = DexField::make_field("LTestSizeEstimation;.someField:I")
-                   ->make_concrete(ACC_PUBLIC);
-  clazz->add_field(field);
-  EXPECT_EQ(clazz->estimated_size(), 79);
-}
-
 TEST_F(DexClassTest, testShowStructure) {
   auto* c = assembler::class_with_methods("LShowStructure;",
                                           {

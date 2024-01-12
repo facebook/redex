@@ -140,11 +140,10 @@ class ResultPropagationPass : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
     };
   }
-
-  bool is_editable_cfg_friendly() override { return true; }
 
   void bind_config() override {
     bind("callee_blocklist",

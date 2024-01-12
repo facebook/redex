@@ -33,7 +33,7 @@ struct TypeInferenceTest : public RedexIntegrationTest {
 
   cfg::ControlFlowGraph& get_cfg(DexMethod* method) {
     auto code = method->get_code();
-    code->build_cfg(/* editable */ false);
+    code->build_cfg();
     auto& cfg = code->cfg();
     cfg.calculate_exit_block();
     return cfg;
@@ -49,14 +49,14 @@ TEST_F(TypeInferenceTest, test_move_exception_type) {
                     ->as_def();
 
   auto code = method->get_code();
-  code->build_cfg(/* editable */ false);
+  code->build_cfg();
   auto& cfg = code->cfg();
   type_inference::TypeInference inference(cfg);
   inference.run(method);
 
   bool insn_found = false;
   auto& envs = inference.get_type_environments();
-  for (auto& mie : InstructionIterable(*code)) {
+  for (auto& mie : InstructionIterable(cfg)) {
     auto insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode()) &&
         insn->get_method() == m_what_is_this) {
@@ -81,7 +81,7 @@ TEST_F(TypeInferenceTest, test_dedup_blocks_exception_type) {
                     ->as_def();
 
   auto code = method->get_code();
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   using namespace dedup_blocks_impl;
@@ -228,7 +228,7 @@ TEST_F(TypeInferenceTest, test_small_set_domain) {
     EXPECT_TRUE(ret_type.get_dex_type());
     EXPECT_EQ(*ret_type.get_dex_type(),
               DexType::get_type("Lcom/facebook/redextest/Base;"));
-    auto type_set = ret_type.get_type_set();
+    const auto& type_set = ret_type.get_type_set();
     EXPECT_EQ(type_set.size(), 2);
     EXPECT_TRUE(
         type_set.contains(DexType::get_type("Lcom/facebook/redextest/Sub1;")));
@@ -256,7 +256,7 @@ TEST_F(TypeInferenceTest, test_join_with_interface) {
     }
     auto ret_type = exit_env.get_type_domain(insn->src(0));
     EXPECT_TRUE(ret_type.get_dex_type());
-    auto type_set = ret_type.get_type_set();
+    const auto& type_set = ret_type.get_type_set();
     EXPECT_EQ(*ret_type.get_dex_type(),
               DexType::get_type("Lcom/facebook/redextest/I;"));
     EXPECT_EQ(type_set.size(), 2);

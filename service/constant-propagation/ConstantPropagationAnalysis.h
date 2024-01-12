@@ -318,6 +318,8 @@ struct ImmutableAttributeAnalyzerState {
   ConcurrentSet<DexMethod*> attribute_methods;
   ConcurrentSet<DexField*> attribute_fields;
   std::unordered_map<DexMethod*, CachedBoxedObjects> cached_boxed_objects;
+  ConcurrentSet<DexType*> initialized_types;
+  mutable ConcurrentMap<DexType*, std::optional<bool>> may_be_initialized_types;
 
   ImmutableAttributeAnalyzerState();
 
@@ -333,6 +335,8 @@ struct ImmutableAttributeAnalyzerState {
   bool is_jvm_cached_object(DexMethod* initialize_method, long value) const;
 
   static DexType* initialized_type(const DexMethod* initialize_method);
+
+  bool may_be_initialized_type(DexType* type) const;
 };
 
 class ImmutableAttributeAnalyzer final
@@ -428,6 +432,32 @@ class ApiLevelAnalyzer final
   static bool analyze_sget(const ApiLevelAnalyzerState& state,
                            const IRInstruction* insn,
                            ConstantEnvironment* env);
+};
+
+class NewObjectAnalyzer
+    : public InstructionAnalyzerBase<NewObjectAnalyzer,
+                                     ConstantEnvironment,
+                                     ImmutableAttributeAnalyzerState*> {
+  static bool ignore_type(const ImmutableAttributeAnalyzerState* state,
+                          DexType* type);
+
+ public:
+  static bool analyze_new_instance(const ImmutableAttributeAnalyzerState* state,
+                                   const IRInstruction* insn,
+                                   ConstantEnvironment* env);
+  static bool analyze_filled_new_array(
+      const ImmutableAttributeAnalyzerState* state,
+      const IRInstruction* insn,
+      ConstantEnvironment* env);
+  static bool analyze_new_array(const ImmutableAttributeAnalyzerState* state,
+                                const IRInstruction* insn,
+                                ConstantEnvironment* env);
+  static bool analyze_instance_of(const ImmutableAttributeAnalyzerState*,
+                                  const IRInstruction* insn,
+                                  ConstantEnvironment* env);
+  static bool analyze_array_length(const ImmutableAttributeAnalyzerState*,
+                                   const IRInstruction* insn,
+                                   ConstantEnvironment* env);
 };
 
 /*
@@ -573,6 +603,8 @@ using ConstantPrimitiveAndBoxedAnalyzer =
                                 BoxedBooleanAnalyzer,
                                 StringAnalyzer,
                                 ApiLevelAnalyzer,
+                                ConstantClassObjectAnalyzer,
+                                NewObjectAnalyzer,
                                 PrimitiveAnalyzer>;
 
 } // namespace constant_propagation

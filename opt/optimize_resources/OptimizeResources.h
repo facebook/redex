@@ -120,6 +120,7 @@ class OptimizeResourcesPass : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
     };
   }
@@ -135,6 +136,7 @@ class OptimizeResourcesPass : public Pass {
   }
 
   void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
   std::unique_ptr<Pass> clone(const std::string& new_name) const override {
     return std::make_unique<OptimizeResourcesPass>(new_name);

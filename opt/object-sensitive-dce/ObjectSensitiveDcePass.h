@@ -26,6 +26,7 @@ class ObjectSensitiveDcePass final : public Pass {
     using namespace redex_properties::names;
     return {
         {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
     };
   }
@@ -47,8 +48,6 @@ class ObjectSensitiveDcePass final : public Pass {
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
-  bool is_editable_cfg_friendly() override { return true; }
 
  private:
   boost::optional<std::string> m_external_side_effect_summaries_file;

@@ -424,7 +424,7 @@ class Impl {
         m_first_dex_index, m_mutable_dexen.size(), [&](size_t dex_idx) {
           auto& dex = m_dexen.at(dex_idx);
           const auto& mutable_dex = m_mutable_dexen.at(dex_idx);
-          auto classes = mutable_dex.get_classes();
+          auto classes = mutable_dex.get_classes(/* perf_based */ true);
           TRACE(IDEXR, 2, "dex %zu: %zu => %zu classes", dex_idx, dex.size(),
                 classes.size());
           dex = std::move(classes);
@@ -490,7 +490,8 @@ class Impl {
   }
 
   bool can_move(DexClass* cls) {
-    return (!m_order_interdex || !cls->is_perf_sensitive()) &&
+    return (!m_order_interdex ||
+            cls->get_perf_sensitive() != PerfSensitiveGroup::BETAMAP_ORDERED) &&
            !is_canary(cls);
   }
 

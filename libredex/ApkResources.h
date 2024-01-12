@@ -25,6 +25,7 @@
 #include "RedexResources.h"
 
 // Compiled XML reading helper functions. Only applicable to APK input files.
+std::string convert_from_string16(const android::String16& string16);
 std::string get_string_attribute_value(const android::ResXMLTree& parser,
                                        const android::String16& attribute_name);
 
@@ -44,9 +45,6 @@ bool get_bool_attribute_value(const android::ResXMLTree& parser,
                               bool default_value);
 
 namespace apk {
-std::string get_string_from_pool(const android::ResStringPool& pool,
-                                 size_t idx);
-
 class XmlValueCollector : public arsc::XmlFileVisitor {
  public:
   ~XmlValueCollector() override {}
@@ -338,6 +336,10 @@ class ApkResources : public AndroidResources {
   void collect_xml_attribute_string_values_for_file(
       const std::string& file_path,
       std::unordered_set<std::string>* out) override;
+  void fully_qualify_layout(
+      const std::unordered_map<std::string, std::string>& element_to_class_name,
+      const std::string& file_path,
+      size_t* changes) override;
 
   // Given the bytes of a binary XML file, replace the entries (if any) in the
   // ResStringPool. Writes result to the given Vector output param.
@@ -360,18 +362,6 @@ class ApkResources : public AndroidResources {
   void obfuscate_xml_files(const std::unordered_set<std::string>& allowed_types,
                            const std::unordered_set<std::string>&
                                do_not_obfuscate_elements) override;
-  // given a manifest xml file, add a string to its global string pool
-  static size_t add_string_to_xml_file(const std::string& file_path,
-                                       const std::string& new_string);
-
-  // Given the bytes of a binary XML file, add new_string to its ResStringPool
-  // Returns android::NO_ERROR (0) on success, or one of the corresponding
-  // android:: error codes for failure conditions/bad input data.
-  static int appened_xml_string_pool(const void* data,
-                                     const size_t len,
-                                     const std::string& new_string,
-                                     android::Vector<char>* out_data,
-                                     size_t* idx);
 
  protected:
   std::vector<std::string> find_res_directories() override;

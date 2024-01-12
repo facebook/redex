@@ -152,6 +152,10 @@ class CtorFieldAnalyzer final
   static bool analyze_move_result(const DexType* class_under_init,
                                   const IRInstruction* insn,
                                   DexTypeEnvironment* env);
+
+  static bool analyze_invoke(const DexType* class_under_init,
+                             const IRInstruction* insn,
+                             DexTypeEnvironment* env);
 };
 
 } // namespace local
