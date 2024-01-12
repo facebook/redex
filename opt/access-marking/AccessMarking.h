@@ -18,8 +18,9 @@ class AccessMarkingPass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
-        {DexLimitsObeyed, Preserves},      {HasSourceBlocks, Preserves},
-        {NoResolvablePureRefs, Preserves}, {NoSpuriousGetClassCalls, Preserves},
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
         {RenameClass, Preserves},
     };
   }
@@ -42,8 +43,6 @@ class AccessMarkingPass : public Pass {
     bind("privatize_methods", true, m_privatize_methods,
          "Mark every eligible method as private.");
   }
-
-  bool is_cfg_legacy() override { return true; }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

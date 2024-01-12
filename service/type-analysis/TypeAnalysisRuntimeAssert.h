@@ -75,19 +75,17 @@ class RuntimeAssertTransform {
                                       DexMethod*);
 
  private:
-  // \returns true if any code is inserted.
-  bool insert_field_assert(const WholeProgramState&,
-                           const DexType*,
-                           cfg::ControlFlowGraph&,
-                           bool,
-                           cfg::InstructionIterator&,
-                           Stats&);
-  // \returns true if any code is inserted.
-  bool insert_return_value_assert(const WholeProgramState&,
-                                  const DexType*,
-                                  cfg::ControlFlowGraph&,
-                                  cfg::InstructionIterator&,
-                                  Stats&);
+  IRList::iterator insert_field_assert(const WholeProgramState&,
+                                       const DexType*,
+                                       IRCode*,
+                                       bool,
+                                       IRList::iterator&,
+                                       Stats&);
+  IRList::iterator insert_return_value_assert(const WholeProgramState&,
+                                              const DexType*,
+                                              IRCode*,
+                                              IRList::iterator&,
+                                              Stats&);
 
   Config m_config;
 };

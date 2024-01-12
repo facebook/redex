@@ -457,9 +457,11 @@ std::vector<SplittableClosure> to_splittable_closures(
 } // namespace
 
 namespace method_splitting_impl {
-std::unordered_map<DexType*, std::vector<SplittableClosure>>
-select_splittable_closures(const std::unordered_set<DexMethod*>& methods,
-                           const Config& config) {
+ConcurrentMap<DexType*, std::vector<SplittableClosure>>
+select_splittable_closures(const ConcurrentSet<DexMethod*>& methods,
+                           const Config& config,
+                           ConcurrentMap<DexMethod*, size_t>*
+                               concurrent_splittable_no_optimizations_methods) {
   Timer t("select_splittable_closures");
   ConcurrentMap<DexType*, std::vector<SplittableClosure>>
       concurrent_splittable_closures;
@@ -486,6 +488,13 @@ select_splittable_closures(const std::unordered_set<DexMethod*>& methods,
     if (scored_closures.empty()) {
       return;
     }
+    if (method->rstate.no_optimizations()) {
+      if (concurrent_splittable_no_optimizations_methods) {
+        concurrent_splittable_no_optimizations_methods->emplace(
+            method, mcs->original_size + adjustment);
+      }
+      return;
+    }
     auto splittable_closures =
         to_splittable_closures(config, mcs, std::move(scored_closures));
     concurrent_splittable_closures.update(
@@ -496,7 +505,7 @@ select_splittable_closures(const std::unordered_set<DexMethod*>& methods,
         });
   };
   workqueue_run<DexMethod*>(concurrent_process_method, methods);
-  return concurrent_splittable_closures.move_to_container();
+  return concurrent_splittable_closures;
 }
 
 } // namespace method_splitting_impl

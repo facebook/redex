@@ -28,7 +28,9 @@ ConstantEnvironment env_with_params(bool is_static,
   for (auto& mie : InstructionIterable(param_instruction)) {
     auto value = args.get(idx);
     if (idx == 0 && !is_static) {
-      value.meet_with(SignedConstantDomain(sign_domain::Interval::NEZ));
+      // Use a customized meet operator for special handling the NEZ and other
+      // non-null objects.
+      value = meet(value, SignedConstantDomain(sign_domain::Interval::NEZ));
     }
     env.set(mie.insn->dest(), value);
     idx++;

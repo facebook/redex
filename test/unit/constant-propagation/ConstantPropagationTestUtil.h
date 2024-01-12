@@ -26,7 +26,7 @@ inline void do_const_prop(
         insn_analyzer = cp::ConstantPrimitiveAnalyzer(),
     const cp::Transform::Config& transform_config = cp::Transform::Config(),
     ConstPropMode mode = ConstPropMode::DontForwardTargets) {
-  code->build_cfg();
+  code->build_cfg(true);
   cp::intraprocedural::FixpointIterator intra_cp(code->cfg(), insn_analyzer);
   intra_cp.run(ConstantEnvironment());
   cp::Transform tf(transform_config);

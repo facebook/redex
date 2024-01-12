@@ -175,8 +175,8 @@ void ClassSplitter::prepare(const DexClass* cls,
     if (!method->get_code()) {
       return;
     }
-    auto& cfg = method->get_code()->cfg();
-    if (get_trampoline_method_cost(method) >= cfg.estimate_code_units()) {
+    if (get_trampoline_method_cost(method) >=
+        method->get_code()->sum_opcode_sizes()) {
       m_stats.method_size_too_small++;
       return;
     }
@@ -396,18 +396,9 @@ void ClassSplitter::materialize_trampoline_code(DexMethod* source,
                                                 DexMethod* target) {
   // "source" is the original method, still in its original place.
   // "target" is the new trampoline target method, somewhere far away
-  target->set_code(
-      std::make_unique<IRCode>(std::make_unique<cfg::ControlFlowGraph>()));
+  target->set_code(std::make_unique<IRCode>(*source->get_code()));
+  source->set_code(std::make_unique<IRCode>());
   auto code = source->get_code();
-  auto& cfg = code->cfg();
-  auto& target_cfg = target->get_code()->cfg();
-  cfg.deep_copy(&target_cfg);
-  code->clear_cfg();
-  source->set_code(
-      std::make_unique<IRCode>(std::make_unique<cfg::ControlFlowGraph>()));
-  // Create a new block containing all the load instructions.
-  cfg = source->get_code()->cfg();
-  cfg::Block* new_block = cfg.create_block();
   auto invoke_insn = new IRInstruction(OPCODE_INVOKE_STATIC);
   invoke_insn->set_method(target);
   auto proto = target->get_proto();
@@ -418,39 +409,39 @@ void ClassSplitter::materialize_trampoline_code(DexMethod* source,
     IRInstruction* load_param_insn;
     if (type::is_wide_type(t)) {
       load_param_insn = new IRInstruction(IOPCODE_LOAD_PARAM_WIDE);
-      load_param_insn->set_dest(cfg.allocate_wide_temp());
+      load_param_insn->set_dest(code->allocate_wide_temp());
     } else {
       load_param_insn = new IRInstruction(
           type::is_object(t) ? IOPCODE_LOAD_PARAM_OBJECT : IOPCODE_LOAD_PARAM);
-      load_param_insn->set_dest(cfg.allocate_temp());
+      load_param_insn->set_dest(code->allocate_temp());
     }
-    new_block->push_back(load_param_insn);
+    code->push_back(load_param_insn);
     invoke_insn->set_src(i, load_param_insn->dest());
   }
-  new_block->push_back(invoke_insn);
+  code->push_back(invoke_insn);
   IRInstruction* return_insn;
   if (proto->get_rtype() != type::_void()) {
     auto t = proto->get_rtype();
     IRInstruction* move_result_insn;
     if (type::is_wide_type(t)) {
       move_result_insn = new IRInstruction(OPCODE_MOVE_RESULT_WIDE);
-      move_result_insn->set_dest(cfg.allocate_wide_temp());
+      move_result_insn->set_dest(code->allocate_wide_temp());
       return_insn = new IRInstruction(OPCODE_RETURN_WIDE);
     } else {
       move_result_insn = new IRInstruction(
           type::is_object(t) ? OPCODE_MOVE_RESULT_OBJECT : OPCODE_MOVE_RESULT);
-      move_result_insn->set_dest(cfg.allocate_temp());
+      move_result_insn->set_dest(code->allocate_temp());
       return_insn = new IRInstruction(type::is_object(t) ? OPCODE_RETURN_OBJECT
                                                          : OPCODE_RETURN);
     }
-    new_block->push_back(move_result_insn);
+    code->push_back(move_result_insn);
     return_insn->set_src(0, move_result_insn->dest());
   } else {
     return_insn = new IRInstruction(OPCODE_RETURN_VOID);
   }
-  new_block->push_back(return_insn);
+  code->push_back(return_insn);
   TRACE(CS, 5, "[class splitting] New body for {%s}: \n%s", SHOW(source),
-        SHOW(cfg));
+        SHOW(code));
   change_visibility(target);
 }
 
@@ -588,10 +579,9 @@ bool ClassSplitter::can_relocate(const DexClass* cls) {
 }
 
 bool ClassSplitter::has_unresolvable_or_external_field_ref(const DexMethod* m) {
-  auto code = const_cast<DexMethod*>(m)->get_code();
+  auto code = m->get_code();
   always_assert(code);
-  auto& cfg = code->cfg();
-  for (const auto& mie : cfg::InstructionIterable(cfg)) {
+  for (const auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->has_field()) {
       auto field = resolve_field(insn->get_field(),
@@ -708,8 +698,8 @@ bool ClassSplitter::can_relocate(bool cls_has_problematic_clinit,
     }
     *requires_trampoline = true;
   }
-  if (*requires_trampoline && m->get_code()->estimate_code_units() <
-                                  m_config.trampoline_size_threshold) {
+  if (*requires_trampoline &&
+      m->get_code()->sum_opcode_sizes() < m_config.trampoline_size_threshold) {
     if (log) {
       m_mgr.incr_metric("num_class_splitting_trampoline_size_threshold_not_met",
                         1);

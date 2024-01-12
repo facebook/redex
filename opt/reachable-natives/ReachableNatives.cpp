@@ -69,18 +69,18 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
       ("ReachableNativesPass Run "s + std::to_string(m_run_number)).c_str());
 
   auto scope = build_class_scope(stores);
-  std::unordered_set<const DexClass*> scope_set(scope.begin(), scope.end());
   auto reachable_objects = std::make_unique<reachability::ReachableObjects>();
-  reachability::ReachableAspects reachable_aspects;
   reachability::ConditionallyMarked cond_marked;
   auto method_override_graph = method_override_graph::build_graph(scope);
 
   ConcurrentSet<reachability::ReachableObject,
                 reachability::ReachableObjectHash>
       root_set;
-  reachability::RootSetMarker root_set_marker(
-      *method_override_graph, false, false, false, &cond_marked,
-      reachable_objects.get(), &root_set);
+  reachability::RootSetMarker root_set_marker(*method_override_graph,
+                                              false,
+                                              &cond_marked,
+                                              reachable_objects.get(),
+                                              &root_set);
 
   TRACE(NATIVE, 2, "Blanket Native Classes: %zu",
         g_redex->blanket_native_root_classes.size());
@@ -92,34 +92,21 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
                                        g_redex->blanket_native_root_methods);
 
   size_t num_threads = redex_parallel::default_num_threads();
+  auto stats_arr = std::make_unique<reachability::Stats[]>(num_threads);
   reachability::IgnoreSets ignore_sets;
-  reachability::Stats stats;
-  reachability::TransitiveClosureMarkerSharedState shared_state{
-      std::move(scope_set),
-      &ignore_sets,
-      method_override_graph.get(),
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      &cond_marked,
-      reachable_objects.get(),
-      &reachable_aspects,
-      &stats};
   workqueue_run<reachability::ReachableObject>(
-      [&](reachability::TransitiveClosureMarkerWorkerState* worker_state,
+      [&](reachability::MarkWorkerState* worker_state,
           const reachability::ReachableObject& obj) {
-        reachability::TransitiveClosureMarkerWorker worker(&shared_state,
-                                                           worker_state);
-        worker.visit(obj);
+        reachability::TransitiveClosureMarker transitive_closure_marker(
+            ignore_sets, *method_override_graph, false, &cond_marked,
+            reachable_objects.get(), worker_state,
+            &stats_arr[worker_state->worker_id()], false);
+        transitive_closure_marker.visit(obj);
         return nullptr;
       },
-      root_set, num_threads,
-      /* push_tasks_while_running */ true);
-  compute_zombie_methods(*method_override_graph, *reachable_objects,
-                         reachable_aspects);
+      root_set,
+      num_threads,
+      /*push_tasks_while_running=*/true);
 
   std::unordered_set<DexMethod*> reachable_natives;
   std::unordered_set<DexMethod*> unreachable_natives;

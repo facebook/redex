@@ -47,6 +47,7 @@ class KotlinObjectInliner : public Pass {
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  bool is_editable_cfg_friendly() override { return true; }
 
  private:
   std::vector<std::string> m_do_not_inline_list;

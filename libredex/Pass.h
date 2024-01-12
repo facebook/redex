@@ -36,8 +36,8 @@ class Pass : public Configurable {
 
   bool is_analysis_pass() const { return m_kind == ANALYSIS; }
 
-  // \returns True means this pass is NOT guaranteed to fully use editable cfg.
-  virtual bool is_cfg_legacy() { return false; }
+  // \returns True means this pass is fully updated to use editable cfg.
+  virtual bool is_editable_cfg_friendly() { return false; }
 
   virtual void destroy_analysis_result() {
     always_assert_log(m_kind != ANALYSIS,

@@ -321,7 +321,7 @@ inline SourceBlock* get_last_source_block_before(cfg::Block* b,
   return sb != nullptr ? sb->get_last_in_chain() : nullptr;
 }
 inline const SourceBlock* get_last_source_block_before(
-    const cfg::Block* b, const IRList::const_iterator& it) {
+    const cfg::Block* b, IRList::const_iterator it) {
   auto* sb = find_between(IRList::const_reverse_iterator(it), b->rend());
   return sb != nullptr ? sb->get_last_in_chain() : nullptr;
 }
@@ -332,7 +332,7 @@ inline SourceBlock* get_first_source_block_after(cfg::Block* b,
   return sb != nullptr ? sb : nullptr;
 }
 inline const SourceBlock* get_first_source_block_after(
-    const cfg::Block* b, const IRList::const_iterator& it) {
+    const cfg::Block* b, IRList::const_iterator it) {
   auto* sb = find_between(it, b->end());
   return sb != nullptr ? sb : nullptr;
 }

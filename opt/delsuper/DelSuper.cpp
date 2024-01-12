@@ -20,7 +20,6 @@
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
-#include "WorkQueue.h"
 
 namespace {
 
@@ -51,21 +50,24 @@ class DelSuper {
  private:
   const std::vector<DexClass*>& m_scope;
   // trivial return invoke super method -> invoked super method
-  ConcurrentMap<DexType*, std::unordered_map<DexMethod*, DexMethod*>>
-      m_delmeths;
-  std::atomic<int> m_num_methods;
-  std::atomic<int> m_num_passed;
-  std::atomic<int> m_num_trivial;
-  std::atomic<int> m_num_relaxed_vis;
-  std::atomic<int> m_num_cls_relaxed_vis;
-  std::atomic<int> m_num_culled_static;
-  std::atomic<int> m_num_culled_name_differs;
-  std::atomic<int> m_num_culled_proto_differs;
-  std::atomic<int> m_num_culled_return_move_result_differs;
-  std::atomic<int> m_num_culled_args_differs;
-  std::atomic<int> m_num_culled_super_is_non_public_sdk;
-  std::atomic<int> m_num_culled_super_cls_non_public;
-  std::atomic<int> m_num_culled_super_not_def;
+  std::unordered_map<DexMethod*, DexMethod*> m_delmeths;
+  int m_num_methods;
+  int m_num_passed;
+  int m_num_trivial;
+  int m_num_relaxed_vis;
+  int m_num_cls_relaxed_vis;
+  int m_num_private;
+  int m_num_culled_no_code;
+  int m_num_culled_too_short;
+  int m_num_culled_not_trivial;
+  int m_num_culled_static;
+  int m_num_culled_name_differs;
+  int m_num_culled_proto_differs;
+  int m_num_culled_return_move_result_differs;
+  int m_num_culled_args_differs;
+  int m_num_culled_super_is_non_public_sdk;
+  int m_num_culled_super_cls_non_public;
+  int m_num_culled_super_not_def;
 
   /**
    * This method ensures that the method arguments pass directly through
@@ -145,6 +147,7 @@ class DelSuper {
 
     // Must have code
     if (!code) {
+      m_num_culled_no_code++;
       return nullptr;
     }
 
@@ -160,6 +163,7 @@ class DelSuper {
 
     // Must have at least two instructions
     if (insns.size() < 2) {
+      m_num_culled_too_short++;
       return nullptr;
     }
 
@@ -168,6 +172,7 @@ class DelSuper {
           are_opcs_equal(insns, s_return_invoke_super_opcs, 3) ||
           are_opcs_equal(insns, s_return_invoke_super_wide_opcs, 3) ||
           are_opcs_equal(insns, s_return_invoke_super_obj_opcs, 3))) {
+      m_num_culled_not_trivial++;
       return nullptr;
     }
 
@@ -175,6 +180,11 @@ class DelSuper {
     if (is_static(meth)) {
       m_num_culled_static++;
       return nullptr;
+    }
+
+    // Must not be private
+    if (is_private(meth)) {
+      m_num_private++;
     }
 
     // For non-void scenarios, capture move-result and return opcodes
@@ -252,6 +262,10 @@ class DelSuper {
         m_num_trivial(0),
         m_num_relaxed_vis(0),
         m_num_cls_relaxed_vis(0),
+        m_num_private(0),
+        m_num_culled_no_code(0),
+        m_num_culled_too_short(0),
+        m_num_culled_not_trivial(0),
         m_num_culled_static(0),
         m_num_culled_name_differs(0),
         m_num_culled_proto_differs(0),
@@ -262,7 +276,7 @@ class DelSuper {
         m_num_culled_super_not_def(0) {}
 
   void run(bool do_delete, PassManager& mgr) {
-    walk::parallel::methods(m_scope, [&](DexMethod* meth) {
+    walk::methods(m_scope, [&](DexMethod* meth) {
       m_num_methods++;
       if (root(meth)) {
         return;
@@ -270,9 +284,7 @@ class DelSuper {
       auto invoked_meth = get_trivial_return_invoke_super(meth);
       if (invoked_meth) {
         TRACE(SUPER, 5, "Found trivial return invoke-super: %s", SHOW(meth));
-        m_delmeths.update(meth->get_class(), [&](auto*, auto& map, bool) {
-          map.emplace(meth, invoked_meth);
-        });
+        m_delmeths.emplace(meth, invoked_meth);
         m_num_passed++;
       }
     });
@@ -281,92 +293,76 @@ class DelSuper {
       // remove the method declarations and the runtime semantics would be
       // unchanged -- but this ensures that we have no more references to
       // that method_id and can avoid emitting it in the dex output.
-      auto get_delmeth = [&](DexMethod* method) -> DexMethod* {
-        auto it = m_delmeths.find(method->get_class());
-        if (it == m_delmeths.end()) {
-          return nullptr;
-        }
-        auto it2 = it->second.find(method);
-        return it2 == it->second.end() ? nullptr : it2->second;
-      };
-      walk::parallel::opcodes(m_scope,
-                              [&](DexMethod* meth, IRInstruction* insn) {
-                                if (opcode::is_an_invoke(insn->opcode())) {
-                                  auto method = insn->get_method()->as_def();
-                                  if (!method) {
-                                    return;
-                                  }
-                                  while (auto* m = get_delmeth(method)) {
-                                    method = m;
-                                  }
-                                  insn->set_method(method);
-                                }
-                              });
-      auto wq = workqueue_foreach<DexType*>([&](DexType* type) {
-        auto& map = m_delmeths.at_unsafe(type);
-        auto clazz = type_class(type);
-        for (const auto& pair : map) {
-          auto meth = pair.first;
-          always_assert(meth->is_virtual());
-          clazz->remove_method(meth);
-          DexMethod::erase_method(meth);
-          DexMethod::delete_method(meth);
-          TRACE(SUPER, 5, "Deleted trivial return invoke-super: %s",
-                SHOW(meth));
-        }
-      });
-      for (auto&& [type, _] : m_delmeths) {
-        wq.add_item(type);
+      walk::opcodes(
+          m_scope,
+          [](DexMethod* meth) { return true; },
+          [&](DexMethod* meth, IRInstruction* insn) {
+            if (opcode::is_an_invoke(insn->opcode())) {
+              auto method = insn->get_method()->as_def();
+              if (!method) {
+                return;
+              }
+              while (m_delmeths.count(method)) {
+                method = m_delmeths.at(method);
+              }
+              insn->set_method(method);
+            }
+          });
+      for (const auto& pair : m_delmeths) {
+        auto meth = pair.first;
+        auto clazz = type_class(meth->get_class());
+        always_assert(meth->is_virtual());
+        clazz->remove_method(meth);
+        DexMethod::erase_method(meth);
+        DexMethod::delete_method(meth);
+        TRACE(SUPER, 5, "Deleted trivial return invoke-super: %s", SHOW(meth));
       }
-      wq.run_all();
     }
     print_stats(do_delete, mgr);
   }
 
   void print_stats(bool do_delete, PassManager& mgr) {
-    TRACE(SUPER, 1, "Examined %d total methods", (int)m_num_methods);
-    TRACE(SUPER, 1, "Found %d candidate trivial methods", (int)m_num_trivial);
+    TRACE(SUPER, 1, "Examined %d total methods", m_num_methods);
+    TRACE(SUPER, 1, "Found %d candidate trivial methods", m_num_trivial);
     TRACE(SUPER, 5, "Culled %d due to super not defined",
-          (int)m_num_culled_super_not_def);
-    TRACE(SUPER, 5, "Culled %d due to method is static",
-          (int)m_num_culled_static);
+          m_num_culled_super_not_def);
+    TRACE(SUPER, 5, "Culled %d due to method is static", m_num_culled_static);
     TRACE(SUPER, 5, "Culled %d due to method name doesn't match super",
-          (int)m_num_culled_name_differs);
+          m_num_culled_name_differs);
     TRACE(SUPER, 5, "Culled %d due to method proto doesn't match super",
-          (int)m_num_culled_proto_differs);
+          m_num_culled_proto_differs);
     TRACE(SUPER, 5, "Culled %d due to method doesn't return move result",
-          (int)m_num_culled_return_move_result_differs);
+          m_num_culled_return_move_result_differs);
     TRACE(SUPER, 5, "Culled %d due to method args doesn't match super",
-          (int)m_num_culled_args_differs);
+          m_num_culled_args_differs);
     TRACE(SUPER, 5, "Culled %d due to non-public super method in sdk",
-          (int)m_num_culled_super_is_non_public_sdk);
+          m_num_culled_super_is_non_public_sdk);
     TRACE(SUPER, 5, "Culled %d due to non-public super class in sdk",
-          (int)m_num_culled_super_cls_non_public);
+          m_num_culled_super_cls_non_public);
     TRACE(SUPER, 1, "Found %d trivial return invoke-super methods",
-          (int)m_num_passed);
+          m_num_passed);
     if (do_delete) {
       TRACE(SUPER, 1, "Deleted %d trivial return invoke-super methods",
-            (int)m_num_passed);
+            m_num_passed);
       TRACE(SUPER, 1, "Promoted %d methods to public visibility",
-            (int)m_num_relaxed_vis);
+            m_num_relaxed_vis);
       TRACE(SUPER, 1, "Promoted %d classes to public visibility",
-            (int)m_num_cls_relaxed_vis);
+            m_num_cls_relaxed_vis);
     } else {
       TRACE(SUPER, 1, "Preview-only; not performing any changes.");
       TRACE(SUPER, 1, "Would delete %d trivial return invoke-super methods",
-            (int)m_num_passed);
+            m_num_passed);
       TRACE(SUPER, 1, "Would promote %d methods to public visibility",
-            (int)m_num_relaxed_vis);
+            m_num_relaxed_vis);
       TRACE(SUPER, 1, "Would promote %d classes to public visibility",
-            (int)m_num_cls_relaxed_vis);
+            m_num_cls_relaxed_vis);
     }
 
-    mgr.incr_metric(METRIC_TOTAL_METHODS, (int)m_num_methods);
-    mgr.incr_metric(METRIC_TRIVIAL_METHOD_CANDIDATES, (int)m_num_trivial);
-    mgr.incr_metric(METRIC_REMOVED_TRIVIAL_METHODS, (int)m_num_passed);
-    mgr.incr_metric(METRIC_METHOD_RELAXED_VISIBILITY, (int)m_num_relaxed_vis);
-    mgr.incr_metric(METRIC_CLASS_RELAXED_VISIBILITY,
-                    (int)m_num_cls_relaxed_vis);
+    mgr.incr_metric(METRIC_TOTAL_METHODS, m_num_methods);
+    mgr.incr_metric(METRIC_TRIVIAL_METHOD_CANDIDATES, m_num_trivial);
+    mgr.incr_metric(METRIC_REMOVED_TRIVIAL_METHODS, m_num_passed);
+    mgr.incr_metric(METRIC_METHOD_RELAXED_VISIBILITY, m_num_relaxed_vis);
+    mgr.incr_metric(METRIC_CLASS_RELAXED_VISIBILITY, m_num_cls_relaxed_vis);
   }
 };
 

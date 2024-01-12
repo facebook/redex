@@ -39,9 +39,7 @@ TEST_F(EnumClinitAnalysisTest, OrdinalAnalysis) {
 
   // EnumSafe
   auto enum_cls = type_class(DexType::get_type(ENUM_SAFE));
-  for (auto* m : enum_cls->get_dmethods()) {
-    m->get_code()->build_cfg();
-  }
+  enum_cls->get_clinit()->get_code()->build_cfg();
   auto attributes = analyze_enum_clinit(enum_cls);
   auto& enum_constants = attributes.m_constants_map;
   auto& ifield_map = attributes.m_field_map;
@@ -81,9 +79,7 @@ TEST_F(EnumClinitAnalysisTest, OrdinalAnalysis) {
   for (const char* enum_name : {"Lcom/facebook/redextest/EnumUnsafe1;",
                                 "Lcom/facebook/redextest/EnumUnsafe2;"}) {
     enum_cls = type_class(DexType::get_type(enum_name));
-    for (auto* m : enum_cls->get_dmethods()) {
-      m->get_code()->build_cfg();
-    }
+    enum_cls->get_clinit()->get_code()->build_cfg();
     attributes = analyze_enum_clinit(enum_cls);
     EXPECT_TRUE(attributes.m_constants_map.empty());
     EXPECT_TRUE(attributes.m_field_map.empty());

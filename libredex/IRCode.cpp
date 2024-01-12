@@ -221,8 +221,7 @@ static void shard_multi_target(IRList* ir,
 static void generate_branch_targets(
     IRList* ir,
     const EntryAddrBiMap& bm,
-    std::unordered_map<MethodItemEntry*, std::unique_ptr<DexOpcodeData>>&
-        entry_to_data) {
+    const std::unordered_map<MethodItemEntry*, DexOpcodeData*>& entry_to_data) {
   for (auto miter = ir->begin(); miter != ir->end(); ++miter) {
     MethodItemEntry* mentry = &*miter;
     if (mentry->type == MFLOW_DEX_OPCODE) {
@@ -230,10 +229,10 @@ static void generate_branch_targets(
       if (dex_opcode::is_branch(insn->opcode())) {
         if (dex_opcode::is_switch(insn->opcode())) {
           auto* fopcode_entry = get_target(mentry, bm);
-          auto data_it = entry_to_data.find(fopcode_entry);
-          always_assert(data_it != entry_to_data.end());
-          shard_multi_target(ir, data_it->second.get(), mentry, bm);
-          entry_to_data.erase(data_it);
+          auto* fopcode = entry_to_data.at(fopcode_entry);
+          shard_multi_target(ir, fopcode, mentry, bm);
+          delete fopcode;
+          // TODO: erase fopcode from map
         } else {
           auto target = get_target(mentry, bm);
           insert_branch_target(ir, target, mentry);
@@ -353,8 +352,7 @@ void generate_load_params(const DexMethod* method,
 void translate_dex_to_ir(
     IRList* ir_list,
     const EntryAddrBiMap& bm,
-    std::unordered_map<MethodItemEntry*, std::unique_ptr<DexOpcodeData>>&
-        entry_to_data) {
+    const std::unordered_map<MethodItemEntry*, DexOpcodeData*>& entry_to_data) {
   for (auto it = ir_list->begin(); it != ir_list->end(); ++it) {
     if (it->type != MFLOW_DEX_OPCODE) {
       continue;
@@ -416,11 +414,7 @@ void translate_dex_to_ir(
     } else if (dex_opcode::has_literal(dex_op)) {
       insn->set_literal(dex_insn->get_literal());
     } else if (op == OPCODE_FILL_ARRAY_DATA) {
-      auto target = get_target(&*it, bm);
-      auto data_it = entry_to_data.find(target);
-      always_assert(data_it != entry_to_data.end());
-      insn->set_data(std::move(data_it->second));
-      entry_to_data.erase(data_it);
+      insn->set_data(entry_to_data.at(get_target(&*it, bm)));
     }
 
     insn->normalize_registers();
@@ -441,9 +435,7 @@ void balloon(DexMethod* method, IRList* ir_list) {
   // This is a 1-to-1 map between MethodItemEntries of type MFLOW_OPCODE and
   // address offsets.
   EntryAddrBiMap bm;
-  std::unordered_map<MethodItemEntry*, std::unique_ptr<DexOpcodeData>>
-      entry_to_data;
-  std::unordered_set<DexOpcodeData*> data_set;
+  std::unordered_map<MethodItemEntry*, DexOpcodeData*> entry_to_data;
 
   uint32_t addr = 0;
   std::vector<std::unique_ptr<DexInstruction>> to_delete;
@@ -456,10 +448,7 @@ void balloon(DexMethod* method, IRList* ir_list) {
       // address.
       mei = new MethodItemEntry();
       if (dex_opcode::is_fopcode(insn->opcode())) {
-        auto data = static_cast<DexOpcodeData*>(insn);
-        auto inserted = data_set.insert(data).second;
-        always_assert(inserted);
-        entry_to_data.emplace(mei, std::unique_ptr<DexOpcodeData>(data));
+        entry_to_data.emplace(mei, static_cast<DexOpcodeData*>(insn));
       } else {
         to_delete.emplace_back(insn);
       }
@@ -1017,11 +1006,13 @@ bool IRCode::try_sync(DexCode* code) {
       addr += count;
     } else {
       // Emit packed.
-      instruction_lowering::CaseKeysExtentBuilder case_keys;
+      std::vector<int32_t> case_keys;
+      case_keys.reserve(targets.size());
       for (const BranchTarget* t : targets) {
-        case_keys.insert(t->case_key);
+        case_keys.push_back(t->case_key);
       }
-      const uint64_t size = case_keys->get_packed_switch_size();
+      const uint64_t size =
+          instruction_lowering::get_packed_switch_size(case_keys);
       always_assert(size <= std::numeric_limits<uint16_t>::max());
       const size_t count = (size * 2) + 4;
       auto packed_payload = std::make_unique<uint16_t[]>(count);
@@ -1201,16 +1192,23 @@ uint32_t IRCode::estimate_code_units() const {
     return m_cfg->estimate_code_units();
   }
   uint32_t code_units = m_ir_list->estimate_code_units();
-  std::unordered_map<MethodItemEntry*,
-                     instruction_lowering::CaseKeysExtentBuilder>
-      switch_case_keys;
+  std::unordered_map<MethodItemEntry*, std::vector<int32_t>> switch_case_keys;
   for (auto it = m_ir_list->begin(); it != m_ir_list->end(); it++) {
     if (it->type == MFLOW_TARGET && it->target->type == BRANCH_MULTI) {
-      switch_case_keys[it->target->src].insert(it->target->case_key);
+      switch_case_keys[it->target->src].push_back(it->target->case_key);
     }
   }
   for (auto&& [_, case_keys] : switch_case_keys) {
-    code_units += case_keys->estimate_switch_payload_code_units();
+    std::sort(case_keys.begin(), case_keys.end());
+    if (instruction_lowering::sufficiently_sparse(case_keys)) {
+      // sparse-switch-payload
+      code_units += 4 + 4 * case_keys.size();
+    } else {
+      // packed-switch-payload
+      const uint64_t size =
+          instruction_lowering::get_packed_switch_size(case_keys);
+      code_units += 4 + size * 2;
+    }
   }
   return code_units;
 }
@@ -1234,14 +1232,4 @@ bool IRCode::has_try_blocks() const {
 
   return std::any_of(this->begin(), this->end(),
                      [](auto& mie) { return mie.type == MFLOW_TRY; });
-}
-
-bool IRCode::is_unreachable() const {
-  if (editable_cfg_built()) {
-    return this->cfg().entry_block()->is_unreachable();
-  }
-  auto it = InstructionIterable(this).begin();
-  for (; opcode::is_a_load_param(it->insn->opcode()); it++) {
-  }
-  return opcode::is_unreachable(it->insn->opcode());
 }

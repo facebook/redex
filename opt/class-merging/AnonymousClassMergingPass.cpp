@@ -36,10 +36,6 @@ void AnonymousClassMergingPass::bind_config() {
        2,
        m_min_count,
        "Minimum mergeable class count per merging group");
-  bind("max_count",
-       50,
-       m_max_count,
-       "Maximum mergeable class count per merging group");
   std::string interdex_grouping;
   bind("interdex_grouping", "non-ordered-set", interdex_grouping);
   m_merging_spec.interdex_grouping =
@@ -59,9 +55,6 @@ void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,
   }
   m_merging_spec.dedup_fill_in_stack_trace = false;
   m_merging_spec.min_count = m_min_count;
-  if (m_max_count > 0) {
-    m_merging_spec.max_count = m_max_count;
-  }
 
   auto scope = build_class_scope(stores);
   TypeSystem type_system(scope);

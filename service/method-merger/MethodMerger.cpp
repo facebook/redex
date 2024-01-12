@@ -109,7 +109,7 @@ void generate_dispatches(
     uint32_t id = 0;
     for (auto it = p.second.begin(); it != p.second.end(); ++it) {
       auto cur_meth = *it;
-      code_size += cur_meth->get_code()->estimate_code_units();
+      code_size += cur_meth->get_code()->sum_opcode_sizes();
       if (code_size > HARD_MAX_INSTRUCTION_SIZE) {
         create_one_dispatch(indices_to_callee, min_method_group_size,
                             old_to_new, stats);

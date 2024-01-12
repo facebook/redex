@@ -32,17 +32,12 @@ else
   BITNESS_PKGS=""
 fi
 
-DEB_UBUNTU_PKGS="unzip"
-
 BOOST_DEB_UBUNTU_PKGS="libboost-filesystem-dev$BITNESS_SUFFIX
                        libboost-iostreams-dev$BITNESS_SUFFIX
                        libboost-program-options-dev$BITNESS_SUFFIX
                        libboost-regex-dev$BITNESS_SUFFIX
                        libboost-system-dev$BITNESS_SUFFIX
                        libboost-thread-dev$BITNESS_SUFFIX"
-
-PROTOBUF_DEB_UBUNTU_PKGS="libprotobuf-dev$BITNESS_SUFFIX
-                          protobuf-compiler"
 
 function install_python36_from_source {
     pushd "$TMP"
@@ -102,11 +97,13 @@ function handle_debian {
                 echo "32-bit compile unsupported because of boost"
                 exit 1
             fi
-            install_from_apt python3 ${DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
+            install_from_apt python3
             install_boost_from_source
+            install_protobuf3_from_source
             ;;
         *)
-            install_from_apt  python3 ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
+            install_from_apt ${BOOST_DEB_UBUNTU_PKGS} python3
+            install_protobuf3_from_source
             ;;
     esac
 }
@@ -118,12 +115,13 @@ function handle_ubuntu {
                 echo "32-bit compile unsupported because of boost"
                 exit 1
             fi
-            install_from_apt python3 ${DEB_UBUNTU_PKGS}
+            install_from_apt python3
             install_boost_from_source
             install_protobuf3_from_source
             ;;
         2*)
-            install_from_apt python3 ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
+            install_from_apt ${BOOST_DEB_UBUNTU_PKGS} python3
+            install_protobuf3_from_source
             ;;
         *)
             echo "Unsupported Ubuntu version $1"

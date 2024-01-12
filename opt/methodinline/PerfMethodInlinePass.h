@@ -21,7 +21,6 @@ class PerfMethodInlinePass : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, RequiresAndEstablishes},
-        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
     };
   }
@@ -29,8 +28,6 @@ class PerfMethodInlinePass : public Pass {
   ~PerfMethodInlinePass();
 
   void bind_config() override;
-
-  bool is_cfg_legacy() override { return true; }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

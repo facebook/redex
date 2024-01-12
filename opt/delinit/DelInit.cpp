@@ -14,7 +14,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include "AnnotationSignatureParser.h"
 #include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -74,16 +73,41 @@ bool find_package(const char* name) {
   return false;
 };
 
+void process_signature_anno(const DexString* dstring) {
+  const char* cstr = dstring->c_str();
+  size_t len = strlen(cstr);
+  if (len < 3) return;
+  if (cstr[0] != 'L') return;
+  if (cstr[len - 1] == ';') {
+    auto dtype = DexType::get_type(dstring);
+    referenced_classes.insert(type_class(dtype));
+    return;
+  }
+  std::string buf(cstr);
+  buf += ';';
+  auto dtype = DexType::get_type(buf);
+  referenced_classes.insert(type_class(dtype));
+}
+
 void find_referenced_classes(const Scope& scope) {
-  DexType* dalviksig = type::dalvik_annotation_Signature();
   walk::parallel::annotations(scope, [&](DexAnnotation* anno) {
+    static DexType* dalviksig =
+        DexType::get_type("Ldalvik/annotation/Signature;");
     // Signature annotations contain strings that Jackson uses
     // to construct the underlying types.
     if (anno->type() == dalviksig) {
-      annotation_signature_parser::parse(anno, [&](auto*, auto* sigcls) {
-        referenced_classes.insert(sigcls);
-        return true;
-      });
+      auto& elems = anno->anno_elems();
+      for (auto const& elem : elems) {
+        auto& ev = elem.encoded_value;
+        if (ev->evtype() != DEVT_ARRAY) continue;
+        auto arrayev = static_cast<DexEncodedValueArray*>(ev.get());
+        auto const& evs = arrayev->evalues();
+        for (auto& strev : *evs) {
+          if (strev->evtype() != DEVT_STRING) continue;
+          auto stringev = static_cast<DexEncodedValueString*>(strev.get());
+          process_signature_anno(stringev->string());
+        }
+      }
       return;
     }
     // Class literals in annotations.
@@ -109,19 +133,18 @@ void find_referenced_classes(const Scope& scope) {
       [](DexMethod*) { return true; },
       [&](DexMethod* meth, IRCode& code) {
         for (const auto& mie : InstructionIterable(meth->get_code())) {
-          auto insn = mie.insn;
+          auto opcode = mie.insn;
           // Matches any stringref that name-aliases a type.
-          if (insn->has_string()) {
-            const DexString* dsclzref = insn->get_string();
+          if (opcode->has_string()) {
+            const DexString* dsclzref = opcode->get_string();
             DexType* dtexclude = get_dextype_from_dotname(dsclzref->c_str());
             if (dtexclude == nullptr) continue;
             TRACE(PGR, 3, "string_ref: %s", SHOW(dtexclude));
             referenced_classes.insert(type_class(dtexclude));
           }
-          if (opcode::is_new_instance(insn->opcode()) ||
-              opcode::is_const_class(insn->opcode())) {
-            TRACE(PGR, 3, "type_ref: %s", SHOW(insn->get_type()));
-            referenced_classes.insert(type_class(insn->get_type()));
+          if (opcode->has_type()) {
+            TRACE(PGR, 3, "type_ref: %s", SHOW(opcode->get_type()));
+            referenced_classes.insert(type_class(opcode->get_type()));
           }
         }
       });
@@ -479,7 +502,7 @@ int DeadRefs::remove_unreachable(Scope& scope) {
   };
   ConcurrentMap<DexClass*, LocalStats> local_stats;
   walk::parallel::classes(scope, [&](DexClass* cls) {
-    auto& ci = class_infos.at(cls);
+    auto ci = class_infos.at(cls);
     LocalStats stats;
     for (const auto& meth : ci.vmethods) {
       redex_assert(meth->is_virtual());

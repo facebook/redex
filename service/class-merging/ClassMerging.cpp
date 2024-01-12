@@ -20,12 +20,27 @@ using namespace class_merging;
 
 namespace {
 
+bool s_is_initialized = false;
+
+/*
+ * Initialize a number of static states for the output mapping file and the
+ * interdex group mapping.
+ */
+void set_up(ConfigFiles& conf) {
+  if (s_is_initialized) {
+    // Already initialized.
+    return;
+  }
+  Model::build_interdex_groups(conf);
+  s_is_initialized = true;
+}
+
 /**
- * Create a ref checker for checking cross-store references and Android SDK
- * api usages. When the per_dex_grouping is false, the create ref checker will
- * check cross-store references. When the per_dex_grouping is true, the
- * checker doesn't check cross-store reference and will let the class merging
- * grouping do the correct grouping for each dex.
+ * Create a ref checker for checking cross-store references and Android SDK api
+ * usages. When the per_dex_grouping is false, the create ref checker will check
+ * cross-store references. When the per_dex_grouping is true, the checker
+ * doesn't check cross-store reference and will let the class merging grouping
+ * do the correct grouping for each dex.
  */
 std::unique_ptr<RefChecker> create_ref_checker(const bool per_dex_grouping,
                                                XStoreRefs* xstores,
@@ -99,34 +114,27 @@ void load_roots_subtypes_as_merging_targets(const TypeSystem& type_system,
 
 namespace class_merging {
 
-ModelStats merge_model(Scope& scope,
-                       ConfigFiles& conf,
-                       PassManager& mgr,
-                       DexStoresVector& stores,
-                       ModelSpec& spec) {
-  always_assert(!spec.roots.empty());
+const ModelStats merge_model(Scope& scope,
+                             ConfigFiles& conf,
+                             PassManager& mgr,
+                             DexStoresVector& stores,
+                             ModelSpec& spec) {
   TypeSystem type_system(scope);
   if (spec.merging_targets.empty()) {
     load_roots_subtypes_as_merging_targets(type_system, &spec);
   }
-  if (spec.merging_targets.empty()) {
-    return ModelStats();
-  }
   return merge_model(type_system, scope, conf, mgr, stores, spec);
 }
 
-ModelStats merge_model(const TypeSystem& type_system,
-                       Scope& scope,
-                       ConfigFiles& conf,
-                       PassManager& mgr,
-                       DexStoresVector& stores,
-                       ModelSpec& spec) {
-  TRACE(CLMG,
-        2,
-        "[ClassMerging] merging %s model merging targets %zu roots %zu",
-        spec.name.c_str(),
-        spec.merging_targets.size(),
-        spec.roots.size());
+const ModelStats merge_model(const TypeSystem& type_system,
+                             Scope& scope,
+                             ConfigFiles& conf,
+                             PassManager& mgr,
+                             DexStoresVector& stores,
+                             ModelSpec& spec) {
+  set_up(conf);
+  always_assert(s_is_initialized);
+  TRACE(CLMG, 2, "[ClassMerging] merging %s model", spec.name.c_str());
   Timer t("erase_model");
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
   XStoreRefs xstores(stores);

@@ -64,7 +64,6 @@ check_PROGRAMS = \
     init_class_pruner_test \
     init_class_lowering_pass_test \
     instruction_sequence_outliner_test \
-    int_type_patcher_test \
     interprocedural_constant_propagation_test \
     intraprocedural_constant_propagation_test \
     ir_assembler_test \
@@ -105,7 +104,6 @@ check_PROGRAMS = \
     pure_analysis_test \
     random_forest_test \
     reaching_definitions_test \
-    rearrange_enum_clinit_test \
     reduce_array_literals_test \
     reduce_boolean_branches_test \
     reduce_gotos_test \
@@ -259,10 +257,6 @@ init_class_pruner_test_SOURCES = InitClassPrunerTest.cpp
 
 init_class_lowering_pass_test_SOURCES = InitClassLoweringPassTest.cpp
 
-unreachable_lowering_pass_test_SOURCES = UnreachableLoweringPassTest.cpp
-
-int_type_patcher_test_SOURCES = IntTypePatcherTest.cpp
-
 instruction_sequence_outliner_test_SOURCES = InstructionSequenceOutlinerTest.cpp ScopeHelper.cpp
 
 interprocedural_constant_propagation_test_SOURCES = constant-propagation/IPConstantPropagationTest.cpp
@@ -358,8 +352,6 @@ pure_analysis_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 random_forest_test_SOURCES = RandomForestTest.cpp
 
 reaching_definitions_test_SOURCES = ReachingDefinitionsTest.cpp
-
-rearrange_enum_clinit_test_SOURCES = RearrangeEnumClinitTest.cpp
 
 reduce_array_literals_test_SOURCES = ReduceArrayLiteralsTest.cpp
 reduce_array_literals_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
@@ -523,7 +515,6 @@ TESTS = \
     init_class_pruner_test \
     init_class_lowering_pass_test \
     instruction_sequence_outliner_test \
-    int_type_patcher_test \
     interprocedural_constant_propagation_test \
     intraprocedural_constant_propagation_test \
     ir_assembler_test \

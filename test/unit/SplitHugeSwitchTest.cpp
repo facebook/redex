@@ -69,15 +69,15 @@ class SplitHugeSwitchTest : public RedexTest {
   static ::testing::AssertionResult test(
       const std::string& sig,
       const std::string& code_str,
-      size_t code_units_threshold,
+      size_t insn_threshold,
       size_t case_threshold,
       const method_profiles::MethodProfiles& method_profiles,
       double hotness_threshold,
       std::initializer_list<std::pair<std::string, std::string>> expected) {
     auto m = create(sig, code_str);
-    auto stats = SplitHugeSwitchPass::run(m, m->get_code(),
-                                          code_units_threshold, case_threshold,
-                                          method_profiles, hotness_threshold);
+    auto stats = SplitHugeSwitchPass::run(m, m->get_code(), insn_threshold,
+                                          case_threshold, method_profiles,
+                                          hotness_threshold);
     std::unordered_map<std::string, std::string> expected_map;
     for (const auto& p : expected) {
       expected_map.insert(p);
@@ -282,7 +282,7 @@ TEST_F(SplitHugeSwitchTest, Split1) {
     ))";
   auto res = test("(I)V",
                   SRC,
-                  30,
+                  20,
                   0,
                   method_profiles::MethodProfiles(),
                   0.0,
@@ -360,7 +360,7 @@ TEST_F(SplitHugeSwitchTest, Split2) {
     ))";
   auto res = test("(I)V",
                   SRC,
-                  20,
+                  10,
                   0,
                   method_profiles::MethodProfiles(),
                   0.0,
@@ -456,7 +456,7 @@ TEST_F(SplitHugeSwitchTest, Split3) {
     ))";
   auto res = test("(I)V",
                   SRC,
-                  11,
+                  7,
                   0,
                   method_profiles::MethodProfiles(),
                   0.0,
@@ -472,7 +472,7 @@ TEST_F(SplitHugeSwitchTest, Split3) {
 TEST_F(SplitHugeSwitchTest, NoSplitExactThreshold) {
   auto res = test("(I)V",
                   SRC,
-                  44,
+                  28,
                   0,
                   method_profiles::MethodProfiles(),
                   0.0,

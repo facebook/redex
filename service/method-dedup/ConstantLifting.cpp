@@ -9,7 +9,6 @@
 
 #include "AnnoUtils.h"
 #include "ConstantValue.h"
-#include "ControlFlow.h"
 #include "IRCode.h"
 #include "MethodReference.h"
 #include "Resolver.h"
@@ -76,11 +75,12 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     auto vals_str = parse_str_anno_value(method, s_method_meta_anno,
                                          CONST_VALUE_ANNO_ATTR_NAME);
 
-    always_assert(method->get_code()->editable_cfg_built());
-    auto& cfg = method->get_code()->cfg();
-    ConstantValues const_vals(type_tags, kinds_str, vals_str,
-                              stud_method_threshold, cfg);
-    auto const_loads = const_vals.collect_constant_loads(cfg);
+    ConstantValues const_vals(type_tags,
+                              kinds_str,
+                              vals_str,
+                              stud_method_threshold,
+                              method->get_code());
+    auto const_loads = const_vals.collect_constant_loads(method->get_code());
     if (const_loads.empty()) {
       // No matching constant found.
       TRACE(METH_DEDUP,
@@ -88,7 +88,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
             "  no matching constant %s found in %s",
             const_vals.to_str().c_str(),
             SHOW(method));
-      TRACE(METH_DEDUP, 9, "%s", SHOW(cfg));
+      TRACE(METH_DEDUP, 9, "%s", SHOW(method->get_code()));
       continue;
     }
 
@@ -97,7 +97,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
           "constant lifting: const value %s",
           const_vals.to_str().c_str());
     TRACE(METH_DEDUP, 9, "    in %s", SHOW(method));
-    TRACE(METH_DEDUP, 9, "%s", SHOW(cfg));
+    TRACE(METH_DEDUP, 9, "%s", SHOW(method->get_code()));
 
     // Add constant to arg list.
     auto old_proto = method->get_proto();
@@ -124,8 +124,8 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     method->change(spec, true /* rename on collision */);
 
     // Insert param load.
-    auto block = cfg.entry_block();
-    auto last_loading = block->get_last_param_loading_insn();
+    auto code = method->get_code();
+    auto params = code->get_param_instructions();
     for (const auto& const_val : const_vals.get_constant_values()) {
       if (const_val.is_invalid()) {
         continue;
@@ -135,34 +135,25 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
               ? new IRInstruction(IOPCODE_LOAD_PARAM)
               : new IRInstruction(IOPCODE_LOAD_PARAM_OBJECT);
       load_type_tag_param->set_dest(const_val.get_param_reg());
-      if (last_loading != block->end()) {
-        cfg.insert_after(block->to_cfg_instruction_iterator(last_loading),
-                         load_type_tag_param);
-      } else {
-        cfg.insert_before(block->to_cfg_instruction_iterator(
-                              block->get_first_non_param_loading_insn()),
-                          load_type_tag_param);
-      }
-      last_loading = block->get_last_param_loading_insn();
+      code->insert_before(params.end(), load_type_tag_param);
     }
 
     // Replace const loads with moves.
     for (const auto& load : const_loads) {
       auto const_val = load.first;
-      auto insn_it = load.second.first;
+      auto insn = load.second.first;
       auto dest = load.second.second;
       auto move_const_arg = const_val.is_int_value()
                                 ? new IRInstruction(OPCODE_MOVE)
                                 : new IRInstruction(OPCODE_MOVE_OBJECT);
       move_const_arg->set_dest(dest);
       move_const_arg->set_src(0, const_val.get_param_reg());
-      cfg.insert_before(insn_it, move_const_arg);
-      cfg.remove_insn(insn_it);
+      code->replace_opcode(insn, move_const_arg);
     }
 
     lifted.insert(method);
     lifted_constants.emplace(method, const_vals);
-    TRACE(METH_DEDUP, 9, "const value lifted in \n%s", SHOW(cfg));
+    TRACE(METH_DEDUP, 9, "const value lifted in \n%s", SHOW(code));
   }
   TRACE(METH_DEDUP,
         5,
@@ -176,13 +167,12 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
   auto call_sites = method_reference::collect_call_refs(scope, lifted);
   for (const auto& callsite : call_sites) {
     auto meth = callsite.caller;
-    auto* insn = callsite.insn;
+    auto insn = callsite.mie->insn;
     const auto callee =
         resolve_method(insn->get_method(), opcode_to_search(insn));
     always_assert(callee != nullptr);
     auto const_vals = lifted_constants.at(callee);
-    auto& meth_cfg = meth->get_code()->cfg();
-    auto cfg_it = meth_cfg.find_insn(insn);
+    auto code = meth->get_code();
     if (const_vals.needs_stub()) {
       // Insert const load
       std::vector<reg_t> args;
@@ -190,36 +180,32 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
         args.push_back(insn->src(i));
       }
       auto stub = const_vals.create_stub_method(callee);
-      stub->get_code()->build_cfg();
       auto invoke = method_reference::make_invoke(stub, insn->opcode(), args);
-      IRInstruction* orig_invoke = cfg_it->insn;
-      cfg_it->insn = invoke;
+      code->insert_after(insn, {invoke});
       // remove original call.
-      delete orig_invoke;
+      code->remove_opcode(insn);
       stub_methods.push_back(stub);
     } else {
       // Make const load
       std::vector<reg_t> const_regs;
       for (size_t i = 0; i < const_vals.size(); ++i) {
-        const_regs.push_back(meth_cfg.allocate_temp());
+        const_regs.push_back(code->allocate_temp());
       }
-      auto const_loads = const_vals.make_const_loads(const_regs);
+      auto const_loads_and_invoke = const_vals.make_const_loads(const_regs);
       // Insert const load
       std::vector<reg_t> args;
       for (size_t i = 0; i < insn->srcs_size(); i++) {
         args.push_back(insn->src(i));
       }
       args.insert(args.end(), const_regs.begin(), const_regs.end());
-      meth_cfg.insert_before(cfg_it, const_loads);
-      auto orig_invoke = cfg_it->insn;
       auto invoke = method_reference::make_invoke(callee, insn->opcode(), args);
-      // replace to the call.
-      cfg_it->insn = invoke;
+      const_loads_and_invoke.push_back(invoke);
+      code->insert_after(insn, const_loads_and_invoke);
       // remove original call.
-      delete orig_invoke;
+      code->remove_opcode(insn);
     }
     TRACE(METH_DEDUP, 9, " patched call site in %s\n%s", SHOW(meth),
-          SHOW(meth_cfg));
+          SHOW(code));
   }
 
   return stub_methods;

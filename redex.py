@@ -47,7 +47,6 @@ from pyredex.utils import (
     relocate_dexen_to_directories,
     remove_comments,
     sign_apk,
-    verify_dexes,
     with_temp_cleanup,
 )
 
@@ -507,27 +506,13 @@ def copy_all_file_to_out_dir(
 
 def validate_args(args: argparse.Namespace) -> None:
     if args.sign:
-
-        def raise_error(arg_name: str) -> None:
-            raise argparse.ArgumentTypeError(
-                "Could not find a suitable default for --{} and no value "
-                "was provided.  This argument is required when --sign "
-                "is used".format(arg_name)
-            )
-
-        if not args.keystore:
-            raise_error("keystore")
-
-        if not args.keyalias:
-            raise_error("keyalias")
-
-        if not args.keypass:
-            raise_error("keypass")
-
-        if not isfile(args.keystore):
-            raise argparse.ArgumentTypeError(
-                f'Keystore path "{args.keystore}" is invalid.'
-            )
+        for arg_name in ["keystore", "keyalias", "keypass"]:
+            if getattr(args, arg_name) is None:
+                raise argparse.ArgumentTypeError(
+                    "Could not find a suitable default for --{} and no value "
+                    "was provided.  This argument is required when --sign "
+                    "is used".format(arg_name)
+                )
 
 
 def arg_parser(
@@ -780,10 +765,6 @@ Given an APK, produce a better APK!
         default=None,
         type=str,
         help="Path to JNI summary directory of json files.",
-    )
-
-    parser.add_argument(
-        "--verify-dexes", type=str, help="Verify dex files with the supplied command"
     )
 
     # Manual tool paths.
@@ -1134,7 +1115,7 @@ def prepare_redex(args: argparse.Namespace) -> State:
             if e.errno != errno.EEXIST:
                 raise e
 
-    with BuckPartScope("redex::Unpacking", "Unpacking Redex input"):
+    with BuckPartScope("Redex::Unpack", "Unpacking input"):
         with BuckPartScope("redex::UnpackApk", "Unpacking APK"):
             logging.debug("Unpacking...")
             if not extracted_apk_dir:
@@ -1298,16 +1279,6 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             CompressionLevel.FAST,  # May be quite large.
         ),
         CompressionEntry(
-            "Redex Unsafe Enums List",
-            lambda args: True,
-            True,
-            [],
-            ["redex-unsafe-enums.txt"],
-            None,
-            None,
-            CompressionLevel.BETTER,  # Usually small enough.
-        ),
-        CompressionEntry(
             "Redex Accessed Proguard Rules",
             lambda args: True,
             True,
@@ -1321,9 +1292,6 @@ def get_compression_list() -> typing.List[CompressionEntry]:
 
 
 def finalize_redex(state: State) -> None:
-    if state.args.verify_dexes:
-        verify_dexes(state.dex_dir, state.args.verify_dexes)
-
     if state.dexen_initial_state is not None:
         dexen_final_state = DexenSnapshot(state.dex_dir)
         assert _assert_val(state.dexen_initial_state).equals(

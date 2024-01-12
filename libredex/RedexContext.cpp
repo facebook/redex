@@ -153,9 +153,9 @@ RedexContext::~RedexContext() {
         for (size_t bucket = 0; bucket < field_buckets_count; bucket++) {
           fns.push_back([bucket, this]() {
             // Delete DexFields. Use set to prevent double freeing aliases
-            std::unordered_set<DexFieldRef*> delete_fields;
+            std::unordered_set<DexField*> delete_fields;
             for (auto const& it : s_field_map) {
-              auto field = static_cast<DexFieldRef*>(it.second);
+              auto field = static_cast<DexField*>(it.second);
               if ((reinterpret_cast<size_t>(field) >> 16) %
                           field_buckets_count ==
                       bucket &&

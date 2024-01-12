@@ -204,7 +204,7 @@ class SmallSetDexTypeDomain final
 
   sparta::AbstractValueKind kind() const { return m_kind; }
 
-  const sparta::PatriciaTreeSet<const DexType*>& get_types() const {
+  sparta::PatriciaTreeSet<const DexType*> get_types() const {
     always_assert(!is_top());
     return m_types;
   }
@@ -390,11 +390,9 @@ class DexTypeDomain final
     });
   }
 
-  const SingletonDexTypeDomain& get_single_domain() const { return get<1>(); }
+  SingletonDexTypeDomain get_single_domain() const { return get<1>(); }
 
-  const TypedefAnnotationDomain& get_annotation_domain() const {
-    return get<3>();
-  }
+  TypedefAnnotationDomain get_annotation_domain() const { return get<3>(); }
 
   boost::optional<const DexType*> get_dex_type() const {
     return get<1>().get_dex_type();
@@ -413,9 +411,9 @@ class DexTypeDomain final
     return dex_cls ? boost::optional<const DexClass*>(dex_cls) : boost::none;
   }
 
-  const SmallSetDexTypeDomain& get_set_domain() const { return get<2>(); }
+  SmallSetDexTypeDomain get_set_domain() { return get<2>(); }
 
-  const sparta::PatriciaTreeSet<const DexType*>& get_type_set() const {
+  sparta::PatriciaTreeSet<const DexType*> get_type_set() {
     return get<2>().get_types();
   }
 

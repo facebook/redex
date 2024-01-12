@@ -92,7 +92,7 @@ void test_object_inliner(
     ScopedCFG caller(caller_code.get());
 
     auto callee_code = assembler::ircode_from_string(callee_str);
-    callee_code->build_cfg();
+    callee_code->build_cfg(true);
     auto& callee = callee_code->cfg();
 
     for (size_t i = 0; i < fields.size(); i++) {

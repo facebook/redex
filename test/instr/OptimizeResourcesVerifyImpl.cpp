@@ -12,7 +12,6 @@
 
 #include "ApkResources.h"
 #include "RedexResources.h"
-#include "utils/Serialize.h"
 #include "verify/VerifyUtil.h"
 
 namespace {
@@ -296,7 +295,7 @@ void apk_postverify_impl(ResourcesArscFile* res_table) {
   auto& pool = res_table->get_table_snapshot().get_global_strings();
   std::unordered_set<std::string> global_strings;
   for (int i = 0; i < pool.size(); i++) {
-    global_strings.emplace(arsc::get_string_from_pool(pool, i));
+    global_strings.emplace(apk::get_string_from_pool(pool, i));
   }
   for (const auto& s : KEPT_FILE_PATHS) {
     EXPECT_EQ(global_strings.count(s), 1)
@@ -318,7 +317,7 @@ void apk_postverify_nullify_impl(ResourcesArscFile* res_table) {
   auto& pool = res_table->get_table_snapshot().get_global_strings();
   std::unordered_set<std::string> global_strings;
   for (int i = 0; i < pool.size(); i++) {
-    global_strings.emplace(arsc::get_string_from_pool(pool, i));
+    global_strings.emplace(apk::get_string_from_pool(pool, i));
   }
   for (const auto& s : modified_kept_file_paths) {
     EXPECT_EQ(global_strings.count(s), 1)

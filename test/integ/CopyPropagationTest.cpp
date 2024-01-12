@@ -39,7 +39,7 @@ TEST_F(CopyPropagationTest, useSwitch) {
     for (const auto& m : cls->get_vmethods()) {
       TRACE(RME, 1, "\nmethod %s:", SHOW(m));
       IRCode* code = m->get_code();
-      code->build_cfg();
+      code->build_cfg(/* editable */ true);
       EXPECT_EQ(2, count_sgets(code->cfg()));
       code->clear_cfg();
     }
@@ -55,7 +55,7 @@ TEST_F(CopyPropagationTest, useSwitch) {
     for (const auto& m : cls->get_vmethods()) {
       TRACE(RME, 1, "\nmethod %s:", SHOW(m));
       IRCode* code = m->get_code();
-      code->build_cfg();
+      code->build_cfg(/* editable */ true);
       if (strcmp(m->get_name()->c_str(), "remove") == 0) {
         EXPECT_EQ(1, count_sgets(code->cfg()));
       } else {

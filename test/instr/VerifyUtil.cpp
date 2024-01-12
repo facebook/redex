@@ -255,7 +255,7 @@ void dump_cfgs(bool is_prev_verify,
 
     method->balloon();
     IRCode* code = method->get_code();
-    code->build_cfg();
+    code->build_cfg(/*editable*/ false);
     cfg::ControlFlowGraph& cfg = code->cfg();
     cfg.write_dot_format(file);
 

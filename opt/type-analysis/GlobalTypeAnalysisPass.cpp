@@ -37,7 +37,7 @@ bool trace_results_if_different(const std::string& prefix,
   if (gdomain.is_top() || gdomain.is_bottom()) {
     return false;
   }
-  const auto& gtype = gdomain.get_single_domain().get_dex_type();
+  auto gtype = gdomain.get_single_domain().get_dex_type();
   if (!are_different(gtype, ltype)) {
     return false;
   }
@@ -77,22 +77,22 @@ void trace_analysis_diff(DexMethod* method,
       } else if (insn->opcode() == OPCODE_IGET_OBJECT ||
                  insn->opcode() == OPCODE_SGET_OBJECT) {
         auto gparam = genv.get(RESULT_REGISTER);
-        auto it = block->to_cfg_instruction_iterator(mie);
-        auto move_res = cfg.move_result_of(it);
+        auto it = code->iterator_to(mie);
+        auto move_res = ir_list::move_result_pseudo_of(it);
         auto field = insn->get_field();
         if (fields.count(field)) {
           continue;
         }
         fields.insert(field);
-        auto lparam = lenvs.at(move_res->insn).get_dex_type(RESULT_REGISTER);
+        auto lparam = lenvs.at(move_res).get_dex_type(RESULT_REGISTER);
         auto prefix = "field " + show(insn);
         found_improvement =
             trace_results_if_different(prefix, gparam, lparam, out);
       } else if (opcode::is_an_invoke(insn->opcode())) {
         auto gparam = genv.get(RESULT_REGISTER);
-        auto it = block->to_cfg_instruction_iterator(mie);
+        auto it = code->iterator_to(mie);
         auto callee = insn->get_method();
-        it.move_next_in_block();
+        it++;
         if (!lenvs.count(it->insn) || callees.count(callee)) {
           continue;
         }
@@ -130,8 +130,7 @@ void GlobalTypeAnalysisPass::run_pass(DexStoresVector& stores,
   null_assertion_set.insert(method::redex_internal_checkObjectNotNull());
   Scope scope = build_class_scope(stores);
   XStoreRefs xstores(stores);
-  global::GlobalTypeAnalysis analysis(m_config.max_global_analysis_iteration,
-                                      m_config.use_multiple_callee_callgraph);
+  global::GlobalTypeAnalysis analysis(m_config.max_global_analysis_iteration);
   auto gta = analysis.analyze(scope);
   optimize(scope, xstores, *gta, null_assertion_set, mgr);
   m_result = std::move(gta);
@@ -147,7 +146,8 @@ void GlobalTypeAnalysisPass::optimize(
     if (method->get_code() == nullptr) {
       return Stats();
     }
-    auto lta = gta.get_replayable_local_analysis(method);
+    auto code = method->get_code();
+    auto lta = gta.get_local_analysis(method);
 
     if (m_config.trace_global_local_diff) {
       trace_analysis_diff(method, *lta);
@@ -158,6 +158,7 @@ void GlobalTypeAnalysisPass::optimize(
       Stats ra_stats;
       ra_stats.assert_stats =
           rat.apply(*lta, gta.get_whole_program_state(), method);
+      code->clear_cfg();
       return ra_stats;
     }
 
@@ -172,6 +173,7 @@ void GlobalTypeAnalysisPass::optimize(
             SHOW(method),
             SHOW(method->get_code()->cfg()));
     }
+    code->clear_cfg();
     return tr_stats;
   });
 

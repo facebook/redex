@@ -78,7 +78,6 @@ class DexType;
   TM(INTRO_SWITCH)      \
   TM(IODI)              \
   TM(ISO)               \
-  TM(ITP)               \
   TM(LCR_PASS)          \
   TM(LIB)               \
   TM(LOC)               \
@@ -162,7 +161,6 @@ class DexType;
   TM(TYPE_TRANSFORM)    \
   TM(UCM)               \
   TM(UNREF_INTF)        \
-  TM(UNREACHABLE)       \
   TM(USES_NAMES)        \
   TM(VERIFY)            \
   TM(VIRT)              \

@@ -9,14 +9,12 @@ class TypeAnalysisRemoveRedundantCmp {
   private val data: Array<Any> = arrayOf(1, "1")
   val x
     get() = data[0] as Int
-
   val y
     get() = data[1] as String
 
   private val dataMayBeNull: Array<Any?> = arrayOf(1, null)
   val xx
     get() = dataMayBeNull[0] as Int
-
   val yy
     get() = dataMayBeNull[1] as String
 

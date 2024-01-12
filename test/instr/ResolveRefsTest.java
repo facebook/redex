@@ -100,16 +100,6 @@ final class Complete extends Incomplete {
   }
 }
 
-final class Copiable {
-  final int val;
-  Copiable(int v) { this.val = v; }
-  Copiable[] copyToArray() {
-    Copiable[] arr = {this};
-    Copiable[] copy = arr.clone();
-    return copy;
-  }
-}
-
 /*
  * Rtype specialization for input with overridding miranda methods
  */
@@ -200,15 +190,6 @@ public class ResolveRefsTest {
     assertThat(c.getReal().getVal()).isEqualTo("Complete");
     Incomplete i = new Complete();
     assertThat(i.getFake().getVal()).isEqualTo("Complete");
-  }
-
-  @KeepForRedexTest
-  @Test
-  public void testResolveObjectArrayClone() {
-    Copiable c = new Copiable(42);
-    Copiable[] arrCopy = c.copyToArray();
-    assertThat(arrCopy.length).isEqualTo(1);
-    assertThat(arrCopy[0].val).isEqualTo(42);
   }
 
   @KeepForRedexTest

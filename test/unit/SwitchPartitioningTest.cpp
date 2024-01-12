@@ -32,7 +32,7 @@ TEST_F(SwitchPartitioningTest, if_chains) {
   )");
   auto smp1 = SwitchMethodPartitioning::create(code1.get(),
                                                /* verify_default_case */ false);
-  ASSERT_TRUE(smp1);
+  ASSERT_TRUE(smp1.has_value());
   const auto& key_to_block1 = smp1->get_key_to_block();
   EXPECT_EQ(key_to_block1.size(), 2);
 
@@ -52,7 +52,7 @@ TEST_F(SwitchPartitioningTest, if_chains) {
   )");
   auto smp2 = SwitchMethodPartitioning::create(code2.get(),
                                                /* verify_default_case */ false);
-  ASSERT_TRUE(smp2);
+  ASSERT_TRUE(smp2.has_value());
   const auto& key_to_block2 = smp2->get_key_to_block();
   EXPECT_EQ(key_to_block2.size(), 2);
   for (size_t key = 1; key <= 2; key++) {

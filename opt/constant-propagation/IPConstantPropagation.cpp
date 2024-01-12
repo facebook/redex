@@ -52,7 +52,6 @@ using CombinedAnalyzer =
                                 StringAnalyzer,
                                 ConstantClassObjectAnalyzer,
                                 ApiLevelAnalyzer,
-                                NewObjectAnalyzer,
                                 PrimitiveAnalyzer>;
 
 class AnalyzerGenerator {
@@ -97,16 +96,19 @@ class AnalyzerGenerator {
 
     auto wps_accessor = std::make_unique<WholeProgramStateAccessor>(wps);
     auto wps_accessor_ptr = wps_accessor.get();
-    auto immut_analyzer_state =
-        const_cast<ImmutableAttributeAnalyzerState*>(m_immut_analyzer_state);
     return std::make_unique<IntraproceduralAnalysis>(
         std::move(wps_accessor), code.cfg(),
         CombinedAnalyzer(
-            class_under_init, immut_analyzer_state, wps_accessor_ptr,
-            EnumFieldAnalyzerState::get(), BoxedBooleanAnalyzerState::get(),
-            nullptr, nullptr,
+            class_under_init,
+            const_cast<ImmutableAttributeAnalyzerState*>(
+                m_immut_analyzer_state),
+            wps_accessor_ptr,
+            EnumFieldAnalyzerState::get(),
+            BoxedBooleanAnalyzerState::get(),
+            nullptr,
+            nullptr,
             *const_cast<ApiLevelAnalyzerState*>(m_api_level_analyzer_state),
-            immut_analyzer_state, nullptr),
+            nullptr),
         std::move(env));
   }
 };
@@ -264,12 +266,13 @@ void PassImpl::run(const DexStoresVector& stores, int min_sdk) {
 
   auto scope = build_class_scope(stores);
   XStoreRefs xstores(stores);
-
-  walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
-    always_assert(code.editable_cfg_built());
+  // Rebuild all CFGs here -- this should be more efficient than doing them
+  // within FixpointIterator::analyze_node(), since that can get called
+  // multiple times for a given method
+  walk::parallel::code(scope, [&](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ !m_config.create_runtime_asserts);
     code.cfg().calculate_exit_block();
   });
-
   // Hold the analyzer state of ImmutableAttributeAnalyzer.
   ImmutableAttributeAnalyzerState immut_analyzer_state;
   immutable_state::analyze_constructors(scope, &immut_analyzer_state);
@@ -279,6 +282,8 @@ void PassImpl::run(const DexStoresVector& stores, int min_sdk) {
       analyze(scope, &immut_analyzer_state, &api_level_analyzer_state);
   m_stats.fp_iter = fp_iter->get_stats();
   optimize(scope, xstores, *fp_iter, &immut_analyzer_state);
+  walk::parallel::code(scope,
+                       [](DexMethod*, IRCode& code) { code.clear_cfg(); });
 }
 
 void PassImpl::run_pass(DexStoresVector& stores,

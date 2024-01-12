@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include "ControlFlow.h"
 #include "Creators.h"
 #include "DexClass.h"
 #include "DexStore.h"
@@ -44,10 +43,10 @@ DexClass* create_merger_class(const DexType* type,
                               const bool add_type_tag_field,
                               bool with_default_ctor = false);
 
-void patch_iput(const cfg::InstructionIterator& it);
+void patch_iput(const IRList::iterator& it);
 
-void patch_iget(cfg::ControlFlowGraph& cfg,
-                const cfg::InstructionIterator& it,
+void patch_iget(DexMethod* meth,
+                const IRList::iterator& it,
                 DexType* original_field_type);
 
 void add_class(DexClass* new_cls,

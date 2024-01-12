@@ -113,7 +113,7 @@ size_t set_difference_size(const std::unordered_set<T>& a,
       result -= b.count(v);
     }
   } else {
-    for (const auto& [v, c] : b) {
+    for (const auto [v, c] : b) {
       result -= a.count(v);
     }
   }

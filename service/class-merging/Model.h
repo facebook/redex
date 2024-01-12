@@ -218,8 +218,6 @@ struct ModelStats {
   uint32_t m_dropped = 0;
   // InterDex grouping stats
   std::map<InterdexSubgroupIdx, size_t> m_interdex_groups{};
-  // MergingStrategy grouping stats
-  std::map<size_t, size_t> m_merging_size_counts{};
   // Stats for approximate shape merging
   ApproximateStats m_approx_stats{};
   // Merging related stats
@@ -252,7 +250,7 @@ class Model {
    */
   static Model build_model(const Scope& scope,
                            const DexStoresVector& stores,
-                           ConfigFiles& conf,
+                           const ConfigFiles& conf,
                            const ModelSpec& spec,
                            const TypeSystem& type_system,
                            const RefChecker& refchecker);
@@ -303,6 +301,10 @@ class Model {
 
   bool process_method_meta() const { return m_spec.process_method_meta; }
   bool keep_debug_info() const { return m_spec.keep_debug_info; }
+
+  void update_redex_stats(PassManager& mgr) const;
+
+  static void build_interdex_groups(ConfigFiles& conf);
 
   /**
    * Print everything about the model.
@@ -381,8 +383,11 @@ class Model {
   std::map<MergerType::Shape, size_t, MergerType::ShapeComp> m_shape_to_count;
 
   const Scope& m_scope;
-  ConfigFiles& m_conf;
+  const ConfigFiles& m_conf;
   const XDexRefs m_x_dex;
+
+  static std::unordered_map<DexType*, size_t> s_cls_to_interdex_group;
+  static size_t s_num_interdex_groups;
 
   /**
    * Build a Model given a set of roots and a set of types deriving from the
@@ -390,7 +395,7 @@ class Model {
    */
   Model(const Scope& scope,
         const DexStoresVector& stores,
-        ConfigFiles& conf,
+        const ConfigFiles& conf,
         const ModelSpec& spec,
         const TypeSystem& type_system,
         const RefChecker& refchecker);
@@ -441,7 +446,7 @@ class Model {
                           MergerType::ShapeHierarchy& hier);
   void flatten_shapes(const MergerType& merger,
                       MergerType::ShapeCollector& shapes);
-  TypeGroupByDex group_per_dex(const TypeSet& types, const ModelSpec& spec);
+  TypeGroupByDex group_per_dex(bool per_dex_grouping, const TypeSet& types);
   TypeSet get_types_in_current_interdex_group(
       const TypeSet& types, const ConstTypeHashSet& interdex_group_types);
 

@@ -206,6 +206,8 @@ struct MergerType {
   FieldsMap field_map;
   // if this was created while "shaping" the model
   bool from_shape{false};
+  // when a type derives from a shape we have to delete its fields
+  bool kill_fields{false};
   // a dummy merger is used only for analysis sake but makes no
   // change to the underlying type
   bool dummy{false};

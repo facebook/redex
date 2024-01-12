@@ -30,7 +30,7 @@ TEST_F(CheckCastAnalysisTest, simple_string) {
       )
     )
   )");
-  method->get_code()->build_cfg();
+  method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
   auto api = create_empty_sdk();
   check_casts::impl::CheckCastAnalysis analysis(config, method, api);
@@ -58,7 +58,7 @@ TEST_F(CheckCastAnalysisTest, new_instance) {
       )
     )
   )");
-  method->get_code()->build_cfg();
+  method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
   auto api = create_empty_sdk();
   check_casts::impl::CheckCastAnalysis analysis(config, method, api);
@@ -86,7 +86,7 @@ TEST_F(CheckCastAnalysisTest, parameter) {
       )
     )
   )");
-  method->get_code()->build_cfg();
+  method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
   auto api = create_empty_sdk();
   check_casts::impl::CheckCastAnalysis analysis(config, method, api);
@@ -113,7 +113,7 @@ TEST_F(CheckCastAnalysisTest, array_parameter) {
       )
     )
   )");
-  method->get_code()->build_cfg();
+  method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
   auto api = create_empty_sdk();
   check_casts::impl::CheckCastAnalysis analysis(config, method, api);
@@ -141,7 +141,7 @@ TEST_F(CheckCastAnalysisTest, this_parameter) {
       )
     )
   )");
-  method->get_code()->build_cfg();
+  method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
   auto api = create_empty_sdk();
   check_casts::impl::CheckCastAnalysis analysis(config, method, api);
@@ -170,7 +170,7 @@ TEST_F(CheckCastAnalysisTest, get_field) {
       )
     )
   )");
-  method->get_code()->build_cfg();
+  method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config{.weaken = false};
   auto api = create_empty_sdk();
   check_casts::impl::CheckCastAnalysis analysis(config, method, api);
@@ -199,7 +199,7 @@ TEST_F(CheckCastAnalysisTest, weaken_disabled) {
       )
     )
   )");
-  method->get_code()->build_cfg();
+  method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config{.weaken = false};
   auto api = create_empty_sdk();
   check_casts::impl::CheckCastAnalysis analysis(config, method, api);
@@ -221,7 +221,7 @@ TEST_F(CheckCastAnalysisTest, weaken_replace) {
       )
     )
   )");
-  method->get_code()->build_cfg();
+  method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
   auto api = create_empty_sdk();
   check_casts::impl::CheckCastAnalysis analysis(config, method, api);
@@ -262,7 +262,7 @@ TEST_F(CheckCastAnalysisTest, weaken) {
       )
     )
   )");
-  method->get_code()->build_cfg();
+  method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
   auto api = create_empty_sdk();
   check_casts::impl::CheckCastAnalysis analysis(config, method, api);
@@ -309,7 +309,7 @@ TEST_F(CheckCastAnalysisTest, weaken_interface_to_interface) {
       )
     )
   )");
-  method->get_code()->build_cfg();
+  method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
   auto api = create_empty_sdk();
   check_casts::impl::CheckCastAnalysis analysis(config, method, api);
@@ -355,7 +355,7 @@ TEST_F(CheckCastAnalysisTest, weaken_replace_class_to_interface) {
       )
     )
   )");
-  method->get_code()->build_cfg();
+  method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
   auto api = create_empty_sdk();
   check_casts::impl::CheckCastAnalysis analysis(config, method, api);
@@ -399,7 +399,7 @@ TEST_F(CheckCastAnalysisTest, do_not_weaken_class_to_interface) {
       )
     )
   )");
-  method->get_code()->build_cfg();
+  method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
   auto api = create_empty_sdk();
   check_casts::impl::CheckCastAnalysis analysis(config, method, api);
@@ -435,8 +435,7 @@ std::tuple<DexType*, DexType*, DexType*, DexType*> create_chain_of_four() {
 
 class CheckCastAnalysisSDKTest
     : public RedexTest,
-      public testing::WithParamInterface<
-          std::tuple<const char*, const char*, bool>> {};
+      public testing::WithParamInterface<std::tuple<const char*, const char*, bool>> {};
 
 TEST_P(CheckCastAnalysisSDKTest, parameter) {
   auto [t1_type, t2_type, t3_type, t4_type] = create_chain_of_four();
@@ -454,7 +453,7 @@ TEST_P(CheckCastAnalysisSDKTest, parameter) {
       )
     )
   )");
-  method->get_code()->build_cfg();
+  method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
   check_casts::impl::CheckCastAnalysis analysis(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();

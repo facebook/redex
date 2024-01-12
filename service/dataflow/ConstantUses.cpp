@@ -235,7 +235,6 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
   case OPCODE_SGET_OBJECT:
   case IOPCODE_INIT_CLASS:
   case IOPCODE_INJECTION_ID:
-  case IOPCODE_UNREACHABLE:
     not_reached();
 
   case OPCODE_RETURN:

@@ -77,10 +77,10 @@ ConstantValue::ConstantValue(const TypeTags* type_tags,
 }
 
 std::vector<ConstantValue::ConstantLoad>
-ConstantValue::collect_constant_loads_in(cfg::ControlFlowGraph& cfg) {
+ConstantValue::collect_constant_loads_in(const IRCode* code) {
   std::vector<ConstantValue::ConstantLoad> res;
   always_assert(is_valid());
-  auto ii = InstructionIterable(cfg);
+  auto ii = InstructionIterable(code);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
     if (is_int_value() && opcode::is_a_literal_const(insn->opcode())) {
@@ -90,14 +90,14 @@ ConstantValue::collect_constant_loads_in(cfg::ControlFlowGraph& cfg) {
         literal = static_cast<uint32_t>(literal);
       }
       if (is_int_value() && literal == m_int_val) {
-        res.emplace_back(it, insn->dest());
+        res.emplace_back(insn, insn->dest());
       }
     } else if (is_str_value() && insn->opcode() == OPCODE_CONST_STRING) {
       if (strcmp(insn->get_string()->c_str(), m_str_val.c_str()) == 0) {
-        auto pseudo_move = cfg.move_result_of(it)->insn;
+        auto pseudo_move = std::next(it)->insn;
         always_assert(pseudo_move->opcode() ==
                       IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
-        res.emplace_back(it, pseudo_move->dest());
+        res.emplace_back(insn, pseudo_move->dest());
       }
     }
   }
@@ -122,7 +122,7 @@ ConstantValues::ConstantValues(const TypeTags* type_tags,
                                const std::string& kinds_str,
                                const std::string& vals_str,
                                const size_t stud_method_threshold,
-                               cfg::ControlFlowGraph& cfg)
+                               IRCode* code)
     : m_stub_method_threshold(stud_method_threshold) {
   // Split vals_str.
   std::vector<std::string> vals_vec;
@@ -150,7 +150,7 @@ ConstantValues::ConstantValues(const TypeTags* type_tags,
 
   // Populate the const_vals set.
   for (auto& pair : kind_to_val) {
-    auto param_reg = cfg.allocate_temp();
+    auto param_reg = code->allocate_temp();
     ConstantValue cval(type_tags, pair.first, pair.second, param_reg);
     m_const_vals.emplace_back(cval);
     if (cval.is_invalid()) {
@@ -161,14 +161,14 @@ ConstantValues::ConstantValues(const TypeTags* type_tags,
 }
 
 std::vector<ConstantValues::ConstantValueLoad>
-ConstantValues::collect_constant_loads(cfg::ControlFlowGraph& cfg) {
+ConstantValues::collect_constant_loads(const IRCode* code) {
   std::vector<ConstantValueLoad> const_val_loads;
   std::unordered_set<IRInstruction*> matched_loads;
   for (auto& const_val : m_const_vals) {
     if (const_val.is_invalid()) {
       continue;
     }
-    auto const_loads = const_val.collect_constant_loads_in(cfg);
+    auto const_loads = const_val.collect_constant_loads_in(code);
     if (m_skip_multiple_const_0 && const_val.is_int_kind() &&
         const_val.get_int_value() == 0 && !const_loads.empty()) {
       const_val_loads.emplace_back(const_val, const_loads.front());
@@ -176,7 +176,7 @@ ConstantValues::collect_constant_loads(cfg::ControlFlowGraph& cfg) {
       continue;
     }
     for (auto& load : const_loads) {
-      if (matched_loads.count(load.first->insn) > 0) {
+      if (matched_loads.count(load.first) > 0) {
         // If the same const load insn has been matched for multiple const
         // values in the @MethodMeta annotation, we skip it.
         // Trying to lift the same const load insn later will lead to a crash.
@@ -187,8 +187,8 @@ ConstantValues::collect_constant_loads(cfg::ControlFlowGraph& cfg) {
             9,
             "const value: %s matched with const-load %s",
             const_val.to_str().c_str(),
-            SHOW(load.first->insn));
-      matched_loads.insert(load.first->insn);
+            SHOW(load.first));
+      matched_loads.insert(load.first);
     }
   }
   return const_val_loads;

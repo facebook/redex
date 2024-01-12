@@ -21,14 +21,12 @@ class StaticReloPassV2 : public Pass {
     using namespace redex_properties::names;
     return {
         {HasSourceBlocks, Preserves},
-        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
     };
   }
 
   static std::vector<DexClass*> gen_candidates(const Scope&);
   static int run_relocation(const Scope&, std::vector<DexClass*>&);
-  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };
 } // namespace static_relo_v2

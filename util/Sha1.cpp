@@ -68,8 +68,8 @@ static void sha_decode32(unsigned int* output,
 /* W[i]
  */
 #define W(i)                                                               \
-  (tmp = x[((i)-3) & 15] ^ x[((i)-8) & 15] ^ x[((i)-14) & 15] ^ x[(i)&15], \
-   (x[(i)&15] = ROTATE_LEFT(tmp, 1)))
+  (tmp = x[(i - 3) & 15] ^ x[(i - 8) & 15] ^ x[(i - 14) & 15] ^ x[i & 15], \
+   (x[i & 15] = ROTATE_LEFT(tmp, 1)))
 
 /* FF, GG, HH, and II transformations for rounds 1, 2, 3, and 4.
  */

@@ -9,7 +9,6 @@
 
 #include <ostream>
 #include <sstream>
-#include <string>
 
 #include "AnnoUtils.h"
 #include "ApproximateShapeMerging.h"
@@ -27,7 +26,12 @@
 
 using namespace class_merging;
 
+size_t Model::s_num_interdex_groups = 0;
+std::unordered_map<DexType*, size_t> Model::s_cls_to_interdex_group;
+
 namespace {
+
+constexpr const char* CLASS_MARKER_DELIMITER = "DexEndMarker";
 
 std::string to_string(const ModelSpec& spec) {
   std::ostringstream ss;
@@ -163,7 +167,7 @@ const TypeSet Model::empty_set = TypeSet();
 
 Model::Model(const Scope& scope,
              const DexStoresVector& stores,
-             ConfigFiles& conf,
+             const ConfigFiles& conf,
              const ModelSpec& spec,
              const TypeSystem& type_system,
              const RefChecker& refchecker)
@@ -245,6 +249,39 @@ MergerType* Model::build_mergers(const DexType* root) {
     }
   }
   return &merger;
+}
+
+void Model::build_interdex_groups(ConfigFiles& conf) {
+  const auto& interdex_order = conf.get_coldstart_classes();
+  if (interdex_order.empty()) {
+    // No grouping based on interdex.
+    s_num_interdex_groups = 0;
+    return;
+  }
+
+  size_t group_id = 0;
+  for (auto it = interdex_order.begin(); it != interdex_order.end(); ++it) {
+    const auto& cls_name = *it;
+    bool is_marker_delim =
+        cls_name.find(CLASS_MARKER_DELIMITER) != std::string::npos;
+
+    if (is_marker_delim || std::next(it) == interdex_order.end()) {
+      group_id++;
+
+      if (is_marker_delim) {
+        continue;
+      }
+    }
+
+    DexType* type = DexType::get_type(cls_name);
+    if (type && s_cls_to_interdex_group.count(type) == 0) {
+      s_cls_to_interdex_group[type] = group_id;
+    }
+  }
+
+  // group_id + 1 represents the number of groups (considering the classes
+  // outside of the interdex order as a group on its own).
+  s_num_interdex_groups = group_id + 1;
 }
 
 MergerType& Model::create_dummy_merger(const DexType* type) {
@@ -357,14 +394,12 @@ void Model::create_mergers_helper(
     const boost::optional<size_t>& max_mergeables_count,
     size_t min_mergeables_count) {
   InterdexSubgroupIdx subgroup_cnt = 0;
-  strategy::MergingStrategy ms(strategy, group_values);
-  ms.apply_grouping(min_mergeables_count, max_mergeables_count,
-                    [&](const ConstTypeVector& group) {
-                      create_merger_helper(merger_type, shape, intf_set, dex_id,
-                                           group, interdex_subgroup_idx,
-                                           subgroup_cnt++);
-                      m_stats.m_merging_size_counts[group.size()]++;
-                    });
+  strategy::apply_grouping(
+      strategy, group_values, min_mergeables_count, max_mergeables_count,
+      [&](const ConstTypeVector& group) {
+        create_merger_helper(merger_type, shape, intf_set, dex_id, group,
+                             interdex_subgroup_idx, subgroup_cnt++);
+      });
 }
 
 /**
@@ -760,26 +795,25 @@ std::ostream& operator<<(std::ostream& os,
  * Group merging targets according to their dex ids. Return a vector of dex_id
  * and types.
  */
-TypeGroupByDex Model::group_per_dex(const TypeSet& types,
-                                    const ModelSpec& spec) {
-  if (!spec.per_dex_grouping) {
+TypeGroupByDex Model::group_per_dex(bool per_dex_grouping,
+                                    const TypeSet& types) {
+  if (!per_dex_grouping) {
     TypeSet group(types.begin(), types.end());
     return {{boost::none, group}};
-  }
-  std::vector<TypeSet> new_groups(m_x_dex.num_dexes());
-  for (auto type : types) {
-    auto dex_id = m_x_dex.get_dex_idx(type);
-    new_groups[dex_id].emplace(type);
-  }
-  TypeGroupByDex result(m_x_dex.num_dexes());
-  for (size_t dex_id = 0; dex_id < new_groups.size(); ++dex_id) {
-    auto& group = new_groups[dex_id];
-    if (group.size() >= spec.min_count) {
-      TRACE(CLMG, 7, "dex_id %zu: group %zu", dex_id, group.size());
-      result.emplace_back(std::make_pair(dex_id, std::move(group)));
+  } else {
+    std::vector<TypeSet> new_groups(m_x_dex.num_dexes());
+    for (auto type : types) {
+      auto dex_id = m_x_dex.get_dex_idx(type);
+      new_groups[dex_id].emplace(type);
     }
+    TypeGroupByDex result(m_x_dex.num_dexes());
+    size_t dex_id = 0;
+    for (auto&& group : new_groups) {
+      result.emplace_back(std::make_pair(dex_id, std::move(group)));
+      ++dex_id;
+    }
+    return result;
   }
-  return result;
 }
 
 TypeSet Model::get_types_in_current_interdex_group(
@@ -799,13 +833,9 @@ TypeSet Model::get_types_in_current_interdex_group(
  */
 std::vector<ConstTypeHashSet> Model::group_by_interdex_set(
     const ConstTypeHashSet& types) {
-  const auto& cls_to_interdex_groups = m_conf.get_cls_interdex_groups();
-  auto num_interdex_groups = m_conf.get_num_interdex_groups();
-  TRACE(CLMG, 5, "num_interdex_groups %zu; cls_to_interdex_groups %zu",
-        num_interdex_groups, cls_to_interdex_groups.size());
   size_t num_group = 1;
-  if (is_interdex_grouping_enabled() && num_interdex_groups > 1) {
-    num_group = num_interdex_groups;
+  if (is_interdex_grouping_enabled() && s_num_interdex_groups > 1) {
+    num_group = s_num_interdex_groups;
   }
   std::vector<ConstTypeHashSet> new_groups(num_group);
   if (num_group == 1) {
@@ -815,8 +845,8 @@ std::vector<ConstTypeHashSet> Model::group_by_interdex_set(
   const auto& type_to_usages =
       get_type_usages(types, m_scope, m_spec.interdex_grouping_inferring_mode);
   for (const auto& pair : type_to_usages) {
-    auto index = get_interdex_group(pair.second, cls_to_interdex_groups,
-                                    num_interdex_groups);
+    auto index = get_interdex_group(pair.second, s_cls_to_interdex_group,
+                                    s_num_interdex_groups);
     if (m_spec.interdex_grouping == InterDexGroupingType::NON_HOT_SET) {
       if (index == 0) {
         // Drop mergeables that are in the hot set.
@@ -824,7 +854,7 @@ std::vector<ConstTypeHashSet> Model::group_by_interdex_set(
       }
     } else if (m_spec.interdex_grouping ==
                InterDexGroupingType::NON_ORDERED_SET) {
-      if (index < num_interdex_groups - 1) {
+      if (index < s_num_interdex_groups - 1) {
         // Only merge the last group which are not in ordered set, drop other
         // mergeables.
         continue;
@@ -881,7 +911,7 @@ void Model::flatten_shapes(const MergerType& merger,
 
     for (const TypeSet* intf_set : intf_sets) {
       const TypeSet& implementors = shape_hierarchy.groups.at(*intf_set);
-      for (auto& pair : group_per_dex(implementors, m_spec)) {
+      for (auto& pair : group_per_dex(m_spec.per_dex_grouping, implementors)) {
         auto dex_id = pair.first;
         auto group_values = pair.second;
         if (all_interdex_groups.size() > 1) {
@@ -1222,30 +1252,18 @@ void Model::distribute_virtual_methods(
       // the emitted code is correct. Virtual method refs can be rebound at a
       // later point.
       auto top_def = virt_scope->methods[0];
-      // We emit invoke_super agaist the overridden method by default in the
-      // virtual dispatch. A non-external abstract method is not a valid target
-      // for invoke-super, so we skip it.
-      const auto get_initial_overridden = [](DexMethod* meth) -> DexMethod* {
-        if (!meth->is_def()) {
-          return nullptr;
-        }
-        if (!meth->is_external() && is_abstract(meth)) {
-          return nullptr;
-        }
-        return meth;
-      };
-      DexMethod* overridden_meth = get_initial_overridden(top_def.first);
+      DexMethod* overridden_meth =
+          top_def.first->is_def() ? top_def.first : nullptr;
       const auto update_overridden = [&merger, &overridden_meth](
                                          const VirtualMethod& top_def,
                                          DexMethod* virt_meth) {
         always_assert(virt_meth->is_def());
-        if (overridden_meth == nullptr &&
-            (is_top_def(top_def.second) || is_miranda(top_def.second))) {
+        if (overridden_meth == nullptr && is_miranda(top_def.second)) {
           const auto* cls = virt_meth->get_class();
           const auto& mergeables = merger.mergeables;
           always_assert(!mergeables.empty());
           const auto* a_mergeable = *mergeables.begin();
-          if (cls != a_mergeable && type::is_subclass(cls, a_mergeable)) {
+          if (type::is_subclass(cls, a_mergeable)) {
             overridden_meth = virt_meth;
             TRACE(CLMG, 9, "Update overridden_meth to %s for top_def %s",
                   SHOW(virt_meth), SHOW(top_def.first));
@@ -1256,10 +1274,6 @@ void Model::distribute_virtual_methods(
       for (const auto& pair : virt_scope->methods) {
         auto* virt_meth = pair.first;
         if (!virt_meth->is_def()) {
-          continue;
-        }
-        if (!virt_meth->is_external() && is_abstract(virt_meth)) {
-          // Skip abstract overridden
           continue;
         }
         if (merger.mergeables.count(virt_meth->get_class()) == 0) {
@@ -1426,8 +1440,7 @@ std::string Model::print(const DexType* type, int nest) const {
       if (meth) {
         ss << "# " << show_deobfuscated(meth) << " ("
            << meth->get_name()->c_str() << ") ["
-           << (meth->get_code() ? meth->get_code()->cfg().num_opcodes() : 0)
-           << "]";
+           << (meth->get_code() ? meth->get_code()->count_opcodes() : 0) << "]";
       } else {
         ss << "# missing";
       }
@@ -1491,7 +1504,7 @@ std::string Model::print(const DexType* type, int nest) const {
 
 Model Model::build_model(const Scope& scope,
                          const DexStoresVector& stores,
-                         ConfigFiles& conf,
+                         const ConfigFiles& conf,
                          const ModelSpec& spec,
                          const TypeSystem& type_system,
                          const RefChecker& refchecker) {
@@ -1522,10 +1535,6 @@ ModelStats& ModelStats::operator+=(const ModelStats& stats) {
     m_interdex_groups[pair.first] += pair.second;
   }
 
-  for (const auto& pair : stats.m_merging_size_counts) {
-    m_merging_size_counts[pair.first] += pair.second;
-  }
-
   m_approx_stats += stats.m_approx_stats;
 
   m_num_classes_merged += stats.m_num_classes_merged;
@@ -1551,15 +1560,6 @@ void ModelStats::update_redex_stats(const std::string& prefix,
                     group_size);
     TRACE(CLMG, 3, "InterDex Group %s_%u %zu", prefix.c_str(), group_id,
           group_size);
-  }
-
-  for (auto& pair : m_merging_size_counts) {
-    auto merging_size = pair.first;
-    auto count = pair.second;
-    mgr.incr_metric(prefix + "_merging_size_" + std::to_string(merging_size),
-                    count);
-    TRACE(CLMG, 3, "Merging size %s_%zu %zu", prefix.c_str(), merging_size,
-          count);
   }
 
   m_approx_stats.update_redex_stats(prefix, mgr);

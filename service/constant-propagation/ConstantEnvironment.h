@@ -20,12 +20,9 @@
 
 #include "ConstantArrayDomain.h"
 #include "ControlFlow.h"
-#include "DisjointUnionWithSignedConstantDomain.h"
-#include "NewObjectDomain.h"
 #include "ObjectDomain.h"
 #include "ObjectWithImmutAttr.h"
 #include "SignedConstantDomain.h"
-#include "SingletonObject.h"
 
 /*
  * The definitions in this file serve to abstractly model:
@@ -37,6 +34,15 @@
 /*****************************************************************************
  * Abstract stack / environment values.
  *****************************************************************************/
+
+/*
+ * This represents an object that is uniquely referenced by a single static
+ * field. This enables us to compare these objects easily -- we can determine
+ * whether two different SingletonObjectDomain elements are equal just based
+ * on their representation in the abstract environment, without needing to
+ * check if they are pointing to the same object in the abstract heap.
+ */
+using SingletonObjectDomain = sparta::ConstantAbstractDomain<const DexField*>;
 
 using IntegerSetDomain = sparta::HashedSetAbstractDomain<int64_t>;
 
@@ -55,42 +61,18 @@ using ConstantInjectionIdDomain = sparta::ConstantAbstractDomain<int32_t>;
 using AbstractHeapPointer =
     sparta::ConstantAbstractDomain<const IRInstruction*>;
 
-/*
- * Identifies domains whose members are compatible with NEZ.
- */
-class is_object_visitor : public boost::static_visitor<bool> {
- public:
-  bool operator()(const SingletonObjectDomain&) const { return true; }
-
-  bool operator()(const StringDomain&) const { return true; }
-
-  bool operator()(const ConstantClassObjectDomain&) const { return true; }
-
-  bool operator()(const ObjectWithImmutAttrDomain&) const { return true; }
-
-  bool operator()(const AbstractHeapPointer&) const { return true; }
-
-  bool operator()(const NewObjectDomain&) const { return true; }
-
-  template <typename Domain>
-  bool operator()(const Domain&) const {
-    return false;
-  }
-};
-
 // TODO: Refactor so that we don't have to list every single possible
 // sub-Domain here.
 using ConstantValue =
-    DisjointUnionWithSignedConstantDomain<is_object_visitor,
-                                          SingletonObjectDomain,
-                                          IntegerSetDomain,
-                                          StringSetDomain,
-                                          StringDomain,
-                                          ConstantClassObjectDomain,
-                                          ConstantInjectionIdDomain,
-                                          ObjectWithImmutAttrDomain,
-                                          NewObjectDomain,
-                                          AbstractHeapPointer>;
+    sparta::DisjointUnionAbstractDomain<SignedConstantDomain,
+                                        SingletonObjectDomain,
+                                        IntegerSetDomain,
+                                        StringSetDomain,
+                                        StringDomain,
+                                        ConstantClassObjectDomain,
+                                        ConstantInjectionIdDomain,
+                                        ObjectWithImmutAttrDomain,
+                                        AbstractHeapPointer>;
 
 struct ConstantValueDefaultValue {
   ConstantValue operator()() { return SignedConstantDomain(0); }
@@ -317,3 +299,8 @@ class ReturnState final
 
   ConstantHeap get_heap() { return ReducedProductAbstractDomain::get<1>(); }
 };
+
+// TODO: Instead of this custom meet function, the ConstantValue should get a
+// custom meet AND JOIN that knows about the relationship of NEZ and certain
+// non-null custom object domains.
+ConstantValue meet(const ConstantValue& left, const ConstantValue& right);

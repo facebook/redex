@@ -34,7 +34,6 @@ class PrintMembersPass : public Pass {
          "Only print these methods");
   }
 
-  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:

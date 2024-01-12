@@ -25,8 +25,6 @@ using namespace std::string_literals;
 
 namespace {
 
-constexpr const char* CLASS_MARKER_DELIMITER = "DexEndMarker";
-
 class StringTabSplitter {
  private:
   std::string_view m_line;
@@ -560,37 +558,4 @@ void ConfigFiles::set_class_lists(
     std::unordered_map<std::string, std::vector<std::string>> l) {
   m_class_lists = std::move(l);
   m_load_class_lists_attempted = true;
-}
-
-void ConfigFiles::build_cls_interdex_groups() {
-  const auto& interdex_order = get_coldstart_classes();
-  if (interdex_order.empty()) {
-    // No grouping based on interdex.
-    m_num_interdex_groups = 0;
-    return;
-  }
-
-  size_t group_id = 0;
-  for (auto it = interdex_order.begin(); it != interdex_order.end(); ++it) {
-    const auto& cls_name = *it;
-    bool is_marker_delim =
-        cls_name.find(CLASS_MARKER_DELIMITER) != std::string::npos;
-
-    if (is_marker_delim || std::next(it) == interdex_order.end()) {
-      group_id++;
-
-      if (is_marker_delim) {
-        continue;
-      }
-    }
-
-    DexType* type = DexType::get_type(cls_name);
-    if (type && m_cls_to_interdex_group.count(type) == 0) {
-      m_cls_to_interdex_group[type] = group_id;
-    }
-  }
-
-  // group_id + 1 represents the number of groups (considering the classes
-  // outside of the interdex order as a group on its own).
-  m_num_interdex_groups = group_id + 1;
 }

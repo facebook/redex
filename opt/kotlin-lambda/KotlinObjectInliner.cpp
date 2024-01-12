@@ -164,7 +164,7 @@ bool is_valid_init(DexMethod* meth) {
 // 5. CLS is final and extends J_L_O
 // If this is a candidate, return outer class. Return nullptr otherwise.
 DexClass* candidate_for_companion_inlining(DexClass* cls) {
-  if (root(cls) || !can_rename(cls) || !can_delete(cls) ||
+  if (is_native(cls) || root(cls) || !can_rename(cls) || !can_delete(cls) ||
       cls->rstate.is_referenced_by_resource_xml() || cls->is_external()) {
     return nullptr;
   }

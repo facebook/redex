@@ -3072,9 +3072,39 @@ static SortMode make_sort_bytecode(const std::string& sort_bytecode) {
   }
 }
 
-std::vector<SortMode> get_code_sort_mode(ConfigFiles& conf,
-                                         const std::string& store_name) {
+enhanced_dex_stats_t write_classes_to_dex(
+    const std::string& filename,
+    DexClasses* classes,
+    std::shared_ptr<GatheredTypes> gtypes,
+    LocatorIndex* locator_index,
+    size_t store_number,
+    const std::string* store_name,
+    size_t dex_number,
+    ConfigFiles& conf,
+    PositionMapper* pos_mapper,
+    DebugInfoKind debug_info_kind,
+    std::unordered_map<DexMethod*, uint64_t>* method_to_id,
+    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
+    IODIMetadata* iodi_metadata,
+    const std::string& dex_magic,
+    const DexOutputConfig& dex_output_config,
+    int min_sdk) {
   const JsonWrapper& json_cfg = conf.get_json_config();
+  bool force_single_dex = json_cfg.get("force_single_dex", false);
+  if (force_single_dex) {
+    always_assert_log(dex_number == 0, "force_single_dex requires one dex");
+  }
+  auto sort_strings = json_cfg.get("string_sort_mode", std::string());
+  SortMode string_sort_mode = SortMode::DEFAULT;
+  if (sort_strings == "class_strings") {
+    string_sort_mode = SortMode::CLASS_STRINGS;
+  } else if (sort_strings == "class_order") {
+    string_sort_mode = SortMode::CLASS_ORDER;
+  }
+
+  auto interdex_config = json_cfg.get("InterDexPass", Json::Value());
+  auto normal_primary_dex =
+      interdex_config.get("normal_primary_dex", false).asBool();
   auto sort_bytecode_cfg = json_cfg.get("bytecode_sort_mode", Json::Value());
   std::vector<SortMode> code_sort_mode;
 
@@ -3094,7 +3124,7 @@ std::vector<SortMode> get_code_sort_mode(ConfigFiles& conf,
             "method_similarity_order");
   }
   if (similarity_config == nullptr || similarity_config->disable ||
-      similarity_config->store_name_to_disable == store_name) {
+      similarity_config->store_name_to_disable == *store_name) {
     TRACE(OPUT, 3, "[write_classes_to_dex] disable_method_similarity_order");
     code_sort_mode.erase(
         std::remove_if(
@@ -3105,50 +3135,6 @@ std::vector<SortMode> get_code_sort_mode(ConfigFiles& conf,
   if (code_sort_mode.empty()) {
     code_sort_mode.push_back(SortMode::DEFAULT);
   }
-
-  return code_sort_mode;
-}
-
-SortMode get_string_sort_mode(ConfigFiles& conf) {
-  const JsonWrapper& json_cfg = conf.get_json_config();
-  auto sort_strings = json_cfg.get("string_sort_mode", std::string());
-  SortMode string_sort_mode = SortMode::DEFAULT;
-  if (sort_strings == "class_strings") {
-    string_sort_mode = SortMode::CLASS_STRINGS;
-  } else if (sort_strings == "class_order") {
-    string_sort_mode = SortMode::CLASS_ORDER;
-  }
-  return string_sort_mode;
-}
-
-enhanced_dex_stats_t write_classes_to_dex(
-    const std::string& filename,
-    DexClasses* classes,
-    std::shared_ptr<GatheredTypes> gtypes,
-    LocatorIndex* locator_index,
-    size_t store_number,
-    const std::string* store_name,
-    size_t dex_number,
-    ConfigFiles& conf,
-    PositionMapper* pos_mapper,
-    DebugInfoKind debug_info_kind,
-    std::unordered_map<DexMethod*, uint64_t>* method_to_id,
-    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
-    IODIMetadata* iodi_metadata,
-    const std::string& dex_magic,
-    const DexOutputConfig& dex_output_config,
-    int min_sdk,
-    const std::vector<SortMode>& code_sort_mode,
-    SortMode string_sort_mode) {
-  const JsonWrapper& json_cfg = conf.get_json_config();
-  bool force_single_dex = json_cfg.get("force_single_dex", false);
-  if (force_single_dex) {
-    always_assert_log(dex_number == 0, "force_single_dex requires one dex");
-  }
-
-  auto interdex_config = json_cfg.get("InterDexPass", Json::Value());
-  auto normal_primary_dex =
-      interdex_config.get("normal_primary_dex", false).asBool();
 
   TRACE(OPUT, 2, "[write_classes_to_dex][filename] %s", filename.c_str());
 

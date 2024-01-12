@@ -275,7 +275,6 @@ uint16_t DexInstruction::src(int i) const {
     case 4:
       return (m_opcode >> 8) & 0xf;
     }
-    not_reached();
   case FMT_f41c_s:
     redex_assert(i == 0);
     return m_arg[0];
@@ -404,7 +403,6 @@ DexInstruction* DexInstruction::set_src(int i, uint16_t vreg) {
       m_opcode = (m_opcode & 0xf0ff) | (vreg << 8);
       return this;
     }
-    not_reached();
   case FMT_f41c_s:
     redex_assert(i == 0);
     m_arg[0] = vreg;

@@ -74,8 +74,7 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
   bool has_type_tag = m_spec.has_type_tag();
   std::vector<std::pair<IRInstruction*, const DexType*>>
       const_classes_to_verify;
-  auto& cfg = code->cfg();
-  for (const auto& mie : InstructionIterable(cfg)) {
+  for (const auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
 
     // If we have a pure method ref on a mergeable type (the class component is
@@ -155,7 +154,8 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
     return non_mergeables;
   }
 
-  live_range::MoveAwareChains chains(cfg);
+  cfg::ScopedCFG cfg(code);
+  live_range::MoveAwareChains chains(*cfg);
   live_range::DefUseChains du_chains = chains.get_def_use_chains();
 
   for (const auto& pair : const_classes_to_verify) {

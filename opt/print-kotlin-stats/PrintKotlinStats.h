@@ -64,15 +64,12 @@ class PrintKotlinStats : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
-        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
-        {UltralightCodePatterns, Preserves},
     };
   }
 
   void setup();
   void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
   Stats handle_method(DexMethod* method);
   Stats handle_class(DexClass* cls);

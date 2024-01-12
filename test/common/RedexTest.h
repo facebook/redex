@@ -144,19 +144,6 @@ struct RedexIntegrationTest : public RedexTest {
   }
 
   template <typename C>
-  DexMethod* find_dmethod(const C& clazzes,
-                          const char* cls,
-                          const char* rtype,
-                          const char* name,
-                          const std::vector<const char*>& args) {
-    const auto* c = find_class(clazzes, cls);
-    const auto& dmethods = c->get_dmethods();
-    const auto it = std::find(dmethods.begin(), dmethods.end(),
-                              DexMethod::make_method(cls, name, rtype, args));
-    return it == dmethods.end() ? nullptr : *it;
-  }
-
-  template <typename C>
   DexMethod* find_vmethod(const C& clazzes,
                           const char* cls,
                           const char* rtype,

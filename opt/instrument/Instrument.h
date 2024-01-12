@@ -44,7 +44,6 @@ class InstrumentPass : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Requires},
-        {NoResolvablePureRefs, Preserves},
         {RenameClass, Preserves},
     };
   }
@@ -53,7 +52,6 @@ class InstrumentPass : public Pass {
   void eval_pass(DexStoresVector& stores,
                  ConfigFiles& conf,
                  PassManager& mgr) override;
-  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   // Helper functions for both method and block instrumentations.

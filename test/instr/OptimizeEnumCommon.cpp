@@ -14,7 +14,7 @@ std::set<BranchCase> collect_const_branch_cases(DexMethodRef* method_ref) {
   method->balloon();
 
   auto* code = method->get_code();
-  code->build_cfg();
+  code->build_cfg(/* editable */ true);
   cfg::ControlFlowGraph& cfg = code->cfg();
   cfg.calculate_exit_block();
 

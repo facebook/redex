@@ -23,7 +23,6 @@ class RemoveBuilderPatternPass : public Pass {
     using namespace redex_properties::names;
     return {
         {HasSourceBlocks, Preserves},
-        {NoResolvablePureRefs, Preserves},
     };
   }
 
@@ -31,6 +30,7 @@ class RemoveBuilderPatternPass : public Pass {
 
   void bind_config() override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  bool is_editable_cfg_friendly() override { return true; }
 
   std::unique_ptr<Pass> clone(const std::string& new_name) const override {
     return std::make_unique<RemoveBuilderPatternPass>(new_name);

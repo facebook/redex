@@ -102,8 +102,8 @@ TEST_F(DexOutputTest, TEST_SIMILARITY_ORDERER_PERF_SENSITIVE) {
   config_files.parse_global_config();
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
 
-  (*classes)[1]->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
-  (*classes)[2]->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
+  (*classes)[1]->set_perf_sensitive(true);
+  (*classes)[2]->set_perf_sensitive(true);
 
   auto scope = build_class_scope(stores);
 
@@ -221,8 +221,8 @@ TEST_F(DexOutputTest, TEST_COMPRESSION_ORDERER_PERF_SENSITIVE) {
   config_files.parse_global_config();
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
 
-  (*classes)[1]->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
-  (*classes)[2]->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
+  (*classes)[1]->set_perf_sensitive(true);
+  (*classes)[2]->set_perf_sensitive(true);
 
   auto scope = build_class_scope(stores);
 
@@ -282,8 +282,8 @@ TEST_F(DexOutputTest, TEST_COLDSTART_ORDER) {
   config_files.parse_global_config();
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
 
-  (*classes)[1]->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
-  (*classes)[2]->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
+  (*classes)[1]->set_perf_sensitive(true);
+  (*classes)[2]->set_perf_sensitive(true);
 
   DexMethod::make_method("LDexOutputTest2$Class;.someRandomMethodNotInDex:(I)I")
       ->make_concrete(ACC_PUBLIC, false);
@@ -340,8 +340,8 @@ TEST_F(DexOutputTest, TEST_COLDSTART_ORDER_EMPTY_FILE) {
   config_files.parse_global_config();
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
 
-  (*classes)[1]->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
-  (*classes)[2]->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
+  (*classes)[1]->set_perf_sensitive(true);
+  (*classes)[2]->set_perf_sensitive(true);
 
   auto scope = build_class_scope(stores);
 

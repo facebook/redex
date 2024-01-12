@@ -104,6 +104,9 @@ void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
   }
 }
 
+bool is_zero(boost::optional<SignedConstantDomain> src) {
+  return src && src->get_constant() && *(src->get_constant()) == 0;
+}
 } // namespace
 
 namespace constant_propagation {
@@ -328,8 +331,8 @@ bool PrimitiveAnalyzer::analyze_const(const IRInstruction* insn,
 
 bool PrimitiveAnalyzer::analyze_check_cast(const IRInstruction* insn,
                                            ConstantEnvironment* env) {
-  auto src = env->get(insn->src(0));
-  if (src.is_zero()) {
+  auto src = env->get(insn->src(0)).maybe_get<SignedConstantDomain>();
+  if (is_zero(src)) {
     env->set(RESULT_REGISTER, SignedConstantDomain(0));
     return true;
   }
@@ -338,8 +341,8 @@ bool PrimitiveAnalyzer::analyze_check_cast(const IRInstruction* insn,
 
 bool PrimitiveAnalyzer::analyze_instance_of(const IRInstruction* insn,
                                             ConstantEnvironment* env) {
-  auto src = env->get(insn->src(0));
-  if (src.is_zero()) {
+  auto src = env->get(insn->src(0)).maybe_get<SignedConstantDomain>();
+  if (is_zero(src)) {
     env->set(RESULT_REGISTER, SignedConstantDomain(0));
     return true;
   }
@@ -817,90 +820,6 @@ bool StringAnalyzer::analyze_invoke(const IRInstruction* insn,
   return false;
 }
 
-bool NewObjectAnalyzer::ignore_type(
-    const ImmutableAttributeAnalyzerState* state, DexType* type) {
-  // Avoid types that may interact other more specialized object domains.
-  if (state->may_be_initialized_type(type) ||
-      type == type::java_lang_String() || type == type::java_lang_Boolean()) {
-    return true;
-  }
-  auto cls = type_class(type);
-  return cls && is_enum(cls);
-}
-
-bool NewObjectAnalyzer::analyze_new_instance(
-    const ImmutableAttributeAnalyzerState* state,
-    const IRInstruction* insn,
-    ConstantEnvironment* env) {
-  if (ignore_type(state, insn->get_type())) {
-    return false;
-  }
-  env->set(RESULT_REGISTER, NewObjectDomain(insn));
-  return true;
-}
-
-bool NewObjectAnalyzer::analyze_filled_new_array(
-    const ImmutableAttributeAnalyzerState* state,
-    const IRInstruction* insn,
-    ConstantEnvironment* env) {
-  if (ignore_type(state, insn->get_type())) {
-    return false;
-  }
-  auto array_length = SignedConstantDomain(insn->srcs_size());
-  env->set(RESULT_REGISTER, NewObjectDomain(insn, array_length));
-  return true;
-}
-
-bool NewObjectAnalyzer::analyze_new_array(
-    const ImmutableAttributeAnalyzerState* state,
-    const IRInstruction* insn,
-    ConstantEnvironment* env) {
-  if (ignore_type(state, insn->get_type())) {
-    return false;
-  }
-  boost::optional<SignedConstantDomain> array_length_opt =
-      env->get<SignedConstantDomain>(insn->src(0));
-  SignedConstantDomain array_length =
-      array_length_opt ? *array_length_opt : SignedConstantDomain::top();
-  array_length.meet_with(SignedConstantDomain(sign_domain::Interval::GEZ));
-  env->set(RESULT_REGISTER, NewObjectDomain(insn, array_length));
-  return true;
-}
-
-bool NewObjectAnalyzer::analyze_instance_of(
-    const ImmutableAttributeAnalyzerState*,
-    const IRInstruction* insn,
-    ConstantEnvironment* env) {
-  auto new_obj_opt = env->get(insn->src(0)).maybe_get<NewObjectDomain>();
-  if (!new_obj_opt) {
-    return false;
-  }
-  auto obj_type = new_obj_opt->get_type();
-  if (!obj_type) {
-    return false;
-  }
-  auto cls = type_class(type::get_element_type_if_array(obj_type));
-  if (!cls || (cls->is_external() && obj_type != insn->get_type())) {
-    return false;
-  }
-  auto res = type::check_cast(obj_type, insn->get_type());
-  env->set(RESULT_REGISTER, SignedConstantDomain(res ? 1 : 0));
-  return true;
-}
-
-bool NewObjectAnalyzer::analyze_array_length(
-    const ImmutableAttributeAnalyzerState*,
-    const IRInstruction* insn,
-    ConstantEnvironment* env) {
-  auto new_obj_opt = env->get(insn->src(0)).maybe_get<NewObjectDomain>();
-  if (!new_obj_opt) {
-    return false;
-  }
-  auto array_length = new_obj_opt->get_array_length();
-  env->set(RESULT_REGISTER, SignedConstantDomain(array_length));
-  return true;
-}
-
 ImmutableAttributeAnalyzerState::Initializer&
 ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
                                                  DexMethod* attr) {
@@ -920,7 +839,6 @@ ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
                   });
       });
   redex_assert(new_initializer);
-  initialized_types.insert(initialized_type(initialize_method));
   return *new_initializer;
 }
 
@@ -943,7 +861,6 @@ ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
                   });
       });
   redex_assert(new_initializer);
-  initialized_types.insert(initialized_type(initialize_method));
   return *new_initializer;
 }
 
@@ -1018,28 +935,6 @@ DexType* ImmutableAttributeAnalyzerState::initialized_type(
   return method::is_init(initialize_method)
              ? initialize_method->get_class()
              : initialize_method->get_proto()->get_rtype();
-}
-
-bool ImmutableAttributeAnalyzerState::may_be_initialized_type(
-    DexType* type) const {
-  auto res = may_be_initialized_types.get(type, std::nullopt);
-  if (!res) {
-    res = false;
-    for (auto* initialized_type : initialized_types) {
-      if (type::check_cast(type, initialized_type)) {
-        res = true;
-        break;
-      }
-    }
-    may_be_initialized_types.update(type, [&](auto*, auto& value, bool exists) {
-      if (exists) {
-        always_assert(value == res);
-      } else {
-        value = res;
-      }
-    });
-  }
-  return *res;
 }
 
 bool ImmutableAttributeAnalyzer::analyze_iget(
@@ -1200,12 +1095,12 @@ void semantically_inline_method(
     const IRInstruction* insn,
     const InstructionAnalyzer<ConstantEnvironment>& analyzer,
     ConstantEnvironment* env) {
-  always_assert(callee_code->editable_cfg_built());
+  callee_code->build_cfg(/* editable */ false);
   auto& cfg = callee_code->cfg();
 
   // Set up the environment at entry into the callee.
   ConstantEnvironment call_entry_env;
-  auto load_params = cfg.get_param_instructions();
+  auto load_params = callee_code->get_param_instructions();
   auto load_params_it = InstructionIterable(load_params).begin();
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     call_entry_env.set(load_params_it->insn->dest(), env->get(insn->src(i)));
@@ -1228,7 +1123,6 @@ void semantically_inline_method(
 
 ReturnState collect_return_state(
     IRCode* code, const intraprocedural::FixpointIterator& fp_iter) {
-  always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   auto return_state = ReturnState::bottom();
   for (cfg::Block* b : cfg.blocks()) {
@@ -1383,8 +1277,7 @@ void FixpointIterator::analyze_no_throw(const IRInstruction* insn,
   }
   auto src = insn->src(*src_index);
   auto value = env->get(src);
-  value.meet_with(SignedConstantDomain(sign_domain::Interval::NEZ));
-  env->set(src, value);
+  env->set(src, meet(value, SignedConstantDomain(sign_domain::Interval::NEZ)));
 }
 
 /*
@@ -1482,20 +1375,20 @@ void FixpointIterator::analyze_if(const IRInstruction* insn,
   auto right =
       insn->srcs_size() > 1 ? env->get(insn->src(1)) : SignedConstantDomain(0);
   const IfZeroMeetWith& izmw = if_zero_meet_with.at(op);
-  if (right.is_zero()) {
+  if (right == SignedConstantDomain(0)) {
     env->set(insn->src(0),
-             left.meet(SignedConstantDomain(izmw.right_zero_meet_interval)));
+             meet(left, SignedConstantDomain(izmw.right_zero_meet_interval)));
     return;
   }
-  if (left.is_zero()) {
+  if (left == SignedConstantDomain(0)) {
     env->set(insn->src(1),
-             right.meet(SignedConstantDomain(*izmw.left_zero_meet_interval)));
+             meet(right, SignedConstantDomain(*izmw.left_zero_meet_interval)));
     return;
   }
 
   switch (op) {
   case OPCODE_IF_EQ: {
-    auto refined_value = left.meet(right);
+    auto refined_value = meet(left, right);
     env->set(insn->src(0), refined_value);
     env->set(insn->src(1), refined_value);
     break;

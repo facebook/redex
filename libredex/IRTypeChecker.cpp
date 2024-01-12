@@ -1566,8 +1566,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     break;
   }
   case IOPCODE_INIT_CLASS:
-  case IOPCODE_INJECTION_ID:
-  case IOPCODE_UNREACHABLE: {
+  case IOPCODE_INJECTION_ID: {
     break;
   }
   }

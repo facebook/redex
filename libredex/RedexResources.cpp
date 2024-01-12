@@ -358,10 +358,10 @@ void AndroidResources::rename_classes_in_layouts(
       /*push_tasks_while_running=*/true);
 }
 
-std::unordered_set<std::string_view> multimap_values_to_set(
+std::set<std::string> multimap_values_to_set(
     const std::unordered_multimap<std::string, std::string>& map,
     const std::string& key) {
-  std::unordered_set<std::string_view> result;
+  std::set<std::string> result;
   auto range = map.equal_range(key);
   for (auto it = range.first; it != range.second; ++it) {
     result.emplace(it->second);

@@ -88,6 +88,7 @@ TypeSet collect_reflected_mergeables(
   if (!code) {
     return non_mergeables;
   }
+
   std::unique_ptr<reflection::ReflectionAnalysis> analysis =
       std::make_unique<reflection::ReflectionAnalysis>(
           /* dex_method */ method,
@@ -99,8 +100,7 @@ TypeSet collect_reflected_mergeables(
     return non_mergeables;
   }
 
-  auto& cfg = code->cfg();
-  for (const auto& mie : cfg::InstructionIterable(cfg)) {
+  for (const auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     auto aobj = analysis->get_result_abstract_object(insn);
 

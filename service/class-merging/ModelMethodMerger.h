@@ -72,12 +72,17 @@ class ModelMethodMerger {
     m_method_stats.print(model_name, num_mergeables);
   }
 
+  // Helpers
+  dispatch::DispatchMethod create_dispatch_method(
+      const dispatch::Spec& spec, const std::vector<DexMethod*>& targets);
+  static void inline_dispatch_entries(DexMethod* dispatch);
+  static void sink_common_ctor_to_return_block(DexMethod* dispatch);
+  static std::vector<IRInstruction*> make_string_const(reg_t dest,
+                                                       const std::string& val);
   static std::vector<IRInstruction*> make_check_cast(DexType* type,
                                                      reg_t src_dest);
 
   TypeToMethodMap get_method_dedup_map() { return m_method_dedup_map; }
-  dispatch::DispatchMethod create_dispatch_method(
-      const dispatch::Spec& spec, const std::vector<DexMethod*>& targets);
 
  private:
   const Scope& m_scope;
@@ -124,16 +129,6 @@ class ModelMethodMerger {
   DexType* get_merger_type(DexType* mergeable);
 
   std::string get_method_signature_string(DexMethod* meth);
-
-  // Helpers
-  static void inline_dispatch_entries(
-      DexType* merger_type,
-      DexMethod* dispatch,
-      std::vector<std::pair<DexType*, DexMethod*>>&
-          not_inlined_dispatch_entries);
-  static void sink_common_ctor_to_return_block(DexMethod* dispatch);
-  static std::vector<IRInstruction*> make_string_const(reg_t dest,
-                                                       const std::string& val);
 };
 
 } // namespace class_merging

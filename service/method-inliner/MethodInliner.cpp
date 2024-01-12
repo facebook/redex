@@ -347,7 +347,7 @@ SameImplementationMap get_same_implementation_map(
       return true;
     };
     for (auto overriding_method : overriding_methods) {
-      if (!method::may_be_invoke_target(overriding_method)) {
+      if (is_abstract(overriding_method)) {
         continue;
       }
       if (!overriding_method->get_code()) {
@@ -493,8 +493,7 @@ void gather_true_virtual_methods(
         if (callee == nullptr) {
           // There are some invoke-virtual call on methods whose def are
           // actually in interface.
-          callee = resolve_method(insn->get_method(),
-                                  MethodSearch::InterfaceVirtual);
+          callee = resolve_method(insn->get_method(), MethodSearch::Interface);
         }
         if (callee == nullptr) {
           continue;
@@ -503,17 +502,13 @@ void gather_true_virtual_methods(
           // Not true virtual, no need to continue;
           continue;
         }
-        auto static_base_type = insn_method->get_class();
         if (can_have_unknown_implementations(method_override_graph, callee)) {
           add_other_call_site(callee);
           if (insn->opcode() != OPCODE_INVOKE_SUPER) {
-            auto overriding_methods = mog::get_overriding_methods(
-                method_override_graph, callee, /* include_interfaces */ false,
-                static_base_type);
+            auto overriding_methods =
+                mog::get_overriding_methods(method_override_graph, callee);
             for (auto overriding_method : overriding_methods) {
-              if (method::may_be_invoke_target(overriding_method)) {
-                add_other_call_site(overriding_method);
-              }
+              add_other_call_site(overriding_method);
             }
           }
           continue;
@@ -533,12 +528,10 @@ void gather_true_virtual_methods(
           same_implementation_invokes.emplace(insn, it->second.get());
           continue;
         }
-        auto overriding_methods = mog::get_overriding_methods(
-            method_override_graph, callee, /* include_interfaces */ false,
-            static_base_type);
-        std20::erase_if(overriding_methods, [&](auto* m) {
-          return !method::may_be_invoke_target(m);
-        });
+        auto overriding_methods =
+            mog::get_overriding_methods(method_override_graph, callee);
+        std20::erase_if(overriding_methods,
+                        [&](auto* m) { return is_abstract(m); });
         if (overriding_methods.empty()) {
           // There is no override for this method
           add_monomorphic_call_site(method, insn, callee);

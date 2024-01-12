@@ -9,7 +9,6 @@
 
 #include "ApkResources.h"
 #include "DedupResourceVerifyHelper.h"
-#include "utils/Serialize.h"
 
 namespace {
 
@@ -45,7 +44,7 @@ TEST_F(PostVerify, ApkDedupResourceTest) {
   auto& pool = res_table.get_table_snapshot().get_global_strings();
   std::unordered_set<std::string> global_strings;
   for (int i = 0; i < pool.size(); i++) {
-    global_strings.emplace(arsc::get_string_from_pool(pool, i));
+    global_strings.emplace(apk::get_string_from_pool(pool, i));
   }
   for (const auto& s : KEPT_FILE_PATHS) {
     EXPECT_EQ(global_strings.count(s), 1)

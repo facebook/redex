@@ -45,7 +45,6 @@ enum class B : I {
   B0,
   B1,
   B2;
-
   override fun getVal(): Int {
     return 42
   }
@@ -111,7 +110,6 @@ enum class F {
   F0,
   F1,
   F2;
-
   companion object {
     fun getFByName(name: String): F = valueOf(name.toUpperCase())
   }

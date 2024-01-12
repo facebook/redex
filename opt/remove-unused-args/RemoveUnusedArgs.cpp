@@ -138,8 +138,7 @@ static bool compare_weighted_dexprotos(const std::pair<DexProto*, size_t>& a,
   return compare_dexprotos(a.first, b.first);
 }
 
-template <typename Collection>
-static bool any_external(const Collection& methods) {
+static bool any_external(const std::unordered_set<const DexMethod*>& methods) {
   for (auto method : methods) {
     auto cls = type_class(method->get_class());
     if (cls == nullptr || cls->is_external()) {
@@ -747,7 +746,7 @@ std::pair<size_t, LocalDce::Stats> RemoveArgs::update_callsites() {
 
         return callsite_args_removed;
       });
-  return std::make_pair(cnt, local_dce_stats);
+  return std::make_pair(cnt, std::move(local_dce_stats));
 }
 
 void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
