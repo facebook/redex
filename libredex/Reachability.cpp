@@ -483,6 +483,8 @@ void TransitiveClosureMarkerWorker::push_if_class_instantiable(
       .update(cls, [&](auto*, auto& map, bool) {
         auto ptr = mrefs_gatherer.get();
         auto p = map.emplace(method, std::move(mrefs_gatherer));
+        // Make sure that moved-from value is a well-defined null.
+        mrefs_gatherer = nullptr;
         always_assert(ptr == p.first->second.get()); // emplaced or not
         emplaced = p.second;
       });
@@ -506,6 +508,8 @@ void TransitiveClosureMarkerWorker::push_if_method_returning(
       .update(returning_method, [&](auto*, auto& map, bool) {
         auto ptr = mrefs_gatherer.get();
         auto p = map.emplace(method, std::move(mrefs_gatherer));
+        // Make sure that moved-from value is a well-defined null.
+        mrefs_gatherer = nullptr;
         always_assert(ptr == p.first->second.get()); // emplaced or not
         emplaced = p.second;
       });
@@ -564,6 +568,8 @@ void TransitiveClosureMarkerWorker::push_if_instance_method_callable(
       method, [&](auto*, auto& value, bool) {
         always_assert(!value);
         value = std::move(mrefs_gatherer);
+        // Make sure that moved-from value is a well-defined null.
+        mrefs_gatherer = nullptr;
       });
   if (m_shared_state->reachable_aspects->callable_instance_methods.count(
           method)) {
