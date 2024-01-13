@@ -199,4 +199,12 @@ class SwitchEquivEditor {
   // are used later. Replace such a move with a duplicated const-class/move
   // result pseudo to make the logic in SwitchEquivFinder less complicated.
   static size_t simplify_moves(IRCode* code);
+  // SwitchEquivFinder needs to be able to understand all ways to reach a leaf
+  // block to do its job safely. In some rare situations however, a leaf block
+  // could exist, with no instructions that gotos another leaf. Such a block is
+  // hereby called a sled and to support this gracefully, the sled block will be
+  // turned into a duplicate of its successor (attaching its successor's
+  // successors onto itself, etc). This is meant to ensure ExtraLoads state is
+  // accurate.
+  static size_t normalize_sled_blocks(cfg::ControlFlowGraph* cfg, const uint32_t leaf_duplication_threshold);
 };

@@ -11,6 +11,7 @@
 
 #include "IRAssembler.h"
 #include "RedexTest.h"
+#include "SourceBlocks.h"
 #include "SwitchEquivFinder.h"
 #include "SwitchEquivPrerequisites.h"
 
@@ -1185,4 +1186,109 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_with_move_duplicate) {
   EXPECT_EQ(bar_block->begin()->insn->get_type(), bar_type);
   EXPECT_EQ(boo_block->begin()->insn->opcode(), OPCODE_CONST_CLASS);
   EXPECT_EQ(boo_block->begin()->insn->get_type(), bar_type);
+}
+
+TEST_F(SwitchEquivFinderTest,
+       test_switch_with_extra_loads_and_multiple_leaf_preds) {
+  // This is a test case in which non-leafs load surviving const values, with a
+  // leaf block that jumps to another!! This needs to be carefully handled such
+  // that extra loads map is not invalidated. Goal is to make sure a simple case
+  // of an empty leaf block could be supported.
+  setup();
+
+  constexpr uint32_t DEFAULT_LEAF_DUP_THRESHOLD = 50;
+  const auto method_name = "LTesting;.with_source_blocks:(I)I";
+  auto method = DexMethod::make_method(method_name)
+                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  method->set_deobfuscated_name(method_name);
+  {
+    auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (const v1 0)
+      (if-eq v1 v0 :case0)
+
+      (const v1 1)
+      (if-eq v1 v0 :case1)
+
+      (const v1 2)
+      (if-eq v1 v0 :case2)
+
+      (const v1 3)
+      (if-eq v1 v0 :case3)
+
+      (const v3 99)
+      (return v3)
+
+      (:case0)
+      (const v3 100)
+      (return v3)
+
+      (:case1)
+      (invoke-static (v1) "LFoo;.useReg:(I)V")
+      (const v3 101)
+      (return v3)
+
+      (:case2)
+      ; NOTE: this next instruction will get forcibly removed so that we can
+      ; create the appropriate CFG structure under test. I am not sure how to
+      ; force an unsimplified empty block.
+      (const-class "LBar;")
+      ;
+      (goto :case3)
+
+      (:case3)
+      (invoke-static (v1) "LFoo;.useReg:(I)V")
+      (const v3 103)
+      (return v3)
+    )
+)");
+    method->set_code(std::move(code));
+  }
+
+  method->get_code()->build_cfg();
+  auto& cfg = method->get_code()->cfg();
+
+  source_blocks::insert_source_blocks(method, &cfg);
+
+  // Further manipulation to make it the right form like we saw in the wild. All
+  // this is doing is making sure we have a block with a source block but actual
+  // instructions and only 1 successor. Do this by just removing a silly
+  // instruction we put in the s-expr.
+  for (auto it = cfg::InstructionIterator(cfg, true); !it.is_end(); ++it) {
+    if (opcode::is_const_class(it->insn->opcode())) {
+      cfg.remove_insn(it);
+      break;
+    }
+  }
+
+  // This munges the cfg into a supported form; finder would fail otherwise.
+  SwitchEquivEditor::normalize_sled_blocks(&cfg, DEFAULT_LEAF_DUP_THRESHOLD);
+
+  SwitchEquivFinder finder(
+      &cfg, get_first_branch(cfg), 0, DEFAULT_LEAF_DUP_THRESHOLD);
+  EXPECT_TRUE(finder.success());
+  ASSERT_TRUE(finder.are_keys_uniform(SwitchEquivFinder::KeyKind::INT));
+  auto& key_to_case = finder.key_to_case();
+  EXPECT_EQ(key_to_case.size(), 5);
+
+  auto& extra_loads = finder.extra_loads();
+  EXPECT_NE(extra_loads.size(), 0);
+  print_extra_loads(extra_loads);
+
+  auto verify_const_at_block = [&](uint32_t key, int64_t v1_expected_literal) {
+    EXPECT_EQ(key_to_case.count(key), 1)
+        << "Should have a case block for " << key;
+    auto case_block = key_to_case.at(key);
+    EXPECT_EQ(extra_loads.count(case_block), 1)
+        << "Should have an extra load at B" << case_block->id();
+    auto insn = extra_loads.at(case_block).begin()->second;
+    EXPECT_TRUE(insn->has_literal());
+    EXPECT_EQ(insn->get_literal(), v1_expected_literal)
+        << "Wrong const value flowing into B" << case_block->id();
+  };
+
+  verify_const_at_block(1, 1);
+  verify_const_at_block(2, 2);
+  verify_const_at_block(3, 3);
 }

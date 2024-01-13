@@ -13,6 +13,7 @@
 
 #include "CFGMutation.h"
 #include "ConstantPropagationAnalysis.h"
+#include "IRList.h"
 #include "LiveRange.h"
 #include "ReachingDefinitions.h"
 #include "ScopedCFG.h"
@@ -134,6 +135,19 @@ bool pred_creates_extra_loads(const SwitchEquivFinder::ExtraLoads& extra_loads,
     }
   }
   return false;
+}
+
+bool is_sled(cfg::Block* b) {
+  auto only = b->goes_to_only_edge();
+  if (only == nullptr || only == b) {
+    return false;
+  }
+  for (auto it = b->begin(); it != b->end(); it++) {
+    if (it->type != MFLOW_SOURCE_BLOCK) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /*
@@ -679,5 +693,41 @@ size_t SwitchEquivEditor::simplify_moves(IRCode* code) {
     }
   }
   mutation.flush();
+  return changes;
+}
+
+size_t SwitchEquivEditor::normalize_sled_blocks(
+    cfg::ControlFlowGraph* cfg, const uint32_t leaf_duplication_threshold) {
+  size_t changes{0};
+  for (auto b : cfg->blocks()) {
+    if (is_sled(b)) {
+      auto dest = b->goes_to_only_edge();
+      if (!is_sled(dest) && dest->num_opcodes() < leaf_duplication_threshold) {
+        always_assert(cfg->editable());
+        // Make a replacement for b, which is b's source blocks plus dest.
+        TRACE(SWITCH_EQUIV, 2,
+              "Removing sled block B%zu; duplicating instructions from B%zu",
+              b->id(), dest->id());
+        auto replacement = cfg->duplicate_block(dest);
+        for (auto succ : dest->succs()) {
+          cfg->add_edge(replacement, succ->target(), succ->type());
+        }
+        // Put b's source blocks into b's replacement.
+        for (auto it = b->rbegin(); it != b->rend(); ++it) {
+          if (it->type == MFLOW_SOURCE_BLOCK) {
+            auto& source_block = it->src_block;
+            auto it_insert =
+                source_blocks::find_first_block_insert_point(replacement);
+            replacement->insert_before(
+                it_insert, std::make_unique<SourceBlock>(*source_block));
+          }
+        }
+        cfg->replace_block(b, replacement);
+        TRACE(SWITCH_EQUIV, 2, " -> Inserted replacement block B%zu",
+              replacement->id());
+        changes++;
+      }
+    }
+  }
   return changes;
 }

@@ -61,6 +61,17 @@ boost::optional<SwitchMethodPartitioning> SwitchMethodPartitioning::create(
     TRACE(SW, 3, "Prologue blocks do not have expected branching");
     return boost::none;
   }
+
+  // Ensure that cfg forms that are not simplified (due to existence of source
+  // blocks) can get handled gracefully. Use the same leaf duplication strategy
+  // as the finder would.
+  auto blocks_changed = SwitchEquivEditor::normalize_sled_blocks(
+      cfg, DEFAULT_LEAF_DUP_THRESHOLD);
+  if (blocks_changed > 0 && traceEnabled(SW, 2)) {
+    TRACE(SW, 2, "Replaced %zu block(s) to normalize; %s", blocks_changed,
+          SHOW(*cfg));
+  }
+
   auto fixpoint = std::make_shared<cp::intraprocedural::FixpointIterator>(
       *cfg, SwitchEquivFinder::Analyzer());
   fixpoint->run(ConstantEnvironment());
