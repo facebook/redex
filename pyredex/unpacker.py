@@ -612,7 +612,8 @@ def pack_xz(
     check: int = lzma.CHECK_CRC32,
 ) -> None:
     # See whether the `xz` binary exists. It may be faster because of multithreaded encoding.
-    if shutil.which("xz"):
+    xz = get_xz_path()
+    if xz is not None:
         check_map = {
             lzma.CHECK_CRC32: "crc32",
             lzma.CHECK_CRC64: "crc64",
@@ -621,14 +622,21 @@ def pack_xz(
             None: None,
         }
         check_str = check_map[check]
-
-        subprocess.check_call(  # noqa(P204)
-            f"xz -z{compression_level} --threads={threads} -c"
-            + (f" --check={check_str}" if check_str else "")
-            + f" {input} > {output}",
-            shell=True,
-        )
-        return
+        with open(input, "rb") as fin:
+            with open(output, "wb") as fout:
+                cmd = [
+                    xz,
+                    f"-z{compression_level}",
+                    f"--threads={threads}",
+                    "-c",
+                    f"--check={check_str}" if check_str else "",
+                ]
+                subprocess.check_call(
+                    cmd,
+                    stdin=fin,
+                    stdout=fout,
+                )
+                return
 
     _warn_xz()
     assert isinstance(compression_level, int)
