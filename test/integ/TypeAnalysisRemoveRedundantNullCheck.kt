@@ -9,6 +9,7 @@ class TypeAnalysisRemoveRedundantNullCheck {
   fun foo(str: String) {
     print(str)
   }
+
   fun main() {
     foo("test")
   }

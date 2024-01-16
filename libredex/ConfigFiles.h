@@ -10,6 +10,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -181,6 +182,20 @@ struct ConfigFiles {
 
   const api::AndroidSDK& get_android_sdk_api(int32_t min_sdk_api);
 
+  std::unordered_map<DexType*, size_t>& get_cls_interdex_groups() {
+    if (m_cls_to_interdex_group.empty()) {
+      build_cls_interdex_groups();
+    }
+    return m_cls_to_interdex_group;
+  }
+
+  size_t get_num_interdex_groups() {
+    if (m_cls_to_interdex_group.empty()) {
+      build_cls_interdex_groups();
+    }
+    return m_num_interdex_groups;
+  }
+
   void parse_global_config();
 
   /**
@@ -212,6 +227,7 @@ struct ConfigFiles {
   void build_dead_class_and_live_class_split_lists();
   bool is_relocated_class(std::string_view name) const;
   void remove_relocated_part(std::string_view* name);
+  void build_cls_interdex_groups();
 
   // For testing.
   void set_class_lists(
@@ -251,6 +267,10 @@ struct ConfigFiles {
   // min_sdk AndroidAPI
   int32_t m_min_sdk_api_level = 0;
   std::unique_ptr<api::AndroidSDK> m_android_min_sdk_api;
+  // interdex class group based on betamap
+  // 0 when no interdex grouping.
+  size_t m_num_interdex_groups = 0;
+  std::unordered_map<DexType*, size_t> m_cls_to_interdex_group;
 
   friend struct ClassPreloadTest;
 };

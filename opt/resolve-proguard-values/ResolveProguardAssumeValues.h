@@ -65,6 +65,7 @@ class ResolveProguardAssumeValuesPass : public Pass {
   }
 
   static ResolveProguardAssumeValuesPass::Stats process_for_code(IRCode* code);
+  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector& stores,
                 ConfigFiles&,
                 PassManager& mgr) override;

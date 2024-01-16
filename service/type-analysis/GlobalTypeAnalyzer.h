@@ -66,9 +66,10 @@ class GlobalTypeAnalyzer : public sparta::ParallelMonotonicFixpointIterator<
                                call_graph::GraphInterface,
                                ArgumentTypePartition> {
  public:
-  explicit GlobalTypeAnalyzer(call_graph::Graph&& call_graph)
-      : ParallelMonotonicFixpointIterator(call_graph),
-        m_call_graph(std::forward<call_graph::Graph>(call_graph)) {
+  explicit GlobalTypeAnalyzer(
+      std::shared_ptr<const call_graph::Graph> call_graph)
+      : ParallelMonotonicFixpointIterator(*call_graph),
+        m_call_graph(std::move(call_graph)) {
     auto wps = new WholeProgramState();
     wps->set_to_top();
     m_wps.reset(wps);
@@ -85,7 +86,7 @@ class GlobalTypeAnalyzer : public sparta::ParallelMonotonicFixpointIterator<
    * Run local analysis for the given method and return the LocalAnalyzer with
    * the end state.
    */
-  std::unique_ptr<local::LocalTypeAnalyzer> get_local_analysis(
+  std::unique_ptr<local::LocalTypeAnalyzer> get_replayable_local_analysis(
       const DexMethod*) const;
 
   const WholeProgramState& get_whole_program_state() const { return *m_wps; }
@@ -94,25 +95,40 @@ class GlobalTypeAnalyzer : public sparta::ParallelMonotonicFixpointIterator<
     m_wps = std::move(wps);
   }
 
-  const call_graph::Graph& get_call_graph() { return m_call_graph; }
+  const call_graph::Graph& get_call_graph() { return *m_call_graph; }
 
   bool is_reachable(const DexMethod* method) const;
 
  private:
   std::unique_ptr<const WholeProgramState> m_wps;
-  call_graph::Graph m_call_graph;
+  std::shared_ptr<const call_graph::Graph> m_call_graph;
+
+  /*
+   * An unsafe variant that runs the local analysis on the given method, and
+   * returns the LocalAnalyzer with the end state. This is only used for
+   * collecting global states. This is not meant to be used to replay analysis
+   * after the global type analysis. It doesn't always fall back to the
+   * WholeProgramState.
+   */
+  std::unique_ptr<local::LocalTypeAnalyzer> get_internal_local_analysis(
+      const DexMethod*) const;
 
   std::unique_ptr<local::LocalTypeAnalyzer> analyze_method(
       const DexMethod* method,
       const WholeProgramState& wps,
-      ArgumentTypeEnvironment args) const;
+      ArgumentTypeEnvironment args,
+      const bool is_replayable = false) const;
+
+  friend class type_analyzer::WholeProgramState;
 };
 
 class GlobalTypeAnalysis {
 
  public:
-  explicit GlobalTypeAnalysis(size_t max_global_analysis_iteration = 10)
-      : m_max_global_analysis_iteration(max_global_analysis_iteration) {}
+  explicit GlobalTypeAnalysis(size_t max_global_analysis_iteration = 10,
+                              bool use_multiple_callee_callgraph = false)
+      : m_max_global_analysis_iteration(max_global_analysis_iteration),
+        m_use_multiple_callee_callgraph(use_multiple_callee_callgraph) {}
 
   void run(Scope& scope) { analyze(scope); }
 
@@ -120,6 +136,7 @@ class GlobalTypeAnalysis {
 
  private:
   size_t m_max_global_analysis_iteration;
+  bool m_use_multiple_callee_callgraph;
   // Methods reachable from clinit that read static fields and reachable from
   // ctors that read instance fields.
   ConcurrentSet<const DexMethod*> m_any_init_reachables;
@@ -132,7 +149,7 @@ class GlobalTypeAnalysis {
   void find_any_init_reachables(
       const method_override_graph::Graph& method_override_graph,
       const Scope&,
-      const call_graph::Graph&);
+      std::shared_ptr<const call_graph::Graph>);
 
   void trace_stats(WholeProgramState& wps);
 };

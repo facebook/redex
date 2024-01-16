@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <algorithm>
 #include <boost/functional/hash.hpp>
 #include <cstddef>
 #include <iostream>
@@ -20,6 +21,7 @@
 #include "utils/String8.h"
 #include "utils/Unicode.h"
 #include "utils/Vector.h"
+#include "utils/Visitor.h"
 
 namespace arsc {
 
@@ -196,6 +198,71 @@ bool are_configs_equivalent(android::ResTable_config* a,
   }
   // Can't deal with newer ResTable_config layouts that we don't know about.
   return false;
+}
+
+ssize_t find_attribute_ordinal(
+    android::ResXMLTree_node* node,
+    android::ResXMLTree_attrExt* extension,
+    android::ResXMLTree_attribute* new_attr,
+    const size_t& attribute_id_count,
+    const std::function<std::string(uint32_t)>& pool_lookup) {
+  std::vector<android::ResXMLTree_attribute*> attributes;
+  collect_attributes(extension, &attributes);
+  if (attributes.empty()) {
+    return 0;
+  }
+  // Attributes are sorted first by id, when available, or sorted
+  // lexographically by string name when the attribute does not
+  // have an id. This is modelled after the aapt2 logic.
+  // https://cs.android.com/android/platform/superproject/+/android-13.0.0_r1:frameworks/base/tools/aapt2/format/binary/XmlFlattener.cpp;l=45
+  auto less_than = [&](android::ResXMLTree_attribute* this_attr,
+                       android::ResXMLTree_attribute* that_attr) {
+    auto this_name = dtohl(this_attr->name.index);
+    auto this_uri = dtohl(this_attr->ns.index);
+    auto this_has_id = this_name < attribute_id_count;
+
+    auto that_name = dtohl(that_attr->name.index);
+    auto that_uri = dtohl(that_attr->ns.index);
+    auto that_has_id = that_name < attribute_id_count;
+
+    if (this_has_id != that_has_id) {
+      return this_has_id;
+    } else if (this_has_id) {
+      // names are offsets into id array, which is sorted, just compare name
+      // index.
+      return this_name < that_name;
+    } else {
+      // Compare uri first, if equal go to actual string name. Honestly this
+      // does not make much sense since it is unclear how an attribute can have
+      // a namespace and not an id. Hmmmmmmmmm.
+      auto this_uri_str =
+          this_uri != NO_VALUE ? pool_lookup(this_uri) : std::string("");
+      auto that_uri_str =
+          that_uri != NO_VALUE ? pool_lookup(that_uri) : std::string("");
+      auto diff = this_uri_str.compare(that_uri_str);
+      if (diff < 0) {
+        return true;
+      }
+      if (diff > 0) {
+        return false;
+      }
+      auto this_str = pool_lookup(this_name);
+      auto that_str = pool_lookup(that_name);
+      return this_str < that_str;
+    }
+  };
+  // Find the first element that is greater than or equal to the new attribute.
+  auto it = std::lower_bound(attributes.begin(), attributes.end(), new_attr,
+                             less_than);
+  if (it == attributes.end()) {
+    return attributes.size();
+  } else {
+    // Check if the item we found is actually equal; this should be unsupported.
+    if (!less_than(new_attr, *it)) {
+      return -1;
+    }
+    return it - attributes.begin();
+  }
 }
 
 float complex_value(uint32_t complex) {
@@ -856,6 +923,81 @@ void replace_xml_string_pool(android::ResChunk_header* data,
   write_long_at_pos(total_size_pos, out->size() - initial_vec_size, out);
 }
 
+int ensure_string_in_xml_pool(const void* data,
+                              const size_t len,
+                              const std::string& new_string,
+                              android::Vector<char>* out_data,
+                              size_t* idx) {
+  std::unordered_map<std::string, uint32_t> out_idx;
+  auto ret =
+      ensure_strings_in_xml_pool(data, len, {new_string}, out_data, &out_idx);
+  if (ret == android::OK) {
+    *idx = out_idx.at(new_string);
+  }
+  return ret;
+}
+
+int ensure_strings_in_xml_pool(
+    const void* data,
+    const size_t len,
+    const std::set<std::string>& strings_to_add,
+    android::Vector<char>* out_data,
+    std::unordered_map<std::string, uint32_t>* string_to_idx) {
+  LOG_ALWAYS_FATAL_IF(!string_to_idx->empty(),
+                      "string_to_idx should start empty");
+  int validation_result = validate_xml_string_pool(data, len);
+  if (validation_result != android::OK) {
+    return validation_result;
+  }
+  SimpleXmlParser parser;
+  LOG_ALWAYS_FATAL_IF(!parser.visit((void*)data, len), "Invalid file");
+  auto& pool = parser.global_strings();
+  size_t pool_size = pool.size();
+  // Check if there is already a non-attribute with the given value.
+  for (size_t i = parser.attribute_count(); i < pool_size; i++) {
+    if (is_valid_string_idx(pool, i)) {
+      auto s = get_string_from_pool(pool, i);
+      if (strings_to_add.count(s) > 0) {
+        string_to_idx->emplace(s, i);
+      }
+    }
+  }
+
+  if (strings_to_add.size() == string_to_idx->size()) {
+    // Everything was already present, just return and do no futher work.
+    // Convention to leave out_data unchanged in this case.
+    return android::OK;
+  }
+
+  // Add given strings to the end of a new pool.
+  auto flags = pool.isUTF8()
+                   ? htodl((uint32_t)android::ResStringPool_header::UTF8_FLAG)
+                   : (uint32_t)0;
+  arsc::ResStringPoolBuilder pool_builder(flags);
+  for (size_t i = 0; i < pool_size; i++) {
+    size_t length;
+    if (pool.isUTF8()) {
+      auto s = pool.string8At(i, &length);
+      pool_builder.add_string(s, length);
+    } else {
+      auto s = pool.stringAt(i, &length);
+      pool_builder.add_string(s, length);
+    }
+  }
+
+  for (const auto& s : strings_to_add) {
+    if (string_to_idx->count(s) == 0) {
+      auto idx = pool_builder.string_count();
+      pool_builder.add_string(s);
+      string_to_idx->emplace(s, idx);
+    }
+  }
+  // Serialize new string pool into out data.
+  replace_xml_string_pool((android::ResChunk_header*)data, len, pool_builder,
+                          out_data);
+  return android::OK;
+}
+
 bool is_empty(const EntryValueData& ev) {
   if (ev.getKey() == nullptr) {
     LOG_ALWAYS_FATAL_IF(ev.getValue() != 0, "Invalid pointer, length pair");
@@ -878,5 +1020,55 @@ PtrLen<uint8_t> get_value_data(const EntryValueData& ev) {
   }
   auto ptr = (uint8_t*)entry + entry_size;
   return {ptr, entry_and_value_len - entry_size};
+}
+
+void ResFileManipulator::serialize(android::Vector<char>* out) {
+  auto vec_start = out->size();
+  ssize_t final_size = m_length;
+  for (const auto& [c, block] : m_additions) {
+    final_size += block.size;
+  }
+  for (const auto& [c, size] : m_deletions) {
+    final_size -= size;
+  }
+  LOG_ALWAYS_FATAL_IF(final_size < 0, "final size went negative");
+  // Copy the original data, applying our edits along the way.
+  char* current = m_data;
+  size_t i = 0;
+  auto emit = [&](const Block& block) {
+    out->appendArray((const char*)block.buffer.get(), block.size);
+  };
+  auto advance = [&](size_t amount) {
+    i += amount;
+    current += amount;
+  };
+  while (i < m_length) {
+    auto addition = m_additions.find(current);
+    if (addition != m_additions.end()) {
+      emit(addition->second);
+    }
+    auto deletion = m_deletions.find(current);
+    if (deletion != m_deletions.end()) {
+      advance(deletion->second);
+      continue;
+    }
+    out->push_back(*current);
+    advance(1);
+  }
+  // Lastly, check if there is a request to add at the very end of the file.
+  auto addition = m_additions.find(m_data + m_length);
+  if (addition != m_additions.end()) {
+    emit(addition->second);
+  }
+  // Assert everything is good.
+  auto actual_size = out->size() - vec_start;
+  LOG_ALWAYS_FATAL_IF(
+      actual_size != final_size,
+      "did not write expected number of bytes; wrote %zu, expected %zu",
+      actual_size, (size_t)final_size);
+  // Fix up the file size, assuming our original data starts in a proper chunk.
+  if (actual_size >= sizeof(android::ResChunk_header)) {
+    write_long_at_pos(vec_start + sizeof(uint16_t) * 2, final_size, out);
+  }
 }
 } // namespace arsc

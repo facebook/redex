@@ -32,7 +32,7 @@ usage: redex.py [-h] [-o [OUT]] [-j JARPATHS] [--redex-binary [REDEX_BINARY]]
                 [-k [KEEP]] [-A [ARCH]] [-S PASSTHRU] [-J PASSTHRU_JSON]
                 [--lldb] [--gdb] [--ignore-zipalign] [--verify-none-mode]
                 [--enable-instrument-pass] [--is-art-build] [--enable-pgi]
-                [--redacted] [--disable-dex-hasher] [--page-align-libs]
+                [--post-lowering] [--disable-dex-hasher] [--page-align-libs]
                 [--side-effect-summaries SIDE_EFFECT_SUMMARIES]
                 [--escape-summaries ESCAPE_SUMMARIES] [--stop-pass STOP_PASS]
                 [--output-ir OUTPUT_IR]
@@ -92,7 +92,7 @@ optional arguments:
                         Enable InstrumentPass if any
   --is-art-build        States that this is an art only build
   --enable-pgi          If not passed, Profile Guided Inlining is disabled
-  --redacted            Specifies how dex files should be laid out
+  --post-lowering       Specifies whether post lowering steps should be run
   --disable-dex-hasher  Disable DexHasher
   --page-align-libs     Preserve 4k page alignment for uncompressed libs
   --side-effect-summaries SIDE_EFFECT_SUMMARIES

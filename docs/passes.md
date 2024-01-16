@@ -669,20 +669,6 @@ Pass ordering dependencies:
    should be run before any inlining passes, and will not optiimize if inlining
    has been performed.
 
-## TrackResourcesPass
-
-An example config file entry:
-```
-"TrackResourcesPass" : {
-  "classes_to_track" : [
-    "Lcom/foo/R$drawable;",
-    "Lcom/foo/R$string;",
-    "Lcom/foo/R$plurals;",
-  ],
-  "tracked_fields_output": "coldstart_fields_in_R_classes.txt"
-},
-```
-
 ## UnreferencedInterfacesPass
 
 `UnreferencedInterfacesPass` removes concrete Interfaces that are not

@@ -101,6 +101,37 @@ static void append_key_value(std::ostringstream& oss,
   oss << "}";
 }
 
+static void append_key_value(std::ostringstream& oss,
+                             const ConstantClassObjectDomain& class_or_none) {
+  oss << "(class)";
+  auto class_opt = class_or_none.get_constant();
+  if (class_opt) {
+    // the DexType* pointer is unique
+    oss << "@" << *class_opt;
+  }
+}
+
+static void append_key_value(std::ostringstream& oss,
+                             const NewObjectDomain& new_obj_or_none) {
+  oss << "(new-object)";
+  auto type = new_obj_or_none.get_type();
+  if (type) {
+    oss << show(type);
+  }
+  auto new_object_insn = new_obj_or_none.get_new_object_insn();
+  if (new_object_insn) {
+    // the IRInstruction* pointer is unique
+    oss << "@" << new_object_insn;
+  }
+  auto array_length = new_obj_or_none.get_array_length();
+  always_assert(!array_length.is_bottom());
+  if (!array_length.is_top()) {
+    oss << "[";
+    ::append_key_value(oss, array_length);
+    oss << "]";
+  }
+}
+
 void CallSiteSummary::append_key_value(std::ostringstream& oss,
                                        const ConstantValue& value) {
   if (const auto& signed_value = value.maybe_get<SignedConstantDomain>()) {
@@ -113,6 +144,11 @@ void CallSiteSummary::append_key_value(std::ostringstream& oss,
     ::append_key_value(oss, *obj_or_none);
   } else if (const auto& string_value = value.maybe_get<StringDomain>()) {
     ::append_key_value(oss, *string_value);
+  } else if (const auto& class_or_none =
+                 value.maybe_get<ConstantClassObjectDomain>()) {
+    ::append_key_value(oss, *class_or_none);
+  } else if (const auto& new_obj_or_none = value.maybe_get<NewObjectDomain>()) {
+    ::append_key_value(oss, *new_obj_or_none);
   } else {
     not_reached_log("unexpected value: %s", SHOW(value));
   }
@@ -292,7 +328,8 @@ CallSiteSummarizer::get_invoke_call_site_summaries(
           m_shrinker.get_immut_analyzer_state(),
           constant_propagation::EnumFieldAnalyzerState::get(),
           constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr,
-          constant_propagation::ApiLevelAnalyzerState::get(), nullptr));
+          constant_propagation::ApiLevelAnalyzerState::get(), nullptr,
+          m_shrinker.get_immut_analyzer_state(), nullptr));
   intra_cp.run(initial_env);
   for (const auto& block : cfg.blocks()) {
     auto env = intra_cp.get_entry_state_at(block);

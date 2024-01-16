@@ -26,6 +26,8 @@ class RegAllocPass : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
         {NoInitClassInstructions, Preserves},
+        {NoResolvablePureRefs, Preserves},
+        {NoUnreachableInstructions, Preserves},
         {RenameClass, Preserves},
     };
   }
@@ -35,8 +37,6 @@ class RegAllocPass : public Pass {
     bind("live_range_splitting", false, unused);
     trait(Traits::Pass::atleast, 1);
   }
-
-  bool is_editable_cfg_friendly() override { return true; }
 
   void eval_pass(DexStoresVector& stores,
                  ConfigFiles& conf,

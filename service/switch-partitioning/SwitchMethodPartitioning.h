@@ -14,6 +14,7 @@
 #include "ConstantPropagationAnalysis.h"
 #include "DexClass.h"
 #include "IRCode.h"
+#include "ScopedCFG.h"
 
 /*
  * This is designed to work on methods with a very specific control-flow graph
@@ -45,25 +46,8 @@
  */
 class SwitchMethodPartitioning final {
  public:
-  static boost::optional<SwitchMethodPartitioning> create(
+  static std::unique_ptr<SwitchMethodPartitioning> create(
       IRCode* code, bool verify_default_case_throws = true);
-
-  // Each SMP instance is responsible for clearing the CFG of m_code exactly
-  // once, so we don't want to have multiple copies of it.
-  SwitchMethodPartitioning(const SwitchMethodPartitioning&) = delete;
-
-  SwitchMethodPartitioning(SwitchMethodPartitioning&& other) noexcept {
-    m_prologue_blocks = std::move(other.m_prologue_blocks);
-    m_key_to_block = std::move(other.m_key_to_block);
-    m_code = other.m_code;
-    other.m_code = nullptr;
-  }
-
-  ~SwitchMethodPartitioning() {
-    if (m_code != nullptr) {
-      m_code->clear_cfg();
-    }
-  }
 
   const std::vector<cfg::Block*>& get_prologue_blocks() const {
     return m_prologue_blocks;
@@ -73,18 +57,16 @@ class SwitchMethodPartitioning final {
     return m_key_to_block;
   }
 
-  const IRCode* get_code() const { return m_code; }
-
  private:
   SwitchMethodPartitioning(
-      IRCode* code,
+      cfg::ScopedCFG cfg,
       std::vector<cfg::Block*> prologue_blocks,
       std::map<int32_t, cfg::Block*> key_to_block)
       : m_prologue_blocks(std::move(prologue_blocks)),
         m_key_to_block(std::move(key_to_block)),
-        m_code(code) {}
+        m_cfg(std::move(cfg)) {}
 
   std::vector<cfg::Block*> m_prologue_blocks;
   std::map<int32_t, cfg::Block*> m_key_to_block;
-  IRCode* m_code;
+  cfg::ScopedCFG m_cfg;
 };

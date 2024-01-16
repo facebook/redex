@@ -167,7 +167,7 @@ std::shared_ptr<MethodClosures> discover_closures(DexMethod* method,
         any_throw = true;
         break;
       }
-      const auto& count = mca->get_exit_state_at(e->src());
+      auto count = mca->get_exit_state_at(e->src());
       if (count != sparta::ConstantAbstractDomain<uint32_t>(0)) {
         any_non_zero_monitor_count = true;
         break;

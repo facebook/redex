@@ -55,7 +55,7 @@ TEST_F(PostVerify, HasTypeChecks) {
   auto test_return_m = find_vmethod_named(*test_cls, "testSetAndGet");
   ASSERT_NE(nullptr, test_field_m);
   ASSERT_NE(nullptr, test_return_m);
-  ASSERT_NE(nullptr,
+  ASSERT_EQ(nullptr,
             find_invoke(test_field_m, DOPCODE_INVOKE_STATIC, "fieldValueError",
                         nullptr));
   ASSERT_NE(nullptr,

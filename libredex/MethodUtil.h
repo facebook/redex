@@ -43,6 +43,13 @@ bool is_trivial_clinit(const IRCode& code);
 
 bool is_clinit_invoked_method_benign(const DexMethodRef*);
 
+/**
+ * Checker whether the method has code that starts with an unreachable
+ * instruction, indicating that earlier static analysis determined that this
+ * particular method is never a possible target of an invocation.
+ */
+bool may_be_invoke_target(const DexMethod* method);
+
 using ClInitHasNoSideEffectsPredicate = std::function<bool(const DexType*)>;
 /**
  * Return true if change the exeution time of the <clinit> of the cls may change

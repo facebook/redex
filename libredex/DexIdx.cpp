@@ -7,6 +7,7 @@
 
 #include "DexIdx.h"
 
+#include <limits>
 #include <sstream>
 
 #include "DexAnnotation.h"
@@ -158,6 +159,9 @@ DexTypeList* DexIdx::get_type_list(uint32_t offset) {
   }
   const uint32_t* tlp = get_uint_data(offset);
   uint32_t size = *tlp++;
+  // T137425749
+  redex_assert(size < get_file_size() / 2);
+  redex_assert(offset <= get_file_size() - 2 * size);
   const uint16_t* typep = (const uint16_t*)tlp;
   DexTypeList::ContainerType tlist;
   tlist.reserve(size);

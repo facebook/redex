@@ -12,6 +12,7 @@
 #include <cinttypes>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <fstream>
 #include <iostream>
 #include <json/json.h>
@@ -780,7 +781,7 @@ class AfterPassSizes {
         if (m_debug) {
           std::cerr << "Running " << pass_name << std::endl;
         }
-        if (pass->is_editable_cfg_friendly()) {
+        if (!pass->is_cfg_legacy()) {
           ensure_editable_cfg(*stores);
         }
         pass->run_pass(*stores, *conf, *m_mgr);
@@ -1241,7 +1242,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   auto post_pass_verifiers = [&](Pass* pass, size_t i, size_t size) {
     ConcurrentSet<const DexMethodRef*> all_code_referenced_methods;
     ConcurrentSet<DexMethod*> unique_methods;
-    bool is_editable_cfg_friendly = pass->is_editable_cfg_friendly();
+    bool is_editable_cfg_friendly = !pass->is_cfg_legacy();
     walk::parallel::code(build_class_scope(stores), [&](DexMethod* m,
                                                         IRCode& code) {
       if (is_editable_cfg_friendly) {
@@ -1335,6 +1336,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
     pre_pass_verifiers(pass, i);
 
+    double cpu_time;
+    std::chrono::duration<double> wall_time;
+
     {
       auto scoped_command_prof = profiler_info_pass == pass
                                      ? ScopedCommandProfiling::maybe_from_info(
@@ -1345,7 +1349,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
       auto maybe_track_violations =
           violatios_tracking.maybe_track(this, stores);
-      if (!pass->is_editable_cfg_friendly()) {
+      double cpu_time_start = ((double)std::clock()) / CLOCKS_PER_SEC;
+      auto wall_time_start = std::chrono::steady_clock::now();
+      if (pass->is_cfg_legacy()) {
         // if this pass hasn't been updated to editable_cfg yet, clear_cfg. In
         // the future, once all editable cfg updates are done, this branch will
         // be removed.
@@ -1362,9 +1368,11 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
         TRACE(PM, 2, "%s Pass uses editable cfg.\n", SHOW(pass->name()));
       }
       pass->run_pass(stores, conf, *this);
+      auto wall_time_end = std::chrono::steady_clock::now();
+      double cpu_time_end = ((double)std::clock()) / CLOCKS_PER_SEC;
 
       // Ensure the CFG is clean, e.g., no unreachable blocks.
-      if (pass->is_editable_cfg_friendly()) {
+      if (!pass->is_cfg_legacy()) {
         auto temp_scope = build_class_scope(stores);
         walk::parallel::code(temp_scope, [&](DexMethod* method, IRCode& code) {
           always_assert_log(code.editable_cfg_built(),
@@ -1375,6 +1383,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       }
 
       trace_cls.dump(pass->name());
+
+      cpu_time = cpu_time_end - cpu_time_start;
+      wall_time = wall_time_end - wall_time_start;
     }
 
     scoped_mem_stats.trace_log(this, pass);
@@ -1395,6 +1406,16 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     if (after_pass_size.handle(m_current_pass_info, &stores, &conf)) {
       // Measuring child. Return to write things out.
       break;
+    }
+
+    set_metric("timing.cpu_time.100", (int64_t)(cpu_time * 100));
+    set_metric("timing.wall_time.100", (int64_t)(wall_time.count() * 100));
+    if (wall_time.count() != 0) {
+      set_metric("timing.speedup.100",
+                 (int64_t)(100.0 * cpu_time / wall_time.count()));
+      set_metric("timing.utilization.100",
+                 (int64_t)(100.0 * cpu_time / wall_time.count() /
+                           redex_parallel::default_num_threads()));
     }
 
     m_current_pass_info = nullptr;

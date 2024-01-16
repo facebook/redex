@@ -460,7 +460,7 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
         opcode::is_an_aget(op) || opcode::is_div_int_lit(op) ||
         opcode::is_rem_int_lit(op) || opcode::is_instance_of(op) ||
         opcode::is_rem_int_or_long(op) || opcode::is_div_int_or_long(op) ||
-        opcode::is_check_cast(op)) {
+        opcode::is_check_cast(op) || opcode::is_array_length(op)) {
       replace_with_const(env, cfg_it, xstores, declaring_type);
     }
     break;
@@ -826,8 +826,7 @@ void Transform::forward_targets(
   // Helper function that computs (ordered) list of unconditional target blocks,
   // together with the sets of assigned registers.
   auto get_unconditional_targets =
-      [&intra_cp, &cfg, &is_normal,
-       &env](cfg::Edge* succ_edge) -> std::vector<TargetAndAssignedRegs> {
+      [&](cfg::Edge* succ_edge) -> std::vector<TargetAndAssignedRegs> {
     auto succ_env = intra_cp.analyze_edge(succ_edge, env);
     if (succ_env.is_bottom()) {
       return {};
@@ -879,11 +878,14 @@ void Transform::forward_targets(
           // feasible successor. We stop the analysis here.
           return unconditional_targets;
         }
-        only_feasible = std::make_pair(succ_succ_edge->target(), succ_succ_env);
+        only_feasible =
+            std::make_pair(succ_succ_edge->target(), std::move(succ_succ_env));
       }
+      always_assert(only_feasible);
       unconditional_targets.push_back(
           (TargetAndAssignedRegs){only_feasible->first, assigned_regs});
-      succ_env = only_feasible->second;
+      succ_env = std::move(only_feasible->second);
+      always_assert(!succ_env.is_bottom());
     }
   };
 

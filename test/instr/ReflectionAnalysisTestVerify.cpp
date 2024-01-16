@@ -39,6 +39,7 @@ void test_analysis(const DexClasses& classes,
   const auto meth = find_vmethod_named(*cls, method_name);
   ASSERT_NE(meth, nullptr);
   meth->balloon();
+  meth->get_code()->build_cfg();
   ReflectionAnalysis analysis(meth);
   EXPECT_TRUE(analysis.has_found_reflection());
   std::string actual_output = to_string(analysis.get_reflection_sites());
@@ -58,6 +59,7 @@ void get_reflected_methods_by_test(Methods& out,
   const auto meth = find_vmethod_named(*cls, method_name);
   ASSERT_NE(meth, nullptr);
   meth->balloon();
+  meth->get_code()->build_cfg();
   ReflectionAnalysis analysis(meth);
   ASSERT_TRUE(analysis.has_found_reflection());
 
@@ -169,7 +171,6 @@ TEST_F(PreVerify, JoinSameClassType) {
       classes, "getClassJoinSame",
       "INVOKE_STATIC v1, Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class; {4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
       "MOVE_RESULT_OBJECT v1 {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
-      "GOTO  {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
       "CONST_CLASS Lcom/facebook/redextest/ReflectionAnalysisTest$Foo; {4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
       "IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v1 {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
       "INVOKE_VIRTUAL v1, Ljava/lang/Class;.getName:()Ljava/lang/String; {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n");
@@ -182,7 +183,6 @@ TEST_F(PreVerify, JoinDifferentClassType) {
       classes, "getClassJoinDifferent",
       "INVOKE_STATIC v1, Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class; {4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
       "MOVE_RESULT_OBJECT v1 {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
-      "GOTO  {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
       "INVOKE_STATIC v1, Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class; {4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Bar;}(REFLECTION)}\n"
       "MOVE_RESULT_OBJECT v1 {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Bar;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Bar;}(REFLECTION)}\n"
       "INVOKE_VIRTUAL v1, Ljava/lang/Class;.getName:()Ljava/lang/String; {1, CLASS{}(REFLECTION)}\n");

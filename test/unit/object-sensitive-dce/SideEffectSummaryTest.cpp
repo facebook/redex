@@ -22,7 +22,7 @@ class SideEffectSummaryTest : public RedexTest {};
 Summary analyze_code_effects(const IRCode* code) {
   InvokeToSummaryMap effect_summaries;
 
-  const_cast<IRCode*>(code)->build_cfg(/* editable */ false);
+  const_cast<IRCode*>(code)->build_cfg();
   auto& cfg = code->cfg();
 
   ptrs::FixpointIterator ptrs_fp_iter(cfg);

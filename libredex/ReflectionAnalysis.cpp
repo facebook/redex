@@ -1084,8 +1084,8 @@ ReflectionAnalysis::ReflectionAnalysis(DexMethod* dex_method,
   if (code == nullptr) {
     return;
   }
-  code->build_cfg(/* editable */ false);
-  cfg::ControlFlowGraph& cfg = code->cfg();
+  always_assert(code->editable_cfg_built());
+  auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   if (!cache) {
     m_fallback_cache = new MetadataCache;
@@ -1126,12 +1126,14 @@ void ReflectionAnalysis::get_reflection_site(
 
 ReflectionSites ReflectionAnalysis::get_reflection_sites() const {
   ReflectionSites reflection_sites;
-  auto code = m_dex_method->get_code();
+  auto code = const_cast<DexMethod*>(m_dex_method)->get_code();
   if (code == nullptr) {
     return reflection_sites;
   }
-  auto reg_size = code->get_registers_size();
-  for (auto& mie : InstructionIterable(code)) {
+  always_assert(code->editable_cfg_built());
+  auto& cfg = code->cfg();
+  auto reg_size = cfg.get_registers_size();
+  for (auto& mie : InstructionIterable(cfg)) {
     IRInstruction* insn = mie.insn;
     std::map<reg_t, ReflectionAbstractObject> abstract_objects;
     for (size_t i = 0; i < reg_size; i++) {
@@ -1156,13 +1158,18 @@ AbstractObjectDomain ReflectionAnalysis::get_return_value() const {
 
 boost::optional<std::vector<DexType*>> ReflectionAnalysis::get_method_params(
     IRInstruction* invoke_insn) const {
-  auto code = m_dex_method->get_code();
+  auto code = const_cast<DexMethod*>(m_dex_method)->get_code();
+  always_assert(code->editable_cfg_built());
+  auto& cfg = code->cfg();
   IRInstruction* move_result_insn = nullptr;
-  auto ii = InstructionIterable(code);
+  auto ii = InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto* insn = it->insn;
     if (insn == invoke_insn) {
-      move_result_insn = std::next(it)->insn;
+      auto move_res_it = cfg.move_result_of(it);
+      if (!move_res_it.is_end()) {
+        move_result_insn = move_res_it->insn;
+      }
       break;
     }
   }

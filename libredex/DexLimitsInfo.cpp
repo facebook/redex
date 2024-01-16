@@ -28,8 +28,10 @@ bool DexLimitsInfo::update_refs_by_adding_class(DexClass* cls) {
   TypeRefs pending_init_class_fields;
   TypeRefs pending_init_class_types;
 
-  cls->gather_init_classes(itrefs);
-  init_refs.insert(itrefs.begin(), itrefs.end());
+  if (m_init_classes_with_side_effects) {
+    cls->gather_init_classes(itrefs);
+    init_refs.insert(itrefs.begin(), itrefs.end());
+  }
   cls->gather_methods(method_refs);
   cls->gather_fields(field_refs);
   cls->gather_types(type_refs);
@@ -50,6 +52,36 @@ bool DexLimitsInfo::update_refs_by_adding_class(DexClass* cls) {
                                  cls);
 }
 
+void DexLimitsInfo::update_refs_by_always_adding_class(DexClass* cls) {
+  MethodRefs method_refs;
+  FieldRefs field_refs;
+  TypeRefs type_refs;
+  TypeRefs init_refs;
+  std::vector<DexType*> itrefs;
+  TypeRefs pending_init_class_fields;
+  TypeRefs pending_init_class_types;
+
+  if (m_init_classes_with_side_effects) {
+    cls->gather_init_classes(itrefs);
+    init_refs.insert(itrefs.begin(), itrefs.end());
+  }
+  cls->gather_methods(method_refs);
+  cls->gather_fields(field_refs);
+  cls->gather_types(type_refs);
+
+  m_dex.resolve_init_classes(m_init_classes_with_side_effects, field_refs,
+                             type_refs, init_refs, &pending_init_class_fields,
+                             &pending_init_class_types);
+
+  return m_dex.add_class_no_checks(method_refs,
+                                   field_refs,
+                                   type_refs,
+                                   pending_init_class_fields,
+                                   pending_init_class_types,
+                                   /*laclazz=*/0,
+                                   cls);
+}
+
 void DexLimitsInfo::update_refs_by_erasing_class(DexClass* cls) {
   MethodRefs method_refs;
   FieldRefs field_refs;
@@ -59,8 +91,10 @@ void DexLimitsInfo::update_refs_by_erasing_class(DexClass* cls) {
   TypeRefs pending_init_class_fields;
   TypeRefs pending_init_class_types;
 
-  cls->gather_init_classes(itrefs);
-  init_refs.insert(itrefs.begin(), itrefs.end());
+  if (m_init_classes_with_side_effects) {
+    cls->gather_init_classes(itrefs);
+    init_refs.insert(itrefs.begin(), itrefs.end());
+  }
   cls->gather_methods(method_refs);
   cls->gather_fields(field_refs);
   cls->gather_types(type_refs);

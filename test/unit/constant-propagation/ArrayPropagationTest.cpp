@@ -264,7 +264,7 @@ TEST_F(ConstantPropagationTest, OutOfBoundsWrite) {
     )
 )");
 
-  code->build_cfg(/* editable */ false);
+  code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   cp::intraprocedural::FixpointIterator intra_cp(cfg, ArrayAnalyzer());
@@ -283,7 +283,7 @@ TEST_F(ConstantPropagationTest, OutOfBoundsRead) {
     )
 )");
 
-  code->build_cfg(/* editable */ false);
+  code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   cp::intraprocedural::FixpointIterator intra_cp(cfg, ArrayAnalyzer());

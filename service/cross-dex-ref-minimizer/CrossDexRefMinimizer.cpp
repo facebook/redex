@@ -13,6 +13,7 @@
 #include "DexUtil.h"
 #include "Show.h"
 #include "Trace.h"
+#include "WorkQueue.h"
 
 namespace cross_dex_ref_minimizer {
 
@@ -70,6 +71,36 @@ uint64_t CrossDexRefMinimizer::ClassInfo::get_priority() const {
   return (primary_priority << 24) | secondary_priority;
 }
 
+void CrossDexRefMinimizer::ClassDiffSet::insert(DexClass* value) {
+  always_assert(!m_diff.count(value));
+  m_base->insert(value);
+}
+
+void CrossDexRefMinimizer::ClassDiffSet::erase(DexClass* value) {
+  always_assert(m_base->count(value));
+  m_diff.insert(value);
+  if (m_diff.size() >= (m_base->size() + 1) / 2) {
+    // When diff set size becomes significant, create a new *shared* base set,
+    // so that operations such as enumeration over all elements retain their
+    // expected complexity.
+    auto new_base = std::make_shared<Repr>(size());
+    for (auto* cls : *m_base) {
+      if (!m_diff.count(cls)) {
+        new_base->insert(cls);
+      }
+    }
+    m_base = std::move(new_base);
+    m_diff.clear();
+  }
+}
+
+void CrossDexRefMinimizer::ClassDiffSet::compact() {
+  for (auto* cls : m_diff) {
+    m_base->erase(cls);
+  }
+  m_diff.clear();
+}
+
 void CrossDexRefMinimizer::reprioritize(
     const std::unordered_map<DexClass*, CrossDexRefMinimizer::ClassInfoDelta>&
         affected_classes) {
@@ -104,35 +135,8 @@ void CrossDexRefMinimizer::reprioritize(
   }
 }
 
-void CrossDexRefMinimizer::gather_refs(DexClass* cls,
-                                       std::vector<DexMethodRef*>& method_refs,
-                                       std::vector<DexFieldRef*>& field_refs,
-                                       std::vector<DexType*>& types,
-                                       std::vector<const DexString*>& strings) {
-  cls->gather_methods(method_refs);
-  cls->gather_fields(field_refs);
-  cls->gather_types(types);
-  cls->gather_strings(strings);
-
-  // remove duplicates to speed up actual sorting
-  sort_unique(method_refs);
-  sort_unique(field_refs);
-  sort_unique(types);
-  sort_unique(strings);
-
-  // sort deterministically
-  std::sort(method_refs.begin(), method_refs.end(), compare_dexmethods);
-  std::sort(field_refs.begin(), field_refs.end(), compare_dexfields);
-  std::sort(types.begin(), types.end(), compare_dextypes);
-  std::sort(strings.begin(), strings.end(), compare_dexstrings);
-}
-
 void CrossDexRefMinimizer::sample(DexClass* cls) {
-  std::vector<DexMethodRef*> method_refs;
-  std::vector<DexFieldRef*> field_refs;
-  std::vector<DexType*> types;
-  std::vector<const DexString*> strings;
-  gather_refs(cls, method_refs, field_refs, types, strings);
+  auto cls_refs = m_cache->get(cls);
   auto increment = [&ref_counts = m_ref_counts,
                     &max_ref_count = m_max_ref_count](const void* ref) {
     size_t& count = ref_counts[ref];
@@ -140,25 +144,25 @@ void CrossDexRefMinimizer::sample(DexClass* cls) {
       max_ref_count = count;
     }
   };
-  for (auto ref : method_refs) {
+  for (auto ref : cls_refs->method_refs) {
     increment(ref);
   }
-  for (auto ref : field_refs) {
+  for (auto ref : cls_refs->field_refs) {
     increment(ref);
   }
-  for (auto ref : types) {
+  for (auto ref : cls_refs->types) {
     increment(ref);
   }
-  for (auto ref : strings) {
+  for (auto ref : cls_refs->strings) {
     increment(ref);
   }
 
   if (m_json_classes) {
     Json::Value json_class;
-    json_class["method_refs"] = m_json_methods.get(method_refs);
-    json_class["field_refs"] = m_json_fields.get(field_refs);
-    json_class["types"] = m_json_types.get(types);
-    json_class["strings"] = m_json_strings.get(strings);
+    json_class["method_refs"] = m_json_methods.get(cls_refs->method_refs);
+    json_class["field_refs"] = m_json_fields.get(cls_refs->field_refs);
+    json_class["types"] = m_json_types.get(cls_refs->types);
+    json_class["strings"] = m_json_strings.get(cls_refs->strings);
     json_class["is_generated"] = cls->rstate.is_generated();
     json_class["insert_index"] = -1;
     (*m_json_classes)[get_json_class_index(cls)] = json_class;
@@ -177,15 +181,11 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
   // entries.
   // We don't bother with protos and type_lists, as they are directly related
   // to method refs (I tried, didn't help).
-  std::vector<DexMethodRef*> method_refs;
-  std::vector<DexFieldRef*> field_refs;
-  std::vector<DexType*> types;
-  std::vector<const DexString*> strings;
-  gather_refs(cls, method_refs, field_refs, types, strings);
+  auto cls_refs = m_cache->get(cls);
 
   auto& refs = *class_info.refs;
-  refs.reserve(method_refs.size() + field_refs.size() + types.size() +
-               strings.size());
+  refs.reserve(cls_refs->method_refs.size() + cls_refs->field_refs.size() +
+               cls_refs->types.size() + cls_refs->strings.size());
   uint64_t& refs_weight = class_info.refs_weight;
   uint64_t& seed_weight = class_info.seed_weight;
 
@@ -215,16 +215,16 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
   // different values and observing the effect on APK size.
   // We discount references that occur in many classes.
   // TODO: Try some other variations.
-  for (auto mref : method_refs) {
+  for (auto mref : cls_refs->method_refs) {
     add_weight(mref, m_config.method_ref_weight, m_config.method_seed_weight);
   }
-  for (auto type : types) {
+  for (auto type : cls_refs->types) {
     add_weight(type, m_config.type_ref_weight, m_config.type_seed_weight);
   }
-  for (auto string : strings) {
+  for (auto string : cls_refs->strings) {
     add_weight(string, m_config.string_ref_weight, m_config.string_seed_weight);
   }
-  for (auto fref : field_refs) {
+  for (auto fref : cls_refs->field_refs) {
     add_weight(fref, m_config.field_ref_weight, m_config.field_seed_weight);
   }
 
@@ -262,7 +262,7 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
     // There's an implicit invariant that class_info and the keys of
     // affected_classes are disjoint, so we are not going to reprioritize
     // the class that we are adding here.
-    classes.emplace(cls);
+    classes.insert(cls);
   }
   const auto priority = class_info.get_priority();
   m_prioritized_classes.insert(cls, priority);
@@ -407,8 +407,7 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
       auto& classes = classes_it->second;
       size_t frequency = classes.size();
       always_assert(frequency > 0);
-      const auto erased = classes.erase(cls);
-      always_assert(erased);
+      classes.erase(cls);
       if (frequency <= INFREQUENT_REFS_COUNT) {
         for (DexClass* affected_class : classes) {
           affected_classes[affected_class]
@@ -477,6 +476,12 @@ size_t CrossDexRefMinimizer::get_unapplied_refs(DexClass* cls) const {
     }
   }
   return unapplied_refs;
+}
+
+void CrossDexRefMinimizer::compact() {
+  for (auto&& [ref, classes] : m_ref_classes) {
+    classes.compact();
+  }
 }
 
 double CrossDexRefMinimizer::get_remaining_difficulty() const {

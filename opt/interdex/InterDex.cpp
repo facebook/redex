@@ -49,7 +49,8 @@ static DexInfo EMPTY_DEX_INFO;
 std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
     const Scope& scope,
     const std::vector<DexType*>& interdex_types,
-    bool static_prune_classes) {
+    bool static_prune_classes,
+    ClassReferencesCache& class_references_cache) {
   int old_no_ref = -1;
   int new_no_ref = 0;
 
@@ -103,9 +104,8 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
     // opcodes directly.
     for (const auto& cls : input_scope) {
       if (cold_cold_references.count(cls->get_type())) {
-        std::vector<DexType*> types;
-        cls->gather_types(types);
-        for (const auto& type : types) {
+        auto refs = class_references_cache.get(cls);
+        for (const auto& type : refs->types) {
           cold_cold_references.insert(type);
         }
       }
@@ -129,21 +129,23 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
 }
 
 void gather_refs(
+    ClassReferencesCache& class_references_cache,
     const std::vector<std::unique_ptr<interdex::InterDexPassPlugin>>& plugins,
     const DexClass* cls,
     MethodRefs* mrefs,
     FieldRefs* frefs,
     TypeRefs* trefs,
     TypeRefs* itrefs) {
+  auto refs = class_references_cache.get(cls);
+  mrefs->insert(refs->method_refs.begin(), refs->method_refs.end());
+  frefs->insert(refs->field_refs.begin(), refs->field_refs.end());
+  trefs->insert(refs->types.begin(), refs->types.end());
+  itrefs->insert(refs->init_types.begin(), refs->init_types.end());
+
   std::vector<DexMethodRef*> method_refs;
   std::vector<DexFieldRef*> field_refs;
   std::vector<DexType*> type_refs;
   std::vector<DexType*> init_type_refs;
-  cls->gather_methods(method_refs);
-  cls->gather_fields(field_refs);
-  cls->gather_types(type_refs);
-  cls->gather_init_classes(init_type_refs);
-
   for (const auto& plugin : plugins) {
     plugin->gather_refs(cls, method_refs, field_refs, type_refs,
                         init_type_refs);
@@ -187,7 +189,7 @@ void do_order_classes(const std::vector<std::string>& coldstart_class_names,
     if (DexType* type = DexType::get_type(class_name)) {
       if (auto cls = type_class(type)) {
         class_to_priority[cls] = priority++;
-        cls->set_perf_sensitive(true);
+        cls->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
       }
     }
   }
@@ -248,7 +250,7 @@ InterDex::EmitResult InterDex::emit_class(
   }
 
   if (perf_sensitive) {
-    clazz->set_perf_sensitive(true);
+    clazz->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
   }
 
   // Calculate the extra method and field refs that we would need to add to
@@ -257,8 +259,8 @@ InterDex::EmitResult InterDex::emit_class(
   FieldRefs clazz_frefs;
   TypeRefs clazz_trefs;
   TypeRefs clazz_itrefs;
-  gather_refs(m_plugins, clazz, &clazz_mrefs, &clazz_frefs, &clazz_trefs,
-              &clazz_itrefs);
+  gather_refs(m_class_references_cache, m_plugins, clazz, &clazz_mrefs,
+              &clazz_frefs, &clazz_trefs, &clazz_itrefs);
 
   bool fits_current_dex =
       emitting_state.dexes_structure.add_class_to_current_dex(
@@ -361,7 +363,7 @@ void InterDex::emit_interdex_classes(
     for (auto* type : interdex_types) {
       DexClass* cls = type_class(type);
       if (cls && !unreferenced_classes.count(cls)) {
-        cls->set_perf_sensitive(true);
+        cls->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
         m_interdex_order.emplace(cls, m_interdex_order.size());
       }
     }
@@ -799,20 +801,20 @@ void InterDex::emit_remaining_classes_legacy(DexInfo& dex_info,
     }
 
     std::optional<FlushOutDexResult> opt_fodr;
-    bool emitted =
+    auto res =
         emit_class(m_emitting_state, dex_info, cls, /* check_if_skip */ false,
                    /* perf_sensitive */ false, canary_cls, &opt_fodr);
     if (opt_fodr) {
-      always_assert(!emitted);
+      always_assert(!res.emitted);
       post_process_dex(m_emitting_state, *opt_fodr);
       m_cross_dex_ref_minimizer.reset();
       pick_worst = true;
       continue;
     }
 
-    m_cross_dex_ref_minimizer.erase(cls, emitted);
+    m_cross_dex_ref_minimizer.erase(cls, res.emitted);
 
-    pick_worst = pick_worst && !emitted;
+    pick_worst = pick_worst && !res.emitted;
   }
 }
 
@@ -847,18 +849,18 @@ void InterDex::emit_remaining_classes_exploring_alternatives(
         }
 
         std::optional<FlushOutDexResult> opt_fodr;
-        bool emitted = inter_dex->emit_class(emitting_state, dex_info, cls,
-                                             /* check_if_skip */ false,
-                                             /* perf_sensitive */ false,
-                                             &canary_cls, &opt_fodr);
+        auto res = inter_dex->emit_class(emitting_state, dex_info, cls,
+                                         /* check_if_skip */ false,
+                                         /* perf_sensitive */ false,
+                                         &canary_cls, &opt_fodr);
         if (opt_fodr) {
-          always_assert(!emitted);
+          always_assert(!res.emitted);
           cross_dex_ref_minimizer.reset();
           fodrs.push_back(*opt_fodr);
           break;
         }
 
-        cross_dex_ref_minimizer.erase(cls, emitted);
+        cross_dex_ref_minimizer.erase(cls, res.emitted);
       }
       return cross_dex_ref_minimizer.get_remaining_difficulty();
     }
@@ -883,6 +885,7 @@ void InterDex::emit_remaining_classes_exploring_alternatives(
       worst_classes.push_back(nullptr);
     }
 
+    best->cross_dex_ref_minimizer.compact();
     std::unique_ptr<Alternative> last;
     std::swap(last, best);
     std::mutex best_mutex;
@@ -902,14 +905,17 @@ void InterDex::emit_remaining_classes_exploring_alternatives(
                 "Found cross-dex-ref-minimization solution with %f remaining "
                 "difficulity at index %zu",
                 remaining_difficulty, index);
-
-          std::lock_guard<std::mutex> lock_guard(best_mutex);
-          if (!best || remaining_difficulty < best_remaining_difficulty ||
-              (remaining_difficulty == best_remaining_difficulty &&
-               index < best_index)) {
-            best = std::move(alt);
-            best_remaining_difficulty = remaining_difficulty;
-            best_index = index;
+          {
+            std::lock_guard<std::mutex> lock_guard(best_mutex);
+            if (!best || remaining_difficulty < best_remaining_difficulty ||
+                (remaining_difficulty == best_remaining_difficulty &&
+                 index < best_index)) {
+              // swap so that we destroy the dead alternative outside of the
+              // lock
+              std::swap(best, alt);
+              best_remaining_difficulty = remaining_difficulty;
+              best_index = index;
+            }
           }
         });
   }
@@ -945,8 +951,8 @@ void InterDex::run_in_force_single_dex_mode() {
     FieldRefs clazz_frefs;
     TypeRefs clazz_trefs;
     TypeRefs clazz_itrefs;
-    gather_refs(m_plugins, cls, &clazz_mrefs, &clazz_frefs, &clazz_trefs,
-                &clazz_itrefs);
+    gather_refs(m_class_references_cache, m_plugins, cls, &clazz_mrefs,
+                &clazz_frefs, &clazz_trefs, &clazz_itrefs);
 
     m_emitting_state.dexes_structure.add_class_no_checks(
         clazz_mrefs, clazz_frefs, clazz_trefs, clazz_itrefs, cls);
@@ -972,7 +978,8 @@ void InterDex::run() {
   }
 
   auto unreferenced_classes = find_unrefenced_coldstart_classes(
-      m_scope, m_interdex_types, m_static_prune_classes);
+      m_scope, m_interdex_types, m_static_prune_classes,
+      m_class_references_cache);
 
   const auto& primary_dex = m_dexen[0];
   // We have a bunch of special logic for the primary dex which we only use if
@@ -1228,8 +1235,8 @@ InterDex::FlushOutDexResult InterDex::flush_out_dex(
     FieldRefs clazz_frefs;
     TypeRefs clazz_trefs;
     TypeRefs clazz_itrefs;
-    gather_refs(m_plugins, canary_cls, &clazz_mrefs, &clazz_frefs, &clazz_trefs,
-                &clazz_itrefs);
+    gather_refs(m_class_references_cache, m_plugins, canary_cls, &clazz_mrefs,
+                &clazz_frefs, &clazz_trefs, &clazz_itrefs);
 
     bool canary_added = emitting_state.dexes_structure.add_class_to_current_dex(
         clazz_mrefs, clazz_frefs, clazz_trefs, clazz_itrefs, canary_cls);
@@ -1276,7 +1283,7 @@ void InterDex::post_process_dex(EmittingState& emitting_state,
       // classes in this dex, then we treat the additional classes as
       // perf-sensitive, to be conservative.
       if (fodr.primary_or_betamap_ordered) {
-        cls->set_perf_sensitive(true);
+        cls->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
       }
     }
   }

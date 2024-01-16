@@ -8,17 +8,26 @@
 #pragma once
 
 #include "Pass.h"
+#include "PassManager.h"
 
-class BasicBlockProfilePass : public Pass {
+/**
+ * This pass is meant to edit layout .xml files to replace things of the form
+ * <View ...> with <view class="android.view.View" ...> to avoid class load
+ * attempts for obviously non-existent classes.
+ */
+class FullyQualifyLayouts : Pass {
  public:
-  BasicBlockProfilePass() : Pass("BasicBlockProfilePass") {}
+  FullyQualifyLayouts() : Pass("FullyQualifyLayoutsPass") {}
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
+        {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 

@@ -15,7 +15,7 @@
 class RemoveRecursiveLocksTest : public RedexTest {
  public:
   static void normalize(IRCode* code) {
-    code->build_cfg(/*editable=*/true);
+    code->build_cfg();
     code->clear_cfg();
   }
 };

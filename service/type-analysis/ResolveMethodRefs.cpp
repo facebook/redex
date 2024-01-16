@@ -18,13 +18,14 @@ ResolveMethodRefs::ResolveMethodRefs(
     const Scope& scope,
     const type_analyzer::global::GlobalTypeAnalyzer& gta,
     const XStoreRefs& xstores) {
-  walk::methods(scope, [&](DexMethod* method) {
+  Timer t("ResolveMethodRefs");
+  walk::parallel::methods(scope, [&](DexMethod* method) {
     auto* code = const_cast<IRCode*>(method->get_code());
     if (!code) {
       return;
     }
     cfg::ScopedCFG cfg(code);
-    auto lta = gta.get_local_analysis(method);
+    auto lta = gta.get_replayable_local_analysis(method);
     // Using the result of GTA, check if an interface can be resolved to its
     // implementor at certain callsite.
     analyze_method(method, *lta, xstores);

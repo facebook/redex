@@ -59,12 +59,17 @@ using PropertyInteractions =
 namespace names {
 
 inline const PropertyName NoInitClassInstructions("NoInitClassInstructions");
+inline const PropertyName NoUnreachableInstructions(
+    "NoUnreachableInstructions");
 inline const PropertyName DexLimitsObeyed("DexLimitsObeyed");
 // Stand-in for fixing up passes.
 inline const PropertyName NeedsEverythingPublic("NeedsEverythingPublic");
+inline const PropertyName NeedsInjectionIdLowering("NeedsInjectionIdLowering");
 inline const PropertyName HasSourceBlocks("HasSourceBlocks");
+inline const PropertyName NoResolvablePureRefs("NoResolvablePureRefs");
 inline const PropertyName NoSpuriousGetClassCalls("NoSpuriousGetClassCalls");
 inline const PropertyName RenameClass("RenameClass");
+inline const PropertyName UltralightCodePatterns("UltralightCodePatterns");
 
 } // namespace names
 
@@ -79,9 +84,13 @@ inline PropertyInteractions preserves_all() {
       {DexLimitsObeyed, Preserves},
       {HasSourceBlocks, Preserves},
       {NeedsEverythingPublic, Preserves},
+      {NeedsInjectionIdLowering, Preserves},
       {NoInitClassInstructions, Preserves},
+      {NoUnreachableInstructions, Preserves},
+      {NoResolvablePureRefs, Preserves},
       {NoSpuriousGetClassCalls, Preserves},
       {RenameClass, Preserves},
+      {UltralightCodePatterns, Preserves},
   };
 }
 

@@ -11,6 +11,8 @@
 #include <map>
 #include <unordered_map>
 
+#include "Debug.h"
+
 /*
  * Collection type that maintains a set of elements with associated
  * priorities, allowing updating priorities, and enabling efficient

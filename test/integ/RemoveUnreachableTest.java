@@ -72,6 +72,13 @@ class HoneyBadger extends BadgerImpl {
   }
 }
 
+class HoneyBadgerInstantiated extends BadgerImpl {
+  @Override
+  public boolean isAwesome() {
+    return true;
+  }
+}
+
 class HogBadger implements Badger {
   @Override
   public boolean isAwesome() {
@@ -81,6 +88,7 @@ class HogBadger implements Badger {
 
 class BadgerTester {
   public static boolean testBadger(Badger b) {
+    new HoneyBadgerInstantiated();
     return b.isAwesome();
   }
 }
@@ -128,8 +136,42 @@ class UseHasher {
 
 class OnlyInArray {}
 
+interface J {
+  public void implementMe();
+}
+
+class Instantiated implements J {
+  public void implementMe() {}
+}
+class Uninstantiated implements J {
+  public Uninstantiated(int dummyParameterToAvoidInclusionOfDefaultArglessConstructor) { }
+  public static J retainMe() { return new Instantiated(); }
+  public void implementMe() {}
+}
+
+interface K {
+  public void foo();
+}
+abstract class KImpl1Abstract implements K { }
+class KImpl1Derived extends KImpl1Abstract {
+  public void foo() { };
+}
+class KImpl2 implements K {
+  public void foo() { };
+}
+
+interface ReferencedInterface {
+  public void foo();
+}
+interface UnreferencedInterface extends ReferencedInterface {
+}
+class ClassImplementingUnreferencedInterface implements UnreferencedInterface {
+  public void foo() {}
+}
+
+
 public class RemoveUnreachableTest {
-  public void testMethod() {
+  public static void testMethod() {
     // Inheritance test
     A d = new D();
     D d2 = (D) d;
@@ -138,5 +180,21 @@ public class RemoveUnreachableTest {
     // Triangle inheritance
     I i = new Sub();
     i.wat();
+  }
+
+  public static void testUninstantiated() {
+    J j = Uninstantiated.retainMe();
+    j.implementMe();
+  }
+
+  public static void testSharpening() {
+    KImpl1Abstract k = new KImpl1Derived();
+    k.foo();
+    new KImpl2();
+  }
+
+  public static void unreferencedInterface() {
+    ReferencedInterface ri = new ClassImplementingUnreferencedInterface();
+    ri.foo();
   }
 }

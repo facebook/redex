@@ -178,11 +178,18 @@ bool is_argless_init(const DexMethodRef* method) {
 }
 
 bool is_trivial_clinit(const IRCode& code) {
-  always_assert(!code.editable_cfg_built());
-  auto ii = InstructionIterable(code);
-  return std::none_of(ii.begin(), ii.end(), [](const MethodItemEntry& mie) {
-    return mie.insn->opcode() != OPCODE_RETURN_VOID;
-  });
+  if (!code.editable_cfg_built()) {
+    auto ii = InstructionIterable(code);
+    return std::none_of(ii.begin(), ii.end(), [](const MethodItemEntry& mie) {
+      return mie.insn->opcode() != OPCODE_RETURN_VOID;
+    });
+  } else {
+    auto& cfg = code.cfg();
+    auto ii = cfg::ConstInstructionIterable(cfg);
+    return std::none_of(ii.begin(), ii.end(), [](const MethodItemEntry& mie) {
+      return mie.insn->opcode() != OPCODE_RETURN_VOID;
+    });
+  }
 }
 
 bool is_clinit_invoked_method_benign(const DexMethodRef* method_ref) {
@@ -507,6 +514,14 @@ bool no_invoke_super(const IRCode& code) {
     return editable_cfg_adapter::LOOP_CONTINUE;
   });
   return !has_invoke_super;
+}
+
+bool may_be_invoke_target(const DexMethod* method) {
+  if (is_native(method) || method->is_external()) {
+    // We don't know
+    return true;
+  }
+  return !is_abstract(method) && !method->get_code()->is_unreachable();
 }
 
 #define DEFINE_CACHED_METHOD(func_name, _)                 \

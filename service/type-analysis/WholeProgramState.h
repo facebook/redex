@@ -11,6 +11,7 @@
 
 #include <sparta/HashedAbstractPartition.h>
 
+#include "CallGraph.h"
 #include "ConcurrentContainers.h"
 #include "DexTypeEnvironment.h"
 #include "InstructionAnalyzer.h"
@@ -28,6 +29,8 @@ class GlobalTypeAnalyzer;
 
 } // namespace global
 
+using EligibleIfields = std::unordered_set<DexField*>;
+
 using DexTypeFieldPartition =
     sparta::HashedAbstractPartition<const DexField*, DexTypeDomain>;
 
@@ -42,7 +45,15 @@ class WholeProgramState {
   WholeProgramState(const Scope&,
                     const global::GlobalTypeAnalyzer&,
                     const std::unordered_set<DexMethod*>& non_true_virtuals,
-                    const ConcurrentSet<const DexMethod*>& any_init_reachables);
+                    const ConcurrentSet<const DexMethod*>& any_init_reachables,
+                    const EligibleIfields& eligible_ifields);
+
+  WholeProgramState(const Scope&,
+                    const global::GlobalTypeAnalyzer&,
+                    const std::unordered_set<DexMethod*>&,
+                    const ConcurrentSet<const DexMethod*>&,
+                    const EligibleIfields&,
+                    std::shared_ptr<const call_graph::Graph> call_graph);
 
   void set_to_top() {
     m_field_partition.set_to_top();
@@ -79,7 +90,11 @@ class WholeProgramState {
    * don't want to propagate Bottom to local analysis.
    */
   DexTypeDomain get_return_type(const DexMethod* method) const {
-    if (!m_known_methods.count(method)) {
+    // When call graph is present, this is only used for testing purposes. That
+    // way to bypass the known_methods check and go straight to the partition.
+    // When call graph is not present, this is the fallback path for the
+    // analysis to look up the return type only for the known_methods.
+    if (!has_call_graph() && !m_known_methods.count(method)) {
       return DexTypeDomain::top();
     }
     auto domain = m_method_partition.get(method);
@@ -125,6 +140,28 @@ class WholeProgramState {
            !is_any_init_reachable(method);
   }
 
+  bool has_call_graph() const { return !!m_call_graph; }
+
+  DexTypeDomain get_return_type_from_cg(const IRInstruction* insn) const {
+    auto callees = call_graph::resolve_callees_in_graph(*m_call_graph, insn);
+    if (callees.empty()) {
+      return DexTypeDomain::top();
+    }
+    DexTypeDomain ret = DexTypeDomain::bottom();
+    for (const DexMethod* callee : callees) {
+      auto val = m_method_partition.get(callee);
+      ret.join_with(val);
+    }
+    if (ret == DexTypeDomain::bottom()) {
+      return DexTypeDomain::top();
+    }
+    return ret;
+  }
+
+  bool method_is_dynamic(const DexMethod* method) const {
+    return call_graph::method_is_dynamic(*m_call_graph, method);
+  }
+
   // For debugging
   std::string print_field_partition_diff(const WholeProgramState& other) const;
 
@@ -147,23 +184,29 @@ class WholeProgramState {
  private:
   void analyze_clinits_and_ctors(const Scope&,
                                  const global::GlobalTypeAnalyzer&,
+                                 const EligibleIfields&,
                                  DexTypeFieldPartition*);
   void setup_known_method_returns();
 
-  void collect(const Scope& scope, const global::GlobalTypeAnalyzer&);
+  void collect(const Scope& scope,
+               const global::GlobalTypeAnalyzer&,
+               const EligibleIfields&);
 
   void collect_field_types(
       const IRInstruction* insn,
       const DexTypeEnvironment& env,
-      ConcurrentMap<const DexField*, std::vector<DexTypeDomain>>* field_tmp);
+      const EligibleIfields& eligible_ifields,
+      ConcurrentMap<const DexField*, DexTypeDomain>* field_tmp);
 
   void collect_return_types(
       const IRInstruction* insn,
       const DexTypeEnvironment& env,
       const DexMethod* method,
-      ConcurrentMap<const DexMethod*, std::vector<DexTypeDomain>>* method_tmp);
+      ConcurrentMap<const DexMethod*, DexTypeDomain>* method_tmp);
 
   bool is_reachable(const global::GlobalTypeAnalyzer&, const DexMethod*) const;
+
+  std::shared_ptr<const call_graph::Graph> m_call_graph;
 
   // To avoid "Show.h" in the header.
   static std::string show_field(const DexField* f);

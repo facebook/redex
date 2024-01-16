@@ -85,7 +85,7 @@ TEST_F(SynthTest1, synthetic) {
     if (strcmp(class_name, "Lcom/facebook/redextest/Alpha$Beta;") == 0) {
       for (const auto& method : cls->get_vmethods()) {
         auto* code = method->get_code();
-        code->build_cfg(/* editable */ true);
+        code->build_cfg();
         for (auto& mie : InstructionIterable(code->cfg())) {
           auto insn = mie.insn;
           std::cout << SHOW(insn) << std::endl;

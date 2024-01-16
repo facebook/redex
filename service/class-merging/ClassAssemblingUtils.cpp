@@ -21,14 +21,14 @@ using namespace class_merging;
 
 namespace {
 
-void patch_iget_for_int_like_types(DexMethod* meth,
-                                   const IRList::iterator& it,
+void patch_iget_for_int_like_types(cfg::ControlFlowGraph& cfg,
+                                   const cfg::InstructionIterator& it,
                                    IRInstruction* convert) {
   auto insn = it->insn;
-  auto move_result_it = std::next(it);
+  auto move_result_it = cfg.move_result_of(it);
   auto src_dest = move_result_it->insn->dest();
   convert->set_src(0, src_dest)->set_dest(src_dest);
-  meth->get_code()->insert_after(move_result_it, convert);
+  cfg.insert_after(move_result_it, convert);
   insn->set_opcode(OPCODE_IGET);
 }
 
@@ -97,6 +97,7 @@ DexClass* create_class(const DexType* type,
     mb->invoke(OPCODE_INVOKE_DIRECT, super_ctor, args);
     mb->ret_void();
     auto ctor = mc->create();
+    ctor->get_code()->build_cfg();
     TRACE(CLMG, 4, " default ctor created %s", SHOW(ctor));
     cls->add_method(ctor);
   }
@@ -194,7 +195,7 @@ DexClass* create_merger_class(const DexType* type,
   return cls;
 }
 
-void patch_iput(const IRList::iterator& it) {
+void patch_iput(const cfg::InstructionIterator& it) {
   auto insn = it->insn;
   const auto op = insn->opcode();
   always_assert(opcode::is_an_iput(op));
@@ -209,35 +210,36 @@ void patch_iput(const IRList::iterator& it) {
   }
 };
 
-void patch_iget(DexMethod* meth,
-                const IRList::iterator& it,
+void patch_iget(cfg::ControlFlowGraph& cfg,
+                const cfg::InstructionIterator& it,
                 DexType* original_field_type) {
   auto insn = it->insn;
   const auto op = insn->opcode();
   always_assert(opcode::is_an_iget(op));
   switch (op) {
   case OPCODE_IGET_OBJECT: {
-    auto dest = std::next(it)->insn->dest();
+    auto move_insn_it = cfg.move_result_of(it);
+    auto dest = move_insn_it->insn->dest();
     auto cast = ModelMethodMerger::make_check_cast(original_field_type, dest);
-    meth->get_code()->insert_after(insn, cast);
+    cfg.insert_after(move_insn_it, cast);
     break;
   }
   case OPCODE_IGET_BYTE: {
     always_assert(original_field_type == type::_byte());
     auto int_to_byte = new IRInstruction(OPCODE_INT_TO_BYTE);
-    patch_iget_for_int_like_types(meth, it, int_to_byte);
+    patch_iget_for_int_like_types(cfg, it, int_to_byte);
     break;
   }
   case OPCODE_IGET_CHAR: {
     always_assert(original_field_type == type::_char());
     auto int_to_char = new IRInstruction(OPCODE_INT_TO_CHAR);
-    patch_iget_for_int_like_types(meth, it, int_to_char);
+    patch_iget_for_int_like_types(cfg, it, int_to_char);
     break;
   }
   case OPCODE_IGET_SHORT: {
     always_assert(original_field_type == type::_short());
     auto int_to_short = new IRInstruction(OPCODE_INT_TO_SHORT);
-    patch_iget_for_int_like_types(meth, it, int_to_short);
+    patch_iget_for_int_like_types(cfg, it, int_to_short);
     break;
   }
   default:

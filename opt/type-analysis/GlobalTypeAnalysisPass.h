@@ -23,6 +23,7 @@ class GlobalTypeAnalysisPass : public Pass {
     bool insert_runtime_asserts{false};
     bool trace_global_local_diff{false};
     bool resolve_method_refs{true};
+    bool use_multiple_callee_callgraph{false};
     type_analyzer::Transform::Config transform;
     type_analyzer::RuntimeAssertTransform::Config runtime_assert;
   };
@@ -55,6 +56,7 @@ class GlobalTypeAnalysisPass : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
     };
   }
@@ -68,6 +70,8 @@ class GlobalTypeAnalysisPass : public Pass {
     bind("insert_runtime_asserts", false, m_config.insert_runtime_asserts);
     bind("trace_global_local_diff", false, m_config.trace_global_local_diff);
     bind("resolve_method_refs", true, m_config.resolve_method_refs);
+    bind("use_multiple_callee_callgraph", true,
+         m_config.use_multiple_callee_callgraph);
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

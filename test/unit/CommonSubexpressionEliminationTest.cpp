@@ -56,10 +56,8 @@ void test(
   auto code = assembler::ircode_from_string(code_str);
   auto expected = assembler::ircode_from_string(expected_str);
 
-  code->build_cfg(/* editable */ true);
-  walk::code(scope, [&](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ true);
-  });
+  code->build_cfg();
+  walk::code(scope, [&](DexMethod*, IRCode& code) { code.build_cfg(); });
 
   auto pure_methods = get_pure_methods();
   std::unordered_set<const DexField*> finalish_fields;

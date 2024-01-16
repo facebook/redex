@@ -304,6 +304,14 @@ class AndroidResources {
   // As above, for single file.
   virtual void collect_xml_attribute_string_values_for_file(
       const std::string& file_path, std::unordered_set<std::string>* out) = 0;
+  // Transforms element names in the given map to be <view> elements with their
+  // class name specified fully qualified. Out param indicates the number of
+  // elements that were changed.
+  virtual void fully_qualify_layout(
+      const std::unordered_map<std::string, std::string>& element_to_class_name,
+      const std::string& file_path,
+      size_t* changes) = 0;
+
   virtual std::unique_ptr<ResourceTableFile> load_res_table() = 0;
   virtual size_t remap_xml_reference_attributes(
       const std::string& filename,
@@ -362,7 +370,7 @@ bool is_raw_resource(const std::string& filename);
 
 // Convenience method for copying values in a multimap to a set, for a
 // particular key.
-std::set<std::string> multimap_values_to_set(
+std::unordered_set<std::string_view> multimap_values_to_set(
     const std::unordered_multimap<std::string, std::string>& map,
     const std::string& key);
 

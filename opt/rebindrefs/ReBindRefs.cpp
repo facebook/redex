@@ -27,28 +27,10 @@
 
 namespace {
 
-DexMethodRef* object_array_clone() {
-  static DexMethodRef* clone = DexMethod::make_method(
-      "[Ljava/lang/Object;", "clone", "Ljava/lang/Object;", {});
-  return clone;
-}
-
-bool is_array_clone(DexMethodRef* mref, DexType* mtype) {
-  static auto clone = DexString::make_string("clone");
-  return type::is_array(mtype) && mref->get_name() == clone &&
-         !type::is_primitive(type::get_array_element_type(mtype));
-}
-
 inline bool match(const DexString* name,
                   const DexProto* proto,
                   const DexMethod* cls_meth) {
   return name == cls_meth->get_name() && proto == cls_meth->get_proto();
-}
-
-// Only looking at the public, protected and private bits.
-template <typename DexMember>
-DexAccessFlags get_visibility(const DexMember* member) {
-  return member->get_access() & VISIBILITY_MASK;
 }
 
 struct Rebinder {
@@ -97,16 +79,11 @@ struct Rebinder {
  public:
   struct RebinderRefs {
     RefStats<DexMethodRef*> mrefs;
-    RefStats<DexMethodRef*> array_clone_refs;
 
-    void print(PassManager& mgr) const {
-      mrefs.print("method_refs", mgr);
-      array_clone_refs.print("array_clone", mgr);
-    }
+    void print(PassManager& mgr) const { mrefs.print("method_refs", mgr); }
 
     RebinderRefs& operator+=(const RebinderRefs& rhs) {
       mrefs += rhs.mrefs;
-      array_clone_refs += rhs.array_clone_refs;
       return *this;
     }
   };
@@ -200,12 +177,6 @@ struct Rebinder {
                              RebinderRefs& rebinder_refs) {
     const auto mref = mop->get_method();
     auto mtype = mref->get_class();
-    if (is_array_clone(mref, mtype)) {
-      rebind_method_opcode(is_support_lib, mop, mref,
-                           rebind_array_clone(mref, rebinder_refs),
-                           rebinder_refs);
-      return;
-    }
     // leave java.lang.String alone not to interfere with OP_EXECUTE_INLINE
     // and possibly any smart handling of String
     if (mtype == type::java_lang_String()) {
@@ -273,13 +244,6 @@ struct Rebinder {
       always_assert(!is_external);
       set_public(cls);
     }
-  }
-
-  DexMethodRef* rebind_array_clone(DexMethodRef* mref,
-                                   RebinderRefs& rebinder_refs) {
-    DexMethodRef* real_ref = object_array_clone();
-    rebinder_refs.array_clone_refs.insert(mref, real_ref);
-    return real_ref;
   }
 
   Scope& m_scope;

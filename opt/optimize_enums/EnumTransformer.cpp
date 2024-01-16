@@ -1146,6 +1146,9 @@ class EnumTransformer final {
 
   uint32_t get_int_objs_count() { return m_int_objs; }
   uint32_t get_enum_objs_count() { return m_enum_objs; }
+  uint32_t get_enum_attributes_map_size() {
+    return m_enum_attributes_map.size();
+  }
 
  private:
   /**
@@ -1600,7 +1603,8 @@ namespace optimize_enums {
  * Transform enums to Integer objects, return the total number of eliminated
  * enum objects.
  */
-int transform_enums(const Config& config,
+int transform_enums(PassManager& mgr,
+                    const Config& config,
                     DexStoresVector* stores,
                     size_t* num_int_objs) {
   if (config.candidate_enums.empty()) {
@@ -1610,6 +1614,10 @@ int transform_enums(const Config& config,
   EnumTransformer transformer(config, stores);
   transformer.run();
   *num_int_objs = transformer.get_int_objs_count();
+  mgr.incr_metric("num_eliminated_enum_classes",
+                  transformer.get_enum_attributes_map_size());
+  TRACE(ENUM, 2, "optimize enums : num_eliminated_enum_classes %u",
+        transformer.get_enum_attributes_map_size());
   return transformer.get_enum_objs_count();
 }
 } // namespace optimize_enums
