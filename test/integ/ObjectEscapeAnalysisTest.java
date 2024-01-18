@@ -373,4 +373,25 @@ public class ObjectEscapeAnalysisTest {
     P p = new P(42);
     return p.getX();
   }
+
+  static class Q {
+    public Q() {}
+
+    static class QQ {}
+
+    public static Q allocator() {
+      // Creating QQ here makes this method itself a root...
+      new QQ();
+      // ... a root that also allocates and returns ...
+      Q q = new Q();
+      Object x = null;
+      x.getClass();
+      // ... except that the return will get dce'd
+      return q;
+    }
+  }
+
+  public static void nothingToReduce() {
+    Q.allocator();
+  }
 }

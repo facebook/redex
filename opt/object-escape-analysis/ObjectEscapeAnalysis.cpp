@@ -365,6 +365,61 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
   return root_methods;
 }
 
+void shrink_root_methods(
+    MultiMethodInliner& inliner,
+    const ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>&
+        dependencies,
+    const std::unordered_map<DexMethod*, InlinableTypes>& root_methods,
+    MethodSummaries* method_summaries) {
+  InsertOnlyConcurrentSet<DexMethod*> methods_that_lost_allocation_insns;
+  std::function<void(DexMethod*)> lose;
+  lose = [&](DexMethod* method) {
+    if (!methods_that_lost_allocation_insns.insert(method).second) {
+      return;
+    }
+    auto it = dependencies.find(method);
+    if (it == dependencies.end()) {
+      return;
+    }
+    for (auto* caller : it->second) {
+      auto it2 = method_summaries->find(caller);
+      if (it2 == method_summaries->end()) {
+        continue;
+      }
+      auto* allocation_insn = it2->second.allocation_insn;
+      if (allocation_insn && opcode::is_an_invoke(allocation_insn->opcode())) {
+        auto callee = resolve_method(allocation_insn->get_method(),
+                                     opcode_to_search(allocation_insn));
+        always_assert(callee);
+        if (callee == method) {
+          lose(caller);
+        }
+      }
+    }
+  };
+  workqueue_run<std::pair<DexMethod*, InlinableTypes>>(
+      [&](const std::pair<DexMethod*, InlinableTypes>& p) {
+        const auto& [method, types] = p;
+        inliner.get_shrinker().shrink_method(method);
+        auto it = method_summaries->find(method);
+        if (it != method_summaries->end() && it->second.allocation_insn) {
+          auto ii = InstructionIterable(method->get_code()->cfg());
+          if (std::none_of(
+                  ii.begin(), ii.end(), [&](const MethodItemEntry& mie) {
+                    return opcode::is_return_object(mie.insn->opcode());
+                  })) {
+            lose(method);
+          }
+        }
+      },
+      root_methods);
+  for (auto* method : methods_that_lost_allocation_insns) {
+    auto& allocation_insn = method_summaries->at(method).allocation_insn;
+    always_assert(allocation_insn != nullptr);
+    allocation_insn = nullptr;
+  }
+}
+
 size_t get_code_size(DexMethod* method) {
   return method->get_code()->estimate_code_units();
 }
@@ -1060,13 +1115,6 @@ compute_reduced_methods(
     }
   }
 
-  workqueue_run<std::pair<DexMethod*, InlinableTypes>>(
-      [&](const std::pair<DexMethod*, InlinableTypes>& p) {
-        const auto& [method, types] = p;
-        inliner.get_shrinker().shrink_method(method);
-      },
-      root_methods);
-
   // This comparison function implies the sequence of inlinable type subsets
   // we'll consider. We'll structure the sequence such that often occurring
   // types with multiple uses will be chopped off the type set first.
@@ -1343,29 +1391,13 @@ void reduce(DexStoresVector& stores,
             ConfigFiles& conf,
             const init_classes::InitClassesWithSideEffects&
                 init_classes_with_side_effects,
+            MultiMethodInliner& inliner,
             const MethodSummaries& method_summaries,
             const std::unordered_set<DexClass*>& excluded_classes,
             const std::unordered_map<DexMethod*, InlinableTypes>& root_methods,
             Stats* stats,
             size_t max_inline_size) {
   Timer t("reduce");
-  ConcurrentMethodResolver concurrent_method_resolver;
-
-  std::unordered_set<DexMethod*> no_default_inlinables;
-  // customize shrinking options
-  auto inliner_config = conf.get_inliner_config();
-  inliner_config.shrinker = shrinker::ShrinkerConfig();
-  inliner_config.shrinker.run_const_prop = true;
-  inliner_config.shrinker.run_cse = true;
-  inliner_config.shrinker.run_copy_prop = true;
-  inliner_config.shrinker.run_local_dce = true;
-  inliner_config.shrinker.normalize_new_instances = false;
-  inliner_config.shrinker.compute_pure_methods = false;
-  int min_sdk = 0;
-  MultiMethodInliner inliner(
-      scope, init_classes_with_side_effects, stores, no_default_inlinables,
-      std::ref(concurrent_method_resolver), inliner_config, min_sdk,
-      MultiMethodInlinerMode::None);
 
   // First, we compute all reduced methods
 
@@ -1440,9 +1472,29 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   auto root_methods = compute_root_methods(mgr, new_instances, invokes,
                                            method_summaries, inline_anchors);
 
+  ConcurrentMethodResolver concurrent_method_resolver;
+  std::unordered_set<DexMethod*> no_default_inlinables;
+  // customize shrinking options
+  auto inliner_config = conf.get_inliner_config();
+  inliner_config.shrinker = shrinker::ShrinkerConfig();
+  inliner_config.shrinker.run_const_prop = true;
+  inliner_config.shrinker.run_cse = true;
+  inliner_config.shrinker.run_copy_prop = true;
+  inliner_config.shrinker.run_local_dce = true;
+  inliner_config.shrinker.normalize_new_instances = false;
+  inliner_config.shrinker.compute_pure_methods = false;
+  int min_sdk = 0;
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, no_default_inlinables,
+      std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+      MultiMethodInlinerMode::None);
+
+  shrink_root_methods(inliner, dependencies, root_methods, &method_summaries);
+
   Stats stats;
-  reduce(stores, scope, conf, init_classes_with_side_effects, method_summaries,
-         excluded_classes, root_methods, &stats, m_max_inline_size);
+  reduce(stores, scope, conf, init_classes_with_side_effects, inliner,
+         method_summaries, excluded_classes, root_methods, &stats,
+         m_max_inline_size);
 
   TRACE(OEA, 1, "[object escape analysis] total savings: %zu",
         (size_t)stats.total_savings);
