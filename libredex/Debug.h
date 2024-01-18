@@ -87,7 +87,6 @@ void disable_stack_trace_for_exc_type(RedexError type);
                   e, RedexError::GENERIC_ASSERTION_ERROR, msg, ##__VA_ARGS__))
 #define always_assert_type_log(e, type, msg, ...) \
   assert_impl(e, assert_fail_impl(e, type, msg, ##__VA_ARGS__))
-#undef assert
 
 // A common definition for non-always asserts. Ensures that there won't be
 // "-Wunused" warnings. The `!debug` should be optimized away since it is a
