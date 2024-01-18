@@ -365,7 +365,7 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
   return root_methods;
 }
 
-void shrink_root_methods(
+size_t shrink_root_methods(
     MultiMethodInliner& inliner,
     const ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>&
         dependencies,
@@ -418,6 +418,7 @@ void shrink_root_methods(
     always_assert(allocation_insn != nullptr);
     allocation_insn = nullptr;
   }
+  return methods_that_lost_allocation_insns.size();
 }
 
 size_t get_code_size(DexMethod* method) {
@@ -1489,7 +1490,8 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
       std::ref(concurrent_method_resolver), inliner_config, min_sdk,
       MultiMethodInlinerMode::None);
 
-  shrink_root_methods(inliner, dependencies, root_methods, &method_summaries);
+  auto lost_returns_through_shrinking = shrink_root_methods(
+      inliner, dependencies, root_methods, &method_summaries);
 
   Stats stats;
   reduce(stores, scope, conf, init_classes_with_side_effects, inliner,
@@ -1563,6 +1565,8 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric("inlinable_methods_kept", stats.inlinable_methods_kept);
   mgr.incr_metric("inlined_methods_mispredicted",
                   stats.inlined_methods_mispredicted);
+  mgr.incr_metric("lost_returns_through_shrinking",
+                  lost_returns_through_shrinking);
 }
 
 static ObjectEscapeAnalysisPass s_pass;
