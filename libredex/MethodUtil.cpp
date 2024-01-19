@@ -34,28 +34,30 @@ class ClInitSideEffectsAnalysis {
 
   const DexClass* run(const DexClass* cls) {
     std::stack<const DexClass*> stack;
+    const DexClass* first_cls_with_clinit{nullptr};
     for (; cls && !cls->is_external();
          cls = type_class(cls->get_super_class())) {
       stack.push(cls);
+      if (!first_cls_with_clinit && cls->get_clinit()) {
+        first_cls_with_clinit = cls;
+      }
     }
-    const DexClass* last_cls = nullptr;
     while (!stack.empty()) {
       cls = stack.top();
       stack.pop();
       m_initialized.insert(cls->get_type());
       if (cls->rstate.clinit_has_no_side_effects() ||
           clinit_has_no_side_effects(cls->get_type())) {
-        always_assert(!last_cls);
         continue;
       }
 
       auto clinit = cls->get_clinit();
       if (clinit && method_may_have_side_effects(clinit, clinit)) {
-        last_cls = cls;
+        return first_cls_with_clinit;
       }
     }
     always_assert(m_active.empty());
-    return last_cls;
+    return nullptr;
   }
 
  private:
