@@ -24,6 +24,8 @@
 #include <string>
 
 #include "Macros.h"
+#include "Trace.h"
+#include "TraceContextAccess.h"
 
 #if !IS_WINDOWS
 #include <execinfo.h>
@@ -209,8 +211,20 @@ void assert_fail(const char* expr,
                  ...) {
   va_list ap;
   va_start(ap, fmt);
-  std::string msg = format2string("%s:%u: %s: assertion `%s' failed.\n", file,
-                                  line, func, expr);
+  auto context_str = []() {
+    std::string res;
+#if !IS_WINDOWS
+    auto* trace_context = TraceContextAccess::get_s_context();
+    if (trace_context != nullptr) {
+      res += " (Context: ";
+      res += trace_context->get_string_value();
+      res += ")";
+    }
+#endif
+    return res;
+  };
+  std::string msg = format2string("%s:%u: %s: assertion `%s' failed.%s\n", file,
+                                  line, func, expr, context_str().c_str());
 
   if (strcmp(fmt, " ") != 0) {
     msg += v_format2string(fmt, ap);
