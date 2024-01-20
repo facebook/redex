@@ -96,6 +96,9 @@ def _symbolize(filename: str, offset: str) -> typing.List[str]:
     try:
         path = ADDR2LINE_PATH
         assert path
+
+        path = os.path.abspath(path)
+
         output = subprocess.check_output(
             [path] + _ADDR2LINE_BASE_ARGS + [filename, offset]
         )
