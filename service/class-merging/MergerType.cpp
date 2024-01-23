@@ -117,6 +117,39 @@ std::string MergerType::Shape::build_type_name(
   return ss.str();
 }
 
+std::string MergerType::Shape::build_type_name_legacy(
+    const std::string& prefix,
+    const DexType* root_type,
+    const TypeSet& intf_set,
+    const boost::optional<size_t>& opt_dex_id,
+    size_t count,
+    const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
+    const InterdexSubgroupIdx subgroup_idx) const {
+  auto parent = root_type;
+  if (root_type == type::java_lang_Object() && intf_set.size() == 1) {
+    parent = *intf_set.begin();
+  }
+  auto root_name_tag = get_type_name_tag(parent);
+  std::ostringstream ss;
+  ss << "L" << prefix << root_name_tag << "Shape";
+  ss << count << "S" << string_fields << reference_fields << bool_fields
+     << int_fields << long_fields << double_fields << float_fields;
+
+  if (opt_dex_id && *opt_dex_id > 0) {
+    ss << "_" << *opt_dex_id;
+  }
+
+  if (interdex_subgroup_idx != boost::none) {
+    ss << "_I" << interdex_subgroup_idx.get();
+  }
+
+  if (subgroup_idx != 0) {
+    ss << "_" << subgroup_idx;
+  }
+  ss << ";";
+  return ss.str();
+}
+
 std::string MergerType::Shape::to_string() const {
   std::ostringstream ss;
   ss << "(" << string_fields << "," << reference_fields << "," << bool_fields

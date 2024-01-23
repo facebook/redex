@@ -194,6 +194,8 @@ struct ModelSpec {
   }
 
   boost::optional<size_t> max_num_dispatch_target{boost::none};
+
+  bool use_stable_shape_names{false};
 };
 
 struct ModelStats {
@@ -407,7 +409,8 @@ class Model {
       const TypeSet& intf_set,
       const boost::optional<size_t>& dex_id,
       const ConstTypeVector& group_values,
-      const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx);
+      const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
+      const InterdexSubgroupIdx subgroup_idx);
   void create_mergers_helper(
       const DexType* merger_type,
       const MergerType::Shape& shape,

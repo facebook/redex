@@ -114,6 +114,15 @@ struct MergerType {
         const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
         std::unordered_set<size_t>& hash_cache) const;
 
+    std::string build_type_name_legacy(
+        const std::string& prefix,
+        const DexType* root_type,
+        const TypeSet& intf_set,
+        const boost::optional<size_t>& opt_dex_id,
+        size_t count,
+        const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
+        const InterdexSubgroupIdx subgroup_idx) const;
+
     /**
      * Returns if this shape includes another shape
      */
