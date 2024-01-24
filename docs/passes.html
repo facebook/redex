@@ -203,21 +203,6 @@ with multiple sucessors.</p>
 <p>Stack traces for deduplicated blocks will always report the same line number,
 but the predecessor line numbers will be correct.</p>
 <p><code>DedupBlocksPass</code> should be run after <a href="#interdexpass"><code>InterDexPass</code></a>.</p>
-<h2><a class="anchor" aria-hidden="true" id="delinitpass"></a><a href="#delinitpass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>DelInitPass</h2>
-<p>DelInitPass deletes unreferenced methods and fields that have no reachable
-constructor, as well as constructors for classes that can be removed or for
-classes that have another constructor that can be called.</p>
-<p>The scope of <code>DelInitPass</code> can be limited by a <code>package_allowlist</code> in the
-<a href="/docs/configuring">app's config file</a>. Lacking a white list, <code>DelInitPass</code> works at
-global scope.</p>
-<p><code>DelInitPass</code> should be run before
-<a href="#removeunreachablepass"><code>RemoveUnreachablePass</code></a> (RMU) as <code>DelInitPass</code> cleans
-constructors, enabling RMU to clean up more classes.</p>
-<p>See related:</p>
-<ul>
-<li><a href="#localdcepass"><code>LocalDcePass</code></a></li>
-<li><a href="#removeunreachablepass"><code>RemoveUnreachablePass</code></a></li>
-</ul>
 <h2><a class="anchor" aria-hidden="true" id="delsuperpass"></a><a href="#delsuperpass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>DelSuperPass</h2>
 <p>DelSuperPass eliminates subclass methods that invoke the superclass method and
 trivially return.</p>
@@ -411,13 +396,6 @@ instance, stored in a field, or returned)</li>
 <li><a href="#removeunreachablepass"><code>RemoveUnreachablePass</code></a></li>
 <li><a href="#resultpropagationpass"><code>ResultPropagationPass</code></a></li>
 </ul>
-<h2><a class="anchor" aria-hidden="true" id="removeemptyclassespass"></a><a href="#removeemptyclassespass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>RemoveEmptyClassesPass</h2>
-<p><code>RemoveEmptyClassesPass</code> removes classes that contain no methods or fields.
-Classes that are referenced by code or annotations are kept.</p>
-<p>See related:</p>
-<ul>
-<li><a href="#staticrelopassv2"><code>StaticReloPassV2</code></a></li>
-</ul>
 <h2><a class="anchor" aria-hidden="true" id="removeinterfacepass"></a><a href="#removeinterfacepass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>RemoveInterfacePass</h2>
 <p>The motivation of this pass is to remove a hierarchy of interfaces extending
 each others. The removal of the interfaces simplifies the type system and
@@ -435,7 +413,7 @@ also generates a Java interface for each GraphQL fragment namely fragment
 interface. The existence of these interfaces greatly complicates the type system
 of the generated GraphQL fragment models making merging the underlying model
 classes virtually impossible. The other interface removal optimizations like
-<code>SingleImpl</code> and <code>UnreferencedInterfacesPass</code> can address this issue to some
+<code>SingleImpl</code> as well as <code>RemoveUnreachablePass</code> can address this issue to some
 extend. But they are not able to remove the majority of them.
 <code>RemoveInterfacePass</code> is capable of removing most of the fragment interfaces at
 the expense of producing the above mentioned dispatch stubs. Doing so before
@@ -443,9 +421,17 @@ Class Merging paves the way for maximizing the code size reduction we can achiev
 in Class Merging.</p>
 <h2><a class="anchor" aria-hidden="true" id="removeunreachablepass"></a><a href="#removeunreachablepass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>RemoveUnreachablePass</h2>
 <p>Starting from the roots, recursively mark the other elements that the roots
-reference. Afterwards, it deletes all the unmarked elements. While doing the
-marking, Redex doesn't attempt to figure out which basic blocks get executed in
-each method; doing that for every single method would be too expensive.</p>
+reference. Afterwards, it deletes all the unmarked elements.</p>
+<p>The pass has various powerful options, including:</p>
+<ul>
+<li><code>remove_no_argument_constructors</code>: Whether to remove argless constructors. They might be used to create instances via reflection, so the default is <code>false</code>.</li>
+<li><code>relaxed_keep_class_members</code>: Only consider instance members as roots when their classes are either instantiable, i.e. have a callable constructor, or are &quot;dynamically referenced&quot;. A class is &quot;dynamically referenced&quot; if it is mentioned in a Dalvik annotation signature, is referenced in a runtime-visibile annotation, appears in a string or a const-class instruction, is the declaring type of a native method, is present in a native library (lib/<em>/</em>.so), has one of the configured &quot;reflected_package_names&quot;. The default is <code>false</code> for backwards compatibility.</li>
+<li><code>throw_propagation</code>: When reachable instructions invoke methods that cannot return (e.g. all possible target methods have no reachable return statement), then subsequent instructions will not be visited, and replaced with a <code>unreachable</code> instruction. The default is <code>false</code> for backwards compatibility.</li>
+<li><code>prune_uninstantiable_insns</code>: When reachable instructions access instance members of classes that can never be instantiated, then subsequent instructions will not be visited, and replaced with an instruction that throws a <code>NullPointerException</code>. The default is <code>false</code> for backwards compatibility.</li>
+<li><code>prune_uncallable_instance_method_bodies</code>: When an instance method can never be target of an invocation, even though we might need to keep the method for virtual scope order, or because of keep rules, then we can replace its body with an <code>unreachable</code> instruction. This draws from the same instantiability knowledge that is used for the <code>prune_uninstantiable_insns</code> option. The default is <code>false</code> for backwards compatibility.</li>
+<li><code>prune_uncallable_virtual_methods</code>: In some cases, we don't need to keep the body of an uncallable method, but instead can make the method abstract, or remove it completely. The default is <code>false</code> for backwards compatibility.</li>
+<li><code>prune_unreferenced_interfaces</code>: Removes interfaces that are not referenced anywhere in code except in <code>implements</code> clauses. The default is <code>false</code> for backwards compatibility.</li>
+</ul>
 <p>More information about <code>RemoveUnreachablePass</code> is available in this [note on
 Teaching Reachability Analysis about Dependency Injection].</p>
 <p>See related:</p>
@@ -535,14 +521,8 @@ confusion in stack traces.</p>
 <p><code>StaticReloPassV2</code> relocates static fields and methods that only have one
 calling class to that class. It improves the performance and reduces the app
 size.</p>
-<p>Pass ordering dependencies:</p>
-<ul>
-<li><code>StaticReloPassV2</code> should be run before <code>RemoveEmptyClassesPass</code> as it enables
-more classes to be optimized.</li>
-</ul>
 <p>See related:</p>
 <ul>
-<li><a href="#removeemptyclassespass"><code>RemoveEmptyClassesPass</code></a></li>
 <li><a href="#staticrelopass"><code>StaticReloPass</code></a></li>
 </ul>
 <h2><a class="anchor" aria-hidden="true" id="stringconcatenatorpass"></a><a href="#stringconcatenatorpass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>StringConcatenatorPass</h2>
@@ -589,11 +569,7 @@ make other passes faster.</li>
 should be run before any inlining passes, and will not optiimize if inlining
 has been performed.</li>
 </ul>
-<h2><a class="anchor" aria-hidden="true" id="unreferencedinterfacespass"></a><a href="#unreferencedinterfacespass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>UnreferencedInterfacesPass</h2>
-<p><code>UnreferencedInterfacesPass</code> removes concrete Interfaces that are not
-referenced anywhere in code except in <code>implements</code> clauses. Interfaces on
-abstract classes are harder to track and are thus considered for optimization.</p>
-</span></div></article></div><div class="docLastUpdate"><em>Last updated on 1/23/2024 by Wei Zhang (Devinfra)</em></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/configuring"><span class="arrow-prev">← </span><span class="function-name-prevnext">Configuring ReDex</span></a><a class="docs-next button" href="/docs/usage"><span>Usage</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#accessmarkingpass">AccessMarkingPass</a></li><li><a href="#annokillpass">AnnoKillPass</a></li><li><a href="#bridgesynthinlinepass">BridgeSynthInlinePass</a></li><li><a href="#checkbreadcrumbspass">CheckBreadcrumbsPass</a></li><li><a href="#classmergingpass">ClassMergingPass</a></li><li><a href="#constantpropagationpass">ConstantPropagationPass</a></li><li><a href="#copypropagationpass">CopyPropagationPass</a></li><li><a href="#dedupblockspass">DedupBlocksPass</a></li><li><a href="#delinitpass">DelInitPass</a></li><li><a href="#delsuperpass">DelSuperPass</a></li><li><a href="#finalinlinepassv2">FinalInlinePassV2</a></li><li><a href="#localdcepass">LocalDcePass</a></li><li><a href="#methoddevirtualizationpass">MethodDevirtualizationPass</a></li><li><a href="#obfuscatepass">ObfuscatePass</a></li><li><a href="#optimizeenumspass">OptimizeEnumsPass</a></li><li><a href="#originalnamepass">OriginalNamePass</a></li><li><a href="#peepholepass">PeepholePass</a></li><li><a href="#rebindrefspass">ReBindRefsPass</a></li><li><a href="#reducegotospass">ReduceGotosPass</a></li><li><a href="#regallocpass">RegAllocPass</a></li><li><a href="#removebuilderspass">RemoveBuildersPass</a></li><li><a href="#removeemptyclassespass">RemoveEmptyClassesPass</a></li><li><a href="#removeinterfacepass">RemoveInterfacePass</a></li><li><a href="#removeunreachablepass">RemoveUnreachablePass</a></li><li><a href="#removeunusedfieldspass">RemoveUnusedFieldsPass</a></li><li><a href="#removeunusedargspass">RemoveUnusedArgsPass</a></li><li><a href="#renameclassespassv2">RenameClassesPassV2</a></li><li><a href="#reorderinterfacesdeclpass">ReorderInterfacesDeclPass</a></li><li><a href="#resultpropagationpass">ResultPropagationPass</a></li><li><a href="#shortensrcstringspass">ShortenSrcStringsPass</a></li><li><a href="#methodinlinepass">MethodInlinePass</a></li><li><a href="#singleimplpass">SingleImplPass</a></li><li><a href="#staticrelopassv2">StaticReloPassV2</a></li><li><a href="#stringconcatenatorpass">StringConcatenatorPass</a></li><li><a href="#stripdebuginfopass">StripDebugInfoPass</a></li><li><a href="#unreferencedinterfacespass">UnreferencedInterfacesPass</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/redex.png" alt="Redex" width="66" height="58"/></a><div class="footerSection"><h5>Docs</h5><a href="
+</span></div></article></div><div class="docLastUpdate"><em>Last updated on 1/24/2024 by Nikolai Tillmann</em></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/configuring"><span class="arrow-prev">← </span><span class="function-name-prevnext">Configuring ReDex</span></a><a class="docs-next button" href="/docs/usage"><span>Usage</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#accessmarkingpass">AccessMarkingPass</a></li><li><a href="#annokillpass">AnnoKillPass</a></li><li><a href="#bridgesynthinlinepass">BridgeSynthInlinePass</a></li><li><a href="#checkbreadcrumbspass">CheckBreadcrumbsPass</a></li><li><a href="#classmergingpass">ClassMergingPass</a></li><li><a href="#constantpropagationpass">ConstantPropagationPass</a></li><li><a href="#copypropagationpass">CopyPropagationPass</a></li><li><a href="#dedupblockspass">DedupBlocksPass</a></li><li><a href="#delsuperpass">DelSuperPass</a></li><li><a href="#finalinlinepassv2">FinalInlinePassV2</a></li><li><a href="#localdcepass">LocalDcePass</a></li><li><a href="#methoddevirtualizationpass">MethodDevirtualizationPass</a></li><li><a href="#obfuscatepass">ObfuscatePass</a></li><li><a href="#optimizeenumspass">OptimizeEnumsPass</a></li><li><a href="#originalnamepass">OriginalNamePass</a></li><li><a href="#peepholepass">PeepholePass</a></li><li><a href="#rebindrefspass">ReBindRefsPass</a></li><li><a href="#reducegotospass">ReduceGotosPass</a></li><li><a href="#regallocpass">RegAllocPass</a></li><li><a href="#removebuilderspass">RemoveBuildersPass</a></li><li><a href="#removeinterfacepass">RemoveInterfacePass</a></li><li><a href="#removeunreachablepass">RemoveUnreachablePass</a></li><li><a href="#removeunusedfieldspass">RemoveUnusedFieldsPass</a></li><li><a href="#removeunusedargspass">RemoveUnusedArgsPass</a></li><li><a href="#renameclassespassv2">RenameClassesPassV2</a></li><li><a href="#reorderinterfacesdeclpass">ReorderInterfacesDeclPass</a></li><li><a href="#resultpropagationpass">ResultPropagationPass</a></li><li><a href="#shortensrcstringspass">ShortenSrcStringsPass</a></li><li><a href="#methodinlinepass">MethodInlinePass</a></li><li><a href="#singleimplpass">SingleImplPass</a></li><li><a href="#staticrelopassv2">StaticReloPassV2</a></li><li><a href="#stringconcatenatorpass">StringConcatenatorPass</a></li><li><a href="#stripdebuginfopass">StripDebugInfoPass</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/redex.png" alt="Redex" width="66" height="58"/></a><div class="footerSection"><h5>Docs</h5><a href="
                 /docs/en/installation">Getting Started</a><a href="
                 /docs/en/configuring">Configuring</a><a href="
                 /docs/en/usage">Using</a><a href="
