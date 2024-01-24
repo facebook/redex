@@ -24,7 +24,6 @@ in [config/default.config](https://github.com/facebook/redex/blob/master/config/
     "SingleImplPass",
     "MethodInlinePass",
     "StaticReloPassV2",
-    "RemoveEmptyClassesPass",
     "ShortenSrcStringsPass",
     "RegAllocPass"
   ]
@@ -58,7 +57,6 @@ this config:
     "DelSuperPass",
     "SingleImplPass",
     "MethodInlinePass",
-    "RemoveEmptyClassesPass",
     "RegAllocPass"
   ]
 }
