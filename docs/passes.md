@@ -472,7 +472,7 @@ also generates a Java interface for each GraphQL fragment namely fragment
 interface. The existence of these interfaces greatly complicates the type system
 of the generated GraphQL fragment models making merging the underlying model
 classes virtually impossible. The other interface removal optimizations like
-`SingleImpl` and `UnreferencedInterfacesPass` can address this issue to some
+`SingleImpl` as well as `RemoveUnreachablePass` can address this issue to some
 extend. But they are not able to remove the majority of them.
 `RemoveInterfacePass` is capable of removing most of the fragment interfaces at
 the expense of producing the above mentioned dispatch stubs. Doing so before
@@ -675,9 +675,3 @@ Pass ordering dependencies:
 *  Inlining complicates the flow graph for debug info. `StripDebugInfoPass`
    should be run before any inlining passes, and will not optiimize if inlining
    has been performed.
-
-## UnreferencedInterfacesPass
-
-`UnreferencedInterfacesPass` removes concrete Interfaces that are not
-referenced anywhere in code except in `implements` clauses. Interfaces on
-abstract classes are harder to track and are thus considered for optimization.
