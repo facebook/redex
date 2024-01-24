@@ -127,6 +127,8 @@ void ClassMergingPass::bind_config() {
   int64_t max_num_dispatch_target;
   bind("max_num_dispatch_target", 0, max_num_dispatch_target);
   trait(Traits::Pass::unique, true);
+  bool use_stable_shape_names;
+  bind("use_stable_shape_names", false, use_stable_shape_names);
 
   // load model specifications
   std::vector<Json::Value> models;
@@ -260,6 +262,7 @@ void ClassMergingPass::bind_config() {
       }
       model.process_method_meta = process_method_meta;
       model.max_num_dispatch_target = m_max_num_dispatch_target;
+      model.use_stable_shape_names = use_stable_shape_names;
       // Assume config based models are all generated code.
       model_spec.get("is_generated_code", true, model.is_generated_code);
 

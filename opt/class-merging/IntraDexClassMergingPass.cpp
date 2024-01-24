@@ -39,6 +39,7 @@ void IntraDexClassMergingPass::bind_config() {
   if (max_count > 0) {
     m_merging_spec.max_count = boost::optional<size_t>(max_count);
   }
+  bind("use_stable_shape_names", false, m_merging_spec.use_stable_shape_names);
   std::string interdex_grouping;
   bind("interdex_grouping", "non-ordered-set", interdex_grouping);
   m_merging_spec.interdex_grouping =

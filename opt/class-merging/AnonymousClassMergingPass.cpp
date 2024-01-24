@@ -40,6 +40,7 @@ void AnonymousClassMergingPass::bind_config() {
        50,
        m_max_count,
        "Maximum mergeable class count per merging group");
+  bind("use_stable_shape_names", false, m_merging_spec.use_stable_shape_names);
   std::string interdex_grouping;
   bind("interdex_grouping", "non-ordered-set", interdex_grouping);
   m_merging_spec.interdex_grouping =
