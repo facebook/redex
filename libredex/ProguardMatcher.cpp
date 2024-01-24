@@ -790,7 +790,6 @@ void KeepRuleMatcher::process_whyareyoukeeping(DexClass* cls) {
 
 // This function is also executed concurrently.
 void KeepRuleMatcher::process_assumenosideeffects(DexClass* cls) {
-  cls->rstate.set_assumenosideeffects();
   ++m_class_matches;
   // Apply any method-level keep specifications.
   apply_method_keeps(cls);

@@ -730,7 +730,9 @@ std::string ReferencedState::str() const {
   s << inner_struct.m_keep;
   s << allowshrinking();
   s << allowobfuscation();
-  s << inner_struct.m_assumenosideeffects;
+  if (inner_struct.is_method()) {
+    s << inner_struct.m_assumenosideeffects;
+  }
   s << inner_struct.m_whyareyoukeeping;
   return s.str();
 }

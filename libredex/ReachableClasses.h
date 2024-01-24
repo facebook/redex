@@ -74,7 +74,6 @@ inline bool marked_by_string(const DexClass* member) {
   return member->rstate.is_referenced_by_string();
 }
 
-template <class DexMember>
-inline bool assumenosideeffects(DexMember* member) {
+inline bool assumenosideeffects(const DexMethod* member) {
   return member->rstate.assumenosideeffects();
 }

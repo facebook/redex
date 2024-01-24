@@ -46,8 +46,7 @@ class ReferencedState {
     // Whether any keep rule has matched this. This applies for both `-keep` and
     // `-keepnames`.
     bool m_keep : 1;
-    // assumenosideeffects allows certain methods to be removed.
-    bool m_assumenosideeffects : 1;
+
     // If m_whyareyoukeeping is true then report debugging information
     // about why this class or member is being kept.
     bool m_whyareyoukeeping : 1;
@@ -101,9 +100,12 @@ class ReferencedState {
         bool m_renamable_initialized : 1;
       };
       // This is for method only. Currently, the number of flags
-      // is 6. Once new flag is added, please update the corresponding number in
+      // is 7. Once new flag is added, please update the corresponding number in
       // comment.
       struct {
+        // assumenosideeffects allows certain methods to be removed.
+        bool m_assumenosideeffects : 1;
+
         bool m_no_optimizations : 1;
         // This is set by the AnalyzePureMethodsPass. It indicates that a method
         // is pure as defined in Purity.h.
@@ -140,7 +142,6 @@ class ReferencedState {
       m_by_resources = false;
 
       m_keep = false;
-      m_assumenosideeffects = false;
       m_whyareyoukeeping = false;
 
       m_set_allowshrinking = false;
@@ -228,9 +229,6 @@ class ReferencedState {
     this->inner_struct.m_keep =
         this->inner_struct.m_keep | other.inner_struct.m_keep;
 
-    this->inner_struct.m_assumenosideeffects =
-        this->inner_struct.m_assumenosideeffects &
-        other.inner_struct.m_assumenosideeffects;
     this->inner_struct.m_whyareyoukeeping =
         this->inner_struct.m_whyareyoukeeping |
         other.inner_struct.m_whyareyoukeeping;
@@ -267,6 +265,9 @@ class ReferencedState {
       this->inner_struct.m_is_kotlin =
           this->inner_struct.m_is_kotlin & other.inner_struct.m_is_kotlin;
     } else if (this->inner_struct.is_method()) {
+      this->inner_struct.m_assumenosideeffects =
+          this->inner_struct.m_assumenosideeffects &
+          other.inner_struct.m_assumenosideeffects;
       this->inner_struct.m_no_optimizations =
           this->inner_struct.m_no_optimizations |
           other.inner_struct.m_no_optimizations;
@@ -328,6 +329,7 @@ class ReferencedState {
   }
 
   bool assumenosideeffects() const {
+    always_assert(this->inner_struct.is_method());
     return inner_struct.m_assumenosideeffects;
   }
 
@@ -437,7 +439,11 @@ class ReferencedState {
     inner_struct.m_unset_allowshrinking = false;
   }
 
-  void set_assumenosideeffects() { inner_struct.m_assumenosideeffects = true; }
+  void set_assumenosideeffects() {
+    if (this->inner_struct.is_method()) {
+      inner_struct.m_assumenosideeffects = true;
+    }
+  }
 
   void set_whyareyoukeeping() { inner_struct.m_whyareyoukeeping = true; }
 
