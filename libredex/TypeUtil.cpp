@@ -459,19 +459,6 @@ bool is_subclass(const DexType* parent, const DexType* child) {
   return false;
 }
 
-bool is_uninstantiable_class(DexType* type) {
-  if (type == nullptr || type::is_array(type) || type::is_primitive(type)) {
-    return false;
-  }
-
-  auto cls = type_class(type);
-  if (cls == nullptr || is_interface(cls) || cls->is_external() ||
-      !cls->rstate.can_delete()) {
-    return false;
-  }
-  return is_abstract(cls) || !cls->has_ctors();
-}
-
 boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
                                              const DexType* test_type) {
   if (test_type == src_type) {

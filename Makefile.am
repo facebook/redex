@@ -453,7 +453,6 @@ libopt_la_SOURCES = \
 	opt/remove_redundant_check_casts/CheckCastAnalysis.cpp \
 	opt/remove_redundant_check_casts/CheckCastTransform.cpp \
 	opt/remove_redundant_check_casts/RemoveRedundantCheckCasts.cpp \
-	opt/remove-uninstantiables/RemoveUninstantiablesPass.cpp \
 	opt/remove-unreachable/RemoveUnreachable.cpp \
 	opt/remove-unreachable/TypeAnalysisAwareRemoveUnreachable.cpp \
 	opt/remove-nullcheck-string-arg/RemoveNullcheckStringArg.cpp \

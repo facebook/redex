@@ -97,7 +97,7 @@ void Stats::report(PassManager& mgr) const {
         RMUNINST, 2, "  " #STAT ": %d/%" PRId64, STAT, mgr.get_metric(#STAT)); \
   } while (0)
 
-  TRACE(RMUNINST, 2, "RemoveUninstantiablesPass Stats:");
+  TRACE(RMUNINST, 2, "RemoveUninstantiablesImpl Stats:");
 
   REPORT(instance_ofs);
   REPORT(invokes);

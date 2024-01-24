@@ -216,15 +216,6 @@ DataType to_datatype(const DexType* t);
 bool is_subclass(const DexType* parent, const DexType* child);
 
 /**
- * Whether the given type refers to a proper class that has no ctor,
- * and is not external or native. This function only makes a quick determination
- * without considering whether an interface or abstract class has any
- * implementations (see the RemoveUninstantiablesPass for a more complete
- * analysis).
- */
-bool is_uninstantiable_class(DexType* type);
-
-/**
  * Evaluate a type check on the `src_type` against the `test_type`. It is
  * equivalent to the semantic of the INSTANCE_OF check. If the check passes, the
  * function returns 1; if it fails, the function returns 0. If it cannot be
