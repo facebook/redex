@@ -8,12 +8,12 @@
 #pragma once
 
 #include <boost/optional.hpp>
-#include <iosfwd>
 #include <json/value.h>
 #include <string>
 
 #include "ApproximateShapeMerging.h"
 #include "DexClass.h"
+#include "InterDexGrouping.h"
 #include "MergerType.h"
 #include "MergingStrategies.h"
 #include "PassManager.h"
@@ -30,13 +30,6 @@ namespace class_merging {
 
 using TypeToTypeSet = std::unordered_map<const DexType*, TypeSet>;
 using TypeGroupByDex = std::vector<std::pair<boost::optional<size_t>, TypeSet>>;
-
-enum InterDexGroupingType {
-  DISABLED = 0, // No interdex grouping.
-  NON_HOT_SET = 1, // Exclude hot set.
-  NON_ORDERED_SET = 2, // Exclude all ordered set.
-  FULL = 3, // Apply interdex grouping on the entire input.
-};
 
 enum TypeTagConfig {
   // No type tags exist in the input hierarchy. No type tags need to be
@@ -174,11 +167,6 @@ struct ModelSpec {
   // a part of the generated set.
   bool is_generated_code{false};
 
-  enum class InterDexGroupingInferringMode {
-    kAllTypeRefs,
-    kClassLoads,
-    kClassLoadsBasicBlockFiltering,
-  };
   InterDexGroupingInferringMode interdex_grouping_inferring_mode{
       InterDexGroupingInferringMode::kAllTypeRefs};
 
@@ -449,11 +437,7 @@ class Model {
   void flatten_shapes(const MergerType& merger,
                       MergerType::ShapeCollector& shapes);
   TypeGroupByDex group_per_dex(const TypeSet& types, const ModelSpec& spec);
-  TypeSet get_types_in_current_interdex_group(
-      const TypeSet& types, const ConstTypeHashSet& interdex_group_types);
 
-  std::vector<ConstTypeHashSet> group_by_interdex_set(
-      const ConstTypeHashSet& types);
   void map_fields(MergerType& merger,
                   const std::vector<const DexType*>& classes);
 
@@ -512,11 +496,5 @@ class Model {
     }
   }
 };
-
-InterDexGroupingType get_merge_per_interdex_type(
-    const std::string& interdex_grouping);
-
-std::ostream& operator<<(std::ostream& os,
-                         ModelSpec::InterDexGroupingInferringMode mode);
 
 } // namespace class_merging

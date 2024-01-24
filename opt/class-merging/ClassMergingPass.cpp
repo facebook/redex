@@ -12,6 +12,7 @@
 #include "ConfigFiles.h"
 #include "ConfigUtils.h"
 #include "DexUtil.h"
+#include "InterDexGrouping.h"
 #include "MergingStrategies.h"
 #include "Show.h"
 #include "Trace.h"
@@ -146,29 +147,26 @@ void ClassMergingPass::bind_config() {
 
     if (models.empty()) return;
 
-    auto parse_grouping_inferring_mode =
-        [](const std::string& s,
-           ModelSpec::InterDexGroupingInferringMode dflt) {
-          if (s.empty()) {
-            return dflt;
-          }
-          if (s == "all-types") {
-            return ModelSpec::InterDexGroupingInferringMode::kAllTypeRefs;
-          } else if (s == "class-loads") {
-            return ModelSpec::InterDexGroupingInferringMode::kClassLoads;
-          } else if (s == "class-loads-bb") {
-            return ModelSpec::InterDexGroupingInferringMode::
-                kClassLoadsBasicBlockFiltering;
-          } else {
-            always_assert_log(false,
-                              "Unknown interdex-grouping-inferring-mode %s",
-                              s.c_str());
-          }
-        };
-    ModelSpec::InterDexGroupingInferringMode default_mode =
-        parse_grouping_inferring_mode(
-            dflt_interdex_grouping_inferring_mode,
-            ModelSpec().interdex_grouping_inferring_mode);
+    auto parse_grouping_inferring_mode = [](const std::string& s,
+                                            InterDexGroupingInferringMode
+                                                dflt) {
+      if (s.empty()) {
+        return dflt;
+      }
+      if (s == "all-types") {
+        return InterDexGroupingInferringMode::kAllTypeRefs;
+      } else if (s == "class-loads") {
+        return InterDexGroupingInferringMode::kClassLoads;
+      } else if (s == "class-loads-bb") {
+        return InterDexGroupingInferringMode::kClassLoadsBasicBlockFiltering;
+      } else {
+        always_assert_log(false, "Unknown interdex-grouping-inferring-mode %s",
+                          s.c_str());
+      }
+    };
+    InterDexGroupingInferringMode default_mode = parse_grouping_inferring_mode(
+        dflt_interdex_grouping_inferring_mode,
+        ModelSpec().interdex_grouping_inferring_mode);
 
     // load each model spec for erasure
     for (auto it = models.begin(); it != models.end(); ++it) {
@@ -228,7 +226,8 @@ void ClassMergingPass::bind_config() {
       // InterDex grouping option is by default `non-ordered-set`.
       std::string interdex_grouping;
       model_spec.get("interdex_grouping", "non-ordered-set", interdex_grouping);
-      model.interdex_grouping = get_merge_per_interdex_type(interdex_grouping);
+      model.interdex_grouping =
+          InterDexGrouping::get_merge_per_interdex_type(interdex_grouping);
 
       always_assert_log(!model.interdex_grouping ||
                             (model.type_tag_config != TypeTagConfig::NONE),

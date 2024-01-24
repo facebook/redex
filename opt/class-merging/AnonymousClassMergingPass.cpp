@@ -12,6 +12,7 @@
 #include "ClassMerging.h"
 #include "ConfigFiles.h"
 #include "ConfigUtils.h"
+#include "InterDexGrouping.h"
 #include "MergingStrategies.h"
 #include "ModelSpecGenerator.h"
 #include "PassManager.h"
@@ -44,7 +45,7 @@ void AnonymousClassMergingPass::bind_config() {
   std::string interdex_grouping;
   bind("interdex_grouping", "non-ordered-set", interdex_grouping);
   m_merging_spec.interdex_grouping =
-      get_merge_per_interdex_type(interdex_grouping);
+      InterDexGrouping::get_merge_per_interdex_type(interdex_grouping);
 }
 
 void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,
