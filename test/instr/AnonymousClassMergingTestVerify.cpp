@@ -64,7 +64,7 @@ TEST_F(PostVerify, MergeablesRemoval) {
 
 TEST_F(PostVerify, InterfaceMethodsOnShape) {
   boost::regex shape_name_pattern(
-      "^Lcom/facebook/redex/AnonInterface1Shape_S0100000_[0-9]+;$");
+      "^Lcom/facebook/redex/AnonInterface1Shape_S0100000_\\w+;$");
   auto shape =
       find_class_named(classes, [&shape_name_pattern](const char* name) {
         return boost::regex_match(name, shape_name_pattern);
@@ -76,7 +76,7 @@ TEST_F(PostVerify, InterfaceMethodsOnShape) {
   ASSERT_NE(magic2, nullptr);
 
   boost::regex comparator_shape_name_pattern(
-      "^Lcom/facebook/redex/AnonComparatorShape_S0100000_[0-9]+;$");
+      "^Lcom/facebook/redex/AnonComparatorShape_S0100000_\\w+;$");
   shape = find_class_named(
       classes, [&comparator_shape_name_pattern](const char* name) {
         return boost::regex_match(name, comparator_shape_name_pattern);

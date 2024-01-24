@@ -7,9 +7,12 @@
 
 #include "MergerType.h"
 
-#include "Trace.h"
 #include <sstream>
 #include <string>
+
+#include "DexHasher.h"
+#include "Trace.h"
+#include "TypeReference.h"
 
 namespace class_merging {
 
@@ -57,14 +60,33 @@ std::string get_type_name_tag(const DexType* root_type) {
   return root_name_tag_str;
 }
 
+std::pair<size_t, std::string> get_mergeables_hash(
+    const ConstTypeVector& mergeables) {
+  size_t hash = 0;
+  boost::hash_combine(hash, mergeables.size());
+  for (const auto* t : mergeables) {
+    boost::hash_combine(hash, t->get_name()->str());
+  }
+  TRACE(CLMG, 5, "  mergeables_hash %zu", hash);
+
+  std::string hash_str = hashing::hash_to_string(hash);
+  TRACE(CLMG, 5, "  mergeables_hash string %s", hash_str.c_str());
+  return {hash, hash_str};
+}
+
+/*
+ * Example name:
+ * com/google/common/collect/IDxUIteratorShape_I3_D9_S0100000_<hash>
+ */
 std::string MergerType::Shape::build_type_name(
     const std::string& prefix,
     const DexType* root_type,
+    const ConstTypeVector& mergeables_set,
     const TypeSet& intf_set,
+    size_t group_count,
     const boost::optional<size_t>& opt_dex_id,
-    size_t count,
     const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
-    const InterdexSubgroupIdx subgroup_idx) const {
+    std::unordered_set<size_t>& hash_cache) const {
   auto parent = root_type;
   if (root_type == type::java_lang_Object() && intf_set.size() == 1) {
     parent = *intf_set.begin();
@@ -83,13 +105,15 @@ std::string MergerType::Shape::build_type_name(
 
   ss << "_S" << string_fields << reference_fields << bool_fields << int_fields
      << long_fields << double_fields << float_fields;
-
-  ss << "_" << count;
-
-  if (subgroup_idx != 0) {
-    ss << "_" << subgroup_idx;
+  auto hash_pair = get_mergeables_hash(mergeables_set);
+  size_t hash = hash_pair.first;
+  std::string hash_str = hash_pair.second;
+  if (!hash_cache.insert(hash).second) {
+    hash_str = hash_str + "_" + group_count;
   }
-  ss << ";";
+  TRACE(CLMG, 5, "group_count %zu, hash_cache %zu", group_count,
+        hash_cache.size());
+  ss << "_" << hash_str << ";";
   return ss.str();
 }
 

@@ -329,12 +329,12 @@ MergerType& Model::create_merger_helper(
     const TypeSet& intf_set,
     const boost::optional<size_t>& dex_id,
     const ConstTypeVector& group_values,
-    const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
-    const InterdexSubgroupIdx subgroup_idx) {
+    const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx) {
   size_t group_count = m_shape_to_count[shape]++;
+  std::unordered_set<size_t>& hash_cache = m_shape_hash_cache[shape];
   std::string name = shape.build_type_name(
-      m_spec.class_name_prefix, merger_type, intf_set, dex_id, group_count,
-      interdex_subgroup_idx, subgroup_idx);
+      m_spec.class_name_prefix, merger_type, group_values, intf_set,
+      group_count, dex_id, interdex_subgroup_idx, hash_cache);
   const auto& shape_type = DexType::make_type(name);
   TRACE(CLMG, 7, "Build shape type %s", SHOW(shape_type));
   auto& merger_shape = create_merger_shape(shape_type, shape, merger_type,
@@ -356,13 +356,11 @@ void Model::create_mergers_helper(
     const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
     const boost::optional<size_t>& max_mergeables_count,
     size_t min_mergeables_count) {
-  InterdexSubgroupIdx subgroup_cnt = 0;
   strategy::MergingStrategy ms(strategy, group_values);
   ms.apply_grouping(min_mergeables_count, max_mergeables_count,
                     [&](const ConstTypeVector& group) {
                       create_merger_helper(merger_type, shape, intf_set, dex_id,
-                                           group, interdex_subgroup_idx,
-                                           subgroup_cnt++);
+                                           group, interdex_subgroup_idx);
                       m_stats.m_merging_size_counts[group.size()]++;
                     });
 }

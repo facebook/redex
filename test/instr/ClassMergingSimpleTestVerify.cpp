@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <boost/regex.hpp>
+
 #include "Show.h"
 #include "verify/VerifyUtil.h"
 
@@ -20,14 +22,17 @@ TEST_F(PostVerify, MergeablesRemoval) {
 }
 
 TEST_F(PostVerify, SinkCommonCtorInvocation) {
-  auto cls = find_class_named(
-      classes, "Lcom/facebook/redextest/SimpleBaseShape_S0000000_0;");
+  boost::regex shape_name_pattern(
+      "^Lcom/facebook/redextest/SimpleBaseShape_S0000000_\\w+;$");
+  auto cls = find_class_named(classes, [&shape_name_pattern](const char* name) {
+    return boost::regex_match(name, shape_name_pattern);
+  });
 
   for (auto dm : cls->get_dmethods()) {
-    if (dm->get_deobfuscated_name_or_empty() !=
-        "Lcom/facebook/redextest/SimpleBaseShape_S0000000_0;.<init>:(Ljava/"
-        "lang/String;I)V")
+    if (!boost::algorithm::ends_with(dm->get_deobfuscated_name_or_empty(),
+                                     ".<init>:(Ljava/lang/String;I)V")) {
       continue;
+    }
 
     int invocation_count = 0;
     auto param_insns = InstructionIterable(dm->get_code());
