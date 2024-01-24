@@ -72,16 +72,19 @@ std::string MergerType::Shape::build_type_name(
   auto root_name_tag = get_type_name_tag(parent);
   std::ostringstream ss;
   ss << "L" << prefix << root_name_tag << "Shape";
-  ss << count << "S" << string_fields << reference_fields << bool_fields
-     << int_fields << long_fields << double_fields << float_fields;
-
-  if (opt_dex_id && *opt_dex_id > 0) {
-    ss << "_" << *opt_dex_id;
-  }
 
   if (interdex_subgroup_idx != boost::none) {
     ss << "_I" << interdex_subgroup_idx.get();
   }
+
+  if (opt_dex_id && *opt_dex_id > 0) {
+    ss << "_D" << *opt_dex_id;
+  }
+
+  ss << "_S" << string_fields << reference_fields << bool_fields << int_fields
+     << long_fields << double_fields << float_fields;
+
+  ss << "_" << count;
 
   if (subgroup_idx != 0) {
     ss << "_" << subgroup_idx;

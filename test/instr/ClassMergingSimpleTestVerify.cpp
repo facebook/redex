@@ -21,12 +21,12 @@ TEST_F(PostVerify, MergeablesRemoval) {
 
 TEST_F(PostVerify, SinkCommonCtorInvocation) {
   auto cls = find_class_named(
-      classes, "Lcom/facebook/redextest/SimpleBaseShape0S0000000;");
+      classes, "Lcom/facebook/redextest/SimpleBaseShape_S0000000_0;");
 
   for (auto dm : cls->get_dmethods()) {
     if (dm->get_deobfuscated_name_or_empty() !=
-        "Lcom/facebook/redextest/SimpleBaseShape0S0000000;.<init>:(Ljava/lang/"
-        "String;I)V")
+        "Lcom/facebook/redextest/SimpleBaseShape_S0000000_0;.<init>:(Ljava/"
+        "lang/String;I)V")
       continue;
 
     int invocation_count = 0;
