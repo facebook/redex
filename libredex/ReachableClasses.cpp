@@ -296,22 +296,7 @@ void analyze_reflection(const Scope& scope) {
  */
 void mark_reachable_by_classname(DexClass* dclass) {
   if (dclass == nullptr) return;
-  dclass->rstate.ref_by_string();
-  // When we mark a class as reachable, we also mark all fields and methods as
-  // reachable.  Eventually we will be smarter about this, which will allow us
-  // to remove unused methods and fields.
-  for (DexMethod* dmethod : dclass->get_dmethods()) {
-    dmethod->rstate.ref_by_string();
-  }
-  for (DexMethod* vmethod : dclass->get_vmethods()) {
-    vmethod->rstate.ref_by_string();
-  }
-  for (DexField* sfield : dclass->get_sfields()) {
-    sfield->rstate.ref_by_string();
-  }
-  for (DexField* ifield : dclass->get_ifields()) {
-    ifield->rstate.ref_by_string();
-  }
+  dclass->rstate.referenced_by_string();
 }
 
 void mark_reachable_by_native(const DexType* dtype) {
@@ -339,9 +324,8 @@ void mark_reachable_by_string(DexMethod* method) {
     return;
   }
   if (auto cls = type_class_internal(method->get_class())) {
-    cls->rstate.ref_by_string();
+    cls->rstate.referenced_by_string();
   }
-  method->rstate.ref_by_string();
 }
 
 void mark_reachable_by_classname(DexType* dtype) {
@@ -576,22 +560,6 @@ void initialize_reachable_for_json_serde(
   }
 }
 
-void keep_methods(const Scope& scope, const std::vector<std::string>& ms) {
-  std::unordered_set<std::string_view> methods_to_keep(ms.begin(), ms.end());
-  for (const auto* cls : scope) {
-    for (auto* m : cls->get_dmethods()) {
-      if (methods_to_keep.count(m->get_name()->str())) {
-        m->rstate.ref_by_string();
-      }
-    }
-    for (auto* m : cls->get_vmethods()) {
-      if (methods_to_keep.count(m->get_name()->str())) {
-        m->rstate.ref_by_string();
-      }
-    }
-  }
-}
-
 /*
  * Returns true iff this class or any of its super classes are in the set of
  * classes banned due to use of complex reflection.
@@ -656,11 +624,6 @@ void analyze_serializable(const Scope& scope) {
  */
 void init_reachable_classes(const Scope& scope,
                             const ReachableClassesConfig& config) {
-  {
-    Timer t{"Mark keep-methods"};
-    keep_methods(scope, config.keep_methods);
-  }
-
   if (!config.apk_dir.empty()) {
     if (config.compute_xml_reachability) {
       Timer t{"Computing XML reachability"};
@@ -759,7 +722,9 @@ void recompute_reachable_from_xml_layouts(const Scope& scope,
 
 std::string ReferencedState::str() const {
   std::ostringstream s;
-  s << inner_struct.m_by_string;
+  if (inner_struct.is_class()) {
+    s << inner_struct.m_by_string;
+  }
   s << inner_struct.m_by_resources;
   s << inner_struct.m_is_serde;
   s << inner_struct.m_keep;

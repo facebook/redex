@@ -38,10 +38,6 @@ class ReferencedState {
     // 00--invalid; 01 -- class; 10 -- method; 11 -- field.
     uint8_t m_stype : 2;
 
-    // Whether this DexMember is referenced by one of the strings in the native
-    // libraries. Note that this doesn't allow us to distinguish
-    // native -> Java references from Java -> native refs.
-    bool m_by_string : 1;
     // Whether it is referenced from an XML layout.
     bool m_by_resources : 1;
     // Whether it is a json serializer/deserializer class for a reachable class.
@@ -79,9 +75,14 @@ class ReferencedState {
     bool m_name_used : 1;
 
     union {
-      // This is for class only. Currently, the number of flags is 5. Once new
+      // This is for class only. Currently, the number of flags is 6. Once new
       // flag is added, please update the corresponding number in comment.
       struct {
+        // Whether this member is referenced by one of the strings in the native
+        // libraries. Note that this doesn't allow us to distinguish
+        // native -> Java references from Java -> native refs.
+        bool m_by_string : 1;
+
         // Is this member is a kotlin class
         bool m_is_kotlin : 1;
         // This may be set on classes, indicating that its static initializer
@@ -134,7 +135,6 @@ class ReferencedState {
       // Initializers in bit fields are C++20...
       m_stype = 0;
 
-      m_by_string = false;
       m_by_resources = false;
       m_is_serde = false;
 
@@ -221,8 +221,6 @@ class ReferencedState {
     }
 
     // Common flags.
-    this->inner_struct.m_by_string =
-        this->inner_struct.m_by_string | other.inner_struct.m_by_string;
     this->inner_struct.m_by_resources =
         this->inner_struct.m_by_resources | other.inner_struct.m_by_resources;
     this->inner_struct.m_is_serde =
@@ -263,6 +261,8 @@ class ReferencedState {
     // m_name_used skipped.
 
     if (this->inner_struct.is_class()) {
+      this->inner_struct.m_by_string =
+          this->inner_struct.m_by_string | other.inner_struct.m_by_string;
       this->inner_struct.m_is_kotlin =
           this->inner_struct.m_is_kotlin & other.inner_struct.m_is_kotlin;
     } else if (this->inner_struct.is_method()) {
@@ -336,9 +336,15 @@ class ReferencedState {
 
   // For example, a classname in a layout, e.g. <com.facebook.MyCustomView /> or
   // Class c = Class.forName("com.facebook.FooBar");
-  void ref_by_string() { inner_struct.m_by_string = true; }
+  void referenced_by_string() {
+    always_assert(this->inner_struct.is_class());
+    inner_struct.m_by_string = true;
+  }
 
-  bool is_referenced_by_string() const { return inner_struct.m_by_string; }
+  bool is_referenced_by_string() const {
+    always_assert(this->inner_struct.is_class());
+    return inner_struct.m_by_string;
+  }
 
   // A class referenced by resource XML can take the following forms in .xml
   // files under the res/ directory:
