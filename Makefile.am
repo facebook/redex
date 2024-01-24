@@ -506,7 +506,6 @@ libopt_la_SOURCES = \
 	opt/strip-debug-info/StripDebugInfo.cpp \
 	opt/test_cfg/TestCFG.cpp \
 	opt/optimize_resources/OptimizeResources.cpp \
-	opt/throw-propagation/ThrowPropagationPass.cpp \
 	opt/typedef-anno-checker/TypedefAnnoCheckerPass.cpp \
 	opt/type-analysis/CallGraphFileGenerationPass.cpp \
 	opt/type-analysis/GlobalTypeAnalysisPass.cpp \
