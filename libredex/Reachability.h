@@ -331,7 +331,7 @@ struct ConditionallyMarked {
   MarkedItems if_class_retained;
 
   // If the class is referenced in a certain way that makes it discoverable via
-  // reflection, using the rules of the DelInitPass.
+  // reflection, using the rules of the retired DelInitPass.
   MarkedItems if_class_dynamically_referenced;
 
   // If the class is not abstract and has a constructor, or has a derived class

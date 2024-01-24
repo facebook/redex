@@ -193,24 +193,6 @@ but the predecessor line numbers will be correct.
 
 `DedupBlocksPass` should be run after [`InterDexPass`](#interdexpass).
 
-## DelInitPass
-
-DelInitPass deletes unreferenced methods and fields that have no reachable
-constructor, as well as constructors for classes that can be removed or for
-classes that have another constructor that can be called.
-
-The scope of `DelInitPass` can be limited by a `package_allowlist` in the
-[app's config file](config.md). Lacking a white list, `DelInitPass` works at
-global scope.
-
-`DelInitPass` should be run before
-[`RemoveUnreachablePass`](#removeunreachablepass) (RMU) as `DelInitPass` cleans
-constructors, enabling RMU to clean up more classes.
-
-See related:
-* [`LocalDcePass`](#localdcepass)
-* [`RemoveUnreachablePass`](#removeunreachablepass)
-
 ## DelSuperPass
 
 DelSuperPass eliminates subclass methods that invoke the superclass method and

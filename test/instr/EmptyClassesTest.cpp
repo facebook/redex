@@ -56,8 +56,9 @@ TEST_F(PostVerify, EmptyClasses) {
   auto numbat_exception =
       find_class_named(classes, "Lcom/facebook/redextest/NumbatException;");
 
-  // Empty class should have been removed.
-  EXPECT_EQ(nullptr, empty_classes);
+  // The "empty class" isn't actually empty, as it has an <init>.
+  EXPECT_NE(nullptr, empty_classes);
+  EXPECT_TRUE(empty_classes->has_ctors());
 
   // Super class will not be removed.
   EXPECT_NE(nullptr, inner_empty);

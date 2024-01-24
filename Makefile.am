@@ -397,7 +397,6 @@ libopt_la_SOURCES = \
 	opt/dedup_resources/DedupResources.cpp \
 	opt/dedup_resources/murmur_hash.cpp \
 	opt/dedup-strings/DedupStrings.cpp \
-	opt/delinit/DelInit.cpp \
 	opt/delsuper/DelSuper.cpp \
 	opt/evaluate_type_checks/EvaluateTypeChecks.cpp \
 	opt/final_inline/FinalInline.cpp \

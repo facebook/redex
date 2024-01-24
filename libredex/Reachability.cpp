@@ -136,7 +136,7 @@ void RootSetMarker::mark(const Scope& scope) {
       TRACE(REACH, 3, "Visiting seed: %s", SHOW(cls));
       push_seed(cls);
     }
-    // Applying the same exclusions as DelInitPass
+    // Applying the same exclusions as the retired DelInitPass
     auto relaxed =
         m_relaxed_keep_class_members && consider_dynamically_referenced(cls);
     // push_seed for an ifield or vmethod
@@ -583,7 +583,7 @@ void TransitiveClosureMarkerWorker::push_if_instance_method_callable(
   }
 }
 
-// Adapted from DelInitPass
+// Adapted from retired DelInitPass
 namespace relaxed_keep_class_members_impl {
 
 void gather_dynamic_references_impl(const DexAnnotation* anno,
