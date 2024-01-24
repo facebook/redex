@@ -482,9 +482,16 @@ in Class Merging.
 ## RemoveUnreachablePass
 
 Starting from the roots, recursively mark the other elements that the roots
-reference. Afterwards, it deletes all the unmarked elements. While doing the
-marking, Redex doesn't attempt to figure out which basic blocks get executed in
-each method; doing that for every single method would be too expensive.
+reference. Afterwards, it deletes all the unmarked elements.
+
+The pass has various powerful options, including:
+- `remove_no_argument_constructors`: Whether to remove argless constructors. They might be used to create instances via reflection, so the default is `false`.
+- `relaxed_keep_class_members`: Only consider instance members as roots when their classes are either instantiable, i.e. have a callable constructor, or are "dynamically referenced". A class is "dynamically referenced" if it is mentioned in a Dalvik annotation signature, is referenced in a runtime-visibile annotation, appears in a string or a const-class instruction, is the declaring type of a native method, is present in a native library (lib/*/*.so), has one of the configured "reflected_package_names". The default is `false` for backwards compatibility.
+- `throw_propagation`: When reachable instructions invoke methods that cannot return (e.g. all possible target methods have no reachable return statement), then subsequent instructions will not be visited, and replaced with a `unreachable` instruction. The default is `false` for backwards compatibility.
+- `prune_uninstantiable_insns`: When reachable instructions access instance members of classes that can never be instantiated, then subsequent instructions will not be visited, and replaced with an instruction that throws a `NullPointerException`. The default is `false` for backwards compatibility.
+- `prune_uncallable_instance_method_bodies`: When an instance method can never be target of an invocation, even though we might need to keep the method for virtual scope order, or because of keep rules, then we can replace its body with an `unreachable` instruction. This draws from the same instantiability knowledge that is used for the `prune_uninstantiable_insns` option. The default is `false` for backwards compatibility.
+- `prune_uncallable_virtual_methods`: In some cases, we don't need to keep the body of an uncallable method, but instead can make the method abstract, or remove it completely. The default is `false` for backwards compatibility.
+- `prune_unreferenced_interfaces`: Removes interfaces that are not referenced anywhere in code except in `implements` clauses. The default is `false` for backwards compatibility.
 
 More information about `RemoveUnreachablePass` is available in this [note on
 Teaching Reachability Analysis about Dependency Injection].
