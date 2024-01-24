@@ -40,8 +40,6 @@ class ReferencedState {
 
     // Whether it is referenced from an XML layout.
     bool m_by_resources : 1;
-    // Whether it is a json serializer/deserializer class for a reachable class.
-    bool m_is_serde : 1;
 
     // ProGuard keep settings
     //
@@ -75,9 +73,13 @@ class ReferencedState {
     bool m_name_used : 1;
 
     union {
-      // This is for class only. Currently, the number of flags is 6. Once new
+      // This is for class only. Currently, the number of flags is 7. Once new
       // flag is added, please update the corresponding number in comment.
       struct {
+        // Whether it is a json serializer/deserializer class for a reachable
+        // class.
+        bool m_is_serde : 1;
+
         // Whether this member is referenced by one of the strings in the native
         // libraries. Note that this doesn't allow us to distinguish
         // native -> Java references from Java -> native refs.
@@ -136,7 +138,6 @@ class ReferencedState {
       m_stype = 0;
 
       m_by_resources = false;
-      m_is_serde = false;
 
       m_keep = false;
       m_assumenosideeffects = false;
@@ -153,12 +154,13 @@ class ReferencedState {
       m_name_used = false;
 
       // Only need to initialize the largest field in union.
-      m_no_optimizations = false;
-      m_pure_method = false;
-      m_immutable_getter = false;
-      m_dont_inline = false;
-      m_force_inline = false;
-      m_too_large_for_inlining_into = false;
+      m_is_serde = false;
+      m_by_string = false;
+      m_is_kotlin = false;
+      m_clinit_has_no_side_effects = false;
+      m_force_rename = false;
+      m_dont_rename = false;
+      m_renamable_initialized = false;
     }
 
     void set_state_type(RefStateType stype) {
@@ -223,9 +225,6 @@ class ReferencedState {
     // Common flags.
     this->inner_struct.m_by_resources =
         this->inner_struct.m_by_resources | other.inner_struct.m_by_resources;
-    this->inner_struct.m_is_serde =
-        this->inner_struct.m_is_serde | other.inner_struct.m_is_serde;
-
     this->inner_struct.m_keep =
         this->inner_struct.m_keep | other.inner_struct.m_keep;
 
@@ -261,6 +260,8 @@ class ReferencedState {
     // m_name_used skipped.
 
     if (this->inner_struct.is_class()) {
+      this->inner_struct.m_is_serde =
+          this->inner_struct.m_is_serde | other.inner_struct.m_is_serde;
       this->inner_struct.m_by_string =
           this->inner_struct.m_by_string | other.inner_struct.m_by_string;
       this->inner_struct.m_is_kotlin =
@@ -369,9 +370,15 @@ class ReferencedState {
     return inner_struct.m_by_resources;
   }
 
-  void set_is_serde() { inner_struct.m_is_serde = true; }
+  void set_is_serde() {
+    always_assert(this->inner_struct.is_class());
+    inner_struct.m_is_serde = true;
+  }
 
-  bool is_serde() const { return inner_struct.m_is_serde; }
+  bool is_serde() const {
+    always_assert(this->inner_struct.is_class());
+    return inner_struct.m_is_serde;
+  }
 
   void set_root() { set_root(keep_reason::UNKNOWN); }
 

@@ -724,9 +724,9 @@ std::string ReferencedState::str() const {
   std::ostringstream s;
   if (inner_struct.is_class()) {
     s << inner_struct.m_by_string;
+    s << inner_struct.m_is_serde;
   }
   s << inner_struct.m_by_resources;
-  s << inner_struct.m_is_serde;
   s << inner_struct.m_keep;
   s << allowshrinking();
   s << allowobfuscation();

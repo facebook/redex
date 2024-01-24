@@ -66,8 +66,7 @@ inline bool can_rename_if_also_renaming_xml(DexMember* member) {
   return member->rstate.can_rename_if_also_renaming_xml();
 }
 
-template <class DexMember>
-inline bool is_serde(DexMember* member) {
+inline bool is_serde(const DexClass* member) {
   return member->rstate.is_serde();
 }
 
