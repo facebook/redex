@@ -426,14 +426,6 @@ See related:
 * [`RemoveUnreachablePass`](#removeunreachablepass)
 * [`ResultPropagationPass`](#resultpropagationpass)
 
-## RemoveEmptyClassesPass
-
-`RemoveEmptyClassesPass` removes classes that contain no methods or fields.
-Classes that are referenced by code or annotations are kept.
-
-See related:
-* [`StaticReloPassV2`](#staticrelopassv2)
-
 ## RemoveInterfacePass
 
 The motivation of this pass is to remove a hierarchy of interfaces extending
@@ -593,12 +585,7 @@ confusion in stack traces.
 calling class to that class. It improves the performance and reduces the app
 size.
 
-Pass ordering dependencies:
-* `StaticReloPassV2` should be run before `RemoveEmptyClassesPass` as it enables
-  more classes to be optimized.
-
 See related:
-* [`RemoveEmptyClassesPass`](#removeemptyclassespass)
 * [`StaticReloPass`](#staticrelopass)
 
 ## StringConcatenatorPass

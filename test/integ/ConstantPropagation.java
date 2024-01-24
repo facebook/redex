@@ -8,7 +8,7 @@
 /**
  * This Java class is used to test the constant propagation and conditional
  * pruning optimization that needs to be written.
- * Currently, The test uses localDCE and RemoveEmptyClasses.
+ * Currently, The test uses localDCE.
  */
 
 package com.facebook.redextest;

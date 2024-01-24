@@ -15,7 +15,6 @@
 #include "RedexTest.h"
 
 #include "LocalDce.h"
-#include "RemoveEmptyClasses.h"
 #include "StripDebugInfo.h"
 
 /*

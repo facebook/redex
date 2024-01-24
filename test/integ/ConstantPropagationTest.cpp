@@ -17,7 +17,6 @@
 
 #include "ConstantPropagationPass.h"
 #include "LocalDce.h"
-#include "RemoveEmptyClasses.h"
 
 /*
 

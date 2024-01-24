@@ -12,7 +12,6 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "RedexTest.h"
-#include "RemoveEmptyClasses.h"
 #include "Show.h"
 #include "Trace.h"
 
