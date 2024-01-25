@@ -24,7 +24,6 @@ enum InterDexGroupingType {
 };
 
 enum class InterDexGroupingInferringMode {
-  kAllTypeRefs,
   kClassLoads,
   kClassLoadsBasicBlockFiltering,
 };
