@@ -44,8 +44,8 @@ void AnonymousClassMergingPass::bind_config() {
   bind("use_stable_shape_names", false, m_merging_spec.use_stable_shape_names);
   std::string interdex_grouping;
   bind("interdex_grouping", "non-ordered-set", interdex_grouping);
-  m_merging_spec.interdex_grouping =
-      InterDexGrouping::get_merge_per_interdex_type(interdex_grouping);
+  // Inferring_mode is "class-loads" by default.
+  m_merging_spec.interdex_config.init_type(interdex_grouping);
 }
 
 void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,

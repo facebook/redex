@@ -29,14 +29,24 @@ enum class InterDexGroupingInferringMode {
   kClassLoadsBasicBlockFiltering,
 };
 
+struct InterDexGroupingConfig {
+  explicit InterDexGroupingConfig(InterDexGroupingType type)
+      : type(type),
+        inferring_mode(InterDexGroupingInferringMode::kClassLoads) {}
+
+  InterDexGroupingType type;
+  InterDexGroupingInferringMode inferring_mode;
+
+  bool is_enabled() const { return type != DISABLED; }
+
+  void init_type(const std::string& interdex_grouping);
+  void init_inferring_mode(const std::string& mode);
+};
+
 class InterDexGrouping final {
  public:
-  explicit InterDexGrouping(ConfigFiles& conf,
-                            InterDexGroupingType type,
-                            InterDexGroupingInferringMode mode)
-      : m_conf(conf), m_type(type), m_inferring_mode(mode) {}
-
-  bool is_enabled() const { return m_type != InterDexGroupingType::DISABLED; }
+  explicit InterDexGrouping(ConfigFiles& conf, InterDexGroupingConfig config)
+      : m_conf(conf), m_config(config) {}
 
   std::vector<ConstTypeHashSet>& group_by_interdex_set(
       const Scope& scope, const ConstTypeHashSet& types);
@@ -44,13 +54,9 @@ class InterDexGrouping final {
   TypeSet get_types_in_current_interdex_group(
       const TypeSet& types, const ConstTypeHashSet& interdex_group_types);
 
-  static InterDexGroupingType get_merge_per_interdex_type(
-      const std::string& interdex_grouping);
-
  private:
   ConfigFiles& m_conf;
-  const InterDexGroupingType m_type;
-  const InterDexGroupingInferringMode m_inferring_mode;
+  const InterDexGroupingConfig m_config;
   std::vector<ConstTypeHashSet> m_all_interdexing_groups;
 };
 

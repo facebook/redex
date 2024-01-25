@@ -184,7 +184,7 @@ std::vector<ConstTypeHashSet>& InterDexGrouping::group_by_interdex_set(
   TRACE(CLMG, 5, "num_interdex_groups %zu; cls_to_interdex_groups %zu",
         num_interdex_groups, cls_to_interdex_groups.size());
   size_t num_group = 1;
-  if (is_enabled() && num_interdex_groups > 1) {
+  if (m_config.is_enabled() && num_interdex_groups > 1) {
     num_group = num_interdex_groups;
   }
   m_all_interdexing_groups = std::vector<ConstTypeHashSet>(num_group);
@@ -192,16 +192,17 @@ std::vector<ConstTypeHashSet>& InterDexGrouping::group_by_interdex_set(
     m_all_interdexing_groups[0].insert(types.begin(), types.end());
     return m_all_interdexing_groups;
   }
-  const auto& type_to_usages = get_type_usages(types, scope, m_inferring_mode);
+  const auto& type_to_usages =
+      get_type_usages(types, scope, m_config.inferring_mode);
   for (const auto& pair : type_to_usages) {
     auto index = get_interdex_group(pair.second, cls_to_interdex_groups,
                                     num_interdex_groups);
-    if (m_type == InterDexGroupingType::NON_HOT_SET) {
+    if (m_config.type == InterDexGroupingType::NON_HOT_SET) {
       if (index == 0) {
         // Drop mergeables that are in the hot set.
         continue;
       }
-    } else if (m_type == InterDexGroupingType::NON_ORDERED_SET) {
+    } else if (m_config.type == InterDexGroupingType::NON_ORDERED_SET) {
       if (index < num_interdex_groups - 1) {
         // Only merge the last group which are not in ordered set, drop other
         // mergeables.
@@ -225,8 +226,7 @@ TypeSet InterDexGrouping::get_types_in_current_interdex_group(
   return group;
 }
 
-InterDexGroupingType InterDexGrouping::get_merge_per_interdex_type(
-    const std::string& interdex_grouping) {
+void InterDexGroupingConfig::init_type(const std::string& interdex_grouping) {
 
   const static std::unordered_map<std::string, InterDexGroupingType>
       string_to_grouping = {
@@ -239,7 +239,24 @@ InterDexGroupingType InterDexGrouping::get_merge_per_interdex_type(
                     "InterDex Grouping Type %s not found. Please check the list"
                     " of accepted values.",
                     interdex_grouping.c_str());
-  return string_to_grouping.at(interdex_grouping);
+  this->type = string_to_grouping.at(interdex_grouping);
+}
+
+void InterDexGroupingConfig::init_inferring_mode(const std::string& mode) {
+  if (mode.empty()) {
+    this->inferring_mode = InterDexGroupingInferringMode::kAllTypeRefs;
+  }
+  if (mode == "all-types") {
+    this->inferring_mode = InterDexGroupingInferringMode::kAllTypeRefs;
+  } else if (mode == "class-loads") {
+    this->inferring_mode = InterDexGroupingInferringMode::kClassLoads;
+  } else if (mode == "class-loads-bb") {
+    this->inferring_mode =
+        InterDexGroupingInferringMode::kClassLoadsBasicBlockFiltering;
+  } else {
+    always_assert_log(false, "Unknown interdex-grouping-inferring-mode %s",
+                      mode.c_str());
+  }
 }
 
 std::ostream& operator<<(std::ostream& os, InterDexGroupingInferringMode mode) {
