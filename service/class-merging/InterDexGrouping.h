@@ -43,18 +43,34 @@ struct InterDexGroupingConfig {
   void init_inferring_mode(const std::string& mode);
 };
 
+struct ModelSpec;
+
 class InterDexGrouping final {
  public:
-  explicit InterDexGrouping(ConfigFiles& conf, InterDexGroupingConfig config)
-      : m_conf(conf), m_config(config) {}
+  explicit InterDexGrouping(const Scope& scope,
+                            ConfigFiles& conf,
+                            const InterDexGroupingConfig& config,
+                            const ConstTypeHashSet& merging_targets)
+      : m_conf(conf), m_config(config) {
+    build_interdex_grouping(scope, merging_targets);
+  }
 
-  std::vector<ConstTypeHashSet>& group_by_interdex_set(
-      const Scope& scope, const ConstTypeHashSet& types);
+  size_t num_groups() const { return m_all_interdexing_groups.size(); }
 
-  TypeSet get_types_in_current_interdex_group(
-      const TypeSet& types, const ConstTypeHashSet& interdex_group_types);
+  void visit_groups(const ModelSpec& spec,
+                    const TypeSet& current_group,
+                    const std::function<void(const InterdexSubgroupIdx,
+                                             const TypeSet&)>& visit_fn) const;
 
  private:
+  // Divide all types in the merging_targets into different interdex subgroups
+  // This grouping should be applied at the entire model level.
+  void build_interdex_grouping(const Scope& scope,
+                               const ConstTypeHashSet& merging_targets);
+
+  TypeSet get_types_in_group(const InterdexSubgroupIdx id,
+                             const TypeSet& types) const;
+
   ConfigFiles& m_conf;
   const InterDexGroupingConfig m_config;
   std::vector<ConstTypeHashSet> m_all_interdexing_groups;
