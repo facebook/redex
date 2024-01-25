@@ -183,12 +183,12 @@ enum TraceModule : int {
 
 // To avoid "-Wunused" warnings, keep the TRACE macros in common so that the
 // compiler sees a "use." However, ensure that it is optimized away through
-// a constexpr condition in NDEBUG mode.
-#ifdef NDEBUG
+// a constexpr condition in NTRACE mode.
+#ifdef NTRACE
 constexpr bool traceEnabled(TraceModule, int) { return false; }
 #else
 bool traceEnabled(TraceModule module, int level);
-#endif // NDEBUG
+#endif // NTRACE
 
 void trace(TraceModule module,
            int level,
