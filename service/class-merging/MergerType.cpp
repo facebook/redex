@@ -117,6 +117,10 @@ std::string MergerType::Shape::build_type_name(
   return ss.str();
 }
 
+/*
+ * Old naming scheme example: LPCreatorCreatorShape15S0000000_I1_9
+ * <root_type_tag>'Shape'<count>'S'<shape_layout_tag>'_I'<interdex_group_id>'_'<subgroup_idx>
+ */
 std::string MergerType::Shape::build_type_name_legacy(
     const std::string& prefix,
     const DexType* root_type,

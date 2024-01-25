@@ -334,7 +334,11 @@ MergerType& Model::create_merger_helper(
   size_t group_count = m_shape_to_count[shape]++;
   std::unordered_set<size_t>& hash_cache = m_shape_hash_cache[shape];
   std::string name;
-  if (m_spec.use_stable_shape_names) {
+  // If the interdex grouping option is disbled, we assume that the model can
+  // collapse nicely into a small set of merged shape classes. In this case, the
+  // legacy naming scheme is more stable. The trailing hash of the mergeable set
+  // is actually likely to make the shape symbol less stable.
+  if (m_spec.interdex_config.is_enabled() && m_spec.use_stable_shape_names) {
     name = shape.build_type_name(m_spec.class_name_prefix, merger_type,
                                  group_values, intf_set, group_count, dex_id,
                                  interdex_subgroup_idx, hash_cache);
