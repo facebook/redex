@@ -171,6 +171,7 @@ void InterDexPass::run_pass(
 
   mgr.set_metric("root_store.dexes", dexen.size());
   redex_assert(dexen.size() == interdex.get_dex_info().size());
+
   for (size_t i = 0; i != dexen.size(); ++i) {
     std::string key_prefix = "root_store.dexes." + std::to_string(i) + ".";
     mgr.set_metric(key_prefix + "classes", dexen[i].size());

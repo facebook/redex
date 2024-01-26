@@ -158,6 +158,11 @@ void CrossDexRefMinimizer::sample(DexClass* cls) {
   }
 
   if (m_json_classes) {
+    Json::Value json_interface = Json::arrayValue;
+    auto intfs = cls->get_interfaces();
+    for (auto intf : *intfs) {
+      json_interface.append(show(intf));
+    }
     Json::Value json_class;
     json_class["method_refs"] = m_json_methods.get(cls_refs.method_refs);
     json_class["field_refs"] = m_json_fields.get(cls_refs.field_refs);
@@ -165,6 +170,8 @@ void CrossDexRefMinimizer::sample(DexClass* cls) {
     json_class["strings"] = m_json_strings.get(cls_refs.strings);
     json_class["is_generated"] = cls->rstate.is_generated();
     json_class["insert_index"] = -1;
+    json_class["super_cls"] = cls->get_super_class()->get_name()->c_str();
+    json_class["interfaces"] = json_interface;
     (*m_json_classes)[get_json_class_index(cls)] = json_class;
   }
 }
@@ -526,7 +533,7 @@ Json::Value CrossDexRefMinimizer::get_json_mapping() {
   // These could be further nested into a ref-specific path,
   // but it just makes the mapping more annoying to use.
   Json::Value res = Json::objectValue;
-  m_json_methods.get_mapping(&res);
+  m_json_methods.get_method_mapping(&res);
   m_json_fields.get_mapping(&res);
   m_json_types.get_mapping(&res);
   m_json_strings.get_mapping(&res);

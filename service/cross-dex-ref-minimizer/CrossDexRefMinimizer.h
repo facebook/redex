@@ -229,6 +229,26 @@ class CrossDexRefMinimizer {
         (*res)[format(index)] = show(ref);
       }
     }
+
+    void get_method_mapping(Json::Value* res) const {
+      for (const auto& [ref, index] : m_indices) {
+        Json::Value method_info;
+        method_info["name"] = show(ref);
+        const DexMethod* meth = ref->as_def();
+        if (meth == nullptr) {
+          method_info["type"] = "no_method";
+        } else if (meth->is_virtual()) {
+          method_info["type"] = "virtual";
+        } else if (is_static(meth)) {
+          method_info["type"] = "static";
+        } else if (is_final(meth)) {
+          method_info["type"] = "final";
+        } else {
+          method_info["type"] = "other";
+        }
+        (*res)[format(index)] = method_info;
+      }
+    }
   };
   JsonRefIndices<DexMethodRef*> m_json_methods{"M"};
   JsonRefIndices<DexFieldRef*> m_json_fields{"F"};
