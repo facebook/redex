@@ -15,9 +15,8 @@ namespace check_casts {
 
 namespace impl {
 
-Stats apply(DexMethod* method, const CheckCastReplacements& casts) {
+Stats apply(cfg::ControlFlowGraph& cfg, const CheckCastReplacements& casts) {
   Stats stats;
-  auto& cfg = method->get_code()->cfg();
   for (const auto& cast : casts) {
     auto it = cfg.find_insn(cast.insn, cast.block);
     boost::optional<IRInstruction*> replacement_insn = cast.replacement_insn;

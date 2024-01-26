@@ -839,9 +839,12 @@ check_casts::impl::Stats OptimizationImpl::post_process(
         // occurs here within SingleImplPass, but not in subsequent
         // CheckCastRemovals where weaken is enabled by default.
         check_casts::CheckCastConfig config{.weaken = false};
-        check_casts::impl::CheckCastAnalysis analysis(config, m, api);
+        check_casts::impl::CheckCastAnalysis analysis(
+            config, *cfg, is_static(m), m->get_class(),
+            m->get_proto()->get_args(), m->get_proto()->get_rtype(),
+            m->get_param_anno(), api);
         auto casts = analysis.collect_redundant_checks_replacement();
-        auto local_stats = check_casts::impl::apply(m, casts);
+        auto local_stats = check_casts::impl::apply(*cfg, casts);
         std::lock_guard<std::mutex> lock_guard(mutex);
         stats += local_stats;
         auto insns = cfg->release_removed_instructions();

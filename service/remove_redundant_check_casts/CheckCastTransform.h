@@ -23,7 +23,7 @@ struct Stats {
   Stats& operator+=(const Stats&);
 };
 
-Stats apply(DexMethod* method, const CheckCastReplacements& casts);
+Stats apply(cfg::ControlFlowGraph& cfg, const CheckCastReplacements& casts);
 
 } // namespace impl
 
