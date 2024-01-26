@@ -127,6 +127,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/service/reference-update \
 	-I$(top_srcdir)/service/regalloc \
 	-I$(top_srcdir)/service/regalloc-fast \
+	-I$(top_srcdir)/service/remove_redundant_check_casts \
 	-I$(top_srcdir)/service/resources \
 	-I$(top_srcdir)/service/shrinker \
 	-I$(top_srcdir)/service/switch-dispatch \

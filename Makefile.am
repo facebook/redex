@@ -316,6 +316,8 @@ libredex_la_SOURCES = \
 	service/regalloc/VirtualRegistersFile.cpp \
 	service/regalloc-fast/LinearScan.cpp \
 	service/regalloc-fast/LiveInterval.cpp \
+	service/remove_redundant_check_casts/CheckCastAnalysis.cpp \
+	service/remove_redundant_check_casts/CheckCastTransform.cpp \
 	service/resources/StaticIds.cpp \
 	service/shrinker/Shrinker.cpp \
 	service/switch-dispatch/SwitchDispatch.cpp \
@@ -450,8 +452,6 @@ libopt_la_SOURCES = \
 	opt/remove-builders/RemoveBuildersHelper.cpp \
 	opt/remove-interfaces/RemoveInterfacePass.cpp \
 	opt/remove-recursive-locks/RemoveRecursiveLocks.cpp \
-	opt/remove_redundant_check_casts/CheckCastAnalysis.cpp \
-	opt/remove_redundant_check_casts/CheckCastTransform.cpp \
 	opt/remove_redundant_check_casts/RemoveRedundantCheckCasts.cpp \
 	opt/remove-unreachable/RemoveUnreachable.cpp \
 	opt/remove-unreachable/TypeAnalysisAwareRemoveUnreachable.cpp \
