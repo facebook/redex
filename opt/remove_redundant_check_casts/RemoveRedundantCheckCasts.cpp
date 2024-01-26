@@ -43,11 +43,21 @@ void RemoveRedundantCheckCastsPass::run_pass(DexStoresVector& stores,
   const auto& android_sdk =
       conf.get_android_sdk_api(mgr.get_redex_options().min_sdk);
 
+  std::atomic<std::size_t> num_magic{0};
+
   auto stats =
       walk::parallel::methods<impl::Stats>(scope, [&](DexMethod* method) {
+        if (method->str().find("$xXX") != std::string::npos) {
+          // There is some Ultralight/SwitchInline magic that trips up when
+          // casts get weakened, so that we don't operate on those magic
+          // methods.
+          num_magic++;
+          return impl::Stats();
+        }
         return remove_redundant_check_casts(m_config, method, android_sdk);
       });
 
+  mgr.set_metric("num_magic", (size_t)num_magic);
   mgr.set_metric("num_removed_casts", stats.removed_casts);
   mgr.set_metric("num_replaced_casts", stats.replaced_casts);
   mgr.set_metric("num_weakened_casts", stats.weakened_casts);

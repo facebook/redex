@@ -354,11 +354,6 @@ CheckCastAnalysis::CheckCastAnalysis(const CheckCastConfig& config,
   if (!method || !method->get_code()) {
     return;
   }
-  if (method->str().find("$xXX") != std::string::npos) {
-    // There is some Ultralight/SwitchInline magic that trips up when
-    // casts get weakened, so that we don't operate on those magic methods.
-    return;
-  }
 
   auto& cfg = method->get_code()->cfg();
   auto iterable = cfg::InstructionIterable(cfg);
