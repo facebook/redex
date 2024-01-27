@@ -1348,11 +1348,16 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   // MAIN PASS LOOP. //
   /////////////////////
   bool handled_child = false;
+  bool after_interdex = false;
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     const size_t pass_run = ++runs[pass];
     AnalysisUsageHelper analysis_usage_helper{m_preserved_analysis_passes};
     analysis_usage_helper.pre_pass(pass);
+
+    if (!after_interdex && pass->name() == "InterDexPass") {
+      after_interdex = true;
+    }
 
     TRACE(PM, 1, "Running %s...", pass->name().c_str());
     ScopedMemStats scoped_mem_stats{mem_pass_stats, hwm_per_pass};
@@ -1396,6 +1401,17 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       auto wall_time_end = std::chrono::steady_clock::now();
       double cpu_time_end = ((double)std::clock()) / CLOCKS_PER_SEC;
 
+      // Collect dex info metrics after InterDexPass.
+      if (after_interdex) {
+        auto& root_store = stores.at(0);
+        auto& root_dexen = root_store.get_dexen();
+        set_metric("~rootstore.num_dexes", root_dexen.size());
+        size_t idx = 0;
+        for (auto& dex : root_dexen) {
+          set_metric("~rootstore.dex_" + std::to_string(++idx) + ".num_classes",
+                     dex.size());
+        }
+      }
       // Ensure the CFG is clean, e.g., no unreachable blocks.
       if (!pass->is_cfg_legacy()) {
         auto temp_scope = build_class_scope(stores);
