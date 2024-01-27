@@ -455,6 +455,7 @@ def align_and_sign_output_apk(
     output_apk_path: str,
     reset_timestamps: bool,
     sign: bool,
+    sign_v4: typing.Optional[bool],
     keystore: str,
     key_alias: str,
     key_password: str,
@@ -478,7 +479,14 @@ def align_and_sign_output_apk(
 
     # Add new signature
     if sign:
-        sign_apk(keystore, key_password, key_alias, output_apk_path, ignore_apksigner)
+        sign_apk(
+            sign_v4,
+            keystore,
+            key_password,
+            key_alias,
+            output_apk_path,
+            ignore_apksigner,
+        )
 
 
 def copy_file_to_out_dir(
@@ -570,6 +578,9 @@ Given an APK, produce a better APK!
     parser.add_argument("-c", "--config", default=config, help="Configuration file")
 
     argparse_yes_no_flag(parser, "sign", help="Sign the apk after optimizing it")
+    argparse_yes_no_flag(
+        parser, "sign-v4", default=None, help="Sign the apk with v4 signing"
+    )
     parser.add_argument("-s", "--keystore", nargs="?", default=keystore)
     parser.add_argument("-a", "--keyalias", nargs="?", default=keyalias)
     parser.add_argument("-p", "--keypass", nargs="?", default=keypass)
@@ -1355,6 +1366,7 @@ def finalize_redex(state: State) -> None:
                 # In dev mode, reset timestamps.
                 state.args.reset_zip_timestamps or state.args.dev,
                 state.args.sign,
+                state.args.sign_v4,
                 state.args.keystore,
                 state.args.keyalias,
                 state.args.keypass,

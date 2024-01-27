@@ -40,4 +40,4 @@ with tempfile.TemporaryDirectory() as temp_dir:
     os.rename(f"{args.output}.zip", args.output)
 
     add_tool_override("apksigner", args.apksigner_path)
-    sign_apk(args.keystore, args.keypass, args.keyalias, args.output)
+    sign_apk(False, args.keystore, args.keypass, args.keyalias, args.output)

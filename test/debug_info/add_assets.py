@@ -25,4 +25,4 @@ with zipfile.ZipFile(args.apk, "a") as zf:
         zf.write(asset, os.path.join("assets", os.path.basename(asset)))
 
 add_tool_override("apksigner", args.apksigner_path)
-sign_apk(args.keystore, args.keypass, args.keyalias, args.apk)
+sign_apk(False, args.keystore, args.keypass, args.keyalias, args.apk)

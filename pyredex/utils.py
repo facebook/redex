@@ -353,7 +353,12 @@ def remove_signature_files(extracted_apk_dir: str) -> None:
 
 
 def sign_apk(
-    keystore: str, keypass: str, keyalias: str, apk: str, ignore_apksigner: bool = False
+    sign_v4: typing.Optional[bool],
+    keystore: str,
+    keypass: str,
+    keyalias: str,
+    apk: str,
+    ignore_apksigner: bool = False,
 ) -> None:
     def run() -> None:
         subprocess.check_call(
@@ -362,6 +367,13 @@ def sign_apk(
                 "sign",
                 "--v1-signing-enabled",
                 "--v2-signing-enabled",
+            ]
+            + (
+                []
+                if sign_v4 is None
+                else (["--v4-signing-enabled", "true" if sign_v4 else "false"])
+            )
+            + [
                 "--ks",
                 keystore,
                 "--ks-pass",
@@ -406,6 +418,7 @@ def argparse_yes_no_flag(
     flag_name: str,
     on_prefix: str = "",
     off_prefix: str = "no-",
+    default: typing.Optional[bool] = False,
     **kwargs: typing.Any,
 ) -> None:
     class FlagAction(argparse.Action):
@@ -424,7 +437,7 @@ def argparse_yes_no_flag(
         f"--{off_prefix}{flag_name}",
         dest=flag_name.replace("-", "_"),
         action=FlagAction,
-        default=False,
+        default=default,
         **kwargs,
     )
 
