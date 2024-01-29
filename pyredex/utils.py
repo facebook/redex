@@ -16,6 +16,7 @@ import logging
 import multiprocessing
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -362,8 +363,8 @@ def sign_apk(
 ) -> None:
     def run() -> None:
         subprocess.check_call(
-            [
-                find_apksigner(),
+            shlex.split(find_apksigner())
+            + [
                 "sign",
                 "--v1-signing-enabled",
                 "--v2-signing-enabled",
