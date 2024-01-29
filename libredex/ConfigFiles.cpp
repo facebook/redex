@@ -351,18 +351,15 @@ void ConfigFiles::build_dead_class_and_live_class_split_lists() {
         DeadClassLoadCounts load_counts;
         StringTabSplitter splitter(line);
         std::string_view classname = splitter.get();
-        if (splitter.next()) {
-          std::string_view str = splitter.get();
-          from_chars(str, &load_counts.sampled);
-          if (splitter.next()) {
-            str = splitter.get();
-            from_chars(str, &load_counts.unsampled);
-            if (splitter.next()) {
-              str = splitter.get();
-              from_chars(str, &load_counts.beta_unsampled);
-            }
-          }
+        const uint32_t k_num_remaining_columns = 4;
+        std::array<int64_t*, k_num_remaining_columns> columns = {
+            &load_counts.sampled, &load_counts.unsampled,
+            &load_counts.beta_unsampled, &load_counts.last_modified_count};
+        for (uint32_t i = 0; splitter.next() && i < k_num_remaining_columns;
+             i++) {
+          from_chars(splitter.get(), columns[i]);
         }
+
         bool is_relocated = is_relocated_class(classname);
         if (is_relocated) {
           remove_relocated_part(&classname);

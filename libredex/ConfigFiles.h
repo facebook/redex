@@ -98,6 +98,9 @@ struct ConfigFiles {
     int64_t sampled{50}; // legacy
     int64_t unsampled{0};
     int64_t beta_unsampled{0}; // Whether is beta sample or not
+    int64_t last_modified_count{1}; // number of times that last modified time
+                                    // fall into acceptable range. Default value
+                                    // 1 is for backward compatibility.
   };
 
   const std::unordered_map<std::string, DeadClassLoadCounts>&
