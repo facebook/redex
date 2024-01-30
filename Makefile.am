@@ -24,6 +24,7 @@ DISABLED_WARNINGS = \
   -Wno-class-memaccess \
   -Wno-deprecated-copy \
   -Wno-deprecated-declarations \
+  -Wno-enum-constexpr-conversion \
   -Wno-format-truncation \
   -Wno-format-zero-length \
   -Wno-invalid-offsetof \
