@@ -18,6 +18,7 @@
 #include "BaseIRAnalyzer.h"
 #include "DexAnnotation.h"
 #include "DexTypeEnvironment.h"
+#include "MethodOverrideGraph.h"
 
 /*
  * This is the implementation of a type checker for the IR that aims at
@@ -172,7 +173,6 @@ boost::optional<const DexType*> get_typedef_anno_from_member(
   }
   return boost::none;
 }
-
 /*
  * Checks whether a (joined) type can be safely used in the presence of if-
  * instructions. Note that in the case of REFERENCE, joining of array types
@@ -275,14 +275,17 @@ class TypeEnvironment final
 class TypeInference final
     : public ir_analyzer::BaseIRAnalyzer<TypeEnvironment> {
  public:
-  explicit TypeInference(const cfg::ControlFlowGraph& cfg,
-                         bool skip_check_cast_upcasting = false,
-                         const std::unordered_set<DexType*>& annotations =
-                             std::unordered_set<DexType*>())
+  explicit TypeInference(
+      const cfg::ControlFlowGraph& cfg,
+      bool skip_check_cast_upcasting = false,
+      const std::unordered_set<DexType*>& annotations =
+          std::unordered_set<DexType*>(),
+      const method_override_graph::Graph* method_override_graph = nullptr)
       : ir_analyzer::BaseIRAnalyzer<TypeEnvironment>(cfg),
         m_cfg(cfg),
         m_skip_check_cast_upcasting(skip_check_cast_upcasting),
-        m_annotations{annotations} {}
+        m_annotations{annotations},
+        m_method_override_graph(method_override_graph) {}
 
   void run(const DexMethod* dex_method);
 
@@ -331,6 +334,8 @@ class TypeInference final
   std::unordered_map<const IRInstruction*, TypeEnvironment> m_type_envs;
   const bool m_skip_check_cast_upcasting;
   const std::unordered_set<DexType*> m_annotations;
+  const method_override_graph::Graph* m_method_override_graph;
+  const DexMethod* m;
 
   TypeDomain refine_type(const TypeDomain& type,
                          IRType expected,
@@ -359,6 +364,8 @@ class TypeInference final
   void refine_boolean(TypeEnvironment* state, reg_t reg) const;
   void refine_short(TypeEnvironment* state, reg_t reg) const;
   void refine_byte(TypeEnvironment* state, reg_t reg) const;
+
+  bool is_pure_virtual_with_annotation(DexMethodRef* dex_method) const;
 };
 
 } // namespace type_inference

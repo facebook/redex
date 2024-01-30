@@ -16,6 +16,71 @@ interface I {
   int get();
 }
 
+abstract class AbstractClass{
+  abstract @TestIntDef int pureVirtual(@TestIntDef int val);
+
+  abstract int pureVirtualNoAnnoReturn(@TestIntDef int val);
+
+  abstract @TestIntDef int pureVirtualInvalidParamAnno(@TestIntDef int val);
+
+  abstract @TestStringDef int pureVirtualInvalidReturn(@TestIntDef int val);
+}
+
+
+class VirtualTest extends AbstractClass{
+  @TestIntDef int pureVirtual(@TestIntDef int val) {
+    return val;
+  };
+
+  int pureVirtualNoAnnoReturn(@TestIntDef int val) {
+    return val;
+  };
+
+  @TestIntDef int pureVirtualInvalidParamAnno(@TestIntDef int val) {
+    return val;
+  }
+
+  @TestStringDef int pureVirtualInvalidReturn(@TestIntDef int val) {
+    return val;
+  }
+}
+
+class WrongConstVirtualTest extends AbstractClass{
+  @TestIntDef int pureVirtual(@TestIntDef int val) {
+    return 6;
+  };
+
+  @TestIntDef int pureVirtualNoAnnoReturn(@TestIntDef int val) {
+    return val;
+  };
+
+  @TestIntDef int pureVirtualInvalidParamAnno(@TestIntDef int val) {
+    return val;
+  }
+
+  @TestStringDef int pureVirtualInvalidReturn(@TestIntDef int val) {
+    return val;
+  }
+}
+
+class NoAnnoVirtualTest extends AbstractClass{
+  int pureVirtual(@TestIntDef int val) {
+    return 2;
+  };
+
+  int pureVirtualNoAnnoReturn(@TestIntDef int val) {
+    return val;
+  };
+
+  @TestIntDef int pureVirtualInvalidParamAnno(@TestStringDef int val) {
+    return val;
+  }
+
+  @TestIntDef int pureVirtualInvalidReturn(@TestIntDef int val) {
+    return val;
+  }
+}
+
 public class TypedefAnnoCheckerTest {
 
   @TestIntDef int int_field;
@@ -23,11 +88,51 @@ public class TypedefAnnoCheckerTest {
   @TestStringDef String str_field;
   int no_anno_field = 6;
 
+  @TestIntDef public int testPureVirtualCall(@TestIntDef int val) {
+    AbstractClass test_virtual = new VirtualTest();
+    return test_virtual.pureVirtual(val);
+  }
+
+  @TestIntDef public int testWrongConstPureVirtualCall(@TestIntDef int val) {
+    AbstractClass test_virtual = new WrongConstVirtualTest();
+    return test_virtual.pureVirtual(val);
+  }
+
+  @TestIntDef public int testNoAnnoPureVirtualCall(@TestIntDef int val) {
+    AbstractClass test_virtual = new NoAnnoVirtualTest();
+    return test_virtual.pureVirtual(val);
+  }
+
+  @TestIntDef public int testPureVirtualCallNoAnno(@TestIntDef int val) {
+    AbstractClass test_virtual = new VirtualTest();
+    return test_virtual.pureVirtualNoAnnoReturn(val);
+  }
+
+  @TestIntDef public int testWrongConstPureVirtualCall2(@TestIntDef int val) {
+    AbstractClass test_virtual = new WrongConstVirtualTest();
+    return test_virtual.pureVirtualNoAnnoReturn(val);
+  }
+
+  @TestIntDef public int testPureVirtualInvalidParamAnno(@TestIntDef int val) {
+    AbstractClass test_virtual = new NoAnnoVirtualTest();
+    return test_virtual.pureVirtualInvalidParamAnno(val);
+  }
+
+  @TestIntDef public int testPureVirtualInvalidParamAnno2(@TestIntDef int val) {
+    AbstractClass test_virtual = new WrongConstVirtualTest();
+    return test_virtual.pureVirtualInvalidParamAnno(val);
+  }
+
+  @TestIntDef public int testPureVirtualInvalidReturn(@TestIntDef int val) {
+    AbstractClass test_virtual = new WrongConstVirtualTest();
+    return test_virtual.pureVirtualInvalidReturn(val);
+  }
+
   void testIntField(@TestIntDef int val) {
     int_field = val;
   }
 
-  void testWrongIntField(@TestIntDef int val) {
+void testWrongIntField(@TestIntDef int val) {
     wrong_anno_field = val;
   }
 
