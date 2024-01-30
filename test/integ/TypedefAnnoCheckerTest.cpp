@@ -814,7 +814,7 @@ TEST_F(TypedefAnnoCheckerTest, testSynthAccessor) {
  Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.takesStrConst:(Ljava/lang/String;)Ljava/lang/String;\n\
  Incorrect parameter's index: 1\n\n");
 
-  SynthAccessorPatcher patcher(config);
+  SynthAccessorPatcher patcher(config, *method_override_graph);
   patcher.run(scope);
 
   TypedefAnnoChecker checker2 = TypedefAnnoChecker(
@@ -931,7 +931,7 @@ TEST_F(TypedefAnnoCheckerTest, testDefaultArg) {
   ///////////////////////////////////////////////////
   // Patch the default synth stub param !!!
   ///////////////////////////////////////////////////
-  SynthAccessorPatcher patcher(config);
+  SynthAccessorPatcher patcher(config, *method_override_graph);
   patcher.run(scope);
 
   TypedefAnnoChecker checker4 = TypedefAnnoChecker(

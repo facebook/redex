@@ -395,10 +395,10 @@ boost::optional<const DexType*> get_typedef_annotation(
 bool TypeInference::is_pure_virtual_with_annotation(
     DexMethodRef* dex_method) const {
   if (!m_annotations.empty() && dex_method->is_def() &&
-      !dex_method->as_def()->get_code() &&
-      method_override_graph::is_true_virtual(*m_method_override_graph,
-                                             dex_method->as_def())) {
-    return true;
+      !dex_method->as_def()->get_code()) {
+    always_assert(m_method_override_graph != nullptr);
+    return method_override_graph::is_true_virtual(*m_method_override_graph,
+                                                  dex_method->as_def());
   }
   return false;
 }

@@ -89,7 +89,10 @@ using IntDefConstants =
 
 class SynthAccessorPatcher {
  public:
-  explicit SynthAccessorPatcher(const TypedefAnnoCheckerPass::Config& config) {
+  explicit SynthAccessorPatcher(
+      const TypedefAnnoCheckerPass::Config& config,
+      const method_override_graph::Graph& method_override_graph)
+      : m_method_override_graph(method_override_graph) {
     m_typedef_annos.insert(config.int_typedef);
     m_typedef_annos.insert(config.str_typedef);
   }
@@ -100,6 +103,7 @@ class SynthAccessorPatcher {
   void collect_accessors(DexMethod* method);
 
   std::unordered_set<DexType*> m_typedef_annos;
+  const method_override_graph::Graph& m_method_override_graph;
 };
 
 class TypedefAnnoChecker {

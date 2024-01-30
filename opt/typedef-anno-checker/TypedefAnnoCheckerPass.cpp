@@ -109,7 +109,8 @@ void SynthAccessorPatcher::collect_accessors(DexMethod* m) {
 
   always_assert_log(code->editable_cfg_built(), "%s has no cfg built", SHOW(m));
   auto& cfg = code->cfg();
-  type_inference::TypeInference inference(cfg, false, m_typedef_annos);
+  type_inference::TypeInference inference(cfg, false, m_typedef_annos,
+                                          &m_method_override_graph);
   inference.run(m);
 
   TypeEnvironments& envs = inference.get_type_environments();
@@ -552,17 +553,16 @@ void TypedefAnnoCheckerPass::run_pass(DexStoresVector& stores,
   assert(m_config.int_typedef != nullptr);
   assert(m_config.str_typedef != nullptr);
   auto scope = build_class_scope(stores);
+  auto method_override_graph = mog::build_graph(scope);
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   walk::parallel::classes(scope, [&](DexClass* cls) {
     gather_typedef_values(cls, strdef_constants, intdef_constants);
   });
 
-  SynthAccessorPatcher patcher(m_config);
+  SynthAccessorPatcher patcher(m_config, *method_override_graph);
   patcher.run(scope);
   TRACE(TAC, 2, "Finish patching synth accessors");
-
-  auto method_override_graph = mog::build_graph(scope);
 
   auto stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* m) {
     TypedefAnnoChecker checker = TypedefAnnoChecker(
