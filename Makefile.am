@@ -23,6 +23,7 @@ DISABLED_WARNINGS = \
   -Wno-array-bounds \
   -Wno-class-memaccess \
   -Wno-deprecated-declarations \
+  -Wno-enum-constexpr-conversion \
   -Wno-format-truncation \
   -Wno-format-zero-length \
   -Wno-invalid-offsetof \
