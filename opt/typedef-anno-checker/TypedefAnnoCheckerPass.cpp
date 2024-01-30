@@ -70,8 +70,8 @@ void collect_from_instruction(
 
   auto& env = envs.find(insn)->second;
   for (auto const& param_anno : *def_method->get_param_anno()) {
-    auto annotation =
-        inference.get_typedef_annotation(param_anno.second->get_annotations());
+    auto annotation = type_inference::get_typedef_annotation(
+        param_anno.second->get_annotations(), inference.get_annotations());
     if (!annotation) {
       continue;
     }
@@ -156,8 +156,8 @@ void TypedefAnnoChecker::run(DexMethod* m) {
   boost::optional<const DexType*> return_annotation = boost::none;
   DexAnnotationSet* return_annos = m->get_anno_set();
   if (return_annos) {
-    return_annotation =
-        inference.get_typedef_annotation(return_annos->get_annotations());
+    return_annotation = type_inference::get_typedef_annotation(
+        return_annos->get_annotations(), inference.get_annotations());
   }
   TypeEnvironments& envs = inference.get_type_environments();
   TRACE(TAC, 2, "Start checking %s\n%s", SHOW(m), SHOW(cfg));
@@ -198,8 +198,8 @@ void TypedefAnnoChecker::check_instruction(
       return;
     }
     for (auto const& param_anno : *callee_def->get_param_anno()) {
-      auto annotation = inference->get_typedef_annotation(
-          param_anno.second->get_annotations());
+      auto annotation = type_inference::get_typedef_annotation(
+          param_anno.second->get_annotations(), inference->get_annotations());
       if (annotation == boost::none) {
         continue;
       }
@@ -263,8 +263,8 @@ void TypedefAnnoChecker::check_instruction(
   case OPCODE_IPUT:
   case OPCODE_IPUT_OBJECT: {
     auto env_anno = env.get_annotation(insn->src(0));
-    auto field_anno =
-        inference->get_typedef_anno_from_member(insn->get_field());
+    auto field_anno = type_inference::get_typedef_anno_from_member(
+        insn->get_field(), inference->get_annotations());
     if (env_anno != boost::none && field_anno != boost::none &&
         env_anno.value() != field_anno.value()) {
       std::ostringstream out;
@@ -456,7 +456,8 @@ bool TypedefAnnoChecker::check_typedef_value(
         return false;
       }
       boost::optional<const DexType*> anno =
-          inference->get_typedef_anno_from_member(def_method);
+          type_inference::get_typedef_anno_from_member(
+              def_method, inference->get_annotations());
       if (anno == boost::none || anno != annotation) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: the method "
@@ -492,8 +493,8 @@ bool TypedefAnnoChecker::check_typedef_value(
     }
     case OPCODE_IGET:
     case OPCODE_IGET_OBJECT: {
-      auto field_anno =
-          inference->get_typedef_anno_from_member(def->get_field());
+      auto field_anno = type_inference::get_typedef_anno_from_member(
+          def->get_field(), inference->get_annotations());
       if (!field_anno || field_anno != annotation) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: in method " << show(m)
