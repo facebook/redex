@@ -33,8 +33,14 @@ void populate_reshuffable_classes_types(
     if (cls_name.find(coldstart_1pct_end) != std::string::npos) {
       seen_coldstart_1pct_end = true;
     }
-    if (seen_coldstart_20pct_end && !seen_coldstart_1pct_end) {
-      reshuffable_classes.insert(cls_name);
+    if (seen_coldstart_20pct_end) {
+      if (!seen_coldstart_1pct_end) {
+        reshuffable_classes.insert(cls_name);
+      } else {
+        // if a class appears after ColdStart marker, then it is loaded
+        // by another interaction which might be perf sensitive.
+        reshuffable_classes.erase(cls_name);
+      }
     }
   }
 }
@@ -81,6 +87,7 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(ConfigFiles& conf,
   if (config.exclude_below20pct_coldstart_classes) {
     populate_reshuffable_classes_types(reshuffable_classes, conf);
   }
+  m_mgr.incr_metric("num_reshuffable_classes", reshuffable_classes.size());
   for (size_t dex_index = m_first_dex_index; dex_index < dexen.size();
        dex_index++) {
     auto& dex = dexen.at(dex_index);
