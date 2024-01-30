@@ -110,7 +110,8 @@ void DedupStrings::run(DexStoresVector& stores) {
       get_perf_sensitive_methods(dexen);
 
   // Compute set of non-load strings in each dex
-  std::unordered_set<const DexString*> non_load_strings[dexen.size()];
+  std::vector<std::unordered_set<const DexString*>> non_load_strings(
+      dexen.size());
   workqueue_run_for<size_t>(0, dexen.size(), [&](size_t i) {
     auto& strings = non_load_strings[i];
     gather_non_load_strings(dexen[i], &strings);
@@ -301,7 +302,7 @@ DedupStrings::get_occurrences(
     const Scope& scope,
     const std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
     const std::unordered_set<const DexMethod*>& perf_sensitive_methods,
-    std::unordered_set<const DexString*> non_load_strings[]) {
+    std::vector<std::unordered_set<const DexString*>>& non_load_strings) {
   // For each string, figure out how many times it's loaded per dex
   ConcurrentMap<const DexString*, std::unordered_map<size_t, size_t>>
       occurrences;
@@ -383,7 +384,7 @@ DedupStrings::get_strings_to_dedup(
         occurrences,
     std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
     std::unordered_set<const DexMethod*>& perf_sensitive_methods,
-    const std::unordered_set<const DexString*> non_load_strings[]) {
+    const std::vector<std::unordered_set<const DexString*>>& non_load_strings) {
   // Use heuristics to determine which strings to dedup, create factory
   // methods as appropriate, and persist relevant information to aid the later
   // rewriting of all const-string instructions.
@@ -393,7 +394,7 @@ DedupStrings::get_strings_to_dedup(
 
   // Do a cost/benefit analysis to figure out which strings to access via
   // factory methods, and where to put to the factory method
-  std::vector<const DexString*> strings_in_dexes[dexen.size()];
+  std::vector<std::vector<const DexString*>> strings_in_dexes(dexen.size());
   std::unordered_set<size_t> hosting_dexnrs;
   std::vector<const DexString*> ordered_strings;
   ordered_strings.reserve(occurrences.size());
@@ -409,7 +410,7 @@ DedupStrings::get_strings_to_dedup(
     const auto& m = occurrences.at_unsafe(s);
     always_assert(m.size() > 1);
     const auto entry_size = s->get_entry_size();
-    const auto get_size_reduction = [entry_size, non_load_strings](
+    const auto get_size_reduction = [entry_size, &non_load_strings](
                                         const DexString* str, size_t dexnr,
                                         size_t loads) -> size_t {
       const auto has_non_load_string = non_load_strings[dexnr].count(str) != 0;

@@ -83,14 +83,15 @@ class DedupStrings {
       const Scope& scope,
       const std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
       const std::unordered_set<const DexMethod*>& perf_sensitive_methods,
-      std::unordered_set<const DexString*> non_load_strings[]);
+      std::vector<std::unordered_set<const DexString*>>& non_load_strings);
   std::unordered_map<const DexString*, DedupStringInfo> get_strings_to_dedup(
       DexClassesVector& dexen,
       const ConcurrentMap<const DexString*, std::unordered_map<size_t, size_t>>&
           occurrences,
       std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
       std::unordered_set<const DexMethod*>& perf_sensitive_methods,
-      const std::unordered_set<const DexString*> non_load_strings[]);
+      const std::vector<std::unordered_set<const DexString*>>&
+          non_load_strings);
   void rewrite_const_string_instructions(
       const Scope& scope,
       const std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
