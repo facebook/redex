@@ -44,6 +44,10 @@ constexpr const char* SCROLL_SET_END_FORMAT = "LScrollSetEnd";
 constexpr const char* BG_SET_START_FORMAT = "LBackgroundSetStart";
 constexpr const char* BG_SET_END_FORMAT = "LBackgroundSetEnd";
 
+// This is only necessary when "exclude_baseline_profile_classes" and
+// "include_betamap_20pct_coldstart" are set.
+constexpr const char* COLD_START_20PCT_END_FORMAT = "LColdStart20PctEnd";
+
 static DexInfo EMPTY_DEX_INFO;
 
 std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
@@ -599,6 +603,12 @@ void InterDex::load_interdex_types() {
         type = DexType::make_type(entry);
         TRACE(IDEX, 4, "[interdex order]: Found bg set end class marker %s.",
               entry.c_str());
+      } else if (boost::algorithm::starts_with(entry,
+                                               COLD_START_20PCT_END_FORMAT)) {
+        type = DexType::make_type(entry);
+        TRACE(IDEX, 4,
+              "[interdex order]: Found 20pct cold start end class marker %s.",
+              entry.c_str());
       } else {
         continue;
       }
@@ -982,11 +992,8 @@ void InterDex::run() {
       m_class_references_cache);
 
   const auto& primary_dex = m_dexen[0];
-  // We have a bunch of special logic for the primary dex which we only use if
-  // we can't touch the primary dex.
-  if (!m_normal_primary_dex) {
-    emit_primary_dex(primary_dex, m_interdex_types, unreferenced_classes);
-  } else {
+
+  if (m_normal_primary_dex) {
     // NOTE: If primary dex is treated as a normal dex, we are going to modify
     //       it too, based on coldstart classes. If we can't remove the classes
     //       from the primary dex, we need to update the coldstart list to
@@ -994,6 +1001,21 @@ void InterDex::run() {
     if (m_keep_primary_order && !m_interdex_types.empty()) {
       update_interdexorder(primary_dex, &m_interdex_types);
     }
+  }
+
+  if (m_order_interdex && m_exclude_baseline_profile_classes) {
+    // Mutates m_interdex_types, removing baseline profile classes.
+    // Note that in normal_primary_dex mode, this can remove classes from the
+    // first/"primary" dex file (i.e. by removing them from m_interdex_types).
+    // This should be fine, because this is not a special primary dex, and we
+    // know these classes will end up in the app image.
+    this->exclude_baseline_profile_classes();
+  }
+
+  // We have a bunch of special logic for the primary dex which we only use if
+  // we can't touch the primary dex.
+  if (!m_normal_primary_dex) {
+    emit_primary_dex(primary_dex, m_interdex_types, unreferenced_classes);
   }
 
   // Emit interdex classes, if any.
@@ -1301,6 +1323,93 @@ void InterDex::post_process_dex(EmittingState& emitting_state,
                        return get_index(a) < get_index(b);
                      });
   }
+}
+
+void InterDex::exclude_baseline_profile_classes() {
+  always_assert(m_exclude_baseline_profile_classes);
+  initialize_baseline_profile_classes();
+
+  // Loop through, still setting baseline profile classes to perf sensitive,
+  // and erasing them from m_interdex_types.
+  for (auto it = m_interdex_types.begin(); it != m_interdex_types.end();) {
+    auto* dex_type = *it;
+    if (!this->is_baseline_profile_class(dex_type)) {
+      ++it;
+      continue;
+    }
+
+    if (auto* cls = type_class(dex_type)) {
+      cls->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
+    }
+
+    it = m_interdex_types.erase(it);
+  }
+
+  // Also remove any DexEndMarkers which would otherwise create initial empty
+  // dexes. Mostly handles the case when classes which would have otherwise
+  // been in the first dex with the 20% cold start set are all in the baseline
+  // profile.
+  auto it = m_interdex_types.begin();
+  while (it != m_interdex_types.end() &&
+         boost::algorithm::starts_with((*it)->get_name()->str(),
+                                       END_MARKER_FORMAT)) {
+    it = m_interdex_types.erase(it);
+  }
+}
+
+void InterDex::initialize_baseline_profile_classes() {
+  always_assert(m_exclude_baseline_profile_classes);
+  // I.e. this should only ever be called once.
+  always_assert(!m_baseline_profile_classes);
+
+  m_baseline_profile_classes = std::unordered_set<DexType*>();
+
+  // If the 20% cold start set from the betamap is included in the baseline
+  // profile, read and insert  all classes in the betamap up until the 20% cold
+  // start end marker.
+  if (m_baseline_profile_config.options.include_betamap_20pct_coldstart) {
+    auto it = m_interdex_types.begin();
+
+    for (; it != m_interdex_types.end(); ++it) {
+      auto* dex_type = *it;
+      m_baseline_profile_classes->insert(dex_type);
+      if (boost::algorithm::starts_with(dex_type->get_name()->str(),
+                                        COLD_START_20PCT_END_FORMAT)) {
+        break;
+      }
+    }
+
+    always_assert_log(it != m_interdex_types.end(),
+                      "include_betamap_20pct_coldstart is set, but %s marker "
+                      "not found in betamap",
+                      COLD_START_20PCT_END_FORMAT);
+  }
+
+  // Handle deep data profiles
+  const auto& method_profiles = m_conf.get_method_profiles();
+  for (const auto& [interaction_id, _] :
+       m_baseline_profile_config.interactions) {
+    auto it =
+        m_baseline_profile_config.interaction_configs.find(interaction_id);
+    always_assert_log(it != m_baseline_profile_config.interaction_configs.end(),
+                      "%s\n", interaction_id.c_str());
+    const auto& interaction_config = it->second;
+    if (!interaction_config.classes) {
+      continue;
+    }
+
+    const auto& method_stats = method_profiles.method_stats(interaction_id);
+    for (const auto& [method, stat] : method_stats) {
+      if (stat.appear_percent >= interaction_config.threshold &&
+          stat.call_count >= interaction_config.call_threshold) {
+        auto* dex_type = method->get_class();
+        always_assert(dex_type);
+        m_baseline_profile_classes->insert(dex_type);
+      }
+    }
+  }
+
+  // TODO: Not handling the manual profile yet.
 }
 
 } // namespace interdex
