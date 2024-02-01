@@ -393,7 +393,7 @@ DedupStrings::get_strings_to_dedup(
 
   // Do a cost/benefit analysis to figure out which strings to access via
   // factory methods, and where to put to the factory method
-  std::vector<const DexString*> strings_in_dexes[dexen.size()];
+  std::vector<std::vector<const DexString*>> strings_in_dexes(dexen.size());
   std::unordered_set<size_t> hosting_dexnrs;
   std::vector<const DexString*> ordered_strings;
   ordered_strings.reserve(occurrences.size());
