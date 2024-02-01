@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "BaselineProfileConfig.h"
 #include "DexClass.h"
 #include "DexStructure.h"
 #include "InterDex.h"
@@ -78,6 +79,8 @@ class InterDexPass : public Pass {
 
   void bind_config() override;
 
+  void bind_baseline_profile_config();
+
   void eval_pass(DexStoresVector& stores,
                  ConfigFiles& conf,
                  PassManager& mgr) override {
@@ -106,6 +109,8 @@ class InterDexPass : public Pass {
   bool m_expect_order_list;
   std::vector<std::string> m_methods_for_canary_clinit_reference;
   bool m_transitively_close_interdex_order{false};
+  bool m_exclude_baseline_profile_classes;
+  BaselineProfileConfig m_baseline_profile_config;
 
   size_t m_run{0}; // Which iteration of `run_pass`.
   size_t m_eval{0}; // How many `eval_pass` iterations.

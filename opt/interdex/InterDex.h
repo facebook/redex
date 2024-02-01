@@ -10,6 +10,7 @@
 #include <unordered_set>
 
 #include "AssetManager.h"
+#include "BaselineProfileConfig.h"
 #include "CrossDexRefMinimizer.h"
 #include "DexClass.h"
 #include "DexStoreUtil.h"
@@ -57,7 +58,9 @@ class InterDex {
                init_classes_with_side_effects,
            bool transitively_close_interdex_order,
            int64_t minimize_cross_dex_refs_explore_alternatives,
-           ClassReferencesCache& class_references_cache)
+           ClassReferencesCache& class_references_cache,
+           bool exclude_baseline_profile_classes,
+           BaselineProfileConfig&& baseline_profile_config)
       : m_dexen(dexen),
         m_asset_manager(asset_manager),
         m_conf(conf),
@@ -82,7 +85,9 @@ class InterDex {
         m_transitively_close_interdex_order(transitively_close_interdex_order),
         m_minimize_cross_dex_refs_explore_alternatives(
             minimize_cross_dex_refs_explore_alternatives),
-        m_class_references_cache(class_references_cache) {
+        m_class_references_cache(class_references_cache),
+        m_exclude_baseline_profile_classes(exclude_baseline_profile_classes),
+        m_baseline_profile_config(std::move(baseline_profile_config)) {
     m_emitting_state.dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
     m_emitting_state.dexes_structure.set_reserve_frefs(reserve_refs.frefs);
     m_emitting_state.dexes_structure.set_reserve_trefs(reserve_refs.trefs);
@@ -201,6 +206,20 @@ class InterDex {
   void update_interdexorder(const DexClasses& dex,
                             std::vector<DexType*>* interdex_types);
 
+  /*
+   * Removes baseline profile classes (based on config specified in refig) from
+   * m_interdex_types. Still sets them to perf-sensitive as BETAMAP_ORDERED.
+   */
+  void exclude_baseline_profile_classes();
+
+  bool is_baseline_profile_class(DexType* dex_type) const {
+    // Assumes m_baseline_profile_classes is set
+    return m_baseline_profile_classes->find(dex_type) !=
+           m_baseline_profile_classes->end();
+  }
+
+  void initialize_baseline_profile_classes();
+
   EmittingState m_emitting_state;
 
   const DexClassesVector& m_dexen;
@@ -239,6 +258,10 @@ class InterDex {
   const int64_t m_minimize_cross_dex_refs_explore_alternatives;
 
   ClassReferencesCache& m_class_references_cache;
+
+  bool m_exclude_baseline_profile_classes;
+  BaselineProfileConfig m_baseline_profile_config;
+  std::optional<std::unordered_set<DexType*>> m_baseline_profile_classes;
 };
 
 } // namespace interdex

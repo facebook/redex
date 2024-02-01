@@ -10,6 +10,7 @@
 #include "ConfigFiles.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "JsonWrapper.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "StlUtil.h"
@@ -36,6 +37,72 @@ void treat_generated_stores(DexStoresVector& stores,
 } // namespace
 
 namespace interdex {
+
+// TODO: This code shouldn't live here. "baseline_profile_config" should likely
+//       be part of the GlobalConfig and parsed early on (close to where deep
+//       data profiles and the betamap get read). Then both InterDexPass and
+//       ArtProfileWriterPass (and anything else) can read the baseline profile
+//       config for a build easily.
+//       Doing it here for now for ease/speed of implementation for an upcoming
+//       APK test.
+void InterDexPass::bind_baseline_profile_config() {
+  Json::Value baseline_profile_config_json;
+  bind("baseline_profile_config", {}, baseline_profile_config_json);
+
+  if (baseline_profile_config_json.empty() ||
+      !m_exclude_baseline_profile_classes) {
+    return;
+  }
+
+  auto interactions_json = baseline_profile_config_json.get("interactions", {});
+  always_assert(!interactions_json.empty());
+
+  for (auto& interaction_pair_json : interactions_json) {
+    auto id = interaction_pair_json[0].asString();
+    auto name = interaction_pair_json[1].asString();
+
+    m_baseline_profile_config.interaction_configs[id] = {};
+    m_baseline_profile_config.interactions.emplace_back(std::move(id),
+                                                        std::move(name));
+  }
+
+  auto options_json = baseline_profile_config_json.get("options", {});
+  always_assert(!options_json.empty());
+
+  auto options_jw = JsonWrapper(options_json);
+
+  options_jw.get("oxygen_modules", false,
+                 m_baseline_profile_config.options.oxygen_modules);
+  options_jw.get("strip_classes", false,
+                 m_baseline_profile_config.options.strip_classes);
+  options_jw.get("use_redex_generated_profile", false,
+                 m_baseline_profile_config.options.use_redex_generated_profile);
+  options_jw.get(
+      "include_betamap_20pct_coldstart", false,
+      m_baseline_profile_config.options.include_betamap_20pct_coldstart);
+
+  for (auto it = baseline_profile_config_json.begin();
+       it != baseline_profile_config_json.end();
+       ++it) {
+    std::string key = it.memberName();
+    if (key == "interactions" || key == "options") {
+      continue;
+    }
+
+    const auto& interaction_id = key;
+
+    auto& bpi_config =
+        m_baseline_profile_config.interaction_configs[interaction_id];
+
+    const auto& bpi_config_jw = JsonWrapper(*it);
+
+    bpi_config_jw.get("call_threshold", 1, bpi_config.call_threshold);
+    bpi_config_jw.get("classes", false, bpi_config.classes);
+    bpi_config_jw.get("post_startup", false, bpi_config.post_startup);
+    bpi_config_jw.get("startup", false, bpi_config.startup);
+    bpi_config_jw.get("threshold", 80, bpi_config.threshold);
+  }
+}
 
 void InterDexPass::bind_config() {
   bind("static_prune", false, m_static_prune);
@@ -111,6 +178,10 @@ void InterDexPass::bind_config() {
   bind("transitively_close_interdex_order", m_transitively_close_interdex_order,
        m_transitively_close_interdex_order);
 
+  bind("exclude_baseline_profile_classes", false,
+       m_exclude_baseline_profile_classes);
+  bind_baseline_profile_config();
+
   trait(Traits::Pass::unique, true);
 }
 
@@ -149,15 +220,16 @@ void InterDexPass::run_pass(
   bool force_single_dex = conf.get_json_config().get("force_single_dex", false);
   mgr.set_metric("config.force_single_dex", force_single_dex);
 
-  InterDex interdex(original_scope, dexen, mgr.asset_manager(), conf, plugins,
-                    m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
-                    m_keep_primary_order, force_single_dex, m_order_interdex,
-                    m_emit_canaries, m_minimize_cross_dex_refs,
-                    m_fill_last_coldstart_dex, m_minimize_cross_dex_refs_config,
-                    refs_info, &xstore_refs, mgr.get_redex_options().min_sdk,
-                    init_classes_with_side_effects,
-                    m_transitively_close_interdex_order,
-                    m_minimize_cross_dex_refs_explore_alternatives, cache);
+  InterDex interdex(
+      original_scope, dexen, mgr.asset_manager(), conf, plugins,
+      m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
+      m_keep_primary_order, force_single_dex, m_order_interdex, m_emit_canaries,
+      m_minimize_cross_dex_refs, m_fill_last_coldstart_dex,
+      m_minimize_cross_dex_refs_config, refs_info, &xstore_refs,
+      mgr.get_redex_options().min_sdk, init_classes_with_side_effects,
+      m_transitively_close_interdex_order,
+      m_minimize_cross_dex_refs_explore_alternatives, cache,
+      m_exclude_baseline_profile_classes, std::move(m_baseline_profile_config));
 
   if (m_expect_order_list) {
     always_assert_log(
@@ -249,7 +321,8 @@ void InterDexPass::run_pass_on_nonroot_store(
       /* fill_last_coldstart_dex=*/false, cross_dex_refs_config, refs_info,
       &xstore_refs, mgr.get_redex_options().min_sdk,
       init_classes_with_side_effects, m_transitively_close_interdex_order,
-      m_minimize_cross_dex_refs_explore_alternatives, cache);
+      m_minimize_cross_dex_refs_explore_alternatives, cache,
+      m_exclude_baseline_profile_classes, std::move(m_baseline_profile_config));
 
   interdex.run_on_nonroot_store();
 

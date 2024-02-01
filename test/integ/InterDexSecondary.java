@@ -16,10 +16,10 @@ class C5 { }
 class C6 { }
 class C7 extends C6 { } // highest seed weight, since it extends another (non-external) class
 class C8 { }
-class C9 { }
+class C9 { void foo(){ } }
 class C10 { }
 class C11 { }
-class C12 { }
+class C12 { void bazz(){ } }
 
 public class InterDexSecondary {
 }
