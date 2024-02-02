@@ -132,7 +132,8 @@ class InlinedCodeSizeEstimator {
   LazyUnorderedMap<DeltaKey, int64_t, boost::hash<DeltaKey>> m_deltas;
 
  public:
-  explicit InlinedCodeSizeEstimator(const MethodSummaries& method_summaries)
+  explicit InlinedCodeSizeEstimator(const MethodSummaries& method_summaries,
+                                    const ObjectEscapeConfig& config)
       : m_inlined_code_sizes([](DexMethod* method) {
           uint32_t code_size{0};
           auto& cfg = method->get_code()->cfg();
@@ -172,14 +173,14 @@ class InlinedCodeSizeEstimator {
                 method_summaries.at(callee).allocation_insn;
             always_assert(callee_allocation_insn);
             delta += 10 * (int64_t)m_inlined_code_sizes[callee] +
-                     get_delta(callee, callee_allocation_insn) - COST_INVOKE -
-                     COST_MOVE_RESULT;
+                     get_delta(callee, callee_allocation_insn) -
+                     config.m_cost_invoke - config.m_cost_move_result;
           } else if (allocation_insn->opcode() == OPCODE_NEW_INSTANCE) {
-            delta -= COST_NEW_INSTANCE;
+            delta -= config.m_cost_new_instance;
           }
           for (auto& use : m_uses[key]) {
             if (opcode::is_an_invoke(use.insn->opcode())) {
-              delta -= COST_INVOKE;
+              delta -= config.m_cost_invoke;
               auto callee = resolve_method(use.insn->get_method(),
                                            opcode_to_search(use.insn));
               always_assert(callee);
@@ -196,7 +197,7 @@ class InlinedCodeSizeEstimator {
               delta += 10 * (int64_t)m_inlined_code_sizes[callee] +
                        get_delta(callee, load_param_insn);
               if (!callee->get_proto()->is_void()) {
-                delta -= COST_MOVE_RESULT;
+                delta -= config.m_cost_move_result;
               }
             } else if (opcode::is_an_iget(use.insn->opcode()) ||
                        opcode::is_an_iput(use.insn->opcode()) ||
@@ -234,7 +235,8 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
     const ConcurrentMap<DexType*, Locations>& new_instances,
     const ConcurrentMap<DexMethod*, Locations>& invokes,
     const MethodSummaries& method_summaries,
-    const ConcurrentMap<DexType*, InlineAnchorsOfType>& inline_anchors) {
+    const ConcurrentMap<DexType*, InlineAnchorsOfType>& inline_anchors,
+    const ObjectEscapeConfig& config) {
   Timer t("compute_root_methods");
   std::array<size_t, (size_t)(InlinableTypeKind::Last) + 1> candidate_types{
       0, 0, 0};
@@ -246,7 +248,8 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
 
   auto concurrent_add_root_methods = [&](DexType* type, bool complete) {
     const auto& inline_anchors_of_type = inline_anchors.at_unsafe(type);
-    InlinedCodeSizeEstimator inlined_code_size_estimator(method_summaries);
+    InlinedCodeSizeEstimator inlined_code_size_estimator(method_summaries,
+                                                         config);
     std::vector<DexMethod*> methods;
     for (auto& [method, allocation_insns] : inline_anchors_of_type) {
       if (method->rstate.no_optimizations()) {
@@ -463,6 +466,7 @@ struct NetSavings {
 
   // Estimate how many code units will be saved.
   int get_value(
+      const ObjectEscapeConfig& config,
       const InsertOnlyConcurrentSet<DexMethod*>* methods_kept = nullptr) const {
     int net_savings{local};
     // A class will only eventually get deleted if all static methods are
@@ -482,7 +486,7 @@ struct NetSavings {
       if (can_delete(method) && !method::is_argless_init(method) &&
           (!methods_kept || !methods_kept->count(method))) {
         auto code_size = get_code_size(method);
-        net_savings += COST_METHOD + code_size;
+        net_savings += config.m_cost_method + code_size;
         if (is_static(method)) {
           smethods[method->get_class()].erase(method);
         }
@@ -494,12 +498,12 @@ struct NetSavings {
       if (can_delete(cls) && cls->get_sfields().empty() && !cls->get_clinit()) {
         auto& type_smethods = smethods[type];
         if (type_smethods.empty()) {
-          net_savings += COST_CLASS;
+          net_savings += config.m_cost_class;
         }
       }
       for (auto field : cls->get_ifields()) {
         if (can_delete(field)) {
-          net_savings += COST_FIELD;
+          net_savings += config.m_cost_field;
         }
       }
     }
@@ -577,7 +581,7 @@ class RootMethodReducer {
   const InlinableTypes& m_types;
   size_t m_calls_inlined{0};
   size_t m_new_instances_eliminated{0};
-  size_t m_max_inline_size;
+  const ObjectEscapeConfig& m_config;
 
  public:
   RootMethodReducer(const ExpandableMethodParams& expandable_method_params,
@@ -589,7 +593,7 @@ class RootMethodReducer {
                     bool is_init_or_clinit,
                     DexMethod* method,
                     const InlinableTypes& types,
-                    size_t max_inline_size)
+                    const ObjectEscapeConfig& config)
       : m_expandable_method_params(expandable_method_params),
         m_incomplete_marker_method(incomplete_marker_method),
         m_inliner(inliner),
@@ -599,7 +603,7 @@ class RootMethodReducer {
         m_is_init_or_clinit(is_init_or_clinit),
         m_method(method),
         m_types(types),
-        m_max_inline_size(max_inline_size) {}
+        m_config(config) {}
 
   std::optional<ReducedMethod> reduce() {
     auto initial_code_size{get_code_size(m_method)};
@@ -860,7 +864,7 @@ class RootMethodReducer {
     auto [param_index, type] = *src_indices.begin();
     bool multiples =
         m_types.at(type) == InlinableTypeKind::CompleteMultipleRoots;
-    if (multiples && get_code_size(callee) > m_max_inline_size &&
+    if (multiples && get_code_size(callee) > m_config.m_max_inline_size &&
         m_expandable_method_params.get_expanded_method_ref(callee,
                                                            param_index)) {
       return true;
@@ -873,7 +877,8 @@ class RootMethodReducer {
   bool expand_or_inline_invokes() {
     auto& cfg = m_method->get_code()->cfg();
     std::unordered_set<DexMethodRef*> expanded_method_refs;
-    for (int iteration = 0; iteration < MAX_INLINE_INVOKES_ITERATIONS;
+    for (int iteration = 0;
+         iteration < m_config.m_max_inline_invokes_iterations;
          iteration++) {
       std::unordered_set<IRInstruction*> invokes_to_inline;
       std::unordered_map<IRInstruction*, param_index_t> invokes_to_expand;
@@ -1102,7 +1107,7 @@ compute_reduced_methods(
     const std::unordered_map<DexMethod*, InlinableTypes>& root_methods,
     std::unordered_set<DexType*>* irreducible_types,
     Stats* stats,
-    size_t max_inline_size) {
+    const ObjectEscapeConfig& config) {
   Timer t("compute_reduced_methods");
 
   // We are not exploring all possible subsets of types, but only single chain
@@ -1181,7 +1186,7 @@ compute_reduced_methods(
                                                   method::is_clinit(method),
                                               copy,
                                               types,
-                                              max_inline_size};
+                                              config};
         auto reduced_method = root_method_reducer.reduce();
         if (reduced_method) {
           concurrent_reduced_methods.update(
@@ -1232,7 +1237,8 @@ void select_reduced_methods(
     std::unordered_set<DexType*>* irreducible_types,
     Stats* stats,
     InsertOnlyConcurrentMap<DexMethod*, size_t>*
-        concurrent_selected_reduced_methods) {
+        concurrent_selected_reduced_methods,
+    const ObjectEscapeConfig& config) {
   Timer t("select_reduced_methods");
 
   // First, we are going to identify all reduced methods which will result in
@@ -1292,7 +1298,7 @@ void select_reduced_methods(
           // determination.
           const auto& reduced_method = reduced_methods_variants.at(i);
           auto net_savings = reduced_method.get_net_savings(*irreducible_types);
-          auto value = net_savings.get_value();
+          auto value = net_savings.get_value(config);
           if (!best_candidate || value > best_candidate->value) {
             best_candidate = (Candidate){i, std::move(net_savings), value};
           }
@@ -1363,12 +1369,12 @@ void select_reduced_methods(
         auto& [type, family] = p;
         if (irreducible_types->count(type) ||
             family.global_net_savings.get_value(
-                &concurrent_inlinable_methods_kept) < 0) {
+                config, &concurrent_inlinable_methods_kept) < 0) {
           stats->too_costly_globally += family.reduced_methods.size();
           return;
         }
         stats->total_savings += family.global_net_savings.get_value(
-            &concurrent_inlinable_methods_kept);
+            config, &concurrent_inlinable_methods_kept);
         for (auto& [method, i] : family.reduced_methods) {
           concurrent_selected_reduced_methods->emplace(method, i);
         }
@@ -1397,7 +1403,7 @@ void reduce(DexStoresVector& stores,
             const std::unordered_set<DexClass*>& excluded_classes,
             const std::unordered_map<DexMethod*, InlinableTypes>& root_methods,
             Stats* stats,
-            size_t max_inline_size) {
+            const ObjectEscapeConfig& config) {
   Timer t("reduce");
 
   // First, we compute all reduced methods
@@ -1406,13 +1412,13 @@ void reduce(DexStoresVector& stores,
   std::unordered_set<DexType*> irreducible_types;
   auto reduced_methods = compute_reduced_methods(
       expandable_method_params, inliner, method_summaries, excluded_classes,
-      root_methods, &irreducible_types, stats, max_inline_size);
+      root_methods, &irreducible_types, stats, config);
   stats->reduced_methods = reduced_methods.size();
 
   // Second, we select reduced methods that will result in net savings
   InsertOnlyConcurrentMap<DexMethod*, size_t> selected_reduced_methods;
   select_reduced_methods(reduced_methods, &irreducible_types, stats,
-                         &selected_reduced_methods);
+                         &selected_reduced_methods, config);
   stats->selected_reduced_methods = selected_reduced_methods.size();
 
   // Finally, we are going to apply those selected methods, and clean up all
@@ -1442,7 +1448,18 @@ void reduce(DexStoresVector& stores,
 } // namespace
 
 void ObjectEscapeAnalysisPass::bind_config() {
-  bind("max_inline_size", MAX_INLINE_SIZE, m_max_inline_size);
+  bind("max_inline_size", MAX_INLINE_SIZE, m_config.m_max_inline_size);
+  bind("max_inline_invokes_iterations", MAX_INLINE_INVOKES_ITERATIONS,
+       m_config.m_max_inline_invokes_iterations);
+  bind("incompalete_estimated_delta_threshold",
+       INCOMPLETE_ESTIMATED_DELTA_THRESHOLD,
+       m_config.m_incompalete_estimated_delta_threshold);
+  bind("cost_method", COST_METHOD, m_config.m_cost_method);
+  bind("cost_class", COST_CLASS, m_config.m_cost_class);
+  bind("cost_field", COST_FIELD, m_config.m_cost_field);
+  bind("cost_invoke", COST_INVOKE, m_config.m_cost_invoke);
+  bind("cost_move_result", COST_MOVE_RESULT, m_config.m_cost_move_result);
+  bind("cost_new_instance", COST_NEW_INSTANCE, m_config.m_cost_new_instance);
 }
 
 void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
@@ -1470,8 +1487,8 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   auto inline_anchors =
       compute_inline_anchors(scope, method_summaries, excluded_classes);
 
-  auto root_methods = compute_root_methods(mgr, new_instances, invokes,
-                                           method_summaries, inline_anchors);
+  auto root_methods = compute_root_methods(
+      mgr, new_instances, invokes, method_summaries, inline_anchors, m_config);
 
   ConcurrentMethodResolver concurrent_method_resolver;
   std::unordered_set<DexMethod*> no_default_inlinables;
@@ -1495,8 +1512,7 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
 
   Stats stats;
   reduce(stores, scope, conf, init_classes_with_side_effects, inliner,
-         method_summaries, excluded_classes, root_methods, &stats,
-         m_max_inline_size);
+         method_summaries, excluded_classes, root_methods, &stats, m_config);
 
   TRACE(OEA, 1, "[object escape analysis] total savings: %zu",
         (size_t)stats.total_savings);

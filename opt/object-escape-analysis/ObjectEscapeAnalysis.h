@@ -9,6 +9,18 @@
 
 #include "Pass.h"
 
+struct ObjectEscapeConfig {
+  size_t m_max_inline_size;
+  int m_max_inline_invokes_iterations;
+  int64_t m_incompalete_estimated_delta_threshold;
+  size_t m_cost_method;
+  size_t m_cost_class;
+  size_t m_cost_field;
+  int64_t m_cost_invoke;
+  int64_t m_cost_move_result;
+  int64_t m_cost_new_instance;
+};
+
 class ObjectEscapeAnalysisPass : public Pass {
  public:
   ObjectEscapeAnalysisPass() : Pass("ObjectEscapeAnalysisPass") {}
@@ -28,5 +40,5 @@ class ObjectEscapeAnalysisPass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  size_t m_max_inline_size;
+  ObjectEscapeConfig m_config;
 };
