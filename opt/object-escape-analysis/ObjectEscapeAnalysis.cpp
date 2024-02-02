@@ -1392,12 +1392,8 @@ void select_reduced_methods(
   }
 }
 
-void reduce(DexStoresVector& stores,
-            const Scope& scope,
-            ConfigFiles& conf,
+void reduce(const Scope& scope,
             const ObjectEscapeConfig& config,
-            const init_classes::InitClassesWithSideEffects&
-                init_classes_with_side_effects,
             MultiMethodInliner& inliner,
             const MethodSummaries& method_summaries,
             const std::unordered_set<DexClass*>& excluded_classes,
@@ -1510,8 +1506,8 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
       inliner, dependencies, root_methods, &method_summaries);
 
   Stats stats;
-  reduce(stores, scope, conf, m_config, init_classes_with_side_effects, inliner,
-         method_summaries, excluded_classes, root_methods, &stats);
+  reduce(scope, m_config, inliner, method_summaries, excluded_classes,
+         root_methods, &stats);
 
   TRACE(OEA, 1, "[object escape analysis] total savings: %zu",
         (size_t)stats.total_savings);
