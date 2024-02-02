@@ -16,6 +16,7 @@ check_PROGRAMS = \
     aliased_registers_test \
     analysis_usage_test \
     array_propagation_test \
+    assert_test \
     blaming_escape_test \
     boxed_boolean_propagation_test \
     branch_prefix_hoisting_test \
@@ -155,6 +156,8 @@ analysis_usage_test_SOURCES = AnalysisUsageTest.cpp
 
 array_propagation_test_SOURCES = constant-propagation/ArrayPropagationTest.cpp
 array_propagation_test_CPPFLAGS = $(COMMON_INCLUDES) $(COMMON_TEST_INCLUDES) -I$(top_srcdir)/sparta/test
+
+assert_test_SOURCES = AssertTest.cpp
 
 blaming_escape_test_SOURCES = BlamingEscapeTest.cpp
 blaming_escape_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
@@ -476,6 +479,7 @@ TESTS = \
     aliased_registers_test \
     analysis_usage_test \
     array_propagation_test \
+    assert_test \
     blaming_escape_test \
     boxed_boolean_propagation_test \
     branch_prefix_hoisting_test \
