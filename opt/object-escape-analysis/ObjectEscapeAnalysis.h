@@ -10,15 +10,15 @@
 #include "Pass.h"
 
 struct ObjectEscapeConfig {
-  size_t m_max_inline_size;
-  int m_max_inline_invokes_iterations;
-  int64_t m_incompalete_estimated_delta_threshold;
-  size_t m_cost_method;
-  size_t m_cost_class;
-  size_t m_cost_field;
-  int64_t m_cost_invoke;
-  int64_t m_cost_move_result;
-  int64_t m_cost_new_instance;
+  size_t max_inline_size;
+  int max_inline_invokes_iterations;
+  int64_t incomplete_estimated_delta_threshold;
+  size_t cost_method;
+  size_t cost_class;
+  size_t cost_field;
+  int64_t cost_invoke;
+  int64_t cost_move_result;
+  int64_t cost_new_instance;
 };
 
 class ObjectEscapeAnalysisPass : public Pass {
