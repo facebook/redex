@@ -2248,11 +2248,19 @@ class HostClassSelector {
     auto declaring_types = get_declaring_types(ci);
     always_assert(!declaring_types.empty());
 
+    auto can_be_host_class = [min_sdk = m_min_sdk](const DexType* type) {
+      auto* cls = type_class(type);
+      // Before Android 7, invoking static methods defined in interfaces was
+      // not supported. See rule A24 in
+      // https://source.android.com/devices/tech/dalvik/constraints
+      return min_sdk >= 24 || (cls && !is_interface(cls));
+    };
+
     auto host_class =
         get_direct_or_base_class(declaring_types, get_common_super_classes);
     if (declaring_types.size() == 1) {
       auto direct_type = *declaring_types.begin();
-      if (host_class == direct_type) {
+      if (host_class == direct_type && can_be_host_class(host_class)) {
         m_hosted_direct_count++;
         return host_class;
       }
@@ -2265,7 +2273,7 @@ class HostClassSelector {
     }
     always_assert(!has_non_init_invoke_directs(c));
 
-    if (host_class) {
+    if (host_class && can_be_host_class(host_class)) {
       m_hosted_base_count++;
       return host_class;
     }
@@ -2276,14 +2284,11 @@ class HostClassSelector {
     auto referenced_types = get_referenced_types(c);
     host_class = get_direct_or_base_class(
         referenced_types, get_super_classes,
-        [min_sdk = m_min_sdk](const DexType* t) {
-          auto cls = type_class(t);
-          // Before Android 7, invoking static methods defined in interfaces was
-          // not supported. See rule A24 in
-          // https://source.android.com/devices/tech/dalvik/constraints
-          if (min_sdk < 24 && is_interface(cls)) {
+        [&can_be_host_class](const DexType* t) {
+          if (!can_be_host_class(t)) {
             return false;
           }
+          auto cls = type_class(t);
           // We don't want any common base class with a scary clinit
           return !method::clinit_may_have_side_effects(
               cls, /* allow_benign_method_invocations */ false);
