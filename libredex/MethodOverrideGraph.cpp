@@ -263,6 +263,108 @@ class GraphBuilder {
   const Scope& m_scope;
 };
 
+template <typename F>
+bool all_overriding_methods_impl(const Graph& graph,
+                                 const DexMethod* method,
+                                 const F& f,
+                                 bool include_interfaces,
+                                 const DexType* base_type) {
+  const Node& root = graph.get_node(method);
+  if (base_type && method->get_class() == base_type) {
+    base_type = nullptr;
+  }
+  if (root.is_interface) {
+    std::unordered_set<const DexMethod*> visited{method};
+    return self_recursive_fn(
+        [&](auto self, const auto& children) -> bool {
+          for (const auto* current : children) {
+            if (!visited.emplace(current).second) {
+              continue;
+            }
+            const Node& node = graph.get_node(current);
+            if (!self(self, node.children)) {
+              return false;
+            }
+            if ((include_interfaces || !node.is_interface) &&
+                (!base_type || node.overrides(current, base_type)) &&
+                !f(current)) {
+              return false;
+            }
+          }
+          return true;
+        },
+        root.children);
+  }
+  // optimized code path
+  return self_recursive_fn(
+      [&](auto self, const auto& children) -> bool {
+        for (const auto* current : children) {
+          const Node& node = graph.get_node(current);
+          if (!self(self, node.children)) {
+            return false;
+          }
+          if ((!base_type || node.overrides(current, base_type)) &&
+              !f(current)) {
+            return false;
+          }
+        }
+        return true;
+      },
+      root.children);
+}
+
+template <typename F>
+bool all_overridden_methods_impl(const Graph& graph,
+                                 const DexMethod* method,
+                                 const F& f,
+                                 bool include_interfaces) {
+  const Node& root = graph.get_node(method);
+  if (include_interfaces) {
+    std::unordered_set<const DexMethod*> visited{method};
+    return self_recursive_fn(
+        [&](auto self, const auto& children) -> bool {
+          for (const auto* current : children) {
+            if (!visited.emplace(current).second) {
+              continue;
+            }
+            const Node& node = graph.get_node(current);
+            if (!include_interfaces && node.is_interface) {
+              continue;
+            }
+            if (!self(self, node.parents)) {
+              return false;
+            }
+            if (!f(current)) {
+              return false;
+            }
+          }
+          return true;
+        },
+        root.parents);
+  }
+  if (root.is_interface) {
+    return true;
+  }
+  // optimized code path
+  return self_recursive_fn(
+      [&](auto self, const auto& children) -> bool {
+        for (const auto* current : children) {
+          const Node& node = graph.get_node(current);
+          if (node.is_interface) {
+            continue;
+          }
+          if (!self(self, node.parents)) {
+            return false;
+          }
+          if (!f(current)) {
+            return false;
+          }
+        }
+        return true;
+      },
+      root.parents);
+}
+
 } // namespace
 
 namespace method_override_graph {
@@ -371,7 +473,7 @@ std::vector<const DexMethod*> get_overriding_methods(const Graph& graph,
                                                      bool include_interfaces,
                                                      const DexType* base_type) {
   std::vector<const DexMethod*> res;
-  all_overriding_methods(
+  all_overriding_methods_impl(
       graph, method,
       [&](const DexMethod* method) {
         res.push_back(method);
@@ -385,7 +487,7 @@ std::vector<const DexMethod*> get_overridden_methods(const Graph& graph,
                                                      const DexMethod* method,
                                                      bool include_interfaces) {
   std::vector<const DexMethod*> res;
-  all_overridden_methods(
+  all_overridden_methods_impl(
       graph, method,
       [&](const DexMethod* method) {
         res.push_back(method);
@@ -423,48 +525,8 @@ bool all_overriding_methods(const Graph& graph,
                             const std::function<bool(const DexMethod*)>& f,
                             bool include_interfaces,
                             const DexType* base_type) {
-  const Node& root = graph.get_node(method);
-  if (base_type && method->get_class() == base_type) {
-    base_type = nullptr;
-  }
-  if (root.is_interface) {
-    std::unordered_set<const DexMethod*> visited{method};
-    return self_recursive_fn(
-        [&](auto self, const auto& children) -> bool {
-          for (const auto* current : children) {
-            if (!visited.emplace(current).second) {
-              continue;
-            }
-            const Node& node = graph.get_node(current);
-            if (!self(self, node.children)) {
-              return false;
-            }
-            if ((include_interfaces || !node.is_interface) &&
-                (!base_type || node.overrides(current, base_type)) &&
-                !f(current)) {
-              return false;
-            }
-          }
-          return true;
-        },
-        root.children);
-  }
-  // optimized code path
-  return self_recursive_fn(
-      [&](auto self, const auto& children) -> bool {
-        for (const auto* current : children) {
-          const Node& node = graph.get_node(current);
-          if (!self(self, node.children)) {
-            return false;
-          }
-          if ((!base_type || node.overrides(current, base_type)) &&
-              !f(current)) {
-            return false;
-          }
-        }
-        return true;
-      },
-      root.children);
+  return all_overriding_methods_impl(graph, method, f, include_interfaces,
+                                     base_type);
 }
 
 bool any_overriding_methods(const Graph& graph,
@@ -472,7 +534,7 @@ bool any_overriding_methods(const Graph& graph,
                             const std::function<bool(const DexMethod*)>& f,
                             bool include_interfaces,
                             const DexType* base_type) {
-  return !all_overriding_methods(
+  return !all_overriding_methods_impl(
       graph, method, [&](const DexMethod* m) { return !f(m); },
       include_interfaces, base_type);
 }
@@ -481,58 +543,14 @@ bool all_overridden_methods(const Graph& graph,
                             const DexMethod* method,
                             const std::function<bool(const DexMethod*)>& f,
                             bool include_interfaces) {
-  const Node& root = graph.get_node(method);
-  if (include_interfaces) {
-    std::unordered_set<const DexMethod*> visited{method};
-    return self_recursive_fn(
-        [&](auto self, const auto& children) -> bool {
-          for (const auto* current : children) {
-            if (!visited.emplace(current).second) {
-              continue;
-            }
-            const Node& node = graph.get_node(current);
-            if (!include_interfaces && node.is_interface) {
-              continue;
-            }
-            if (!self(self, node.parents)) {
-              return false;
-            }
-            if (!f(current)) {
-              return false;
-            }
-          }
-          return true;
-        },
-        root.parents);
-  }
-  if (root.is_interface) {
-    return true;
-  }
-  // optimized code path
-  return self_recursive_fn(
-      [&](auto self, const auto& children) -> bool {
-        for (const auto* current : children) {
-          const Node& node = graph.get_node(current);
-          if (node.is_interface) {
-            continue;
-          }
-          if (!self(self, node.parents)) {
-            return false;
-          }
-          if (!f(current)) {
-            return false;
-          }
-        }
-        return true;
-      },
-      root.parents);
+  return all_overridden_methods_impl(graph, method, f, include_interfaces);
 }
 
 bool any_overridden_methods(const Graph& graph,
                             const DexMethod* method,
                             const std::function<bool(const DexMethod*)>& f,
                             bool include_interfaces) {
-  return !all_overridden_methods(
+  return !all_overridden_methods_impl(
       graph, method, [&](const DexMethod* m) { return !f(m); },
       include_interfaces);
 }
