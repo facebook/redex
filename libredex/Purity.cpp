@@ -831,13 +831,11 @@ bool has_implementor(const method_override_graph::Graph* method_override_graph,
     return true;
   }
   bool found_implementor = false;
-  if (!process_base_and_overriding_methods(
-          method_override_graph, method, /* methods_to_ignore */ nullptr,
-          /* ignore_methods_with_assumenosideeffects */ false, [&](DexMethod*) {
-            found_implementor = true;
-            return true;
-          })) {
-    return true;
-  }
-  return found_implementor;
+  auto res = process_base_and_overriding_methods(
+      method_override_graph, method, /* methods_to_ignore */ nullptr,
+      /* ignore_methods_with_assumenosideeffects */ false, [&](DexMethod*) {
+        found_implementor = true;
+        return true;
+      });
+  return !res || found_implementor;
 }
