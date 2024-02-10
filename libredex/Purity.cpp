@@ -518,12 +518,15 @@ size_t compute_locations_closure(
   //    scanning method bodies
   ConcurrentMap<const DexMethod*, LocationsAndDependencies>
       concurrent_method_lads;
-  walk::parallel::methods(scope, [&](DexMethod* method) {
-    auto lads = init_func(method);
-    if (lads) {
-      concurrent_method_lads.emplace(method, std::move(*lads));
-    }
-  });
+  {
+    Timer t{"Initialize LADS"};
+    walk::parallel::methods(scope, [&](DexMethod* method) {
+      auto lads = init_func(method);
+      if (lads) {
+        concurrent_method_lads.emplace(method, std::move(*lads));
+      }
+    });
+  }
 
   std::unordered_map<const DexMethod*, LocationsAndDependencies> method_lads =
       concurrent_method_lads.move_to_container();
@@ -534,12 +537,15 @@ size_t compute_locations_closure(
   std::unordered_map<const DexMethod*, std::vector<const DexMethod*>>
       inverse_dependencies;
   std::unordered_set<const DexMethod*> impacted_methods;
-  for (auto&& [method, lads] : method_lads) {
-    if (!lads.dependencies.empty()) {
-      for (auto d : lads.dependencies) {
-        inverse_dependencies[d].push_back(method);
+  {
+    Timer t{"Compute inverse dependencies"};
+    for (auto&& [method, lads] : method_lads) {
+      if (!lads.dependencies.empty()) {
+        for (auto d : lads.dependencies) {
+          inverse_dependencies[d].push_back(method);
+        }
+        impacted_methods.insert(method);
       }
-      impacted_methods.insert(method);
     }
   }
 
@@ -562,6 +568,7 @@ size_t compute_locations_closure(
     std::vector<const DexMethod*> ordered_impacted_methods;
 
     {
+      Timer prepare_wto{"Prepare Ordering"};
       auto wto_timer_scope = s_wto_timer.scope();
 
       auto wto_successors = get_wto_successors(
@@ -656,18 +663,21 @@ static size_t analyze_read_locations(
     bool compute_locations,
     std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result) {
   std::unordered_set<const DexMethod*> pure_methods_closure;
-  for (auto pure_method_ref : pure_methods) {
-    auto pure_method = pure_method_ref->as_def();
-    if (pure_method == nullptr) {
-      continue;
-    }
-    pure_methods_closure.insert(pure_method);
-    if (pure_method->is_virtual() && method_override_graph) {
-      const auto overriding_methods =
-          method_override_graph::get_overriding_methods(*method_override_graph,
-                                                        pure_method);
-      pure_methods_closure.insert(overriding_methods.begin(),
-                                  overriding_methods.end());
+  {
+    Timer t{"Pure methods closure"};
+    for (auto pure_method_ref : pure_methods) {
+      auto pure_method = pure_method_ref->as_def();
+      if (pure_method == nullptr) {
+        continue;
+      }
+      pure_methods_closure.insert(pure_method);
+      if (pure_method->is_virtual() && method_override_graph) {
+        const auto overriding_methods =
+            method_override_graph::get_overriding_methods(
+                *method_override_graph, pure_method);
+        pure_methods_closure.insert(overriding_methods.begin(),
+                                    overriding_methods.end());
+      }
     }
   }
 
