@@ -49,7 +49,9 @@ DexMethod* resolve_method(const DexClass* cls,
                           MethodSearch search,
                           const DexMethod* caller) {
   if (search == MethodSearch::Interface) {
-    return resolve_intf_method_ref(cls, name, proto);
+    if (cls) {
+      return resolve_intf_method_ref(cls, name, proto);
+    }
   }
   if (search == MethodSearch::Super) {
     if (caller) {
