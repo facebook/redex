@@ -1360,7 +1360,7 @@ class DexClass {
   PerfSensitiveGroup get_perf_sensitive() { return m_perf_sensitive; }
 
   bool is_dynamically_dead() const { return m_dynamically_dead; }
-  void set_dynamically_dead() { m_dynamically_dead = true; }
+  void set_dynamically_dead(bool value = true) { m_dynamically_dead = value; }
 
   // Find methods and fields from a class using its obfuscated name.
   DexField* find_field_from_simple_deobfuscated_name(

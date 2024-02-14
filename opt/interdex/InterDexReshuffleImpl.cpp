@@ -56,13 +56,15 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(ConfigFiles& conf,
                                              PassManager& mgr,
                                              ReshuffleConfig& config,
                                              DexClasses& original_scope,
-                                             DexClassesVector& dexen)
+                                             DexClassesVector& dexen,
+                                             std::set<size_t>& untouched_dexes)
     : m_conf(conf),
       m_mgr(mgr),
       m_config(config),
       m_init_classes_with_side_effects(original_scope,
                                        conf.create_init_class_insns()),
-      m_dexen(dexen) {
+      m_dexen(dexen),
+      m_untouched_dexes(untouched_dexes) {
   m_dexes_structure.set_min_sdk(mgr.get_redex_options().min_sdk);
   const auto& interdex_metrics = mgr.get_interdex_metrics();
   auto it = interdex_metrics.find(interdex::METRIC_LINEAR_ALLOC_LIMIT);
@@ -150,7 +152,7 @@ void InterDexReshuffleImpl::compute_plan() {
   Timer t("compute_plan");
   MoveGains move_gains(m_first_dex_index, m_movable_classes,
                        m_class_dex_indices, m_class_refs, m_mutable_dexen,
-                       m_mutable_dexen_strings);
+                       m_mutable_dexen_strings, m_untouched_dexes);
   size_t batches{0};
   size_t total_moves{0};
   size_t max_move_gains{0};
@@ -268,5 +270,5 @@ bool InterDexReshuffleImpl::try_plan_move(const Move& move) {
 bool InterDexReshuffleImpl::can_move(DexClass* cls) {
   return (!m_order_interdex ||
           cls->get_perf_sensitive() != PerfSensitiveGroup::BETAMAP_ORDERED) &&
-         !is_canary(cls);
+         !is_canary(cls) && !cls->is_dynamically_dead();
 }

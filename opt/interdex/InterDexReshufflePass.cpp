@@ -50,7 +50,27 @@ void InterDexReshufflePass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  InterDexReshuffleImpl impl(conf, mgr, m_config, original_scope, root_dexen);
+  std::set<size_t> untouched_dexes;
+  for (size_t dex_index = 1; dex_index < root_dexen.size(); dex_index++) {
+    auto& dex = root_dexen.at(dex_index);
+    bool should_be_touched = false;
+    for (auto cls : dex) {
+      if (is_canary(cls)) {
+        continue;
+      }
+      if (!cls->is_dynamically_dead()) {
+        should_be_touched = true;
+        break;
+      }
+    }
+    if (!should_be_touched) {
+      untouched_dexes.emplace(dex_index);
+      TRACE(IDEXR, 1, "**dex %zu should not be touched\n", dex_index);
+    }
+  }
+
+  InterDexReshuffleImpl impl(conf, mgr, m_config, original_scope, root_dexen,
+                             untouched_dexes);
   impl.compute_plan();
   impl.apply_plan();
 

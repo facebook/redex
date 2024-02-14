@@ -76,13 +76,15 @@ class MoveGains {
             const std::unordered_map<DexClass*, Refs>& class_refs,
             const std::vector<DexStructure>& dexen,
             const std::vector<std::unordered_map<const DexString*, size_t>>&
-                dexen_strings)
+                dexen_strings,
+            const std::set<size_t>& untouched_dexes)
       : m_first_dex_index(first_dex_index),
         m_movable_classes(movable_classes),
         m_class_dex_indices(class_dex_indices),
         m_class_refs(class_refs),
         m_dexen(dexen),
-        m_dexen_strings(dexen_strings) {}
+        m_dexen_strings(dexen_strings),
+        m_untouched_dexes(untouched_dexes) {}
 
   void recompute_gains() {
     Timer t("recompute_gains");
@@ -91,6 +93,10 @@ class MoveGains {
     walk::parallel::classes(m_movable_classes, [&](DexClass* cls) {
       for (size_t dex_index = m_first_dex_index; dex_index < m_dexen.size();
            ++dex_index) {
+        if (m_untouched_dexes.count(dex_index) != 0) {
+          // m_untouched_dexes should not be involved during reshuffle.
+          continue;
+        }
         auto gain = compute_move_gain(cls, dex_index);
         if (gain > 0) {
           std::lock_guard<std::mutex> lock_guard(mutex);
@@ -233,6 +239,7 @@ class MoveGains {
   const std::vector<DexStructure>& m_dexen;
   const std::vector<std::unordered_map<const DexString*, size_t>>&
       m_dexen_strings;
+  const std::set<size_t>& m_untouched_dexes;
 };
 
 class InterDexReshuffleImpl {
@@ -241,7 +248,8 @@ class InterDexReshuffleImpl {
                         PassManager& mgr,
                         ReshuffleConfig& config,
                         DexClasses& original_scope,
-                        DexClassesVector& dexen);
+                        DexClassesVector& dexen,
+                        std::set<size_t>& untouched_dexes);
 
   void compute_plan();
 
@@ -259,6 +267,7 @@ class InterDexReshuffleImpl {
   ReshuffleConfig& m_config;
   init_classes::InitClassesWithSideEffects m_init_classes_with_side_effects;
   DexClassesVector& m_dexen;
+  std::set<size_t>& m_untouched_dexes;
   size_t m_linear_alloc_limit;
   DexesStructure m_dexes_structure;
   std::vector<DexClass*> m_movable_classes;
