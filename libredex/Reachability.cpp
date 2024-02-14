@@ -1686,7 +1686,7 @@ void TransitiveClosureMarkerWorker::base_invoke_virtual_target(
     exact_invoke_virtual_target(method);
   }
   for (auto* child : node.children) {
-    base_invoke_virtual_target(child, base_type, /* is_child */ true);
+    base_invoke_virtual_target(child->method, base_type, /* is_child */ true);
   }
 }
 
@@ -1800,8 +1800,8 @@ void compute_zombie_methods(
             any_abstract_methods = true;
           }
           for (auto* parent : method_override_graph.get_node(elder).parents) {
-            if (is_abstract(parent)) {
-              visit_abstract_method(parent);
+            if (is_abstract(parent->method)) {
+              visit_abstract_method(parent->method);
             }
           }
         };
@@ -1814,10 +1814,10 @@ void compute_zombie_methods(
           unmarked_elder = elder_parent;
           for (auto* parent :
                method_override_graph.get_node(unmarked_elder).parents) {
-            if (is_abstract(parent)) {
-              visit_abstract_method(parent);
+            if (is_abstract(parent->method)) {
+              visit_abstract_method(parent->method);
             } else {
-              elder_parent = parent;
+              elder_parent = parent->method;
             }
           }
         }

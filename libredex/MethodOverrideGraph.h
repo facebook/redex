@@ -77,10 +77,11 @@ struct OtherInterfaceImplementations {
  * Node's method.
  */
 struct Node {
+  const DexMethod* method{nullptr};
   // The set of immediately overridden / implemented methods.
-  std::vector<const DexMethod*> parents;
+  std::vector<Node*> parents;
   // The set of immediately overriding / implementing methods.
-  std::vector<const DexMethod*> children;
+  std::vector<Node*> children;
   // The set of parents and classes where this node implements a previously
   // unimplemented method. (This is usually absent.)
   std::unique_ptr<OtherInterfaceImplementations>
@@ -97,7 +98,9 @@ class Graph {
  public:
   const Node& get_node(const DexMethod* method) const;
 
-  const ConcurrentMap<const DexMethod*, Node>& nodes() const { return m_nodes; }
+  const ConcurrentMap<const DexMethod*, std::unique_ptr<Node>>& nodes() const {
+    return m_nodes;
+  }
 
   void add_edge(const DexMethod* overridden, const DexMethod* overriding);
 
@@ -114,7 +117,7 @@ class Graph {
 
  private:
   static Node empty_node;
-  ConcurrentMap<const DexMethod*, Node> m_nodes;
+  ConcurrentMap<const DexMethod*, std::unique_ptr<Node>> m_nodes;
 };
 
 bool all_overriding_methods(const Graph& graph,

@@ -13,15 +13,14 @@
 
 namespace {
 void overriden_should_not_be_public(
-    const DexMethod* method,
+    const method_override_graph::Node* method,
     const method_override_graph::Graph* graph,
     std::unordered_set<const DexMethod*>* should_not_mark) {
-  if (method->is_external()) {
+  if (method->method->is_external()) {
     return;
   }
-  should_not_mark->insert(method);
-  const auto& node = graph->get_node(method);
-  for (const auto* overriden : node.parents) {
+  should_not_mark->insert(method->method);
+  for (const auto* overriden : method->parents) {
     overriden_should_not_be_public(overriden, graph, should_not_mark);
   }
 }
@@ -40,14 +39,15 @@ void loosen_access_modifier_for_vmethods(const DexClasses& scope) {
     const auto* method = pair.first;
     // If a final method has children, it can only be package-private and we can
     // not change it to be public.
-    if (is_final(method) && !pair.second.children.empty()) {
-      overriden_should_not_be_public(method, graph.get(), &should_not_mark);
-      auto& children = pair.second.children;
+    if (is_final(method) && !pair.second->children.empty()) {
+      overriden_should_not_be_public(
+          pair.second.get(), graph.get(), &should_not_mark);
+      auto& children = pair.second->children;
       auto* first_child = *children.begin();
       always_assert_log(!is_public(method) && !is_protected(method),
                         "%s is visible final but it has children %s",
                         SHOW(method->get_deobfuscated_name()),
-                        SHOW(first_child->get_deobfuscated_name()));
+                        SHOW(first_child->method->get_deobfuscated_name()));
     }
   }
   walk::parallel::classes(scope, [&should_not_mark](DexClass* cls) {

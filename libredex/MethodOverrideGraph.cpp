@@ -9,6 +9,7 @@
 
 #include <boost/range/adaptor/map.hpp>
 
+#include <iterator>
 #include <sparta/PatriciaTreeMap.h>
 #include <sparta/PatriciaTreeSet.h>
 
@@ -274,20 +275,20 @@ bool all_overriding_methods_impl(const Graph& graph,
     base_type = nullptr;
   }
   if (root.is_interface) {
-    std::unordered_set<const DexMethod*> visited{method};
+    std::unordered_set<const Node*> visited{&root};
+    visited.reserve(root.children.size() * 7);
     return self_recursive_fn(
         [&](auto self, const auto& children) -> bool {
-          for (const auto* current : children) {
-            if (!visited.emplace(current).second) {
+          for (const auto* node : children) {
+            if (!visited.emplace(node).second) {
               continue;
             }
-            const Node& node = graph.get_node(current);
-            if (!self(self, node.children)) {
+            if (!self(self, node->children)) {
               return false;
             }
-            if ((include_interfaces || !node.is_interface) &&
-                (!base_type || node.overrides(current, base_type)) &&
-                !f(current)) {
+            if ((include_interfaces || !node->is_interface) &&
+                (!base_type || node->overrides(node->method, base_type)) &&
+                !f(node->method)) {
               return false;
             }
           }
@@ -298,13 +299,12 @@ bool all_overriding_methods_impl(const Graph& graph,
   // optimized code path
   return self_recursive_fn(
       [&](auto self, const auto& children) -> bool {
-        for (const auto* current : children) {
-          const Node& node = graph.get_node(current);
-          if (!self(self, node.children)) {
+        for (const auto* node : children) {
+          if (!self(self, node->children)) {
             return false;
           }
-          if ((!base_type || node.overrides(current, base_type)) &&
-              !f(current)) {
+          if ((!base_type || node->overrides(node->method, base_type)) &&
+              !f(node->method)) {
             return false;
           }
         }
@@ -320,21 +320,21 @@ bool all_overridden_methods_impl(const Graph& graph,
                                  bool include_interfaces) {
   const Node& root = graph.get_node(method);
   if (include_interfaces) {
-    std::unordered_set<const DexMethod*> visited{method};
+    std::unordered_set<const Node*> visited{&root};
+    visited.reserve(root.parents.size() * 7);
     return self_recursive_fn(
         [&](auto self, const auto& children) -> bool {
-          for (const auto* current : children) {
-            if (!visited.emplace(current).second) {
+          for (const auto* node : children) {
+            if (!visited.emplace(node).second) {
               continue;
             }
-            const Node& node = graph.get_node(current);
-            if (!include_interfaces && node.is_interface) {
+            if (!include_interfaces && node->is_interface) {
               continue;
             }
-            if (!self(self, node.parents)) {
+            if (!self(self, node->parents)) {
               return false;
             }
-            if (!f(current)) {
+            if (!f(node->method)) {
               return false;
             }
           }
@@ -348,15 +348,14 @@ bool all_overridden_methods_impl(const Graph& graph,
   // optimized code path
   return self_recursive_fn(
       [&](auto self, const auto& children) -> bool {
-        for (const auto* current : children) {
-          const Node& node = graph.get_node(current);
-          if (node.is_interface) {
+        for (const auto* node : children) {
+          if (node->is_interface) {
             continue;
           }
-          if (!self(self, node.parents)) {
+          if (!self(self, node->parents)) {
             return false;
           }
-          if (!f(current)) {
+          if (!f(node->method)) {
             return false;
           }
         }
@@ -394,7 +393,7 @@ const Node& Graph::get_node(const DexMethod* method) const {
   if (it == m_nodes.end()) {
     return empty_node;
   }
-  return it->second;
+  return *it->second;
 }
 
 void Graph::add_edge(const DexMethod* overridden, const DexMethod* overriding) {
@@ -412,21 +411,35 @@ void Graph::add_edge(const DexMethod* overridden,
                      bool overridden_is_interface,
                      const DexMethod* overriding,
                      bool overriding_is_interface) {
-  m_nodes.update(overridden, [&](const DexMethod*, Node& node, bool exists) {
-    node.children.push_back(overriding);
-    if (exists) {
-      always_assert(node.is_interface == overridden_is_interface);
-    } else {
-      node.is_interface = overridden_is_interface;
+  Node* overriding_node = nullptr;
+  m_nodes.update(overriding, [&](const DexMethod*, std::unique_ptr<Node>& node,
+                                 bool exists) {
+    if (!exists) {
+      node = std::make_unique<Node>();
+      node->method = overriding;
+      node->is_interface = overriding_is_interface;
     }
+    overriding_node = node.get();
   });
-  m_nodes.update(overriding, [&](const DexMethod*, Node& node, bool exists) {
-    node.parents.push_back(overridden);
+
+  Node* overridden_node = nullptr;
+  m_nodes.update(overridden, [&](const DexMethod*, std::unique_ptr<Node>& node,
+                                 bool exists) {
     if (exists) {
-      always_assert(node.is_interface == overriding_is_interface);
+      always_assert(node->is_interface == overridden_is_interface);
     } else {
-      node.is_interface = overriding_is_interface;
+      node = std::make_unique<Node>();
+      node->method = overridden;
+      node->is_interface = overridden_is_interface;
     }
+    node->children.push_back(overriding_node);
+    overridden_node = node.get();
+  });
+
+  m_nodes.update(overriding, [&](const DexMethod*, std::unique_ptr<Node>& node,
+                                 bool exists) {
+    redex_assert(exists);
+    node->parents.push_back(overridden_node);
   });
 }
 
@@ -434,8 +447,13 @@ bool Graph::add_other_implementation_class(const DexMethod* overridden,
                                            const DexMethod* overriding,
                                            const DexClass* cls) {
   bool parent_inserted = false;
-  m_nodes.update(overriding, [&](const DexMethod*, Node& node, bool) {
-    auto& oii = node.other_interface_implementations;
+  m_nodes.update(overriding, [&](const DexMethod*, std::unique_ptr<Node>& node,
+                                 bool exists) {
+    if (!exists) {
+      node = std::make_unique<Node>();
+      node->method = overriding;
+    }
+    auto& oii = node->other_interface_implementations;
     if (!oii) {
       oii = std::make_unique<OtherInterfaceImplementations>();
     }
@@ -456,8 +474,11 @@ void Graph::dump(std::ostream& os) const {
       },
       [&](const DexMethod* method) -> std::vector<const DexMethod*> {
         const auto& node = get_node(method);
-        std::vector<const DexMethod*> succs(node.children.begin(),
-                                            node.children.end());
+        std::vector<const DexMethod*> succs;
+        succs.reserve(node.children.size());
+        std::transform(node.children.begin(), node.children.end(),
+                       std::back_inserter(succs),
+                       [](auto* c) { return c->method; });
         return succs;
       });
   gw.write(os, boost::adaptors::keys(m_nodes));

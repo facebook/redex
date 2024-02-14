@@ -50,7 +50,8 @@ void find_duplications(const method_override_graph::Graph* graph,
   if (!root_code) {
     return;
   }
-  for (auto* child : graph->get_node(root_method).children) {
+  for (auto* child_node : graph->get_node(root_method).children) {
+    auto* child = child_node->method;
     // The method definition may be deleted after the overriding graph is
     // created, check if it's still a definition.
     if (root(child) || !child->is_def() || !can_rename(child)) {
@@ -72,13 +73,13 @@ void publicize_methods(const method_override_graph::Graph* graph,
                        DexMethod* root_method) {
   set_public(root_method);
   for (auto* child : graph->get_node(root_method).children) {
-    if (is_public(child)) {
+    if (is_public(child->method)) {
       // The children of child should all be public, otherwise the code is
       // invalid before this transformation.
       continue;
     }
-    redex_assert(is_protected(child));
-    publicize_methods(graph, const_cast<DexMethod*>(child));
+    redex_assert(is_protected(child->method));
+    publicize_methods(graph, const_cast<DexMethod*>(child->method));
   }
 }
 
