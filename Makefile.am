@@ -410,6 +410,7 @@ libopt_la_SOURCES = \
 	opt/instrument/BlockInstrument.cpp \
 	opt/instrument/Instrument.cpp \
 	opt/int_type_patcher/IntTypePatcher.cpp \
+	opt/interdex/DexRemovalPass.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/interdex/InterDexPass.cpp \
 	opt/interdex/InterDexReshuffleImpl.cpp \
