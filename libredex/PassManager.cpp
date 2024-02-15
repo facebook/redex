@@ -1576,8 +1576,8 @@ PassManager::ActivatedPasses PassManager::compute_activated_passes(
         continue;
       }
 
-      not_reached_log("No pass named %s(%s)!", pass_name.c_str(),
-                      alias != nullptr ? alias->c_str() : "n/a");
+      always_assert_log(false, "No pass named %s(%s)!", pass_name.c_str(),
+                        alias != nullptr ? alias->c_str() : "n/a");
     }
   } else {
     result.activated_passes.reserve(registered_passes.size());
