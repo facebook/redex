@@ -549,8 +549,6 @@ workflows:
       # For newer compilers.
       - build-deb_unstable:
           filters: *filter-only-main
-      - build-deb_unstable-w-clang:
-          filters: *filter-only-main
       # At least one Clang check.
       - build-deb_stable-w-clang-llvm-org:
           filters: *filter-only-main
@@ -577,10 +575,6 @@ workflows:
           filters: *filter-not-gh-pages-not-main
       - build-deb_unstable:
           filters: *filter-not-gh-pages-not-main
-      - build-deb_unstable-w-clang:
-          filters: *filter-not-gh-pages-not-main
-      - build-deb_unstable-32:
-          filters: *filter-not-gh-pages-not-main
       - build-windows:
           filters: *filter-not-gh-pages-not-main
 
@@ -598,11 +592,9 @@ workflows:
       - build-deb_stable-w-clang
       - build-deb_stable-32
       - build-deb_unstable
-      - build-deb_unstable-w-clang
-      - build-deb_unstable-32
       - build-windows-artifacts
       # All llvm.org versions. Keep this up-to-date. Ignore the duplicate.
       - build-deb_stable-w-clang-llvm-org:
           matrix:
             parameters:
-              clang_version: [0, 15, 16, 17]
+              clang_version: [0, 15, 17]
