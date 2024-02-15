@@ -152,7 +152,7 @@ bool process_base_and_overriding_methods(
 size_t compute_locations_closure(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
-    std::function<boost::optional<LocationsAndDependencies>(DexMethod*)>
+    const std::function<boost::optional<LocationsAndDependencies>(DexMethod*)>&
         init_func,
     std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result);
 

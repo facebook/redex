@@ -331,7 +331,9 @@ std::unordered_set<DexMethod*> get_immutable_getters(const Scope& scope) {
   return pure_methods;
 }
 
-MethodOverrideAction get_base_or_overriding_method_action(
+namespace {
+
+MethodOverrideAction get_base_or_overriding_method_action_impl(
     const DexMethod* method,
     const std::unordered_set<const DexMethod*>* methods_to_ignore,
     bool ignore_methods_with_assumenosideeffects) {
@@ -367,13 +369,26 @@ MethodOverrideAction get_base_or_overriding_method_action(
   return MethodOverrideAction::INCLUDE;
 }
 
-bool process_base_and_overriding_methods(
+} // namespace
+
+MethodOverrideAction get_base_or_overriding_method_action(
+    const DexMethod* method,
+    const std::unordered_set<const DexMethod*>* methods_to_ignore,
+    bool ignore_methods_with_assumenosideeffects) {
+  return get_base_or_overriding_method_action_impl(
+      method, methods_to_ignore, ignore_methods_with_assumenosideeffects);
+}
+
+namespace {
+
+template <typename HandlerFunc>
+bool process_base_and_overriding_methods_impl(
     const method_override_graph::Graph* method_override_graph,
     const DexMethod* method,
     const std::unordered_set<const DexMethod*>* methods_to_ignore,
     bool ignore_methods_with_assumenosideeffects,
-    const std::function<bool(DexMethod*)>& handler_func) {
-  auto action = get_base_or_overriding_method_action(
+    const HandlerFunc& handler_func) {
+  auto action = get_base_or_overriding_method_action_impl(
       method, methods_to_ignore, ignore_methods_with_assumenosideeffects);
   if (action == MethodOverrideAction::UNKNOWN ||
       (action == MethodOverrideAction::INCLUDE &&
@@ -415,39 +430,67 @@ bool process_base_and_overriding_methods(
   return true;
 }
 
-static AccumulatingTimer s_wto_timer("compute_locations_closure_wto");
+} // namespace
 
-static constexpr const DexMethod* WTO_ROOT = nullptr;
-static std::function<const std::vector<const DexMethod*>&(const DexMethod*)>
-get_wto_successors(
+bool process_base_and_overriding_methods(
+    const method_override_graph::Graph* method_override_graph,
+    const DexMethod* method,
+    const std::unordered_set<const DexMethod*>* methods_to_ignore,
+    bool ignore_methods_with_assumenosideeffects,
+    const std::function<bool(DexMethod*)>& handler_func) {
+  return process_base_and_overriding_methods_impl(
+      method_override_graph,
+      method,
+      methods_to_ignore,
+      ignore_methods_with_assumenosideeffects,
+      handler_func);
+}
+
+namespace {
+
+AccumulatingTimer s_wto_timer("compute_locations_closure_wto");
+
+struct WtoSuccessors {
+  static constexpr const DexMethod* WTO_ROOT = nullptr;
+
+  struct FirstIterationData {
+    std::vector<const DexMethod*> root_cache;
     std::unordered_map<const DexMethod*, std::vector<const DexMethod*>>&
-        inverse_dependencies,
-    const std::unordered_set<const DexMethod*>& impacted_methods,
-    bool first_iteration) {
-  // Make number of iterations deterministic by sorting  successors
-  auto get_sorted_impacted_methods = [&impacted_methods]() {
-    std::vector<const DexMethod*> successors;
-    successors.reserve(impacted_methods.size());
-    successors.insert(successors.end(), impacted_methods.begin(),
-                      impacted_methods.end());
-    std::sort(successors.begin(), successors.end(), compare_dexmethods);
-    return successors;
-  };
-  std::vector<const DexMethod*> wto_nodes{WTO_ROOT};
-  wto_nodes.reserve(wto_nodes.size() + impacted_methods.size());
-  wto_nodes.insert(wto_nodes.end(), impacted_methods.begin(),
-                   impacted_methods.end());
+        inverse_dependencies;
+    const std::vector<const DexMethod*> empty{};
 
-  if (first_iteration) {
+    const std::vector<const DexMethod*>& get(const DexMethod* m) {
+      if (m == WTO_ROOT) {
+        // Pre-initialized and pre-sorted
+        return root_cache;
+      }
+      auto it = inverse_dependencies.find(m);
+      if (it != inverse_dependencies.end()) {
+        // Pre-sorted
+        return it->second;
+      }
+      return empty;
+    }
+  };
+
+  static FirstIterationData create_first_iteration_data(
+      std::unordered_map<const DexMethod*, std::vector<const DexMethod*>>&
+          inverse_dependencies,
+      const std::unordered_set<const DexMethod*>& impacted_methods) {
+    std::vector<const DexMethod*> wto_nodes{WTO_ROOT};
+    wto_nodes.reserve(wto_nodes.size() + impacted_methods.size());
+    wto_nodes.insert(wto_nodes.end(), impacted_methods.begin(),
+                     impacted_methods.end());
+
     // In the first iteration, besides computing the sorted root successors, we
     // also sort all inverse_dependencies entries in-place. They represent the
     // full successor vectors.
-    auto root_cache = std::make_shared<std::vector<const DexMethod*>>();
+    std::vector<const DexMethod*> root_cache;
     workqueue_run<const DexMethod*>(
-        [&inverse_dependencies, root_cache,
-         &get_sorted_impacted_methods](const DexMethod* m) {
+        [&inverse_dependencies, &root_cache,
+         &impacted_methods](const DexMethod* m) {
           if (m == WTO_ROOT) {
-            *root_cache = get_sorted_impacted_methods();
+            root_cache = get_sorted_impacted_methods(impacted_methods);
             return;
           }
           auto it = inverse_dependencies.find(m);
@@ -458,60 +501,74 @@ get_wto_successors(
           }
         },
         wto_nodes);
-    return [root_cache, &inverse_dependencies](
-               const DexMethod* m) -> const std::vector<const DexMethod*>& {
-      if (m == WTO_ROOT) {
-        // Pre-initialized and pre-sorted
-        return *root_cache;
-      }
-      auto it = inverse_dependencies.find(m);
-      if (it != inverse_dependencies.end()) {
-        // Pre-sorted
-        return it->second;
-      }
-      static std::vector<const DexMethod*> no_successors;
-      return no_successors;
-    };
+
+    return {std::move(root_cache), inverse_dependencies};
   }
 
-  // In subsequent iteration, besides computing the sorted root successors
-  // again, we also filter all previously sorted inverse_dependencies entries.
-  auto concurrent_cache = std::make_shared<InsertOnlyConcurrentMap<
-      const DexMethod*, std::vector<const DexMethod*>>>();
-  workqueue_run<const DexMethod*>(
-      [&impacted_methods, &get_sorted_impacted_methods, &inverse_dependencies,
-       concurrent_cache](const DexMethod* m) {
-        std::vector<const DexMethod*> successors;
-        if (m == WTO_ROOT) {
-          // Re-initialize and re-sort
-          successors = get_sorted_impacted_methods();
-        }
-        auto it = inverse_dependencies.find(m);
-        if (it != inverse_dependencies.end()) {
-          // Note that we are filtering on an already pre-sorted vector
-          for (auto n : it->second) {
-            if (impacted_methods.count(n)) {
-              successors.push_back(n);
+  struct OtherIterationData {
+    InsertOnlyConcurrentMap<const DexMethod*, std::vector<const DexMethod*>>
+        concurrent_cache;
+
+    const std::vector<const DexMethod*>& get(const DexMethod* const& m) {
+      return concurrent_cache.at_unsafe(m);
+    }
+  };
+
+  static OtherIterationData create_other_iteration_data(
+      std::unordered_map<const DexMethod*, std::vector<const DexMethod*>>&
+          inverse_dependencies,
+      const std::unordered_set<const DexMethod*>& impacted_methods) {
+    std::vector<const DexMethod*> wto_nodes{WTO_ROOT};
+    wto_nodes.reserve(wto_nodes.size() + impacted_methods.size());
+    wto_nodes.insert(wto_nodes.end(), impacted_methods.begin(),
+                     impacted_methods.end());
+
+    // In subsequent iteration, besides computing the sorted root successors
+    // again, we also filter all previously sorted inverse_dependencies entries.
+    InsertOnlyConcurrentMap<const DexMethod*, std::vector<const DexMethod*>>
+        concurrent_cache;
+    workqueue_run<const DexMethod*>(
+        [&impacted_methods, &concurrent_cache,
+         &inverse_dependencies](const DexMethod* m) {
+          std::vector<const DexMethod*> successors;
+          if (m == WTO_ROOT) {
+            // Re-initialize and re-sort
+            successors = get_sorted_impacted_methods(impacted_methods);
+          }
+          auto it = inverse_dependencies.find(m);
+          if (it != inverse_dependencies.end()) {
+            // Note that we are filtering on an already pre-sorted vector
+            for (auto n : it->second) {
+              if (impacted_methods.count(n)) {
+                successors.push_back(n);
+              }
             }
           }
-        }
-        auto [_, emplaced] =
-            concurrent_cache->emplace(m, std::move(successors));
-        always_assert(emplaced);
-      },
-      wto_nodes);
-  return
-      [concurrent_cache](
-          const DexMethod* const& m) -> const std::vector<const DexMethod*>& {
-        return concurrent_cache->at_unsafe(m);
-      };
-}
+          auto [_, emplaced] =
+              concurrent_cache.emplace(m, std::move(successors));
+          always_assert(emplaced);
+        },
+        wto_nodes);
 
-size_t compute_locations_closure(
+    return {std::move(concurrent_cache)};
+  }
+
+  static std::vector<const DexMethod*> get_sorted_impacted_methods(
+      const std::unordered_set<const DexMethod*>& impacted_methods) {
+    std::vector<const DexMethod*> successors;
+    successors.reserve(impacted_methods.size());
+    successors.insert(successors.end(), impacted_methods.begin(),
+                      impacted_methods.end());
+    std::sort(successors.begin(), successors.end(), compare_dexmethods);
+    return successors;
+  }
+};
+
+template <typename InitFuncT>
+size_t compute_locations_closure_impl(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
-    std::function<boost::optional<LocationsAndDependencies>(DexMethod*)>
-        init_func,
+    const InitFuncT& init_func,
     std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result) {
   // 1. Let's initialize known method read locations and dependencies by
   //    scanning method bodies
@@ -567,16 +624,34 @@ size_t compute_locations_closure(
       Timer prepare_wto{"Prepare Ordering"};
       auto wto_timer_scope = s_wto_timer.scope();
 
-      auto wto_successors = get_wto_successors(
-          inverse_dependencies, impacted_methods, iterations == 1);
-      sparta::WeakTopologicalOrdering<const DexMethod*> wto(
-          WTO_ROOT, std::move(wto_successors));
-      wto.visit_depth_first([&ordered_impacted_methods](const DexMethod* m) {
-        if (m) {
-          ordered_impacted_methods.push_back(m);
-        }
-      });
-      impacted_methods.clear();
+      auto run_wto = [&impacted_methods,
+                      &ordered_impacted_methods](const auto& succ_fn) {
+        sparta::WeakTopologicalOrdering<const DexMethod*> wto(
+            WtoSuccessors::WTO_ROOT, succ_fn);
+        wto.visit_depth_first([&ordered_impacted_methods](const DexMethod* m) {
+          if (m) {
+            ordered_impacted_methods.push_back(m);
+          }
+        });
+        impacted_methods.clear();
+      };
+
+      // To avoid std::function overhead we have to split here.
+      if (iterations == 1) {
+        auto first_data = WtoSuccessors::create_first_iteration_data(
+            inverse_dependencies, impacted_methods);
+        run_wto([&first_data](const DexMethod* m)
+                    -> const std::vector<const DexMethod*>& {
+          return first_data.get(m);
+        });
+      } else {
+        auto other_data = WtoSuccessors::create_other_iteration_data(
+            inverse_dependencies, impacted_methods);
+        run_wto([&other_data](const DexMethod* m)
+                    -> const std::vector<const DexMethod*>& {
+          return other_data.get(m);
+        });
+      }
     }
 
     std::vector<const DexMethod*> changed_methods;
@@ -637,6 +712,18 @@ size_t compute_locations_closure(
   return iterations;
 }
 
+} // namespace
+
+size_t compute_locations_closure(
+    const Scope& scope,
+    const method_override_graph::Graph* method_override_graph,
+    const std::function<boost::optional<LocationsAndDependencies>(DexMethod*)>&
+        init_func,
+    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result) {
+  return compute_locations_closure_impl(scope, method_override_graph, init_func,
+                                        result);
+}
+
 // Helper function that invokes compute_locations_closure, providing initial
 // set of locations indicating whether a function only reads locations (and
 // doesn't write). Via additional flags it can be selected whether...
@@ -678,10 +765,10 @@ static size_t analyze_read_locations(
     }
   }
 
-  return compute_locations_closure(
+  return compute_locations_closure_impl(
       scope, method_override_graph,
       [&](DexMethod* method) -> boost::optional<LocationsAndDependencies> {
-        auto action = get_base_or_overriding_method_action(
+        auto action = get_base_or_overriding_method_action_impl(
             method, &pure_methods_closure,
             ignore_methods_with_assumenosideeffects);
 
@@ -690,7 +777,7 @@ static size_t analyze_read_locations(
         }
 
         LocationsAndDependencies lads;
-        if (!process_base_and_overriding_methods(
+        if (!process_base_and_overriding_methods_impl(
                 method_override_graph, method, &pure_methods_closure,
                 ignore_methods_with_assumenosideeffects,
                 [&](DexMethod* other_method) {
@@ -764,7 +851,7 @@ static size_t analyze_read_locations(
                   if ((invoke_method && opcode::is_invoke_static(opcode) &&
                        (!clinit_has_no_side_effects(
                            invoke_method->get_class()))) ||
-                      !process_base_and_overriding_methods(
+                      !process_base_and_overriding_methods_impl(
                           method_override_graph, invoke_method,
                           &pure_methods_closure,
                           ignore_methods_with_assumenosideeffects,
@@ -841,7 +928,7 @@ bool has_implementor(const method_override_graph::Graph* method_override_graph,
     return true;
   }
   bool found_implementor = false;
-  auto res = process_base_and_overriding_methods(
+  auto res = process_base_and_overriding_methods_impl(
       method_override_graph, method, /* methods_to_ignore */ nullptr,
       /* ignore_methods_with_assumenosideeffects */ false, [&](DexMethod*) {
         found_implementor = true;
