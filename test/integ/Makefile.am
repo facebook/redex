@@ -159,7 +159,7 @@ javac_source_target = -source 1.7 -target 1.7
 
 define create_jar
 	mkdir -p $@.tmp
-	$(JAVAC) $(javac_source_target) -d $@.tmp $^
+	$(JAVAC) $(javac_source_target) -cp "$(srcdir)" -d $@.tmp $^
 	jar cf $@ -C $@.tmp .
 endef
 
