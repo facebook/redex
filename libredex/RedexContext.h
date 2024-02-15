@@ -149,11 +149,12 @@ struct RedexContext {
 
   void publish_class(DexClass* cls);
 
-  DexClass* type_class(const DexType* t);
+  DexClass* type_class(const DexType* t) const;
+  DexType* class_type(const DexClass* cls) const;
   template <class TypeClassWalkerFn = void(const DexType*, const DexClass*)>
   void walk_type_class(TypeClassWalkerFn walker) {
-    for (const auto& type_cls : m_type_to_class) {
-      walker(type_cls.first, type_cls.second);
+    for (auto* cls : m_classes) {
+      walker(class_type(cls), cls);
     }
   }
 
@@ -477,8 +478,8 @@ struct RedexContext {
   PositionPatternSwitchManager* m_position_pattern_switch_manager{nullptr};
 
   // Type-to-class map
-  std::mutex m_type_system_mutex;
-  std::unordered_map<const DexType*, DexClass*> m_type_to_class;
+  InsertOnlyConcurrentSet<DexClass*> m_classes;
+  std::mutex m_external_classes_mutex;
   std::vector<DexClass*> m_external_classes;
 
   const std::vector<const DexType*> m_empty_types;

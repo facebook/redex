@@ -199,6 +199,7 @@ class DexType {
   friend struct RedexContext;
 
   const DexString* m_name;
+  std::atomic<DexClass*> m_self{nullptr};
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
   explicit DexType(const DexString* dstring) { m_name = dstring; }

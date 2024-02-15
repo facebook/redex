@@ -91,10 +91,10 @@ RedexContext::~RedexContext() {
                 },
                 [&] {
                   Timer timer("Delete DexClasses", /* indent */ false);
-                  for (auto const& p : m_type_to_class) {
-                    delete p.second;
+                  for (auto* cls : m_classes) {
+                    delete cls;
                   }
-                  m_type_to_class.clear();
+                  m_classes.clear();
                 },
                 [&] {
                   Timer timer("Delete DexLocations", /* indent */ false);
@@ -809,13 +809,12 @@ RedexContext::get_position_pattern_switch_manager() {
 // Return true on benign duplicate classes
 // Throw RedexException on problematic duplicate classes
 bool RedexContext::class_already_loaded(DexClass* cls) {
-  std::lock_guard<std::mutex> l(m_type_system_mutex);
   const DexType* type = cls->get_type();
-  const auto& it = m_type_to_class.find(type);
-  if (it == m_type_to_class.end()) {
+  auto prev_cls = type->m_self.load(std::memory_order_acquire);
+  if (prev_cls == nullptr) {
     return false;
   } else {
-    const auto& prev_loc = it->second->get_location()->get_file_name();
+    const auto& prev_loc = prev_cls->get_location()->get_file_name();
     const auto& cur_loc = cls->get_location()->get_file_name();
     if (prev_loc == cur_loc || dup_classes::is_known_dup(cls)) {
       // benign duplicates
@@ -842,22 +841,27 @@ bool RedexContext::class_already_loaded(DexClass* cls) {
 }
 
 void RedexContext::publish_class(DexClass* cls) {
-  std::lock_guard<std::mutex> l(m_type_system_mutex);
-  const DexType* type = cls->get_type();
-  const auto& pair = m_type_to_class.emplace(type, cls);
-  bool insertion_took_place = pair.second;
+  DexType* type = cls->get_type();
+  DexClass* expected = nullptr;
+  bool insertion_took_place =
+      type->m_self.compare_exchange_strong(expected, cls);
   always_assert_log(insertion_took_place,
                     "No insertion for class: %s with deobfuscated name: %s",
                     cls->get_name()->c_str(),
                     cls->get_deobfuscated_name().c_str());
+  m_classes.insert(cls);
   if (cls->is_external()) {
+    std::lock_guard<std::mutex> l(m_external_classes_mutex);
     m_external_classes.emplace_back(cls);
   }
 }
 
-DexClass* RedexContext::type_class(const DexType* t) {
-  auto it = m_type_to_class.find(t);
-  return it != m_type_to_class.end() ? it->second : nullptr;
+DexClass* RedexContext::type_class(const DexType* t) const {
+  return t ? t->m_self.load(std::memory_order_relaxed) : nullptr;
+}
+
+DexType* RedexContext::class_type(const DexClass* cls) const {
+  return cls ? cls->get_type() : nullptr;
 }
 
 void RedexContext::set_field_value(DexField* field,
