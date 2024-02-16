@@ -937,7 +937,7 @@ std::vector<std::string> BundleResources::find_res_directories() {
 }
 
 std::vector<std::string> BundleResources::find_lib_directories() {
-  return find_subdirs_in_modules(m_directory, {"lib", "assets/lib"});
+  return find_subdirs_in_modules(m_directory, {"lib", "assets"});
 }
 
 std::string BundleResources::get_base_assets_dir() {
