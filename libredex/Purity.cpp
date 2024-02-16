@@ -7,12 +7,16 @@
 
 #include "Purity.h"
 
+#include <algorithm>
+#include <iterator>
 #include <sstream>
+#include <vector>
 
 #include <sparta/WeakTopologicalOrdering.h>
 
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
+#include "DexClass.h"
 #include "EditableCfgAdapter.h"
 #include "IRInstruction.h"
 #include "Resolver.h"
@@ -22,6 +26,12 @@
 #include "Trace.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
+
+namespace {
+
+constexpr double kWtoOrderingThreshold = 50.0;
+
+} // namespace
 
 std::ostream& operator<<(std::ostream& o, const CseLocation& l) {
   switch (l.special_location) {
@@ -450,7 +460,7 @@ namespace {
 
 AccumulatingTimer s_wto_timer("compute_locations_closure_wto");
 
-struct WtoSuccessors {
+class WtoOrdering {
   static constexpr const DexMethod* WTO_ROOT = nullptr;
 
   struct FirstIterationData {
@@ -562,6 +572,110 @@ struct WtoSuccessors {
     std::sort(successors.begin(), successors.end(), compare_dexmethods);
     return successors;
   }
+
+  static std::vector<const DexMethod*> sort_by_inverse_deps(
+      const std::unordered_set<const DexMethod*>& impacted_methods,
+      const std::unordered_map<const DexMethod*, std::vector<const DexMethod*>>&
+          inverse_dependencies) {
+    // First translate to pair to avoid repeated map lookups.
+    std::vector<std::pair<const DexMethod*, size_t>> sorted_by_inv_deps;
+    sorted_by_inv_deps.reserve(impacted_methods.size());
+    std::transform(impacted_methods.begin(), impacted_methods.end(),
+                   std::back_inserter(sorted_by_inv_deps),
+                   [&inverse_dependencies](auto* m) {
+                     auto it = inverse_dependencies.find(m);
+                     return std::make_pair(m, it != inverse_dependencies.end()
+                                                  ? it->second.size()
+                                                  : 0);
+                   });
+    std::sort(sorted_by_inv_deps.begin(), sorted_by_inv_deps.end(),
+              [](const std::pair<const DexMethod*, size_t>& lhs,
+                 const std::pair<const DexMethod*, size_t>& rhs) {
+                if (lhs.second != rhs.second) {
+                  return lhs.second > rhs.second;
+                }
+                return compare_dexmethods(lhs.first, rhs.first);
+              });
+    std::vector<const DexMethod*> res;
+    res.reserve(impacted_methods.size());
+    std::transform(sorted_by_inv_deps.begin(), sorted_by_inv_deps.end(),
+                   std::back_inserter(res),
+                   [](const auto& p) { return p.first; });
+    return res;
+  }
+
+  // We saw big slowdowns when there are too many components, possibly
+  // driven by the fact there is a lot of dependencies.
+  template <typename SuccFn>
+  static void run_wto(const SuccFn& succ_fn,
+                      std::vector<const DexMethod*>& ordered_impacted_methods) {
+    sparta::WeakTopologicalOrdering<const DexMethod*> wto(WTO_ROOT, succ_fn);
+    wto.visit_depth_first([&ordered_impacted_methods](const DexMethod* m) {
+      if (m) {
+        ordered_impacted_methods.push_back(m);
+      }
+    });
+  }
+
+  static bool should_use_wto(
+      const std::unordered_set<const DexMethod*>& impacted_methods,
+      const std::unordered_map<const DexMethod*, std::vector<const DexMethod*>>&
+          inverse_dependencies) {
+    size_t impacted_methods_size = impacted_methods.size();
+    size_t inv_dep_sum{0}, inv_dep_max{0};
+    for (auto& entry : inverse_dependencies) {
+      inv_dep_sum += entry.second.size();
+      inv_dep_max = std::max(inv_dep_max, entry.second.size());
+    }
+    auto inv_dep_avg = ((double)inv_dep_sum) / inverse_dependencies.size();
+    // Purity is too low-level for nice configuration switches. Think
+    // about it.
+    TRACE(CSE, 4,
+          "UseWto: impacted methods = %zu inverse_deps_max = %zu "
+          "inverse_deps avg = %.2f",
+          impacted_methods_size, inv_dep_max, inv_dep_avg);
+    return inv_dep_avg < kWtoOrderingThreshold;
+  }
+
+ public:
+  static std::vector<const DexMethod*> order_impacted_methods(
+      const std::unordered_set<const DexMethod*>& impacted_methods,
+      std::unordered_map<const DexMethod*, std::vector<const DexMethod*>>&
+          inverse_dependencies,
+      size_t iterations) {
+    Timer prepare_wto{"Prepare Ordering"};
+    auto wto_timer_scope = s_wto_timer.scope();
+
+    std::vector<const DexMethod*> ordered_impacted_methods;
+
+    // To avoid std::function overhead we have to split here.
+    if (iterations == 1 &&
+        should_use_wto(impacted_methods, inverse_dependencies)) {
+      auto first_data =
+          create_first_iteration_data(inverse_dependencies, impacted_methods);
+      run_wto(
+          [&first_data](
+              const DexMethod* m) -> const std::vector<const DexMethod*>& {
+            return first_data.get(m);
+          },
+          ordered_impacted_methods);
+    } else if (iterations == 1) {
+      // Simple sorting for determinism.
+      ordered_impacted_methods =
+          sort_by_inverse_deps(impacted_methods, inverse_dependencies);
+    } else {
+      auto other_data =
+          create_other_iteration_data(inverse_dependencies, impacted_methods);
+      run_wto(
+          [&other_data](
+              const DexMethod* m) -> const std::vector<const DexMethod*>& {
+            return other_data.get(m);
+          },
+          ordered_impacted_methods);
+    }
+
+    return ordered_impacted_methods;
+  }
 };
 
 template <typename InitFuncT>
@@ -618,41 +732,9 @@ size_t compute_locations_closure_impl(
 
     // We order the impacted methods in a deterministic way that's likely
     // helping to reduce the number of needed iterations.
-    std::vector<const DexMethod*> ordered_impacted_methods;
-
-    {
-      Timer prepare_wto{"Prepare Ordering"};
-      auto wto_timer_scope = s_wto_timer.scope();
-
-      auto run_wto = [&impacted_methods,
-                      &ordered_impacted_methods](const auto& succ_fn) {
-        sparta::WeakTopologicalOrdering<const DexMethod*> wto(
-            WtoSuccessors::WTO_ROOT, succ_fn);
-        wto.visit_depth_first([&ordered_impacted_methods](const DexMethod* m) {
-          if (m) {
-            ordered_impacted_methods.push_back(m);
-          }
-        });
-        impacted_methods.clear();
-      };
-
-      // To avoid std::function overhead we have to split here.
-      if (iterations == 1) {
-        auto first_data = WtoSuccessors::create_first_iteration_data(
-            inverse_dependencies, impacted_methods);
-        run_wto([&first_data](const DexMethod* m)
-                    -> const std::vector<const DexMethod*>& {
-          return first_data.get(m);
-        });
-      } else {
-        auto other_data = WtoSuccessors::create_other_iteration_data(
-            inverse_dependencies, impacted_methods);
-        run_wto([&other_data](const DexMethod* m)
-                    -> const std::vector<const DexMethod*>& {
-          return other_data.get(m);
-        });
-      }
-    }
+    auto ordered_impacted_methods = WtoOrdering::order_impacted_methods(
+        impacted_methods, inverse_dependencies, iterations);
+    impacted_methods.clear();
 
     std::vector<const DexMethod*> changed_methods;
     for (const DexMethod* method : ordered_impacted_methods) {
