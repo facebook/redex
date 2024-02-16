@@ -257,6 +257,7 @@ using TypedefAnnotationDomain = SingletonDexTypeDomain;
 /*
  *
  * NullnessDomain X SingletonDexTypeDomain X SmallSetDexTypeDomain
+ * X TypedefAnnotationDomain
  *
  *
  * When the SmallSetDexTypeDomain has elements, then they represent an exact set
