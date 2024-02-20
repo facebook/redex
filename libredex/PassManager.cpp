@@ -1407,9 +1407,36 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
         auto& root_dexen = root_store.get_dexen();
         set_metric("~rootstore.num_dexes", root_dexen.size());
         size_t idx = 0;
+        size_t total_methods = 0;
         for (auto& dex : root_dexen) {
           set_metric("~rootstore.dex_" + std::to_string(++idx) + ".num_classes",
                      dex.size());
+          for (auto& cls : dex) {
+            total_methods += cls->get_all_methods().size();
+          }
+        }
+        set_metric("~rootstore.total_class_num", total_methods);
+        if (pm_config->dump_mrefs) {
+          // dump number of mrefs in each dex in root_store.
+          idx = 0;
+          size_t total_mrefs = 0;
+          for (auto& dex : root_dexen) {
+            std::vector<DexMethodRef*> mrefs;
+            std::unordered_set<DexMethodRef*> mrefs_set;
+            for (DexClass* cls : dex) {
+              cls->gather_methods(mrefs);
+            }
+            for (auto& elem : mrefs) {
+              mrefs_set.insert(elem);
+            }
+            set_metric(
+                "~~rootstore.dex_" + std::to_string(++idx) + ".num_mrefs",
+                mrefs_set.size());
+            total_mrefs += mrefs_set.size();
+          }
+          set_metric("~~rootstore.total_mrefs", total_mrefs);
+          set_metric("~~rootstore.total_cross_dex_mrefs",
+                     total_mrefs - total_methods);
         }
       }
       // Ensure the CFG is clean, e.g., no unreachable blocks.

@@ -109,6 +109,7 @@ void PassManagerConfig::bind_config() {
   bind("check_pass_order_properties", check_pass_order_properties,
        check_pass_order_properties);
   bind("check_properties_deep", check_properties_deep, check_properties_deep);
+  bind("dump_mrefs", dump_mrefs, dump_mrefs);
 }
 
 void ResourceConfig::bind_config() {
