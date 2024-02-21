@@ -143,6 +143,6 @@ COMMON_INCLUDES = \
 
 if SET_PROTOBUF
 COMMON_INCLUDES += \
-	-I$(top_srcdir)/protores \
+	-I$(builddir)/protores \
 	$(PROTOBUF_CXXFLAGS)
 endif

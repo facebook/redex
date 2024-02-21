@@ -59,6 +59,8 @@ AM_CPPFLAGS = $(COMMON_INCLUDES)
 
 noinst_LTLIBRARIES = libredex.la libopt.la
 
+BUILT_SOURCES =
+
 #
 # build protobuf
 #
@@ -68,18 +70,16 @@ proto_res_in = \
 	proto/Resources.proto \
 	proto/Configuration.proto
 
-protores/%.pb.cc protores/%.pb.h: proto/%.proto | mdir ; $(PROTOC) --proto_path=$(dir $^) --cpp_out=$(top_srcdir)/protores $^
-mdir: ; mkdir -p $(top_srcdir)/protores
+protores/%.pb.cc protores/%.pb.h: proto/%.proto ; mkdir -p protores ; $(PROTOC) --proto_path=$(dir $^) --cpp_out=protores $^
 
 proto_res_header_out = $(addprefix protores/, $(notdir ${proto_res_in:.proto=.pb.h}))
 proto_res_body_out = $(addprefix protores/, $(notdir ${proto_res_in:.proto=.pb.cc}))
-BUILT_SOURCES = $(proto_res_header_out)
+BUILT_SOURCES += $(proto_res_header_out)
 
 proto_cfg_in = \
 	proto/config.proto
 
-protocfg/%.pb.cc protocfg/%.pb.h: proto/config.proto | mdir ; $(PROTOC) --proto_path=$(dir $^) --cpp_out=$(top_srcdir)/protocfg $^
-mdir: ; mkdir -p $(top_srcdir)/protocfg
+protocfg/%.pb.cc protocfg/%.pb.h: proto/config.proto ; mkdir -p protocfg ; $(PROTOC) --proto_path=$(dir $^) --cpp_out=protocfg $^
 
 proto_cfg_header_out = $(addprefix protocfg/, $(notdir ${proto_cfg_in:.proto=.pb.h}))
 proto_cfg_body_out = $(addprefix protocfg/, $(notdir ${proto_cfg_in:.proto=.pb.cc}))
@@ -583,10 +583,12 @@ bin_SCRIPTS = redex apkutil
 CLEANFILES = redex
 
 # Embedded API level files.
-GEN_API_LEVELS_SCRIPT = gen_packed_apilevels.py
+GEN_API_LEVELS_SCRIPT = $(srcdir)/gen_packed_apilevels.py
 GENERATED_API_LEVELS_MODULE = generated_apilevels.py
-$(GENERATED_API_LEVELS_MODULE): $(GEN_API_LEVELS_SCRIPT) service/api-levels/framework_classes_api_*.txt
-	python3 $(GEN_API_LEVELS_SCRIPT) -o $@ service/api-levels/framework_classes_api_*.txt
+$(GENERATED_API_LEVELS_MODULE): $(GEN_API_LEVELS_SCRIPT) $(srcdir)/service/api-levels/framework_classes_api_*.txt
+	python3 $(GEN_API_LEVELS_SCRIPT) -o $@ $(srcdir)/service/api-levels/framework_classes_api_*.txt
+
+BUILT_SOURCES += $(GENERATED_API_LEVELS_MODULE)
 
 PYTHON_SRCS := redex.py \
 	pyredex/__init__.py \
@@ -596,4 +598,4 @@ PYTHON_SRCS := redex.py \
 	$(GENERATED_API_LEVELS_MODULE)
 
 redex: redex-all $(PYTHON_SRCS)
-	$(srcdir)/bundle-redex.sh
+	$(srcdir)/bundle-redex.sh "$(srcdir)"
