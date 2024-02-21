@@ -135,6 +135,11 @@ class SetValue final : public PowersetImplementation<typename Set::value_type,
     return AbstractValueKind::Value;
   }
 
+  AbstractValueKind erase_all_matching(const Element& variable_mask) {
+    m_set.erase_all_matching(variable_mask);
+    return AbstractValueKind::Value;
+  }
+
   friend std::ostream& operator<<(std::ostream& o, const SetValue& value) {
     o << "[#" << value.size() << "]";
     o << value.m_set;
