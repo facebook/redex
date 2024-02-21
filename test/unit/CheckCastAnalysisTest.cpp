@@ -11,8 +11,37 @@
 #include "FrameworkApi.h"
 #include "IRAssembler.h"
 #include "RedexTest.h"
+#include "VirtualScope.h"
 
 struct CheckCastAnalysisTest : public RedexTest {
+  CheckCastAnalysisTest() {
+    // Calling get_vmethods under the hood initializes the object-class, which
+    // we need in the tests to create a proper scope
+    virt_scope::get_vmethods(type::java_lang_Object());
+    type_class(type::java_lang_Object())->set_external();
+    if (type_class(type::java_lang_String()) == nullptr) {
+      ClassCreator cc(type::java_lang_String());
+      cc.set_super(type::java_lang_Object());
+      cc.set_access(ACC_PUBLIC);
+      cc.create();
+    }
+    type_class(type::java_lang_String())->set_external();
+    auto* foo_cls = DexType::make_type("LFoo;");
+    if (type_class(foo_cls) == nullptr) {
+      ClassCreator cc(foo_cls);
+      cc.set_super(type::java_lang_Object());
+      cc.add_interface(DexType::make_type("LUnknownExternalInterface;"));
+      cc.set_access(ACC_PUBLIC);
+      cc.create();
+    }
+    auto* bar_cls = DexType::make_type("LBar;");
+    if (type_class(bar_cls) == nullptr) {
+      ClassCreator cc(bar_cls);
+      cc.set_super(type::java_lang_Object());
+      cc.set_access(ACC_PUBLIC);
+      cc.create();
+    }
+  }
   static api::AndroidSDK create_empty_sdk() {
     return api::AndroidSDK(boost::none);
   }
@@ -32,7 +61,9 @@ TEST_F(CheckCastAnalysisTest, simple_string) {
   )");
   method->get_code()->build_cfg();
   check_casts::CheckCastConfig config;
-  auto api = create_empty_sdk();
+  auto api = api::AndroidSDK::from_string(R"(
+    Ljava/lang/String; 1 Ljava/lang/Object; 0 0
+  )");
   check_casts::impl::CheckCastAnalysis analysis(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
@@ -396,6 +427,27 @@ TEST_F(CheckCastAnalysisTest, do_not_weaken_class_to_interface) {
         (check-cast v1 "LB;")
         (move-result-pseudo-object v0)
         (return-object v0)
+      )
+    )
+  )");
+  method->get_code()->build_cfg();
+  check_casts::CheckCastConfig config;
+  auto api = create_empty_sdk();
+  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
+  auto replacements = analysis.collect_redundant_checks_replacement();
+
+  EXPECT_EQ(replacements.size(), 0);
+}
+
+TEST_F(CheckCastAnalysisTest, external) {
+  auto method = assembler::method_from_string(R"(
+    (method (public) "LFoo;.bar:()LUnknownExternalInterface;"
+      (
+        (new-instance "LFoo;")
+        (move-result-pseudo-object v1)
+        (check-cast v1 "LUnknownExternalInterface;")
+        (move-result-pseudo-object v1)
+        (return-object v1)
       )
     )
   )");
