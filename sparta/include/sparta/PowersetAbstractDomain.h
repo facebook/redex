@@ -224,6 +224,18 @@ class PowersetAbstractDomain
     }
   }
 
+  void erase_all_matching(const Element& variable_mask) {
+    if (this->is_bottom() || this->is_top()) {
+      return;
+    }
+    auto kind = this->get_value()->erase_all_matching(variable_mask);
+    if (kind == AbstractValueKind::Bottom) {
+      this->set_to_bottom();
+    } else if (kind == AbstractValueKind::Top) {
+      this->set_to_top();
+    }
+  }
+
   bool contains(const Element& e) const {
     switch (this->kind()) {
     case AbstractValueKind::Bottom: {

@@ -29,6 +29,7 @@ constexpr const char* METRIC_ELIMINATED_INSTRUCTIONS =
 constexpr const char* METRIC_MAX_VALUE_IDS = "max_value_ids";
 constexpr const char* METRIC_METHODS_USING_OTHER_TRACKED_LOCATION_BIT =
     "methods_using_other_tracked_location_bit";
+constexpr const char* METRIC_BRANCHES_ELIMINATED = "num_branches_eliminated";
 constexpr const char* METRIC_INSTR_PREFIX = "instr_";
 constexpr const char* METRIC_METHOD_BARRIERS = "num_method_barriers";
 constexpr const char* METRIC_METHOD_BARRIERS_ITERATIONS =
@@ -129,6 +130,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_MAX_VALUE_IDS, stats.max_value_ids);
   mgr.incr_metric(METRIC_METHODS_USING_OTHER_TRACKED_LOCATION_BIT,
                   stats.methods_using_other_tracked_location_bit);
+  mgr.incr_metric(METRIC_BRANCHES_ELIMINATED, stats.branches_eliminated);
   auto& shared_state_stats = shared_state.get_stats();
   mgr.incr_metric(METRIC_METHOD_BARRIERS, shared_state_stats.method_barriers);
   mgr.incr_metric(METRIC_METHOD_BARRIERS_ITERATIONS,
