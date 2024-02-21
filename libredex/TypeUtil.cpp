@@ -612,6 +612,18 @@ bool is_min_sdk_acceptable(const DexType* source_type,
     return true;
   }
 
+  auto* cls = type_class(target_type);
+  if (cls == nullptr || (cls->is_external() && !api.has_type(target_type))) {
+    // The Android verifier used to have a limitation around filled-new-array
+    // instructions that caused hard verification failures when the verifier
+    // couldn't establish the type correctness at verification time. The
+    // ReduceArrayLiteralsPass introduces check-casts instructions to deal with
+    // this, and we need to make that such casts to external types are retained.
+    // This issue is only fixed in Android 14, min-sdk 34, see
+    // https://android-review.googlesource.com/c/platform/art/+/2438373 .
+    return false;
+  }
+
   Lazy<std::ostringstream> impl_msg{
       []() { return std::make_unique<std::ostringstream>(); }};
 
