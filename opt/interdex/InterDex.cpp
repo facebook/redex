@@ -47,6 +47,7 @@ constexpr const char* BG_SET_END_FORMAT = "LBackgroundSetEnd";
 // This is only necessary when "exclude_baseline_profile_classes" and
 // "include_betamap_20pct_coldstart" are set.
 constexpr const char* COLD_START_20PCT_END_FORMAT = "LColdStart20PctEnd";
+constexpr const char* COLD_START_1PCT_END_FORMAT = "LColdStart1PctEnd";
 
 static DexInfo EMPTY_DEX_INFO;
 
@@ -608,6 +609,12 @@ void InterDex::load_interdex_types() {
         type = DexType::make_type(entry);
         TRACE(IDEX, 4,
               "[interdex order]: Found 20pct cold start end class marker %s.",
+              entry.c_str());
+      } else if (boost::algorithm::starts_with(entry,
+                                               COLD_START_1PCT_END_FORMAT)) {
+        type = DexType::make_type(entry);
+        TRACE(IDEX, 4,
+              "[interdex order]: Found 1pct cold start end class marker %s.",
               entry.c_str());
       } else {
         continue;
@@ -1383,6 +1390,22 @@ void InterDex::initialize_baseline_profile_classes() {
                       "include_betamap_20pct_coldstart is set, but %s marker "
                       "not found in betamap",
                       COLD_START_20PCT_END_FORMAT);
+
+    if (m_baseline_profile_config.options.betamap_include_coldstart_1pct) {
+      for (; it != m_interdex_types.end(); ++it) {
+        auto* dex_type = *it;
+        m_baseline_profile_classes->insert(dex_type);
+        if (boost::algorithm::starts_with(dex_type->get_name()->str(),
+                                          COLD_START_1PCT_END_FORMAT)) {
+          break;
+        }
+      }
+
+      always_assert_log(it != m_interdex_types.end(),
+                        "betamap_include_coldstart_1pct is set, but %s marker "
+                        "not found in betamap",
+                        COLD_START_1PCT_END_FORMAT);
+    }
   }
 
   // Handle deep data profiles

@@ -35,7 +35,12 @@ struct BaselineProfileOptions {
   // This field isn't used currently by the driver. We currently pass a
   // `--betamap` flag to the driver to enable betamap 20% set inclusion, which
   // isn't ideal. TODO: The driver config JSON should be updated to use this.
+  // TODO: Rename this "betamap_include_coldstart_1pct"
   bool include_betamap_20pct_coldstart;
+
+  // NOTE: This requires that include_betamap_20pct_coldstart be set to have any
+  // effect
+  bool betamap_include_coldstart_1pct;
 };
 
 struct BaselineProfileConfig {

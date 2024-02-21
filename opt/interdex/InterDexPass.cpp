@@ -79,6 +79,9 @@ void InterDexPass::bind_baseline_profile_config() {
   options_jw.get(
       "include_betamap_20pct_coldstart", false,
       m_baseline_profile_config.options.include_betamap_20pct_coldstart);
+  options_jw.get(
+      "betamap_include_coldstart_1pct", false,
+      m_baseline_profile_config.options.betamap_include_coldstart_1pct);
 
   for (auto it = baseline_profile_config_json.begin();
        it != baseline_profile_config_json.end(); ++it) {
