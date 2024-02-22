@@ -1150,7 +1150,7 @@ class DexClass {
   bool m_external;
   PerfSensitiveGroup m_perf_sensitive;
 
-  explicit DexClass(const DexLocation* location);
+  DexClass(DexType* type, const DexLocation* location);
   void load_class_annotations(DexIdx* idx, uint32_t anno_off);
   void load_class_data_item(DexIdx* idx,
                             uint32_t cdi_off,

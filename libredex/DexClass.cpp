@@ -1560,7 +1560,21 @@ DexClass* DexClass::create(DexIdx* idx,
   return cls;
 }
 
-DexClass::DexClass(const DexLocation* location) : m_location(location) {}
+DexClass::DexClass(DexType* type, const DexLocation* location)
+    : m_super_class(nullptr),
+      m_self(type),
+      m_interfaces(DexTypeList::make_type_list({})),
+      m_source_file(nullptr),
+      m_anno(nullptr),
+      m_location(location),
+      m_access_flags((DexAccessFlags)0),
+      m_external(false),
+      m_perf_sensitive(PerfSensitiveGroup::NONE) {
+  always_assert(type != nullptr);
+  always_assert_log(type_class(type) == nullptr,
+                    "class already exists for %s\n", type->c_str());
+  set_deobfuscated_name(type->get_name());
+}
 
 DexClass::DexClass(DexIdx* idx,
                    const dex_class_def* cdef,
@@ -1573,7 +1587,9 @@ DexClass::DexClass(DexIdx* idx,
       m_location(location),
       m_access_flags((DexAccessFlags)cdef->access_flags),
       m_external(false),
-      m_perf_sensitive(PerfSensitiveGroup::NONE) {}
+      m_perf_sensitive(PerfSensitiveGroup::NONE) {
+  always_assert(m_self != nullptr);
+}
 
 DexClass::~DexClass() = default; // For forwarding.
 

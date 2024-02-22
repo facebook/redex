@@ -503,21 +503,10 @@ struct MethodCreator {
  */
 struct ClassCreator {
   explicit ClassCreator(DexType* type, const DexLocation* location = nullptr) {
-    always_assert_log(type_class(type) == nullptr,
-                      "class already exists for %s\n", show_type(type).c_str());
     if (location == nullptr) {
       location = DexLocation::make_location("", "");
     }
-    m_cls = new DexClass(location);
-    m_cls->m_self = type;
-    m_cls->m_access_flags = (DexAccessFlags)0;
-    m_cls->m_super_class = nullptr;
-    m_cls->m_interfaces = DexTypeList::make_type_list({});
-    m_cls->m_source_file = nullptr;
-    m_cls->m_anno = nullptr;
-    m_cls->m_external = false;
-    m_cls->m_perf_sensitive = PerfSensitiveGroup::NONE;
-    m_cls->set_deobfuscated_name(type->get_name()->c_str());
+    m_cls = new DexClass(type, location);
   }
 
   /**
