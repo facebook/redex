@@ -661,6 +661,21 @@ void ResStringPoolBuilder::add_style(std::string s, SpanVector spans) {
   m_styles.emplace_back(std::move(info));
 }
 
+std::string ResStringPoolBuilder::get_string(size_t idx) {
+  arsc::StringHolder holder = m_strings.at(idx);
+  if (holder.kind == StringKind::STRING_8) {
+    return std::string(holder.string8);
+  }
+  if (holder.kind == StringKind::STRING_16) {
+    android::String16 s16(holder.string16, holder.length);
+    android::String8 s8(s16);
+    return std::string(s8.string());
+  }
+  else {
+    return holder.str;
+  }
+}
+
 namespace {
 void write_string8(StringHolder& holder, android::Vector<char>* out) {
   if (holder.kind == StringKind::STRING_8) {
@@ -901,26 +916,32 @@ void ResTableBuilder::serialize(android::Vector<char>* out) {
   write_long_at_pos(total_size_pos, out->size() - initial_size, out);
 }
 
-void replace_xml_string_pool(android::ResChunk_header* data,
+void ResXmlIdsBuilder::serialize(android::Vector<char>* out) {
+  if (!std::is_sorted(m_ids.begin(), m_ids.end())) {
+    LOG_ALWAYS_FATAL("XML attribute ids should be sorted!");
+  }
+  uint32_t total_size =
+      sizeof(android::ResChunk_header) + m_ids.size() * sizeof(uint32_t);
+  push_short(android::RES_XML_RESOURCE_MAP_TYPE, out);
+  push_short(sizeof(android::ResChunk_header), out);
+  push_long(total_size, out);
+  for (const auto& id : m_ids) {
+    push_long(id, out);
+  }
+}
+
+void replace_xml_string_pool(android::ResChunk_header* header,
                              size_t len,
                              ResStringPoolBuilder& builder,
                              android::Vector<char>* out) {
-  // Find boundaries for the various pieces of the file.
-  auto chunk_size = dtohs(data->headerSize);
-  auto pool_ptr = (android::ResStringPool_header*)((char*)data + chunk_size);
-  // Build the new file.
-  auto initial_vec_size = out->size();
-  arsc::push_short(android::RES_XML_TYPE, out);
-  arsc::push_short(chunk_size, out);
-  auto total_size_pos = out->size();
-  arsc::push_long(FILL_IN_LATER, out);
-  builder.serialize(out);
-  // Straight copy of everything after the original data's string pool.
-  auto start = chunk_size + dtohl(pool_ptr->header.size);
-  auto remaining = len - start;
-  void* start_ptr = ((char*)data) + start;
-  push_data_no_swap(start_ptr, remaining, out);
-  write_long_at_pos(total_size_pos, out->size() - initial_vec_size, out);
+  // Find boundaries for the relevant piece of the file.
+  auto data = (char*)header;
+  auto chunk_size = dtohs(header->headerSize);
+  auto pool_ptr = (android::ResStringPool_header*)(data + chunk_size);
+  ResFileManipulator manipulator(data, len);
+  manipulator.delete_at(pool_ptr, dtohl(pool_ptr->header.size));
+  manipulator.add_serializable_at(pool_ptr, builder);
+  manipulator.serialize(out);
 }
 
 int ensure_string_in_xml_pool(const void* data,
@@ -996,6 +1017,91 @@ int ensure_strings_in_xml_pool(
   replace_xml_string_pool((android::ResChunk_header*)data, len, pool_builder,
                           out_data);
   return android::OK;
+}
+
+int ensure_attribute_in_xml_doc(const void* const_data,
+                                const size_t len,
+                                const std::string& attribute_name,
+                                const uint32_t& attribute_id,
+                                android::Vector<char>* out_data,
+                                size_t* idx) {
+  LOG_ALWAYS_FATAL_IF(!out_data->empty(), "Output vector should start empty!");
+  if (attribute_id == 0) {
+    return ensure_string_in_xml_pool(const_data, len, attribute_name, out_data,
+                                     idx);
+  }
+
+  constexpr ssize_t NOT_INSERTED = -1;
+  char* data = (char*)const_data;
+
+  SimpleXmlParser parser;
+  LOG_ALWAYS_FATAL_IF(!parser.visit(data, len), "Invalid file");
+
+  auto& pool = parser.global_strings();
+  ssize_t insert_idx = NOT_INSERTED;
+  ResStringPoolBuilder pool_builder(
+      pool.isUTF8() ? android::ResStringPool_header::UTF8_FLAG : 0);
+  ResXmlIdsBuilder ids_builder;
+  for (size_t i = 0; i < parser.attribute_count(); i++) {
+    auto id = parser.get_attribute_id(i);
+    auto str = arsc::get_string_from_pool(pool, i);
+    if (attribute_id == id) {
+      if (str != attribute_name) {
+        ALOGE("ID 0x%x already has conflicting name %s", id, str.c_str());
+        return android::ALREADY_EXISTS;
+      }
+      *idx = i;
+      return android::OK;
+    }
+    if (insert_idx == NOT_INSERTED && id > attribute_id) {
+      insert_idx = i;
+      pool_builder.add_string(attribute_name);
+      ids_builder.add_id(attribute_id);
+    }
+    pool_builder.add_string(str);
+    ids_builder.add_id(id);
+  }
+  if (insert_idx == NOT_INSERTED) {
+    insert_idx = parser.attribute_count();
+    pool_builder.add_string(attribute_name);
+    ids_builder.add_id(attribute_id);
+  }
+  // Copy over non-attribute strings to the pool builder.
+  for (size_t i = parser.attribute_count(); i < pool.size(); i++) {
+    auto str = arsc::get_string_from_pool(pool, i);
+    pool_builder.add_string(str);
+  }
+
+  // Build up a new file with the pool and edited attribute ids.
+  ResFileManipulator manipulator(data, len);
+  auto pool_off = data + parser.string_pool_offset();
+  auto existing_pool_size = parser.string_pool_data_size();
+  manipulator.delete_at(pool_off, existing_pool_size);
+  manipulator.add_serializable_at(pool_off, pool_builder);
+
+  auto attributes_header_offset = parser.attributes_header_offset();
+  auto attributes_data_size = parser.attributes_data_size();
+  if (attributes_header_offset != boost::none &&
+      attributes_data_size != boost::none) {
+    auto attributes_off = data + *attributes_header_offset;
+    manipulator.delete_at(attributes_off, *attributes_data_size);
+  }
+
+  manipulator.add_serializable_at(pool_off + existing_pool_size, ids_builder);
+  manipulator.serialize(out_data);
+
+  // out_data now holds an inconsistent view; remap all string refs to be
+  // consistent with what was added to the pool.
+  std::unordered_map<uint32_t, uint32_t> mapping;
+  for (size_t i = insert_idx; i < pool.size(); i++) {
+    mapping.emplace(i, i + 1);
+  }
+  XmlStringRefRemapper remapper(mapping);
+  if (remapper.visit((void*)out_data->array(), out_data->size())) {
+    *idx = insert_idx;
+    return android::OK;
+  }
+  LOG_ALWAYS_FATAL("Error parsing/remapping built file");
 }
 
 bool is_empty(const EntryValueData& ev) {

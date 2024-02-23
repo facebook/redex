@@ -49,7 +49,9 @@ class XmlValueCollector : public arsc::XmlFileVisitor {
  public:
   ~XmlValueCollector() override {}
 
-  bool visit_attribute_ids(uint32_t* id, size_t count) override {
+  bool visit_attribute_ids(android::ResChunk_header* /* unused */,
+                           uint32_t* id,
+                           size_t count) override {
     for (size_t i = 0; i < count; i++) {
       auto res_id = id[i];
       if (res_id > PACKAGE_RESID_START) {
@@ -78,7 +80,9 @@ class XmlFileEditor : public arsc::XmlFileVisitor {
   ~XmlFileEditor() override {}
 
   bool visit_global_strings(android::ResStringPool_header* pool) override;
-  bool visit_attribute_ids(uint32_t* id, size_t count) override;
+  bool visit_attribute_ids(android::ResChunk_header* header,
+                           uint32_t* id,
+                           size_t count) override;
   bool visit_typed_data(android::Res_value* value) override;
   // Remaps attribute IDs and reference data, according to the map and returns
   // the number of changes made.

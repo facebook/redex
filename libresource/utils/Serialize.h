@@ -53,6 +53,11 @@ inline void write_bytes_to_file(const android::Vector<char>& vector,
   LOG_ALWAYS_FATAL_IF(!ofs, "Unable to write to %s", filename.c_str());
 }
 
+template <typename T>
+inline void push_struct(const T& item, android::Vector<char>* vec) {
+  vec->appendArray((const char*)&item, sizeof(T));
+}
+
 // Returns the size of the entry and the value data structure(s) that follow it.
 size_t compute_entry_value_length(android::ResTable_entry* entry);
 // Return in device order the flags for the entry in the type
@@ -158,6 +163,8 @@ class ResStringPoolBuilder {
 
   size_t string_count() { return non_style_string_count() + style_count(); }
 
+  std::string get_string(size_t idx);
+
  private:
   uint32_t m_flags;
 
@@ -198,6 +205,19 @@ int ensure_strings_in_xml_pool(
     const std::set<std::string>& strings_to_add,
     android::Vector<char>* out_data,
     std::unordered_map<std::string, uint32_t>* string_to_idx);
+
+// Like above, but return the index at which the attribute with the given name
+// (and optional id) is present in the document. If the attribute does not exist
+// in the doc, it will be added and the outputted data will be remapped to be
+// consistent. If the id exists in the doc with a conflicting name, an error
+// will be returned. If adding an attribute with no id, pass in 0 and this
+// function will be equivalent to ensure_string_in_xml_pool.
+int ensure_attribute_in_xml_doc(const void* data,
+                                const size_t len,
+                                const std::string& attribute_name,
+                                const uint32_t& attribute_id,
+                                android::Vector<char>* out_data,
+                                size_t* idx);
 
 using EntryValueData = PtrLen<uint8_t>;
 using EntryOffsetData = std::pair<EntryValueData, uint32_t>;
@@ -336,6 +356,11 @@ class ResTableTypeDefiner : public ResTableTypeBuilder {
     auto& vec = m_data.at(config);
     vec.emplace_back(data);
   }
+  // Convenience method for above.
+  template <typename T>
+  void add(android::ResTable_config* config, T* ptr) {
+    add(config, {(uint8_t*)ptr, sizeof(T)});
+  }
   // Convenience method to add empty entry/value to the given config.
   void add_empty(android::ResTable_config* config) {
     EntryValueData ev(nullptr, 0);
@@ -465,6 +490,15 @@ class ResTableBuilder {
       m_packages;
 };
 
+class ResXmlIdsBuilder {
+ public:
+  void add_id(uint32_t id) { m_ids.emplace_back(id); }
+  void serialize(android::Vector<char>* out);
+
+ private:
+  std::vector<uint32_t> m_ids;
+};
+
 // Helper to organize edits to a binary chunk of data that is assumed to start
 // in a ResChunk_header. It takes a chunk of original data, and allows for
 // noting edits at certain positions and applying them later. Some basic
@@ -490,6 +524,13 @@ class ResFileManipulator {
       written_bytes += t_size;
     }
 
+    void write_vec(const android::Vector<char>& vec) {
+      char* dest = buffer.get() + written_bytes;
+      auto v_size = vec.size();
+      memcpy(dest, vec.array(), v_size);
+      written_bytes += v_size;
+    }
+
     std::unique_ptr<char[]> buffer;
     size_t size;
     size_t written_bytes{0};
@@ -508,6 +549,14 @@ class ResFileManipulator {
   void add_at(void* pos, const T& item) {
     Block block(sizeof(T));
     block.write(item);
+    m_additions.emplace((char*)pos, std::move(block));
+  }
+  template <typename T>
+  void add_serializable_at(void* pos, T& builder) {
+    android::Vector<char> vec;
+    builder.serialize(&vec);
+    Block block(vec.size());
+    block.write_vec(vec);
     m_additions.emplace((char*)pos, std::move(block));
   }
   // Shorthand for deleting N bytes at the position and adding N different

@@ -8,7 +8,10 @@
 #ifndef _FB_ANDROID_VISITOR_H
 #define _FB_ANDROID_VISITOR_H
 
+#include <boost/optional.hpp>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "androidfw/ResourceTypes.h"
@@ -155,7 +158,9 @@ class XmlFileVisitor : public VisitorBase {
  public:
   virtual bool visit(void* data, size_t len);
   virtual bool visit_global_strings(android::ResStringPool_header* pool);
-  virtual bool visit_attribute_ids(uint32_t* id, size_t count);
+  virtual bool visit_attribute_ids(android::ResChunk_header* header,
+                                   uint32_t* id,
+                                   size_t count);
   virtual bool visit_node(android::ResXMLTree_node* node);
   virtual bool visit_start_namespace(
       android::ResXMLTree_node* node,
@@ -180,12 +185,17 @@ class SimpleXmlParser : public arsc::XmlFileVisitor {
  public:
   ~SimpleXmlParser() override {}
 
-  bool visit_attribute_ids(uint32_t* id, size_t count) override {
+  bool visit_attribute_ids(android::ResChunk_header* header,
+                           uint32_t* id,
+                           size_t count) override {
+    m_attribute_ids_header = header;
+    m_attribute_ids = id;
     m_attribute_count = count;
     return true;
   }
 
   bool visit_global_strings(android::ResStringPool_header* pool) override {
+    m_global_strings_header = pool;
     auto status = m_global_strings.setTo(pool, dtohl(pool->header.size), true);
     LOG_ALWAYS_FATAL_IF(status != android::OK, "Invalid string pool");
     return arsc::XmlFileVisitor::visit_global_strings(pool);
@@ -193,10 +203,64 @@ class SimpleXmlParser : public arsc::XmlFileVisitor {
 
   android::ResStringPool& global_strings() { return m_global_strings; }
   size_t attribute_count() { return m_attribute_count; }
+  uint32_t get_attribute_id(size_t pos) {
+    LOG_ALWAYS_FATAL_IF(pos >= m_attribute_count, "Invalid attribute index");
+    return m_attribute_ids[pos];
+  }
+  size_t string_pool_offset() {
+    LOG_ALWAYS_FATAL_IF(m_global_strings_header == nullptr,
+                        "Pool not found or uninitialized");
+    return get_file_offset(m_global_strings_header);
+  }
+  size_t string_pool_data_size() {
+    LOG_ALWAYS_FATAL_IF(m_global_strings_header == nullptr,
+                        "Pool not found or uninitialized");
+    return dtohl(m_global_strings_header->header.size);
+  }
+  boost::optional<size_t> attributes_header_offset() {
+    if (m_attribute_ids_header == nullptr) {
+      return boost::none;
+    }
+    return get_file_offset(m_attribute_ids_header);
+  }
+  boost::optional<size_t> attributes_data_size() {
+    if (m_attribute_ids_header == nullptr) {
+      return boost::none;
+    }
+    return dtohl(m_attribute_ids_header->size);
+  }
 
  private:
-  size_t m_attribute_count{0};
+  android::ResStringPool_header* m_global_strings_header{nullptr};
   android::ResStringPool m_global_strings;
+
+  android::ResChunk_header* m_attribute_ids_header{nullptr};
+  size_t m_attribute_count{0};
+  uint32_t* m_attribute_ids{nullptr};
+};
+
+// Takes a mapping of old to new string indices, and applies them throughout the
+// document.
+class XmlStringRefRemapper : public SimpleXmlParser {
+ public:
+  XmlStringRefRemapper(const std::unordered_map<uint32_t, uint32_t>& mapping)
+      : m_mapping(mapping) {}
+  ~XmlStringRefRemapper() override {}
+
+  bool visit_string_ref(android::ResStringPool_ref* ref) override {
+    if (m_seen.count(ref) == 0) {
+      m_seen.emplace(ref);
+      auto search = m_mapping.find(dtohl(ref->index));
+      if (search != m_mapping.end()) {
+        ref->index = htodl(search->second);
+      }
+    }
+    return SimpleXmlParser::visit_string_ref(ref);
+  }
+
+ private:
+  std::unordered_map<uint32_t, uint32_t> m_mapping;
+  std::unordered_set<android::ResStringPool_ref*> m_seen;
 };
 } // namespace arsc
 #endif
