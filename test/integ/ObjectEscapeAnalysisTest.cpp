@@ -244,6 +244,93 @@ TEST_F(ObjectEscapeAnalysisTest, doNotReduceTo42B) {
   ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
 }
 
+TEST_F(ObjectEscapeAnalysisTest, optionalReduceTo42) {
+  run();
+
+  auto actual = get_s_expr(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest;.optionalReduceTo42:(Z)I");
+  auto expected = assembler::ircode_from_string(R"(
+   (
+      (load-param v2)
+      (if-eqz v2 :L1)
+      (const v1 42)
+      (:L0)
+      (return v1)
+      (:L1)
+      (const v1 0)
+      (goto :L0)
+    )
+)");
+  ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
+}
+
+TEST_F(ObjectEscapeAnalysisTest, optionalReduceTo42Alt) {
+  run();
+
+  auto actual = get_s_expr(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest;.optionalReduceTo42Alt:(Z)I");
+  auto expected = assembler::ircode_from_string(R"(
+   (
+      (load-param v2)
+      (if-eqz v2 :L1)
+      (const v1 42)
+      (:L0)
+      (return v1)
+      (:L1)
+      (const v1 0)
+      (goto :L0)
+    )
+)");
+  ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
+}
+
+// This test case documents how we suppress NPEs. This is a tolerated artefact
+// of the transformation, not something we have to do.
+TEST_F(ObjectEscapeAnalysisTest, optionalReduceTo42SuppressNPE) {
+  run();
+
+  auto actual = get_s_expr(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest;.optionalReduceTo42SuppressNPE:(Z)I");
+  auto expected = assembler::ircode_from_string(R"(
+   (
+      (load-param v2)
+      (const v11 0)
+      (if-eqz v2 :L0)
+      (const v11 42)
+      (:L0)
+      (return v11)
+    )
+)");
+  ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
+}
+
+TEST_F(ObjectEscapeAnalysisTest, optionalReduceToBC) {
+  run();
+
+  auto actual = get_s_expr(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest;.optionalReduceToBC:(ZZ)Z");
+  auto expected = assembler::ircode_from_string(R"(
+   (
+      (load-param v3)
+      (load-param v4)
+      (const v9 0)
+      (const v10 0)
+      (if-eqz v3 :L0)
+      (const v9 1)
+      (:L0)
+      (if-eqz v4 :L1)
+      (move v10 v9)
+      (:L1)
+      (return v10)
+    )
+)");
+  ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
+}
+
 TEST_F(ObjectEscapeAnalysisTest, objectIsNotNull) {
   run();
 
@@ -472,11 +559,11 @@ TEST_F(ObjectEscapeAnalysisTest, reduceIncompleteInlinableType) {
       (move-result-object v6)
       (invoke-virtual (v6) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$D;.getX:()I")
       (if-eqz v5 :L1)
-      (const v20 42)
+      (const v23 42)
       (:L0)
-      (return v20)
+      (return v23)
       (:L1)
-      (const v20 23)
+      (const v23 23)
       (goto :L0)
     )
 )");

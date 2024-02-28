@@ -211,6 +211,28 @@ public class ObjectEscapeAnalysisTest {
     }
   }
 
+  public static int optionalReduceTo42(boolean b) {
+    I i = b ? I.allocator(42) : null;
+    return b ? i.getX() : 0;
+  }
+
+  public static int optionalReduceTo42Alt(boolean b) {
+    I i = b ? I.allocator(42) : null;
+    return i == null ? 0 : i.getX();
+  }
+
+  public static int optionalReduceTo42SuppressNPE(boolean b) {
+    I i = b ? I.allocator(42) : null;
+    return i.getX();
+  }
+
+  public static boolean optionalReduceToBC(boolean b, boolean c) {
+    I i = b ? I.allocator(42) : null;
+    I j = null;
+    if (c) { j = i; }
+    return j instanceof Object;
+  }
+
   public static boolean objectIsNotNull() {
     I i = I.allocator(42);
     return i == null;
