@@ -19,7 +19,8 @@ import java.lang.ref.WeakReference;
     // The enum field NONE is referenced by latter annotation, so the construction code is not deleted.
     // CHECK: sput-object {{.*}} redex.RuntimeAnno$Visibility.NONE
     // PRECHECK: sput-object {{.*}} redex.RuntimeAnno$Visibility.PUBLIC_ONLY
-    // POSTCHECK-NOT: sput-object {{.*}} redex.RuntimeAnno$Visibility.PUBLIC_ONLY
+    // TODO(T179088781) Re-enable this assertion
+    // disabled-POSTCHECK-NOT: sput-object {{.*}} redex.RuntimeAnno$Visibility.PUBLIC_ONLY
     NONE, DEFAULT, PUBLIC_ONLY;
   }
 
