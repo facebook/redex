@@ -213,6 +213,21 @@ TEST_F(ObjectEscapeAnalysisTest, objectIsNotNull) {
   ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
 }
 
+TEST_F(ObjectEscapeAnalysisTest, reduceTo42WithCheckCast) {
+  run();
+
+  auto actual = get_s_expr(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest;.reduceTo42WithCheckCast:()I");
+  auto expected = assembler::ircode_from_string(R"(
+   (
+      (const v1 42)
+      (return v1)
+    )
+)");
+  ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
+}
+
 TEST_F(ObjectEscapeAnalysisTest, DontOptimizeFinalInInit) {
   run();
 

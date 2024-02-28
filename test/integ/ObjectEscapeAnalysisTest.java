@@ -171,6 +171,11 @@ public class ObjectEscapeAnalysisTest {
     return i == null;
   }
 
+  public static int reduceTo42WithCheckCast() {
+    Object i = I.allocator(42);
+    return ((I)i).getX();
+  }
+
   static class J {
     public J() {}
   }

@@ -39,9 +39,6 @@
  *   fully inlined, and the fields of allocated objects got turned into
  *   registers (and the transformation does not produce estimated negative net
  *   savings)
- *
- * Ideas for future work:
- * - Support check-cast instructions for singleton-allocations
  */
 
 #include "ObjectEscapeAnalysis.h"
@@ -116,6 +113,62 @@ ConcurrentMap<DexType*, InlineAnchorsOfType> compute_inline_anchors(
   return inline_anchors;
 }
 
+live_range::DefUseChains get_augmented_du_chains(
+    cfg::ControlFlowGraph& cfg,
+    const std::vector<DexType*>& inline_anchor_types,
+    std::function<DexType*(const IRInstruction*)> selector,
+    bool* throwing_check_cast = nullptr) {
+  auto is_inlinable_check_cast = [&](const auto* insn) {
+    if (insn->opcode() == OPCODE_CHECK_CAST) {
+      for (auto* t : inline_anchor_types) {
+        if (type::is_subclass(insn->get_type(), t)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+  live_range::MoveAwareChains chains(
+      cfg, /* ignore_unreachable */ false, [&](const auto* insn) {
+        return selector(insn) != nullptr || is_inlinable_check_cast(insn);
+      });
+  const auto du_chains = chains.get_def_use_chains();
+  live_range::DefUseChains res;
+  for (auto&& [def, def_uses] : du_chains) {
+    auto* inline_anchor_type = selector(def);
+    if (!inline_anchor_type) {
+      continue;
+    }
+    auto& augmented_uses = res[def];
+    std::stack<live_range::Use> stack;
+    auto process_uses = [&](auto& uses) {
+      for (auto& use : uses) {
+        if (opcode::is_check_cast(use.insn->opcode())) {
+          if (throwing_check_cast &&
+              !type::is_subclass(use.insn->get_type(), inline_anchor_type)) {
+            *throwing_check_cast = true;
+          }
+          stack.push(use);
+        } else {
+          augmented_uses.insert(use);
+        }
+      }
+    };
+    process_uses(def_uses);
+    while (!stack.empty()) {
+      auto use = stack.top();
+      stack.pop();
+      if (augmented_uses.insert(use).second) {
+        auto it = du_chains.find(use.insn);
+        if (it != du_chains.end()) {
+          process_uses(it->second);
+        }
+      }
+    }
+  }
+  return res;
+}
+
 class InlinedEstimator {
  private:
   const MethodSummaries& m_method_summaries;
@@ -172,8 +225,15 @@ class InlinedEstimator {
   }
 
  public:
-  explicit InlinedEstimator(const ObjectEscapeConfig& config,
-                            const MethodSummaries& method_summaries)
+  // Sentinel for the case where we encounter an unconditionally throwing cast.
+  // In this case, we'll abort and not consider this for inlining, as we don't
+  // want to bother modeling this rare care.
+  static constexpr const int64_t THROWING_CHECK_CAST =
+      std::numeric_limits<int64_t>::max();
+
+  InlinedEstimator(const ObjectEscapeConfig& config,
+                   DexType* inline_anchor_type,
+                   const MethodSummaries& method_summaries)
       : m_method_summaries(method_summaries),
         m_inlined_code_sizes([](DexMethod* method) {
           uint32_t code_size{0};
@@ -190,16 +250,16 @@ class InlinedEstimator {
           }
           return code_size;
         }),
-        m_uses([&](Key key) {
+        m_uses([inline_anchor_type](Key key) {
+          auto& cfg = key.first->get_code()->cfg();
           auto allocation_insn = const_cast<IRInstruction*>(key.second);
-          live_range::MoveAwareChains chains(key.first->get_code()->cfg(),
-                                             /* ignore_unreachable */ false,
-                                             [&](const IRInstruction* insn) {
-                                               return insn == allocation_insn;
-                                             });
-          return chains.get_def_use_chains()[allocation_insn];
+          auto du_chains = get_augmented_du_chains(
+              cfg, {inline_anchor_type}, [&](const auto* insn) {
+                return insn == allocation_insn ? inline_anchor_type : nullptr;
+              });
+          return std::move(du_chains[allocation_insn]);
         }),
-        m_deltas([&](Key key) {
+        m_deltas([&config, this, &method_summaries](Key key) {
           auto [method, allocation_insn] = key;
           always_assert(
               opcode::is_new_instance(allocation_insn->opcode()) ||
@@ -213,8 +273,11 @@ class InlinedEstimator {
             auto* callee_allocation_insn =
                 method_summaries.at(callee).allocation_insn;
             always_assert(callee_allocation_insn);
-            delta += 10 * (int64_t)m_inlined_code_sizes[callee] +
-                     get_delta(callee, callee_allocation_insn) -
+            auto callee_delta = get_delta(callee, callee_allocation_insn);
+            if (callee_delta == THROWING_CHECK_CAST) {
+              return THROWING_CHECK_CAST;
+            }
+            delta += 10 * (int64_t)m_inlined_code_sizes[callee] + callee_delta -
                      config.cost_invoke - config.cost_move_result;
           } else if (allocation_insn->opcode() == OPCODE_NEW_INSTANCE) {
             delta -= config.cost_new_instance;
@@ -235,8 +298,12 @@ class InlinedEstimator {
               always_assert(load_param_insn);
               always_assert(
                   opcode::is_load_param_object(load_param_insn->opcode()));
-              delta += 10 * (int64_t)m_inlined_code_sizes[callee] +
-                       get_delta(callee, load_param_insn);
+              auto callee_delta = get_delta(callee, load_param_insn);
+              if (callee_delta == THROWING_CHECK_CAST) {
+                return THROWING_CHECK_CAST;
+              }
+              delta +=
+                  10 * (int64_t)m_inlined_code_sizes[callee] + callee_delta;
               if (!callee->get_proto()->is_void()) {
                 delta -= config.cost_move_result;
               }
@@ -244,6 +311,8 @@ class InlinedEstimator {
                        opcode::is_an_iput(use.insn->opcode()) ||
                        opcode::is_instance_of(use.insn->opcode()) ||
                        opcode::is_a_monitor(use.insn->opcode())) {
+              delta -= 10 * (int64_t)use.insn->size();
+            } else if (opcode::is_check_cast(use.insn->opcode())) {
               delta -= 10 * (int64_t)use.insn->size();
             }
           }
@@ -330,11 +399,12 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
   std::atomic<size_t> num_recursive{0};
   std::atomic<size_t> num_no_optimizations{0};
   std::atomic<size_t> num_returning{0};
+  std::atomic<size_t> num_throwing_check_casts{0};
 
   InsertOnlyConcurrentSet<DexMethod*> concurrent_inlinable_methods_kept;
   auto concurrent_add_root_methods = [&](DexType* type, bool complete) {
     const auto& inline_anchors_of_type = inline_anchors.at_unsafe(type);
-    InlinedEstimator inlined_estimator(config, method_summaries);
+    InlinedEstimator inlined_estimator(config, type, method_summaries);
     auto keep = [&](const auto& inlinable_methods) {
       for (auto* inlinable_method : inlinable_methods) {
         concurrent_inlinable_methods_kept.insert(inlinable_method);
@@ -372,7 +442,18 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
         int64_t delta = 0;
         const auto& allocation_insns = inline_anchors_of_type.at(method);
         for (auto allocation_insn : allocation_insns) {
-          delta += inlined_estimator.get_delta(method, allocation_insn);
+          auto method_delta =
+              inlined_estimator.get_delta(method, allocation_insn);
+          if (method_delta == InlinedEstimator::THROWING_CHECK_CAST) {
+            delta = InlinedEstimator::THROWING_CHECK_CAST;
+            break;
+          }
+          delta += method_delta;
+        }
+        if (delta == InlinedEstimator::THROWING_CHECK_CAST) {
+          num_throwing_check_casts++;
+          keep(inlinable_methods);
+          return true;
         }
         if (delta > config.incomplete_estimated_delta_threshold) {
           // Skipping, as it's highly unlikely to results in an overall size
@@ -479,6 +560,8 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
   mgr.incr_metric("root_methods_returning", (size_t)num_returning);
   mgr.incr_metric("root_methods_no_optimizations",
                   (size_t)num_no_optimizations);
+  mgr.incr_metric("root_methods_throwing_check_casts",
+                  (size_t)num_throwing_check_casts);
   return root_methods;
 }
 
@@ -546,6 +629,7 @@ struct Stats {
   std::atomic<size_t> invokes_not_inlinable_callee_unexpandable{0};
   std::atomic<size_t> invokes_not_inlinable_callee_inconcrete{0};
   std::atomic<size_t> invokes_not_inlinable_callee_too_many_params_to_expand{0};
+  std::atomic<size_t> throwing_check_cast{0};
   std::atomic<size_t> invokes_not_inlinable_inlining{0};
   std::atomic<size_t> invokes_not_inlinable_too_many_iterations{0};
   std::atomic<size_t> anchors_not_inlinable_inlining{0};
@@ -693,6 +777,7 @@ class RootMethodReducer {
   bool m_is_init_or_clinit;
   DexMethod* m_method;
   const InlinableTypes& m_types;
+  std::vector<DexType*> m_types_vec;
   size_t m_calls_inlined{0};
   size_t m_new_instances_eliminated{0};
 
@@ -718,7 +803,12 @@ class RootMethodReducer {
         m_stats(stats),
         m_is_init_or_clinit(is_init_or_clinit),
         m_method(method),
-        m_types(types) {}
+        m_types(types) {
+    m_types_vec.reserve(m_types.size());
+    for (auto&& [type, _] : m_types) {
+      m_types_vec.push_back(type);
+    }
+  }
 
   std::optional<ReducedMethod> reduce(size_t initial_code_size) {
     if (!inline_anchors() || !expand_or_inline_invokes()) {
@@ -850,35 +940,41 @@ class RootMethodReducer {
   // Inline all "anchors" until all relevant allocations are new-instance
   // instructions in the (root) method.
   bool inline_anchors() {
-    auto& cfg = m_method->get_code()->cfg();
     for (int iteration = 0; true; iteration++) {
+      auto& cfg = m_method->get_code()->cfg();
       Analyzer analyzer(m_excluded_classes, m_method_summaries,
                         m_incomplete_marker_method, cfg);
-      std::unordered_set<IRInstruction*> invokes_to_inline;
-      auto inlinables = analyzer.get_inlinables();
-      Lazy<live_range::DefUseChains> du_chains([&]() {
-        live_range::MoveAwareChains chains(
-            cfg, /* ignore_unreachable */ false, [&](auto* insn) {
-              return inlinables.count(const_cast<IRInstruction*>(insn));
-            });
-        return chains.get_def_use_chains();
-      });
-      cfg::CFGMutation mutation(cfg);
-      for (auto insn : inlinables) {
+      using Inlinable = std::tuple<DexMethod*, DexType*, const InlinableInfo*>;
+      std::unordered_map<IRInstruction*, Inlinable> inlinables;
+      for (auto* insn : analyzer.get_inlinables()) {
         auto [callee, type] = resolve_inlinable(m_method_summaries, insn);
         auto it = m_types.find(type);
-        if (it == m_types.end()) {
-          continue;
+        if (it != m_types.end()) {
+          inlinables.emplace(insn, Inlinable(callee, type, &it->second));
         }
-        auto kind = it->second.kind;
-        if (kind == InlinableTypeKind::Incomplete) {
+      }
+      if (inlinables.empty()) {
+        // Can happen if pre-shrinking removes all references to inlinable
+        // types.
+        return true;
+      }
+      auto du_chains =
+          get_augmented_du_chains(cfg, m_types_vec, [&](const auto* insn) {
+            auto it = inlinables.find(const_cast<IRInstruction*>(insn));
+            return it != inlinables.end() ? std::get<1>(it->second) : nullptr;
+          });
+      std::unordered_set<IRInstruction*> invokes_to_inline;
+      cfg::CFGMutation mutation(cfg);
+      for (auto&& [insn, inlinable] : inlinables) {
+        auto [callee, type, inlinable_info] = inlinable;
+        if (inlinable_info->kind == InlinableTypeKind::Incomplete) {
           // We are only going to consider incompletely inlinable types when we
           // find them in the first iteration, i.e. in the original method,
           // and not coming from any inlined method. We are then going insert
           // a special marker invocation instruction so that we can later find
           // the originally matched anchors again. This instruction will get
           // removed later.
-          if (!has_incomplete_marker((*du_chains)[insn])) {
+          if (!has_incomplete_marker(du_chains[insn])) {
             if (iteration > 0) {
               continue;
             }
@@ -943,27 +1039,24 @@ class RootMethodReducer {
 
   std::optional<std::pair<IRInstruction*, live_range::Uses>>
   find_inlinable_new_instance() const {
+    bool throwing_check_cast = false;
+    auto du_chains = get_augmented_du_chains_for_inlinable_new_instances(
+        &throwing_check_cast);
+    always_assert(!throwing_check_cast);
     auto& cfg = m_method->get_code()->cfg();
-    Lazy<live_range::DefUseChains> du_chains([&]() {
-      live_range::MoveAwareChains chains(
-          cfg,
-          /* ignore_unreachable */ false,
-          [&](auto* insn) { return is_inlinable_new_instance(insn); });
-      return chains.get_def_use_chains();
-    });
     for (auto& mie : InstructionIterable(cfg)) {
       auto insn = mie.insn;
       if (!is_inlinable_new_instance(insn)) {
         continue;
       }
       auto type = insn->get_type();
-      auto& p = *du_chains->find(insn);
+      auto& uses = du_chains[insn];
       auto kind = m_types.at(type).kind;
       if (kind == InlinableTypeKind::Incomplete &&
-          !has_incomplete_marker(p.second)) {
+          !has_incomplete_marker(uses)) {
         continue;
       }
-      return std::make_optional(std::move(p));
+      return std::make_optional(std::make_pair(insn, std::move(uses)));
     }
     return std::nullopt;
   }
@@ -989,28 +1082,46 @@ class RootMethodReducer {
     return false;
   }
 
+  live_range::DefUseChains get_augmented_du_chains_for_inlinable_new_instances(
+      bool* throwing_check_cast) const {
+    auto& cfg = m_method->get_code()->cfg();
+    return get_augmented_du_chains(
+        cfg, m_types_vec,
+        [&](const auto* insn) {
+          return is_inlinable_new_instance(insn) ? insn->get_type() : nullptr;
+        },
+        throwing_check_cast);
+  }
+
   // Expand or inline all uses of all relevant new-instance instructions that
   // involve invoke- instructions, until there are no more such uses.
   bool expand_or_inline_invokes() {
-    auto& cfg = m_method->get_code()->cfg();
     std::unordered_set<DexMethodRef*> expanded_method_refs;
     for (int iteration = 0; iteration < m_config.max_inline_invokes_iterations;
          iteration++) {
       std::unordered_set<IRInstruction*> invokes_to_inline;
       std::unordered_map<IRInstruction*, param_index_t> invokes_to_expand;
 
-      live_range::MoveAwareChains chains(
-          cfg,
-          /* ignore_unreachable */ false,
-          [&](auto* insn) { return is_inlinable_new_instance(insn); });
-      auto du_chains = chains.get_def_use_chains();
+      bool throwing_check_cast = false;
+      auto du_chains = get_augmented_du_chains_for_inlinable_new_instances(
+          &throwing_check_cast);
+      if (throwing_check_cast) {
+        // Hm, unlike that the program would unconditionally crash. It's
+        // probably in dead code.
+        shrink();
+        throwing_check_cast = false;
+        du_chains = get_augmented_du_chains_for_inlinable_new_instances(
+            &throwing_check_cast);
+        if (throwing_check_cast) {
+          m_stats->throwing_check_cast++;
+          return false;
+        }
+      }
       std::unordered_map<IRInstruction*,
                          std::unordered_map<src_index_t, DexType*>>
           aggregated_uses;
       for (auto& [insn, uses] : du_chains) {
-        if (!is_inlinable_new_instance(insn)) {
-          continue;
-        }
+        always_assert(is_inlinable_new_instance(insn));
         auto type = insn->get_type();
         auto kind = m_types.at(type).kind;
         if (kind == InlinableTypeKind::Incomplete &&
@@ -1069,7 +1180,7 @@ class RootMethodReducer {
       }
       // simplify to prune now unreachable code, e.g. from removed exception
       // handlers
-      cfg.simplify();
+      m_method->get_code()->cfg().simplify();
     }
 
     m_stats->invokes_not_inlinable_too_many_iterations++;
@@ -1110,7 +1221,9 @@ class RootMethodReducer {
       if (opcode::is_an_iput(opcode)) {
         always_assert(use.src_index == 1);
       } else if (opcode::is_an_invoke(opcode) || opcode::is_a_monitor(opcode) ||
-                 opcode == OPCODE_IF_EQZ || opcode == OPCODE_IF_NEZ) {
+                 opcode::is_check_cast(opcode) || opcode::is_an_iget(opcode) ||
+                 opcode::is_instance_of(opcode) || opcode == OPCODE_IF_EQZ ||
+                 opcode == OPCODE_IF_NEZ) {
         always_assert(use.src_index == 0);
       } else if (opcode::is_move_object(opcode)) {
         continue;
@@ -1119,9 +1232,8 @@ class RootMethodReducer {
         m_stats->stackify_returns_objects++;
         return false;
       } else {
-        always_assert_log(
-            opcode::is_an_iget(opcode) || opcode::is_instance_of(opcode),
-            "Unexpected use: %s at %u", SHOW(use.insn), use.src_index);
+        not_reached_log("Unexpected use: %s at %u", SHOW(use.insn),
+                        use.src_index);
       }
       instructions_to_replace.insert(use.insn);
     }
@@ -1165,6 +1277,12 @@ class RootMethodReducer {
         mutation.remove(it);
       } else if (opcode == OPCODE_IF_EQZ || opcode == OPCODE_IF_NEZ) {
         insn->set_src(0, get_created_reg());
+      } else if (opcode::is_check_cast(opcode)) {
+        auto move_result_it = cfg.move_result_of(it);
+        auto new_insn = (new IRInstruction(OPCODE_MOVE_OBJECT))
+                            ->set_src(0, insn->src(0))
+                            ->set_dest(move_result_it->insn->dest());
+        mutation.replace(it, {new_insn});
       } else {
         not_reached();
       }
@@ -1425,7 +1543,7 @@ void select_reduced_methods(
           NetSavings net_savings;
           int value;
         };
-        boost::optional<Candidate> best_candidate;
+        std::optional<Candidate> best_candidate;
         for (size_t i = 0; i < reduced_methods_variants.size(); i++) {
           // If we couldn't accommodate any types, we'll need to add them to the
           // irreducible types set. Except for the last variant with the least
@@ -1665,7 +1783,8 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
       "inlining failed, %zu/%zu invokes not inlinable because callee is "
       "init, %zu invokes not inlinable because callee is not concrete,"
       "%zu invokes not inlinable because inlining failed, %zu invokes not "
-      "inlinable after too many iterations, %zu stackify returned objects, "
+      "inlinable after too many iterations, %zu throwing "
+      "check-casts, %zu stackify returned objects, "
       "%zu too costly with irreducible classes, %zu too costly with multiple "
       "conditional classes, %zu too costly globally; %zu expanded methods; %zu "
       "calls inlined; %zu new-instances eliminated; %zu/%zu/%zu inlinable "
@@ -1678,7 +1797,7 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
       (size_t)stats.invokes_not_inlinable_callee_inconcrete,
       (size_t)stats.invokes_not_inlinable_inlining,
       (size_t)stats.invokes_not_inlinable_too_many_iterations,
-      (size_t)stats.stackify_returns_objects,
+      (size_t)stats.throwing_check_cast, (size_t)stats.stackify_returns_objects,
       (size_t)stats.too_costly_irreducible_classes,
       (size_t)stats.too_costly_multiple_conditional_classes,
       (size_t)stats.too_costly_globally, (size_t)stats.expanded_methods,
@@ -1692,6 +1811,8 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric("reduced_methods_variants",
                   (size_t)stats.reduced_methods_variants);
   mgr.incr_metric("selected_reduced_methods", stats.selected_reduced_methods);
+  mgr.incr_metric("root_method_throwing_check_cast",
+                  (size_t)stats.throwing_check_cast);
   mgr.incr_metric("root_method_anchors_not_inlinable_inlining",
                   (size_t)stats.anchors_not_inlinable_inlining);
   mgr.incr_metric("root_method_invokes_not_inlinable_callee_unexpandable",

@@ -148,6 +148,10 @@ void Analyzer::analyze_instruction(const IRInstruction* insn,
     const auto& domain = current_state->get(insn->src(0));
     current_state->set(insn->dest(), domain);
     return;
+  } else if (insn->opcode() == OPCODE_CHECK_CAST) {
+    const auto& domain = current_state->get(insn->src(0));
+    current_state->set(RESULT_REGISTER, domain);
+    return;
   } else if (insn->opcode() == OPCODE_INSTANCE_OF ||
              opcode::is_an_iget(insn->opcode())) {
     if (get_singleton_allocation(current_state->get(insn->src(0)))) {
