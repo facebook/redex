@@ -293,6 +293,24 @@ struct InlinableInfo {
 
 using InlinableTypes = std::unordered_map<DexType*, InlinableInfo>;
 
+class CodeSizeCache {
+ private:
+  mutable InsertOnlyConcurrentMap<DexMethod*, size_t> m_cache;
+
+ public:
+  size_t operator[](DexMethod* method) const {
+    return *m_cache
+                .get_or_create_and_assert_equal(
+                    method,
+                    [&](auto* m) {
+                      static AccumulatingTimer s_timer("get_code_size");
+                      auto t = s_timer.scope();
+                      return m->get_code()->estimate_code_units();
+                    })
+                .first;
+  }
+};
+
 std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
     const ObjectEscapeConfig& config,
     PassManager& mgr,
@@ -520,10 +538,6 @@ size_t shrink_root_methods(
   return methods_that_lost_allocation_insns.size();
 }
 
-size_t get_code_size(DexMethod* method) {
-  return method->get_code()->estimate_code_units();
-}
-
 struct Stats {
   std::atomic<size_t> total_savings{0};
   size_t reduced_methods{0};
@@ -562,6 +576,7 @@ struct NetSavings {
 
   // Estimate how many code units will be saved.
   int get_value(const ObjectEscapeConfig& config,
+                const CodeSizeCache& code_size_cache,
                 const std::unordered_set<DexMethod*>& methods_kept) const {
     int net_savings{local};
     // A class will only eventually get deleted if all static methods are
@@ -580,7 +595,7 @@ struct NetSavings {
     for (auto method : methods) {
       if (can_delete(method) && !method::is_argless_init(method) &&
           !methods_kept.count(method)) {
-        auto code_size = get_code_size(method);
+        auto code_size = code_size_cache[method];
         net_savings += config.cost_method + code_size;
         if (is_static(method)) {
           smethods[method->get_class()].erase(method);
@@ -617,9 +632,10 @@ struct ReducedMethod {
   size_t new_instances_eliminated;
 
   NetSavings get_net_savings(
+      const CodeSizeCache& code_size_cache,
       const std::unordered_set<DexType*>& irreducible_types,
       NetSavings* conditional_net_savings = nullptr) const {
-    auto final_code_size = get_code_size(method);
+    auto final_code_size = code_size_cache[method];
     NetSavings net_savings;
     net_savings.local = (int)initial_code_size - (int)final_code_size;
 
@@ -667,6 +683,7 @@ struct ReducedMethod {
 class RootMethodReducer {
  private:
   const ObjectEscapeConfig& m_config;
+  const CodeSizeCache& m_code_size_cache;
   const ExpandableMethodParams& m_expandable_method_params;
   DexMethodRef* m_incomplete_marker_method;
   MultiMethodInliner& m_inliner;
@@ -681,6 +698,7 @@ class RootMethodReducer {
 
  public:
   RootMethodReducer(const ObjectEscapeConfig& config,
+                    const CodeSizeCache& code_size_cache,
                     const ExpandableMethodParams& expandable_method_params,
                     DexMethodRef* incomplete_marker_method,
                     MultiMethodInliner& inliner,
@@ -691,6 +709,7 @@ class RootMethodReducer {
                     DexMethod* method,
                     const InlinableTypes& types)
       : m_config(config),
+        m_code_size_cache(code_size_cache),
         m_expandable_method_params(expandable_method_params),
         m_incomplete_marker_method(incomplete_marker_method),
         m_inliner(inliner),
@@ -701,9 +720,7 @@ class RootMethodReducer {
         m_method(method),
         m_types(types) {}
 
-  std::optional<ReducedMethod> reduce() {
-    auto initial_code_size{get_code_size(m_method)};
-
+  std::optional<ReducedMethod> reduce(size_t initial_code_size) {
     if (!inline_anchors() || !expand_or_inline_invokes()) {
       return std::nullopt;
     }
@@ -964,7 +981,7 @@ class RootMethodReducer {
     auto [param_index, type] = *src_indices.begin();
     auto kind = m_types.at(type).kind;
     bool multiples = kind == InlinableTypeKind::CompleteMultipleRoots;
-    if (multiples && get_code_size(callee) > m_config.max_inline_size &&
+    if (multiples && m_code_size_cache[callee] > m_config.max_inline_size &&
         m_expandable_method_params.get_expanded_method_ref(callee,
                                                            param_index)) {
       return true;
@@ -1279,6 +1296,7 @@ compute_reduced_methods(
   // into issues, or negative net savings.
   ConcurrentMap<DexMethod*, std::vector<ReducedMethod>>
       concurrent_reduced_methods;
+  CodeSizeCache code_size_cache;
   workqueue_run<std::pair<DexMethod*, InlinableTypes>>(
       [&](const std::pair<DexMethod*, InlinableTypes>& p) {
         auto* method = p.first;
@@ -1288,6 +1306,7 @@ compute_reduced_methods(
         auto copy = DexMethod::make_method_from(
             method, method->get_class(), DexString::make_string(copy_name_str));
         RootMethodReducer root_method_reducer{config,
+                                              code_size_cache,
                                               expandable_method_params,
                                               incomplete_marker_method,
                                               inliner,
@@ -1298,7 +1317,8 @@ compute_reduced_methods(
                                                   method::is_clinit(method),
                                               copy,
                                               types};
-        auto reduced_method = root_method_reducer.reduce();
+        auto reduced_method =
+            root_method_reducer.reduce(code_size_cache[method]);
         if (reduced_method) {
           concurrent_reduced_methods.update(
               method, [&](auto*, auto& reduced_methods_variants, bool) {
@@ -1365,6 +1385,7 @@ void select_reduced_methods(
   InsertOnlyConcurrentSet<DexMethod*> concurrent_inlined_methods_removed;
   InsertOnlyConcurrentSet<DexMethod*> concurrent_inlinable_methods_kept;
 
+  CodeSizeCache code_size_cache;
   // A family of reduced methods for which we'll look at the combined global net
   // savings
   struct Family {
@@ -1411,8 +1432,10 @@ void select_reduced_methods(
           // inlined types, for which might below try to make a global cost
           // determination.
           const auto& reduced_method = reduced_methods_variants.at(i);
-          auto net_savings = reduced_method.get_net_savings(*irreducible_types);
-          auto value = net_savings.get_value(config, *inlinable_methods_kept);
+          auto net_savings = reduced_method.get_net_savings(code_size_cache,
+                                                            *irreducible_types);
+          auto value = net_savings.get_value(config, code_size_cache,
+                                             *inlinable_methods_kept);
           if (!best_candidate || value > best_candidate->value) {
             best_candidate = (Candidate){i, std::move(net_savings), value};
           }
@@ -1441,7 +1464,7 @@ void select_reduced_methods(
         const auto& smallest_reduced_method = reduced_methods_variants.back();
         NetSavings conditional_net_savings;
         auto local_net_savings = smallest_reduced_method.get_net_savings(
-            *irreducible_types, &conditional_net_savings);
+            code_size_cache, *irreducible_types, &conditional_net_savings);
         const auto& classes = conditional_net_savings.classes;
         if (std::any_of(classes.begin(), classes.end(), [&](DexType* type) {
               return irreducible_types->count(type);
@@ -1485,13 +1508,13 @@ void select_reduced_methods(
       [&](const std::pair<DexType*, Family>& p) {
         auto& [type, family] = p;
         if (irreducible_types->count(type) ||
-            family.global_net_savings.get_value(config,
+            family.global_net_savings.get_value(config, code_size_cache,
                                                 *inlinable_methods_kept) < 0) {
           stats->too_costly_globally += family.reduced_methods.size();
           return;
         }
         stats->total_savings += family.global_net_savings.get_value(
-            config, *inlinable_methods_kept);
+            config, code_size_cache, *inlinable_methods_kept);
         for (auto& [method, i] : family.reduced_methods) {
           concurrent_selected_reduced_methods->emplace(method, i);
         }
