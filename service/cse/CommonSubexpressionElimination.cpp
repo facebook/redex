@@ -889,6 +889,36 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
       value_id_t value_id = *c;
       value.srcs.push_back(value_id);
     }
+    if (opcode::is_a_conditional_branch(opcode) && insn->srcs_size() == 1) {
+      switch (opcode) {
+      case OPCODE_IF_EQZ:
+        opcode = OPCODE_IF_EQ;
+        break;
+      case OPCODE_IF_NEZ:
+        opcode = OPCODE_IF_NE;
+        break;
+      case OPCODE_IF_LTZ:
+        opcode = OPCODE_IF_LT;
+        break;
+      case OPCODE_IF_LEZ:
+        opcode = OPCODE_IF_LE;
+        break;
+      case OPCODE_IF_GTZ:
+        opcode = OPCODE_IF_GT;
+        break;
+      case OPCODE_IF_GEZ:
+        opcode = OPCODE_IF_GE;
+        break;
+      default:
+        not_reached();
+      }
+      value.opcode = opcode;
+      IRValue zero_value;
+      zero_value.opcode = OPCODE_CONST;
+      zero_value.literal = 0;
+      auto zero_value_id = *get_value_id(zero_value);
+      value.srcs.push_back(zero_value_id);
+    }
     if (opcode::is_commutative(opcode)) {
       std::sort(value.srcs.begin(), value.srcs.end());
     }

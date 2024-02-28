@@ -2289,6 +2289,38 @@ TEST_F(CommonSubexpressionEliminationTest, if_lt) {
   test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 2);
 }
 
+TEST_F(CommonSubexpressionEliminationTest, if_ltz) {
+  auto code_str = R"(
+    (
+      (load-param v0)
+      (const v1 0)
+      (if-lt v0 v1 :L1)
+      (const v0 1)
+      (return v0)
+    (:L1)
+      (if-ltz v0 :L2)
+      (const v0 2)
+      (return v0)
+    (:L2)
+      (const v0 3)
+      (return v0)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (load-param v0)
+      (const v1 0)
+      (if-lt v0 v1 :L1)
+      (const v0 1)
+      (return v0)
+    (:L1)
+      (const v0 3)
+      (return v0)
+    )
+  )";
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 2);
+}
+
 TEST_F(CommonSubexpressionEliminationTest, if_eq_commutative) {
   auto code_str = R"(
     (
