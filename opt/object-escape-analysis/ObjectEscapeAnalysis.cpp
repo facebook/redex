@@ -56,6 +56,7 @@
 #include "Inliner.h"
 #include "ObjectEscapeAnalysisImpl.h"
 #include "PassManager.h"
+#include "StlUtil.h"
 #include "StringBuilder.h"
 #include "Walkers.h"
 
@@ -316,25 +317,25 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
   auto concurrent_add_root_methods = [&](DexType* type, bool complete) {
     const auto& inline_anchors_of_type = inline_anchors.at_unsafe(type);
     InlinedEstimator inlined_estimator(config, method_summaries);
+    auto keep = [&](const auto& inlinable_methods) {
+      for (auto* inlinable_method : inlinable_methods) {
+        concurrent_inlinable_methods_kept.insert(inlinable_method);
+      }
+      complete = false;
+    };
     std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>> methods;
-    for (auto& [method, allocation_insns] : inline_anchors_of_type) {
+    for (auto&& [method, allocation_insns] : inline_anchors_of_type) {
       bool recursive{false};
       auto inlinable_methods = inlined_estimator.get_inlinable_methods(
           method, allocation_insns, &recursive);
-      auto keep = [&]() {
-        for (auto* inlinable_method : inlinable_methods) {
-          concurrent_inlinable_methods_kept.insert(inlinable_method);
-        }
-        complete = false;
-      };
       if (recursive) {
         num_recursive++;
-        keep();
+        keep(inlinable_methods);
         continue;
       }
       if (method->rstate.no_optimizations()) {
         num_no_optimizations++;
-        keep();
+        keep(inlinable_methods);
         continue;
       }
       auto it2 = method_summaries.find(method);
@@ -342,11 +343,16 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
           resolve_inlinable(method_summaries, it2->second.allocation_insn)
                   .second == type) {
         num_returning++;
-        keep();
+        keep(inlinable_methods);
         continue;
       }
-      if (!complete) {
+      methods.emplace(method, std::move(inlinable_methods));
+    }
+    if (!complete) {
+      std20::erase_if(methods, [&](const auto& p) {
+        auto [method, inlinable_methods] = p;
         int64_t delta = 0;
+        const auto& allocation_insns = inline_anchors_of_type.at(method);
         for (auto allocation_insn : allocation_insns) {
           delta += inlined_estimator.get_delta(method, allocation_insn);
         }
@@ -354,11 +360,11 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
           // Skipping, as it's highly unlikely to results in an overall size
           // win, while taking a very long time to compute exactly.
           num_incomplete_estimated_delta_threshold_exceeded++;
-          keep();
-          continue;
+          keep(inlinable_methods);
+          return true;
         }
-      }
-      methods.emplace(method, std::move(inlinable_methods));
+        return false;
+      });
     }
     if (methods.empty()) {
       return;
