@@ -638,6 +638,10 @@ size_t shrink_root_methods(
     auto& ms = method_summaries->at(method);
     always_assert(ms.allocation_insn() != nullptr);
     ms.returns = std::monostate();
+    always_assert(ms.allocation_insn() == nullptr);
+    if (ms.empty()) {
+      method_summaries->erase(method);
+    }
   }
   return methods_that_lost_allocation_insns.size();
 }
@@ -1866,6 +1870,7 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
                   stats.inlined_methods_mispredicted);
   mgr.incr_metric("lost_returns_through_shrinking",
                   lost_returns_through_shrinking);
+  mgr.incr_metric("method_summaries", method_summaries.size());
 }
 
 static ObjectEscapeAnalysisPass s_pass;
