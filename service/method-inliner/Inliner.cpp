@@ -439,6 +439,35 @@ size_t MultiMethodInliner::inline_callees(
   return inline_inlinables(caller, inlinables, deleted_insns);
 }
 
+size_t MultiMethodInliner::inline_callees(
+    DexMethod* caller,
+    const std::unordered_map<IRInstruction*, DexMethod*>& insns) {
+  TraceContext context{caller};
+  std::vector<Inlinable> inlinables;
+  always_assert(caller->get_code()->editable_cfg_built());
+  for (auto& mie : InstructionIterable(caller->get_code()->cfg())) {
+    auto insn = mie.insn;
+    auto it = insns.find(insn);
+    if (it == insns.end()) {
+      continue;
+    }
+    auto* callee = it->second;
+    always_assert(callee->is_concrete());
+    always_assert(opcode::is_an_invoke(insn->opcode()));
+    auto needs_receiver_cast =
+        is_static(callee) ||
+                type::check_cast(mie.insn->get_method()->get_class(),
+                                 callee->get_class())
+            ? nullptr
+            : callee->get_class();
+    inlinables.push_back((Inlinable){callee, insn, false, nullptr,
+                                     get_callee_insn_size(callee),
+                                     needs_receiver_cast});
+  }
+
+  return inline_inlinables(caller, inlinables);
+}
+
 namespace {
 
 // Helper method, as computing inline for a trace could be too expensive.

@@ -160,6 +160,36 @@ TEST_F(ObjectEscapeAnalysisTest, reduceTo42D) {
   ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
 }
 
+TEST_F(ObjectEscapeAnalysisTest, reduceTo42WithOverrides) {
+  run();
+
+  auto actual = get_s_expr(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest;.reduceTo42WithOverrides:()I");
+  auto expected = assembler::ircode_from_string(R"(
+   (
+      (const v1 42)
+      (return v1)
+    )
+)");
+  ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
+}
+
+TEST_F(ObjectEscapeAnalysisTest, reduceTo42WithOverrides2) {
+  run();
+
+  auto actual = get_s_expr(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest;.reduceTo42WithOverrides2:()I");
+  auto expected = assembler::ircode_from_string(R"(
+   (
+      (const v2 42)
+      (return v2)
+    )
+)");
+  ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
+}
+
 TEST_F(ObjectEscapeAnalysisTest, doNotReduceTo42A) {
   run();
 

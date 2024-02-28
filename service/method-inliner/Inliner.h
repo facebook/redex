@@ -251,6 +251,14 @@ class MultiMethodInliner {
                         std::vector<IRInstruction*>* deleted_insns = nullptr);
 
   /**
+   * Inline callees in the given instructions in the caller, if is_inlinable
+   * below returns true.
+   */
+  size_t inline_callees(
+      DexMethod* caller,
+      const std::unordered_map<IRInstruction*, DexMethod*>& insns);
+
+  /**
    * Return true if the callee is inlinable into the caller.
    * The predicates below define the constraints for inlining.
    * Providing an instrucion is optional, and only used for logging.

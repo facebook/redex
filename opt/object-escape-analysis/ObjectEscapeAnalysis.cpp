@@ -94,16 +94,20 @@ using InlineAnchorsOfType =
     std::unordered_map<DexMethod*, std::unordered_set<IRInstruction*>>;
 ConcurrentMap<DexType*, InlineAnchorsOfType> compute_inline_anchors(
     const Scope& scope,
+    const method_override_graph::Graph& method_override_graph,
     const MethodSummaries& method_summaries,
-    const std::unordered_set<DexClass*>& excluded_classes) {
+    const std::unordered_set<DexClass*>& excluded_classes,
+    CalleesCache* callees_cache,
+    MethodSummaryCache* method_summary_cache) {
   Timer t("compute_inline_anchors");
   ConcurrentMap<DexType*, InlineAnchorsOfType> inline_anchors;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    Analyzer analyzer(excluded_classes, method_summaries,
-                      /* incomplete_marker_method */ nullptr, code.cfg());
+    Analyzer analyzer(method_override_graph, excluded_classes, method_summaries,
+                      /* incomplete_marker_method */ nullptr, method,
+                      callees_cache, method_summary_cache);
     auto inlinables = analyzer.get_inlinables();
     for (auto insn : inlinables) {
-      auto [callee, type] = resolve_inlinable(method_summaries, insn);
+      auto [callee, type] = resolve_inlinable(method_summaries, method, insn);
       TRACE(OEA, 3, "[object escape analysis] inline anchor [%s] %s",
             SHOW(method), SHOW(insn));
       inline_anchors.update(
@@ -114,9 +118,12 @@ ConcurrentMap<DexType*, InlineAnchorsOfType> compute_inline_anchors(
 }
 
 live_range::DefUseChains get_augmented_du_chains(
-    cfg::ControlFlowGraph& cfg,
+    const method_override_graph::Graph& method_override_graph,
+    DexMethod* method,
     const std::vector<DexType*>& inline_anchor_types,
     const MethodSummaries& method_summaries,
+    CalleesCache* callees_cache,
+    MethodSummaryCache* method_summary_cache,
     std::function<DexType*(const IRInstruction*)> selector,
     bool* throwing_check_cast = nullptr) {
   auto is_inlinable_check_cast = [&](const auto* insn) {
@@ -137,14 +144,16 @@ live_range::DefUseChains get_augmented_du_chains(
       return false;
     }
 
-    auto callee = resolve_method(insn->get_method(), opcode_to_search(insn));
-    auto it = method_summaries.find(callee);
-    if (it == method_summaries.end() || !it->second.returned_param_index()) {
+    const auto* ms = resolve_invoke_method_summary(
+        method_override_graph, method_summaries, insn, method, callees_cache,
+        method_summary_cache);
+    if (!ms->returned_param_index()) {
       return false;
     }
-    return !src_index || *it->second.returned_param_index() == *src_index;
+    return !src_index || *ms->returned_param_index() == *src_index;
   };
 
+  auto& cfg = method->get_code()->cfg();
   live_range::MoveAwareChains chains(
       cfg, /* ignore_unreachable */ false, [&](const auto* insn) {
         return selector(insn) != nullptr || is_inlinable_check_cast(insn) ||
@@ -191,7 +200,10 @@ live_range::DefUseChains get_augmented_du_chains(
 
 class InlinedEstimator {
  private:
+  const method_override_graph::Graph& m_method_override_graph;
+  DexType* m_inline_anchor_type;
   const MethodSummaries& m_method_summaries;
+  CalleesCache* m_callees_cache;
   using Key = std::pair<DexMethod*, const IRInstruction*>;
   LazyUnorderedMap<DexMethod*, uint32_t> m_inlined_code_sizes;
   LazyUnorderedMap<Key, live_range::Uses, boost::hash<Key>> m_uses;
@@ -215,8 +227,7 @@ class InlinedEstimator {
                   opcode::is_an_invoke(allocation_insn->opcode()) ||
                   opcode::is_load_param_object(allocation_insn->opcode()));
     if (opcode::is_an_invoke(allocation_insn->opcode())) {
-      auto callee = resolve_method(allocation_insn->get_method(),
-                                   opcode_to_search(allocation_insn));
+      auto callee = resolve_invoke_method(allocation_insn, method);
       always_assert(callee);
       auto* callee_allocation_insn =
           m_method_summaries.at(callee).allocation_insn();
@@ -226,12 +237,16 @@ class InlinedEstimator {
     }
     for (auto& use : m_uses[{method, allocation_insn}]) {
       if (opcode::is_an_invoke(use.insn->opcode())) {
-        auto callee =
-            resolve_method(use.insn->get_method(), opcode_to_search(use.insn));
-        always_assert(callee);
-        if (is_benign(callee)) {
+        if (is_benign(use.insn->get_method())) {
           continue;
         }
+        auto callee = resolve_invoke_inlinable_callee(
+            m_method_override_graph, use.insn, method, m_callees_cache,
+            [this, src_index = use.src_index]() {
+              always_assert(src_index == 0);
+              return m_inline_anchor_type;
+            });
+        always_assert(callee);
         auto load_param_insns = InstructionIterable(
             callee->get_code()->cfg().get_param_instructions());
         auto* load_param_insn =
@@ -252,9 +267,15 @@ class InlinedEstimator {
       std::numeric_limits<int64_t>::max();
 
   InlinedEstimator(const ObjectEscapeConfig& config,
+                   const method_override_graph::Graph& method_override_graph,
                    DexType* inline_anchor_type,
-                   const MethodSummaries& method_summaries)
-      : m_method_summaries(method_summaries),
+                   const MethodSummaries& method_summaries,
+                   CalleesCache* callees_cache,
+                   MethodSummaryCache* method_summary_cache)
+      : m_method_override_graph(method_override_graph),
+        m_inline_anchor_type(inline_anchor_type),
+        m_method_summaries(method_summaries),
+        m_callees_cache(callees_cache),
         m_inlined_code_sizes([](DexMethod* method) {
           uint32_t code_size{0};
           auto& cfg = method->get_code()->cfg();
@@ -270,17 +291,17 @@ class InlinedEstimator {
           }
           return code_size;
         }),
-        m_uses([inline_anchor_type, &method_summaries](Key key) {
-          auto& cfg = key.first->get_code()->cfg();
+        m_uses([this, method_summary_cache](Key key) {
           auto allocation_insn = const_cast<IRInstruction*>(key.second);
           auto du_chains = get_augmented_du_chains(
-              cfg, {inline_anchor_type}, method_summaries,
+              m_method_override_graph, key.first, {m_inline_anchor_type},
+              m_method_summaries, m_callees_cache, method_summary_cache,
               [&](const auto* insn) {
-                return insn == allocation_insn ? inline_anchor_type : nullptr;
+                return insn == allocation_insn ? m_inline_anchor_type : nullptr;
               });
           return std::move(du_chains[allocation_insn]);
         }),
-        m_deltas([&config, this, &method_summaries](Key key) {
+        m_deltas([&config, this](Key key) {
           auto [method, allocation_insn] = key;
           always_assert(
               opcode::is_new_instance(allocation_insn->opcode()) ||
@@ -288,11 +309,10 @@ class InlinedEstimator {
               opcode::is_load_param_object(allocation_insn->opcode()));
           int64_t delta = 0;
           if (opcode::is_an_invoke(allocation_insn->opcode())) {
-            auto callee = resolve_method(allocation_insn->get_method(),
-                                         opcode_to_search(allocation_insn));
+            auto callee = resolve_invoke_method(allocation_insn, method);
             always_assert(callee);
             auto* callee_allocation_insn =
-                method_summaries.at(callee).allocation_insn();
+                m_method_summaries.at(callee).allocation_insn();
             always_assert(callee_allocation_insn);
             auto callee_delta = get_delta(callee, callee_allocation_insn);
             if (callee_delta == THROWING_CHECK_CAST) {
@@ -306,12 +326,16 @@ class InlinedEstimator {
           for (auto& use : m_uses[key]) {
             if (opcode::is_an_invoke(use.insn->opcode())) {
               delta -= config.cost_invoke;
-              auto callee = resolve_method(use.insn->get_method(),
-                                           opcode_to_search(use.insn));
-              always_assert(callee);
-              if (is_benign(callee)) {
+              if (is_benign(use.insn->get_method())) {
                 continue;
               }
+              auto callee = resolve_invoke_inlinable_callee(
+                  m_method_override_graph, use.insn, method, m_callees_cache,
+                  [this, src_index = use.src_index]() {
+                    always_assert(src_index == 0);
+                    return m_inline_anchor_type;
+                  });
+              always_assert(callee);
               auto load_param_insns = InstructionIterable(
                   callee->get_code()->cfg().get_param_instructions());
               auto* load_param_insn =
@@ -404,11 +428,15 @@ class CodeSizeCache {
 std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
     const ObjectEscapeConfig& config,
     PassManager& mgr,
+    const method_override_graph::Graph& method_override_graph,
     const ConcurrentMap<DexType*, Locations>& new_instances,
-    const ConcurrentMap<DexMethod*, Locations>& invokes,
+    const ConcurrentMap<DexMethod*, Locations>& single_callee_invokes,
+    const InsertOnlyConcurrentSet<DexMethod*>& multi_callee_invokes,
     const MethodSummaries& method_summaries,
     const ConcurrentMap<DexType*, InlineAnchorsOfType>& inline_anchors,
-    std::unordered_set<DexMethod*>* inlinable_methods_kept) {
+    std::unordered_set<DexMethod*>* inlinable_methods_kept,
+    CalleesCache* callees_cache,
+    MethodSummaryCache* method_summary_cache) {
   Timer t("compute_root_methods");
   std::array<size_t, (size_t)(InlinableTypeKind::Last) + 1> candidate_types{
       0, 0, 0};
@@ -425,7 +453,9 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
   InsertOnlyConcurrentSet<DexMethod*> concurrent_inlinable_methods_kept;
   auto concurrent_add_root_methods = [&](DexType* type, bool complete) {
     const auto& inline_anchors_of_type = inline_anchors.at_unsafe(type);
-    InlinedEstimator inlined_estimator(config, type, method_summaries);
+    InlinedEstimator inlined_estimator(config, method_override_graph, type,
+                                       method_summaries, callees_cache,
+                                       method_summary_cache);
     auto keep = [&](const auto& inlinable_methods) {
       for (auto* inlinable_method : inlinable_methods) {
         concurrent_inlinable_methods_kept.insert(inlinable_method);
@@ -449,7 +479,8 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
       }
       auto it2 = method_summaries.find(method);
       if (it2 != method_summaries.end() && it2->second.allocation_insn() &&
-          resolve_inlinable(method_summaries, it2->second.allocation_insn())
+          resolve_inlinable(method_summaries, method,
+                            it2->second.allocation_insn())
                   .second == type) {
         num_returning++;
         keep(inlinable_methods);
@@ -536,13 +567,15 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
               it3->second.allocation_insn() != insn) {
             return false;
           }
-          auto it4 = invokes.find(method);
-          if (it4 == invokes.end()) {
+          if (multi_callee_invokes.count_unsafe(method) || root(method)) {
             return false;
           }
-          for (auto q : it4->second) {
-            if (!is_anchored(q)) {
-              return false;
+          auto it4 = single_callee_invokes.find(method);
+          if (it4 != single_callee_invokes.end()) {
+            for (auto q : it4->second) {
+              if (!is_anchored(q)) {
+                return false;
+              }
             }
           }
           return true;
@@ -591,7 +624,8 @@ size_t shrink_root_methods(
     const ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>&
         dependencies,
     const std::unordered_map<DexMethod*, InlinableTypes>& root_methods,
-    MethodSummaries* method_summaries) {
+    MethodSummaries* method_summaries,
+    MethodSummaryCache* method_summary_cache) {
   InsertOnlyConcurrentSet<DexMethod*> methods_that_lost_allocation_insns;
   std::function<void(DexMethod*)> lose;
   lose = [&](DexMethod* method) {
@@ -609,8 +643,7 @@ size_t shrink_root_methods(
       }
       auto* allocation_insn = it2->second.allocation_insn();
       if (allocation_insn && opcode::is_an_invoke(allocation_insn->opcode())) {
-        auto callee = resolve_method(allocation_insn->get_method(),
-                                     opcode_to_search(allocation_insn));
+        auto callee = resolve_invoke_method(allocation_insn, caller);
         always_assert(callee);
         if (callee == method) {
           lose(caller);
@@ -643,6 +676,9 @@ size_t shrink_root_methods(
       method_summaries->erase(method);
     }
   }
+  if (!methods_that_lost_allocation_insns.empty()) {
+    method_summary_cache->clear();
+  }
   return methods_that_lost_allocation_insns.size();
 }
 
@@ -654,6 +690,8 @@ struct Stats {
   std::atomic<size_t> invokes_not_inlinable_callee_unexpandable{0};
   std::atomic<size_t> invokes_not_inlinable_callee_inconcrete{0};
   std::atomic<size_t> invokes_not_inlinable_callee_too_many_params_to_expand{0};
+  std::atomic<size_t>
+      invokes_not_inlinable_callee_expansion_needs_receiver_cast{0};
   std::atomic<size_t> throwing_check_cast{0};
   std::atomic<size_t> invokes_not_inlinable_inlining{0};
   std::atomic<size_t> invokes_not_inlinable_too_many_iterations{0};
@@ -793,6 +831,7 @@ class RootMethodReducer {
  private:
   const ObjectEscapeConfig& m_config;
   const CodeSizeCache& m_code_size_cache;
+  const method_override_graph::Graph& m_method_override_graph;
   const ExpandableMethodParams& m_expandable_method_params;
   DexMethodRef* m_incomplete_marker_method;
   MultiMethodInliner& m_inliner;
@@ -805,10 +844,13 @@ class RootMethodReducer {
   std::vector<DexType*> m_types_vec;
   size_t m_calls_inlined{0};
   size_t m_new_instances_eliminated{0};
+  CalleesCache* m_callees_cache;
+  MethodSummaryCache* m_method_summary_cache;
 
  public:
   RootMethodReducer(const ObjectEscapeConfig& config,
                     const CodeSizeCache& code_size_cache,
+                    const method_override_graph::Graph& method_override_graph,
                     const ExpandableMethodParams& expandable_method_params,
                     DexMethodRef* incomplete_marker_method,
                     MultiMethodInliner& inliner,
@@ -817,9 +859,12 @@ class RootMethodReducer {
                     Stats* stats,
                     bool is_init_or_clinit,
                     DexMethod* method,
-                    const InlinableTypes& types)
+                    const InlinableTypes& types,
+                    CalleesCache* callees_cache,
+                    MethodSummaryCache* method_summary_cache)
       : m_config(config),
         m_code_size_cache(code_size_cache),
+        m_method_override_graph(method_override_graph),
         m_expandable_method_params(expandable_method_params),
         m_incomplete_marker_method(incomplete_marker_method),
         m_inliner(inliner),
@@ -828,7 +873,9 @@ class RootMethodReducer {
         m_stats(stats),
         m_is_init_or_clinit(is_init_or_clinit),
         m_method(method),
-        m_types(types) {
+        m_types(types),
+        m_callees_cache(callees_cache),
+        m_method_summary_cache(method_summary_cache) {
     m_types_vec.reserve(m_types.size());
     for (auto&& [type, _] : m_types) {
       m_types_vec.push_back(type);
@@ -880,7 +927,8 @@ class RootMethodReducer {
                                          [this]() { return show(m_method); });
   }
 
-  bool inline_insns(const std::unordered_set<IRInstruction*>& insns) {
+  bool inline_insns(
+      const std::unordered_map<IRInstruction*, DexMethod*>& insns) {
     auto inlined = m_inliner.inline_callees(m_method, insns);
     m_calls_inlined += inlined;
     return inlined == insns.size();
@@ -891,9 +939,14 @@ class RootMethodReducer {
   // method.
   DexMethodRef* expand_invoke(cfg::CFGMutation& mutation,
                               const cfg::InstructionIterator& it,
-                              param_index_t param_index) {
+                              param_index_t param_index,
+                              DexType* inlinable_type) {
     auto insn = it->insn;
-    auto callee = resolve_method(insn->get_method(), opcode_to_search(insn));
+    auto callee = resolve_invoke_inlinable_callee(
+        m_method_override_graph, insn, m_method, m_callees_cache, [&]() {
+          always_assert(param_index == 0);
+          return inlinable_type;
+        });
     always_assert(callee);
     always_assert(callee->is_concrete());
     std::vector<DexField*> const* fields;
@@ -935,9 +988,11 @@ class RootMethodReducer {
     return expanded_method_ref;
   }
 
-  bool expand_invokes(const std::unordered_map<IRInstruction*, param_index_t>&
-                          invokes_to_expand,
-                      std::unordered_set<DexMethodRef*>* expanded_method_refs) {
+  bool expand_invokes(
+      const std::unordered_map<IRInstruction*,
+                               std::pair<param_index_t, DexType*>>&
+          invokes_to_expand,
+      std::unordered_set<DexMethodRef*>* expanded_method_refs) {
     if (invokes_to_expand.empty()) {
       return true;
     }
@@ -950,8 +1005,9 @@ class RootMethodReducer {
       if (it2 == invokes_to_expand.end()) {
         continue;
       }
-      auto param_index = it2->second;
-      auto expanded_method_ref = expand_invoke(mutation, it, param_index);
+      auto [param_index, inlinable_type] = it2->second;
+      auto expanded_method_ref =
+          expand_invoke(mutation, it, param_index, inlinable_type);
       if (!expanded_method_ref) {
         mutation.clear();
         return false;
@@ -966,13 +1022,14 @@ class RootMethodReducer {
   // instructions in the (root) method.
   bool inline_anchors() {
     for (int iteration = 0; true; iteration++) {
-      auto& cfg = m_method->get_code()->cfg();
-      Analyzer analyzer(m_excluded_classes, m_method_summaries,
-                        m_incomplete_marker_method, cfg);
+      Analyzer analyzer(m_method_override_graph, m_excluded_classes,
+                        m_method_summaries, m_incomplete_marker_method,
+                        m_method, m_callees_cache, m_method_summary_cache);
       using Inlinable = std::tuple<DexMethod*, DexType*, const InlinableInfo*>;
       std::unordered_map<IRInstruction*, Inlinable> inlinables;
       for (auto* insn : analyzer.get_inlinables()) {
-        auto [callee, type] = resolve_inlinable(m_method_summaries, insn);
+        auto [callee, type] =
+            resolve_inlinable(m_method_summaries, m_method, insn);
         auto it = m_types.find(type);
         if (it != m_types.end()) {
           inlinables.emplace(insn, Inlinable(callee, type, &it->second));
@@ -984,11 +1041,13 @@ class RootMethodReducer {
         return true;
       }
       auto du_chains = get_augmented_du_chains(
-          cfg, m_types_vec, m_method_summaries, [&](const auto* insn) {
+          m_method_override_graph, m_method, m_types_vec, m_method_summaries,
+          m_callees_cache, m_method_summary_cache, [&](const auto* insn) {
             auto it = inlinables.find(const_cast<IRInstruction*>(insn));
             return it != inlinables.end() ? std::get<1>(it->second) : nullptr;
           });
-      std::unordered_set<IRInstruction*> invokes_to_inline;
+      std::unordered_map<IRInstruction*, DexMethod*> invokes_to_inline;
+      auto& cfg = m_method->get_code()->cfg();
       cfg::CFGMutation mutation(cfg);
       for (auto&& [insn, inlinable] : inlinables) {
         auto [callee, type, inlinable_info] = inlinable;
@@ -1019,7 +1078,7 @@ class RootMethodReducer {
         if (!callee) {
           continue;
         }
-        invokes_to_inline.insert(insn);
+        invokes_to_inline.emplace(insn, callee);
         m_inlined_methods[callee].insert(type);
       }
       mutation.flush();
@@ -1109,9 +1168,9 @@ class RootMethodReducer {
 
   live_range::DefUseChains get_augmented_du_chains_for_inlinable_new_instances(
       bool* throwing_check_cast) const {
-    auto& cfg = m_method->get_code()->cfg();
     return get_augmented_du_chains(
-        cfg, m_types_vec, m_method_summaries,
+        m_method_override_graph, m_method, m_types_vec, m_method_summaries,
+        m_callees_cache, m_method_summary_cache,
         [&](const auto* insn) {
           return is_inlinable_new_instance(insn) ? insn->get_type() : nullptr;
         },
@@ -1124,8 +1183,9 @@ class RootMethodReducer {
     std::unordered_set<DexMethodRef*> expanded_method_refs;
     for (int iteration = 0; iteration < m_config.max_inline_invokes_iterations;
          iteration++) {
-      std::unordered_set<IRInstruction*> invokes_to_inline;
-      std::unordered_map<IRInstruction*, param_index_t> invokes_to_expand;
+      std::unordered_map<IRInstruction*, DexMethod*> invokes_to_inline;
+      std::unordered_map<IRInstruction*, std::pair<param_index_t, DexType*>>
+          invokes_to_expand;
 
       bool throwing_check_cast = false;
       auto du_chains = get_augmented_du_chains_for_inlinable_new_instances(
@@ -1169,8 +1229,13 @@ class RootMethodReducer {
           m_stats->invokes_not_inlinable_callee_inconcrete++;
           return false;
         }
-        auto callee = resolve_method(uses_insn->get_method(),
-                                     opcode_to_search(uses_insn));
+        auto callee = resolve_invoke_inlinable_callee(
+            m_method_override_graph, uses_insn, m_method, m_callees_cache,
+            [&src_indices = src_indices]() {
+              always_assert(src_indices.size() == 1);
+              always_assert(src_indices.begin()->first == 0);
+              return src_indices.begin()->second;
+            });
         always_assert(callee);
         always_assert(callee->is_concrete());
         if (should_expand(callee, src_indices)) {
@@ -1178,13 +1243,20 @@ class RootMethodReducer {
             m_stats->invokes_not_inlinable_callee_too_many_params_to_expand++;
             return false;
           }
+          if (!is_static(callee) &&
+              uses_insn->get_method()->get_class() != callee->get_class()) {
+            // TODO: Support inserting check-casts as needed here, similar to
+            // what the inliner does.
+            m_stats
+                ->invokes_not_inlinable_callee_expansion_needs_receiver_cast++;
+            return false;
+          }
           always_assert(src_indices.size() == 1);
-          auto src_index = src_indices.begin()->first;
-          invokes_to_expand.emplace(uses_insn, src_index);
+          invokes_to_expand.emplace(uses_insn, *src_indices.begin());
           continue;
         }
 
-        invokes_to_inline.insert(uses_insn);
+        invokes_to_inline.emplace(uses_insn, callee);
         for (auto [src_index, type] : src_indices) {
           m_inlined_methods[callee].insert(type);
         }
@@ -1369,6 +1441,7 @@ class RootMethodReducer {
 std::unordered_map<DexMethod*, std::vector<ReducedMethod>>
 compute_reduced_methods(
     const ObjectEscapeConfig& config,
+    const method_override_graph::Graph& method_override_graph,
     ExpandableMethodParams& expandable_method_params,
     MultiMethodInliner& inliner,
     const MethodSummaries& method_summaries,
@@ -1376,7 +1449,9 @@ compute_reduced_methods(
     const std::unordered_map<DexMethod*, InlinableTypes>& root_methods,
     std::unordered_set<DexType*>* irreducible_types,
     std::unordered_set<DexMethod*>* inlinable_methods_kept,
-    Stats* stats) {
+    Stats* stats,
+    CalleesCache* callees_cache,
+    MethodSummaryCache* method_summary_cache) {
   Timer t("compute_reduced_methods");
 
   // We are not exploring all possible subsets of types, but only single chain
@@ -1450,6 +1525,7 @@ compute_reduced_methods(
             method, method->get_class(), DexString::make_string(copy_name_str));
         RootMethodReducer root_method_reducer{config,
                                               code_size_cache,
+                                              method_override_graph,
                                               expandable_method_params,
                                               incomplete_marker_method,
                                               inliner,
@@ -1459,7 +1535,9 @@ compute_reduced_methods(
                                               method::is_init(method) ||
                                                   method::is_clinit(method),
                                               copy,
-                                              types};
+                                              types,
+                                              callees_cache,
+                                              method_summary_cache};
         auto reduced_method =
             root_method_reducer.reduce(code_size_cache[method]);
         if (reduced_method) {
@@ -1678,12 +1756,15 @@ void select_reduced_methods(
 
 void reduce(const Scope& scope,
             const ObjectEscapeConfig& config,
+            const method_override_graph::Graph& method_override_graph,
             MultiMethodInliner& inliner,
             const MethodSummaries& method_summaries,
             const std::unordered_set<DexClass*>& excluded_classes,
             const std::unordered_map<DexMethod*, InlinableTypes>& root_methods,
             Stats* stats,
-            std::unordered_set<DexMethod*>* inlinable_methods_kept) {
+            std::unordered_set<DexMethod*>* inlinable_methods_kept,
+            CalleesCache* callees_cache,
+            MethodSummaryCache* method_summary_cache) {
   Timer t("reduce");
 
   // First, we compute all reduced methods
@@ -1691,9 +1772,9 @@ void reduce(const Scope& scope,
   ExpandableMethodParams expandable_method_params(scope);
   std::unordered_set<DexType*> irreducible_types;
   auto reduced_methods = compute_reduced_methods(
-      config, expandable_method_params, inliner, method_summaries,
-      excluded_classes, root_methods, &irreducible_types,
-      inlinable_methods_kept, stats);
+      config, method_override_graph, expandable_method_params, inliner,
+      method_summaries, excluded_classes, root_methods, &irreducible_types,
+      inlinable_methods_kept, stats, callees_cache, method_summary_cache);
   stats->reduced_methods = reduced_methods.size();
 
   // Second, we select reduced methods that will result in net savings
@@ -1755,24 +1836,31 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   auto excluded_classes = get_excluded_classes(*method_override_graph);
 
   ConcurrentMap<DexType*, Locations> new_instances;
-  ConcurrentMap<DexMethod*, Locations> invokes;
+  ConcurrentMap<DexMethod*, Locations> single_callee_invokes;
+  InsertOnlyConcurrentSet<DexMethod*> multi_callee_invokes;
   ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>> dependencies;
-  analyze_scope(scope, *method_override_graph, &new_instances, &invokes,
-                &dependencies);
+  CalleesCache callees_cache;
+  analyze_scope(scope, *method_override_graph, &new_instances,
+                &single_callee_invokes, &multi_callee_invokes, &dependencies,
+                &callees_cache);
 
   size_t analysis_iterations;
-  auto method_summaries =
-      compute_method_summaries(scope, dependencies, *method_override_graph,
-                               excluded_classes, &analysis_iterations);
+  MethodSummaryCache method_summary_cache;
+  auto method_summaries = compute_method_summaries(
+      scope, dependencies, *method_override_graph, excluded_classes,
+      &analysis_iterations, &callees_cache, &method_summary_cache);
   mgr.incr_metric("analysis_iterations", analysis_iterations);
 
-  auto inline_anchors =
-      compute_inline_anchors(scope, method_summaries, excluded_classes);
+  auto inline_anchors = compute_inline_anchors(
+      scope, *method_override_graph, method_summaries, excluded_classes,
+      &callees_cache, &method_summary_cache);
 
   std::unordered_set<DexMethod*> inlinable_methods_kept;
   auto root_methods = compute_root_methods(
-      m_config, mgr, new_instances, invokes, method_summaries, inline_anchors,
-      &inlinable_methods_kept);
+      m_config, mgr, *method_override_graph, new_instances,
+      single_callee_invokes, multi_callee_invokes, method_summaries,
+      inline_anchors, &inlinable_methods_kept, &callees_cache,
+      &method_summary_cache);
 
   ConcurrentMethodResolver concurrent_method_resolver;
   std::unordered_set<DexMethod*> no_default_inlinables;
@@ -1791,12 +1879,14 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
       std::ref(concurrent_method_resolver), inliner_config, min_sdk,
       MultiMethodInlinerMode::None);
 
-  auto lost_returns_through_shrinking = shrink_root_methods(
-      inliner, dependencies, root_methods, &method_summaries);
+  auto lost_returns_through_shrinking =
+      shrink_root_methods(inliner, dependencies, root_methods,
+                          &method_summaries, &method_summary_cache);
 
   Stats stats;
-  reduce(scope, m_config, inliner, method_summaries, excluded_classes,
-         root_methods, &stats, &inlinable_methods_kept);
+  reduce(scope, m_config, *method_override_graph, inliner, method_summaries,
+         excluded_classes, root_methods, &stats, &inlinable_methods_kept,
+         &callees_cache, &method_summary_cache);
 
   TRACE(OEA, 1, "[object escape analysis] total savings: %zu",
         (size_t)stats.total_savings);
@@ -1805,9 +1895,10 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
       "[object escape analysis] %zu root methods lead to %zu reduced root "
       "methods with %zu variants "
       "of which %zu were selected and %zu anchors not inlinable because "
-      "inlining failed, %zu/%zu invokes not inlinable because callee is "
-      "init, %zu invokes not inlinable because callee is not concrete,"
-      "%zu invokes not inlinable because inlining failed, %zu invokes not "
+      "inlining failed, %zu/%zu/%zu/%zu invokes not inlinable because callee "
+      "is unexpandable/has too many params/expansion needs receiver cast/is "
+      "inconcrete, %zu invokes not inlinable because inlining failed, %zu "
+      "invokes not "
       "inlinable after too many iterations, %zu throwing "
       "check-casts, %zu stackify returned objects, "
       "%zu too costly with irreducible classes, %zu too costly with multiple "
@@ -1819,6 +1910,7 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
       (size_t)stats.anchors_not_inlinable_inlining,
       (size_t)stats.invokes_not_inlinable_callee_unexpandable,
       (size_t)stats.invokes_not_inlinable_callee_too_many_params_to_expand,
+      (size_t)stats.invokes_not_inlinable_callee_expansion_needs_receiver_cast,
       (size_t)stats.invokes_not_inlinable_callee_inconcrete,
       (size_t)stats.invokes_not_inlinable_inlining,
       (size_t)stats.invokes_not_inlinable_too_many_iterations,
@@ -1846,6 +1938,9 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
       "root_method_invokes_not_inlinable_callee_is_init_too_many_params_to_"
       "expand",
       (size_t)stats.invokes_not_inlinable_callee_too_many_params_to_expand);
+  mgr.incr_metric(
+      "invokes_not_inlinable_callee_expansion_needs_receiver_cast",
+      (size_t)stats.invokes_not_inlinable_callee_expansion_needs_receiver_cast);
   mgr.incr_metric("root_method_invokes_not_inlinable_callee_inconcrete",
                   (size_t)stats.invokes_not_inlinable_callee_inconcrete);
   mgr.incr_metric("root_method_invokes_not_inlinable_inlining",

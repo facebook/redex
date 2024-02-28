@@ -28,6 +28,35 @@
 
 namespace object_escape_analysis_impl {
 
+DexMethod* resolve_invoke_method_if_unambiguous(
+    const method_override_graph::Graph& method_override_graph,
+    const IRInstruction* insn,
+    const DexMethod* caller);
+
+struct Callees {
+  std::vector<DexMethod*> with_code;
+  bool any_unknown{false};
+  bool operator==(const Callees& other) const;
+};
+
+using CalleesKey = std::pair<DexMethod*, const DexType*>;
+using CalleesKeyHash = boost::hash<CalleesKey>;
+using CalleesCache =
+    InsertOnlyConcurrentMap<CalleesKey, Callees, CalleesKeyHash>[2];
+
+const Callees* resolve_invoke_callees(
+    const method_override_graph::Graph& method_override_graph,
+    const IRInstruction* insn,
+    const DexMethod* caller,
+    CalleesCache* callees_cache);
+
+DexMethod* resolve_invoke_inlinable_callee(
+    const method_override_graph::Graph& method_override_graph,
+    const IRInstruction* insn,
+    const DexMethod* caller,
+    CalleesCache* callees_cache,
+    const std::function<DexType*()>& inlinable_type_at_src_index_0_getter);
+
 using Locations = std::vector<std::pair<DexMethod*, const IRInstruction*>>;
 
 std::unordered_set<DexClass*> get_excluded_classes(
@@ -39,8 +68,10 @@ void analyze_scope(
     const Scope& scope,
     const method_override_graph::Graph& method_override_graph,
     ConcurrentMap<DexType*, Locations>* new_instances,
-    ConcurrentMap<DexMethod*, Locations>* invokes,
-    ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>* dependencies);
+    ConcurrentMap<DexMethod*, Locations>* single_callee_invokes,
+    InsertOnlyConcurrentSet<DexMethod*>* multi_callee_invokes,
+    ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>* dependencies,
+    CalleesCache* callees_cache);
 
 // A benign method invocation can be ignored during the escape analysis.
 bool is_benign(const DexMethodRef* method_ref);
@@ -85,9 +116,24 @@ struct MethodSummary {
   bool empty() const {
     return benign_params.empty() && !returns_allocation_or_param();
   }
+
+  bool operator==(const MethodSummary& other) const {
+    return benign_params == other.benign_params && returns == other.returns;
+  }
 };
 
 using MethodSummaries = std::unordered_map<DexMethod*, MethodSummary>;
+
+using MethodSummaryCache =
+    InsertOnlyConcurrentMap<const Callees*, MethodSummary>;
+
+const MethodSummary* resolve_invoke_method_summary(
+    const method_override_graph::Graph& method_override_graph,
+    const MethodSummaries& method_summaries,
+    const IRInstruction* insn,
+    const DexMethod* caller,
+    CalleesCache* callees_cache,
+    MethodSummaryCache* method_summary_cache);
 
 // The analyzer computes...
 // - which instructions allocate (new-instance, invoke-)
@@ -95,10 +141,13 @@ using MethodSummaries = std::unordered_map<DexMethod*, MethodSummary>;
 // - which allocations return
 class Analyzer final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
-  explicit Analyzer(const std::unordered_set<DexClass*>& excluded_classes,
+  explicit Analyzer(const method_override_graph::Graph& method_override_graph,
+                    const std::unordered_set<DexClass*>& excluded_classes,
                     const MethodSummaries& method_summaries,
                     DexMethodRef* incomplete_marker_method,
-                    cfg::ControlFlowGraph& cfg);
+                    DexMethod* method,
+                    CalleesCache* callees_cache,
+                    MethodSummaryCache* method_summary_cache);
 
   static const IRInstruction* get_singleton_allocation(const Domain& domain);
 
@@ -116,11 +165,15 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<Environment> {
   std::unordered_set<IRInstruction*> get_inlinables() const;
 
  private:
+  const method_override_graph::Graph& m_method_override_graph;
   const std::unordered_set<DexClass*>& m_excluded_classes;
   const MethodSummaries& m_method_summaries;
   DexMethodRef* m_incomplete_marker_method;
+  DexMethod* m_method;
   mutable Escapes m_escapes;
   mutable std::unordered_set<const IRInstruction*> m_returns;
+  mutable CalleesCache* m_callees_cache;
+  mutable MethodSummaryCache* m_method_summary_cache;
 
   bool is_incomplete_marker(const IRInstruction* insn) const {
     return insn->opcode() == OPCODE_INVOKE_STATIC &&
@@ -134,11 +187,15 @@ MethodSummaries compute_method_summaries(
         dependencies,
     const method_override_graph::Graph& method_override_graph,
     const std::unordered_set<DexClass*>& excluded_classes,
-    size_t* analysis_iterations);
+    size_t* analysis_iterations,
+    CalleesCache* callees_cache,
+    MethodSummaryCache* method_summary_cache);
 
 // For an inlinable new-instance or invoke- instruction, determine first
 // resolved callee (if any), and (eventually) allocated type
 std::pair<DexMethod*, DexType*> resolve_inlinable(
-    const MethodSummaries& method_summaries, const IRInstruction* insn);
+    const MethodSummaries& method_summaries,
+    DexMethod* method,
+    const IRInstruction* insn);
 
 } // namespace object_escape_analysis_impl
