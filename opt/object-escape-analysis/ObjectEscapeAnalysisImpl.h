@@ -62,9 +62,29 @@ using Environment = sparta::PatriciaTreeMapAbstractEnvironment<reg_t, Domain>;
 struct MethodSummary {
   // A parameter is "benign" if a provided argument does not escape
   std::unordered_set<src_index_t> benign_params;
-  // A method might contain a unique instruction which allocates an object that
-  // is eventually unconditionally returned.
-  const IRInstruction* allocation_insn{nullptr};
+
+  // Whether the method returns nothing of interest, or only the result of a
+  // unique instruction which allocates an object, or only a particular
+  // parameter.
+  std::variant<std::monostate, const IRInstruction*, src_index_t> returns;
+
+  bool returns_allocation_or_param() const {
+    return !std::holds_alternative<std::monostate>(returns);
+  }
+
+  const IRInstruction* allocation_insn() const {
+    auto ptr = std::get_if<const IRInstruction*>(&returns);
+    return ptr ? *ptr : nullptr;
+  }
+
+  std::optional<src_index_t> returned_param_index() const {
+    auto ptr = std::get_if<src_index_t>(&returns);
+    return ptr ? std::optional<src_index_t>(*ptr) : std::nullopt;
+  }
+
+  bool empty() const {
+    return benign_params.empty() && !returns_allocation_or_param();
+  }
 };
 
 using MethodSummaries = std::unordered_map<DexMethod*, MethodSummary>;
@@ -85,15 +105,15 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<Environment> {
   void analyze_instruction(const IRInstruction* insn,
                            Environment* current_state) const override;
 
-  const Escapes& get_escapes() { return m_escapes; }
+  const Escapes& get_escapes() const { return m_escapes; }
 
-  const std::unordered_set<const IRInstruction*>& get_returns() {
+  const std::unordered_set<const IRInstruction*>& get_returns() const {
     return m_returns;
   }
 
   // Returns set of new-instance and invoke- allocating instructions that do not
   // escape (or return).
-  std::unordered_set<IRInstruction*> get_inlinables();
+  std::unordered_set<IRInstruction*> get_inlinables() const;
 
  private:
   const std::unordered_set<DexClass*>& m_excluded_classes;

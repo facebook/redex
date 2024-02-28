@@ -116,6 +116,7 @@ ConcurrentMap<DexType*, InlineAnchorsOfType> compute_inline_anchors(
 live_range::DefUseChains get_augmented_du_chains(
     cfg::ControlFlowGraph& cfg,
     const std::vector<DexType*>& inline_anchor_types,
+    const MethodSummaries& method_summaries,
     std::function<DexType*(const IRInstruction*)> selector,
     bool* throwing_check_cast = nullptr) {
   auto is_inlinable_check_cast = [&](const auto* insn) {
@@ -128,9 +129,26 @@ live_range::DefUseChains get_augmented_du_chains(
     }
     return false;
   };
+
+  auto is_inlinable_invoke = [&](const auto* insn,
+                                 std::optional<src_index_t> src_index =
+                                     std::nullopt) {
+    if (!opcode::is_an_invoke(insn->opcode())) {
+      return false;
+    }
+
+    auto callee = resolve_method(insn->get_method(), opcode_to_search(insn));
+    auto it = method_summaries.find(callee);
+    if (it == method_summaries.end() || !it->second.returned_param_index()) {
+      return false;
+    }
+    return !src_index || *it->second.returned_param_index() == *src_index;
+  };
+
   live_range::MoveAwareChains chains(
       cfg, /* ignore_unreachable */ false, [&](const auto* insn) {
-        return selector(insn) != nullptr || is_inlinable_check_cast(insn);
+        return selector(insn) != nullptr || is_inlinable_check_cast(insn) ||
+               is_inlinable_invoke(insn);
       });
   const auto du_chains = chains.get_def_use_chains();
   live_range::DefUseChains res;
@@ -148,6 +166,8 @@ live_range::DefUseChains get_augmented_du_chains(
               !type::is_subclass(use.insn->get_type(), inline_anchor_type)) {
             *throwing_check_cast = true;
           }
+          stack.push(use);
+        } else if (is_inlinable_invoke(use.insn, use.src_index)) {
           stack.push(use);
         } else {
           augmented_uses.insert(use);
@@ -199,7 +219,7 @@ class InlinedEstimator {
                                    opcode_to_search(allocation_insn));
       always_assert(callee);
       auto* callee_allocation_insn =
-          m_method_summaries.at(callee).allocation_insn;
+          m_method_summaries.at(callee).allocation_insn();
       always_assert(callee_allocation_insn);
       gather_inlinable_methods(callee, callee_allocation_insn, recursive,
                                visiting);
@@ -250,11 +270,12 @@ class InlinedEstimator {
           }
           return code_size;
         }),
-        m_uses([inline_anchor_type](Key key) {
+        m_uses([inline_anchor_type, &method_summaries](Key key) {
           auto& cfg = key.first->get_code()->cfg();
           auto allocation_insn = const_cast<IRInstruction*>(key.second);
           auto du_chains = get_augmented_du_chains(
-              cfg, {inline_anchor_type}, [&](const auto* insn) {
+              cfg, {inline_anchor_type}, method_summaries,
+              [&](const auto* insn) {
                 return insn == allocation_insn ? inline_anchor_type : nullptr;
               });
           return std::move(du_chains[allocation_insn]);
@@ -271,7 +292,7 @@ class InlinedEstimator {
                                          opcode_to_search(allocation_insn));
             always_assert(callee);
             auto* callee_allocation_insn =
-                method_summaries.at(callee).allocation_insn;
+                method_summaries.at(callee).allocation_insn();
             always_assert(callee_allocation_insn);
             auto callee_delta = get_delta(callee, callee_allocation_insn);
             if (callee_delta == THROWING_CHECK_CAST) {
@@ -427,8 +448,8 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
         continue;
       }
       auto it2 = method_summaries.find(method);
-      if (it2 != method_summaries.end() && it2->second.allocation_insn &&
-          resolve_inlinable(method_summaries, it2->second.allocation_insn)
+      if (it2 != method_summaries.end() && it2->second.allocation_insn() &&
+          resolve_inlinable(method_summaries, it2->second.allocation_insn())
                   .second == type) {
         num_returning++;
         keep(inlinable_methods);
@@ -512,7 +533,7 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
           }
           auto it3 = method_summaries.find(method);
           if (it3 == method_summaries.end() ||
-              it3->second.allocation_insn != insn) {
+              it3->second.allocation_insn() != insn) {
             return false;
           }
           auto it4 = invokes.find(method);
@@ -586,7 +607,7 @@ size_t shrink_root_methods(
       if (it2 == method_summaries->end()) {
         continue;
       }
-      auto* allocation_insn = it2->second.allocation_insn;
+      auto* allocation_insn = it2->second.allocation_insn();
       if (allocation_insn && opcode::is_an_invoke(allocation_insn->opcode())) {
         auto callee = resolve_method(allocation_insn->get_method(),
                                      opcode_to_search(allocation_insn));
@@ -602,7 +623,7 @@ size_t shrink_root_methods(
         const auto& [method, types] = p;
         inliner.get_shrinker().shrink_method(method);
         auto it = method_summaries->find(method);
-        if (it != method_summaries->end() && it->second.allocation_insn) {
+        if (it != method_summaries->end() && it->second.allocation_insn()) {
           auto ii = InstructionIterable(method->get_code()->cfg());
           if (std::none_of(
                   ii.begin(), ii.end(), [&](const MethodItemEntry& mie) {
@@ -614,9 +635,9 @@ size_t shrink_root_methods(
       },
       root_methods);
   for (auto* method : methods_that_lost_allocation_insns) {
-    auto& allocation_insn = method_summaries->at(method).allocation_insn;
-    always_assert(allocation_insn != nullptr);
-    allocation_insn = nullptr;
+    auto& ms = method_summaries->at(method);
+    always_assert(ms.allocation_insn() != nullptr);
+    ms.returns = std::monostate();
   }
   return methods_that_lost_allocation_insns.size();
 }
@@ -958,8 +979,8 @@ class RootMethodReducer {
         // types.
         return true;
       }
-      auto du_chains =
-          get_augmented_du_chains(cfg, m_types_vec, [&](const auto* insn) {
+      auto du_chains = get_augmented_du_chains(
+          cfg, m_types_vec, m_method_summaries, [&](const auto* insn) {
             auto it = inlinables.find(const_cast<IRInstruction*>(insn));
             return it != inlinables.end() ? std::get<1>(it->second) : nullptr;
           });
@@ -1086,7 +1107,7 @@ class RootMethodReducer {
       bool* throwing_check_cast) const {
     auto& cfg = m_method->get_code()->cfg();
     return get_augmented_du_chains(
-        cfg, m_types_vec,
+        cfg, m_types_vec, m_method_summaries,
         [&](const auto* insn) {
           return is_inlinable_new_instance(insn) ? insn->get_type() : nullptr;
         },

@@ -31,6 +31,19 @@ std::unordered_set<DexClass*> get_excluded_classes(
   return res;
 };
 
+src_index_t get_param_index(const DexMethod* callee,
+                            const IRInstruction* load_param_insn) {
+  src_index_t idx = 0;
+  auto& cfg = callee->get_code()->cfg();
+  for (auto& mie : InstructionIterable(cfg.get_param_instructions())) {
+    if (mie.insn == load_param_insn) {
+      return idx;
+    }
+    idx++;
+  }
+  not_reached();
+}
+
 // Collect all allocation and invoke instructions, as well as non-virtual
 // invocation dependencies.
 void analyze_scope(
@@ -186,9 +199,13 @@ void Analyzer::analyze_instruction(const IRInstruction* insn,
     }
 
     Domain domain(NO_ALLOCATION);
-    if (it != m_method_summaries.end() && it->second.allocation_insn) {
-      m_escapes[insn];
-      domain = Domain(insn);
+    if (it != m_method_summaries.end()) {
+      if (it->second.allocation_insn()) {
+        m_escapes[insn];
+        domain = Domain(insn);
+      } else if (auto src_index = it->second.returned_param_index()) {
+        domain = current_state->get(insn->src(*src_index));
+      }
     }
     current_state->set(RESULT_REGISTER, domain);
     return;
@@ -210,7 +227,7 @@ void Analyzer::analyze_instruction(const IRInstruction* insn,
 
 // Returns set of new-instance and invoke- allocating instructions that do not
 // escape (or return).
-std::unordered_set<IRInstruction*> Analyzer::get_inlinables() {
+std::unordered_set<IRInstruction*> Analyzer::get_inlinables() const {
   std::unordered_set<IRInstruction*> inlinables;
   for (auto&& [insn, uses] : m_escapes) {
     if (uses.empty() && insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT &&
@@ -245,35 +262,39 @@ MethodSummaries compute_method_summaries(
     (*analysis_iterations)++;
     TRACE(OEA, 2, "[object escape analysis] analysis_iteration %zu",
           *analysis_iterations);
-    ConcurrentMap<DexMethod*, MethodSummary> recomputed_method_summaries;
+    InsertOnlyConcurrentMap<DexMethod*, MethodSummary>
+        recomputed_method_summaries;
     workqueue_run<DexMethod*>(
         [&](DexMethod* method) {
+          MethodSummary ms;
           auto& cfg = method->get_code()->cfg();
           Analyzer analyzer(excluded_classes, method_summaries,
                             /* incomplete_marker_method */ nullptr, cfg);
           const auto& escapes = analyzer.get_escapes();
           const auto& returns = analyzer.get_returns();
+          if (returns.size() == 1) {
+            const auto* returned_insn = *returns.begin();
+            if (returned_insn != NO_ALLOCATION &&
+                escapes.at(returned_insn).empty()) {
+              if (returned_insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
+                ms.returns = get_param_index(method, returned_insn);
+              } else {
+                ms.returns = returned_insn;
+              }
+            }
+          }
           src_index_t src_index = 0;
           for (auto& mie : InstructionIterable(cfg.get_param_instructions())) {
             if (mie.insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT &&
-                escapes.at(mie.insn).empty() && !returns.count(mie.insn)) {
-              recomputed_method_summaries.update(
-                  method, [src_index](DexMethod*, auto& ms, bool) {
-                    ms.benign_params.insert(src_index);
-                  });
+                escapes.at(mie.insn).empty() &&
+                (!returns.count(mie.insn) ||
+                 ms.returned_param_index() == src_index)) {
+              ms.benign_params.insert(src_index);
             }
             src_index++;
           }
-          if (returns.size() == 1) {
-            const auto* allocation_insn = *returns.begin();
-            if (allocation_insn != NO_ALLOCATION &&
-                escapes.at(allocation_insn).empty() &&
-                allocation_insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT) {
-              recomputed_method_summaries.update(
-                  method, [allocation_insn](DexMethod*, auto& ms, bool) {
-                    ms.allocation_insn = allocation_insn;
-                  });
-            }
+          if (!ms.empty()) {
+            recomputed_method_summaries.emplace(method, std::move(ms));
           }
         },
         impacted_methods);
@@ -290,17 +311,19 @@ MethodSummaries compute_method_summaries(
           summary.benign_params.size()) {
         summary.benign_params = std::move(recomputed_summary.benign_params);
         changed_methods.insert(method);
+      } else {
+        always_assert(summary.benign_params ==
+                      recomputed_summary.benign_params);
       }
-      if (recomputed_summary.allocation_insn) {
-        if (summary.allocation_insn) {
-          always_assert(summary.allocation_insn ==
-                        recomputed_summary.allocation_insn);
+      if (recomputed_summary.returns_allocation_or_param()) {
+        if (summary.returns_allocation_or_param()) {
+          always_assert(summary.returns == recomputed_summary.returns);
         } else {
-          summary.allocation_insn = recomputed_summary.allocation_insn;
+          summary.returns = recomputed_summary.returns;
           changed_methods.insert(method);
         }
       } else {
-        always_assert(summary.allocation_insn == nullptr);
+        always_assert(!summary.returns_allocation_or_param());
       }
     }
     impacted_methods.clear();
@@ -327,7 +350,7 @@ std::pair<DexMethod*, DexType*> resolve_inlinable(
     if (!first_callee) {
       first_callee = callee;
     }
-    insn = method_summaries.at(callee).allocation_insn;
+    insn = method_summaries.at(callee).allocation_insn();
   }
   return std::make_pair(first_callee, insn->get_type());
 }

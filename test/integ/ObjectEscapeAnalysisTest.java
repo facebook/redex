@@ -164,6 +164,10 @@ public class ObjectEscapeAnalysisTest {
     public int getX() {
       return this.x;
     }
+
+    public I id() {
+      return this;
+    }
   }
 
   public static boolean objectIsNotNull() {
@@ -174,6 +178,12 @@ public class ObjectEscapeAnalysisTest {
   public static int reduceTo42WithCheckCast() {
     Object i = I.allocator(42);
     return ((I)i).getX();
+  }
+
+  public static int reduceTo42WithReturnedArg() {
+    I i = I.allocator(42);
+    i = i.id();
+    return i.getX();
   }
 
   static class J {
