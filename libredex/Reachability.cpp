@@ -1347,19 +1347,6 @@ void TransitiveClosureMarkerWorker::visit_cls(const DexClass* cls) {
   const DexAnnotationSet* annoset = cls->get_anno_set();
   if (annoset) {
     for (auto const& anno : annoset->get_annotations()) {
-      if (m_shared_state->ignore_sets->system_annos.count(anno->type())) {
-        TRACE(REACH,
-              5,
-              "Stop marking from %s by system anno: %s",
-              SHOW(cls),
-              SHOW(anno->type()));
-        if (m_shared_state->relaxed_keep_class_members) {
-          References refs;
-          gather_dynamic_references(anno.get(), &refs);
-          dynamically_referenced(refs.classes_dynamically_referenced);
-        }
-        continue;
-      }
       record_reachability(cls, anno.get());
       gather_and_push(anno.get());
     }

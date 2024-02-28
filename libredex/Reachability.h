@@ -98,7 +98,6 @@ struct IgnoreSets {
   IgnoreSets() = default;
   std::unordered_set<const DexType*> string_literals;
   std::unordered_set<const DexType*> string_literal_annos;
-  std::unordered_set<const DexType*> system_annos;
   bool keep_class_in_string{true};
 };
 
