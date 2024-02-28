@@ -72,4 +72,12 @@ class MutablePriorityQueue {
 
   // Returns element with lowest priority.
   Value back() const { return m_values.begin()->second; }
+
+  // Returns whether a value is currently in the queue.
+  bool contains(const Value& value) const { return m_priorities.count(value); }
+
+  // Returns the priority of a value currently in the queue.
+  const Priority& get_priority(const Value& value) const {
+    return m_priorities.at(value);
+  }
 };

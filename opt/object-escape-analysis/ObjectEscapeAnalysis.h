@@ -19,6 +19,7 @@ struct ObjectEscapeConfig {
   int64_t cost_invoke;
   int64_t cost_move_result;
   int64_t cost_new_instance;
+  int64_t savings_threshold;
 };
 
 class ObjectEscapeAnalysisPass : public Pass {
