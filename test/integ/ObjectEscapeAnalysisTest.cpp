@@ -199,20 +199,15 @@ TEST_F(ObjectEscapeAnalysisTest, doNotReduceTo42B) {
   ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
 }
 
-TEST_F(ObjectEscapeAnalysisTest, reduceTo42IdentityMatters) {
+TEST_F(ObjectEscapeAnalysisTest, objectIsNotNull) {
   run();
 
   auto actual = get_s_expr(
       "Lcom/facebook/redextest/"
-      "ObjectEscapeAnalysisTest;.reduceTo42IdentityMatters:()Z");
+      "ObjectEscapeAnalysisTest;.objectIsNotNull:()Z");
   auto expected = assembler::ircode_from_string(R"(
    (
-      (new-instance "Ljava/lang/Object;")
-      (move-result-pseudo-object v2)
-      (invoke-direct (v2) "Ljava/lang/Object;.<init>:()V")
-
-      (const v1 0)
-      (return v1)
+      (const v1 0) (return v1)
     )
 )");
   ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());

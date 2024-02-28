@@ -166,7 +166,7 @@ public class ObjectEscapeAnalysisTest {
     }
   }
 
-  public static boolean reduceTo42IdentityMatters() {
+  public static boolean objectIsNotNull() {
     I i = I.allocator(42);
     return i == null;
   }

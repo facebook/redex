@@ -40,17 +40,8 @@
  *   registers (and the transformation does not produce estimated negative net
  *   savings)
  *
- * Notes:
- * - The transformation doesn't directly eliminate the object allocation, as the
- *   object might be involved in some identity comparisons, e.g. for
- *   null-checks. Instead, the object allocation gets rewritten to create an
- *   object of type java.lang.Object, and other optimizations such as
- *   constant-propagation and local-dead-code-elimination should be able to
- *   remove that remaining code in most cases.
- *
  * Ideas for future work:
  * - Support check-cast instructions for singleton-allocations
- * - Support conditional branches over either zero or single allocations
  */
 
 #include "ObjectEscapeAnalysis.h"
@@ -965,6 +956,13 @@ class RootMethodReducer {
                 const live_range::Uses& new_instance_insn_uses) {
     auto& cfg = m_method->get_code()->cfg();
     std::unordered_map<DexField*, reg_t> field_regs;
+    std::optional<reg_t> created_reg;
+    auto get_created_reg = [&]() {
+      if (!created_reg) {
+        created_reg = cfg.allocate_temp();
+      }
+      return *created_reg;
+    };
     std::vector<DexField*> ordered_fields;
     auto get_field_reg = [&](DexFieldRef* ref) {
       always_assert(ref->is_def());
@@ -980,16 +978,13 @@ class RootMethodReducer {
     };
 
     std::unordered_set<IRInstruction*> instructions_to_replace;
-    bool identity_matters{false};
     for (auto& use : new_instance_insn_uses) {
       auto opcode = use.insn->opcode();
       if (opcode::is_an_iput(opcode)) {
         always_assert(use.src_index == 1);
-      } else if (opcode::is_an_invoke(opcode) || opcode::is_a_monitor(opcode)) {
+      } else if (opcode::is_an_invoke(opcode) || opcode::is_a_monitor(opcode) ||
+                 opcode == OPCODE_IF_EQZ || opcode == OPCODE_IF_NEZ) {
         always_assert(use.src_index == 0);
-      } else if (opcode == OPCODE_IF_EQZ || opcode == OPCODE_IF_NEZ) {
-        identity_matters = true;
-        continue;
       } else if (opcode::is_move_object(opcode)) {
         continue;
       } else if (opcode::is_return_object(opcode)) {
@@ -1030,9 +1025,7 @@ class RootMethodReducer {
       } else if (opcode::is_an_invoke(opcode)) {
         always_assert(is_benign(insn->get_method()) ||
                       is_incomplete_marker(insn));
-        if (is_incomplete_marker(insn) || !identity_matters) {
-          mutation.remove(it);
-        }
+        mutation.remove(it);
       } else if (opcode::is_instance_of(opcode)) {
         auto move_result_it = cfg.move_result_of(it);
         auto new_insn =
@@ -1043,6 +1036,8 @@ class RootMethodReducer {
         mutation.replace(it, {new_insn});
       } else if (opcode::is_a_monitor(opcode)) {
         mutation.remove(it);
+      } else if (opcode == OPCODE_IF_EQZ || opcode == OPCODE_IF_NEZ) {
+        insn->set_src(0, get_created_reg());
       } else {
         not_reached();
       }
@@ -1056,9 +1051,7 @@ class RootMethodReducer {
     if (init_class_insn) {
       mutation.insert_before(new_instance_insn_it, {init_class_insn});
     }
-    if (identity_matters) {
-      new_instance_insn_it->insn->set_type(type::java_lang_Object());
-    } else {
+    {
       auto move_result_it = cfg.move_result_of(new_instance_insn_it);
       auto new_insn = (new IRInstruction(OPCODE_CONST))
                           ->set_literal(0)
@@ -1070,18 +1063,24 @@ class RootMethodReducer {
 
     std::sort(ordered_fields.begin(), ordered_fields.end(), compare_dexfields);
 
-    std::vector<IRInstruction*> field_inits;
-    field_inits.reserve(ordered_fields.size());
+    std::vector<IRInstruction*> inits;
+    inits.reserve(ordered_fields.size() + static_cast<bool>(created_reg));
     for (auto field : ordered_fields) {
       auto wide = type::is_wide_type(field->get_type());
       auto opcode = wide ? OPCODE_CONST_WIDE : OPCODE_CONST;
       auto reg = field_regs.at(field);
       auto new_insn =
           (new IRInstruction(opcode))->set_literal(0)->set_dest(reg);
-      field_inits.push_back(new_insn);
+      inits.push_back(new_insn);
+    }
+    if (created_reg) {
+      auto new_insn = (new IRInstruction(OPCODE_CONST))
+                          ->set_literal(1)
+                          ->set_dest(*created_reg);
+      inits.push_back(new_insn);
     }
 
-    mutation.insert_before(new_instance_insn_it, field_inits);
+    mutation.insert_before(new_instance_insn_it, inits);
     mutation.flush();
     // simplify to prune now unreachable code, e.g. from removed exception
     // handlers
