@@ -696,6 +696,7 @@ struct Stats {
   std::atomic<size_t> invokes_not_inlinable_inlining{0};
   std::atomic<size_t> invokes_not_inlinable_too_many_iterations{0};
   std::atomic<size_t> anchors_not_inlinable_inlining{0};
+  std::atomic<size_t> invoke_supers{0};
   std::atomic<size_t> stackify_returns_objects{0};
   std::atomic<size_t> too_costly_multiple_conditional_classes{0};
   std::atomic<size_t> too_costly_irreducible_classes{0};
@@ -887,13 +888,19 @@ class RootMethodReducer {
       return std::nullopt;
     }
 
+    auto* insn = find_rewritten_invoke_supers();
+    if (insn) {
+      m_stats->invoke_supers++;
+      return std::nullopt;
+    }
+
     while (auto opt_p = find_inlinable_new_instance()) {
       if (!stackify(opt_p->first, opt_p->second)) {
         return std::nullopt;
       }
     }
 
-    auto* insn = find_incomplete_marker_methods();
+    insn = find_incomplete_marker_methods();
     auto describe = [&]() {
       std::ostringstream oss;
       for (auto [type, inlinable_info] : m_types) {
@@ -1111,11 +1118,25 @@ class RootMethodReducer {
     });
   }
 
-  IRInstruction* find_incomplete_marker_methods() {
+  IRInstruction* find_incomplete_marker_methods() const {
     auto& cfg = m_method->get_code()->cfg();
     for (auto& mie : InstructionIterable(cfg)) {
       if (is_incomplete_marker(mie.insn)) {
         return mie.insn;
+      }
+    }
+    return nullptr;
+  }
+
+  IRInstruction* find_rewritten_invoke_supers() const {
+    auto& cfg = m_method->get_code()->cfg();
+    for (auto& mie : InstructionIterable(cfg)) {
+      if (opcode::is_invoke_direct(mie.insn->opcode())) {
+        auto* method = mie.insn->get_method()->as_def();
+        ;
+        if (method != nullptr && method->is_virtual()) {
+          return mie.insn;
+        }
       }
     }
     return nullptr;
@@ -1192,11 +1213,14 @@ class RootMethodReducer {
           &throwing_check_cast);
       if (throwing_check_cast) {
         // Hm, unlike that the program would unconditionally crash. It's
-        // probably in dead code.
-        shrink();
-        throwing_check_cast = false;
-        du_chains = get_augmented_du_chains_for_inlinable_new_instances(
-            &throwing_check_cast);
+        // probably in dead code. We'll try to shrink (unless we are in a state
+        // where rewritten invoke-supers are present).
+        if (!find_rewritten_invoke_supers()) {
+          shrink();
+          throwing_check_cast = false;
+          du_chains = get_augmented_du_chains_for_inlinable_new_instances(
+              &throwing_check_cast);
+        }
         if (throwing_check_cast) {
           m_stats->throwing_check_cast++;
           return false;
@@ -1873,6 +1897,7 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   inliner_config.shrinker.run_local_dce = true;
   inliner_config.shrinker.normalize_new_instances = false;
   inliner_config.shrinker.compute_pure_methods = false;
+  inliner_config.rewrite_invoke_super = true;
   int min_sdk = 0;
   MultiMethodInliner inliner(
       scope, init_classes_with_side_effects, stores, no_default_inlinables,
@@ -1899,7 +1924,7 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
       "is unexpandable/has too many params/expansion needs receiver cast/is "
       "inconcrete, %zu invokes not inlinable because inlining failed, %zu "
       "invokes not "
-      "inlinable after too many iterations, %zu throwing "
+      "inlinable after too many iterations, %zu invoke-supers, %zu throwing "
       "check-casts, %zu stackify returned objects, "
       "%zu too costly with irreducible classes, %zu too costly with multiple "
       "conditional classes, %zu too costly globally; %zu expanded methods; %zu "
@@ -1914,7 +1939,8 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
       (size_t)stats.invokes_not_inlinable_callee_inconcrete,
       (size_t)stats.invokes_not_inlinable_inlining,
       (size_t)stats.invokes_not_inlinable_too_many_iterations,
-      (size_t)stats.throwing_check_cast, (size_t)stats.stackify_returns_objects,
+      (size_t)stats.invoke_supers, (size_t)stats.throwing_check_cast,
+      (size_t)stats.stackify_returns_objects,
       (size_t)stats.too_costly_irreducible_classes,
       (size_t)stats.too_costly_multiple_conditional_classes,
       (size_t)stats.too_costly_globally, (size_t)stats.expanded_methods,
@@ -1947,6 +1973,7 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
                   (size_t)stats.invokes_not_inlinable_inlining);
   mgr.incr_metric("root_method_invokes_not_inlinable_too_many_iterations",
                   (size_t)stats.invokes_not_inlinable_too_many_iterations);
+  mgr.incr_metric("root_method_invoke_supers", (size_t)stats.invoke_supers);
   mgr.incr_metric("root_method_stackify_returns_objects",
                   (size_t)stats.stackify_returns_objects);
   mgr.incr_metric("root_method_too_costly_globally",

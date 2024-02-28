@@ -36,6 +36,7 @@ struct InlinerConfig {
   bool respect_sketchy_methods{true};
   bool debug{false};
   bool check_min_sdk_refs{true};
+  bool rewrite_invoke_super{false};
 
   /*
    * Some versions of ART (5.0.0 - 5.0.2) will fail to verify a method if it

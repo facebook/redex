@@ -98,6 +98,10 @@ public class ObjectEscapeAnalysisTest {
     }
 
     public abstract int getX();
+
+    public int getSomething() {
+      return 1;
+    }
   }
 
   static class Derived extends Base {
@@ -109,6 +113,10 @@ public class ObjectEscapeAnalysisTest {
 
     public /* override */ int getX() {
       return this.x;
+    }
+
+    public /* override */ int getSomething() {
+      return 1 + super.getSomething();
     }
   }
 
@@ -139,6 +147,11 @@ public class ObjectEscapeAnalysisTest {
     Base b2 = new Derived2(23);
 
     return b.helper() + b2.helper();
+  }
+
+  public static int reduceTo42WithInvokeSuper() {
+    Derived d = new Derived(40);
+    return d.getX() + d.getSomething();
   }
 
   static class G {

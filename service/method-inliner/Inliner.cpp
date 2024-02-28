@@ -742,7 +742,7 @@ size_t MultiMethodInliner::inline_inlinables(
     bool success = inliner::inline_with_cfg(
         caller_method, callee_method, callsite_insn,
         inlinable.needs_receiver_cast, needs_init_class, *cfg_next_caller_reg,
-        reduced_cfg);
+        reduced_cfg, m_config.rewrite_invoke_super ? callee_method : nullptr);
     if (!success) {
       calls_not_inlined++;
       continue;
@@ -1749,7 +1749,7 @@ bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
         // worry about invoke supers, or unknown virtuals -- private /
         // protected methods will remain accessible
         if (caller->get_class() != callee->get_class()) {
-          if (nonrelocatable_invoke_super(insn)) {
+          if (nonrelocatable_invoke_super(insn, callee)) {
             if (invk_insn) {
               log_nopt(INL_HAS_INVOKE_SUPER, caller, invk_insn);
             }
@@ -1851,8 +1851,16 @@ bool MultiMethodInliner::outlined_invoke_outlined(IRInstruction* insn,
  * in the hierarchy.
  * Inlining an invoke_super off its class hierarchy would break the verifier.
  */
-bool MultiMethodInliner::nonrelocatable_invoke_super(IRInstruction* insn) {
+bool MultiMethodInliner::nonrelocatable_invoke_super(IRInstruction* insn,
+                                                     const DexMethod* callee) {
   if (insn->opcode() == OPCODE_INVOKE_SUPER) {
+    if (m_config.rewrite_invoke_super) {
+      auto resolved_method = resolve_invoke_method(insn, callee);
+      if (resolved_method && resolved_method->is_def() &&
+          resolved_method->as_def()->get_code()) {
+        return false;
+      }
+    }
     info.invoke_super++;
     return true;
   }
@@ -2138,7 +2146,8 @@ bool inline_with_cfg(DexMethod* caller_method,
                      DexType* needs_receiver_cast,
                      DexType* needs_init_class,
                      size_t next_caller_reg,
-                     const cfg::ControlFlowGraph* reduced_cfg) {
+                     const cfg::ControlFlowGraph* reduced_cfg,
+                     DexMethod* rewrite_invoke_super_callee) {
 
   auto caller_code = caller_method->get_code();
   always_assert(caller_code->editable_cfg_built());
@@ -2189,7 +2198,8 @@ bool inline_with_cfg(DexMethod* caller_method,
   log_opt(INLINED, caller_method, callsite);
 
   cfg::CFGInliner::inline_cfg(&caller_cfg, callsite_it, needs_receiver_cast,
-                              needs_init_class, callee_cfg, next_caller_reg);
+                              needs_init_class, callee_cfg, next_caller_reg,
+                              rewrite_invoke_super_callee);
 
   return true;
 }

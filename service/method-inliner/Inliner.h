@@ -32,7 +32,8 @@ bool inline_with_cfg(DexMethod* caller_method,
                      DexType* needs_receiver_cast,
                      DexType* needs_init_class,
                      size_t next_caller_reg,
-                     const cfg::ControlFlowGraph* reduced_cfg = nullptr);
+                     const cfg::ControlFlowGraph* reduced_cfg = nullptr,
+                     DexMethod* rewrite_invoke_super_callee = nullptr);
 
 } // namespace inliner
 
@@ -328,7 +329,8 @@ class MultiMethodInliner {
    * in the hierarchy.
    * invoke-super can only exist within the class the call lives in.
    */
-  bool nonrelocatable_invoke_super(IRInstruction* insn);
+  bool nonrelocatable_invoke_super(IRInstruction* insn,
+                                   const DexMethod* callee);
 
   /**
    * Return true if the callee contains a call to an unknown virtual method.
