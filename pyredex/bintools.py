@@ -10,6 +10,7 @@
 
 import enum
 import itertools
+import logging
 import os
 import platform
 import re
@@ -73,19 +74,51 @@ def _has_addr2line() -> bool:
     try:
         global ADDR2LINE_PATH
         path = ADDR2LINE_PATH
-        if path:
-            if os.path.exists(path) or shutil.which(path):
-                return True
 
-        subprocess.check_call(
-            ["addr2line", "-v"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        ADDR2LINE_PATH = "addr2line"
-        return True
+        def _try_run(cmd: typing.Optional[str]) -> typing.Optional[str]:
+            if not cmd:
+                return None
+
+            # Try directly.  Only if it exists as path.
+            if os.path.exists(cmd):
+                cmd = os.path.abspath(cmd)
+                try:
+                    subprocess.check_call(
+                        [cmd, "-v"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    logging.info("Found addr2line at %s", cmd)
+                    return cmd
+                except Exception:
+                    pass
+
+            # Try as PATH reference.
+            cmd = shutil.which(cmd)
+            if cmd:
+                cmd = os.path.abspath(cmd)
+                try:
+                    subprocess.check_call(
+                        [cmd, "-v"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    logging.info("Found addr2line at %s from `which`", cmd)
+                    return cmd
+                except Exception:
+                    pass
+
+            return None
+
+        path = _try_run(path) or _try_run("addr2line")
+
+        if path:
+            ADDR2LINE_PATH = path
+            return True
     except (subprocess.CalledProcessError, FileNotFoundError):
-        return False
+        pass
+
+    return False
 
 
 _ADDR2LINE_BASE_ARGS = ["-f", "-i", "-C", "-e"]
@@ -96,8 +129,7 @@ def _symbolize(filename: str, offset: str) -> typing.List[str]:
     try:
         path = ADDR2LINE_PATH
         assert path
-
-        path = os.path.abspath(path)
+        assert os.path.isabs(path)
 
         output = subprocess.check_output(
             [path] + _ADDR2LINE_BASE_ARGS + [filename, offset]
