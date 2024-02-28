@@ -1681,7 +1681,6 @@ static std::pair<IROpcode, std::optional<int64_t>> get_move_or_const_literal(
 
 bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
   if (!m_dead_edges.empty()) {
-    auto before = show(m_cfg);
     m_cfg.delete_edges(m_dead_edges.begin(), m_dead_edges.end());
     m_stats.instructions_eliminated += m_cfg.remove_unreachable_blocks().first;
     m_stats.branches_eliminated += m_dead_edges.size();
