@@ -237,7 +237,7 @@ struct Res_value
         // Where the actual value is.  This gives us 23 bits of
         // precision.  The top bit is the sign.
         COMPLEX_MANTISSA_SHIFT = 8,
-        COMPLEX_MANTISSA_MASK = 0xffffff
+        COMPLEX_MANTISSA_MASK = 0xffffffU
     };
 
     // Possible data values for TYPE_NULL.
