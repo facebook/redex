@@ -598,4 +598,4 @@ PYTHON_SRCS := redex.py \
 	$(GENERATED_API_LEVELS_MODULE)
 
 redex: redex-all $(PYTHON_SRCS)
-	$(srcdir)/bundle-redex.sh "$(srcdir)"
+	SRC_DIR="$(srcdir)" $(srcdir)/bundle-redex.sh
