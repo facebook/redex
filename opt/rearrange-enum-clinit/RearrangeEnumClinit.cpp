@@ -177,9 +177,16 @@ struct Rearranger {
 
   reg_t move_new_array_to_front() {
     redex_assert(array_new_array != b->begin());
-    auto orig_new_array_size_it = std::prev(array_new_array);
-    redex_assert(orig_new_array_size_it->type == MFLOW_OPCODE);
-    redex_assert(orig_new_array_size_it->insn->opcode() == OPCODE_CONST);
+
+    auto size_def_it = use_def.find({array_new_array->insn, 0});
+    redex_assert(size_def_it != std::as_const(use_def).end());
+    redex_assert(size_def_it->second.size() == 1);
+    auto orig_new_array_size_cfg_it =
+        cfg.find_insn(*size_def_it->second.begin(), b);
+    redex_assert(!orig_new_array_size_cfg_it.is_end());
+    redex_assert(orig_new_array_size_cfg_it.block() == b);
+    auto orig_new_array_size_it = orig_new_array_size_cfg_it.unwrap();
+    always_assert(orig_new_array_size_it->insn->opcode() == OPCODE_CONST);
 
     // Just move to the front. This does not handle source blocks. Assume
     // this is not important for now.
