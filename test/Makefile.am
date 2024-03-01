@@ -1,9 +1,15 @@
 SUBDIRS = . integ unit
 
-check_LTLIBRARIES = libgtest.la libgtest_main.la libgmock_main.la
-
 # Note: Use at least 1.10 as we need googlemock, too.
 GOOGLETEST_MIN_VERSION = 1.10.0
+
+setup_gtest:
+	curl https://codeload.github.com/google/googletest/zip/release-$(GOOGLETEST_MIN_VERSION) -o gtest-$(GOOGLETEST_MIN_VERSION).zip
+	unzip -o gtest-$(GOOGLETEST_MIN_VERSION).zip
+	touch setup_gtest
+
+check_LTLIBRARIES = libgtest.la libgtest_main.la libgmock_main.la
+
 GOOGLETEST_DIR = googletest-release-$(GOOGLETEST_MIN_VERSION)/googletest
 GOOGLEMOCK_DIR = googletest-release-$(GOOGLETEST_MIN_VERSION)/googlemock
 
@@ -31,11 +37,6 @@ GOOGLE_TEST_SOURCES = \
 BUILT_SOURCES = $(GOOGLE_TEST_SOURCES)
 
 $(GOOGLE_TEST_SOURCES): setup_gtest
-
-setup_gtest:
-	curl https://codeload.github.com/google/googletest/zip/release-$(GOOGLETEST_MIN_VERSION) -o gtest-$(GOOGLETEST_MIN_VERSION).zip
-	unzip -o gtest-$(GOOGLETEST_MIN_VERSION).zip
-	touch setup_gtest
 
 check_SCRIPTS = check_num_passes.sh
 # _DEPENDENCIES does not seem to work for SCRIPTS
