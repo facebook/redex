@@ -379,16 +379,6 @@ jobs:
   # UBUNTU #
   ##########
 
-  build-18_04:
-    docker:
-      - image: circleci/buildpack-deps:bionic
-    # GCC is hungry.
-    resource_class: large
-    steps:
-      - build_debian:
-          use_sdk: false
-          save_boost_cache: true
-
   build-20_04:
     docker:
       - image: circleci/buildpack-deps:focal
@@ -534,9 +524,6 @@ workflows:
   version: 2.1
   build_main:
     jobs:
-      # Oldest officially supported Ubuntu build. Will go away soon.
-      - build-18_04:
-          filters: *filter-only-main
       # Current Ubuntu LTS.
       - build-20_04:
           filters: *filter-only-main
@@ -560,8 +547,6 @@ workflows:
     jobs:
       # Note: only filter gh-pages for 'build_other' so that pull
       #       requests/stable get checked.
-      - build-18_04:
-          filters: *filter-not-gh-pages-not-main
       - build-20_04:
           filters: *filter-not-gh-pages-not-main
       - build-deb_stable:
@@ -584,7 +569,6 @@ workflows:
           cron: "0 0 * * *"
           filters: *filter-only-main
     jobs:
-      - build-18_04
       - build-20_04
       - build-22_04
       - build-deb_oldoldstable
