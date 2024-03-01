@@ -253,6 +253,14 @@ commands:
             autoreconf -ivf
             ./configure --enable-protobuf << parameters.configure_extra >>
 
+      # Work around Ubuntu 18.04 dependency issues.
+      # TODO: Remove when we remove 18.04 support.
+      - run:
+          name: Gtest 18.04 Compat
+          working_directory: test
+          command: |
+            make setup_gtest
+
       - run:
           name: Build
           # The old Travis limit. Hopefully ensures GCC does
