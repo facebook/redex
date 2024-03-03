@@ -2076,7 +2076,7 @@ class File:
 
     def get_class_def_index_from_offset(self, class_def_offset):
         class_defs = self.get_class_defs()
-        for (i, class_def) in enumerate(class_defs):
+        for i, class_def in enumerate(class_defs):
             if class_def.get_offset() == class_def_offset:
                 return i
         return -1
@@ -2159,7 +2159,7 @@ class File:
         string_ids = self.get_string_ids()
         if string_ids:
             f.write("string_ids:\n")
-            for (i, item) in enumerate(self.get_strings()):
+            for i, item in enumerate(self.get_strings()):
                 f.write("[%4u] %#8.8x ( " % (i, string_ids[i]))
                 item.dump(f=f)
                 f.write(")\n")
@@ -2168,7 +2168,7 @@ class File:
         type_ids = self.get_type_ids()
         if type_ids:
             f.write("\ntype_ids:\n      DESCRIPTOR_IDX\n")
-            for (i, item) in enumerate(type_ids):
+            for i, item in enumerate(type_ids):
                 f.write('[%4u] %#8.8x ("%s")\n' % (i, item, self.get_string(item)))
 
     def find_type_idx(self, class_str_idx):
@@ -2191,7 +2191,7 @@ class File:
             f.write("\nproto_ids:\n")
             f.write(" " * (6 + 1))
             f.write(proto_id_item.get_table_header())
-            for (i, item) in enumerate(proto_ids):
+            for i, item in enumerate(proto_ids):
                 f.write("[%4u] " % (i))
                 item.dump(f=f, print_name=False)
                 f.write("%s\n" % self.get_proto_string(i))
@@ -2202,7 +2202,7 @@ class File:
             f.write("\nfield_ids:\n")
             f.write(" " * (6 + 1))
             f.write(field_id_item.get_table_header())
-            for (i, item) in enumerate(field_ids):
+            for i, item in enumerate(field_ids):
                 f.write("[%4u] " % (i))
                 item.dump(f=f, print_name=False)
                 f.write(
@@ -2244,7 +2244,7 @@ class File:
             f.write("\nclass_defs:\n")
             f.write(" " * (6 + 1))
             f.write(class_def_item.get_table_header())
-            for (i, item) in enumerate(class_defs):
+            for i, item in enumerate(class_defs):
                 f.write("[%4u] " % (i))
                 item.dump(f=f, print_name=False)
                 f.write(
@@ -2262,7 +2262,7 @@ class File:
         if call_site_ids:
             f.write("\ncall_site_ids:\n")
             f.write(" " * (6 + 1))
-            for (i, item) in enumerate(call_site_ids):
+            for i, item in enumerate(call_site_ids):
                 f.write("[%4u] %#8.8x\n" % (i, item))
 
     def dump_method_handle_items(self, options, f=sys.stdout):
@@ -2270,7 +2270,7 @@ class File:
         if method_handle_items:
             f.write("\nmethod_handle_items:\n")
             f.write(" " * (6 + 1))
-            for (i, item) in enumerate(method_handle_items):
+            for i, item in enumerate(method_handle_items):
                 f.write("[%4u] " % (i))
                 item.dump(f=f)
                 f.write("\n")
@@ -2291,7 +2291,7 @@ class File:
     def dump_code_items(self, options, f=sys.stdout):
         code_items = self.get_code_items()
         if code_items:
-            for (i, code_item) in enumerate(code_items):
+            for i, code_item in enumerate(code_items):
                 f.write("code_item[%u]:\n" % (i))
                 code_item.dump(f=f)
 
@@ -2314,18 +2314,18 @@ class File:
             for method in methods:
                 if public_only and not method.is_public():
                     continue
-                method_signature_to_access[
-                    method.get_signature()
-                ] = method.get_raw_access_flags()
+                method_signature_to_access[method.get_signature()] = (
+                    method.get_raw_access_flags()
+                )
 
             fields = cls.get_fields()
             field_signature_to_access = {}
             for field in fields:
                 if public_only and not field.is_public():
                     continue
-                field_signature_to_access[
-                    field.get_signature()
-                ] = field.get_raw_access_flags()
+                field_signature_to_access[field.get_signature()] = (
+                    field.get_raw_access_flags()
+                )
 
             f.write(
                 "%s %s %s %d %d\n"
@@ -2498,12 +2498,12 @@ class Opcode00(Opcode):
         elif self.nature == 1:
             f.write("packed-switch-payload\n")
             f.write("INDEX  KEY       TARGET\n===== --------- ---------\n")
-            for (i, target) in enumerate(self.targets):
+            for i, target in enumerate(self.targets):
                 f.write("[%4u] %+8.8x %+8.8x\n" % (i, self.first_key + i, target))
         elif self.nature == 2:
             f.write("sparse-switch-payload\n")
             f.write("INDEX  KEY       TARGET\n===== --------- ---------\n")
-            for (i, key) in enumerate(self.keys):
+            for i, key in enumerate(self.keys):
                 f.write("[%4u] %+8.8x %+8.8x\n" % (i, key, self.targets[i]))
         elif self.nature == 3:
             f.write(
@@ -4917,7 +4917,7 @@ def main():
         print("BYTESIZE %AGE  OPCODE")
         print("======== ===== =================================")
         sorted_x = sorted(op_name_to_size.items(), key=operator.itemgetter(1))
-        for (op_name, byte_size) in sorted_x:
+        for op_name, byte_size in sorted_x:
             percentage = get_percentage(byte_size, total_opcode_byte_size)
             print("%-8u %5.2f %s" % (byte_size, percentage, op_name))
         print("-------- ----- ---------------------------------")

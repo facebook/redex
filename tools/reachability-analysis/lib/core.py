@@ -260,7 +260,7 @@ class CombinedGraph(object):
         self.method_override_graph.load(method_override)
 
         # extract information from the override graph
-        for (type, name) in self.reachability_graph.nodes:
+        for type, name in self.reachability_graph.nodes:
             if type == ReachableObjectType.METHOD:
                 self.reachability_graph.nodes[(type, name)] = ReachableMethod(
                     self.reachability_graph.nodes[(type, name)],
@@ -292,7 +292,7 @@ class CombinedGraph(object):
     def node(self, search_str=None, search_type=None):
         node = None
         known_names = []
-        for (type, name) in list(self.nodes.keys()):
+        for type, name in list(self.nodes.keys()):
             if search_type is not None and type != search_type:
                 # Classes and Annotations may have naming collisions
                 # if that happens, use the search_type argument to filter
@@ -315,7 +315,7 @@ class CombinedGraph(object):
         if node is None:
             print(("Found %s matching names:" % len(known_names)))
             idx = 0
-            for (type, name) in known_names:
+            for type, name in known_names:
                 print(
                     (
                         '%d: (ReachableObjectType.%s, "%s")'

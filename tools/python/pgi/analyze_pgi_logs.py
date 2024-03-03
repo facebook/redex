@@ -218,10 +218,10 @@ def _fill_inline_maps(data, caller_map, callee_map, inline_data_map):
     stats = inline_data_map.setdefault(data.caller.method_name, {}).setdefault(
         data.callee.method_name, InlineCalleeStats(0, 0)
     )
-    inline_data_map[data.caller.method_name][
-        data.callee.method_name
-    ] = InlineCalleeStats(
-        stats.count + 1, max(stats.max_loop_depth, data.caller.callee_depth)
+    inline_data_map[data.caller.method_name][data.callee.method_name] = (
+        InlineCalleeStats(
+            stats.count + 1, max(stats.max_loop_depth, data.caller.callee_depth)
+        )
     )
 
     return None

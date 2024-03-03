@@ -869,9 +869,9 @@ class HprofData(object):
 
     def parse_load_class_record(self, tag, time_offset_us, data):
         load_class_record = LoadClassRecord.create(tag, time_offset_us, data)
-        self.class_object_id_to_load_class_record[
-            load_class_record.object_id
-        ] = load_class_record
+        self.class_object_id_to_load_class_record[load_class_record.object_id] = (
+            load_class_record
+        )
         return load_class_record
 
     def parse_heap_dump_segment_record(self, tag, time_offset_us, data):
