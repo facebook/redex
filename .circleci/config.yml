@@ -112,6 +112,7 @@ commands:
           name: Setup
           environment:
             TOOLCHAIN_TMP: /tmp/toolchain
+          working_directory: repo
           command: |
             sudo -E ./setup_oss_toolchain.sh << parameters.setup_toolchain_extra >>
       # Only save the cache when asked, e.g., hopefully when it was populated.
@@ -248,13 +249,25 @@ commands:
           use_sdk: << parameters.use_sdk >>
 
       - run:
-          name: Configure
+          name: Create build directory
+          command: |
+            mkdir -p build
+
+      - run:
+          name: Autoreconf
+          working_directory: repo
           command: |
             autoreconf -ivf
-            ./configure --enable-protobuf << parameters.configure_extra >>
+
+      - run:
+          name: Configure
+          working_directory: build
+          command: |
+            ../repo/configure --enable-protobuf << parameters.configure_extra >>
 
       - run:
           name: Build
+          working_directory: build
           # The old Travis limit. Hopefully ensures GCC does
           # not die.
           command: |
@@ -262,6 +275,7 @@ commands:
 
       - run:
           name: Build tests
+          working_directory: build
           command: |
             make -j4 check TESTS= V=0
 
@@ -270,6 +284,7 @@ commands:
           steps:
             - run:
                 name: Run tests
+                working_directory: build
                 command: |
                   mkdir -p /tmp/test-results
                   export GTEST_OUTPUT=xml:/tmp/test-results/
@@ -332,7 +347,8 @@ commands:
         type: boolean
         default: true
     steps:
-      - checkout
+      - checkout:
+          path: repo
       - debian-based-image-build-setup:
           install_clang: << parameters.install_clang>>
           install_clang_llvm_org: << parameters.install_clang_llvm_org >>
