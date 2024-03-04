@@ -214,6 +214,11 @@ void ClassMergingPass::bind_config() {
                         "Cannot group %s when type tag is not needed.",
                         model.name.c_str());
 
+      std::string interdex_grouping_inferring_mode_local;
+      model_spec.get("interdex_grouping_inferring_mode",
+                     interdex_grouping_inferring_mode,
+                     interdex_grouping_inferring_mode_local);
+
       size_t max_count;
       model_spec.get("max_count", 0, max_count);
       Json::Value approximate_shaping;
@@ -246,7 +251,7 @@ void ClassMergingPass::bind_config() {
       model_spec.get("is_generated_code", true, model.is_generated_code);
 
       model.interdex_config.init_inferring_mode(
-          interdex_grouping_inferring_mode);
+          interdex_grouping_inferring_mode_local);
 
       if (!verify_model_spec(m_model_specs, model)) {
         continue;
