@@ -123,7 +123,7 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
   return res;
 }
 
-size_t get_interdex_group(
+size_t get_min_interdex_group(
     const TypeHashSet& types,
     const std::unordered_map<DexType*, size_t>& cls_to_interdex_groups,
     size_t interdex_groups) {
@@ -136,6 +136,16 @@ size_t get_interdex_group(
   }
 
   return group;
+}
+
+size_t get_interdex_group(
+    DexType* type,
+    const std::unordered_map<DexType*, size_t>& cls_to_interdex_groups,
+    size_t interdex_groups) {
+  if (cls_to_interdex_groups.count(type)) {
+    return cls_to_interdex_groups.at(type);
+  }
+  return interdex_groups - 1;
 }
 
 } // namespace
@@ -162,11 +172,35 @@ void InterDexGrouping::build_interdex_grouping(
                                        merging_targets.end());
     return;
   }
+
+  if (m_config.inferring_mode ==
+      InterDexGroupingInferringMode::kExactSymbolMatch) {
+    for (auto* type : merging_targets) {
+      size_t group_idx =
+          get_interdex_group(const_cast<DexType*>(type), cls_to_interdex_groups,
+                             num_interdex_groups);
+      if (m_config.type == InterDexGroupingType::NON_HOT_SET) {
+        if (group_idx == 0) {
+          // Drop mergeables that are in the hot set.
+          continue;
+        }
+      } else if (m_config.type == InterDexGroupingType::NON_ORDERED_SET) {
+        if (group_idx < num_interdex_groups - 1) {
+          // Only merge the last group which are not in ordered set, drop other
+          // mergeables.
+          continue;
+        }
+      }
+      m_all_interdexing_groups[group_idx].insert(type);
+    }
+    return;
+  }
+
   const auto& type_to_usages =
       get_type_usages(merging_targets, scope, m_config.inferring_mode);
   for (const auto& pair : type_to_usages) {
-    auto index = get_interdex_group(pair.second, cls_to_interdex_groups,
-                                    num_interdex_groups);
+    auto index = get_min_interdex_group(pair.second, cls_to_interdex_groups,
+                                        num_interdex_groups);
     if (m_config.type == InterDexGroupingType::NON_HOT_SET) {
       if (index == 0) {
         // Drop mergeables that are in the hot set.
