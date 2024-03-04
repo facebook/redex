@@ -103,9 +103,11 @@ commands:
     steps:
       # It is OK to generically restore boost, even if it is not used.
       - restore_cache:
+          name: Restoring Boost DL Cache
           keys:
             - boost-1-71-0-v5
       - restore_cache:
+          name: Restoring Protobuf DL Cache
           keys:
             - protobuf3-v3
       - run:
@@ -120,10 +122,12 @@ commands:
           condition: << parameters.save_boost_cache >>
           steps:
             - save_cache:
+                name: "Saving Boost DL Cache"
                 paths:
                   - /tmp/toolchain/dl_cache/boost_cache
                 key: boost-1-71-0-v5
             - save_cache:
+                name: "Saving Protobuf DL Cache"
                 paths:
                   - /tmp/toolchain/dl_cache/protobuf
                 key: protobuf3-v3
@@ -169,6 +173,7 @@ commands:
             echo "${CACHE_VERSION}" > cache_version.rev
 
       - restore_cache:
+          name: Restoring SDK Cache
           keys:
             - android-build-tools-{{ checksum "cache_version.rev" }}
 
@@ -200,6 +205,7 @@ commands:
             sudo ln -s ~/sdk/build-tools/25.0.3/dx /usr/local/bin/dx
 
       - save_cache:
+          name: Saving SDK Cache
           paths:
             - ~/sdk
           key: android-build-tools-{{ checksum "cache_version.rev" }}
