@@ -35,7 +35,7 @@ constexpr const char* METRIC_UNVERIFIABLE_MOVE_RESULTS =
     "num_unverifiable_move_results";
 constexpr const char* METRIC_METHODS_WHICH_RETURN_PARAMETER_ITERATIONS =
     "num_methods_which_return_parameters_iterations";
-constexpr const ParamIndex WIDE_HIGH = 1 << 31;
+constexpr const ParamIndex WIDE_HIGH = 1u << 31;
 
 void patch_move_result_to_move(IRInstruction* move_result_inst, reg_t reg) {
   const auto op = move_result_inst->opcode();
