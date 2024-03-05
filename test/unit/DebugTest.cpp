@@ -13,5 +13,10 @@
 class DebugTest : public RedexTest {};
 
 TEST_F(DebugTest, slow_invariants_on_for_gtest) {
-  EXPECT_TRUE(slow_invariants_debug);
+#ifdef NDEBUG
+  constexpr bool kNDebug = true;
+#else
+  constexpr bool kNDebug = false;
+#endif
+  EXPECT_TRUE(slow_invariants_debug || kNDebug);
 }
