@@ -52,6 +52,12 @@
 
 namespace {
 
+#ifdef DEBUG_LOG
+constexpr bool kDebugLog = true;
+#else
+constexpr bool kDebugLog = false;
+#endif
+
 // "86827de6f1ef3407f8dc98b76382d3a6e0759ab3" is the SHA1 digest for
 // 'created_by_oatmeal'.
 const char* kCreatedByOatmeal = "86827de6f1ef3407f8dc98b76382d3a6e0759ab3";
@@ -920,10 +926,9 @@ class DexFileListing_131 : public DexFileListing_124 {
       write_word(fh, file.dex_layout_sections_offset);
       write_word(fh, file.method_bss_mapping_offset);
 
-#ifdef DEBUG_LOG
-
-      printf(
-          "WRITING DexFileListing_131: \
+      if (kDebugLog) {
+        printf(
+            "WRITING DexFileListing_131: \
           location_len: %u\
           location: %s\
           location_checksum: %04x\
@@ -932,15 +937,15 @@ class DexFileListing_131 : public DexFileListing_124 {
           lookup_table_offset: %u\
           dex_layout_sections_offset: %u\
           method_bss_mapping_offset: %u\n",
-          location_len,
-          file.location.c_str(),
-          file.location_checksum,
-          file.file_offset,
-          file.classes_offset,
-          file.lookup_table_offset,
-          file.dex_layout_sections_offset,
-          file.method_bss_mapping_offset);
-#endif
+            location_len,
+            file.location.c_str(),
+            file.location_checksum,
+            file.file_offset,
+            file.classes_offset,
+            file.lookup_table_offset,
+            file.dex_layout_sections_offset,
+            file.method_bss_mapping_offset);
+      }
     }
   }
 };
@@ -1455,9 +1460,9 @@ void OatClasses_079::print_unverified_classes() {
 template <typename DexFileType>
 void OatClasses_079::write(const std::vector<DexFileType>& dex_files,
                            FileHandle& cksum_fh) {
-#ifdef DEBUG_LOG
-  printf("WRITING OatClasses:\n");
-#endif
+  if (kDebugLog) {
+    printf("WRITING OatClasses:\n");
+  }
 
   size_t dex_count = 0;
   for (const auto& dex_file : dex_files) {
@@ -1467,26 +1472,26 @@ void OatClasses_079::write(const std::vector<DexFileType>& dex_files,
     uint32_t table_offset =
         dex_file.classes_offset + num_classes * sizeof(uint32_t);
 
-#ifdef DEBUG_LOG
-    printf(
-        "WRITING OatClasses for dex[%zu]: \
+    if (kDebugLog) {
+      printf(
+          "WRITING OatClasses for dex[%zu]: \
       #classes: %u :: \
       #offset: %u (-> %u)\n",
-        dex_count,
-        num_classes,
-        dex_file.classes_offset,
-        table_offset);
-#endif
+          dex_count,
+          num_classes,
+          dex_file.classes_offset,
+          table_offset);
+    }
 
     // write pointers to ClassInfo.
     for (size_t i = 0; i < num_classes; i++) {
       write_word(cksum_fh, table_offset + i * sizeof(uint32_t));
 
-#ifdef DEBUG_LOG
-      printf("#ClassOffsets[%zu] -> %zu\n",
-             i,
-             table_offset + i * sizeof(uint32_t));
-#endif
+      if (kDebugLog) {
+        printf("#ClassOffsets[%zu] -> %zu\n",
+               i,
+               table_offset + i * sizeof(uint32_t));
+      }
     }
     CHECK(table_offset == cksum_fh.bytes_written());
 
@@ -1496,9 +1501,9 @@ void OatClasses_079::write(const std::vector<DexFileType>& dex_files,
     for (size_t i = 0; i < num_classes; i++) {
       write_obj(cksum_fh, info);
 
-#ifdef DEBUG_LOG
-      printf("#OatClass[%zu]:%u ::  type: %u\n", i, table_offset, info.type);
-#endif
+      if (kDebugLog) {
+        printf("#OatClass[%zu]:%u ::  type: %u\n", i, table_offset, info.type);
+      }
       table_offset += sizeof(OatClasses::ClassInfo);
     }
     CHECK(table_offset == cksum_fh.bytes_written());

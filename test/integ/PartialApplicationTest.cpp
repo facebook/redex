@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include "ControlFlow.h"
+#include "Creators.h"
 #include "DexInstruction.h"
 #include "DexUtil.h"
 #include "IRAssembler.h"

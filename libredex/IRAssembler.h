@@ -7,10 +7,15 @@
 
 #pragma once
 
+#include <memory>
+#include <string>
+#include <vector>
+
 #include <sparta/S_Expression.h>
 
-#include "Creators.h"
-#include "IRCode.h"
+class DexClass;
+class DexMethod;
+class IRCode;
 
 /*
  * This module provides an easy way to create / serialize Dex elements using

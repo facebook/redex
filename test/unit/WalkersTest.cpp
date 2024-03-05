@@ -9,6 +9,7 @@
 
 #include <gmock/gmock.h>
 
+#include "Creators.h"
 #include "DexUtil.h"
 #include "RedexTest.h"
 #include "Show.h"

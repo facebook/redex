@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include "CheckCastAnalysis.h"
+#include "Creators.h"
 #include "FrameworkApi.h"
 #include "IRAssembler.h"
 #include "RedexTest.h"

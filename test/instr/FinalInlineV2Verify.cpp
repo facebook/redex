@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <gtest/gtest.h>
 
+#include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexLoader.h"

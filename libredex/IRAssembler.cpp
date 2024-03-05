@@ -10,10 +10,12 @@
 #include <boost/functional/hash.hpp>
 #include <boost/optional/optional.hpp>
 #include <sstream>
-#include <string>
 #include <unordered_map>
 
+#include "Creators.h"
+#include "DexClass.h"
 #include "DexPosition.h"
+#include "IRCode.h"
 #include "Show.h"
 
 using namespace sparta;

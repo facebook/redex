@@ -15,6 +15,7 @@
 #include <iostream>
 
 #include "DexClass.h"
+#include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "Show.h"

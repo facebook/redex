@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include "ControlFlow.h"
+#include "DexAnnotation.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
