@@ -33,7 +33,7 @@ class ModelMerger {
 
   std::vector<DexClass*> merge_model(Scope& scope,
                                      DexStoresVector& stores,
-                                     const ConfigFiles& conf,
+                                     ConfigFiles& conf,
                                      Model& model);
 
   void increase_ctor_dedupped_stats(int64_t value) {

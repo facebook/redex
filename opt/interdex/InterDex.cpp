@@ -672,7 +672,9 @@ void InterDex::load_interdex_types() {
 
   // We still want to add the ones in the last interdex group, if any.
   always_assert_log(interdex_group_classes.size() <= curr_interdex_group + 2,
-                    "Too many interdex subgroups!\n");
+                    "Too many interdex subgroups! interdex group size %zu; "
+                    "curr_interdex_group %zu\n",
+                    interdex_group_classes.size(), curr_interdex_group);
   if (interdex_group_classes.size() > curr_interdex_group) {
     for (DexType* type : interdex_group_classes.at(curr_interdex_group)) {
       // TODO: Does the above need to filter? Do we need to transitively close

@@ -199,6 +199,10 @@ struct ConfigFiles {
     return m_num_interdex_groups;
   }
 
+  bool get_recognize_coldstart_pct_marker() const {
+    return m_recognize_coldstart_pct_marker;
+  }
+
   void parse_global_config();
 
   /**
@@ -274,6 +278,8 @@ struct ConfigFiles {
   // 0 when no interdex grouping.
   size_t m_num_interdex_groups = 0;
   std::unordered_map<DexType*, size_t> m_cls_to_interdex_group;
+
+  bool m_recognize_coldstart_pct_marker{false};
 
   friend struct ClassPreloadTest;
 };
