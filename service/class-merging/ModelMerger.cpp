@@ -562,9 +562,25 @@ std::vector<DexClass*> ModelMerger::merge_model(
                               intfs,
                               model_spec.generate_type_tag(),
                               !merger.has_mergeables());
-    // TODO: replace this with an annotation.
-    cls->rstate.set_interdex_subgroup(merger.interdex_subgroup);
+    // When inferring the interdex grouping using coldstart_pct markers, we do
+    // not persist that grouping to the rstate. Doing that will inferfere with
+    // the InterDex pass logic. InterDex pass does not recognize those markers
+    // as DexEndMarker. To avoid more complications, convert the grouping idx to
+    // two groups setup when setting up the rstate grouping idx as if we do not
+    // recognize those coldstart_pct markers.
+    bool uses_coldstart_pct_marker = conf.get_recognize_coldstart_pct_marker();
+    auto subgroup_idx = merger.interdex_subgroup;
+    if (uses_coldstart_pct_marker && subgroup_idx != boost::none) {
+      if (*subgroup_idx < conf.get_num_interdex_groups() - 1) {
+        subgroup_idx = 0;
+      } else {
+        subgroup_idx = 1;
+      }
+    }
+    cls->rstate.set_interdex_subgroup(subgroup_idx);
     cls->rstate.set_generated();
+    TRACE(CLMG, 5, "Set interdex subgroup %u (%u) for %s", *subgroup_idx,
+          *merger.interdex_subgroup, SHOW(merger.type));
 
     add_class(cls, scope, stores, merger.dex_id);
     merger_classes.push_back(cls);

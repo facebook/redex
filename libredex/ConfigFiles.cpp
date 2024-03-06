@@ -26,6 +26,8 @@ using namespace std::string_literals;
 namespace {
 
 constexpr const char* CLASS_MARKER_DELIMITER = "DexEndMarker";
+constexpr const char* COLD_START_20PCT_END = "LColdStart20PctEnd";
+constexpr const char* COLD_START_1PCT_END = "LColdStart1PctEnd";
 
 class StringTabSplitter {
  private:
@@ -92,6 +94,9 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
       "instruction_size_bitwidth_limit must be between 0 and 31, actual: %u\n",
       instruction_size_bitwidth_limit);
   m_instruction_size_bitwidth_limit = instruction_size_bitwidth_limit;
+
+  m_recognize_coldstart_pct_marker =
+      config.get("recognize_betamap_coldstart_pct_marker", false).asBool();
 }
 
 ConfigFiles::ConfigFiles(const Json::Value& config) : ConfigFiles(config, "") {}
@@ -572,8 +577,16 @@ void ConfigFiles::build_cls_interdex_groups() {
     const auto& cls_name = *it;
     bool is_marker_delim =
         cls_name.find(CLASS_MARKER_DELIMITER) != std::string::npos;
+    auto is_coldstart_pct_marker = [this](const std::string& cls_name) {
+      if (!m_recognize_coldstart_pct_marker) {
+        return false;
+      }
+      return cls_name.find(COLD_START_20PCT_END) != std::string::npos ||
+             cls_name.find(COLD_START_1PCT_END) != std::string::npos;
+    };
 
-    if (is_marker_delim || std::next(it) == interdex_order.end()) {
+    if (is_marker_delim || is_coldstart_pct_marker(cls_name) ||
+        std::next(it) == interdex_order.end()) {
       group_id++;
 
       if (is_marker_delim) {
