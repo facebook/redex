@@ -667,3 +667,63 @@ TEST_F(IRAssemblerTest, dexDebugInstruction) {
   EXPECT_EQ(dbg10->opcode(), DBG_FIRST_SPECIAL);
   EXPECT_EQ(dbg10->uvalue(), DEX_NO_INDEX);
 }
+
+TEST_F(IRAssemblerTest, assembleField) {
+  auto field =
+      assembler::field_from_string("(field (private) \"LFoo;.bar:I\")");
+  EXPECT_EQ(field->get_access(), ACC_PRIVATE);
+  EXPECT_EQ(field->get_name()->str(), "bar");
+  EXPECT_EQ(field->get_class()->get_name()->str(), "LFoo;");
+
+  auto static_field =
+      assembler::field_from_string("(field (public static) \"LFoo;.baz:I\")");
+  EXPECT_EQ(static_field->get_access(), ACC_PUBLIC | ACC_STATIC);
+  EXPECT_EQ(static_field->get_name()->str(), "baz");
+  EXPECT_EQ(static_field->get_class()->get_name()->str(), "LFoo;");
+}
+
+TEST_F(IRAssemblerTest, assembleClassFromString) {
+  auto cls = assembler::class_from_string(R"(
+    (class (public final) "LFoo;"
+      (field (public) "LFoo;.bar:I")
+      (field (public static) "LFoo;.barStatic:I")
+      (method (private) "LFoo;.baz:(I)V"
+        (
+          (return-void)
+        )
+      )
+      (method (public) "LFoo;.bazPublic:(I)V"
+        (
+          (return-void)
+        )
+      )
+    )
+  )");
+
+  EXPECT_EQ(cls->get_access(), ACC_PUBLIC | ACC_FINAL);
+  EXPECT_EQ(cls->get_name()->str(), "LFoo;");
+
+  EXPECT_EQ(cls->get_ifields().size(), 1);
+  ASSERT_GE(cls->get_ifields().size(), 1);
+  auto i_field = cls->get_ifields()[0];
+  EXPECT_EQ(i_field->get_class(), cls->get_type());
+  EXPECT_EQ(i_field->get_name()->str(), "bar");
+
+  EXPECT_EQ(cls->get_sfields().size(), 1);
+  ASSERT_GE(cls->get_sfields().size(), 1);
+  auto s_field = cls->get_sfields()[0];
+  EXPECT_EQ(s_field->get_class(), cls->get_type());
+  EXPECT_EQ(s_field->get_name()->str(), "barStatic");
+
+  EXPECT_EQ(cls->get_dmethods().size(), 1);
+  ASSERT_GE(cls->get_dmethods().size(), 1);
+  auto d_method = cls->get_dmethods()[0];
+  EXPECT_EQ(d_method->get_class(), cls->get_type());
+  EXPECT_EQ(d_method->get_name()->str(), "baz");
+
+  EXPECT_EQ(cls->get_vmethods().size(), 1);
+  ASSERT_GE(cls->get_vmethods().size(), 1);
+  auto v_method = cls->get_vmethods()[0];
+  EXPECT_EQ(v_method->get_class(), cls->get_type());
+  EXPECT_EQ(v_method->get_name()->str(), "bazPublic");
+}

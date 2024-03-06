@@ -14,6 +14,7 @@
 #include <sparta/S_Expression.h>
 
 class DexClass;
+class DexField;
 class DexMethod;
 class IRCode;
 
@@ -72,6 +73,14 @@ std::unique_ptr<IRCode> ircode_from_string(const std::string&);
 DexMethod* method_from_s_expr(const sparta::s_expr&);
 
 DexMethod* method_from_string(const std::string&);
+
+DexField* field_from_s_expr(const sparta::s_expr& field_def);
+
+DexField* field_from_string(const std::string& field_def);
+
+DexClass* class_from_s_expr(const sparta::s_expr& class_expr);
+
+DexClass* class_from_string(const std::string& class_def);
 
 DexMethod* class_with_method(const std::string& class_name,
                              const std::string& method_instructions);
