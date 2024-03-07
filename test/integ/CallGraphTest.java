@@ -15,12 +15,8 @@ public class CallGraphTest {
     Extended.foo();
     MoreThan5 moreThan5 = new MoreThan5Impl1();
     int get1 = moreThan5.returnNum();
-    MoreThan5Impl1 moreThan5Impl1 = new MoreThan5Impl1();
-    int get2 = moreThan5Impl1.returnNum();
     LessThan5 lessThan5 = new LessThan5Impl3();
     int get3 = lessThan5.returnNum();
-    MoreThan5ClassExtends1 moreThan5ClassExtends1 = new MoreThan5ClassExtends1();
-    int get4 = moreThan5ClassExtends1.returnSuperNum();
   }
 
   static int callsReturnsInt(Base b) {
@@ -112,50 +108,4 @@ abstract class PureRefImpl2 extends PureRefImpl1 {}
 
 class PureRefImpl3 extends PureRefImpl2 {
   public int returnNum() { return 5; }
-}
-
-class MoreThan5Class {
-  public int returnNum() {
-    return 0;
-  }
-}
-
-class MoreThan5ClassExtends1 extends MoreThan5Class {
-  public int returnNum() {
-    return 1;
-  }
-
-  public int returnSuperNum() {
-    return super.returnNum();
-  }
-}
-
-class MoreThan5ClassExtends2 extends MoreThan5Class {
-  public int returnNum() {
-    return 2;
-  }
-}
-
-class MoreThan5ClassExtends3 extends MoreThan5Class {
-  public int returnNum() {
-    return 3;
-  }
-}
-
-class MoreThan5ClassExtends4 extends MoreThan5Class {
-  public int returnNum() {
-    return 4;
-  }
-}
-
-class MoreThan5ClassExtends5 extends MoreThan5Class {
-  public int returnNum() {
-    return 5;
-  }
-}
-
-class MoreThan5ClassExtends6 extends MoreThan5Class {
-  public int returnNum() {
-    return 6;
-  }
 }

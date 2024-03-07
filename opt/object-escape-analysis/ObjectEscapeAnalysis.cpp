@@ -55,22 +55,39 @@
 
 #include "ObjectEscapeAnalysis.h"
 
+#include <algorithm>
 #include <optional>
 
+#include <sparta/ConstantAbstractDomain.h>
+#include <sparta/PatriciaTreeMap.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/PatriciaTreeSet.h>
+#include <sparta/PatriciaTreeSetAbstractDomain.h>
+
 #include "ApiLevelChecker.h"
+#include "BaseIRAnalyzer.h"
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
+#include "ControlFlow.h"
+#include "DexClass.h"
 #include "ExpandableMethodParams.h"
+#include "HierarchyUtil.h"
+#include "IRCode.h"
 #include "IRInstruction.h"
+#include "IROpcode.h"
 #include "Inliner.h"
-#include "ObjectEscapeAnalysisImpl.h"
+#include "Lazy.h"
+#include "LiveRange.h"
+#include "MethodOverrideGraph.h"
 #include "PassManager.h"
+#include "Resolver.h"
+#include "Show.h"
 #include "StringBuilder.h"
 #include "Walkers.h"
 
 using namespace sparta;
-using namespace object_escape_analysis_impl;
 namespace mog = method_override_graph;
+namespace hier = hierarchy_util;
 
 namespace {
 
@@ -101,34 +118,384 @@ constexpr int64_t COST_MOVE_RESULT = 30;
 // Overhead of a new-instance instruction, times 10.
 constexpr int64_t COST_NEW_INSTANCE = 20;
 
+using Locations = std::vector<std::pair<DexMethod*, const IRInstruction*>>;
+
+// Collect all allocation and invoke instructions, as well as non-virtual
+// invocation dependencies.
+void analyze_scope(
+    const Scope& scope,
+    const std::unordered_set<const DexMethod*>& non_overridden_virtuals,
+    std::unordered_map<DexType*, Locations>* new_instances,
+    std::unordered_map<DexMethod*, Locations>* invokes,
+    std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>>*
+        dependencies) {
+  Timer t("analyze_scope");
+  ConcurrentMap<DexType*, Locations> concurrent_new_instances;
+  ConcurrentMap<DexMethod*, Locations> concurrent_invokes;
+  ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>
+      concurrent_dependencies;
+  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
+    code.build_cfg(/* editable */ true);
+    for (auto& mie : InstructionIterable(code.cfg())) {
+      auto insn = mie.insn;
+      if (insn->opcode() == OPCODE_NEW_INSTANCE) {
+        auto cls = type_class(insn->get_type());
+        if (cls && !cls->is_external()) {
+          concurrent_new_instances.update(
+              insn->get_type(),
+              [&](auto*, auto& vec, bool) { vec.emplace_back(method, insn); });
+        }
+      } else if (opcode::is_an_invoke(insn->opcode())) {
+        auto callee =
+            resolve_method(insn->get_method(), opcode_to_search(insn));
+        if (callee &&
+            (!callee->is_virtual() || non_overridden_virtuals.count(callee))) {
+          concurrent_invokes.update(callee, [&](auto*, auto& vec, bool) {
+            vec.emplace_back(method, insn);
+          });
+          if (!method->is_virtual() || non_overridden_virtuals.count(method)) {
+            concurrent_dependencies.update(
+                callee,
+                [method](auto, auto& set, auto) { set.insert(method); });
+          }
+        }
+      }
+    }
+  });
+  *new_instances = concurrent_new_instances.move_to_container();
+  *invokes = concurrent_invokes.move_to_container();
+  *dependencies = concurrent_dependencies.move_to_container();
+}
+
+// A benign method invocation can be ignored during the escape analysis.
+bool is_benign(const DexMethodRef* method_ref) {
+  static const std::unordered_set<std::string> methods = {
+      // clang-format off
+      "Ljava/lang/Object;.<init>:()V",
+      // clang-format on
+  };
+
+  return method_ref->is_def() &&
+         methods.count(
+             method_ref->as_def()->get_deobfuscated_name_or_empty_copy());
+}
+
+constexpr const IRInstruction* NO_ALLOCATION = nullptr;
+
+using namespace ir_analyzer;
+
+// For each allocating instruction that escapes (not including returns), all
+// uses by which it escapes.
+using Escapes = std::unordered_map<const IRInstruction*,
+                                   std::unordered_set<live_range::Use>>;
+
+// For each object, we track which instruction might have allocated it:
+// - new-instance, invoke-, and load-param-object instructions might represent
+//   allocation points
+// - NO_ALLOCATION is a value for which the allocation instruction is not known,
+//   or it is not an object
+using Domain = sparta::PatriciaTreeSetAbstractDomain<const IRInstruction*>;
+
+// For each register that holds a relevant value, keep track of it.
+using Environment = sparta::PatriciaTreeMapAbstractEnvironment<reg_t, Domain>;
+
+struct MethodSummary {
+  // A parameter is "benign" if a provided argument does not escape
+  std::unordered_set<src_index_t> benign_params;
+  // A method might contain a unique instruction which allocates an object that
+  // is eventually unconditionally returned.
+  const IRInstruction* allocation_insn{nullptr};
+};
+
+using MethodSummaries = std::unordered_map<DexMethod*, MethodSummary>;
+
+// The analyzer computes...
+// - which instructions allocate (new-instance, invoke-)
+// - which allocations escape (and how)
+// - which allocations return
+class Analyzer final : public BaseIRAnalyzer<Environment> {
+ public:
+  explicit Analyzer(const MethodSummaries& method_summaries,
+                    DexMethodRef* incomplete_marker_method,
+                    cfg::ControlFlowGraph& cfg)
+      : BaseIRAnalyzer(cfg),
+        m_method_summaries(method_summaries),
+        m_incomplete_marker_method(incomplete_marker_method) {
+    MonotonicFixpointIterator::run(Environment::top());
+  }
+
+  static const IRInstruction* get_singleton_allocation(const Domain& domain) {
+    always_assert(domain.kind() == AbstractValueKind::Value);
+    auto& elements = domain.elements();
+    if (elements.size() != 1) {
+      return nullptr;
+    }
+    return *elements.begin();
+  }
+
+  void analyze_instruction(const IRInstruction* insn,
+                           Environment* current_state) const override {
+
+    const auto escape = [&](src_index_t src_idx) {
+      auto reg = insn->src(src_idx);
+      const auto& domain = current_state->get(reg);
+      always_assert(domain.kind() == AbstractValueKind::Value);
+      for (auto allocation_insn : domain.elements()) {
+        if (allocation_insn != NO_ALLOCATION) {
+          m_escapes[allocation_insn].insert(
+              {const_cast<IRInstruction*>(insn), src_idx});
+        }
+      }
+    };
+
+    if (insn->opcode() == OPCODE_NEW_INSTANCE) {
+      auto type = insn->get_type();
+      auto cls = type_class(type);
+      if (cls && !cls->is_external()) {
+        m_escapes[insn];
+        current_state->set(RESULT_REGISTER, Domain(insn));
+        return;
+      }
+    } else if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
+      m_escapes[insn];
+      current_state->set(insn->dest(), Domain(insn));
+      return;
+    } else if (insn->opcode() == OPCODE_RETURN_OBJECT) {
+      const auto& domain = current_state->get(insn->src(0));
+      always_assert(domain.kind() == AbstractValueKind::Value);
+      m_returns.insert(domain.elements().begin(), domain.elements().end());
+      return;
+    } else if (insn->opcode() == OPCODE_MOVE_RESULT_OBJECT ||
+               insn->opcode() == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT) {
+      const auto& domain = current_state->get(RESULT_REGISTER);
+      current_state->set(insn->dest(), domain);
+      return;
+    } else if (insn->opcode() == OPCODE_MOVE_OBJECT) {
+      const auto& domain = current_state->get(insn->src(0));
+      current_state->set(insn->dest(), domain);
+      return;
+    } else if (insn->opcode() == OPCODE_INSTANCE_OF ||
+               opcode::is_an_iget(insn->opcode())) {
+      if (get_singleton_allocation(current_state->get(insn->src(0)))) {
+        current_state->set(RESULT_REGISTER, Domain(NO_ALLOCATION));
+        return;
+      }
+    } else if (opcode::is_a_monitor(insn->opcode()) ||
+               insn->opcode() == OPCODE_IF_EQZ ||
+               insn->opcode() == OPCODE_IF_NEZ) {
+      if (get_singleton_allocation(current_state->get(insn->src(0)))) {
+        return;
+      }
+    } else if (opcode::is_an_iput(insn->opcode())) {
+      if (get_singleton_allocation(current_state->get(insn->src(1)))) {
+        escape(0);
+        return;
+      }
+    } else if (opcode::is_an_invoke(insn->opcode())) {
+      if (is_benign(insn->get_method()) || is_incomplete_marker(insn)) {
+        current_state->set(RESULT_REGISTER, Domain(NO_ALLOCATION));
+        return;
+      }
+      auto callee = resolve_method(insn->get_method(), opcode_to_search(insn));
+      auto it = m_method_summaries.find(callee);
+      auto benign_params =
+          it == m_method_summaries.end() ? nullptr : &it->second.benign_params;
+      for (src_index_t i = 0; i < insn->srcs_size(); i++) {
+        if (!benign_params || !benign_params->count(i) ||
+            !get_singleton_allocation(current_state->get(insn->src(i)))) {
+          escape(i);
+        }
+      }
+
+      Domain domain(NO_ALLOCATION);
+      if (it != m_method_summaries.end() && it->second.allocation_insn) {
+        m_escapes[insn];
+        domain = Domain(insn);
+      }
+      current_state->set(RESULT_REGISTER, domain);
+      return;
+    }
+
+    for (src_index_t i = 0; i < insn->srcs_size(); i++) {
+      escape(i);
+    }
+
+    if (insn->has_dest()) {
+      current_state->set(insn->dest(), Domain(NO_ALLOCATION));
+      if (insn->dest_is_wide()) {
+        current_state->set(insn->dest() + 1, Domain::top());
+      }
+    } else if (insn->has_move_result_any()) {
+      current_state->set(RESULT_REGISTER, Domain(NO_ALLOCATION));
+    }
+  }
+
+  const Escapes& get_escapes() { return m_escapes; }
+
+  const std::unordered_set<const IRInstruction*>& get_returns() {
+    return m_returns;
+  }
+
+  // Returns set of new-instance and invoke- allocating instructions that do not
+  // escape (or return).
+  std::unordered_set<IRInstruction*> get_inlinables() {
+    std::unordered_set<IRInstruction*> inlinables;
+    for (auto&& [insn, uses] : m_escapes) {
+      if (uses.empty() && insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT &&
+          !m_returns.count(insn)) {
+        inlinables.insert(const_cast<IRInstruction*>(insn));
+      }
+    }
+    return inlinables;
+  }
+
+ private:
+  const MethodSummaries& m_method_summaries;
+  DexMethodRef* m_incomplete_marker_method;
+  mutable Escapes m_escapes;
+  mutable std::unordered_set<const IRInstruction*> m_returns;
+
+  bool is_incomplete_marker(const IRInstruction* insn) const {
+    return insn->opcode() == OPCODE_INVOKE_STATIC &&
+           insn->get_method() == m_incomplete_marker_method;
+  }
+};
+
+MethodSummaries compute_method_summaries(
+    PassManager& mgr,
+    const Scope& scope,
+    const std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>>&
+        dependencies,
+    const std::unordered_set<const DexMethod*>& non_overridden_virtuals) {
+  Timer t("compute_method_summaries");
+
+  std::unordered_set<DexMethod*> impacted_methods;
+  walk::code(scope, [&](DexMethod* method, IRCode&) {
+    if (!method->is_virtual() || non_overridden_virtuals.count(method)) {
+      impacted_methods.insert(method);
+    }
+  });
+
+  MethodSummaries method_summaries;
+  size_t analysis_iterations = 0;
+  while (!impacted_methods.empty()) {
+    Timer t2("analysis iteration");
+    analysis_iterations++;
+    TRACE(OEA, 2, "[object escape analysis] analysis_iteration %zu",
+          analysis_iterations);
+    ConcurrentMap<DexMethod*, MethodSummary> recomputed_method_summaries;
+    workqueue_run<DexMethod*>(
+        [&](DexMethod* method) {
+          auto& cfg = method->get_code()->cfg();
+          Analyzer analyzer(method_summaries,
+                            /* incomplete_marker_method */ nullptr, cfg);
+          const auto& escapes = analyzer.get_escapes();
+          const auto& returns = analyzer.get_returns();
+          src_index_t src_index = 0;
+          for (auto& mie : InstructionIterable(cfg.get_param_instructions())) {
+            if (mie.insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT &&
+                escapes.at(mie.insn).empty() && !returns.count(mie.insn)) {
+              recomputed_method_summaries.update(
+                  method, [src_index](DexMethod*, auto& ms, bool) {
+                    ms.benign_params.insert(src_index);
+                  });
+            }
+            src_index++;
+          }
+          const IRInstruction* allocation_insn;
+          if (returns.size() == 1 &&
+              (allocation_insn = *returns.begin()) != NO_ALLOCATION &&
+              escapes.at(allocation_insn).empty() &&
+              allocation_insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT) {
+            recomputed_method_summaries.update(
+                method, [allocation_insn](DexMethod*, auto& ms, bool) {
+                  ms.allocation_insn = allocation_insn;
+                });
+          }
+        },
+        impacted_methods);
+
+    std::unordered_set<DexMethod*> changed_methods;
+    // (Recomputed) summaries can only grow; assert that, update summaries when
+    // necessary, and remember for which methods the summaries actually changed.
+    for (auto&& [method, recomputed_summary] : recomputed_method_summaries) {
+      auto& summary = method_summaries[method];
+      for (auto src_index : summary.benign_params) {
+        always_assert(recomputed_summary.benign_params.count(src_index));
+      }
+      if (recomputed_summary.benign_params.size() >
+          summary.benign_params.size()) {
+        summary.benign_params = std::move(recomputed_summary.benign_params);
+        changed_methods.insert(method);
+      }
+      if (recomputed_summary.allocation_insn) {
+        if (summary.allocation_insn) {
+          always_assert(summary.allocation_insn ==
+                        recomputed_summary.allocation_insn);
+        } else {
+          summary.allocation_insn = recomputed_summary.allocation_insn;
+          changed_methods.insert(method);
+        }
+      } else {
+        always_assert(summary.allocation_insn == nullptr);
+      }
+    }
+    impacted_methods.clear();
+    for (auto method : changed_methods) {
+      auto it = dependencies.find(method);
+      if (it != dependencies.end()) {
+        impacted_methods.insert(it->second.begin(), it->second.end());
+      }
+    }
+  }
+  mgr.incr_metric("analysis_iterations", analysis_iterations);
+  return method_summaries;
+}
+
+// For an inlinable new-instance or invoke- instruction, determine first
+// resolved callee (if any), and (eventually) allocated type
+std::pair<DexMethod*, DexType*> resolve_inlinable(
+    const MethodSummaries& method_summaries, const IRInstruction* insn) {
+  always_assert(insn->opcode() == OPCODE_NEW_INSTANCE ||
+                opcode::is_an_invoke(insn->opcode()));
+  DexMethod* first_callee{nullptr};
+  while (insn->opcode() != OPCODE_NEW_INSTANCE) {
+    always_assert(opcode::is_an_invoke(insn->opcode()));
+    auto callee = resolve_method(insn->get_method(), opcode_to_search(insn));
+    if (!first_callee) {
+      first_callee = callee;
+    }
+    insn = method_summaries.at(callee).allocation_insn;
+  }
+  return std::make_pair(first_callee, insn->get_type());
+}
+
 using InlineAnchorsOfType =
     std::unordered_map<DexMethod*, std::unordered_set<IRInstruction*>>;
-ConcurrentMap<DexType*, InlineAnchorsOfType> compute_inline_anchors(
-    const Scope& scope,
-    const MethodSummaries& method_summaries,
-    const std::unordered_set<DexClass*>& excluded_classes) {
+std::unordered_map<DexType*, InlineAnchorsOfType> compute_inline_anchors(
+    const Scope& scope, const MethodSummaries& method_summaries) {
   Timer t("compute_inline_anchors");
-  ConcurrentMap<DexType*, InlineAnchorsOfType> inline_anchors;
+  ConcurrentMap<DexType*, InlineAnchorsOfType> concurrent_inline_anchors;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    Analyzer analyzer(excluded_classes, method_summaries,
-                      /* incomplete_marker_method */ nullptr, code.cfg());
+    Analyzer analyzer(method_summaries, /* incomplete_marker_method */ nullptr,
+                      code.cfg());
     auto inlinables = analyzer.get_inlinables();
     for (auto insn : inlinables) {
       auto [callee, type] = resolve_inlinable(method_summaries, insn);
       TRACE(OEA, 3, "[object escape analysis] inline anchor [%s] %s",
             SHOW(method), SHOW(insn));
-      inline_anchors.update(
+      concurrent_inline_anchors.update(
           type, [&](auto*, auto& map, bool) { map[method].insert(insn); });
     }
   });
-  return inline_anchors;
+  return concurrent_inline_anchors.move_to_container();
 }
 
 class InlinedCodeSizeEstimator {
  private:
   using DeltaKey = std::pair<DexMethod*, const IRInstruction*>;
   LazyUnorderedMap<DexMethod*, uint32_t> m_inlined_code_sizes;
-  LazyUnorderedMap<DeltaKey, live_range::Uses, boost::hash<DeltaKey>> m_uses;
+  LazyUnorderedMap<DexMethod*, live_range::DefUseChains> m_du_chains;
   LazyUnorderedMap<DeltaKey, int64_t, boost::hash<DeltaKey>> m_deltas;
 
  public:
@@ -148,22 +515,14 @@ class InlinedCodeSizeEstimator {
           }
           return code_size;
         }),
-        m_uses([&](DeltaKey key) {
-          auto allocation_insn = const_cast<IRInstruction*>(key.second);
-          live_range::MoveAwareChains chains(key.first->get_code()->cfg(),
-                                             /* ignore_unreachable */ false,
-                                             [&](const IRInstruction* insn) {
-                                               return insn == allocation_insn;
-                                             });
-          return chains.get_def_use_chains()[allocation_insn];
+        m_du_chains([](DexMethod* method) {
+          live_range::MoveAwareChains chains(method->get_code()->cfg());
+          return chains.get_def_use_chains();
         }),
         m_deltas([&](DeltaKey key) {
           auto [method, allocation_insn] = key;
-          always_assert(
-              opcode::is_new_instance(allocation_insn->opcode()) ||
-              opcode::is_an_invoke(allocation_insn->opcode()) ||
-              opcode::is_load_param_object(allocation_insn->opcode()));
           int64_t delta = 0;
+          auto& du_chains = m_du_chains[method];
           if (opcode::is_an_invoke(allocation_insn->opcode())) {
             auto callee = resolve_method(allocation_insn->get_method(),
                                          opcode_to_search(allocation_insn));
@@ -177,7 +536,8 @@ class InlinedCodeSizeEstimator {
           } else if (allocation_insn->opcode() == OPCODE_NEW_INSTANCE) {
             delta -= COST_NEW_INSTANCE;
           }
-          for (auto& use : m_uses[key]) {
+          for (auto& use :
+               du_chains[const_cast<IRInstruction*>(allocation_insn)]) {
             if (opcode::is_an_invoke(use.insn->opcode())) {
               delta -= COST_INVOKE;
               auto callee = resolve_method(use.insn->get_method(),
@@ -191,17 +551,14 @@ class InlinedCodeSizeEstimator {
               auto* load_param_insn =
                   std::next(load_param_insns.begin(), use.src_index)->insn;
               always_assert(load_param_insn);
-              always_assert(
-                  opcode::is_load_param_object(load_param_insn->opcode()));
+              always_assert(opcode::is_a_load_param(load_param_insn->opcode()));
               delta += 10 * (int64_t)m_inlined_code_sizes[callee] +
                        get_delta(callee, load_param_insn);
               if (!callee->get_proto()->is_void()) {
                 delta -= COST_MOVE_RESULT;
               }
             } else if (opcode::is_an_iget(use.insn->opcode()) ||
-                       opcode::is_an_iput(use.insn->opcode()) ||
-                       opcode::is_instance_of(use.insn->opcode()) ||
-                       opcode::is_a_monitor(use.insn->opcode())) {
+                       opcode::is_an_iput(use.insn->opcode())) {
               delta -= 10 * (int64_t)use.insn->size();
             }
           }
@@ -231,10 +588,10 @@ using InlinableTypes = std::unordered_map<DexType*, InlinableTypeKind>;
 
 std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
     PassManager& mgr,
-    const ConcurrentMap<DexType*, Locations>& new_instances,
-    const ConcurrentMap<DexMethod*, Locations>& invokes,
+    const std::unordered_map<DexType*, Locations>& new_instances,
+    const std::unordered_map<DexMethod*, Locations>& invokes,
     const MethodSummaries& method_summaries,
-    const ConcurrentMap<DexType*, InlineAnchorsOfType>& inline_anchors) {
+    const std::unordered_map<DexType*, InlineAnchorsOfType>& inline_anchors) {
   Timer t("compute_root_methods");
   std::array<size_t, (size_t)(InlinableTypeKind::Last) + 1> candidate_types{
       0, 0, 0};
@@ -243,16 +600,11 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
 
   std::mutex mutex; // protects candidate_types and root_methods
   std::atomic<size_t> incomplete_estimated_delta_threshold_exceeded{0};
-
   auto concurrent_add_root_methods = [&](DexType* type, bool complete) {
-    const auto& inline_anchors_of_type = inline_anchors.at_unsafe(type);
+    const auto& inline_anchors_of_type = inline_anchors.at(type);
     InlinedCodeSizeEstimator inlined_code_size_estimator(method_summaries);
     std::vector<DexMethod*> methods;
     for (auto& [method, allocation_insns] : inline_anchors_of_type) {
-      if (method->rstate.no_optimizations()) {
-        always_assert(!complete);
-        continue;
-      }
       auto it2 = method_summaries.find(method);
       if (it2 != method_summaries.end() && it2->second.allocation_insn &&
           resolve_inlinable(method_summaries, it2->second.allocation_insn)
@@ -306,8 +658,8 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
   }
   workqueue_run<DexType*>(
       [&](DexType* type) {
-        const auto& method_insn_pairs = new_instances.at_unsafe(type);
-        const auto& inline_anchors_of_type = inline_anchors.at_unsafe(type);
+        const auto& method_insn_pairs = new_instances.at(type);
+        const auto& inline_anchors_of_type = inline_anchors.at(type);
 
         std::function<bool(const std::pair<DexMethod*, const IRInstruction*>&)>
             is_anchored;
@@ -365,9 +717,9 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
   return root_methods;
 }
 
-size_t shrink_root_methods(
+void shrink_root_methods(
     MultiMethodInliner& inliner,
-    const ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>&
+    const std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>>&
         dependencies,
     const std::unordered_map<DexMethod*, InlinableTypes>& root_methods,
     MethodSummaries* method_summaries) {
@@ -418,7 +770,6 @@ size_t shrink_root_methods(
     always_assert(allocation_insn != nullptr);
     allocation_insn = nullptr;
   }
-  return methods_that_lost_allocation_insns.size();
 }
 
 size_t get_code_size(DexMethod* method) {
@@ -427,9 +778,9 @@ size_t get_code_size(DexMethod* method) {
 
 struct Stats {
   std::atomic<size_t> total_savings{0};
-  size_t reduced_methods{0};
+  std::atomic<size_t> reduced_methods{0};
   std::atomic<size_t> reduced_methods_variants{0};
-  size_t selected_reduced_methods{0};
+  std::atomic<size_t> selected_reduced_methods{0};
   std::atomic<size_t> invokes_not_inlinable_callee_unexpandable{0};
   std::atomic<size_t> invokes_not_inlinable_callee_inconcrete{0};
   std::atomic<size_t> invokes_not_inlinable_callee_too_many_params_to_expand{0};
@@ -443,9 +794,6 @@ struct Stats {
   std::atomic<size_t> expanded_methods{0};
   std::atomic<size_t> calls_inlined{0};
   std::atomic<size_t> new_instances_eliminated{0};
-  size_t inlined_methods_removed{0};
-  size_t inlinable_methods_kept{0};
-  size_t inlined_methods_mispredicted{0};
 };
 
 // Data structure to derive local or accumulated global net savings
@@ -462,8 +810,7 @@ struct NetSavings {
   }
 
   // Estimate how many code units will be saved.
-  int get_value(
-      const InsertOnlyConcurrentSet<DexMethod*>* methods_kept = nullptr) const {
+  int get_value() const {
     int net_savings{local};
     // A class will only eventually get deleted if all static methods are
     // inlined.
@@ -479,8 +826,7 @@ struct NetSavings {
       }
     }
     for (auto method : methods) {
-      if (can_delete(method) && !method::is_argless_init(method) &&
-          (!methods_kept || !methods_kept->count(method))) {
+      if (can_delete(method) && !method::is_argless_init(method)) {
         auto code_size = get_code_size(method);
         net_savings += COST_METHOD + code_size;
         if (is_static(method)) {
@@ -570,7 +916,6 @@ class RootMethodReducer {
   DexMethodRef* m_incomplete_marker_method;
   MultiMethodInliner& m_inliner;
   const MethodSummaries& m_method_summaries;
-  const std::unordered_set<DexClass*>& m_excluded_classes;
   Stats* m_stats;
   bool m_is_init_or_clinit;
   DexMethod* m_method;
@@ -584,7 +929,6 @@ class RootMethodReducer {
                     DexMethodRef* incomplete_marker_method,
                     MultiMethodInliner& inliner,
                     const MethodSummaries& method_summaries,
-                    const std::unordered_set<DexClass*>& excluded_classes,
                     Stats* stats,
                     bool is_init_or_clinit,
                     DexMethod* method,
@@ -594,7 +938,6 @@ class RootMethodReducer {
         m_incomplete_marker_method(incomplete_marker_method),
         m_inliner(inliner),
         m_method_summaries(method_summaries),
-        m_excluded_classes(excluded_classes),
         m_stats(stats),
         m_is_init_or_clinit(is_init_or_clinit),
         m_method(method),
@@ -615,20 +958,9 @@ class RootMethodReducer {
     }
 
     auto* insn = find_incomplete_marker_methods();
-    auto describe = [&]() {
-      std::ostringstream oss;
-      for (auto [type, kind] : m_types) {
-        oss << show(type) << ":"
-            << (kind == InlinableTypeKind::Incomplete ? "incomplete" : "")
-            << ", ";
-      }
-      return oss.str();
-    };
-    always_assert_log(
-        !insn,
-        "Incomplete marker {%s} present in {%s} after reduction of %s in\n%s",
-        SHOW(insn), SHOW(m_method), describe().c_str(),
-        SHOW(m_method->get_code()->cfg()));
+    always_assert_log(!insn,
+                      "Incomplete marker {%s} present after reduction in\n%s",
+                      SHOW(insn), SHOW(m_method->get_code()->cfg()));
 
     shrink();
     return (ReducedMethod){
@@ -662,7 +994,7 @@ class RootMethodReducer {
     auto callee = resolve_method(insn->get_method(), opcode_to_search(insn));
     always_assert(callee);
     always_assert(callee->is_concrete());
-    std::vector<DexField*> const* fields;
+    std::vector<DexField*>* fields;
     auto expanded_method_ref =
         m_expandable_method_params.get_expanded_method_ref(callee, param_index,
                                                            &fields);
@@ -719,7 +1051,6 @@ class RootMethodReducer {
       auto param_index = it2->second;
       auto expanded_method_ref = expand_invoke(mutation, it, param_index);
       if (!expanded_method_ref) {
-        mutation.clear();
         return false;
       }
       expanded_method_refs->insert(expanded_method_ref);
@@ -733,15 +1064,11 @@ class RootMethodReducer {
   bool inline_anchors() {
     auto& cfg = m_method->get_code()->cfg();
     for (int iteration = 0; true; iteration++) {
-      Analyzer analyzer(m_excluded_classes, m_method_summaries,
-                        m_incomplete_marker_method, cfg);
+      Analyzer analyzer(m_method_summaries, m_incomplete_marker_method, cfg);
       std::unordered_set<IRInstruction*> invokes_to_inline;
       auto inlinables = analyzer.get_inlinables();
       Lazy<live_range::DefUseChains> du_chains([&]() {
-        live_range::MoveAwareChains chains(
-            cfg, /* ignore_unreachable */ false, [&](auto* insn) {
-              return inlinables.count(const_cast<IRInstruction*>(insn));
-            });
+        live_range::MoveAwareChains chains(cfg);
         return chains.get_def_use_chains();
       });
       cfg::CFGMutation mutation(cfg);
@@ -795,17 +1122,18 @@ class RootMethodReducer {
     }
   }
 
-  bool is_inlinable_new_instance(const IRInstruction* insn) const {
+  bool is_inlinable_new_instance(IRInstruction* insn) const {
     return insn->opcode() == OPCODE_NEW_INSTANCE &&
            m_types.count(insn->get_type());
   }
 
-  bool is_incomplete_marker(const IRInstruction* insn) const {
+  bool is_incomplete_marker(IRInstruction* insn) const {
     return insn->opcode() == OPCODE_INVOKE_STATIC &&
            insn->get_method() == m_incomplete_marker_method;
   }
 
-  bool has_incomplete_marker(const live_range::Uses& uses) const {
+  bool has_incomplete_marker(
+      const std::unordered_set<live_range::Use>& uses) const {
     return std::any_of(uses.begin(), uses.end(), [&](auto& use) {
       return is_incomplete_marker(use.insn);
     });
@@ -821,14 +1149,11 @@ class RootMethodReducer {
     return nullptr;
   }
 
-  std::optional<std::pair<IRInstruction*, live_range::Uses>>
+  std::optional<std::pair<live_range::DefUseChains, IRInstruction*>>
   find_inlinable_new_instance() const {
     auto& cfg = m_method->get_code()->cfg();
     Lazy<live_range::DefUseChains> du_chains([&]() {
-      live_range::MoveAwareChains chains(
-          cfg,
-          /* ignore_unreachable */ false,
-          [&](auto* insn) { return is_inlinable_new_instance(insn); });
+      live_range::MoveAwareChains chains(cfg);
       return chains.get_def_use_chains();
     });
     for (auto& mie : InstructionIterable(cfg)) {
@@ -837,12 +1162,11 @@ class RootMethodReducer {
         continue;
       }
       auto type = insn->get_type();
-      auto& p = *du_chains->find(insn);
       if (m_types.at(type) == InlinableTypeKind::Incomplete &&
-          !has_incomplete_marker(p.second)) {
+          !has_incomplete_marker((*du_chains)[insn])) {
         continue;
       }
-      return std::make_optional(std::move(p));
+      return std::make_optional(std::pair(std::move(*du_chains), insn));
     }
     return std::nullopt;
   }
@@ -878,10 +1202,7 @@ class RootMethodReducer {
       std::unordered_set<IRInstruction*> invokes_to_inline;
       std::unordered_map<IRInstruction*, param_index_t> invokes_to_expand;
 
-      live_range::MoveAwareChains chains(
-          cfg,
-          /* ignore_unreachable */ false,
-          [&](auto* insn) { return is_inlinable_new_instance(insn); });
+      live_range::MoveAwareChains chains(cfg);
       auto du_chains = chains.get_def_use_chains();
       std::unordered_map<IRInstruction*,
                          std::unordered_map<src_index_t, DexType*>>
@@ -957,8 +1278,8 @@ class RootMethodReducer {
   // Given a new-instance instruction whose (main) uses are as the receiver in
   // iget- and iput- instruction, transform all such field accesses into
   // accesses to registers, one per field.
-  bool stackify(IRInstruction* new_instance_insn,
-                const live_range::Uses& new_instance_insn_uses) {
+  bool stackify(live_range::DefUseChains& du_chains,
+                IRInstruction* new_instance_insn) {
     auto& cfg = m_method->get_code()->cfg();
     std::unordered_map<DexField*, reg_t> field_regs;
     std::vector<DexField*> ordered_fields;
@@ -975,9 +1296,10 @@ class RootMethodReducer {
       return it->second;
     };
 
+    auto& uses = du_chains[new_instance_insn];
     std::unordered_set<IRInstruction*> instructions_to_replace;
     bool identity_matters{false};
-    for (auto& use : new_instance_insn_uses) {
+    for (auto& use : uses) {
       auto opcode = use.insn->opcode();
       if (opcode::is_an_iput(opcode)) {
         always_assert(use.src_index == 1);
@@ -1098,7 +1420,6 @@ compute_reduced_methods(
     ExpandableMethodParams& expandable_method_params,
     MultiMethodInliner& inliner,
     const MethodSummaries& method_summaries,
-    const std::unordered_set<DexClass*>& excluded_classes,
     const std::unordered_map<DexMethod*, InlinableTypes>& root_methods,
     std::unordered_set<DexType*>* irreducible_types,
     Stats* stats,
@@ -1167,15 +1488,14 @@ compute_reduced_methods(
       [&](const std::pair<DexMethod*, InlinableTypes>& p) {
         auto* method = p.first;
         const auto& types = p.second;
-        auto copy_name_str = method->get_name()->str() + "$oea$internal$" +
-                             std::to_string(types.size());
+        auto copy_name_str =
+            method->get_name()->str() + "$oea$" + std::to_string(types.size());
         auto copy = DexMethod::make_method_from(
             method, method->get_class(), DexString::make_string(copy_name_str));
         RootMethodReducer root_method_reducer{expandable_method_params,
                                               incomplete_marker_method,
                                               inliner,
                                               method_summaries,
-                                              excluded_classes,
                                               stats,
                                               method::is_init(method) ||
                                                   method::is_clinit(method),
@@ -1226,13 +1546,11 @@ compute_reduced_methods(
 // Select all those reduced methods which will result in overall size savings,
 // either by looking at local net savings for just a single reduced method, or
 // by considering families of reduced methods that affect the same classes.
-void select_reduced_methods(
+std::unordered_map<DexMethod*, size_t> select_reduced_methods(
     const std::unordered_map<DexMethod*, std::vector<ReducedMethod>>&
         reduced_methods,
     std::unordered_set<DexType*>* irreducible_types,
-    Stats* stats,
-    InsertOnlyConcurrentMap<DexMethod*, size_t>*
-        concurrent_selected_reduced_methods) {
+    Stats* stats) {
   Timer t("select_reduced_methods");
 
   // First, we are going to identify all reduced methods which will result in
@@ -1240,10 +1558,8 @@ void select_reduced_methods(
   // We'll also build up families of reduced methods for which we can later do a
   // global net savings analysis.
 
-  InsertOnlyConcurrentSet<DexType*> concurrent_irreducible_types;
-  InsertOnlyConcurrentSet<DexMethod*> concurrent_inlined_methods_removed;
-  InsertOnlyConcurrentSet<DexMethod*> concurrent_inlinable_methods_kept;
-  InsertOnlyConcurrentSet<DexMethod*> concurrent_kept_methods;
+  ConcurrentSet<DexType*> concurrent_irreducible_types;
+  ConcurrentMap<DexMethod*, size_t> concurrent_selected_reduced_methods;
 
   // A family of reduced methods for which we'll look at the combined global net
   // savings
@@ -1261,44 +1577,31 @@ void select_reduced_methods(
         auto update_irreducible_types = [&](size_t i) {
           const auto& reduced_method = reduced_methods_variants.at(i);
           const auto& reduced_types = reduced_method.types;
-          const auto& inlined_methods = reduced_method.inlined_methods;
-          const auto& largest_reduced_method = reduced_methods_variants.at(0);
-          for (auto&& [type, kind] : largest_reduced_method.types) {
+          for (auto&& [type, kind] : reduced_methods_variants.at(0).types) {
             if (!reduced_types.count(type) &&
                 kind != InlinableTypeKind::Incomplete) {
               concurrent_irreducible_types.insert(type);
-            }
-          }
-          for (auto&& [inlined_method, _] :
-               largest_reduced_method.inlined_methods) {
-            if (!inlined_methods.count(inlined_method)) {
-              concurrent_inlinable_methods_kept.insert(inlined_method);
             }
           }
         };
         // We'll try to find the maximal (involving most inlined non-incomplete
         // types) reduced method variant for which we can make the largest
         // non-negative local cost determination.
-        struct Candidate {
-          size_t index;
-          NetSavings net_savings;
-          int value;
-        };
-        boost::optional<Candidate> best_candidate;
+        boost::optional<std::pair<size_t, int>> best_candidate;
         for (size_t i = 0; i < reduced_methods_variants.size(); i++) {
           // If we couldn't accommodate any types, we'll need to add them to the
           // irreducible types set. Except for the last variant with the least
           // inlined types, for which might below try to make a global cost
           // determination.
           const auto& reduced_method = reduced_methods_variants.at(i);
-          auto net_savings = reduced_method.get_net_savings(*irreducible_types);
-          auto value = net_savings.get_value();
-          if (!best_candidate || value > best_candidate->value) {
-            best_candidate = (Candidate){i, std::move(net_savings), value};
+          auto savings =
+              reduced_method.get_net_savings(*irreducible_types).get_value();
+          if (!best_candidate || savings > best_candidate->second) {
+            best_candidate = std::make_pair(i, savings);
           }
           // If there are no incomplete types left, we can stop here
           const auto& reduced_types = reduced_method.types;
-          if (best_candidate && best_candidate->value >= 0 &&
+          if (best_candidate && best_candidate->second >= 0 &&
               !std::any_of(reduced_types.begin(), reduced_types.end(),
                            [](auto& p) {
                              return p.second == InlinableTypeKind::Incomplete;
@@ -1306,14 +1609,11 @@ void select_reduced_methods(
             break;
           }
         }
-        if (best_candidate && best_candidate->value >= 0) {
-          stats->total_savings += best_candidate->value;
-          concurrent_selected_reduced_methods->emplace(method,
-                                                       best_candidate->index);
-          update_irreducible_types(best_candidate->index);
-          for (auto* inlined_method : best_candidate->net_savings.methods) {
-            concurrent_inlined_methods_removed.insert(inlined_method);
-          }
+        if (best_candidate && best_candidate->second >= 0) {
+          auto [i, savings] = *best_candidate;
+          stats->total_savings += savings;
+          concurrent_selected_reduced_methods.emplace(method, i);
+          update_irreducible_types(i);
           return;
         }
         update_irreducible_types(reduced_methods_variants.size() - 1);
@@ -1347,44 +1647,30 @@ void select_reduced_methods(
         for (auto [type, kind] : smallest_reduced_method.types) {
           concurrent_irreducible_types.insert(type);
         }
-        for (auto&& [inlined_method, _] :
-             smallest_reduced_method.inlined_methods) {
-          concurrent_inlinable_methods_kept.insert(inlined_method);
-        }
       },
       reduced_methods);
   irreducible_types->insert(concurrent_irreducible_types.begin(),
                             concurrent_irreducible_types.end());
-  stats->inlinable_methods_kept = concurrent_inlinable_methods_kept.size();
 
   // Second, perform global net savings analysis
   workqueue_run<std::pair<DexType*, Family>>(
       [&](const std::pair<DexType*, Family>& p) {
         auto& [type, family] = p;
         if (irreducible_types->count(type) ||
-            family.global_net_savings.get_value(
-                &concurrent_inlinable_methods_kept) < 0) {
+            family.global_net_savings.get_value() < 0) {
           stats->too_costly_globally += family.reduced_methods.size();
           return;
         }
-        stats->total_savings += family.global_net_savings.get_value(
-            &concurrent_inlinable_methods_kept);
+        stats->total_savings += family.global_net_savings.get_value();
         for (auto& [method, i] : family.reduced_methods) {
-          concurrent_selected_reduced_methods->emplace(method, i);
-        }
-        for (auto* inlined_method : family.global_net_savings.methods) {
-          concurrent_inlined_methods_removed.insert(inlined_method);
+          concurrent_selected_reduced_methods.emplace(method, i);
         }
       },
       concurrent_families);
 
-  stats->inlined_methods_removed = concurrent_inlined_methods_removed.size();
-
-  for (auto* method : concurrent_inlined_methods_removed) {
-    if (concurrent_inlinable_methods_kept.count_unsafe(method)) {
-      stats->inlined_methods_mispredicted++;
-    }
-  }
+  return std::unordered_map<DexMethod*, size_t>(
+      concurrent_selected_reduced_methods.begin(),
+      concurrent_selected_reduced_methods.end());
 }
 
 void reduce(DexStoresVector& stores,
@@ -1394,7 +1680,6 @@ void reduce(DexStoresVector& stores,
                 init_classes_with_side_effects,
             MultiMethodInliner& inliner,
             const MethodSummaries& method_summaries,
-            const std::unordered_set<DexClass*>& excluded_classes,
             const std::unordered_map<DexMethod*, InlinableTypes>& root_methods,
             Stats* stats,
             size_t max_inline_size) {
@@ -1405,14 +1690,13 @@ void reduce(DexStoresVector& stores,
   ExpandableMethodParams expandable_method_params(scope);
   std::unordered_set<DexType*> irreducible_types;
   auto reduced_methods = compute_reduced_methods(
-      expandable_method_params, inliner, method_summaries, excluded_classes,
-      root_methods, &irreducible_types, stats, max_inline_size);
+      expandable_method_params, inliner, method_summaries, root_methods,
+      &irreducible_types, stats, max_inline_size);
   stats->reduced_methods = reduced_methods.size();
 
   // Second, we select reduced methods that will result in net savings
-  InsertOnlyConcurrentMap<DexMethod*, size_t> selected_reduced_methods;
-  select_reduced_methods(reduced_methods, &irreducible_types, stats,
-                         &selected_reduced_methods);
+  auto selected_reduced_methods =
+      select_reduced_methods(reduced_methods, &irreducible_types, stats);
   stats->selected_reduced_methods = selected_reduced_methods.size();
 
   // Finally, we are going to apply those selected methods, and clean up all
@@ -1452,23 +1736,19 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   auto method_override_graph = mog::build_graph(scope);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns(), method_override_graph.get());
+  auto non_overridden_virtuals =
+      hier::find_non_overridden_virtuals(*method_override_graph);
 
-  auto excluded_classes = get_excluded_classes(*method_override_graph);
-
-  ConcurrentMap<DexType*, Locations> new_instances;
-  ConcurrentMap<DexMethod*, Locations> invokes;
-  ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>> dependencies;
-  analyze_scope(scope, *method_override_graph, &new_instances, &invokes,
+  std::unordered_map<DexType*, Locations> new_instances;
+  std::unordered_map<DexMethod*, Locations> invokes;
+  std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>> dependencies;
+  analyze_scope(scope, non_overridden_virtuals, &new_instances, &invokes,
                 &dependencies);
 
-  size_t analysis_iterations;
-  auto method_summaries =
-      compute_method_summaries(scope, dependencies, *method_override_graph,
-                               excluded_classes, &analysis_iterations);
-  mgr.incr_metric("analysis_iterations", analysis_iterations);
+  auto method_summaries = compute_method_summaries(mgr, scope, dependencies,
+                                                   non_overridden_virtuals);
 
-  auto inline_anchors =
-      compute_inline_anchors(scope, method_summaries, excluded_classes);
+  auto inline_anchors = compute_inline_anchors(scope, method_summaries);
 
   auto root_methods = compute_root_methods(mgr, new_instances, invokes,
                                            method_summaries, inline_anchors);
@@ -1482,7 +1762,6 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   inliner_config.shrinker.run_cse = true;
   inliner_config.shrinker.run_copy_prop = true;
   inliner_config.shrinker.run_local_dce = true;
-  inliner_config.shrinker.normalize_new_instances = false;
   inliner_config.shrinker.compute_pure_methods = false;
   int min_sdk = 0;
   MultiMethodInliner inliner(
@@ -1490,13 +1769,15 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
       std::ref(concurrent_method_resolver), inliner_config, min_sdk,
       MultiMethodInlinerMode::None);
 
-  auto lost_returns_through_shrinking = shrink_root_methods(
-      inliner, dependencies, root_methods, &method_summaries);
+  shrink_root_methods(inliner, dependencies, root_methods, &method_summaries);
 
   Stats stats;
   reduce(stores, scope, conf, init_classes_with_side_effects, inliner,
-         method_summaries, excluded_classes, root_methods, &stats,
+         method_summaries, root_methods, &stats,
          m_max_inline_size);
+
+  walk::parallel::code(scope,
+                       [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
 
   TRACE(OEA, 1, "[object escape analysis] total savings: %zu",
         (size_t)stats.total_savings);
@@ -1511,10 +1792,10 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
       "inlinable after too many iterations, %zu stackify returned objects, "
       "%zu too costly with irreducible classes, %zu too costly with multiple "
       "conditional classes, %zu too costly globally; %zu expanded methods; %zu "
-      "calls inlined; %zu new-instances eliminated; %zu/%zu/%zu inlinable "
-      "methods removed/kept/mispredicted",
-      root_methods.size(), stats.reduced_methods,
-      (size_t)stats.reduced_methods_variants, stats.selected_reduced_methods,
+      "calls inlined; %zu new-instances eliminated",
+      root_methods.size(), (size_t)stats.reduced_methods,
+      (size_t)stats.reduced_methods_variants,
+      (size_t)stats.selected_reduced_methods,
       (size_t)stats.anchors_not_inlinable_inlining,
       (size_t)stats.invokes_not_inlinable_callee_unexpandable,
       (size_t)stats.invokes_not_inlinable_callee_too_many_params_to_expand,
@@ -1525,16 +1806,15 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
       (size_t)stats.too_costly_irreducible_classes,
       (size_t)stats.too_costly_multiple_conditional_classes,
       (size_t)stats.too_costly_globally, (size_t)stats.expanded_methods,
-      (size_t)stats.calls_inlined, (size_t)stats.new_instances_eliminated,
-      stats.inlined_methods_removed, stats.inlinable_methods_kept,
-      stats.inlined_methods_mispredicted);
+      (size_t)stats.calls_inlined, (size_t)stats.new_instances_eliminated);
 
   mgr.incr_metric("total_savings", stats.total_savings);
   mgr.incr_metric("root_methods", root_methods.size());
-  mgr.incr_metric("reduced_methods", stats.reduced_methods);
+  mgr.incr_metric("reduced_methods", (size_t)stats.reduced_methods);
   mgr.incr_metric("reduced_methods_variants",
                   (size_t)stats.reduced_methods_variants);
-  mgr.incr_metric("selected_reduced_methods", stats.selected_reduced_methods);
+  mgr.incr_metric("selected_reduced_methods",
+                  (size_t)stats.selected_reduced_methods);
   mgr.incr_metric("root_method_anchors_not_inlinable_inlining",
                   (size_t)stats.anchors_not_inlinable_inlining);
   mgr.incr_metric("root_method_invokes_not_inlinable_callee_unexpandable",
@@ -1561,12 +1841,6 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric("calls_inlined", (size_t)stats.calls_inlined);
   mgr.incr_metric("new_instances_eliminated",
                   (size_t)stats.new_instances_eliminated);
-  mgr.incr_metric("inlined_methods_removed", stats.inlined_methods_removed);
-  mgr.incr_metric("inlinable_methods_kept", stats.inlinable_methods_kept);
-  mgr.incr_metric("inlined_methods_mispredicted",
-                  stats.inlined_methods_mispredicted);
-  mgr.incr_metric("lost_returns_through_shrinking",
-                  lost_returns_through_shrinking);
 }
 
 static ObjectEscapeAnalysisPass s_pass;

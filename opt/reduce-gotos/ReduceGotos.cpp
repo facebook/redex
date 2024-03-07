@@ -480,11 +480,13 @@ void ReduceGotosPass::process_code_ifs(cfg::ControlFlowGraph& cfg,
 
 ReduceGotosPass::Stats ReduceGotosPass::process_code(IRCode* code) {
   Stats stats;
-  always_assert(code->editable_cfg_built());
+
+  code->build_cfg(/* editable = true*/);
   code->cfg().calculate_exit_block();
   auto& cfg = code->cfg();
   process_code_switches(cfg, stats);
   process_code_ifs(cfg, stats);
+  code->clear_cfg();
 
   return stats;
 }
@@ -496,7 +498,7 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
 
   Stats stats = walk::parallel::methods<Stats>(scope, [](DexMethod* method) {
     const auto code = method->get_code();
-    if (!code || method->rstate.no_optimizations()) {
+    if (!code) {
       return Stats{};
     }
 

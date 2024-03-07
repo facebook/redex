@@ -20,6 +20,7 @@ class InitClassLoweringPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
         {NoInitClassInstructions, Establishes},
         {NoResolvablePureRefs, Preserves},
         {RenameClass, Preserves},
@@ -27,6 +28,8 @@ class InitClassLoweringPass : public Pass {
   }
 
   void bind_config() override;
+
+  bool is_cfg_legacy() override { return true; }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

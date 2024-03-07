@@ -29,13 +29,13 @@ void DedupBlocksPass::run_pass(DexStoresVector& stores,
       scope,
       [&](DexMethod* method) {
         const auto code = method->get_code();
-        if (code == nullptr || m_config.method_blocklist.count(method) != 0 ||
-            method->rstate.no_optimizations()) {
+        if (code == nullptr || m_config.method_blocklist.count(method) != 0) {
           return dedup_blocks_impl::Stats();
         }
 
         TRACE(DEDUP_BLOCKS, 3, "[dedup blocks] method %s", SHOW(method));
-        always_assert(code->editable_cfg_built());
+
+        code->build_cfg(/* editable */ true);
         auto& cfg = code->cfg();
 
         TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] method %s before:\n%s",
@@ -44,6 +44,7 @@ void DedupBlocksPass::run_pass(DexStoresVector& stores,
         dedup_blocks_impl::DedupBlocks impl(&m_config, method);
         impl.run();
 
+        code->clear_cfg();
         return impl.get_stats();
       },
       m_config.debug ? 1 : redex_parallel::default_num_threads());

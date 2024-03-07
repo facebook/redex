@@ -367,7 +367,7 @@ DexClasses ClassSplitter::additional_classes(const DexClasses& classes) {
         ++m_stats.relocated_static_methods;
       } else if (!method->is_virtual()) {
         ++m_stats.relocated_non_static_direct_methods;
-      } else if (m_non_true_virtual_methods.count_unsafe(method)) {
+      } else if (m_non_true_virtual_methods.count(method)) {
         ++m_stats.relocated_non_true_virtual_methods;
       } else {
         ++m_stats.relocated_true_virtual_methods;
@@ -524,8 +524,8 @@ void ClassSplitter::cleanup(const Scope& final_scope) {
     if (!is_static(method)) {
       mutators::make_static(method);
     }
-    change_visibility(method, target_cls->get_type());
     relocate_method(method, target_cls->get_type());
+    change_visibility(method);
   }
   TRACE(CS, 2, "[class splitting] Made {%zu} methods static.",
         methods_to_staticize.size());
@@ -698,8 +698,7 @@ bool ClassSplitter::can_relocate(bool cls_has_problematic_clinit,
       // fields, and carefully deal with super-init calls.
       return false;
     }
-  } else if (m_non_true_virtual_methods.count_unsafe(
-                 const_cast<DexMethod*>(m))) {
+  } else if (m_non_true_virtual_methods.count(const_cast<DexMethod*>(m))) {
     if (!m_config.relocate_non_true_virtual_methods) {
       return false;
     }

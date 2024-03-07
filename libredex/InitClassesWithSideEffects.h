@@ -26,7 +26,7 @@ using InitClasses = std::vector<const DexClass*>;
  */
 class InitClassesWithSideEffects {
  private:
-  InsertOnlyConcurrentMap<const DexType*, InitClasses> m_init_classes;
+  ConcurrentMap<const DexType*, std::shared_ptr<InitClasses>> m_init_classes;
   std::atomic<size_t> m_trivial_init_classes{0};
   InitClasses m_empty_init_classes;
   bool m_create_init_class_insns;
@@ -34,7 +34,7 @@ class InitClassesWithSideEffects {
   const InitClasses* compute(
       const DexClass* cls,
       const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
-      const InsertOnlyConcurrentSet<DexMethod*>* non_true_virtuals);
+      const std::unordered_set<DexMethod*>* non_true_virtuals);
 
  public:
   InitClassesWithSideEffects(

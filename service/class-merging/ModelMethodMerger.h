@@ -11,7 +11,6 @@
 
 #include "DexClass.h"
 #include "MergerType.h"
-#include "MethodProfiles.h"
 #include "Model.h"
 #include "TypeTags.h"
 
@@ -57,8 +56,7 @@ class ModelMethodMerger {
       const TypeTags* type_tags,
       const std::unordered_map<DexMethod*, std::string>& method_debug_map,
       const ModelSpec& model_spec,
-      boost::optional<size_t> max_num_dispatch_target,
-      boost::optional<method_profiles::MethodProfiles*> method_profiles);
+      boost::optional<size_t> max_num_dispatch_target);
 
   TypeToMethod& merge_methods() {
     merge_ctors();
@@ -91,7 +89,6 @@ class ModelMethodMerger {
   // This member is only used for testing purpose. If its value is greator than
   // zero, the splitting decision will bypass the instruction count limit.
   boost::optional<size_t> m_max_num_dispatch_target;
-  boost::optional<method_profiles::MethodProfiles*> m_method_profiles;
 
   // dmethods
   MergerToMethods m_merger_ctors;

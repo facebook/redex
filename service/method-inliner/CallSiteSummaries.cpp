@@ -158,8 +158,8 @@ namespace inliner {
 
 CallSiteSummarizer::CallSiteSummarizer(
     shrinker::Shrinker& shrinker,
-    const ConcurrentMethodToMethodOccurrences& callee_caller,
-    const ConcurrentMethodToMethodOccurrences& caller_callee,
+    const MethodToMethodOccurrences& callee_caller,
+    const MethodToMethodOccurrences& caller_callee,
     GetCalleeFunction get_callee_fn,
     HasCalleeOtherCallSitesPredicate has_callee_other_call_sites_fn,
     std::function<bool(const ConstantValue&)>* filter_fn,
@@ -175,14 +175,34 @@ CallSiteSummarizer::CallSiteSummarizer(
 
 const CallSiteSummary* CallSiteSummarizer::internalize_call_site_summary(
     const CallSiteSummary& call_site_summary) {
-  return m_call_site_summaries
-      .get_or_emplace_and_assert_equal(call_site_summary.get_key(),
-                                       call_site_summary)
-      .first;
+  auto key = call_site_summary.get_key();
+  const CallSiteSummary* res;
+  m_call_site_summaries.update(
+      key, [&](const std::string&,
+               std::unique_ptr<const CallSiteSummary>& p,
+               bool exist) {
+        if (exist) {
+          always_assert_log(p->result_used == call_site_summary.result_used,
+                            "same key %s for\n    %d\nvs. %d", key.c_str(),
+                            p->result_used, call_site_summary.result_used);
+          always_assert_log(p->arguments.equals(call_site_summary.arguments),
+                            "same key %s for\n    %s\nvs. %s", key.c_str(),
+                            SHOW(p->arguments),
+                            SHOW(call_site_summary.arguments));
+        } else {
+          p = std::make_unique<const CallSiteSummary>(call_site_summary);
+        }
+        res = p.get();
+      });
+  return res;
 }
 
 void CallSiteSummarizer::summarize() {
   Timer t("compute_call_site_summaries");
+  struct CalleeInfo {
+    std::unordered_map<const CallSiteSummary*, size_t> occurrences;
+    std::vector<IRInstruction*> invokes;
+  };
 
   // We'll do a top-down traversal of all call-sites, in order to propagate
   // call-site information from outer call-sites to nested call-sites, improving
@@ -194,17 +214,21 @@ void CallSiteSummarizer::summarize() {
   // virtual methods.
   PriorityThreadPoolDAGScheduler<DexMethod*> summaries_scheduler;
 
+  ConcurrentMap<DexMethod*, std::shared_ptr<CalleeInfo>>
+      concurrent_callee_infos;
+
   // Helper function to retrieve a list of callers of a callee such that all
   // possible call-sites to the callee are in the returned callers.
   auto get_dependencies =
       [&](DexMethod* callee) -> const std::unordered_map<DexMethod*, size_t>* {
-    const auto* ptr = m_callee_caller.get_unsafe(callee);
-    if (ptr == nullptr || m_has_callee_other_call_sites_fn(callee)) {
+    auto it = m_callee_caller.find(callee);
+    if (it == m_callee_caller.end() ||
+        m_has_callee_other_call_sites_fn(callee)) {
       return nullptr;
     }
     // If we get here, then we know all possible call-sites to the callee, and
     // they reside in the known list of callers.
-    return ptr;
+    return &it->second;
   };
 
   summaries_scheduler.set_executor([&](DexMethod* method) {
@@ -214,18 +238,11 @@ void CallSiteSummarizer::summarize() {
       // constant arguments.
       arguments = CallSiteArguments::top();
     } else {
-      CalleeInfo* ci = nullptr;
-      auto success =
-          m_callee_infos.observe(method, [&](auto*, const auto& val) {
-            ci = const_cast<CalleeInfo*>(&val);
-          });
-      always_assert(success == !!ci);
-      if (ci == nullptr) {
+      auto ci = concurrent_callee_infos.get(method, nullptr);
+      if (!ci) {
         // All callers were unreachable
         arguments = CallSiteArguments::bottom();
       } else {
-        // Release memory for indices
-        ci->indices.clear();
         // The only way to call this method is by going through a set of known
         // call-sites. We join together all those incoming constant arguments.
         always_assert(!ci->occurrences.empty());
@@ -242,7 +259,7 @@ void CallSiteSummarizer::summarize() {
       m_stats->constant_invoke_callers_unreachable++;
       return;
     }
-    auto& callees = m_caller_callee.at_unsafe(method);
+    auto& callees = m_caller_callee.at(method);
     ConstantEnvironment initial_env =
         constant_propagation::interprocedural::env_with_params(
             is_static(method), method->get_code(), arguments);
@@ -251,27 +268,23 @@ void CallSiteSummarizer::summarize() {
       auto insn = p.first;
       auto callee = m_get_callee_fn(method, insn);
       auto call_site_summary = p.second;
-      m_callee_infos.update(
-          callee, [&](const DexMethod*, CalleeInfo& ci, bool /* exists */) {
-            auto [it, emplaced] =
-                ci.indices.emplace(call_site_summary, ci.indices.size());
-            if (emplaced) {
-              ci.occurrences.emplace_back(call_site_summary, 1);
-            } else {
-              ci.occurrences[it->second].second++;
-            }
-            ci.invokes.push_back(insn);
-          });
+      concurrent_callee_infos.update(callee,
+                                     [&](const DexMethod*,
+                                         std::shared_ptr<CalleeInfo>& ci,
+                                         bool /* exists */) {
+                                       if (!ci) {
+                                         ci = std::make_shared<CalleeInfo>();
+                                       }
+                                       ci->occurrences[call_site_summary]++;
+                                       ci->invokes.push_back(insn);
+                                     });
       m_invoke_call_site_summaries.emplace(insn, call_site_summary);
     }
     m_stats->constant_invoke_callers_analyzed++;
-    if (res.dead_blocks > 0) {
-      m_stats->constant_invoke_callers_unreachable_blocks += res.dead_blocks;
-    }
+    m_stats->constant_invoke_callers_unreachable_blocks += res.dead_blocks;
   });
 
   std::vector<DexMethod*> callers;
-  callers.reserve(m_caller_callee.size());
   for (auto& p : m_caller_callee) {
     auto method = const_cast<DexMethod*>(p.first);
     callers.push_back(method);
@@ -284,6 +297,19 @@ void CallSiteSummarizer::summarize() {
   }
   m_stats->constant_invoke_callers_critical_path_length =
       summaries_scheduler.run(callers.begin(), callers.end());
+
+  for (auto& p : concurrent_callee_infos) {
+    auto callee = p.first;
+    auto& v = m_callee_call_site_summary_occurrences[callee];
+    auto& ci = p.second;
+    for (const auto& q : ci->occurrences) {
+      const auto call_site_summary = q.first;
+      const auto count = q.second;
+      v.emplace_back(call_site_summary, count);
+    }
+    auto& invokes = m_callee_call_site_invokes[callee];
+    invokes.insert(invokes.end(), ci->invokes.begin(), ci->invokes.end());
+  }
 }
 
 InvokeCallSiteSummariesAndDeadBlocks
@@ -352,21 +378,22 @@ CallSiteSummarizer::get_invoke_call_site_summaries(
 const std::vector<CallSiteSummaryOccurrences>*
 CallSiteSummarizer::get_callee_call_site_summary_occurrences(
     const DexMethod* callee) const {
-  auto ptr = m_callee_infos.get_unsafe(callee);
-  return ptr == nullptr ? nullptr : &ptr->occurrences;
+  auto it = m_callee_call_site_summary_occurrences.find(callee);
+  return it == m_callee_call_site_summary_occurrences.end() ? nullptr
+                                                            : &it->second;
 }
 
 const std::vector<const IRInstruction*>*
 CallSiteSummarizer::get_callee_call_site_invokes(
     const DexMethod* callee) const {
-  auto ptr = m_callee_infos.get_unsafe(callee);
-  return ptr == nullptr ? nullptr : &ptr->invokes;
+  auto it = m_callee_call_site_invokes.find(callee);
+  return it == m_callee_call_site_invokes.end() ? nullptr : &it->second;
 }
 
 const CallSiteSummary* CallSiteSummarizer::get_instruction_call_site_summary(
     const IRInstruction* invoke_insn) const {
-  auto ptr = m_invoke_call_site_summaries.get_unsafe(invoke_insn);
-  return ptr == nullptr ? nullptr : *ptr;
+  auto it = m_invoke_call_site_summaries.find(invoke_insn);
+  return it == m_invoke_call_site_summaries.end() ? nullptr : &*it->second;
 }
 
 } // namespace inliner

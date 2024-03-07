@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include "ConcurrentContainers.h"
 #include "DexStore.h"
 #include "Pass.h"
 
@@ -29,13 +28,6 @@ struct Stats {
   int get_uninstantiables = 0;
   int invoke_uninstantiables = 0;
   int check_casts = 0;
-
-  int sum() const {
-    return instance_ofs + invokes + field_accesses_on_uninstantiable +
-           throw_null_methods + abstracted_classes + abstracted_vmethods +
-           removed_vmethods + get_uninstantiables + invoke_uninstantiables +
-           check_casts;
-  }
 
   Stats& operator+=(const Stats&);
   Stats operator+(const Stats&) const;
@@ -61,6 +53,6 @@ Stats replace_all_with_unreachable_throw(cfg::ControlFlowGraph& cfg);
 /// either making them abstract, removing their body, or deleting them.
 Stats reduce_uncallable_instance_methods(
     const Scope& scope,
-    const ConcurrentSet<DexMethod*>& uncallable_instance_methods,
+    const std::unordered_set<DexMethod*>& uncallable_instance_methods,
     const std::function<bool(const DexMethod*)>& is_implementation_methods);
 } // namespace remove_uninstantiables_impl

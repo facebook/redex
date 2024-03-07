@@ -48,7 +48,6 @@
 
 #define WELL_KNOWN_METHODS                                                    \
   FOR_EACH(java_lang_Object_ctor, "Ljava/lang/Object;.<init>:()V")            \
-  FOR_EACH(java_lang_Object_finalize, "Ljava/lang/Object;.finalize:()V")      \
   FOR_EACH(java_lang_Enum_ctor,                                               \
            "Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V")                  \
   FOR_EACH(java_lang_Enum_ordinal, "Ljava/lang/Enum;.ordinal:()I")            \

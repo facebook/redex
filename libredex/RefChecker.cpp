@@ -27,12 +27,17 @@ CodeRefs::CodeRefs(const DexMethod* method) {
           always_assert(insn->get_type());
           types_set.insert(insn->get_type());
         } else if (insn->has_method()) {
-          auto callee = resolve_invoke_method(insn, method);
+          auto callee_ref = insn->get_method();
+          auto callee =
+              resolve_method(callee_ref, opcode_to_search(insn), method);
+          if (!callee && opcode_to_search(insn) == MethodSearch::Virtual) {
+            callee = resolve_method(callee_ref, MethodSearch::InterfaceVirtual,
+                                    method);
+          }
           if (!callee) {
             invalid_refs = true;
             return editable_cfg_adapter::LOOP_BREAK;
           }
-          auto callee_ref = insn->get_method();
           if (callee != callee_ref) {
             types_set.insert(callee_ref->get_class());
           }
@@ -74,27 +79,44 @@ CodeRefs::CodeRefs(const DexMethod* method) {
 }
 
 bool RefChecker::check_type(const DexType* type) const {
-  return *m_type_cache
-              .get_or_create_and_assert_equal(
-                  type,
-                  [this](const auto* _) { return check_type_internal(_); })
-              .first;
+  auto res = m_type_cache.get(type, boost::none);
+  if (res == boost::none) {
+    res = check_type_internal(type);
+    m_type_cache.update(
+        type, [res](const DexType*, boost::optional<bool>& value, bool exists) {
+          always_assert(!exists || value == res);
+          value = res;
+        });
+  }
+  return *res;
 }
 
 bool RefChecker::check_method(const DexMethod* method) const {
-  return *m_method_cache
-              .get_or_create_and_assert_equal(
-                  method,
-                  [this](const auto* _) { return check_method_internal(_); })
-              .first;
+  auto res = m_method_cache.get(method, boost::none);
+  if (res == boost::none) {
+    res = check_method_internal(method);
+    m_method_cache.update(
+        method,
+        [res](const DexMethod*, boost::optional<bool>& value, bool exists) {
+          always_assert(!exists || value == res);
+          value = res;
+        });
+  }
+  return *res;
 }
 
 bool RefChecker::check_field(const DexField* field) const {
-  return *m_field_cache
-              .get_or_create_and_assert_equal(
-                  field,
-                  [this](const auto* _) { return check_field_internal(_); })
-              .first;
+  auto res = m_field_cache.get(field, boost::none);
+  if (res == boost::none) {
+    res = check_field_internal(field);
+    m_field_cache.update(
+        field,
+        [res](const DexField*, boost::optional<bool>& value, bool exists) {
+          always_assert(!exists || value == res);
+          value = res;
+        });
+  }
+  return *res;
 }
 
 bool RefChecker::check_class(
@@ -114,21 +136,17 @@ bool RefChecker::check_class(
       return false;
     }
     if (mog && method->is_virtual()) {
-      if (method_override_graph::any_overridden_methods(
-              *mog, method,
-              [&](const auto* m) {
-                if (!m->is_external()) {
-                  return false;
-                }
-                if (m_min_sdk_api && !m_min_sdk_api->has_method(m)) {
-                  TRACE(REFC, 4, "Risky external method override %s -> %s",
-                        SHOW(method), SHOW(m));
-                  return true;
-                }
-                return false;
-              },
-              true)) {
-        return false;
+      const auto& overriddens =
+          method_override_graph::get_overridden_methods(*mog, method, true);
+      for (const auto* m : overriddens) {
+        if (!m->is_external()) {
+          continue;
+        }
+        if (m_min_sdk_api && !m_min_sdk_api->has_method(m)) {
+          TRACE(REFC, 4, "Risky external method override %s -> %s",
+                SHOW(method), SHOW(m));
+          return false;
+        }
       }
     }
   }

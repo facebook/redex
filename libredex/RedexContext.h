@@ -39,7 +39,6 @@ class DexMethodHandle;
 class DexMethodRef;
 class DexProto;
 class DexString;
-struct DexStringRepr;
 class DexType;
 class DexTypeList;
 class PositionPatternSwitchManager;
@@ -220,10 +219,6 @@ struct RedexContext {
   ConcurrentSet<const DexClass*> blanket_native_root_classes;
   ConcurrentSet<const DexMethod*> blanket_native_root_methods;
 
-  // Release memory used by erased items and old ConcurrentHashtable storage
-  // versions.
-  void compact();
-
  private:
   struct Strcmp;
   struct TruncatedStringHash;
@@ -333,44 +328,11 @@ struct RedexContext {
   };
 
   template <size_t n_slots = 31>
-  class ConcurrentProjectedStringSet {
-    std::array<std::set<StringSetKey, StringSetKeyCompare>, n_slots> m_slots;
-    mutable std::array<std::mutex, n_slots> m_locks;
-
-   public:
-    const StringSetKey* get(StringSetKey str) const {
-      size_t i = StringSetKeyHash()(str) % n_slots;
-      auto& map = m_slots[i];
-      std::lock_guard<std::mutex> lock(m_locks[i]);
-      auto it = map.find(str);
-      return it == map.end() ? nullptr : &*it;
-    }
-
-    std::pair<const StringSetKey*, bool> insert(StringSetKey str) {
-      size_t i = StringSetKeyHash()(str) % n_slots;
-      auto& map = m_slots[i];
-      std::lock_guard<std::mutex> lock(m_locks[i]);
-      auto [it, emplaced] = map.emplace(str);
-      return std::make_pair(&*it, emplaced);
-    }
-
-    size_t size() const {
-      size_t res = 0;
-      for (auto& set : m_slots) {
-        res += set.size();
-      }
-      return res;
-    }
-
-    void release() {
-      for (auto& set : m_slots) {
-        for (auto* s : set) {
-          delete s;
-        }
-        set.clear();
-      }
-    }
-  };
+  using ConcurrentProjectedStringSet = InsertOnlyConcurrentSetContainer<
+      std::set<StringSetKey, StringSetKeyCompare>,
+      StringSetKey,
+      StringSetKeyHash,
+      n_slots>;
 
   template <size_t n_slots, size_t m_slots>
   struct LargeStringSet {
@@ -402,33 +364,19 @@ struct RedexContext {
     size_t operator()(StringSetKey k);
   };
 
-  struct DexStringReprHash {
-    size_t operator()(const DexStringRepr& k) const;
-  };
-  struct DexStringReprEqual {
-    bool operator()(const DexStringRepr& a, const DexStringRepr& b) const;
-  };
-
   // DexString
-  LargeStringSet<31, 127> s_large_string_set;
-  std::array<InsertOnlyConcurrentSet<DexStringRepr,
-                                     DexStringReprHash,
-                                     DexStringReprEqual>*,
-             128>
-      s_small_string_set;
+  LargeStringSet<31, 127> s_string_set;
 
   // We maintain three kinds of raw string storage
   ConcurrentStringStorage s_small_string_storage;
   ConcurrentStringStorage s_medium_string_storage;
   ConcurrentStringStorage s_large_string_storage;
 
-  char* store_string(std::string_view);
-
   // DexType
-  AtomicMap<const DexString*, DexType*> s_type_map;
+  ConcurrentMap<const DexString*, DexType*> s_type_map;
 
   // DexFieldRef
-  AtomicMap<DexFieldSpec, DexFieldRef*> s_field_map;
+  ConcurrentMap<DexFieldSpec, DexFieldRef*> s_field_map;
   std::mutex s_field_lock;
 
   // DexTypeList
@@ -443,10 +391,10 @@ struct RedexContext {
       return lhs == rhs || *lhs == *rhs;
     }
   };
-  AtomicMap<const DexTypeListContainerType*,
-            DexTypeList*,
-            DexTypeListContainerTypePtrHash,
-            DexTypeListContainerTypePtrEquals>
+  ConcurrentMap<const DexTypeListContainerType*,
+                DexTypeList*,
+                DexTypeListContainerTypePtrHash,
+                DexTypeListContainerTypePtrEquals>
       s_typelist_map;
 
   // DexProto
@@ -460,7 +408,7 @@ struct RedexContext {
       s_proto_set;
 
   // DexMethod
-  AtomicMap<DexMethodSpec, DexMethodRef*> s_method_map;
+  ConcurrentMap<DexMethodSpec, DexMethodRef*> s_method_map;
   std::mutex s_method_lock;
 
   // DexLocation
@@ -470,7 +418,7 @@ struct RedexContext {
       return std::hash<std::string_view>()(k.second);
     }
   };
-  AtomicMap<ClassLocationKey, DexLocation*, ClassLocationKeyHash>
+  ConcurrentMap<ClassLocationKey, DexLocation*, ClassLocationKeyHash>
       s_location_map;
 
   // DexPositionSwitch and DexPositionPattern

@@ -59,28 +59,28 @@ TEST_F(GlobalTypeAnalysisTest, ConstsAndAGETTest) {
 
   auto meth_pass_string = get_method("TestB;.passString", "Ljava/lang/String;",
                                      "Ljava/lang/String;");
-  EXPECT_EQ(
-      wps.get_return_type(meth_pass_string),
-      get_type_domain_simple("Ljava/lang/String;", /* is_not_null */ true));
+  EXPECT_EQ(wps.get_return_type(meth_pass_string),
+            get_type_domain_simple("Ljava/lang/String;"));
 
   auto meth_pass_class =
       get_method("TestB;.passClass", "Ljava/lang/Class;", "Ljava/lang/Class;");
-  EXPECT_EQ(
-      wps.get_return_type(meth_pass_class),
-      get_type_domain_simple("Ljava/lang/Class;", /* is_not_null */ true));
+  EXPECT_EQ(wps.get_return_type(meth_pass_class),
+            get_type_domain_simple("Ljava/lang/Class;"));
 
   auto meth_array_comp = get_method("TestB;.getStringArrayComponent",
                                     "[Ljava/lang/String;",
                                     "Ljava/lang/String;");
   EXPECT_EQ(wps.get_return_type(meth_array_comp),
-            get_type_domain_simple("Ljava/lang/String;"));
+            get_type_domain_simple("Ljava/lang/String;", Nullness::NN_TOP,
+                                   /* is_dex_type_exact */ false));
 
   auto meth_nested_array_comp =
       get_method("TestB;.getNestedStringArrayComponent",
                  "[[Ljava/lang/String;",
                  "[Ljava/lang/String;");
   EXPECT_EQ(wps.get_return_type(meth_nested_array_comp),
-            get_type_domain_simple("[Ljava/lang/String;"));
+            get_type_domain_simple("[Ljava/lang/String;", Nullness::NN_TOP,
+                                   /* is_dex_type_exact */ false));
 }
 
 TEST_F(GlobalTypeAnalysisTest, NullableFieldTypeTest) {
@@ -157,7 +157,9 @@ TEST_F(GlobalTypeAnalysisTest, ConstNullnessDomainTest) {
   auto lta = gta->get_replayable_local_analysis(meth_foo);
   auto code = meth_foo->get_code();
   auto foo_exit_env = lta->get_exit_state_at(code->cfg().exit_block());
-  EXPECT_TRUE(foo_exit_env.get_reg_environment().get(0).is_top());
+  EXPECT_FALSE(foo_exit_env.get_reg_environment().get(0).is_top());
+  EXPECT_EQ(*foo_exit_env.get_reg_environment().get(0).get_constant(), 1);
+  EXPECT_TRUE(foo_exit_env.get_reg_environment().get(0).is_not_null());
 }
 
 TEST_F(GlobalTypeAnalysisTest, ArrayConstNullnessDomainTest) {
@@ -190,8 +192,11 @@ TEST_F(GlobalTypeAnalysisTest, ClinitFieldAnalyzerTest) {
   auto field_sbase =
       get_field("TestH;.BASE:Lcom/facebook/redextest/TestH$Base;");
   auto ftype = wps.get_field_type(field_sbase);
-  EXPECT_TRUE(ftype.is_top());
+  EXPECT_FALSE(ftype.is_top());
   EXPECT_TRUE(ftype.is_nullable());
+  EXPECT_EQ(ftype.get_single_domain(),
+            SingletonDexTypeDomain(get_type("TestH$Base")));
+  EXPECT_EQ(ftype.get_set_domain(), get_small_set_domain({"TestH$Base"}));
 
   auto field_mbase =
       get_field("TestH;.mBase:Lcom/facebook/redextest/TestH$Base;");
@@ -214,8 +219,11 @@ TEST_F(GlobalTypeAnalysisTest, ClinitFieldAnalyzerTest) {
   auto meth_baz =
       get_method("TestH;.baz", "", "Lcom/facebook/redextest/TestH$Base;");
   rtype = wps.get_return_type(meth_baz);
-  EXPECT_TRUE(rtype.is_top());
+  EXPECT_FALSE(rtype.is_top());
   EXPECT_TRUE(rtype.is_nullable());
+  EXPECT_EQ(rtype.get_single_domain(),
+            SingletonDexTypeDomain(get_type("TestH$Base")));
+  EXPECT_EQ(rtype.get_set_domain(), get_small_set_domain({"TestH$Base"}));
 }
 
 TEST_F(GlobalTypeAnalysisTest, IFieldsNullnessTest) {
@@ -262,6 +270,7 @@ TEST_F(GlobalTypeAnalysisTest, PrimitiveArrayTest) {
   EXPECT_TRUE(rtype.is_not_null());
   EXPECT_EQ(rtype.get_single_domain(),
             SingletonDexTypeDomain(get_type_simple("[B")));
+  EXPECT_TRUE(rtype.get_array_nullness().is_top());
 }
 
 TEST_F(GlobalTypeAnalysisTest, InstanceSensitiveCtorTest) {
@@ -306,6 +315,7 @@ TEST_F(GlobalTypeAnalysisTest, ArrayNullnessEscapeTest) {
   EXPECT_EQ(rtype.get_single_domain(),
             SingletonDexTypeDomain(
                 get_type_simple("Lcom/facebook/redextest/TestM$A;")));
+  EXPECT_TRUE(rtype.get_array_nullness().is_top());
 }
 
 TEST_F(GlobalTypeAnalysisTest, ArrayNullnessEscape2Test) {
@@ -325,6 +335,7 @@ TEST_F(GlobalTypeAnalysisTest, ArrayNullnessEscape2Test) {
   EXPECT_EQ(rtype.get_single_domain(),
             SingletonDexTypeDomain(
                 get_type_simple("Lcom/facebook/redextest/TestN$A;")));
+  EXPECT_TRUE(rtype.get_array_nullness().is_top());
 
   auto dance2 = get_method("TestN;.danceWithArray2", "",
                            "Lcom/facebook/redextest/TestN$A;");
@@ -335,6 +346,7 @@ TEST_F(GlobalTypeAnalysisTest, ArrayNullnessEscape2Test) {
   EXPECT_EQ(rtype.get_single_domain(),
             SingletonDexTypeDomain(
                 get_type_simple("Lcom/facebook/redextest/TestN$A;")));
+  EXPECT_TRUE(rtype.get_array_nullness().is_top());
 }
 
 TEST_F(GlobalTypeAnalysisTest, MultipleCalleeTest) {

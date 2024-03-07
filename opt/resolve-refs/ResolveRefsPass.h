@@ -41,7 +41,9 @@ class ResolveRefsPass : public ExternalRefsManglingPass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Establishes},
+        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 

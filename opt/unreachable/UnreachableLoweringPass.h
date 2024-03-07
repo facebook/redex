@@ -20,17 +20,12 @@ class UnreachableLoweringPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
         {NoInitClassInstructions, Preserves},
         {NoUnreachableInstructions, Establishes},
         {RenameClass, Preserves},
     };
   }
 
-  void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
- private:
-  std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
-  DexMethod* m_create_and_throw_method{nullptr};
 };

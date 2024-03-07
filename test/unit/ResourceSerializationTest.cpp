@@ -21,7 +21,6 @@
 #include "SanitizersConfig.h"
 #include "Util.h"
 #include "androidfw/ResourceTypes.h"
-#include "arsc/TestStructures.h"
 #include "utils/Errors.h"
 #include "utils/Serialize.h"
 #include "utils/Visitor.h"
@@ -388,8 +387,8 @@ ParsedAaptOutput aapt_dump_and_parse(const std::string& arsc_path,
       uint32_t data = std::stoul(what[5], nullptr, 16);
       output.id_fully_qualified_names.emplace(id, fully_qualified);
       output.fully_qualified_name_to_id.emplace(fully_qualified, id);
-      android::Res_value value{sizeof(android::Res_value), 0, (uint8_t)type,
-                               data};
+      android::Res_value value{
+          sizeof(android::Res_value), 0, (uint8_t)type, data};
       SimpleEntry entry{id, fully_qualified, value};
       simple_values.emplace(id, std::move(entry));
     } else if (boost::regex_search(line, what, bag_exp)) {
@@ -569,6 +568,11 @@ TEST(ResTable, AppendNewType) {
       table_snapshot.collect_resource_values(source_ids[i], &values);
     }
   }
+
+  // Create a default looking ResTable_config
+  android::ResTable_config default_config;
+  memset(&default_config, 0, sizeof(android::ResTable_config));
+  default_config.size = sizeof(android::ResTable_config);
 
   // Write a new .arsc file
   {
@@ -814,7 +818,12 @@ TEST(ResTableParse, TestUnknownPackageChunks) {
 }
 
 TEST(Configs, TestConfigEquivalence) {
+  android::ResTable_config default_config{};
+  default_config.size = sizeof(android::ResTable_config);
   EXPECT_TRUE(arsc::are_configs_equivalent(&default_config, &default_config));
+  android::ResTable_config land_config{};
+  land_config.size = sizeof(android::ResTable_config);
+  land_config.orientation = android::ResTable_config::ORIENTATION_LAND;
   EXPECT_FALSE(arsc::are_configs_equivalent(&default_config, &land_config));
   // Configs of different sizes (simulate some of our snapshots of older files)
   {
@@ -856,6 +865,70 @@ TEST(ResTable, TestBuilderRoundTrip) {
 }
 
 namespace {
+PACKED(struct EntryAndValue {
+  android::ResTable_entry entry{};
+  android::Res_value value{};
+  EntryAndValue(uint32_t key_string_idx, uint8_t data_type, uint32_t data) {
+    entry.size = sizeof(android::ResTable_entry);
+    entry.key.index = key_string_idx;
+    value.size = sizeof(android::Res_value);
+    value.dataType = data_type;
+    value.data = data;
+  }
+});
+
+// For testing simplicity, a map that has two items in it.
+PACKED(struct MapEntryAndValues {
+  android::ResTable_map_entry entry{};
+  android::ResTable_map item0{};
+  android::ResTable_map item1{};
+  MapEntryAndValues(uint32_t key_string_idx, uint32_t parent_ident) {
+    entry.size = sizeof(android::ResTable_map_entry);
+    entry.count = 2;
+    entry.flags = android::ResTable_entry::FLAG_COMPLEX;
+    entry.key.index = key_string_idx;
+    entry.parent.ident = parent_ident;
+    item0.value.size = sizeof(android::Res_value);
+    item1.value.size = sizeof(android::Res_value);
+  }
+});
+} // namespace
+
+TEST(ResTable, ComputeSizes) {
+  EntryAndValue simple(0, android::Res_value::TYPE_DIMENSION, 1000);
+  EXPECT_EQ(arsc::compute_entry_value_length(&simple.entry),
+            sizeof(EntryAndValue));
+  MapEntryAndValues complex(1, 0);
+  EXPECT_EQ(arsc::compute_entry_value_length(&complex.entry),
+            sizeof(MapEntryAndValues));
+}
+
+namespace {
+// Data for a simple arsc file that many tests can get written against.
+EntryAndValue e0(0, android::Res_value::TYPE_DIMENSION, 1000);
+EntryAndValue e0_land(0, android::Res_value::TYPE_DIMENSION, 1001);
+EntryAndValue e1(1, android::Res_value::TYPE_DIMENSION, 2000);
+EntryAndValue e2(2, android::Res_value::TYPE_REFERENCE, 0x7f010001);
+EntryAndValue id_0(0, android::Res_value::TYPE_INT_BOOLEAN, 0);
+EntryAndValue id_1(1, android::Res_value::TYPE_INT_BOOLEAN, 0);
+EntryAndValue id_2(2, android::Res_value::TYPE_INT_BOOLEAN, 0);
+MapEntryAndValues style(3, 0);
+
+// The package that all tests to follow will be in
+android::ResTable_package package_header{.id = 0x7f,
+                                         .name = {'f', 'o', 'o', '\0'}};
+// Create a default ResTable_config
+android::ResTable_config default_config = {
+    .size = sizeof(android::ResTable_config)};
+// Create a landscape config
+android::ResTable_config land_config = {
+    .size = sizeof(android::ResTable_config),
+    .orientation = android::ResTable_config::ORIENTATION_LAND};
+// And a xxhdpi config
+android::ResTable_config xxhdpi_config = {
+    .size = sizeof(android::ResTable_config),
+    .density = android::ResTable_config::DENSITY_XXHIGH};
+
 void build_arsc_file_and_validate(
     const std::function<void(const std::string& temp_dir,
                              const std::string& arsc_path)>& callback) {
@@ -880,7 +953,7 @@ void build_arsc_file_and_validate(
   }
 
   auto package_builder =
-      std::make_shared<arsc::ResPackageBuilder>(&foo_package);
+      std::make_shared<arsc::ResPackageBuilder>(&package_header);
   package_builder->set_key_strings(key_strings_builder);
   package_builder->set_type_strings(type_strings_builder);
 
@@ -896,7 +969,7 @@ void build_arsc_file_and_validate(
   std::vector<uint32_t> dimen_flags = {
       android::ResTable_config::CONFIG_ORIENTATION, 0, 0};
   auto dimen_type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
-      foo_package.id, 1, dimen_configs, dimen_flags);
+      package_header.id, 1, dimen_configs, dimen_flags);
   package_builder->add_type(dimen_type_definer);
 
   dimen_type_definer->add(&default_config, &e0);
@@ -911,7 +984,7 @@ void build_arsc_file_and_validate(
   std::vector<uint32_t> style_flags = {
       android::ResTable_config::CONFIG_DENSITY};
   auto style_type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
-      foo_package.id, 2, style_configs, style_flags);
+      package_header.id, 2, style_configs, style_flags);
   package_builder->add_type(style_type_definer);
 
   style.item0.name.ident = 0x01010098; // android:textColor
@@ -1041,15 +1114,6 @@ TEST(ResTable, BuildNewTable) {
   });
 }
 
-TEST(ResTable, ComputeSizes) {
-  EntryAndValue simple(0, android::Res_value::TYPE_DIMENSION, 1000);
-  EXPECT_EQ(arsc::compute_entry_value_length(&simple.entry),
-            sizeof(EntryAndValue));
-  MapEntryAndValues complex(1, 0);
-  EXPECT_EQ(arsc::compute_entry_value_length(&complex.entry),
-            sizeof(MapEntryAndValues));
-}
-
 TEST(ResTable, DeleteAllEntriesInType) {
   build_arsc_file_and_validate(
       [&](const std::string& /* unused */, const std::string& arsc_path) {
@@ -1142,7 +1206,7 @@ TEST(ResTable, SerializeTypeWithAllEmpty) {
   type_strings_builder->add_string(type_name.c_str(), type_name.size());
 
   auto package_builder =
-      std::make_shared<arsc::ResPackageBuilder>(&foo_package);
+      std::make_shared<arsc::ResPackageBuilder>(&package_header);
   package_builder->set_key_strings(key_strings_builder);
   package_builder->set_type_strings(type_strings_builder);
 
@@ -1154,7 +1218,7 @@ TEST(ResTable, SerializeTypeWithAllEmpty) {
   std::vector<android::ResTable_config*> dimen_configs = {&default_config};
   std::vector<uint32_t> dimen_flags = {0, 0, 0};
   auto dimen_type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
-      foo_package.id, 1, dimen_configs, dimen_flags);
+      package_header.id, 1, dimen_configs, dimen_flags);
   package_builder->add_type(dimen_type_definer);
   dimen_type_definer->add_empty(&default_config);
   dimen_type_definer->add_empty(&default_config);
@@ -1204,7 +1268,7 @@ void build_table_with_ids(const std::string& dest_file_path,
   type_strings_builder->add_string(type_name.c_str(), type_name.size());
 
   auto package_builder =
-      std::make_shared<arsc::ResPackageBuilder>(&foo_package);
+      std::make_shared<arsc::ResPackageBuilder>(&package_header);
   package_builder->set_key_strings(key_strings_builder);
   package_builder->set_type_strings(type_strings_builder);
 
@@ -1216,7 +1280,7 @@ void build_table_with_ids(const std::string& dest_file_path,
   std::vector<android::ResTable_config*> id_configs = {&default_config};
   std::vector<uint32_t> flags = {0, 0, 0, 0, 0, 0};
   auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
-      foo_package.id, 1, id_configs, flags, canonical_entries);
+      package_header.id, 1, id_configs, flags, canonical_entries);
   package_builder->add_type(type_definer);
   type_definer->add(&default_config, &id_0);
   // When canonical_entries is true, following three items will generate three
@@ -1248,7 +1312,7 @@ TEST(ResTable, ValueEquality) {
   type_strings_builder->add_string("dimen");
 
   auto package_builder =
-      std::make_shared<arsc::ResPackageBuilder>(&foo_package);
+      std::make_shared<arsc::ResPackageBuilder>(&package_header);
   package_builder->set_key_strings(key_strings_builder);
   package_builder->set_type_strings(type_strings_builder);
 
@@ -1260,7 +1324,7 @@ TEST(ResTable, ValueEquality) {
       &default_config, &land_config, &xxhdpi_config};
   std::vector<uint32_t> dimen_flags = {0, 0, 0, 0, 0};
   auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
-      foo_package.id, 1, dimen_configs, dimen_flags);
+      package_header.id, 1, dimen_configs, dimen_flags);
   package_builder->add_type(type_definer);
 
   EntryAndValue a(0, android::Res_value::TYPE_INT_COLOR_RGB8, 123456);
@@ -1361,7 +1425,7 @@ TEST(ResTable, CanonicalEntryData) {
   apk::TableParser parsed_table;
   parsed_table.visit((void*)no_canon_file.const_data(), no_canon_file.size());
   auto package_builder =
-      std::make_shared<arsc::ResPackageBuilder>(&foo_package);
+      std::make_shared<arsc::ResPackageBuilder>(&package_header);
   package_builder->set_key_strings(
       parsed_table.m_package_key_string_headers.begin()->second);
   package_builder->set_type_strings(
@@ -1369,7 +1433,7 @@ TEST(ResTable, CanonicalEntryData) {
 
   auto& id_type = parsed_table.m_package_types.begin()->second.at(0);
   auto type_projector = std::make_shared<arsc::ResTableTypeProjector>(
-      foo_package.id, id_type.spec, id_type.configs, true);
+      package_header.id, id_type.spec, id_type.configs, true);
   package_builder->add_type(type_projector);
 
   auto table_builder = std::make_shared<arsc::ResTableBuilder>();
@@ -1405,7 +1469,7 @@ TEST(ResTable, GetStringsByName) {
   type_strings_builder->add_string("string");
 
   auto package_builder =
-      std::make_shared<arsc::ResPackageBuilder>(&foo_package);
+      std::make_shared<arsc::ResPackageBuilder>(&package_header);
   package_builder->set_key_strings(key_strings_builder);
   package_builder->set_type_strings(type_strings_builder);
 
@@ -1420,7 +1484,7 @@ TEST(ResTable, GetStringsByName) {
       android::ResTable_config::CONFIG_ORIENTATION,
       android::ResTable_config::CONFIG_ORIENTATION};
   auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
-      foo_package.id, 1, string_configs, string_flags);
+      package_header.id, 1, string_configs, string_flags);
   package_builder->add_type(type_definer);
 
   EntryAndValue first(0, android::Res_value::TYPE_STRING, 0);
@@ -1489,7 +1553,7 @@ TEST(ResTable, BuildDumpAndParseSparseType) {
   type_strings_builder->add_string("dimen");
 
   auto package_builder =
-      std::make_shared<arsc::ResPackageBuilder>(&foo_package);
+      std::make_shared<arsc::ResPackageBuilder>(&package_header);
   package_builder->set_key_strings(key_strings_builder);
   package_builder->set_type_strings(type_strings_builder);
 
@@ -1505,7 +1569,7 @@ TEST(ResTable, BuildDumpAndParseSparseType) {
       0, 0,
       0, 0};
   auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
-      foo_package.id, 1, dimen_configs, flags, true, true);
+      package_header.id, 1, dimen_configs, flags, true, true);
   package_builder->add_type(type_definer);
 
   // Add all 8 values

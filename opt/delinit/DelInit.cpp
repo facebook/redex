@@ -39,6 +39,10 @@ constexpr const char* METRIC_VMETHODS_REMOVED = "num_vmethods_removed";
 constexpr const char* METRIC_IFIELDS_REMOVED = "num_ifields_removed";
 constexpr const char* METRIC_DMETHODS_REMOVED = "num_dmethods_removed";
 
+static ConcurrentSet<const DexClass*> referenced_classes;
+// List of packages on the white list
+static std::vector<std::string> package_filter;
+
 // Note: this method will return nullptr if the dotname refers to an unknown
 // type.
 DexType* get_dextype_from_dotname(const char* dotname) {
@@ -56,8 +60,7 @@ DexType* get_dextype_from_dotname(const char* dotname) {
 
 // Search a class name in a list of package names, return true if there is a
 // match
-bool find_package(const char* name,
-                  const std::vector<std::string>& package_filter) {
+bool find_package(const char* name) {
   // If there's no allowed package, optimize every package by default
   if (package_filter.empty()) {
     return true;
@@ -71,8 +74,7 @@ bool find_package(const char* name,
   return false;
 };
 
-ConcurrentSet<const DexClass*> find_referenced_classes(const Scope& scope) {
-  ConcurrentSet<const DexClass*> referenced_classes;
+void find_referenced_classes(const Scope& scope) {
   DexType* dalviksig = type::dalvik_annotation_Signature();
   walk::parallel::annotations(scope, [&](DexAnnotation* anno) {
     // Signature annotations contain strings that Jackson uses
@@ -123,21 +125,15 @@ ConcurrentSet<const DexClass*> find_referenced_classes(const Scope& scope) {
           }
         }
       });
-
-  return referenced_classes;
 }
 
-bool can_remove(const DexClass* cls,
-                const ConcurrentSet<const DexClass*>& referenced_classes) {
+bool can_remove(const DexClass* cls) {
   return !root_or_string(cls) && !referenced_classes.count_unsafe(cls);
 }
 
-bool can_remove(const DexMethod* m,
-                const ConcurrentSet<DexMethod*>& callers,
-                const ConcurrentSet<const DexClass*>& referenced_classes) {
+bool can_remove(const DexMethod* m, const ConcurrentSet<DexMethod*>& callers) {
   return callers.count_unsafe(const_cast<DexMethod*>(m)) == 0 &&
-         (can_remove(type_class(m->get_class()), referenced_classes) ||
-          !root_or_string(m));
+         (can_remove(type_class(m->get_class())) || !root_or_string(m));
 }
 
 /**
@@ -148,10 +144,9 @@ bool can_remove(const DexMethod* m,
  *  - there is another constructor for the class that is used.
  */
 bool can_remove_init(const DexMethod* m,
-                     const ConcurrentSet<DexMethod*>& called,
-                     const ConcurrentSet<const DexClass*>& referenced_classes) {
+                     const ConcurrentSet<DexMethod*>& called) {
   DexClass* clazz = type_class(m->get_class());
-  if (can_remove(clazz, referenced_classes)) {
+  if (can_remove(clazz)) {
     return true;
   } else if (m->get_proto()->get_args()->empty()) {
     // If the class is kept, we should probably keep the no argument constructor
@@ -176,19 +171,16 @@ bool can_remove_init(const DexMethod* m,
   return false;
 }
 
-bool can_remove(const DexField* f,
-                const ConcurrentSet<const DexClass*>& referenced_classes) {
-  return can_remove(type_class(f->get_class()), referenced_classes) ||
-         !root_or_string(f);
+bool can_remove(const DexField* f) {
+  return can_remove(type_class(f->get_class())) || !root_or_string(f);
 }
 
 /**
  * Return true for classes that should not be processed by the optimization.
  */
-bool filter_class(DexClass* clazz,
-                  const std::vector<std::string>& package_filter) {
+bool filter_class(DexClass* clazz) {
   always_assert(!clazz->is_external());
-  if (!find_package(clazz->get_name()->c_str(), package_filter)) {
+  if (!find_package(clazz->get_name()->c_str())) {
     return true;
   }
   return is_interface(clazz) || is_annotation(clazz);
@@ -235,14 +227,6 @@ struct DeadRefs {
     size_t deleted_ifields{0};
     size_t deleted_dmeths{0};
   } del_init_res;
-
-  ConcurrentSet<const DexClass*> referenced_classes;
-  std::vector<std::string> package_filter;
-
-  explicit DeadRefs(ConcurrentSet<const DexClass*> referenced_classes,
-                    std::vector<std::string> package_filter)
-      : referenced_classes(std::move(referenced_classes)),
-        package_filter(std::move(package_filter)) {}
 
   void delinit(Scope& scope);
   int find_new_unreachable(Scope& scope);
@@ -293,7 +277,7 @@ int DeadRefs::find_new_unreachable(Scope& scope) {
         stats.init_called++;
         continue;
       }
-      if (!can_remove_init(init, called, referenced_classes)) {
+      if (!can_remove_init(init, called)) {
         stats.init_cant_delete++;
         continue;
       }
@@ -328,7 +312,7 @@ void DeadRefs::find_unreachable(Scope& scope) {
     auto& ci = class_infos.at(clazz);
     ci.vmethods.clear();
     ci.ifields.clear();
-    if (filter_class(clazz, package_filter)) return;
+    if (filter_class(clazz)) return;
 
     auto const& dmeths = clazz->get_dmethods();
     bool hasInit = false;
@@ -360,12 +344,12 @@ void DeadRefs::find_unreachable_data(DexClass* clazz) {
   ClassInfo& ci = class_infos.at(clazz);
 
   for (const auto& meth : clazz->get_vmethods()) {
-    if (!can_remove(meth, called, referenced_classes)) continue;
+    if (!can_remove(meth, called)) continue;
     ci.vmethods.insert(meth);
   }
 
   for (const auto& field : clazz->get_ifields()) {
-    if (!can_remove(field, referenced_classes)) continue;
+    if (!can_remove(field)) continue;
     ci.ifields.insert(field);
   }
 
@@ -385,7 +369,7 @@ void DeadRefs::collect_dmethods(Scope& scope) {
     auto& ci = class_infos.at(clazz);
     ci.initmethods.clear();
     ci.dmethods.clear();
-    if (filter_class(clazz, package_filter)) return;
+    if (filter_class(clazz)) return;
 
     auto const& dmeths = clazz->get_dmethods();
     for (auto meth : dmeths) {
@@ -529,7 +513,7 @@ int DeadRefs::remove_unreachable(Scope& scope) {
         stats.called_dmeths++;
         continue;
       }
-      if (!can_remove(meth, called, referenced_classes)) {
+      if (!can_remove(meth, called)) {
         stats.dont_delete_dmeths++;
         continue;
       }
@@ -571,8 +555,10 @@ int DeadRefs::remove_unreachable(Scope& scope) {
 void DelInitPass::run_pass(DexStoresVector& stores,
                            ConfigFiles& /* conf */,
                            PassManager& mgr) {
+  package_filter = m_package_filter;
   auto scope = build_class_scope(stores);
-  DeadRefs drefs{find_referenced_classes(scope), m_package_filter};
+  find_referenced_classes(scope);
+  DeadRefs drefs;
   drefs.delinit(scope);
   TRACE(DELINIT, 1, "Removed %zu <init> methods",
         drefs.del_init_res.deleted_inits);

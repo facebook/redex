@@ -380,12 +380,6 @@ public class EnumTransformTest {
     }
   }
 
-  @Test
-  public void toString_regression() {
-    Enum e = SCORE.ONE;
-    assertThat(e.toString()).isEqualTo("UNO");
-  }
-
   // NullPointerException.
   @Test(expected = NullPointerException.class)
   public void test_npe() {

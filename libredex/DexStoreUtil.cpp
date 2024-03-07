@@ -42,7 +42,6 @@ DexClass* create_canary(int dexnum, const DexString* store_name) {
     canary_cls = cc.create();
     // Don't rename the Canary we've created
     canary_cls->rstate.set_keepnames();
-    canary_cls->rstate.set_generated();
   }
   return canary_cls;
 }
@@ -81,7 +80,7 @@ std::unordered_set<const DexType*> get_non_root_store_types(
     const TypeSet& types,
     bool include_primary_dex) {
 
-  always_assert(!stores.empty());
+  always_assert(stores.size());
   XStoreRefs xstores(stores);
   return get_non_root_store_types(stores, xstores, types, include_primary_dex);
 }

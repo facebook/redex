@@ -7,10 +7,11 @@
 
 #pragma once
 
-#include "Model.h"
 #include "Pass.h"
 
 namespace class_merging {
+
+struct ModelSpec;
 
 class AnonymousClassMergingPass : public Pass {
  public:
@@ -21,7 +22,9 @@ class AnonymousClassMergingPass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
+        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 

@@ -19,7 +19,6 @@
 
 #include "ControlFlow.h"
 #include "Debug.h"
-#include "DebugUtils.h"
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
 #include "DexInstruction.h"
@@ -1030,8 +1029,7 @@ bool IRCode::try_sync(DexCode* code) {
       packed_payload[1] = size;
       uint32_t* psdata = (uint32_t*)&packed_payload[2];
       int32_t next_key = *psdata++ = targets.front()->case_key;
-      redex_assert(std::as_const(targets).front()->case_key <=
-                   std::as_const(targets).back()->case_key);
+      redex_assert(targets.front()->case_key <= targets.back()->case_key);
       for (BranchTarget* target : targets) {
         // Fill in holes with relative offsets that are falling through to the
         // instruction after the switch instruction

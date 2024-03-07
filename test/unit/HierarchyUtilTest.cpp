@@ -56,16 +56,8 @@ TEST_F(RedexTest, findNonOverriddenVirtuals) {
 
   ext_cc.create();
 
-  NonOverriddenVirtuals non_overridden_virtuals({cls});
-  std::unordered_set<DexMethod*> set;
-  g_redex->walk_type_class([&](const DexType*, const DexClass* cls) {
-    for (auto* method : cls->get_vmethods()) {
-      if (non_overridden_virtuals.count(method)) {
-        set.insert(method);
-      }
-    }
-  });
-  EXPECT_THAT(set,
+  const auto& non_overridden = find_non_overridden_virtuals({cls});
+  EXPECT_THAT(non_overridden,
               ::testing::UnorderedElementsAre(final_method, nonfinal_method,
                                               ext_final_method));
 }

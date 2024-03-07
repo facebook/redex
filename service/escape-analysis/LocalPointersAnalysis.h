@@ -60,7 +60,7 @@ class EnvironmentWithStore {
 
   virtual bool may_have_escaped(const IRInstruction* ptr) const = 0;
 
-  const PointerSet& get_pointers(reg_t reg) const {
+  PointerSet get_pointers(reg_t reg) const {
     return get_pointer_environment().get(reg);
   }
 
@@ -119,7 +119,7 @@ class EnvironmentWithStoreImpl final
 
   void set_pointers(reg_t reg, PointerSet pset) override {
     Base::template apply<0>(
-        [&](PointerEnvironment* penv) { penv->set(reg, std::move(pset)); });
+        [&](PointerEnvironment* penv) { penv->set(reg, pset); });
   }
 
   void set_fresh_pointer(reg_t reg, const IRInstruction* pointer) override {
@@ -141,7 +141,7 @@ class EnvironmentWithStoreImpl final
 
   template <class F>
   void update_store(reg_t reg, F updater) {
-    const auto& pointers = get_pointers(reg);
+    auto pointers = get_pointers(reg);
     if (!pointers.is_value()) {
       return;
     }
@@ -196,23 +196,16 @@ struct EscapeSummary {
   // Note that if only some of the returned values are parameters, this will be
   // set to Top. A non-extremal value indicates that the return value must be
   // an element of the set.
-  ParamSet returned_parameters = ParamSet::bottom();
+  ParamSet returned_parameters;
 
   EscapeSummary() = default;
 
-  // TODO: Tidy complains about an unnecessary copy when using a value type.
-  //       This indicates that a move constructor may be missing for ParamSet.
-  EscapeSummary(const ParamSet& ps, std::initializer_list<uint16_t> l)
-      : escaping_parameters(l), returned_parameters(ps) {}
+  EscapeSummary(std::initializer_list<uint16_t> l) : escaping_parameters(l) {}
+
+  EscapeSummary(ParamSet ps, std::initializer_list<uint16_t> l)
+      : escaping_parameters(l), returned_parameters(std::move(ps)) {}
 
   static EscapeSummary from_s_expr(const sparta::s_expr&);
-
-  bool operator==(const EscapeSummary& other) const {
-    return escaping_parameters == other.escaping_parameters &&
-           returned_parameters == other.returned_parameters;
-  }
-
-  void join_with(const EscapeSummary& other);
 };
 
 std::ostream& operator<<(std::ostream& o, const EscapeSummary& summary);
@@ -300,20 +293,29 @@ void default_instruction_handler(const IRInstruction* insn,
                                  EnvironmentWithStore* env);
 
 using FixpointIteratorMap =
-    ConcurrentMap<const DexMethod*, std::unique_ptr<FixpointIterator>>;
+    ConcurrentMap<const DexMethodRef*, FixpointIterator*>;
+
+struct FixpointIteratorMapDeleter final {
+  void operator()(FixpointIteratorMap*);
+};
+
+using FixpointIteratorMapPtr =
+    std::unique_ptr<FixpointIteratorMap, FixpointIteratorMapDeleter>;
 
 using SummaryMap = std::unordered_map<const DexMethodRef*, EscapeSummary>;
+
+using SummaryCMap = ConcurrentMap<const DexMethodRef*, EscapeSummary>;
 
 /*
  * Analyze all methods in scope, making sure to analyze the callees before
  * their callers.
  *
- * If a non-null SummaryMap pointer is passed in, it will get populated
+ * If a non-null SummaryCMap pointer is passed in, it will get populated
  * with the escape summaries of the methods in scope.
  */
-FixpointIteratorMap analyze_scope(const Scope&,
-                                  const call_graph::Graph&,
-                                  SummaryMap* = nullptr);
+FixpointIteratorMapPtr analyze_scope(const Scope&,
+                                     const call_graph::Graph&,
+                                     SummaryCMap* = nullptr);
 
 /*
  * Join over all possible returned and thrown values.
@@ -331,11 +333,5 @@ void collect_exiting_pointers(const FixpointIterator& fp_iter,
  */
 EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
                                  const IRCode& code);
-
-/* Whether a method is virtual but not final, or in a final class. */
-bool may_be_overridden(const DexMethod*);
-
-// Whether a given method ref is a method called "clone" defined on an array.
-bool is_array_clone(const DexMethodRef*);
 
 } // namespace local_pointers

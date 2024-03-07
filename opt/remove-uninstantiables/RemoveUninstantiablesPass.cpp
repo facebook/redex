@@ -11,6 +11,7 @@
 
 #include "MethodFixup.h"
 #include "RemoveUninstantiablesImpl.h"
+#include "ScopedCFG.h"
 #include "Walkers.h"
 
 namespace {
@@ -57,7 +58,7 @@ class OverriddenVirtualScopesAnalysis {
   void compute_transitively_defined_virtual_scope(
       const std::unordered_map<DexType*, std::unordered_set<DexType*>>&
           instantiable_children,
-      const InsertOnlyConcurrentMap<const DexType*, VirtualScopeIdSet>&
+      const ConcurrentMap<const DexType*, VirtualScopeIdSet>&
           defined_virtual_scopes,
       DexType* t) {
     auto it = m_transitively_defined_virtual_scopes.find(t);
@@ -147,8 +148,7 @@ class OverriddenVirtualScopesAnalysis {
 
     scan_code(scope);
 
-    InsertOnlyConcurrentMap<const DexType*, VirtualScopeIdSet>
-        defined_virtual_scopes;
+    ConcurrentMap<const DexType*, VirtualScopeIdSet> defined_virtual_scopes;
     walk::parallel::classes(scope, [&](DexClass* cls) {
       VirtualScopeIdSet virtual_scopes;
       for (auto method : cls->get_vmethods()) {
@@ -272,18 +272,18 @@ void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
         if (method->rstate.no_optimizations() || code == nullptr) {
           return remove_uninstantiables_impl::Stats();
         }
-        always_assert(code->editable_cfg_built());
+
         if (overridden_virtual_scopes_analysis.keep_code(method)) {
-          auto& cfg = code->cfg();
+          cfg::ScopedCFG cfg(code);
           return remove_uninstantiables_impl::replace_uninstantiable_refs(
-              scoped_uninstantiable_types, cfg);
+              scoped_uninstantiable_types, *cfg);
         }
         uncallable_instance_methods.insert(method);
         return remove_uninstantiables_impl::Stats();
       });
 
   stats += remove_uninstantiables_impl::reduce_uncallable_instance_methods(
-      scope, uncallable_instance_methods,
+      scope, uncallable_instance_methods.move_to_container(),
       [&](const DexMethod* m) { return false; });
 
   stats.report(mgr);

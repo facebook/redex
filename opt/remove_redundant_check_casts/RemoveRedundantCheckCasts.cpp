@@ -24,11 +24,12 @@ impl::Stats remove_redundant_check_casts(const CheckCastConfig& config,
   }
 
   auto* code = method->get_code();
-  always_assert(code->editable_cfg_built());
+  code->build_cfg(/* editable */ true);
   impl::CheckCastAnalysis analysis(config, method, android_sdk);
   auto casts = analysis.collect_redundant_checks_replacement();
   auto stats = impl::apply(method, casts);
 
+  code->clear_cfg();
   return stats;
 }
 

@@ -15,7 +15,6 @@
 
 #include "BaseIRAnalyzer.h"
 #include "DexUtil.h"
-#include "InitClassesWithSideEffects.h"
 
 namespace init_classes {
 

@@ -304,7 +304,20 @@ void patch_filled_new_array_test(Scope& scope) {
 class PointsToSemanticsTest : public RedexIntegrationTest {};
 
 TEST_F(PointsToSemanticsTest, semanticActionGeneration) {
-  std::string sdk_jar = android_sdk_jar_path();
+  const char* android_env_sdk = std::getenv("ANDROID_SDK");
+  const char* android_config_sdk = std::getenv("sdk_path");
+
+  const char* android_sdk = (strncmp(android_config_sdk, "None", 4) != 0)
+                                ? android_config_sdk
+                                : android_env_sdk;
+
+  ASSERT_NE(nullptr, android_sdk);
+  const char* android_target = std::getenv("android_target");
+  ASSERT_NE(nullptr, android_target);
+  std::string android_version(android_target);
+  ASSERT_NE("NotFound", android_version);
+  std::string sdk_jar = std::string(android_sdk) + "/platforms/" +
+                        android_version + "/android.jar";
   ASSERT_TRUE(load_jar_file(DexLocation::make_location("", sdk_jar)));
 
   DexStoreClassesIterator it(stores);

@@ -85,7 +85,7 @@ void scan_any_init_reachables(
             SHOW(method));
       continue;
     }
-    auto callees = resolve_callees_in_graph(cg, insn);
+    auto callees = resolve_callees_in_graph(cg, method, insn);
     for (const DexMethod* callee : callees) {
       scan_any_init_reachables(cg, method_override_graph, callee, false,
                                reachables);
@@ -179,7 +179,7 @@ void GlobalTypeAnalyzer::analyze_node(
 }
 
 ArgumentTypePartition GlobalTypeAnalyzer::analyze_edge(
-    const call_graph::EdgeId& edge,
+    const std::shared_ptr<call_graph::Edge>& edge,
     const ArgumentTypePartition& exit_state_at_source) const {
   ArgumentTypePartition entry_state_at_dest;
   auto insn = edge->invoke_insn();
@@ -227,7 +227,8 @@ bool GlobalTypeAnalyzer::is_reachable(const DexMethod* method) const {
 }
 
 using CombinedAnalyzer =
-    InstructionAnalyzerCombiner<WholeProgramAwareAnalyzer,
+    InstructionAnalyzerCombiner<local::ClinitFieldAnalyzer,
+                                WholeProgramAwareAnalyzer,
                                 local::CtorFieldAnalyzer,
                                 local::RegisterTypeAnalyzer>;
 
@@ -253,8 +254,10 @@ std::unique_ptr<local::LocalTypeAnalyzer> GlobalTypeAnalyzer::analyze_method(
   }
 
   auto env = env_with_params(&code, args);
-  DexType* ctor_type{nullptr};
-  if (method::is_init(method)) {
+  DexType *clinit_type{nullptr}, *ctor_type{nullptr};
+  if (method::is_clinit(method)) {
+    clinit_type = method->get_class();
+  } else if (method::is_init(method)) {
     ctor_type = method->get_class();
   }
   TRACE(TYPE, 5, "%s", SHOW(code.cfg()));
@@ -263,7 +266,8 @@ std::unique_ptr<local::LocalTypeAnalyzer> GlobalTypeAnalyzer::analyze_method(
           ? std::make_unique<local::LocalTypeAnalyzer>(
                 code.cfg(), CombinedReplayAnalyzer(&wps, nullptr))
           : std::make_unique<local::LocalTypeAnalyzer>(
-                code.cfg(), CombinedAnalyzer(&wps, ctor_type, nullptr));
+                code.cfg(),
+                CombinedAnalyzer(clinit_type, &wps, ctor_type, nullptr));
   local_ta->run(env);
 
   return local_ta;
@@ -389,7 +393,7 @@ void GlobalTypeAnalysis::find_any_init_reachables(
               SHOW(method));
         continue;
       }
-      auto callees = resolve_callees_in_graph(*cg, insn);
+      auto callees = resolve_callees_in_graph(*cg, method, insn);
       for (const DexMethod* callee : callees) {
         bool trace_callbacks_in_callee_cls =
             is_leaking_this_in_ctor(method, callee);
@@ -457,26 +461,21 @@ std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
       {CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
   auto non_true_virtuals =
       mog::get_non_true_virtuals(*method_override_graph, scope);
-  EligibleIfields eligible_ifields;
-  if (m_only_aggregate_safely_inferrable_fields) {
-    eligible_ifields =
-        constant_propagation::gather_safely_inferable_ifield_candidates(scope,
-                                                                        {});
-  }
+  EligibleIfields eligible_ifields =
+      constant_propagation::gather_safely_inferable_ifield_candidates(scope,
+                                                                      {});
   size_t iteration_cnt = 0;
 
   for (size_t i = 0; i < m_max_global_analysis_iteration; ++i) {
     // Build an approximation of all the field values and method return values.
     TRACE(TYPE, 2, "[global] Collecting WholeProgramState");
-    auto wps =
-        m_use_multiple_callee_callgraph
-            ? std::make_unique<WholeProgramState>(
-                  scope, *gta, non_true_virtuals, m_any_init_reachables,
-                  eligible_ifields, m_only_aggregate_safely_inferrable_fields,
-                  cg)
-            : std::make_unique<WholeProgramState>(
-                  scope, *gta, non_true_virtuals, m_any_init_reachables,
-                  eligible_ifields, m_only_aggregate_safely_inferrable_fields);
+    auto wps = m_use_multiple_callee_callgraph
+                   ? std::make_unique<WholeProgramState>(
+                         scope, *gta, non_true_virtuals, m_any_init_reachables,
+                         eligible_ifields, cg)
+                   : std::make_unique<WholeProgramState>(
+                         scope, *gta, non_true_virtuals, m_any_init_reachables,
+                         eligible_ifields);
     trace_whole_program_state(*wps);
     trace_stats(*wps);
     trace_whole_program_state_diff(gta->get_whole_program_state(), *wps);

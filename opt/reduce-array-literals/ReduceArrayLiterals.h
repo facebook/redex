@@ -11,7 +11,6 @@
 
 #include "IRInstruction.h" // For reg_t.
 #include "Pass.h"
-#include "PassManager.h"
 #include "RedexOptions.h" // For Architecture.
 
 class DexType;
@@ -79,21 +78,17 @@ class ReduceArrayLiteralsPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {InitialRenameClass, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 
   void bind_config() override;
-
-  void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
+  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   size_t m_max_filled_elements;
   bool m_debug;
-  std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
-  size_t m_run{0}; // Which iteration of `run_pass`.
-  size_t m_eval{0}; // How many `eval_pass` iterations.
 };

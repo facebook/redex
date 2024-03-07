@@ -18,11 +18,11 @@
 namespace {
 
 struct CodeAsKey {
-  const cfg::ControlFlowGraph& cfg;
+  const IRCode* code;
   const bool dedup_fill_in_stack_trace;
 
-  CodeAsKey(cfg::ControlFlowGraph& c, bool dedup_fill_in_stack_trace)
-      : cfg(c), dedup_fill_in_stack_trace(dedup_fill_in_stack_trace) {}
+  CodeAsKey(const IRCode* c, bool dedup_fill_in_stack_trace)
+      : code(c), dedup_fill_in_stack_trace(dedup_fill_in_stack_trace) {}
 
   static bool non_throw_instruction_equal(const IRInstruction& left,
                                           const IRInstruction& right) {
@@ -33,16 +33,16 @@ struct CodeAsKey {
 
   bool operator==(const CodeAsKey& other) const {
     return dedup_fill_in_stack_trace
-               ? cfg.structural_equals(other.cfg)
-               : cfg.structural_equals(other.cfg, non_throw_instruction_equal);
+               ? code->structural_equals(*other.code)
+               : code->structural_equals(*other.code,
+                                         non_throw_instruction_equal);
   }
 };
 
 struct CodeHasher {
   size_t operator()(const CodeAsKey& key) const {
     size_t result = 0;
-    for (auto& mie : cfg::InstructionIterable(
-             const_cast<cfg::ControlFlowGraph&>(key.cfg))) {
+    for (auto& mie : InstructionIterable(key.code)) {
       result ^= mie.insn->hash();
     }
     return result;
@@ -57,8 +57,7 @@ std::vector<MethodOrderedSet> get_duplicate_methods_simple(
   DuplicateMethods duplicates;
   for (DexMethod* method : methods) {
     always_assert(method->get_code());
-    always_assert(method->get_code()->editable_cfg_built());
-    duplicates[CodeAsKey(method->get_code()->cfg(), dedup_fill_in_stack_trace)]
+    duplicates[CodeAsKey(method->get_code(), dedup_fill_in_stack_trace)]
         .emplace(method);
   }
 

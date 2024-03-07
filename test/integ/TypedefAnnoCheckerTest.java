@@ -21,7 +21,6 @@ public class TypedefAnnoCheckerTest {
   @TestIntDef int int_field;
   @TestStringDef int wrong_anno_field;
   @TestStringDef String str_field;
-  int no_anno_field = 6;
 
   void testIntField(@TestIntDef int val) {
     int_field = val;
@@ -33,10 +32,6 @@ public class TypedefAnnoCheckerTest {
 
   void testStringField(@TestStringDef String val) {
     str_field = val;
-  }
-
-  @TestIntDef int testNoAnnoField() {
-    return testValidIntAnnoReturn(no_anno_field);
   }
 
   static @NotSafeAnno @TestIntDef int testValidIntAnnoReturn(@NotSafeAnno @TestIntDef int val) {
@@ -185,9 +180,5 @@ public class TypedefAnnoCheckerTest {
     boolean flag = false;
     int res = flag ? TestIntDef.ZERO : TestIntDef.ONE;
     return res;
-  }
-
-  static @TestStringDef String testAssignNullToString() {
-    return null;
   }
 }

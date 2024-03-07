@@ -245,7 +245,7 @@ size_t estimate_num_switch_dispatch_needed(
 DexMethod* create_simple_switch_dispatch(
     const dispatch::Spec& spec,
     const std::map<SwitchIndices, DexMethod*>& indices_to_callee) {
-  always_assert(!indices_to_callee.empty());
+  always_assert(indices_to_callee.size());
   TRACE(SDIS,
         5,
         "creating leaf switch dispatch %s.%s for targets of size %zu",
@@ -689,11 +689,9 @@ bool may_be_dispatch(const DexMethod* method) {
   if (name.find(DISPATCH_PREFIX) != 0) {
     return false;
   }
-  auto code = const_cast<DexMethod*>(method)->get_code();
-  always_assert(code->editable_cfg_built());
-  auto& cfg = code->cfg();
+  auto code = method->get_code();
   uint32_t branches = 0;
-  for (auto& mie : cfg::InstructionIterable(cfg)) {
+  for (auto& mie : InstructionIterable(code)) {
     auto op = mie.insn->opcode();
     if (opcode::is_switch(op)) {
       return true;

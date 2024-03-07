@@ -40,12 +40,14 @@ class ReduceGotosPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
         {NoInitClassInstructions, Preserves},
         {NoResolvablePureRefs, Preserves},
         {NoUnreachableInstructions, Preserves},
         {RenameClass, Preserves},
     };
   }
+  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   static Stats process_code(IRCode*);

@@ -21,8 +21,12 @@ class IntTypePatcherPass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {{DexLimitsObeyed, Preserves},
+            {HasSourceBlocks, Preserves},
             {UltralightCodePatterns, Preserves},
             {NoInitClassInstructions, Preserves},
+            {NeedsEverythingPublic, Preserves},
+            {NeedsInjectionIdLowering, Preserves},
+            {NoSpuriousGetClassCalls, Preserves},
             {RenameClass, Preserves}};
   }
 

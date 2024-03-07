@@ -597,8 +597,7 @@ bool Breadcrumbs::has_illegal_access(const DexMethod* input_method) {
   if (input_method->get_code() == nullptr) {
     return false;
   }
-  auto& cfg = (const_cast<DexMethod*>(input_method))->get_code()->cfg();
-  for (const auto& mie : cfg::InstructionIterable(cfg)) {
+  for (const auto& mie : InstructionIterable(input_method->get_code())) {
     auto* insn = mie.insn;
     if (insn->has_field()) {
       auto res_field = resolve_field(insn->get_field());

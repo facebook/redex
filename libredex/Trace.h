@@ -23,7 +23,6 @@ class DexType;
   TM(API_UTILS)         \
   TM(APP_MOD_USE)       \
   TM(ARGS)              \
-  TM(ARSC)              \
   TM(ASSESSOR)          \
   TM(BBPROFILE)         \
   TM(BBREORDERING)      \

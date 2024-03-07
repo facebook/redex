@@ -51,6 +51,7 @@ struct AnalysisImpl : SingleImplAnalysis {
   void filter_list(const std::vector<std::string>& list, bool keep_match);
   void filter_by_annotations(const std::vector<std::string>& blocklist);
 
+ private:
   const Scope& scope;
   const ProguardMap& pg_map;
   XStoreRefs xstores;
@@ -259,7 +260,7 @@ void AnalysisImpl::escape_with_clinit() {
 void AnalysisImpl::escape_with_sfields() {
   for (auto const& intf_it : single_impls) {
     auto intf_cls = type_class(intf_it.first);
-    redex_assert(CONSTP(intf_cls)->get_ifields().empty());
+    redex_assert(intf_cls->get_ifields().empty());
     always_assert(!intf_cls->is_external());
     const auto& sfields = intf_cls->get_sfields();
     if (sfields.empty()) continue;

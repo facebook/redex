@@ -389,7 +389,8 @@ class ReflectionAnalysis final {
   std::unique_ptr<impl::Analyzer> m_analyzer;
   MetadataCache* m_fallback_cache = nullptr;
 
-  void gather_reflection_sites(
+  void get_reflection_site(
+      const reg_t reg,
       IRInstruction* insn,
       std::map<reg_t, ReflectionAbstractObject>* abstract_objects) const;
 };

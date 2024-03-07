@@ -58,10 +58,8 @@ class IntrinsifyNullChecksPass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
-        // This is so the checker verifies the efficacy of the pass.
+        {HasSourceBlocks, Preserves},
         {NoSpuriousGetClassCalls, Establishes},
-        // This is so the rest of the passes know that this ran.
-        {SpuriousGetClassCallsInterned, Establishes},
         {UltralightCodePatterns, Preserves},
     };
   }

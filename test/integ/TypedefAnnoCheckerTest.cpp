@@ -22,51 +22,41 @@ struct TypedefAnnoCheckerTest : public RedexIntegrationTest {
     return m_config;
   }
 
-  void build_cfg(Scope& scope) {
-    for (auto* cls : scope) {
-      always_assert(cls);
-      for (auto* m : cls->get_dmethods()) {
-        if (m && m->get_code()) {
-          m->get_code()->build_cfg();
-        }
-      }
-      for (auto* m : cls->get_vmethods()) {
-        if (m && m->get_code()) {
-          m->get_code()->build_cfg();
-        }
-      }
-    }
-  }
-
-  void gather_typedef_values(TypedefAnnoCheckerPass pass,
-                             DexClass* cls,
-                             StrDefConstants& strdef_constants,
-                             IntDefConstants& intdef_constants) {
+  void gather_typedef_values(
+      TypedefAnnoCheckerPass pass,
+      DexClass* cls,
+      ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>&
+          strdef_constants,
+      ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>>&
+          intdef_constants) {
     pass.gather_typedef_values(cls, strdef_constants, intdef_constants);
   }
 };
 
 TEST_F(TypedefAnnoCheckerTest, TestValidIntAnnoReturn) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerTest;.testValidIntAnnoReturn:(I)I")
-                     ->as_def();
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testValidIntAnnoReturn:(I)I")
+                    ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
 
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_TRUE(checker.complete());
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestValidStrAnnoReturn) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method =
+  auto method =
       DexMethod::get_method(
           "Lcom/facebook/redextest/"
           "TypedefAnnoCheckerTest;.testValidStrAnnoReturn:(Ljava/lang/"
@@ -74,36 +64,44 @@ TEST_F(TypedefAnnoCheckerTest, TestValidStrAnnoReturn) {
           "String;")
           ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
 
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_TRUE(checker.complete());
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestIntAnnoInvokeStatic) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerTest;.testIntAnnoInvokeStatic:(I)I")
-                     ->as_def();
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testIntAnnoInvokeStatic:(I)I")
+                    ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
 
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_TRUE(checker.complete());
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestStringAnnoInvokeStatic) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method =
+  auto method =
       DexMethod::get_method(
           "Lcom/facebook/redextest/"
           "TypedefAnnoCheckerTest;.testStringAnnoInvokeStatic:(Ljava/lang/"
@@ -111,19 +109,23 @@ TEST_F(TypedefAnnoCheckerTest, TestStringAnnoInvokeStatic) {
           "String;")
           ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
 
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_TRUE(checker.complete());
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestWrongAnnotationReturned) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method =
+  auto method =
       DexMethod::get_method(
           "Lcom/facebook/redextest/"
           "TypedefAnnoCheckerTest;.testWrongAnnotationReturned:(Ljava/lang/"
@@ -131,12 +133,17 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongAnnotationReturned) {
           "String;")
           ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
 
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -149,18 +156,22 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongAnnotationReturned) {
 
 TEST_F(TypedefAnnoCheckerTest, TestWrongAnnoInvokeStatic) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerTest;.testWrongAnnoInvokeStatic:(I)I")
-                     ->as_def();
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testWrongAnnoInvokeStatic:(I)I")
+                    ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
 
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -173,35 +184,43 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongAnnoInvokeStatic) {
 
 TEST_F(TypedefAnnoCheckerTest, TestIntField) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerTest;.testIntField:(I)V")
-                     ->as_def();
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testIntField:(I)V")
+                    ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
 
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_TRUE(checker.complete());
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestWrongIntField) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerTest;.testWrongIntField:(I)V")
-                     ->as_def();
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testWrongIntField:(I)V")
+                    ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
 
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -214,61 +233,79 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongIntField) {
 
 TEST_F(TypedefAnnoCheckerTest, TestStringField) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerTest;.testStringField:(Ljava/lang/"
-                     "String;)V")
-                     ->as_def();
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testStringField:(Ljava/lang/"
+                    "String;)V")
+                    ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
 
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_TRUE(checker.complete());
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestConstReturn) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerTest;.testConstReturn:()I")
-                     ->as_def();
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testConstReturn:()I")
+                    ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
+  for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_TRUE(checker.complete());
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestInvalidConstReturn) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerTest;.testInvalidConstReturn:()I")
-                     ->as_def();
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testInvalidConstReturn:()I")
+                    ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
+  for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -282,22 +319,29 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstReturn) {
 
 TEST_F(TypedefAnnoCheckerTest, TestInvalidConstReturn2) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerTest;.testInvalidConstReturn2:()I")
-                     ->as_def();
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testInvalidConstReturn2:()I")
+                    ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
+  for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -311,24 +355,31 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstReturn2) {
 
 TEST_F(TypedefAnnoCheckerTest, TestInvalidConstStrReturn) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method =
+  auto method =
       DexMethod::get_method(
           "Lcom/facebook/redextest/"
           "TypedefAnnoCheckerTest;.testInvalidConstStrReturn:()Ljava/lang/"
           "String;")
           ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
+  for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -342,22 +393,29 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstStrReturn) {
 
 TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerTest;.testInvalidConstInvokeStatic:()I")
-                     ->as_def();
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testInvalidConstInvokeStatic:()I")
+                    ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
+  for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -372,23 +430,29 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic) {
 
 TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic2) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method =
-      DexMethod::get_method(
-          "Lcom/facebook/redextest/"
-          "TypedefAnnoCheckerTest;.testInvalidConstInvokeStatic2:()I")
-          ->as_def();
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testInvalidConstInvokeStatic2:()I")
+                    ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
+  for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -403,29 +467,33 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic2) {
 
 TEST_F(TypedefAnnoCheckerTest, TestMultipleBlocksInt) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerTest;.testMultipleBlocksInt:(I)I")
-                     ->as_def();
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testMultipleBlocksInt:(I)I")
+                    ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
+  for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_TRUE(checker.complete());
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestMultipleBlocksString) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method =
+  auto method =
       DexMethod::get_method(
           "Lcom/facebook/redextest/"
           "TypedefAnnoCheckerTest;.testMultipleBlocksString:(Ljava/lang/"
@@ -433,40 +501,50 @@ TEST_F(TypedefAnnoCheckerTest, TestMultipleBlocksString) {
           "String;")
           ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
+  for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_TRUE(checker.complete());
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestInvalidMultipleBlocksString) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method =
+  auto method =
       DexMethod::get_method(
           "Lcom/facebook/redextest/"
           "TypedefAnnoCheckerTest;.testInvalidMultipleBlocksString:(Ljava/lang/"
           "String;)Ljava/lang/"
           "String;")
           ->as_def();
+  IRCode* code = method->get_code();
+  code->build_cfg();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
+  for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -479,22 +557,26 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidMultipleBlocksString) {
 
 TEST_F(TypedefAnnoCheckerTest, TestNonConstInt) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerTest;.testNonConstInt:(I)I")
-                     ->as_def();
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testNonConstInt:(I)I")
+                    ->as_def();
+  IRCode* code = method->get_code();
+  code->build_cfg();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
+  for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -507,18 +589,22 @@ TEST_F(TypedefAnnoCheckerTest, TestNonConstInt) {
 
 TEST_F(TypedefAnnoCheckerTest, TestInvalidType) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerTest;.testInvalidType:(Lcom/facebook/"
-                     "redextest/I;)Lcom/facebook/redextest/I;")
-                     ->as_def();
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testInvalidType:(Lcom/facebook/"
+                    "redextest/I;)Lcom/facebook/redextest/I;")
+                    ->as_def();
+  IRCode* code = method->get_code();
+  code->build_cfg();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(checker.error(),
             "TypedefAnnoCheckerPass: the annotation  Linteg/TestIntDef;\n\
@@ -529,24 +615,29 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidType) {
 
 TEST_F(TypedefAnnoCheckerTest, TestJoiningTwoAnnotations) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method =
+  auto method =
       DexMethod::get_method(
           "Lcom/facebook/redextest/"
           "TypedefAnnoCheckerTest;.testJoiningTwoAnnotations:(Ljava/lang/"
           "String;Ljava/lang/String;)Ljava/lang/String;")
           ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
+  for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -559,142 +650,172 @@ TEST_F(TypedefAnnoCheckerTest, TestJoiningTwoAnnotations) {
 
 TEST_F(TypedefAnnoCheckerTest, TestJoiningTwoAnnotations2) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method =
+  auto method =
       DexMethod::get_method(
           "Lcom/facebook/redextest/"
           "TypedefAnnoCheckerTest;.testJoiningTwoAnnotations2:(Ljava/lang/"
           "String;Ljava/lang/String;)Ljava/lang/String;")
           ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
+  for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_TRUE(checker.complete());
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestReassigningInt) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerTest;.testReassigningInt:(II)I")
-                     ->as_def();
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testReassigningInt:(II)I")
+                    ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
+  for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_TRUE(checker.complete());
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestIfElse) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerTest;.testIfElse:()I")
-                     ->as_def();
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testIfElse:()I")
+                    ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
+  for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_TRUE(checker.complete());
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestIfElseParam) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerTest;.testIfElseParam:(Z)I")
-                     ->as_def();
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testIfElseParam:(Z)I")
+                    ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
+  for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_TRUE(checker.complete());
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestIfElseString) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerTest;.testIfElseString:(Z)Ljava/lang/"
-                     "String;")
-                     ->as_def();
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testIfElseString:(Z)Ljava/lang/"
+                    "String;")
+                    ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
+  for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_TRUE(checker.complete());
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestXORIfElse) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerTest;.testXORIfElse:(Z)I")
-                     ->as_def();
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testXORIfElse:(Z)I")
+                    ->as_def();
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  IRCode* code = method->get_code();
+  code->build_cfg();
+
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
+  for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_TRUE(checker.complete());
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestXORIfElseZero) {
   auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerTest;.testXORIfElseZero:()I")
-                     ->as_def();
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypedefAnnoCheckerTest;.testXORIfElseZero:()I")
+                    ->as_def();
 
   IRCode* code = method->get_code();
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   type_inference::TypeInference inference(cfg);
@@ -711,250 +832,18 @@ TEST_F(TypedefAnnoCheckerTest, TestXORIfElseZero) {
     inference.analyze_instruction(insn, &env);
   }
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>
+      strdef_constants;
+  ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>> intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
+  for (auto cls : scope) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
   TypedefAnnoChecker checker =
       TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
   checker.run(method);
+  code->clear_cfg();
+
   EXPECT_TRUE(checker.complete());
-}
-
-TEST_F(TypedefAnnoCheckerTest, testSynthAccessor) {
-  auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* accessor = DexMethod::get_method(
-                       "Lcom/facebook/redextest/"
-                       "TypedefAnnoCheckerKtTest;.access$takesStrConst:(Lcom/"
-                       "facebook/redextest/TypedefAnnoCheckerKtTest;Ljava/lang/"
-                       "String;)Ljava/lang/String;")
-                       ->as_def();
-  EXPECT_TRUE(accessor != nullptr);
-
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  auto config = get_config();
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
-  checker.run(accessor);
-
-  // Without patching the accessor, the checker will fail.
-  EXPECT_FALSE(checker.complete());
-  EXPECT_EQ(
-      checker.error(),
-      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.access$takesStrConst:(Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;Ljava/lang/String;)Ljava/lang/String;\n\
- one of the parameters needs to have the typedef annotation  Linteg/TestStringDef;\n\
- attached to it. Check that the value is annotated and exists in the typedef annotation class.\n\
- failed instruction: IOPCODE_LOAD_PARAM_OBJECT v2\n\
- Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.takesStrConst:(Ljava/lang/String;)Ljava/lang/String;\n\
- Incorrect parameter's index: 1\n\n");
-
-  SynthAccessorPatcher patcher(config);
-  patcher.run(scope);
-
-  TypedefAnnoChecker checker2 =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
-  checker2.run(accessor);
-  // After patching the accessor, the checker should succeed.
-  EXPECT_TRUE(checker2.complete());
-
-  auto* accessor_caller =
-      DexMethod::get_method(
-          "Lcom/facebook/redextest/"
-          "TypedefAnnoCheckerKtTest$testSynthAccessor$lmd$1;"
-          ".invoke:()Ljava/lang/String;")
-          ->as_def();
-  EXPECT_TRUE(accessor_caller != nullptr);
-
-  TypedefAnnoChecker checker3 =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
-  checker3.run(accessor_caller);
-  // The caller of the accessor has the actual violation.
-  EXPECT_FALSE(checker3.complete());
-  EXPECT_EQ(
-      checker3.error(),
-      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest$testSynthAccessor$lmd$1;.invoke:()Ljava/lang/String;\n\
- the string value liu does not have the typedef annotation \n\
- Linteg/TestStringDef; attached to it. \n\
- Check that the value is annotated and exists in the typedef annotation class.\n\
- failed instruction: CONST_STRING \"liu\"\n\
- Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.access$takesStrConst:(Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;Ljava/lang/String;)Ljava/lang/String;\n\
- Incorrect parameter's index: 1\n\n");
-}
-
-TEST_F(TypedefAnnoCheckerTest, testDefaultArg) {
-  // Dex code example: https://fburl.com/dexbolt/o35r4sgv
-  auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* wrong_default_arg =
-      DexMethod::get_method(
-          "Lcom/facebook/redextest/"
-          "TypedefAnnoCheckerKtTest;.wrongDefaultArg$default:(Lcom/"
-          "facebook/redextest/TypedefAnnoCheckerKtTest;Ljava/lang/"
-          "String;ILjava/lang/Object;)Ljava/lang/String;")
-          ->as_def();
-  EXPECT_TRUE(wrong_default_arg != nullptr);
-
-  auto* wrong_default_caller =
-      DexMethod::get_method(
-          "Lcom/facebook/redextest/"
-          "TypedefAnnoCheckerKtTest;.wrongDefaultCaller:(Ljava/lang/"
-          "String;)V")
-          ->as_def();
-  EXPECT_TRUE(wrong_default_caller != nullptr);
-
-  auto* right_default_arg =
-      DexMethod::get_method(
-          "Lcom/facebook/redextest/"
-          "TypedefAnnoCheckerKtTest;.rightDefaultArg$default:(Lcom/"
-          "facebook/redextest/TypedefAnnoCheckerKtTest;Ljava/lang/"
-          "String;ILjava/lang/Object;)Ljava/lang/String;")
-          ->as_def();
-  EXPECT_TRUE(right_default_arg != nullptr);
-
-  auto* right_default_caller =
-      DexMethod::get_method(
-          "Lcom/facebook/redextest/"
-          "TypedefAnnoCheckerKtTest;.rightDefaultCaller:(Ljava/lang/"
-          "String;)V")
-          ->as_def();
-  EXPECT_TRUE(right_default_caller != nullptr);
-
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  auto config = get_config();
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
-  checker.run(wrong_default_arg);
-  // Without patching the accessor, the checker will fail.
-  // The default arg is not safe value. The param is not annotated.
-  // We don't check the detailed error msg, since multiple errors are possible.
-  EXPECT_FALSE(checker.complete());
-
-  TypedefAnnoChecker checker1 =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
-  checker1.run(wrong_default_caller);
-  EXPECT_TRUE(checker1.complete());
-
-  TypedefAnnoChecker checker2 =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
-  checker2.run(right_default_arg);
-  // Without patching the accessor, the checker will fail.
-  // The default arg is a safe value, but the param is not annotated.
-  EXPECT_FALSE(checker2.complete());
-  EXPECT_EQ(
-      checker2.error(),
-      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.rightDefaultArg$default:(Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;\n\
- one of the parameters needs to have the typedef annotation  Linteg/TestStringDef;\n\
- attached to it. Check that the value is annotated and exists in the typedef annotation class.\n\
- failed instruction: IOPCODE_LOAD_PARAM_OBJECT v1\n\
- Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.rightDefaultArg:(Ljava/lang/String;)Ljava/lang/String;\n\
- Incorrect parameter's index: 1\n\n");
-
-  TypedefAnnoChecker checker3 =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
-  checker3.run(right_default_caller);
-  EXPECT_TRUE(checker3.complete());
-
-  ///////////////////////////////////////////////////
-  // Patch the default synth stub param !!!
-  ///////////////////////////////////////////////////
-  SynthAccessorPatcher patcher(config);
-  patcher.run(scope);
-
-  TypedefAnnoChecker checker4 =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
-  checker4.run(wrong_default_arg);
-  // After patching the accessor, the param annotation is patched. But the wrong
-  // constant error remains.
-  EXPECT_FALSE(checker4.complete());
-  EXPECT_EQ(
-      checker4.error(),
-      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.wrongDefaultArg$default:(Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;\n\
- the string value default does not have the typedef annotation \n\
- Linteg/TestStringDef; attached to it. \n\
- Check that the value is annotated and exists in the typedef annotation class.\n\
- failed instruction: CONST_STRING \"default\"\n\
- Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.wrongDefaultArg:(Ljava/lang/String;)Ljava/lang/String;\n\
- Incorrect parameter's index: 1\n\n");
-
-  TypedefAnnoChecker checker5 =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
-  checker5.run(wrong_default_caller);
-  EXPECT_TRUE(checker5.complete());
-
-  TypedefAnnoChecker checker6 =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
-  checker6.run(right_default_arg);
-  // After patching the accessor, the param annotation is patched. The default
-  // arg is correct.
-  EXPECT_TRUE(checker6.complete());
-
-  TypedefAnnoChecker checker7 =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
-  checker7.run(right_default_caller);
-  EXPECT_TRUE(checker7.complete());
-}
-
-TEST_F(TypedefAnnoCheckerTest, testAssignNullToString) {
-  auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method =
-      DexMethod::get_method(
-          "Lcom/facebook/redextest/"
-          "TypedefAnnoCheckerTest;.testAssignNullToString:()Ljava/lang/String;")
-          ->as_def();
-
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
-  checker.run(method);
-  EXPECT_TRUE(checker.complete());
-}
-
-TEST_F(TypedefAnnoCheckerTest, TestNoAnnoField) {
-  auto scope = build_class_scope(stores);
-  build_cfg(scope);
-  auto* method = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypedefAnnoCheckerTest;.testNoAnnoField:()I")
-                     ->as_def();
-
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
-  checker.run(method);
-  EXPECT_FALSE(checker.complete());
-  EXPECT_EQ(
-      checker.error(),
-      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testNoAnnoField:()I\n\
- the field no_anno_field\n\
- needs to have the annotation  Linteg/TestIntDef;.\n\
- failed instruction: IGET v1, Lcom/facebook/redextest/TypedefAnnoCheckerTest;.no_anno_field:I\n");
 }

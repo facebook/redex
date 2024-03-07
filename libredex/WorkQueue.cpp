@@ -9,7 +9,7 @@
 
 #include <iostream>
 
-#include "DebugUtils.h"
+#include "Debug.h"
 
 namespace redex_workqueue_impl {
 

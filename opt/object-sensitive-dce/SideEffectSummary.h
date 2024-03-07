@@ -31,8 +31,8 @@
  * Now supposing that there are no other side effects in the method (such as
  * throwing an exception), we can use this classification as follows:
  *
- *   - Methods containing only #1 are always side-effect-free and can be elided
- *     if their return values are unused.
+ *   - Methods containing only #1 are always pure and can be elided if their
+ *     return values are unused.
  *   - Methods containing only #1 and #2 can be elided if their arguments are
  *     all non-escaping and unused, and if their return values are unused.
  */
@@ -53,7 +53,6 @@ enum Effects : size_t {
   // Marked by @DoNotOptimize
   EFF_NO_OPTIMIZE = 1 << 4,
   EFF_INIT_CLASS = 1 << 5,
-  EFF_NORMALIZED = 1 << 6,
 };
 
 struct Summary {
@@ -76,31 +75,18 @@ struct Summary {
   Summary(const std::initializer_list<param_idx_t>& modified_params)
       : modified_params(modified_params) {}
 
-  bool has_side_effects() const {
-    return effects != EFF_NONE || !modified_params.empty() || may_read_external;
+  bool is_pure() {
+    return effects == EFF_NONE && modified_params.empty() && !may_read_external;
   }
-
   friend bool operator==(const Summary& a, const Summary& b) {
     return a.effects == b.effects && a.modified_params == b.modified_params &&
            a.may_read_external == b.may_read_external;
   }
 
-  void normalize() {
-    if (effects != EFF_NONE) {
-      effects = EFF_NORMALIZED;
-      modified_params.clear();
-      may_read_external = false;
-    }
-  }
-
-  void join_with(const Summary& other);
-
   static Summary from_s_expr(const sparta::s_expr&);
 };
 
 sparta::s_expr to_s_expr(const Summary&);
-
-std::ostream& operator<<(std::ostream& o, const Summary& summary);
 
 using SummaryMap = std::unordered_map<const DexMethodRef*, Summary>;
 
@@ -138,11 +124,6 @@ class SummaryBuilder final {
   reaching_defs::MoveAwareFixpointIterator* m_reaching_defs_fixpoint_iter;
 };
 
-// Builds a caller-specific summary from.
-InvokeToSummaryMap build_summary_map(const SummaryMap& summary_map,
-                                     const call_graph::Graph& call_graph,
-                                     const DexMethod* method);
-
 // For testing.
 Summary analyze_code(const init_classes::InitClassesWithSideEffects&
                          init_classes_with_side_effects,
@@ -157,7 +138,8 @@ void analyze_scope(const init_classes::InitClassesWithSideEffects&
                        init_classes_with_side_effects,
                    const Scope& scope,
                    const call_graph::Graph&,
-                   const local_pointers::FixpointIteratorMap&,
+                   const ConcurrentMap<const DexMethodRef*,
+                                       local_pointers::FixpointIterator*>&,
                    SummaryMap* effect_summaries);
 
 } // namespace side_effects

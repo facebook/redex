@@ -118,15 +118,18 @@ class RemoveUnusedFields final {
     field_op_tracker::FieldStatsMap field_stats =
         field_op_tracker::analyze(m_scope);
 
-    std::unique_ptr<field_op_tracker::FieldWrites> field_writes;
+    // analyze_non_zero_writes and the later transform() need (editable) cfg
+    walk::parallel::code(m_scope, [&](const DexMethod*, IRCode& code) {
+      code.build_cfg(/* editable = true*/);
+    });
+
+    boost::optional<field_op_tracker::FieldWrites> field_writes;
     if (m_config.remove_zero_written_fields ||
         m_config.remove_vestigial_objects_written_fields) {
-      field_writes = std::make_unique<field_op_tracker::FieldWrites>();
-      field_op_tracker::analyze_writes(
+      field_writes = field_op_tracker::analyze_writes(
           m_scope, field_stats,
           m_config.remove_vestigial_objects_written_fields ? &m_type_lifetimes
-                                                           : nullptr,
-          field_writes.get());
+                                                           : nullptr);
     }
 
     for (auto& pair : field_stats) {
@@ -143,7 +146,7 @@ class RemoveUnusedFields final {
         if (m_config.remove_unread_fields && stats.reads == 0) {
           m_unread_fields.emplace(field);
           if (m_config.remove_vestigial_objects_written_fields &&
-              !field_writes->non_vestigial_objects_written_fields.count_unsafe(
+              !field_writes->non_vestigial_objects_written_fields.count(
                   field)) {
             m_vestigial_objects_written_fields.emplace(field);
           }
@@ -151,7 +154,7 @@ class RemoveUnusedFields final {
                    !has_non_zero_static_value(field)) {
           m_unwritten_fields.emplace(field);
         } else if (m_config.remove_zero_written_fields &&
-                   !field_writes->non_zero_written_fields.count_unsafe(field) &&
+                   !field_writes->non_zero_written_fields.count(field) &&
                    !has_non_zero_static_value(field)) {
           m_zero_written_fields.emplace(field);
         }
@@ -170,10 +173,6 @@ class RemoveUnusedFields final {
     // Replace reads to unwritten fields with appropriate const-0 instructions,
     // and remove the writes to unread fields.
     walk::parallel::code(m_scope, [&](const DexMethod* method, IRCode& code) {
-      if (method->rstate.no_optimizations()) {
-        return;
-      }
-      always_assert(code.editable_cfg_built());
       auto& cfg = code.cfg();
       cfg::CFGMutation m(cfg);
       auto iterable = cfg::InstructionIterable(cfg);
@@ -246,6 +245,7 @@ class RemoveUnusedFields final {
       if (any_changes) {
         m_shrinker.shrink_method(const_cast<DexMethod*>(method));
       }
+      code.clear_cfg();
     });
   }
 

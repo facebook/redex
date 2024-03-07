@@ -8,7 +8,6 @@
 #pragma once
 
 #include "DexClass.h"
-#include "MethodInliner.h"
 #include "Pass.h"
 
 class MethodInlinePass : public Pass {
@@ -20,17 +19,13 @@ class MethodInlinePass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
+        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        // This may be too conservative as the inliner can be configured not to
-        // DCE in the shrinker.
-        {SpuriousGetClassCallsInterned, RequiresAndPreserves},
+        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 
-  void bind_config() override;
+  bool is_cfg_legacy() override { return true; }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
- private:
-  InlinerCostConfig m_inliner_cost_config;
 };

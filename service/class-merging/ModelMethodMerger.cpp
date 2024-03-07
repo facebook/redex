@@ -56,7 +56,7 @@ void staticize_with_new_arg_head(DexMethod* meth, DexType* new_head) {
   mutators::make_static(meth, mutators::KeepThis::Yes);
   DexMethodSpec spec;
   auto args = meth->get_proto()->get_args();
-  always_assert(!args->empty());
+  always_assert(args->size());
   auto new_type_list = args->replace_head(new_head);
   auto new_proto =
       DexProto::make_proto(meth->get_proto()->get_rtype(), new_type_list);
@@ -158,7 +158,7 @@ static void find_common_ctor_invocations(
       return;
     }
     auto last_non_goto_insn = target->get_last_insn();
-    assert_log(last_non_goto_insn != CONSTP(target)->end(),
+    assert_log(last_non_goto_insn != target->end(),
                "Should have at least one insn!");
 
     if (!opcode::is_invoke_direct(last_non_goto_insn->insn->opcode())) {
@@ -236,16 +236,14 @@ ModelMethodMerger::ModelMethodMerger(
     const TypeTags* type_tags,
     const std::unordered_map<DexMethod*, std::string>& method_debug_map,
     const ModelSpec& model_spec,
-    boost::optional<size_t> max_num_dispatch_target,
-    boost::optional<method_profiles::MethodProfiles*> method_profiles)
+    boost::optional<size_t> max_num_dispatch_target)
     : m_scope(scope),
       m_mergers(mergers),
       m_type_tag_fields(type_tag_fields),
       m_type_tags(type_tags),
       m_method_debug_map(method_debug_map),
       m_model_spec(model_spec),
-      m_max_num_dispatch_target(max_num_dispatch_target),
-      m_method_profiles(method_profiles) {
+      m_max_num_dispatch_target(max_num_dispatch_target) {
   for (const auto& mtf : type_tag_fields) {
     auto type_tag_field = mtf.second;
     if (model_spec.generate_type_tag()) {
@@ -352,7 +350,7 @@ std::vector<IRInstruction*> ModelMethodMerger::make_check_cast(DexType* type,
 
 dispatch::DispatchMethod ModelMethodMerger::create_dispatch_method(
     const dispatch::Spec& spec, const std::vector<DexMethod*>& targets) {
-  always_assert(!targets.empty());
+  always_assert(targets.size());
   TRACE(CLMG,
         5,
         "creating dispatch %s.%s for targets of size %zu",
@@ -370,12 +368,24 @@ dispatch::DispatchMethod ModelMethodMerger::create_dispatch_method(
 
 std::map<SwitchIndices, DexMethod*> ModelMethodMerger::get_dedupped_indices_map(
     const std::vector<DexMethod*>& targets) {
-  always_assert(!targets.empty());
+  always_assert(targets.size());
   std::map<SwitchIndices, DexMethod*> indices_to_callee;
+
+  // TODO "structural_equals" feature of editable cfg hasn't been implenmented
+  // yet. Currently, we still need to use irlist::structural_equals. Therefore,
+  // we need to clear_cfg before finding equivalent methods. Once
+  // structural_equals of editable cfg is added, the following clear_cfg will be
+  // removed.
+  for (size_t i = 0; i < targets.size(); i++) {
+    targets[i]->get_code()->clear_cfg();
+  }
   // Find equivalent methods.
   std::vector<MethodOrderedSet> duplicates =
       method_dedup::group_identical_methods(
           targets, m_model_spec.dedup_fill_in_stack_trace);
+  for (size_t i = 0; i < targets.size(); i++) {
+    targets[i]->get_code()->build_cfg();
+  }
   for (const auto& duplicate : duplicates) {
     SwitchIndices switch_indices;
     for (auto& meth : duplicate) {
@@ -557,7 +567,7 @@ void ModelMethodMerger::merge_virtual_methods(
   DexClass* target_cls = type_class(target_type);
   for (auto& virt_meth : virt_methods) {
     auto& meth_lst = virt_meth.overrides;
-    always_assert(!meth_lst.empty());
+    always_assert(meth_lst.size());
     auto overridden_meth = virt_meth.base;
     auto front_meth = meth_lst.front();
     auto access = front_meth->get_access();
@@ -590,11 +600,6 @@ void ModelMethodMerger::merge_virtual_methods(
     dispatch_methods.emplace_back(target_cls, dispatch.main_dispatch);
     for (const auto& m : meth_lst) {
       old_to_new_callee[m] = dispatch.main_dispatch;
-    }
-    if (m_method_profiles != boost::none) {
-      m_stats.m_updated_profile_method +=
-          m_method_profiles.get()->substitute_stats(dispatch.main_dispatch,
-                                                    meth_lst);
     }
     // Populating method dedup map
     for (auto& type_to_sig : meth_signatures) {
@@ -696,10 +701,6 @@ void ModelMethodMerger::merge_ctors() {
       for (const auto& m : ctors) {
         old_to_new_callee[m] = dispatch;
       }
-      if (m_method_profiles != boost::none) {
-        m_stats.m_updated_profile_method +=
-            m_method_profiles.get()->substitute_stats(dispatch, ctors);
-      }
       std::vector<std::pair<DexType*, DexMethod*>> not_inlined_ctors;
       type_class(target_type)->add_method(dispatch);
       // Inline entries
@@ -788,9 +789,20 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
     auto new_to_old_optional =
         boost::optional<std::unordered_map<DexMethod*, MethodOrderedSet>>(
             new_to_old);
+    // TODO "structural_equals" feature of editable cfg hasn't been implenmented
+    // yet. Currently, we still need to use irlist::structural_equals.
+    // Therefore, we need to clear_cfg before finding equivalent methods. Once
+    // structural_equals of editable cfg is added, the following clear_cfg will
+    // be removed.
+    for (size_t i = 0; i < to_dedup.size(); i++) {
+      to_dedup[i]->get_code()->clear_cfg();
+    }
     m_stats.m_num_static_non_virt_dedupped += method_dedup::dedup_methods(
         m_scope, to_dedup, m_model_spec.dedup_fill_in_stack_trace, replacements,
         new_to_old_optional);
+    for (size_t i = 0; i < replacements.size(); i++) {
+      replacements[i]->get_code()->build_cfg();
+    }
     // Relocate the remainders.
     std::set<DexMethod*, dexmethods_comparator> to_relocate(
         replacements.begin(), replacements.end());
@@ -810,18 +822,12 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
             SHOW(merger_type));
 
       TRACE(CLMG, 8, "dedup: moving static|non_virt method %s", SHOW(m));
-      change_visibility(m, merger_type);
       relocate_method(m, merger_type);
     }
 
     // Update method dedup map
     for (auto& pair : new_to_old) {
       auto old_list = pair.second;
-      if (m_method_profiles != boost::none) {
-        std::vector<DexMethod*> old_list_vec{old_list.begin(), old_list.end()};
-        m_stats.m_updated_profile_method +=
-            m_method_profiles.get()->substitute_stats(pair.first, old_list_vec);
-      }
       for (auto old_meth : old_list) {
         auto type = old_meth->get_class();
         if (m_mergeable_to_merger_ctor.count(type) == 0) {
@@ -880,8 +886,6 @@ void ModelMethodMerger::merge_virt_itf_methods() {
                               ? m_type_tag_fields.at(merger)
                               : nullptr;
     std::vector<MergerType::VirtualMethod> virt_methods;
-    virt_methods.reserve(merger->vmethods.size() +
-                         merger->intfs_methods.size());
 
     for (auto& vm_lst : merger->vmethods) {
       virt_methods.emplace_back(vm_lst);
@@ -916,7 +920,6 @@ void ModelMethodMerger::merge_virt_itf_methods() {
   for (const auto& pair : not_inlined_dispatch_entries) {
     auto merger_type = pair.first;
     auto not_inlined = pair.second;
-    change_visibility(not_inlined, merger_type);
     relocate_method(not_inlined, merger_type);
   }
 }

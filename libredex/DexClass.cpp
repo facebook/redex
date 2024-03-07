@@ -110,7 +110,7 @@ std::string get_simple_deobf_name(const T* ref) {
   const auto& full_name = ref->get_deobfuscated_name_or_empty();
   if (full_name.empty()) {
     // This comes up for redex-created methods/fields.
-    return ref->str_copy();
+    return std::string(ref->c_str());
   }
   auto dot_pos = full_name.find('.');
   auto colon_pos = full_name.find(':');
@@ -120,8 +120,6 @@ std::string get_simple_deobf_name(const T* ref) {
   return str_copy(full_name.substr(dot_pos + 1, colon_pos - dot_pos - 1));
 }
 } // namespace
-
-static_assert(sizeof(DexString) == sizeof(DexStringRepr));
 
 const std::string DexString::EMPTY;
 
@@ -814,7 +812,7 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
     always_assert_log(that->get_code() != nullptr, "%s", vshow(that).c_str());
     m->set_code(std::make_unique<IRCode>(*that->get_code()));
   } else {
-    redex_assert(CONSTP(that)->get_code() == nullptr);
+    redex_assert(that->get_code() == nullptr);
   }
 
   m->m_access = that->m_access;
@@ -947,9 +945,8 @@ void DexMethod::attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset) {
 }
 void DexMethod::attach_param_annotation_set(
     int paramno, std::unique_ptr<DexAnnotationSet> aset) {
-  always_assert_type_log(!m_concrete || is_synthetic(get_access()),
-                         RedexError::BAD_ANNOTATION, "method %s is concrete\n",
-                         self_show().c_str());
+  always_assert_type_log(!m_concrete, RedexError::BAD_ANNOTATION,
+                         "method %s is concrete\n", self_show().c_str());
   always_assert_type_log(
       m_param_anno == nullptr || m_param_anno->count(paramno) == 0,
       RedexError::BAD_ANNOTATION, "param %d annotation to method %s exists\n",
@@ -1434,7 +1431,7 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
         auto aset = DexAnnotationSet::get_annotation_set(idx, off);
         if (aset != nullptr) {
           method->attach_param_annotation_set(j, std::move(aset));
-          redex_assert(CONSTP(method)->get_param_anno());
+          redex_assert(method->get_param_anno());
         }
       }
     }
@@ -1572,8 +1569,7 @@ DexClass::DexClass(DexType* type, const DexLocation* location)
       m_location(location),
       m_access_flags((DexAccessFlags)0),
       m_external(false),
-      m_perf_sensitive(PerfSensitiveGroup::NONE),
-      m_dynamically_dead(false) {
+      m_perf_sensitive(PerfSensitiveGroup::NONE) {
   always_assert(type != nullptr);
   always_assert_log(type_class(type) == nullptr,
                     "class already exists for %s\n", type->c_str());
@@ -1591,8 +1587,7 @@ DexClass::DexClass(DexIdx* idx,
       m_location(location),
       m_access_flags((DexAccessFlags)cdef->access_flags),
       m_external(false),
-      m_perf_sensitive(PerfSensitiveGroup::NONE),
-      m_dynamically_dead(false) {
+      m_perf_sensitive(PerfSensitiveGroup::NONE) {
   always_assert(m_self != nullptr);
 }
 

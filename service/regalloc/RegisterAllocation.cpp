@@ -11,7 +11,6 @@
 
 #include "CppUtil.h"
 #include "Debug.h"
-#include "DebugUtils.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "GraphColoring.h"

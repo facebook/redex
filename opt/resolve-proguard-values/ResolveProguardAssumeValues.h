@@ -6,7 +6,6 @@
  */
 
 #pragma once
-#include "ControlFlow.h"
 #include "Pass.h"
 #include "PassManager.h"
 
@@ -59,11 +58,14 @@ class ResolveProguardAssumeValuesPass : public Pass {
       const override {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
-    return {};
+    return {
+        {HasSourceBlocks, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
+    };
   }
 
-  static ResolveProguardAssumeValuesPass::Stats process_for_code(
-      cfg::ControlFlowGraph& cfg);
+  static ResolveProguardAssumeValuesPass::Stats process_for_code(IRCode* code);
+  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector& stores,
                 ConfigFiles&,
                 PassManager& mgr) override;

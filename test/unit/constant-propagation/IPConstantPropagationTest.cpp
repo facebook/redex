@@ -14,7 +14,6 @@
 #include "ConstantPropagationRuntimeAssert.h"
 #include "Creators.h"
 #include "Debug.h"
-#include "DebugUtils.h"
 #include "DexUtil.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "IRAssembler.h"

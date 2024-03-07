@@ -191,7 +191,9 @@ void Outliner::gather_outline_candidate_typelists(
   for (const auto& p : tostring_instruction_to_state) {
     const auto& state = p.second;
     auto typelist = typelist_from_state(state);
-    m_outline_typelists.fetch_add(typelist, 1);
+    m_outline_typelists.update(
+        typelist,
+        [](const DexTypeList*, size_t& n, bool /* exists */) { ++n; });
   }
 }
 
@@ -234,7 +236,7 @@ void Outliner::create_outline_helpers(DexStoresVector* stores) {
   bool did_create_helper{false};
   for (const auto& p : m_outline_typelists) {
     const auto* typelist = p.first;
-    auto count = p.second.load();
+    auto count = p.second;
 
     if (count < m_config.min_outline_count ||
         typelist->size() > m_config.max_outline_length) {
@@ -454,18 +456,14 @@ void StringBuilderOutlinerPass::run_pass(DexStoresVector& stores,
   Outliner outliner(m_config);
   // 1) Determine which methods have candidates for outlining.
   walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
-    if (!method->rstate.no_optimizations()) {
-      outliner.analyze(code);
-    }
+    outliner.analyze(code);
   });
   // 2) Determine which candidates occur frequently enough to be worth
   // outlining. Build the corresponding outline helper functions.
   outliner.create_outline_helpers(&stores);
   // 3) Actually do the outlining.
   walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
-    if (!method->rstate.no_optimizations()) {
-      outliner.transform(&code);
-    }
+    outliner.transform(&code);
   });
 
   mgr.incr_metric("stringbuilders_removed",

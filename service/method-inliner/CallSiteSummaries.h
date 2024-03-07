@@ -26,10 +26,6 @@ struct CallSiteSummary {
                                const ConstantValue& value);
 };
 
-inline bool operator==(const CallSiteSummary& a, const CallSiteSummary& b) {
-  return a.result_used == b.result_used && a.arguments.equals(b.arguments);
-}
-
 struct CalleeCallSiteSummary {
   const DexMethod* method;
   const CallSiteSummary* call_site_summary;
@@ -54,9 +50,9 @@ struct InvokeCallSiteSummariesAndDeadBlocks {
 
 using CallSiteSummaryOccurrences = std::pair<const CallSiteSummary*, size_t>;
 
-using ConcurrentMethodToMethodOccurrences =
-    ConcurrentMap<const DexMethod*, std::unordered_map<DexMethod*, size_t>>;
-
+using MethodToMethodOccurrences =
+    std::unordered_map<const DexMethod*,
+                       std::unordered_map<DexMethod*, size_t>>;
 namespace inliner {
 
 using GetCalleeFunction = std::function<DexMethod*(DexMethod*, IRInstruction*)>;
@@ -71,35 +67,36 @@ struct CallSiteSummaryStats {
 
 class CallSiteSummarizer {
   shrinker::Shrinker& m_shrinker;
-  const ConcurrentMethodToMethodOccurrences& m_callee_caller;
-  const ConcurrentMethodToMethodOccurrences& m_caller_callee;
+  const MethodToMethodOccurrences& m_callee_caller;
+  const MethodToMethodOccurrences& m_caller_callee;
   GetCalleeFunction m_get_callee_fn;
   HasCalleeOtherCallSitesPredicate m_has_callee_other_call_sites_fn;
   std::function<bool(const ConstantValue&)>* m_filter_fn;
   CallSiteSummaryStats* m_stats;
 
-  struct CalleeInfo {
-    std::unordered_map<const CallSiteSummary*, size_t> indices;
-    std::vector<CallSiteSummaryOccurrences> occurrences;
-    std::vector<const IRInstruction*> invokes;
-  };
+  /**
+   * For all (reachable) invoked methods, list of call-site summaries
+   */
+  std::unordered_map<const DexMethod*, std::vector<CallSiteSummaryOccurrences>>
+      m_callee_call_site_summary_occurrences;
 
   /**
-   * For all (reachable) invoked methods, call-site summaries and invoke
-   * instructions
+   * For all (reachable) invoked methods, list of vinoke instructions
    */
-  ConcurrentMap<const DexMethod*, CalleeInfo> m_callee_infos;
+  std::unordered_map<const DexMethod*, std::vector<const IRInstruction*>>
+      m_callee_call_site_invokes;
 
   /**
    * For all (reachable) invoke instructions, constant arguments
    */
-  InsertOnlyConcurrentMap<const IRInstruction*, const CallSiteSummary*>
+  ConcurrentMap<const IRInstruction*, const CallSiteSummary*>
       m_invoke_call_site_summaries;
 
   /**
    * Internalized call-site summaries.
    */
-  InsertOnlyConcurrentMap<std::string, CallSiteSummary> m_call_site_summaries;
+  ConcurrentMap<std::string, std::unique_ptr<const CallSiteSummary>>
+      m_call_site_summaries;
 
   /**
    * For all (reachable) invoke instructions in a given method, collect
@@ -114,8 +111,8 @@ class CallSiteSummarizer {
  public:
   CallSiteSummarizer(
       shrinker::Shrinker& shrinker,
-      const ConcurrentMethodToMethodOccurrences& callee_caller,
-      const ConcurrentMethodToMethodOccurrences& caller_callee,
+      const MethodToMethodOccurrences& callee_caller,
+      const MethodToMethodOccurrences& caller_callee,
       GetCalleeFunction get_callee_fn,
       HasCalleeOtherCallSitesPredicate has_callee_other_call_sites_fn,
       std::function<bool(const ConstantValue&)>* filter_fn,

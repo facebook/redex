@@ -53,18 +53,16 @@ struct CallSite {
   const DexMethod* callee;
   IRInstruction* invoke_insn;
 
-  CallSite() { not_reached(); }
   CallSite(const DexMethod* callee, IRInstruction* invoke_insn)
       : callee(callee), invoke_insn(invoke_insn) {}
 };
 
 using CallSites = std::vector<CallSite>;
 using MethodSet = std::unordered_set<const DexMethod*>;
-using MethodVector = std::vector<const DexMethod*>;
 
 struct RootAndDynamic {
-  MethodSet roots;
-  MethodSet dynamic_methods;
+  std::vector<const DexMethod*> roots;
+  std::unordered_set<const DexMethod*> dynamic_methods;
 };
 
 /*
@@ -84,56 +82,10 @@ class BuildStrategy {
 };
 
 class Edge;
-using EdgeId = const Edge*;
+using EdgeId = std::shared_ptr<Edge>;
+using Edges = std::vector<std::shared_ptr<Edge>>;
 
-// This exposes a `EdgesVector` as a iterable of `const Edge*`.
-class EdgesAdapter {
- public:
-  explicit EdgesAdapter(const std::vector<Edge>* edges) : m_edges(edges) {}
-
-  class iterator {
-   public:
-    using value_type = const Edge*;
-    using difference_type = std::ptrdiff_t;
-    using pointer = const value_type*;
-    using reference = const value_type&;
-    using iterator_category = std::input_iterator_tag;
-
-    explicit iterator(value_type current) : m_current(current) {}
-
-    reference operator*() const { return m_current; }
-
-    pointer operator->() const { return &(this->operator*()); }
-
-    bool operator==(const iterator& other) const {
-      return m_current == other.m_current;
-    }
-
-    bool operator!=(iterator& other) const { return !(*this == other); }
-
-    iterator operator++(int) {
-      auto result = *this;
-      ++(*this);
-      return result;
-    }
-
-    iterator& operator++();
-
-   private:
-    value_type m_current;
-  };
-
-  iterator begin() const { return iterator(&*m_edges->begin()); }
-
-  iterator end() const { return iterator(&*m_edges->end()); }
-
-  size_t size() const { return m_edges->size(); }
-
- private:
-  const std::vector<Edge>* m_edges;
-};
-
-class Node final {
+class Node {
   enum NodeType {
     GHOST_ENTRY,
     GHOST_EXIT,
@@ -145,26 +97,22 @@ class Node final {
   explicit Node(NodeType type) : m_method(nullptr), m_type(type) {}
 
   const DexMethod* method() const { return m_method; }
-  const std::vector<const Edge*>& callers() const { return m_predecessors; }
-  EdgesAdapter callees() const { return EdgesAdapter(&m_successors); }
+  const Edges& callers() const { return m_predecessors; }
+  const Edges& callees() const { return m_successors; }
 
-  bool is_entry() const { return m_type == GHOST_ENTRY; }
-  bool is_exit() const { return m_type == GHOST_EXIT; }
-
-  bool operator==(const Node& other) const {
-    return m_method == other.m_method && m_type == other.m_type;
-  }
+  bool is_entry() { return m_type == GHOST_ENTRY; }
+  bool is_exit() { return m_type == GHOST_EXIT; }
 
  private:
   const DexMethod* m_method;
-  std::vector<const Edge*> m_predecessors;
-  std::vector<Edge> m_successors;
+  Edges m_predecessors;
+  Edges m_successors;
   NodeType m_type;
 
   friend class Graph;
 };
 
-using NodeId = const Node*;
+using NodeId = Node*;
 
 class Edge {
  public:
@@ -179,38 +127,26 @@ class Edge {
   IRInstruction* m_invoke_insn;
 };
 
-inline EdgesAdapter::iterator& EdgesAdapter::iterator::operator++() {
-  ++m_current;
-  return *this;
-}
-
 class Graph final {
  public:
   explicit Graph(const BuildStrategy&);
-
-  Graph(Graph&&) = default;
-  Graph& operator=(Graph&&) = default;
-
-  // The call graph cannot be copied.
-  Graph(const Graph&) = delete;
-  Graph& operator=(const Graph&) = delete;
 
   NodeId entry() const { return m_entry.get(); }
   NodeId exit() const { return m_exit.get(); }
 
   bool has_node(const DexMethod* m) const {
-    return m_nodes.count_unsafe(const_cast<DexMethod*>(m)) != 0;
+    return m_nodes.count(const_cast<DexMethod*>(m)) != 0;
   }
 
   NodeId node(const DexMethod* m) const {
     if (m == nullptr) {
       return this->entry();
     }
-    return m_nodes.get_unsafe(m);
+    return m_nodes.at(m).get();
   }
 
-  const InsertOnlyConcurrentMap<const IRInstruction*,
-                                std::unordered_set<const DexMethod*>>&
+  const std::unordered_map<const IRInstruction*,
+                           std::unordered_set<const DexMethod*>>&
   get_insn_to_callee() const {
     return m_insn_to_callee;
   }
@@ -219,18 +155,18 @@ class Graph final {
     return m_dynamic_methods;
   }
 
-  const MethodVector& get_callers(const DexMethod* callee) const;
-
  private:
-  std::unique_ptr<Node> m_entry;
-  std::unique_ptr<Node> m_exit;
-  InsertOnlyConcurrentMap<const DexMethod*, Node> m_nodes;
-  InsertOnlyConcurrentMap<const IRInstruction*,
-                          std::unordered_set<const DexMethod*>>
-      m_insn_to_callee;
-  mutable InsertOnlyConcurrentMap<const DexMethod*, MethodVector>
-      m_callee_to_callers;
+  NodeId make_node(const DexMethod*);
 
+  void add_edge(const NodeId& caller,
+                const NodeId& callee,
+                IRInstruction* invoke_insn);
+
+  std::shared_ptr<Node> m_entry;
+  std::shared_ptr<Node> m_exit;
+  std::unordered_map<const DexMethod*, std::shared_ptr<Node>> m_nodes;
+  std::unordered_map<const IRInstruction*, std::unordered_set<const DexMethod*>>
+      m_insn_to_callee;
   // Methods that might have unknown inputs/outputs that we need special handle.
   // Like external methods with internal overrides, they might have external
   // implementation that we don't know about. Or methods that might have
@@ -251,9 +187,11 @@ class SingleCalleeStrategy : public BuildStrategy {
 
  protected:
   bool is_definitely_virtual(DexMethod* method) const;
+  virtual DexMethod* resolve_callee(const DexMethod* caller,
+                                    IRInstruction* invoke) const;
 
   const Scope& m_scope;
-  InsertOnlyConcurrentSet<DexMethod*> m_non_virtual;
+  std::unordered_set<DexMethod*> m_non_virtual;
 };
 
 class MultipleCalleeBaseStrategy : public SingleCalleeStrategy {
@@ -265,19 +203,20 @@ class MultipleCalleeBaseStrategy : public SingleCalleeStrategy {
   RootAndDynamic get_roots() const override;
 
  protected:
-  const std::vector<const DexMethod*>&
-  get_ordered_overriding_methods_with_code_or_native(
-      const DexMethod* method) const;
+  virtual std::vector<const DexMethod*> get_additional_roots(
+      const MethodSet& /* existing_roots */) const {
+    // No additional roots by default.
+    return std::vector<const DexMethod*>();
+  }
 
-  const std::vector<const DexMethod*>&
-  init_ordered_overriding_methods_with_code_or_native(
-      const DexMethod* method, std::vector<const DexMethod*>) const;
+  const std::vector<const DexMethod*>& get_ordered_overriding_methods_with_code(
+      const DexMethod* method) const;
 
   const method_override_graph::Graph& m_method_override_graph;
 
  private:
-  mutable InsertOnlyConcurrentMap<const DexMethod*,
-                                  std::vector<const DexMethod*>>
+  mutable ConcurrentMap<const DexMethod*,
+                        std::shared_ptr<std::vector<const DexMethod*>>>
       m_overriding_methods_cache;
 };
 
@@ -295,40 +234,44 @@ class MultipleCalleeStrategy : public MultipleCalleeBaseStrategy {
                                   const Scope& scope,
                                   uint32_t big_override_threshold);
   CallSites get_callsites(const DexMethod* method) const override;
-  RootAndDynamic get_roots() const override;
 
  protected:
-  ConcurrentSet<const DexMethod*> m_big_virtuals;
-  ConcurrentSet<const DexMethod*> m_big_virtual_overrides;
+  std::vector<const DexMethod*> get_additional_roots(
+      const MethodSet& existing_roots) const override;
+  MethodSet m_big_override;
 };
 
 // A static-method-only API for use with the monotonic fixpoint iterator.
 class GraphInterface {
  public:
   using Graph = call_graph::Graph;
-  using NodeId = const Node*;
-  using EdgeId = const Edge*;
+  using NodeId = Node*;
+  using EdgeId = std::shared_ptr<Edge>;
 
   static NodeId entry(const Graph& graph) { return graph.entry(); }
   static NodeId exit(const Graph& graph) { return graph.exit(); }
-  static const std::vector<const Edge*>& predecessors(const Graph&,
-                                                      const NodeId& m) {
+  static const Edges& predecessors(const Graph& graph, const NodeId& m) {
     return m->callers();
   }
-  static EdgesAdapter successors(const Graph&, const NodeId& m) {
+  static const Edges& successors(const Graph& graph, const NodeId& m) {
     return m->callees();
   }
-  static NodeId source(const Graph&, const EdgeId& e) { return e->caller(); }
-  static NodeId target(const Graph&, const EdgeId& e) { return e->callee(); }
+  static NodeId source(const Graph& graph, const EdgeId& e) {
+    return e->caller();
+  }
+  static NodeId target(const Graph& graph, const EdgeId& e) {
+    return e->callee();
+  }
 };
+
+MethodSet resolve_callees_in_graph(const Graph& graph,
+                                   const DexMethod* method,
+                                   const IRInstruction* insn);
 
 const MethodSet& resolve_callees_in_graph(const Graph& graph,
                                           const IRInstruction* insn);
 
-const MethodVector& get_callee_to_callers(const Graph& graph,
-                                          const DexMethod* callee);
-
-bool invoke_is_dynamic(const Graph& graph, const IRInstruction* insn);
+bool method_is_dynamic(const Graph& graph, const DexMethod* method);
 
 struct CallgraphStats {
   uint32_t num_nodes;

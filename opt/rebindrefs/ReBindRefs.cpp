@@ -105,9 +105,7 @@ struct Rebinder {
           }
           bool is_support_lib = api::is_support_lib_type(method->get_class());
           RebinderRefs rebinder_refs;
-          always_assert(method->get_code()->editable_cfg_built());
-          auto& cfg = method->get_code()->cfg();
-          for (auto& mie : cfg::InstructionIterable(cfg)) {
+          for (auto& mie : InstructionIterable(method->get_code())) {
             auto insn = mie.insn;
             switch (insn->opcode()) {
             case OPCODE_INVOKE_VIRTUAL: {

@@ -28,6 +28,7 @@ class UnmarkProguardKeepPass : Pass {
     bind("package_list", {}, m_package_list);
   }
 
+  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:

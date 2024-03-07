@@ -22,7 +22,6 @@ DISABLED_WARNINGS = \
   $(DISABLED_WARNINGS_HARD) \
   -Wno-array-bounds \
   -Wno-class-memaccess \
-  -Wno-deprecated-copy \
   -Wno-deprecated-declarations \
   -Wno-enum-constexpr-conversion \
   -Wno-format-truncation \
@@ -74,16 +73,6 @@ mdir: ; mkdir -p $(top_srcdir)/protores
 proto_res_header_out = $(addprefix protores/, $(notdir ${proto_res_in:.proto=.pb.h}))
 proto_res_body_out = $(addprefix protores/, $(notdir ${proto_res_in:.proto=.pb.cc}))
 BUILT_SOURCES = $(proto_res_header_out)
-
-proto_cfg_in = \
-	proto/config.proto
-
-protocfg/%.pb.cc protocfg/%.pb.h: proto/config.proto | mdir ; $(PROTOC) --proto_path=$(dir $^) --cpp_out=$(top_srcdir)/protocfg $^
-mdir: ; mkdir -p $(top_srcdir)/protocfg
-
-proto_cfg_header_out = $(addprefix protocfg/, $(notdir ${proto_cfg_in:.proto=.pb.h}))
-proto_cfg_body_out = $(addprefix protocfg/, $(notdir ${proto_cfg_in:.proto=.pb.cc}))
-BUILT_SOURCES += $(proto_cfg_header_out)
 
 endif
 
@@ -151,6 +140,7 @@ libredex_la_SOURCES = \
 	libredex/GlobalConfig.cpp \
 	libredex/GraphVisualizer.cpp \
 	libredex/HierarchyUtil.cpp \
+	libredex/InitCollisionFinder.cpp \
 	libredex/InitClassesWithSideEffects.cpp \
 	libredex/InlinerConfig.cpp \
 	libredex/InstructionLowering.cpp \
@@ -208,7 +198,6 @@ libredex_la_SOURCES = \
 	libredex/RedexMappedFile.cpp \
 	libredex/ReadMaybeMapped.cpp \
 	libredex/RedexContext.cpp \
-	libredex/RedexProperties.cpp \
 	libredex/RedexPropertiesManager.cpp \
 	libredex/RedexPropertyChecker.cpp \
 	libredex/RedexPropertyCheckerRegistry.cpp \
@@ -225,7 +214,6 @@ libredex_la_SOURCES = \
 	libredex/SourceBlocks.cpp \
 	libredex/StringTreeSet.cpp \
 	libredex/Timer.cpp \
-	libredex/ThreadPool.cpp \
 	libredex/ThrowPropagationImpl.cpp \
 	libredex/Trace.cpp \
 	libredex/Transform.cpp \
@@ -321,6 +309,7 @@ libredex_la_SOURCES = \
 	service/shrinker/Shrinker.cpp \
 	service/switch-dispatch/SwitchDispatch.cpp \
 	service/switch-partitioning/SwitchEquivFinder.cpp \
+	service/switch-partitioning/SwitchMethodPartitioning.cpp \
 	service/type-analysis/GlobalTypeAnalyzer.cpp \
 	service/type-analysis/LocalTypeAnalyzer.cpp \
 	service/type-analysis/WholeProgramState.cpp \
@@ -346,8 +335,7 @@ libredex_la_LIBADD = \
 if SET_PROTOBUF
 libredex_la_SOURCES += \
 	protores/Resources.pb.cc \
-	protores/Configuration.pb.cc \
-	protocfg/config.pb.cc
+	protores/Configuration.pb.cc
 
 libredex_la_LIBADD += \
 	$(LIBPROTOBUF_LIBS)
@@ -363,7 +351,6 @@ endif
 
 libopt_la_SOURCES = \
 	checkers/HasSourceBlocksChecker.cpp \
-	checkers/InitialRenameClassCheker.cpp \
 	checkers/InjectionIdInstructionsChecker.cpp \
 	checkers/NoInitClassInstructionsChecker.cpp \
 	checkers/NoUnreachableInstructionsChecker.cpp \
@@ -411,7 +398,6 @@ libopt_la_SOURCES = \
 	opt/int_type_patcher/IntTypePatcher.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/interdex/InterDexPass.cpp \
-	opt/interdex/InterDexReshuffleImpl.cpp \
 	opt/interdex/InterDexReshufflePass.cpp \
 	opt/interdex/SortRemainingClassesPass.cpp \
 	opt/kotlin-lambda/RewriteKotlinSingletonInstance.cpp \
@@ -499,7 +485,6 @@ libopt_la_SOURCES = \
 	opt/split_huge_switches/SplitHugeSwitchPass.cpp \
 	opt/split_resource_tables/SplitResourceTables.cpp \
 	opt/object-escape-analysis/ExpandableMethodParams.cpp \
-	opt/object-escape-analysis/ObjectEscapeAnalysisImpl.cpp \
 	opt/object-escape-analysis/ObjectEscapeAnalysis.cpp \
 	opt/staticrelo/StaticReloV2.cpp \
 	opt/string_concatenator/StringConcatenator.cpp \

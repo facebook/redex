@@ -22,8 +22,8 @@ class RemoveBuilderPatternPass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
+        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {SpuriousGetClassCallsInterned, RequiresAndPreserves},
     };
   }
 

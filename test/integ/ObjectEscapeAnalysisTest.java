@@ -323,10 +323,6 @@ public class ObjectEscapeAnalysisTest {
     public int getX() {
       return this.x;
     }
-
-    public int getX4(int dummy_a, int dummy_b, int dummy_c, int dummy_d) {
-      return this.x;
-    }
   }
 
   public static int reduceTo42IncompleteInlinableType() {
@@ -340,38 +336,6 @@ public class ObjectEscapeAnalysisTest {
     // This one not.
     O.instance = new O(16);
     return o.getX();
-  }
-
-  public static O helper(boolean b) {
-    // This completely reducible class D makes the helper into a root.
-    D d = D.allocator(42);
-    d.getX();
-    return b ? new O(42) : new O(23);
-  }
-
-  public static int reduceIncompleteInlinableType(boolean b) {
-    O o = helper(b);
-    return o.getX4(1, 2, 3, 4);
-  }
-
-  public static class P {
-    int x;
-
-    public P(int x) {
-      this.x = x;
-    }
-
-    public int getX() {
-      return this.x;
-    }
-
-    protected void finalize() {}
-  }
-
-  public static int doNotReduceTo42Finalize() {
-    // This object creation can NOT be reduced
-    P p = new P(42);
-    return p.getX();
   }
 
   static class Q {

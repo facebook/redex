@@ -100,7 +100,7 @@ class FixpointIterator : public sparta::ParallelMonotonicFixpointIterator<
   void analyze_node(const call_graph::NodeId& node,
                     Domain* current_state) const override;
 
-  Domain analyze_edge(const call_graph::EdgeId& edge,
+  Domain analyze_edge(const std::shared_ptr<call_graph::Edge>& edge,
                       const Domain& exit_state_at_source) const override;
 
   std::unique_ptr<IntraproceduralAnalysis> get_intraprocedural_analysis(
@@ -149,10 +149,6 @@ class FixpointIterator : public sparta::ParallelMonotonicFixpointIterator<
  */
 void set_encoded_values(const DexClass* cls, ConstantEnvironment* env);
 
-/**
- * Bind all eligible fields to SignedConstantDomain(0) in :env, since all
- * fields are initialized to zero by default at runtime.
- */
 void set_ifield_values(const DexClass* cls,
                        const EligibleIfields& eligible_ifields,
                        ConstantEnvironment* env);
