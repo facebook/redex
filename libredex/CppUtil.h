@@ -16,7 +16,7 @@
 //
 // Example:
 //   self_recursive_fn([](auto self, int i) {
-//     return i == 0 ? 1 : i == 1 ? 1 : self(i - 1) + self(i-2);
+//     return i == 0 ? 1 : i == 1 ? 1 : self(self, i - 1) + self(self, i-2);
 //   }, 3);
 template <typename Fn, typename... Args>
 auto self_recursive_fn(const Fn& fn, Args&&... args)

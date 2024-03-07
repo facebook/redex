@@ -104,7 +104,8 @@ std::vector<cfg::Block*> Analyzer::get_monitor_mismatches() {
       // Dead block
       continue;
     }
-    if (count.is_top()) {
+    if (count.is_top() &&
+        !m_cfg.get_pred_edge_of_type(block, cfg::EDGE_GHOST)) {
       blocks.push_back(block);
     }
   }

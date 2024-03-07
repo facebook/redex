@@ -290,7 +290,7 @@ void RtypeSpecialization::specialize_non_true_virtuals(
     const method_override_graph::Graph& override_graph,
     DexMethod* meth,
     const DexType* better_rtype,
-    ConcurrentMap<DexMethod*, const DexType*>& virtual_roots,
+    InsertOnlyConcurrentMap<DexMethod*, const DexType*>& virtual_roots,
     RtypeStats& stats) const {
   const auto& overridings =
       method_override_graph::get_overriding_methods(override_graph, meth, true);
@@ -303,7 +303,7 @@ void RtypeSpecialization::specialize_true_virtuals(
     const method_override_graph::Graph& override_graph,
     DexMethod* meth,
     const DexType* better_rtype,
-    ConcurrentMap<DexMethod*, const DexType*>& virtual_roots,
+    InsertOnlyConcurrentMap<DexMethod*, const DexType*>& virtual_roots,
     RtypeStats& stats) const {
   const auto& overridings =
       method_override_graph::get_overriding_methods(override_graph, meth, true);
@@ -380,7 +380,7 @@ void RtypeSpecialization::specialize_true_virtuals(
 void RtypeSpecialization::specialize_rtypes(const Scope& scope) {
   Timer t("specialize_rtype");
   const auto& override_graph = method_override_graph::build_graph(scope);
-  ConcurrentMap<DexMethod*, const DexType*> virtual_roots;
+  InsertOnlyConcurrentMap<DexMethod*, const DexType*> virtual_roots;
 
   // Preprocess the candidates to cut down the size of candidates.
   // The main logic is filtering out complex virtual scopes that we choose not

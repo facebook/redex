@@ -63,7 +63,7 @@ boost::optional<RDefs> compute_rdefs(ControlFlowGraph& cfg) {
   std::unordered_map<const IRInstruction*, Block*> block_map;
   auto get_rdef = [&](IRInstruction* insn, reg_t reg) -> IRInstruction* {
     auto it = block_map.find(insn);
-    redex_assert(it != block_map.end());
+    redex_assert(it != block_map.cend());
     auto defs = get_defs(it->second, insn);
     return get_singleton(defs, reg);
   };

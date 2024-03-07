@@ -95,15 +95,18 @@ static auto libc_posix_memalign =
 
 #ifdef __linux__
 extern "C" {
-extern void* __libc_malloc(size_t size);
+extern void* __libc_malloc(size_t size); // NOLINT(bugprone-reserved-identifier)
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
 extern void* __libc_calloc(size_t nelem, size_t elsize);
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
 extern void* __libc_memalign(size_t alignment, size_t size);
 // This isn't found?
 // extern int __posix_memalign(void** out, size_t alignment, size_t size);
 }
 
-static auto libc_malloc = __libc_malloc;
-static auto libc_calloc = __libc_calloc;
+static auto libc_malloc = __libc_malloc; // NOLINT(bugprone-reserved-identifier)
+static auto libc_calloc = __libc_calloc; // NOLINT(bugprone-reserved-identifier)
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
 static auto libc_memalign = __libc_memalign;
 // static auto libc_posix_memalign = __posix_memalign;
 #endif
@@ -285,22 +288,44 @@ class MallocDebug {
 };
 
 thread_local MallocDebug<true> malloc_debug;
+bool shutdown{false};
 
 } // namespace
 
 extern "C" {
 
-void* malloc(size_t sz) { return malloc_debug.malloc(sz); }
+void* malloc(size_t sz) {
+  if (shutdown) {
+    return libc_malloc(sz);
+  }
+  return malloc_debug.malloc(sz);
+}
 
 void* calloc(size_t nelem, size_t elsize) {
+  if (shutdown) {
+    return libc_calloc(nelem, elsize);
+  }
   return malloc_debug.calloc(nelem, elsize);
 }
 
 void* memalign(size_t alignment, size_t bytes) {
+  if (shutdown) {
+    return libc_memalign(alignment, bytes);
+  }
   return malloc_debug.memalign(alignment, bytes);
 }
 
 int posix_memalign(void** out, size_t alignment, size_t size) {
+  if (shutdown) {
+    *out = memalign(alignment, size);
+    return 0;
+  }
   return malloc_debug.posix_memalign(out, alignment, size);
 }
-}
+} // extern "C"
+
+namespace malloc_debug {
+
+void set_shutdown() { shutdown = true; }
+
+} // namespace malloc_debug

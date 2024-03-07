@@ -49,6 +49,14 @@ TEST_F(PreVerify, VerifyBaseState) {
   ASSERT_NE(method_dup, nullptr);
   EXPECT_EQ(count_switches(method_dup), 0)
       << "Method does not match expected input state";
+
+  auto cls_multi = find_class_named(
+      classes, "Lcom/facebook/redex/ConstClassBranches$Complicated;");
+  ASSERT_NE(cls_multi, nullptr);
+  auto method_multi = find_dmethod_named(*cls_multi, "get");
+  ASSERT_NE(method_multi, nullptr);
+  EXPECT_EQ(count_switches(method_multi), 0)
+      << "Method does not match expected input state";
 }
 
 TEST_F(PostVerify, VerifyTransformedA) {
@@ -77,4 +85,14 @@ TEST_F(PostVerify, VerifyTransformedDuplicate) {
   ASSERT_NE(method_dup, nullptr);
   EXPECT_EQ(count_switches(method_dup), 1)
       << "Duplicates.get should be transformed";
+}
+
+TEST_F(PostVerify, VerifyTransformedMulti) {
+  auto cls_multi = find_class_named(
+      classes, "Lcom/facebook/redex/ConstClassBranches$Complicated;");
+  ASSERT_NE(cls_multi, nullptr);
+  auto method_multi = find_dmethod_named(*cls_multi, "get");
+  ASSERT_NE(method_multi, nullptr);
+  EXPECT_EQ(count_switches(method_multi), 2)
+      << "Complicated.get should have two transforms applied";
 }

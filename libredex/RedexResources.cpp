@@ -449,6 +449,10 @@ bool AndroidResources::can_obfuscate_xml_file(
   return false;
 }
 
+void AndroidResources::finalize_bundle_config(const ResourceConfig& config) {
+  // Do nothing in super implementation, sub class will override if relevant.
+}
+
 void ResourceTableFile::finalize_resource_table(const ResourceConfig& config) {
   // Intentionally left empty, proto resource table will not contain a relevant
   // structure to clean up.

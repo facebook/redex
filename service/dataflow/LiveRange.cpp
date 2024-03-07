@@ -14,8 +14,11 @@
 #include "IRCode.h"
 #include "ScopedCFG.h"
 #include "Show.h"
+#include "Timer.h"
 
 namespace {
+
+AccumulatingTimer s_timer("live_range");
 
 using namespace live_range;
 
@@ -77,6 +80,8 @@ void replay_analysis_with_callback(const cfg::ControlFlowGraph& cfg,
                                    const Iter& iter,
                                    bool ignore_unreachable,
                                    Fn f) {
+  auto timer_scope = s_timer.scope();
+
   for (cfg::Block* block : cfg.blocks()) {
     auto defs_in = iter.get_entry_state_at(block);
     if (ignore_unreachable && defs_in.is_bottom()) {
@@ -88,9 +93,16 @@ void replay_analysis_with_callback(const cfg::ControlFlowGraph& cfg,
         Use use{insn, i};
         auto src = insn->src(i);
         const auto& defs = defs_in.get(src);
-        always_assert_log(
-            !defs.is_top() && !defs.is_bottom() && defs.size() > 0,
-            "Found use without def when processing [0x%p]%s", &mie, SHOW(insn));
+        if (defs.is_top() || defs.empty()) {
+          if (iter.has_filter()) {
+            continue;
+          }
+          not_reached_log("Found use without def when processing [0x%p]%s",
+                          &mie, SHOW(insn));
+        }
+        always_assert_log(!defs.is_bottom(),
+                          "Found unreachable use when processing [0x%p]%s",
+                          &mie, SHOW(insn));
         f(use, defs);
       }
       iter.analyze_instruction(insn, &defs_in);
@@ -134,8 +146,13 @@ bool Use::operator==(const Use& that) const {
   return insn == that.insn && src_index == that.src_index;
 }
 
-Chains::Chains(const cfg::ControlFlowGraph& cfg, bool ignore_unreachable)
-    : m_cfg(cfg), m_fp_iter(cfg), m_ignore_unreachable(ignore_unreachable) {
+Chains::Chains(const cfg::ControlFlowGraph& cfg,
+               bool ignore_unreachable,
+               reaching_defs::Filter filter)
+    : m_cfg(cfg),
+      m_fp_iter(cfg, std::move(filter)),
+      m_ignore_unreachable(ignore_unreachable) {
+  auto timer_scope = s_timer.scope();
   m_fp_iter.run(reaching_defs::Environment());
 }
 
@@ -148,8 +165,12 @@ DefUseChains Chains::get_def_use_chains() const {
 }
 
 MoveAwareChains::MoveAwareChains(const cfg::ControlFlowGraph& cfg,
-                                 bool ignore_unreachable)
-    : m_cfg(cfg), m_fp_iter(cfg), m_ignore_unreachable(ignore_unreachable) {
+                                 bool ignore_unreachable,
+                                 reaching_defs::Filter filter)
+    : m_cfg(cfg),
+      m_fp_iter(cfg, std::move(filter)),
+      m_ignore_unreachable(ignore_unreachable) {
+  auto timer_scope = s_timer.scope();
   m_fp_iter.run(reaching_defs::Environment());
 }
 

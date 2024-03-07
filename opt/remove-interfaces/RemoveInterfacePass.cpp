@@ -28,11 +28,11 @@ namespace {
 // If an interface has more implementors, we do not remove it.
 constexpr size_t MAX_IMPLS_SIZE = 7;
 
-std::vector<Location> get_args_for(DexProto* proto, MethodCreator* mc) {
+std::vector<Location> get_args_for(DexProto* proto, MethodCreator& mc) {
   std::vector<Location> args;
   size_t args_size = proto->get_args()->size();
   for (size_t arg_loc = 0; arg_loc < args_size; ++arg_loc) {
-    args.push_back(mc->get_local(arg_loc));
+    args.push_back(mc.get_local(arg_loc));
   }
 
   return args;
@@ -44,8 +44,8 @@ std::unique_ptr<DexAnnotationSet> get_anno_set(DexType* anno_type) {
       anno_type, DexAnnotationVisibility::DAV_BUILD));
   return anno_set;
 }
-DexMethod* materialized_dispatch(DexType* owner, MethodCreator* mc) {
-  auto dispatch = mc->create();
+DexMethod* materialized_dispatch(DexType* owner, MethodCreator&& mc) {
+  auto dispatch = mc.create();
   TRACE(RM_INTF,
         9,
         "Generated dispatch %s\n%s",
@@ -94,16 +94,16 @@ DexMethod* generate_dispatch(const DexType* base_type,
   TRACE(RM_INTF, 9, "generating dispatch %s.%s for targets of size %zu",
         SHOW(dispatch_owner), dispatch_name->c_str(), targets.size());
   auto anno_set = get_anno_set(dispatch_anno);
-  auto mc = new MethodCreator(dispatch_owner, dispatch_name, new_proto,
-                              ACC_STATIC | ACC_PUBLIC, std::move(anno_set),
-                              keep_debug_info);
+  auto mc = MethodCreator(dispatch_owner, dispatch_name, new_proto,
+                          ACC_STATIC | ACC_PUBLIC, std::move(anno_set),
+                          keep_debug_info);
   // Variable setup
-  auto self_loc = mc->get_local(0);
-  auto type_test_loc = mc->make_local(type::_boolean());
-  auto ret_loc = new_proto->is_void() ? mc->get_local(0) // not used
-                                      : mc->make_local(new_proto->get_rtype());
+  auto self_loc = mc.get_local(0);
+  auto type_test_loc = mc.make_local(type::_boolean());
+  auto ret_loc = new_proto->is_void() ? mc.get_local(0) // not used
+                                      : mc.make_local(new_proto->get_rtype());
   std::vector<Location> args = get_args_for(new_proto, mc);
-  auto mb = mc->get_main_block();
+  auto mb = mc.get_main_block();
 
   /**
    * In case all interface scopes can only be resolved to a single concrete
@@ -121,7 +121,7 @@ DexMethod* generate_dispatch(const DexType* base_type,
       mb->move_result(ret_loc, new_proto->get_rtype());
     }
     mb->ret(new_proto->get_rtype(), ret_loc);
-    return materialized_dispatch(dispatch_owner, mc);
+    return materialized_dispatch(dispatch_owner, std::move(mc));
   }
   // Construct dispatchs
   for (size_t idx = 0; idx < targets.size(); idx++) {
@@ -146,7 +146,7 @@ DexMethod* generate_dispatch(const DexType* base_type,
     curr_block->ret(new_proto->get_rtype(), ret_loc);
   }
   // Finalizing
-  return materialized_dispatch(dispatch_owner, mc);
+  return materialized_dispatch(dispatch_owner, std::move(mc));
 }
 
 void update_interface_calls(
@@ -281,7 +281,7 @@ size_t exclude_unremovables(const Scope& scope,
                             const std::vector<DexType*>& excluded_interfaces,
                             TypeSet& candidates) {
   size_t count = 0;
-  always_assert(stores.size());
+  always_assert(!stores.empty());
   XStoreRefs xstores(stores);
 
   // Excluded by config
@@ -324,7 +324,9 @@ size_t exclude_unremovables(const Scope& scope,
     if (!code) {
       return current_excluded;
     }
-    for (const auto& mie : InstructionIterable(code)) {
+    always_assert(code->editable_cfg_built());
+    auto& cfg = code->cfg();
+    for (const auto& mie : cfg::InstructionIterable(cfg)) {
       auto insn = mie.insn;
       if (!insn->has_type() || insn->get_type() == nullptr) {
         continue;
@@ -510,6 +512,7 @@ TypeSet RemoveInterfacePass::remove_leaf_interfaces(
       auto dispatch =
           generate_dispatch(replacement_type, dispatch_targets, meth,
                             m_keep_debug_info, m_interface_dispatch_anno);
+      dispatch->get_code()->build_cfg();
       local_dispatch_stats[dispatch_targets.size()]++;
       local_intf_meth_to_dispatch[meth] = dispatch;
     }

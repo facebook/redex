@@ -50,6 +50,11 @@ TEST_F(TypeAnalysisTransformTest, MethodHasNoEqDefined) {
           ->as_def();
   auto codey = y_method->get_code();
   ASSERT_NE(nullptr, codey);
+  auto jj = InstructionIterable(y_method->get_code());
+  auto end2 = jj.end();
+  for (auto it = jj.begin(); it != end2; ++it) {
+    auto insn = it->insn;
+  }
 }
 
 } // namespace

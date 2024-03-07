@@ -19,11 +19,9 @@ class AddSecondaryDexPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
-        {HasSourceBlocks, Preserves},
         {NoInitClassInstructions, Preserves},
         {NoResolvablePureRefs, Preserves},
         {NoUnreachableInstructions, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
         {RenameClass, Preserves},
     };
   }

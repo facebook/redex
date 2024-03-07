@@ -2828,3 +2828,46 @@ TEST_F(IRTypeCheckerTest, synchronizedThrowOutsideCatchAllInTry) {
   checker.run();
   EXPECT_TRUE(checker.fail());
 }
+
+TEST_F(IRTypeCheckerTest, invokeVirtualOnInterfaceMethod) {
+  const auto interface_type = DexType::make_type("LI;");
+  ClassCreator interface_type_creator(interface_type);
+  interface_type_creator.set_super(type::java_lang_Object());
+  interface_type_creator.set_access(ACC_INTERFACE);
+  auto foo_method =
+      DexMethod::make_method("LI;.foo:()V")->make_concrete(ACC_PUBLIC, true);
+  interface_type_creator.add_method(foo_method);
+  interface_type_creator.create();
+
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:(LI;)V;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (invoke-virtual (v1) "LI;.foo:()V")
+      (return-void)
+    )
+  )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_TRUE(checker.fail());
+  }
+
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:(LI;)V;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (invoke-interface (v1) "LI;.foo:()V")
+      (return-void)
+    )
+  )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_FALSE(checker.fail());
+  }
+}

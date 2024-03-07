@@ -125,8 +125,6 @@ class MethodProfiles {
   // Try to resolve previously unresolved lines
   void process_unresolved_lines();
 
-  static double get_process_unresolved_lines_seconds();
-
   std::unordered_set<dex_member_refs::MethodDescriptorTokens>
   get_unresolved_method_descriptor_tokens() const;
 
@@ -138,6 +136,10 @@ class MethodProfiles {
   // sources.
   size_t derive_stats(DexMethod* target,
                       const std::vector<DexMethod*>& sources);
+
+  // Substitute target method's stat with derived stats from given sources.
+  size_t substitute_stats(DexMethod* target,
+                          const std::vector<DexMethod*>& sources);
 
  private:
   static AccumulatingTimer s_process_unresolved_lines_timer;

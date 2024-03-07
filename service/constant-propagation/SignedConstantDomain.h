@@ -11,6 +11,7 @@
 #include <sparta/ConstantAbstractDomain.h>
 #include <sparta/IntervalDomain.h>
 
+#include "Debug.h"
 #include "SignDomain.h"
 
 using ConstantDomain = sparta::ConstantAbstractDomain<int64_t>;

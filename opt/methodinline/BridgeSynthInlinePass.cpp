@@ -15,6 +15,7 @@ void BridgeSynthInlinePass::run_pass(DexStoresVector& stores,
   inliner::run_inliner(stores,
                        mgr,
                        conf,
+                       DEFAULT_COST_CONFIG,
                        /* intra_dex */ false,
                        /* inline_for_speed */ nullptr,
                        /* inline_bridge_synth_only */ true);

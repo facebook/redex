@@ -25,7 +25,7 @@ void NoInitClassInstructionsChecker::run_checker(DexStoresVector& stores,
   walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
     always_assert_log(!opcode::is_init_class(insn->opcode()),
                       "[%s] %s contains init-class instruction!\n  {%s}",
-                      get_property_name().c_str(), SHOW(method), SHOW(insn));
+                      get_name(get_property()), SHOW(method), SHOW(insn));
   });
 }
 

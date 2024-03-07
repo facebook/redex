@@ -21,7 +21,6 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "Inliner.h"
 #include "LiveRange.h"
 #include "MethodOverrideGraph.h"
 #include "MethodProfiles.h"
@@ -227,7 +226,7 @@ static void filter_candidates_local_only(
  */
 std::unordered_set<DexMethod*> gather_non_virtual_methods(
     Scope& scope,
-    const std::unordered_set<DexMethod*>* non_virtual,
+    const InsertOnlyConcurrentSet<DexMethod*>* non_virtual,
     const std::unordered_set<DexType*>& no_devirtualize_anno) {
   // trace counter
   size_t all_methods = 0;
@@ -334,10 +333,14 @@ SameImplementationMap get_same_implementation_map(
     SameImplementation same_implementation{nullptr, {}};
     auto consider_method = [&](DexMethod* method) {
       always_assert(method->get_code());
-      if (same_implementation.representative != nullptr &&
-          !method->get_code()->structural_equals(
-              *same_implementation.representative->get_code())) {
-        return false;
+      always_assert(method->get_code()->editable_cfg_built());
+      if (same_implementation.representative != nullptr) {
+        always_assert(same_implementation.representative->get_code()
+                          ->editable_cfg_built());
+        if (!method->get_code()->cfg().structural_equals(
+                same_implementation.representative->get_code()->cfg())) {
+          return false;
+        }
       }
       if (same_implementation.representative == nullptr ||
           compare_dexmethods(method, same_implementation.representative)) {
@@ -406,15 +409,16 @@ bool can_have_unknown_implementations(const mog::Graph& method_override_graph,
     return true;
   }
   // Also check that for all overridden methods.
-  const auto& overridden_methods = mog::get_overridden_methods(
-      method_override_graph, method, /* include_interfaces */ true);
-  for (auto overridden_method : overridden_methods) {
-    if (is_interface(type_class(overridden_method->get_class())) &&
-        (root(overridden_method) || !can_rename(overridden_method))) {
-      return true;
-    }
-  }
-  return false;
+  return mog::any_overridden_methods(
+      method_override_graph, method,
+      [&](auto* overridden_method) {
+        if (is_interface(type_class(overridden_method->get_class())) &&
+            (root(overridden_method) || !can_rename(overridden_method))) {
+          return true;
+        }
+        return false;
+      },
+      /* include_interfaces */ true);
 };
 
 /**
@@ -427,13 +431,13 @@ bool can_have_unknown_implementations(const mog::Graph& method_override_graph,
  */
 void gather_true_virtual_methods(
     const mog::Graph& method_override_graph,
-    const std::unordered_set<DexMethod*>& non_virtual,
+    const InsertOnlyConcurrentSet<DexMethod*>& non_virtual,
     const Scope& scope,
     const SameImplementationMap& same_implementation_map,
     CalleeCallerInsns* true_virtual_callers) {
   Timer t("gather_true_virtual_methods");
   ConcurrentMap<const DexMethod*, CallerInsns> concurrent_true_virtual_callers;
-  ConcurrentMap<IRInstruction*, SameImplementation*>
+  InsertOnlyConcurrentMap<IRInstruction*, SameImplementation*>
       same_implementation_invokes;
   // Add mapping from callee to monomorphic callsites.
   auto add_monomorphic_call_site = [&](const DexMethod* caller,
@@ -444,22 +448,67 @@ void gather_true_virtual_methods(
           m.caller_insns[caller].emplace(callsite);
         });
   };
-  auto add_other_call_site = [&](const DexMethod* callee) {
-    concurrent_true_virtual_callers.update(
-        callee, [&](const DexMethod*, CallerInsns& m, bool) {
-          m.other_call_sites = true;
-        });
-  };
+  auto add_other_call_site =
+      [&](const DexMethod* callee,
+          bool other_call_sites_overriding_methods_added = false) {
+        bool res;
+        concurrent_true_virtual_callers.update(
+            callee, [&](const DexMethod*, CallerInsns& m, bool) {
+              m.other_call_sites = true;
+              res = m.other_call_sites_overriding_methods_added;
+              if (other_call_sites_overriding_methods_added) {
+                m.other_call_sites_overriding_methods_added = true;
+              }
+            });
+        return res;
+      };
   auto add_candidate = [&](const DexMethod* callee) {
     concurrent_true_virtual_callers.emplace(callee, CallerInsns());
+  };
+
+  struct Key {
+    DexMethod* callee;
+    DexType* static_base_type;
+    bool operator==(const Key& other) const {
+      return callee == other.callee &&
+             static_base_type == other.static_base_type;
+    }
+  };
+  struct Hash {
+    size_t operator()(const Key& key) const {
+      size_t hash = 0;
+      boost::hash_combine(hash, key.callee);
+      boost::hash_combine(hash, key.static_base_type);
+      return hash;
+    }
+  };
+  InsertOnlyConcurrentMap<Key, std::vector<const DexMethod*>, Hash>
+      concurrent_overriding_methods;
+  auto get_overriding_methods =
+      [&](DexMethod* callee,
+          DexType* static_base_type) -> const std::vector<const DexMethod*>& {
+    return *concurrent_overriding_methods
+                .get_or_create_and_assert_equal(
+                    Key{callee, static_base_type},
+                    [&](const Key&) {
+                      auto overriding_methods = mog::get_overriding_methods(
+                          method_override_graph, callee,
+                          /* include_interfaces */ false, static_base_type);
+                      std20::erase_if(overriding_methods, [&](auto* m) {
+                        return !method::may_be_invoke_target(m);
+                      });
+                      return overriding_methods;
+                    })
+                .first;
   };
 
   walk::parallel::methods(scope, [&non_virtual, &method_override_graph,
                                   &add_monomorphic_call_site,
                                   &add_other_call_site, &add_candidate,
                                   &same_implementation_invokes,
-                                  &same_implementation_map](DexMethod* method) {
-    if (method->is_virtual() && !non_virtual.count(method)) {
+                                  &same_implementation_map,
+                                  &get_overriding_methods](DexMethod* method) {
+    if (method->is_virtual() && !non_virtual.count_unsafe(method)) {
       add_candidate(method);
       if (root(method)) {
         add_other_call_site(method);
@@ -488,32 +537,26 @@ void gather_true_virtual_methods(
           continue;
         }
         auto insn_method = insn->get_method();
-        auto callee =
-            resolve_method(insn_method, opcode_to_search(insn), method);
-        if (callee == nullptr) {
-          // There are some invoke-virtual call on methods whose def are
-          // actually in interface.
-          callee = resolve_method(insn->get_method(),
-                                  MethodSearch::InterfaceVirtual);
-        }
+        auto callee = resolve_invoke_method(insn, method);
         if (callee == nullptr) {
           continue;
         }
-        if (non_virtual.count(callee) != 0) {
+        if (non_virtual.count_unsafe(callee) != 0) {
           // Not true virtual, no need to continue;
           continue;
         }
         auto static_base_type = insn_method->get_class();
         if (can_have_unknown_implementations(method_override_graph, callee)) {
-          add_other_call_site(callee);
-          if (insn->opcode() != OPCODE_INVOKE_SUPER) {
-            auto overriding_methods = mog::get_overriding_methods(
-                method_override_graph, callee, /* include_interfaces */ false,
-                static_base_type);
+          bool consider_overriding_methods =
+              insn->opcode() != OPCODE_INVOKE_SUPER;
+          if (!add_other_call_site(callee, consider_overriding_methods) &&
+              consider_overriding_methods) {
+            const auto& overriding_methods =
+                get_overriding_methods(callee, static_base_type);
             for (auto overriding_method : overriding_methods) {
-              if (method::may_be_invoke_target(overriding_method)) {
-                add_other_call_site(overriding_method);
-              }
+              add_other_call_site(
+                  overriding_method,
+                  /* other_call_sites_overriding_methods_added */ true);
             }
           }
           continue;
@@ -533,12 +576,8 @@ void gather_true_virtual_methods(
           same_implementation_invokes.emplace(insn, it->second.get());
           continue;
         }
-        auto overriding_methods = mog::get_overriding_methods(
-            method_override_graph, callee, /* include_interfaces */ false,
-            static_base_type);
-        std20::erase_if(overriding_methods, [&](auto* m) {
-          return !method::may_be_invoke_target(m);
-        });
+        const auto& overriding_methods =
+            get_overriding_methods(callee, static_base_type);
         if (overriding_methods.empty()) {
           // There is no override for this method
           add_monomorphic_call_site(method, insn, callee);
@@ -548,9 +587,14 @@ void gather_true_virtual_methods(
           auto implementing_method = *overriding_methods.begin();
           add_monomorphic_call_site(method, insn, implementing_method);
         } else {
-          add_other_call_site(callee);
-          for (auto overriding_method : overriding_methods) {
-            add_other_call_site(overriding_method);
+          if (!add_other_call_site(
+                  callee,
+                  /* other_call_sites_overriding_methods_added */ true)) {
+            for (auto overriding_method : overriding_methods) {
+              add_other_call_site(
+                  overriding_method,
+                  /* other_call_sites_overriding_methods_added */ true);
+            }
           }
         }
       }
@@ -579,11 +623,15 @@ void gather_true_virtual_methods(
         }
         // Figure out if candidates use the receiver in a way that does require
         // a cast.
-        std::unordered_set<live_range::Use> first_load_param_uses;
+        live_range::Uses first_load_param_uses;
         {
-          live_range::MoveAwareChains chains(code->cfg());
           auto ii = InstructionIterable(code->cfg().get_param_instructions());
           auto first_load_param = ii.begin()->insn;
+          live_range::MoveAwareChains chains(code->cfg(),
+                                             /* ignore_unreachable */ false,
+                                             [first_load_param](auto* insn) {
+                                               return insn == first_load_param;
+                                             });
           first_load_param_uses =
               std::move(chains.get_def_use_chains()[first_load_param]);
         }
@@ -673,13 +721,15 @@ void gather_true_virtual_methods(
 } // namespace
 
 namespace inliner {
-void run_inliner(DexStoresVector& stores,
-                 PassManager& mgr,
-                 ConfigFiles& conf,
-                 bool intra_dex /* false */,
-                 InlineForSpeed* inline_for_speed /* nullptr */,
-                 bool inline_bridge_synth_only /* false */,
-                 bool local_only /* false */) {
+void run_inliner(
+    DexStoresVector& stores,
+    PassManager& mgr,
+    ConfigFiles& conf,
+    InlinerCostConfig inliner_cost_config /* DEFAULT_COST_CONFIG */,
+    bool intra_dex /* false */,
+    InlineForSpeed* inline_for_speed /* nullptr */,
+    bool inline_bridge_synth_only /* false */,
+    bool local_only /* false */) {
   always_assert_log(
       !mgr.init_class_lowering_has_run(),
       "Implementation limitation: The inliner could introduce new "
@@ -736,10 +786,10 @@ void run_inliner(DexStoresVector& stores,
   inliner_config.unique_inlined_registers = false;
 
   std::unique_ptr<const mog::Graph> method_override_graph;
-  std::unique_ptr<const std::unordered_set<DexMethod*>> non_virtual;
+  std::unique_ptr<const InsertOnlyConcurrentSet<DexMethod*>> non_virtual;
   if (inliner_config.virtual_inline) {
     method_override_graph = mog::build_graph(scope);
-    non_virtual = std::make_unique<const std::unordered_set<DexMethod*>>(
+    non_virtual = std::make_unique<const InsertOnlyConcurrentSet<DexMethod*>>(
         mog::get_non_true_virtuals(*method_override_graph, scope));
   }
 
@@ -759,10 +809,6 @@ void run_inliner(DexStoresVector& stores,
     same_implementation_map = std::make_unique<SameImplementationMap>(
         get_same_implementation_map(scope, *method_override_graph));
   }
-
-  walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ true);
-  });
 
   if (inliner_config.virtual_inline && inliner_config.true_virtual_inline) {
     gather_true_virtual_methods(*method_override_graph, *non_virtual, scope,
@@ -797,11 +843,9 @@ void run_inliner(DexStoresVector& stores,
       intra_dex ? IntraDex : InterDex, true_virtual_callers, inline_for_speed,
       analyze_and_prune_inits, conf.get_pure_methods(), min_sdk_api,
       cross_dex_penalty,
-      /* configured_finalish_field_names */ {}, local_only);
-  inliner.inline_methods(/* need_deconstruct */ false);
-
-  walk::parallel::code(scope,
-                       [](DexMethod*, IRCode& code) { code.clear_cfg(); });
+      /* configured_finalish_field_names */ {}, local_only,
+      inliner_cost_config);
+  inliner.inline_methods();
 
   // delete all methods that can be deleted
   auto inlined = inliner.get_inlined();
@@ -951,10 +995,10 @@ void run_inliner(DexStoresVector& stores,
                   shrinker.get_cse_stats().instructions_eliminated);
   mgr.incr_metric("instructions_eliminated_copy_prop",
                   shrinker.get_copy_prop_stats().moves_eliminated);
-  mgr.incr_metric(
-      "instructions_eliminated_localdce",
-      shrinker.get_local_dce_stats().dead_instruction_count +
-          shrinker.get_local_dce_stats().unreachable_instruction_count);
+  mgr.incr_metric("instructions_eliminated_localdce_dead",
+                  shrinker.get_local_dce_stats().dead_instruction_count);
+  mgr.incr_metric("instructions_eliminated_localdce_unreachable",
+                  shrinker.get_local_dce_stats().unreachable_instruction_count);
   mgr.incr_metric("instructions_eliminated_unreachable",
                   inliner.get_info().unreachable_insns);
   mgr.incr_metric("instructions_eliminated_dedup_blocks",

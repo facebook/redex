@@ -14,6 +14,7 @@
 #include "DexUtil.h"
 #include "IRAssembler.h"
 #include "RedexTest.h"
+#include "Walkers.h"
 
 // Create the following hierarchy
 //
@@ -223,11 +224,17 @@ TEST_F(CheckBreadcrumbsTest, AccessValidityTest) {
                  /* verify_proto_cross_dex= */ false,
                  /* enforce_allowed_violations_file= */ false);
   std::vector<DexMethod*> method_list = call_a_fields_and_methods_methods();
+  method_list[0]->get_code()->build_cfg();
   EXPECT_EQ(bc.has_illegal_access(method_list[0]), false);
+  method_list[1]->get_code()->build_cfg();
   EXPECT_EQ(bc.has_illegal_access(method_list[1]), false);
+  method_list[2]->get_code()->build_cfg();
   EXPECT_EQ(bc.has_illegal_access(method_list[2]), true);
+  method_list[3]->get_code()->build_cfg();
   EXPECT_EQ(bc.has_illegal_access(method_list[3]), false);
+  method_list[4]->get_code()->build_cfg();
   EXPECT_EQ(bc.has_illegal_access(method_list[4]), false);
+  method_list[5]->get_code()->build_cfg();
   EXPECT_EQ(bc.has_illegal_access(method_list[5]), true);
   std::ostringstream expected;
   expected << "Bad methods in class LB;\n"
@@ -306,6 +313,7 @@ TEST_F(CheckBreadcrumbsTest, CrossStoreValidityTest) {
   stores.emplace_back(std::move(store_s_B_C));
 
   auto scope = build_class_scope(stores);
+
   Breadcrumbs bc_shared(scope,
                         "",
                         stores,

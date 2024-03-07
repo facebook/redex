@@ -34,7 +34,7 @@ Serdes get_serdes(const DexClass* cls) {
   return Serdes(deser, flatbuf_deser, ser, flatbuf_ser);
 }
 
-DexMethod* get_or_create_clinit(DexClass* cls) {
+DexMethod* get_or_create_clinit(DexClass* cls, bool need_editable_cfg) {
   using namespace dex_asm;
 
   DexMethod* clinit = cls->get_clinit();
@@ -57,6 +57,9 @@ DexMethod* get_or_create_clinit(DexClass* cls) {
   auto ir_code = std::make_unique<IRCode>(clinit, 1);
   ir_code->push_back(dasm(OPCODE_RETURN_VOID));
   clinit->set_code(std::move(ir_code));
+  if (need_editable_cfg) {
+    clinit->get_code()->build_cfg();
+  }
   cls->add_method(clinit);
   return clinit;
 }

@@ -15,9 +15,7 @@
 
 namespace cfg {
 
-static AccumulatingTimer s_timer;
-
-double CFGMutation::get_seconds() { return s_timer.get_seconds(); }
+static AccumulatingTimer s_timer("CFGMutation");
 
 void CFGMutation::clear() {
   for (auto& [block, changes] : m_changes) {

@@ -7,6 +7,7 @@
 
 #include "ObfuscateResourcesPass.h"
 
+#include <algorithm>
 #include <boost/algorithm/string.hpp>
 #include <boost/format.hpp>
 #include <cstdio>
@@ -37,19 +38,21 @@ const std::string RESFILE_MAPPING = "resource-mapping.txt";
 const std::string DOT_DELIM = ".";
 const std::string RES_START = std::string(RES_DIRECTORY) + "/";
 const std::string SHORTEN_START = std::string(OBFUSCATED_RES_DIRECTORY) + "/";
-const std::string PORT_CHAR = "abcdefghijklmnopqrstuvwxyz0123456789_-";
+constexpr std::string_view PORT_CHAR = "abcdefghijklmnopqrstuvwxyz0123456789_-";
 const std::string FONT_DIR = "/font/";
 
 std::string get_short_name_from_index(size_t index) {
   always_assert(index >= 0);
   std::string to_return;
   auto PORT_CHAR_length = PORT_CHAR.length();
+  to_return.reserve(1 + index / PORT_CHAR_length);
   while (index >= PORT_CHAR_length) {
     size_t i = index % PORT_CHAR_length;
-    to_return = PORT_CHAR[i] + to_return;
+    to_return += PORT_CHAR[i];
     index = index / PORT_CHAR_length;
   }
-  to_return = PORT_CHAR[index] + to_return;
+  to_return += PORT_CHAR[index];
+  std::reverse(to_return.begin(), to_return.end());
   return to_return;
 }
 
@@ -182,7 +185,9 @@ void collect_string_values_from_code(
         // Checking things like proto / type names is probably unnecessary. Just
         // look at instructions.
         if (code != nullptr) {
-          code->gather_strings(strings);
+          always_assert(code->editable_cfg_built());
+          auto& cfg = code->cfg();
+          cfg.gather_strings(strings);
         }
       }
     }
@@ -309,6 +314,14 @@ void ObfuscateResourcesPass::run_pass(DexStoresVector& stores,
       m_keep_resource_name_prefixes, keep_resource_names_specific);
   mgr.incr_metric("num_anonymized_resource_names", changed);
   mgr.incr_metric("num_anonymized_resource_files", filepath_old_to_new.size());
+
+  // Obfuscation may create duplicate entry/value structures. Make sure to set
+  // relevant values in BundleConfig.pb to take advantage of that (if
+  // configured).
+  const auto& global_config = conf.get_global_config();
+  auto global_resources_config =
+      global_config.get_config_by_name<ResourceConfig>("resources");
+  resources->finalize_bundle_config(*global_resources_config);
 }
 
 static ObfuscateResourcesPass s_pass;

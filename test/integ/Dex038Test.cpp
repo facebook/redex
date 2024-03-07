@@ -353,20 +353,21 @@ TEST(Dex038Test, ReadWriteDex038) {
   std::string output_dex = tmpdir.path + "/output.dex";
   auto gtypes = std::make_shared<GatheredTypes>(&classes);
 
-  write_classes_to_dex(output_dex,
-                       &classes,
-                       std::move(gtypes),
-                       nullptr,
-                       0,
-                       nullptr,
-                       0,
-                       dummy_cfg,
-                       pos_mapper.get(),
-                       DebugInfoKind::NoCustomSymbolication,
-                       &method_to_id,
-                       &code_debug_lines,
-                       nullptr,
-                       "dex\n038\0");
+  write_classes_to_dex(
+      output_dex,
+      &classes,
+      std::move(gtypes),
+      nullptr,
+      0,
+      nullptr,
+      0,
+      dummy_cfg,
+      pos_mapper.get(),
+      DebugInfoKind::NoCustomSymbolication,
+      &method_to_id,
+      &code_debug_lines,
+      nullptr,
+      "dex\n038\0"); // NOLINT(bugprone-string-literal-with-embedded-nul)
 
   delete g_redex;
   g_redex = new RedexContext();

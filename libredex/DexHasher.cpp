@@ -51,13 +51,13 @@ class Impl final {
   void hash(const IRCode* c);
   void hash(const cfg::ControlFlowGraph& cfg);
   void hash_code_init(
-      IRList::const_iterator begin,
-      IRList::const_iterator end,
+      const IRList::const_iterator& begin,
+      const IRList::const_iterator& end,
       std::unordered_map<const MethodItemEntry*, uint32_t>* mie_ids,
       std::unordered_map<DexPosition*, uint32_t>* pos_ids);
   void hash_code_flush(
-      IRList::const_iterator begin,
-      IRList::const_iterator end,
+      const IRList::const_iterator& begin,
+      const IRList::const_iterator& end,
       const std::unordered_map<const MethodItemEntry*, uint32_t>& mie_ids,
       const std::unordered_map<DexPosition*, uint32_t>& pos_ids);
   void hash(const IRInstruction* insn);
@@ -263,8 +263,8 @@ void Impl::hash(const cfg::ControlFlowGraph& cfg) {
 }
 
 void Impl::hash_code_init(
-    IRList::const_iterator begin,
-    IRList::const_iterator end,
+    const IRList::const_iterator& begin,
+    const IRList::const_iterator& end,
     std::unordered_map<const MethodItemEntry*, uint32_t>* mie_ids,
     std::unordered_map<DexPosition*, uint32_t>* pos_ids) {
   auto get_mie_id = [mie_ids](const MethodItemEntry* mie) {
@@ -347,8 +347,8 @@ void Impl::hash_code_init(
 }
 
 void Impl::hash_code_flush(
-    IRList::const_iterator begin,
-    IRList::const_iterator end,
+    const IRList::const_iterator& begin,
+    const IRList::const_iterator& end,
     const std::unordered_map<const MethodItemEntry*, uint32_t>& mie_ids,
     const std::unordered_map<DexPosition*, uint32_t>& pos_ids) {
   uint32_t mie_index = 0;

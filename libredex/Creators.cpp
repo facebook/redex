@@ -48,8 +48,9 @@ DexClass* ClassCreator::create() {
     }
   }
   m_cls->m_interfaces = DexTypeList::make_type_list(std::move(m_interfaces));
-  g_redex->publish_class(m_cls);
-  return m_cls;
+  DexClass* cls = m_cls.release();
+  g_redex->publish_class(cls);
+  return cls;
 }
 
 MethodBlock::MethodBlock(const IRList::iterator& iterator,
@@ -507,7 +508,7 @@ MethodBlock* MethodBlock::switch_op(Location test,
   // Copy initialized case blocks back.
   for (const auto& it : indices_cases) {
     SwitchIndices indices = it.first;
-    always_assert(indices.size());
+    always_assert(!indices.empty());
     int idx = *indices.begin();
     cases[idx] = it.second;
   }

@@ -18,6 +18,7 @@
 #include "Resolver.h"
 #include "Show.h"
 #include "StlUtil.h"
+#include "Timer.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
@@ -399,25 +400,22 @@ bool process_base_and_overriding_methods(
   }
 
   // Okay, let's process all overridden methods just like the base method.
-  auto overriding_methods = method_override_graph::get_overriding_methods(
-      *method_override_graph, method);
-  for (auto overriding_method : overriding_methods) {
-    action = get_base_or_overriding_method_action(
-        overriding_method, methods_to_ignore,
-        ignore_methods_with_assumenosideeffects);
-    if (action == MethodOverrideAction::UNKNOWN ||
-        (action == MethodOverrideAction::INCLUDE &&
-         !handler_func(const_cast<DexMethod*>(overriding_method)))) {
-      return false;
-    }
-  }
+  return method_override_graph::all_overriding_methods(
+      *method_override_graph, method, [&](const DexMethod* overriding_method) {
+        action = get_base_or_overriding_method_action(
+            overriding_method, methods_to_ignore,
+            ignore_methods_with_assumenosideeffects);
+        if (action == MethodOverrideAction::UNKNOWN ||
+            (action == MethodOverrideAction::INCLUDE &&
+             !handler_func(const_cast<DexMethod*>(overriding_method)))) {
+          return false;
+        }
+        return true;
+      });
   return true;
 }
 
-static AccumulatingTimer s_wto_timer;
-double get_compute_locations_closure_wto_seconds() {
-  return s_wto_timer.get_seconds();
-}
+static AccumulatingTimer s_wto_timer("compute_locations_closure_wto");
 
 static constexpr const DexMethod* WTO_ROOT = nullptr;
 static std::function<const std::vector<const DexMethod*>&(const DexMethod*)>
@@ -478,8 +476,8 @@ get_wto_successors(
 
   // In subsequent iteration, besides computing the sorted root successors
   // again, we also filter all previously sorted inverse_dependencies entries.
-  auto concurrent_cache = std::make_shared<
-      ConcurrentMap<const DexMethod*, std::vector<const DexMethod*>>>();
+  auto concurrent_cache = std::make_shared<InsertOnlyConcurrentMap<
+      const DexMethod*, std::vector<const DexMethod*>>>();
   workqueue_run<const DexMethod*>(
       [&impacted_methods, &get_sorted_impacted_methods, &inverse_dependencies,
        concurrent_cache](const DexMethod* m) {
@@ -497,7 +495,8 @@ get_wto_successors(
             }
           }
         }
-        auto emplaced = concurrent_cache->emplace(m, std::move(successors));
+        auto [_, emplaced] =
+            concurrent_cache->emplace(m, std::move(successors));
         always_assert(emplaced);
       },
       wto_nodes);
@@ -516,20 +515,17 @@ size_t compute_locations_closure(
     std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result) {
   // 1. Let's initialize known method read locations and dependencies by
   //    scanning method bodies
-  ConcurrentMap<const DexMethod*, LocationsAndDependencies>
-      concurrent_method_lads;
+  InsertOnlyConcurrentMap<const DexMethod*, LocationsAndDependencies>
+      method_lads;
   {
     Timer t{"Initialize LADS"};
     walk::parallel::methods(scope, [&](DexMethod* method) {
       auto lads = init_func(method);
       if (lads) {
-        concurrent_method_lads.emplace(method, std::move(*lads));
+        method_lads.emplace(method, std::move(*lads));
       }
     });
   }
-
-  std::unordered_map<const DexMethod*, LocationsAndDependencies> method_lads =
-      concurrent_method_lads.move_to_container();
 
   // 2. Compute inverse dependencies so that we know what needs to be recomputed
   // during the fixpoint computation, and determine set of methods that are
@@ -585,7 +581,7 @@ size_t compute_locations_closure(
 
     std::vector<const DexMethod*> changed_methods;
     for (const DexMethod* method : ordered_impacted_methods) {
-      auto& lads = method_lads.at(method);
+      auto& lads = method_lads.at_unsafe(method);
       bool unknown = false;
       size_t lads_locations_size = lads.locations.size();
       for (const DexMethod* d : lads.dependencies) {
@@ -604,7 +600,7 @@ size_t compute_locations_closure(
         // something changed
         changed_methods.push_back(method);
         if (unknown) {
-          method_lads.erase(method);
+          method_lads.erase_unsafe(method);
         }
       }
     }
@@ -619,7 +615,8 @@ size_t compute_locations_closure(
 
       // remove inverse dependency entries as appropriate
       auto& entries = it->second;
-      std20::erase_if(entries, [&](auto* m) { return !method_lads.count(m); });
+      std20::erase_if(entries,
+                      [&](auto* m) { return !method_lads.count_unsafe(m); });
 
       if (entries.empty()) {
         // remove inverse dependency

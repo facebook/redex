@@ -219,7 +219,7 @@ Stats replace_all_with_unreachable_throw(cfg::ControlFlowGraph& cfg) {
 
 Stats reduce_uncallable_instance_methods(
     const Scope& scope,
-    const std::unordered_set<DexMethod*>& uncallable_instance_methods,
+    const ConcurrentSet<DexMethod*>& uncallable_instance_methods,
     const std::function<bool(const DexMethod*)>& is_implementation_method) {
   // We perform structural changes, i.e. whether a method has a body and
   // removal, as a post-processing step, to streamline the main operations

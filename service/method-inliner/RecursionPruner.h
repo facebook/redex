@@ -13,8 +13,8 @@ namespace inliner {
 
 class RecursionPruner {
  private:
-  MethodToMethodOccurrences& m_callee_caller;
-  MethodToMethodOccurrences& m_caller_callee;
+  ConcurrentMethodToMethodOccurrences& m_callee_caller;
+  ConcurrentMethodToMethodOccurrences& m_caller_callee;
   size_t m_recursive_call_sites{0};
   size_t m_max_call_stack_depth{0};
   std::unordered_set<const DexMethod*> m_recursive_callees;
@@ -22,8 +22,8 @@ class RecursionPruner {
   std::function<bool(DexMethod*, DexMethod*)> m_exclude_fn;
 
  public:
-  RecursionPruner(MethodToMethodOccurrences& callee_caller,
-                  MethodToMethodOccurrences& caller_callee,
+  RecursionPruner(ConcurrentMethodToMethodOccurrences& callee_caller,
+                  ConcurrentMethodToMethodOccurrences& caller_callee,
                   std::function<bool(DexMethod*, DexMethod*)> exclude_fn);
 
   void run();

@@ -133,7 +133,7 @@ void NoResolvablePureRefsChecker::run_checker(DexStoresVector& stores,
       }
       always_assert_log(mref->is_def(),
                         "[%s] %s contains pure method ref!\n  {%s}",
-                        get_property_name().c_str(), SHOW(method), SHOW(insn));
+                        get_name(get_property()), SHOW(method), SHOW(insn));
     } else if (insn->has_field()) {
       DexFieldRef* fref = insn->get_field();
       if (fref->is_def()) {
@@ -170,7 +170,7 @@ void NoResolvablePureRefsChecker::run_checker(DexStoresVector& stores,
       }
       always_assert_log(fref->is_def(),
                         "[%s] %s contains pure field ref!\n  {%s}",
-                        get_property_name().c_str(), SHOW(method), SHOW(insn));
+                        get_name(get_property()), SHOW(method), SHOW(insn));
     }
   });
 }

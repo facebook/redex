@@ -18,6 +18,7 @@
 #include "LegacyInliner.h"
 #include "RedexTest.h"
 #include "VirtualScope.h"
+#include "Walkers.h"
 
 struct MethodInlineTest : public RedexTest {
   MethodInlineTest() {
@@ -464,6 +465,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
     expected_inlined.insert(bar_m2);
   }
   auto scope = build_class_scope(stores);
+  walk::parallel::code(scope, [&](auto*, IRCode& code) { code.build_cfg(); });
   api::LevelChecker::init(0, scope);
 
   inliner::InlinerConfig inliner_config;
@@ -524,6 +526,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_new_references) {
     // bring a new reference from baz_m1.
   }
   auto scope = build_class_scope(stores);
+  walk::parallel::code(scope, [&](auto*, IRCode& code) { code.build_cfg(); });
   api::LevelChecker::init(0, scope);
 
   inliner::InlinerConfig inliner_config;
@@ -609,6 +612,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_init_class) {
     // Expect bar_m1 not to be inlined, as it has an init-class instruction.
   }
   auto scope = build_class_scope(stores);
+  walk::parallel::code(scope, [&](auto*, IRCode& code) { code.build_cfg(); });
   api::LevelChecker::init(0, scope);
 
   inliner::InlinerConfig inliner_config;
@@ -658,6 +662,7 @@ TEST_F(MethodInlineTest, size_limit) {
     make_a_method_calls_others(bar_cls, "bar_main", {bar_m1});
   }
   auto scope = build_class_scope(stores);
+  walk::parallel::code(scope, [&](auto*, IRCode& code) { code.build_cfg(); });
   api::LevelChecker::init(0, scope);
 
   inliner::InlinerConfig inliner_config;
@@ -697,6 +702,7 @@ TEST_F(MethodInlineTest, minimal_self_loop_regression) {
     expected_inlined.insert(foo_m1);
   }
   auto scope = build_class_scope(stores);
+  walk::parallel::code(scope, [&](auto*, IRCode& code) { code.build_cfg(); });
   api::LevelChecker::init(0, scope);
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
@@ -743,6 +749,7 @@ TEST_F(MethodInlineTest, non_unique_inlined_registers) {
     expected_inlined.insert(foo_m2);
   }
   auto scope = build_class_scope(stores);
+  walk::parallel::code(scope, [&](auto*, IRCode& code) { code.build_cfg(); });
   api::LevelChecker::init(0, scope);
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
@@ -761,6 +768,7 @@ TEST_F(MethodInlineTest, non_unique_inlined_registers) {
     EXPECT_EQ(inlined.count(method), 1);
   }
 
+  walk::parallel::code(scope, [&](auto*, IRCode& code) { code.clear_cfg(); });
   // Note: the position is an artifact and may get cleaned up.
   const auto& expected_str = R"(
     (

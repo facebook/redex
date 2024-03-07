@@ -124,7 +124,7 @@ class SharedState {
   const std::unordered_set<const DexString*>& m_finalish_field_names;
   const std::unordered_set<const DexField*>& m_finalish_fields;
   std::unordered_set<const DexField*> m_finalizable_fields;
-  std::unique_ptr<ConcurrentMap<Barrier, size_t, BarrierHasher>> m_barriers;
+  std::unique_ptr<AtomicMap<Barrier, size_t, BarrierHasher>> m_barriers;
   std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
       m_method_written_locations;
   std::unordered_map<const DexMethod*, CseUnorderedLocationSet>

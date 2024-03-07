@@ -8,8 +8,10 @@
 #include "ConstantLifting.h"
 
 #include "AnnoUtils.h"
+#include "CFGMutation.h"
 #include "ConstantValue.h"
 #include "ControlFlow.h"
+#include "DexAsm.h"
 #include "IRCode.h"
 #include "MethodReference.h"
 #include "Resolver.h"
@@ -17,6 +19,8 @@
 #include "Trace.h"
 #include "TypeReference.h"
 #include "TypeTags.h"
+
+using namespace dex_asm;
 
 namespace {
 
@@ -41,6 +45,22 @@ bool overlaps_with_an_existing_virtual_scope(DexType* type,
   }
 
   return false;
+}
+
+void patch_invoke(cfg::ControlFlowGraph& meth_cfg,
+                  cfg::CFGMutation& mutation,
+                  const cfg::InstructionIterator& cfg_it,
+                  IRInstruction* invoke) {
+  mutation.insert_before(cfg_it, {invoke});
+
+  auto move_res_old = meth_cfg.move_result_of(cfg_it);
+  if (!move_res_old.is_end()) {
+    auto dest = move_res_old->insn->dest();
+    auto move_res_new = dasm(move_res_old->insn->opcode(), {{VREG, dest}});
+    mutation.insert_before(cfg_it, {move_res_new});
+  }
+
+  mutation.remove(cfg_it);
 }
 
 } // namespace
@@ -130,11 +150,10 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
       if (const_val.is_invalid()) {
         continue;
       }
+      auto opcode = const_val.is_int_value() ? IOPCODE_LOAD_PARAM
+                                             : IOPCODE_LOAD_PARAM_OBJECT;
       auto load_type_tag_param =
-          const_val.is_int_value()
-              ? new IRInstruction(IOPCODE_LOAD_PARAM)
-              : new IRInstruction(IOPCODE_LOAD_PARAM_OBJECT);
-      load_type_tag_param->set_dest(const_val.get_param_reg());
+          dasm(opcode, {{VREG, const_val.get_param_reg()}});
       if (last_loading != block->end()) {
         cfg.insert_after(block->to_cfg_instruction_iterator(last_loading),
                          load_type_tag_param);
@@ -151,11 +170,9 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
       auto const_val = load.first;
       auto insn_it = load.second.first;
       auto dest = load.second.second;
-      auto move_const_arg = const_val.is_int_value()
-                                ? new IRInstruction(OPCODE_MOVE)
-                                : new IRInstruction(OPCODE_MOVE_OBJECT);
-      move_const_arg->set_dest(dest);
-      move_const_arg->set_src(0, const_val.get_param_reg());
+      auto opcode = const_val.is_int_value() ? OPCODE_MOVE : OPCODE_MOVE_OBJECT;
+      auto move_const_arg =
+          dasm(opcode, {{VREG, dest}, {VREG, const_val.get_param_reg()}});
       cfg.insert_before(insn_it, move_const_arg);
       cfg.remove_insn(insn_it);
     }
@@ -182,6 +199,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     always_assert(callee != nullptr);
     auto const_vals = lifted_constants.at(callee);
     auto& meth_cfg = meth->get_code()->cfg();
+    cfg::CFGMutation mutation(meth_cfg);
     auto cfg_it = meth_cfg.find_insn(insn);
     if (const_vals.needs_stub()) {
       // Insert const load
@@ -192,10 +210,8 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
       auto stub = const_vals.create_stub_method(callee);
       stub->get_code()->build_cfg();
       auto invoke = method_reference::make_invoke(stub, insn->opcode(), args);
-      IRInstruction* orig_invoke = cfg_it->insn;
-      cfg_it->insn = invoke;
-      // remove original call.
-      delete orig_invoke;
+      patch_invoke(meth_cfg, mutation, cfg_it, invoke);
+
       stub_methods.push_back(stub);
     } else {
       // Make const load
@@ -210,14 +226,12 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
         args.push_back(insn->src(i));
       }
       args.insert(args.end(), const_regs.begin(), const_regs.end());
-      meth_cfg.insert_before(cfg_it, const_loads);
-      auto orig_invoke = cfg_it->insn;
+      mutation.insert_before(cfg_it, const_loads);
       auto invoke = method_reference::make_invoke(callee, insn->opcode(), args);
-      // replace to the call.
-      cfg_it->insn = invoke;
-      // remove original call.
-      delete orig_invoke;
+      patch_invoke(meth_cfg, mutation, cfg_it, invoke);
     }
+
+    mutation.flush();
     TRACE(METH_DEDUP, 9, " patched call site in %s\n%s", SHOW(meth),
           SHOW(meth_cfg));
   }

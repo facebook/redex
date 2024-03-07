@@ -31,7 +31,7 @@ void FullyQualifyLayouts::run_pass(DexStoresVector& /* unused */,
                                    PassManager& mgr) {
   std::string zip_dir;
   conf.get_json_config().get("apk_dir", "", zip_dir);
-  always_assert(zip_dir.size());
+  always_assert(!zip_dir.empty());
   auto resources = create_resource_reader(zip_dir);
   auto res_table = resources->load_res_table();
 

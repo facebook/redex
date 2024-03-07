@@ -10,10 +10,11 @@
 
 #include "ApiLevelChecker.h"
 #include "Creators.h"
+#include "DexAsm.h"
 #include "IRAssembler.h"
 #include "RedexTest.h"
-
 #include "StaticReloV2.h"
+#include "Walkers.h"
 
 namespace static_relo_v2 {
 
@@ -39,6 +40,8 @@ struct StaticReloV2Test : public RedexTest {
             cls->get_type(), DexString::make_string(method_name), m_proto)
             ->make_concrete(access, false);
     method->set_code(std::make_unique<IRCode>(method, 1));
+    method->get_code()->push_back(dex_asm::dasm(OPCODE_RETURN_VOID));
+    method->get_code()->build_cfg();
     cls->add_method(method);
     return method;
   }
@@ -46,7 +49,9 @@ struct StaticReloV2Test : public RedexTest {
   void call(DexMethod* caller, DexMethod* callee) {
     IRInstruction* inst = new IRInstruction(OPCODE_INVOKE_STATIC);
     inst->set_method(callee);
-    caller->get_code()->push_back(inst);
+    auto& cfg = caller->get_code()->cfg();
+    auto ii = cfg::InstructionIterable(cfg);
+    cfg.insert_before(ii.begin(), inst);
   }
 };
 

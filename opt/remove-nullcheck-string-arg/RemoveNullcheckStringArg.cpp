@@ -39,10 +39,9 @@ void RemoveNullcheckStringArg::run_pass(DexStoresVector& stores,
         new_methods.count(method)) {
       return Stats();
     }
-    code->build_cfg();
+    always_assert(code->editable_cfg_built());
     auto local_stats = change_in_cfg(code->cfg(), transfer_map_param,
                                      transfer_map_expr, method->is_virtual());
-    code->clear_cfg();
     return local_stats;
   });
 
@@ -164,6 +163,7 @@ DexMethod* RemoveNullcheckStringArg::get_wrapper_method_with_msg(
   main_block->ret_void();
 
   auto new_method = method_creator.create();
+  new_method->get_code()->build_cfg();
   TRACE(NULLCHECK, 5, "Created Method : %s", SHOW(new_method->get_code()));
   host_cls->add_method(new_method);
   return new_method;
@@ -254,6 +254,7 @@ DexMethod* RemoveNullcheckStringArg::get_wrapper_method_with_int_index(
   main_block->ret_void();
 
   auto new_method = method_creator.create();
+  new_method->get_code()->build_cfg();
   TRACE(NULLCHECK, 5, "Created Method : %s", SHOW(new_method->get_code()));
   host_cls->add_method(new_method);
   return new_method;
@@ -279,7 +280,9 @@ RemoveNullcheckStringArg::Stats RemoveNullcheckStringArg::change_in_cfg(
     param_index.insert(std::make_pair(load_insn->dest(), arg_index++));
   }
 
-  live_range::MoveAwareChains chains(cfg);
+  live_range::MoveAwareChains chains(
+      cfg, /* ignore_unreachable */ false,
+      [&](auto* insn) { return opcode::is_a_load_param(insn->opcode()); });
   live_range::DefUseChains du_chains = chains.get_def_use_chains();
 
   for (cfg::Block* block : cfg.blocks()) {
@@ -353,7 +356,7 @@ RemoveNullcheckStringArg::Stats RemoveNullcheckStringArg::change_in_cfg(
       } else {
         // Handle null check for expr. Get the proper wrapper function to throw
         // more accurate exception message.
-        always_assert(defs.size() > 0);
+        always_assert(!defs.empty());
         auto def = *defs.elements().begin();
         NullErrSrc err_msg;
         if (defs.size() > 1) {

@@ -139,21 +139,30 @@ void InterDexPass::bind_config() {
   bind("minimize_cross_dex_refs_type_ref_weight",
        m_minimize_cross_dex_refs_config.type_ref_weight,
        m_minimize_cross_dex_refs_config.type_ref_weight);
-  bind("minimize_cross_dex_refs_string_ref_weight",
-       m_minimize_cross_dex_refs_config.string_ref_weight,
-       m_minimize_cross_dex_refs_config.string_ref_weight);
+  bind("minimize_cross_dex_refs_large_string_ref_weight",
+       m_minimize_cross_dex_refs_config.large_string_ref_weight,
+       m_minimize_cross_dex_refs_config.large_string_ref_weight);
+  bind("minimize_cross_dex_refs_small_string_ref_weight",
+       m_minimize_cross_dex_refs_config.small_string_ref_weight,
+       m_minimize_cross_dex_refs_config.small_string_ref_weight);
+  bind("minimize_cross_dex_refs_min_large_string_size",
+       m_minimize_cross_dex_refs_config.min_large_string_size,
+       m_minimize_cross_dex_refs_config.min_large_string_size);
   bind("minimize_cross_dex_refs_method_seed_weight",
        m_minimize_cross_dex_refs_config.method_seed_weight,
        m_minimize_cross_dex_refs_config.method_seed_weight);
   bind("minimize_cross_dex_refs_field_seed_weight",
        m_minimize_cross_dex_refs_config.field_seed_weight,
        m_minimize_cross_dex_refs_config.field_seed_weight);
-  bind("minimize_cross_dex_refs_type_ref_weight",
+  bind("minimize_cross_dex_refs_type_seed_weight",
        m_minimize_cross_dex_refs_config.type_seed_weight,
        m_minimize_cross_dex_refs_config.type_seed_weight);
-  bind("minimize_cross_dex_refs_string_ref_weight",
-       m_minimize_cross_dex_refs_config.string_seed_weight,
-       m_minimize_cross_dex_refs_config.string_seed_weight);
+  bind("minimize_cross_dex_refs_large_string_seed_weight",
+       m_minimize_cross_dex_refs_config.large_string_seed_weight,
+       m_minimize_cross_dex_refs_config.large_string_seed_weight);
+  bind("minimize_cross_dex_refs_small_string_seed_weight",
+       m_minimize_cross_dex_refs_config.small_string_seed_weight,
+       m_minimize_cross_dex_refs_config.small_string_seed_weight);
   bind("minimize_cross_dex_refs_emit_json", false,
        m_minimize_cross_dex_refs_config.emit_json);
   bind("minimize_cross_dex_refs_explore_alternatives", 1,
@@ -166,10 +175,6 @@ void InterDexPass::bind_config() {
   bind("can_touch_coldstart_extended_cls", false,
        m_can_touch_coldstart_extended_cls);
   bind("expect_order_list", false, m_expect_order_list);
-  bind("methods_for_canary_clinit_reference", {},
-       m_methods_for_canary_clinit_reference,
-       "If set, canary classes will have a clinit generated which call the "
-       "specified methods, if they exist");
 
   bind("transitively_close_interdex_order", m_transitively_close_interdex_order,
        m_transitively_close_interdex_order);
@@ -222,8 +227,8 @@ void InterDexPass::run_pass(
       m_keep_primary_order, force_single_dex, m_order_interdex, m_emit_canaries,
       m_minimize_cross_dex_refs, m_fill_last_coldstart_dex,
       m_minimize_cross_dex_refs_config, refs_info, &xstore_refs,
-      mgr.get_redex_options().min_sdk, m_methods_for_canary_clinit_reference,
-      init_classes_with_side_effects, m_transitively_close_interdex_order,
+      mgr.get_redex_options().min_sdk, init_classes_with_side_effects,
+      m_transitively_close_interdex_order,
       m_minimize_cross_dex_refs_explore_alternatives, cache,
       m_exclude_baseline_profile_classes, std::move(m_baseline_profile_config));
 
@@ -315,8 +320,7 @@ void InterDexPass::run_pass_on_nonroot_store(
       false /* emit canaries */, false /* minimize_cross_dex_refs */,
       /* fill_last_coldstart_dex=*/false, cross_dex_refs_config, refs_info,
       &xstore_refs, mgr.get_redex_options().min_sdk,
-      m_methods_for_canary_clinit_reference, init_classes_with_side_effects,
-      m_transitively_close_interdex_order,
+      init_classes_with_side_effects, m_transitively_close_interdex_order,
       m_minimize_cross_dex_refs_explore_alternatives, cache,
       m_exclude_baseline_profile_classes, std::move(m_baseline_profile_config));
 
@@ -338,14 +342,12 @@ void InterDexPass::run_pass(DexStoresVector& stores,
       PluginRegistry::get().pass_registry(INTERDEX_PASS_NAME));
   auto plugins = registry->create_plugins();
 
-  ReserveRefsInfo refs_info = m_reserve_refs;
   for (const auto& plugin : plugins) {
     plugin->configure(original_scope, conf);
-    const auto plugin_reserve_refs = plugin->reserve_refs();
-    refs_info.frefs += plugin_reserve_refs.frefs;
-    refs_info.trefs += plugin_reserve_refs.trefs;
-    refs_info.mrefs += plugin_reserve_refs.mrefs;
   }
+
+  ReserveRefsInfo refs_info = m_reserve_refs;
+  refs_info += mgr.get_reserved_refs();
 
   ClassReferencesCache cache(original_scope);
 

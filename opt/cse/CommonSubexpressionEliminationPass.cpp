@@ -54,10 +54,6 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns());
 
-  walk::parallel::code(scope, [&](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ true);
-  });
-
   auto pure_methods = /* Android framework */ get_pure_methods();
   auto configured_pure_methods = conf.get_pure_methods();
   pure_methods.insert(configured_pure_methods.begin(),
@@ -89,7 +85,6 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
         }
 
         if (method->rstate.no_optimizations()) {
-          code->clear_cfg();
           return Stats();
         }
 
@@ -106,7 +101,6 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
           stats += cse.get_stats();
 
           if (!any_changes) {
-            code->clear_cfg();
             return stats;
           }
 

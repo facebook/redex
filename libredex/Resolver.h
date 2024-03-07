@@ -74,8 +74,9 @@ struct MethodRefCacheKeyHash {
 using MethodRefCache =
     std::unordered_map<MethodRefCacheKey, DexMethod*, MethodRefCacheKeyHash>;
 
-using ConcurrentMethodRefCache =
-    ConcurrentMap<MethodRefCacheKey, DexMethod*, MethodRefCacheKeyHash>;
+using ConcurrentMethodRefCache = InsertOnlyConcurrentMap<MethodRefCacheKey,
+                                                         DexMethod*,
+                                                         MethodRefCacheKeyHash>;
 
 /**
  * Helper to map an opcode to a MethodSearch rule.
@@ -273,16 +274,59 @@ inline DexMethod* resolve_method(DexMethodRef* method,
   if (m) {
     return m;
   }
-  auto def =
-      concurrent_ref_cache.get(MethodRefCacheKey{method, search}, nullptr);
-  if (def != nullptr) {
-    return def;
+  auto res = concurrent_ref_cache.get(MethodRefCacheKey{method, search});
+  if (res) {
+    return *res;
   }
   auto mdef = resolve_method(method, search, caller);
   if (mdef != nullptr) {
     concurrent_ref_cache.emplace(MethodRefCacheKey{method, search}, mdef);
   }
   return mdef;
+}
+
+/**
+ * Resolve the method of an invoke instruction. Note that there are some
+ * invoke-virtual call on methods whose def are actually in interface. Thus, for
+ * an invoke-virtual, it first tries MethodSearch::Virtual, and then
+ * MethodSearch::InterfaceVirtual.
+ */
+inline DexMethod* resolve_invoke_method(
+    const IRInstruction* insn,
+    const DexMethod* caller = nullptr,
+    bool* resolved_virtual_to_interface = nullptr) {
+  auto callee_ref = insn->get_method();
+  auto search = opcode_to_search(insn);
+  auto callee = resolve_method(callee_ref, search, caller);
+  if (!callee && search == MethodSearch::Virtual) {
+    callee = resolve_method(callee_ref, MethodSearch::InterfaceVirtual, caller);
+    if (resolved_virtual_to_interface) {
+      *resolved_virtual_to_interface = callee != nullptr;
+    }
+  } else if (resolved_virtual_to_interface) {
+    *resolved_virtual_to_interface = false;
+  }
+  return callee;
+}
+
+inline DexMethod* resolve_invoke_method(
+    const IRInstruction* insn,
+    MethodRefCache& ref_cache,
+    const DexMethod* caller = nullptr,
+    bool* resolved_virtual_to_interface = nullptr) {
+  auto callee_ref = insn->get_method();
+  auto search = opcode_to_search(insn);
+  auto callee = resolve_method(callee_ref, search, ref_cache, caller);
+  if (!callee && search == MethodSearch::Virtual) {
+    callee = resolve_method(callee_ref, MethodSearch::InterfaceVirtual,
+                            ref_cache, caller);
+    if (resolved_virtual_to_interface) {
+      *resolved_virtual_to_interface = callee != nullptr;
+    }
+  } else if (resolved_virtual_to_interface) {
+    *resolved_virtual_to_interface = false;
+  }
+  return callee;
 }
 
 /**

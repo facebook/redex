@@ -84,7 +84,8 @@ struct EnumUtil {
   ConcurrentSet<DexMethod*> m_instance_methods;
 
   // Store methods for getting instance fields to be generated later.
-  ConcurrentMap<DexFieldRef*, DexMethodRef*> m_get_instance_field_methods;
+  InsertOnlyConcurrentMap<DexFieldRef*, DexMethodRef*>
+      m_get_instance_field_methods;
 
   DexMethodRef* m_values_method_ref = nullptr;
 
@@ -137,12 +138,13 @@ struct EnumUtil {
   DexMethodRef* INTEGER_COMPARETO_METHOD = DexMethod::make_method(
       "Ljava/lang/Integer;.compareTo:(Ljava/lang/Integer;)I");
   DexMethodRef* INTEGER_VALUEOF_METHOD = method::java_lang_Integer_valueOf();
-  DexMethodRef* RTEXCEPTION_CTOR_METHOD =
-      method::java_lang_RuntimeException_init_String();
   DexMethodRef* ILLEGAL_ARG_CONSTRUCT_METHOD = DexMethod::make_method(
       "Ljava/lang/IllegalArgumentException;.<init>:(Ljava/lang/String;)V");
   DexMethodRef* STRING_EQ_METHOD =
       DexMethod::make_method("Ljava/lang/String;.equals:(Ljava/lang/Object;)Z");
+
+  InsertOnlyConcurrentMap<DexClass*, DexMethod*>
+      m_user_defined_tostring_method_cache;
 
   explicit EnumUtil(const Config& config) : m_config(config) {}
 
@@ -293,15 +295,19 @@ struct EnumUtil {
    * Store the method ref at the same time.
    */
   DexMethodRef* add_get_ifield_method(DexType* enum_type, DexFieldRef* ifield) {
-    if (m_get_instance_field_methods.count(ifield)) {
-      return m_get_instance_field_methods.at(ifield);
-    }
-    auto proto = DexProto::make_proto(
-        ifield->get_type(), DexTypeList::make_type_list({INTEGER_TYPE}));
-    auto method_name = DexString::make_string("redex$OE$get_" + ifield->str());
-    auto method = DexMethod::make_method(enum_type, method_name, proto);
-    m_get_instance_field_methods.insert(std::make_pair(ifield, method));
-    return method;
+    return *m_get_instance_field_methods
+                .get_or_create_and_assert_equal(
+                    ifield,
+                    [&](auto*) {
+                      auto proto = DexProto::make_proto(
+                          ifield->get_type(),
+                          DexTypeList::make_type_list({INTEGER_TYPE}));
+                      auto method_name = DexString::make_string(
+                          "redex$OE$get_" + ifield->str());
+                      return DexMethod::make_method(enum_type, method_name,
+                                                    proto);
+                    })
+                .first;
   }
 
   /**
@@ -309,18 +315,19 @@ struct EnumUtil {
    * `Enum.toString()`. Return `nullptr` if `Enum.toString()` is not overridden.
    */
   DexMethod* get_user_defined_tostring_method(DexClass* cls) {
-    static ConcurrentMap<DexClass*, DexMethod*> cache;
-    if (cache.count(cls)) {
-      return cache.at(cls);
-    }
-    for (auto vmethod : cls->get_vmethods()) {
-      if (method::signatures_match(vmethod, ENUM_TOSTRING_METHOD)) {
-        cache.insert(std::make_pair(cls, vmethod));
-        return vmethod;
-      }
-    }
-    cache.insert(std::make_pair(cls, nullptr));
-    return nullptr;
+    return *m_user_defined_tostring_method_cache
+                .get_or_create_and_assert_equal(
+                    cls,
+                    [&](auto*) -> DexMethod* {
+                      for (auto vmethod : cls->get_vmethods()) {
+                        if (method::signatures_match(vmethod,
+                                                     ENUM_TOSTRING_METHOD)) {
+                          return vmethod;
+                        }
+                      }
+                      return nullptr;
+                    })
+                .first;
   }
 
  private:
@@ -666,8 +673,8 @@ class CodeTransformer final {
       auto type = insn->get_type();
       auto new_type = try_convert_to_int_type(type);
       if (new_type) {
-        auto possible_src_types = env.get(insn->src(0));
-        if (possible_src_types.size() != 0) {
+        const auto& possible_src_types = env.get(insn->src(0));
+        if (!possible_src_types.empty()) {
           DexType* candidate_type =
               extract_candidate_enum_type(possible_src_types);
           always_assert(candidate_type == type);
@@ -964,19 +971,28 @@ class CodeTransformer final {
 
     // If this is toString() and there is no CandidateEnum.toString(), then we
     // call Enum.name() instead.
+    DexMethod* method = nullptr;
     if (method::signatures_match(method_ref,
-                                 m_enum_util->ENUM_TOSTRING_METHOD) &&
-        m_enum_util->get_user_defined_tostring_method(
-            type_class(candidate_type)) == nullptr) {
-      update_invoke_name(env, cfg, block, mie);
-    } else {
-      auto method = resolve_method(method_ref, opcode_to_search(insn));
-      always_assert(method);
-      auto new_insn = (new IRInstruction(*insn))
-                          ->set_opcode(OPCODE_INVOKE_STATIC)
-                          ->set_method(method);
-      m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
+                                 m_enum_util->ENUM_TOSTRING_METHOD)) {
+      method = m_enum_util->get_user_defined_tostring_method(
+          type_class(candidate_type));
+      if (method == nullptr) {
+        update_invoke_name(env, cfg, block, mie);
+        return;
+      }
     }
+    if (method == nullptr) {
+      method = resolve_method(method_ref, opcode_to_search(insn));
+    }
+    always_assert(method);
+    always_assert_log(
+        !method->is_external() || is_static(method),
+        "[%s] with candidate type %s resolved to external non-static method %s",
+        SHOW(insn), SHOW(candidate_type), SHOW(method));
+    auto new_insn = (new IRInstruction(*insn))
+                        ->set_opcode(OPCODE_INVOKE_STATIC)
+                        ->set_method(method);
+    m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
   }
 
   /**
@@ -995,7 +1011,7 @@ class CodeTransformer final {
     } else if (!m_enum_util->is_super_type_of_candidate_enum(target_type)) {
       return nullptr;
     }
-    auto type_set = reg_types.elements();
+    const auto& type_set = reg_types.elements();
     if (type_set.empty()) {
       // Register holds null value, we infer the type in instruction.
       return candidate_type;
@@ -1536,7 +1552,7 @@ class EnumTransformer final {
     cfg.calculate_exit_block();
     ptrs::FixpointIterator fp_iter(cfg);
     fp_iter.run(ptrs::Environment());
-    used_vars::FixpointIterator uv_fpiter(fp_iter, summaries, cfg);
+    used_vars::FixpointIterator uv_fpiter(fp_iter, summaries, cfg, ctor);
     uv_fpiter.run(used_vars::UsedVarsSet());
     auto dead_instructions = used_vars::get_dead_instructions(cfg, uv_fpiter);
     for (const auto& insn : dead_instructions) {

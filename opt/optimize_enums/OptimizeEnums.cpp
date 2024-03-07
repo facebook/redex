@@ -499,8 +499,9 @@ class OptimizeEnums {
                      [](const auto& p) { return p.first; });
       std::sort(unsafe_types.begin(), unsafe_types.end(), compare_dextypes);
       for (auto* t : unsafe_types) {
-        ofs << show(t) << ":" << unsafe_enums.at(t) << "\n";
-        for (auto u : unsafe_enums.at(t)) {
+        const auto& unsafe_enums_at_t = unsafe_enums.at_unsafe(t);
+        ofs << show(t) << ":" << unsafe_enums_at_t << "\n";
+        for (auto u : unsafe_enums_at_t) {
           ++unsafe_counts[u];
         }
       }

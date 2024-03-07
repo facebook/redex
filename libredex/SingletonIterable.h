@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <iterator>
 #include <optional>
 
 template <class T>

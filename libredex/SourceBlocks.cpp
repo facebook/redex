@@ -1365,4 +1365,18 @@ void fill_source_block(SourceBlock& sb,
   }
 }
 
+void fill_source_block(SourceBlock& sb,
+                       DexMethod* ref,
+                       uint32_t id,
+                       const std::vector<SourceBlock*>& many) {
+  sb.src = ref->get_deobfuscated_name_or_null();
+  sb.id = id;
+  for (size_t i = 0; i < sb.vals_size; i++) {
+    sb.vals[i] = SourceBlock::Val::none();
+  }
+  for (auto& other : many) {
+    sb.max(*other);
+  }
+}
+
 } // namespace source_blocks

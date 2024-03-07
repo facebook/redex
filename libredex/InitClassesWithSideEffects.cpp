@@ -17,46 +17,34 @@ namespace init_classes {
 const InitClasses* InitClassesWithSideEffects::compute(
     const DexClass* cls,
     const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
-    const std::unordered_set<DexMethod*>* non_true_virtuals) {
-  auto res =
-      m_init_classes.get(cls->get_type(), std::shared_ptr<InitClasses>());
-  if (res) {
-    return res.get();
-  }
-
-  InitClasses classes;
-  const auto* refined_cls = method::clinit_may_have_side_effects(
-      cls, /* allow_benign_method_invocations */ true,
-      &clinit_has_no_side_effects, non_true_virtuals);
-  if (refined_cls == nullptr) {
-  } else if (refined_cls != cls) {
-    classes =
-        *compute(refined_cls, clinit_has_no_side_effects, non_true_virtuals);
-  } else {
-    classes.push_back(cls);
-    auto super_cls = type_class(cls->get_super_class());
-    if (super_cls) {
-      const auto super_classes =
-          compute(super_cls, clinit_has_no_side_effects, non_true_virtuals);
-      classes.insert(classes.end(), super_classes->begin(),
-                     super_classes->end());
-    }
-  }
-  m_init_classes.update(
-      cls->get_type(),
-      [&res, &classes, this](const DexType*,
-                             std::shared_ptr<InitClasses>& value, bool exist) {
-        if (exist) {
-          always_assert(classes == *value);
+    const InsertOnlyConcurrentSet<DexMethod*>* non_true_virtuals) {
+  const DexType* key = cls->get_type();
+  auto [ptr, emplaced] =
+      m_init_classes.get_or_create_and_assert_equal(key, [&](const auto*) {
+        InitClasses classes;
+        const auto* refined_cls = method::clinit_may_have_side_effects(
+            cls, /* allow_benign_method_invocations */ true,
+            &clinit_has_no_side_effects, non_true_virtuals);
+        if (refined_cls == nullptr) {
+        } else if (refined_cls != cls) {
+          classes = *compute(refined_cls, clinit_has_no_side_effects,
+                             non_true_virtuals);
         } else {
-          if (classes.empty()) {
-            m_trivial_init_classes++;
+          classes.push_back(cls);
+          auto super_cls = type_class(cls->get_super_class());
+          if (super_cls) {
+            const auto super_classes = compute(
+                super_cls, clinit_has_no_side_effects, non_true_virtuals);
+            classes.insert(classes.end(), super_classes->begin(),
+                           super_classes->end());
           }
-          value = std::make_shared<InitClasses>(std::move(classes));
         }
-        res = value;
+        return classes;
       });
-  return res.get();
+  if (emplaced && ptr->empty()) {
+    m_trivial_init_classes++;
+  }
+  return ptr;
 }
 
 InitClassesWithSideEffects::InitClassesWithSideEffects(
@@ -65,9 +53,9 @@ InitClassesWithSideEffects::InitClassesWithSideEffects(
     const method_override_graph::Graph* method_override_graph)
     : m_create_init_class_insns(create_init_class_insns) {
   Timer t("InitClassesWithSideEffects");
-  std::unique_ptr<std::unordered_set<DexMethod*>> non_true_virtuals;
+  std::unique_ptr<InsertOnlyConcurrentSet<DexMethod*>> non_true_virtuals;
   if (method_override_graph) {
-    non_true_virtuals = std::make_unique<std::unordered_set<DexMethod*>>(
+    non_true_virtuals = std::make_unique<InsertOnlyConcurrentSet<DexMethod*>>(
         method_override_graph::get_non_true_virtuals(*method_override_graph,
                                                      scope));
   }
@@ -79,7 +67,7 @@ InitClassesWithSideEffects::InitClassesWithSideEffects(
         [&](const DexType* type) {
           auto it = prev_init_classes.find(type);
           if (it != prev_init_classes.end()) {
-            return it->second->empty();
+            return it->second.empty();
           }
           auto cls = type_class(type);
           return cls && (cls->is_external() ||
@@ -106,7 +94,7 @@ InitClassesWithSideEffects::InitClassesWithSideEffects(
 
 const InitClasses* InitClassesWithSideEffects::get(const DexType* type) const {
   auto it = m_init_classes.find(type);
-  return it == m_init_classes.end() ? &m_empty_init_classes : it->second.get();
+  return it == m_init_classes.end() ? &m_empty_init_classes : &it->second;
 }
 
 const DexType* InitClassesWithSideEffects::refine(const DexType* type) const {

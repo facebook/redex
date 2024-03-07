@@ -41,13 +41,16 @@ struct CrossDexRefMinimizerConfig {
   uint64_t method_ref_weight{100};
   uint64_t field_ref_weight{90};
   uint64_t type_ref_weight{100};
-  uint64_t string_ref_weight{90};
+  uint64_t large_string_ref_weight{90};
+  uint64_t small_string_ref_weight{90};
 
   uint64_t method_seed_weight{100};
   uint64_t field_seed_weight{20};
   uint64_t type_seed_weight{30};
-  uint64_t string_seed_weight{20};
+  uint64_t large_string_seed_weight{20};
+  uint64_t small_string_seed_weight{20};
 
+  uint32_t min_large_string_size{50};
   bool emit_json{false};
 };
 

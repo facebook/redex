@@ -1733,7 +1733,7 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
 
   void peephole(DexMethod* method) {
     auto code = method->get_code();
-    code->build_cfg(/* editable */ true);
+    always_assert(code->editable_cfg_built());
     auto& cfg = code->cfg();
 
     // do optimizations one at a time
@@ -1797,8 +1797,6 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
       // Apply the mutator.
       mutator.flush();
     }
-
-    code->clear_cfg();
   }
 
   void print_stats() {
