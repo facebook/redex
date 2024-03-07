@@ -293,7 +293,8 @@ void DexField::set_value(std::unique_ptr<DexEncodedValue> v) {
 void DexField::clear_annotations() { m_anno.reset(); }
 
 void DexField::attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset) {
-  always_assert_type_log(!m_concrete, RedexError::BAD_ANNOTATION,
+  always_assert_type_log(!m_concrete || is_synthetic(get_access()),
+                         RedexError::BAD_ANNOTATION,
                          "field %s.%s is concrete\n",
                          m_spec.cls->get_name()->c_str(), m_spec.name->c_str());
   always_assert_type_log(!m_anno, RedexError::BAD_ANNOTATION,
@@ -939,8 +940,9 @@ std::unique_ptr<ParamAnnotations> DexMethod::release_param_anno() {
 }
 
 void DexMethod::attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset) {
-  always_assert_type_log(!m_concrete, RedexError::BAD_ANNOTATION,
-                         "method %s is concrete\n", self_show().c_str());
+  always_assert_type_log((!m_concrete) || is_synthetic(get_access()),
+                         RedexError::BAD_ANNOTATION, "method %s is concrete\n",
+                         self_show().c_str());
   always_assert_type_log(!m_anno, RedexError::BAD_ANNOTATION,
                          "method %s annotation exists\n", self_show().c_str());
   m_anno = std::move(aset);

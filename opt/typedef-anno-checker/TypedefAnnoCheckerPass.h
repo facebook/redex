@@ -102,6 +102,8 @@ class SynthAccessorPatcher {
  private:
   void collect_accessors(DexMethod* method);
 
+  void patch_kotlin_annotations(DexMethod* method);
+
   std::unordered_set<DexType*> m_typedef_annos;
   const method_override_graph::Graph& m_method_override_graph;
 };

@@ -83,7 +83,7 @@ class NoAnnoVirtualTest extends AbstractClass{
 
 public class TypedefAnnoCheckerTest {
 
-  @TestIntDef int int_field;
+  @TestIntDef int int_field = TestIntDef.ZERO;
   @TestStringDef int wrong_anno_field;
   @TestStringDef String str_field;
   int no_anno_field = 6;
@@ -130,6 +130,10 @@ public class TypedefAnnoCheckerTest {
 
   void testIntField(@TestIntDef int val) {
     int_field = val;
+  }
+
+  @TestIntDef int testReturnIntField() {
+    return int_field;
   }
 
 void testWrongIntField(@TestIntDef int val) {
