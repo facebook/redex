@@ -1405,3 +1405,96 @@ TEST_F(TypedefAnnoCheckerTest, TestReturnIntField) {
   checker.run(method);
   EXPECT_TRUE(checker.complete());
 }
+
+TEST_F(TypedefAnnoCheckerTest, TestCompanionObject) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerKtTest;.testCompanionObject:()Ljava/lang/String;")
+          ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  auto config = get_config();
+  SynthAccessorPatcher patcher(config, *method_override_graph);
+  patcher.run(scope);
+
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto* cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
+  checker.run(method);
+  EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestCompanionVarSetter) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerKtTest;.testCompanionVarSetter:()Ljava/"
+                     "lang/String;")
+                     ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  auto config = get_config();
+  SynthAccessorPatcher patcher(config, *method_override_graph);
+  patcher.run(scope);
+
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto* cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
+  checker.run(method);
+  EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestInvalidCompanionVarSetter) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerKtTest;.testInvalidCompanionVarSetter:()Ljava/"
+          "lang/String;")
+          ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  auto config = get_config();
+  SynthAccessorPatcher patcher(config, *method_override_graph);
+  patcher.run(scope);
+
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto* cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
+  checker.run(method);
+  EXPECT_FALSE(checker.complete());
+  EXPECT_EQ(
+      checker.error(),
+      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testInvalidCompanionVarSetter:()Ljava/lang/String;\n\
+ the string value 5 does not have the typedef annotation \n\
+ Linteg/TestStringDef; attached to it. \n\
+ Check that the value is annotated and exists in the typedef annotation class.\n\
+ failed instruction: CONST_STRING \"5\"\n\
+ Error caught when returning the faulty value\n\n");
+}

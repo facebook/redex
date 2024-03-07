@@ -18,6 +18,11 @@ public class TypedefAnnoCheckerKtTest {
   @TestStringDef var var_field: String = TestStringDef.THREE
   @NotSafeAnno val field_not_safe: String = "4"
 
+  companion object {
+    @TestStringDef val companion_val: String = TestStringDef.ONE
+    @TestStringDef var companion_var: String = TestStringDef.FOUR
+  }
+
   fun testSynthAccessor() {
     val lmd: () -> String = { takesStrConst("liu") }
     lmd()
@@ -43,6 +48,23 @@ public class TypedefAnnoCheckerKtTest {
 
   private fun rightDefaultArg(@TestStringDef str: String = "one"): String {
     return str
+  }
+
+  @TestStringDef
+  fun testCompanionObject(): String {
+    return companion_val
+  }
+
+  @TestStringDef
+  fun testCompanionVarSetter(): String {
+    companion_var = TestStringDef.ONE
+    return companion_var
+  }
+
+  @TestStringDef
+  fun testInvalidCompanionVarSetter(): String {
+    companion_var = "5"
+    return companion_var
   }
 
   @TestStringDef
