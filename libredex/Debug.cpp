@@ -6,6 +6,7 @@
  */
 
 #include "Debug.h"
+#include "DebugUtils.h"
 
 #include <array>
 #include <atomic>

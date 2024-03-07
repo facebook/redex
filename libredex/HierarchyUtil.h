@@ -9,29 +9,29 @@
 
 #include <unordered_set>
 
+#include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "MethodOverrideGraph.h"
 
 namespace hierarchy_util {
 
 /*
- * Returns all non-overridden virtual methods in scope, plus methods from
+ * Identifies all non-overridden virtual methods in scope, plus methods from
  * external classes. The external classes will be included even if they are not
  * in the input Scope parameter.
  */
-std::unordered_set<const DexMethod*> find_non_overridden_virtuals(
-    const method_override_graph::Graph& override_graph);
+class NonOverriddenVirtuals {
+ public:
+  NonOverriddenVirtuals(const Scope& scope,
+                        const method_override_graph::Graph& override_graph);
+  explicit NonOverriddenVirtuals(const Scope& scope)
+      : NonOverriddenVirtuals(scope,
+                              *method_override_graph::build_graph(scope)) {}
 
-/*
- * Returns all non-overridden virtual methods in scope, plus methods from
- * external classes. The external classes will be included even if they are not
- * in the input Scope parameter.
- */
-inline std::unordered_set<const DexMethod*> find_non_overridden_virtuals(
-    const Scope& scope) {
-  std::unique_ptr<const method_override_graph::Graph> override_graph =
-      method_override_graph::build_graph(scope);
-  return find_non_overridden_virtuals(*override_graph);
-}
+  size_t count(const DexMethod*) const;
+
+ private:
+  ConcurrentSet<const DexMethod*> m_non_overridden_virtuals;
+};
 
 } // namespace hierarchy_util

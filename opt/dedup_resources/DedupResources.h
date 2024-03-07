@@ -57,9 +57,7 @@ class DedupResourcesPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
-        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 
@@ -67,8 +65,6 @@ class DedupResourcesPass : public Pass {
     bind("disallowed_types", {}, m_disallowed_types);
     bind("disallowed_resources", {}, m_disallowed_resources);
   }
-
-  bool is_cfg_legacy() override { return true; }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

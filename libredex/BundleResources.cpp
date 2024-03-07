@@ -28,6 +28,7 @@
 #include <google/protobuf/text_format.h>
 
 #include "Debug.h"
+#include "DetectBundle.h"
 #include "DexUtil.h"
 #include "ReadMaybeMapped.h"
 #include "RedexMappedFile.h"
@@ -299,14 +300,14 @@ void read_single_manifest(const std::string& manifest,
                   }
                 } else if (tag == "instrumentation") {
                   auto classname = get_string_attribute_value(element, "name");
-                  always_assert(classname.size());
+                  always_assert(!classname.empty());
                   manifest_classes->instrumentation_classes.emplace(
                       fully_qualified_external(package_name, classname));
                 } else if (string_to_tag.count(tag)) {
                   std::string classname = get_string_attribute_value(
                       element,
                       tag != "activity-alias" ? "name" : "targetActivity");
-                  always_assert(classname.size());
+                  always_assert(!classname.empty());
 
                   bool has_exported_attribute = has_primitive_attribute(
                       element, "exported", aapt::pb::Primitive::kBooleanValue);
@@ -1908,7 +1909,7 @@ std::unordered_set<uint32_t> ResourcesPbFile::get_types_by_name_prefixes(
     const auto& type_name = pair.second;
     if (std::find_if(type_name_prefixes.begin(), type_name_prefixes.end(),
                      [&](const std::string& prefix) {
-                       return type_name.find(prefix) != std::string::npos;
+                       return type_name.find(prefix) == 0;
                      }) != type_name_prefixes.end()) {
       type_ids.emplace((pair.first) << TYPE_INDEX_BIT_SHIFT);
     }
@@ -2297,6 +2298,28 @@ void BundleResources::obfuscate_xml_files(
   }
   for (const auto& path : xml_paths) {
     obfuscate_xml_attributes(path, do_not_obfuscate_elements);
+  }
+}
+
+void BundleResources::finalize_bundle_config(const ResourceConfig& config) {
+  if (!config.canonical_entry_types.empty() && has_bundle_config(m_directory)) {
+    std::string bundle_config_path =
+        (boost::filesystem::path(m_directory) / "BundleConfig.pb").string();
+    read_protobuf_file_contents(
+        bundle_config_path,
+        [&](google::protobuf::io::CodedInputStream& input, size_t size) {
+          android::bundle::BundleConfig bundle_config;
+          always_assert_log(bundle_config.ParseFromCodedStream(&input),
+                            "BundleResource failed to read %s",
+                            bundle_config_path.c_str());
+          auto pb_resource_optimizations =
+              bundle_config.mutable_optimizations()
+                  ->mutable_resource_optimizations();
+          pb_resource_optimizations->mutable_collapsed_resource_names()
+              ->set_deduplicate_resource_entries(true);
+          std::ofstream out(bundle_config_path, std::ofstream::binary);
+          always_assert(bundle_config.SerializeToOstream(&out));
+        });
   }
 }
 

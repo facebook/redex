@@ -12,6 +12,7 @@
 #include <boost/optional.hpp>
 
 #include <sparta/AbstractDomain.h>
+#include <sparta/ConstantAbstractDomain.h>
 #include <sparta/FiniteAbstractDomain.h>
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
 #include <sparta/PatriciaTreeSet.h>
@@ -255,7 +256,7 @@ using TypedefAnnotationDomain = SingletonDexTypeDomain;
 
 /*
  *
- * ArrayConstNullnessDomain X SingletonDexTypeDomain X SmallSetDexTypeDomain
+ * NullnessDomain X SingletonDexTypeDomain X SmallSetDexTypeDomain
  *
  *
  * When the SmallSetDexTypeDomain has elements, then they represent an exact set
@@ -263,7 +264,7 @@ using TypedefAnnotationDomain = SingletonDexTypeDomain;
  */
 class DexTypeDomain final
     : public sparta::ReducedProductAbstractDomain<DexTypeDomain,
-                                                  ArrayConstNullnessDomain,
+                                                  NullnessDomain,
                                                   SingletonDexTypeDomain,
                                                   SmallSetDexTypeDomain,
                                                   TypedefAnnotationDomain> {
@@ -272,7 +273,7 @@ class DexTypeDomain final
 
   using BaseType =
       sparta::ReducedProductAbstractDomain<DexTypeDomain,
-                                           ArrayConstNullnessDomain,
+                                           NullnessDomain,
                                            SingletonDexTypeDomain,
                                            SmallSetDexTypeDomain,
                                            TypedefAnnotationDomain>;
@@ -283,36 +284,13 @@ class DexTypeDomain final
   // catch this. So we insert a redundant '= default'.
   DexTypeDomain() = default;
 
-  explicit DexTypeDomain(int64_t v)
-      : ReducedProductAbstractDomain(
-            std::make_tuple(ConstNullnessDomain(v),
-                            SingletonDexTypeDomain(),
-                            SmallSetDexTypeDomain::top(),
-                            TypedefAnnotationDomain())) {}
-
-  explicit DexTypeDomain(const DexType* array_type, uint32_t array_length)
-      : ReducedProductAbstractDomain(
-            std::make_tuple(ArrayNullnessDomain(array_length),
-                            SingletonDexTypeDomain(array_type),
-                            SmallSetDexTypeDomain(array_type),
-                            TypedefAnnotationDomain())) {}
-
-  explicit DexTypeDomain(const DexType* dex_type,
-                         const DexAnnoType* annotation = nullptr)
-      : ReducedProductAbstractDomain(
-            std::make_tuple(ConstNullnessDomain(NOT_NULL),
-                            SingletonDexTypeDomain(dex_type),
-                            SmallSetDexTypeDomain(dex_type),
-                            (annotation && annotation->m_type)
-                                ? TypedefAnnotationDomain(annotation->m_type)
-                                : TypedefAnnotationDomain())) {}
-
+ private:
   explicit DexTypeDomain(const DexType* dex_type,
                          const Nullness nullness,
                          bool is_dex_type_exact,
                          const DexAnnoType* annotation = nullptr)
       : ReducedProductAbstractDomain(
-            std::make_tuple(ConstNullnessDomain(nullness),
+            std::make_tuple(NullnessDomain(nullness),
                             SingletonDexTypeDomain(dex_type),
                             is_dex_type_exact ? SmallSetDexTypeDomain(dex_type)
                                               : SmallSetDexTypeDomain::top(),
@@ -322,73 +300,50 @@ class DexTypeDomain final
 
   explicit DexTypeDomain(const DexAnnoType* annotation)
       : ReducedProductAbstractDomain(std::make_tuple(
-            ConstNullnessDomain(),
+            NullnessDomain(),
             SingletonDexTypeDomain(),
             SmallSetDexTypeDomain::top(),
             annotation->m_type ? TypedefAnnotationDomain(annotation->m_type)
                                : TypedefAnnotationDomain())) {}
 
+ public:
   static void reduce_product(
-      std::tuple<ArrayConstNullnessDomain,
+      std::tuple<NullnessDomain,
                  SingletonDexTypeDomain,
                  SmallSetDexTypeDomain,
                  TypedefAnnotationDomain>& /* product */) {}
 
+  static DexTypeDomain create_nullable(
+      const DexType* dex_type, const DexAnnoType* annotation = nullptr) {
+    return DexTypeDomain(dex_type, NN_TOP, false, annotation);
+  }
+
+  /*
+   * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+   * Only create not_null domain when you are absolutely sure about the nullness
+   * of the value!!!
+   * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+   * Usually it means the value is created via new-instance or alike. If the
+   * nullness info is incorrect from the source, it could lead to incorrect
+   * analysis result.
+   */
+  static DexTypeDomain create_not_null(const DexType* dex_type) {
+    return DexTypeDomain(dex_type, NOT_NULL, true);
+  }
+
+  static DexTypeDomain create_for_anno(const DexAnnoType* annotation) {
+    return DexTypeDomain(annotation);
+  }
+
   static DexTypeDomain null() { return DexTypeDomain(IS_NULL); }
 
-  NullnessDomain get_nullness() const {
-    auto domain = get<0>();
-    if (domain.which() == 0) {
-      return domain.get<ConstNullnessDomain>().get_nullness();
-    } else {
-      return domain.get<ArrayNullnessDomain>().get_nullness();
-    }
-  }
+  NullnessDomain get_nullness() const { return get<0>(); }
 
   bool is_null() const { return get_nullness().element() == IS_NULL; }
 
   bool is_not_null() const { return get_nullness().element() == NOT_NULL; }
 
   bool is_nullable() const { return get_nullness().is_top(); }
-
-  boost::optional<ConstantDomain::ConstantType> get_constant() const {
-    if (auto const_nullness = get<0>().maybe_get<ConstNullnessDomain>()) {
-      return const_nullness->const_domain().get_constant();
-    }
-    return boost::none;
-  }
-
-  ArrayNullnessDomain get_array_nullness() const {
-    if (auto array_nullness = get<0>().maybe_get<ArrayNullnessDomain>()) {
-      return *array_nullness;
-    }
-    return ArrayNullnessDomain::top();
-  }
-
-  NullnessDomain get_array_element_nullness(
-      boost::optional<int64_t> idx) const {
-    if (!ArrayNullnessDomain::is_valid_array_idx(idx)) {
-      return NullnessDomain::top();
-    }
-    return get_array_nullness().get_element(*idx);
-  }
-
-  void set_array_element_nullness(boost::optional<int64_t> idx,
-                                  const NullnessDomain& nullness) {
-    if (!ArrayNullnessDomain::is_valid_array_idx(idx)) {
-      apply<0>([&](ArrayConstNullnessDomain* d) {
-        d->apply<ArrayNullnessDomain>([&](ArrayNullnessDomain* array_nullness) {
-          array_nullness->reset_elements();
-        });
-      });
-      return;
-    }
-    apply<0>([&](ArrayConstNullnessDomain* d) {
-      d->apply<ArrayNullnessDomain>([&](ArrayNullnessDomain* array_nullness) {
-        array_nullness->set_element(*idx, nullness);
-      });
-    });
-  }
 
   const SingletonDexTypeDomain& get_single_domain() const { return get<1>(); }
 
@@ -416,13 +371,14 @@ class DexTypeDomain final
   const SmallSetDexTypeDomain& get_set_domain() const { return get<2>(); }
 
   const sparta::PatriciaTreeSet<const DexType*>& get_type_set() const {
+    always_assert(!get<2>().is_top() && !get<2>().is_bottom());
     return get<2>().get_types();
   }
 
  private:
   explicit DexTypeDomain(const Nullness nullness)
       : ReducedProductAbstractDomain(
-            std::make_tuple(ConstNullnessDomain(nullness),
+            std::make_tuple(NullnessDomain(nullness),
                             SingletonDexTypeDomain::none(),
                             SmallSetDexTypeDomain(),
                             TypedefAnnotationDomain::none())) {}

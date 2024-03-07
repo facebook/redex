@@ -37,7 +37,13 @@ RedexContext::RedexContext(bool allow_class_duplicates)
       s_medium_string_storage{65536, 2000,
                               boost::thread::hardware_concurrency() / 4},
       s_large_string_storage{0, 0, boost::thread::hardware_concurrency()},
-      m_allow_class_duplicates(allow_class_duplicates) {}
+      m_allow_class_duplicates(allow_class_duplicates) {
+  for (size_t i = 0; i < s_small_string_set.size(); ++i) {
+    s_small_string_set[i] =
+        new InsertOnlyConcurrentSet<DexStringRepr, DexStringReprHash,
+                                    DexStringReprEqual>();
+  }
+}
 
 RedexContext::~RedexContext() {
   // We parallelize destruction for efficiency.
@@ -53,6 +59,9 @@ RedexContext::~RedexContext() {
     }
   };
 
+  size_t small_strings_size = 0;
+  size_t large_strings_size = 0;
+
   parallel_run({[&] {
                   Timer timer("Delete DexTypes", /* indent */ false);
                   // NB: This table intentionally contains aliases (multiple
@@ -67,14 +76,14 @@ RedexContext::~RedexContext() {
                   s_type_map.clear();
                 },
                 [&] {
-                  Timer timer("DexTypeLists", /* indent */ false);
+                  Timer timer("Delete DexTypeLists", /* indent */ false);
                   for (auto const& p : s_typelist_map) {
                     delete p.second;
                   }
                   s_typelist_map.clear();
                 },
                 [&] {
-                  Timer timer("Delete DexProtos.", /* indent */ false);
+                  Timer timer("Delete DexProtos", /* indent */ false);
                   for (auto* proto : s_proto_set) {
                     delete proto;
                   }
@@ -130,8 +139,8 @@ RedexContext::~RedexContext() {
           fns.push_back([bucket, this]() {
             // Delete DexMethods. Use set to prevent double freeing aliases
             std::unordered_set<DexMethod*> delete_methods;
-            for (auto const& it : s_method_map) {
-              auto method = static_cast<DexMethod*>(it.second);
+            for (auto&& [_, loc] : s_method_map) {
+              auto method = static_cast<DexMethod*>(loc.load());
               if ((reinterpret_cast<size_t>(method) >> 16) %
                           method_buckets_count ==
                       bucket &&
@@ -154,8 +163,8 @@ RedexContext::~RedexContext() {
           fns.push_back([bucket, this]() {
             // Delete DexFields. Use set to prevent double freeing aliases
             std::unordered_set<DexFieldRef*> delete_fields;
-            for (auto const& it : s_field_map) {
-              auto field = static_cast<DexFieldRef*>(it.second);
+            for (auto&& [_, loc] : s_field_map) {
+              auto field = static_cast<DexFieldRef*>(loc.load());
               if ((reinterpret_cast<size_t>(field) >> 16) %
                           field_buckets_count ==
                       bucket &&
@@ -171,16 +180,19 @@ RedexContext::~RedexContext() {
 
   parallel_run(
       [&]() {
-        size_t segment_index{0};
         std::vector<std::function<void()>> fns;
-        fns.reserve(s_string_set.slots());
-        for (auto& segment : s_string_set) {
-          fns.push_back([&segment, index = segment_index++]() {
-            for (auto* v : segment) {
-              delete v;
-            }
-            segment.clear();
+        fns.reserve(s_small_string_set.size() + s_large_string_set.slots());
+        for (size_t i = 0; i < s_small_string_set.size(); ++i) {
+          auto* small_string_set = s_small_string_set[i];
+          small_strings_size += small_string_set->size();
+          fns.push_back([small_string_set]() {
+            small_string_set->clear();
+            delete small_string_set;
           });
+        }
+        for (auto& segment : s_large_string_set) {
+          large_strings_size += segment.size();
+          fns.push_back([&segment]() { segment.release(); });
         }
         return fns;
       }(),
@@ -201,7 +213,9 @@ RedexContext::~RedexContext() {
   log_stats("small", s_small_string_storage);
   log_stats("medium", s_medium_string_storage);
   log_stats("large", s_large_string_storage);
-  TRACE(PM, 1, "String storage @ %u hardware concurrency:%s",
+  TRACE(PM, 1,
+        "String storage of %zu + %zu strings @ %u hardware concurrency:%s",
+        small_strings_size, large_strings_size,
         boost::thread::hardware_concurrency(), oss.str().c_str());
 }
 
@@ -237,10 +251,11 @@ template <class InsertValue,
 static StoredValue* try_insert(Key key,
                                std::unique_ptr<InsertValue, Deleter> value,
                                Container* container) {
-  if (container->emplace(key, value.get())) {
+  auto [ptr, success] = container->emplace(key, value.get());
+  if (success) {
     return value.release();
   }
-  return container->at(key);
+  return ptr->load();
 }
 
 RedexContext::ConcurrentStringStorage::Container::~Container() {
@@ -350,20 +365,7 @@ RedexContext::ConcurrentStringStorage::Context::~Context() {
   }
 }
 
-const DexString* RedexContext::make_string(std::string_view str) {
-  // We are creating a DexString key that is just "defined enough" to be used as
-  // a key into our string set. The provided string does not have to be zero
-  // terminated, and we won't compute the utf size, as neither is needed for
-  // this purpose.
-  uint32_t dummy_utfsize{0};
-  const DexString key(str.data(), str.size(), dummy_utfsize);
-  auto& segment = s_string_set.at(&key);
-
-  auto rv_ptr = segment.get(&key);
-  if (rv_ptr != nullptr) {
-    return *rv_ptr;
-  }
-
+char* RedexContext::store_string(std::string_view str) {
   ConcurrentStringStorage& concurrent_string_storage =
       str.length() < s_small_string_storage.max_allocation
           ? s_small_string_storage
@@ -381,7 +383,37 @@ const DexString* RedexContext::make_string(std::string_view str) {
   }
   memcpy(storage, str.data(), str.length());
   storage[str.length()] = 0;
+  return storage;
+}
 
+const DexString* RedexContext::make_string(std::string_view str) {
+  // We are creating a DexString key that is just "defined enough" to be used as
+  // a key into our string set. The provided string does not have to be zero
+  // terminated, and we won't compute the utf size, as neither is needed for
+  // this purpose.
+  uint32_t dummy_utfsize{0};
+  DexStringRepr repr{str.data(), (uint32_t)str.size(), dummy_utfsize};
+  if (str.size() < s_small_string_set.size()) {
+    auto* rv_ptr = s_small_string_set[str.size()]->get(repr);
+    if (rv_ptr != nullptr) {
+      return reinterpret_cast<const DexString*>(rv_ptr);
+    }
+    char* storage = store_string(str);
+    uint32_t utfsize = length_of_utf8_string(storage);
+    return reinterpret_cast<const DexString*>(
+        s_small_string_set[str.size()]
+            ->insert(DexStringRepr{storage, (uint32_t)str.length(), utfsize})
+            .first);
+    // If unsuccessful, we have wasted a bit of string storage. Oh well...
+  }
+
+  auto* key = reinterpret_cast<const DexString*>(&repr);
+  auto& segment = s_large_string_set.at(key);
+  auto rv_ptr = segment.get(key);
+  if (rv_ptr != nullptr) {
+    return *rv_ptr;
+  }
+  char* storage = store_string(str);
   uint32_t utfsize = length_of_utf8_string(storage);
   std::unique_ptr<DexString> string(
       new DexString(storage, str.length(), utfsize));
@@ -411,17 +443,36 @@ size_t RedexContext::TruncatedStringHash::operator()(StringSetKey k) {
   return boost::hash_range(s + start, s + len);
 }
 
+size_t RedexContext::DexStringReprHash::operator()(
+    const DexStringRepr& k) const {
+  return boost::hash_range(k.storage, k.storage + k.length);
+}
+
+bool RedexContext::DexStringReprEqual::operator()(
+    const DexStringRepr& a, const DexStringRepr& b) const {
+  if (a.length != b.length) {
+    return false;
+  }
+  return memcmp(a.storage, b.storage, a.length) == 0;
+}
+
 const DexString* RedexContext::get_string(std::string_view str) {
   uint32_t dummy_utfsize{0};
-  const DexString key(str.data(), str.size(), dummy_utfsize);
-  const auto& segment = s_string_set.at(&key);
-  auto rv_ptr = segment.get(&key);
+  DexStringRepr repr{str.data(), (uint32_t)str.size(), dummy_utfsize};
+  if (str.size() < s_small_string_set.size()) {
+    return reinterpret_cast<const DexString*>(
+        s_small_string_set[str.size()]->get(repr));
+  }
+
+  auto* key = reinterpret_cast<const DexString*>(&repr);
+  const auto& segment = s_large_string_set.at(key);
+  auto rv_ptr = segment.get(key);
   return rv_ptr == nullptr ? nullptr : *rv_ptr;
 }
 
 DexType* RedexContext::make_type(const DexString* dstring) {
   always_assert(dstring != nullptr);
-  auto rv = s_type_map.get(dstring, nullptr);
+  auto rv = s_type_map.load(dstring, nullptr);
   if (rv != nullptr) {
     return rv;
   }
@@ -433,7 +484,7 @@ DexType* RedexContext::get_type(const DexString* dstring) {
   if (dstring == nullptr) {
     return nullptr;
   }
-  return s_type_map.get(dstring, nullptr);
+  return s_type_map.load(dstring, nullptr);
 }
 
 void RedexContext::set_type_name(DexType* type, const DexString* new_name) {
@@ -459,7 +510,7 @@ DexFieldRef* RedexContext::make_field(const DexType* container,
   always_assert(container != nullptr && name != nullptr && type != nullptr);
   DexFieldSpec r(const_cast<DexType*>(container), name,
                  const_cast<DexType*>(type));
-  auto rv = s_field_map.get(r, nullptr);
+  auto rv = s_field_map.load(r, nullptr);
   if (rv != nullptr) {
     return rv;
   }
@@ -476,7 +527,7 @@ DexFieldRef* RedexContext::get_field(const DexType* container,
   }
   DexFieldSpec r(const_cast<DexType*>(container), name,
                  const_cast<DexType*>(type));
-  return s_field_map.get(r, nullptr);
+  return s_field_map.load(r, nullptr);
 }
 
 void RedexContext::alias_field_name(DexFieldRef* field,
@@ -512,24 +563,24 @@ void RedexContext::mutate_field(DexFieldRef* field,
   r.type = ref.type != nullptr ? ref.type : field->m_spec.type;
   field->m_spec = r;
 
-  if (rename_on_collision && s_field_map.find(r) != s_field_map.end()) {
+  if (rename_on_collision && s_field_map.count(r)) {
     uint32_t i = 0;
     while (true) {
-      r.name = DexString::make_string(("f$" + std::to_string(i++)).c_str());
-      if (s_field_map.find(r) == s_field_map.end()) {
+      r.name = DexString::make_string("f$" + std::to_string(i++));
+      if (!s_field_map.count(r)) {
         break;
       }
     }
   }
-  always_assert_log(s_field_map.find(r) == s_field_map.end(),
+  always_assert_log(!s_field_map.count(r),
                     "Another field with the same signature already exists %s",
-                    SHOW(s_field_map.at(r)));
+                    SHOW(s_field_map.load(r)));
   s_field_map.emplace(r, field);
 }
 
 DexTypeList* RedexContext::make_type_list(
     RedexContext::DexTypeListContainerType&& p) {
-  auto rv = s_typelist_map.get(&p, nullptr);
+  auto rv = s_typelist_map.load(&p, nullptr);
   if (rv != nullptr) {
     return rv;
   }
@@ -540,7 +591,7 @@ DexTypeList* RedexContext::make_type_list(
 
 DexTypeList* RedexContext::get_type_list(
     const RedexContext::DexTypeListContainerType& p) {
-  return s_typelist_map.get(&p, nullptr);
+  return s_typelist_map.load(&p, nullptr);
 }
 
 size_t RedexContext::DexProtoKeyHash::operator()(DexProto* k) const {
@@ -588,7 +639,7 @@ DexMethodRef* RedexContext::make_method(const DexType* type_,
   auto proto = const_cast<DexProto*>(proto_);
   always_assert(type != nullptr && name != nullptr && proto != nullptr);
   DexMethodSpec r(type, name, proto);
-  auto rv = s_method_map.get(r, nullptr);
+  auto rv = s_method_map.load(r, nullptr);
   if (rv != nullptr) {
     return rv;
   }
@@ -606,7 +657,7 @@ DexMethodRef* RedexContext::get_method(const DexType* type,
   }
   DexMethodSpec r(const_cast<DexType*>(type), name,
                   const_cast<DexProto*>(proto));
-  return s_method_map.get(r, nullptr);
+  return s_method_map.load(r, nullptr);
 }
 
 void RedexContext::alias_method_name(DexMethodRef* method,
@@ -680,7 +731,7 @@ void RedexContext::mutate_method(DexMethodRef* method,
         prefix = r.name->str() + "$";
       }
       do {
-        r.name = DexString::make_string((prefix + std::to_string(i++)).c_str());
+        r.name = DexString::make_string(prefix + std::to_string(i++));
       } while (s_method_map.count(r));
     } else {
       // We are about to change its class. Use a better name to remember its
@@ -727,7 +778,7 @@ void RedexContext::mutate_method(DexMethodRef* method,
 DexLocation* RedexContext::make_location(std::string_view store_name,
                                          std::string_view file_name) {
   auto key = std::make_pair(store_name, file_name);
-  auto rv = s_location_map.get(key, nullptr);
+  auto rv = s_location_map.load(key, nullptr);
   if (rv != nullptr) {
     return rv;
   }
@@ -743,7 +794,7 @@ DexLocation* RedexContext::make_location(std::string_view store_name,
 DexLocation* RedexContext::get_location(std::string_view store_name,
                                         std::string_view file_name) {
   auto key = std::make_pair(store_name, file_name);
-  return s_location_map.get(key, nullptr);
+  return s_location_map.load(key, nullptr);
 }
 
 PositionPatternSwitchManager*
@@ -854,4 +905,23 @@ void RedexContext::add_destruction_task(const Task& t) {
 void RedexContext::set_sb_interaction_index(
     const std::unordered_map<std::string, size_t>& input) {
   m_sb_interaction_indices = input;
+}
+
+void RedexContext::compact() {
+  // We parallelize destruction for efficiency.
+  auto parallel_run = [](const std::vector<std::function<void()>>& fns) {
+    workqueue_run<std::function<void()>>(
+        [](const std::function<void()>& fn) { fn(); }, fns);
+  };
+
+  parallel_run({
+      [&] { s_type_map.compact(); },
+      [&] { s_field_map.compact(); },
+      [&] { s_typelist_map.compact(); },
+      [&] { s_proto_set.compact(); },
+      [&] { s_method_map.compact(); },
+      [&] { s_location_map.compact(); },
+      [&] { field_values.compact(); },
+      [&] { method_return_values.compact(); },
+  });
 }

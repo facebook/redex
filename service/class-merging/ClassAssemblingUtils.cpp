@@ -83,20 +83,20 @@ DexClass* create_class(const DexType* type,
   // Create ctor.
   auto super_ctors = type_class(super_type)->get_ctors();
   for (auto super_ctor : super_ctors) {
-    auto mc = new MethodCreator(t,
-                                DexString::make_string("<init>"),
-                                super_ctor->get_proto(),
-                                ACC_PUBLIC | ACC_CONSTRUCTOR);
+    auto mc = MethodCreator(t,
+                            DexString::make_string("<init>"),
+                            super_ctor->get_proto(),
+                            ACC_PUBLIC | ACC_CONSTRUCTOR);
     // Call to super.<init>
     std::vector<Location> args;
     size_t args_size = super_ctor->get_proto()->get_args()->size();
     for (size_t arg_loc = 0; arg_loc < args_size + 1; ++arg_loc) {
-      args.push_back(mc->get_local(arg_loc));
+      args.push_back(mc.get_local(arg_loc));
     }
-    auto mb = mc->get_main_block();
+    auto mb = mc.get_main_block();
     mb->invoke(OPCODE_INVOKE_DIRECT, super_ctor, args);
     mb->ret_void();
-    auto ctor = mc->create();
+    auto ctor = mc.create();
     ctor->get_code()->build_cfg();
     TRACE(CLMG, 4, " default ctor created %s", SHOW(ctor));
     cls->add_method(ctor);

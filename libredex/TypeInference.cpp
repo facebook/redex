@@ -186,7 +186,7 @@ void set_integral(
     const boost::optional<const DexType*>& annotation = boost::none) {
   state->set_type(reg, TypeDomain(IRType::INT));
   const auto anno = DexAnnoType(annotation);
-  DexTypeDomain dex_type_domain = DexTypeDomain(&anno);
+  DexTypeDomain dex_type_domain = DexTypeDomain::create_for_anno(&anno);
   state->set_dex_type(reg, dex_type_domain);
 }
 
@@ -200,15 +200,30 @@ void set_scalar(TypeEnvironment* state, reg_t reg) {
   state->reset_dex_type(reg);
 }
 
-void set_reference(
+void set_reference(TypeEnvironment* state,
+                   reg_t reg,
+                   const boost::optional<const DexType*>& dex_type_opt,
+                   bool is_not_null = false) {
+  state->set_type(reg, TypeDomain(IRType::REFERENCE));
+  auto* dex_type = dex_type_opt ? *dex_type_opt : nullptr;
+  always_assert(!is_not_null || dex_type != nullptr);
+  const DexTypeDomain dex_type_domain =
+      is_not_null ? DexTypeDomain::create_not_null(dex_type)
+                  : DexTypeDomain::create_nullable(dex_type);
+  state->set_dex_type(reg, dex_type_domain);
+}
+
+// The presence of DexAnnoType implies Nullable
+void set_reference_with_anno(
     TypeEnvironment* state,
     reg_t reg,
     const boost::optional<const DexType*>& dex_type_opt,
-    const boost::optional<const DexType*>& annotation = boost::none) {
+    const boost::optional<const DexType*>& annotation) {
   state->set_type(reg, TypeDomain(IRType::REFERENCE));
-  auto dex_type = dex_type_opt ? *dex_type_opt : nullptr;
+  auto* dex_type = dex_type_opt ? *dex_type_opt : nullptr;
   const auto anno = DexAnnoType(annotation);
-  const DexTypeDomain dex_type_domain = DexTypeDomain(dex_type, &anno);
+  const DexTypeDomain dex_type_domain =
+      DexTypeDomain::create_nullable(dex_type, &anno);
   state->set_dex_type(reg, dex_type_domain);
 }
 
@@ -338,8 +353,8 @@ const DexType* merge_dex_types(const DexTypeIt& begin,
           return t1;
         }
 
-        DexTypeDomain d1(t1);
-        DexTypeDomain d2(t2);
+        DexTypeDomain d1 = DexTypeDomain::create_nullable(t1);
+        DexTypeDomain d2 = DexTypeDomain::create_nullable(t2);
         d1.join_with(d2);
 
         auto maybe_dextype = d1.get_dex_type();
@@ -439,7 +454,7 @@ void TypeInference::refine_scalar(TypeEnvironment* state, reg_t reg) const {
               /* expected */ IRType::SCALAR);
   const boost::optional<const DexType*> annotation = state->get_annotation(reg);
   const auto anno = DexAnnoType(annotation);
-  DexTypeDomain dex_type_domain = DexTypeDomain(&anno);
+  DexTypeDomain dex_type_domain = DexTypeDomain::create_for_anno(&anno);
   state->set_dex_type(reg, dex_type_domain);
 }
 
@@ -447,7 +462,7 @@ void TypeInference::refine_integral(TypeEnvironment* state, reg_t reg) const {
   refine_type(state, reg, /* expected */ IRType::INT);
   const boost::optional<const DexType*> annotation = state->get_annotation(reg);
   const auto anno = DexAnnoType(annotation);
-  DexTypeDomain dex_type_domain = DexTypeDomain(&anno);
+  DexTypeDomain dex_type_domain = DexTypeDomain::create_for_anno(&anno);
   state->set_dex_type(reg, dex_type_domain);
 }
 
@@ -540,12 +555,13 @@ void TypeInference::run(bool is_static,
         // If the method is not static, the first parameter corresponds to
         // `this`.
         first_param = false;
-        set_reference(&init_state, insn->dest(), declaring_type, annotation);
+        set_reference_with_anno(&init_state, insn->dest(), declaring_type,
+                                annotation);
       } else {
         // This is a regular parameter of the method.
         always_assert(sig_it != args->end());
         const DexType* type = *sig_it;
-        set_reference(&init_state, insn->dest(), type, annotation);
+        set_reference_with_anno(&init_state, insn->dest(), type, annotation);
         ++sig_it;
       }
       break;
@@ -813,12 +829,14 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     break;
   }
   case OPCODE_NEW_INSTANCE: {
-    set_reference(current_state, RESULT_REGISTER, insn->get_type());
+    set_reference(current_state, RESULT_REGISTER, insn->get_type(),
+                  /* is_not_null */ true);
     break;
   }
   case OPCODE_NEW_ARRAY: {
     refine_int(current_state, insn->src(0));
-    set_reference(current_state, RESULT_REGISTER, insn->get_type());
+    set_reference(current_state, RESULT_REGISTER, insn->get_type(),
+                  /* is_not_null */ true);
     break;
   }
   case OPCODE_FILLED_NEW_ARRAY: {
@@ -835,7 +853,8 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
         refine_scalar(current_state, insn->src(i));
       }
     }
-    set_reference(current_state, RESULT_REGISTER, insn->get_type());
+    set_reference(current_state, RESULT_REGISTER, insn->get_type(),
+                  /* is_not_null */ true);
     break;
   }
   case OPCODE_FILL_ARRAY_DATA: {
@@ -1035,8 +1054,8 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
         get_typedef_anno_from_member(insn->get_field());
     always_assert(insn->has_field());
     const auto field = insn->get_field();
-    set_reference(current_state, RESULT_REGISTER, field->get_type(),
-                  annotation);
+    set_reference_with_anno(current_state, RESULT_REGISTER, field->get_type(),
+                            annotation);
     break;
   }
   case OPCODE_IPUT: {
@@ -1044,7 +1063,8 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     if (!m_annotations.empty()) {
       auto annotation = current_state->get_annotation(insn->src(0));
       const DexAnnoType anno = DexAnnoType(annotation);
-      const DexTypeDomain dex_type_domain = DexTypeDomain(type, &anno);
+      const DexTypeDomain dex_type_domain =
+          DexTypeDomain::create_nullable(type, &anno);
       current_state->set_dex_type(insn->src(1), dex_type_domain);
     }
     if (type::is_float(type)) {
@@ -1086,7 +1106,8 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
       const auto anno = DexAnnoType(annotation);
       auto type = current_state->get_dex_type(insn->src(1));
       auto dex_type = type ? *type : nullptr;
-      const DexTypeDomain dex_type_domain = DexTypeDomain(dex_type, &anno);
+      const DexTypeDomain dex_type_domain =
+          DexTypeDomain::create_nullable(dex_type, &anno);
       current_state->set_dex_type(insn->src(1), dex_type_domain);
     }
     refine_reference(current_state, insn->src(0));
@@ -1236,7 +1257,8 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     if (type::is_object(return_type)) {
       boost::optional<const DexType*> annotation =
           get_typedef_anno_from_member(dex_method);
-      set_reference(current_state, RESULT_REGISTER, return_type, annotation);
+      set_reference_with_anno(current_state, RESULT_REGISTER, return_type,
+                              annotation);
       break;
     }
     if (type::is_integral(return_type)) {

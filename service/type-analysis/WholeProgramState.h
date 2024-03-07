@@ -42,17 +42,20 @@ class WholeProgramState {
   // By default, the field and method partitions are initialized to Bottom.
   WholeProgramState() = default;
 
-  WholeProgramState(const Scope&,
-                    const global::GlobalTypeAnalyzer&,
-                    const std::unordered_set<DexMethod*>& non_true_virtuals,
-                    const ConcurrentSet<const DexMethod*>& any_init_reachables,
-                    const EligibleIfields& eligible_ifields);
+  WholeProgramState(
+      const Scope&,
+      const global::GlobalTypeAnalyzer&,
+      const InsertOnlyConcurrentSet<DexMethod*>& non_true_virtuals,
+      const ConcurrentSet<const DexMethod*>& any_init_reachables,
+      const EligibleIfields& eligible_ifields,
+      const bool only_aggregate_safely_inferrable_fields);
 
   WholeProgramState(const Scope&,
                     const global::GlobalTypeAnalyzer&,
-                    const std::unordered_set<DexMethod*>&,
+                    const InsertOnlyConcurrentSet<DexMethod*>&,
                     const ConcurrentSet<const DexMethod*>&,
                     const EligibleIfields&,
+                    const bool,
                     std::shared_ptr<const call_graph::Graph> call_graph);
 
   void set_to_top() {
@@ -126,7 +129,7 @@ class WholeProgramState {
   }
 
   bool is_any_init_reachable(const DexMethod* method) const {
-    return m_any_init_reachables.count(method);
+    return m_any_init_reachables && m_any_init_reachables->count(method);
   }
 
   /*
@@ -149,6 +152,10 @@ class WholeProgramState {
     }
     DexTypeDomain ret = DexTypeDomain::bottom();
     for (const DexMethod* callee : callees) {
+      if (!callee->get_code()) {
+        always_assert(is_abstract(callee) || is_native(callee));
+        return DexTypeDomain::top();
+      }
       auto val = m_method_partition.get(callee);
       ret.join_with(val);
     }
@@ -158,8 +165,8 @@ class WholeProgramState {
     return ret;
   }
 
-  bool method_is_dynamic(const DexMethod* method) const {
-    return call_graph::method_is_dynamic(*m_call_graph, method);
+  bool invoke_is_dynamic(const IRInstruction* insn) const {
+    return call_graph::invoke_is_dynamic(*m_call_graph, insn);
   }
 
   // For debugging
@@ -221,11 +228,12 @@ class WholeProgramState {
   std::unordered_set<const DexMethod*> m_known_methods;
   // Methods reachable from clinit that read static fields and reachable from
   // ctors that raed instance fields.
-  ConcurrentSet<const DexMethod*> m_any_init_reachables;
+  const ConcurrentSet<const DexMethod*>* m_any_init_reachables{nullptr};
 
   DexTypeFieldPartition m_field_partition;
   DexTypeMethodPartition m_method_partition;
   std::unordered_map<const DexMethodRef*, DexTypeDomain> m_known_method_returns;
+  bool m_only_aggregate_safely_inferrable_fields = false;
 };
 
 class WholeProgramAwareAnalyzer final

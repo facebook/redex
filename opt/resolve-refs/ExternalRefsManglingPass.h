@@ -25,9 +25,7 @@ class ExternalRefsManglingPass : public Pass {
       const override {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
-    return {
-        {HasSourceBlocks, Preserves},
-    };
+    return {};
   }
 
   void bind_config() override {

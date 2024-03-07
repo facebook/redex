@@ -132,12 +132,6 @@ LoopInfo::LoopInfo(cfg::ControlFlowGraph& cfg) {
   });
 }
 
-LoopInfo::~LoopInfo() {
-  for (auto* loop : m_loops) {
-    delete loop;
-  }
-}
-
 template <typename T, typename Fn>
 void LoopInfo::init(T& cfg, Fn preheader_fn) {
   sparta::WeakTopologicalOrdering<cfg::Block*> wto(
@@ -196,27 +190,26 @@ void LoopInfo::init(T& cfg, Fn preheader_fn) {
     auto loop_header = blocks_in_loop.front();
     auto loop_preheader = preheader_fn(cfg, block_set, loop_header);
 
-    auto loop = new Loop(blocks_in_loop, subloops, loop_preheader);
-
-    loop_heads.emplace(loop_header, loop);
-    m_loops.emplace_back(loop);
+    // we are traversing level_order backwards, so we insert in front to make it
+    // level_order; also note that insertions into deques does not invalidate
+    // references
+    auto& loop =
+        m_loops.emplace_front(blocks_in_loop, subloops, loop_preheader);
 
     for (auto block : blocks_in_loop) {
-      m_block_location.emplace(block, loop);
+      m_block_location.emplace(block, &loop);
     }
+
+    loop_heads.emplace(loop_header, &loop);
   }
 
-  // we traversed level_order backwards, so reverse loops to make it level
-  // order
-  std::reverse(m_loops.begin(), m_loops.end());
-
   // update parent_loop
-  for (auto loop : m_loops) {
+  for (auto& loop : m_loops) {
     // since we are traversing in level order, if this is true then we are done
-    if (loop->get_parent_loop() != nullptr) {
+    if (loop.get_parent_loop() != nullptr) {
       break;
     }
-    loop->update_parent_loop_fields();
+    loop.update_parent_loop_fields();
   }
 }
 

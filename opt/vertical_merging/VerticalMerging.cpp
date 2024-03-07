@@ -664,7 +664,7 @@ void remove_merged(Scope& scope, const ClassMap& mergeable_to_merger) {
 void resolve_virtual_calls_to_merger(const Scope& scope,
                                      ClassMap& mergeable_to_merger) {
   ConcurrentSet<DexClass*> excluded_mergeables;
-  ConcurrentMap<IRInstruction*, DexMethodRef*> resolved_virtual_calls;
+  InsertOnlyConcurrentMap<IRInstruction*, DexMethodRef*> resolved_virtual_calls;
   walk::parallel::code(scope, [&](DexMethod* /* method */, IRCode& code) {
     editable_cfg_adapter::iterate(&code, [&](MethodItemEntry& mie) {
       auto insn = mie.insn;
@@ -686,7 +686,7 @@ void resolve_virtual_calls_to_merger(const Scope& scope,
             // merger class is not checked because the case is excluded earlier
             // in collect_can_merge.
             if (merger_method_ref && is_internal_def(merger_method_ref)) {
-              resolved_virtual_calls.insert({insn, merger_method_ref});
+              resolved_virtual_calls.emplace(insn, merger_method_ref);
             }
           } else { // Merger is the superclass.
             if (resolve_virtual(find_merger->second,
@@ -696,7 +696,7 @@ void resolve_virtual_calls_to_merger(const Scope& scope,
                   DexMethod::make_method(find_merger->second->get_type(),
                                          mergeable_method_ref->get_name(),
                                          mergeable_method_ref->get_proto());
-              resolved_virtual_calls.insert({insn, merger_method_ref});
+              resolved_virtual_calls.emplace(insn, merger_method_ref);
             } else {
               // There is no instance of the mergeable class. So virtual calls
               // on the mergeable class should be invalid or unreachable. To

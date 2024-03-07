@@ -208,6 +208,20 @@ class IRInstruction final {
     return has_move_result() || has_move_result_pseudo();
   }
 
+  bool has_contiguous_range_srcs_denormalized() const {
+    if (srcs_size() == 0) {
+      return true;
+    }
+    auto last = src(0);
+    for (size_t i = 1; i < srcs_size(); ++i) {
+      if (src(i) - last != 1) {
+        return false;
+      }
+      last = src(i);
+    }
+    return true;
+  }
+
   /*
    * Information about operands.
    */

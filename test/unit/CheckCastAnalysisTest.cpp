@@ -47,6 +47,7 @@ struct CheckCastAnalysisTest : public RedexTest {
   }
 };
 
+
 TEST_F(CheckCastAnalysisTest, simple_string) {
   auto method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:()Ljava/lang/String;"

@@ -40,10 +40,7 @@ class KotlinObjectInliner : public Pass {
       const override {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
-    return {
-        {HasSourceBlocks, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
-    };
+    return {};
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

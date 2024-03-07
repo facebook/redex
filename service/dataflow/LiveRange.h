@@ -56,12 +56,14 @@ struct hash<live_range::Use> {
 namespace live_range {
 
 using UseDefChains = std::unordered_map<Use, sparta::PatriciaTreeSet<Def>>;
+using Uses = std::unordered_set<Use>;
 using DefUseChains = std::unordered_map<Def, std::unordered_set<Use>>;
 
 class Chains {
  public:
   explicit Chains(const cfg::ControlFlowGraph& cfg,
-                  bool ignore_unreachable = false);
+                  bool ignore_unreachable = false,
+                  reaching_defs::Filter filter = nullptr);
   UseDefChains get_use_def_chains() const;
   DefUseChains get_def_use_chains() const;
   const reaching_defs::FixpointIterator& get_fp_iter() const {
@@ -77,7 +79,8 @@ class Chains {
 class MoveAwareChains {
  public:
   explicit MoveAwareChains(const cfg::ControlFlowGraph& cfg,
-                           bool ignore_unreachable = false);
+                           bool ignore_unreachable = false,
+                           reaching_defs::Filter filter = nullptr);
   UseDefChains get_use_def_chains() const;
   DefUseChains get_def_use_chains() const;
   const reaching_defs::MoveAwareFixpointIterator& get_fp_iter() const {

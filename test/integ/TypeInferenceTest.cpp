@@ -256,14 +256,9 @@ TEST_F(TypeInferenceTest, test_join_with_interface) {
     }
     auto ret_type = exit_env.get_type_domain(insn->src(0));
     EXPECT_TRUE(ret_type.get_dex_type());
-    const auto& type_set = ret_type.get_type_set();
     EXPECT_EQ(*ret_type.get_dex_type(),
               DexType::get_type("Lcom/facebook/redextest/I;"));
-    EXPECT_EQ(type_set.size(), 2);
-    EXPECT_TRUE(
-        type_set.contains(DexType::get_type("Lcom/facebook/redextest/I;")));
-    EXPECT_TRUE(
-        type_set.contains(DexType::get_type("Lcom/facebook/redextest/C;")));
+    EXPECT_TRUE(ret_type.get_set_domain().is_top());
   }
 }
 

@@ -14,11 +14,10 @@
 
 #pragma once
 
+#include "Model.h"
 #include "Pass.h"
 
 namespace class_merging {
-
-struct ModelSpec;
 
 class IntraDexClassMergingPass : public Pass {
  public:
@@ -30,9 +29,8 @@ class IntraDexClassMergingPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
-        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
+        {InitialRenameClass, Preserves},
     };
   }
 

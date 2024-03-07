@@ -89,7 +89,10 @@ TEST_F(PrintKotlinStatsTest, SimpleArgumentPassingTest) {
   pass.setup();
   PrintKotlinStats::Stats stats =
       walk::parallel::methods<PrintKotlinStats::Stats>(
-          scope, [&](DexMethod* meth) { return pass.handle_method(meth); });
+          scope, [&](DexMethod* meth) {
+            meth->get_code()->build_cfg();
+            return pass.handle_method(meth);
+          });
 
   ASSERT_EQ(stats.kotlin_null_check_insns, 2);
 }

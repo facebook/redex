@@ -33,11 +33,6 @@ class InterDexPassPlugin {
                            std::vector<DexType*>&,
                            std::vector<DexType*>&) {}
 
-  // Reserves refs in every dex, effectively lowering the capacity of each dex.
-  //
-  // This is applied uniformly (e.g., cannot be a per-dex value).
-  virtual ReserveRefsInfo reserve_refs() { return ReserveRefsInfo{}; }
-
   // Return any new codegened classes that should be added to the current dex.
   virtual DexClasses additional_classes(size_t dex_count, const DexClasses&) {
     DexClasses empty;

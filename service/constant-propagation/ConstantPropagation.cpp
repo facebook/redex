@@ -20,7 +20,7 @@ Transform::Stats ConstantPropagation::run(
     DexMethod* method,
     XStoreRefs* xstores,
     const Transform::RuntimeCache& runtime_cache) {
-  if (method->get_code() == nullptr) {
+  if (method->get_code() == nullptr || method->rstate.no_optimizations()) {
     return Transform::Stats();
   }
   TRACE(CONSTP, 2, "Method: %s", SHOW(method));

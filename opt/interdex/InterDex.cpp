@@ -81,7 +81,8 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
         },
         [&](DexMethod* meth, const IRCode& code) {
           auto base_cls = meth->get_class();
-          for (auto& mie : InstructionIterable(meth->get_code())) {
+          always_assert(meth->get_code()->editable_cfg_built());
+          for (auto& mie : cfg::InstructionIterable(meth->get_code()->cfg())) {
             auto inst = mie.insn;
             DexType* called_cls = nullptr;
             if (inst->has_method()) {
@@ -109,8 +110,8 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
     // opcodes directly.
     for (const auto& cls : input_scope) {
       if (cold_cold_references.count(cls->get_type())) {
-        auto refs = class_references_cache.get(cls);
-        for (const auto& type : refs->types) {
+        const auto& refs = class_references_cache.get(cls);
+        for (const auto& type : refs.types) {
           cold_cold_references.insert(type);
         }
       }
@@ -141,11 +142,11 @@ void gather_refs(
     FieldRefs* frefs,
     TypeRefs* trefs,
     TypeRefs* itrefs) {
-  auto refs = class_references_cache.get(cls);
-  mrefs->insert(refs->method_refs.begin(), refs->method_refs.end());
-  frefs->insert(refs->field_refs.begin(), refs->field_refs.end());
-  trefs->insert(refs->types.begin(), refs->types.end());
-  itrefs->insert(refs->init_types.begin(), refs->init_types.end());
+  const auto& refs = class_references_cache.get(cls);
+  mrefs->insert(refs.method_refs.begin(), refs.method_refs.end());
+  frefs->insert(refs.field_refs.begin(), refs.field_refs.end());
+  trefs->insert(refs.types.begin(), refs.types.end());
+  itrefs->insert(refs.init_types.begin(), refs.init_types.end());
 
   std::vector<DexMethodRef*> method_refs;
   std::vector<DexFieldRef*> field_refs;
@@ -716,17 +717,21 @@ void InterDex::init_cross_dex_ref_minimizer() {
   TRACE(IDEX, 2,
         "[dex ordering] Cross-dex-ref-minimizer active with method ref weight "
         "%" PRIu64 ", field ref weight %" PRIu64 ", type ref weight %" PRIu64
-        ", string ref weight %" PRIu64 ", method seed weight %" PRIu64
+        ", large string ref weight %" PRIu64
+        ", small string ref weight %" PRIu64 ", method seed weight %" PRIu64
         ", field seed weight %" PRIu64 ", type seed weight %" PRIu64
-        ", string seed weight %" PRIu64 ".",
+        ", large string seed weight %" PRIu64
+        ", small string seed weight %" PRIu64 ".",
         m_cross_dex_ref_minimizer.get_config().method_ref_weight,
         m_cross_dex_ref_minimizer.get_config().field_ref_weight,
         m_cross_dex_ref_minimizer.get_config().type_ref_weight,
-        m_cross_dex_ref_minimizer.get_config().string_ref_weight,
+        m_cross_dex_ref_minimizer.get_config().large_string_ref_weight,
+        m_cross_dex_ref_minimizer.get_config().small_string_ref_weight,
         m_cross_dex_ref_minimizer.get_config().method_seed_weight,
         m_cross_dex_ref_minimizer.get_config().field_seed_weight,
         m_cross_dex_ref_minimizer.get_config().type_seed_weight,
-        m_cross_dex_ref_minimizer.get_config().string_seed_weight);
+        m_cross_dex_ref_minimizer.get_config().large_string_seed_weight,
+        m_cross_dex_ref_minimizer.get_config().small_string_seed_weight);
 
   std::vector<DexClass*> classes_to_insert;
   // Emit classes using some algorithm to group together classes which
@@ -1139,65 +1144,6 @@ void InterDex::add_dexes_from_store(const DexStore& store) {
   post_process_dex(m_emitting_state, fodr);
 }
 
-void InterDex::set_clinit_methods_if_needed(DexClass* cls) const {
-  using namespace dex_asm;
-
-  if (m_methods_for_canary_clinit_reference.empty()) {
-    // No methods to call from clinit; don't create clinit.
-    return;
-  }
-
-  if (cls->get_clinit()) {
-    // We already created and added a clinit.
-    return;
-  }
-
-  // Create a clinit static method.
-  auto proto =
-      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-  DexMethod* clinit =
-      DexMethod::make_method(cls->get_type(),
-                             DexString::make_string("<clinit>"), proto)
-          ->make_concrete(ACC_STATIC | ACC_CONSTRUCTOR, false);
-  clinit->set_code(std::make_unique<IRCode>());
-  cls->add_method(clinit);
-  clinit->set_deobfuscated_name(show_deobfuscated(clinit));
-
-  // Add code to clinit to call the other methods.
-  auto code = clinit->get_code();
-  size_t max_size = 0;
-  for (const auto& method_name : m_methods_for_canary_clinit_reference) {
-    // No need to do anything if this method isn't present in the build.
-    if (DexMethodRef* method = DexMethod::get_method(method_name)) {
-      std::vector<Operand> reg_operands;
-      int64_t reg = 0;
-      for (auto* dex_type : *method->get_proto()->get_args()) {
-        Operand reg_operand = {VREG, reg};
-        switch (dex_type->get_name()->c_str()[0]) {
-        case 'J':
-        case 'D':
-          // 8 bytes
-          code->push_back(dasm(OPCODE_CONST_WIDE, {reg_operand, 0_L}));
-          reg_operands.push_back(reg_operand);
-          reg += 2;
-          break;
-        default:
-          // 4 or fewer bytes
-          code->push_back(dasm(OPCODE_CONST, {reg_operand, 0_L}));
-          reg_operands.push_back(reg_operand);
-          ++reg;
-          break;
-        }
-      }
-      max_size = std::max(max_size, (size_t)reg);
-      code->push_back(dasm(OPCODE_INVOKE_STATIC, method, reg_operands.begin(),
-                           reg_operands.end()));
-    }
-  }
-  code->set_registers_size(max_size);
-  code->push_back(dasm(OPCODE_RETURN_VOID));
-}
-
 // Creates a canary class if necessary. (In particular, the primary dex never
 // has a canary class.) This method should be called after flush_out_dex when
 // beginning a new dex. As canary classes are added in the end without checks,
@@ -1214,7 +1160,6 @@ DexClass* InterDex::get_canary_cls(EmittingState& emitting_state,
     static std::mutex canary_mutex;
     std::lock_guard<std::mutex> lock_guard(canary_mutex);
     canary_cls = create_canary(dexnum);
-    set_clinit_methods_if_needed(canary_cls);
   }
   MethodRefs clazz_mrefs;
   FieldRefs clazz_frefs;
@@ -1310,6 +1255,14 @@ void InterDex::post_process_dex(EmittingState& emitting_state,
       TRACE(IDEX, 4, "IDEX: Emitting %s-plugin-generated class :: %s",
             plugin->name().c_str(), SHOW(cls));
       classes.push_back(cls);
+      // For the plugin cls, make sure all methods are editable cfg built.
+      for (auto* m : cls->get_all_methods()) {
+        if (m->get_code() == nullptr) {
+          continue;
+        }
+        m->get_code()->build_cfg();
+      }
+
       // If this is the primary dex, or if there are any betamap-ordered
       // classes in this dex, then we treat the additional classes as
       // perf-sensitive, to be conservative.

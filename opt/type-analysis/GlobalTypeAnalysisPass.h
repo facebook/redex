@@ -55,9 +55,7 @@ class GlobalTypeAnalysisPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
-        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 

@@ -83,11 +83,13 @@ using Stats = SplitHugeSwitchPass::Stats;
 
 namespace {
 
-bool has_switch(IRCode* code) {
-  for (const auto& mie : InstructionIterable(*code)) {
-    auto opcode = mie.insn->opcode();
-    if (opcode::is_switch(opcode)) {
-      return true;
+bool has_switch(cfg::ControlFlowGraph& cfg) {
+  for (auto* block : cfg.blocks()) {
+    for (const auto& mie : InstructionIterable(block)) {
+      auto opcode = mie.insn->opcode();
+      if (opcode::is_switch(opcode)) {
+        return true;
+      }
     }
   }
   return false;
@@ -101,7 +103,7 @@ cfg::InstructionIterator find_large_switch(cfg::ControlFlowGraph& cfg,
       continue;
     }
     auto block = it.block();
-    redex_assert(it->insn == block->get_last_insn()->insn);
+    redex_assert(it->insn == CONSTP(block)->get_last_insn()->insn);
     if (block->succs().size() >= case_threshold) {
       break;
     }
@@ -210,7 +212,7 @@ struct SwitchRange {
 SwitchRange get_switch_range(const cfg::ControlFlowGraph& cfg,
                              cfg::Block* b,
                              size_t split_into) {
-  redex_assert(b->get_last_insn()->insn->opcode() == OPCODE_SWITCH);
+  redex_assert(CONSTP(b)->get_last_insn()->insn->opcode() == OPCODE_SWITCH);
   std::vector<int32_t> cases;
   for (const auto* e : cfg.get_succ_edges_of_type(b, cfg::EDGE_BRANCH)) {
     cases.push_back(*e->case_key());
@@ -276,7 +278,6 @@ DexMethod* create_split(DexMethod* orig_method,
     cfg.simplify();
   }
 
-  cloned_code->clear_cfg();
   return create_dex_method(orig_method, std::move(cloned_code));
 }
 
@@ -530,14 +531,14 @@ AnalysisData analyze(DexMethod* m,
   data.under_code_units_threshold = false;
   // stats.large_methods_set.emplace(m);
 
-  if (!has_switch(code)) {
+  cfg::ScopedCFG scoped_cfg(code);
+
+  if (!has_switch(*scoped_cfg)) {
     data.no_switch = true;
     return data;
   }
   data.no_switch = false;
   // stats.switch_methods_set.emplace(m);
-
-  cfg::ScopedCFG scoped_cfg(code);
 
   auto switch_it = find_large_switch(*scoped_cfg, case_threshold);
   if (switch_it.is_end()) {
@@ -760,13 +761,15 @@ Stats run_split_dexes(DexStoresVector& stores,
             continue;
           }
           left -= required;
-          size_t orig_size = data.m->get_code()->estimate_code_units();
+          always_assert(data.m->get_code());
+          always_assert(data.m->get_code()->editable_cfg_built());
+          size_t orig_size = data.m->get_code()->cfg().estimate_code_units();
           auto new_methods =
               run_split(data, data.m, data.m->get_code(), case_threshold);
-          size_t new_size = data.m->get_code()->estimate_code_units();
+          size_t new_size = data.m->get_code()->cfg().estimate_code_units();
           for (DexMethod* m : new_methods) {
             type_class(m->get_class())->add_method(m);
-            new_size += m->get_code()->estimate_code_units();
+            new_size += m->get_code()->cfg().estimate_code_units();
           }
 
           std::lock_guard<std::mutex> lock_guard(mutex);

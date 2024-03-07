@@ -7,6 +7,7 @@
 
 #include "ReflectionAnalysis.h"
 
+#include <functional>
 #include <iomanip>
 #include <ostream>
 #include <unordered_map>
@@ -349,30 +350,34 @@ class AbstractObjectEnvironment final
                                         ReturnValueDomain,
                                         CallingContextMap>& /* product */) {}
 
-  AbstractObjectDomain get_abstract_obj(reg_t reg) const {
+  const AbstractObjectDomain& get_abstract_obj(reg_t reg) const {
     return get<0>().get(reg);
   }
 
-  void set_abstract_obj(reg_t reg, const AbstractObjectDomain aobj) {
-    apply<0>([=](auto env) { env->set(reg, aobj); }, true);
+  const BasicAbstractObjectEnvironment& get_basic_abstract_obj_env() const {
+    return get<0>();
+  }
+
+  void set_abstract_obj(reg_t reg, const AbstractObjectDomain& aobj) {
+    apply<0>([&](auto env) { env->set(reg, aobj); }, true);
   }
 
   void update_abstract_obj(
       reg_t reg,
       const std::function<AbstractObjectDomain(const AbstractObjectDomain&)>&
           operation) {
-    apply<0>([=](auto env) { env->update(reg, operation); }, true);
+    apply<0>([&](auto env) { env->update(reg, operation); }, true);
   }
 
-  ClassObjectSourceDomain get_class_source(reg_t reg) const {
+  const ClassObjectSourceDomain& get_class_source(reg_t reg) const {
     return get<1>().get(reg);
   }
 
-  void set_class_source(reg_t reg, const ClassObjectSourceDomain cls_src) {
+  void set_class_source(reg_t reg, const ClassObjectSourceDomain& cls_src) {
     apply<1>([=](auto env) { env->set(reg, cls_src); }, true);
   }
 
-  ConstantAbstractDomain<std::vector<DexType*>> get_heap_class_array(
+  const ConstantAbstractDomain<std::vector<DexType*>>& get_heap_class_array(
       AbstractHeapAddress addr) const {
     return get<2>().get(addr);
   }
@@ -389,7 +394,7 @@ class AbstractObjectEnvironment final
     set_heap_class_array(addr, domain);
   }
 
-  ReturnValueDomain get_return_value() const { return get<3>(); }
+  const ReturnValueDomain& get_return_value() const { return get<3>(); }
 
   void join_return_value(const ReturnValueDomain& domain) {
     apply<3>([=](auto original) { original->join_with(domain); }, true);
@@ -414,6 +419,20 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
         m_cfg(cfg),
         m_summary_query_fn(summary_query_fn),
         m_cache(cache) {}
+
+  static std::optional<std::reference_wrapper<const AbstractObjectDomain>>
+  maybe_get_value_type_parameter(CallingContext* context,
+                                 param_index_t param_position) {
+    if (context == nullptr) {
+      return std::nullopt;
+    }
+    // This is a regular parameter of the method.
+    auto& param_abstract_obj = context->get(param_position);
+    if (param_abstract_obj.is_value()) {
+      return param_abstract_obj;
+    }
+    return std::nullopt;
+  }
 
   void run(CallingContext* context) {
     // We need to compute the initial environment by assigning the parameter
@@ -442,16 +461,13 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
           // `this`.
           update_non_string_input(&init_state, insn, m_dex_method->get_class());
         } else {
-          // This is a regular parameter of the method.
-          AbstractObjectDomain param_abstract_obj;
-
           DexType* type = *sig_it;
           always_assert(sig_it++ != signature->end());
-          if (context && (param_abstract_obj = context->get(param_position),
-                          param_abstract_obj.is_value())) {
+          auto maybe_value_param =
+              maybe_get_value_type_parameter(context, param_position);
+          if (maybe_value_param) {
             // Parameter domain is provided with the calling context.
-            init_state.set_abstract_obj(insn->dest(),
-                                        context->get(param_position));
+            init_state.set_abstract_obj(insn->dest(), maybe_value_param->get());
           } else {
             update_non_string_input(&init_state, insn, type);
           }
@@ -484,7 +500,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       auto srcs = insn->srcs();
       for (param_index_t i = 0; i < srcs.size(); i++) {
         reg_t src = insn->src(i);
-        auto aobj = current_state->get_abstract_obj(src);
+        const auto& aobj = current_state->get_abstract_obj(src);
         cc.set(i, aobj);
       }
       if (!cc.is_bottom()) {
@@ -506,14 +522,14 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
     case OPCODE_MOVE:
     case OPCODE_MOVE_OBJECT: {
-      const auto aobj = current_state->get_abstract_obj(insn->src(0));
+      const auto& aobj = current_state->get_abstract_obj(insn->src(0));
       current_state->set_abstract_obj(insn->dest(), aobj);
       set_class_source(insn->src(0), insn->dest(), aobj, current_state);
       break;
     }
     case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
     case OPCODE_MOVE_RESULT_OBJECT: {
-      const auto aobj = current_state->get_abstract_obj(RESULT_REGISTER);
+      const auto& aobj = current_state->get_abstract_obj(RESULT_REGISTER);
       current_state->set_abstract_obj(insn->dest(), aobj);
       set_class_source(RESULT_REGISTER, insn->dest(), aobj, current_state);
       break;
@@ -535,7 +551,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       break;
     }
     case OPCODE_CHECK_CAST: {
-      const auto aobj = current_state->get_abstract_obj(insn->src(0));
+      const auto& aobj = current_state->get_abstract_obj(insn->src(0));
       set_abstract_obj(RESULT_REGISTER, AbstractObjectKind::OBJECT,
                        insn->get_type(), current_state);
       set_class_source(insn->src(0), RESULT_REGISTER, aobj, current_state);
@@ -547,7 +563,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       break;
     }
     case OPCODE_INSTANCE_OF: {
-      const auto aobj = current_state->get_abstract_obj(insn->src(0));
+      const auto& aobj = current_state->get_abstract_obj(insn->src(0));
       auto obj = aobj.get_object();
       // Append the referenced type here to the potential dex types list.
       // Doing this increases the type information we have at the reflection
@@ -760,6 +776,16 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     return it->second.get_abstract_obj(reg).get_object();
   }
 
+  const AbstractObjectEnvironment& get_abstract_object_env(
+      IRInstruction* insn) const {
+    auto it = m_environments.find(insn);
+    if (it == m_environments.end()) {
+      static const AbstractObjectEnvironment empty_environment;
+      return empty_environment;
+    }
+    return it->second;
+  }
+
   boost::optional<ClassObjectSource> get_class_source(
       size_t reg, IRInstruction* insn) const {
     auto it = m_environments.find(insn);
@@ -769,7 +795,9 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     return it->second.get_class_source(reg).get_constant();
   }
 
-  AbstractObjectDomain get_return_value() const { return m_return_value; }
+  const AbstractObjectDomain& get_return_value() const {
+    return m_return_value;
+  }
 
   const AbstractObjectEnvironment& get_exit_state() const {
     return get_exit_state_at(m_cfg.exit_block());
@@ -1096,32 +1124,39 @@ ReflectionAnalysis::ReflectionAnalysis(DexMethod* dex_method,
   m_analyzer->run(context);
 }
 
-void ReflectionAnalysis::get_reflection_site(
-    const reg_t reg,
+void ReflectionAnalysis::gather_reflection_sites(
     IRInstruction* insn,
     std::map<reg_t, ReflectionAbstractObject>* abstract_objects) const {
-  auto aobj = m_analyzer->get_abstract_object(reg, insn);
-  if (!aobj) {
+  const auto& env =
+      m_analyzer->get_abstract_object_env(insn).get_basic_abstract_obj_env();
+  if (env.kind() != AbstractValueKind::Value) {
     return;
   }
-  if (is_not_reflection_output(*aobj)) {
-    return;
-  }
-  boost::optional<ClassObjectSource> cls_src =
-      aobj->is_class() ? m_analyzer->get_class_source(reg, insn) : boost::none;
-  if (aobj->is_class() && cls_src == ClassObjectSource::NON_REFLECTION) {
-    return;
-  }
-  if (traceEnabled(REFL, 5)) {
-    std::ostringstream out;
-    out << "reg " << reg << " " << *aobj << " ";
-    if (cls_src) {
-      out << *cls_src;
+  for (auto&& [reg, domain] : env.bindings()) {
+    auto aobj = domain.get_object();
+    if (!aobj) {
+      continue;
     }
-    out << std::endl;
-    TRACE(REFL, 5, " reflection site: %s", out.str().c_str());
+    if (is_not_reflection_output(*aobj)) {
+      continue;
+    }
+    boost::optional<ClassObjectSource> cls_src =
+        aobj->is_class() ? m_analyzer->get_class_source(reg, insn)
+                         : boost::none;
+    if (aobj->is_class() && cls_src == ClassObjectSource::NON_REFLECTION) {
+      continue;
+    }
+    if (traceEnabled(REFL, 5)) {
+      std::ostringstream out;
+      out << "reg " << reg << " " << *aobj << " ";
+      if (cls_src) {
+        out << *cls_src;
+      }
+      out << std::endl;
+      TRACE(REFL, 5, " reflection site: %s", out.str().c_str());
+    }
+    (*abstract_objects)[reg] = ReflectionAbstractObject(*aobj, cls_src);
   }
-  (*abstract_objects)[reg] = ReflectionAbstractObject(*aobj, cls_src);
 }
 
 ReflectionSites ReflectionAnalysis::get_reflection_sites() const {
@@ -1136,13 +1171,10 @@ ReflectionSites ReflectionAnalysis::get_reflection_sites() const {
   for (auto& mie : InstructionIterable(cfg)) {
     IRInstruction* insn = mie.insn;
     std::map<reg_t, ReflectionAbstractObject> abstract_objects;
-    for (size_t i = 0; i < reg_size; i++) {
-      get_reflection_site(i, insn, &abstract_objects);
-    }
-    get_reflection_site(RESULT_REGISTER, insn, &abstract_objects);
+    gather_reflection_sites(insn, &abstract_objects);
 
     if (!abstract_objects.empty()) {
-      reflection_sites.push_back(std::make_pair(insn, abstract_objects));
+      reflection_sites.emplace_back(insn, std::move(abstract_objects));
     }
   }
   return reflection_sites;

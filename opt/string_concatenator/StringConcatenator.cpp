@@ -383,16 +383,15 @@ void StringConcatenatorPass::run_pass(DexStoresVector& stores,
         if (code == nullptr) {
           return Stats{};
         }
-        if (!method::is_clinit(m)) {
+        if (!method::is_clinit(m) || m->rstate.no_optimizations()) {
           // TODO maybe later? If we expand to non-clinit methods, `analyze()`
           // will have to consider StringBuilders passed in as arguments.
           return Stats{};
         }
 
-        code->build_cfg(/* editable */ true);
+        always_assert(code->editable_cfg_built());
         Stats stats =
             Concatenator{config}.run(&code->cfg(), m, &methods_to_remove);
-        code->clear_cfg();
 
         return stats;
       },

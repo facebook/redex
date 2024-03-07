@@ -56,8 +56,11 @@ class ExpandableMethodParams {
       param_index_t param_index,
       const std::vector<DexField*>& fields);
 
+  // create the method-info for a given type, method-name, rtype.
+  MethodInfo create_method_info(const MethodKey& key) const;
+
   // Get or create the method-info for a given type, method-name, rtype.
-  MethodInfo* get_method_info(const MethodKey& key) const;
+  const MethodInfo* get_method_info(const MethodKey& key) const;
 
   // Given an earlier created expanded method ref, fill in the code.
   DexMethod* make_expanded_method_concrete(DexMethodRef* expanded_method_ref);
@@ -71,14 +74,14 @@ class ExpandableMethodParams {
   DexMethodRef* get_expanded_method_ref(
       DexMethod* method,
       param_index_t param_index,
-      std::vector<DexField*>** fields = nullptr) const;
+      std::vector<DexField*> const** fields = nullptr) const;
 
   // Make sure that all newly used expanded ctors actually exist as concrete
   // methods.
   size_t flush(const Scope& scope);
 
  private:
-  mutable ConcurrentMap<MethodKey, std::shared_ptr<MethodInfo>, MethodKeyHash>
+  mutable InsertOnlyConcurrentMap<MethodKey, MethodInfo, MethodKeyHash>
       m_method_infos;
   // For each requested expanded method ref, we remember the
   // original method, and which parameter was expanded.

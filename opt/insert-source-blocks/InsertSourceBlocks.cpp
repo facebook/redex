@@ -33,7 +33,6 @@
 #include "PassManager.h"
 #include "RedexContext.h"
 #include "RedexMappedFile.h"
-#include "ScopedCFG.h"
 #include "Show.h"
 #include "SourceBlockConsistencyCheck.h"
 #include "SourceBlocks.h"
@@ -646,13 +645,13 @@ struct Injector {
             std::string_view access_method_name;
             std::string access_method_hash_name;
 
-            ScopedCFG cfg(code);
-
+            always_assert(code->editable_cfg_built());
+            auto& cfg = code->cfg();
             if (access_method) {
               access_method_type = access_method->first;
               access_method_name = access_method->second;
 
-              auto hash_value = hasher::stable_hash(*cfg);
+              auto hash_value = hasher::stable_hash(cfg);
 
               access_method_hash_name =
                   hasher::hashed_name(hash_value, access_method_name);
@@ -680,7 +679,7 @@ struct Injector {
             }();
 
             auto res = source_blocks::insert_source_blocks(
-                sb_name, cfg.get(), profiles.first, serialize, exc_inject);
+                sb_name, &cfg, profiles.first, serialize, exc_inject);
 
             smi.add({sb_name, std::move(res.serialized),
                      std::move(res.serialized_idom_map)});

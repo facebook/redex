@@ -37,9 +37,7 @@ class RemoveUninstantiablesPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
-        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 
@@ -47,8 +45,6 @@ class RemoveUninstantiablesPass : public Pass {
       const Scope& scope,
       std::unordered_map<DexType*, std::unordered_set<DexType*>>*
           instantiable_children = nullptr);
-
-  bool is_cfg_legacy() override { return true; }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

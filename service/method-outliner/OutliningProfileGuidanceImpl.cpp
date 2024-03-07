@@ -12,7 +12,6 @@
 #include "MethodOverrideGraph.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
-#include "ScopedCFG.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "Walkers.h"
@@ -182,7 +181,7 @@ std::vector<DexMethod*> get_possibly_warm_or_hot_methods(
             // next method on success/failure, as there's no point
             // checking the same fixed condition for other
             // interactions.
-            cfg::ScopedCFG scopedCFG(code);
+            always_assert(code->editable_cfg_built());
             auto& cfg = code->cfg();
             auto entry_block = cfg.entry_block();
             auto entry_sb = source_blocks::get_first_source_block(entry_block);

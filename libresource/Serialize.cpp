@@ -129,7 +129,7 @@ void push_chunk(android::ResChunk_header* header, android::Vector<char>* out) {
 }
 
 void push_vec(android::Vector<char>& vec, android::Vector<char>* out) {
-  if (vec.size() > 0) {
+  if (!vec.empty()) {
     out->appendVector(vec);
   }
 }

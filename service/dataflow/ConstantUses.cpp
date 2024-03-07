@@ -89,13 +89,21 @@ ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg,
                            DexTypeList* args,
                            const std::function<std::string()>& method_describer,
                            bool force_type_inference)
-    : m_reaching_definitions(cfg), m_rtype(rtype) {
+    : m_rtype(rtype) {
+  static AccumulatingTimer s_timer("ConstantUses::ConstantUses");
+  auto t = s_timer.scope();
+
   always_assert(!force_type_inference || args);
-  m_reaching_definitions.run(reaching_defs::Environment());
+  auto is_const = [](auto* insn) {
+    return insn->opcode() == OPCODE_CONST ||
+           insn->opcode() == OPCODE_CONST_WIDE;
+  };
+  reaching_defs::MoveAwareFixpointIterator reaching_definitions(cfg, is_const);
+  reaching_definitions.run(reaching_defs::Environment());
 
   bool need_type_inference = false;
   for (cfg::Block* block : cfg.blocks()) {
-    auto env = m_reaching_definitions.get_entry_state_at(block);
+    auto env = reaching_definitions.get_entry_state_at(block);
     for (auto& mie : InstructionIterable(block)) {
       IRInstruction* insn = mie.insn;
       for (size_t src_index = 0; src_index < insn->srcs_size(); src_index++) {
@@ -103,36 +111,34 @@ ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg,
         const auto& defs = env.get(src);
         if (!defs.is_top() && !defs.is_bottom()) {
           for (auto def : defs.elements()) {
-            auto def_opcode = def->opcode();
-            if (def_opcode == OPCODE_CONST || def_opcode == OPCODE_CONST_WIDE) {
-              m_constant_uses[def].emplace_back(insn, src_index);
-              // So there's an instruction that uses a const value.
-              // For some uses, get_type_demand(IRInstruction*, size_t) will
-              // need to know type inference information on operands.
-              // The following switch logic needs to be kept in sync with that
-              // actual usage of type inference information.
-              auto opcode = insn->opcode();
-              switch (opcode) {
-              case OPCODE_APUT:
-              case OPCODE_APUT_WIDE:
-                if (src_index == 0) {
-                  need_type_inference = true;
-                }
-                break;
-              case OPCODE_IF_EQ:
-              case OPCODE_IF_NE:
-              case OPCODE_IF_EQZ:
-              case OPCODE_IF_NEZ:
+            always_assert(is_const(def));
+            m_constant_uses[def].emplace_back(insn, src_index);
+            // So there's an instruction that uses a const value.
+            // For some uses, get_type_demand(IRInstruction*, size_t) will
+            // need to know type inference information on operands.
+            // The following switch logic needs to be kept in sync with that
+            // actual usage of type inference information.
+            auto opcode = insn->opcode();
+            switch (opcode) {
+            case OPCODE_APUT:
+            case OPCODE_APUT_WIDE:
+              if (src_index == 0) {
                 need_type_inference = true;
-                break;
-              default:
-                break;
               }
+              break;
+            case OPCODE_IF_EQ:
+            case OPCODE_IF_NE:
+            case OPCODE_IF_EQZ:
+            case OPCODE_IF_NEZ:
+              need_type_inference = true;
+              break;
+            default:
+              break;
             }
           }
         }
       }
-      m_reaching_definitions.analyze_instruction(insn, &env);
+      reaching_definitions.analyze_instruction(insn, &env);
     }
   }
 

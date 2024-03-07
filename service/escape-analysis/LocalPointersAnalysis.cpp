@@ -353,7 +353,7 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
       const auto& summary = m_invoke_to_summary_map.at(insn);
       analyze_invoke_with_summary(summary, insn, env);
     } else {
-      default_instruction_handler(insn, env);
+      analyze_generic_invoke(insn, env);
     }
   } else if (may_alloc(op)) {
     env->set_fresh_pointer(RESULT_REGISTER, insn);
@@ -367,80 +367,88 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
   }
 }
 
-void FixpointIteratorMapDeleter::operator()(FixpointIteratorMap* map) {
-  // Deletion is actually really expensive due to the reference counts of the
-  // shared_ptrs in the Patricia trees, so we do it in parallel.
-  auto wq = workqueue_foreach<FixpointIterator*>(
-      [](FixpointIterator* fp_iter) { delete fp_iter; });
-  for (auto& pair : *map) {
-    wq.add_item(pair.second);
-  }
-  wq.run_all();
-  delete map;
-}
-
-static void analyze_method_recursive(
+std::pair<std::unique_ptr<FixpointIterator>, EscapeSummary> analyze_method(
     const DexMethod* method,
     const call_graph::Graph& call_graph,
-    sparta::PatriciaTreeSet<const DexMethodRef*> visiting,
-    FixpointIteratorMap* fp_iter_map,
-    SummaryCMap* summary_map) {
-  if (!method || summary_map->count(method) != 0 || visiting.contains(method) ||
-      method->get_code() == nullptr) {
-    return;
-  }
-  visiting.insert(method);
-
+    const SummaryMap& summary_map) {
   std::unordered_map<const IRInstruction*, EscapeSummary> invoke_to_summary_map;
   if (call_graph.has_node(method)) {
     const auto& callee_edges = call_graph.node(method)->callees();
     for (const auto& edge : callee_edges) {
+      if (edge->callee() == call_graph.exit()) {
+        continue;
+      }
+      auto invoke_insn = edge->invoke_insn();
+      auto& callee_summary = invoke_to_summary_map[invoke_insn];
       auto* callee = edge->callee()->method();
-      analyze_method_recursive(callee, call_graph, visiting, fp_iter_map,
-                               summary_map);
-      if (summary_map->count(callee) != 0) {
-        invoke_to_summary_map.emplace(edge->invoke_insn(),
-                                      summary_map->at(callee));
+      auto it = summary_map.find(callee);
+      if (it != summary_map.end()) {
+        callee_summary.join_with(it->second);
+      } else if (callee == nullptr &&
+                 is_array_clone(invoke_insn->get_method())) {
+        // The array clone method doesn't escape or return any parameters; it
+        // returns a new array.
+        callee_summary.join_with(EscapeSummary(ParamSet{FRESH_RETURN}, {}));
       }
     }
   }
 
   auto* code = method->get_code();
   auto& cfg = code->cfg();
-  auto fp_iter = new FixpointIterator(cfg, std::move(invoke_to_summary_map));
+  auto fp_iter =
+      std::make_unique<FixpointIterator>(cfg,
+                                         std::move(invoke_to_summary_map),
+                                         /* escape_check_cast */ false);
   fp_iter->run(Environment());
 
-  // The following updates form a critical section.
-  {
-    std::unique_lock<std::mutex> lock(fp_iter_map->get_lock(method));
-    fp_iter_map->update_unsafe(method,
-                               [&](auto, FixpointIterator*& v, bool exists) {
-                                 redex_assert(!(exists ^ (v != nullptr)));
-                                 delete v;
-                                 v = fp_iter;
-                               });
-    summary_map->update(method, [&](auto, EscapeSummary& v, bool) {
-      v = get_escape_summary(*fp_iter, *code);
-    });
-  }
+  auto summary = get_escape_summary(*fp_iter, *code);
+  return std::make_pair(std::move(fp_iter), std::move(summary));
 }
 
-FixpointIteratorMapPtr analyze_scope(const Scope& scope,
-                                     const call_graph::Graph& call_graph,
-                                     SummaryCMap* summary_map_ptr) {
-  FixpointIteratorMapPtr fp_iter_map(new FixpointIteratorMap());
-  SummaryCMap summary_map;
+FixpointIteratorMap analyze_scope(const Scope& scope,
+                                  const call_graph::Graph& call_graph,
+                                  SummaryMap* summary_map_ptr) {
+  FixpointIteratorMap fp_iter_map;
+  SummaryMap summary_map;
   if (summary_map_ptr == nullptr) {
     summary_map_ptr = &summary_map;
   }
-  summary_map_ptr->emplace(
-      DexMethod::get_method("Ljava/lang/Object;.<init>:()V"), EscapeSummary{});
+  summary_map_ptr->emplace(method::java_lang_Object_ctor(), EscapeSummary{});
 
-  walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
-    sparta::PatriciaTreeSet<const DexMethodRef*> visiting;
-    analyze_method_recursive(method, call_graph, visiting, fp_iter_map.get(),
-                             summary_map_ptr);
+  auto affected_methods = std::make_unique<ConcurrentSet<const DexMethod*>>();
+  walk::parallel::code(scope, [&](const DexMethod* method, IRCode&) {
+    affected_methods->insert(method);
   });
+
+  while (!affected_methods->empty()) {
+    InsertOnlyConcurrentMap<const DexMethod*, EscapeSummary>
+        changed_effect_summaries;
+    auto next_affected_methods =
+        std::make_unique<ConcurrentSet<const DexMethod*>>();
+    workqueue_run<const DexMethod*>(
+        [&](const DexMethod* method) {
+          auto p = analyze_method(method, call_graph, *summary_map_ptr);
+          auto& new_fp_iter = p.first;
+          auto& new_summary = p.second;
+          fp_iter_map.update(method, [&](auto*, auto& v, bool exists) {
+            redex_assert(!(exists ^ (v != nullptr)));
+            std::swap(new_fp_iter, v);
+          });
+          auto it = summary_map_ptr->find(method);
+          if (it != summary_map_ptr->end() && it->second == new_summary) {
+            return;
+          }
+          changed_effect_summaries.emplace(method, std::move(new_summary));
+          const auto& callers = call_graph.get_callers(method);
+          next_affected_methods->insert(callers.begin(), callers.end());
+        },
+        *affected_methods);
+    for (auto&& [method, summary] : changed_effect_summaries) {
+      (*summary_map_ptr)[method] = std::move(summary);
+    }
+    std::swap(next_affected_methods, affected_methods);
+  }
+
   return fp_iter_map;
 }
 
@@ -501,6 +509,7 @@ EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
 
   switch (returned_ptrs.kind()) {
   case sparta::AbstractValueKind::Value: {
+    summary.returned_parameters = ParamSet();
     for (auto insn : returned_ptrs.elements()) {
       if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
         summary.returned_parameters.add(param_indexes.at(insn));
@@ -596,11 +605,28 @@ EscapeSummary EscapeSummary::from_s_expr(const sparta::s_expr& expr) {
     }
   } else {
     always_assert(returned_params_s_expr.is_list());
+    summary.returned_parameters = ParamSet();
     for (size_t i = 0; i < returned_params_s_expr.size(); ++i) {
       summary.returned_parameters.add(returned_params_s_expr[i].get_int32());
     }
   }
   return summary;
+}
+
+void EscapeSummary::join_with(const EscapeSummary& other) {
+  escaping_parameters.insert(other.escaping_parameters.begin(),
+                             other.escaping_parameters.end());
+  returned_parameters.join_with(other.returned_parameters);
+}
+
+bool may_be_overridden(const DexMethod* method) {
+  return method->is_virtual() && !is_final(method) &&
+         !is_final(type_class(method->get_class()));
+}
+
+bool is_array_clone(const DexMethodRef* mref) {
+  return type::is_array(mref->get_class()) &&
+         mref->get_name()->str() == "clone";
 }
 
 } // namespace local_pointers

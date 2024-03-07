@@ -22,10 +22,7 @@ namespace uv = used_vars;
 class StringBuilderOutlinerTest : public RedexTest {
  public:
   void SetUp() override {
-    const char* android_sdk = std::getenv("sdk_path");
-    std::string android_target(std::getenv("android_target"));
-    std::string sdk_jar = std::string(android_sdk) + "/platforms/" +
-                          android_target + "/android.jar";
+    std::string sdk_jar = android_sdk_jar_path();
     // StringBuilderOutliner requires bunch of java.lang.* classes to be
     // defined. Loading the SDK JAR here ensures that.
     ASSERT_TRUE(load_jar_file(DexLocation::make_location("", sdk_jar)));

@@ -7,11 +7,15 @@
 
 #include "Timer.h"
 
+#include <list>
+
 #include "Trace.h"
 
 unsigned Timer::s_indent = 0;
 std::mutex Timer::s_lock;
 Timer::times_t Timer::s_times;
+std::mutex AccumulatingTimer::s_lock;
+AccumulatingTimer::times_impl_t* AccumulatingTimer::s_times{nullptr};
 
 Timer::Timer(const std::string& msg, bool indent)
     : m_msg(msg),
@@ -34,7 +38,32 @@ Timer::~Timer() {
   Timer::add_timer(std::move(m_msg), duration_s);
 }
 
-void Timer::add_timer(std::string&& msg, double dur_s) {
+void Timer::add_timer(std::string msg, double dur_s) {
   std::lock_guard<std::mutex> guard(s_lock);
   s_times.emplace_back(std::move(msg), dur_s);
+}
+
+AccumulatingTimer::AccumulatingTimer(std::string msg) {
+  add_timer(std::move(msg), m_microseconds);
+}
+
+AccumulatingTimer::times_t AccumulatingTimer::get_times() {
+  std::lock_guard<std::mutex> guard(s_lock);
+  AccumulatingTimer::times_t res;
+  if (s_times) {
+    res.reserve(s_times->size());
+    for (auto& [str, microseconds] : *s_times) {
+      res.emplace_back(str, ((double)microseconds->load()) / 1000000);
+    }
+  }
+  return res;
+}
+
+void AccumulatingTimer::add_timer(
+    std::string msg, std::shared_ptr<std::atomic<uint64_t>> microseconds) {
+  std::lock_guard<std::mutex> guard(s_lock);
+  if (!s_times) {
+    s_times = new AccumulatingTimer::times_impl_t();
+  }
+  s_times->emplace_back(std::move(msg), std::move(microseconds));
 }

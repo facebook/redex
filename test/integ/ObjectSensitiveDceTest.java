@@ -13,6 +13,41 @@ class ObjectSensitiveDceTest {
     useless.foo();
   }
 
+  public static void recursive() {
+    Useless useless = new Useless();
+    useless.recursive_foo(100);
+  }
+
+  public static void mutually_recursive() {
+    Useless useless = new Useless();
+    useless.mutually_recursive_foo(100);
+  }
+
+  public static void invoke_super() {
+    UselessDerived useless = new UselessDerived();
+    useless.foo();
+  }
+
+  public static void invoke_virtual_with_overrides() {
+    UselessBase useless = new UselessDerived();
+    useless.bar();
+  }
+
+  public static void invoke_virtual_with_overrides_with_side_effect() {
+    UselessBase useless = new UselessDerived();
+    useless.bar_where_override_has_side_effect();
+  }
+
+  public static void invoke_virtual_with_too_many_overrides() {
+    UselessBase useless = new UselessDerived();
+    useless.bar_with_invoke_virtual_with_too_many_overrides();
+  }
+
+  public static void non_termination() {
+    Useless useless = new Useless();
+    useless.non_terminating_foo();
+  }
+
   public static void clinit_with_side_effects() {
     UselessWithClInitWithSideEffects useless = new UselessWithClInitWithSideEffects();
     useless.foo();
@@ -22,12 +57,112 @@ class ObjectSensitiveDceTest {
     UselessWithMethodNeedingInitClass useless = new UselessWithMethodNeedingInitClass();
     useless.foo();
   }
+
+  public static void pure_method() {
+    Useless useless = new Useless();
+    useless.getClass();
+  }
+
+  public static void array_clone() {
+    int[] a = new int[1];
+    a = a.clone();
+    a.clone();
+  }
 }
 
 class Useless {
   int F;
   public Useless() {}
   public void foo() {
+    F = 42;
+  }
+  public void non_terminating_foo() {
+    while (true) {}
+  }
+  public void recursive_foo(int x) {
+    if (x<=0) {
+      F = 42;
+    } else {
+      recursive_foo(x-1);
+    }
+  }
+  public void mutually_recursive_foo(int x) {
+    if (x<=0) {
+      F = 42;
+    } else {
+      mutually_recursive_bar(x-1);
+    }
+  }
+  public void mutually_recursive_bar(int x) {
+    if (x<=0) {
+      F = 42;
+    } else {
+      mutually_recursive_foo(x-1);
+    }
+  }
+}
+
+class UselessBase {
+  int F;
+  public UselessBase() {}
+  public void foo() {
+    F = 42;
+  }
+  public void bar() {
+    F = 42;
+  }
+  public void bar_where_override_has_side_effect() {
+    F = 42;
+  }
+  public void bar_with_invoke_virtual_with_too_many_overrides() {
+    F = 42;
+  }
+}
+
+class UselessDerived extends UselessBase {
+  public UselessDerived() {}
+  public void foo() {
+    super.foo();
+  }
+  public void bar() {
+    F = 42;
+  }
+  public void bar_where_override_has_side_effect() {
+    try {
+      System.loadLibrary("boo"); // side effect
+    } catch (Throwable t) { }
+  }
+  public void bar_with_invoke_virtual_with_too_many_overrides() {
+    F = 42;
+  }
+}
+
+class UselessDerived2 extends UselessBase {
+  public void bar_with_invoke_virtual_with_too_many_overrides() {
+    F = 42;
+  }
+}
+
+class UselessDerived3 extends UselessBase {
+  public void bar_with_invoke_virtual_with_too_many_overrides() {
+    F = 42;
+  }
+}
+
+class UselessDerived4 extends UselessBase {
+  public void bar_with_invoke_virtual_with_too_many_overrides() {
+    F = 42;
+  }
+}
+
+class UselessDerived5 extends UselessBase {
+  public void bar_with_invoke_virtual_with_too_many_overrides() {
+    F = 42;
+  }
+}
+
+class UselessDerived6 extends UselessBase {
+  public void bar_with_invoke_virtual_with_too_many_overrides() {
     F = 42;
   }
 }

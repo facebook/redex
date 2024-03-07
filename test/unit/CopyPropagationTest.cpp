@@ -25,7 +25,7 @@ TEST_F(CopyPropagationTest, simple) {
     )
 )");
   code->set_registers_size(3);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
@@ -39,7 +39,7 @@ TEST_F(CopyPropagationTest, simple) {
      (return v0)
     )
 )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -60,7 +60,7 @@ TEST_F(CopyPropagationTest, deleteRepeatedMove) {
     )
 )");
   code->set_registers_size(2);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
@@ -73,7 +73,7 @@ TEST_F(CopyPropagationTest, deleteRepeatedMove) {
      (return v0)
     )
 )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -92,7 +92,7 @@ TEST_F(CopyPropagationTest, noRemapRange) {
     )
 )");
   code->set_registers_size(7);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   config.regalloc_has_run = true;
   CopyPropagation(config).run(code.get());
@@ -105,7 +105,7 @@ TEST_F(CopyPropagationTest, noRemapRange) {
      (return v0)
     )
 )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -118,7 +118,7 @@ TEST_F(CopyPropagationTest, deleteSelfMove) {
     )
 )");
   code->set_registers_size(2);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
@@ -128,7 +128,7 @@ TEST_F(CopyPropagationTest, deleteSelfMove) {
       (return-void)
     )
 )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -143,7 +143,7 @@ TEST_F(CopyPropagationTest, representative) {
     )
 )");
   code->set_registers_size(2);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
@@ -156,7 +156,7 @@ TEST_F(CopyPropagationTest, representative) {
       (return-void)
     )
 )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -172,7 +172,7 @@ TEST_F(CopyPropagationTest, verifyEnabled) {
     )
 )");
   code->set_registers_size(2);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
@@ -185,7 +185,7 @@ TEST_F(CopyPropagationTest, verifyEnabled) {
       (return-void)
     )
 )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -201,7 +201,7 @@ TEST_F(CopyPropagationTest, consts_safe_by_constant_uses) {
     )
 )");
   code->set_registers_size(2);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
@@ -213,7 +213,7 @@ TEST_F(CopyPropagationTest, consts_safe_by_constant_uses) {
       (return-void)
     )
 )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -235,7 +235,7 @@ TEST_F(CopyPropagationTest, non_zero_constant_cannot_have_object_type_demand) {
 )");
   auto code = method->get_code();
   code->set_registers_size(2);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   CopyPropagation(config).run(code, method);
 
@@ -248,7 +248,7 @@ TEST_F(CopyPropagationTest, non_zero_constant_cannot_have_object_type_demand) {
       (return-void)
     )
 )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code, expected_code.get());
 }
 
@@ -281,7 +281,7 @@ TEST_F(CopyPropagationTest, if_eqz_can_create_demand) {
 )");
   auto code = method->get_code();
   code->set_registers_size(2);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   CopyPropagation(config).run(code, method);
 
@@ -306,7 +306,7 @@ TEST_F(CopyPropagationTest, if_eqz_can_create_demand) {
       (return-void)
     )
 )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code, expected_code.get());
 }
 
@@ -331,7 +331,7 @@ TEST_F(CopyPropagationTest, consts_safe_by_constant_uses_aput) {
 )");
   auto code = method->get_code();
   code->set_registers_size(3);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   CopyPropagation(config).run(code, method);
 
@@ -346,7 +346,7 @@ TEST_F(CopyPropagationTest, consts_safe_by_constant_uses_aput) {
       (return-void)
     )
 )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code, expected_code.get());
 }
 
@@ -370,7 +370,7 @@ TEST_F(CopyPropagationTest, consts_unsafe_by_constant_uses_aput) {
 )");
   auto code = method->get_code();
   code->set_registers_size(3);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   CopyPropagation(config).run(code, method);
 
@@ -387,7 +387,7 @@ TEST_F(CopyPropagationTest, consts_unsafe_by_constant_uses_aput) {
       (return-void)
     )
 )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code, expected_code.get());
 }
 
@@ -403,7 +403,7 @@ TEST_F(CopyPropagationTest, wide_consts_safe_by_constant_uses) {
     )
 )");
   code->set_registers_size(4);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
@@ -415,7 +415,7 @@ TEST_F(CopyPropagationTest, wide_consts_safe_by_constant_uses) {
       (return-void)
     )
 )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -445,7 +445,7 @@ TEST_F(CopyPropagationTest, if_constraints_with_constant_uses) {
 )");
   auto code = method->get_code();
   code->set_registers_size(4);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   CopyPropagation(config).run(code, method);
 
@@ -465,7 +465,7 @@ TEST_F(CopyPropagationTest, if_constraints_with_constant_uses) {
       (return-object v1)
     )
 )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code, expected_code.get());
 }
 
@@ -480,7 +480,7 @@ TEST_F(CopyPropagationTest, cliqueAliasing) {
     )
   )");
   code->set_registers_size(4);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   config.replace_with_representative = false;
   CopyPropagation(config).run(code.get());
@@ -493,7 +493,7 @@ TEST_F(CopyPropagationTest, cliqueAliasing) {
       (return-void)
     )
   )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -513,7 +513,7 @@ TEST_F(CopyPropagationTest, loopNoChange) {
     )
   )");
   code->set_registers_size(2);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
@@ -531,7 +531,7 @@ TEST_F(CopyPropagationTest, loopNoChange) {
       (return-void)
     )
   )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -554,12 +554,12 @@ TEST_F(CopyPropagationTest, branchNoChange) {
 
   auto code = assembler::ircode_from_string(no_change);
   code->set_registers_size(4);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(no_change);
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -580,7 +580,7 @@ TEST_F(CopyPropagationTest, intersect1) {
     )
   )");
   code->set_registers_size(4);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
@@ -598,7 +598,7 @@ TEST_F(CopyPropagationTest, intersect1) {
       (goto :end)
     )
   )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -621,13 +621,13 @@ TEST_F(CopyPropagationTest, intersect2) {
   )";
   auto code = assembler::ircode_from_string(no_change);
   code->set_registers_size(5);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   config.replace_with_representative = false;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(no_change);
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -640,7 +640,7 @@ TEST_F(CopyPropagationTest, wide) {
     )
   )");
   code->set_registers_size(4);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   config.wide_registers = true;
   CopyPropagation(config).run(code.get());
@@ -651,7 +651,7 @@ TEST_F(CopyPropagationTest, wide) {
       (return-void)
     )
   )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -665,7 +665,7 @@ TEST_F(CopyPropagationTest, wideClobber) {
     )
   )");
   code->set_registers_size(5);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   config.wide_registers = false;
   CopyPropagation(config).run(code.get());
@@ -678,7 +678,7 @@ TEST_F(CopyPropagationTest, wideClobber) {
       (return-void)
     )
   )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -692,7 +692,7 @@ TEST_F(CopyPropagationTest, wideClobberWideTrue) {
     )
   )");
   code->set_registers_size(5);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   config.wide_registers = true;
   CopyPropagation(config).run(code.get());
@@ -705,7 +705,7 @@ TEST_F(CopyPropagationTest, wideClobberWideTrue) {
       (return-void)
     )
   )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -718,7 +718,7 @@ TEST_F(CopyPropagationTest, wideClobberWideOddUp) {
     )
   )");
   code->set_registers_size(5);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   config.wide_registers = true;
   CopyPropagation(config).run(code.get());
@@ -730,7 +730,7 @@ TEST_F(CopyPropagationTest, wideClobberWideOddUp) {
       (return-void)
     )
   )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -743,7 +743,7 @@ TEST_F(CopyPropagationTest, wideClobberWideOddDown) {
     )
   )");
   code->set_registers_size(5);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   config.wide_registers = true;
   CopyPropagation(config).run(code.get());
@@ -755,7 +755,7 @@ TEST_F(CopyPropagationTest, wideClobberWideOddDown) {
       (return-void)
     )
   )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -770,7 +770,7 @@ TEST_F(CopyPropagationTest, repWide) {
     )
   )");
   code->set_registers_size(5);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   config.wide_registers = true;
   config.replace_with_representative = true;
@@ -786,7 +786,7 @@ TEST_F(CopyPropagationTest, repWide) {
       (return-void)
     )
   )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -810,13 +810,13 @@ TEST_F(CopyPropagationTest, whichRep) {
   )";
   auto code = assembler::ircode_from_string(no_change);
   code->set_registers_size(4);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   config.replace_with_representative = true;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(no_change);
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -838,11 +838,11 @@ TEST_F(CopyPropagationTest, whichRep2) {
   )";
   auto code = assembler::ircode_from_string(no_change);
   code->set_registers_size(4);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   config.replace_with_representative = true;
   CopyPropagation(config).run(code.get());
-
+  code->clear_cfg();
   auto expected_code = assembler::ircode_from_string(no_change);
 }
 
@@ -864,7 +864,7 @@ TEST_F(CopyPropagationTest, whichRepPreserve) {
     )
   )");
   code->set_registers_size(4);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   config.replace_with_representative = true;
   CopyPropagation(config).run(code.get());
@@ -884,7 +884,7 @@ TEST_F(CopyPropagationTest, whichRepPreserve) {
       (goto :end)
     )
   )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -899,7 +899,7 @@ TEST_F(CopyPropagationTest, wideInvokeSources) {
   )";
   auto code = assembler::ircode_from_string(no_change);
   code->set_registers_size(16);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   config.replace_with_representative = true;
   config.wide_registers = true;
@@ -907,7 +907,7 @@ TEST_F(CopyPropagationTest, wideInvokeSources) {
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(no_change);
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -925,7 +925,7 @@ TEST_F(CopyPropagationTest, use_does_not_kill_type_demands) {
 )");
   auto code = method->get_code();
   code->set_registers_size(2);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   CopyPropagation(config).run(code, method);
 
@@ -937,7 +937,7 @@ TEST_F(CopyPropagationTest, use_does_not_kill_type_demands) {
       (return-object v0)
     )
 )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code, expected_code.get());
 }
 
@@ -955,7 +955,7 @@ TEST_F(CopyPropagationTest, instance_of_kills_type_demands) {
 )");
   auto code = method->get_code();
   code->set_registers_size(2);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   CopyPropagation(config).run(code, method);
 
@@ -968,7 +968,7 @@ TEST_F(CopyPropagationTest, instance_of_kills_type_demands) {
       (return-object v0)
     )
 )");
-
+  code->clear_cfg();
   EXPECT_CODE_EQ(code, expected_code.get());
 }
 
@@ -988,7 +988,7 @@ TEST_F(CopyPropagationTest, ResueConst) {
 
   auto code = method->get_code();
   code->set_registers_size(4);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   config.regalloc_has_run = false;
   CopyPropagation(config).run(code, method);
@@ -1003,6 +1003,7 @@ TEST_F(CopyPropagationTest, ResueConst) {
       (invoke-static (v1 v2 v2 v2 v2 v2) "LFoo;.bar:(IIIIII)V")
     )
 )");
+  code->clear_cfg();
   EXPECT_CODE_EQ(code, expected_code.get());
 }
 
@@ -1025,7 +1026,7 @@ TEST_F(CopyPropagationTest, lock_canonicalization_none) {
 )");
   auto code = method->get_code();
   code->set_registers_size(4);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   CopyPropagation(config).run(code, method);
 
@@ -1043,6 +1044,7 @@ TEST_F(CopyPropagationTest, lock_canonicalization_none) {
        (monitor-exit v3)
     )
 )");
+  code->clear_cfg();
   EXPECT_CODE_EQ(code, expected_code.get());
 }
 
@@ -1063,7 +1065,7 @@ TEST_F(CopyPropagationTest, lock_canonicalization) {
 )");
   auto code = method->get_code();
   code->set_registers_size(2);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   CopyPropagation(config).run(code, method);
 
@@ -1079,6 +1081,7 @@ TEST_F(CopyPropagationTest, lock_canonicalization) {
        (monitor-exit v2)
     )
 )");
+  code->clear_cfg();
   EXPECT_CODE_EQ(code, expected_code.get());
 }
 
@@ -1112,12 +1115,13 @@ TEST_F(CopyPropagationTest, check_cast_throw_targets_regs) {
 
   auto code = method->get_code();
   code->set_registers_size(3);
-
+  code->build_cfg();
   copy_propagation_impl::Config config;
   config.replace_with_representative = true;
   config.eliminate_const_literals_with_same_type_demands = true;
   CopyPropagation(config).run(code, method);
 
+  code->clear_cfg();
   // Expect that `v2` is not replaced in `add-int`.
   auto expected_code = assembler::ircode_from_string(code_str);
   EXPECT_CODE_EQ(code, expected_code.get());

@@ -104,9 +104,9 @@ class AnnoKill {
   AnnoSet m_keep;
   AnnoKillStats m_stats;
 
-  mutable ConcurrentMap<std::string_view, size_t> m_build_anno_map;
-  mutable ConcurrentMap<std::string_view, size_t> m_runtime_anno_map;
-  mutable ConcurrentMap<std::string_view, size_t> m_system_anno_map;
+  mutable AtomicMap<std::string_view, size_t> m_build_anno_map;
+  mutable AtomicMap<std::string_view, size_t> m_runtime_anno_map;
+  mutable AtomicMap<std::string_view, size_t> m_system_anno_map;
   std::unordered_map<const DexType*, std::unordered_set<const DexType*>>
       m_anno_class_hierarchy_keep;
   std::unordered_map<const DexType*, std::unordered_set<const DexType*>>
@@ -123,9 +123,8 @@ class AnnoKillPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
-        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
+        {InitialRenameClass, Preserves},
     };
   }
 
@@ -140,8 +139,6 @@ class AnnoKillPass : public Pass {
     bind("annotated_keep_annos", {}, m_annotated_keep_annos);
     bind("only_force_kill", false, m_only_force_kill);
   }
-
-  bool is_cfg_legacy() override { return true; }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
