@@ -35,6 +35,10 @@ commands:
           name: Update Apt Data
           command: |
             sudo apt-get update || ( apt-get update && apt-get install --no-install-recommends -y sudo ; )
+      - run:
+          name: Install tools
+          command: |
+            sudo apt-get install --no-install-recommends -y git-restore-mtime zstd tar
       - when:
           condition: << parameters.mode_32 >>
           steps:
@@ -246,6 +250,8 @@ commands:
       use_sdk:
         type: boolean
         default: true
+      job_name:
+        type: string
     steps:
       - base-build-setup:
           save_boost_cache: << parameters.save_boost_cache >>
@@ -255,9 +261,23 @@ commands:
           use_sdk: << parameters.use_sdk >>
 
       - run:
+          name: Create Build Cache File
+          command: |
+            echo "<< parameters.job_name >>.<< parameters.setup_toolchain_extra >>.<< parameters.configure_extra >>" > /tmp/build.txt
+
+      - restore_cache:
+          name: Restoring Build Cache
+          keys:
+          # Always distinguish caches for the job, arch and branch. Look for the current revision first,
+          # then "newest" cache.
+            - &build-cache v1-build-cache-{{ checksum "/tmp/build.txt" }}-{{ arch }}-{{ .Branch }}-{{ .Revision }}
+            - v1-build-cache-{{ checksum "/tmp/build.txt" }}-{{ arch }}-{{ .Branch }}-
+
+      - run:
           name: Create build directory
           command: |
-            mkdir -p build
+            if [ -f  "build.tar.zstd" ] ; then zstd --decompress --stdout build.tar.zstd | tar xf - ; else mkdir -p build ; fi
+            rm -f build.tar.zstd
 
       - run:
           name: Autoreconf
@@ -278,6 +298,25 @@ commands:
           # not die.
           command: |
             make -j4 V=0
+
+      # We do not cache tests. They are fast to build and very large.
+      # It seems better to compress manually, as the CircleCI saver seems to
+      # be single-threaded. zstd -3 seems about as good as what CircleCI is
+      # doing, is very fast, and might speed up the following step, where
+      # we don't seem to be able to turn off compression explicitly.
+      #
+      # Think about not caching redex-all. It is very large, likely
+      # changes and linking is not that slow.
+      - run:
+          name: Compress build directory
+          command: |
+            tar cf - build | zstd -T0 -3 > build.tar.zstd
+
+      - save_cache:
+          name: Saving Build Cache
+          key: *build-cache
+          paths:
+            - build.tar.zstd
 
       - run:
           name: Build tests
@@ -312,6 +351,8 @@ commands:
       use_sdk:
         type: boolean
         default: true
+      job_name:
+        type: string
     steps:
       - when:
           condition: << parameters.mode_32 >>
@@ -325,6 +366,7 @@ commands:
                 configure_extra: "--host=i686-linux-gnu CFLAGS=-m32 CXXFLAGS=-m32 LDFLAGS=-m32"
                 # Some tests segfault in 32-bit mode.
                 run_tests: false
+                job_name: << parameters.job_name >>
       # "else" not supported.
       - when:
           condition:
@@ -333,6 +375,7 @@ commands:
             - setup-build-and-test-w-make-impl:
                 save_boost_cache: << parameters.save_boost_cache >>
                 use_sdk: << parameters.use_sdk >>
+                job_name: << parameters.job_name >>
 
   build_debian:
     description: "(Modern) Debian build and test"
@@ -352,6 +395,8 @@ commands:
       use_sdk:
         type: boolean
         default: true
+      job_name:
+        type: string
     steps:
       - checkout:
           path: repo
@@ -359,10 +404,16 @@ commands:
           install_clang: << parameters.install_clang>>
           install_clang_llvm_org: << parameters.install_clang_llvm_org >>
           mode_32: << parameters.mode_32>>
+      - run:
+          name: Run git-restore-mtime
+          working_directory: repo
+          command: |
+            git restore-mtime
       - setup-build-and-test-w-make:
           save_boost_cache: << parameters.save_boost_cache >>
           use_sdk: << parameters.use_sdk >>
-          mode_32: << parameters.mode_32>>
+          mode_32: << parameters.mode_32 >>
+          job_name: << parameters.job_name >>-<< parameters.install_clang_llvm_org >>
 
   setup-build-and-test-windows:
     description: "Prepare, build and test ReDex on Windows with MSYS2"
@@ -407,7 +458,8 @@ jobs:
     # GCC is hungry.
     resource_class: large
     steps:
-      - build_debian
+      - build_debian:
+          job_name: ubuntu_20.04
 
   build-22_04:
     docker:
@@ -415,7 +467,8 @@ jobs:
     # GCC is hungry.
     resource_class: large
     steps:
-      - build_debian
+      - build_debian:
+          job_name: ubuntu_22.04
 
   ##########
   # DEBIAN #
@@ -430,6 +483,7 @@ jobs:
     steps:
       - build_debian:
           use_sdk: false
+          job_name: debian_10
 
   build-deb_stable:
     docker:
@@ -437,7 +491,8 @@ jobs:
     # GCC is hungry.
     resource_class: large
     steps:
-      - build_debian
+      - build_debian:
+          job_name: debian_12
 
   build-deb_stable-w-clang:
     docker:
@@ -449,6 +504,7 @@ jobs:
     steps:
       - build_debian:
           install_clang: true
+          job_name: debian_12_clang
 
   build-deb_stable-32:
     docker:
@@ -458,6 +514,7 @@ jobs:
     steps:
       - build_debian:
           mode_32: true
+          job_name: debian_12_32
 
   build-deb_stable-w-clang-llvm-org:
     docker:
@@ -473,6 +530,7 @@ jobs:
     steps:
       - build_debian:
           install_clang_llvm_org: << parameters.clang_version>>
+          job_name: debian_12_clang_upstream
 
   # Note: buildpack-deps:testing is the same as stable at time of writing,
   #       so jump to unstable directly.
@@ -483,7 +541,8 @@ jobs:
     # GCC is hungry.
     resource_class: large
     steps:
-      - build_debian
+      - build_debian:
+          job_name: debian_unstable
 
   build-deb_unstable-w-clang:
     docker:
@@ -495,6 +554,7 @@ jobs:
     steps:
       - build_debian:
           install_clang: true
+          job_name: debian_unstable_clang
 
   build-deb_unstable-32:
     docker:
@@ -504,6 +564,7 @@ jobs:
     steps:
       - build_debian:
           mode_32: true
+          job_name: debian_unstable_32
 
   ###########
   # WINDOWS #
