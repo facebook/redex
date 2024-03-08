@@ -197,3 +197,134 @@ TEST_F(InstructionSequenceOutlinerTest, iputsBeforeBaseInitInvocation) {
   }
   EXPECT_CODE_EQ(expected_init_code.get(), outlined_init_code);
 }
+
+// Tests that we do not create a clinit cycle.
+// NOTE: This is only an initial test for a small workaround. Proper
+//       work to detect cycles (and a better test) are future work.
+TEST_F(InstructionSequenceOutlinerTest, doNotCreateClinitCycle) {
+  using namespace dex_asm;
+
+  // Setup:
+  //
+  // class Foo {
+  //   public Foo(int i, int j, int k) {}
+  //   public Foo(Foo other) {}
+  // }
+  //
+  // class A {
+  //   static Foo foo1 = new Foo(1, 1+1, 2+1);
+  //   static Foo foo2 = new Foo(2, 2+1, 3+1);
+  //   static Foo foo3 = new Foo(3, 3+1, 4+1);
+  //   ...
+  // }
+  //
+  // class B extends A {
+  //   static Foo foo1 = new Foo(1, 1+1, 2+1);
+  //   static Foo foo2 = new Foo(1, 1+1, 2+1);
+  //   static Foo foo3 = new Foo(1, 1+1, 2+1);
+  //
+  //   static Foo loop = new Foo(A.foo1);
+  // }
+
+  using namespace assembler;
+
+  auto foo_cls = assembler::class_from_string(R"(
+    (class (public final) "LFoo;"
+      (method (public) "LFoo;.<init>:(III)V"
+        (
+          (load-param-object v0) (load-param v1) (load-param v2) (load-param v3)
+          (return-void)
+        )
+      )
+      (method (public) "LFoo;.<init>:(LFoo;)V"
+        (
+          (load-param-object v0) (load-param-object v1)
+          (return-void)
+        )
+      )
+    )
+  )");
+  m_classes.push_back(foo_cls);
+
+  auto field_str = [](std::string_view class_name, size_t idx) {
+    return std::string("(field (public static) \"") + class_name + ".foo" +
+           std::to_string(idx) + ":LFoo;\")";
+  };
+
+  auto init_fooX_str = [](const char* class_name, size_t idx) {
+    char buf[4096]; // Definitely large enough.
+    snprintf(buf, 4096, R"(
+      (const v0 %zu)
+      (add-int/lit v1 v0 1)
+      (add-int/lit v2 v1 1)
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v3)
+      (invoke-direct (v3 v0 v1 v2) "LFoo;.<init>:(III)V")
+      (sput-object v3 "%s.foo%zu:LFoo;")
+    )",
+             idx, class_name, idx);
+    return std::string(buf);
+  };
+
+  constexpr size_t kFields = 10;
+
+  auto a_cls = assembler::class_from_string(
+      "(class (public final) \"LA;\" " +
+      [&]() {
+        std::string tmp;
+        for (size_t i = 0; i < kFields; ++i) {
+          tmp += field_str("LA;", i);
+        }
+        return tmp;
+      }() +
+      "(method (public static) \"LA;.<clinit>:()V\" (" +
+      [&]() {
+        std::string tmp;
+        for (size_t i = 0; i < kFields; ++i) {
+          tmp += init_fooX_str("LA;", i);
+        }
+        return tmp;
+      }() +
+      "(return-void) )))");
+  m_classes.push_back(a_cls);
+  EXPECT_EQ(a_cls, type_class(a_cls->get_type()));
+
+  auto b_cls = assembler::class_from_string(
+      "(class (public final) \"LB;\" extends \"LA;\" " +
+      [&]() {
+        std::string tmp;
+        for (size_t i = 0; i < kFields + 1; ++i) {
+          tmp += field_str("LB;", i);
+        }
+        return tmp;
+      }() +
+      "(method (public static) \"LB;.<clinit>:()V\" (" +
+      [&]() {
+        std::string tmp;
+        for (size_t i = 1; i < kFields + 1; ++i) {
+          tmp += init_fooX_str("LB;", i);
+        }
+        return tmp;
+      }() +
+      R"(
+          (sget-object "LA;.foo0:LFoo;")
+          (move-result-pseudo-object v0)
+          (new-instance "LFoo;")
+          (move-result-pseudo-object v1)
+          (invoke-direct (v1 v0) "LFoo;.<init>:(LFoo;)V")
+          (sput-object v3 "LB;.foo0:LFoo;")
+          (return-void)
+        )
+      )))");
+  m_classes.push_back(b_cls);
+  EXPECT_EQ(b_cls, type_class(b_cls->get_type()));
+
+  EXPECT_EQ(a_cls->get_dmethods().size(), 1);
+  EXPECT_EQ(b_cls->get_dmethods().size(), 1);
+
+  run();
+
+  // Inserted outlined method into A.
+  EXPECT_EQ(a_cls->get_dmethods().size(), 2);
+  EXPECT_EQ(b_cls->get_dmethods().size(), 1);
+}

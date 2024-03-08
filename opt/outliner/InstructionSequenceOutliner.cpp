@@ -2200,8 +2200,26 @@ class HostClassSelector {
       const std::function<bool(const DexType*)>& predicate =
           [](const DexType*) { return true; }) {
     // Let's see if we can reduce the set to a most specific sub-type
+    //
+    // Try to avoid clinit cycles, where the sub-type is the wrong type.
+    // TODO: This is not a great way to do this. It's also hampered by
+    //       init-side-effects analysis being too permissive.
     if (types.size() > 1) {
+      auto common_super_classes = get_common_super_classes(types);
+      bool non_common_clinit = std::any_of(
+          types.begin(), types.end(), [&common_super_classes](auto* t) {
+            auto c = type_class(t);
+            return c != nullptr && common_super_classes.count(t) == 0 &&
+                   c->get_clinit() != nullptr;
+          });
       for (auto t : get_common_super_classes(types)) {
+        if (non_common_clinit) {
+          auto c = type_class(t);
+          if (c != nullptr && c->get_clinit() != nullptr) {
+            // Do not drop super with clinit.
+            continue;
+          }
+        }
         types.erase(t);
       }
     }
