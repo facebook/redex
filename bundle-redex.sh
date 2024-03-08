@@ -17,3 +17,4 @@ fi
 tar czf redex.tar.gz redex-all "${SRC_DIR}/redex.py" "${SRC_DIR}"/pyredex/*.py $GEN_APILEVELS_INPUT
 cat "${SRC_DIR}/selfextract.sh" redex.tar.gz > redex
 chmod +x redex
+rm redex.tar.gz
