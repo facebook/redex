@@ -43,12 +43,11 @@ class MaterializeNullChecksPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
-        {InitialRenameClass, Preserves},
+        {HasSourceBlocks, Preserves},
         {NoInitClassInstructions, Preserves},
         {NoResolvablePureRefs, Preserves},
         {NoUnreachableInstructions, Preserves},
         {RenameClass, Preserves},
-        {SpuriousGetClassCallsInterned, Requires},
     };
   }
 

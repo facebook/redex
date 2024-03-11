@@ -12,7 +12,6 @@
 #include <unordered_set>
 
 #include "Pass.h"
-#include "PassManager.h"
 
 class DexMethod;
 
@@ -46,7 +45,6 @@ class InstrumentPass : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Requires},
         {NoResolvablePureRefs, Preserves},
-        {SpuriousGetClassCallsInterned, RequiresAndPreserves},
         {RenameClass, Preserves},
     };
   }
@@ -55,6 +53,7 @@ class InstrumentPass : public Pass {
   void eval_pass(DexStoresVector& stores,
                  ConfigFiles& conf,
                  PassManager& mgr) override;
+  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   // Helper functions for both method and block instrumentations.
@@ -110,7 +109,6 @@ class InstrumentPass : public Pass {
  private:
   Options m_options;
   std::unique_ptr<interdex::InterDexPassPlugin> m_plugin;
-  std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
 };
 
 } // namespace instrument

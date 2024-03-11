@@ -206,6 +206,5 @@ class SwitchEquivEditor {
   // turned into a duplicate of its successor (attaching its successor's
   // successors onto itself, etc). This is meant to ensure ExtraLoads state is
   // accurate.
-  static size_t normalize_sled_blocks(
-      cfg::ControlFlowGraph* cfg, const uint32_t leaf_duplication_threshold);
+  static size_t normalize_sled_blocks(cfg::ControlFlowGraph* cfg, const uint32_t leaf_duplication_threshold);
 };

@@ -25,8 +25,9 @@ class FullyQualifyLayouts : Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {InitialRenameClass, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 

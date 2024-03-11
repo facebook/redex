@@ -56,107 +56,107 @@ std::vector<DexType*> ExpandableMethodParams::get_expanded_args_vector(
   return args_vector;
 }
 
-ExpandableMethodParams::MethodInfo ExpandableMethodParams::create_method_info(
+// Get or create the method-info for a given type, method-name, rtype.
+ExpandableMethodParams::MethodInfo* ExpandableMethodParams::get_method_info(
     const MethodKey& key) const {
-  MethodInfo res;
-  auto cls = type_class(key.type);
-  if (!cls) {
-    return res;
+  auto res = m_method_infos.get(key, nullptr);
+  if (res) {
+    return res.get();
   }
-  std::set<std::vector<DexType*>> args_vectors;
-  // First, for constructors, collect all of the (guaranteed to be distinct)
-  // args.
-  if (key.name->str() == "<init>") {
+  res = std::make_shared<MethodInfo>();
+  auto cls = type_class(key.type);
+  if (cls) {
+    std::set<std::vector<DexType*>> args_vectors;
+    // First, for constructors, collect all of the (guaranteed to be distinct)
+    // args.
+    if (key.name->str() == "<init>") {
+      for (auto* method : cls->get_all_methods()) {
+        if (method->get_name() != key.name ||
+            method->get_proto()->get_rtype() != key.rtype) {
+          continue;
+        }
+        auto args = method->get_proto()->get_args();
+        std::vector<DexType*> args_vector(args->begin(), args->end());
+        auto inserted = args_vectors.insert(std::move(args_vector)).second;
+        always_assert(inserted);
+      }
+    }
+    // Second, for each matching method, and each (non-receiver) parameter
+    // that is only used in igets, compute the expanded constructor args and
+    // record them if they don't create a conflict.
     for (auto* method : cls->get_all_methods()) {
       if (method->get_name() != key.name ||
           method->get_proto()->get_rtype() != key.rtype) {
         continue;
       }
-      auto args = method->get_proto()->get_args();
-      std::vector<DexType*> args_vector(args->begin(), args->end());
-      auto inserted = args_vectors.insert(std::move(args_vector)).second;
-      always_assert(inserted);
-    }
-  }
-  // Second, for each matching method, and each (non-receiver) parameter
-  // that is only used in igets, compute the expanded constructor args and
-  // record them if they don't create a conflict.
-  for (auto* method : cls->get_all_methods()) {
-    if (method->get_name() != key.name ||
-        method->get_proto()->get_rtype() != key.rtype) {
-      continue;
-    }
-    auto code = method->get_code();
-    if (!code || method->rstate.no_optimizations()) {
-      continue;
-    }
-    live_range::MoveAwareChains chains(
-        code->cfg(),
-        /* ignore_unreachable */ false,
-        [](auto* insn) { return opcode::is_a_load_param(insn->opcode()); });
-    auto du_chains = chains.get_def_use_chains();
-    param_index_t param_index{0};
-    auto ii = code->cfg().get_param_instructions();
-    auto begin = ii.begin();
-    if (method::is_init(method)) {
-      begin++;
-      param_index++;
-    }
-    for (auto it = begin; it != ii.end(); it++, param_index++) {
-      auto insn = it->insn;
-      if (insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT) {
+      auto code = method->get_code();
+      if (!code || method->rstate.no_optimizations()) {
         continue;
       }
-      bool expandable{true};
-      std::vector<DexField*> fields;
-      for (auto& use : du_chains[it->insn]) {
-        if (opcode::is_an_iget(use.insn->opcode())) {
-          auto* field =
-              resolve_field(use.insn->get_field(), FieldSearch::Instance);
-          if (field) {
-            fields.push_back(field);
-            continue;
+      live_range::MoveAwareChains chains(code->cfg());
+      auto du_chains = chains.get_def_use_chains();
+      param_index_t param_index{0};
+      auto ii = code->cfg().get_param_instructions();
+      auto begin = ii.begin();
+      if (method::is_init(method)) {
+        begin++;
+        param_index++;
+      }
+      for (auto it = begin; it != ii.end(); it++, param_index++) {
+        auto insn = it->insn;
+        if (insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT) {
+          continue;
+        }
+        bool expandable{true};
+        std::vector<DexField*> fields;
+        for (auto& use : du_chains[it->insn]) {
+          if (opcode::is_an_iget(use.insn->opcode())) {
+            auto* field =
+                resolve_field(use.insn->get_field(), FieldSearch::Instance);
+            if (field) {
+              fields.push_back(field);
+              continue;
+            }
+          }
+          expandable = false;
+          break;
+        }
+        if (!expandable) {
+          continue;
+        }
+        std::sort(fields.begin(), fields.end(), compare_dexfields);
+        // remove duplicates
+        fields.erase(std::unique(fields.begin(), fields.end()), fields.end());
+        auto expanded_args_vector =
+            get_expanded_args_vector(method, param_index, fields);
+        // We need to check if we don't have too many args that won't fit
+        // into an invoke/range instruction.
+        uint32_t range_size = 0;
+        if (method::is_init(method)) {
+          range_size++;
+        }
+        for (auto arg_type : expanded_args_vector) {
+          range_size += type::is_wide_type(arg_type) ? 2 : 1;
+        }
+        if (range_size <= 0xff) {
+          auto inserted =
+              args_vectors.insert(std::move(expanded_args_vector)).second;
+          if (inserted) {
+            (*res)[method].emplace(param_index, std::move(fields));
           }
         }
-        expandable = false;
-        break;
-      }
-      if (!expandable) {
-        continue;
-      }
-      std::sort(fields.begin(), fields.end(), compare_dexfields);
-      // remove duplicates
-      fields.erase(std::unique(fields.begin(), fields.end()), fields.end());
-      auto expanded_args_vector =
-          get_expanded_args_vector(method, param_index, fields);
-      // We need to check if we don't have too many args that won't fit
-      // into an invoke/range instruction.
-      uint32_t range_size = 0;
-      if (method::is_init(method)) {
-        range_size++;
-      }
-      for (auto arg_type : expanded_args_vector) {
-        range_size += type::is_wide_type(arg_type) ? 2 : 1;
-      }
-      if (range_size <= 0xff) {
-        auto inserted =
-            args_vectors.insert(std::move(expanded_args_vector)).second;
-        if (inserted) {
-          res[method].emplace(param_index, std::move(fields));
-        }
       }
     }
   }
-  return res;
-}
-
-// Get or create the method-info for a given type, method-name, rtype.
-const ExpandableMethodParams::MethodInfo*
-ExpandableMethodParams::get_method_info(const MethodKey& key) const {
-  return m_method_infos
-      .get_or_create_and_assert_equal(
-          key, [this](const auto& _) { return create_method_info(_); })
-      .first;
+  m_method_infos.update(key, [&](const auto&, auto& value, bool exists) {
+    if (exists) {
+      // Oh well, we wasted some racing with another thread.
+      res = value;
+      return;
+    }
+    value = res;
+  });
+  return res.get();
 }
 
 DexMethod* ExpandableMethodParams::make_expanded_method_concrete(
@@ -192,7 +192,7 @@ DexMethod* ExpandableMethodParams::make_expanded_method_concrete(
   std::vector<IRInstruction*> new_load_param_insns;
   std::unordered_map<DexField*, reg_t> field_regs;
   auto& fields = m_method_infos.at_unsafe(MethodKey::from_method(method))
-                     .at(method)
+                     ->at(method)
                      .at(param_index);
   for (auto field : fields) {
     auto reg = type::is_wide_type(field->get_type()) ? cfg.allocate_wide_temp()
@@ -209,9 +209,7 @@ DexMethod* ExpandableMethodParams::make_expanded_method_concrete(
   // Replace all igets on the (newly created) object with moves from the new
   // field value load-params. No other (non-move) uses of the (newly created)
   // object can exist.
-  live_range::MoveAwareChains chains(
-      cfg, /* ignore_unreachable */ false,
-      [](auto* insn) { return opcode::is_a_load_param(insn->opcode()); });
+  live_range::MoveAwareChains chains(cfg);
   auto du_chains = chains.get_def_use_chains();
   std::unordered_set<IRInstruction*> use_insns;
   for (auto& use : du_chains[load_param_it->insn]) {
@@ -268,7 +266,7 @@ ExpandableMethodParams::ExpandableMethodParams(const Scope& scope) {
 DexMethodRef* ExpandableMethodParams::get_expanded_method_ref(
     DexMethod* method,
     param_index_t param_index,
-    std::vector<DexField*> const** fields) const {
+    std::vector<DexField*>** fields) const {
   auto method_info = get_method_info(MethodKey::from_method(method));
   auto it = method_info->find(method);
   if (it == method_info->end()) {

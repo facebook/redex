@@ -21,6 +21,8 @@ class StripDebugInfoPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
         {UltralightCodePatterns, Preserves},
     };
   }
@@ -39,6 +41,7 @@ class StripDebugInfoPass : public Pass {
     bind("drop_synth_conservative", false, m_config.drop_synth_conservative);
   }
 
+  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   void set_drop_prologue_end(bool b) { m_config.drop_prologue_end = b; }

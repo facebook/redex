@@ -797,20 +797,17 @@ MethodReferencesGatherer::get_returning_dependency(
       std::unordered_set<const DexMethod*> unique_methods;
       auto identity = [](const auto* x) { return x; };
       auto select_first = [](const auto& p) { return p.first; };
-      auto is = [&](const auto& item, const auto& p) {
-        auto* m = p(item);
-        if (!unique_methods.insert(m).second) {
-          return false;
-        }
-        always_assert(m->is_virtual());
-        if (is_abstract(m)) {
-          return false;
-        }
-        return f(m);
-      };
       auto any_of = [&](const auto& collection, const auto& p) {
         for (auto&& item : collection) {
-          if (is(item, p)) {
+          auto* m = p(item);
+          if (!unique_methods.insert(m).second) {
+            continue;
+          }
+          always_assert(m->is_virtual());
+          if (is_abstract(m)) {
+            continue;
+          }
+          if (f(m)) {
             return true;
           }
         }
@@ -826,12 +823,10 @@ MethodReferencesGatherer::get_returning_dependency(
            refs->base_invoke_virtual_targets_if_class_instantiable) {
         for (auto* base_type : base_types) {
           always_assert(!type_class(base_type)->is_external());
-          if (mog::any_overriding_methods(
-                  *m_shared_state->method_override_graph, base_method,
-                  [&](const DexMethod* overriding_method) {
-                    return is(overriding_method, identity);
-                  },
-                  /* include_interfaces*/ false, base_type)) {
+          auto overriding_methods = mog::get_overriding_methods(
+              *m_shared_state->method_override_graph, base_method,
+              /* include_interfaces*/ false, base_type);
+          if (any_of(overriding_methods, identity)) {
             return true;
           }
         }
@@ -893,14 +888,20 @@ void MethodReferencesGatherer::default_gather_mie(const MethodItemEntry& mie,
       }
     } else if (gather_methods && (opcode::is_invoke_virtual(op) ||
                                   opcode::is_invoke_interface(op))) {
-      auto resolved_callee = resolve_invoke_method(insn, m_method);
+      auto method_ref = insn->get_method();
+      auto resolved_callee = resolve_method(method_ref, opcode_to_search(insn));
+      if (resolved_callee == nullptr && opcode::is_invoke_virtual(op)) {
+        // There are some invoke-virtual call on methods whose def are
+        // actually in interface.
+        resolved_callee =
+            resolve_method(method_ref, MethodSearch::InterfaceVirtual);
+      }
       if (!resolved_callee) {
         // Typically clone() on an array, or other obscure external references
         TRACE(REACH, 2, "Unresolved virtual callee at %s", SHOW(insn));
         refs->unknown_invoke_virtual_targets = true;
         return;
       }
-      auto method_ref = insn->get_method();
       auto base_type = method_ref->get_class();
       refs->base_invoke_virtual_targets_if_class_instantiable[resolved_callee]
           .insert(base_type);
@@ -1876,10 +1877,8 @@ void ReachableAspects::finish(const ConditionallyMarked& cond_marked,
     add(map);
   }
   for (auto&& [method, mrefs_gatherer] : remaining_mrefs_gatherers) {
-    auto set = mrefs_gatherer->get_non_returning_insns();
-    if (!set.empty()) {
-      non_returning_insns.emplace(method, std::move(set));
-    }
+    non_returning_insns.emplace(method,
+                                mrefs_gatherer->get_non_returning_insns());
   }
   std::atomic<uint64_t> concurrent_instructions_unvisited{0};
   workqueue_run<std::pair<const DexMethod*, const MethodReferencesGatherer*>>(
@@ -1913,8 +1912,7 @@ void ReachableAspects::finish(const ConditionallyMarked& cond_marked,
 }
 
 std::unique_ptr<ReachableObjects> compute_reachable_objects(
-    const Scope& scope,
-    const method_override_graph::Graph& method_override_graph,
+    const DexStoresVector& stores,
     const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
     ReachableAspects* reachable_aspects,
@@ -1925,14 +1923,17 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     bool cfg_gathering_check_instance_callable,
     bool cfg_gathering_check_returning,
     bool should_mark_all_as_seed,
+    std::unique_ptr<const mog::Graph>* out_method_override_graph,
     bool remove_no_argument_constructors) {
   Timer t("Marking");
+  auto scope = build_class_scope(stores);
   std::unordered_set<const DexClass*> scope_set(scope.begin(), scope.end());
   auto reachable_objects = std::make_unique<ReachableObjects>();
   ConditionallyMarked cond_marked;
+  auto method_override_graph = mog::build_graph(scope);
 
   ConcurrentSet<ReachableObject, ReachableObjectHash> root_set;
-  RootSetMarker root_set_marker(method_override_graph, record_reachability,
+  RootSetMarker root_set_marker(*method_override_graph, record_reachability,
                                 relaxed_keep_class_members,
                                 remove_no_argument_constructors, &cond_marked,
                                 reachable_objects.get(), &root_set);
@@ -1948,7 +1949,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
   TransitiveClosureMarkerSharedState shared_state{
       std::move(scope_set),
       &ignore_sets,
-      &method_override_graph,
+      method_override_graph.get(),
       record_reachability,
       relaxed_keep_class_members,
       relaxed_keep_interfaces,
@@ -1969,11 +1970,15 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
       },
       root_set, num_threads,
       /*push_tasks_while_running=*/true);
-  compute_zombie_methods(method_override_graph, *reachable_objects,
+  compute_zombie_methods(*method_override_graph, *reachable_objects,
                          *reachable_aspects);
 
   if (num_ignore_check_strings != nullptr) {
     *num_ignore_check_strings = (int)stats.num_ignore_check_strings;
+  }
+
+  if (out_method_override_graph) {
+    *out_method_override_graph = std::move(method_override_graph);
   }
 
   reachable_aspects->finish(cond_marked, *reachable_objects);
@@ -2181,14 +2186,11 @@ void reanimate_zombie_methods(const ReachableAspects& reachable_aspects) {
   }
 }
 
-void sweep_code(
+std::pair<remove_uninstantiables_impl::Stats, size_t> sweep_code(
     DexStoresVector& stores,
     bool prune_uncallable_instance_method_bodies,
     bool skip_uncallable_virtual_methods,
-    const ReachableAspects& reachable_aspects,
-    remove_uninstantiables_impl::Stats* remove_uninstantiables_stats,
-    std::atomic<size_t>* throws_inserted,
-    InsertOnlyConcurrentSet<DexMethod*>* affected_methods) {
+    const ReachableAspects& reachable_aspects) {
   Timer t("Sweep Code");
   auto scope = build_class_scope(stores);
   std::unordered_set<DexType*> uninstantiable_types;
@@ -2212,7 +2214,8 @@ void sweep_code(
     }
   }
   uninstantiable_types.insert(type::java_lang_Void());
-  *remove_uninstantiables_stats = walk::parallel::methods<
+  std::atomic<size_t> throws_inserted{0};
+  auto res = walk::parallel::methods<
       remove_uninstantiables_impl::Stats>(scope, [&](DexMethod* method) {
     auto code = method->get_code();
     if (!code || method->rstate.no_optimizations()) {
@@ -2223,7 +2226,7 @@ void sweep_code(
     auto non_returning_it = reachable_aspects.non_returning_insns.find(method);
     if (non_returning_it != reachable_aspects.non_returning_insns.end()) {
       auto& non_returning_insns = non_returning_it->second;
-      throw_propagation_impl::ThrowPropagator impl(cfg);
+      throw_propagation_impl::ThrowPropagator impl(cfg, /* debug */ false);
       for (auto block : cfg.blocks()) {
         auto ii = InstructionIterable(block);
         for (auto it = ii.begin(); it != ii.end(); it++) {
@@ -2231,31 +2234,27 @@ void sweep_code(
             continue;
           }
           if (impl.try_apply(block->to_cfg_instruction_iterator(it))) {
-            (*throws_inserted)++;
+            throws_inserted++;
           }
           // Stop processing more instructions in this block
           break;
         }
       }
       cfg.remove_unreachable_blocks();
-      affected_methods->insert(method);
     }
     if (uncallable_instance_methods.count(method)) {
       if (skip_uncallable_virtual_methods && method->is_virtual()) {
         return remove_uninstantiables_impl::Stats();
       }
-      affected_methods->insert(method);
       return remove_uninstantiables_impl::replace_all_with_unreachable_throw(
           cfg);
     }
     auto stats = remove_uninstantiables_impl::replace_uninstantiable_refs(
         uninstantiable_types, cfg);
-    if (stats.sum()) {
-      cfg.remove_unreachable_blocks();
-      affected_methods->insert(method);
-    }
+    cfg.remove_unreachable_blocks();
     return stats;
   });
+  return std::make_pair(res, (size_t)throws_inserted);
 }
 
 remove_uninstantiables_impl::Stats sweep_uncallable_virtual_methods(
@@ -2290,7 +2289,7 @@ remove_uninstantiables_impl::Stats sweep_uncallable_virtual_methods(
         }
       },
       reachable_aspects.directly_instantiable_types);
-  ConcurrentSet<DexMethod*> uncallable_instance_methods;
+  std::unordered_set<DexMethod*> uncallable_instance_methods;
   for (auto* cls : scope) {
     if (is_interface(cls)) {
       // TODO: Is this needed?
@@ -2343,6 +2342,8 @@ void report(PassManager& pm,
   pm.incr_metric("zombie_implementation_methods",
                  reachable_aspects.zombie_implementation_methods.size());
   pm.incr_metric("zombie_methods", reachable_aspects.zombie_methods.size());
+  pm.incr_metric("non_returning_dependencies",
+                 reachable_aspects.non_returning_dependencies.size());
   pm.incr_metric("returning_methods",
                  reachable_aspects.returning_methods.size());
 }
@@ -2414,7 +2415,7 @@ void dump_graph(std::ostream& os, const ReachableObjectGraph& retainers_of) {
         if (!retainers_of.count(obj)) {
           return {};
         }
-        const auto& preds = retainers_of.at_unsafe(obj);
+        const auto& preds = retainers_of.at(obj);
         std::vector<ReachableObject> preds_vec(preds.begin(), preds.end());
         // Gotta sort the reachables or the output is nondeterministic.
         std::sort(preds_vec.begin(), preds_vec.end(), compare);

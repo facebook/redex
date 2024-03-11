@@ -11,8 +11,6 @@
 #include <memory>
 #include <unordered_map>
 
-#include "Debug.h"
-
 template <typename T>
 // A convenient helper class for lazy initialization.
 // This class is not thread-safe.
@@ -26,17 +24,13 @@ class Lazy {
   explicit Lazy(const std::function<std::unique_ptr<T>()>& creator)
       : m_creator(creator) {}
   // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
-  operator bool() const { return !!m_value; }
+  operator bool() { return !!m_value; }
   T& operator*() {
     init();
     return *m_value;
   }
   T* operator->() {
     init();
-    return m_value.get();
-  }
-  T* operator->() const {
-    redex_assert(m_value);
     return m_value.get();
   }
 

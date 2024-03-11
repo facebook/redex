@@ -47,8 +47,7 @@ bool empty_column(std::string_view sv) { return sv.empty() || sv == "\n"; }
 
 } // namespace
 
-AccumulatingTimer MethodProfiles::s_process_unresolved_lines_timer(
-    "MethodProfiles::process_unresolved_lines");
+AccumulatingTimer MethodProfiles::s_process_unresolved_lines_timer;
 
 const StatsMap& MethodProfiles::method_stats(
     const std::string& interaction_id) const {
@@ -312,48 +311,6 @@ size_t MethodProfiles::derive_stats(DexMethod* target,
   return res;
 }
 
-size_t MethodProfiles::substitute_stats(
-    DexMethod* target, const std::vector<DexMethod*>& sources) {
-  size_t res = 0;
-  for (auto& [interaction_id, method_stats] : m_method_stats) {
-    std::optional<Stats> stats;
-    for (auto* src : sources) {
-      auto it = method_stats.find(src);
-      if (it == method_stats.end()) {
-        continue;
-      }
-      if (!stats) {
-        stats = it->second;
-        continue;
-      }
-      stats->appear_percent =
-          std::max(stats->appear_percent, it->second.appear_percent);
-      stats->call_count += it->second.call_count;
-      stats->order_percent =
-          std::min(stats->order_percent, it->second.order_percent);
-      stats->min_api_level =
-          std::min(stats->min_api_level, it->second.min_api_level);
-    }
-
-    if (stats) {
-      auto target_it = method_stats.find(target);
-      if (target_it != method_stats.end()) {
-        const auto& target_stats = target_it->second;
-        if (target_stats.min_api_level == stats->min_api_level &&
-            target_stats.appear_percent == stats->appear_percent &&
-            target_stats.call_count == stats->call_count) {
-          // Target method has stats and is same as the stats to be substituted.
-          // Do not change.
-          return 0;
-        }
-      }
-      method_stats.emplace(target, *stats);
-      res++;
-    }
-  }
-  return res;
-}
-
 bool MethodProfiles::parse_main(const std::string& line,
                                 std::string* interaction_id) {
   auto result = parse_main_internal(line);
@@ -382,6 +339,10 @@ boost::optional<uint32_t> MethodProfiles::get_interaction_count(
   } else {
     return search->second;
   }
+}
+
+double MethodProfiles::get_process_unresolved_lines_seconds() {
+  return s_process_unresolved_lines_timer.get_seconds();
 }
 
 void MethodProfiles::process_unresolved_lines() {

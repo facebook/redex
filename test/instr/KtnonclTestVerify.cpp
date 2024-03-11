@@ -49,22 +49,20 @@ TEST_F(PostVerify, KotlinGeneratedClass) {
 
   // After opt, there is no invoke-interface, which is replaced with
   // invoke-virtual in doCalc.
-  // This is not optimized anymore!!!
   auto* intf_cls = find_class_named(classes, fn2);
-  ASSERT_NE(nullptr, find_invoke(meth_doCalc, DOPCODE_INVOKE_INTERFACE,
+  ASSERT_EQ(nullptr, find_invoke(meth_doCalc, DOPCODE_INVOKE_INTERFACE,
                                  "invoke", intf_cls->get_type()));
   auto* impl_cls = find_class_named(classes, foo);
-  ASSERT_EQ(nullptr, find_invoke(meth_doCalc, DOPCODE_INVOKE_VIRTUAL, "invoke",
+  ASSERT_NE(nullptr, find_invoke(meth_doCalc, DOPCODE_INVOKE_VIRTUAL, "invoke",
                                  impl_cls->get_type()));
 
   auto* meth_doCalc1 = find_vmethod_named(*cls, "doCalc1");
   EXPECT_NE(nullptr, meth_doCalc1);
   // After opt, there is no invoke-interface, which is replaced with
   // invoke-virtual in doCalc1.
-  // This is not optimized anymore!!!
-  ASSERT_NE(nullptr, find_invoke(meth_doCalc1, DOPCODE_INVOKE_INTERFACE,
+  ASSERT_EQ(nullptr, find_invoke(meth_doCalc1, DOPCODE_INVOKE_INTERFACE,
                                  "invoke", intf_cls->get_type()));
   impl_cls = find_class_named(classes, foo1);
-  ASSERT_EQ(nullptr, find_invoke(meth_doCalc1, DOPCODE_INVOKE_VIRTUAL, "invoke",
+  ASSERT_NE(nullptr, find_invoke(meth_doCalc1, DOPCODE_INVOKE_VIRTUAL, "invoke",
                                  impl_cls->get_type()));
 }

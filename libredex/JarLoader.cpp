@@ -40,7 +40,7 @@ namespace JarLoaderUtil {
 uint32_t read32(uint8_t*& buffer, uint8_t* buffer_end) {
   uint32_t rv;
   auto next = buffer + sizeof(uint32_t);
-  if (next > buffer_end) {
+  if (next >= buffer_end) {
     throw RedexException(RedexError::BUFFER_END_EXCEEDED);
   }
   memcpy(&rv, buffer, sizeof(uint32_t));
@@ -48,22 +48,15 @@ uint32_t read32(uint8_t*& buffer, uint8_t* buffer_end) {
   return htonl(rv);
 }
 
-uint16_t read16(uint8_t*& buffer, uint8_t* buffer_end) {
+uint32_t read16(uint8_t*& buffer, uint8_t* buffer_end) {
   uint16_t rv;
   auto next = buffer + sizeof(uint16_t);
-  if (next > buffer_end) {
+  if (next >= buffer_end) {
     throw RedexException(RedexError::BUFFER_END_EXCEEDED);
   }
   memcpy(&rv, buffer, sizeof(uint16_t));
   buffer = next;
   return htons(rv);
-}
-
-uint8_t read8(uint8_t*& buffer, uint8_t* buffer_end) {
-  if (buffer >= buffer_end) {
-    throw RedexException(RedexError::BUFFER_END_EXCEEDED);
-  }
-  return *buffer++;
 }
 } // namespace JarLoaderUtil
 
@@ -129,7 +122,7 @@ constexpr size_t CP_CONST_PACKAGE =     20;
 /* clang-format on */
 
 bool parse_cp_entry(uint8_t*& buffer, uint8_t* buffer_end, cp_entry& cpe) {
-  cpe.tag = read8(buffer, buffer_end);
+  cpe.tag = *buffer++;
   switch (cpe.tag) {
   case CP_CONST_CLASS:
   case CP_CONST_STRING:
@@ -146,7 +139,7 @@ bool parse_cp_entry(uint8_t*& buffer, uint8_t* buffer_end, cp_entry& cpe) {
     cpe.s1 = read16(buffer, buffer_end);
     return true;
   case CP_CONST_METHHANDLE:
-    cpe.s0 = read8(buffer, buffer_end);
+    cpe.s0 = *buffer++;
     cpe.s1 = read16(buffer, buffer_end);
     return true;
   case CP_CONST_INT:
@@ -162,9 +155,6 @@ bool parse_cp_entry(uint8_t*& buffer, uint8_t* buffer_end, cp_entry& cpe) {
     cpe.len = read16(buffer, buffer_end);
     cpe.data = buffer;
     buffer += cpe.len;
-    if (buffer > buffer_end) {
-      throw RedexException(RedexError::BUFFER_END_EXCEEDED);
-    }
     return true;
   case CP_CONST_INVOKEDYN:
     std::cerr << "INVOKEDYN constant unsupported, Bailing\n";
@@ -192,10 +182,6 @@ constexpr size_t MAX_CLASS_NAMELEN = 8 * 1024;
 
 DexType* make_dextype_from_cref(std::vector<cp_entry>& cpool, uint16_t cref) {
   char nbuffer[MAX_CLASS_NAMELEN];
-  if (cref >= cpool.size()) {
-    std::cerr << "Illegal cref, Bailing\n";
-    return nullptr;
-  }
   if (cpool[cref].tag != CP_CONST_CLASS) {
     std::cerr << "Non-class ref in get_class_name, Bailing\n";
     return nullptr;
@@ -210,24 +196,16 @@ DexType* make_dextype_from_cref(std::vector<cp_entry>& cpool, uint16_t cref) {
     std::cerr << "classname is greater than max, bailing";
     return nullptr;
   }
-  try {
-    nbuffer[0] = 'L';
-    memcpy(nbuffer + 1, utf8cpe.data, utf8cpe.len);
-    nbuffer[1 + utf8cpe.len] = ';';
-    nbuffer[2 + utf8cpe.len] = '\0';
-    return DexType::make_type(nbuffer);
-  } catch (std::invalid_argument&) {
-    return nullptr;
-  }
+  nbuffer[0] = 'L';
+  memcpy(nbuffer + 1, utf8cpe.data, utf8cpe.len);
+  nbuffer[1 + utf8cpe.len] = ';';
+  nbuffer[2 + utf8cpe.len] = '\0';
+  return DexType::make_type(nbuffer);
 }
 
 bool extract_utf8(std::vector<cp_entry>& cpool,
                   uint16_t utf8ref,
                   std::string_view* out) {
-  if (utf8ref >= cpool.size()) {
-    std::cerr << "utf8 ref out of bound, bailing\n";
-    return false;
-  }
   const cp_entry& utf8cpe = cpool[utf8ref];
   if (utf8cpe.tag != CP_CONST_UTF8) {
     std::cerr << "Non-utf8 ref in get_utf8, bailing\n";
@@ -448,10 +426,6 @@ bool parse_class(uint8_t* buffer,
   }
 
   DexType* self = make_dextype_from_cref(cpool, clazz);
-  if (self == nullptr) {
-    std::cerr << "Bad class cpool index " << clazz << ", Bailing\n";
-    return false;
-  }
   DexClass* cls = type_class(self);
   if (cls) {
     // We are seeing duplicate classes when parsing jar file
@@ -487,10 +461,6 @@ bool parse_class(uint8_t* buffer,
   cc.set_external();
   if (super != 0) {
     DexType* sclazz = make_dextype_from_cref(cpool, super);
-    if (sclazz == nullptr) {
-      std::cerr << "Bad super class cpool index " << super << ", Bailing\n";
-      return false;
-    }
     cc.set_super(sclazz);
   }
   cc.set_access((DexAccessFlags)aflags);
@@ -498,10 +468,6 @@ bool parse_class(uint8_t* buffer,
     for (int i = 0; i < ifcount; i++) {
       uint16_t iface = read16(buffer, buffer_end);
       DexType* iftype = make_dextype_from_cref(cpool, iface);
-      if (iftype == nullptr) {
-        std::cerr << "Bad interface cpool index " << super << ", Bailing\n";
-        return false;
-      }
       cc.add_interface(iftype);
     }
   }

@@ -135,25 +135,27 @@ void update_code_type_refs(
         if (!type_reference::proto_has_reference_to(proto, mergeables)) {
           continue;
         }
-        bool resolved_virtual_to_interface;
         const auto meth_def =
-            resolve_invoke_method(insn, meth, &resolved_virtual_to_interface);
+            resolve_method(meth_ref, opcode_to_search(insn), meth);
         // This is a very tricky case where ResolveRefs cannot resolve a
         // MethodRef to MethodDef. It is a invoke-virtual with a MethodRef
         // referencing an interface method implmentation defined in a subclass
         // of the referenced type. To resolve the actual def we need to go
         // through another interface method search. Maybe we should fix it in
         // ResolveRefs.
-        always_assert_log(resolved_virtual_to_interface,
-                          "Found mergeable referencing MethodRef %s\n",
-                          SHOW(meth_ref));
-        always_assert(insn->opcode() == OPCODE_INVOKE_VIRTUAL);
-        auto new_proto =
-            type_reference::get_new_proto(proto, mergeable_to_merger);
-        DexMethodSpec spec;
-        spec.proto = new_proto;
-        meth_ref->change(spec, true /*rename on collision*/);
-        continue;
+        if (meth_def == nullptr) {
+          auto intf_def =
+              resolve_method(meth_ref, MethodSearch::InterfaceVirtual);
+          always_assert(insn->opcode() == OPCODE_INVOKE_VIRTUAL && intf_def);
+          auto new_proto =
+              type_reference::get_new_proto(proto, mergeable_to_merger);
+          DexMethodSpec spec;
+          spec.proto = new_proto;
+          meth_ref->change(spec, true /*rename on collision*/);
+          continue;
+        }
+        not_reached_log("Found mergeable referencing MethodRef %s\n",
+                        SHOW(meth_ref));
       }
       ////////////////////////////////////////
       // Update simple type refs
@@ -245,23 +247,23 @@ DexMethod* create_instanceof_method(const DexType* merger_type,
       DexTypeList::make_type_list({type::java_lang_Object(), type::_int()});
   auto proto = DexProto::make_proto(type::_boolean(), arg_list);
   auto access = ACC_PUBLIC | ACC_STATIC;
-  auto mc = MethodCreator(const_cast<DexType*>(merger_type),
-                          DexString::make_string(INSTANCE_OF_STUB_NAME),
-                          proto,
-                          access);
-  auto obj_loc = mc.get_local(0);
-  auto type_tag_loc = mc.get_local(1);
+  auto mc = new MethodCreator(const_cast<DexType*>(merger_type),
+                              DexString::make_string(INSTANCE_OF_STUB_NAME),
+                              proto,
+                              access);
+  auto obj_loc = mc->get_local(0);
+  auto type_tag_loc = mc->get_local(1);
   // first type check result loc.
-  auto check_res_loc = mc.make_local(type::_boolean());
-  auto mb = mc.get_main_block();
+  auto check_res_loc = mc->make_local(type::_boolean());
+  auto mb = mc->get_main_block();
   mb->instance_of(obj_loc, check_res_loc, const_cast<DexType*>(merger_type));
   // ret slot.
-  auto ret_loc = mc.make_local(type::_boolean());
+  auto ret_loc = mc->make_local(type::_boolean());
   // first check and branch off. Zero means fail.
   auto instance_of_block = mb->if_testz(OPCODE_IF_EQZ, check_res_loc);
 
   // Fall through. Check succeed.
-  auto itype_tag_loc = mc.make_local(type::_int());
+  auto itype_tag_loc = mc->make_local(type::_int());
   // CHECK_CAST obj to merger type.
   instance_of_block->check_cast(obj_loc, const_cast<DexType*>(merger_type));
   instance_of_block->iget(type_tag_field, obj_loc, itype_tag_loc);
@@ -275,7 +277,7 @@ DexMethod* create_instanceof_method(const DexType* merger_type,
   instance_of_block->load_const(ret_loc, 0);
   instance_of_block->ret(ret_loc);
 
-  return mc.create();
+  return mc->create();
 }
 
 void update_instance_of(
@@ -522,12 +524,10 @@ void ModelMerger::update_stats(const std::string& model_name,
   m_stats += mm.get_stats();
 }
 
-std::vector<DexClass*> ModelMerger::merge_model(
-    Scope& scope,
-    DexStoresVector& stores,
-    ConfigFiles& conf,
-    Model& model,
-    bool update_method_profiles_stats) {
+std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
+                                                DexStoresVector& stores,
+                                                ConfigFiles& conf,
+                                                Model& model) {
   Timer t("merge_model");
   std::vector<const MergerType*> to_materialize;
   std::vector<DexClass*> merger_classes;
@@ -632,18 +632,13 @@ std::vector<DexClass*> ModelMerger::merge_model(
       scope, to_materialize, mergeable_to_merger, m_merger_fields);
 
   // Merge methods
-  method_profiles::MethodProfiles& method_profile = conf.get_method_profiles();
-  ModelMethodMerger mm(
-      scope,
-      to_materialize,
-      type_tag_fields,
-      &type_tags,
-      method_debug_map,
-      model.get_model_spec(),
-      model.get_model_spec().max_num_dispatch_target,
-      update_method_profiles_stats
-          ? boost::optional<method_profiles::MethodProfiles*>(&method_profile)
-          : boost::none);
+  ModelMethodMerger mm(scope,
+                       to_materialize,
+                       type_tag_fields,
+                       &type_tags,
+                       method_debug_map,
+                       model.get_model_spec(),
+                       model.get_model_spec().max_num_dispatch_target);
   auto mergeable_to_merger_ctor = mm.merge_methods();
   update_stats(model.get_name(), to_materialize, mm);
 
@@ -671,7 +666,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
                        if (mergeable_to_merger.count(cls->get_type())) {
                          cls->set_interfaces(no_interface);
                          cls->set_super_class(type::java_lang_Object());
-                         redex_assert(CONSTP(cls)->get_vmethods().empty());
+                         redex_assert(cls->get_vmethods().empty());
                          if (!cls->get_clinit() && cls->get_sfields().empty()) {
                            // Purge merged cls w/o static fields.
                            return true;

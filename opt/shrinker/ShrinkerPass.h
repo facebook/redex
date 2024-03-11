@@ -20,14 +20,14 @@ class ShrinkerPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        // This may be too conservative as the shrinker can be configured not to
-        // DCE.
-        {SpuriousGetClassCallsInterned, RequiresAndPreserves},
+        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 
   void bind_config() override;
+  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:

@@ -15,14 +15,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 # Temporary directory for toolchain sources. Build artifacts will be
 # installed to /usr/local.
-echo "toolchain tmp = $TOOLCHAIN_TMP"
-if [ -z "$TOOLCHAIN_TMP" ] ; then
-  TOOLCHAIN_TMP=$(mktemp -d 2>/dev/null)
-  trap 'rm -r $TOOLCHAIN_TMP' EXIT
-else
-  echo "Using toolchain tmp $TOOLCHAIN_TMP"
-  mkdir -p "$TOOLCHAIN_TMP"
-fi
+TMP=$(mktemp -d 2>/dev/null)
+trap 'rm -r $TMP' EXIT
 
 if [ "$1" = "32" ] ; then
   BITNESS="32"
@@ -50,21 +44,26 @@ BOOST_DEB_UBUNTU_PKGS="libboost-filesystem-dev$BITNESS_SUFFIX
 PROTOBUF_DEB_UBUNTU_PKGS="libprotobuf-dev$BITNESS_SUFFIX
                           protobuf-compiler"
 
+function install_python36_from_source {
+    pushd "$TMP"
+    wget https://www.python.org/ftp/python/3.6.10/Python-3.6.10.tgz
+    tar -xvf Python-3.6.10.tgz
+    pushd Python-3.6.10
+
+    # Always compile Python as host-preferred.
+    ./configure
+    make V=0 && make install V=0
+}
+
 function install_boost_from_source {
-    pushd "$TOOLCHAIN_TMP"
+    pushd "$TMP"
     "$ROOT"/get_boost.sh
 }
 
 function install_protobuf3_from_source {
-    pushd "$TOOLCHAIN_TMP"
-    mkdir -p dl_cache/protobuf
-    if [ ! -f dl_cache/protobuf/protobuf-cpp-3.17.3.tar.gz ] ; then
-      wget https://github.com/protocolbuffers/protobuf/releases/download/v3.17.3/protobuf-cpp-3.17.3.tar.gz -O dl_cache/protobuf/protobuf-cpp-3.17.3.tar.gz
-    fi
-
-    mkdir -p toolchain_install/protobuf
-    pushd toolchain_install/protobuf
-    tar -xf ../../dl_cache/protobuf/protobuf-cpp-3.17.3.tar.gz --no-same-owner
+    pushd "$TMP"
+    wget https://github.com/protocolbuffers/protobuf/releases/download/v3.17.3/protobuf-cpp-3.17.3.tar.gz
+    tar -xvf protobuf-cpp-3.17.3.tar.gz --no-same-owner
 
     pushd protobuf-3.17.3
     ./configure $BITNESS_CONFIGURE
@@ -88,8 +87,8 @@ function install_from_apt {
         make
         wget
         zlib1g-dev$BITNESS_SUFFIX $BITNESS_PKGS $*"
-  apt-get update -q
-  apt-get install -q --no-install-recommends -y ${PKGS}
+  apt-get update
+  apt-get install --no-install-recommends -y ${PKGS}
 }
 
 function handle_debian {

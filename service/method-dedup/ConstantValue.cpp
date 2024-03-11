@@ -10,12 +10,9 @@
 #include <boost/algorithm/string.hpp>
 
 #include "Creators.h"
-#include "DexAsm.h"
 #include "Show.h"
 #include "Trace.h"
 #include "TypeReference.h"
-
-using namespace dex_asm;
 
 namespace {
 
@@ -24,10 +21,13 @@ constexpr uint64_t MAX_NUM_CONST_VALUE = 10;
 std::vector<IRInstruction*> make_string_const(reg_t dest,
                                               const std::string& val) {
   std::vector<IRInstruction*> res;
-  auto load = dasm(OPCODE_CONST_STRING, DexString::make_string(val));
-  auto move_res = dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {{VREG, dest}});
+  IRInstruction* load = new IRInstruction(OPCODE_CONST_STRING);
+  load->set_string(DexString::make_string(val));
+  IRInstruction* move_result_pseudo =
+      new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+  move_result_pseudo->set_dest(dest);
   res.push_back(load);
-  res.push_back(move_res);
+  res.push_back(move_result_pseudo);
   return res;
 }
 
@@ -230,27 +230,28 @@ DexMethod* ConstantValues::create_stub_method(DexMethod* callee) {
   auto name = DexString::make_string(callee->get_name()->str() + "$stub");
   name = DexMethod::get_unique_name(type, name, stub_proto);
   TRACE(METH_DEDUP, 9, "const value: stub name %s", name->c_str());
-  auto mc = MethodCreator(type,
-                          name,
-                          stub_proto,
-                          callee->get_access(),
-                          /* anno=*/nullptr,
-                          /* with_debug_item= */ false);
-  auto mb = mc.get_main_block();
+  auto mc = new MethodCreator(type,
+                              name,
+                              stub_proto,
+                              callee->get_access(),
+                              nullptr, // anno
+                              false // with_debug_item
+  );
+  auto mb = mc->get_main_block();
   // Setup args for calling the callee.
   size_t arg_loc = 0;
   std::vector<Location> args;
   if (!is_static(callee)) {
-    args.push_back(mc.get_local(arg_loc++));
+    args.push_back(mc->get_local(arg_loc++));
   }
   for (size_t i = 0; i < stub_arg_list->size(); ++i) {
-    args.push_back(mc.get_local(arg_loc++));
+    args.push_back(mc->get_local(arg_loc++));
   }
   for (auto& cval : m_const_vals) {
     if (cval.is_invalid()) {
       continue;
     }
-    auto loc = mc.make_local(cval.get_constant_type());
+    auto loc = mc->make_local(cval.get_constant_type());
     if (cval.is_int_value()) {
       mb->load_const(loc, static_cast<int32_t>(cval.get_int_value()));
     } else {
@@ -264,12 +265,12 @@ DexMethod* ConstantValues::create_stub_method(DexMethod* callee) {
   if (ret_type == type::_void()) {
     mb->ret_void();
   } else {
-    auto ret_loc = mc.make_local(ret_type);
+    auto ret_loc = mc->make_local(ret_type);
     mb->move_result(ret_loc, ret_type);
     mb->ret(ret_type, ret_loc);
   }
 
-  auto stub = mc.create();
+  auto stub = mc->create();
   // Propogate deobfuscated name
   const auto orig_name = callee->get_deobfuscated_name_or_empty();
   auto pos = orig_name.find(':');

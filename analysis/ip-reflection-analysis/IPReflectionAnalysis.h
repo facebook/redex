@@ -20,7 +20,9 @@ class IPReflectionAnalysisPass : public Pass {
       const override {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
-    return {};
+    return {
+        {HasSourceBlocks, Preserves},
+    };
   }
 
   void bind_config() override {

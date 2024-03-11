@@ -40,10 +40,11 @@ class UpCodeMotionPass : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, RequiresAndEstablishes},
         {NoResolvablePureRefs, Preserves},
-        {InitialRenameClass, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 
+  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
   void bind_config() override {
     bind("check_branch_hotness",

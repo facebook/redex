@@ -24,7 +24,9 @@ class AnalysisConsumerPass : public Pass {
       const override {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
-    return {};
+    return {
+        {HasSourceBlocks, Preserves},
+    };
   }
 
   void set_analysis_usage(AnalysisUsage& au) const override {

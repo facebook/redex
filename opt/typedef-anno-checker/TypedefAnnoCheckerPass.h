@@ -49,10 +49,9 @@ class TypedefAnnoCheckerPass : public Pass {
  private:
   void gather_typedef_values(
       const DexClass* cls,
-      InsertOnlyConcurrentMap<const DexClass*,
-                              std::unordered_set<const DexString*>>&
+      ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>&
           strdef_constants,
-      InsertOnlyConcurrentMap<const DexClass*, std::unordered_set<uint64_t>>&
+      ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>>&
           intdef_constants);
 
   Config m_config;
@@ -77,33 +76,14 @@ struct Stats {
   }
 };
 
-using StrDefConstants =
-    InsertOnlyConcurrentMap<const DexClass*,
-                            std::unordered_set<const DexString*>>;
-
-using IntDefConstants =
-    InsertOnlyConcurrentMap<const DexClass*, std::unordered_set<uint64_t>>;
-
-class SynthAccessorPatcher {
- public:
-  explicit SynthAccessorPatcher(const TypedefAnnoCheckerPass::Config& config) {
-    m_typedef_annos.insert(config.int_typedef);
-    m_typedef_annos.insert(config.str_typedef);
-  }
-
-  void run(const Scope& scope);
-
- private:
-  void collect_accessors(DexMethod* method);
-
-  std::unordered_set<DexType*> m_typedef_annos;
-};
-
 class TypedefAnnoChecker {
  public:
-  explicit TypedefAnnoChecker(const StrDefConstants& strdef_constants,
-                              const IntDefConstants& intdef_constants,
-                              const TypedefAnnoCheckerPass::Config& config)
+  explicit TypedefAnnoChecker(
+      ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>&
+          strdef_constants,
+      ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>>&
+          intdef_constants,
+      const TypedefAnnoCheckerPass::Config& config)
       : m_config(config),
         m_strdef_constants(strdef_constants),
         m_intdef_constants(intdef_constants) {}
@@ -135,6 +115,8 @@ class TypedefAnnoChecker {
   std::string m_error;
   TypedefAnnoCheckerPass::Config m_config;
 
-  const StrDefConstants& m_strdef_constants;
-  const IntDefConstants& m_intdef_constants;
+  const ConcurrentMap<const DexClass*, std::unordered_set<const DexString*>>&
+      m_strdef_constants;
+  const ConcurrentMap<const DexClass*, std::unordered_set<uint64_t>>&
+      m_intdef_constants;
 };

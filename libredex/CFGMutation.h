@@ -26,6 +26,7 @@ namespace cfg {
 /// TODO(T59235117) Flush mutation in the destructor.
 class CFGMutation {
  public:
+  static double get_seconds();
   /// Create a new mutation to apply to \p cfg.
   explicit CFGMutation(ControlFlowGraph& cfg);
 

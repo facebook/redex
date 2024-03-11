@@ -14,6 +14,7 @@
 class ThrowPropagationPass : public Pass {
  public:
   struct Config {
+    bool debug{false};
     std::unordered_set<const DexType*> blocklist;
   };
 
@@ -37,18 +38,20 @@ class ThrowPropagationPass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
+        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 
   void bind_config() override;
 
-  static ConcurrentSet<DexMethod*> get_no_return_methods(const Config& config,
-                                                         const Scope& scope);
+  static std::unordered_set<DexMethod*> get_no_return_methods(
+      const Config& config, const Scope& scope);
 
   static Stats run(
       const Config& config,
-      const ConcurrentSet<DexMethod*>& no_return_methods,
+      const std::unordered_set<DexMethod*>& no_return_methods,
       const method_override_graph::Graph& graph,
       IRCode* code,
       std::unordered_set<DexMethod*>* no_return_methods_checked = nullptr);

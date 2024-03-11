@@ -889,8 +889,6 @@ enum class IFSMode {
 
 } // namespace
 
-PerfMethodInlinePass::PerfMethodInlinePass() : Pass("PerfMethodInlinePass") {}
-
 PerfMethodInlinePass::~PerfMethodInlinePass() {}
 
 struct PerfMethodInlinePass::Config {
@@ -1134,8 +1132,7 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
     not_reached();
   }()};
 
-  inliner::run_inliner(stores, mgr, conf, DEFAULT_COST_CONFIG,
-                       /* intra_dex */ true,
+  inliner::run_inliner(stores, mgr, conf, /* intra_dex */ true,
                        /* inline_for_speed= */ ifs.get());
 
   TRACE(METH_PROF, 1, "Accepted %zu out of %zu choices.",

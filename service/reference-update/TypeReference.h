@@ -65,7 +65,7 @@ class TypeRefUpdater final {
    */
   bool mangling(DexMethodRef* method);
 
-  InsertOnlyConcurrentMap<DexMethod*, DexProto*> m_inits;
+  ConcurrentMap<DexMethod*, DexProto*> m_inits;
   const std::unordered_map<DexType*, DexType*>& m_old_to_new;
 };
 

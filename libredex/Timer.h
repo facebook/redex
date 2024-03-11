@@ -9,8 +9,6 @@
 
 #include <atomic>
 #include <chrono>
-#include <list>
-#include <memory>
 #include <mutex>
 #include <string>
 #include <utility>
@@ -21,11 +19,10 @@ struct Timer {
   ~Timer();
 
   using times_t = std::vector<std::pair<std::string, double>>;
-
   // there should be no currently running Timers when this function is called
   static const times_t& get_times() { return s_times; }
 
-  static void add_timer(std::string msg, double dur_s);
+  static void add_timer(std::string&& msg, double dur_s);
 
  private:
   static std::mutex s_lock;
@@ -49,7 +46,7 @@ class AccumulatingTimer {
       auto end = std::chrono::high_resolution_clock::now();
       auto dur_in_mus =
           std::chrono::duration_cast<std::chrono::microseconds>(end - m_start);
-      m_context->m_microseconds->fetch_add((uint64_t)dur_in_mus.count());
+      m_context->m_microseconds += (uint64_t)dur_in_mus.count();
     }
 
     // Disallow copying.
@@ -65,33 +62,15 @@ class AccumulatingTimer {
     std::chrono::high_resolution_clock::time_point m_start;
   };
 
-  AccumulatingTimer() {}
-
-  explicit AccumulatingTimer(std::string msg);
+  AccumulatingTimer() : m_microseconds(0) {}
 
   AccumulatingTimerScope scope() { return AccumulatingTimerScope(this); }
 
-  uint64_t get_microseconds() const { return m_microseconds->load(); }
+  uint64_t get_microseconds() const { return m_microseconds.load(); }
   double get_seconds() const {
-    return ((double)m_microseconds->load()) / 1000000;
+    return ((double)m_microseconds.load()) / 1000000;
   }
 
-  using times_t = std::vector<std::pair<std::string, double>>;
-
-  // there should be no currently running Timers when this function is called
-  static times_t get_times();
-
-  static void add_timer(std::string msg,
-                        std::shared_ptr<std::atomic<uint64_t>> microseconds);
-
  private:
-  using times_impl_t =
-      std::list<std::pair<std::string, std::shared_ptr<std::atomic<uint64_t>>>>;
-
-  static std::mutex s_lock;
-  // We dynamically allocate the static list of times to avoid problems with the
-  // static initialization / destruction order.
-  static times_impl_t* s_times;
-  std::shared_ptr<std::atomic<uint64_t>> m_microseconds{
-      std::make_shared<std::atomic<uint64_t>>(0)};
+  std::atomic<uint64_t> m_microseconds;
 };

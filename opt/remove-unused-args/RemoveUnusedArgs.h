@@ -47,20 +47,18 @@ class RemoveArgs {
              const init_classes::InitClassesWithSideEffects&
                  init_classes_with_side_effects,
              const std::vector<std::string>& blocklist,
-             const std::unordered_set<DexMethodRef*>& pure_methods,
              size_t iteration = 0)
       : m_scope(scope),
         m_init_classes_with_side_effects(init_classes_with_side_effects),
         m_blocklist(blocklist),
-        m_iteration(iteration),
-        m_pure_methods(pure_methods) {}
+        m_iteration(iteration) {}
   RemoveArgs::PassStats run(ConfigFiles& conf);
 
  private:
   const Scope& m_scope;
   const init_classes::InitClassesWithSideEffects&
       m_init_classes_with_side_effects;
-  InsertOnlyConcurrentMap<DexMethod*, std::deque<uint16_t>> m_live_arg_idxs_map;
+  ConcurrentMap<DexMethod*, std::deque<uint16_t>> m_live_arg_idxs_map;
   // Data structure to remember running indices to make method names unique when
   // we reorder prototypes across virtual scopes, or do other general changes to
   // non-virtuals.
@@ -74,7 +72,6 @@ class RemoveArgs {
   std::unordered_map<DexProto*, DexProto*> m_reordered_protos;
   const std::vector<std::string>& m_blocklist;
   size_t m_iteration;
-  const std::unordered_set<DexMethodRef*>& m_pure_methods;
 
   DexTypeList::ContainerType get_live_arg_type_list(
       DexMethod* method, const std::deque<uint16_t>& live_arg_idxs);
@@ -101,8 +98,9 @@ class RemoveUnusedArgsPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {InitialRenameClass, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 

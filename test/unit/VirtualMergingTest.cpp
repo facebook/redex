@@ -131,7 +131,6 @@ class VirtualMergingTest : public RedexTest {
       return *fail;
     }
 
-    // NOLINTNEXTLINE(google-explicit-constructor)
     operator bool() const { return fail.operator bool(); }
 
     ::testing::AssertionResult result() {

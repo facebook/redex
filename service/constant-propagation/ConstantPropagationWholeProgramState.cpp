@@ -138,7 +138,7 @@ namespace constant_propagation {
 WholeProgramState::WholeProgramState(
     const Scope& scope,
     const interprocedural::FixpointIterator& fp_iter,
-    const InsertOnlyConcurrentSet<DexMethod*>& non_true_virtuals,
+    const std::unordered_set<DexMethod*>& non_true_virtuals,
     const std::unordered_set<const DexType*>& field_blocklist,
     const std::unordered_set<const DexField*>& definitely_assigned_ifields,
     std::shared_ptr<const call_graph::Graph> call_graph)
@@ -358,7 +358,15 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
     return false;
   }
   if (whole_program_state->has_call_graph()) {
-    if (whole_program_state->invoke_is_dynamic(insn)) {
+    auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    if (method == nullptr && opcode_to_search(insn) == MethodSearch::Virtual) {
+      method =
+          resolve_method(insn->get_method(), MethodSearch::InterfaceVirtual);
+    }
+    if (method == nullptr) {
+      return false;
+    }
+    if (whole_program_state->method_is_dynamic(method)) {
       return false;
     }
     auto value = whole_program_state->get_return_value_from_cg(insn);

@@ -180,8 +180,7 @@ void analyze_reflection(const Scope& scope) {
       return DexString::get_string("<init>");
     }
     int arg_str_idx = refl_type == ReflectionType::REF_UPDATER ? 2 : 1;
-    const auto& arg_str =
-        analysis.get_abstract_object(insn->src(arg_str_idx), insn);
+    auto arg_str = analysis.get_abstract_object(insn->src(arg_str_idx), insn);
     if (arg_str && arg_str->obj_kind == AbstractObjectKind::STRING) {
       return arg_str->dex_string;
     } else {
@@ -228,7 +227,7 @@ void analyze_reflection(const Scope& scope) {
             /* metadata_cache */ &refl_metadata_cache);
       }
 
-      const auto& arg_cls = analysis->get_abstract_object(insn->src(0), insn);
+      auto arg_cls = analysis->get_abstract_object(insn->src(0), insn);
       if (!arg_cls || arg_cls->obj_kind != AbstractObjectKind::CLASS) {
         continue;
       }

@@ -29,7 +29,7 @@ class UnreachableLoweringPassTest : public RedexTest {
     virt_scope::get_vmethods(type::java_lang_Object());
 
     std::string class_name = "LTest;";
-    ClassCreator creator(DexType::make_type(class_name));
+    ClassCreator creator(DexType::make_type(class_name.c_str()));
     creator.set_super(type::java_lang_Object());
     auto signature = class_name + ".foo:()V";
     auto method = DexMethod::make_method(signature)->make_concrete(
@@ -77,8 +77,7 @@ TEST_F(UnreachableLoweringPassTest, simple) {
     )";
   auto expected_code = R"(
      (
-      (invoke-static () "Lcom/redex/UnreachableException;.createAndThrow:()Lcom/redex/UnreachableException;")
-      (move-result-object v0)
+      (const v0 0)
       (throw v0)
      )
     )";
@@ -95,8 +94,7 @@ TEST_F(UnreachableLoweringPassTest, move_objects_are_tolerated) {
     )";
   auto expected_code = R"(
      (
-      (invoke-static () "Lcom/redex/UnreachableException;.createAndThrow:()Lcom/redex/UnreachableException;")
-      (move-result-object v0)
+      (const v0 0)
       (move-object v1 v0)
       (throw v1)
      )
@@ -115,8 +113,7 @@ TEST_F(UnreachableLoweringPassTest, invokes_are_tolerated) {
     )";
   auto expected_code = R"(
      (
-      (invoke-static () "Lcom/redex/UnreachableException;.createAndThrow:()Lcom/redex/UnreachableException;")
-      (move-result-object v0)
+      (const v0 0)
       (move-object v1 v0)
       (invoke-static () "Lcom/facebook/redex/dynamicanalysis/DynamicAnalysis;.onMethodExit:()V")
       (throw v1)

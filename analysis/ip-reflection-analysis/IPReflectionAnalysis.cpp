@@ -33,7 +33,8 @@ struct Caller {
   using Domain = PatriciaTreeMapAbstractPartition<const DexMethod*,
                                                   reflection::CallingContext>;
 
-  Domain analyze_edge(const call_graph::EdgeId edge, const Domain& original) {
+  Domain analyze_edge(const std::shared_ptr<call_graph::Edge>& edge,
+                      const Domain& original) {
     auto callee = edge->callee()->method();
     if (!callee) {
       return Domain::bottom();
@@ -148,8 +149,8 @@ class ReflectionAnalyzer : public Base {
 
     reflection::SummaryQueryFn query_fn =
         [&](const IRInstruction* insn) -> reflection::AbstractObjectDomain {
-      auto callees =
-          call_graph::resolve_callees_in_graph(*this->get_call_graph(), insn);
+      auto callees = call_graph::resolve_callees_in_graph(
+          *this->get_call_graph(), m_method, insn);
 
       reflection::AbstractObjectDomain ret =
           reflection::AbstractObjectDomain::bottom();
@@ -180,8 +181,8 @@ class ReflectionAnalyzer : public Base {
         auto op = insn->opcode();
         always_assert(opcode::is_an_invoke(op));
 
-        auto callees =
-            call_graph::resolve_callees_in_graph(*this->get_call_graph(), insn);
+        auto callees = call_graph::resolve_callees_in_graph(
+            *this->get_call_graph(), m_method, insn);
 
         for (const DexMethod* method : callees) {
           this->get_caller_context()->update(
@@ -235,7 +236,7 @@ void IPReflectionAnalysisPass::run_pass(DexStoresVector& stores,
   AnalysisParameters param;
   auto analysis = Analysis(scope, m_max_iteration, &param);
   analysis.run();
-  const auto& summaries = analysis.registry.get_map();
+  auto summaries = analysis.registry.get_map();
   m_result = std::make_shared<Result>();
   for (const auto& entry : summaries) {
     (*m_result)[entry.first] = entry.second.get_reflection_sites();

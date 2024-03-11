@@ -45,61 +45,6 @@ enum MultiMethodInlinerMode {
   IntraDex,
 };
 
-struct InlinerCostConfig {
-  // The following costs are in terms of code-units (2 bytes).
-  // Typical overhead of calling a method, without move-result overhead.
-  float cost_invoke;
-
-  // Typical overhead of having move-result instruction.
-  float cost_move_result;
-
-  // Overhead of having a method and its metadata.
-  size_t cost_method;
-
-  // Typical savings in caller when callee doesn't use any argument.
-  float unused_args_discount;
-
-  size_t reg_threshold_1;
-
-  size_t reg_threshold_2;
-
-  size_t op_init_class_cost;
-
-  size_t op_injection_id_cost;
-
-  size_t op_unreachable_cost;
-
-  size_t op_move_exception_cost;
-
-  size_t insn_cost_1;
-
-  size_t insn_has_data_cost;
-
-  size_t insn_has_lit_cost_1;
-
-  size_t insn_has_lit_cost_2;
-
-  size_t insn_has_lit_cost_3;
-};
-
-const struct InlinerCostConfig DEFAULT_COST_CONFIG = {
-    3.7f, // cost_invoke
-    3.0f, // cost_move_result
-    16, // cost_method
-    1.0f, // unused_args_discount
-    3, // reg_threshold_1
-    2, // reg_threshold_2
-    2, // op_init_class_cost
-    3, // op_injection_id_cost
-    1, // op_unreachable_cost
-    8, // op_move_exception_cost
-    1, // insn_cost_1
-    4, // insn_has_data_cost
-    4, // insn_has_lit_cost_1
-    2, // insn_has_lit_cost_2
-    1, // insn_has_lit_cost_3
-};
-
 // All call-sites of a callee.
 struct CallerInsns {
   // Invoke instructions per caller
@@ -109,7 +54,6 @@ struct CallerInsns {
   std::unordered_map<IRInstruction*, DexType*> inlined_invokes_need_cast;
   // Whether there may be any other unknown call-sites.
   bool other_call_sites{false};
-  bool other_call_sites_overriding_methods_added{false};
   bool empty() const { return caller_insns.empty() && !other_call_sites; }
 };
 
@@ -127,6 +71,8 @@ class ReducedCode {
 
 struct Inlinable {
   DexMethod* callee;
+  // Only used when not using cfg; iterator to invoke instruction to callee
+  IRList::iterator iterator;
   // Invoke instruction to callee
   IRInstruction* insn;
   // Whether the invocation at a particular call-site is guaranteed to not
@@ -138,9 +84,6 @@ struct Inlinable {
   std::shared_ptr<ReducedCode> reduced_code;
   // Estimated size of callee, possibly reduced by call-site specific knowledge
   size_t insn_size;
-  // Whether the callee is a virtual method different from the one referenced in
-  // the invoke instruction.
-  DexType* needs_receiver_cast;
 };
 
 struct CalleeCallerRefs {
@@ -172,7 +115,7 @@ struct InlinedCost {
   // Maximum or call-site specific estimated callee size after pruning
   size_t insn_size;
 
-  bool operator==(const InlinedCost& other) const {
+  bool operator==(const InlinedCost& other) {
     // TODO: Also check that reduced_cfg's are equivalent
     return full_code == other.full_code && code == other.code &&
            method_refs == other.method_refs && other_refs == other.other_refs &&
@@ -215,15 +158,14 @@ class MultiMethodInliner {
       bool cross_dex_penalty = false,
       const std::unordered_set<const DexString*>&
           configured_finalish_field_names = {},
-      bool local_only = false,
-      InlinerCostConfig m_inliner_cost_config = DEFAULT_COST_CONFIG);
+      bool local_only = false);
 
   ~MultiMethodInliner() { delayed_invoke_direct_to_static(); }
 
   /**
    * attempt inlining for all candidates.
    */
-  void inline_methods();
+  void inline_methods(bool methods_need_deconstruct = true);
 
   /**
    * Return the set of unique inlined methods.
@@ -510,6 +452,12 @@ class MultiMethodInliner {
    */
   void shrink_method(DexMethod* method);
 
+  /**
+   * Whether inline_inlinables needs to deconstruct the caller's and callees'
+   * code.
+   */
+  bool inline_inlinables_need_deconstruct(DexMethod* method);
+
   // Checks that...
   // - there are no assignments to (non-inherited) instance fields before
   //   a constructor call, and
@@ -536,9 +484,9 @@ class MultiMethodInliner {
   // Maps from callee to callers and reverse map from caller to callees.
   // Those are used to perform bottom up inlining.
   //
-  ConcurrentMethodToMethodOccurrences callee_caller;
+  MethodToMethodOccurrences callee_caller;
 
-  ConcurrentMethodToMethodOccurrences caller_callee;
+  MethodToMethodOccurrences caller_callee;
 
   // Auxiliary data for a caller that contains true virtual callees
   struct CallerVirtualCallees {
@@ -566,21 +514,22 @@ class MultiMethodInliner {
 
   // Cache of the inlined costs of fully inlining a calle without using any
   // summaries for pruning.
-  mutable InsertOnlyConcurrentMap<const DexMethod*, InlinedCost>
+  mutable ConcurrentMap<const DexMethod*, std::shared_ptr<InlinedCost>>
       m_fully_inlined_costs;
 
   // Cache of the average inlined costs of each method.
-  mutable InsertOnlyConcurrentMap<const DexMethod*, InlinedCost>
+  mutable ConcurrentMap<const DexMethod*, std::shared_ptr<InlinedCost>>
       m_average_inlined_costs;
 
   // Cache of the inlined costs of each call-site summary after pruning.
-  mutable InsertOnlyConcurrentMap<CalleeCallSiteSummary,
-                                  InlinedCost,
-                                  boost::hash<CalleeCallSiteSummary>>
+  mutable ConcurrentMap<CalleeCallSiteSummary,
+                        std::shared_ptr<InlinedCost>,
+                        boost::hash<CalleeCallSiteSummary>>
       m_call_site_inlined_costs;
 
   // Cache of the inlined costs of each call-site after pruning.
-  mutable InsertOnlyConcurrentMap<const IRInstruction*, const InlinedCost*>
+  mutable ConcurrentMap<const IRInstruction*,
+                        boost::optional<const InlinedCost*>>
       m_invoke_call_site_inlined_costs;
 
   // Priority thread pool to handle parallel processing of methods, either
@@ -601,29 +550,27 @@ class MultiMethodInliner {
   std::mutex m_visibility_changes_mutex;
 
   // Cache for should_inline function
-  InsertOnlyConcurrentMap<const DexMethod*, bool> m_should_inline;
+  ConcurrentMap<const DexMethod*, boost::optional<bool>> m_should_inline;
 
   // Optional cache for get_callee_insn_size function
-  std::unique_ptr<InsertOnlyConcurrentMap<const DexMethod*, size_t>>
-      m_callee_insn_sizes;
+  std::unique_ptr<ConcurrentMap<const DexMethod*, size_t>> m_callee_insn_sizes;
 
   // Optional cache for get_callee_type_refs function
   std::unique_ptr<
-      InsertOnlyConcurrentMap<const DexMethod*,
-                              std::shared_ptr<std::vector<DexType*>>>>
+      ConcurrentMap<const DexMethod*, std::shared_ptr<std::vector<DexType*>>>>
       m_callee_type_refs;
 
   // Optional cache for get_callee_code_refs function
-  std::unique_ptr<
-      InsertOnlyConcurrentMap<const DexMethod*, std::shared_ptr<CodeRefs>>>
+  std::unique_ptr<ConcurrentMap<const DexMethod*, std::shared_ptr<CodeRefs>>>
       m_callee_code_refs;
 
   // Optional cache for get_callee_caller_res function
-  std::unique_ptr<InsertOnlyConcurrentMap<const DexMethod*, CalleeCallerRefs>>
+  std::unique_ptr<ConcurrentMap<const DexMethod*, CalleeCallerRefs>>
       m_callee_caller_refs;
 
   // Cache of whether a constructor can be unconditionally inlined.
-  mutable InsertOnlyConcurrentMap<const DexMethod*, bool> m_can_inline_init;
+  mutable ConcurrentMap<const DexMethod*, boost::optional<bool>>
+      m_can_inline_init;
 
   std::unique_ptr<inliner::CallSiteSummarizer> m_call_site_summarizer;
 
@@ -700,8 +647,6 @@ class MultiMethodInliner {
       DexField::get_field("Landroid/os/Build$VERSION;.SDK_INT:I");
 
   bool m_local_only;
-
-  InlinerCostConfig m_inliner_cost_config;
 
  public:
   const InliningInfo& get_info() { return info; }

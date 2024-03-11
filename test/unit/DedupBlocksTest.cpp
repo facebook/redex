@@ -1180,16 +1180,17 @@ TEST_F(DedupBlocksTest, androidIsAfraidOfArraysOfInterfaces) {
   ClassCreator i_creator(DexType::make_type("LI;"));
   i_creator.set_access(ACC_INTERFACE);
   i_creator.set_super(type::java_lang_Object());
-  auto i_cls = i_creator.create();
+  i_creator.create();
 
   ClassCreator a_creator(DexType::make_type("LA;"));
-  a_creator.add_interface(i_cls->get_type());
+  a_creator.add_interface(i_creator.get_class()->get_type());
   a_creator.set_super(type::java_lang_Object());
   a_creator.create();
 
   ClassCreator b_creator(DexType::make_type("LB;"));
-  b_creator.add_interface(i_cls->get_type());
+  b_creator.add_interface(i_creator.get_class()->get_type());
   b_creator.set_super(type::java_lang_Object());
+  b_creator.create();
 
   auto str = R"(
     (
@@ -1237,10 +1238,10 @@ TEST_F(DedupBlocksTest, trivialJoinOfArrayOfClassesIsFine) {
   ClassCreator i_creator(DexType::make_type("LI;"));
   i_creator.set_access(ACC_INTERFACE);
   i_creator.set_super(type::java_lang_Object());
-  auto i_cls = i_creator.create();
+  i_creator.create();
 
   ClassCreator a_creator(DexType::make_type("LA;"));
-  a_creator.add_interface(i_cls->get_type());
+  a_creator.add_interface(i_creator.get_class()->get_type());
   a_creator.set_super(type::java_lang_Object());
   a_creator.create();
 

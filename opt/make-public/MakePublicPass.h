@@ -24,6 +24,7 @@ class MakePublicPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
         {NeedsEverythingPublic, Destroys},
         {NoInitClassInstructions, Preserves},
         {NoResolvablePureRefs, Preserves},
@@ -32,5 +33,6 @@ class MakePublicPass : public Pass {
     };
   }
 
+  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

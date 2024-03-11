@@ -17,7 +17,6 @@ check_PROGRAMS = \
     analysis_usage_test \
     array_propagation_test \
     assert_test \
-    atomic_map_test \
     blaming_escape_test \
     boxed_boolean_propagation_test \
     branch_prefix_hoisting_test \
@@ -28,7 +27,6 @@ check_PROGRAMS = \
     check_breadcrumbs_test \
     check_cast_analysis_test \
     concurrent_containers_test \
-    concurrent_hashtable_test \
     configurable_test \
     constructor_analysis_test \
     control_flow_test \
@@ -133,6 +131,7 @@ check_PROGRAMS = \
     strip_debug_info_test \
     switch_dispatch_test \
     switch_equiv_test \
+    switch_partitioning_test \
     timer_test \
     trace_multithreading_test \
     true_virtuals_test \
@@ -183,10 +182,6 @@ check_cast_analysis_test_SOURCES = CheckCastAnalysisTest.cpp
 class_checker_test_SOURCES = ClassCheckerTest.cpp ScopeHelper.cpp
 
 concurrent_containers_test_SOURCES = ConcurrentContainersTest.cpp
-
-concurrent_hashtable_test_SOURCES = ConcurrentHashtableTest.cpp
-
-atomic_map_test_SOURCES = AtomicMapTest.cpp
 
 configurable_test_SOURCES = ConfigurableTest.cpp
 configurable_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
@@ -432,6 +427,8 @@ switch_dispatch_test_SOURCES = SwitchDispatchTest.cpp
 switch_equiv_test_SOURCES = SwitchEquivFinderTest.cpp
 switch_equiv_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
+switch_partitioning_test_SOURCES = SwitchPartitioningTest.cpp
+
 # throw_propagation_test_SOURCES = ThrowPropagationTest.cpp
 # throw_propagation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
@@ -493,8 +490,6 @@ TESTS = \
     check_cast_analysis_test \
     class_checker_test \
     concurrent_containers_test \
-    concurrent_hashtable_test \
-    atomic_map_test \
     configurable_test \
     constructor_analysis_test \
     control_flow_test \
@@ -592,6 +587,7 @@ TESTS = \
     strip_debug_info_test \
     switch_dispatch_test \
     switch_equiv_test \
+    switch_partitioning_test \
     timer_test \
     trace_multithreading_test \
     true_virtuals_test \

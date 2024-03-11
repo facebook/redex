@@ -12,8 +12,6 @@
 
 #include <sparta/WorkQueue.h>
 
-#include "ThreadPool.h"
-
 namespace redex_workqueue_impl {
 
 void redex_queue_exception_handler(std::exception& e);
@@ -65,10 +63,11 @@ workqueue_foreach(
     const Fn& fn,
     unsigned int num_threads = redex_parallel::default_num_threads(),
     bool push_tasks_while_running = false) {
-  return sparta::WorkQueue<
-      Input, redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>(
-      redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>{fn}, num_threads,
-      push_tasks_while_running, redex_thread_pool::ThreadPool::get_instance());
+  return sparta::
+      WorkQueue<Input, redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>(
+          redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>{fn},
+          num_threads,
+          push_tasks_while_running);
 }
 template <class Input,
           typename Fn,
@@ -80,10 +79,11 @@ workqueue_foreach(
     unsigned int num_threads = redex_parallel::default_num_threads(),
     bool push_tasks_while_running = false) {
   return sparta::WorkQueue<
-      Input, redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>(
+      Input,
+      redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>(
       redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>{fn},
-      num_threads, push_tasks_while_running,
-      redex_thread_pool::ThreadPool::get_instance());
+      num_threads,
+      push_tasks_while_running);
 }
 
 template <class Input,
@@ -95,10 +95,11 @@ void workqueue_run(
     Items& items,
     unsigned int num_threads = redex_parallel::default_num_threads(),
     bool push_tasks_while_running = false) {
-  auto wq = sparta::WorkQueue<
-      Input, redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>(
-      redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>{fn}, num_threads,
-      push_tasks_while_running, redex_thread_pool::ThreadPool::get_instance());
+  auto wq = sparta::
+      WorkQueue<Input, redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>(
+          redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>{fn},
+          num_threads,
+          push_tasks_while_running);
   for (Input item : items) {
     wq.add_item(std::move(item));
   }
@@ -113,10 +114,11 @@ void workqueue_run(
     const Items& items,
     unsigned int num_threads = redex_parallel::default_num_threads(),
     bool push_tasks_while_running = false) {
-  auto wq = sparta::WorkQueue<
-      Input, redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>(
-      redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>{fn}, num_threads,
-      push_tasks_while_running, redex_thread_pool::ThreadPool::get_instance());
+  auto wq = sparta::
+      WorkQueue<Input, redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>(
+          redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>{fn},
+          num_threads,
+          push_tasks_while_running);
   for (Input item : items) {
     wq.add_item(std::move(item));
   }
@@ -132,10 +134,11 @@ void workqueue_run(
     unsigned int num_threads = redex_parallel::default_num_threads(),
     bool push_tasks_while_running = false) {
   auto wq = sparta::WorkQueue<
-      Input, redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>(
+      Input,
+      redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>(
       redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>{fn},
-      num_threads, push_tasks_while_running,
-      redex_thread_pool::ThreadPool::get_instance());
+      num_threads,
+      push_tasks_while_running);
   for (Input item : items) {
     wq.add_item(std::move(item));
   }
@@ -151,10 +154,11 @@ void workqueue_run(
     unsigned int num_threads = redex_parallel::default_num_threads(),
     bool push_tasks_while_running = false) {
   auto wq = sparta::WorkQueue<
-      Input, redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>(
+      Input,
+      redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>(
       redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>{fn},
-      num_threads, push_tasks_while_running,
-      redex_thread_pool::ThreadPool::get_instance());
+      num_threads,
+      push_tasks_while_running);
   for (Input item : items) {
     wq.add_item(std::move(item));
   }
@@ -171,8 +175,7 @@ void workqueue_run_for(
       redex_workqueue_impl::NoStateWorkQueueHelper<InteralType, Fn>>(
       redex_workqueue_impl::NoStateWorkQueueHelper<InteralType, Fn>{fn},
       num_threads,
-      /* push_tasks_while_running */ false,
-      redex_thread_pool::ThreadPool::get_instance());
+      /* push_tasks_while_running */ false);
   for (InteralType i = start; i < end; i++) {
     wq.add_item(i);
   }

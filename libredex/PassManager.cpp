@@ -34,7 +34,6 @@
 #include "ApiLevelChecker.h"
 #include "AssetManager.h"
 #include "CFGMutation.h"
-#include "CallGraph.h"
 #include "ClassChecker.h"
 #include "CommandProfiling.h"
 #include "ConfigFiles.h"
@@ -42,7 +41,6 @@
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
-#include "DexStructure.h"
 #include "DexUtil.h"
 #include "GlobalConfig.h"
 #include "GraphVisualizer.h"
@@ -66,15 +64,10 @@
 #include "ScopedMetrics.h"
 #include "Show.h"
 #include "SourceBlocks.h"
-#include "ThreadPool.h"
 #include "Timer.h"
 #include "Walkers.h"
 
 namespace {
-
-AccumulatingTimer m_hashers_timer{"PassManager.Hashers"};
-AccumulatingTimer m_check_unique_deobfuscateds_timer{
-    "PassManager.CheckUniqueDeobfuscateds"};
 
 constexpr const char* INCOMING_HASHES = "incoming_hashes.txt";
 constexpr const char* OUTGOING_HASHES = "outgoing_hashes.txt";
@@ -82,7 +75,6 @@ constexpr const char* REMOVABLE_NATIVES = "redex-removable-natives.txt";
 const std::string PASS_ORDER_KEY = "pass_order";
 
 const Pass* get_profiled_pass(const PassManager& mgr) {
-  // NOLINTNEXTLINE(bugprone-assert-side-effect)
   redex_assert(getenv("PROFILE_PASS") != nullptr);
   // Resolve the pass in the constructor so that any typos / references to
   // nonexistent passes are caught as early as possible
@@ -234,8 +226,7 @@ class CheckerConfig {
           }
         });
       }
-      auto* code = dex_method->get_code();
-      return code->editable_cfg_built() ? show(code->cfg()) : show(code);
+      return show(dex_method->get_code());
     };
 
     auto res =
@@ -688,8 +679,6 @@ class AfterPassSizes {
       tmp_dir = dir_name;
     }
 
-    redex_thread_pool::ThreadPool::get_instance()->join();
-
     pid_t p = fork();
 
     if (p < 0) {
@@ -806,14 +795,8 @@ class AfterPassSizes {
     }
     // Better run MakePublicPass.
     maybe_run("MakePublicPass");
-    // Run ReBindRefsPass to not get a 'trying to encode too many method refs in
-    // dex' error
-    maybe_run("ReBindRefsPass");
-    // May need register allocation. Run InjectionIdLoweringPass too so
-    // RegAllocPass doesn't fail on injection-id opcodes
+    // May need register allocation.
     if (!m_mgr->regalloc_has_run()) {
-      maybe_run("IntrinsifyInjectionIdsPass");
-      maybe_run("InjectionIdLoweringPass");
       maybe_run("RegAllocPass");
     }
 
@@ -889,14 +872,8 @@ class TraceClassAfterEachPass {
     }
     for (auto* v : methods) {
       fprintf(fd, "Method %s\n", SHOW(v));
-      auto code = v->get_code();
-      if (code != nullptr) {
-        if (code->editable_cfg_built()) {
-          auto& cfg = code->cfg();
-          fprintf(fd, "%s\n", SHOW(cfg));
-        } else {
-          fprintf(fd, "%s\n", SHOW(code));
-        }
+      if (v->get_code()) {
+        fprintf(fd, "%s\n", SHOW(v->get_code()));
       }
     }
   }
@@ -1144,7 +1121,7 @@ void PassManager::init_property_interactions(ConfigFiles& conf) {
 
       always_assert_log(property_interaction.is_valid(),
                         "%s has an invalid property interaction for %s",
-                        pass->name().c_str(), redex_properties::get_name(name));
+                        pass->name().c_str(), name.c_str());
       ++it;
     }
     pass_info->property_interactions = std::move(m);
@@ -1270,7 +1247,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
                                                         IRCode& code) {
       if (is_editable_cfg_friendly) {
         always_assert_log(code.editable_cfg_built(), "%s has a cfg!", SHOW(m));
-        code.cfg().reset_exit_block();
       }
       if (slow_invariants_debug) {
         std::vector<DexMethodRef*> methods;
@@ -1347,7 +1323,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   /////////////////////
   // MAIN PASS LOOP. //
   /////////////////////
-  bool handled_child = false;
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     const size_t pass_run = ++runs[pass];
@@ -1407,8 +1382,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
         });
       }
 
-      g_redex->compact();
-
       trace_cls.dump(pass->name());
 
       cpu_time = cpu_time_end - cpu_time_start;
@@ -1430,8 +1403,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     process_method_profiles(*this, conf);
     process_secondary_method_profiles(*this, conf);
 
-    handled_child = after_pass_size.handle(m_current_pass_info, &stores, &conf);
-    if (handled_child) {
+    if (after_pass_size.handle(m_current_pass_info, &stores, &conf)) {
       // Measuring child. Return to write things out.
       break;
     }
@@ -1464,9 +1436,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   jni_native_context_helper.post_passes(scope, conf);
 
   check_unique_deobfuscated.run_finally(scope);
-  if (!handled_child) {
-    check_unreleased_reserved_refs();
-  }
 
   graph_visualizer.finalize();
 
@@ -1475,9 +1444,17 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   sanitizers::lsan_do_recoverable_leak_check();
 
-  for (auto& [name, seconds] : AccumulatingTimer::get_times()) {
-    Timer::add_timer(std::move(name), seconds);
-  }
+  Timer::add_timer("PassManager.Hashers", m_hashers_timer.get_seconds());
+  Timer::add_timer("PassManager.CheckUniqueDeobfuscateds",
+                   m_check_unique_deobfuscateds_timer.get_seconds());
+  Timer::add_timer("CFGMutation", cfg::CFGMutation::get_seconds());
+  Timer::add_timer(
+      "MethodProfiles::process_unresolved_lines",
+      method_profiles::MethodProfiles::get_process_unresolved_lines_seconds());
+  Timer::add_timer("compute_locations_closure_wto",
+                   get_compute_locations_closure_wto_seconds());
+  Timer::add_timer("cc_impl::destructor_second",
+                   cc_impl::get_destructor_seconds());
 }
 
 PassManager::ActivatedPasses PassManager::compute_activated_passes(
@@ -1610,30 +1587,4 @@ PassManager::get_interdex_metrics() {
   }
   static std::unordered_map<std::string, int64_t> empty;
   return empty;
-}
-
-ReserveRefsInfoHandle PassManager::reserve_refs(const std::string& name,
-                                                const ReserveRefsInfo& info) {
-  return m_reserved_ref_infos.insert(m_reserved_ref_infos.end(),
-                                     std::make_pair(name, info));
-}
-
-void PassManager::release_reserved_refs(ReserveRefsInfoHandle handle) {
-  m_reserved_ref_infos.erase(handle);
-}
-
-ReserveRefsInfo PassManager::get_reserved_refs() const {
-  ReserveRefsInfo res;
-  for (const auto& [_, info] : m_reserved_ref_infos) {
-    res += info;
-  }
-  return res;
-}
-
-void PassManager::check_unreleased_reserved_refs() {
-  for (const auto& [name, info] : m_reserved_ref_infos) {
-    fprintf(stderr, "ABORT! Unreleased reserved refs: %s(%zu, %zu, %zu)\n",
-            name.c_str(), info.frefs, info.trefs, info.mrefs);
-    exit(EXIT_FAILURE);
-  }
 }

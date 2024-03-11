@@ -38,6 +38,7 @@ class TypeLifetimes {
  private:
   std::unordered_set<const DexType*> m_ignored_types;
   const DexType* m_java_lang_Enum;
+  mutable ConcurrentMap<const DexMethodRef*, boost::optional<bool>> m_cache;
 
  public:
   TypeLifetimes();
@@ -50,7 +51,7 @@ FieldStatsMap analyze(const Scope& scope);
 
 struct FieldWrites {
   // All fields to which some potentially non-zero value is written.
-  ConcurrentSet<DexField*> non_zero_written_fields;
+  std::unordered_set<DexField*> non_zero_written_fields;
   // All fields to which some non-vestigial object is written.
   // We say an object is "vestigial" when the only escaping reference to it is
   // stored in a particular field. In other words, the only way to retrieve and
@@ -58,11 +59,10 @@ struct FieldWrites {
   // is unread, we can remove the iput/sput to it, as it is not possible that
   // the object's lifetime can be observed by a weak reference, at least after
   // the storing method returns.
-  ConcurrentSet<DexField*> non_vestigial_objects_written_fields;
+  std::unordered_set<DexField*> non_vestigial_objects_written_fields;
 };
 
-void analyze_writes(const Scope& scope,
-                    const FieldStatsMap& field_stats,
-                    const TypeLifetimes* type_lifetimes,
-                    FieldWrites* res);
+FieldWrites analyze_writes(const Scope& scope,
+                           const FieldStatsMap& field_stats,
+                           const TypeLifetimes* type_lifetimes = nullptr);
 } // namespace field_op_tracker

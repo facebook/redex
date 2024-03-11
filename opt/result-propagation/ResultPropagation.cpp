@@ -18,6 +18,7 @@
 #include "IRInstruction.h"
 #include "PassManager.h"
 #include "Resolver.h"
+#include "ScopedCFG.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -251,7 +252,12 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
     return 0;
   }
 
-  auto callee = resolve_invoke_method(insn, resolved_refs);
+  auto callee = resolve_method(method, opcode_to_search(insn), resolved_refs);
+  if (callee == nullptr && opcode == OPCODE_INVOKE_VIRTUAL) {
+    // There are some invoke-virtual call on methods whose def are
+    // actually in interface.
+    callee = resolve_method(method, MethodSearch::InterfaceVirtual);
+  }
   if (callee == nullptr) {
     return boost::none;
   }
@@ -425,11 +431,12 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
   return return_param_index.get_constant();
 }
 
-void ResultPropagation::patch(PassManager& mgr, cfg::ControlFlowGraph& cfg) {
+void ResultPropagation::patch(PassManager& mgr, IRCode* code) {
   // turn move-result-... into move instructions if the called method
   // is known to always return a particular parameter
   std::vector<cfg::InstructionIterator> deletes;
-  auto ii = InstructionIterable(cfg);
+  cfg::ScopedCFG cfg(code);
+  auto ii = InstructionIterable(*cfg);
   for (auto it = ii.begin(); it != ii.end(); it++) {
     // do we have a sequence of invoke + move-result instruction?
     const auto insn = it->insn;
@@ -440,7 +447,7 @@ void ResultPropagation::patch(PassManager& mgr, cfg::ControlFlowGraph& cfg) {
       continue;
     }
 
-    auto primary_it = cfg.primary_instruction_of_move_result(it);
+    auto primary_it = cfg->primary_instruction_of_move_result(it);
     if (primary_it.is_end()) {
       continue;
     }
@@ -495,7 +502,7 @@ void ResultPropagation::patch(PassManager& mgr, cfg::ControlFlowGraph& cfg) {
     }
   }
   for (auto const& instr : deletes) {
-    cfg.remove_insn(instr);
+    cfg->remove_insn(instr);
   }
 }
 
@@ -511,15 +518,13 @@ void ResultPropagationPass::run_pass(DexStoresVector& stores,
   const auto stats = walk::parallel::methods<ResultPropagation::Stats>(
       scope, [&](DexMethod* m) {
         const auto code = m->get_code();
-        if (code == nullptr || m->rstate.no_optimizations()) {
+        if (code == nullptr) {
           return ResultPropagation::Stats();
         }
 
         ResultPropagation rp(methods_which_return_parameter, resolver,
                              m_callee_blocklist);
-        always_assert(code->editable_cfg_built());
-        auto& cfg = code->cfg();
-        rp.patch(mgr, cfg);
+        rp.patch(mgr, code);
         return rp.get_stats();
       });
   mgr.incr_metric(METRIC_METHODS_WHICH_RETURN_PARAMETER,
@@ -574,10 +579,9 @@ ResultPropagationPass::find_methods_which_return_parameter(
                 return res;
               }
 
-              always_assert(code->editable_cfg_built());
-              auto& cfg = code->cfg();
+              cfg::ScopedCFG cfg(const_cast<IRCode*>(code));
               const auto return_param_index = resolver.get_return_param_index(
-                  cfg, methods_which_return_parameter);
+                  *cfg, methods_which_return_parameter);
               if (return_param_index) {
                 res.insert({method, *return_param_index});
               }

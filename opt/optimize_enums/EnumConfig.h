@@ -30,7 +30,7 @@ struct ParamSummary {
   void print(const DexMethodRef* method) const;
 };
 
-using SummaryMap = InsertOnlyConcurrentMap<const DexMethodRef*, ParamSummary>;
+using SummaryMap = ConcurrentMap<const DexMethodRef*, ParamSummary>;
 
 struct Config {
   /**

@@ -74,7 +74,7 @@ bool uses_this(const DexMethod* method, bool strict = false) {
   }
   always_assert(!iterable.empty());
   live_range::MoveAwareChains chains(cfg);
-  live_range::Uses first_load_param_uses;
+  std::unordered_set<live_range::Use> first_load_param_uses;
 
   auto first_load_param = iterable.begin()->insn;
   first_load_param_uses =
@@ -104,7 +104,6 @@ void make_static_and_relocate_method(DexMethod* method, DexType* to_type) {
                           uses_this(method, true) ? mutators::KeepThis::Yes
                                                   : mutators::KeepThis::No);
   }
-  change_visibility(method, to_type);
   relocate_method(method, to_type);
 }
 
@@ -357,7 +356,7 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
 
   const auto scope = build_class_scope(stores);
 
-  InsertOnlyConcurrentMap<DexClass*, DexClass*> map;
+  ConcurrentMap<DexClass*, DexClass*> map;
   ConcurrentSet<DexClass*> bad;
   std::unordered_map<DexClass*, unsigned> outer_cls_count;
   std::unordered_set<DexType*> do_not_inline_set;

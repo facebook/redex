@@ -12,6 +12,7 @@
 #include "ReachingDefinitions.h"
 #include "RedexContext.h"
 #include "Resolver.h"
+#include "ScopedCFG.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -27,9 +28,8 @@ void ResolveProguardAssumeValuesPass::run_pass(DexStoresVector& stores,
     if (!method || !method->get_code()) {
       return stat;
     }
-    always_assert(method->get_code()->editable_cfg_built());
-    auto& cfg = method->get_code()->cfg();
-    return process_for_code(cfg);
+    auto code = method->get_code();
+    return process_for_code(code);
   });
   stats.report(mgr);
   TRACE(PGR,
@@ -43,12 +43,13 @@ void ResolveProguardAssumeValuesPass::run_pass(DexStoresVector& stores,
 }
 
 ResolveProguardAssumeValuesPass::Stats
-ResolveProguardAssumeValuesPass::process_for_code(cfg::ControlFlowGraph& cfg) {
+ResolveProguardAssumeValuesPass::process_for_code(IRCode* code) {
 
   Stats stat;
-  cfg::CFGMutation mutation(cfg);
+  cfg::ScopedCFG cfg(code);
+  cfg::CFGMutation mutation(*cfg);
 
-  auto ii = InstructionIterable(cfg);
+  auto ii = InstructionIterable(*cfg);
   for (auto insn_it = ii.begin(); insn_it != ii.end(); ++insn_it) {
     auto insn = insn_it->insn;
     switch (insn->opcode()) {
@@ -60,7 +61,7 @@ ResolveProguardAssumeValuesPass::process_for_code(cfg::ControlFlowGraph& cfg) {
         break;
       }
 
-      auto move_result_it = cfg.move_result_of(insn_it);
+      auto move_result_it = cfg->move_result_of(insn_it);
       if (!move_result_it.is_end()) {
         auto move_insn = move_result_it->insn;
         int val = field_value->value.v;
@@ -86,7 +87,7 @@ ResolveProguardAssumeValuesPass::process_for_code(cfg::ControlFlowGraph& cfg) {
         break;
       }
 
-      auto move_result_it = cfg.move_result_of(insn_it);
+      auto move_result_it = cfg->move_result_of(insn_it);
       if (!move_result_it.is_end()) {
         auto move_insn = move_result_it->insn;
         int val = (*return_value).value.v;

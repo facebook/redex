@@ -23,10 +23,12 @@ class RemoveRecursiveLocksPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {InitialRenameClass, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
     };
   }
+  bool is_cfg_legacy() override { return true; }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

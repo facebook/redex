@@ -673,7 +673,7 @@ ManifestClassInfo extract_classes_from_manifest(const char* data, size_t size) {
         }
       } else if (tag == instrumentation) {
         std::string classname = get_string_attribute_value(parser, name);
-        always_assert(!classname.empty());
+        always_assert(classname.size());
         manifest_classes.instrumentation_classes.emplace(
             java_names::external_to_internal(classname));
       } else if (tag == queries) {
@@ -683,7 +683,7 @@ ManifestClassInfo extract_classes_from_manifest(const char* data, size_t size) {
       } else if (string_to_tag.count(tag)) {
         std::string classname = get_string_attribute_value(
             parser, tag != activity_alias ? name : target_activity);
-        always_assert(!classname.empty());
+        always_assert(classname.size());
 
         bool has_exported_attribute = has_bool_attribute(parser, exported);
         android::Res_value ignore_output;
@@ -2417,7 +2417,6 @@ size_t ResourcesArscFile::serialize() {
       // Refer to the re-parsed data at initial step to get full details of the
       // entries, flags and values for the new type.
       std::vector<uint32_t> flags;
-      flags.reserve(type_def.source_res_ids.size());
       for (auto& id : type_def.source_res_ids) {
         flags.emplace_back(table_parser.m_res_id_to_flags.at(id));
       }
@@ -2566,7 +2565,7 @@ std::unordered_set<uint32_t> ResourcesArscFile::get_types_by_name_prefixes(
     const auto& type_name = all_types.at(i);
     if (std::find_if(type_name_prefixes.begin(), type_name_prefixes.end(),
                      [&](const std::string& prefix) {
-                       return type_name.find(prefix) == 0;
+                       return type_name.find(prefix) != std::string::npos;
                      }) != type_name_prefixes.end()) {
       type_ids.emplace((i + 1) << TYPE_INDEX_BIT_SHIFT);
     }

@@ -11,8 +11,6 @@
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
 #include <sparta/PatriciaTreeSetAbstractDomain.h>
 
-#include <utility>
-
 #include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
@@ -24,43 +22,25 @@ using Domain = sparta::PatriciaTreeSetAbstractDomain<IRInstruction*>;
 
 using Environment = sparta::PatriciaTreeMapAbstractEnvironment<reg_t, Domain>;
 
-using Filter = std::function<bool(const IRInstruction*)>;
-
 class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
-  Filter m_filter;
-
  public:
-  explicit FixpointIterator(const cfg::ControlFlowGraph& cfg,
-                            Filter filter = nullptr)
-      : ir_analyzer::BaseIRAnalyzer<Environment>(cfg),
-        m_filter(std::move(filter)) {}
+  explicit FixpointIterator(const cfg::ControlFlowGraph& cfg)
+      : ir_analyzer::BaseIRAnalyzer<Environment>(cfg) {}
 
   void analyze_instruction(const IRInstruction* insn,
                            Environment* current_state) const override {
     if (insn->has_dest()) {
-      current_state->set(insn->dest(), make_domain(insn));
+      current_state->set(insn->dest(),
+                         Domain(const_cast<IRInstruction*>(insn)));
     }
-  }
-
-  bool has_filter() const { return m_filter != nullptr; }
-
-  Domain make_domain(const IRInstruction* insn) const {
-    if (!m_filter || m_filter(insn)) {
-      return Domain(const_cast<IRInstruction*>(insn));
-    }
-    return Domain();
   }
 };
 
 class MoveAwareFixpointIterator final
     : public ir_analyzer::BaseIRAnalyzer<Environment> {
-  Filter m_filter;
-
  public:
-  explicit MoveAwareFixpointIterator(const cfg::ControlFlowGraph& cfg,
-                                     Filter filter = nullptr)
-      : ir_analyzer::BaseIRAnalyzer<Environment>(cfg),
-        m_filter(std::move(filter)) {}
+  explicit MoveAwareFixpointIterator(const cfg::ControlFlowGraph& cfg)
+      : ir_analyzer::BaseIRAnalyzer<Environment>(cfg) {}
 
   void analyze_instruction(const IRInstruction* insn,
                            Environment* current_state) const override {
@@ -70,19 +50,12 @@ class MoveAwareFixpointIterator final
       current_state->set(insn->dest(), current_state->get(RESULT_REGISTER));
       current_state->set(RESULT_REGISTER, Domain::top());
     } else if (insn->has_move_result_any()) {
-      current_state->set(RESULT_REGISTER, make_domain(insn));
+      current_state->set(RESULT_REGISTER,
+                         Domain(const_cast<IRInstruction*>(insn)));
     } else if (insn->has_dest()) {
-      current_state->set(insn->dest(), make_domain(insn));
+      current_state->set(insn->dest(),
+                         Domain(const_cast<IRInstruction*>(insn)));
     }
-  }
-
-  bool has_filter() const { return m_filter != nullptr; }
-
-  Domain make_domain(const IRInstruction* insn) const {
-    if (!m_filter || m_filter(insn)) {
-      return Domain(const_cast<IRInstruction*>(insn));
-    }
-    return Domain();
   }
 };
 

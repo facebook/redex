@@ -57,8 +57,8 @@ bool is_true_virtual(const Graph& graph, const DexMethod* method);
 /*
  * Return all non-true-virtuals in scope.
  */
-InsertOnlyConcurrentSet<DexMethod*> get_non_true_virtuals(const Graph& graph,
-                                                          const Scope& scope);
+std::unordered_set<DexMethod*> get_non_true_virtuals(const Graph& graph,
+                                                     const Scope& scope);
 
 /*
  * When a class method implements interface methods only in a subclass of the
@@ -116,29 +116,5 @@ class Graph {
   static Node empty_node;
   ConcurrentMap<const DexMethod*, Node> m_nodes;
 };
-
-bool all_overriding_methods(const Graph& graph,
-                            const DexMethod* method,
-                            const std::function<bool(const DexMethod*)>& f,
-                            bool include_interfaces = false,
-                            const DexType* base_type = nullptr);
-
-bool any_overriding_methods(
-    const Graph& graph,
-    const DexMethod* method,
-    const std::function<bool(const DexMethod*)>& f = [](auto*) { return true; },
-    bool include_interfaces = false,
-    const DexType* base_type = nullptr);
-
-bool all_overridden_methods(const Graph& graph,
-                            const DexMethod* method,
-                            const std::function<bool(const DexMethod*)>& f,
-                            bool include_interfaces);
-
-bool any_overridden_methods(
-    const Graph& graph,
-    const DexMethod* method,
-    const std::function<bool(const DexMethod*)>& f = [](auto*) { return true; },
-    bool include_interfaces = false);
 
 } // namespace method_override_graph

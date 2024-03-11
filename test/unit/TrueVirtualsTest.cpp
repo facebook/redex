@@ -409,9 +409,8 @@ std::vector<DexClass*> create_scope_10() {
 // Utilities for tests
 //
 
-template <typename MethodCollection>
 std::unordered_set<std::string> get_method_names(
-    const MethodCollection& methods) {
+    const std::unordered_set<DexMethod*>& methods) {
   std::unordered_set<std::string> result;
   for (auto* method : methods) {
     result.emplace(show(method));

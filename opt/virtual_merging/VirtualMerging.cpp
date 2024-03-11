@@ -654,20 +654,19 @@ VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
     const method_profiles::MethodProfiles& profiles,
     Strategy strategy,
     VirtualMergingStats& stats) const {
-  InsertOnlyConcurrentMap<const VirtualScope*, LocalStats> local_stats;
+  ConcurrentMap<const VirtualScope*, LocalStats> local_stats;
   std::vector<const VirtualScope*> virtual_scopes;
   for (auto& p : m_mergeable_scope_methods) {
     virtual_scopes.push_back(p.first);
   }
-  InsertOnlyConcurrentMap<
-      const VirtualScope*,
-      std::vector<std::pair<const DexMethod*, const DexMethod*>>>
+  ConcurrentMap<const VirtualScope*,
+                std::vector<std::pair<const DexMethod*, const DexMethod*>>>
       mergeable_pairs_by_virtual_scopes;
   SimpleOrderingProvider ordering_provider{profiles};
   walk::parallel::virtual_scopes(
       virtual_scopes, [&](const virt_scope::VirtualScope* virtual_scope) {
         MergePairsBuilder mpb(virtual_scope, ordering_provider, m_perf_config);
-        auto res = mpb.build(m_mergeable_scope_methods.at_unsafe(virtual_scope),
+        auto res = mpb.build(m_mergeable_scope_methods.at(virtual_scope),
                              m_xstores, m_xdexes, profiles, strategy);
         if (!res) {
           return;
@@ -1375,8 +1374,6 @@ void VirtualMerging::merge_methods(
 // Part 5: Remove methods within classes.
 void VirtualMerging::remove_methods() {
   std::vector<DexClass*> classes_with_virtual_methods_to_remove;
-  classes_with_virtual_methods_to_remove.reserve(
-      m_virtual_methods_to_remove.size());
   for (auto& p : m_virtual_methods_to_remove) {
     classes_with_virtual_methods_to_remove.push_back(p.first);
   }

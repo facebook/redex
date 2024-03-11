@@ -17,12 +17,12 @@ class PassManager;
 namespace redex_properties {
 
 class PropertyChecker {
-  const Property m_property;
+  PropertyName m_property_name;
 
  public:
-  explicit PropertyChecker(Property property);
+  explicit PropertyChecker(PropertyName property_name);
   virtual ~PropertyChecker();
-  const Property& get_property() const { return m_property; }
+  const PropertyName& get_property_name() { return m_property_name; }
   virtual void run_checker(DexStoresVector& stores,
                            ConfigFiles& conf,
                            PassManager& mgr,

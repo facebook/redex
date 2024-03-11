@@ -7,10 +7,8 @@
 
 #pragma once
 
-#include <iosfwd>
 #include <string>
 #include <unordered_map>
-#include <vector>
 
 namespace redex_properties {
 
@@ -40,57 +38,38 @@ struct PropertyInteraction {
 };
 
 namespace interactions {
-// Not specified property will have Destroys interaction for
-// passes by default unless specified with Negative or DefaultPreserve
 inline const PropertyInteraction Destroys = // default
     PropertyInteraction(false, false, false, false);
-// Preserve established property for passes.
-// DefaultPreserve will preserve the property by default.
 inline const PropertyInteraction Preserves =
     PropertyInteraction(false, false, true, false);
-// Requires property for passes will be checked if they have
-// already been established.
 inline const PropertyInteraction Requires =
     PropertyInteraction(false, true, false, false);
-// Establishes a property for passes. DefaultInitial property
-// will be established at beginning by default.
-// In deep check mode, after each pass eastablished property
-// will be running their own checks.
 inline const PropertyInteraction Establishes =
     PropertyInteraction(true, false, false, false);
 inline const PropertyInteraction RequiresAndEstablishes =
     PropertyInteraction(true, true, true, false);
-inline const PropertyInteraction RequiresAndPreserves =
-    PropertyInteraction(false, true, true, false);
-// Establish a property and add it to final require list with other
-// default finals.
 inline const PropertyInteraction EstablishesAndRequiresFinally =
     PropertyInteraction(true, false, false, true);
 } // namespace interactions
 
-enum class Property {
-#define REDEX_PROPS(name, _neg, _init, _final, _def_pres) name,
-#include "RedexProperties.def"
-#undef REDEX_PROPS
-};
-
-bool is_negative(Property property);
-bool is_default_preserving(Property property);
-std::vector<Property> get_all_properties();
-
-const char* get_name(Property property);
-std::ostream& operator<<(std::ostream& os, const Property& property);
-
-using PropertyInteractions = std::unordered_map<Property, PropertyInteraction>;
-
-// Legacy naming scheme. May update references at some point.
+using PropertyName = std::string;
+using PropertyInteractions =
+    std::unordered_map<PropertyName, PropertyInteraction>;
 
 namespace names {
 
-#define REDEX_PROPS(name, _neg, _init, _final, _def_pres) \
-  constexpr Property name = Property::name;
-#include "RedexProperties.def"
-#undef REDEX_PROPS
+inline const PropertyName NoInitClassInstructions("NoInitClassInstructions");
+inline const PropertyName NoUnreachableInstructions(
+    "NoUnreachableInstructions");
+inline const PropertyName DexLimitsObeyed("DexLimitsObeyed");
+// Stand-in for fixing up passes.
+inline const PropertyName NeedsEverythingPublic("NeedsEverythingPublic");
+inline const PropertyName NeedsInjectionIdLowering("NeedsInjectionIdLowering");
+inline const PropertyName HasSourceBlocks("HasSourceBlocks");
+inline const PropertyName NoResolvablePureRefs("NoResolvablePureRefs");
+inline const PropertyName NoSpuriousGetClassCalls("NoSpuriousGetClassCalls");
+inline const PropertyName RenameClass("RenameClass");
+inline const PropertyName UltralightCodePatterns("UltralightCodePatterns");
 
 } // namespace names
 
@@ -100,11 +79,18 @@ namespace simple {
 // explicit.
 inline PropertyInteractions preserves_all() {
   using namespace redex_properties::interactions;
+  using namespace redex_properties::names;
   return {
-#define REDEX_PROPS(name, _neg, _init, _final, _def_pres) \
-  {Property::name, Preserves},
-#include "RedexProperties.def"
-#undef REDEX_PROPS
+      {DexLimitsObeyed, Preserves},
+      {HasSourceBlocks, Preserves},
+      {NeedsEverythingPublic, Preserves},
+      {NeedsInjectionIdLowering, Preserves},
+      {NoInitClassInstructions, Preserves},
+      {NoUnreachableInstructions, Preserves},
+      {NoResolvablePureRefs, Preserves},
+      {NoSpuriousGetClassCalls, Preserves},
+      {RenameClass, Preserves},
+      {UltralightCodePatterns, Preserves},
   };
 }
 

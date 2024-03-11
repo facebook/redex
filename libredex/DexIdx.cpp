@@ -92,12 +92,8 @@ DexCallSite* DexIdx::get_callsiteidx_fromdex(uint32_t csidx) {
 
 DexMethodHandle* DexIdx::get_methodhandleidx_fromdex(uint32_t mhidx) {
   redex_assert(mhidx < m_methodhandle_ids_size);
-  auto type_uint16 = m_methodhandle_ids[mhidx].method_handle_type;
-  always_assert_log(
-      type_uint16 >= MethodHandleType::METHOD_HANDLE_TYPE_STATIC_PUT &&
-          type_uint16 <= MethodHandleType::METHOD_HANDLE_TYPE_INVOKE_INTERFACE,
-      "Invalid MethodHandle type");
-  MethodHandleType method_handle_type = (MethodHandleType)type_uint16;
+  MethodHandleType method_handle_type =
+      (MethodHandleType)m_methodhandle_ids[mhidx].method_handle_type;
   if (DexMethodHandle::isInvokeType(method_handle_type)) {
     DexMethodRef* methodref =
         get_methodidx(m_methodhandle_ids[mhidx].field_or_method_id);

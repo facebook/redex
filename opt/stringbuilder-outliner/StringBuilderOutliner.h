@@ -251,12 +251,12 @@ class Outliner {
 
   // Map typelists of potentially outlinable StringBuilder call sequence to
   // their number of occurrences.
-  AtomicMap<const DexTypeList*, size_t> m_outline_typelists;
+  ConcurrentMap<const DexTypeList*, size_t> m_outline_typelists;
   // Typelists of call sequences we have chosen to outline -> generated outline
   // helper method.
   std::unordered_map<const DexTypeList*, DexMethod*> m_outline_helpers;
 
-  InsertOnlyConcurrentMap<const IRCode*, BuilderStateMap> m_builder_state_maps;
+  ConcurrentMap<const IRCode*, BuilderStateMap> m_builder_state_maps;
 };
 
 class StringBuilderOutlinerPass : public Pass {
@@ -268,7 +268,9 @@ class StringBuilderOutlinerPass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
+        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 

@@ -89,7 +89,9 @@ class SplitResourceTablesPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 
@@ -104,6 +106,7 @@ class SplitResourceTablesPass : public Pass {
     bind("max_splits_per_type", 5, m_max_splits_per_type);
   }
 
+  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:

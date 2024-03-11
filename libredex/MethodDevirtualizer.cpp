@@ -65,9 +65,7 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
       return call_counter;
     }
 
-    always_assert(code->editable_cfg_built());
-    auto& cfg = code->cfg();
-    for (const MethodItemEntry& mie : InstructionIterable(cfg)) {
+    for (const MethodItemEntry& mie : InstructionIterable(code)) {
       IRInstruction* insn = mie.insn;
       if (!insn->has_method()) {
         continue;
@@ -119,17 +117,14 @@ void make_methods_static(const std::unordered_set<DexMethod*>& methods,
 }
 
 bool uses_this(const DexMethod* method) {
-  auto code = (const_cast<DexMethod*>(method))->get_code();
+  auto const* code = method->get_code();
   always_assert_log(!is_static(method) && code != nullptr, "%s", SHOW(method));
 
-  always_assert(code->editable_cfg_built());
-  auto& cfg = code->cfg();
-  auto first = cfg.entry_block()->get_first_insn();
-  always_assert(first != cfg.entry_block()->end());
-  auto this_insn = first->insn;
+  auto iterable = InstructionIterable(code);
+  auto const this_insn = iterable.begin()->insn;
   always_assert(this_insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT);
   auto const this_reg = this_insn->dest();
-  for (const auto& mie : cfg::InstructionIterable(cfg)) {
+  for (const auto& mie : iterable) {
     auto insn = mie.insn;
     for (unsigned i = 0; i < insn->srcs_size(); i++) {
       if (this_reg == insn->src(i)) {
@@ -192,10 +187,6 @@ void MethodDevirtualizer::verify_and_split(
   for (const auto m : candidates) {
     if (!m_config.ignore_keep && !can_rename(m)) {
       TRACE(VIRT, 2, "failed to devirt method %s: keep", SHOW(m));
-      continue;
-    }
-    if (m->rstate.no_optimizations()) {
-      TRACE(VIRT, 2, "failed to devirt method %s: no_optimizations", SHOW(m));
       continue;
     }
     if (m->is_external() || is_abstract(m) || is_native(m)) {
