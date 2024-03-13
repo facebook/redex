@@ -29,6 +29,8 @@ class SortRemainingClassesPass : public Pass {
          "Whether to enable SortRemainingClassesPass.");
     bind("sort_primary_dex", false, m_sort_primary_dex,
          "Whether to sort classes in primary dex.");
+    bind("sort_for_speed", false, m_sort_for_speed,
+         "Whether to sort classes based on profiles.");
   }
 
   bool is_cfg_legacy() override { return true; }
@@ -41,4 +43,7 @@ class SortRemainingClassesPass : public Pass {
   bool m_enable_pass;
   // Whether the classes in primary dex should be sorted.
   bool m_sort_primary_dex;
+  // Whether classes should be ordered based on profiling data. This applies to
+  // the primary dex as well.
+  bool m_sort_for_speed;
 };
