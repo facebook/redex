@@ -147,6 +147,75 @@ void sort_classes_for_compressed_size(const std::string& name,
   mgr.set_metric(name + "_remaining_classes", remaining_classes.size());
 }
 
+void sort_classes_for_speed_and_compression(
+    const std::string& name,
+    PassManager& mgr,
+    DexClasses* classes,
+    bool sort_for_compression,
+    std::unordered_map<const DexMethod*, unsigned int>&
+        coldstart_method_ordering) {
+  std::vector<DexClass*> perf_sensitive_classes;
+  using DexClassWithSortNum = std::pair<DexClass*, unsigned int>;
+  std::vector<DexClassWithSortNum> classes_with_sort_num;
+  std::vector<DexClass*> remaining_classes;
+
+  for (auto cls : *classes) {
+    if (cls->is_perf_sensitive() || is_canary(cls)) {
+      perf_sensitive_classes.push_back(cls);
+      continue;
+    }
+
+    unsigned int cls_sort_num = std::numeric_limits<unsigned int>::max();
+    walk::methods(std::vector<DexClass*>{cls}, [&](DexMethod* method) {
+      if (coldstart_method_ordering.count(method) != 0 &&
+          coldstart_method_ordering[method] < cls_sort_num) {
+        cls_sort_num = coldstart_method_ordering[method];
+      }
+    });
+    if (cls_sort_num < std::numeric_limits<unsigned int>::max()) {
+      classes_with_sort_num.emplace_back(cls, cls_sort_num);
+      continue;
+    }
+    remaining_classes.push_back(cls);
+  }
+  always_assert(perf_sensitive_classes.size() + classes_with_sort_num.size() +
+                    remaining_classes.size() ==
+                classes->size());
+
+  TRACE(SRC_PASS, 3,
+        "Skipping %zu perf sensitive, ordering %zu by orderfile, and "
+        "sorting %zu classes",
+        perf_sensitive_classes.size(), classes_with_sort_num.size(),
+        remaining_classes.size());
+  std::stable_sort(
+      classes_with_sort_num.begin(), classes_with_sort_num.end(),
+      [](const DexClassWithSortNum& a, const DexClassWithSortNum& b) {
+        return a.second < b.second;
+      });
+
+  if (sort_for_compression) {
+    std::sort(remaining_classes.begin(), remaining_classes.end(),
+              compare_dexclasses_for_compressed_size);
+  }
+  // Rearrange classes so that...
+  // - perf_sensitive_classes go first, then
+  // - classes_with_sort_num that got ordered by bps, and
+  // finally
+  // - remaining_classes
+  classes->clear();
+  classes->insert(classes->end(), perf_sensitive_classes.begin(),
+                  perf_sensitive_classes.end());
+  for (auto& p : classes_with_sort_num) {
+    classes->push_back(p.first);
+  }
+  classes->insert(classes->end(), remaining_classes.begin(),
+                  remaining_classes.end());
+  mgr.set_metric(name + "_perf_sensitive_classes",
+                 perf_sensitive_classes.size());
+  mgr.set_metric(name + "_classes_with_sort_num", classes_with_sort_num.size());
+  mgr.set_metric(name + "_remaining_classes", remaining_classes.size());
+}
+
 } // namespace
 
 void SortRemainingClassesPass::run_pass(DexStoresVector& stores,
@@ -162,7 +231,10 @@ void SortRemainingClassesPass::run_pass(DexStoresVector& stores,
     auto& dexen = store.get_dexen();
     // by default (m_sort_primary_dex == false), skip primary dex in root store.
     // Otherwise, also sort primary dex.
-    for (size_t i = (store.is_root_store() && !m_sort_primary_dex) ? 1 : 0;
+    for (size_t i =
+             (store.is_root_store() && !m_sort_primary_dex && !m_sort_for_speed)
+                 ? 1
+                 : 0;
          i < dexen.size();
          i++) {
       std::string name = store.get_name();
@@ -171,6 +243,31 @@ void SortRemainingClassesPass::run_pass(DexStoresVector& stores,
       }
       linear_dexen.emplace_back(std::move(name), &dexen.at(i));
     }
+  }
+
+  if (m_sort_for_speed) {
+    auto& coldstart_methods = conf.get_coldstart_methods();
+    std::unordered_map<const DexMethod*, unsigned int>
+        coldstart_method_ordering;
+    for (auto& method : coldstart_methods) {
+      DexMethodRef* method_ref = DexMethod::get_method(method);
+      if (method_ref == nullptr || !method_ref->is_def()) {
+        continue;
+      }
+      auto* meth = method_ref->as_def();
+      always_assert_log(coldstart_method_ordering.count(meth) == 0,
+                        "%s already found at position %u", SHOW(meth),
+                        coldstart_method_ordering.at(meth));
+      coldstart_method_ordering[meth] = coldstart_method_ordering.size();
+    }
+
+    workqueue_run_for<size_t>(0, linear_dexen.size(), [&](size_t i) {
+      auto&& [name, dex] = linear_dexen.at(i);
+      sort_classes_for_speed_and_compression(name, mgr, dex,
+                                             m_sort_primary_dex || i != 0,
+                                             coldstart_method_ordering);
+    });
+    return;
   }
 
   workqueue_run_for<size_t>(0, linear_dexen.size(), [&](size_t i) {
