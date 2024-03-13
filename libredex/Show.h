@@ -11,6 +11,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <vector>
 
 /*
  * Stringification functions for core types.  Definitions are in DexClass.cpp
@@ -155,3 +156,8 @@ std::string vshow(const DexType*);
 
 // Format a number as a byte entity.
 std::string pretty_bytes(uint64_t val);
+
+// Format the items of given width as human readable hex strings.
+std::vector<std::string> pretty_array_data_payload(const uint16_t ewidth,
+                                                   const uint32_t element_count,
+                                                   const uint16_t* data);

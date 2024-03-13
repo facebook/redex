@@ -16,6 +16,7 @@
 
 #include "Creators.h"
 #include "DexClass.h"
+#include "DexInstruction.h"
 #include "DexPosition.h"
 #include "IRCode.h"
 #include "Show.h"
@@ -75,9 +76,24 @@ s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
   switch (opcode::ref(op)) {
   case opcode::Ref::None:
     break;
-  case opcode::Ref::Data:
-    not_reached_log("Not yet supported");
+  case opcode::Ref::Data: {
+    auto op_data = insn->get_data();
+    if (op_data->opcode() == FOPCODE_FILLED_ARRAY) {
+      auto ewidth = fill_array_data_payload_width(op_data);
+      s_exprs.emplace_back(ewidth);
+      auto element_count = fill_array_data_payload_element_count(op_data);
+      std::vector<s_expr> element_exprs;
+      element_exprs.reserve(element_count);
+      for (const auto& s :
+           pretty_array_data_payload(ewidth, element_count, op_data->data())) {
+        element_exprs.emplace_back(s);
+      }
+      s_exprs.emplace_back(element_exprs);
+    } else {
+      not_reached_log("Not yet supported");
+    }
     break;
+  }
   case opcode::Ref::Field:
     s_exprs.emplace_back(show(insn->get_field()));
     break;
@@ -137,6 +153,22 @@ s_expr _to_s_expr(const DexPosition* pos, uint32_t idx, uint32_t parent_idx) {
       s_expr(std::to_string(pos->line)),
       s_expr(parent_idx_str),
   });
+}
+
+std::unique_ptr<DexOpcodeData> create_fill_array_data_payload_from_str(
+    const uint16_t ewidth, const std::vector<std::string>& elements) {
+  switch (ewidth) {
+  case 1:
+    return encode_fill_array_data_payload_from_string<uint8_t>(elements);
+  case 2:
+    return encode_fill_array_data_payload_from_string<uint16_t>(elements);
+  case 4:
+    return encode_fill_array_data_payload_from_string<uint32_t>(elements);
+  default: {
+    always_assert_log(ewidth == 8, "Invalid width: %d", ewidth);
+    return encode_fill_array_data_payload_from_string<uint64_t>(elements);
+  }
+  }
 }
 } // namespace
 
@@ -206,9 +238,31 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
   switch (opcode::ref(op)) {
   case opcode::Ref::None:
     break;
-  case opcode::Ref::Data:
-    not_reached_log("Not yet supported");
+  case opcode::Ref::Data: {
+    if (insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
+      int32_t ewidth;
+      s_patn({s_patn(&ewidth)}, tail)
+          .must_match(tail, "Expecting int for element width" + opcode_str);
+      always_assert_log(ewidth == 1 || ewidth == 2 || ewidth == 4 ||
+                            ewidth == 8,
+                        "Invalid width %d", ewidth);
+
+      std::vector<std::string> hex_elements;
+      std::string element_str;
+      s_expr list;
+      s_patn({s_patn(list)}, tail)
+          .must_match(tail, "Expecting list of hex strings for " + opcode_str);
+      while (s_patn({s_patn(&element_str)}, list).match_with(list)) {
+        hex_elements.push_back(element_str);
+      }
+      auto data = create_fill_array_data_payload_from_str((uint16_t)ewidth,
+                                                          hex_elements);
+      insn->set_data(std::move(data));
+    } else {
+      not_reached_log("Not yet supported");
+    }
     break;
+  }
   case opcode::Ref::Field: {
     std::string str;
     s_patn({s_patn(&str)}, tail)

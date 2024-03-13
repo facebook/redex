@@ -41,10 +41,6 @@ class IRCode;
  * automatically created by the assembler. I.e. you do *not* need to call
  * make_{field,method}() beforehand to ensure that they exist.
  *
- * Not-yet-implemented features:
- *   - try-catch
- *   - fill-array-data opcodes
- *
  * NOTE:
  * When assembling an IRCode instance, the assembler will attempt to set the
  * registers_size for you by making it 1 larger than the largest register
