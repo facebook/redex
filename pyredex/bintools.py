@@ -22,6 +22,7 @@ import typing
 
 
 IS_WINDOWS: bool = os.name == "nt"
+LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 _BACKTRACE_PATTERN: typing.Pattern[str] = re.compile(
@@ -88,7 +89,7 @@ def _has_addr2line() -> bool:
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
                     )
-                    logging.info("Found addr2line at %s", cmd)
+                    LOGGER.info("Found addr2line at %s", cmd)
                     return cmd
                 except Exception:
                     pass
@@ -103,7 +104,7 @@ def _has_addr2line() -> bool:
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
                     )
-                    logging.info("Found addr2line at %s from `which`", cmd)
+                    LOGGER.info("Found addr2line at %s from `which`", cmd)
                     return cmd
                 except Exception:
                     pass

@@ -36,6 +36,9 @@ from pyredex.utils import (
 )
 
 
+LOGGER: logging.Logger = logging.getLogger(__name__)
+
+
 class BaseDexMode(ABC):
     def __init__(
         self,
@@ -577,7 +580,7 @@ warned_about_xz = False
 def _warn_xz() -> None:
     global warned_about_xz
     if not warned_about_xz:
-        logging.warning(
+        LOGGER.warning(
             "Falling back to python lzma. For increased performance, install xz."
         )
         warned_about_xz = True
