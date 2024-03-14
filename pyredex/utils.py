@@ -11,6 +11,7 @@
 import argparse
 import distutils.version
 import glob
+import inspect
 import json
 import logging
 import multiprocessing
@@ -31,6 +32,7 @@ from pyredex.logger import log
 
 
 IS_WINDOWS: bool = os.name == "nt"
+LOGGER: logging.Logger = logging.getLogger(__name__)
 temp_dirs: typing.List[str] = []
 
 
@@ -103,7 +105,7 @@ class _FindAndroidBuildToolHelper:
     def find(self, tool_name: str, tool: str) -> str:
         if tool_name in self.tool_overrides:
             res = self.tool_overrides[tool_name]
-            logging.debug("Using tool override: %s -> %s", tool_name, res)
+            LOGGER.debug("Using tool override: %s -> %s", tool_name, res)
             return res
 
         if self.omit_sdk_tool_discovery:
@@ -150,13 +152,13 @@ class _FindAndroidBuildToolHelper:
             return None
 
         for name, _, base_tools_fn in self.sdk_search_order:
-            logging.debug("Attempting %s to find %s", name, tool)
+            LOGGER.debug("Attempting %s to find %s", name, tool)
             candidate = try_find(name, base_tools_fn)
             if candidate:
                 return candidate, attempts
 
         # By `PATH`.
-        logging.debug("Attempting PATH to find %s", tool)
+        LOGGER.debug("Attempting PATH to find %s", tool)
         tool_path = shutil.which(tool)
         if tool_path is not None:
             return tool_path, attempts
@@ -179,11 +181,11 @@ class _FindAndroidBuildToolHelper:
             key=distutils.version.StrictVersion,
         )
         if version == "0.0.1":
-            logging.debug(
+            LOGGER.debug(
                 "No version found in %s: %s", build_tools, os.listdir(build_tools)
             )
             return None
-        logging.debug("max build tools version: %s", version)
+        LOGGER.debug("max build tools version: %s", version)
         return join(build_tools, version)
 
     @staticmethod
@@ -191,11 +193,11 @@ class _FindAndroidBuildToolHelper:
         input: typing.Optional[typing.List[typing.Optional[str]]],
     ) -> typing.Optional[typing.List[str]]:
         if input is None:
-            logging.debug("Filtering an input None to None")
+            LOGGER.debug("Filtering an input None to None")
             return None
         filtered = [p for p in input if p and os.path.exists(p)]
         ret_val = filtered if filtered else None
-        logging.debug("Filtered %s to %s = %s", input, filtered, ret_val)
+        LOGGER.debug("Filtered %s to %s = %s", input, filtered, ret_val)
         return ret_val
 
     @staticmethod
@@ -205,13 +207,13 @@ class _FindAndroidBuildToolHelper:
             for key in ["ANDROID_SDK", "ANDROID_HOME"]
             if key in os.environ
         ]
-        logging.debug("Android ENV values = %s", env_values)
+        LOGGER.debug("Android ENV values = %s", env_values)
         return _FindAndroidBuildToolHelper._filter_none_not_exists_ret_none(env_values)
 
     @staticmethod
     def find_android_build_tools_by_env() -> typing.Optional[typing.List[str]]:
         base = _FindAndroidBuildToolHelper.find_android_path_by_env()
-        logging.debug("Android Build Tools base by env = %s", base)
+        LOGGER.debug("Android Build Tools base by env = %s", base)
         if not base:
             return None
 
@@ -260,16 +262,16 @@ class _FindAndroidBuildToolHelper:
         return json.loads(raw)
 
     def find_android_path_by_buck(self) -> typing.Optional[typing.List[str]]:
-        logging.debug("Computing SDK path from buck")
+        LOGGER.debug("Computing SDK path from buck")
         try:
             buckconfig = self._load_android_buckconfig_values()
         except BaseException as e:
-            logging.debug("Failed loading buckconfig: %s", e)
+            LOGGER.debug("Failed loading buckconfig: %s", e)
             return None
         if "android.sdk_path" not in buckconfig:
-            logging.debug("android.sdk_path is not in buckconfig")
+            LOGGER.debug("android.sdk_path is not in buckconfig")
             return None
-        logging.debug(
+        LOGGER.debug(
             "buckconfig android.sdk_path = %s", buckconfig.get("android.sdk_path")
         )
         return _FindAndroidBuildToolHelper._filter_none_not_exists_ret_none(
@@ -277,27 +279,27 @@ class _FindAndroidBuildToolHelper:
         )
 
     def find_android_build_tools_by_buck(self) -> typing.Optional[typing.List[str]]:
-        logging.debug("Computing SDK path from buck")
+        LOGGER.debug("Computing SDK path from buck")
         try:
             buckconfig = self._load_android_buckconfig_values()
         except BaseException as e:
-            logging.debug("Failed loading buckconfig: %s", e)
+            LOGGER.debug("Failed loading buckconfig: %s", e)
             return None
         if "android.sdk_path" not in buckconfig:
-            logging.debug("android.sdk_path is not in buckconfig")
+            LOGGER.debug("android.sdk_path is not in buckconfig")
             return None
         sdk_path = buckconfig.get("android.sdk_path")
-        logging.debug("buckconfig android.sdk_path = %s", sdk_path)
+        LOGGER.debug("buckconfig android.sdk_path = %s", sdk_path)
 
         if "android.build_tools_version" in buckconfig:
             version = buckconfig["android.build_tools_version"]
-            logging.debug("buckconfig android.build_tools_version is %s", version)
+            LOGGER.debug("buckconfig android.build_tools_version is %s", version)
             assert isinstance(sdk_path, str)
             return _FindAndroidBuildToolHelper._filter_none_not_exists_ret_none(
                 [join(sdk_path, "build-tools", version)]
             )
         else:
-            logging.debug("No android.build_tools_version in buck-config")
+            LOGGER.debug("No android.build_tools_version in buck-config")
             return _FindAndroidBuildToolHelper._filter_none_not_exists_ret_none(
                 [
                     _FindAndroidBuildToolHelper._find_biggest_build_tools_version(
@@ -325,7 +327,7 @@ def add_tool_override(tool_name: str, path: str) -> None:
 def get_android_sdk_path() -> str:
     attempts = []
     for name, base_dir_fn, _ in FIND_HELPER.sdk_search_order:
-        logging.debug("Attempting %s to find SDK path", name)
+        LOGGER.debug("Attempting %s to find SDK path", name)
         candidate = base_dir_fn()
         if candidate:
             return candidate[0]
@@ -390,7 +392,7 @@ def sign_apk(
         try:
             run()
         except FileNotFoundError:
-            logging.warning("Failed to find apksigner binary. Continuing...")
+            LOGGER.warning("Failed to find apksigner binary. Continuing...")
     else:
         run()
 
@@ -540,10 +542,10 @@ def verify_dexes(dex_dir: str, cmd: str) -> None:
 
     dex_files = glob.glob(join(join(dex_dir, "**"), "*.dex"), recursive=True)
     if not dex_files:
-        logging.warning("Found no dex files to verify")
+        LOGGER.warning("Found no dex files to verify")
         return
 
-    logging.info("Verifying %d dex files...", len(dex_files))
+    LOGGER.info("Verifying %d dex files...", len(dex_files))
 
     with multiprocessing.Pool() as pool:
         result = pool.starmap(
@@ -554,7 +556,7 @@ def verify_dexes(dex_dir: str, cmd: str) -> None:
     assert all(result), "Some dex files failed to verify!"
 
     end = timer()
-    logging.debug("Dex verification finished in {:.2f} seconds".format(end - start))
+    LOGGER.debug("Dex verification finished in {:.2f} seconds".format(end - start))
 
 
 _TIME_IT_DEPTH: int = 0
@@ -562,14 +564,23 @@ _TIME_IT_DEPTH: int = 0
 
 @contextmanager
 def time_it(
-    fmt: str, *args: typing.Any, **kwargs: str
+    fmt: str, *args: typing.Any, **kwargs: typing.Any
 ) -> typing.Generator[int, None, None]:
     global _TIME_IT_DEPTH
     this_depth = _TIME_IT_DEPTH
     _TIME_IT_DEPTH += 1
 
+    if "logger" in kwargs:
+        logger_opt: typing.Optional[logging.Logger] = kwargs["logger"]
+        if logger_opt:
+            logger = logger_opt
+        else:
+            logger = logging.getLogger()
+    else:
+        logger = logging.getLogger()
+
     if "start" in kwargs:
-        logging.info("-" * this_depth + kwargs["start"])
+        logger.info("-" * this_depth + kwargs["start"])
 
     timer = timeit.default_timer
     start_time = timer()
@@ -577,6 +588,21 @@ def time_it(
         yield 1  # Irrelevant
     finally:
         end_time = timer()
-        logging.info("-" * this_depth + fmt.format(time=end_time - start_time), *args)
+        logger.info("-" * this_depth + fmt.format(time=end_time - start_time), *args)
 
         _TIME_IT_DEPTH -= 1
+
+
+# Look for a global LOGGER in the stack.
+def time_it_logger(
+    start_depth: int = 1, max_depth: int = 1
+) -> typing.Optional[logging.Logger]:
+    stack = inspect.stack()
+    for i in range(start_depth, min(max_depth + 1, len(stack))):
+        frame = stack[i].frame
+        if hasattr(frame, "f_globals") and "LOGGER" in frame.f_globals:
+            logger = frame.f_globals["LOGGER"]
+            if isinstance(logger, logging.Logger):
+                return logger
+
+    return None

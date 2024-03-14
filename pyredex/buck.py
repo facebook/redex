@@ -16,7 +16,7 @@ import typing
 from contextlib import contextmanager
 from io import TextIOWrapper
 
-from pyredex.utils import time_it
+from pyredex.utils import time_it, time_it_logger
 
 
 # Data class for a running step.
@@ -177,11 +177,16 @@ class BuckConnectionScope:
 
 @contextmanager
 def BuckPartScope(
-    name: str, desc: str, timed: bool = True, timed_start: bool = True
+    name: str,
+    desc: str,
+    timed: bool = True,
+    timed_start: bool = True,
+    logger: typing.Optional[logging.Logger] = None,
 ) -> typing.Generator[int, None, None]:
     if timed:
         with time_it(
             f"{desc} took {{time:.2f}} seconds",
+            logger=time_it_logger(start_depth=2, max_depth=5),
             **({"start": desc} if timed_start else {}),
         ):
             _BUCK_CONNECTION.start(name, desc)

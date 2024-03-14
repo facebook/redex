@@ -53,6 +53,7 @@ from pyredex.utils import (
 
 
 IS_WINDOWS: bool = os.name == "nt"
+LOGGER: logging.Logger = logging.getLogger("redex")  # Don't want __main__
 
 
 # Pyre helper.
@@ -266,7 +267,7 @@ def run_redex_binary(
         sys.exit(
             "redex-all is not found or is not executable: " + state.args.redex_binary
         )
-    logging.debug("Running redex binary at %s", state.args.redex_binary)
+    LOGGER.debug("Running redex binary at %s", state.args.redex_binary)
 
     args: typing.List[str] = [state.args.redex_binary]
 
@@ -497,9 +498,9 @@ def copy_file_to_out_dir(
     tmp_path = tmp + "/" + name
     if os.path.isfile(tmp_path):
         shutil.copy2(tmp_path, output_path)
-        logging.debug("Copying " + human_name + " map to output_dir: " + output_path)
+        LOGGER.debug("Copying " + human_name + " map to output_dir: " + output_path)
     else:
-        logging.debug("Skipping " + human_name + " copy, since no file found to copy")
+        LOGGER.debug("Skipping " + human_name + " copy, since no file found to copy")
 
 
 def copy_all_file_to_out_dir(
@@ -867,21 +868,21 @@ def _has_android_library_jars(pg_file: str) -> bool:
 
 def _check_android_sdk_jar(args: argparse.Namespace) -> None:
     if args.suppress_android_jar_check:
-        logging.debug("No SDK jar check done")
+        LOGGER.debug("No SDK jar check done")
         return
 
     for jarpath in args.jarpaths:
         if jarpath.endswith("android.jar"):
-            logging.debug("Found an SDK-looking jar: %s", jarpath)
+            LOGGER.debug("Found an SDK-looking jar: %s", jarpath)
             return
 
     for pg_config in args.proguard_configs:
         if _has_android_library_jars(pg_config):
-            logging.debug("Found an SDK-looking jar in PG file %s", pg_config)
+            LOGGER.debug("Found an SDK-looking jar in PG file %s", pg_config)
             return
 
     # Check whether we can find and add one.
-    logging.info(
+    LOGGER.info(
         "No SDK jar found. If the detection is wrong, add `--suppress-android-jar-check`."
     )
     if args.omit_sdk_tool_discovery:
@@ -889,11 +890,11 @@ def _check_android_sdk_jar(args: argparse.Namespace) -> None:
             "SDK tool discovery explicitly disabled, not attempting to locate SDK jar via SDK path. Failing due to no SDK jar provided."
         )
 
-    logging.info("Attempting to find an SDK-looking jar via SDK path")
+    LOGGER.info("Attempting to find an SDK-looking jar via SDK path")
 
     try:
         sdk_path = get_android_sdk_path()
-        logging.debug("SDK path is %s", sdk_path)
+        LOGGER.debug("SDK path is %s", sdk_path)
         platforms = join(sdk_path, "platforms")
         if not os.path.exists(platforms):
             raise RuntimeError("platforms directory does not exist")
@@ -914,10 +915,10 @@ def _check_android_sdk_jar(args: argparse.Namespace) -> None:
         jar_path = join(platforms, f"android-{version}", "android.jar")
         if not os.path.exists(jar_path):
             raise RuntimeError(f"{jar_path} not found")
-        logging.info("Adding SDK jar path %s", jar_path)
+        LOGGER.info("Adding SDK jar path %s", jar_path)
         args.jarpaths.append(jar_path)
     except BaseException as e:
-        logging.warning("Could not find an SDK jar: %s", e)
+        LOGGER.warning("Could not find an SDK jar: %s", e)
 
 
 def _has_config_val(args: argparse.Namespace, path: typing.Iterable[str]) -> bool:
@@ -926,12 +927,12 @@ def _has_config_val(args: argparse.Namespace, path: typing.Iterable[str]) -> boo
             json_obj = json.load(f)
         for item in path:
             if item not in json_obj:
-                logging.debug("Did not find %s in %s", item, json_obj)
+                LOGGER.debug("Did not find %s in %s", item, json_obj)
                 return False
             json_obj = json_obj[item]
         return True
     except BaseException as e:
-        logging.error("%s", e)
+        LOGGER.error("%s", e)
         return False
 
 
@@ -945,21 +946,21 @@ def _check_shrinker_heuristics(args: argparse.Namespace) -> None:
         return
 
     # Nothing found, check whether we have files embedded
-    logging.info("No shrinking heuristic found, searching for default.")
+    LOGGER.info("No shrinking heuristic found, searching for default.")
     try:
         # pyre-ignore[21]
         from generated_shrinker_regalloc_heuristics import SHRINKER_HEURISTICS_FILE
 
-        logging.info("Found embedded shrinker heuristics")
+        LOGGER.info("Found embedded shrinker heuristics")
         tmp_dir = make_temp_dir("shrinker_heuristics")
         filename = os.path.join(tmp_dir, "shrinker.forest")
-        logging.debug("Writing shrinker heuristics to %s", filename)
+        LOGGER.debug("Writing shrinker heuristics to %s", filename)
         with open(filename, "wb") as f:
             f.write(SHRINKER_HEURISTICS_FILE)
         arg = arg_template + filename
         args.passthru.append(arg)
     except ImportError:
-        logging.info("No embedded files, please add manually!")
+        LOGGER.info("No embedded files, please add manually!")
 
 
 def _check_android_sdk_api(args: argparse.Namespace) -> None:
@@ -970,15 +971,15 @@ def _check_android_sdk_api(args: argparse.Namespace) -> None:
             return
 
     # Nothing found, check whether we have files embedded
-    logging.info("No android_sdk_api_XX_file parameters found.")
+    LOGGER.info("No android_sdk_api_XX_file parameters found.")
     try:
         # pyre-ignore[21]
         import generated_apilevels as ga
 
         levels = ga.get_api_levels()
-        logging.info("Found embedded API levels: %s", levels)
+        LOGGER.info("Found embedded API levels: %s", levels)
         api_dir = make_temp_dir("api_levels")
-        logging.debug("Writing API level files to %s", api_dir)
+        LOGGER.debug("Writing API level files to %s", api_dir)
         for level in levels:
             blob = ga.get_api_level_file(level)
             filename = os.path.join(api_dir, f"framework_classes_api_{level}.txt")
@@ -987,7 +988,7 @@ def _check_android_sdk_api(args: argparse.Namespace) -> None:
             arg = arg_template.format(level=level) + filename
             args.passthru.append(arg)
     except ImportError:
-        logging.warning("No embedded files, please add manually!")
+        LOGGER.warning("No embedded files, please add manually!")
 
 
 def _handle_profiles(args: argparse.Namespace) -> None:
@@ -1004,10 +1005,10 @@ def _handle_profiles(args: argparse.Namespace) -> None:
         if f.is_file() and ("method_stats" in f.name or "agg_stats" in f.name)
     )
     if method_profiles_str:
-        logging.debug("Found method profiles: %s", method_profiles_str)
+        LOGGER.debug("Found method profiles: %s", method_profiles_str)
         args.passthru_json.append(f"agg_method_stats_files=[{method_profiles_str}]")
     else:
-        logging.info("No method profiles found in %s", args.packed_profiles)
+        LOGGER.info("No method profiles found in %s", args.packed_profiles)
 
     # Create input for basic blocks.
     # Note: at the moment, only look for ColdStart.
@@ -1018,13 +1019,13 @@ def _handle_profiles(args: argparse.Namespace) -> None:
         if f.is_file() and f.name.startswith("block_profiles_")
     )
     if block_profiles_str:
-        logging.debug("Found block profiles: %s", block_profiles_str)
+        LOGGER.debug("Found block profiles: %s", block_profiles_str)
         # Assume there's at most one.
         args.passthru.append(
             f"InsertSourceBlocksPass.profile_files={block_profiles_str}"
         )
     else:
-        logging.info("No block profiles found in %s", args.packed_profiles)
+        LOGGER.info("No block profiles found in %s", args.packed_profiles)
 
     coldstart_method_ordering_str = join_str.join(
         f"{f.path}"
@@ -1032,11 +1033,11 @@ def _handle_profiles(args: argparse.Namespace) -> None:
         if f.is_file() and f.name.startswith("coldstart_method_ordering")
     )
     if coldstart_method_ordering_str:
-        logging.debug("Found coldstart ordering: %s", coldstart_method_ordering_str)
+        LOGGER.debug("Found coldstart ordering: %s", coldstart_method_ordering_str)
         # Assume there's at most one.
         args.passthru.append(f"coldstart_methods_file={coldstart_method_ordering_str}")
     else:
-        logging.info("No coldstart ordering found in %s", args.packed_profiles)
+        LOGGER.info("No coldstart ordering found in %s", args.packed_profiles)
 
 
 def _handle_secondary_method_profiles(args: argparse.Namespace) -> None:
@@ -1054,20 +1055,20 @@ def _handle_secondary_method_profiles(args: argparse.Namespace) -> None:
         and ("secondary_method_stats" in f.name or "secondary_stats" in f.name)
     )
     if secondary_method_profiles_str:
-        logging.debug(
+        LOGGER.debug(
             "Found secondary_method profiles: %s", secondary_method_profiles_str
         )
         args.passthru_json.append(
             f"secondary_method_stats_files=[{secondary_method_profiles_str}]"
         )
     else:
-        logging.info(
+        LOGGER.info(
             "No secondary method profiles found in %s", args.secondary_packed_profiles
         )
 
 
 def prepare_redex(args: argparse.Namespace) -> State:
-    logging.debug("Preparing...")
+    LOGGER.debug("Preparing...")
     debug_mode = args.unpack_only or args.debug
 
     if args.android_sdk_path:
@@ -1116,8 +1117,8 @@ def prepare_redex(args: argparse.Namespace) -> State:
 
     config = args.config
     binary = args.redex_binary
-    logging.debug("Using config %s", config if config is not None else "(default)")
-    logging.debug("Using binary %s", binary if binary is not None else "(default)")
+    LOGGER.debug("Using config %s", config if config is not None else "(default)")
+    LOGGER.debug("Using binary %s", binary if binary is not None else "(default)")
 
     if args.unpack_only or config is None:
         config_dict = {}
@@ -1147,7 +1148,7 @@ def prepare_redex(args: argparse.Namespace) -> State:
 
     with BuckPartScope("redex::Unpacking", "Unpacking Redex input"):
         with BuckPartScope("redex::UnpackApk", "Unpacking APK"):
-            logging.debug("Unpacking...")
+            LOGGER.debug("Unpacking...")
             if not extracted_apk_dir:
                 extracted_apk_dir = make_temp_dir(".redex_extracted_apk", debug_mode)
 
@@ -1186,7 +1187,7 @@ def prepare_redex(args: argparse.Namespace) -> State:
         _handle_profiles(args)
         _handle_secondary_method_profiles(args)
 
-        logging.debug("Moving contents to expected structure...")
+        LOGGER.debug("Moving contents to expected structure...")
         # Move each dex to a separate temporary directory to be operated by
         # redex.
         preserve_input_dexes = config_dict.get("preserve_input_dexes")
@@ -1212,7 +1213,7 @@ def prepare_redex(args: argparse.Namespace) -> State:
     for key_value_str in args.passthru_json:
         key_value = key_value_str.split("=", 1)
         if len(key_value) != 2:
-            logging.debug(
+            LOGGER.debug(
                 "Json Pass through %s is not valid. Split len: %s",
                 key_value_str,
                 len(key_value),
@@ -1221,7 +1222,7 @@ def prepare_redex(args: argparse.Namespace) -> State:
         key = key_value[0]
         value = key_value[1]
         prev_value = config_dict.get(key, "(No previous value)")
-        logging.debug(
+        LOGGER.debug(
             "Got Override %s = %s from %s. Previous %s",
             key,
             value,
@@ -1238,7 +1239,7 @@ def prepare_redex(args: argparse.Namespace) -> State:
     # Scan for SDK jar provided. If not found, warn and add if available and allowed.
     _check_android_sdk_jar(args)
 
-    logging.debug("Running redex-all on %d dex files ", len(dexen))
+    LOGGER.debug("Running redex-all on %d dex files ", len(dexen))
     if args.lldb:
         debugger = "lldb"
     elif args.gdb:
@@ -1428,7 +1429,7 @@ def _init_logging(level_str: str) -> None:
     level = levels[level_str]
     logging.basicConfig(
         level=level,
-        format="[%(levelname)-8s][%(asctime)-23s][%(name)-25s] %(message)s",
+        format="[%(levelname)-8s][%(asctime)-23s][%(name)-16s] %(message)s",
     )
 
 

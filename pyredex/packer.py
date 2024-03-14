@@ -29,6 +29,9 @@ from enum import Enum
 timer: typing.Callable[[], float] = timeit.default_timer
 
 
+LOGGER: logging.Logger = logging.getLogger(__name__)
+
+
 class CompressionLevel(Enum):
     FAST = 1
     DEFAULT = 2
@@ -226,26 +229,26 @@ def _warning_timer(name: str, threshold: float) -> typing.Generator[int, None, N
         end_time = timer()
         time_delta = end_time - start_time
         if time_delta > threshold:
-            logging.warning("Needed %fs to compress %s.", end_time - start_time, name)
+            LOGGER.warning("Needed %fs to compress %s.", end_time - start_time, name)
         else:
-            logging.debug("Needed %fs to compress.", end_time - start_time)
+            LOGGER.debug("Needed %fs to compress.", end_time - start_time)
 
 
 def _compress(
     data: typing.Tuple[CompressionEntry, str, str, argparse.Namespace]
 ) -> None:
     item, src_dir, trg_dir, args = data
-    logging.debug("Checking %s for compression...", item.name)
+    LOGGER.debug("Checking %s for compression...", item.name)
 
     inputs = _ensure_exists(item.file_list_must, src_dir) + [
         f for f in item.file_list_may if os.path.exists(os.path.join(src_dir, f))
     ]
     if not inputs:
-        logging.debug("No inputs found.")
+        LOGGER.debug("No inputs found.")
         return
 
     with _warning_timer(item.name, 1.0) as _:
-        logging.debug("Compressing %s...", item.name)
+        LOGGER.debug("Compressing %s...", item.name)
 
         # If an output name is given, use it. If not, ensure that it is only
         # one file.
