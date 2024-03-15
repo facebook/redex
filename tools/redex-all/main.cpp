@@ -1742,8 +1742,6 @@ int main(int argc, char* argv[]) {
   auto maybe_global_profile =
       ScopedCommandProfiling::maybe_from_env("GLOBAL_", "global");
 
-  redex_thread_pool::ThreadPool::create();
-
   ConcurrentContainerConcurrentDestructionScope
       concurrent_container_destruction_scope;
 
