@@ -14,6 +14,7 @@ import logging
 import lzma
 import multiprocessing
 import os
+import platform
 import shutil
 import subprocess
 import tarfile
@@ -204,7 +205,7 @@ def _compress_xz(
 ) -> None:
     comp = _get_xz_compress_level(compression_level)
     xz = get_xz_path()
-    if xz is not None:
+    if xz is not None and platform.system() != "Darwin":
         cmd = [xz, "-z", comp[0], "-T10"]
         with open(from_file, "rb") as fin:
             with open(to_file, "wb") as fout:
