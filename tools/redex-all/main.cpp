@@ -861,7 +861,7 @@ Json::Value get_times(double cpu_time_s) {
     cpu_element["cpu_time"] = std::round(cpu_time_s * 10) / 10.0;
     list.append(cpu_element);
   }
-  {
+  if (redex_thread_pool::ThreadPool::get_instance() != nullptr) {
     Json::Value thread_pool_element;
     thread_pool_element["thread_pool_size"] =
         redex_thread_pool::ThreadPool::get_instance()->size() * 1.0;

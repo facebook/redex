@@ -688,7 +688,10 @@ class AfterPassSizes {
       tmp_dir = dir_name;
     }
 
-    redex_thread_pool::ThreadPool::get_instance()->join();
+    auto thread_pool_instance = redex_thread_pool::ThreadPool::get_instance();
+    if (thread_pool_instance != nullptr) {
+      thread_pool_instance->join();
+    }
 
     pid_t p = fork();
 
