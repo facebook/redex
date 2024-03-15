@@ -203,7 +203,7 @@ void SynthAccessorPatcher::patch_kotlin_annotations(DexMethod* m) {
   auto int_or_string = safe_annotation->get_name()->str() ==
                                "Lcom/facebook/redex/annotations/SafeStringDef;"
                            ? type::java_lang_String()->get_name()->str()
-                           : type::java_lang_Integer()->get_name()->str();
+                           : "I";
   // we need to remove the first three characters, 'get', from the annotations
   // methoid name to derive the field name
   auto field_name = method_name.substr(3, method_name.size());
