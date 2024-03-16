@@ -3125,10 +3125,56 @@ uint32_t ControlFlowGraph::replace_blocks(
 }
 
 std::ostream& ControlFlowGraph::write_dot_format(std::ostream& o) const {
-  o << "digraph {\n";
+  o << "digraph {\nnode [shape=box];\n";
+  for (auto* block : blocks()) {
+    o << "B" << block->id() << " [label=\"B" << block->id();
+    if (block == entry_block()) {
+      o << " (entry)";
+    }
+    if (block == exit_block()) {
+      o << " (exit)";
+    }
+    for (auto& mie : *block) {
+      o << "\\l" << show(mie);
+    }
+    o << "\\l\"];\n";
+  }
+
   for (auto* block : blocks()) {
     for (auto& succ : block->succs()) {
-      o << block->id() << " -> " << succ->target()->id() << "\n";
+      o << "B" << block->id() << " -> B" << succ->target()->id();
+      if (succ->type() != EDGE_GOTO) {
+        o << " [label=\"";
+        switch (succ->type()) {
+        case EDGE_BRANCH:
+          o << "br";
+          if (succ->case_key() != boost::none) {
+            o << " " << *succ->case_key();
+          }
+          break;
+        case EDGE_THROW:
+          o << "th";
+          if (succ->throw_info() != nullptr) {
+            o << " ";
+            if (succ->throw_info()->catch_type != nullptr) {
+              o << show(succ->throw_info()->catch_type);
+            } else {
+              o << "A";
+            }
+          }
+          break;
+        case EDGE_GHOST:
+          o << "gh";
+          break;
+
+        // For completeness.
+        case EDGE_GOTO:
+        case EDGE_TYPE_SIZE:
+          break;
+        }
+        o << "\"]";
+      }
+      o << ";\n";
     }
   }
   o << "}\n";
