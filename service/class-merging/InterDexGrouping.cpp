@@ -116,6 +116,8 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
     });
     break;
   }
+  default:
+    not_reached();
   }
 
   return res;
@@ -235,6 +237,8 @@ void InterDexGroupingConfig::init_inferring_mode(const std::string& mode) {
   } else if (mode == "class-loads-bb") {
     this->inferring_mode =
         InterDexGroupingInferringMode::kClassLoadsBasicBlockFiltering;
+  } else if (mode == "exact-symbol-match") {
+    this->inferring_mode = InterDexGroupingInferringMode::kExactSymbolMatch;
   } else {
     always_assert_log(false, "Unknown interdex-grouping-inferring-mode %s",
                       mode.c_str());
@@ -248,6 +252,9 @@ std::ostream& operator<<(std::ostream& os, InterDexGroupingInferringMode mode) {
     break;
   case InterDexGroupingInferringMode::kClassLoadsBasicBlockFiltering:
     os << "class-loads-bb";
+    break;
+  case InterDexGroupingInferringMode::kExactSymbolMatch:
+    os << "exact-symbol-match";
     break;
   }
   return os;

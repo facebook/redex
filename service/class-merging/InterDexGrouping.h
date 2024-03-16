@@ -26,6 +26,7 @@ enum InterDexGroupingType {
 enum class InterDexGroupingInferringMode {
   kClassLoads,
   kClassLoadsBasicBlockFiltering,
+  kExactSymbolMatch,
 };
 
 struct InterDexGroupingConfig {
