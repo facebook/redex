@@ -143,8 +143,10 @@ size_t get_interdex_group(
     const std::unordered_map<DexType*, size_t>& cls_to_interdex_groups,
     size_t interdex_groups) {
   if (cls_to_interdex_groups.count(type)) {
+    TRACE(CLMG, 5, "Found interdex group symbol match for %s", SHOW(type));
     return cls_to_interdex_groups.at(type);
   }
+  TRACE(CLMG, 5, "No interdex group symbol match for %s", SHOW(type));
   return interdex_groups - 1;
 }
 
