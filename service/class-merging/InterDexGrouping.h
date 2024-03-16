@@ -62,6 +62,11 @@ class InterDexGrouping final {
                     const std::function<void(const InterdexSubgroupIdx,
                                              const TypeSet&)>& visit_fn) const;
 
+  // For testing only
+  const std::vector<ConstTypeHashSet>& get_all_interdexing_groups() const {
+    return m_all_interdexing_groups;
+  }
+
  private:
   // Divide all types in the merging_targets into different interdex subgroups
   // This grouping should be applied at the entire model level.
