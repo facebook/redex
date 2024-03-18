@@ -110,7 +110,7 @@ class ResultPropagation {
   /*
    * Patch code based on analysis results.
    */
-  void patch(PassManager&, IRCode*);
+  void patch(PassManager&, cfg::ControlFlowGraph&);
 
  private:
   const std::unordered_map<const DexMethod*, ParamIndex>&
@@ -139,9 +139,7 @@ class ResultPropagationPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
-        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 

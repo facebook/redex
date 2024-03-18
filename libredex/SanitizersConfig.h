@@ -28,7 +28,9 @@ const char* kAsanDefaultOptions =
     ":"
     "print_suppressions=0"
     ":"
-    "strict_init_order=1";
+    "strict_init_order=1"
+    ":"
+    "detect_odr_violation=0";
 
 #if defined(__clang__)
 #define NO_SANITIZE \

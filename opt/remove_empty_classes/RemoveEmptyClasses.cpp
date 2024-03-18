@@ -77,7 +77,9 @@ void process_code(ConcurrentSet<const DexType*>* class_references,
                   DexMethod* meth,
                   IRCode& code) {
   // Types referenced in code.
-  for (auto const& mie : InstructionIterable(meth->get_code())) {
+  always_assert(code.editable_cfg_built());
+  auto& cfg = code.cfg();
+  for (auto const& mie : cfg::InstructionIterable(cfg)) {
     auto opcode = mie.insn;
     if (opcode->has_type()) {
       auto typ = type::get_element_type_if_array(opcode->get_type());

@@ -23,6 +23,7 @@
 #include "OptData.h"
 #include "OptDataDefs.h"
 #include "PassManager.h"
+#include "Purity.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "Walkers.h"
@@ -156,12 +157,10 @@ static bool any_external(const Collection& methods) {
  * that are externally defined or not-renamable.
  */
 void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
-  ConcurrentMap<DexProto*, size_t> fixed_protos;
+  AtomicMap<DexProto*, size_t> fixed_protos;
   ConcurrentSet<DexProto*> defined_protos;
   auto record_fixed_proto = [&fixed_protos](DexProto* proto, size_t increment) {
-    fixed_protos.update(proto,
-                        [increment](DexProto*, size_t& count,
-                                    bool /* exists */) { count += increment; });
+    fixed_protos.fetch_add(proto, increment);
   };
   walk::parallel::methods(
       m_scope,
@@ -169,7 +168,8 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
        &defined_protos](DexMethod* caller) {
         auto caller_proto = caller->get_proto();
         defined_protos.insert(caller_proto);
-        if (!can_rename(caller) || is_native(caller)) {
+        if (!can_rename(caller) || is_native(caller) ||
+            caller->rstate.no_optimizations()) {
           record_fixed_proto(caller_proto, 1);
         } else if (caller->is_virtual()) {
           auto is_interface_method =
@@ -215,8 +215,11 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
         }
       });
 
-  std::vector<std::pair<DexProto*, size_t>> ordered_fixed_protos(
-      fixed_protos.begin(), fixed_protos.end());
+  std::vector<std::pair<DexProto*, size_t>> ordered_fixed_protos;
+  ordered_fixed_protos.reserve(fixed_protos.size());
+  for (auto&& [proto, count] : fixed_protos) {
+    ordered_fixed_protos.emplace_back(proto, count.load());
+  }
   std::sort(ordered_fixed_protos.begin(), ordered_fixed_protos.end(),
             compare_weighted_dexprotos);
   std::unordered_map<DexProto*, DexProto*> fixed_representatives;
@@ -532,9 +535,9 @@ void run_cleanup(DexMethod* method,
                  cfg::ControlFlowGraph& cfg,
                  const init_classes::InitClassesWithSideEffects*
                      init_classes_with_side_effects,
+                 const std::unordered_set<DexMethodRef*>& pure_methods,
                  std::mutex& mutex,
                  LocalDce::Stats& stats) {
-  std::unordered_set<DexMethodRef*> pure_methods;
   auto local_dce = LocalDce(init_classes_with_side_effects, pure_methods);
   local_dce.dce(cfg, /* normalize_new_instances */ true, method->get_class());
   const auto& local_stats = local_dce.get_stats();
@@ -562,7 +565,7 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
     DexProto* original_proto;
     DexProto* reordered_proto;
   };
-  ConcurrentMap<DexMethod*, Entry> unordered_entries;
+  InsertOnlyConcurrentMap<DexMethod*, Entry> unordered_entries;
   walk::parallel::methods(m_scope, [&](DexMethod* method) {
     std::deque<uint16_t> live_arg_idxs;
     std::vector<cfg::InstructionIterator> dead_insns;
@@ -585,6 +588,9 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
     // param that might make the method static. For now do not remove any unused
     // arguments for this.
     if (has_any_annotation(method, no_devirtualize_annos)) {
+      return;
+    }
+    if (method->rstate.no_optimizations()) {
       return;
     }
 
@@ -663,6 +669,7 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
         run_cleanup(method,
                     cfg,
                     &m_init_classes_with_side_effects,
+                    m_pure_methods,
                     local_dce_stats_mutex,
                     local_dce_stats);
       }
@@ -741,6 +748,7 @@ std::pair<size_t, LocalDce::Stats> RemoveArgs::update_callsites() {
           run_cleanup(method,
                       cfg,
                       &m_init_classes_with_side_effects,
+                      m_pure_methods,
                       local_dce_stats_mutex,
                       local_dce_stats);
         }
@@ -764,10 +772,11 @@ void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
   size_t num_method_protos_reordered_count = 0;
   size_t num_iterations = 0;
   LocalDce::Stats local_dce_stats;
+  auto pure_methods = get_pure_methods();
   while (true) {
     num_iterations++;
     RemoveArgs rm_args(scope, init_classes_with_side_effects, m_blocklist,
-                       m_total_iterations++);
+                       pure_methods, m_total_iterations++);
     auto pass_stats = rm_args.run(conf);
     if (pass_stats.methods_updated_count == 0) {
       break;

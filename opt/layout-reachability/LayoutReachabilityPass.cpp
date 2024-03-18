@@ -18,7 +18,7 @@ void LayoutReachabilityPass::run_pass(DexStoresVector& stores,
   TRACE(PGR, 1, "Recomputing layout classes");
   std::string apk_dir;
   conf.get_json_config().get("apk_dir", "", apk_dir);
-  always_assert(apk_dir.size());
+  always_assert(!apk_dir.empty());
 
   auto scope = build_class_scope(stores);
   // Update the m_byresources rstate flags on classes/methods

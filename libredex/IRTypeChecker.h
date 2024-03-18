@@ -153,6 +153,7 @@ class IRTypeChecker final {
   bool m_verify_moves;
   bool m_check_no_overwrite_this;
   bool m_good;
+  bool m_orig_editable_cfg;
   std::string m_what;
   std::unique_ptr<type_inference::TypeInference> m_type_inference;
 

@@ -176,7 +176,7 @@ struct Rearranger {
   }
 
   reg_t move_new_array_to_front() {
-    redex_assert(array_new_array != b->begin());
+    redex_assert(array_new_array != CONSTP(b)->begin());
 
     auto size_def_it = use_def.find({array_new_array->insn, 0});
     redex_assert(size_def_it != std::as_const(use_def).end());
@@ -221,7 +221,7 @@ struct Rearranger {
   IRInstruction* find_singleton_def(IRInstruction* use_insn,
                                     src_index_t src_index) {
     auto it = use_def.find(live_range::Use{use_insn, src_index});
-    redex_assert(it != use_def.end());
+    redex_assert(it != use_def.cend());
     redex_assert(it->second.size() == 1);
     return *it->second.begin();
   }
@@ -229,7 +229,7 @@ struct Rearranger {
   std::pair<IRList::iterator, reg_t> find_move_point_new_instance(
       IRInstruction* object_insn) {
     auto it = def_use.find(object_insn);
-    redex_assert(it != def_use.end());
+    redex_assert(it != def_use.cend());
     std::optional<reg_t> which_reg{};
     std::optional<IRList::iterator> which_it{};
     for (auto& obj_use : it->second) {
@@ -292,7 +292,7 @@ struct Rearranger {
     // Find all the users of the array. This should be aput-object things.
     {
       auto new_array_uses_it = def_use.find(array_new_array->insn);
-      redex_assert(new_array_uses_it != def_use.end());
+      redex_assert(new_array_uses_it != def_use.cend());
       std::optional<reg_t> extra_reg{};
       for (auto& use : new_array_uses_it->second) {
         // Skip the sput.
@@ -378,6 +378,7 @@ void RearrangeEnumClinitPass::run_pass(DexStoresVector& stores,
   std::atomic<size_t> cnt_below_threshold{0};
   std::atomic<size_t> cnt_failed{0};
   std::atomic<size_t> cnt_changed{0};
+  std::atomic<size_t> cnt_no_optimizations{0};
 
   walk::parallel::classes(build_class_scope(stores), [&](DexClass* c) {
     if (c->is_external() || !is_enum(c)) {
@@ -396,6 +397,11 @@ void RearrangeEnumClinitPass::run_pass(DexStoresVector& stores,
 
     if (m->get_code()->count_opcodes() < m_threshold) {
       cnt_below_threshold.fetch_add(1, std::memory_order_relaxed);
+      return;
+    }
+
+    if (m->rstate.no_optimizations()) {
+      cnt_no_optimizations.fetch_add(1, std::memory_order_relaxed);
       return;
     }
 
@@ -423,6 +429,7 @@ void RearrangeEnumClinitPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("failed", cnt_failed.load());
   mgr.set_metric("no_clinit", cnt_no_clinit.load());
   mgr.set_metric("below_threshold", cnt_below_threshold.load());
+  mgr.set_metric("no_optimizations", cnt_no_optimizations.load());
   mgr.set_metric("not_one_block", cnt_not_one_block.load());
   mgr.set_metric("all_enum", cnt_all.load());
 }

@@ -57,7 +57,7 @@ class WholeProgramState {
 
   WholeProgramState(const Scope&,
                     const interprocedural::FixpointIterator&,
-                    const std::unordered_set<DexMethod*>&,
+                    const InsertOnlyConcurrentSet<DexMethod*>&,
                     const std::unordered_set<const DexType*>&,
                     const std::unordered_set<const DexField*>&,
                     std::shared_ptr<const call_graph::Graph> call_graph);
@@ -122,8 +122,8 @@ class WholeProgramState {
 
   const call_graph::Graph* call_graph() const { return m_call_graph.get(); }
 
-  bool method_is_dynamic(const DexMethod* method) const {
-    return call_graph::method_is_dynamic(*m_call_graph, method);
+  bool invoke_is_dynamic(const IRInstruction* insn) const {
+    return call_graph::invoke_is_dynamic(*m_call_graph, insn);
   }
 
  private:
@@ -187,8 +187,8 @@ class WholeProgramStateAccessor {
 
   bool has_call_graph() const { return m_wps.has_call_graph(); }
 
-  bool method_is_dynamic(const DexMethod* method) const {
-    return m_wps.method_is_dynamic(method);
+  bool invoke_is_dynamic(const IRInstruction* insn) const {
+    return m_wps.invoke_is_dynamic(insn);
   }
 
   ConstantValue get_field_value(const DexField* field) const {
@@ -208,6 +208,7 @@ class WholeProgramStateAccessor {
     }
     for (const DexMethod* callee : callees) {
       if (!callee->get_code()) {
+        always_assert(is_abstract(callee) || is_native(callee));
         return ConstantValue::top();
       }
     }

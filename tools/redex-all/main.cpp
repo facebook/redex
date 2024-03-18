@@ -42,6 +42,7 @@
 #include "ConfigFiles.h"
 #include "ControlFlow.h" // To set DEBUG.
 #include "Debug.h"
+#include "DebugUtils.h"
 #include "DexClass.h"
 #include "DexHasher.h"
 #include "DexLoader.h"
@@ -55,6 +56,7 @@
 #include "JemallocUtil.h"
 #include "KeepReason.h"
 #include "Macros.h"
+#include "MallocDebug.h"
 #include "MonitorCount.h"
 #include "NoOptimizationsMatcher.h"
 #include "OptData.h"
@@ -66,6 +68,7 @@
 #include "ProguardPrintConfiguration.h" // New ProGuard configuration
 #include "ReachableClasses.h"
 #include "RedexContext.h"
+#include "RedexProperties.h"
 #include "RedexPropertiesManager.h"
 #include "RedexPropertyCheckerRegistry.h"
 #include "RedexResources.h"
@@ -73,6 +76,7 @@
 #include "SanitizersConfig.h"
 #include "ScopedMemStats.h"
 #include "Show.h"
+#include "ThreadPool.h"
 #include "Timer.h"
 #include "ToolsCommon.h"
 #include "Walkers.h"
@@ -239,6 +243,7 @@ Json::Value reflect_config(const Configurable::Reflection& cr) {
 }
 
 void add_pass_properties_reflection(Json::Value& value, Pass* pass) {
+  using namespace redex_properties;
   auto interactions = pass->get_property_interactions();
   if (interactions.empty()) {
     return;
@@ -251,16 +256,16 @@ void add_pass_properties_reflection(Json::Value& value, Pass* pass) {
 
   for (const auto& [property, inter] : interactions) {
     if (inter.establishes) {
-      establishes.append(property);
+      establishes.append(get_name(property));
     }
     if (inter.requires_) {
-      requires_.append(property);
+      requires_.append(get_name(property));
     }
     if (inter.preserves) {
-      preserves.append(property);
+      preserves.append(get_name(property));
     }
     if (inter.requires_finally) {
-      requires_finally.append(property);
+      requires_finally.append(get_name(property));
     }
   }
 
@@ -278,23 +283,23 @@ Json::Value reflect_property_definitions() {
 
   properties["properties"] = []() {
     Json::Value prop_map;
-    auto all = redex_properties::Manager::get_all_properties();
+    auto all = redex_properties::get_all_properties();
     for (auto& prop : all) {
       Json::Value prop_value;
-      prop_value["negative"] = redex_properties::Manager::is_negative(prop);
-      prop_map[prop] = std::move(prop_value);
+      prop_value["negative"] = redex_properties::is_negative(prop);
+      prop_map[redex_properties::get_name(prop)] = std::move(prop_value);
     }
     return prop_map;
   }();
 
   auto create_sorted = [](const auto& input) {
-    std::vector<redex_properties::PropertyName> tmp;
+    std::vector<redex_properties::Property> tmp;
     std::copy(input.begin(), input.end(), std::back_inserter(tmp));
     std::sort(tmp.begin(), tmp.end());
 
     Json::Value holder = Json::arrayValue;
     for (auto& prop : tmp) {
-      holder.append(prop);
+      holder.append(redex_properties::get_name(prop));
     }
     return holder;
   };
@@ -655,6 +660,7 @@ Json::Value get_stats(const dex_stats_t& stats) {
   val["num_annotations"] = stats.num_annotations;
   val["num_bytes"] = stats.num_bytes;
   val["num_instructions"] = stats.num_instructions;
+  val["num_tries"] = stats.num_tries;
 
   val["num_unique_types"] = stats.num_unique_types;
   val["num_unique_protos"] = stats.num_unique_protos;
@@ -855,6 +861,12 @@ Json::Value get_times(double cpu_time_s) {
     Json::Value cpu_element;
     cpu_element["cpu_time"] = std::round(cpu_time_s * 10) / 10.0;
     list.append(cpu_element);
+  }
+  if (redex_thread_pool::ThreadPool::get_instance() != nullptr) {
+    Json::Value thread_pool_element;
+    thread_pool_element["thread_pool_size"] =
+        redex_thread_pool::ThreadPool::get_instance()->size() * 1.0;
+    list.append(thread_pool_element);
   }
   return list;
 }
@@ -1509,17 +1521,25 @@ void redex_backend(ConfigFiles& conf,
     auto method_move_map =
         conf.metafile(json_config.get("method_move_map", std::string()));
     if (needs_addresses) {
+      Timer t2{"Writing debug line mapping"};
       write_debug_line_mapping(debug_line_map_filename, method_to_id,
                                code_debug_lines, stores,
                                needs_debug_line_mapping);
     }
     if (is_iodi(dik)) {
+      Timer t2{"Writing IODI metadata"};
       iodi_metadata.write(iodi_metadata_filename, method_to_id);
     }
-    pos_mapper->write_map();
-    stats["output_stats"] =
-        get_output_stats(output_totals, output_dexes_stats, manager,
-                         instruction_lowering_stats, pos_mapper.get());
+    {
+      Timer t2{"Writing position map"};
+      pos_mapper->write_map();
+    }
+    {
+      Timer t2{"Collecting output stats"};
+      stats["output_stats"] =
+          get_output_stats(output_totals, output_dexes_stats, manager,
+                           instruction_lowering_stats, pos_mapper.get());
+    }
     print_warning_summary();
 
     if (dex_output_config.write_class_sizes) {
@@ -1644,6 +1664,7 @@ void copy_proguard_stats(Json::Value& stats) {
 }
 
 int check_pass_properties(const Arguments& args) {
+  using namespace redex_properties;
   // Cannot parse GlobalConfig nor passes, as they may require binding
   // to dex elements. So this looks more complicated than necessary.
 
@@ -1662,13 +1683,12 @@ int check_pass_properties(const Arguments& args) {
   }
 
   auto const& all_passes = PassRegistry::get().get_passes();
-  auto props_manager = redex_properties::Manager(
-      conf, redex_properties::PropertyCheckerRegistry::get().get_checkers());
+  auto props_manager =
+      Manager(conf, PropertyCheckerRegistry::get().get_checkers());
   auto active_passes =
       PassManager::compute_activated_passes(all_passes, conf, &pmc);
 
-  std::vector<std::pair<std::string, redex_properties::PropertyInteractions>>
-      pass_interactions;
+  std::vector<std::pair<std::string, PropertyInteractions>> pass_interactions;
   for (const auto& [pass, _] : active_passes.activated_passes) {
     auto m = pass->get_property_interactions();
     for (auto it = m.begin(); it != m.end();) {
@@ -1681,13 +1701,12 @@ int check_pass_properties(const Arguments& args) {
 
       always_assert_log(property_interaction.is_valid(),
                         "%s has an invalid property interaction for %s",
-                        pass->name().c_str(), name.c_str());
+                        pass->name().c_str(), get_name(name));
       ++it;
     }
     pass_interactions.emplace_back(pass->name(), std::move(m));
   }
-  auto failure = redex_properties::Manager::verify_pass_interactions(
-      pass_interactions, conf);
+  auto failure = Manager::verify_pass_interactions(pass_interactions, conf);
   if (failure) {
     std::cerr << "Illegal pass order:\n" << *failure << std::endl;
     return 1;
@@ -1870,6 +1889,10 @@ int main(int argc, char* argv[]) {
           pretty_bytes(vm_stats.vm_peak).c_str(),
           pretty_bytes(vm_stats.vm_hwm).c_str());
   }
+
+  redex_thread_pool::ThreadPool::destroy();
+
+  malloc_debug::set_shutdown();
 
   return 0;
 }

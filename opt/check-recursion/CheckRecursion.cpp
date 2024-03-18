@@ -123,7 +123,6 @@ void CheckRecursionPass::run_pass(DexStoresVector& stores,
       scope,
       [this, &num_methods_detected, &num_methods_patched](DexMethod* method,
                                                           IRCode& code) {
-        code.build_cfg(/* editable */ true);
         switch (do_check_recursion(method, code, bad_recursion_count)) {
         case CheckRecursionResult::SafeRecursion:
           ++num_methods_detected;
@@ -137,7 +136,6 @@ void CheckRecursionPass::run_pass(DexStoresVector& stores,
         case CheckRecursionResult::NotFound:
           break;
         }
-        code.clear_cfg();
       });
 
   mgr.incr_metric(METRIC_METHODS_DETECTED, num_methods_detected);

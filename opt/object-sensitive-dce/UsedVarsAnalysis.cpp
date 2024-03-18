@@ -45,8 +45,10 @@ using namespace ir_analyzer;
 FixpointIterator::FixpointIterator(
     const local_pointers::FixpointIterator& pointers_fp_iter,
     side_effects::InvokeToSummaryMap invoke_to_summary_map,
-    const cfg::ControlFlowGraph& cfg)
+    const cfg::ControlFlowGraph& cfg,
+    const DexMethod* method)
     : BaseBackwardsIRAnalyzer<UsedVarsSet>(cfg),
+      m_method(method),
       m_insn_env_map(gen_instruction_environment_map(cfg, pointers_fp_iter)),
       m_invoke_to_summary_map(std::move(invoke_to_summary_map)) {}
 
@@ -78,7 +80,7 @@ void FixpointIterator::analyze_instruction(IRInstruction* insn,
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       auto reg = insn->src(i);
       used_vars->add(reg);
-      auto pointers = env.get_pointers(reg);
+      const auto& pointers = env.get_pointers(reg);
       if (!pointers.is_value()) {
         continue;
       }
@@ -98,7 +100,7 @@ void FixpointIterator::analyze_instruction(IRInstruction* insn,
 bool FixpointIterator::is_used_or_escaping_write(const ptrs::Environment& env,
                                                  const UsedVarsSet& used_vars,
                                                  reg_t obj_reg) const {
-  auto pointers = env.get_pointers(obj_reg);
+  const auto& pointers = env.get_pointers(obj_reg);
   if (!pointers.is_value()) {
     return true;
   }
@@ -125,7 +127,6 @@ bool FixpointIterator::is_required(const IRInstruction* insn,
   case OPCODE_RETURN_OBJECT:
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT:
-  case OPCODE_CHECK_CAST:
   case OPCODE_THROW:
   case OPCODE_GOTO:
   case OPCODE_SWITCH:
@@ -173,21 +174,22 @@ bool FixpointIterator::is_required(const IRInstruction* insn,
   case OPCODE_SPUT_SHORT: {
     return true;
   }
+  case OPCODE_INVOKE_SUPER:
+  case OPCODE_INVOKE_INTERFACE:
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_VIRTUAL: {
-    auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
-    if (method == nullptr) {
-      return true;
-    }
+    auto method = resolve_invoke_method(insn, m_method);
     const auto& env = m_insn_env_map.at(insn);
-    if (method::is_init(method)) {
-      if (used_vars.contains(insn->src(0)) ||
-          is_used_or_escaping_write(env, used_vars, insn->src(0))) {
-        return true;
+    if (method != nullptr) {
+      if (method::is_init(method)) {
+        if (used_vars.contains(insn->src(0)) ||
+            is_used_or_escaping_write(env, used_vars, insn->src(0))) {
+          return true;
+        }
+      } else if (assumenosideeffects(method)) {
+        return used_vars.contains(RESULT_REGISTER);
       }
-    } else if (assumenosideeffects(method)) {
-      return used_vars.contains(RESULT_REGISTER);
     }
     if (!m_invoke_to_summary_map.count(insn)) {
       return true;
@@ -205,10 +207,6 @@ bool FixpointIterator::is_required(const IRInstruction* insn,
         mod_params.begin(), mod_params.end(), [&](param_idx_t idx) {
           return is_used_or_escaping_write(env, used_vars, insn->src(idx));
         });
-  }
-  case OPCODE_INVOKE_SUPER:
-  case OPCODE_INVOKE_INTERFACE: {
-    return true;
   }
   default: {
     if (insn->has_dest()) {

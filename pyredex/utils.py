@@ -519,20 +519,25 @@ def get_file_ext(file_name: str) -> str:
 
 
 def _verify_dex(dex_file: str, cmd: str) -> bool:
-    logging.debug("Verifying %s...", dex_file)
-
-    res = subprocess.run(
-        f"{cmd} '{dex_file}'", shell=True, text=False, capture_output=True
-    )
-    if res.returncode == 0:
-        return True
-
     try:
-        stderr_str = res.stderr.decode("utf-8")
-    except BaseException:
-        stderr_str = "<unable to decode, contains non-UTF8>"
+        LOGGER.info("Verifying %s...", dex_file)
 
-    logging.error("Failed verification for %s:\n%s", dex_file, stderr_str)
+        res = subprocess.run(
+            f"{cmd} '{dex_file}'", shell=True, text=False, capture_output=True
+        )
+        if res.returncode == 0:
+            return True
+
+        try:
+            stderr_str = res.stderr.decode("utf-8")
+        except BaseException:
+            stderr_str = "<unable to decode, contains non-UTF8>"
+
+    except BaseException as e:
+        LOGGER.exception("Error for dex file %s", dex_file)
+        stderr_str = f"{e}"
+
+    LOGGER.error("Failed verification for %s:\n%s", dex_file, stderr_str)
     return False
 
 
@@ -557,6 +562,26 @@ def verify_dexes(dex_dir: str, cmd: str) -> None:
 
     end = timer()
     LOGGER.debug("Dex verification finished in {:.2f} seconds".format(end - start))
+
+
+try:
+    # This is an xz that is built from source and provided via BUCK.
+    from xz_for_python.xz import get_xz_bin_path
+except ImportError:
+    get_xz_bin_path = None
+
+
+def get_xz_path() -> typing.Optional[str]:
+    xz = None
+    if get_xz_bin_path is not None:
+        xz_bin_path = get_xz_bin_path()
+        assert xz_bin_path is not None
+        LOGGER.debug("Using provided xz")
+        xz = xz_bin_path
+    elif shutil.which("xz"):
+        LOGGER.debug("Using command line xz")
+        xz = "xz"
+    return xz
 
 
 _TIME_IT_DEPTH: int = 0

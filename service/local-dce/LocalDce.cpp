@@ -183,13 +183,17 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg,
     const IRList::iterator& it = pair.second;
     auto insn = it->insn;
     auto cfg_it = b->to_cfg_instruction_iterator(it);
-    DexMethod* method;
+    auto has_no_implementors = [&](auto* method) {
+      if (method == nullptr) {
+        return false;
+      }
+      return !has_implementor(m_method_override_graph, method);
+    };
     if (m_may_allocate_registers && m_method_override_graph &&
         (insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
          insn->opcode() == OPCODE_INVOKE_INTERFACE) &&
-        (method = resolve_method(insn->get_method(), opcode_to_search(insn))) !=
-            nullptr &&
-        !has_implementor(m_method_override_graph, method)) {
+        has_no_implementors(
+            resolve_method(insn->get_method(), opcode_to_search(insn)))) {
       TRACE(DCE, 2, "DEAD NPE: %s", SHOW(insn));
       if (!npe_creator) {
         npe_creator = std::make_unique<npe::NullPointerExceptionCreator>(&cfg);
@@ -313,6 +317,9 @@ bool LocalDce::assumenosideeffects(DexMethodRef* ref, DexMethod* meth) {
 }
 
 void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
+  static AccumulatingTimer s_timer("LocalDce::normalize_new_instances");
+  auto t = s_timer.scope();
+
   // TODO: This normalization optimization doesn't really belong to local-dce,
   // but it combines nicely as local-dce will clean-up redundant new-instance
   // instructions and moves afterwards.
@@ -331,7 +338,8 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
   }
 
   cfg::CFGMutation mutation(cfg);
-  reaching_defs::MoveAwareFixpointIterator fp_iter(cfg);
+  reaching_defs::MoveAwareFixpointIterator fp_iter(
+      cfg, [&](auto* insn) { return opcode::is_new_instance(insn->opcode()); });
   fp_iter.run({});
   for (cfg::Block* block : cfg.blocks()) {
     auto env = fp_iter.get_entry_state_at(block);
@@ -351,18 +359,12 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
       const auto& defs = env.get(reg);
       always_assert(!defs.is_top());
       always_assert(!defs.is_bottom());
-      IRInstruction* old_new_instance_insn{nullptr};
-      for (auto def : defs.elements()) {
-        if (def->opcode() == OPCODE_NEW_INSTANCE) {
-          always_assert(old_new_instance_insn == nullptr);
-          old_new_instance_insn = def;
-          always_assert(def->get_type() == type);
-        }
-      }
-      if (old_new_instance_insn == nullptr) {
+      if (defs.empty()) {
         // base constructor invocation
         continue;
       }
+      always_assert(defs.size() == 1);
+      IRInstruction* old_new_instance_insn = *defs.elements().begin();
       if (last_insn != end &&
           last_insn->insn->opcode() == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT &&
           last_insn->insn->dest() == reg) {

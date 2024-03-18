@@ -42,13 +42,12 @@ class InstructionSequenceOutliner : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, RequiresAndEstablishes},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Establishes},
+        {SpuriousGetClassCallsInterned, RequiresAndEstablishes},
+        {InitialRenameClass, Preserves},
     };
   }
 
   void bind_config() override;
-
-  bool is_cfg_legacy() override { return true; }
 
   void run_pass(DexStoresVector& stores,
                 ConfigFiles& config,

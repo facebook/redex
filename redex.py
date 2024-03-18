@@ -948,7 +948,6 @@ def _check_shrinker_heuristics(args: argparse.Namespace) -> None:
     # Nothing found, check whether we have files embedded
     LOGGER.info("No shrinking heuristic found, searching for default.")
     try:
-        # pyre-ignore[21]
         from generated_shrinker_regalloc_heuristics import SHRINKER_HEURISTICS_FILE
 
         LOGGER.info("Found embedded shrinker heuristics")
@@ -973,7 +972,6 @@ def _check_android_sdk_api(args: argparse.Namespace) -> None:
     # Nothing found, check whether we have files embedded
     LOGGER.info("No android_sdk_api_XX_file parameters found.")
     try:
-        # pyre-ignore[21]
         import generated_apilevels as ga
 
         levels = ga.get_api_levels()
@@ -1334,6 +1332,7 @@ def get_compression_list() -> typing.List[CompressionEntry]:
 
 def finalize_redex(state: State) -> None:
     if state.args.verify_dexes:
+        # with BuckPartScope("Redex::VerifyDexes", "Verifying output dex files"):
         verify_dexes(state.dex_dir, state.args.verify_dexes)
 
     if state.dexen_initial_state is not None:

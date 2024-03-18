@@ -30,7 +30,8 @@
 void LocalMethodInlinePass::run_pass(DexStoresVector& stores,
                                      ConfigFiles& conf,
                                      PassManager& mgr) {
-  inliner::run_inliner(stores, mgr, conf, /* intra_dex */ false,
+  inliner::run_inliner(stores, mgr, conf, DEFAULT_COST_CONFIG,
+                       /* intra_dex */ false,
                        /* inline_for_speed */ nullptr,
                        /* inline_bridge_synth_only */ false,
                        /* local_only */ true);

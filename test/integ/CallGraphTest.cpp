@@ -39,21 +39,24 @@ struct CallGraphTest : public RedexIntegrationTest {
   DexMethod* pure_ref_intf_return;
   DexMethod* pure_ref_3_return;
   DexMethod* pure_ref_3_init;
+  DexMethod* more_than_5_class_extends_1_init;
+  DexMethod* more_than_5_class_extends_1_return_super_num;
+  DexMethod* more_than_5_class_return_num;
 
   Scope scope;
   std::unique_ptr<const method_override_graph::Graph> method_override_graph;
-  boost::optional<call_graph::Graph> complete_graph;
-  boost::optional<call_graph::Graph> multiple_graph;
+  std::unique_ptr<call_graph::Graph> complete_graph;
+  std::unique_ptr<call_graph::Graph> multiple_graph;
 
  public:
   CallGraphTest() {}
   void SetUp() override {
     scope = build_class_scope(stores);
     method_override_graph = method_override_graph::build_graph(scope);
-    complete_graph =
-        call_graph::complete_call_graph(*method_override_graph, scope);
-    multiple_graph =
-        call_graph::multiple_callee_graph(*method_override_graph, scope, 5);
+    complete_graph = std::make_unique<call_graph::Graph>(
+        call_graph::complete_call_graph(*method_override_graph, scope));
+    multiple_graph = std::make_unique<call_graph::Graph>(
+        call_graph::multiple_callee_graph(*method_override_graph, scope, 5));
     clinit = DexMethod::get_method(
                  "Lcom/facebook/redextest/CallGraphTest;.<clinit>:()V")
                  ->as_def();
@@ -140,6 +143,22 @@ struct CallGraphTest : public RedexIntegrationTest {
     pure_ref_3_init = DexMethod::get_method(
                           "Lcom/facebook/redextest/PureRefImpl3;.<init>:()V")
                           ->as_def();
+
+    more_than_5_class_extends_1_init = DexMethod::get_method(
+                                           "Lcom/facebook/redextest/"
+                                           "MoreThan5ClassExtends1;.<init>:()V")
+                                           ->as_def();
+
+    more_than_5_class_extends_1_return_super_num =
+        DexMethod::get_method(
+            "Lcom/facebook/redextest/"
+            "MoreThan5ClassExtends1;.returnSuperNum:()I")
+            ->as_def();
+
+    more_than_5_class_return_num =
+        DexMethod::get_method(
+            "Lcom/facebook/redextest/MoreThan5Class;.returnNum:()I")
+            ->as_def();
   }
 
   std::vector<const DexMethod*> get_callees(const call_graph::Graph& graph,
@@ -169,8 +188,8 @@ TEST_F(CallGraphTest, test_resolve_static_callees) {
     }
   }
   ASSERT_NE(invoke_insn, nullptr);
-  auto callees = call_graph::resolve_callees_in_graph(
-      *complete_graph, clinit, invoke_insn);
+  auto callees =
+      call_graph::resolve_callees_in_graph(*complete_graph, invoke_insn);
   EXPECT_THAT(callees, ::testing::UnorderedElementsAre(base_foo));
 }
 
@@ -183,8 +202,8 @@ TEST_F(CallGraphTest, test_resolve_virtual_callees) {
     }
   }
   ASSERT_NE(invoke_insn, nullptr);
-  auto callees = call_graph::resolve_callees_in_graph(
-      *complete_graph, calls_returns_int, invoke_insn);
+  auto callees =
+      call_graph::resolve_callees_in_graph(*complete_graph, invoke_insn);
   EXPECT_THAT(callees,
               ::testing::UnorderedElementsAre(base_returns_int,
                                               extended_returns_int,
@@ -211,15 +230,20 @@ TEST_F(CallGraphTest, test_multiple_callee_graph_entry) {
 TEST_F(CallGraphTest, test_multiple_callee_graph_clinit) {
   auto clinit_callees = get_callees(*multiple_graph, clinit);
   EXPECT_THAT(clinit_callees,
-              ::testing::UnorderedElementsAre(calls_returns_int,
-                                              base_foo,
-                                              extended_init,
-                                              less_impl3_init,
-                                              more_impl1_init,
-                                              less_impl1_return,
-                                              less_impl2_return,
-                                              less_impl3_return,
-                                              less_impl4_return));
+              ::testing::UnorderedElementsAre(
+                  calls_returns_int,
+                  base_foo,
+                  extended_init,
+                  less_impl3_init,
+                  more_impl1_init,
+                  more_impl1_init,
+                  more_impl1_return,
+                  less_impl1_return,
+                  less_impl2_return,
+                  less_impl3_return,
+                  less_impl4_return,
+                  more_than_5_class_extends_1_init,
+                  more_than_5_class_extends_1_return_super_num));
 }
 
 TEST_F(CallGraphTest, test_multiple_callee_graph_return4) {
@@ -243,4 +267,11 @@ TEST_F(CallGraphTest, test_multiple_callee_graph_extended_returns_int) {
       get_callees(*multiple_graph, extendedextended_returns_int);
   EXPECT_THAT(extendedextended_returns_int_callees,
               ::testing::UnorderedElementsAre(extended_returns_int));
+}
+
+TEST_F(CallGraphTest, test_multiple_callee_graph_invoke_super) {
+  auto callees = get_callees(*multiple_graph,
+                             more_than_5_class_extends_1_return_super_num);
+  EXPECT_THAT(callees,
+              ::testing::UnorderedElementsAre(more_than_5_class_return_num));
 }

@@ -534,7 +534,8 @@ std::unordered_map<std::string, MethodItemEntry*> get_catch_name_map(
 }
 
 // Can we merge this target into the same label as the previous target?
-bool can_merge(IRList::const_iterator prev, IRList::const_iterator it) {
+bool can_merge(const IRList::const_iterator& prev,
+               const IRList::const_iterator& it) {
   always_assert(it->type == MFLOW_TARGET);
   return prev->type == MFLOW_TARGET &&
          // can't merge if/goto targets with switch targets
@@ -1005,8 +1006,8 @@ DexClass* class_with_methods(const std::string& class_name,
   for (const auto& method : methods) {
     class_creator.add_method(method);
   }
-  class_creator.create();
-  return class_creator.get_class();
+  auto cls = class_creator.create();
+  return cls;
 }
 
 } // namespace assembler

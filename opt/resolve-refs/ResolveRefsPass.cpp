@@ -250,17 +250,9 @@ void ResolveRefsPass::resolve_method_refs(const DexMethod* caller,
                                           RefStats& stats) {
   always_assert(insn->has_method());
   auto mref = insn->get_method();
-  auto mdef = resolve_method(mref, opcode_to_search(insn), caller);
-  bool resolved_to_interface = false;
-  if (!mdef && opcode_to_search(insn) == MethodSearch::Virtual) {
-    mdef = resolve_method(mref, MethodSearch::InterfaceVirtual, caller);
-    if (mdef) {
-      TRACE(RESO, 4, "InterfaceVirtual resolve to %s in %s", SHOW(mdef),
-            SHOW(insn));
-      const auto* cls = type_class(mdef->get_class());
-      resolved_to_interface = cls && is_interface(cls);
-    }
-  }
+  bool resolved_virtual_to_interface;
+  auto mdef =
+      resolve_invoke_method(insn, caller, &resolved_virtual_to_interface);
   if (!mdef && is_array_clone(insn)) {
     auto* object_array_clone = method::java_lang_Objects_clone();
     TRACE(RESO, 3, "Resolving %s\n\t=>%s", SHOW(mref),
@@ -294,7 +286,9 @@ void ResolveRefsPass::resolve_method_refs(const DexMethod* caller,
   TRACE(RESO, 3, "Resolving %s\n\t=>%s", SHOW(mref), SHOW(mdef));
   insn->set_method(mdef);
   stats.num_mref_simple_resolved++;
-  if (resolved_to_interface && opcode::is_invoke_virtual(insn->opcode())) {
+  if (resolved_virtual_to_interface && cls && is_interface(cls)) {
+    TRACE(RESO, 4, "InterfaceVirtual resolve to %s in %s", SHOW(mdef),
+          SHOW(insn));
     insn->set_opcode(OPCODE_INVOKE_INTERFACE);
     stats.num_resolve_to_interface++;
   }

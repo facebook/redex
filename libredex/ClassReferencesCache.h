@@ -15,6 +15,9 @@
 
 struct ClassReferences {
   explicit ClassReferences(const DexClass* cls);
+
+  bool operator==(const ClassReferences& other) const;
+
   std::vector<DexMethodRef*> method_refs;
   std::vector<DexFieldRef*> field_refs;
   std::vector<DexType*> types;
@@ -25,9 +28,8 @@ struct ClassReferences {
 class ClassReferencesCache {
  public:
   explicit ClassReferencesCache(const std::vector<DexClass*>& classes);
-  std::shared_ptr<const ClassReferences> get(const DexClass* cls) const;
+  const ClassReferences& get(const DexClass* cls) const;
 
  private:
-  mutable ConcurrentMap<const DexClass*, std::shared_ptr<const ClassReferences>>
-      m_cache;
+  mutable InsertOnlyConcurrentMap<const DexClass*, ClassReferences> m_cache;
 };

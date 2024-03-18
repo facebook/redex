@@ -21,7 +21,7 @@ class DexMethod;
 
 namespace JarLoaderUtil {
 uint32_t read32(uint8_t*& buffer, uint8_t* buffer_end);
-uint32_t read16(uint8_t*& buffer, uint8_t* buffer_end);
+uint16_t read16(uint8_t*& buffer, uint8_t* buffer_end);
 }; // namespace JarLoaderUtil
 
 using attribute_hook_t =

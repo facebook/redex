@@ -239,31 +239,32 @@ XStoreRefs::XStoreRefs(const DexStoresVector& stores,
       m_reverse_dependencies(build_reverse_dependencies(stores)),
       m_shared_module_prefix(shared_module_prefix) {
 
-  m_xstores.push_back(std::unordered_set<const DexType*>());
+  std::vector<std::pair<const DexClasses*, size_t>> dexes;
+
   m_stores.push_back(&stores[0]);
-  for (const auto& cls : stores[0].get_dexen()[0]) {
-    m_xstores.back().insert(cls->get_type());
-  }
+  dexes.emplace_back(&stores[0].get_dexen()[0], 0);
   m_root_stores = 1;
   if (stores[0].get_dexen().size() > 1) {
     m_root_stores++;
-    m_xstores.push_back(std::unordered_set<const DexType*>());
     m_stores.push_back(&stores[0]);
     for (size_t i = 1; i < stores[0].get_dexen().size(); i++) {
-      for (const auto& cls : stores[0].get_dexen()[i]) {
-        m_xstores.back().insert(cls->get_type());
-      }
+      dexes.emplace_back(&stores[0].get_dexen()[i], 1);
     }
   }
   for (size_t i = 1; i < stores.size(); i++) {
-    m_xstores.push_back(std::unordered_set<const DexType*>());
     m_stores.push_back(&stores[i]);
+    size_t store_idx = m_stores.size() - 1;
     for (const auto& classes : stores[i].get_dexen()) {
-      for (const auto& cls : classes) {
-        m_xstores.back().insert(cls->get_type());
-      }
+      dexes.emplace_back(&classes, store_idx);
     }
   }
+
+  workqueue_run_for<size_t>(0, dexes.size(), [&](size_t i) {
+    auto [dex, store_idx] = dexes[i];
+    for (auto* cls : *dex) {
+      m_xstores.emplace(cls->get_type(), store_idx);
+    }
+  });
 }
 
 bool XStoreRefs::illegal_ref_load_types(const DexType* location,

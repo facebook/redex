@@ -39,7 +39,9 @@ void RedundantCheckCastRemover::run() {
                                  const std::vector<IRInstruction*>& insns) {
         if (RedundantCheckCastRemover::can_remove_check_cast(insns)) {
           IRInstruction* check_cast = insns[2];
-          method->get_code()->remove_opcode(check_cast);
+          auto& cfg = method->get_code()->cfg();
+          auto pos_it = cfg.find_insn(check_cast);
+          cfg.remove_insn(pos_it);
           num_check_casts_removed++;
 
           TRACE(PEEPHOLE, 8, "redundant check cast in %s", SHOW(method));

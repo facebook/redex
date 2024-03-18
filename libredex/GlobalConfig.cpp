@@ -191,6 +191,7 @@ void GlobalConfig::bind_config() {
   bind("create_init_class_insns", true, bool_param);
   bind("finalize_resource_table", false, bool_param);
   bind("check_required_resources", {}, string_vector_param);
+  bind("update_method_profiles_stats", false, bool_param);
   bind("recognize_betamap_coldstart_pct_marker", false, bool_param);
 
   for (const auto& entry : m_registry) {

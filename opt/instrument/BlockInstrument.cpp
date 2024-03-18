@@ -642,6 +642,7 @@ auto insert_prologue_insts(cfg::ControlFlowGraph& cfg,
         }
         return false;
       };
+      // NOLINTNEXTLINE(bugprone-assert-side-effect)
       assert_log(b.block->end() == b.it || is_in_block(), "%s\n%s",
                  SHOW(b.block), SHOW(**b.it));
     }
@@ -682,6 +683,7 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
       }
       return *reg;
     }
+    // NOLINTNEXTLINE(google-explicit-constructor)
     operator bool() const { return reg.has_value(); }
   };
 
@@ -1129,8 +1131,9 @@ auto get_blocks_to_instrument(const DexMethod* m,
       info->bit_id = id++;
     }
   }
+  // NOLINTNEXTLINE(bugprone-assert-side-effect)
   redex_assert(std::all_of(
-      block_info_list.begin(), block_info_list.end(),
+      block_info_list.cbegin(), block_info_list.cend(),
       [](const auto& bi) { return bi.type != BlockType::Unspecified; }));
 
   return std::make_tuple(block_info_list, id, hit_id, false);
@@ -1225,7 +1228,7 @@ MethodInfo instrument_basic_blocks(
 
   using namespace cfg;
 
-  code.build_cfg(/*editable*/ true);
+  always_assert(code.editable_cfg_built());
   ControlFlowGraph& cfg = code.cfg();
 
   std::string before_cfg =
@@ -1403,9 +1406,10 @@ MethodInfo instrument_basic_blocks(
   info.num_instrumented_blocks = num_to_instrument;
   always_assert(count(BlockType::Instrumentable) == num_to_instrument);
 
-  redex_assert(std::none_of(blocks.begin(), blocks.end(), [](const auto& b) {
-    return std::find(b.merge_in.begin(), b.merge_in.end(), b.block) !=
-           b.merge_in.end();
+  // NOLINTNEXTLINE(bugprone-assert-side-effect)
+  redex_assert(std::none_of(blocks.cbegin(), blocks.cend(), [](const auto& b) {
+    return std::find(b.merge_in.cbegin(), b.merge_in.cend(), b.block) !=
+           b.merge_in.cend();
   }));
   info.num_merged = std::accumulate(
       blocks.begin(), blocks.end(), 0,
@@ -1450,7 +1454,6 @@ MethodInfo instrument_basic_blocks(
     TRACE(INSTRUMENT, 7, "%s", SHOW(cfg));
   }
 
-  code.clear_cfg();
   return info;
 }
 
@@ -1859,12 +1862,12 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   // Create Buildable CFG so we can inline functions correctly.
   if (options.inline_onBlockHit) {
     IRCode* blockHit_code = onBlockHit->get_code();
-    blockHit_code->build_cfg(true);
+    always_assert(blockHit_code->editable_cfg_built());
   }
 
   for (auto& en : onNonLoopBlockHit_map) {
     IRCode* nonLoopBlockHit_code = en.second->get_code();
-    nonLoopBlockHit_code->build_cfg(true);
+    always_assert(nonLoopBlockHit_code->editable_cfg_built());
   }
 
   DexMethod* binaryIncrementer;
@@ -1885,7 +1888,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
     break;
   }
   IRCode* binaryIncrementer_code = binaryIncrementer->get_code();
-  binaryIncrementer_code->build_cfg(true);
+  always_assert(binaryIncrementer_code->editable_cfg_built());
 
   // This method_offset is used in sMethodStats[] to locate a method profile.
   // We have a small header in the beginning of sMethodStats.
@@ -2014,19 +2017,6 @@ void BlockInstrumentHelper::do_basic_block_tracing(
     method_offset += 2 + method_info.num_vectors;
     hit_offset += method_info.num_hit_blocks;
   });
-
-  // Destroy the CFG because we are done Instrumenting
-  if (options.inline_onBlockHit) {
-    IRCode* blockHit_code = onBlockHit->get_code();
-    blockHit_code->clear_cfg();
-  }
-
-  for (auto& en : onNonLoopBlockHit_map) {
-    IRCode* nonLoopBlockHit_code = en.second->get_code();
-    nonLoopBlockHit_code->clear_cfg();
-  }
-
-  binaryIncrementer_code->clear_cfg();
 
   // Patch static fields.
   const auto field_name = array_fields.at(1)->get_name()->str();

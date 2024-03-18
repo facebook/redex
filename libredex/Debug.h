@@ -11,8 +11,7 @@
 #include "RedexException.h"
 
 #include <cstdint>
-#include <iosfwd>
-#include <stdexcept>
+#include <type_traits>
 
 constexpr bool debug =
 #ifdef NDEBUG
@@ -24,47 +23,29 @@ constexpr bool debug =
 
 extern bool slow_invariants_debug;
 
-namespace redex_debug {
-
-void set_exc_type_as_abort(RedexError type);
-void disable_stack_trace_for_exc_type(RedexError type);
-
-} // namespace redex_debug
-
 #ifdef _MSC_VER
 #define DEBUG_ONLY
+#define UNREACHABLE() __assume(false)
+#define PRETTY_FUNC() __func__
+#else
+#define DEBUG_ONLY __attribute__((unused))
+#define UNREACHABLE() __builtin_unreachable()
+#define PRETTY_FUNC() __PRETTY_FUNCTION__
+#endif // _MSC_VER
 
 #define not_reached()    \
   do {                   \
     redex_assert(false); \
-    __assume(false);     \
+    UNREACHABLE();       \
   } while (true)
 #define not_reached_log(msg, ...)          \
   do {                                     \
     assert_log(false, msg, ##__VA_ARGS__); \
-    __assume(false);                       \
+    UNREACHABLE();                         \
   } while (true)
 
 #define assert_fail_impl(e, type, msg, ...) \
-  assert_fail(#e, __FILE__, __LINE__, __func__, type, msg, ##__VA_ARGS__)
-#else
-#define DEBUG_ONLY __attribute__((unused))
-
-#define not_reached()        \
-  do {                       \
-    redex_assert(false);     \
-    __builtin_unreachable(); \
-  } while (true)
-#define not_reached_log(msg, ...)          \
-  do {                                     \
-    assert_log(false, msg, ##__VA_ARGS__); \
-    __builtin_unreachable();               \
-  } while (true)
-
-#define assert_fail_impl(e, type, msg, ...) \
-  assert_fail(                              \
-      #e, __FILE__, __LINE__, __PRETTY_FUNCTION__, type, msg, ##__VA_ARGS__)
-#endif
+  assert_fail(#e, __FILE__, __LINE__, PRETTY_FUNC(), type, msg, ##__VA_ARGS__)
 
 [[noreturn]] void assert_fail(const char* expr,
                               const char* file,
@@ -97,25 +78,8 @@ void disable_stack_trace_for_exc_type(RedexError type);
 #define assert_type_log(e, type, msg, ...) \
   always_assert_type_log(!debug || e, type, msg, ##__VA_ARGS__)
 
-void print_stack_trace(std::ostream& os, const std::exception& e);
-
-void crash_backtrace_handler(int sig);
-void debug_backtrace_handler(int sig);
-
-// If `block` is true, only a single assert will be logged. All following
-// asserts will sleep forever.
-void block_multi_asserts(bool block);
-
-// If called, assertions on threads other than the caller may immediately abort
-// instead of raising an exception. Currently only implemented for Linux.
-// Note: this is a workaround for libstdc++ from GCC < 8.
-void set_abort_if_not_this_thread();
-
-// Stats from /proc. See http://man7.org/linux/man-pages/man5/proc.5.html.
-struct VmStats {
-  uint64_t vm_peak = 0; // "Peak virtual memory size."
-  uint64_t vm_hwm = 0; // "Peak resident set size ("high water mark")."
-  uint64_t vm_rss = 0; // "Resident set size"
-};
-VmStats get_mem_stats();
-bool try_reset_hwm_mem_stat(); // Attempt to reset the vm_hwm value.
+// Helper for const assertions.
+#define CONSTP(e)                                                  \
+  static_cast<std::add_pointer<typename std::add_const<            \
+      typename std::remove_pointer<typename std::remove_reference< \
+          decltype(e)>::type>::type>::type>::type>(e)

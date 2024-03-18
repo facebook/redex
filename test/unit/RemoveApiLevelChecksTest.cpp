@@ -20,7 +20,9 @@ class RemoveApiLevelChecksTest : public RedexTest {
  public:
   size_t run(IRCode* code, int32_t min_sdk) {
     const auto* sdk_int_field = RemoveApiLevelChecksPass::get_sdk_int_field();
+    code->build_cfg();
     auto res = RemoveApiLevelChecksPass::run(code, min_sdk, sdk_int_field);
+    code->clear_cfg();
     return res.num_removed;
   }
 

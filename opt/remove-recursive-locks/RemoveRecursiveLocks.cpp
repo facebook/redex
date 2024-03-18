@@ -24,7 +24,6 @@
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "ReachingDefinitions.h"
-#include "ScopedCFG.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -295,14 +294,14 @@ ComputeRDefsResult compute_rdefs(ControlFlowGraph& cfg) {
   std::unordered_map<const IRInstruction*, Block*> block_map;
   auto get_rdef = [&](IRInstruction* insn, reg_t reg) -> IRInstruction* {
     auto it = block_map.find(insn);
-    redex_assert(it != block_map.end());
+    redex_assert(it != block_map.cend());
     auto defs = get_defs(it->second, insn);
     return get_singleton(defs, reg);
   };
 
   auto print_rdefs = [&](IRInstruction* insn, reg_t reg) -> std::string {
     auto it = block_map.find(insn);
-    redex_assert(it != block_map.end());
+    redex_assert(it != block_map.cend());
     auto defs = get_defs(it->second, insn);
     const auto& defs0 = defs.get(reg);
     if (defs0.is_top()) {
@@ -591,7 +590,7 @@ size_t remove(ControlFlowGraph& cfg, AnalysisResult& analysis) {
     for (const auto& insn_it : ir_list::InstructionIterable{b}) {
       if (opcode::is_a_monitor(insn_it.insn->opcode())) {
         auto it = analysis.rdefs.find(insn_it.insn);
-        redex_assert(it != analysis.rdefs.end());
+        redex_assert(it != analysis.rdefs.cend());
         auto def = it->second;
 
         auto& bindings = state.bindings();
@@ -692,8 +691,8 @@ struct Stats {
   }
 };
 
-bool has_monitor_ops(const IRCode* code) {
-  for (const auto& mie : ir_list::InstructionIterableImpl<true>(code)) {
+bool has_monitor_ops(cfg::ControlFlowGraph& cfg) {
+  for (const auto& mie : cfg::InstructionIterable(cfg)) {
     if (opcode::is_a_monitor(mie.insn->opcode())) {
       return true;
     }
@@ -703,13 +702,14 @@ bool has_monitor_ops(const IRCode* code) {
 
 Stats run_locks_removal(DexMethod* m, IRCode* code) {
   // 1) Check whether there are MONITOR_ENTER instructions.
-  if (!has_monitor_ops(code)) {
+  always_assert(code->editable_cfg_built());
+  auto& cfg = code->cfg();
+  if (!has_monitor_ops(cfg)) {
     return Stats{};
   }
 
-  cfg::ScopedCFG cfg(code);
   Stats stats{};
-  auto analysis = analyze(*cfg);
+  auto analysis = analyze(cfg);
 
   stats.methods_with_locks = analysis.method_with_locks ? 1 : 0;
   if (analysis.non_singleton_rdefs) {
@@ -728,19 +728,19 @@ Stats run_locks_removal(DexMethod* m, IRCode* code) {
   stats.counts_per[analysis.max_same].insert(m);
 
   if (analysis.max_same > 1) {
-    size_t removed = remove(*cfg, analysis);
+    size_t removed = remove(cfg, analysis);
     redex_assert(removed > 0);
-    cfg->simplify(); // Remove dead blocks.
+    cfg.simplify(); // Remove dead blocks.
 
     // Run analysis again just to check.
-    auto analysis2 = analyze(*cfg);
-    always_assert_log(!analysis2.non_singleton_rdefs, "%s", SHOW(*cfg));
-    always_assert_log(!analysis2.method_with_issues, "%s", SHOW(*cfg));
-    auto verify_res = verify(*cfg, analysis, analysis2);
+    auto analysis2 = analyze(cfg);
+    always_assert_log(!analysis2.non_singleton_rdefs, "%s", SHOW(cfg));
+    always_assert_log(!analysis2.method_with_issues, "%s", SHOW(cfg));
+    auto verify_res = verify(cfg, analysis, analysis2);
     auto print_err = [&m, &verify_res, &analysis2, &cfg]() {
       std::ostringstream oss;
       oss << show(m) << ": " << *verify_res << std::endl;
-      print(oss, analysis2.rdefs, *analysis2.iter, *cfg);
+      print(oss, analysis2.rdefs, *analysis2.iter, cfg);
       return oss.str();
     };
     always_assert_log(!verify_res, "%s", print_err().c_str());
@@ -760,7 +760,7 @@ void run_impl(DexStoresVector& stores,
   Stats stats =
       walk::parallel::methods<Stats>(scope, [](DexMethod* method) -> Stats {
         auto code = method->get_code();
-        if (code != nullptr) {
+        if (code != nullptr && !method->rstate.no_optimizations()) {
           return run_locks_removal(method, code);
         }
         return Stats{};

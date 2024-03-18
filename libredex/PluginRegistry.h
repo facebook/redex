@@ -47,6 +47,7 @@ class PluginEntry : public Plugin {
   }
   std::vector<std::unique_ptr<T>> create_plugins() {
     std::vector<std::unique_ptr<T>> res;
+    res.reserve(m_ordered_creator_names.size());
     for (const auto& name : m_ordered_creator_names) {
       res.emplace_back(std::move(create(name)));
     }

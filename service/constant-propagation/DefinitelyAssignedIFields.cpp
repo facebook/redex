@@ -293,41 +293,33 @@ namespace definitely_assigned_ifields {
 std::unordered_set<const DexField*> get_definitely_assigned_ifields(
     const Scope& scope) {
   Timer t("get_definitely_assigned_ifields");
-  ConcurrentMap<DexMethod*, std::shared_ptr<AnalysisResult>> analysis_results;
+  InsertOnlyConcurrentMap<DexMethod*, AnalysisResult> analysis_results;
   std::function<const AnalysisResult*(DexMethod*)> get_analysis_result;
-  get_analysis_result = [&](DexMethod* ctor) {
-    auto res = analysis_results.get(ctor, nullptr);
-    if (res) {
-      return res.get();
-    }
-    if (!ctor->is_external() && ctor->get_code()) {
-      auto& cfg = ctor->get_code()->cfg();
-      Analyzer analyzer(cfg, ctor->get_class(), get_analysis_result);
-      const auto& env = analyzer.get_exit_state_at(cfg.exit_block());
-      auto cls = type_class(ctor->get_class());
-      res = std::make_shared<AnalysisResult>(env.get_analysis_result(cls));
-    } else {
-      res = std::make_shared<AnalysisResult>();
-      // Conservative assumption: All external ctors (without code)
-      // except Object::<init> may directly or indirectly read and write own
-      // fields.
-      if (ctor->get_class() != type::java_lang_Object()) {
-        // TODO: Consider using the SummaryGenerator to analyze AOSP classes to
-        // find other external constructors where this does not escape.
-        res->may_this_have_escaped = true;
-      }
-    }
-    analysis_results.update(
-        ctor,
-        [&](DexMethod*, std::shared_ptr<AnalysisResult>& value, bool exists) {
-          if (exists) {
-            always_assert(*value == *res);
-            res = value;
-          } else {
-            value = res;
-          }
-        });
-    return res.get();
+  get_analysis_result = [&](DexMethod* ctor) -> const AnalysisResult* {
+    return analysis_results
+        .get_or_create_and_assert_equal(
+            ctor,
+            [&](auto*) {
+              if (!ctor->is_external() && ctor->get_code()) {
+                auto& cfg = ctor->get_code()->cfg();
+                Analyzer analyzer(cfg, ctor->get_class(), get_analysis_result);
+                const auto& env = analyzer.get_exit_state_at(cfg.exit_block());
+                auto cls = type_class(ctor->get_class());
+                return env.get_analysis_result(cls);
+              }
+              AnalysisResult res;
+              // Conservative assumption: All external ctors (without
+              // code) except Object::<init> may directly or
+              // indirectly read and write own fields.
+              if (ctor->get_class() != type::java_lang_Object()) {
+                // TODO: Consider using the SummaryGenerator to
+                // analyze AOSP classes to find other external
+                // constructors where this does not escape.
+                res.may_this_have_escaped = true;
+              }
+              return res;
+            })
+        .first;
   };
   ConcurrentSet<const DexField*> res;
   walk::parallel::classes(scope, [&](DexClass* cls) {

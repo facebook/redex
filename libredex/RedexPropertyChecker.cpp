@@ -10,8 +10,7 @@
 
 namespace redex_properties {
 
-PropertyChecker::PropertyChecker(std::string property_name)
-    : m_property_name(std::move(property_name)) {
+PropertyChecker::PropertyChecker(Property property) : m_property(property) {
   PropertyCheckerRegistry::get().register_checker(this);
 }
 

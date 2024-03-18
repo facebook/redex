@@ -215,7 +215,6 @@ struct OptimizationImpl {
       const std::unordered_set<DexMethod*>& methods,
       std::vector<IRInstruction*>* removed_instruction);
 
- private:
   std::unique_ptr<SingleImplAnalysis> single_impls;
   // A map from interface method to implementing method. We maintain this global
   // map for rewriting method references in annotation.

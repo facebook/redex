@@ -36,9 +36,7 @@ class MethodSimilarityCompressionConsciousOrderer {
  private:
   // The content of the method (a sequence of bytes representing the method).
   std::vector<uint8_t> get_encoded_method_content(
-      DexMethod* meth,
-      std::unique_ptr<DexOutputIdx>& dodx,
-      std::unique_ptr<uint8_t[]>& output);
+      DexMethod* meth, DexOutputIdx& dodx, std::unique_ptr<uint8_t[]>& output);
 
  public:
   void order(std::vector<DexMethod*>& methods, GatheredTypes* m_gtypes);

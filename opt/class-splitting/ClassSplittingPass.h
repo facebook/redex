@@ -23,7 +23,6 @@ class ClassSplittingPass : public Pass {
     return {
         {HasSourceBlocks, RequiresAndEstablishes},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 

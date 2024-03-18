@@ -213,18 +213,17 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
     stats->num_fields += clz->get_ifields().size() + clz->get_sfields().size();
     stats->num_methods +=
         clz->get_vmethods().size() + clz->get_dmethods().size();
-    for (auto* meth : clz->get_vmethods()) {
-      DexCode* code = meth->get_dex_code();
-      if (code) {
-        stats->num_instructions += code->get_instructions().size();
+    auto process_methods = [&](const auto& methods) {
+      for (auto* meth : methods) {
+        DexCode* code = meth->get_dex_code();
+        if (code) {
+          stats->num_instructions += code->get_instructions().size();
+          stats->num_tries += code->get_tries().size();
+        }
       }
-    }
-    for (auto* meth : clz->get_dmethods()) {
-      DexCode* code = meth->get_dex_code();
-      if (code) {
-        stats->num_instructions += code->get_instructions().size();
-      }
-    }
+    };
+    process_methods(clz->get_vmethods());
+    process_methods(clz->get_dmethods());
   }
   for (uint32_t meth_idx = 0; meth_idx < dh->method_ids_size; ++meth_idx) {
     auto* meth = m_idx->get_methodidx(meth_idx);
@@ -623,7 +622,7 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
 }
 
 static void balloon_all(const Scope& scope, bool throw_on_error) {
-  ConcurrentMap<DexMethod*, std::string> ir_balloon_errors;
+  InsertOnlyConcurrentMap<DexMethod*, std::string> ir_balloon_errors;
   walk::parallel::methods(scope, [&](DexMethod* m) {
     if (m->get_dex_code()) {
       try {

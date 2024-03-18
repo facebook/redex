@@ -28,7 +28,7 @@ void test(const std::string& code_str,
 
   auto code = assembler::ircode_from_string(code_str);
   auto expected = assembler::ircode_from_string(expected_str);
-
+  code->build_cfg();
   ReduceGotosPass::Stats stats = ReduceGotosPass::process_code(code.get());
   EXPECT_EQ(expected_replaced_gotos_with_returns,
             stats.replaced_gotos_with_returns);
@@ -42,7 +42,7 @@ void test(const std::string& code_str,
   EXPECT_EQ(expected_removed_switch_cases, stats.removed_switch_cases);
   EXPECT_EQ(expected_replaced_trivial_switches,
             stats.replaced_trivial_switches);
-
+  code->clear_cfg();
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected.get()))
       << "  " << assembler::to_s_expr(code.get()).str() << "\n---\n"

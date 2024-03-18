@@ -142,10 +142,6 @@ bool process_base_and_overriding_methods(
     bool ignore_methods_with_assumenosideeffects,
     const std::function<bool(DexMethod*)>& handler_func);
 
-// Accumulated time of all internal wto computations of
-// compute_locations_closure.
-double get_compute_locations_closure_wto_seconds();
-
 // Given initial locations and dependencies for each method, compute the closure
 // (union) of all such locations over all the stated dependencies, taking into
 // account all overriding methods.

@@ -17,11 +17,12 @@ bool ThrowPropagator::try_apply(const cfg::InstructionIterator& cfg_it) {
   if (!check_if_dead_code_present_and_prepare_block(cfg_it)) {
     return false;
   }
-  insert_throw(cfg_it);
+  insert_unreachable(cfg_it);
   return true;
 }
 
-bool ThrowPropagator::will_throw_or_not_terminate(cfg::InstructionIterator it) {
+bool ThrowPropagator::will_throw_or_not_terminate_or_unreachable(
+    cfg::InstructionIterator it) {
   std::unordered_set<IRInstruction*> visited{it->insn};
   while (true) {
     it = m_cfg.next_following_gotos(it);
@@ -47,6 +48,7 @@ bool ThrowPropagator::will_throw_or_not_terminate(cfg::InstructionIterator it) {
       break;
     }
     case OPCODE_THROW:
+    case IOPCODE_UNREACHABLE:
       return true;
     default:
       return false;
@@ -65,7 +67,7 @@ bool ThrowPropagator::check_if_dead_code_present_and_prepare_block(
   auto insn = it->insn;
   TRACE(TP, 4, "no return: %s", SHOW(insn));
   if (insn == block->get_last_insn()->insn) {
-    if (will_throw_or_not_terminate(cfg_it)) {
+    if (will_throw_or_not_terminate_or_unreachable(cfg_it)) {
       // There's already code in place that will immediately and
       // unconditionally throw an exception, and thus we don't need to
       // bother rewriting the code into a throw. The main reason we are
@@ -79,7 +81,7 @@ bool ThrowPropagator::check_if_dead_code_present_and_prepare_block(
     // causes complications due to the possibly following and then dangling
     // move-result instruction, so we'll explicitly split the block here
     // in order to keep all invariant happy.)
-    if (will_throw_or_not_terminate(cfg_it)) {
+    if (will_throw_or_not_terminate_or_unreachable(cfg_it)) {
       // As above, nothing to do, since an exception will be thrown anyway.
       return false;
     }
@@ -91,53 +93,19 @@ bool ThrowPropagator::check_if_dead_code_present_and_prepare_block(
   return true;
 };
 
-void ThrowPropagator::insert_throw(const cfg::InstructionIterator& cfg_it) {
+void ThrowPropagator::insert_unreachable(
+    const cfg::InstructionIterator& cfg_it) {
   const auto block = cfg_it.block();
   IRInstruction* insn = cfg_it->insn;
 
-  std::string message{"Redex: Unreachable code after no-return invoke"};
-  if (m_debug) {
-    message += ":";
-    message += SHOW(insn);
+  if (!m_reg) {
+    m_reg = m_cfg.allocate_temp();
   }
-  if (!m_regs) {
-    m_regs = std::make_pair(m_cfg.allocate_temp(), m_cfg.allocate_temp());
-  }
-  auto exception_reg = m_regs->first;
-  auto string_reg = m_regs->second;
   cfg::Block* new_block = m_cfg.create_block();
-  std::vector<IRInstruction*> insns;
-  auto new_instance_insn = new IRInstruction(OPCODE_NEW_INSTANCE);
-  auto exception_type = type::java_lang_RuntimeException();
-  always_assert(exception_type != nullptr);
-  new_instance_insn->set_type(exception_type);
-  insns.push_back(new_instance_insn);
-
-  auto move_result_pseudo_exception_insn =
-      new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
-  move_result_pseudo_exception_insn->set_dest(exception_reg);
-  insns.push_back(move_result_pseudo_exception_insn);
-
-  auto const_string_insn = new IRInstruction(OPCODE_CONST_STRING);
-  const_string_insn->set_string(DexString::make_string(message));
-  insns.push_back(const_string_insn);
-
-  auto move_result_pseudo_string_insn =
-      new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
-  move_result_pseudo_string_insn->set_dest(string_reg);
-  insns.push_back(move_result_pseudo_string_insn);
-
-  auto invoke_direct_insn = new IRInstruction(OPCODE_INVOKE_DIRECT);
-  auto init_method = method::java_lang_RuntimeException_init_String();
-  always_assert(init_method != nullptr);
-  invoke_direct_insn->set_method(init_method)
-      ->set_srcs_size(2)
-      ->set_src(0, exception_reg)
-      ->set_src(1, string_reg);
-  insns.push_back(invoke_direct_insn);
-  auto throw_insn = new IRInstruction(OPCODE_THROW);
-  throw_insn->set_src(0, exception_reg);
-  insns.push_back(throw_insn);
+  std::vector<IRInstruction*> insns{
+      (new IRInstruction(OPCODE_CONST))->set_literal(0)->set_dest(*m_reg),
+      (new IRInstruction(OPCODE_THROW))->set_src(0, *m_reg),
+  };
   new_block->push_back(insns);
   m_cfg.copy_succ_edges_of_type(block, new_block, cfg::EDGE_THROW);
   auto existing_goto_edge = m_cfg.get_succ_edge_of_type(block, cfg::EDGE_GOTO);

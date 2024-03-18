@@ -32,7 +32,7 @@ class FinalInlinePass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
-        {HasSourceBlocks, Preserves},
+        {SpuriousGetClassCallsInterned, RequiresAndPreserves},
     };
   }
 

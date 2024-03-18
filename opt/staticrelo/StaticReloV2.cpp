@@ -102,7 +102,12 @@ void build_call_graph(const std::vector<DexClass*>& candidate_classes,
   for (auto& meth_id : graph.method_id_map) {
     DexMethod* caller = meth_id.first;
     int caller_id = meth_id.second;
-    for (const auto& mie : InstructionIterable(caller->get_code())) {
+    if (!caller->get_code()) {
+      continue;
+    }
+    always_assert(caller->get_code()->editable_cfg_built());
+    for (const auto& mie :
+         cfg::InstructionIterable(caller->get_code()->cfg())) {
       if (mie.insn->has_method()) {
         if (mie.insn->opcode() != OPCODE_INVOKE_STATIC) {
           continue;
@@ -159,7 +164,9 @@ void color_from_a_class(StaticCallGraph& graph, DexClass* cls, int color) {
     if (code == nullptr) {
       return;
     }
-    for (const auto& mie : InstructionIterable(code)) {
+    always_assert(code->editable_cfg_built());
+    auto& cfg = code->cfg();
+    for (const auto& mie : cfg::InstructionIterable(cfg)) {
       if (mie.insn->has_method()) {
         if (mie.insn->opcode() != OPCODE_INVOKE_STATIC) {
           continue;
@@ -201,6 +208,7 @@ int relocate_clusters(const StaticCallGraph& graph, const Scope& scope) {
         // caller
         int caller_id = *graph.callers[vertex.id].begin();
         DexMethod* caller = graph.vertices[caller_id].method;
+        change_visibility(vertex.method, caller->get_class());
         relocate_method(vertex.method, caller->get_class());
         relocated_methods++;
         set_public(vertex.method);
@@ -212,6 +220,7 @@ int relocate_clusters(const StaticCallGraph& graph, const Scope& scope) {
       // higher or equal to the api level of the method.
       if (to_class->rstate.get_api_level() >=
           api::LevelChecker::get_method_level(vertex.method)) {
+        change_visibility(vertex.method, to_class->get_type());
         relocate_method(vertex.method, to_class->get_type());
         relocated_methods++;
       }

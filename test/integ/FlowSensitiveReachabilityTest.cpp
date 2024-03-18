@@ -31,9 +31,11 @@ TEST_F(FlowSensitiveReachabilityTest,
   reachability::ReachableAspects reachable_aspects;
   auto scope = build_class_scope(stores);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
+  auto method_override_graph = method_override_graph::build_graph(scope);
 
   auto reachable_objects = reachability::compute_reachable_objects(
-      stores, ig_sets, &num_ignore_check_strings, &reachable_aspects, false,
+      scope, *method_override_graph, ig_sets, &num_ignore_check_strings,
+      &reachable_aspects, false,
       /* relaxed_keep_class_members */ true,
       /* relaxed_keep_interfaces */ false,
       /* cfg_gathering_check_instantiable */ true);
@@ -81,13 +83,17 @@ TEST_F(FlowSensitiveReachabilityTest,
   EXPECT_TRUE(is_uninstantiable_dependency("LDataHolder;"));
 
   // Code sweeping
-  auto [uninstantiables_stats, throws_inserted] = reachability::sweep_code(
+  remove_uninstantiables_impl::Stats remove_uninstantiables_stats;
+  std::atomic<size_t> throws_inserted{0};
+  InsertOnlyConcurrentSet<DexMethod*> affected_methods;
+  reachability::sweep_code(
       stores, /* prune_uncallable_instance_method_bodies */ false,
-      /* skip_uncallable_virtual_methods */ false, reachable_aspects);
-  EXPECT_EQ(uninstantiables_stats.field_accesses_on_uninstantiable, 3);
-  EXPECT_EQ(uninstantiables_stats.invokes, 7);
-  EXPECT_EQ(uninstantiables_stats.check_casts, 1);
-  EXPECT_EQ(uninstantiables_stats.instance_ofs, 1);
+      /* skip_uncallable_virtual_methods */ false, reachable_aspects,
+      &remove_uninstantiables_stats, &throws_inserted, &affected_methods);
+  EXPECT_EQ(remove_uninstantiables_stats.field_accesses_on_uninstantiable, 3);
+  EXPECT_EQ(remove_uninstantiables_stats.invokes, 7);
+  EXPECT_EQ(remove_uninstantiables_stats.check_casts, 1);
+  EXPECT_EQ(remove_uninstantiables_stats.instance_ofs, 1);
 
   walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
 }
@@ -108,9 +114,11 @@ TEST_F(FlowSensitiveReachabilityTest, cfg_gathering_check_instance_callable) {
   reachability::ReachableAspects reachable_aspects;
   auto scope = build_class_scope(stores);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
+  auto method_override_graph = method_override_graph::build_graph(scope);
 
   auto reachable_objects = reachability::compute_reachable_objects(
-      stores, ig_sets, &num_ignore_check_strings, &reachable_aspects, false,
+      scope, *method_override_graph, ig_sets, &num_ignore_check_strings,
+      &reachable_aspects, false,
       /* relaxed_keep_class_members */ true,
       /* relaxed_keep_interfaces */ false,
       /* cfg_gathering_check_instantiable */ true,
@@ -159,14 +167,18 @@ TEST_F(FlowSensitiveReachabilityTest, cfg_gathering_check_instance_callable) {
   EXPECT_TRUE(is_uninstantiable_dependency("LDataHolder;"));
 
   // Code sweeping
-  auto [uninstantiables_stats, throws_inserted] = reachability::sweep_code(
+  remove_uninstantiables_impl::Stats remove_uninstantiables_stats;
+  std::atomic<size_t> throws_inserted{0};
+  InsertOnlyConcurrentSet<DexMethod*> affected_methods;
+  reachability::sweep_code(
       stores, /* prune_uncallable_instance_method_bodies */ true,
-      /* skip_uncallable_virtual_methods */ false, reachable_aspects);
-  EXPECT_EQ(uninstantiables_stats.field_accesses_on_uninstantiable, 1);
-  EXPECT_EQ(uninstantiables_stats.invokes, 5);
-  EXPECT_EQ(uninstantiables_stats.check_casts, 1);
-  EXPECT_EQ(uninstantiables_stats.instance_ofs, 1);
-  EXPECT_EQ(uninstantiables_stats.throw_null_methods, 12);
+      /* skip_uncallable_virtual_methods */ false, reachable_aspects,
+      &remove_uninstantiables_stats, &throws_inserted, &affected_methods);
+  EXPECT_EQ(remove_uninstantiables_stats.field_accesses_on_uninstantiable, 1);
+  EXPECT_EQ(remove_uninstantiables_stats.invokes, 5);
+  EXPECT_EQ(remove_uninstantiables_stats.check_casts, 1);
+  EXPECT_EQ(remove_uninstantiables_stats.instance_ofs, 1);
+  EXPECT_EQ(remove_uninstantiables_stats.throw_null_methods, 12);
 
   walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
 }
@@ -187,9 +199,11 @@ TEST_F(FlowSensitiveReachabilityTest, sweep_uncallable_virtual_methods) {
   reachability::ReachableAspects reachable_aspects;
   auto scope = build_class_scope(stores);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
+  auto method_override_graph = method_override_graph::build_graph(scope);
 
   auto reachable_objects = reachability::compute_reachable_objects(
-      stores, ig_sets, &num_ignore_check_strings, &reachable_aspects, false,
+      scope, *method_override_graph, ig_sets, &num_ignore_check_strings,
+      &reachable_aspects, false,
       /* relaxed_keep_class_members */ true,
       /* relaxed_keep_interfaces */ false,
       /* cfg_gathering_check_instantiable */ true,
@@ -238,24 +252,28 @@ TEST_F(FlowSensitiveReachabilityTest, sweep_uncallable_virtual_methods) {
   EXPECT_TRUE(is_uninstantiable_dependency("LDataHolder;"));
 
   // Code sweeping
-  auto [uninstantiables_stats, throws_inserted] = reachability::sweep_code(
+  remove_uninstantiables_impl::Stats remove_uninstantiables_stats;
+  std::atomic<size_t> throws_inserted{0};
+  InsertOnlyConcurrentSet<DexMethod*> affected_methods;
+  reachability::sweep_code(
       stores, /* prune_uncallable_instance_method_bodies */ true,
-      /* skip_uncallable_virtual_methods */ true, reachable_aspects);
-  EXPECT_EQ(uninstantiables_stats.field_accesses_on_uninstantiable, 1);
-  EXPECT_EQ(uninstantiables_stats.invokes, 5);
-  EXPECT_EQ(uninstantiables_stats.check_casts, 1);
-  EXPECT_EQ(uninstantiables_stats.instance_ofs, 1);
-  EXPECT_EQ(uninstantiables_stats.throw_null_methods, 7);
+      /* skip_uncallable_virtual_methods */ true, reachable_aspects,
+      &remove_uninstantiables_stats, &throws_inserted, &affected_methods);
+  EXPECT_EQ(remove_uninstantiables_stats.field_accesses_on_uninstantiable, 1);
+  EXPECT_EQ(remove_uninstantiables_stats.invokes, 5);
+  EXPECT_EQ(remove_uninstantiables_stats.check_casts, 1);
+  EXPECT_EQ(remove_uninstantiables_stats.instance_ofs, 1);
+  EXPECT_EQ(remove_uninstantiables_stats.throw_null_methods, 7);
 
   auto abstracted_classes = reachability::mark_classes_abstract(
       stores, *reachable_objects, reachable_aspects);
   EXPECT_EQ(abstracted_classes.size(), 5);
   reachability::sweep(stores, *reachable_objects);
-  uninstantiables_stats =
+  remove_uninstantiables_stats =
       reachability::sweep_uncallable_virtual_methods(stores, reachable_aspects);
-  EXPECT_EQ(uninstantiables_stats.abstracted_vmethods, 1);
-  EXPECT_EQ(uninstantiables_stats.abstracted_classes, 0);
-  EXPECT_EQ(uninstantiables_stats.removed_vmethods, 1);
+  EXPECT_EQ(remove_uninstantiables_stats.abstracted_vmethods, 1);
+  EXPECT_EQ(remove_uninstantiables_stats.abstracted_classes, 0);
+  EXPECT_EQ(remove_uninstantiables_stats.removed_vmethods, 1);
 
   walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
 }
@@ -276,9 +294,11 @@ TEST_F(FlowSensitiveReachabilityTest, abstract_overrides_non_abstract) {
   reachability::ReachableAspects reachable_aspects;
   auto scope = build_class_scope(stores);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
+  auto method_override_graph = method_override_graph::build_graph(scope);
 
   auto reachable_objects = reachability::compute_reachable_objects(
-      stores, ig_sets, &num_ignore_check_strings, &reachable_aspects, false,
+      scope, *method_override_graph, ig_sets, &num_ignore_check_strings,
+      &reachable_aspects, false,
       /* relaxed_keep_class_members */ true,
       /* relaxed_keep_interfaces */ false,
       /* cfg_gathering_check_instantiable */ true);
@@ -321,9 +341,11 @@ TEST_F(FlowSensitiveReachabilityTest, throw_propagation) {
   reachability::ReachableAspects reachable_aspects;
   auto scope = build_class_scope(stores);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
+  auto method_override_graph = method_override_graph::build_graph(scope);
 
   auto reachable_objects = reachability::compute_reachable_objects(
-      stores, ig_sets, &num_ignore_check_strings, &reachable_aspects, false,
+      scope, *method_override_graph, ig_sets, &num_ignore_check_strings,
+      &reachable_aspects, false,
       /* relaxed_keep_class_members */ true,
       /* relaxed_keep_interfaces */ true,
       /* cfg_gathering_check_instantiable */ true,
@@ -340,9 +362,13 @@ TEST_F(FlowSensitiveReachabilityTest, throw_propagation) {
   ASSERT_FALSE(reachable_objects->marked_unsafe(dead_cls));
 
   // Code sweeping
+  remove_uninstantiables_impl::Stats remove_uninstantiables_stats;
+  std::atomic<size_t> throws_inserted{0};
+  InsertOnlyConcurrentSet<DexMethod*> affected_methods;
   reachability::sweep_code(
       stores, /* prune_uncallable_instance_method_bodies */ true,
-      /* skip_uncallable_virtual_methods */ true, reachable_aspects);
+      /* skip_uncallable_virtual_methods */ true, reachable_aspects,
+      &remove_uninstantiables_stats, &throws_inserted, &affected_methods);
 
   walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
 

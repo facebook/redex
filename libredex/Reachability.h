@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <sparta/WorkQueue.h>
+#include <WorkQueue.h>
 
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
@@ -691,7 +691,8 @@ class TransitiveClosureMarkerWorker {
  * (e.g. proguard rules).
  */
 std::unique_ptr<ReachableObjects> compute_reachable_objects(
-    const DexStoresVector& stores,
+    const Scope& scope,
+    const method_override_graph::Graph& method_override_graph,
     const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
     ReachableAspects* reachable_aspects,
@@ -702,8 +703,6 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     bool cfg_gathering_check_instance_callable = false,
     bool cfg_gathering_check_returning = false,
     bool should_mark_all_as_seed = false,
-    std::unique_ptr<const method_override_graph::Graph>*
-        out_method_override_graph = nullptr,
     bool remove_no_argument_constructors = false);
 
 void compute_zombie_methods(
@@ -723,11 +722,14 @@ void sweep(DexStoresVector& stores,
 
 void reanimate_zombie_methods(const ReachableAspects& reachable_aspects);
 
-std::pair<remove_uninstantiables_impl::Stats, size_t> sweep_code(
+void sweep_code(
     DexStoresVector& stores,
     bool prune_uncallable_instance_method_bodies,
     bool skip_uncallable_virtual_methods,
-    const ReachableAspects& reachable_aspects);
+    const ReachableAspects& reachable_aspects,
+    remove_uninstantiables_impl::Stats* remove_uninstantiables_stats,
+    std::atomic<size_t>* throws_inserted,
+    InsertOnlyConcurrentSet<DexMethod*>* affected_methods);
 
 remove_uninstantiables_impl::Stats sweep_uncallable_virtual_methods(
     DexStoresVector& stores, const ReachableAspects& reachable_aspects);

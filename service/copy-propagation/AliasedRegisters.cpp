@@ -713,7 +713,7 @@ void AliasGraph::clear_vertex(vertex_t v) {
   auto v_in_it = m_vertices_ins.find(v);
   if (v_in_it != m_vertices_ins.end()) {
     auto& v_in = v_in_it->second;
-    always_assert(v_in.size() >= 1);
+    always_assert(!v_in.empty());
     for (auto u : v_in) {
       always_assert(m_vertices_outs.at(u) == v);
       m_vertices_outs.erase(u);

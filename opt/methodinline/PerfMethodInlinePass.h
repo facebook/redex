@@ -12,7 +12,7 @@
 
 class PerfMethodInlinePass : public Pass {
  public:
-  PerfMethodInlinePass() : Pass("PerfMethodInlinePass") {}
+  PerfMethodInlinePass();
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
@@ -22,7 +22,10 @@ class PerfMethodInlinePass : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, RequiresAndEstablishes},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
+        // This may be too conservative as the inliner can be configured not to
+        // DCE in the shrinker.
+        {SpuriousGetClassCallsInterned, RequiresAndPreserves},
+        {InitialRenameClass, Preserves},
     };
   }
 
@@ -30,11 +33,9 @@ class PerfMethodInlinePass : public Pass {
 
   void bind_config() override;
 
-  bool is_cfg_legacy() override { return true; }
-
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   struct Config;
-  std::unique_ptr<Config> m_config;
+  std::unique_ptr<Config> m_config{nullptr};
 };

@@ -120,7 +120,7 @@ TEST_F(CreatorsTest, MakeSwitchMultiIndices) {
 
 TEST_F(CreatorsTest, ClassCreator) {
   std::string foo("Lfoo;");
-  ClassCreator cc(DexType::make_type(foo.c_str()));
+  ClassCreator cc(DexType::make_type(foo));
   cc.set_super(type::java_lang_Object());
   auto cls = cc.create();
   std::string bar("Lbar;");
