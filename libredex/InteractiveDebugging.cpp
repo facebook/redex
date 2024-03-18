@@ -7,7 +7,7 @@
 
 #include "Macros.h"
 
-#if !defined(NDEBUG) && !IS_WINDOWS
+#if !IS_WINDOWS
 
 #include "InteractiveDebugging.h"
 
