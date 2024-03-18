@@ -258,9 +258,21 @@ class XmlStringRefRemapper : public SimpleXmlParser {
     return SimpleXmlParser::visit_string_ref(ref);
   }
 
+  bool visit_typed_data(android::Res_value* value) override {
+    auto type = value->dataType;
+    if (type == android::Res_value::TYPE_STRING && m_seen.count(value) == 0) {
+      m_seen.emplace(value);
+      auto search = m_mapping.find(dtohl(value->data));
+      if (search != m_mapping.end()) {
+        value->data = htodl(search->second);
+      }
+    }
+    return SimpleXmlParser::visit_typed_data(value);
+  }
+
  private:
   std::unordered_map<uint32_t, uint32_t> m_mapping;
-  std::unordered_set<android::ResStringPool_ref*> m_seen;
+  std::unordered_set<void*> m_seen;
 };
 } // namespace arsc
 #endif
