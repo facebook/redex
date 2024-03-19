@@ -1,0 +1,8 @@
+name: test-build-setup-no-sdk
+runs:
+  using: composite
+  steps:
+  - name: Setup for tests
+    run: |-
+      sudo apt-get install -y --no-install-recommends dalvik-exchange default-jdk-headless
+    shell: bash

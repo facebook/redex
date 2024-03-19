@@ -1,0 +1,111 @@
+name: facebook/redex/build_main
+on:
+  pull_request:
+    branches:
+    - main
+    - stable
+  push:
+    branches:
+    - main
+  schedule:
+    - cron: 0 0 * * *
+env:
+  CACHE_VERSION: xxxxx1
+jobs:
+  build-20_04:
+    runs-on: 4-core-ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v4.1.1
+    - uses: "./.github/actions/build_debian"
+      with:
+        job_name: ubuntu_20.04
+  build-22_04:
+    runs-on: 4-core-ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4.1.1
+    - uses: "./.github/actions/build_debian"
+      with:
+        job_name: ubuntu_22.04
+  build-deb_oldoldstable:
+    runs-on: 4-core-ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v4.1.1
+    - uses: "./.github/actions/build_debian"
+      with:
+        use_sdk: false
+        job_name: debian_10
+  build-deb_stable:
+    runs-on: 4-core-ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v4.1.1
+    - uses: "./.github/actions/build_debian"
+      with:
+        job_name: debian_12
+  build-deb_stable-32:
+    runs-on: 4-core-ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v4.1.1
+    - uses: "./.github/actions/build_debian"
+      with:
+        mode_32: true
+        job_name: debian_12_32
+  build-deb_unstable:
+    runs-on: 4-core-ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v4.1.1
+    - uses: "./.github/actions/build_debian"
+      with:
+        job_name: debian_unstable
+  build-deb_stable-w-clang-llvm-org:
+    runs-on: 4-core-ubuntu-20.04
+    env:
+      CC: clang
+      CXX: clang++
+    strategy:
+      matrix:
+        clang_version:
+        - 0
+        - 15
+        - 17
+    steps:
+    - uses: actions/checkout@v4.1.1
+    - uses: "./.github/actions/build_debian"
+      with:
+        install_clang_llvm_org: "${{ matrix.clang_version }}"
+        job_name: debian_12_clang_upstream
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4.1.1
+    - uses: "./.github/actions/setup-build-and-test-windows"
+  build-windows-artifacts:
+    if: github.event_name == 'schedule'
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4.1.1
+    - uses: "./.github/actions/setup-build-and-test-windows"
+    - name: Copy package for github actions
+      run: mkdir artifacts && mv build/Redex*.zip artifacts/
+      shell: c:/tools/msys64/msys2_shell.cmd -defterm -no-start -mingw64 -full-path -here -c
+    - uses: actions/upload-artifact@v4.0.0
+      with:
+        path: ".\\artifacts"
+  build-deb_stable-w-clang-llvm-org_nightly:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    env:
+      CC: clang
+      CXX: clang++
+    strategy:
+      matrix:
+        clang_version:
+        - 0
+        - 15
+        - 17
+    steps:
+    - uses: actions/checkout@v4.1.1
+    - uses: "./.github/actions/build_debian"
+      with:
+        install_clang_llvm_org: "${{ matrix.clang_version }}"
+        job_name: debian_12_clang_upstream
+      
