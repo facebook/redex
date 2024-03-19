@@ -91,5 +91,58 @@ TEST(Visitor, AppendXmlId) {
     }
     EXPECT_TRUE(found_string)
         << "String pool did not contain the string \"" << new_attr << "\"";
+
+    // Actually parse it with the Android Framework class, to ensure that
+    // attribute values in unrelated parts of the document are still correct.
+    android::ResXMLTree xml_tree;
+    xml_tree.setTo(vec.array(), vec.size());
+    EXPECT_EQ(xml_tree.getError(), android::NO_ERROR)
+        << "Android Framework failed to parse manifest after editing!";
+    android::ResXMLParser::event_code_t event_code;
+    android::String16 manifest_element("manifest");
+    android::String16 package_attr("package");
+    android::String16 expected_package_value("com.fb.bundles");
+    bool found_attribute{false};
+    do {
+      event_code = xml_tree.next();
+      if (event_code == android::ResXMLParser::START_TAG) {
+        size_t outLen;
+        auto element_name = android::String16(xml_tree.getElementName(&outLen));
+        if (element_name == manifest_element) {
+          const size_t attr_count = xml_tree.getAttributeCount();
+          for (size_t a = 0; a < attr_count; ++a) {
+            size_t len;
+            android::String16 attr_name(xml_tree.getAttributeName(a, &len));
+            if (attr_name == package_attr) {
+              // ResXMLTree_attribute stores redundant indices to the string
+              // pool, from rawValue and typedValue. Thoroughly check both.
+              {
+                auto chars = xml_tree.getAttributeStringValue(a, &len);
+                EXPECT_NE(chars, nullptr) << "Attribute value was null";
+                android::String16 attr_value(chars, len);
+                EXPECT_EQ(attr_value, expected_package_value)
+                    << "Attribute raw value not remapped!";
+              }
+              {
+                // Now make sure typedValue is correct.
+                auto data = xml_tree.getAttributeData(a);
+                EXPECT_GE(data, 0);
+                auto chars = pool.stringAt((size_t)data, &len);
+                EXPECT_NE(chars, nullptr) << "Attribute value was null";
+                android::String16 attr_value(chars, len);
+                EXPECT_EQ(attr_value, expected_package_value)
+                    << "Attribute data not remapped!";
+              }
+              found_attribute = true;
+              break;
+            }
+          }
+        }
+      }
+    } while ((event_code != android::ResXMLParser::END_DOCUMENT) &&
+             (event_code != android::ResXMLParser::BAD_DOCUMENT));
+
+    EXPECT_TRUE(found_attribute)
+        << "Did not find expected <manifest> attribute";
   }
 }

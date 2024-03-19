@@ -14,6 +14,7 @@ import logging
 import lzma
 import multiprocessing
 import os
+import platform
 import shutil
 import subprocess
 import tarfile
@@ -204,7 +205,7 @@ def _compress_xz(
 ) -> None:
     comp = _get_xz_compress_level(compression_level)
     xz = get_xz_path()
-    if xz is not None:
+    if xz is not None and platform.system() != "Darwin":
         cmd = [xz, "-z", comp[0], "-T10"]
         with open(from_file, "rb") as fin:
             with open(to_file, "wb") as fout:
@@ -300,15 +301,16 @@ def compress_entries(
     args: argparse.Namespace,
     processes: int = 4,
 ) -> None:
+    def _is_selected(item: CompressionEntry) -> bool:
+        filter_fn = item.filter_fn
+        return filter_fn is None or filter_fn(args)
+
     if processes == 1:
         for item in conf:
-            _compress((item, src_dir, trg_dir, args))
+            if _is_selected(item):
+                _compress((item, src_dir, trg_dir, args))
     else:
         with multiprocessing.Pool(processes=processes) as pool:
-
-            def _is_selected(item: CompressionEntry) -> bool:
-                filter_fn = item.filter_fn
-                return filter_fn is None or filter_fn(args)
 
             imap_iter = pool.imap_unordered(
                 _compress,

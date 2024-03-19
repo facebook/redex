@@ -861,7 +861,7 @@ Json::Value get_times(double cpu_time_s) {
     cpu_element["cpu_time"] = std::round(cpu_time_s * 10) / 10.0;
     list.append(cpu_element);
   }
-  {
+  if (redex_thread_pool::ThreadPool::get_instance() != nullptr) {
     Json::Value thread_pool_element;
     thread_pool_element["thread_pool_size"] =
         redex_thread_pool::ThreadPool::get_instance()->size() * 1.0;
@@ -1741,8 +1741,6 @@ int main(int argc, char* argv[]) {
 
   auto maybe_global_profile =
       ScopedCommandProfiling::maybe_from_env("GLOBAL_", "global");
-
-  redex_thread_pool::ThreadPool::create();
 
   ConcurrentContainerConcurrentDestructionScope
       concurrent_container_destruction_scope;

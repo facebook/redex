@@ -19,6 +19,7 @@ enum class UnsafeType {
   kCannotDelete,
   kHasInterfaces,
   kMoreThanOneSynthField,
+  kUnexpectedSynthFields,
   kMultipleCtors,
   kComplexCtor,
   kUnrenamableDmethod,
@@ -56,6 +57,9 @@ inline std::ostream& operator<<(std::ostream& os, const UnsafeType& u) {
     break;
   case UnsafeType::kMoreThanOneSynthField:
     os << "MoreThanOneSynthField";
+    break;
+  case UnsafeType::kUnexpectedSynthFields:
+    os << "UnexpectedSynthFields";
     break;
   case UnsafeType::kMultipleCtors:
     os << "MultipleCtors";

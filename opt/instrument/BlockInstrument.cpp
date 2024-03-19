@@ -620,6 +620,13 @@ auto insert_prologue_insts(cfg::ControlFlowGraph& cfg,
     auto it = cfg.find_insn(eb_insn);
     b.block = it.block();
     b.it = it.unwrap();
+    // the entry block with prologue opcodes should not retain throws from the
+    // block that it was split from
+    if (!cfg.entry_block()->cannot_throw()) {
+      cfg.delete_succ_edge_if(cfg.entry_block(), [](const cfg::Edge* e) {
+        return e->type() == cfg::EdgeType::EDGE_THROW;
+      });
+    }
   }
 
   if (slow_invariants_debug) {

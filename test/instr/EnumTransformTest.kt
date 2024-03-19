@@ -18,7 +18,7 @@ import org.junit.Test
 // POSTCHECK: (PUBLIC, STATIC, FINAL) f0:java.lang.Integer
 // POSTCHECK: (PUBLIC, STATIC, FINAL) f1:java.lang.Integer
 // POSTCHECK: (PUBLIC, STATIC, FINAL) f2:java.lang.Integer
-// POSTCHECK: (PUBLIC, STATIC, FINAL) f3:java.lang.Integer
+// POSTCHECK-NOT: (PUBLIC, STATIC, FINAL) f3:java.lang.Integer
 // POSTCHECK-NOT: (PUBLIC, STATIC, FINAL) f4:java.lang.Integer
 
 // Simple case is optimized.
