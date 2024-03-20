@@ -18,6 +18,7 @@
 constexpr const char* ACCESS_PREFIX = "access$";
 constexpr const char* DEFAULT_SUFFIX = "$default";
 constexpr const char* ANNOTATIONS_SUFFIX = "$annotations";
+constexpr const char* COMPANION_CLASS = "$Companion";
 
 namespace {
 
@@ -54,62 +55,6 @@ bool is_synthetic_kotlin_annotations_method(DexMethod* m) {
                           ANNOTATIONS_SUFFIX);
 }
 
-void collect_from_instruction(
-    TypeEnvironments& envs,
-    type_inference::TypeInference& inference,
-    DexMethod* caller,
-    IRInstruction* insn,
-    std::vector<std::pair<int, DexAnnotationSet&>>& missing_param_annos) {
-  always_assert(opcode::is_an_invoke(insn->opcode()));
-  auto* def_method = resolve_method(caller, insn);
-  if (!def_method || !def_method->get_param_anno()) {
-    // callee cannot be resolved or has no param annotation.
-    return;
-  }
-  if (ACCESS_PREFIX + def_method->get_simple_deobfuscated_name() !=
-          caller->get_simple_deobfuscated_name() &&
-      def_method->get_simple_deobfuscated_name() + DEFAULT_SUFFIX !=
-          caller->get_simple_deobfuscated_name()) {
-    // Not a matching synthetic accessor.
-    return;
-  }
-
-  auto& env = envs.find(insn)->second;
-  for (auto const& param_anno : *def_method->get_param_anno()) {
-    auto annotation = type_inference::get_typedef_annotation(
-        param_anno.second->get_annotations(), inference.get_annotations());
-    if (!annotation) {
-      continue;
-    }
-    int param_index = insn->opcode() == OPCODE_INVOKE_STATIC
-                          ? param_anno.first
-                          : param_anno.first + 1;
-    reg_t param_reg = insn->src(param_index);
-    auto anno_type = env.get_annotation(param_reg);
-    if (anno_type && anno_type == annotation) {
-      // Safe assignment. Nothing to do.
-      continue;
-    }
-    DexAnnotationSet& param_anno_set = *param_anno.second;
-    missing_param_annos.push_back({param_index, param_anno_set});
-    TRACE(TAC, 2, "Missing param annotation %s in %s", SHOW(&param_anno_set),
-          SHOW(caller));
-  }
-}
-
-} // namespace
-
-void SynthAccessorPatcher::run(const Scope& scope) {
-  walk::parallel::methods(scope, [this](DexMethod* m) {
-    if (is_synthetic_accessor(m)) {
-      collect_accessors(m);
-    }
-    if (is_synthetic_kotlin_annotations_method(m)) {
-      patch_kotlin_annotations(m);
-    }
-  });
-}
-
 // make the methods and fields temporarily synthetic to add annotations
 template <typename DexMember>
 bool add_annotations(DexMember* member, DexAnnotationSet* anno_set) {
@@ -128,6 +73,67 @@ bool add_annotations(DexMember* member, DexAnnotationSet* anno_set) {
     return true;
   }
   return false;
+}
+
+void collect_from_instruction(
+    TypeEnvironments& envs,
+    type_inference::TypeInference& inference,
+    DexMethod* caller,
+    IRInstruction* insn,
+    std::vector<std::pair<int, DexAnnotationSet&>>& missing_param_annos) {
+  always_assert(opcode::is_an_invoke(insn->opcode()));
+  auto* def_method = resolve_method(caller, insn);
+  if (!def_method ||
+      (!def_method->get_param_anno() && !def_method->get_anno_set())) {
+    // callee cannot be resolved, has no param annotation, or has no return
+    // annotation
+    return;
+  }
+
+  auto& env = envs.find(insn)->second;
+  if (def_method->get_param_anno()) {
+    for (auto const& param_anno : *def_method->get_param_anno()) {
+      auto annotation = type_inference::get_typedef_annotation(
+          param_anno.second->get_annotations(), inference.get_annotations());
+      if (!annotation) {
+        continue;
+      }
+      int param_index = insn->opcode() == OPCODE_INVOKE_STATIC
+                            ? param_anno.first
+                            : param_anno.first + 1;
+      reg_t param_reg = insn->src(param_index);
+      auto anno_type = env.get_annotation(param_reg);
+      if (anno_type && anno_type == annotation) {
+        // Safe assignment. Nothing to do.
+        continue;
+      }
+      DexAnnotationSet& param_anno_set = *param_anno.second;
+      missing_param_annos.push_back({param_index, param_anno_set});
+      TRACE(TAC, 2, "Missing param annotation %s in %s", SHOW(&param_anno_set),
+            SHOW(caller));
+    }
+  }
+  if (def_method->get_anno_set()) {
+    auto return_annotation = type_inference::get_typedef_annotation(
+        def_method->get_anno_set()->get_annotations(),
+        inference.get_annotations());
+    if (return_annotation) {
+      add_annotations(caller, def_method->get_anno_set());
+    }
+  }
+}
+
+} // namespace
+
+void SynthAccessorPatcher::run(const Scope& scope) {
+  walk::parallel::methods(scope, [this](DexMethod* m) {
+    if (is_synthetic_accessor(m)) {
+      collect_accessors(m);
+    }
+    if (is_synthetic_kotlin_annotations_method(m)) {
+      patch_kotlin_annotations(m);
+    }
+  });
 }
 
 void SynthAccessorPatcher::patch_kotlin_annotations(DexMethod* m) {
@@ -173,11 +179,27 @@ void SynthAccessorPatcher::patch_kotlin_annotations(DexMethod* m) {
   // field is one of:
   //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.Field_three:Ljava/lang/String;
   //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.field_three:Ljava/lang/String;
+  // companion example
+  // companion method:
+  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest$Companion;.getField_one$annotations:()V
+  // getters:
+  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest$Companion.getField_one:()I
+  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.access$getField_one$cp:()I
+  // setters:
+  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest$Companion.setField_one:(I)
+  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.access$setField_one$cp:(I)V
+  // field is one of:
+  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.Field_one:I
+  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.field_one:I
+
+  // some synthetic interfaces' names have $-CC. Delete it from the name
   auto class_name = m->get_class()->get_name()->str() + ".";
+  auto pos = class_name.find("$-CC");
+  if (pos != std::string::npos) class_name.erase(pos, 4);
+
   auto anno_method_name = m->get_simple_deobfuscated_name();
   auto method_name =
       anno_method_name.substr(0, anno_method_name.find(ANNOTATIONS_SUFFIX));
-
   auto int_or_string = safe_annotation->get_name()->str() ==
                                "Lcom/facebook/redex-stable/annotations/SafeStringDef;"
                            ? type::java_lang_String()->get_name()->str()
@@ -194,6 +216,19 @@ void SynthAccessorPatcher::patch_kotlin_annotations(DexMethod* m) {
                                         int_or_string + ")V"),
                   anno_set);
 
+  auto companion_pos = class_name.find(COMPANION_CLASS);
+  if (companion_pos != std::string::npos) {
+    class_name = class_name.substr(0, companion_pos) + ";.";
+    // add annotations to access non-companion getter and setter methods
+    add_annotations(
+        DexMethod::get_method(class_name + ACCESS_PREFIX + "get" + field_name +
+                              "$cp:()" + int_or_string),
+        anno_set);
+    add_annotations(
+        DexMethod::get_method(class_name + ACCESS_PREFIX + "set" + field_name +
+                              "$cp:(" + int_or_string + ")V"),
+        anno_set);
+  }
   // add annotations to field
   if (!add_annotations(
           DexField::get_field(class_name + field_name + ":" + int_or_string),
