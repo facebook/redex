@@ -10,11 +10,14 @@
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
 #include "LiveRange.h"
+#include "MethodOverrideGraph.h"
 #include "Pass.h"
 #include "TypeInference.h"
 
 using TypeEnvironments =
     std::unordered_map<const IRInstruction*, type_inference::TypeEnvironment>;
+
+namespace mog = method_override_graph;
 
 /*
  * This pass checks that typedef annotations usages are value safe
@@ -86,7 +89,10 @@ using IntDefConstants =
 
 class SynthAccessorPatcher {
  public:
-  explicit SynthAccessorPatcher(const TypedefAnnoCheckerPass::Config& config) {
+  explicit SynthAccessorPatcher(
+      const TypedefAnnoCheckerPass::Config& config,
+      const method_override_graph::Graph& method_override_graph)
+      : m_method_override_graph(method_override_graph) {
     m_typedef_annos.insert(config.int_typedef);
     m_typedef_annos.insert(config.str_typedef);
   }
@@ -97,16 +103,20 @@ class SynthAccessorPatcher {
   void collect_accessors(DexMethod* method);
 
   std::unordered_set<DexType*> m_typedef_annos;
+  const method_override_graph::Graph& m_method_override_graph;
 };
 
 class TypedefAnnoChecker {
  public:
-  explicit TypedefAnnoChecker(const StrDefConstants& strdef_constants,
-                              const IntDefConstants& intdef_constants,
-                              const TypedefAnnoCheckerPass::Config& config)
+  explicit TypedefAnnoChecker(
+      const StrDefConstants& strdef_constants,
+      const IntDefConstants& intdef_constants,
+      const TypedefAnnoCheckerPass::Config& config,
+      const method_override_graph::Graph& method_override_graph)
       : m_config(config),
         m_strdef_constants(strdef_constants),
-        m_intdef_constants(intdef_constants) {}
+        m_intdef_constants(intdef_constants),
+        m_method_override_graph(method_override_graph) {}
 
   void run(DexMethod* m);
 
@@ -137,4 +147,5 @@ class TypedefAnnoChecker {
 
   const StrDefConstants& m_strdef_constants;
   const IntDefConstants& m_intdef_constants;
+  const method_override_graph::Graph& m_method_override_graph;
 };

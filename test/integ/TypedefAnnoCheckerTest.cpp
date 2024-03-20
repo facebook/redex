@@ -54,10 +54,12 @@ TEST_F(TypedefAnnoCheckerTest, TestValidIntAnnoReturn) {
                      "TypedefAnnoCheckerTest;.testValidIntAnnoReturn:(I)I")
                      ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
 
   checker.run(method);
   EXPECT_TRUE(checker.complete());
@@ -74,10 +76,12 @@ TEST_F(TypedefAnnoCheckerTest, TestValidStrAnnoReturn) {
           "String;")
           ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
 
   checker.run(method);
   EXPECT_TRUE(checker.complete());
@@ -91,10 +95,12 @@ TEST_F(TypedefAnnoCheckerTest, TestIntAnnoInvokeStatic) {
                      "TypedefAnnoCheckerTest;.testIntAnnoInvokeStatic:(I)I")
                      ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
 
   checker.run(method);
   EXPECT_TRUE(checker.complete());
@@ -111,10 +117,12 @@ TEST_F(TypedefAnnoCheckerTest, TestStringAnnoInvokeStatic) {
           "String;")
           ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
 
   checker.run(method);
   EXPECT_TRUE(checker.complete());
@@ -131,10 +139,12 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongAnnotationReturned) {
           "String;")
           ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
 
   checker.run(method);
   EXPECT_FALSE(checker.complete());
@@ -155,10 +165,12 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongAnnoInvokeStatic) {
                      "TypedefAnnoCheckerTest;.testWrongAnnoInvokeStatic:(I)I")
                      ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
 
   checker.run(method);
   EXPECT_FALSE(checker.complete());
@@ -179,10 +191,12 @@ TEST_F(TypedefAnnoCheckerTest, TestIntField) {
                      "TypedefAnnoCheckerTest;.testIntField:(I)V")
                      ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
 
   checker.run(method);
   EXPECT_TRUE(checker.complete());
@@ -196,10 +210,12 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongIntField) {
                      "TypedefAnnoCheckerTest;.testWrongIntField:(I)V")
                      ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
 
   checker.run(method);
   EXPECT_FALSE(checker.complete());
@@ -221,10 +237,12 @@ TEST_F(TypedefAnnoCheckerTest, TestStringField) {
                      "String;)V")
                      ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
 
   checker.run(method);
   EXPECT_TRUE(checker.complete());
@@ -238,6 +256,8 @@ TEST_F(TypedefAnnoCheckerTest, TestConstReturn) {
                      "TypedefAnnoCheckerTest;.testConstReturn:()I")
                      ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -245,8 +265,8 @@ TEST_F(TypedefAnnoCheckerTest, TestConstReturn) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_TRUE(checker.complete());
 }
@@ -258,6 +278,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstReturn) {
                      "Lcom/facebook/redextest/"
                      "TypedefAnnoCheckerTest;.testInvalidConstReturn:()I")
                      ->as_def();
+  auto method_override_graph = mog::build_graph(scope);
 
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
@@ -266,8 +287,8 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstReturn) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
@@ -288,6 +309,8 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstReturn2) {
                      "TypedefAnnoCheckerTest;.testInvalidConstReturn2:()I")
                      ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -295,8 +318,8 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstReturn2) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
@@ -319,6 +342,8 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstStrReturn) {
           "String;")
           ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -326,8 +351,8 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstStrReturn) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
@@ -348,6 +373,8 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic) {
                      "TypedefAnnoCheckerTest;.testInvalidConstInvokeStatic:()I")
                      ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -355,8 +382,8 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
@@ -379,6 +406,8 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic2) {
           "TypedefAnnoCheckerTest;.testInvalidConstInvokeStatic2:()I")
           ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -386,8 +415,8 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic2) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
@@ -409,6 +438,8 @@ TEST_F(TypedefAnnoCheckerTest, TestMultipleBlocksInt) {
                      "TypedefAnnoCheckerTest;.testMultipleBlocksInt:(I)I")
                      ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -416,8 +447,8 @@ TEST_F(TypedefAnnoCheckerTest, TestMultipleBlocksInt) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_TRUE(checker.complete());
 }
@@ -433,6 +464,8 @@ TEST_F(TypedefAnnoCheckerTest, TestMultipleBlocksString) {
           "String;")
           ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -440,8 +473,8 @@ TEST_F(TypedefAnnoCheckerTest, TestMultipleBlocksString) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_TRUE(checker.complete());
 }
@@ -457,6 +490,8 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidMultipleBlocksString) {
           "String;")
           ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -464,8 +499,8 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidMultipleBlocksString) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
@@ -485,6 +520,8 @@ TEST_F(TypedefAnnoCheckerTest, TestNonConstInt) {
                      "TypedefAnnoCheckerTest;.testNonConstInt:(I)I")
                      ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -492,8 +529,8 @@ TEST_F(TypedefAnnoCheckerTest, TestNonConstInt) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
@@ -514,10 +551,12 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidType) {
                      "redextest/I;)Lcom/facebook/redextest/I;")
                      ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(checker.error(),
@@ -537,6 +576,8 @@ TEST_F(TypedefAnnoCheckerTest, TestJoiningTwoAnnotations) {
           "String;Ljava/lang/String;)Ljava/lang/String;")
           ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -544,8 +585,8 @@ TEST_F(TypedefAnnoCheckerTest, TestJoiningTwoAnnotations) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
@@ -567,6 +608,8 @@ TEST_F(TypedefAnnoCheckerTest, TestJoiningTwoAnnotations2) {
           "String;Ljava/lang/String;)Ljava/lang/String;")
           ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -574,8 +617,8 @@ TEST_F(TypedefAnnoCheckerTest, TestJoiningTwoAnnotations2) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_TRUE(checker.complete());
 }
@@ -588,6 +631,8 @@ TEST_F(TypedefAnnoCheckerTest, TestReassigningInt) {
                      "TypedefAnnoCheckerTest;.testReassigningInt:(II)I")
                      ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -595,8 +640,8 @@ TEST_F(TypedefAnnoCheckerTest, TestReassigningInt) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_TRUE(checker.complete());
 }
@@ -609,6 +654,8 @@ TEST_F(TypedefAnnoCheckerTest, TestIfElse) {
                      "TypedefAnnoCheckerTest;.testIfElse:()I")
                      ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -616,8 +663,8 @@ TEST_F(TypedefAnnoCheckerTest, TestIfElse) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_TRUE(checker.complete());
 }
@@ -630,6 +677,8 @@ TEST_F(TypedefAnnoCheckerTest, TestIfElseParam) {
                      "TypedefAnnoCheckerTest;.testIfElseParam:(Z)I")
                      ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -637,8 +686,8 @@ TEST_F(TypedefAnnoCheckerTest, TestIfElseParam) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_TRUE(checker.complete());
 }
@@ -652,6 +701,8 @@ TEST_F(TypedefAnnoCheckerTest, TestIfElseString) {
                      "String;")
                      ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -659,8 +710,8 @@ TEST_F(TypedefAnnoCheckerTest, TestIfElseString) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_TRUE(checker.complete());
 }
@@ -673,6 +724,8 @@ TEST_F(TypedefAnnoCheckerTest, TestXORIfElse) {
                      "TypedefAnnoCheckerTest;.testXORIfElse:(Z)I")
                      ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -680,8 +733,8 @@ TEST_F(TypedefAnnoCheckerTest, TestXORIfElse) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_TRUE(checker.complete());
 }
@@ -711,6 +764,8 @@ TEST_F(TypedefAnnoCheckerTest, TestXORIfElseZero) {
     inference.analyze_instruction(insn, &env);
   }
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -718,8 +773,8 @@ TEST_F(TypedefAnnoCheckerTest, TestXORIfElseZero) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_TRUE(checker.complete());
 }
@@ -734,6 +789,7 @@ TEST_F(TypedefAnnoCheckerTest, testSynthAccessor) {
                        "String;)Ljava/lang/String;")
                        ->as_def();
   EXPECT_TRUE(accessor != nullptr);
+  auto method_override_graph = mog::build_graph(scope);
 
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
@@ -743,8 +799,8 @@ TEST_F(TypedefAnnoCheckerTest, testSynthAccessor) {
   }
 
   auto config = get_config();
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, config, *method_override_graph);
   checker.run(accessor);
 
   // Without patching the accessor, the checker will fail.
@@ -758,11 +814,11 @@ TEST_F(TypedefAnnoCheckerTest, testSynthAccessor) {
  Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.takesStrConst:(Ljava/lang/String;)Ljava/lang/String;\n\
  Incorrect parameter's index: 1\n\n");
 
-  SynthAccessorPatcher patcher(config);
+  SynthAccessorPatcher patcher(config, *method_override_graph);
   patcher.run(scope);
 
-  TypedefAnnoChecker checker2 =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
+  TypedefAnnoChecker checker2 = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, config, *method_override_graph);
   checker2.run(accessor);
   // After patching the accessor, the checker should succeed.
   EXPECT_TRUE(checker2.complete());
@@ -775,8 +831,8 @@ TEST_F(TypedefAnnoCheckerTest, testSynthAccessor) {
           ->as_def();
   EXPECT_TRUE(accessor_caller != nullptr);
 
-  TypedefAnnoChecker checker3 =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
+  TypedefAnnoChecker checker3 = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, config, *method_override_graph);
   checker3.run(accessor_caller);
   // The caller of the accessor has the actual violation.
   EXPECT_FALSE(checker3.complete());
@@ -829,6 +885,8 @@ TEST_F(TypedefAnnoCheckerTest, testDefaultArg) {
           ->as_def();
   EXPECT_TRUE(right_default_caller != nullptr);
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -837,21 +895,21 @@ TEST_F(TypedefAnnoCheckerTest, testDefaultArg) {
   }
 
   auto config = get_config();
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, config, *method_override_graph);
   checker.run(wrong_default_arg);
   // Without patching the accessor, the checker will fail.
   // The default arg is not safe value. The param is not annotated.
   // We don't check the detailed error msg, since multiple errors are possible.
   EXPECT_FALSE(checker.complete());
 
-  TypedefAnnoChecker checker1 =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
+  TypedefAnnoChecker checker1 = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, config, *method_override_graph);
   checker1.run(wrong_default_caller);
   EXPECT_TRUE(checker1.complete());
 
-  TypedefAnnoChecker checker2 =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
+  TypedefAnnoChecker checker2 = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, config, *method_override_graph);
   checker2.run(right_default_arg);
   // Without patching the accessor, the checker will fail.
   // The default arg is a safe value, but the param is not annotated.
@@ -865,19 +923,19 @@ TEST_F(TypedefAnnoCheckerTest, testDefaultArg) {
  Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.rightDefaultArg:(Ljava/lang/String;)Ljava/lang/String;\n\
  Incorrect parameter's index: 1\n\n");
 
-  TypedefAnnoChecker checker3 =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
+  TypedefAnnoChecker checker3 = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, config, *method_override_graph);
   checker3.run(right_default_caller);
   EXPECT_TRUE(checker3.complete());
 
   ///////////////////////////////////////////////////
   // Patch the default synth stub param !!!
   ///////////////////////////////////////////////////
-  SynthAccessorPatcher patcher(config);
+  SynthAccessorPatcher patcher(config, *method_override_graph);
   patcher.run(scope);
 
-  TypedefAnnoChecker checker4 =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
+  TypedefAnnoChecker checker4 = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, config, *method_override_graph);
   checker4.run(wrong_default_arg);
   // After patching the accessor, the param annotation is patched. But the wrong
   // constant error remains.
@@ -892,20 +950,20 @@ TEST_F(TypedefAnnoCheckerTest, testDefaultArg) {
  Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.wrongDefaultArg:(Ljava/lang/String;)Ljava/lang/String;\n\
  Incorrect parameter's index: 1\n\n");
 
-  TypedefAnnoChecker checker5 =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
+  TypedefAnnoChecker checker5 = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, config, *method_override_graph);
   checker5.run(wrong_default_caller);
   EXPECT_TRUE(checker5.complete());
 
-  TypedefAnnoChecker checker6 =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
+  TypedefAnnoChecker checker6 = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, config, *method_override_graph);
   checker6.run(right_default_arg);
   // After patching the accessor, the param annotation is patched. The default
   // arg is correct.
   EXPECT_TRUE(checker6.complete());
 
-  TypedefAnnoChecker checker7 =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, config);
+  TypedefAnnoChecker checker7 = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, config, *method_override_graph);
   checker7.run(right_default_caller);
   EXPECT_TRUE(checker7.complete());
 }
@@ -919,6 +977,8 @@ TEST_F(TypedefAnnoCheckerTest, testAssignNullToString) {
           "TypedefAnnoCheckerTest;.testAssignNullToString:()Ljava/lang/String;")
           ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -926,8 +986,8 @@ TEST_F(TypedefAnnoCheckerTest, testAssignNullToString) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_TRUE(checker.complete());
 }
@@ -940,6 +1000,8 @@ TEST_F(TypedefAnnoCheckerTest, TestNoAnnoField) {
                      "TypedefAnnoCheckerTest;.testNoAnnoField:()I")
                      ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
   StrDefConstants strdef_constants;
   IntDefConstants intdef_constants;
   TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
@@ -947,8 +1009,8 @@ TEST_F(TypedefAnnoCheckerTest, TestNoAnnoField) {
     gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
   }
 
-  TypedefAnnoChecker checker =
-      TypedefAnnoChecker(strdef_constants, intdef_constants, get_config());
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
   checker.run(method);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
@@ -957,4 +1019,254 @@ TEST_F(TypedefAnnoCheckerTest, TestNoAnnoField) {
  the field no_anno_field\n\
  needs to have the annotation  Linteg/TestIntDef;.\n\
  failed instruction: IGET v1, Lcom/facebook/redextest/TypedefAnnoCheckerTest;.no_anno_field:I\n");
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestPureVirtualCall) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerTest;.testPureVirtualCall:(I)I")
+                     ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto* cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
+  checker.run(method);
+  // it should fail because NoAnnoVirtualTest;.pureVirtual does not have a
+  // typedef annotation attached
+  EXPECT_FALSE(checker.complete());
+  EXPECT_EQ(
+      checker.error(),
+      "TypedefAnnoCheckerPass: the method Lcom/facebook/redextest/AbstractClass;.pureVirtual:(I)I\n\
+ and any methods overriding it need to return a value with the annotation  Linteg/TestIntDef;\n\
+ and include it in it's method signature.\n\
+ failed instruction: INVOKE_VIRTUAL v0, v3, Lcom/facebook/redextest/AbstractClass;.pureVirtual:(I)I\n\
+ Error caught when returning the faulty value\n\n");
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestWrongConstPureVirtualCall) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerTest;.testWrongConstPureVirtualCall:(I)I")
+          ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto* cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
+  checker.run(method);
+  // it should fail because NoAnnoVirtualTest;.pureVirtual does not have a
+  // typedef annotation attached
+  EXPECT_FALSE(checker.complete());
+  EXPECT_EQ(
+      checker.error(),
+      "TypedefAnnoCheckerPass: the method Lcom/facebook/redextest/AbstractClass;.pureVirtual:(I)I\n\
+ and any methods overriding it need to return a value with the annotation  Linteg/TestIntDef;\n\
+ and include it in it's method signature.\n\
+ failed instruction: INVOKE_VIRTUAL v0, v3, Lcom/facebook/redextest/AbstractClass;.pureVirtual:(I)I\n\
+ Error caught when returning the faulty value\n\n");
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestWrongConstPureVirtual) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "WrongConstVirtualTest;.pureVirtual:(I)I")
+                     ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto* cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
+  checker.run(method);
+  EXPECT_FALSE(checker.complete());
+  EXPECT_EQ(
+      checker.error(),
+      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/WrongConstVirtualTest;.pureVirtual:(I)I\n\
+ the int value 6 does not have the typedef annotation \n\
+ Linteg/TestIntDef; attached to it. \n\
+ Check that the value is annotated and exists in its typedef annotation class.\n\
+ failed instruction: CONST v0, 6\n\
+ Error caught when returning the faulty value\n\n");
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestPureVirtualCallNoAnno) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerTest;.testPureVirtualCallNoAnno:(I)I")
+                     ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto* cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
+  checker.run(method);
+  EXPECT_FALSE(checker.complete());
+  EXPECT_EQ(
+      checker.error(),
+      "TypedefAnnoCheckerPass: the method Lcom/facebook/redextest/AbstractClass;.pureVirtualNoAnnoReturn:(I)I\n\
+ and any methods overriding it need to return a value with the annotation  Linteg/TestIntDef;\n\
+ and include it in it's method signature.\n\
+ failed instruction: INVOKE_VIRTUAL v0, v3, Lcom/facebook/redextest/AbstractClass;.pureVirtualNoAnnoReturn:(I)I\n\
+ Error caught when returning the faulty value\n\n");
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestWrongConstPureVirtualCall2) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerTest;.testWrongConstPureVirtualCall2:(I)I")
+          ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto* cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
+  checker.run(method);
+  EXPECT_FALSE(checker.complete());
+  EXPECT_EQ(
+      checker.error(),
+      "TypedefAnnoCheckerPass: the method Lcom/facebook/redextest/AbstractClass;.pureVirtualNoAnnoReturn:(I)I\n\
+ and any methods overriding it need to return a value with the annotation  Linteg/TestIntDef;\n\
+ and include it in it's method signature.\n\
+ failed instruction: INVOKE_VIRTUAL v0, v3, Lcom/facebook/redextest/AbstractClass;.pureVirtualNoAnnoReturn:(I)I\n\
+ Error caught when returning the faulty value\n\n");
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestPureVirtualInvalidParamAnno) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerTest;.testPureVirtualInvalidParamAnno:(I)I")
+          ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto* cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
+  checker.run(method);
+  EXPECT_FALSE(checker.complete());
+  EXPECT_EQ(
+      checker.error(),
+      "TypedefAnnoCheckerPass: while invoking Lcom/facebook/redextest/NoAnnoVirtualTest;.pureVirtualInvalidParamAnno:(I)I\n\
+ in method Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testPureVirtualInvalidParamAnno:(I)I\n\
+ parameter 0 has the annotation  Linteg/TestIntDef;\n\
+ but the method expects the annotation to be Linteg/TestStringDef;.\n\
+ failed instruction: INVOKE_VIRTUAL v0, v3, Lcom/facebook/redextest/AbstractClass;.pureVirtualInvalidParamAnno:(I)I\n\n");
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestPureVirtualInvalidParamAnno2) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerTest;.testPureVirtualInvalidParamAnno2:(I)I")
+          ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto* cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
+  checker.run(method);
+  EXPECT_FALSE(checker.complete());
+  EXPECT_EQ(
+      checker.error(),
+      "TypedefAnnoCheckerPass: while invoking Lcom/facebook/redextest/NoAnnoVirtualTest;.pureVirtualInvalidParamAnno:(I)I\n\
+ in method Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testPureVirtualInvalidParamAnno2:(I)I\n\
+ parameter 0 has the annotation  Linteg/TestIntDef;\n\
+ but the method expects the annotation to be Linteg/TestStringDef;.\n\
+ failed instruction: INVOKE_VIRTUAL v0, v3, Lcom/facebook/redextest/AbstractClass;.pureVirtualInvalidParamAnno:(I)I\n\n");
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestPureVirtualInvalidReturn) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerTest;.testPureVirtualInvalidReturn:(I)I")
+          ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto* cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
+  checker.run(method);
+  EXPECT_FALSE(checker.complete());
+  EXPECT_EQ(
+      checker.error(),
+      "TypedefAnnoCheckerPass: the method Lcom/facebook/redextest/AbstractClass;.pureVirtualInvalidReturn:(I)I\n\
+ and any methods overriding it need to return a value with the annotation  Linteg/TestIntDef;\n\
+ and include it in it's method signature.\n\
+ failed instruction: INVOKE_VIRTUAL v0, v3, Lcom/facebook/redextest/AbstractClass;.pureVirtualInvalidReturn:(I)I\n\
+ Error caught when returning the faulty value\n\n");
 }

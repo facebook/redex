@@ -392,6 +392,17 @@ boost::optional<const DexType*> get_typedef_annotation(
   return boost::none;
 }
 
+bool TypeInference::is_pure_virtual_with_annotation(
+    DexMethodRef* dex_method) const {
+  if (!m_annotations.empty() && dex_method->is_def() &&
+      !dex_method->as_def()->get_code()) {
+    always_assert(m_method_override_graph != nullptr);
+    return method_override_graph::is_true_virtual(*m_method_override_graph,
+                                                  dex_method->as_def());
+  }
+  return false;
+}
+
 TypeDomain TypeInference::refine_type(const TypeDomain& type,
                                       IRType expected,
                                       IRType const_type,
@@ -1259,6 +1270,19 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     if (type::is_object(return_type)) {
       boost::optional<const DexType*> annotation =
           get_typedef_anno_from_member(dex_method, m_annotations);
+      if (is_pure_virtual_with_annotation(dex_method)) {
+        std::vector<const DexMethod*> callees =
+            method_override_graph::get_overriding_methods(
+                *m_method_override_graph, dex_method->as_def());
+        for (const DexMethod* callee : callees) {
+          boost::optional<const DexType*> anno =
+              get_typedef_anno_from_member(callee, m_annotations);
+          if (anno == boost::none || anno != annotation) {
+            annotation = boost::none;
+            break;
+          }
+        }
+      }
       set_reference_with_anno(current_state, RESULT_REGISTER, return_type,
                               annotation);
       break;
@@ -1267,6 +1291,19 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
       if (type::is_int(return_type)) {
         boost::optional<const DexType*> annotation =
             get_typedef_anno_from_member(dex_method, m_annotations);
+        if (is_pure_virtual_with_annotation(dex_method)) {
+          std::vector<const DexMethod*> callees =
+              method_override_graph::get_overriding_methods(
+                  *m_method_override_graph, dex_method->as_def());
+          for (const DexMethod* callee : callees) {
+            boost::optional<const DexType*> anno =
+                get_typedef_anno_from_member(callee, m_annotations);
+            if (anno == boost::none || anno != annotation) {
+              annotation = boost::none;
+              break;
+            }
+          }
+        }
         set_int(current_state, RESULT_REGISTER, annotation);
         break;
       }
