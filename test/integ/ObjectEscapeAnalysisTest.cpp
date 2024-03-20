@@ -55,7 +55,7 @@ class ObjectEscapeAnalysisTest : public RedexIntegrationTest {
 
     std::vector<Pass*> passes = {
         new BranchPrefixHoistingPass(),
-        new ObjectEscapeAnalysisPass(),
+        new ObjectEscapeAnalysisPass(/* register_plugins */ false),
     };
 
     run_passes(passes, nullptr, cfg);

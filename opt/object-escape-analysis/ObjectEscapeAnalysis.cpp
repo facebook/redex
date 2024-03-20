@@ -54,6 +54,7 @@
 #include "Inliner.h"
 #include "MutablePriorityQueue.h"
 #include "ObjectEscapeAnalysisImpl.h"
+#include "ObjectEscapeAnalysisPlugin.h"
 #include "PassManager.h"
 #include "StlUtil.h"
 #include "StringBuilder.h"
@@ -625,6 +626,7 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
 }
 
 size_t shrink_root_methods(
+    const std::function<void(DexMethod*)>& apply_shrinking_plugins,
     MultiMethodInliner& inliner,
     const ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>&
         dependencies,
@@ -660,6 +662,7 @@ size_t shrink_root_methods(
       [&](const std::pair<DexMethod*, InlinableTypes>& p) {
         const auto& [method, types] = p;
         inliner.get_shrinker().shrink_method(method);
+        apply_shrinking_plugins(method);
         auto it = method_summaries->find(method);
         if (it != method_summaries->end() && it->second.allocation_insn()) {
           auto ii = InstructionIterable(method->get_code()->cfg());
@@ -817,6 +820,7 @@ struct ReducedMethod {
 class RootMethodReducer {
  private:
   const ObjectEscapeConfig& m_config;
+  const std::function<void(DexMethod*)>& m_apply_shrinking_plugins;
   const CodeSizeCache& m_code_size_cache;
   const method_override_graph::Graph& m_method_override_graph;
   const ExpandableMethodParams& m_expandable_method_params;
@@ -835,21 +839,24 @@ class RootMethodReducer {
   MethodSummaryCache* m_method_summary_cache;
 
  public:
-  RootMethodReducer(const ObjectEscapeConfig& config,
-                    const CodeSizeCache& code_size_cache,
-                    const method_override_graph::Graph& method_override_graph,
-                    const ExpandableMethodParams& expandable_method_params,
-                    DexMethodRef* incomplete_marker_method,
-                    MultiMethodInliner& inliner,
-                    const MethodSummaries& method_summaries,
-                    const std::unordered_set<DexClass*>& excluded_classes,
-                    Stats* stats,
-                    bool is_init_or_clinit,
-                    DexMethod* method,
-                    const InlinableTypes& types,
-                    CalleesCache* callees_cache,
-                    MethodSummaryCache* method_summary_cache)
+  RootMethodReducer(
+      const ObjectEscapeConfig& config,
+      const std::function<void(DexMethod*)>& apply_shrinking_plugins,
+      const CodeSizeCache& code_size_cache,
+      const method_override_graph::Graph& method_override_graph,
+      const ExpandableMethodParams& expandable_method_params,
+      DexMethodRef* incomplete_marker_method,
+      MultiMethodInliner& inliner,
+      const MethodSummaries& method_summaries,
+      const std::unordered_set<DexClass*>& excluded_classes,
+      Stats* stats,
+      bool is_init_or_clinit,
+      DexMethod* method,
+      const InlinableTypes& types,
+      CalleesCache* callees_cache,
+      MethodSummaryCache* method_summary_cache)
       : m_config(config),
+        m_apply_shrinking_plugins(apply_shrinking_plugins),
         m_code_size_cache(code_size_cache),
         m_method_override_graph(method_override_graph),
         m_expandable_method_params(expandable_method_params),
@@ -917,6 +924,7 @@ class RootMethodReducer {
                                          m_method->get_class(),
                                          m_method->get_proto(),
                                          [this]() { return show(m_method); });
+    m_apply_shrinking_plugins(m_method);
   }
 
   bool inline_insns(
@@ -1538,6 +1546,7 @@ std::vector<DexType*> order_inlinable_types(
 std::unordered_map<DexMethod*, std::vector<ReducedMethod>>
 compute_reduced_methods(
     const ObjectEscapeConfig& config,
+    const std::function<void(DexMethod*)>& apply_shrinking_plugins,
     const method_override_graph::Graph& method_override_graph,
     ExpandableMethodParams& expandable_method_params,
     MultiMethodInliner& inliner,
@@ -1595,6 +1604,7 @@ compute_reduced_methods(
         auto copy = DexMethod::make_method_from(
             method, method->get_class(), DexString::make_string(copy_name_str));
         RootMethodReducer root_method_reducer{config,
+                                              apply_shrinking_plugins,
                                               code_size_cache,
                                               method_override_graph,
                                               expandable_method_params,
@@ -1914,6 +1924,7 @@ void select_reduced_methods(
 
 void reduce(const Scope& scope,
             const ObjectEscapeConfig& config,
+            const std::function<void(DexMethod*)>& apply_shrinking_plugins,
             const method_override_graph::Graph& method_override_graph,
             MultiMethodInliner& inliner,
             const MethodSummaries& method_summaries,
@@ -1939,10 +1950,10 @@ void reduce(const Scope& scope,
   ExpandableMethodParams expandable_method_params(scope);
   std::unordered_set<DexType*> irreducible_types;
   auto reduced_methods = compute_reduced_methods(
-      config, method_override_graph, expandable_method_params, inliner,
-      method_summaries, excluded_classes, root_methods, inlinable_type_index,
-      &irreducible_types, inlinable_methods_kept, stats, callees_cache,
-      method_summary_cache);
+      config, apply_shrinking_plugins, method_override_graph,
+      expandable_method_params, inliner, method_summaries, excluded_classes,
+      root_methods, inlinable_type_index, &irreducible_types,
+      inlinable_methods_kept, stats, callees_cache, method_summary_cache);
   stats->reduced_methods = reduced_methods.size();
 
   // Second, we select reduced methods that will result in net savings
@@ -1978,6 +1989,16 @@ void reduce(const Scope& scope,
 }
 } // namespace
 
+ObjectEscapeAnalysisPass::ObjectEscapeAnalysisPass(bool register_plugins)
+    : Pass(OBJECTESCAPEANALYSIS_PASS_NAME) {
+  if (register_plugins) {
+    std::unique_ptr<ObjectEscapeAnalysisRegistry> plugin =
+        std::make_unique<ObjectEscapeAnalysisRegistry>();
+    PluginRegistry::get().register_pass(OBJECTESCAPEANALYSIS_PASS_NAME,
+                                        std::move(plugin));
+  }
+}
+
 void ObjectEscapeAnalysisPass::bind_config() {
   bind("max_inline_size", MAX_INLINE_SIZE, m_config.max_inline_size);
   bind("max_inline_invokes_iterations", MAX_INLINE_INVOKES_ITERATIONS,
@@ -2001,6 +2022,18 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   auto method_override_graph = mog::build_graph(scope);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns(), method_override_graph.get());
+
+  auto* registry = static_cast<ObjectEscapeAnalysisRegistry*>(
+      PluginRegistry::get().pass_registry(OBJECTESCAPEANALYSIS_PASS_NAME));
+  std::vector<std::unique_ptr<ObjectEscapeAnalysisPlugin>> shrinking_plugins;
+  if (registry) {
+    shrinking_plugins = registry->create_plugins();
+  };
+  auto apply_shrinking_plugins = [&](DexMethod* method) {
+    for (auto& plugin : shrinking_plugins) {
+      plugin->shrink_method(init_classes_with_side_effects, method);
+    }
+  };
 
   auto excluded_classes = get_excluded_classes(*method_override_graph);
 
@@ -2049,14 +2082,14 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
       std::ref(concurrent_method_resolver), inliner_config, min_sdk,
       MultiMethodInlinerMode::None);
 
-  auto lost_returns_through_shrinking =
-      shrink_root_methods(inliner, dependencies, root_methods,
-                          &method_summaries, &method_summary_cache);
+  auto lost_returns_through_shrinking = shrink_root_methods(
+      apply_shrinking_plugins, inliner, dependencies, root_methods,
+      &method_summaries, &method_summary_cache);
 
   Stats stats;
-  reduce(scope, m_config, *method_override_graph, inliner, method_summaries,
-         excluded_classes, root_methods, &stats, &inlinable_methods_kept,
-         &callees_cache, &method_summary_cache);
+  reduce(scope, m_config, apply_shrinking_plugins, *method_override_graph,
+         inliner, method_summaries, excluded_classes, root_methods, &stats,
+         &inlinable_methods_kept, &callees_cache, &method_summary_cache);
 
   TRACE(OEA, 1, "[object escape analysis] total savings: %zu",
         (size_t)stats.total_savings);

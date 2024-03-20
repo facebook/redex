@@ -24,7 +24,7 @@ struct ObjectEscapeConfig {
 
 class ObjectEscapeAnalysisPass : public Pass {
  public:
-  ObjectEscapeAnalysisPass() : Pass("ObjectEscapeAnalysisPass") {}
+  explicit ObjectEscapeAnalysisPass(bool register_plugins = true);
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
