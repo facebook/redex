@@ -149,8 +149,6 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<Environment> {
                     CalleesCache* callees_cache,
                     MethodSummaryCache* method_summary_cache);
 
-  static const IRInstruction* get_singleton_allocation(const Domain& domain);
-
   void analyze_instruction(const IRInstruction* insn,
                            Environment* current_state) const override;
 

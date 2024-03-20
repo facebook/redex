@@ -48,6 +48,7 @@
 #include "ApiLevelChecker.h"
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
+#include "Dominators.h"
 #include "ExpandableMethodParams.h"
 #include "IRInstruction.h"
 #include "Inliner.h"
@@ -1299,12 +1300,13 @@ class RootMethodReducer {
                 const live_range::Uses& new_instance_insn_uses) {
     auto& cfg = m_method->get_code()->cfg();
     std::unordered_map<DexField*, reg_t> field_regs;
-    std::optional<reg_t> created_reg;
-    auto get_created_reg = [&]() {
-      if (!created_reg) {
-        created_reg = cfg.allocate_temp();
+    std::unordered_map<reg_t, reg_t> created_regs;
+    auto get_created_reg = [&](auto reg_t) {
+      auto it = created_regs.find(reg_t);
+      if (it == created_regs.end()) {
+        it = created_regs.emplace(reg_t, cfg.allocate_temp()).first;
       }
-      return *created_reg;
+      return it->second;
     };
     std::vector<DexField*> ordered_fields;
     auto get_field_reg = [&](DexFieldRef* ref) {
@@ -1320,18 +1322,17 @@ class RootMethodReducer {
       return it->second;
     };
 
-    std::unordered_set<IRInstruction*> instructions_to_replace;
+    std::unordered_set<IRInstruction*> used_insns;
     for (auto& use : new_instance_insn_uses) {
       auto opcode = use.insn->opcode();
       if (opcode::is_an_iput(opcode)) {
         always_assert(use.src_index == 1);
       } else if (opcode::is_an_invoke(opcode) || opcode::is_a_monitor(opcode) ||
                  opcode::is_check_cast(opcode) || opcode::is_an_iget(opcode) ||
-                 opcode::is_instance_of(opcode) || opcode == OPCODE_IF_EQZ ||
+                 opcode::is_instance_of(opcode) ||
+                 opcode::is_move_object(opcode) || opcode == OPCODE_IF_EQZ ||
                  opcode == OPCODE_IF_NEZ) {
         always_assert(use.src_index == 0);
-      } else if (opcode::is_move_object(opcode)) {
-        continue;
       } else if (opcode::is_return_object(opcode)) {
         // Can happen if the root method is also an allocator
         m_stats->stackify_returns_objects++;
@@ -1340,22 +1341,35 @@ class RootMethodReducer {
         not_reached_log("Unexpected use: %s at %u", SHOW(use.insn),
                         use.src_index);
       }
-      instructions_to_replace.insert(use.insn);
+      used_insns.insert(use.insn);
     }
+
+    auto doms = dominators::SimpleFastDominators<cfg::GraphInterface>(cfg);
+    cfg::Block* dom = nullptr;
+    auto refine_dom = [&](auto* b) { dom = dom ? doms.intersect(dom, b) : b; };
 
     cfg::CFGMutation mutation(cfg);
     auto ii = InstructionIterable(cfg);
     auto new_instance_insn_it = ii.end();
+    std::vector<std::pair<IRInstruction*, cfg::InstructionIterator>> zero_its;
     for (auto it = ii.begin(); it != ii.end(); it++) {
       auto insn = it->insn;
-      if (!instructions_to_replace.count(insn)) {
+      auto opcode = insn->opcode();
+      if (!used_insns.count(insn)) {
         if (insn == new_instance_insn) {
           new_instance_insn_it = it;
+        } else if (opcode::is_const(opcode) || opcode::is_move_object(opcode)) {
+          zero_its.emplace_back(insn, it);
         }
         continue;
       }
-      auto opcode = insn->opcode();
-      if (opcode::is_an_iget(opcode)) {
+      refine_dom(it.block());
+      if (opcode::is_move_object(opcode)) {
+        auto new_insn = (new IRInstruction(OPCODE_MOVE))
+                            ->set_src(0, get_created_reg(insn->src(0)))
+                            ->set_dest(get_created_reg(insn->dest()));
+        mutation.replace(it, {new_insn});
+      } else if (opcode::is_an_iget(opcode)) {
         auto move_result_it = cfg.move_result_of(it);
         auto new_insn = (new IRInstruction(opcode::iget_to_move(opcode)))
                             ->set_src(0, get_field_reg(insn->get_field()))
@@ -1373,23 +1387,37 @@ class RootMethodReducer {
       } else if (opcode::is_instance_of(opcode)) {
         auto move_result_it = cfg.move_result_of(it);
         auto new_insn =
-            (new IRInstruction(OPCODE_CONST))
-                ->set_literal(type::is_subclass(insn->get_type(),
-                                                new_instance_insn->get_type()))
+            (type::is_subclass(insn->get_type(), new_instance_insn->get_type())
+                 ? (new IRInstruction(OPCODE_MOVE))
+                       ->set_src(0, get_created_reg(insn->src(0)))
+                 : (new IRInstruction(OPCODE_CONST))->set_literal(0))
                 ->set_dest(move_result_it->insn->dest());
         mutation.replace(it, {new_insn});
       } else if (opcode::is_a_monitor(opcode)) {
         mutation.remove(it);
       } else if (opcode == OPCODE_IF_EQZ || opcode == OPCODE_IF_NEZ) {
-        insn->set_src(0, get_created_reg());
+        insn->set_src(0, get_created_reg(insn->src(0)));
       } else if (opcode::is_check_cast(opcode)) {
         auto move_result_it = cfg.move_result_of(it);
-        auto new_insn = (new IRInstruction(OPCODE_MOVE_OBJECT))
-                            ->set_src(0, insn->src(0))
-                            ->set_dest(move_result_it->insn->dest());
+        auto dest = move_result_it->insn->dest();
+        auto new_insn = (new IRInstruction(OPCODE_MOVE))
+                            ->set_src(0, get_created_reg(insn->src(0)))
+                            ->set_dest(get_created_reg(dest));
         mutation.replace(it, {new_insn});
       } else {
-        not_reached();
+        not_reached_log("Unexpected insn: %s", SHOW(insn));
+      }
+    }
+
+    // Also handle (zero-)overrides of registers holding a reference to the
+    // newly created object.
+    for (auto& [insn, it] : zero_its) {
+      auto created_regs_it = created_regs.find(insn->dest());
+      if (created_regs_it != created_regs.end()) {
+        auto new_insn = (new IRInstruction(OPCODE_CONST))
+                            ->set_literal(0)
+                            ->set_dest(created_regs_it->second);
+        mutation.insert_before(it, {new_insn});
       }
     }
 
@@ -1401,36 +1429,55 @@ class RootMethodReducer {
     if (init_class_insn) {
       mutation.insert_before(new_instance_insn_it, {init_class_insn});
     }
-    {
-      auto move_result_it = cfg.move_result_of(new_instance_insn_it);
-      auto new_insn = (new IRInstruction(OPCODE_CONST))
-                          ->set_literal(0)
-                          ->set_dest(move_result_it->insn->dest());
-      mutation.replace(new_instance_insn_it, {new_insn});
-    }
+    mutation.remove(new_instance_insn_it);
 
     // Insert zero-initialization code for field registers.
 
     std::sort(ordered_fields.begin(), ordered_fields.end(), compare_dexfields);
 
-    std::vector<IRInstruction*> inits;
-    inits.reserve(ordered_fields.size() + static_cast<bool>(created_reg));
-    for (auto field : ordered_fields) {
-      auto wide = type::is_wide_type(field->get_type());
-      auto opcode = wide ? OPCODE_CONST_WIDE : OPCODE_CONST;
-      auto reg = field_regs.at(field);
-      auto new_insn =
-          (new IRInstruction(opcode))->set_literal(0)->set_dest(reg);
-      inits.push_back(new_insn);
-    }
-    if (created_reg) {
-      auto new_insn = (new IRInstruction(OPCODE_CONST))
-                          ->set_literal(1)
-                          ->set_dest(*created_reg);
-      inits.push_back(new_insn);
-    }
+    auto new_instance_move_result_it = cfg.move_result_of(new_instance_insn_it);
+    always_assert(!new_instance_move_result_it.is_end());
 
-    mutation.insert_before(new_instance_insn_it, inits);
+    auto insert_inits_before = [&](const auto& it, bool created) {
+      std::vector<IRInstruction*> inits;
+      inits.reserve(ordered_fields.size() + created_regs.size());
+      for (auto field : ordered_fields) {
+        auto wide = type::is_wide_type(field->get_type());
+        auto opcode = wide ? OPCODE_CONST_WIDE : OPCODE_CONST;
+        auto reg = field_regs.at(field);
+        auto new_insn =
+            (new IRInstruction(opcode))->set_literal(0)->set_dest(reg);
+        inits.push_back(new_insn);
+      }
+      std::vector<reg_t> ordered_created_regs;
+      ordered_created_regs.reserve(created_regs.size());
+      for (auto& [reg, _] : created_regs) {
+        ordered_created_regs.push_back(reg);
+      }
+      std::sort(ordered_created_regs.begin(), ordered_created_regs.end());
+      for (auto reg : ordered_created_regs) {
+        auto created_reg = created_regs.at(reg);
+        auto new_insn =
+            (new IRInstruction(OPCODE_CONST))
+                ->set_literal(created &&
+                              reg == new_instance_move_result_it->insn->dest())
+                ->set_dest(created_reg);
+        inits.push_back(new_insn);
+      }
+      mutation.insert_before(it, inits);
+    };
+    insert_inits_before(new_instance_insn_it, /* created */ true);
+
+    refine_dom(new_instance_insn_it.block());
+    always_assert(dom);
+    if (dom != new_instance_insn_it.block()) {
+      auto it = dom->to_cfg_instruction_iterator(
+          dom->get_first_non_param_loading_insn());
+      if (dom->starts_with_move_result() || dom->starts_with_move_exception()) {
+        it++;
+      }
+      insert_inits_before(it, /* created */ false);
+    }
     mutation.flush();
     // simplify to prune now unreachable code, e.g. from removed exception
     // handlers

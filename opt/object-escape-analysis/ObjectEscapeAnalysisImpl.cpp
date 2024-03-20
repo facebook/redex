@@ -15,6 +15,7 @@ namespace mog = method_override_graph;
 
 namespace {
 constexpr const IRInstruction* NO_ALLOCATION = nullptr;
+const IRInstruction* ZERO = new IRInstruction(OPCODE_CONST);
 } // namespace
 
 namespace object_escape_analysis_impl {
@@ -329,13 +330,27 @@ Analyzer::Analyzer(const mog::Graph& method_override_graph,
   MonotonicFixpointIterator::run(Environment::top());
 }
 
-const IRInstruction* Analyzer::get_singleton_allocation(const Domain& domain) {
-  always_assert(domain.kind() == AbstractValueKind::Value);
-  auto& elements = domain.elements();
-  if (elements.size() != 1) {
+template <class It>
+const IRInstruction* get_singleton_allocation(It it, const It& end) {
+  if (it == end) {
     return nullptr;
   }
-  return *elements.begin();
+  const IRInstruction* a = *it++;
+  if (it == end) {
+    return (a == NO_ALLOCATION || a == ZERO) ? nullptr : a;
+  }
+  const IRInstruction* b = *it++;
+  if (it != end || a == NO_ALLOCATION || b == NO_ALLOCATION ||
+      (a != ZERO && b != ZERO)) {
+    return nullptr;
+  }
+  return a == ZERO ? b : a;
+}
+
+const IRInstruction* get_singleton_allocation(const Domain& domain) {
+  always_assert(domain.kind() == AbstractValueKind::Value);
+  auto& elements = domain.elements();
+  return get_singleton_allocation(elements.begin(), elements.end());
 }
 
 void Analyzer::analyze_instruction(const IRInstruction* insn,
@@ -346,7 +361,7 @@ void Analyzer::analyze_instruction(const IRInstruction* insn,
     const auto& domain = current_state->get(reg);
     always_assert(domain.kind() == AbstractValueKind::Value);
     for (auto allocation_insn : domain.elements()) {
-      if (allocation_insn != NO_ALLOCATION) {
+      if (allocation_insn != NO_ALLOCATION && allocation_insn != ZERO) {
         m_escapes[allocation_insn].insert(
             {const_cast<IRInstruction*>(insn), src_idx});
       }
@@ -364,6 +379,9 @@ void Analyzer::analyze_instruction(const IRInstruction* insn,
   } else if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
     m_escapes[insn];
     current_state->set(insn->dest(), Domain(insn));
+    return;
+  } else if (insn->opcode() == OPCODE_CONST && insn->get_literal() == 0) {
+    current_state->set(insn->dest(), Domain(ZERO));
     return;
   } else if (insn->opcode() == OPCODE_RETURN_OBJECT) {
     const auto& domain = current_state->get(insn->src(0));
@@ -494,21 +512,19 @@ MethodSummaries compute_method_summaries(
                             callees_cache, method_summary_cache);
           const auto& escapes = analyzer.get_escapes();
           const auto& returns = analyzer.get_returns();
-          if (returns.size() == 1) {
-            const auto* returned_insn = *returns.begin();
-            if (returned_insn != NO_ALLOCATION &&
-                escapes.at(returned_insn).empty()) {
-              if (returned_insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
-                ms.returns = get_param_index(method, returned_insn);
-              } else {
-                auto op = returned_insn->opcode();
-                always_assert(op == OPCODE_NEW_INSTANCE ||
-                              opcode::is_an_invoke(op));
-                if (op == OPCODE_NEW_INSTANCE ||
-                    resolve_invoke_method_if_unambiguous(
-                        method_override_graph, returned_insn, method)) {
-                  ms.returns = returned_insn;
-                }
+          auto returned_insn =
+              get_singleton_allocation(returns.begin(), returns.end());
+          if (returned_insn && escapes.at(returned_insn).empty()) {
+            if (returned_insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
+              ms.returns = get_param_index(method, returned_insn);
+            } else {
+              auto op = returned_insn->opcode();
+              always_assert(op == OPCODE_NEW_INSTANCE ||
+                            opcode::is_an_invoke(op));
+              if (op == OPCODE_NEW_INSTANCE ||
+                  resolve_invoke_method_if_unambiguous(method_override_graph,
+                                                       returned_insn, method)) {
+                ms.returns = returned_insn;
               }
             }
           }
