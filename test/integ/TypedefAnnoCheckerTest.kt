@@ -7,9 +7,16 @@
 
 package com.facebook.redextest
 
+import integ.TestIntDef
 import integ.TestStringDef
 
+annotation class NotSafeAnno {}
+
 public class TypedefAnnoCheckerKtTest {
+
+  @TestStringDef val field_str: String = TestStringDef.TWO
+  @TestStringDef var var_field: String = TestStringDef.THREE
+  @NotSafeAnno val field_not_safe: String = "4"
 
   fun testSynthAccessor() {
     val lmd: () -> String = { takesStrConst("liu") }
@@ -36,5 +43,33 @@ public class TypedefAnnoCheckerKtTest {
 
   private fun rightDefaultArg(@TestStringDef str: String = "one"): String {
     return str
+  }
+
+  @TestStringDef
+  fun testKtField(): String {
+    return field_str
+  }
+
+  @TestStringDef
+  fun testVarField(): String {
+    var_field = TestStringDef.ONE
+    return var_field
+  }
+
+  @TestStringDef
+  fun testInvalidVarField(): String {
+    var_field = "5"
+    return var_field
+  }
+
+  @TestIntDef
+  fun testReturnWhen(): Int {
+    return when (field_str) {
+      "1" -> 1
+      "2" -> 2
+      "3" -> 3
+      "4" -> 4
+      else -> 0
+    }
   }
 }

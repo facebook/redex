@@ -366,6 +366,9 @@ class TypeInference final
   void refine_byte(TypeEnvironment* state, reg_t reg) const;
 
   bool is_pure_virtual_with_annotation(DexMethodRef* dex_method) const;
+  void set_annotation(TypeEnvironment* state,
+                      reg_t reg,
+                      const DexType* type) const;
 };
 
 } // namespace type_inference

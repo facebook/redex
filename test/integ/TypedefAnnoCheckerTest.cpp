@@ -1270,3 +1270,138 @@ TEST_F(TypedefAnnoCheckerTest, TestPureVirtualInvalidReturn) {
  failed instruction: INVOKE_VIRTUAL v0, v3, Lcom/facebook/redextest/AbstractClass;.pureVirtualInvalidReturn:(I)I\n\
  Error caught when returning the faulty value\n\n");
 }
+
+TEST_F(TypedefAnnoCheckerTest, TestReturnWhen) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerKtTest;.testReturnWhen:()I")
+                     ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  auto config = get_config();
+  SynthAccessorPatcher patcher(config, *method_override_graph);
+  patcher.run(scope);
+
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto* cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
+  checker.run(method);
+  EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestKtField) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerKtTest;.testKtField:()Ljava/lang/String;")
+          ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  auto config = get_config();
+  SynthAccessorPatcher patcher(config, *method_override_graph);
+  patcher.run(scope);
+
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto* cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
+  checker.run(method);
+  EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestVarField) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerKtTest;.testVarField:()Ljava/lang/String;")
+          ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  auto config = get_config();
+  SynthAccessorPatcher patcher(config, *method_override_graph);
+  patcher.run(scope);
+
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto* cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
+  checker.run(method);
+  EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestInvalidVarField) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerKtTest;.testInvalidVarField:()Ljava/lang/String;")
+          ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  auto config = get_config();
+  SynthAccessorPatcher patcher(config, *method_override_graph);
+  patcher.run(scope);
+
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto* cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
+  checker.run(method);
+  EXPECT_FALSE(checker.complete());
+  std::cerr << checker.error() << "\n";
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestReturnIntField) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerTest;.testReturnIntField:()I")
+                     ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto* cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
+  checker.run(method);
+  EXPECT_TRUE(checker.complete());
+}

@@ -419,6 +419,18 @@ TypeDomain TypeInference::refine_type(const TypeDomain& type,
   return refined_type;
 }
 
+void TypeInference::set_annotation(TypeEnvironment* state,
+                                   reg_t reg,
+                                   const DexType* type) const {
+  if (!m_annotations.empty()) {
+    auto annotation = state->get_annotation(reg);
+    const auto anno = DexAnnoType(annotation);
+    const DexTypeDomain dex_type_domain =
+        DexTypeDomain::create_nullable(type, &anno);
+    state->set_dex_type(reg, dex_type_domain);
+  }
+}
+
 void TypeInference::refine_type(TypeEnvironment* state,
                                 reg_t reg,
                                 IRType expected) const {
@@ -1129,10 +1141,12 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   }
   case OPCODE_SGET: {
     DexType* type = insn->get_field()->get_type();
+    boost::optional<const DexType*> annotation =
+        get_typedef_anno_from_member(insn->get_field(), m_annotations);
     if (type::is_float(type)) {
       set_float(current_state, RESULT_REGISTER);
     } else {
-      set_int(current_state, RESULT_REGISTER);
+      set_int(current_state, RESULT_REGISTER, annotation);
     }
     break;
   }
@@ -1164,11 +1178,15 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_SGET_OBJECT: {
     always_assert(insn->has_field());
     const auto field = insn->get_field();
-    set_reference(current_state, RESULT_REGISTER, field->get_type());
+    boost::optional<const DexType*> annotation =
+        get_typedef_anno_from_member(insn->get_field(), m_annotations);
+    set_reference_with_anno(current_state, RESULT_REGISTER, field->get_type(),
+                            annotation);
     break;
   }
   case OPCODE_SPUT: {
     const DexType* type = insn->get_field()->get_type();
+    set_annotation(current_state, insn->src(0), type);
     if (type::is_float(type)) {
       refine_float(current_state, insn->src(0));
     } else {
@@ -1197,6 +1215,8 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     break;
   }
   case OPCODE_SPUT_OBJECT: {
+    const DexType* type = insn->get_field()->get_type();
+    set_annotation(current_state, insn->src(0), type);
     refine_reference(current_state, insn->src(0));
     break;
   }

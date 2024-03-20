@@ -17,6 +17,7 @@
 
 constexpr const char* ACCESS_PREFIX = "access$";
 constexpr const char* DEFAULT_SUFFIX = "$default";
+constexpr const char* ANNOTATIONS_SUFFIX = "$annotations";
 
 namespace {
 
@@ -46,6 +47,11 @@ DexMethod* resolve_method(DexMethod* caller, IRInstruction* insn) {
 bool is_synthetic_accessor(DexMethod* m) {
   return boost::starts_with(m->get_simple_deobfuscated_name(), ACCESS_PREFIX) ||
          boost::ends_with(m->get_simple_deobfuscated_name(), DEFAULT_SUFFIX);
+}
+
+bool is_synthetic_kotlin_annotations_method(DexMethod* m) {
+  return boost::ends_with(m->get_simple_deobfuscated_name(),
+                          ANNOTATIONS_SUFFIX);
 }
 
 void collect_from_instruction(
@@ -95,10 +101,108 @@ void collect_from_instruction(
 
 void SynthAccessorPatcher::run(const Scope& scope) {
   walk::parallel::methods(scope, [this](DexMethod* m) {
-    if (is_synthetic(m) && is_synthetic_accessor(m)) {
+    if (is_synthetic_accessor(m)) {
       collect_accessors(m);
     }
+    if (is_synthetic_kotlin_annotations_method(m)) {
+      patch_kotlin_annotations(m);
+    }
   });
+}
+
+// make the methods and fields temporarily synthetic to add annotations
+template <typename DexMember>
+bool add_annotations(DexMember* member, DexAnnotationSet* anno_set) {
+  if (member && member->is_def()) {
+    auto def_member = member->as_def();
+    auto existing_annos = def_member->get_anno_set();
+    if (existing_annos) {
+      existing_annos->combine_with(*anno_set);
+    } else {
+      DexAccessFlags access = def_member->get_access();
+      def_member->set_access(ACC_SYNTHETIC);
+      def_member->attach_annotation_set(
+          std::make_unique<DexAnnotationSet>(*anno_set));
+      def_member->set_access(access);
+    }
+    return true;
+  }
+  return false;
+}
+
+void SynthAccessorPatcher::patch_kotlin_annotations(DexMethod* m) {
+  IRCode* code = m->get_code();
+  if (!code) {
+    return;
+  }
+
+  DexAnnotationSet* anno_set = m->get_anno_set();
+  if (!anno_set) {
+    return;
+  }
+  DexType* safe_annotation = nullptr;
+  bool has_typedef = false;
+  for (auto const& anno : anno_set->get_annotations()) {
+    auto const anno_class = type_class(anno->type());
+    if (!anno_class) {
+      continue;
+    }
+    for (auto safe_anno : m_typedef_annos) {
+      if (get_annotation(anno_class, safe_anno)) {
+        if (has_typedef) {
+          always_assert_log(
+              false,
+              "Method %s cannot have more than one TypeDef annotation",
+              SHOW(m));
+          return;
+        }
+        has_typedef = true;
+        safe_annotation = safe_anno;
+      }
+    }
+  }
+  if (!safe_annotation) {
+    return;
+  }
+  // example method name:
+  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.getField_three$annotations:()V
+  // getter:
+  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.getField_three:()Ljava/lang/String;
+  // setter:
+  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.setField_three:(Ljava/lang/String;)V;
+  // field is one of:
+  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.Field_three:Ljava/lang/String;
+  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.field_three:Ljava/lang/String;
+  auto class_name = m->get_class()->get_name()->str() + ".";
+  auto anno_method_name = m->get_simple_deobfuscated_name();
+  auto method_name =
+      anno_method_name.substr(0, anno_method_name.find(ANNOTATIONS_SUFFIX));
+
+  auto int_or_string = safe_annotation->get_name()->str() ==
+                               "Lcom/facebook/redex-stable/annotations/SafeStringDef;"
+                           ? type::java_lang_String()->get_name()->str()
+                           : type::java_lang_Integer()->get_name()->str();
+  // we need to remove the first three characters, 'get', from the annotations
+  // methoid name to derive the field name
+  auto field_name = method_name.substr(3, method_name.size());
+
+  // add annotations to getter and setter methods
+  add_annotations(
+      DexMethod::get_method(class_name + method_name + ":()" + int_or_string),
+      anno_set);
+  add_annotations(DexMethod::get_method(class_name + "set" + field_name + ":(" +
+                                        int_or_string + ")V"),
+                  anno_set);
+
+  // add annotations to field
+  if (!add_annotations(
+          DexField::get_field(class_name + field_name + ":" + int_or_string),
+          anno_set)) {
+    field_name.at(0) = std::tolower(field_name.at(0));
+    add_annotations(
+        DexField::get_field(class_name + field_name + ":" + int_or_string),
+        anno_set);
+  }
 }
 
 void SynthAccessorPatcher::collect_accessors(DexMethod* m) {
