@@ -152,6 +152,27 @@ std::ostream& operator<<(std::ostream& output, const IntType& type);
 
 namespace type_inference {
 
+// if one of these annotations has the str_typedef_anno or int_typedef_anno
+// annotation, return it
+boost::optional<const DexType*> get_typedef_annotation(
+    const std::vector<std::unique_ptr<DexAnnotation>>& annotations,
+    const std::unordered_set<DexType*>& typedef_annotations);
+
+template <typename DexMember>
+boost::optional<const DexType*> get_typedef_anno_from_member(
+    const DexMember* member,
+    const std::unordered_set<DexType*>& typedef_annotations) {
+  if (!typedef_annotations.empty() && member->is_def()) {
+    auto member_def = member->as_def();
+    auto anno_set = member_def->get_anno_set();
+    if (anno_set) {
+      return get_typedef_annotation(anno_set->get_annotations(),
+                                    typedef_annotations);
+    }
+  }
+  return boost::none;
+}
+
 /*
  * Checks whether a (joined) type can be safely used in the presence of if-
  * instructions. Note that in the case of REFERENCE, joining of array types
@@ -301,23 +322,7 @@ class TypeInference final
     return m_type_envs;
   }
 
-  // if one of these annotations has the str_typedef_anno or int_typedef_anno
-  // annotation, return it
-  boost::optional<const DexType*> get_typedef_annotation(
-      const std::vector<std::unique_ptr<DexAnnotation>>& annotations) const;
-
-  template <typename DexMember>
-  boost::optional<const DexType*> get_typedef_anno_from_member(
-      const DexMember* member) const {
-    if (!m_annotations.empty() && member->is_def()) {
-      auto member_def = member->as_def();
-      auto anno_set = member_def->get_anno_set();
-      if (anno_set) {
-        return get_typedef_annotation(anno_set->get_annotations());
-      }
-    }
-    return boost::none;
-  }
+  std::unordered_set<DexType*> get_annotations() { return m_annotations; }
 
  private:
   void populate_type_environments();

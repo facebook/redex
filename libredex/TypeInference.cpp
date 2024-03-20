@@ -364,15 +364,16 @@ const DexType* merge_dex_types(const DexTypeIt& begin,
       });
 }
 
-boost::optional<const DexType*> TypeInference::get_typedef_annotation(
-    const std::vector<std::unique_ptr<DexAnnotation>>& annotations) const {
+boost::optional<const DexType*> get_typedef_annotation(
+    const std::vector<std::unique_ptr<DexAnnotation>>& annotations,
+    const std::unordered_set<DexType*>& typedef_annotations) {
   for (auto const& anno : annotations) {
     auto const anno_class = type_class(anno->type());
     if (!anno_class) {
       continue;
     }
     bool has_typedef = false;
-    for (auto annotation : m_annotations) {
+    for (auto annotation : typedef_annotations) {
       if (get_annotation(anno_class, annotation)) {
         if (has_typedef) {
           always_assert_log(
@@ -544,7 +545,8 @@ void TypeInference::run(bool is_static,
       if (!m_annotations.empty() && param_anno &&
           param_anno->find(arg_index) != param_anno->end()) {
         annotation = get_typedef_annotation(
-            (&param_anno->at(arg_index))->get()->get_annotations());
+            (&param_anno->at(arg_index))->get()->get_annotations(),
+            m_annotations);
       }
       arg_index += 1;
     }
@@ -1010,7 +1012,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     refine_reference(current_state, insn->src(0));
     const DexType* type = insn->get_field()->get_type();
     boost::optional<const DexType*> annotation =
-        get_typedef_anno_from_member(insn->get_field());
+        get_typedef_anno_from_member(insn->get_field(), m_annotations);
     if (type::is_float(type)) {
       set_float(current_state, RESULT_REGISTER);
     } else {
@@ -1051,7 +1053,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_IGET_OBJECT: {
     refine_reference(current_state, insn->src(0));
     boost::optional<const DexType*> annotation =
-        get_typedef_anno_from_member(insn->get_field());
+        get_typedef_anno_from_member(insn->get_field(), m_annotations);
     always_assert(insn->has_field());
     const auto field = insn->get_field();
     set_reference_with_anno(current_state, RESULT_REGISTER, field->get_type(),
@@ -1256,7 +1258,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     }
     if (type::is_object(return_type)) {
       boost::optional<const DexType*> annotation =
-          get_typedef_anno_from_member(dex_method);
+          get_typedef_anno_from_member(dex_method, m_annotations);
       set_reference_with_anno(current_state, RESULT_REGISTER, return_type,
                               annotation);
       break;
@@ -1264,7 +1266,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     if (type::is_integral(return_type)) {
       if (type::is_int(return_type)) {
         boost::optional<const DexType*> annotation =
-            get_typedef_anno_from_member(dex_method);
+            get_typedef_anno_from_member(dex_method, m_annotations);
         set_int(current_state, RESULT_REGISTER, annotation);
         break;
       }
