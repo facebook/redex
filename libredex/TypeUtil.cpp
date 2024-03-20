@@ -149,6 +149,13 @@ bool is_java_lang_object_array(const DexType* type) {
   return get_array_component_type(type) == java_lang_Object();
 }
 
+bool is_enum_array(const DexType* type) {
+  if (!is_array(type)) {
+    return false;
+  }
+  return get_array_component_type(type) == java_lang_Enum();
+}
+
 bool is_reference_array(const DexType* type) {
   if (!is_array(type)) {
     return false;

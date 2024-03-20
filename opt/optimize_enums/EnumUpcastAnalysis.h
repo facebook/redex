@@ -31,12 +31,18 @@ bool is_enum_valueof(const DexMethodRef* method);
  */
 bool is_enum_values(const DexMethodRef* method);
 
+/**
+ * Return whether the field is
+ * LEnumSubtype;.$ENTRIES:Lkotlin/enums/EnumEntries;
+ */
+bool is_enum_entries(const DexFieldRef* field);
+
 constexpr const char* KT_ENUM_ENTRIES_TYPE = "Lkotlin/enums/EnumEntries;";
 constexpr const char* ENUM_VALUES_FIELD = "$VALUES";
 constexpr const char* ENUM_ENTRIES_FIELD = "$ENTRIES";
 
-// Store possible types for a register although we only care about Object, Enum
-// and Enum's subtypes.
+// Store possible types for a register although we only care about Object,
+// Enum and Enum's subtypes.
 using EnumTypes = sparta::PatriciaTreeSetAbstractDomain<DexType*>;
 using EnumTypeEnvironment =
     sparta::PatriciaTreeMapAbstractEnvironment<reg_t, EnumTypes>;

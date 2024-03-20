@@ -96,6 +96,8 @@ bool is_void(const DexType* type);
 
 bool is_java_lang_object_array(const DexType* type);
 
+bool is_enum_array(const DexType* type);
+
 bool is_reference_array(const DexType* type);
 
 /*
@@ -253,7 +255,7 @@ bool can_access(const DexMethod* accessor, const DexMember* accessee) {
   }
   auto accessee_class = accessee->get_class();
   auto from_same_package = same_package(accessor_class, accessee_class);
-  redex_assert(is_protected(accessee) || is_package_private(accessee));
+  always_assert(is_protected(accessee) || is_package_private(accessee));
   if (from_same_package) {
     return true;
   }

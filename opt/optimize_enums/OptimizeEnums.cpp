@@ -382,7 +382,8 @@ class OptimizeEnums {
     if (max_enum_size <= 0) {
       return;
     }
-    optimize_enums::Config config(max_enum_size, skip_sanity_check, allowlist);
+    optimize_enums::Config config(max_enum_size, skip_sanity_check,
+                                  support_kt_19_enum_entries, allowlist);
     const auto override_graph = method_override_graph::build_graph(m_scope);
     calculate_param_summaries(m_scope, *override_graph,
                               &config.param_summary_map);

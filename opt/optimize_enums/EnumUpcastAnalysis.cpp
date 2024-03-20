@@ -132,6 +132,9 @@ class EnumUpcastDetector {
       reject(insn, insn->get_field()->get_class(),
              UnsafeType::kUsageIFieldSetOutsideInit);
       break;
+    case OPCODE_SGET_OBJECT:
+      process_sget_object(insn);
+      break;
     case OPCODE_SPUT_OBJECT:
       process_isput_object(insn, env);
       break;
@@ -163,6 +166,21 @@ class EnumUpcastDetector {
     DexType* field_type = insn->get_field()->get_type();
     reject_if_inconsistent(insn, env->get(arg_reg), field_type,
                            UnsafeType::kUsageCastISPutObject);
+  }
+
+  void process_sget_object(const IRInstruction* insn) const {
+    DexFieldRef* field = insn->get_field();
+    if (!is_enum_entries(field)) {
+      return;
+    }
+    auto enum_cls = field->get_class();
+    auto method_cls = m_method->get_class();
+    TRACE(ENUM, 5, "sget_object enum entries %s in %s", SHOW(field),
+          SHOW(m_method));
+    if (enum_cls == method_cls && method::is_clinit(m_method)) {
+      return;
+    }
+    reject(insn, enum_cls, UnsafeType::kUsageUsedEnumEntries);
   }
 
   /**
@@ -393,6 +411,19 @@ class EnumUpcastDetector {
       }
     } else {
       for (auto possible_type : types.elements()) {
+        const auto possible_elem_type =
+            type::get_array_component_type(possible_type);
+        if (m_config->support_kt_19_enum_entries &&
+            method::is_clinit(m_method) &&
+            m_method->get_class() == possible_elem_type &&
+            type::is_enum_array(required_type)) {
+          // EnumEntries upcast in the clinit method of the same enum class.
+          TRACE(ENUM, 5,
+                "Skip upcasting of EnumEntries construction in clinit method. "
+                "%s %s",
+                SHOW(possible_elem_type), SHOW(m_method));
+          continue;
+        }
         reject(insn, possible_type, reason);
       }
     }
@@ -420,8 +451,12 @@ class EnumUpcastDetector {
     type = const_cast<DexType*>(type::get_element_type_if_array(type));
     if (m_candidate_enums->count_unsafe(type)) {
       m_reject_fn(type, reason);
-      TRACE(ENUM, 9, "reject %s %d %s %s", SHOW(type), (int)reason,
-            SHOW(m_method), SHOW(insn));
+      if (traceEnabled(ENUM, 9)) {
+        std::ostringstream os;
+        os << reason;
+        TRACE(ENUM, 9, "reject %s %s %s %s", SHOW(type), os.str().c_str(),
+              SHOW(m_method), SHOW(insn));
+      }
     }
   }
 
@@ -456,6 +491,15 @@ bool is_static_method_on_enum_class(const DexMethodRef* ref) {
     return false;
   }
   auto container = type_class(method->get_class());
+  return container && is_enum(container);
+}
+
+bool is_static_field_on_enum_class(const DexFieldRef* fref) {
+  auto field = fref->as_def();
+  if (!field || !is_static(field)) {
+    return false;
+  }
+  auto container = type_class(field->get_class());
   return container && is_enum(container);
 }
 } // namespace
@@ -757,6 +801,14 @@ bool is_enum_values(const DexMethodRef* method) {
   }
   return type::get_array_component_type(proto->get_rtype()) ==
          method->get_class();
+}
+
+bool is_enum_entries(const DexFieldRef* field) {
+  if (!is_static_field_on_enum_class(field) ||
+      field->str() != ENUM_ENTRIES_FIELD) {
+    return false;
+  }
+  return field->get_type() == DexType::get_type(KT_ENUM_ENTRIES_TYPE);
 }
 
 } // namespace optimize_enums

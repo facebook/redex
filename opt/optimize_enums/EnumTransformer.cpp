@@ -1098,8 +1098,12 @@ class EnumTransformer final {
       m_int_objs = std::max<uint32_t>(m_int_objs, num_enum_constants);
       m_enum_objs += num_enum_constants;
       m_enum_attributes_map.emplace(*it, attributes);
+      TRACE(ENUM, 2, "\tcleaning enum %s with num const values %zu",
+            SHOW(enum_cls), num_enum_constants);
       clean_generated_methods_fields(enum_cls);
       opt_metadata::log_opt(ENUM_OPTIMIZED, enum_cls);
+      TRACE(ENUM, 2, "\tOptimized %s to %zu Integers", SHOW(enum_cls),
+            num_enum_constants);
     }
     m_enum_util->create_util_class(stores, m_int_objs);
   }
