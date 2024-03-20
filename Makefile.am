@@ -449,7 +449,6 @@ libopt_la_SOURCES = \
 	opt/rebindrefs/ReBindRefs.cpp \
 	opt/regalloc/RegAlloc.cpp \
 	opt/regalloc-fast/FastRegAlloc.cpp \
-	opt/remove-apilevel-checks/RemoveApiLevelChecks.cpp \
 	opt/remove-builders/RemoveBuilders.cpp \
 	opt/remove-builders/RemoveBuildersHelper.cpp \
 	opt/remove-interfaces/RemoveInterfacePass.cpp \
