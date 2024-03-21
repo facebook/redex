@@ -72,6 +72,23 @@ std::unordered_set<DexType*> gather_resolved_init_class_types(
   return refined_init_class_types;
 }
 
+// Inlining methods into different classes might lead to worse cross-dex-ref
+// minimization results. \returns the estimated cross dex penalty caused by
+// inlining.
+float estimate_cross_dex_penalty(const InlinedCost* inlined_cost,
+                                 const InlinerCostConfig& inliner_cost_config,
+                                 bool use_other_refs) {
+  float cross_dex_penalty =
+      inliner_cost_config.cross_dex_penalty_coe1 * inlined_cost->method_refs;
+  if (use_other_refs &&
+      (inlined_cost->method_refs + inlined_cost->other_refs) > 0) {
+    cross_dex_penalty +=
+        inliner_cost_config.cross_dex_penalty_coe2 * inlined_cost->other_refs +
+        inliner_cost_config.cross_dex_penalty_const;
+  }
+  return cross_dex_penalty;
+}
+
 } // namespace
 
 MultiMethodInliner::MultiMethodInliner(
@@ -1582,11 +1599,9 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
     } else {
       // Inlining methods into different classes might lead to worse
       // cross-dex-ref minimization results.
-      cross_dex_penalty = inlined_cost->method_refs;
-      if (callee_caller_refs->classes > 1 &&
-          (inlined_cost->method_refs + inlined_cost->other_refs) > 0) {
-        cross_dex_penalty++;
-      }
+      cross_dex_penalty = estimate_cross_dex_penalty(
+          inlined_cost, m_inliner_cost_config,
+          callee_caller_refs->classes > 1 ? true : false);
     }
   }
 
@@ -1671,10 +1686,8 @@ bool MultiMethodInliner::should_inline_at_call_site(
       (caller == nullptr || caller->get_class() != callee->get_class())) {
     // Inlining methods into different classes might lead to worse
     // cross-dex-ref minimization results.
-    cross_dex_penalty = inlined_cost->method_refs;
-    if (inlined_cost->method_refs + inlined_cost->other_refs > 0) {
-      cross_dex_penalty++;
-    }
+    cross_dex_penalty =
+        estimate_cross_dex_penalty(inlined_cost, m_inliner_cost_config, true);
   }
 
   float invoke_cost =

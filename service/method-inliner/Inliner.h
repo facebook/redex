@@ -81,6 +81,12 @@ struct InlinerCostConfig {
   size_t insn_has_lit_cost_2;
 
   size_t insn_has_lit_cost_3;
+
+  // Those configs are used to calculate the penalty for worse cross-dex-ref
+  // minimization results due to inlining.
+  size_t cross_dex_penalty_coe1;
+  size_t cross_dex_penalty_coe2;
+  size_t cross_dex_penalty_const;
 };
 
 const struct InlinerCostConfig DEFAULT_COST_CONFIG = {
@@ -99,6 +105,9 @@ const struct InlinerCostConfig DEFAULT_COST_CONFIG = {
     4, // insn_has_lit_cost_1
     2, // insn_has_lit_cost_2
     1, // insn_has_lit_cost_3
+    1, // cross_dex_penalty_coe1;
+    0, // cross_dex_penalty_coe2;
+    1, // cross_dex_penalty_const;
 };
 
 // All call-sites of a callee.
