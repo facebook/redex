@@ -142,6 +142,9 @@ struct EnumUtil {
       "Ljava/lang/IllegalArgumentException;.<init>:(Ljava/lang/String;)V");
   DexMethodRef* STRING_EQ_METHOD =
       DexMethod::make_method("Ljava/lang/String;.equals:(Ljava/lang/Object;)Z");
+  DexMethodRef* KT_ENUM_ENTRIES_FACTORY_METHOD = DexMethod::make_method(
+      "Lkotlin/enums/EnumEntriesKt;.enumEntries:([Ljava/lang/Enum;)Lkotlin/"
+      "enums/EnumEntries;");
 
   InsertOnlyConcurrentMap<DexClass*, DexMethod*>
       m_user_defined_tostring_method_cache;
@@ -1076,7 +1079,8 @@ class EnumTransformer final {
          it != config.candidate_enums.end();
          ++it) {
       auto enum_cls = type_class(*it);
-      auto attributes = optimize_enums::analyze_enum_clinit(enum_cls);
+      auto attributes = optimize_enums::analyze_enum_clinit(
+          enum_cls, config.support_kt_19_enum_entries);
       size_t num_enum_constants = attributes.m_constants_map.size();
       if (num_enum_constants == 0) {
         TRACE(ENUM, 2, "\tCannot analyze enum %s : ord %zu sfields %zu",
@@ -1470,7 +1474,7 @@ class EnumTransformer final {
     auto& enum_constants =
         m_enum_attributes_map[enum_cls->get_type()].m_constants_map;
     auto synth_field_access = synth_access();
-    DexField* values_field = nullptr;
+    std::unordered_set<DexField*> synth_fields;
 
     std20::erase_if(sfields, [&](auto* field) {
       if (enum_constants.count(field)) {
@@ -1478,19 +1482,24 @@ class EnumTransformer final {
       }
       if (check_required_access_flags(synth_field_access,
                                       field->get_access())) {
-        always_assert(!values_field);
-        values_field = field;
+        always_assert(synth_fields.size() < 2);
+        TRACE(ENUM, 5, "erasing field %s", SHOW(field));
+        synth_fields.insert(field);
+        if (synth_fields.size() == 2) {
+          always_assert(m_enum_util->m_config.support_kt_19_enum_entries);
+        }
         return true;
       }
       return false;
     });
 
-    always_assert(values_field);
+    always_assert(!synth_fields.empty());
     auto& dmethods = enum_cls->get_dmethods();
     // Delete <init>, values() and valueOf(String) methods, and clean <clinit>.
     std20::erase_if(dmethods, [&, this](auto* method) {
       if (method::is_clinit(method)) {
-        clean_clinit(enum_constants, enum_cls, method, values_field);
+        clean_clinit(enum_constants, m_enum_util->m_config, enum_cls, method,
+                     synth_fields, m_enum_util->KT_ENUM_ENTRIES_FACTORY_METHOD);
         return empty(method->get_code());
       }
       return this->is_generated_enum_method(method);
@@ -1522,9 +1531,11 @@ class EnumTransformer final {
    * ... // register v0 may be used.
    */
   static void clean_clinit(const EnumConstantsMap& enum_constants,
+                           const Config& config,
                            DexClass* enum_cls,
                            DexMethod* clinit,
-                           DexField* values_field) {
+                           const std::unordered_set<DexField*>& synth_fields,
+                           DexMethodRef* kt_enum_entries_factory) {
     auto code = clinit->get_code();
     auto ctors = enum_cls->get_ctors();
     always_assert(ctors.size() == 1);
@@ -1543,12 +1554,16 @@ class EnumTransformer final {
               it,
               dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {{VREG, insn->src(0)}}));
           m.remove(it);
-        } else if (field == values_field) {
+        } else if (synth_fields.count(field)) {
           m.remove(it);
         }
       } else if (opcode::is_invoke_direct(insn->opcode()) &&
                  insn->get_method() == ctor) {
         summaries.emplace(insn, side_effects::Summary());
+      } else if (opcode::is_invoke_static(insn->opcode()) &&
+                 insn->get_method() == kt_enum_entries_factory) {
+        summaries.emplace(insn, side_effects::Summary());
+        always_assert(config.support_kt_19_enum_entries);
       }
     }
     m.flush();
@@ -1566,7 +1581,8 @@ class EnumTransformer final {
     // Assert no instruction about the $VALUES field.
     for (auto& mie : cfg::InstructionIterable(cfg)) {
       auto insn = mie.insn;
-      always_assert_log(!insn->has_field() || insn->get_field() != values_field,
+      always_assert_log(!insn->has_field() ||
+                            !synth_fields.count(insn->get_field()->as_def()),
                         "%s can not be deleted", SHOW(insn));
     }
   }

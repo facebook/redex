@@ -63,6 +63,7 @@ struct EnumAttributes {
  * Returns an EnumInstanceFieldMap and an EnumConstantsMap if success,
  * otherwise, return empty maps.
  */
-EnumAttributes analyze_enum_clinit(const DexClass* cls);
+EnumAttributes analyze_enum_clinit(const DexClass* cls,
+                                   const bool support_kt_19_enum_entries);
 
 } // namespace optimize_enums

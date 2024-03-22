@@ -190,13 +190,15 @@ class EnumOrdinalAnalyzer
  * type are in the result map.
  */
 bool validate_result(const DexClass* cls,
-                     const optimize_enums::EnumConstantsMap& constants) {
+                     const optimize_enums::EnumConstantsMap& constants,
+                     const bool support_kt_19_enum_entries) {
   if (constants.empty()) {
     TRACE(ENUM, 2, "\tEmpty result for %s", SHOW(cls));
     return false;
   }
   std::vector<bool> ordinals(constants.size(), false);
   bool synth_values_field = false;
+  size_t synth_values_field_cnt = 0;
 
   auto enum_field_access = optimize_enums::enum_field_access();
   auto values_access = optimize_enums::synth_access();
@@ -224,14 +226,20 @@ bool validate_result(const DexClass* cls,
         return false;
       }
       if (check_required_access_flags(values_access, access)) {
-        if (!synth_values_field) {
-          synth_values_field = true;
+        if (synth_values_field_cnt < 2) {
+          synth_values_field_cnt++;
         } else {
-          TRACE(ENUM, 2, "\tMultiple static synthetic fields on %s", SHOW(cls));
+          // $VALUES and $ENTRIES
+          TRACE(ENUM, 2, "\tMore static synthetic fields than expected on %s",
+                SHOW(cls));
           return false;
         }
       }
     }
+  }
+  if (synth_values_field_cnt == 2) {
+    always_assert_log(support_kt_19_enum_entries,
+                      "Only Kotlin 1.9 enums have two synth fields.");
   }
   if (std::all_of(ordinals.begin(), ordinals.end(),
                   [](bool item) { return item; })) {
@@ -249,7 +257,8 @@ DexAccessFlags enum_field_access() { return ACC_STATIC | ACC_ENUM; }
 
 DexAccessFlags synth_access() { return ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC; }
 
-EnumAttributes analyze_enum_clinit(const DexClass* cls) {
+EnumAttributes analyze_enum_clinit(const DexClass* cls,
+                                   const bool support_kt_19_enum_entries) {
   always_assert(is_enum(cls));
 
   auto* code = cls->get_clinit()->get_code();
@@ -357,7 +366,8 @@ EnumAttributes analyze_enum_clinit(const DexClass* cls) {
       return EnumAttributes();
     }
   }
-  if (!validate_result(cls, attributes.m_constants_map)) {
+  if (!validate_result(cls, attributes.m_constants_map,
+                       support_kt_19_enum_entries)) {
     return EnumAttributes();
   }
   return attributes;
