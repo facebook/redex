@@ -152,6 +152,9 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(DexClass* cls) {
     if (boost::algorithm::ends_with(cls->get_name()->str(), "$Companion;")) {
       stats.kotlin_companion_class++;
     }
+    if (is_enum(cls)) {
+      stats.kotlin_enum_class++;
+    }
   }
   return stats;
 }
@@ -214,6 +217,7 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("kotlin_default_arg_method", kotlin_default_arg_method);
   mgr.incr_metric("kotlin_coroutine_continuation_base",
                   kotlin_coroutine_continuation_base);
+  mgr.incr_metric("kotlin_enum_class", kotlin_enum_class);
 
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_null_check_insns = %zu",
         kotlin_null_check_insns);
@@ -242,6 +246,8 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   TRACE(KOTLIN_STATS, 1,
         "KOTLIN_STATS: kotlin_coroutine_continuation_base = %zu",
         kotlin_coroutine_continuation_base);
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_enum_class = %zu",
+        kotlin_enum_class);
 }
 
 static PrintKotlinStats s_pass;
