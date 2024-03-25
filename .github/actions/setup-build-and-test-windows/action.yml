@@ -1,0 +1,28 @@
+name: setup-build-and-test-windows
+runs:
+  using: composite
+  steps:
+  - name: Install MSYS2
+    uses: msys2/setup-msys2@v2
+    with:
+      msystem: MINGW64
+      pacboy: >-
+        make
+        boost
+        cmake
+        gcc
+        jsoncpp
+        make
+        python
+  - name: Setup
+    run: pacman -S --needed --noconfirm make zip unzip 
+    shell: msys2 {0}
+  - name: Build
+    run: mkdir build && cd build && cmake -G "MSYS Makefiles" .. && make -j 4 V=0
+    shell: msys2 {0}
+  - name: Minimal Test
+    run: 'build/redex-all --show-passes | grep -E "Registered passes: [1-9][0-9]*"'
+    shell: msys2 {0}
+  - name: Package
+    run: cd build && make -j 4 package V=0
+    shell: msys2 {0}

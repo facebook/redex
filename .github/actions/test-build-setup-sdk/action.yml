@@ -1,0 +1,44 @@
+name: test-build-setup-sdk
+runs:
+  using: composite
+  steps:
+  - name: Setup for tests (Deb Testing)
+    run: sudo apt-get install -y --no-install-recommends default-jdk-headless
+    shell: bash
+  - name: Set cache version
+    id: cache_version
+    run: |-
+      echo "Cache key is: ${CACHE_VERSION}"
+      echo "CACHE_VERSION=${CACHE_VERSION}" >> "$GITHUB_OUTPUT"
+    shell: bash
+  - name: Cache SDK
+    uses: actions/cache@v3.3.2
+    with:
+      key: android-build-tools-{{ steps.cache_version.outputs.CACHE_VERSION }}
+      path: ~/sdk
+      restore-keys: android-build-tools-{{ steps.cache_version.outputs.CACHE_VERSION }}
+  - name: Check/Install (SDK)
+    run: |-
+      if [ -e ~/sdk/build-tools/25.0.3/dx ] ; then
+        echo "Found SDK."
+        exit 0
+      fi
+      echo "SDK missing, downloading..."
+      rm -rf ~/sdk 2>/dev/null
+      wget https://dl.google.com/android/repository/commandlinetools-linux-6609375_latest.zip
+      mkdir -p ~/sdk/cmdline-tools
+      unzip commandlinetools-linux-6609375_latest.zip -d ~/sdk/cmdline-tools/
+      pushd ~/sdk/cmdline-tools/tools/bin >/dev/null
+      echo 'y' | ./sdkmanager --install 'build-tools;25.0.3'
+      popd >/dev/null
+    shell: bash
+  - name: Check/Install (Symlink)
+    run: |-
+      if [ -L /usr/local/bin/dx ] ; then
+        echo "Found symlink."
+        exit 0
+      fi
+      echo "Adding symlink..."
+      sudo ln -s ~/sdk/build-tools/25.0.3/dx /usr/local/bin/dx
+    shell: bash
+  

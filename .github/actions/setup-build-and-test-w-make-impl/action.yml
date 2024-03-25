@@ -1,0 +1,73 @@
+name: setup-build-and-test-w-make-impl
+inputs:
+  setup_toolchain_extra:
+    required: false
+    default: ''
+  configure_extra:
+    required: false
+    default: ''
+  save_boost_cache:
+    required: false
+    default: false
+  run_tests:
+    required: false
+    default: true
+  use_sdk:
+    required: false
+    default: true
+  job_name:
+    required: false
+runs:
+  using: composite
+  steps:
+  - uses: "./.github/actions/base-build-setup"
+    with:
+      save_boost_cache: "${{ inputs.save_boost_cache }}"
+      setup_toolchain_extra: "${{ inputs.setup_toolchain_extra }}"
+  - uses: "./.github/actions/test-build-setup"
+    with:
+      use_sdk: "${{ inputs.use_sdk }}"
+  - name: Create Build Cache File
+    run: echo "${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}" > /tmp/build.txt
+    shell: bash
+  - name: Cache build
+    uses: actions/cache@v3.3.2
+    with:
+      key: v1-build-cache-{{ hashFiles('/tmp/build.txt') }}-{{ runner.arch }}-{{ github.ref_name }}-{{ github.sha }}
+      path: build.tar.zstd
+  - name: Create build directory
+    run: |-
+      if [ -f  "build.tar.zstd" ] ; then zstd --decompress --stdout build.tar.zstd | tar xf - ; else mkdir -p build ; fi
+      rm -f build.tar.zstd
+    shell: bash
+  - name: Autoreconf
+    run: autoreconf -ivf
+    working-directory: repo
+    shell: bash
+  - name: Configure
+    run: "../repo/configure --enable-protobuf ${{ inputs.configure_extra }}"
+    working-directory: build
+    shell: bash
+  - name: Build
+    run: make -j4 V=0
+    working-directory: build
+    shell: bash
+  - name: Compress build directory
+    run: tar cf - build | zstd -T0 -3 > build.tar.zstd
+    shell: bash
+  - name: Build tests
+    run: make -j4 check TESTS= V=0
+    working-directory: build
+    shell: bash
+  - name: Run tests
+    run: |-
+      mkdir -p /tmp/test-results
+      export GTEST_OUTPUT=xml:/tmp/test-results/
+      make -j4 check V=0
+    working-directory: build
+    if: inputs.run_test == 'true'
+    shell: bash
+  - uses: actions/upload-artifact@v4.0.0
+    with:
+      path: "/tmp/test-results"
+    if: inputs.run_tests == 'true'

@@ -1,0 +1,42 @@
+name: debian-based-image-build-setup
+inputs:
+  mode_32:
+    required: false
+    default: false
+  install_clang:
+    required: false
+    default: false
+  install_clang_llvm_org:
+    required: false
+    default: -1
+runs:
+  using: composite
+  steps:
+  - name: Update Apt Data
+    run: sudo apt-get update || ( apt-get update && apt-get install --no-install-recommends -y sudo ; )
+    shell: bash
+  - name: Install tools
+    run: sudo apt-get install --no-install-recommends -y git-restore-mtime zstd tar
+    shell: bash
+  - name: Add 32-bit Arch
+    run: sudo dpkg --add-architecture i386 && sudo apt-get update
+    if: inputs.mode_32 == 'true'
+    shell: bash
+  - name: Install Clang
+    run: sudo apt-get install -y --no-install-recommends clang
+    if: inputs.install_clang == 'true'
+    shell: bash
+  - name: Install Clang (apt.llvm.org)
+    run: |-
+      sudo apt-get install -y --no-install-recommends lsb-release software-properties-common
+      sudo /bin/bash -c "$(wget -O - https://apt.llvm.org/llvm.sh | sed -e 's/^add-apt-repository.*$/& -y\n& -y/')"
+      ls /usr/bin/clang*
+    if: 0 == inputs.install_clang_llvm_org
+    shell: bash
+  - name: Install Clang (apt.llvm.org)
+    run: |-
+      sudo apt-get install -y --no-install-recommends lsb-release software-properties-common
+      sudo /bin/bash -c "$(wget -O - https://apt.llvm.org/llvm.sh | sed -e 's/^add-apt-repository.*$/& -y\n& -y/')" "llvm.sh" ${{ inputs.install_clang_llvm_org }}
+      ls /usr/bin/clang*
+    if: -1 != inputs.install_clang_llvm_org && 0 != inputs.install_clang_llvm_org
+    shell: bash

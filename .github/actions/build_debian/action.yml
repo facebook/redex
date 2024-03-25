@@ -1,0 +1,40 @@
+name: build_debian
+inputs:
+  save_boost_cache:
+    required: false
+    default: false
+  install_clang:
+    required: false
+    default: false
+  install_clang_llvm_org:
+    required: false
+    default: -1
+  mode_32:
+    required: false
+    default: false
+  use_sdk:
+    required: false
+    default: true
+  job_name:
+    required: false
+runs:
+  using: composite
+  steps:
+  - uses: actions/checkout@v4.1.1
+    with:
+      path: repo
+  - uses: ./.github/actions/debian-based-image-build-setup
+    with:
+      mode_32: "${{ inputs.mode_32 }}"
+      install_clang: "${{ inputs.install_clang }}"
+      install_clang_llvm_org: "${{ inputs.install_clang_llvm_org }}"
+  - name: Run git-restore-mtime
+    run: git restore-mtime
+    working-directory: repo
+    shell: bash
+  - uses: ./.github/actions/setup-build-and-test-w-make
+    with:
+      save_boost_cache: "${{ inputs.save_boost_cache }}"
+      mode_32: "${{ inputs.mode_32 }}"
+      use_sdk: "${{ inputs.use_sdk }}"
+      job_name: "${{ inputs.job_name }}-${{ inputs.install_clang_llvm_org }}"
