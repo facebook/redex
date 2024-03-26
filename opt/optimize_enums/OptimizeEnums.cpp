@@ -375,6 +375,7 @@ class OptimizeEnums {
       PassManager& mgr,
       int max_enum_size,
       bool skip_sanity_check,
+      const bool support_kt_19_enum_entries,
       const std::vector<DexType*>& allowlist,
       ConfigFiles& conf,
       std::unordered_map<UnsafeType, size_t>& unsafe_counts) {
@@ -396,8 +397,8 @@ class OptimizeEnums {
      * fields, and virtual methods are safe.
      */
 
-    auto is_safe_enum = [this, &base_enum_check](const DexClass* cls,
-                                                 UnsafeTypes& utypes) {
+    auto is_safe_enum = [this, &base_enum_check, support_kt_19_enum_entries](
+                            const DexClass* cls, UnsafeTypes& utypes) {
       if (!base_enum_check(cls)) {
         return false;
       }
@@ -411,8 +412,14 @@ class OptimizeEnums {
       if (!cls->get_interfaces()->empty()) {
         utypes.insert(UnsafeType::kHasInterfaces);
       }
-      if (!only_one_static_synth_field(cls)) {
-        utypes.insert(UnsafeType::kMoreThanOneSynthField);
+      if (support_kt_19_enum_entries) {
+        if (!only_has_expected_static_synth_fields(cls)) {
+          utypes.insert(UnsafeType::kUnexpectedSynthFields);
+        }
+      } else {
+        if (!only_one_static_synth_field(cls)) {
+          utypes.insert(UnsafeType::kMoreThanOneSynthField);
+        }
       }
 
       const auto& ctors = cls->get_ctors();
@@ -582,6 +589,52 @@ class OptimizeEnums {
       return false;
     }
     return true;
+  }
+
+  bool only_has_expected_static_synth_fields(const DexClass* cls) {
+    const auto synth_access = optimize_enums::synth_access();
+    const auto enum_entries_type =
+        DexType::get_type(optimize_enums::KT_ENUM_ENTRIES_TYPE);
+    always_assert(enum_entries_type != nullptr);
+    std::set<std::string> expected_fields = {ENUM_VALUES_FIELD,
+                                             ENUM_ENTRIES_FIELD};
+    for (auto field : cls->get_sfields()) {
+      if (!check_required_access_flags(synth_access, field->get_access())) {
+        continue;
+      }
+      auto fname = field->get_name()->str_copy();
+      if (expected_fields.count(fname)) {
+        expected_fields.erase(fname);
+        if (fname == ENUM_ENTRIES_FIELD &&
+            field->get_type() != enum_entries_type) {
+          TRACE(ENUM, 2, "Unexpected synthetic field %s", SHOW(field));
+          return false;
+        }
+      } else {
+        TRACE(ENUM, 2, "Unexpected synthetic field %s", SHOW(field));
+        return false;
+      }
+    }
+    if (expected_fields.empty()) {
+      return true;
+    }
+    if (expected_fields.size() == 1 &&
+        *expected_fields.begin() == ENUM_ENTRIES_FIELD) {
+      return true;
+    }
+
+    if (traceEnabled(ENUM, 2)) {
+      std::ostringstream s;
+      for (const auto& field : cls->get_sfields()) {
+        if (!check_required_access_flags(synth_access, field->get_access())) {
+          continue;
+        }
+        s << field->get_name()->str_copy() << ", ";
+      }
+      TRACE(ENUM, 2, "Unexpected synthetic fields found on %s %s", SHOW(cls),
+            s.str().c_str());
+    }
+    return false;
   }
 
   /**
@@ -867,6 +920,8 @@ void OptimizeEnumsPass::bind_config() {
        "enum fields, try to erase them without considering reference equality "
        "of the enum objects. Do not add enums to the allowlist!");
   bind("skip_sanity_check", false, m_skip_sanity_check, "May skip some check.");
+  bind("support_kt_19_enum_entries", false, m_support_kt_19_enum_entries,
+       "Try to optimize Kotlin 1.9 Enums with EnumEntries feature.");
 }
 
 void OptimizeEnumsPass::run_pass(DexStoresVector& stores,
@@ -875,9 +930,9 @@ void OptimizeEnumsPass::run_pass(DexStoresVector& stores,
   OptimizeEnums opt_enums(stores, conf);
   opt_enums.remove_redundant_generated_classes();
   std::unordered_map<UnsafeType, size_t> unsafe_counts;
-  opt_enums.replace_enum_with_int(mgr, m_max_enum_size, m_skip_sanity_check,
-                                  m_enum_to_integer_allowlist, conf,
-                                  unsafe_counts);
+  opt_enums.replace_enum_with_int(
+      mgr, m_max_enum_size, m_skip_sanity_check, m_support_kt_19_enum_entries,
+      m_enum_to_integer_allowlist, conf, unsafe_counts);
   opt_enums.remove_enum_generated_methods();
   opt_enums.stats(mgr);
   for (auto& p : unsafe_counts) {
