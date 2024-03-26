@@ -42,6 +42,7 @@ enum class UnsafeType {
   kUsageIFieldSetOutsideInit,
   kUsageCastEnumArrayToObject,
   kUsageUsedInInstanceOf,
+  kUsageUsedEnumEntries,
 };
 
 inline std::ostream& operator<<(std::ostream& os, const UnsafeType& u) {
@@ -123,6 +124,9 @@ inline std::ostream& operator<<(std::ostream& os, const UnsafeType& u) {
     break;
   case UnsafeType::kUsageUsedInInstanceOf:
     os << "UsageUsedInInstanceOf";
+    break;
+  case UnsafeType::kUsageUsedEnumEntries:
+    os << "UsageUsedEnumEntries";
     break;
   }
   return os;

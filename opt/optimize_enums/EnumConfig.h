@@ -42,6 +42,7 @@ struct Config {
    */
   uint32_t max_enum_size;
   bool skip_sanity_check{false};
+  bool support_kt_19_enum_entries{false};
   /**
    * Will try to optimize the enums in the allowlist without considering
    * reference equality of the enum objects.
@@ -54,9 +55,11 @@ struct Config {
 
   explicit Config(uint32_t max_size,
                   bool skip_sanity_check,
+                  bool support_kt_19_enum_entries,
                   const std::vector<DexType*>& allowlist)
       : max_enum_size(max_size),
         skip_sanity_check(skip_sanity_check),
+        support_kt_19_enum_entries(support_kt_19_enum_entries),
         breaking_reference_equality_allowlist(allowlist.begin(),
                                               allowlist.end()) {}
 };
