@@ -42,7 +42,8 @@ TEST_F(EnumClinitAnalysisTest, OrdinalAnalysis) {
   for (auto* m : enum_cls->get_dmethods()) {
     m->get_code()->build_cfg();
   }
-  auto attributes = analyze_enum_clinit(enum_cls);
+  auto attributes =
+      analyze_enum_clinit(enum_cls, /*support_kt_19_enum_entries*/ false);
   auto& enum_constants = attributes.m_constants_map;
   auto& ifield_map = attributes.m_field_map;
 
@@ -84,7 +85,8 @@ TEST_F(EnumClinitAnalysisTest, OrdinalAnalysis) {
     for (auto* m : enum_cls->get_dmethods()) {
       m->get_code()->build_cfg();
     }
-    attributes = analyze_enum_clinit(enum_cls);
+    attributes =
+        analyze_enum_clinit(enum_cls, /*support_kt_19_enum_entries*/ false);
     EXPECT_TRUE(attributes.m_constants_map.empty());
     EXPECT_TRUE(attributes.m_field_map.empty());
   }
