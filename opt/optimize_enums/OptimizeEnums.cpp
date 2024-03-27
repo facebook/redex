@@ -311,12 +311,17 @@ class OptimizeEnums {
 
     // Collect number of all enum classes.
     std::atomic<size_t> cnt{0};
+    std::atomic<size_t> kotlin_enums{0};
     walk::parallel::classes(m_scope, [&](auto* klass) {
       if (is_enum(klass) && !klass->is_external()) {
         ++cnt;
+        if (klass->rstate.is_cls_kotlin()) {
+          ++kotlin_enums;
+        }
       }
     });
     m_stats.num_all_enum_classes = cnt.load();
+    m_stats.num_kotlin_enum_classes = kotlin_enums.load();
   }
 
   void remove_redundant_generated_classes() {
@@ -366,6 +371,7 @@ class OptimizeEnums {
     report(METRIC_NUM_REMOVED_GENERATED_METHODS,
            m_stats.num_removed_generated_methods);
     report("num_all_enum_classes", m_stats.num_all_enum_classes);
+    report("num_all_kotlin_enum_classes", m_stats.num_kotlin_enum_classes);
   }
 
   /**
@@ -515,8 +521,9 @@ class OptimizeEnums {
       }
     }
 
-    m_stats.num_enum_objs = optimize_enums::transform_enums(
-        mgr, config, &m_stores, &m_stats.num_int_objs);
+    auto stats = optimize_enums::transform_enums(mgr, config, &m_stores);
+    m_stats.num_enum_objs = stats.num_erased_enum_objs;
+    m_stats.num_int_objs = stats.num_int_objs;
     m_stats.num_enum_classes = config.candidate_enums.size();
   }
 
@@ -900,6 +907,7 @@ class OptimizeEnums {
     size_t num_candidate_generated_methods{0};
     size_t num_removed_generated_methods{0};
     size_t num_all_enum_classes{0};
+    size_t num_kotlin_enum_classes{0};
   };
   Stats m_stats;
 

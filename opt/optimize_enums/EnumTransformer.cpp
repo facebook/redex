@@ -1108,6 +1108,9 @@ class EnumTransformer final {
       opt_metadata::log_opt(ENUM_OPTIMIZED, enum_cls);
       TRACE(ENUM, 2, "\tOptimized %s to %zu Integers", SHOW(enum_cls),
             num_enum_constants);
+      if (enum_cls->rstate.is_cls_kotlin()) {
+        m_kotlin_enum_classes++;
+      }
     }
     m_enum_util->create_util_class(stores, m_int_objs);
   }
@@ -1173,6 +1176,7 @@ class EnumTransformer final {
   uint32_t get_enum_attributes_map_size() {
     return m_enum_attributes_map.size();
   }
+  size_t get_eliminated_kotlin_enum_classes() { return m_kotlin_enum_classes; }
 
  private:
   /**
@@ -1631,6 +1635,7 @@ class EnumTransformer final {
   uint32_t m_enum_objs{0}; // Eliminated Enum objects.
   EnumAttributeMap m_enum_attributes_map;
   std::unique_ptr<EnumUtil> m_enum_util;
+  size_t m_kotlin_enum_classes{0};
 };
 } // namespace
 
@@ -1639,21 +1644,31 @@ namespace optimize_enums {
  * Transform enums to Integer objects, return the total number of eliminated
  * enum objects.
  */
-int transform_enums(PassManager& mgr,
-                    const Config& config,
-                    DexStoresVector* stores,
-                    size_t* num_int_objs) {
+Stats transform_enums(PassManager& mgr,
+                      const Config& config,
+                      DexStoresVector* stores) {
+
+  Stats stats;
   if (config.candidate_enums.empty()) {
-    return 0;
+    return stats;
   }
 
   EnumTransformer transformer(config, stores);
   transformer.run();
-  *num_int_objs = transformer.get_int_objs_count();
+  stats.num_eliminated_enum_classes =
+      transformer.get_enum_attributes_map_size();
   mgr.incr_metric("num_eliminated_enum_classes",
-                  transformer.get_enum_attributes_map_size());
-  TRACE(ENUM, 2, "optimize enums : num_eliminated_enum_classes %u",
-        transformer.get_enum_attributes_map_size());
-  return transformer.get_enum_objs_count();
+                  stats.num_eliminated_enum_classes);
+  TRACE(ENUM, 2, "optimize enums : num_eliminated_enum_classes %zu",
+        stats.num_eliminated_enum_classes);
+  stats.num_eliminated_kotlin_enum_classes =
+      transformer.get_eliminated_kotlin_enum_classes();
+  mgr.incr_metric("num_eliminated_kotlin_enum_classes",
+                  stats.num_eliminated_kotlin_enum_classes);
+  TRACE(ENUM, 2, "optimize enums : num_eliminated_kotlin_enum_classes %zu",
+        stats.num_eliminated_kotlin_enum_classes);
+  stats.num_erased_enum_objs = transformer.get_enum_objs_count();
+  stats.num_int_objs = transformer.get_int_objs_count();
+  return stats;
 }
 } // namespace optimize_enums

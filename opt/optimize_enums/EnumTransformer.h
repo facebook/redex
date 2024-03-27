@@ -14,8 +14,16 @@
 #include "PassManager.h"
 
 namespace optimize_enums {
-int transform_enums(PassManager& mgr,
-                    const Config& config,
-                    DexStoresVector* stores,
-                    size_t* num_int_objs);
+
+struct Stats {
+  size_t num_eliminated_enum_classes{0};
+  size_t num_eliminated_kotlin_enum_classes{0};
+  size_t num_erased_enum_objs{0};
+  size_t num_int_objs{0};
+};
+
+Stats transform_enums(PassManager& mgr,
+                      const Config& config,
+                      DexStoresVector* stores);
+
 } // namespace optimize_enums
