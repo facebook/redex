@@ -15,14 +15,7 @@ void ClassChecker::run(const Scope& scope) {
     if (is_interface(cls) || is_abstract(cls)) {
       return;
     }
-    for (auto* m : cls->get_dmethods()) {
-      if (is_abstract(m)) {
-        m_good = false;
-        failed_classes.insert(cls);
-        return;
-      }
-    }
-    for (auto* m : cls->get_vmethods()) {
+    for (auto* m : cls->get_all_methods()) {
       if (is_abstract(m)) {
         m_good = false;
         failed_classes.insert(cls);
