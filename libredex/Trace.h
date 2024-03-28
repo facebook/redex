@@ -58,6 +58,7 @@ class DexType;
   TM(EMPTY)             \
   TM(ENUM)              \
   TM(EVALTC)            \
+  TM(FALCO_STATS)       \
   TM(FINALINLINE)       \
   TM(FREG)              \
   TM(GETTER)            \
