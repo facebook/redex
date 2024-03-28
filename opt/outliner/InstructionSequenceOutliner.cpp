@@ -2215,13 +2215,6 @@ class HostClassSelector {
           const std::unordered_set<const DexType*>&)>& get_super_classes,
       const std::function<bool(const DexType*)>& predicate =
           [](const DexType*) { return true; }) {
-    // Let's see if we can reduce the set to a most specific sub-type
-    if (types.size() > 1) {
-      for (auto t : get_common_super_classes(types)) {
-        types.erase(t);
-      }
-    }
-
     // When there's only one type, try to use that
     if (types.size() == 1) {
       auto direct_type = *types.begin();
@@ -2272,6 +2265,21 @@ class HostClassSelector {
           return min_sdk >= 24 || (cls && !is_interface(cls));
     };
 
+    // Whether this type will not trigger a clinit
+    auto no_clinit = [](const DexType* type) {
+      while (true) {
+        auto cls = type_class(type);
+        if (!cls || cls->is_external()) {
+          // We stop at external classes
+          return true;
+        }
+        if (cls->get_clinit()) {
+          return false;
+        }
+        type = cls->get_super_class();
+      }
+    };
+
     auto host_class =
         get_direct_or_base_class(declaring_types, get_common_super_classes);
     if (declaring_types.size() == 1) {
@@ -2285,7 +2293,7 @@ class HostClassSelector {
         // just like what the inliner does
         *not_outlinable = true;
         return nullptr;
-      };
+      }
     }
     always_assert(!has_non_init_invoke_directs(c));
 
@@ -2298,16 +2306,16 @@ class HostClassSelector {
     // references some types that share a common base type, then that common
     // base type is a reasonable place where to put the outlined code.
     auto referenced_types = get_referenced_types(c);
+    // Let's see if we can reduce the set to a most specific sub-type
+    if (referenced_types.size() > 1) {
+      for (auto t : get_common_super_classes(referenced_types)) {
+        referenced_types.erase(t);
+      }
+    }
     host_class = get_direct_or_base_class(
         referenced_types, get_super_classes,
-        [&can_be_host_class](const DexType* t) {
-          if (!can_be_host_class(t)) {
-            return false;
-          }
-          auto cls = type_class(t);
-          // We don't want any common base class with a scary clinit
-          return !method::clinit_may_have_side_effects(
-              cls, /* allow_benign_method_invocations */ false);
+        [&can_be_host_class, no_clinit](const DexType* type) {
+          return can_be_host_class(type) && no_clinit(type);
         });
     if (host_class) {
       m_hosted_at_refs_count++;
