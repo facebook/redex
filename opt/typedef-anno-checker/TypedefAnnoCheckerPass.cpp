@@ -201,7 +201,7 @@ void SynthAccessorPatcher::patch_kotlin_annotations(DexMethod* m) {
   auto method_name =
       anno_method_name.substr(0, anno_method_name.find(ANNOTATIONS_SUFFIX));
   auto int_or_string = safe_annotation->get_name()->str() ==
-                               "Lcom/facebook/redex-stable/annotations/SafeStringDef;"
+                               "Lcom/facebook/redex/annotations/SafeStringDef;"
                            ? type::java_lang_String()->get_name()->str()
                            : "I";
   // we need to remove the first three characters, 'get', from the annotations
