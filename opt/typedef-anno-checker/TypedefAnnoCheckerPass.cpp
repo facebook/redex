@@ -635,6 +635,7 @@ bool TypedefAnnoChecker::check_typedef_value(
       }
       break;
     }
+    case OPCODE_XOR_INT:
     case OPCODE_XOR_INT_LIT: {
       // https://fburl.com/code/7lk98pj6
       // in the code linked above, NotifLogAppBadgeEnabled.ENABLED has a value
