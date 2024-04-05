@@ -166,7 +166,7 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
       auto use_insn = use.insn;
       if (opcode::is_a_move(use_insn->opcode())) {
         // Ignore moves
-        break;
+        continue;
       }
       if (!use_insn->has_method()) {
         TRACE(CLMG, 5, "[non mergeable] const class unsafe use @ %s in %s",
