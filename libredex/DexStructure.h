@@ -116,7 +116,9 @@ class DexStructure {
                          size_t field_refs_limit,
                          size_t method_refs_limit,
                          size_t type_refs_limit,
-                         DexClass* clazz);
+                         DexClass* clazz,
+                         const bool mergeability_aware = false,
+                         const size_t clazz_num_dedupable_method_defs = 0);
 
   void add_class_no_checks(const MethodRefs& clazz_mrefs,
                            const FieldRefs& clazz_frefs,

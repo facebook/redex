@@ -280,16 +280,19 @@ void DexStructure::resolve_init_classes(
   }
 }
 
-bool DexStructure::add_class_if_fits(const MethodRefs& clazz_mrefs,
-                                     const FieldRefs& clazz_frefs,
-                                     const TypeRefs& clazz_trefs,
-                                     const TypeRefs& pending_init_class_fields,
-                                     const TypeRefs& pending_init_class_types,
-                                     size_t linear_alloc_limit,
-                                     size_t field_refs_limit,
-                                     size_t method_refs_limit,
-                                     size_t type_refs_limit,
-                                     DexClass* clazz) {
+bool DexStructure::add_class_if_fits(
+    const MethodRefs& clazz_mrefs,
+    const FieldRefs& clazz_frefs,
+    const TypeRefs& clazz_trefs,
+    const TypeRefs& pending_init_class_fields,
+    const TypeRefs& pending_init_class_types,
+    size_t linear_alloc_limit,
+    size_t field_refs_limit,
+    size_t method_refs_limit,
+    size_t type_refs_limit,
+    DexClass* clazz,
+    const bool mergeability_aware,
+    const size_t clazz_num_dedupable_method_defs) {
 
   auto trace_details = [&]() {
     TRACE(IDEX, 7,
@@ -312,7 +315,23 @@ bool DexStructure::add_class_if_fits(const MethodRefs& clazz_mrefs,
   }
 
   const auto extra_mrefs_size = set_difference_size(clazz_mrefs, m_mrefs);
-  const auto new_method_refs = m_mrefs.size() + extra_mrefs_size;
+  auto new_method_refs = m_mrefs.size() + extra_mrefs_size;
+  // New_method_refs above counts the number of method refs in the current dex
+  // before class merging. If mergeability-aware, we compute the number of
+  // method refs after class merging instead.
+  if (mergeability_aware) {
+    // Class merging will create new methods
+    new_method_refs += m_num_new_methods;
+    // Class merging will replace dedupable methods with new methods
+    always_assert(new_method_refs >= (size_t)m_num_deduped_methods);
+    new_method_refs -= m_num_deduped_methods;
+    // Since m_num_deduped_methods has not been updated yet to account for
+    // clazz that we are trying to add to the current dex, we need to further
+    // adjust new_method_refs by accounting for potentially dedupable method
+    // definitions in clazz.
+    always_assert(new_method_refs >= clazz_num_dedupable_method_defs);
+    new_method_refs -= clazz_num_dedupable_method_defs;
+  }
   if (new_method_refs >= method_refs_limit) {
     TRACE(IDEX, 6,
           "[warning]: Class won't fit current dex since it will go "

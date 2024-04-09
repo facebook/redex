@@ -29,6 +29,8 @@ struct Refs {
   std::unordered_set<const DexString*> srefs;
 };
 
+using gain_t = int64_t;
+
 struct ReshuffleConfig {
   size_t reserved_extra_frefs{0};
   size_t reserved_extra_trefs{0};
@@ -37,6 +39,9 @@ struct ReshuffleConfig {
   size_t max_batches{20};
   size_t max_batch_size{200000};
   bool exclude_below20pct_coldstart_classes{false};
+  // Class merging related
+  gain_t m_deduped_weight{1};
+  gain_t m_other_weight{1};
 };
 
 struct MergingInfo {
@@ -52,7 +57,6 @@ struct MergingInfo {
 // increase the size gain a little bit, but come with a cost of
 // “non-determinism” (due to rounding errors or space complexity if we compute
 // these differently).
-using gain_t = int64_t;
 static constexpr gain_t power_value_for(size_t occurrences) {
   return occurrences > 11 ? 0 : (((gain_t)1) << 44) >> (occurrences * 4);
 }
@@ -89,14 +93,25 @@ class MoveGains {
             const std::vector<DexStructure>& dexen,
             const std::vector<std::unordered_map<const DexString*, size_t>>&
                 dexen_strings,
-            const std::set<size_t>& untouched_dexes)
+            const std::set<size_t>& untouched_dexes,
+            const std::unordered_map<DexClass*, struct MergingInfo>&
+                class_to_merging_info,
+            const std::unordered_map<MergerIndex, size_t>& num_field_defs,
+            const bool mergeability_aware,
+            const gain_t deduped_weight,
+            const gain_t other_weight)
       : m_first_dex_index(first_dex_index),
         m_movable_classes(movable_classes),
         m_class_dex_indices(class_dex_indices),
         m_class_refs(class_refs),
         m_dexen(dexen),
         m_dexen_strings(dexen_strings),
-        m_untouched_dexes(untouched_dexes) {}
+        m_untouched_dexes(untouched_dexes),
+        m_class_to_merging_info(class_to_merging_info),
+        m_num_field_defs(num_field_defs),
+        m_mergeability_aware(mergeability_aware),
+        m_deduped_weight(deduped_weight),
+        m_other_weight(other_weight) {}
 
   void recompute_gains(size_t removal_dex = 0) {
     Timer t("recompute_gains");
@@ -119,8 +134,14 @@ class MoveGains {
           // Won't move any class to the potential removed dex.
           continue;
         }
-        auto gain =
-            compute_move_gain(cls, dex_index, removal_dex != 0 ? true : false);
+        gain_t gain = 0;
+        if (m_mergeability_aware) {
+          gain = compute_move_gain_after_merging(
+              cls, dex_index, removal_dex != 0 ? true : false);
+        } else {
+          gain = compute_move_gain(cls, dex_index,
+                                   removal_dex != 0 ? true : false);
+        }
         if (gain > 0 || removal_dex != 0) {
           // In InterDexReshufflePass, we require gain > 0. For DexRemovalPass,
           // any gain is accepted to increase the possibility of make a dex
@@ -241,6 +262,96 @@ class MoveGains {
     return gain;
   }
 
+  gain_t compute_move_gain_after_merging(DexClass* cls,
+                                         size_t target_index,
+                                         bool for_removal = false) {
+    MergerIndex merging_type;
+    if (m_class_to_merging_info.count(cls)) {
+      merging_type = m_class_to_merging_info.at(cls).merging_type;
+    } else {
+      // If cls does not belong to any merging type, then use the original
+      // formula to compute move gain.
+      return compute_move_gain(cls, target_index, for_removal);
+    }
+    gain_t gain = 0;
+    always_assert(m_class_dex_indices.count(cls));
+    auto source_index = m_class_dex_indices.at(cls);
+    if (source_index != target_index) {
+      always_assert(m_class_refs.count(cls));
+      const auto& refs = m_class_refs.at(cls);
+      auto& source = m_dexen.at(source_index);
+      auto& target = m_dexen.at(target_index);
+      int source_merging_type_usage =
+          source.get_merging_type_usage(merging_type);
+      int target_merging_type_usage =
+          target.get_merging_type_usage(merging_type);
+      for (auto* fref : refs.frefs) {
+        // If fref is not defined in cls, then we compute its corresponding gain
+        // using the original formula.
+        const auto ref_cls = type_class(fref->get_class());
+        if (ref_cls != cls) {
+          auto source_occurrences = source.get_fref_occurrences(fref);
+          auto target_occurrences = target.get_fref_occurrences(fref);
+          gain +=
+              m_other_weight *
+              compute_gain(source_occurrences, target_occurrences, for_removal);
+        }
+      }
+      // We separately compute the gain for frefs *defined in* cls.
+      always_assert(m_num_field_defs.count(merging_type));
+      gain += m_deduped_weight * m_num_field_defs.at(merging_type) *
+              compute_gain(source_merging_type_usage, target_merging_type_usage,
+                           for_removal);
+
+      for (auto* mref : refs.mrefs) {
+        auto source_occurrences = source.get_mref_occurrences(mref);
+        auto target_occurrences = target.get_mref_occurrences(mref);
+        const auto ref_cls = type_class(mref->get_class());
+        // If mref is defined in cls, then we use its corresponding merging type
+        // method usage in source and target to approximate the
+        // source_occurrences and target_occurrences after merging.
+        if (ref_cls == cls) {
+          const std::string& method_name =
+              mref->as_def()->get_simple_deobfuscated_name();
+          source_occurrences =
+              source.get_merging_type_method_usage(merging_type, method_name);
+          target_occurrences =
+              target.get_merging_type_method_usage(merging_type, method_name);
+          gain +=
+              m_deduped_weight *
+              compute_gain(source_occurrences, target_occurrences, for_removal);
+        } else {
+          gain +=
+              m_other_weight *
+              compute_gain(source_occurrences, target_occurrences, for_removal);
+        }
+      }
+      for (auto* tref : refs.trefs) {
+        auto source_occurrences = source.get_tref_occurrences(tref);
+        auto target_occurrences = target.get_tref_occurrences(tref);
+        const auto ref_cls = type_class(tref);
+        if (ref_cls == cls) {
+          source_occurrences = source_merging_type_usage;
+          target_occurrences = target_merging_type_usage;
+        }
+        gain += m_other_weight * compute_gain(source_occurrences,
+                                              target_occurrences, for_removal);
+      }
+      auto& source_strings = m_dexen_strings.at(source_index);
+      auto& target_strings = m_dexen_strings.at(target_index);
+      for (auto* sref : refs.srefs) {
+        auto it = source_strings.find(sref);
+        auto source_occurrences = it == source_strings.end() ? 0 : it->second;
+        it = target_strings.find(sref);
+        auto target_occurrences = it == target_strings.end() ? 0 : it->second;
+        gain += m_other_weight * compute_gain(source_occurrences,
+                                              target_occurrences, for_removal);
+      }
+    }
+
+    return gain;
+  }
+
   gain_t compute_gain(size_t source_occurrences,
                       size_t target_occurrences,
                       bool for_removal) const {
@@ -284,6 +395,15 @@ class MoveGains {
   const std::vector<std::unordered_map<const DexString*, size_t>>&
       m_dexen_strings;
   const std::set<size_t>& m_untouched_dexes;
+
+  // Class merging related data.
+  const std::unordered_map<DexClass*, struct MergingInfo>&
+      m_class_to_merging_info;
+  const std::unordered_map<MergerIndex, size_t>& m_num_field_defs;
+  const bool m_mergeability_aware;
+  const gain_t m_deduped_weight{1};
+  const gain_t m_other_weight{1};
+
   // Classes that are already moved once, and should not be moved again. It is
   // used in DexRemovalPass only.
   std::unordered_set<DexClass*> m_moved_classes;
@@ -311,7 +431,7 @@ class InterDexReshuffleImpl {
 
   void record_stats();
 
-  bool try_plan_move(const Move& move);
+  bool try_plan_move(const Move& move, bool mergeability_aware = false);
 
   bool can_move(DexClass* cls);
 
