@@ -40,6 +40,7 @@ struct ReserveRefsInfo {
 using MethodRefs = std::unordered_set<DexMethodRef*>;
 using FieldRefs = std::unordered_set<DexFieldRef*>;
 using TypeRefs = std::unordered_set<DexType*>;
+using MergerIndex = size_t;
 
 struct DexInfo {
   bool primary{false};
@@ -202,6 +203,74 @@ also reject some legal cases.
 
   const OverflowStats& get_overflow_stats() const { return m_overflow_stats; }
 
+  void set_merging_type_usage(
+      std::unordered_map<MergerIndex, size_t>& merging_type_usage) {
+    m_merging_type_usage = merging_type_usage;
+  }
+
+  size_t get_merging_type_usage(MergerIndex merging_type) const {
+    auto it = m_merging_type_usage.find(merging_type);
+    return it == m_merging_type_usage.end() ? 0 : it->second;
+  }
+
+  void increase_merging_type_usage(MergerIndex merging_type) {
+    m_merging_type_usage[merging_type]++;
+  }
+
+  void decrease_merging_type_usage(MergerIndex merging_type) {
+    always_assert(m_merging_type_usage[merging_type] > 0);
+    m_merging_type_usage[merging_type]--;
+  }
+
+  void set_merging_type_method_usage(
+      std::unordered_map<MergerIndex, std::unordered_map<std::string, size_t>>&
+          merging_type_method_usage) {
+    m_merging_type_method_usage = merging_type_method_usage;
+  }
+
+  size_t get_merging_type_method_usage(MergerIndex merging_type,
+                                       const std::string& name) const {
+    auto it = m_merging_type_method_usage.find(merging_type);
+    if (it == m_merging_type_method_usage.end()) {
+      return 0;
+    }
+    auto it2 = it->second.find(name);
+    return it2 == it->second.end() ? 0 : it2->second;
+  }
+
+  void increase_merging_type_method_usage(MergerIndex merging_type,
+                                          const std::string& name) {
+    m_merging_type_method_usage[merging_type][name]++;
+  }
+
+  void decrease_merging_type_method_usage(MergerIndex merging_type,
+                                          const std::string& name) {
+    always_assert(m_merging_type_method_usage[merging_type][name] > 0);
+    m_merging_type_method_usage[merging_type][name]--;
+  }
+
+  void set_num_new_methods(size_t num_new_methods) {
+    m_num_new_methods = num_new_methods;
+  }
+
+  void increase_num_new_methods() { m_num_new_methods++; }
+
+  void decrease_num_new_methods() {
+    always_assert(m_num_new_methods > 0);
+    m_num_new_methods--;
+  }
+
+  void set_num_deduped_methods(size_t num_deduped_methods) {
+    m_num_deduped_methods = num_deduped_methods;
+  }
+
+  void increase_num_deduped_methods() { m_num_deduped_methods++; }
+
+  void decrease_num_deduped_methods() {
+    always_assert(m_num_deduped_methods > 0);
+    m_num_deduped_methods--;
+  }
+
  private:
   size_t m_linear_alloc_size;
   std::unordered_map<DexType*, size_t> m_trefs;
@@ -214,6 +283,13 @@ also reject some legal cases.
       m_classes_iterators;
 
   OverflowStats m_overflow_stats{};
+
+  // The following are used to track (hypothetical) class merging stats.
+  std::unordered_map<MergerIndex, size_t> m_merging_type_usage;
+  std::unordered_map<MergerIndex, std::unordered_map<std::string, size_t>>
+      m_merging_type_method_usage;
+  int m_num_new_methods;
+  int m_num_deduped_methods;
 
   friend class DexesStructure;
 };

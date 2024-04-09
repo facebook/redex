@@ -6,6 +6,7 @@
  */
 
 #include "InterDexReshuffleImpl.h"
+#include "ClassMerging.h"
 #include "InterDexPass.h"
 #include "Show.h"
 #include "Trace.h"
@@ -52,19 +53,22 @@ bool is_reshuffable_class(
          reshuffable_classes.end();
 }
 
-InterDexReshuffleImpl::InterDexReshuffleImpl(ConfigFiles& conf,
-                                             PassManager& mgr,
-                                             ReshuffleConfig& config,
-                                             DexClasses& original_scope,
-                                             DexClassesVector& dexen,
-                                             std::set<size_t>& untouched_dexes)
+InterDexReshuffleImpl::InterDexReshuffleImpl(
+    ConfigFiles& conf,
+    PassManager& mgr,
+    ReshuffleConfig& config,
+    DexClasses& original_scope,
+    DexClassesVector& dexen,
+    std::set<size_t>& untouched_dexes,
+    const boost::optional<class_merging::Model&>& merging_model)
     : m_conf(conf),
       m_mgr(mgr),
       m_config(config),
       m_init_classes_with_side_effects(original_scope,
                                        conf.create_init_class_insns()),
       m_dexen(dexen),
-      m_untouched_dexes(untouched_dexes) {
+      m_untouched_dexes(untouched_dexes),
+      m_merging_model(merging_model) {
   m_dexes_structure.set_min_sdk(mgr.get_redex_options().min_sdk);
   const auto& interdex_metrics = mgr.get_interdex_metrics();
   auto it = interdex_metrics.find(interdex::METRIC_LINEAR_ALLOC_LIMIT);
@@ -146,6 +150,67 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(ConfigFiles& conf,
           }
         }
       });
+
+  // Initialize m_class_to_merging_info and m_num_field_defs
+  if (!m_merging_model) {
+    return;
+  }
+
+  m_mergeability_aware = true;
+  MergerIndex num_merging_types = 0;
+  m_merging_model->walk_hierarchy([&](const class_merging::MergerType& merger) {
+    if (!merger.has_mergeables()) {
+      return;
+    }
+    for (const DexType* mergeable : merger.mergeables) {
+      auto cls = type_class(mergeable);
+      if (cls != nullptr) {
+        m_class_to_merging_info.emplace(cls, MergingInfo());
+        auto& merging_info = m_class_to_merging_info.at(cls);
+        merging_info.merging_type = num_merging_types;
+        auto& dedupable_mrefs = merging_info.dedupable_mrefs;
+        for (const auto& method : cls->get_vmethods()) {
+          dedupable_mrefs.insert(method);
+        }
+        for (const auto& method : cls->get_ctors()) {
+          dedupable_mrefs.insert(method);
+        }
+      }
+    }
+    m_num_field_defs.emplace(num_merging_types, merger.shape.field_count());
+    num_merging_types++;
+  });
+
+  // Initialize hypothetical class merging stats in DexStructure.
+  for (size_t dex_idx = m_first_dex_index; dex_idx < dexen.size(); dex_idx++) {
+    auto& dex = dexen.at(dex_idx);
+    auto& mutable_dex = m_mutable_dexen.at(dex_idx);
+    std::unordered_map<MergerIndex, std::unordered_map<std::string, size_t>>
+        merging_type_method_usage;
+    std::unordered_map<MergerIndex, size_t> merging_type_usage;
+    int num_new_methods = 0;
+    int num_deduped_methods = 0;
+    for (auto cls : dex) {
+      if (m_class_to_merging_info.count(cls)) {
+        const auto& merging_info = m_class_to_merging_info.at(cls);
+        MergerIndex merging_type = merging_info.merging_type;
+        merging_type_usage[merging_type]++;
+        for (const auto& method : merging_info.dedupable_mrefs) {
+          const std::string& method_name =
+              method->get_simple_deobfuscated_name();
+          merging_type_method_usage[merging_type][method_name]++;
+          num_deduped_methods++;
+        }
+      }
+    }
+    for (const auto& entry : merging_type_method_usage) {
+      num_new_methods += entry.second.size();
+    }
+    mutable_dex.set_merging_type_usage(merging_type_usage);
+    mutable_dex.set_merging_type_method_usage(merging_type_method_usage);
+    mutable_dex.set_num_new_methods(num_new_methods);
+    mutable_dex.set_num_deduped_methods(num_deduped_methods);
+  }
 }
 
 size_t InterDexReshuffleImpl::get_eliminate_dex(

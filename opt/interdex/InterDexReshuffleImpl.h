@@ -14,6 +14,13 @@
 #include "StlUtil.h"
 #include "Walkers.h"
 
+namespace class_merging {
+
+// Forward declaration.
+class Model;
+
+} // namespace class_merging
+
 struct Refs {
   MethodRefs mrefs;
   FieldRefs frefs;
@@ -30,6 +37,11 @@ struct ReshuffleConfig {
   size_t max_batches{20};
   size_t max_batch_size{200000};
   bool exclude_below20pct_coldstart_classes{false};
+};
+
+struct MergingInfo {
+  MergerIndex merging_type;
+  std::unordered_set<DexMethod*> dedupable_mrefs;
 };
 
 // Compute gain powers by reference occurrences. We don't use the upper 20 (19,
@@ -284,7 +296,9 @@ class InterDexReshuffleImpl {
                         ReshuffleConfig& config,
                         DexClasses& original_scope,
                         DexClassesVector& dexen,
-                        std::set<size_t>& untouched_dexes);
+                        std::set<size_t>& untouched_dexes,
+                        const boost::optional<class_merging::Model&>&
+                            merging_model = boost::none);
 
   void compute_plan();
 
@@ -309,6 +323,7 @@ class InterDexReshuffleImpl {
   init_classes::InitClassesWithSideEffects m_init_classes_with_side_effects;
   DexClassesVector& m_dexen;
   std::set<size_t>& m_untouched_dexes;
+  boost::optional<class_merging::Model&> m_merging_model;
   size_t m_linear_alloc_limit;
   DexesStructure m_dexes_structure;
   std::vector<DexClass*> m_movable_classes;
@@ -319,4 +334,8 @@ class InterDexReshuffleImpl {
       m_mutable_dexen_strings;
   size_t m_first_dex_index{1}; // skip primary dex
   bool m_order_interdex;
+  // Class merging related data.
+  std::unordered_map<DexClass*, struct MergingInfo> m_class_to_merging_info;
+  std::unordered_map<MergerIndex, size_t> m_num_field_defs;
+  bool m_mergeability_aware{false};
 };
