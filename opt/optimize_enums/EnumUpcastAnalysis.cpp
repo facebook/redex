@@ -8,6 +8,7 @@
 #include "EnumUpcastAnalysis.h"
 
 #include "EnumClinitAnalysis.h"
+#include "LiveRange.h"
 #include "Macros.h"
 #include "Resolver.h"
 #include "Show.h"
@@ -688,6 +689,65 @@ void reject_enums_for_colliding_constructors(
   }
 }
 
+void reject_enums_for_relaxed_inits(const std::vector<DexClass*>& classes,
+                                    ConcurrentSet<DexType*>* candidate_enums) {
+  ConcurrentSet<DexType*> rejected_enums;
+  walk::parallel::code(classes, [&](DexMethod* method, IRCode& code) {
+    auto& cfg = code.cfg();
+    std::unordered_set<const IRInstruction*> new_instances_to_verify;
+    for (auto& mie : InstructionIterable(cfg)) {
+      auto insn = mie.insn;
+      if (insn->opcode() != OPCODE_NEW_INSTANCE ||
+          !candidate_enums->count(insn->get_type())) {
+        continue;
+      }
+      new_instances_to_verify.insert(insn);
+    }
+    if (new_instances_to_verify.empty()) {
+      return;
+    }
+    live_range::MoveAwareChains chains(
+        cfg, /* ignore_unreachable */ false,
+        [&](auto* insn) { return new_instances_to_verify.count(insn); });
+    live_range::DefUseChains du_chains = chains.get_def_use_chains();
+    for (auto* new_instance_insn : new_instances_to_verify) {
+      auto* enum_type = new_instance_insn->get_type();
+      auto use_set = du_chains[const_cast<IRInstruction*>(new_instance_insn)];
+      for (const auto use : use_set) {
+        if (use.src_index != 0) {
+          continue;
+        }
+        auto use_insn = use.insn;
+        if (opcode::is_a_move(use_insn->opcode())) {
+          // Ignore moves
+          continue;
+        }
+        if (!use_insn->has_method()) {
+          continue;
+        }
+        auto callee = use_insn->get_method();
+        if (!method::is_init(callee)) {
+          continue;
+        }
+        const auto* resolved_callee =
+            resolve_method(callee, opcode_to_search(use_insn), method);
+        if (!resolved_callee || resolved_callee->get_class() != enum_type) {
+          TRACE(ENUM, 4,
+                "Reject %s because base constructor %s in invoke instruction "
+                "%s may be called on new-instance instruction %s in %s",
+                SHOW(enum_type), SHOW(resolved_callee), SHOW(use_insn),
+                SHOW(new_instance_insn), SHOW(method));
+          rejected_enums.insert(enum_type);
+          break;
+        }
+      }
+    }
+  });
+  for (DexType* type : rejected_enums) {
+    candidate_enums->erase(type);
+  }
+}
+
 void reject_unsafe_enums(
     const std::vector<DexClass*>& classes,
     Config* config,
@@ -777,6 +837,7 @@ void reject_unsafe_enums(
   }
 
   reject_enums_for_colliding_constructors(classes, candidate_enums);
+  reject_enums_for_relaxed_inits(classes, candidate_enums);
 }
 
 bool is_enum_valueof(const DexMethodRef* method) {
