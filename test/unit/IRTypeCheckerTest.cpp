@@ -1390,6 +1390,69 @@ TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
   }
 }
 
+TEST_F(IRTypeCheckerTest, invokeInitOfSuperTypeAfterNewInstanceDefault) {
+  const auto type_super = DexType::make_type("LSuper;");
+  const auto type_sub = DexType::make_type("LSub;");
+
+  ClassCreator cls_super_creator(type_super);
+  cls_super_creator.set_super(type::java_lang_Object());
+  auto super_ctor = DexMethod::make_method("LSuper;.<init>:()V")
+                        ->make_concrete(ACC_PUBLIC, false);
+  cls_super_creator.add_method(super_ctor);
+  cls_super_creator.create();
+
+  ClassCreator cls_sub_creator(type_sub);
+  cls_sub_creator.set_super(type_super);
+  cls_sub_creator.create();
+
+  auto method =
+      DexMethod::make_method("LFoo;.bar:()LSub;")
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+  method->set_code(assembler::ircode_from_string(R"(
+      (
+        (new-instance "LSub;")
+        (move-result-pseudo-object v0)
+        (invoke-direct (v0) "LSuper;.<init>:()V")
+        (return-object v0)
+      )
+    )"));
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_FALSE(checker.good()) << checker.what(); // should fail
+}
+
+TEST_F(IRTypeCheckerTest, invokeInitOfSuperTypeAfterNewInstanceRelaxed) {
+  const auto type_super = DexType::make_type("LSuper;");
+  const auto type_sub = DexType::make_type("LSub;");
+
+  ClassCreator cls_super_creator(type_super);
+  cls_super_creator.set_super(type::java_lang_Object());
+  auto super_ctor = DexMethod::make_method("LSuper;.<init>:()V")
+                        ->make_concrete(ACC_PUBLIC, false);
+  cls_super_creator.add_method(super_ctor);
+  cls_super_creator.create();
+
+  ClassCreator cls_sub_creator(type_sub);
+  cls_sub_creator.set_super(type_super);
+  cls_sub_creator.create();
+
+  auto method =
+      DexMethod::make_method("LFoo;.bar:()LSub;")
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+  method->set_code(assembler::ircode_from_string(R"(
+      (
+        (new-instance "LSub;")
+        (move-result-pseudo-object v0)
+        (invoke-direct (v0) "LSuper;.<init>:()V")
+        (return-object v0)
+      )
+    )"));
+  IRTypeChecker checker(method);
+  checker.relaxed_init_check(); // enabling the relaxed init-check
+  checker.run();
+  EXPECT_TRUE(checker.good()) << checker.what(); // should succeed
+}
+
 TEST_F(IRTypeCheckerTest, checkNoOverwriteThis) {
   // Good
   {

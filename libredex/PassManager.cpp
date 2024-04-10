@@ -100,7 +100,8 @@ std::string get_apk_dir(const ConfigFiles& config) {
 
 class CheckerConfig {
  public:
-  explicit CheckerConfig(const ConfigFiles& conf) {
+  explicit CheckerConfig(const ConfigFiles& conf, bool relaxed_init_check)
+      : m_relaxed_init_check(relaxed_init_check) {
     const Json::Value& type_checker_args =
         conf.get_json_config()["ir_type_checker"];
     m_run_type_checker_on_input =
@@ -216,6 +217,9 @@ class CheckerConfig {
       if (m_check_no_overwrite_this) {
         checker.check_no_overwrite_this();
       }
+      if (m_relaxed_init_check) {
+        checker.relaxed_init_check();
+      }
       return fn(std::move(checker));
     };
     auto run_checker = [&](DexMethod* dex_method) {
@@ -308,6 +312,7 @@ class CheckerConfig {
   bool m_annotated_cfg_on_error{false};
   bool m_annotated_cfg_on_error_reduced{true};
   bool m_check_classes;
+  bool m_relaxed_init_check;
 };
 
 class CheckUniqueDeobfuscatedNames {
@@ -1209,7 +1214,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       conf.get_global_config().get_config_by_name<AssessorConfig>("assessor");
 
   // Retrieve the type checker's settings.
-  CheckerConfig checker_conf{conf};
+  bool relaxed_init_check = m_redex_options.min_sdk >= 21;
+  CheckerConfig checker_conf{conf, relaxed_init_check};
   checker_conf.on_input(scope);
 
   // Pull on method-profiles, so that they get initialized, and are matched
