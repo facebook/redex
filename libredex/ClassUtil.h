@@ -47,4 +47,10 @@ DexMethod* get_or_create_clinit(DexClass* cls, bool need_editable_cfg = false);
  */
 bool has_hierarchy_in_scope(DexClass* cls);
 
+/**
+ * Return true if the name matches "$$Lambda$", "$$ExternalSyntheticLambda", or
+ * "$[0-9]".
+ */
+bool maybe_anonymous_class(const DexClass* cls);
+
 }; // namespace klass
