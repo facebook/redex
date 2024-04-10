@@ -17,10 +17,14 @@ class DexType;
 class PassManager;
 class DexStore;
 class TypeSystem;
+struct ConfigFiles;
 using DexStoresVector = std::vector<DexStore>;
 using Scope = std::vector<DexClass*>;
+using DexClasses = std::vector<DexClass*>;
 
 namespace class_merging {
+
+class Model;
 
 struct ModelSpec;
 
@@ -36,5 +40,17 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
                                    size_t global_min_count,
                                    PassManager& mgr,
                                    ModelSpec* merging_spec);
+
+/**
+ * Construct a merging model that disregards dex boundaries and max
+ * size per merger. It is used by the mergeability-aware version of
+ * the InterDexReshuffle pass, which is run right before
+ * IntraDexClassMerging. As a result, certain merging specs used are
+ * set to match those used by the IntraDexClassMerging pass.
+ */
+class_merging::Model construct_global_model(DexClasses& scope,
+                                            PassManager& mgr,
+                                            ConfigFiles& conf,
+                                            DexStoresVector& stores);
 
 } // namespace class_merging

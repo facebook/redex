@@ -95,8 +95,14 @@ class InterDexReshufflePass : public Pass {
          "Whether to exclude coldstart classes in between 1pctColdStart and "
          "20pctColdStart marker"
          "from the reshuffle.");
+    bind("allow_mergeability_aware", true, m_allow_mergeability_aware);
   }
 
  private:
   ReshuffleConfig m_config;
+
+  // Which iteration of `run_pass`.
+  size_t m_run{0};
+
+  bool m_allow_mergeability_aware;
 };

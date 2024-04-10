@@ -6,6 +6,7 @@
  */
 
 #include "ModelSpecGenerator.h"
+#include "ClassMerging.h"
 #include "Model.h"
 #include "PassManager.h"
 #include "ReflectionAnalysis.h"
@@ -216,5 +217,31 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
   TRACE(CLMG, 9, "Discover %zu mergeables from %zu roots",
         merging_spec->merging_targets.size(), merging_spec->roots.size());
 }
+
+class_merging::Model construct_global_model(DexClasses& scope,
+                                            PassManager& mgr,
+                                            ConfigFiles& conf,
+                                            DexStoresVector& stores) {
+  class_merging::ModelSpec m_merging_spec;
+  // The specs below should match those used by IntraDexClassMerging
+  m_merging_spec.use_stable_shape_names = true;
+  m_merging_spec.interdex_config.init_type("non-ordered-set");
+  m_merging_spec.interdex_config.init_inferring_mode("class-loads");
+  m_merging_spec.dedup_fill_in_stack_trace = false;
+  size_t global_min_count = 4;
+
+  // The specs below removes dex boundaries and max size of mergers.
+  m_merging_spec.per_dex_grouping = false;
+  m_merging_spec.strategy = class_merging::strategy::BY_CLASS_COUNT;
+  m_merging_spec.min_count = 2;
+  m_merging_spec.max_count = std::numeric_limits<size_t>::max();
+
+  TypeSystem type_system(scope);
+  find_all_mergeables_and_roots(type_system, scope,
+                                /*global_min_count=*/global_min_count, mgr,
+                                &m_merging_spec);
+  return class_merging::construct_model(type_system, scope, conf, mgr, stores,
+                                        m_merging_spec);
+};
 
 } // namespace class_merging

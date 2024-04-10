@@ -148,4 +148,26 @@ ModelStats merge_model(const TypeSystem& type_system,
   return stats;
 }
 
+Model construct_model(const TypeSystem& type_system,
+                      Scope& scope,
+                      ConfigFiles& conf,
+                      PassManager& mgr,
+                      DexStoresVector& stores,
+                      ModelSpec& spec) {
+  TRACE(CLMG,
+        2,
+        "[ClassMerging] merging %s model merging targets %zu roots %zu",
+        spec.name.c_str(),
+        spec.merging_targets.size(),
+        spec.roots.size());
+  Timer t("erase_model");
+  int32_t min_sdk = mgr.get_redex_options().min_sdk;
+  XStoreRefs xstores(stores);
+  auto refchecker =
+      create_ref_checker(spec.per_dex_grouping, &xstores, conf, min_sdk);
+  auto model =
+      Model::build_model(scope, stores, conf, spec, type_system, *refchecker);
+  return model;
+}
+
 } // namespace class_merging
