@@ -134,15 +134,13 @@ void check_dont_merge_list(
 
 /**
  * Gather IRinstructions in method that invoke-super methods in parent_mergeable
- * class or invoke-direct parent_mergeable's constructors.
+ * class.
  */
 void get_call_to_super(
     DexMethod* method,
     DexClass* parent_mergeable,
     std::unordered_map<DexMethodRef*, std::vector<IRInstruction*>>*
-        callee_to_insns,
-    std::unordered_map<DexMethod*, std::vector<cfg::ControlFlowGraph*>>*
-        init_callers) {
+        callee_to_insns) {
   if (!method->get_code()) {
     return;
   }
@@ -153,22 +151,16 @@ void get_call_to_super(
       continue;
     }
     auto insn_method = insn->get_method();
-    if (insn_method->get_class() == parent_mergeable->get_type()) {
-      if (method::is_init(insn_method)) {
-        auto insn_method_def = insn_method->as_def();
-        redex_assert(insn_method_def);
-        (*init_callers)[insn_method_def].push_back(&cfg);
-        TRACE(VMERGE, 5, "Changing init call %s", SHOW(insn));
-      } else if (opcode::is_invoke_super(insn->opcode())) {
-        (*callee_to_insns)[insn_method].push_back(insn);
-        TRACE(VMERGE, 5, "Replacing super call %s", SHOW(insn));
-      }
+    if (insn_method->get_class() == parent_mergeable->get_type() &&
+        opcode::is_invoke_super(insn->opcode())) {
+      (*callee_to_insns)[insn_method].push_back(insn);
+      TRACE(VMERGE, 5, "Replacing super call %s", SHOW(insn));
     }
   }
 }
 
 using SuperCall = std::pair<DexMethodRef*, std::vector<IRInstruction*>>;
-using InitCall = std::pair<DexMethod*, std::vector<cfg::ControlFlowGraph*>>;
+using InitCall = std::pair<DexMethod*, std::unordered_set<DexMethod*>>;
 
 /**
  * Relocate callee methods in IRInstruction from mergeable class to merger
@@ -219,7 +211,7 @@ void handle_invoke_super(
  * call to ctors and modify IRinstruction accordingly.
  */
 void handle_invoke_init(
-    const std::unordered_map<DexMethod*, std::vector<cfg::ControlFlowGraph*>>&
+    const std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>>&
         init_callers,
     DexClass* merger,
     DexClass* mergeable) {
@@ -236,8 +228,12 @@ void handle_invoke_init(
     size_t num_add_args = new_proto->get_args()->size() - num_orig_args;
     size_t num_orig_src = num_orig_args + 1;
     callee->add_load_params(num_add_args);
-    for (auto* cfg : callee_to_insn.second) {
-      auto ii = cfg::InstructionIterable(*cfg);
+    std::vector<DexMethod*> callers(callee_to_insn.second.begin(),
+                                    callee_to_insn.second.end());
+    std::sort(callers.begin(), callers.end(), compare_dexmethods);
+    for (auto* caller : callers) {
+      auto& cfg = caller->get_code()->cfg();
+      auto ii = cfg::InstructionIterable(cfg);
       for (auto it = ii.begin(); it != ii.end(); ++it) {
         auto* insn = it->insn;
         if (insn->opcode() != OPCODE_INVOKE_DIRECT) {
@@ -249,11 +245,11 @@ void handle_invoke_init(
           size_t current_add = 0;
           insn->set_srcs_size(num_add_args + num_orig_src);
           while (current_add < num_add_args) {
-            auto temp = cfg->allocate_temp();
+            auto temp = cfg.allocate_temp();
             IRInstruction* new_insn = new IRInstruction(OPCODE_CONST);
             new_insn->set_literal(0);
             new_insn->set_dest(temp);
-            cfg->insert_before(it, new_insn);
+            cfg.insert_before(it, new_insn);
             insn->set_src(num_orig_src + current_add, temp);
             ++current_add;
           }
@@ -730,10 +726,7 @@ void resolve_virtual_calls_to_merger(const Scope& scope,
 } // namespace
 
 /**
- * 1. For an invoke-direct call on parent's constructor, move the method to
- * merger class and resolve conflicts.
- *
- * 2. For an invoke-super call on a parent's method
+ * For an invoke-super call on a parent's method
  *
  * a) When Parent.v is a pure ref, we update it to a method ref on grandparent
  * class.
@@ -745,8 +738,8 @@ void resolve_virtual_calls_to_merger(const Scope& scope,
  *
  *  invoke-super Parent.v => invoke-virtual Child.relocated_parent_v
  *
- * At the time, bellow invocation can be different when child overrides the
- * method. These invocatoins should be resolved to child ref before running into
+ * At the time, below invocation can be different when child overrides the
+ * method. These invocations should be resolved to child ref before running into
  * this.
  *
  *  invoke-virtual Parent.v => invoke-virtual Child.v
@@ -755,26 +748,21 @@ void resolve_virtual_calls_to_merger(const Scope& scope,
 void VerticalMergingPass::change_super_calls(
     const ClassMap& mergeable_to_merger) {
 
-  // Update invoke-super and invoke-direct constructor.
+  // Update invoke-super.
   // The invoke-super Parent.v could only be called from child class.
-  // The invoke-direct Parent.<init> could be called only from child or from
-  // parent's constructors.
   auto process_subclass_methods = [&](DexClass* child, DexClass* parent) {
     std::unordered_map<DexMethodRef*, std::vector<IRInstruction*>>
         callee_to_insns;
-    std::unordered_map<DexMethod*, std::vector<cfg::ControlFlowGraph*>>
-        init_callers;
     for (DexMethod* method : child->get_dmethods()) {
-      get_call_to_super(method, parent, &callee_to_insns, &init_callers);
+      get_call_to_super(method, parent, &callee_to_insns);
     }
     for (DexMethod* method : child->get_vmethods()) {
-      get_call_to_super(method, parent, &callee_to_insns, &init_callers);
+      get_call_to_super(method, parent, &callee_to_insns);
     }
     for (DexMethod* method : parent->get_dmethods()) {
-      get_call_to_super(method, parent, &callee_to_insns, &init_callers);
+      get_call_to_super(method, parent, &callee_to_insns);
     }
     handle_invoke_super(callee_to_insns, child, parent);
-    handle_invoke_init(init_callers, child, parent);
   };
 
   for (const auto& pair : mergeable_to_merger) {
@@ -783,6 +771,56 @@ void VerticalMergingPass::change_super_calls(
     if (merger->get_super_class() == mergeable->get_type()) {
       process_subclass_methods(merger, mergeable);
     }
+  }
+}
+
+/**
+ * For an invoke-direct call on parent's constructor, move the method to
+ * merger class and resolve conflicts.
+ */
+void VerticalMergingPass::change_init_calls(
+    const Scope& scope, const ClassMap& mergeable_to_merger) {
+
+  // Update invoke-direct constructor.
+  // The invoke-direct Parent.<init> could be called from child or from parent's
+  // constructors, or from any other code.
+
+  ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>
+      concurrent_init_callers;
+  walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
+    if (!insn->has_method()) {
+      return;
+    }
+    auto insn_method = insn->get_method();
+    if (!method::is_init(insn_method)) {
+      return;
+    }
+    auto* cls = type_class(insn_method->get_class());
+    if (!mergeable_to_merger.count(cls)) {
+      return;
+    }
+    auto* insn_method_def = insn_method->as_def();
+    redex_assert(insn_method_def);
+    concurrent_init_callers.update(
+        insn_method_def,
+        [method](auto*, auto& set, auto) { set.insert(method); });
+    TRACE(VMERGE, 5, "Changing init call %s", SHOW(insn));
+  });
+
+  for (const auto& pair : mergeable_to_merger) {
+    DexClass* merger = pair.second;
+    DexClass* mergeable = pair.first;
+    if (merger->get_super_class() != mergeable->get_type()) {
+      continue;
+    }
+    std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>> init_callers;
+    for (auto* ctor : mergeable->get_ctors()) {
+      auto it = concurrent_init_callers.find(ctor);
+      if (it != concurrent_init_callers.end()) {
+        init_callers.emplace(ctor, std::move(it->second));
+      }
+    }
+    handle_invoke_init(init_callers, merger, mergeable);
   }
 }
 
@@ -881,6 +919,7 @@ void VerticalMergingPass::merge_classes(const Scope& scope,
   MethodRefMap methodref_update_map;
 
   change_super_calls(mergeable_to_merger);
+  change_init_calls(scope, mergeable_to_merger);
 
   for (const auto& pair : mergeable_to_merger) {
     DexClass* merger = pair.second;
