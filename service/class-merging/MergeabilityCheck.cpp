@@ -75,9 +75,18 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
   std::vector<std::pair<IRInstruction*, const DexType*>>
       const_classes_to_verify;
   std::unordered_set<const IRInstruction*> const_classes_to_verify_set;
+  std::vector<IRInstruction*> new_instances_to_verify;
+  std::unordered_set<const IRInstruction*> new_instances_to_verify_set;
   auto& cfg = code->cfg();
   for (const auto& mie : InstructionIterable(cfg)) {
     auto insn = mie.insn;
+
+    if (opcode::is_new_instance(insn->opcode()) &&
+        m_spec.merging_targets.count(insn->get_type())) {
+      new_instances_to_verify.push_back(insn);
+      new_instances_to_verify_set.insert(insn);
+      continue;
+    }
 
     // If we have a pure method ref on a mergeable type (the class component is
     // mergeable), we do not merge the type.
@@ -153,13 +162,15 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
     }
   }
 
-  if (const_classes_to_verify.empty()) {
+  if (const_classes_to_verify.empty() && new_instances_to_verify.empty()) {
     return non_mergeables;
   }
 
   live_range::MoveAwareChains chains(
-      cfg, /* ignore_unreachable */ false,
-      [&](auto* insn) { return const_classes_to_verify_set.count(insn); });
+      cfg, /* ignore_unreachable */ false, [&](auto* insn) {
+        return const_classes_to_verify_set.count(insn) ||
+               new_instances_to_verify_set.count(insn);
+      });
   live_range::DefUseChains du_chains = chains.get_def_use_chains();
 
   for (const auto& pair : const_classes_to_verify) {
@@ -184,6 +195,43 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
         TRACE(CLMG, 5, "[non mergeable] const class unsafe callee %s in %s",
               SHOW(callee), SHOW(method));
         non_mergeables.insert(referenced_type);
+        break;
+      }
+    }
+  }
+
+  // We find and exclude classes of which instances are created via
+  // new-instance, but then the associated constructor call invokes a
+  // constructor of a super type, and not the exact instantiated type.
+  // TODO T184662680: Fully support such scenario, e.g. by synthesizing a
+  // corresponding constructor on the instantiated class, and not just exclude.
+  for (auto* new_instance_insn : new_instances_to_verify) {
+    auto* type = new_instance_insn->get_type();
+    auto use_set = du_chains[new_instance_insn];
+    for (const auto use : use_set) {
+      if (use.src_index != 0) {
+        continue;
+      }
+      auto use_insn = use.insn;
+      if (opcode::is_a_move(use_insn->opcode())) {
+        // Ignore moves
+        continue;
+      }
+      if (!use_insn->has_method()) {
+        continue;
+      }
+      auto callee = use_insn->get_method();
+      if (!method::is_init(callee)) {
+        continue;
+      }
+      const auto* resolved_callee =
+          resolve_method(callee, opcode_to_search(use_insn), method);
+      if (!resolved_callee || resolved_callee->get_class() != type) {
+        TRACE(CLMG, 5,
+              "[non mergeable] new-instance %s associated with invoke init %s "
+              "defined in other type in %s",
+              SHOW(new_instance_insn), SHOW(use_insn), SHOW(method));
+        non_mergeables.insert(type);
         break;
       }
     }
