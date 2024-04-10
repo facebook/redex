@@ -354,7 +354,7 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
           !method::is_init(insn->get_method())) {
         continue;
       }
-      auto type = insn->get_method()->get_class();
+      auto init_declaring_type = insn->get_method()->get_class();
       auto reg = insn->src(0);
       const auto& defs = env.get(reg);
       always_assert(!defs.is_top());
@@ -365,13 +365,14 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
       }
       always_assert(defs.size() == 1);
       IRInstruction* old_new_instance_insn = *defs.elements().begin();
+      auto* type = old_new_instance_insn->get_type();
+      always_assert(type::is_subclass(init_declaring_type, type));
       if (last_insn != end &&
           last_insn->insn->opcode() == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT &&
           last_insn->insn->dest() == reg) {
         auto primary_insn = cfg.primary_instruction_of_move_result(
             block->to_cfg_instruction_iterator(last_insn));
-        if (primary_insn->insn->opcode() == OPCODE_NEW_INSTANCE) {
-          always_assert(primary_insn->insn->get_type() == type);
+        if (primary_insn->insn == old_new_instance_insn) {
           // already normalized
           continue;
         }
