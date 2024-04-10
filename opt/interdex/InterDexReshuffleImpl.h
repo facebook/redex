@@ -40,8 +40,8 @@ struct ReshuffleConfig {
   size_t max_batch_size{200000};
   bool exclude_below20pct_coldstart_classes{false};
   // Class merging related
-  gain_t m_deduped_weight{1};
-  gain_t m_other_weight{1};
+  gain_t deduped_weight{1};
+  gain_t other_weight{1};
 };
 
 struct MergingInfo {

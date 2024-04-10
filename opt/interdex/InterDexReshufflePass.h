@@ -89,6 +89,16 @@ class InterDexReshufflePass : public Pass {
          m_config.max_batch_size,
          "How many class to move per batch. More might yield better results, "
          "but might take longer.");
+    bind("other_weight",
+         m_config.other_weight,
+         m_config.other_weight,
+         "Weight for non-deduped method in mergeability-aware reshuffle cost "
+         "function.");
+    bind("deduped_weight",
+         m_config.deduped_weight,
+         m_config.deduped_weight,
+         "Weight for deduped method in mergeability-aware reshuffle cost "
+         "function.");
     bind("exclude_below20pct_coldstart_classes",
          false,
          m_config.exclude_below20pct_coldstart_classes,

@@ -269,7 +269,7 @@ void InterDexReshuffleImpl::compute_plan() {
       m_first_dex_index, m_movable_classes, m_class_dex_indices, m_class_refs,
       m_mutable_dexen, m_mutable_dexen_strings, m_untouched_dexes,
       m_class_to_merging_info, m_num_field_defs, m_mergeability_aware,
-      m_config.m_deduped_weight, m_config.m_other_weight);
+      m_config.deduped_weight, m_config.other_weight);
   size_t batches{0};
   size_t total_moves{0};
   size_t max_move_gains{0};
@@ -364,7 +364,7 @@ bool InterDexReshuffleImpl::compute_dex_removal_plan() {
                        m_class_refs, m_mutable_dexen, m_mutable_dexen_strings,
                        m_untouched_dexes, m_class_to_merging_info,
                        m_num_field_defs, m_mergeability_aware,
-                       m_config.m_deduped_weight, m_config.m_other_weight);
+                       m_config.deduped_weight, m_config.other_weight);
   size_t max_move_gains{0};
 
   size_t max_batch = movable_classes.size();
