@@ -295,7 +295,7 @@ class WritesAnalyzer {
     case OPCODE_NEW_INSTANCE:
       always_assert(!invoked_ctors.empty());
       for (auto method : invoked_ctors) {
-        always_assert(method->get_class() == insn->get_type());
+        always_assert(type::is_subclass(method->get_class(), insn->get_type()));
         if (may_capture(active, method)) {
           return true;
         }
