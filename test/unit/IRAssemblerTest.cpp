@@ -809,14 +809,14 @@ TEST_F(IRAssemblerTest, arrayDataRoundTrip) {
         encode_fill_array_data_payload_from_string<uint16_t>(elements);
     // SHOW and s-expr will use slightly different format, so that the latter
     // will be idiomatic. Just verify the elements are encoded the right way.
-    EXPECT_STREQ(SHOW(op_data),
+    EXPECT_STREQ(SHOW(&*op_data),
                  "fill-array-data-payload { [2 x 2] { 3e7, a } }");
   }
   {
     std::vector<std::string> elements{"3e7", "2", "40000000"};
     auto op_data =
         encode_fill_array_data_payload_from_string<uint32_t>(elements);
-    EXPECT_STREQ(SHOW(op_data),
+    EXPECT_STREQ(SHOW(&*op_data),
                  "fill-array-data-payload { [3 x 4] { 3e7, 2, 40000000 } }");
   }
   std::string expr(R"(
