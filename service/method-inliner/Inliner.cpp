@@ -1545,8 +1545,17 @@ bool MultiMethodInliner::can_inline_init(const DexMethod* init_method) {
                   [&](const auto&) {
                     const auto* finalizable_fields =
                         m_shrinker.get_finalizable_fields();
+                    // We also exclude possibly anonymous classes as those may
+                    // regress the effectiveness of the class-merging passes.
+                    // TODO T184662680: While this is not a correctness issue,
+                    // we should fully support relaxed init methods in
+                    // class-merging.
+                    bool relaxed = m_config.relaxed_init_inline &&
+                                   m_shrinker.min_sdk() >= 21 &&
+                                   !klass::maybe_anonymous_class(
+                                       type_class(init_method->get_class()));
                     return constructor_analysis::can_inline_init(
-                        init_method, finalizable_fields);
+                        init_method, finalizable_fields, relaxed);
                   })
               .first;
 }

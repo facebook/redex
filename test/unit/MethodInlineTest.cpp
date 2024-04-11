@@ -22,6 +22,8 @@
 
 struct MethodInlineTest : public RedexTest {
   MethodInlineTest() {
+    DexMethod::make_method("Ljava/lang/Object;.<init>:()V")
+        ->make_concrete(ACC_CONSTRUCTOR | ACC_PUBLIC, false);
     DexMethod::make_method("Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z")
         ->make_concrete(ACC_PUBLIC, true);
 
@@ -2113,4 +2115,197 @@ TEST_F(MethodInlineTest, max_cost_for_constant_propagation) {
   EXPECT_EQ(inlined.size(), 1);
   EXPECT_EQ(inlined.count(check_method), 0);
   EXPECT_EQ(inlined.count(small_method), 1);
+}
+
+TEST_F(MethodInlineTest, inline_init_not_relaxed) {
+  auto foo_cls = create_a_class("LFoo;");
+  auto bar_cls = create_a_class("LBar;");
+
+  DexMethod* caller =
+      static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
+  caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+
+  DexMethod* init =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:()V"));
+  init->make_concrete(ACC_CONSTRUCTOR | ACC_PUBLIC, /* is_virtual */ false);
+
+  bar_cls->add_method(caller);
+
+  foo_cls->add_method(init);
+
+  const auto& caller_str = R"(
+    (
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1) "LFoo;.<init>:()V")
+      (return-void)
+    )
+  )";
+
+  caller->set_code(assembler::ircode_from_string(caller_str));
+
+  const auto& init_str = R"(
+    (
+      (load-param-object v0)
+      (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (return-void)
+    )
+  )";
+
+  init->set_code(assembler::ircode_from_string(init_str));
+
+  ConcurrentMethodResolver concurrent_method_resolver;
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> candidates;
+  std::unordered_set<DexMethod*> expected_inlined;
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls, bar_cls});
+    stores.push_back(std::move(store));
+  }
+  candidates.insert(init);
+
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.shrinker.compute_pure_methods = false;
+
+  caller->get_code()->build_cfg();
+  init->get_code()->build_cfg();
+
+  {
+    init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+        scope, /* create_init_class_insns */ false);
+    int min_sdk = 0;
+    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                               candidates, std::ref(concurrent_method_resolver),
+                               inliner_config, min_sdk,
+                               intra_dex ? IntraDex : InterDex,
+                               /* true_virtual_callers */ {},
+                               /* inline_for_speed */ nullptr,
+                               /* analyze_and_prune_inits */ true, {});
+    inliner.inline_methods();
+
+    auto inlined = inliner.get_inlined();
+    EXPECT_EQ(inlined.size(), expected_inlined.size());
+    for (auto method : expected_inlined) {
+      EXPECT_EQ(inlined.count(method), 1);
+    }
+  }
+
+  caller->get_code()->clear_cfg();
+  init->get_code()->clear_cfg();
+
+  const auto& caller_expected_str = caller_str;
+  auto caller_actual = caller->get_code();
+  auto caller_expected = assembler::ircode_from_string(caller_expected_str);
+  EXPECT_CODE_EQ(caller_actual, caller_expected.get());
+}
+
+TEST_F(MethodInlineTest, inline_init_relaxed) {
+  auto foo_cls = create_a_class("LFoo;");
+  auto bar_cls = create_a_class("LBar;");
+
+  DexMethod* caller =
+      static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
+  caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+
+  DexMethod* init =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:()V"));
+  init->make_concrete(ACC_CONSTRUCTOR | ACC_PUBLIC, /* is_virtual */ false);
+
+  bar_cls->add_method(caller);
+
+  foo_cls->add_method(init);
+
+  const auto& caller_str = R"(
+    (
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1) "LFoo;.<init>:()V")
+      (return-void)
+    )
+  )";
+
+  caller->set_code(assembler::ircode_from_string(caller_str));
+
+  const auto& init_str = R"(
+    (
+      (load-param-object v0)
+      (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (return-void)
+    )
+  )";
+
+  init->set_code(assembler::ircode_from_string(init_str));
+
+  ConcurrentMethodResolver concurrent_method_resolver;
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> candidates;
+  std::unordered_set<DexMethod*> expected_inlined;
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls, bar_cls});
+    stores.push_back(std::move(store));
+  }
+  candidates.insert(init);
+  expected_inlined.insert(init);
+
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.shrinker.run_copy_prop = true;
+  inliner_config.shrinker.run_local_dce = true;
+  inliner_config.shrinker.compute_pure_methods = false;
+  inliner_config.relaxed_init_inline = true;
+
+  caller->get_code()->build_cfg();
+  init->get_code()->build_cfg();
+
+  {
+    init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+        scope, /* create_init_class_insns */ false);
+    int min_sdk = 21; // the "relaxed init inline" mode only kicks in starting
+                      // with min_sdk 21.
+    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                               candidates, std::ref(concurrent_method_resolver),
+                               inliner_config, min_sdk,
+                               intra_dex ? IntraDex : InterDex,
+                               /* true_virtual_callers */ {},
+                               /* inline_for_speed */ nullptr,
+                               /* analyze_and_prune_inits */ true, {});
+    inliner.inline_methods();
+
+    auto inlined = inliner.get_inlined();
+    EXPECT_EQ(inlined.size(), expected_inlined.size());
+    for (auto method : expected_inlined) {
+      EXPECT_EQ(inlined.count(method), 1);
+    }
+  }
+
+  caller->get_code()->clear_cfg();
+  init->get_code()->clear_cfg();
+
+  const auto& caller_expected_str = R"(
+    (
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1) "Ljava/lang/Object;.<init>:()V")
+      (return-void)
+    )
+  )";
+  auto caller_actual = caller->get_code();
+  remove_position(caller_actual);
+  auto caller_expected = assembler::ircode_from_string(caller_expected_str);
+  EXPECT_CODE_EQ(caller_actual, caller_expected.get());
 }

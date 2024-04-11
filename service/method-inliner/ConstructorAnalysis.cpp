@@ -97,10 +97,13 @@ const IRInstruction* get_first_load_param(const cfg::ControlFlowGraph& cfg) {
 
 class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
  public:
-  Analyzer(const cfg::ControlFlowGraph& cfg, const DexType* declaring_type)
+  Analyzer(const cfg::ControlFlowGraph& cfg,
+           const DexType* declaring_type,
+           bool relaxed)
       : BaseIRAnalyzer(cfg),
         m_declaring_type(declaring_type),
-        m_first_load_param(get_first_load_param(cfg)) {
+        m_first_load_param(get_first_load_param(cfg)),
+        m_relaxed(relaxed) {
     // We need to check superclass chain because dex spec allows calling
     // constructor on superclass of superclass
     // https://cs.android.com/android/platform/superproject/main/+/main:art/runtime/verifier/method_verifier.cc;l=2940
@@ -184,7 +187,7 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
           if (!first_param.get_constant() || *first_param.get_constant()) {
             // We've encountered a call to another constructor on a value
             // that might be `this`
-            if (m_super_types.count(method_class) ||
+            if ((!m_relaxed && m_super_types.count(method_class)) ||
                 !first_param.get_constant()) {
               current_state->set_uninlinable(BoolDomain(true));
             } else {
@@ -208,6 +211,7 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
   const DexType* m_declaring_type;
   std::unordered_set<DexType*> m_super_types;
   const IRInstruction* m_first_load_param;
+  bool m_relaxed;
 };
 } // namespace
 
@@ -217,7 +221,8 @@ namespace constructor_analysis {
 
 bool can_inline_init(
     const DexMethod* init_method,
-    const std::unordered_set<const DexField*>* finalizable_fields) {
+    const std::unordered_set<const DexField*>* finalizable_fields,
+    bool relaxed) {
   always_assert(method::is_init(init_method));
   auto code = init_method->get_code();
   if (!code) {
@@ -226,7 +231,7 @@ bool can_inline_init(
   always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   DexType* declaring_type = init_method->get_class();
-  Analyzer analyzer(cfg, declaring_type);
+  Analyzer analyzer(cfg, declaring_type, relaxed);
   for (const auto block : cfg.blocks()) {
     const auto& env = analyzer.get_exit_state_at(block);
     if (env.is_bottom()) {

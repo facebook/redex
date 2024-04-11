@@ -10,6 +10,7 @@
 void InlinerConfig::bind_config() {
   bind("delete_non_virtuals", delete_non_virtuals, delete_non_virtuals);
   bind("true_virtual_inline", true_virtual_inline, true_virtual_inline);
+  bind("relaxed_init_inline", relaxed_init_inline, relaxed_init_inline);
   bind("intermediate_shrinking", intermediate_shrinking,
        intermediate_shrinking);
   bind("enforce_method_size_limit", enforce_method_size_limit,

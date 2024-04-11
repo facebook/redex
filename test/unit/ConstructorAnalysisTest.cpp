@@ -150,3 +150,12 @@ TEST_F(ConstructorAnalysisTest,
   EXPECT_FALSE(constructor_analysis::can_inline_inits_in_same_class(
       foo_init2, foo_init1, callsite_insns[1]));
 }
+
+TEST_F(ConstructorAnalysisTest, can_inline_init_supertype_relaxed) {
+  auto foo_cls = create_a_class("Lfoo;");
+  auto foo_init1 = create_an_init_method(
+      foo_cls, DexMethod::make_method("Ljava/lang/Object;.<init>:()V"), 0, {});
+
+  EXPECT_FALSE(constructor_analysis::can_inline_init(
+      foo_init1, /* finalizable_fields */ nullptr, /* relaxed */ true));
+}

@@ -135,6 +135,8 @@ class Shrinker {
     return m_init_classes_with_side_effects;
   }
 
+  int min_sdk() const { return m_min_sdk; }
+
  private:
   ShrinkerForest m_forest;
   const XStoreRefs m_xstores;
