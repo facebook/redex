@@ -439,6 +439,7 @@ libopt_la_SOURCES = \
 	opt/optimize_enums/OptimizeEnums.cpp \
 	opt/optimize_enums/OptimizeEnumsUnmap.cpp \
 	opt/original_name/OriginalNamePass.cpp \
+	opt/package-private-preprocessor/PackagePrivatePreprocessor.cpp \
 	opt/partial-application/PartialApplication.cpp \
 	opt/peephole/Peephole.cpp \
 	opt/peephole/RedundantCheckCastRemover.cpp \

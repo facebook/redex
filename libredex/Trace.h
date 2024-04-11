@@ -116,6 +116,7 @@ class DexType;
   TM(PGR)               \
   TM(PM)                \
   TM(POST_LOWERING)     \
+  TM(PPP)               \
   TM(PTA)               \
   TM(PURITY)            \
   TM(QUICK)             \
