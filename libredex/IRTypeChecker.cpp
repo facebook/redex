@@ -918,6 +918,7 @@ IRTypeChecker::IRTypeChecker(DexMethod* dex_method,
       m_complete(false),
       m_verify_moves(false),
       m_check_no_overwrite_this(false),
+      m_relaxed_init_check(false),
       m_good(true),
       m_what("OK") {}
 
