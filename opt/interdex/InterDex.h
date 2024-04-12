@@ -148,7 +148,6 @@ class InterDex {
 
  private:
   void run_in_force_single_dex_mode();
-  bool should_skip_class_due_to_dynamically_dead(DexClass* clazz) const;
   bool should_skip_class_due_to_plugin(DexClass* clazz) const;
 
   struct EmitResult {
@@ -161,14 +160,14 @@ class InterDex {
     bool primary_or_betamap_ordered;
   };
 
-  EmitResult emit_class(EmittingState& emitting_state,
-                        DexInfo& dex_info,
-                        DexClass* clazz,
-                        bool check_if_skip,
-                        bool perf_sensitive,
-                        DexClass** canary_cls,
-                        std::optional<FlushOutDexResult>* opt_fodr = nullptr,
-                        bool skip_dynamically_dead = false) const;
+  EmitResult emit_class(
+      EmittingState& emitting_state,
+      DexInfo& dex_info,
+      DexClass* clazz,
+      bool check_if_skip,
+      bool perf_sensitive,
+      DexClass** canary_cls,
+      std::optional<FlushOutDexResult>* opt_fodr = nullptr) const;
   void emit_primary_dex(
       const DexClasses& primary_dex,
       const std::vector<DexType*>& interdex_order,
@@ -260,7 +259,6 @@ class InterDex {
 
   ClassReferencesCache& m_class_references_cache;
 
-  std::vector<DexClass*> m_excluded_dead_classes;
   bool m_exclude_baseline_profile_classes;
   BaselineProfileConfig m_baseline_profile_config;
   std::optional<std::unordered_set<DexType*>> m_baseline_profile_classes;

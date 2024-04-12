@@ -337,13 +337,6 @@ void InterDexPass::run_pass(DexStoresVector& stores,
                             PassManager& mgr) {
   Scope original_scope = build_class_scope(stores);
 
-  size_t orig_dynamically_dead_num = 0;
-  for (const auto& cls : original_scope) {
-    if (cls->is_dynamically_dead()) {
-      orig_dynamically_dead_num++;
-    }
-  }
-
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       original_scope, conf.create_init_class_insns());
   XStoreRefs xstore_refs(stores);
@@ -367,15 +360,6 @@ void InterDexPass::run_pass(DexStoresVector& stores,
     if (store.is_root_store()) {
       run_pass(original_scope, xstore_refs, init_classes_with_side_effects,
                stores, store.get_dexen(), plugins, conf, mgr, refs_info, cache);
-      size_t dynamically_dead_num{0};
-      Scope new_scope = build_class_scope(stores);
-      for (const auto& cls : new_scope) {
-        if (cls->is_dynamically_dead()) {
-          dynamically_dead_num++;
-        }
-      }
-      mgr.set_metric("excluded_dead_classe_due_to_perf",
-                     orig_dynamically_dead_num - dynamically_dead_num);
     } else if (!store.is_generated()) {
       parallel_stores.push_back(&store);
     }

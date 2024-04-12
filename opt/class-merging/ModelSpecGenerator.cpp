@@ -130,8 +130,7 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
   for (const auto* cls : scope) {
     auto cur_type = cls->get_type();
     if (is_interface(cls) || is_abstract(cls) || cls->rstate.is_generated() ||
-        cls->get_clinit() || throwable.count(cur_type) ||
-        cls->is_dynamically_dead()) {
+        cls->get_clinit() || throwable.count(cur_type)) {
       continue;
     }
     bool is_anonymous_class = klass::maybe_anonymous_class(cls);

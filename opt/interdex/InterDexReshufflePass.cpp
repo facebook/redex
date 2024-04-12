@@ -51,25 +51,6 @@ void InterDexReshufflePass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  std::set<size_t> untouched_dexes;
-  for (size_t dex_index = 1; dex_index < root_dexen.size(); dex_index++) {
-    auto& dex = root_dexen.at(dex_index);
-    bool should_be_touched = false;
-    for (auto cls : dex) {
-      if (is_canary(cls)) {
-        continue;
-      }
-      if (!cls->is_dynamically_dead()) {
-        should_be_touched = true;
-        break;
-      }
-    }
-    if (!should_be_touched) {
-      untouched_dexes.emplace(dex_index);
-      TRACE(IDEXR, 1, "**dex %zu should not be touched\n", dex_index);
-    }
-  }
-
   auto has_IDCM_pass = mgr.find_pass("IntraDexClassMergingPass");
   // The mergeability_aware reshuffle algorithm is only enabled when 1) there
   // will be a IDCM pass; 2) m_allow_mergeability_aware is set true; and 3) This
@@ -83,14 +64,13 @@ void InterDexReshufflePass::run_pass(DexStoresVector& stores,
         original_scope, mgr, conf, stores);
 
     InterDexReshuffleImpl impl(conf, mgr, m_config, original_scope, root_dexen,
-                               untouched_dexes, merging_model);
+                               merging_model);
     impl.compute_plan();
     impl.apply_plan();
   } else {
     TRACE(PM, 1, "Run regular InterDexReshuffle");
     mgr.incr_metric("Mergeability_aware", 0);
-    InterDexReshuffleImpl impl(conf, mgr, m_config, original_scope, root_dexen,
-                               untouched_dexes);
+    InterDexReshuffleImpl impl(conf, mgr, m_config, original_scope, root_dexen);
     impl.compute_plan();
     impl.apply_plan();
   }
