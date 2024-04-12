@@ -48,7 +48,6 @@
 #include "ApiLevelChecker.h"
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
-#include "Dominators.h"
 #include "ExpandableMethodParams.h"
 #include "IRInstruction.h"
 #include "Inliner.h"
@@ -1352,10 +1351,6 @@ class RootMethodReducer {
       used_insns.insert(use.insn);
     }
 
-    auto doms = dominators::SimpleFastDominators<cfg::GraphInterface>(cfg);
-    cfg::Block* dom = nullptr;
-    auto refine_dom = [&](auto* b) { dom = dom ? doms.intersect(dom, b) : b; };
-
     cfg::CFGMutation mutation(cfg);
     auto ii = InstructionIterable(cfg);
     auto new_instance_insn_it = ii.end();
@@ -1371,7 +1366,6 @@ class RootMethodReducer {
         }
         continue;
       }
-      refine_dom(it.block());
       if (opcode::is_move_object(opcode)) {
         auto new_insn = (new IRInstruction(OPCODE_MOVE))
                             ->set_src(0, get_created_reg(insn->src(0)))
@@ -1446,16 +1440,16 @@ class RootMethodReducer {
     auto new_instance_move_result_it = cfg.move_result_of(new_instance_insn_it);
     always_assert(!new_instance_move_result_it.is_end());
 
-    auto insert_inits_before = [&](const auto& it, bool created) {
-      std::vector<IRInstruction*> inits;
-      inits.reserve(ordered_fields.size() + created_regs.size());
+    auto get_init_insns = [&](bool created) {
+      std::vector<IRInstruction*> insns;
+      insns.reserve(ordered_fields.size() + created_regs.size());
       for (auto field : ordered_fields) {
         auto wide = type::is_wide_type(field->get_type());
         auto opcode = wide ? OPCODE_CONST_WIDE : OPCODE_CONST;
         auto reg = field_regs.at(field);
         auto new_insn =
             (new IRInstruction(opcode))->set_literal(0)->set_dest(reg);
-        inits.push_back(new_insn);
+        insns.push_back(new_insn);
       }
       std::vector<reg_t> ordered_created_regs;
       ordered_created_regs.reserve(created_regs.size());
@@ -1470,23 +1464,20 @@ class RootMethodReducer {
                 ->set_literal(created &&
                               reg == new_instance_move_result_it->insn->dest())
                 ->set_dest(created_reg);
-        inits.push_back(new_insn);
+        insns.push_back(new_insn);
       }
-      mutation.insert_before(it, inits);
+      return insns;
     };
-    insert_inits_before(new_instance_insn_it, /* created */ true);
+    mutation.insert_before(new_instance_insn_it,
+                           get_init_insns(/* created */ true));
 
-    refine_dom(new_instance_insn_it.block());
-    always_assert(dom);
-    if (dom != new_instance_insn_it.block()) {
-      auto it = dom->to_cfg_instruction_iterator(
-          dom->get_first_non_param_loading_insn());
-      if (dom->starts_with_move_result() || dom->starts_with_move_exception()) {
-        it++;
-      }
-      insert_inits_before(it, /* created */ false);
-    }
     mutation.flush();
+
+    auto entry_block = cfg.entry_block();
+    auto entry_it = entry_block->to_cfg_instruction_iterator(
+        entry_block->get_first_non_param_loading_insn());
+    cfg.insert_before(entry_it, get_init_insns(/* created */ false));
+
     // simplify to prune now unreachable code, e.g. from removed exception
     // handlers
     cfg.simplify();

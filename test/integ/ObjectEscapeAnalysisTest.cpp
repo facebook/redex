@@ -375,6 +375,31 @@ TEST_F(ObjectEscapeAnalysisTest, optionalReduceToBC) {
   ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
 }
 
+TEST_F(ObjectEscapeAnalysisTest, optionalLoopyReduceTo42) {
+  run();
+
+  auto actual = get_s_expr(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest;.optionalLoopyReduceTo42:()I");
+  auto expected = assembler::ircode_from_string(R"(
+   (
+      (const v11 0)
+      (const v0 0)
+      (:L0)
+      (if-eqz v0 :L2)
+      (const v2 2)
+      (if-ne v0 v2 :L1)
+      (return v11)
+      (:L1)
+      (const v11 42)
+      (:L2)
+      (add-int/lit v0 v0 1)
+      (goto :L0)
+    )
+)");
+  ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
+}
+
 TEST_F(ObjectEscapeAnalysisTest, objectIsNotNull) {
   run();
 

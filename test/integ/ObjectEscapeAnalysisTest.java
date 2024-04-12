@@ -251,6 +251,20 @@ public class ObjectEscapeAnalysisTest {
     return j instanceof Object;
   }
 
+  public static int optionalLoopyReduceTo42() {
+    I i = null;
+    int c = 0;
+    while (true) {
+      if (c != 0) {
+        if (c == 2) {
+          return i.getX();
+        }
+        i = I.allocator(42);
+      }
+      c++;
+    }
+  }
+
   public static boolean objectIsNotNull() {
     I i = I.allocator(42);
     return i == null;
