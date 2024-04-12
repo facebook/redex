@@ -17,6 +17,8 @@
 #include "ConstantPropagationAnalysis.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "Lazy.h"
+#include "LiveRange.h"
 #include "Resolver.h"
 #include "StlUtil.h"
 #include "Timer.h"
@@ -321,8 +323,39 @@ std::unordered_set<const DexField*> get_definitely_assigned_ifields(
             })
         .first;
   };
+  ConcurrentSet<const DexType*> classes_with_relaxed_invoke_init;
+  walk::code(scope, [&](DexMethod*, IRCode& code) {
+    auto ii = InstructionIterable(code.cfg());
+    if (std::none_of(ii.begin(), ii.end(), [](auto& mie) {
+          return opcode::is_new_instance(mie.insn->opcode());
+        })) {
+      return;
+    }
+    live_range::MoveAwareChains chains(
+        code.cfg(), /* ignore_unreachable */ false,
+        [&](auto* insn) { return opcode::is_new_instance(insn->opcode()); });
+    for (auto& [def, uses] : chains.get_def_use_chains()) {
+      always_assert(opcode::is_new_instance(def->opcode()));
+      for (auto& use : uses) {
+        if (opcode::is_invoke_direct(use.insn->opcode()) &&
+            method::is_init(use.insn->get_method())) {
+          auto resolved =
+              resolve_method(use.insn->get_method(), MethodSearch::Direct);
+          if (resolved == nullptr || resolved->get_class() != def->get_type()) {
+            classes_with_relaxed_invoke_init.insert(def->get_type());
+          }
+        }
+      }
+    }
+  });
   ConcurrentSet<const DexField*> res;
   walk::parallel::classes(scope, [&](DexClass* cls) {
+    if (classes_with_relaxed_invoke_init.count(cls->get_type())) {
+      // All constructors, if any, of this class may be skipped.
+      // TODO: Analyze all new-instance occurrences to see if the fields still
+      // get initialized before being used.
+      return;
+    }
     const auto ctors = cls->get_ctors();
     if (ctors.empty()) {
       // Actually, without a constructor, all fields *are* definitely assigned.
