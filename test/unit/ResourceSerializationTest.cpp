@@ -219,8 +219,7 @@ struct ParsedAaptOutput {
       for (auto& entry_pair : config_pair.second) {
         auto& e = entry_pair.second;
         std::cerr << "    0x" << std::hex << entry_pair.first << " (" << e.name
-                  << "): "
-                  << "t=0x" << unsigned(e.value.dataType) << " d=0x"
+                  << "): " << "t=0x" << unsigned(e.value.dataType) << " d=0x"
                   << e.value.data << std::dec << std::endl;
       }
     }

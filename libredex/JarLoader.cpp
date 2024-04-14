@@ -977,7 +977,7 @@ bool load_jar_file(const DexLocation* location,
   return true;
 }
 
-//#define LOCAL_MAIN
+// #define LOCAL_MAIN
 #ifdef LOCAL_MAIN
 int main(int argc, char* argv[]) {
   if (argc < 2) {

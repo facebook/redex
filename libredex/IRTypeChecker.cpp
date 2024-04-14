@@ -1402,9 +1402,9 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
         (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types->size();
     if (insn->srcs_size() != expected_args) {
       std::ostringstream out;
-      out << SHOW(insn) << ": argument count mismatch; "
-          << "expected " << expected_args << ", "
-          << "but found " << insn->srcs_size() << " instead";
+      out << SHOW(insn) << ": argument count mismatch; " << "expected "
+          << expected_args << ", " << "but found " << insn->srcs_size()
+          << " instead";
       throw TypeCheckingException(out.str());
     }
     size_t src_idx{0};
