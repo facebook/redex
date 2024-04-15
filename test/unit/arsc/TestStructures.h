@@ -26,7 +26,7 @@ PACKED(struct EntryAndValue {
 });
 
 // For testing simplicity, a map that has two items in it.
-PACKED(struct MapEntryAndValues {
+struct MapEntryAndValues {
   android::ResTable_map_entry entry{};
   android::ResTable_map item0{};
   android::ResTable_map item1{};
@@ -39,7 +39,7 @@ PACKED(struct MapEntryAndValues {
     item0.value.size = sizeof(android::Res_value);
     item1.value.size = sizeof(android::Res_value);
   }
-});
+};
 
 // Sample data for building arsc test cases
 extern EntryAndValue e0;
