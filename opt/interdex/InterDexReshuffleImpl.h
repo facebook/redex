@@ -264,8 +264,9 @@ class MoveGains {
       merging_type = m_class_to_merging_info.at(cls).merging_type;
     } else {
       // If cls does not belong to any merging type, then use the original
-      // formula to compute move gain.
-      return compute_move_gain(cls, target_index, for_removal);
+      // formula to compute move gain and multiply it by m_other_weight for
+      // non-dedupable references.
+      return m_other_weight * compute_move_gain(cls, target_index, for_removal);
     }
     gain_t gain = 0;
     always_assert(m_class_dex_indices.count(cls));
