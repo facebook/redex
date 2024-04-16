@@ -101,6 +101,13 @@ struct ConfigFiles {
     int64_t last_modified_count{1}; // number of times that last modified time
                                     // fall into acceptable range. Default value
                                     // 1 is for backward compatibility.
+    // The number of seconds since last
+    // time the file of this class was modified.
+    // 0 is for backward compatibility, meaning data not available.
+    // This will be passed in by the data pipeline, the value is calculated by
+    // timestamp_of_datapipe_ds - last_modified which is deterministic at given
+    // ds
+    int64_t seconds_since_last_modified{0};
   };
 
   const std::unordered_map<std::string, DeadClassLoadCounts>&

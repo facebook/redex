@@ -356,10 +356,11 @@ void ConfigFiles::build_dead_class_and_live_class_split_lists() {
         DeadClassLoadCounts load_counts;
         StringTabSplitter splitter(line);
         std::string_view classname = splitter.get();
-        const uint32_t k_num_remaining_columns = 4;
+        const uint32_t k_num_remaining_columns = 5;
         std::array<int64_t*, k_num_remaining_columns> columns = {
             &load_counts.sampled, &load_counts.unsampled,
-            &load_counts.beta_unsampled, &load_counts.last_modified_count};
+            &load_counts.beta_unsampled, &load_counts.last_modified_count,
+            &load_counts.seconds_since_last_modified};
         for (uint32_t i = 0; splitter.next() && i < k_num_remaining_columns;
              i++) {
           from_chars(splitter.get(), columns[i]);
