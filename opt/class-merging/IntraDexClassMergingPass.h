@@ -28,7 +28,7 @@ class IntraDexClassMergingPass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
-        {DexLimitsObeyed, Establishes},
+        {DexLimitsObeyed, Preserves},
         {NoResolvablePureRefs, Preserves},
         {InitialRenameClass, Preserves},
     };

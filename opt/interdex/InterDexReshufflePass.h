@@ -89,14 +89,30 @@ class InterDexReshufflePass : public Pass {
          m_config.max_batch_size,
          "How many class to move per batch. More might yield better results, "
          "but might take longer.");
+    bind("other_weight",
+         m_config.other_weight,
+         m_config.other_weight,
+         "Weight for non-deduped method in mergeability-aware reshuffle cost "
+         "function.");
+    bind("deduped_weight",
+         m_config.deduped_weight,
+         m_config.deduped_weight,
+         "Weight for deduped method in mergeability-aware reshuffle cost "
+         "function.");
     bind("exclude_below20pct_coldstart_classes",
          false,
          m_config.exclude_below20pct_coldstart_classes,
          "Whether to exclude coldstart classes in between 1pctColdStart and "
          "20pctColdStart marker"
          "from the reshuffle.");
+    bind("allow_mergeability_aware", true, m_allow_mergeability_aware);
   }
 
  private:
   ReshuffleConfig m_config;
+
+  // Which iteration of `run_pass`.
+  size_t m_run{0};
+
+  bool m_allow_mergeability_aware;
 };
