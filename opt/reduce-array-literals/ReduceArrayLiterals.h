@@ -33,6 +33,9 @@ class ReduceArrayLiterals {
     size_t remaining_buggy_arrays{0};
     size_t remaining_buggy_array_elements{0};
 
+    size_t fill_array_datas{0};
+    size_t fill_array_data_elements{0};
+
     Stats& operator+=(const Stats&);
   };
 
@@ -51,6 +54,14 @@ class ReduceArrayLiterals {
  private:
   void patch_new_array(const IRInstruction* new_array_insn,
                        const std::vector<const IRInstruction*>& aput_insns);
+  template <typename T>
+  std::unique_ptr<DexOpcodeData> get_data(
+      const std::vector<const IRInstruction*>& aput_insns);
+  std::unique_ptr<DexOpcodeData> get_data(
+      DexType* component_type,
+      const std::vector<const IRInstruction*>& aput_insns);
+  void patch_new_array(const std::vector<const IRInstruction*>& aput_insns,
+                       std::unique_ptr<DexOpcodeData> data);
   size_t patch_new_array_chunk(
       DexType* type,
       size_t chunk_start,
