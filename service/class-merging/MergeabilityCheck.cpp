@@ -74,6 +74,7 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
   bool has_type_tag = m_spec.has_type_tag();
   std::vector<std::pair<IRInstruction*, const DexType*>>
       const_classes_to_verify;
+  std::unordered_set<const IRInstruction*> const_classes_to_verify_set;
   auto& cfg = code->cfg();
   for (const auto& mie : InstructionIterable(cfg)) {
     auto insn = mie.insn;
@@ -147,6 +148,7 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
       } else {
         // To verify the usages
         const_classes_to_verify.emplace_back(insn, type);
+        const_classes_to_verify_set.insert(insn);
       }
     }
   }
@@ -155,7 +157,9 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
     return non_mergeables;
   }
 
-  live_range::MoveAwareChains chains(cfg);
+  live_range::MoveAwareChains chains(
+      cfg, /* ignore_unreachable */ false,
+      [&](auto* insn) { return const_classes_to_verify_set.count(insn); });
   live_range::DefUseChains du_chains = chains.get_def_use_chains();
 
   for (const auto& pair : const_classes_to_verify) {
