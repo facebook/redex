@@ -415,6 +415,7 @@ libopt_la_SOURCES = \
 	opt/interdex/InterDexPass.cpp \
 	opt/interdex/InterDexReshuffleImpl.cpp \
 	opt/interdex/InterDexReshufflePass.cpp \
+	opt/interdex/MAInterDexReshufflePass.cpp \
 	opt/interdex/SortRemainingClassesPass.cpp \
 	opt/kotlin-lambda/RewriteKotlinSingletonInstance.cpp \
 	opt/kotlin-lambda/KotlinObjectInliner.cpp \

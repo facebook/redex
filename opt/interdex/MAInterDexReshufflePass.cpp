@@ -5,13 +5,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "InterDexReshufflePass.h"
+#include "MAInterDexReshufflePass.h"
+#include "ClassMerging.h"
 #include "ConfigFiles.h"
 #include "DedupStrings.h"
 #include "DexClass.h"
 #include "DexStructure.h"
 #include "DexUtil.h"
 #include "InterDexPass.h"
+#include "ModelSpecGenerator.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "StlUtil.h"
@@ -27,19 +29,27 @@ const interdex::InterDexPass* get_interdex_pass(const PassManager& mgr) {
 }
 } // namespace
 
-void InterDexReshufflePass::run_pass(DexStoresVector& stores,
-                                     ConfigFiles& conf,
-                                     PassManager& mgr) {
+void MergeabilityAwareInterDexReshufflePass::run_pass(DexStoresVector& stores,
+                                                      ConfigFiles& conf,
+                                                      PassManager& mgr) {
   const auto* interdex_pass = get_interdex_pass(mgr);
   if (!interdex_pass->minimize_cross_dex_refs()) {
     mgr.incr_metric("no minimize_cross_dex_refs", 1);
-    TRACE(
-        IDEXR, 1,
-        "InterDexReshufflePass not run because InterDexPass is not configured "
-        "for minimize_cross_dex_refs.");
+    TRACE(IDEXR, 1,
+          "MergeabilityAwareInterDexReshufflePass not run because InterDexPass "
+          "is not configured "
+          "for minimize_cross_dex_refs.");
     return;
   }
 
+  auto has_IDCM_pass = mgr.find_pass("IntraDexClassMergingPass");
+  if (!has_IDCM_pass) {
+    mgr.incr_metric("no IntraDexClassMergingPass", 1);
+    TRACE(IDEXR, 1,
+          "MergeabilityAwareInterDexReshufflePass not run because there is no "
+          "IntraDexClassMergingPass.");
+    return;
+  }
   auto original_scope = build_class_scope(stores);
 
   auto& root_store = stores.at(0);
@@ -49,7 +59,11 @@ void InterDexReshufflePass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  InterDexReshuffleImpl impl(conf, mgr, m_config, original_scope, root_dexen);
+  class_merging::Model merging_model =
+      class_merging::construct_global_model(original_scope, mgr, conf, stores);
+
+  InterDexReshuffleImpl impl(conf, mgr, m_config, original_scope, root_dexen,
+                             merging_model);
   impl.compute_plan();
   impl.apply_plan();
 
@@ -65,4 +79,4 @@ void InterDexReshufflePass::run_pass(DexStoresVector& stores,
   }
 }
 
-static InterDexReshufflePass s_pass;
+static MergeabilityAwareInterDexReshufflePass s_pass;

@@ -12,45 +12,22 @@
 #include "InterDexReshuffleImpl.h"
 #include "Pass.h"
 
-/* This pass impls Local Search Algotithm to minize cross-dex refs by
-reshuffling classes among dex files. The algorithm is descripted as follows:
-Inputs: V = classes
-        D = dexes
-        num_batches
-
-determine an initial allocation of classes v in V into dexes d in D;
-
-for batch_idx in 1, ..., num_batches:
-    # compute move gains
-    for v in V:
-        for d in D:
-            gain[v, d] <- compute_move_gain(v, d)
-    S <- sorted move pairs (v, d) in descending order of gains;
-
-    # move classes
-    for (v,d) in S:
-        # compute new size of dex d after moving v to d
-        new_size <- recompute_gains(d, v)
-        if gain[v, d] > 0:
-            if new_size is valid:
-                move v to d;
-                update dex size;
-        else:
-            break
-
-    if converged or stopping condition is met:
-        break
+/* Similar to InterDexReshufflePass, this pass impls Local Search Algotithm to
+ * minize cross-dex refs by reshuffling classes among dex files. Different from
+ * InterDexReshufflePass, when reshuffling classes, this pass considers the
+ * classes mergeability. That is, if two classes may be merged in later IDCM,
+ * they have the high possibility to moved to the same dex.
  */
-class InterDexReshufflePass : public Pass {
+class MergeabilityAwareInterDexReshufflePass : public Pass {
  public:
-  explicit InterDexReshufflePass() : Pass("InterDexReshufflePass") {}
+  explicit MergeabilityAwareInterDexReshufflePass()
+      : Pass("MergeabilityAwareInterDexReshufflePass") {}
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
-        {DexLimitsObeyed, Preserves},
         {NoResolvablePureRefs, Preserves},
         {InitialRenameClass, Preserves},
     };
@@ -89,6 +66,16 @@ class InterDexReshufflePass : public Pass {
          m_config.max_batch_size,
          "How many class to move per batch. More might yield better results, "
          "but might take longer.");
+    bind("other_weight",
+         m_config.other_weight,
+         m_config.other_weight,
+         "Weight for non-deduped method in mergeability-aware reshuffle cost "
+         "function.");
+    bind("deduped_weight",
+         m_config.deduped_weight,
+         m_config.deduped_weight,
+         "Weight for deduped method in mergeability-aware reshuffle cost "
+         "function.");
     bind("exclude_below20pct_coldstart_classes",
          false,
          m_config.exclude_below20pct_coldstart_classes,
