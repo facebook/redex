@@ -1,0 +1,29 @@
+name: base-build-setup
+inputs:
+  save_boost_cache:
+    required: false
+    default: false
+  setup_toolchain_extra:
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+  - name: Cache boost
+    if: inputs.save_boost_cache == 'true'
+    uses: actions/cache@v3.3.2
+    with:
+      key: boost-1-71-0-v5
+      path: /tmp/toolchain/dl_cache/boost_cache
+  - name: Cache protobuf
+    if: inputs.save_boost_cache == 'true'
+    uses: actions/cache@v3.3.2
+    with:
+      key: protobuf3-v3
+      path: /tmp/toolchain/dl_cache/protobuf
+  - name: Setup
+    run: sudo -E ./setup_oss_toolchain.sh ${{ inputs.setup_toolchain_extra }}
+    working-directory: repo
+    env:
+      TOOLCHAIN_TMP: /tmp/toolchain
+    shell: bash
