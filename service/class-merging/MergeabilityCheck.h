@@ -40,6 +40,7 @@ class MergeabilityChecker {
   const RefChecker& m_ref_checker;
   const TypeSet& m_generated;
   const std::unordered_set<DexType*>& m_const_class_safe_types;
+  bool m_track_use_of_reflection;
 
   void exclude_unsupported_cls_property(TypeSet& non_mergeables);
   void exclude_unsupported_bytecode(TypeSet& non_mergeables);

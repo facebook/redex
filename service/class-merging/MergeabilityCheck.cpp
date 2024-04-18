@@ -27,7 +27,8 @@ MergeabilityChecker::MergeabilityChecker(const Scope& scope,
       m_spec(spec),
       m_ref_checker(ref_checker),
       m_generated(generated),
-      m_const_class_safe_types(spec.const_class_safe_types) {}
+      m_const_class_safe_types(spec.const_class_safe_types),
+      m_track_use_of_reflection(spec.mergeability_checks_use_of_const_class) {}
 
 void MergeabilityChecker::exclude_unsupported_cls_property(
     TypeSet& non_mergeables) {
@@ -151,13 +152,29 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
 
     const auto* type = type::get_element_type_if_array(insn->get_type());
     if (m_spec.merging_targets.count(type) > 0) {
-      if (!opcode::is_const_class(insn->opcode()) ||
-          m_const_class_safe_types.empty()) {
-        non_mergeables.insert(type);
+      if (m_track_use_of_reflection) {
+        // Always track the const-class usages.
+        if (!opcode::is_const_class(insn->opcode())) {
+          TRACE(CLMG, 5, "[non mergeable] unsafe opcode @ %s in %s", SHOW(insn),
+                SHOW(method));
+          non_mergeables.insert(type);
+        } else {
+          // To verify the usages
+          const_classes_to_verify.emplace_back(insn, type);
+          const_classes_to_verify_set.insert(insn);
+        }
       } else {
-        // To verify the usages
-        const_classes_to_verify.emplace_back(insn, type);
-        const_classes_to_verify_set.insert(insn);
+        // Old logic that also checks m_const_class_safe_types not being empty.
+        if (!opcode::is_const_class(insn->opcode()) ||
+            m_const_class_safe_types.empty()) {
+          TRACE(CLMG, 5, "[non mergeable] unsafe opcode @ %s in %s", SHOW(insn),
+                SHOW(method));
+          non_mergeables.insert(type);
+        } else {
+          // To verify the usages
+          const_classes_to_verify.emplace_back(insn, type);
+          const_classes_to_verify_set.insert(insn);
+        }
       }
     }
   }

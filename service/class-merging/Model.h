@@ -196,6 +196,8 @@ struct ModelSpec {
   boost::optional<size_t> max_num_dispatch_target{boost::none};
 
   bool use_stable_shape_names{false};
+
+  bool mergeability_checks_use_of_const_class{false};
 };
 
 struct ModelStats {

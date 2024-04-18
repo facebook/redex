@@ -6,6 +6,8 @@
  */
 
 #include "ModelSpecGenerator.h"
+
+#include "LiveRange.h"
 #include "Model.h"
 #include "PassManager.h"
 #include "ReflectionAnalysis.h"
@@ -100,6 +102,9 @@ TypeSet collect_reflected_mergeables(
   }
 
   auto& cfg = code->cfg();
+  live_range::MoveAwareChains chains(cfg);
+  live_range::DefUseChains du_chains = chains.get_def_use_chains();
+
   for (const auto& mie : cfg::InstructionIterable(cfg)) {
     auto insn = mie.insn;
     auto aobj = analysis->get_result_abstract_object(insn);
@@ -109,12 +114,21 @@ TypeSet collect_reflected_mergeables(
       reflected_type = const_cast<DexType*>(
           type::get_element_type_if_array(aobj->get_dex_type()));
     }
-    if (reflected_type != nullptr &&
-        merging_spec->merging_targets.count(reflected_type) > 0) {
-      non_mergeables.insert(reflected_type);
-      TRACE(CLMG, 5, "[reflected mergeable] %s (%s) in %s", SHOW(insn),
-            SHOW(reflected_type), SHOW(method));
+    if (reflected_type == nullptr ||
+        merging_spec->merging_targets.count(reflected_type) == 0) {
+      continue;
     }
+    const auto use_set = du_chains[insn];
+    if (merging_spec->mergeability_checks_use_of_const_class &&
+        use_set.empty()) {
+      TRACE(CLMG, 5, "[reflected mergeable] skipped w/o no use %s in %s",
+            SHOW(insn), SHOW(method));
+      continue;
+    }
+
+    non_mergeables.insert(reflected_type);
+    TRACE(CLMG, 5, "[reflected mergeable] %s (%s) in %s", SHOW(insn),
+          SHOW(reflected_type), SHOW(method));
   }
 
   return non_mergeables;
