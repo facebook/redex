@@ -89,6 +89,24 @@ float estimate_cross_dex_penalty(const InlinedCost* inlined_cost,
   return cross_dex_penalty;
 }
 
+bool is_finalizable(DexType* type) {
+  for (const auto* cls = type_class(type);
+       cls && cls->get_type() != type::java_lang_Object();
+       cls = type_class(cls->get_super_class())) {
+    for (const auto* m : cls->get_vmethods()) {
+      if (m->get_name()->str() != "finalize") {
+        continue;
+      }
+      const auto* p = m->get_proto();
+      if (!p->is_void() || !p->get_args()->empty()) {
+        continue;
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
 } // namespace
 
 MultiMethodInliner::MultiMethodInliner(
@@ -1545,6 +1563,18 @@ bool MultiMethodInliner::can_inline_init(const DexMethod* init_method) {
                   [&](const auto&) {
                     const auto* finalizable_fields =
                         m_shrinker.get_finalizable_fields();
+                    // When configured, we allow for relaxed constructor
+                    // inlining starting with min-sdk 21: starting with that
+                    // version, the Android verifier allows that any inherited
+                    // constructor may be invoked.
+
+                    // However, following JLS 17.4.5. Happens-before Order rules
+                    // (see
+                    // https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html),
+                    // we want to make sure that a happens-before relationship
+                    // is maintained between a proper constructor and a finalize
+                    // method, if any.
+
                     // We also exclude possibly anonymous classes as those may
                     // regress the effectiveness of the class-merging passes.
                     // TODO T184662680: While this is not a correctness issue,
@@ -1553,7 +1583,8 @@ bool MultiMethodInliner::can_inline_init(const DexMethod* init_method) {
                     bool relaxed = m_config.relaxed_init_inline &&
                                    m_shrinker.min_sdk() >= 21 &&
                                    !klass::maybe_anonymous_class(
-                                       type_class(init_method->get_class()));
+                                       type_class(init_method->get_class())) &&
+                                   !is_finalizable(init_method->get_class());
                     return constructor_analysis::can_inline_init(
                         init_method, finalizable_fields, relaxed);
                   })
