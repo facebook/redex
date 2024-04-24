@@ -504,10 +504,9 @@ const std::vector<DexField*> ModelMerger::empty_fields =
     std::vector<DexField*>();
 
 void ModelMerger::update_merger_fields(const MergerType& merger) {
-  auto merger_fields =
-      merger.has_fields()
-          ? create_merger_fields(merger.type, merger.field_map.begin()->second)
-          : empty_fields;
+  auto merger_fields = merger.has_fields()
+                           ? create_merger_fields(merger.type, merger.field_map)
+                           : empty_fields;
   m_merger_fields[merger.type] = merger_fields;
 }
 
