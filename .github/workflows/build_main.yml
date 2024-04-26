@@ -86,12 +86,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4.1.1
     - uses: "./.github/actions/setup-build-and-test-windows"
-    - name: Copy package for github actions
-      run: mkdir artifacts && mv build/Redex*.zip artifacts/
-      shell: bash
     - uses: actions/upload-artifact@v4.0.0
       with:
-        path: ".\\artifacts"
+        name: redex-windows
+        retention-days: 7
+        path: build/Redex*.zip
   build-deb_stable-w-clang-llvm-org_nightly:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
