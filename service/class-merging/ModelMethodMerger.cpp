@@ -590,6 +590,8 @@ void ModelMethodMerger::merge_virtual_methods(
     dispatch_methods.emplace_back(target_cls, dispatch.main_dispatch);
     for (const auto& m : meth_lst) {
       old_to_new_callee[m] = dispatch.main_dispatch;
+      dispatch.main_dispatch->combine_annotations_with(m);
+      dispatch.main_dispatch->rstate.join_with(m->rstate);
     }
     if (m_method_profiles != boost::none) {
       m_stats.m_updated_profile_method +=
