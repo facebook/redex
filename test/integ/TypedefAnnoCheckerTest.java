@@ -299,4 +299,13 @@ void testWrongIntField(@TestIntDef int val) {
   static @TestStringDef String testAssignNullToString() {
     return null;
   }
+
+  static boolean getBoolean() {
+    return true;
+  }
+
+  static @TestIntDef int testConstFolding() {
+    @TestIntDef int val = getBoolean() ? TestIntDef.ONE : TestIntDef.ZERO;
+    return val;
+  }
 }

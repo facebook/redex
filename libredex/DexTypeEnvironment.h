@@ -300,12 +300,13 @@ class DexTypeDomain final
                                 : TypedefAnnotationDomain())) {}
 
   explicit DexTypeDomain(const DexAnnoType* annotation)
-      : ReducedProductAbstractDomain(std::make_tuple(
-            NullnessDomain(),
-            SingletonDexTypeDomain(),
-            SmallSetDexTypeDomain::top(),
-            annotation->m_type ? TypedefAnnotationDomain(annotation->m_type)
-                               : TypedefAnnotationDomain())) {}
+      : ReducedProductAbstractDomain(
+            std::make_tuple(NullnessDomain(),
+                            SingletonDexTypeDomain(),
+                            SmallSetDexTypeDomain::top(),
+                            (annotation && annotation->m_type)
+                                ? TypedefAnnotationDomain(annotation->m_type)
+                                : TypedefAnnotationDomain())) {}
 
  public:
   static void reduce_product(

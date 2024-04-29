@@ -778,6 +778,8 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
       current_state->set_dex_type(insn->dest(), DexTypeDomain::null());
       set_type(current_state, insn->dest(), TypeDomain(IRType::ZERO));
     } else {
+      current_state->set_dex_type(insn->dest(),
+                                  DexTypeDomain::create_for_anno(nullptr));
       set_type(current_state, insn->dest(), TypeDomain(IRType::CONST));
     }
     set_type(current_state, insn->dest(), IntTypeDomain(IntType::BOOLEAN));
