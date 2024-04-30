@@ -7,9 +7,23 @@
 
 #include "DedupBlockValueNumbering.h"
 
+#include "RedexContext.h"
 #include "StlUtil.h"
 
 using namespace DedupBlkValueNumbering;
+
+void next_opcode_or_srcblk(IRList::iterator& block_it, cfg::Block* block) {
+  if (g_redex->instrument_mode) {
+    while (block_it != block->end() && block_it->type != MFLOW_OPCODE &&
+           block_it->type != MFLOW_SOURCE_BLOCK) {
+      ++block_it;
+    }
+  } else {
+    while (block_it != block->end() && block_it->type != MFLOW_OPCODE) {
+      ++block_it;
+    }
+  }
+}
 
 // Return BlockValue hash for the given block.
 const BlockValue* BlockValues::get_block_value(cfg::Block* block) const {
@@ -22,27 +36,39 @@ const BlockValue* BlockValues::get_block_value(cfg::Block* block) const {
   std::unique_ptr<BlockValue> block_value = std::make_unique<BlockValue>();
   auto& regs = block_value->out_regs;
   auto& ordered_operations = block_value->ordered_operations;
-  for (auto& mie : InstructionIterable(block)) {
-    auto operation = get_operation(regs, mie.insn);
-    bool is_ordered = is_ordered_operation(operation);
-    if (is_ordered) {
-      ordered_operations.push_back(operation);
-    } else {
-      always_assert(operation.opcode == OPCODE_NOP || mie.insn->has_dest());
-    }
-    if (mie.insn->has_dest()) {
-      if (is_ordered) {
-        operation.opcode = IOPCODE_OPERATION_RESULT;
-        operation.srcs.clear();
-        operation.operation_index = ordered_operations.size() - 1;
+  auto block_it = block->begin();
+  while (block_it != block->end()) {
+    next_opcode_or_srcblk(block_it, block);
+    if (block_it != block->end()) {
+      if (block_it->type == MFLOW_OPCODE) {
+        auto operation = get_operation(regs, block_it->insn);
+        bool is_ordered = is_ordered_operation(operation);
+        if (is_ordered) {
+          ordered_operations.push_back(operation);
+        } else {
+          always_assert(operation.opcode == OPCODE_NOP ||
+                        block_it->insn->has_dest());
+        }
+        if (block_it->insn->has_dest()) {
+          if (is_ordered) {
+            operation.opcode = IOPCODE_OPERATION_RESULT;
+            operation.srcs.clear();
+            operation.operation_index = ordered_operations.size() - 1;
+          }
+          auto value = opcode::is_a_move(operation.opcode)
+                           ? operation.srcs.at(0)
+                           : get_value_id(operation);
+          regs[block_it->insn->dest()] = value;
+          if (block_it->insn->dest_is_wide()) {
+            regs.erase(block_it->insn->dest() + 1);
+          }
+        }
+      } else if (block_it->type == MFLOW_SOURCE_BLOCK) {
+        IROperation operation;
+        operation.src_blk_id = block_it->src_block->id;
+        ordered_operations.push_back(operation);
       }
-      auto value = opcode::is_a_move(operation.opcode)
-                       ? operation.srcs.at(0)
-                       : get_value_id(operation);
-      regs[mie.insn->dest()] = value;
-      if (mie.insn->dest_is_wide()) {
-        regs.erase(mie.insn->dest() + 1);
-      }
+      block_it++;
     }
   }
   const auto& live_out_vars =

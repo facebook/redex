@@ -45,4 +45,5 @@ class InsertSourceBlocksPass : public Pass {
   bool m_always_inject{true};
 
   friend class SourceBlocksTest;
+  friend class SourceBlocksDedupTest;
 };

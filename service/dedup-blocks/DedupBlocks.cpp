@@ -58,6 +58,7 @@
 #include "RedexContext.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "StlUtil.h"
 #include "Trace.h"
 #include "TypeInference.h"
@@ -68,6 +69,13 @@ namespace {
 constexpr bool kDebugForceInstrumentMode = false;
 
 using hash_t = std::size_t;
+
+bool is_instrument_mode() {
+  if (g_redex->instrument_mode || kDebugForceInstrumentMode) {
+    return true;
+  }
+  return false;
+}
 
 static bool is_branch_or_goto(const cfg::Edge* edge) {
   auto type = edge->type();
@@ -170,12 +178,15 @@ struct BlockSuccHasher {
   }
 };
 
-struct InstructionHasher {
-  hash_t operator()(IRInstruction* insn) const { return insn->hash(); }
+struct MIEHasher {
+  hash_t operator()(MethodItemEntry* mie) const {
+    return mie->type == MFLOW_OPCODE ? mie->insn->hash() : mie->src_block->id;
+  }
 };
-
-struct InstructionEquals {
-  bool operator()(IRInstruction* a, IRInstruction* b) const { return *a == *b; }
+struct MIEEquals {
+  bool operator()(MethodItemEntry* a, MethodItemEntry* b) const {
+    return *a == *b;
+  }
 };
 
 // Choose an iteration order based on block ids for determinism. This returns a
@@ -391,7 +402,8 @@ class DedupBlocksImpl {
     return duplicates;
   }
 
-  static size_t remove_instructions(cfg::Block* block,
+  static size_t remove_instructions(SourceBlock* src_block,
+                                    cfg::Block* block,
                                     const cfg::ControlFlowGraph& cfg) {
     size_t cnt{0};
 
@@ -407,8 +419,12 @@ class DedupBlocksImpl {
         ++cnt;
       } break;
 
+      case MFLOW_SOURCE_BLOCK: {
+        src_block->max(*cur_it->src_block);
+        block->remove_mie(cur_it);
+        ++cnt;
+      } break;
       // Keep.
-      case MFLOW_SOURCE_BLOCK:
       case MFLOW_POSITION:
       case MFLOW_DEBUG:
         break;
@@ -439,10 +455,14 @@ class DedupBlocksImpl {
 
     size_t cnt{0}; // Removed blocks.
 
-    if (g_redex->instrument_mode || kDebugForceInstrumentMode) {
+    if (is_instrument_mode()) {
       for (const BlockSet& group : order) {
         // canon is block with lowest id.
         cfg::Block* canon = *group.begin();
+        SourceBlock* src_block = source_blocks::get_first_source_block(canon);
+        if (src_block == nullptr) {
+          continue;
+        }
 
         for (cfg::Block* block : group) {
           if (block == canon) {
@@ -466,21 +486,15 @@ class DedupBlocksImpl {
           };
           redex_assert(exc_check_fn());
 
-          // Don't remove directly. Just remove everything but source blocks
-          // and dex positions. Then remove all outgoing edges and make a goto
+          // Don't remove directly. Just remove everything but dex positions.
+          // Then remove all outgoing edges and make a goto
           // to the replacement.
           //
-          // This will overcount source blocks, and not deal correctly with
-          // exceptions.
-          //
-          // TODO: Consider splitting all in-edges of the canonical block and
-          //       adding its source blocks there. This will still not deal
-          //       correctly with exception edges, but fix counting.
-
+          // This will not deal correctly with exceptions.
           cfg.delete_edges(block->succs().begin(), block->succs().end());
 
           // Undercounts branch instructions.
-          m_stats.insns_removed += remove_instructions(block, cfg);
+          m_stats.insns_removed += remove_instructions(src_block, block, cfg);
 
           cfg.add_edge(block, canon, cfg::EDGE_GOTO);
 
@@ -512,6 +526,20 @@ class DedupBlocksImpl {
     m_stats.blocks_removed += cnt;
 
     return cnt > 0;
+  }
+
+  void next_opcode_or_srcblk(IRList::reverse_iterator& block_it,
+                             cfg::Block* block) {
+    if (is_instrument_mode()) {
+      while (block_it != block->rend() && block_it->type != MFLOW_OPCODE &&
+             block_it->type != MFLOW_SOURCE_BLOCK) {
+        ++block_it;
+      }
+    } else {
+      while (block_it != block->rend() && block_it->type != MFLOW_OPCODE) {
+        ++block_it;
+      }
+    }
   }
 
   // The algorithm below identifies the best groups of blocks that share the
@@ -641,7 +669,7 @@ class DedupBlocksImpl {
         // We do remember the instructions saved and select the best
         // combination at the end.
         size_t majority = 0;
-        IRInstruction* majority_insn = nullptr;
+        MethodItemEntry* majority_mie = nullptr;
 
         // For each (Block, iterator) - advance the iterator and partition
         // the current set of blocks into two groups:
@@ -657,47 +685,67 @@ class DedupBlocksImpl {
         // @TODO - Instead of only keeping one group and calculate best savings
         // based on just one group, maintain multiple groups at the same time
         // and split/dedup those groups.
-        std::unordered_map<IRInstruction*, CountGroup, InstructionHasher,
-                           InstructionEquals>
-            insn_count;
+        std::unordered_map<MethodItemEntry*, CountGroup, MIEHasher, MIEEquals>
+            mie_count;
 
         for (auto& block_iterator_pair : block_iterator_map) {
           const auto block = block_iterator_pair.first;
           auto& it = block_iterator_pair.second;
 
-          // Skip all non-instructions.
-          while (it != block->rend() && it->type != MFLOW_OPCODE) {
-            ++it;
+          // When instrumenting, do not deduplicate catch handler head blocks.
+          // If the handlers are similar, splitting should make this a minimal
+          // block of `move-exception` + `goto`.
+          if (!dedup_catch_handler_head_block(cfg, block)) {
+            continue;
           }
 
-          if (it != block->rend()) {
-            // Count the instructions and locate the majority
-            auto& count_group = insn_count[it->insn];
-            count_group.count++;
-            count_group.blocks.insert(block);
-            if (count_group.count > majority) {
-              majority = count_group.count;
-              majority_insn = it->insn;
-            }
+          next_opcode_or_srcblk(it, block);
 
-            // Move to next instruction.
-            // IMPORTANT: we should always land on instructions otherwise
-            // you can get subtle errors when converting between different
-            // instruction iterators.
-            do {
-              ++it;
-            } while (it != block->rend() && it->type != MFLOW_OPCODE);
+          if (it == block->rend()) {
+            continue;
           }
+
+          MethodItemEntry* mie;
+          switch (it->type) {
+          case MFLOW_OPCODE: {
+            mie = new MethodItemEntry(it->insn);
+            break;
+          }
+          case MFLOW_SOURCE_BLOCK: {
+            redex_assert(is_instrument_mode());
+            mie = new MethodItemEntry(
+                std::make_unique<SourceBlock>(*it->src_block));
+            break;
+          }
+          default:
+            always_assert_log(false,
+                              "the iterator type should always be either an "
+                              "opcode or source block");
+          }
+          // Count the MIEs and locate the majority
+          auto& count_group = mie_count[mie];
+          count_group.count++;
+          count_group.blocks.insert(block);
+          if (count_group.count > majority) {
+            majority = count_group.count;
+            majority_mie = mie;
+          }
+          // Move to next instruction or source block.
+          // IMPORTANT: in non-instrumentation mode, we should always land on
+          // instructions otherwise you can get subtle errors when converting
+          // between different instruction iterators.
+          ++it;
+          next_opcode_or_srcblk(it, block);
         }
 
         // No group to count or no one group has more than 1 item in common.
         // In either case we are done.
-        if (majority_insn == nullptr || majority <= 1) {
+        if (majority_mie == nullptr || majority <= 1) {
           break;
         }
 
         cur_insn_index++;
-        auto& majority_count_group = insn_count[majority_insn];
+        auto& majority_count_group = mie_count[majority_mie];
 
         // Remove the iterators
         std20::erase_if(block_iterator_map, [&](auto& p) {
@@ -707,12 +755,12 @@ class DedupBlocksImpl {
 
         // Is this the best saving we've seen so far?
         // Note we only want at least block_split_min_opcode_count deep (config)
-        size_t cur_saved_insn =
+        size_t cur_saved_mie =
             cur_insn_index * (majority_count_group.blocks.size() - 1);
-        if (cur_saved_insn >= best_saved_insn &&
+        if (cur_saved_mie >= best_saved_insn &&
             cur_insn_index >= m_config->block_split_min_opcode_count) {
           // Save it
-          best_saved_insn = cur_saved_insn;
+          best_saved_insn = cur_saved_mie;
           best_insn_count = cur_insn_index;
           best_block_its = block_iterator_map;
           best_blocks = std::move(majority_count_group.blocks);
@@ -734,6 +782,39 @@ class DedupBlocksImpl {
     TRACE(DEDUP_BLOCKS, 4, "split_postfix: total split groups = %zu",
           splitGroupMap.size());
     return splitGroupMap;
+  }
+
+  // copy over the last source block of the main block to the commmon block
+  void copy_over_source_block(cfg::Block* block, cfg::Block* split_block) {
+    SourceBlock* last_src_blk = source_blocks::get_last_source_block(block);
+    if (last_src_blk != nullptr) {
+      auto new_sb = std::make_unique<SourceBlock>(*last_src_blk);
+      new_sb->id = SourceBlock::kSyntheticId;
+      new_sb->next = nullptr;
+      auto split_block_it = split_block->begin();
+      if (split_block_it != split_block->end() &&
+          opcode::is_move_result_any(split_block_it->insn->opcode())) {
+        split_block->insert_after(split_block_it, std::move(new_sb));
+      } else {
+        split_block->insert_before(split_block_it, std::move(new_sb));
+      }
+    }
+  }
+
+  // When instrumenting, do not deduplicate catch handler head blocks. If
+  // the handlers are similar, splitting should make this a minimal block
+  // of `move-exception` + `goto`.
+  bool dedup_catch_handler_head_block(cfg::ControlFlowGraph& cfg,
+                                      cfg::Block* block) {
+    if (is_instrument_mode() &&
+        cfg.get_pred_edge_of_type(block, cfg::EdgeType::EDGE_THROW)) {
+      auto first = block->get_first_insn();
+      if (first != block->end() &&
+          opcode::is_move_exception(first->insn->opcode())) {
+        return false;
+      }
+    }
+    return true;
   }
 
   // For each group, split the blocks in the group where the reverse iterator
@@ -764,6 +845,35 @@ class DedupBlocksImpl {
             ir_list::InstructionIterator(std::prev(it.base()), block->end());
         auto fwd_it_end = ir_list::InstructionIterable(*block).end();
 
+        if (is_instrument_mode() && it->type == MFLOW_SOURCE_BLOCK) {
+          // If the first instruction after the source block is a move
+          // instruction then split the block after the first non-move
+          // instruction
+          bool skipped_instruction = false;
+          cfg::Block* split_block;
+          while (fwd_it != fwd_it_end) {
+            if (opcode::is_move_result_any(fwd_it->insn->opcode())) {
+              fwd_it++;
+              skipped_instruction = true;
+              continue;
+            }
+            break;
+          }
+          if (skipped_instruction) {
+            fwd_it--;
+            split_block =
+                cfg.split_block(block->to_cfg_instruction_iterator(fwd_it));
+          } else {
+            // use IRList::iterator because it can iterate through source
+            // blocks,
+            // unlike ir_list::InstructionIterator
+            auto fwd_ir_it = IRList::iterator(std::prev(it.base()));
+            split_block = cfg.split_block(block, fwd_ir_it);
+          }
+          copy_over_source_block(block, split_block);
+          continue;
+        }
+
         // If we are splitting at the boundary of following iget/sget/invoke/
         // filled-new-array we should skip to the next instruction. Otherwise
         // splitting would generate a goto in between and lead to invalid
@@ -790,6 +900,7 @@ class DedupBlocksImpl {
         // Split the block
         auto split_block = cfg.split_block(cfg_it);
 
+        copy_over_source_block(block, split_block);
         TRACE(DEDUP_BLOCKS, 4,
               "split_postfix: split block : old = %zu, new = %zu", block->id(),
               split_block->id());
@@ -824,21 +935,12 @@ class DedupBlocksImpl {
 
     // Empty blocks are possibly necessary for profiling markers, or will
     // be cleaned up by CFG deconstruction.
-    if ((g_redex->instrument_mode || kDebugForceInstrumentMode) &&
-        block->get_first_insn() == block->end()) {
+    if (is_instrument_mode() && block->get_first_insn() == block->end()) {
       return false;
     }
 
-    // When instrumenting, do not deduplicate catch handler head blocks. If the
-    // handlers are similar, splitting should make this a minimal block of
-    // `move-exception` + `goto`.
-    if ((g_redex->instrument_mode || kDebugForceInstrumentMode) &&
-        cfg.get_pred_edge_of_type(block, cfg::EdgeType::EDGE_THROW)) {
-      auto first = block->get_first_insn();
-      if (first != block->end() &&
-          opcode::is_move_exception(first->insn->opcode())) {
-        return false;
-      }
+    if (!dedup_catch_handler_head_block(cfg, block)) {
+      return false;
     }
 
     // TODO: It's not worth the goto to merge return-only blocks. What size is

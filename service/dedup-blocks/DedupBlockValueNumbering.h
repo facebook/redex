@@ -41,7 +41,7 @@ const IROpcode IOPCODE_OPERATION_RESULT = IROpcode(0xFFFE);
 // implementation.
 
 struct IROperation {
-  IROpcode opcode;
+  IROpcode opcode{0};
   std::vector<value_id_t> srcs;
   union {
     // Zero-initialize this union with the uint64_t member instead of a
@@ -54,6 +54,7 @@ struct IROperation {
     const DexOpcodeData* data;
     reg_t in_reg;
     size_t operation_index;
+    uint32_t src_blk_id;
   };
 };
 
@@ -62,12 +63,14 @@ struct IROperationHasher {
     size_t hash = tv.opcode;
     boost::hash_combine(hash, tv.srcs);
     boost::hash_combine(hash, (size_t)tv.literal);
+    boost::hash_combine(hash, tv.src_blk_id);
     return hash;
   }
 };
 
 inline bool operator==(const IROperation& a, const IROperation& b) {
-  return a.opcode == b.opcode && a.srcs == b.srcs && a.literal == b.literal;
+  return a.opcode == b.opcode && a.srcs == b.srcs && a.literal == b.literal &&
+         a.src_blk_id == b.src_blk_id;
 }
 
 struct BlockValue {
