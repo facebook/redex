@@ -65,12 +65,7 @@ namespace android {
 
 static const bool kDebugStringPoolNoisy = false;
 static const bool kDebugXMLNoisy = false;
-static const bool kDebugTableNoisy = false;
-static const bool kDebugTableGetEntry = false;
 static const bool kDebugTableSuperNoisy = false;
-static const bool kDebugLoadTableNoisy = false;
-static const bool kDebugLoadTableSuperNoisy = false;
-static const bool kDebugTableTheme = false;
 static const bool kDebugResXMLTree = false;
 static const bool kDebugLibNoisy = false;
 
