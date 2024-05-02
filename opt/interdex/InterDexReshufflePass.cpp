@@ -6,14 +6,12 @@
  */
 
 #include "InterDexReshufflePass.h"
-#include "ClassMerging.h"
 #include "ConfigFiles.h"
 #include "DedupStrings.h"
 #include "DexClass.h"
 #include "DexStructure.h"
 #include "DexUtil.h"
 #include "InterDexPass.h"
-#include "ModelSpecGenerator.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "StlUtil.h"
@@ -51,29 +49,9 @@ void InterDexReshufflePass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  auto has_IDCM_pass = mgr.find_pass("IntraDexClassMergingPass");
-  // The mergeability_aware reshuffle algorithm is only enabled when 1) there
-  // will be a IDCM pass; 2) m_allow_mergeability_aware is set true; and 3) This
-  // is the first run of InterDexReshufflePass.
-  bool enable_mergeability_aware_reshuffle =
-      has_IDCM_pass && m_allow_mergeability_aware && m_run == 0;
-  if (enable_mergeability_aware_reshuffle) {
-    TRACE(PM, 1, "Run regular mergeability-aware InterDexReshuffle");
-    mgr.incr_metric("Mergeability_aware", 1);
-    class_merging::Model merging_model = class_merging::construct_global_model(
-        original_scope, mgr, conf, stores);
-
-    InterDexReshuffleImpl impl(conf, mgr, m_config, original_scope, root_dexen,
-                               merging_model);
-    impl.compute_plan();
-    impl.apply_plan();
-  } else {
-    TRACE(PM, 1, "Run regular InterDexReshuffle");
-    mgr.incr_metric("Mergeability_aware", 0);
-    InterDexReshuffleImpl impl(conf, mgr, m_config, original_scope, root_dexen);
-    impl.compute_plan();
-    impl.apply_plan();
-  }
+  InterDexReshuffleImpl impl(conf, mgr, m_config, original_scope, root_dexen);
+  impl.compute_plan();
+  impl.apply_plan();
 
   // Sanity check
   std::unordered_set<DexClass*> original_scope_set(original_scope.begin(),
@@ -85,8 +63,6 @@ void InterDexReshufflePass::run_pass(DexStoresVector& stores,
   for (auto cls : original_scope_set) {
     always_assert(new_scope_set.count(cls));
   }
-
-  ++m_run;
 }
 
 static InterDexReshufflePass s_pass;
