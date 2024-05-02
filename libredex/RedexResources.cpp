@@ -225,8 +225,12 @@ void AndroidResources::collect_layout_classes_and_attributes(
     const std::unordered_set<std::string>& attributes_to_read,
     std::unordered_set<std::string>* out_classes,
     std::unordered_multimap<std::string, std::string>* out_attributes) {
+  auto res_table = load_res_table();
   auto collect_fn = [&](const std::vector<std::string>& prefixes) {
     std::mutex out_mutex;
+    resources::StringOrReferenceSet classes;
+    std::unordered_multimap<std::string, resources::StringOrReference>
+        attributes;
     workqueue_run<std::string>(
         [&](sparta::WorkerState<std::string>* worker_state,
             const std::string& input) {
@@ -246,24 +250,47 @@ void AndroidResources::collect_layout_classes_and_attributes(
             return;
           }
 
-          std::unordered_set<std::string> local_out_classes;
-          std::unordered_multimap<std::string, std::string>
-              local_out_attributes;
+          resources::StringOrReferenceSet local_classes;
+          std::unordered_multimap<std::string, resources::StringOrReference>
+              local_attributes;
           collect_layout_classes_and_attributes_for_file(
-              input, attributes_to_read, &local_out_classes,
-              &local_out_attributes);
-          if (!local_out_classes.empty() || !local_out_attributes.empty()) {
+              input, attributes_to_read, &local_classes, &local_attributes);
+          if (!local_classes.empty() || !local_attributes.empty()) {
             std::unique_lock<std::mutex> lock(out_mutex);
             // C++17: use merge to avoid copies.
-            out_classes->insert(local_out_classes.begin(),
-                                local_out_classes.end());
-            out_attributes->insert(local_out_attributes.begin(),
-                                   local_out_attributes.end());
+            classes.insert(local_classes.begin(), local_classes.end());
+            attributes.insert(local_attributes.begin(), local_attributes.end());
           }
         },
         std::vector<std::string>{""},
         std::min(redex_parallel::default_num_threads(), kReadXMLThreads),
         /*push_tasks_while_running=*/true);
+
+    // Resolve references that were encountered while reading xml files
+    for (const auto& val : classes) {
+      if (val.is_reference()) {
+        std::vector<std::string> all_values;
+        res_table->resolve_string_values_for_resource_reference(val.ref,
+                                                                &all_values);
+        for (const auto& s : all_values) {
+          out_classes->emplace(s);
+        }
+      } else {
+        out_classes->emplace(val.str);
+      }
+    }
+    for (auto it = attributes.begin(); it != attributes.end(); it++) {
+      if (it->second.is_reference()) {
+        std::vector<std::string> all_values;
+        res_table->resolve_string_values_for_resource_reference(it->second.ref,
+                                                                &all_values);
+        for (const auto& s : all_values) {
+          out_attributes->emplace(it->first, s);
+        }
+      } else {
+        out_attributes->emplace(it->first, it->second.str);
+      }
+    }
   };
 
   collect_fn({
@@ -357,17 +384,6 @@ void AndroidResources::rename_classes_in_layouts(
       std::vector<std::string>{""},
       std::min(redex_parallel::default_num_threads(), kReadXMLThreads),
       /*push_tasks_while_running=*/true);
-}
-
-std::unordered_set<std::string_view> multimap_values_to_set(
-    const std::unordered_multimap<std::string, std::string>& map,
-    const std::string& key) {
-  std::unordered_set<std::string_view> result;
-  auto range = map.equal_range(key);
-  for (auto it = range.first; it != range.second; ++it) {
-    result.emplace(it->second);
-  }
-  return result;
 }
 
 namespace {

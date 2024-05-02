@@ -500,7 +500,8 @@ void analyze_reachable_from_manifest(
   }
 }
 
-void mark_reachable_by_xml(const std::string& classname) {
+void mark_reachable_by_xml(const std::string& external_classname) {
+  auto classname = java_names::external_to_internal(external_classname);
   auto dclass = maybe_class_from_string(classname);
   if (dclass == nullptr) {
     return;
@@ -514,6 +515,17 @@ void mark_reachable_by_xml(const std::string& classname) {
   for (DexMethod* dmethod : dclass->get_ctors()) {
     dmethod->rstate.set_referenced_by_resource_xml();
   }
+}
+
+std::unordered_set<std::string_view> multimap_values_to_set(
+    const std::unordered_multimap<std::string, std::string>& map,
+    const std::string& key) {
+  std::unordered_set<std::string_view> result;
+  auto range = map.equal_range(key);
+  for (auto it = range.first; it != range.second; ++it) {
+    result.emplace(it->second);
+  }
+  return result;
 }
 
 // 1) Marks classes (Fragments, Views) found in XML layouts as reachable along

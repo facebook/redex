@@ -765,6 +765,24 @@ std::string get_string_attribute_value(
   return std::string("");
 }
 
+boost::optional<resources::StringOrReference>
+get_attribute_string_or_reference_value(const android::ResXMLTree& parser,
+                                        size_t idx) {
+  auto data_type = parser.getAttributeDataType(idx);
+  if (data_type == android::Res_value::TYPE_REFERENCE) {
+    return resources::StringOrReference(parser.getAttributeData(idx));
+  } else if (data_type == android::Res_value::TYPE_STRING) {
+    size_t len;
+    const char16_t* p = parser.getAttributeStringValue(idx, &len);
+    if (p != nullptr) {
+      android::String16 target(p, len);
+      std::string converted = convert_from_string16(target);
+      return resources::StringOrReference(converted);
+    }
+  }
+  return boost::none;
+}
+
 bool has_raw_attribute_value(const android::ResXMLTree& parser,
                              const android::String16& attribute_name,
                              android::Res_value& out_value) {
@@ -847,8 +865,9 @@ void extract_classes_from_layout(
     const char* data,
     size_t size,
     const std::unordered_set<std::string>& attributes_to_read,
-    std::unordered_set<std::string>* out_classes,
-    std::unordered_multimap<std::string, std::string>* out_attributes) {
+    resources::StringOrReferenceSet* out_classes,
+    std::unordered_multimap<std::string, resources::StringOrReference>*
+        out_attributes) {
   if (!arsc::is_binary_xml(data, size)) {
     return;
   }
@@ -868,17 +887,18 @@ void extract_classes_from_layout(
       size_t len;
       android::String16 tag(parser.getElementName(&len));
       std::string element_name = convert_from_string16(tag);
-      for (const auto& attr : resources::POSSIBLE_CLASS_ATTRIBUTES) {
-        android::String16 attr_name(attr.c_str(), attr.length());
-        auto classname = get_string_attribute_value(parser, attr_name);
-        if (resources::valid_java_identifier(classname)) {
-          auto internal = java_names::external_to_internal(classname);
-          TRACE(RES, 9,
-                "Considering %s as possible class in XML "
-                "resource from element %s",
-                internal.c_str(), element_name.c_str());
-          out_classes->emplace(internal);
-          break;
+      const size_t attr_count = parser.getAttributeCount();
+      for (size_t i = 0; i < attr_count; ++i) {
+        auto data_type = parser.getAttributeDataType(i);
+        if (data_type == android::Res_value::TYPE_STRING ||
+            data_type == android::Res_value::TYPE_REFERENCE) {
+          std::string attr_name = read_attribute_name_at_idx(parser, i);
+          if (resources::POSSIBLE_CLASS_ATTRIBUTES.count(attr_name) > 0) {
+            auto value = get_attribute_string_or_reference_value(parser, i);
+            if (value && value->possible_java_identifier()) {
+              out_classes->emplace(*value);
+            }
+          }
         }
       }
 
@@ -887,10 +907,9 @@ void extract_classes_from_layout(
       // and will have various "android." packages prepended before
       // instantiation.
       if (resources::valid_xml_element(element_name)) {
-        auto internal = java_names::external_to_internal(element_name);
         TRACE(RES, 9, "Considering %s as possible class in XML resource",
-              internal.c_str());
-        out_classes->emplace(internal);
+              element_name.c_str());
+        out_classes->emplace(element_name);
       }
 
       if (!attributes_to_read.empty()) {
@@ -904,11 +923,9 @@ void extract_classes_from_layout(
             fully_qualified = attr_name;
           }
           if (attributes_to_read.count(fully_qualified) != 0) {
-            auto val = parser.getAttributeStringValue(i, &len);
-            if (val != nullptr) {
-              android::String16 s16(val, len);
-              out_attributes->emplace(fully_qualified,
-                                      convert_from_string16(s16));
+            auto value = get_attribute_string_or_reference_value(parser, i);
+            if (value) {
+              out_attributes->emplace(fully_qualified, *value);
             }
           }
         }
@@ -928,8 +945,9 @@ void extract_classes_from_layout(
 void ApkResources::collect_layout_classes_and_attributes_for_file(
     const std::string& file_path,
     const std::unordered_set<std::string>& attributes_to_read,
-    std::unordered_set<std::string>* out_classes,
-    std::unordered_multimap<std::string, std::string>* out_attributes) {
+    resources::StringOrReferenceSet* out_classes,
+    std::unordered_multimap<std::string, resources::StringOrReference>*
+        out_attributes) {
   redex::read_file_with_contents(file_path, [&](const char* data, size_t size) {
     extract_classes_from_layout(data, size, attributes_to_read, out_classes,
                                 out_attributes);
@@ -2623,6 +2641,19 @@ std::vector<std::string> ResourcesArscFile::get_resource_strings_by_name(
     }
   }
   return ret;
+}
+
+void ResourcesArscFile::resolve_string_values_for_resource_reference(
+    uint32_t ref, std::vector<std::string>* values) {
+  auto& table_snapshot = get_table_snapshot();
+  std::unordered_set<uint32_t> seen;
+  std::set<uint32_t> string_idx;
+  resolve_string_index_for_id(table_snapshot, ref, &seen, &string_idx);
+  for (const auto& i : string_idx) {
+    if (table_snapshot.is_valid_global_string_idx(i)) {
+      values->push_back(table_snapshot.get_global_string(i));
+    }
+  }
 }
 
 ResourcesArscFile::~ResourcesArscFile() {}

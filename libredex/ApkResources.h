@@ -302,6 +302,8 @@ class ResourcesArscFile : public ResourceTableFile {
       std::vector<android::ResTable_config>* configs) override;
   std::set<android::ResTable_config> get_configs_with_values(
       uint32_t id) override;
+  void resolve_string_values_for_resource_reference(
+      uint32_t ref, std::vector<std::string>* values) override;
   ~ResourcesArscFile() override;
 
   size_t get_length() const;
@@ -334,9 +336,9 @@ class ApkResources : public AndroidResources {
   void collect_layout_classes_and_attributes_for_file(
       const std::string& file_path,
       const std::unordered_set<std::string>& attributes_to_read,
-      std::unordered_set<std::string>* out_classes,
-      std::unordered_multimap<std::string, std::string>* out_attributes)
-      override;
+      resources::StringOrReferenceSet* out_classes,
+      std::unordered_multimap<std::string, resources::StringOrReference>*
+          out_attributes) override;
   void collect_xml_attribute_string_values_for_file(
       const std::string& file_path,
       std::unordered_set<std::string>* out) override;

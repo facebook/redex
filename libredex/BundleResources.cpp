@@ -134,6 +134,27 @@ std::string get_string_attribute_value(const aapt::pb::XmlElement& element,
   return std::string("");
 }
 
+boost::optional<resources::StringOrReference>
+get_string_or_reference_from_attribute(const aapt::pb::XmlAttribute& pb_attr) {
+  if (pb_attr.has_compiled_item()) {
+    auto& item = pb_attr.compiled_item();
+    // None of this was previously supported; just check for regular references
+    // punting on theme refs for now.
+    always_assert_log(item.has_ref(),
+                      "Attribute expected to be string or a reference");
+    always_assert_log(item.ref().type() ==
+                          aapt::pb::Reference_Type::Reference_Type_REFERENCE,
+                      "Attribute expected to be a non-theme reference");
+    auto id = item.ref().id();
+    if (id > 0) {
+      return resources::StringOrReference(id);
+    }
+    return boost::none;
+  } else {
+    return resources::StringOrReference(pb_attr.value());
+  }
+}
+
 // Apply callback to element and its descendants, stopping if/when callback
 // returns false
 void traverse_element_and_children(
@@ -967,20 +988,17 @@ void collect_layout_classes_and_attributes_for_element(
     const aapt::pb::XmlElement& element,
     const std::unordered_map<std::string, std::string>& ns_uri_to_prefix,
     const std::unordered_set<std::string>& attributes_to_read,
-    std::unordered_set<std::string>* out_classes,
-    std::unordered_multimap<std::string, std::string>* out_attributes) {
+    resources::StringOrReferenceSet* out_classes,
+    std::unordered_multimap<std::string, resources::StringOrReference>*
+        out_attributes) {
   const auto& element_name = element.name();
   // XML element could itself be a class, with classes in its attribute values.
-  for (const auto& attr : resources::POSSIBLE_CLASS_ATTRIBUTES) {
-    auto classname = get_string_attribute_value(element, attr);
-    if (resources::valid_java_identifier(classname)) {
-      auto internal = java_names::external_to_internal(classname);
-      TRACE(RES, 9,
-            "Considering %s as possible class in XML "
-            "resource from element %s",
-            internal.c_str(), element_name.c_str());
-      out_classes->emplace(internal);
-      break;
+  for (const aapt::pb::XmlAttribute& pb_attr : element.attribute()) {
+    if (resources::POSSIBLE_CLASS_ATTRIBUTES.count(pb_attr.name()) > 0) {
+      auto value = get_string_or_reference_from_attribute(pb_attr);
+      if (value && value->possible_java_identifier()) {
+        out_classes->emplace(*value);
+      }
     }
   }
 
@@ -989,10 +1007,9 @@ void collect_layout_classes_and_attributes_for_element(
   // and will have various "android." packages prepended before
   // instantiation.
   if (resources::valid_xml_element(element_name)) {
-    auto internal = java_names::external_to_internal(element_name);
     TRACE(RES, 9, "Considering %s as possible class in XML resource",
-          internal.c_str());
-    out_classes->emplace(internal);
+          element_name.c_str());
+    out_classes->emplace(element_name);
   }
 
   if (!attributes_to_read.empty()) {
@@ -1004,12 +1021,10 @@ void collect_layout_classes_and_attributes_for_element(
               ? attr_name
               : (ns_uri_to_prefix.at(uri) + ":" + attr_name);
       if (attributes_to_read.count(fully_qualified) > 0) {
-        always_assert_log(!pb_attr.has_compiled_item(),
-                          "Only supporting string values for attributes. "
-                          "Given attribute: %s",
-                          fully_qualified.c_str());
-        auto value = pb_attr.value();
-        out_attributes->emplace(fully_qualified, value);
+        auto value = get_string_or_reference_from_attribute(pb_attr);
+        if (value) {
+          out_attributes->emplace(fully_qualified, *value);
+        }
       }
     }
   }
@@ -1222,8 +1237,9 @@ void change_resource_id_in_xml_references(
 void BundleResources::collect_layout_classes_and_attributes_for_file(
     const std::string& file_path,
     const std::unordered_set<std::string>& attributes_to_read,
-    std::unordered_set<std::string>* out_classes,
-    std::unordered_multimap<std::string, std::string>* out_attributes) {
+    resources::StringOrReferenceSet* out_classes,
+    std::unordered_multimap<std::string, resources::StringOrReference>*
+        out_attributes) {
   if (is_raw_resource(file_path)) {
     return;
   }
@@ -2322,6 +2338,51 @@ void BundleResources::finalize_bundle_config(const ResourceConfig& config) {
           always_assert(bundle_config.SerializeToOstream(&out));
         });
   }
+}
+
+namespace {
+// For the given ID, look up values in all configs for string data. Any
+// references encountered will be resolved and handled recursively.
+void resolve_strings_for_id(
+    const std::map<uint32_t, const ConfigValues>& table_snapshot,
+    uint32_t id,
+    std::unordered_set<uint32_t>* seen,
+    std::set<std::string>* values) {
+  // Annoyingly, Android build tools allow references to have cycles in them
+  // without failing at build time. At runtime, such a situation would just loop
+  // a fixed number of times (https://fburl.com/xmckadjk) but we'll keep track
+  // of a seen list.
+  if (seen->count(id) > 0) {
+    return;
+  }
+  seen->insert(id);
+  auto search = table_snapshot.find(id);
+  if (search != table_snapshot.end()) {
+    auto& config_values = search->second;
+    for (auto i = 0; i < config_values.size(); i++) {
+      const auto& value = config_values[i].value();
+      always_assert_log(value.has_item(), "Item expected for id 0x%x", id);
+      auto& item = value.item();
+      if (item.has_str()) {
+        values->emplace(item.str().value());
+      } else {
+        always_assert_log(item.has_ref(),
+                          "Item expected to be string or reference for id 0x%x",
+                          id);
+        resolve_strings_for_id(table_snapshot, item.ref().id(), seen, values);
+      }
+    }
+  }
+}
+} // namespace
+
+void ResourcesPbFile::resolve_string_values_for_resource_reference(
+    uint32_t ref, std::vector<std::string>* values) {
+  std::unordered_set<uint32_t> seen;
+  // Ensure no duplicates
+  std::set<std::string> values_set;
+  resolve_strings_for_id(get_res_id_to_configvalue(), ref, &seen, &values_set);
+  std::copy(values_set.begin(), values_set.end(), std::back_inserter(*values));
 }
 
 ResourcesPbFile::~ResourcesPbFile() {}
