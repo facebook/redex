@@ -472,10 +472,17 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
 
   std::string norule;
 
+  auto on_class_renamable = [&](DexClass* clazz) {
+    if (referenced_by_layouts(clazz)) {
+      m_renamable_layout_classes.emplace(clazz->get_name());
+    }
+  };
+
   for (auto clazz : scope) {
     // Short circuit force renames
     if (force_rename_hierarchies.count(clazz->get_type())) {
       clazz->rstate.set_force_rename();
+      on_class_renamable(clazz);
       continue;
     }
 
@@ -583,6 +590,10 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
                                       get_keep_rule(clazz)};
       continue;
     }
+
+    // All above checks have passed, callback for a type which appears to be
+    // renamable.
+    on_class_renamable(clazz);
   }
 }
 
@@ -780,14 +791,20 @@ void RenameClassesPassV2::rename_classes_in_layouts(
   // Sync up ResStringPool entries in XML layouts. Class names should appear
   // in their "external" name, i.e. java.lang.String instead of
   // Ljava/lang/String;
-  std::map<std::string, std::string> aliases_for_layouts;
-  for (const auto& apair : name_mapping.get_class_map()) {
-    aliases_for_layouts.emplace(
-        java_names::internal_to_external(apair.first->str()),
-        java_names::internal_to_external(apair.second->str()));
+  std::map<std::string, std::string> rename_map_for_layouts;
+  for (auto&& [old_name, new_name] : name_mapping.get_class_map()) {
+    // Application should be configuring specific packages/class names to
+    // prevent collisions/accidental rewrites of unrelated xml
+    // elements/attributes/values; filter the given map to only be known View
+    // classes.
+    if (m_renamable_layout_classes.count(old_name) > 0) {
+      rename_map_for_layouts.emplace(
+          java_names::internal_to_external(old_name->str()),
+          java_names::internal_to_external(new_name->str()));
+    }
   }
   auto resources = create_resource_reader(m_apk_dir);
-  resources->rename_classes_in_layouts(aliases_for_layouts);
+  resources->rename_classes_in_layouts(rename_map_for_layouts);
 }
 
 std::string RenameClassesPassV2::prepend_package_prefix(
