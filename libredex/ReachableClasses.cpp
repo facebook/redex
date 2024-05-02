@@ -505,6 +505,7 @@ void mark_reachable_by_xml(const std::string& classname) {
   if (dclass == nullptr) {
     return;
   }
+  TRACE(PGR, 3, "xml_layout: %s", classname.c_str());
   // Setting "referenced_by_resource_xml" essentially behaves like keep,
   // though breaking it out to its own flag will let us clear/recompute this.
   dclass->rstate.set_referenced_by_resource_xml();
@@ -530,7 +531,7 @@ void analyze_reachable_from_xml_layouts(const Scope& scope,
   resources->collect_layout_classes_and_attributes(
       attrs_to_read, &layout_classes, &attribute_values);
   for (const std::string& classname : layout_classes) {
-    TRACE(PGR, 3, "xml_layout: %s", classname.c_str());
+    TRACE(PGR, 4, "xml_layout candidate: %s", classname.c_str());
     mark_reachable_by_xml(classname);
   }
   auto attr_values =

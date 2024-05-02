@@ -51,19 +51,19 @@ inline bool is_resource_class_name(const std::string_view c_name) {
 }
 bool is_r_class(const DexClass* cls);
 void gather_r_classes(const Scope& scope, std::vector<DexClass*>* vec);
-// List of tags in xml documents for which we should hunt in attribute values
-// for class names.
-const inline std::unordered_set<std::string>
-    KNOWN_ELEMENTS_WITH_CLASS_ATTRIBUTES = {
-        "fragment",   "view",   "dialog",
-        "activity",   "intent", "androidx.fragment.app.FragmentContainerView",
-        "transition",
-};
+// List of attribute names (without namespace) in xml documents for which we
+// should hunt for class names. This is intentionally broad, as narrowly
+// targeting specific element names would require analyzing parent element names
+// (example: children of
+// https://developer.android.com/reference/androidx/coordinatorlayout/widget/CoordinatorLayout).
 const inline std::vector<std::string> POSSIBLE_CLASS_ATTRIBUTES = {
-    "class",
-    "name",
-    "targetClass",
+    "actionViewClass", "class", "controller",  "layout_behavior",
+    "layoutManager",   "name",  "targetClass",
 };
+// Returns false if there are any characters that are not valid Java identifier.
+bool valid_java_identifier(const std::string& ident);
+// Returns false if there is no dot or it's not a Java identifier.
+bool valid_xml_element(const std::string& ident);
 } // namespace resources
 
 /*

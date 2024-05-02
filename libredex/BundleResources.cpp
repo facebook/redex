@@ -971,23 +971,24 @@ void collect_layout_classes_and_attributes_for_element(
     std::unordered_multimap<std::string, std::string>* out_attributes) {
   const auto& element_name = element.name();
   // XML element could itself be a class, with classes in its attribute values.
-  if (resources::KNOWN_ELEMENTS_WITH_CLASS_ATTRIBUTES.count(element_name) > 0) {
-    for (const auto& attr : resources::POSSIBLE_CLASS_ATTRIBUTES) {
-      auto classname = get_string_attribute_value(element, attr);
-      if (!classname.empty() && classname.find('.') != std::string::npos) {
-        auto internal = java_names::external_to_internal(classname);
-        TRACE(RES, 9,
-              "Considering %s as possible class in XML "
-              "resource from element %s",
-              internal.c_str(), element_name.c_str());
-        out_classes->emplace(internal);
-        break;
-      }
+  for (const auto& attr : resources::POSSIBLE_CLASS_ATTRIBUTES) {
+    auto classname = get_string_attribute_value(element, attr);
+    if (resources::valid_java_identifier(classname)) {
+      auto internal = java_names::external_to_internal(classname);
+      TRACE(RES, 9,
+            "Considering %s as possible class in XML "
+            "resource from element %s",
+            internal.c_str(), element_name.c_str());
+      out_classes->emplace(internal);
+      break;
     }
   }
-  if (element_name.find('.') != std::string::npos) {
-    // Consider the element name itself as a possible class in the
-    // application
+
+  // NOTE: xml elements that refer to application classes must have a
+  // package name; elements without a package are assumed to be SDK classes
+  // and will have various "android." packages prepended before
+  // instantiation.
+  if (resources::valid_xml_element(element_name)) {
     auto internal = java_names::external_to_internal(element_name);
     TRACE(RES, 9, "Considering %s as possible class in XML resource",
           internal.c_str());

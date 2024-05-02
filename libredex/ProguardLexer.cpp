@@ -41,21 +41,6 @@ bool is_not_idenfitier_character(char ch) {
          ch == '~' || ch == '-';
 }
 
-// An identifier can refer to a class name, a field name or a package name.
-// https://docs.oracle.com/javase/specs/jls/se16/html/jls-3.html#jls-JavaLetter
-bool is_identifier(const std::string_view& ident) {
-  for (const char& ch : ident) {
-    // java identifiers can be multi-lingual so membership testing is complex.
-    // much simpler to test for what is definitely not an identifier and then
-    // assume everything else is a legal identifier char, accepting that we
-    // will have false positives.
-    if (is_deliminator(ch) || is_not_idenfitier_character(ch)) {
-      return false;
-    }
-  }
-  return true;
-}
-
 void skip_whitespace(std::string_view& data, unsigned int* line) {
   size_t index = 0;
   for (; index != data.size(); ++index) {
@@ -227,6 +212,21 @@ using UnorderedStringViewIndexableMap = multi_index_container<
                              StringViewEquals>>>;
 
 } // namespace
+
+// An identifier can refer to a class name, a field name or a package name.
+// https://docs.oracle.com/javase/specs/jls/se16/html/jls-3.html#jls-JavaLetter
+bool is_identifier(const std::string_view& ident) {
+  for (const char& ch : ident) {
+    // java identifiers can be multi-lingual so membership testing is complex.
+    // much simpler to test for what is definitely not an identifier and then
+    // assume everything else is a legal identifier char, accepting that we
+    // will have false positives.
+    if (is_deliminator(ch) || is_not_idenfitier_character(ch)) {
+      return false;
+    }
+  }
+  return true;
+}
 
 std::string Token::show() const {
   switch (type) {
