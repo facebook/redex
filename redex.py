@@ -20,7 +20,7 @@ import sys
 import tempfile
 import timeit
 import typing
-from os.path import abspath, dirname, getsize, isdir, isfile, join
+from os.path import abspath, dirname, getsize, isabs, isdir, isfile, join
 from pipes import quote
 
 import pyredex.bintools as bintools
@@ -215,6 +215,7 @@ class State(object):
         unpack_manager: typing.Optional[UnpackManager],
         zip_manager: typing.Optional[ZipManager],
         dexen_initial_state: typing.Optional[DexenSnapshot],
+        trace_file_path: typing.Optional[str],
     ) -> None:
         self.args = args
         self.config_dict = config_dict
@@ -227,6 +228,7 @@ class State(object):
         self.unpack_manager = unpack_manager
         self.zip_manager = zip_manager
         self.dexen_initial_state = dexen_initial_state
+        self.trace_file_path = trace_file_path
 
 
 class RedexRunException(Exception):
@@ -1065,7 +1067,10 @@ def _handle_secondary_method_profiles(args: argparse.Namespace) -> None:
         )
 
 
-def prepare_redex(args: argparse.Namespace) -> State:
+def prepare_redex(
+    args: argparse.Namespace,
+    trace_file_path: typing.Optional[str] = None,
+) -> State:
     LOGGER.debug("Preparing...")
     debug_mode = args.unpack_only or args.debug
 
@@ -1257,6 +1262,7 @@ def prepare_redex(args: argparse.Namespace) -> State:
         unpack_manager=unpack_manager,
         zip_manager=zip_manager,
         dexen_initial_state=dexen_initial_state,
+        trace_file_path=trace_file_path,
     )
 
 
@@ -1415,6 +1421,14 @@ def finalize_redex(state: State) -> None:
             state.dex_dir, state.args.out, "*.dot", "approximate shape graphs"
         )
 
+        if state.trace_file_path:
+            copy_all_file_to_out_dir(
+                state.trace_file_path,
+                state.args.out,
+                "*",
+                "trace output",
+            )
+
 
 def _init_logging(level_str: str) -> None:
     levels = {
@@ -1452,6 +1466,7 @@ def run_redex_passthrough(
         unpack_manager=None,
         zip_manager=None,
         dexen_initial_state=None,
+        trace_file_path=None,
     )
     run_redex_binary(state, exception_formatter, output_line_handler)
 
@@ -1460,6 +1475,7 @@ def run_redex(
     args: argparse.Namespace,
     exception_formatter: typing.Optional[ExceptionMessageFormatter] = None,
     output_line_handler: typing.Optional[typing.Callable[[str], str]] = None,
+    trace_file_path: typing.Optional[str] = None,
 ) -> None:
     with BuckConnectionScope():
         if exception_formatter is None:
@@ -1472,7 +1488,7 @@ def run_redex(
             assert args.input_apk
 
         with BuckPartScope("redex::Preparing", "Prepare to run redex"):
-            state = prepare_redex(args)
+            state = prepare_redex(args, trace_file_path)
 
         with BuckPartScope("redex::Run redex-all", "Actually run redex binary"):
             run_redex_binary(state, exception_formatter, output_line_handler)
@@ -1484,7 +1500,7 @@ def run_redex(
         finalize_redex(state)
 
 
-def early_apply_args(args: argparse.Namespace) -> None:
+def early_apply_args(args: argparse.Namespace) -> typing.Optional[str]:
     # This is late, but hopefully early enough.
     _init_logging(args.log_level)
 
@@ -1492,8 +1508,22 @@ def early_apply_args(args: argparse.Namespace) -> None:
     if args.trace:
         os.environ["TRACE"] = args.trace
 
+    # Set up the env variable for cpp binary. If given an absolute path, that
+    # will take effect. Otherwise, a temp file will be created for the cpp
+    # binary to write to, which will be moved to the same output dir as the rest
+    # of the redex txt outputs.
+    trace_file_path = None
     if args.trace_file:
-        os.environ["TRACEFILE"] = args.trace_file
+        if os.path.isabs(args.trace_file):
+            os.environ["TRACEFILE"] = args.trace_file
+        else:
+            trace_file_path = make_temp_dir(
+                ".redex_trace", args.unpack_only or args.debug
+            )
+            trace_file = os.path.join(trace_file_path, args.trace_file)
+            os.environ["TRACEFILE"] = trace_file
+
+    return trace_file_path
 
 
 if __name__ == "__main__":
@@ -1507,6 +1537,8 @@ if __name__ == "__main__":
     except Exception:
         pass
     args: argparse.Namespace = arg_parser(**keys).parse_args()
-    early_apply_args(args)
+    trace_file_path: typing.Optional[str] = early_apply_args(args)
     validate_args(args)
-    with_temp_cleanup(lambda: run_redex(args), args.always_clean_up)
+    with_temp_cleanup(
+        lambda: run_redex(args, trace_file_path=trace_file_path), args.always_clean_up
+    )

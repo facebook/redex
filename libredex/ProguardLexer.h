@@ -26,10 +26,6 @@
 namespace keep_rules {
 namespace proguard_parser {
 
-// An identifier can refer to a class name, a field name or a package name.
-// https://docs.oracle.com/javase/specs/jls/se16/html/jls-3.html#jls-JavaLetter
-bool is_identifier(const std::string_view& ident);
-
 enum class TokenType {
   openCurlyBracket,
   closeCurlyBracket,
@@ -146,6 +142,10 @@ struct Token {
 };
 
 std::vector<Token> lex(const std::string_view& in);
+
+// An identifier can refer to a class name, a field name or a package name.
+// https://docs.oracle.com/javase/specs/jls/se16/html/jls-3.html#jls-JavaLetter
+bool is_identifier(const std::string_view& ident);
 
 } // namespace proguard_parser
 } // namespace keep_rules
