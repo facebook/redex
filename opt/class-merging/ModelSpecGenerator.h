@@ -48,9 +48,12 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
  * IntraDexClassMerging. As a result, certain merging specs used are
  * set to match those used by the IntraDexClassMerging pass.
  */
-class_merging::Model construct_global_model(DexClasses& scope,
-                                            PassManager& mgr,
-                                            ConfigFiles& conf,
-                                            DexStoresVector& stores);
+class_merging::Model construct_global_model(
+    DexClasses& scope,
+    PassManager& mgr,
+    ConfigFiles& conf,
+    DexStoresVector& stores,
+    const class_merging::ModelSpec& merging_spec,
+    size_t global_min_count);
 
 } // namespace class_merging

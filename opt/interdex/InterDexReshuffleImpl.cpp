@@ -150,7 +150,7 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(
       });
 
   // Initialize m_class_to_merging_info and m_num_field_defs
-  if (!m_merging_model) {
+  if (m_merging_model == boost::none) {
     return;
   }
 
@@ -161,20 +161,35 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(
       return;
     }
     for (const DexType* mergeable : merger.mergeables) {
-      auto cls = type_class(mergeable);
+      const auto cls = type_class(mergeable);
       if (cls != nullptr) {
         m_class_to_merging_info.emplace(cls, MergingInfo());
         auto& merging_info = m_class_to_merging_info.at(cls);
         merging_info.merging_type = num_merging_types;
-        auto& dedupable_mrefs = merging_info.dedupable_mrefs;
-        for (const auto& method : cls->get_vmethods()) {
-          dedupable_mrefs.insert(method);
-        }
-        for (const auto& method : cls->get_ctors()) {
-          dedupable_mrefs.insert(method);
-        }
       }
     }
+    MethodGroup group = 0;
+    if (!merger.vmethods.empty()) {
+      for (const auto& vmeths : merger.vmethods) {
+        for (const auto* meth : vmeths.overrides) {
+          const auto meth_cls = type_class(meth->get_class());
+          auto& merging_info = m_class_to_merging_info.at(meth_cls);
+          merging_info.dedupable_mrefs[meth] = group;
+        }
+        group++;
+      }
+    }
+    if (!merger.intfs_methods.empty()) {
+      for (const auto& intf_meths : merger.intfs_methods) {
+        for (const auto* meth : intf_meths.methods) {
+          const auto meth_cls = type_class(meth->get_class());
+          auto& merging_info = m_class_to_merging_info.at(meth_cls);
+          merging_info.dedupable_mrefs[meth] = group;
+        }
+        group++;
+      }
+    }
+
     m_num_field_defs.emplace(num_merging_types, merger.shape.field_count());
     num_merging_types++;
   });
@@ -183,7 +198,7 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(
   for (size_t dex_idx = m_first_dex_index; dex_idx < dexen.size(); dex_idx++) {
     auto& dex = dexen.at(dex_idx);
     auto& mutable_dex = m_mutable_dexen.at(dex_idx);
-    std::unordered_map<MergerIndex, std::unordered_map<std::string, size_t>>
+    std::unordered_map<MergerIndex, std::unordered_map<MethodGroup, size_t>>
         merging_type_method_usage;
     std::unordered_map<MergerIndex, size_t> merging_type_usage;
     int num_new_methods = 0;
@@ -194,9 +209,8 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(
         MergerIndex merging_type = merging_info.merging_type;
         merging_type_usage[merging_type]++;
         for (const auto& method : merging_info.dedupable_mrefs) {
-          const std::string& method_name =
-              method->get_simple_deobfuscated_name();
-          merging_type_method_usage[merging_type][method_name]++;
+          MethodGroup group = method.second;
+          merging_type_method_usage[merging_type][group]++;
           num_deduped_methods++;
         }
       }
@@ -470,12 +484,12 @@ bool InterDexReshuffleImpl::try_plan_move(const Move& move,
     merging_type = m_class_to_merging_info.at(move.cls).merging_type;
     // Compute the number of method definitions in move.cls that can be deduped
     // in target_dex.
-    std::unordered_set<DexMethod*> dedupable_mrefs =
+    const std::unordered_map<const DexMethod*, MethodGroup>& dedupable_mrefs =
         m_class_to_merging_info.at(move.cls).dedupable_mrefs;
     for (const auto& method : dedupable_mrefs) {
-      const std::string& method_name = method->get_simple_deobfuscated_name();
+      MethodGroup group = method.second;
       const size_t old_usage =
-          target_dex.get_merging_type_method_usage(merging_type, method_name);
+          target_dex.get_merging_type_method_usage(merging_type, group);
       if (old_usage > 0) {
         clazz_num_dedupable_method_defs++;
       }
@@ -516,23 +530,23 @@ bool InterDexReshuffleImpl::try_plan_move(const Move& move,
     // Update class merging stats in source_dex and target_dex
     source_dex.decrease_merging_type_usage(merging_type);
     target_dex.increase_merging_type_usage(merging_type);
-    std::unordered_set<DexMethod*> dedupable_mrefs =
+    const std::unordered_map<const DexMethod*, MethodGroup>& dedupable_mrefs =
         m_class_to_merging_info.at(move.cls).dedupable_mrefs;
     for (const auto& method : dedupable_mrefs) {
-      const std::string& method_name = method->get_simple_deobfuscated_name();
+      MethodGroup group = method.second;
       // Source_dex updates
       const int source_old_usage =
-          source_dex.get_merging_type_method_usage(merging_type, method_name);
+          source_dex.get_merging_type_method_usage(merging_type, group);
       always_assert(source_old_usage > 0);
-      source_dex.decrease_merging_type_method_usage(merging_type, method_name);
+      source_dex.decrease_merging_type_method_usage(merging_type, group);
       if (source_old_usage == 1) {
         source_dex.decrease_num_new_methods();
       }
       source_dex.decrease_num_deduped_methods();
       // Target_dex updates
       const int target_old_usage =
-          target_dex.get_merging_type_method_usage(merging_type, method_name);
-      target_dex.increase_merging_type_method_usage(merging_type, method_name);
+          target_dex.get_merging_type_method_usage(merging_type, group);
+      target_dex.increase_merging_type_method_usage(merging_type, group);
       if (target_old_usage == 0) {
         target_dex.increase_num_new_methods();
       }

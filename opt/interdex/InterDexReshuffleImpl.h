@@ -46,7 +46,7 @@ struct ReshuffleConfig {
 
 struct MergingInfo {
   MergerIndex merging_type;
-  std::unordered_set<DexMethod*> dedupable_mrefs;
+  std::unordered_map<const DexMethod*, MethodGroup> dedupable_mrefs;
 };
 
 // Compute gain powers by reference occurrences. We don't use the upper 20 (19,
@@ -298,20 +298,21 @@ class MoveGains {
               compute_gain(source_merging_type_usage, target_merging_type_usage,
                            for_removal);
 
+      const std::unordered_map<const DexMethod*, MethodGroup>& dedupable_mrefs =
+          m_class_to_merging_info.at(cls).dedupable_mrefs;
       for (auto* mref : refs.mrefs) {
         auto source_occurrences = source.get_mref_occurrences(mref);
         auto target_occurrences = target.get_mref_occurrences(mref);
-        const auto ref_cls = type_class(mref->get_class());
         // If mref is defined in cls, then we use its corresponding merging type
         // method usage in source and target to approximate the
         // source_occurrences and target_occurrences after merging.
-        if (ref_cls == cls) {
-          const std::string& method_name =
-              mref->as_def()->get_simple_deobfuscated_name();
+        const DexMethod* meth = mref->as_def();
+        if (dedupable_mrefs.count(meth)) {
+          MethodGroup group = dedupable_mrefs.at(meth);
           source_occurrences =
-              source.get_merging_type_method_usage(merging_type, method_name);
+              source.get_merging_type_method_usage(merging_type, group);
           target_occurrences =
-              target.get_merging_type_method_usage(merging_type, method_name);
+              target.get_merging_type_method_usage(merging_type, group);
           gain +=
               m_deduped_weight *
               compute_gain(source_occurrences, target_occurrences, for_removal);

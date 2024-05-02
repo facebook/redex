@@ -41,6 +41,7 @@ using MethodRefs = std::unordered_set<DexMethodRef*>;
 using FieldRefs = std::unordered_set<DexFieldRef*>;
 using TypeRefs = std::unordered_set<DexType*>;
 using MergerIndex = size_t;
+using MethodGroup = size_t;
 
 struct DexInfo {
   bool primary{false};
@@ -225,30 +226,30 @@ also reject some legal cases.
   }
 
   void set_merging_type_method_usage(
-      std::unordered_map<MergerIndex, std::unordered_map<std::string, size_t>>&
+      std::unordered_map<MergerIndex, std::unordered_map<MethodGroup, size_t>>&
           merging_type_method_usage) {
     m_merging_type_method_usage = merging_type_method_usage;
   }
 
   size_t get_merging_type_method_usage(MergerIndex merging_type,
-                                       const std::string& name) const {
+                                       MethodGroup group) const {
     auto it = m_merging_type_method_usage.find(merging_type);
     if (it == m_merging_type_method_usage.end()) {
       return 0;
     }
-    auto it2 = it->second.find(name);
+    auto it2 = it->second.find(group);
     return it2 == it->second.end() ? 0 : it2->second;
   }
 
   void increase_merging_type_method_usage(MergerIndex merging_type,
-                                          const std::string& name) {
-    m_merging_type_method_usage[merging_type][name]++;
+                                          MethodGroup group) {
+    m_merging_type_method_usage[merging_type][group]++;
   }
 
   void decrease_merging_type_method_usage(MergerIndex merging_type,
-                                          const std::string& name) {
-    always_assert(m_merging_type_method_usage[merging_type][name] > 0);
-    m_merging_type_method_usage[merging_type][name]--;
+                                          MethodGroup group) {
+    always_assert(m_merging_type_method_usage[merging_type][group] > 0);
+    m_merging_type_method_usage[merging_type][group]--;
   }
 
   void set_num_new_methods(size_t num_new_methods) {
@@ -288,7 +289,7 @@ also reject some legal cases.
 
   // The following are used to track (hypothetical) class merging stats.
   std::unordered_map<MergerIndex, size_t> m_merging_type_usage;
-  std::unordered_map<MergerIndex, std::unordered_map<std::string, size_t>>
+  std::unordered_map<MergerIndex, std::unordered_map<MethodGroup, size_t>>
       m_merging_type_method_usage;
   int m_num_new_methods;
   int m_num_deduped_methods;
