@@ -542,6 +542,19 @@ bool TypedefAnnoChecker::check_typedef_value(
         break;
       }
       if (int_value_set->count(const_value) == 0) {
+        // when passing an integer to a default method, the value will be 0 if
+        // the default method will the default value. The const 0 is not
+        // annotated and might not be in the IntDef. Since the checker will
+        // check that the default value is a member of the IntDef, passing in 0
+        // is safe. Example caller and default methods: P1222824190 P1222829651
+        if (const_value == 0 && opcode::is_an_invoke(insn->opcode())) {
+          DexMethodRef* callee = insn->get_method();
+          if (callee->is_def() &&
+              boost::ends_with(callee->as_def()->get_simple_deobfuscated_name(),
+                               DEFAULT_SUFFIX)) {
+            break;
+          }
+        }
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: in method " << show(m)
             << "\n the int value " << show(const_value)
@@ -620,6 +633,13 @@ bool TypedefAnnoChecker::check_typedef_value(
             type_inference::get_typedef_anno_from_member(
                 callee, inference->get_annotations());
         if (anno == boost::none || anno != annotation) {
+          DexType* return_type = callee->get_proto()->get_rtype();
+          // constant folding might cause the source to be the invoked boolean
+          // method https://fburl.com/code/h3dn0ft0
+          if (type::is_boolean(return_type) && int_value_set->count(0) == 1 &&
+              int_value_set->count(1) == 1) {
+            break;
+          }
           std::ostringstream out;
           out << "TypedefAnnoCheckerPass: the method "
               << show(def->get_method()->as_def())
