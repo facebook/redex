@@ -25,6 +25,7 @@
 #include "androidfw/ResourceTypes.h"
 
 #include "Debug.h"
+#include "DexUtil.h"
 #include "GlobalConfig.h"
 #include "RedexMappedFile.h"
 
@@ -60,8 +61,6 @@ const inline std::set<std::string> POSSIBLE_CLASS_ATTRIBUTES = {
     "actionViewClass", "class", "controller",  "layout_behavior",
     "layoutManager",   "name",  "targetClass",
 };
-// Returns false if there are any characters that are not valid Java identifier.
-bool valid_java_identifier(const std::string& ident);
 // Returns false if there is no dot or it's not a Java identifier.
 bool valid_xml_element(const std::string& ident);
 
@@ -78,7 +77,7 @@ struct StringOrReference {
     if (ref != 0) {
       return true;
     }
-    return valid_java_identifier(str);
+    return java_names::is_identifier(str);
   }
 
   bool operator==(const StringOrReference& that) const {
