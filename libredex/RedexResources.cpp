@@ -25,7 +25,6 @@
 #include "GlobalConfig.h"
 #include "IOUtil.h"
 #include "Macros.h"
-#include "ProguardLexer.h"
 #include "ReadMaybeMapped.h"
 #include "StringUtil.h"
 #include "Trace.h"
@@ -490,11 +489,8 @@ void gather_r_classes(const Scope& scope, std::vector<DexClass*>* vec) {
   }
 }
 
-bool valid_java_identifier(const std::string& ident) {
-  return !ident.empty() && keep_rules::proguard_parser::is_identifier(ident);
-}
-
 bool valid_xml_element(const std::string& ident) {
-  return valid_java_identifier(ident) && ident.find('.') != std::string::npos;
+  return java_names::is_identifier(ident) &&
+         ident.find('.') != std::string::npos;
 }
 } // namespace resources

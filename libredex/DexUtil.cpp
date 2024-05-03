@@ -466,3 +466,29 @@ bool is_valid_identifier(std::string_view s) {
   }
   return true;
 }
+
+namespace java_names {
+
+namespace {
+bool is_not_idenfitier_character(char ch) {
+  return ch == '=' || ch == '+' || ch == '|' || ch == '@' || ch == '#' ||
+         ch == '^' || ch == '&' || ch == '"' || ch == '\'' || ch == '`' ||
+         ch == '~' || ch == '-';
+}
+} // namespace
+
+// Differs from above "is_valid_identifier" function since this is for external
+// names
+bool is_identifier(const std::string_view& ident) {
+  for (const char& ch : ident) {
+    // java identifiers can be multi-lingual so membership testing is complex.
+    // much simpler to test for what is definitely not an identifier and then
+    // assume everything else is a legal identifier char, accepting that we
+    // will have false positives.
+    if (is_deliminator(ch) || is_not_idenfitier_character(ch)) {
+      return false;
+    }
+  }
+  return true;
+}
+} // namespace java_names
