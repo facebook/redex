@@ -10,6 +10,7 @@
 #include "ClassMerging.h"
 #include "ConfigUtils.h"
 #include "InterDexGrouping.h"
+#include "InterDexPass.h"
 #include "IntraDexClassMergingPass.h"
 #include "ModelSpecGenerator.h"
 #include "PassManager.h"
@@ -52,6 +53,54 @@ void IntraDexClassMergingPass::bind_config() {
        interdex_grouping_inferring_mode);
   m_merging_spec.interdex_config.init_inferring_mode(
       interdex_grouping_inferring_mode);
+  bind("enable_reshuffle", true, m_enable_reshuffle);
+  // Bind reshuffle config.
+  bind("reserved_extra_frefs",
+       m_reshuffle_config.reserved_extra_frefs,
+       m_reshuffle_config.reserved_extra_frefs,
+       "How many extra frefs to be reserved for the dexes this pass "
+       "processes.");
+  bind("reserved_extra_trefs",
+       m_reshuffle_config.reserved_extra_trefs,
+       m_reshuffle_config.reserved_extra_trefs,
+       "How many extra trefs to be reserved for the dexes this pass "
+       "processes.");
+  bind("reserved_extra_mrefs",
+       m_reshuffle_config.reserved_extra_mrefs,
+       m_reshuffle_config.reserved_extra_mrefs,
+       "How many extra mrefs to be reserved for the dexes this pass "
+       "processes.");
+  bind("extra_linear_alloc_limit",
+       m_reshuffle_config.extra_linear_alloc_limit,
+       m_reshuffle_config.extra_linear_alloc_limit,
+       "How many extra linear_alloc_limit to be reserved for the dexes "
+       "this pass rocesses.");
+  bind("max_batches",
+       m_reshuffle_config.max_batches,
+       m_reshuffle_config.max_batches,
+       "How many batches to execute. More might yield better results, but "
+       "might take longer.");
+  bind("max_batch_size",
+       m_reshuffle_config.max_batch_size,
+       m_reshuffle_config.max_batch_size,
+       "How many class to move per batch. More might yield better results, "
+       "but might take longer.");
+  bind("other_weight",
+       m_reshuffle_config.other_weight,
+       m_reshuffle_config.other_weight,
+       "Weight for non-deduped method in mergeability-aware reshuffle cost "
+       "function.");
+  bind("deduped_weight",
+       m_reshuffle_config.deduped_weight,
+       m_reshuffle_config.deduped_weight,
+       "Weight for deduped method in mergeability-aware reshuffle cost "
+       "function.");
+  bind("exclude_below20pct_coldstart_classes",
+       false,
+       m_reshuffle_config.exclude_below20pct_coldstart_classes,
+       "Whether to exclude coldstart classes in between 1pctColdStart and "
+       "20pctColdStart marker"
+       "from the reshuffle.");
 }
 
 void IntraDexClassMergingPass::run_pass(DexStoresVector& stores,
@@ -73,6 +122,32 @@ void IntraDexClassMergingPass::run_pass(DexStoresVector& stores,
   if (m_merging_spec.roots.empty()) {
     TRACE(CLMG, 1, "No mergeable classes found by IntraDexClassMergingPass");
     return;
+  }
+
+  const auto* interdex_pass =
+      static_cast<interdex::InterDexPass*>(mgr.find_pass("InterDexPass"));
+  always_assert_log(interdex_pass, "InterDexPass missing");
+  auto& root_store = stores.at(0);
+  auto& root_dexen = root_store.get_dexen();
+  if (m_enable_reshuffle && interdex_pass->minimize_cross_dex_refs() &&
+      root_dexen.size() > 1) {
+    class_merging::Model merging_model = class_merging::construct_global_model(
+        scope, mgr, conf, stores, m_merging_spec, m_global_min_count);
+
+    InterDexReshuffleImpl impl(conf, mgr, m_reshuffle_config, scope, root_dexen,
+                               merging_model);
+    impl.compute_plan();
+    impl.apply_plan();
+
+    // Sanity check
+    std::unordered_set<DexClass*> original_scope_set(scope.begin(),
+                                                     scope.end());
+    scope = build_class_scope(stores);
+    std::unordered_set<DexClass*> new_scope_set(scope.begin(), scope.end());
+    always_assert(original_scope_set.size() == new_scope_set.size());
+    for (auto cls : original_scope_set) {
+      always_assert(new_scope_set.count(cls));
+    }
   }
 
   class_merging::merge_model(type_system, scope, conf, mgr, stores,

@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include "InterDex.h"
+#include "InterDexReshuffleImpl.h"
 #include "Model.h"
 #include "Pass.h"
 
@@ -40,6 +42,8 @@ class IntraDexClassMergingPass : public Pass {
 
  private:
   ModelSpec m_merging_spec;
+  bool m_enable_reshuffle;
+  ReshuffleConfig m_reshuffle_config;
   size_t m_global_min_count;
 };
 
