@@ -536,7 +536,7 @@ TEST_F(SourceBlocksDedupTest, source_blocks_chain) {
    succs: (goto B6)\n\
  Block B6:\n\
    preds: (goto B3) (goto B4) (goto B5)\n\
-   SOURCE-BLOCKS: Lcom/facebook/redextest/SourceBlocksDedupTest;.useSwitch:()I@4294967295() Lcom/facebook/redextest/SourceBlocksDedupTest;.useSwitch:()I@100() "
+   SOURCE-BLOCKS: Lcom/facebook/redextest/SourceBlocksDedupTest;.useSwitch:()I@100() "
       "Lcom/facebook/redextest/SourceBlocksDedupTest;.useSwitch:()I@100() Lcom/facebook/redextest/SourceBlocksDedupTest;.useSwitch:()I@100()\n\
    POSITION: Lcom/facebook/redextest/SourceBlocksDedupTest;.useSwitch:()I(SourceBlocksDedupTest.java:22)\n\
    OPCODE: INVOKE_VIRTUAL v4, Lcom/facebook/redextest/SourceBlocksDedupTest;.someFunc:()V\n\

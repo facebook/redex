@@ -870,7 +870,10 @@ class DedupBlocksImpl {
             auto fwd_ir_it = IRList::iterator(std::prev(it.base()));
             split_block = cfg.split_block(block, fwd_ir_it);
           }
-          copy_over_source_block(block, split_block);
+          // add a source block in the beginning if there isn't one already
+          if (split_block->begin()->type != MFLOW_SOURCE_BLOCK) {
+            copy_over_source_block(block, split_block);
+          }
           continue;
         }
 
@@ -897,10 +900,13 @@ class DedupBlocksImpl {
         }
 
         auto cfg_it = block->to_cfg_instruction_iterator(fwd_it);
-        // Split the block
+        // Split the block and add a source block in the beginning if there
+        // isn't one already
         auto split_block = cfg.split_block(cfg_it);
+        if (split_block->begin()->type != MFLOW_SOURCE_BLOCK) {
+          copy_over_source_block(block, split_block);
+        }
 
-        copy_over_source_block(block, split_block);
         TRACE(DEDUP_BLOCKS, 4,
               "split_postfix: split block : old = %zu, new = %zu", block->id(),
               split_block->id());
