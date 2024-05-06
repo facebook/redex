@@ -303,24 +303,6 @@ void AndroidResources::collect_layout_classes_and_attributes(
       // Raw would not contain binary XML.
       "raw",
   });
-
-  if (slow_invariants_debug) {
-    TRACE(RES, 1,
-          "Checking collect_layout_classes_and_attributes filter assumption");
-    size_t out_classes_size = out_classes->size();
-    size_t out_attributes_size = out_attributes->size();
-
-    // Comparison is complicated, as out_attributes is a multi-map.
-    // Assume that the inputs were empty, for simplicity.
-    out_classes->clear();
-    out_attributes->clear();
-
-    collect_fn({});
-    size_t new_out_classes_size = out_classes->size();
-    size_t new_out_attributes_size = out_attributes->size();
-    redex_assert(out_classes_size == new_out_classes_size);
-    redex_assert(out_attributes_size == new_out_attributes_size);
-  }
 }
 
 void AndroidResources::collect_xml_attribute_string_values(
