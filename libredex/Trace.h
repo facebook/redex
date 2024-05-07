@@ -115,7 +115,6 @@ class DexType;
   TM(PEEPHOLE)          \
   TM(PGR)               \
   TM(PM)                \
-  TM(POST_LOWERING)     \
   TM(PTA)               \
   TM(PURITY)            \
   TM(QUICK)             \

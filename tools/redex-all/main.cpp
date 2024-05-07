@@ -61,7 +61,6 @@
 #include "NoOptimizationsMatcher.h"
 #include "OptData.h"
 #include "PassRegistry.h"
-#include "PostLowering.h"
 #include "ProguardConfiguration.h" // New ProGuard configuration
 #include "ProguardMatcher.h"
 #include "ProguardParser.h" // New ProGuard Parser
@@ -374,10 +373,6 @@ Arguments parse_args(int argc, char* argv[]) {
       po::bool_switch(&args.redex_options.disable_dex_hasher)
           ->default_value(false),
       "If specified, states that the current run disables dex hasher.\n");
-  od.add_options()(
-      "post-lowering",
-      po::bool_switch(&args.redex_options.post_lowering)->default_value(false),
-      "If specified, post lowering steps are run.\n");
   od.add_options()(
       "arch,A",
       po::value<std::vector<std::string>>(),
@@ -1414,8 +1409,6 @@ void redex_backend(ConfigFiles& conf,
   }();
 
   std::set<uint32_t> signatures;
-  std::unique_ptr<PostLowering> post_lowering =
-      redex_options.post_lowering ? PostLowering::create() : nullptr;
 
   const bool mem_stats_enabled =
       traceEnabled(STATS, 1) || conf.get_json_config().get("mem_stats", true);
@@ -1438,9 +1431,6 @@ void redex_backend(ConfigFiles& conf,
   bool should_preserve_input_dexes =
       conf.get_json_config().get("preserve_input_dexes", false);
   if (should_preserve_input_dexes) {
-    always_assert_log(
-        !post_lowering,
-        "post lowering should be off when preserving input dex option is on");
     TRACE(MAIN, 1, "Skipping writing output dexes as configured");
   } else {
     redex_assert(!stores.empty());
@@ -1456,11 +1446,6 @@ void redex_backend(ConfigFiles& conf,
       for (size_t i = 0; i < store.get_dexen().size(); i++) {
         DexClasses* classes = &store.get_dexen()[i];
         auto gtypes = std::make_shared<GatheredTypes>(classes);
-
-        if (post_lowering) {
-          post_lowering->load_dex_indexes(conf, min_sdk, classes, *gtypes,
-                                          store_name, i);
-        }
 
         auto this_dex_stats = write_classes_to_dex(
             redex::get_dex_output_name(output_dir, store, i),
@@ -1497,10 +1482,6 @@ void redex_backend(ConfigFiles& conf,
   sanitizers::lsan_do_recoverable_leak_check();
 
   std::vector<DexMethod*> needs_debug_line_mapping;
-  if (post_lowering) {
-    post_lowering->run(stores);
-    post_lowering->finalize(manager.asset_manager());
-  }
 
   {
     Timer t("Writing opt decisions data");
