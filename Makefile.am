@@ -191,7 +191,6 @@ libredex_la_SOURCES = \
 	libredex/PluginRegistry.cpp \
 	libredex/PointsToSemantics.cpp \
 	libredex/PointsToSemanticsUtils.cpp \
-	libredex/PostLowering.cpp \
 	libredex/PrintSeeds.cpp \
 	libredex/ProguardConfiguration.cpp \
 	libredex/ProguardLexer.cpp \
