@@ -1369,11 +1369,21 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
       /* ignore_unreachable */ !reduced_code,
       [&](auto* insn) { return opcode::is_a_load_param(insn->opcode()); });
   auto def_use_chains = chains.get_def_use_chains();
+  size_t arg_idx = 0;
   for (auto& mie : cfg->get_param_instructions()) {
-    auto uses = def_use_chains[mie.insn];
-    if (uses.empty()) {
-      unused_args++;
+    auto it = def_use_chains.find(mie.insn);
+    if (it == def_use_chains.end() || it->second.empty()) {
+      float multiplier =
+          1.0f; // all other multipliers are relative to this normative value
+      if (call_site_summary) {
+        const auto& cv = call_site_summary->arguments.get(arg_idx);
+        if (!cv.is_top()) {
+          multiplier = get_unused_arg_multiplier(cv);
+        }
+      }
+      unused_args += multiplier;
     }
+    arg_idx++;
   }
   insn_size = cfg->estimate_code_units();
   if (returns > 1) {
@@ -1394,6 +1404,44 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
                        unused_args,
                        std::move(reduced_code),
                        insn_size};
+}
+
+float MultiMethodInliner::get_unused_arg_multiplier(
+    const ConstantValue& cv) const {
+  always_assert(!cv.is_top());
+  always_assert(!cv.is_bottom());
+  if (cv.is_zero()) {
+    return m_inliner_cost_config.unused_arg_zero_multiplier;
+  }
+  if (auto scd = cv.maybe_get<SignedConstantDomain>()) {
+    if (scd->get_constant()) {
+      return m_inliner_cost_config.unused_arg_non_zero_constant_multiplier;
+    }
+    if (scd->is_nez()) {
+      return m_inliner_cost_config.unused_arg_nez_multiplier;
+    }
+    return m_inliner_cost_config.unused_arg_interval_multiplier;
+  }
+  if (cv.is_object()) {
+    if (cv.is_singleton_object()) {
+      return m_inliner_cost_config.unused_arg_singleton_object_multiplier;
+    }
+    if (cv.is_object_with_immutable_attr()) {
+      return m_inliner_cost_config
+          .unused_arg_object_with_immutable_attr_multiplier;
+    }
+    if (cv.maybe_get<StringDomain>()) {
+      return m_inliner_cost_config.unused_arg_string_multiplier;
+    }
+    if (cv.maybe_get<ConstantClassObjectDomain>()) {
+      return m_inliner_cost_config.unused_arg_class_object_multiplier;
+    }
+    if (cv.maybe_get<NewObjectDomain>()) {
+      return m_inliner_cost_config.unused_arg_new_object_multiplier;
+    }
+    return m_inliner_cost_config.unused_arg_other_object_multiplier;
+  }
+  return m_inliner_cost_config.unused_arg_not_top_multiplier;
 }
 
 const InlinedCost* MultiMethodInliner::get_fully_inlined_cost(

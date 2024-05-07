@@ -87,6 +87,18 @@ struct InlinerCostConfig {
   size_t cross_dex_penalty_coe1;
   size_t cross_dex_penalty_coe2;
   size_t cross_dex_penalty_const;
+
+  float unused_arg_zero_multiplier;
+  float unused_arg_non_zero_constant_multiplier;
+  float unused_arg_nez_multiplier;
+  float unused_arg_interval_multiplier;
+  float unused_arg_singleton_object_multiplier;
+  float unused_arg_object_with_immutable_attr_multiplier;
+  float unused_arg_string_multiplier;
+  float unused_arg_class_object_multiplier;
+  float unused_arg_new_object_multiplier;
+  float unused_arg_other_object_multiplier;
+  float unused_arg_not_top_multiplier;
 };
 
 const struct InlinerCostConfig DEFAULT_COST_CONFIG = {
@@ -108,6 +120,17 @@ const struct InlinerCostConfig DEFAULT_COST_CONFIG = {
     1, // cross_dex_penalty_coe1;
     0, // cross_dex_penalty_coe2;
     1, // cross_dex_penalty_const;
+    1.0f, // unused_arg_zero_multiplier
+    1.0f, // unused_arg_non_zero_constant_multiplier
+    1.0f, // unused_arg_nez_multiplier
+    1.0f, // unused_arg_interval_multiplier
+    1.0f, // unused_arg_singleton_object_multiplier
+    1.0f, // unused_arg_object_with_immutable_attr_multiplier
+    1.0f, // unused_arg_string_multiplier
+    1.0f, // unused_arg_class_object_multiplier
+    1.0f, // unused_arg_new_object_multiplier
+    1.0f, // unused_arg_other_object_multiplier
+    1.0f, // unused_arg_not_top_multiplier
 };
 
 // All call-sites of a callee.
@@ -473,6 +496,8 @@ class MultiMethodInliner {
       DexProto* proto,
       const IRCode* code,
       const CallSiteSummary* call_site_summary = nullptr);
+
+  float get_unused_arg_multiplier(const ConstantValue&) const;
 
   /**
    * Estimate inlined cost for fully inlining a callee without using any
