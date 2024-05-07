@@ -891,3 +891,133 @@ TEST_F(SourceBlocksTest, get_last_source_block_before_non_entry) {
     }
   }
 }
+
+// dedup the diamond test code from the DedupBlocks unit tests
+TEST_F(SourceBlocksTest, dedup_diamond_with_interactions) {
+  g_redex->instrument_mode = true;
+  IRList::CONSECUTIVE_STYLE = IRList::ConsecutiveStyle::kChain;
+  DexMethod* method = create_method("diamond");
+
+  auto str = R"(
+    (
+      (.src_block "LFoo;.bar:()V" 1 (1.0 1.0) (1.0 1.0) (1.0 1.0))
+      (const v0 0)
+      (if-eqz v0 :left)
+      (goto :right)
+
+      (:left)
+      (.src_block "LFoo;.bar:()V" 2 (1.0 1.0) (0.0 0.0) (0.0 0.0))
+      (const v1 1)
+      (goto :middle)
+
+      (:right)
+      (.src_block "LFoo;.bar:()V" 3 (0.0 0.0) (1.0 1.0) (0.0 0.0))
+      (const v1 1)
+
+      (:middle)
+      (.src_block "LFoo;.bar:()V" 4 (1.0 1.0) (1.0 1.0) (0.0 0.0))
+      (return-void)
+    )
+  )";
+
+  auto code = assembler::ircode_from_string(str);
+  method->set_code(std::move(code));
+  method->get_code()->build_cfg();
+
+  dedup_blocks_impl::Config empty_config;
+  dedup_blocks_impl::DedupBlocks db(&empty_config, method);
+  db.run();
+  method->get_code()->clear_cfg();
+
+  auto expected_str = R"(
+    (
+      (.src_block "LFoo;.bar:()V" 1 (1.0 1.0) (1.0 1.0) (1.0 1.0))
+      (const v0 0)
+      (if-eqz v0 :left)
+
+      (.src_block "LFoo;.bar:()V" 3 (0.0 0.0) (1.0 1.0) (0.0 0.0))
+
+      (:middle)
+      (.src_block "LFoo;.bar:()V" 4294967295 (1.0 1.0) (1.0 1.0) (0.0 0.0))
+      (const v1 1)
+      (.src_block "LFoo;.bar:()V" 4 (1.0 1.0) (1.0 1.0) (0.0 0.0))
+      (return-void)
+
+      (:left)
+      (.src_block "LFoo;.bar:()V" 2 (1.0 1.0) (0.0 0.0) (0.0 0.0))
+      (goto :middle)
+    )
+  )";
+  auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+}
+
+TEST_F(SourceBlocksTest, dedup_multiple_interactions_in_same_block) {
+  g_redex->instrument_mode = true;
+  IRList::CONSECUTIVE_STYLE = IRList::ConsecutiveStyle::kChain;
+  DexMethod* method = create_method("multiple_interactions");
+
+  auto str = R"(
+    (
+      (.src_block "LFoo;.bar:()V" 1 (5.0 1.0) (5.0 1.0) (5.0 1.0))
+      (const v0 0)
+      (if-eqz v0 :left)
+      (goto :right)
+
+      (:left)
+      (.src_block "LFoo;.bar:()V" 2 (2.0 0.5) (0.0 0.0) (0.0 0.0))
+      (const v1 1)
+      (.src_block "LFoo;.bar:()V" 2 (1.0 0.5) (0.0 0.0) (0.0 0.0))
+      (const v2 2)
+      (const v3 3)
+      (goto :middle)
+
+      (:right)
+      (.src_block "LFoo;.bar:()V" 3 (0.0 0.0) (3.0 0.5) (0.0 0.0))
+      (const v1 1)
+      (.src_block "LFoo;.bar:()V" 3 (0.0 0.0) (2.0 0.4) (0.0 0.0))
+      (const v2 2)
+      (const v3 3)
+
+      (:middle)
+      (.src_block "LFoo;.bar:()V" 4 (5.0 0.5) (5.0 0.5) (0.0 0.0))
+      (return-void)
+    )
+  )";
+
+  auto code = assembler::ircode_from_string(str);
+  method->set_code(std::move(code));
+  method->get_code()->build_cfg();
+
+  dedup_blocks_impl::Config empty_config;
+  dedup_blocks_impl::DedupBlocks db(&empty_config, method);
+  db.run();
+  method->get_code()->clear_cfg();
+
+  auto expected_str = R"(
+    (
+      (.src_block "LFoo;.bar:()V" 1 (5.0 1.0) (5.0 1.0) (5.0 1.0))
+      (const v0 0)
+      (if-eqz v0 :left)
+
+      (.src_block "LFoo;.bar:()V" 3 (0.0 0.0) (3.0 0.5) (0.0 0.0))
+      (const v1 1)
+      (.src_block "LFoo;.bar:()V" 3 (0.0 0.0) (2.0 0.4) (0.0 0.0))
+
+      (:synthetic)
+      (.src_block "LFoo;.bar:()V" 4294967295 (1.0 0.5) (2.0 0.4) (0.0 0.0))
+      (const v2 2)
+      (const v3 3)
+      (.src_block "LFoo;.bar:()V" 4 (5.0 0.5) (5.0 0.5) (0.0 0.0))
+      (return-void)
+
+      (:left)
+      (.src_block "LFoo;.bar:()V" 2 (2.0 0.5) (0.0 0.0) (0.0 0.0))
+      (const v1 1)
+      (.src_block "LFoo;.bar:()V" 2 (1.0 0.5) (0.0 0.0) (0.0 0.0))
+      (goto :synthetic)
+    )
+  )";
+  auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+}
