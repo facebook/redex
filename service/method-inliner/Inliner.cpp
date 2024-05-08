@@ -348,8 +348,7 @@ void MultiMethodInliner::inline_methods() {
   info.critical_path_length =
       m_scheduler.run(methods_to_schedule.begin(), methods_to_schedule.end());
 
-  delayed_visibility_changes_apply();
-  delayed_invoke_direct_to_static();
+  flush();
   info.waited_seconds = m_scheduler.get_thread_pool().get_waited_seconds();
 }
 
@@ -2177,8 +2176,12 @@ bool MultiMethodInliner::cross_store_reference(const DexMethod* caller,
 }
 
 void MultiMethodInliner::delayed_visibility_changes_apply() {
+  if (!m_delayed_visibility_changes) {
+    return;
+  }
   visibility_changes_apply_and_record_make_static(
       *m_delayed_visibility_changes);
+  m_delayed_visibility_changes->clear();
 }
 
 void MultiMethodInliner::visibility_changes_apply_and_record_make_static(

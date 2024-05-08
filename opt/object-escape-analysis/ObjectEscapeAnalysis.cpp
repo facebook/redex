@@ -2085,6 +2085,8 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
          &inlinable_methods_kept, &callees_cache, &method_summary_cache,
          &conf.get_method_profiles());
 
+  inliner.flush();
+
   TRACE(OEA, 1, "[object escape analysis] total savings: %zu",
         (size_t)stats.total_savings);
   TRACE(

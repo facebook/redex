@@ -39,6 +39,7 @@ struct VisibilityChanges {
   void insert(const VisibilityChanges& other);
   void apply() const;
   bool empty() const;
+  void clear();
 };
 
 /**

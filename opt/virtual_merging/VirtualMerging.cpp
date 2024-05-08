@@ -124,6 +124,9 @@ VirtualMerging::VirtualMerging(DexStoresVector& stores,
       /* const std::unordered_set<DexMethodRef*>& configured_pure_methods */ {},
       min_sdk_api));
 }
+
+void VirtualMerging::flush() { m_inliner->flush(); }
+
 VirtualMerging::~VirtualMerging() {}
 
 // Part 1: Identify which virtual methods get invoked via invoke-super --- we'll
@@ -1513,6 +1516,7 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
                     m_perf_config);
   vm.run(conf.get_method_profiles(), m_strategy, m_insertion_strategy);
   auto stats = vm.get_stats();
+  vm.flush();
 
   mgr.incr_metric(METRIC_DEDUPPED_VIRTUAL_METHODS, dedupped);
   mgr.incr_metric(METRIC_INVOKE_SUPER_METHODS, stats.invoke_super_methods);

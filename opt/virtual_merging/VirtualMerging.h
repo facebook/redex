@@ -156,6 +156,8 @@ class VirtualMerging {
                std::vector<std::pair<const DexMethod*, const DexMethod*>>,
                virtualscopes_comparator>;
 
+  void flush();
+
  private:
   MergablePairsByVirtualScope compute_mergeable_pairs_by_virtual_scopes(
       const method_profiles::MethodProfiles&,

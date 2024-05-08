@@ -251,10 +251,17 @@ class MultiMethodInliner {
       bool local_only = false,
       InlinerCostConfig inliner_cost_config = DEFAULT_COST_CONFIG);
 
-  ~MultiMethodInliner() { delayed_invoke_direct_to_static(); }
+  /*
+   * Applies certain delayed scope-wide changes, including in particular
+   * visibility and staticizing changes.
+   */
+  void flush() {
+    delayed_visibility_changes_apply();
+    delayed_invoke_direct_to_static();
+  }
 
   /**
-   * attempt inlining for all candidates.
+   * Attempt inlining for all candidates, and flushes scope-wide changes.
    */
   void inline_methods();
 
@@ -532,9 +539,6 @@ class MultiMethodInliner {
   /**
    * Staticize required methods (stored in `m_delayed_make_static`) and update
    * opcodes accordingly.
-   *
-   * NOTE: It only needs to be called once after inlining. Since it is called
-   *       from the destructor, there is no need to manually call it.
    */
   void delayed_invoke_direct_to_static();
 

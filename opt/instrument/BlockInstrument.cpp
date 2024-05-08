@@ -2062,6 +2062,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
         analysis_cls, field->get_name()->str(),
         static_cast<int>(ProfileTypeFlags::BasicBlockHitCount));
   }
+  inliner.flush();
 
   write_metadata(cfg, options.metadata_file_name, instrumented_methods,
                  options.instrumentation_strategy);
