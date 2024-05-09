@@ -352,6 +352,7 @@ void DexEncodedValueAnnotation::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
 
 static DexAnnotationElement get_annotation_element(DexIdx* idx,
                                                    const uint8_t*& encdata) {
+  always_assert(encdata < idx->end());
   uint32_t sidx = read_uleb128(&encdata);
   auto name = idx->get_stringidx(sidx);
   always_assert_log(name != nullptr,
@@ -362,6 +363,7 @@ static DexAnnotationElement get_annotation_element(DexIdx* idx,
 
 std::unique_ptr<DexEncodedValueArray> get_encoded_value_array(
     DexIdx* idx, const uint8_t*& encdata) {
+  always_assert(encdata < idx->end());
   uint32_t size = read_uleb128(&encdata);
   auto* evlist = new std::vector<std::unique_ptr<DexEncodedValue>>();
   evlist->reserve(size);
@@ -444,6 +446,7 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::zero_for_type(DexType* type) {
 
 std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
     DexIdx* idx, const uint8_t*& encdata) {
+  always_assert(encdata < idx->end());
   uint8_t evhdr = *encdata++;
   DexEncodedValueTypes evt = (DexEncodedValueTypes)DEVT_HDR_TYPE(evhdr);
   uint8_t evarg = DEVT_HDR_ARG(evhdr);
@@ -456,6 +459,7 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
     [[fallthrough]];
   case DEVT_LONG: {
     always_assert(evarg <= 7);
+    always_assert(encdata + evarg < idx->end());
     uint64_t v = read_evarg(encdata, evarg, true /* sign_extend */);
     return std::unique_ptr<DexEncodedValue>(
         new DexEncodedValuePrimitive(evt, v));
@@ -465,6 +469,7 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
     [[fallthrough]];
   case DEVT_CHAR: {
     always_assert(evarg <= 1);
+    always_assert(encdata + evarg < idx->end());
     uint64_t v = read_evarg(encdata, evarg, false /* sign_extend */);
     return std::unique_ptr<DexEncodedValue>(
         new DexEncodedValuePrimitive(evt, v));
@@ -472,6 +477,7 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
   case DEVT_FLOAT: {
     always_assert_log(evarg <= 3, "Unexpected float size: %u", evarg);
     // We sign extend floats so that they can be treated just like signed ints
+    always_assert(encdata + evarg < idx->end());
     uint64_t v = read_evarg(encdata, evarg, true /* sign_extend */)
                  << ((3 - evarg) * 8);
     return std::unique_ptr<DexEncodedValue>(
@@ -479,6 +485,7 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
   }
   case DEVT_DOUBLE: {
     always_assert(evarg <= 7);
+    always_assert(encdata + evarg < idx->end());
     uint64_t v = read_evarg(encdata, evarg, false /* sign_extend */)
                  << ((7 - evarg) * 8);
     return std::unique_ptr<DexEncodedValue>(
@@ -486,6 +493,7 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
   }
   case DEVT_METHOD_TYPE: {
     always_assert(evarg <= 3);
+    always_assert(encdata + evarg < idx->end());
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     DexProto* evproto = idx->get_protoidx(evidx);
     return std::unique_ptr<DexEncodedValue>(
@@ -493,6 +501,7 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
   }
   case DEVT_METHOD_HANDLE: {
     always_assert(evarg <= 3);
+    always_assert(encdata + evarg < idx->end());
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     DexMethodHandle* evmethodhandle = idx->get_methodhandleidx(evidx);
     return std::unique_ptr<DexEncodedValue>(
@@ -508,6 +517,7 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
         new DexEncodedValueBit(evt, evarg > 0));
   case DEVT_STRING: {
     always_assert(evarg <= 3);
+    always_assert(encdata + evarg < idx->end());
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     auto evstring = idx->get_stringidx(evidx);
     always_assert_log(evstring != nullptr,
@@ -517,6 +527,7 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
   }
   case DEVT_TYPE: {
     always_assert(evarg <= 3);
+    always_assert(encdata + evarg < idx->end());
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     DexType* evtype = idx->get_typeidx(evidx);
     always_assert_log(evtype != nullptr,
@@ -528,6 +539,7 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
     [[fallthrough]];
   case DEVT_ENUM: {
     always_assert(evarg <= 3);
+    always_assert(encdata + evarg < idx->end());
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     DexFieldRef* evfield = idx->get_fieldidx(evidx);
     always_assert_log(evfield != nullptr,
@@ -537,6 +549,7 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
   }
   case DEVT_METHOD: {
     always_assert(evarg <= 3);
+    always_assert(encdata + evarg < idx->end());
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     DexMethodRef* evmethod = idx->get_methodidx(evidx);
     always_assert_log(evmethod != nullptr,
@@ -550,7 +563,9 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
   case DEVT_ANNOTATION: {
     always_assert(evarg == 0);
     EncodedAnnotations eanno{};
+    always_assert(encdata < idx->end());
     uint32_t tidx = read_uleb128(&encdata);
+    always_assert(encdata < idx->end());
     uint32_t count = read_uleb128(&encdata);
     DexType* type = idx->get_typeidx(tidx);
     always_assert_log(type != nullptr,
@@ -570,9 +585,12 @@ std::unique_ptr<DexAnnotation> DexAnnotation::get_annotation(
     DexIdx* idx, uint32_t anno_off) {
   if (anno_off == 0) return nullptr;
   const uint8_t* encdata = idx->get_uleb_data(anno_off);
+  always_assert(encdata < idx->end());
   uint8_t viz = *encdata++;
   always_assert_log(viz <= DAV_SYSTEM, "Invalid annotation visibility %d", viz);
+  always_assert(encdata < idx->end());
   uint32_t tidx = read_uleb128(&encdata);
+  always_assert(encdata < idx->end());
   uint32_t count = read_uleb128(&encdata);
   DexType* type = idx->get_typeidx(tidx);
   always_assert_log(type != nullptr, "Invalid annotation type");
