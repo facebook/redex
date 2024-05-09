@@ -43,6 +43,7 @@ class IntraDexClassMergingPass : public Pass {
  private:
   ModelSpec m_merging_spec;
   bool m_enable_reshuffle;
+  bool m_enable_mergeability_aware_reshuffle;
   ReshuffleConfig m_reshuffle_config;
   size_t m_global_min_count;
 };

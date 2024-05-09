@@ -54,6 +54,8 @@ void IntraDexClassMergingPass::bind_config() {
   m_merging_spec.interdex_config.init_inferring_mode(
       interdex_grouping_inferring_mode);
   bind("enable_reshuffle", true, m_enable_reshuffle);
+  bind("enable_mergeability_aware_reshuffle", true,
+       m_enable_mergeability_aware_reshuffle);
   // Bind reshuffle config.
   bind("reserved_extra_frefs",
        m_reshuffle_config.reserved_extra_frefs,
@@ -131,14 +133,20 @@ void IntraDexClassMergingPass::run_pass(DexStoresVector& stores,
   auto& root_dexen = root_store.get_dexen();
   if (m_enable_reshuffle && interdex_pass->minimize_cross_dex_refs() &&
       root_dexen.size() > 1) {
-    class_merging::Model merging_model = class_merging::construct_global_model(
-        scope, mgr, conf, stores, m_merging_spec, m_global_min_count);
-
-    InterDexReshuffleImpl impl(conf, mgr, m_reshuffle_config, scope, root_dexen,
-                               merging_model);
-    impl.compute_plan();
-    impl.apply_plan();
-
+    if (m_enable_mergeability_aware_reshuffle) {
+      class_merging::Model merging_model =
+          class_merging::construct_global_model(
+              scope, mgr, conf, stores, m_merging_spec, m_global_min_count);
+      InterDexReshuffleImpl impl(conf, mgr, m_reshuffle_config, scope,
+                                 root_dexen, merging_model);
+      impl.compute_plan();
+      impl.apply_plan();
+    } else {
+      InterDexReshuffleImpl impl(conf, mgr, m_reshuffle_config, scope,
+                                 root_dexen);
+      impl.compute_plan();
+      impl.apply_plan();
+    }
     // Sanity check
     std::unordered_set<DexClass*> original_scope_set(scope.begin(),
                                                      scope.end());
