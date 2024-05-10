@@ -288,6 +288,7 @@ namespace {
 
 DexType* parse_type(std::string_view& buf) {
   char typebuffer[MAX_CLASS_NAMELEN];
+  always_assert(!buf.empty());
   char desc = buf.at(0);
   buf = buf.substr(1);
   switch (desc) {
@@ -312,10 +313,12 @@ DexType* parse_type(std::string_view& buf) {
   case 'L': {
     char* tpout = typebuffer;
     *tpout++ = desc;
+    always_assert(!buf.empty());
     while (buf.at(0) != ';') {
       *tpout++ = buf[0];
       buf = buf.substr(1);
     }
+    always_assert(!buf.empty());
     *tpout++ = buf.at(0);
     buf = buf.substr(1);
     *tpout = '\0';
@@ -325,14 +328,17 @@ DexType* parse_type(std::string_view& buf) {
   case '[': {
     char* tpout = typebuffer;
     *tpout++ = desc;
+    always_assert(!buf.empty());
     while (buf.at(0) == '[') {
       *tpout++ = buf[0];
       buf = buf.substr(1);
+      always_assert(!buf.empty());
     }
     if (buf.at(0) == 'L') {
       while (buf.at(0) != ';') {
         *tpout++ = buf[0];
         buf = buf.substr(1);
+        always_assert(!buf.empty());
       }
       *tpout++ = buf.at(0);
       buf = buf.substr(1);
@@ -349,6 +355,7 @@ DexType* parse_type(std::string_view& buf) {
 }
 
 DexTypeList* extract_arguments(std::string_view& buf) {
+  always_assert(buf.size() >= 2);
   buf = buf.substr(1);
   if (buf.at(0) == ')') {
     buf = buf.substr(1);
@@ -363,6 +370,7 @@ DexTypeList* extract_arguments(std::string_view& buf) {
       return nullptr;
     }
     args.push_back(dtype);
+    always_assert(!buf.empty());
   }
   buf = buf.substr(1);
   return DexTypeList::make_type_list(std::move(args));
