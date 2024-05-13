@@ -66,6 +66,9 @@ void MethodInlinePass::bind_config() {
   bind("cross_dex_penalty_const",
        DEFAULT_COST_CONFIG.cross_dex_penalty_const,
        m_inliner_cost_config.cross_dex_penalty_const);
+  bind("cross_dex_bonus_const",
+       DEFAULT_COST_CONFIG.cross_dex_bonus_const,
+       m_inliner_cost_config.cross_dex_bonus_const);
   bind("unused_arg_zero_multiplier",
        DEFAULT_COST_CONFIG.unused_arg_zero_multiplier,
        m_inliner_cost_config.unused_arg_zero_multiplier);

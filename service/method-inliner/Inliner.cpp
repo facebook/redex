@@ -1692,6 +1692,16 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
     }
   }
 
+  float cross_dex_bonus{0};
+  if (can_delete_callee && m_cross_dex_penalty) {
+    auto callee_code_refs = get_callee_code_refs(callee);
+    const auto& mrefs = callee_code_refs->methods;
+    if (std::none_of(mrefs.begin(), mrefs.end(),
+                     [callee](const auto* m) { return m != callee; })) {
+      cross_dex_bonus = m_inliner_cost_config.cross_dex_bonus_const;
+    }
+  }
+
   // 2. Determine costs of keeping the invoke instruction
 
   size_t caller_count{0};
@@ -1701,11 +1711,12 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   float invoke_cost =
       get_invoke_cost(m_inliner_cost_config, callee, inlined_cost->result_used);
   TRACE(INLINE, 3,
-        "[too_many_callers] %zu calls to %s; cost: inlined %f + %f, invoke %f",
+        "[too_many_callers] %zu calls to %s; cost: inlined %f + %f - %f, "
+        "invoke %f",
         caller_count, SHOW(callee), inlined_cost->code, cross_dex_penalty,
-        invoke_cost);
+        cross_dex_bonus, invoke_cost);
 
-  size_t classes = callee_caller_refs ? callee_caller_refs->classes : 0;
+  size_t classes = callee_caller_refs ? callee_caller_refs->classes : 1;
 
   size_t method_cost = 0;
   if (can_delete_callee) {
@@ -1720,7 +1731,7 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   if ((inlined_cost->code -
        inlined_cost->unused_args * m_inliner_cost_config.unused_args_discount) *
               caller_count +
-          classes * cross_dex_penalty >
+          classes * (cross_dex_penalty - cross_dex_bonus) >
       invoke_cost * caller_count + method_cost) {
     return true;
   }

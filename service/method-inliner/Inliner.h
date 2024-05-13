@@ -87,6 +87,7 @@ struct InlinerCostConfig {
   size_t cross_dex_penalty_coe1;
   size_t cross_dex_penalty_coe2;
   size_t cross_dex_penalty_const;
+  float cross_dex_bonus_const;
 
   float unused_arg_zero_multiplier;
   float unused_arg_non_zero_constant_multiplier;
@@ -120,6 +121,7 @@ const struct InlinerCostConfig DEFAULT_COST_CONFIG = {
     1, // cross_dex_penalty_coe1;
     0, // cross_dex_penalty_coe2;
     1, // cross_dex_penalty_const;
+    0.0f, // cross_dex_bonus_const
     1.0f, // unused_arg_zero_multiplier
     1.0f, // unused_arg_non_zero_constant_multiplier
     1.0f, // unused_arg_nez_multiplier
