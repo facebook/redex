@@ -84,9 +84,9 @@ struct InlinerCostConfig {
 
   // Those configs are used to calculate the penalty for worse cross-dex-ref
   // minimization results due to inlining.
-  size_t cross_dex_penalty_coe1;
-  size_t cross_dex_penalty_coe2;
-  size_t cross_dex_penalty_const;
+  float cross_dex_penalty_coe1;
+  float cross_dex_penalty_coe2;
+  float cross_dex_penalty_const;
   float cross_dex_bonus_const;
 
   float unused_arg_zero_multiplier;
@@ -118,9 +118,9 @@ const struct InlinerCostConfig DEFAULT_COST_CONFIG = {
     4, // insn_has_lit_cost_1
     2, // insn_has_lit_cost_2
     1, // insn_has_lit_cost_3
-    1, // cross_dex_penalty_coe1;
-    0, // cross_dex_penalty_coe2;
-    1, // cross_dex_penalty_const;
+    1.0f, // cross_dex_penalty_coe1
+    0.0f, // cross_dex_penalty_coe2
+    1.0f, // cross_dex_penalty_const
     0.0f, // cross_dex_bonus_const
     1.0f, // unused_arg_zero_multiplier
     1.0f, // unused_arg_non_zero_constant_multiplier
