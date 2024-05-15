@@ -6,6 +6,7 @@
  */
 
 #include "InterDexReshuffleImpl.h"
+#include "ClassMerging.h"
 #include "InterDexPass.h"
 #include "Show.h"
 #include "Trace.h"
@@ -52,17 +53,20 @@ bool is_reshuffable_class(
          reshuffable_classes.end();
 }
 
-InterDexReshuffleImpl::InterDexReshuffleImpl(ConfigFiles& conf,
-                                             PassManager& mgr,
-                                             ReshuffleConfig& config,
-                                             DexClasses& original_scope,
-                                             DexClassesVector& dexen)
+InterDexReshuffleImpl::InterDexReshuffleImpl(
+    ConfigFiles& conf,
+    PassManager& mgr,
+    ReshuffleConfig& config,
+    DexClasses& original_scope,
+    DexClassesVector& dexen,
+    const boost::optional<class_merging::Model&>& merging_model)
     : m_conf(conf),
       m_mgr(mgr),
       m_config(config),
       m_init_classes_with_side_effects(original_scope,
                                        conf.create_init_class_insns()),
-      m_dexen(dexen) {
+      m_dexen(dexen),
+      m_merging_model(merging_model) {
   m_dexes_structure.set_min_sdk(mgr.get_redex_options().min_sdk);
   const auto& interdex_metrics = mgr.get_interdex_metrics();
   auto it = interdex_metrics.find(interdex::METRIC_LINEAR_ALLOC_LIMIT);
@@ -87,6 +91,7 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(ConfigFiles& conf,
   if (config.exclude_below20pct_coldstart_classes) {
     populate_reshuffable_classes_types(reshuffable_classes, conf);
   }
+  m_mgr.incr_metric("num_reshuffable_classes", reshuffable_classes.size());
   for (size_t dex_index = m_first_dex_index; dex_index < dexen.size();
        dex_index++) {
     auto& dex = dexen.at(dex_index);
@@ -143,13 +148,90 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(ConfigFiles& conf,
           }
         }
       });
+
+  // Initialize m_class_to_merging_info and m_num_field_defs
+  if (m_merging_model == boost::none) {
+    return;
+  }
+
+  m_mergeability_aware = true;
+  MergerIndex num_merging_types = 0;
+  m_merging_model->walk_hierarchy([&](const class_merging::MergerType& merger) {
+    if (!merger.has_mergeables()) {
+      return;
+    }
+    for (const DexType* mergeable : merger.mergeables) {
+      const auto cls = type_class(mergeable);
+      if (cls != nullptr) {
+        m_class_to_merging_info.emplace(cls, MergingInfo());
+        auto& merging_info = m_class_to_merging_info.at(cls);
+        merging_info.merging_type = num_merging_types;
+      }
+    }
+    MethodGroup group = 0;
+    if (!merger.vmethods.empty()) {
+      for (const auto& vmeths : merger.vmethods) {
+        for (const auto* meth : vmeths.overrides) {
+          const auto meth_cls = type_class(meth->get_class());
+          auto& merging_info = m_class_to_merging_info.at(meth_cls);
+          merging_info.dedupable_mrefs[meth] = group;
+        }
+        group++;
+      }
+    }
+    if (!merger.intfs_methods.empty()) {
+      for (const auto& intf_meths : merger.intfs_methods) {
+        for (const auto* meth : intf_meths.methods) {
+          const auto meth_cls = type_class(meth->get_class());
+          auto& merging_info = m_class_to_merging_info.at(meth_cls);
+          merging_info.dedupable_mrefs[meth] = group;
+        }
+        group++;
+      }
+    }
+
+    m_num_field_defs.emplace(num_merging_types, merger.shape.field_count());
+    num_merging_types++;
+  });
+
+  // Initialize hypothetical class merging stats in DexStructure.
+  for (size_t dex_idx = m_first_dex_index; dex_idx < dexen.size(); dex_idx++) {
+    auto& dex = dexen.at(dex_idx);
+    auto& mutable_dex = m_mutable_dexen.at(dex_idx);
+    std::unordered_map<MergerIndex, std::unordered_map<MethodGroup, size_t>>
+        merging_type_method_usage;
+    std::unordered_map<MergerIndex, size_t> merging_type_usage;
+    int num_new_methods = 0;
+    int num_deduped_methods = 0;
+    for (auto cls : dex) {
+      if (m_class_to_merging_info.count(cls)) {
+        const auto& merging_info = m_class_to_merging_info.at(cls);
+        MergerIndex merging_type = merging_info.merging_type;
+        merging_type_usage[merging_type]++;
+        for (const auto& method : merging_info.dedupable_mrefs) {
+          MethodGroup group = method.second;
+          merging_type_method_usage[merging_type][group]++;
+          num_deduped_methods++;
+        }
+      }
+    }
+    for (const auto& entry : merging_type_method_usage) {
+      num_new_methods += entry.second.size();
+    }
+    mutable_dex.set_merging_type_usage(merging_type_usage);
+    mutable_dex.set_merging_type_method_usage(merging_type_method_usage);
+    mutable_dex.set_num_new_methods(num_new_methods);
+    mutable_dex.set_num_deduped_methods(num_deduped_methods);
+  }
 }
 
 void InterDexReshuffleImpl::compute_plan() {
   Timer t("compute_plan");
   MoveGains move_gains(m_first_dex_index, m_movable_classes,
                        m_class_dex_indices, m_class_refs, m_mutable_dexen,
-                       m_mutable_dexen_strings);
+                       m_mutable_dexen_strings, m_class_to_merging_info,
+                       m_num_field_defs, m_mergeability_aware,
+                       m_config.deduped_weight, m_config.other_weight);
   size_t batches{0};
   size_t total_moves{0};
   size_t max_move_gains{0};
@@ -165,14 +247,20 @@ void InterDexReshuffleImpl::compute_plan() {
       }
 
       const Move& move = *move_opt;
-      auto recomputed_gain =
-          move_gains.compute_move_gain(move.cls, move.target_dex_index);
+      gain_t recomputed_gain = 0;
+      if (m_mergeability_aware) {
+        recomputed_gain = move_gains.compute_move_gain_after_merging(
+            move.cls, move.target_dex_index);
+      } else {
+        recomputed_gain =
+            move_gains.compute_move_gain(move.cls, move.target_dex_index);
+      }
       if (recomputed_gain <= 0) {
         continue;
       }
 
       // Check if it is a valid move.
-      if (!try_plan_move(move)) {
+      if (!try_plan_move(move, /*mergeability_aware=*/m_mergeability_aware)) {
         continue;
       }
       if (traceEnabled(IDEXR, 5)) {
@@ -225,7 +313,10 @@ void InterDexReshuffleImpl::print_stats() {
   TRACE(IDEXR, 5, "\t %zu frefs", n_frefs);
 }
 
-bool InterDexReshuffleImpl::try_plan_move(const Move& move) {
+bool InterDexReshuffleImpl::try_plan_move(const Move& move,
+                                          bool mergeability_aware) {
+  bool special_case =
+      mergeability_aware && m_class_to_merging_info.count(move.cls);
   auto& target_dex = m_mutable_dexen.at(move.target_dex_index);
   always_assert(m_class_refs.count(move.cls));
   const auto& refs = m_class_refs.at(move.cls);
@@ -235,12 +326,35 @@ bool InterDexReshuffleImpl::try_plan_move(const Move& move) {
       &m_init_classes_with_side_effects, refs.frefs, refs.trefs, refs.itrefs,
       &pending_init_class_fields, &pending_init_class_types);
   auto laclazz = estimate_linear_alloc(move.cls);
+
+  MergerIndex merging_type;
+  size_t clazz_num_dedupable_method_defs = 0;
+
+  if (special_case) {
+    merging_type = m_class_to_merging_info.at(move.cls).merging_type;
+    // Compute the number of method definitions in move.cls that can be deduped
+    // in target_dex.
+    const std::unordered_map<const DexMethod*, MethodGroup>& dedupable_mrefs =
+        m_class_to_merging_info.at(move.cls).dedupable_mrefs;
+    for (const auto& method : dedupable_mrefs) {
+      MethodGroup group = method.second;
+      const size_t old_usage =
+          target_dex.get_merging_type_method_usage(merging_type, group);
+      if (old_usage > 0) {
+        clazz_num_dedupable_method_defs++;
+      }
+    }
+  }
+
   if (!target_dex.add_class_if_fits(
           refs.mrefs, refs.frefs, refs.trefs, pending_init_class_fields,
           pending_init_class_types, m_linear_alloc_limit,
           m_dexes_structure.get_frefs_limit(),
           m_dexes_structure.get_mrefs_limit(),
-          m_dexes_structure.get_trefs_limit(), move.cls)) {
+          m_dexes_structure.get_trefs_limit(), move.cls,
+          /*mergeability_aware=*/
+          m_mergeability_aware, /*clazz_num_dedupable_method_defs=*/
+          clazz_num_dedupable_method_defs)) {
     return false;
   }
   auto& target_dex_strings = m_mutable_dexen_strings.at(move.target_dex_index);
@@ -261,6 +375,34 @@ bool InterDexReshuffleImpl::try_plan_move(const Move& move) {
     }
   }
   dex_index = move.target_dex_index;
+
+  if (special_case) {
+    // Update class merging stats in source_dex and target_dex
+    source_dex.decrease_merging_type_usage(merging_type);
+    target_dex.increase_merging_type_usage(merging_type);
+    const std::unordered_map<const DexMethod*, MethodGroup>& dedupable_mrefs =
+        m_class_to_merging_info.at(move.cls).dedupable_mrefs;
+    for (const auto& method : dedupable_mrefs) {
+      MethodGroup group = method.second;
+      // Source_dex updates
+      const int source_old_usage =
+          source_dex.get_merging_type_method_usage(merging_type, group);
+      always_assert(source_old_usage > 0);
+      source_dex.decrease_merging_type_method_usage(merging_type, group);
+      if (source_old_usage == 1) {
+        source_dex.decrease_num_new_methods();
+      }
+      source_dex.decrease_num_deduped_methods();
+      // Target_dex updates
+      const int target_old_usage =
+          target_dex.get_merging_type_method_usage(merging_type, group);
+      target_dex.increase_merging_type_method_usage(merging_type, group);
+      if (target_old_usage == 0) {
+        target_dex.increase_num_new_methods();
+      }
+      target_dex.increase_num_deduped_methods();
+    }
+  }
   return true;
 }
 

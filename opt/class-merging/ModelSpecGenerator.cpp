@@ -7,6 +7,7 @@
 
 #include "ModelSpecGenerator.h"
 
+#include "ClassMerging.h"
 #include "LiveRange.h"
 #include "Model.h"
 #include "PassManager.h"
@@ -229,5 +230,30 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
   TRACE(CLMG, 9, "Discover %zu mergeables from %zu roots",
         merging_spec->merging_targets.size(), merging_spec->roots.size());
 }
+
+class_merging::Model construct_global_model(
+    DexClasses& scope,
+    PassManager& mgr,
+    ConfigFiles& conf,
+    DexStoresVector& stores,
+    const class_merging::ModelSpec& merging_spec,
+    size_t global_min_count) {
+  // Copy merging_spec to avoid changing the original one.
+  class_merging::ModelSpec global_model_merging_spec = merging_spec;
+  // The global_model_merging_spec share everything with the input merging_spec
+  // expect for the following, which removes dex boundaries and max size of
+  // mergers to create a global model.
+  global_model_merging_spec.per_dex_grouping = false;
+  global_model_merging_spec.strategy = class_merging::strategy::BY_CLASS_COUNT;
+  global_model_merging_spec.min_count = 2;
+  global_model_merging_spec.max_count = std::numeric_limits<size_t>::max();
+
+  TypeSystem type_system(scope);
+  find_all_mergeables_and_roots(type_system, scope,
+                                /*global_min_count=*/global_min_count, mgr,
+                                &global_model_merging_spec);
+  return class_merging::construct_model(type_system, scope, conf, mgr, stores,
+                                        global_model_merging_spec);
+};
 
 } // namespace class_merging

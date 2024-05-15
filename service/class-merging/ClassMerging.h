@@ -24,4 +24,10 @@ ModelStats merge_model(const TypeSystem&,
                        DexStoresVector& stores,
                        ModelSpec& spec);
 
+Model construct_model(const TypeSystem& type_system,
+                      Scope& scope,
+                      ConfigFiles& conf,
+                      PassManager& mgr,
+                      DexStoresVector& stores,
+                      ModelSpec& spec);
 } // namespace class_merging
