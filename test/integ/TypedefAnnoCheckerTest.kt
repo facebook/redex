@@ -10,8 +10,6 @@ package com.facebook.redextest
 import integ.TestIntDef
 import integ.TestStringDef
 
-annotation class NotSafeAnno {}
-
 public class TypedefAnnoCheckerKtTest {
 
   @TestStringDef val field_str: String = TestStringDef.TWO
@@ -100,5 +98,24 @@ public class TypedefAnnoCheckerKtTest {
       "4" -> 4
       else -> 0
     }
+  }
+
+  @TestStringDef
+  fun call_lambda(lambda_func: () -> String): String {
+    return lambda_func()
+  }
+
+  fun assign_and_print(@TestStringDef param: String) {
+    var_field = param
+    print(param)
+  }
+
+  @TestStringDef
+  fun testLambdaCall(@TestStringDef param: String): String {
+    return call_lambda({
+      var_field = param
+      assign_and_print(param)
+      param
+    })
   }
 }
