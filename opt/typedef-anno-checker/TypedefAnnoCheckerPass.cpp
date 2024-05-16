@@ -185,6 +185,7 @@ void SynthAccessorPatcher::patch_kotlin_annotations(DexMethod* m) {
   // getters:
   //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest$Companion.getField_one:()I
   //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.access$getField_one$cp:()I
+  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.access$getField_one$p:()I
   // setters:
   //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest$Companion.setField_one:(I)
   //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.access$setField_one$cp:(I)V
@@ -193,9 +194,14 @@ void SynthAccessorPatcher::patch_kotlin_annotations(DexMethod* m) {
   //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.field_one:I
 
   // some synthetic interfaces' names have $-CC. Delete it from the name
-  auto class_name = m->get_class()->get_name()->str() + ".";
+  auto original_class_name = m->get_class()->get_name()->str();
+  auto class_name = original_class_name + ".";
   auto pos = class_name.find("$-CC");
   if (pos != std::string::npos) class_name.erase(pos, 4);
+  auto companion_pos = class_name.find(COMPANION_CLASS);
+  auto base_class_name = (companion_pos != std::string::npos)
+                             ? class_name.substr(0, companion_pos) + ";."
+                             : class_name;
 
   auto anno_method_name = m->get_simple_deobfuscated_name();
   auto method_name =
@@ -216,26 +222,27 @@ void SynthAccessorPatcher::patch_kotlin_annotations(DexMethod* m) {
                                         int_or_string + ")V"),
                   anno_set);
 
-  auto companion_pos = class_name.find(COMPANION_CLASS);
-  if (companion_pos != std::string::npos) {
-    class_name = class_name.substr(0, companion_pos) + ";.";
-    // add annotations to access non-companion getter and setter methods
-    add_annotations(
-        DexMethod::get_method(class_name + ACCESS_PREFIX + "get" + field_name +
-                              "$cp:()" + int_or_string),
-        anno_set);
-    add_annotations(
-        DexMethod::get_method(class_name + ACCESS_PREFIX + "set" + field_name +
-                              "$cp:(" + int_or_string + ")V"),
-        anno_set);
-  }
+  // add annotations to access non-companion getter and setter methods
+  add_annotations(
+      DexMethod::get_method(base_class_name + ACCESS_PREFIX + "get" +
+                            field_name + "$cp:()" + int_or_string),
+      anno_set);
+  add_annotations(
+      DexMethod::get_method(base_class_name + ACCESS_PREFIX + "set" +
+                            field_name + "$cp:(" + int_or_string + ")V"),
+      anno_set);
+  add_annotations(DexMethod::get_method(
+                      base_class_name + ACCESS_PREFIX + "get" + field_name +
+                      "$p:(" + original_class_name + ")" + int_or_string),
+                  anno_set);
+
   // add annotations to field
-  if (!add_annotations(
-          DexField::get_field(class_name + field_name + ":" + int_or_string),
-          anno_set)) {
+  if (!add_annotations(DexField::get_field(base_class_name + field_name + ":" +
+                                           int_or_string),
+                       anno_set)) {
     field_name.at(0) = std::tolower(field_name.at(0));
     add_annotations(
-        DexField::get_field(class_name + field_name + ":" + int_or_string),
+        DexField::get_field(base_class_name + field_name + ":" + int_or_string),
         anno_set);
   }
 }
@@ -414,6 +421,8 @@ void TypedefAnnoChecker::check_instruction(
   }
   // when writing to annotated fields, check that the value is annotated
   case OPCODE_IPUT:
+  case OPCODE_SPUT:
+  case OPCODE_SPUT_OBJECT:
   case OPCODE_IPUT_OBJECT: {
     auto env_anno = env.get_annotation(insn->src(0));
     auto field_anno = type_inference::get_typedef_anno_from_member(
@@ -676,7 +685,9 @@ bool TypedefAnnoChecker::check_typedef_value(
       break;
     }
     case OPCODE_IGET:
-    case OPCODE_IGET_OBJECT: {
+    case OPCODE_SGET:
+    case OPCODE_IGET_OBJECT:
+    case OPCODE_SGET_OBJECT: {
       auto field_anno = type_inference::get_typedef_anno_from_member(
           def->get_field(), inference->get_annotations());
       if (!field_anno || field_anno != annotation) {

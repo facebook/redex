@@ -1551,3 +1551,32 @@ TEST_F(TypedefAnnoCheckerTest, TestConstFolding) {
   checker.run(method);
   EXPECT_TRUE(checker.complete());
 }
+
+TEST_F(TypedefAnnoCheckerTest, testSGet) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerTest;.testSGet:()I")
+                     ->as_def();
+
+  auto code = method->get_code();
+  code->build_cfg();
+  auto method_override_graph = mog::build_graph(scope);
+
+  auto config = get_config();
+  SynthAccessorPatcher patcher(config, *method_override_graph);
+  patcher.run(scope);
+
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+  for (auto* cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+
+  TypedefAnnoChecker checker = TypedefAnnoChecker(
+      strdef_constants, intdef_constants, get_config(), *method_override_graph);
+  checker.run(method);
+  EXPECT_TRUE(checker.complete());
+}

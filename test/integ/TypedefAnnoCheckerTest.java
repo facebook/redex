@@ -84,6 +84,7 @@ class NoAnnoVirtualTest extends AbstractClass{
 public class TypedefAnnoCheckerTest {
 
   @TestIntDef int int_field = TestIntDef.ZERO;
+  @TestIntDef private static int static_int_field = TestIntDef.ZERO;
   @TestStringDef int wrong_anno_field;
   @TestStringDef String str_field;
   int no_anno_field = 6;
@@ -136,7 +137,7 @@ public class TypedefAnnoCheckerTest {
     return int_field;
   }
 
-void testWrongIntField(@TestIntDef int val) {
+  void testWrongIntField(@TestIntDef int val) {
     wrong_anno_field = val;
   }
 
@@ -306,6 +307,11 @@ void testWrongIntField(@TestIntDef int val) {
 
   static @TestIntDef int testConstFolding() {
     @TestIntDef int val = getBoolean() ? TestIntDef.ONE : TestIntDef.ZERO;
+    return val;
+  }
+
+  @TestIntDef int testSGet() {
+    @TestIntDef int val = static_int_field;
     return val;
   }
 }
