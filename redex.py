@@ -980,19 +980,30 @@ def _check_android_sdk_api(args: argparse.Namespace) -> None:
         LOGGER.warning("No embedded files, please add manually!")
 
 
-def _handle_profiles(args: argparse.Namespace) -> None:
+def _handle_profiles(
+    args: argparse.Namespace, dd_enabled_interactions: typing.List[str]
+) -> None:
     if not args.packed_profiles:
         return
 
     directory = make_temp_dir(".redex_profiles", False)
     unpack_tar_xz(args.packed_profiles, directory)
 
-    # Create input for method profiles.
-    method_profiles_str = ", ".join(
+    method_profiles_paths = (
         f'"{f.path}"'
         for f in os.scandir(directory)
         if f.is_file() and ("method_stats" in f.name or "agg_stats" in f.name)
     )
+
+    if len(dd_enabled_interactions) > 0:
+        method_profiles_paths = [
+            mpp
+            for mpp in method_profiles_paths
+            if any([f"_{i}_" in mpp for i in dd_enabled_interactions])
+        ]
+
+    # Create input for method profiles.
+    method_profiles_str = ", ".join(method_profiles_paths)
     if method_profiles_str:
         LOGGER.debug("Found method profiles: %s", method_profiles_str)
         args.passthru_json.append(f"agg_method_stats_files=[{method_profiles_str}]")
@@ -1000,13 +1011,22 @@ def _handle_profiles(args: argparse.Namespace) -> None:
         LOGGER.info("No method profiles found in %s", args.packed_profiles)
 
     # Create input for basic blocks.
-    # Note: at the moment, only look for ColdStart.
-    join_str = ";" if IS_WINDOWS else ":"
-    block_profiles_str = join_str.join(
+
+    block_profiles_paths = (
         f"{f.path}"
         for f in os.scandir(directory)
         if f.is_file() and f.name.startswith("block_profiles_")
     )
+
+    if len(dd_enabled_interactions) > 0:
+        block_profiles_paths = [
+            bpp
+            for bpp in block_profiles_paths
+            if any([f"_{i}_" in bpp for i in dd_enabled_interactions])
+        ]
+
+    join_str = ";" if IS_WINDOWS else ":"
+    block_profiles_str = join_str.join(block_profiles_paths)
     if block_profiles_str:
         LOGGER.debug("Found block profiles: %s", block_profiles_str)
         # Assume there's at most one.
@@ -1173,7 +1193,8 @@ def prepare_redex(args: argparse.Namespace) -> State:
                 sys.exit()
 
         # Unpack profiles, if they exist.
-        _handle_profiles(args)
+        dd_enabled_interactions = config_dict.get("deep_data_enabled_interactions", [])
+        _handle_profiles(args, dd_enabled_interactions)
         _handle_secondary_method_profiles(args)
 
         LOGGER.debug("Moving contents to expected structure...")

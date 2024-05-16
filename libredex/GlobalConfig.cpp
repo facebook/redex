@@ -150,6 +150,7 @@ void GlobalConfig::bind_config() {
   bind("coldstart_classes", "", string_param);
   bind("coldstart_methods_file", "", string_param);
   bind("compute_xml_reachability", false, bool_param);
+  bind("deep_data_enabled_interactions", {}, string_vector_param);
   bind("unused_keep_rule_abort", false, bool_param);
   bind("debug_info_kind", "", string_param);
   bind("default_coldstart_classes", "", string_param);
