@@ -108,6 +108,8 @@ class SynthAccessorPatcher {
 
   void patch_enclosed_method(DexClass* cls);
 
+  void patch_field_annotations(DexMethod* ctor);
+
   std::unordered_set<DexType*> m_typedef_annos;
   const method_override_graph::Graph& m_method_override_graph;
   InsertOnlyConcurrentMap<std::string, std::vector<const DexField*>>
