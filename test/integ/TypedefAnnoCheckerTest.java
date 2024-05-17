@@ -329,7 +329,7 @@ public class TypedefAnnoCheckerTest {
   	return new AccessGetClass() {
     	@Override
       public void override_method() {
-        takes_param(int_field);
+        takes_param(static_int_field);
       }
     };
   }

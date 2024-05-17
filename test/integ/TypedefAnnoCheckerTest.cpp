@@ -44,6 +44,32 @@ struct TypedefAnnoCheckerTest : public RedexIntegrationTest {
                              IntDefConstants& intdef_constants) {
     pass.gather_typedef_values(cls, strdef_constants, intdef_constants);
   }
+
+  void run_patcher(const Scope& scope,
+                   const method_override_graph::Graph& method_override_graph) {
+    auto config = get_config();
+    SynthAccessorPatcher patcher(config, method_override_graph);
+    patcher.run(scope);
+  }
+
+  TypedefAnnoChecker run_checker(
+      const Scope& scope,
+      DexMethod* method,
+      const method_override_graph::Graph& method_override_graph) {
+    StrDefConstants strdef_constants;
+    IntDefConstants intdef_constants;
+    TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
+    for (auto* cls : scope) {
+      pass.gather_typedef_values(cls, strdef_constants, intdef_constants);
+    }
+
+    TypedefAnnoChecker checker = TypedefAnnoChecker(strdef_constants,
+                                                    intdef_constants,
+                                                    get_config(),
+                                                    method_override_graph);
+    checker.run(method);
+    return checker;
+  }
 };
 
 TEST_F(TypedefAnnoCheckerTest, TestValidIntAnnoReturn) {
@@ -258,16 +284,7 @@ TEST_F(TypedefAnnoCheckerTest, TestConstReturn) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -280,16 +297,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstReturn) {
                      ->as_def();
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -311,16 +319,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstReturn2) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -344,16 +343,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstStrReturn) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -375,16 +365,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -408,16 +389,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic2) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -440,16 +412,7 @@ TEST_F(TypedefAnnoCheckerTest, TestMultipleBlocksInt) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -466,16 +429,7 @@ TEST_F(TypedefAnnoCheckerTest, TestMultipleBlocksString) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -492,16 +446,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidMultipleBlocksString) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -522,16 +467,7 @@ TEST_F(TypedefAnnoCheckerTest, TestNonConstInt) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -578,16 +514,7 @@ TEST_F(TypedefAnnoCheckerTest, TestJoiningTwoAnnotations) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -610,16 +537,7 @@ TEST_F(TypedefAnnoCheckerTest, TestJoiningTwoAnnotations2) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -633,16 +551,7 @@ TEST_F(TypedefAnnoCheckerTest, TestReassigningInt) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -656,16 +565,7 @@ TEST_F(TypedefAnnoCheckerTest, TestIfElse) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -679,16 +579,7 @@ TEST_F(TypedefAnnoCheckerTest, TestIfElseParam) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -703,16 +594,7 @@ TEST_F(TypedefAnnoCheckerTest, TestIfElseString) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -726,16 +608,7 @@ TEST_F(TypedefAnnoCheckerTest, TestXORIfElse) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -766,16 +639,7 @@ TEST_F(TypedefAnnoCheckerTest, TestXORIfElseZero) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -979,16 +843,7 @@ TEST_F(TypedefAnnoCheckerTest, testAssignNullToString) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -1002,16 +857,7 @@ TEST_F(TypedefAnnoCheckerTest, TestNoAnnoField) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -1031,16 +877,7 @@ TEST_F(TypedefAnnoCheckerTest, TestPureVirtualCall) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   // it should fail because NoAnnoVirtualTest;.pureVirtual does not have a
   // typedef annotation attached
   EXPECT_FALSE(checker.complete());
@@ -1064,16 +901,7 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongConstPureVirtualCall) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   // it should fail because NoAnnoVirtualTest;.pureVirtual does not have a
   // typedef annotation attached
   EXPECT_FALSE(checker.complete());
@@ -1096,16 +924,7 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongConstPureVirtual) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -1127,16 +946,7 @@ TEST_F(TypedefAnnoCheckerTest, TestPureVirtualCallNoAnno) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -1158,16 +968,7 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongConstPureVirtualCall2) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -1189,16 +990,7 @@ TEST_F(TypedefAnnoCheckerTest, TestPureVirtualInvalidParamAnno) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -1220,16 +1012,7 @@ TEST_F(TypedefAnnoCheckerTest, TestPureVirtualInvalidParamAnno2) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -1251,16 +1034,7 @@ TEST_F(TypedefAnnoCheckerTest, TestPureVirtualInvalidReturn) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -1281,20 +1055,9 @@ TEST_F(TypedefAnnoCheckerTest, TestReturnWhen) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  auto config = get_config();
-  SynthAccessorPatcher patcher(config, *method_override_graph);
-  patcher.run(scope);
+  run_patcher(scope, *method_override_graph);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -1309,20 +1072,9 @@ TEST_F(TypedefAnnoCheckerTest, TestKtField) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  auto config = get_config();
-  SynthAccessorPatcher patcher(config, *method_override_graph);
-  patcher.run(scope);
+  run_patcher(scope, *method_override_graph);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -1337,20 +1089,9 @@ TEST_F(TypedefAnnoCheckerTest, TestVarField) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  auto config = get_config();
-  SynthAccessorPatcher patcher(config, *method_override_graph);
-  patcher.run(scope);
+  run_patcher(scope, *method_override_graph);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -1365,20 +1106,9 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidVarField) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  auto config = get_config();
-  SynthAccessorPatcher patcher(config, *method_override_graph);
-  patcher.run(scope);
+  run_patcher(scope, *method_override_graph);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_FALSE(checker.complete());
 }
 
@@ -1392,16 +1122,7 @@ TEST_F(TypedefAnnoCheckerTest, TestReturnIntField) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -1416,20 +1137,9 @@ TEST_F(TypedefAnnoCheckerTest, TestCompanionObject) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  auto config = get_config();
-  SynthAccessorPatcher patcher(config, *method_override_graph);
-  patcher.run(scope);
+  run_patcher(scope, *method_override_graph);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -1444,20 +1154,9 @@ TEST_F(TypedefAnnoCheckerTest, TestCompanionVarSetter) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  auto config = get_config();
-  SynthAccessorPatcher patcher(config, *method_override_graph);
-  patcher.run(scope);
+  run_patcher(scope, *method_override_graph);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -1473,20 +1172,9 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidCompanionVarSetter) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  auto config = get_config();
-  SynthAccessorPatcher patcher(config, *method_override_graph);
-  patcher.run(scope);
+  run_patcher(scope, *method_override_graph);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
@@ -1508,20 +1196,9 @@ TEST_F(TypedefAnnoCheckerTest, TestCompanionIntVarSetter) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  auto config = get_config();
-  SynthAccessorPatcher patcher(config, *method_override_graph);
-  patcher.run(scope);
+  run_patcher(scope, *method_override_graph);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -1535,20 +1212,9 @@ TEST_F(TypedefAnnoCheckerTest, TestConstFolding) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  auto config = get_config();
-  SynthAccessorPatcher patcher(config, *method_override_graph);
-  patcher.run(scope);
+  run_patcher(scope, *method_override_graph);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -1566,20 +1232,9 @@ TEST_F(TypedefAnnoCheckerTest, TestLambdaCall) {
   DexClass* synth_class = type_class(method->get_class());
   synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
 
-  auto config = get_config();
-  SynthAccessorPatcher patcher(config, *method_override_graph);
-  patcher.run(scope);
+  run_patcher(scope, *method_override_graph);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -1593,20 +1248,9 @@ TEST_F(TypedefAnnoCheckerTest, TestClassConstructorArgs) {
 
   auto method_override_graph = mog::build_graph(scope);
 
-  auto config = get_config();
-  SynthAccessorPatcher patcher(config, *method_override_graph);
-  patcher.run(scope);
+  run_patcher(scope, *method_override_graph);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -1622,20 +1266,9 @@ TEST_F(TypedefAnnoCheckerTest, testSGet) {
   code->build_cfg();
   auto method_override_graph = mog::build_graph(scope);
 
-  auto config = get_config();
-  SynthAccessorPatcher patcher(config, *method_override_graph);
-  patcher.run(scope);
+  run_patcher(scope, *method_override_graph);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
 
@@ -1657,19 +1290,8 @@ TEST_F(TypedefAnnoCheckerTest, TestAccessGet) {
           ->as_def();
   synth_method->set_deobfuscated_name(synth_method->get_name()->c_str());
 
-  auto config = get_config();
-  SynthAccessorPatcher patcher(config, *method_override_graph);
-  patcher.run(scope);
+  run_patcher(scope, *method_override_graph);
 
-  StrDefConstants strdef_constants;
-  IntDefConstants intdef_constants;
-  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(get_config());
-  for (auto* cls : scope) {
-    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
-  }
-
-  TypedefAnnoChecker checker = TypedefAnnoChecker(
-      strdef_constants, intdef_constants, get_config(), *method_override_graph);
-  checker.run(method);
+  auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
