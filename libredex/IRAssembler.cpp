@@ -1090,13 +1090,68 @@ std::variant<DexField*, DexMethod*> member_from_s_expr(const s_expr& e) {
   return field_from_s_expr(e);
 }
 
+// Parse a method or field definition for an interface. Makes assumption about
+// members being public, without allowing for access flags.
+// NOTE: Default interface methods are not supported, nor are static methods.
+// TODO (T188746141): Support encoded values for fields.
+std::variant<DexField*, DexMethod*> interface_member_from_s_expr(
+    const s_expr& e) {
+  s_expr tail;
+  if (s_patn({s_patn("method")}, tail).match_with(e)) {
+    std::string method_name;
+    s_patn({s_patn(&method_name)}, tail)
+        .must_match(tail, "Expecting method name");
+    always_assert_log(method_name.find("<init>") == std::string::npos,
+                      "Invalid method name: %s", method_name.c_str());
+    auto method = DexMethod::make_method(method_name);
+    if (method_name.find("<clinit>") != std::string::npos) {
+      s_expr code_expr;
+      s_patn({s_patn(code_expr)}, tail).match_with(tail);
+      always_assert_log(code_expr.is_list(), "Expecting code listing");
+      return method->make_concrete(
+          DexAccessFlags::ACC_STATIC | DexAccessFlags::ACC_CONSTRUCTOR,
+          ircode_from_s_expr(code_expr), false /* is_virtual */);
+    } else {
+      always_assert_log(
+          tail.is_nil(),
+          "Should have no method definition for interface member");
+      // Methods should be public, abstract
+      std::unique_ptr<IRCode> no_code{};
+      return method->make_concrete(DexAccessFlags::ACC_PUBLIC |
+                                       DexAccessFlags::ACC_ABSTRACT,
+                                   std::move(no_code), true /* is_virtual */);
+    }
+  }
+  s_patn({s_patn("field")}, tail)
+      .must_match(e, "field definitions must start with 'field'");
+
+  std::string field_name;
+  s_patn({s_patn(&field_name)}, tail).must_match(tail, "Expecting field name");
+  always_assert(tail.is_nil());
+
+  auto field = DexField::make_field(field_name);
+  // Fields should be public, static, final
+  return field->make_concrete(DexAccessFlags::ACC_PUBLIC |
+                              DexAccessFlags::ACC_STATIC |
+                              DexAccessFlags::ACC_FINAL);
+}
+
 } // namespace
 
-// TODO: Support interfaces.
 DexClass* class_from_s_expr(const sparta::s_expr& class_expr) {
   s_expr tail;
-  s_patn({s_patn("class")}, tail)
-      .must_match(class_expr, "class definitions must start with 'class'");
+  bool iface{false};
+  // Flags that are implied, if creating an interface
+  DexAccessFlags implied_flags{};
+  if (s_patn({s_patn("interface")}, tail).match_with(class_expr)) {
+    iface = true;
+    implied_flags =
+        DexAccessFlags::ACC_INTERFACE | DexAccessFlags::ACC_ABSTRACT;
+  } else {
+    s_patn({s_patn("class")}, tail)
+        .must_match(class_expr,
+                    "class definitions must start with 'class' or 'interface'");
+  }
 
   s_expr access_tokens;
   std::string class_name;
@@ -1105,10 +1160,40 @@ DexClass* class_from_s_expr(const sparta::s_expr& class_expr) {
 
   auto class_type = DexType::make_type(DexString::make_string(class_name));
   ClassCreator class_creator(class_type);
-  class_creator.set_access(parse_access_flags(access_tokens));
+  auto given_flags = parse_access_flags(access_tokens);
+  if (iface) {
+    // An interface may be default access, or public. But nothing else expected.
+    always_assert_log(
+        given_flags == 0 || given_flags == ACC_PUBLIC,
+        "Interface should have at most public modifier, nothing else. Got 0x%x",
+        given_flags);
+  }
+  class_creator.set_access(implied_flags | given_flags);
 
-  // Possible `extends Bar` clause.
-  {
+  auto add_iface = [&](const std::string& iface_name) {
+    auto iface_type = DexType::make_type(DexString::make_string(iface_name));
+    class_creator.add_interface(iface_type);
+  };
+  auto handle_interfaces = [&](const std::string& keyword) {
+    s_expr list_or_iface;
+    s_expr extends_tail;
+    if (s_patn({s_patn(keyword), s_patn(list_or_iface)}, extends_tail)
+            .match_with(tail)) {
+      if (list_or_iface.is_list()) {
+        std::string element_str;
+        while (s_patn({s_patn(&element_str)}, list_or_iface)
+                   .match_with(list_or_iface)) {
+          add_iface(element_str);
+        }
+      } else {
+        always_assert_log(list_or_iface.is_string(), "Expected class name");
+        add_iface(list_or_iface.get_string());
+      }
+      tail = std::move(extends_tail);
+    }
+  };
+  // Possible `extends Bar` clause and implemented interfaces.
+  if (!iface) {
     s_expr superclass_tail;
     std::string super_class_name;
     if (s_patn({s_patn("extends"), s_patn(&super_class_name)}, superclass_tail)
@@ -1120,9 +1205,14 @@ DexClass* class_from_s_expr(const sparta::s_expr& class_expr) {
     } else {
       class_creator.set_super(type::java_lang_Object());
     }
+    // Possible `implements (Bar1, Bar2, ...)` clause.
+    handle_interfaces("implements");
+  } else {
+    class_creator.set_super(type::java_lang_Object());
+    // Possible `extends (Bar1, Bar2, ...)` clause, for interfaces that
+    // implement one or more other interfaces (keyword is "extends" though).
+    handle_interfaces("extends");
   }
-
-  // TODO: Possible `implements (Bar1, Bar2, ...)` clause.
 
   // Parse members.
   always_assert(tail.is_list() || tail.is_nil());
@@ -1135,7 +1225,8 @@ DexClass* class_from_s_expr(const sparta::s_expr& class_expr) {
           .must_match(member_list, "Expected a head");
       always_assert(member_expr.is_list());
 
-      auto member = member_from_s_expr(member_expr);
+      auto member = iface ? interface_member_from_s_expr(member_expr)
+                          : member_from_s_expr(member_expr);
       if (std::holds_alternative<DexField*>(member)) {
         class_creator.add_field(std::get<DexField*>(member));
       } else {
