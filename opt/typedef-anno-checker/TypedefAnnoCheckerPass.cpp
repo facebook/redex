@@ -75,7 +75,7 @@ bool add_annotations(DexMember* member, DexAnnotationSet* anno_set) {
   return false;
 }
 
-void collect_from_instruction(
+void collect_param_anno_from_instruction(
     TypeEnvironments& envs,
     type_inference::TypeInference& inference,
     DexMethod* caller,
@@ -120,6 +120,31 @@ void collect_from_instruction(
     if (return_annotation) {
       add_annotations(caller, def_method->get_anno_set());
     }
+  }
+}
+
+void patch_return_anno_from_get(type_inference::TypeInference& inference,
+                                DexMethod* caller,
+                                IRInstruction* insn) {
+  always_assert(opcode::is_an_iget(insn->opcode()) ||
+                opcode::is_an_sget(insn->opcode()));
+  auto name = caller->get_deobfuscated_name_or_empty();
+  auto pos = name.rfind('$');
+  if (pos == std::string::npos) {
+    return;
+  }
+  pos++;
+  if (!(pos < name.size() && name[pos] >= '0' && name[pos] <= '9')) {
+    return;
+  }
+  auto field_ref = insn->get_field();
+  auto field_anno = type_inference::get_typedef_anno_from_member(
+      field_ref, inference.get_annotations());
+
+  if (field_anno != boost::none) {
+    // Patch missing return annotations from accessed fields
+    caller->attach_annotation_set(std::make_unique<DexAnnotationSet>(
+        *field_ref->as_def()->get_anno_set()));
   }
 }
 
@@ -265,10 +290,12 @@ void SynthAccessorPatcher::collect_accessors(DexMethod* m) {
     for (auto& mie : InstructionIterable(b)) {
       auto* insn = mie.insn;
       IROpcode opcode = insn->opcode();
-      if (!opcode::is_an_invoke(opcode)) {
-        continue;
+      if (opcode::is_an_invoke(opcode)) {
+        collect_param_anno_from_instruction(envs, inference, m, insn,
+                                            missing_param_annos);
+      } else if (opcode::is_an_iget(opcode) || opcode::is_an_sget(opcode)) {
+        patch_return_anno_from_get(inference, m, insn);
       }
-      collect_from_instruction(envs, inference, m, insn, missing_param_annos);
     }
   }
 

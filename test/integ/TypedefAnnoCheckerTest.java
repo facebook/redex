@@ -16,6 +16,16 @@ interface I {
   int get();
 }
 
+class AccessGetClass {
+	@TestIntDef public static int public_field = 0;
+
+  public void takes_param(@TestIntDef int val) {
+    public_field = val;
+  }
+
+	public void override_method() {}
+}
+
 abstract class AbstractClass{
   abstract @TestIntDef int pureVirtual(@TestIntDef int val);
 
@@ -314,4 +324,14 @@ public class TypedefAnnoCheckerTest {
     @TestIntDef int val = static_int_field;
     return val;
   }
+
+  public AccessGetClass testAccessGet() {
+  	return new AccessGetClass() {
+    	@Override
+      public void override_method() {
+        takes_param(static_int_field);
+      }
+    };
+  }
+
 }
