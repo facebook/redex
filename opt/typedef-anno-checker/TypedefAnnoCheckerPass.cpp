@@ -177,6 +177,9 @@ void SynthAccessorPatcher::run(const Scope& scope) {
     if (is_synthetic_kotlin_annotations_method(m)) {
       patch_kotlin_annotations(m);
     }
+    if (is_constructor(m) && m->get_param_anno()) {
+      patch_field_annotations(m);
+    }
   });
   walk::parallel::classes(scope, [&](DexClass* cls) {
     if (klass::maybe_anonymous_class(cls)) {
@@ -188,6 +191,61 @@ void SynthAccessorPatcher::run(const Scope& scope) {
       patch_enclosed_method(cls);
     }
   });
+}
+
+void SynthAccessorPatcher::patch_field_annotations(DexMethod* ctor) {
+  IRCode* code = ctor->get_code();
+  if (!code) {
+    return;
+  }
+  always_assert_log(code->editable_cfg_built(), "%s has no cfg built",
+                    SHOW(ctor));
+  auto& cfg = code->cfg();
+
+  type_inference::TypeInference inference(cfg, false, m_typedef_annos,
+                                          &m_method_override_graph);
+  inference.run(ctor);
+  TypeEnvironments& envs = inference.get_type_environments();
+  auto class_name_dot = ctor->get_class()->get_name()->str() + ".";
+
+  for (cfg::Block* b : cfg.blocks()) {
+    for (auto& mie : InstructionIterable(b)) {
+      auto* insn = mie.insn;
+      if (!opcode::is_an_iput(insn->opcode())) {
+        continue;
+      }
+      DexField* field = insn->get_field()->as_def();
+      if (!field) {
+        continue;
+      }
+      auto& env = envs.at(insn);
+      if (!is_int(env, insn->src(0)) && !is_string(env, insn->src(0))) {
+        continue;
+      }
+      auto annotation = env.get_annotation(insn->src(0));
+      if (annotation != boost::none) {
+        DexAnnotationSet anno_set = DexAnnotationSet();
+        anno_set.add_annotation(std::make_unique<DexAnnotation>(
+            DexType::make_type(annotation.get()->get_name()), DAV_RUNTIME));
+        add_annotations(field, &anno_set);
+        auto field_name = field->get_simple_deobfuscated_name();
+        field_name.at(0) = std::toupper(field_name.at(0));
+        const auto int_or_string =
+            type::is_int(field->get_type())
+                ? "I"
+                : type::java_lang_String()->get_name()->str();
+        // add annotations to the Kotlin getter and setter methods
+        add_annotations(
+            DexMethod::get_method(class_name_dot + "get" + field_name + ":()" +
+                                  int_or_string),
+            &anno_set);
+        add_annotations(
+            DexMethod::get_method(class_name_dot + "set" + field_name + ":(" +
+                                  int_or_string + ")V"),
+            &anno_set);
+      }
+    }
+  }
 }
 
 void SynthAccessorPatcher::patch_enclosed_method(DexClass* cls) {

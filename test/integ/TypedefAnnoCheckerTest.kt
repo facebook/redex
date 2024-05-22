@@ -10,11 +10,14 @@ package com.facebook.redextest
 import integ.TestIntDef
 import integ.TestStringDef
 
+public class ClassWithParams(@TestIntDef var int_field: Int) {}
+
 public class TypedefAnnoCheckerKtTest {
 
   @TestStringDef val field_str: String = TestStringDef.TWO
   @TestStringDef var var_field: String = TestStringDef.THREE
   @NotSafeAnno val field_not_safe: String = "4"
+  @TestIntDef var field_int: Int = TestIntDef.ONE
 
   companion object {
     @TestStringDef val companion_val: String = TestStringDef.ONE
@@ -117,5 +120,11 @@ public class TypedefAnnoCheckerKtTest {
       assign_and_print(param)
       param
     })
+  }
+
+  @TestIntDef
+  fun testClassConstructorArgs(@TestIntDef param: Int): Int {
+    val lambda_test: ClassWithParams = ClassWithParams(param)
+    return lambda_test.int_field
   }
 }
