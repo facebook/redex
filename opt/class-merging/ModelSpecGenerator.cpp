@@ -19,30 +19,6 @@
 namespace {
 
 /**
- * Return true if the name matches "$$Lambda$", "$$ExternalSyntheticLambda", or
- * "$[0-9]".
- */
-bool maybe_anonymous_class(const DexClass* cls) {
-  static constexpr std::array<const char*, 2> patterns = {
-      // https://r8.googlesource.com/r8/+/refs/tags/3.1.34/src/main/java/com/android/tools/r8/synthesis/SyntheticNaming.java#140
-      "$$ExternalSyntheticLambda",
-      // Desugared lambda classes from older versions of D8.
-      "$$Lambda$",
-  };
-  const auto name = cls->get_deobfuscated_name_or_empty();
-  auto pos = name.rfind('$');
-  if (pos == std::string::npos) {
-    return false;
-  }
-  pos++;
-  return (pos < name.size() && name[pos] >= '0' && name[pos] <= '9') ||
-         std::any_of(patterns.begin(), patterns.end(),
-                     [&name](const std::string& pattern) {
-                       return name.find(pattern) != std::string::npos;
-                     });
-}
-
-/**
  * The methods and fields may have associated keeping rules, exclude the classes
  * if they or their methods/fields are not deleteable. For example, methods
  * annotated with @android.webkit.JavascriptInterface are invoked reflectively,
@@ -171,7 +147,7 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
         cls->get_clinit() || throwable.count(cur_type)) {
       continue;
     }
-    bool is_anonymous_class = maybe_anonymous_class(cls);
+    bool is_anonymous_class = klass::maybe_anonymous_class(cls);
     // TODO: Can merge named classes.
     if (!is_anonymous_class) {
       continue;
