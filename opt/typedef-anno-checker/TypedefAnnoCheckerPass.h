@@ -104,8 +104,14 @@ class SynthAccessorPatcher {
 
   void patch_kotlin_annotations(DexMethod* method);
 
+  void patch_first_level_nested_lambda(DexClass* cls);
+
+  void patch_enclosed_method(DexClass* cls);
+
   std::unordered_set<DexType*> m_typedef_annos;
   const method_override_graph::Graph& m_method_override_graph;
+  InsertOnlyConcurrentMap<std::string, std::vector<const DexField*>>
+      m_lambda_anno_map;
 };
 
 class TypedefAnnoChecker {
