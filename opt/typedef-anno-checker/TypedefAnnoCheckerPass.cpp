@@ -296,18 +296,27 @@ void SynthAccessorPatcher::patch_first_level_nested_lambda(DexClass* cls) {
       !enclosing_method->is_def()) {
     return;
   }
-
-  // find the second $ to get the common class name
+  // In Java, the common class name is everything before the first $,
+  // and there is no second $ in the class name. For example, from the
+  // tests, the method name is
+  // Lcom/facebook/redextest/TypedefAnnoCheckerTest$2;.override_method:()V
+  //
+  // In kotlin, the common class name is everything before the second $
+  // From the tests, the method name is
+  // Lcom/facebook/redextest/TypedefAnnoCheckerKtTest$testLambdaCall$1;.invoke:()Ljava/lang/String;
   auto cls_name = cls->get_deobfuscated_name_or_empty_copy();
-  auto second_dollar = cls_name.find('$', cls_name.find('$') + 1);
-  if (second_dollar == std::string::npos) {
+  auto common_class_name_end = cls_name.find('$') + 1;
+  if (cls_name[common_class_name_end] < '0' ||
+      cls_name[common_class_name_end] > '9') {
+    common_class_name_end = cls_name.find('$', cls_name.find('$') + 1);
+  }
+  if (common_class_name_end == std::string::npos) {
     return;
   }
-
   // if the map is already filled in, there's nothing to do.
   // class_prefix is the entire class name before the second dollar sign
-  auto class_prefix = cls_name.substr(0, second_dollar);
-  if (m_lambda_anno_map.get(cls_name.substr(0, second_dollar))) {
+  auto class_prefix = cls_name.substr(0, common_class_name_end);
+  if (m_lambda_anno_map.get(cls_name.substr(0, common_class_name_end))) {
     return;
   }
 
@@ -328,6 +337,7 @@ void SynthAccessorPatcher::patch_first_level_nested_lambda(DexClass* cls) {
     // patched
     return;
   }
+
   type_inference::TypeInference inference(cfg, false, m_typedef_annos,
                                           &m_method_override_graph);
 
