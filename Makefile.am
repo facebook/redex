@@ -443,7 +443,6 @@ libopt_la_SOURCES = \
 	opt/peephole/Peephole.cpp \
 	opt/peephole/RedundantCheckCastRemover.cpp \
 	opt/print-kotlin-stats/PrintKotlinStats.cpp \
-	opt/print-members/PrintMembers.cpp \
 	opt/reachable-natives/ReachableNatives.cpp \
 	opt/rearrange-enum-clinit/RearrangeEnumClinit.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
@@ -502,7 +501,6 @@ libopt_la_SOURCES = \
 	opt/string_concatenator/StringConcatenator.cpp \
 	opt/stringbuilder-outliner/StringBuilderOutliner.cpp \
 	opt/strip-debug-info/StripDebugInfo.cpp \
-	opt/test_cfg/TestCFG.cpp \
 	opt/optimize_resources/OptimizeResources.cpp \
 	opt/typedef-anno-checker/TypedefAnnoCheckerPass.cpp \
 	opt/type-analysis/CallGraphFileGenerationPass.cpp \
