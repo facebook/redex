@@ -597,7 +597,8 @@ TypeGroupByDex Model::group_per_dex(const TypeSet& types,
     auto& group = new_groups[dex_id];
     if (group.size() >= spec.min_count) {
       TRACE(CLMG, 7, "dex_id %zu: group %zu", dex_id, group.size());
-      result.emplace_back(std::make_pair(dex_id, std::move(group)));
+      result.emplace_back(
+          std::make_pair(boost::optional<size_t>(dex_id), std::move(group)));
     }
   }
   return result;

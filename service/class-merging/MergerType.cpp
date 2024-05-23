@@ -99,7 +99,7 @@ std::string MergerType::Shape::build_type_name(
     ss << "_I" << interdex_subgroup_idx.get();
   }
 
-  if (opt_dex_id && *opt_dex_id > 0) {
+  if (opt_dex_id && *opt_dex_id >= 0) {
     ss << "_D" << *opt_dex_id;
   }
 
