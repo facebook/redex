@@ -58,9 +58,12 @@ void find_duplications(const method_override_graph::Graph* graph,
       continue;
     }
     auto child_code = child->get_code();
+    if (!child_code) {
+      continue;
+    }
     always_assert(child_code->editable_cfg_built());
     auto& child_cfg = child_code->cfg();
-    if (child_code && eligible_code(child_cfg)) {
+    if (eligible_code(child_cfg)) {
       if (root_cfg.structural_equals(child_cfg)) {
         result->push_back(const_cast<DexMethod*>(child));
         find_duplications(graph, child, result);
