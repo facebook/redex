@@ -334,4 +334,13 @@ public class TypedefAnnoCheckerTest {
     };
   }
 
+  public AccessGetClass testSyntheticValField(@TestIntDef int param) {
+  	return new AccessGetClass() {
+      @Override
+      public void override_method() {
+        takes_param(param);
+      }
+    };
+  }
+
 }
