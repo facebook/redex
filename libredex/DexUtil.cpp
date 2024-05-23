@@ -7,13 +7,6 @@
 
 #include "DexUtil.h"
 
-#include <boost/algorithm/string.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/regex.hpp>
-#include <deque>
-#include <string_view>
-#include <unordered_set>
-
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
@@ -22,6 +15,12 @@
 #include "Resolver.h"
 #include "Trace.h"
 #include "UnknownVirtuals.h"
+#include <boost/algorithm/string.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/regex.hpp>
+#include <deque>
+#include <string_view>
+#include <unordered_set>
 
 const DexType* get_init_class_type_demand(const IRInstruction* insn) {
   switch (insn->opcode()) {
@@ -407,9 +406,10 @@ bool gather_invoked_methods_that_prevent_relocation(
     std::unordered_set<DexMethodRef*>* methods_preventing_relocation) {
   auto code = method->get_code();
   always_assert(code);
-
+  always_assert(code->editable_cfg_built());
+  auto& cfg = code->cfg();
   bool can_relocate = true;
-  for (const auto& mie : InstructionIterable(code)) {
+  for (auto& mie : InstructionIterable(cfg)) {
     auto insn = mie.insn;
     auto opcode = insn->opcode();
     if (opcode::is_an_invoke(opcode)) {
