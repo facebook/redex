@@ -419,7 +419,9 @@ class OptimizeEnums {
       if (!cls->get_interfaces()->empty()) {
         utypes.insert(UnsafeType::kHasInterfaces);
       }
-      if (support_kt_19_enum_entries) {
+      const auto* enum_entries_type =
+          DexType::get_type(optimize_enums::KT_ENUM_ENTRIES_TYPE);
+      if (support_kt_19_enum_entries && enum_entries_type != nullptr) {
         if (!only_has_expected_static_synth_fields(cls)) {
           utypes.insert(UnsafeType::kUnexpectedSynthFields);
         }
@@ -601,7 +603,7 @@ class OptimizeEnums {
 
   bool only_has_expected_static_synth_fields(const DexClass* cls) {
     const auto synth_access = optimize_enums::synth_access();
-    const auto enum_entries_type =
+    const auto* enum_entries_type =
         DexType::get_type(optimize_enums::KT_ENUM_ENTRIES_TYPE);
     always_assert(enum_entries_type != nullptr);
     std::set<std::string> expected_fields = {ENUM_VALUES_FIELD,
