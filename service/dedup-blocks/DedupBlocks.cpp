@@ -508,6 +508,9 @@ class DedupBlocksImpl {
       for (const BlockSet& group : order) {
         // canon is block with lowest id.
         cfg::Block* canon = *group.begin();
+        std::vector<SourceBlock*> canon_source_blocks =
+            source_blocks::gather_source_blocks(canon);
+        auto num_canon_sb = canon_source_blocks.size();
 
         for (cfg::Block* block : group) {
           if (block != canon) {
@@ -515,6 +518,25 @@ class DedupBlocksImpl {
 
             blocks_to_replace.emplace_back(block, canon);
             ++cnt;
+          }
+          std::vector<SourceBlock*> source_blocks =
+              source_blocks::gather_source_blocks(block);
+          auto num_sb = source_blocks.size();
+          if (num_sb == num_canon_sb) {
+            for (size_t source_blk_idx = 0; source_blk_idx < num_sb;
+                 source_blk_idx++) {
+              canon_source_blocks[source_blk_idx]->max(
+                  *source_blocks[source_blk_idx]);
+            }
+          } else if (num_sb >= 1 && num_canon_sb >= 1) {
+            source_blocks::get_first_source_block(canon)->max(
+                *source_blocks::get_first_source_block(block));
+            auto last_source_block =
+                *source_blocks::get_last_source_block(block);
+            for (size_t source_blk_idx = 1; source_blk_idx < num_canon_sb;
+                 source_blk_idx++) {
+              canon_source_blocks[source_blk_idx]->max(last_source_block);
+            }
           }
         }
       }
