@@ -414,6 +414,25 @@ bool Model::is_excluded(const DexType* type) const {
   return false;
 }
 
+bool Model::is_ordered_set_excluded(const DexType* type) const {
+  if (m_excluded.count(type)) {
+    return true;
+  }
+  for (const auto& root : m_spec.exclude_ordered_set_types) {
+    auto* cls = type_class(root);
+    if (is_interface(cls)) {
+      if (m_type_system.implements(type, root)) {
+        return true;
+      }
+    } else {
+      if (m_type_system.is_subtype(root, type)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 /**
  * Aggregate all mergeable types under a merger according to their shape.
  * Create a merger for every shape and move the mergeable types under
@@ -442,7 +461,7 @@ void Model::shape_model() {
   for (auto merger : mergers) {
     TRACE(CLMG, 6, "Build shapes from %s", SHOW(merger->type));
     MergerType::ShapeCollector shapes;
-    shape_merger(*merger, shapes);
+    shape_merger(*merger, interdex_grouping, shapes);
     approximate_shapes(shapes);
 
     m_stats.m_dropped += trim_shapes(shapes, m_spec.min_count);
@@ -459,6 +478,7 @@ void Model::shape_model() {
 }
 
 void Model::shape_merger(const MergerType& root,
+                         const InterDexGrouping& interdex_grouping,
                          MergerType::ShapeCollector& shapes) {
   // if the root has got no children there is nothing to "shape"
   const auto& children = m_hierarchy.find(root.type);
@@ -472,6 +492,12 @@ void Model::shape_merger(const MergerType& root,
       continue;
     }
     if (is_excluded(child)) {
+      m_excluded.insert(child);
+      continue;
+    }
+    if (interdex_grouping.is_in_ordered_set(child) &&
+        is_ordered_set_excluded(child)) {
+      TRACE(CLMG, 5, "Excluding ordered set type %s", SHOW(child));
       m_excluded.insert(child);
       continue;
     }

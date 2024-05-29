@@ -67,6 +67,13 @@ class InterDexGrouping final {
     return m_all_interdexing_groups;
   }
 
+  bool is_in_ordered_set(const DexType* type) const {
+    if (m_config.type == InterDexGroupingType::DISABLED) {
+      return false;
+    }
+    return m_ordered_set.count(type);
+  }
+
  private:
   // Divide all types in the merging_targets into different interdex subgroups
   // This grouping should be applied at the entire model level.
@@ -79,6 +86,9 @@ class InterDexGrouping final {
   ConfigFiles& m_conf;
   const InterDexGroupingConfig m_config;
   std::vector<ConstTypeHashSet> m_all_interdexing_groups;
+  // The set of types that are supposingly ordered and not in the last interdex
+  // groups. It should be empty if interdex grouping is disabled.
+  ConstTypeHashSet m_ordered_set;
 };
 
 std::ostream& operator<<(std::ostream& os,

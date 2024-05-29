@@ -194,6 +194,9 @@ void InterDexGrouping::build_interdex_grouping(
         }
       }
       m_all_interdexing_groups[group_idx].insert(type);
+      if (group_idx < num_interdex_groups - 1) {
+        m_ordered_set.insert(type);
+      }
     }
     return;
   }
@@ -216,6 +219,9 @@ void InterDexGrouping::build_interdex_grouping(
       }
     }
     m_all_interdexing_groups[index].emplace(pair.first);
+    if (index < num_interdex_groups - 1) {
+      m_ordered_set.insert(pair.first);
+    }
   }
 }
 
