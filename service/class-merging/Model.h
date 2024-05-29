@@ -124,6 +124,8 @@ struct ModelSpec {
   ConstTypeHashSet exclude_types;
   // prefixes of types to exclude from the model
   std::unordered_set<std::string> exclude_prefixes;
+  // types to exclude only when they are placed in the ordred set
+  ConstTypeHashSet exclude_ordered_set_types;
   // prefix for class generation
   std::string class_name_prefix;
   // type tag config
@@ -396,6 +398,7 @@ class Model {
   MergerType* build_mergers(const DexType* root);
   void exclude_types(const ConstTypeHashSet& exclude_types);
   bool is_excluded(const DexType* type) const;
+  bool is_ordered_set_excluded(const DexType* type) const;
 
   // MergerType creator helpers
   MergerType& create_dummy_merger(const DexType* type);
@@ -426,7 +429,9 @@ class Model {
 
   // make shapes out of the model classes
   void shape_model();
-  void shape_merger(const MergerType& root, MergerType::ShapeCollector& shapes);
+  void shape_merger(const MergerType& root,
+                    const InterDexGrouping& interdex_grouping,
+                    MergerType::ShapeCollector& shapes);
   void approximate_shapes(MergerType::ShapeCollector& shapes);
   void break_by_interface(const MergerType& merger,
                           const MergerType::Shape& shape,

@@ -7,6 +7,7 @@
 
 #include "ConfigUtils.h"
 
+#include "Show.h"
 #include "Trace.h"
 
 namespace class_merging {
@@ -32,6 +33,20 @@ std::vector<DexType*> get_types(const std::vector<std::string>& target_types) {
     types.push_back(target_type);
   }
   return types;
+}
+
+void load_types(const std::vector<std::string>& type_names,
+                std::unordered_set<const DexType*>& types) {
+  for (const auto& type_s : type_names) {
+    auto target_type = get_type(type_s);
+    if (target_type == nullptr) {
+      TRACE(CLMG, 2, "[ClassMerging] Warning: No type found for target type %s",
+            type_s.c_str());
+      continue;
+    }
+    types.insert(target_type);
+    TRACE(CLMG, 5, "Loaded type %s", SHOW(target_type));
+  }
 }
 
 void load_types_and_prefixes(const std::vector<std::string>& type_names,
