@@ -223,7 +223,9 @@ bool HeapEscapeAnalyzer::analyze_invoke(const IRInstruction* insn,
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     set_escaped(insn->src(i), env);
   }
-  return true;
+  // Practical use cases of this analyzer is followed by PrimitiveAnalyzer which
+  // will handle setting result register. Return false to let it run.
+  return false;
 }
 
 bool HeapEscapeAnalyzer::analyze_filled_new_array(const IRInstruction* insn,
@@ -231,7 +233,9 @@ bool HeapEscapeAnalyzer::analyze_filled_new_array(const IRInstruction* insn,
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     set_escaped(insn->src(i), env);
   }
-  return true;
+  // Practical use cases of this analyzer is followed by PrimitiveAnalyzer which
+  // will handle setting result register. Return false to let it run.
+  return false;
 }
 
 bool LocalArrayAnalyzer::analyze_new_array(const IRInstruction* insn,

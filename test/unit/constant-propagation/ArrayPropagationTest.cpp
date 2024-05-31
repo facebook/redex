@@ -399,6 +399,64 @@ TEST_F(ConstantPropagationTest, UnknownPrimitiveArray) {
   VERIFY_NO_CHANGE(code_size_unknown);
 }
 
+TEST_F(ConstantPropagationTest, UnknownReturnValuesClearedOut) {
+  // Makes sure handling of RESULT_REGISTER is not forgotten when it needs to be
+  // reset.
+  auto code = R"(
+    (
+     (const v0 0)
+     (const v1 1)
+     (new-array v1 "[I") ; create an array of length 1
+     (move-result-pseudo-object v2)
+
+     (invoke-static () "LFoo;.bar:()[I")
+     (move-result-object v2)
+
+     (aget v2 v0)
+     (move-result-pseudo v3)
+
+     (if-nez v3 :if-true-label)
+     (const v4 1)
+
+     (:if-true-label)
+     (const v4 2)
+
+     (return-void)
+    )
+)";
+  VERIFY_NO_CHANGE(code);
+}
+
+TEST_F(ConstantPropagationTest, ObjectArrayReturnValueClearedOut) {
+  // Makes sure handling of RESULT_REGISTER is not forgotten when it needs to be
+  // reset for creation of object arrays (which are not being modeled here).
+  auto code = R"(
+    (
+     (const v0 0)
+     (const v1 1)
+     (new-array v1 "[I") ; create an array of length 1
+     (move-result-pseudo-object v2)
+     (aput v1 v2 v0)
+
+     ; create an array of strings, first item is null
+     (filled-new-array (v0) "[Ljava/lang/String;")
+     (move-result-object v2)
+
+     (aget v2 v0)
+     (move-result-pseudo v3)
+
+     (if-nez v3 :if-true-label)
+     (const v4 1)
+
+     (:if-true-label)
+     (const v4 2)
+
+     (return-void)
+    )
+)";
+  VERIFY_NO_CHANGE(code);
+}
+
 TEST_F(ConstantPropagationTest, PrimitiveArrayAliased) {
   auto code = assembler::ircode_from_string(R"(
     (
