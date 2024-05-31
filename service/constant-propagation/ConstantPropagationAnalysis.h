@@ -196,6 +196,9 @@ class LocalArrayAnalyzer final
 
   static bool analyze_fill_array_data(const IRInstruction* insn,
                                       ConstantEnvironment* env);
+
+  static bool analyze_filled_new_array(const IRInstruction* insn,
+                                       ConstantEnvironment* env);
 };
 
 /*

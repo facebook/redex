@@ -12,6 +12,7 @@
 #include <limits>
 #include <mutex>
 #include <set>
+#include <type_traits>
 
 #include "RedexContext.h"
 
@@ -25,6 +26,7 @@ std::enable_if_t<std::is_integral<T>::value, int> fpclassify(T x) {
 }
 #endif
 
+#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "Resolver.h"
 #include "Trace.h"
@@ -254,6 +256,10 @@ bool LocalArrayAnalyzer::analyze_aget(const IRInstruction* insn,
   if (!idx_opt) {
     return false;
   }
+  auto heap_ptr = env->get(insn->src(0)).maybe_get<AbstractHeapPointer>();
+  if (!heap_ptr) {
+    return false;
+  }
   auto arr = env->get_pointee<ConstantValueArrayDomain>(insn->src(0));
   env->set(RESULT_REGISTER, arr.get(*idx_opt));
   return true;
@@ -264,22 +270,106 @@ bool LocalArrayAnalyzer::analyze_aput(const IRInstruction* insn,
   if (insn->opcode() == OPCODE_APUT_OBJECT) {
     return false;
   }
-  boost::optional<int64_t> idx_opt =
-      env->get<SignedConstantDomain>(insn->src(2)).get_constant();
-  if (!idx_opt) {
+  auto subscript = env->get(insn->src(2)).maybe_get<SignedConstantDomain>();
+  if (!subscript || subscript->is_top() || subscript->is_bottom()) {
+    set_escaped(insn->src(1), env);
     return false;
   }
   auto val = env->get(insn->src(0));
-  env->set_array_binding(insn->src(1), *idx_opt, val);
+  // Check if insn->src(1) is actually known as an array
+  auto heap_ptr = env->get(insn->src(1)).maybe_get<AbstractHeapPointer>();
+  if (!heap_ptr) {
+    return false;
+  }
+  env->set_array_binding(insn->src(1), *subscript->get_constant(), val);
   return true;
 }
 
+namespace {
+template <typename IntType>
+void populate_array_bindings_for_payload(reg_t array_reg,
+                                         const std::vector<IntType>& elements,
+                                         ConstantEnvironment* env) {
+  static_assert(
+      std::is_integral<IntType>::value,
+      "fill-array-data-payload only implemented for integral values.");
+  for (size_t i = 0; i < elements.size(); i++) {
+    auto constant = elements[i];
+    env->set_array_binding(array_reg, i, SignedConstantDomain(constant));
+  }
+}
+} // namespace
+
 bool LocalArrayAnalyzer::analyze_fill_array_data(const IRInstruction* insn,
                                                  ConstantEnvironment* env) {
-  // We currently don't analyze fill-array-data properly; we simply
-  // mark the array it modifies as unknown.
-  set_escaped(insn->src(0), env);
+  // Unpacks the fill-array-data-payload and call env->set_array_binding()
+  // N times with the appropriate SignedConstantDomain. The bytecode format says
+  // the size of the array is allowed to be larger than the payload of items;
+  // under such a contition the elements beyond what are contained in
+  // fill-array-data-payload should be unmodified.
+  // If an too small array is encountered, mark it as escaped to avoid making
+  // any assumptions.
+  auto reg = insn->src(0);
+  auto op_data = insn->get_data();
+  auto heap_ptr = env->get(reg).maybe_get<AbstractHeapPointer>();
+  if (heap_ptr) {
+    auto array_domain = env->get_pointee<ConstantValueArrayDomain>(*heap_ptr);
+    if (array_domain.is_value()) {
+      auto len = array_domain.length();
+      auto ewidth = fill_array_data_payload_width(op_data);
+      auto element_count = fill_array_data_payload_element_count(op_data);
+      if (len >= element_count) {
+        if (ewidth == 1) {
+          auto elements = get_fill_array_data_payload<int8_t>(op_data);
+          populate_array_bindings_for_payload(reg, elements, env);
+        } else if (ewidth == 2) {
+          auto elements = get_fill_array_data_payload<int16_t>(op_data);
+          populate_array_bindings_for_payload(reg, elements, env);
+        } else if (ewidth == 4) {
+          auto elements = get_fill_array_data_payload<int32_t>(op_data);
+          populate_array_bindings_for_payload(reg, elements, env);
+        } else {
+          always_assert_log(ewidth == 8, "Invalid element width: %d", ewidth);
+          auto elements = get_fill_array_data_payload<int64_t>(op_data);
+          populate_array_bindings_for_payload(reg, elements, env);
+        }
+        return true;
+      } else {
+        TRACE(
+            CONSTP, 3,
+            "Array length does not match size of fill-array-data-payload @ %s\n"
+            "  => marking as escaped",
+            SHOW(insn));
+      }
+    }
+  }
+  // Fallthrough behavior is as before; mark the array it modifies as unknown.
+  set_escaped(reg, env);
   return false;
+}
+
+bool LocalArrayAnalyzer::analyze_filled_new_array(const IRInstruction* insn,
+                                                  ConstantEnvironment* env) {
+  auto array_size = insn->srcs_size();
+  const DexType* element_type =
+      type::get_array_component_type(insn->get_type());
+  if (type::is_integral(element_type)) {
+    env->new_heap_value(RESULT_REGISTER, insn,
+                        ConstantValueArrayDomain(array_size));
+    for (src_index_t i = 0; i < array_size; i++) {
+      auto value = env->get(insn->src(i)).maybe_get<SignedConstantDomain>();
+      if (value && !value->is_top() && !value->is_bottom()) {
+        env->set_array_binding(RESULT_REGISTER, i,
+                               SignedConstantDomain(*value->get_constant()));
+      } else {
+        env->set_array_binding(RESULT_REGISTER, i, SignedConstantDomain());
+      }
+    }
+    return true;
+  } else {
+    // Subsequent analyzers should mark all srcs as escaped.
+    return false;
+  }
 }
 
 bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
