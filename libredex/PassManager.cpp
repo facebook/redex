@@ -903,7 +903,12 @@ class TraceClassAfterEachPass {
     std::cerr << "TRACE_CLASS_NAME=" << m_trace_class_env << std::endl;
     m_trace_class_names = extract_delimited_items(m_trace_class_env, ',');
 
-    if (!m_trace_class_names.empty()) {
+    auto trace_method_name = getenv("TRACE_METHOD_NAME");
+    m_trace_method_env = trace_method_name == nullptr ? "" : trace_method_name;
+    std::cerr << "TRACE_METHOD_NAME=" << m_trace_method_env << std::endl;
+    m_trace_method_names = extract_delimited_items(m_trace_method_env, ',');
+
+    if (!m_trace_method_names.empty() || !m_trace_class_names.empty()) {
       if (trace_class_file) {
         try {
           int int_fd = std::stoi(trace_class_file);
@@ -954,8 +959,37 @@ class TraceClassAfterEachPass {
     }
   }
 
+  boost::optional<std::string_view> matches_source_block(DexMethod* method) {
+    auto code = method->get_code();
+    if (code == nullptr) {
+      return boost::none;
+    }
+    if (code->editable_cfg_built()) {
+      auto& cfg = code->cfg();
+      for (auto b : cfg.blocks()) {
+        auto sbs = source_blocks::gather_source_blocks(b);
+        for (auto sb : sbs) {
+          auto search = m_trace_method_names.find(sb->src->str());
+          if (search != m_trace_method_names.end()) {
+            return *search;
+          }
+        }
+      }
+    } else {
+      for (auto it = code->begin(); it != code->end(); it++) {
+        if (it->type == MFLOW_SOURCE_BLOCK) {
+          auto search = m_trace_method_names.find(it->src_block->src->str());
+          if (search != m_trace_method_names.end()) {
+            return *search;
+          }
+        }
+      }
+    }
+    return boost::none;
+  }
+
   void dump(const std::string& pass_name, DexStoresVector& stores) {
-    if (m_trace_class_names.empty()) {
+    if (m_trace_class_names.empty() && m_trace_method_names.empty()) {
       return;
     }
     fprintf(m_fd, "After Pass %s\n", pass_name.c_str());
@@ -981,12 +1015,60 @@ class TraceClassAfterEachPass {
         }
       }
     }
+    // Attempt to dump specific method contents, falling back on exhaustive
+    // search on source blocks to give a coherent representation of where the
+    // code went and how it changes after each pass.
+    using SetOfMethods = std::set<DexMethod*, dexmethods_comparator>;
+    if (!m_trace_method_names.empty()) {
+      std::unordered_map<std::string_view, SetOfMethods> to_print;
+      for (const auto& s : m_trace_method_names) {
+        auto ref = DexMethod::get_method(s);
+        if (ref != nullptr) {
+          auto def = ref->as_def();
+          if (def != nullptr) {
+            SetOfMethods methods{def};
+            to_print.emplace(s, std::move(methods));
+          }
+        }
+      }
+      if (to_print.size() != m_trace_method_names.size()) {
+        // Fall back and do some hunting to find if the method got inlined; if
+        // so, print what would have been its caller (note there could be many).
+        std::mutex print_mtx;
+        walk::parallel::methods(temp_scope, [&](DexMethod* m) {
+          auto str = matches_source_block(m);
+          if (str != boost::none) {
+            std::lock_guard lock(print_mtx);
+            auto search = to_print.find(*str);
+            if (search == to_print.end()) {
+              SetOfMethods methods{m};
+              to_print.emplace(*str, std::move(methods));
+            } else {
+              search->second.emplace(m);
+            }
+          }
+        });
+      }
+      for (const auto& s : m_trace_method_names) {
+        auto search = to_print.find(s);
+        if (search != to_print.end()) {
+          for (const auto& method : search->second) {
+            dump_method(method);
+          }
+        } else {
+          fprintf(m_fd, "Method %.*s not found!\n",
+                  static_cast<int>(s.length()), s.data());
+        }
+      }
+    }
   }
 
  private:
   FILE* m_fd = stderr;
   std::string m_trace_class_env;
+  std::string m_trace_method_env;
   std::set<std::string_view> m_trace_class_names;
+  std::set<std::string_view> m_trace_method_names;
 };
 
 static TraceClassAfterEachPass trace_cls;
