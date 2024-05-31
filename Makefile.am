@@ -305,6 +305,9 @@ libredex_la_SOURCES = \
 	service/method-inliner/RecursionPruner.cpp \
 	service/method-merger/MethodMerger.cpp \
 	service/method-outliner/OutliningProfileGuidanceImpl.cpp \
+	service/object-sensitive-dce/ObjectSensitiveDce.cpp \
+	service/object-sensitive-dce/SideEffectSummary.cpp \
+	service/object-sensitive-dce/UsedVarsAnalysis.cpp \
 	service/reduce-boolean-branches/ReduceBooleanBranches.cpp \
 	service/reference-update/MethodReference.cpp \
 	service/reference-update/TypeReference.cpp \
@@ -427,8 +430,6 @@ libopt_la_SOURCES = \
 	opt/obfuscate/VirtualRenamer.cpp \
 	opt/obfuscate_resources/ObfuscateResourcesPass.cpp \
 	opt/object-sensitive-dce/ObjectSensitiveDcePass.cpp \
-	opt/object-sensitive-dce/SideEffectSummary.cpp \
-	opt/object-sensitive-dce/UsedVarsAnalysis.cpp \
 	opt/optimize_enums/EnumClinitAnalysis.cpp \
 	opt/optimize_enums/EnumConfig.cpp \
 	opt/optimize_enums/EnumAnalyzeGeneratedMethods.cpp \
