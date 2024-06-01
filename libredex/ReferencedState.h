@@ -465,7 +465,8 @@ class ReferencedState {
   // -1 means unknown, e.g. for a method created by Redex
   int8_t get_api_level() const { return inner_struct.m_api_level; }
   void set_api_level(int32_t api_level) {
-    redex_assert(api_level <= std::numeric_limits<int8_t>::max());
+    always_assert_log(api_level <= std::numeric_limits<int8_t>::max(),
+                      "api level too big");
     inner_struct.m_api_level = api_level;
   }
 
