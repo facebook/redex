@@ -16,6 +16,7 @@ import logging
 import lzma
 import mmap
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -666,13 +667,17 @@ def unpack_tar_xz(input: str, output_dir: str) -> None:
         xz = get_xz_path()
 
         if xz is not None:
+            if platform.system() != "Darwin":
+                additional_arg = f"--use-compress-program={xz}"
+            else:
+                additional_arg = f"--use-compress-program={xz} -d"
             cmd = [
                 "tar",
                 "xf",
                 input,
                 "-C",
                 output_dir,
-                f"--use-compress-program={xz}",
+                additional_arg,
             ]
             subprocess.check_call(cmd)
             return
