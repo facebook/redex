@@ -39,10 +39,6 @@ class InitialRenameClassesPass : public Pass {
                 ConfigFiles& conf,
                 PassManager& mgr) override;
 
-  std::unordered_set<DexClass*> get_renamable_classes(Scope& scope,
-                                                      ConfigFiles& conf,
-                                                      PassManager& mgr);
-
  private:
   // Decide which classes should be actually renamed.
   void initial_rename_classes(Scope& scope, PassManager& mgr);
