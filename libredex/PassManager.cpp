@@ -852,35 +852,14 @@ namespace {
 // Return a set of the items denoted by the given input. Items will have
 // leading/trailing spaces trimmed.
 std::set<std::string_view> extract_delimited_items(const std::string& input,
-                                                   const char delim) {
+                                                   const std::string& delim) {
   std::set<std::string_view> result_set;
-  auto emit = [&result_set](std::string_view s) {
-    auto start = s.find_first_not_of(' ');
-    if (start != std::string::npos) {
-      s.remove_prefix(start);
-      auto last = s.size() - 1;
-      auto end = s.find_last_not_of(' ');
-      if (end != last) {
-        s.remove_suffix(last - end);
-      }
-      result_set.emplace(s);
+  for (auto item : split_string(input, delim)) {
+    auto trimmed = trim_whitespaces(item);
+    if (!trimmed.empty()) {
+      result_set.emplace(trimmed);
     }
-  };
-
-  std::string_view input_view(input);
-  std::string::size_type pos = 0;
-  while (true) {
-    auto where = input_view.find(delim, pos);
-    if (where == std::string::npos) {
-      auto remainder = input_view.substr(pos);
-      emit(remainder);
-      break;
-    }
-    auto chunk = input_view.substr(pos, where - pos);
-    emit(chunk);
-    pos = where + 1;
   }
-
   return result_set;
 }
 } // namespace
@@ -901,12 +880,12 @@ class TraceClassAfterEachPass {
     auto trace_class_name = getenv("TRACE_CLASS_NAME");
     m_trace_class_env = trace_class_name == nullptr ? "" : trace_class_name;
     std::cerr << "TRACE_CLASS_NAME=" << m_trace_class_env << std::endl;
-    m_trace_class_names = extract_delimited_items(m_trace_class_env, ',');
+    m_trace_class_names = extract_delimited_items(m_trace_class_env, ",");
 
     auto trace_method_name = getenv("TRACE_METHOD_NAME");
     m_trace_method_env = trace_method_name == nullptr ? "" : trace_method_name;
     std::cerr << "TRACE_METHOD_NAME=" << m_trace_method_env << std::endl;
-    m_trace_method_names = extract_delimited_items(m_trace_method_env, ',');
+    m_trace_method_names = extract_delimited_items(m_trace_method_env, ",");
 
     if (!m_trace_method_names.empty() || !m_trace_class_names.empty()) {
       if (trace_class_file) {
