@@ -9,6 +9,8 @@
 
 #include <boost/functional/hash.hpp>
 #include <boost/optional/optional.hpp>
+#include <cstdint>
+#include <cstdio>
 #include <sstream>
 #include <tuple>
 #include <unordered_map>
@@ -1027,6 +1029,63 @@ DexAccessFlags parse_access_flags(const s_expr& access_tokens) {
 
 } // namespace
 
+DexField* create_concrete_field(const std::string& field_name,
+                                const DexAccessFlags& access_flags,
+                                s_expr tail) {
+  auto field = DexField::make_field(field_name);
+
+  DexField* ret = field->make_concrete(access_flags);
+
+  // If we have an additional paramter, adding that data in as well
+  if (!tail.is_nil()) {
+    s_expr code_expr;
+    s_patn({s_patn(code_expr)}, tail).match_with(tail);
+    auto ret_type = ret->get_type();
+
+    // CASE 1: is an integer (prefixed be #)
+    if (code_expr.is_int32()) {
+      always_assert_log(type::is_primitive(ret_type),
+                        "Inputted primitive but did not expect primitive");
+      ret->get_static_value()->value(code_expr.get_int32());
+    }
+
+    // CASE 2: is a string (no prefix of #)
+    else if (code_expr.is_string()) {
+      // turning s-expression into string
+      const auto& code_expr_str = code_expr.get_string();
+
+      // BOOLEAN
+      if (type::is_boolean(ret_type)) {
+        ret->get_static_value()->value(code_expr_str == "true");
+      }
+
+      // PRIMITIVE TYPE
+      else if (type::is_primitive(ret_type)) {
+        uint64_t val;
+        auto result = std::from_chars(
+            code_expr_str.data(), code_expr_str.data() + code_expr_str.size(),
+            val, 16);
+        always_assert_log(result.ec != std::errc::invalid_argument,
+                          "Invalid payload: \"%s\"", code_expr_str.c_str());
+        ret->get_static_value()->value(val);
+      }
+
+      // REGULAR STRING
+      else {
+        auto dex_string = DexString::make_string(code_expr_str);
+        always_assert_log(ret_type == type::java_lang_String(),
+                          "Inputted string but did not expect string");
+        auto encoded_string = new DexEncodedValueString(dex_string);
+        ret->set_value(std::unique_ptr<DexEncodedValue>(encoded_string));
+      }
+    } else {
+      always_assert_log(false, "Invalid code expression for field");
+    }
+  }
+  always_assert(tail.is_nil());
+  return ret;
+}
+
 DexMethod* method_from_s_expr(const s_expr& e) {
   s_expr tail;
   s_patn({s_patn("method")}, tail)
@@ -1122,18 +1181,17 @@ std::variant<DexField*, DexMethod*> interface_member_from_s_expr(
                                    std::move(no_code), true /* is_virtual */);
     }
   }
+
   s_patn({s_patn("field")}, tail)
       .must_match(e, "field definitions must start with 'field'");
 
   std::string field_name;
   s_patn({s_patn(&field_name)}, tail).must_match(tail, "Expecting field name");
-  always_assert(tail.is_nil());
-
-  auto field = DexField::make_field(field_name);
-  // Fields should be public, static, final
-  return field->make_concrete(DexAccessFlags::ACC_PUBLIC |
-                              DexAccessFlags::ACC_STATIC |
-                              DexAccessFlags::ACC_FINAL);
+  return create_concrete_field(field_name,
+                               DexAccessFlags::ACC_PUBLIC |
+                                   DexAccessFlags::ACC_STATIC |
+                                   DexAccessFlags::ACC_FINAL,
+                               tail);
 }
 
 } // namespace

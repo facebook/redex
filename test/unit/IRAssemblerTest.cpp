@@ -7,6 +7,7 @@
 
 #include "IRAssembler.h"
 
+#include <cstdint>
 #include <gtest/gtest.h>
 
 #include "DexAnnotation.h"
@@ -757,6 +758,14 @@ TEST_F(IRAssemblerTest, assembleInterfaceFromString) {
       (method "LIface;.two:(Ljava/lang/String;)I")
       (field "LIface;.three:I")
       (field "LIface;.four:Ljava/lang/String;")
+      (field "LIface;.five:I" #5)
+      (field "LIface;.six:I" #123)
+      (field "LIface;.seven:Ljava/lang/String;" hello)
+      (field "LIface;.eight:Z" true)
+      (field "LIface;.nine:Z" false)
+      (field "LIface;.ten:I;" a)
+      (field "LIface;.eleven:I;" b)
+      (field "LIface;.twelve:I;" ab)
     )
   )");
   EXPECT_TRUE(is_interface(iface));
@@ -777,13 +786,16 @@ TEST_F(IRAssemblerTest, assembleInterfaceFromString) {
 
   EXPECT_TRUE(iface->get_ifields().empty());
   const auto& fields = iface->get_sfields();
-  EXPECT_EQ(fields.size(), 2);
+  EXPECT_EQ(fields.size(), 10);
   for (const auto& f : fields) {
     EXPECT_EQ(f->get_access(),
               DexAccessFlags::ACC_PUBLIC | DexAccessFlags::ACC_STATIC |
                   DexAccessFlags::ACC_FINAL);
     auto name = f->str();
-    EXPECT_TRUE(name == "three" || name == "four")
+    EXPECT_TRUE(name == "three" || name == "four" || name == "five" ||
+                name == "six" || name == "seven" || name == "eight" ||
+                name == "nine" || name == "ten" || name == "eleven" ||
+                name == "twelve")
         << "Got unexpected field: " << name;
     if (name == "three") {
       auto static_value = f->get_static_value();
@@ -793,6 +805,33 @@ TEST_F(IRAssemblerTest, assembleInterfaceFromString) {
       auto static_value = f->get_static_value();
       EXPECT_EQ(static_value->value(), false);
       EXPECT_EQ(static_value->evtype(), DEVT_NULL);
+    } else if (name == "five") {
+      auto static_value = f->get_static_value();
+      EXPECT_EQ(static_value->value(), 5);
+      EXPECT_EQ(static_value->evtype(), DEVT_INT);
+    } else if (name == "six") {
+      auto static_value = f->get_static_value();
+      EXPECT_EQ(static_value->value(), 123);
+      EXPECT_EQ(static_value->evtype(), DEVT_INT);
+    } else if (name == "seven") {
+      auto static_value = f->get_static_value();
+      EXPECT_EQ(static_value->evtype(), DEVT_STRING);
+      EXPECT_EQ(static_value->show(), "hello");
+    } else if (name == "eight") {
+      auto static_value = f->get_static_value();
+      EXPECT_EQ(static_value->value(), 1);
+    } else if (name == "nine") {
+      auto static_value = f->get_static_value();
+      EXPECT_EQ(static_value->value(), 0);
+    } else if (name == "ten") {
+      auto static_value = f->get_static_value();
+      EXPECT_EQ(static_value->value(), 10);
+    } else if (name == "eleven") {
+      auto static_value = f->get_static_value();
+      EXPECT_EQ(static_value->value(), 11);
+    } else if (name == "twelve") {
+      auto static_value = f->get_static_value();
+      EXPECT_EQ(static_value->value(), 171);
     }
   }
 
