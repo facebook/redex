@@ -27,9 +27,12 @@ bool is_int(const type_inference::TypeEnvironment& env, reg_t reg) {
   return !env.get_int_type(reg).is_top() && !env.get_int_type(reg).is_bottom();
 }
 
+// if there's no dex type, the value is null, and the checker does not enforce
+// nullability
 bool is_string(const type_inference::TypeEnvironment& env, reg_t reg) {
-  return env.get_dex_type(reg) &&
-         *env.get_dex_type(reg) == type::java_lang_String();
+  return env.get_dex_type(reg) != boost::none
+             ? *env.get_dex_type(reg) == type::java_lang_String()
+             : true;
 }
 
 bool is_not_str_nor_int(const type_inference::TypeEnvironment& env, reg_t reg) {
