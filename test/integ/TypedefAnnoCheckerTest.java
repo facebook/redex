@@ -343,4 +343,8 @@ public class TypedefAnnoCheckerTest {
     };
   }
 
+  @TestStringDef public String testNullString() {
+    return null;
+  }
+
 }
