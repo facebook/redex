@@ -1347,6 +1347,10 @@ void TransitiveClosureMarkerWorker::visit_cls(const DexClass* cls) {
   const DexAnnotationSet* annoset = cls->get_anno_set();
   if (annoset) {
     for (auto const& anno : annoset->get_annotations()) {
+      if (anno->type() == type::dalvik_annotation_MemberClasses()) {
+        // Ignore inner-class annotations.
+        continue;
+      }
       record_reachability(cls, anno.get());
       gather_and_push(anno.get());
     }
