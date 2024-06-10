@@ -7,11 +7,13 @@
 
 #pragma once
 
+#include <charconv>
 #include <cstring>
 #include <string>
 #include <type_traits>
 #include <utility>
 
+#include "CppUtil.h"
 #include "Debug.h"
 #include "DexDefs.h"
 #include "DexOpcode.h"
@@ -363,6 +365,22 @@ class DexOpcodeProto : public DexInstruction {
   void set_proto(DexProto* proto) { m_proto = proto; }
 };
 
+inline uint16_t fill_array_data_payload_width(const DexOpcodeData* op_data) {
+  always_assert_log(op_data->opcode() == FOPCODE_FILLED_ARRAY,
+                    "DexOpcodeData is not an array payload");
+  always_assert(op_data->data_size() >= 3);
+  return *op_data->data();
+}
+
+inline uint32_t fill_array_data_payload_element_count(
+    const DexOpcodeData* op_data) {
+  always_assert_log(op_data->opcode() == FOPCODE_FILLED_ARRAY,
+                    "DexOpcodeData is not an array payload");
+  always_assert(op_data->data_size() >= 3);
+  auto size_ptr = (uint32_t*)(op_data->data() + 1);
+  return *size_ptr;
+}
+
 // helper function to create fill-array-data-payload according to
 // https://source.android.com/devices/tech/dalvik/dalvik-bytecode#fill-array
 template <typename IntType>
@@ -383,6 +401,25 @@ std::unique_ptr<DexOpcodeData> encode_fill_array_data_payload(
   uint8_t* data_bytes = (uint8_t*)(ptr + 4);
   memcpy(data_bytes, (void*)vec.data(), total_copy_size);
   return std::make_unique<DexOpcodeData>(data);
+}
+
+// Like above, but parse from a vector of hex string elements
+template <typename IntType>
+std::unique_ptr<DexOpcodeData> encode_fill_array_data_payload_from_string(
+    const std::vector<std::string>& elements) {
+  static_assert(std::is_integral<IntType>::value,
+                "fill-array-data-payload can only contain integral values.");
+  std::vector<IntType> vec;
+  for (const auto& item : elements) {
+    IntType val;
+    auto trimmed = trim_whitespaces(item);
+    auto result = std::from_chars(trimmed.data(),
+                                  trimmed.data() + trimmed.size(), val, 16);
+    always_assert_log(result.ec != std::errc::invalid_argument,
+                      "Invalid payload: \"%s\"", item.c_str());
+    vec.emplace_back(val);
+  }
+  return encode_fill_array_data_payload(vec);
 }
 
 template <typename IntType>

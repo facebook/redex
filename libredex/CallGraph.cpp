@@ -182,7 +182,6 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
       for (auto m : overridden_methods) {
         if (!m->is_external()) {
           auto* cls = type_class(m->get_class());
-          always_assert(is_interface(cls) || is_abstract(cls));
           dynamic_methods.emplace(m);
         }
       }

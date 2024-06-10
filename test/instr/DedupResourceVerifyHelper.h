@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include "DexAnnotation.h"
 #include "RedexResources.h"
 #include "verify/VerifyUtil.h"
 

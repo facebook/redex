@@ -2,10 +2,6 @@
 -dontshrink
 -dontoptimize
 
--keep class com.facebook.redextest.EmptyClassesTest {
- *;
-}
-
 # Don't muck with test infra
 
 -keep class org.junit.** { *; }
@@ -14,5 +10,3 @@
 -keep class android.test.** { *; }
 -keep class android.support.test.** { *; }
 -keep class androidx.test.** { *; }
-
-

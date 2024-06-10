@@ -272,7 +272,7 @@ void WholeProgramState::analyze_clinits_and_ctors(
 
     const auto& ctors = cls->get_ctors();
     for (auto* ctor : ctors) {
-      if (!is_reachable(gta, ctor)) {
+      if (!is_reachable(gta, ctor) || !ctor->get_code()) {
         continue;
       }
       IRCode* code = ctor->get_code();

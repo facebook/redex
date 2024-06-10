@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 #include <json/value.h>
 
+#include "Creators.h"
 #include "JarLoader.h"
 #include "RedexOptions.h"
 #include "RedexTest.h"

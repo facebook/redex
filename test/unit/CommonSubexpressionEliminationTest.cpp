@@ -2256,3 +2256,225 @@ TEST_F(CommonSubexpressionEliminationTest, const_regression) {
   )";
   test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 1);
 }
+
+TEST_F(CommonSubexpressionEliminationTest, if_lt) {
+  auto code_str = R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (if-lt v0 v1 :L1)
+      (const v0 1)
+      (return v0)
+    (:L1)
+      (if-lt v0 v1 :L2)
+      (const v0 2)
+      (return v0)
+    (:L2)
+      (const v0 3)
+      (return v0)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (if-lt v0 v1 :L1)
+      (const v0 1)
+      (return v0)
+    (:L1)
+      (const v0 3)
+      (return v0)
+    )
+  )";
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 2);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, if_ltz) {
+  auto code_str = R"(
+    (
+      (load-param v0)
+      (const v1 0)
+      (if-lt v0 v1 :L1)
+      (const v0 1)
+      (return v0)
+    (:L1)
+      (if-ltz v0 :L2)
+      (const v0 2)
+      (return v0)
+    (:L2)
+      (const v0 3)
+      (return v0)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (load-param v0)
+      (const v1 0)
+      (if-lt v0 v1 :L1)
+      (const v0 1)
+      (return v0)
+    (:L1)
+      (const v0 3)
+      (return v0)
+    )
+  )";
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 2);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, if_eq_commutative) {
+  auto code_str = R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (if-eq v0 v1 :L1)
+      (const v0 1)
+      (return v0)
+    (:L1)
+      (if-eq v1 v0 :L2)
+      (const v0 2)
+      (return v0)
+    (:L2)
+      (const v0 3)
+      (return v0)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (if-eq v0 v1 :L1)
+      (const v0 1)
+      (return v0)
+    (:L1)
+      (const v0 3)
+      (return v0)
+    )
+  )";
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 2);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, if_lt_negation) {
+  auto code_str = R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (if-lt v0 v1 :L1)
+      (const v0 1)
+      (return v0)
+    (:L1)
+      (if-ge v0 v1 :L2)
+      (const v0 2)
+      (return v0)
+    (:L2)
+      (const v0 3)
+      (return v0)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (if-lt v0 v1 :L1)
+      (const v0 1)
+      (return v0)
+    (:L1)
+      (const v0 2)
+      (return v0)
+    )
+  )";
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 2);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, if_ne) {
+  auto code_str = R"(
+    (
+      (load-param v0)
+      (if-eq v0 v0 :L1)
+      (const v0 1)
+      (return v0)
+    (:L1)
+      (const v0 2)
+      (return v0)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (load-param v0)
+      (const v0 2)
+      (return v0)
+    )
+  )";
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 2);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, if_lt_after_join) {
+  // When control-flow joints from two paths, we lose the branch conditions.
+  auto code_str = R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (if-lt v0 v1 :L1)
+    (:L1)
+      (if-lt v0 v1 :L2)
+      (const v0 2)
+      (return v0)
+    (:L2)
+      (const v0 3)
+      (return v0)
+    )
+  )";
+  auto expected_str = code_str;
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, if_lt_memory) {
+  // When branch condition involve memory locations that get written to, we
+  // cannot eliminate branches.
+  auto code_str = R"(
+    (
+      (load-param v0)
+      (load-param-object v1)
+      (iget v1 "LFoo;.a:I")
+      (move-result-pseudo v2)
+      (if-lt v0 v2 :L1)
+      (const v0 1)
+      (return v0)
+    (:L1)
+      (const v3 42)
+      (iput v3 v1 "LFoo;.a:I")
+      (iget v1 "LFoo;.a:I")
+      (move-result-pseudo v2)
+      (if-lt v0 v2 :L2)
+      (const v0 2)
+      (return v0)
+    (:L2)
+      (const v0 3)
+      (return v0)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (load-param v0)
+      (load-param-object v1)
+      (iget v1 "LFoo;.a:I")
+      (move-result-pseudo v2)
+      (if-lt v0 v2 :L1)
+      (const v0 1)
+      (return v0)
+    (:L1)
+      (const v3 42)
+      (iput v3 v1 "LFoo;.a:I")
+      (move v4 v3)
+      (iget v1 "LFoo;.a:I")
+      (move-result-pseudo v2)
+      (move v2 v4)
+      (if-lt v0 v2 :L2)
+      (const v0 2)
+      (return v0)
+    (:L2)
+      (const v0 3)
+      (return v0)
+    )
+  )";
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 1);
+}

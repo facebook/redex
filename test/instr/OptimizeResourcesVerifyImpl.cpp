@@ -11,6 +11,8 @@
 #include <unordered_set>
 
 #include "ApkResources.h"
+#include "DexAnnotation.h"
+#include "DexClass.h"
 #include "RedexResources.h"
 #include "utils/Serialize.h"
 #include "verify/VerifyUtil.h"

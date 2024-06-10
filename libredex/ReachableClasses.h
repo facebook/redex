@@ -66,25 +66,14 @@ inline bool can_rename_if_also_renaming_xml(DexMember* member) {
   return member->rstate.can_rename_if_also_renaming_xml();
 }
 
-template <class DexMember>
-inline bool is_serde(DexMember* member) {
+inline bool is_serde(const DexClass* member) {
   return member->rstate.is_serde();
 }
 
-template <class DexMember>
-inline bool marked_by_string(DexMember* member) {
+inline bool marked_by_string(const DexClass* member) {
   return member->rstate.is_referenced_by_string();
 }
 
-template <class DexMember>
-inline bool assumenosideeffects(DexMember* member) {
+inline bool assumenosideeffects(const DexMethod* member) {
   return member->rstate.assumenosideeffects();
-}
-
-/**
- * If this member is root or it has m_by_string be true.
- */
-template <class DexMember>
-inline bool root_or_string(DexMember* member) {
-  return root(member) || marked_by_string(member);
 }

@@ -53,12 +53,12 @@ class DexType;
   TM(DCE)               \
   TM(DEDUP_BLOCKS)      \
   TM(DEDUP_RES)         \
-  TM(DELINIT)           \
   TM(DELMET)            \
   TM(DS)                \
   TM(EMPTY)             \
   TM(ENUM)              \
   TM(EVALTC)            \
+  TM(FALCO_STATS)       \
   TM(FINALINLINE)       \
   TM(FREG)              \
   TM(GETTER)            \
@@ -115,6 +115,7 @@ class DexType;
   TM(PEEPHOLE)          \
   TM(PGR)               \
   TM(PM)                \
+  TM(PPP)               \
   TM(PTA)               \
   TM(PURITY)            \
   TM(QUICK)             \

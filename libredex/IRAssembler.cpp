@@ -10,10 +10,15 @@
 #include <boost/functional/hash.hpp>
 #include <boost/optional/optional.hpp>
 #include <sstream>
-#include <string>
+#include <tuple>
 #include <unordered_map>
+#include <variant>
 
+#include "Creators.h"
+#include "DexClass.h"
+#include "DexInstruction.h"
 #include "DexPosition.h"
+#include "IRCode.h"
 #include "Show.h"
 
 using namespace sparta;
@@ -71,9 +76,24 @@ s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
   switch (opcode::ref(op)) {
   case opcode::Ref::None:
     break;
-  case opcode::Ref::Data:
-    not_reached_log("Not yet supported");
+  case opcode::Ref::Data: {
+    auto op_data = insn->get_data();
+    if (op_data->opcode() == FOPCODE_FILLED_ARRAY) {
+      auto ewidth = fill_array_data_payload_width(op_data);
+      s_exprs.emplace_back(ewidth);
+      auto element_count = fill_array_data_payload_element_count(op_data);
+      std::vector<s_expr> element_exprs;
+      element_exprs.reserve(element_count);
+      for (const auto& s :
+           pretty_array_data_payload(ewidth, element_count, op_data->data())) {
+        element_exprs.emplace_back(s);
+      }
+      s_exprs.emplace_back(element_exprs);
+    } else {
+      not_reached_log("Not yet supported");
+    }
     break;
+  }
   case opcode::Ref::Field:
     s_exprs.emplace_back(show(insn->get_field()));
     break;
@@ -133,6 +153,22 @@ s_expr _to_s_expr(const DexPosition* pos, uint32_t idx, uint32_t parent_idx) {
       s_expr(std::to_string(pos->line)),
       s_expr(parent_idx_str),
   });
+}
+
+std::unique_ptr<DexOpcodeData> create_fill_array_data_payload_from_str(
+    const uint16_t ewidth, const std::vector<std::string>& elements) {
+  switch (ewidth) {
+  case 1:
+    return encode_fill_array_data_payload_from_string<uint8_t>(elements);
+  case 2:
+    return encode_fill_array_data_payload_from_string<uint16_t>(elements);
+  case 4:
+    return encode_fill_array_data_payload_from_string<uint32_t>(elements);
+  default: {
+    always_assert_log(ewidth == 8, "Invalid width: %d", ewidth);
+    return encode_fill_array_data_payload_from_string<uint64_t>(elements);
+  }
+  }
 }
 } // namespace
 
@@ -202,9 +238,31 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
   switch (opcode::ref(op)) {
   case opcode::Ref::None:
     break;
-  case opcode::Ref::Data:
-    not_reached_log("Not yet supported");
+  case opcode::Ref::Data: {
+    if (insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
+      int32_t ewidth;
+      s_patn({s_patn(&ewidth)}, tail)
+          .must_match(tail, "Expecting int for element width" + opcode_str);
+      always_assert_log(ewidth == 1 || ewidth == 2 || ewidth == 4 ||
+                            ewidth == 8,
+                        "Invalid width %d", ewidth);
+
+      std::vector<std::string> hex_elements;
+      std::string element_str;
+      s_expr list;
+      s_patn({s_patn(list)}, tail)
+          .must_match(tail, "Expecting list of hex strings for " + opcode_str);
+      while (s_patn({s_patn(&element_str)}, list).match_with(list)) {
+        hex_elements.push_back(element_str);
+      }
+      auto data = create_fill_array_data_payload_from_str((uint16_t)ewidth,
+                                                          hex_elements);
+      insn->set_data(std::move(data));
+    } else {
+      not_reached_log("Not yet supported");
+    }
     break;
+  }
   case opcode::Ref::Field: {
     std::string str;
     s_patn({s_patn(&str)}, tail)
@@ -922,7 +980,10 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
   return code;
 }
 
-std::unique_ptr<IRCode> ircode_from_string(const std::string& s) {
+namespace {
+
+template <typename T, typename SExprFn>
+T from_string_helper(const std::string& s, const SExprFn& fn) {
   std::istringstream input(s);
   s_expr_istream s_expr_input(input);
   s_expr expr;
@@ -934,7 +995,14 @@ std::unique_ptr<IRCode> ircode_from_string(const std::string& s) {
     always_assert_log(!s_expr_input.fail(), "%s\n",
                       s_expr_input.what().c_str());
   }
-  return ircode_from_s_expr(expr);
+  return fn(expr);
+}
+
+} // namespace
+
+std::unique_ptr<IRCode> ircode_from_string(const std::string& s) {
+  return from_string_helper<std::unique_ptr<IRCode>>(
+      s, [](const s_expr& e) { return ircode_from_s_expr(e); });
 }
 
 #define AF(uc, lc, val) {ACC_##uc, #lc},
@@ -947,6 +1015,18 @@ std::unordered_map<std::string, DexAccessFlags> string_to_access_table = {
     ACCESSFLAGS};
 #undef AF
 
+namespace {
+
+DexAccessFlags parse_access_flags(const s_expr& access_tokens) {
+  DexAccessFlags access_flags = static_cast<DexAccessFlags>(0);
+  for (size_t i = 0; i < access_tokens.size(); ++i) {
+    access_flags |= string_to_access_table.at(access_tokens[i].str());
+  }
+  return access_flags;
+}
+
+} // namespace
+
 DexMethod* method_from_s_expr(const s_expr& e) {
   s_expr tail;
   s_patn({s_patn("method")}, tail)
@@ -958,9 +1038,10 @@ DexMethod* method_from_s_expr(const s_expr& e) {
       .must_match(tail, "Expecting access list and method name");
 
   auto method = DexMethod::make_method(method_name);
-  DexAccessFlags access_flags = static_cast<DexAccessFlags>(0);
-  for (size_t i = 0; i < access_tokens.size(); ++i) {
-    access_flags |= string_to_access_table.at(access_tokens[i].str());
+  auto access_flags = parse_access_flags(access_tokens);
+  if (method->get_name()->str() == "<init>" ||
+      method->get_name()->str() == "<cinit>") {
+    access_flags |= ACC_CONSTRUCTOR;
   }
 
   s_expr code_expr;
@@ -973,18 +1054,104 @@ DexMethod* method_from_s_expr(const s_expr& e) {
 }
 
 DexMethod* method_from_string(const std::string& s) {
-  std::istringstream input(s);
-  s_expr_istream s_expr_input(input);
-  s_expr expr;
-  while (s_expr_input.good()) {
-    s_expr_input >> expr;
-    if (s_expr_input.eoi()) {
-      break;
-    }
-    always_assert_log(!s_expr_input.fail(), "%s\n",
-                      s_expr_input.what().c_str());
+  return from_string_helper<DexMethod*>(
+      s, [](const s_expr& e) { return method_from_s_expr(e); });
+}
+
+DexField* field_from_s_expr(const s_expr& field_def) {
+  s_expr tail;
+  s_patn({s_patn("field")}, tail)
+      .must_match(field_def, "field definitions must start with 'field'");
+
+  s_expr access_tokens;
+  std::string field_name;
+  s_patn({s_patn(access_tokens), s_patn(&field_name)}, tail)
+      .must_match(tail, "Expecting access list and field name");
+  always_assert(tail.is_nil());
+
+  auto field = DexField::make_field(field_name);
+  auto access_flags = parse_access_flags(access_tokens);
+
+  return field->make_concrete(access_flags);
+}
+
+DexField* field_from_string(const std::string& field_def) {
+  return from_string_helper<DexField*>(
+      field_def, [](const s_expr& e) { return field_from_s_expr(e); });
+}
+
+namespace {
+
+std::variant<DexField*, DexMethod*> member_from_s_expr(const s_expr& e) {
+  s_expr tail;
+  if (s_patn({s_patn("method")}, tail).match_with(e)) {
+    return method_from_s_expr(e);
   }
-  return method_from_s_expr(expr);
+  return field_from_s_expr(e);
+}
+
+} // namespace
+
+// TODO: Support interfaces.
+DexClass* class_from_s_expr(const sparta::s_expr& class_expr) {
+  s_expr tail;
+  s_patn({s_patn("class")}, tail)
+      .must_match(class_expr, "class definitions must start with 'class'");
+
+  s_expr access_tokens;
+  std::string class_name;
+  s_patn({s_patn(access_tokens), s_patn(&class_name)}, tail)
+      .must_match(tail, "Expecting access list and class name");
+
+  auto class_type = DexType::make_type(DexString::make_string(class_name));
+  ClassCreator class_creator(class_type);
+  class_creator.set_access(parse_access_flags(access_tokens));
+
+  // Possible `extends Bar` clause.
+  {
+    s_expr superclass_tail;
+    std::string super_class_name;
+    if (s_patn({s_patn("extends"), s_patn(&super_class_name)}, superclass_tail)
+            .match_with(tail)) {
+      auto super_class_type =
+          DexType::make_type(DexString::make_string(super_class_name));
+      class_creator.set_super(super_class_type);
+      tail = std::move(superclass_tail);
+    } else {
+      class_creator.set_super(type::java_lang_Object());
+    }
+  }
+
+  // TODO: Possible `implements (Bar1, Bar2, ...)` clause.
+
+  // Parse members.
+  always_assert(tail.is_list() || tail.is_nil());
+  if (tail.is_list()) {
+    for (s_expr member_list = std::move(tail); !member_list.is_nil();) {
+      always_assert(member_list.is_list());
+      s_expr member_expr;
+      s_expr member_tail;
+      s_patn({s_patn(member_expr)}, member_tail)
+          .must_match(member_list, "Expected a head");
+      always_assert(member_expr.is_list());
+
+      auto member = member_from_s_expr(member_expr);
+      if (std::holds_alternative<DexField*>(member)) {
+        class_creator.add_field(std::get<DexField*>(member));
+      } else {
+        class_creator.add_method(std::get<DexMethod*>(member));
+      }
+
+      member_list = std::move(member_tail);
+    }
+  }
+
+  return class_creator.create();
+}
+
+DexClass* class_from_string(const std::string& class_def) {
+  return from_string_helper<DexClass*>(
+      class_def, [](const s_expr& e) { return class_from_s_expr(e); });
 }
 
 DexMethod* class_with_method(const std::string& class_name,

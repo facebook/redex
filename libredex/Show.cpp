@@ -1293,17 +1293,16 @@ std::string show(const DexOpcodeData* insn) {
     // See format at
     // https://source.android.com/devices/tech/dalvik/dalvik-bytecode#fill-array
     const uint16_t ewidth = *data++;
-    const uint32_t size = *((uint32_t*)data);
-    ss << "[" << size << " x " << ewidth << "] ";
-    // escape size
-    data += 2;
-    const uint8_t* data_ptr = (uint8_t*)data;
-    ss << "{ ";
-    for (size_t i = 0; i < size; i++) {
-      if (i != 0) {
-        ss << ", ";
+    const uint32_t element_count = *((uint32_t*)data);
+    ss << "[" << element_count << " x " << ewidth << "] {";
+    auto vec = pretty_array_data_payload(ewidth, element_count, insn->data());
+    bool first{true};
+    for (const auto& s : vec) {
+      if (!first) {
+        ss << ",";
       }
-      ss << std::hex << read<uint64_t>(data_ptr, ewidth);
+      ss << " " << s;
+      first = false;
     }
     ss << " }";
     break;
@@ -1710,4 +1709,19 @@ std::string pretty_bytes(uint64_t val) {
   oss << std::setiosflags(std::ios::fixed) << std::setprecision(2) << d_val
       << " " << modifier << "B";
   return oss.str();
+}
+
+std::vector<std::string> pretty_array_data_payload(const uint16_t ewidth,
+                                                   const uint32_t element_count,
+                                                   const uint16_t* data) {
+  std::vector<std::string> result;
+  result.reserve(element_count);
+  const uint8_t* data_ptr = (uint8_t*)(data + 3);
+  for (size_t i = 0; i < element_count; i++) {
+    auto xx = read<uint64_t>(data_ptr, ewidth);
+    std::ostringstream oss;
+    oss << std::hex << xx;
+    result.emplace_back(oss.str());
+  }
+  return result;
 }

@@ -10,6 +10,7 @@
 void InlinerConfig::bind_config() {
   bind("delete_non_virtuals", delete_non_virtuals, delete_non_virtuals);
   bind("true_virtual_inline", true_virtual_inline, true_virtual_inline);
+  bind("relaxed_init_inline", relaxed_init_inline, relaxed_init_inline);
   bind("intermediate_shrinking", intermediate_shrinking,
        intermediate_shrinking);
   bind("enforce_method_size_limit", enforce_method_size_limit,
@@ -109,6 +110,7 @@ void PassManagerConfig::bind_config() {
   bind("check_pass_order_properties", check_pass_order_properties,
        check_pass_order_properties);
   bind("check_properties_deep", check_properties_deep, check_properties_deep);
+  bind("dump_mrefs", dump_mrefs, dump_mrefs);
 }
 
 void ResourceConfig::bind_config() {

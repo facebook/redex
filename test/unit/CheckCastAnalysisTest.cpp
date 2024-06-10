@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include "CheckCastAnalysis.h"
+#include "Creators.h"
 #include "FrameworkApi.h"
 #include "IRAssembler.h"
 #include "RedexTest.h"
@@ -47,7 +48,6 @@ struct CheckCastAnalysisTest : public RedexTest {
   }
 };
 
-
 TEST_F(CheckCastAnalysisTest, simple_string) {
   auto method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:()Ljava/lang/String;"
@@ -65,7 +65,8 @@ TEST_F(CheckCastAnalysisTest, simple_string) {
   auto api = api::AndroidSDK::from_string(R"(
     Ljava/lang/String; 1 Ljava/lang/Object; 0 0
   )");
-  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
+  auto analysis =
+      check_casts::impl::CheckCastAnalysis::forMethod(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -93,7 +94,8 @@ TEST_F(CheckCastAnalysisTest, new_instance) {
   method->get_code()->build_cfg();
   check_casts::CheckCastConfig config;
   auto api = create_empty_sdk();
-  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
+  auto analysis =
+      check_casts::impl::CheckCastAnalysis::forMethod(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -121,7 +123,8 @@ TEST_F(CheckCastAnalysisTest, parameter) {
   method->get_code()->build_cfg();
   check_casts::CheckCastConfig config;
   auto api = create_empty_sdk();
-  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
+  auto analysis =
+      check_casts::impl::CheckCastAnalysis::forMethod(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -148,7 +151,8 @@ TEST_F(CheckCastAnalysisTest, array_parameter) {
   method->get_code()->build_cfg();
   check_casts::CheckCastConfig config;
   auto api = create_empty_sdk();
-  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
+  auto analysis =
+      check_casts::impl::CheckCastAnalysis::forMethod(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -176,7 +180,8 @@ TEST_F(CheckCastAnalysisTest, this_parameter) {
   method->get_code()->build_cfg();
   check_casts::CheckCastConfig config;
   auto api = create_empty_sdk();
-  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
+  auto analysis =
+      check_casts::impl::CheckCastAnalysis::forMethod(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -205,7 +210,8 @@ TEST_F(CheckCastAnalysisTest, get_field) {
   method->get_code()->build_cfg();
   check_casts::CheckCastConfig config{.weaken = false};
   auto api = create_empty_sdk();
-  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
+  auto analysis =
+      check_casts::impl::CheckCastAnalysis::forMethod(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -234,7 +240,8 @@ TEST_F(CheckCastAnalysisTest, weaken_disabled) {
   method->get_code()->build_cfg();
   check_casts::CheckCastConfig config{.weaken = false};
   auto api = create_empty_sdk();
-  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
+  auto analysis =
+      check_casts::impl::CheckCastAnalysis::forMethod(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 0);
@@ -256,7 +263,8 @@ TEST_F(CheckCastAnalysisTest, weaken_replace) {
   method->get_code()->build_cfg();
   check_casts::CheckCastConfig config;
   auto api = create_empty_sdk();
-  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
+  auto analysis =
+      check_casts::impl::CheckCastAnalysis::forMethod(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -297,7 +305,8 @@ TEST_F(CheckCastAnalysisTest, weaken) {
   method->get_code()->build_cfg();
   check_casts::CheckCastConfig config;
   auto api = create_empty_sdk();
-  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
+  auto analysis =
+      check_casts::impl::CheckCastAnalysis::forMethod(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -344,7 +353,8 @@ TEST_F(CheckCastAnalysisTest, weaken_interface_to_interface) {
   method->get_code()->build_cfg();
   check_casts::CheckCastConfig config;
   auto api = create_empty_sdk();
-  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
+  auto analysis =
+      check_casts::impl::CheckCastAnalysis::forMethod(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -390,7 +400,8 @@ TEST_F(CheckCastAnalysisTest, weaken_replace_class_to_interface) {
   method->get_code()->build_cfg();
   check_casts::CheckCastConfig config;
   auto api = create_empty_sdk();
-  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
+  auto analysis =
+      check_casts::impl::CheckCastAnalysis::forMethod(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -434,7 +445,8 @@ TEST_F(CheckCastAnalysisTest, do_not_weaken_class_to_interface) {
   method->get_code()->build_cfg();
   check_casts::CheckCastConfig config;
   auto api = create_empty_sdk();
-  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
+  auto analysis =
+      check_casts::impl::CheckCastAnalysis::forMethod(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 0);
@@ -455,7 +467,8 @@ TEST_F(CheckCastAnalysisTest, external) {
   method->get_code()->build_cfg();
   check_casts::CheckCastConfig config;
   auto api = create_empty_sdk();
-  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
+  auto analysis =
+      check_casts::impl::CheckCastAnalysis::forMethod(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 0);
@@ -509,7 +522,8 @@ TEST_P(CheckCastAnalysisSDKTest, parameter) {
   )");
   method->get_code()->build_cfg();
   check_casts::CheckCastConfig config;
-  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
+  auto analysis =
+      check_casts::impl::CheckCastAnalysis::forMethod(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   if (std::get<2>(GetParam())) {

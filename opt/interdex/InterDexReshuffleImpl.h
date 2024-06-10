@@ -111,21 +111,35 @@ class MoveGains {
         m_deduped_weight(deduped_weight),
         m_other_weight(other_weight) {}
 
-  void recompute_gains() {
+  void recompute_gains(size_t removal_dex = 0) {
     Timer t("recompute_gains");
     m_gains_size = 0;
     std::mutex mutex;
     walk::parallel::classes(m_movable_classes, [&](DexClass* cls) {
       for (size_t dex_index = m_first_dex_index; dex_index < m_dexen.size();
            ++dex_index) {
+        if (!m_moved_classes.empty() && m_moved_classes.count(cls)) {
+          // In DexRemovalPass, if a class is already moved from the dex which
+          // is going to be eliminated, we won't move it again.
+          continue;
+        }
+
+        if (dex_index == removal_dex) {
+          // Won't move any class to the potential removed dex.
+          continue;
+        }
         gain_t gain = 0;
         if (m_mergeability_aware) {
           gain = compute_move_gain_after_merging(
-              cls, dex_index);
+              cls, dex_index, removal_dex != 0 ? true : false);
         } else {
-          gain = compute_move_gain(cls, dex_index);
+          gain = compute_move_gain(cls, dex_index,
+                                   removal_dex != 0 ? true : false);
         }
-        if (gain > 0) {
+        if (gain > 0 || removal_dex != 0) {
+          // In InterDexReshufflePass, we require gain > 0. For DexRemovalPass,
+          // any gain is accepted to increase the possibility of make a dex
+          // removable.
           std::lock_guard<std::mutex> lock_guard(mutex);
           if (m_gains_size == m_gains.size()) {
             m_gains.resize(std::max((size_t)1024, m_gains_size * 2));
@@ -180,9 +194,12 @@ class MoveGains {
 
     m_moves_this_epoch += 1;
     m_also_moved_in_last_epoch += was_moved_last_epoch;
+    m_moved_classes.emplace(move.cls);
   }
 
   size_t moves_this_epoch() const { return m_moves_this_epoch; }
+
+  size_t moved_classes_size() const { return m_moved_classes.size(); }
 
   bool should_stop() const {
     return m_moves_this_epoch == 0 ||
@@ -193,8 +210,11 @@ class MoveGains {
 
   size_t size() const { return m_gains_heap_size; }
 
+  gain_t get_min_gain_val() const { return m_min_gain_val; }
+
   gain_t compute_move_gain(DexClass* cls,
-                           size_t target_index) {
+                           size_t target_index,
+                           bool for_removal = false) {
     gain_t gain = 0;
     always_assert(m_class_dex_indices.count(cls));
     auto source_index = m_class_dex_indices.at(cls);
@@ -207,19 +227,19 @@ class MoveGains {
         auto source_occurrences = source.get_fref_occurrences(fref);
         auto target_occurrences = target.get_fref_occurrences(fref);
         gain +=
-            compute_gain(source_occurrences, target_occurrences);
+            compute_gain(source_occurrences, target_occurrences, for_removal);
       }
       for (auto* mref : refs.mrefs) {
         auto source_occurrences = source.get_mref_occurrences(mref);
         auto target_occurrences = target.get_mref_occurrences(mref);
         gain +=
-            compute_gain(source_occurrences, target_occurrences);
+            compute_gain(source_occurrences, target_occurrences, for_removal);
       }
       for (auto* tref : refs.trefs) {
         auto source_occurrences = source.get_tref_occurrences(tref);
         auto target_occurrences = target.get_tref_occurrences(tref);
         gain +=
-            compute_gain(source_occurrences, target_occurrences);
+            compute_gain(source_occurrences, target_occurrences, for_removal);
       }
       auto& source_strings = m_dexen_strings.at(source_index);
       auto& target_strings = m_dexen_strings.at(target_index);
@@ -229,7 +249,7 @@ class MoveGains {
         it = target_strings.find(sref);
         auto target_occurrences = it == target_strings.end() ? 0 : it->second;
         gain +=
-            compute_gain(source_occurrences, target_occurrences);
+            compute_gain(source_occurrences, target_occurrences, for_removal);
       }
     }
 
@@ -237,7 +257,8 @@ class MoveGains {
   }
 
   gain_t compute_move_gain_after_merging(DexClass* cls,
-                                         size_t target_index) {
+                                         size_t target_index,
+                                         bool for_removal = false) {
     MergerIndex merging_type;
     if (m_class_to_merging_info.count(cls)) {
       merging_type = m_class_to_merging_info.at(cls).merging_type;
@@ -245,7 +266,7 @@ class MoveGains {
       // If cls does not belong to any merging type, then use the original
       // formula to compute move gain and multiply it by m_other_weight for
       // non-dedupable references.
-      return m_other_weight * compute_move_gain(cls, target_index);
+      return m_other_weight * compute_move_gain(cls, target_index, for_removal);
     }
     gain_t gain = 0;
     always_assert(m_class_dex_indices.count(cls));
@@ -268,13 +289,14 @@ class MoveGains {
           auto target_occurrences = target.get_fref_occurrences(fref);
           gain +=
               m_other_weight *
-              compute_gain(source_occurrences, target_occurrences);
+              compute_gain(source_occurrences, target_occurrences, for_removal);
         }
       }
       // We separately compute the gain for frefs *defined in* cls.
       always_assert(m_num_field_defs.count(merging_type));
       gain += m_deduped_weight * m_num_field_defs.at(merging_type) *
-              compute_gain(source_merging_type_usage, target_merging_type_usage);
+              compute_gain(source_merging_type_usage, target_merging_type_usage,
+                           for_removal);
 
       const std::unordered_map<const DexMethod*, MethodGroup>& dedupable_mrefs =
           m_class_to_merging_info.at(cls).dedupable_mrefs;
@@ -293,11 +315,11 @@ class MoveGains {
               target.get_merging_type_method_usage(merging_type, group);
           gain +=
               m_deduped_weight *
-              compute_gain(source_occurrences, target_occurrences);
+              compute_gain(source_occurrences, target_occurrences, for_removal);
         } else {
           gain +=
               m_other_weight *
-              compute_gain(source_occurrences, target_occurrences);
+              compute_gain(source_occurrences, target_occurrences, for_removal);
         }
       }
       for (auto* tref : refs.trefs) {
@@ -309,7 +331,7 @@ class MoveGains {
           target_occurrences = target_merging_type_usage;
         }
         gain += m_other_weight * compute_gain(source_occurrences,
-                                              target_occurrences);
+                                              target_occurrences, for_removal);
       }
       auto& source_strings = m_dexen_strings.at(source_index);
       auto& target_strings = m_dexen_strings.at(target_index);
@@ -319,7 +341,7 @@ class MoveGains {
         it = target_strings.find(sref);
         auto target_occurrences = it == target_strings.end() ? 0 : it->second;
         gain += m_other_weight * compute_gain(source_occurrences,
-                                              target_occurrences);
+                                              target_occurrences, for_removal);
       }
     }
 
@@ -327,7 +349,11 @@ class MoveGains {
   }
 
   gain_t compute_gain(size_t source_occurrences,
-                      size_t target_occurrences) const {
+                      size_t target_occurrences,
+                      bool for_removal) const {
+    if (for_removal) {
+      return 0 - power_value_for(target_occurrences);
+    }
     return source_occurrences == 0 ? 0
                                    : power_value_for(source_occurrences - 1) -
                                          power_value_for(target_occurrences);
@@ -339,6 +365,9 @@ class MoveGains {
   size_t m_gains_size{0};
   std::vector<size_t> m_gains_heap;
   size_t m_gains_heap_size{0};
+
+  // This value is from expriment.
+  gain_t m_min_gain_val{-24299166313522127};
 
   // Tracks when a class was last moved.
   //
@@ -369,6 +398,10 @@ class MoveGains {
   const bool m_mergeability_aware;
   const gain_t m_deduped_weight{1};
   const gain_t m_other_weight{1};
+
+  // Classes that are already moved once, and should not be moved again. It is
+  // used in DexRemovalPass only.
+  std::unordered_set<DexClass*> m_moved_classes;
 };
 
 class InterDexReshuffleImpl {
@@ -385,13 +418,19 @@ class InterDexReshuffleImpl {
 
   void apply_plan();
 
+  bool compute_dex_removal_plan();
+
  private:
   void print_stats();
+
+  void record_stats();
 
   bool try_plan_move(const Move& move, bool mergeability_aware = false);
 
   bool can_move(DexClass* cls);
 
+  size_t get_eliminate_dex(
+      const std::unordered_map<size_t, bool>& dex_eliminate);
   ConfigFiles& m_conf;
   PassManager& m_mgr;
   ReshuffleConfig& m_config;

@@ -147,8 +147,6 @@ void sort_classes_for_compressed_size(const std::string& name,
   mgr.set_metric(name + "_remaining_classes", remaining_classes.size());
 }
 
-} // namespace
-
 void sort_classes_for_speed_and_compression(
     const std::string& name,
     PassManager& mgr,
@@ -217,6 +215,8 @@ void sort_classes_for_speed_and_compression(
   mgr.set_metric(name + "_classes_with_sort_num", classes_with_sort_num.size());
   mgr.set_metric(name + "_remaining_classes", remaining_classes.size());
 }
+
+} // namespace
 
 void SortRemainingClassesPass::run_pass(DexStoresVector& stores,
                                         ConfigFiles& conf,

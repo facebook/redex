@@ -150,7 +150,7 @@ DexType* CheckCastAnalysis::get_type_demand(IRInstruction* insn,
     return type::get_array_component_type(insn->get_type());
 
   case OPCODE_RETURN_OBJECT:
-    return m_method->get_proto()->get_rtype();
+    return m_rtype;
 
   case OPCODE_MOVE_OBJECT:
   case OPCODE_MONITOR_ENTER:
@@ -344,23 +344,24 @@ DexType* CheckCastAnalysis::weaken_to_demand(
 }
 
 CheckCastAnalysis::CheckCastAnalysis(const CheckCastConfig& config,
-                                     DexMethod* method,
+                                     cfg::ControlFlowGraph& cfg,
+                                     bool is_static,
+                                     DexType* declaring_type,
+                                     DexTypeList* args,
+                                     DexType* rtype,
+                                     const ParamAnnotations* param_anno,
                                      const api::AndroidSDK& api)
     : m_class_cast_exception_type(
           DexType::make_type("Ljava/lang/ClassCastException;")),
-      m_method(method),
+      m_cfg(cfg),
+      m_is_static(is_static),
+      m_declaring_type(declaring_type),
+      m_args(args),
+      m_rtype(rtype),
+      m_param_anno(param_anno),
       m_api(api) {
   always_assert(m_class_cast_exception_type);
-  if (!method || !method->get_code()) {
-    return;
-  }
-  if (method->str().find("$xXX") != std::string::npos) {
-    // There is some Ultralight/SwitchInline magic that trips up when
-    // casts get weakened, so that we don't operate on those magic methods.
-    return;
-  }
 
-  auto& cfg = method->get_code()->cfg();
   auto iterable = cfg::InstructionIterable(cfg);
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {
     IRInstruction* insn = it->insn;
@@ -458,6 +459,15 @@ CheckCastAnalysis::CheckCastAnalysis(const CheckCastConfig& config,
   }
 }
 
+CheckCastAnalysis CheckCastAnalysis::forMethod(const CheckCastConfig& config,
+                                               DexMethod* method,
+                                               const api::AndroidSDK& api) {
+  return CheckCastAnalysis(config, method->get_code()->cfg(), is_static(method),
+                           method->get_class(), method->get_proto()->get_args(),
+                           method->get_proto()->get_rtype(),
+                           method->get_param_anno(), api);
+}
+
 CheckCastReplacements CheckCastAnalysis::collect_redundant_checks_replacement()
     const {
   CheckCastReplacements redundant_check_casts;
@@ -472,7 +482,7 @@ CheckCastReplacements CheckCastAnalysis::collect_redundant_checks_replacement()
     }
     if (is_check_cast_redundant(insn, check_type)) {
       auto src = insn->src(0);
-      auto move = m_method->get_code()->cfg().move_result_of(it);
+      auto move = m_cfg.move_result_of(it);
       if (move.is_end()) {
         continue;
       }
@@ -540,9 +550,8 @@ bool CheckCastAnalysis::is_check_cast_redundant(IRInstruction* insn,
 
 type_inference::TypeInference* CheckCastAnalysis::get_type_inference() const {
   if (!m_type_inference) {
-    m_type_inference = std::make_unique<type_inference::TypeInference>(
-        m_method->get_code()->cfg());
-    m_type_inference->run(m_method);
+    m_type_inference = std::make_unique<type_inference::TypeInference>(m_cfg);
+    m_type_inference->run(m_is_static, m_declaring_type, m_args, m_param_anno);
   }
   return m_type_inference.get();
 }

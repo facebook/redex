@@ -110,11 +110,11 @@ TEST_F(MethodOverrideGraphTest, verify) {
 
   // Check that parents and children do not contain duplicates
   for (auto&& [method, node] : graph->nodes()) {
-    std::unordered_set<const DexMethod*> children(node.children.begin(),
-                                                  node.children.end());
-    EXPECT_EQ(node.children.size(), children.size());
-    std::unordered_set<const DexMethod*> parents(node.parents.begin(),
-                                                 node.parents.end());
-    EXPECT_EQ(node.parents.size(), parents.size());
+    std::unordered_set<const mog::Node*> children(node->children.begin(),
+                                                  node->children.end());
+    EXPECT_EQ(node->children.size(), children.size());
+    std::unordered_set<const mog::Node*> parents(node->parents.begin(),
+                                                 node->parents.end());
+    EXPECT_EQ(node->parents.size(), parents.size());
   }
 }

@@ -125,6 +125,7 @@ class AnnoKillPass : public Pass {
         {DexLimitsObeyed, Preserves},
         {NoResolvablePureRefs, Preserves},
         {InitialRenameClass, Preserves},
+        {UltralightCodePatterns, Preserves},
     };
   }
 

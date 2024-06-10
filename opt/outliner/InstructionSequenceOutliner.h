@@ -26,6 +26,11 @@ struct Config {
   ProfileGuidanceConfig profile_guidance;
   bool outline_control_flow{true};
   bool obfuscate_method_names{false};
+  size_t cost_method_metadata{8};
+  size_t cost_method_body{8};
+  size_t cost_invoke_with_result{4};
+  size_t cost_invoke_without_result{3};
+  size_t max_args{5};
 };
 
 } // namespace outliner

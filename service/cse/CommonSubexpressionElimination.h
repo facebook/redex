@@ -36,6 +36,7 @@ struct Stats {
   // keys are IROpcode encoded as uint16_t, to make OSS build happy
   std::unordered_map<uint16_t, size_t> eliminated_opcodes;
   size_t max_iterations{0};
+  size_t branches_eliminated{0};
 
   Stats& operator+=(const Stats&);
 };
@@ -164,6 +165,7 @@ class CommonSubexpressionElimination {
     IRInstruction* insn;
   };
   std::vector<Forward> m_forward;
+  std::vector<cfg::Edge*> m_dead_edges;
   // List of unique sets of earlier instructions to be forwarded
   std::vector<sparta::PatriciaTreeSet<const IRInstruction*>> m_earlier_insns;
   cfg::ControlFlowGraph& m_cfg;

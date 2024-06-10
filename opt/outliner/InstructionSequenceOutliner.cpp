@@ -118,23 +118,6 @@ using namespace outliner_impl;
 
 constexpr const char* OUTLINED_CLASS_NAME_PREFIX = "Lcom/redex/Outlined$";
 
-// Average cost of having an outlined method reference (method_id_item,
-// proto_id, type_list, string) in code units.
-const size_t COST_METHOD_METADATA = 8;
-
-// Average cost of having an outlined method body (encoded_method, code_item) in
-// code units.
-const size_t COST_METHOD_BODY = 8;
-
-// Overhead of calling an outlined method with a result (invoke + move-result).
-const size_t COST_INVOKE_WITH_RESULT = 4;
-
-// Overhead of calling an outlined method without a result.
-const size_t COST_INVOKE_WITHOUT_RESULT = 3;
-
-// Maximum number of arguments in outlined methods to avoid /range instructions
-const size_t MAX_ARGS = 5;
-
 // Minimum number of instructions to be outlined in a sequence, used in
 // definition of cores
 const size_t MIN_INSNS_SIZE = 3;
@@ -604,7 +587,8 @@ static bool append_to_partial_candidate(
     LazyReachingInitializedsEnvironments& reaching_initialized_new_instances,
     IRInstruction* insn,
     PartialCandidate* pc,
-    PartialCandidateNode* pcn) {
+    PartialCandidateNode* pcn,
+    const Config& config) {
   auto opcode = insn->opcode();
   if (opcode == OPCODE_INVOKE_DIRECT && method::is_init(insn->get_method())) {
     auto it = pcn->defined_regs.find(insn->src(0));
@@ -620,7 +604,7 @@ static bool append_to_partial_candidate(
       if (insn->src_is_wide(i)) {
         pc->in_regs.insert(src + 1);
       }
-      if (pc->in_regs.size() > MAX_ARGS) {
+      if (pc->in_regs.size() > config.max_args) {
         return false;
       }
     }
@@ -838,7 +822,7 @@ static bool explore_candidates_from(
       return false;
     }
     if (!append_to_partial_candidate(reaching_initialized_new_instances, insn,
-                                     pc, pcn)) {
+                                     pc, pcn, config)) {
       return false;
     }
     if (opcode::is_a_conditional_branch(insn->opcode()) ||
@@ -1032,7 +1016,7 @@ static MethodCandidates find_method_candidates(
             // Code is below minimum configured size
             return;
           }
-          if (pc.size <= COST_INVOKE_WITHOUT_RESULT) {
+          if (pc.size <= config.cost_invoke_without_result) {
             // Partial candidate is not longer than the replacement invoke
             // instruction would be
             return;
@@ -1073,7 +1057,7 @@ static MethodCandidates find_method_candidates(
               }
             }
           }
-          if (out_reg && pc.size <= COST_INVOKE_WITH_RESULT) {
+          if (out_reg && pc.size <= config.cost_invoke_with_result) {
             // Code to outline is not longer than the replacement invoke
             // instruction would be
             return;
@@ -1445,14 +1429,14 @@ static size_t get_savings(const Config& config,
                           const CandidateInfo& ci,
                           const ReusableOutlinedMethods& outlined_methods) {
   size_t cost = c.size * ci.count;
-  size_t outlined_cost =
-      COST_METHOD_METADATA +
-      (c.res_type ? COST_INVOKE_WITH_RESULT : COST_INVOKE_WITHOUT_RESULT) *
-          ci.count;
+  size_t outlined_cost = config.cost_method_metadata +
+                         (c.res_type ? config.cost_invoke_with_result
+                                     : config.cost_invoke_without_result) *
+                             ci.count;
   if (find_reusable_method(store, store_dependencies, c, ci, outlined_methods,
                            config.reuse_outlined_methods_across_dexes) ==
       nullptr) {
-    outlined_cost += COST_METHOD_BODY + c.size;
+    outlined_cost += config.cost_method_body + c.size;
   }
 
   return (outlined_cost + config.savings_threshold) < cost
@@ -2259,10 +2243,10 @@ class HostClassSelector {
 
     auto can_be_host_class = [min_sdk = m_min_sdk](const DexType* type) {
       auto* cls = type_class(type);
-          // Before Android 7, invoking static methods defined in interfaces was
-          // not supported. See rule A24 in
-          // https://source.android.com/devices/tech/dalvik/constraints
-          return min_sdk >= 24 || (cls && !is_interface(cls));
+      // Before Android 7, invoking static methods defined in interfaces was
+      // not supported. See rule A24 in
+      // https://source.android.com/devices/tech/dalvik/constraints
+      return min_sdk >= 24 || (cls && !is_interface(cls));
     };
 
     // Whether this type will not trigger a clinit
@@ -3090,6 +3074,23 @@ void InstructionSequenceOutliner::bind_config() {
        "Minimum number of instructions to be outlined in a sequence");
   bind("max_insns_size", m_config.max_insns_size, m_config.max_insns_size,
        "Maximum number of instructions to be outlined in a sequence");
+  bind("cost_method_metadata", m_config.cost_method_metadata,
+       m_config.cost_method_metadata,
+       "Average cost of having an outlined method reference (method_id_item, "
+       "proto_id, type_list, string) in code units");
+  bind("cost_method_body", m_config.cost_method_body, m_config.cost_method_body,
+       "Average cost of having an outlined method body (encoded_method, "
+       "code_item) in code units");
+  bind("cost_invoke_with_result", m_config.cost_invoke_with_result,
+       m_config.cost_invoke_with_result,
+       "Overhead of calling an outlined method with a result (invoke + "
+       "move-result).");
+  bind("cost_invoke_without_result", m_config.cost_invoke_without_result,
+       m_config.cost_invoke_without_result,
+       "Overhead of calling an outlined method without a result.");
+  bind("max_args", m_config.max_args, m_config.max_args,
+       "Maximum number of arguments in outlined methods to avoid /range "
+       "instructions");
   bind("use_method_profiles", pg.use_method_profiles, pg.use_method_profiles,
        "Whether to use provided method-profiles configuration data to "
        "determine if certain code should not be outlined from a method");

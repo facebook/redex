@@ -32,7 +32,8 @@ bool inline_with_cfg(DexMethod* caller_method,
                      DexType* needs_receiver_cast,
                      DexType* needs_init_class,
                      size_t next_caller_reg,
-                     const cfg::ControlFlowGraph* reduced_cfg = nullptr);
+                     const cfg::ControlFlowGraph* reduced_cfg = nullptr,
+                     DexMethod* rewrite_invoke_super_callee = nullptr);
 
 } // namespace inliner
 
@@ -80,6 +81,12 @@ struct InlinerCostConfig {
   size_t insn_has_lit_cost_2;
 
   size_t insn_has_lit_cost_3;
+
+  // Those configs are used to calculate the penalty for worse cross-dex-ref
+  // minimization results due to inlining.
+  size_t cross_dex_penalty_coe1;
+  size_t cross_dex_penalty_coe2;
+  size_t cross_dex_penalty_const;
 };
 
 const struct InlinerCostConfig DEFAULT_COST_CONFIG = {
@@ -98,6 +105,9 @@ const struct InlinerCostConfig DEFAULT_COST_CONFIG = {
     4, // insn_has_lit_cost_1
     2, // insn_has_lit_cost_2
     1, // insn_has_lit_cost_3
+    1, // cross_dex_penalty_coe1;
+    0, // cross_dex_penalty_coe2;
+    1, // cross_dex_penalty_const;
 };
 
 // All call-sites of a callee.
@@ -216,7 +226,7 @@ class MultiMethodInliner {
       const std::unordered_set<const DexString*>&
           configured_finalish_field_names = {},
       bool local_only = false,
-      InlinerCostConfig m_inliner_cost_config = DEFAULT_COST_CONFIG);
+      InlinerCostConfig inliner_cost_config = DEFAULT_COST_CONFIG);
 
   ~MultiMethodInliner() { delayed_invoke_direct_to_static(); }
 
@@ -249,6 +259,14 @@ class MultiMethodInliner {
   size_t inline_callees(DexMethod* caller,
                         const std::unordered_set<IRInstruction*>& insns,
                         std::vector<IRInstruction*>* deleted_insns = nullptr);
+
+  /**
+   * Inline callees in the given instructions in the caller, if is_inlinable
+   * below returns true.
+   */
+  size_t inline_callees(
+      DexMethod* caller,
+      const std::unordered_map<IRInstruction*, DexMethod*>& insns);
 
   /**
    * Return true if the callee is inlinable into the caller.
@@ -320,7 +338,8 @@ class MultiMethodInliner {
    * in the hierarchy.
    * invoke-super can only exist within the class the call lives in.
    */
-  bool nonrelocatable_invoke_super(IRInstruction* insn);
+  bool nonrelocatable_invoke_super(IRInstruction* insn,
+                                   const DexMethod* callee);
 
   /**
    * Return true if the callee contains a call to an unknown virtual method.

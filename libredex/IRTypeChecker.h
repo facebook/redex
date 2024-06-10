@@ -86,6 +86,16 @@ class IRTypeChecker final {
     return *this;
   }
 
+  /*
+   * Starting with minsdk 21, the verifier allows the constructor invoked after
+   * a new-instance instruction to be of a super-type, and doesn't have to be an
+   * exact type match.
+   */
+  IRTypeChecker& relaxed_init_check() {
+    m_relaxed_init_check = true;
+    return *this;
+  }
+
   IRTypeChecker& validate_access() {
     if (!m_complete) {
       m_validate_access = true;
@@ -152,6 +162,7 @@ class IRTypeChecker final {
   bool m_complete;
   bool m_verify_moves;
   bool m_check_no_overwrite_this;
+  bool m_relaxed_init_check;
   bool m_good;
   bool m_orig_editable_cfg;
   std::string m_what;

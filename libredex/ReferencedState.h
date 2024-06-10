@@ -38,22 +38,15 @@ class ReferencedState {
     // 00--invalid; 01 -- class; 10 -- method; 11 -- field.
     uint8_t m_stype : 2;
 
-    // Whether this DexMember is referenced by one of the strings in the native
-    // libraries. Note that this doesn't allow us to distinguish
-    // native -> Java references from Java -> native refs.
-    bool m_by_string : 1;
     // Whether it is referenced from an XML layout.
     bool m_by_resources : 1;
-    // Whether it is a json serializer/deserializer class for a reachable class.
-    bool m_is_serde : 1;
 
     // ProGuard keep settings
     //
     // Whether any keep rule has matched this. This applies for both `-keep` and
     // `-keepnames`.
     bool m_keep : 1;
-    // assumenosideeffects allows certain methods to be removed.
-    bool m_assumenosideeffects : 1;
+
     // If m_whyareyoukeeping is true then report debugging information
     // about why this class or member is being kept.
     bool m_whyareyoukeeping : 1;
@@ -79,9 +72,18 @@ class ReferencedState {
     bool m_name_used : 1;
 
     union {
-      // This is for class only. Currently, the number of flags is 5. Once new
+      // This is for class only. Currently, the number of flags is 7. Once new
       // flag is added, please update the corresponding number in comment.
       struct {
+        // Whether it is a json serializer/deserializer class for a reachable
+        // class.
+        bool m_is_serde : 1;
+
+        // Whether this member is referenced by one of the strings in the native
+        // libraries. Note that this doesn't allow us to distinguish
+        // native -> Java references from Java -> native refs.
+        bool m_by_string : 1;
+
         // Is this member is a kotlin class
         bool m_is_kotlin : 1;
         // This may be set on classes, indicating that its static initializer
@@ -98,9 +100,12 @@ class ReferencedState {
         bool m_renamable_initialized : 1;
       };
       // This is for method only. Currently, the number of flags
-      // is 6. Once new flag is added, please update the corresponding number in
+      // is 7. Once new flag is added, please update the corresponding number in
       // comment.
       struct {
+        // assumenosideeffects allows certain methods to be removed.
+        bool m_assumenosideeffects : 1;
+
         bool m_no_optimizations : 1;
         // This is set by the AnalyzePureMethodsPass. It indicates that a method
         // is pure as defined in Purity.h.
@@ -134,12 +139,9 @@ class ReferencedState {
       // Initializers in bit fields are C++20...
       m_stype = 0;
 
-      m_by_string = false;
       m_by_resources = false;
-      m_is_serde = false;
 
       m_keep = false;
-      m_assumenosideeffects = false;
       m_whyareyoukeeping = false;
 
       m_set_allowshrinking = false;
@@ -153,12 +155,13 @@ class ReferencedState {
       m_name_used = false;
 
       // Only need to initialize the largest field in union.
-      m_no_optimizations = false;
-      m_pure_method = false;
-      m_immutable_getter = false;
-      m_dont_inline = false;
-      m_force_inline = false;
-      m_too_large_for_inlining_into = false;
+      m_is_serde = false;
+      m_by_string = false;
+      m_is_kotlin = false;
+      m_clinit_has_no_side_effects = false;
+      m_force_rename = false;
+      m_dont_rename = false;
+      m_renamable_initialized = false;
     }
 
     void set_state_type(RefStateType stype) {
@@ -221,19 +224,11 @@ class ReferencedState {
     }
 
     // Common flags.
-    this->inner_struct.m_by_string =
-        this->inner_struct.m_by_string | other.inner_struct.m_by_string;
     this->inner_struct.m_by_resources =
         this->inner_struct.m_by_resources | other.inner_struct.m_by_resources;
-    this->inner_struct.m_is_serde =
-        this->inner_struct.m_is_serde | other.inner_struct.m_is_serde;
-
     this->inner_struct.m_keep =
         this->inner_struct.m_keep | other.inner_struct.m_keep;
 
-    this->inner_struct.m_assumenosideeffects =
-        this->inner_struct.m_assumenosideeffects &
-        other.inner_struct.m_assumenosideeffects;
     this->inner_struct.m_whyareyoukeeping =
         this->inner_struct.m_whyareyoukeeping |
         other.inner_struct.m_whyareyoukeeping;
@@ -263,9 +258,16 @@ class ReferencedState {
     // m_name_used skipped.
 
     if (this->inner_struct.is_class()) {
+      this->inner_struct.m_is_serde =
+          this->inner_struct.m_is_serde | other.inner_struct.m_is_serde;
+      this->inner_struct.m_by_string =
+          this->inner_struct.m_by_string | other.inner_struct.m_by_string;
       this->inner_struct.m_is_kotlin =
           this->inner_struct.m_is_kotlin & other.inner_struct.m_is_kotlin;
     } else if (this->inner_struct.is_method()) {
+      this->inner_struct.m_assumenosideeffects =
+          this->inner_struct.m_assumenosideeffects &
+          other.inner_struct.m_assumenosideeffects;
       this->inner_struct.m_no_optimizations =
           this->inner_struct.m_no_optimizations |
           other.inner_struct.m_no_optimizations;
@@ -327,6 +329,7 @@ class ReferencedState {
   }
 
   bool assumenosideeffects() const {
+    always_assert(this->inner_struct.is_method());
     return inner_struct.m_assumenosideeffects;
   }
 
@@ -336,9 +339,15 @@ class ReferencedState {
 
   // For example, a classname in a layout, e.g. <com.facebook.MyCustomView /> or
   // Class c = Class.forName("com.facebook.FooBar");
-  void ref_by_string() { inner_struct.m_by_string = true; }
+  void referenced_by_string() {
+    always_assert(this->inner_struct.is_class());
+    inner_struct.m_by_string = true;
+  }
 
-  bool is_referenced_by_string() const { return inner_struct.m_by_string; }
+  bool is_referenced_by_string() const {
+    always_assert(this->inner_struct.is_class());
+    return inner_struct.m_by_string;
+  }
 
   // A class referenced by resource XML can take the following forms in .xml
   // files under the res/ directory:
@@ -363,9 +372,15 @@ class ReferencedState {
     return inner_struct.m_by_resources;
   }
 
-  void set_is_serde() { inner_struct.m_is_serde = true; }
+  void set_is_serde() {
+    always_assert(this->inner_struct.is_class());
+    inner_struct.m_is_serde = true;
+  }
 
-  bool is_serde() const { return inner_struct.m_is_serde; }
+  bool is_serde() const {
+    always_assert(this->inner_struct.is_class());
+    return inner_struct.m_is_serde;
+  }
 
   void set_root() { set_root(keep_reason::UNKNOWN); }
 
@@ -424,7 +439,11 @@ class ReferencedState {
     inner_struct.m_unset_allowshrinking = false;
   }
 
-  void set_assumenosideeffects() { inner_struct.m_assumenosideeffects = true; }
+  void set_assumenosideeffects() {
+    if (this->inner_struct.is_method()) {
+      inner_struct.m_assumenosideeffects = true;
+    }
+  }
 
   void set_whyareyoukeeping() { inner_struct.m_whyareyoukeeping = true; }
 

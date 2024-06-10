@@ -251,7 +251,7 @@ InterDex::EmitResult InterDex::emit_class(
     return {false, false};
   }
 
-  if (check_if_skip && (should_skip_class_due_to_plugin(clazz))) {
+  if (check_if_skip && should_skip_class_due_to_plugin(clazz)) {
     return {false, false};
   }
 

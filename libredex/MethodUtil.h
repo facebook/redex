@@ -52,15 +52,23 @@ bool is_clinit_invoked_method_benign(const DexMethodRef*);
 bool may_be_invoke_target(const DexMethod* method);
 
 using ClInitHasNoSideEffectsPredicate = std::function<bool(const DexType*)>;
+
 /**
- * Return true if change the exeution time of the <clinit> of the cls may change
- * the program behavior.
+ * Determine if a change in the execution time of a class' <clinit> may change
+ * program behavior.
  *
- * TODO: We can assume no side effect for more cases, like if it only accesses
- * other classes whose <clinit> also has no side effect.
- *
- * Returns the first type along the chain of super types whose clinit actually
+ * Returns the first type along the chain of super types whose <clinit> actually
  * may have side effects.
+ *
+ * Note that when a parent class' <clinit> has side effect, then we
+ * conservatively assume that all of its children's <clinits> have side effects,
+ * as we don't currently have the capability to determine if the side effect
+ * does not affect any children.
+ *
+ * When `allow_benign_method_invocations` is true, we assume that invocations to
+ * certain framework methods are benign, i.e. trigger no side effects. This is
+ * somewhat optimistic, and not currently conservative.
+ * TODO: Make this less optimistic and more precise.
  */
 const DexClass* clinit_may_have_side_effects(
     const DexClass* cls,

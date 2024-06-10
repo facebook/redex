@@ -553,14 +553,14 @@ def main():
     ]
     num_errors = 0
     print("Running unit tests...", end="")
-    for (s, check_n) in sleb_tests:
+    for s, check_n in sleb_tests:
         e = FileExtract(BytesIO(s))
         n = e.get_sleb128()
         if n != check_n:
             num_errors += 1
             print("\nerror: sleb128 extraction failed for %i (got %i)" % (check_n, n))
             dump_memory(0, s, 32, sys.stdout)
-    for (s, check_n) in uleb_tests:
+    for s, check_n in uleb_tests:
         e = FileExtract(BytesIO(s))
         n = e.get_uleb128()
         if n != check_n:
@@ -1108,7 +1108,7 @@ class AutoParser:
             index_format = "[%%%uu]" % (index_width)
             if prefix is None:
                 prefix = ""
-            for (i, value) in enumerate(values):
+            for i, value in enumerate(values):
                 if flat:
                     if prefix:
                         f.write(prefix)

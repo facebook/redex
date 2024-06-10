@@ -301,15 +301,16 @@ def compress_entries(
     args: argparse.Namespace,
     processes: int = 4,
 ) -> None:
+    def _is_selected(item: CompressionEntry) -> bool:
+        filter_fn = item.filter_fn
+        return filter_fn is None or filter_fn(args)
+
     if processes == 1:
         for item in conf:
-            _compress((item, src_dir, trg_dir, args))
+            if _is_selected(item):
+                _compress((item, src_dir, trg_dir, args))
     else:
         with multiprocessing.Pool(processes=processes) as pool:
-
-            def _is_selected(item: CompressionEntry) -> bool:
-                filter_fn = item.filter_fn
-                return filter_fn is None or filter_fn(args)
 
             imap_iter = pool.imap_unordered(
                 _compress,

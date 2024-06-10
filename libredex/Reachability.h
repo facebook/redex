@@ -98,7 +98,6 @@ struct IgnoreSets {
   IgnoreSets() = default;
   std::unordered_set<const DexType*> string_literals;
   std::unordered_set<const DexType*> string_literal_annos;
-  std::unordered_set<const DexType*> system_annos;
   bool keep_class_in_string{true};
 };
 
@@ -331,7 +330,7 @@ struct ConditionallyMarked {
   MarkedItems if_class_retained;
 
   // If the class is referenced in a certain way that makes it discoverable via
-  // reflection, using the rules of the DelInitPass.
+  // reflection, using the rules of the retired DelInitPass.
   MarkedItems if_class_dynamically_referenced;
 
   // If the class is not abstract and has a constructor, or has a derived class

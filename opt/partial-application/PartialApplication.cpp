@@ -106,10 +106,6 @@ using namespace live_range;
 using namespace shrinker;
 
 namespace {
-
-// Overhead of introducing a typical new helper method and its metadata.
-const size_t COST_METHOD = 28;
-
 // Retrieve list of classes in primary dex, if there is more than one store and
 // dexes.
 std::unordered_set<const DexType*> get_excluded_classes(
@@ -419,6 +415,8 @@ class CalleeInvocationSelector {
                      std::unordered_map<src_index_t, AggregatedArgExclusivity>>
       m_aggregated_arg_exclusivity;
 
+  const PartialApplicationConfig& m_cost_config;
+
   static std::string get_key(const ConstantValue& value) {
     std::ostringstream oss;
     CallSiteSummary::append_key_value(oss, value);
@@ -439,30 +437,38 @@ class CalleeInvocationSelector {
       always_assert(c);
       auto lit = *c;
       if (lit < -2147483648 || lit > 2147483647) {
-        return 5;
+        return m_cost_config.const_signed_cost_base +
+               m_cost_config.const_signed_cost_addon_1 +
+               m_cost_config.const_signed_cost_addon_2 +
+               m_cost_config.const_signed_cost_addon_3;
+        ;
       } else if (lit < -32768 || lit > 32767) {
-        return 3;
+        return m_cost_config.const_signed_cost_base +
+               m_cost_config.const_signed_cost_addon_1 +
+               m_cost_config.const_signed_cost_addon_2;
       } else if (lit < -8 || lit > 7) {
-        return 2;
+        return m_cost_config.const_signed_cost_base +
+               m_cost_config.const_signed_cost_addon_1;
       } else {
-        return 1;
+        return m_cost_config.const_signed_cost_base;
       }
     } else if (const auto& singleton_value =
                    value.maybe_get<SingletonObjectDomain>()) {
-      return 2;
+      return m_cost_config.const_singleton_cost;
     } else if (const auto& obj_or_none =
                    value.maybe_get<ObjectWithImmutAttrDomain>()) {
       auto object = obj_or_none->get_constant();
       always_assert(object);
       if (try_get_enum_utils_f_field(m_enum_utils_cache, *object)) {
-        return 2;
+        return m_cost_config.const_obj_or_none_cost_1;
       } else {
         always_assert(object->jvm_cached_singleton);
         always_assert(object->attributes.size() == 1);
         const auto& signed_value2 =
             object->attributes.front().value.maybe_get<SignedConstantDomain>();
         always_assert(signed_value2);
-        return 3 + const_value_cost(*signed_value2);
+        return m_cost_config.const_obj_or_none_cost_2 +
+               const_value_cost(*signed_value2);
       }
     } else {
       not_reached_log("unexpected value: %s", SHOW(value));
@@ -501,7 +507,7 @@ class CalleeInvocationSelector {
     int32_t pa_cross_dex_penalty =
         2 * std::ceil(std::sqrt(m_callee_caller_classes));
     int32_t pa_method_cost =
-        COST_METHOD + pa_cross_dex_penalty + css->result_used;
+        m_cost_config.cost_method + pa_cross_dex_penalty + css->result_used;
     const auto& bindings = css->arguments.bindings();
     for (auto& r : bindings) {
       pa_method_cost += const_value_cost(r.second);
@@ -543,13 +549,15 @@ class CalleeInvocationSelector {
                            CallSiteSummarizer& call_site_summarizer,
                            const DexMethod* callee,
                            const InsnsArgExclusivity& arg_exclusivity,
-                           size_t callee_caller_classes)
+                           size_t callee_caller_classes,
+                           const PartialApplicationConfig& cost_config)
       : m_enum_utils_cache(enum_utils_cache),
         m_call_site_summarizer(call_site_summarizer),
         m_callee(callee),
         m_arg_exclusivity(arg_exclusivity),
         m_callee_caller_classes(callee_caller_classes),
-        m_css_sets((RankPMap(m_rank)), (ParentPMap(m_parent))) {
+        m_css_sets((RankPMap(m_rank)), (ParentPMap(m_parent))),
+        m_cost_config(cost_config) {
     auto callee_call_site_invokes =
         call_site_summarizer.get_callee_call_site_invokes(callee);
     if (!callee_call_site_invokes) {
@@ -804,7 +812,8 @@ void select_invokes_and_callers(
     std::atomic<size_t>* total_estimated_savings,
     PaMethodRefs* pa_method_refs,
     InvokeCallSiteSummaries* selected_invokes,
-    std::unordered_set<DexMethod*>* selected_callers) {
+    std::unordered_set<DexMethod*>* selected_callers,
+    const PartialApplicationConfig& config) {
   Timer t("select_invokes_and_callers");
   std::vector<const DexMethod*> callees;
   std::unordered_map<const DexType*, std::vector<const DexMethod*>>
@@ -822,7 +831,7 @@ void select_invokes_and_callers(
       [&](const DexMethod* callee) {
         CalleeInvocationSelector cis(
             enum_utils_cache, call_site_summarizer, callee, arg_exclusivity,
-            callee_caller_classes.at_unsafe(callee).size());
+            callee_caller_classes.at_unsafe(callee).size(), config);
         cis.fill_pq();
         cis.reduce_pq();
         cis.select_invokes(total_estimated_savings,
@@ -1122,6 +1131,23 @@ size_t derive_method_profiles_stats(ConfigFiles& config,
 } // namespace
 
 void PartialApplicationPass::bind_config() {
+  bind("cost_method", m_cost_config.cost_method, m_cost_config.cost_method,
+       "Overhead of introducing a typical new helper method and its metadata.");
+  bind("const_signed_cost_base", m_cost_config.const_signed_cost_base,
+       m_cost_config.const_signed_cost_base);
+  bind("const_signed_cost_addon_1", m_cost_config.const_signed_cost_addon_1,
+       m_cost_config.const_signed_cost_addon_1);
+  bind("const_signed_cost_addon_2", m_cost_config.const_signed_cost_addon_2,
+       m_cost_config.const_signed_cost_addon_2);
+  bind("const_signed_cost_addon_3", m_cost_config.const_signed_cost_addon_3,
+       m_cost_config.const_signed_cost_addon_3);
+  bind("const_singleton_cost", m_cost_config.const_singleton_cost,
+       m_cost_config.const_singleton_cost);
+  bind("const_obj_or_none_cost_1", m_cost_config.const_obj_or_none_cost_1,
+       m_cost_config.const_obj_or_none_cost_1);
+  bind("const_obj_or_none_cost_2", m_cost_config.const_obj_or_none_cost_2,
+       m_cost_config.const_obj_or_none_cost_2);
+
   auto& pg = m_profile_guidance_config;
   bind("use_method_profiles", pg.use_method_profiles, pg.use_method_profiles,
        "Whether to use provided method-profiles configuration data to "
@@ -1264,7 +1290,7 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
   select_invokes_and_callers(
       enum_utils_cache, call_site_summarizer, callee_caller, arg_exclusivity,
       callee_caller_classes, m_iteration++, &total_estimated_savings,
-      &pa_method_refs, &selected_invokes, &selected_callers);
+      &pa_method_refs, &selected_invokes, &selected_callers, m_cost_config);
 
   std::atomic<size_t> removed_args{0};
   PaCallers pa_callers;

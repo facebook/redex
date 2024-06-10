@@ -1,10 +1,15 @@
+# TODO: Unify with Makefile.am (or maybe autodetect)
+GOOGLETEST_MIN_VERSION = 1.10.0
+GOOGLETEST_DIR = googletest-release-$(GOOGLETEST_MIN_VERSION)/googletest
+GOOGLEMOCK_DIR = googletest-release-$(GOOGLETEST_MIN_VERSION)/googlemock
+
 #
 # Include paths
 #
 COMMON_TEST_INCLUDES = \
     -I$(top_srcdir)/test/common \
-    -I$(top_srcdir)/test/googletest-release-1.10.0/googlemock/include \
-    -I$(top_srcdir)/test/googletest-release-1.10.0/googletest/include
+    -I$(top_builddir)/test/$(GOOGLEMOCK_DIR)/include \
+    -I$(top_builddir)/test/$(GOOGLETEST_DIR)/include
 
 COMMON_BASE_TEST_LIBS = \
 	$(top_builddir)/libredex.la \

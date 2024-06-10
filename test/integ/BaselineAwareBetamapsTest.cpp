@@ -51,9 +51,8 @@ class BaselineAwareBetamapsTest : public RedexIntegrationTest {
     run_passes(passes, nullptr, cfg);
   }
 
-  void define_throwing_test(
-      const std::vector<std::string>& betamap,
-      const std::string& expected_manifest) {
+  void define_throwing_test(const std::vector<std::string>& betamap,
+                            const std::string& expected_manifest) {
     EXPECT_THROW(
         try {
           define_test(betamap, expected_manifest);

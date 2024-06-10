@@ -438,7 +438,7 @@ Result check_load_params(const DexMethod* method) {
 // proper invoke-direct <init>. Here, we perform simple check to find some
 // missing calls resulting in use of uninitialized variables. We correctly track
 // variables in a "big block", the most common form of allocation+init.
-Result check_uninitialized(const DexMethod* method) {
+Result check_uninitialized(const DexMethod* method, bool relaxed_init_check) {
   auto code = (const_cast<DexMethod*>(method))->get_code();
   always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
@@ -458,9 +458,10 @@ Result check_uninitialized(const DexMethod* method) {
     for (auto b : big_block->get_blocks()) {
       block_visited.emplace(b->id());
     }
-    std::map<uint16_t, IRInstruction*> uninitialized_regs;
-    std::map<IRInstruction*, std::set<uint16_t>> uninitialized_regs_rev;
-    auto remove_from_uninitialized_list = [&](uint16_t reg) {
+    std::unordered_map<reg_t, IRInstruction*> uninitialized_regs;
+    std::unordered_map<IRInstruction*, std::unordered_set<reg_t>>
+        uninitialized_regs_rev;
+    auto remove_from_uninitialized_list = [&](reg_t reg) {
       auto it = uninitialized_regs.find(reg);
       if (it != uninitialized_regs.end()) {
         uninitialized_regs_rev[it->second].erase(reg);
@@ -527,11 +528,17 @@ Result check_uninitialized(const DexMethod* method) {
           auto object_it = uninitialized_regs.find(object);
           if (object_it != uninitialized_regs.end()) {
             auto* object_ir = object_it->second;
-            if (insn->get_method()->get_name()->str() != "<init>") {
+            auto* init_method = insn->get_method();
+            if (!method::is_init(init_method)) {
               return create_error(object_ir, cfg);
             }
-            if (insn->get_method()->get_class()->str() !=
-                object_ir->get_type()->str()) {
+            auto check_type = [&](auto* init_type, auto* object_type) {
+              if (relaxed_init_check) {
+                return type::is_subclass(init_type, object_type);
+              }
+              return init_type == object_type;
+            };
+            if (!check_type(init_method->get_class(), object_ir->get_type())) {
               return Result::make_error("Variable " + show(object_ir) +
                                         "initialized with the wrong type at " +
                                         show(*it) + " in \n" + show(cfg));
@@ -574,7 +581,8 @@ Result check_uninitialized(const DexMethod* method) {
  */
 Result check_structure(const DexMethod* method,
                        cfg::ControlFlowGraph& cfg,
-                       bool check_no_overwrite_this) {
+                       bool check_no_overwrite_this,
+                       bool relaxed_init_check) {
   check_no_overwrite_this &= !is_static(method);
   IRInstruction* this_insn = nullptr;
   auto entry_block = cfg.entry_block();
@@ -648,7 +656,7 @@ Result check_structure(const DexMethod* method,
       }
     }
   }
-  return check_uninitialized(method);
+  return check_uninitialized(method, relaxed_init_check);
 }
 
 /*
@@ -910,6 +918,7 @@ IRTypeChecker::IRTypeChecker(DexMethod* dex_method,
       m_complete(false),
       m_verify_moves(false),
       m_check_no_overwrite_this(false),
+      m_relaxed_init_check(false),
       m_good(true),
       m_what("OK") {}
 
@@ -929,7 +938,8 @@ void IRTypeChecker::run() {
 
   cfg::ScopedCFG cfg(code);
 
-  auto result = check_structure(m_dex_method, *cfg, m_check_no_overwrite_this);
+  auto result = check_structure(
+      m_dex_method, *cfg, m_check_no_overwrite_this, m_relaxed_init_check);
   if (result != Result::Ok()) {
     m_complete = true;
     m_good = false;

@@ -14,9 +14,7 @@
 #include "IRCode.h"
 #include "RedexTest.h"
 
-#include "DelInit.h"
 #include "LocalDce.h"
-#include "RemoveEmptyClasses.h"
 #include "StripDebugInfo.h"
 
 /*

@@ -49,7 +49,8 @@ void InterDexPass::bind_baseline_profile_config() {
   Json::Value baseline_profile_config_json;
   bind("baseline_profile_config", {}, baseline_profile_config_json);
 
-  if (baseline_profile_config_json.empty() || !m_exclude_baseline_profile_classes) {
+  if (baseline_profile_config_json.empty() ||
+      !m_exclude_baseline_profile_classes) {
     return;
   }
 
@@ -84,7 +85,8 @@ void InterDexPass::bind_baseline_profile_config() {
       m_baseline_profile_config.options.betamap_include_coldstart_1pct);
 
   for (auto it = baseline_profile_config_json.begin();
-       it != baseline_profile_config_json.end(); ++it) {
+       it != baseline_profile_config_json.end();
+       ++it) {
     std::string key = it.memberName();
     if (key == "interactions" || key == "options") {
       continue;
@@ -244,6 +246,7 @@ void InterDexPass::run_pass(
 
   mgr.set_metric("root_store.dexes", dexen.size());
   redex_assert(dexen.size() == interdex.get_dex_info().size());
+
   for (size_t i = 0; i != dexen.size(); ++i) {
     std::string key_prefix = "root_store.dexes." + std::to_string(i) + ".";
     mgr.set_metric(key_prefix + "classes", dexen[i].size());
@@ -333,6 +336,7 @@ void InterDexPass::run_pass(DexStoresVector& stores,
                             ConfigFiles& conf,
                             PassManager& mgr) {
   Scope original_scope = build_class_scope(stores);
+
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       original_scope, conf.create_init_class_insns());
   XStoreRefs xstore_refs(stores);

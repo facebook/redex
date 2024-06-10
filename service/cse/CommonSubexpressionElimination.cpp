@@ -149,18 +149,35 @@ using DefEnvironment =
                                                IRInstructionsDomain>;
 using RefEnvironment =
     sparta::PatriciaTreeMapAbstractEnvironment<reg_t, ValueIdDomain>;
+class CondEnvironment final
+    : public sparta::AbstractDomainReverseAdaptor<
+          sparta::PatriciaTreeSetAbstractDomain<value_id_t>,
+          CondEnvironment> {
+ public:
+  using AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor;
+
+  // Some older compilers complain that the class is not default constructible.
+  // We intended to use the default constructors of the base class (via using
+  // AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor), but some
+  // compilers fail to catch this. So we insert a redundant '= default'.
+  CondEnvironment() = default;
+};
 
 class CseEnvironment final
     : public sparta::ReducedProductAbstractDomain<CseEnvironment,
                                                   DefEnvironment,
-                                                  RefEnvironment> {
+                                                  RefEnvironment,
+                                                  CondEnvironment> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
   CseEnvironment()
-      : ReducedProductAbstractDomain(
-            std::make_tuple(DefEnvironment(), RefEnvironment())) {}
+      : ReducedProductAbstractDomain(std::make_tuple(
+            DefEnvironment(),
+            RefEnvironment(),
+            CondEnvironment(sparta::PatriciaTreeSet<value_id_t>()))) {}
 
-  static void reduce_product(std::tuple<DefEnvironment, RefEnvironment>&) {}
+  static void reduce_product(
+      std::tuple<DefEnvironment, RefEnvironment, CondEnvironment>&) {}
 
   const DefEnvironment& get_def_env() const {
     return ReducedProductAbstractDomain::get<0>();
@@ -168,6 +185,10 @@ class CseEnvironment final
 
   const RefEnvironment& get_ref_env() const {
     return ReducedProductAbstractDomain::get<1>();
+  }
+
+  const CondEnvironment& get_cond_env() const {
+    return ReducedProductAbstractDomain::get<2>();
   }
 
   CseEnvironment& mutate_def_env(std::function<void(DefEnvironment*)> f) {
@@ -178,6 +199,24 @@ class CseEnvironment final
   CseEnvironment& mutate_ref_env(std::function<void(RefEnvironment*)> f) {
     apply<1>(std::move(f));
     return *this;
+  }
+
+  CseEnvironment& mutate_cond_env(std::function<void(CondEnvironment*)> f) {
+    apply<2>(std::move(f));
+    return *this;
+  }
+
+  bool has_cond(value_id_t cond) const {
+    return get_cond_env().unwrap().contains(cond);
+  }
+
+  CseEnvironment& add_cond(value_id_t cond, value_id_t neg_cond) {
+    if (has_cond(neg_cond)) {
+      set_to_bottom();
+      return *this;
+    }
+    return mutate_cond_env(
+        [cond](CondEnvironment* env) { env->unwrap().add(cond); });
   }
 };
 
@@ -386,11 +425,15 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
       }
     }
 
-    run(CseEnvironment::top());
+    run({});
   }
 
   void analyze_instruction_normal(
       const IRInstruction* insn, CseEnvironment* current_state) const override {
+    if (current_state->is_bottom()) {
+      return;
+    }
+
     const auto set_current_state_at = [&](reg_t reg, bool wide,
                                           ValueIdDomain value) {
       current_state->mutate_ref_env([&](RefEnvironment* env) {
@@ -458,6 +501,9 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
           any_changes = true;
         }
       });
+      current_state->mutate_cond_env([mask](CondEnvironment* env) {
+        env->unwrap().erase_all_matching(mask);
+      });
       current_state->mutate_ref_env([mask, &any_changes](RefEnvironment* env) {
         bool any_map_changes = env->transform([mask](ValueIdDomain domain) {
           auto c = domain.get_constant();
@@ -478,8 +524,76 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
     }
   }
 
+  void add_cond(const IRValue& value, CseEnvironment* env) const {
+    if (value.opcode == OPCODE_IF_NE) {
+      always_assert(value.srcs.size() == 2);
+      if (value.srcs[0] == value.srcs[1]) {
+        env->set_to_bottom();
+        return;
+      }
+    }
+    auto value_id = *get_value_id(value);
+
+    auto neg_value = value;
+    neg_value.opcode = opcode::invert_conditional_branch(value.opcode);
+    auto neg_value_id = *get_value_id(neg_value);
+
+    env->add_cond(value_id, neg_value_id);
+  }
+
+  void analyze_if(const IRInstruction* insn,
+                  const EdgeId& edge,
+                  CseEnvironment* env) const override {
+    if (env->is_bottom()) {
+      return;
+    }
+
+    auto value = get_value(insn, env, {});
+    if (edge->type() == cfg::EDGE_GOTO) {
+      value.opcode = opcode::invert_conditional_branch(value.opcode);
+    }
+    add_cond(value, env);
+  }
+
+  void analyze_switch(const IRInstruction* insn,
+                      const EdgeId& edge,
+                      CseEnvironment* env) const override {
+    if (env->is_bottom()) {
+      return;
+    }
+
+    const auto& ref_env = env->get_ref_env();
+    auto selector_reg = insn->src(0);
+    auto c = ref_env.get(selector_reg).get_constant();
+    if (!c) {
+      return;
+    }
+    value_id_t selector_value_id = *c;
+
+    const auto& case_key = edge->case_key();
+    if (!case_key) {
+      always_assert(edge->type() == cfg::EDGE_GOTO);
+      return;
+    }
+
+    always_assert(edge->type() == cfg::EDGE_BRANCH);
+    IRValue const_value;
+    const_value.opcode = OPCODE_CONST;
+    const_value.literal = *case_key;
+    auto const_value_id = *get_value_id(const_value);
+
+    IRValue if_value;
+    if_value.opcode = OPCODE_IF_EQ;
+    if_value.srcs = {selector_value_id, const_value_id};
+    add_cond(if_value, env);
+  }
+
   void analyze_no_throw(const IRInstruction* insn,
                         CseEnvironment* current_state) const override {
+    if (current_state->is_bottom()) {
+      return;
+    }
+
     auto opcode = insn->opcode();
     if (opcode == OPCODE_NEW_ARRAY) {
       const auto& domain = current_state->get_ref_env().get(RESULT_REGISTER);
@@ -534,7 +648,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
   mutable std::unordered_set<IRInstruction*> m_unboxing_insns_set;
 
   CseUnorderedLocationSet get_clobbered_locations(
-      const IRInstruction* insn, CseEnvironment* current_state) const {
+      const IRInstruction* insn, const CseEnvironment* current_state) const {
     DexType* exact_virtual_scope = nullptr;
     if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
       auto src0 = current_state->get_ref_env().get(insn->src(0)).get_constant();
@@ -548,7 +662,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
 
   ValueIdDomain get_value_id_domain(
       const IRInstruction* insn,
-      CseEnvironment* current_state,
+      const CseEnvironment* current_state,
       const CseUnorderedLocationSet& clobbered_locations) const {
     auto value = get_value(insn, current_state, clobbered_locations);
     auto value_id = get_value_id(value);
@@ -762,7 +876,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
   }
 
   IRValue get_value(const IRInstruction* insn,
-                    CseEnvironment* current_state,
+                    const CseEnvironment* current_state,
                     const CseUnorderedLocationSet& clobbered_locations) const {
     IRValue value;
     auto opcode = insn->opcode();
@@ -771,9 +885,39 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
     const auto& ref_env = current_state->get_ref_env();
     for (auto reg : insn->srcs()) {
       auto c = ref_env.get(reg).get_constant();
-      always_assert(c);
+      always_assert_log(c, "%s", SHOW(ref_env.get(reg)));
       value_id_t value_id = *c;
       value.srcs.push_back(value_id);
+    }
+    if (opcode::is_a_conditional_branch(opcode) && insn->srcs_size() == 1) {
+      switch (opcode) {
+      case OPCODE_IF_EQZ:
+        opcode = OPCODE_IF_EQ;
+        break;
+      case OPCODE_IF_NEZ:
+        opcode = OPCODE_IF_NE;
+        break;
+      case OPCODE_IF_LTZ:
+        opcode = OPCODE_IF_LT;
+        break;
+      case OPCODE_IF_LEZ:
+        opcode = OPCODE_IF_LE;
+        break;
+      case OPCODE_IF_GTZ:
+        opcode = OPCODE_IF_GT;
+        break;
+      case OPCODE_IF_GEZ:
+        opcode = OPCODE_IF_GE;
+        break;
+      default:
+        not_reached();
+      }
+      value.opcode = opcode;
+      IRValue zero_value;
+      zero_value.opcode = OPCODE_CONST;
+      zero_value.literal = 0;
+      auto zero_value_id = *get_value_id(zero_value);
+      value.srcs.push_back(zero_value_id);
     }
     if (opcode::is_commutative(opcode)) {
       std::sort(value.srcs.begin(), value.srcs.end());
@@ -1412,6 +1556,9 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
       continue;
     }
     auto last_insn = block->get_last_insn();
+    if (last_insn == block->end()) {
+      continue;
+    }
     for (const auto& mie : InstructionIterable(block)) {
       IRInstruction* insn = mie.insn;
       analyzer.analyze_instruction(insn, &env, insn == last_insn->insn);
@@ -1455,6 +1602,17 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
 
       auto earlier_insns_index = get_earlier_insns_index(earlier_insns);
       m_forward.push_back({earlier_insns_index, insn});
+    }
+
+    if (!opcode::is_switch(last_insn->insn->opcode()) &&
+        !opcode::is_a_conditional_branch(last_insn->insn->opcode())) {
+      continue;
+    }
+    for (auto* edge : block->succs()) {
+      const auto& exit_env = analyzer.get_exit_state_at(block);
+      if (analyzer.analyze_edge(edge, exit_env).is_bottom()) {
+        m_dead_edges.push_back(edge);
+      }
     }
   }
 }
@@ -1522,8 +1680,14 @@ static std::pair<IROpcode, std::optional<int64_t>> get_move_or_const_literal(
 }
 
 bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
+  if (!m_dead_edges.empty()) {
+    m_cfg.delete_edges(m_dead_edges.begin(), m_dead_edges.end());
+    m_stats.instructions_eliminated += m_cfg.remove_unreachable_blocks().first;
+    m_stats.branches_eliminated += m_dead_edges.size();
+  }
+
   if (m_forward.empty()) {
-    return false;
+    return !m_dead_edges.empty();
   }
 
   TRACE(CSE, 5, "[CSE] before:\n%s", SHOW(m_cfg));
@@ -1868,6 +2032,7 @@ Stats& Stats::operator+=(const Stats& that) {
     eliminated_opcodes[p.first] += p.second;
   }
   max_iterations = std::max(max_iterations, that.max_iterations);
+  branches_eliminated += that.branches_eliminated;
   return *this;
 }
 

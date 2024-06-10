@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 
+#include "DexInstruction.h"
 #include "DexPosition.h"
 #include "RedexTest.h"
 #include "Show.h"
@@ -666,4 +667,170 @@ TEST_F(IRAssemblerTest, dexDebugInstruction) {
   auto dbg10 = debug_info[10];
   EXPECT_EQ(dbg10->opcode(), DBG_FIRST_SPECIAL);
   EXPECT_EQ(dbg10->uvalue(), DEX_NO_INDEX);
+}
+
+TEST_F(IRAssemblerTest, assembleField) {
+  auto field =
+      assembler::field_from_string("(field (private) \"LFoo;.bar:I\")");
+  EXPECT_EQ(field->get_access(), ACC_PRIVATE);
+  EXPECT_EQ(field->get_name()->str(), "bar");
+  EXPECT_EQ(field->get_class()->get_name()->str(), "LFoo;");
+
+  auto static_field =
+      assembler::field_from_string("(field (public static) \"LFoo;.baz:I\")");
+  EXPECT_EQ(static_field->get_access(), ACC_PUBLIC | ACC_STATIC);
+  EXPECT_EQ(static_field->get_name()->str(), "baz");
+  EXPECT_EQ(static_field->get_class()->get_name()->str(), "LFoo;");
+}
+
+TEST_F(IRAssemblerTest, assembleClassFromString) {
+  auto cls = assembler::class_from_string(R"(
+    (class (public final) "LFoo;"
+      (field (public) "LFoo;.bar:I")
+      (field (public static) "LFoo;.barStatic:I")
+      (method (private) "LFoo;.baz:(I)V"
+        (
+          (return-void)
+        )
+      )
+      (method (public) "LFoo;.bazPublic:(I)V"
+        (
+          (return-void)
+        )
+      )
+    )
+  )");
+
+  EXPECT_EQ(cls->get_access(), ACC_PUBLIC | ACC_FINAL);
+  EXPECT_EQ(cls->get_name()->str(), "LFoo;");
+
+  EXPECT_EQ(cls->get_ifields().size(), 1);
+  ASSERT_GE(cls->get_ifields().size(), 1);
+  auto i_field = cls->get_ifields()[0];
+  EXPECT_EQ(i_field->get_class(), cls->get_type());
+  EXPECT_EQ(i_field->get_name()->str(), "bar");
+
+  EXPECT_EQ(cls->get_sfields().size(), 1);
+  ASSERT_GE(cls->get_sfields().size(), 1);
+  auto s_field = cls->get_sfields()[0];
+  EXPECT_EQ(s_field->get_class(), cls->get_type());
+  EXPECT_EQ(s_field->get_name()->str(), "barStatic");
+
+  EXPECT_EQ(cls->get_dmethods().size(), 1);
+  ASSERT_GE(cls->get_dmethods().size(), 1);
+  auto d_method = cls->get_dmethods()[0];
+  EXPECT_EQ(d_method->get_class(), cls->get_type());
+  EXPECT_EQ(d_method->get_name()->str(), "baz");
+
+  EXPECT_EQ(cls->get_vmethods().size(), 1);
+  ASSERT_GE(cls->get_vmethods().size(), 1);
+  auto v_method = cls->get_vmethods()[0];
+  EXPECT_EQ(v_method->get_class(), cls->get_type());
+  EXPECT_EQ(v_method->get_name()->str(), "bazPublic");
+}
+
+std::vector<IRInstruction*> get_fill_array_data_insns(
+    const std::unique_ptr<IRCode>& code) {
+  std::vector<IRInstruction*> result;
+  for (const auto& mie : *code) {
+    if (mie.type == MFLOW_OPCODE &&
+        mie.insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
+      result.push_back(mie.insn);
+    }
+  }
+  return result;
+}
+
+TEST_F(IRAssemblerTest, fillArrayPayloads) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const v0 3)
+
+     (new-array v0 "[Z") ; create an array of length 3
+     (move-result-pseudo-object v1)
+     (fill-array-data v1 #1 (0 0 1))
+
+     (new-array v0 "[C") ; create an array of length 3
+     (move-result-pseudo-object v2)
+     (fill-array-data v2 #2 (61 62 63))
+
+     (new-array v0 "[I") ; create an array of length 3
+     (move-result-pseudo-object v3)
+     (fill-array-data v3 #4 (3e7 2 40000000))
+
+     (new-array v0 "[J") ; create an array of length 3
+     (move-result-pseudo-object v4)
+     (fill-array-data v4 #8 (3b9aca00 b2d05e00 b2d05e01))
+
+     (return-void)
+    )
+)");
+  auto insns = get_fill_array_data_insns(code);
+  EXPECT_EQ(insns.size(), 4);
+
+  {
+    auto data = insns.at(0)->get_data();
+    auto values = get_fill_array_data_payload<uint8_t>(data);
+    EXPECT_EQ(values.size(), 3);
+    EXPECT_EQ(values.at(0), 0x0);
+    EXPECT_EQ(values.at(1), 0x0);
+    EXPECT_EQ(values.at(2), 0x1);
+  }
+  {
+    auto data = insns.at(1)->get_data();
+    auto values = get_fill_array_data_payload<uint16_t>(data);
+    EXPECT_EQ(values.size(), 3);
+    EXPECT_EQ(values.at(0), 0x61);
+    EXPECT_EQ(values.at(1), 0x62);
+    EXPECT_EQ(values.at(2), 0x63);
+  }
+  {
+    auto data = insns.at(2)->get_data();
+    auto values = get_fill_array_data_payload<uint32_t>(data);
+    EXPECT_EQ(values.size(), 3);
+    EXPECT_EQ(values.at(0), 0x3e7);
+    EXPECT_EQ(values.at(1), 0x2);
+    EXPECT_EQ(values.at(2), 0x40000000);
+  }
+  {
+    auto data = insns.at(3)->get_data();
+    auto values = get_fill_array_data_payload<uint64_t>(data);
+    EXPECT_EQ(values.size(), 3);
+    EXPECT_EQ(values.at(0), 0x3b9aca00);
+    EXPECT_EQ(values.at(1), 0xb2d05e00);
+    EXPECT_EQ(values.at(2), 0xb2d05e01);
+  }
+}
+
+TEST_F(IRAssemblerTest, arrayDataRoundTrip) {
+  {
+    std::vector<std::string> elements{"3e7", "a"};
+    auto op_data =
+        encode_fill_array_data_payload_from_string<uint16_t>(elements);
+    // SHOW and s-expr will use slightly different format, so that the latter
+    // will be idiomatic. Just verify the elements are encoded the right way.
+    EXPECT_STREQ(SHOW(&*op_data),
+                 "fill-array-data-payload { [2 x 2] { 3e7, a } }");
+  }
+  {
+    std::vector<std::string> elements{"3e7", "2", "40000000"};
+    auto op_data =
+        encode_fill_array_data_payload_from_string<uint32_t>(elements);
+    EXPECT_STREQ(SHOW(&*op_data),
+                 "fill-array-data-payload { [3 x 4] { 3e7, 2, 40000000 } }");
+  }
+  std::string expr(R"(
+    (
+     (const v0 3)
+     (new-array v0 "[I") ; create an array of length 3
+     (move-result-pseudo-object v1)
+     (fill-array-data v1 #4 (63 64 65))
+     (return-void)
+    )
+)");
+  auto code = assembler::ircode_from_string(expr);
+  std::string expected(
+      "((const v0 3) (new-array v0 \"[I\") (move-result-pseudo-object v1) "
+      "(fill-array-data v1 #4 (63 64 65)) (return-void))");
+  EXPECT_EQ(expected, assembler::to_string(code.get()));
 }

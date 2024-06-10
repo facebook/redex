@@ -93,7 +93,15 @@ public class ObjectEscapeAnalysisTest {
   abstract static class Base {
     public Base() {}
 
+    public int helper() {
+      return getX();
+    }
+
     public abstract int getX();
+
+    public int getSomething() {
+      return 1;
+    }
   }
 
   static class Derived extends Base {
@@ -106,11 +114,44 @@ public class ObjectEscapeAnalysisTest {
     public /* override */ int getX() {
       return this.x;
     }
+
+    public /* override */ int getSomething() {
+      return 1 + super.getSomething();
+    }
+  }
+
+  static class Derived2 extends Base {
+    int x;
+
+    public Derived2(int x) {
+      this.x = x;
+    }
+
+    public /* override */ int getX() {
+      return this.x - 2;
+    }
   }
 
   public static int reduceTo42D() {
     Derived d = new Derived(42);
     return d.getX();
+  }
+
+  public static int reduceTo42WithOverrides() {
+    Base b = new Derived(42);
+    return b.getX();
+  }
+
+  public static int reduceTo42WithOverrides2() {
+    Base b = new Derived(21);
+    Base b2 = new Derived2(23);
+
+    return b.helper() + b2.helper();
+  }
+
+  public static int reduceTo42WithInvokeSuper() {
+    Derived d = new Derived(40);
+    return d.getX() + d.getSomething();
   }
 
   static class G {
@@ -164,11 +205,80 @@ public class ObjectEscapeAnalysisTest {
     public int getX() {
       return this.x;
     }
+
+    public I id() {
+      return this;
+    }
   }
 
-  public static boolean reduceTo42IdentityMatters() {
+  public static int optionalReduceTo42(boolean b) {
+    I i = b ? I.allocator(42) : null;
+    return b ? i.getX() : 0;
+  }
+
+  public static int optionalReduceTo42Alt(boolean b) {
+    I i = b ? I.allocator(42) : null;
+    return i == null ? 0 : i.getX();
+  }
+
+  private static I optionalAllocator(boolean b) {
+    I i = I.allocator(42);
+    if (b) {
+      i = null;
+    }
+    return i;
+  }
+
+  public static int optionalReduceTo42Override(boolean b) {
+    I i = optionalAllocator(b);
+    return i == null ? 0 : i.getX();
+  }
+
+  public static int optionalReduceTo42CheckCast(boolean b) {
+    Object o = optionalAllocator(b);
+    return ((I)o) == null ? 0 : ((I)o).getX();
+  }
+
+  public static int optionalReduceTo42SuppressNPE(boolean b) {
+    I i = b ? I.allocator(42) : null;
+    return i.getX();
+  }
+
+  public static boolean optionalReduceToBC(boolean b, boolean c) {
+    I i = b ? I.allocator(42) : null;
+    I j = null;
+    if (c) { j = i; }
+    return j instanceof Object;
+  }
+
+  public static int optionalLoopyReduceTo42() {
+    I i = null;
+    int c = 0;
+    while (true) {
+      if (c != 0) {
+        if (c == 2) {
+          return i.getX();
+        }
+        i = I.allocator(42);
+      }
+      c++;
+    }
+  }
+
+  public static boolean objectIsNotNull() {
     I i = I.allocator(42);
     return i == null;
+  }
+
+  public static int reduceTo42WithCheckCast() {
+    Object i = I.allocator(42);
+    return ((I)i).getX();
+  }
+
+  public static int reduceTo42WithReturnedArg() {
+    I i = I.allocator(42);
+    i = i.id();
+    return i.getX();
   }
 
   static class J {

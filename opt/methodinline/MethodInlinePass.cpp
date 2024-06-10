@@ -57,6 +57,15 @@ void MethodInlinePass::bind_config() {
   bind("insn_has_lit_cost_3",
        DEFAULT_COST_CONFIG.insn_has_lit_cost_3,
        m_inliner_cost_config.insn_has_lit_cost_3);
+  bind("cross_dex_penalty_coe1",
+       DEFAULT_COST_CONFIG.cross_dex_penalty_coe1,
+       m_inliner_cost_config.cross_dex_penalty_coe1);
+  bind("cross_dex_penalty_coe2",
+       DEFAULT_COST_CONFIG.cross_dex_penalty_coe2,
+       m_inliner_cost_config.cross_dex_penalty_coe2);
+  bind("cross_dex_penalty_const",
+       DEFAULT_COST_CONFIG.cross_dex_penalty_const,
+       m_inliner_cost_config.cross_dex_penalty_const);
 }
 
 void MethodInlinePass::run_pass(DexStoresVector& stores,

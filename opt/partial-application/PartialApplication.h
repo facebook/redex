@@ -10,6 +10,17 @@
 #include "OutliningProfileGuidance.h"
 #include "Pass.h"
 
+struct PartialApplicationConfig {
+  size_t cost_method{28};
+  size_t const_signed_cost_base{1};
+  size_t const_signed_cost_addon_1{1};
+  size_t const_signed_cost_addon_2{1};
+  size_t const_signed_cost_addon_3{2};
+  size_t const_singleton_cost{2};
+  size_t const_obj_or_none_cost_1{2};
+  size_t const_obj_or_none_cost_2{3};
+};
+
 class PartialApplicationPass : public Pass {
  public:
   PartialApplicationPass() : Pass("PartialApplicationPass") {}
@@ -32,4 +43,5 @@ class PartialApplicationPass : public Pass {
   size_t m_iteration{0};
   outliner::ProfileGuidanceConfig m_profile_guidance_config;
   bool m_derive_method_profiles_stats{false};
+  PartialApplicationConfig m_cost_config;
 };

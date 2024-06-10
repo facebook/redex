@@ -33,11 +33,13 @@ class IRMetaIO {
   template <typename T>
   static bool is_default_meta(const T* obj) {
     return obj->get_deobfuscated_name_or_empty() == show(obj) &&
-           !obj->rstate.inner_struct.m_by_string &&
+           (!obj->rstate.inner_struct.is_class() ||
+            (!obj->rstate.inner_struct.m_by_string &&
+             !obj->rstate.inner_struct.m_is_serde)) &&
            !obj->rstate.inner_struct.m_by_resources &&
-           !obj->rstate.inner_struct.m_is_serde &&
            !obj->rstate.inner_struct.m_keep &&
-           !obj->rstate.inner_struct.m_assumenosideeffects &&
+           (!obj->rstate.inner_struct.is_method() ||
+            !obj->rstate.inner_struct.m_assumenosideeffects) &&
            !obj->rstate.inner_struct.m_whyareyoukeeping &&
            !obj->rstate.inner_struct.m_set_allowshrinking &&
            !obj->rstate.inner_struct.m_unset_allowshrinking &&

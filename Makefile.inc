@@ -35,7 +35,6 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/dedup_blocks \
 	-I$(top_srcdir)/opt/dedup_resources \
 	-I$(top_srcdir)/opt/dedup-strings \
-	-I$(top_srcdir)/opt/delinit \
 	-I$(top_srcdir)/opt/delsuper \
 	-I$(top_srcdir)/opt/evaluate_type_checks \
 	-I$(top_srcdir)/opt/final_inline \
@@ -128,6 +127,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/service/reference-update \
 	-I$(top_srcdir)/service/regalloc \
 	-I$(top_srcdir)/service/regalloc-fast \
+	-I$(top_srcdir)/service/remove_redundant_check_casts \
 	-I$(top_srcdir)/service/resources \
 	-I$(top_srcdir)/service/shrinker \
 	-I$(top_srcdir)/service/switch-dispatch \
@@ -143,6 +143,6 @@ COMMON_INCLUDES = \
 
 if SET_PROTOBUF
 COMMON_INCLUDES += \
-	-I$(top_srcdir)/protores \
+	-I$(builddir)/protores \
 	$(PROTOBUF_CXXFLAGS)
 endif

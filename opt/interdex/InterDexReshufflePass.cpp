@@ -6,7 +6,6 @@
  */
 
 #include "InterDexReshufflePass.h"
-
 #include "ConfigFiles.h"
 #include "DedupStrings.h"
 #include "DexClass.h"

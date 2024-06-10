@@ -1015,6 +1015,8 @@ bool is_commutative(IROpcode opcode) {
   case OPCODE_MUL_LONG:
   case OPCODE_MUL_FLOAT:
   case OPCODE_MUL_DOUBLE:
+  case OPCODE_IF_EQ:
+  case OPCODE_IF_NE:
     return true;
   default:
     return false;

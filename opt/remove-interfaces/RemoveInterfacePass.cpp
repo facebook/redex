@@ -293,7 +293,7 @@ size_t exclude_unremovables(const Scope& scope,
   }
 
   // Skip intfs with single or none implementor. For some reason, they are
-  // not properly removed by either SingleImpl or UnreferencedInterfacesPass.
+  // not properly removed by either SingleImpl or RemoveUnreachablePass.
   // They are not the focus of this pass. We should address them elsewhere.
   std::vector<const DexType*> intf_list(candidates.begin(), candidates.end());
   for (auto intf : intf_list) {

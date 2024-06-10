@@ -59,6 +59,8 @@ AM_CPPFLAGS = $(COMMON_INCLUDES)
 
 noinst_LTLIBRARIES = libredex.la libopt.la
 
+BUILT_SOURCES =
+
 #
 # build protobuf
 #
@@ -68,18 +70,16 @@ proto_res_in = \
 	proto/Resources.proto \
 	proto/Configuration.proto
 
-protores/%.pb.cc protores/%.pb.h: proto/%.proto | mdir ; $(PROTOC) --proto_path=$(dir $^) --cpp_out=$(top_srcdir)/protores $^
-mdir: ; mkdir -p $(top_srcdir)/protores
+protores/%.pb.cc protores/%.pb.h: proto/%.proto ; mkdir -p protores ; $(PROTOC) --proto_path=$(dir $^) --cpp_out=protores $^
 
 proto_res_header_out = $(addprefix protores/, $(notdir ${proto_res_in:.proto=.pb.h}))
 proto_res_body_out = $(addprefix protores/, $(notdir ${proto_res_in:.proto=.pb.cc}))
-BUILT_SOURCES = $(proto_res_header_out)
+BUILT_SOURCES += $(proto_res_header_out)
 
 proto_cfg_in = \
 	proto/config.proto
 
-protocfg/%.pb.cc protocfg/%.pb.h: proto/config.proto | mdir ; $(PROTOC) --proto_path=$(dir $^) --cpp_out=$(top_srcdir)/protocfg $^
-mdir: ; mkdir -p $(top_srcdir)/protocfg
+protocfg/%.pb.cc protocfg/%.pb.h: proto/config.proto ; mkdir -p protocfg ; $(PROTOC) --proto_path=$(dir $^) --cpp_out=protocfg $^
 
 proto_cfg_header_out = $(addprefix protocfg/, $(notdir ${proto_cfg_in:.proto=.pb.h}))
 proto_cfg_body_out = $(addprefix protocfg/, $(notdir ${proto_cfg_in:.proto=.pb.cc}))
@@ -316,6 +316,8 @@ libredex_la_SOURCES = \
 	service/regalloc/VirtualRegistersFile.cpp \
 	service/regalloc-fast/LinearScan.cpp \
 	service/regalloc-fast/LiveInterval.cpp \
+	service/remove_redundant_check_casts/CheckCastAnalysis.cpp \
+	service/remove_redundant_check_casts/CheckCastTransform.cpp \
 	service/resources/StaticIds.cpp \
 	service/shrinker/Shrinker.cpp \
 	service/switch-dispatch/SwitchDispatch.cpp \
@@ -397,7 +399,6 @@ libopt_la_SOURCES = \
 	opt/dedup_resources/DedupResources.cpp \
 	opt/dedup_resources/murmur_hash.cpp \
 	opt/dedup-strings/DedupStrings.cpp \
-	opt/delinit/DelInit.cpp \
 	opt/delsuper/DelSuper.cpp \
 	opt/evaluate_type_checks/EvaluateTypeChecks.cpp \
 	opt/final_inline/FinalInline.cpp \
@@ -408,6 +409,7 @@ libopt_la_SOURCES = \
 	opt/instrument/BlockInstrument.cpp \
 	opt/instrument/Instrument.cpp \
 	opt/int_type_patcher/IntTypePatcher.cpp \
+	opt/interdex/DexRemovalPass.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/interdex/InterDexPass.cpp \
 	opt/interdex/InterDexReshuffleImpl.cpp \
@@ -436,6 +438,7 @@ libopt_la_SOURCES = \
 	opt/optimize_enums/OptimizeEnums.cpp \
 	opt/optimize_enums/OptimizeEnumsUnmap.cpp \
 	opt/original_name/OriginalNamePass.cpp \
+	opt/package-private-preprocessor/PackagePrivatePreprocessor.cpp \
 	opt/partial-application/PartialApplication.cpp \
 	opt/peephole/Peephole.cpp \
 	opt/peephole/RedundantCheckCastRemover.cpp \
@@ -446,20 +449,15 @@ libopt_la_SOURCES = \
 	opt/rebindrefs/ReBindRefs.cpp \
 	opt/regalloc/RegAlloc.cpp \
 	opt/regalloc-fast/FastRegAlloc.cpp \
-	opt/remove-apilevel-checks/RemoveApiLevelChecks.cpp \
 	opt/remove-builders/RemoveBuilders.cpp \
 	opt/remove-builders/RemoveBuildersHelper.cpp \
 	opt/remove-interfaces/RemoveInterfacePass.cpp \
 	opt/remove-recursive-locks/RemoveRecursiveLocks.cpp \
-	opt/remove_redundant_check_casts/CheckCastAnalysis.cpp \
-	opt/remove_redundant_check_casts/CheckCastTransform.cpp \
 	opt/remove_redundant_check_casts/RemoveRedundantCheckCasts.cpp \
-	opt/remove-uninstantiables/RemoveUninstantiablesPass.cpp \
 	opt/remove-unreachable/RemoveUnreachable.cpp \
 	opt/remove-unreachable/TypeAnalysisAwareRemoveUnreachable.cpp \
 	opt/remove-nullcheck-string-arg/RemoveNullcheckStringArg.cpp \
 	opt/remove-unused-fields/RemoveUnusedFields.cpp \
-	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
 	opt/remove-unused-args/RemoveUnusedArgs.cpp \
 	opt/renameclasses/InitialRenameClassesPass.cpp \
 	opt/renameclasses/RenameClassesV2.cpp \
@@ -506,12 +504,10 @@ libopt_la_SOURCES = \
 	opt/strip-debug-info/StripDebugInfo.cpp \
 	opt/test_cfg/TestCFG.cpp \
 	opt/optimize_resources/OptimizeResources.cpp \
-	opt/throw-propagation/ThrowPropagationPass.cpp \
 	opt/typedef-anno-checker/TypedefAnnoCheckerPass.cpp \
 	opt/type-analysis/CallGraphFileGenerationPass.cpp \
 	opt/type-analysis/GlobalTypeAnalysisPass.cpp \
 	opt/type-analysis/TypeAnalysisCallGraphGenerationPass.cpp \
-	opt/unreferenced_interfaces/UnreferencedInterfaces.cpp \
 	opt/unmark_proguard_keep/UnmarkProguardKeep.cpp \
 	opt/up-code-motion/UpCodeMotion.cpp \
 	opt/uses-names/UsesNames.cpp \
@@ -586,10 +582,12 @@ bin_SCRIPTS = redex apkutil
 CLEANFILES = redex
 
 # Embedded API level files.
-GEN_API_LEVELS_SCRIPT = gen_packed_apilevels.py
+GEN_API_LEVELS_SCRIPT = $(srcdir)/gen_packed_apilevels.py
 GENERATED_API_LEVELS_MODULE = generated_apilevels.py
-$(GENERATED_API_LEVELS_MODULE): $(GEN_API_LEVELS_SCRIPT) service/api-levels/framework_classes_api_*.txt
-	python3 $(GEN_API_LEVELS_SCRIPT) -o $@ service/api-levels/framework_classes_api_*.txt
+$(GENERATED_API_LEVELS_MODULE): $(GEN_API_LEVELS_SCRIPT) $(srcdir)/service/api-levels/framework_classes_api_*.txt
+	python3 $(GEN_API_LEVELS_SCRIPT) -o $@ $(srcdir)/service/api-levels/framework_classes_api_*.txt
+
+BUILT_SOURCES += $(GENERATED_API_LEVELS_MODULE)
 
 PYTHON_SRCS := redex.py \
 	pyredex/__init__.py \
@@ -599,4 +597,4 @@ PYTHON_SRCS := redex.py \
 	$(GENERATED_API_LEVELS_MODULE)
 
 redex: redex-all $(PYTHON_SRCS)
-	$(srcdir)/bundle-redex.sh
+	SRC_DIR="$(srcdir)" $(srcdir)/bundle-redex.sh

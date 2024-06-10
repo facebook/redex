@@ -72,6 +72,23 @@ std::unordered_set<DexType*> gather_resolved_init_class_types(
   return refined_init_class_types;
 }
 
+// Inlining methods into different classes might lead to worse cross-dex-ref
+// minimization results. \returns the estimated cross dex penalty caused by
+// inlining.
+float estimate_cross_dex_penalty(const InlinedCost* inlined_cost,
+                                 const InlinerCostConfig& inliner_cost_config,
+                                 bool use_other_refs) {
+  float cross_dex_penalty =
+      inliner_cost_config.cross_dex_penalty_coe1 * inlined_cost->method_refs;
+  if (use_other_refs &&
+      (inlined_cost->method_refs + inlined_cost->other_refs) > 0) {
+    cross_dex_penalty +=
+        inliner_cost_config.cross_dex_penalty_coe2 * inlined_cost->other_refs +
+        inliner_cost_config.cross_dex_penalty_const;
+  }
+  return cross_dex_penalty;
+}
+
 } // namespace
 
 MultiMethodInliner::MultiMethodInliner(
@@ -439,6 +456,35 @@ size_t MultiMethodInliner::inline_callees(
   return inline_inlinables(caller, inlinables, deleted_insns);
 }
 
+size_t MultiMethodInliner::inline_callees(
+    DexMethod* caller,
+    const std::unordered_map<IRInstruction*, DexMethod*>& insns) {
+  TraceContext context{caller};
+  std::vector<Inlinable> inlinables;
+  always_assert(caller->get_code()->editable_cfg_built());
+  for (auto& mie : InstructionIterable(caller->get_code()->cfg())) {
+    auto insn = mie.insn;
+    auto it = insns.find(insn);
+    if (it == insns.end()) {
+      continue;
+    }
+    auto* callee = it->second;
+    always_assert(callee->is_concrete());
+    always_assert(opcode::is_an_invoke(insn->opcode()));
+    auto needs_receiver_cast =
+        is_static(callee) ||
+                type::check_cast(mie.insn->get_method()->get_class(),
+                                 callee->get_class())
+            ? nullptr
+            : callee->get_class();
+    inlinables.push_back((Inlinable){callee, insn, false, nullptr,
+                                     get_callee_insn_size(callee),
+                                     needs_receiver_cast});
+  }
+
+  return inline_inlinables(caller, inlinables);
+}
+
 namespace {
 
 // Helper method, as computing inline for a trace could be too expensive.
@@ -713,7 +759,7 @@ size_t MultiMethodInliner::inline_inlinables(
     bool success = inliner::inline_with_cfg(
         caller_method, callee_method, callsite_insn,
         inlinable.needs_receiver_cast, needs_init_class, *cfg_next_caller_reg,
-        reduced_cfg);
+        reduced_cfg, m_config.rewrite_invoke_super ? callee_method : nullptr);
     if (!success) {
       calls_not_inlined++;
       continue;
@@ -1499,8 +1545,17 @@ bool MultiMethodInliner::can_inline_init(const DexMethod* init_method) {
                   [&](const auto&) {
                     const auto* finalizable_fields =
                         m_shrinker.get_finalizable_fields();
+                    // We also exclude possibly anonymous classes as those may
+                    // regress the effectiveness of the class-merging passes.
+                    // TODO T184662680: While this is not a correctness issue,
+                    // we should fully support relaxed init methods in
+                    // class-merging.
+                    bool relaxed = m_config.relaxed_init_inline &&
+                                   m_shrinker.min_sdk() >= 21 &&
+                                   !klass::maybe_anonymous_class(
+                                       type_class(init_method->get_class()));
                     return constructor_analysis::can_inline_init(
-                        init_method, finalizable_fields);
+                        init_method, finalizable_fields, relaxed);
                   })
               .first;
 }
@@ -1553,11 +1608,9 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
     } else {
       // Inlining methods into different classes might lead to worse
       // cross-dex-ref minimization results.
-      cross_dex_penalty = inlined_cost->method_refs;
-      if (callee_caller_refs->classes > 1 &&
-          (inlined_cost->method_refs + inlined_cost->other_refs) > 0) {
-        cross_dex_penalty++;
-      }
+      cross_dex_penalty = estimate_cross_dex_penalty(
+          inlined_cost, m_inliner_cost_config,
+          callee_caller_refs->classes > 1 ? true : false);
     }
   }
 
@@ -1642,10 +1695,8 @@ bool MultiMethodInliner::should_inline_at_call_site(
       (caller == nullptr || caller->get_class() != callee->get_class())) {
     // Inlining methods into different classes might lead to worse
     // cross-dex-ref minimization results.
-    cross_dex_penalty = inlined_cost->method_refs;
-    if (inlined_cost->method_refs + inlined_cost->other_refs > 0) {
-      cross_dex_penalty++;
-    }
+    cross_dex_penalty =
+        estimate_cross_dex_penalty(inlined_cost, m_inliner_cost_config, true);
   }
 
   float invoke_cost =
@@ -1720,7 +1771,7 @@ bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
         // worry about invoke supers, or unknown virtuals -- private /
         // protected methods will remain accessible
         if (caller->get_class() != callee->get_class()) {
-          if (nonrelocatable_invoke_super(insn)) {
+          if (nonrelocatable_invoke_super(insn, callee)) {
             if (invk_insn) {
               log_nopt(INL_HAS_INVOKE_SUPER, caller, invk_insn);
             }
@@ -1822,8 +1873,16 @@ bool MultiMethodInliner::outlined_invoke_outlined(IRInstruction* insn,
  * in the hierarchy.
  * Inlining an invoke_super off its class hierarchy would break the verifier.
  */
-bool MultiMethodInliner::nonrelocatable_invoke_super(IRInstruction* insn) {
+bool MultiMethodInliner::nonrelocatable_invoke_super(IRInstruction* insn,
+                                                     const DexMethod* callee) {
   if (insn->opcode() == OPCODE_INVOKE_SUPER) {
+    if (m_config.rewrite_invoke_super) {
+      auto resolved_method = resolve_invoke_method(insn, callee);
+      if (resolved_method && resolved_method->is_def() &&
+          resolved_method->as_def()->get_code()) {
+        return false;
+      }
+    }
     info.invoke_super++;
     return true;
   }
@@ -2109,7 +2168,8 @@ bool inline_with_cfg(DexMethod* caller_method,
                      DexType* needs_receiver_cast,
                      DexType* needs_init_class,
                      size_t next_caller_reg,
-                     const cfg::ControlFlowGraph* reduced_cfg) {
+                     const cfg::ControlFlowGraph* reduced_cfg,
+                     DexMethod* rewrite_invoke_super_callee) {
 
   auto caller_code = caller_method->get_code();
   always_assert(caller_code->editable_cfg_built());
@@ -2160,7 +2220,8 @@ bool inline_with_cfg(DexMethod* caller_method,
   log_opt(INLINED, caller_method, callsite);
 
   cfg::CFGInliner::inline_cfg(&caller_cfg, callsite_it, needs_receiver_cast,
-                              needs_init_class, callee_cfg, next_caller_reg);
+                              needs_init_class, callee_cfg, next_caller_reg,
+                              rewrite_invoke_super_callee);
 
   return true;
 }

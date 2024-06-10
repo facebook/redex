@@ -136,7 +136,7 @@ void RootSetMarker::mark(const Scope& scope) {
       TRACE(REACH, 3, "Visiting seed: %s", SHOW(cls));
       push_seed(cls);
     }
-    // Applying the same exclusions as DelInitPass
+    // Applying the same exclusions as the retired DelInitPass
     auto relaxed =
         m_relaxed_keep_class_members && consider_dynamically_referenced(cls);
     // push_seed for an ifield or vmethod
@@ -583,7 +583,7 @@ void TransitiveClosureMarkerWorker::push_if_instance_method_callable(
   }
 }
 
-// Adapted from DelInitPass
+// Adapted from retired DelInitPass
 namespace relaxed_keep_class_members_impl {
 
 void gather_dynamic_references_impl(const DexAnnotation* anno,
@@ -1347,17 +1347,8 @@ void TransitiveClosureMarkerWorker::visit_cls(const DexClass* cls) {
   const DexAnnotationSet* annoset = cls->get_anno_set();
   if (annoset) {
     for (auto const& anno : annoset->get_annotations()) {
-      if (m_shared_state->ignore_sets->system_annos.count(anno->type())) {
-        TRACE(REACH,
-              5,
-              "Stop marking from %s by system anno: %s",
-              SHOW(cls),
-              SHOW(anno->type()));
-        if (m_shared_state->relaxed_keep_class_members) {
-          References refs;
-          gather_dynamic_references(anno.get(), &refs);
-          dynamically_referenced(refs.classes_dynamically_referenced);
-        }
+      if (anno->type() == type::dalvik_annotation_MemberClasses()) {
+        // Ignore inner-class annotations.
         continue;
       }
       record_reachability(cls, anno.get());
@@ -1686,7 +1677,7 @@ void TransitiveClosureMarkerWorker::base_invoke_virtual_target(
     exact_invoke_virtual_target(method);
   }
   for (auto* child : node.children) {
-    base_invoke_virtual_target(child, base_type, /* is_child */ true);
+    base_invoke_virtual_target(child->method, base_type, /* is_child */ true);
   }
 }
 
@@ -1800,8 +1791,8 @@ void compute_zombie_methods(
             any_abstract_methods = true;
           }
           for (auto* parent : method_override_graph.get_node(elder).parents) {
-            if (is_abstract(parent)) {
-              visit_abstract_method(parent);
+            if (is_abstract(parent->method)) {
+              visit_abstract_method(parent->method);
             }
           }
         };
@@ -1814,10 +1805,10 @@ void compute_zombie_methods(
           unmarked_elder = elder_parent;
           for (auto* parent :
                method_override_graph.get_node(unmarked_elder).parents) {
-            if (is_abstract(parent)) {
-              visit_abstract_method(parent);
+            if (is_abstract(parent->method)) {
+              visit_abstract_method(parent->method);
             } else {
-              elder_parent = parent;
+              elder_parent = parent->method;
             }
           }
         }

@@ -100,7 +100,8 @@ std::string get_apk_dir(const ConfigFiles& config) {
 
 class CheckerConfig {
  public:
-  explicit CheckerConfig(const ConfigFiles& conf) {
+  explicit CheckerConfig(const ConfigFiles& conf, bool relaxed_init_check)
+      : m_relaxed_init_check(relaxed_init_check) {
     const Json::Value& type_checker_args =
         conf.get_json_config()["ir_type_checker"];
     m_run_type_checker_on_input =
@@ -216,6 +217,9 @@ class CheckerConfig {
       if (m_check_no_overwrite_this) {
         checker.check_no_overwrite_this();
       }
+      if (m_relaxed_init_check) {
+        checker.relaxed_init_check();
+      }
       return fn(std::move(checker));
     };
     auto run_checker = [&](DexMethod* dex_method) {
@@ -308,6 +312,7 @@ class CheckerConfig {
   bool m_annotated_cfg_on_error{false};
   bool m_annotated_cfg_on_error_reduced{true};
   bool m_check_classes;
+  bool m_relaxed_init_check;
 };
 
 class CheckUniqueDeobfuscatedNames {
@@ -1209,7 +1214,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       conf.get_global_config().get_config_by_name<AssessorConfig>("assessor");
 
   // Retrieve the type checker's settings.
-  CheckerConfig checker_conf{conf};
+  bool relaxed_init_check = m_redex_options.min_sdk >= 21;
+  CheckerConfig checker_conf{conf, relaxed_init_check};
   checker_conf.on_input(scope);
 
   // Pull on method-profiles, so that they get initialized, and are matched
@@ -1351,11 +1357,16 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   // MAIN PASS LOOP. //
   /////////////////////
   bool handled_child = false;
+  bool after_interdex = false;
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     const size_t pass_run = ++runs[pass];
     AnalysisUsageHelper analysis_usage_helper{m_preserved_analysis_passes};
     analysis_usage_helper.pre_pass(pass);
+
+    if (!after_interdex && pass->name() == "InterDexPass") {
+      after_interdex = true;
+    }
 
     TRACE(PM, 1, "Running %s...", pass->name().c_str());
     ScopedMemStats scoped_mem_stats{mem_pass_stats, hwm_per_pass};
@@ -1399,6 +1410,44 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       auto wall_time_end = std::chrono::steady_clock::now();
       double cpu_time_end = ((double)std::clock()) / CLOCKS_PER_SEC;
 
+      // Collect dex info metrics after InterDexPass.
+      if (after_interdex) {
+        auto& root_store = stores.at(0);
+        auto& root_dexen = root_store.get_dexen();
+        set_metric("~rootstore.num_dexes", root_dexen.size());
+        size_t idx = 0;
+        size_t total_methods = 0;
+        for (auto& dex : root_dexen) {
+          set_metric("~rootstore.dex_" + std::to_string(++idx) + ".num_classes",
+                     dex.size());
+          for (auto& cls : dex) {
+            total_methods += cls->get_all_methods().size();
+          }
+        }
+        set_metric("~rootstore.total_class_num", total_methods);
+        if (pm_config->dump_mrefs) {
+          // dump number of mrefs in each dex in root_store.
+          idx = 0;
+          size_t total_mrefs = 0;
+          for (auto& dex : root_dexen) {
+            std::vector<DexMethodRef*> mrefs;
+            std::unordered_set<DexMethodRef*> mrefs_set;
+            for (DexClass* cls : dex) {
+              cls->gather_methods(mrefs);
+            }
+            for (auto& elem : mrefs) {
+              mrefs_set.insert(elem);
+            }
+            set_metric(
+                "~~rootstore.dex_" + std::to_string(++idx) + ".num_mrefs",
+                mrefs_set.size());
+            total_mrefs += mrefs_set.size();
+          }
+          set_metric("~~rootstore.total_mrefs", total_mrefs);
+          set_metric("~~rootstore.total_cross_dex_mrefs",
+                     total_mrefs - total_methods);
+        }
+      }
       // Ensure the CFG is clean, e.g., no unreachable blocks.
       if (!pass->is_cfg_legacy()) {
         auto temp_scope = build_class_scope(stores);

@@ -7,10 +7,16 @@
 
 #pragma once
 
+#include <memory>
+#include <string>
+#include <vector>
+
 #include <sparta/S_Expression.h>
 
-#include "Creators.h"
-#include "IRCode.h"
+class DexClass;
+class DexField;
+class DexMethod;
+class IRCode;
 
 /*
  * This module provides an easy way to create / serialize Dex elements using
@@ -34,10 +40,6 @@
  * Note that any field or methods that the opcodes reference will be
  * automatically created by the assembler. I.e. you do *not* need to call
  * make_{field,method}() beforehand to ensure that they exist.
- *
- * Not-yet-implemented features:
- *   - try-catch
- *   - fill-array-data opcodes
  *
  * NOTE:
  * When assembling an IRCode instance, the assembler will attempt to set the
@@ -67,6 +69,14 @@ std::unique_ptr<IRCode> ircode_from_string(const std::string&);
 DexMethod* method_from_s_expr(const sparta::s_expr&);
 
 DexMethod* method_from_string(const std::string&);
+
+DexField* field_from_s_expr(const sparta::s_expr& field_def);
+
+DexField* field_from_string(const std::string& field_def);
+
+DexClass* class_from_s_expr(const sparta::s_expr& class_expr);
+
+DexClass* class_from_string(const std::string& class_def);
 
 DexMethod* class_with_method(const std::string& class_name,
                              const std::string& method_instructions);

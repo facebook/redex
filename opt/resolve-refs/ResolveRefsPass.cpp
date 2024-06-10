@@ -202,12 +202,14 @@ boost::optional<DexMethod*> get_inferred_method_def(
     const std::vector<std::string>& excluded_externals,
     const bool is_support_lib,
     DexMethod* callee,
+    const IROpcode invoke_op,
     const DexType* inferred_type,
     RefStats& stats) {
 
   auto* inferred_cls = type_class(inferred_type);
-  auto* resolved = resolve_method(inferred_cls, callee->get_name(),
-                                  callee->get_proto(), MethodSearch::Virtual);
+  auto* resolved =
+      resolve_method(inferred_cls, callee->get_name(), callee->get_proto(),
+                     opcode_to_search(invoke_op));
   // 1. If we cannot resolve the callee based on the inferred_cls, we bail.
   if (!resolved || !resolved->is_def()) {
     TRACE(RESO, 4, "Bailed resolved upon inferred_cls %s for %s",
@@ -234,6 +236,14 @@ boost::optional<DexMethod*> get_inferred_method_def(
   }
   if (!is_external && !is_public(resolved_cls)) {
     set_public(resolved_cls);
+  }
+  if (is_interface(inferred_cls) && !opcode::is_invoke_interface(invoke_op)) {
+    // If we pass in an interface class with MethodSearch::Virtual into the
+    // Resolver, it can resolve to an interface method.
+    TRACE(RESO, 4, "Bailed on incompatible invoke opcode: %s is an interface",
+          SHOW(inferred_cls));
+    stats.num_failed_infer_callee_target_type++;
+    return boost::none;
   }
 
   TRACE(RESO, 4, "Inferred to %s for type %s", SHOW(resolved),
@@ -443,8 +453,10 @@ RefStats ResolveRefsPass::refine_virtual_callsites(const XStoreRefs& xstores,
     }
 
     // replace it with the actual implementation if any provided.
-    auto m_def = get_inferred_method_def(
-        method, m_excluded_externals, is_support_lib, callee, *dex_type, stats);
+    const auto invoke_op = insn->opcode();
+    auto m_def =
+        get_inferred_method_def(method, m_excluded_externals, is_support_lib,
+                                callee, invoke_op, *dex_type, stats);
     if (!m_def) {
       stats.num_failed_infer_callee_def++;
       continue;
@@ -455,6 +467,11 @@ RefStats ResolveRefsPass::refine_virtual_callsites(const XStoreRefs& xstores,
       // The ref resolution is a nop.
       continue;
     }
+    if (opcode::is_invoke_virtual(opcode)) {
+      always_assert_log(!is_interface(def_cls),
+                        "invoke-virtual to interface method %s",
+                        SHOW(def_meth));
+    }
     // Stop if the resolve_to_external config is False.
     if (!m_refine_to_external && def_cls->is_external()) {
       TRACE(RESO, 4, "Bailed on external %s", SHOW(def_meth));
@@ -464,10 +481,6 @@ RefStats ResolveRefsPass::refine_virtual_callsites(const XStoreRefs& xstores,
       // Resolving to external and the target is missing in the min_sdk_api.
       TRACE(RESO, 4, "Bailed on mismatch with min_sdk %s", SHOW(def_meth));
       stats.num_bailed_on_min_sdk_mismatch++;
-      continue;
-    }
-    if (!opcode::is_invoke_interface(opcode) && is_interface(def_cls)) {
-      TRACE(RESO, 4, "Bailed on incorrect opcode %s", SHOW(def_meth));
       continue;
     }
     TRACE(RESO, 3, "Resolving %s\n\t=>%s", SHOW(mref), SHOW(def_meth));

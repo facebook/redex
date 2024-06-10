@@ -13,6 +13,7 @@
 #include "IRList.h"
 #include "IROpcode.h"
 #include "RedexContext.h"
+#include "Resolver.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "Trace.h"
@@ -30,10 +31,12 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                             DexType* needs_receiver_cast,
                             DexType* needs_init_class,
                             const ControlFlowGraph& callee_orig,
-                            size_t next_caller_reg) {
+                            size_t next_caller_reg,
+                            DexMethod* rewrite_invoke_super_callee) {
   CFGInlinerPlugin base_plugin;
   inline_cfg(caller, callsite, needs_receiver_cast, needs_init_class,
-             callee_orig, next_caller_reg, base_plugin);
+             callee_orig, next_caller_reg, base_plugin,
+             rewrite_invoke_super_callee);
 }
 
 namespace {
@@ -56,13 +59,17 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                             DexType* needs_init_class,
                             const ControlFlowGraph& callee_orig,
                             size_t next_caller_reg,
-                            CFGInlinerPlugin& plugin) {
+                            CFGInlinerPlugin& plugin,
+                            DexMethod* rewrite_invoke_super_callee) {
   always_assert(&inline_site.cfg() == caller);
 
   // copy the callee because we're going to move its contents into the caller
   ControlFlowGraph callee;
   callee_orig.deep_copy(&callee);
   remove_ghost_exit_block(&callee);
+  if (rewrite_invoke_super_callee) {
+    rewrite_invoke_supers(&callee, rewrite_invoke_super_callee);
+  }
 
   normalize_source_blocks(inline_site, callee);
 
@@ -218,6 +225,20 @@ void CFGInliner::remove_ghost_exit_block(ControlFlowGraph* cfg) {
   if (exit_block && cfg->get_pred_edge_of_type(exit_block, EDGE_GHOST)) {
     cfg->remove_block(exit_block);
     cfg->set_exit_block(nullptr);
+  }
+}
+
+void CFGInliner::rewrite_invoke_supers(ControlFlowGraph* cfg,
+                                       DexMethod* method) {
+  for (auto& mie : cfg::InstructionIterable(*cfg)) {
+    auto insn = mie.insn;
+    if (opcode::is_invoke_super(insn->opcode())) {
+      auto callee = resolve_invoke_method(insn, method);
+      always_assert(callee);
+      // Illegal combination; someone needs to clean this up.
+      insn->set_opcode(OPCODE_INVOKE_DIRECT);
+      insn->set_method(callee);
+    }
   }
 }
 

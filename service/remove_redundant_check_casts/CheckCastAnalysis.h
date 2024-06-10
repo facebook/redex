@@ -46,8 +46,16 @@ class CheckCastAnalysis {
 
  public:
   CheckCastAnalysis(const CheckCastConfig& config,
-                    DexMethod* method,
+                    cfg::ControlFlowGraph& cfg,
+                    bool is_static,
+                    DexType* declaring_type,
+                    DexTypeList* args,
+                    DexType* rtype,
+                    const ParamAnnotations* param_anno,
                     const api::AndroidSDK& api);
+  static CheckCastAnalysis forMethod(const CheckCastConfig& config,
+                                     DexMethod* method,
+                                     const api::AndroidSDK& api);
   CheckCastReplacements collect_redundant_checks_replacement() const;
 
  private:
@@ -60,7 +68,12 @@ class CheckCastAnalysis {
   bool can_catch_class_cast_exception(cfg::Block* block) const;
 
   DexType* m_class_cast_exception_type;
-  DexMethod* m_method;
+  cfg::ControlFlowGraph& m_cfg;
+  bool m_is_static;
+  DexType* m_declaring_type;
+  DexTypeList* m_args;
+  DexType* m_rtype;
+  const ParamAnnotations* m_param_anno;
   using InstructionTypeDemands =
       std::unordered_map<IRInstruction*, std::unordered_set<DexType*>>;
   std::unique_ptr<InstructionTypeDemands> m_insn_demands;

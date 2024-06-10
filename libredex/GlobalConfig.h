@@ -158,6 +158,7 @@ struct PassManagerConfig : public Configurable {
   bool violations_tracking{false};
   bool check_pass_order_properties{false};
   bool check_properties_deep{false};
+  bool dump_mrefs{false};
 };
 
 struct ResourceConfig : public Configurable {

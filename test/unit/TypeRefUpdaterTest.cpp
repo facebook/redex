@@ -7,6 +7,7 @@
 
 #include "TypeReference.h"
 
+#include "Creators.h"
 #include "IRAssembler.h"
 #include "RedexTest.h"
 

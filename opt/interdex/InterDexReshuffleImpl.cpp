@@ -225,6 +225,56 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(
   }
 }
 
+size_t InterDexReshuffleImpl::get_eliminate_dex(
+    const std::unordered_map<size_t, bool>& dex_eliminate) {
+  size_t e_dex_idx = 0;
+  size_t mrefs_limit = m_dexes_structure.get_mrefs_limit();
+  size_t frefs_limit = m_dexes_structure.get_frefs_limit();
+  size_t mrefs = mrefs_limit;
+  size_t frefs = frefs_limit;
+  size_t mrefs_avail = 0;
+  size_t frefs_avail = 0;
+  TRACE(IDEXR, 1, "mutable dexen are %zu, and orignial dexen are %zu\n",
+        m_mutable_dexen.size(), m_dexen.size());
+  // Step1: find out the dex with the smallest refs.
+  for (size_t dex_index = m_first_dex_index; dex_index < m_mutable_dexen.size();
+       dex_index++) {
+    auto& cur = m_mutable_dexen.at(dex_index);
+    auto cur_mrefs = cur.get_num_mrefs();
+    auto cur_frefs = cur.get_num_frefs();
+    mrefs_avail += (mrefs_limit - cur_mrefs);
+    frefs_avail += (frefs_limit - cur_frefs);
+    if (!dex_eliminate.at(dex_index)) {
+      continue;
+    }
+    TRACE(IDEXR, 1, "In dex %zu, mrefs is %zu, frefs is %zu\n", dex_index,
+          cur_mrefs, cur_frefs);
+    if (cur_mrefs > mrefs) {
+      continue;
+    }
+    if (cur_mrefs < mrefs) {
+      mrefs = cur_mrefs;
+      frefs = cur_frefs;
+      e_dex_idx = dex_index;
+      continue;
+    }
+    if (cur_frefs < frefs) {
+      mrefs = cur_mrefs;
+      frefs = cur_frefs;
+      e_dex_idx = dex_index;
+    }
+  }
+
+  // Step2. Check if the rest of dexes have enough space for classes moving in
+  // a high level.
+  mrefs_avail -= (mrefs_limit - mrefs);
+  frefs_avail -= (frefs_limit - frefs);
+  if (mrefs_avail <= mrefs || frefs_avail <= frefs) {
+    return 0;
+  }
+  return e_dex_idx;
+}
+
 void InterDexReshuffleImpl::compute_plan() {
   Timer t("compute_plan");
   MoveGains move_gains(m_first_dex_index, m_movable_classes,
@@ -280,7 +330,95 @@ void InterDexReshuffleImpl::compute_plan() {
   m_mgr.incr_metric("total_moves", total_moves);
   m_mgr.incr_metric("batches", batches);
   m_mgr.incr_metric("first_dex_index", m_first_dex_index);
+  record_stats();
   TRACE(IDEXR, 1, "executed %zu moves in %zu batches", total_moves, batches);
+}
+
+bool InterDexReshuffleImpl::compute_dex_removal_plan() {
+  Timer t("compute_dex_removal_plan");
+  std::unordered_map<size_t, bool> dex_eliminate;
+
+  for (size_t dex_index = m_first_dex_index; dex_index < m_dexen.size();
+       dex_index++) {
+    dex_eliminate.emplace(dex_index, true);
+    auto& dex = m_dexen.at(dex_index);
+    for (auto cls : dex) {
+      if (!can_move(cls)) {
+        if (!is_canary(cls)) {
+          // If a dex contains any non-canary classes which couldn't be
+          // moved, this dex can not be eliminated.
+          dex_eliminate.at(dex_index) = false;
+          break;
+        }
+      }
+    }
+  }
+
+  size_t removal_dex = get_eliminate_dex(dex_eliminate);
+  if (removal_dex == 0) {
+    // No dex can be removed.
+    return false;
+  }
+
+  TRACE(IDEXR, 1, "Checking if %zu could be removed", removal_dex);
+  std::vector<DexClass*> movable_classes;
+  std::unordered_map<DexClass*, size_t> class_dex_indices;
+  auto& dex = m_dexen.at(removal_dex);
+  for (auto cls : dex) {
+    if (is_canary(cls)) {
+      continue;
+    }
+    movable_classes.push_back(cls);
+    class_dex_indices.emplace(cls, removal_dex);
+  }
+
+  MoveGains move_gains(m_first_dex_index, movable_classes, class_dex_indices,
+                       m_class_refs, m_mutable_dexen, m_mutable_dexen_strings,
+                       m_class_to_merging_info, m_num_field_defs,
+                       m_mergeability_aware, m_config.deduped_weight,
+                       m_config.other_weight);
+  size_t max_move_gains{0};
+
+  size_t max_batch = movable_classes.size();
+  size_t batches{0};
+
+  while (batches < max_batch) {
+    batches++;
+    move_gains.recompute_gains(removal_dex);
+    max_move_gains = std::max(max_move_gains, move_gains.size());
+    while (move_gains.moved_classes_size() < movable_classes.size()) {
+      std::optional<Move> move_opt = move_gains.pop_max_gain();
+      if (!move_opt) {
+        break;
+      }
+      const Move& move = *move_opt;
+      // Check if it is a valid move.
+      if (!try_plan_move(move)) {
+        continue;
+      }
+      if (traceEnabled(IDEXR, 5)) {
+        print_stats();
+      }
+      move_gains.moved_class(move);
+      TRACE(IDEXR, 2, "Move class %s to Dex %zu", SHOW(move.cls),
+            move.target_dex_index);
+    }
+    if (move_gains.moved_classes_size() == movable_classes.size()) {
+      // All expected classes have been moved.
+      break;
+    }
+  }
+
+  if (move_gains.moved_classes_size() != movable_classes.size()) {
+    TRACE(IDEXR, 1, "Dex removal failed, still %zu classes left",
+          movable_classes.size() - move_gains.moved_classes_size());
+    return false;
+  }
+
+  m_mgr.incr_metric("max_move_gains", max_move_gains);
+  m_mgr.incr_metric("total_moved_classes", move_gains.moved_classes_size());
+  record_stats();
+  return true;
 }
 
 void InterDexReshuffleImpl::apply_plan() {
@@ -296,6 +434,14 @@ void InterDexReshuffleImpl::apply_plan() {
       });
 }
 
+void InterDexReshuffleImpl::record_stats() {
+  for (size_t idx = 0; idx < m_mutable_dexen.size(); ++idx) {
+    auto& mutable_dex = m_mutable_dexen.at(idx);
+    m_mgr.set_metric("Dex" + std::to_string(idx) + "number_of_mrefs",
+                     mutable_dex.get_num_mrefs());
+  }
+}
+
 void InterDexReshuffleImpl::print_stats() {
   size_t n_classes = 0;
   size_t n_mrefs = 0;
@@ -305,6 +451,10 @@ void InterDexReshuffleImpl::print_stats() {
     n_classes += mutable_dex.get_num_classes();
     n_mrefs += mutable_dex.get_num_mrefs();
     n_frefs += mutable_dex.get_num_frefs();
+    TRACE(IDEXR, 5, "Global stats for dex %zu:", idx);
+    TRACE(IDEXR, 5, "\t %zu classes", mutable_dex.get_num_classes());
+    TRACE(IDEXR, 5, "\t %zu mrefs", mutable_dex.get_num_mrefs());
+    TRACE(IDEXR, 5, "\t %zu frefs", mutable_dex.get_num_frefs());
   }
 
   TRACE(IDEXR, 5, "Global stats:");

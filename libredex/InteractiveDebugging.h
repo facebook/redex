@@ -10,7 +10,7 @@
 #include "Macros.h"
 #include <stddef.h>
 
-#if !defined(NDEBUG) && !IS_WINDOWS
+#if !IS_WINDOWS
 
 namespace cfg {
 class ControlFlowGraph;
