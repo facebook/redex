@@ -309,6 +309,8 @@ class AndroidResources {
   virtual ManifestClassInfo get_manifest_class_info() = 0;
   virtual boost::optional<std::string> get_manifest_package_name() = 0;
 
+  virtual std::unordered_set<std::string> get_service_loader_classes() = 0;
+
   // Given the xml file name, return the list of resource ids referred in xml
   // attributes.
   virtual std::unordered_set<uint32_t> get_xml_reference_attributes(
@@ -402,6 +404,9 @@ class AndroidResources {
 
 std::unique_ptr<AndroidResources> create_resource_reader(
     const std::string& directory);
+
+std::unordered_set<std::string> get_service_loader_classes_helper(
+    const std::string& path_dir);
 
 // For testing only!
 std::unordered_set<std::string> extract_classes_from_native_lib(

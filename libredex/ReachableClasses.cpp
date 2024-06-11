@@ -624,6 +624,19 @@ void analyze_serializable(const Scope& scope) {
 
 } // namespace
 
+void mark_reflection_root(const std::string& classname) {
+  auto dclass = maybe_class_from_string(classname);
+  if (dclass == nullptr) {
+    TRACE(PGR, 3, "Dangling reference from reflection: %s", classname.c_str());
+    return;
+  }
+  TRACE(PGR, 3, "reflection: %s", classname.c_str());
+  dclass->rstate.set_root(keep_reason::REFLECTION);
+  for (DexMethod* dmethod : dclass->get_ctors()) {
+    dmethod->rstate.set_root(keep_reason::REFLECTION);
+  }
+}
+
 /*
  * Initializes list of classes that are reachable via reflection, and calls
  * or from code.
@@ -646,11 +659,14 @@ void init_reachable_classes(const Scope& scope,
       // Classes present in XML layouts
       analyze_reachable_from_xml_layouts(scope, config.apk_dir);
     }
+    auto resources = create_resource_reader(config.apk_dir);
+    for (const auto& classname : resources->get_service_loader_classes()) {
+      mark_reflection_root(classname);
+    }
 
     if (config.analyze_native_lib_reachability) {
       Timer t{"Computing native reachability"};
       // Classnames present in native libraries (lib/*/*.so)
-      auto resources = create_resource_reader(config.apk_dir);
       for (const std::string& classname : resources->get_native_classes()) {
         auto type = DexType::get_type(classname);
         if (type == nullptr) continue;

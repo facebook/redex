@@ -14,5 +14,5 @@ TEST_F(PreVerify, BundleReachableServiceLoaderTest) {
 }
 
 TEST_F(PostVerify, BundleReachableServiceLoaderTest) {
-  // TODO: should have same classes as in pre-verify.
+  verify_exception_handlers_kept(classes);
 }

@@ -14,5 +14,5 @@ TEST_F(PreVerify, ApkReachableServiceLoaderTest) {
 }
 
 TEST_F(PostVerify, ApkReachableServiceLoaderTest) {
-  // TODO: should have same classes as in pre-verify.
+  verify_exception_handlers_kept(classes);
 }

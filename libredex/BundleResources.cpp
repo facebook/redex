@@ -17,6 +17,7 @@
 #include <boost/range/iterator_range.hpp>
 #include <fstream>
 #include <iomanip>
+#include <istream>
 #include <map>
 #include <queue>
 #include <stdexcept>
@@ -952,6 +953,20 @@ std::vector<std::string> find_subdirs_in_modules(
 }
 
 } // namespace
+
+std::unordered_set<std::string> BundleResources::get_service_loader_classes() {
+  std::vector<std::string> subdirs =
+      find_subdirs_in_modules(m_directory, {"root/META-INF/services/"});
+
+  std::unordered_set<std::string> ret_set;
+  for (const auto& subdir : subdirs) {
+    std::unordered_set<std::string> temp_set =
+        get_service_loader_classes_helper(subdir);
+    ret_set.insert(temp_set.begin(), temp_set.end());
+  }
+
+  return ret_set;
+}
 
 std::vector<std::string> BundleResources::find_res_directories() {
   return find_subdirs_in_modules(m_directory, {"res"});

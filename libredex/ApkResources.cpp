@@ -17,7 +17,9 @@
 #include <cstdint>
 #include <fcntl.h>
 #include <fstream>
+#include <istream>
 #include <map>
+#include <string>
 #include <string_view>
 
 #include "Macros.h"
@@ -1281,6 +1283,12 @@ boost::optional<std::string> ApkResources::get_manifest_package_name() {
         android::String16 s16(chars, len);
         return boost::optional<std::string>(convert_from_string16(s16));
       });
+}
+
+std::unordered_set<std::string> ApkResources::get_service_loader_classes() {
+  const std::string meta_inf =
+      (boost::filesystem::path(m_directory) / "META-INF/services/").string();
+  return get_service_loader_classes_helper(meta_inf);
 }
 
 std::unordered_set<uint32_t> ApkResources::get_xml_reference_attributes(

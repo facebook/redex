@@ -8,8 +8,11 @@
 #include "RedexResources.h"
 
 #include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
+#include <boost/iostreams/device/mapped_file.hpp>
+#include <boost/optional.hpp>
 #include <map>
 #include <mutex>
 #include <string>
@@ -63,6 +66,35 @@ std::unique_ptr<AndroidResources> create_resource_reader(
 #else
   return std::make_unique<ApkResources>(directory);
 #endif // HAS_PROTOBUF
+}
+
+std::unordered_set<std::string> get_service_loader_classes_helper(
+    const std::string& path_dir) {
+  std::unordered_set<std::string> classes_set;
+
+  if (boost::filesystem::exists(path_dir) &&
+      boost::filesystem::is_directory(path_dir)) {
+    for (auto it = dir_iterator(path_dir); it != dir_iterator(); ++it) {
+      auto const& file = *it;
+      const path_t& file_path = file.path();
+      const auto& file_string = file_path.string();
+
+      classes_set.insert(
+          java_names::external_to_internal(file_path.filename().string()));
+
+      std::fstream new_file;
+      new_file.open(file_string, std::ios::in);
+      if (new_file.is_open()) {
+        std::string current_line;
+        while (std::getline(new_file, current_line)) {
+          classes_set.insert(java_names::external_to_internal(current_line));
+        }
+        new_file.close();
+      }
+    }
+  }
+
+  return classes_set;
 }
 
 namespace {
