@@ -12,6 +12,8 @@ import integ.TestStringDef
 
 public class ClassWithParams(@TestIntDef var int_field: Int) {}
 
+public class ClassWithDefaultParams(@TestIntDef var int_field: Int = TestIntDef.THREE) {}
+
 public class TypedefAnnoCheckerKtTest {
 
   @TestStringDef val field_str: String = TestStringDef.TWO
@@ -129,8 +131,14 @@ public class TypedefAnnoCheckerKtTest {
 
   @TestIntDef
   fun testClassConstructorArgs(@TestIntDef param: Int): Int {
-    val lambda_test: ClassWithParams = ClassWithParams(param)
-    return lambda_test.int_field
+    val ctor_test: ClassWithParams = ClassWithParams(param)
+    return ctor_test.int_field
+  }
+
+  @TestIntDef
+  fun testClassConstructorDefaultArgs(@TestIntDef param: Int): Int {
+    val default_ctor_test: ClassWithDefaultParams = ClassWithDefaultParams(param)
+    return default_ctor_test.int_field
   }
 
   @TestStringDef

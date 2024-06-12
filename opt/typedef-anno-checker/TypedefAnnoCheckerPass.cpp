@@ -64,6 +64,16 @@ bool is_lamdda_callback(DexMethod* m) {
          m->get_simple_deobfuscated_name() == "onClick";
 }
 
+bool has_kotlin_default_ctor_marker(DexMethod* m) {
+  auto params = m->get_proto()->get_args();
+  if (params->size() > 1 &&
+      params->at(params->size() - 1)->str() ==
+          "Lkotlin/jvm/internal/DefaultConstructorMarker;") {
+    return true;
+  }
+  return false;
+}
+
 DexMethodRef* get_enclosing_method(DexClass* cls) {
   auto anno_set = cls->get_anno_set();
   if (!anno_set) {
@@ -186,8 +196,13 @@ void SynthAccessorPatcher::run(const Scope& scope) {
     if (is_synthetic_kotlin_annotations_method(m)) {
       patch_kotlin_annotations(m);
     }
-    if (is_constructor(m) && m->get_param_anno()) {
-      patch_synth_cls_fields_from_ctor_param(m);
+    if (is_constructor(m)) {
+      if (m->get_param_anno()) {
+        patch_synth_cls_fields_from_ctor_param(m);
+      } else {
+        has_kotlin_default_ctor_marker(m);
+        collect_accessors(m);
+      }
     }
     if (is_lamdda_callback(m) &&
         klass::maybe_anonymous_class(type_class(m->get_class()))) {
@@ -819,7 +834,12 @@ void SynthAccessorPatcher::collect_accessors(DexMethod* m) {
   // Patch missing param annotations
   for (auto& pair : missing_param_annos) {
     int param_index = pair.first;
-    always_assert(is_static(m));
+    if (is_synthetic_accessor(m)) {
+      always_assert(is_static(m));
+    } else {
+      always_assert(is_constructor(m));
+      param_index -= 1;
+    }
     m->attach_param_annotation_set(
         param_index, std::make_unique<DexAnnotationSet>(pair.second));
     TRACE(TAC, 2, "Add param annotation %s at %d to %s", SHOW(&pair.second),
