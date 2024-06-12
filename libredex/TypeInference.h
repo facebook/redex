@@ -325,7 +325,7 @@ class TypeInference final
     return m_type_envs;
   }
 
-  std::unordered_set<DexType*> get_annotations() { return m_annotations; }
+  std::unordered_set<DexType*> get_annotations() const { return m_annotations; }
 
  private:
   void populate_type_environments();
