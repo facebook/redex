@@ -470,6 +470,7 @@ libopt_la_SOURCES = \
 	opt/resolve-refs/SpecializeRtype.cpp \
 	opt/result-propagation/ResultPropagation.cpp \
 	opt/resolve-proguard-values/ResolveProguardAssumeValues.cpp \
+	opt/resources-inlining-pass/ResourcesInliningPass.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
 	opt/shrinker/ShrinkerPass.cpp \
 	opt/unreachable/UnreachableLoweringPass.cpp \
