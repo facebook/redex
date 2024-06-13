@@ -200,8 +200,9 @@ void SynthAccessorPatcher::run(const Scope& scope) {
       if (m->get_param_anno()) {
         patch_synth_cls_fields_from_ctor_param(m);
       } else {
-        has_kotlin_default_ctor_marker(m);
-        collect_accessors(m);
+        if (has_kotlin_default_ctor_marker(m)) {
+          collect_accessors(m);
+        }
       }
     }
     if (is_lamdda_callback(m) &&
