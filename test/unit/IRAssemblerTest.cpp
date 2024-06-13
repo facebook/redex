@@ -690,6 +690,7 @@ TEST_F(IRAssemblerTest, assembleClassFromString) {
     (class (public final) "LFoo;"
       (field (public) "LFoo;.bar:I")
       (field (public static) "LFoo;.barStatic:I")
+      (field (public static) "LFoo;.bazStatic:I" #123)
       (method (private) "LFoo;.baz:(I)V"
         (
           (return-void)
@@ -712,12 +713,22 @@ TEST_F(IRAssemblerTest, assembleClassFromString) {
   auto i_field = cls->get_ifields()[0];
   EXPECT_EQ(i_field->get_class(), cls->get_type());
   EXPECT_EQ(i_field->get_name()->str(), "bar");
+  EXPECT_EQ(i_field->get_static_value(), nullptr);
 
-  EXPECT_EQ(cls->get_sfields().size(), 1);
-  ASSERT_GE(cls->get_sfields().size(), 1);
-  auto s_field = cls->get_sfields()[0];
-  EXPECT_EQ(s_field->get_class(), cls->get_type());
-  EXPECT_EQ(s_field->get_name()->str(), "barStatic");
+  EXPECT_EQ(cls->get_sfields().size(), 2);
+  ASSERT_GE(cls->get_sfields().size(), 2);
+  {
+    auto s_field = cls->get_sfields()[0];
+    EXPECT_EQ(s_field->get_class(), cls->get_type());
+    EXPECT_EQ(s_field->get_name()->str(), "barStatic");
+  }
+  {
+    auto s_field = cls->get_sfields()[1];
+    EXPECT_EQ(s_field->get_class(), cls->get_type());
+    EXPECT_EQ(s_field->get_name()->str(), "bazStatic");
+    EXPECT_NE(s_field->get_static_value(), nullptr);
+    EXPECT_EQ(s_field->get_static_value()->as_value(), 123);
+  }
 
   EXPECT_EQ(cls->get_dmethods().size(), 1);
   ASSERT_GE(cls->get_dmethods().size(), 1);

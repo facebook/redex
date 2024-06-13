@@ -1037,7 +1037,7 @@ DexField* create_concrete_field(const std::string& field_name,
   DexField* ret = field->make_concrete(access_flags);
 
   // If we have an additional paramter, adding that data in as well
-  if (!tail.is_nil()) {
+  if (is_static(ret) && !tail.is_nil()) {
     s_expr code_expr;
     s_patn({s_patn(code_expr)}, tail).match_with(tail);
     auto ret_type = ret->get_type();
@@ -1126,12 +1126,9 @@ DexField* field_from_s_expr(const s_expr& field_def) {
   std::string field_name;
   s_patn({s_patn(access_tokens), s_patn(&field_name)}, tail)
       .must_match(tail, "Expecting access list and field name");
-  always_assert(tail.is_nil());
 
-  auto field = DexField::make_field(field_name);
   auto access_flags = parse_access_flags(access_tokens);
-
-  return field->make_concrete(access_flags);
+  return create_concrete_field(field_name, access_flags, tail);
 }
 
 DexField* field_from_string(const std::string& field_def) {
