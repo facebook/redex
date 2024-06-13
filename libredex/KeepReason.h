@@ -30,6 +30,7 @@ enum KeepReasonType {
   REDEX_CONFIG,
   REFLECTION,
   MANIFEST,
+  META_INF,
   XML,
   ANNO,
   SERIALIZABLE,

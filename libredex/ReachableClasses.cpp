@@ -624,16 +624,16 @@ void analyze_serializable(const Scope& scope) {
 
 } // namespace
 
-void mark_reflection_root(const std::string& classname) {
+void mark_meta_inf_root(const std::string& classname) {
   auto dclass = maybe_class_from_string(classname);
   if (dclass == nullptr) {
-    TRACE(PGR, 3, "Dangling reference from reflection: %s", classname.c_str());
+    TRACE(PGR, 3, "Dangling reference from META-INF: %s", classname.c_str());
     return;
   }
-  TRACE(PGR, 3, "reflection: %s", classname.c_str());
-  dclass->rstate.set_root(keep_reason::REFLECTION);
+  TRACE(PGR, 3, "META-INF: %s", classname.c_str());
+  dclass->rstate.set_root(keep_reason::META_INF);
   for (DexMethod* dmethod : dclass->get_ctors()) {
-    dmethod->rstate.set_root(keep_reason::REFLECTION);
+    dmethod->rstate.set_root(keep_reason::META_INF);
   }
 }
 
@@ -661,7 +661,7 @@ void init_reachable_classes(const Scope& scope,
     }
     auto resources = create_resource_reader(config.apk_dir);
     for (const auto& classname : resources->get_service_loader_classes()) {
-      mark_reflection_root(classname);
+      mark_meta_inf_root(classname);
     }
 
     if (config.analyze_native_lib_reachability) {
