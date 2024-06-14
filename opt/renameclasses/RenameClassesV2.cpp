@@ -713,7 +713,8 @@ void RenameClassesPassV2::rename_classes(
     always_assert(renamable_classes.count(clazz));
     mgr.incr_metric(METRIC_RENAMED_CLASSES, 1);
 
-    char descriptor[Locator::encoded_global_class_index_max];
+    std::array<char, Locator::encoded_global_class_index_max> array;
+    char* descriptor = array.data();
     always_assert(sequence != Locator::invalid_global_class_index);
     Locator::encodeGlobalClassIndex(sequence, digits, descriptor);
     always_assert_log(facebook::Locator::decodeGlobalClassIndex(descriptor) ==
