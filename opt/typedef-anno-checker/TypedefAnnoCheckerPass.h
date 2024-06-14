@@ -99,16 +99,25 @@ class SynthAccessorPatcher {
 
   void run(const Scope& scope);
 
+  void patch_first_level_nested_lambda(DexClass* cls);
+
  private:
   void collect_accessors(DexMethod* method);
 
   void patch_kotlin_annotations(DexMethod* method);
 
-  void patch_first_level_nested_lambda(DexClass* cls);
-
   void patch_enclosed_method(DexClass* cls);
 
-  void patch_field_annotations(DexMethod* ctor);
+  void patch_synth_cls_fields_from_ctor_param(DexMethod* ctor);
+
+  void patch_local_var_lambda(DexMethod* method);
+
+  void collect_annos_from_default_method(
+      DexMethod* method,
+      std::vector<std::pair<src_index_t, DexAnnotationSet&>>&
+          missing_param_annos);
+
+  void patch_ctor_params_from_synth_cls_fields(DexClass* cls);
 
   std::unordered_set<DexType*> m_typedef_annos;
   const method_override_graph::Graph& m_method_override_graph;
@@ -132,7 +141,7 @@ class TypedefAnnoChecker {
 
   void check_instruction(
       DexMethod* m,
-      type_inference::TypeInference* inference,
+      const type_inference::TypeInference* inference,
       IRInstruction* insn,
       const boost::optional<const DexType*>& return_annotation,
       live_range::UseDefChains* ud_chains,
@@ -143,7 +152,7 @@ class TypedefAnnoChecker {
                            live_range::UseDefChains* ud_chains,
                            IRInstruction* insn,
                            const src_index_t src,
-                           type_inference::TypeInference* inference,
+                           const type_inference::TypeInference* inference,
                            TypeEnvironments& envs);
 
   bool complete() { return m_good; }

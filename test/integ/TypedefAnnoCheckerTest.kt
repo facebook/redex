@@ -113,6 +113,11 @@ public class TypedefAnnoCheckerKtTest {
     print(param)
   }
 
+  fun assign_and_print_default(@TestStringDef param: String, def_param: String = "hello") {
+    print(param)
+    print(def_param)
+  }
+
   @TestStringDef
   fun testLambdaCall(@TestStringDef param: String): String {
     return call_lambda({
@@ -126,5 +131,23 @@ public class TypedefAnnoCheckerKtTest {
   fun testClassConstructorArgs(@TestIntDef param: Int): Int {
     val lambda_test: ClassWithParams = ClassWithParams(param)
     return lambda_test.int_field
+  }
+
+  @TestStringDef
+  fun testLambdaCallLocalVar(): String {
+    val local_val = "two"
+    return call_lambda({
+      assign_and_print_default(local_val)
+      local_val
+    })
+  }
+
+  @TestStringDef
+  fun testLambdaCallLocalVarInvalid(): String {
+    val local_val = "randomval"
+    return call_lambda({
+      assign_and_print_default(local_val)
+      local_val
+    })
   }
 }

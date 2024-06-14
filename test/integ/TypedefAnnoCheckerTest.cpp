@@ -11,6 +11,7 @@
 #include "RedexTest.h"
 #include "Show.h"
 #include "TypedefAnnoCheckerPass.h"
+#include "Walkers.h"
 
 struct TypedefAnnoCheckerTest : public RedexIntegrationTest {
   TypedefAnnoCheckerPass::Config get_config() {
@@ -49,6 +50,11 @@ struct TypedefAnnoCheckerTest : public RedexIntegrationTest {
                    const method_override_graph::Graph& method_override_graph) {
     auto config = get_config();
     SynthAccessorPatcher patcher(config, method_override_graph);
+    walk::parallel::classes(scope, [&](DexClass* cls) {
+      if (klass::maybe_anonymous_class(cls)) {
+        patcher.patch_first_level_nested_lambda(cls);
+      }
+    });
     patcher.run(scope);
   }
 
@@ -1337,4 +1343,62 @@ TEST_F(TypedefAnnoCheckerTest, TestNullString) {
 
   auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVar) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerKtTest$testLambdaCallLocalVar$1;.invoke:()"
+          "Ljava/lang/String;")
+          ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  DexClass* synth_class = type_class(method->get_class());
+  synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarInvalid) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarInvalid:()"
+          "Ljava/lang/String;")
+          ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  auto* synth_method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerKtTest$testLambdaCallLocalVarInvalid$1;.invoke:()"
+          "Ljava/lang/String;")
+          ->as_def();
+
+  DexClass* synth_class = type_class(synth_method->get_class());
+  synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_FALSE(checker.complete());
+  EXPECT_EQ(
+      checker.error(),
+      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarInvalid:()Ljava/lang/String;\n\
+ the string value randomval does not have the typedef annotation \n\
+ Linteg/TestStringDef; attached to it. \n\
+ Check that the value is annotated and exists in the typedef annotation class.\n\
+ failed instruction: CONST_STRING \"randomval\"\n\
+ Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest$testLambdaCallLocalVarInvalid$1;.<init>:(Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;Ljava/lang/String;)V\n\
+ Incorrect parameter's index: 2\n\n");
 }
