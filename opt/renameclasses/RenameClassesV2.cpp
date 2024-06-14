@@ -154,10 +154,11 @@ RenameClassesPassV2::build_dont_rename_class_name_literals(Scope& scope) {
   return result;
 }
 
-std::unordered_set<std::string>
+std::unordered_set<const DexString*>
 RenameClassesPassV2::build_dont_rename_for_types_with_reflection(
     Scope& scope, const ProguardMap& pg_map) {
-  std::unordered_set<std::string> dont_rename_class_for_types_with_reflection;
+  std::unordered_set<const DexString*>
+      dont_rename_class_for_types_with_reflection;
   std::unordered_set<DexType*> refl_map;
   for (auto const& refl_type_str : m_dont_rename_types_with_reflection) {
     auto deobf_cls_string = pg_map.translate_class(refl_type_str);
@@ -185,33 +186,32 @@ RenameClassesPassV2::build_dont_rename_for_types_with_reflection(
           if (callee == nullptr || !callee->is_concrete()) return;
           auto callee_method_cls = callee->get_class();
           if (refl_map.count(callee_method_cls) == 0) return;
-          std::string classname = m->get_class()->get_name()->str_copy();
+          const auto* classname = m->get_class()->get_name();
           TRACE(RENAME, 4,
                 "Found %s with known reflection usage. marking reachable",
-                classname.c_str());
-          dont_rename_class_for_types_with_reflection.insert(
-              std::move(classname));
+                classname->c_str());
+          dont_rename_class_for_types_with_reflection.insert(classname);
         }
       });
   return dont_rename_class_for_types_with_reflection;
 }
 
-std::unordered_set<std::string> RenameClassesPassV2::build_dont_rename_canaries(
-    Scope& scope) {
-  std::unordered_set<std::string> dont_rename_canaries;
+std::unordered_set<const DexString*>
+RenameClassesPassV2::build_dont_rename_canaries(Scope& scope) {
+  std::unordered_set<const DexString*> dont_rename_canaries;
   // Gather canaries
   for (auto clazz : scope) {
     if (strstr(clazz->get_name()->c_str(), "/Canary")) {
-      dont_rename_canaries.insert(clazz->get_name()->str_copy());
+      dont_rename_canaries.insert(clazz->get_name());
     }
   }
   return dont_rename_canaries;
 }
 
-std::unordered_map<const DexType*, std::string>
+std::unordered_set<const DexType*>
 RenameClassesPassV2::build_force_rename_hierarchies(
     PassManager& mgr, Scope& scope, const ClassHierarchy& class_hierarchy) {
-  std::unordered_map<const DexType*, std::string> force_rename_hierarchies;
+  std::unordered_set<const DexType*> force_rename_hierarchies;
   std::vector<DexClass*> base_classes;
   for (const auto& base : m_force_rename_hierarchies) {
     // skip comments
@@ -233,22 +233,21 @@ RenameClassesPassV2::build_force_rename_hierarchies(
     }
   }
   for (const auto& base_class : base_classes) {
-    auto base_name = base_class->get_name()->c_str();
-    force_rename_hierarchies[base_class->get_type()] = base_name;
+    force_rename_hierarchies.insert(base_class->get_type());
     TypeSet children_and_implementors;
     get_all_children_or_implementors(class_hierarchy, scope, base_class,
                                      children_and_implementors);
     for (const auto& cls : children_and_implementors) {
-      force_rename_hierarchies[cls] = base_name;
+      force_rename_hierarchies.insert(cls);
     }
   }
   return force_rename_hierarchies;
 }
 
-std::unordered_map<const DexType*, std::string>
+std::unordered_map<const DexType*, const DexString*>
 RenameClassesPassV2::build_dont_rename_hierarchies(
     PassManager& mgr, Scope& scope, const ClassHierarchy& class_hierarchy) {
-  std::unordered_map<const DexType*, std::string> dont_rename_hierarchies;
+  std::unordered_map<const DexType*, const DexString*> dont_rename_hierarchies;
   std::vector<DexClass*> base_classes;
   for (const auto& base : m_dont_rename_hierarchies) {
     // skip comments
@@ -270,7 +269,7 @@ RenameClassesPassV2::build_dont_rename_hierarchies(
     }
   }
   for (const auto& base_class : base_classes) {
-    auto base_name = base_class->get_name()->c_str();
+    const auto* base_name = base_class->get_name();
     dont_rename_hierarchies[base_class->get_type()] = base_name;
     TypeSet children_and_implementors;
     get_all_children_or_implementors(class_hierarchy, scope, base_class,
@@ -287,8 +286,7 @@ RenameClassesPassV2::build_dont_rename_serde_relationships(Scope& scope) {
   std::unordered_set<const DexType*> dont_rename_serde_relationships;
   for (const auto& cls : scope) {
     klass::Serdes cls_serdes = klass::get_serdes(cls);
-    const char* rawname = cls->get_name()->c_str();
-    std::string name = std::string(rawname);
+    std::string name = cls->get_name()->str_copy();
     name.pop_back();
 
     // Look for a class that matches one of the two deserializer patterns
@@ -431,12 +429,13 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
                                        ConfigFiles& conf,
                                        bool rename_annotations,
                                        PassManager& mgr) {
-  std::unordered_map<const DexType*, std::string> force_rename_hierarchies;
+  std::unordered_set<const DexType*> force_rename_hierarchies;
   std::unordered_set<const DexType*> dont_rename_serde_relationships;
   std::unordered_set<std::string> dont_rename_class_name_literals;
-  std::unordered_set<std::string> dont_rename_class_for_types_with_reflection;
-  std::unordered_set<std::string> dont_rename_canaries;
-  std::unordered_map<const DexType*, std::string> dont_rename_hierarchies;
+  std::unordered_set<const DexString*>
+      dont_rename_class_for_types_with_reflection;
+  std::unordered_set<const DexString*> dont_rename_canaries;
+  std::unordered_map<const DexType*, const DexString*> dont_rename_hierarchies;
   std::unordered_set<const DexType*> dont_rename_native_bindings;
   std::unordered_set<const DexType*> dont_rename_annotated;
 
@@ -549,14 +548,14 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
       continue;
     }
 
-    if (dont_rename_class_for_types_with_reflection.count(strname)) {
+    if (dont_rename_class_for_types_with_reflection.count(clazz->get_name())) {
       clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {
           DontRenameReasonCode::ClassForTypesWithReflection, norule};
       continue;
     }
 
-    if (dont_rename_canaries.count(strname)) {
+    if (dont_rename_canaries.count(clazz->get_name())) {
       clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Canaries, norule};
       continue;
@@ -570,9 +569,10 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
     }
 
     if (dont_rename_hierarchies.count(clazz->get_type())) {
-      std::string rule = dont_rename_hierarchies[clazz->get_type()];
+      const auto* rule = dont_rename_hierarchies[clazz->get_type()];
       clazz->rstate.set_dont_rename();
-      m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Hierarchy, rule};
+      m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Hierarchy,
+                                      rule->str_copy()};
       continue;
     }
 
@@ -636,8 +636,9 @@ void RenameClassesPassV2::eval_classes_post(
     if (package_blocklisted) continue;
 
     if (dont_rename_hierarchies.count(clazz->get_type())) {
-      std::string rule = dont_rename_hierarchies[clazz->get_type()];
-      m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Hierarchy, rule};
+      const auto* rule = dont_rename_hierarchies[clazz->get_type()];
+      m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Hierarchy,
+                                      rule->str_copy()};
       continue;
     }
 
@@ -737,15 +738,12 @@ void RenameClassesPassV2::rename_classes(
 
     name_mapping.add_type_name(clazz->get_name(), dstring);
     dtype->set_name(dstring);
-    std::string old_str(oldname->c_str());
-    // std::string new_str(descriptor);
-    // proguard_map.update_class_mapping(old_str, new_str);
-    m_base_strings_size += strlen(oldname->c_str());
-    m_ren_strings_size += strlen(dstring->c_str());
+    m_base_strings_size += oldname->size();
+    m_ren_strings_size += dstring->size();
 
     while (1) {
       std::string arrayop("[");
-      arrayop += oldname->c_str();
+      arrayop += oldname->str();
       oldname = DexString::get_string(arrayop);
       if (oldname == nullptr) {
         break;
@@ -755,7 +753,7 @@ void RenameClassesPassV2::rename_classes(
         break;
       }
       std::string newarraytype("[");
-      newarraytype += dstring->c_str();
+      newarraytype += dstring->str();
       dstring = DexString::make_string(newarraytype);
       arraytype->set_name(dstring);
     }
