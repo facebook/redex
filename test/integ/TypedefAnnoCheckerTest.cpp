@@ -1402,3 +1402,20 @@ TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarInvalid) {
  Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest$testLambdaCallLocalVarInvalid$1;.<init>:(Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;Ljava/lang/String;)V\n\
  Incorrect parameter's index: 2\n\n");
 }
+
+TEST_F(TypedefAnnoCheckerTest, TestClassConstructorDefaultArgs) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerKtTest;.testClassConstructorDefaultArgs:(I)I")
+          ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_TRUE(checker.complete());
+}
