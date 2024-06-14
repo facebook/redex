@@ -107,9 +107,24 @@ class RenameClassesPassV2 : public Pass {
 
   std::unordered_set<DexClass*> get_renamable_classes(Scope& scope);
 
+  std::unordered_set<DexClass*> get_unrenamable_classes(
+      Scope& scope,
+      const std::unordered_set<DexClass*>& renamable_classes,
+      PassManager& mgr);
+
+  rewriter::TypeStringMap get_name_mapping(
+      const DexStoresVector& stores,
+      size_t digits,
+      const std::unordered_set<DexClass*>& unrenamable_classes);
+  void evolve_name_mapping(
+      size_t digits,
+      const DexClasses& dex,
+      const std::unordered_set<DexClass*>& unrenamable_classes,
+      rewriter::TypeStringMap* name_mapping,
+      uint32_t* nextGlobalClassIndex);
+
   void rename_classes(Scope& scope,
-                      size_t digits,
-                      const std::unordered_set<DexClass*>& renamable_classes,
+                      const rewriter::TypeStringMap& name_mapping,
                       PassManager& mgr);
   void rename_classes_in_layouts(const rewriter::TypeStringMap& name_mapping,
                                  PassManager& mgr);

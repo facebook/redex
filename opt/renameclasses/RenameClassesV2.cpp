@@ -674,20 +674,55 @@ std::unordered_set<DexClass*> RenameClassesPassV2::get_renamable_classes(
   return renamable_classes;
 }
 
-void RenameClassesPassV2::rename_classes(
-    Scope& scope,
+void RenameClassesPassV2::evolve_name_mapping(
     size_t digits,
+    const DexClasses& dex,
+    const std::unordered_set<DexClass*>& unrenamable_classes,
+    rewriter::TypeStringMap* name_mapping,
+    uint32_t* nextGlobalClassIndex) {
+  for (size_t i = 0; i < dex.size(); i++) {
+    auto* clazz = dex.at(i);
+    if (unrenamable_classes.count(clazz)) {
+      continue;
+    }
+    auto dtype = clazz->get_type();
+    auto oldname = dtype->get_name();
+
+    uint32_t globalClassIndex = *nextGlobalClassIndex + i;
+    std::array<char, Locator::encoded_global_class_index_max> array;
+    char* descriptor = array.data();
+    always_assert(globalClassIndex != Locator::invalid_global_class_index);
+    Locator::encodeGlobalClassIndex(globalClassIndex, digits, descriptor);
+    always_assert_log(facebook::Locator::decodeGlobalClassIndex(descriptor) ==
+                          globalClassIndex,
+                      "global class index didn't roundtrip; %s generated from "
+                      "%u parsed to %u",
+                      descriptor, globalClassIndex,
+                      facebook::Locator::decodeGlobalClassIndex(descriptor));
+
+    std::string prefixed_descriptor = prepend_package_prefix(descriptor);
+
+    TRACE(RENAME, 2, "'%s' ->  %s (%u)'", oldname->c_str(),
+          prefixed_descriptor.c_str(), globalClassIndex);
+
+    auto dstring = DexString::make_string(prefixed_descriptor);
+    name_mapping->add_type_name(oldname, dstring);
+  }
+  *nextGlobalClassIndex += dex.size();
+}
+
+std::unordered_set<DexClass*> RenameClassesPassV2::get_unrenamable_classes(
+    Scope& scope,
     const std::unordered_set<DexClass*>& renamable_classes,
     PassManager& mgr) {
-  rewriter::TypeStringMap name_mapping;
-  uint32_t sequence = 0;
-  for (auto clazz : scope) {
+  std::unordered_set<DexClass*> unrenamable_classes;
+  for (auto* clazz : scope) {
     auto dtype = clazz->get_type();
     auto oldname = dtype->get_name();
 
     if (clazz->rstate.is_force_rename()) {
-      mgr.incr_metric(METRIC_FORCE_RENAMED_CLASSES, 1);
       TRACE(RENAME, 2, "Forced renamed: '%s'", oldname->c_str());
+      mgr.incr_metric(METRIC_FORCE_RENAMED_CLASSES, 1);
     } else if (!clazz->rstate.is_renamable_initialized_and_renamable() ||
                clazz->rstate.is_generated()) {
       // Either cls is not renamble, or it is a Redex newly generated class.
@@ -704,40 +739,45 @@ void RenameClassesPassV2::rename_classes(
           TRACE(RENAME, 2, "'%s' NOT RENAMED due to %s'", oldname->c_str(),
                 metric.c_str());
         }
-        sequence++;
         always_assert(!renamable_classes.count(clazz));
+        unrenamable_classes.insert(clazz);
         continue;
       }
     }
 
     always_assert(renamable_classes.count(clazz));
-    mgr.incr_metric(METRIC_RENAMED_CLASSES, 1);
+  }
+  return unrenamable_classes;
+}
 
-    std::array<char, Locator::encoded_global_class_index_max> array;
-    char* descriptor = array.data();
-    always_assert(sequence != Locator::invalid_global_class_index);
-    Locator::encodeGlobalClassIndex(sequence, digits, descriptor);
-    always_assert_log(facebook::Locator::decodeGlobalClassIndex(descriptor) ==
-                          sequence,
-                      "global class index didn't roundtrip; %s generated from "
-                      "%u parsed to %u",
-                      descriptor, sequence,
-                      facebook::Locator::decodeGlobalClassIndex(descriptor));
+rewriter::TypeStringMap RenameClassesPassV2::get_name_mapping(
+    const DexStoresVector& stores,
+    size_t digits,
+    const std::unordered_set<DexClass*>& unrenamable_classes) {
+  rewriter::TypeStringMap name_mapping;
+  uint32_t nextGlobalClassIndex = 0;
+  for (auto& store : stores) {
+    for (auto& dex : store.get_dexen()) {
+      evolve_name_mapping(digits, dex, unrenamable_classes, &name_mapping,
+                          &nextGlobalClassIndex);
+    }
+  }
+  return name_mapping;
+}
 
-    sequence++;
-
-    std::string prefixed_descriptor = prepend_package_prefix(descriptor);
-
-    TRACE(RENAME, 2, "'%s' ->  %s (%u)'", oldname->c_str(),
-          prefixed_descriptor.c_str(), sequence);
-
-    auto dstring = DexString::make_string(prefixed_descriptor);
-
-    always_assert_log(!DexType::get_type(dstring),
-                      "Type name collision detected. %s already exists.",
-                      prefixed_descriptor.c_str());
-
-    name_mapping.add_type_name(clazz->get_name(), dstring);
+void RenameClassesPassV2::rename_classes(
+    Scope& scope,
+    const rewriter::TypeStringMap& name_mapping,
+    PassManager& mgr) {
+  const auto& class_map = name_mapping.get_class_map();
+  for (auto* clazz : scope) {
+    auto* dtype = clazz->get_type();
+    const auto* oldname = dtype->get_name();
+    auto it = class_map.find(oldname);
+    if (it == class_map.end()) {
+      continue;
+    }
+    const auto* dstring = it->second;
     dtype->set_name(dstring);
     m_base_strings_size += oldname->size();
     m_ren_strings_size += dstring->size();
@@ -759,7 +799,6 @@ void RenameClassesPassV2::rename_classes(
       arraytype->set_name(dstring);
     }
   }
-
   /* Now rewrite all const-string strings for force renamed classes. */
   rewriter::TypeStringMap force_rename_map;
   for (const auto& pair : name_mapping.get_class_map()) {
@@ -855,7 +894,21 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
         "Total classes in scope for renaming: %zu chosen number of digits: %zu",
         scope.size(), digits);
 
-  rename_classes(scope, digits, get_renamable_classes(scope, conf, mgr), mgr);
+  auto renamable_classes = get_renamable_classes(scope, conf, mgr);
+  auto unrenamable_classes =
+      get_unrenamable_classes(scope, renamable_classes, mgr);
+
+  auto name_mapping = get_name_mapping(stores, digits, unrenamable_classes);
+
+  for (auto [_, dstring] : name_mapping.get_class_map()) {
+    always_assert_log(!DexType::get_type(dstring),
+                      "Type name collision detected. %s already exists.",
+                      dstring->c_str());
+  }
+
+  mgr.incr_metric(METRIC_RENAMED_CLASSES, name_mapping.get_class_map().size());
+
+  rename_classes(scope, name_mapping, mgr);
 
   mgr.incr_metric(METRIC_DIGITS, digits);
 
