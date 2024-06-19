@@ -789,6 +789,13 @@ Given an APK, produce a better APK!
         "--verify-dexes", type=str, help="Verify dex files with the supplied command"
     )
 
+    parser.add_argument(
+        "--deep-data-enabled-interactions",
+        default=None,
+        nargs="+",
+        help="Override deep data enabled interactions",
+    )
+
     # Manual tool paths.
 
     # Must be subclassed.
@@ -1193,7 +1200,12 @@ def prepare_redex(args: argparse.Namespace) -> State:
                 sys.exit()
 
         # Unpack profiles, if they exist.
-        dd_enabled_interactions = config_dict.get("deep_data_enabled_interactions", [])
+        dd_enabled_interactions = (
+            args.deep_data_enabled_interactions
+            if args.deep_data_enabled_interactions
+            else config_dict.get("deep_data_enabled_interactions", [])
+        )
+
         _handle_profiles(args, dd_enabled_interactions)
         _handle_secondary_method_profiles(args)
 
