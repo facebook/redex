@@ -226,6 +226,16 @@ class ClinitFieldAnalyzer final
 };
 
 /*
+ * Models the effects of the sget instructions on static final fields
+ */
+class StaticFinalFieldAnalyzer final
+    : public InstructionAnalyzerBase<StaticFinalFieldAnalyzer,
+                                     ConstantEnvironment> {
+ public:
+  static bool analyze_sget(const IRInstruction* insn, ConstantEnvironment* env);
+};
+
+/*
  * Handle instance fields in <init> methods.
  */
 class InitFieldAnalyzer final

@@ -26,6 +26,7 @@ std::enable_if_t<std::is_integral<T>::value, int> fpclassify(T x) {
 }
 #endif
 
+#include "DexAccess.h"
 #include "DexInstruction.h"
 #include "DexUtil.h"
 #include "Resolver.h"
@@ -683,6 +684,26 @@ bool ClinitFieldAnalyzer::analyze_invoke(const DexType* class_under_init,
   if (insn->opcode() == OPCODE_INVOKE_STATIC &&
       class_under_init == insn->get_method()->get_class()) {
     env->clear_field_environment();
+  }
+  return false;
+}
+
+bool StaticFinalFieldAnalyzer::analyze_sget(const IRInstruction* insn,
+                                            ConstantEnvironment* env) {
+  if (insn->opcode() != OPCODE_SGET) {
+    return false;
+  }
+
+  auto field = insn->get_field();
+  auto* dex_field = static_cast<const DexField*>(field);
+  // Only want to set the environment of the variable has a static value
+  // and is certainly final and will not be modified
+  if (field && field->is_def() && dex_field->get_static_value() &&
+      is_final(dex_field)) {
+    const auto constant =
+        SignedConstantDomain(dex_field->get_static_value()->value());
+    env->set(RESULT_REGISTER, constant);
+    return true;
   }
   return false;
 }
