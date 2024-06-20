@@ -18,7 +18,14 @@ struct Config {
 
 class ConstantPropagation final {
  public:
-  explicit ConstantPropagation(const Config& config) : m_config(config) {}
+  explicit ConstantPropagation(
+      const Config& config,
+      int min_sdk = 0,
+      constant_propagation::ImmutableAttributeAnalyzerState*
+          immut_analyzer_state = nullptr)
+      : m_config(config),
+        m_min_sdk(min_sdk),
+        m_immut_analyzer_state(immut_analyzer_state) {}
 
   Transform::Stats run(DexMethod* method, XStoreRefs* xstores);
   Transform::Stats run(DexMethod* method,
@@ -28,5 +35,7 @@ class ConstantPropagation final {
 
  private:
   const Config& m_config;
+  int m_min_sdk;
+  constant_propagation::ImmutableAttributeAnalyzerState* m_immut_analyzer_state;
 };
 } // namespace constant_propagation

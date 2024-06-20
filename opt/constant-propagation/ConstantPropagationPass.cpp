@@ -9,6 +9,7 @@
 
 #include "ConstantPropagation.h"
 #include "PassManager.h"
+#include "Purity.h"
 #include "ScopedMetrics.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -21,7 +22,12 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   XStoreRefs xstores(stores);
 
-  ConstantPropagation impl(m_config);
+  const auto& pure_methods = ::get_pure_methods();
+  auto config = m_config;
+  config.transform.pure_methods = &pure_methods;
+  auto min_sdk = mgr.get_redex_options().min_sdk;
+  constant_propagation::ImmutableAttributeAnalyzerState immut_analyzer_state;
+  ConstantPropagation impl(config, min_sdk, &immut_analyzer_state);
   auto stats = impl.run(scope, &xstores);
 
   ScopedMetrics sm(mgr);
