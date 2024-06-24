@@ -37,6 +37,8 @@ using facebook::Locator;
 
 #define MAX_DESCRIPTOR_LENGTH (1024)
 
+static const char* METRIC_AVOIDED_COLLISIONS = "num_avoided_collisions";
+static const char* METRIC_SKIPPED_INDICES = "num_skipped_indices";
 static const char* METRIC_DIGITS = "num_digits";
 static const char* METRIC_CLASSES_IN_SCOPE = "num_classes_in_scope";
 static const char* METRIC_RENAMED_CLASSES = "**num_renamed**";
@@ -702,7 +704,7 @@ void RenameClassesPassV2::evolve_name_mapping(
 
     std::string prefixed_descriptor = prepend_package_prefix(descriptor);
 
-    TRACE(RENAME, 2, "'%s' ->  %s (%u)'", oldname->c_str(),
+    TRACE(RENAME, 3, "'%s' ->  %s (%u)'", oldname->c_str(),
           prefixed_descriptor.c_str(), globalClassIndex);
 
     auto dstring = DexString::make_string(prefixed_descriptor);
@@ -763,6 +765,192 @@ rewriter::TypeStringMap RenameClassesPassV2::get_name_mapping(
     }
   }
   return name_mapping;
+}
+
+ArtTypeLookupTable::ArtTypeLookupTable(
+    uint32_t size, const std::vector<uint32_t>& initial_hashes) {
+  uint32_t mask_bits = 1;
+  while ((1u << mask_bits) < size) {
+    mask_bits++;
+  }
+  m_mask = (1u << mask_bits) - 1;
+  m_buckets.resize(m_mask + 1);
+
+  std::unordered_map<uint32_t, uint32_t> entries; // Pos => NextDeltaPos
+  entries.reserve(initial_hashes.size());
+  std::vector<uint32_t> conflict_hashes;
+  for (auto hash : initial_hashes) {
+    auto insert_pos = GetPos(hash);
+    if (entries.emplace(insert_pos, 0).second) {
+      m_buckets[insert_pos] = true;
+      continue;
+    }
+    conflict_hashes.push_back(hash);
+  }
+  TRACE(RENAME, 2,
+        "Creating ArtTypeLookupTable for size: %u, mask_bits: %u, mask: %u, "
+        "initial hashes: %zu, conflict_hashes: %zu",
+        size, mask_bits, m_mask, initial_hashes.size(), conflict_hashes.size());
+  for (auto hash : conflict_hashes) {
+    auto tail_pos = GetPos(hash);
+    auto* next_delta_pos = &entries.at(tail_pos);
+    while (*next_delta_pos > 0) {
+      tail_pos = (tail_pos + *next_delta_pos) & m_mask;
+      next_delta_pos = &entries.at(tail_pos);
+    }
+    auto insert_pos = tail_pos;
+    do {
+      insert_pos = (insert_pos + 1) & m_mask;
+    } while (!entries.emplace(insert_pos, 0).second);
+    m_buckets[insert_pos] = true;
+    *next_delta_pos = (insert_pos - tail_pos) & m_mask;
+  }
+}
+
+bool ArtTypeLookupTable::has_bucket(uint32_t hash) const {
+  return m_buckets[GetPos(hash)];
+}
+
+void ArtTypeLookupTable::insert(uint32_t hash) {
+  always_assert(!m_buckets[GetPos(hash)]);
+  m_buckets[GetPos(hash)] = true;
+}
+
+bool RenameClassesPassV2::evolve_name_mapping_avoiding_collisions(
+    size_t digits,
+    const DexClasses& dex,
+    const std::unordered_set<DexClass*>& unrenamable_classes,
+    uint32_t index_end,
+    rewriter::TypeStringMap* name_mapping,
+    uint32_t* next_index,
+    std::set<uint32_t>* skipped_indices,
+    size_t* avoided_collisions) {
+  // We add a new type look-up table and pre-initialize it with all unrenamable
+  // class name hashes. We'll later only use renamed class names whose immediate
+  // buckets are not yet used, as to not interfere with the collision bucket
+  // assignment of the unrenamable classes class names.
+  std::vector<uint32_t> initial_hashes;
+  for (auto* clazz : dex) {
+    if (unrenamable_classes.count(clazz)) {
+      int32_t java_hash = clazz->get_name()->java_hashcode();
+      initial_hashes.push_back(*(uint32_t*)&java_hash);
+    }
+  }
+  ArtTypeLookupTable current_table(dex.size(), initial_hashes);
+
+  std::set<uint32_t> collision_indices;
+  auto skipped_indices_it = skipped_indices->begin();
+  for (auto* clazz : dex) {
+    if (unrenamable_classes.count(clazz)) {
+      continue;
+    }
+
+    auto dtype = clazz->get_type();
+    auto oldname = dtype->get_name();
+
+    std::array<char, Locator::encoded_global_class_index_max> array;
+    char* descriptor = array.data();
+    std::string prefixed_descriptor;
+    while (1) {
+      uint32_t index;
+      if (skipped_indices_it != skipped_indices->end()) {
+        index = *skipped_indices_it;
+        skipped_indices_it = skipped_indices->erase(skipped_indices_it);
+      } else {
+        index = (*next_index)++;
+        if (index == index_end) {
+          return false;
+        }
+      }
+
+      always_assert(index != Locator::invalid_global_class_index);
+      Locator::encodeGlobalClassIndex(index, digits, descriptor);
+      always_assert_log(
+          facebook::Locator::decodeGlobalClassIndex(descriptor) == index,
+          "global class index didn't roundtrip; %s generated from "
+          "%u parsed to %u",
+          descriptor, index,
+          facebook::Locator::decodeGlobalClassIndex(descriptor));
+
+      prefixed_descriptor = prepend_package_prefix(descriptor);
+      int32_t java_hash =
+          java_hashcode_of_utf8_string(prefixed_descriptor.c_str());
+      uint32_t hash = *(uint32_t*)&java_hash;
+      if (current_table.has_bucket(hash)) {
+        TRACE(RENAME, 2, "Avoided collision for '%s'",
+              prefixed_descriptor.c_str());
+        collision_indices.insert(index);
+        continue;
+      }
+      current_table.insert(hash);
+      break;
+    }
+
+    TRACE(RENAME, 3, "'%s' ->  %s (%u)'", oldname->c_str(),
+          prefixed_descriptor.c_str(), *next_index);
+
+    auto dstring = DexString::make_string(prefixed_descriptor);
+    name_mapping->add_type_name(oldname, dstring);
+  }
+
+  TRACE(RENAME, 2,
+        "Inserted %zu renamed classes while avoiding %zu collisions.",
+        dex.size() - initial_hashes.size(), collision_indices.size());
+  (*avoided_collisions) += collision_indices.size();
+  skipped_indices->insert(collision_indices.begin(), collision_indices.end());
+  return true;
+}
+
+rewriter::TypeStringMap
+RenameClassesPassV2::get_name_mapping_avoiding_collisions(
+    const DexStoresVector& stores,
+    const std::unordered_set<DexClass*>& unrenamable_classes,
+    size_t* digits,
+    size_t* avoided_collisions,
+    size_t* skipped_indices_count) {
+  while (1) {
+    always_assert_log(
+        (*digits) <= Locator::global_class_index_digits_max,
+        "exceeded maximum number of digits for global class index: %zu",
+        *digits);
+
+    uint32_t index_end = 1;
+    for (size_t i = 0; i < *digits; i++) {
+      index_end *= Locator::global_class_index_digits_base;
+    }
+    rewriter::TypeStringMap name_mapping;
+    *avoided_collisions = 0;
+    auto try_evolve_all_dexes = [&]() {
+      uint32_t next_index = 0;
+      std::set<uint32_t> skipped_indices;
+      for (auto& store : stores) {
+        for (auto& dex : store.get_dexen()) {
+          if (!store.is_root_store()) {
+            // VoltronModuleMetadataHelper has certain assumptions about the
+            // consecutiveness of the global class indices for non-root stores,
+            // so we are not doing anything fancy here.
+            if (next_index + dex.size() > index_end) {
+              return false;
+            }
+            evolve_name_mapping(*digits, dex, unrenamable_classes,
+                                &name_mapping, &next_index);
+          } else if (!evolve_name_mapping_avoiding_collisions(
+                         *digits, dex, unrenamable_classes, index_end,
+                         &name_mapping, &next_index, &skipped_indices,
+                         avoided_collisions)) {
+            return false;
+          }
+        }
+      }
+      *skipped_indices_count = skipped_indices.size();
+      return true;
+    };
+    if (try_evolve_all_dexes()) {
+      return name_mapping;
+    }
+    ++(*digits);
+    TRACE(RENAME, 1, "Increasing digits to %zu", *digits);
+  }
 }
 
 void RenameClassesPassV2::rename_classes(
@@ -898,7 +1086,30 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
   auto unrenamable_classes =
       get_unrenamable_classes(scope, renamable_classes, mgr);
 
-  auto name_mapping = get_name_mapping(stores, digits, unrenamable_classes);
+  auto avoid_type_lookup_table_collisions =
+      m_avoid_type_lookup_table_collisions;
+  if (conf.get_json_config().get("emit_locator_strings", false)) {
+    TRACE(RENAME, 1,
+          "Ignoring avoid_type_lookup_table_collisions configuration as it is "
+          "incompatible with emitting locator strings");
+    avoid_type_lookup_table_collisions = false;
+  }
+
+  size_t avoided_collisions = 0;
+  size_t skipped_indices = 0;
+  auto name_mapping =
+      avoid_type_lookup_table_collisions
+          ? get_name_mapping_avoiding_collisions(stores, unrenamable_classes,
+                                                 &digits, &avoided_collisions,
+                                                 &skipped_indices)
+          : get_name_mapping(stores, digits, unrenamable_classes);
+
+  if (avoid_type_lookup_table_collisions) {
+    TRACE(RENAME, 1, "Avoided collisions: %zu, skipped indices: %zu",
+          avoided_collisions, skipped_indices);
+    mgr.incr_metric(METRIC_AVOIDED_COLLISIONS, avoided_collisions);
+    mgr.incr_metric(METRIC_SKIPPED_INDICES, skipped_indices);
+  }
 
   for (auto [_, dstring] : name_mapping.get_class_map()) {
     always_assert_log(!DexType::get_type(dstring),
