@@ -18,8 +18,7 @@
 namespace rewriter {
 
 class TypeStringMap {
-  std::map<const DexString*, const DexString*, dexstrings_comparator>
-      m_type_name_map;
+  std::unordered_map<const DexString*, const DexString*> m_type_name_map;
 
  public:
   TypeStringMap() {}
@@ -34,8 +33,8 @@ class TypeStringMap {
    * does not exist in the mapping. Array types are supported properly.
    */
   const DexString* get_new_type_name(const DexString* old_name) const;
-  const std::map<const DexString*, const DexString*, dexstrings_comparator>&
-  get_class_map() const {
+  const std::unordered_map<const DexString*, const DexString*>& get_class_map()
+      const {
     return m_type_name_map;
   }
 };
