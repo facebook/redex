@@ -84,15 +84,15 @@ class RenameClassesPassV2 : public Pass {
                          PassManager& mgr);
 
  private:
-  std::unordered_map<const DexType*, std::string>
-  build_force_rename_hierarchies(PassManager&, Scope&, const ClassHierarchy&);
+  std::unordered_set<const DexType*> build_force_rename_hierarchies(
+      PassManager&, Scope&, const ClassHierarchy&);
 
   std::unordered_set<std::string> build_dont_rename_class_name_literals(Scope&);
-  std::unordered_set<std::string> build_dont_rename_for_types_with_reflection(
-      Scope&, const ProguardMap&);
-  std::unordered_set<std::string> build_dont_rename_canaries(Scope&);
-  std::unordered_map<const DexType*, std::string> build_dont_rename_hierarchies(
-      PassManager&, Scope&, const ClassHierarchy&);
+  std::unordered_set<const DexString*>
+  build_dont_rename_for_types_with_reflection(Scope&, const ProguardMap&);
+  std::unordered_set<const DexString*> build_dont_rename_canaries(Scope&);
+  std::unordered_map<const DexType*, const DexString*>
+  build_dont_rename_hierarchies(PassManager&, Scope&, const ClassHierarchy&);
   std::unordered_set<const DexType*> build_dont_rename_native_bindings(
       Scope& scope);
   std::unordered_set<const DexType*> build_dont_rename_serde_relationships(
