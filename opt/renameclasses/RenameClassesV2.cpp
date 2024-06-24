@@ -37,6 +37,7 @@ using facebook::Locator;
 
 #define MAX_DESCRIPTOR_LENGTH (1024)
 
+static const char* METRIC_DIGITS = "num_digits";
 static const char* METRIC_CLASSES_IN_SCOPE = "num_classes_in_scope";
 static const char* METRIC_RENAMED_CLASSES = "**num_renamed**";
 static const char* METRIC_FORCE_RENAMED_CLASSES = "num_force_renamed";
@@ -663,6 +664,7 @@ std::unordered_set<DexClass*> RenameClassesPassV2::get_renamable_classes(
 
 void RenameClassesPassV2::rename_classes(
     Scope& scope,
+    size_t digits,
     const std::unordered_set<DexClass*>& renamable_classes,
     PassManager& mgr) {
   rewriter::TypeStringMap name_mapping;
@@ -701,7 +703,7 @@ void RenameClassesPassV2::rename_classes(
 
     char descriptor[Locator::encoded_global_class_index_max];
     always_assert(sequence != Locator::invalid_global_class_index);
-    Locator::encodeGlobalClassIndex(sequence, m_digits, descriptor);
+    Locator::encodeGlobalClassIndex(sequence, digits, descriptor);
     always_assert_log(facebook::Locator::decodeGlobalClassIndex(descriptor) ==
                           sequence,
                       "global class index didn't roundtrip; %s generated from "
@@ -821,13 +823,6 @@ std::unordered_set<DexClass*> RenameClassesPassV2::get_renamable_classes(
   int total_classes = scope.size();
   mgr.incr_metric(METRIC_CLASSES_IN_SCOPE, total_classes);
 
-  // encode the whole sequence as base 62: [0 - 9], [A - Z], [a - z]
-  m_digits = std::ceil(std::log(total_classes) /
-                       std::log(Locator::global_class_index_digits_base));
-  TRACE(RENAME, 1,
-        "Total classes in scope for renaming: %d chosen number of digits: %d",
-        total_classes, m_digits);
-
   return get_renamable_classes(scope);
 }
 
@@ -835,7 +830,18 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
                                    ConfigFiles& conf,
                                    PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  rename_classes(scope, get_renamable_classes(scope, conf, mgr), mgr);
+
+  // encode the whole sequence as base 62: [0 - 9], [A - Z], [a - z]
+  auto digits =
+      (size_t)std::ceil(std::log(scope.size()) /
+                        std::log(Locator::global_class_index_digits_base));
+  TRACE(RENAME, 1,
+        "Total classes in scope for renaming: %zu chosen number of digits: %zu",
+        scope.size(), digits);
+
+  rename_classes(scope, digits, get_renamable_classes(scope, conf, mgr), mgr);
+
+  mgr.incr_metric(METRIC_DIGITS, digits);
 
   TRACE(RENAME, 1, "String savings, at least %d-%d = %d bytes ",
         m_base_strings_size, m_ren_strings_size,

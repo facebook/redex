@@ -108,6 +108,7 @@ class RenameClassesPassV2 : public Pass {
   std::unordered_set<DexClass*> get_renamable_classes(Scope& scope);
 
   void rename_classes(Scope& scope,
+                      size_t digits,
                       const std::unordered_set<DexClass*>& renamable_classes,
                       PassManager& mgr);
   void rename_classes_in_layouts(const rewriter::TypeStringMap& name_mapping,
@@ -117,7 +118,6 @@ class RenameClassesPassV2 : public Pass {
 
   int m_base_strings_size = 0;
   int m_ren_strings_size = 0;
-  int m_digits = 0;
 
   // Config and rules
   bool m_rename_annotations;
