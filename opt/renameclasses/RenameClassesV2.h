@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <boost/dynamic_bitset.hpp>
+
 #include "Pass.h"
 
 #include "ClassHierarchy.h"
@@ -37,6 +39,25 @@ namespace rewriter {
 class TypeStringMap;
 } // namespace rewriter
 
+// This data structure models the Android ART's data structure in
+// libdexfile/dex/type_lookup_table.cc that is precomputed and used at runtime
+// to lookup classes.
+class ArtTypeLookupTable {
+ public:
+  ArtTypeLookupTable(uint32_t size,
+                     const std::vector<uint32_t>& initial_hashes);
+
+  bool has_bucket(uint32_t hash) const;
+
+  void insert(uint32_t hash);
+
+ private:
+  uint32_t GetPos(uint32_t hash) const { return hash & m_mask; }
+
+  uint32_t m_mask;
+  boost::dynamic_bitset<> m_buckets;
+};
+
 class RenameClassesPassV2 : public Pass {
  public:
   RenameClassesPassV2() : Pass("RenameClassesPassV2") {}
@@ -64,6 +85,8 @@ class RenameClassesPassV2 : public Pass {
     bind("dont_rename_types_with_reflection", {},
          m_dont_rename_types_with_reflection);
     bind("package_prefix", "", m_package_prefix);
+    bind("avoid_type_lookup_table_collisions", false,
+         m_avoid_type_lookup_table_collisions);
     trait(Traits::Pass::unique, true);
   }
 
@@ -123,6 +146,22 @@ class RenameClassesPassV2 : public Pass {
       rewriter::TypeStringMap* name_mapping,
       uint32_t* nextGlobalClassIndex);
 
+  rewriter::TypeStringMap get_name_mapping_avoiding_collisions(
+      const DexStoresVector& stores,
+      const std::unordered_set<DexClass*>& unrenamable_classes,
+      size_t* digits,
+      size_t* avoided_collisions,
+      size_t* skipped_indices_count);
+  bool evolve_name_mapping_avoiding_collisions(
+      size_t digits,
+      const DexClasses& dex,
+      const std::unordered_set<DexClass*>& unrenamable_classes,
+      uint32_t index_end,
+      rewriter::TypeStringMap* name_mapping,
+      uint32_t* next_index,
+      std::set<uint32_t>* skipped_indices,
+      size_t* avoided_collisions);
+
   void rename_classes(Scope& scope,
                       const rewriter::TypeStringMap& name_mapping,
                       PassManager& mgr);
@@ -149,4 +188,6 @@ class RenameClassesPassV2 : public Pass {
   std::unordered_map<const DexClass*, DontRenameReason> m_dont_rename_reasons;
 
   std::string m_apk_dir;
+
+  bool m_avoid_type_lookup_table_collisions = false;
 };
