@@ -815,6 +815,7 @@ TEST(ResTableParse, TestUnknownPackageChunks) {
 TEST(Configs, TestConfigEquivalence) {
   EXPECT_TRUE(arsc::are_configs_equivalent(&default_config, &default_config));
   EXPECT_FALSE(arsc::are_configs_equivalent(&default_config, &land_config));
+  EXPECT_TRUE(arsc::is_default_config(&default_config));
   // Configs of different sizes (simulate some of our snapshots of older files)
   {
     struct SmallConfig {

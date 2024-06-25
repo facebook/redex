@@ -200,6 +200,12 @@ bool are_configs_equivalent(android::ResTable_config* a,
   return false;
 }
 
+bool is_default_config(android::ResTable_config* c) {
+  android::ResTable_config default_config{};
+  default_config.size = sizeof(android::ResTable_config);
+  return are_configs_equivalent(&default_config, c);
+}
+
 ssize_t find_attribute_ordinal(
     android::ResXMLTree_node* node,
     android::ResXMLTree_attrExt* extension,
