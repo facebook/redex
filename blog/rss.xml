@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+    <channel>
+        <title>Redex Blog</title>
+        <link>https://fbredex.com/blog</link>
+        <description>Redex Blog</description>
+        <lastBuildDate>Wed, 26 Oct 2022 00:00:00 GMT</lastBuildDate>
+        <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
+        <generator>https://github.com/jpmonette/feed</generator>
+        <language>en</language>
+        <item>
+            <title><![CDATA[Office Hours]]></title>
+            <link>https://fbredex.com/blog/office-hours</link>
+            <guid>office-hours</guid>
+            <pubDate>Wed, 26 Oct 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[!!! Redex Public Office Hour Coming on Wed. 10/26/2022 @2PM PST !!!]]></description>
+            <content:encoded><![CDATA[<p>!!! Redex Public Office Hour Coming on Wed. 10/26/2022 @2PM PST !!!</p><p><a href="https://fb.zoom.us/j/92134545091?pwd=NDRZSEhQSXBpeEVxTUF4Y3NMYjU3dz09" target="_blank" rel="noopener noreferrer">Zoom Meeting id: 921 3454 5091; passcode: 177943</a></p><p>Please dial in to chat! We would love to learn how do you use Redex, what challenges are
+you facing, and how can we better help. We would like keep the 1st office hour to be more
+high level. If you have very specific questions, like how to build Redex, Github issue is still
+the best way to resolve it.</p>]]></content:encoded>
+            <category>redex</category>
+        </item>
+    </channel>
+</rss>

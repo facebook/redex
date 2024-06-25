@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://fbredex.com/blog</id>
+    <title>Redex Blog</title>
+    <updated>2022-10-26T00:00:00.000Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://fbredex.com/blog"/>
+    <subtitle>Redex Blog</subtitle>
+    <icon>https://fbredex.com/img/favicon.png</icon>
+    <entry>
+        <title type="html"><![CDATA[Office Hours]]></title>
+        <id>office-hours</id>
+        <link href="https://fbredex.com/blog/office-hours"/>
+        <updated>2022-10-26T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[!!! Redex Public Office Hour Coming on Wed. 10/26/2022 @2PM PST !!!]]></summary>
+        <content type="html"><![CDATA[<p>!!! Redex Public Office Hour Coming on Wed. 10/26/2022 @2PM PST !!!</p><p><a href="https://fb.zoom.us/j/92134545091?pwd=NDRZSEhQSXBpeEVxTUF4Y3NMYjU3dz09" target="_blank" rel="noopener noreferrer">Zoom Meeting id: 921 3454 5091; passcode: 177943</a></p><p>Please dial in to chat! We would love to learn how do you use Redex, what challenges are
+you facing, and how can we better help. We would like keep the 1st office hour to be more
+high level. If you have very specific questions, like how to build Redex, Github issue is still
+the best way to resolve it.</p>]]></content>
+        <author>
+            <name>Nikolai Tillmann</name>
+            <uri>https://github.com//NTillmann</uri>
+        </author>
+        <category label="redex" term="redex"/>
+    </entry>
+</feed>
