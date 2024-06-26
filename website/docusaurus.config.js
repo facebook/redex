@@ -69,7 +69,7 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula');
         items: [
           {
             type: 'doc',
-            docId: 'installation',
+            docId: 'getting_started/installation',
             position: 'left',
             label: 'Docs',
           },
@@ -89,19 +89,19 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula');
             items: [
               {
                 label: 'Getting Started',
-                to: '/docs/installation',
+                to: '/docs/getting_started/installation',
               },
               {
                 label: 'Configuring',
-                to: '/docs/configuring',
+                to: '/docs/getting_started/configuring',
               },
               {
                 label: 'Using',
-                to: '/docs/usage',
+                to: '/docs/getting_started/usage',
               },
               {
                 label: 'FAQ',
-                to: '/docs/faq',
+                to: '/docs/help/faq',
               },
             ],
           },

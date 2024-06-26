@@ -1,6 +1,7 @@
 ---
 id: usage
 title: Usage
+sidebar_position: 4
 ---
 
 ## Basic Usage

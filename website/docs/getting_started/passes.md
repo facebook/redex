@@ -1,6 +1,7 @@
 ---
 id: passes
 title: Passes
+sidebar_position: 3
 ---
 
 ReDex has a large set of optimization passes that is constantly evolving.

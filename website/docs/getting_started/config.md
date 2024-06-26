@@ -1,6 +1,7 @@
 ---
 id: configuring
 title: Configuring ReDex
+sidebar_position: 2
 ---
 
 ReDex can be configured to run different optimizations or to alter the behavior
