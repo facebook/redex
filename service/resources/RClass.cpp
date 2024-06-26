@@ -18,13 +18,17 @@
 #include "DexUtil.h"
 #include "EditableCfgAdapter.h"
 #include "GlobalConfig.h"
+#include "InitClassesWithSideEffects.h"
 #include "InitDeps.h"
 #include "LiveRange.h"
-#include "LocalDce.h"
+#include "LocalPointersAnalysis.h"
+#include "MethodOverrideGraph.h"
+#include "ObjectSensitiveDce.h"
 #include "RedexResources.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"
 #include "Show.h"
+#include "SideEffectSummary.h"
 #include "Timer.h"
 #include "Trace.h"
 
@@ -426,6 +430,28 @@ bool remap_array(const std::vector<uint32_t>& original_values,
   }
   return changed;
 }
+
+void perform_dce(Scope& scope) {
+  auto method_override_graph = method_override_graph::build_graph(scope);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, true, method_override_graph.get());
+  // Assume no pure methods or summaries for external/framework code for
+  // simplicity. OSDCE should make conservative assumptions in the face of this.
+  std::unordered_set<DexMethodRef*> pure_methods;
+  local_pointers::SummaryMap escape_summaries;
+  side_effects::SummaryMap effect_summaries;
+  ObjectSensitiveDce impl(scope,
+                          &init_classes_with_side_effects,
+                          pure_methods,
+                          *method_override_graph,
+                          0, /* should not be encountering virtual calls here */
+                          &escape_summaries,
+                          &effect_summaries);
+  impl.dce();
+  auto& stats = impl.get_stats();
+  TRACE(OPTRES, 2, "Pruned %zu instruction(s); R class scope size = %zu",
+        stats.removed_instructions, scope.size());
+}
 } // namespace
 
 size_t RClassWriter::remap_resource_class_clinit(
@@ -515,13 +541,7 @@ size_t RClassWriter::remap_resource_class_clinit(
   }
   auto i2 = cfg::InstructionIterable(cfg);
   mutation.insert_before(i2.begin(), consts);
-
   mutation.flush();
-  // OSDCE has the capability to mop up array creation and fills that go nowhere
-  // but as a simple cleanup effort (for now) run LocalDce to perform some
-  // cleanup since the former is not easily runnable on per-method basis right
-  // now.
-  LocalDce(/* init_classes_with_side_effects */ nullptr, {}).dce(ir_code);
   return pending_new_values.size();
 }
 
@@ -545,12 +565,17 @@ void RClassWriter::remap_resource_class_arrays(
   });
 
   // Actually remap the values in arrays.
+  Scope cleanup_scope;
   for (auto& [cls, field_values] : class_states) {
+    cleanup_scope.emplace_back(cls);
     if (!field_values.empty()) {
       auto changes =
           remap_resource_class_clinit(cls, field_values, old_to_remapped_ids);
       TRACE(OPTRES, 2, "Updated %zu field(s) in %s clinit", changes, SHOW(cls));
     }
   }
+  // Modifying array values will leave behind old array filling instructions.
+  // Perform DCE to clean this up.
+  perform_dce(cleanup_scope);
 }
 } // namespace resources
