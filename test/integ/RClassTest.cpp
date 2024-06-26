@@ -116,6 +116,7 @@ void prepare_methods_for_test(DexClasses& classes) {
 const char* base_r_class_name = "Lcom/redextest/R;";
 const char* styleable_r_class_name = "Lcom/redextest/R$styleable;";
 const char* another_styleable_r_class_name = "Lcom/redextest/R$styleable2;";
+const char* styleable_sgets_r_class_name = "Lcom/redextest/R$styleable_sgets;";
 
 class RClassTest : public RedexIntegrationTest {};
 
@@ -368,4 +369,36 @@ TEST_F(RClassTest, remapResourceClassArrays) {
   verify_expected_sizes(another_code->cfg(),
                         {{"Lcom/redextest/R$styleable2;.five:[I", 10}},
                         callback);
+}
+
+TEST_F(RClassTest, noDoubleRemappingArrays) {
+  prepare_methods_for_test(*classes);
+  // Outer class that is assumed to have been customized to store extra junk.
+  ResourceConfig global_resources_config;
+  global_resources_config.customized_r_classes.emplace(base_r_class_name);
+
+  // This setup ensures that the value does not get remapped twice.
+  constexpr uint32_t TARGET_ID = 0x7f090000;
+  std::map<uint32_t, uint32_t> old_to_remapped_ids{{0x7f040000, TARGET_ID},
+                                                   {TARGET_ID, 0x7f099999}};
+  resources::RClassWriter r_class_writer(global_resources_config);
+  r_class_writer.remap_resource_class_arrays(stores, old_to_remapped_ids);
+
+  DexClass* sget_r_class = get_r_class(*classes, styleable_sgets_r_class_name);
+  auto clinit = sget_r_class->get_clinit();
+  auto code = clinit->get_code();
+  dump_code_verbose(code);
+  bool found_array{false};
+  for (const auto& mie : cfg::InstructionIterable(code->cfg())) {
+    auto insn = mie.insn;
+    if (insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
+      found_array = true;
+      auto op_data = insn->get_data();
+      auto payload = get_fill_array_data_payload<uint32_t>(op_data);
+      EXPECT_EQ(payload.size(), 2) << "Should have two elements!";
+      EXPECT_EQ(payload[0], TARGET_ID) << "Remapping was incorrect!";
+      EXPECT_EQ(payload[1], 0) << "Second values should be zeroed out!";
+    }
+  }
+  EXPECT_TRUE(found_array);
 }

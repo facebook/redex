@@ -77,11 +77,10 @@ class RClassWriter {
       const std::map<uint32_t, uint32_t>& old_to_remapped_ids) const;
 
   // A supporting function for the below method. Exposed for testability.
-  FieldArrayValues remap_resource_class_clinit(
+  size_t remap_resource_class_clinit(
       const DexClass* cls,
-      const std::map<uint32_t, uint32_t>& old_to_remapped_ids,
-      const FieldArrayValues& known_field_values,
-      DexMethod* clinit) const;
+      const FieldArrayValues& field_values,
+      const std::map<uint32_t, uint32_t>& old_to_remapped_ids) const;
 
   // Search for array fields in known R classes and edit the array values to
   // reflect the given mapping.

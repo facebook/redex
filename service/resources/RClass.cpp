@@ -102,7 +102,7 @@ FieldArrayValues RClassReader::analyze_clinit(
     DexClass* cls, const FieldArrayValues& known_field_values) const {
   FieldArrayValues values;
   auto clinit = cls->get_clinit();
-  if (clinit == nullptr) {
+  if (clinit == nullptr || clinit->get_code() == nullptr) {
     return values;
   }
   always_assert(clinit->get_code()->editable_cfg_built());
@@ -290,37 +290,27 @@ bool remap_array(const std::vector<uint32_t>& original_values,
 }
 } // namespace
 
-FieldArrayValues RClassWriter::remap_resource_class_clinit(
+size_t RClassWriter::remap_resource_class_clinit(
     const DexClass* cls,
-    const std::map<uint32_t, uint32_t>& old_to_remapped_ids,
-    const FieldArrayValues& known_field_values,
-    DexMethod* clinit) const {
-  IRCode* ir_code = clinit->get_code();
+    const FieldArrayValues& field_values,
+    const std::map<uint32_t, uint32_t>& old_to_remapped_ids) const {
+  IRCode* ir_code = cls->get_clinit()->get_code();
   always_assert(ir_code->editable_cfg_built());
 
   // For styleable, we avoid actually deleting entries since there are offsets
   // that will point to the wrong positions in the array. Instead, zero out the
   // values.
   bool zero_out_values = is_styleable(cls);
-
-  RClassReader r_class_reader(m_global_resources_config);
-  // Fields that must be patched to new array values.
   FieldArrayValues pending_new_values;
-  // The up-to-date map that reflects all rewriting.
-  FieldArrayValues return_values;
-  for (auto&& [f, vec] :
-       r_class_reader.analyze_clinit((DexClass*)cls, known_field_values)) {
+  for (auto&& [f, vec] : field_values) {
     std::vector<uint32_t> new_values;
     if (remap_array(vec, old_to_remapped_ids, zero_out_values, &new_values)) {
       pending_new_values.emplace(f, new_values);
-      return_values.emplace(f, new_values);
-    } else {
-      return_values.emplace(f, vec);
     }
   }
 
   if (pending_new_values.empty()) {
-    return return_values;
+    return 0;
   }
   auto& cfg = ir_code->cfg();
   cfg::CFGMutation mutation(cfg);
@@ -360,13 +350,19 @@ FieldArrayValues RClassWriter::remap_resource_class_clinit(
       auto move_result_pseudo =
           new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
       move_result_pseudo->set_dest(array_reg);
-      auto fill_array_data = new IRInstruction(OPCODE_FILL_ARRAY_DATA);
-      fill_array_data->set_src(0, array_reg);
-      auto op_data = encode_fill_array_data_payload(new_values);
-      fill_array_data->set_data(std::move(op_data));
+      if (!new_values.empty()) {
+        auto fill_array_data = new IRInstruction(OPCODE_FILL_ARRAY_DATA);
+        fill_array_data->set_src(0, array_reg);
+        auto op_data = encode_fill_array_data_payload(new_values);
+        fill_array_data->set_data(std::move(op_data));
 
-      mutation.insert_before(cfg.find_insn(insn),
-                             {new_array, move_result_pseudo, fill_array_data});
+        mutation.insert_before(
+            cfg.find_insn(insn),
+            {new_array, move_result_pseudo, fill_array_data});
+      } else {
+        mutation.insert_before(cfg.find_insn(insn),
+                               {new_array, move_result_pseudo});
+      }
       insn->set_src(0, array_reg);
     }
   }
@@ -388,29 +384,35 @@ FieldArrayValues RClassWriter::remap_resource_class_clinit(
   // cleanup since the former is not easily runnable on per-method basis right
   // now.
   LocalDce(/* init_classes_with_side_effects */ nullptr, {}).dce(ir_code);
-  return return_values;
+  return pending_new_values.size();
 }
 
 void RClassWriter::remap_resource_class_arrays(
     DexStoresVector& stores,
     const std::map<uint32_t, uint32_t>& old_to_remapped_ids) const {
   Timer t("remap_resource_class_arrays");
-  FieldArrayValues field_values;
+  // State of all R class fields before remapping
+  FieldArrayValues all_field_values;
   RClassReader r_class_reader(m_global_resources_config);
+
+  std::vector<std::pair<DexClass*, FieldArrayValues>> class_states;
   auto scope = build_class_scope(stores);
+
   r_class_reader.ordered_r_class_iteration(scope, [&](DexClass* cls) {
-    DexMethod* clinit = cls->get_clinit();
-    if (clinit == nullptr) {
-      return;
-    }
-    TRACE(OPTRES, 2, "remap_resource_class_arrays, class %s", SHOW(cls));
-    IRCode* ir_code = clinit->get_code();
-    if (ir_code == nullptr) {
-      return;
-    }
-    auto class_state = remap_resource_class_clinit(cls, old_to_remapped_ids,
-                                                   field_values, clinit);
-    field_values.insert(class_state.begin(), class_state.end());
+    TRACE(OPTRES, 3, "remap_resource_class_arrays, considering class %s",
+          SHOW(cls));
+    auto values = r_class_reader.analyze_clinit(cls, all_field_values);
+    class_states.emplace_back(cls, values);
+    all_field_values.insert(values.begin(), values.end());
   });
+
+  // Actually remap the values in arrays.
+  for (auto& [cls, field_values] : class_states) {
+    if (!field_values.empty()) {
+      auto changes =
+          remap_resource_class_clinit(cls, field_values, old_to_remapped_ids);
+      TRACE(OPTRES, 2, "Updated %zu field(s) in %s clinit", changes, SHOW(cls));
+    }
+  }
 }
 } // namespace resources
