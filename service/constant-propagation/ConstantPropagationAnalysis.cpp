@@ -480,6 +480,51 @@ bool PrimitiveAnalyzer::analyze_cmp(const IRInstruction* insn,
   return true;
 }
 
+bool PrimitiveAnalyzer::analyze_unop(const IRInstruction* insn,
+                                     ConstantEnvironment* env) NO_UBSAN_ARITH {
+  auto op = insn->opcode();
+  bool is_unop64 = opcode::is_unop64(op);
+  TRACE(CONSTP, 5, "Attempting to fold %s", SHOW(insn));
+  auto apply = [&](auto val) {
+    SignedConstantDomain result;
+    if (is_unop64) {
+      result = SignedConstantDomain((int64_t)val);
+    } else {
+      result = SignedConstantDomain((int32_t)(((int64_t)val) & 0xFFFFFFFF));
+    }
+    env->set(insn->dest(), result);
+    return true;
+  };
+
+  auto cst = env->get<SignedConstantDomain>(insn->src(0)).get_constant();
+
+  if (cst) {
+    auto val = *cst;
+    switch (op) {
+    case OPCODE_NOT_INT:
+      return apply(~((int32_t)val));
+    case OPCODE_NOT_LONG:
+      return apply(~((int64_t)val));
+    case OPCODE_NEG_INT:
+    case OPCODE_NEG_LONG:
+      return apply(-val);
+    case OPCODE_LONG_TO_INT:
+      return apply((int32_t)val);
+    case OPCODE_INT_TO_LONG:
+      return apply((int64_t)val);
+    case OPCODE_INT_TO_BYTE:
+      return apply((int8_t)val);
+    case OPCODE_INT_TO_CHAR:
+      return apply((uint16_t)val);
+    case OPCODE_INT_TO_SHORT:
+      return apply((int16_t)val);
+    default:
+      break;
+    }
+  }
+  return analyze_default(insn, env);
+}
+
 bool PrimitiveAnalyzer::analyze_binop_lit(
     const IRInstruction* insn, ConstantEnvironment* env) NO_UBSAN_ARITH {
   auto op = insn->opcode();

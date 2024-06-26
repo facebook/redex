@@ -132,6 +132,8 @@ class PrimitiveAnalyzer final
 
   static bool analyze_cmp(const IRInstruction* insn, ConstantEnvironment* env);
 
+  static bool analyze_unop(const IRInstruction* insn, ConstantEnvironment* env);
+
   static bool analyze_binop_lit(const IRInstruction* insn,
                                 ConstantEnvironment* env);
 
