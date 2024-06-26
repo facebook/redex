@@ -127,6 +127,7 @@ FieldArrayValues RClassReader::analyze_clinit(
         // NOTE: this entire job may be best performed as interprocedural.
         // Some day.
         auto field_type = insn->get_field()->get_type();
+        auto field_def = insn->get_field()->as_def();
         always_assert(type::is_array(field_type));
         const DexType* element_type =
             type::get_array_component_type(field_type);
@@ -154,13 +155,17 @@ FieldArrayValues RClassReader::analyze_clinit(
                             "Unsupported array definition at %s in %s",
                             SHOW(def), SHOW(cfg));
           auto source_field = def->get_field();
-          // No need to rewrite values for external field refs, or field ref
-          // of another R class (which would be eligible for rewriting).
-          always_assert_log(known_field_values.count(source_field) > 0 ||
-                                is_external_ref(source_field),
-                            "Field %s was not analyzed", SHOW(source_field));
+          if (!is_external_ref(source_field)) {
+            always_assert_log(known_field_values.count(source_field) > 0,
+                              "Field %s was not analyzed",
+                              SHOW(source_field));
+            // Give callers a consistent view of the used IDs for fields that
+            // reference other fields.
+            auto known_values = known_field_values.at(source_field);
+            values.emplace(field_def, known_values);
+          }
         } else {
-          locally_built_fields.emplace(insn->get_field()->as_def());
+          locally_built_fields.emplace(field_def);
         }
       }
       intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);

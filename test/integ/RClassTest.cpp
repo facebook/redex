@@ -174,6 +174,16 @@ TEST_F(RClassTest, extractStaticArrayValues) {
                                               0x7f050008,
                                               0x7f050009));
   }
+
+  {
+    DexFieldRef* ref =
+        DexField::get_field("Lcom/redextest/R$styleable_sgets;.seven:[I");
+    std::unordered_set<uint32_t> values;
+    r_class_reader.extract_resource_ids_from_static_arrays(
+        *classes, {ref->as_def()}, &values);
+    EXPECT_THAT(values, testing::UnorderedElementsAre(0x7f040000, 0x7f040001))
+        << "seven is incorrect";
+  }
 }
 
 TEST_F(RClassTest, analyzeStaticInitializers) {
