@@ -159,14 +159,6 @@ class OptimizeResourcesPass : public Pass {
       const GlobalConfig& global_config,
       const std::map<uint32_t, uint32_t>& old_to_remapped_ids);
 
-  static std::unordered_set<uint32_t> find_code_resource_references(
-      DexStoresVector& stores,
-      ConfigFiles& conf,
-      PassManager& mgr,
-      const std::map<std::string, std::vector<uint32_t>>& name_to_ids,
-      bool check_string_for_name,
-      bool assume_id_inlined);
-
  private:
   bool m_delete_unused_files;
   std::vector<std::string> m_assume_reachable_prefixes;

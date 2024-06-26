@@ -65,98 +65,6 @@ ReachableResourcesPluginRegistry::get_plugins() const {
 } // namespace opt_res
 
 namespace {
-void extract_resources_from_static_arrays(
-    const std::unordered_set<DexField*>& array_fields,
-    std::unordered_set<uint32_t>* out_values) {
-  std::unordered_set<DexClass*> classes_to_search;
-  for (DexField* field : array_fields) {
-    DexClass* clazz = type_class(field->get_class());
-
-    // We can assert a non-null class since we know these fields came
-    // from classes we iterated over.
-    always_assert(clazz != nullptr);
-    classes_to_search.emplace(clazz);
-  }
-
-  for (auto clazz : classes_to_search) {
-    DexMethod* clinit = clazz->get_clinit();
-    IRCode* ir_code = clinit->get_code();
-    if (ir_code == nullptr) {
-      continue;
-    }
-    always_assert(ir_code->editable_cfg_built());
-    auto& cfg = ir_code->cfg();
-    live_range::MoveAwareChains move_aware_chains(cfg);
-    auto use_defs = move_aware_chains.get_use_def_chains();
-    auto def_uses = move_aware_chains.get_def_use_chains();
-    for (const auto& mie : InstructionIterable(cfg)) {
-      auto insn = mie.insn;
-      if (!opcode::is_an_sput(insn->opcode())) {
-        continue;
-      }
-      auto field = resolve_field(insn->get_field(), FieldSearch::Static);
-      // Only consider array values for the requested fields.
-      if (!array_fields.count(field)) {
-        continue;
-      }
-      std::unordered_set<uint32_t> inner_array_values;
-      auto& array_defs = use_defs.at(live_range::Use{insn, 0});
-      // should be only one, but we can be conservative and consider all
-      for (auto* array_def : array_defs) {
-        auto& uses = def_uses.at(array_def);
-        if (array_def->opcode() == OPCODE_SGET_OBJECT && uses.size() == 1) {
-          continue;
-        }
-        always_assert_log(array_def->opcode() == OPCODE_NEW_ARRAY,
-                          "OptimizeResources does not support extracting "
-                          "resources from array created by %s\nin %s:\n%s",
-                          SHOW(array_def), SHOW(clinit), SHOW(cfg));
-        // should be only one, but we can be conservative and consider all
-        for (auto& use : uses) {
-          switch (use.insn->opcode()) {
-          case OPCODE_FILL_ARRAY_DATA: {
-            always_assert(use.src_index == 0);
-            auto array_ints =
-                get_fill_array_data_payload<uint32_t>(use.insn->get_data());
-            for (uint32_t entry_x : array_ints) {
-              if (entry_x > PACKAGE_RESID_START) {
-                inner_array_values.emplace(entry_x);
-              }
-            }
-            break;
-          }
-          case OPCODE_APUT: {
-            always_assert(use.src_index == 1);
-            auto value_defs = use_defs.at(live_range::Use{use.insn, 0});
-            for (auto* value_def : value_defs) {
-              always_assert_log(value_def->opcode() == OPCODE_CONST,
-                                "OptimizeResources does not support extracting "
-                                "resources from value given by %s",
-                                SHOW(value_def));
-              auto const_literal = value_def->get_literal();
-              if (const_literal > PACKAGE_RESID_START) {
-                inner_array_values.emplace(const_literal);
-              }
-            }
-            break;
-          }
-          default:
-            if (use.insn != insn) {
-              always_assert_log(false,
-                                "OptimizeResources does not support extracting "
-                                "resources from array escaping via %s",
-                                SHOW(use.insn));
-            }
-            break;
-          }
-        }
-      }
-      out_values->insert(inner_array_values.begin(), inner_array_values.end());
-    }
-  }
-}
-
-namespace {
 // Return true if the given string is a relative file path, has .xml extension
 // and can refer to the res directory of an .apk or .aab file.
 bool is_resource_xml(const std::string& str) {
@@ -174,7 +82,6 @@ bool is_resource_xml(const std::string& str) {
   }
   return false;
 }
-} // namespace
 
 void compute_transitive_closure(
     ResourceTableFile* res_table,
@@ -347,42 +254,93 @@ std::unordered_set<uint32_t> get_resources_by_name_prefix(
   return found_resources;
 }
 
-} // namespace
-
-void OptimizeResourcesPass::report_metric(TraceModule trace_module,
-                                          const std::string& metric_name,
-                                          int metric_value,
-                                          PassManager& mgr) {
-  TRACE(trace_module, 1, "%s: %d", metric_name.c_str(), metric_value);
-  mgr.set_metric(metric_name, metric_value);
+bool is_potential_resid(int64_t id) {
+  return id >= 0x7f000000 && id <= 0x7fffffff;
 }
 
-void OptimizeResourcesPass::remap_resource_classes(
+std::unordered_set<uint32_t> find_code_resource_references(
     DexStoresVector& stores,
-    const std::map<uint32_t, uint32_t>& old_to_remapped_ids) {
-  int replaced_fields = 0;
-  auto scope = build_class_scope(stores);
-  for (auto clazz : scope) {
-    if (resources::is_r_class(clazz)) {
-      const std::vector<DexField*>& fields = clazz->get_sfields();
-      for (auto& field : fields) {
-        uint64_t f_value = field->get_static_value()->value();
-        const uint32_t MAX_UINT_32 = 0xFFFFFFFF;
+    ConfigFiles& conf,
+    PassManager& mgr,
+    resources::RClassReader& r_class_reader,
+    const std::map<std::string, std::vector<uint32_t>>& name_to_ids,
+    bool check_string_for_name,
+    bool assume_id_inlined) {
+  std::unordered_set<uint32_t> ids_from_code;
+  Scope scope = build_class_scope(stores);
+  ConcurrentSet<uint32_t> potential_ids_from_code;
+  ConcurrentSet<DexField*> accessed_sfields;
+  ConcurrentSet<uint32_t> potential_ids_from_strings;
+  boost::regex find_ints("(\\d+)");
 
-        // f_value is a uint64_t, but we know it will be safe to cast down to
-        // a uint32_t since it will be a resource ID- hence, we assert.
-        always_assert(f_value <= MAX_UINT_32);
-        if (f_value > PACKAGE_RESID_START &&
-            old_to_remapped_ids.count(f_value)) {
-          field->get_static_value()->value(
-              (uint64_t)old_to_remapped_ids.at((uint32_t)f_value));
-          ++replaced_fields;
+  walk::parallel::opcodes(scope, [&](DexMethod*, IRInstruction* insn) {
+    // Collect all accessed fields that could be R fields, or values that got
+    // inlined elsewhere.
+    if (insn->has_field() && opcode::is_an_sfield_op(insn->opcode())) {
+      auto field = resolve_field(insn->get_field(), FieldSearch::Static);
+      if (field && field->is_concrete()) {
+        accessed_sfields.emplace(field);
+      }
+    } else if (insn->has_literal()) {
+      auto lit = insn->get_literal();
+      if (assume_id_inlined && is_potential_resid(lit)) {
+        potential_ids_from_code.emplace(lit);
+      }
+    } else if (insn->has_string()) {
+      std::string to_find = insn->get_string()->str_copy();
+      if (assume_id_inlined) {
+        // Redex evaluates expressions like
+        // String.valueOf(R.drawable.inspiration_no_format)
+        // which means we need to parse ints encoded as strings or ints that
+        // were constant folded/concatenated at build time with other strings.
+        std::vector<std::string> int_strings;
+        int_strings.insert(int_strings.end(),
+                           boost::sregex_token_iterator(
+                               to_find.begin(), to_find.end(), find_ints),
+                           boost::sregex_token_iterator());
+        for (const auto& int_string : int_strings) {
+          int64_t potential_num;
+          try {
+            potential_num = std::stol(int_string);
+          } catch (...) {
+            continue;
+          }
+          if (is_potential_resid(potential_num)) {
+            potential_ids_from_code.emplace(potential_num);
+          }
+        }
+      }
+      if (check_string_for_name) {
+        // Being more conservative of what might get passed into
+        // Landroid/content/res/Resources;.getIdentifier:(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I
+        auto search = name_to_ids.find(to_find);
+        if (search != name_to_ids.end()) {
+          potential_ids_from_strings.insert(search->second.begin(),
+                                            search->second.end());
         }
       }
     }
+  });
+
+  std::unordered_set<DexField*> array_fields;
+  for (auto* field : accessed_sfields) {
+    auto is_r_field = resources::is_r_class(type_class(field->get_class()));
+    if (type::is_primitive(field->get_type()) && field->get_static_value() &&
+        is_potential_resid(field->get_static_value()->value()) &&
+        (is_r_field || assume_id_inlined)) {
+      ids_from_code.emplace(field->get_static_value()->value());
+    } else if (is_r_field && type::is_array(field->get_type())) {
+      array_fields.emplace(field);
+    }
   }
 
-  TRACE(OPTRES, 2, "replaced_fields count: %d", replaced_fields);
+  r_class_reader.extract_resource_ids_from_static_arrays(array_fields,
+                                                         &ids_from_code);
+  ids_from_code.insert(potential_ids_from_code.begin(),
+                       potential_ids_from_code.end());
+  ids_from_code.insert(potential_ids_from_strings.begin(),
+                       potential_ids_from_strings.end());
+  return ids_from_code;
 }
 
 void remap_resource_class_clinit(
@@ -492,6 +450,43 @@ void remap_resource_class_clinit(
     }
   }
 }
+} // namespace
+
+void OptimizeResourcesPass::report_metric(TraceModule trace_module,
+                                          const std::string& metric_name,
+                                          int metric_value,
+                                          PassManager& mgr) {
+  TRACE(trace_module, 1, "%s: %d", metric_name.c_str(), metric_value);
+  mgr.set_metric(metric_name, metric_value);
+}
+
+void OptimizeResourcesPass::remap_resource_classes(
+    DexStoresVector& stores,
+    const std::map<uint32_t, uint32_t>& old_to_remapped_ids) {
+  int replaced_fields = 0;
+  auto scope = build_class_scope(stores);
+  for (auto clazz : scope) {
+    if (resources::is_r_class(clazz)) {
+      const std::vector<DexField*>& fields = clazz->get_sfields();
+      for (auto& field : fields) {
+        uint64_t f_value = field->get_static_value()->value();
+        const uint32_t MAX_UINT_32 = 0xFFFFFFFF;
+
+        // f_value is a uint64_t, but we know it will be safe to cast down to
+        // a uint32_t since it will be a resource ID- hence, we assert.
+        always_assert(f_value <= MAX_UINT_32);
+        if (f_value > PACKAGE_RESID_START &&
+            old_to_remapped_ids.count(f_value)) {
+          field->get_static_value()->value(
+              (uint64_t)old_to_remapped_ids.at((uint32_t)f_value));
+          ++replaced_fields;
+        }
+      }
+    }
+  }
+
+  TRACE(OPTRES, 2, "replaced_fields count: %d", replaced_fields);
+}
 
 void OptimizeResourcesPass::remap_resource_class_arrays(
     DexStoresVector& stores,
@@ -527,96 +522,6 @@ void OptimizeResourcesPass::remap_resource_class_arrays(
   }
 }
 
-bool is_potential_resid(int64_t id) {
-  return id >= 0x7f000000 && id <= 0x7fffffff;
-}
-
-std::unordered_set<uint32_t>
-OptimizeResourcesPass::find_code_resource_references(
-    DexStoresVector& stores,
-    ConfigFiles& conf,
-    PassManager& mgr,
-    const std::map<std::string, std::vector<uint32_t>>& name_to_ids,
-    bool check_string_for_name,
-    bool assume_id_inlined) {
-  std::unordered_set<uint32_t> ids_from_code;
-  Scope scope = build_class_scope(stores);
-  ConcurrentSet<uint32_t> potential_ids_from_code;
-  ConcurrentSet<DexField*> accessed_sfields;
-  ConcurrentSet<uint32_t> potential_ids_from_strings;
-  boost::regex find_ints("(\\d+)");
-
-  walk::parallel::opcodes(scope, [&](DexMethod*, IRInstruction* insn) {
-    // Collect all accessed fields that could be R fields, or values that got
-    // inlined elsewhere.
-    if (insn->has_field() && opcode::is_an_sfield_op(insn->opcode())) {
-      auto field = resolve_field(insn->get_field(), FieldSearch::Static);
-      if (field && field->is_concrete()) {
-        accessed_sfields.emplace(field);
-      }
-    } else if (insn->has_literal()) {
-      auto lit = insn->get_literal();
-      if (assume_id_inlined && is_potential_resid(lit)) {
-        potential_ids_from_code.emplace(lit);
-      }
-    } else if (insn->has_string()) {
-      std::string to_find = insn->get_string()->str_copy();
-      if (assume_id_inlined) {
-        // Redex evaluates expressions like
-        // String.valueOf(R.drawable.inspiration_no_format)
-        // which means we need to parse ints encoded as strings or ints that
-        // were constant folded/concatenated at build time with other strings.
-        std::vector<std::string> int_strings;
-        int_strings.insert(int_strings.end(),
-                           boost::sregex_token_iterator(
-                               to_find.begin(), to_find.end(), find_ints),
-                           boost::sregex_token_iterator());
-        for (const auto& int_string : int_strings) {
-          int64_t potential_num;
-          try {
-            potential_num = std::stol(int_string);
-          } catch (...) {
-            continue;
-          }
-          if (is_potential_resid(potential_num)) {
-            potential_ids_from_code.emplace(potential_num);
-          }
-        }
-      }
-      if (check_string_for_name) {
-        // Being more conservative of what might get passed into
-        // Landroid/content/res/Resources;.getIdentifier:(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I
-        auto search = name_to_ids.find(to_find);
-        if (search != name_to_ids.end()) {
-          potential_ids_from_strings.insert(search->second.begin(),
-                                            search->second.end());
-        }
-      }
-    }
-  });
-
-  std::unordered_set<DexField*> array_fields;
-  for (auto* field : accessed_sfields) {
-    auto is_r_field = resources::is_r_class(type_class(field->get_class()));
-    if (type::is_primitive(field->get_type()) && field->get_static_value() &&
-        is_potential_resid(field->get_static_value()->value()) &&
-        (is_r_field || assume_id_inlined)) {
-      ids_from_code.emplace(field->get_static_value()->value());
-    } else if (is_r_field && type::is_array(field->get_type())) {
-      array_fields.emplace(field);
-    }
-  }
-  // TODO: Improve this piece of analysis to lift restriction of having to run
-  // the pass before ReduceArrayLiteralsPass and
-  // InstructionSequenceOutlinerPass.
-  extract_resources_from_static_arrays(array_fields, &ids_from_code);
-  ids_from_code.insert(potential_ids_from_code.begin(),
-                       potential_ids_from_code.end());
-  ids_from_code.insert(potential_ids_from_strings.begin(),
-                       potential_ids_from_strings.end());
-  return ids_from_code;
-}
-
 void OptimizeResourcesPass::eval_pass(DexStoresVector& stores,
                                       ConfigFiles& conf,
                                       PassManager&) {
@@ -640,9 +545,10 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
   auto res_table = resources->load_res_table();
 
   // 2. Get all resources directly referenced by source code.
+  resources::RClassReader r_class_reader(conf.get_global_config());
   std::unordered_set<uint32_t> ids_from_code = find_code_resource_references(
-      stores, conf, mgr, res_table->name_to_ids, m_check_string_for_name,
-      m_assume_id_inlined);
+      stores, conf, mgr, r_class_reader, res_table->name_to_ids,
+      m_check_string_for_name, m_assume_id_inlined);
   const auto& sorted_res_ids = res_table->sorted_res_ids;
   std::unordered_set<uint32_t> existing_resids;
   for (size_t index = 0; index < sorted_res_ids.size(); ++index) {
