@@ -190,6 +190,21 @@ bool is_non_customized_r_class(const DexClass* cls) {
   return false;
 }
 
+void prepare_r_classes(DexStoresVector& stores,
+                       const GlobalConfig& global_config) {
+  auto scope = build_class_scope(stores);
+  RClassReader r_class_reader(global_config);
+  for (auto cls : scope) {
+    if (r_class_reader.is_r_class(cls)) {
+      auto clinit = cls->get_clinit();
+      if (clinit != nullptr && !clinit->rstate.should_not_outline()) {
+        TRACE(OPTRES, 1, "Disabling outlining for %s", SHOW(clinit));
+        clinit->rstate.set_no_outlining();
+      }
+    }
+  }
+}
+
 bool RClassReader::is_r_class(const DexClass* cls) const {
   if (is_customized_resource_class(cls, m_global_resources_config)) {
     // Customized classes will have fewer validation checks; they may have some

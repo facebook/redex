@@ -23,6 +23,12 @@ inline bool is_potential_resid(int64_t id) {
 // reachability).
 bool is_non_customized_r_class(const DexClass* cls);
 
+// Ensures that the R classes in the input app will stay somewhat undisturbed
+// through optimizations, so they can be read/rewritten effectively. Meant to be
+// called early before passes have began running.
+void prepare_r_classes(DexStoresVector& stores,
+                       const GlobalConfig& global_config);
+
 using FieldArrayValues =
     std::map<DexFieldRef*, std::vector<uint32_t>, dexfields_comparator>;
 

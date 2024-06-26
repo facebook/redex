@@ -349,6 +349,7 @@ void OptimizeResourcesPass::report_metric(TraceModule trace_module,
 void OptimizeResourcesPass::eval_pass(DexStoresVector& stores,
                                       ConfigFiles& conf,
                                       PassManager&) {
+  resources::prepare_r_classes(stores, conf.get_global_config());
   auto& plugin_registery = opt_res::ReachableResourcesPluginRegistry::get();
   plugin_registery.sort();
   for (auto& p : plugin_registery.get_plugins()) {
