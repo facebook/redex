@@ -30,13 +30,13 @@ check_PROGRAMS = \
     max_depth_test \
     method_override_graph_test \
     monotonic_fixpoint_test \
-    optimize_resources_test \
     partial_application_test \
     peephole_test \
     points_to_semantics_test \
     propagation_test \
     pure_method_test \
-    reachability_test \
+    r_class_test \
+	reachability_test \
     reflection_analysis_test \
     resolve_refs_test \
     remove_unreachable_test \
@@ -106,8 +106,8 @@ EXTRA_method_override_graph_test_DEPENDENCIES = method_override_graph_test-class
 monotonic_fixpoint_test_SOURCES = MonotonicFixpointTest.cpp
 EXTRA_monotonic_fixpoint_test_DEPENDENCIES = monotonic_fixpoint_test-class.dex
 
-optimize_resources_test_SOURCES = OptimizeResourcesTest.cpp
-EXTRA_optimize_resources_test_DEPENDENCIES = optimize_resources_test-class.dex
+r_class_test_SOURCES = RClassTest.cpp
+EXTRA_r_class_test_DEPENDENCIES = r_class_test-class.dex
 
 partial_application_test_SOURCES = PartialApplicationTest.cpp
 EXTRA_partial_application_test_DEPENDENCIES = partial_application_test-class.dex
@@ -228,7 +228,7 @@ method_override_graph_test-class.jar: MethodOverrideGraphTest.java
 monotonic_fixpoint_test-class.jar: MonotonicFixpoint.java
 	$(create_jar)
 
-optimize_resources_test-class.jar: R.java
+r_class_test-class.jar: R.java
 	$(create_jar)
 
 partial_application_test-class.jar: PartialApplication.java

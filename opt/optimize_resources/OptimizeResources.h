@@ -145,20 +145,6 @@ class OptimizeResourcesPass : public Pass {
                             int metric_value,
                             PassManager& mgr);
 
-  static void remap_resource_classes(
-      DexStoresVector& stores,
-      const std::map<uint32_t, uint32_t>& old_to_remapped_ids);
-
-  static void remap_resource_class_arrays(
-      DexStoresVector& stores,
-      const ResourceConfig& global_resources_config,
-      const std::map<uint32_t, uint32_t>& old_to_remapped_ids);
-
-  static void remap_resource_class_arrays(
-      DexStoresVector& stores,
-      const GlobalConfig& global_config,
-      const std::map<uint32_t, uint32_t>& old_to_remapped_ids);
-
  private:
   bool m_delete_unused_files;
   std::vector<std::string> m_assume_reachable_prefixes;
