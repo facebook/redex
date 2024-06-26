@@ -89,8 +89,6 @@ bool is_move_result_any(IROpcode op);
 
 bool is_commutative(IROpcode opcode);
 
-bool is_unop64(IROpcode op);
-
 bool is_binop64(IROpcode op);
 
 bool may_throw(IROpcode);
