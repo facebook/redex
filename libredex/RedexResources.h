@@ -47,11 +47,6 @@ struct TypeDefinition {
   std::vector<uint32_t> source_res_ids;
 };
 
-inline bool is_resource_class_name(const std::string_view c_name) {
-  return c_name.find("/R$") != std::string::npos;
-}
-bool is_r_class(const DexClass* cls);
-void gather_r_classes(const Scope& scope, std::vector<DexClass*>* vec);
 // List of attribute names (without namespace) in xml documents for which we
 // should hunt for class names. This is intentionally broad, as narrowly
 // targeting specific element names would require analyzing parent element names

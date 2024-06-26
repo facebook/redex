@@ -321,6 +321,7 @@ libredex_la_SOURCES = \
 	service/regalloc-fast/LiveInterval.cpp \
 	service/remove_redundant_check_casts/CheckCastAnalysis.cpp \
 	service/remove_redundant_check_casts/CheckCastTransform.cpp \
+	service/resources/RClass.cpp \
 	service/resources/StaticIds.cpp \
 	service/shrinker/Shrinker.cpp \
 	service/switch-dispatch/SwitchDispatch.cpp \

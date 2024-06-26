@@ -489,20 +489,6 @@ void ResourceTableFile::finalize_resource_table(const ResourceConfig& config) {
 }
 
 namespace resources {
-bool is_r_class(const DexClass* cls) {
-  const auto c_name = cls->get_name()->str();
-  const auto d_name = cls->get_deobfuscated_name_or_empty();
-  return is_resource_class_name(c_name) || is_resource_class_name(d_name);
-}
-
-void gather_r_classes(const Scope& scope, std::vector<DexClass*>* vec) {
-  for (auto c : scope) {
-    if (is_r_class(c)) {
-      vec->emplace_back(c);
-    }
-  }
-}
-
 bool valid_xml_element(const std::string& ident) {
   return java_names::is_identifier(ident) &&
          ident.find('.') != std::string::npos;

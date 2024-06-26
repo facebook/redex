@@ -27,6 +27,7 @@
 #include "IRInstruction.h"
 #include "LiveRange.h"
 #include "PassManager.h"
+#include "RClass.h"
 #include "ReachableClasses.h"
 #include "RedexMappedFile.h"
 #include "RedexResources.h"
