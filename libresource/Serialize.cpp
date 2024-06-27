@@ -1002,14 +1002,7 @@ int ensure_strings_in_xml_pool(
                    : (uint32_t)0;
   arsc::ResStringPoolBuilder pool_builder(flags);
   for (size_t i = 0; i < pool_size; i++) {
-    size_t length;
-    if (pool.isUTF8()) {
-      auto s = pool.string8At(i, &length);
-      pool_builder.add_string(s, length);
-    } else {
-      auto s = pool.stringAt(i, &length);
-      pool_builder.add_string(s, length);
-    }
+    pool_builder.add_string(pool, i);
   }
 
   for (const auto& s : strings_to_add) {
@@ -1064,7 +1057,7 @@ int ensure_attribute_in_xml_doc(const void* const_data,
       pool_builder.add_string(attribute_name);
       ids_builder.add_id(attribute_id);
     }
-    pool_builder.add_string(str);
+    pool_builder.add_string(pool, i);
     ids_builder.add_id(id);
   }
   if (insert_idx == NOT_INSERTED) {
@@ -1074,8 +1067,7 @@ int ensure_attribute_in_xml_doc(const void* const_data,
   }
   // Copy over non-attribute strings to the pool builder.
   for (size_t i = parser.attribute_count(); i < pool.size(); i++) {
-    auto str = arsc::get_string_from_pool(pool, i);
-    pool_builder.add_string(str);
+    pool_builder.add_string(pool, i);
   }
 
   // Build up a new file with the pool and edited attribute ids.
