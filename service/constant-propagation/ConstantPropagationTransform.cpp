@@ -526,28 +526,7 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   case OPCODE_MUL_LONG:
   case OPCODE_AND_LONG:
   case OPCODE_OR_LONG:
-  case OPCODE_XOR_LONG:
-  case OPCODE_NOT_INT:
-  case OPCODE_NEG_INT:
-  case OPCODE_NEG_LONG:
-  case OPCODE_NOT_LONG:
-  case OPCODE_INT_TO_LONG:
-  case OPCODE_INT_TO_BYTE:
-  case OPCODE_INT_TO_CHAR:
-  case OPCODE_INT_TO_SHORT:
-  case OPCODE_LONG_TO_INT:
-  case OPCODE_NEG_FLOAT:
-  case OPCODE_NEG_DOUBLE:
-  case OPCODE_FLOAT_TO_INT:
-  case OPCODE_INT_TO_FLOAT:
-  case OPCODE_FLOAT_TO_LONG:
-  case OPCODE_LONG_TO_FLOAT:
-  case OPCODE_DOUBLE_TO_INT:
-  case OPCODE_DOUBLE_TO_LONG:
-  case OPCODE_DOUBLE_TO_FLOAT:
-  case OPCODE_INT_TO_DOUBLE:
-  case OPCODE_LONG_TO_DOUBLE:
-  case OPCODE_FLOAT_TO_DOUBLE: {
+  case OPCODE_XOR_LONG: {
     if (replace_with_const(env, cfg_it, xstores, declaring_type)) {
       break;
     }

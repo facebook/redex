@@ -15,7 +15,6 @@
 #include <type_traits>
 
 #include "RedexContext.h"
-#include "StlUtil.h"
 
 // Note: MSVC STL doesn't implement std::isnan(Integral arg). We need to provide
 // an override of fpclassify for integral types.
@@ -105,26 +104,6 @@ void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
     env->set(insn->dest(), SignedConstantDomain(result));
   } else {
     env->set(insn->dest(), SignedConstantDomain::top());
-  }
-}
-
-// https://cs.android.com/android/platform/superproject/main/+/main:art/runtime/entrypoints/entrypoint_utils-inl.h;l=702;drc=d5137445c0d4067406cb3e38aade5507ff2fcd16
-template <typename INT_TYPE, typename FLOAT_TYPE>
-inline INT_TYPE art_float_to_integral(FLOAT_TYPE f) {
-  const INT_TYPE kMaxInt =
-      static_cast<INT_TYPE>(std::numeric_limits<INT_TYPE>::max());
-  const INT_TYPE kMinInt =
-      static_cast<INT_TYPE>(std::numeric_limits<INT_TYPE>::min());
-  const FLOAT_TYPE kMaxIntAsFloat = static_cast<FLOAT_TYPE>(kMaxInt);
-  const FLOAT_TYPE kMinIntAsFloat = static_cast<FLOAT_TYPE>(kMinInt);
-  if (f > kMinIntAsFloat) {
-    if (f < kMaxIntAsFloat) {
-      return static_cast<INT_TYPE>(f);
-    } else {
-      return kMaxInt;
-    }
-  } else {
-    return (f != f) ? 0 : kMinInt; // f != f implies NaN
   }
 }
 
@@ -499,85 +478,6 @@ bool PrimitiveAnalyzer::analyze_cmp(const IRInstruction* insn,
   }
   }
   return true;
-}
-
-bool PrimitiveAnalyzer::analyze_unop(const IRInstruction* insn,
-                                     ConstantEnvironment* env) NO_UBSAN_ARITH {
-  auto op = insn->opcode();
-  TRACE(CONSTP, 5, "Attempting to fold %s", SHOW(insn));
-
-  auto apply = [&](auto val) {
-    SignedConstantDomain result;
-    if constexpr (sizeof(val) == 4) {
-      result = SignedConstantDomain(
-          (int32_t)((std20::bit_cast<int32_t>(val)) & 0xFFFFFFFF));
-    } else if constexpr (sizeof(val) == 8) {
-      result = SignedConstantDomain(std20::bit_cast<int64_t>(val));
-    } else {
-      // floating point number is either 32 bit or 64 bit
-      // so we must have intergral value here
-      result = SignedConstantDomain(val);
-    }
-    env->set(insn->dest(), result);
-    return true;
-  };
-
-  auto cst = env->get<SignedConstantDomain>(insn->src(0)).get_constant();
-
-  if (cst) {
-    int64_t val = *cst;
-    switch (op) {
-    case OPCODE_NOT_INT:
-      return apply(~((int32_t)val));
-    case OPCODE_NOT_LONG:
-      return apply(~val);
-    case OPCODE_NEG_INT:
-      return apply(-((int32_t)val));
-    case OPCODE_NEG_LONG:
-      return apply(-val);
-    case OPCODE_NEG_FLOAT:
-      return apply(-std20::bit_cast<float>((int32_t)val));
-    case OPCODE_NEG_DOUBLE:
-      return apply(-std20::bit_cast<double>(val));
-    case OPCODE_LONG_TO_INT:
-      return apply((int32_t)val);
-    case OPCODE_INT_TO_LONG:
-      return apply((int64_t)val);
-    case OPCODE_INT_TO_BYTE:
-      return apply((int8_t)val);
-    case OPCODE_INT_TO_CHAR:
-      return apply((uint16_t)val);
-    case OPCODE_INT_TO_SHORT:
-      return apply((int16_t)val);
-    case OPCODE_INT_TO_FLOAT:
-      return apply((float)(val));
-    case OPCODE_DOUBLE_TO_FLOAT:
-      return apply((float)(std20::bit_cast<double>(val)));
-    case OPCODE_LONG_TO_FLOAT:
-      return apply((float)val);
-    case OPCODE_INT_TO_DOUBLE:
-      return apply((double)((int32_t)val));
-    case OPCODE_LONG_TO_DOUBLE:
-      return apply((double)val);
-    case OPCODE_FLOAT_TO_DOUBLE:
-      return apply((double)(std20::bit_cast<float>((int32_t)val)));
-    case OPCODE_FLOAT_TO_INT:
-      return apply(art_float_to_integral<int32_t, float>(
-          std20::bit_cast<float>((int32_t)val)));
-    case OPCODE_DOUBLE_TO_INT:
-      return apply(
-          art_float_to_integral<int32_t, double>(std20::bit_cast<double>(val)));
-    case OPCODE_FLOAT_TO_LONG:
-      return apply(art_float_to_integral<int64_t, float>(
-          std20::bit_cast<float>((int32_t)val)));
-    case OPCODE_DOUBLE_TO_LONG:
-      return apply(
-          art_float_to_integral<int64_t, double>(std20::bit_cast<double>(val)));
-    default:
-      break;
-    }
-  }
-  return analyze_default(insn, env);
 }
 
 bool PrimitiveAnalyzer::analyze_binop_lit(

@@ -45,9 +45,4 @@ size_t erase_if(Container& c, const Pred& pred) {
   return removed;
 }
 
-template <typename To, typename From>
-constexpr To bit_cast(const From& from) noexcept {
-  return __builtin_bit_cast(To, from);
-}
-
 } // namespace std20
