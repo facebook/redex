@@ -80,6 +80,13 @@ struct StringOrReference {
   }
 };
 
+struct InlinableValue {
+  uint8_t type;
+  uint32_t uint_value;
+  bool bool_value;
+  std::string string_value;
+};
+
 struct StringOrReferenceHasher {
   size_t operator()(const StringOrReference& val) const {
     size_t seed = 0;
@@ -258,6 +265,9 @@ class ResourceTableFile {
   // across all configurations (including chasing down references).
   virtual void resolve_string_values_for_resource_reference(
       uint32_t ref, std::vector<std::string>* values) = 0;
+
+  virtual std::map<uint32_t, resources::InlinableValue>
+  get_inlinable_resource_values() = 0;
 
   // Takes effect during serialization. Appends a new type with the given
   // details (id, name) to the package. It will contain types with the given

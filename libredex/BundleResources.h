@@ -76,6 +76,8 @@ class ResourcesPbFile : public ResourceTableFile {
       uint32_t id) override;
   void resolve_string_values_for_resource_reference(
       uint32_t ref, std::vector<std::string>* values) override;
+  std::map<uint32_t, resources::InlinableValue> get_inlinable_resource_values()
+      override;
 
   const std::map<uint32_t, const ConfigValues>& get_res_id_to_configvalue()
       const {

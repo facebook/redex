@@ -2400,6 +2400,11 @@ void ResourcesPbFile::resolve_string_values_for_resource_reference(
   std::copy(values_set.begin(), values_set.end(), std::back_inserter(*values));
 }
 
+std::map<uint32_t, resources::InlinableValue>
+ResourcesPbFile::get_inlinable_resource_values() {
+  return {};
+}
+
 ResourcesPbFile::~ResourcesPbFile() {}
 
 #endif // HAS_PROTOBUF

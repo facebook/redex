@@ -2664,4 +2664,95 @@ void ResourcesArscFile::resolve_string_values_for_resource_reference(
   }
 }
 
+/* An inlinable resource ID will be defined as a resource ID for which there
+ * exists 1 entry in the default configuration, and the entry is non-complex.
+ */
+bool is_inlinable_resource_value(
+    const std::map<android::ResTable_config*, arsc::EntryValueData>&
+        config_to_entry_map,
+    android::ResTable_entry* entry,
+    android::Res_value* res_value) {
+  bool is_not_complex =
+      ((dtohs(entry->flags) & android::ResTable_entry::FLAG_COMPLEX) == 0);
+
+  bool is_one_entry = true;
+  for (auto& pair : config_to_entry_map) {
+    if (!arsc::is_default_config(pair.first)) {
+      if (!arsc::is_empty(pair.second)) {
+        is_one_entry = false;
+      }
+    }
+  }
+
+  bool is_valid_type =
+      (res_value->dataType == android::Res_value::TYPE_STRING ||
+       res_value->dataType == android::Res_value::TYPE_REFERENCE ||
+       (res_value->dataType >= android::Res_value::TYPE_FIRST_INT &&
+        res_value->dataType <= android::Res_value::TYPE_LAST_INT));
+
+  if (is_not_complex && is_one_entry && is_valid_type) {
+    return true;
+  }
+  return false;
+}
+
+std::map<uint32_t, resources::InlinableValue>
+ResourcesArscFile::get_inlinable_resource_values() {
+  apk::TableSnapshot& table_snapshot = get_table_snapshot();
+  android::ResStringPool& global_string_pool =
+      table_snapshot.get_global_strings(); // gives pool of strings
+  apk::TableEntryParser& parsed_table = table_snapshot.get_parsed_table();
+  auto& res_id_to_entries = parsed_table.m_res_id_to_entries;
+  std::map<uint32_t, resources::InlinableValue> inlinable_resources;
+  std::vector<std::tuple<uint32_t, android::Res_value*>> past_refs;
+
+  for (auto& pair : res_id_to_entries) {
+    uint32_t id = pair.first;
+    apk::ConfigToEntry config_to_entry_map = pair.second;
+    android::ResTable_config* config = config_to_entry_map.begin()->first;
+    arsc::EntryValueData entry_value =
+        parsed_table.get_entry_for_config(id, config);
+    if (!arsc::is_default_config(config) || arsc::is_empty(entry_value)) {
+      continue;
+    }
+    android::ResTable_entry* res_entry =
+        (android::ResTable_entry*)entry_value.getKey();
+    arsc::PtrLen<uint8_t> value_data = arsc::get_value_data(entry_value);
+    android::Res_value* res_value = (android::Res_value*)(value_data.getKey());
+
+    if (is_inlinable_resource_value(config_to_entry_map, res_entry,
+                                    res_value)) {
+      resources::InlinableValue val{};
+      val.type = res_value->dataType;
+      if (res_value->dataType == android::Res_value::TYPE_STRING) {
+        size_t length;
+        auto chars = global_string_pool.string8At(res_value->data, &length);
+        if (chars == nullptr) {
+          continue;
+        }
+        val.string_value = chars;
+      } else if (res_value->dataType == android::Res_value::TYPE_REFERENCE) {
+        past_refs.push_back(
+            std::tuple<uint32_t, android::Res_value*>(id, res_value));
+        continue;
+      } else if (res_value->dataType == android::Res_value::TYPE_INT_BOOLEAN) {
+        val.bool_value = res_value->data;
+      } else if (res_value->dataType >= android::Res_value::TYPE_FIRST_INT &&
+                 res_value->dataType <= android::Res_value::TYPE_LAST_INT) {
+        val.uint_value = res_value->data;
+      }
+      inlinable_resources.insert({id, val});
+    }
+  }
+
+  for (auto& [id, value] : past_refs) {
+    auto it = inlinable_resources.find(value->data);
+    if (it != inlinable_resources.end()) {
+      resources::InlinableValue val = it->second;
+      inlinable_resources.insert({id, val});
+    }
+  }
+  return inlinable_resources;
+}
+
 ResourcesArscFile::~ResourcesArscFile() {}

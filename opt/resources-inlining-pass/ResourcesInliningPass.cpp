@@ -6,18 +6,19 @@
  */
 
 #include "ResourcesInliningPass.h"
+#include "ConfigFiles.h"
+#include "RedexResources.h"
 #include "Trace.h"
+#include <json/value.h>
 
 void ResourcesInliningPass::run_pass(DexStoresVector& stores,
                                      ConfigFiles& conf,
                                      PassManager& mgr) {
-  for (const auto& elem : m_resource_type_names) {
-    TRACE(RIP, 1, "Resource Type Name: %s", elem.c_str());
-  }
-
-  for (const auto& elem : m_resource_entry_names) {
-    TRACE(RIP, 1, "Resource Entry Name: %s", elem.c_str());
-  }
+  std::string zip_dir;
+  conf.get_json_config().get("apk_dir", "", zip_dir);
+  always_assert(!zip_dir.empty());
+  auto resources = create_resource_reader(zip_dir);
+  auto res_table = resources->load_res_table();
 }
 
 static ResourcesInliningPass s_pass;
