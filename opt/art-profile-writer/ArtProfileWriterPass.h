@@ -8,6 +8,7 @@
 #pragma once
 
 #include "Pass.h"
+#include "PassManager.h"
 
 class ArtProfileWriterPass : public Pass {
  public:
@@ -19,6 +20,7 @@ class ArtProfileWriterPass : public Pass {
   }
 
   void bind_config() override;
+  void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
@@ -45,4 +47,7 @@ class ArtProfileWriterPass : public Pass {
   };
 
   PerfConfig m_perf_config;
+  bool m_never_inline_estimate;
+  bool m_never_inline_attach_annotations;
+  std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
 };
