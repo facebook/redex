@@ -35,7 +35,9 @@
   FOR_EACH(java_lang_RuntimeException, "Ljava/lang/RuntimeException;")   \
   FOR_EACH(dalvik_annotation_Signature, "Ldalvik/annotation/Signature;") \
   FOR_EACH(dalvik_annotation_MemberClasses, "Ldalvik/annotation/"        \
-                                            "MemberClasses;")
+                                            "MemberClasses;")            \
+  FOR_EACH(dalvik_annotation_optimization_NeverInline,                   \
+           "Ldalvik/annotation/optimization/NeverInline;")
 
 #define PRIMITIVE_PSEUDO_TYPE_FIELDS                                       \
   FOR_EACH(Void_TYPE, "Ljava/lang/Void;.TYPE:Ljava/lang/Class;")           \
@@ -61,7 +63,8 @@
            "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;")              \
   FOR_EACH(java_lang_Integer_intValue, "Ljava/lang/Integer;.intValue:()I")    \
   FOR_EACH(java_lang_Throwable_fillInStackTrace,                              \
-           "Ljava/lang/Throwable;.fillInStackTrace:()Ljava/lang/Throwable;")  \
+           "Ljava/lang/Throwable;.fillInStackTrace:()Ljava/lang/"             \
+           "Throwable;")                                                      \
   FOR_EACH(java_lang_RuntimeException_init_String,                            \
            "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V")       \
   FOR_EACH(java_lang_String_equals,                                           \
@@ -70,4 +73,5 @@
   FOR_EACH(java_lang_Objects_clone,                                           \
            "[Ljava/lang/Object;.clone:()Ljava/lang/Object;")                  \
   FOR_EACH(java_lang_Class_forName,                                           \
-           "Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class;")
+           "Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/"             \
+           "lang/Class;")
