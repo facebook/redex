@@ -774,6 +774,9 @@ Stats run_split_dexes(DexStoresVector& stores,
 
           std::lock_guard<std::mutex> lock_guard(mutex);
           result.new_methods.insert(new_methods.begin(), new_methods.end());
+          for (auto* m : new_methods) {
+            result.orig_methods.emplace_back(m, data.m);
+          }
           result.transformed_srcs.emplace(data.m,
                                           std::make_pair(orig_size, new_size));
         }
@@ -799,6 +802,8 @@ Stats& Stats::operator+=(const Stats& rhs) {
                             rhs.large_switches_set.end());
   easy_expr_set.insert(rhs.easy_expr_set.begin(), rhs.easy_expr_set.end());
   new_methods.insert(rhs.new_methods.begin(), rhs.new_methods.end());
+  orig_methods.insert(orig_methods.end(), rhs.orig_methods.begin(),
+                      rhs.orig_methods.end());
   transformed_srcs.insert(rhs.transformed_srcs.begin(),
                           rhs.transformed_srcs.end());
   return *this;
@@ -825,6 +830,9 @@ Stats SplitHugeSwitchPass::run(
 
   auto new_methods = run_split(data, m, code, case_threshold);
   ret.new_methods.insert(new_methods.begin(), new_methods.end());
+  for (auto* new_m : new_methods) {
+    ret.orig_methods.emplace_back(new_m, m);
+  }
   return ret;
 }
 
@@ -845,6 +853,7 @@ void SplitHugeSwitchPass::bind_config() {
        "too large to be inlined into");
   bind("switch_size", 100u, m_switch_size, "Switch case threshold");
   bind("debug", false, m_debug, "Debug output");
+  bind("derive_stats", false, m_derive_stats, "Derive stats");
 }
 
 void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
@@ -855,7 +864,7 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  const auto& method_profiles = conf.get_method_profiles();
+  auto& method_profiles = conf.get_method_profiles();
   mgr.set_metric("has_method_profiles", method_profiles.has_stats() ? 1 : 0);
 
   const boost::regex rx(m_method_filter.empty() ? "." : m_method_filter);
@@ -958,6 +967,12 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
     std::string name = show(m);
     replace_chars(name);
     mgr.set_metric("method_created_" + name, 1);
+  }
+  if (m_derive_stats) {
+    for (auto [m, orig_m] : result_stats.orig_methods) {
+      method_profiles.derive_stats(m, {orig_m});
+    }
+    mgr.set_metric("derived_stats", result_stats.orig_methods.size());
   }
   for (const auto& p : result_stats.transformed_srcs) {
     std::string name = show(p.first);

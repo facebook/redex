@@ -33,6 +33,8 @@ class SplitHugeSwitchPass : public Pass {
     std::unordered_map<DexMethod*, std::pair<size_t, size_t>> transformed_srcs;
     // Actual new methods inserted into their respective classes.
     std::unordered_set<DexMethod*> new_methods;
+    // For each new method, mapping back to the original method.
+    std::vector<std::pair<DexMethod*, DexMethod*>> orig_methods;
 
     uint32_t constructor = 0;
     uint32_t non_simple_chain = 0;
@@ -74,4 +76,5 @@ class SplitHugeSwitchPass : public Pass {
   uint32_t m_method_size_when_too_large_for_inlining = 0;
   uint32_t m_switch_size = 0;
   bool m_debug = false;
+  bool m_derive_stats = false;
 };

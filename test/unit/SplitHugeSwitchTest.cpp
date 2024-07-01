@@ -116,6 +116,10 @@ class SplitHugeSwitchTest : public RedexTest {
         return ::testing::AssertionFailure() << show(out) << ": " << out_error;
       }
     }
+    if (stats.orig_methods.size() != stats.new_methods.size()) {
+      return ::testing::AssertionFailure()
+             << "Unexpected amount of orig methods";
+    }
     if (stats.new_methods.size() + 1 != expected_map.size()) {
       return ::testing::AssertionFailure() << "Unexpected amount of methods";
     }
