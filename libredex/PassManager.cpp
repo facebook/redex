@@ -928,6 +928,10 @@ class TraceClassAfterEachPass {
 
   void dump_cls(DexClass* cls) {
     fprintf(m_fd, "Class %s\n", SHOW(cls));
+    auto anno_set = cls->get_anno_set();
+    if (anno_set != nullptr) {
+      fprintf(m_fd, "  Annotations on class: %s\n", SHOW(anno_set));
+    }
     std::vector<DexMethod*> methods = cls->get_all_methods();
     std::vector<DexField*> fields = cls->get_all_fields();
     for (auto* v : fields) {
