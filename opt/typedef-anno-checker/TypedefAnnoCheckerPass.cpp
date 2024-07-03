@@ -618,12 +618,6 @@ void SynthAccessorPatcher::patch_first_level_nested_lambda(DexClass* cls) {
   if (common_class_name_end == std::string::npos) {
     return;
   }
-  // if the map is already filled in, there's nothing to do.
-  // class_prefix is the entire class name before the second dollar sign
-  auto class_prefix = cls_name.substr(0, common_class_name_end);
-  if (m_lambda_anno_map.get(cls_name.substr(0, common_class_name_end))) {
-    return;
-  }
 
   DexMethod* method = enclosing_method->as_def();
   IRCode* code = method->get_code();
@@ -748,6 +742,12 @@ void SynthAccessorPatcher::patch_first_level_nested_lambda(DexClass* cls) {
         }
       }
     }
+  }
+  // if the map is already filled in, don't fill it in again.
+  // class_prefix is the entire class name before the second dollar sign
+  auto class_prefix = cls_name.substr(0, common_class_name_end);
+  if (m_lambda_anno_map.get(class_prefix)) {
+    return;
   }
 
   m_lambda_anno_map.emplace(class_prefix, annotated_fields);
