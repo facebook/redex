@@ -1423,3 +1423,21 @@ TEST_F(TypedefAnnoCheckerTest, TestClassConstructorDefaultArgs) {
   auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
+
+TEST_F(TypedefAnnoCheckerTest, TestAnnotatedPropertyGetterPatching) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerKtTest;.testAnnotatedPropertyGetterPatching:()"
+          "Ljava/lang/String;")
+          ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_TRUE(checker.complete());
+}

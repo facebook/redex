@@ -92,6 +92,28 @@ DexMethodRef* get_enclosing_method(DexClass* cls) {
   return nullptr;
 }
 
+DexField* get_field_from_accessor_kotlin(DexMethod* m) {
+  always_assert(boost::starts_with(m->get_simple_deobfuscated_name(), "get") ||
+                boost::starts_with(m->get_simple_deobfuscated_name(), "set"));
+  if (m->get_simple_deobfuscated_name().length() <= 3) {
+    return nullptr;
+  }
+  auto field_name = m->get_simple_deobfuscated_name().substr(3);
+  field_name.at(0) = std::tolower(field_name.at(0));
+
+  const auto* rtype = m->get_proto()->get_rtype();
+  if (!type::is_int(rtype) && rtype != type::java_lang_String()) {
+    return nullptr;
+  }
+  const auto int_or_string =
+      type::is_int(rtype) ? "I" : type::java_lang_String()->get_name()->str();
+
+  auto class_name_dot = m->get_class()->get_name()->str() + ".";
+  auto* fref =
+      DexField::get_field(class_name_dot + field_name + ":" + int_or_string);
+  return fref && fref->is_def() ? fref->as_def() : nullptr;
+}
+
 // make the methods and fields temporarily synthetic to add annotations
 template <typename DexMember>
 bool add_annotations(DexMember* member, DexAnnotationSet* anno_set) {
@@ -188,8 +210,45 @@ void patch_return_anno_from_get(type_inference::TypeInference& inference,
 
 } // namespace
 
+bool SynthAccessorPatcher::is_kotlin_annotated_property_getter_setter(
+    DexMethod* m) {
+  if (!boost::starts_with(m->get_simple_deobfuscated_name(), "get") &&
+      !boost::starts_with(m->get_simple_deobfuscated_name(), "set")) {
+    return false;
+  }
+
+  const auto* property_field = get_field_from_accessor_kotlin(m);
+  if (property_field == nullptr) {
+    return false;
+  }
+
+  auto anno = type_inference::get_typedef_anno_from_member(property_field,
+                                                           m_typedef_annos);
+  return anno != boost::none;
+}
+
+void SynthAccessorPatcher::patch_kotlin_annotated_property_getter_setter(
+    DexMethod* m) {
+  always_assert(boost::starts_with(m->get_simple_deobfuscated_name(), "get") ||
+                boost::starts_with(m->get_simple_deobfuscated_name(), "set"));
+
+  const auto* property_field = get_field_from_accessor_kotlin(m);
+  always_assert(property_field != nullptr);
+  auto anno = type_inference::get_typedef_anno_from_member(property_field,
+                                                           m_typedef_annos);
+  always_assert(anno != boost::none);
+
+  DexAnnotationSet anno_set = DexAnnotationSet();
+  anno_set.add_annotation(std::make_unique<DexAnnotation>(
+      DexType::make_type(anno.get()->get_name()), DAV_RUNTIME));
+  add_annotations(m, &anno_set);
+}
+
 void SynthAccessorPatcher::run(const Scope& scope) {
   walk::parallel::methods(scope, [this](DexMethod* m) {
+    if (is_kotlin_annotated_property_getter_setter(m)) {
+      patch_kotlin_annotated_property_getter_setter(m);
+    }
     if (is_synthetic_accessor(m)) {
       collect_accessors(m);
     }
