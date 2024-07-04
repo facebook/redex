@@ -5,9 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/multi_index/hashed_index.hpp>
-#include <boost/multi_index/member.hpp>
-#include <boost/multi_index_container.hpp>
 #include <cctype>
 #include <istream>
 #include <unordered_map>
@@ -166,40 +163,6 @@ std::vector<std::string_view> lex_filter_list(std::string_view& data,
   }
   return filter_list;
 }
-
-// std::unordered_map does not work with string views. Use Boost magic.
-template <typename T, typename Q>
-struct MyPair {
-  T first;
-  mutable Q second;
-};
-
-struct StringViewEquals {
-  bool operator()(const std::string& s1, const std::string& s2) const {
-    return s1 == s2;
-  }
-  bool operator()(const std::string& s1, const std::string_view& v2) const {
-    return v2 == s1;
-  }
-  bool operator()(const std::string_view& v1, const std::string& s2) const {
-    return v1 == s2;
-  }
-  bool operator()(const std::string_view& v1,
-                  const std::string_view& v2) const {
-    return v1 == v2;
-  }
-};
-
-using namespace boost::multi_index;
-
-template <typename Q>
-using UnorderedStringViewIndexableMap = multi_index_container<
-    MyPair<std::string_view, Q>,
-    indexed_by<hashed_unique<member<MyPair<std::string_view, Q>,
-                                    std::string_view,
-                                    &MyPair<std::string_view, Q>::first>,
-                             boost::hash<std::string_view>,
-                             StringViewEquals>>>;
 
 } // namespace
 
@@ -513,7 +476,7 @@ std::vector<Token> lex(const std::string_view& in) {
       {'@', TokenType::annotation_application},
   };
 
-  using TokenMap = UnorderedStringViewIndexableMap<TokenType>;
+  using TokenMap = std::unordered_map<std::string_view, TokenType>;
 
   TokenMap word_tokens{
       {"includedescriptorclasses", TokenType::includedescriptorclasses_token},
