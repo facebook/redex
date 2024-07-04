@@ -22,6 +22,12 @@ if [ -z "$TOOLCHAIN_TMP" ] ; then
 else
   echo "Using toolchain tmp $TOOLCHAIN_TMP"
   mkdir -p "$TOOLCHAIN_TMP"
+
+  # Temporarily to bypass jfrog downtime.
+  if [ -d "dl_cache" ] && [ ! -d "$TOOLCHAIN_TMP/dl_cache" ] ; then
+    echo "Copying older cache..."
+    cp -r dl_cache "$TOOLCHAIN_TMP/"
+  fi
 fi
 
 if [ "$1" = "32" ] ; then
