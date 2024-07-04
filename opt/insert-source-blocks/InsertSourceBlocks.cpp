@@ -9,10 +9,6 @@
 
 #include <algorithm>
 #include <boost/algorithm/string.hpp>
-#include <boost/multi_index/hashed_index.hpp>
-#include <boost/multi_index/member.hpp>
-#include <boost/multi_index_container.hpp>
-#include <boost/utility/string_view.hpp>
 #include <cstdint>
 #include <deque>
 #include <fstream>
@@ -251,8 +247,6 @@ is_traditional_access_method(const DexMethodRef* mref) {
   return std::make_pair(mref->get_class(), access_name);
 }
 
-using namespace boost::multi_index;
-
 struct ProfileFile {
   RedexMappedFile mapped_file;
   std::string interaction;
@@ -262,40 +256,11 @@ struct ProfileFile {
   using MethodMeta = std::unordered_map<const DexMethodRef*, StringPos>;
   MethodMeta method_meta;
 
-  struct StringViewEquals {
-    bool operator()(const std::string& s1, const std::string& s2) const {
-      return s1 == s2;
-    }
-    bool operator()(const std::string& s1, const std::string_view& v2) const {
-      return v2 == s1;
-    }
-    bool operator()(const std::string_view& v1, const std::string& s2) const {
-      return v1 == s2;
-    }
-    bool operator()(const std::string_view& v1,
-                    const std::string_view& v2) const {
-      return v1 == v2;
-    }
-  };
-  using UnresolvedMethodMeta = multi_index_container<
-      std::pair<std::string_view, StringPos>,
-      indexed_by<
-          hashed_unique<member<std::pair<std::string_view, StringPos>,
-                               std::string_view,
-                               &std::pair<std::string_view, StringPos>::first>,
-                        boost::hash<std::string_view>,
-                        StringViewEquals>>>;
+  using UnresolvedMethodMeta = std::unordered_map<std::string_view, StringPos>;
 
   UnresolvedMethodMeta unresolved_method_meta;
 
-  using ClassAccessMethods = multi_index_container<
-      std::pair<std::string_view, StringPos>,
-      indexed_by<
-          hashed_unique<member<std::pair<std::string_view, StringPos>,
-                               std::string_view,
-                               &std::pair<std::string_view, StringPos>::first>,
-                        boost::hash<std::string_view>,
-                        StringViewEquals>>>;
+  using ClassAccessMethods = std::unordered_map<std::string_view, StringPos>;
 
   using AccessMethods = std::unordered_map<const DexType*, ClassAccessMethods>;
 
