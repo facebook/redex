@@ -7,8 +7,18 @@
 
 #pragma once
 
+#include "DexUtil.h"
 #include "Pass.h"
+#include "RedexResources.h"
 #include "androidfw/ResourceTypes.h"
+
+struct InlinableOptimization {
+  IRInstruction* insn;
+  resources::InlinableValue inlinable_value;
+};
+
+using MethodTransformsMap =
+    InsertOnlyConcurrentMap<DexMethod*, std::vector<InlinableOptimization>>;
 
 class ResourcesInliningPass : public Pass {
  public:
@@ -20,6 +30,9 @@ class ResourcesInliningPass : public Pass {
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+  static MethodTransformsMap optimization_pass(
+      const Scope&, const std::map<uint32_t, resources::InlinableValue>&);
 
   std::unordered_set<std::string> m_resource_type_names;
   std::unordered_set<std::string> m_resource_entry_names;
