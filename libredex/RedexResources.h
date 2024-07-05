@@ -266,7 +266,7 @@ class ResourceTableFile {
   virtual void resolve_string_values_for_resource_reference(
       uint32_t ref, std::vector<std::string>* values) = 0;
 
-  virtual std::map<uint32_t, resources::InlinableValue>
+  virtual std::unordered_map<uint32_t, resources::InlinableValue>
   get_inlinable_resource_values() = 0;
 
   // Takes effect during serialization. Appends a new type with the given

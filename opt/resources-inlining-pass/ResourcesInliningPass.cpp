@@ -32,7 +32,8 @@ void ResourcesInliningPass::run_pass(DexStoresVector& stores,
 
 MethodTransformsMap ResourcesInliningPass::optimization_pass(
     const Scope& scope,
-    const std::map<uint32_t, resources::InlinableValue>& inlinable_resources) {
+    const std::unordered_map<uint32_t, resources::InlinableValue>&
+        inlinable_resources) {
   std::unordered_set<DexMethodRef*> dex_method_refs = {
       DexMethod::get_method("Landroid/content/res/Resources;.getBoolean:(I)Z"),
       DexMethod::get_method("Landroid/content/res/Resources;.getColor:(I)I"),

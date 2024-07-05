@@ -304,8 +304,8 @@ class ResourcesArscFile : public ResourceTableFile {
       uint32_t id) override;
   void resolve_string_values_for_resource_reference(
       uint32_t ref, std::vector<std::string>* values) override;
-  std::map<uint32_t, resources::InlinableValue> get_inlinable_resource_values()
-      override;
+  std::unordered_map<uint32_t, resources::InlinableValue>
+  get_inlinable_resource_values() override;
   ~ResourcesArscFile() override;
 
   size_t get_length() const;

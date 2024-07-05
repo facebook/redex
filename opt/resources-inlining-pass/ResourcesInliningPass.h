@@ -32,7 +32,8 @@ class ResourcesInliningPass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   static MethodTransformsMap optimization_pass(
-      const Scope&, const std::map<uint32_t, resources::InlinableValue>&);
+      const Scope&,
+      const std::unordered_map<uint32_t, resources::InlinableValue>&);
 
   std::unordered_set<std::string> m_resource_type_names;
   std::unordered_set<std::string> m_resource_entry_names;

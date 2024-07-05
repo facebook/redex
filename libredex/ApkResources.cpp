@@ -2696,14 +2696,14 @@ bool is_inlinable_resource_value(
   return false;
 }
 
-std::map<uint32_t, resources::InlinableValue>
+std::unordered_map<uint32_t, resources::InlinableValue>
 ResourcesArscFile::get_inlinable_resource_values() {
   apk::TableSnapshot& table_snapshot = get_table_snapshot();
   android::ResStringPool& global_string_pool =
       table_snapshot.get_global_strings(); // gives pool of strings
   apk::TableEntryParser& parsed_table = table_snapshot.get_parsed_table();
   auto& res_id_to_entries = parsed_table.m_res_id_to_entries;
-  std::map<uint32_t, resources::InlinableValue> inlinable_resources;
+  std::unordered_map<uint32_t, resources::InlinableValue> inlinable_resources;
   std::vector<std::tuple<uint32_t, android::Res_value*>> past_refs;
 
   for (auto& pair : res_id_to_entries) {

@@ -35,7 +35,7 @@ TEST_F(PreVerify, ResourcesInliningPassTest) {
                   0x7f050002,
                   /* string */
                   0x7f060000));
-  std::map<uint32_t, resources::InlinableValue> inlinable =
+  std::unordered_map<uint32_t, resources::InlinableValue> inlinable =
       res_table.get_inlinable_resource_values();
 
   EXPECT_TRUE(inlinable.find(0x7f010000) != inlinable.end());
