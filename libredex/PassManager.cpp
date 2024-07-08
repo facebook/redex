@@ -917,7 +917,10 @@ class TraceClassAfterEachPass {
     if (code != nullptr) {
       if (code->editable_cfg_built()) {
         auto& cfg = code->cfg();
-        fprintf(m_fd, "%s\n", SHOW(cfg));
+        // Note: would be nice to make the special printers from ShowCFG
+        // configurable/callable from here.
+        auto cfg_string = show(cfg);
+        fprintf(m_fd, "%s\n", cfg_string.c_str());
       } else {
         // NOTE: consider building CFG, showing, and clearing to make the output
         // nicer to look at.

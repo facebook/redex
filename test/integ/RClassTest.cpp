@@ -21,29 +21,14 @@
 #include "RedexResources.h"
 #include "RedexTest.h"
 #include "Show.h"
+#include "ShowCFG.h"
 
 namespace {
-// SHOW on the cfg does not print out payloads, so do that with a loop and
-// explicitly show the packed array data.
+// SHOW on the code/cfg by default does not print out payloads; use the special
+// printer;
 void dump_code_verbose(IRCode* code) {
   auto& cfg = code->cfg();
-  for (const auto& mie : cfg::InstructionIterable(cfg)) {
-    auto insn = mie.insn;
-    if (insn->opcode() == OPCODE_CONST &&
-        insn->get_literal() > PACKAGE_RESID_START) {
-      // I want to look at these big numbers as hex :P do not care if printing
-      // code diverges https://fburl.com/macros/crpnp8yx
-      std::cout << "[" << &mie << "] OPCODE: CONST v" << insn->dest() << ", "
-                << std::hex << (uint32_t)insn->get_literal() << std::dec
-                << std::endl;
-    } else {
-      std::cout << SHOW(mie) << std::endl;
-    }
-    if (insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
-      auto data = insn->get_data();
-      std::cout << "  " << SHOW(data) << std::endl;
-    }
-  }
+  std::cout << show_res_payloads(cfg);
 }
 
 DexClass* get_r_class(const DexClasses& classes, const char* name) {
