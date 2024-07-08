@@ -28,11 +28,6 @@
 
 #include <stdint.h>
 #include <sys/types.h>
-#if defined(_WIN32)
-#include <winsock2.h>
-#elif !defined(_MSC_VER) && !defined(__MINGW64__) && !defined(__MINGW32__)
-#include <netinet/in.h>
-#endif
 
 /* TODO: move this cruft to frameworks/. */
 
