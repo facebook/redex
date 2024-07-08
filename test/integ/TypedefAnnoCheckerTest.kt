@@ -158,4 +158,28 @@ public class TypedefAnnoCheckerKtTest {
       local_val
     })
   }
+
+  interface Error {
+    @get:TestStringDef val failure: String
+  }
+
+  abstract class BaseError : Error {}
+
+  class Mismatch : BaseError() {
+    @TestStringDef override val failure: String = TestStringDef.ONE
+  }
+
+  class Blowup : BaseError() {
+    @TestStringDef override val failure: String = TestStringDef.THREE
+  }
+
+  fun getError(): Error {
+    return Mismatch()
+  }
+
+  @TestStringDef
+  fun testAnnotatedPropertyGetterPatching(): String {
+    val e = getError()
+    return e.failure
+  }
 }
