@@ -105,6 +105,9 @@ class SynthAccessorPatcher {
   bool is_kotlin_annotated_property_getter_setter(DexMethod* m);
   void patch_kotlin_annotated_property_getter_setter(DexMethod* m);
 
+  bool is_kotlin_companion_property_accessor(DexMethod* m);
+  void patch_kotlin_companion_property_accessor(DexMethod* m);
+
   void collect_accessors(DexMethod* method);
 
   void patch_kotlin_annotations(DexMethod* method);
