@@ -8,7 +8,6 @@
 #include <json/value.h>
 #include <set>
 
-#include "ApkResources.h"
 #include "ConfigFiles.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ResourcesInliningPass.h"
