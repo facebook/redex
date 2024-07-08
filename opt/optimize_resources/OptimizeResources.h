@@ -121,6 +121,7 @@ class OptimizeResourcesPass : public Pass {
         {DexLimitsObeyed, Preserves},
         {NoResolvablePureRefs, Preserves},
         {InitialRenameClass, Preserves},
+        {RenameClass, Preserves},
     };
   }
 
