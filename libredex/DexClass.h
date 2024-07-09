@@ -1319,6 +1319,7 @@ class DexClass {
   }
 
   void combine_annotations_with(DexClass* other);
+  void combine_annotations_with(DexAnnotationSet* other);
 
   void set_interfaces(DexTypeList* intfs) {
     always_assert_log(!m_external, "Unexpected external class %s\n",

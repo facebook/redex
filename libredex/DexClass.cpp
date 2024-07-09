@@ -1460,15 +1460,18 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
   }
 }
 
-void DexClass::combine_annotations_with(DexClass* other) {
-  auto other_anno_set = other->get_anno_set();
-  if (other_anno_set != nullptr) {
+void DexClass::combine_annotations_with(DexAnnotationSet* other) {
+  if (other != nullptr) {
     if (m_anno == nullptr) {
-      m_anno = std::make_unique<DexAnnotationSet>(*other->m_anno);
+      m_anno = std::make_unique<DexAnnotationSet>(*other);
     } else {
-      m_anno->combine_with(*other->m_anno);
+      m_anno->combine_with(*other);
     }
   }
+}
+
+void DexClass::combine_annotations_with(DexClass* other) {
+  combine_annotations_with(other->get_anno_set());
 }
 
 void DexClass::attach_annotation_set(std::unique_ptr<DexAnnotationSet> anno) {

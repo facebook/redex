@@ -99,6 +99,32 @@ void setup_method(DexMethod* orig_method, DexMethod* new_method) {
 }
 
 /**
+ * Takes the annotations from the interface and combines them into the class,
+ * excepting EnclosingClass, InnerClass (since that would make little sense to
+ * haul over and could lead to surprise class loading attempts for dangling
+ * outer class).
+ */
+void combine_class_annotations(DexClass* cls, DexClass* intf_cls) {
+  auto interface_annos = intf_cls->get_anno_set();
+  if (interface_annos == nullptr) {
+    return;
+  }
+  auto enclosing_cls = DexType::get_type("Ldalvik/annotation/EnclosingClass;");
+  auto inner_cls = DexType::get_type("Ldalvik/annotation/InnerClass;");
+  if (enclosing_cls == nullptr || inner_cls == nullptr) {
+    // Not expected.
+    return;
+  }
+  DexAnnotationSet filtered;
+  for (auto& anno : interface_annos->get_annotations()) {
+    if (anno->type() != enclosing_cls && anno->type() != inner_cls) {
+      filtered.add_annotation(std::make_unique<DexAnnotation>(anno->clone()));
+    }
+  }
+  cls->combine_annotations_with(&filtered);
+}
+
+/**
  * Remove interfaces from classes. We walk the interface chain and move
  * down parent interfaces as needed so the contract of the class stays
  * the same.
@@ -145,7 +171,7 @@ void remove_interface(const DexType* intf, const SingleImplData& data) {
                                              new_intfs.end()};
   std::sort(revisited_intfs.begin(), revisited_intfs.end(), compare_dextypes);
   cls->set_interfaces(DexTypeList::make_type_list(std::move(revisited_intfs)));
-  cls->combine_annotations_with(intf_cls);
+  combine_class_annotations(cls, intf_cls);
   TRACE(INTF, 3, "(REMI)\t=> %s", SHOW(cls));
 }
 
