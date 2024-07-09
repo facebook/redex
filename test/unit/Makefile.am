@@ -123,7 +123,6 @@ check_PROGRAMS = \
     renamer_test \
     resolver_test \
     resolve_proguard_value_test \
-    resource_inlining_test \
     result_propagation_test \
     side_effects_summary_test \
     signed_constant_propagation_test \
@@ -403,8 +402,6 @@ renamer_test_SOURCES = RenamerTest.cpp VirtScopeHelper.cpp ScopeHelper.cpp
 resolver_test_SOURCES = ResolverTest.cpp
 resolve_proguard_value_test_SOURCES = ResolveProguardAssumeValuesTest.cpp ScopeHelper.cpp
 
-resource_inlining_test_SOURCES = ResourceInliningTest.cpp ScopeHelper.cpp
-
 result_propagation_test_SOURCES = ResultPropagationTest.cpp
 result_propagation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
@@ -581,7 +578,6 @@ TESTS = \
     renamer_test \
     resolver_test \
     resolve_proguard_value_test \
-    resource_inlining_test \
     result_propagation_test \
     side_effects_summary_test \
     signed_constant_propagation_test \
