@@ -159,6 +159,7 @@ public class TypedefAnnoCheckerKtTest {
     })
   }
 
+  ////////////////////////////////////////////////////////////////////////////////////////////
   interface Error {
     @get:TestStringDef val failure: String
   }
@@ -181,5 +182,24 @@ public class TypedefAnnoCheckerKtTest {
   fun testAnnotatedPropertyGetterPatching(): String {
     val e = getError()
     return e.failure
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////
+  class Listener {
+    companion object {
+      @TestStringDef private val ONE: String = TestStringDef.ONE
+
+      @TestStringDef
+      fun getOne(): String {
+        return ONE
+      }
+    }
+  }
+
+  // This test method is just a placehold to make the test look complete. The real testing target is
+  // the getOne() method in the Companion object above.
+  @TestStringDef
+  fun testAnnotatedCompanionPropertyAccessorPatching(): String {
+    return Listener.getOne()
   }
 }
