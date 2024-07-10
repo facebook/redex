@@ -57,6 +57,10 @@ include $(top_srcdir)/Makefile.inc
 #
 AM_CPPFLAGS = $(COMMON_INCLUDES)
 
+# Boost.
+AM_CPPFLAGS += $(BOOST_CPPFLAGS)
+AM_LDFLAGS = $(BOOST_LDFLAGS)
+
 noinst_LTLIBRARIES = libredex.la libopt.la
 
 BUILT_SOURCES =
