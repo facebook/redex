@@ -21,6 +21,7 @@ constexpr const char* DEFAULT_SUFFIX = "$default";
 constexpr const char* ANNOTATIONS_SUFFIX = "$annotations";
 constexpr const char* COMPANION_SUFFIX = "$cp";
 constexpr const char* COMPANION_CLASS = "$Companion";
+constexpr const char* PRIVATE_SUFFIX = "$p";
 
 namespace {
 
@@ -128,6 +129,34 @@ DexField* get_field_from_companion_property_accessor_kotlin(DexMethod* m) {
   auto field_name = meth_name.substr(7, meth_name.length() - (7 + 3));
   // getBLOKS_RENDERING_TYPE -> BLOKS_RENDERING_TYPE
   field_name = field_name.substr(3);
+
+  const auto* rtype = m->get_proto()->get_rtype();
+  if (!type::is_int(rtype) && rtype != type::java_lang_String()) {
+    return nullptr;
+  }
+  const auto int_or_string =
+      type::is_int(rtype) ? "I" : type::java_lang_String()->get_name()->str();
+
+  auto class_name_dot = m->get_class()->get_name()->str() + ".";
+  auto* fref =
+      DexField::get_field(class_name_dot + field_name + ":" + int_or_string);
+  return fref && fref->is_def() ? fref->as_def() : nullptr;
+}
+
+DexField* get_field_from_property_private_getter_kotlin(DexMethod* m) {
+  always_assert(
+      boost::starts_with(m->get_simple_deobfuscated_name(), ACCESS_PREFIX) &&
+      boost::ends_with(m->get_simple_deobfuscated_name(), PRIVATE_SUFFIX));
+  if (m->get_simple_deobfuscated_name().length() <= (7 + 2)) {
+    return nullptr;
+  }
+
+  const auto meth_name = m->get_simple_deobfuscated_name();
+  // access$getUiSection$p -> getUiSection
+  auto field_name = meth_name.substr(7, meth_name.length() - (7 + 2));
+  // getUiSection -> uiSection
+  field_name = field_name.substr(3);
+  field_name.at(0) = std::tolower(field_name.at(0));
 
   const auto* rtype = m->get_proto()->get_rtype();
   if (!type::is_int(rtype) && rtype != type::java_lang_String()) {
@@ -312,6 +341,43 @@ void SynthAccessorPatcher::patch_kotlin_companion_property_accessor(
   add_annotations(m, &anno_set);
 }
 
+/*
+ * A synthesized Kotlin method like access$getUiSection$p(); that enables access
+ * to private property on the class.
+ */
+bool SynthAccessorPatcher::is_kotlin_property_private_getter(DexMethod* m) {
+  if (!boost::starts_with(m->get_simple_deobfuscated_name(), ACCESS_PREFIX) ||
+      !boost::ends_with(m->get_simple_deobfuscated_name(), PRIVATE_SUFFIX)) {
+    return false;
+  }
+
+  const auto* property_field = get_field_from_property_private_getter_kotlin(m);
+  if (property_field == nullptr) {
+    return false;
+  }
+
+  auto anno = type_inference::get_typedef_anno_from_member(property_field,
+                                                           m_typedef_annos);
+  return anno != boost::none;
+}
+
+void SynthAccessorPatcher::patch_kotlin_property_private_getter(DexMethod* m) {
+  always_assert(
+      boost::starts_with(m->get_simple_deobfuscated_name(), ACCESS_PREFIX) &&
+      boost::ends_with(m->get_simple_deobfuscated_name(), PRIVATE_SUFFIX));
+
+  const auto* property_field = get_field_from_property_private_getter_kotlin(m);
+  always_assert(property_field != nullptr);
+  auto anno = type_inference::get_typedef_anno_from_member(property_field,
+                                                           m_typedef_annos);
+  always_assert(anno != boost::none);
+
+  DexAnnotationSet anno_set = DexAnnotationSet();
+  anno_set.add_annotation(std::make_unique<DexAnnotation>(
+      DexType::make_type(anno.get()->get_name()), DAV_RUNTIME));
+  add_annotations(m, &anno_set);
+}
+
 void SynthAccessorPatcher::run(const Scope& scope) {
   walk::parallel::methods(scope, [this](DexMethod* m) {
     if (is_kotlin_annotated_property_getter_setter(m)) {
@@ -322,6 +388,9 @@ void SynthAccessorPatcher::run(const Scope& scope) {
     }
     if (is_kotlin_companion_property_accessor(m)) {
       patch_kotlin_companion_property_accessor(m);
+    }
+    if (is_kotlin_property_private_getter(m)) {
+      patch_kotlin_property_private_getter(m);
     }
     if (is_synthetic_kotlin_annotations_method(m)) {
       patch_kotlin_annotations(m);
