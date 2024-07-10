@@ -4,6 +4,10 @@ include $(top_srcdir)/test/Makefile.inc
 AM_CXXFLAGS = --std=gnu++17
 AM_CPPFLAGS = $(COMMON_INCLUDES) $(COMMON_TEST_INCLUDES)
 
+# Boost.
+AM_CPPFLAGS += $(BOOST_CPPFLAGS)
+AM_LDFLAGS = $(BOOST_LDFLAGS)
+
 LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 # Need to set "dexfile" environment variable to point to the dex file ised in
