@@ -155,7 +155,7 @@ aliased_registers_test_SOURCES = AliasedRegistersTest.cpp
 analysis_usage_test_SOURCES = AnalysisUsageTest.cpp
 
 array_propagation_test_SOURCES = constant-propagation/ArrayPropagationTest.cpp
-array_propagation_test_CPPFLAGS = $(COMMON_INCLUDES) $(COMMON_TEST_INCLUDES) -I$(top_srcdir)/sparta/test
+array_propagation_test_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/sparta/test
 
 assert_test_SOURCES = AssertTest.cpp
 
@@ -334,7 +334,7 @@ object_inliner_test_SOURCES = ObjectInlinerTest.cpp
 object_inliner_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 object_propagation_test_SOURCES = constant-propagation/ObjectPropagationTest.cpp
-object_propagation_test_CPPFLAGS = $(COMMON_INCLUDES) $(COMMON_TEST_INCLUDES) -I$(top_srcdir)/sparta/test
+object_propagation_test_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/sparta/test
 
 optimize_enums_test_SOURCES = OptimizeEnumsTest.cpp
 optimize_enums_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
@@ -409,7 +409,7 @@ side_effects_summary_test_SOURCES = object-sensitive-dce/SideEffectSummaryTest.c
 side_effects_summary_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 signed_constant_propagation_test_SOURCES = constant-propagation/SignedConstantPropagationTest.cpp
-signed_constant_propagation_test_CPPFLAGS = $(COMMON_INCLUDES) $(COMMON_TEST_INCLUDES) -I$(top_srcdir)/sparta/test
+signed_constant_propagation_test_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/sparta/test
 
 source_blocks_test_SOURCES = SourceBlocksTest.cpp
 
