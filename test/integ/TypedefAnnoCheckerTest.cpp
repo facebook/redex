@@ -1458,3 +1458,38 @@ TEST_F(TypedefAnnoCheckerTest, TestAnnotatedCompanionPropertyAccessorPatching) {
   auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
+
+TEST_F(TypedefAnnoCheckerTest, TestClassPrivatePropertyGetter) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  std::cout << "!!! before method: " << std::endl;
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerKtTest$ClassWithPrivateProperty$"
+                     "returnInt$lmd$1;.invoke:()V")
+                     ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  DexClass* synth_class = type_class(method->get_class());
+  synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
+
+  // set the deobfuscated name manually since it doesn't get set by default in
+  // integ tests
+  auto* access_p = DexMethod::get_method(
+                       "Lcom/facebook/redextest/"
+                       "TypedefAnnoCheckerKtTest$ClassWithPrivateProperty;."
+                       "access$getInt_field$p:(Lcom/facebook/redextest/"
+                       "TypedefAnnoCheckerKtTest$ClassWithPrivateProperty;)I")
+                       ->as_def();
+  access_p->set_deobfuscated_name(
+      "Lcom/facebook/redextest/"
+      "TypedefAnnoCheckerKtTest$ClassWithPrivateProperty;.access$getInt_field$"
+      "p:(Lcom/facebook/redextest/"
+      "TypedefAnnoCheckerKtTest$ClassWithPrivateProperty;)I");
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_TRUE(checker.complete());
+}

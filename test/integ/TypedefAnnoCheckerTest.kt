@@ -202,4 +202,19 @@ public class TypedefAnnoCheckerKtTest {
   fun testAnnotatedCompanionPropertyAccessorPatching(): String {
     return Listener.getOne()
   }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////
+  public class ClassWithPrivateProperty(@TestIntDef private val int_field: Int) {
+
+    fun printInt(@TestIntDef param: Int) {
+      print(param)
+    }
+
+    @TestIntDef
+    fun returnInt(): Int {
+      val lmd: () -> (Unit) = { printInt(int_field) }
+      lmd()
+      return int_field
+    }
+  }
 }
