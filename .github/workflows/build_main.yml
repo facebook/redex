@@ -13,35 +13,23 @@ env:
   CACHE_VERSION: xxxxx1
 jobs:
   build-20_04:
-    runs-on: 4-core-ubuntu
+    runs-on: 4-core-ubuntu-20.04
     steps:
     - uses: actions/checkout@v4.1.1
     - uses: "./.github/actions/build_debian"
       with:
         job_name: ubuntu_20.04
-# `ubuntu-latest` runner out of space
-#  build-22_04:
-#    runs-on: ubuntu-latest
-#    steps:
-#    - uses: actions/checkout@v4.1.1
-#    - uses: "./.github/actions/build_debian"
-#      with:
-#        job_name: ubuntu_22.04
-  build-deb_oldoldstable:
+  build-22_04:
     runs-on: 4-core-ubuntu
     steps:
     - uses: actions/checkout@v4.1.1
     - uses: "./.github/actions/build_debian"
       with:
-        use_sdk: true
-        job_name: debian_10
-  build-deb_stable:
-    runs-on: 4-core-ubuntu
-    steps:
-    - uses: actions/checkout@v4.1.1
-    - uses: "./.github/actions/build_debian"
-      with:
-        job_name: debian_12
+        job_name: ubuntu_22.04
+  # No supported Github runners:
+  # * debian 10
+  # * debian 12
+  # * debian unstable
 # `mode_32` failed on boost lib
 #  build-deb_stable-32:
 #    runs-on: 4-core-ubuntu
@@ -51,13 +39,6 @@ jobs:
 #      with:
 #        mode_32: true
 #        job_name: debian_12_32
-  build-deb_unstable:
-    runs-on: 4-core-ubuntu
-    steps:
-    - uses: actions/checkout@v4.1.1
-    - uses: "./.github/actions/build_debian"
-      with:
-        job_name: debian_unstable
   build-deb_stable-w-clang-llvm-org:
     runs-on: 4-core-ubuntu
     env:
@@ -74,7 +55,7 @@ jobs:
     - uses: "./.github/actions/build_debian"
       with:
         install_clang_llvm_org: "${{ matrix.clang_version }}"
-        job_name: debian_12_clang_upstream
+        job_name: ubuntu_22_clang_upstream
   build-windows:
     runs-on: windows-latest
     steps:
@@ -108,4 +89,4 @@ jobs:
     - uses: "./.github/actions/build_debian"
       with:
         install_clang_llvm_org: "${{ matrix.clang_version }}"
-        job_name: debian_12_clang_upstream
+        job_name: clang_upstream
