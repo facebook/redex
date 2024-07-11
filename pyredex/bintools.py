@@ -20,6 +20,8 @@ import subprocess
 import sys
 import typing
 
+from pyredex.logger import get_store_logs_temp_file
+
 
 IS_WINDOWS: bool = os.name == "nt"
 LOGGER: logging.Logger = logging.getLogger(__name__)
@@ -160,6 +162,7 @@ def maybe_addr2line(lines: typing.Iterable[str]) -> typing.Optional[typing.List[
 
     if not _has_addr2line():
         sys.stderr.write("Addr2line not found!\n")
+        # Note: no need for store-logs, as this has failed anyways.
         return None
     ret = []
 
@@ -262,6 +265,9 @@ def run_and_stream_stderr(
         # Copy and stash the output.
         stderr = proc.stderr
         assert stderr is not None
+
+        store_logs = get_store_logs_temp_file()
+
         for line in stderr:
             try:
                 str_line = line.decode(sys.stdout.encoding)
@@ -270,6 +276,8 @@ def run_and_stream_stderr(
             if line_handler:
                 str_line = line_handler(str_line)
             sys.stderr.write(str_line)
+            if store_logs:
+                store_logs.write(str_line)
             err_out.append(str_line)
             if len(err_out) > 1000:
                 err_out = err_out[100:]

@@ -8,8 +8,13 @@
 # pyre-strict
 
 
+import atexit
+import logging
+import lzma
 import os
+import shutil
 import sys
+import tempfile
 import typing
 
 
@@ -124,3 +129,68 @@ def flush() -> None:
 def log(*stuff: typing.Any) -> None:
     if get_log_level() > 0:
         print(*stuff, file=get_trace_file())
+
+
+_STORE_LOGS_TEMP: typing.Optional[typing.Tuple[str, typing.TextIO]] = None
+
+
+def _close_and_delete_store_logs_temp_file() -> None:
+    global _STORE_LOGS_TEMP
+    store_logs = _STORE_LOGS_TEMP
+    _STORE_LOGS_TEMP = None
+    if store_logs:
+        store_logs[1].close()
+        os.remove(store_logs[0])
+
+
+def setup_store_logs_temp_file() -> None:
+    global _STORE_LOGS_TEMP
+    assert _STORE_LOGS_TEMP is None
+
+    fileno, filepath = tempfile.mkstemp(prefix="redex-", suffix=".log", text=True)
+    textio = os.fdopen(fileno, "w")
+
+    # Use atexit to close and clean up. Hopefully there won't be logging
+    # triggered in parallel.
+    atexit.register(_close_and_delete_store_logs_temp_file)
+
+    # Install as a stream handler (because the file exists and is open) to the
+    # root logger.
+    last_handler = logging.getLogger().handlers[-1]
+    file_handler = logging.StreamHandler(textio)
+    file_handler.setLevel(last_handler.level)
+    file_handler.setFormatter(last_handler.formatter)
+    logging.getLogger().addHandler(file_handler)
+
+    _STORE_LOGS_TEMP = (filepath, textio)
+
+
+def get_store_logs_temp_file() -> typing.Optional[typing.TextIO]:
+    global _STORE_LOGS_TEMP
+    store_logs = _STORE_LOGS_TEMP
+
+    return store_logs[1] if store_logs else None
+
+
+def copy_store_logs_to(dst: str) -> bool:
+    global _STORE_LOGS_TEMP
+    store_logs = _STORE_LOGS_TEMP
+
+    if not store_logs:
+        return False
+
+    # First flush.
+    store_logs[1].flush()
+    # Make a temporary copy to not get annoyance with compression.
+    fileno, filepath = tempfile.mkstemp(prefix="redex-", suffix=".log.bak", text=True)
+    os.close(fileno)  # Don't need this.
+    shutil.copy2(store_logs[0], filepath)
+
+    # Compress into dst.
+    with lzma.open(dst, "wb", preset=9) as out_file:
+        with open(filepath, "rb") as in_file:
+            shutil.copyfileobj(in_file, out_file)
+
+    os.remove(filepath)
+
+    return True

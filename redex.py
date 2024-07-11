@@ -373,6 +373,7 @@ def run_redex_binary(
                 sys.stderr.write("\n")
                 sys.stderr.write("\n".join(symbolized))
                 sys.stderr.write("\n")
+                # Note: no need for store-logs, as this has failed anyways.
 
             abort_error = None
             if returncode == -6:  # SIGABRT
@@ -764,6 +765,9 @@ Given an APK, produce a better APK!
         "--log-level",
         default="warning",
         help="Specify the python logging level",
+    )
+    parser.add_argument(
+        "--store-logs", action="store_true", help="Store all logs as meta"
     )
 
     parser.add_argument(
@@ -1439,6 +1443,9 @@ def finalize_redex(state: State) -> None:
             state.dex_dir, state.args.out, "*.dot", "approximate shape graphs"
         )
 
+    # Write stored logs, if any.
+    logger.copy_store_logs_to(join(dirname(state.args.out), "redex-log.txt.xz"))
+
 
 def _init_logging(level_str: str) -> None:
     levels = {
@@ -1511,6 +1518,8 @@ def run_redex(
 def early_apply_args(args: argparse.Namespace) -> None:
     # This is late, but hopefully early enough.
     _init_logging(args.log_level)
+    if args.store_logs:
+        logger.setup_store_logs_temp_file()
 
     # Translate these to the regular environment variables.
     if args.trace:
