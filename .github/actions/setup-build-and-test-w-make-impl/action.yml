@@ -12,9 +12,6 @@ inputs:
   run_tests:
     required: false
     default: true
-  use_sdk:
-    required: false
-    default: true
   job_name:
     required: false
 runs:
@@ -25,8 +22,6 @@ runs:
       save_boost_cache: "${{ inputs.save_boost_cache }}"
       setup_toolchain_extra: "${{ inputs.setup_toolchain_extra }}"
   - uses: "./.github/actions/test-build-setup"
-    with:
-      use_sdk: "${{ inputs.use_sdk }}"
   - name: Create Build Cache File
     run: echo "${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}" > /tmp/build.txt
     shell: bash

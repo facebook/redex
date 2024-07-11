@@ -12,9 +12,6 @@ inputs:
   mode_32:
     required: false
     default: false
-  use_sdk:
-    required: false
-    default: true
   job_name:
     required: false
 runs:
@@ -36,5 +33,4 @@ runs:
     with:
       save_boost_cache: "${{ inputs.save_boost_cache }}"
       mode_32: "${{ inputs.mode_32 }}"
-      use_sdk: "${{ inputs.use_sdk }}"
       job_name: "${{ inputs.job_name }}-${{ inputs.install_clang_llvm_org }}"
