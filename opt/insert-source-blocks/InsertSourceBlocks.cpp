@@ -799,6 +799,21 @@ struct Injector {
       }
     }
   }
+
+  void write_unresolved_methods(const std::string& fname) const {
+    // Using a set to avoid hashing all of it. Similar approach to RedexContext.
+    // Assumption is set is small overall. Also helps for sorting strings.
+    std::set<std::string_view> unresolved_uniqued;
+    for (auto& p : profile_files) {
+      for (auto& sv : p->unresolved_methods) {
+        unresolved_uniqued.insert(sv);
+      }
+    }
+    std::ofstream ofs{fname};
+    for (auto& sv : unresolved_uniqued) {
+      ofs << sv << "\n";
+    }
+  }
 };
 
 } // namespace
@@ -826,6 +841,8 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
   Injector inj(conf, always_inject);
 
   inj.prepare_profile_files_and_interactions(m_profile_files);
+  inj.write_unresolved_methods(
+      conf.metafile("redex-isb-unresolved-methods.txt"));
 
   inj.run_source_blocks(stores,
                         mgr,
