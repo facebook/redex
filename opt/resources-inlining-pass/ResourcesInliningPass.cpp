@@ -26,13 +26,21 @@ void ResourcesInliningPass::run_pass(DexStoresVector& stores,
 
   const Scope scope = build_class_scope(stores);
 
-  ResourcesInliningPass::optimization_pass(scope, inlinable_resources);
+  ResourcesInliningPass::find_transformations(scope, inlinable_resources);
 }
 
-MethodTransformsMap ResourcesInliningPass::optimization_pass(
+MethodTransformsMap ResourcesInliningPass::find_transformations(
     const Scope& scope,
     const std::unordered_map<uint32_t, resources::InlinableValue>&
         inlinable_resources) {
+  /*
+   Per the following Android source links, these methods are performing no
+   further logic beyond retrieving the raw data from the resource table and thus
+   should be easily representable with dex instructions.
+   https://cs.android.com/android/platform/superproject/+/android-14.0.0_r1:frameworks/base/core/java/android/content/res/Resources.java;l=1180
+   https://cs.android.com/android/platform/superproject/+/android-14.0.0_r1:frameworks/base/core/java/android/content/res/Resources.java;l=1073
+   https://cs.android.com/android/platform/superproject/+/android-14.0.0_r1:frameworks/base/core/java/android/content/res/Resources.java;l=1206
+  */
   std::unordered_set<DexMethodRef*> dex_method_refs = {
       DexMethod::get_method("Landroid/content/res/Resources;.getBoolean:(I)Z"),
       DexMethod::get_method("Landroid/content/res/Resources;.getColor:(I)I"),
@@ -53,6 +61,7 @@ MethodTransformsMap ResourcesInliningPass::optimization_pass(
                                     cp::HeapEscapeAnalyzer,
                                     cp::PrimitiveAnalyzer>;
 
+    // Retrieving cfg
     auto get_code = method->get_code();
     if (get_code == nullptr) {
       return;
@@ -61,12 +70,16 @@ MethodTransformsMap ResourcesInliningPass::optimization_pass(
 
     cp::intraprocedural::FixpointIterator intra_cp(
         cfg, CombinedAnalyzer(nullptr, nullptr, nullptr));
+    // Runing the combined analyzer initially
     intra_cp.run(ConstantEnvironment());
 
     std::vector<InlinableOptimization> transforms;
+    // Looping through each block and replaying
     for (auto* block : cfg.blocks()) {
       auto env = intra_cp.get_entry_state_at(block);
       auto last_insn = block->get_last_insn();
+      // Going through each instruction in the block and checking for invoke
+      // virtual, if it is inlinable and if it is a valid API call
       for (auto& mie : InstructionIterable(block)) {
         auto insn = mie.insn;
         if (insn->opcode() == OPCODE_INVOKE_VIRTUAL &&
@@ -77,6 +90,7 @@ MethodTransformsMap ResourcesInliningPass::optimization_pass(
           if (const_value != boost::none &&
               inlinable_resources.find(const_value.value()) !=
                   inlinable_resources.end()) {
+            // Adding to list of possible optimizations if it is
             auto insertable = InlinableOptimization();
             insertable.insn = insn;
             insertable.inlinable_value =
@@ -87,6 +101,7 @@ MethodTransformsMap ResourcesInliningPass::optimization_pass(
         intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
       }
     }
+    // For each method, adding all possible transformations to the map
     if (!transforms.empty()) {
       possible_transformations.emplace(method, std::move(transforms));
     }

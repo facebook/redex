@@ -788,6 +788,9 @@ bool ClinitFieldAnalyzer::analyze_invoke(const DexType* class_under_init,
   return false;
 }
 
+/*
+ * An analyzer for sget for when we have a static final field
+ */
 bool StaticFinalFieldAnalyzer::analyze_sget(const IRInstruction* insn,
                                             ConstantEnvironment* env) {
   if (insn->opcode() != OPCODE_SGET) {

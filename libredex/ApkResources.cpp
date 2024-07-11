@@ -2696,6 +2696,10 @@ bool is_inlinable_resource_value(
   return false;
 }
 
+/*
+ * Finds a map of the resource id to an inlinable value, if a certain resource
+ * value could be eligible for inlining
+ */
 std::unordered_map<uint32_t, resources::InlinableValue>
 ResourcesArscFile::get_inlinable_resource_values() {
   apk::TableSnapshot& table_snapshot = get_table_snapshot();
@@ -2720,6 +2724,8 @@ ResourcesArscFile::get_inlinable_resource_values() {
     arsc::PtrLen<uint8_t> value_data = arsc::get_value_data(entry_value);
     android::Res_value* res_value = (android::Res_value*)(value_data.getKey());
 
+    // If found an inlinable resource value, setting the values of a
+    // InlinableValue struct accordingly and adding it to the map
     if (is_inlinable_resource_value(config_to_entry_map, res_entry,
                                     res_value)) {
       resources::InlinableValue val{};
@@ -2745,6 +2751,9 @@ ResourcesArscFile::get_inlinable_resource_values() {
     }
   }
 
+  // If a reference is found, check if the referenced value is inlinable and add
+  // it's actual value to the map (instead of the reference). NOTE: only works
+  // if reference only goes down one level.
   for (auto& [id, value] : past_refs) {
     auto it = inlinable_resources.find(value->data);
     if (it != inlinable_resources.end()) {

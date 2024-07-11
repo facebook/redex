@@ -48,7 +48,7 @@ MethodTransformsMap build_test(
   walk::code(scope, [&](DexMethod*, IRCode& code) { code.build_cfg(); });
 
   auto transforms =
-      ResourcesInliningPass::optimization_pass(scope, inlinable_resources);
+      ResourcesInliningPass::find_transformations(scope, inlinable_resources);
   return transforms;
 }
 
