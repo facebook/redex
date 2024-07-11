@@ -233,8 +233,11 @@ class TableSnapshot {
       std::vector<android::ResTable_config> include_configs,
       std::vector<android::Res_value>* out);
   bool is_valid_global_string_idx(size_t idx) const;
-  // Reads a string from the global string pool.
-  std::string get_global_string(size_t idx) const;
+  // Convenience method to Read a string from the global string pool as standard
+  // UTF-8.
+  // ONLY USE FOR HUMAN READABLE PRINTING OR KNOWN SIMPLE STRINGS LIKE FILE
+  // PATHS OR CLASS NAMES.
+  std::string get_global_string_utf8s(size_t idx) const;
   // Get a representation of the underlying parsed file.
   TableEntryParser& get_parsed_table() { return m_table_parser; }
   android::ResStringPool& get_global_strings() { return m_global_strings; }
@@ -253,6 +256,9 @@ class ResourcesArscFile : public ResourceTableFile {
   ResourcesArscFile& operator=(const ResourcesArscFile&) = delete;
 
   explicit ResourcesArscFile(const std::string& path);
+  // Returns the string values of the resource(s) with the given name.
+  // NOTE: For human readability, the returned strings in the vector will be
+  // standard UTF-8 encoding!
   std::vector<std::string> get_resource_strings_by_name(
       const std::string& res_name);
   void remap_ids(const std::map<uint32_t, uint32_t>& old_to_remapped_ids);
@@ -302,6 +308,8 @@ class ResourcesArscFile : public ResourceTableFile {
       std::vector<android::ResTable_config>* configs) override;
   std::set<android::ResTable_config> get_configs_with_values(
       uint32_t id) override;
+  // NOTE: this method will return values in standard UTF-8 to give a consistent
+  // API/return values with BundleResources.
   void resolve_string_values_for_resource_reference(
       uint32_t ref, std::vector<std::string>* values) override;
   std::unordered_map<uint32_t, resources::InlinableValue>

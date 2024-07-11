@@ -263,6 +263,9 @@ class ResourceTableFile {
 
   // For a given resource ID, find all string values that the ID could represent
   // across all configurations (including chasing down references).
+  // NOTE: in case of supplimental characters in string values, UTF-8 standard
+  // encoding will be returned, so that the caller will have a consistent
+  // behavior regardless of apk / aab container formats.
   virtual void resolve_string_values_for_resource_reference(
       uint32_t ref, std::vector<std::string>* values) = 0;
 

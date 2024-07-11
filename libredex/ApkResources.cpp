@@ -499,7 +499,10 @@ bool TableSnapshot::is_valid_global_string_idx(size_t idx) const {
   return arsc::is_valid_string_idx(m_global_strings, idx);
 }
 
-std::string TableSnapshot::get_global_string(size_t idx) const {
+// Note: this method should be used for printing values, or for giving a unified
+// API with BundleResources, which will use standard UTF-8 encoding. Do not
+// forward the return values on to a new string pool.
+std::string TableSnapshot::get_global_string_utf8s(size_t idx) const {
   return arsc::get_string_from_pool(m_global_strings, idx);
 }
 
@@ -967,13 +970,13 @@ class XmlStringAttributeCollector : public arsc::SimpleXmlParser {
       auto& pool = global_strings();
       if (arsc::is_valid_string_idx(pool, idx)) {
         auto s = arsc::get_string_from_pool(pool, idx);
-        m_values.emplace(s);
+        m_utf8s_values.emplace(s);
       }
     }
     return true;
   }
 
-  std::unordered_set<std::string> m_values;
+  std::unordered_set<std::string> m_utf8s_values;
 };
 
 class XmlElementCollector : public arsc::SimpleXmlParser {
@@ -1123,7 +1126,8 @@ void ApkResources::collect_xml_attribute_string_values_for_file(
     if (arsc::is_binary_xml(data, size)) {
       XmlStringAttributeCollector collector;
       if (collector.visit((void*)data, size)) {
-        out->insert(collector.m_values.begin(), collector.m_values.end());
+        out->insert(collector.m_utf8s_values.begin(),
+                    collector.m_utf8s_values.end());
       }
     }
   });
@@ -1427,7 +1431,7 @@ void obfuscate_xml_attributes(
         TRACE(RES, 9, "NOT obfuscating xml file %s", filename.c_str());
         return;
       }
-      builder.add_string(element);
+      builder.add_string(pool, i);
     }
     android::Vector<char> out;
     arsc::replace_xml_string_pool((android::ResChunk_header*)file.data(),
@@ -1618,7 +1622,9 @@ class GlobalStringPoolReader : public arsc::ResourceTableVisitor {
     return false; // Don't parse anything else
   }
 
-  uint32_t get_string_idx(const std::string& s) {
+  // Given a standard UTF-8 string, return the index into the pool for where
+  // that string is. The given string must be in the pool.
+  uint32_t get_index_of_utf8s_string(const std::string& s) {
     return m_string_to_idx.at(s);
   }
 
@@ -1736,8 +1742,9 @@ void ResourcesArscFile::remap_file_paths_and_serialize(
   string_reader.visit(m_f.data(), m_arsc_len);
   std::unordered_map<uint32_t, uint32_t> old_to_new_idx;
   for (auto& pair : old_to_new) {
-    old_to_new_idx.emplace(string_reader.get_string_idx(pair.first),
-                           string_reader.get_string_idx(pair.second));
+    old_to_new_idx.emplace(
+        string_reader.get_index_of_utf8s_string(pair.first),
+        string_reader.get_index_of_utf8s_string(pair.second));
   }
   TRACE(RES, 9, "BEGIN StringPoolRefRemappingVisitor");
   StringPoolRefRemappingVisitor remapper(old_to_new_idx);
@@ -2122,7 +2129,7 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
     uint32_t total_num_strings = string_pool->size();
     for (const auto& pair : filepath_old_to_new) {
       const auto& cur_new_string = pair.second;
-      auto old_id = string_reader.get_string_idx(pair.first);
+      auto old_id = string_reader.get_index_of_utf8s_string(pair.first);
       always_assert_log(old_id >= string_pool->styleCount(),
                         "Don't support remapping of style.");
       if (!global_new_strings_to_id.count(cur_new_string)) {
@@ -2188,6 +2195,8 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
 
       for (auto& ref : refs) {
         auto old = dtohl(ref->index);
+        // keep_resource_specific values are given as standard UTF-8; compare
+        // against string pool also as standard UTF-8.
         std::string old_string =
             arsc::get_string_from_pool(*key_string_pool, old);
         if (keep_resource_specific.count(old_string) > 0 ||
@@ -2258,7 +2267,7 @@ std::vector<std::string> ResourcesArscFile::get_files_by_rid(
     auto val = out_values[i];
     if (val.dataType == android::Res_value::TYPE_STRING) {
       // data is an index into string pool.
-      auto s = table_snapshot.get_global_string(dtohl(val.data));
+      auto s = table_snapshot.get_global_string_utf8s(dtohl(val.data));
       if (is_resource_file(s)) {
         ret.emplace_back(s);
       }
@@ -2298,7 +2307,7 @@ void ResourcesArscFile::walk_references_for_resource(
     nodes_to_explore.pop();
     if (r.dataType == android::Res_value::TYPE_STRING) {
       potential_file_paths->insert(
-          table_snapshot.get_global_string(dtohl(r.data)));
+          table_snapshot.get_global_string_utf8s(dtohl(r.data)));
       continue;
     }
 
@@ -2644,7 +2653,7 @@ std::vector<std::string> ResourcesArscFile::get_resource_strings_by_name(
     ret.reserve(string_idx.size());
     for (const auto& i : string_idx) {
       if (table_snapshot.is_valid_global_string_idx(i)) {
-        ret.push_back(table_snapshot.get_global_string(i));
+        ret.push_back(table_snapshot.get_global_string_utf8s(i));
       }
     }
   }
@@ -2659,7 +2668,7 @@ void ResourcesArscFile::resolve_string_values_for_resource_reference(
   resolve_string_index_for_id(table_snapshot, ref, &seen, &string_idx);
   for (const auto& i : string_idx) {
     if (table_snapshot.is_valid_global_string_idx(i)) {
-      values->push_back(table_snapshot.get_global_string(i));
+      values->push_back(table_snapshot.get_global_string_utf8s(i));
     }
   }
 }
