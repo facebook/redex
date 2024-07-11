@@ -271,6 +271,7 @@ commands:
           # Always distinguish caches for the job, arch and branch. Look for the current revision first,
           # then "newest" cache.
             - &build-cache v2-build-cache-{{ checksum "/tmp/build.txt" }}-{{ arch }}-{{ .Branch }}-{{ .Revision }}
+            - v2-build-cache-{{ checksum "/tmp/build.txt" }}-{{ arch }}-{{ .Branch }}-
             - v1-build-cache-{{ checksum "/tmp/build.txt" }}-{{ arch }}-{{ .Branch }}-
 
       - run:
