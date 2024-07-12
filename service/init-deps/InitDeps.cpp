@@ -126,13 +126,13 @@ Scope reverse_tsort_by_clinit_deps(const Scope& scope, size_t& init_cycles) {
   // NOTE: Using nullptr for root node.
   auto wto = sparta::WeakTopologicalOrdering<DexClass*>(
       nullptr,
-      [&roots = roots, &reverse_deps = reverse_deps](DexClass* const& cls) {
+      [&_roots = roots, &_reverse_deps = reverse_deps](DexClass* const& cls) {
         if (cls == nullptr) {
-          return roots;
+          return _roots;
         }
 
-        auto it = reverse_deps.find(cls);
-        if (it == reverse_deps.end()) {
+        auto it = _reverse_deps.find(cls);
+        if (it == _reverse_deps.end()) {
           return std::vector<DexClass*>();
         }
 
