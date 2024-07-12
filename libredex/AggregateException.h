@@ -19,7 +19,7 @@ class aggregate_exception : public std::exception {
       : m_exceptions(container.begin(), container.end()) {}
 
   // We do not really want to have this called directly
-  const char* what() const throw() override { return "one or more exception"; }
+  const char* what() const noexcept override { return "one or more exception"; }
 
   const std::vector<std::exception_ptr> m_exceptions;
 };
