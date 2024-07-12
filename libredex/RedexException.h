@@ -41,7 +41,7 @@ class RedexException : public std::exception {
       const std::string& message = "",
       const std::map<std::string, std::string>& extra_info = {});
 
-  const char* what() const throw() override;
+  const char* what() const noexcept override;
 
  private:
   std::string m_msg;
