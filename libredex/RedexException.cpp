@@ -29,7 +29,7 @@ RedexException::RedexException(
   m_msg = oss.str();
 }
 
-const char* RedexException::what() const throw() { return m_msg.c_str(); }
+const char* RedexException::what() const noexcept { return m_msg.c_str(); }
 
 void assert_or_throw(bool cond,
                      RedexError type,
