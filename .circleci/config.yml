@@ -138,17 +138,6 @@ commands:
 
   # For testing, need additional dependencies not provided by the image.
 
-  # Version where dx is available as a package. May remove this eventually.
-  test-build-setup-no-sdk:
-    steps:
-      - run:
-          name: Setup for tests
-          command: |
-            sudo apt-get install -y --no-install-recommends dalvik-exchange default-jdk-headless
-            sudo ln -s /usr/bin/dalvik-exchange /usr/local/bin/dx
-
-  # Special version of the above to work around Debian Testing package issues.
-  #
   # Note: CircleCI does not allow to drop existing caches (in case they are
   #       outdated, for example). The expectation is that the "cache key"
   #       changes, for example via the checksum of a dependency file.
@@ -163,15 +152,15 @@ commands:
   #       See:
   #       * [https://support.circleci.com/hc/en-us/articles/115015426888-Clear-project-dependency-cache]
   #       * [https://devops.stackexchange.com/questions/9147/how-to-get-other-than-no-value-when-interpolating-environment-some-var]
-  test-build-setup-sdk:
+  test-build-setup:
     steps:
       - run:
-          name: Setup for tests (Deb Testing)
+          name: Setup for tests
           command: |
             sudo apt-get install -y --no-install-recommends default-jdk-headless
 
       - run:
-          name: Create cache key file
+          name: Create cache key file for SDK Cache
           command: |
             echo "Cache key is: ${CACHE_VERSION}"
             echo "${CACHE_VERSION}" > cache_version.rev
@@ -214,22 +203,6 @@ commands:
             - ~/sdk
           key: android-build-tools-{{ checksum "cache_version.rev" }}
 
-  test-build-setup:
-    parameters:
-      use_sdk:
-        type: boolean
-        default: true
-    steps:
-      - when:
-          condition: << parameters.use_sdk >>
-          steps:
-            - test-build-setup-sdk
-      - when:
-          condition:
-            not: << parameters.use_sdk >>
-          steps:
-            - test-build-setup-no-sdk
-
   # Level of indirection because there seems to be no way to set parameters
   # in the steps.
   setup-build-and-test-w-make-impl:
@@ -247,9 +220,6 @@ commands:
       run_tests:
         type: boolean
         default: true
-      use_sdk:
-        type: boolean
-        default: true
       job_name:
         type: string
     steps:
@@ -257,8 +227,7 @@ commands:
           save_boost_cache: << parameters.save_boost_cache >>
           setup_toolchain_extra: << parameters.setup_toolchain_extra >>
 
-      - test-build-setup:
-          use_sdk: << parameters.use_sdk >>
+      - test-build-setup
 
       - run:
           name: Create Build Cache File
@@ -348,10 +317,6 @@ commands:
       mode_32:
         type: boolean
         default: false
-      # Download DX from the Android SDK.
-      use_sdk:
-        type: boolean
-        default: true
       job_name:
         type: string
     steps:
@@ -360,7 +325,6 @@ commands:
           steps:
             - setup-build-and-test-w-make-impl:
                 save_boost_cache: << parameters.save_boost_cache >>
-                use_sdk: << parameters.use_sdk >>
                 setup_toolchain_extra: "32"
                 # Would be nice to properly use environment, but that's only at
                 # the jobs or run level.
@@ -375,7 +339,6 @@ commands:
           steps:
             - setup-build-and-test-w-make-impl:
                 save_boost_cache: << parameters.save_boost_cache >>
-                use_sdk: << parameters.use_sdk >>
                 job_name: << parameters.job_name >>
 
   build_debian:
@@ -393,9 +356,6 @@ commands:
       mode_32:
         type: boolean
         default: false
-      use_sdk:
-        type: boolean
-        default: true
       job_name:
         type: string
     steps:
@@ -412,7 +372,6 @@ commands:
             git restore-mtime
       - setup-build-and-test-w-make:
           save_boost_cache: << parameters.save_boost_cache >>
-          use_sdk: << parameters.use_sdk >>
           mode_32: << parameters.mode_32 >>
           job_name: << parameters.job_name >>-<< parameters.install_clang_llvm_org >>
 
@@ -483,7 +442,6 @@ jobs:
     resource_class: large
     steps:
       - build_debian:
-          use_sdk: false
           job_name: debian_10
 
   build-deb_stable:

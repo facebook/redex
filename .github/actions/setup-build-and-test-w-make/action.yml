@@ -6,9 +6,6 @@ inputs:
   mode_32:
     required: false
     default: false
-  use_sdk:
-    required: false
-    default: true
   job_name:
     required: false
 runs:
@@ -21,12 +18,10 @@ runs:
       configure_extra: "--host=i686-linux-gnu CFLAGS=-m32 CXXFLAGS=-m32 LDFLAGS=-m32"
       save_boost_cache: "${{ inputs.save_boost_cache }}"
       run_tests: false
-      use_sdk: "${{ inputs.use_sdk }}"
       job_name: "${{ inputs.job_name }}"
 
   - uses: "./.github/actions/setup-build-and-test-w-make-impl"
     if: inputs.mode_32 != 'true'
     with:
       save_boost_cache: "${{ inputs.save_boost_cache }}"
-      use_sdk: "${{ inputs.use_sdk }}"
       job_name: "${{ inputs.job_name }}"
