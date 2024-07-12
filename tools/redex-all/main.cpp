@@ -1803,6 +1803,12 @@ int main(int argc, char* argv[]) {
           ScopedCommandProfiling::maybe_from_env("FRONTEND_", "frontend");
       redex_frontend(conf, args, *pg_config, stores, stats);
       conf.parse_global_config();
+      if (args.redex_options.instrument_pass_enabled) {
+        auto global_resources_config =
+            conf.get_global_config().get_config_by_name<ResourceConfig>(
+                "resources");
+        global_resources_config->cleanup_r_class_rewriting = false;
+      }
       maybe_dump_jemalloc_profile("MALLOC_PROFILE_DUMP_FRONTEND");
     }
 

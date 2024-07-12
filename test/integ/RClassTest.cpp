@@ -14,6 +14,7 @@
 #include "DexLoader.h"
 #include "DexUtil.h"
 #include "GlobalConfig.h"
+#include "IRAssembler.h"
 #include "IRCode.h"
 #include "LiveRange.h"
 #include "RClass.h"
@@ -106,6 +107,7 @@ const char* styleable_sgets_r_class_name = "Lcom/redextest/R$styleable_sgets;";
 class RClassTest : public RedexIntegrationTest {
  public:
   ResourceConfig global_resources_config;
+  ResourceConfig instrumented_global_resources_config;
   DexClass* base_r_class;
 
   RClassTest() {
@@ -113,6 +115,9 @@ class RClassTest : public RedexIntegrationTest {
     // The outer R class is assumed to have been customized to store extra junk,
     // like in our buck builds of applications.
     global_resources_config.customized_r_classes.emplace(base_r_class_name);
+    instrumented_global_resources_config.customized_r_classes.emplace(
+        base_r_class_name);
+    instrumented_global_resources_config.cleanup_r_class_rewriting = false;
     base_r_class = get_r_class(*classes, base_r_class_name);
   }
 };
@@ -378,4 +383,73 @@ TEST_F(RClassTest, noDoubleRemappingArrays) {
     }
   }
   EXPECT_TRUE(found_array);
+}
+
+TEST_F(RClassTest, bePermissiveWhenInInstrumentationMode) {
+  auto instrumented_r_cls = assembler::class_from_string(R"(
+    (class (public) "Lcom/redextest/R$styleable_instr;"
+      (field (public static final) "Lcom/redextest/R$styleable_instr;.eight:[I")
+      (method (static constructor) "Lcom/redextest/R$styleable_instr;.<clinit>:()V"
+        (
+          (const v0 999)
+          (invoke-static (v0) "Lcom/redex/Instrumentation;.onMethodBegin:(I)V")
+          (const v0 2)
+          (new-array v0 "[I") ; create an array of length 2
+          (move-result-pseudo-object v1)
+          (fill-array-data v1 #4 (7f080000 7f080001))
+          (sput-object v1 "Lcom/redextest/R$styleable_instr;.eight:[I")
+          (return-void)
+        )
+      )
+      (method (constructor) "Lcom/redextest/R$styleable_instr;.<init>:()V"
+        (
+          (load-param-object v0)
+          (const v1 1000)
+          (invoke-static (v1) "Lcom/redex/Instrumentation;.onMethodBegin:(I)V")
+          (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+          (return-void)
+        )
+      )
+    )
+  )");
+
+  // Build up a totally separate store, scope of the specially instrumented
+  // class, so that this example, and the config options can be tested in
+  // isolation from eachother.
+  Scope test_scope{instrumented_r_cls};
+  prepare_methods_for_test(test_scope);
+
+  DexMetadata temp_metadata;
+  temp_metadata.set_id("classes");
+  DexStore temp_store(temp_metadata);
+  temp_store.add_classes(test_scope);
+  std::vector<DexStore> temp_stores{temp_store};
+
+  auto code = instrumented_r_cls->get_clinit()->get_code();
+  std::cout << "Instrumented R clinit:" << std::endl;
+  dump_code_verbose(code);
+
+  std::map<uint32_t, uint32_t> old_to_remapped_ids{{0x7f080000, 0x7f090000},
+                                                   {0x7f080001, 0x7f090001}};
+
+  resources::RClassWriter r_class_writer(instrumented_global_resources_config);
+  r_class_writer.remap_resource_class_arrays(temp_stores, old_to_remapped_ids);
+
+  std::cout << "Remapped Instrumented R clinit:" << std::endl;
+  dump_code_verbose(code);
+  size_t found_count{0};
+  for (const auto& mie : cfg::InstructionIterable(code->cfg())) {
+    auto insn = mie.insn;
+    if (insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
+      found_count++;
+      if (found_count == 2) {
+        auto op_data = insn->get_data();
+        auto payload = get_fill_array_data_payload<uint32_t>(op_data);
+        EXPECT_EQ(payload.size(), 2) << "Should have two elements!";
+        EXPECT_EQ(payload[0], 0x7f090000) << "Remapping was incorrect!";
+        EXPECT_EQ(payload[1], 0x7f090001) << "Remapping was incorrect!";
+      }
+    }
+  }
+  EXPECT_EQ(found_count, 2) << "Cleanup should have been turned off!";
 }

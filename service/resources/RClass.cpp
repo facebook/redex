@@ -71,19 +71,39 @@ bool is_zero_arg_constructor(const DexMethodRef* ref) {
   return method::is_init(ref) && proto->is_void() && proto->get_args()->empty();
 }
 
+// For instrumented builds, R class <clinit> method and constructors can have
+// additional static method calls for tracking purposes. Because this does not
+// fit the standard form, or the expectations of what we pass to OSDCE, be
+// permissive under this situation and skip cleanup.
+bool is_tolerable_instrumentation_invoke(
+    const IRInstruction* insn, const ResourceConfig& global_resources_config) {
+  if (!global_resources_config.cleanup_r_class_rewriting) {
+    // If cleanup is turned off, be more permissive to allow InstrumentPass's
+    // onMethodBegin to be called. The following is a very coarse check for
+    // that method, for simplicity's sake.
+    return opcode::is_invoke_static(insn->opcode()) &&
+           insn->get_method()->get_proto()->is_void();
+  }
+  return false;
+}
+
 // R inner classes are expected to simply set up static final fields of the
 // class. There should be no invokes, but a class might dereference fields from
 // other classes (which should be fine).
-bool valid_r_class_clinit(const DexMethod* clinit) {
+bool valid_r_class_clinit(const DexMethod* clinit,
+                          const ResourceConfig& global_resources_config) {
   const auto code = clinit->get_code();
   if (code == nullptr) {
     return true;
   }
   bool is_valid{true};
   editable_cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
-    if (mie.type == MFLOW_OPCODE && mie.insn->has_method()) {
-      is_valid = false;
-      return editable_cfg_adapter::LoopExit::LOOP_BREAK;
+    if (mie.type == MFLOW_OPCODE) {
+      if (mie.insn->has_method() && !is_tolerable_instrumentation_invoke(
+                                        mie.insn, global_resources_config)) {
+        is_valid = false;
+        return editable_cfg_adapter::LoopExit::LOOP_BREAK;
+      }
     }
     return editable_cfg_adapter::LoopExit::LOOP_CONTINUE;
   });
@@ -92,7 +112,8 @@ bool valid_r_class_clinit(const DexMethod* clinit) {
 
 // Should be an empty constructor that simply loads the "this" obj, calls the
 // super Object constructor and returns.
-bool valid_r_class_init(const DexMethod* init) {
+bool valid_r_class_init(const DexMethod* init,
+                        const ResourceConfig& global_resources_config) {
   if (!is_zero_arg_constructor(init)) {
     return false;
   }
@@ -104,12 +125,15 @@ bool valid_r_class_init(const DexMethod* init) {
   editable_cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
     if (mie.type == MFLOW_OPCODE) {
       auto op = mie.insn->opcode();
-      if (opcode::is_invoke_direct(op)) {
-        if (!is_zero_arg_constructor(mie.insn->get_method())) {
+      if (mie.insn->has_method()) {
+        if (!is_zero_arg_constructor(mie.insn->get_method()) &&
+            !is_tolerable_instrumentation_invoke(mie.insn,
+                                                 global_resources_config)) {
           is_valid = false;
           return editable_cfg_adapter::LoopExit::LOOP_BREAK;
         }
-      } else if (!opcode::is_a_load_param(op) && !opcode::is_a_return(op)) {
+      } else if (!opcode::is_a_load_param(op) && !opcode::is_a_return(op) &&
+                 !opcode::is_a_const(op)) {
         is_valid = false;
         return editable_cfg_adapter::LoopExit::LOOP_BREAK;
       }
@@ -117,33 +141,6 @@ bool valid_r_class_init(const DexMethod* init) {
     return editable_cfg_adapter::LoopExit::LOOP_CONTINUE;
   });
   return is_valid;
-}
-
-// R inner classes should have at most a <clinit> method, no others, and that
-// <clinit> should be simple (i.e. not calling any other methods).
-bool valid_r_class_structure(const DexClass* cls) {
-  if (!cls->get_vmethods().empty()) {
-    return false;
-  }
-  // Should be at most clinit and zero arg constructor
-  const auto& methods = cls->get_dmethods();
-  if (methods.size() > 2) {
-    return false;
-  }
-  for (auto m : methods) {
-    if (m == cls->get_clinit()) {
-      if (!valid_r_class_clinit(m)) {
-        return false;
-      }
-    } else if (is_constructor(m)) {
-      if (!valid_r_class_init(m)) {
-        return false;
-      }
-    } else {
-      return false;
-    }
-  }
-  return true;
 }
 
 // See
@@ -185,10 +182,6 @@ bool is_non_customized_r_class(const DexClass* cls) {
   const auto c_name = cls->get_name()->str();
   const auto d_name = cls->get_deobfuscated_name_or_empty();
   if ((is_resource_class_name(c_name) || is_resource_class_name(d_name))) {
-    always_assert_log(
-        valid_r_class_structure(cls),
-        "%s is a R inner class but does not have the required structure.",
-        SHOW(cls));
     return true;
   }
   return false;
@@ -209,18 +202,49 @@ void prepare_r_classes(DexStoresVector& stores,
   }
 }
 
+// R inner classes should have at most a <clinit> method, no others, and that
+// <clinit> should be simple (i.e. not calling any other methods).
+bool RClassReader::valid_r_class_structure(const DexClass* cls) const {
+  if (!cls->get_vmethods().empty()) {
+    return false;
+  }
+  // Should be at most clinit and zero arg constructor
+  const auto& methods = cls->get_dmethods();
+  if (methods.size() > 2) {
+    return false;
+  }
+  for (auto m : methods) {
+    if (m == cls->get_clinit()) {
+      if (!valid_r_class_clinit(m, m_global_resources_config)) {
+        return false;
+      }
+    } else if (is_constructor(m)) {
+      if (!valid_r_class_init(m, m_global_resources_config)) {
+        return false;
+      }
+    } else {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool RClassReader::is_r_class(const DexClass* cls) const {
   if (is_customized_resource_class(cls, m_global_resources_config)) {
     // Customized classes will have fewer validation checks; they may have some
     // extra/inconsequential getters.
     auto clinit = cls->get_clinit();
     if (clinit != nullptr) {
-      always_assert_log(valid_r_class_clinit(clinit),
+      always_assert_log(valid_r_class_clinit(clinit, m_global_resources_config),
                         "<clinit> unsupported of custom R class %s", SHOW(cls));
     }
     return true;
   }
   if (is_non_customized_r_class(cls)) {
+    always_assert_log(
+        valid_r_class_structure(cls),
+        "%s is a R inner class but does not have the required structure.",
+        SHOW(cls));
     return true;
   }
   return false;
@@ -575,7 +599,15 @@ void RClassWriter::remap_resource_class_arrays(
     }
   }
   // Modifying array values will leave behind old array filling instructions.
-  // Perform DCE to clean this up.
-  perform_dce(cleanup_scope);
+  // Perform DCE to clean this up. Avoid doing this when instrumented, since the
+  // cleanup scope will not contain callees.
+  if (m_global_resources_config.cleanup_r_class_rewriting) {
+    TRACE(OPTRES, 2,
+          "Cleaning up old array filling instructions on %zu class(es)",
+          cleanup_scope.size());
+    perform_dce(cleanup_scope);
+  } else {
+    TRACE(OPTRES, 1, "Skipping cleanup of old array filling instructions!!");
+  }
 }
 } // namespace resources

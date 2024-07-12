@@ -64,6 +64,8 @@ class RClassReader {
       std::unordered_set<uint32_t>* out_values) const;
 
  private:
+  bool valid_r_class_structure(const DexClass* cls) const;
+
   const ResourceConfig m_global_resources_config;
 };
 

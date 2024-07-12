@@ -7,6 +7,12 @@
 
 package com.redextest;
 
+class Instrumentation {
+  public static void onMethodBegin(int x) {
+
+  }
+}
+
 public class R {
   static final int[] one = {
     0x7f010000,
