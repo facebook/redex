@@ -103,15 +103,22 @@ const char* styleable_r_class_name = "Lcom/redextest/R$styleable;";
 const char* another_styleable_r_class_name = "Lcom/redextest/R$styleable2;";
 const char* styleable_sgets_r_class_name = "Lcom/redextest/R$styleable_sgets;";
 
-class RClassTest : public RedexIntegrationTest {};
+class RClassTest : public RedexIntegrationTest {
+ public:
+  ResourceConfig global_resources_config;
+  DexClass* base_r_class;
+
+  RClassTest() {
+    prepare_methods_for_test(*classes);
+    // The outer R class is assumed to have been customized to store extra junk,
+    // like in our buck builds of applications.
+    global_resources_config.customized_r_classes.emplace(base_r_class_name);
+    base_r_class = get_r_class(*classes, base_r_class_name);
+  }
+};
 
 TEST_F(RClassTest, extractStaticArrayValues) {
-  prepare_methods_for_test(*classes);
-  DexClass* base_r_class = get_r_class(*classes, base_r_class_name);
-  ResourceConfig global_resources_config;
-  global_resources_config.customized_r_classes.emplace(base_r_class_name);
   resources::RClassReader r_class_reader(global_resources_config);
-
   // Basic check on returning only IDs related to given fields.
   {
     std::unordered_set<uint32_t> values;
@@ -173,15 +180,11 @@ TEST_F(RClassTest, extractStaticArrayValues) {
 }
 
 TEST_F(RClassTest, analyzeStaticInitializers) {
-  prepare_methods_for_test(*classes);
-  DexClass* base_r_class = get_r_class(*classes, base_r_class_name);
   dump_code_verbose(base_r_class->get_clinit()->get_code());
 
   DexClass* styleable_class = get_r_class(*classes, styleable_r_class_name);
   dump_code_verbose(styleable_class->get_clinit()->get_code());
 
-  ResourceConfig global_resources_config;
-  global_resources_config.customized_r_classes.emplace(base_r_class_name);
   resources::RClassReader r_class_reader(global_resources_config);
 
   auto field_values = r_class_reader.analyze_clinit(base_r_class, {});
@@ -234,12 +237,6 @@ TEST_F(RClassTest, analyzeStaticInitializers) {
 }
 
 TEST_F(RClassTest, remapResourceClassArrays) {
-  prepare_methods_for_test(*classes);
-  // Outer class that is assumed to have been customized to store extra junk.
-  ResourceConfig global_resources_config;
-  global_resources_config.customized_r_classes.emplace(base_r_class_name);
-  DexClass* base_r_class = get_r_class(*classes, base_r_class_name);
-
   std::cout << "BASELINE R <clinit>:" << std::endl;
   auto clinit = base_r_class->get_clinit();
   auto code = clinit->get_code();
@@ -357,11 +354,6 @@ TEST_F(RClassTest, remapResourceClassArrays) {
 }
 
 TEST_F(RClassTest, noDoubleRemappingArrays) {
-  prepare_methods_for_test(*classes);
-  // Outer class that is assumed to have been customized to store extra junk.
-  ResourceConfig global_resources_config;
-  global_resources_config.customized_r_classes.emplace(base_r_class_name);
-
   // This setup ensures that the value does not get remapped twice.
   constexpr uint32_t TARGET_ID = 0x7f090000;
   std::map<uint32_t, uint32_t> old_to_remapped_ids{{0x7f040000, TARGET_ID},
