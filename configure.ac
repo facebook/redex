@@ -113,6 +113,33 @@ AS_IF([test "x$enable_protobuf" = "xyes"], [
 ])
 AM_CONDITIONAL([SET_PROTOBUF],[test "x${enable_protobuf}" = "xyes"])
 
+# Check for Android SDK (for tests).
+AC_ARG_WITH([android-sdk],
+    [AS_HELP_STRING([--with-android-sdk=/path/to/android-sdk],
+        [Location of the Android SDK, for testing.])],
+    [ANDROID_HOME="$withval"],
+    [NO_ANDROID_HOME="no"]
+    [ AS_IF([test "x${PROTOC}" == "x"],
+        [AC_PATH_PROG([PROTOC], [protoc], [no])])
+    ]
+)
+# Look for dx & android.jar.
+AS_IF([test "x$NO_ANDROID_HOME" = "xno"],
+    [],
+    [
+        # Do not assume a totally new SDK. Try platform 29.
+        AC_PATH_PROG(
+            DX,
+            dx,
+            no,
+            "$ANDROID_HOME/build-tools/29.0.2:$PATH"
+        )
+        AS_IF([test "x$DX" = "xno"],
+            [AC_MSG_ERROR([--with-android-sdk option was specified but does not seem to point at a valid Android SDK installation])]
+            []
+        )
+    ]
+)
 
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h inttypes.h memory.h netinet/in.h stddef.h stdint.h stdlib.h string.h sys/time.h unistd.h])

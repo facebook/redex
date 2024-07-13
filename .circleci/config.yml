@@ -191,16 +191,6 @@ commands:
             rm -rf sdk/emulator 2>/dev/null
             tar cf - sdk | zstd -T0 -3 > sdk.tar.zstd
 
-      - run:
-          name: Check/Install (Symlink)
-          command: |
-            if [ -L /usr/local/bin/dx ] ; then
-              echo "Found symlink."
-              exit 0
-            fi
-            echo "Adding symlink..."
-            sudo ln -s $(pwd)/sdk/build-tools/29.0.2/dx /usr/local/bin/dx
-
       - save_cache:
           name: Saving SDK Cache
           paths:
@@ -263,7 +253,7 @@ commands:
           name: Configure
           working_directory: build
           command: |
-            ../repo/configure --enable-protobuf << parameters.configure_extra >>
+            ../repo/configure --enable-protobuf --with-android-sdk="$(pwd)/../sdk" << parameters.configure_extra >>
 
       - run:
           name: Build

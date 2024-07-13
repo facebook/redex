@@ -1,6 +1,8 @@
 include $(top_srcdir)/Makefile.inc
 include $(top_srcdir)/test/Makefile.inc
 
+DX = @DX@
+
 AM_CXXFLAGS = --std=gnu++17
 AM_CPPFLAGS = $(COMMON_INCLUDES) $(COMMON_TEST_INCLUDES)
 
