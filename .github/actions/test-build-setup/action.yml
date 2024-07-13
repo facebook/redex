@@ -14,23 +14,33 @@ runs:
   - name: Cache SDK
     uses: actions/cache@v3.3.2
     with:
-      key: android-build-tools-{{ steps.cache_version.outputs.CACHE_VERSION }}
-      path: ~/sdk
-      restore-keys: android-build-tools-{{ steps.cache_version.outputs.CACHE_VERSION }}
+      key: v1-android-build-tools
+      path: sdk.tar.zstd
+      restore-keys: v1-android-build-tools
   - name: Check/Install (SDK)
     run: |-
-      if [ -e ~/sdk/build-tools/25.0.3/dx ] ; then
-        echo "Found SDK."
-        exit 0
+      if [ -e sdk/build-tools/29.0.2/dx ] ; then echo "Found SDK." ; exit 0 ; fi
+
+      # Check whether cache file exists, then check dx again.
+      if [ -f "sdk.tar.zstd" ] ; then
+        zstd --decompress --stdout sdk.tar.zstd | tar xf -
+        if [ -e sdk/build-tools/29.0.2/dx ] ; then echo "Unpacked SDK." ; exit 0 ; fi
       fi
+
+      # Download.
       echo "SDK missing, downloading..."
-      rm -rf ~/sdk 2>/dev/null
+      rm -rf sdk 2>/dev/null && mkdir -p sdk/cmdline-tools
+      echo "Downloading SDK to $(pwd)/sdk"
       wget https://dl.google.com/android/repository/commandlinetools-linux-6609375_latest.zip
-      mkdir -p ~/sdk/cmdline-tools
-      unzip commandlinetools-linux-6609375_latest.zip -d ~/sdk/cmdline-tools/
-      pushd ~/sdk/cmdline-tools/tools/bin >/dev/null
-      echo 'y' | ./sdkmanager --install 'build-tools;25.0.3'
+      unzip commandlinetools-linux-6609375_latest.zip -d sdk/cmdline-tools/
+      pushd sdk/cmdline-tools/tools/bin >/dev/null
+      echo 'y' | ./sdkmanager --install 'build-tools;29.0.2'
       popd >/dev/null
+
+      # Compress for cache. For reason see description of build cache.
+      # We do not need the emulator and it is large. Delete.
+      rm -rf sdk/emulator 2>/dev/null
+      tar cf - sdk | zstd -T0 -3 > sdk.tar.zstd
     shell: bash
   - name: Check/Install (Symlink)
     run: |-
@@ -39,5 +49,5 @@ runs:
         exit 0
       fi
       echo "Adding symlink..."
-      sudo ln -s ~/sdk/build-tools/25.0.3/dx /usr/local/bin/dx
+      sudo ln -s $(pwd)/sdk/build-tools/29.0.2/dx /usr/local/bin/dx
     shell: bash
