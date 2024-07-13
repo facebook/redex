@@ -138,6 +138,15 @@ AS_IF([test "x$NO_ANDROID_HOME" = "xno"],
             [AC_MSG_ERROR([--with-android-sdk option was specified but does not seem to point at a valid Android SDK installation])]
             []
         )
+        AC_CHECK_FILE(
+            "$ANDROID_HOME/platforms/android-29/android.jar",
+            [
+                AC_SUBST(ANDROID_JAR,"$ANDROID_HOME/platforms/android-29/android.jar")
+                AC_SUBST(ANDROID_SDK,"$ANDROID_HOME")
+                AC_SUBST(ANDROID_PLATFORM_VERSION,29)
+            ],
+            [AC_MSG_ERROR([--with-android-sdk option was specified but does not seem to point at a valid Android SDK installation])]
+        )
     ]
 )
 

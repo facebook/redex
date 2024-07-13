@@ -14,9 +14,9 @@ runs:
   - name: Cache SDK
     uses: actions/cache@v3.3.2
     with:
-      key: v1-android-build-tools
+      key: v3-android-build-tools
       path: sdk.tar.zstd
-      restore-keys: v1-android-build-tools
+      restore-keys: v3-android-build-tools
   - name: Check/Install (SDK)
     run: |-
       if [ -e sdk/build-tools/29.0.2/dx ] ; then echo "Found SDK." ; exit 0 ; fi
@@ -35,6 +35,7 @@ runs:
       unzip commandlinetools-linux-6609375_latest.zip -d sdk/cmdline-tools/
       pushd sdk/cmdline-tools/tools/bin >/dev/null
       echo 'y' | ./sdkmanager --install 'build-tools;29.0.2'
+      ./sdkmanager --install 'platforms;android-29'
       popd >/dev/null
 
       # Compress for cache. For reason see description of build cache.

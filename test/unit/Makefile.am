@@ -1,6 +1,9 @@
 include $(top_srcdir)/Makefile.inc
 include $(top_srcdir)/test/Makefile.inc
 
+ANDROID_SDK = @ANDROID_SDK@
+ANDROID_PLATFORM_VERSION = @ANDROID_PLATFORM_VERSION@
+
 AM_CXXFLAGS = --std=gnu++17
 AM_CPPFLAGS = $(COMMON_INCLUDES) $(COMMON_TEST_INCLUDES)
 
@@ -9,6 +12,11 @@ AM_CPPFLAGS += $(BOOST_CPPFLAGS)
 AM_LDFLAGS = $(BOOST_LDFLAGS)
 
 LDADD = $(COMMON_TEST_LIBS)
+
+# Need to set "sdk_path" environment variable to point to the SDK.
+# Need to set "android_target" for the platform version.
+LOG_COMPILER = sh
+AM_LOG_FLAGS = -c 'sdk_path=$(ANDROID_SDK) android_target=$(ANDROID_PLATFORM_VERSION) $0'
 
 # These need things in the environment.
 # XFAIL_TESTS = stringbuilder_outline_test throw_propagation_test

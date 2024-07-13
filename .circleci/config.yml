@@ -162,7 +162,7 @@ commands:
       - restore_cache:
           name: Restoring SDK Cache
           keys:
-            - v2-android-build-tools
+            - v3-android-build-tools
 
       # We have to emulate cache behavior. Skip downloads if files exist.
       - run:
@@ -184,6 +184,7 @@ commands:
             unzip commandlinetools-linux-6609375_latest.zip -d sdk/cmdline-tools/
             pushd sdk/cmdline-tools/tools/bin >/dev/null
             echo 'y' | ./sdkmanager --install 'build-tools;29.0.2'
+            ./sdkmanager --install 'platforms;android-29'
             popd >/dev/null
 
             # Compress for cache. For reason see description of build cache.
@@ -195,7 +196,7 @@ commands:
           name: Saving SDK Cache
           paths:
             - sdk.tar.zstd
-          key: v2-android-build-tools
+          key: v3-android-build-tools
 
   # Level of indirection because there seems to be no way to set parameters
   # in the steps.
