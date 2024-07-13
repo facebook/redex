@@ -42,12 +42,3 @@ runs:
       rm -rf sdk/emulator 2>/dev/null
       tar cf - sdk | zstd -T0 -3 > sdk.tar.zstd
     shell: bash
-  - name: Check/Install (Symlink)
-    run: |-
-      if [ -L /usr/local/bin/dx ] ; then
-        echo "Found symlink."
-        exit 0
-      fi
-      echo "Adding symlink..."
-      sudo ln -s $(pwd)/sdk/build-tools/29.0.2/dx /usr/local/bin/dx
-    shell: bash

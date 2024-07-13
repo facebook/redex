@@ -40,7 +40,8 @@ runs:
     working-directory: repo
     shell: bash
   - name: Configure
-    run: "../repo/configure --enable-protobuf ${{ inputs.configure_extra }}"
+    run: |-
+      ../repo/configure --enable-protobuf --with-android-sdk="$(pwd)/../sdk" ${{ inputs.configure_extra }}
     working-directory: build
     shell: bash
   - name: Build
