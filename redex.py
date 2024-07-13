@@ -1355,6 +1355,16 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             None,
             CompressionLevel.BETTER,  # Usually small enough.
         ),
+        CompressionEntry(
+            "Redex InsertSourceBlocksPass Unresolved Methods",
+            lambda args: True,
+            True,
+            [],
+            ["redex-isb-unresolved-methods.txt"],
+            None,
+            None,
+            CompressionLevel.BETTER,  # Usually small enough.
+        ),
     ]
 
 
