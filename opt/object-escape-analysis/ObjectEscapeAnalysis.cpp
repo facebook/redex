@@ -1247,10 +1247,10 @@ class RootMethodReducer {
         }
         auto callee = resolve_invoke_inlinable_callee(
             m_method_override_graph, uses_insn, m_method, m_callees_cache,
-            [&src_indices = src_indices]() {
-              always_assert(src_indices.size() == 1);
-              always_assert(src_indices.begin()->first == 0);
-              return src_indices.begin()->second;
+            [&_src_indices = src_indices]() {
+              always_assert(_src_indices.size() == 1);
+              always_assert(_src_indices.begin()->first == 0);
+              return _src_indices.begin()->second;
             });
         always_assert(callee);
         always_assert(callee->is_concrete());

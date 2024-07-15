@@ -962,10 +962,10 @@ struct SBHelper {
 
   std::function<std::unique_ptr<SourceBlock>()> get_source_block_creator(
       float val = 0) const {
-    return [overridden = this->overridden,
+    return [overridden_method = this->overridden,
             template_sb = get_arbitrary_first_sb(), val]() {
       auto new_sb = std::make_unique<SourceBlock>(*template_sb);
-      source_blocks::fill_source_block(*new_sb, overridden,
+      source_blocks::fill_source_block(*new_sb, overridden_method,
                                        SourceBlock::kSyntheticId,
                                        SourceBlock::Val{val, 0});
       return new_sb;
