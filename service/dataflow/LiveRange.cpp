@@ -207,8 +207,11 @@ void renumber_registers(IRCode* code, bool width_aware) {
   for (auto& mie : cfg::InstructionIterable(*cfg)) {
     auto insn = mie.insn;
     for (src_index_t i = 0; i < insn->srcs_size(); ++i) {
-      auto& defs = ud_chains.at(Use{insn, i});
-      insn->set_src(i, sym_reg_mapper.at(def_sets.find_set(*defs.begin())));
+      auto defs = ud_chains.find(Use{insn, i});
+      always_assert_log(defs != ud_chains.end(),
+                        "No defs found for use %s src %u", SHOW(insn), i);
+      insn->set_src(
+          i, sym_reg_mapper.at(def_sets.find_set(*(defs->second).begin())));
     }
   }
   cfg->set_registers_size(sym_reg_mapper.regs_size());
