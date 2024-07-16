@@ -57,7 +57,6 @@ struct InlinerConfig {
   // analysis redex compiler can tolerate when making decision to inline
   size_t max_cost_for_constant_propagation{MAX_COST_FOR_CONSTANT_PROPAGATION};
 
-  std::unordered_set<DexType*> allowlist_no_method_limit;
   // We will populate the information to rstate of classes and methods.
   std::unordered_set<DexType*> m_no_inline_annos;
   std::unordered_set<DexType*> m_force_inline_annos;
