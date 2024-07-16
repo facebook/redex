@@ -58,47 +58,46 @@ struct InlinerConfig {
   size_t max_cost_for_constant_propagation{MAX_COST_FOR_CONSTANT_PROPAGATION};
 
   // We will populate the information to rstate of classes and methods.
-  std::unordered_set<DexType*> m_no_inline_annos;
-  std::unordered_set<DexType*> m_force_inline_annos;
+  std::unordered_set<DexType*> no_inline_annos;
+  std::unordered_set<DexType*> force_inline_annos;
   // Prefixes of classes not to inline from / into
-  std::vector<std::string> m_blocklist;
-  std::vector<std::string> m_caller_blocklist;
-  std::vector<std::string> m_intradex_allowlist;
+  std::vector<std::string> blocklist;
+  std::vector<std::string> caller_blocklist;
+  std::vector<std::string> intradex_allowlist;
 
   // Limit on number of relevant invokes to speed up local-only pass.
   uint64_t max_relevant_invokes_when_local_only{10};
 
   /**
-   * 1. Populate m_blocklist m_caller_blocklist to blocklist and
-   * caller_blocklist with the initial scope.
+   * 1. Derive blocklist/caller_blocklist/intradex_allowlist from patterns.
    * 2. Set rstate of classes and methods if they are annotated by any
-   * m_no_inline_annos and m_force_inline_annos.
+   * no_inline_annos and force_inline_annos.
    */
   void populate(const Scope& scope);
 
   const std::unordered_set<DexType*>& get_blocklist() const {
     always_assert_log(m_populated, "Should populate blocklist\n");
-    return blocklist;
+    return m_blocklist;
   }
 
   const std::unordered_set<DexType*>& get_caller_blocklist() const {
     always_assert_log(m_populated, "Should populate blocklist\n");
-    return caller_blocklist;
+    return m_caller_blocklist;
   }
 
   void apply_intradex_allowlist() {
     always_assert_log(m_populated, "Should populate allowlist\n");
-    for (auto type : intradex_allowlist) {
-      blocklist.erase(type);
-      caller_blocklist.erase(type);
+    for (DexType* type : m_intradex_allowlist) {
+      m_blocklist.erase(type);
+      m_caller_blocklist.erase(type);
     }
   }
 
  private:
   bool m_populated{false};
   // The populated black lists.
-  std::unordered_set<DexType*> blocklist;
-  std::unordered_set<DexType*> caller_blocklist;
-  std::unordered_set<DexType*> intradex_allowlist;
+  std::unordered_set<DexType*> m_blocklist;
+  std::unordered_set<DexType*> m_caller_blocklist;
+  std::unordered_set<DexType*> m_intradex_allowlist;
 };
 } // namespace inliner

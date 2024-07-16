@@ -19,26 +19,26 @@ void InlinerConfig::populate(const Scope& scope) {
     return;
   }
   walk::classes(scope, [this](DexClass* cls) {
-    for (const auto& type_s : m_blocklist) {
-      if (boost::starts_with(cls->get_name()->c_str(), type_s)) {
-        blocklist.emplace(cls->get_type());
+    for (const std::string& type_str : blocklist) {
+      if (boost::starts_with(cls->get_name()->str(), type_str)) {
+        m_blocklist.emplace(cls->get_type());
         break;
       }
     }
-    for (const auto& type_s : m_caller_blocklist) {
-      if (boost::starts_with(cls->get_name()->c_str(), type_s)) {
-        caller_blocklist.emplace(cls->get_type());
+    for (const std::string& type_str : caller_blocklist) {
+      if (boost::starts_with(cls->get_name()->str(), type_str)) {
+        m_caller_blocklist.emplace(cls->get_type());
         break;
       }
     }
-    for (const auto& type_s : m_intradex_allowlist) {
-      if (boost::starts_with(cls->get_name()->c_str(), type_s)) {
-        intradex_allowlist.emplace(cls->get_type());
+    for (const std::string& type_str : intradex_allowlist) {
+      if (boost::starts_with(cls->get_name()->str(), type_str)) {
+        m_intradex_allowlist.emplace(cls->get_type());
         break;
       }
     }
     // Class may be annotated by no_inline_annos.
-    if (has_any_annotation(cls, m_no_inline_annos)) {
+    if (has_any_annotation(cls, no_inline_annos)) {
       for (auto method : cls->get_dmethods()) {
         method->rstate.set_dont_inline();
       }
@@ -51,9 +51,9 @@ void InlinerConfig::populate(const Scope& scope) {
     if (method->rstate.dont_inline()) {
       return;
     }
-    if (has_any_annotation(method, m_no_inline_annos)) {
+    if (has_any_annotation(method, no_inline_annos)) {
       method->rstate.set_dont_inline();
-    } else if (has_any_annotation(method, m_force_inline_annos)) {
+    } else if (has_any_annotation(method, force_inline_annos)) {
       method->rstate.set_force_inline();
     }
   });
