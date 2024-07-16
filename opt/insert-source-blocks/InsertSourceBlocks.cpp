@@ -636,6 +636,10 @@ struct Injector {
       }
     };
 
+    std::vector<const DexMethodRef*> failed_methods{};
+    std::mutex failed_methods_mutex{};
+    failed_methods.reserve(10000);
+
     auto res =
         walk::parallel::methods<InsertResult>(scope, [&](DexMethod* method) {
           auto code = method->get_code();
@@ -684,6 +688,11 @@ struct Injector {
             smi.add({sb_name, std::move(res.serialized),
                      std::move(res.serialized_idom_map)});
 
+            if (!res.profile_success) {
+              std::unique_lock<std::mutex> lock{failed_methods_mutex};
+              failed_methods.push_back(method);
+            }
+
             return InsertResult(access_method ? 1 : 0,
                                 res.block_count,
                                 profiles.second ? 1 : 0,
@@ -714,6 +723,11 @@ struct Injector {
                      unresolved > 0
                          ? (int64_t)(unresolved * 100.0 / profile_files.size())
                          : 0);
+    }
+
+    if (!failed_methods.empty()) {
+      write_sorted_methods(conf.metafile("redex-isb-failed-methods.txt"),
+                           failed_methods);
     }
 
     if (!serialize) {
@@ -789,6 +803,16 @@ struct Injector {
       interaction_indices[fn(container[i])] = i;
     }
     g_redex->set_sb_interaction_index(interaction_indices);
+  }
+
+  static void write_sorted_methods(const std::string& fname,
+                                   std::vector<const DexMethodRef*>& methods) {
+    std::sort(methods.begin(), methods.end(), compare_dexmethods);
+
+    std::ofstream ofs{fname};
+    for (auto* mref : methods) {
+      ofs << show(mref) << "\n";
+    }
   }
 
   void prepare_profile_files_and_interactions(
