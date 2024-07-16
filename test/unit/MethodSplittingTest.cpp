@@ -751,7 +751,9 @@ TEST_F(MethodSplitterTest, DontSplitLoadParamChains) {
     ))";
   auto [cls, m] = create("(IIIIIIIIII)I", code_str);
   m->get_code()->build_cfg();
-  method_splitting_impl::discover_closures(m, defaultConfig());
+  auto config = defaultConfig();
+  method_splitting_impl::discover_closures(
+      m, method_splitting_impl::reduce_cfg(m, config.split_block_size));
   ASSERT_EQ(m->get_code()->cfg().blocks().size(), 1);
   m->get_code()->clear_cfg();
 }

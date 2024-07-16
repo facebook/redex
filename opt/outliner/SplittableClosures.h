@@ -43,13 +43,17 @@ struct SplittableClosure {
     always_assert(closures.size() == 1);
     return closures.front()->target->id();
   }
+
+  std::vector<DexType*> get_arg_types() const;
 };
 
-// Selects splittable closures for a given set of methods.
+// Selects splittable closures for a given set of methods based of configured
+// costs.
 ConcurrentMap<DexType*, std::vector<SplittableClosure>>
-select_splittable_closures(const ConcurrentSet<DexMethod*>& methods,
-                           const Config& config,
-                           InsertOnlyConcurrentMap<DexMethod*, size_t>*
-                               concurrent_splittable_no_optimizations_methods);
+select_splittable_closures_based_on_costs(
+    const ConcurrentSet<DexMethod*>& methods,
+    const Config& config,
+    InsertOnlyConcurrentMap<DexMethod*, size_t>*
+        concurrent_splittable_no_optimizations_methods);
 
 } // namespace method_splitting_impl

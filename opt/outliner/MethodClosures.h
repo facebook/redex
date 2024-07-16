@@ -34,8 +34,11 @@ struct MethodClosures {
   std::vector<Closure> closures;
 };
 
+std::shared_ptr<const ReducedControlFlowGraph> reduce_cfg(
+    DexMethod* method, std::optional<uint64_t> split_block_size = std::nullopt);
+
 // Find potentially relevant closures for a method.
-std::shared_ptr<MethodClosures> discover_closures(DexMethod* method,
-                                                  const Config& config);
+std::shared_ptr<MethodClosures> discover_closures(
+    DexMethod* method, std::shared_ptr<const ReducedControlFlowGraph> rcfg);
 
 } // namespace method_splitting_impl

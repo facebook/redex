@@ -15,6 +15,7 @@
 #include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "MethodSplittingConfig.h"
+#include "SplittableClosures.h"
 
 class DexStore;
 using DexStoresVector = std::vector<DexStore>;
@@ -33,6 +34,38 @@ struct Stats {
   std::atomic<size_t> split_code_size{0};
   std::unordered_set<DexMethod*> added_methods;
   std::atomic<size_t> excluded_methods{0};
+};
+
+class SplitMethod {
+ public:
+  // Creates a new static method according to a splittable closure.
+  static SplitMethod create(const SplittableClosure& splittable_closure,
+                            DexType* target_type,
+                            const DexString* split_name,
+                            std::vector<DexType*> arg_types);
+
+  // Adds the new method to its parent class.
+  void add_to_target();
+
+  // Applies the code changes to the original method.
+  void apply_code_changes();
+
+  DexMethod* get_new_method() const { return m_new_method; }
+
+ private:
+  SplitMethod(const SplittableClosure& splittable_closure,
+              DexMethod* new_method,
+              cfg::Block* launchpad_template,
+              std::unique_ptr<SourceBlock> launchpad_sb)
+      : m_splittable_closure(splittable_closure),
+        m_new_method(new_method),
+        m_launchpad_template(launchpad_template),
+        m_launchpad_sb(std::move(launchpad_sb)) {}
+
+  const SplittableClosure& m_splittable_closure;
+  DexMethod* m_new_method;
+  cfg::Block* m_launchpad_template;
+  std::unique_ptr<SourceBlock> m_launchpad_sb;
 };
 
 void split_methods_in_stores(
