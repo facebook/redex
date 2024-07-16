@@ -1369,6 +1369,16 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             None,
             CompressionLevel.BETTER,  # Usually small enough.
         ),
+        CompressionEntry(
+            "Redex InsertSourceBlocksPass Failed Methods",
+            lambda args: True,
+            True,
+            [],
+            ["redex-isb-failed-methods.txt"],
+            None,
+            None,
+            CompressionLevel.BETTER,  # Usually small enough.
+        ),
     ]
 
 
