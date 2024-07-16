@@ -38,24 +38,60 @@ void ResourcesInliningPass::run_pass(DexStoresVector& stores,
   }
 }
 
+/*
+ This method generates a map of the valid APIs that can be inlined to the
+ range of valid types
+ that can be inlined. The DexMethodRef* represents the method that is being
+ called and the first component of the tuple
+ represents the lower bound of the type that can be inlined and the second
+ component represents the upper bound of the type that can be inlined. Per the
+ following Android source links, these methods are performing no further logic
+ beyond retrieving the raw data from the resource table and thus should be
+ easily representable with dex instructions.
+ https://cs.android.com/android/platform/superproject/+/android-14.0.0_r1:frameworks/base/core/java/android/content/res/Resources.java;l=1180
+ https://cs.android.com/android/platform/superproject/+/android-14.0.0_r1:frameworks/base/core/java/android/content/res/Resources.java;l=1073
+ https://cs.android.com/android/platform/superproject/+/android-14.0.0_r1:frameworks/base/core/java/android/content/res/Resources.java;l=1206
+*/
+std::unordered_map<DexMethodRef*, std::tuple<uint8_t, uint8_t>>
+generate_valid_apis() {
+  std::unordered_map<DexMethodRef*, std::tuple<uint8_t, uint8_t>> usable_apis;
+
+  DexMethodRef* bool_method =
+      DexMethod::get_method("Landroid/content/res/Resources;.getBoolean:(I)Z");
+  std::tuple<uint8_t, uint8_t> bool_range =
+      std::make_tuple(android::Res_value::TYPE_INT_BOOLEAN,
+                      android::Res_value::TYPE_INT_BOOLEAN);
+  usable_apis.insert({bool_method, bool_range});
+
+  DexMethodRef* color_method =
+      DexMethod::get_method("Landroid/content/res/Resources;.getColor:(I)I");
+  std::tuple<uint8_t, uint8_t> color_range =
+      std::make_tuple(android::Res_value::TYPE_FIRST_COLOR_INT,
+                      android::Res_value::TYPE_LAST_COLOR_INT);
+  usable_apis.insert({color_method, color_range});
+
+  DexMethodRef* int_method =
+      DexMethod::get_method("Landroid/content/res/Resources;.getInteger:(I)I");
+  std::tuple<uint8_t, uint8_t> int_range = std::make_tuple(
+      android::Res_value::TYPE_INT_DEC, android::Res_value::TYPE_INT_HEX);
+  usable_apis.insert({int_method, int_range});
+
+  DexMethodRef* string_method = DexMethod::get_method(
+      "Landroid/content/res/Resources;.getString:(I)Ljava/lang/String;");
+  std::tuple<uint8_t, uint8_t> string_range = std::make_tuple(
+      android::Res_value::TYPE_STRING, android::Res_value::TYPE_STRING);
+  usable_apis.insert({string_method, string_range});
+
+  return usable_apis;
+}
+
 MethodTransformsMap ResourcesInliningPass::find_transformations(
     const Scope& scope,
     const std::unordered_map<uint32_t, resources::InlinableValue>&
         inlinable_resources) {
-  /*
-   Per the following Android source links, these methods are performing no
-   further logic beyond retrieving the raw data from the resource table and thus
-   should be easily representable with dex instructions.
-   https://cs.android.com/android/platform/superproject/+/android-14.0.0_r1:frameworks/base/core/java/android/content/res/Resources.java;l=1180
-   https://cs.android.com/android/platform/superproject/+/android-14.0.0_r1:frameworks/base/core/java/android/content/res/Resources.java;l=1073
-   https://cs.android.com/android/platform/superproject/+/android-14.0.0_r1:frameworks/base/core/java/android/content/res/Resources.java;l=1206
-  */
-  std::unordered_set<DexMethodRef*> dex_method_refs = {
-      DexMethod::get_method("Landroid/content/res/Resources;.getBoolean:(I)Z"),
-      DexMethod::get_method("Landroid/content/res/Resources;.getColor:(I)I"),
-      DexMethod::get_method("Landroid/content/res/Resources;.getInteger:(I)I"),
-      DexMethod::get_method(
-          "Landroid/content/res/Resources;.getString:(I)Ljava/lang/String;")};
+
+  std::unordered_map<DexMethodRef*, std::tuple<uint8_t, uint8_t>>
+      dex_method_refs = generate_valid_apis();
 
   MethodTransformsMap possible_transformations;
 
@@ -125,13 +161,30 @@ void ResourcesInliningPass::inline_resource_values_dex(
   auto& cfg = method->get_code()->cfg();
   cfg::CFGMutation mutator(cfg);
 
+  std::unordered_map<DexMethodRef*, std::tuple<uint8_t, uint8_t>> usable_apis =
+      generate_valid_apis();
+
   IRInstruction* new_insn;
   for (const auto& elem : insn_inlinable) {
     auto insn = elem.insn;
     auto inlinable_value = elem.inlinable_value;
     cfg::InstructionIterator it_invoke = cfg.find_insn(insn);
+    DexMethodRef* method_ref = insn->get_method();
+    auto method_bounds = usable_apis.at(method_ref);
+    auto method_lower_bound = get<0>(method_bounds);
+    auto method_upper_bound = get<1>(method_bounds);
+
+    if (method_lower_bound > inlinable_value.type ||
+        method_upper_bound < inlinable_value.type) {
+      continue;
+    }
 
     auto move_insn_it = cfg.move_result_of(it_invoke);
+    if (move_insn_it.is_end()) {
+      mgr.incr_metric("removed_unused_invokes", 1);
+      mutator.remove(it_invoke);
+      continue;
+    }
     auto move_insn = move_insn_it->insn;
 
     if (move_insn->opcode() == OPCODE_MOVE_RESULT) {

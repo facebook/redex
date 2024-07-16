@@ -36,6 +36,11 @@ public class MainActivity extends Activity {
       int bg = resources.getColor(R.color.view_bg);
       android.util.Log.w(LOG_TAG, "view_bg: " + Integer.toHexString(bg));
 
+      int purple = resources.getColor(R.color.nice_purple);
+
+      int bool_int = resources.getInteger(R.bool.should_log);
+      android.util.Log.w(LOG_TAG, "bool_int: " + Integer.toHexString(bool_int));
+
       int count = resources.getInteger(R.integer.loop_count);
       String main = resources.getString(R.string.main_text);
       for (int i = 0; i < count; i++) {

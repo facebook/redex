@@ -94,9 +94,9 @@ TEST_F(PostVerify, ResourcesInliningPassTest_DexPatching) {
       line_num++;
       auto insn = mie.insn;
       if (block->id() == 0) {
-        if (line_num == 10) {
+        if (line_num == 6) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST);
-          ASSERT_EQ(insn->get_literal(), 0xFFFF0000);
+          ASSERT_EQ(insn->get_literal(), 1);
         }
       } else if (block->id() == 1) {
         if (line_num == 3) {
@@ -105,15 +105,27 @@ TEST_F(PostVerify, ResourcesInliningPassTest_DexPatching) {
         } else if (line_num == 20) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST);
           ASSERT_EQ(uint32_t(insn->get_literal()), 0xFF673AB7);
+        } else if (line_num == 49) {
+          ASSERT_EQ(insn->opcode(), OPCODE_SGET);
+        } else if (line_num == 50) {
+          ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO);
         } else if (line_num == 51) {
+          ASSERT_EQ(insn->opcode(), OPCODE_SGET);
+        } else if (line_num == 52) {
+          ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO);
+        } else if (line_num == 53) {
+          ASSERT_EQ(insn->opcode(), OPCODE_INVOKE_VIRTUAL);
+        } else if (line_num == 54) {
+          ASSERT_EQ(insn->opcode(), OPCODE_MOVE_RESULT);
+        } else if (line_num == 69) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST);
           ASSERT_EQ(uint32_t(insn->get_literal()), 3);
-        } else if (line_num == 54) {
+        } else if (line_num == 72) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
           auto string_char_star = insn->get_string()->c_str();
           auto string = (std::string)string_char_star;
           ASSERT_EQ(string.substr(0, 6), "Hello,");
-        } else if (line_num == 55) {
+        } else if (line_num == 73) {
           ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
         }
       }
