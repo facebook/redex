@@ -8,8 +8,10 @@
 #include <json/value.h>
 #include <set>
 
+#include "CFGMutation.h"
 #include "ConfigFiles.h"
 #include "ConstantPropagationAnalysis.h"
+#include "PassManager.h"
 #include "ResourcesInliningPass.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -26,7 +28,14 @@ void ResourcesInliningPass::run_pass(DexStoresVector& stores,
 
   const Scope scope = build_class_scope(stores);
 
-  ResourcesInliningPass::find_transformations(scope, inlinable_resources);
+  MethodTransformsMap possible_transformations =
+      ResourcesInliningPass::find_transformations(scope, inlinable_resources);
+
+  for (auto& pair : possible_transformations) {
+    auto method = pair.first;
+    auto& transforms = pair.second;
+    ResourcesInliningPass::inline_resource_values_dex(method, transforms, mgr);
+  }
 }
 
 MethodTransformsMap ResourcesInliningPass::find_transformations(
@@ -107,6 +116,56 @@ MethodTransformsMap ResourcesInliningPass::find_transformations(
     }
   });
   return possible_transformations;
+}
+
+void ResourcesInliningPass::inline_resource_values_dex(
+    DexMethod* method,
+    const std::vector<InlinableOptimization>& insn_inlinable,
+    PassManager& mgr) {
+  auto& cfg = method->get_code()->cfg();
+  cfg::CFGMutation mutator(cfg);
+
+  IRInstruction* new_insn;
+  for (const auto& elem : insn_inlinable) {
+    auto insn = elem.insn;
+    auto inlinable_value = elem.inlinable_value;
+    cfg::InstructionIterator it_invoke = cfg.find_insn(insn);
+
+    auto move_insn_it = cfg.move_result_of(it_invoke);
+    auto move_insn = move_insn_it->insn;
+
+    if (move_insn->opcode() == OPCODE_MOVE_RESULT) {
+      new_insn = new IRInstruction(OPCODE_CONST);
+      if (inlinable_value.type == android::Res_value::TYPE_INT_BOOLEAN) {
+        new_insn->set_literal(inlinable_value.bool_value);
+        mgr.incr_metric("inlined_booleans", 1);
+      } else {
+        new_insn->set_literal((int32_t)inlinable_value.uint_value);
+        mgr.incr_metric("inlined_integers", 1);
+      }
+      always_assert_log(move_insn->has_dest(),
+                        "The move instruction has no destination");
+      new_insn->set_dest(move_insn->dest());
+      mutator.replace(it_invoke, {new_insn});
+    }
+
+    else if (move_insn->opcode() == OPCODE_MOVE_RESULT_OBJECT) {
+      new_insn = new IRInstruction(OPCODE_CONST_STRING);
+      new_insn->set_string(
+          DexString::make_string(inlinable_value.string_value));
+      IRInstruction* new_insn_pseudo_move =
+          new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+      always_assert_log(move_insn->has_dest(),
+                        "The move instruction has no destination");
+      new_insn_pseudo_move->set_dest(move_insn->dest());
+      mutator.replace(it_invoke, {new_insn, new_insn_pseudo_move});
+      mgr.incr_metric("inlined_strings", 1);
+    }
+
+    mutator.remove(move_insn_it);
+    mgr.incr_metric("inlined_total", 1);
+  }
+  mutator.flush();
 }
 
 static ResourcesInliningPass s_pass;

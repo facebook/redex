@@ -54,6 +54,11 @@ class ResourcesInliningPass : public Pass {
       const Scope&,
       const std::unordered_map<uint32_t, resources::InlinableValue>&);
 
+  static void inline_resource_values_dex(
+      DexMethod* method,
+      const std::vector<InlinableOptimization>& insn_inlinable,
+      PassManager& mgr);
+
   std::unordered_set<std::string> m_resource_type_names;
   std::unordered_set<std::string> m_resource_entry_names;
 };

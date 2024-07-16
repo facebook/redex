@@ -80,3 +80,43 @@ TEST_F(PreVerify, ResourcesInliningPassTest) {
   EXPECT_EQ(val.type, android::Res_value::TYPE_STRING);
   EXPECT_EQ(val.string_value.substr(0, 6), "Hello,");
 }
+
+TEST_F(PostVerify, ResourcesInliningPassTest_DexPatching) {
+  auto cls = find_class_named(classes, "Lcom/fb/resources/MainActivity;");
+  auto method = find_method_named(*cls, "logValues");
+  IRCode* code = new IRCode(method);
+  code->build_cfg();
+  auto& cfg = code->cfg();
+
+  for (auto* block : cfg.blocks()) {
+    int line_num = 0;
+    for (auto& mie : InstructionIterable(block)) {
+      line_num++;
+      auto insn = mie.insn;
+      if (block->id() == 0) {
+        if (line_num == 10) {
+          ASSERT_EQ(insn->opcode(), OPCODE_CONST);
+          ASSERT_EQ(insn->get_literal(), 0xFFFF0000);
+        }
+      } else if (block->id() == 1) {
+        if (line_num == 3) {
+          ASSERT_EQ(insn->opcode(), OPCODE_CONST);
+          ASSERT_EQ(uint32_t(insn->get_literal()), 0xFFFF0000);
+        } else if (line_num == 20) {
+          ASSERT_EQ(insn->opcode(), OPCODE_CONST);
+          ASSERT_EQ(uint32_t(insn->get_literal()), 0xFF673AB7);
+        } else if (line_num == 51) {
+          ASSERT_EQ(insn->opcode(), OPCODE_CONST);
+          ASSERT_EQ(uint32_t(insn->get_literal()), 3);
+        } else if (line_num == 54) {
+          ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
+          auto string_char_star = insn->get_string()->c_str();
+          auto string = (std::string)string_char_star;
+          ASSERT_EQ(string.substr(0, 6), "Hello,");
+        } else if (line_num == 55) {
+          ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+        }
+      }
+    }
+  }
+}
