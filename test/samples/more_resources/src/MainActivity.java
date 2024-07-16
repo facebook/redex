@@ -42,6 +42,9 @@ public class MainActivity extends Activity {
         android.util.Log.w(LOG_TAG, "main_text: " + main + " [" + (i + 1) + " / " + count + "]");
       }
 
+      String styled_text = resources.getString(R.string.styled_text);
+      android.util.Log.w(LOG_TAG, "styled_text: " + styled_text);
+
       int size = resources.getDimensionPixelSize(R.dimen.text_size);
       android.util.Log.w(LOG_TAG, "Text size (in pixels): " + size);
     }

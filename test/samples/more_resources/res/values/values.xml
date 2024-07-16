@@ -9,4 +9,5 @@
   <dimen name="text_size">36sp</dimen>
   <integer name="loop_count">3</integer>
   <string name="main_text">Hello, 🌎!</string>
+  <string name="styled_text"><b>styled</b> AND <i>styled</i></string>
 </resources>

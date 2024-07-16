@@ -34,7 +34,8 @@ TEST_F(PreVerify, ResourcesInliningPassTest) {
                   0x7f050001,
                   0x7f050002,
                   /* string */
-                  0x7f060000));
+                  0x7f060000,
+                  0x7f060001));
   std::unordered_map<uint32_t, resources::InlinableValue> inlinable =
       res_table.get_inlinable_resource_values();
 
@@ -51,6 +52,7 @@ TEST_F(PreVerify, ResourcesInliningPassTest) {
   EXPECT_TRUE(inlinable.find(0x7f040000) != inlinable.end());
 
   EXPECT_TRUE(inlinable.find(0x7f060000) != inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f060001) == inlinable.end());
 
   auto val = inlinable.at(0x7f010000);
   EXPECT_EQ(val.type, android::Res_value::TYPE_INT_BOOLEAN);

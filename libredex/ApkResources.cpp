@@ -2742,7 +2742,8 @@ ResourcesArscFile::get_inlinable_resource_values() {
       if (res_value->dataType == android::Res_value::TYPE_STRING) {
         size_t length;
         auto chars = global_string_pool.string8At(res_value->data, &length);
-        if (chars == nullptr) {
+        if (chars == nullptr ||
+            global_string_pool.styleAt(res_value->data) != nullptr) {
           continue;
         }
         val.string_value = chars;
