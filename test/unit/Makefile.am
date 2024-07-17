@@ -18,12 +18,6 @@ LDADD = $(COMMON_TEST_LIBS)
 LOG_COMPILER = sh
 AM_LOG_FLAGS = -c 'sdk_path=$(ANDROID_SDK) android_target=$(ANDROID_PLATFORM_VERSION) $0'
 
-# These need things in the environment.
-# XFAIL_TESTS = stringbuilder_outline_test throw_propagation_test
-
-# CircleCI shows XFAIL as red. Automake does not allow to $(filter). So for
-# now remove the XFAIL_TESTS entries explicitly from here.
-
 check_PROGRAMS = \
     aliased_registers_test \
     analysis_usage_test \
@@ -142,9 +136,11 @@ check_PROGRAMS = \
     source_blocks_test \
     split_huge_switch_test \
     static_relo_v2_test \
+    stringbuilder_outline_test \
     strip_debug_info_test \
     switch_dispatch_test \
     switch_equiv_test \
+    throw_propagation_test \
     timer_test \
     trace_multithreading_test \
     true_virtuals_test \
@@ -432,7 +428,7 @@ split_huge_switch_test_SOURCES = SplitHugeSwitchTest.cpp
 
 static_relo_v2_test_SOURCES = StaticReloV2Test.cpp
 
-# stringbuilder_outline_test_SOURCES = StringBuilderOutlinerTest.cpp
+stringbuilder_outline_test_SOURCES = StringBuilderOutlinerTest.cpp
 
 string_propagation_test_SOURCES = constant-propagation/StringPropagationTest.cpp
 
@@ -443,8 +439,8 @@ switch_dispatch_test_SOURCES = SwitchDispatchTest.cpp
 switch_equiv_test_SOURCES = SwitchEquivFinderTest.cpp
 switch_equiv_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
-# throw_propagation_test_SOURCES = ThrowPropagationTest.cpp
-# throw_propagation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+throw_propagation_test_SOURCES = ThrowPropagationTest.cpp
+throw_propagation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 timer_test_SOURCES = TimerTest.cpp
 
@@ -600,9 +596,11 @@ TESTS = \
     source_blocks_test \
     split_huge_switch_test \
     static_relo_v2_test \
+    stringbuilder_outline_test \
     strip_debug_info_test \
     switch_dispatch_test \
     switch_equiv_test \
+    throw_propagation_test \
     timer_test \
     trace_multithreading_test \
     true_virtuals_test \
