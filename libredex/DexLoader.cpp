@@ -57,8 +57,12 @@ static void validate_dex_header(const dex_header* dh,
     not_reached_log("Unrecognized support_dex_version %d\n",
                     support_dex_version);
   }
-  always_assert_log(supported, "Bad dex magic %s for support_dex_version %d\n",
-                    dh->magic, support_dex_version);
+  always_assert_log(supported,
+                    "Bad dex magic %s for "
+                    "support_dex_version %d\n",
+                    // There may not be a null terminator, so roundtrip.
+                    std::string(dh->magic, sizeof(dh->magic)).c_str(),
+                    support_dex_version);
   always_assert_log(
       dh->file_size == dexsize,
       "Reported size in header (%zu) does not match file size (%u)\n",
