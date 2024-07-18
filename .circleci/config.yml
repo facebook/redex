@@ -157,7 +157,7 @@ commands:
       - run:
           name: Setup for tests
           command: |
-            sudo apt-get install -y --no-install-recommends default-jdk-headless
+            sudo apt-get install -y --no-install-recommends default-jdk-headless zip unzip
 
       - restore_cache:
           name: Restoring SDK Cache
