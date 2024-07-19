@@ -16,7 +16,7 @@ LDADD = $(COMMON_TEST_LIBS)
 # Need to set "sdk_path" environment variable to point to the SDK.
 # Need to set "android_target" for the platform version.
 LOG_COMPILER = sh
-AM_LOG_FLAGS = -c 'sdk_path=$(ANDROID_SDK) android_target=$(ANDROID_PLATFORM_VERSION) $0'
+AM_LOG_FLAGS = -c 'sdk_path=$(ANDROID_SDK) android_target=$(ANDROID_PLATFORM_VERSION) $$0'
 
 check_PROGRAMS = \
     aliased_registers_test \
