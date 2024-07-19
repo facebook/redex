@@ -336,19 +336,23 @@ size_t MethodProfiles::substitute_stats(
     }
 
     if (stats) {
-      auto target_it = method_stats.find(target);
-      if (target_it != method_stats.end()) {
-        const auto& target_stats = target_it->second;
-        if (target_stats.min_api_level == stats->min_api_level &&
-            target_stats.appear_percent == stats->appear_percent &&
-            target_stats.call_count == stats->call_count) {
+      auto [target_it, emplaced] = method_stats.emplace(target, *stats);
+      if (!emplaced) {
+        auto& target_stats = target_it->second;
+        if (target_stats == *stats) {
           // Target method has stats and is same as the stats to be substituted.
           // Do not change.
-          return 0;
+          continue;
         }
+        target_stats = *stats;
       }
-      method_stats.emplace(target, *stats);
       res++;
+    } else {
+      auto target_it = method_stats.find(target);
+      if (target_it != method_stats.end()) {
+        method_stats.erase(target_it);
+        res++;
+      }
     }
   }
   return res;

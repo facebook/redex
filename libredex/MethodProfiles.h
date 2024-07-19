@@ -52,6 +52,13 @@ struct Stats {
 
   // The minimum API level that this method was observed running on
   int16_t min_api_level{0}; // min_api_level
+
+  bool operator==(const Stats& other) const {
+    return appear_percent == other.appear_percent &&
+           call_count == other.call_count &&
+           order_percent == other.order_percent &&
+           min_api_level == other.min_api_level;
+  }
 };
 
 using StatsMap = std::unordered_map<const DexMethodRef*, Stats>;
