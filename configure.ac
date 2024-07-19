@@ -179,5 +179,9 @@ AC_CONFIG_FILES([
         Makefile
         test/Makefile
         test/integ/Makefile
-        test/unit/Makefile])
+        test/unit/Makefile
+        test/samples/Makefile
+        test/samples/more_resources/Makefile
+        test/samples/strings/Makefile
+        ])
 AC_OUTPUT
