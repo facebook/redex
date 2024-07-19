@@ -43,6 +43,14 @@ class ResourcesInliningPass : public Pass {
   // Runs the pass on the given Scope
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
+  static std::unordered_map<uint32_t, resources::InlinableValue>
+  filter_inlinable_resources(
+      ResourceTableFile* res_table,
+      const std::unordered_map<uint32_t, resources::InlinableValue>&
+          inlinable_resources,
+      const std::unordered_set<std::string>& resource_type_names,
+      const std::unordered_set<std::string>& resource_entry_names);
+
   /* This method finds possible transformations of invoke_virtuals and move
    * instructions that are also inlinable and are one of the following supported
    * API calls: android.content.res.Resources.getBoolean(int)

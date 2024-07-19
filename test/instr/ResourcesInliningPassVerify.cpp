@@ -11,6 +11,7 @@
 #include "verify/VerifyUtil.h"
 
 #include "ApkResources.h"
+#include "ResourcesInliningPass.h"
 
 TEST_F(PreVerify, ResourcesInliningPassTest) {
   const auto& resource_arsc_file = resources.at("resources.arsc");
@@ -35,9 +36,19 @@ TEST_F(PreVerify, ResourcesInliningPassTest) {
                   0x7f050002,
                   /* string */
                   0x7f060000,
-                  0x7f060001));
-  std::unordered_map<uint32_t, resources::InlinableValue> inlinable =
+                  0x7f060001,
+                  0x7f060002));
+  std::unordered_set<std::string> resource_type_names = {"bool", "color",
+                                                         "integer"};
+  std::unordered_set<std::string> resource_entry_names = {"string/main_text"};
+  std::unordered_map<uint32_t, resources::InlinableValue> inlinable_pre_filter =
       res_table.get_inlinable_resource_values();
+
+  auto inlinable =
+      ResourcesInliningPass::filter_inlinable_resources(&res_table,
+                                                        inlinable_pre_filter,
+                                                        resource_type_names,
+                                                        resource_entry_names);
 
   EXPECT_TRUE(inlinable.find(0x7f010000) != inlinable.end());
 
@@ -51,8 +62,13 @@ TEST_F(PreVerify, ResourcesInliningPassTest) {
 
   EXPECT_TRUE(inlinable.find(0x7f040000) != inlinable.end());
 
+  EXPECT_TRUE(inlinable.find(0x7f050000) == inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f050001) == inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f050002) == inlinable.end());
+
   EXPECT_TRUE(inlinable.find(0x7f060000) != inlinable.end());
   EXPECT_TRUE(inlinable.find(0x7f060001) == inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f060002) == inlinable.end());
 
   auto val = inlinable.at(0x7f010000);
   EXPECT_EQ(val.type, android::Res_value::TYPE_INT_BOOLEAN);
@@ -87,7 +103,6 @@ TEST_F(PostVerify, ResourcesInliningPassTest_DexPatching) {
   IRCode* code = new IRCode(method);
   code->build_cfg();
   auto& cfg = code->cfg();
-
   for (auto* block : cfg.blocks()) {
     int line_num = 0;
     for (auto& mie : InstructionIterable(block)) {

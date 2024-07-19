@@ -16,6 +16,43 @@
 #include "Trace.h"
 #include "Walkers.h"
 
+std::unordered_map<uint32_t, resources::InlinableValue>
+ResourcesInliningPass::filter_inlinable_resources(
+    ResourceTableFile* res_table,
+    const std::unordered_map<uint32_t, resources::InlinableValue>&
+        inlinable_resources,
+    const std::unordered_set<std::string>& resource_type_names,
+    const std::unordered_set<std::string>& resource_entry_names) {
+  auto type_ids = res_table->get_types_by_name(resource_type_names);
+
+  std::vector<std::string> type_names;
+  res_table->get_type_names(&type_names);
+
+  const auto& id_to_name = res_table->id_to_name;
+  std::unordered_map<uint32_t, resources::InlinableValue>
+      refined_inlinable_resources;
+
+  for (auto& pair : inlinable_resources) {
+    auto& id = pair.first;
+    auto& value = pair.second;
+
+    auto masked_type = id & 0x00FF0000;
+    const auto& id_name = id_to_name.at(id);
+
+    std::string type_name =
+        type_names[(masked_type >> TYPE_INDEX_BIT_SHIFT) - 1];
+    std::string entry_name_formatted = type_name + "/" + id_name;
+
+    if (type_ids.find(masked_type) != type_ids.end() ||
+        resource_entry_names.find(entry_name_formatted) !=
+            resource_entry_names.end()) {
+      refined_inlinable_resources.insert({id, value});
+    }
+  }
+
+  return refined_inlinable_resources;
+}
+
 void ResourcesInliningPass::run_pass(DexStoresVector& stores,
                                      ConfigFiles& conf,
                                      PassManager& mgr) {
@@ -24,7 +61,12 @@ void ResourcesInliningPass::run_pass(DexStoresVector& stores,
   always_assert(!zip_dir.empty());
   auto resources = create_resource_reader(zip_dir);
   auto res_table = resources->load_res_table();
-  auto inlinable_resources = res_table->get_inlinable_resource_values();
+  auto inlinable = res_table->get_inlinable_resource_values();
+  std::unordered_map<uint32_t, resources::InlinableValue> inlinable_resources =
+      filter_inlinable_resources(res_table.get(),
+                                 inlinable,
+                                 m_resource_type_names,
+                                 m_resource_entry_names);
 
   const Scope scope = build_class_scope(stores);
 
