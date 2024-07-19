@@ -127,6 +127,22 @@ generate_valid_apis() {
   return usable_apis;
 }
 
+bool exists_possible_transformation(
+    const cfg::ControlFlowGraph& cfg,
+    const std::unordered_map<DexMethodRef*, std::tuple<uint8_t, uint8_t>>&
+        dex_method_refs) {
+  for (auto* block : cfg.blocks()) {
+    for (auto& mie : InstructionIterable(block)) {
+      auto insn = mie.insn;
+      if (insn->opcode() == OPCODE_INVOKE_VIRTUAL &&
+          (dex_method_refs.find(insn->get_method()) != dex_method_refs.end())) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 MethodTransformsMap ResourcesInliningPass::find_transformations(
     const Scope& scope,
     const std::unordered_map<uint32_t, resources::InlinableValue>&
@@ -155,6 +171,11 @@ MethodTransformsMap ResourcesInliningPass::find_transformations(
     }
     auto& cfg = get_code->cfg();
 
+    if (!exists_possible_transformation(cfg, dex_method_refs)) {
+      return;
+    }
+
+    TRACE(RIP, 1, "Found possible transformations for %s", SHOW(method));
     cp::intraprocedural::FixpointIterator intra_cp(
         cfg, CombinedAnalyzer(nullptr, nullptr, nullptr));
     // Runing the combined analyzer initially
