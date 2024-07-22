@@ -13,6 +13,7 @@
 #include "Debug.h"
 #include "RedexMappedFile.h"
 #include "RedexResources.h"
+#include "RedexTest.h"
 #include "RedexTestUtils.h"
 #include "Trace.h"
 
@@ -26,15 +27,14 @@ void setup_resources_and_run(
         callback) {
   auto tmp_dir = redex::make_tmp_dir("ApkResourcesTest%%%%%%%%");
   boost::filesystem::path p(tmp_dir.path);
-  redex::copy_file(std::getenv("test_manifest_path"),
+  redex::copy_file(get_env("test_manifest_path"),
                    (p / "AndroidManifest.xml").string());
-  redex::copy_file(std::getenv("test_res_path"),
-                   (p / "resources.arsc").string());
+  redex::copy_file(get_env("test_res_path"), (p / "resources.arsc").string());
 
   auto layout_dir = p / "res/layout";
   create_directories(layout_dir);
   auto layout_dest = layout_dir.string() + "/activity_main.xml";
-  redex::copy_file(std::getenv("test_layout_path"), layout_dest);
+  redex::copy_file(get_env("test_layout_path"), layout_dest);
 
   ApkResources resources(tmp_dir.path);
   callback(tmp_dir.path, &resources);

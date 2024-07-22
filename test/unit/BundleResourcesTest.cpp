@@ -13,6 +13,7 @@
 #include "Debug.h"
 #include "RedexMappedFile.h"
 #include "RedexResources.h"
+#include "RedexTest.h"
 #include "RedexTestUtils.h"
 #include "ResourcesTestDefs.h"
 #include "Trace.h"
@@ -30,18 +31,18 @@ void setup_resources_and_run(
 
   auto res_dir = p / "base";
   create_directories(res_dir);
-  redex::copy_file(std::getenv("test_res_path"),
+  redex::copy_file(get_env("test_res_path"),
                    res_dir.string() + "/resources.pb");
 
   auto manifest_dir = p / "base/manifest";
   create_directories(manifest_dir);
-  redex::copy_file(std::getenv("test_manifest_path"),
+  redex::copy_file(get_env("test_manifest_path"),
                    manifest_dir.string() + "/AndroidManifest.xml");
 
   auto layout_dir = p / "base/res/layout";
   create_directories(layout_dir);
   auto layout_dest = layout_dir.string() + "/activity_main.xml";
-  redex::copy_file(std::getenv("test_layout_path"), layout_dest);
+  redex::copy_file(get_env("test_layout_path"), layout_dest);
 
   BundleResources resources(tmp_dir.path);
   callback(tmp_dir.path, &resources);
@@ -199,7 +200,7 @@ TEST(BundleResources, ReadLayout) {
     std::unordered_multimap<std::string, resources::StringOrReference>
         attribute_values;
     resources->collect_layout_classes_and_attributes_for_file(
-        std::getenv("test_layout_path"),
+        get_env("test_layout_path"),
         attrs_to_read,
         &layout_classes,
         &attribute_values);
@@ -223,7 +224,7 @@ TEST(BundleResources, ReadLayout) {
     std::unordered_multimap<std::string, resources::StringOrReference>
         more_attribute_values;
     resources->collect_layout_classes_and_attributes_for_file(
-        std::getenv("another_layout_path"),
+        get_env("another_layout_path"),
         {},
         &more_classes,
         &more_attribute_values);

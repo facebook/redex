@@ -17,7 +17,7 @@ struct NativeTest : public RedexTest {};
 
 TEST_F(NativeTest, testJNIOutputParsing) {
   auto libs = native::get_so_libraries(
-      boost::filesystem::path(std::getenv("native_jni_output_path")) /
+      boost::filesystem::path(get_env("native_jni_output_path")) /
       "JNI_OUTPUT");
 
   std::unordered_set<std::string> lib_names;
@@ -31,8 +31,7 @@ TEST_F(NativeTest, testJNIOutputParsing) {
 
 TEST_F(NativeTest, testBuildingContext) {
   auto path_to_native_results =
-      boost::filesystem::path(std::getenv("native_jni_output_path")) /
-      "JNI_OUTPUT";
+      boost::filesystem::path(get_env("native_jni_output_path")) / "JNI_OUTPUT";
 
   auto type = DexType::make_type("Lredex/JNIExample;");
   ClassCreator creator(type);

@@ -14,6 +14,7 @@
 #include "ApkResources.h"
 #include "Debug.h"
 #include "RedexResources.h"
+#include "RedexTest.h"
 #include "ResourcesTestDefs.h"
 #include "androidfw/ResourceTypes.h"
 
@@ -29,7 +30,7 @@ TEST(RedexResources, ReadXmlTagsAndAttributes) {
 
   ApkResources resources("");
   resources.collect_layout_classes_and_attributes_for_file(
-      std::getenv("test_layout_path"),
+      get_env("test_layout_path"),
       attributes_to_find,
       &classes,
       &attribute_values);
@@ -53,7 +54,7 @@ TEST(RedexResources, ReadXmlTagsAndAttributes) {
   std::unordered_multimap<std::string, resources::StringOrReference>
       more_attribute_values;
   resources.collect_layout_classes_and_attributes_for_file(
-      std::getenv("another_layout_path"),
+      get_env("another_layout_path"),
       {},
       &more_classes,
       &more_attribute_values);

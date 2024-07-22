@@ -11,7 +11,12 @@
 #include <gtest/gtest.h>
 #include <json/value.h>
 
+#if __has_include(<unistd.h>)
+#include <unistd.h>
+#endif
+
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "DexStore.h"
@@ -26,6 +31,27 @@
 #endif
 #include "RedexTestUtils.h"
 
+inline std::string get_env(const char* name) {
+  const char* env_file = std::getenv(name);
+  always_assert_log(env_file != nullptr, "Environment variable %s not set%s",
+                    name,
+                    []() -> std::string {
+#if __has_include(<unistd.h>)
+                      extern char** environ;
+                      std::string tmp;
+                      for (auto** env = environ; *env != nullptr; ++env) {
+                        tmp += "\n ";
+                        tmp += *env;
+                      }
+                      return tmp;
+#else
+    return "";
+#endif
+                    }()
+                                .c_str());
+  return env_file;
+}
+
 struct RedexTest : public testing::Test {
  public:
   RedexTest() { g_redex = new RedexContext(); }
@@ -33,16 +59,15 @@ struct RedexTest : public testing::Test {
   ~RedexTest() { delete g_redex; }
 
   std::string android_sdk_jar_path() {
-    const char* android_sdk = std::getenv("sdk_path");
-    std::string android_target(std::getenv("android_target"));
-    return std::string(android_sdk) + "/platforms/" + android_target +
-           "/android.jar";
+    std::string android_sdk = get_env("sdk_path");
+    std::string android_target(get_env("android_target"));
+    return android_sdk + "/platforms/" + android_target + "/android.jar";
   }
 };
 
 struct RedexIntegrationTest : public RedexTest {
  protected:
-  const char* dex_file;
+  std::string dex_file;
   const char* secondary_dex_file;
   std::vector<DexStore> stores;
   boost::optional<DexClasses&> classes;
@@ -53,11 +78,9 @@ struct RedexIntegrationTest : public RedexTest {
 
  public:
   RedexIntegrationTest() {
-    dex_file = std::getenv("dexfile");
+    dex_file = get_env("dexfile");
 
-    always_assert_log(dex_file,
-                      "Dex file must be set up before integration tests.\n");
-
+    // This may be null.
     secondary_dex_file = std::getenv("secondary_dexfile");
 
     dex_metadata.set_id("classes");

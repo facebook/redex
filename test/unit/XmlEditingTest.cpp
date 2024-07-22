@@ -16,13 +16,14 @@
 #include "utils/Visitor.h"
 
 #include "RedexMappedFile.h"
+#include "RedexTest.h"
 
 namespace {
 const size_t UNSET{std::numeric_limits<size_t>::max()};
 } // namespace
 
 TEST(Visitor, AppendXmlId) {
-  auto f = RedexMappedFile::open(std::getenv("test_manifest_path"));
+  auto f = RedexMappedFile::open(get_env("test_manifest_path"));
 
   // Read some data about original file, used for asserts later.
   size_t initial_attributes{0};
@@ -151,7 +152,7 @@ TEST(Visitor, AppendXmlId) {
 }
 
 TEST(Visitor, AppendXmlIdUtf8Pool) {
-  auto f = RedexMappedFile::open(std::getenv("test_views"));
+  auto f = RedexMappedFile::open(get_env("test_views"));
 
   arsc::SimpleXmlParser orig_parser;
   orig_parser.visit((void*)f.const_data(), f.size());

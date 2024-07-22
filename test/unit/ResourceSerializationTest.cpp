@@ -17,6 +17,7 @@
 #include "Debug.h"
 #include "RedexMappedFile.h"
 #include "RedexResources.h"
+#include "RedexTest.h"
 #include "RedexTestUtils.h"
 #include "SanitizersConfig.h"
 #include "Util.h"
@@ -128,16 +129,16 @@ void write_to_file(const std::string& output_path,
 // that the Android SDK tools can successfully parse our built .arsc files, even
 // with all our shenanigans going on :) ;)
 std::vector<std::string> aapt_dump_helper(const std::string& arsc_path) {
-  std::string arsc_dumper_bin(std::getenv("arsc_dumper_bin"));
-  std::cerr << "Using aapt at: " << std::getenv("aapt_path") << std::endl;
+  std::string arsc_dumper_bin(get_env("arsc_dumper_bin"));
+  std::cerr << "Using aapt at: " << get_env("aapt_path") << std::endl;
 
   auto tmp_dir = redex::make_tmp_dir("aapt_dump_helper%%%%%%%%");
   auto out = tmp_dir.path + "/out.txt";
   auto err = tmp_dir.path + "/err.txt";
   boost::process::child c(
       arsc_dumper_bin,
-      boost::process::args({"--aapt", std::getenv("aapt_path"), "--arsc",
-                            arsc_path, "--outfile", out, "--errfile", err}));
+      boost::process::args({"--aapt", get_env("aapt_path"), "--arsc", arsc_path,
+                            "--outfile", out, "--errfile", err}));
   c.wait();
   auto exit_code = c.exit_code();
   if (exit_code != 0) {
@@ -427,7 +428,7 @@ ParsedAaptOutput aapt_dump_and_parse(const std::string& arsc_path,
 
 TEST(ResStringPool, AppendStringInXmlLayout) {
   std::string to_add("test_test");
-  auto f = RedexMappedFile::open(std::getenv("test_layout_path"));
+  auto f = RedexMappedFile::open(get_env("test_layout_path"));
 
   android::Vector<char> serialized;
   size_t new_idx;
@@ -461,7 +462,7 @@ TEST(ResStringPool, AppendStringsInXmlLayout) {
   // ones added at the back of pool.
   std::set<std::string> strings_to_add{"TextView", "aaaaa", "bbbbb"};
   std::unordered_map<std::string, uint32_t> string_to_idx;
-  auto f = RedexMappedFile::open(std::getenv("test_layout_path"));
+  auto f = RedexMappedFile::open(get_env("test_layout_path"));
 
   android::Vector<char> serialized;
   EXPECT_EQ(arsc::ensure_strings_in_xml_pool(f.const_data(), f.size(),
@@ -501,7 +502,7 @@ TEST(ResStringPool, ReplaceStringsInXmlLayout) {
   // Given layout file should have a series of View subclasses in the XML, which
   // we will rename. Parse the resulting binary data, and make sure all tags are
   // right.
-  auto f = RedexMappedFile::open(std::getenv("test_layout_path"));
+  auto f = RedexMappedFile::open(get_env("test_layout_path"));
 
   std::map<std::string, std::string> shortened_names;
   shortened_names.emplace("com.example.test.CustomViewGroup", "Z.a");
@@ -547,7 +548,7 @@ TEST(ResStringPool, ReplaceStringsInXmlLayout) {
 }
 
 TEST(ResTable, AppendNewType) {
-  auto src_file_path = std::getenv("test_arsc_path");
+  auto src_file_path = get_env("test_arsc_path");
   auto tmp_dir = redex::make_tmp_dir("ResTable_AppendNewType%%%%%%%%");
   auto dest_file_path = tmp_dir.path + "/resources.arsc";
   copy_file(src_file_path, dest_file_path);
@@ -800,7 +801,7 @@ TEST(ResTableParse, TestUnknownPackageChunks) {
   // that is not known/recognized should just be copied as-is to the output.
   auto tmp_dir = redex::make_tmp_dir("ResTableParse%%%%%%%%");
   auto res_path = tmp_dir.path + "/resources.arsc";
-  copy_file(std::getenv("resources_unknown_chunk"), res_path);
+  copy_file(get_env("resources_unknown_chunk"), res_path);
   ResourcesArscFile res_table(res_path);
   ResourceConfig config;
   // Be explicit here for when the default value of this config option gets
@@ -808,8 +809,7 @@ TEST(ResTableParse, TestUnknownPackageChunks) {
   // simple round trip with no changes.
   config.sort_key_strings = false;
   res_table.finalize_resource_table(config);
-  EXPECT_TRUE(
-      are_files_equal(std::getenv("resources_unknown_chunk"), res_path));
+  EXPECT_TRUE(are_files_equal(get_env("resources_unknown_chunk"), res_path));
 }
 
 TEST(Configs, TestConfigEquivalence) {
@@ -849,10 +849,10 @@ TEST(Configs, TestConfigEquivalence) {
 TEST(ResTable, TestBuilderRoundTrip) {
   auto tmp_dir = redex::make_tmp_dir("ResTable%%%%%%%%");
   auto res_path = tmp_dir.path + "/resources.arsc";
-  copy_file(std::getenv("test_arsc_path"), res_path);
+  copy_file(get_env("test_arsc_path"), res_path);
   ResourcesArscFile res_table(res_path);
   res_table.serialize();
-  EXPECT_TRUE(are_files_equal(std::getenv("test_arsc_path"), res_path));
+  EXPECT_TRUE(are_files_equal(get_env("test_arsc_path"), res_path));
 }
 
 namespace {
@@ -1739,7 +1739,7 @@ class AttributeCounter : public arsc::SimpleXmlParser {
 };
 
 TEST(FileManipulator, RebuildXmlFile) {
-  auto path = std::getenv("xml_path");
+  auto path = get_env("xml_path");
   auto f = RedexMappedFile::open(path);
   auto data = (char*)f.const_data();
 
@@ -1760,7 +1760,7 @@ TEST(FileManipulator, RebuildXmlFile) {
 }
 
 TEST(FileManipulator, AppendAtEnd) {
-  auto path = std::getenv("xml_path");
+  auto path = get_env("xml_path");
   auto f = RedexMappedFile::open(path);
   auto data_ptr = (char*)f.const_data();
 
