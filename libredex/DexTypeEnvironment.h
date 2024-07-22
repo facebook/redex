@@ -493,7 +493,7 @@ class DexTypeEnvironment final
 
   DexTypeEnvironment& clear_field_environment() {
     return mutate_field_environment(
-        [](FieldTypeEnvironment* env) { env->set_to_bottom(); });
+        [](FieldTypeEnvironment* env) { env->set_to_top(); });
   }
 
   bool is_this_ptr(reg_t reg) const {
