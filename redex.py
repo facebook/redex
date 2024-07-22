@@ -777,12 +777,6 @@ Given an APK, produce a better APK!
     )
 
     parser.add_argument(
-        "--secondary-packed-profiles",
-        type=str,
-        help="Path to packed secondary profiles (expects tar.xz)",
-    )
-
-    parser.add_argument(
         "--jni-summary",
         default=None,
         type=str,
@@ -1060,33 +1054,6 @@ def _handle_profiles(
         LOGGER.info("No coldstart ordering found in %s", args.packed_profiles)
 
 
-def _handle_secondary_method_profiles(args: argparse.Namespace) -> None:
-    if not args.secondary_packed_profiles:
-        return
-
-    directory = make_temp_dir(".redex_profiles", False)
-    unpack_tar_xz(args.secondary_packed_profiles, directory)
-
-    # Create input for secondary method profiles.
-    secondary_method_profiles_str = ", ".join(
-        f'"{f.path}"'
-        for f in os.scandir(directory)
-        if f.is_file()
-        and ("secondary_method_stats" in f.name or "secondary_stats" in f.name)
-    )
-    if secondary_method_profiles_str:
-        LOGGER.debug(
-            "Found secondary_method profiles: %s", secondary_method_profiles_str
-        )
-        args.passthru_json.append(
-            f"secondary_method_stats_files=[{secondary_method_profiles_str}]"
-        )
-    else:
-        LOGGER.info(
-            "No secondary method profiles found in %s", args.secondary_packed_profiles
-        )
-
-
 def prepare_redex(args: argparse.Namespace) -> State:
     LOGGER.debug("Preparing...")
     debug_mode = args.unpack_only or args.debug
@@ -1211,7 +1178,6 @@ def prepare_redex(args: argparse.Namespace) -> State:
         )
 
         _handle_profiles(args, dd_enabled_interactions)
-        _handle_secondary_method_profiles(args)
 
         LOGGER.debug("Moving contents to expected structure...")
         # Move each dex to a separate temporary directory to be operated by
