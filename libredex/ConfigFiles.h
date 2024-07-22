@@ -130,18 +130,7 @@ struct ConfigFiles {
     return *m_method_profiles;
   }
 
-  method_profiles::MethodProfiles& get_secondary_method_profiles() {
-    ensure_secondary_method_stats_loaded();
-    return *m_secondary_method_profiles;
-  }
-
-  const method_profiles::MethodProfiles& get_secondary_method_profiles() const {
-    ensure_secondary_method_stats_loaded();
-    return *m_secondary_method_profiles;
-  }
-
   void process_unresolved_method_profile_lines();
-  void process_unresolved_secondary_method_profile_lines();
 
   const std::unordered_set<DexType*>& get_no_optimizations_annos();
   const std::unordered_set<std::string>& get_no_optimizations_blocklist();
@@ -257,8 +246,6 @@ struct ConfigFiles {
   bool m_dead_class_list_attempted{false};
   std::string m_printseeds; // Filename to dump computed seeds.
   mutable std::unique_ptr<method_profiles::MethodProfiles> m_method_profiles;
-  mutable std::unique_ptr<method_profiles::MethodProfiles>
-      m_secondary_method_profiles;
   std::unordered_map<std::string, DeadClassLoadCounts> m_dead_classes;
   std::unordered_set<std::string> m_live_relocated_classes;
 
