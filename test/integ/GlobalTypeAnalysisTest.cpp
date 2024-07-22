@@ -397,3 +397,22 @@ TEST_F(GlobalTypeAnalysisTest, MultipleCalleeTest) {
   EXPECT_FALSE(rtype.is_top());
   EXPECT_TRUE(rtype.get_single_domain().is_top());
 }
+
+// This makes sure we are no longer running in a bug where all code following an
+// invocation within a constructor was considered unreachable.
+TEST_F(GlobalTypeAnalysisTest, InvokeInInitRegressionTest) {
+  auto scope = build_class_scope(stores);
+  set_root_method("Lcom/facebook/redextest/TestP;.main:()V");
+
+  GlobalTypeAnalysis analysis;
+  auto gta = analysis.analyze(scope);
+  auto wps = gta->get_whole_program_state();
+
+  auto meth = get_method("TestP;.bar", "TestP$C");
+  auto rtype = wps.get_return_type(meth);
+  EXPECT_TRUE(rtype.is_nullable());
+  const auto& single_domain = rtype.get_single_domain();
+  EXPECT_EQ(single_domain, SingletonDexTypeDomain(get_type("TestP$C")));
+  const auto& set_domain = rtype.get_set_domain();
+  EXPECT_EQ(set_domain.get_types(), get_type_set({get_type("TestP$C")}));
+}

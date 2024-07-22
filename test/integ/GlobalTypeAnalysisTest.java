@@ -439,3 +439,18 @@ class TestO {
     callDiff(3);
   }
 }
+
+class TestP { 
+  static class C {}
+  TestP() {
+    foo();
+    obj1 = new C();
+  }
+  final C obj1;
+  private void foo() {}
+  C bar() { return obj1; }
+  public static void main() {
+    TestP x = new TestP();
+    x.bar();
+  }
+}
