@@ -22,18 +22,33 @@ runs:
       save_boost_cache: "${{ inputs.save_boost_cache }}"
       setup_toolchain_extra: "${{ inputs.setup_toolchain_extra }}"
   - uses: "./.github/actions/test-build-setup"
-  - name: Create Build Cache File
-    run: echo "${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}" > /tmp/build.txt
-    shell: bash
+  # It is unclear whether github.sha is the right thing generally. It is
+  # for scheduled workflows (as it's HEAD of the branch). But for pull requests
+  # it's a bit murkier (looking for some merge commits).
+  # For now leave it at that and hope that the fallback does the right thing.
   - name: Cache build
     uses: actions/cache@v3.3.2
     with:
-      key: v1-build-cache-{{ hashFiles('/tmp/build.txt') }}-{{ runner.arch }}-{{ github.ref_name }}-{{ github.sha }}
+      key: v1-build-cache-${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}-${{ runner.arch }}-${{ github.ref_name }}-${{ github.sha }}
       path: build.tar.zstd
+      restore-keys: |
+        v1-build-cache-${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}-${{ runner.arch }}-${{ github.ref_name }}
+        v1-build-cache-${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}-${{ runner.arch }}-main
+        v1-build-cache-${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}-${{ runner.arch }}
+  # Would be nice to use the cache action output, but we want to unpack even on
+  # restore_keys hit.
+  - name: Unpack build cache
+    run: |-
+      if [ -f  "build.tar.zstd" ] ; then
+        echo "Decompressing build cache"
+        zstd --decompress --stdout build.tar.zstd | tar xf -
+        rm build.tar.zstd
+        find build | wc -l
+      fi
+    shell: bash
   - name: Create build directory
     run: |-
-      if [ -f  "build.tar.zstd" ] ; then zstd --decompress --stdout build.tar.zstd | tar xf - ; else mkdir -p build ; fi
-      rm -f build.tar.zstd
+      if [ ! -d build ] ; then echo "Creating build dir." ; mkdir -p build ; fi
     shell: bash
   - name: Autoreconf
     run: autoreconf -ivf
