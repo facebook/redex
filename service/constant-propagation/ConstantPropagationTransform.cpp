@@ -325,7 +325,10 @@ void try_simplify(const ConstantEnvironment& env,
     break;
   }
   case OPCODE_XOR_INT_LIT: {
-    // TODO
+    if (insn->get_literal() == 0) {
+      replace_with_move(insn->src(0));
+      break;
+    }
     break;
   }
 
@@ -400,11 +403,16 @@ void try_simplify(const ConstantEnvironment& env,
     break;
   }
 
-  case OPCODE_XOR_INT:
-    if (maybe_reduce_lit_both()) {
+  case OPCODE_XOR_INT: {
+    if (reg_is_exact(insn->src(0), 0)) {
+      replace_with_move(insn->src(1));
+    } else if (reg_is_exact(insn->src(1), 0)) {
+      replace_with_move(insn->src(0));
+    } else if (maybe_reduce_lit_both()) {
       break;
     }
     break;
+  }
 
   case OPCODE_ADD_LONG:
   case OPCODE_SUB_LONG:
