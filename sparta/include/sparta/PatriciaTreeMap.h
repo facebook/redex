@@ -114,7 +114,10 @@ class PatriciaTreeMap final
   const mapped_type& at(Key key) const { return m_core.at(key); }
 
   bool leq(const PatriciaTreeMap& other) const {
-    return m_core.leq(other.m_core);
+    return m_core.leq(other.m_core,
+                      [](auto, const mapped_type& a, const mapped_type& b) {
+                        return ValueInterface::leq(a, b);
+                      });
   }
 
   bool equals(const PatriciaTreeMap& other) const {
