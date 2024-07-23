@@ -8,15 +8,14 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include "ApkResources.h"
+#include "BundleResources.h"
+#include "RedexResources.h"
+#include "ResourcesInliningPass.h"
 #include "verify/VerifyUtil.h"
 
-#include "ApkResources.h"
-#include "ResourcesInliningPass.h"
-
-TEST_F(PreVerify, ResourcesInliningPassTest) {
-  const auto& resource_arsc_file = resources.at("resources.arsc");
-  auto res_table = ResourcesArscFile(resource_arsc_file);
-  EXPECT_THAT(res_table.sorted_res_ids,
+void resource_inlining_PreVerify(ResourceTableFile* res_table) {
+  EXPECT_THAT(res_table->sorted_res_ids,
               testing::ElementsAre(
                   /* bool */
                   0x7f010000,
@@ -38,18 +37,16 @@ TEST_F(PreVerify, ResourcesInliningPassTest) {
                   0x7f060000,
                   0x7f060001,
                   0x7f060002));
+  std::unordered_map<uint32_t, resources::InlinableValue> inlinable_pre_filter =
+      res_table->get_inlinable_resource_values();
   std::unordered_set<std::string> resource_type_names = {"bool", "color",
                                                          "integer"};
   std::unordered_set<std::string> resource_entry_names = {"string/main_text"};
-  std::unordered_map<uint32_t, resources::InlinableValue> inlinable_pre_filter =
-      res_table.get_inlinable_resource_values();
-
   auto inlinable =
-      ResourcesInliningPass::filter_inlinable_resources(&res_table,
+      ResourcesInliningPass::filter_inlinable_resources(res_table,
                                                         inlinable_pre_filter,
                                                         resource_type_names,
                                                         resource_entry_names);
-
   EXPECT_TRUE(inlinable.find(0x7f010000) != inlinable.end());
 
   EXPECT_TRUE(inlinable.find(0x7f020000) != inlinable.end());
@@ -97,8 +94,7 @@ TEST_F(PreVerify, ResourcesInliningPassTest) {
   EXPECT_EQ(val.string_value.substr(0, 6), "Hello,");
 }
 
-TEST_F(PostVerify, ResourcesInliningPassTest_DexPatching) {
-  auto cls = find_class_named(classes, "Lcom/fb/resources/MainActivity;");
+void resource_inlining_PostVerify(DexClass* cls) {
   auto method = find_method_named(*cls, "logValues");
   IRCode* code = new IRCode(method);
   code->build_cfg();
