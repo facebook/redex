@@ -350,8 +350,8 @@ class PatriciaTreeBranch final
       boost::intrusive_ptr<Base> left_tree,
       boost::intrusive_ptr<Base> right_tree) {
     return boost::intrusive_ptr<PatriciaTreeBranch>(
-        new PatriciaTreeBranch(prefix, branching_bit, std::move(left_tree),
-                               std::move(right_tree)),
+        new PatriciaTreeBranch(
+            prefix, branching_bit, std::move(left_tree), std::move(right_tree)),
         /* add_ref */ false);
   }
 
@@ -583,7 +583,8 @@ inline bool is_tree_subset_of(
     return is_tree_subset_of(branch1->left_tree(), branch2->left_tree()) &&
            is_tree_subset_of(branch1->right_tree(), branch2->right_tree());
   } else if (branch1->branching_bit() > branch2->branching_bit() &&
-             match_prefix(branch1->prefix(), branch2->prefix(),
+             match_prefix(branch1->prefix(),
+                          branch2->prefix(),
                           branch2->branching_bit())) {
     if (is_zero_bit(branch1->prefix(), branch2->branching_bit())) {
       return is_tree_subset_of(branch1->left_tree(), branch2->left_tree()) &&
@@ -888,8 +889,8 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> update_leaf_by_key(
     if (new_leaf == nullptr) {
       return tree;
     } else {
-      return join_trees<IntegerType, Value>(key, std::move(new_leaf),
-                                            leaf->key(), tree);
+      return join_trees<IntegerType, Value>(
+          key, std::move(new_leaf), leaf->key(), tree);
     }
   }
 
@@ -897,7 +898,8 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> update_leaf_by_key(
   if (match_prefix(key, branch->prefix(), branch->branching_bit())) {
     if (is_zero_bit(key, branch->branching_bit())) {
       auto new_left_tree =
-          update_leaf_by_key(std::forward<LeafOperation>(leaf_operation), key,
+          update_leaf_by_key(std::forward<LeafOperation>(leaf_operation),
+                             key,
                              branch->left_tree());
       if (new_left_tree == branch->left_tree()) {
         return tree;
@@ -908,7 +910,8 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> update_leaf_by_key(
                          branch->right_tree());
     } else {
       auto new_right_tree =
-          update_leaf_by_key(std::forward<LeafOperation>(leaf_operation), key,
+          update_leaf_by_key(std::forward<LeafOperation>(leaf_operation),
+                             key,
                              branch->right_tree());
       if (new_right_tree == branch->right_tree()) {
         return tree;
@@ -923,8 +926,8 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> update_leaf_by_key(
   if (new_leaf == nullptr) {
     return tree;
   } else {
-    return join_trees<IntegerType, Value>(key, std::move(new_leaf),
-                                          branch->prefix(), tree);
+    return join_trees<IntegerType, Value>(
+        key, std::move(new_leaf), branch->prefix(), tree);
   }
 }
 
@@ -961,8 +964,10 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> update_all_leafs(
       new_right_tree == branch->right_tree()) {
     return tree;
   } else {
-    return make_branch(branch->prefix(), branch->branching_bit(),
-                       std::move(new_left_tree), std::move(new_right_tree));
+    return make_branch(branch->prefix(),
+                       branch->branching_bit(),
+                       std::move(new_left_tree),
+                       std::move(new_right_tree));
   }
 }
 
@@ -1005,7 +1010,8 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> combine_leafs_by_key(
        &other](auto leaf) {
         return leaf_combine(std::move(leaf), std::move(other));
       },
-      key, tree);
+      key,
+      tree);
 }
 
 template <typename IntegerType, typename Value, typename LeafCombine>
@@ -1133,7 +1139,8 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> intersect_trees(
       return nullptr;
     } else {
       return combine_leafs(
-          leaf_combine, std::move(key_in_t),
+          leaf_combine,
+          std::move(key_in_t),
           boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(s));
     }
   } else if (const auto* t_leaf = t->as_leaf()) {
@@ -1142,7 +1149,8 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> intersect_trees(
       return nullptr;
     } else {
       return combine_leafs(
-          leaf_combine, std::move(key_in_s),
+          leaf_combine,
+          std::move(key_in_s),
           boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t));
     }
   }
@@ -1197,7 +1205,8 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> diff_trees(
       return s;
     } else {
       return combine_leafs(
-          leaf_combine, std::move(key_in_t),
+          leaf_combine,
+          std::move(key_in_t),
           boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(s));
     }
   } else if (t->is_leaf()) {
@@ -1312,8 +1321,10 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> erase_keys_matching(
       new_right_tree == branch->right_tree()) {
     return tree;
   } else {
-    return make_branch(branch->prefix(), branch->branching_bit(),
-                       std::move(new_left_tree), std::move(new_right_tree));
+    return make_branch(branch->prefix(),
+                       branch->branching_bit(),
+                       std::move(new_left_tree),
+                       std::move(new_right_tree));
   }
 }
 
@@ -1404,15 +1415,16 @@ class PatriciaTreeCore {
 
   template <typename ValueOrLeaf>
   inline void upsert(Key key, ValueOrLeaf value_or_leaf) {
-    m_tree = pt_core::upsert_leaf_by_key(Codec::encode(key),
-                                         std::move(value_or_leaf), m_tree);
+    m_tree = pt_core::upsert_leaf_by_key(
+        Codec::encode(key), std::move(value_or_leaf), m_tree);
   }
 
   template <typename LeafOperation>
   inline void update(LeafOperation&& leaf_operation, Key key) {
     m_tree =
         pt_core::update_leaf_by_key(std::forward<LeafOperation>(leaf_operation),
-                                    Codec::encode(key), m_tree);
+                                    Codec::encode(key),
+                                    m_tree);
   }
 
   template <typename LeafOperation>
@@ -1435,21 +1447,21 @@ class PatriciaTreeCore {
 
   template <typename LeafCombine>
   inline void merge(LeafCombine&& leaf_combine, const PatriciaTreeCore& other) {
-    m_tree = pt_core::merge_trees(std::forward<LeafCombine>(leaf_combine),
-                                  m_tree, other.m_tree);
+    m_tree = pt_core::merge_trees(
+        std::forward<LeafCombine>(leaf_combine), m_tree, other.m_tree);
   }
 
   template <typename LeafCombine>
   inline void intersect(LeafCombine&& leaf_combine,
                         const PatriciaTreeCore& other) {
-    m_tree = pt_core::intersect_trees(std::forward<LeafCombine>(leaf_combine),
-                                      m_tree, other.m_tree);
+    m_tree = pt_core::intersect_trees(
+        std::forward<LeafCombine>(leaf_combine), m_tree, other.m_tree);
   }
 
   template <typename LeafCombine>
   inline void diff(LeafCombine&& leaf_combine, const PatriciaTreeCore& other) {
-    m_tree = pt_core::diff_trees(std::forward<LeafCombine>(leaf_combine),
-                                 m_tree, other.m_tree);
+    m_tree = pt_core::diff_trees(
+        std::forward<LeafCombine>(leaf_combine), m_tree, other.m_tree);
   }
 
   inline void remove(Key key) {
