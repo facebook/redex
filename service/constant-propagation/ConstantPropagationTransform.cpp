@@ -256,6 +256,13 @@ void try_simplify(const ConstantEnvironment& env,
     mutation.replace(cfg_it, {move});
   };
 
+  auto replace_with_move_wide = [&](reg_t src_reg) {
+    auto* move = new IRInstruction(OPCODE_MOVE_WIDE);
+    move->set_src(0, src_reg);
+    move->set_dest(insn->dest());
+    mutation.replace(cfg_it, {move});
+  };
+
   auto replace_with_const = [&](int64_t val) {
     auto* c = new IRInstruction(OPCODE_CONST);
     c->set_dest(insn->dest());
@@ -263,8 +270,22 @@ void try_simplify(const ConstantEnvironment& env,
     mutation.replace(cfg_it, {c});
   };
 
+  auto replace_with_const_wide = [&](int64_t val) {
+    auto* c = new IRInstruction(OPCODE_CONST_WIDE);
+    c->set_dest(insn->dest());
+    c->set_literal(val);
+    mutation.replace(cfg_it, {c});
+  };
+
   auto replace_with_neg = [&](reg_t src_reg) {
     auto* neg = new IRInstruction(OPCODE_NEG_INT);
+    neg->set_src(0, src_reg);
+    neg->set_dest(insn->dest());
+    mutation.replace(cfg_it, {neg});
+  };
+
+  auto replace_with_neg_long = [&](reg_t src_reg) {
+    auto* neg = new IRInstruction(OPCODE_NEG_LONG);
     neg->set_src(0, src_reg);
     neg->set_dest(insn->dest());
     mutation.replace(cfg_it, {neg});
@@ -414,14 +435,64 @@ void try_simplify(const ConstantEnvironment& env,
     break;
   }
 
-  case OPCODE_ADD_LONG:
-  case OPCODE_SUB_LONG:
-  case OPCODE_MUL_LONG:
-  case OPCODE_AND_LONG:
-  case OPCODE_OR_LONG:
-  case OPCODE_XOR_LONG:
-    // TODO: More complicated version of the above.
+  case OPCODE_ADD_LONG: {
+    if (reg_is_exact(insn->src(0), 0)) {
+      replace_with_move_wide(insn->src(1));
+    } else if (reg_is_exact(insn->src(1), 0)) {
+      replace_with_move_wide(insn->src(0));
+    }
     break;
+  }
+  case OPCODE_SUB_LONG: {
+    if (reg_is_exact(insn->src(0), 0)) {
+      replace_with_neg_long(insn->src(1));
+    } else if (reg_is_exact(insn->src(1), 0)) {
+      replace_with_move_wide(insn->src(0));
+    }
+    break;
+  }
+  case OPCODE_MUL_LONG: {
+    if ((reg_is_exact(insn->src(0), 0)) || (reg_is_exact(insn->src(1), 0))) {
+      replace_with_const_wide(0);
+    } else if (reg_is_exact(insn->src(0), 1)) {
+      replace_with_move_wide(insn->src(1));
+    } else if (reg_is_exact(insn->src(1), 1)) {
+      replace_with_move_wide(insn->src(0));
+    } else if (reg_is_exact(insn->src(0), -1)) {
+      replace_with_neg_long(insn->src(1));
+    } else if (reg_is_exact(insn->src(1), -1)) {
+      replace_with_neg_long(insn->src(0));
+    }
+    break;
+  }
+  case OPCODE_AND_LONG: {
+    if ((reg_is_exact(insn->src(0), 0)) || (reg_is_exact(insn->src(1), 0))) {
+      replace_with_const_wide(0);
+    } else if (reg_is_exact(insn->src(0), -1)) {
+      replace_with_move_wide(insn->src(1));
+    } else if (reg_is_exact(insn->src(1), -1)) {
+      replace_with_move_wide(insn->src(0));
+    }
+    break;
+  }
+  case OPCODE_OR_LONG: {
+    if ((reg_is_exact(insn->src(0), -1)) || (reg_is_exact(insn->src(1), -1))) {
+      replace_with_const_wide(-1);
+    } else if (reg_is_exact(insn->src(0), 0)) {
+      replace_with_move_wide(insn->src(1));
+    } else if (reg_is_exact(insn->src(1), 0)) {
+      replace_with_move_wide(insn->src(0));
+    }
+    break;
+  }
+  case OPCODE_XOR_LONG: {
+    if (reg_is_exact(insn->src(0), 0)) {
+      replace_with_move_wide(insn->src(1));
+    } else if (reg_is_exact(insn->src(1), 0)) {
+      replace_with_move_wide(insn->src(0));
+    }
+    break;
+  }
 
   default:
     return;
