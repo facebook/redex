@@ -76,9 +76,5 @@ runs:
       export GTEST_OUTPUT=xml:/tmp/test-results/
       make -j4 check V=0
     working-directory: build
-    if: inputs.run_test == 'true'
-    shell: bash
-  - uses: actions/upload-artifact@v4.0.0
-    with:
-      path: "/tmp/test-results"
     if: inputs.run_tests == 'true'
+    shell: bash
