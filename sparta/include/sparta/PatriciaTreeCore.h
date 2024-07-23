@@ -599,17 +599,11 @@ inline bool is_tree_subset_of(
 }
 
 /* Assumes Value::default_value_kind is either Top or Bottom */
-template <typename IntegerType, typename Value>
+template <typename IntegerType, typename Value, typename Compare>
 inline bool is_tree_leq(
     const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& s,
-    const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& t) {
-  using ValueType = typename Value::type;
-  constexpr bool kHasLeq =
-      std::is_same_v<decltype(Value::leq(std::declval<ValueType>(),
-                                         std::declval<ValueType>())),
-                     bool>;
-  static_assert(kHasLeq, "Value::leq() is not defined");
-
+    const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& t,
+    Compare&& compare) {
   static_assert(Value::default_value_kind == AbstractValueKind::Top ||
                 Value::default_value_kind == AbstractValueKind::Bottom);
 
@@ -629,7 +623,7 @@ inline bool is_tree_leq(
     // Both nodes are leaves. s leq to t iff
     // key(s) == key(t) && value(s) <= value(t).
     return s_leaf->key() == t_leaf->key() &&
-           Value::leq(s_leaf->value(), t_leaf->value());
+           compare(s_leaf->key(), s_leaf->value(), t_leaf->value());
   } else if (s_leaf) {
     // t has at least one non-default binding that s doesn't have.
     if (Value::default_value_kind == AbstractValueKind::Top) {
@@ -647,7 +641,7 @@ inline bool is_tree_leq(
       // Always false if default_value is Bottom, which we already assume.
       return false;
     } else {
-      return Value::leq(s_leaf->value(), *t_value);
+      return compare(s_leaf->key(), s_leaf->value(), *t_value);
     }
   } else if (t_leaf) {
     // s has at least one non-default binding that t doesn't have.
@@ -661,7 +655,7 @@ inline bool is_tree_leq(
       // Always false if default_value is Top, which we already assume.
       return false;
     } else {
-      return Value::leq(*s_value, t_leaf->value());
+      return compare(t_leaf->key(), *s_value, t_leaf->value());
     }
   }
 
@@ -677,17 +671,17 @@ inline bool is_tree_leq(
   const auto& t0 = t_branch->left_tree();
   const auto& t1 = t_branch->right_tree();
   if (m == n && p == q) {
-    return is_tree_leq(s0, t0) && is_tree_leq(s1, t1);
+    return is_tree_leq(s0, t0, compare) && is_tree_leq(s1, t1, compare);
   } else if (m < n && match_prefix(q, p, m)) {
     // The tree t only contains bindings present in a subtree of s, and s has
     // bindings not present in t.
     return Value::default_value_kind == AbstractValueKind::Top &&
-           is_tree_leq(is_zero_bit(q, m) ? s0 : s1, t);
+           is_tree_leq(is_zero_bit(q, m) ? s0 : s1, t, compare);
   } else if (m > n && match_prefix(p, q, n)) {
     // The tree s only contains bindings present in a subtree of t, and t has
     // bindings not present in s.
     return Value::default_value_kind == AbstractValueKind::Bottom &&
-           is_tree_leq(s, is_zero_bit(p, n) ? t0 : t1);
+           is_tree_leq(s, is_zero_bit(p, n) ? t0 : t1, compare);
   } else {
     // s and t both have bindings that are not present in the other tree.
     return false;
@@ -1371,6 +1365,11 @@ class PatriciaTreeCore {
     return contains_leaf_with_key(Codec::encode(key), m_tree);
   }
 
+  // Returns nullptr if the key is mapped to the default value.
+  inline const ValueType* find(Key key) const {
+    return find_value_by_key(Codec::encode(key), m_tree);
+  }
+
   inline const ValueType& at(Key key) const {
     if (const auto* value = find_value_by_key(Codec::encode(key), m_tree)) {
       return *value;
@@ -1401,8 +1400,10 @@ class PatriciaTreeCore {
     return pt_core::is_tree_subset_of(m_tree, other.m_tree);
   }
 
-  inline bool leq(const PatriciaTreeCore& other) const {
-    return pt_core::is_tree_leq(m_tree, other.m_tree);
+  template <typename Compare>
+  inline bool leq(const PatriciaTreeCore& other, Compare compare) const {
+    return pt_core::is_tree_leq(
+        m_tree, other.m_tree, std::forward<Compare>(compare));
   }
 
   inline bool equals(const PatriciaTreeCore& other) const {
