@@ -42,6 +42,7 @@ check_PROGRAMS = \
     analysis_usage_test \
     api_utils_test \
     array_propagation_test \
+    arsc_attribution_test \
     assert_test \
     atomic_map_test \
     blaming_escape_test \
@@ -191,6 +192,9 @@ $(eval $(call make_env,api_utils_test,api_utils_easy_input_path=$(srcdir)/api_ut
 
 array_propagation_test_SOURCES = constant-propagation/ArrayPropagationTest.cpp
 array_propagation_test_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/sparta/test
+
+arsc_attribution_test_SOURCES = ArscAttributionTest.cpp $(top_srcdir)/tools/arsc/ArscStats.cpp arsc/TestStructures.cpp
+arsc_attribution_test_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/tools/arsc -I$(top_srcdir)/test/unit/arsc
 
 assert_test_SOURCES = AssertTest.cpp
 
