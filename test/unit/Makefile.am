@@ -275,6 +275,8 @@ extract_native_test_SOURCES = ExtractNativeTest.cpp
 fast_reg_alloc_test_SOURCES = FastRegAllocTest.cpp
 
 fbjni_marker_test_SOURCES = FbjniMarkerTest.cpp
+EXTRA_fbjni_marker_test_DEPENDENCIES = fbjni_marker_test.env
+$(eval $(call make_env,fbjni_marker_test,test_fbjni_json=$(srcdir)/example_fbjni.json))
 
 final_inline_test_SOURCES = FinalInlineTest.cpp
 
@@ -557,6 +559,7 @@ TESTS = \
     exception_test \
     extract_native_test \
     fast_reg_alloc_test \
+    fbjni_marker_test \
     final_inline_test \
     final_inline_v2_test \
     fp_ev_test \
