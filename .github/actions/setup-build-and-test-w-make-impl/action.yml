@@ -42,6 +42,7 @@ runs:
       if [ -f  "build.tar.zstd" ] ; then
         echo "Decompressing build cache"
         zstd --decompress --stdout build.tar.zstd | tar xf -
+        ls -l build.tar.zstd
         rm build.tar.zstd
         find build | wc -l
       fi
@@ -59,8 +60,19 @@ runs:
       ../repo/configure --enable-protobuf --with-android-sdk="$(pwd)/../sdk" ${{ inputs.configure_extra }}
     working-directory: build
     shell: bash
+  - name: Print dates
+    run: |
+      ls -l ../repo/proto/
+      ls -l protores/
+      echo '===='
+      ls -l libredex.la
+      ls -l ../repo/libredex/*.cpp
+      ls -l libredex/
+      exit 1
+    working-directory: build
+    shell: bash
   - name: Build
-    run: make -j4 V=0
+    run: make -j4 -d
     working-directory: build
     shell: bash
   - name: Compress build directory
