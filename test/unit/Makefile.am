@@ -40,6 +40,7 @@ endef
 check_PROGRAMS = \
     aliased_registers_test \
     analysis_usage_test \
+    api_utils_test \
     array_propagation_test \
     assert_test \
     atomic_map_test \
@@ -182,6 +183,11 @@ check_PROGRAMS = \
 aliased_registers_test_SOURCES = AliasedRegistersTest.cpp
 
 analysis_usage_test_SOURCES = AnalysisUsageTest.cpp
+
+api_utils_test_SOURCES = ApiUtilsTest.cpp ScopeHelper.cpp
+api_utils_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+EXTRA_api_utils_test_DEPENDENCIES = api_utils_test.env
+$(eval $(call make_env,api_utils_test,api_utils_easy_input_path=$(srcdir)/api_utils_easy_input.txt))
 
 array_propagation_test_SOURCES = constant-propagation/ArrayPropagationTest.cpp
 array_propagation_test_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/sparta/test
