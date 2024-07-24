@@ -149,6 +149,7 @@ check_PROGRAMS = \
     resolver_test \
     resolve_proguard_value_test \
     resource_inlining_test \
+    resources_test \
     result_propagation_test \
     side_effects_summary_test \
     signed_constant_propagation_test \
@@ -503,6 +504,14 @@ xstorerefs_test_SOURCES = XStoreRefsTest.cpp
 
 string_tree_test_SOURCES = StringTreeTest.cpp
 
+resources_test_SOURCES = RedexResourcesTest.cpp
+EXTRA_resources_test_DEPENDENCIES = resources_test.env more_resources/res/layout/class_names.xml
+$(eval $(call make_env,resources_test,\
+  test_layout_path=$(srcdir)/example_layout_with_onclick.xml \
+  another_layout_path=more_resources/res/layout/class_names.xml))
+
+more_resources/res/layout/class_names.xml:
+	mkdir -p more_resources && unzip ../samples/more_resources/unsigned.apk -d more_resources res/layout/class_names.xml
 
 TESTS = \
     aliased_registers_test \
@@ -609,6 +618,7 @@ TESTS = \
     resolver_test \
     resolve_proguard_value_test \
     resource_inlining_test \
+    resources_test \
     result_propagation_test \
     side_effects_summary_test \
     signed_constant_propagation_test \
