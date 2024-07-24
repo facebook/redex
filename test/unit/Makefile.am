@@ -356,6 +356,8 @@ leb_test_SOURCES = LebTest.cpp
 
 native_test_SOURCES = NativeTest.cpp
 native_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+EXTRA_native_test_DEPENDENCIES = native_test.env
+$(eval $(call make_env,native_test,native_jni_output_path=$(srcdir)))
 
 native_names_test_SOURCES = NativeNamesTest.cpp
 
@@ -591,6 +593,7 @@ TESTS = \
     monitor_count_test \
     mutf8_compare_test \
     leb_test \
+    native_test \
     null_propagation_test \
     object_inliner_test \
     object_propagation_test \
