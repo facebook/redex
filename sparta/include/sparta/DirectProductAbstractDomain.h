@@ -16,6 +16,7 @@
 #include <type_traits>
 
 #include <sparta/AbstractDomain.h>
+#include <sparta/PerfectForwardCapture.h>
 
 // Forward declarations.
 namespace sparta {
@@ -190,10 +191,10 @@ class DirectProductAbstractDomain : public AbstractDomain<Derived> {
   template <class Predicate>
   bool all_of(Predicate&& predicate) const {
     return tuple_apply(
-        [predicate =
-             std::forward<Predicate>(predicate)](const Domains&... component) {
+        [predicate = fwd_capture(std::forward<Predicate>(predicate))](
+            const Domains&... component) mutable {
           bool result = true;
-          discard({(result &= predicate(component))...});
+          discard({(result &= predicate.get()(component))...});
           return result;
         },
         m_product);
@@ -202,10 +203,10 @@ class DirectProductAbstractDomain : public AbstractDomain<Derived> {
   template <class Predicate>
   bool any_of(Predicate&& predicate) const {
     return tuple_apply(
-        [predicate =
-             std::forward<Predicate>(predicate)](const Domains&... component) {
+        [predicate = fwd_capture(std::forward<Predicate>(predicate))](
+            const Domains&... component) mutable {
           bool result = false;
-          discard({(result |= predicate(component))...});
+          discard({(result |= predicate.get()(component))...});
           return result;
         },
         m_product);

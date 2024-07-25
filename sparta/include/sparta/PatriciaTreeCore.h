@@ -25,6 +25,7 @@
 #include <sparta/AbstractMapValue.h>
 #include <sparta/Exceptions.h>
 #include <sparta/PatriciaTreeUtil.h>
+#include <sparta/PerfectForwardCapture.h>
 
 namespace sparta {
 
@@ -864,7 +865,7 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> update_leaf_by_key(
     LeafOperation&& leaf_operation,
     IntegerType key,
     const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& tree) {
-  const auto make_new_leaf = [&] {
+  const auto make_new_leaf = [key, &leaf_operation]() {
     return update_new_leaf<IntegerType, Value>(
         std::forward<LeafOperation>(leaf_operation), key);
   };
@@ -936,7 +937,9 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> upsert_leaf_by_key(
     ValueOrLeaf value_or_leaf,
     const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& tree) {
   return update_leaf_by_key(
-      [&](const auto&) { return std::move(value_or_leaf); }, key, tree);
+      [&value_or_leaf](const auto&) { return std::move(value_or_leaf); },
+      key,
+      tree);
 }
 
 template <typename IntegerType, typename Value, typename LeafOperation>
@@ -986,9 +989,9 @@ inline intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>> combine_leafs(
     intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>> other,
     intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>> leaf) {
   return update_leaf(
-      [leaf_combine = std::forward<LeafCombine>(leaf_combine),
-       &other](auto leaf) {
-        return leaf_combine(std::move(leaf), std::move(other));
+      [leaf_combine = fwd_capture(std::forward<LeafCombine>(leaf_combine)),
+       &other](auto leaf) mutable {
+        return leaf_combine.get()(std::move(leaf), std::move(other));
       },
       std::move(leaf));
 }
@@ -1000,9 +1003,9 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> combine_leafs_by_key(
     IntegerType key,
     const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& tree) {
   return update_leaf_by_key(
-      [leaf_combine = std::forward<LeafCombine>(leaf_combine),
-       &other](auto leaf) {
-        return leaf_combine(std::move(leaf), std::move(other));
+      [leaf_combine = fwd_capture(std::forward<LeafCombine>(leaf_combine)),
+       &other](auto leaf) mutable {
+        return leaf_combine.get()(std::move(leaf), std::move(other));
       },
       key,
       tree);
@@ -1440,9 +1443,8 @@ class PatriciaTreeCore {
   template <typename Visitor>
   inline void visit_all_leafs(Visitor&& visitor) const {
     pt_core::visit_all_leafs(
-        [visitor = std::forward<Visitor>(visitor)](const auto& data) {
-          visitor(Codec::decode(data));
-        },
+        [visitor = fwd_capture(std::forward<Visitor>(visitor))](
+            const auto& data) mutable { visitor.get()(Codec::decode(data)); },
         m_tree);
   }
 
@@ -1472,9 +1474,9 @@ class PatriciaTreeCore {
   template <typename Predicate>
   inline void filter(Predicate&& predicate) {
     m_tree = pt_core::filter_tree(
-        [predicate = std::forward<Predicate>(predicate)](
-            IntegerType key, const ValueType& value) {
-          return predicate(Codec::decode(key), value);
+        [predicate = fwd_capture(std::forward<Predicate>(predicate))](
+            IntegerType key, const ValueType& value) mutable {
+          return predicate.get()(Codec::decode(key), value);
         },
         m_tree);
   }

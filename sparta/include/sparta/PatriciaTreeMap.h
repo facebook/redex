@@ -21,6 +21,7 @@
 #include <sparta/Exceptions.h>
 #include <sparta/PatriciaTreeCore.h>
 #include <sparta/PatriciaTreeUtil.h>
+#include <sparta/PerfectForwardCapture.h>
 
 namespace sparta {
 namespace ptm_impl {
@@ -237,10 +238,11 @@ class PatriciaTreeMap final
   // This wraps the given function to apply these transformations.
   template <typename Func>
   inline static auto apply_leafs(Func&& func) {
-    return [func = std::forward<Func>(func)](const auto&... leaf_ptrs) {
+    return [func = fwd_capture(std::forward<Func>(func))](
+               const auto&... leaf_ptrs) mutable {
       auto default_value = ValueInterface::default_value();
       auto return_value =
-          func((leaf_ptrs ? leaf_ptrs->value() : default_value)...);
+          func.get()((leaf_ptrs ? leaf_ptrs->value() : default_value)...);
 
       return keep_if_non_default(std::move(return_value));
     };

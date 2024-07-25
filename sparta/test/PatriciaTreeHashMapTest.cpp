@@ -181,3 +181,50 @@ TEST(PatriciaTreeHashMapTest, difference) {
                                      create_pth_map({{2, 1}, {4, 1}, {6, 1}})),
             create_pth_map({{1, 3}, {3, 3}, {5, 3}}));
 }
+
+TEST(PatriciaTreeHashMapTest, movableOperators) {
+  pth_map p = create_pth_map({{0, 1}, {1, 2}});
+
+  // lambda passed by rvalue reference, holding a non-copyable value.
+  auto movable = std::make_unique<uint32_t>(3);
+  p.update(
+      [movable = std::move(movable)](uint32_t* value) mutable {
+        auto tmp = std::move(movable);
+        *value = *value + *tmp;
+      },
+      0);
+  EXPECT_EQ(p.at(0), 4);
+
+  movable = std::make_unique<uint32_t>(4);
+  auto updater = [movable = std::move(movable)](uint32_t* value) mutable {
+    auto tmp = std::move(movable);
+    *value = *value + *tmp;
+  };
+  p.update(updater, 0);
+  EXPECT_EQ(p.at(0), 8);
+
+  // lambda passed by rvalue reference, holding a non-copyable value.
+  movable = std::make_unique<uint32_t>(10);
+  p.transform([movable = std::move(movable)](uint32_t* value) mutable {
+    auto tmp = std::move(movable);
+    (*tmp)++;
+    auto new_value = *tmp;
+    movable = std::move(tmp);
+    *value = new_value;
+  });
+  EXPECT_EQ(p.at(0), 11);
+  EXPECT_EQ(p.at(1), 12);
+
+  // lambda passed by lvalue reference, holding a non-copyable value.
+  movable = std::make_unique<uint32_t>(20);
+  auto transformer = [movable = std::move(movable)](uint32_t* value) mutable {
+    auto tmp = std::move(movable);
+    (*tmp)++;
+    auto new_value = *tmp;
+    movable = std::move(tmp);
+    *value = new_value;
+  };
+  p.transform(transformer);
+  EXPECT_EQ(p.at(0), 21);
+  EXPECT_EQ(p.at(1), 22);
+}

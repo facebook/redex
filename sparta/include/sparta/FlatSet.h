@@ -16,6 +16,7 @@
 
 #include <sparta/AbstractSet.h>
 #include <sparta/PatriciaTreeUtil.h>
+#include <sparta/PerfectForwardCapture.h>
 
 namespace sparta {
 
@@ -131,8 +132,10 @@ class FlatSet final
   FlatSet& filter(Predicate&& predicate) {
     auto container = m_set.extract_sequence();
     container.erase(
-        std::remove_if(container.begin(), container.end(),
-                       [&](const Element& e) { return !predicate(e); }),
+        std::remove_if(
+            container.begin(), container.end(),
+            [predicate = fwd_capture(std::forward<Predicate>(predicate))](
+                const Element& e) mutable { return !predicate.get()(e); }),
         container.end());
     m_set.adopt_sequence(boost::container::ordered_unique_range,
                          std::move(container));
