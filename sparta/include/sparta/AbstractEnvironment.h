@@ -16,6 +16,7 @@
 #include <sparta/AbstractDomain.h>
 #include <sparta/AbstractMap.h>
 #include <sparta/AbstractMapValue.h>
+#include <sparta/PerfectForwardCapture.h>
 
 namespace sparta {
 
@@ -135,9 +136,9 @@ class AbstractEnvironment final
     try {
       if constexpr (Map::mutability == AbstractMapMutability::Immutable) {
         this->get_value()->m_map.update(
-            [operation = std::forward<Operation>(operation)](
-                const Domain& value) -> Domain {
-              Domain result = operation(value);
+            [operation = fwd_capture(std::forward<Operation>(operation))](
+                const Domain& value) mutable -> Domain {
+              Domain result = operation.get()(value);
               if (result.is_bottom()) {
                 throw environment_impl::value_is_bottom();
               }
@@ -146,9 +147,9 @@ class AbstractEnvironment final
             variable);
       } else if constexpr (Map::mutability == AbstractMapMutability::Mutable) {
         this->get_value()->m_map.update(
-            [operation =
-                 std::forward<Operation>(operation)](Domain* value) -> void {
-              operation(value);
+            [operation = fwd_capture(std::forward<Operation>(operation))](
+                Domain* value) mutable -> void {
+              operation.get()(value);
               if (value->is_bottom()) {
                 throw environment_impl::value_is_bottom();
               }
@@ -338,19 +339,18 @@ class MapValue final : public AbstractValue<MapValue<Map>> {
 
   template <typename Operation>
   AbstractValueKind join_like_operation(const MapValue& other,
-                                        Operation&& operation) {
-    m_map.intersection_with(std::forward<Operation>(operation), other.m_map);
+                                        const Operation& operation) {
+    m_map.intersection_with(operation, other.m_map);
     return kind();
   }
 
   template <typename Operation>
   AbstractValueKind meet_like_operation(const MapValue& other,
-                                        Operation&& operation) {
+                                        const Operation& operation) {
     try {
       if constexpr (Map::mutability == AbstractMapMutability::Immutable) {
         m_map.union_with(
-            [operation = std::forward<Operation>(operation)](
-                const Domain& x, const Domain& y) -> Domain {
+            [&operation](const Domain& x, const Domain& y) -> Domain {
               Domain result = operation(x, y);
               if (result.is_bottom()) {
                 throw value_is_bottom();
@@ -360,8 +360,7 @@ class MapValue final : public AbstractValue<MapValue<Map>> {
             other.m_map);
       } else if constexpr (Map::mutability == AbstractMapMutability::Mutable) {
         m_map.union_with(
-            [operation = std::forward<Operation>(operation)](
-                Domain* x, const Domain& y) -> void {
+            [&operation](Domain* x, const Domain& y) -> void {
               operation(x, y);
               if (x->is_bottom()) {
                 throw value_is_bottom();

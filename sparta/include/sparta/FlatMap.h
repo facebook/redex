@@ -17,6 +17,7 @@
 #include <sparta/AbstractMap.h>
 #include <sparta/AbstractMapValue.h>
 #include <sparta/PatriciaTreeCore.h>
+#include <sparta/PerfectForwardCapture.h>
 
 namespace sparta {
 namespace fm_impl {
@@ -282,13 +283,14 @@ class FlatMap final
       // Use boost `flat_map` API to get the underlying container and
       // apply a remove_if + erase. This allows to perform a filter in O(n).
       auto container = m_map.extract_sequence();
-      container.erase(std::remove_if(container.begin(),
-                                     container.end(),
-                                     [predicate = std::forward<Predicate>(
-                                          predicate)](const auto& p) {
-                                       return !predicate(p.first, p.second);
-                                     }),
-                      container.end());
+      container.erase(
+          std::remove_if(container.begin(),
+                         container.end(),
+                         [predicate = fwd_capture(std::forward<Predicate>(
+                              predicate))](const auto& p) mutable {
+                           return !predicate.get()(p.first, p.second);
+                         }),
+          container.end());
       m_map.adopt_sequence(boost::container::ordered_unique_range,
                            std::move(container));
       break;

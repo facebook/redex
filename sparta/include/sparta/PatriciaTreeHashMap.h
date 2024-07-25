@@ -21,6 +21,7 @@
 #include <sparta/FlatMap.h>
 #include <sparta/FlattenIterator.h>
 #include <sparta/PatriciaTreeMap.h>
+#include <sparta/PerfectForwardCapture.h>
 
 namespace sparta {
 namespace pthm_impl {
@@ -163,12 +164,9 @@ class PatriciaTreeHashMap final
   template <typename Operation> // void(mapped_type*)
   PatriciaTreeHashMap& update(Operation&& operation, const Key& key) {
     m_tree.update(
-        [operation = std::forward<Operation>(operation),
-         &key](FlatMapT flat_map) -> FlatMapT {
-          // We should be using `std::forward` here but we would get a compiler
-          // error, see:
-          // https://vittorioromeo.info/index/blog/capturing_perfectly_forwarded_objects_in_lambdas.html
-          flat_map.update(operation, key);
+        [operation = fwd_capture(std::forward<Operation>(operation)),
+         &key](FlatMapT flat_map) mutable -> FlatMapT {
+          flat_map.update(std::forward<Operation>(operation.get()), key);
           return flat_map;
         },
         KeyHash()(key));
@@ -177,11 +175,11 @@ class PatriciaTreeHashMap final
 
   template <typename MappingFunction> // void(mapped_type*)
   void transform(MappingFunction&& f) {
-    m_tree.transform(
-        [f = std::forward<MappingFunction>(f)](FlatMapT flat_map) -> FlatMapT {
-          flat_map.transform(f);
-          return flat_map;
-        });
+    m_tree.transform([f = fwd_capture(std::forward<MappingFunction>(f))](
+                         FlatMapT flat_map) mutable -> FlatMapT {
+      flat_map.transform(f.get());
+      return flat_map;
+    });
   }
 
   /*
@@ -190,9 +188,9 @@ class PatriciaTreeHashMap final
    */
   template <typename Visitor> // void(const value_type&)
   void visit(Visitor&& visitor) const {
-    m_tree.visit([visitor = std::forward<Visitor>(visitor)](
-                     const std::pair<size_t, FlatMapT>& binding) {
-      binding.second.visit(visitor);
+    m_tree.visit([visitor = fwd_capture(std::forward<Visitor>(visitor))](
+                     const std::pair<size_t, FlatMapT>& binding) mutable {
+      binding.second.visit(visitor.get());
     });
   }
 
@@ -207,9 +205,10 @@ class PatriciaTreeHashMap final
   }
 
   template <typename Predicate> // bool(const Key&, const mapped_type&)
-  PatriciaTreeHashMap& filter(const Predicate& predicate) {
-    m_tree.transform([&predicate](FlatMapT flat_map) -> FlatMapT {
-      flat_map.filter(predicate);
+  PatriciaTreeHashMap& filter(Predicate&& predicate) {
+    m_tree.transform([predicate = fwd_capture(std::forward<Predicate>(
+                          predicate))](FlatMapT flat_map) mutable -> FlatMapT {
+      flat_map.filter(predicate.get());
       return flat_map;
     });
     return *this;
@@ -222,11 +221,12 @@ class PatriciaTreeHashMap final
   // Requires CombiningFunction to coerce to
   // std::function<void(mapped_type*, const mapped_type&)>
   template <typename CombiningFunction>
-  PatriciaTreeHashMap& union_with(const CombiningFunction& combine,
+  PatriciaTreeHashMap& union_with(CombiningFunction&& combine,
                                   const PatriciaTreeHashMap& other) {
     m_tree.union_with(
-        [&combine](FlatMapT left, const FlatMapT& right) -> FlatMapT {
-          left.union_with(combine, right);
+        [combine = fwd_capture(std::forward<CombiningFunction>(combine))](
+            FlatMapT left, const FlatMapT& right) mutable -> FlatMapT {
+          left.union_with(combine.get(), right);
           return left;
         },
         other.m_tree);
@@ -236,11 +236,12 @@ class PatriciaTreeHashMap final
   // Requires CombiningFunction to coerce to
   // std::function<void(mapped_type*, const mapped_type&)>
   template <typename CombiningFunction>
-  PatriciaTreeHashMap& intersection_with(const CombiningFunction& combine,
+  PatriciaTreeHashMap& intersection_with(CombiningFunction&& combine,
                                          const PatriciaTreeHashMap& other) {
     m_tree.intersection_with(
-        [&combine](FlatMapT left, const FlatMapT& right) -> FlatMapT {
-          left.intersection_with(combine, right);
+        [combine = fwd_capture(std::forward<CombiningFunction>(combine))](
+            FlatMapT left, const FlatMapT& right) mutable -> FlatMapT {
+          left.intersection_with(combine.get(), right);
           return left;
         },
         other.m_tree);
@@ -249,11 +250,12 @@ class PatriciaTreeHashMap final
 
   // Requires that `combine(bottom, ...) = bottom`.
   template <typename CombiningFunction>
-  PatriciaTreeHashMap& difference_with(const CombiningFunction& combine,
+  PatriciaTreeHashMap& difference_with(CombiningFunction&& combine,
                                        const PatriciaTreeHashMap& other) {
     m_tree.difference_with(
-        [&combine](FlatMapT left, const FlatMapT& right) -> FlatMapT {
-          left.difference_with(combine, right);
+        [combine = fwd_capture(std::forward<CombiningFunction>(combine))](
+            FlatMapT left, const FlatMapT& right) mutable -> FlatMapT {
+          left.difference_with(combine.get(), right);
           return left;
         },
         other.m_tree);
