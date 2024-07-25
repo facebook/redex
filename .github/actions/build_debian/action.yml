@@ -17,9 +17,16 @@ inputs:
 runs:
   using: composite
   steps:
+  # Reinitialize. It is easier to do this (again) to not have to deal with
+  # fixing `uses:` paths.
   - uses: actions/checkout@v4.1.1
     with:
       path: repo
+      # We want to run restore-mtime, which needs to find actual commit data
+      # and not just the shallow default result. The easiest way for this seems
+      # to be the filter support of Github (https://github.blog/open-source/git/get-up-to-speed-with-partial-clone-and-shallow-clone/).
+      fetch-depth: 1000000
+      filter: "tree:0"
   - uses: ./.github/actions/debian-based-image-build-setup
     with:
       mode_32: "${{ inputs.mode_32 }}"
