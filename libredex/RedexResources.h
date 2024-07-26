@@ -98,6 +98,10 @@ struct StringOrReferenceHasher {
 
 using StringOrReferenceSet =
     std::unordered_set<StringOrReference, StringOrReferenceHasher>;
+
+// Helper for dealing with differences in character encoding between .arsc and
+// .pb files.
+std::string convert_utf8_to_mutf8(const std::string& input);
 } // namespace resources
 
 /*

@@ -13,6 +13,7 @@
 #include <boost/filesystem/operations.hpp>
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <boost/optional.hpp>
+#include <boost/regex/pending/unicode_iterator.hpp>
 #include <map>
 #include <mutex>
 #include <string>
@@ -32,6 +33,7 @@
 #include "StringUtil.h"
 #include "Trace.h"
 #include "WorkQueue.h"
+#include "utils/Unicode.h"
 
 // Workaround for inclusion order, when compiling on Windows (#defines NO_ERROR
 // as 0).
@@ -492,5 +494,43 @@ namespace resources {
 bool valid_xml_element(const std::string& ident) {
   return java_names::is_identifier(ident) &&
          ident.find('.') != std::string::npos;
+}
+
+std::string convert_utf8_to_mutf8(const std::string& input) {
+  std::ostringstream out;
+  auto pack_to_3_byte_form = [&](char16_t c) {
+    uint8_t one = 0xE0 | ((c >> 12) & 0xF);
+    uint8_t two = 0x80 | ((c >> 6) & 0x3F);
+    uint8_t three = 0x80 | (c & 0x3F);
+    out << one << two << three;
+  };
+
+  for (boost::u8_to_u32_iterator<std::string::const_iterator> it(input.begin()),
+       end(input.end());
+       it != end;
+       ++it) {
+    auto code_point = (char32_t)*it;
+    auto len = utf32_to_utf8_length(&code_point, 1);
+    always_assert(len != -1);
+    if (code_point == 0) {
+      // Special null zero encoding for MUTF-8.
+      out << '\xC0' << '\x80';
+    } else if (code_point < 0x10000) {
+      // Normal UTF-8 encoding.
+      char dest[4] = {0};
+      utf32_to_utf8(&code_point, 1, dest, sizeof(dest));
+      for (size_t i = 0; i < (size_t)len; i++) {
+        out << dest[i];
+      }
+    } else {
+      // Convert to UTF-16 surrogate pair, then pack each as 3 byte encoding.
+      code_point -= 0x10000;
+      char16_t high = 0xD800 + ((code_point >> 10) & 0x3FF);
+      char16_t low = 0xDC00 + (code_point & 0x3FF);
+      pack_to_3_byte_form(high);
+      pack_to_3_byte_form(low);
+    }
+  }
+  return out.str();
 }
 } // namespace resources
