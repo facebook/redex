@@ -13,12 +13,18 @@ bool is_canary(DexClass* clazz) {
                  strlen(SECONDARY_CANARY_PREFIX)) == 0;
 }
 
+int32_t get_unique_store_id(const char* store_name) {
+  always_assert(store_name != nullptr);
+  auto store_id = java_hashcode_of_utf8_string(store_name) & 0xFFFF;
+  // Yes, there could be collisions. We assume that is handled outside of
+  // Redex.
+  return store_id;
+}
+
 std::string get_canary_name(int dexnum, const char* store_name) {
   if (store_name) {
     char buf[STORE_CANARY_CLASS_BUFSIZE];
-    int store_id = java_hashcode_of_utf8_string(store_name) & 0xFFFF;
-    // Yes, there could be collisions. We assume that is handled outside of
-    // Redex.
+    int store_id = get_unique_store_id(store_name);
     snprintf(buf, sizeof(buf), STORE_CANARY_CLASS_FORMAT, store_id, dexnum + 1);
     return std::string(buf);
   } else {
