@@ -37,6 +37,7 @@
 #include "Trace.h"
 #include "androidfw/LocaleValue.h"
 #include "androidfw/ResourceTypes.h"
+#include "utils/Serialize.h"
 
 namespace {
 
@@ -2402,7 +2403,91 @@ void ResourcesPbFile::resolve_string_values_for_resource_reference(
 
 std::unordered_map<uint32_t, resources::InlinableValue>
 ResourcesPbFile::get_inlinable_resource_values() {
-  return {};
+  auto& res_id_to_configvalue = m_res_id_to_configvalue;
+  std::unordered_map<uint32_t, resources::InlinableValue> inlinable_resources;
+  std::vector<std::tuple<uint32_t, uint32_t>> past_refs;
+
+  for (auto& pair : res_id_to_configvalue) {
+    uint32_t id = pair.first;
+    const ConfigValues& config_seq = pair.second;
+    if (config_seq.empty() || config_seq.size() > 1) {
+      continue;
+    }
+    const auto& config = config_seq.begin();
+    auto arsc_config = convert_to_arsc_config(id, config->config());
+
+    if (!arsc::is_default_config(&arsc_config)) {
+      continue;
+    }
+    if (!config->has_value()) {
+      continue;
+    }
+    const aapt::pb::Value& value = config->value();
+    if (value.has_compound_value()) {
+      continue;
+    }
+    const aapt::pb::Item& item = value.item();
+    if (!(item.has_ref() || item.has_str() || item.has_prim())) {
+      continue;
+    }
+
+    resources::InlinableValue inlinable_val{};
+    if (item.has_ref()) {
+      auto id_to_add = item.ref().id();
+      past_refs.push_back(std::tuple<uint32_t, uint32_t>(id, id_to_add));
+      continue;
+    } else if (item.has_str()) {
+      const std::string& og_str = item.str().value();
+      const std::string& mutf8_string =
+          resources::convert_utf8_to_mutf8(og_str);
+      inlinable_val.string_value = mutf8_string;
+      inlinable_val.type = android::Res_value::TYPE_STRING;
+    } else if (item.has_prim()) {
+      if (item.prim().oneof_value_case() ==
+          aapt::pb::Primitive::kBooleanValue) {
+        inlinable_val.bool_value = item.prim().boolean_value();
+        inlinable_val.type = android::Res_value::TYPE_INT_BOOLEAN;
+      } else if (item.prim().oneof_value_case() ==
+                 aapt::pb::Primitive::kColorArgb4Value) {
+        inlinable_val.uint_value = item.prim().color_argb4_value();
+        inlinable_val.type = android::Res_value::TYPE_INT_COLOR_ARGB4;
+      } else if (item.prim().oneof_value_case() ==
+                 aapt::pb::Primitive::kColorArgb8Value) {
+        inlinable_val.uint_value = item.prim().color_argb8_value();
+        inlinable_val.type = android::Res_value::TYPE_INT_COLOR_ARGB8;
+      } else if (item.prim().oneof_value_case() ==
+                 aapt::pb::Primitive::kColorRgb4Value) {
+        inlinable_val.uint_value = item.prim().color_rgb4_value();
+        inlinable_val.type = android::Res_value::TYPE_INT_COLOR_RGB4;
+      } else if (item.prim().oneof_value_case() ==
+                 aapt::pb::Primitive::kColorRgb8Value) {
+        inlinable_val.uint_value = item.prim().color_rgb8_value();
+        inlinable_val.type = android::Res_value::TYPE_INT_COLOR_RGB8;
+      } else if (item.prim().oneof_value_case() ==
+                 aapt::pb::Primitive::kIntDecimalValue) {
+        inlinable_val.uint_value = item.prim().int_decimal_value();
+        inlinable_val.type = android::Res_value::TYPE_INT_DEC;
+      } else if (item.prim().oneof_value_case() ==
+                 aapt::pb::Primitive::kIntHexadecimalValue) {
+        inlinable_val.uint_value = item.prim().int_hexadecimal_value();
+        inlinable_val.type = android::Res_value::TYPE_INT_HEX;
+      } else {
+        continue;
+      }
+    }
+    inlinable_resources.insert({id, inlinable_val});
+  }
+  // If a reference is found, check if the referenced value is inlinable and add
+  // it's actual value to the map (instead of the reference). NOTE: only works
+  // if reference only goes down one level.
+  for (auto& [id, id_past] : past_refs) {
+    auto it = inlinable_resources.find(id_past);
+    if (it != inlinable_resources.end()) {
+      resources::InlinableValue val = it->second;
+      inlinable_resources.insert({id, val});
+    }
+  }
+  return inlinable_resources;
 }
 
 ResourcesPbFile::~ResourcesPbFile() {}
