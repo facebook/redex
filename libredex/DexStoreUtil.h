@@ -20,9 +20,13 @@ constexpr size_t SECONDARY_CANARY_CLASS_BUFSIZE =
 constexpr const char STORE_CANARY_CLASS_FORMAT[] = "Lstore%04x/dex%02d/Canary;";
 constexpr size_t STORE_CANARY_CLASS_BUFSIZE = sizeof(STORE_CANARY_CLASS_FORMAT);
 
-std::string get_canary_name(int dexnum, const DexString* store_name);
+// Pass in nullptr for the root store name.
+std::string get_canary_name(int dexnum, const char* store_name = nullptr);
+
 bool is_canary(DexClass* clazz);
-DexClass* create_canary(int dexnum, const DexString* store_name = nullptr);
+
+// Pass in the empty string for the root store name.
+DexClass* create_canary(int dexnum, const std::string& store_name = "");
 
 using TypeSet = std::set<const DexType*, dextypes_comparator>;
 
