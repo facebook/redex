@@ -26,7 +26,17 @@ class InterDexTest : public RedexIntegrationTest {
   void define_test(const std::vector<std::string>& betmap,
                    const std::string& expected_manifest,
                    bool minimize_cross_dex_refs_explore_alternatives = false,
-                   bool order_interdex = true) {
+                   bool order_interdex = true,
+                   bool define_dynamically_dead_classes = false) {
+    if (define_dynamically_dead_classes) {
+      for (auto& cls : *classes) {
+        if (cls->get_name() ==
+            DexString::make_string("Lcom/facebook/redextest/C7;")) {
+          cls->set_dynamically_dead();
+        }
+      }
+    }
+
     std::cout << "Loaded classes: " << classes->size() << std::endl;
 
     auto tmp_dir = redex::make_tmp_dir("redex_interdex_test_%%%%%%%%");
@@ -43,6 +53,7 @@ class InterDexTest : public RedexIntegrationTest {
     cfg["coldstart_classes"] = betmap_file;
     if (minimize_cross_dex_refs_explore_alternatives) {
       cfg["InterDexPass"]["minimize_cross_dex_refs"] = true;
+      cfg["InterDexPass"]["reorder_dynamically_dead_classes"] = true;
       cfg["InterDexPass"]["reserved_trefs"] = kOldMaxTypeRefs - 16;
       cfg["InterDexPass"]["minimize_cross_dex_refs_explore_alternatives"] = 24;
       cfg["InterDexPass"]["order_interdex"] = order_interdex;
@@ -322,6 +333,29 @@ TEST_F(InterDexTest, interdex_cross_dex_ref_minimization) {
 
   // First regular class is the one with highest seed weight
   EXPECT_EQ(stores[0].get_dexen()[1].front()->get_name()->str(), "Lcom/facebook/redextest/C7;");
+}
+
+TEST_F(InterDexTest, interdex_dynamically_dead) {
+  define_test({
+      "com/facebook/redextest/InterDexPrimary.class",
+      "DexEndMarker0.class",
+    },
+    "Lsecondary/dex00/Canary;,ordinal=0,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
+    "Lsecondary/dex01/Canary;,ordinal=1,coldstart=0,extended=0,primary=0,scroll=0,background=0\n"
+    "Lsecondary/dex02/Canary;,ordinal=2,coldstart=0,extended=0,primary=0,scroll=0,background=0\n"
+    "Lsecondary/dex03/Canary;,ordinal=3,coldstart=0,extended=0,primary=0,scroll=0,background=0\n",
+    /* minimize_cross_dex_refs_explore_alternatives */ true, /* order_interdex*/ true, /* define_dynamically_dead_classes */true
+  );
+
+  EXPECT_EQ(stores.size(), 1);
+  EXPECT_EQ(stores[0].get_dexen().size(), 4);
+  EXPECT_EQ(stores[0].get_dexen()[0].size(), 2);
+  EXPECT_EQ(stores[0].get_dexen()[1].size(), 12);
+  EXPECT_EQ(stores[0].get_dexen()[2].size(), 3);
+  EXPECT_EQ(stores[0].get_dexen()[3].size(), 2);
+
+  // The dynamically_dead class should be in the last seconday dex.
+  EXPECT_EQ(stores[0].get_dexen()[3].front()->get_name()->str(), "Lcom/facebook/redextest/C7;");
 }
 
 TEST_F(InterDexTest, interdex_test_validate_class_spec) {

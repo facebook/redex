@@ -59,6 +59,7 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(
     ReshuffleConfig& config,
     DexClasses& original_scope,
     DexClassesVector& dexen,
+    const std::unordered_set<size_t>& dynamically_dead_dexes,
     const boost::optional<class_merging::Model&>& merging_model)
     : m_conf(conf),
       m_mgr(mgr),
@@ -66,6 +67,7 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(
       m_init_classes_with_side_effects(original_scope,
                                        conf.create_init_class_insns()),
       m_dexen(dexen),
+      m_dynamically_dead_dexes(dynamically_dead_dexes),
       m_merging_model(merging_model) {
   m_dexes_structure.set_min_sdk(mgr.get_redex_options().min_sdk);
   const auto& interdex_metrics = mgr.get_interdex_metrics();
@@ -277,11 +279,11 @@ size_t InterDexReshuffleImpl::get_eliminate_dex(
 
 void InterDexReshuffleImpl::compute_plan() {
   Timer t("compute_plan");
-  MoveGains move_gains(m_first_dex_index, m_movable_classes,
-                       m_class_dex_indices, m_class_refs, m_mutable_dexen,
-                       m_mutable_dexen_strings, m_class_to_merging_info,
-                       m_num_field_defs, m_mergeability_aware,
-                       m_config.deduped_weight, m_config.other_weight);
+  MoveGains move_gains(
+      m_first_dex_index, m_movable_classes, m_class_dex_indices, m_class_refs,
+      m_mutable_dexen, m_mutable_dexen_strings, m_dynamically_dead_dexes,
+      m_class_to_merging_info, m_num_field_defs, m_mergeability_aware,
+      m_config.deduped_weight, m_config.other_weight);
   size_t batches{0};
   size_t total_moves{0};
   size_t max_move_gains{0};
@@ -374,9 +376,9 @@ bool InterDexReshuffleImpl::compute_dex_removal_plan() {
 
   MoveGains move_gains(m_first_dex_index, movable_classes, class_dex_indices,
                        m_class_refs, m_mutable_dexen, m_mutable_dexen_strings,
-                       m_class_to_merging_info, m_num_field_defs,
-                       m_mergeability_aware, m_config.deduped_weight,
-                       m_config.other_weight);
+                       m_dynamically_dead_dexes, m_class_to_merging_info,
+                       m_num_field_defs, m_mergeability_aware,
+                       m_config.deduped_weight, m_config.other_weight);
   size_t max_move_gains{0};
 
   size_t max_batch = movable_classes.size();
@@ -559,5 +561,6 @@ bool InterDexReshuffleImpl::try_plan_move(const Move& move,
 bool InterDexReshuffleImpl::can_move(DexClass* cls) {
   return (!m_order_interdex ||
           cls->get_perf_sensitive() != PerfSensitiveGroup::BETAMAP_ORDERED) &&
-         !is_canary(cls);
+         !is_canary(cls) &&
+         (m_dynamically_dead_dexes.empty() || !cls->is_dynamically_dead());
 }

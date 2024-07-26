@@ -181,6 +181,9 @@ void InterDexPass::bind_config() {
   bind("transitively_close_interdex_order", m_transitively_close_interdex_order,
        m_transitively_close_interdex_order);
 
+  bind("reorder_dynamically_dead_classes", false,
+       m_reorder_dynamically_dead_classes);
+
   bind("exclude_baseline_profile_classes", false,
        m_exclude_baseline_profile_classes);
   bind_baseline_profile_config();
@@ -228,9 +231,9 @@ void InterDexPass::run_pass(
       m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
       m_keep_primary_order, force_single_dex, m_order_interdex, m_emit_canaries,
       m_minimize_cross_dex_refs, m_fill_last_coldstart_dex,
-      m_minimize_cross_dex_refs_config, refs_info, &xstore_refs,
-      mgr.get_redex_options().min_sdk, init_classes_with_side_effects,
-      m_transitively_close_interdex_order,
+      m_reorder_dynamically_dead_classes, m_minimize_cross_dex_refs_config,
+      refs_info, &xstore_refs, mgr.get_redex_options().min_sdk,
+      init_classes_with_side_effects, m_transitively_close_interdex_order,
       m_minimize_cross_dex_refs_explore_alternatives, cache,
       m_exclude_baseline_profile_classes, std::move(m_baseline_profile_config));
 
@@ -294,6 +297,31 @@ void InterDexPass::run_pass(
   mgr.set_metric("num_overflows.method_refs", over.method_refs_overflow);
   mgr.set_metric("num_overflows.field_refs", over.field_refs_overflow);
   mgr.set_metric("num_overflows.type_refs", over.type_refs_overflow);
+
+  if (m_reorder_dynamically_dead_classes && !force_single_dex) {
+    // If dynamically_dead_classes have been reordered, i.e., emitting to the
+    // last few dexes, record those dexes full of dynamically_dead_classes. This
+    // info will be used in later reshuffle and classmerging pass.
+    auto& root_store = stores.at(0);
+    auto& root_dexen = root_store.get_dexen();
+    for (size_t dex_index = 1; dex_index < root_dexen.size(); dex_index++) {
+      auto& dex = root_dexen.at(dex_index);
+      bool not_dynamically_dead = false;
+      for (auto cls : dex) {
+        if (is_canary(cls)) {
+          continue;
+        }
+        if (!cls->is_dynamically_dead()) {
+          not_dynamically_dead = true;
+          break;
+        }
+      }
+      if (!not_dynamically_dead) {
+        m_dynamically_dead_dexes.emplace(dex_index);
+        TRACE(IDEXR, 1, "Dex %zu should not be touched\n", dex_index);
+      }
+    }
+  }
 }
 
 void InterDexPass::run_pass_on_nonroot_store(
@@ -321,8 +349,9 @@ void InterDexPass::run_pass_on_nonroot_store(
       m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
       m_keep_primary_order, false /* force single dex */, m_order_interdex,
       false /* emit canaries */, false /* minimize_cross_dex_refs */,
-      /* fill_last_coldstart_dex=*/false, cross_dex_refs_config, refs_info,
-      &xstore_refs, mgr.get_redex_options().min_sdk,
+      /* fill_last_coldstart_dex=*/false,
+      /* reorder_dynamically_dead_classes =*/false, cross_dex_refs_config,
+      refs_info, &xstore_refs, mgr.get_redex_options().min_sdk,
       init_classes_with_side_effects, m_transitively_close_interdex_order,
       m_minimize_cross_dex_refs_explore_alternatives, cache,
       m_exclude_baseline_profile_classes, std::move(m_baseline_profile_config));

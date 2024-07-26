@@ -93,6 +93,7 @@ class MoveGains {
             const std::vector<DexStructure>& dexen,
             const std::vector<std::unordered_map<const DexString*, size_t>>&
                 dexen_strings,
+            const std::unordered_set<size_t>& dynamically_dead_dexes,
             const std::unordered_map<DexClass*, struct MergingInfo>&
                 class_to_merging_info,
             const std::unordered_map<MergerIndex, size_t>& num_field_defs,
@@ -105,6 +106,7 @@ class MoveGains {
         m_class_refs(class_refs),
         m_dexen(dexen),
         m_dexen_strings(dexen_strings),
+        m_dynamically_dead_dexes(dynamically_dead_dexes),
         m_class_to_merging_info(class_to_merging_info),
         m_num_field_defs(num_field_defs),
         m_mergeability_aware(mergeability_aware),
@@ -118,6 +120,10 @@ class MoveGains {
     walk::parallel::classes(m_movable_classes, [&](DexClass* cls) {
       for (size_t dex_index = m_first_dex_index; dex_index < m_dexen.size();
            ++dex_index) {
+        if (m_dynamically_dead_dexes.count(dex_index) != 0) {
+          // m_dynamically_dead_dexes should not be involved during reshuffle.
+          continue;
+        }
         if (!m_moved_classes.empty() && m_moved_classes.count(cls)) {
           // In DexRemovalPass, if a class is already moved from the dex which
           // is going to be eliminated, we won't move it again.
@@ -390,6 +396,7 @@ class MoveGains {
   const std::vector<DexStructure>& m_dexen;
   const std::vector<std::unordered_map<const DexString*, size_t>>&
       m_dexen_strings;
+  const std::unordered_set<size_t>& m_dynamically_dead_dexes;
 
   // Class merging related data.
   const std::unordered_map<DexClass*, struct MergingInfo>&
@@ -406,13 +413,15 @@ class MoveGains {
 
 class InterDexReshuffleImpl {
  public:
-  InterDexReshuffleImpl(ConfigFiles& conf,
-                        PassManager& mgr,
-                        ReshuffleConfig& config,
-                        DexClasses& original_scope,
-                        DexClassesVector& dexen,
-                        const boost::optional<class_merging::Model&>&
-                            merging_model = boost::none);
+  InterDexReshuffleImpl(
+      ConfigFiles& conf,
+      PassManager& mgr,
+      ReshuffleConfig& config,
+      DexClasses& original_scope,
+      DexClassesVector& dexen,
+      const std::unordered_set<size_t>& dynamically_dead_dexes,
+      const boost::optional<class_merging::Model&>& merging_model =
+          boost::none);
 
   void compute_plan();
 
@@ -436,6 +445,7 @@ class InterDexReshuffleImpl {
   ReshuffleConfig& m_config;
   init_classes::InitClassesWithSideEffects m_init_classes_with_side_effects;
   DexClassesVector& m_dexen;
+  const std::unordered_set<size_t>& m_dynamically_dead_dexes;
   boost::optional<class_merging::Model&> m_merging_model;
   size_t m_linear_alloc_limit;
   DexesStructure m_dexes_structure;
