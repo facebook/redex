@@ -66,6 +66,8 @@ TEST(RedexResources, ReadXmlTagsAndAttributes) {
   EXPECT_EQ(count_strings(more_classes, "com.facebook.SomeFragment"), 1);
   EXPECT_EQ(count_strings(more_classes, "com.facebook.AnotherFragment"), 1);
   EXPECT_EQ(count_strings(more_classes, "com.facebook.CoolView"), 1);
+
+  EXPECT_TRUE(resources::valid_xml_element("com.facebook.CoolView"));
 }
 
 inline uint32_t to_uint(char c) {
