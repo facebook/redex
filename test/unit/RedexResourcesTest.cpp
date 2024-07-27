@@ -74,7 +74,7 @@ inline uint32_t to_uint(char c) {
 
 TEST(RedexResources, Mutf8Conversion) {
   bool be_noisy{false};
-  auto verify = [&](const std::string& input,
+  auto verify = [&](const std::string input,
                     const std::vector<uint8_t>& expected_bytes) {
     auto converted = resources::convert_utf8_to_mutf8(input);
     EXPECT_EQ(converted.size(), expected_bytes.size());
@@ -93,11 +93,11 @@ TEST(RedexResources, Mutf8Conversion) {
   };
 
   // Code points beyond U+FFFF
-  verify(u8"Hello, \U0001F30E!",
+  verify(std::string(u8"Hello, \U0001F30E!"),
          {0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x2c, 0x20, 0xed, 0xa0, 0xbc, 0xed,
           0xbc, 0x8e, 0x21});
   verify(
-      u8"\U0001F525\U0001F525",
+      std::string(u8"\U0001F525\U0001F525"),
       {0xed, 0xa0, 0xbd, 0xed, 0xb4, 0xa5, 0xed, 0xa0, 0xbd, 0xed, 0xb4, 0xa5});
 
   // Embedded null
@@ -107,5 +107,5 @@ TEST(RedexResources, Mutf8Conversion) {
 
   // Regular UTF-8 string with one, two, three byte encoded code points that is
   // not changed
-  verify(u8"e\u0205\u1E15", {0x65, 0xc8, 0x85, 0xe1, 0xb8, 0x95});
+  verify(std::string(u8"e\u0205\u1E15"), {0x65, 0xc8, 0x85, 0xe1, 0xb8, 0x95});
 }

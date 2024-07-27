@@ -2437,7 +2437,7 @@ ResourcesPbFile::get_inlinable_resource_values() {
       past_refs.push_back(std::tuple<uint32_t, uint32_t>(id, id_to_add));
       continue;
     } else if (item.has_str()) {
-      const std::string& og_str = item.str().value();
+      std::string og_str = item.str().value();
       const std::string& mutf8_string =
           resources::convert_utf8_to_mutf8(og_str);
       inlinable_val.string_value = mutf8_string;
