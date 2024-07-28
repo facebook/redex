@@ -318,7 +318,7 @@ void InterDexPass::run_pass(
       }
       if (!not_dynamically_dead) {
         m_dynamically_dead_dexes.emplace(dex_index);
-        TRACE(IDEXR, 1, "Dex %zu should not be touched\n", dex_index);
+        TRACE(IDEX, 2, "Dex %zu is dynamically_dead_dex\n", dex_index);
       }
     }
   }

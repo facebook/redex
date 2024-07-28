@@ -1112,6 +1112,10 @@ void InterDex::run() {
   // Emit the rest dynamically_dead classes, if there is any.
   if (m_reorder_dynamically_dead_classes) {
     bool any_dynamically_dead = false;
+    // The following dexes should contains dynamically_dead classes only.
+    // Therefore, for any additional generated classes, we mark them
+    // dynamically_dead by setting m_emitting_dynamically_dead_dex true.
+    m_emitting_dynamically_dead_dex = true;
     canary_cls = get_canary_cls(m_emitting_state, EMPTY_DEX_INFO);
     for (DexClass* cls : m_scope) {
       if (!cls->is_dynamically_dead()) {
@@ -1348,6 +1352,12 @@ void InterDex::post_process_dex(EmittingState& emitting_state,
       // perf-sensitive, to be conservative.
       if (fodr.primary_or_betamap_ordered) {
         cls->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
+      }
+
+      // If this is dynamically_dead dex, we treat the additional classes as
+      // dynamically_dead.
+      if (m_emitting_dynamically_dead_dex) {
+        cls->set_dynamically_dead();
       }
     }
   }

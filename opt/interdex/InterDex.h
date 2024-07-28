@@ -75,6 +75,7 @@ class InterDex {
         m_minimize_cross_dex_refs(minimize_cross_dex_refs),
         m_fill_last_coldstart_dex(fill_last_coldstart_dex),
         m_reorder_dynamically_dead_classes(reorder_dynamically_dead_classes),
+        m_emitting_dynamically_dead_dex(false),
         m_emitting_scroll_set(false),
         m_emitting_bg_set(false),
         m_emitted_bg_set(false),
@@ -239,6 +240,8 @@ class InterDex {
   bool m_minimize_cross_dex_refs;
   bool m_fill_last_coldstart_dex;
   bool m_reorder_dynamically_dead_classes;
+  // True if dynamically_dead_classes are emitting.
+  bool m_emitting_dynamically_dead_dex;
 
   std::unordered_map<const DexClass*, size_t> m_interdex_order;
   bool m_emitting_scroll_set;
