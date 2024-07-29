@@ -178,6 +178,11 @@ TYPED_TEST(UInt32SetTest, basicOperations) {
   TypeParam d43 = t4.get_difference_with(t3);
   EXPECT_THAT(d43,
               ::testing::UnorderedElementsAre(0, 1, 5, 101, 8137, 1234567));
+
+  std::vector<uint32_t> elements5 = {1, 2, 1023, 4096, 13001, bigint};
+  TypeParam t5(elements5.begin(), elements5.end());
+  TypeParam d54 = t5.get_difference_with(t4);
+  EXPECT_THAT(d54, ::testing::UnorderedElementsAre(1023, 13001));
 }
 
 TYPED_TEST(UInt32SetTest, robustness) {
