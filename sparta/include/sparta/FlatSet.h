@@ -190,7 +190,6 @@ class FlatSet final
       if (it != end && Equal()(*it, *other_it)) {
         it = m_set.erase(it);
         end = m_set.end();
-        ++it;
       }
       ++other_it;
     }
