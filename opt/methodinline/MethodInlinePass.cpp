@@ -66,12 +66,14 @@ void MethodInlinePass::bind_config() {
   bind("cross_dex_penalty_const",
        DEFAULT_COST_CONFIG.cross_dex_penalty_const,
        m_inliner_cost_config.cross_dex_penalty_const);
+  bind("consider_hot_cold", false, m_consider_hot_cold);
 }
 
 void MethodInlinePass::run_pass(DexStoresVector& stores,
                                 ConfigFiles& conf,
                                 PassManager& mgr) {
-  inliner::run_inliner(stores, mgr, conf, m_inliner_cost_config);
+  inliner::run_inliner(stores, mgr, conf, m_inliner_cost_config,
+                       m_consider_hot_cold);
 }
 
 static MethodInlinePass s_pass;
