@@ -500,18 +500,16 @@ bool has_source_block_positive_val(const SourceBlock* sb) {
 }
 
 IRList::iterator find_first_block_insert_point(cfg::Block* b) {
-  // Do not put source blocks before a (pseudo) move result at the head of a
-  // block.
+  // Do not put source blocks before a (pseudo) move result or load-param-* at
+  // the head of a block.
+  auto can_insert_source_block_before = [](IROpcode op) {
+    return !opcode::is_a_load_param(op) && !opcode::is_move_result_any(op) &&
+           !opcode::is_move_exception(op);
+  };
   auto it = b->begin();
-  if (it == b->end()) {
-    return it;
-  }
-  if (it->type == MFLOW_OPCODE) {
-    auto op = it->insn->opcode();
-    if (opcode::is_a_move_result(op) || opcode::is_a_move_result_pseudo(op) ||
-        opcode::is_move_exception(op)) {
-      ++it;
-    }
+  while (it != b->end() && it->type == MFLOW_OPCODE &&
+         !can_insert_source_block_before(it->insn->opcode())) {
+    ++it;
   }
   return it;
 }
