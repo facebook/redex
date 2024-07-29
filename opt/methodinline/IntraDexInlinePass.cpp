@@ -9,11 +9,16 @@
 
 #include "MethodInliner.h"
 
+void IntraDexInlinePass::bind_config() {
+  bind("consider_hot_cold", false, m_consider_hot_cold);
+}
+
 void IntraDexInlinePass::run_pass(DexStoresVector& stores,
                                   ConfigFiles& conf,
                                   PassManager& mgr) {
-  inliner::run_inliner(
-      stores, mgr, conf, DEFAULT_COST_CONFIG, /* intra_dex */ true);
+  inliner::run_inliner(stores, mgr, conf, DEFAULT_COST_CONFIG,
+                       m_consider_hot_cold,
+                       /* intra_dex */ true);
 }
 
 static IntraDexInlinePass s_pass;

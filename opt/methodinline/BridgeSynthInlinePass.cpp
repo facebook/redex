@@ -16,6 +16,7 @@ void BridgeSynthInlinePass::run_pass(DexStoresVector& stores,
                        mgr,
                        conf,
                        DEFAULT_COST_CONFIG,
+                       /* consider_hot_cold */ false,
                        /* intra_dex */ false,
                        /* inline_for_speed */ nullptr,
                        /* inline_bridge_synth_only */ true);

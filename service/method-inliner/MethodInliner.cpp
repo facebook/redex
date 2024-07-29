@@ -726,6 +726,7 @@ void run_inliner(
     PassManager& mgr,
     ConfigFiles& conf,
     InlinerCostConfig inliner_cost_config /* DEFAULT_COST_CONFIG */,
+    bool consider_hot_cold /* false */,
     bool intra_dex /* false */,
     InlineForSpeed* inline_for_speed /* nullptr */,
     bool inline_bridge_synth_only /* false */,
@@ -851,7 +852,7 @@ void run_inliner(
       intra_dex ? IntraDex : InterDex, true_virtual_callers, inline_for_speed,
       analyze_and_prune_inits, conf.get_pure_methods(), min_sdk_api,
       cross_dex_penalty,
-      /* configured_finalish_field_names */ {}, local_only,
+      /* configured_finalish_field_names */ {}, local_only, consider_hot_cold,
       inliner_cost_config);
   inliner.inline_methods();
 
@@ -1025,6 +1026,7 @@ void run_inliner(
   mgr.incr_metric("localdce_init_class_instructions_refined",
                   shrinker.get_local_dce_stats()
                       .init_classes.init_class_instructions_refined);
+  mgr.incr_metric("not_cold_methods", inliner.get_not_cold_methods());
 
   // Expose the shrinking timers as Timers.
   Timer::add_timer("Inliner.Shrinking.ConstantPropagation",

@@ -14,6 +14,8 @@ class IntraDexInlinePass : public Pass {
  public:
   IntraDexInlinePass() : Pass("IntraDexInlinePass") {}
 
+  void bind_config() override;
+
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
     using namespace redex_properties::interactions;
@@ -29,4 +31,7 @@ class IntraDexInlinePass : public Pass {
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+ private:
+  bool m_consider_hot_cold;
 };

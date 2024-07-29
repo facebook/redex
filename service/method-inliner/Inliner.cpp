@@ -29,6 +29,7 @@
 #include "OptData.h"
 #include "OutlinedMethods.h"
 #include "RecursionPruner.h"
+#include "SourceBlocks.h"
 #include "StlUtil.h"
 #include "Timer.h"
 #include "UnknownVirtuals.h"
@@ -44,6 +45,9 @@ namespace {
  * The table of instructions is indexed by a 32 bit unsigned integer.
  */
 constexpr uint64_t HARD_MAX_INSTRUCTION_SIZE = UINT64_C(1) << 32;
+
+// TODO: Make configurable.
+const uint64_t MAX_HOT_COLD_CALLEE_SIZE = 27;
 
 /*
  * Given a method, gather all resolved init-class instruction types. This
@@ -128,6 +132,7 @@ MultiMethodInliner::MultiMethodInliner(
     bool cross_dex_penalty,
     const std::unordered_set<const DexString*>& configured_finalish_field_names,
     bool local_only,
+    bool consider_hot_cold,
     InlinerCostConfig inliner_cost_config)
     : m_concurrent_resolver(std::move(concurrent_resolve_fn)),
       m_scheduler(
@@ -165,6 +170,7 @@ MultiMethodInliner::MultiMethodInliner(
                  configured_pure_methods,
                  configured_finalish_field_names),
       m_local_only(local_only),
+      m_consider_hot_cold(consider_hot_cold),
       m_inliner_cost_config(inliner_cost_config) {
   Timer t("MultiMethodInliner construction");
   for (const auto& callee_callers : true_virtual_callers) {
@@ -255,6 +261,42 @@ MultiMethodInliner::MultiMethodInliner(
         m_caller_virtual_callees[caller].exclusive_callees.insert(callee);
       }
     }
+  }
+
+  if (m_consider_hot_cold) {
+    std::vector<const DexMethod*> methods;
+    for (auto&& [callee, _] : callee_caller) {
+      methods.push_back(callee);
+    }
+    for (auto&& [caller, _] : caller_callee) {
+      if (!callee_caller.count_unsafe(caller)) {
+        methods.push_back(caller);
+      }
+    }
+    // Now try to get the hot blocks and exclude them too based on the
+    // instrumented SourceBlock data.
+    auto is_not_cold = [](cfg::Block* b) {
+      auto* sb = source_blocks::get_first_source_block(b);
+      if (sb == nullptr) {
+        // Conservatively assume that missing SBs mean no profiling data.
+        return true;
+      }
+      return sb->foreach_val_early(
+          [](const auto& v) { return v && v->val > 0; });
+    };
+    workqueue_run<const DexMethod*>(
+        [&](const DexMethod* method) {
+          auto* code = method->get_code();
+          if (code == nullptr || !code->editable_cfg_built()) {
+            return;
+          }
+          auto& cfg = code->cfg();
+          auto blocks = cfg.blocks();
+          if (std::any_of(blocks.begin(), blocks.end(), is_not_cold)) {
+            m_not_cold_methods.insert(method);
+          }
+        },
+        methods);
   }
 }
 
@@ -586,18 +628,29 @@ size_t MultiMethodInliner::inline_inlinables(
   std::vector<Inlinable> ordered_inlinables(inlinables.begin(),
                                             inlinables.end());
 
-  std::stable_sort(ordered_inlinables.begin(),
-                   ordered_inlinables.end(),
-                   [&](const Inlinable& a, const Inlinable& b) {
-                     // First, prefer no-return inlinable, as they cut off
-                     // control-flow and thus other inlinables.
-                     if (a.no_return != b.no_return) {
-                       return a.no_return > b.no_return;
-                     }
-                     // Second, prefer smaller methods, to avoid hitting size
-                     // limits too soon
-                     return a.insn_size < b.insn_size;
-                   });
+  bool consider_not_cold =
+      m_consider_hot_cold && m_not_cold_methods.count_unsafe(caller_method);
+  std::stable_sort(
+      ordered_inlinables.begin(),
+      ordered_inlinables.end(),
+      [&](const Inlinable& a, const Inlinable& b) {
+        // First, prefer no-return inlinable, as they cut off
+        // control-flow and thus other inlinables.
+        if (a.no_return != b.no_return) {
+          return a.no_return > b.no_return;
+        }
+        // Second, if appropriate, prefer inlining not-cold callees
+        if (consider_not_cold) {
+          auto a_not_cold = m_not_cold_methods.count_unsafe(a.callee);
+          auto b_not_cold = m_not_cold_methods.count_unsafe(b.callee);
+          if (a_not_cold != b_not_cold) {
+            return a_not_cold > b_not_cold;
+          }
+        }
+        // Third, prefer smaller methods, to avoid hitting size
+        // limits too soon
+        return a.insn_size < b.insn_size;
+      });
 
   std::vector<DexMethod*> inlined_callees;
   boost::optional<reg_t> cfg_next_caller_reg;
@@ -948,6 +1001,9 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
     }
     return false;
   }
+  if (cross_hot_cold(caller, callee, estimated_callee_size)) {
+    return false;
+  }
   if (is_blocklisted(callee)) {
     if (insn) {
       log_nopt(INL_BLOCK_LISTED_CALLEE, callee);
@@ -1088,7 +1144,8 @@ bool MultiMethodInliner::should_inline_fast(const DexMethod* callee) {
   if (callers.size() == 1 && callers.begin()->second == 1 && !root(callee) &&
       !method::is_argless_init(callee) && !m_recursive_callees.count(callee) &&
       !m_x_dex_callees.count(callee) &&
-      !m_true_virtual_callees_with_other_call_sites.count(callee)) {
+      !m_true_virtual_callees_with_other_call_sites.count(callee) &&
+      !cross_hot_cold(callers.begin()->first, callee)) {
     return true;
   }
 
@@ -2180,6 +2237,26 @@ bool MultiMethodInliner::cross_store_reference(const DexMethod* caller,
   }
 
   return false;
+}
+
+bool MultiMethodInliner::cross_hot_cold(const DexMethod* caller,
+                                        const DexMethod* callee,
+                                        uint64_t estimated_callee_size) {
+  if (!m_consider_hot_cold) {
+    return false;
+  }
+
+  if (!m_not_cold_methods.count_unsafe(caller) ||
+      m_not_cold_methods.count_unsafe(callee)) {
+    return false;
+  }
+
+  if (estimated_callee_size == 0) {
+    estimated_callee_size = get_callee_insn_size(callee);
+  }
+
+  // TODO: Make configurable as part of the cost options.
+  return estimated_callee_size > MAX_HOT_COLD_CALLEE_SIZE;
 }
 
 void MultiMethodInliner::delayed_visibility_changes_apply() {

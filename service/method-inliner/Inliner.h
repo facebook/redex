@@ -251,6 +251,7 @@ class MultiMethodInliner {
       const std::unordered_set<const DexString*>&
           configured_finalish_field_names = {},
       bool local_only = false,
+      bool consider_hot_cold = false,
       InlinerCostConfig inliner_cost_config = DEFAULT_COST_CONFIG);
 
   /*
@@ -274,6 +275,8 @@ class MultiMethodInliner {
     std::unordered_set<DexMethod*> res(m_inlined.begin(), m_inlined.end());
     return res;
   }
+
+  size_t get_not_cold_methods() const { return m_not_cold_methods.size(); }
 
   bool for_speed() const { return m_inline_for_speed != nullptr; }
 
@@ -400,6 +403,10 @@ class MultiMethodInliner {
    * refers to a DexMember in a different store .
    */
   bool cross_store_reference(const DexMethod* caller, const DexMethod* callee);
+
+  bool cross_hot_cold(const DexMethod* caller,
+                      const DexMethod* callee,
+                      uint64_t estimated_callee_size = 0);
 
   /**
    * Return true if a caller is in a DEX in a store and any opcode in callee
@@ -582,6 +589,8 @@ class MultiMethodInliner {
    */
   ConcurrentSet<DexMethod*> m_inlined;
 
+  InsertOnlyConcurrentSet<const DexMethod*> m_not_cold_methods;
+
   //
   // Maps from callee to callers and reverse map from caller to callees.
   // Those are used to perform bottom up inlining.
@@ -750,6 +759,7 @@ class MultiMethodInliner {
       DexField::get_field("Landroid/os/Build$VERSION;.SDK_INT:I");
 
   bool m_local_only;
+  bool m_consider_hot_cold;
 
   InlinerCostConfig m_inliner_cost_config;
 

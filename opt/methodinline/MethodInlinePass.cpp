@@ -102,12 +102,14 @@ void MethodInlinePass::bind_config() {
   bind("unused_arg_not_top_multiplier",
        DEFAULT_COST_CONFIG.unused_arg_not_top_multiplier,
        m_inliner_cost_config.unused_arg_not_top_multiplier);
+  bind("consider_hot_cold", false, m_consider_hot_cold);
 }
 
 void MethodInlinePass::run_pass(DexStoresVector& stores,
                                 ConfigFiles& conf,
                                 PassManager& mgr) {
-  inliner::run_inliner(stores, mgr, conf, m_inliner_cost_config);
+  inliner::run_inliner(stores, mgr, conf, m_inliner_cost_config,
+                       m_consider_hot_cold);
 }
 
 static MethodInlinePass s_pass;
