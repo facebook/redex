@@ -151,7 +151,9 @@ void DexRemovalPass::run_pass(DexStoresVector& stores,
     TRACE(IDEXR, 1, "current number of dex is %zu", root_dexen.size());
 
     ReshuffleConfig config;
-    InterDexReshuffleImpl impl(conf, mgr, config, original_scope, root_dexen);
+    const std::unordered_set<size_t> dynamically_dead_dexes;
+    InterDexReshuffleImpl impl(conf, mgr, config, original_scope, root_dexen,
+                               dynamically_dead_dexes);
     if (!impl.compute_dex_removal_plan()) {
       break;
     }

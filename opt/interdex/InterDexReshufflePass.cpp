@@ -49,7 +49,8 @@ void InterDexReshufflePass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  InterDexReshuffleImpl impl(conf, mgr, m_config, original_scope, root_dexen);
+  InterDexReshuffleImpl impl(conf, mgr, m_config, original_scope, root_dexen,
+                             interdex_pass->get_dynamically_dead_dexes());
   impl.compute_plan();
   impl.apply_plan();
 

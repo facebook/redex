@@ -39,7 +39,8 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
                                    const Scope& scope,
                                    size_t global_min_count,
                                    PassManager& mgr,
-                                   ModelSpec* merging_spec);
+                                   ModelSpec* merging_spec,
+                                   bool skip_dynamically_dead = false);
 
 /**
  * Construct a merging model that disregards dex boundaries and max

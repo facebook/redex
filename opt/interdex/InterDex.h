@@ -49,6 +49,7 @@ class InterDex {
            bool emit_canaries,
            bool minimize_cross_dex_refs,
            bool fill_last_coldstart_dex,
+           bool reorder_dynamically_dead_classes,
            const cross_dex_ref_minimizer::CrossDexRefMinimizerConfig&
                cross_dex_refs_config,
            const ReserveRefsInfo& reserve_refs,
@@ -73,6 +74,8 @@ class InterDex {
         m_emit_canaries(emit_canaries),
         m_minimize_cross_dex_refs(minimize_cross_dex_refs),
         m_fill_last_coldstart_dex(fill_last_coldstart_dex),
+        m_reorder_dynamically_dead_classes(reorder_dynamically_dead_classes),
+        m_emitting_dynamically_dead_dex(false),
         m_emitting_scroll_set(false),
         m_emitting_bg_set(false),
         m_emitted_bg_set(false),
@@ -148,6 +151,7 @@ class InterDex {
 
  private:
   void run_in_force_single_dex_mode();
+  bool should_skip_class_due_to_dynamically_dead(DexClass* clazz) const;
   bool should_skip_class_due_to_plugin(DexClass* clazz) const;
 
   struct EmitResult {
@@ -160,14 +164,14 @@ class InterDex {
     bool primary_or_betamap_ordered;
   };
 
-  EmitResult emit_class(
-      EmittingState& emitting_state,
-      DexInfo& dex_info,
-      DexClass* clazz,
-      bool check_if_skip,
-      bool perf_sensitive,
-      DexClass** canary_cls,
-      std::optional<FlushOutDexResult>* opt_fodr = nullptr) const;
+  EmitResult emit_class(EmittingState& emitting_state,
+                        DexInfo& dex_info,
+                        DexClass* clazz,
+                        bool check_if_skip,
+                        bool perf_sensitive,
+                        DexClass** canary_cls,
+                        std::optional<FlushOutDexResult>* opt_fodr = nullptr,
+                        bool skip_dynamically_dead = false) const;
   void emit_primary_dex(
       const DexClasses& primary_dex,
       const std::vector<DexType*>& interdex_order,
@@ -235,6 +239,9 @@ class InterDex {
   bool m_emit_canaries;
   bool m_minimize_cross_dex_refs;
   bool m_fill_last_coldstart_dex;
+  bool m_reorder_dynamically_dead_classes;
+  // True if dynamically_dead_classes are emitting.
+  bool m_emitting_dynamically_dead_dex;
 
   std::unordered_map<const DexClass*, size_t> m_interdex_order;
   bool m_emitting_scroll_set;

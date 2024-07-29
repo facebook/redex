@@ -217,9 +217,31 @@ void do_order_classes(const std::vector<std::string>& coldstart_class_names,
       });
 }
 
+// Perf sensitive classes and all the classes they reference via super classes
+// can not be dynamically_dead.
+void exclude_extra_dynamically_dead_class(
+    const std::vector<DexClass*>& candidates) {
+  for (auto const& cls : candidates) {
+    DexType* super_type;
+    super_type = cls->get_super_class();
+    while (super_type) {
+      DexClass* super_cls = type_class(super_type);
+      if (super_cls->is_dynamically_dead()) {
+        super_cls->set_dynamically_dead(false);
+      }
+      super_type = super_cls->get_super_class();
+    }
+  }
+}
+
 } // namespace
 
 namespace interdex {
+
+bool InterDex::should_skip_class_due_to_dynamically_dead(
+    DexClass* clazz) const {
+  return clazz->is_dynamically_dead();
+}
 
 bool InterDex::should_skip_class_due_to_plugin(DexClass* clazz) const {
   for (const auto& plugin : m_plugins) {
@@ -240,7 +262,8 @@ InterDex::EmitResult InterDex::emit_class(
     bool check_if_skip,
     bool perf_sensitive,
     DexClass** canary_cls,
-    std::optional<FlushOutDexResult>* opt_fodr) const {
+    std::optional<FlushOutDexResult>* opt_fodr,
+    bool skip_dynamically_dead) const {
   if (is_canary(clazz)) {
     // Nothing to do here.
     return {false, false};
@@ -257,6 +280,11 @@ InterDex::EmitResult InterDex::emit_class(
 
   if (perf_sensitive) {
     clazz->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
+  }
+
+  if (m_reorder_dynamically_dead_classes && skip_dynamically_dead &&
+      should_skip_class_due_to_dynamically_dead(clazz)) {
+    return {false, false};
   }
 
   // Calculate the extra method and field refs that we would need to add to
@@ -751,6 +779,13 @@ void InterDex::init_cross_dex_ref_minimizer() {
       continue;
     }
 
+    // Don't bother with these classes which will be emitted at the end of
+    // dexes.
+    if (m_reorder_dynamically_dead_classes &&
+        should_skip_class_due_to_dynamically_dead(cls)) {
+      continue;
+    }
+
     classes_to_insert.emplace_back(cls);
   }
 
@@ -784,7 +819,8 @@ void InterDex::emit_remaining_classes(DexInfo& dex_info,
   if (!m_minimize_cross_dex_refs) {
     for (DexClass* cls : m_scope) {
       emit_class(m_emitting_state, dex_info, cls, /* check_if_skip */ true,
-                 /* perf_sensitive */ false, canary_cls);
+                 /* perf_sensitive */ false, canary_cls, nullptr,
+                 /* skip_dynamically_dead */ true);
     }
     return;
   }
@@ -827,7 +863,8 @@ void InterDex::emit_remaining_classes_legacy(DexInfo& dex_info,
     std::optional<FlushOutDexResult> opt_fodr;
     auto res =
         emit_class(m_emitting_state, dex_info, cls, /* check_if_skip */ false,
-                   /* perf_sensitive */ false, canary_cls, &opt_fodr);
+                   /* perf_sensitive */ false, canary_cls, &opt_fodr,
+                   /* skip_dynamically_dead */ true);
     if (opt_fodr) {
       always_assert(!res.emitted);
       post_process_dex(m_emitting_state, *opt_fodr);
@@ -873,10 +910,11 @@ void InterDex::emit_remaining_classes_exploring_alternatives(
         }
 
         std::optional<FlushOutDexResult> opt_fodr;
-        auto res = inter_dex->emit_class(emitting_state, dex_info, cls,
-                                         /* check_if_skip */ false,
-                                         /* perf_sensitive */ false,
-                                         &canary_cls, &opt_fodr);
+        auto res =
+            inter_dex->emit_class(emitting_state, dex_info, cls,
+                                  /* check_if_skip */ false,
+                                  /* perf_sensitive */ false, &canary_cls,
+                                  &opt_fodr, /* skip_dynamically_dead */ true);
         if (opt_fodr) {
           always_assert(!res.emitted);
           cross_dex_ref_minimizer.reset();
@@ -1045,6 +1083,21 @@ void InterDex::run() {
         m_emitting_state.dexes_structure.get_current_dex().get_classes());
   }
 
+  // Unmark dynamically_dead flag if a class is perf sensitive.
+  if (m_reorder_dynamically_dead_classes) {
+    std::vector<DexClass*> excluded_dead_classes;
+    for (DexClass* cls : m_scope) {
+      if (cls->get_perf_sensitive() == PerfSensitiveGroup::BETAMAP_ORDERED &&
+          cls->is_dynamically_dead()) {
+        cls->set_dynamically_dead(false);
+        excluded_dead_classes.push_back(cls);
+      }
+    }
+    if (!excluded_dead_classes.empty()) {
+      exclude_extra_dynamically_dead_class(excluded_dead_classes);
+    }
+  }
+
   // Now emit the classes that weren't specified in the head or primary list.
   auto remaining_classes_first_dex_idx = m_emitting_state.outdex.size();
   emit_remaining_classes(dex_info, &canary_cls);
@@ -1054,6 +1107,37 @@ void InterDex::run() {
     auto fodr = flush_out_dex(m_emitting_state, dex_info, canary_cls);
     post_process_dex(m_emitting_state, fodr);
     canary_cls = nullptr;
+  }
+
+  // Emit the rest dynamically_dead classes, if there is any.
+  if (m_reorder_dynamically_dead_classes) {
+    bool any_dynamically_dead = false;
+    // The following dexes should contains dynamically_dead classes only.
+    // Therefore, for any additional generated classes, we mark them
+    // dynamically_dead by setting m_emitting_dynamically_dead_dex true.
+    m_emitting_dynamically_dead_dex = true;
+    canary_cls = get_canary_cls(m_emitting_state, EMPTY_DEX_INFO);
+    for (DexClass* cls : m_scope) {
+      if (!cls->is_dynamically_dead()) {
+        continue;
+      }
+      if (m_emitting_state.dexes_structure.has_class(cls)) {
+        // This class is already added. Ignore.
+        continue;
+      }
+      emit_class(m_emitting_state, dex_info, cls, /*check_if_skip*/ false,
+                 /*perf_sensitive*/ false, &canary_cls, /*opt_fodr*/ nullptr);
+      any_dynamically_dead = true;
+    }
+
+    if (any_dynamically_dead) {
+      // Emit what is left, if any.
+      if (!m_emitting_state.dexes_structure.get_current_dex().empty()) {
+        auto fodr = flush_out_dex(m_emitting_state, dex_info, canary_cls);
+        post_process_dex(m_emitting_state, fodr);
+        canary_cls = nullptr;
+      }
+    }
   }
 
   if (json_classes) {
@@ -1268,6 +1352,12 @@ void InterDex::post_process_dex(EmittingState& emitting_state,
       // perf-sensitive, to be conservative.
       if (fodr.primary_or_betamap_ordered) {
         cls->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
+      }
+
+      // If this is dynamically_dead dex, we treat the additional classes as
+      // dynamically_dead.
+      if (m_emitting_dynamically_dead_dex) {
+        cls->set_dynamically_dead();
       }
     }
   }

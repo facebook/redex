@@ -134,7 +134,8 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
                                    const Scope& scope,
                                    size_t global_min_count,
                                    PassManager& mgr,
-                                   ModelSpec* merging_spec) {
+                                   ModelSpec* merging_spec,
+                                   bool skip_dynamically_dead) {
   std::unordered_map<const DexTypeList*, std::vector<const DexType*>>
       intfs_implementors;
   std::unordered_map<const DexType*, std::vector<const DexType*>>
@@ -145,6 +146,9 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
     auto cur_type = cls->get_type();
     if (is_interface(cls) || is_abstract(cls) || cls->rstate.is_generated() ||
         cls->get_clinit() || throwable.count(cur_type)) {
+      continue;
+    }
+    if (skip_dynamically_dead && cls->is_dynamically_dead()) {
       continue;
     }
     bool is_anonymous_class = klass::maybe_anonymous_class(cls);

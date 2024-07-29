@@ -125,18 +125,23 @@ void IntraDexClassMergingPass::run_pass(DexStoresVector& stores,
   m_merging_spec.per_dex_grouping = true;
   m_merging_spec.dedup_fill_in_stack_trace = false;
 
+  const auto* interdex_pass =
+      static_cast<interdex::InterDexPass*>(mgr.find_pass("InterDexPass"));
+  always_assert_log(interdex_pass, "InterDexPass missing");
+  // If dynamically-dead-classes are reordered in InterDexPass, should not merge
+  // those classes.
+  bool skip_dynamically_dead =
+      interdex_pass->reorder_dynamically_dead_classes();
+
   auto scope = build_class_scope(stores);
   TypeSystem type_system(scope);
   find_all_mergeables_and_roots(type_system, scope, m_global_min_count, mgr,
-                                &m_merging_spec);
+                                &m_merging_spec, skip_dynamically_dead);
   if (m_merging_spec.roots.empty()) {
     TRACE(CLMG, 1, "No mergeable classes found by IntraDexClassMergingPass");
     return;
   }
 
-  const auto* interdex_pass =
-      static_cast<interdex::InterDexPass*>(mgr.find_pass("InterDexPass"));
-  always_assert_log(interdex_pass, "InterDexPass missing");
   auto& root_store = stores.at(0);
   auto& root_dexen = root_store.get_dexen();
   if (m_enable_reshuffle && interdex_pass->minimize_cross_dex_refs() &&
@@ -145,13 +150,15 @@ void IntraDexClassMergingPass::run_pass(DexStoresVector& stores,
       class_merging::Model merging_model =
           class_merging::construct_global_model(
               scope, mgr, conf, stores, m_merging_spec, m_global_min_count);
-      InterDexReshuffleImpl impl(conf, mgr, m_reshuffle_config, scope,
-                                 root_dexen, merging_model);
+      InterDexReshuffleImpl impl(
+          conf, mgr, m_reshuffle_config, scope, root_dexen,
+          interdex_pass->get_dynamically_dead_dexes(), merging_model);
       impl.compute_plan();
       impl.apply_plan();
     } else {
       InterDexReshuffleImpl impl(conf, mgr, m_reshuffle_config, scope,
-                                 root_dexen);
+                                 root_dexen,
+                                 interdex_pass->get_dynamically_dead_dexes());
       impl.compute_plan();
       impl.apply_plan();
     }
