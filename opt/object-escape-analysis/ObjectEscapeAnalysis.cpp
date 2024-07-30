@@ -2028,7 +2028,9 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
     }
   };
 
-  auto excluded_classes = get_excluded_classes(*method_override_graph);
+  auto excluded_classes =
+      method_override_graph::get_classes_with_overridden_finalize(
+          *method_override_graph);
 
   ConcurrentMap<DexType*, Locations> new_instances;
   ConcurrentMap<DexMethod*, Locations> single_callee_invokes;

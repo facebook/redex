@@ -68,6 +68,16 @@ class ObjectSensitiveDceTest {
     a = a.clone();
     a.clone();
   }
+
+  public static void do_not_reduce_finalize() {
+    UselessWithFinalize useless = new UselessWithFinalize();
+    useless.foo();
+  }
+
+  public static void do_not_reduce_finalize_field() {
+    UselessWithFinalize useless = new UselessWithFinalize();
+    useless.F = 42;
+  }
 }
 
 class Useless {
@@ -186,4 +196,13 @@ class UselessWithMethodNeedingInitClass {
   public void foo() {
     F = new UselessWithClInitWithSideEffects().F;
   }
+}
+
+class UselessWithFinalize {
+  int F;
+  public UselessWithFinalize() {}
+  public void foo() {
+    F = 42;
+  }
+  protected void finalize() {}
 }

@@ -175,8 +175,13 @@ void ObjectSensitiveDce::dce() {
       m_method_override_graph, m_scope, m_pure_methods, *m_escape_summaries,
       *m_effect_summaries, m_big_override_threshold));
 
-  auto ptrs_fp_iter_map =
-      ptrs::analyze_scope(m_scope, call_graph, m_escape_summaries);
+  // R8 does not remove a new instance instruction if the class defines a
+  // finalize method So we do the same here.
+  auto excluded_classes =
+      method_override_graph::get_classes_with_overridden_finalize(
+          m_method_override_graph);
+  auto ptrs_fp_iter_map = ptrs::analyze_scope(
+      m_scope, call_graph, m_escape_summaries, &excluded_classes);
 
   side_effects::analyze_scope(*m_init_classes_with_side_effects, m_scope,
                               call_graph, ptrs_fp_iter_map, m_effect_summaries);

@@ -576,4 +576,17 @@ bool any_overridden_methods(const Graph& graph,
       include_interfaces);
 }
 
+std::unordered_set<DexClass*> get_classes_with_overridden_finalize(
+    const Graph& method_override_graph) {
+  std::unordered_set<DexClass*> res;
+  for (auto* overriding_method : method_override_graph::get_overriding_methods(
+           method_override_graph, method::java_lang_Object_finalize())) {
+    auto* cls = type_class(overriding_method->get_class());
+    if (cls && !cls->is_external()) {
+      res.insert(cls);
+    }
+  }
+  return res;
+}
+
 } // namespace method_override_graph

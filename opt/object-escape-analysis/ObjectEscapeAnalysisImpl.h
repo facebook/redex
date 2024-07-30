@@ -59,9 +59,6 @@ DexMethod* resolve_invoke_inlinable_callee(
 
 using Locations = std::vector<std::pair<DexMethod*, const IRInstruction*>>;
 
-std::unordered_set<DexClass*> get_excluded_classes(
-    const method_override_graph::Graph& method_override_graph);
-
 // Collect all allocation and invoke instructions, as well as non-virtual
 // invocation dependencies.
 void analyze_scope(

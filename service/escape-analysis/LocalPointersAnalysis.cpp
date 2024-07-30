@@ -349,7 +349,13 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
 
   auto op = insn->opcode();
   if (opcode::is_an_invoke(op)) {
-    if (m_invoke_to_summary_map.count(insn)) {
+    auto method = insn->get_method();
+    // If the method is an init and the class is excluded, we label is as
+    // escaping to prevent further optimizations.
+    if (method::is_init(method) && m_excluded_classes &&
+        m_excluded_classes->count(type_class(method->get_class()))) {
+      env->set_may_escape(insn->src(0), insn);
+    } else if (m_invoke_to_summary_map.count(insn)) {
       const auto& summary = m_invoke_to_summary_map.at(insn);
       analyze_invoke_with_summary(summary, insn, env);
     } else {
@@ -370,7 +376,8 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
 std::pair<std::unique_ptr<FixpointIterator>, EscapeSummary> analyze_method(
     const DexMethod* method,
     const call_graph::Graph& call_graph,
-    const SummaryMap& summary_map) {
+    const SummaryMap& summary_map,
+    const std::unordered_set<DexClass*>* excluded_classes) {
   std::unordered_map<const IRInstruction*, EscapeSummary> invoke_to_summary_map;
   if (call_graph.has_node(method)) {
     const auto& callee_edges = call_graph.node(method)->callees();
@@ -398,16 +405,19 @@ std::pair<std::unique_ptr<FixpointIterator>, EscapeSummary> analyze_method(
   auto fp_iter =
       std::make_unique<FixpointIterator>(cfg,
                                          std::move(invoke_to_summary_map),
-                                         /* escape_check_cast */ false);
+                                         /* escape_check_cast */ false,
+                                         excluded_classes);
   fp_iter->run(Environment());
 
   auto summary = get_escape_summary(*fp_iter, *code);
   return std::make_pair(std::move(fp_iter), std::move(summary));
 }
 
-FixpointIteratorMap analyze_scope(const Scope& scope,
-                                  const call_graph::Graph& call_graph,
-                                  SummaryMap* summary_map_ptr) {
+FixpointIteratorMap analyze_scope(
+    const Scope& scope,
+    const call_graph::Graph& call_graph,
+    SummaryMap* summary_map_ptr,
+    const std::unordered_set<DexClass*>* excluded_classes) {
   FixpointIteratorMap fp_iter_map;
   SummaryMap summary_map;
   if (summary_map_ptr == nullptr) {
@@ -427,7 +437,8 @@ FixpointIteratorMap analyze_scope(const Scope& scope,
         std::make_unique<ConcurrentSet<const DexMethod*>>();
     workqueue_run<const DexMethod*>(
         [&](const DexMethod* method) {
-          auto p = analyze_method(method, call_graph, *summary_map_ptr);
+          auto p = analyze_method(
+              method, call_graph, *summary_map_ptr, excluded_classes);
           auto& new_fp_iter = p.first;
           auto& new_summary = p.second;
           fp_iter_map.update(method, [&](auto*, auto& v, bool exists) {

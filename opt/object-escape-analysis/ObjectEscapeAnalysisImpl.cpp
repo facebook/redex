@@ -145,19 +145,6 @@ DexMethod* resolve_invoke_inlinable_callee(
   return callee;
 }
 
-std::unordered_set<DexClass*> get_excluded_classes(
-    const mog::Graph& method_override_graph) {
-  std::unordered_set<DexClass*> res;
-  for (auto* overriding_method : method_override_graph::get_overriding_methods(
-           method_override_graph, method::java_lang_Object_finalize())) {
-    auto* cls = type_class(overriding_method->get_class());
-    if (cls && !cls->is_external()) {
-      res.insert(cls);
-    }
-  }
-  return res;
-};
-
 src_index_t get_param_index(const DexMethod* callee,
                             const IRInstruction* load_param_insn) {
   src_index_t idx = 0;

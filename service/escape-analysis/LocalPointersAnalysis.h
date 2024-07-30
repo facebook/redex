@@ -261,10 +261,12 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
   explicit FixpointIterator(
       const cfg::ControlFlowGraph& cfg,
       InvokeToSummaryMap invoke_to_summary_map = InvokeToSummaryMap(),
-      bool escape_check_cast = false)
+      bool escape_check_cast = false,
+      const std::unordered_set<DexClass*>* excluded_classes = nullptr)
       : ir_analyzer::BaseIRAnalyzer<Environment>(cfg),
         m_invoke_to_summary_map(std::move(invoke_to_summary_map)),
-        m_escape_check_cast(escape_check_cast) {}
+        m_escape_check_cast(escape_check_cast),
+        m_excluded_classes(excluded_classes) {}
 
   void analyze_instruction(const IRInstruction* insn,
                            Environment* env) const override;
@@ -280,6 +282,7 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
   // construction strategies.
   InvokeToSummaryMap m_invoke_to_summary_map;
   const bool m_escape_check_cast;
+  const std::unordered_set<DexClass*>* m_excluded_classes;
 };
 
 /*
@@ -311,9 +314,11 @@ using SummaryMap = std::unordered_map<const DexMethodRef*, EscapeSummary>;
  * If a non-null SummaryMap pointer is passed in, it will get populated
  * with the escape summaries of the methods in scope.
  */
-FixpointIteratorMap analyze_scope(const Scope&,
-                                  const call_graph::Graph&,
-                                  SummaryMap* = nullptr);
+FixpointIteratorMap analyze_scope(
+    const Scope&,
+    const call_graph::Graph&,
+    SummaryMap* = nullptr,
+    const std::unordered_set<DexClass*>* excluded_classes = nullptr);
 
 /*
  * Join over all possible returned and thrown values.
