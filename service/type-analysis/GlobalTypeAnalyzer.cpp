@@ -493,6 +493,8 @@ std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
     ++iteration_cnt;
   }
 
+  global_analysis_iterations = iteration_cnt;
+
   TRACE(TYPE,
         1,
         "[global] Finished in %zu global iterations (max %zu)",

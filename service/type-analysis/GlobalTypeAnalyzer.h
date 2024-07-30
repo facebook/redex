@@ -134,12 +134,18 @@ class GlobalTypeAnalysis {
         m_only_aggregate_safely_inferrable_fields(
             only_aggregate_safely_inferrable_fields) {}
 
-  void run(Scope& scope) { analyze(scope); }
+  void run(const Scope& scope) { analyze(scope); }
 
   std::unique_ptr<GlobalTypeAnalyzer> analyze(const Scope&);
 
+  size_t get_global_analysis_iterations() const {
+    return global_analysis_iterations;
+  }
+
  private:
-  size_t m_max_global_analysis_iteration;
+  const size_t m_max_global_analysis_iteration;
+  size_t global_analysis_iterations{0};
+
   bool m_use_multiple_callee_callgraph;
   bool m_only_aggregate_safely_inferrable_fields;
   // Methods reachable from clinit that read static fields and reachable from

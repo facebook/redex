@@ -135,6 +135,9 @@ void GlobalTypeAnalysisPass::run_pass(DexStoresVector& stores,
   auto gta = analysis.analyze(scope);
   optimize(scope, xstores, *gta, null_assertion_set, mgr);
   m_result = std::move(gta);
+
+  mgr.set_metric("global_analysis_iterations",
+                 analysis.get_global_analysis_iterations());
 }
 
 void GlobalTypeAnalysisPass::optimize(
