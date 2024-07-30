@@ -78,6 +78,11 @@ class ObjectSensitiveDceTest {
     UselessWithFinalize useless = new UselessWithFinalize();
     useless.F = 42;
   }
+
+  public static void do_not_reduce_finalize_derived() {
+    UselessDerivedWithFinalize useless = new UselessDerivedWithFinalize();
+    useless.bar();
+  }
 }
 
 class Useless {
@@ -205,4 +210,11 @@ class UselessWithFinalize {
     F = 42;
   }
   protected void finalize() {}
+}
+
+class UselessDerivedWithFinalize extends UselessWithFinalize {
+  public UselessDerivedWithFinalize() {}
+  public void bar() {
+    F = 37;
+  }
 }

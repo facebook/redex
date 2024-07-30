@@ -11,6 +11,12 @@
 #include "DexClass.h"
 #include "DexStore.h"
 
+// The definition of TypeSet is defined differently in ClassHierarchy, so we
+// need to manually define ClassHierarchy here.
+using ClassHierarchy =
+    std::unordered_map<const DexType*,
+                       std::set<const DexType*, dextypes_comparator>>;
+
 /*
  * This module builds a DAG that enables us to quickly answer the following
  * question: Given a method reference, what is the set of methods that it could
@@ -145,6 +151,6 @@ bool any_overridden_methods(
     bool include_interfaces = false);
 
 std::unordered_set<DexClass*> get_classes_with_overridden_finalize(
-    const Graph& method_override_graph);
+    const Graph& method_override_graph, const ClassHierarchy& class_hierarchy);
 
 } // namespace method_override_graph

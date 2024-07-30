@@ -577,13 +577,21 @@ bool any_overridden_methods(const Graph& graph,
 }
 
 std::unordered_set<DexClass*> get_classes_with_overridden_finalize(
-    const Graph& method_override_graph) {
+    const Graph& method_override_graph, const ClassHierarchy& class_hierarchy) {
   std::unordered_set<DexClass*> res;
   for (auto* overriding_method : method_override_graph::get_overriding_methods(
            method_override_graph, method::java_lang_Object_finalize())) {
-    auto* cls = type_class(overriding_method->get_class());
+    auto type = overriding_method->get_class();
+    auto* cls = type_class(type);
     if (cls && !cls->is_external()) {
       res.insert(cls);
+      auto children = get_all_children(class_hierarchy, type);
+      for (auto child : children) {
+        auto* child_cls = type_class(child);
+        if (child_cls && !child_cls->is_external()) {
+          res.insert(child_cls);
+        }
+      }
     }
   }
   return res;

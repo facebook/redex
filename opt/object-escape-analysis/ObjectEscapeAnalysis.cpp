@@ -2028,9 +2028,10 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
     }
   };
 
+  auto class_hierarchy = build_internal_type_hierarchy(scope);
   auto excluded_classes =
       method_override_graph::get_classes_with_overridden_finalize(
-          *method_override_graph);
+          *method_override_graph, class_hierarchy);
 
   ConcurrentMap<DexType*, Locations> new_instances;
   ConcurrentMap<DexMethod*, Locations> single_callee_invokes;
