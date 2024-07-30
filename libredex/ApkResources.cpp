@@ -2683,6 +2683,9 @@ bool is_inlinable_resource_value(
     android::Res_value* res_value) {
   bool is_not_complex =
       ((dtohs(entry->flags) & android::ResTable_entry::FLAG_COMPLEX) == 0);
+  if (!is_not_complex) {
+    return false;
+  }
 
   bool is_one_entry = true;
   for (auto& pair : config_to_entry_map) {
@@ -2692,17 +2695,19 @@ bool is_inlinable_resource_value(
       }
     }
   }
+  if (!is_one_entry) {
+    return false;
+  }
 
   bool is_valid_type =
       (res_value->dataType == android::Res_value::TYPE_STRING ||
        res_value->dataType == android::Res_value::TYPE_REFERENCE ||
        (res_value->dataType >= android::Res_value::TYPE_FIRST_INT &&
         res_value->dataType <= android::Res_value::TYPE_LAST_INT));
-
-  if (is_not_complex && is_one_entry && is_valid_type) {
-    return true;
+  if (!is_valid_type) {
+    return false;
   }
-  return false;
+  return true;
 }
 
 /*

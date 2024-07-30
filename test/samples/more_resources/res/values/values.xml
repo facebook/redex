@@ -11,4 +11,6 @@
   <string name="main_text">Hello, 🌎!</string>
   <string name="styled_text"><b>styled</b> AND <i>styled</i></string>
   <string name="not_main_text">Goodbye, 🌎!</string>
+  <integer-array name="integer_array">
+  </integer-array>
 </resources>
