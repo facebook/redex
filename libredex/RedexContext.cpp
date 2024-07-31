@@ -542,6 +542,9 @@ void RedexContext::alias_field_name(DexFieldRef* field,
 
 void RedexContext::erase_field(DexFieldRef* field) {
   s_field_map.erase(field->m_spec);
+  if (field->is_def()) {
+    unset_field_value(field->as_def());
+  }
 }
 
 void RedexContext::erase_field(const DexType* container,
@@ -549,7 +552,11 @@ void RedexContext::erase_field(const DexType* container,
                                const DexType* type) {
   DexFieldSpec r(const_cast<DexType*>(container), name,
                  const_cast<DexType*>(type));
+  auto* f = s_field_map.load(r, nullptr);
   s_field_map.erase(r);
+  if (f != nullptr && f->is_def()) {
+    unset_field_value(f->as_def());
+  }
 }
 
 void RedexContext::mutate_field(DexFieldRef* field,
@@ -681,6 +688,7 @@ void RedexContext::erase_method(DexMethodRef* method) {
                       method->m_spec.proto);
       s_method_map.erase(r);
     }
+    unset_return_value(method->as_def());
   }
 }
 
@@ -689,7 +697,11 @@ void RedexContext::erase_method(const DexType* type,
                                 const DexProto* proto) {
   DexMethodSpec r(const_cast<DexType*>(type), name,
                   const_cast<DexProto*>(proto));
+  auto* m = s_method_map.load(r, nullptr);
   s_method_map.erase(r);
+  if (m != nullptr && m->is_def()) {
+    unset_return_value(m->as_def());
+  }
 }
 
 // TODO: Need a better interface.
