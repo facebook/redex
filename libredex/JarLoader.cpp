@@ -969,7 +969,7 @@ bool load_jar_file(const DexLocation* location,
   try {
     file.open(location->get_file_name().c_str(),
               boost::iostreams::mapped_file::readonly);
-  } catch (const std::exception& e) {
+  } catch (const std::exception&) {
     std::cerr << "error: cannot open jar file: " << location->get_file_name()
               << "\n";
     return false;

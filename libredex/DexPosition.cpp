@@ -397,7 +397,7 @@ void RealPositionMapper::write_map_v2() {
           uint32_t parent_line = 0;
           try {
             parent_line = pos->parent == nullptr ? 0 : get_line(pos->parent);
-          } catch (std::out_of_range& e) {
+          } catch (std::out_of_range&) {
             ++unregistered_parent_positions;
             TRACE(OPUT, 1, "Parent position %s of %s was not registered",
                   SHOW(pos->parent), SHOW(pos));
