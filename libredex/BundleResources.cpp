@@ -2405,7 +2405,7 @@ std::unordered_map<uint32_t, resources::InlinableValue>
 ResourcesPbFile::get_inlinable_resource_values() {
   auto& res_id_to_configvalue = m_res_id_to_configvalue;
   std::unordered_map<uint32_t, resources::InlinableValue> inlinable_resources;
-  std::vector<std::tuple<uint32_t, uint32_t>> past_refs;
+  std::unordered_map<uint32_t, uint32_t> past_refs;
 
   for (auto& pair : res_id_to_configvalue) {
     uint32_t id = pair.first;
@@ -2434,7 +2434,7 @@ ResourcesPbFile::get_inlinable_resource_values() {
     resources::InlinableValue inlinable_val{};
     if (item.has_ref()) {
       auto id_to_add = item.ref().id();
-      past_refs.push_back(std::tuple<uint32_t, uint32_t>(id, id_to_add));
+      past_refs.insert({id, id_to_add});
       continue;
     } else if (item.has_str()) {
       const std::string& og_str = item.str().value();
@@ -2480,13 +2480,7 @@ ResourcesPbFile::get_inlinable_resource_values() {
   // If a reference is found, check if the referenced value is inlinable and add
   // it's actual value to the map (instead of the reference). NOTE: only works
   // if reference only goes down one level.
-  for (auto& [id, id_past] : past_refs) {
-    auto it = inlinable_resources.find(id_past);
-    if (it != inlinable_resources.end()) {
-      resources::InlinableValue val = it->second;
-      inlinable_resources.insert({id, val});
-    }
-  }
+  resources::resources_inlining_find_refs(past_refs, &inlinable_resources);
   return inlinable_resources;
 }
 

@@ -2722,7 +2722,7 @@ ResourcesArscFile::get_inlinable_resource_values() {
   apk::TableEntryParser& parsed_table = table_snapshot.get_parsed_table();
   auto& res_id_to_entries = parsed_table.m_res_id_to_entries;
   std::unordered_map<uint32_t, resources::InlinableValue> inlinable_resources;
-  std::vector<std::tuple<uint32_t, android::Res_value*>> past_refs;
+  std::unordered_map<uint32_t, uint32_t> past_refs;
 
   for (auto& pair : res_id_to_entries) {
     uint32_t id = pair.first;
@@ -2753,8 +2753,7 @@ ResourcesArscFile::get_inlinable_resource_values() {
         }
         val.string_value = chars;
       } else if (res_value->dataType == android::Res_value::TYPE_REFERENCE) {
-        past_refs.push_back(
-            std::tuple<uint32_t, android::Res_value*>(id, res_value));
+        past_refs.insert({id, res_value->data});
         continue;
       } else if (res_value->dataType == android::Res_value::TYPE_INT_BOOLEAN) {
         val.bool_value = res_value->data;
@@ -2767,15 +2766,8 @@ ResourcesArscFile::get_inlinable_resource_values() {
   }
 
   // If a reference is found, check if the referenced value is inlinable and add
-  // it's actual value to the map (instead of the reference). NOTE: only works
-  // if reference only goes down one level.
-  for (auto& [id, value] : past_refs) {
-    auto it = inlinable_resources.find(value->data);
-    if (it != inlinable_resources.end()) {
-      resources::InlinableValue val = it->second;
-      inlinable_resources.insert({id, val});
-    }
-  }
+  // it's actual value to the map (instead of the reference).
+  resources::resources_inlining_find_refs(past_refs, &inlinable_resources);
   return inlinable_resources;
 }
 

@@ -4,7 +4,11 @@
   <color name="nice_purple">#673AB7</color>
   <color name="simple">#F00</color>
   <color name="text_color">@color/nice_purple</color>
+  <color name="text_color_ref">@color/text_color</color>
   <color name="view_bg">#E8EAF6</color>
+  <color name="z_crazy_a">@color/z_crazy_b</color>
+  <color name="z_crazy_b">@color/z_crazy_a</color>
+  <color name="z_crazy">@color/z_crazy_a</color>
   <dimen name="outer_padding">16dp</dimen>
   <dimen name="text_size">36sp</dimen>
   <integer name="loop_count">3</integer>

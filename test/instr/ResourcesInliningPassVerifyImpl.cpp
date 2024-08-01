@@ -26,6 +26,10 @@ void resource_inlining_PreVerify(ResourceTableFile* res_table) {
                   0x7f030001,
                   0x7f030002,
                   0x7f030003,
+                  0x7f030004,
+                  0x7f030005,
+                  0x7f030006,
+                  0x7f030007,
                   /* dimen */
                   0x7f040000,
                   0x7f040001,
@@ -56,7 +60,11 @@ void resource_inlining_PreVerify(ResourceTableFile* res_table) {
   EXPECT_TRUE(inlinable.find(0x7f030000) != inlinable.end());
   EXPECT_TRUE(inlinable.find(0x7f030001) != inlinable.end());
   EXPECT_TRUE(inlinable.find(0x7f030002) != inlinable.end());
-  EXPECT_TRUE(inlinable.find(0x7f030003) == inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f030003) != inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f030004) == inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f030005) == inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f030006) == inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f030007) == inlinable.end());
 
   EXPECT_TRUE(inlinable.find(0x7f040000) == inlinable.end());
   EXPECT_TRUE(inlinable.find(0x7f040001) == inlinable.end());
@@ -85,6 +93,10 @@ void resource_inlining_PreVerify(ResourceTableFile* res_table) {
   EXPECT_EQ(val.uint_value, 0xffff0000);
 
   val = inlinable.at(0x7f030002);
+  EXPECT_EQ(val.type, android::Res_value::TYPE_INT_COLOR_RGB8);
+  EXPECT_EQ(val.uint_value, 0xff673ab7);
+
+  val = inlinable.at(0x7f030003);
   EXPECT_EQ(val.type, android::Res_value::TYPE_INT_COLOR_RGB8);
   EXPECT_EQ(val.uint_value, 0xff673ab7);
 
