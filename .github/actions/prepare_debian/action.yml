@@ -23,11 +23,9 @@ runs:
   - uses: actions/checkout@v4.1.1
     with:
       path: repo
-      # We want to run restore-mtime, which needs to find actual commit data
-      # and not just the shallow default result. The easiest way for this seems
-      # to be the filter support of Github (https://github.blog/open-source/git/get-up-to-speed-with-partial-clone-and-shallow-clone/).
-      fetch-depth: 1000000
-      filter: "tree:0"
+      # We want the whole repo because of restore-mtime. Using filters is
+      # observably slower.
+      fetch-depth: 0
   - name: Timestamp (2)
     run: date
     shell: bash
