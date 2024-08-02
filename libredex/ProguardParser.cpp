@@ -573,6 +573,7 @@ void skip_to_semicolon(TokenIndex& idx) {
 
 void parse_member_specification(TokenIndex& idx,
                                 ClassSpecification* class_spec,
+                                bool allow_return,
                                 bool* ok) {
   MemberSpecification member_specification;
   *ok = true;
@@ -703,7 +704,7 @@ void parse_member_specification(TokenIndex& idx,
     member_specification.descriptor = arg;
   }
   // if with value, look for return
-  if (idx.type() == TokenType::returns) {
+  if (allow_return && idx.type() == TokenType::returns) {
     idx.next();
     const auto& rident = idx.data();
     if (rident == "true") {
@@ -733,12 +734,13 @@ void parse_member_specification(TokenIndex& idx,
 
 void parse_member_specifications(TokenIndex& idx,
                                  ClassSpecification* class_spec,
+                                 bool allow_return,
                                  bool* ok) {
   if (idx.type() == TokenType::openCurlyBracket) {
     idx.next();
     while ((idx.type() != TokenType::closeCurlyBracket) &&
            (idx.type() != TokenType::eof_token)) {
-      parse_member_specification(idx, class_spec, ok);
+      parse_member_specification(idx, class_spec, allow_return, ok);
       if (!*ok) {
         // We failed to parse a member specification so skip to the next
         // semicolon.
@@ -804,7 +806,9 @@ void parse_class_names(
   }
 }
 
-ClassSpecification parse_class_specification(TokenIndex& idx, bool* ok) {
+ClassSpecification parse_class_specification(TokenIndex& idx,
+                                             bool allow_return,
+                                             bool* ok) {
   ClassSpecification class_spec;
   *ok = true;
   class_spec.annotationType = parse_annotation_type(idx);
@@ -843,7 +847,7 @@ ClassSpecification parse_class_specification(TokenIndex& idx, bool* ok) {
     idx.next();
   }
   // Parse the member specifications, if there are any
-  parse_member_specifications(idx, &class_spec, ok);
+  parse_member_specifications(idx, &class_spec, allow_return, ok);
   std::sort(class_spec.fieldSpecifications.begin(),
             class_spec.fieldSpecifications.end(),
             member_comparison);
@@ -859,6 +863,7 @@ bool parse_keep(TokenIndex& idx,
                 bool mark_classes,
                 bool mark_conditionally,
                 bool allowshrinking,
+                bool allow_return,
                 const std::string& filename,
                 uint32_t line,
                 bool* ok) {
@@ -874,7 +879,7 @@ bool parse_keep(TokenIndex& idx,
       skip_to_next_command(idx);
       return true;
     }
-    keep->class_spec = parse_class_specification(idx, ok);
+    keep->class_spec = parse_class_specification(idx, allow_return, ok);
     spec->emplace(std::move(keep));
     return true;
   }
@@ -961,6 +966,7 @@ void parse(const std::vector<Token>& vec,
                    true, // mark_classes
                    false, // mark_conditionally
                    false, // allowshrinking
+                   /* allow_return= */ false,
                    filename,
                    line,
                    &ok)) {
@@ -975,6 +981,7 @@ void parse(const std::vector<Token>& vec,
                    false, // mark_classes
                    false, // mark_conditionally
                    false, // allowshrinking
+                   /* allow_return= */ false,
                    filename,
                    line,
                    &ok)) {
@@ -989,6 +996,7 @@ void parse(const std::vector<Token>& vec,
                    false, // mark_classes
                    true, // mark_conditionally
                    false, // allowshrinking
+                   /* allow_return= */ false,
                    filename,
                    line,
                    &ok)) {
@@ -1003,6 +1011,7 @@ void parse(const std::vector<Token>& vec,
                    true, // mark_classes
                    false, // mark_conditionally
                    true, // allowshrinking
+                   /* allow_return= */ false,
                    filename,
                    line,
                    &ok)) {
@@ -1017,6 +1026,7 @@ void parse(const std::vector<Token>& vec,
                    false, // mark_classes
                    false, // mark_conditionally
                    true, // allowshrinking
+                   /* allow_return= */ false,
                    filename,
                    line,
                    &ok)) {
@@ -1031,6 +1041,7 @@ void parse(const std::vector<Token>& vec,
                    false, // mark_classes
                    true, // mark_conditionally
                    true, // allowshrinking
+                   /* allow_return= */ false,
                    filename,
                    line,
                    &ok)) {
@@ -1072,6 +1083,7 @@ void parse(const std::vector<Token>& vec,
                    false, // mark_classes
                    false, // mark_conditionally
                    false, // allowshrinking
+                   /* allow_return= */ true,
                    filename,
                    line,
                    &ok)) {
@@ -1083,6 +1095,7 @@ void parse(const std::vector<Token>& vec,
                    false, // mark_classes
                    false, // mark_conditionally
                    false, // allowshrinking
+                   /* allow_return= */ false,
                    filename,
                    line,
                    &ok)) {
