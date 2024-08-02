@@ -858,18 +858,24 @@ DexClass* ProguardMatcher::find_single_class(
 void ProguardMatcher::classify_rules(const KeepRuleMatcher& rule_matcher,
                                      const RuleType& rule_type,
                                      const KeepSpec* keep_rule) {
-  if (rule_type == RuleType::KEEP) {
+  switch (rule_type) {
+  case RuleType::KEEP:
     if (rule_matcher.is_unused()) {
       m_recorder.unused_keep_rules.insert(keep_rule);
     } else {
       m_recorder.used_keep_rules.insert(keep_rule);
     }
-  } else if (rule_type == RuleType::ASSUME_NO_SIDE_EFFECTS) {
+    break;
+  case RuleType::ASSUME_NO_SIDE_EFFECTS:
     if (rule_matcher.is_unused()) {
       m_recorder.unused_assumenosideeffect_rules.insert(keep_rule);
     } else {
       m_recorder.used_assumenosideeffect_rules.insert(keep_rule);
     }
+    break;
+  case RuleType::WHY_ARE_YOU_KEEPING:
+  case RuleType::KEEP_NATIVE:
+    break;
   }
 }
 
