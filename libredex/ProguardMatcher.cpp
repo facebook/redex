@@ -1029,7 +1029,8 @@ void ProguardRuleRecorder::record_accessed_rules(
     }
     for (const keep_rules::KeepSpec* keep_rule :
          used_assumenosideeffect_rules) {
-      used_out.push_back(keep_rules::show_assumenosideeffect(*keep_rule));
+      used_out.push_back(keep_rules::show_simple_keep_rule(
+          *keep_rule, "-assumenosideeffects"));
     }
     // Make output deterministic
     std::sort(used_out.begin(), used_out.end());
@@ -1045,7 +1046,8 @@ void ProguardRuleRecorder::record_accessed_rules(
     }
     for (const keep_rules::KeepSpec* keep_rule :
          unused_assumenosideeffect_rules) {
-      unused_out.push_back(keep_rules::show_assumenosideeffect(*keep_rule));
+      unused_out.push_back(keep_rules::show_simple_keep_rule(
+          *keep_rule, "-assumenosideeffects"));
     }
     // Make output deterministic
     std::sort(unused_out.begin(), unused_out.end());

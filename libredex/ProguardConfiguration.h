@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <boost/functional/hash.hpp>
 #include <functional>
+#include <iosfwd>
 #include <set>
 #include <string>
 #include <unordered_set>
@@ -30,6 +31,8 @@ struct AssumeReturnValue {
     int v;
   } value;
 };
+
+std::ostream& operator<<(std::ostream& oss, const AssumeReturnValue& asr);
 
 struct MemberSpecification {
   DexAccessFlags requiredSetAccessFlags = DexAccessFlags(0);

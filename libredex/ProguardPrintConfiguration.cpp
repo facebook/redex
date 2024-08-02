@@ -67,10 +67,11 @@ std::string keep_rules::show_keep(const KeepSpec& keep_rule, bool show_source) {
   return text.str();
 }
 
-std::string keep_rules::show_assumenosideeffect(const KeepSpec& keep_rule,
-                                                bool show_source) {
+std::string keep_rules::show_simple_keep_rule(const KeepSpec& keep_rule,
+                                              std::string_view command,
+                                              bool show_source) {
   std::ostringstream text;
-  text << "-assumenosideeffects " << keep_rule;
+  text << command << " " << keep_rule;
   if (show_source) {
     std::ostringstream source;
     source << keep_rule.source_filename << ":" << keep_rule.source_line;
