@@ -787,6 +787,7 @@ void KeepRuleMatcher::process_whyareyoukeeping(DexClass* cls) {
 // This function is also executed concurrently.
 void KeepRuleMatcher::process_assumenosideeffects(DexClass* cls) {
   ++m_class_matches;
+  apply_field_keeps(cls);
   // Apply any method-level keep specifications.
   apply_method_keeps(cls);
 }
