@@ -1102,10 +1102,6 @@ bool MultiMethodInliner::caller_too_large(DexType* caller_type,
     return false;
   }
 
-  if (m_config.allowlist_no_method_limit.count(caller_type)) {
-    return false;
-  }
-
   if (is_estimate_over_max(estimated_caller_size, estimated_callee_size,
                            m_config.soft_max_instruction_size)) {
     return true;
