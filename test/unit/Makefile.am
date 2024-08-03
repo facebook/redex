@@ -328,6 +328,8 @@ native_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 native_names_test_SOURCES = NativeNamesTest.cpp
 
+nopper_test_SOURCES = NopperTest.cpp
+
 null_propagation_test_SOURCES = constant-propagation/NullPropagationTest.cpp
 
 object_inliner_test_SOURCES = ObjectInlinerTest.cpp

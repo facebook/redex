@@ -118,6 +118,8 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
     });
   }
 
+  bool may_remove_nops = !mgr.nopper_has_run();
+
   auto stats =
       walk::parallel::methods<LocalDce::Stats>(scope, [&](DexMethod* m) {
         auto* code = m->get_code();
@@ -126,7 +128,9 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
         }
 
         LocalDce ldce(init_classes_with_side_effects.get(), pure_methods,
-                      override_graph.get(), may_allocate_registers);
+                      override_graph.get(), may_allocate_registers,
+                      /* ignore_pure_method_init_classes */ false,
+                      may_remove_nops);
         ldce.dce(code, /* normalize_new_instances */ true, m->get_class());
         return ldce.get_stats();
       });
