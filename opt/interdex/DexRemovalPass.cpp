@@ -107,7 +107,7 @@ void DexRemovalPass::sanity_check(Scope& original_scope,
     auto& dex = root_dexen_new.at(i);
     for (auto cls : dex) {
       if (is_canary(cls)) {
-        std::string expected_name = get_canary_name(i, nullptr);
+        std::string expected_name = get_canary_name(i);
         auto dtype = cls->get_type();
         auto oldname = dtype->get_name();
         always_assert(oldname->str() == expected_name);

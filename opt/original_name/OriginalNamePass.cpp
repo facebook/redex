@@ -156,13 +156,8 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
         if (new_dex.empty()) {
           // A canary_cls need to be added when a new dex is created.
           int dexnum = store.get_dexen().size();
-          DexClass* canary_cls;
-          if (store.is_root_store()) {
-            canary_cls = create_canary(dexnum);
-          } else {
-            canary_cls =
-                create_canary(dexnum, DexString::make_string(store.get_name()));
-          }
+          auto store_name = store.is_root_store() ? "" : store.get_name();
+          DexClass* canary_cls = create_canary(dexnum, store_name);
           for (auto* m : canary_cls->get_all_methods()) {
             if (m->get_code() == nullptr) {
               continue;

@@ -13,10 +13,10 @@ bool is_canary(DexClass* clazz) {
                  strlen(SECONDARY_CANARY_PREFIX)) == 0;
 }
 
-std::string get_canary_name(int dexnum, const DexString* store_name) {
+std::string get_canary_name(int dexnum, const char* store_name) {
   if (store_name) {
     char buf[STORE_CANARY_CLASS_BUFSIZE];
-    int store_id = store_name->java_hashcode() & 0xFFFF;
+    int store_id = java_hashcode_of_utf8_string(store_name) & 0xFFFF;
     // Yes, there could be collisions. We assume that is handled outside of
     // Redex.
     snprintf(buf, sizeof(buf), STORE_CANARY_CLASS_FORMAT, store_id, dexnum + 1);
@@ -28,8 +28,9 @@ std::string get_canary_name(int dexnum, const DexString* store_name) {
   }
 }
 
-DexClass* create_canary(int dexnum, const DexString* store_name) {
-  std::string canary_name = get_canary_name(dexnum, store_name);
+DexClass* create_canary(int dexnum, const std::string& store_name) {
+  std::string canary_name = get_canary_name(
+      dexnum, store_name.empty() ? nullptr : store_name.c_str());
   auto canary_type = DexType::get_type(canary_name);
   if (!canary_type) {
     canary_type = DexType::make_type(canary_name);
