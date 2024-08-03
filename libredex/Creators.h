@@ -248,6 +248,11 @@ struct MethodBlock {
   // Helper
   void init_loc(Location& loc);
 
+  void binop(IROpcode op,
+             const Location& dest,
+             const Location& src0,
+             const Location& src1);
+
   void binop_lit(IROpcode op,
                  const Location& dest,
                  const Location& src,
@@ -430,6 +435,11 @@ struct MethodCreator {
    * Return the newly created method.
    */
   DexMethod* create();
+
+  /**
+   * Returns the method-ref for the method that is being created.
+   */
+  DexMethodRef* get_method() const { return method; }
 
   /**
    * Transfer code from a given method to a static with the same signature
