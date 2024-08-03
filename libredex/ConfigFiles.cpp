@@ -441,9 +441,9 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("run_fast_reg_alloc", false, shrinker_config.run_fast_reg_alloc);
   jw.get("run_dedup_blocks", false, shrinker_config.run_dedup_blocks);
   jw.get("debug", false, inliner_config->debug);
-  jw.get("blocklist", {}, inliner_config->m_blocklist);
-  jw.get("caller_blocklist", {}, inliner_config->m_caller_blocklist);
-  jw.get("intradex_allowlist", {}, inliner_config->m_intradex_allowlist);
+  jw.get("blocklist", {}, inliner_config->blocklist);
+  jw.get("caller_blocklist", {}, inliner_config->caller_blocklist);
+  jw.get("intradex_allowlist", {}, inliner_config->intradex_allowlist);
   jw.get("reg_alloc_random_forest", "",
          shrinker_config.reg_alloc_random_forest);
   jw.get("respect_sketchy_methods", true,
@@ -460,7 +460,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   for (const auto& type_s : no_inline_annos) {
     auto type = DexType::get_type(type_s);
     if (type != nullptr) {
-      inliner_config->m_no_inline_annos.emplace(type);
+      inliner_config->no_inline_annos.emplace(type);
     } else {
       fprintf(stderr, "WARNING: Cannot find no_inline annotation %s\n",
               type_s.c_str());
@@ -472,7 +472,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   for (const auto& type_s : force_inline_annos) {
     auto type = DexType::get_type(type_s);
     if (type != nullptr) {
-      inliner_config->m_force_inline_annos.emplace(type);
+      inliner_config->force_inline_annos.emplace(type);
     } else {
       fprintf(stderr, "WARNING: Cannot find force_inline annotation %s\n",
               type_s.c_str());

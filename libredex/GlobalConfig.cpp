@@ -29,12 +29,11 @@ void InlinerConfig::bind_config() {
   bind("run_fast_reg_alloc", shrinker.run_fast_reg_alloc,
        shrinker.run_fast_reg_alloc);
   bind("run_local_dce", shrinker.run_local_dce, shrinker.run_local_dce);
-  bind("no_inline_annos", {}, m_no_inline_annos);
-  bind("force_inline_annos", {}, m_force_inline_annos);
-  bind("blocklist", {}, m_blocklist);
-  bind("blocklist", {}, m_blocklist);
-  bind("caller_blocklist", {}, m_caller_blocklist);
-  bind("intradex_allowlist", {}, m_intradex_allowlist,
+  bind("no_inline_annos", {}, no_inline_annos);
+  bind("force_inline_annos", {}, force_inline_annos);
+  bind("blocklist", {}, blocklist);
+  bind("caller_blocklist", {}, caller_blocklist);
+  bind("intradex_allowlist", {}, intradex_allowlist,
        "The purpose of this white-list is to remove black-list entries when "
        "inlining after the InterDex pass has run. (This reduces the impact of "
        "black-list entries that avoid inlining conditional control-flow and "
