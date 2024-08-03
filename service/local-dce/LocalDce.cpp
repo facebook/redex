@@ -305,6 +305,8 @@ bool LocalDce::is_required(const cfg::ControlFlowGraph& cfg,
     // These instructions pass their dests via the return-value slot, but
     // aren't inherently live like the invoke-* instructions.
     return bliveness.test(bliveness.size() - 1);
+  } else if (opcode::is_nop(inst->opcode()) && !m_may_remove_nops) {
+    return true;
   }
   return false;
 }

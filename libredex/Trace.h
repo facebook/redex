@@ -101,6 +101,7 @@ class DexType;
   TM(MTRANS)            \
   TM(NATIVE)            \
   TM(NCI)               \
+  TM(NOP)               \
   TM(NULLCHECK)         \
   TM(OBFUSCATE)         \
   TM(OEA)               \

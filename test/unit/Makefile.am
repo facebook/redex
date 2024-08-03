@@ -371,6 +371,8 @@ $(eval $(call make_env,native_test,native_jni_output_path=$(srcdir)))
 
 native_names_test_SOURCES = NativeNamesTest.cpp
 
+nopper_test_SOURCES = NopperTest.cpp
+
 null_propagation_test_SOURCES = constant-propagation/NullPropagationTest.cpp
 
 object_inliner_test_SOURCES = ObjectInlinerTest.cpp

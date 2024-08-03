@@ -78,12 +78,14 @@ class LocalDce {
       const std::unordered_set<DexMethodRef*>& pure_methods,
       const method_override_graph::Graph* method_override_graph = nullptr,
       bool may_allocate_registers = false,
-      bool ignore_pure_method_init_classes = false)
+      bool ignore_pure_method_init_classes = false,
+      bool may_remove_nops = true)
       : m_init_classes_with_side_effects(init_classes_with_side_effects),
         m_pure_methods(pure_methods),
         m_method_override_graph(method_override_graph),
         m_may_allocate_registers(may_allocate_registers),
-        m_ignore_pure_method_init_classes(ignore_pure_method_init_classes) {}
+        m_ignore_pure_method_init_classes(ignore_pure_method_init_classes),
+        m_may_remove_nops(may_remove_nops) {}
 
   const Stats& get_stats() const { return m_stats; }
 
@@ -105,6 +107,7 @@ class LocalDce {
   const method_override_graph::Graph* m_method_override_graph;
   const bool m_may_allocate_registers;
   const bool m_ignore_pure_method_init_classes;
+  const bool m_may_remove_nops;
   Stats m_stats;
 
   bool is_required(const cfg::ControlFlowGraph& cfg,
