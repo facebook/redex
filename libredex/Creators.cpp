@@ -443,6 +443,20 @@ void MethodBlock::init_loc(Location& loc) {
   }
 }
 
+void MethodBlock::binop(IROpcode op,
+                        const Location& dest,
+                        const Location& src0,
+                        const Location& src1) {
+  always_assert(OPCODE_ADD_INT <= op && op <= OPCODE_REM_DOUBLE);
+  always_assert(dest.type == src0.type);
+  always_assert(dest.type == src1.type);
+  IRInstruction* insn = new IRInstruction(op);
+  insn->set_dest(dest.get_reg());
+  insn->set_src(0, src0.get_reg());
+  insn->set_src(1, src1.get_reg());
+  push_instruction(insn);
+}
+
 void MethodBlock::binop_lit(IROpcode op,
                             const Location& dest,
                             const Location& src,

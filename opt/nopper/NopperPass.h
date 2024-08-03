@@ -8,6 +8,7 @@
 #pragma once
 
 #include "Pass.h"
+#include "PassManager.h"
 
 class NopperPass : public Pass {
  public:
@@ -26,7 +27,10 @@ class NopperPass : public Pass {
     };
   }
 
-  void bind_config() override { bind("probability", 0.0f, m_probability); }
+  void bind_config() override {
+    bind("probability", 0.0f, m_probability);
+    bind("complex", false, m_complex);
+  }
 
   void eval_pass(DexStoresVector& stores,
                  ConfigFiles& conf,
@@ -35,4 +39,6 @@ class NopperPass : public Pass {
 
  private:
   float m_probability{0}; // How many percent of blocks to infect
+  bool m_complex{false};
+  std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
 };
