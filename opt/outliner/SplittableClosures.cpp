@@ -297,7 +297,7 @@ std::vector<ScoredClosure> get_scored_closures(const Config& config,
 // determine what type we can use as parameter type of a split method), and
 // filter out closures which don't meet the configured liveness threshold.
 std::vector<SplittableClosure> to_splittable_closures(
-    const Config& config,
+    size_t max_live_in,
     const std::shared_ptr<MethodClosures>& mcs,
     std::vector<ScoredClosure> scored_closures) {
   std::vector<SplittableClosure> splittable_closures;
@@ -348,7 +348,7 @@ std::vector<SplittableClosure> to_splittable_closures(
   std::unordered_set<const ReducedBlock*> covered;
   std20::erase_if(scored_closures, [&covered, &ota, &liveness_fp_iter,
                                     &uninitialized_objects, &insns, &def_uses,
-                                    &config](auto& sc) {
+                                    max_live_in](auto& sc) {
     for (auto* c : sc.closures) {
       if (covered.count(c->reduced_block)) {
         // We already have this contained closure covered by a valid
@@ -377,7 +377,7 @@ std::vector<SplittableClosure> to_splittable_closures(
       first_insn = it->insn;
     }
     std::vector<reg_t> ordered_live_in(live_in.begin(), live_in.end());
-    if (ordered_live_in.size() > (size_t)config.max_live_in) {
+    if (ordered_live_in.size() > max_live_in) {
       return true;
     }
     std::sort(ordered_live_in.begin(), ordered_live_in.end());
@@ -457,16 +457,34 @@ std::vector<SplittableClosure> to_splittable_closures(
 } // namespace
 
 namespace method_splitting_impl {
+std::vector<DexType*> SplittableClosure::get_arg_types() const {
+  std::vector<DexType*> arg_types;
+  for (auto arg : args) {
+    if (arg.type) {
+      arg_types.push_back(const_cast<DexType*>(arg.type));
+    }
+  }
+  return arg_types;
+}
+
 ConcurrentMap<DexType*, std::vector<SplittableClosure>>
-select_splittable_closures(const ConcurrentSet<DexMethod*>& methods,
-                           const Config& config,
-                           InsertOnlyConcurrentMap<DexMethod*, size_t>*
-                               concurrent_splittable_no_optimizations_methods) {
-  Timer t("select_splittable_closures");
+select_splittable_closures_based_on_costs(
+    const ConcurrentSet<DexMethod*>& methods,
+    const Config& config,
+    InsertOnlyConcurrentMap<DexMethod*, size_t>*
+        concurrent_splittable_no_optimizations_methods) {
+  Timer t("select_splittable_closures_based_on_costs");
   ConcurrentMap<DexType*, std::vector<SplittableClosure>>
       concurrent_splittable_closures;
   auto concurrent_process_method = [&](DexMethod* method) {
-    auto mcs = discover_closures(method, config);
+    auto rcfg = reduce_cfg(method, config.split_block_size);
+    if ((rcfg->code_size() < config.min_original_size) &&
+        (!method->rstate.too_large_for_inlining_into() ||
+         rcfg->code_size() < config.min_original_size_too_large_for_inlining)) {
+      return;
+    }
+
+    auto mcs = discover_closures(method, std::move(rcfg));
     if (!mcs) {
       return;
     }
@@ -495,8 +513,8 @@ select_splittable_closures(const ConcurrentSet<DexMethod*>& methods,
       }
       return;
     }
-    auto splittable_closures =
-        to_splittable_closures(config, mcs, std::move(scored_closures));
+    auto splittable_closures = to_splittable_closures(
+        config.max_live_in, mcs, std::move(scored_closures));
     concurrent_splittable_closures.update(
         method->get_class(), [&](auto, auto& v, bool) {
           v.insert(v.end(),

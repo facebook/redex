@@ -135,23 +135,24 @@ void split_blocks(DexMethod* method,
 
 namespace method_splitting_impl {
 
-std::shared_ptr<MethodClosures> discover_closures(DexMethod* method,
-                                                  const Config& config) {
+std::shared_ptr<const ReducedControlFlowGraph> reduce_cfg(
+    DexMethod* method, std::optional<uint64_t> split_block_size) {
   auto code = method->get_code();
   auto& cfg = code->cfg();
   cfg.remove_unreachable_blocks();
-  split_blocks(method, cfg, config.split_block_size);
-
-  auto rcfg = std::make_shared<const ReducedControlFlowGraph>(cfg);
-  auto original_size = code_size(rcfg->blocks());
-  if ((original_size < config.min_original_size) &&
-      (!method->rstate.too_large_for_inlining_into() ||
-       original_size < config.min_original_size_too_large_for_inlining)) {
-    return nullptr;
+  if (split_block_size) {
+    split_blocks(method, cfg, *split_block_size);
   }
+
+  return std::make_shared<const ReducedControlFlowGraph>(cfg);
+}
+
+std::shared_ptr<MethodClosures> discover_closures(
+    DexMethod* method, std::shared_ptr<const ReducedControlFlowGraph> rcfg) {
   std::vector<Closure> closures;
-  Lazy<monitor_count::Analyzer> mca(
-      [&cfg] { return std::make_unique<monitor_count::Analyzer>(cfg); });
+  Lazy<monitor_count::Analyzer> mca([method] {
+    return std::make_unique<monitor_count::Analyzer>(method->get_code()->cfg());
+  });
   auto excluded_blocks = get_blocks_with_final_field_puts(method, rcfg.get());
   for (auto* reduced_block : rcfg->blocks()) {
     if (reduced_block == rcfg->entry_block()) {
@@ -199,7 +200,7 @@ std::shared_ptr<MethodClosures> discover_closures(DexMethod* method,
     return nullptr;
   }
   return std::make_shared<MethodClosures>((MethodClosures){
-      method, original_size, std::move(rcfg), std::move(closures)});
+      method, rcfg->code_size(), std::move(rcfg), std::move(closures)});
 }
 
 } // namespace method_splitting_impl

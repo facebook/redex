@@ -124,6 +124,8 @@ ReducedControlFlowGraph::ReducedControlFlowGraph(cfg::ControlFlowGraph& cfg)
       }
     }
   }
+
+  m_code_size = method_splitting_impl::code_size(blocks());
 }
 
 std::vector<const ReducedBlock*> ReducedControlFlowGraph::blocks() const {

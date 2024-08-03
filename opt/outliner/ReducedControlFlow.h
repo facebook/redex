@@ -59,6 +59,8 @@ class ReducedControlFlowGraph {
 
   ReducedBlock* get_reduced_block(const cfg::Block* block) const;
 
+  size_t code_size() const { return m_code_size; }
+
  private:
   ReducedEdge* get_edge(ReducedBlock* src, ReducedBlock* target) {
     auto [it, _] =
@@ -71,6 +73,7 @@ class ReducedControlFlowGraph {
                      std::unordered_map<ReducedBlock*, ReducedEdge>>
       m_reduced_edges;
   std::unordered_map<const cfg::Block*, ReducedBlock*> m_blocks;
+  size_t m_code_size;
 };
 
 template <class ReducedBlockCollection>
