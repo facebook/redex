@@ -20,8 +20,8 @@ constexpr size_t SECONDARY_CANARY_CLASS_BUFSIZE =
 constexpr const char STORE_CANARY_CLASS_FORMAT[] = "Lstore%04x/dex%02d/Canary;";
 constexpr size_t STORE_CANARY_CLASS_BUFSIZE = sizeof(STORE_CANARY_CLASS_FORMAT);
 
-// The store name must be a non-empty string.
-int32_t get_unique_store_id(const DexString* store_name);
+// The store name must be a non-null, non-empty string.
+int32_t get_unique_store_id(const char* store_name);
 
 // Pass in nullptr for the root store name.
 std::string get_canary_name(int dexnum, const char* store_name = nullptr);
