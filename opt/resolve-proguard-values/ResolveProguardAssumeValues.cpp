@@ -67,9 +67,13 @@ ResolveProguardAssumeValuesPass::process_for_code(cfg::ControlFlowGraph& cfg) {
         IRInstruction* new_insn = new IRInstruction(OPCODE_CONST);
         new_insn->set_literal(val)->set_dest(move_insn->dest());
 
-        TRACE(PGR, 5, "Changing:\n %s and %s", SHOW(insn), SHOW(move_insn));
-        TRACE(PGR, 5, "TO:\n %s", SHOW(new_insn));
-        mutation.replace(move_result_it, {new_insn});
+        TRACE(PGR,
+              5,
+              "Inserting after:\n %s and %s\nWith:\n %s",
+              SHOW(insn),
+              SHOW(move_insn),
+              SHOW(new_insn));
+        mutation.insert_after(move_result_it, {new_insn});
         stat.field_values_changed++;
       }
       break;
