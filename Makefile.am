@@ -267,8 +267,9 @@ libredex_la_SOURCES = \
 	service/class-merging/TypeTagUtils.cpp \
 	service/class-splitting/ClassSplitting.cpp \
 	service/cross-dex-ref-minimizer/CrossDexRefMinimizer.cpp \
-	service/constant-propagation/ConstantPropagationAnalysis.cpp \
 	service/constant-propagation/ConstantPropagation.cpp \
+	service/constant-propagation/ConstantPropagationAnalysis.cpp \
+	service/constant-propagation/ConstantPropagationState.cpp \
 	service/constant-propagation/ConstantPropagationTransform.cpp \
 	service/constant-propagation/ConstantPropagationWholeProgramState.cpp \
 	service/constant-propagation/ConstructorParams.cpp \

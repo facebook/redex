@@ -10,6 +10,7 @@
 #include "ConfigFiles.h"
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
+#include "ConstantPropagationState.h"
 #include "ConstructorParams.h"
 #include "DefinitelyAssignedIFields.h"
 #include "IPConstantPropagationAnalysis.h"
@@ -223,7 +224,7 @@ void PassImpl::optimize(
     const XStoreRefs& xstores,
     const FixpointIterator& fp_iter,
     const ImmutableAttributeAnalyzerState* immut_analyzer_state) {
-  Transform::RuntimeCache runtime_cache{};
+  State state;
   const auto& pure_methods = ::get_pure_methods();
   m_transform_stats =
       walk::parallel::methods<Transform::Stats>(scope, [&](DexMethod* method) {
@@ -245,7 +246,7 @@ void PassImpl::optimize(
           config.getter_methods_for_immutable_fields =
               &immut_analyzer_state->attribute_methods;
           config.pure_methods = &pure_methods;
-          Transform tf(config, &runtime_cache);
+          Transform tf(config, &state);
           tf.legacy_apply_constants_and_prune_unreachable(
               ipa->fp_iter,
               fp_iter.get_whole_program_state(),
