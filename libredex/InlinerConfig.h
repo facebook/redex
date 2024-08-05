@@ -80,9 +80,19 @@ struct InlinerConfig {
     return m_blocklist;
   }
 
+  void clear_blocklist() {
+    blocklist.clear();
+    m_blocklist.clear();
+  }
+
   const std::unordered_set<DexType*>& get_caller_blocklist() const {
     always_assert_log(m_populated, "Should populate blocklist\n");
     return m_caller_blocklist;
+  }
+
+  void clear_caller_blocklist() {
+    caller_blocklist.clear();
+    m_caller_blocklist.clear();
   }
 
   void apply_intradex_allowlist() {

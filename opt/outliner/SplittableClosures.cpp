@@ -526,4 +526,59 @@ select_splittable_closures_based_on_costs(
   return concurrent_splittable_closures;
 }
 
+InsertOnlyConcurrentMap<DexMethod*, std::vector<SplittableClosure>>
+select_splittable_closures_from_top_level_switch_cases(
+    const std::vector<DexMethod*>& methods, size_t max_live_in) {
+  Timer t("select_splittable_closures_from_top_level_switch_cases");
+  InsertOnlyConcurrentMap<DexMethod*, std::vector<SplittableClosure>>
+      concurrent_splittable_closures;
+  auto concurrent_process_method = [&](DexMethod* method) {
+    if (method->rstate.no_optimizations()) {
+      TRACE(SWOL, 2, "%s is marked as do-not-optimize", SHOW(method));
+      return;
+    }
+
+    auto& cfg = method->get_code()->cfg();
+    auto rcfg = reduce_cfg(method);
+
+    auto mcs = discover_closures(method, std::move(rcfg));
+    if (!mcs) {
+      TRACE(SWOL, 2, "%s doesn't have closures:\n%s", SHOW(method), SHOW(cfg));
+      return;
+    }
+
+    auto* entry_block = cfg.entry_block();
+    if (entry_block->branchingness() != opcode::BRANCH_SWITCH) {
+      TRACE(SWOL, 2, "%s doesn't have top-level switch:\n%s", SHOW(method),
+            SHOW(cfg));
+      return;
+    }
+    auto default_block = entry_block->goes_to();
+
+    std::vector<ScoredClosure> scored_closures;
+    for (auto& c : mcs->closures) {
+      if (c.srcs.size() != 1 || *c.srcs.begin() != entry_block) {
+        continue;
+      }
+      if (c.reduced_block->blocks.count(default_block)) {
+        // We don't bother with the fall-through case that typically throws an
+        // exception.
+        continue;
+      }
+      ScoredClosure sc{/* switch_block */ nullptr, {&c}};
+      sc.reduced_components.insert(c.reduced_components.begin(),
+                                   c.reduced_components.end());
+      scored_closures.emplace_back(std::move(sc));
+    }
+    auto splittable_closures =
+        to_splittable_closures(max_live_in, mcs, std::move(scored_closures));
+    if (!splittable_closures.empty()) {
+      concurrent_splittable_closures.emplace(method,
+                                             std::move(splittable_closures));
+    }
+  };
+  workqueue_run<DexMethod*>(concurrent_process_method, methods);
+  return concurrent_splittable_closures;
+}
+
 } // namespace method_splitting_impl
