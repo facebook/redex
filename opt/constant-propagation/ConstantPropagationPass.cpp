@@ -22,7 +22,8 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
   XStoreRefs xstores(stores);
 
   ConstantPropagation impl(m_config);
-  auto stats = impl.run(scope, &xstores);
+  auto state = constant_propagation::State();
+  auto stats = impl.run(scope, &xstores, state);
 
   ScopedMetrics sm(mgr);
   stats.log_metrics(sm, /* with_scope= */ false);

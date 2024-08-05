@@ -21,11 +21,12 @@ class ConstantPropagation final {
  public:
   explicit ConstantPropagation(const Config& config) : m_config(config) {}
 
-  Transform::Stats run(DexMethod* method, XStoreRefs* xstores);
   Transform::Stats run(DexMethod* method,
-                       XStoreRefs* xstores,
+                       const XStoreRefs* xstores,
                        const State& state);
-  Transform::Stats run(const Scope& scope, XStoreRefs* xstores);
+  Transform::Stats run(const Scope& scope,
+                       const XStoreRefs* xstores,
+                       const State& state);
 
  private:
   const Config& m_config;

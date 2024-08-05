@@ -317,6 +317,7 @@ cp::WholeProgramState analyze_and_simplify_clinits(
     const XStoreRefs* xstores,
     const std::unordered_set<const DexType*>& blocklist_types,
     const std::unordered_set<std::string>& allowed_opaque_callee_names,
+    const cp::State& cp_state,
     size_t& init_cycles) {
   const std::unordered_set<DexMethodRef*> pure_methods = get_pure_methods();
   cp::WholeProgramState wps(blocklist_types);
@@ -325,8 +326,6 @@ cp::WholeProgramState analyze_and_simplify_clinits(
   auto graph =
       call_graph::Graph(ClassInitStrategy(*method_override_graph, scope));
   StaticFieldReadAnalysis analysis(graph, allowed_opaque_callee_names);
-
-  cp::State cp_state;
 
   for (DexClass* cls : reverse_tsort_by_clinit_deps(scope, init_cycles)) {
     auto clinit = cls->get_clinit();
@@ -368,7 +367,7 @@ cp::WholeProgramState analyze_and_simplify_clinits(
         // remove those sputs.
         cp::Transform::Config transform_config;
         transform_config.class_under_init = cls->get_type();
-        cp::Transform(transform_config, &cp_state)
+        cp::Transform(transform_config, cp_state)
             .legacy_apply_constants_and_prune_unreachable(
                 intra_cp, wps, cfg, xstores, cls->get_type());
         // Delete the instructions rendered dead by the removal of those sputs.
@@ -403,6 +402,7 @@ cp::WholeProgramState analyze_and_simplify_inits(
     const XStoreRefs* xstores,
     const std::unordered_set<const DexType*>& blocklist_types,
     const cp::EligibleIfields& eligible_ifields,
+    const cp::State& cp_state,
     size_t& possible_cycles) {
   const std::unordered_set<DexMethodRef*> pure_methods = get_pure_methods();
   cp::WholeProgramState wps(blocklist_types);
@@ -452,7 +452,7 @@ cp::WholeProgramState analyze_and_simplify_inits(
       // Remove redundant iputs in inits
       cp::Transform::Config transform_config;
       transform_config.class_under_init = cls->get_type();
-      cp::Transform(transform_config)
+      cp::Transform(transform_config, cp_state)
           .legacy_apply_constants_and_prune_unreachable(
               intra_cp, wps, cfg, xstores, cls->get_type());
       // Delete the instructions rendered dead by the removal of those iputs.
@@ -563,12 +563,13 @@ FinalInlinePassV2::Stats FinalInlinePassV2::run(
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
     const XStoreRefs* xstores,
+    const cp::State& cp_state,
     const Config& config,
     std::optional<DexStoresVector*> stores) {
   size_t clinit_cycles = 0;
   auto wps = final_inline::analyze_and_simplify_clinits(
       scope, init_classes_with_side_effects, xstores, config.blocklist_types,
-      {}, clinit_cycles);
+      {}, cp_state, clinit_cycles);
   auto res = inline_final_gets(stores, scope, min_sdk,
                                init_classes_with_side_effects, xstores, wps,
                                config.blocklist_types, cp::FieldType::STATIC);
@@ -582,12 +583,13 @@ FinalInlinePassV2::Stats FinalInlinePassV2::run_inline_ifields(
         init_classes_with_side_effects,
     const XStoreRefs* xstores,
     const cp::EligibleIfields& eligible_ifields,
+    const cp::State& cp_state,
     const Config& config,
     std::optional<DexStoresVector*> stores) {
   size_t possible_cycles = 0;
   auto wps = final_inline::analyze_and_simplify_inits(
       scope, init_classes_with_side_effects, xstores, config.blocklist_types,
-      eligible_ifields, possible_cycles);
+      eligible_ifields, cp_state, possible_cycles);
   auto ret = inline_final_gets(stores, scope, min_sdk,
                                init_classes_with_side_effects, xstores, wps,
                                config.blocklist_types, cp::FieldType::INSTANCE);
@@ -607,16 +609,17 @@ void FinalInlinePassV2::run_pass(DexStoresVector& stores,
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns());
   XStoreRefs xstores(stores);
+  cp::State cp_state;
   auto sfield_stats = run(scope, min_sdk, init_classes_with_side_effects,
-                          &xstores, m_config, &stores);
+                          &xstores, cp_state, m_config, &stores);
   FinalInlinePassV2::Stats ifield_stats{};
   if (m_config.inline_instance_field) {
     cp::EligibleIfields eligible_ifields =
         cp::gather_safely_inferable_ifield_candidates(
             scope, m_config.allowlist_method_names);
-    ifield_stats =
-        run_inline_ifields(scope, min_sdk, init_classes_with_side_effects,
-                           &xstores, eligible_ifields, m_config, &stores);
+    ifield_stats = run_inline_ifields(
+        scope, min_sdk, init_classes_with_side_effects, &xstores,
+        eligible_ifields, cp_state, m_config, &stores);
     always_assert(ifield_stats.init_classes == 0);
   }
   mgr.incr_metric("num_static_finals_inlined", sfield_stats.inlined_count);

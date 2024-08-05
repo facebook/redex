@@ -17,7 +17,7 @@
 namespace constant_propagation {
 
 Transform::Stats ConstantPropagation::run(DexMethod* method,
-                                          XStoreRefs* xstores,
+                                          const XStoreRefs* xstores,
                                           const State& state) {
   if (method->get_code() == nullptr || method->rstate.no_optimizations()) {
     return Transform::Stats();
@@ -32,7 +32,7 @@ Transform::Stats ConstantPropagation::run(DexMethod* method,
     intraprocedural::FixpointIterator fp_iter(*cfg,
                                               ConstantPrimitiveAnalyzer());
     fp_iter.run({});
-    constant_propagation::Transform tf(m_config.transform, &state);
+    constant_propagation::Transform tf(m_config.transform, state);
     tf.apply(fp_iter, WholeProgramState(), code->cfg(), xstores,
              is_static(method), method->get_class(), method->get_proto());
     local_stats = tf.get_stats();
@@ -40,14 +40,9 @@ Transform::Stats ConstantPropagation::run(DexMethod* method,
   return local_stats;
 }
 
-Transform::Stats ConstantPropagation::run(DexMethod* method,
-                                          XStoreRefs* xstores) {
-  return run(method, xstores, State());
-}
-
 Transform::Stats ConstantPropagation::run(const Scope& scope,
-                                          XStoreRefs* xstores) {
-  State state;
+                                          const XStoreRefs* xstores,
+                                          const State& state) {
   return walk::parallel::methods<Transform::Stats>(
       scope, [&](DexMethod* method) { return run(method, xstores, state); });
 }

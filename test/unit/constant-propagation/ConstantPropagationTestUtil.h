@@ -29,7 +29,8 @@ inline void do_const_prop(
   code->build_cfg();
   cp::intraprocedural::FixpointIterator intra_cp(code->cfg(), insn_analyzer);
   intra_cp.run(ConstantEnvironment());
-  cp::Transform tf(transform_config);
+  cp::State state;
+  cp::Transform tf(transform_config, state);
   auto constants_and_prune_unreachable = [&]() {
     tf.legacy_apply_constants_and_prune_unreachable(
         intra_cp, cp::WholeProgramState(), code->cfg(), nullptr, nullptr);
