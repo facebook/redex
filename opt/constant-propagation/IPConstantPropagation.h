@@ -96,7 +96,8 @@ class PassImpl : public Pass {
   std::unique_ptr<FixpointIterator> analyze(
       const Scope&,
       const ImmutableAttributeAnalyzerState*,
-      const ApiLevelAnalyzerState* api_level_analyzer_state);
+      const ApiLevelAnalyzerState*,
+      const State&);
 
  private:
   void compute_analysis_stats(const WholeProgramState&,
@@ -105,7 +106,8 @@ class PassImpl : public Pass {
   void optimize(const Scope&,
                 const XStoreRefs& xstores,
                 const FixpointIterator&,
-                const ImmutableAttributeAnalyzerState*);
+                const ImmutableAttributeAnalyzerState*,
+                const State& cp_state);
 
   struct Stats {
     // Number of instance fields that are known to be definitely-assigned, i.e.

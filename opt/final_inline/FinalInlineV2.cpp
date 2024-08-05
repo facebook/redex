@@ -344,7 +344,7 @@ cp::WholeProgramState analyze_and_simplify_clinits(
         cfg.calculate_exit_block();
         constant_propagation::WholeProgramStateAccessor wps_accessor(wps);
         cp::intraprocedural::FixpointIterator intra_cp(
-            cfg,
+            &cp_state, cfg,
             CombinedAnalyzer(cls->get_type(), &wps_accessor, nullptr, nullptr,
                              nullptr));
         intra_cp.run(env);
@@ -443,7 +443,7 @@ cp::WholeProgramState analyze_and_simplify_inits(
       cfg.calculate_exit_block();
       constant_propagation::WholeProgramStateAccessor wps_accessor(wps);
       cp::intraprocedural::FixpointIterator intra_cp(
-          cfg,
+          &cp_state, cfg,
           CombinedInitAnalyzer(cls->get_type(), &wps_accessor, nullptr, nullptr,
                                nullptr));
       intra_cp.run(env);

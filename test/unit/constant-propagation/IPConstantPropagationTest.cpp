@@ -47,6 +47,7 @@ struct InterproceduralConstantPropagationTest : public RedexTest {
   const int min_sdk = 42;
   ImmutableAttributeAnalyzerState m_immut_analyzer_state;
   ApiLevelAnalyzerState m_api_level_analyzer_state;
+  State m_cp_state;
 };
 
 static DexStoresVector make_simple_stores(const Scope& scope) {
@@ -465,14 +466,16 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
   auto cg = std::make_shared<call_graph::Graph>(call_graph::single_callee_graph(
       *method_override_graph::build_graph(scope), scope));
   walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
+  State cp_state;
   FixpointIterator fp_iter(std::move(cg),
-                           [](const DexMethod* method,
-                              const WholeProgramState&,
-                              const ArgumentDomain& args) {
+                           [&cp_state](const DexMethod* method,
+                                       const WholeProgramState&,
+                                       const ArgumentDomain& args) {
                              auto& code = *method->get_code();
-                             auto env = env_with_params(
-                                 is_static(method), &code, args);
+                             auto env = env_with_params(is_static(method),
+                                                        &code, args);
                              return std::make_unique<IntraproceduralAnalysis>(
+                                 &cp_state,
                                  /* wps accessor */ nullptr,
                                  code.cfg(),
                                  ConstantPrimitiveAnalyzer(),
@@ -532,8 +535,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertEquality) {
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto code = method->get_code();
   code->build_cfg();
-  intraprocedural::FixpointIterator intra_cp(code->cfg(),
-                                             ConstantPrimitiveAnalyzer());
+  intraprocedural::FixpointIterator intra_cp(
+      /* cp_state */ nullptr, code->cfg(), ConstantPrimitiveAnalyzer());
   intra_cp.run(env);
   rat.apply(intra_cp, WholeProgramState(), method);
 
@@ -570,8 +573,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertSign) {
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto code = method->get_code();
   code->build_cfg();
-  intraprocedural::FixpointIterator intra_cp(code->cfg(),
-                                             ConstantPrimitiveAnalyzer());
+  intraprocedural::FixpointIterator intra_cp(
+      /* cp_state */ nullptr, code->cfg(), ConstantPrimitiveAnalyzer());
   intra_cp.run(env);
   EXPECT_TRUE(method->get_code()->editable_cfg_built());
   rat.apply(intra_cp, WholeProgramState(), method);
@@ -613,8 +616,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckIntOnly) {
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto code = method->get_code();
   code->build_cfg();
-  intraprocedural::FixpointIterator intra_cp(code->cfg(),
-                                             ConstantPrimitiveAnalyzer());
+  intraprocedural::FixpointIterator intra_cp(
+      /* cp_state */ nullptr, code->cfg(), ConstantPrimitiveAnalyzer());
   intra_cp.run(env);
   rat.apply(intra_cp, WholeProgramState(), method);
 
@@ -650,8 +653,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckVirtualMethod) {
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto code = method->get_code();
   code->build_cfg();
-  intraprocedural::FixpointIterator intra_cp(code->cfg(),
-                                             ConstantPrimitiveAnalyzer());
+  intraprocedural::FixpointIterator intra_cp(
+      /* cp_state */ nullptr, code->cfg(), ConstantPrimitiveAnalyzer());
   intra_cp.run(env);
   rat.apply(intra_cp, WholeProgramState(), method);
 
@@ -1077,7 +1080,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
   config.max_heap_analysis_iterations = 2;
 
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
-      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state);
+      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
   EXPECT_EQ(wps.get_field_value(field_qux), SignedConstantDomain(0));
   EXPECT_EQ(wps.get_field_value(field_corge), SignedConstantDomain(1));
@@ -1169,7 +1172,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   config.max_heap_analysis_iterations = 1;
 
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
-      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state);
+      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
   EXPECT_EQ(wps.get_field_value(field_qux), ConstantValue::top());
 
@@ -1353,8 +1356,8 @@ TEST_F(InterproceduralConstantPropagationTest, NativeImplementReturnValue) {
       DexProto::make_proto(type::_int(), DexTypeList::make_type_list({}));
   auto method_base = static_cast<DexMethod*>(DexMethod::make_method(
       cls1_ty, DexString::make_string("virtualMethod"), void_int));
-  method_base->make_concrete(
-      ACC_PUBLIC | ACC_ABSTRACT, std::unique_ptr<IRCode>(nullptr), true);
+  method_base->make_concrete(ACC_PUBLIC | ACC_ABSTRACT,
+                             std::unique_ptr<IRCode>(nullptr), true);
   cls1->add_method(method_base);
 
   auto cls2_ty = DexType::make_type("LBoo;");
@@ -1431,8 +1434,8 @@ TEST_F(InterproceduralConstantPropagationTest,
       DexProto::make_proto(type::_int(), DexTypeList::make_type_list({}));
   auto method_base = static_cast<DexMethod*>(DexMethod::make_method(
       cls1_ty, DexString::make_string("virtualMethod"), void_int));
-  method_base->make_concrete(
-      ACC_PUBLIC | ACC_INTERFACE, std::unique_ptr<IRCode>(nullptr), true);
+  method_base->make_concrete(ACC_PUBLIC | ACC_INTERFACE,
+                             std::unique_ptr<IRCode>(nullptr), true);
   cls1->add_method(method_base);
 
   auto cls2_ty = DexType::make_type("LBoo;");
@@ -1658,7 +1661,7 @@ TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
-      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state);
+      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
 
   // Make sure we mark methods that have a reachable return-void statement as
@@ -1694,7 +1697,7 @@ TEST_F(InterproceduralConstantPropagationTest, min_sdk) {
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
-      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state);
+      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
 
   // Make sure we mark methods that have a reachable return-void statement as
@@ -1807,7 +1810,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   config.max_heap_analysis_iterations = 2;
 
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
-      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state);
+      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
   // as the field is definitely-assigned, 0 was not added to the numeric
   // interval domain
@@ -1882,7 +1885,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   config.max_heap_analysis_iterations = 2;
 
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
-      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state);
+      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
   // as the field is definitely-assigned, even with the branching in the
   // constructor, 0 was not added to the numeric interval domain
@@ -1950,7 +1953,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   config.max_heap_analysis_iterations = 2;
 
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
-      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state);
+      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
   // 0 is included in the numeric interval as 'this' escaped before the
   // assignment
@@ -2016,7 +2019,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   config.max_heap_analysis_iterations = 2;
 
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
-      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state);
+      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
   // 0 is included in the numeric interval as 'this' escaped before the
   // assignment
@@ -2083,7 +2086,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   config.max_heap_analysis_iterations = 2;
 
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
-      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state);
+      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
   // 0 is included in the numeric interval as no actual constructor was ever
   // called
@@ -2153,7 +2156,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   config.max_heap_analysis_iterations = 2;
 
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
-      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state);
+      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
   // 0 is included in the numeric interval as the field was read before written
   EXPECT_EQ(wps.get_field_value(field_f), SignedConstantDomain(0, 42));

@@ -542,8 +542,8 @@ void SwitchEquivFinder::normalize_extra_loads(
 cp::intraprocedural::FixpointIterator& SwitchEquivFinder::get_analyzed_cfg() {
   if (!m_fixpoint_iterator) {
     m_fixpoint_iterator =
-        std::make_shared<cp::intraprocedural::FixpointIterator>(*m_cfg,
-                                                                Analyzer());
+        std::make_shared<cp::intraprocedural::FixpointIterator>(
+            /* cp_state */ nullptr, *m_cfg, Analyzer());
     m_fixpoint_iterator->run(ConstantEnvironment());
   }
   return *m_fixpoint_iterator;

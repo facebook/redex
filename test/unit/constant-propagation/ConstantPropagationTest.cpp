@@ -846,8 +846,9 @@ TEST_F(ConstantPropagationTest, WhiteBox1) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
+  cp::State cp_state;
   cp::intraprocedural::FixpointIterator intra_cp(
-      cfg, cp::ConstantPrimitiveAnalyzer());
+      &cp_state, cfg, cp::ConstantPrimitiveAnalyzer());
   intra_cp.run(ConstantEnvironment());
 
   auto exit_state = intra_cp.get_exit_state_at(cfg.exit_block());
@@ -881,8 +882,9 @@ TEST_F(ConstantPropagationTest, WhiteBox2) {
   code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
+  cp::State cp_state;
   cp::intraprocedural::FixpointIterator intra_cp(
-      cfg, cp::ConstantPrimitiveAnalyzer());
+      &cp_state, cfg, cp::ConstantPrimitiveAnalyzer());
   intra_cp.run(ConstantEnvironment());
 
   auto exit_state = intra_cp.get_exit_state_at(cfg.exit_block());

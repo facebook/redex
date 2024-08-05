@@ -91,8 +91,7 @@ bool Transform::eliminate_redundant_null_check(
   switch (insn->opcode()) {
   case OPCODE_INVOKE_STATIC: {
     // Kotlin null check.
-    if (auto index = get_null_check_object_index(
-            insn, m_state.kotlin_null_check_assertions())) {
+    if (auto index = get_null_check_object_index(insn, m_state)) {
       ++m_stats.null_checks_method_calls;
       auto val = env.get(insn->src(*index)).maybe_get<SignedConstantDomain>();
       if (val && val->interval() == sign_domain::Interval::NEZ) {
