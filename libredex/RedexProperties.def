@@ -36,3 +36,5 @@ REDEX_PROPS(MethodRegister,                false,    false,          true,      
 // cannot have been input-code null-checks.
 REDEX_PROPS(SpuriousGetClassCallsInterned, true,     false,          false,        false)
 REDEX_PROPS(UltralightCodePatterns,        false,    true,           false,        false)
+REDEX_PROPS(SwitchOutlined,                false,    false,          false,        true)
+REDEX_PROPS(SwitchOutlinedInlined,         false,    true,           true,         true)
