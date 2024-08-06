@@ -108,13 +108,12 @@ void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
 
 namespace constant_propagation {
 
-boost::optional<size_t> get_null_check_object_index(
-    const IRInstruction* insn,
-    const std::unordered_set<DexMethodRef*>& kotlin_null_check_assertions) {
+boost::optional<size_t> get_null_check_object_index(const IRInstruction* insn,
+                                                    const State& state) {
   switch (insn->opcode()) {
   case OPCODE_INVOKE_STATIC: {
     auto method = insn->get_method();
-    if (kotlin_null_check_assertions.count(method)) {
+    if (state.kotlin_null_check_assertions().count(method)) {
       // Note: We are not assuming here that the first argument is the checked
       // argument of type object, as it might not be. For example,
       // RemoveUnusedArgs may have removed or otherwise reordered the arguments.
@@ -1236,8 +1235,8 @@ void semantically_inline_method(
       [env](ConstantHeap* heap) { *heap = env->get_heap(); });
 
   // Analyze the callee.
-  auto fp_iter =
-      std::make_unique<intraprocedural::FixpointIterator>(cfg, analyzer);
+  auto fp_iter = std::make_unique<intraprocedural::FixpointIterator>(
+      /* cp_state */ nullptr, cfg, analyzer);
   fp_iter->run(call_entry_env);
 
   // Update the caller's environment with the callee's return states.
@@ -1335,43 +1334,14 @@ bool ApiLevelAnalyzer::analyze_sget(const ApiLevelAnalyzerState& state,
 
 namespace intraprocedural {
 
-namespace {
-
-std::atomic<std::unordered_set<DexMethodRef*>*> kotlin_null_assertions{nullptr};
-const std::unordered_set<DexMethodRef*>& get_kotlin_null_assertions() {
-  for (;;) {
-    auto* ptr = kotlin_null_assertions.load();
-    if (ptr != nullptr) {
-      return *ptr;
-    }
-    auto uptr = std::make_unique<std::unordered_set<DexMethodRef*>>(
-        kotlin_nullcheck_wrapper::get_kotlin_null_assertions());
-    if (kotlin_null_assertions.compare_exchange_strong(ptr, uptr.get())) {
-      // Add a task to delete stuff.
-      g_redex->add_destruction_task([]() {
-        auto* ptr = kotlin_null_assertions.load();
-        if (ptr != nullptr) {
-          auto old_ptr = ptr;
-          if (kotlin_null_assertions.compare_exchange_strong(ptr, nullptr)) {
-            delete old_ptr;
-          }
-        }
-      });
-      return *uptr.release();
-    }
-  }
-}
-
-} // namespace
-
 FixpointIterator::FixpointIterator(
+    const State* state,
     const cfg::ControlFlowGraph& cfg,
     InstructionAnalyzer<ConstantEnvironment> insn_analyzer,
     bool imprecise_switches)
     : BaseEdgeAwareIRAnalyzer(cfg),
       m_insn_analyzer(std::move(insn_analyzer)),
-      m_kotlin_null_check_assertions(get_kotlin_null_assertions()),
-      m_redex_null_check_assertion(method::redex_internal_checkObjectNotNull()),
+      m_state(state),
       m_imprecise_switches(imprecise_switches) {}
 
 void FixpointIterator::analyze_instruction_normal(
@@ -1382,14 +1352,13 @@ void FixpointIterator::analyze_instruction_normal(
 void FixpointIterator::analyze_no_throw(const IRInstruction* insn,
                                         ConstantEnvironment* env) const {
   auto src_index = get_dereferenced_object_src_index(insn);
-  if (!src_index) {
-    src_index =
-        get_null_check_object_index(insn, m_kotlin_null_check_assertions);
+  if (!src_index && m_state) {
+    src_index = get_null_check_object_index(insn, *m_state);
   }
   if (!src_index) {
     // Check if it is redex null check.
-    if (insn->opcode() != OPCODE_INVOKE_STATIC ||
-        insn->get_method() != m_redex_null_check_assertion) {
+    if (!m_state || insn->opcode() != OPCODE_INVOKE_STATIC ||
+        insn->get_method() != m_state->redex_null_check_assertion()) {
       return;
     }
     src_index = 0;

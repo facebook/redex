@@ -16,6 +16,7 @@
 #include "BaseIRAnalyzer.h"
 #include "ConcurrentContainers.h"
 #include "ConstantEnvironment.h"
+#include "ConstantPropagationState.h"
 #include "IRCode.h"
 #include "InstructionAnalyzer.h"
 #include "KotlinNullCheckMethods.h"
@@ -25,9 +26,8 @@ class DexMethodRef;
 
 namespace constant_propagation {
 
-boost::optional<size_t> get_null_check_object_index(
-    const IRInstruction* insn,
-    const std::unordered_set<DexMethodRef*>& kotlin_null_check_assertions);
+boost::optional<size_t> get_null_check_object_index(const IRInstruction* insn,
+                                                    const State& state);
 
 namespace intraprocedural {
 
@@ -38,7 +38,8 @@ class FixpointIterator final
    * The fixpoint iterator takes an optional WholeProgramState argument that
    * it will use to determine the static field values and method return values.
    */
-  FixpointIterator(const cfg::ControlFlowGraph& cfg,
+  FixpointIterator(const State* state,
+                   const cfg::ControlFlowGraph& cfg,
                    InstructionAnalyzer<ConstantEnvironment> insn_analyzer,
                    bool imprecise_switches = false);
 
@@ -63,9 +64,7 @@ class FixpointIterator final
   using SwitchSuccs = std::unordered_map<int32_t, uint32_t>;
   mutable std::unordered_map<cfg::Block*, SwitchSuccs> m_switch_succs;
   InstructionAnalyzer<ConstantEnvironment> m_insn_analyzer;
-  const std::unordered_set<DexMethodRef*>& m_kotlin_null_check_assertions;
-  const DexMethodRef* m_redex_null_check_assertion;
-
+  const State* m_state;
   const bool m_imprecise_switches;
 
   const SwitchSuccs& find_switch_succs(cfg::Block* block) const {

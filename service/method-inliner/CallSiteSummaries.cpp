@@ -296,6 +296,7 @@ CallSiteSummarizer::get_invoke_call_site_summaries(
   InvokeCallSiteSummariesAndDeadBlocks res;
   auto& cfg = code->cfg();
   constant_propagation::intraprocedural::FixpointIterator intra_cp(
+      &m_shrinker.get_cp_state(),
       cfg,
       constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
           m_shrinker.get_immut_analyzer_state(),

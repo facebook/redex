@@ -146,12 +146,13 @@ FixpointIterator::get_intraprocedural_analysis(const DexMethod* method) const {
 }
 
 IntraproceduralAnalysis::IntraproceduralAnalysis(
+    const State* cp_state,
     std::unique_ptr<WholeProgramStateAccessor> wps_accessor,
     const cfg::ControlFlowGraph& cfg,
     InstructionAnalyzer<ConstantEnvironment> insn_analyzer,
     const ConstantEnvironment& env)
     : wps_accessor(std::move(wps_accessor)),
-      fp_iter(cfg, std::move(insn_analyzer)) {
+      fp_iter(cp_state, cfg, std::move(insn_analyzer)) {
   fp_iter.run(env);
 }
 

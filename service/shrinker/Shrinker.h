@@ -129,6 +129,8 @@ class Shrinker {
     return &m_immut_analyzer_state;
   }
 
+  const constant_propagation::State& get_cp_state() const { return m_cp_state; }
+
   void log_metrics(ScopedMetrics& sm) const;
 
   const init_classes::InitClassesWithSideEffects&

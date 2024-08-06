@@ -29,7 +29,7 @@ Transform::Stats ConstantPropagation::run(DexMethod* method,
   TRACE(CONSTP, 5, "CFG: %s", SHOW(*cfg));
   Transform::Stats local_stats;
   {
-    intraprocedural::FixpointIterator fp_iter(*cfg,
+    intraprocedural::FixpointIterator fp_iter(&state, *cfg,
                                               ConstantPrimitiveAnalyzer());
     fp_iter.run({});
     constant_propagation::Transform tf(m_config.transform, state);

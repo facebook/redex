@@ -27,9 +27,10 @@ inline void do_const_prop(
     const cp::Transform::Config& transform_config = cp::Transform::Config(),
     ConstPropMode mode = ConstPropMode::DontForwardTargets) {
   code->build_cfg();
-  cp::intraprocedural::FixpointIterator intra_cp(code->cfg(), insn_analyzer);
-  intra_cp.run(ConstantEnvironment());
   cp::State state;
+  cp::intraprocedural::FixpointIterator intra_cp(
+      &state, code->cfg(), insn_analyzer);
+  intra_cp.run(ConstantEnvironment());
   cp::Transform tf(transform_config, state);
   auto constants_and_prune_unreachable = [&]() {
     tf.legacy_apply_constants_and_prune_unreachable(

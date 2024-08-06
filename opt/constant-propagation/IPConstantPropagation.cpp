@@ -59,13 +59,16 @@ using CombinedAnalyzer =
 class AnalyzerGenerator {
   const ImmutableAttributeAnalyzerState* m_immut_analyzer_state;
   const ApiLevelAnalyzerState* m_api_level_analyzer_state;
+  const State& m_cp_state;
 
  public:
   explicit AnalyzerGenerator(
       const ImmutableAttributeAnalyzerState* immut_analyzer_state,
-      const ApiLevelAnalyzerState* api_level_analyzer_state)
+      const ApiLevelAnalyzerState* api_level_analyzer_state,
+      const State& cp_state)
       : m_immut_analyzer_state(immut_analyzer_state),
-        m_api_level_analyzer_state(api_level_analyzer_state) {
+        m_api_level_analyzer_state(api_level_analyzer_state),
+        m_cp_state(cp_state) {
     // Initialize the singletons that `operator()` needs ahead of time to
     // avoid a data race.
     static_cast<void>(EnumFieldAnalyzerState::get());
@@ -101,7 +104,7 @@ class AnalyzerGenerator {
     auto immut_analyzer_state =
         const_cast<ImmutableAttributeAnalyzerState*>(m_immut_analyzer_state);
     return std::make_unique<IntraproceduralAnalysis>(
-        std::move(wps_accessor), code.cfg(),
+        &m_cp_state, std::move(wps_accessor), code.cfg(),
         CombinedAnalyzer(
             class_under_init, immut_analyzer_state, wps_accessor_ptr,
             EnumFieldAnalyzerState::get(), BoxedBooleanAnalyzerState::get(),
@@ -128,7 +131,8 @@ class AnalyzerGenerator {
 std::unique_ptr<FixpointIterator> PassImpl::analyze(
     const Scope& scope,
     const ImmutableAttributeAnalyzerState* immut_analyzer_state,
-    const ApiLevelAnalyzerState* api_level_analyzer_state) {
+    const ApiLevelAnalyzerState* api_level_analyzer_state,
+    const State& cp_state) {
   auto method_override_graph = mog::build_graph(scope);
   std::shared_ptr<call_graph::Graph> cg;
   {
@@ -147,7 +151,9 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
   m_stats.callgraph_edges = cg_stats.num_edges;
   m_stats.callgraph_callsites = cg_stats.num_callsites;
   auto fp_iter = std::make_unique<FixpointIterator>(
-      cg, AnalyzerGenerator(immut_analyzer_state, api_level_analyzer_state),
+      cg,
+      AnalyzerGenerator(immut_analyzer_state, api_level_analyzer_state,
+                        cp_state),
       cg_for_wps);
   // Run the bootstrap. All field value and method return values are
   // represented by Top.
@@ -223,8 +229,8 @@ void PassImpl::optimize(
     const Scope& scope,
     const XStoreRefs& xstores,
     const FixpointIterator& fp_iter,
-    const ImmutableAttributeAnalyzerState* immut_analyzer_state) {
-  State state;
+    const ImmutableAttributeAnalyzerState* immut_analyzer_state,
+    const State& cp_state) {
   const auto& pure_methods = ::get_pure_methods();
   m_transform_stats =
       walk::parallel::methods<Transform::Stats>(scope, [&](DexMethod* method) {
@@ -246,7 +252,7 @@ void PassImpl::optimize(
           config.getter_methods_for_immutable_fields =
               &immut_analyzer_state->attribute_methods;
           config.pure_methods = &pure_methods;
-          Transform tf(config, state);
+          Transform tf(config, cp_state);
           tf.legacy_apply_constants_and_prune_unreachable(
               ipa->fp_iter,
               fp_iter.get_whole_program_state(),
@@ -276,10 +282,11 @@ void PassImpl::run(const DexStoresVector& stores, int min_sdk) {
   immutable_state::analyze_constructors(scope, &immut_analyzer_state);
   ApiLevelAnalyzerState api_level_analyzer_state =
       ApiLevelAnalyzerState::get(min_sdk);
-  auto fp_iter =
-      analyze(scope, &immut_analyzer_state, &api_level_analyzer_state);
+  State cp_state;
+  auto fp_iter = analyze(scope, &immut_analyzer_state,
+                         &api_level_analyzer_state, cp_state);
   m_stats.fp_iter = fp_iter->get_stats();
-  optimize(scope, xstores, *fp_iter, &immut_analyzer_state);
+  optimize(scope, xstores, *fp_iter, &immut_analyzer_state, cp_state);
 }
 
 void PassImpl::run_pass(DexStoresVector& stores,

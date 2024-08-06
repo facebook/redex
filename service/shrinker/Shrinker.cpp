@@ -145,6 +145,7 @@ constant_propagation::Transform::Stats Shrinker::constant_propagation(
     const ConstantEnvironment& initial_env,
     const constant_propagation::Transform::Config& config) {
   constant_propagation::intraprocedural::FixpointIterator fp_iter(
+      &m_cp_state,
       code->cfg(),
       constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
           &m_immut_analyzer_state, &m_immut_analyzer_state,
