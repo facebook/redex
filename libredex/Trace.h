@@ -153,6 +153,7 @@ class DexType;
   TM(SUPER)             \
   TM(SW)                \
   TM(SWIN)              \
+  TM(SWOL)              \
   TM(SWITCH_EQUIV)      \
   TM(SYNT)              \
   TM(TAC)               \

@@ -56,4 +56,10 @@ select_splittable_closures_based_on_costs(
     InsertOnlyConcurrentMap<DexMethod*, size_t>*
         concurrent_splittable_no_optimizations_methods);
 
+// Selects splittable closures for a given set of methods from all contained
+// top-level switch cases.
+InsertOnlyConcurrentMap<DexMethod*, std::vector<SplittableClosure>>
+select_splittable_closures_from_top_level_switch_cases(
+    const std::vector<DexMethod*>& methods, size_t max_live_in);
+
 } // namespace method_splitting_impl
