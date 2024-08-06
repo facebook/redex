@@ -246,7 +246,7 @@ void PassImpl::optimize(
           config.getter_methods_for_immutable_fields =
               &immut_analyzer_state->attribute_methods;
           config.pure_methods = &pure_methods;
-          Transform tf(config, &state);
+          Transform tf(config, state);
           tf.legacy_apply_constants_and_prune_unreachable(
               ipa->fp_iter,
               fp_iter.get_whole_program_state(),

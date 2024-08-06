@@ -41,8 +41,9 @@ struct FinalInlineTest : public RedexTest {
         scope, create_init_class_insns);
     walk::code(scope, [&](DexMethod*, IRCode& code) { code.build_cfg(); });
     int min_sdk = 0;
+    constant_propagation::State state;
     auto res = FinalInlinePassV2::run(
-        scope, min_sdk, init_classes_with_side_effects, xstores);
+        scope, min_sdk, init_classes_with_side_effects, xstores, state);
     walk::code(scope, [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
     return res;
   }

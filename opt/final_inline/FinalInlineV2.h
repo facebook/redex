@@ -11,6 +11,7 @@
 
 #include <sparta/PatriciaTreeSetAbstractDomain.h>
 
+#include "ConstantPropagationState.h"
 #include "ConstantPropagationWholeProgramState.h"
 #include "DexClass.h"
 #include "IRCode.h"
@@ -61,6 +62,7 @@ class FinalInlinePassV2 : public Pass {
                    const init_classes::InitClassesWithSideEffects&
                        init_classes_with_side_effects,
                    const XStoreRefs*,
+                   const constant_propagation::State& cp_state,
                    const Config& config = Config(),
                    std::optional<DexStoresVector*> stores = std::nullopt);
   static Stats run_inline_ifields(
@@ -70,6 +72,7 @@ class FinalInlinePassV2 : public Pass {
           init_classes_with_side_effects,
       const XStoreRefs*,
       const constant_propagation::EligibleIfields& eligible_ifields,
+      const constant_propagation::State& cp_state,
       const Config& config = Config(),
       std::optional<DexStoresVector*> stores = std::nullopt);
 
@@ -88,6 +91,7 @@ constant_propagation::WholeProgramState analyze_and_simplify_clinits(
     const XStoreRefs* xstores,
     const std::unordered_set<const DexType*>& blocklist_types,
     const std::unordered_set<std::string>& allowed_opaque_callee_names,
+    const constant_propagation::State& cp_state,
     size_t& clinit_cycles);
 
 class StaticFieldReadAnalysis {

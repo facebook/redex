@@ -71,10 +71,8 @@ class Transform final {
     void log_metrics(ScopedMetrics& sm, bool with_scope = true) const;
   };
 
-  explicit Transform(Config config, const State* state = nullptr)
-      : m_config(config),
-        m_state_storage(state == nullptr ? new State() : nullptr),
-        m_state(state == nullptr ? *m_state_storage : *state) {}
+  explicit Transform(Config config, const State& state)
+      : m_config(config), m_state(state) {}
 
   // Apply all available transformations on editable cfg
   // May run cfg.calculate_exit_block as a side-effect.
@@ -175,7 +173,6 @@ class Transform final {
   std::vector<std::tuple<cfg::Block*, cfg::Block*, cfg::EdgeType>> m_edge_adds;
   Stats m_stats;
 
-  std::unique_ptr<State> m_state_storage;
   const State& m_state;
 };
 
