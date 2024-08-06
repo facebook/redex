@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "ConstantPropagationState.h"
 #include "ConstantPropagationTransform.h"
 #include "IRCode.h"
 
@@ -23,7 +24,7 @@ class ConstantPropagation final {
   Transform::Stats run(DexMethod* method, XStoreRefs* xstores);
   Transform::Stats run(DexMethod* method,
                        XStoreRefs* xstores,
-                       const Transform::RuntimeCache& runtime_cache);
+                       const State& state);
   Transform::Stats run(const Scope& scope, XStoreRefs* xstores);
 
  private:

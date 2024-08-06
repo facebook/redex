@@ -10,6 +10,7 @@
 #include "CFGMutation.h"
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
+#include "ConstantPropagationState.h"
 #include "ConstantPropagationWholeProgramState.h"
 #include "IRCode.h"
 #include "Liveness.h"
@@ -43,13 +44,6 @@ class Transform final {
     Config() {}
   };
 
-  struct RuntimeCache {
-    const std::unordered_set<DexMethodRef*> kotlin_null_check_assertions{
-        kotlin_nullcheck_wrapper::get_kotlin_null_assertions()};
-    const DexMethodRef* redex_null_check_assertion{
-        method::redex_internal_checkObjectNotNull()};
-  };
-
   struct Stats {
     size_t branches_removed{0};
     size_t branches_forwarded{0};
@@ -77,12 +71,10 @@ class Transform final {
     void log_metrics(ScopedMetrics& sm, bool with_scope = true) const;
   };
 
-  explicit Transform(Config config, const RuntimeCache* runtime_cache = nullptr)
+  explicit Transform(Config config, const State* state = nullptr)
       : m_config(config),
-        m_runtime_cache_storage(runtime_cache == nullptr ? new RuntimeCache()
-                                                         : nullptr),
-        m_runtime_cache(runtime_cache == nullptr ? *m_runtime_cache_storage
-                                                 : *runtime_cache) {}
+        m_state_storage(state == nullptr ? new State() : nullptr),
+        m_state(state == nullptr ? *m_state_storage : *state) {}
 
   // Apply all available transformations on editable cfg
   // May run cfg.calculate_exit_block as a side-effect.
@@ -183,8 +175,8 @@ class Transform final {
   std::vector<std::tuple<cfg::Block*, cfg::Block*, cfg::EdgeType>> m_edge_adds;
   Stats m_stats;
 
-  std::unique_ptr<RuntimeCache> m_runtime_cache_storage;
-  const RuntimeCache& m_runtime_cache;
+  std::unique_ptr<State> m_state_storage;
+  const State& m_state;
 };
 
 /*

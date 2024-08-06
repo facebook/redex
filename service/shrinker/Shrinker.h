@@ -9,6 +9,7 @@
 
 #include "CommonSubexpressionElimination.h"
 #include "ConstantEnvironment.h"
+#include "ConstantPropagationState.h"
 #include "ConstantPropagationTransform.h"
 #include "CopyPropagation.h"
 #include "DedupBlocks.h"
@@ -152,7 +153,7 @@ class Shrinker {
   std::unordered_set<const DexField*> m_finalish_fields;
 
   constant_propagation::ImmutableAttributeAnalyzerState m_immut_analyzer_state;
-  constant_propagation::Transform::RuntimeCache m_runtime_cache;
+  constant_propagation::State m_cp_state;
 
   // THe mutex protects all other mutable (stats) fields.
   std::mutex m_stats_mutex;
