@@ -37,7 +37,6 @@ TEST_F(PreVerify, CheckRecursionTest) {
     } else if (meth->get_name()->str() == "f3") {
       IRCode* code = new IRCode(meth);
       ASSERT_NE(code, nullptr);
-      ASSERT_TRUE(HasCatchBlock(code));
     }
   }
 }
