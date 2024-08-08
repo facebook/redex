@@ -489,14 +489,15 @@ jobs:
   # Note: buildpack-deps:testing is the same as stable at time of writing,
   #       so jump to unstable directly.
 
-  build-deb_unstable:
-    docker:
-      - image: buildpack-deps:unstable-scm
-    # GCC is hungry.
-    resource_class: large
-    steps:
-      - build_debian:
-          job_name: debian_unstable
+  # TODO T198252082: Re-enable after migrating tests from DX to D8
+  # build-deb_unstable:
+  #   docker:
+  #     - image: buildpack-deps:unstable-scm
+  #   # GCC is hungry.
+  #   resource_class: large
+  #   steps:
+  #     - build_debian:
+  #         job_name: debian_unstable
 
   build-deb_unstable-w-clang:
     docker:
