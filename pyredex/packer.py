@@ -189,6 +189,57 @@ class _TarGzCompressor(_Compressor):
             self.tarfile.add(checksum_filename, name)
 
 
+# Compresses with zstandard, if available.
+class _ZstdCompressor(_Compressor):
+    def __init__(
+        self,
+        zstd_path: str,
+        checksum_name: typing.Optional[str],
+        compression_level: CompressionLevel,
+    ) -> None:
+        super().__init__(checksum_name)
+        # Late import so Redex does not hard-depend on zstd
+        try:
+            import zstandard as zstd
+
+            self._ok: bool = True
+            self.out_file: typing.BinaryIO = open(zstd_path, "wb")
+            self.zstd: zstd.ZstdCompressor = zstd.ZstdCompressor(
+                level=_ZstdCompressor._get_compress_level(compression_level), threads=-1
+            )
+        except ImportError:
+            self._ok: bool = False
+
+        self.written = False
+
+    def ok(self) -> bool:
+        return self._ok
+
+    def _handle_file_impl(self, file_path: str, file_name: str) -> None:
+        assert self.ok()
+        if self.written:
+            raise RuntimeError("Cannot handle more than one file with zstd.")
+        self.written = True
+        with open(file_path, "rb") as f_in:
+            self.zstd.copy_stream(f_in, self.out_file)
+
+    @staticmethod
+    def _get_compress_level(compression_level: CompressionLevel) -> int:
+        if compression_level == CompressionLevel.FAST:
+            return 9  # This is decently fast.
+        elif compression_level == CompressionLevel.BETTER:
+            return 22
+        else:
+            return 12  # This is a decent fast default.
+
+    def _finalize_impl(self) -> None:
+        assert self.ok()
+        self.out_file.close()
+
+    def _add_file_content(self, name: str, content: str) -> None:
+        raise RuntimeError("Cannot add file content with zstd.")
+
+
 def _get_xz_compress_level(
     compression_level: CompressionLevel,
 ) -> typing.Tuple[str, int]:
@@ -269,6 +320,16 @@ def _compress(
                 compressor = _ZipCompressor(
                     name, item.checksum_name, item.compression_level
                 )
+            elif name.endswith(".zstd"):
+                compressor = _ZstdCompressor(
+                    name, item.checksum_name, item.compression_level
+                )
+                if not compressor.ok():
+                    LOGGER.warning(
+                        "zstd not available, skipping compression to %s",
+                        item.output_name,
+                    )
+                    return
             assert compressor is not None
 
             for f in inputs:
@@ -291,7 +352,6 @@ def _compress(
         if item.remove_source:
             for f in inputs:
                 os.remove(os.path.join(src_dir, f))
-    pass
 
 
 def compress_entries(
