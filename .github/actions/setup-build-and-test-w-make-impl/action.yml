@@ -63,6 +63,12 @@ runs:
     run: make -j4 V=0
     working-directory: build
     shell: bash
+  - name: List build directory size
+    working-directory: build
+    run: |-
+      ls -l
+      du -h --max-depth=1
+    shell: bash
   - name: Compress build directory
     run: tar cf - build | zstd -T0 -3 > build.tar.zstd
     shell: bash
