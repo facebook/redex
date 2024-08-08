@@ -1345,16 +1345,6 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             None,
             CompressionLevel.BETTER,  # Usually small enough.
         ),
-        CompressionEntry(
-            "Redex Full Rename Map",
-            lambda args: True,
-            False,
-            ["redex-full-rename-map.txt"],
-            [],
-            "redex-full-rename-map.txt.zstd",
-            None,
-            CompressionLevel.DEFAULT,  # Bit larger.
-        ),
     ]
 
 
