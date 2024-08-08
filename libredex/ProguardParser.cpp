@@ -1090,6 +1090,18 @@ void parse(const std::vector<Token>& vec,
       continue;
     }
     if (parse_keep(idx,
+                   TokenType::assumevalues,
+                   &pg_config->assumevalues_rules,
+                   false, // mark_classes
+                   false, // mark_conditionally
+                   false, // allowshrinking
+                   /* allow_return= */ true,
+                   filename,
+                   line,
+                   &ok)) {
+      continue;
+    }
+    if (parse_keep(idx,
                    TokenType::whyareyoukeeping,
                    &pg_config->whyareyoukeeping_rules,
                    false, // mark_classes

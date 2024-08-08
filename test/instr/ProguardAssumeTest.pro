@@ -6,6 +6,12 @@
   boolean assumeNoSideEffectsField3 return false;
 }
 
+-assumevalues class * {
+  boolean assumeValue() return false;
+  boolean assumeValue2() return false;
+  boolean assumeValueField3 return false;
+}
+
 # Keep @KeepForRedexTest
 
 -keep @com.facebook.redex.test.instr.KeepForRedexTest class *

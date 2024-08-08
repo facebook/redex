@@ -53,4 +53,41 @@ public class ProguardAssumeTest {
   public void testAssumeNoSideEffectsFieldValue() {
     assertThat(assumeNoSideEffectsField3).isEqualTo(false);  // Return value.
   }
+
+  private static boolean assumeValueField = false;
+
+  private static boolean assumeValue() {
+    assumeValueField = true;
+    return assumeValueField;
+  }
+
+  @Test
+  public void testAssumeValueMethod() {
+    assertThat(assumeValueField).isEqualTo(false);
+    boolean val = assumeValue();
+    assertThat(val).isEqualTo(false);
+    assertThat(assumeValueField).isEqualTo(true);
+  }
+
+  private static boolean assumeValueField2 = false;
+
+  private static boolean assumeValue2() {
+    assumeValueField2 = true;
+    return assumeValueField2;
+  }
+
+  @Test
+  public void testAssumeValueMethodNotStripped() {
+    assertThat(assumeValueField2).isEqualTo(false);
+    assumeValue2();
+    assertThat(assumeValueField2).isEqualTo(true);
+  }
+
+  // Something that should be true.
+  private final static boolean assumeValueField3 = Math.random() >= 0;
+
+  @Test
+  public void testAssumeValueFieldValue() {
+    assertThat(assumeValueField3).isEqualTo(false);  // Return value.
+  }
 }

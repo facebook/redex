@@ -102,6 +102,7 @@ enum class TokenType {
   optimizations,
   optimizationpasses,
   assumenosideeffects,
+  assumevalues,
   mergeinterfacesaggressively,
   allowaccessmodification_token,
   returns,

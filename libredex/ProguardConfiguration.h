@@ -191,6 +191,7 @@ struct ProguardConfiguration {
   KeepSpecSet keep_rules;
   std::optional<KeepSpecSet::iterator> keep_rules_native_begin;
   KeepSpecSet assumenosideeffects_rules;
+  KeepSpecSet assumevalues_rules;
   KeepSpecSet whyareyoukeeping_rules;
   std::vector<std::string> optimization_filters;
   std::vector<std::string> keepattributes;

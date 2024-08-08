@@ -1001,3 +1001,102 @@ TEST(ProguardParserTest, class_spec_negated) {
     EXPECT_EQ(cs.methodSpecifications.size(), 0);
   }
 }
+
+TEST(ProguardParserTest, assumevalues_methods) {
+  {
+    ProguardConfiguration config;
+    std::istringstream ss(R"(
+    -assumevalues class Foo { void foo();}
+    -assumevalues class Foo {
+      void foo1() return true;
+      void foo2() return false;
+      void foo3() return;
+      void foo4();
+    }
+    -assumevalues class Foo { void foo() return false;}
+    -assumevalues class Foo { void foo() return;}
+)");
+    proguard_parser::parse(ss, &config);
+    ASSERT_TRUE(config.ok);
+    ASSERT_EQ(config.assumevalues_rules.size(), 4);
+    auto it = config.assumevalues_rules.elements().begin();
+
+    const auto& k1 = *it++;
+    EXPECT_EQ(k1->class_spec.methodSpecifications[0].return_value.value_type,
+              keep_rules::AssumeReturnValue::ValueNone);
+    EXPECT_THAT(k1->class_spec.classNames,
+                ::testing::ElementsAre(
+                    ClassSpecification::ClassNameSpec("Foo", false)));
+
+    const auto& k2 = *it++;
+    EXPECT_EQ(k2->class_spec.methodSpecifications[0].return_value.value_type,
+              keep_rules::AssumeReturnValue::ValueBool);
+    EXPECT_EQ(k2->class_spec.methodSpecifications[0].return_value.value.v, 1);
+    EXPECT_EQ(k2->class_spec.methodSpecifications[0].name, "foo1");
+
+    EXPECT_EQ(k2->class_spec.methodSpecifications[1].return_value.value_type,
+              keep_rules::AssumeReturnValue::ValueBool);
+    EXPECT_EQ(k2->class_spec.methodSpecifications[1].return_value.value.v, 0);
+    EXPECT_EQ(k2->class_spec.methodSpecifications[1].name, "foo2");
+
+    EXPECT_EQ(k2->class_spec.methodSpecifications[2].return_value.value_type,
+              keep_rules::AssumeReturnValue::ValueNone);
+    EXPECT_EQ(k2->class_spec.methodSpecifications[2].name, "foo3");
+
+    EXPECT_EQ(k2->class_spec.methodSpecifications[3].return_value.value_type,
+              keep_rules::AssumeReturnValue::ValueNone);
+    EXPECT_EQ(k2->class_spec.methodSpecifications[3].name, "foo4");
+
+    EXPECT_THAT(k2->class_spec.classNames,
+                ::testing::ElementsAre(
+                    ClassSpecification::ClassNameSpec("Foo", false)));
+
+    const auto& k3 = *it++;
+    EXPECT_EQ(k3->class_spec.methodSpecifications[0].return_value.value_type,
+              keep_rules::AssumeReturnValue::ValueBool);
+    EXPECT_EQ(k3->class_spec.methodSpecifications[0].return_value.value.v, 0);
+    EXPECT_EQ(k3->class_spec.methodSpecifications[0].name, "foo");
+    EXPECT_THAT(k3->class_spec.classNames,
+                ::testing::ElementsAre(
+                    ClassSpecification::ClassNameSpec("Foo", false)));
+    const auto& k4 = *it++;
+    EXPECT_EQ(k4->class_spec.methodSpecifications[0].return_value.value_type,
+              keep_rules::AssumeReturnValue::ValueNone);
+    EXPECT_THAT(k4->class_spec.classNames,
+                ::testing::ElementsAre(
+                    ClassSpecification::ClassNameSpec("Foo", false)));
+  }
+}
+
+TEST(ProguardParserTest, assumevalues_fields) {
+  {
+    ProguardConfiguration config;
+    std::istringstream ss(R"(
+    -assumevalues class Foo {
+      boolean foo1 return true;
+    }
+    -assumevalues class Foo {
+      boolean foo1 return true;
+      boolean foo2 return false;
+      boolean foo3;
+    }
+)");
+    proguard_parser::parse(ss, &config);
+    ASSERT_TRUE(config.ok);
+    ASSERT_EQ(config.assumevalues_rules.size(), 2);
+    auto it = config.assumevalues_rules.elements().begin();
+    const auto& k1 = *it++;
+    EXPECT_EQ(k1->class_spec.fieldSpecifications[0].return_value.value_type,
+              keep_rules::AssumeReturnValue::ValueBool);
+    EXPECT_EQ(k1->class_spec.fieldSpecifications[0].return_value.value.v, 1);
+    const auto& k2 = *it++;
+    EXPECT_EQ(k2->class_spec.fieldSpecifications[0].return_value.value_type,
+              keep_rules::AssumeReturnValue::ValueBool);
+    EXPECT_EQ(k2->class_spec.fieldSpecifications[0].return_value.value.v, 1);
+    EXPECT_EQ(k2->class_spec.fieldSpecifications[1].return_value.value_type,
+              keep_rules::AssumeReturnValue::ValueBool);
+    EXPECT_EQ(k2->class_spec.fieldSpecifications[1].return_value.value.v, 0);
+    EXPECT_EQ(k2->class_spec.fieldSpecifications[2].return_value.value_type,
+              keep_rules::AssumeReturnValue::ValueNone);
+  }
+}

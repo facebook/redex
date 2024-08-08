@@ -23,9 +23,8 @@ void ResolveProguardAssumeValuesPass::run_pass(DexStoresVector& stores,
   Scope scope = build_class_scope(stores);
 
   Stats stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
-    Stats stat;
     if (!method || !method->get_code()) {
-      return stat;
+      return Stats{};
     }
     always_assert(method->get_code()->editable_cfg_built());
     auto& cfg = method->get_code()->cfg();

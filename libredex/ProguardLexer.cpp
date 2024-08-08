@@ -308,6 +308,8 @@ std::string Token::show() const {
     return "-optimizationpasses";
   case TokenType::assumenosideeffects:
     return "-assumenosideeffects";
+  case TokenType::assumevalues:
+    return "-assumevalues";
   case TokenType::mergeinterfacesaggressively:
     return "-mergeinterfacesaggressively";
   case TokenType::allowaccessmodification_token:
@@ -432,6 +434,7 @@ bool Token::is_command() const {
   case TokenType::optimizations:
   case TokenType::optimizationpasses:
   case TokenType::assumenosideeffects:
+  case TokenType::assumevalues:
   case TokenType::mergeinterfacesaggressively:
   case TokenType::allowaccessmodification_token:
   case TokenType::returns:
@@ -520,6 +523,7 @@ std::vector<Token> lex(const std::string_view& in) {
 
       // Optimization Options
       {"assumenosideeffects", TokenType::assumenosideeffects},
+      {"assumevalues", TokenType::assumevalues},
       {"allowaccessmodification", TokenType::allowaccessmodification_token},
       {"dontoptimize", TokenType::dontoptimize},
       {"optimizationpasses", TokenType::optimizationpasses},
