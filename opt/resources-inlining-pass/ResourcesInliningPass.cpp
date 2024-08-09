@@ -115,13 +115,13 @@ generate_valid_apis() {
   DexMethodRef* int_method =
       DexMethod::get_method("Landroid/content/res/Resources;.getInteger:(I)I");
   std::tuple<uint8_t, uint8_t> int_range = std::make_tuple(
-      android::Res_value::TYPE_INT_DEC, android::Res_value::TYPE_INT_HEX);
+      android::Res_value::TYPE_FIRST_INT, android::Res_value::TYPE_LAST_INT);
   usable_apis.insert({int_method, int_range});
 
   DexMethodRef* string_method = DexMethod::get_method(
       "Landroid/content/res/Resources;.getString:(I)Ljava/lang/String;");
   std::tuple<uint8_t, uint8_t> string_range = std::make_tuple(
-      android::Res_value::TYPE_STRING, android::Res_value::TYPE_STRING);
+      android::Res_value::TYPE_STRING, android::Res_value::TYPE_LAST_INT);
   usable_apis.insert({string_method, string_range});
 
   return usable_apis;
@@ -254,7 +254,17 @@ void ResourcesInliningPass::inline_resource_values_dex(
     if (move_insn->opcode() == OPCODE_MOVE_RESULT) {
       new_insn = new IRInstruction(OPCODE_CONST);
       if (inlinable_value.type == android::Res_value::TYPE_INT_BOOLEAN) {
-        new_insn->set_literal(inlinable_value.bool_value);
+        if (method_ref ==
+            DexMethod::get_method(
+                "Landroid/content/res/Resources;.getInteger:(I)I")) {
+          if (inlinable_value.bool_value == 1) {
+            new_insn->set_literal((int32_t)0xffffffff);
+          } else {
+            new_insn->set_literal(0);
+          }
+        } else {
+          new_insn->set_literal(inlinable_value.bool_value);
+        }
         mgr.incr_metric("inlined_booleans", 1);
       } else {
         new_insn->set_literal((int32_t)inlinable_value.uint_value);
@@ -268,8 +278,30 @@ void ResourcesInliningPass::inline_resource_values_dex(
 
     else if (move_insn->opcode() == OPCODE_MOVE_RESULT_OBJECT) {
       new_insn = new IRInstruction(OPCODE_CONST_STRING);
-      new_insn->set_string(
-          DexString::make_string(inlinable_value.string_value));
+      if (inlinable_value.type == android::Res_value::TYPE_STRING) {
+        new_insn->set_string(
+            DexString::make_string(inlinable_value.string_value));
+      } else if (inlinable_value.type == android::Res_value::TYPE_INT_BOOLEAN) {
+        new_insn->set_string(DexString::make_string(
+            inlinable_value.bool_value ? "true" : "false"));
+      } else if (inlinable_value.type == android::Res_value::TYPE_INT_HEX) {
+        std::stringstream stream;
+        stream << "0x" << std::hex << inlinable_value.uint_value;
+        new_insn->set_string(DexString::make_string(stream.str()));
+      } else if (inlinable_value.type >=
+                     android::Res_value::TYPE_FIRST_COLOR_INT &&
+                 inlinable_value.type <=
+                     android::Res_value::TYPE_LAST_COLOR_INT) {
+        std::stringstream stream;
+        stream << "#" << std::hex << inlinable_value.uint_value;
+        new_insn->set_string(DexString::make_string(stream.str()));
+      } else if (inlinable_value.type >= android::Res_value::TYPE_FIRST_INT &&
+                 inlinable_value.type <= android::Res_value::TYPE_LAST_INT) {
+        new_insn->set_string(
+            DexString::make_string(std::to_string(inlinable_value.uint_value)));
+      } else {
+        continue;
+      }
       IRInstruction* new_insn_pseudo_move =
           new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
       always_assert_log(move_insn->has_dest(),
@@ -278,7 +310,6 @@ void ResourcesInliningPass::inline_resource_values_dex(
       mutator.replace(it_invoke, {new_insn, new_insn_pseudo_move});
       mgr.incr_metric("inlined_strings", 1);
     }
-
     mutator.remove(move_insn_it);
     mgr.incr_metric("inlined_total", 1);
   }

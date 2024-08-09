@@ -141,18 +141,33 @@ void resource_inlining_PostVerify(DexClass* cls) {
         } else if (line_num == 52) {
           ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO);
         } else if (line_num == 53) {
-          ASSERT_EQ(insn->opcode(), OPCODE_INVOKE_VIRTUAL);
-        } else if (line_num == 54) {
-          ASSERT_EQ(insn->opcode(), OPCODE_MOVE_RESULT);
-        } else if (line_num == 69) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST);
           ASSERT_EQ(uint32_t(insn->get_literal()), 3);
-        } else if (line_num == 72) {
+        } else if (line_num == 56) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
           auto string_char_star = insn->get_string()->c_str();
           auto string = (std::string)string_char_star;
           ASSERT_EQ(string.substr(0, 6), "Hello,");
-        } else if (line_num == 73) {
+        } else if (line_num == 57) {
+          ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+        }
+      } else if (block->id() == 4) {
+        if (line_num == 31) {
+          ASSERT_EQ(insn->opcode(), OPCODE_CONST);
+          ASSERT_EQ(uint32_t(insn->get_literal()), 0xFFFFFFFF);
+        } else if (line_num == 46) {
+          ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
+          auto string_char_star = insn->get_string()->c_str();
+          auto string = (std::string)string_char_star;
+          ASSERT_EQ(string, "#ff673ab7");
+        } else if (line_num == 47) {
+          ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+        } else if (line_num == 60) {
+          ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
+          auto string_char_star = insn->get_string()->c_str();
+          auto string = (std::string)string_char_star;
+          ASSERT_EQ(string, "3");
+        } else if (line_num == 61) {
           ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
         }
       }

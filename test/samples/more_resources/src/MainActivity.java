@@ -38,9 +38,6 @@ public class MainActivity extends Activity {
 
       int purple = resources.getColor(R.color.nice_purple);
 
-      int bool_int = resources.getInteger(R.bool.should_log);
-      android.util.Log.w(LOG_TAG, "bool_int: " + Integer.toHexString(bool_int));
-
       int count = resources.getInteger(R.integer.loop_count);
       String main = resources.getString(R.string.main_text);
       for (int i = 0; i < count; i++) {
@@ -52,6 +49,15 @@ public class MainActivity extends Activity {
 
       int size = resources.getDimensionPixelSize(R.dimen.text_size);
       android.util.Log.w(LOG_TAG, "Text size (in pixels): " + size);
+
+      int bool_int = resources.getInteger(R.bool.should_log);
+      android.util.Log.w(LOG_TAG, "bool_int: " + Integer.toHexString(bool_int));
+
+      String string_color = resources.getString(R.color.nice_purple);
+      android.util.Log.w(LOG_TAG, "string_color: " + string_color);
+
+      String string_int = resources.getString(R.integer.loop_count);
+      android.util.Log.w(LOG_TAG, "string_int: " + string_int);
     }
   }
 }
