@@ -14,9 +14,8 @@ runs:
   - name: Cache SDK
     uses: actions/cache@v3.3.2
     with:
-      key: v3-android-build-tools
+      key: v4-android-build-tools
       path: sdk.tar.zstd
-      restore-keys: v3-android-build-tools
   - name: Check/Install (SDK)
     run: |-
       if [ -e sdk/build-tools/29.0.2/dx ] ; then echo "Found SDK." ; exit 0 ; fi
@@ -41,5 +40,5 @@ runs:
       # Compress for cache. For reason see description of build cache.
       # We do not need the emulator and it is large. Delete.
       rm -rf sdk/emulator 2>/dev/null
-      tar cf - sdk | zstd -T0 -3 > sdk.tar.zstd
+      tar cf - sdk | zstd -T0 -9 > sdk.tar.zstd
     shell: bash
