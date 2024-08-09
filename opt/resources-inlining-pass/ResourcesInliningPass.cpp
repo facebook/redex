@@ -25,10 +25,33 @@ ResourcesInliningPass::filter_inlinable_resources(
     const std::unordered_set<std::string>& resource_entry_names) {
   auto type_ids = res_table->get_types_by_name(resource_type_names);
 
+  uint32_t num_colors = 0;
+  uint32_t num_ints = 0;
+  uint32_t num_bools = 0;
+
   std::vector<std::string> type_names;
   res_table->get_type_names(&type_names);
 
   const auto& id_to_name = res_table->id_to_name;
+  if (traceEnabled(RIP, 1)) {
+    for (auto& val : id_to_name) {
+      auto id = val.first;
+      auto masked_type = id & 0x00FF0000;
+      const std::string& type_name =
+          type_names.at((masked_type >> TYPE_INDEX_BIT_SHIFT) - 1);
+      if (type_name == "color") {
+        num_colors++;
+      } else if (type_name == "integer") {
+        num_ints++;
+      } else if (type_name == "bool") {
+        num_bools++;
+      }
+    }
+    TRACE(RIP, 1, "num_ints: %d", num_ints);
+    TRACE(RIP, 1, "num_bools: %d", num_bools);
+    TRACE(RIP, 1, "num_colors: %d", num_colors);
+  }
+
   std::unordered_map<uint32_t, resources::InlinableValue>
       refined_inlinable_resources;
 
@@ -39,8 +62,8 @@ ResourcesInliningPass::filter_inlinable_resources(
     auto masked_type = id & 0x00FF0000;
     const auto& id_name = id_to_name.at(id);
 
-    std::string type_name =
-        type_names[(masked_type >> TYPE_INDEX_BIT_SHIFT) - 1];
+    const std::string& type_name =
+        type_names.at((masked_type >> TYPE_INDEX_BIT_SHIFT) - 1);
     std::string entry_name_formatted = type_name + "/" + id_name;
 
     if (type_ids.find(masked_type) != type_ids.end() ||
