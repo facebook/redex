@@ -322,7 +322,8 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
   mgr.incr_metric("min_sdk", min_sdk);
   auto end = min_sdk >= 21 ? dexen.size() : 1;
-  InsertOnlyConcurrentSet<DexMethod*> methods_with_baseline_profile;
+  std::unordered_set<DexMethod*> methods_with_baseline_profile;
+  size_t classes_with_baseline_profile = 0;
   for (size_t dex_idx = 0; dex_idx < end; dex_idx++) {
     auto& dex = dexen.at(dex_idx);
     for (auto* cls : dex) {
@@ -348,6 +349,7 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       }
       if (should_include_class) {
         ofs << show_deobfuscated(cls) << std::endl;
+        classes_with_baseline_profile++;
       }
     }
   }
@@ -359,6 +361,9 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       methods_with_baseline_profile_code_units += code.estimate_code_units();
     }
   });
+
+  mgr.incr_metric("classes_with_baseline_profile",
+                  classes_with_baseline_profile);
 
   mgr.incr_metric("methods_with_baseline_profile",
                   methods_with_baseline_profile.size());
