@@ -29,12 +29,12 @@ runs:
   - name: Cache build
     uses: actions/cache@v3.3.2
     with:
-      key: v1-build-cache-${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}-${{ runner.arch }}-${{ github.ref_name }}-${{ github.sha }}
+      key: v2-build-cache-${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}-${{ runner.arch }}-${{ github.ref_name }}-${{ github.sha }}
       path: build.tar.zstd
       restore-keys: |
-        v1-build-cache-${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}-${{ runner.arch }}-${{ github.ref_name }}
-        v1-build-cache-${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}-${{ runner.arch }}-main
-        v1-build-cache-${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}-${{ runner.arch }}
+        v2-build-cache-${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}-${{ runner.arch }}-${{ github.ref_name }}-
+        v2-build-cache-${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}-${{ runner.arch }}-main-
+        v2-build-cache-${{ inputs.job_name }}.${{ inputs.setup_toolchain_extra }}.${{ inputs.configure_extra }}-${{ runner.arch }}-
   # Would be nice to use the cache action output, but we want to unpack even on
   # restore_keys hit.
   - name: Unpack build cache

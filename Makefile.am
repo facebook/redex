@@ -48,7 +48,7 @@ DISABLED_WARNINGS = \
   -Wno-unused-value \
   -Wno-unused-variable
 
-AM_CXXFLAGS = --std=gnu++17 -O3 -Wall -Werror -Wextra $(DISABLED_WARNINGS) -g
+AM_CXXFLAGS = --std=gnu++17 -O3 -Wall -Werror -Wextra $(DISABLED_WARNINGS) -g1
 
 include $(top_srcdir)/Makefile.inc
 
