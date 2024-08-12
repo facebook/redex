@@ -17,10 +17,13 @@ TEST(FpEvTest, empty) {
   do {                                                                    \
     uint8_t res[] = {ans};                                                \
     uint8_t buf[9];                                                       \
-    uint8_t* bufp = buf;                                                  \
                                                                           \
     uint64_t val = x;                                                     \
-    type_encoder_fp(bufp, DEVT_FLOAT, val);                               \
+    std::vector<uint8_t> vbuf;                                            \
+    type_encoder_fp(vbuf, DEVT_FLOAT, val);                               \
+    for (size_t i = 0; i < 9 && i < vbuf.size(); i++)                     \
+      buf[i] = vbuf[i];                                                   \
+    uint8_t* bufp = buf + vbuf.size();                                    \
                                                                           \
     EXPECT_EQ(buf[0], DEVT_FLOAT | (sizeof(res) - 1) << 5);               \
     EXPECT_EQ(memcmp(res, &buf[1], sizeof(res)), 0);                      \
