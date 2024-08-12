@@ -61,7 +61,8 @@ class InterDex {
            int64_t minimize_cross_dex_refs_explore_alternatives,
            ClassReferencesCache& class_references_cache,
            bool exclude_baseline_profile_classes,
-           BaselineProfileConfig&& baseline_profile_config)
+           BaselineProfileConfig&& baseline_profile_config,
+           int64_t stable_partitions)
       : m_dexen(dexen),
         m_asset_manager(asset_manager),
         m_conf(conf),
@@ -90,7 +91,8 @@ class InterDex {
             minimize_cross_dex_refs_explore_alternatives),
         m_class_references_cache(class_references_cache),
         m_exclude_baseline_profile_classes(exclude_baseline_profile_classes),
-        m_baseline_profile_config(std::move(baseline_profile_config)) {
+        m_baseline_profile_config(std::move(baseline_profile_config)),
+        m_stable_partitions(stable_partitions) {
     m_emitting_state.dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
     m_emitting_state.dexes_structure.set_reserve_frefs(reserve_refs.frefs);
     m_emitting_state.dexes_structure.set_reserve_trefs(reserve_refs.trefs);
@@ -182,6 +184,7 @@ class InterDex {
       const std::unordered_set<DexClass*>& unreferenced_classes,
       DexClass** canary_cls);
   void init_cross_dex_ref_minimizer();
+  std::vector<DexClasses> get_stable_partitions();
   void emit_remaining_classes(DexInfo& dex_info, DexClass** canary_cls);
   void emit_remaining_classes_legacy(DexInfo& dex_info, DexClass** canary_cls);
   void emit_remaining_classes_exploring_alternatives(DexInfo& dex_info,
@@ -269,6 +272,8 @@ class InterDex {
   bool m_exclude_baseline_profile_classes;
   BaselineProfileConfig m_baseline_profile_config;
   std::optional<std::unordered_set<DexType*>> m_baseline_profile_classes;
+
+  const uint64_t m_stable_partitions;
 };
 
 } // namespace interdex

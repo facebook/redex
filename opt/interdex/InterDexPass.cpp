@@ -188,6 +188,16 @@ void InterDexPass::bind_config() {
        m_exclude_baseline_profile_classes);
   bind_baseline_profile_config();
 
+  bind("stable_partitions", 0, m_stable_partitions,
+       "For the unordered classes, how many dexes they should be distributed "
+       "over in a stable manner, or 0 if stability is not desired");
+
+  after_configuration([=] {
+    always_assert(m_stable_partitions >= 0);
+    always_assert(m_stable_partitions < (int64_t)MAX_DEX_NUM);
+    always_assert((m_stable_partitions == 0) || !m_minimize_cross_dex_refs);
+  });
+
   trait(Traits::Pass::unique, true);
 }
 
@@ -235,7 +245,8 @@ void InterDexPass::run_pass(
       refs_info, &xstore_refs, mgr.get_redex_options().min_sdk,
       init_classes_with_side_effects, m_transitively_close_interdex_order,
       m_minimize_cross_dex_refs_explore_alternatives, cache,
-      m_exclude_baseline_profile_classes, std::move(m_baseline_profile_config));
+      m_exclude_baseline_profile_classes, std::move(m_baseline_profile_config),
+      m_stable_partitions);
 
   if (m_expect_order_list) {
     always_assert_log(
@@ -354,7 +365,8 @@ void InterDexPass::run_pass_on_nonroot_store(
       refs_info, &xstore_refs, mgr.get_redex_options().min_sdk,
       init_classes_with_side_effects, m_transitively_close_interdex_order,
       m_minimize_cross_dex_refs_explore_alternatives, cache,
-      m_exclude_baseline_profile_classes, std::move(m_baseline_profile_config));
+      m_exclude_baseline_profile_classes, std::move(m_baseline_profile_config),
+      m_stable_partitions);
 
   interdex.run_on_nonroot_store();
 
