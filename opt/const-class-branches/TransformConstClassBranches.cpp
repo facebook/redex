@@ -12,6 +12,7 @@
 
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
+#include "Creators.h"
 #include "DexClass.h"
 #include "PassManager.h"
 #include "ScopedCFG.h"
@@ -225,9 +226,129 @@ void gather_possible_transformations(
   }
 }
 
-Stats apply_transform(const PassState& pass_state, MethodTransform& mt) {
+Stats apply_transform(const PassState& pass_state,
+                      MethodTransform& mt,
+                      size_t transform_count) {
   Stats result;
   auto method = mt.method;
+  auto cls = type_class(method->get_class());
+
+  // Creates a method on the class that returns the given encoded string; broken
+  // out into a separate method in an attempt to work around suspected JIT bug
+  // on Android Go devices. This truly makes no sense, but here we are.
+  auto int_arg = DexTypeList::make_type_list({type::_int()});
+  DexProto* string_getter_proto =
+      DexProto::make_proto(type::java_lang_String(), int_arg);
+  /**
+   * Created method below is inspired from:
+   *
+   * String myConstImpl(int depth) {
+   *   if (depth >= 10) {
+   *     throw new RuntimeError("WTF");
+   *   }
+   *   String s = "...";
+   *   if (s == null) {
+   *     return myConstImpl(depth + 1);
+   *   }
+   *   return s;
+   * }
+   */
+  auto create_string_getter_method = [&](const DexString* encoded_str) {
+    MethodCreator creator(
+        method->get_class(),
+        DexString::make_string("__RDX_GET_STR_" +
+                               std::to_string(transform_count)),
+        string_getter_proto, ACC_STATIC | ACC_PRIVATE);
+
+    auto getter = creator.create();
+    getter->rstate.set_no_optimizations();
+    getter->rstate.set_generated();
+    cls->add_method(getter);
+
+    auto code = getter->get_code();
+    code->build_cfg();
+    auto& getter_cfg = code->cfg();
+
+    auto entry = getter_cfg.entry_block();
+    // -> branch to either:
+    auto throw_block = getter_cfg.create_block();
+    auto non_throw_block = getter_cfg.create_block();
+    // -> branch to either:
+    auto recurse_block = getter_cfg.create_block();
+    auto non_null_block = getter_cfg.create_block();
+
+    // Main blocks that checks depth
+    auto max_depth_reg = getter_cfg.allocate_temp();
+    auto const_max = new IRInstruction(OPCODE_CONST);
+    const_max->set_literal(10);
+    const_max->set_dest(max_depth_reg);
+    entry->push_back(const_max);
+    getter_cfg.create_branch(entry,
+                             (new IRInstruction(OPCODE_IF_GE))
+                                 ->set_src(0, 0)
+                                 ->set_src(1, max_depth_reg),
+                             non_throw_block, throw_block);
+
+    // throwing block
+    auto ex_reg = getter_cfg.allocate_temp();
+    auto msg_reg = getter_cfg.allocate_temp();
+    auto new_instance =
+        (new IRInstruction(OPCODE_NEW_INSTANCE))
+            ->set_type(DexType::get_type("Ljava/lang/RuntimeException;"));
+    auto move_ex = (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+                       ->set_dest(ex_reg);
+    auto msg = (new IRInstruction(OPCODE_CONST_STRING))
+                   ->set_string(DexString::make_string("Unexpected"));
+    auto move_msg = (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+                        ->set_dest(msg_reg);
+    auto invoke_init =
+        (new IRInstruction(OPCODE_INVOKE_DIRECT))
+            ->set_srcs_size(2)
+            ->set_src(0, ex_reg)
+            ->set_src(1, msg_reg)
+            ->set_method(DexMethod::get_method(
+                "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V"));
+    auto throw_ex = (new IRInstruction(OPCODE_THROW))->set_src(0, ex_reg);
+    throw_block->push_back(
+        {new_instance, move_ex, msg, move_msg, invoke_init, throw_ex});
+
+    // non-throwing block
+    auto str_reg = getter_cfg.allocate_temp();
+    auto str =
+        (new IRInstruction(OPCODE_CONST_STRING))->set_string(encoded_str);
+    auto move_str = (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+                        ->set_dest(str_reg);
+    non_throw_block->push_back({str, move_str});
+    getter_cfg.create_branch(
+        non_throw_block,
+        (new IRInstruction(OPCODE_IF_NEZ))->set_src(0, str_reg), recurse_block,
+        non_null_block);
+
+    // return the string
+    auto ret = (new IRInstruction(OPCODE_RETURN_OBJECT))->set_src(0, str_reg);
+    non_null_block->push_back(ret);
+
+    // increment and recurse
+    auto inc_reg = getter_cfg.allocate_temp();
+    auto recurse_result_reg = getter_cfg.allocate_temp();
+    auto add_lit = (new IRInstruction(OPCODE_ADD_INT_LIT))
+                       ->set_literal(1)
+                       ->set_src(0, 0)
+                       ->set_dest(inc_reg);
+    auto recurse = (new IRInstruction(OPCODE_INVOKE_STATIC))
+                       ->set_srcs_size(1)
+                       ->set_method(getter)
+                       ->set_src(0, inc_reg);
+    auto move_recurse = (new IRInstruction(OPCODE_MOVE_RESULT_OBJECT))
+                            ->set_dest(recurse_result_reg);
+    auto ret_recurse = (new IRInstruction(OPCODE_RETURN_OBJECT))
+                           ->set_src(0, recurse_result_reg);
+    recurse_block->push_back({add_lit, recurse, move_recurse, ret_recurse});
+
+    TRACE(CCB, 4, "String getter method %s %s", SHOW(getter), SHOW(getter_cfg));
+    return getter;
+  };
+
   auto& cfg = **mt.scoped_cfg;
   auto before_const_class_count = num_const_class_opcodes(&cfg);
   TRACE(CCB, 3,
@@ -274,13 +395,21 @@ Stats apply_transform(const PassState& pass_state, MethodTransform& mt) {
           SHOW(transform.insn));
 
     std::vector<IRInstruction*> replacements;
+    auto zero_depth_reg = cfg.allocate_temp();
+    auto zero_insn = new IRInstruction(OPCODE_CONST);
+    zero_insn->set_literal(0);
+    zero_insn->set_dest(zero_depth_reg);
+    replacements.push_back(zero_insn);
     auto encoded_str_reg = cfg.allocate_temp();
-    auto const_string_insn =
-        (new IRInstruction(OPCODE_CONST_STRING))->set_string(encoded_dex_str);
-    replacements.push_back(const_string_insn);
-    auto move_string_insn =
-        (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
-            ->set_dest(encoded_str_reg);
+
+    auto getter_ref = create_string_getter_method(encoded_dex_str);
+    auto get_string_insn =
+        (new IRInstruction(OPCODE_INVOKE_STATIC))->set_method(getter_ref);
+    get_string_insn->set_srcs_size(1);
+    get_string_insn->set_src(0, zero_depth_reg);
+    replacements.push_back(get_string_insn);
+    auto move_string_insn = (new IRInstruction(OPCODE_MOVE_RESULT_OBJECT))
+                                ->set_dest(encoded_str_reg);
     replacements.push_back(move_string_insn);
 
     auto default_value_reg = cfg.allocate_temp();
@@ -319,6 +448,7 @@ Stats apply_transform(const PassState& pass_state, MethodTransform& mt) {
         cfg.set_edge_target(edge, default_case);
       }
     }
+    transform_count++;
   }
   // Last step is to prune leaf blocks which are now unreachable. Do this
   // before computing metrics (so we know if this pass is doing anything
@@ -347,16 +477,24 @@ void TransformConstClassBranchesPass::bind_config() {
   // string data.
   bind("max_cases", 2000, m_max_cases);
   bind("string_tree_lookup_method", "", m_string_tree_lookup_method);
+  // Applying runtime workarounds per string generated, at the moment, will
+  // involve generating extra helper methods. Put some sensible cap on number of
+  // transforms to give the ability to reserve refs
+  bind("transforms_per_dex", 10, m_max_transforms_per_dex);
   trait(Traits::Pass::unique, true);
 }
 
 void TransformConstClassBranchesPass::eval_pass(DexStoresVector&,
                                                 ConfigFiles&,
                                                 PassManager& mgr) {
+  // Every transform will get a method that returns the generated string, that
+  // method will itself call constructor of RuntimeException under weird
+  // situations, and 1 more ref for the actual call to the lookup method.
+  auto mrefs = 2 + m_max_transforms_per_dex;
   m_reserved_refs_handle = mgr.reserve_refs(name(),
                                             ReserveRefsInfo(/* frefs */ 0,
-                                                            /* trefs */ 0,
-                                                            /* mrefs */ 1));
+                                                            /* trefs */ 1,
+                                                            mrefs));
 }
 
 void TransformConstClassBranchesPass::run_pass(DexStoresVector& stores,
@@ -388,9 +526,46 @@ void TransformConstClassBranchesPass::run_pass(DexStoresVector& stores,
     }
   });
 
+  std::unordered_map<DexClass*, std::vector<MethodTransform*>>
+      per_class_transforms;
+  for (auto& transform : method_transforms) {
+    auto cls = type_class(transform.method->get_class());
+    per_class_transforms[cls].emplace_back(&transform);
+  }
+
   Stats stats;
-  for (auto& mt : method_transforms) {
-    stats += apply_transform(pass_state, mt);
+  // Apply at most N transforms per dex, because of reserved refs.
+  auto apply_transforms_dex = [&](DexClasses& dex_file) {
+    std::vector<MethodTransform*> per_dex_transforms;
+    for (auto cls : dex_file) {
+      auto search = per_class_transforms.find(cls);
+      if (search != per_class_transforms.end()) {
+        per_dex_transforms.insert(per_dex_transforms.end(),
+                                  search->second.begin(), search->second.end());
+      }
+    }
+    std::sort(per_dex_transforms.begin(), per_dex_transforms.end(),
+              [](const MethodTransform* a, const MethodTransform* b) {
+                return compare_dexmethods(a->method, b->method);
+              });
+    size_t transform_count{0};
+    for (auto it = per_dex_transforms.rbegin(); it != per_dex_transforms.rend();
+         ++it) {
+      auto& mt = *it;
+      auto size = mt->transforms.size();
+      if (transform_count + size > m_max_transforms_per_dex) {
+        break;
+      }
+      stats += apply_transform(pass_state, *mt, transform_count);
+      transform_count += size;
+    }
+  };
+
+  for (auto& store : stores) {
+    auto& dex_files = store.get_dexen();
+    for (auto& dex_file : dex_files) {
+      apply_transforms_dex(dex_file);
+    }
   }
   mgr.incr_metric(METRIC_METHODS_TRANSFORMED, stats.methods_transformed);
   mgr.incr_metric(METRIC_CONST_CLASS_INSTRUCTIONS_REMOVED,
