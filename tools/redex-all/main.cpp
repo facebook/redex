@@ -1379,7 +1379,7 @@ void collect_classes_for_full_json(const DexStore& store,
   store_entry["classes"] = std::move(classes_entry);
   store_entry["root"] = store.is_root_store();
   store_entry["generated"] = store.is_generated();
-  store_entry["num_dexes"] = (uint64_t)store.num_dexes();
+  store_entry["num_dexes"] = (Json::UInt64)store.num_dexes();
 
   Json::Value deps_entry{Json::ValueType::arrayValue};
   for (const auto& dep : store.get_dependencies()) {
