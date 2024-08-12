@@ -733,8 +733,9 @@ void Model::map_fields(MergerType& merger,
       std::ostringstream ss;
       ss << "placeholder_" << index;
       auto field_type = merger.field_type_at(index);
-      fields[index] = static_cast<DexField*>(DexField::make_field(
-          type, DexString::make_string(ss.str()), field_type));
+      fields[index] = DexField::make_field(
+                          type, DexString::make_string(ss.str()), field_type)
+                          ->make_concrete(ACC_PUBLIC);
       TRACE(CLMG, 9,
             "  -- A hole found at index %zu, created a placeholder field of "
             "type %s",
