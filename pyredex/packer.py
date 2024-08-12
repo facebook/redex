@@ -204,9 +204,16 @@ class _ZstdCompressor(_Compressor):
 
             self._ok: bool = True
             self.out_file: typing.BinaryIO = open(zstd_path, "wb")
-            self.zstd: zstd.ZstdCompressor = zstd.ZstdCompressor(
-                level=_ZstdCompressor._get_compress_level(compression_level), threads=-1
-            )
+            try:
+                self.zstd: zstd.ZstdCompressor = zstd.ZstdCompressor(
+                    level=_ZstdCompressor._get_compress_level(compression_level),
+                    threads=-1,
+                )
+            except zstd.ZstdError:
+                # Sometimes the threads argument is unsupported. Try again without
+                self.zstd: zstd.ZstdCompressor = zstd.ZstdCompressor(
+                    level=_ZstdCompressor._get_compress_level(compression_level)
+                )
         except ImportError:
             self._ok: bool = False
 
