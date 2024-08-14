@@ -87,7 +87,8 @@ class DexInstruction : public Gatherable {
 
  public:
   static DexInstruction* make_instruction(DexIdx* idx,
-                                          const uint16_t** insns_ptr);
+                                          const uint16_t** insns_ptr,
+                                          const uint16_t* end);
   /* Creates the right subclass of DexInstruction for the given opcode */
   static DexInstruction* make_instruction(DexOpcode);
   virtual void encode(DexOutputIdx* dodx, uint16_t*& insns) const;

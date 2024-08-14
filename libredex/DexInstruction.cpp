@@ -787,7 +787,8 @@ void DexInstruction::encode(DexOutputIdx* /* unused */,
 size_t DexInstruction::size() const { return m_count + 1; }
 
 DexInstruction* DexInstruction::make_instruction(DexIdx* idx,
-                                                 const uint16_t** insns_ptr) {
+                                                 const uint16_t** insns_ptr,
+                                                 const uint16_t* end) {
   auto& insns = *insns_ptr;
   auto fopcode = static_cast<DexOpcode>(*insns++);
   DexOpcode opcode = static_cast<DexOpcode>(fopcode & 0xff);
@@ -806,6 +807,7 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx,
       uint32_t size = *((uint32_t*)insns);
       int count = (ewidth * size + 1) / 2 + 4;
       insns += count - 2;
+      always_assert(insns <= end);
       return new DexOpcodeData(insns - count, count - 1);
     }
   }
