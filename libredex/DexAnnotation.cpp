@@ -181,7 +181,7 @@ uint64_t read_evarg(const uint8_t*& encdata,
   return v;
 }
 
-void type_encoder(uint8_t*& encdata, uint8_t type, uint64_t val) {
+void type_encoder(std::vector<uint8_t>& encdata, uint8_t type, uint64_t val) {
   uint8_t devtb = DEVT_HDR_TYPE(type);
   int count = 0;
   uint64_t t = (val >> 8);
@@ -190,24 +190,27 @@ void type_encoder(uint8_t*& encdata, uint8_t type, uint64_t val) {
     t >>= 8;
   }
   devtb |= TO_DEVT_HDR_ARG(count);
-  *encdata++ = devtb;
+  encdata.push_back(devtb);
   t = (val >> 8);
-  *encdata++ = val & 0xff;
+  encdata.push_back(val & 0xff);
   while (t) {
-    *encdata++ = t & 0xff;
+    encdata.push_back(t & 0xff);
     t >>= 8;
   }
 }
 
-void type_encoder_signext(uint8_t*& encdata, uint8_t type, uint64_t val) {
-  uint8_t* mp = encdata++;
+void type_encoder_signext(std::vector<uint8_t>& encdata,
+                          uint8_t type,
+                          uint64_t val) {
+  size_t mp = encdata.size();
+  encdata.push_back(0);
   int64_t sval = *(int64_t*)&val;
   int64_t t = sval;
   int bytes = 0;
   while (true) {
     uint8_t emit = t & 0xff;
     int64_t rest = t >> 8;
-    *encdata++ = emit;
+    encdata.push_back(emit);
     bytes++;
     if (rest == 0) {
       if ((emit & 0x80) == 0) break;
@@ -217,10 +220,12 @@ void type_encoder_signext(uint8_t*& encdata, uint8_t type, uint64_t val) {
     }
     t = rest;
   }
-  *mp = DEVT_HDR_TYPE(type) | TO_DEVT_HDR_ARG(bytes - 1);
+  encdata[mp] = DEVT_HDR_TYPE(type) | TO_DEVT_HDR_ARG(bytes - 1);
 }
 
-void type_encoder_fp(uint8_t*& encdata, uint8_t type, uint64_t val) {
+void type_encoder_fp(std::vector<uint8_t>& encdata,
+                     uint8_t type,
+                     uint64_t val) {
   // Ignore trailing zero bytes.
   int bytes = 0;
   while (val && ((val & 0xff) == 0)) {
@@ -242,14 +247,23 @@ void type_encoder_fp(uint8_t*& encdata, uint8_t type, uint64_t val) {
     encbytes = 1;
   }
   // Encode.
-  *encdata++ = DEVT_HDR_TYPE(type) | TO_DEVT_HDR_ARG(encbytes - 1);
+  encdata.push_back(DEVT_HDR_TYPE(type) | TO_DEVT_HDR_ARG(encbytes - 1));
   for (int i = 0; i < encbytes; i++) {
-    *encdata++ = val & 0xff;
+    encdata.push_back(val & 0xff);
     val >>= 8;
   }
 }
 
-void DexEncodedValue::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
+static void uleb_append(std::vector<uint8_t>& bytes, uint32_t v) {
+  uint8_t tarray[5];
+  uint8_t* pend = write_uleb128(tarray, v);
+  for (uint8_t* p = tarray; p < pend; p++) {
+    bytes.push_back(*p);
+  }
+}
+
+void DexEncodedValue::encode(DexOutputIdx* dodx,
+                             std::vector<uint8_t>& encdata) {
   switch (m_evtype) {
   case DEVT_SHORT:
   case DEVT_INT:
@@ -266,86 +280,84 @@ void DexEncodedValue::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
     return;
   }
 }
+
 void DexEncodedValue::vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes) {
-  // Relatively large buffer as Kotlin metadata annotations may be huge.
-  constexpr size_t kRedZone = 1024;
-  constexpr size_t kBufferSize = 16384;
-  uint8_t buffer[kBufferSize];
-  uint8_t* pend = buffer;
-  encode(dodx, pend);
-  always_assert_log((size_t)(pend - buffer) <= kBufferSize - kRedZone,
-                    "DexEncodedValue::vencode overflow, size %d: %s",
-                    (int)(pend - buffer), show().c_str());
-  for (uint8_t* p = buffer; p < pend; p++) {
-    bytes.push_back(*p);
-  }
+  encode(dodx, bytes);
 }
 
-void DexEncodedValueBit::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
+void DexEncodedValueBit::encode(DexOutputIdx* dodx,
+                                std::vector<uint8_t>& encdata) {
   uint8_t devtb = DEVT_HDR_TYPE(m_evtype);
   if (m_val.m_value) {
     devtb |= TO_DEVT_HDR_ARG(1);
   }
-  *encdata++ = devtb;
+  encdata.push_back(devtb);
 }
 
-void DexEncodedValueString::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
+void DexEncodedValueString::encode(DexOutputIdx* dodx,
+                                   std::vector<uint8_t>& encdata) {
   uint32_t sidx = dodx->stringidx(string());
   type_encoder(encdata, m_evtype, sidx);
 }
 
-void DexEncodedValueType::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
+void DexEncodedValueType::encode(DexOutputIdx* dodx,
+                                 std::vector<uint8_t>& encdata) {
   uint32_t tidx = dodx->typeidx(type());
   type_encoder(encdata, m_evtype, tidx);
 }
 
-void DexEncodedValueField::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
+void DexEncodedValueField::encode(DexOutputIdx* dodx,
+                                  std::vector<uint8_t>& encdata) {
   uint32_t fidx = dodx->fieldidx(field());
   type_encoder(encdata, m_evtype, fidx);
 }
 
-void DexEncodedValueMethod::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
+void DexEncodedValueMethod::encode(DexOutputIdx* dodx,
+                                   std::vector<uint8_t>& encdata) {
   uint32_t midx = dodx->methodidx(method());
   type_encoder(encdata, m_evtype, midx);
 }
 
-void DexEncodedValueMethodType::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
+void DexEncodedValueMethodType::encode(DexOutputIdx* dodx,
+                                       std::vector<uint8_t>& encdata) {
   uint32_t pidx = dodx->protoidx(proto());
   type_encoder(encdata, m_evtype, pidx);
 }
 
 void DexEncodedValueMethodHandle::encode(DexOutputIdx* dodx,
-                                         uint8_t*& encdata) {
+                                         std::vector<uint8_t>& encdata) {
   uint32_t mhidx = dodx->methodhandleidx(methodhandle());
   type_encoder(encdata, m_evtype, mhidx);
 }
 
-void DexEncodedValueArray::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
+void DexEncodedValueArray::encode(DexOutputIdx* dodx,
+                                  std::vector<uint8_t>& encdata) {
   /*
    * Static values are implied to be DEVT_ARRAY, and thus don't
    * have a type byte.
    */
   if (!m_static_val) {
     uint8_t devtb = DEVT_HDR_TYPE(m_evtype);
-    *encdata++ = devtb;
+    encdata.push_back(devtb);
   }
-  encdata = write_uleb128(encdata, (uint32_t)evalues()->size());
+  uleb_append(encdata, (uint32_t)evalues()->size());
   for (auto const& ev : *evalues()) {
     ev->encode(dodx, encdata);
   }
 }
 
-void DexEncodedValueAnnotation::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
+void DexEncodedValueAnnotation::encode(DexOutputIdx* dodx,
+                                       std::vector<uint8_t>& encdata) {
   uint8_t devtb = DEVT_HDR_TYPE(m_evtype);
   uint32_t tidx = dodx->typeidx(m_type);
-  *encdata++ = devtb;
-  encdata = write_uleb128(encdata, tidx);
-  encdata = write_uleb128(encdata, (uint32_t)m_annotations.size());
+  encdata.push_back(devtb);
+  uleb_append(encdata, tidx);
+  uleb_append(encdata, (uint32_t)m_annotations.size());
   for (auto const& dae : m_annotations) {
     auto str = dae.string;
     DexEncodedValue* dev = dae.encoded_value.get();
     uint32_t sidx = dodx->stringidx(str);
-    encdata = write_uleb128(encdata, sidx);
+    uleb_append(encdata, sidx);
     dev->encode(dodx, encdata);
   }
 }
@@ -817,14 +829,6 @@ void DexAnnotationSet::vencode(DexOutputIdx* dodx,
                       anno.get(),
                       show(anno.get()).c_str());
     asetout.push_back(annoout[anno.get()]);
-  }
-}
-
-static void uleb_append(std::vector<uint8_t>& bytes, uint32_t v) {
-  uint8_t tarray[5];
-  uint8_t* pend = write_uleb128(tarray, v);
-  for (uint8_t* p = tarray; p < pend; p++) {
-    bytes.push_back(*p);
   }
 }
 

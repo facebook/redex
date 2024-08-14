@@ -1205,6 +1205,7 @@ void DexOutput::check_method_instruction_size_limit(const ConfigFiles& conf,
 }
 
 void DexOutput::generate_static_values() {
+  constexpr size_t initial_buffer_reserve = 32 * 1024;
   uint32_t sv_start = m_offset;
   std::unordered_map<DexEncodedValueArray, uint32_t,
                      boost::hash<DexEncodedValueArray>>
@@ -1221,13 +1222,17 @@ void DexOutput::generate_static_values() {
     if (enc_arrays.count(*deva)) {
       m_static_values[clz] = enc_arrays.at(*deva);
     } else {
-      uint8_t* output = m_output.get() + m_offset;
-      uint8_t* outputsv = output;
+      std::vector<uint8_t> encdata;
+      encdata.reserve(initial_buffer_reserve);
+      deva->encode(&m_dodx, encdata);
+      size_t encdatasize = encdata.size();
+      always_assert_log((((uint64_t)encdatasize) >> 32) == 0,
+                        "buffer size (%lu) is too big", encdatasize);
       /* No alignment requirements */
-      deva->encode(&m_dodx, output);
+      memcpy(m_output.get() + m_offset, encdata.data(), encdatasize);
       enc_arrays.emplace(std::move(*deva), m_offset);
       m_static_values[clz] = m_offset;
-      inc_offset(output - outputsv);
+      inc_offset((uint32_t)encdatasize);
       m_stats.num_static_values++;
     }
   }
@@ -1239,12 +1244,16 @@ void DexOutput::generate_static_values() {
       if (enc_arrays.count(eva)) {
         m_call_site_items[callsite] = enc_arrays.at(eva);
       } else {
-        uint8_t* output = m_output.get() + m_offset;
-        uint8_t* outputsv = output;
-        eva.encode(&m_dodx, output);
+        std::vector<uint8_t> encdata;
+        encdata.reserve(initial_buffer_reserve);
+        eva.encode(&m_dodx, encdata);
+        size_t encdatasize = encdata.size();
+        always_assert_log((((uint64_t)encdatasize) >> 32) == 0,
+                          "buffer size (%lu) is too big", encdatasize);
+        memcpy(m_output.get() + m_offset, encdata.data(), encdatasize);
         enc_arrays.emplace(std::move(eva), m_offset);
         m_call_site_items[callsite] = m_offset;
-        inc_offset(output - outputsv);
+        inc_offset((uint32_t)encdatasize);
         m_stats.num_static_values++;
       }
     }
