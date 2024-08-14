@@ -977,6 +977,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
       return hot_immediate_dom_not_hot_cfg(cfg);
     case Violation::kChainAndDom:
       return chain_and_dom_violations_cfg(cfg);
+    case Violation::kUncoveredSourceBlocks:
+      return uncovered_source_blocks_violations_cfg(cfg);
     }
     not_reached();
   }
@@ -1110,6 +1112,18 @@ struct ViolationsHelper::ViolationsHelperImpl {
     dominators::SimpleFastDominators<cfg::GraphInterface> dom{cfg};
     for (auto* b : cfg.blocks()) {
       sum += chain_and_dom_violations(b, dom);
+    }
+    return sum;
+  }
+
+  static size_t uncovered_source_blocks_violations_cfg(
+      cfg::ControlFlowGraph& cfg) {
+    size_t sum{0};
+    for (auto* b : cfg.blocks()) {
+      auto* sb = get_first_source_block(b);
+      if (sb == nullptr) {
+        sum++;
+      }
     }
     return sum;
   }
@@ -1254,6 +1268,23 @@ struct ViolationsHelper::ViolationsHelperImpl {
         void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
       };
       print_cfg_with_violations<ChainAndDom>(m);
+      return;
+    }
+    case Violation::kUncoveredSourceBlocks: {
+      struct UncoveredSourceBlocks {
+        explicit UncoveredSourceBlocks(cfg::ControlFlowGraph&) {}
+
+        void mie_before(std::ostream&, const MethodItemEntry&) {}
+        void mie_after(std::ostream&, const MethodItemEntry&) {}
+
+        void start_block(std::ostream& os, cfg::Block* b) {
+          if (get_first_source_block(b) == nullptr) {
+            os << "!!!MISSING SOURCE BLOCK\n";
+          }
+        }
+        void end_block(std::ostream&, cfg::Block*) {}
+      };
+      print_cfg_with_violations<UncoveredSourceBlocks>(m);
       return;
     }
     }
