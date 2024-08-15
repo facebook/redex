@@ -8,6 +8,7 @@
 #include "ThrowPropagationImpl.h"
 #include "MethodUtil.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "Trace.h"
 #include "TypeUtil.h"
 
@@ -107,6 +108,17 @@ void ThrowPropagator::insert_unreachable(
       (new IRInstruction(OPCODE_THROW))->set_src(0, *m_reg),
   };
   new_block->push_back(insns);
+  auto template_source_block = source_blocks::get_first_source_block(block);
+  if (template_source_block != nullptr) {
+    auto new_source_block =
+        std::make_unique<SourceBlock>(*template_source_block);
+    source_blocks::fill_source_block(*new_source_block,
+                                     m_method,
+                                     SourceBlock::kSyntheticId,
+                                     SourceBlock::Val(0, 0));
+    auto new_block_it = new_block->begin();
+    new_block->insert_before(new_block_it, std::move(new_source_block));
+  }
   m_cfg.copy_succ_edges_of_type(block, new_block, cfg::EDGE_THROW);
   auto existing_goto_edge = m_cfg.get_succ_edge_of_type(block, cfg::EDGE_GOTO);
   always_assert(existing_goto_edge != nullptr);
