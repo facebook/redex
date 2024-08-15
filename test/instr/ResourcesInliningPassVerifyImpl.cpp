@@ -169,6 +169,20 @@ void resource_inlining_PostVerify(DexClass* cls) {
           ASSERT_EQ(string, "3");
         } else if (line_num == 61) {
           ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+        } else if (line_num == 74) {
+          ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
+          auto string_char_star = insn->get_string()->c_str();
+          auto string = (std::string)string_char_star;
+          ASSERT_EQ(string, "com.fb.resources:integer/loop_count");
+        } else if (line_num == 75) {
+          ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+        } else if (line_num == 88) {
+          ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
+          auto string_char_star = insn->get_string()->c_str();
+          auto string = (std::string)string_char_star;
+          ASSERT_EQ(string, "loop_count");
+        } else if (line_num == 89) {
+          ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
         }
       }
     }

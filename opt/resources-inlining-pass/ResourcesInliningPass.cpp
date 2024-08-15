@@ -25,13 +25,12 @@ ResourcesInliningPass::filter_inlinable_resources(
     const std::unordered_set<std::string>& resource_entry_names) {
   auto type_ids = res_table->get_types_by_name(resource_type_names);
 
-  uint32_t num_colors = 0;
-  uint32_t num_ints = 0;
-  uint32_t num_bools = 0;
-
   std::vector<std::string> type_names;
   res_table->get_type_names(&type_names);
 
+  uint32_t num_colors = 0;
+  uint32_t num_ints = 0;
+  uint32_t num_bools = 0;
   const auto& id_to_name = res_table->id_to_name;
   if (traceEnabled(RIP, 1)) {
     for (auto& val : id_to_name) {
@@ -92,9 +91,14 @@ void ResourcesInliningPass::run_pass(DexStoresVector& stores,
                                  m_resource_entry_names);
 
   const Scope scope = build_class_scope(stores);
+  const auto& id_to_name = res_table->id_to_name;
+  std::vector<std::string> type_names;
+  res_table->get_type_names(&type_names);
+  auto package_name = resources->get_manifest_package_name();
 
   MethodTransformsMap possible_transformations =
-      ResourcesInliningPass::find_transformations(scope, inlinable_resources);
+      ResourcesInliningPass::find_transformations(
+          scope, inlinable_resources, id_to_name, type_names, package_name);
 
   for (auto& pair : possible_transformations) {
     auto method = pair.first;
@@ -118,7 +122,7 @@ void ResourcesInliningPass::run_pass(DexStoresVector& stores,
  https://cs.android.com/android/platform/superproject/+/android-14.0.0_r1:frameworks/base/core/java/android/content/res/Resources.java;l=1206
 */
 std::unordered_map<DexMethodRef*, std::tuple<uint8_t, uint8_t>>
-generate_valid_apis() {
+generate_valid_method_refs() {
   std::unordered_map<DexMethodRef*, std::tuple<uint8_t, uint8_t>> usable_apis;
 
   DexMethodRef* bool_method =
@@ -146,19 +150,22 @@ generate_valid_apis() {
   std::tuple<uint8_t, uint8_t> string_range = std::make_tuple(
       android::Res_value::TYPE_STRING, android::Res_value::TYPE_LAST_INT);
   usable_apis.insert({string_method, string_range});
-
   return usable_apis;
 }
 
 bool exists_possible_transformation(
     const cfg::ControlFlowGraph& cfg,
     const std::unordered_map<DexMethodRef*, std::tuple<uint8_t, uint8_t>>&
-        dex_method_refs) {
+        value_method_refs,
+    const std::unordered_set<DexMethodRef*>& name_method_refs) {
   for (auto* block : cfg.blocks()) {
     for (auto& mie : InstructionIterable(block)) {
       auto insn = mie.insn;
       if (insn->opcode() == OPCODE_INVOKE_VIRTUAL &&
-          (dex_method_refs.find(insn->get_method()) != dex_method_refs.end())) {
+          (value_method_refs.find(insn->get_method()) !=
+               value_method_refs.end() ||
+           name_method_refs.find(insn->get_method()) !=
+               name_method_refs.end())) {
         return true;
       }
     }
@@ -169,10 +176,21 @@ bool exists_possible_transformation(
 MethodTransformsMap ResourcesInliningPass::find_transformations(
     const Scope& scope,
     const std::unordered_map<uint32_t, resources::InlinableValue>&
-        inlinable_resources) {
+        inlinable_resources,
+    const std::map<uint32_t, std::string>& id_to_name,
+    const std::vector<std::string>& type_names,
+    const boost::optional<std::string>& package_name) {
+  DexMethodRef* getResourceEntryName = DexMethod::get_method(
+      "Landroid/content/res/Resources;.getResourceEntryName:(I)Ljava/lang/"
+      "String;");
+  DexMethodRef* getResourceName = DexMethod::get_method(
+      "Landroid/content/res/Resources;.getResourceName:(I)Ljava/lang/"
+      "String;");
+  std::unordered_set<DexMethodRef*> name_method_refs = {getResourceEntryName,
+                                                        getResourceName};
 
   std::unordered_map<DexMethodRef*, std::tuple<uint8_t, uint8_t>>
-      dex_method_refs = generate_valid_apis();
+      value_method_refs = generate_valid_method_refs();
 
   MethodTransformsMap possible_transformations;
 
@@ -194,7 +212,8 @@ MethodTransformsMap ResourcesInliningPass::find_transformations(
     }
     auto& cfg = get_code->cfg();
 
-    if (!exists_possible_transformation(cfg, dex_method_refs)) {
+    if (!exists_possible_transformation(cfg, value_method_refs,
+                                        name_method_refs)) {
       return;
     }
 
@@ -214,20 +233,46 @@ MethodTransformsMap ResourcesInliningPass::find_transformations(
       // virtual, if it is inlinable and if it is a valid API call
       for (auto& mie : InstructionIterable(block)) {
         auto insn = mie.insn;
-        if (insn->opcode() == OPCODE_INVOKE_VIRTUAL &&
-            (dex_method_refs.find(insn->get_method()) !=
-             dex_method_refs.end())) {
-          auto field_domain = env.get<SignedConstantDomain>(insn->src(1));
-          auto const_value = field_domain.get_constant();
-          if (const_value != boost::none &&
-              inlinable_resources.find(const_value.value()) !=
-                  inlinable_resources.end()) {
-            // Adding to list of possible optimizations if it is
-            auto insertable = InlinableOptimization();
-            insertable.insn = insn;
-            insertable.inlinable_value =
-                inlinable_resources.at(const_value.value());
-            transforms.push_back(insertable);
+        if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
+          DexMethodRef* method_ref = insn->get_method();
+          auto value_method_comp =
+              value_method_refs.find(method_ref) != value_method_refs.end();
+          auto name_method_comp =
+              name_method_refs.find(method_ref) != name_method_refs.end();
+          if (value_method_comp || name_method_comp) {
+            auto field_domain = env.get<SignedConstantDomain>(insn->src(1));
+            auto const_value = field_domain.get_constant();
+            if (const_value != boost::none &&
+                inlinable_resources.find(const_value.value()) !=
+                    inlinable_resources.end() &&
+                value_method_comp) {
+              // Adding to list of possible optimizations if it is
+              auto insertable = InlinableOptimization();
+              insertable.insn = insn;
+              insertable.inlinable =
+                  inlinable_resources.at(const_value.value());
+              transforms.push_back(insertable);
+            } else if (const_value != boost::none && name_method_comp) {
+              auto elem_id = const_value.value();
+              auto insertable = InlinableOptimization();
+              insertable.insn = insn;
+              if (id_to_name.find(elem_id) == id_to_name.end()) {
+                continue;
+              }
+              if (method_ref == getResourceEntryName) {
+                insertable.inlinable = id_to_name.at(elem_id);
+              } else {
+                auto masked_type = elem_id & 0x00FF0000;
+                const std::string& type_name =
+                    type_names.at((masked_type >> TYPE_INDEX_BIT_SHIFT) - 1);
+                if (package_name == boost::none) {
+                  continue;
+                }
+                insertable.inlinable = *package_name + ":" + type_name + "/" +
+                                       id_to_name.at(elem_id);
+              }
+              transforms.push_back(insertable);
+            }
           }
         }
         intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
@@ -249,82 +294,107 @@ void ResourcesInliningPass::inline_resource_values_dex(
   cfg::CFGMutation mutator(cfg);
 
   std::unordered_map<DexMethodRef*, std::tuple<uint8_t, uint8_t>> usable_apis =
-      generate_valid_apis();
+      generate_valid_method_refs();
 
   IRInstruction* new_insn;
   for (const auto& elem : insn_inlinable) {
     auto insn = elem.insn;
-    auto inlinable_value = elem.inlinable_value;
     cfg::InstructionIterator it_invoke = cfg.find_insn(insn);
-    DexMethodRef* method_ref = insn->get_method();
-    auto method_bounds = usable_apis.at(method_ref);
-    auto method_lower_bound = get<0>(method_bounds);
-    auto method_upper_bound = get<1>(method_bounds);
 
-    if (method_lower_bound > inlinable_value.type ||
-        method_upper_bound < inlinable_value.type) {
-      continue;
-    }
+    if (std::holds_alternative<resources::InlinableValue>(elem.inlinable)) {
+      auto inlinable_value = get<resources::InlinableValue>(elem.inlinable);
+      DexMethodRef* method_ref = insn->get_method();
+      if (usable_apis.find(method_ref) != usable_apis.end()) {
+        auto method_bounds = usable_apis.at(method_ref);
+        auto method_lower_bound = get<0>(method_bounds);
+        auto method_upper_bound = get<1>(method_bounds);
 
-    auto move_insn_it = cfg.move_result_of(it_invoke);
-    if (move_insn_it.is_end()) {
-      mgr.incr_metric("removed_unused_invokes", 1);
-      mutator.remove(it_invoke);
-      continue;
-    }
-    auto move_insn = move_insn_it->insn;
-
-    if (move_insn->opcode() == OPCODE_MOVE_RESULT) {
-      new_insn = new IRInstruction(OPCODE_CONST);
-      if (inlinable_value.type == android::Res_value::TYPE_INT_BOOLEAN) {
-        if (method_ref ==
-            DexMethod::get_method(
-                "Landroid/content/res/Resources;.getInteger:(I)I")) {
-          if (inlinable_value.bool_value == 1) {
-            new_insn->set_literal((int32_t)0xffffffff);
-          } else {
-            new_insn->set_literal(0);
-          }
-        } else {
-          new_insn->set_literal(inlinable_value.bool_value);
+        if (method_lower_bound > inlinable_value.type ||
+            method_upper_bound < inlinable_value.type) {
+          continue;
         }
-        mgr.incr_metric("inlined_booleans", 1);
-      } else {
-        new_insn->set_literal((int32_t)inlinable_value.uint_value);
-        mgr.incr_metric("inlined_integers", 1);
       }
-      always_assert_log(move_insn->has_dest(),
-                        "The move instruction has no destination");
-      new_insn->set_dest(move_insn->dest());
-      mutator.replace(it_invoke, {new_insn});
-    }
 
-    else if (move_insn->opcode() == OPCODE_MOVE_RESULT_OBJECT) {
-      new_insn = new IRInstruction(OPCODE_CONST_STRING);
-      if (inlinable_value.type == android::Res_value::TYPE_STRING) {
-        new_insn->set_string(
-            DexString::make_string(inlinable_value.string_value));
-      } else if (inlinable_value.type == android::Res_value::TYPE_INT_BOOLEAN) {
-        new_insn->set_string(DexString::make_string(
-            inlinable_value.bool_value ? "true" : "false"));
-      } else if (inlinable_value.type == android::Res_value::TYPE_INT_HEX) {
-        std::stringstream stream;
-        stream << "0x" << std::hex << inlinable_value.uint_value;
-        new_insn->set_string(DexString::make_string(stream.str()));
-      } else if (inlinable_value.type >=
-                     android::Res_value::TYPE_FIRST_COLOR_INT &&
-                 inlinable_value.type <=
-                     android::Res_value::TYPE_LAST_COLOR_INT) {
-        std::stringstream stream;
-        stream << "#" << std::hex << inlinable_value.uint_value;
-        new_insn->set_string(DexString::make_string(stream.str()));
-      } else if (inlinable_value.type >= android::Res_value::TYPE_FIRST_INT &&
-                 inlinable_value.type <= android::Res_value::TYPE_LAST_INT) {
-        new_insn->set_string(
-            DexString::make_string(std::to_string(inlinable_value.uint_value)));
-      } else {
+      auto move_insn_it = cfg.move_result_of(it_invoke);
+      if (move_insn_it.is_end()) {
+        mgr.incr_metric("removed_unused_invokes", 1);
+        mutator.remove(it_invoke);
         continue;
       }
+      auto move_insn = move_insn_it->insn;
+
+      if (move_insn->opcode() == OPCODE_MOVE_RESULT) {
+        new_insn = new IRInstruction(OPCODE_CONST);
+        if (inlinable_value.type == android::Res_value::TYPE_INT_BOOLEAN) {
+          if (method_ref ==
+              DexMethod::get_method(
+                  "Landroid/content/res/Resources;.getInteger:(I)I")) {
+            if (inlinable_value.bool_value == 1) {
+              new_insn->set_literal((int32_t)0xffffffff);
+            } else {
+              new_insn->set_literal(0);
+            }
+          } else {
+            new_insn->set_literal(inlinable_value.bool_value);
+          }
+          mgr.incr_metric("inlined_booleans", 1);
+        } else {
+          new_insn->set_literal((int32_t)inlinable_value.uint_value);
+          mgr.incr_metric("inlined_integers", 1);
+        }
+        always_assert_log(move_insn->has_dest(),
+                          "The move instruction has no destination");
+        new_insn->set_dest(move_insn->dest());
+        mutator.replace(it_invoke, {new_insn});
+      }
+
+      else if (move_insn->opcode() == OPCODE_MOVE_RESULT_OBJECT) {
+        new_insn = new IRInstruction(OPCODE_CONST_STRING);
+        if (inlinable_value.type == android::Res_value::TYPE_STRING) {
+          new_insn->set_string(
+              DexString::make_string(inlinable_value.string_value));
+        } else if (inlinable_value.type ==
+                   android::Res_value::TYPE_INT_BOOLEAN) {
+          new_insn->set_string(DexString::make_string(
+              inlinable_value.bool_value ? "true" : "false"));
+        } else if (inlinable_value.type == android::Res_value::TYPE_INT_HEX) {
+          std::stringstream stream;
+          stream << "0x" << std::hex << inlinable_value.uint_value;
+          new_insn->set_string(DexString::make_string(stream.str()));
+        } else if (inlinable_value.type >=
+                       android::Res_value::TYPE_FIRST_COLOR_INT &&
+                   inlinable_value.type <=
+                       android::Res_value::TYPE_LAST_COLOR_INT) {
+          std::stringstream stream;
+          stream << "#" << std::hex << inlinable_value.uint_value;
+          new_insn->set_string(DexString::make_string(stream.str()));
+        } else if (inlinable_value.type >= android::Res_value::TYPE_FIRST_INT &&
+                   inlinable_value.type <= android::Res_value::TYPE_LAST_INT) {
+          new_insn->set_string(DexString::make_string(
+              std::to_string(inlinable_value.uint_value)));
+        } else {
+          continue;
+        }
+        IRInstruction* new_insn_pseudo_move =
+            new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+        always_assert_log(move_insn->has_dest(),
+                          "The move instruction has no destination");
+        new_insn_pseudo_move->set_dest(move_insn->dest());
+        mutator.replace(it_invoke, {new_insn, new_insn_pseudo_move});
+        mgr.incr_metric("inlined_strings", 1);
+      }
+      mutator.remove(move_insn_it);
+    } else {
+      auto move_insn_it = cfg.move_result_of(it_invoke);
+      if (move_insn_it.is_end()) {
+        mgr.incr_metric("removed_unused_invokes", 1);
+        mutator.remove(it_invoke);
+        continue;
+      }
+      auto move_insn = move_insn_it->insn;
+      new_insn = new IRInstruction(OPCODE_CONST_STRING);
+      new_insn->set_string(
+          DexString::make_string(get<std::string>(elem.inlinable)));
       IRInstruction* new_insn_pseudo_move =
           new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
       always_assert_log(move_insn->has_dest(),
@@ -333,7 +403,6 @@ void ResourcesInliningPass::inline_resource_values_dex(
       mutator.replace(it_invoke, {new_insn, new_insn_pseudo_move});
       mgr.incr_metric("inlined_strings", 1);
     }
-    mutator.remove(move_insn_it);
     mgr.incr_metric("inlined_total", 1);
   }
   mutator.flush();

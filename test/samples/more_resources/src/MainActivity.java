@@ -58,6 +58,12 @@ public class MainActivity extends Activity {
 
       String string_int = resources.getString(R.integer.loop_count);
       android.util.Log.w(LOG_TAG, "string_int: " + string_int);
+
+      String res_name = resources.getResourceName(R.integer.loop_count); 
+      android.util.Log.w(LOG_TAG, "res_name: " + res_name);
+
+      String res_entry_name = resources.getResourceEntryName(R.integer.loop_count); 
+      android.util.Log.w(LOG_TAG, "res_entry_name: " + res_entry_name);
     }
   }
 }
