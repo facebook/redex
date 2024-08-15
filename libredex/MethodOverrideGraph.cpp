@@ -443,6 +443,26 @@ void Graph::add_edge(const DexMethod* overridden,
   });
 }
 
+void Node::gather_connected_methods(
+    std::unordered_set<const DexMethod*>* visited) const {
+  if (method == nullptr) {
+    return;
+  }
+  visited->insert(method);
+  for (auto* child : children) {
+    if (visited->count(child->method)) {
+      continue;
+    }
+    child->gather_connected_methods(visited);
+  }
+  for (auto* parent : parents) {
+    if (visited->count(parent->method)) {
+      continue;
+    }
+    parent->gather_connected_methods(visited);
+  }
+}
+
 bool Graph::add_other_implementation_class(const DexMethod* overridden,
                                            const DexMethod* overriding,
                                            const DexClass* cls) {

@@ -98,6 +98,9 @@ struct Node {
   // Checks whther the current method's class, or any other implementation
   // class, can be cast to the given base type.
   bool overrides(const DexMethod* current, const DexType* base_type) const;
+
+  void gather_connected_methods(
+      std::unordered_set<const DexMethod*>* visited) const;
 };
 
 class Graph {

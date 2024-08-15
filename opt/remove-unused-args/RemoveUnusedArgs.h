@@ -20,10 +20,8 @@ namespace remove_unused_args {
 
 namespace mog = method_override_graph;
 
-std::deque<uint16_t> compute_live_args(
-    DexMethod* method,
-    size_t num_args,
-    std::vector<cfg::InstructionIterator>* dead_insns);
+std::map<uint16_t, cfg::InstructionIterator> compute_dead_insns(
+    const DexMethod* method, const IRCode& code);
 
 class RemoveArgs {
  public:
@@ -58,30 +56,36 @@ class RemoveArgs {
 
  private:
   const Scope& m_scope;
+  InsertOnlyConcurrentMap<const DexMethod*, const DexMethod*>
+      m_method_representative_map;
+  InsertOnlyConcurrentMap<const DexMethod*,
+                          std::unordered_set<const DexMethod*>>
+      m_related_method_groups;
   const init_classes::InitClassesWithSideEffects&
       m_init_classes_with_side_effects;
   InsertOnlyConcurrentMap<DexMethod*, std::deque<uint16_t>> m_live_arg_idxs_map;
+  InsertOnlyConcurrentMap<DexMethod*, std::deque<uint16_t>>
+      m_abstract_live_arg_idxs_map;
   // Data structure to remember running indices to make method names unique when
-  // we reorder prototypes across virtual scopes, or do other general changes to
-  // non-virtuals.
+  // we reorder prototypes or remove args across virtual scopes.
   struct NamedRenameMap {
     size_t next_reordering_uniquifiers{0};
+    size_t next_removal_uniquifiers{0};
     std::unordered_map<DexTypeList*, size_t> reordering_uniquifiers;
-    std::unordered_map<DexTypeList*, size_t> general_uniquifiers;
+    std::unordered_map<const DexMethod*, size_t> removal_uniquifiers;
   };
   std::unordered_map<const DexString*, NamedRenameMap> m_rename_maps;
-  ConcurrentSet<DexMethod*> m_result_used;
+  ConcurrentSet<const DexMethod*> m_result_used;
   std::unordered_map<DexProto*, DexProto*> m_reordered_protos;
   const std::vector<std::string>& m_blocklist;
   size_t m_iteration;
   const std::unordered_set<DexMethodRef*>& m_pure_methods;
 
   DexTypeList::ContainerType get_live_arg_type_list(
-      DexMethod* method, const std::deque<uint16_t>& live_arg_idxs);
+      const DexMethod* method, const std::deque<uint16_t>& live_arg_idxs);
   bool update_method_signature(DexMethod* method,
-                               const std::deque<uint16_t>& live_arg_idxs,
-                               bool remove_result,
-                               DexProto* reordered_proto);
+                               DexProto* updated_proto,
+                               bool is_reordered);
   MethodStats update_method_protos(
       const mog::Graph& override_graph,
       const std::unordered_set<DexType*>& no_devirtualize_anno);
@@ -89,6 +93,23 @@ class RemoveArgs {
   std::pair<size_t, LocalDce::Stats> update_callsites();
   void gather_results_used();
   void compute_reordered_protos(const mog::Graph& override_graph);
+  void populate_representative_ids(
+      const mog::Graph& override_graph,
+      const std::unordered_set<DexType*>& no_devirtualize_annos);
+  bool compute_remove_result(const DexMethod* method);
+
+  struct Entry {
+    std::vector<cfg::InstructionIterator> dead_insns;
+    std::deque<uint16_t> live_arg_idxs;
+    bool remove_result;
+    bool is_reordered;
+    DexProto* updated_proto;
+    DexProto* original_proto;
+  };
+
+  void gather_updated_entries(
+      const std::unordered_set<DexType*>& no_devirtualize_annos,
+      InsertOnlyConcurrentMap<DexMethod*, Entry>* updated_entries);
 };
 
 class RemoveUnusedArgsPass : public Pass {

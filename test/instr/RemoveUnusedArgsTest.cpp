@@ -14,13 +14,19 @@
 namespace {
 
 // Checks only the first callsite in method against num_args_expected
-void check_callsite_regs(DexMethod* method, int num_args_expected) {
+void check_callsite_regs(DexMethod* method,
+                         int num_args_expected,
+                         uint callsite_index = 0) {
+  uint i = 0;
   for (const auto& mie : InstructionIterable(method->get_code())) {
     auto insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode())) {
-      auto actual_method = insn->get_method();
-      EXPECT_EQ(insn->srcs_size(), num_args_expected) << show(actual_method);
-      break;
+      if (i == callsite_index) {
+        auto actual_method = insn->get_method();
+        EXPECT_EQ(insn->srcs_size(), num_args_expected) << show(actual_method);
+        break;
+      }
+      i++;
     }
   }
 }
@@ -568,6 +574,535 @@ TEST_F(PostVerify, SubReorderables) {
   auto reorderable2altalt = find_vmethod(*reorderables, "reorderable2$rvp0$1",
                                          "(Ljava/lang/Object;DI)V");
   ASSERT_NE(nullptr, reorderable2altalt);
+}
+
+// Check unused arguments are successfully removed in virtual base constructors
+TEST_F(PreVerify, RemoveVirtualCtorArg) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo1_virtual");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2);
+}
+
+TEST_F(PostVerify, RemoveVirtualCtorArg) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo1_virtual");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 1);
+}
+
+// Check unused arguments are successfully removed in virtual derived
+// constructors
+TEST_F(PreVerify, RemoveDerivedCtorArg) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo1_derived");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2);
+}
+
+TEST_F(PostVerify, RemoveDerivedCtorArg) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo1_derived");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 1);
+}
+
+// Check used arguments are not removed in virtual base constructors
+TEST_F(PreVerify, DontRemoveVirtualCtorArg) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo2_virtual");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 3);
+}
+
+TEST_F(PostVerify, DontRemoveVirtualCtorArg) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo2_virtual");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 3);
+}
+
+// Check used arguments are not removed in virtual derived constructors
+TEST_F(PreVerify, DontRemoveDerivedCtorArg) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo2_derived");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 3);
+}
+
+TEST_F(PostVerify, DontRemoveDerivedCtorArg) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo2_derived");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 3);
+}
+
+// Check used arguments are not removed in virtual base functions that use the
+// argument in the base function
+TEST_F(PreVerify, DontRemoveVirtualArgUsedInBase) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo_used_in_base_virtual");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+TEST_F(PostVerify, DontRemoveVirtualArgUsedInBase) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo_used_in_base_virtual");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+// Check used arguments are not removed in virtual derived functions that use
+// the argument in the base function
+TEST_F(PreVerify, DontRemoveDerivedArgUsedInBase) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo_used_in_base_derived");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+TEST_F(PostVerify, DontRemoveDerivedArgUsedInBase) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo_used_in_base_derived");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+// Check used arguments are not removed in virtual base functions that use the
+// argument in the derived function
+TEST_F(PreVerify, DontRemoveVirtualArgUsedInDerived) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo =
+      find_vmethod_named(*foo_user, "use_foo_used_in_derived_virtual");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+TEST_F(PostVerify, DontRemoveVirtualArgUsedInDerived) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo =
+      find_vmethod_named(*foo_user, "use_foo_used_in_derived_virtual");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+// Check used arguments are not removed in virtual derived functions that use
+// the argument in the derived function
+TEST_F(PreVerify, DontRemoveDerivedArgUsedInDrived) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo =
+      find_vmethod_named(*foo_user, "use_foo_used_in_derived_derived");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+TEST_F(PostVerify, DontRemoveDerivedArgUsedInDerived) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo =
+      find_vmethod_named(*foo_user, "use_foo_used_in_derived_derived");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+// Check used arguments are not removed in virtual base functions that use the
+// argument in the both functions
+TEST_F(PreVerify, DontRemoveVirtualArgUsedInBoth) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo_used_in_all_virtual");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+TEST_F(PostVerify, DontRemoveVirtualArgUsedInBoth) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo_used_in_all_virtual");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+// Check used arguments are not removed in virtual derived functions that use
+// the argument in both functions
+TEST_F(PreVerify, DontRemoveDerivedArgUsedInBoth) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo_used_in_all_derived");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+TEST_F(PostVerify, DontRemoveDerivedArgUsedInBoth) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo_used_in_all_derived");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+// Check used arguments are removed in virtual base functions that use the
+// argument in the no functions
+TEST_F(PreVerify, RemoveVirtualArgUsedInNone) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo_used_in_none_virtual");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+TEST_F(PostVerify, RemoveVirtualArgUsedInNone) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo_used_in_none_virtual");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 1, 1);
+}
+
+// Check used arguments are removed in virtual derived functions that use
+// the argument in no functions
+TEST_F(PreVerify, RemoveDerivedArgUsedInNone) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo_used_in_none_derived");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+TEST_F(PostVerify, RemoveDerivedArgUsedInNone) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo_used_in_none_derived");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 1, 1);
+}
+
+// Check used arguments are not removed in virtual base functions that use
+// the argument in a derived derived function
+TEST_F(PreVerify, DontRemoveVirtualArgUsedInDerivedDerived) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo =
+      find_vmethod_named(*foo_user, "use_foo_used_in_derived_derived_virtual");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+TEST_F(PostVerify, DontRemoveVirtualArgUsedInDerivedDerived) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo =
+      find_vmethod_named(*foo_user, "use_foo_used_in_derived_derived_virtual");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+// Check used arguments are not removed in virtual derived derived functions
+// that use the argument in a base function
+TEST_F(PreVerify, DontRemoveDerivedDerivedArgUsedInBase) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo =
+      find_vmethod_named(*foo_user, "use_foo_used_in_base_derived_derived");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+TEST_F(PostVerify, DontRemoveDerivedDerivedArgUsedInBase) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo =
+      find_vmethod_named(*foo_user, "use_foo_used_in_base_derived_derived");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+// Check used arguments are not removed in virtual derived functions
+// that use the argument in a sibling function
+TEST_F(PreVerify, DontRemoveDerivedArgUsedInSibling) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo =
+      find_vmethod_named(*foo_user, "use_foo_used_in_sibling_derived");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+TEST_F(PostVerify, DontRemoveDerivedArgUsedInSibling) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo =
+      find_vmethod_named(*foo_user, "use_foo_used_in_sibling_derived");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+// Check used arguments are removed in virtual interface functions
+// that use the argument in a no functions
+TEST_F(PreVerify, RemoveInterfaceArgUsedInNone) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo =
+      find_vmethod_named(*foo_user, "use_foo_used_in_none_interface");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+TEST_F(PostVerify, RemoveInterfaceArgUsedInNone) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo =
+      find_vmethod_named(*foo_user, "use_foo_used_in_none_interface");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 1, 1);
+}
+
+// Check used arguments are not removed in virtual interface functions
+// that use the argument in all functions
+TEST_F(PreVerify, DontRemoveInterfaceArgUsedInAll) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo_used_in_all_interface");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+TEST_F(PostVerify, DontRemoveInterfaceArgUsedInAll) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo_used_in_all_interface");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+// Check used arguments are not removed in virtual interface functions
+// that use the argument in base function
+TEST_F(PreVerify, DontRemoveInterfaceArgUsedInBase) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo =
+      find_vmethod_named(*foo_user, "use_foo_used_in_base_interface");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+TEST_F(PostVerify, DontRemoveInterfaceArgUsedInBase) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo =
+      find_vmethod_named(*foo_user, "use_foo_used_in_base_interface");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+// Check used arguments are not removed in abstract class functions
+TEST_F(PreVerify, DontRemoveAbstractUsedArg) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo_abstract_used");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+TEST_F(PostVerify, DontRemoveAbstractUsedArg) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo_abstract_used");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+// Check unused arguments are removed in abstract class functions
+TEST_F(PreVerify, RemoveAbstractUnusedArg) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo_abstract_unused");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 2, 1);
+}
+
+TEST_F(PostVerify, RemoveAbstractUnusedArg) {
+  auto foo_user = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/FooVirtualUser;");
+  ASSERT_NE(nullptr, foo_user);
+
+  auto use_foo = find_vmethod_named(*foo_user, "use_foo_abstract_unused");
+  ASSERT_NE(nullptr, use_foo);
+  use_foo->balloon();
+
+  check_callsite_regs(use_foo, 1, 1);
 }
 
 } // namespace
