@@ -43,5 +43,6 @@ class TransformConstClassBranchesPass : public Pass {
   // data structure.
   std::string m_string_tree_lookup_method;
   std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
+  size_t m_const_string_max_size;
   size_t m_max_transforms_per_dex;
 };
