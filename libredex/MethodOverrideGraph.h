@@ -107,9 +107,7 @@ class Graph {
  public:
   const Node& get_node(const DexMethod* method) const;
 
-  const ConcurrentMap<const DexMethod*, std::unique_ptr<Node>>& nodes() const {
-    return m_nodes;
-  }
+  const ConcurrentMap<const DexMethod*, Node>& nodes() const { return m_nodes; }
 
   void add_edge(const DexMethod* overridden, const DexMethod* overriding);
 
@@ -126,7 +124,7 @@ class Graph {
 
  private:
   static Node empty_node;
-  ConcurrentMap<const DexMethod*, std::unique_ptr<Node>> m_nodes;
+  ConcurrentMap<const DexMethod*, Node> m_nodes;
 };
 
 bool all_overriding_methods(const Graph& graph,

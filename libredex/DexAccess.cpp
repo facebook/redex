@@ -39,10 +39,10 @@ void loosen_access_modifier_for_vmethods(const DexClasses& scope) {
     const auto* method = pair.first;
     // If a final method has children, it can only be package-private and we can
     // not change it to be public.
-    if (is_final(method) && !pair.second->children.empty()) {
+    if (is_final(method) && !pair.second.children.empty()) {
       overriden_should_not_be_public(
-          pair.second.get(), graph.get(), &should_not_mark);
-      auto& children = pair.second->children;
+          &pair.second, graph.get(), &should_not_mark);
+      auto& children = pair.second.children;
       auto* first_child = *children.begin();
       always_assert_log(!is_public(method) && !is_protected(method),
                         "%s is visible final but it has children %s",

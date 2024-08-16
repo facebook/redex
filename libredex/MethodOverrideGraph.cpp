@@ -393,7 +393,7 @@ const Node& Graph::get_node(const DexMethod* method) const {
   if (it == m_nodes.end()) {
     return empty_node;
   }
-  return *it->second;
+  return it->second;
 }
 
 void Graph::add_edge(const DexMethod* overridden, const DexMethod* overriding) {
@@ -412,34 +412,29 @@ void Graph::add_edge(const DexMethod* overridden,
                      const DexMethod* overriding,
                      bool overriding_is_interface) {
   Node* overriding_node = nullptr;
-  m_nodes.update(overriding, [&](const DexMethod*, std::unique_ptr<Node>& node,
-                                 bool exists) {
+  m_nodes.update(overriding, [&](const DexMethod*, Node& node, bool exists) {
     if (!exists) {
-      node = std::make_unique<Node>();
-      node->method = overriding;
-      node->is_interface = overriding_is_interface;
+      node.method = overriding;
+      node.is_interface = overriding_is_interface;
     }
-    overriding_node = node.get();
+    overriding_node = &node;
   });
 
   Node* overridden_node = nullptr;
-  m_nodes.update(overridden, [&](const DexMethod*, std::unique_ptr<Node>& node,
-                                 bool exists) {
+  m_nodes.update(overridden, [&](const DexMethod*, Node& node, bool exists) {
     if (exists) {
-      always_assert(node->is_interface == overridden_is_interface);
+      always_assert(node.is_interface == overridden_is_interface);
     } else {
-      node = std::make_unique<Node>();
-      node->method = overridden;
-      node->is_interface = overridden_is_interface;
+      node.method = overridden;
+      node.is_interface = overridden_is_interface;
     }
-    node->children.push_back(overriding_node);
-    overridden_node = node.get();
+    node.children.push_back(overriding_node);
+    overridden_node = &node;
   });
 
-  m_nodes.update(overriding, [&](const DexMethod*, std::unique_ptr<Node>& node,
-                                 bool exists) {
+  m_nodes.update(overriding, [&](const DexMethod*, Node& node, bool exists) {
     redex_assert(exists);
-    node->parents.push_back(overridden_node);
+    node.parents.push_back(overridden_node);
   });
 }
 
@@ -467,13 +462,11 @@ bool Graph::add_other_implementation_class(const DexMethod* overridden,
                                            const DexMethod* overriding,
                                            const DexClass* cls) {
   bool parent_inserted = false;
-  m_nodes.update(overriding, [&](const DexMethod*, std::unique_ptr<Node>& node,
-                                 bool exists) {
+  m_nodes.update(overriding, [&](const DexMethod*, Node& node, bool exists) {
     if (!exists) {
-      node = std::make_unique<Node>();
-      node->method = overriding;
+      node.method = overriding;
     }
-    auto& oii = node->other_interface_implementations;
+    auto& oii = node.other_interface_implementations;
     if (!oii) {
       oii = std::make_unique<OtherInterfaceImplementations>();
     }
