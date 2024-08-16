@@ -280,6 +280,7 @@ Stats apply_transform(const PassState& pass_state,
     auto field_def = DexField::make_field(method->get_class(), field_name,
                                           type::java_lang_String())
                          ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
+    field_def->set_deobfuscated_name(show_deobfuscated(field_def));
     cls->add_field(field_def);
 
     auto clinit = ensure_clinit();
