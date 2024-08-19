@@ -168,9 +168,31 @@ void GlobalTypeAnalyzer::analyze_node(
       auto* insn = mie.insn;
       if (insn->has_method() && outgoing_insns.count(insn)) {
         ArgumentTypeEnvironment out_args;
+
+        auto handle_receiver_domain = [](DexTypeDomain&& receiver_domain) {
+          if (receiver_domain.is_bottom() || receiver_domain.is_top()) {
+            return receiver_domain;
+          }
+
+          if (receiver_domain.is_null()) {
+            return receiver_domain;
+          }
+
+          // Only the NOT_NULL receiver type domain is visible to the callee.
+          // This also helps to ensure global state domains convergence.
+          receiver_domain.apply<0>(
+              [&](auto* val) { *val = NullnessDomain(Nullness::NOT_NULL); });
+          return receiver_domain;
+        };
+
         for (size_t i = 0; i < insn->srcs_size(); ++i) {
-          out_args.set(i, state.get(insn->src(i)));
+          if (i == 0 && !opcode::is_invoke_static(insn->opcode())) {
+            out_args.set(i, handle_receiver_domain(state.get(insn->src(i))));
+          } else {
+            out_args.set(i, state.get(insn->src(i)));
+          }
         }
+
         current_partition->set(insn, out_args);
       }
       intra_ta->analyze_instruction(insn, &state);
@@ -484,6 +506,8 @@ std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
     if (gta->get_whole_program_state().leq(*wps)) {
       break;
     }
+    // Check for progress being made.
+    always_assert(wps->leq(gta->get_whole_program_state()));
     // Use the refined WholeProgramState to propagate more constants via
     // the stack and registers.
     TRACE(TYPE, 2, "[global] Start a new global analysis run");
