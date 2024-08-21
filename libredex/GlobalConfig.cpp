@@ -148,12 +148,14 @@ void GlobalConfig::bind_config() {
   bind("android_sdk_api_28_file", "", string_param);
   bind("android_sdk_api_29_file", "", string_param);
   bind("bytecode_sort_mode", {}, string_vector_param);
+  bind("class_frequencies", "", string_param);
   bind("coldstart_classes", "", string_param);
   bind("coldstart_methods_file", "", string_param);
   bind("compute_xml_reachability", false, bool_param);
   bind("deep_data_enabled_interactions", {}, string_vector_param);
   bind("unused_keep_rule_abort", false, bool_param);
   bind("debug_info_kind", "", string_param);
+  bind("default_class_frequencies", "", string_param);
   bind("default_coldstart_classes", "", string_param);
   bind("emit_class_method_info_map", false, bool_param);
   bind("emit_locator_strings", {}, bool_param);

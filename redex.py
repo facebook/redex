@@ -20,6 +20,7 @@ import sys
 import tempfile
 import timeit
 import typing
+import zipfile
 from os.path import abspath, dirname, getsize, isdir, isfile, join
 from pipes import quote
 
@@ -794,6 +795,12 @@ Given an APK, produce a better APK!
         help="Override deep data enabled interactions",
     )
 
+    parser.add_argument(
+        "--class-frequencies",
+        type=str,
+        help="Path to a zipped file containing class frequencies for different interactions (expects .zip)",
+    )
+
     # Manual tool paths.
 
     # Must be subclassed.
@@ -1058,6 +1065,27 @@ def _handle_profiles(
         LOGGER.info("No coldstart ordering found in %s", args.packed_profiles)
 
 
+def _handle_class_frequencies(args: argparse.Namespace) -> None:
+    if not args.class_frequencies:
+        return
+    class_freq_directory = make_temp_dir(".redex_class_frequencies", False)
+    with zipfile.ZipFile(args.class_frequencies, "r") as class_freq_zip:
+        class_freq_zip.extractall(path=class_freq_directory)
+
+    join_str = ";" if IS_WINDOWS else ":"
+    class_frequencies_str = join_str.join(
+        f"{f.path}"
+        for f in os.scandir(class_freq_directory)
+        if f.is_file() and f.name.startswith("class_freqs")
+    )
+    if class_frequencies_str:
+        LOGGER.debug("Found class_frequencies: %s", class_frequencies_str)
+        # Assume there's at most one.
+        args.passthru.append(f"class_frequencies={class_frequencies_str}")
+    else:
+        LOGGER.info("No class_frequencies found in %s", args.class_frequencies)
+
+
 def prepare_redex(args: argparse.Namespace) -> State:
     LOGGER.debug("Preparing...")
     debug_mode = args.unpack_only or args.debug
@@ -1182,6 +1210,8 @@ def prepare_redex(args: argparse.Namespace) -> State:
         )
 
         _handle_profiles(args, dd_enabled_interactions)
+
+        _handle_class_frequencies(args)
 
         LOGGER.debug("Moving contents to expected structure...")
         # Move each dex to a separate temporary directory to be operated by
