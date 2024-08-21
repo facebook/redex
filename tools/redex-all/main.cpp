@@ -1348,48 +1348,6 @@ void finalize_resource_table(ConfigFiles& conf) {
   res_table->finalize_resource_table(*global_resources_config);
 }
 
-void collect_classes_for_full_json(const DexStore& store,
-                                   Json::Value* full_map_root) {
-  Json::Value store_entry;
-
-  Json::Value classes_entry;
-  for (const auto& classes : store.get_dexen()) {
-    for (const auto& cls : classes) {
-      Json::Value class_entry;
-      class_entry["obfuscated"] = show(cls);
-      class_entry["original_store"] = cls->get_location()->get_store_name();
-
-      auto collect_members = [](const auto& members) {
-        Json::Value members_entry{Json::ValueType::objectValue};
-        for (const auto* member : members) {
-          members_entry[std::string(member->get_deobfuscated_name_or_empty())] =
-              show(member);
-        }
-        return members_entry;
-      };
-      class_entry["ifields"] = collect_members(cls->get_ifields());
-      class_entry["sfields"] = collect_members(cls->get_sfields());
-      class_entry["dmethods"] = collect_members(cls->get_dmethods());
-      class_entry["vmethods"] = collect_members(cls->get_vmethods());
-
-      classes_entry[std::string(cls->get_deobfuscated_name_or_empty())] =
-          std::move(class_entry);
-    }
-  }
-  store_entry["classes"] = std::move(classes_entry);
-  store_entry["root"] = store.is_root_store();
-  store_entry["generated"] = store.is_generated();
-  store_entry["num_dexes"] = (uint64_t)store.num_dexes();
-
-  Json::Value deps_entry{Json::ValueType::arrayValue};
-  for (const auto& dep : store.get_dependencies()) {
-    deps_entry.append(dep);
-  }
-  store_entry["dependencies"] = std::move(deps_entry);
-
-  (*full_map_root)[store.get_name()] = std::move(store_entry);
-}
-
 /**
  * Post processing steps: write dex and collect stats
  */
@@ -1478,10 +1436,6 @@ void redex_backend(ConfigFiles& conf,
     const auto& dex_magic = stores[0].get_dex_magic();
     auto min_sdk = manager.get_redex_options().min_sdk;
     ScopedMemStats wod_mem_stats{mem_stats_enabled, reset_hwm};
-    Json::Value full_json_root{Json::ValueType::objectValue};
-    constexpr const char* kJsonTimerName =
-        "Collecting full-rename-map-json data";
-    AccumulatingTimer json_timer{kJsonTimerName};
     for (size_t store_number = 0; store_number < stores.size();
          ++store_number) {
       auto& store = stores[store_number];
@@ -1520,19 +1474,8 @@ void redex_backend(ConfigFiles& conf,
         output_dexes_stats.push_back(
             std::make_pair(store.get_name(), std::move(this_dex_stats)));
       }
-      {
-        auto timer_scope = json_timer.scope();
-        collect_classes_for_full_json(store, &full_json_root);
-      }
     }
-    Timer::add_timer(kJsonTimerName, json_timer.get_seconds());
     wod_mem_stats.trace_log("Writing optimized dexes");
-
-    {
-      Timer t("Writing full rename map JSON");
-      std::ofstream ofs(conf.metafile("redex-full-rename-map.json"));
-      ofs << full_json_root;
-    }
   }
 
   sanitizers::lsan_do_recoverable_leak_check();
