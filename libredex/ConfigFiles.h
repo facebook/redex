@@ -49,6 +49,21 @@ struct ConfigFiles {
   ConfigFiles(const Json::Value& config, const std::string& outdir);
   ~ConfigFiles();
 
+  const std::unordered_map<const DexString*, std::vector<uint8_t>>&
+  get_class_frequencies() {
+    if (m_class_freq_map.empty()) {
+      m_class_freq_map = load_class_frequencies();
+    }
+    return m_class_freq_map;
+  }
+
+  const std::vector<std::string>& get_interactions() {
+    if (m_interactions.empty()) {
+      load_class_frequencies();
+    }
+    return m_interactions;
+  }
+
   const std::vector<std::string>& get_coldstart_classes() {
     if (m_coldstart_classes.empty()) {
       m_coldstart_classes = load_coldstart_classes();
@@ -223,6 +238,8 @@ struct ConfigFiles {
 
   std::vector<std::string> load_coldstart_methods();
   std::vector<std::string> load_coldstart_classes();
+  std::unordered_map<const DexString*, std::vector<uint8_t>>
+  load_class_frequencies();
   std::unordered_map<std::string, std::vector<std::string>> load_class_lists();
   void ensure_agg_method_stats_loaded() const;
   void ensure_secondary_method_stats_loaded() const;
@@ -238,8 +255,11 @@ struct ConfigFiles {
 
   bool m_load_class_lists_attempted{false};
   std::unique_ptr<ProguardMap> m_proguard_map;
+  std::string m_class_frequency_filename;
   std::string m_coldstart_class_filename;
   std::string m_coldstart_methods_filename;
+  std::vector<std::string> m_interactions;
+  std::unordered_map<const DexString*, std::vector<uint8_t>> m_class_freq_map;
   std::vector<std::string> m_coldstart_classes;
   std::vector<std::string> m_coldstart_methods;
   std::unordered_map<std::string, std::vector<std::string>> m_class_lists;
