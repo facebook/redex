@@ -1282,6 +1282,20 @@ def prepare_redex(args: argparse.Namespace) -> State:
     )
 
 
+def _is_preserve_input_dexes(args: argparse.Namespace) -> bool:
+    if args.config is None:
+        return False
+
+    try:
+        with open(args.config) as config_file:
+            config_dict = json.load(config_file)
+
+        return config_dict.get("preserve_input_dexes", False)
+    except Exception as e:
+        LOGGER.warning("Failed to read config file: %s", e)
+    return False
+
+
 def get_compression_list() -> typing.List[CompressionEntry]:
     return [
         CompressionEntry(
@@ -1368,6 +1382,16 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             None,
             None,
             CompressionLevel.BETTER,  # Usually small enough.
+        ),
+        CompressionEntry(
+            "Redex Full Rename Map",
+            lambda args: not _is_preserve_input_dexes(args),
+            False,
+            ["redex-full-rename-map.txt"],
+            [],
+            "redex-full-rename-map.txt.zstd",
+            None,
+            CompressionLevel.DEFAULT,  # Bit larger.
         ),
     ]
 
