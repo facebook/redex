@@ -507,7 +507,9 @@ std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
       break;
     }
     // Check for progress being made.
-    always_assert(wps->leq(gta->get_whole_program_state()));
+    if (m_enforce_iteration_refinement) {
+      always_assert(wps->leq(gta->get_whole_program_state()));
+    }
     // Use the refined WholeProgramState to propagate more constants via
     // the stack and registers.
     TRACE(TYPE, 2, "[global] Start a new global analysis run");

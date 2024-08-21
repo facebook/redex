@@ -128,11 +128,13 @@ class GlobalTypeAnalysis {
   explicit GlobalTypeAnalysis(
       size_t max_global_analysis_iteration = 10,
       bool use_multiple_callee_callgraph = false,
-      bool only_aggregate_safely_inferrable_fields = true)
+      bool only_aggregate_safely_inferrable_fields = true,
+      bool enforce_iteration_refinement = true)
       : m_max_global_analysis_iteration(max_global_analysis_iteration),
         m_use_multiple_callee_callgraph(use_multiple_callee_callgraph),
         m_only_aggregate_safely_inferrable_fields(
-            only_aggregate_safely_inferrable_fields) {}
+            only_aggregate_safely_inferrable_fields),
+        m_enforce_iteration_refinement(enforce_iteration_refinement) {}
 
   void run(const Scope& scope) { analyze(scope); }
 
@@ -148,6 +150,7 @@ class GlobalTypeAnalysis {
 
   bool m_use_multiple_callee_callgraph;
   bool m_only_aggregate_safely_inferrable_fields;
+  bool m_enforce_iteration_refinement;
   // Methods reachable from clinit that read static fields and reachable from
   // ctors that read instance fields.
   ConcurrentSet<const DexMethod*> m_any_init_reachables;
