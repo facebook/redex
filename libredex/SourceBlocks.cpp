@@ -1098,7 +1098,12 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
   static size_t hot_immediate_dom_not_hot_cfg(cfg::ControlFlowGraph& cfg) {
     size_t sum{0};
+
+    // Some passes may leave around unreachable blocks which the fast-dom
+    // does not deal well with.
+    cfg.remove_unreachable_blocks();
     dominators::SimpleFastDominators<cfg::GraphInterface> dom{cfg};
+
     for (auto* b : cfg.blocks()) {
       sum += hot_immediate_dom_not_hot(b, dom);
     }
@@ -1107,7 +1112,12 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
   static size_t chain_and_dom_violations_cfg(cfg::ControlFlowGraph& cfg) {
     size_t sum{0};
+
+    // Some passes may leave around unreachable blocks which the fast-dom
+    // does not deal well with.
+    cfg.remove_unreachable_blocks();
     dominators::SimpleFastDominators<cfg::GraphInterface> dom{cfg};
+
     for (auto* b : cfg.blocks()) {
       sum += chain_and_dom_violations(b, dom);
     }
