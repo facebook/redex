@@ -326,8 +326,7 @@ size_t MethodProfiles::substitute_stats(
         stats = it->second;
         continue;
       }
-      stats->appear_percent =
-          std::max(stats->appear_percent, it->second.appear_percent);
+      stats->appear_percent += it->second.appear_percent;
       stats->call_count += it->second.call_count;
       stats->order_percent =
           std::min(stats->order_percent, it->second.order_percent);
