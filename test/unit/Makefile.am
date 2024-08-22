@@ -6,6 +6,27 @@ AM_CPPFLAGS = $(COMMON_INCLUDES) $(COMMON_TEST_INCLUDES)
 
 LDADD = $(COMMON_TEST_LIBS)
 
+# Set any env that a test wants if a test.env file is found.
+AM_LOG_FLAGS = -c 'if [ -f $$0.env ] ; then source $$0.env ; fi ; sdk_path=$(ANDROID_SDK) android_target=$(ANDROID_PLATFORM_VERSION) $$0'
+
+# make_env: Simple helper to generate test-specific env.
+#
+# $1: test name
+# $2: space-separated list of env values
+#
+# Use: $(eval $(call make_env,test_name,a=b c=d))
+define make_env
+
+$(1).env:
+	rm -f $$@
+	$(foreach pair,$(2), echo "export $(pair)" >> $$@ ;)
+
+endef
+
+####
+# Actual test definitions
+####
+
 # These need things in the environment.
 # XFAIL_TESTS = stringbuilder_outline_test throw_propagation_test
 
