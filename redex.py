@@ -1207,6 +1207,8 @@ def prepare_redex(args: argparse.Namespace) -> State:
 
         _handle_profiles(args, dd_enabled_interactions)
 
+        _handle_class_frequencies(args)
+
         LOGGER.debug("Moving contents to expected structure...")
         # Move each dex to a separate temporary directory to be operated by
         # redex.
