@@ -86,6 +86,12 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
         config.get("default_coldstart_classes", "").asString();
   }
 
+  m_class_frequency_filename = config.get("class_frequencies", "").asString();
+  if (m_class_frequency_filename.empty()) {
+    m_class_frequency_filename =
+        config.get("default_class_frequencies", "").asString();
+  }
+
   uint32_t instruction_size_bitwidth_limit =
       config.get("instruction_size_bitwidth_limit", 0).asUInt();
   always_assert_log(
@@ -193,6 +199,41 @@ const std::unordered_set<DexType*>& ConfigFiles::get_do_not_devirt_anon() {
     }
   }
   return m_no_devirtualize_annos;
+}
+
+std::unordered_map<const DexString*, std::vector<uint8_t>>
+ConfigFiles::load_class_frequencies() {
+  if (m_class_frequency_filename.empty()) {
+    return {};
+  }
+  Timer t("loading class frequencies");
+  std::ifstream input(m_class_frequency_filename, std::ios_base::in);
+
+  std::unordered_map<const DexString*, std::vector<uint8_t>> class_freq_map;
+
+  std::string line;
+  std::getline(input, line);
+  // line containing all interactions
+  boost::trim(line);
+  boost::split(m_interactions, line, boost::is_any_of(" "));
+
+  while (std::getline(input, line)) {
+    // each line follows the format
+    // class_name,0 0 0 0 0
+    auto comma = line.find(',');
+
+    std::vector<std::string> frequencies;
+    boost::split(frequencies, line.substr(comma + 1, line.length()),
+                 boost::is_any_of(" "));
+    std::vector<uint8_t> int_frequencies(frequencies.size());
+    std::transform(frequencies.begin(), frequencies.end(),
+                   int_frequencies.begin(),
+                   [](const std::string& val) { return std::stoi(val); });
+
+    class_freq_map[DexString::make_string(line.substr(0, comma))] =
+        int_frequencies;
+  }
+  return class_freq_map;
 }
 
 /**
