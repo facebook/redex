@@ -17,31 +17,25 @@
 #include <string>
 #include <unordered_set>
 
-/// populate_reshuffable_classes_types collects type of classes that are in cold
-/// start but below 20pct appear count. These classes can be considered not as
-/// perf sensitive, thus should be movable.
+/// populate_reshuffable_classes_types collects all classes that appear
+/// with less than or equal to interaction_frequency_threshold percent of the
+/// time in all interactions the class appears in
 void populate_reshuffable_classes_types(
-    std::unordered_set<std::string>& reshuffable_classes, ConfigFiles& conf) {
-  const auto& betamap_classes = conf.get_coldstart_classes();
-  bool seen_coldstart_20pct_end = false;
-  bool seen_coldstart_1pct_end = false;
-  constexpr const char* coldstart_20pct_end = "ColdStart20PctEnd";
-  constexpr const char* coldstart_1pct_end = "ColdStart1PctEnd";
-  for (const auto& cls_name : betamap_classes) {
-    if (cls_name.find(coldstart_20pct_end) != std::string::npos) {
-      seen_coldstart_20pct_end = true;
-    }
-    if (cls_name.find(coldstart_1pct_end) != std::string::npos) {
-      seen_coldstart_1pct_end = true;
-    }
-    if (seen_coldstart_20pct_end) {
-      if (!seen_coldstart_1pct_end) {
-        reshuffable_classes.insert(cls_name);
-      } else {
-        // if a class appears after ColdStart marker, then it is loaded
-        // by another interaction which might be perf sensitive.
-        reshuffable_classes.erase(cls_name);
+    std::unordered_set<std::string>& reshuffable_classes,
+    ConfigFiles& conf,
+    size_t interaction_frequency_threshold) {
+  const auto& class_freqs = conf.get_class_frequencies();
+  for (const auto& class_freq : class_freqs) {
+    const DexString* class_name = class_freq.first;
+    const std::vector<uint8_t>& frequencies = class_freq.second;
+    bool below_threshold = true;
+    for (auto freq : frequencies) {
+      if (freq > interaction_frequency_threshold) {
+        below_threshold = false;
       }
+    }
+    if (below_threshold) {
+      reshuffable_classes.insert(class_name->c_str());
     }
   }
 }
@@ -91,7 +85,8 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(
   DexClasses classes;
   std::unordered_set<std::string> reshuffable_classes;
   if (config.exclude_below20pct_coldstart_classes) {
-    populate_reshuffable_classes_types(reshuffable_classes, conf);
+    populate_reshuffable_classes_types(reshuffable_classes, conf,
+                                       config.interaction_frequency_threshold);
   }
   m_mgr.incr_metric("num_reshuffable_classes", reshuffable_classes.size());
   for (size_t dex_index = m_first_dex_index; dex_index < dexen.size();
