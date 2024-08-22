@@ -95,6 +95,12 @@ class InterDexReshufflePass : public Pass {
          "Whether to exclude coldstart classes in between 1pctColdStart and "
          "20pctColdStart marker"
          "from the reshuffle.");
+    bind("interaction_frequency_threshold",
+         m_config.interaction_frequency_threshold,
+         m_config.interaction_frequency_threshold,
+         "Threshold of class frequency to be considered perf sensitive."
+         "A class has to have at least one interaction's frequency to be "
+         "above this threshold to be considered as perf sensitive");
   }
 
  private:

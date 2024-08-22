@@ -38,6 +38,7 @@ struct ReshuffleConfig {
   size_t extra_linear_alloc_limit{0};
   size_t max_batches{20};
   size_t max_batch_size{200000};
+  size_t interaction_frequency_threshold{0};
   bool exclude_below20pct_coldstart_classes{false};
   // Class merging related
   gain_t deduped_weight{1};
