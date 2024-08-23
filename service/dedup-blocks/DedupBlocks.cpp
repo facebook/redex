@@ -348,16 +348,6 @@ class DedupBlocksImpl {
   const Config* m_config;
   Stats& m_stats;
 
-  struct LiveRanges {
-    live_range::MoveAwareChains chains;
-    Lazy<live_range::DefUseChains> def_use_chains;
-    Lazy<live_range::UseDefChains> use_def_chains;
-    explicit LiveRanges(cfg::ControlFlowGraph& cfg)
-        : chains(cfg),
-          def_use_chains([this] { return chains.get_def_use_chains(); }),
-          use_def_chains([this] { return chains.get_use_def_chains(); }) {}
-  };
-
   // Find blocks with the same exact code
   Duplicates collect_duplicates(
       bool is_static,
@@ -369,8 +359,8 @@ class DedupBlocksImpl {
     const auto& blocks = cfg.blocks();
     Duplicates duplicates;
 
-    Lazy<LiveRanges> live_ranges(
-        [&]() { return std::make_unique<LiveRanges>(cfg); });
+    Lazy<live_range::LazyLiveRanges> live_ranges(
+        [&]() { return std::make_unique<live_range::LazyLiveRanges>(cfg); });
 
     for (cfg::Block* block : blocks) {
       if (is_eligible(block, cfg)) {
@@ -1036,7 +1026,7 @@ class DedupBlocksImpl {
   // invocation to an object that didn't come from a unique instruction.
   static boost::optional<std::vector<IRInstruction*>>
   get_init_receiver_instructions_defined_outside_of_block(
-      cfg::Block* block, Lazy<LiveRanges>& live_ranges) {
+      cfg::Block* block, Lazy<live_range::LazyLiveRanges>& live_ranges) {
     std::vector<IRInstruction*> res;
     std::unordered_set<IRInstruction*> block_insns;
     for (auto& mie : InstructionIterable(block)) {
@@ -1115,7 +1105,7 @@ class DedupBlocksImpl {
 
   static bool is_singleton_or_inconsistent(
       const BlockSet& blocks,
-      Lazy<LiveRanges>& live_ranges,
+      Lazy<live_range::LazyLiveRanges>& live_ranges,
       LivenessFixpointIterator& liveness_fixpoint_iter,
       Lazy<type_inference::TypeInference>& type_inference) {
     if (blocks.size() <= 1) {

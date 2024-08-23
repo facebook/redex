@@ -15,6 +15,7 @@
 
 #include "ControlFlow.h"
 #include "IRInstruction.h"
+#include "Lazy.h"
 #include "ReachingDefinitions.h"
 
 class IRCode;
@@ -91,6 +92,16 @@ class MoveAwareChains {
   const cfg::ControlFlowGraph& m_cfg;
   reaching_defs::MoveAwareFixpointIterator m_fp_iter;
   bool m_ignore_unreachable;
+};
+
+struct LazyLiveRanges {
+  live_range::MoveAwareChains chains;
+  Lazy<live_range::DefUseChains> def_use_chains;
+  Lazy<live_range::UseDefChains> use_def_chains;
+  explicit LazyLiveRanges(cfg::ControlFlowGraph& cfg)
+      : chains(cfg),
+        def_use_chains([this] { return chains.get_def_use_chains(); }),
+        use_def_chains([this] { return chains.get_use_def_chains(); }) {}
 };
 
 /*
