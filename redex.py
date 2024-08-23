@@ -317,6 +317,9 @@ def run_redex_binary(
     args += ["-S" + x for x in state.args.passthru]
     args += ["-J" + x for x in state.args.passthru_json]
 
+    if state.args.assert_abort:
+        args += ["--assert-abort", state.args.assert_abort]
+
     args += state.dexen
 
     # Stop before a pass and output intermediate dex and IR meta data.
@@ -800,6 +803,8 @@ Given an APK, produce a better APK!
         type=str,
         help="Path to a zipped file containing class frequencies for different interactions (expects .zip)",
     )
+
+    parser.add_argument("--assert-abort", type=str, help="For testing only!")
 
     # Manual tool paths.
 
@@ -1524,6 +1529,9 @@ def run_redex_passthrough(
 ) -> None:
     assert args.outdir
     assert args.dex_files
+
+    if args.addr2line:
+        bintools.set_addr2line_path(args.addr2line)
 
     state = State(
         args=args,
