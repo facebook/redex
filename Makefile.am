@@ -524,7 +524,8 @@ libopt_la_SOURCES = \
 	opt/vertical_merging/VerticalMerging.cpp \
 	opt/virtual_merging/DedupVirtualMethods.cpp \
 	opt/virtual_merging/VirtualMerging.cpp \
-	opt/virtual_scope/MethodDevirtualizationPass.cpp
+	opt/virtual_scope/MethodDevirtualizationPass.cpp \
+	opt/wrapped-primitives/WrappedPrimitives.cpp
 
 libopt_la_LIBADD = \
     libredex.la \
