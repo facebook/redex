@@ -61,7 +61,8 @@ class InterDex {
            int64_t minimize_cross_dex_refs_explore_alternatives,
            ClassReferencesCache& class_references_cache,
            bool exclude_baseline_profile_classes,
-           BaselineProfileConfig&& baseline_profile_config)
+           BaselineProfileConfig&& baseline_profile_config,
+           bool is_root_store = true)
       : m_dexen(dexen),
         m_asset_manager(asset_manager),
         m_conf(conf),
@@ -90,7 +91,8 @@ class InterDex {
             minimize_cross_dex_refs_explore_alternatives),
         m_class_references_cache(class_references_cache),
         m_exclude_baseline_profile_classes(exclude_baseline_profile_classes),
-        m_baseline_profile_config(std::move(baseline_profile_config)) {
+        m_baseline_profile_config(std::move(baseline_profile_config)),
+        m_is_root_store(is_root_store) {
     m_emitting_state.dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
     m_emitting_state.dexes_structure.set_reserve_frefs(reserve_refs.frefs);
     m_emitting_state.dexes_structure.set_reserve_trefs(reserve_refs.trefs);
@@ -269,6 +271,8 @@ class InterDex {
   bool m_exclude_baseline_profile_classes;
   BaselineProfileConfig m_baseline_profile_config;
   std::optional<std::unordered_set<DexType*>> m_baseline_profile_classes;
+
+  const bool m_is_root_store;
 };
 
 } // namespace interdex

@@ -552,12 +552,13 @@ namespace {
  * Grab classes that should end up in a pre-defined interdex group.
  */
 std::vector<std::vector<DexType*>> get_extra_classes_per_interdex_group(
-    const Scope& scope) {
+    const Scope& scope, const bool is_root_store) {
   std::vector<std::vector<DexType*>> res(MAX_DEX_NUM);
 
   InterdexSubgroupIdx num_interdex_groups = 0;
   walk::classes(scope, [&](const DexClass* cls) {
-    if (cls->rstate.has_interdex_subgroup()) {
+    // Interdex grouping is only relevant for root stores.
+    if (is_root_store && cls->rstate.has_interdex_subgroup()) {
       InterdexSubgroupIdx interdex_subgroup =
           cls->rstate.get_interdex_subgroup();
       res[interdex_subgroup].push_back(cls->get_type());
@@ -565,6 +566,9 @@ std::vector<std::vector<DexType*>> get_extra_classes_per_interdex_group(
           std::max(num_interdex_groups, interdex_subgroup + 1);
     }
   });
+  TRACE(IDEX, 3,
+        "  Populated interdex group with extra classes: num_interdex_groups %u",
+        num_interdex_groups);
 
   res.resize(num_interdex_groups);
 
@@ -581,7 +585,7 @@ void InterDex::load_interdex_types() {
 
   // Find generated classes that should be in the interdex order.
   std::vector<std::vector<DexType*>> interdex_group_classes =
-      get_extra_classes_per_interdex_group(m_scope);
+      get_extra_classes_per_interdex_group(m_scope, m_is_root_store);
   size_t curr_interdex_group = 0;
 
   std::unordered_set<DexClass*> classes(m_scope.begin(), m_scope.end());

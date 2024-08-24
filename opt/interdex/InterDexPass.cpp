@@ -354,7 +354,8 @@ void InterDexPass::run_pass_on_nonroot_store(
       refs_info, &xstore_refs, mgr.get_redex_options().min_sdk,
       init_classes_with_side_effects, m_transitively_close_interdex_order,
       m_minimize_cross_dex_refs_explore_alternatives, cache,
-      m_exclude_baseline_profile_classes, std::move(m_baseline_profile_config));
+      m_exclude_baseline_profile_classes, std::move(m_baseline_profile_config),
+      /* is_root_store */ false);
 
   interdex.run_on_nonroot_store();
 
