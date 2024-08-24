@@ -366,7 +366,7 @@ void InterDexPass::run_pass_on_nonroot_store(
       init_classes_with_side_effects, m_transitively_close_interdex_order,
       m_minimize_cross_dex_refs_explore_alternatives, cache,
       m_exclude_baseline_profile_classes, std::move(m_baseline_profile_config),
-      m_stable_partitions);
+      m_stable_partitions, /* is_root_store */ false);
 
   interdex.run_on_nonroot_store();
 
