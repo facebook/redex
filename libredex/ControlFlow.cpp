@@ -767,9 +767,14 @@ std::ostream& operator<<(std::ostream& os, const Edge& e) {
     return os;
   }
 
-  case EDGE_THROW:
-    return os << "throw";
-
+  case EDGE_THROW: {
+    auto catch_type = e.throw_info()->catch_type;
+    if (catch_type == nullptr) {
+      return os << "throw";
+    } else {
+      return os << "throw " << show(catch_type);
+    }
+  }
   case EDGE_GHOST:
     return os << "ghost";
 
