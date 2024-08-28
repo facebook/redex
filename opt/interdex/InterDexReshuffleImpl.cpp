@@ -17,16 +17,15 @@
 #include <string>
 #include <unordered_set>
 
-/// populate_reshuffable_classes_types collects all classes that appear
+/// populate_reshufflable_classes_types collects all classes that appear
 /// with less than or equal to interaction_frequency_threshold percent of the
 /// time in all interactions the class appears in
-void populate_reshuffable_classes_types(
-    std::unordered_set<std::string>& reshuffable_classes,
+void populate_reshufflable_classes_types(
+    std::unordered_set<const DexString*>& reshufflable_classes,
     ConfigFiles& conf,
     size_t interaction_frequency_threshold) {
   const auto& class_freqs = conf.get_class_frequencies();
   for (const auto& class_freq : class_freqs) {
-    const DexString* class_name = class_freq.first;
     const std::vector<uint8_t>& frequencies = class_freq.second;
     bool below_threshold = true;
     for (auto freq : frequencies) {
@@ -35,16 +34,16 @@ void populate_reshuffable_classes_types(
       }
     }
     if (below_threshold) {
-      reshuffable_classes.insert(class_name->c_str());
+      reshufflable_classes.insert(class_freq.first);
     }
   }
 }
 
-bool is_reshuffable_class(
+bool is_reshufflable_class(
     const DexClass* cls,
-    const std::unordered_set<std::string>& reshuffable_classes) {
-  return reshuffable_classes.find(cls->get_type()->str_copy()) !=
-         reshuffable_classes.end();
+    const std::unordered_set<const DexString*>& reshufflable_classes) {
+  return reshufflable_classes.find(cls->get_type()->get_name()) !=
+         reshufflable_classes.end();
 }
 
 InterDexReshuffleImpl::InterDexReshuffleImpl(
@@ -83,20 +82,20 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(
 
   Timer t("init");
   DexClasses classes;
-  std::unordered_set<std::string> reshuffable_classes;
+  std::unordered_set<const DexString*> reshufflable_classes;
   if (config.exclude_below20pct_coldstart_classes) {
-    populate_reshuffable_classes_types(reshuffable_classes, conf,
-                                       config.interaction_frequency_threshold);
+    populate_reshufflable_classes_types(reshufflable_classes, conf,
+                                        config.interaction_frequency_threshold);
   }
-  m_mgr.incr_metric("num_reshuffable_classes", reshuffable_classes.size());
+  m_mgr.incr_metric("num_reshufflable_classes", reshufflable_classes.size());
   for (size_t dex_index = m_first_dex_index; dex_index < dexen.size();
        dex_index++) {
     auto& dex = dexen.at(dex_index);
     if (dex_index == m_first_dex_index &&
         !std::any_of(dex.begin(), dex.end(),
-                     [this, &reshuffable_classes](auto* cls) {
+                     [this, &reshufflable_classes](auto* cls) {
                        return can_move(cls) ||
-                              is_reshuffable_class(cls, reshuffable_classes);
+                              is_reshufflable_class(cls, reshufflable_classes);
                      })) {
       m_first_dex_index++;
       continue;
@@ -104,7 +103,7 @@ InterDexReshuffleImpl::InterDexReshuffleImpl(
     for (auto cls : dex) {
       classes.push_back(cls);
       m_class_refs.emplace(cls, Refs());
-      if (!can_move(cls) && !is_reshuffable_class(cls, reshuffable_classes)) {
+      if (!can_move(cls) && !is_reshufflable_class(cls, reshufflable_classes)) {
         continue;
       }
       m_movable_classes.push_back(cls);
