@@ -140,7 +140,7 @@ TEST_F(FbjniMarkerTest, FbjniJsonIntegTest) {
 
   // read json file and call marker
   std::vector<std::string> json_files;
-  json_files.push_back(get_env("test_fbjni_json"));
+  json_files.push_back(std::getenv("test_fbjni_json"));
   mark_native_classes_from_fbjni_configs(json_files);
 
   // test mark successfully

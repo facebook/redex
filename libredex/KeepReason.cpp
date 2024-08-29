@@ -25,8 +25,6 @@ std::ostream& operator<<(std::ostream& os, const Reason& reason) {
     return os << "REDEX_CONFIG";
   case MANIFEST:
     return os << "MANIFEST";
-  case META_INF:
-    return os << "META_INF";
   case XML:
     return os << "XML";
   case ANNO:

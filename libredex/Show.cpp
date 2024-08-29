@@ -1110,7 +1110,8 @@ std::string vshow(const DexMethod* p, bool include_annotations /*=true*/) {
     if (p->get_param_anno() != nullptr) {
       for (auto const& pair : *p->get_param_anno()) {
         if (first) {
-          ss << "\n  param annotations:" << "\n";
+          ss << "\n  param annotations:"
+             << "\n";
           first = false;
         }
         ss << "    " << pair.first << ": " << show(pair.second) << "\n";
@@ -1221,10 +1222,9 @@ std::string show(DexOpcode opcode) {
 #define OP(op, ...)  \
   case DOPCODE_##op: \
     return #op;
-  DOPS
+    DOPS
 #undef OP
-      case FOPCODE_PACKED_SWITCH:
-    return "PACKED_SWITCH_DATA";
+        case FOPCODE_PACKED_SWITCH : return "PACKED_SWITCH_DATA";
   case FOPCODE_SPARSE_SWITCH:
     return "SPARSE_SWITCH_DATA";
   case FOPCODE_FILLED_ARRAY:

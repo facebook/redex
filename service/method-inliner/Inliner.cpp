@@ -93,24 +93,6 @@ float estimate_cross_dex_penalty(const InlinedCost* inlined_cost,
   return cross_dex_penalty;
 }
 
-bool is_finalizable(DexType* type) {
-  for (const auto* cls = type_class(type);
-       cls && cls->get_type() != type::java_lang_Object();
-       cls = type_class(cls->get_super_class())) {
-    for (const auto* m : cls->get_vmethods()) {
-      if (m->get_name()->str() != "finalize") {
-        continue;
-      }
-      const auto* p = m->get_proto();
-      if (!p->is_void() || !p->get_args()->empty()) {
-        continue;
-      }
-      return true;
-    }
-  }
-  return false;
-}
-
 } // namespace
 
 MultiMethodInliner::MultiMethodInliner(
@@ -390,7 +372,8 @@ void MultiMethodInliner::inline_methods() {
   info.critical_path_length =
       m_scheduler.run(methods_to_schedule.begin(), methods_to_schedule.end());
 
-  flush();
+  delayed_visibility_changes_apply();
+  delayed_invoke_direct_to_static();
   info.waited_seconds = m_scheduler.get_thread_pool().get_waited_seconds();
 }
 
@@ -1421,21 +1404,11 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
       /* ignore_unreachable */ !reduced_code,
       [&](auto* insn) { return opcode::is_a_load_param(insn->opcode()); });
   auto def_use_chains = chains.get_def_use_chains();
-  size_t arg_idx = 0;
   for (auto& mie : cfg->get_param_instructions()) {
-    auto it = def_use_chains.find(mie.insn);
-    if (it == def_use_chains.end() || it->second.empty()) {
-      float multiplier =
-          1.0f; // all other multipliers are relative to this normative value
-      if (call_site_summary) {
-        const auto& cv = call_site_summary->arguments.get(arg_idx);
-        if (!cv.is_top()) {
-          multiplier = get_unused_arg_multiplier(cv);
-        }
-      }
-      unused_args += multiplier;
+    auto uses = def_use_chains[mie.insn];
+    if (uses.empty()) {
+      unused_args++;
     }
-    arg_idx++;
   }
   insn_size = cfg->estimate_code_units();
   if (returns > 1) {
@@ -1456,44 +1429,6 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
                        unused_args,
                        std::move(reduced_code),
                        insn_size};
-}
-
-float MultiMethodInliner::get_unused_arg_multiplier(
-    const ConstantValue& cv) const {
-  always_assert(!cv.is_top());
-  always_assert(!cv.is_bottom());
-  if (cv.is_zero()) {
-    return m_inliner_cost_config.unused_arg_zero_multiplier;
-  }
-  if (auto scd = cv.maybe_get<SignedConstantDomain>()) {
-    if (scd->get_constant()) {
-      return m_inliner_cost_config.unused_arg_non_zero_constant_multiplier;
-    }
-    if (scd->is_nez()) {
-      return m_inliner_cost_config.unused_arg_nez_multiplier;
-    }
-    return m_inliner_cost_config.unused_arg_interval_multiplier;
-  }
-  if (cv.is_object()) {
-    if (cv.is_singleton_object()) {
-      return m_inliner_cost_config.unused_arg_singleton_object_multiplier;
-    }
-    if (cv.is_object_with_immutable_attr()) {
-      return m_inliner_cost_config
-          .unused_arg_object_with_immutable_attr_multiplier;
-    }
-    if (cv.maybe_get<StringDomain>()) {
-      return m_inliner_cost_config.unused_arg_string_multiplier;
-    }
-    if (cv.maybe_get<ConstantClassObjectDomain>()) {
-      return m_inliner_cost_config.unused_arg_class_object_multiplier;
-    }
-    if (cv.maybe_get<NewObjectDomain>()) {
-      return m_inliner_cost_config.unused_arg_new_object_multiplier;
-    }
-    return m_inliner_cost_config.unused_arg_other_object_multiplier;
-  }
-  return m_inliner_cost_config.unused_arg_not_top_multiplier;
 }
 
 const InlinedCost* MultiMethodInliner::get_fully_inlined_cost(
@@ -1663,18 +1598,6 @@ bool MultiMethodInliner::can_inline_init(const DexMethod* init_method) {
                   [&](const auto&) {
                     const auto* finalizable_fields =
                         m_shrinker.get_finalizable_fields();
-                    // When configured, we allow for relaxed constructor
-                    // inlining starting with min-sdk 21: starting with that
-                    // version, the Android verifier allows that any inherited
-                    // constructor may be invoked.
-
-                    // However, following JLS 17.4.5. Happens-before Order rules
-                    // (see
-                    // https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html),
-                    // we want to make sure that a happens-before relationship
-                    // is maintained between a proper constructor and a finalize
-                    // method, if any.
-
                     // We also exclude possibly anonymous classes as those may
                     // regress the effectiveness of the class-merging passes.
                     // TODO T184662680: While this is not a correctness issue,
@@ -1683,8 +1606,7 @@ bool MultiMethodInliner::can_inline_init(const DexMethod* init_method) {
                     bool relaxed = m_config.relaxed_init_inline &&
                                    m_shrinker.min_sdk() >= 21 &&
                                    !klass::maybe_anonymous_class(
-                                       type_class(init_method->get_class())) &&
-                                   !is_finalizable(init_method->get_class());
+                                       type_class(init_method->get_class()));
                     return constructor_analysis::can_inline_init(
                         init_method, finalizable_fields, relaxed);
                   })
@@ -1745,16 +1667,6 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
     }
   }
 
-  float cross_dex_bonus{0};
-  if (can_delete_callee && m_cross_dex_penalty) {
-    auto callee_code_refs = get_callee_code_refs(callee);
-    const auto& mrefs = callee_code_refs->methods;
-    if (std::none_of(mrefs.begin(), mrefs.end(),
-                     [callee](const auto* m) { return m != callee; })) {
-      cross_dex_bonus = m_inliner_cost_config.cross_dex_bonus_const;
-    }
-  }
-
   // 2. Determine costs of keeping the invoke instruction
 
   size_t caller_count{0};
@@ -1764,12 +1676,11 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   float invoke_cost =
       get_invoke_cost(m_inliner_cost_config, callee, inlined_cost->result_used);
   TRACE(INLINE, 3,
-        "[too_many_callers] %zu calls to %s; cost: inlined %f + %f - %f, "
-        "invoke %f",
+        "[too_many_callers] %zu calls to %s; cost: inlined %f + %f, invoke %f",
         caller_count, SHOW(callee), inlined_cost->code, cross_dex_penalty,
-        cross_dex_bonus, invoke_cost);
+        invoke_cost);
 
-  size_t classes = callee_caller_refs ? callee_caller_refs->classes : 1;
+  size_t classes = callee_caller_refs ? callee_caller_refs->classes : 0;
 
   size_t method_cost = 0;
   if (can_delete_callee) {
@@ -1784,7 +1695,7 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   if ((inlined_cost->code -
        inlined_cost->unused_args * m_inliner_cost_config.unused_args_discount) *
               caller_count +
-          classes * (cross_dex_penalty - cross_dex_bonus) >
+          classes * cross_dex_penalty >
       invoke_cost * caller_count + method_cost) {
     return true;
   }
@@ -2260,12 +2171,8 @@ bool MultiMethodInliner::cross_hot_cold(const DexMethod* caller,
 }
 
 void MultiMethodInliner::delayed_visibility_changes_apply() {
-  if (!m_delayed_visibility_changes) {
-    return;
-  }
   visibility_changes_apply_and_record_make_static(
       *m_delayed_visibility_changes);
-  m_delayed_visibility_changes->clear();
 }
 
 void MultiMethodInliner::visibility_changes_apply_and_record_make_static(

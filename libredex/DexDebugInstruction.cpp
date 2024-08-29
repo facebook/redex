@@ -69,7 +69,6 @@ void DexDebugInstruction::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
 DexDebugInstruction* DexDebugInstruction::make_instruction(
     DexIdx* idx, const uint8_t** encdata_ptr) {
   auto& encdata = *encdata_ptr;
-  always_assert(encdata < idx->end());
   uint8_t opcode = *encdata++;
   switch (opcode) {
   case DBG_END_SEQUENCE:
@@ -77,24 +76,20 @@ DexDebugInstruction* DexDebugInstruction::make_instruction(
   case DBG_ADVANCE_PC:
   case DBG_END_LOCAL:
   case DBG_RESTART_LOCAL: {
-    always_assert(encdata < idx->end());
     uint32_t v = read_uleb128(&encdata);
     return new DexDebugInstruction((DexDebugItemOpcode)opcode, v);
   }
   case DBG_ADVANCE_LINE: {
-    always_assert(encdata < idx->end());
     int32_t v = (uint32_t)read_sleb128(&encdata);
     return new DexDebugInstruction((DexDebugItemOpcode)opcode, v);
   }
   case DBG_START_LOCAL: {
-    always_assert(encdata < idx->end());
     uint32_t rnum = read_uleb128(&encdata);
     auto name = decode_noindexable_string(idx, encdata);
     DexType* type = decode_noindexable_type(idx, encdata);
     return new DexDebugOpcodeStartLocal(rnum, name, type);
   }
   case DBG_START_LOCAL_EXTENDED: {
-    always_assert(encdata < idx->end());
     uint32_t rnum = read_uleb128(&encdata);
     auto name = decode_noindexable_string(idx, encdata);
     DexType* type = decode_noindexable_type(idx, encdata);

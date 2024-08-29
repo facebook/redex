@@ -115,8 +115,6 @@ class BuilderTransform {
       const std::function<std::unordered_set<DexMethod*>(IRCode*, DexType*)>&
           get_methods_to_inline);
 
-  void flush() { m_inliner->flush(); }
-
  private:
   std::unique_ptr<MultiMethodInliner> m_inliner;
   inliner::InlinerConfig m_inliner_config;

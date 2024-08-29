@@ -99,32 +99,6 @@ void setup_method(DexMethod* orig_method, DexMethod* new_method) {
 }
 
 /**
- * Takes the annotations from the interface and combines them into the class,
- * excepting EnclosingClass, InnerClass (since that would make little sense to
- * haul over and could lead to surprise class loading attempts for dangling
- * outer class).
- */
-void combine_class_annotations(DexClass* cls, DexClass* intf_cls) {
-  auto interface_annos = intf_cls->get_anno_set();
-  if (interface_annos == nullptr) {
-    return;
-  }
-  auto enclosing_cls = DexType::get_type("Ldalvik/annotation/EnclosingClass;");
-  auto inner_cls = DexType::get_type("Ldalvik/annotation/InnerClass;");
-  if (enclosing_cls == nullptr || inner_cls == nullptr) {
-    // Not expected.
-    return;
-  }
-  DexAnnotationSet filtered;
-  for (auto& anno : interface_annos->get_annotations()) {
-    if (anno->type() != enclosing_cls && anno->type() != inner_cls) {
-      filtered.add_annotation(std::make_unique<DexAnnotation>(anno->clone()));
-    }
-  }
-  cls->combine_annotations_with(&filtered);
-}
-
-/**
  * Remove interfaces from classes. We walk the interface chain and move
  * down parent interfaces as needed so the contract of the class stays
  * the same.
@@ -171,7 +145,7 @@ void remove_interface(const DexType* intf, const SingleImplData& data) {
                                              new_intfs.end()};
   std::sort(revisited_intfs.begin(), revisited_intfs.end(), compare_dextypes);
   cls->set_interfaces(DexTypeList::make_type_list(std::move(revisited_intfs)));
-  combine_class_annotations(cls, intf_cls);
+  cls->combine_annotations_with(intf_cls);
   TRACE(INTF, 3, "(REMI)\t=> %s", SHOW(cls));
 }
 
@@ -181,10 +155,6 @@ bool must_rewrite_annotations(const SingleImplConfig& config) {
 
 bool must_set_method_annotations(const SingleImplConfig& config) {
   return config.meth_anno;
-}
-
-bool must_set_interface_annotations(const SingleImplConfig& config) {
-  return config.intf_anno;
 }
 
 /**
@@ -565,81 +535,41 @@ void OptimizationImpl::rewrite_interface_methods(const DexType* intf,
  */
 void OptimizationImpl::rewrite_annotations(Scope& scope,
                                            const SingleImplConfig& config) {
-  // TODO: this is a hack to fix a problem with enclosing annotations; there are
-  // more dalvik annotations that may need fixups if SystemAnnoKillPass is not
-  // configured to run afterwards.
-  using RewriteFn =
-      std::function<void(const DexClass*, DexAnnotation*, DexEncodedValue*)>;
-  std::unordered_map<DexType*, RewriteFn> types_to_rewrite;
-
-  auto rewrite_enclosing_method = [&](const DexClass* cls, DexAnnotation* anno,
-                                      DexEncodedValue* value) {
-    if (value->evtype() == DexEncodedValueTypes::DEVT_METHOD) {
-      auto method_value = static_cast<DexEncodedValueMethod*>(value);
-      const auto& meth_it =
-          m_intf_meth_to_impl_meth.find(method_value->method());
-      if (meth_it == m_intf_meth_to_impl_meth.end()) {
-        if (method_value->method()->is_def()) {
-          return;
-        }
-        // All the method definitions with optimized interfaces are updated,
-        // this is a pure ref, we are not sure if it's updated properly.
-        TRACE(INTF, 2,
-              "[SingleImpl]: Found pure methodref %s in annotation of "
-              "class %s, this may not be properly supported.\n",
-              SHOW(method_value->method()), SHOW(cls));
-        return;
-      }
-      TRACE(INTF, 4, "REWRITE: %s", SHOW(anno));
-      method_value->set_method(meth_it->second);
-      TRACE(INTF, 4, "TO: %s", SHOW(anno));
-    }
-  };
-
-  auto rewrite_enclosing_class = [&](const DexClass*, DexAnnotation* anno,
-                                     DexEncodedValue* value) {
-    if (value->evtype() == DexEncodedValueTypes::DEVT_TYPE) {
-      auto type_value = static_cast<DexEncodedValueType*>(value);
-      auto iface = type_value->type();
-      auto search = optimized.find(iface);
-      if (search != optimized.end()) {
-        auto& intf_data = single_impls->get_single_impl_data(iface);
-        TRACE(INTF, 4, "REWRITE: %s", SHOW(anno));
-        type_value->set_type(intf_data.cls);
-        TRACE(INTF, 4, "TO: %s", SHOW(anno));
-      }
-    }
-  };
-
-  auto enclosing_method =
+  // TODO: this is a hack to fix a problem with enclosing methods only.
+  //       There are more dalvik annotations to review.
+  //       The infrastructure is here but the code for all cases not yet
+  auto enclosingMethod =
       DexType::get_type("Ldalvik/annotation/EnclosingMethod;");
-  auto enclosing_class =
-      DexType::get_type("Ldalvik/annotation/EnclosingClass;");
-  if (must_set_method_annotations(config) && enclosing_method != nullptr) {
-    types_to_rewrite.emplace(enclosing_method, rewrite_enclosing_method);
-  }
-  if (must_set_interface_annotations(config) && enclosing_class != nullptr) {
-    types_to_rewrite.emplace(enclosing_class, rewrite_enclosing_class);
-  }
-  if (types_to_rewrite.empty()) {
-    return;
-  }
-
+  if (enclosingMethod == nullptr) return; // nothing to do
+  if (!must_set_method_annotations(config)) return;
   for (const auto& cls : scope) {
     auto anno_set = cls->get_anno_set();
-    if (anno_set == nullptr) {
-      continue;
-    }
+    if (anno_set == nullptr) continue;
     for (auto& anno : anno_set->get_annotations()) {
-      auto search = types_to_rewrite.find(anno->type());
-      if (search == types_to_rewrite.end()) {
-        continue;
-      }
-      auto& rewrite_fn = search->second;
+      if (anno->type() != enclosingMethod) continue;
       const auto& elems = anno->anno_elems();
       for (auto& elem : elems) {
         auto& value = elem.encoded_value;
-        rewrite_fn(cls, anno.get(), value.get());
+        if (value->evtype() == DexEncodedValueTypes::DEVT_METHOD) {
+          auto method_value = static_cast<DexEncodedValueMethod*>(value.get());
+          const auto& meth_it =
+              m_intf_meth_to_impl_meth.find(method_value->method());
+          if (meth_it == m_intf_meth_to_impl_meth.end()) {
+            if (method_value->method()->is_def()) {
+              continue;
+            }
+            // All the method definitions with optimized interfaces are updated,
+            // this is a pure ref, we are not sure if it's updated properly.
+            TRACE(INTF, 2,
+                  "[SingleImpl]: Found pure methodref %s in annotation of "
+                  "class %s, this may not be properly supported.\n",
+                  SHOW(method_value->method()), SHOW(cls));
+            continue;
+          }
+          TRACE(INTF, 4, "REWRITE: %s", SHOW(anno));
+          method_value->set_method(meth_it->second);
+          TRACE(INTF, 4, "TO: %s", SHOW(anno));
+        }
       }
     }
   }

@@ -57,6 +57,8 @@ std::unordered_set<IRInstruction*> BuilderTransform::try_inline_calls(
   return not_inlined_insns;
 }
 
+BuilderTransform::~BuilderTransform() {}
+
 /**
  * For all the methods of the given type, try inlining all super calls and
  * constructors of the super type. If any of them fails, return false.
@@ -290,7 +292,6 @@ void BuilderTransform::cleanup() {
     DexMethod::erase_method(copy);
     DexMethod::delete_method_DO_NOT_USE(copy);
   }
-  m_inliner->flush();
 }
 
 } // namespace builder_pattern

@@ -2504,7 +2504,8 @@ void ControlFlowGraph::delete_pred_edges(Block* b) {
 ControlFlowGraph::EdgeSet ControlFlowGraph::remove_edges_between(Block* p,
                                                                  Block* s,
                                                                  bool cleanup) {
-  return remove_edge_if(p, s, [](const Edge*) { return true; }, cleanup);
+  return remove_edge_if(
+      p, s, [](const Edge*) { return true; }, cleanup);
 }
 
 void ControlFlowGraph::delete_edges_between(Block* p, Block* s) {

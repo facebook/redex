@@ -12,7 +12,6 @@
 #include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "IRInstruction.h"
-#include "MethodProfiles.h"
 
 // Helper class to deal with methods that take a
 // (newly created) object, and only use it to read ifields. For those
@@ -79,8 +78,7 @@ class ExpandableMethodParams {
 
   // Make sure that all newly used expanded ctors actually exist as concrete
   // methods.
-  size_t flush(const Scope& scope,
-               method_profiles::MethodProfiles* method_profiles);
+  size_t flush(const Scope& scope);
 
  private:
   mutable InsertOnlyConcurrentMap<MethodKey, MethodInfo, MethodKeyHash>

@@ -66,42 +66,6 @@ void MethodInlinePass::bind_config() {
   bind("cross_dex_penalty_const",
        DEFAULT_COST_CONFIG.cross_dex_penalty_const,
        m_inliner_cost_config.cross_dex_penalty_const);
-  bind("cross_dex_bonus_const",
-       DEFAULT_COST_CONFIG.cross_dex_bonus_const,
-       m_inliner_cost_config.cross_dex_bonus_const);
-  bind("unused_arg_zero_multiplier",
-       DEFAULT_COST_CONFIG.unused_arg_zero_multiplier,
-       m_inliner_cost_config.unused_arg_zero_multiplier);
-  bind("unused_arg_non_zero_constant_multiplier",
-       DEFAULT_COST_CONFIG.unused_arg_non_zero_constant_multiplier,
-       m_inliner_cost_config.unused_arg_non_zero_constant_multiplier);
-  bind("unused_arg_nez_multiplier",
-       DEFAULT_COST_CONFIG.unused_arg_nez_multiplier,
-       m_inliner_cost_config.unused_arg_nez_multiplier);
-  bind("unused_arg_interval_multiplier",
-       DEFAULT_COST_CONFIG.unused_arg_interval_multiplier,
-       m_inliner_cost_config.unused_arg_interval_multiplier);
-  bind("unused_arg_singleton_object_multiplier",
-       DEFAULT_COST_CONFIG.unused_arg_singleton_object_multiplier,
-       m_inliner_cost_config.unused_arg_singleton_object_multiplier);
-  bind("unused_arg_object_with_immutable_attr_multiplier",
-       DEFAULT_COST_CONFIG.unused_arg_object_with_immutable_attr_multiplier,
-       m_inliner_cost_config.unused_arg_object_with_immutable_attr_multiplier);
-  bind("unused_arg_string_multiplier",
-       DEFAULT_COST_CONFIG.unused_arg_string_multiplier,
-       m_inliner_cost_config.unused_arg_string_multiplier);
-  bind("unused_arg_class_object_multiplier",
-       DEFAULT_COST_CONFIG.unused_arg_class_object_multiplier,
-       m_inliner_cost_config.unused_arg_class_object_multiplier);
-  bind("unused_arg_new_object_multiplier",
-       DEFAULT_COST_CONFIG.unused_arg_new_object_multiplier,
-       m_inliner_cost_config.unused_arg_new_object_multiplier);
-  bind("unused_arg_other_object_multiplier",
-       DEFAULT_COST_CONFIG.unused_arg_other_object_multiplier,
-       m_inliner_cost_config.unused_arg_other_object_multiplier);
-  bind("unused_arg_not_top_multiplier",
-       DEFAULT_COST_CONFIG.unused_arg_not_top_multiplier,
-       m_inliner_cost_config.unused_arg_not_top_multiplier);
   bind("consider_hot_cold", false, m_consider_hot_cold);
 }
 

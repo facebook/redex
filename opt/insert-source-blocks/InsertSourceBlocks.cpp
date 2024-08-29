@@ -9,6 +9,10 @@
 
 #include <algorithm>
 #include <boost/algorithm/string.hpp>
+#include <boost/multi_index/hashed_index.hpp>
+#include <boost/multi_index/member.hpp>
+#include <boost/multi_index_container.hpp>
+#include <boost/utility/string_view.hpp>
 #include <cstdint>
 #include <deque>
 #include <fstream>
@@ -247,6 +251,8 @@ is_traditional_access_method(const DexMethodRef* mref) {
   return std::make_pair(mref->get_class(), access_name);
 }
 
+using namespace boost::multi_index;
+
 struct ProfileFile {
   RedexMappedFile mapped_file;
   std::string interaction;
@@ -256,11 +262,40 @@ struct ProfileFile {
   using MethodMeta = std::unordered_map<const DexMethodRef*, StringPos>;
   MethodMeta method_meta;
 
-  using UnresolvedMethods = std::unordered_set<std::string_view>;
+  struct StringViewEquals {
+    bool operator()(const std::string& s1, const std::string& s2) const {
+      return s1 == s2;
+    }
+    bool operator()(const std::string& s1, const std::string_view& v2) const {
+      return v2 == s1;
+    }
+    bool operator()(const std::string_view& v1, const std::string& s2) const {
+      return v1 == s2;
+    }
+    bool operator()(const std::string_view& v1,
+                    const std::string_view& v2) const {
+      return v1 == v2;
+    }
+  };
+  using UnresolvedMethodMeta = multi_index_container<
+      std::pair<std::string_view, StringPos>,
+      indexed_by<
+          hashed_unique<member<std::pair<std::string_view, StringPos>,
+                               std::string_view,
+                               &std::pair<std::string_view, StringPos>::first>,
+                        boost::hash<std::string_view>,
+                        StringViewEquals>>>;
 
-  UnresolvedMethods unresolved_methods;
+  UnresolvedMethodMeta unresolved_method_meta;
 
-  using ClassAccessMethods = std::unordered_map<std::string_view, StringPos>;
+  using ClassAccessMethods = multi_index_container<
+      std::pair<std::string_view, StringPos>,
+      indexed_by<
+          hashed_unique<member<std::pair<std::string_view, StringPos>,
+                               std::string_view,
+                               &std::pair<std::string_view, StringPos>::first>,
+                        boost::hash<std::string_view>,
+                        StringViewEquals>>>;
 
   using AccessMethods = std::unordered_map<const DexType*, ClassAccessMethods>;
 
@@ -269,12 +304,12 @@ struct ProfileFile {
   ProfileFile(RedexMappedFile mapped_file,
               std::string interaction,
               MethodMeta method_meta,
-              UnresolvedMethods unresolved_methods,
+              UnresolvedMethodMeta unresolved_method_meta,
               AccessMethods access_methods)
       : mapped_file(std::move(mapped_file)),
         interaction(std::move(interaction)),
         method_meta(std::move(method_meta)),
-        unresolved_methods(std::move(unresolved_methods)),
+        unresolved_method_meta(std::move(unresolved_method_meta)),
         access_methods(std::move(access_methods)) {}
 
   static std::unique_ptr<ProfileFile> prepare_profile_file(
@@ -284,7 +319,7 @@ struct ProfileFile {
     }
     auto file = RedexMappedFile::open(profile_file_name, /*read_only=*/true);
     MethodMeta meta;
-    UnresolvedMethods unresolved_methods;
+    UnresolvedMethodMeta unresolved_meta;
     AccessMethods access_methods;
 
     std::string_view data{file.const_data(), file.size()};
@@ -333,7 +368,7 @@ struct ProfileFile {
       }
       pos = linefeed_pos + 1;
       // Do not use pos anymore! Ensure by scope from lambda.
-      [&data, &src_pos, &linefeed_pos, &meta, &unresolved_methods,
+      [&data, &src_pos, &linefeed_pos, &meta, &unresolved_meta,
        &access_methods]() {
         size_t comma_pos = data.find(',', src_pos);
         always_assert(comma_pos < linefeed_pos);
@@ -364,7 +399,7 @@ struct ProfileFile {
                 6,
                 "failed to resolve %s",
                 std::string(method_view).c_str());
-          unresolved_methods.insert(method_view);
+          unresolved_meta.emplace(method_view, string_pos);
           return;
         }
         TRACE(METH_PROF, 7, "Found normal method %s.",
@@ -375,7 +410,7 @@ struct ProfileFile {
 
     return std::make_unique<ProfileFile>(
         std::move(file), std::move(interaction), std::move(meta),
-        std::move(unresolved_methods), std::move(access_methods));
+        std::move(unresolved_meta), std::move(access_methods));
   }
 };
 
@@ -682,7 +717,7 @@ struct Injector {
     {
       size_t unresolved = 0;
       for (const auto& p_file : profile_files) {
-        unresolved += p_file->unresolved_methods.size();
+        unresolved += p_file->unresolved_method_meta.size();
       }
       mgr.set_metric("avg_unresolved_methods_100",
                      unresolved > 0
@@ -829,8 +864,8 @@ struct Injector {
     // Assumption is set is small overall. Also helps for sorting strings.
     std::set<std::string_view> unresolved_uniqued;
     for (auto& p : profile_files) {
-      for (auto& sv : p->unresolved_methods) {
-        unresolved_uniqued.insert(sv);
+      for (auto& sv : p->unresolved_method_meta) {
+        unresolved_uniqued.insert(sv.first);
       }
     }
     std::ofstream ofs{fname};

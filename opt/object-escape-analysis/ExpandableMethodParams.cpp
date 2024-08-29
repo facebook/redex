@@ -323,8 +323,7 @@ DexMethodRef* ExpandableMethodParams::get_expanded_method_ref(
 
 // Make sure that all newly used expanded methods actually exist as concrete
 // methods.
-size_t ExpandableMethodParams::flush(
-    const Scope& scope, method_profiles::MethodProfiles* method_profiles) {
+size_t ExpandableMethodParams::flush(const Scope& scope) {
   // First, find all expanded_method_ref that made it into the updated code.
   ConcurrentSet<DexMethodRef*> used_expanded_method_refs;
   walk::parallel::opcodes(scope, [&](DexMethod*, IRInstruction* insn) {
@@ -351,12 +350,9 @@ size_t ExpandableMethodParams::flush(
     type_class(expanded_method->get_class())->add_method(expanded_method);
   }
 
-  // Finally, derived method-profiles for used candidates, and erase the unused
-  // method refs.
-  for (auto&& [method, p] : m_candidates) {
-    if (used_expanded_method_refs.count(method)) {
-      method_profiles->derive_stats(method->as_def(), {p.first});
-    } else {
+  // Finally, erase the unused method refs.
+  for (auto [method, param_index] : m_candidates) {
+    if (!used_expanded_method_refs.count(method)) {
       DexMethod::erase_method(method);
       DexMethod::delete_method_DO_NOT_USE(static_cast<DexMethod*>(method));
     }

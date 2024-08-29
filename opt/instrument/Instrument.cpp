@@ -179,8 +179,8 @@ void do_simple_method_tracing(DexClass* analysis_cls,
         method == analysis_cls->get_clinit()) {
       ++excluded;
       TRACE(INSTRUMENT, 2, "Excluding analysis method: %s", SHOW(method));
-      ofs << "M,-1," << name << "," << sum_opcode_sizes << ",\"" << "MYSELF "
-          << vshow(method->get_access(), true) << "\"\n";
+      ofs << "M,-1," << name << "," << sum_opcode_sizes << ",\""
+          << "MYSELF " << vshow(method->get_access(), true) << "\"\n";
       return 0;
     }
 
@@ -201,8 +201,8 @@ void do_simple_method_tracing(DexClass* analysis_cls,
     if (InstrumentPass::is_included(method, options.blocklist)) {
       ++excluded;
       TRACE(INSTRUMENT, 8, "Blocklist: excluded: %s", SHOW(method));
-      ofs << "M,-1," << name << "," << sum_opcode_sizes << ",\"" << "BLOCKLIST "
-          << vshow(method->get_access(), true) << "\"\n";
+      ofs << "M,-1," << name << "," << sum_opcode_sizes << ",\""
+          << "BLOCKLIST " << vshow(method->get_access(), true) << "\"\n";
       return 0;
     }
 

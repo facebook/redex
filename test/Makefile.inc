@@ -33,4 +33,5 @@ COMMON_MOCK_TEST_LIBS = \
 	$(top_builddir)/test/libgmock_main.la
 
 # By default use PATH to find tools.
+DX = dx
 JAVAC = javac

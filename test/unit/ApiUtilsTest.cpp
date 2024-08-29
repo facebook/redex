@@ -12,7 +12,6 @@
 #include "DexUtil.h"
 #include "IRAssembler.h"
 #include "RedexContext.h"
-#include "RedexTest.h"
 #include "ScopeHelper.h"
 #include "Show.h"
 
@@ -73,7 +72,8 @@ TEST(ApiUtilsTest, testParseInputFormat) {
   g_redex = new RedexContext();
 
   Scope scope = create_scope(false);
-  api::ApiLevelsUtils api_utils(scope, get_env("api_utils_easy_input_path"));
+  api::ApiLevelsUtils api_utils(scope,
+                                std::getenv("api_utils_easy_input_path"));
   const auto& framework_cls_to_api = api_utils.get_framework_classes();
   EXPECT_EQ(framework_cls_to_api.size(), 6);
 
@@ -97,7 +97,8 @@ TEST(ApiUtilsTest, testEasyInput_EasyReleaseLibraries) {
   g_redex = new RedexContext();
 
   Scope scope = create_scope(false);
-  api::ApiLevelsUtils api_utils(scope, get_env("api_utils_easy_input_path"));
+  api::ApiLevelsUtils api_utils(scope,
+                                std::getenv("api_utils_easy_input_path"));
 
   const auto& types_to_framework_api = api_utils.get_types_to_framework_api();
   EXPECT_EQ(types_to_framework_api.size(), 3);
@@ -119,7 +120,8 @@ TEST(ApiUtilsTest, testEasyInput_SubClassMissingInReleaseLibraries) {
   g_redex = new RedexContext();
 
   Scope scope = create_scope(true);
-  api::ApiLevelsUtils api_utils(scope, get_env("api_utils_easy_input_path"));
+  api::ApiLevelsUtils api_utils(scope,
+                                std::getenv("api_utils_easy_input_path"));
 
   const auto& types_to_framework_api = api_utils.get_types_to_framework_api();
   EXPECT_EQ(types_to_framework_api.size(), 2);
@@ -152,7 +154,8 @@ TEST(ApiUtilsTest, testEasyInput_MethodMissingButNotTruePrivate) {
   auto a_cls = type_class(a_release);
   a_cls->add_method(method);
 
-  api::ApiLevelsUtils api_utils(scope, get_env("api_utils_easy_input_path"));
+  api::ApiLevelsUtils api_utils(scope,
+                                std::getenv("api_utils_easy_input_path"));
 
   const auto& types_to_framework_api = api_utils.get_types_to_framework_api();
   EXPECT_EQ(types_to_framework_api.size(), 3);
@@ -185,7 +188,8 @@ TEST(ApiUtilsTest, testEasyInput_MethodMissing) {
   // considered missing.
   add_usage(&scope, method);
 
-  api::ApiLevelsUtils api_utils(scope, get_env("api_utils_easy_input_path"));
+  api::ApiLevelsUtils api_utils(scope,
+                                std::getenv("api_utils_easy_input_path"));
 
   const auto& types_to_framework_api = api_utils.get_types_to_framework_api();
   EXPECT_EQ(types_to_framework_api.size(), 1);
@@ -200,7 +204,8 @@ TEST(ApiUtilsTest, testHasMethod) {
 
   Scope scope = create_scope(false);
 
-  api::ApiLevelsUtils api_utils(scope, get_env("api_utils_easy_input_path"));
+  api::ApiLevelsUtils api_utils(scope,
+                                std::getenv("api_utils_easy_input_path"));
   const auto& framework_cls_to_api = api_utils.get_framework_classes();
   EXPECT_EQ(framework_cls_to_api.size(), 6);
 
@@ -216,7 +221,7 @@ TEST(ApiUtilsTest, testHasMethod) {
   EXPECT_FALSE(api.has_method("joJo", void_empty, ACC_PUBLIC));
 
   auto api_file =
-      boost::optional<std::string>(get_env("api_utils_easy_input_path"));
+      boost::optional<std::string>(std::getenv("api_utils_easy_input_path"));
   api::AndroidSDK sdk(api_file);
   auto method = static_cast<DexMethod*>(DexMethod::make_method(
       android_view, DexString::make_string("clearFocus"), void_empty));

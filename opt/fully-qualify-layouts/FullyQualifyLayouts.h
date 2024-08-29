@@ -27,7 +27,6 @@ class FullyQualifyLayouts : Pass {
         {DexLimitsObeyed, Preserves},
         {NoResolvablePureRefs, Preserves},
         {InitialRenameClass, Preserves},
-        {RenameClass, Preserves},
     };
   }
 

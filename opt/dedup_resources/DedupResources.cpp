@@ -21,7 +21,6 @@
 #include "DexUtil.h"
 #include "IOUtil.h"
 #include "OptimizeResources.h"
-#include "RClass.h"
 #include "ReadMaybeMapped.h"
 #include "RedexResources.h"
 #include "Timer.h"
@@ -454,8 +453,7 @@ void DedupResourcesPass::run_pass(DexStoresVector& stores,
                       conf.metafile("redex-resid-dedup-mapping.json"));
 
   // 7. Renumber resources in R$ classes and all relevant XML files
-  resources::RClassWriter r_class_writer(conf.get_global_config());
-  r_class_writer.remap_resource_class_scalars(stores, old_to_new);
+  OptimizeResourcesPass::remap_resource_classes(stores, old_to_new);
 
   const auto& relevant_xml_files = resources->find_all_xml_files();
   for (const std::string& path : relevant_xml_files) {
@@ -464,7 +462,8 @@ void DedupResourcesPass::run_pass(DexStoresVector& stores,
 
   // 8. Fix up the arrays in the base R class, as well as R$styleable- any
   //    deleted entries are removed, the rest are remapped.
-  r_class_writer.remap_resource_class_arrays(stores, old_to_new);
+  OptimizeResourcesPass::remap_resource_class_arrays(
+      stores, conf.get_global_config(), old_to_new);
 
   // 9. Renumber all resource references within the resource table. And write
   // out result

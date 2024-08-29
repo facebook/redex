@@ -1140,11 +1140,6 @@ TEST_F(ConstantPropagationTest, ArithmeticFolding) {
       (and-int v8 v0 v1)
       (and-int v9 v0 v1)
 
-      (const v1 0)
-
-      (xor-int v10 v0 v1)
-      (xor-int v11 v0 v1)
-
       (return v2)
     )
   )");
@@ -1194,119 +1189,7 @@ TEST_F(ConstantPropagationTest, ArithmeticFolding) {
       (move v8 v0)
       (move v9 v0)
 
-      (const v1 0)
-
-      (move v10 v0)
-      (move v11 v0)
-
       (return v2)
-    )
-  )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
-}
-
-TEST_F(ConstantPropagationTest, ArithmeticFoldingLong) {
-  auto code = assembler::ircode_from_string(R"(
-    (
-      (load-param v0)
-      (const-wide v2 0)
-
-      (add-long v4 v0 v2)
-      (add-long v6 v2 v0)
-
-      (mul-long v8 v0 v2)
-      (mul-long v10 v0 v2)
-
-      (const-wide v2 1)
-
-      (mul-long v8 v0 v2)
-      (mul-long v10 v0 v2)
-
-      (const-wide v2 -1)
-
-      (mul-long v8 v0 v2)
-      (mul-long v10 v0 v2)
-
-      (const-wide v2 0)
-
-      (or-long v12 v0 v2)
-      (or-long v14 v0 v2)
-
-      (const-wide v2 -1)
-
-      (or-long v12 v0 v2)
-      (or-long v14 v0 v2)
-
-      (const-wide v2 0)
-
-      (and-long v16 v0 v2)
-      (and-long v18 v0 v2)
-
-      (const-wide v2 -1)
-
-      (and-long v16 v0 v2)
-      (and-long v18 v0 v2)
-
-      (const-wide v2 0)
-
-      (xor-long v20 v0 v2)
-      (xor-long v22 v0 v2)
-
-      (return v4)
-    )
-  )");
-
-  DexMethod::make_method("LFoo;.bar:(I)I");
-  do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
-                cp::Transform::Config());
-
-  auto expected_code = assembler::ircode_from_string(R"(
-    (
-      (load-param v0)
-      (const-wide v2 0)
-
-      (move-wide v4 v0)
-      (move-wide v6 v0)
-
-      (const-wide v8 0)
-      (const-wide v10 0)
-
-      (const-wide v2 1)
-
-      (move-wide v8 v0)
-      (move-wide v10 v0)
-
-      (const-wide v2 -1)
-
-      (neg-long v8 v0)
-      (neg-long v10 v0)
-
-      (const-wide v2 0)
-
-      (move-wide v12 v0)
-      (move-wide v14 v0)
-
-      (const-wide v2 -1)
-
-      (const-wide v12 -1)
-      (const-wide v14 -1)
-
-      (const-wide v2 0)
-
-      (const-wide v16 0)
-      (const-wide v18 0)
-
-      (const-wide v2 -1)
-
-      (move-wide v16 v0)
-      (move-wide v18 v0)
-
-      (const-wide v2 0)
-
-      (move-wide v20 v0)
-      (move-wide v22 v0)
-
-      (return v4)
     )
   )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
@@ -1343,9 +1226,6 @@ TEST_F(ConstantPropagationTest, ArithmeticFoldingFromLit) {
 
       (and-int/lit v3 v0 -1)
       (and-int/lit v4 v0 -1)
-
-      (xor-int/lit v16 v0 0)
-      (xor-int/lit v17 v0 0)
 
       (return v0)
     )
@@ -1386,9 +1266,6 @@ TEST_F(ConstantPropagationTest, ArithmeticFoldingFromLit) {
       (move v3 v0)
       (move v4 v0)
 
-      (move v16 v0)
-      (move v17 v0)
-
       (return v0)
     )
   )");
@@ -1414,9 +1291,6 @@ TEST_F(ConstantPropagationTest, ArithmeticFoldingToLit8) {
 
       (and-int v8 v0 v127)
       (and-int v9 v128 v0)
-
-      (xor-int v10 v0 v127)
-      (xor-int v11 v128 v0)
 
       (return v0)
     )
@@ -1445,9 +1319,6 @@ TEST_F(ConstantPropagationTest, ArithmeticFoldingToLit8) {
       (and-int/lit v8 v0 127)
       (and-int/lit v9 v0 -128)
 
-      (xor-int/lit v10 v0 127)
-      (xor-int/lit v11 v0 -128)
-
       (return v0)
     )
   )");
@@ -1473,9 +1344,6 @@ TEST_F(ConstantPropagationTest, ArithmeticFoldingToLit16) {
 
       (and-int v8 v0 v127)
       (and-int v9 v128 v0)
-
-      (xor-int v10 v0 v127)
-      (xor-int v11 v128 v0)
 
       (return v0)
     )
@@ -1504,9 +1372,6 @@ TEST_F(ConstantPropagationTest, ArithmeticFoldingToLit16) {
 
       (and-int/lit v8 v0 32767)
       (and-int/lit v9 v0 -32768)
-
-      (xor-int/lit v10 v0 32767)
-      (xor-int/lit v11 v0 -32768)
 
       (return v0)
     )

@@ -234,25 +234,6 @@ char type_shorty(const DexType* type) {
   not_reached();
 }
 
-uint8_t primitive_size(const DexType* type) {
-  auto const name = type->get_name()->c_str();
-  switch (name[0]) {
-  case 'Z':
-  case 'B':
-    return 1;
-  case 'S':
-  case 'C':
-    return 2;
-  case 'I':
-  case 'F':
-    return 4;
-  case 'J':
-  case 'D':
-    return 8;
-  }
-  not_reached();
-}
-
 bool check_cast(const DexType* type, const DexType* base_type) {
   if (type == base_type) return true;
   if (type != nullptr && is_array(type)) {

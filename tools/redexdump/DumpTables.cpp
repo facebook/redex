@@ -150,12 +150,14 @@ static std::string get_class_def(ddump_data* rd,
       ss << "<no_file>";
     }
     if (cls_def->annotations_off) {
-      ss << ", anno: " << "0x" << std::hex << cls_def->annotations_off;
+      ss << ", anno: "
+         << "0x" << std::hex << cls_def->annotations_off;
     }
-    ss << ", data: " << "0x" << std::hex << cls_def->class_data_offset;
+    ss << ", data: "
+       << "0x" << std::hex << cls_def->class_data_offset;
     if (cls_def->static_values_off) {
-      ss << ", static values: " << "0x" << std::hex
-         << cls_def->static_values_off;
+      ss << ", static values: "
+         << "0x" << std::hex << cls_def->static_values_off;
     }
   }
   return ss.str();
@@ -211,7 +213,8 @@ static std::string get_class_data_item(ddump_data* rd, uint32_t idx) {
     auto flags = read_uleb128(&class_data);
     auto code = read_uleb128(&class_data);
     ss << get_flags(flags, false, true) << "- " << get_method(rd, meth_idx)
-       << " - " << "0x" << std::hex << code << "\n";
+       << " - "
+       << "0x" << std::hex << code << "\n";
   }
   ss << "vmethods: " << vmethod_count << "\n";
   meth_idx = 0;
@@ -220,7 +223,8 @@ static std::string get_class_data_item(ddump_data* rd, uint32_t idx) {
     auto flags = read_uleb128(&class_data);
     auto code = read_uleb128(&class_data);
     ss << get_flags(flags, false, true) << "- " << get_method(rd, meth_idx)
-       << " - " << "0x" << std::hex << code << "\n";
+       << " - "
+       << "0x" << std::hex << code << "\n";
   }
   return ss.str();
 }
@@ -231,8 +235,8 @@ static std::string get_code_item(dex_code_item** pcode_item) {
   ss << "registers_size: " << code_item->registers_size << ", "
      << "ins_size: " << code_item->ins_size << ", "
      << "outs_size: " << code_item->outs_size << ", "
-     << "tries_size: " << code_item->tries_size << ", " << "debug_info_off: 0x"
-     << std::hex << code_item->debug_info_off << ", "
+     << "tries_size: " << code_item->tries_size << ", "
+     << "debug_info_off: 0x" << std::hex << code_item->debug_info_off << ", "
      << "insns_size: " << std::dec << code_item->insns_size << "\n";
   const uint16_t* dexptr =
       (const uint16_t*)(code_item + 1) + code_item->insns_size;

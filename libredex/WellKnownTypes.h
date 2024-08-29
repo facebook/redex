@@ -34,9 +34,8 @@
   FOR_EACH(java_lang_Double, "Ljava/lang/Double;")                       \
   FOR_EACH(java_lang_RuntimeException, "Ljava/lang/RuntimeException;")   \
   FOR_EACH(dalvik_annotation_Signature, "Ldalvik/annotation/Signature;") \
-  FOR_EACH(dalvik_annotation_MemberClasses,                              \
-           "Ldalvik/annotation/"                                         \
-           "MemberClasses;")                                             \
+  FOR_EACH(dalvik_annotation_MemberClasses, "Ldalvik/annotation/"        \
+                                            "MemberClasses;")            \
   FOR_EACH(dalvik_annotation_optimization_NeverInline,                   \
            "Ldalvik/annotation/optimization/NeverInline;")
 

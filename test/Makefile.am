@@ -1,4 +1,4 @@
-SUBDIRS = . samples integ unit
+SUBDIRS = . integ unit
 
 check_LTLIBRARIES = libgtest.la libgtest_main.la libgmock_main.la
 

@@ -22,21 +22,25 @@ constexpr const uint32_t MAX_NUM_INSTRUCTIONS = 32;
  * Allow code without invoke-super and with less than MAX_NUM_INSTRUCTIONS
  * instructions.
  */
-bool eligible_code(const cfg::ControlFlowGraph& cfg) {
+bool eligible_code(const IRCode* code) {
+  bool eligible = true;
   uint32_t count = 0;
-  for (const auto& mie : cfg::ConstInstructionIterable(cfg)) {
+  editable_cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
     auto opcode = mie.insn->opcode();
     if (opcode::is_invoke_super(opcode)) {
-      return false;
+      eligible = false;
+      return editable_cfg_adapter::LOOP_BREAK;
     }
     if (!opcode::is_an_internal(opcode)) {
       count++;
     }
     if (count > MAX_NUM_INSTRUCTIONS) {
-      return false;
+      eligible = false;
+      return editable_cfg_adapter::LOOP_BREAK;
     }
-  }
-  return true;
+    return editable_cfg_adapter::LOOP_CONTINUE;
+  });
+  return eligible;
 }
 
 void find_duplications(const method_override_graph::Graph* graph,
@@ -46,10 +50,6 @@ void find_duplications(const method_override_graph::Graph* graph,
   if (!root_code) {
     return;
   }
-
-  always_assert(root_code->editable_cfg_built());
-  auto& root_cfg = root_code->cfg();
-
   for (auto* child_node : graph->get_node(root_method).children) {
     auto* child = child_node->method;
     // The method definition may be deleted after the overriding graph is
@@ -58,16 +58,10 @@ void find_duplications(const method_override_graph::Graph* graph,
       continue;
     }
     auto child_code = child->get_code();
-    if (!child_code) {
-      continue;
-    }
-    always_assert(child_code->editable_cfg_built());
-    auto& child_cfg = child_code->cfg();
-    if (eligible_code(child_cfg)) {
-      if (root_cfg.structural_equals(child_cfg)) {
-        result->push_back(const_cast<DexMethod*>(child));
-        find_duplications(graph, child, result);
-      }
+    if (child_code && eligible_code(child_code) &&
+        root_code->structural_equals(*child_code)) {
+      result->push_back(const_cast<DexMethod*>(child));
+      find_duplications(graph, child, result);
     }
   }
 }
@@ -111,8 +105,7 @@ uint32_t remove_duplicated_vmethods(
         // names when change the accessibility of them.
         continue;
       }
-      always_assert(method->get_code()->editable_cfg_built());
-      if (!eligible_code(method->get_code()->cfg())) {
+      if (!eligible_code(method->get_code())) {
         continue;
       }
       std::vector<DexMethod*> duplicates;
@@ -137,7 +130,7 @@ uint32_t remove_duplicated_vmethods(
           DexMethod::delete_method(m);
         }
         ret += duplicates.size();
-        TRACE(VM, 9, "%s\n", SHOW(method->get_code()->cfg()));
+        TRACE(VM, 9, "%s\n", SHOW(method->get_code()));
       }
     }
   });

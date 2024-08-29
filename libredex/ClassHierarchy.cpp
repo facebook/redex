@@ -107,18 +107,13 @@ void build_interface_map(InterfaceMap& interfaces,
 
 } // namespace
 
-ClassHierarchy build_internal_type_hierarchy(const Scope& scope) {
+ClassHierarchy build_type_hierarchy(const Scope& scope) {
   ClassHierarchy hierarchy;
   // build the type hierarchy
   for (const auto& cls : scope) {
     if (is_interface(cls)) continue;
     build_class_hierarchy(hierarchy, cls);
   }
-  return hierarchy;
-}
-
-ClassHierarchy build_type_hierarchy(const Scope& scope) {
-  auto hierarchy = build_internal_type_hierarchy(scope);
   build_external_hierarchy(hierarchy);
   return hierarchy;
 }

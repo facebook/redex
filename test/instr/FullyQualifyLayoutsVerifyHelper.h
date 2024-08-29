@@ -22,7 +22,7 @@ struct Element {
 };
 
 inline void verify_xml_element_attributes(std::vector<Element> elements) {
-  EXPECT_GE(elements.size(), 4);
+  EXPECT_EQ(elements.size(), 4);
 
   auto linear_layout = elements.at(0);
   EXPECT_STREQ(linear_layout.name.c_str(), "LinearLayout");

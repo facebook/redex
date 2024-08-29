@@ -8,7 +8,6 @@
 #pragma once
 
 #include <algorithm>
-#include <cstring>
 #include <deque>
 #include <vector>
 
@@ -44,13 +43,6 @@ size_t erase_if(Container& c, const Pred& pred) {
     }
   }
   return removed;
-}
-
-template <class To, class From>
-constexpr To bit_cast(const From& src) noexcept {
-  To dst;
-  std::memcpy(&dst, &src, sizeof(To));
-  return dst;
 }
 
 } // namespace std20

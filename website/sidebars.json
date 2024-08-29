@@ -1,0 +1,21 @@
+{
+  "docs": {
+    "Getting Started": [
+      "installation",
+      "configuring",
+      "passes",
+      "usage"
+    ],
+    "Examples": [
+      "proguard",
+      "synth"
+    ],
+    "Technical Details": [
+      "docker",
+      "interdex"
+    ],
+    "Help": [
+      "faq"
+    ]
+  }
+}

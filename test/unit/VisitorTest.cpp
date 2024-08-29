@@ -14,7 +14,6 @@
 #include "utils/Visitor.h"
 
 #include "RedexMappedFile.h"
-#include "RedexTest.h"
 
 namespace {
 
@@ -173,7 +172,7 @@ class XmlStringCollector : public arsc::SimpleXmlParser {
 } // namespace
 
 TEST(Visitor, ParsePackageAndTypes) {
-  auto f = RedexMappedFile::open(get_env("arsc_path"));
+  auto f = RedexMappedFile::open(std::getenv("arsc_path"));
   TypeVisitor visitor;
   visitor.visit(const_cast<char*>(f.const_data()), f.size());
   EXPECT_EQ(visitor.m_package_count, 1) << "Should have only 1 package";
@@ -190,7 +189,7 @@ TEST(Visitor, ParsePackageAndTypes) {
 }
 
 TEST(Visitor, VisitAllStrings) {
-  auto f = RedexMappedFile::open(get_env("arsc_path"));
+  auto f = RedexMappedFile::open(std::getenv("arsc_path"));
   StringTestVisitor visitor;
   visitor.visit(const_cast<char*>(f.const_data()), f.size());
   EXPECT_EQ(visitor.m_global_strings_seen.size(), NUM_GLOBAL_STRINGS)
@@ -208,7 +207,7 @@ TEST(Visitor, VisitAllStrings) {
 }
 
 TEST(Visitor, VisitXmlStrings) {
-  auto f = RedexMappedFile::open(get_env("xml_path"));
+  auto f = RedexMappedFile::open(std::getenv("xml_path"));
   XmlStringCollector collector;
   collector.visit(const_cast<char*>(f.const_data()), f.size());
   EXPECT_EQ(collector.m_encountered_strings.size(), 8);

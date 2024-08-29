@@ -847,10 +847,6 @@ Given an APK, produce a better APK!
 
     parser.add_argument("--trace", type=str)
     parser.add_argument("--trace-file", type=str)
-    # Relevant options to TraceClassAfterEachPass
-    parser.add_argument("--trace-class-name", type=str)
-    parser.add_argument("--trace-method-name", type=str)
-    parser.add_argument("--after-pass-trace-file", type=str)
 
     return parser
 
@@ -1581,12 +1577,6 @@ def early_apply_args(args: argparse.Namespace) -> None:
 
     if args.trace_file:
         os.environ["TRACEFILE"] = args.trace_file
-    if args.after_pass_trace_file:
-        os.environ["TRACE_CLASS_FILE"] = args.after_pass_trace_file
-    if args.trace_class_name:
-        os.environ["TRACE_CLASS_NAME"] = args.trace_class_name
-    if args.trace_method_name:
-        os.environ["TRACE_METHOD_NAME"] = args.trace_method_name
 
 
 if __name__ == "__main__":

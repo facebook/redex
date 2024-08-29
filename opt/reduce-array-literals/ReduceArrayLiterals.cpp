@@ -19,11 +19,9 @@
 #include "BaseIRAnalyzer.h"
 #include "CFGMutation.h"
 #include "ControlFlow.h"
-#include "DexInstruction.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "InterDexPass.h"
-#include "LiveRange.h"
 #include "PassManager.h"
 #include "PluginRegistry.h"
 #include "Resolver.h"
@@ -50,9 +48,6 @@ constexpr const char* METRIC_REMAINING_BUGGY_ARRAYS =
     "num_remaining_buggy_arrays";
 constexpr const char* METRIC_REMAINING_BUGGY_ARRAY_ELEMENTS =
     "num_remaining_buggy_array_elements";
-constexpr const char* METRIC_FILL_ARRAY_DATAS = "num_fill_array_datas";
-constexpr const char* METRIC_FILL_ARRAY_DATA_ELEMENTS =
-    "num_fill_array_data_elements";
 
 /* A tracked value is...
  * - a 32-bit literal,
@@ -391,85 +386,6 @@ ReduceArrayLiterals::ReduceArrayLiterals(cfg::ControlFlowGraph& cfg,
   always_assert(array_literals.size() == m_array_literals.size());
 }
 
-template <typename T>
-std::unique_ptr<DexOpcodeData> ReduceArrayLiterals::get_data(
-    const std::vector<const IRInstruction*>& aput_insns) {
-
-  std::vector<T> entries;
-
-  // TODO: Improve the runtime complexity by reuse computed MoveAwareChains.
-  live_range::MoveAwareChains move_aware_chains(m_cfg);
-  auto use_defs = move_aware_chains.get_use_def_chains();
-  for (auto aput_insn : aput_insns) {
-    auto& defs =
-        use_defs.at(live_range::Use{const_cast<IRInstruction*>(aput_insn), 0});
-    auto it = defs.begin();
-    auto def = *it++;
-    if (def->opcode() != OPCODE_CONST && def->opcode() != OPCODE_CONST_WIDE) {
-      return nullptr;
-    }
-    // ensure that if there's more than definition, they are all the same
-    for (; it != defs.end(); it++) {
-      auto other_def = *it;
-      if (other_def->opcode() != def->opcode() ||
-          other_def->get_literal() != def->get_literal()) {
-        return nullptr;
-      }
-    }
-    entries.push_back(def->get_literal());
-  }
-
-  return encode_fill_array_data_payload(entries);
-}
-
-std::unique_ptr<DexOpcodeData> ReduceArrayLiterals::get_data(
-    DexType* component_type,
-    const std::vector<const IRInstruction*>& aput_insns) {
-  if (!type::is_primitive(component_type)) {
-    return nullptr;
-  }
-
-  switch (type::primitive_size(component_type)) {
-  case 1:
-    return get_data<uint8_t>(aput_insns);
-  case 2:
-    return get_data<uint16_t>(aput_insns);
-  case 4:
-    return get_data<uint32_t>(aput_insns);
-  default: {
-    return get_data<uint64_t>(aput_insns);
-  }
-  }
-}
-
-void ReduceArrayLiterals::patch_new_array(
-    const std::vector<const IRInstruction*>& aput_insns,
-    std::unique_ptr<DexOpcodeData> data) {
-  cfg::CFGMutation mutation(m_cfg);
-  always_assert(!aput_insns.empty());
-
-  // insert filled-array-data instruction after the last aput, and remove all
-  // aput instructions
-  std::unordered_set<const IRInstruction*> aput_insns_set(aput_insns.begin(),
-                                                          aput_insns.end());
-  auto iterable = cfg::InstructionIterable(m_cfg);
-  for (auto insn_it = iterable.begin(); insn_it != iterable.end(); ++insn_it) {
-    auto insn = insn_it->insn;
-    if (aput_insns_set.count(insn)) {
-      if (insn == aput_insns.back()) {
-        IRInstruction* fill_array_data_insn =
-            new IRInstruction(OPCODE_FILL_ARRAY_DATA);
-        fill_array_data_insn->set_data(std::move(data));
-        fill_array_data_insn->set_src(0, insn->src(1));
-        mutation.replace(insn_it, {fill_array_data_insn});
-      } else {
-        mutation.remove(insn_it);
-      }
-    }
-  }
-  mutation.flush();
-}
-
 void ReduceArrayLiterals::patch() {
   for (auto& p : m_array_literals) {
     const IRInstruction* new_array_insn = p.first;
@@ -480,17 +396,7 @@ void ReduceArrayLiterals::patch() {
     }
 
     auto type = new_array_insn->get_type();
-    auto component_type = type::get_array_component_type(type);
-
-    if (aput_insns.size() > 2) {
-      auto data = ReduceArrayLiterals::get_data(component_type, aput_insns);
-      if (data) {
-        patch_new_array(aput_insns, std::move(data));
-        m_stats.fill_array_datas++;
-        m_stats.fill_array_data_elements += aput_insns.size();
-        continue;
-      }
-    }
+    auto element_type = type::get_array_component_type(type);
 
     if (m_min_sdk < 24) {
       // See T45708995.
@@ -517,14 +423,14 @@ void ReduceArrayLiterals::patch() {
       continue;
     }
 
-    if (type::is_wide_type(component_type)) {
+    if (type::is_wide_type(element_type)) {
       // TODO: Consider using an annotation-based scheme.
       m_stats.remaining_wide_arrays++;
       m_stats.remaining_wide_array_elements += aput_insns.size();
       continue;
     }
 
-    if (m_min_sdk < 21 && type::is_array(component_type)) {
+    if (m_min_sdk < 21 && type::is_array(element_type)) {
       // The Dalvik verifier had a bug for this case:
       // It retrieves the "element class" to check if the elements are of the
       // right type:
@@ -539,7 +445,7 @@ void ReduceArrayLiterals::patch() {
 
     if (m_min_sdk < 19 &&
         (m_arch == Architecture::UNKNOWN || m_arch == Architecture::X86) &&
-        !type::is_primitive(component_type)) {
+        !type::is_primitive(element_type)) {
       // Before Kitkat, the Dalvik x86-atom backend had a bug for this case.
       // https://android.googlesource.com/platform/dalvik/+/ics-mr0/vm/mterp/out/InterpAsm-x86-atom.S#25106
       m_stats.remaining_buggy_arrays++;
@@ -547,7 +453,7 @@ void ReduceArrayLiterals::patch() {
       continue;
     }
 
-    if (type::is_primitive(component_type) && component_type != type::_int()) {
+    if (type::is_primitive(element_type) && element_type != type::_int()) {
       // Somewhat surprising random implementation limitation in all known
       // ART versions:
       // https://android.googlesource.com/platform/art/+/400455c23d6a9a849d090b9e60ff53c4422e461b/runtime/interpreter/interpreter_common.cc#189
@@ -802,9 +708,6 @@ void ReduceArrayLiteralsPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_REMAINING_BUGGY_ARRAYS, stats.remaining_buggy_arrays);
   mgr.incr_metric(METRIC_REMAINING_BUGGY_ARRAY_ELEMENTS,
                   stats.remaining_buggy_array_elements);
-  mgr.incr_metric(METRIC_FILL_ARRAY_DATAS, stats.fill_array_datas);
-  mgr.incr_metric(METRIC_FILL_ARRAY_DATA_ELEMENTS,
-                  stats.fill_array_data_elements);
 }
 
 ReduceArrayLiterals::Stats& ReduceArrayLiterals::Stats::operator+=(
@@ -819,8 +722,6 @@ ReduceArrayLiterals::Stats& ReduceArrayLiterals::Stats::operator+=(
       that.remaining_unimplemented_array_elements;
   remaining_buggy_arrays += that.remaining_buggy_arrays;
   remaining_buggy_array_elements += that.remaining_buggy_array_elements;
-  fill_array_datas += that.fill_array_datas;
-  fill_array_data_elements += that.fill_array_data_elements;
   return *this;
 }
 

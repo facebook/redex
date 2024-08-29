@@ -9,7 +9,6 @@
 
 #include <algorithm>
 #include <boost/algorithm/string/predicate.hpp>
-#include <cctype>
 #include <functional>
 #include <string_view>
 #include <unordered_set>
@@ -39,7 +38,6 @@ struct VisibilityChanges {
   void insert(const VisibilityChanges& other);
   void apply() const;
   bool empty() const;
-  void clear();
 };
 
 /**
@@ -389,13 +387,4 @@ inline std::string package_name(std::string_view type_name) {
     return nice_name;
   }
 }
-
-inline bool is_deliminator(char ch) {
-  return isspace(ch) || ch == '{' || ch == '}' || ch == '(' || ch == ')' ||
-         ch == ',' || ch == ';' || ch == ':' || ch == '#';
-}
-
-// An identifier can refer to a class name, a field name or a package name.
-// https://docs.oracle.com/javase/specs/jls/se16/html/jls-3.html#jls-JavaLetter
-bool is_identifier(const std::string_view& ident);
 } // namespace java_names

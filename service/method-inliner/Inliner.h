@@ -84,22 +84,9 @@ struct InlinerCostConfig {
 
   // Those configs are used to calculate the penalty for worse cross-dex-ref
   // minimization results due to inlining.
-  float cross_dex_penalty_coe1;
-  float cross_dex_penalty_coe2;
-  float cross_dex_penalty_const;
-  float cross_dex_bonus_const;
-
-  float unused_arg_zero_multiplier;
-  float unused_arg_non_zero_constant_multiplier;
-  float unused_arg_nez_multiplier;
-  float unused_arg_interval_multiplier;
-  float unused_arg_singleton_object_multiplier;
-  float unused_arg_object_with_immutable_attr_multiplier;
-  float unused_arg_string_multiplier;
-  float unused_arg_class_object_multiplier;
-  float unused_arg_new_object_multiplier;
-  float unused_arg_other_object_multiplier;
-  float unused_arg_not_top_multiplier;
+  size_t cross_dex_penalty_coe1;
+  size_t cross_dex_penalty_coe2;
+  size_t cross_dex_penalty_const;
 };
 
 const struct InlinerCostConfig DEFAULT_COST_CONFIG = {
@@ -118,21 +105,9 @@ const struct InlinerCostConfig DEFAULT_COST_CONFIG = {
     4, // insn_has_lit_cost_1
     2, // insn_has_lit_cost_2
     1, // insn_has_lit_cost_3
-    1.0f, // cross_dex_penalty_coe1
-    0.0f, // cross_dex_penalty_coe2
-    1.0f, // cross_dex_penalty_const
-    0.0f, // cross_dex_bonus_const
-    1.0f, // unused_arg_zero_multiplier
-    1.0f, // unused_arg_non_zero_constant_multiplier
-    1.0f, // unused_arg_nez_multiplier
-    1.0f, // unused_arg_interval_multiplier
-    1.0f, // unused_arg_singleton_object_multiplier
-    1.0f, // unused_arg_object_with_immutable_attr_multiplier
-    1.0f, // unused_arg_string_multiplier
-    1.0f, // unused_arg_class_object_multiplier
-    1.0f, // unused_arg_new_object_multiplier
-    1.0f, // unused_arg_other_object_multiplier
-    1.0f, // unused_arg_not_top_multiplier
+    1, // cross_dex_penalty_coe1;
+    0, // cross_dex_penalty_coe2;
+    1, // cross_dex_penalty_const;
 };
 
 // All call-sites of a callee.
@@ -254,17 +229,10 @@ class MultiMethodInliner {
       bool consider_hot_cold = false,
       InlinerCostConfig inliner_cost_config = DEFAULT_COST_CONFIG);
 
-  /*
-   * Applies certain delayed scope-wide changes, including in particular
-   * visibility and staticizing changes.
-   */
-  void flush() {
-    delayed_visibility_changes_apply();
-    delayed_invoke_direct_to_static();
-  }
+  ~MultiMethodInliner() { delayed_invoke_direct_to_static(); }
 
   /**
-   * Attempt inlining for all candidates, and flushes scope-wide changes.
+   * attempt inlining for all candidates.
    */
   void inline_methods();
 
@@ -513,8 +481,6 @@ class MultiMethodInliner {
       const IRCode* code,
       const CallSiteSummary* call_site_summary = nullptr);
 
-  float get_unused_arg_multiplier(const ConstantValue&) const;
-
   /**
    * Estimate inlined cost for fully inlining a callee without using any
    * summaries for pruning.
@@ -548,6 +514,9 @@ class MultiMethodInliner {
   /**
    * Staticize required methods (stored in `m_delayed_make_static`) and update
    * opcodes accordingly.
+   *
+   * NOTE: It only needs to be called once after inlining. Since it is called
+   *       from the destructor, there is no need to manually call it.
    */
   void delayed_invoke_direct_to_static();
 

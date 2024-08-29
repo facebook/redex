@@ -1,23 +1,13 @@
 include $(top_srcdir)/Makefile.inc
 include $(top_srcdir)/test/Makefile.inc
 
-ANDROID_SDK = @ANDROID_SDK@
-ANDROID_PLATFORM_VERSION = @ANDROID_PLATFORM_VERSION@
-
 AM_CXXFLAGS = --std=gnu++17
 AM_CPPFLAGS = $(COMMON_INCLUDES) $(COMMON_TEST_INCLUDES)
 
-# Boost.
-AM_CPPFLAGS += $(BOOST_CPPFLAGS)
-AM_LDFLAGS = $(BOOST_LDFLAGS)
-
 LDADD = $(COMMON_TEST_LIBS)
 
-# Need to set "sdk_path" environment variable to point to the SDK.
-# Need to set "android_target" for the platform version.
 # Set any env that a test wants if a test.env file is found.
-LOG_COMPILER = sh
-AM_LOG_FLAGS = -c 'if [ -f $$0.env ] ; then . ./$$0.env ; fi ; sdk_path=$(ANDROID_SDK) android_target=$(ANDROID_PLATFORM_VERSION) ./$$0'
+AM_LOG_FLAGS = -c 'if [ -f $$0.env ] ; then source $$0.env ; fi ; sdk_path=$(ANDROID_SDK) android_target=$(ANDROID_PLATFORM_VERSION) $$0'
 
 # make_env: Simple helper to generate test-specific env.
 #
@@ -37,12 +27,16 @@ endef
 # Actual test definitions
 ####
 
+# These need things in the environment.
+# XFAIL_TESTS = stringbuilder_outline_test throw_propagation_test
+
+# CircleCI shows XFAIL as red. Automake does not allow to $(filter). So for
+# now remove the XFAIL_TESTS entries explicitly from here.
+
 check_PROGRAMS = \
     aliased_registers_test \
     analysis_usage_test \
-    api_utils_test \
     array_propagation_test \
-    arsc_attribution_test \
     assert_test \
     atomic_map_test \
     blaming_escape_test \
@@ -151,19 +145,15 @@ check_PROGRAMS = \
     renamer_test \
     resolver_test \
     resolve_proguard_value_test \
-    resource_inlining_test \
-    resources_test \
     result_propagation_test \
     side_effects_summary_test \
     signed_constant_propagation_test \
     source_blocks_test \
     split_huge_switch_test \
     static_relo_v2_test \
-    stringbuilder_outline_test \
     strip_debug_info_test \
     switch_dispatch_test \
     switch_equiv_test \
-    throw_propagation_test \
     timer_test \
     trace_multithreading_test \
     true_virtuals_test \
@@ -186,16 +176,8 @@ aliased_registers_test_SOURCES = AliasedRegistersTest.cpp
 
 analysis_usage_test_SOURCES = AnalysisUsageTest.cpp
 
-api_utils_test_SOURCES = ApiUtilsTest.cpp ScopeHelper.cpp
-api_utils_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
-EXTRA_api_utils_test_DEPENDENCIES = api_utils_test.env
-$(eval $(call make_env,api_utils_test,api_utils_easy_input_path=$(srcdir)/api_utils_easy_input.txt))
-
 array_propagation_test_SOURCES = constant-propagation/ArrayPropagationTest.cpp
-array_propagation_test_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/sparta/test
-
-arsc_attribution_test_SOURCES = ArscAttributionTest.cpp $(top_srcdir)/tools/arsc/ArscStats.cpp arsc/TestStructures.cpp
-arsc_attribution_test_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/tools/arsc -I$(top_srcdir)/test/unit/arsc
+array_propagation_test_CPPFLAGS = $(COMMON_INCLUDES) $(COMMON_TEST_INCLUDES) -I$(top_srcdir)/sparta/test
 
 assert_test_SOURCES = AssertTest.cpp
 
@@ -290,8 +272,6 @@ extract_native_test_SOURCES = ExtractNativeTest.cpp
 fast_reg_alloc_test_SOURCES = FastRegAllocTest.cpp
 
 fbjni_marker_test_SOURCES = FbjniMarkerTest.cpp
-EXTRA_fbjni_marker_test_DEPENDENCIES = fbjni_marker_test.env
-$(eval $(call make_env,fbjni_marker_test,test_fbjni_json=$(srcdir)/example_fbjni.json))
 
 final_inline_test_SOURCES = FinalInlineTest.cpp
 
@@ -371,8 +351,6 @@ leb_test_SOURCES = LebTest.cpp
 
 native_test_SOURCES = NativeTest.cpp
 native_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
-EXTRA_native_test_DEPENDENCIES = native_test.env
-$(eval $(call make_env,native_test,native_jni_output_path=$(srcdir)))
 
 native_names_test_SOURCES = NativeNamesTest.cpp
 
@@ -384,7 +362,7 @@ object_inliner_test_SOURCES = ObjectInlinerTest.cpp
 object_inliner_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 object_propagation_test_SOURCES = constant-propagation/ObjectPropagationTest.cpp
-object_propagation_test_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/sparta/test
+object_propagation_test_CPPFLAGS = $(COMMON_INCLUDES) $(COMMON_TEST_INCLUDES) -I$(top_srcdir)/sparta/test
 
 optimize_enums_test_SOURCES = OptimizeEnumsTest.cpp
 optimize_enums_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
@@ -452,8 +430,6 @@ renamer_test_SOURCES = RenamerTest.cpp VirtScopeHelper.cpp ScopeHelper.cpp
 resolver_test_SOURCES = ResolverTest.cpp
 resolve_proguard_value_test_SOURCES = ResolveProguardAssumeValuesTest.cpp ScopeHelper.cpp
 
-resource_inlining_test_SOURCES = ResourceInliningTest.cpp ScopeHelper.cpp
-
 result_propagation_test_SOURCES = ResultPropagationTest.cpp
 result_propagation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
@@ -461,7 +437,7 @@ side_effects_summary_test_SOURCES = object-sensitive-dce/SideEffectSummaryTest.c
 side_effects_summary_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 signed_constant_propagation_test_SOURCES = constant-propagation/SignedConstantPropagationTest.cpp
-signed_constant_propagation_test_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/sparta/test
+signed_constant_propagation_test_CPPFLAGS = $(COMMON_INCLUDES) $(COMMON_TEST_INCLUDES) -I$(top_srcdir)/sparta/test
 
 source_blocks_test_SOURCES = SourceBlocksTest.cpp
 
@@ -469,7 +445,7 @@ split_huge_switch_test_SOURCES = SplitHugeSwitchTest.cpp
 
 static_relo_v2_test_SOURCES = StaticReloV2Test.cpp
 
-stringbuilder_outline_test_SOURCES = StringBuilderOutlinerTest.cpp
+# stringbuilder_outline_test_SOURCES = StringBuilderOutlinerTest.cpp
 
 string_propagation_test_SOURCES = constant-propagation/StringPropagationTest.cpp
 
@@ -480,8 +456,8 @@ switch_dispatch_test_SOURCES = SwitchDispatchTest.cpp
 switch_equiv_test_SOURCES = SwitchEquivFinderTest.cpp
 switch_equiv_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
-throw_propagation_test_SOURCES = ThrowPropagationTest.cpp
-throw_propagation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+# throw_propagation_test_SOURCES = ThrowPropagationTest.cpp
+# throw_propagation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 timer_test_SOURCES = TimerTest.cpp
 
@@ -525,13 +501,134 @@ xstorerefs_test_SOURCES = XStoreRefsTest.cpp
 
 string_tree_test_SOURCES = StringTreeTest.cpp
 
-resources_test_SOURCES = RedexResourcesTest.cpp
-EXTRA_resources_test_DEPENDENCIES = resources_test.env more_resources/res/layout/class_names.xml
-$(eval $(call make_env,resources_test,\
-  test_layout_path=$(srcdir)/example_layout_with_onclick.xml \
-  another_layout_path=more_resources/res/layout/class_names.xml))
 
-more_resources/res/layout/class_names.xml:
-	mkdir -p more_resources && unzip ../samples/more_resources/unsigned.apk -d more_resources res/layout/class_names.xml
-
-TESTS = $(check_PROGRAMS)
+TESTS = \
+    aliased_registers_test \
+    analysis_usage_test \
+    array_propagation_test \
+    assert_test \
+    blaming_escape_test \
+    boxed_boolean_propagation_test \
+    branch_prefix_hoisting_test \
+    cfg_inliner_test \
+    cfg_mutation_test \
+    cfg_positions_test \
+    check_breadcrumbs_test \
+    check_cast_analysis_test \
+    class_checker_test \
+    concurrent_containers_test \
+    concurrent_hashtable_test \
+    atomic_map_test \
+    configurable_test \
+    constructor_analysis_test \
+    control_flow_test \
+    copy_propagation_test \
+    cpp_util_test \
+    cse_test \
+    creators_test \
+    debug_info_test \
+    debug_test \
+    dedup_blocks_test \
+    deobfuscated_alias_test \
+    dex_class_test \
+    dex_instruction_test \
+    dex_loader_test \
+    dex_mutate_test \
+    dex_output_test \
+    dex_store_test \
+    dex_structure_test \
+    dex_type_environment_test \
+    dex_util_test \
+    dominators_test \
+    ev_arg_test \
+    ev_write_test \
+    evaluate_type_checks_test \
+    exception_test \
+    extract_native_test \
+    fast_reg_alloc_test \
+    final_inline_test \
+    final_inline_v2_test \
+    fp_ev_test \
+    global_type_analysis_test \
+    graph_util_test \
+    hierarchy_util_test \
+    init_class_test \
+    init_class_pruner_test \
+    init_class_lowering_pass_test \
+    instruction_sequence_outliner_test \
+    int_type_patcher_test \
+    interprocedural_constant_propagation_test \
+    intraprocedural_constant_propagation_test \
+    ir_assembler_test \
+    ir_code_test \
+    ir_instruction_test \
+    ir_list_test \
+    ir_typechecker_test \
+    java_parser_util_test \
+    literals_test \
+    live_range_test \
+    local_dce_test \
+    local_pointers_test \
+    loop_info_test \
+    loosen_access_modifier_test \
+    match_flow_test \
+    match_test \
+    method_inline_test \
+    monitor_count_test \
+    mutf8_compare_test \
+    leb_test \
+    null_propagation_test \
+    object_inliner_test \
+    object_propagation_test \
+    optimize_enums_test \
+    outliner_type_analysis_test \
+    partial_pass_test \
+    peephole_test \
+    print_kotlin_stats_test \
+    proguard_lexer_test \
+    proguard_map_test \
+    proguard_parser_test \
+    proguard_regex_test \
+    pure_analysis_test \
+    random_forest_test \
+    reaching_definitions_test \
+    reduce_array_literals_test \
+    reduce_boolean_branches_test \
+    reduce_gotos_test \
+    reflection_analysis_test \
+    reg_alloc_test \
+    registers_test \
+    remove_null_check_string_arg_test \
+    remove_recursive_locks_test \
+    remove_redundant_check_casts_test \
+    remove_uninstantiables_test \
+    remove_unused_args_test \
+    renamer_test \
+    resolver_test \
+    resolve_proguard_value_test \
+    result_propagation_test \
+    side_effects_summary_test \
+    signed_constant_propagation_test \
+    source_blocks_test \
+    split_huge_switch_test \
+    static_relo_v2_test \
+    strip_debug_info_test \
+    switch_dispatch_test \
+    switch_equiv_test \
+    timer_test \
+    trace_multithreading_test \
+    true_virtuals_test \
+    type_analysis_transform_test \
+    type_inference_test \
+    type_ref_updater_test \
+    type_reference_test \
+    type_system_test \
+    type_util_test \
+    up_code_motion_test \
+    used_vars_test \
+    virt_scope_test \
+    virtual_merging_test \
+    walkers_test \
+    work_queue_test \
+    xstorerefs_test \
+    string_tree_test

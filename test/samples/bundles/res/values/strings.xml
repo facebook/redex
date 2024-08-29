@@ -28,6 +28,4 @@
     <item quantity="other">@string/too_many</item>
   </plurals>
   <string name="used_from_layout">Sample text for applying theme attributes</string>
-  <string name="some_fragment">A</string>
-  <string name="indirection">@string/some_fragment</string>
 </resources>

@@ -21,8 +21,8 @@ struct ModelSpec;
 constexpr const char* INTERNAL_TYPE_TAG_FIELD_NAME = "$t";
 constexpr const char* EXTERNAL_TYPE_TAG_FIELD_NAME = "mTypeTag";
 
-std::vector<DexField*> create_merger_fields(const DexType* owner,
-                                            const FieldsMap& fields_map);
+std::vector<DexField*> create_merger_fields(
+    const DexType* owner, const std::vector<DexField*>& mergeable_fields);
 
 void cook_merger_fields_lookup(
     const std::vector<DexField*>& new_fields,

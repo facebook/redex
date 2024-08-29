@@ -7,10 +7,8 @@
 
 #include "IRAssembler.h"
 
-#include <cstdint>
 #include <gtest/gtest.h>
 
-#include "DexAnnotation.h"
 #include "DexInstruction.h"
 #include "DexPosition.h"
 #include "RedexTest.h"
@@ -690,7 +688,6 @@ TEST_F(IRAssemblerTest, assembleClassFromString) {
     (class (public final) "LFoo;"
       (field (public) "LFoo;.bar:I")
       (field (public static) "LFoo;.barStatic:I")
-      (field (public static) "LFoo;.bazStatic:I" #123)
       (method (private) "LFoo;.baz:(I)V"
         (
           (return-void)
@@ -706,29 +703,18 @@ TEST_F(IRAssemblerTest, assembleClassFromString) {
 
   EXPECT_EQ(cls->get_access(), ACC_PUBLIC | ACC_FINAL);
   EXPECT_EQ(cls->get_name()->str(), "LFoo;");
-  EXPECT_EQ(cls->get_super_class(), type::java_lang_Object());
 
   EXPECT_EQ(cls->get_ifields().size(), 1);
   ASSERT_GE(cls->get_ifields().size(), 1);
   auto i_field = cls->get_ifields()[0];
   EXPECT_EQ(i_field->get_class(), cls->get_type());
   EXPECT_EQ(i_field->get_name()->str(), "bar");
-  EXPECT_EQ(i_field->get_static_value(), nullptr);
 
-  EXPECT_EQ(cls->get_sfields().size(), 2);
-  ASSERT_GE(cls->get_sfields().size(), 2);
-  {
-    auto s_field = cls->get_sfields()[0];
-    EXPECT_EQ(s_field->get_class(), cls->get_type());
-    EXPECT_EQ(s_field->get_name()->str(), "barStatic");
-  }
-  {
-    auto s_field = cls->get_sfields()[1];
-    EXPECT_EQ(s_field->get_class(), cls->get_type());
-    EXPECT_EQ(s_field->get_name()->str(), "bazStatic");
-    EXPECT_NE(s_field->get_static_value(), nullptr);
-    EXPECT_EQ(s_field->get_static_value()->as_value(), 123);
-  }
+  EXPECT_EQ(cls->get_sfields().size(), 1);
+  ASSERT_GE(cls->get_sfields().size(), 1);
+  auto s_field = cls->get_sfields()[0];
+  EXPECT_EQ(s_field->get_class(), cls->get_type());
+  EXPECT_EQ(s_field->get_name()->str(), "barStatic");
 
   EXPECT_EQ(cls->get_dmethods().size(), 1);
   ASSERT_GE(cls->get_dmethods().size(), 1);
@@ -741,212 +727,6 @@ TEST_F(IRAssemblerTest, assembleClassFromString) {
   auto v_method = cls->get_vmethods()[0];
   EXPECT_EQ(v_method->get_class(), cls->get_type());
   EXPECT_EQ(v_method->get_name()->str(), "bazPublic");
-
-  auto sub = assembler::class_from_string(R"(
-    (class (public final) "LSub;" extends "LFoo;"
-      (method (public) "LSub;.bazPublic:(I)V"
-        (
-          (return-void)
-        )
-      )
-    )
-  )");
-  EXPECT_EQ(sub->get_super_class(), cls->get_type());
-}
-
-TEST_F(IRAssemblerTest, assembleInterfaceFromString) {
-  {
-    // Non public interface
-    auto iface = assembler::class_from_string(R"(
-      (interface () "LIfaceNotPub;")
-    )");
-    EXPECT_TRUE(is_interface(iface));
-    EXPECT_FALSE(is_public(iface));
-  }
-  auto iface = assembler::class_from_string(R"(
-    (interface (public) "LIface;"
-      (method "LIface;.one:(I)V")
-      (method "LIface;.two:(Ljava/lang/String;)I")
-      (field "LIface;.three:I")
-      (field "LIface;.four:Ljava/lang/String;")
-      (field "LIface;.five:I" #5)
-      (field "LIface;.six:I" #123)
-      (field "LIface;.seven:Ljava/lang/String;" hello)
-      (field "LIface;.eight:Z" true)
-      (field "LIface;.nine:Z" false)
-      (field "LIface;.ten:I;" a)
-      (field "LIface;.eleven:I;" b)
-      (field "LIface;.twelve:I;" ab)
-    )
-  )");
-  EXPECT_TRUE(is_interface(iface));
-  EXPECT_TRUE(is_public(iface));
-
-  const auto& methods = iface->get_all_methods();
-  EXPECT_EQ(methods.size(), 2);
-  for (const auto& m : methods) {
-    EXPECT_TRUE(m->is_virtual());
-    EXPECT_TRUE(m->is_concrete());
-    EXPECT_EQ(m->get_access(),
-              DexAccessFlags::ACC_PUBLIC | DexAccessFlags::ACC_ABSTRACT);
-    auto name = m->str();
-    EXPECT_TRUE(name == "one" || name == "two")
-        << "Got unexpected method: " << name;
-    EXPECT_EQ(m->get_code(), nullptr);
-  }
-
-  EXPECT_TRUE(iface->get_ifields().empty());
-  const auto& fields = iface->get_sfields();
-  EXPECT_EQ(fields.size(), 10);
-  for (const auto& f : fields) {
-    EXPECT_EQ(f->get_access(),
-              DexAccessFlags::ACC_PUBLIC | DexAccessFlags::ACC_STATIC |
-                  DexAccessFlags::ACC_FINAL);
-    auto name = f->str();
-    EXPECT_TRUE(name == "three" || name == "four" || name == "five" ||
-                name == "six" || name == "seven" || name == "eight" ||
-                name == "nine" || name == "ten" || name == "eleven" ||
-                name == "twelve")
-        << "Got unexpected field: " << name;
-    if (name == "three") {
-      auto static_value = f->get_static_value();
-      EXPECT_EQ(static_value->value(), 0);
-      EXPECT_EQ(static_value->evtype(), DEVT_INT);
-    } else if (name == "four") {
-      auto static_value = f->get_static_value();
-      EXPECT_EQ(static_value->value(), false);
-      EXPECT_EQ(static_value->evtype(), DEVT_NULL);
-    } else if (name == "five") {
-      auto static_value = f->get_static_value();
-      EXPECT_EQ(static_value->value(), 5);
-      EXPECT_EQ(static_value->evtype(), DEVT_INT);
-    } else if (name == "six") {
-      auto static_value = f->get_static_value();
-      EXPECT_EQ(static_value->value(), 123);
-      EXPECT_EQ(static_value->evtype(), DEVT_INT);
-    } else if (name == "seven") {
-      auto static_value = f->get_static_value();
-      EXPECT_EQ(static_value->evtype(), DEVT_STRING);
-      EXPECT_EQ(static_value->show(), "hello");
-    } else if (name == "eight") {
-      auto static_value = f->get_static_value();
-      EXPECT_EQ(static_value->value(), 1);
-    } else if (name == "nine") {
-      auto static_value = f->get_static_value();
-      EXPECT_EQ(static_value->value(), 0);
-    } else if (name == "ten") {
-      auto static_value = f->get_static_value();
-      EXPECT_EQ(static_value->value(), 10);
-    } else if (name == "eleven") {
-      auto static_value = f->get_static_value();
-      EXPECT_EQ(static_value->value(), 11);
-    } else if (name == "twelve") {
-      auto static_value = f->get_static_value();
-      EXPECT_EQ(static_value->value(), 171);
-    }
-  }
-
-  // Interfaces that extend other interfaces
-  auto a = assembler::class_from_string(R"(
-    (interface (public) "LA;"
-      (method "LA;.one:(I)V")
-    )
-  )");
-  EXPECT_EQ(a->get_interfaces()->size(), 0);
-  auto b = assembler::class_from_string(R"(
-    (interface (public) "LB;"
-      (method "LB;.two:(Ljava/lang/String;)I")
-    )
-  )");
-  EXPECT_EQ(b->get_interfaces()->size(), 0);
-  auto c = assembler::class_from_string(R"(
-    (interface (public) "LC;" extends "LA;")
-  )");
-  {
-    const auto& ifaces = c->get_interfaces();
-    EXPECT_EQ(ifaces->size(), 1);
-    EXPECT_EQ(ifaces->at(0)->str(), "LA;");
-  }
-  auto d = assembler::class_from_string(R"(
-    (interface (public) "LD;" extends ("LA;" "LB;")
-    (method "LD;.x:(II)V")
-    )
-  )");
-  {
-    const auto& ifaces = d->get_interfaces();
-    EXPECT_EQ(ifaces->size(), 2);
-    EXPECT_EQ(ifaces->at(0)->str(), "LA;");
-    EXPECT_EQ(ifaces->at(1)->str(), "LB;");
-  }
-  // Make sure the rest of the expression is parsed
-  EXPECT_EQ(d->get_all_methods().size(), 1);
-  auto d_x = *d->get_all_methods().begin();
-  EXPECT_EQ(d_x->str(), "x");
-
-  // Classes can implement interfaces
-  auto foo = assembler::class_from_string(R"(
-    (class (public) "LFoo;" implements "LA;"
-      (method (public) "LFoo;.one:(I)V"
-        (
-          (return-void)
-        )
-      )
-    )
-  )");
-  EXPECT_EQ(foo->get_super_class(), type::java_lang_Object());
-  EXPECT_EQ(foo->get_interfaces()->size(), 1);
-  EXPECT_EQ(foo->get_interfaces()->at(0), a->get_type());
-  EXPECT_EQ(foo->get_vmethods().size(), 1);
-  auto foo_one = *foo->get_vmethods().begin();
-  EXPECT_EQ(foo_one->str(), "one");
-
-  auto bar = assembler::class_from_string(R"(
-    (class (public) "LBar;" extends "LFoo;" implements ("Ljava/io/Serializable;" "LB;")
-      (method (public) "LBar;.two:(Ljava/lang/String;)I"
-        (
-          (const v0 42)
-          (return v0)
-        )
-      )
-    )
-  )");
-  EXPECT_EQ(bar->get_super_class(), foo->get_type());
-  EXPECT_EQ(bar->get_interfaces()->size(), 2);
-  EXPECT_EQ(bar->get_interfaces()->at(0)->str(), "Ljava/io/Serializable;");
-  EXPECT_EQ(bar->get_interfaces()->at(1), b->get_type());
-  EXPECT_EQ(bar->get_vmethods().size(), 1);
-  auto bar_two = *bar->get_vmethods().begin();
-  EXPECT_EQ(bar_two->str(), "two");
-}
-
-TEST_F(IRAssemblerTest, assembleInterfaceWithClinit) {
-  auto iface = assembler::class_from_string(R"(
-    (interface (public) "LIface;"
-      (field "LIface;.one:I")
-      (field "LIface;.two:Ljava/lang/Class;")
-      (method "LIface;.<clinit>:()V"
-        (
-          (const v0 42)
-          (sput v0 "LIface;.one:I")
-          (const-class "Ljava/lang/String;")
-          (move-result-pseudo-object v0)
-          (sput-object v0 "LIface;.two:Ljava/lang/Class;")
-          (return-void)
-        )
-      )
-    )
-  )");
-  EXPECT_TRUE(is_interface(iface));
-  EXPECT_TRUE(is_public(iface));
-  const auto& methods = iface->get_all_methods();
-  EXPECT_EQ(methods.size(), 1);
-  auto clinit = methods.at(0);
-  EXPECT_EQ(clinit, iface->get_clinit());
-  EXPECT_EQ(clinit->get_access(),
-            DexAccessFlags::ACC_STATIC | DexAccessFlags::ACC_CONSTRUCTOR);
-  EXPECT_EQ(
-      assembler::to_string(clinit->get_code()),
-      R"(((const v0 42) (sput v0 "LIface;.one:I") (const-class "Ljava/lang/String;") (move-result-pseudo-object v0) (sput-object v0 "LIface;.two:Ljava/lang/Class;") (return-void)))");
 }
 
 std::vector<IRInstruction*> get_fill_array_data_insns(

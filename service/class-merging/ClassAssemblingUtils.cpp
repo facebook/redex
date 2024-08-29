@@ -104,12 +104,11 @@ DexClass* create_class(const DexType* type,
   return cls;
 }
 
-std::vector<DexField*> create_merger_fields(const DexType* owner,
-                                            const FieldsMap& fields_map) {
+std::vector<DexField*> create_merger_fields(
+    const DexType* owner, const std::vector<DexField*>& mergeable_fields) {
   std::vector<DexField*> res;
-  const auto& mergeable_fields = fields_map.begin()->second;
   size_t cnt = 0;
-  for (const auto* f : mergeable_fields) {
+  for (const auto f : mergeable_fields) {
     auto type = f->get_type();
     std::string name;
     if (type == type::_byte() || type == type::_char() ||
@@ -146,23 +145,6 @@ std::vector<DexField*> create_merger_fields(const DexType* owner,
                      ->make_concrete(ACC_PUBLIC);
     res.push_back(field);
     cnt++;
-  }
-
-  std::vector<bool> acc_final_map(mergeable_fields.size(), true);
-  for (const auto& fmap : fields_map) {
-    const auto& fields = fmap.second;
-    for (size_t i = 0; i < fields.size(); i++) {
-      redex_assert(acc_final_map.size() > i);
-      acc_final_map[i] = acc_final_map.at(i) && is_final(fields[i]);
-    }
-  }
-
-  for (size_t i = 0; i < res.size(); i++) {
-    redex_assert(acc_final_map.size() > i);
-    if (acc_final_map[i]) {
-      set_final(res.at(i));
-      TRACE(CLMG, 5, "marking merger field final %s", SHOW(res.at(i)));
-    }
   }
 
   TRACE(CLMG, 8, "  created merger fields %zu ", res.size());

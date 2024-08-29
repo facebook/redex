@@ -156,8 +156,6 @@ class VirtualMerging {
                std::vector<std::pair<const DexMethod*, const DexMethod*>>,
                virtualscopes_comparator>;
 
-  void flush();
-
  private:
   MergablePairsByVirtualScope compute_mergeable_pairs_by_virtual_scopes(
       const method_profiles::MethodProfiles&,
@@ -193,6 +191,7 @@ class VirtualMergingPass : public Pass {
   }
 
   void bind_config() override;
+  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:

@@ -177,9 +177,6 @@ struct ResourceConfig : public Configurable {
   // canonical offsets for entries/values.
   std::unordered_set<std::string> canonical_entry_types;
   bool sort_key_strings{false};
-  // For instrumentation scenarios, R classes will have unexpected method
-  // invocations. Allow certain validation/cleanup behaviors to be omitted.
-  bool cleanup_r_class_rewriting{true};
 };
 
 struct DexOutputConfig : public Configurable {

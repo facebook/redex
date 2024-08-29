@@ -13,9 +13,7 @@
 #include "Debug.h"
 #include "RedexMappedFile.h"
 #include "RedexResources.h"
-#include "RedexTest.h"
 #include "RedexTestUtils.h"
-#include "ResourcesTestDefs.h"
 #include "Trace.h"
 #include "androidfw/ResourceTypes.h"
 
@@ -31,18 +29,18 @@ void setup_resources_and_run(
 
   auto res_dir = p / "base";
   create_directories(res_dir);
-  redex::copy_file(get_env("test_res_path"),
+  redex::copy_file(std::getenv("test_res_path"),
                    res_dir.string() + "/resources.pb");
 
   auto manifest_dir = p / "base/manifest";
   create_directories(manifest_dir);
-  redex::copy_file(get_env("test_manifest_path"),
+  redex::copy_file(std::getenv("test_manifest_path"),
                    manifest_dir.string() + "/AndroidManifest.xml");
 
   auto layout_dir = p / "base/res/layout";
   create_directories(layout_dir);
   auto layout_dest = layout_dir.string() + "/activity_main.xml";
-  redex::copy_file(get_env("test_layout_path"), layout_dest);
+  redex::copy_file(std::getenv("test_layout_path"), layout_dest);
 
   BundleResources resources(tmp_dir.path);
   callback(tmp_dir.path, &resources);
@@ -56,24 +54,6 @@ ComponentTagInfo find_component_info(const std::vector<ComponentTagInfo>& list,
     }
   }
   throw std::runtime_error("Not found: " + classname);
-}
-
-void dump_string_reference_set(
-    const resources::StringOrReferenceSet& layout_classes) {
-  for (const auto& c : layout_classes) {
-    if (c.is_reference()) {
-      std::cerr << "LAYOUT CLASS REF: 0x" << std::hex << c.ref << std::dec
-                << std::endl;
-    } else {
-      std::cerr << "LAYOUT CLASS: " << c.str << std::endl;
-    }
-  }
-}
-
-uint32_t get_resource_id(const std::string& name, BundleResources* resources) {
-  auto res_table = resources->load_res_table();
-  auto ids = res_table->get_res_ids_by_name(name);
-  return *ids.begin();
 }
 } // namespace
 
@@ -194,70 +174,43 @@ TEST(BundleResources, TestCollectResFilesByRid) {
 TEST(BundleResources, ReadLayout) {
   setup_resources_and_run([&](const std::string& extract_dir,
                               BundleResources* resources) {
-    resources::StringOrReferenceSet layout_classes;
+    std::unordered_set<std::string> layout_classes;
     std::unordered_set<std::string> attrs_to_read;
     attrs_to_read.emplace(ONCLICK_ATTRIBUTE);
-    std::unordered_multimap<std::string, resources::StringOrReference>
-        attribute_values;
+    std::unordered_multimap<std::string, std::string> attribute_values;
     resources->collect_layout_classes_and_attributes_for_file(
-        get_env("test_layout_path"),
+        std::getenv("test_layout_path"),
         attrs_to_read,
         &layout_classes,
         &attribute_values);
-    dump_string_reference_set(layout_classes);
-    EXPECT_EQ(layout_classes.size(), 3);
-    EXPECT_EQ(count_strings(layout_classes, "com.fb.bundles.WickedCoolButton"),
-              1);
-    EXPECT_EQ(count_strings(layout_classes, "com.fb.bundles.NiftyViewGroup"),
-              1);
-    auto ref_id = get_resource_id("indirection", resources);
-    EXPECT_EQ(count_refs(layout_classes, ref_id), 1);
+    EXPECT_EQ(layout_classes.size(), 2);
+    EXPECT_EQ(layout_classes.count("Lcom/fb/bundles/WickedCoolButton;"), 1);
+    EXPECT_EQ(layout_classes.count("Lcom/fb/bundles/NiftyViewGroup;"), 1);
 
-    auto method_names =
-        string_values_for_key(attribute_values, "android:onClick");
-    EXPECT_EQ(method_names.size(), 2);
-    EXPECT_EQ(method_names.count("performBar"), 1);
-    EXPECT_EQ(method_names.count("performFoo"), 1);
+    auto range = attribute_values.equal_range(ONCLICK_ATTRIBUTE);
+    size_t found_method_names = 0;
+    for (auto it = range.first; it != range.second; ++it) {
+      found_method_names++;
+      EXPECT_TRUE(it->second == "performFoo" || it->second == "performBar");
+    }
+    EXPECT_EQ(found_method_names, 2);
 
     // Parse another file with slightly different form.
-    resources::StringOrReferenceSet more_classes;
-    std::unordered_multimap<std::string, resources::StringOrReference>
-        more_attribute_values;
+    std::unordered_set<std::string> more_classes;
+    std::unordered_multimap<std::string, std::string> more_attribute_values;
     resources->collect_layout_classes_and_attributes_for_file(
-        get_env("another_layout_path"),
+        std::getenv("another_layout_path"),
         {},
         &more_classes,
         &more_attribute_values);
     EXPECT_EQ(more_classes.size(), 5);
-    EXPECT_EQ(count_strings(more_classes, "com.facebook.BananaView"), 1);
-    EXPECT_EQ(count_strings(more_classes,
-                            "androidx.fragment.app.FragmentContainerView"),
-              1);
-    EXPECT_EQ(count_strings(more_classes, "com.facebook.SomeFragment"), 1);
-    EXPECT_EQ(count_strings(more_classes, "com.facebook.AnotherFragment"), 1);
-    EXPECT_EQ(count_strings(more_classes, "com.facebook.CoolView"), 1);
+    EXPECT_EQ(more_classes.count("Lcom/facebook/BananaView;"), 1);
+    EXPECT_EQ(
+        more_classes.count("Landroidx/fragment/app/FragmentContainerView;"), 1);
+    EXPECT_EQ(more_classes.count("Lcom/facebook/SomeFragment;"), 1);
+    EXPECT_EQ(more_classes.count("Lcom/facebook/AnotherFragment;"), 1);
+    EXPECT_EQ(more_classes.count("Lcom/facebook/CoolView;"), 1);
   });
-}
-
-TEST(BundleResources, ReadLayoutResolveRefs) {
-  setup_resources_and_run(
-      [&](const std::string& /* unused */, BundleResources* resources) {
-        std::unordered_set<std::string> layout_classes;
-        std::unordered_set<std::string> attrs_to_read;
-        attrs_to_read.emplace(ONCLICK_ATTRIBUTE);
-        std::unordered_multimap<std::string, std::string> attribute_values;
-        resources->collect_layout_classes_and_attributes(
-            attrs_to_read, &layout_classes, &attribute_values);
-
-        EXPECT_EQ(layout_classes.size(), 4);
-        EXPECT_EQ(attribute_values.size(), 2);
-
-        // One reference should have been resolved to two possible classes.
-        EXPECT_EQ(layout_classes.count("A"), 1);
-        EXPECT_EQ(layout_classes.count("B"), 1);
-        EXPECT_EQ(layout_classes.count("com.fb.bundles.WickedCoolButton"), 1);
-        EXPECT_EQ(layout_classes.count("com.fb.bundles.NiftyViewGroup"), 1);
-      });
 }
 
 TEST(BundleResources, RenameLayout) {
@@ -269,21 +222,17 @@ TEST(BundleResources, RenameLayout) {
         resources->rename_classes_in_layouts(rename_map);
 
         // Read the file again to see it take effect
-        resources::StringOrReferenceSet layout_classes;
+        std::unordered_set<std::string> layout_classes;
         std::unordered_set<std::string> attrs_to_read;
-        std::unordered_multimap<std::string, resources::StringOrReference>
-            attribute_values;
+        std::unordered_multimap<std::string, std::string> attribute_values;
         resources->collect_layout_classes_and_attributes_for_file(
             extract_dir + "/base/res/layout/activity_main.xml",
             attrs_to_read,
             &layout_classes,
             &attribute_values);
-        dump_string_reference_set(layout_classes);
-        EXPECT_EQ(layout_classes.size(), 3);
-        EXPECT_EQ(count_strings(layout_classes, "X.001"), 1);
-        EXPECT_EQ(count_strings(layout_classes, "X.002"), 1);
-        auto ref_id = get_resource_id("indirection", resources);
-        EXPECT_EQ(count_refs(layout_classes, ref_id), 1);
+        EXPECT_EQ(layout_classes.size(), 2);
+        EXPECT_EQ(layout_classes.count("LX/001;"), 1);
+        EXPECT_EQ(layout_classes.count("LX/002;"), 1);
       });
 }
 

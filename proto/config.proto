@@ -221,7 +221,6 @@ message UncompressDexFiles {
     UNSPECIFIED = 0;
     // S+ variant will be generated.
     SDK_31 = 1;
-    reserved 2;
   }
 }
 

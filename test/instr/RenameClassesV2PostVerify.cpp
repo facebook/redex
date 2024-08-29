@@ -20,19 +20,18 @@
 #include "androidfw/ResourceTypes.h"
 
 void verify_layout(const std::string& filename) {
-  resources::StringOrReferenceSet classes;
-  std::unordered_multimap<std::string, resources::StringOrReference>
-      unused_attr_values;
+  std::unordered_set<std::string> classes;
+  std::unordered_set<std::string> unused_attrs;
+  std::unordered_multimap<std::string, std::string> unused_attr_values;
   ApkResources resources("");
   resources.collect_layout_classes_and_attributes_for_file(
-      filename, {}, &classes, &unused_attr_values);
+      filename, unused_attrs, &classes, &unused_attr_values);
 
   EXPECT_EQ(classes.size(), 1)
       << "Expected 1 View in layout file: " << filename;
   auto cls_name = *classes.begin();
-  EXPECT_FALSE(cls_name.is_reference());
-  EXPECT_EQ(cls_name.str.find("X."), 0)
-      << "Got unexpected class name in layout: " << cls_name.str;
+  EXPECT_EQ(cls_name.find("LX/"), 0)
+      << "Got unexpected class name in layout: " << cls_name;
 }
 
 TEST_F(PostVerify, RenameClassesV2) {

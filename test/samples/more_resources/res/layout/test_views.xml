@@ -25,10 +25,4 @@
       android:background="#E91E63"
       class="derp"
       />
-
-  <TextView
-      android:layout_width="match_parent"
-      android:layout_height="wrap_content"
-      android:text="Make sure this is MUTF-8: 🔥"
-      />
 </LinearLayout>

@@ -13,7 +13,6 @@
 #include "JarLoader.h"
 #include "ObjectSensitiveDcePass.h"
 #include "RedexTest.h"
-#include "UsedVarsAnalysis.h"
 
 using namespace stringbuilder_outliner;
 
