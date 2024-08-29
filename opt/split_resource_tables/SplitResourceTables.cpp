@@ -26,6 +26,7 @@
 #include "MethodReference.h"
 #include "OptimizeResources.h"
 #include "PassManager.h"
+#include "RClass.h"
 #include "RedexResources.h"
 #include "Resolver.h"
 #include "StaticIds.h"
@@ -442,7 +443,8 @@ void SplitResourceTablesPass::run_pass(DexStoresVector& stores,
                        deleted_resources, &old_to_remapped_ids);
 
   // Renumber the R classes
-  OptimizeResourcesPass::remap_resource_classes(stores, old_to_remapped_ids);
+  resources::RClassWriter r_class_writer(cfg.get_global_config());
+  r_class_writer.remap_resource_class_scalars(stores, old_to_remapped_ids);
 
   // Fix xml files
   auto all_xml_files = resources->find_all_xml_files();
@@ -451,8 +453,7 @@ void SplitResourceTablesPass::run_pass(DexStoresVector& stores,
     resources->remap_xml_reference_attributes(f, old_to_remapped_ids);
   }
 
-  OptimizeResourcesPass::remap_resource_class_arrays(
-      stores, cfg.get_global_config(), old_to_remapped_ids);
+  r_class_writer.remap_resource_class_arrays(stores, old_to_remapped_ids);
 
   // Set up the new types that will actually be created by the next step.
   for (const auto& t : new_types) {

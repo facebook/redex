@@ -131,6 +131,8 @@ class PrimitiveAnalyzer final
 
   static bool analyze_cmp(const IRInstruction* insn, ConstantEnvironment* env);
 
+  static bool analyze_unop(const IRInstruction* insn, ConstantEnvironment* env);
+
   static bool analyze_binop_lit(const IRInstruction* insn,
                                 ConstantEnvironment* env);
 
@@ -195,6 +197,9 @@ class LocalArrayAnalyzer final
 
   static bool analyze_fill_array_data(const IRInstruction* insn,
                                       ConstantEnvironment* env);
+
+  static bool analyze_filled_new_array(const IRInstruction* insn,
+                                       ConstantEnvironment* env);
 };
 
 /*
@@ -219,6 +224,16 @@ class ClinitFieldAnalyzer final
   static bool analyze_invoke(const DexType* class_under_init,
                              const IRInstruction* insn,
                              ConstantEnvironment* env);
+};
+
+/*
+ * Models the effects of the sget instructions on static final fields
+ */
+class StaticFinalFieldAnalyzer final
+    : public InstructionAnalyzerBase<StaticFinalFieldAnalyzer,
+                                     ConstantEnvironment> {
+ public:
+  static bool analyze_sget(const IRInstruction* insn, ConstantEnvironment* env);
 };
 
 /*

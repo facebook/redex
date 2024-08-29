@@ -100,7 +100,7 @@ class ReferencedState {
         bool m_renamable_initialized : 1;
       };
       // This is for method only. Currently, the number of flags
-      // is 7. Once new flag is added, please update the corresponding number in
+      // is 8. Once new flag is added, please update the corresponding number in
       // comment.
       struct {
         // assumenosideeffects allows certain methods to be removed.
@@ -124,10 +124,11 @@ class ReferencedState {
         bool m_dont_inline : 1;
         bool m_force_inline : 1;
         bool m_too_large_for_inlining_into : 1;
+        // To prevent outlining code from this method.
+        bool m_dont_outline : 1;
       };
-      // This is for filed only.  Currently the number of flags
-      // is 1. Once new flag is added, please update the corresponding number in
-      // comment.
+      // This is for field only. Currently the number of flags is 1. Once new
+      // flag is added, please update the corresponding number in comment.
       struct {
         // Whether a field is used to indicate that an sget cannot be removed
         // because it signals that the class must be initialized at this point.
@@ -162,6 +163,7 @@ class ReferencedState {
       m_force_rename = false;
       m_dont_rename = false;
       m_renamable_initialized = false;
+      m_dont_outline = false;
     }
 
     void set_state_type(RefStateType stype) {
@@ -283,6 +285,8 @@ class ReferencedState {
       this->inner_struct.m_too_large_for_inlining_into =
           this->inner_struct.m_too_large_for_inlining_into |
           other.inner_struct.m_too_large_for_inlining_into;
+      this->inner_struct.m_dont_outline =
+          this->inner_struct.m_dont_outline | other.inner_struct.m_dont_outline;
     } else if (this->inner_struct.is_field()) {
       this->inner_struct.m_init_class =
           this->inner_struct.m_init_class | other.inner_struct.m_init_class;
@@ -461,7 +465,8 @@ class ReferencedState {
   // -1 means unknown, e.g. for a method created by Redex
   int8_t get_api_level() const { return inner_struct.m_api_level; }
   void set_api_level(int32_t api_level) {
-    redex_assert(api_level <= std::numeric_limits<int8_t>::max());
+    always_assert_log(api_level <= std::numeric_limits<int8_t>::max(),
+                      "api level too big");
     inner_struct.m_api_level = api_level;
   }
 
@@ -586,6 +591,19 @@ class ReferencedState {
   bool too_large_for_inlining_into() const {
     always_assert(inner_struct.is_method());
     return inner_struct.m_too_large_for_inlining_into;
+  }
+
+  void set_no_outlining() {
+    always_assert(inner_struct.is_method());
+    inner_struct.m_dont_outline = true;
+  }
+  void reset_no_outlining() {
+    always_assert(inner_struct.is_method());
+    inner_struct.m_dont_outline = false;
+  }
+  bool should_not_outline() const {
+    always_assert(inner_struct.is_method());
+    return inner_struct.m_dont_outline;
   }
 
  private:

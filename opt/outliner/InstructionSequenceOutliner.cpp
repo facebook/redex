@@ -1174,7 +1174,8 @@ static MethodCandidates find_method_candidates(
 ////////////////////////////////////////////////////////////////////////////////
 
 static bool can_outline_from_method(DexMethod* method) {
-  if (method->rstate.no_optimizations() || method->rstate.outlined()) {
+  if (method->rstate.no_optimizations() ||
+      method->rstate.should_not_outline() || method->rstate.outlined()) {
     return false;
   }
 

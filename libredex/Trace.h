@@ -132,6 +132,7 @@ class DexType;
   TM(RES)               \
   TM(RESO)              \
   TM(RG)                \
+  TM(RIP)               \
   TM(RME)               \
   TM(RMGOTO)            \
   TM(RM_INTF)           \

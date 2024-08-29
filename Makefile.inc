@@ -8,11 +8,6 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/liblocator \
 	-I$(top_srcdir)/libredex \
 	-I$(top_srcdir)/libresource \
-	-I$(top_srcdir)/libresource/android \
-	-I$(top_srcdir)/libresource/androidfw \
-	-I$(top_srcdir)/libresource/cutils \
-	-I$(top_srcdir)/libresource/system \
-	-I$(top_srcdir)/libresource/utils \
 	-I$(top_srcdir)/opt \
 	-I$(top_srcdir)/opt/access-marking \
 	-I$(top_srcdir)/opt/add-secondary-dex \
@@ -79,6 +74,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/reorder-interfaces \
 	-I$(top_srcdir)/opt/resolve-proguard-values \
 	-I$(top_srcdir)/opt/resolve-refs \
+	-I$(top_srcdir)/opt/resources-inlining-pass \
 	-I$(top_srcdir)/opt/result-propagation \
 	-I$(top_srcdir)/opt/shrinker \
 	-I$(top_srcdir)/opt/shorten-srcstrings \
@@ -116,12 +112,14 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/service/escape-analysis \
 	-I$(top_srcdir)/service/field-ops \
 	-I$(top_srcdir)/service/init-classes \
+	-I$(top_srcdir)/service/init-deps \
 	-I$(top_srcdir)/service/local-dce \
 	-I$(top_srcdir)/service/loop-info \
 	-I$(top_srcdir)/service/method-dedup \
 	-I$(top_srcdir)/service/method-inliner \
 	-I$(top_srcdir)/service/method-outliner \
 	-I$(top_srcdir)/service/method-merger \
+	-I$(top_srcdir)/service/object-sensitive-dce \
 	-I$(top_srcdir)/service/kotlin-instance-rewrite \
 	-I$(top_srcdir)/service/reduce-boolean-branches \
 	-I$(top_srcdir)/service/reference-update \

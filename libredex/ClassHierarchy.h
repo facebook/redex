@@ -20,6 +20,13 @@ using TypeSet = std::set<const DexType*, dextypes_comparator>;
 using ClassHierarchy = std::unordered_map<const DexType*, TypeSet>;
 
 /**
+ * Given a scope it builds all the parent-children relationships known. Excludes
+ * external classes as keys in the returned map, and will have incomplete
+ * hierarchies that end in external types.
+ */
+ClassHierarchy build_internal_type_hierarchy(const Scope& scope);
+
+/**
  * Given a scope it builds all the parent-children relationship known.
  * The walk stops once a DexClass is not found.
  * If all the code is known all classes will root to java.lang.Object.

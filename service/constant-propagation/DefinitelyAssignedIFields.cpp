@@ -338,7 +338,7 @@ std::unordered_set<const DexField*> get_definitely_assigned_ifields(
       always_assert(opcode::is_new_instance(def->opcode()));
       for (auto& use : uses) {
         if (opcode::is_invoke_direct(use.insn->opcode()) &&
-            method::is_init(use.insn->get_method())) {
+            use.src_index == 0 && method::is_init(use.insn->get_method())) {
           auto resolved =
               resolve_method(use.insn->get_method(), MethodSearch::Direct);
           if (resolved == nullptr || resolved->get_class() != def->get_type()) {

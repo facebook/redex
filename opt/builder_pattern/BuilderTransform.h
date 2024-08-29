@@ -24,7 +24,7 @@ class BuilderTransform {
                        init_classes_with_side_effects,
                    const inliner::InlinerConfig& inliner_config,
                    DexStoresVector& stores);
-  ~BuilderTransform();
+  void flush();
 
   bool inline_super_calls_and_ctors(const DexType* type);
 

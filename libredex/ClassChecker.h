@@ -27,5 +27,7 @@ class ClassChecker {
 
  private:
   bool m_good;
-  ConcurrentSet<DexClass*> failed_classes;
+  ConcurrentSet<const DexClass*> m_failed_classes;
+  // Methods which are incorrectly overriding final methods on a super.
+  ConcurrentSet<const DexMethod*> m_failed_methods;
 };

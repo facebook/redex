@@ -66,6 +66,9 @@ uint32_t get_spec_flags(android::ResTable_typeSpec* spec, uint16_t entry_id);
 // simply a byte by byte compare).
 bool are_configs_equivalent(android::ResTable_config* a,
                             android::ResTable_config* b);
+// Returns whether or not the given config is the default (basically an empty
+// config).
+bool is_default_config(android::ResTable_config* c);
 
 // For a Res_value marked with FLAG_COMPLEX, return the value part.
 float complex_value(uint32_t complex);

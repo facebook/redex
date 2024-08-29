@@ -1385,14 +1385,16 @@ MethodInfo instrument_basic_blocks(
 
   // When there are too many blocks, collect all source blocks into the entry
   // block to track them conservatively.
-  info.entry_source_blocks = too_many_blocks ? [&]() {
-    std::vector<SourceBlock*> all;
-    for (auto* b : cfg.blocks()) {
-      auto tmp = source_blocks::gather_source_blocks(b);
-      all.insert(all.end(), tmp.begin(), tmp.end());
-    }
-    return all;
-  }() : source_blocks::gather_source_blocks(cfg.entry_block());
+  info.entry_source_blocks =
+      too_many_blocks ? [&]() {
+        std::vector<SourceBlock*> all;
+        for (auto* b : cfg.blocks()) {
+          auto tmp = source_blocks::gather_source_blocks(b);
+          all.insert(all.end(), tmp.begin(), tmp.end());
+        }
+        return all;
+      }()
+                      : source_blocks::gather_source_blocks(cfg.entry_block());
   info.too_many_blocks = too_many_blocks;
   info.num_too_many_blocks = too_many_blocks ? 1 : 0;
   info.offset = method_offset;
@@ -2060,6 +2062,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
         analysis_cls, field->get_name()->str(),
         static_cast<int>(ProfileTypeFlags::BasicBlockHitCount));
   }
+  inliner.flush();
 
   write_metadata(cfg, options.metadata_file_name, instrumented_methods,
                  options.instrumentation_strategy);

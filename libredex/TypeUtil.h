@@ -110,6 +110,12 @@ bool is_reference_array(const DexType* type);
 char type_shorty(const DexType* type);
 
 /**
+ * Returns the number of bytes that any value of the given primitive types
+ * requires to be represented in memory.
+ */
+uint8_t primitive_size(const DexType* type);
+
+/**
  * Check whether a type can be cast to another type.
  * That is, if 'base_type' is an ancestor or an interface implemented by 'type'.
  * However the check is only within classes known to the app. So

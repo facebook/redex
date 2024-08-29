@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <bool name="should_log">true</bool>
+  <color name="nice_purple">#673AB7</color>
+  <color name="simple">#F00</color>
+  <color name="text_color">@color/nice_purple</color>
+  <color name="view_bg">#E8EAF6</color>
+  <dimen name="outer_padding">16dp</dimen>
+  <dimen name="text_size">36sp</dimen>
+  <integer name="loop_count">3</integer>
+  <string name="main_text">Hello, 🌎!</string>
+  <string name="styled_text"><b>styled</b> AND <i>styled</i></string>
+  <string name="not_main_text">Goodbye, 🌎!</string>
+</resources>

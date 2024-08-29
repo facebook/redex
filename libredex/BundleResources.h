@@ -74,6 +74,10 @@ class ResourcesPbFile : public ResourceTableFile {
       std::vector<android::ResTable_config>* configs) override;
   std::set<android::ResTable_config> get_configs_with_values(
       uint32_t id) override;
+  void resolve_string_values_for_resource_reference(
+      uint32_t ref, std::vector<std::string>* values) override;
+  std::unordered_map<uint32_t, resources::InlinableValue>
+  get_inlinable_resource_values() override;
 
   const std::map<uint32_t, const ConfigValues>& get_res_id_to_configvalue()
       const {
@@ -99,14 +103,15 @@ class BundleResources : public AndroidResources {
   boost::optional<int32_t> get_min_sdk() override;
   ManifestClassInfo get_manifest_class_info() override;
   boost::optional<std::string> get_manifest_package_name() override;
+  std::unordered_set<std::string> get_service_loader_classes() override;
   std::unordered_set<uint32_t> get_xml_reference_attributes(
       const std::string& filename) override;
   void collect_layout_classes_and_attributes_for_file(
       const std::string& file_path,
       const std::unordered_set<std::string>& attributes_to_read,
-      std::unordered_set<std::string>* out_classes,
-      std::unordered_multimap<std::string, std::string>* out_attributes)
-      override;
+      resources::StringOrReferenceSet* out_classes,
+      std::unordered_multimap<std::string, resources::StringOrReference>*
+          out_attributes) override;
   void collect_xml_attribute_string_values_for_file(
       const std::string& file_path,
       std::unordered_set<std::string>* out) override;

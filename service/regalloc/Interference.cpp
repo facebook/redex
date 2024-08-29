@@ -368,8 +368,7 @@ std::ostream& Graph::write_dot_format(std::ostream& o) const {
   for (const auto& pair : nodes()) {
     auto reg = pair.first;
     auto& node = pair.second;
-    o << reg << "[label=\"" << reg << " (" << node.weight() << ")\"]"
-      << "\n";
+    o << reg << "[label=\"" << reg << " (" << node.weight() << ")\"]" << "\n";
     for (auto adj : node.adjacent()) {
       if (pair.first < adj) {
         o << reg << " -- " << adj << "\n";

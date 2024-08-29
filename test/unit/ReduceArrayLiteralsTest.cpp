@@ -15,13 +15,13 @@
 
 class ReduceArrayLiteralsTest : public RedexTest {};
 
-void test(const std::string& code_str,
-          const std::string& expected_str,
-          size_t expected_filled_arrays,
-          size_t expected_filled_array_elements,
-          size_t max_filled_elements = 222,
-          int32_t min_sdk = 24,
-          Architecture arch = Architecture::UNKNOWN) {
+ReduceArrayLiterals::Stats test(const std::string& code_str,
+                                const std::string& expected_str,
+                                size_t expected_filled_arrays,
+                                size_t expected_filled_array_elements,
+                                size_t max_filled_elements = 222,
+                                int32_t min_sdk = 24,
+                                Architecture arch = Architecture::UNKNOWN) {
   auto code = assembler::ircode_from_string(code_str);
   auto expected = assembler::ircode_from_string(expected_str);
 
@@ -38,6 +38,8 @@ void test(const std::string& code_str,
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected.get()));
+
+  return stats;
 };
 
 TEST_F(ReduceArrayLiteralsTest, empty_array) {
@@ -343,4 +345,101 @@ TEST_F(ReduceArrayLiteralsTest, conditional_escape) {
   )";
   const auto& expected_str = code_str;
   test(code_str, expected_str, 0, 0);
+}
+
+TEST_F(ReduceArrayLiteralsTest, emit_fill_array_data) {
+  auto code_str = R"(
+    (
+     (const v0 3)
+     (new-array v0 "[I")
+     (move-result-pseudo-object v1)
+     (const v2 0)
+     (const v3 1)
+     (aput v3 v1 v2)
+     (const v2 2)
+     (aput v2 v1 v3)
+     (aput v0 v1 v2)
+     (return-object v1)
+    )
+)";
+
+  auto expected_str = R"(
+    (
+     (const v0 3)
+     (new-array v0 "[I")
+     (move-result-pseudo-object v1)
+     (const v2 0)
+     (const v3 1)
+     (const v2 2)
+     (fill-array-data v1 #4 (1 2 3))
+     (return-object v1)
+    )
+)";
+
+  auto stats = test(code_str, expected_str, 0, 0);
+
+  EXPECT_EQ(1, stats.fill_array_datas);
+  EXPECT_EQ(3, stats.fill_array_data_elements);
+}
+
+TEST_F(ReduceArrayLiteralsTest, emit_fill_array_data_same_constants) {
+  auto code_str = R"(
+    (
+      (invoke-static () "Ljava/lang/System;.currentTimeMillis:()J")
+      (move-result-wide v0)
+      (const-wide v2 1)
+      (cmp-long v4 v0 v2)
+      (if-lez v4 :L0)
+      (const v2 10)
+      (const v3 20)
+      (const v4 30)
+      (goto :L1)
+      (:L0)
+      (const v2 10)
+      (const v3 20)
+      (const v4 30)
+      (:L1)
+      (const v5 3)
+      (new-array v5 "[I")
+      (move-result-pseudo-object v6)
+      (const v7 0)
+      (aput v2 v6 v7)
+      (const v7 1)
+      (aput v3 v6 v7)
+      (const v7 2)
+      (aput v4 v6 v7)
+      (return-object v6)
+    )
+)";
+
+  auto expected_str = R"(
+    (
+      (invoke-static () "Ljava/lang/System;.currentTimeMillis:()J")
+      (move-result-wide v0)
+      (const-wide v2 1)
+      (cmp-long v4 v0 v2)
+      (if-lez v4 :L1)
+      (const v2 10)
+      (const v3 20)
+      (const v4 30)
+      (:L0)
+      (const v5 3)
+      (new-array v5 "[I")
+      (move-result-pseudo-object v6)
+      (const v7 0)
+      (const v7 1)
+      (const v7 2)
+      (fill-array-data v6 #4 (a 14 1e))
+      (return-object v6)
+      (:L1)
+      (const v2 10)
+      (const v3 20)
+      (const v4 30)
+      (goto :L0))
+)";
+
+  auto stats = test(code_str, expected_str, 0, 0);
+
+  EXPECT_EQ(1, stats.fill_array_datas);
+  EXPECT_EQ(3, stats.fill_array_data_elements);
 }

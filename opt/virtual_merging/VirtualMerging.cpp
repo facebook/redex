@@ -124,6 +124,9 @@ VirtualMerging::VirtualMerging(DexStoresVector& stores,
       /* const std::unordered_set<DexMethodRef*>& configured_pure_methods */ {},
       min_sdk_api));
 }
+
+void VirtualMerging::flush() { m_inliner->flush(); }
+
 VirtualMerging::~VirtualMerging() {}
 
 // Part 1: Identify which virtual methods get invoked via invoke-super --- we'll
@@ -1166,7 +1169,7 @@ VirtualMergingStats apply_ordering(
           allocate_wide_temp = [=]() {
             return overridden_code->allocate_wide_temp();
           };
-          cleanup = [=]() { overridden_code->build_cfg(/* editable */ true); };
+          cleanup = [=]() { overridden_code->build_cfg(); };
         } else {
           // We are dealing with a non-abstract method. In this case, we'll
           // first insert an if-instruction to decide whether to run the
@@ -1174,7 +1177,7 @@ VirtualMergingStats apply_ordering(
           // old method body.
           overridden_code = overridden_method->get_code();
           always_assert(overridden_code);
-          overridden_code->build_cfg(/* editable */ true);
+          overridden_code->build_cfg();
           auto& overridden_cfg = overridden_code->cfg();
 
           // Find block with load-param instructions
@@ -1316,7 +1319,9 @@ VirtualMergingStats apply_ordering(
 
         cleanup();
 
-        overriding_method->get_code()->build_cfg(/* editable */ true);
+        // overriding_method->get_code()->build_cfg();
+        always_assert(overriding_method->get_code()->editable_cfg_built());
+        always_assert(overridden_method->get_code()->editable_cfg_built());
         inliner::inline_with_cfg(
             overridden_method, overriding_method, invoke_virtual_insn,
             /* needs_receiver_cast */ nullptr, /* needs_init_class */ nullptr,
@@ -1324,15 +1329,12 @@ VirtualMergingStats apply_ordering(
         inliner.visibility_changes_apply_and_record_make_static(
             get_visibility_changes(overriding_method,
                                    overridden_method->get_class()));
-        overriding_method->get_code()->clear_cfg();
 
         // Check if everything was inlined.
         for (const auto& mie :
              cfg::InstructionIterable(overridden_code->cfg())) {
           redex_assert(invoke_virtual_insn != mie.insn);
         }
-
-        overridden_code->clear_cfg();
 
         virtual_methods_to_remove[type_class(overriding_method->get_class())]
             .push_back(overriding_method);
@@ -1513,6 +1515,7 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
                     m_perf_config);
   vm.run(conf.get_method_profiles(), m_strategy, m_insertion_strategy);
   auto stats = vm.get_stats();
+  vm.flush();
 
   mgr.incr_metric(METRIC_DEDUPPED_VIRTUAL_METHODS, dedupped);
   mgr.incr_metric(METRIC_INVOKE_SUPER_METHODS, stats.invoke_super_methods);

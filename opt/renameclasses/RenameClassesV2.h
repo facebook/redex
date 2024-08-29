@@ -187,6 +187,9 @@ class RenameClassesPassV2 : public Pass {
   // Decisions we made in the eval_classes pass
   std::unordered_map<const DexClass*, DontRenameReason> m_dont_rename_reasons;
 
+  // State for ensuring xml files are rewritten properly.
+  std::unordered_set<const DexString*> m_renamable_layout_classes;
+
   std::string m_apk_dir;
 
   bool m_avoid_type_lookup_table_collisions = false;
