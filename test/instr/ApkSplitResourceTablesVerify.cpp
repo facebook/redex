@@ -25,7 +25,8 @@ TEST_F(PostVerify, VerifyNewTypeCreated) {
     table_snapshot.collect_resource_values(id, &out_vals);
     for (const auto& val : out_vals) {
       if (val.dataType == android::Res_value::TYPE_STRING) {
-        result.emplace_back(table_snapshot.get_global_string(dtohl(val.data)));
+        result.emplace_back(
+            table_snapshot.get_global_string_utf8s(dtohl(val.data)));
       }
     }
     return result;

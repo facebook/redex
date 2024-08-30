@@ -25,8 +25,8 @@
 #include "GlobalConfig.h"
 #include "IOUtil.h"
 #include "IRInstruction.h"
-#include "LiveRange.h"
 #include "PassManager.h"
+#include "RClass.h"
 #include "ReachableClasses.h"
 #include "RedexMappedFile.h"
 #include "RedexResources.h"
@@ -64,98 +64,6 @@ ReachableResourcesPluginRegistry::get_plugins() const {
 } // namespace opt_res
 
 namespace {
-void extract_resources_from_static_arrays(
-    const std::unordered_set<DexField*>& array_fields,
-    std::unordered_set<uint32_t>* out_values) {
-  std::unordered_set<DexClass*> classes_to_search;
-  for (DexField* field : array_fields) {
-    DexClass* clazz = type_class(field->get_class());
-
-    // We can assert a non-null class since we know these fields came
-    // from classes we iterated over.
-    always_assert(clazz != nullptr);
-    classes_to_search.emplace(clazz);
-  }
-
-  for (auto clazz : classes_to_search) {
-    DexMethod* clinit = clazz->get_clinit();
-    IRCode* ir_code = clinit->get_code();
-    if (ir_code == nullptr) {
-      continue;
-    }
-    always_assert(ir_code->editable_cfg_built());
-    auto& cfg = ir_code->cfg();
-    live_range::MoveAwareChains move_aware_chains(cfg);
-    auto use_defs = move_aware_chains.get_use_def_chains();
-    auto def_uses = move_aware_chains.get_def_use_chains();
-    for (const auto& mie : InstructionIterable(cfg)) {
-      auto insn = mie.insn;
-      if (!opcode::is_an_sput(insn->opcode())) {
-        continue;
-      }
-      auto field = resolve_field(insn->get_field(), FieldSearch::Static);
-      // Only consider array values for the requested fields.
-      if (!array_fields.count(field)) {
-        continue;
-      }
-      std::unordered_set<uint32_t> inner_array_values;
-      auto& array_defs = use_defs.at(live_range::Use{insn, 0});
-      // should be only one, but we can be conservative and consider all
-      for (auto* array_def : array_defs) {
-        auto& uses = def_uses.at(array_def);
-        if (array_def->opcode() == OPCODE_SGET_OBJECT && uses.size() == 1) {
-          continue;
-        }
-        always_assert_log(array_def->opcode() == OPCODE_NEW_ARRAY,
-                          "OptimizeResources does not support extracting "
-                          "resources from array created by %s\nin %s:\n%s",
-                          SHOW(array_def), SHOW(clinit), SHOW(cfg));
-        // should be only one, but we can be conservative and consider all
-        for (auto& use : uses) {
-          switch (use.insn->opcode()) {
-          case OPCODE_FILL_ARRAY_DATA: {
-            always_assert(use.src_index == 0);
-            auto array_ints =
-                get_fill_array_data_payload<uint32_t>(use.insn->get_data());
-            for (uint32_t entry_x : array_ints) {
-              if (entry_x > PACKAGE_RESID_START) {
-                inner_array_values.emplace(entry_x);
-              }
-            }
-            break;
-          }
-          case OPCODE_APUT: {
-            always_assert(use.src_index == 1);
-            auto value_defs = use_defs.at(live_range::Use{use.insn, 0});
-            for (auto* value_def : value_defs) {
-              always_assert_log(value_def->opcode() == OPCODE_CONST,
-                                "OptimizeResources does not support extracting "
-                                "resources from value given by %s",
-                                SHOW(value_def));
-              auto const_literal = value_def->get_literal();
-              if (const_literal > PACKAGE_RESID_START) {
-                inner_array_values.emplace(const_literal);
-              }
-            }
-            break;
-          }
-          default:
-            if (use.insn != insn) {
-              always_assert_log(false,
-                                "OptimizeResources does not support extracting "
-                                "resources from array escaping via %s",
-                                SHOW(use.insn));
-            }
-            break;
-          }
-        }
-      }
-      out_values->insert(inner_array_values.begin(), inner_array_values.end());
-    }
-  }
-}
-
-namespace {
 // Return true if the given string is a relative file path, has .xml extension
 // and can refer to the res directory of an .apk or .aab file.
 bool is_resource_xml(const std::string& str) {
@@ -173,7 +81,6 @@ bool is_resource_xml(const std::string& str) {
   }
   return false;
 }
-} // namespace
 
 void compute_transitive_closure(
     ResourceTableFile* res_table,
@@ -346,195 +253,9 @@ std::unordered_set<uint32_t> get_resources_by_name_prefix(
   return found_resources;
 }
 
-} // namespace
-
-void OptimizeResourcesPass::report_metric(TraceModule trace_module,
-                                          const std::string& metric_name,
-                                          int metric_value,
-                                          PassManager& mgr) {
-  TRACE(trace_module, 1, "%s: %d", metric_name.c_str(), metric_value);
-  mgr.set_metric(metric_name, metric_value);
-}
-
-void OptimizeResourcesPass::remap_resource_classes(
+std::unordered_set<uint32_t> find_code_resource_references(
     DexStoresVector& stores,
-    const std::map<uint32_t, uint32_t>& old_to_remapped_ids) {
-  int replaced_fields = 0;
-  auto scope = build_class_scope(stores);
-  for (auto clazz : scope) {
-    if (resources::is_r_class(clazz)) {
-      const std::vector<DexField*>& fields = clazz->get_sfields();
-      for (auto& field : fields) {
-        uint64_t f_value = field->get_static_value()->value();
-        const uint32_t MAX_UINT_32 = 0xFFFFFFFF;
-
-        // f_value is a uint64_t, but we know it will be safe to cast down to
-        // a uint32_t since it will be a resource ID- hence, we assert.
-        always_assert(f_value <= MAX_UINT_32);
-        if (f_value > PACKAGE_RESID_START &&
-            old_to_remapped_ids.count(f_value)) {
-          field->get_static_value()->value(
-              (uint64_t)old_to_remapped_ids.at((uint32_t)f_value));
-          ++replaced_fields;
-        }
-      }
-    }
-  }
-
-  TRACE(OPTRES, 2, "replaced_fields count: %d", replaced_fields);
-}
-
-void remap_resource_class_clinit(
-    const DexClass* cls,
-    const std::map<uint32_t, uint32_t>& old_to_remapped_ids,
-    DexMethod* clinit) {
-  const auto c_name = cls->get_name()->str();
-  IRCode* ir_code = clinit->get_code();
-  always_assert(ir_code->editable_cfg_built());
-  // Lookup from new-array instruction to an updated array size.
-  std::unordered_map<IRInstruction*, uint32_t> new_array_size_updates;
-  IRInstruction* last_new_array = nullptr;
-  auto& cfg = ir_code->cfg();
-  for (const MethodItemEntry& mie : cfg::InstructionIterable(cfg)) {
-    IRInstruction* insn = mie.insn;
-    if (insn->opcode() == OPCODE_CONST) {
-      auto const_literal = insn->get_literal();
-      if (const_literal > PACKAGE_RESID_START) {
-        auto remapped_literal = old_to_remapped_ids.find(const_literal);
-        const uint32_t MAX_UINT_32 = 0xFFFFFFFF;
-        // const_literal is a int64_t, but we know it will be safe to cast
-        // down to a uint32_t since it will be a resource ID-
-        // hence, we assert.
-        always_assert(const_literal <= MAX_UINT_32);
-        if (remapped_literal != old_to_remapped_ids.end()) {
-          insn->set_literal(remapped_literal->second);
-        }
-      }
-    } else if (insn->opcode() == OPCODE_NEW_ARRAY) {
-      last_new_array = insn;
-    } else if (insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
-      DexOpcodeData* op_data = insn->get_data();
-      always_assert(op_data->size() > 3);
-      always_assert_log(last_new_array != nullptr, "new-array not found");
-      std::vector<uint16_t> filtered_op_data_entries;
-
-      uint16_t header_entry = *(op_data->data());
-      auto array_ints = get_fill_array_data_payload<uint32_t>(op_data);
-      for (uint32_t entry_x : array_ints) {
-        if (entry_x > PACKAGE_RESID_START) {
-          bool keep = old_to_remapped_ids.count(entry_x);
-          if (keep) {
-            const uint16_t* remapped_entry_parts =
-                (uint16_t*)&(old_to_remapped_ids.at(entry_x));
-            filtered_op_data_entries.push_back(*remapped_entry_parts++);
-            filtered_op_data_entries.push_back(*remapped_entry_parts);
-          } else {
-            // For styleable, we avoid actually deleting entries since
-            // there are offsets that will point to the wrong positions
-            // in the array. Instead, we zero out the values.
-            if (c_name.find("R$styleable") != std::string::npos) {
-              filtered_op_data_entries.push_back(0);
-              filtered_op_data_entries.push_back(0);
-            }
-          }
-        } else {
-          const uint16_t* original_entry_parts = (uint16_t*)&(entry_x);
-          filtered_op_data_entries.push_back(*original_entry_parts++);
-          filtered_op_data_entries.push_back(*original_entry_parts);
-        }
-      }
-
-      uint32_t new_size = filtered_op_data_entries.size() / 2;
-      uint16_t* size_pieces = ((uint16_t*)&new_size);
-
-      if (new_size != array_ints.size()) {
-        new_array_size_updates.emplace(last_new_array, new_size);
-      }
-
-      filtered_op_data_entries.insert(filtered_op_data_entries.begin(),
-                                      size_pieces[1]);
-      filtered_op_data_entries.insert(filtered_op_data_entries.begin(),
-                                      size_pieces[0]);
-      filtered_op_data_entries.insert(filtered_op_data_entries.begin(),
-                                      header_entry);
-      filtered_op_data_entries.insert(filtered_op_data_entries.begin(),
-                                      FOPCODE_FILLED_ARRAY);
-
-      auto new_op_data = std::make_unique<DexOpcodeData>(
-          filtered_op_data_entries.data(), filtered_op_data_entries.size() - 1);
-      insn->set_data(std::move(new_op_data));
-    }
-  }
-  // If any array entries were deleted we need to update the new-array constant.
-  // Do this by inserting new instructions (creating dead/non-optimal code that
-  // should get cleaned by a later pass).
-  if (new_array_size_updates.empty()) {
-    return;
-  }
-  auto ii = cfg::InstructionIterable(cfg);
-  for (auto it = ii.begin(); it != ii.end(); ++it) {
-    IRInstruction* insn = it->insn;
-    auto search = new_array_size_updates.find(insn);
-    if (search != new_array_size_updates.end()) {
-      auto new_size = search->second;
-      TRACE(OPTRES, 3, "Updating new-array size %u at instruction: %s",
-            new_size, SHOW(*it));
-      // Make this additive to not impact other instructions.
-      // Note that the naive numbering scheme here requires RegAlloc to be run
-      // later (which should be the case for all apps).
-      auto new_reg = cfg.allocate_temp();
-      auto const_insn = new IRInstruction(OPCODE_CONST);
-      const_insn->set_literal(new_size);
-      const_insn->set_dest(new_reg);
-      insn->set_src(0, new_reg);
-      cfg.insert_before(it, const_insn);
-    }
-  }
-}
-
-void OptimizeResourcesPass::remap_resource_class_arrays(
-    DexStoresVector& stores,
-    const GlobalConfig& global_config,
-    const std::map<uint32_t, uint32_t>& old_to_remapped_ids) {
-  auto global_resources_config =
-      global_config.get_config_by_name<ResourceConfig>("resources");
-  remap_resource_class_arrays(stores, *global_resources_config,
-                              old_to_remapped_ids);
-}
-
-void OptimizeResourcesPass::remap_resource_class_arrays(
-    DexStoresVector& stores,
-    const ResourceConfig& global_resources_config,
-    const std::map<uint32_t, uint32_t>& old_to_remapped_ids) {
-  auto scope = build_class_scope(stores);
-  for (auto clazz : scope) {
-    const auto c_name = clazz->get_name()->str_copy();
-
-    if (global_resources_config.customized_r_classes.count(c_name) > 0 ||
-        c_name.find("R$styleable") != std::string::npos) {
-      DexMethod* clinit = clazz->get_clinit();
-      if (clinit == nullptr) {
-        continue;
-      }
-      TRACE(OPTRES, 2, "remap_resource_class_arrays, class %s", SHOW(clazz));
-      IRCode* ir_code = clinit->get_code();
-      if (ir_code == nullptr) {
-        continue;
-      }
-      remap_resource_class_clinit(clazz, old_to_remapped_ids, clinit);
-    }
-  }
-}
-
-bool is_potential_resid(int64_t id) {
-  return id >= 0x7f000000 && id <= 0x7fffffff;
-}
-
-std::unordered_set<uint32_t>
-OptimizeResourcesPass::find_code_resource_references(
-    DexStoresVector& stores,
-    ConfigFiles& conf,
-    PassManager& mgr,
+    const resources::RClassReader& r_class_reader,
     const std::map<std::string, std::vector<uint32_t>>& name_to_ids,
     bool check_string_for_name,
     bool assume_id_inlined) {
@@ -545,7 +266,7 @@ OptimizeResourcesPass::find_code_resource_references(
   ConcurrentSet<uint32_t> potential_ids_from_strings;
   boost::regex find_ints("(\\d+)");
 
-  walk::parallel::opcodes(scope, [&](DexMethod*, IRInstruction* insn) {
+  walk::parallel::opcodes(scope, [&](DexMethod* m, IRInstruction* insn) {
     // Collect all accessed fields that could be R fields, or values that got
     // inlined elsewhere.
     if (insn->has_field() && opcode::is_an_sfield_op(insn->opcode())) {
@@ -555,7 +276,7 @@ OptimizeResourcesPass::find_code_resource_references(
       }
     } else if (insn->has_literal()) {
       auto lit = insn->get_literal();
-      if (assume_id_inlined && is_potential_resid(lit)) {
+      if (assume_id_inlined && resources::is_potential_resid(lit)) {
         potential_ids_from_code.emplace(lit);
       }
     } else if (insn->has_string()) {
@@ -577,7 +298,7 @@ OptimizeResourcesPass::find_code_resource_references(
           } catch (...) {
             continue;
           }
-          if (is_potential_resid(potential_num)) {
+          if (resources::is_potential_resid(potential_num)) {
             potential_ids_from_code.emplace(potential_num);
           }
         }
@@ -591,34 +312,59 @@ OptimizeResourcesPass::find_code_resource_references(
                                             search->second.end());
         }
       }
+    } else if (assume_id_inlined && insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
+      auto op_data = insn->get_data();
+      auto cls = type_class(m->get_class());
+      // Do not blanket assume the filling of customized arrays is a usage.
+      auto customized_r = !resources::is_non_customized_r_class(cls) &&
+                          r_class_reader.is_r_class(cls);
+      if (!customized_r && fill_array_data_payload_width(op_data) == 4) {
+        // Consider only int[] for resource ids.
+        auto payload = get_fill_array_data_payload<uint32_t>(op_data);
+        for (const auto& lit : payload) {
+          if (resources::is_potential_resid(lit)) {
+            potential_ids_from_code.emplace(lit);
+          }
+        }
+      }
     }
   });
 
   std::unordered_set<DexField*> array_fields;
   for (auto* field : accessed_sfields) {
-    auto is_r_field = resources::is_r_class(type_class(field->get_class()));
+    auto is_r_field =
+        resources::is_non_customized_r_class(type_class(field->get_class()));
     if (type::is_primitive(field->get_type()) && field->get_static_value() &&
-        is_potential_resid(field->get_static_value()->value()) &&
+        resources::is_potential_resid(field->get_static_value()->value()) &&
         (is_r_field || assume_id_inlined)) {
       ids_from_code.emplace(field->get_static_value()->value());
     } else if (is_r_field && type::is_array(field->get_type())) {
       array_fields.emplace(field);
     }
   }
-  // TODO: Improve this piece of analysis to lift restriction of having to run
-  // the pass before ReduceArrayLiteralsPass and
-  // InstructionSequenceOutlinerPass.
-  extract_resources_from_static_arrays(array_fields, &ids_from_code);
+
+  r_class_reader.extract_resource_ids_from_static_arrays(scope, array_fields,
+                                                         &ids_from_code);
   ids_from_code.insert(potential_ids_from_code.begin(),
                        potential_ids_from_code.end());
   ids_from_code.insert(potential_ids_from_strings.begin(),
                        potential_ids_from_strings.end());
   return ids_from_code;
 }
+} // namespace
+
+void OptimizeResourcesPass::report_metric(TraceModule trace_module,
+                                          const std::string& metric_name,
+                                          int metric_value,
+                                          PassManager& mgr) {
+  TRACE(trace_module, 1, "%s: %d", metric_name.c_str(), metric_value);
+  mgr.set_metric(metric_name, metric_value);
+}
 
 void OptimizeResourcesPass::eval_pass(DexStoresVector& stores,
                                       ConfigFiles& conf,
                                       PassManager&) {
+  resources::prepare_r_classes(stores, conf.get_global_config());
   auto& plugin_registery = opt_res::ReachableResourcesPluginRegistry::get();
   plugin_registery.sort();
   for (auto& p : plugin_registery.get_plugins()) {
@@ -639,8 +385,9 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
   auto res_table = resources->load_res_table();
 
   // 2. Get all resources directly referenced by source code.
+  resources::RClassReader r_class_reader(conf.get_global_config());
   std::unordered_set<uint32_t> ids_from_code = find_code_resource_references(
-      stores, conf, mgr, res_table->name_to_ids, m_check_string_for_name,
+      stores, r_class_reader, res_table->name_to_ids, m_check_string_for_name,
       m_assume_id_inlined);
   const auto& sorted_res_ids = res_table->sorted_res_ids;
   std::unordered_set<uint32_t> existing_resids;
@@ -726,6 +473,7 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
       type_names, nodes_visited, res_table.get(), &files_to_delete);
   report_metric(OPTRES, "num_deleted_resources", deleted_resources.size(), mgr);
 
+  resources::RClassWriter r_class_writer(conf.get_global_config());
   if (!m_assume_id_inlined) {
     // 7. Create mapping from kept to remapped resource ID's
     std::map<uint32_t, uint32_t> kept_to_remapped_ids =
@@ -735,7 +483,7 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
                         conf.metafile("redex-resid-optres-mapping.json"));
 
     // 8. Renumber resources in R$ classes and explored_xml_files
-    remap_resource_classes(stores, kept_to_remapped_ids);
+    r_class_writer.remap_resource_class_scalars(stores, kept_to_remapped_ids);
 
     for (const std::string& path : explored_xml_files) {
       resources->remap_xml_reference_attributes(path, kept_to_remapped_ids);
@@ -743,8 +491,7 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
 
     // 9. Fix up the arrays in the base R class, as well as R$styleable- any
     //    deleted entries are removed, the rest are remapped.
-    remap_resource_class_arrays(stores, conf.get_global_config(),
-                                kept_to_remapped_ids);
+    r_class_writer.remap_resource_class_arrays(stores, kept_to_remapped_ids);
 
     // 10. Renumber all resource referencesand write out the new resource file
     // to disk.
@@ -761,8 +508,7 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
         kept_ids_to_itself[id] = id;
       }
     }
-    remap_resource_class_arrays(stores, conf.get_global_config(),
-                                kept_ids_to_itself);
+    r_class_writer.remap_resource_class_arrays(stores, kept_ids_to_itself);
     const auto& res_files = resources->find_resources_files();
     res_table->nullify_res_ids_and_serialize(res_files);
   }

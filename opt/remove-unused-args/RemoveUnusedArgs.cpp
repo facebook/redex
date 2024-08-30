@@ -13,7 +13,6 @@
 #include <vector>
 
 #include "AnnoUtils.h"
-#include "CallGraph.h"
 #include "ConfigFiles.h"
 #include "DexClass.h"
 #include "DexUtil.h"

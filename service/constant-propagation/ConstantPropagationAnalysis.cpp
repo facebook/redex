@@ -12,8 +12,10 @@
 #include <limits>
 #include <mutex>
 #include <set>
+#include <type_traits>
 
 #include "RedexContext.h"
+#include "StlUtil.h"
 
 // Note: MSVC STL doesn't implement std::isnan(Integral arg). We need to provide
 // an override of fpclassify for integral types.
@@ -25,6 +27,8 @@ std::enable_if_t<std::is_integral<T>::value, int> fpclassify(T x) {
 }
 #endif
 
+#include "DexAccess.h"
+#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "Resolver.h"
 #include "Trace.h"
@@ -101,6 +105,26 @@ void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
     env->set(insn->dest(), SignedConstantDomain(result));
   } else {
     env->set(insn->dest(), SignedConstantDomain::top());
+  }
+}
+
+// https://cs.android.com/android/platform/superproject/main/+/main:art/runtime/entrypoints/entrypoint_utils-inl.h;l=702;drc=d5137445c0d4067406cb3e38aade5507ff2fcd16
+template <typename INT_TYPE, typename FLOAT_TYPE>
+inline INT_TYPE art_float_to_integral(FLOAT_TYPE f) {
+  const INT_TYPE kMaxInt =
+      static_cast<INT_TYPE>(std::numeric_limits<INT_TYPE>::max());
+  const INT_TYPE kMinInt =
+      static_cast<INT_TYPE>(std::numeric_limits<INT_TYPE>::min());
+  const FLOAT_TYPE kMaxIntAsFloat = static_cast<FLOAT_TYPE>(kMaxInt);
+  const FLOAT_TYPE kMinIntAsFloat = static_cast<FLOAT_TYPE>(kMinInt);
+  if (f > kMinIntAsFloat) {
+    if (f < kMaxIntAsFloat) {
+      return static_cast<INT_TYPE>(f);
+    } else {
+      return kMaxInt;
+    }
+  } else {
+    return (f != f) ? 0 : kMinInt; // f != f implies NaN
   }
 }
 
@@ -220,7 +244,9 @@ bool HeapEscapeAnalyzer::analyze_invoke(const IRInstruction* insn,
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     set_escaped(insn->src(i), env);
   }
-  return true;
+  // Practical use cases of this analyzer is followed by PrimitiveAnalyzer which
+  // will handle setting result register. Return false to let it run.
+  return false;
 }
 
 bool HeapEscapeAnalyzer::analyze_filled_new_array(const IRInstruction* insn,
@@ -228,7 +254,9 @@ bool HeapEscapeAnalyzer::analyze_filled_new_array(const IRInstruction* insn,
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     set_escaped(insn->src(i), env);
   }
-  return true;
+  // Practical use cases of this analyzer is followed by PrimitiveAnalyzer which
+  // will handle setting result register. Return false to let it run.
+  return false;
 }
 
 bool LocalArrayAnalyzer::analyze_new_array(const IRInstruction* insn,
@@ -253,6 +281,10 @@ bool LocalArrayAnalyzer::analyze_aget(const IRInstruction* insn,
   if (!idx_opt) {
     return false;
   }
+  auto heap_ptr = env->get(insn->src(0)).maybe_get<AbstractHeapPointer>();
+  if (!heap_ptr) {
+    return false;
+  }
   auto arr = env->get_pointee<ConstantValueArrayDomain>(insn->src(0));
   env->set(RESULT_REGISTER, arr.get(*idx_opt));
   return true;
@@ -263,22 +295,106 @@ bool LocalArrayAnalyzer::analyze_aput(const IRInstruction* insn,
   if (insn->opcode() == OPCODE_APUT_OBJECT) {
     return false;
   }
-  boost::optional<int64_t> idx_opt =
-      env->get<SignedConstantDomain>(insn->src(2)).get_constant();
-  if (!idx_opt) {
+  auto subscript = env->get(insn->src(2)).maybe_get<SignedConstantDomain>();
+  if (!subscript || subscript->is_top() || subscript->is_bottom()) {
+    set_escaped(insn->src(1), env);
     return false;
   }
   auto val = env->get(insn->src(0));
-  env->set_array_binding(insn->src(1), *idx_opt, val);
+  // Check if insn->src(1) is actually known as an array
+  auto heap_ptr = env->get(insn->src(1)).maybe_get<AbstractHeapPointer>();
+  if (!heap_ptr) {
+    return false;
+  }
+  env->set_array_binding(insn->src(1), *subscript->get_constant(), val);
   return true;
 }
 
+namespace {
+template <typename IntType>
+void populate_array_bindings_for_payload(reg_t array_reg,
+                                         const std::vector<IntType>& elements,
+                                         ConstantEnvironment* env) {
+  static_assert(
+      std::is_integral<IntType>::value,
+      "fill-array-data-payload only implemented for integral values.");
+  for (size_t i = 0; i < elements.size(); i++) {
+    auto constant = elements[i];
+    env->set_array_binding(array_reg, i, SignedConstantDomain(constant));
+  }
+}
+} // namespace
+
 bool LocalArrayAnalyzer::analyze_fill_array_data(const IRInstruction* insn,
                                                  ConstantEnvironment* env) {
-  // We currently don't analyze fill-array-data properly; we simply
-  // mark the array it modifies as unknown.
-  set_escaped(insn->src(0), env);
+  // Unpacks the fill-array-data-payload and call env->set_array_binding()
+  // N times with the appropriate SignedConstantDomain. The bytecode format says
+  // the size of the array is allowed to be larger than the payload of items;
+  // under such a contition the elements beyond what are contained in
+  // fill-array-data-payload should be unmodified.
+  // If an too small array is encountered, mark it as escaped to avoid making
+  // any assumptions.
+  auto reg = insn->src(0);
+  auto op_data = insn->get_data();
+  auto heap_ptr = env->get(reg).maybe_get<AbstractHeapPointer>();
+  if (heap_ptr) {
+    auto array_domain = env->get_pointee<ConstantValueArrayDomain>(*heap_ptr);
+    if (array_domain.is_value()) {
+      auto len = array_domain.length();
+      auto ewidth = fill_array_data_payload_width(op_data);
+      auto element_count = fill_array_data_payload_element_count(op_data);
+      if (len >= element_count) {
+        if (ewidth == 1) {
+          auto elements = get_fill_array_data_payload<int8_t>(op_data);
+          populate_array_bindings_for_payload(reg, elements, env);
+        } else if (ewidth == 2) {
+          auto elements = get_fill_array_data_payload<int16_t>(op_data);
+          populate_array_bindings_for_payload(reg, elements, env);
+        } else if (ewidth == 4) {
+          auto elements = get_fill_array_data_payload<int32_t>(op_data);
+          populate_array_bindings_for_payload(reg, elements, env);
+        } else {
+          always_assert_log(ewidth == 8, "Invalid element width: %d", ewidth);
+          auto elements = get_fill_array_data_payload<int64_t>(op_data);
+          populate_array_bindings_for_payload(reg, elements, env);
+        }
+        return true;
+      } else {
+        TRACE(
+            CONSTP, 3,
+            "Array length does not match size of fill-array-data-payload @ %s\n"
+            "  => marking as escaped",
+            SHOW(insn));
+      }
+    }
+  }
+  // Fallthrough behavior is as before; mark the array it modifies as unknown.
+  set_escaped(reg, env);
   return false;
+}
+
+bool LocalArrayAnalyzer::analyze_filled_new_array(const IRInstruction* insn,
+                                                  ConstantEnvironment* env) {
+  auto array_size = insn->srcs_size();
+  const DexType* element_type =
+      type::get_array_component_type(insn->get_type());
+  if (type::is_integral(element_type)) {
+    env->new_heap_value(RESULT_REGISTER, insn,
+                        ConstantValueArrayDomain(array_size));
+    for (src_index_t i = 0; i < array_size; i++) {
+      auto value = env->get(insn->src(i)).maybe_get<SignedConstantDomain>();
+      if (value && !value->is_top() && !value->is_bottom()) {
+        env->set_array_binding(RESULT_REGISTER, i,
+                               SignedConstantDomain(*value->get_constant()));
+      } else {
+        env->set_array_binding(RESULT_REGISTER, i, SignedConstantDomain());
+      }
+    }
+    return true;
+  } else {
+    // Subsequent analyzers should mark all srcs as escaped.
+    return false;
+  }
 }
 
 bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
@@ -382,6 +498,85 @@ bool PrimitiveAnalyzer::analyze_cmp(const IRInstruction* insn,
   }
   }
   return true;
+}
+
+bool PrimitiveAnalyzer::analyze_unop(const IRInstruction* insn,
+                                     ConstantEnvironment* env) NO_UBSAN_ARITH {
+  auto op = insn->opcode();
+  TRACE(CONSTP, 5, "Attempting to fold %s", SHOW(insn));
+
+  auto apply = [&](auto val) {
+    SignedConstantDomain result;
+    if constexpr (sizeof(val) == 4) {
+      result = SignedConstantDomain(
+          (int32_t)((std20::bit_cast<int32_t>(val)) & 0xFFFFFFFF));
+    } else if constexpr (sizeof(val) == 8) {
+      result = SignedConstantDomain(std20::bit_cast<int64_t>(val));
+    } else {
+      // floating point number is either 32 bit or 64 bit
+      // so we must have intergral value here
+      result = SignedConstantDomain(val);
+    }
+    env->set(insn->dest(), result);
+    return true;
+  };
+
+  auto cst = env->get<SignedConstantDomain>(insn->src(0)).get_constant();
+
+  if (cst) {
+    int64_t val = *cst;
+    switch (op) {
+    case OPCODE_NOT_INT:
+      return apply(~((int32_t)val));
+    case OPCODE_NOT_LONG:
+      return apply(~val);
+    case OPCODE_NEG_INT:
+      return apply(-((int32_t)val));
+    case OPCODE_NEG_LONG:
+      return apply(-val);
+    case OPCODE_NEG_FLOAT:
+      return apply(-std20::bit_cast<float>((int32_t)val));
+    case OPCODE_NEG_DOUBLE:
+      return apply(-std20::bit_cast<double>(val));
+    case OPCODE_LONG_TO_INT:
+      return apply((int32_t)val);
+    case OPCODE_INT_TO_LONG:
+      return apply((int64_t)val);
+    case OPCODE_INT_TO_BYTE:
+      return apply((int8_t)val);
+    case OPCODE_INT_TO_CHAR:
+      return apply((uint16_t)val);
+    case OPCODE_INT_TO_SHORT:
+      return apply((int16_t)val);
+    case OPCODE_INT_TO_FLOAT:
+      return apply((float)(val));
+    case OPCODE_DOUBLE_TO_FLOAT:
+      return apply((float)(std20::bit_cast<double>(val)));
+    case OPCODE_LONG_TO_FLOAT:
+      return apply((float)val);
+    case OPCODE_INT_TO_DOUBLE:
+      return apply((double)((int32_t)val));
+    case OPCODE_LONG_TO_DOUBLE:
+      return apply((double)val);
+    case OPCODE_FLOAT_TO_DOUBLE:
+      return apply((double)(std20::bit_cast<float>((int32_t)val)));
+    case OPCODE_FLOAT_TO_INT:
+      return apply(art_float_to_integral<int32_t, float>(
+          std20::bit_cast<float>((int32_t)val)));
+    case OPCODE_DOUBLE_TO_INT:
+      return apply(
+          art_float_to_integral<int32_t, double>(std20::bit_cast<double>(val)));
+    case OPCODE_FLOAT_TO_LONG:
+      return apply(art_float_to_integral<int64_t, float>(
+          std20::bit_cast<float>((int32_t)val)));
+    case OPCODE_DOUBLE_TO_LONG:
+      return apply(
+          art_float_to_integral<int64_t, double>(std20::bit_cast<double>(val)));
+    default:
+      break;
+    }
+  }
+  return analyze_default(insn, env);
 }
 
 bool PrimitiveAnalyzer::analyze_binop_lit(
@@ -588,6 +783,29 @@ bool ClinitFieldAnalyzer::analyze_invoke(const DexType* class_under_init,
   if (insn->opcode() == OPCODE_INVOKE_STATIC &&
       class_under_init == insn->get_method()->get_class()) {
     env->clear_field_environment();
+  }
+  return false;
+}
+
+/*
+ * An analyzer for sget for when we have a static final field
+ */
+bool StaticFinalFieldAnalyzer::analyze_sget(const IRInstruction* insn,
+                                            ConstantEnvironment* env) {
+  if (insn->opcode() != OPCODE_SGET) {
+    return false;
+  }
+
+  auto field = insn->get_field();
+  auto* dex_field = static_cast<const DexField*>(field);
+  // Only want to set the environment of the variable has a static value
+  // and is certainly final and will not be modified
+  if (field && field->is_def() && dex_field->get_static_value() &&
+      is_final(dex_field)) {
+    const auto constant =
+        SignedConstantDomain(dex_field->get_static_value()->value());
+    env->set(RESULT_REGISTER, constant);
+    return true;
   }
   return false;
 }

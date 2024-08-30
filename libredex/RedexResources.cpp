@@ -8,8 +8,12 @@
 #include "RedexResources.h"
 
 #include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
+#include <boost/iostreams/device/mapped_file.hpp>
+#include <boost/optional.hpp>
+#include <boost/regex/pending/unicode_iterator.hpp>
 #include <map>
 #include <mutex>
 #include <string>
@@ -29,6 +33,7 @@
 #include "StringUtil.h"
 #include "Trace.h"
 #include "WorkQueue.h"
+#include "utils/Unicode.h"
 
 // Workaround for inclusion order, when compiling on Windows (#defines NO_ERROR
 // as 0).
@@ -63,6 +68,35 @@ std::unique_ptr<AndroidResources> create_resource_reader(
 #else
   return std::make_unique<ApkResources>(directory);
 #endif // HAS_PROTOBUF
+}
+
+std::unordered_set<std::string> get_service_loader_classes_helper(
+    const std::string& path_dir) {
+  std::unordered_set<std::string> classes_set;
+
+  if (boost::filesystem::exists(path_dir) &&
+      boost::filesystem::is_directory(path_dir)) {
+    for (auto it = dir_iterator(path_dir); it != dir_iterator(); ++it) {
+      auto const& file = *it;
+      const path_t& file_path = file.path();
+      const auto& file_string = file_path.string();
+
+      classes_set.insert(
+          java_names::external_to_internal(file_path.filename().string()));
+
+      std::fstream new_file;
+      new_file.open(file_string, std::ios::in);
+      if (new_file.is_open()) {
+        std::string current_line;
+        while (std::getline(new_file, current_line)) {
+          classes_set.insert(java_names::external_to_internal(current_line));
+        }
+        new_file.close();
+      }
+    }
+  }
+
+  return classes_set;
 }
 
 namespace {
@@ -224,8 +258,12 @@ void AndroidResources::collect_layout_classes_and_attributes(
     const std::unordered_set<std::string>& attributes_to_read,
     std::unordered_set<std::string>* out_classes,
     std::unordered_multimap<std::string, std::string>* out_attributes) {
+  auto res_table = load_res_table();
   auto collect_fn = [&](const std::vector<std::string>& prefixes) {
     std::mutex out_mutex;
+    resources::StringOrReferenceSet classes;
+    std::unordered_multimap<std::string, resources::StringOrReference>
+        attributes;
     workqueue_run<std::string>(
         [&](sparta::WorkerState<std::string>* worker_state,
             const std::string& input) {
@@ -245,24 +283,47 @@ void AndroidResources::collect_layout_classes_and_attributes(
             return;
           }
 
-          std::unordered_set<std::string> local_out_classes;
-          std::unordered_multimap<std::string, std::string>
-              local_out_attributes;
+          resources::StringOrReferenceSet local_classes;
+          std::unordered_multimap<std::string, resources::StringOrReference>
+              local_attributes;
           collect_layout_classes_and_attributes_for_file(
-              input, attributes_to_read, &local_out_classes,
-              &local_out_attributes);
-          if (!local_out_classes.empty() || !local_out_attributes.empty()) {
+              input, attributes_to_read, &local_classes, &local_attributes);
+          if (!local_classes.empty() || !local_attributes.empty()) {
             std::unique_lock<std::mutex> lock(out_mutex);
             // C++17: use merge to avoid copies.
-            out_classes->insert(local_out_classes.begin(),
-                                local_out_classes.end());
-            out_attributes->insert(local_out_attributes.begin(),
-                                   local_out_attributes.end());
+            classes.insert(local_classes.begin(), local_classes.end());
+            attributes.insert(local_attributes.begin(), local_attributes.end());
           }
         },
         std::vector<std::string>{""},
         std::min(redex_parallel::default_num_threads(), kReadXMLThreads),
         /*push_tasks_while_running=*/true);
+
+    // Resolve references that were encountered while reading xml files
+    for (const auto& val : classes) {
+      if (val.is_reference()) {
+        std::vector<std::string> all_values;
+        res_table->resolve_string_values_for_resource_reference(val.ref,
+                                                                &all_values);
+        for (const auto& s : all_values) {
+          out_classes->emplace(s);
+        }
+      } else {
+        out_classes->emplace(val.str);
+      }
+    }
+    for (auto it = attributes.begin(); it != attributes.end(); it++) {
+      if (it->second.is_reference()) {
+        std::vector<std::string> all_values;
+        res_table->resolve_string_values_for_resource_reference(it->second.ref,
+                                                                &all_values);
+        for (const auto& s : all_values) {
+          out_attributes->emplace(it->first, s);
+        }
+      } else {
+        out_attributes->emplace(it->first, it->second.str);
+      }
+    }
   };
 
   collect_fn({
@@ -276,24 +337,6 @@ void AndroidResources::collect_layout_classes_and_attributes(
       // Raw would not contain binary XML.
       "raw",
   });
-
-  if (slow_invariants_debug) {
-    TRACE(RES, 1,
-          "Checking collect_layout_classes_and_attributes filter assumption");
-    size_t out_classes_size = out_classes->size();
-    size_t out_attributes_size = out_attributes->size();
-
-    // Comparison is complicated, as out_attributes is a multi-map.
-    // Assume that the inputs were empty, for simplicity.
-    out_classes->clear();
-    out_attributes->clear();
-
-    collect_fn({});
-    size_t new_out_classes_size = out_classes->size();
-    size_t new_out_attributes_size = out_attributes->size();
-    redex_assert(out_classes_size == new_out_classes_size);
-    redex_assert(out_attributes_size == new_out_attributes_size);
-  }
 }
 
 void AndroidResources::collect_xml_attribute_string_values(
@@ -356,17 +399,6 @@ void AndroidResources::rename_classes_in_layouts(
       std::vector<std::string>{""},
       std::min(redex_parallel::default_num_threads(), kReadXMLThreads),
       /*push_tasks_while_running=*/true);
-}
-
-std::unordered_set<std::string_view> multimap_values_to_set(
-    const std::unordered_multimap<std::string, std::string>& map,
-    const std::string& key) {
-  std::unordered_set<std::string_view> result;
-  auto range = map.equal_range(key);
-  for (auto it = range.first; it != range.second; ++it) {
-    result.emplace(it->second);
-  }
-  return result;
 }
 
 namespace {
@@ -459,17 +491,46 @@ void ResourceTableFile::finalize_resource_table(const ResourceConfig& config) {
 }
 
 namespace resources {
-bool is_r_class(const DexClass* cls) {
-  const auto c_name = cls->get_name()->str();
-  const auto d_name = cls->get_deobfuscated_name_or_empty();
-  return is_resource_class_name(c_name) || is_resource_class_name(d_name);
+bool valid_xml_element(const std::string& ident) {
+  return java_names::is_identifier(ident) &&
+         ident.find('.') != std::string::npos;
 }
 
-void gather_r_classes(const Scope& scope, std::vector<DexClass*>* vec) {
-  for (auto c : scope) {
-    if (is_r_class(c)) {
-      vec->emplace_back(c);
+std::string convert_utf8_to_mutf8(const std::string& input) {
+  std::ostringstream out;
+  auto pack_to_3_byte_form = [&](char16_t c) {
+    uint8_t one = 0xE0 | ((c >> 12) & 0xF);
+    uint8_t two = 0x80 | ((c >> 6) & 0x3F);
+    uint8_t three = 0x80 | (c & 0x3F);
+    out << one << two << three;
+  };
+
+  for (boost::u8_to_u32_iterator<std::string::const_iterator> it(input.begin()),
+       end(input.end());
+       it != end;
+       ++it) {
+    auto code_point = (char32_t)*it;
+    auto len = utf32_to_utf8_length(&code_point, 1);
+    always_assert(len != -1);
+    if (code_point == 0) {
+      // Special null zero encoding for MUTF-8.
+      out << '\xC0' << '\x80';
+    } else if (code_point < 0x10000) {
+      // Normal UTF-8 encoding.
+      char dest[4] = {0};
+      utf32_to_utf8(&code_point, 1, dest, sizeof(dest));
+      for (size_t i = 0; i < (size_t)len; i++) {
+        out << dest[i];
+      }
+    } else {
+      // Convert to UTF-16 surrogate pair, then pack each as 3 byte encoding.
+      code_point -= 0x10000;
+      char16_t high = 0xD800 + ((code_point >> 10) & 0x3FF);
+      char16_t low = 0xDC00 + (code_point & 0x3FF);
+      pack_to_3_byte_form(high);
+      pack_to_3_byte_form(low);
     }
   }
+  return out.str();
 }
 } // namespace resources

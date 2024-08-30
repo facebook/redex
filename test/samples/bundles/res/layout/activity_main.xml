@@ -1,46 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
+<ScrollView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:custom="http://schemas.android.com/apk/res/com.fb.bundles"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:background="@color/bg_grey"
     >
-    <TextView
-        android:id="@+id/welcome_view"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/margin_top"
-        android:paddingStart="@dimen/padding_left"
-        android:paddingEnd="@dimen/padding_right"
-        android:text="@string/welcome"
-        style="@style/CustomText.Prickly"
-        />
-    <com.fb.bundles.NiftyViewGroup
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/margin_top"
-        android:gravity="center"
+        android:orientation="vertical"
         >
-        <ImageView
-            android:layout_width="wrap_content"
+        <TextView
+            android:id="@+id/welcome_view"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:src="@drawable/prickly"
-            android:onClick="performBar"
+            android:layout_marginTop="@dimen/margin_top"
+            android:paddingStart="@dimen/padding_left"
+            android:paddingEnd="@dimen/padding_right"
+            android:text="@string/welcome"
+            style="@style/CustomText.Prickly"
             />
-    </com.fb.bundles.NiftyViewGroup>
-    <com.fb.bundles.WickedCoolButton
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/margin_top"
-        android:layout_marginStart="@dimen/padding_left"
-        android:layout_marginEnd="@dimen/padding_right"
-        android:text="@string/button_txt"
-        android:onClick="performFoo"
-        custom:a_boolean="true"
-        custom:fancy_effects="distortion|reverb"
-        custom:reverb_type="spring"
-        custom:dangerous="flerp, welcome_view,glurp,"
-        />
-</LinearLayout>
+        <fragment
+            android:name="@string/indirection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:tag="my_fragment"
+            />
+        <com.fb.bundles.NiftyViewGroup
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/margin_top"
+            android:gravity="center"
+            >
+            <ImageView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/prickly"
+                android:onClick="performBar"
+                />
+        </com.fb.bundles.NiftyViewGroup>
+        <com.fb.bundles.WickedCoolButton
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/margin_top"
+            android:layout_marginStart="@dimen/padding_left"
+            android:layout_marginEnd="@dimen/padding_right"
+            android:text="@string/button_txt"
+            android:onClick="performFoo"
+            custom:a_boolean="true"
+            custom:fancy_effects="distortion|reverb"
+            custom:reverb_type="spring"
+            custom:dangerous="flerp, welcome_view,glurp,"
+            />
+    </LinearLayout>
+</ScrollView>

@@ -33,22 +33,18 @@
 #include "AnalysisUsage.h"
 #include "ApiLevelChecker.h"
 #include "AssetManager.h"
-#include "CFGMutation.h"
-#include "CallGraph.h"
 #include "ClassChecker.h"
 #include "CommandProfiling.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
-#include "DexOutput.h"
 #include "DexStructure.h"
 #include "DexUtil.h"
 #include "GlobalConfig.h"
 #include "GraphVisualizer.h"
 #include "IRCode.h"
 #include "IRTypeChecker.h"
-#include "InstructionLowering.h"
 #include "JemallocUtil.h"
 #include "MethodProfiles.h"
 #include "Native.h"
@@ -57,11 +53,9 @@
 #include "PrintSeeds.h"
 #include "ProguardPrintConfiguration.h"
 #include "ProguardReporting.h"
-#include "Purity.h"
-#include "ReachableClasses.h"
+#include "RedexContext.h"
 #include "RedexPropertiesManager.h"
 #include "Sanitizers.h"
-#include "ScopedCFG.h"
 #include "ScopedMemStats.h"
 #include "ScopedMetrics.h"
 #include "Show.h"
@@ -837,6 +831,22 @@ void run_assessor(PassManager& pm, const Scope& scope, bool initially = false) {
   }
 }
 
+namespace {
+// Return a set of the items denoted by the given input. Items will have
+// leading/trailing spaces trimmed.
+std::set<std::string_view> extract_delimited_items(const std::string& input,
+                                                   const std::string& delim) {
+  std::set<std::string_view> result_set;
+  for (auto item : split_string(input, delim)) {
+    auto trimmed = trim_whitespaces(item);
+    if (!trimmed.empty()) {
+      result_set.emplace(trimmed);
+    }
+  }
+  return result_set;
+}
+} // namespace
+
 // For debugging purpose allows tracing a class after each pass.
 // Env variable TRACE_CLASS_FILE provides the name of the output file where
 // these data will be written and env variable TRACE_CLASS_NAME would provide
@@ -845,75 +855,189 @@ class TraceClassAfterEachPass {
  public:
   TraceClassAfterEachPass() {
 
-    trace_class_file = getenv("TRACE_CLASS_FILE");
-    trace_class_name = getenv("TRACE_CLASS_NAME");
+    auto trace_class_file = getenv("TRACE_CLASS_FILE");
     std::cerr << "TRACE_CLASS_FILE="
               << (trace_class_file == nullptr ? "" : trace_class_file)
               << std::endl;
-    std::cerr << "TRACE_CLASS_NAME="
-              << (trace_class_name == nullptr ? "" : trace_class_name)
-              << std::endl;
-    if (trace_class_name) {
+
+    auto trace_class_name = getenv("TRACE_CLASS_NAME");
+    m_trace_class_env = trace_class_name == nullptr ? "" : trace_class_name;
+    std::cerr << "TRACE_CLASS_NAME=" << m_trace_class_env << std::endl;
+    m_trace_class_names = extract_delimited_items(m_trace_class_env, ",");
+
+    auto trace_method_name = getenv("TRACE_METHOD_NAME");
+    m_trace_method_env = trace_method_name == nullptr ? "" : trace_method_name;
+    std::cerr << "TRACE_METHOD_NAME=" << m_trace_method_env << std::endl;
+    m_trace_method_names = extract_delimited_items(m_trace_method_env, ",");
+
+    if (!m_trace_method_names.empty() || !m_trace_class_names.empty()) {
       if (trace_class_file) {
         try {
           int int_fd = std::stoi(trace_class_file);
-          fd = fdopen(int_fd, "w");
+          m_fd = fdopen(int_fd, "w");
         } catch (std::invalid_argument&) {
           // Not an integer file descriptor; real file name.
-          fd = fopen(trace_class_file, "w");
+          m_fd = fopen(trace_class_file, "w");
         }
-        if (!fd) {
+        if (!m_fd) {
           fprintf(stderr,
                   "Unable to open TRACE_CLASS_FILE, falling back to stderr\n");
-          fd = stderr;
+          m_fd = stderr;
         }
       }
     }
   }
 
   ~TraceClassAfterEachPass() {
-    if (fd != stderr) {
-      fclose(fd);
+    if (m_fd != stderr) {
+      fclose(m_fd);
+    }
+  }
+
+  void dump_method(DexMethod* m) {
+    fprintf(m_fd, "Method %s\n", SHOW(m));
+    auto code = m->get_code();
+    if (code != nullptr) {
+      if (code->editable_cfg_built()) {
+        auto& cfg = code->cfg();
+        // Note: would be nice to make the special printers from ShowCFG
+        // configurable/callable from here.
+        auto cfg_string = show(cfg);
+        fprintf(m_fd, "%s\n", cfg_string.c_str());
+      } else {
+        // NOTE: consider building CFG, showing, and clearing to make the output
+        // nicer to look at.
+        fprintf(m_fd, "%s\n", SHOW(code));
+      }
     }
   }
 
   void dump_cls(DexClass* cls) {
-    fprintf(fd, "Class %s\n", SHOW(cls));
+    fprintf(m_fd, "Class %s\n", SHOW(cls));
+    auto anno_set = cls->get_anno_set();
+    if (anno_set != nullptr) {
+      fprintf(m_fd, "  Annotations on class: %s\n", SHOW(anno_set));
+    }
     std::vector<DexMethod*> methods = cls->get_all_methods();
     std::vector<DexField*> fields = cls->get_all_fields();
     for (auto* v : fields) {
-      fprintf(fd, "Field %s\n", SHOW(v));
+      fprintf(m_fd, "Field %s\n", SHOW(v));
     }
-    for (auto* v : methods) {
-      fprintf(fd, "Method %s\n", SHOW(v));
-      auto code = v->get_code();
-      if (code != nullptr) {
-        if (code->editable_cfg_built()) {
-          auto& cfg = code->cfg();
-          fprintf(fd, "%s\n", SHOW(cfg));
+    for (auto* m : methods) {
+      dump_method(m);
+    }
+  }
+
+  boost::optional<std::string_view> matches_source_block(DexMethod* method) {
+    auto code = method->get_code();
+    if (code == nullptr) {
+      return boost::none;
+    }
+    if (code->editable_cfg_built()) {
+      auto& cfg = code->cfg();
+      for (auto b : cfg.blocks()) {
+        auto sbs = source_blocks::gather_source_blocks(b);
+        for (auto sb : sbs) {
+          auto search = m_trace_method_names.find(sb->src->str());
+          if (search != m_trace_method_names.end()) {
+            return *search;
+          }
+        }
+      }
+    } else {
+      for (auto it = code->begin(); it != code->end(); it++) {
+        if (it->type == MFLOW_SOURCE_BLOCK) {
+          auto search = m_trace_method_names.find(it->src_block->src->str());
+          if (search != m_trace_method_names.end()) {
+            return *search;
+          }
+        }
+      }
+    }
+    return boost::none;
+  }
+
+  void dump(const std::string& pass_name, DexStoresVector& stores) {
+    if (m_trace_class_names.empty() && m_trace_method_names.empty()) {
+      return;
+    }
+    fprintf(m_fd, "After Pass %s\n", pass_name.c_str());
+    auto temp_scope = build_class_scope(stores);
+    if (!m_trace_class_names.empty()) {
+      std::unordered_map<std::string_view, DexClass*> to_print;
+      for (auto cls : temp_scope) {
+        auto name = cls->get_deobfuscated_name_or_empty();
+        if (name.empty()) {
+          name = cls->get_name()->str();
+        }
+        if (m_trace_class_names.count(name) > 0) {
+          to_print.emplace(name, cls);
+        }
+      }
+      for (const auto& s : m_trace_class_names) {
+        auto search = to_print.find(s);
+        if (search != to_print.end()) {
+          dump_cls(search->second);
         } else {
-          fprintf(fd, "%s\n", SHOW(code));
+          fprintf(m_fd, "Class %.*s not found!\n", static_cast<int>(s.length()),
+                  s.data());
+        }
+      }
+    }
+    // Attempt to dump specific method contents, falling back on exhaustive
+    // search on source blocks to give a coherent representation of where the
+    // code went and how it changes after each pass.
+    using SetOfMethods = std::set<DexMethod*, dexmethods_comparator>;
+    if (!m_trace_method_names.empty()) {
+      std::unordered_map<std::string_view, SetOfMethods> to_print;
+      for (const auto& s : m_trace_method_names) {
+        auto ref = DexMethod::get_method(s);
+        if (ref != nullptr) {
+          auto def = ref->as_def();
+          if (def != nullptr) {
+            SetOfMethods methods{def};
+            to_print.emplace(s, std::move(methods));
+          }
+        }
+      }
+      if (to_print.size() != m_trace_method_names.size()) {
+        // Fall back and do some hunting to find if the method got inlined; if
+        // so, print what would have been its caller (note there could be many).
+        std::mutex print_mtx;
+        walk::parallel::methods(temp_scope, [&](DexMethod* m) {
+          auto str = matches_source_block(m);
+          if (str != boost::none) {
+            std::lock_guard lock(print_mtx);
+            auto search = to_print.find(*str);
+            if (search == to_print.end()) {
+              SetOfMethods methods{m};
+              to_print.emplace(*str, std::move(methods));
+            } else {
+              search->second.emplace(m);
+            }
+          }
+        });
+      }
+      for (const auto& s : m_trace_method_names) {
+        auto search = to_print.find(s);
+        if (search != to_print.end()) {
+          for (const auto& method : search->second) {
+            dump_method(method);
+          }
+        } else {
+          fprintf(m_fd, "Method %.*s not found!\n",
+                  static_cast<int>(s.length()), s.data());
         }
       }
     }
   }
 
-  void dump(const std::string& pass_name) {
-    if (trace_class_name) {
-      fprintf(fd, "After Pass  %s\n", pass_name.c_str());
-      auto* typ = DexType::get_type(trace_class_name);
-      if (typ && type_class(typ)) {
-        dump_cls(type_class(typ));
-      } else {
-        fprintf(fd, "Class = %s not foud\n", trace_class_name);
-      }
-    }
-  }
-
  private:
-  FILE* fd = stderr;
-  char* trace_class_file;
-  char* trace_class_name;
+  FILE* m_fd = stderr;
+  std::string m_trace_class_env;
+  std::string m_trace_method_env;
+  std::set<std::string_view> m_trace_class_names;
+  std::set<std::string_view> m_trace_method_names;
 };
 
 static TraceClassAfterEachPass trace_cls;
@@ -1450,7 +1574,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
       g_redex->compact();
 
-      trace_cls.dump(pass->name());
+      trace_cls.dump(pass->name(), stores);
 
       cpu_time = cpu_time_end - cpu_time_start;
       wall_time = wall_time_end - wall_time_start;

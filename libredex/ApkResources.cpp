@@ -17,7 +17,9 @@
 #include <cstdint>
 #include <fcntl.h>
 #include <fstream>
+#include <istream>
 #include <map>
+#include <string>
 #include <string_view>
 
 #include "Macros.h"
@@ -497,7 +499,10 @@ bool TableSnapshot::is_valid_global_string_idx(size_t idx) const {
   return arsc::is_valid_string_idx(m_global_strings, idx);
 }
 
-std::string TableSnapshot::get_global_string(size_t idx) const {
+// Note: this method should be used for printing values, or for giving a unified
+// API with BundleResources, which will use standard UTF-8 encoding. Do not
+// forward the return values on to a new string pool.
+std::string TableSnapshot::get_global_string_utf8s(size_t idx) const {
   return arsc::get_string_from_pool(m_global_strings, idx);
 }
 
@@ -765,6 +770,24 @@ std::string get_string_attribute_value(
   return std::string("");
 }
 
+boost::optional<resources::StringOrReference>
+get_attribute_string_or_reference_value(const android::ResXMLTree& parser,
+                                        size_t idx) {
+  auto data_type = parser.getAttributeDataType(idx);
+  if (data_type == android::Res_value::TYPE_REFERENCE) {
+    return resources::StringOrReference(parser.getAttributeData(idx));
+  } else if (data_type == android::Res_value::TYPE_STRING) {
+    size_t len;
+    const char16_t* p = parser.getAttributeStringValue(idx, &len);
+    if (p != nullptr) {
+      android::String16 target(p, len);
+      std::string converted = convert_from_string16(target);
+      return resources::StringOrReference(converted);
+    }
+  }
+  return boost::none;
+}
+
 bool has_raw_attribute_value(const android::ResXMLTree& parser,
                              const android::String16& attribute_name,
                              android::Res_value& out_value) {
@@ -847,8 +870,9 @@ void extract_classes_from_layout(
     const char* data,
     size_t size,
     const std::unordered_set<std::string>& attributes_to_read,
-    std::unordered_set<std::string>* out_classes,
-    std::unordered_multimap<std::string, std::string>* out_attributes) {
+    resources::StringOrReferenceSet* out_classes,
+    std::unordered_multimap<std::string, resources::StringOrReference>*
+        out_attributes) {
   if (!arsc::is_binary_xml(data, size)) {
     return;
   }
@@ -868,29 +892,29 @@ void extract_classes_from_layout(
       size_t len;
       android::String16 tag(parser.getElementName(&len));
       std::string element_name = convert_from_string16(tag);
-      if (resources::KNOWN_ELEMENTS_WITH_CLASS_ATTRIBUTES.count(element_name) >
-          0) {
-        for (const auto& attr : resources::POSSIBLE_CLASS_ATTRIBUTES) {
-          android::String16 attr_name(attr.c_str(), attr.length());
-          auto classname = get_string_attribute_value(parser, attr_name);
-          if (!classname.empty() && classname.find('.') != std::string::npos) {
-            auto internal = java_names::external_to_internal(classname);
-            TRACE(RES, 9,
-                  "Considering %s as possible class in XML "
-                  "resource from element %s",
-                  internal.c_str(), element_name.c_str());
-            out_classes->emplace(internal);
-            break;
+      const size_t attr_count = parser.getAttributeCount();
+      for (size_t i = 0; i < attr_count; ++i) {
+        auto data_type = parser.getAttributeDataType(i);
+        if (data_type == android::Res_value::TYPE_STRING ||
+            data_type == android::Res_value::TYPE_REFERENCE) {
+          std::string attr_name = read_attribute_name_at_idx(parser, i);
+          if (resources::POSSIBLE_CLASS_ATTRIBUTES.count(attr_name) > 0) {
+            auto value = get_attribute_string_or_reference_value(parser, i);
+            if (value && value->possible_java_identifier()) {
+              out_classes->emplace(*value);
+            }
           }
         }
       }
-      if (element_name.find('.') != std::string::npos) {
-        // Consider the element name itself as a possible class in the
-        // application
-        auto internal = java_names::external_to_internal(element_name);
+
+      // NOTE: xml elements that refer to application classes must have a
+      // package name; elements without a package are assumed to be SDK classes
+      // and will have various "android." packages prepended before
+      // instantiation.
+      if (resources::valid_xml_element(element_name)) {
         TRACE(RES, 9, "Considering %s as possible class in XML resource",
-              internal.c_str());
-        out_classes->emplace(internal);
+              element_name.c_str());
+        out_classes->emplace(element_name);
       }
 
       if (!attributes_to_read.empty()) {
@@ -904,11 +928,9 @@ void extract_classes_from_layout(
             fully_qualified = attr_name;
           }
           if (attributes_to_read.count(fully_qualified) != 0) {
-            auto val = parser.getAttributeStringValue(i, &len);
-            if (val != nullptr) {
-              android::String16 s16(val, len);
-              out_attributes->emplace(fully_qualified,
-                                      convert_from_string16(s16));
+            auto value = get_attribute_string_or_reference_value(parser, i);
+            if (value) {
+              out_attributes->emplace(fully_qualified, *value);
             }
           }
         }
@@ -928,8 +950,9 @@ void extract_classes_from_layout(
 void ApkResources::collect_layout_classes_and_attributes_for_file(
     const std::string& file_path,
     const std::unordered_set<std::string>& attributes_to_read,
-    std::unordered_set<std::string>* out_classes,
-    std::unordered_multimap<std::string, std::string>* out_attributes) {
+    resources::StringOrReferenceSet* out_classes,
+    std::unordered_multimap<std::string, resources::StringOrReference>*
+        out_attributes) {
   redex::read_file_with_contents(file_path, [&](const char* data, size_t size) {
     extract_classes_from_layout(data, size, attributes_to_read, out_classes,
                                 out_attributes);
@@ -947,13 +970,13 @@ class XmlStringAttributeCollector : public arsc::SimpleXmlParser {
       auto& pool = global_strings();
       if (arsc::is_valid_string_idx(pool, idx)) {
         auto s = arsc::get_string_from_pool(pool, idx);
-        m_values.emplace(s);
+        m_utf8s_values.emplace(s);
       }
     }
     return true;
   }
 
-  std::unordered_set<std::string> m_values;
+  std::unordered_set<std::string> m_utf8s_values;
 };
 
 class XmlElementCollector : public arsc::SimpleXmlParser {
@@ -1103,7 +1126,8 @@ void ApkResources::collect_xml_attribute_string_values_for_file(
     if (arsc::is_binary_xml(data, size)) {
       XmlStringAttributeCollector collector;
       if (collector.visit((void*)data, size)) {
-        out->insert(collector.m_values.begin(), collector.m_values.end());
+        out->insert(collector.m_utf8s_values.begin(),
+                    collector.m_utf8s_values.end());
       }
     }
   });
@@ -1265,6 +1289,12 @@ boost::optional<std::string> ApkResources::get_manifest_package_name() {
       });
 }
 
+std::unordered_set<std::string> ApkResources::get_service_loader_classes() {
+  const std::string meta_inf =
+      (boost::filesystem::path(m_directory) / "META-INF/services/").string();
+  return get_service_loader_classes_helper(meta_inf);
+}
+
 std::unordered_set<uint32_t> ApkResources::get_xml_reference_attributes(
     const std::string& filename) {
   if (is_raw_resource(filename)) {
@@ -1401,7 +1431,7 @@ void obfuscate_xml_attributes(
         TRACE(RES, 9, "NOT obfuscating xml file %s", filename.c_str());
         return;
       }
-      builder.add_string(element);
+      builder.add_string(pool, i);
     }
     android::Vector<char> out;
     arsc::replace_xml_string_pool((android::ResChunk_header*)file.data(),
@@ -1592,7 +1622,9 @@ class GlobalStringPoolReader : public arsc::ResourceTableVisitor {
     return false; // Don't parse anything else
   }
 
-  uint32_t get_string_idx(const std::string& s) {
+  // Given a standard UTF-8 string, return the index into the pool for where
+  // that string is. The given string must be in the pool.
+  uint32_t get_index_of_utf8s_string(const std::string& s) {
     return m_string_to_idx.at(s);
   }
 
@@ -1710,8 +1742,9 @@ void ResourcesArscFile::remap_file_paths_and_serialize(
   string_reader.visit(m_f.data(), m_arsc_len);
   std::unordered_map<uint32_t, uint32_t> old_to_new_idx;
   for (auto& pair : old_to_new) {
-    old_to_new_idx.emplace(string_reader.get_string_idx(pair.first),
-                           string_reader.get_string_idx(pair.second));
+    old_to_new_idx.emplace(
+        string_reader.get_index_of_utf8s_string(pair.first),
+        string_reader.get_index_of_utf8s_string(pair.second));
   }
   TRACE(RES, 9, "BEGIN StringPoolRefRemappingVisitor");
   StringPoolRefRemappingVisitor remapper(old_to_new_idx);
@@ -2096,7 +2129,7 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
     uint32_t total_num_strings = string_pool->size();
     for (const auto& pair : filepath_old_to_new) {
       const auto& cur_new_string = pair.second;
-      auto old_id = string_reader.get_string_idx(pair.first);
+      auto old_id = string_reader.get_index_of_utf8s_string(pair.first);
       always_assert_log(old_id >= string_pool->styleCount(),
                         "Don't support remapping of style.");
       if (!global_new_strings_to_id.count(cur_new_string)) {
@@ -2162,6 +2195,8 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
 
       for (auto& ref : refs) {
         auto old = dtohl(ref->index);
+        // keep_resource_specific values are given as standard UTF-8; compare
+        // against string pool also as standard UTF-8.
         std::string old_string =
             arsc::get_string_from_pool(*key_string_pool, old);
         if (keep_resource_specific.count(old_string) > 0 ||
@@ -2232,7 +2267,7 @@ std::vector<std::string> ResourcesArscFile::get_files_by_rid(
     auto val = out_values[i];
     if (val.dataType == android::Res_value::TYPE_STRING) {
       // data is an index into string pool.
-      auto s = table_snapshot.get_global_string(dtohl(val.data));
+      auto s = table_snapshot.get_global_string_utf8s(dtohl(val.data));
       if (is_resource_file(s)) {
         ret.emplace_back(s);
       }
@@ -2272,7 +2307,7 @@ void ResourcesArscFile::walk_references_for_resource(
     nodes_to_explore.pop();
     if (r.dataType == android::Res_value::TYPE_STRING) {
       potential_file_paths->insert(
-          table_snapshot.get_global_string(dtohl(r.data)));
+          table_snapshot.get_global_string_utf8s(dtohl(r.data)));
       continue;
     }
 
@@ -2618,11 +2653,125 @@ std::vector<std::string> ResourcesArscFile::get_resource_strings_by_name(
     ret.reserve(string_idx.size());
     for (const auto& i : string_idx) {
       if (table_snapshot.is_valid_global_string_idx(i)) {
-        ret.push_back(table_snapshot.get_global_string(i));
+        ret.push_back(table_snapshot.get_global_string_utf8s(i));
       }
     }
   }
   return ret;
+}
+
+void ResourcesArscFile::resolve_string_values_for_resource_reference(
+    uint32_t ref, std::vector<std::string>* values) {
+  auto& table_snapshot = get_table_snapshot();
+  std::unordered_set<uint32_t> seen;
+  std::set<uint32_t> string_idx;
+  resolve_string_index_for_id(table_snapshot, ref, &seen, &string_idx);
+  for (const auto& i : string_idx) {
+    if (table_snapshot.is_valid_global_string_idx(i)) {
+      values->push_back(table_snapshot.get_global_string_utf8s(i));
+    }
+  }
+}
+
+/* An inlinable resource ID will be defined as a resource ID for which there
+ * exists 1 entry in the default configuration, and the entry is non-complex.
+ */
+bool is_inlinable_resource_value(
+    const std::map<android::ResTable_config*, arsc::EntryValueData>&
+        config_to_entry_map,
+    android::ResTable_entry* entry,
+    android::Res_value* res_value) {
+  bool is_not_complex =
+      ((dtohs(entry->flags) & android::ResTable_entry::FLAG_COMPLEX) == 0);
+
+  bool is_one_entry = true;
+  for (auto& pair : config_to_entry_map) {
+    if (!arsc::is_default_config(pair.first)) {
+      if (!arsc::is_empty(pair.second)) {
+        is_one_entry = false;
+      }
+    }
+  }
+
+  bool is_valid_type =
+      (res_value->dataType == android::Res_value::TYPE_STRING ||
+       res_value->dataType == android::Res_value::TYPE_REFERENCE ||
+       (res_value->dataType >= android::Res_value::TYPE_FIRST_INT &&
+        res_value->dataType <= android::Res_value::TYPE_LAST_INT));
+
+  if (is_not_complex && is_one_entry && is_valid_type) {
+    return true;
+  }
+  return false;
+}
+
+/*
+ * Finds a map of the resource id to an inlinable value, if a certain resource
+ * value could be eligible for inlining
+ */
+std::unordered_map<uint32_t, resources::InlinableValue>
+ResourcesArscFile::get_inlinable_resource_values() {
+  apk::TableSnapshot& table_snapshot = get_table_snapshot();
+  android::ResStringPool& global_string_pool =
+      table_snapshot.get_global_strings(); // gives pool of strings
+  apk::TableEntryParser& parsed_table = table_snapshot.get_parsed_table();
+  auto& res_id_to_entries = parsed_table.m_res_id_to_entries;
+  std::unordered_map<uint32_t, resources::InlinableValue> inlinable_resources;
+  std::vector<std::tuple<uint32_t, android::Res_value*>> past_refs;
+
+  for (auto& pair : res_id_to_entries) {
+    uint32_t id = pair.first;
+    apk::ConfigToEntry config_to_entry_map = pair.second;
+    android::ResTable_config* config = config_to_entry_map.begin()->first;
+    arsc::EntryValueData entry_value =
+        parsed_table.get_entry_for_config(id, config);
+    if (!arsc::is_default_config(config) || arsc::is_empty(entry_value)) {
+      continue;
+    }
+    android::ResTable_entry* res_entry =
+        (android::ResTable_entry*)entry_value.getKey();
+    arsc::PtrLen<uint8_t> value_data = arsc::get_value_data(entry_value);
+    android::Res_value* res_value = (android::Res_value*)(value_data.getKey());
+
+    // If found an inlinable resource value, setting the values of a
+    // InlinableValue struct accordingly and adding it to the map
+    if (is_inlinable_resource_value(config_to_entry_map, res_entry,
+                                    res_value)) {
+      resources::InlinableValue val{};
+      val.type = res_value->dataType;
+      if (res_value->dataType == android::Res_value::TYPE_STRING) {
+        size_t length;
+        auto chars = global_string_pool.string8At(res_value->data, &length);
+        if (chars == nullptr ||
+            global_string_pool.styleAt(res_value->data) != nullptr) {
+          continue;
+        }
+        val.string_value = chars;
+      } else if (res_value->dataType == android::Res_value::TYPE_REFERENCE) {
+        past_refs.push_back(
+            std::tuple<uint32_t, android::Res_value*>(id, res_value));
+        continue;
+      } else if (res_value->dataType == android::Res_value::TYPE_INT_BOOLEAN) {
+        val.bool_value = res_value->data;
+      } else if (res_value->dataType >= android::Res_value::TYPE_FIRST_INT &&
+                 res_value->dataType <= android::Res_value::TYPE_LAST_INT) {
+        val.uint_value = res_value->data;
+      }
+      inlinable_resources.insert({id, val});
+    }
+  }
+
+  // If a reference is found, check if the referenced value is inlinable and add
+  // it's actual value to the map (instead of the reference). NOTE: only works
+  // if reference only goes down one level.
+  for (auto& [id, value] : past_refs) {
+    auto it = inlinable_resources.find(value->data);
+    if (it != inlinable_resources.end()) {
+      resources::InlinableValue val = it->second;
+      inlinable_resources.insert({id, val});
+    }
+  }
+  return inlinable_resources;
 }
 
 ResourcesArscFile::~ResourcesArscFile() {}

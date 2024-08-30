@@ -446,7 +446,7 @@ B4: LFoo;.bar:()V@3(x))";
     try {
       insert_source_blocks(method, &cfg, profile, /*serialize=*/true);
       ADD_FAILURE() << "Expected exception.";
-    } catch (const std::exception& e) {
+    } catch (const std::exception&) {
       // This is not ours, but from std::stof. Message is not well-specified, I
       // think.
     }

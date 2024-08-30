@@ -194,8 +194,8 @@ DexMethodInfoMap load_dex_method_move_info(const std::string& dir) {
 }
 
 void dump_method_sizes_from_dexen_dir(const std::string& dexen_dir) {
-  std::cout << "INFO: "
-            << "Loading directory " << dexen_dir << " ... " << std::endl;
+  std::cout << "INFO: " << "Loading directory " << dexen_dir << " ... "
+            << std::endl;
   auto info = load_dex_method_info(dexen_dir);
   std::cout << "INFO: " << info.size() << " method information loaded"
             << std::endl;
@@ -208,16 +208,16 @@ void dump_method_sizes_from_dexen_dir(const std::string& dexen_dir) {
 void diff_from_two_dexen_dirs(const std::string& dexen_dir_A,
                               const std::string& dexen_dir_B,
                               bool is_comparing_dex_size) {
-  std::cout << "INFO: "
-            << "Loading directory " << dexen_dir_A << " ... " << std::endl;
+  std::cout << "INFO: " << "Loading directory " << dexen_dir_A << " ... "
+            << std::endl;
   RedexContext* A_context = g_redex;
   auto A_info = is_comparing_dex_size ? load_dex_method_info(dexen_dir_A)
                                       : load_dex_method_move_info(dexen_dir_A);
   std::cout << "INFO: " << A_info.size() << " method information loaded"
             << std::endl;
 
-  std::cout << "INFO: "
-            << "Loading directory " << dexen_dir_B << " ... " << std::endl;
+  std::cout << "INFO: " << "Loading directory " << dexen_dir_B << " ... "
+            << std::endl;
   std::unique_ptr<RedexContext> B_context(new RedexContext());
   g_redex = B_context.get();
   auto B_info = is_comparing_dex_size ? load_dex_method_info(dexen_dir_B)
@@ -274,8 +274,8 @@ void diff_from_two_dexen_dirs(const std::string& dexen_dir_A,
 }
 
 void dump_method_move_info_from_dex_dir(const std::string& dex_dir) {
-  std::cout << "INFO: "
-            << "Loading directory " << dex_dir << " ... " << std::endl;
+  std::cout << "INFO: " << "Loading directory " << dex_dir << " ... "
+            << std::endl;
   auto info = load_dex_method_move_info(dex_dir);
   std::cout << "INFO: " << info.size() << " method information loaded"
             << std::endl;
@@ -298,14 +298,13 @@ class DiffMethodSizes : public Tool {
         "dexendir,d",
         po::value<std::vector<std::string>>()->multitoken(),
         "dump all method sizes in the given dexen directory; if two dexen "
-        "directories are given, compare the method sizes")("show-moves,s",
-                                                           po::value<std::vector<
-                                                               std::string>>()
-                                                               ->multitoken(),
-                                                           "show number of "
-                                                           "move code and "
-                                                           "their size for "
-                                                           "each methods");
+        "directories are given, compare the method sizes")(
+        "show-moves,s",
+        po::value<std::vector<std::string>>()->multitoken(),
+        "show number of "
+        "move code and "
+        "their size for "
+        "each methods");
   }
 
   void run(const po::variables_map& options) override {

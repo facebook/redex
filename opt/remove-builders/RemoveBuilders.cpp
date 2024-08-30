@@ -404,6 +404,8 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   TRACE(BUILDERS, 1, "Methods removed: %zu", b_counter.methods_removed);
   TRACE(BUILDERS, 1, "Fields removed: %zu", b_counter.fields_removed);
   TRACE(BUILDERS, 1, "Methods cleared: %zu", b_counter.methods_cleared);
+
+  b_transform.flush();
 }
 
 static RemoveBuildersPass s_pass;

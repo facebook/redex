@@ -18,8 +18,8 @@
 #include <utility>
 #include <vector>
 
-//#define DEBUG_LOG
-//#define PERF_LOG
+// #define DEBUG_LOG
+// #define PERF_LOG
 
 #define PACK __attribute__((packed))
 

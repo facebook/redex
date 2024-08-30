@@ -222,11 +222,9 @@ void print_edge(const Shape& from_shape,
   always_assert(num_mergeables.find(from_shape) != num_mergeables.end() &&
                 num_mergeables.find(to_shape) != num_mergeables.end());
 
-  os << "    "
-     << "\"" << from_shape.to_string() << "\\n"
-     << num_mergeables.at(from_shape) << "\""
-     << " -> "
-     << "\"" << to_shape.to_string() << "\\n"
+  os << "    " << "\"" << from_shape.to_string() << "\\n"
+     << num_mergeables.at(from_shape) << "\"" << " -> " << "\""
+     << to_shape.to_string() << "\\n"
      << num_mergeables.at(to_shape) << "\""
      << "  [label=\"dist=" << distance(to_shape, from_shape) << "\"]"
      << std::endl;

@@ -5,9 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/multi_index/hashed_index.hpp>
-#include <boost/multi_index/member.hpp>
-#include <boost/multi_index_container.hpp>
 #include <cctype>
 #include <istream>
 #include <unordered_map>
@@ -15,6 +12,7 @@
 #include <vector>
 
 #include "Debug.h"
+#include "DexUtil.h"
 #include "Macros.h"
 #include "ProguardLexer.h"
 
@@ -29,32 +27,6 @@ constexpr char kPathDelim =
 #else
     ':';
 #endif
-
-bool is_deliminator(char ch) {
-  return isspace(ch) || ch == '{' || ch == '}' || ch == '(' || ch == ')' ||
-         ch == ',' || ch == ';' || ch == ':' || ch == '#';
-}
-
-bool is_not_idenfitier_character(char ch) {
-  return ch == '=' || ch == '+' || ch == '|' || ch == '@' || ch == '#' ||
-         ch == '^' || ch == '&' || ch == '"' || ch == '\'' || ch == '`' ||
-         ch == '~' || ch == '-';
-}
-
-// An identifier can refer to a class name, a field name or a package name.
-// https://docs.oracle.com/javase/specs/jls/se16/html/jls-3.html#jls-JavaLetter
-bool is_identifier(const std::string_view& ident) {
-  for (const char& ch : ident) {
-    // java identifiers can be multi-lingual so membership testing is complex.
-    // much simpler to test for what is definitely not an identifier and then
-    // assume everything else is a legal identifier char, accepting that we
-    // will have false positives.
-    if (is_deliminator(ch) || is_not_idenfitier_character(ch)) {
-      return false;
-    }
-  }
-  return true;
-}
 
 void skip_whitespace(std::string_view& data, unsigned int* line) {
   size_t index = 0;
@@ -191,40 +163,6 @@ std::vector<std::string_view> lex_filter_list(std::string_view& data,
   }
   return filter_list;
 }
-
-// std::unordered_map does not work with string views. Use Boost magic.
-template <typename T, typename Q>
-struct MyPair {
-  T first;
-  mutable Q second;
-};
-
-struct StringViewEquals {
-  bool operator()(const std::string& s1, const std::string& s2) const {
-    return s1 == s2;
-  }
-  bool operator()(const std::string& s1, const std::string_view& v2) const {
-    return v2 == s1;
-  }
-  bool operator()(const std::string_view& v1, const std::string& s2) const {
-    return v1 == s2;
-  }
-  bool operator()(const std::string_view& v1,
-                  const std::string_view& v2) const {
-    return v1 == v2;
-  }
-};
-
-using namespace boost::multi_index;
-
-template <typename Q>
-using UnorderedStringViewIndexableMap = multi_index_container<
-    MyPair<std::string_view, Q>,
-    indexed_by<hashed_unique<member<MyPair<std::string_view, Q>,
-                                    std::string_view,
-                                    &MyPair<std::string_view, Q>::first>,
-                             boost::hash<std::string_view>,
-                             StringViewEquals>>>;
 
 } // namespace
 
@@ -538,7 +476,7 @@ std::vector<Token> lex(const std::string_view& in) {
       {'@', TokenType::annotation_application},
   };
 
-  using TokenMap = UnorderedStringViewIndexableMap<TokenType>;
+  using TokenMap = std::unordered_map<std::string_view, TokenType>;
 
   TokenMap word_tokens{
       {"includedescriptorclasses", TokenType::includedescriptorclasses_token},
@@ -715,8 +653,8 @@ std::vector<Token> lex(const std::string_view& in) {
     // Check for commands.
     if (ch == '-') {
       data = data.substr(1);
-      auto command =
-          parse_part_fn</*kSkipWs=*/false>(data, &line, is_deliminator);
+      auto command = parse_part_fn</*kSkipWs=*/false>(
+          data, &line, java_names::is_deliminator);
 
       {
         auto it = simple_commands.find(command);
@@ -789,7 +727,8 @@ std::vector<Token> lex(const std::string_view& in) {
     // At this point:
     // * data is not empty
     // * it does not start with a deliminator
-    auto word = parse_part_fn</*kSkipWs=*/false>(data, &line, is_deliminator);
+    auto word = parse_part_fn</*kSkipWs=*/false>(
+        data, &line, java_names::is_deliminator);
 
     {
       auto it = word_tokens.find(word);
@@ -811,7 +750,7 @@ std::vector<Token> lex(const std::string_view& in) {
       continue;
     }
 
-    if (is_identifier(word)) {
+    if (java_names::is_identifier(word)) {
       add_token_data(TokenType::identifier, word);
       continue;
     }

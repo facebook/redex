@@ -413,7 +413,9 @@ DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset)
     : m_source_checksum(idx->get_checksum()), m_source_offset(offset) {
   const uint8_t* encdata = idx->get_uleb_data(offset);
   const uint8_t* base_encdata = encdata;
+  always_assert(encdata < idx->end());
   uint32_t line_start = read_uleb128(&encdata);
+  always_assert(encdata < idx->end());
   uint32_t paramcount = read_uleb128(&encdata);
   while (paramcount--) {
     // We intentionally drop the parameter string name here because we don't
@@ -661,6 +663,7 @@ std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
     for (uint32_t i = 0; i < tries; i++) {
       DexTryItem* dextry = new DexTryItem(dti[i].start_addr, dti[i].insn_count);
       const uint8_t* handler = handlers + dti[i].handler_off;
+      always_assert(handler < idx->end());
       int32_t count = read_sleb128(&handler);
       bool has_catchall = false;
       if (count <= 0) {
@@ -668,12 +671,15 @@ std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
         has_catchall = true;
       }
       while (count--) {
+        always_assert(handler < idx->end());
         uint32_t tidx = read_uleb128(&handler);
+        always_assert(handler < idx->end());
         uint32_t hoff = read_uleb128(&handler);
         DexType* dt = idx->get_typeidx(tidx);
         dextry->m_catches.push_back(std::make_pair(dt, hoff));
       }
       if (has_catchall) {
+        always_assert(handler < idx->end());
         auto hoff = read_uleb128(&handler);
         dextry->m_catches.push_back(std::make_pair(nullptr, hoff));
       }
@@ -1145,9 +1151,13 @@ void DexClass::load_class_data_item(
     std::unique_ptr<DexEncodedValueArray> svalues) {
   if (cdi_off == 0) return;
   const uint8_t* encd = idx->get_uleb_data(cdi_off);
+  always_assert(encd < idx->end());
   uint32_t sfield_count = read_uleb128(&encd);
+  always_assert(encd < idx->end());
   uint32_t ifield_count = read_uleb128(&encd);
+  always_assert(encd < idx->end());
   uint32_t dmethod_count = read_uleb128(&encd);
+  always_assert(encd < idx->end());
   uint32_t vmethod_count = read_uleb128(&encd);
   uint32_t ndex = 0;
 
@@ -1160,7 +1170,9 @@ void DexClass::load_class_data_item(
 
   m_sfields.reserve(sfield_count);
   for (uint32_t i = 0; i < sfield_count; i++) {
+    always_assert(encd < idx->end());
     ndex += read_uleb128(&encd);
+    always_assert(encd < idx->end());
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     DexField* df = static_cast<DexField*>(idx->get_fieldidx(ndex));
     std::unique_ptr<DexEncodedValue> ev = nullptr;
@@ -1175,7 +1187,9 @@ void DexClass::load_class_data_item(
   ndex = 0;
   m_ifields.reserve(ifield_count);
   for (uint32_t i = 0; i < ifield_count; i++) {
+    always_assert(encd < idx->end());
     ndex += read_uleb128(&encd);
+    always_assert(encd < idx->end());
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     DexField* df = static_cast<DexField*>(idx->get_fieldidx(ndex));
     df->make_concrete(access_flags);
@@ -1187,8 +1201,11 @@ void DexClass::load_class_data_item(
 
   auto process_method = [this, &encd, &idx, &method_pointer_cache](
                             uint32_t& ndex, bool is_virtual) {
+    always_assert(encd < idx->end());
     ndex += read_uleb128(&encd);
+    always_assert(encd < idx->end());
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
+    always_assert(encd < idx->end());
     uint32_t code_off = read_uleb128(&encd);
     // Find method in method index, returns same pointer for same method.
     DexMethod* dm = static_cast<DexMethod*>(idx->get_methodidx(ndex));
@@ -1443,15 +1460,18 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
   }
 }
 
-void DexClass::combine_annotations_with(DexClass* other) {
-  auto other_anno_set = other->get_anno_set();
-  if (other_anno_set != nullptr) {
+void DexClass::combine_annotations_with(DexAnnotationSet* other) {
+  if (other != nullptr) {
     if (m_anno == nullptr) {
-      m_anno = std::make_unique<DexAnnotationSet>(*other->m_anno);
+      m_anno = std::make_unique<DexAnnotationSet>(*other);
     } else {
-      m_anno->combine_with(*other->m_anno);
+      m_anno->combine_with(*other);
     }
   }
+}
+
+void DexClass::combine_annotations_with(DexClass* other) {
+  combine_annotations_with(other->get_anno_set());
 }
 
 void DexClass::attach_annotation_set(std::unique_ptr<DexAnnotationSet> anno) {

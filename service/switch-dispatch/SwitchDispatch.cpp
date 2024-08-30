@@ -357,7 +357,7 @@ dispatch::DispatchMethod create_two_level_switch_dispatch(
   }
 
   auto template_sb = get_template_source_block(indices_to_callee);
-  auto dispatch_meth = materialize_dispatch(orig_method, mc, template_sb);
+  auto dispatch_meth = materialize_dispatch(orig_method, mc, nullptr);
 
   /////////////////////////////////////////////////////////////////////////////
   // Remove unwanted gotos.
@@ -424,6 +424,17 @@ dispatch::DispatchMethod create_two_level_switch_dispatch(
 
   for (const auto& it : to_delete) {
     code->remove_opcode(it);
+  }
+
+  if (template_sb) {
+    source_blocks::insert_synthetic_source_blocks_in_method(
+        dispatch_meth, [&]() {
+          auto new_sb = std::make_unique<SourceBlock>(*template_sb);
+          source_blocks::fill_source_block(*new_sb, dispatch_meth,
+                                           SourceBlock::kSyntheticId,
+                                           SourceBlock::Val{1, 0});
+          return new_sb;
+        });
   }
 
   TRACE(SDIS, 9, "dispatch: split dispatch %s\n%s", SHOW(dispatch_meth),

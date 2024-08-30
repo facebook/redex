@@ -9,6 +9,7 @@
 #include "AnnoUtils.h"
 #include "RedexTest.h"
 #include "Show.h"
+#include "Walkers.h"
 #include <gtest/gtest.h>
 
 class DedupVirtualMethodsTest : public RedexIntegrationTest {};
@@ -58,6 +59,7 @@ void check_public(const std::vector<DexMethod*>& methods,
 
 TEST_F(DedupVirtualMethodsTest, dedup) {
   auto scope = build_class_scope(stores);
+  walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
   auto annotation = DexType::get_type("Lcom/facebook/redextest/Duplication;");
 
   auto methods_annotated_by_pub = annotated_by_publicized(scope);
@@ -75,6 +77,7 @@ TEST_F(DedupVirtualMethodsTest, dedup) {
 
 TEST_F(DedupVirtualMethodsTest, dedup_with_call) {
   auto scope = build_class_scope(stores);
+  walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
   auto annotation = DexType::get_type("Lcom/facebook/redextest/Duplication;");
 
   auto methods_annotated_by_pub = annotated_by_publicized(scope);

@@ -25,6 +25,7 @@
 #include "androidfw/ResourceTypes.h"
 
 #include "Debug.h"
+#include "DexUtil.h"
 #include "GlobalConfig.h"
 #include "RedexMappedFile.h"
 
@@ -46,24 +47,61 @@ struct TypeDefinition {
   std::vector<uint32_t> source_res_ids;
 };
 
-inline bool is_resource_class_name(const std::string_view c_name) {
-  return c_name.find("/R$") != std::string::npos;
-}
-bool is_r_class(const DexClass* cls);
-void gather_r_classes(const Scope& scope, std::vector<DexClass*>* vec);
-// List of tags in xml documents for which we should hunt in attribute values
-// for class names.
-const inline std::unordered_set<std::string>
-    KNOWN_ELEMENTS_WITH_CLASS_ATTRIBUTES = {
-        "fragment",   "view",   "dialog",
-        "activity",   "intent", "androidx.fragment.app.FragmentContainerView",
-        "transition",
+// List of attribute names (without namespace) in xml documents for which we
+// should hunt for class names. This is intentionally broad, as narrowly
+// targeting specific element names would require analyzing parent element names
+// (example: children of
+// https://developer.android.com/reference/androidx/coordinatorlayout/widget/CoordinatorLayout).
+const inline std::set<std::string> POSSIBLE_CLASS_ATTRIBUTES = {
+    "actionViewClass", "class", "controller",  "layout_behavior",
+    "layoutManager",   "name",  "targetClass",
 };
-const inline std::vector<std::string> POSSIBLE_CLASS_ATTRIBUTES = {
-    "class",
-    "name",
-    "targetClass",
+// Returns false if there is no dot or it's not a Java identifier.
+bool valid_xml_element(const std::string& ident);
+
+struct StringOrReference {
+  const std::string str;
+  const uint32_t ref;
+
+  explicit StringOrReference(const std::string& value) : str(value), ref(0) {}
+  explicit StringOrReference(const uint32_t& value) : ref(value) {}
+
+  bool is_reference() const { return ref != 0; }
+
+  bool possible_java_identifier() const {
+    if (ref != 0) {
+      return true;
+    }
+    return java_names::is_identifier(str);
+  }
+
+  bool operator==(const StringOrReference& that) const {
+    return str == that.str && ref == that.ref;
+  }
 };
+
+struct InlinableValue {
+  uint8_t type;
+  uint32_t uint_value;
+  bool bool_value;
+  std::string string_value;
+};
+
+struct StringOrReferenceHasher {
+  size_t operator()(const StringOrReference& val) const {
+    size_t seed = 0;
+    boost::hash_combine(seed, val.str);
+    boost::hash_combine(seed, val.ref);
+    return seed;
+  }
+};
+
+using StringOrReferenceSet =
+    std::unordered_set<StringOrReference, StringOrReferenceHasher>;
+
+// Helper for dealing with differences in character encoding between .arsc and
+// .pb files.
+std::string convert_utf8_to_mutf8(const std::string& input);
 } // namespace resources
 
 /*
@@ -227,6 +265,17 @@ class ResourceTableFile {
   virtual std::set<android::ResTable_config> get_configs_with_values(
       uint32_t id) = 0;
 
+  // For a given resource ID, find all string values that the ID could represent
+  // across all configurations (including chasing down references).
+  // NOTE: in case of supplimental characters in string values, UTF-8 standard
+  // encoding will be returned, so that the caller will have a consistent
+  // behavior regardless of apk / aab container formats.
+  virtual void resolve_string_values_for_resource_reference(
+      uint32_t ref, std::vector<std::string>* values) = 0;
+
+  virtual std::unordered_map<uint32_t, resources::InlinableValue>
+  get_inlinable_resource_values() = 0;
+
   // Takes effect during serialization. Appends a new type with the given
   // details (id, name) to the package. It will contain types with the given
   // configs and use existing resource entry/value data of "source_res_ids" to
@@ -272,6 +321,8 @@ class AndroidResources {
   virtual ManifestClassInfo get_manifest_class_info() = 0;
   virtual boost::optional<std::string> get_manifest_package_name() = 0;
 
+  virtual std::unordered_set<std::string> get_service_loader_classes() = 0;
+
   // Given the xml file name, return the list of resource ids referred in xml
   // attributes.
   virtual std::unordered_set<uint32_t> get_xml_reference_attributes(
@@ -281,10 +332,16 @@ class AndroidResources {
   // every non-raw XML file in the directory.
   void rename_classes_in_layouts(
       const std::map<std::string, std::string>& rename_map);
-  // Iterates through all layouts in the given directory. Adds all class names
-  // to the output set, and allows for any specified attribute values to be
-  // returned as well. Attribute names should specify their namespace, if any
-  // (so android:onClick instead of just onClick)
+
+  // Iterates through all layouts in the given directory. Adds possible class
+  // name candidates to the out parameter, and allows for any specified
+  // attribute values to be returned as well. Returned values may or may not
+  // refer to real classes, and will be given in external name form (so
+  // "com.facebook.Foo" not "Lcom/facebook/Foo;"). Attribute names that are to
+  // be read should specify their namespace, if any (so android:onClick instead
+  // of just onClick). Any references encountered in attribute values will be
+  // resolved against the resource table, and all possible discovered values (in
+  // all configs) will be included in the output.
   void collect_layout_classes_and_attributes(
       const std::unordered_set<std::string>& attributes_to_read,
       std::unordered_set<std::string>* out_classes,
@@ -294,8 +351,9 @@ class AndroidResources {
   virtual void collect_layout_classes_and_attributes_for_file(
       const std::string& file_path,
       const std::unordered_set<std::string>& attributes_to_read,
-      std::unordered_set<std::string>* out_classes,
-      std::unordered_multimap<std::string, std::string>* out_attributes) = 0;
+      resources::StringOrReferenceSet* out_classes,
+      std::unordered_multimap<std::string, resources::StringOrReference>*
+          out_attributes) = 0;
   // Similar to collect_layout_classes_and_attributes, but less focused to cover
   // custom View subclasses that might be doing interesting things with string
   // values
@@ -359,6 +417,9 @@ class AndroidResources {
 std::unique_ptr<AndroidResources> create_resource_reader(
     const std::string& directory);
 
+std::unordered_set<std::string> get_service_loader_classes_helper(
+    const std::string& path_dir);
+
 // For testing only!
 std::unordered_set<std::string> extract_classes_from_native_lib(
     const std::string& lib_contents);
@@ -370,12 +431,6 @@ std::unordered_set<std::string> get_xml_files(const std::string& directory);
 // for resource remapping, class name extraction, etc. These files don't follow
 // binary XML format, and thus are out of scope for many optimizations.
 bool is_raw_resource(const std::string& filename);
-
-// Convenience method for copying values in a multimap to a set, for a
-// particular key.
-std::unordered_set<std::string_view> multimap_values_to_set(
-    const std::unordered_multimap<std::string, std::string>& map,
-    const std::string& key);
 
 const int TYPE_INDEX_BIT_SHIFT = 16;
 const int PACKAGE_INDEX_BIT_SHIFT = 24;

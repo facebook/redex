@@ -1924,7 +1924,8 @@ void reduce(const Scope& scope,
             Stats* stats,
             std::unordered_set<DexMethod*>* inlinable_methods_kept,
             CalleesCache* callees_cache,
-            MethodSummaryCache* method_summary_cache) {
+            MethodSummaryCache* method_summary_cache,
+            method_profiles::MethodProfiles* method_profiles) {
   Timer t("reduce");
 
   // First, we compute all reduced methods
@@ -1975,7 +1976,8 @@ void reduce(const Scope& scope,
       },
       reduced_methods);
 
-  size_t expanded_methods = expandable_method_params.flush(scope);
+  size_t expanded_methods =
+      expandable_method_params.flush(scope, method_profiles);
   stats->expanded_methods += expanded_methods;
 }
 } // namespace
@@ -2080,7 +2082,10 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   Stats stats;
   reduce(scope, m_config, apply_shrinking_plugins, *method_override_graph,
          inliner, method_summaries, excluded_classes, root_methods, &stats,
-         &inlinable_methods_kept, &callees_cache, &method_summary_cache);
+         &inlinable_methods_kept, &callees_cache, &method_summary_cache,
+         &conf.get_method_profiles());
+
+  inliner.flush();
 
   TRACE(OEA, 1, "[object escape analysis] total savings: %zu",
         (size_t)stats.total_savings);

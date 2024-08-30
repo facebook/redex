@@ -43,6 +43,9 @@ class VirtualMergingTest : public RedexTest {
       auto ctor = DexMethod::make_method(std::string(name) + ".<init>:()V")
                       ->make_concrete(ACC_PUBLIC, false);
       cls_creator.add_method(ctor);
+      if (ctor->get_code()) {
+        ctor->get_code()->build_cfg();
+      }
       // Should add a super call here, but...
 
       auto make_code = [](int32_t val, auto mref, float sb_val) {
@@ -65,14 +68,14 @@ class VirtualMergingTest : public RedexTest {
                                  make_code(foo_val, foo_ref, idx / 100.0f),
                                  /*is_virtual=*/true);
       cls_creator.add_method(foo);
-
+      foo->get_code()->build_cfg();
       auto bar_ref = DexMethod::make_method(std::string(name) + ".bar:()I");
       auto bar =
           bar_ref->make_concrete(ACC_PUBLIC,
                                  make_code(bar_val, bar_ref, idx / 100.0f),
                                  /*is_virtual=*/true);
       cls_creator.add_method(bar);
-
+      bar->get_code()->build_cfg();
       DexClass* res = cls_creator.create();
       if (super_class != nullptr) {
         subtypes[super_class].push_back(res);

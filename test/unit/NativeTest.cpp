@@ -17,7 +17,7 @@ struct NativeTest : public RedexTest {};
 
 TEST_F(NativeTest, testJNIOutputParsing) {
   auto libs = native::get_so_libraries(
-      boost::filesystem::path(std::getenv("native_jni_output_path")) /
+      boost::filesystem::path(get_env("native_jni_output_path")) /
       "JNI_OUTPUT");
 
   std::unordered_set<std::string> lib_names;
@@ -31,8 +31,7 @@ TEST_F(NativeTest, testJNIOutputParsing) {
 
 TEST_F(NativeTest, testBuildingContext) {
   auto path_to_native_results =
-      boost::filesystem::path(std::getenv("native_jni_output_path")) /
-      "JNI_OUTPUT";
+      boost::filesystem::path(get_env("native_jni_output_path")) / "JNI_OUTPUT";
 
   auto type = DexType::make_type("Lredex/JNIExample;");
   ClassCreator creator(type);
@@ -60,7 +59,7 @@ TEST_F(NativeTest, testBuildingContext) {
       native::NativeContext::build(path_to_native_results.string(), java_scope);
 
   {
-    EXPECT_EQ(2, context.so_libraries.size());
+    ASSERT_EQ(2, context.so_libraries.size());
 
     auto java_decl_of =
         [&](const std::string& native_func) -> std::unordered_set<DexMethod*> {
@@ -78,7 +77,7 @@ TEST_F(NativeTest, testBuildingContext) {
   }
 
   {
-    EXPECT_EQ(2, context.java_declaration_to_function.size());
+    ASSERT_EQ(2, context.java_declaration_to_function.size());
 
     auto native_impl_of = [&](DexMethod* method) {
       return context.java_declaration_to_function.at(method)->get_name();

@@ -16,6 +16,7 @@
 #include "DexUtil.h"
 #include "Nopper.h"
 #include "PassManager.h"
+#include "RClass.h"
 #include "Walkers.h"
 
 namespace {
@@ -87,8 +88,14 @@ void NopperPass::run_pass(DexStoresVector& stores,
 
   InsertOnlyConcurrentMap<DexMethod*, std::vector<cfg::Block*>>
       gathered_noppable_blocks;
+  resources::RClassReader r_class_reader(conf.get_global_config());
   walk::parallel::code(scope, [&](DexMethod* method, IRCode&) {
     if (m_complex) {
+      if (r_class_reader.is_r_class(type_class(method->get_class()))) {
+        // The NopperPass may run before certain resource optimizations, and we
+        // don't want to interfere with or degrade them.
+        return;
+      }
       auto ii = InstructionIterable(method->get_code()->cfg());
       if (std::any_of(ii.begin(), ii.end(), [](auto& mie) {
             return opcode::is_a_monitor(mie.insn->opcode());

@@ -500,11 +500,13 @@ void analyze_reachable_from_manifest(
   }
 }
 
-void mark_reachable_by_xml(const std::string& classname) {
+void mark_reachable_by_xml(const std::string& external_classname) {
+  auto classname = java_names::external_to_internal(external_classname);
   auto dclass = maybe_class_from_string(classname);
   if (dclass == nullptr) {
     return;
   }
+  TRACE(PGR, 3, "xml_layout: %s", classname.c_str());
   // Setting "referenced_by_resource_xml" essentially behaves like keep,
   // though breaking it out to its own flag will let us clear/recompute this.
   dclass->rstate.set_referenced_by_resource_xml();
@@ -513,6 +515,17 @@ void mark_reachable_by_xml(const std::string& classname) {
   for (DexMethod* dmethod : dclass->get_ctors()) {
     dmethod->rstate.set_referenced_by_resource_xml();
   }
+}
+
+std::unordered_set<std::string_view> multimap_values_to_set(
+    const std::unordered_multimap<std::string, std::string>& map,
+    const std::string& key) {
+  std::unordered_set<std::string_view> result;
+  auto range = map.equal_range(key);
+  for (auto it = range.first; it != range.second; ++it) {
+    result.emplace(it->second);
+  }
+  return result;
 }
 
 // 1) Marks classes (Fragments, Views) found in XML layouts as reachable along
@@ -530,7 +543,7 @@ void analyze_reachable_from_xml_layouts(const Scope& scope,
   resources->collect_layout_classes_and_attributes(
       attrs_to_read, &layout_classes, &attribute_values);
   for (const std::string& classname : layout_classes) {
-    TRACE(PGR, 3, "xml_layout: %s", classname.c_str());
+    TRACE(PGR, 4, "xml_layout candidate: %s", classname.c_str());
     mark_reachable_by_xml(classname);
   }
   auto attr_values =
@@ -611,6 +624,19 @@ void analyze_serializable(const Scope& scope) {
 
 } // namespace
 
+void mark_meta_inf_root(const std::string& classname) {
+  auto dclass = maybe_class_from_string(classname);
+  if (dclass == nullptr) {
+    TRACE(PGR, 3, "Dangling reference from META-INF: %s", classname.c_str());
+    return;
+  }
+  TRACE(PGR, 3, "META-INF: %s", classname.c_str());
+  dclass->rstate.set_root(keep_reason::META_INF);
+  for (DexMethod* dmethod : dclass->get_ctors()) {
+    dmethod->rstate.set_root(keep_reason::META_INF);
+  }
+}
+
 /*
  * Initializes list of classes that are reachable via reflection, and calls
  * or from code.
@@ -633,11 +659,14 @@ void init_reachable_classes(const Scope& scope,
       // Classes present in XML layouts
       analyze_reachable_from_xml_layouts(scope, config.apk_dir);
     }
+    auto resources = create_resource_reader(config.apk_dir);
+    for (const auto& classname : resources->get_service_loader_classes()) {
+      mark_meta_inf_root(classname);
+    }
 
     if (config.analyze_native_lib_reachability) {
       Timer t{"Computing native reachability"};
       // Classnames present in native libraries (lib/*/*.so)
-      auto resources = create_resource_reader(config.apk_dir);
       for (const std::string& classname : resources->get_native_classes()) {
         auto type = DexType::get_type(classname);
         if (type == nullptr) continue;

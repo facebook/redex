@@ -16,10 +16,14 @@
 #include "utils/Visitor.h"
 
 #include "RedexMappedFile.h"
+#include "RedexTest.h"
+
+namespace {
+const size_t UNSET{std::numeric_limits<size_t>::max()};
+} // namespace
 
 TEST(Visitor, AppendXmlId) {
-  auto f = RedexMappedFile::open(std::getenv("test_manifest_path"));
-  const size_t UNSET{std::numeric_limits<size_t>::max()};
+  auto f = RedexMappedFile::open(get_env("test_manifest_path"));
 
   // Read some data about original file, used for asserts later.
   size_t initial_attributes{0};
@@ -144,5 +148,40 @@ TEST(Visitor, AppendXmlId) {
 
     EXPECT_TRUE(found_attribute)
         << "Did not find expected <manifest> attribute";
+  }
+}
+
+TEST(Visitor, AppendXmlIdUtf8Pool) {
+  auto f = RedexMappedFile::open(get_env("test_views"));
+
+  arsc::SimpleXmlParser orig_parser;
+  orig_parser.visit((void*)f.const_data(), f.size());
+  auto& original_strings = orig_parser.global_strings();
+
+  android::Vector<char> vec;
+  size_t idx{UNSET};
+  std::string new_attr("fake");
+  auto ret = arsc::ensure_attribute_in_xml_doc(f.const_data(), f.size(),
+                                               new_attr, 0xf, &vec, &idx);
+  EXPECT_EQ(ret, android::OK);
+  EXPECT_FALSE(vec.empty());
+  EXPECT_EQ(idx, 0);
+
+  // Make sure the resulting string pool is still correct.
+  arsc::SimpleXmlParser parser;
+  EXPECT_TRUE(parser.visit((void*)vec.array(), vec.size()));
+  auto& string_pool = parser.global_strings();
+
+  EXPECT_EQ(string_pool.size(), original_strings.size() + 1);
+  EXPECT_EQ(arsc::get_string_from_pool(string_pool, idx), new_attr);
+  for (size_t i = 1; i < string_pool.size(); i++) {
+    size_t a_len;
+    auto a = string_pool.string8At(i, &a_len);
+
+    size_t b_len;
+    auto b = original_strings.string8At(i - 1, &b_len);
+
+    EXPECT_EQ(a_len, b_len) << "Wrong string length at idx: " << i;
+    EXPECT_EQ(strncmp(a, b, a_len), 0) << "Incorrect string data at idx: " << i;
   }
 }
