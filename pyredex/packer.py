@@ -327,7 +327,7 @@ def _compress(
                 compressor = _ZipCompressor(
                     name, item.checksum_name, item.compression_level
                 )
-            elif name.endswith(".zstd"):
+            elif name.endswith(".zst"):
                 compressor = _ZstdCompressor(
                     name, item.checksum_name, item.compression_level
                 )
