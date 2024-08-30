@@ -53,8 +53,8 @@ struct TypeDefinition {
 // (example: children of
 // https://developer.android.com/reference/androidx/coordinatorlayout/widget/CoordinatorLayout).
 const inline std::set<std::string> POSSIBLE_CLASS_ATTRIBUTES = {
-    "actionViewClass", "class", "controller",  "layout_behavior",
-    "layoutManager",   "name",  "targetClass",
+    "actionViewClass", "argType",       "class", "controller",
+    "layout_behavior", "layoutManager", "name",  "targetClass",
 };
 // Returns false if there is no dot or it's not a Java identifier.
 bool valid_xml_element(const std::string& ident);
