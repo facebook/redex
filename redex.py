@@ -1400,7 +1400,7 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             False,
             ["redex-full-rename-map.txt"],
             [],
-            "redex-full-rename-map.txt.zstd",
+            "redex-full-rename-map.txt.zst",
             None,
             CompressionLevel.DEFAULT,  # Bit larger.
         ),
@@ -1410,7 +1410,7 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             True,
             ["redex-full-rename-map.json"],
             [],
-            "redex-full-rename-map.json.zstd",
+            "redex-full-rename-map.json.zst",
             None,
             CompressionLevel.DEFAULT,  # Bit larger.
         ),
