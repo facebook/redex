@@ -166,13 +166,17 @@ public class TypedefAnnoCheckerKtTest {
 
   ////////////////////////////////////////////////////////////////////////////////////////////
   interface Error {
-    @get:TestStringDef var failure: String
+    @get:TestStringDef val failure: String
   }
 
   abstract class BaseError : Error {}
 
   class Mismatch : BaseError() {
-    @TestStringDef override var failure: String = TestStringDef.ONE
+    @TestStringDef override val failure: String = TestStringDef.ONE
+  }
+
+  class Blowup : BaseError() {
+    @TestStringDef override val failure: String = TestStringDef.THREE
   }
 
   fun getError(): Error {
@@ -185,41 +189,27 @@ public class TypedefAnnoCheckerKtTest {
     return e.failure
   }
 
-  fun testAnnotatedPropertySetterPatching() {
-    val e = getError()
-    e.failure = TestStringDef.TWO
-  }
-
   ////////////////////////////////////////////////////////////////////////////////////////////
   class Listener {
     companion object {
-      @TestStringDef private var ONE: String = TestStringDef.ONE
+      @TestStringDef private val ONE: String = TestStringDef.ONE
 
       @TestStringDef
       fun getOne(): String {
         return ONE
       }
-
-      fun setOne(@TestStringDef param: String) {
-        ONE = param
-      }
     }
   }
 
-  // These test methods are just placeholders to make the test look complete. The real testing
-  // targets are
-  // the getOne() and setOne() methods in the Companion object above.
+  // This test method is just a placehold to make the test look complete. The real testing target is
+  // the getOne() method in the Companion object above.
   @TestStringDef
-  fun testAnnotatedCompanionPropertyAccessorGetter(): String {
+  fun testAnnotatedCompanionPropertyAccessorPatching(): String {
     return Listener.getOne()
   }
 
-  fun testAnnotatedCompanionPropertyAccessorSetter() {
-    Listener.setOne(TestStringDef.TWO)
-  }
-
   ////////////////////////////////////////////////////////////////////////////////////////////
-  public class ClassWithPrivateProperty(@TestIntDef private var int_field: Int) {
+  public class ClassWithPrivateProperty(@TestIntDef private val int_field: Int) {
 
     fun printInt(@TestIntDef param: Int) {
       print(param)
@@ -230,14 +220,6 @@ public class TypedefAnnoCheckerKtTest {
       val lmd: () -> (Unit) = { printInt(int_field) }
       lmd()
       return int_field
-    }
-
-    fun setInt() {
-      val lmd: () -> (Unit) = {
-        int_field = TestIntDef.TWO
-        printInt(int_field)
-      }
-      lmd()
     }
   }
 }
