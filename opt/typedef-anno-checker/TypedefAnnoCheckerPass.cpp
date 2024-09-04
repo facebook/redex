@@ -267,60 +267,6 @@ void patch_return_anno_from_get(type_inference::TypeInference& inference,
 
 } // namespace
 
-// https://kotlinlang.org/docs/fun-interfaces.html#sam-conversions
-// sam conversions appear in Kotlin and provide a more concise way to override
-// methods. This method handles sam conversiona and all synthetic methods that
-// override methods with return or parameter annotations
-bool SynthAccessorPatcher::patch_synth_methods_overriding_annotated_methods(
-    DexMethod* m) {
-  DexClass* cls = type_class(m->get_class());
-  if (!klass::maybe_anonymous_class(cls)) {
-    return false;
-  }
-
-  auto callees = mog::get_overridden_methods(m_method_override_graph, m,
-                                             true /*include_interfaces*/);
-  for (auto callee : callees) {
-    auto return_anno =
-        type_inference::get_typedef_anno_from_member(callee, m_typedef_annos);
-
-    if (return_anno != boost::none) {
-      DexAnnotationSet anno_set = DexAnnotationSet();
-      anno_set.add_annotation(std::make_unique<DexAnnotation>(
-          DexType::make_type(return_anno.get()->get_name()), DAV_RUNTIME));
-      add_annotations(m, &anno_set);
-    }
-
-    if (callee->get_param_anno() == nullptr) {
-      continue;
-    }
-    for (auto const& param_anno : *callee->get_param_anno()) {
-      auto annotation = type_inference::get_typedef_annotation(
-          param_anno.second->get_annotations(), m_typedef_annos);
-      if (annotation == boost::none) {
-        continue;
-      }
-
-      DexAnnotationSet anno_set = DexAnnotationSet();
-      anno_set.add_annotation(std::make_unique<DexAnnotation>(
-          DexType::make_type(annotation.get()->get_name()), DAV_RUNTIME));
-      if (m->get_param_anno()) {
-        m->get_param_anno()
-            ->at(param_anno.first)
-            ->add_annotation(std::make_unique<DexAnnotation>(
-                DexType::make_type(annotation.get()->get_name()), DAV_RUNTIME));
-      } else {
-        DexAccessFlags access = m->get_access();
-        m->set_access(ACC_SYNTHETIC);
-        m->attach_param_annotation_set(
-            param_anno.first, std::make_unique<DexAnnotationSet>(anno_set));
-        m->set_access(access);
-      }
-    }
-  }
-  return false;
-}
-
 bool SynthAccessorPatcher::is_kotlin_annotated_property_getter_setter(
     DexMethod* m) {
   if (!boost::starts_with(m->get_simple_deobfuscated_name(), "get") &&
@@ -471,7 +417,6 @@ void SynthAccessorPatcher::run(const Scope& scope) {
     if (is_synthetic_kotlin_annotations_method(m)) {
       patch_kotlin_annotations(m);
     }
-    patch_synth_methods_overriding_annotated_methods(m);
     if (is_constructor(m)) {
       if (m->get_param_anno()) {
         patch_synth_cls_fields_from_ctor_param(m);

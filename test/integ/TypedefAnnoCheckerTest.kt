@@ -10,10 +10,6 @@ package com.facebook.redextest
 import integ.TestIntDef
 import integ.TestStringDef
 
-fun interface SAMInterface {
-  fun setString(@TestStringDef sam_string: String)
-}
-
 public class ClassWithParams(@TestIntDef var int_field: Int) {}
 
 public class ClassWithDefaultParams(@TestIntDef var int_field: Int = TestIntDef.THREE) {}
@@ -24,7 +20,6 @@ public class TypedefAnnoCheckerKtTest {
   @TestStringDef var var_field: String = TestStringDef.THREE
   @NotSafeAnno val field_not_safe: String = "4"
   @TestIntDef var field_int: Int = TestIntDef.ONE
-  private val sam_interface = SAMInterface { sam_string -> var_field = sam_string }
 
   companion object {
     @TestStringDef val companion_val: String = TestStringDef.ONE
