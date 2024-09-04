@@ -280,6 +280,18 @@ class FlatMap final
       break;
     }
     default: {
+#if (BOOST_VERSION / 100) >= 1086
+      // TODO(T200541423): Boost 1.86.0 has a bug with `extract_sequence()` and
+      // `adopt_sequence`. Let's disable the optimization for now. See
+      // https://github.com/boostorg/container/issues/288
+      for (auto it = m_map.begin(); it != m_map.end();) {
+        if (!predicate(it->first, it->second)) {
+          it = m_map.erase(it);
+        } else {
+          ++it;
+        }
+      }
+#else
       // Use boost `flat_map` API to get the underlying container and
       // apply a remove_if + erase. This allows to perform a filter in O(n).
       auto container = m_map.extract_sequence();
@@ -293,6 +305,7 @@ class FlatMap final
           container.end());
       m_map.adopt_sequence(boost::container::ordered_unique_range,
                            std::move(container));
+#endif
       break;
     }
     }
