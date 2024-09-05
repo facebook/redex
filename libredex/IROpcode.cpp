@@ -883,6 +883,8 @@ bool may_throw(IROpcode op) {
   case OPCODE_NEW_INSTANCE:
   case OPCODE_NEW_ARRAY:
   case OPCODE_FILLED_NEW_ARRAY:
+  case OPCODE_FILL_ARRAY_DATA:
+  case OPCODE_THROW:
   case OPCODE_AGET:
   case OPCODE_AGET_WIDE:
   case OPCODE_AGET_OBJECT:
@@ -938,6 +940,8 @@ bool may_throw(IROpcode op) {
   case OPCODE_REM_LONG:
   case OPCODE_DIV_INT_LIT:
   case OPCODE_REM_INT_LIT:
+  case OPCODE_CONST_METHOD_HANDLE:
+  case OPCODE_CONST_METHOD_TYPE:
     return true;
   default:
     return false;

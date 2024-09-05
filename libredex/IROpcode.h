@@ -91,6 +91,10 @@ bool is_commutative(IROpcode opcode);
 
 bool is_binop64(IROpcode op);
 
+/**
+ * Update according to
+ * https://cs.android.com/android/platform/superproject/main/+/main:art/libdexfile/dex/dex_instruction_list.h
+ */
 bool may_throw(IROpcode);
 
 /**
