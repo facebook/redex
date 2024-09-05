@@ -5,16 +5,17 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <assert.h>
 #include <exception>
 #include <stdexcept>
-#include <assert.h>
+
+// clang-format off (import order matters)
 #include "locator.h"
+// clang-format on
 
 namespace facebook {
 
-Locator
-Locator::make(uint32_t str, uint32_t dex, uint32_t cls)
-{
+Locator Locator::make(uint32_t str, uint32_t dex, uint32_t cls) {
   if (str >= (1 << strnr_bits)) {
     throw std::runtime_error("too many dex stores");
   }
@@ -30,13 +31,11 @@ Locator::make(uint32_t str, uint32_t dex, uint32_t cls)
   return Locator(str, dex, cls);
 }
 
-uint32_t
-Locator::encode(char buf[encoded_max]) noexcept
-{
+uint32_t Locator::encode(char buf[encoded_max]) noexcept {
   uint64_t value = ((uint64_t)strnr) << clsnr_bits;
   value = (value | clsnr) << dexnr_bits;
   value = (value | dexnr);
-  uint8_t* pos = (uint8_t*) &buf[0];
+  uint8_t* pos = (uint8_t*)&buf[0];
   while (value != 0) {
     uint8_t enc = (value % base) + bias;
     assert((enc & 0x80) == 0);
@@ -45,7 +44,7 @@ Locator::encode(char buf[encoded_max]) noexcept
     value /= base;
   }
   *pos = '\0';
-  uint32_t len = (pos - (uint8_t*) buf);
+  uint32_t len = (pos - (uint8_t*)buf);
   assert(len <= encoded_max);
   return len;
 }
@@ -62,8 +61,9 @@ static char getDigit(uint32_t num) {
 }
 
 void Locator::encodeGlobalClassIndex(
-    uint32_t globalClassIndex, size_t digits, char buf[encoded_global_class_index_max]) noexcept
-{
+    uint32_t globalClassIndex,
+    size_t digits,
+    char buf[encoded_global_class_index_max]) noexcept {
   assert(digits > 0 && digits <= global_class_index_digits_max);
 
   char* pos = buf;
@@ -86,4 +86,4 @@ void Locator::encodeGlobalClassIndex(
   assert(static_cast<uint32_t>(pos - buf) <= encoded_global_class_index_max);
 }
 
-}
+} // namespace facebook

@@ -138,16 +138,16 @@ class Locator {
   constexpr static const uint64_t bits = strnr_bits + dexnr_bits + clsnr_bits;
 
   constexpr static const uint64_t dexmask = (1LL << dexnr_bits) - 1;
-  constexpr static const uint64_t clsmask = ((1LL << (dexnr_bits + clsnr_bits)) - 1)
-                                            & ~dexmask;
-  constexpr static const uint64_t strmask = ((1LL << (strnr_bits + clsnr_bits + dexnr_bits)) - 1)
-                                            & ~(dexmask | clsmask);
+  constexpr static const uint64_t clsmask =
+      ((1LL << (dexnr_bits + clsnr_bits)) - 1) & ~dexmask;
+  constexpr static const uint64_t strmask =
+      ((1LL << (strnr_bits + clsnr_bits + dexnr_bits)) - 1) &
+      ~(dexmask | clsmask);
 
   constexpr static const unsigned base = 94;
   constexpr static const unsigned bias = '!'; // 33
 
  public:
-
   const uint32_t strnr;
   const uint32_t dexnr; // 0 == special
   const uint32_t clsnr;
@@ -167,20 +167,21 @@ class Locator {
   // Encoded global class indices are of the form "LX/000000;" with at most
   // six digits.
   constexpr static const uint32_t global_class_index_digits_max = 6;
-  constexpr static const uint32_t encoded_global_class_index_max = 3 + global_class_index_digits_max + 1 + 1;
+  constexpr static const uint32_t encoded_global_class_index_max =
+      3 + global_class_index_digits_max + 1 + 1;
   static void encodeGlobalClassIndex(
-      uint32_t globalClassIndex, size_t digits, char buf[encoded_global_class_index_max]) noexcept;
+      uint32_t globalClassIndex,
+      size_t digits,
+      char buf[encoded_global_class_index_max]) noexcept;
   constexpr static const uint32_t invalid_global_class_index = 0xFFFFFFFF;
-      static inline uint32_t decodeGlobalClassIndex(
-          const char* descriptor) noexcept;
+  static inline uint32_t decodeGlobalClassIndex(
+      const char* descriptor) noexcept;
 
   Locator(uint32_t str, uint32_t dex, uint32_t cls)
       : strnr(str), dexnr(dex), clsnr(cls) {}
 };
 
-Locator
-Locator::decodeBackward(const char* endpos) noexcept
-{
+Locator Locator::decodeBackward(const char* endpos) noexcept {
   // N.B. Because we _encode_ little-endian, when we _decode_
   // backward, we decode big-endian.
 

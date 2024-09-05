@@ -5,15 +5,16 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <cstdlib>
 #include <iostream>
 #include <vector>
-#include <cstdlib>
 
 #include <locator.h>
 
 using namespace std;
 using namespace facebook;
 
+// clang-format off
 void print_usage() {
   cout << "Usage:" << endl;
   cout << "  locatortool d" << endl;
@@ -26,6 +27,7 @@ void print_usage() {
   cout << "      -h | --hex   Print a hexdump of the locator instead of the raw string" << endl;
   cout << endl;
 }
+// clang-format on
 
 int main(int argc, char* argv[]) {
   if (argc < 2) {
@@ -43,7 +45,8 @@ int main(int argc, char* argv[]) {
       case 'd': {
         string locator_str;
         cin >> locator_str;
-        Locator locator = Locator::decodeBackward(locator_str.c_str() + locator_str.size());
+        Locator locator =
+            Locator::decodeBackward(locator_str.c_str() + locator_str.size());
         cout << "class: " << locator.clsnr << endl;
         cout << "dex  : " << locator.dexnr << endl;
         cout << "store: " << locator.strnr << endl;
