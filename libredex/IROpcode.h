@@ -94,6 +94,7 @@ bool is_binop64(IROpcode op);
 /**
  * Update according to
  * https://cs.android.com/android/platform/superproject/main/+/main:art/libdexfile/dex/dex_instruction_list.h
+ * except OPCODE_THROW, this get covered in can_throw
  */
 bool may_throw(IROpcode);
 
@@ -113,6 +114,10 @@ bool may_throw(IROpcode);
   inline bool is_##LC(IROpcode op) { return op == IOPCODE_##UC; }
 #include "IROpcodes.def"
 
+/**
+ * Should represent value in
+ * https://cs.android.com/android/platform/superproject/main/+/main:art/libdexfile/dex/dex_instruction_list.h
+ */
 inline bool can_throw(IROpcode op) { return may_throw(op) || is_throw(op); }
 
 inline bool writes_result_register(IROpcode op) {

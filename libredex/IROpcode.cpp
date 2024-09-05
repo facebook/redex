@@ -884,7 +884,6 @@ bool may_throw(IROpcode op) {
   case OPCODE_NEW_ARRAY:
   case OPCODE_FILLED_NEW_ARRAY:
   case OPCODE_FILL_ARRAY_DATA:
-  case OPCODE_THROW:
   case OPCODE_AGET:
   case OPCODE_AGET_WIDE:
   case OPCODE_AGET_OBJECT:
