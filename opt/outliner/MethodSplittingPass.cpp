@@ -22,6 +22,8 @@
 using namespace method_splitting_impl;
 
 void MethodSplittingPass::bind_config() {
+  bind("split_clinits", m_config.split_clinits, m_config.split_clinits,
+       "Whether to consider splitting clinits");
   bind("split_block_size", m_config.split_block_size, m_config.split_block_size,
        "Splits blocks so that no block has more opcodes than this size");
   bind("min_original_size", m_config.min_original_size,

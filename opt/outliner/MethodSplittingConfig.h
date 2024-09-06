@@ -15,6 +15,7 @@
 namespace method_splitting_impl {
 
 struct Config {
+  bool split_clinits{true};
   uint64_t split_block_size{100};
   uint64_t min_original_size{5000};
   uint64_t min_original_size_too_large_for_inlining{1500};

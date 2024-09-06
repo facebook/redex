@@ -451,6 +451,9 @@ void split_methods_in_stores(
   }
 
   auto is_excluded = [&](DexMethod* method) {
+    if (!config.split_clinits && method::is_clinit(method)) {
+      return true;
+    }
     auto name = method->get_deobfuscated_name_or_empty();
     for (const auto& prefix : config.excluded_prefices) {
       if (name.substr(0, prefix.size()) == prefix) {
