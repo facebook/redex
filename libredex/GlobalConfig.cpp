@@ -162,8 +162,6 @@ void GlobalConfig::bind_config() {
   bind("iodi_layer_mode", "full", string_param,
        "IODI layer mode. One of \"full\", \"skip-layer-0-at-api-26\" or "
        "\"always-skip-layer-0\"");
-  bind("symbolicate_detached_methods", false, bool_param);
-  bind("enable_quickening", false, bool_param);
   bind("force_single_dex", false, bool_param);
   bind("emit_incoming_hashes", false, bool_param);
   bind("emit_outgoing_hashes", false, bool_param);
@@ -174,7 +172,6 @@ void GlobalConfig::bind_config() {
   bind("record_accessed_rules", true, bool_param);
   bind("keep_methods", {}, string_vector_param);
   bind("keep_packages", {}, string_vector_param);
-  bind("legacy_reflection_reachability", false, bool_param);
   bind("lower_with_cfg", {}, bool_param);
   bind("no_optimizations_annotations", {}, string_vector_param);
   bind("no_optimizations_blocklist", {}, string_vector_param);
