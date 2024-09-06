@@ -13,6 +13,8 @@
 #include <utility>
 #include <vector>
 
+namespace baseline_profiles {
+
 // Note: Not everything is relevant to Redex in here. This should mostly 1:1
 // map to the JSON config currently being passed to the baseline profile
 // driver.
@@ -49,3 +51,5 @@ struct BaselineProfileConfig {
   std::vector<std::pair<std::string, std::string>> interactions;
   BaselineProfileOptions options;
 };
+
+} // namespace baseline_profiles
