@@ -49,5 +49,6 @@ class ArtProfileWriterPass : public Pass {
   PerfConfig m_perf_config;
   bool m_never_inline_estimate;
   bool m_never_inline_attach_annotations;
+  bool m_legacy_mode;
   std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
 };
