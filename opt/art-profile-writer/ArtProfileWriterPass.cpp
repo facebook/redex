@@ -35,6 +35,19 @@ struct ArtProfileEntryFlags {
   bool not_startup{false};
 };
 
+using MethodFlags =
+    std::unordered_map<const DexMethodRef*, ArtProfileEntryFlags>;
+
+// Only certain "hot" methods get compiled.
+bool is_compiled(DexMethod* method, const ArtProfileEntryFlags& flags) {
+  return flags.hot && !method::is_clinit(method);
+}
+
+bool is_compiled(const MethodFlags& method_flags, DexMethod* method) {
+  auto it = method_flags.find(method);
+  return it != method_flags.end() && is_compiled(method, it->second);
+}
+
 bool is_simple(DexMethod* method, IRInstruction** invoke_insn = nullptr) {
   auto* code = method->get_code();
   always_assert(code->editable_cfg_built());
@@ -86,12 +99,6 @@ void never_inline(bool attach_annotations,
       type::dalvik_annotation_optimization_NeverInline(),
       DexAnnotationVisibility::DAV_BUILD));
 
-  // Only "hot" methods get compiled.
-  auto is_hot = [&](DexMethod* method) {
-    auto it = method_flags.find(method);
-    return it != method_flags.end() && it->second.hot;
-  };
-
   auto consider_callee = [&](DexMethod* callee) {
     if (callee == nullptr || !callee->get_code()) {
       return false;
@@ -128,7 +135,7 @@ void never_inline(bool attach_annotations,
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
     auto ecu = code.estimate_code_units();
     estimated_code_units.emplace(caller, ecu);
-    if (!is_hot(caller)) {
+    if (!is_compiled(method_flags, caller)) {
       return;
     }
     if (ecu > 2048) {
@@ -147,7 +154,7 @@ void never_inline(bool attach_annotations,
           continue;
         }
 
-        if (is_hot(callee)) {
+        if (is_compiled(method_flags, callee)) {
           hot_hot_callees.insert(callee);
         } else {
           hot_cold_callees.insert(callee);
@@ -322,7 +329,6 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
   mgr.incr_metric("min_sdk", min_sdk);
   auto end = min_sdk >= 21 ? dexen.size() : 1;
-  std::unordered_set<DexMethod*> methods_with_baseline_profile;
   size_t classes_with_baseline_profile = 0;
   for (size_t dex_idx = 0; dex_idx < end; dex_idx++) {
     auto& dex = dexen.at(dex_idx);
@@ -345,7 +351,6 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
         boost::replace_all(descriptor, ".", "->");
         boost::replace_all(descriptor, ":(", "(");
         ofs << it->second << descriptor << std::endl;
-        methods_with_baseline_profile.insert(method);
       }
       if (should_include_class) {
         ofs << show_deobfuscated(cls) << std::endl;
@@ -355,10 +360,21 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   }
 
   auto scope = build_class_scope(stores);
+  std::atomic<size_t> methods_with_baseline_profile{0};
   std::atomic<size_t> methods_with_baseline_profile_code_units{0};
+  std::atomic<size_t> compiled{0};
+  std::atomic<size_t> compiled_code_units{0};
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    if (methods_with_baseline_profile.count(method)) {
-      methods_with_baseline_profile_code_units += code.estimate_code_units();
+    auto it = method_flags.find(method);
+    if (it == method_flags.end()) {
+      return;
+    }
+    auto ecu = code.estimate_code_units();
+    methods_with_baseline_profile++;
+    methods_with_baseline_profile_code_units += ecu;
+    if (is_compiled(method, it->second)) {
+      compiled++;
+      compiled_code_units += ecu;
     }
   });
 
@@ -366,10 +382,14 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
                   classes_with_baseline_profile);
 
   mgr.incr_metric("methods_with_baseline_profile",
-                  methods_with_baseline_profile.size());
+                  (size_t)methods_with_baseline_profile);
 
   mgr.incr_metric("methods_with_baseline_profile_code_units",
                   (size_t)methods_with_baseline_profile_code_units);
+
+  mgr.incr_metric("compiled", (size_t)compiled);
+
+  mgr.incr_metric("compiled_code_units", (size_t)compiled_code_units);
 
   if (!m_never_inline_estimate && !m_never_inline_attach_annotations) {
     return;
