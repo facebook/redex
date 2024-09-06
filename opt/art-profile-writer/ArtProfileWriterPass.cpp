@@ -35,8 +35,7 @@ struct ArtProfileEntryFlags {
   bool not_startup{false};
 };
 
-using MethodFlags =
-    std::unordered_map<const DexMethodRef*, ArtProfileEntryFlags>;
+using MethodFlags = std::unordered_map<const DexMethod*, ArtProfileEntryFlags>;
 
 // Only certain "hot" methods get compiled.
 bool is_compiled(DexMethod* method, const ArtProfileEntryFlags& flags) {
@@ -91,7 +90,7 @@ bool is_simple(DexMethod* method, IRInstruction** invoke_insn = nullptr) {
 
 void never_inline(bool attach_annotations,
                   const Scope& scope,
-                  const std::unordered_map<const DexMethodRef*,
+                  const std::unordered_map<const DexMethod*,
                                            ArtProfileEntryFlags>& method_flags,
                   PassManager& mgr) {
   DexAnnotationSet anno_set;
@@ -289,11 +288,17 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   }
 
   const auto& method_profiles = conf.get_method_profiles();
-  std::unordered_map<const DexMethodRef*, ArtProfileEntryFlags> method_flags;
+  MethodFlags method_flags;
+  std::unordered_set<const DexMethodRef*> method_refs_without_def;
   for (auto& interaction_id : m_perf_config.interactions) {
     bool startup = interaction_id == "ColdStart";
     const auto& method_stats = method_profiles.method_stats(interaction_id);
-    for (auto&& [method, stat] : method_stats) {
+    for (auto&& [method_ref, stat] : method_stats) {
+      auto method = method_ref->as_def();
+      if (method == nullptr) {
+        method_refs_without_def.insert(method_ref);
+        continue;
+      }
       // for startup interaction, we can include it into baseline profile
       // as non hot method if the method appear100 is above nonhot_threshold
       if (stat.appear_percent >=
@@ -390,6 +395,8 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric("compiled", (size_t)compiled);
 
   mgr.incr_metric("compiled_code_units", (size_t)compiled_code_units);
+
+  mgr.incr_metric("method_refs_without_def", method_refs_without_def.size());
 
   if (!m_never_inline_estimate && !m_never_inline_attach_annotations) {
     return;
