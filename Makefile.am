@@ -109,6 +109,7 @@ libredex_la_SOURCES = \
 	libredex/ApkResources.cpp \
 	libredex/AssetManager.cpp \
 	libredex/BalancedPartitioning.cpp \
+	libredex/BaselineProfile.cpp \
 	libredex/BigBlocks.cpp \
 	libredex/BundleResources.cpp \
 	libredex/CFGMutation.cpp \
