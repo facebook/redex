@@ -32,6 +32,9 @@ struct Stats {
   std::atomic<size_t> dex_limits_hit{0};
   std::atomic<size_t> added_code_size{0};
   std::atomic<size_t> split_code_size{0};
+  std::atomic<size_t> kept_large_packed_switches{0};
+  std::atomic<size_t> created_large_sparse_switches{0};
+  std::atomic<size_t> destroyed_large_packed_switches{0};
   std::unordered_set<DexMethod*> added_methods;
   std::atomic<size_t> excluded_methods{0};
   size_t iterations{0};

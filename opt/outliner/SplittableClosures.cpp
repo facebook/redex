@@ -11,6 +11,7 @@
 
 #include "ClosureAggregator.h"
 #include "ConcurrentContainers.h"
+#include "InstructionLowering.h"
 #include "Lazy.h"
 #include "Liveness.h"
 #include "OutlinerTypeAnalysis.h"
@@ -35,6 +36,9 @@ struct ScoredClosure {
   size_t split_size{};
   size_t remaining_size{};
   HotSplitKind hot_split_kind{};
+  bool is_large_packed_switch{false};
+  bool creates_large_sparse_switch{false};
+  bool destroys_large_packed_switch{false};
   std::vector<ClosureArgument> args{};
 
   int is_switch() const { return switch_block ? 1 : 0; }
@@ -54,7 +58,8 @@ struct ScoredClosure {
 std::unordered_set<const ReducedEdge*> get_except_preds(
     cfg::Block* switch_block,
     const std::vector<const Closure*>& closures,
-    const std::unordered_set<const ReducedBlock*>& reduced_components) {
+    const std::unordered_set<const ReducedBlock*>& reduced_components,
+    std::unordered_set<int32_t>* except_case_keys) {
   std::unordered_set<const ReducedEdge*> except_preds;
   for (auto* c : closures) {
     except_preds.insert(c->reduced_block->preds.begin(),
@@ -70,12 +75,39 @@ std::unordered_set<const ReducedEdge*> get_except_preds(
           if (e->src() != switch_block) {
             except_preds.erase(pred);
             break;
+          } else if (e->type() == cfg::EDGE_BRANCH) {
+            except_case_keys->insert(*e->case_key());
           }
         }
       }
     }
   }
   return except_preds;
+}
+
+bool is_large(const Config& config,
+              cfg::Block* switch_block,
+              const std::unordered_set<int32_t>* except_case_keys = nullptr) {
+  // ">" and not ">=" because the succs include the default edge.
+  return switch_block->succs().size() -
+             (except_case_keys ? except_case_keys->size() : 0) >
+         config.min_large_switch_size;
+}
+
+bool is_packed(cfg::Block* switch_block,
+               const std::unordered_set<int32_t>* except_case_keys = nullptr) {
+  instruction_lowering::CaseKeysExtentBuilder ckeb;
+  for (auto* e : switch_block->succs()) {
+    if (e->type() != cfg::EDGE_BRANCH) {
+      continue;
+    }
+    auto case_key = *e->case_key();
+    if (except_case_keys && except_case_keys->count(case_key)) {
+      continue;
+    }
+    ckeb.insert(case_key);
+  }
+  return !ckeb->sufficiently_sparse();
 }
 
 std::optional<ScoredClosure> score(
@@ -149,8 +181,29 @@ std::optional<ScoredClosure> score(
     not_reached();
   }
 
-  auto except_preds =
-      get_except_preds(switch_block, closures, sc.reduced_components);
+  if (switch_block) {
+    sc.is_large_packed_switch =
+        is_large(config, switch_block) && is_packed(switch_block);
+  }
+
+  std::unordered_set<int32_t> except_case_keys;
+  auto except_preds = get_except_preds(
+      switch_block, closures, sc.reduced_components, &except_case_keys);
+  if (sc.is_large_packed_switch) {
+    sc.destroys_large_packed_switch =
+        is_large(config, switch_block, &except_case_keys) &&
+        !is_packed(switch_block, &except_case_keys);
+    if (except_case_keys.size() >= config.min_large_switch_size) {
+      instruction_lowering::CaseKeysExtentBuilder ckeb;
+      for (auto case_key : except_case_keys) {
+        ckeb.insert(case_key);
+      }
+      if (ckeb->sufficiently_sparse()) {
+        sc.creates_large_sparse_switch = true;
+      }
+    }
+  }
+
   auto& rcfg = *mcs.rcfg;
   auto remaining_blocks = rcfg.reachable(rcfg.entry_block(), except_preds);
   sc.remaining_size = code_size(remaining_blocks);
@@ -450,7 +503,8 @@ std::vector<SplittableClosure> to_splittable_closures(
         sc.split_size + sc.remaining_size - mcs->original_size;
     splittable_closures.push_back((SplittableClosure){
         mcs, sc.switch_block, std::move(sc.closures), std::move(sc.args), rank,
-        added_code_size, sc.hot_split_kind});
+        added_code_size, sc.hot_split_kind, sc.is_large_packed_switch,
+        sc.creates_large_sparse_switch, sc.destroys_large_packed_switch});
   }
   return splittable_closures;
 };

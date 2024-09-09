@@ -116,6 +116,12 @@ void MethodSplittingPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("dex_limits_hit", (size_t)stats.dex_limits_hit);
   mgr.set_metric("added_code_size", (size_t)stats.added_code_size);
   mgr.set_metric("split_code_size", (size_t)stats.split_code_size);
+  mgr.set_metric("kept_large_packed_switches",
+                 (size_t)stats.kept_large_packed_switches);
+  mgr.set_metric("destroyed_large_packed_switches",
+                 (size_t)stats.destroyed_large_packed_switches);
+  mgr.set_metric("created_large_sparse_switches",
+                 (size_t)stats.created_large_sparse_switches);
   mgr.set_metric("new_hot_split_methods",
                  concurrent_new_hot_split_methods.size());
   mgr.set_metric("derived_method_profile_stats", derived_method_profile_stats);
