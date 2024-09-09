@@ -205,7 +205,7 @@ void InterDexPass::run_pass(
 
   auto final_scope = build_class_scope(stores);
   for (const auto& plugin : plugins) {
-    plugin->cleanup(final_scope);
+    plugin->cleanup(final_scope, mgr);
   }
   mgr.set_metric(METRIC_COLD_START_SET_DEX_COUNT,
                  interdex.get_num_cold_start_set_dexes());

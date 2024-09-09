@@ -41,7 +41,7 @@ class InterDexPassPlugin {
 
   // Run plugin cleanup and finalization here. InterDex Pass should run
   // this after running its implementation
-  virtual void cleanup(const std::vector<DexClass*>&) {}
+  virtual void cleanup(const std::vector<DexClass*>&, PassManager&) {}
 
   const std::string& name() const { return m_name; }
 
