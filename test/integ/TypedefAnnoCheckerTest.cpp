@@ -1560,3 +1560,31 @@ TEST_F(TypedefAnnoCheckerTest, TestClassPrivatePropertySetter) {
   auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
+
+TEST_F(TypedefAnnoCheckerTest, TestSAM) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerKtTest$sam_interface$1;."
+                     "setString:(Ljava/lang/String;)V")
+                     ->as_def();
+
+  // set the deobfuscated name manually since it doesn't get set by default in
+  // integ tests
+  method->set_deobfuscated_name(
+      "Lcom/facebook/redextest/"
+      "TypedefAnnoCheckerKtTest$sam_interface$1;."
+      "setString:(Ljava/lang/String;)V");
+  std::cerr << SHOW(method->get_code()->cfg()) << "\n";
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  DexClass* synth_class = type_class(method->get_class());
+  synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_TRUE(checker.complete());
+}
