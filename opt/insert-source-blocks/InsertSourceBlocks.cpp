@@ -881,6 +881,10 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
                         mgr,
                         /* serialize= */ m_force_serialize || is_instr_mode,
                         m_insert_after_excs);
+
+  for (auto&& [interaction_id, index] : g_redex->get_sb_interaction_indices()) {
+    mgr.set_metric("interaction_" + interaction_id, index);
+  }
 }
 
 static InsertSourceBlocksPass s_pass;
