@@ -748,10 +748,10 @@ struct Injector {
     }
   }
 
-  template <typename T, typename Fn>
-  void sort_coldstart_and_set_indices(T& container, const Fn& fn) {
+  template <typename T, typename Fn, typename Pred>
+  void sort_and_set_indices(T& container, const Fn& fn, const Pred& pred) {
     std::sort(container.begin(), container.end(),
-              [&fn](const auto& lhs_in, const auto& rhs_in) {
+              [&fn, &pred](const auto& lhs_in, const auto& rhs_in) {
                 if (lhs_in == rhs_in) {
                   return false;
                 }
@@ -760,13 +760,7 @@ struct Injector {
                 if (lhs == rhs) {
                   return false;
                 }
-                if (lhs == "ColdStart") {
-                  return true;
-                }
-                if (rhs == "ColdStart") {
-                  return false;
-                }
-                return lhs < rhs;
+                return pred(lhs, rhs);
               });
 
     std::unordered_map<std::string, size_t> interaction_indices;
@@ -787,7 +781,30 @@ struct Injector {
   }
 
   void prepare_profile_files_and_interactions(
-      const std::string& profile_files_str) {
+      const std::string& profile_files_str,
+      const std::vector<std::string>& ordered_interactions) {
+    std::unordered_map<std::string, size_t> ordered_interactions_indices;
+    for (auto& s : ordered_interactions) {
+      ordered_interactions_indices.emplace(s,
+                                           ordered_interactions_indices.size());
+    }
+    auto get_interaction_index =
+        [&](const std::string& interaction_id) -> size_t {
+      auto it = ordered_interactions_indices.find(interaction_id);
+      return it == ordered_interactions_indices.end()
+                 ? std::numeric_limits<size_t>::max()
+                 : it->second;
+    };
+    auto interaction_less = [&](const std::string& lhs,
+                                const std::string& rhs) -> bool {
+      auto lhs_index = get_interaction_index(lhs);
+      auto rhs_index = get_interaction_index(rhs);
+      if (lhs_index != rhs_index) {
+        return lhs_index < rhs_index;
+      }
+      return lhs < rhs;
+    };
+
     if (!profile_files_str.empty()) {
       Timer t("reading files");
       std::vector<std::string> files;
@@ -809,9 +826,10 @@ struct Injector {
       });
 
       // Sort the interactions.
-      sort_coldstart_and_set_indices(
+      sort_and_set_indices(
           profile_files,
-          [](const auto& u) -> const std::string& { return u->interaction; });
+          [](const auto& u) -> const std::string& { return u->interaction; },
+          interaction_less);
 
       std::transform(profile_files.begin(), profile_files.end(),
                      std::back_inserter(interactions),
@@ -823,9 +841,9 @@ struct Injector {
         std::transform(mp_map.begin(), mp_map.end(),
                        std::back_inserter(interactions),
                        [](const auto& p) { return p.first; });
-        sort_coldstart_and_set_indices(
-            interactions,
-            [](const auto& s) -> const std::string& { return s; });
+        sort_and_set_indices(
+            interactions, [](const auto& s) -> const std::string& { return s; },
+            interaction_less);
       }
     }
   }
@@ -863,6 +881,7 @@ void InsertSourceBlocksPass::bind_config() {
   bind("default_value", m_use_default_value, m_use_default_value,
        "Use a default value for the inserted source blocks. The default value "
        "is defined in SourceBlocks.cpp");
+  bind("ordered_interactions", {"ColdStart"}, m_ordered_interactions);
 }
 
 void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
@@ -873,7 +892,8 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
 
   Injector inj(conf, always_inject, m_use_default_value);
 
-  inj.prepare_profile_files_and_interactions(m_profile_files);
+  inj.prepare_profile_files_and_interactions(m_profile_files,
+                                             m_ordered_interactions);
   inj.write_unresolved_methods(
       conf.metafile("redex-isb-unresolved-methods.txt"));
 
