@@ -115,6 +115,7 @@ std::optional<ScoredClosure> score(
     const MethodClosures& mcs,
     float max_overhead_ratio,
     cfg::Block* switch_block,
+    bool is_large_packed_switch,
     const std::vector<const Closure*>& closures) {
   ScoredClosure sc{switch_block, closures};
   for (auto* c : closures) {
@@ -181,15 +182,11 @@ std::optional<ScoredClosure> score(
     not_reached();
   }
 
-  if (switch_block) {
-    sc.is_large_packed_switch =
-        is_large(config, switch_block) && is_packed(switch_block);
-  }
-
   std::unordered_set<int32_t> except_case_keys;
   auto except_preds = get_except_preds(
       switch_block, closures, sc.reduced_components, &except_case_keys);
-  if (sc.is_large_packed_switch) {
+  if (is_large_packed_switch) {
+    sc.is_large_packed_switch = true;
     sc.destroys_large_packed_switch =
         is_large(config, switch_block, &except_case_keys) &&
         !is_packed(switch_block, &except_case_keys);
@@ -198,9 +195,7 @@ std::optional<ScoredClosure> score(
       for (auto case_key : except_case_keys) {
         ckeb.insert(case_key);
       }
-      if (ckeb->sufficiently_sparse()) {
-        sc.creates_large_sparse_switch = true;
-      }
+      sc.creates_large_sparse_switch = ckeb->sufficiently_sparse();
     }
   }
 
@@ -239,12 +234,68 @@ std::unordered_set<const ReducedBlock*> get_critical_components(
   return critical_components;
 };
 
+std::optional<ScoredClosure> select_prefix(
+    const Config& config,
+    const MethodClosures& mcs,
+    float max_overhead_ratio,
+    cfg::Block* switch_block,
+    bool is_large_packed_switch,
+    std::vector<const Closure*> aggregated) {
+  while (aggregated.size() > 1) {
+    auto opt_sc = score(config, mcs, max_overhead_ratio, switch_block,
+                        is_large_packed_switch, aggregated);
+    if (opt_sc) {
+      return opt_sc;
+    }
+    aggregated.pop_back();
+  }
+  return std::nullopt;
+}
+
+std::vector<const Closure*> aggregate_half_packed(
+    const Closure* fallthrough,
+    const std::vector<std::pair<int32_t, const Closure*>>& keyed,
+    size_t switched_size) {
+  std::vector<const Closure*> aggregated{fallthrough};
+  size_t i = 0;
+  // Add up to half of all cases
+  while (i < keyed.size() && aggregated.size() * 2 <= switched_size) {
+    aggregated.push_back(keyed.at(i++).second);
+  }
+  return aggregated;
+}
+
+std::vector<const Closure*> aggregate_half_sparse(
+    const Closure* fallthrough,
+    const std::vector<std::pair<int32_t, const Closure*>>& keyed,
+    size_t switched_size) {
+  ClosureAggregator aggregator(get_critical_components(keyed, fallthrough));
+  for (auto [_, c] : keyed) {
+    aggregator.insert(c);
+  }
+  std::vector<const Closure*> aggregated{fallthrough};
+  // Select the seed case, which will influence all following cases.
+  // We start with the largest key, preferring aggregating a suffix.
+  auto seed = keyed.front().second;
+  aggregator.erase(seed);
+  aggregated.push_back(seed);
+
+  // Add up to half of all cases
+  while (!aggregator.empty() && aggregated.size() * 2 <= switched_size) {
+    auto c = aggregator.front();
+    aggregator.erase(c);
+    aggregated.push_back(c);
+  }
+  return aggregated;
+}
+
 // Find a set of switch cases that are worthwhile to split off
 std::optional<ScoredClosure> aggregate(
     const Config& config,
     const MethodClosures& mcs,
     float max_overhead_ratio,
     cfg::Block* switch_block,
+    bool is_large_packed_switch,
     const std::vector<const Closure*>& switched,
     const std::function<bool(const Closure*)>& predicate) {
   always_assert(!switched.empty());
@@ -276,32 +327,36 @@ std::optional<ScoredClosure> aggregate(
   // of the (sorted) case keys.
   std::sort(keyed.begin(), keyed.end(),
             [&](auto& p, auto& q) { return p.first > q.first; });
-  ClosureAggregator aggregator(get_critical_components(keyed, fallthrough));
-  for (auto [_, c] : keyed) {
-    aggregator.insert(c);
-  }
-  std::vector<const Closure*> aggregated{fallthrough};
-  // Select the seed case, which will influence all following cases.
-  // We start with the largest key, preferring aggregating a suffix.
-  auto seed = keyed.front().second;
-  aggregator.erase(seed);
-  aggregated.push_back(seed);
+  if (is_large_packed_switch) {
+    auto aggregate_half_packed_and_select_prefix = [&]() {
+      auto aggregated =
+          aggregate_half_packed(fallthrough, keyed, switched.size());
+      return select_prefix(config, mcs, max_overhead_ratio, switch_block,
+                           is_large_packed_switch, std::move(aggregated));
+    };
 
-  // Add up to half of all cases
-  while (!aggregator.empty() && aggregated.size() * 2 <= switched.size()) {
-    auto c = aggregator.front();
-    aggregator.erase(c);
-    aggregated.push_back(c);
-  }
-  while (aggregated.size() > 1) {
-    auto opt_sc =
-        score(config, mcs, max_overhead_ratio, switch_block, aggregated);
-    if (opt_sc) {
-      return opt_sc;
+    // First, consider suffix. Note that smallest keys are already last.
+    auto sc_opt = aggregate_half_packed_and_select_prefix();
+    if (sc_opt) {
+      return sc_opt;
     }
-    aggregated.pop_back();
+
+    // Second, consider prefix. For this, we reserve the order to put smallest
+    // case keys first.
+    std::reverse(keyed.begin(), keyed.end());
+    sc_opt = aggregate_half_packed_and_select_prefix();
+    if (sc_opt) {
+      return sc_opt;
+    }
+
+    // Otherwise, fall back to aggregation of arbitrarily switch cases
+    // Restore original order (smallest case keys last).
+    std::reverse(keyed.begin(), keyed.end());
   }
-  return std::nullopt;
+
+  auto aggregated = aggregate_half_sparse(fallthrough, keyed, switched.size());
+  return select_prefix(config, mcs, max_overhead_ratio, switch_block,
+                       is_large_packed_switch, std::move(aggregated));
 };
 
 // Select closures that meet the configured size thresholds, and score them.
@@ -315,7 +370,8 @@ std::vector<ScoredClosure> get_scored_closures(const Config& config,
       remaining_switch_case_closures;
   for (auto& c : mcs.closures) {
     auto opt_sc = score(config, mcs, max_overhead_ratio,
-                        /* switch_block */ nullptr, {&c});
+                        /* switch_block */ nullptr,
+                        /* is_large_packed_switch */ false, {&c});
     if (opt_sc) {
       scored_closures.push_back(std::move(*opt_sc));
     }
@@ -334,9 +390,11 @@ std::vector<ScoredClosure> get_scored_closures(const Config& config,
       [](const auto* c) { return c->reduced_block->is_hot; },
       [](const auto*) { return true; }};
   for (auto&& [switch_block, switched] : remaining_switch_case_closures) {
+    auto is_large_packed_switch =
+        is_large(config, switch_block) && is_packed(switch_block);
     for (const auto& predicate : predicates) {
       auto opt_sc = aggregate(config, mcs, max_overhead_ratio, switch_block,
-                              switched, predicate);
+                              is_large_packed_switch, switched, predicate);
       if (opt_sc) {
         scored_closures.push_back(std::move(*opt_sc));
         break;
