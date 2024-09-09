@@ -139,6 +139,20 @@ std::shared_ptr<const ReducedControlFlowGraph> reduce_cfg(
     DexMethod* method, std::optional<uint64_t> split_block_size) {
   auto code = method->get_code();
   auto& cfg = code->cfg();
+  for (auto* block : cfg.blocks()) {
+    auto* goes_to_block = block->goes_to_only_edge();
+    if (goes_to_block == nullptr) {
+      continue;
+    }
+    auto first_insn_it = goes_to_block->get_first_insn();
+    if (first_insn_it == goes_to_block->end()) {
+      continue;
+    }
+    if (opcode::is_a_return(first_insn_it->insn->opcode())) {
+      block->push_back(new IRInstruction(*first_insn_it->insn));
+      cfg.delete_succ_edges(block);
+    }
+  }
   cfg.remove_unreachable_blocks();
   if (split_block_size) {
     split_blocks(method, cfg, *split_block_size);
