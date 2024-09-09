@@ -471,6 +471,7 @@ ConcurrentMap<DexType*, std::vector<SplittableClosure>>
 select_splittable_closures_based_on_costs(
     const ConcurrentSet<DexMethod*>& methods,
     const Config& config,
+    InsertOnlyConcurrentSet<const DexMethod*>* concurrent_hot_methods,
     InsertOnlyConcurrentMap<DexMethod*, size_t>*
         concurrent_splittable_no_optimizations_methods) {
   Timer t("select_splittable_closures_based_on_costs");
@@ -478,9 +479,22 @@ select_splittable_closures_based_on_costs(
       concurrent_splittable_closures;
   auto concurrent_process_method = [&](DexMethod* method) {
     auto rcfg = reduce_cfg(method, config.split_block_size);
-    if ((rcfg->code_size() < config.min_original_size) &&
-        (!method->rstate.too_large_for_inlining_into() ||
-         rcfg->code_size() < config.min_original_size_too_large_for_inlining)) {
+    auto is_sufficiently_large = [&]() {
+      if (rcfg->code_size() >= config.min_original_size) {
+        return true;
+      }
+      if (concurrent_hot_methods && concurrent_hot_methods->count(method) &&
+          rcfg->code_size() >= config.min_original_size_hot_method) {
+        return true;
+      }
+      if (method->rstate.too_large_for_inlining_into() &&
+          rcfg->code_size() >=
+              config.min_original_size_too_large_for_inlining) {
+        return true;
+      }
+      return false;
+    };
+    if (!is_sufficiently_large()) {
       return;
     }
 
@@ -493,13 +507,17 @@ select_splittable_closures_based_on_costs(
     std::vector<ScoredClosure> scored_closures;
     auto adjustment = cfg.get_size_adjustment(
         /* assume_no_unreachable_blocks */ true);
+    bool is_hot = concurrent_hot_methods &&
+                  concurrent_hot_methods->count(method) &&
+                  mcs->original_size >= config.min_original_size_hot_method;
     bool is_huge =
         mcs->original_size + adjustment > config.huge_threshold ||
         (method->rstate.too_large_for_inlining_into() &&
          mcs->original_size >= config.min_original_size_too_large_for_inlining);
     auto begin = config.max_overhead_ratio;
-    auto end =
-        is_huge ? config.max_huge_overhead_ratio : config.max_overhead_ratio;
+    auto end = is_huge  ? config.max_huge_overhead_ratio
+               : is_hot ? config.max_hot_overhead_ratio
+                        : config.max_overhead_ratio;
     for (auto r = begin; scored_closures.empty() && r <= end; r *= 2) {
       scored_closures = get_scored_closures(config, *mcs, r);
     }

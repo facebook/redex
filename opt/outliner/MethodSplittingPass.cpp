@@ -11,6 +11,7 @@
  */
 #include "MethodSplittingPass.h"
 
+#include "BaselineProfile.h"
 #include "ConfigFiles.h"
 #include "InterDexPass.h"
 #include "MethodProfiles.h"
@@ -28,7 +29,10 @@ void MethodSplittingPass::bind_config() {
        "Splits blocks so that no block has more opcodes than this size");
   bind("min_original_size", m_config.min_original_size,
        m_config.min_original_size,
-       "Minimum size of method to consider splitting");
+       "Minimum size of any method to consider splitting");
+  bind("min_original_size_hot_method", m_config.min_original_size_hot_method,
+       m_config.min_original_size_hot_method,
+       "Minimum size of a hot method to consider splitting");
   bind("min_original_size_too_large_for_inlining",
        m_config.min_original_size_too_large_for_inlining,
        m_config.min_original_size_too_large_for_inlining,
@@ -48,6 +52,10 @@ void MethodSplittingPass::bind_config() {
        m_config.max_overhead_ratio,
        "Maximum ratio of combined split and remaining code size vs "
        "original code size");
+  bind("max_hot_overhead_ratio", m_config.max_hot_overhead_ratio,
+       m_config.max_hot_overhead_ratio,
+       "Maximum ratio of combined split and remaining code size vs "
+       "original code size for hot methods");
   bind("max_huge_overhead_ratio", m_config.max_huge_overhead_ratio,
        m_config.max_huge_overhead_ratio,
        "Maximum ratio of combined split and remaining code size vs "
@@ -69,20 +77,30 @@ void MethodSplittingPass::run_pass(DexStoresVector& stores,
   it = interdex_metrics.find(interdex::METRIC_RESERVED_TREFS);
   size_t reserved_trefs = it == interdex_metrics.end() ? 0 : it->second;
 
+  auto baseline_profile = baseline_profiles::get_baseline_profile(
+      conf.get_baseline_profile_config(), conf.get_method_profiles());
+  InsertOnlyConcurrentSet<const DexMethod*> concurrent_hot_methods;
+  for (auto&& [method, flags] : baseline_profile.methods) {
+    if (flags.hot) {
+      concurrent_hot_methods.insert_unsafe(method);
+    }
+  }
+
   auto name_infix = "$" + std::to_string(m_iteration) + "$";
   Stats stats;
-  InsertOnlyConcurrentMap<DexMethod*, DexMethod*> concurrent_new_hot_methods;
+  InsertOnlyConcurrentMap<DexMethod*, DexMethod*>
+      concurrent_new_hot_split_methods;
   InsertOnlyConcurrentMap<DexMethod*, size_t>
       concurrent_splittable_no_optimizations_methods;
-  split_methods_in_stores(stores, mgr.get_redex_options().min_sdk, m_config,
-                          conf.create_init_class_insns(), reserved_mrefs,
-                          reserved_trefs, &stats, name_infix,
-                          &concurrent_new_hot_methods,
-                          &concurrent_splittable_no_optimizations_methods);
+  split_methods_in_stores(
+      stores, mgr.get_redex_options().min_sdk, m_config,
+      conf.create_init_class_insns(), reserved_mrefs, reserved_trefs, &stats,
+      name_infix, &concurrent_hot_methods, &concurrent_new_hot_split_methods,
+      &concurrent_splittable_no_optimizations_methods);
 
   auto& method_profiles = conf.get_method_profiles();
   size_t derived_method_profile_stats{0};
-  for (auto [new_method, root_method] : concurrent_new_hot_methods) {
+  for (auto [new_method, root_method] : concurrent_new_hot_split_methods) {
     derived_method_profile_stats +=
         method_profiles.derive_stats(new_method, {root_method});
   }
@@ -98,9 +116,11 @@ void MethodSplittingPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("dex_limits_hit", (size_t)stats.dex_limits_hit);
   mgr.set_metric("added_code_size", (size_t)stats.added_code_size);
   mgr.set_metric("split_code_size", (size_t)stats.split_code_size);
-  mgr.set_metric("new_hot_methods", concurrent_new_hot_methods.size());
+  mgr.set_metric("new_hot_split_methods",
+                 concurrent_new_hot_split_methods.size());
   mgr.set_metric("derived_method_profile_stats", derived_method_profile_stats);
   mgr.set_metric("excluded_methods", (size_t)stats.excluded_methods);
+  mgr.set_metric("iterations", stats.iterations);
   TRACE(MS, 1, "Split out %zu methods", stats.added_methods.size());
 
   for (auto [method, size] : concurrent_splittable_no_optimizations_methods) {
