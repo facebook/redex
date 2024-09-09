@@ -102,13 +102,10 @@ class SynthAccessorPatcher {
   void patch_first_level_nested_lambda(DexClass* cls);
 
  private:
-  bool is_kotlin_annotated_property_getter_setter(DexMethod* m);
+  void try_adding_annotation_to_accessor(DexMethod* m, const DexField* field);
+
   void patch_kotlin_annotated_property_getter_setter(DexMethod* m);
-
-  bool is_kotlin_companion_property_accessor(DexMethod* m);
   void patch_kotlin_companion_property_accessor(DexMethod* m);
-
-  bool is_kotlin_property_private_getter(DexMethod* m);
   void patch_kotlin_property_private_getter(DexMethod* m);
 
   void collect_accessors(DexMethod* method);
