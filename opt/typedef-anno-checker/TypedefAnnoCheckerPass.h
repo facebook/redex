@@ -110,7 +110,7 @@ class SynthAccessorPatcher {
 
   bool patch_synth_methods_overriding_annotated_methods(DexMethod* m);
 
-  void collect_accessors(DexMethod* method);
+  void patch_accessors(DexMethod* method);
 
   void patch_kotlin_annotations(DexMethod* method);
 

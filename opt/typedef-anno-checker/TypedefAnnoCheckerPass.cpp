@@ -275,6 +275,40 @@ void patch_return_anno_from_get(type_inference::TypeInference& inference,
   }
 }
 
+void patch_parameter_from_put(type_inference::TypeInference& inference,
+                              DexMethod* caller,
+                              IRInstruction* insn) {
+  always_assert(opcode::is_an_iput(insn->opcode()) ||
+                opcode::is_an_sput(insn->opcode()));
+  auto name = caller->get_simple_deobfuscated_name();
+  auto last_dollar = name.find('$');
+  if (last_dollar == std::string::npos) {
+    return;
+  }
+  last_dollar++;
+  if (!(last_dollar < name.size() && name[last_dollar] >= '0' &&
+        name[last_dollar] <= '9')) {
+    return;
+  }
+  auto field_ref = insn->get_field();
+  auto field_anno = type_inference::get_typedef_anno_from_member(
+      field_ref, inference.get_annotations());
+
+  if (field_anno != boost::none) {
+    // Patch missing parameter annotations from accessed fields
+    size_t param_index = 1;
+    if (opcode::is_an_sput(insn->opcode())) {
+      param_index = 0;
+    }
+    DexAccessFlags access = caller->get_access();
+    caller->set_access(ACC_SYNTHETIC);
+    caller->attach_param_annotation_set(
+        param_index, std::make_unique<DexAnnotationSet>(
+                         *field_ref->as_def()->get_anno_set()));
+    caller->set_access(access);
+  }
+}
+
 } // namespace
 
 // https://kotlinlang.org/docs/fun-interfaces.html#sam-conversions
@@ -401,7 +435,7 @@ void SynthAccessorPatcher::run(const Scope& scope) {
   walk::parallel::methods(scope, [this](DexMethod* m) {
     patch_kotlin_annotated_property_getter_setter(m);
     if (is_synthetic_accessor(m)) {
-      collect_accessors(m);
+      patch_accessors(m);
     }
     patch_kotlin_companion_property_accessor(m);
     patch_kotlin_property_private_getter(m);
@@ -414,7 +448,7 @@ void SynthAccessorPatcher::run(const Scope& scope) {
         patch_synth_cls_fields_from_ctor_param(m);
       } else {
         if (has_kotlin_default_ctor_marker(m)) {
-          collect_accessors(m);
+          patch_accessors(m);
         }
       }
     }
@@ -542,7 +576,7 @@ void annotate_local_var_field_from_callee(
 
 // Check if the default method calls a method with annotated parameters.
 // If there are annotated parameters, return them, but don't patch them since
-// they'll be patched by collect_accessors
+// they'll be patched by patch_accessors
 void SynthAccessorPatcher::collect_annos_from_default_method(
     DexMethod* method,
     std::vector<std::pair<src_index_t, DexAnnotationSet&>>&
@@ -1010,7 +1044,10 @@ void SynthAccessorPatcher::patch_kotlin_annotations(DexMethod* m) {
   }
 }
 
-void SynthAccessorPatcher::collect_accessors(DexMethod* m) {
+// patch $default methods and java access methods. access$000 patterened methods
+// with a get/put opcode are java access methods that either get a field or
+// write to a field.
+void SynthAccessorPatcher::patch_accessors(DexMethod* m) {
   IRCode* code = m->get_code();
   if (!code) {
     return;
@@ -1032,7 +1069,12 @@ void SynthAccessorPatcher::collect_accessors(DexMethod* m) {
         collect_param_anno_from_instruction(envs, inference, m, insn,
                                             missing_param_annos);
       } else if (opcode::is_an_iget(opcode) || opcode::is_an_sget(opcode)) {
-        patch_return_anno_from_get(inference, m, insn);
+        if (m->as_def()->get_proto()->get_rtype() == type::java_lang_String() ||
+            type::is_int(m->as_def()->get_proto()->get_rtype())) {
+          patch_return_anno_from_get(inference, m, insn);
+        }
+      } else if (opcode::is_an_iput(opcode) || opcode::is_an_sput(opcode)) {
+        patch_parameter_from_put(inference, m, insn);
       }
     }
   }

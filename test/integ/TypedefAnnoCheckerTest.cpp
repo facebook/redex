@@ -1306,12 +1306,42 @@ TEST_F(TypedefAnnoCheckerTest, TestAccessGet) {
   EXPECT_TRUE(checker.complete());
 }
 
-TEST_F(TypedefAnnoCheckerTest, TestSyntheticValField) {
+TEST_F(TypedefAnnoCheckerTest, TestAccessSet) {
   auto scope = build_class_scope(stores);
   build_cfg(scope);
   auto* method = DexMethod::get_method(
                      "Lcom/facebook/redextest/"
                      "TypedefAnnoCheckerTest$2;.override_method:()V")
+                     ->as_def();
+
+  auto code = method->get_code();
+  code->build_cfg();
+  auto method_override_graph = mog::build_graph(scope);
+
+  auto* synth_getter =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/TypedefAnnoCheckerTest;.access$000:()I")
+          ->as_def();
+  synth_getter->set_deobfuscated_name(synth_getter->get_name()->c_str());
+
+  auto* synth_setter =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/TypedefAnnoCheckerTest;.access$002:(I)I")
+          ->as_def();
+  synth_setter->set_deobfuscated_name(synth_setter->get_name()->c_str());
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestSyntheticValField) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerTest$3;.override_method:()V")
                      ->as_def();
 
   auto code = method->get_code();
