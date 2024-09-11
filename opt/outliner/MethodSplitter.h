@@ -34,6 +34,7 @@ struct Stats {
   std::atomic<size_t> split_code_size{0};
   std::unordered_set<DexMethod*> added_methods;
   std::atomic<size_t> excluded_methods{0};
+  size_t iterations{0};
 };
 
 class SplitMethod {
@@ -77,8 +78,9 @@ void split_methods_in_stores(
     size_t reserved_trefs,
     Stats* stats,
     const std::string& name_infix = "",
+    InsertOnlyConcurrentSet<const DexMethod*>* concurrent_hot_methods = nullptr,
     InsertOnlyConcurrentMap<DexMethod*, DexMethod*>*
-        concurrent_new_hot_methods = nullptr,
+        concurrent_new_hot_split_methods = nullptr,
     InsertOnlyConcurrentMap<DexMethod*, size_t>*
         concurrent_splittable_no_optimizations_methods = nullptr);
 

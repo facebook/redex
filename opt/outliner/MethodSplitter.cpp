@@ -138,8 +138,9 @@ ConcurrentSet<DexMethod*> split_splittable_closures(
     Stats* stats,
     std::unordered_map<DexClasses*, std::unique_ptr<DexState>>* dex_states,
     ConcurrentSet<DexMethod*>* concurrent_added_methods,
+    InsertOnlyConcurrentSet<const DexMethod*>* concurrent_hot_methods,
     InsertOnlyConcurrentMap<DexMethod*, DexMethod*>*
-        concurrent_new_hot_methods) {
+        concurrent_new_hot_split_methods) {
   Timer t("split");
   ConcurrentSet<DexMethod*> concurrent_affected_methods;
   auto process_dex = [&](DexClasses* dex) {
@@ -223,10 +224,14 @@ ConcurrentSet<DexMethod*> split_splittable_closures(
       switch (splittable_closure->hot_split_kind) {
       case HotSplitKind::Hot: {
         stats->hot_split_count++;
-        if (concurrent_new_hot_methods) {
-          auto* ptr = concurrent_new_hot_methods->get(method);
+        if (concurrent_new_hot_split_methods) {
+          auto* ptr = concurrent_new_hot_split_methods->get(method);
           auto* hot_root_method = ptr ? *ptr : method;
-          concurrent_new_hot_methods->emplace(new_method, hot_root_method);
+          concurrent_new_hot_split_methods->emplace(new_method,
+                                                    hot_root_method);
+        }
+        if (concurrent_hot_methods && concurrent_hot_methods->count(method)) {
+          concurrent_hot_methods->insert(method);
         }
         break;
       }
@@ -433,7 +438,9 @@ void split_methods_in_stores(
     size_t reserved_trefs,
     Stats* stats,
     const std::string& name_infix,
-    InsertOnlyConcurrentMap<DexMethod*, DexMethod*>* concurrent_new_hot_methods,
+    InsertOnlyConcurrentSet<const DexMethod*>* concurrent_hot_methods,
+    InsertOnlyConcurrentMap<DexMethod*, DexMethod*>*
+        concurrent_new_hot_split_methods,
     InsertOnlyConcurrentMap<DexMethod*, size_t>*
         concurrent_splittable_no_optimizations_methods) {
   auto scope = build_class_scope(stores);
@@ -476,17 +483,20 @@ void split_methods_in_stores(
     TRACE(MS, 2, "=== iteration[%zu]", iteration);
     Timer t("iteration " + std::to_string(iteration++));
     auto splittable_closures = select_splittable_closures_based_on_costs(
-        methods, config, concurrent_splittable_no_optimizations_methods);
+        methods, config, concurrent_hot_methods,
+        concurrent_splittable_no_optimizations_methods);
     ConcurrentSet<DexMethod*> concurrent_added_methods;
     methods = split_splittable_closures(
         dexen, min_sdk, init_classes_with_side_effects, reserved_trefs,
         reserved_mrefs, splittable_closures, name_infix, &uniquifiers, stats,
-        &dex_states, &concurrent_added_methods, concurrent_new_hot_methods);
+        &dex_states, &concurrent_added_methods, concurrent_hot_methods,
+        concurrent_new_hot_split_methods);
     stats->added_methods.insert(concurrent_added_methods.begin(),
                                 concurrent_added_methods.end());
     TRACE(MS, 1, "[%zu] Split out %zu methods", iteration,
           concurrent_added_methods.size());
   }
+  stats->iterations = iteration;
   walk::code(scope, [&](DexMethod* method, IRCode&) {
     method->rstate.reset_too_large_for_inlining_into();
   });
