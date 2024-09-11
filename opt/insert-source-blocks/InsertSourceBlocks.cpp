@@ -55,6 +55,8 @@ bool is_numeric(const std::string_view& s) {
                      [](auto c) { return '0' <= c && c <= '9'; });
 }
 
+SourceBlock::Val DEFAULT_VALUE = SourceBlock::Val(1, 1);
+
 namespace hasher {
 
 uint64_t stable_hash_value(const std::string& s) {
@@ -383,10 +385,13 @@ struct Injector {
   ConfigFiles& conf;
   std::vector<std::unique_ptr<ProfileFile>> profile_files;
   std::vector<std::string> interactions;
+  bool use_default_value;
   bool always_inject;
 
-  Injector(ConfigFiles& conf, bool always_inject)
-      : conf(conf), always_inject(always_inject) {
+  Injector(ConfigFiles& conf, bool always_inject, bool use_default_value)
+      : conf(conf),
+        use_default_value(use_default_value),
+        always_inject(always_inject) {
     // Prefetch the method profiles. We may need them when block profiles
     // are missing and it's easier to do it here than have to synchronize
     // loading later. (It's probably also amortized with later passes.)
@@ -626,14 +631,6 @@ struct Injector {
                   hasher::hashed_name(hash_value, access_method_name);
             }
 
-            auto profiles =
-                find_profiles(method, access_method_type, access_method_name,
-                              access_method_hash_name);
-            if (!profiles.second && !always_inject) {
-              // Skip without profile.
-              return InsertResult(access_method ? 1 : 0, 1);
-            }
-
             auto* sb_name = [&]() {
               if (!access_method) {
                 return &method->get_deobfuscated_name();
@@ -647,8 +644,17 @@ struct Injector {
               return DexString::make_string(new_name);
             }();
 
-            auto res = source_blocks::insert_source_blocks(
-                sb_name, &cfg, profiles.first, serialize, exc_inject);
+            source_blocks::InsertResult res;
+            auto profiles =
+                find_profiles(method, access_method_type, access_method_name,
+                              access_method_hash_name);
+            if (!profiles.second && !always_inject) {
+              // Skip without profile.
+              return InsertResult(access_method ? 1 : 0, 1);
+            }
+            res = source_blocks::insert_source_blocks(
+                sb_name, &cfg, use_default_value, profiles.first, serialize,
+                exc_inject);
 
             smi.add({sb_name, std::move(res.serialized),
                      std::move(res.serialized_idom_map)});
@@ -854,6 +860,9 @@ void InsertSourceBlocksPass::bind_config() {
        "Force serialization of the CFGs. Testing only.");
   bind("insert_after_excs", m_insert_after_excs, m_insert_after_excs);
   bind("profile_files", "", m_profile_files);
+  bind("default_value", m_use_default_value, m_use_default_value,
+       "Use a default value for the inserted source blocks. The default value "
+       "is defined in SourceBlocks.cpp");
 }
 
 void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
@@ -862,7 +871,7 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
   bool is_instr_mode = mgr.get_redex_options().instrument_pass_enabled;
   bool always_inject = m_always_inject || m_force_serialize || is_instr_mode;
 
-  Injector inj(conf, always_inject);
+  Injector inj(conf, always_inject, m_use_default_value);
 
   inj.prepare_profile_files_and_interactions(m_profile_files);
   inj.write_unresolved_methods(

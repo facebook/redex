@@ -1250,7 +1250,7 @@ TEST_F(SwitchEquivFinderTest,
   method->get_code()->build_cfg();
   auto& cfg = method->get_code()->cfg();
 
-  source_blocks::insert_source_blocks(method, &cfg);
+  source_blocks::insert_source_blocks(method, &cfg, false);
 
   // Further manipulation to make it the right form like we saw in the wild. All
   // this is doing is making sure we have a block with a source block but actual
