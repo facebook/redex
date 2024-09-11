@@ -280,7 +280,7 @@ class FlatMap final
       break;
     }
     default: {
-#if (BOOST_VERSION / 100) >= 1086
+#if (BOOST_VERSION / 100) == 1086
       // TODO(T200541423): Boost 1.86.0 has a bug with `extract_sequence()` and
       // `adopt_sequence`. Let's disable the optimization for now. See
       // https://github.com/boostorg/container/issues/288
