@@ -123,6 +123,8 @@ class InterDexPass : public Pass {
   bool m_exclude_baseline_profile_classes;
   BaselineProfileConfig m_baseline_profile_config;
 
+  int64_t m_stable_partitions;
+
   size_t m_run{0}; // Which iteration of `run_pass`.
   size_t m_eval{0}; // How many `eval_pass` iterations.
 

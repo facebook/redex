@@ -815,17 +815,53 @@ void InterDex::init_cross_dex_ref_minimizer() {
   }
 }
 
+std::vector<DexClasses> InterDex::get_stable_partitions() {
+  always_assert(m_stable_partitions > 0);
+  std::vector<DexClasses> partitions(m_stable_partitions);
+  auto partition_it = partitions.begin();
+  size_t partition_target_size =
+      (m_scope.size() + m_stable_partitions - 1) / m_stable_partitions;
+  for (auto* cls : m_scope) {
+    always_assert(partition_it < partitions.end());
+    partition_it->push_back(cls);
+    if (partition_it->size() >= partition_target_size) {
+      partition_it++;
+    }
+  }
+  return partitions;
+}
+
 void InterDex::emit_remaining_classes(DexInfo& dex_info,
                                       DexClass** canary_cls) {
   m_current_classes_when_emitting_remaining =
       m_emitting_state.dexes_structure.get_current_dex().size();
 
   if (!m_minimize_cross_dex_refs) {
-    for (DexClass* cls : m_scope) {
-      emit_class(m_emitting_state, dex_info, cls, /* check_if_skip */ true,
-                 /* perf_sensitive */ false, canary_cls, nullptr,
-                 /* skip_dynamically_dead */ true);
+    auto emit_classes = [&](const DexClasses& classes) {
+      for (DexClass* cls : classes) {
+        emit_class(m_emitting_state, dex_info, cls, /* check_if_skip */ true,
+                   /* perf_sensitive */ false, canary_cls, nullptr,
+                   /* skip_dynamically_dead */ true);
+      }
+    };
+
+    if (m_stable_partitions > 0) {
+      auto partitions = get_stable_partitions();
+      for (auto& partition : partitions) {
+        if (partition.empty()) {
+          continue;
+        }
+        if (!m_emitting_state.dexes_structure.get_current_dex().empty()) {
+          auto fodr = flush_out_dex(m_emitting_state, dex_info, *canary_cls);
+          post_process_dex(m_emitting_state, fodr);
+          *canary_cls = nullptr;
+        }
+        emit_classes(partition);
+      }
+      return;
     }
+
+    emit_classes(m_scope);
     return;
   }
 
