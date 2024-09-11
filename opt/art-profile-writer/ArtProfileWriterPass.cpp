@@ -17,6 +17,7 @@
 #include <fstream>
 #include <string>
 
+#include "BaselineProfile.h"
 #include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
 #include "DexStructure.h"
@@ -29,22 +30,17 @@
 namespace {
 const std::string BASELINE_PROFILES_FILE = "additional-baseline-profiles.list";
 
-struct ArtProfileEntryFlags {
-  bool hot{false};
-  bool startup{false};
-  bool not_startup{false};
-};
-
-using MethodFlags = std::unordered_map<const DexMethod*, ArtProfileEntryFlags>;
-
 // Only certain "hot" methods get compiled.
-bool is_compiled(DexMethod* method, const ArtProfileEntryFlags& flags) {
+bool is_compiled(DexMethod* method,
+                 const baseline_profiles::MethodFlags& flags) {
   return flags.hot && !method::is_clinit(method);
 }
 
-bool is_compiled(const MethodFlags& method_flags, DexMethod* method) {
-  auto it = method_flags.find(method);
-  return it != method_flags.end() && is_compiled(method, it->second);
+bool is_compiled(const baseline_profiles::BaselineProfile& baseline_profile,
+                 DexMethod* method) {
+  auto it = baseline_profile.methods.find(method);
+  return it != baseline_profile.methods.end() &&
+         is_compiled(method, it->second);
 }
 
 bool is_simple(DexMethod* method, IRInstruction** invoke_insn = nullptr) {
@@ -90,13 +86,18 @@ bool is_simple(DexMethod* method, IRInstruction** invoke_insn = nullptr) {
 
 void never_inline(bool attach_annotations,
                   const Scope& scope,
-                  const std::unordered_map<const DexMethod*,
-                                           ArtProfileEntryFlags>& method_flags,
+                  const baseline_profiles::BaselineProfile& baseline_profile,
                   PassManager& mgr) {
   DexAnnotationSet anno_set;
   anno_set.add_annotation(std::make_unique<DexAnnotation>(
       type::dalvik_annotation_optimization_NeverInline(),
       DexAnnotationVisibility::DAV_BUILD));
+
+  // Only "hot" methods get compiled.
+  auto is_hot = [&](DexMethod* method) {
+    auto it = baseline_profile.methods.find(method);
+    return it != baseline_profile.methods.end() && it->second.hot;
+  };
 
   auto consider_callee = [&](DexMethod* callee) {
     if (callee == nullptr || !callee->get_code()) {
@@ -134,7 +135,7 @@ void never_inline(bool attach_annotations,
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
     auto ecu = code.estimate_code_units();
     estimated_code_units.emplace(caller, ecu);
-    if (!is_compiled(method_flags, caller)) {
+    if (!is_compiled(baseline_profile, caller)) {
       return;
     }
     if (ecu > 2048) {
@@ -153,7 +154,7 @@ void never_inline(bool attach_annotations,
           continue;
         }
 
-        if (is_compiled(method_flags, callee)) {
+        if (is_compiled(baseline_profile, callee)) {
           hot_hot_callees.insert(callee);
         } else {
           hot_cold_callees.insert(callee);
@@ -232,14 +233,15 @@ void never_inline(bool attach_annotations,
 
 } // namespace
 
-std::ostream& operator<<(std::ostream& os, const ArtProfileEntryFlags& flags) {
+std::ostream& operator<<(std::ostream& os,
+                         const baseline_profiles::MethodFlags& flags) {
   if (flags.hot) {
     os << "H";
   }
   if (flags.startup) {
     os << "S";
   }
-  if (flags.not_startup) {
+  if (flags.post_startup) {
     os << "P";
   }
   return os;
@@ -287,95 +289,106 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     m_reserved_refs_handle = std::nullopt;
   }
 
-  const auto& method_profiles = conf.get_method_profiles();
-  MethodFlags method_flags;
   std::unordered_set<const DexMethodRef*> method_refs_without_def;
-  for (auto& interaction_id : m_perf_config.interactions) {
-    bool startup = interaction_id == "ColdStart";
-    const auto& method_stats = method_profiles.method_stats(interaction_id);
-    for (auto&& [method_ref, stat] : method_stats) {
-      auto method = method_ref->as_def();
-      if (method == nullptr) {
-        method_refs_without_def.insert(method_ref);
-        continue;
-      }
-      // for startup interaction, we can include it into baseline profile
-      // as non hot method if the method appear100 is above nonhot_threshold
-      if (stat.appear_percent >=
-              (startup ? m_perf_config.coldstart_appear100_nonhot_threshold
-                       : m_perf_config.appear100_threshold) &&
-          stat.call_count >= m_perf_config.call_count_threshold) {
-        auto& mf = method_flags[method];
-        mf.hot = startup ? stat.appear_percent >
-                               m_perf_config.coldstart_appear100_threshold
-                         : true;
-        if (startup) {
-          // consistent with buck python config in the post-process baseline
-          // profile generator, which is set both flags true for ColdStart
-          // methods
-          mf.startup = true;
-          // if startup method is not hot, we do not set its not_startup flag
-          // the method still has a change to get it set if it appears in other
-          // interactions' hot list. Remember, ART only uses this flag to guide
-          // dexlayout decision, so we don't have to be pedantic to assume it
-          // never gets exectued post startup
-          mf.not_startup = mf.hot;
-        } else {
-          mf.not_startup = true;
-        }
-      }
-    }
-  }
-
-  std::ofstream ofs{conf.metafile(BASELINE_PROFILES_FILE)};
-
-  always_assert(!stores.empty());
-  auto& dexen = stores.front().get_dexen();
-  int32_t min_sdk = mgr.get_redex_options().min_sdk;
-  mgr.incr_metric("min_sdk", min_sdk);
-  auto end = min_sdk >= 21 ? dexen.size() : 1;
-  size_t classes_with_baseline_profile = 0;
-  for (size_t dex_idx = 0; dex_idx < end; dex_idx++) {
-    auto& dex = dexen.at(dex_idx);
-    for (auto* cls : dex) {
-      bool should_include_class = false;
-      for (auto* method : cls->get_all_methods()) {
-        auto it = method_flags.find(method);
-        if (it == method_flags.end()) {
+  const auto& method_profiles = conf.get_method_profiles();
+  auto get_legacy_baseline_profile = [&]() {
+    baseline_profiles::BaselineProfile res;
+    for (auto& interaction_id : m_perf_config.interactions) {
+      bool startup = interaction_id == "ColdStart";
+      const auto& method_stats = method_profiles.method_stats(interaction_id);
+      for (auto&& [method_ref, stat] : method_stats) {
+        auto method = method_ref->as_def();
+        if (method == nullptr) {
+          method_refs_without_def.insert(method_ref);
           continue;
         }
-        // hot method's class should be included.
-        // In addition, if we include non-hot startup method, we also need to
-        // include its class.
-        if (it->second.hot || (it->second.startup && !it->second.not_startup)) {
-          should_include_class = true;
+        // for startup interaction, we can include it into baseline profile
+        // as non hot method if the method appear100 is above nonhot_threshold
+        if (stat.appear_percent >=
+                (startup ? m_perf_config.coldstart_appear100_nonhot_threshold
+                         : m_perf_config.appear100_threshold) &&
+            stat.call_count >= m_perf_config.call_count_threshold) {
+          auto& mf = res.methods[method];
+          mf.hot = startup ? stat.appear_percent >
+                                 m_perf_config.coldstart_appear100_threshold
+                           : true;
+          if (startup) {
+            // consistent with buck python config in the post-process baseline
+            // profile generator, which is set both flags true for ColdStart
+            // methods
+            mf.startup = true;
+            // if startup method is not hot, we do not set its post_startup flag
+            // the method still has a change to get it set if it appears in
+            // other interactions' hot list. Remember, ART only uses this flag
+            // to guide dexlayout decision, so we don't have to be pedantic to
+            // assume it never gets exectued post startup
+            mf.post_startup = mf.hot;
+          } else {
+            mf.post_startup = true;
+          }
         }
-        std::string descriptor = show_deobfuscated(method);
-        // reformat it into manual profile pattern so baseline profile generator
-        // in post-process can recognize the method
-        boost::replace_all(descriptor, ".", "->");
-        boost::replace_all(descriptor, ":(", "(");
-        ofs << it->second << descriptor << std::endl;
-      }
-      if (should_include_class) {
-        ofs << show_deobfuscated(cls) << std::endl;
-        classes_with_baseline_profile++;
       }
     }
-  }
+    auto& dexen = stores.front().get_dexen();
+    int32_t min_sdk = mgr.get_redex_options().min_sdk;
+    mgr.incr_metric("min_sdk", min_sdk);
+    auto end = min_sdk >= 21 ? dexen.size() : 1;
+    for (size_t dex_idx = 0; dex_idx < end; dex_idx++) {
+      auto& dex = dexen.at(dex_idx);
+      for (auto* cls : dex) {
+        bool should_include_class = false;
+        for (auto* method : cls->get_all_methods()) {
+          auto it = res.methods.find(method);
+          if (it == res.methods.end()) {
+            continue;
+          }
+          // hot method's class should be included.
+          // In addition, if we include non-hot startup method, we also need to
+          // include its class.
+          if (it->second.hot ||
+              (it->second.startup && !it->second.post_startup)) {
+            should_include_class = true;
+          }
+        }
+        if (should_include_class) {
+          res.classes.insert(cls);
+        }
+      }
+    }
+    return res;
+  };
 
+  auto baseline_profile = get_legacy_baseline_profile();
+
+  std::ofstream ofs{conf.metafile(BASELINE_PROFILES_FILE)};
   auto scope = build_class_scope(stores);
-  std::atomic<size_t> methods_with_baseline_profile{0};
+  walk::classes(scope, [&](DexClass* cls) {
+    for (auto* method : cls->get_all_methods()) {
+      auto it = baseline_profile.methods.find(method);
+      if (it == baseline_profile.methods.end()) {
+        continue;
+      }
+      std::string descriptor = show_deobfuscated(method);
+      // reformat it into manual profile pattern so baseline profile generator
+      // in post-process can recognize the method
+      boost::replace_all(descriptor, ".", "->");
+      boost::replace_all(descriptor, ":(", "(");
+      ofs << it->second << descriptor << std::endl;
+    }
+    if (baseline_profile.classes.count(cls)) {
+      ofs << show_deobfuscated(cls) << std::endl;
+    }
+  });
+
   std::atomic<size_t> methods_with_baseline_profile_code_units{0};
   std::atomic<size_t> compiled{0};
   std::atomic<size_t> compiled_code_units{0};
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    auto it = method_flags.find(method);
-    if (it == method_flags.end()) {
+    auto it = baseline_profile.methods.find(method);
+    if (it == baseline_profile.methods.end()) {
       return;
     }
     auto ecu = code.estimate_code_units();
-    methods_with_baseline_profile++;
     methods_with_baseline_profile_code_units += ecu;
     if (is_compiled(method, it->second)) {
       compiled++;
@@ -384,10 +397,10 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   });
 
   mgr.incr_metric("classes_with_baseline_profile",
-                  classes_with_baseline_profile);
+                  baseline_profile.classes.size());
 
   mgr.incr_metric("methods_with_baseline_profile",
-                  (size_t)methods_with_baseline_profile);
+                  baseline_profile.methods.size());
 
   mgr.incr_metric("methods_with_baseline_profile_code_units",
                   (size_t)methods_with_baseline_profile_code_units);
@@ -402,7 +415,7 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  never_inline(m_never_inline_attach_annotations, scope, method_flags, mgr);
+  never_inline(m_never_inline_attach_annotations, scope, baseline_profile, mgr);
 }
 
 static ArtProfileWriterPass s_pass;
