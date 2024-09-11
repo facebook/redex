@@ -263,6 +263,7 @@ void ArtProfileWriterPass::bind_config() {
   bind("never_inline_estimate", false, m_never_inline_estimate);
   bind("never_inline_attach_annotations", false,
        m_never_inline_attach_annotations);
+  bind("legacy_mode", true, m_legacy_mode);
   after_configuration([this] {
     always_assert(m_perf_config.coldstart_appear100_nonhot_threshold <=
                   m_perf_config.coldstart_appear100_threshold);
@@ -358,7 +359,11 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     return res;
   };
 
-  auto baseline_profile = get_legacy_baseline_profile();
+  auto baseline_profile = m_legacy_mode
+                              ? get_legacy_baseline_profile()
+                              : baseline_profiles::get_baseline_profile(
+                                    conf.get_baseline_profile_config(),
+                                    method_profiles, &method_refs_without_def);
 
   std::ofstream ofs{conf.metafile(BASELINE_PROFILES_FILE)};
   auto scope = build_class_scope(stores);
