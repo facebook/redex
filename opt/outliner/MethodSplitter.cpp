@@ -213,6 +213,16 @@ ConcurrentSet<DexMethod*> split_splittable_closures(
       split_method.add_to_target();
       split_method.apply_code_changes();
 
+      if (splittable_closure->is_large_packed_switch) {
+        if (splittable_closure->destroys_large_packed_switch) {
+          stats->destroyed_large_packed_switches++;
+        } else {
+          stats->kept_large_packed_switches++;
+        }
+        if (splittable_closure->creates_large_sparse_switch) {
+          stats->created_large_sparse_switches++;
+        }
+      }
       stats->added_code_size += splittable_closure->added_code_size;
       stats->split_code_size += new_method->get_code()->estimate_code_units();
       if (splittable_closure->closures.size() == 1) {

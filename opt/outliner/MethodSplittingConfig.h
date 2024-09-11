@@ -30,6 +30,8 @@ struct Config {
   int64_t max_live_in{32};
   uint64_t max_iteration{10};
 
+  size_t min_large_switch_size{8};
+
   // Estimated overhead of having a split method and its metadata.
   size_t cost_split_method{16};
   size_t cost_split_switch{6};
