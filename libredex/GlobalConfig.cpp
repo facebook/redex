@@ -133,6 +133,7 @@ void GlobalConfig::bind_config() {
   std::unordered_map<std::string, std::string> string_map_param;
   std::vector<std::string> string_vector_param;
   uint32_t uint32_param;
+  Json::Value json_param;
   // Sorted alphabetically
   bind("agg_method_stats_files", {}, string_vector_param);
   bind("android_sdk_api_15_file", "", string_param);
@@ -194,6 +195,7 @@ void GlobalConfig::bind_config() {
   bind("check_required_resources", {}, string_vector_param);
   bind("update_method_profiles_stats", false, bool_param);
   bind("recognize_betamap_coldstart_pct_marker", false, bool_param);
+  bind("baseline_profile", {}, json_param);
 
   for (const auto& entry : m_registry) {
     m_global_configs.emplace(entry.name,

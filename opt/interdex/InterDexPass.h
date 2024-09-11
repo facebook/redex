@@ -79,8 +79,6 @@ class InterDexPass : public Pass {
 
   void bind_config() override;
 
-  void bind_baseline_profile_config();
-
   void eval_pass(DexStoresVector& stores,
                  ConfigFiles& conf,
                  PassManager& mgr) override {
@@ -121,7 +119,6 @@ class InterDexPass : public Pass {
   std::vector<std::string> m_methods_for_canary_clinit_reference;
   bool m_transitively_close_interdex_order{false};
   bool m_exclude_baseline_profile_classes;
-  BaselineProfileConfig m_baseline_profile_config;
 
   int64_t m_stable_partitions;
 

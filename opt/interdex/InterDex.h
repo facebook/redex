@@ -35,35 +35,36 @@ class InterDex {
   };
 
  public:
-  InterDex(const Scope& original_scope,
-           const DexClassesVector& dexen,
-           AssetManager& asset_manager,
-           ConfigFiles& conf,
-           std::vector<std::unique_ptr<InterDexPassPlugin>>& plugins,
-           int64_t linear_alloc_limit,
-           bool static_prune_classes,
-           bool normal_primary_dex,
-           bool keep_primary_order,
-           bool force_single_dex,
-           bool order_interdex,
-           bool emit_canaries,
-           bool minimize_cross_dex_refs,
-           bool fill_last_coldstart_dex,
-           bool reorder_dynamically_dead_classes,
-           const cross_dex_ref_minimizer::CrossDexRefMinimizerConfig&
-               cross_dex_refs_config,
-           const ReserveRefsInfo& reserve_refs,
-           const XStoreRefs* xstore_refs,
-           int min_sdk,
-           const init_classes::InitClassesWithSideEffects&
-               init_classes_with_side_effects,
-           bool transitively_close_interdex_order,
-           int64_t minimize_cross_dex_refs_explore_alternatives,
-           ClassReferencesCache& class_references_cache,
-           bool exclude_baseline_profile_classes,
-           BaselineProfileConfig&& baseline_profile_config,
-           int64_t stable_partitions,
-           bool is_root_store = true)
+  InterDex(
+      const Scope& original_scope,
+      const DexClassesVector& dexen,
+      AssetManager& asset_manager,
+      ConfigFiles& conf,
+      std::vector<std::unique_ptr<InterDexPassPlugin>>& plugins,
+      int64_t linear_alloc_limit,
+      bool static_prune_classes,
+      bool normal_primary_dex,
+      bool keep_primary_order,
+      bool force_single_dex,
+      bool order_interdex,
+      bool emit_canaries,
+      bool minimize_cross_dex_refs,
+      bool fill_last_coldstart_dex,
+      bool reorder_dynamically_dead_classes,
+      const cross_dex_ref_minimizer::CrossDexRefMinimizerConfig&
+          cross_dex_refs_config,
+      const ReserveRefsInfo& reserve_refs,
+      const XStoreRefs* xstore_refs,
+      int min_sdk,
+      const init_classes::InitClassesWithSideEffects&
+          init_classes_with_side_effects,
+      bool transitively_close_interdex_order,
+      int64_t minimize_cross_dex_refs_explore_alternatives,
+      ClassReferencesCache& class_references_cache,
+      bool exclude_baseline_profile_classes,
+      const baseline_profiles::BaselineProfileConfig& baseline_profile_config,
+      int64_t stable_partitions,
+      bool is_root_store = true)
       : m_dexen(dexen),
         m_asset_manager(asset_manager),
         m_conf(conf),
@@ -92,7 +93,7 @@ class InterDex {
             minimize_cross_dex_refs_explore_alternatives),
         m_class_references_cache(class_references_cache),
         m_exclude_baseline_profile_classes(exclude_baseline_profile_classes),
-        m_baseline_profile_config(std::move(baseline_profile_config)),
+        m_baseline_profile_config(baseline_profile_config),
         m_stable_partitions(stable_partitions),
         m_is_root_store(is_root_store) {
     m_emitting_state.dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
@@ -272,7 +273,7 @@ class InterDex {
   ClassReferencesCache& m_class_references_cache;
 
   bool m_exclude_baseline_profile_classes;
-  BaselineProfileConfig m_baseline_profile_config;
+  const baseline_profiles::BaselineProfileConfig& m_baseline_profile_config;
   std::optional<std::unordered_set<DexType*>> m_baseline_profile_classes;
 
   const uint64_t m_stable_partitions;
