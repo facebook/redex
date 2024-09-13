@@ -66,6 +66,28 @@ bool is_lamdda_callback(DexMethod* m) {
          m->get_simple_deobfuscated_name() == "onClick";
 }
 
+bool is_model_gen(const DexMethod* m) {
+  DexType* type = m->get_class();
+  auto model_gen_cls_name =
+      type->str().substr(0, type->str().size() - 1) + "Spec;";
+  DexClass* cls = type_class(DexType::make_type(model_gen_cls_name));
+  if (!cls) {
+    auto model_gen_cls_name_from_builder =
+      type->str().substr(0, type->str().find("$Builder;")) + "Spec;";
+    cls = type_class(DexType::make_type(model_gen_cls_name_from_builder));
+  }
+  if (!cls || !cls->get_anno_set()) {
+    return false;
+  }
+  DexAnnotation* anno = get_annotation(
+      cls, DexType::make_type("Lcom/facebook/annotationprocessors/modelgen/"
+                              "iface/ModelDefinition;"));
+  if (anno) {
+    return true;
+  }
+  return false;
+}
+
 bool has_kotlin_default_ctor_marker(DexMethod* m) {
   auto params = m->get_proto()->get_args();
   if (params->size() > 1 &&
@@ -1053,6 +1075,10 @@ void TypedefAnnoChecker::run(DexMethod* m) {
     return;
   }
 
+  if (is_model_gen(m) && boost::starts_with(m->get_simple_deobfuscated_name(), "get")) {
+    return;
+  }
+
   always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   std::unordered_set<DexType*> anno_set;
@@ -1119,6 +1145,9 @@ void TypedefAnnoChecker::check_instruction(
     for (const DexMethod* callee : callees) {
       if (!callee->get_param_anno()) {
         // Callee does not expect any Typedef value. Nothing to do.
+        return;
+      }
+      if (is_model_gen(callee) && boost::starts_with(callee->get_simple_deobfuscated_name(), "set")) {
         return;
       }
       for (auto const& param_anno : *callee->get_param_anno()) {
