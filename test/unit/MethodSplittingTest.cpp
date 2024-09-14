@@ -839,6 +839,97 @@ TEST_F(MethodSplitterTest, SplitTypeDemands) {
   ASSERT_TRUE(res);
 }
 
+// When determining type demands on values flowing into the code to split-out,
+// only consider uses of definitions that flow through the register involved in
+// the outlined call.
+TEST_F(MethodSplitterTest, SplitTypeDemandsRegression) {
+  ClassCreator cc{DexType::make_type("LSpecificType;")};
+  cc.set_super(type::java_lang_Object());
+  cc.create();
+
+  auto before = R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (load-param-object v2)
+      (move-object v3 v2)
+      (if-eqz v0 :specific_type_demand)
+      (if-eqz v1 :weaken_type)
+    (:code_to_split_out)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (iput-object v3 v3 "LSpecificType;.foo:LSpecificType;")
+      (return-object v2)
+
+    (:weaken_type)
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v2)
+      (invoke-direct (v2) "Ljava/lang/Object;.<init>:()V")
+      (goto :code_to_split_out)
+    (:specific_type_demand)
+      (iput-object v2 v2 "LSpecificType;.foo:LSpecificType;")
+      (return-object v2)
+    ))";
+  auto after = R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (load-param-object v2)
+      (move-object v3 v2)
+      (if-eqz v0 :specific_type_demand)
+      (if-eqz v1 :weaken_type)
+    (:code_to_split_out)
+      (.pos:dbg_0 "LFoo;.bar:(IILSpecificType;)Ljava/lang/Object;" RedexGenerated 0)
+      (invoke-static (v0 v2 v3) "LFoo;.bar$split$cold0:(ILjava/lang/Object;LSpecificType;)Ljava/lang/Object;")
+      (move-result-object v0)
+      (return-object v0)
+
+    (:weaken_type)
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v2)
+      (invoke-direct (v2) "Ljava/lang/Object;.<init>:()V")
+      (goto :code_to_split_out)
+    (:specific_type_demand)
+      (iput-object v2 v2 "LSpecificType;.foo:LSpecificType;")
+      (return-object v2)
+    ))";
+  auto split0 = R"(
+    (
+      (load-param v0)
+      (load-param-object v2)
+      (load-param-object v3)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (iput-object v3 v3 "LSpecificType;.foo:LSpecificType;")
+      (return-object v2)
+    ))";
+  auto config = defaultConfig();
+  config.min_cold_split_size = 8;
+  auto res =
+      test("(IILSpecificType;)Ljava/lang/Object;",
+           before,
+           config,
+           {std::make_pair<std::string, std::string>("", after),
+            std::make_pair<std::string, std::string>("split$cold0", split0)});
+  ASSERT_TRUE(res);
+}
+
 TEST_F(MethodSplitterTest, DontSplitLoadParamChains) {
   auto code_str = R"(
     (

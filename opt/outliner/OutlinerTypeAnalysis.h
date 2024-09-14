@@ -15,6 +15,7 @@
 #include "ConstantUses.h"
 #include "IRInstruction.h"
 #include "Lazy.h"
+#include "LiveRange.h"
 #include "ReachingDefinitions.h"
 #include "TypeInference.h"
 
@@ -71,6 +72,9 @@ class OutlinerTypeAnalysis {
  private:
   DexMethod* m_method;
   Lazy<ReachingDefsEnvironments> m_reaching_defs_environments;
+  Lazy<live_range::Chains> m_immediate_chains;
+  Lazy<ReachingDefsEnvironments> m_immediate_reaching_defs_environments;
+  Lazy<live_range::DefUseChains> m_immediate_def_uses;
   Lazy<TypeEnvironments> m_type_environments;
   Lazy<constant_uses::ConstantUses> m_constant_uses;
 

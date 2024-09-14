@@ -30,6 +30,27 @@ OutlinerTypeAnalysis::OutlinerTypeAnalysis(DexMethod* method)
         }
         return res;
       }),
+      m_immediate_chains([method]() {
+        auto& cfg = method->get_code()->cfg();
+        return std::make_unique<live_range::Chains>(cfg);
+      }),
+      m_immediate_reaching_defs_environments([this, method]() {
+        auto& cfg = method->get_code()->cfg();
+        const auto& reaching_defs_fp_iter = m_immediate_chains->get_fp_iter();
+        ReachingDefsEnvironments res;
+        for (auto block : cfg.blocks()) {
+          auto env = reaching_defs_fp_iter.get_entry_state_at(block);
+          for (auto& mie : InstructionIterable(block)) {
+            res[mie.insn] = env;
+            reaching_defs_fp_iter.analyze_instruction(mie.insn, &env);
+          }
+        }
+        return res;
+      }),
+      m_immediate_def_uses([this]() {
+        return std::make_unique<live_range::DefUseChains>(
+            m_immediate_chains->get_def_use_chains());
+      }),
       m_type_environments([method]() {
         auto& cfg = method->get_code()->cfg();
         type_inference::TypeInference type_inference(cfg);

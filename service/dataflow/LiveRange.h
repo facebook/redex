@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#pragma once
+
 #include <cstdint>
 #include <unordered_map>
 #include <unordered_set>

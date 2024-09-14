@@ -454,7 +454,7 @@ std::vector<SplittableClosure> to_splittable_closures(
   });
   Lazy<live_range::DefUseChains> def_uses([&cfg]() {
     return std::make_unique<live_range::DefUseChains>(
-        live_range::MoveAwareChains(cfg).get_def_use_chains());
+        live_range::Chains(cfg).get_def_use_chains());
   });
   std::unordered_set<const ReducedBlock*> covered;
   std20::erase_if(scored_closures, [&covered, &ota, &liveness_fp_iter,

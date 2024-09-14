@@ -45,8 +45,11 @@ void ReducedCFGClosureAdapter::gather_type_demands(
     std::unordered_set<const DexType*>* type_demands) const {
   std::queue<IRInstruction*> workqueue;
   std::unordered_set<IRInstruction*> visited;
+  auto irdef_env =
+      m_ota.m_immediate_reaching_defs_environments->at(m_first_insn);
   for (auto reg : regs_to_track) {
-    for (auto* def : get_defs(reg)) {
+    auto defs = irdef_env.get(reg).elements();
+    for (auto* def : defs) {
       workqueue.push(def);
     }
   }
@@ -58,8 +61,11 @@ void ReducedCFGClosureAdapter::gather_type_demands(
     }
     for (auto& use : (*m_def_uses)[def]) {
       auto reduced_component = m_insns->at(use.insn);
-      if (!m_reduced_components.count(reduced_component) ||
-          opcode::is_a_move(use.insn->opcode())) {
+      if (!m_reduced_components.count(reduced_component)) {
+        continue;
+      }
+      if (opcode::is_a_move(use.insn->opcode())) {
+        workqueue.push(use.insn);
         continue;
       }
       if (opcode::is_a_return(use.insn->opcode())) {
