@@ -2235,7 +2235,17 @@ bool MultiMethodInliner::cross_store_reference(const DexMethod* caller,
       return true;
     }
   }
-
+  if (method::is_init(callee)) {
+    // Extra check for constructor inlining across stores; if callee is in
+    // another store, but everything the callee references is in the same store
+    // as the caller, a problem can still arise (verifier will not know that
+    // methods called on the receiver are okay - it will see an unresolved
+    // reference).
+    if (xstores.illegal_ref(store_idx, callee->get_class())) {
+      info.cross_store++;
+      return true;
+    }
+  }
   return false;
 }
 
