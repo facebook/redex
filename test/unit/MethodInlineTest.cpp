@@ -2408,3 +2408,120 @@ TEST_F(MethodInlineTest, inline_init_relaxed_finalize) {
   auto caller_expected = assembler::ircode_from_string(caller_expected_str);
   EXPECT_CODE_EQ(caller_actual, caller_expected.get());
 }
+
+TEST_F(MethodInlineTest, inline_init_relaxed_stores) {
+  auto s = assembler::class_from_string(R"(
+    (class (public) "LS;"
+      (method (public constructor) "LS;.<init>:()V"
+        (
+          (load-param-object v0)
+          (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+          (return-void)
+        )
+      )
+    )
+  )");
+
+  auto x = assembler::class_from_string(R"(
+    (class (public) "LX;" extends "LS;"
+      (method (public constructor) "LX;.<init>:()V"
+        (
+          (load-param-object v0)
+          (invoke-direct (v0) "LS;.<init>:()V")
+          (return-void)
+        )
+      )
+    )
+  )");
+  auto x_init = x->get_ctors().at(0);
+
+  auto use = assembler::class_from_string(R"(
+    (class (public) "LUse;"
+      (method (public static) "LUse;.a:()V"
+        (
+          (new-instance "LX;")
+          (move-result-pseudo-object v0)
+          (invoke-direct (v0) "LX;.<init>:()V")
+          (return-void)
+        )
+      )
+    )
+  )");
+  auto caller = use->get_all_methods().at(0);
+
+  ConcurrentMethodResolver concurrent_method_resolver;
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> candidates;
+  std::unordered_set<DexMethod*> expected_inlined; // intentionally empty.
+  {
+    DexStore store("classes");
+    store.add_classes({});
+    store.add_classes({use, s});
+    stores.push_back(std::move(store));
+  }
+  {
+    DexStore store("x", {"classes"});
+    store.add_classes({x});
+    stores.push_back(std::move(store));
+  }
+
+  candidates.insert(x_init);
+
+  auto scope = build_class_scope(stores);
+  for (auto cls : scope) {
+    for (auto m : cls->get_all_methods()) {
+      auto code = m->get_code();
+      if (code != nullptr) {
+        code->build_cfg();
+      }
+    }
+  }
+
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.shrinker.run_copy_prop = true;
+  inliner_config.shrinker.run_local_dce = true;
+  inliner_config.shrinker.compute_pure_methods = false;
+  inliner_config.relaxed_init_inline = true;
+
+  {
+    init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+        scope, /* create_init_class_insns */ false);
+    int min_sdk = 21; // the "relaxed init inline" mode only kicks in starting
+                      // with min_sdk 21.
+    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                               candidates, std::ref(concurrent_method_resolver),
+                               inliner_config, min_sdk,
+                               intra_dex ? IntraDex : InterDex,
+                               /* true_virtual_callers */ {},
+                               /* inline_for_speed */ nullptr,
+                               /* analyze_and_prune_inits */ true, {});
+    inliner.inline_methods();
+
+    auto inlined = inliner.get_inlined();
+    EXPECT_EQ(inlined.size(), expected_inlined.size());
+    for (auto method : expected_inlined) {
+      EXPECT_EQ(inlined.count(method), 1);
+    }
+  }
+
+  caller->get_code()->clear_cfg();
+
+  // Unchanged from above.
+  const auto& caller_expected_str = R"(
+    (
+      (new-instance "LX;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LX;.<init>:()V")
+      (return-void)
+    )
+  )";
+  auto caller_actual = caller->get_code();
+  remove_position(caller_actual);
+  auto caller_expected = assembler::ircode_from_string(caller_expected_str);
+  EXPECT_CODE_EQ(caller_actual, caller_expected.get());
+}
