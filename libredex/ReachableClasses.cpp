@@ -615,7 +615,12 @@ void analyze_serializable(const Scope& scope) {
     if (!children.count(child_super_type)) {
       for (auto meth : child_supercls->get_dmethods()) {
         if (method::is_init(meth) && meth->get_proto()->get_args()->empty()) {
+          TRACE(PGR, 3, "serializable super class: no-arg ctor %s", SHOW(meth));
           meth->rstate.set_root(keep_reason::SERIALIZABLE);
+          // Also mark the super class as referenced_by_string, to retain it in
+          // case there's no other reference to the class itself. Otherwise, the
+          // ctor might be removed after all.
+          child_supercls->rstate.referenced_by_string();
         }
       }
     }
