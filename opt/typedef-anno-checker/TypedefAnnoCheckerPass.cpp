@@ -56,6 +56,10 @@ bool is_synthetic_accessor(DexMethod* m) {
          boost::ends_with(m->get_simple_deobfuscated_name(), DEFAULT_SUFFIX);
 }
 
+bool is_synthetic_bridge(DexMethod* m) {
+  return m->get_access() & ACC_SYNTHETIC && m->get_access() & ACC_BRIDGE;
+}
+
 bool is_synthetic_kotlin_annotations_method(DexMethod* m) {
   return boost::ends_with(m->get_simple_deobfuscated_name(),
                           ANNOTATIONS_SUFFIX);
@@ -456,7 +460,7 @@ void SynthAccessorPatcher::patch_kotlin_property_private_getter(DexMethod* m) {
 void SynthAccessorPatcher::run(const Scope& scope) {
   walk::parallel::methods(scope, [this](DexMethod* m) {
     patch_kotlin_annotated_property_getter_setter(m);
-    if (is_synthetic_accessor(m)) {
+    if (is_synthetic_accessor(m) || is_synthetic_bridge(m)) {
       patch_accessors(m);
     }
     patch_kotlin_companion_property_accessor(m);
@@ -1107,7 +1111,7 @@ void SynthAccessorPatcher::patch_accessors(DexMethod* m) {
     if (is_synthetic_accessor(m)) {
       always_assert(is_static(m));
     } else {
-      always_assert(is_constructor(m));
+      always_assert(is_constructor(m) || is_synthetic_bridge(m));
       param_index -= 1;
     }
     add_param_annotations(m, &pair.second, param_index);
