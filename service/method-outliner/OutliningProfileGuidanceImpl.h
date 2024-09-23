@@ -16,6 +16,12 @@ class PassManager;
 
 namespace outliner_impl {
 
+void get_throughput_interactions(
+    ConfigFiles& config_files,
+    const outliner::ProfileGuidanceConfig& config,
+    std::unordered_set<size_t>* throughput_interaction_indices,
+    std::unordered_set<std::string>* throughput_interaction_ids);
+
 ////////////////////////////////////////////////////////////////////////////////
 // gather_sufficiently_warm_and_hot_methods
 ////////////////////////////////////////////////////////////////////////////////
@@ -43,6 +49,8 @@ void gather_sufficiently_warm_and_hot_methods(
     ConfigFiles& config_files,
     PassManager& mgr,
     const outliner::ProfileGuidanceConfig& config,
+    const std::unordered_set<std::string>& throughput_interaction_ids,
+    std::unordered_set<DexMethod*>* throughput_methods,
     std::unordered_set<DexMethod*>* sufficiently_warm_methods,
     std::unordered_set<DexMethod*>* sufficiently_hot_methods);
 
@@ -58,16 +66,22 @@ outliner::PerfSensitivity parse_perf_sensitivity(const std::string& str);
 class CanOutlineBlockDecider {
  private:
   const outliner::ProfileGuidanceConfig& m_config;
+  const std::unordered_set<size_t>& m_throughput_interaction_indices;
+  bool m_throughput;
   bool m_sufficiently_warm;
   bool m_sufficiently_hot;
   mutable std::unique_ptr<LazyUnorderedMap<cfg::Block*, bool>> m_is_in_loop;
   mutable std::unique_ptr<LazyUnorderedMap<cfg::Block*, boost::optional<float>>>
       m_max_vals;
+  mutable std::unique_ptr<LazyUnorderedMap<cfg::Block*, bool>> m_is_throughput;
 
  public:
-  CanOutlineBlockDecider(const outliner::ProfileGuidanceConfig& config,
-                         bool sufficiently_warm,
-                         bool sufficiently_hot);
+  CanOutlineBlockDecider(
+      const outliner::ProfileGuidanceConfig& config,
+      const std::unordered_set<size_t>& throughput_interaction_indices,
+      bool throughput,
+      bool sufficiently_warm,
+      bool sufficiently_hot);
 
   enum class Result {
     CanOutline,
@@ -75,6 +89,9 @@ class CanOutlineBlockDecider {
     WarmLoop,
     WarmLoopExceedsThresholds,
     WarmLoopNoSourceBlocks,
+    Throughput,
+    ThroughputExceedsThresholds,
+    ThroughputNoSourceBlocks,
     Hot,
     HotExceedsThresholds,
     HotNoSourceBlocks,

@@ -901,20 +901,23 @@ static bool explore_candidates_from(
   return true;
 }
 
-#define STATS                                  \
-  FOR_EACH(live_out_to_throw_edge)             \
-  FOR_EACH(live_out_multiple)                  \
-  FOR_EACH(live_out_initialized_not)           \
-  FOR_EACH(arg_type_not_computed)              \
-  FOR_EACH(arg_type_illegal)                   \
-  FOR_EACH(res_type_not_computed)              \
-  FOR_EACH(res_type_illegal)                   \
-  FOR_EACH(overlap)                            \
-  FOR_EACH(loop)                               \
-  FOR_EACH(block_warm_loop_exceeds_thresholds) \
-  FOR_EACH(block_warm_loop_no_source_blocks)   \
-  FOR_EACH(block_hot)                          \
-  FOR_EACH(block_hot_exceeds_thresholds)       \
+#define STATS                                   \
+  FOR_EACH(live_out_to_throw_edge)              \
+  FOR_EACH(live_out_multiple)                   \
+  FOR_EACH(live_out_initialized_not)            \
+  FOR_EACH(arg_type_not_computed)               \
+  FOR_EACH(arg_type_illegal)                    \
+  FOR_EACH(res_type_not_computed)               \
+  FOR_EACH(res_type_illegal)                    \
+  FOR_EACH(overlap)                             \
+  FOR_EACH(loop)                                \
+  FOR_EACH(block_warm_loop_exceeds_thresholds)  \
+  FOR_EACH(block_warm_loop_no_source_blocks)    \
+  FOR_EACH(block_throughput)                    \
+  FOR_EACH(block_throughput_exceeds_thresholds) \
+  FOR_EACH(block_throughput_no_source_blocks)   \
+  FOR_EACH(block_hot)                           \
+  FOR_EACH(block_hot_exceeds_thresholds)        \
   FOR_EACH(block_hot_no_source_blocks)
 
 struct FindCandidatesStats {
@@ -1108,6 +1111,15 @@ static MethodCandidates find_method_candidates(
             case CanOutlineBlockDecider::Result::WarmLoopNoSourceBlocks:
               lstats.block_warm_loop_no_source_blocks++;
               return;
+            case CanOutlineBlockDecider::Result::Throughput:
+              lstats.block_throughput++;
+              return;
+            case CanOutlineBlockDecider::Result::ThroughputExceedsThresholds:
+              lstats.block_throughput_exceeds_thresholds++;
+              return;
+            case CanOutlineBlockDecider::Result::ThroughputNoSourceBlocks:
+              lstats.block_throughput_no_source_blocks++;
+              return;
             case CanOutlineBlockDecider::Result::Hot:
               lstats.block_hot++;
               return;
@@ -1189,6 +1201,8 @@ static void get_recurring_cores(
     const Config& config,
     PassManager& mgr,
     const Scope& scope,
+    const std::unordered_set<size_t>& throughput_interaction_indices,
+    const std::unordered_set<DexMethod*>& throughput_methods,
     const std::unordered_set<DexMethod*>& sufficiently_warm_methods,
     const std::unordered_set<DexMethod*>& sufficiently_hot_methods,
     const RefChecker& ref_checker,
@@ -1198,16 +1212,20 @@ static void get_recurring_cores(
   AtomicMap<CandidateInstructionCores, size_t, CandidateInstructionCoresHasher>
       concurrent_cores;
   walk::parallel::code(
-      scope, [&config, &ref_checker, &sufficiently_warm_methods,
-              &sufficiently_hot_methods, &concurrent_cores,
-              block_deciders](DexMethod* method, IRCode& code) {
+      scope,
+      [&config, &ref_checker, &throughput_interaction_indices,
+       &throughput_methods, &sufficiently_warm_methods,
+       &sufficiently_hot_methods, &concurrent_cores,
+       block_deciders](DexMethod* method, IRCode& code) {
         if (!can_outline_from_method(method)) {
           return;
         }
         always_assert(code.editable_cfg_built());
         code.cfg().calculate_exit_block();
         CanOutlineBlockDecider block_decider(
-            config.profile_guidance, sufficiently_warm_methods.count(method),
+            config.profile_guidance, throughput_interaction_indices,
+            throughput_methods.count(method),
+            sufficiently_warm_methods.count(method),
             sufficiently_hot_methods.count(method));
         auto& cfg = code.cfg();
         OptionalReachingInitializedsEnvironments
@@ -3103,6 +3121,14 @@ void InstructionSequenceOutliner::bind_config() {
        pg.method_profiles_appear_percent,
        pg.method_profiles_appear_percent,
        "Cut off when a method in a method profile is deemed relevant");
+  bind("throughput_interaction_name_pattern",
+       pg.throughput_interaction_name_pattern,
+       pg.throughput_interaction_name_pattern,
+       "Regular expression identifying throughput interaction names");
+  bind("method_profiles_throughput_hot_call_count",
+       pg.method_profiles_throughput_hot_call_count,
+       pg.method_profiles_throughput_hot_call_count,
+       "No code is outlined out of methods in throughput interactions");
   bind("method_profiles_hot_call_count",
        pg.method_profiles_hot_call_count,
        pg.method_profiles_hot_call_count,
@@ -3185,11 +3211,23 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, config.create_init_class_insns());
+
+  std::unordered_set<size_t> throughput_interaction_indices;
+  std::unordered_set<std::string> throughput_interaction_ids;
+  get_throughput_interactions(config, m_config.profile_guidance,
+                              &throughput_interaction_indices,
+                              &throughput_interaction_ids);
+  mgr.incr_metric("num_throughput_interactions",
+                  throughput_interaction_ids.size());
+
+  std::unordered_set<DexMethod*> throughput_methods;
   std::unordered_set<DexMethod*> sufficiently_warm_methods;
   std::unordered_set<DexMethod*> sufficiently_hot_methods;
   gather_sufficiently_warm_and_hot_methods(
-      scope, config, mgr, m_config.profile_guidance, &sufficiently_warm_methods,
+      scope, config, mgr, m_config.profile_guidance, throughput_interaction_ids,
+      &throughput_methods, &sufficiently_warm_methods,
       &sufficiently_hot_methods);
+  mgr.incr_metric("num_throughput_methods", throughput_methods.size());
   mgr.incr_metric("num_sufficiently_warm_methods",
                   sufficiently_warm_methods.size());
   mgr.incr_metric("num_sufficiently_hot_methods",
@@ -3238,7 +3276,8 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
       CandidateInstructionCoresSet recurring_cores;
       InsertOnlyConcurrentMap<DexMethod*, CanOutlineBlockDecider>
           block_deciders;
-      get_recurring_cores(m_config, mgr, dex, sufficiently_warm_methods,
+      get_recurring_cores(m_config, mgr, dex, throughput_interaction_indices,
+                          throughput_methods, sufficiently_warm_methods,
                           sufficiently_hot_methods, ref_checker,
                           &recurring_cores, &block_deciders);
       std::vector<CandidateWithInfo> candidates_with_infos;
