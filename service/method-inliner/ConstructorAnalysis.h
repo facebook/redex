@@ -8,9 +8,12 @@
 #pragma once
 
 #include <unordered_set>
+#include <vector>
 
 class DexField;
 class DexMethod;
+class DexType;
+class DexClass;
 class IRInstruction;
 
 namespace constructor_analysis {
@@ -35,4 +38,11 @@ bool can_inline_inits_in_same_class(DexMethod* caller_method,
                                     const DexMethod* callee_method,
                                     IRInstruction* callsite_insn);
 
+// Iterates the scope to find any types that have apparently been optimized by
+// relaxed init inlining (either by Redex or the input dex of an application).
+// Complex is defined such that the called <init> method on a new-instance is
+// defined on some other type in the hierarchy, aside from java.lang.Object's
+// default constructor.
+std::unordered_set<const DexType*> find_complex_init_inlined_types(
+    const std::vector<DexClass*>& scope);
 } // namespace constructor_analysis
