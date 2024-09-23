@@ -16,13 +16,18 @@
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
+#include "Show.h"
 
 struct ConstructorAnalysisTest : public RedexTest {};
 
-DexClass* create_a_class(const char* description) {
+DexClass* create_a_class(const char* description, DexType* super) {
   ClassCreator cc(DexType::make_type(description));
-  cc.set_super(type::java_lang_Object());
+  cc.set_super(super);
   return cc.create();
+}
+
+DexClass* create_a_class(const char* description) {
+  return create_a_class(description, type::java_lang_Object());
 }
 
 /**
@@ -158,4 +163,57 @@ TEST_F(ConstructorAnalysisTest, can_inline_init_supertype_relaxed) {
 
   EXPECT_FALSE(constructor_analysis::can_inline_init(
       foo_init1, /* finalizable_fields */ nullptr, /* relaxed */ true));
+}
+
+TEST_F(ConstructorAnalysisTest, can_detect_relaxed_inlined_init) {
+  // Set up a couple of classes, and usages of them (some of which will look
+  // like its constructor was inlined).
+  auto foo_cls = create_a_class("Lfoo;");
+  create_an_init_method(
+      foo_cls, DexMethod::make_method("Ljava/lang/Object;.<init>:()V"), 0, {});
+
+  auto bar_cls = create_a_class("Lbar;");
+  auto bar_init = create_an_init_method(
+      bar_cls, DexMethod::make_method("Ljava/lang/Object;.<init>:()V"), 0, {});
+
+  auto baz_cls = create_a_class("Lbaz;", bar_cls->get_type());
+  create_an_init_method(baz_cls, bar_init, 0, {});
+
+  auto use_cls = assembler::class_from_string(R"(
+    (class (public) "Luse;"
+      (method (public static) "Luse;.a:(I)V"
+        (
+          ; not complex
+          (new-instance "Lfoo;")
+          (move-result-pseudo-object v1)
+          (invoke-direct (v1) "Ljava/lang/Object;.<init>:()V")
+
+          ; totally normal
+          (new-instance "Lbar;")
+          (move-result-pseudo-object v2)
+          (invoke-direct (v2) "Lbar;.<init>:()V")
+
+          ; complex
+          (new-instance "Lbaz;")
+          (move-result-pseudo-object v3)
+          (invoke-direct (v3) "Lbar;.<init>:()V")
+          (return-void)
+        )
+      )
+    )
+  )");
+
+  Scope scope{foo_cls, bar_cls, baz_cls, use_cls};
+  for (auto cls : scope) {
+    for (auto m : cls->get_all_methods()) {
+      auto code = m->get_code();
+      if (code != nullptr) {
+        code->build_cfg();
+      }
+    }
+  }
+  auto result = constructor_analysis::find_complex_init_inlined_types(scope);
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(*result.begin(), baz_cls->get_type())
+      << "GOT " << show(*result.begin());
 }

@@ -13,14 +13,18 @@
 #include <sparta/ReducedProductAbstractDomain.h>
 
 #include "BaseIRAnalyzer.h"
+#include "ConcurrentContainers.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "Lazy.h"
+#include "LiveRange.h"
 #include "MethodUtil.h"
 #include "ReachingDefinitions.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "Walkers.h"
 
 using namespace sparta;
 
@@ -331,4 +335,43 @@ bool can_inline_inits_in_same_class(DexMethod* caller_method,
   }
 }
 
+std::unordered_set<const DexType*> find_complex_init_inlined_types(
+    const std::vector<DexClass*>& scope) {
+  InsertOnlyConcurrentSet<const DexType*> items;
+  // Calling this on an unknown type is apparently OK for verification.
+  auto object_init = DexMethod::get_method("Ljava/lang/Object;.<init>:()V");
+  walk::parallel::methods(scope, [&](DexMethod* method) {
+    auto code = method->get_code();
+    if (code == nullptr) {
+      return;
+    }
+    always_assert(code->editable_cfg_built());
+    auto& cfg = code->cfg();
+    Lazy<live_range::LazyLiveRanges> live_ranges(
+        [&]() { return std::make_unique<live_range::LazyLiveRanges>(cfg); });
+    for (auto* block : cfg.blocks()) {
+      for (auto& mie : InstructionIterable(block)) {
+        auto insn = mie.insn;
+        if (insn->opcode() == OPCODE_NEW_INSTANCE) {
+          auto new_instance_type = insn->get_type();
+          auto search = live_ranges->def_use_chains->find(insn);
+          if (search != live_ranges->def_use_chains->end()) {
+            for (auto& use : search->second) {
+              if (use.insn->has_method()) {
+                auto use_method = use.insn->get_method();
+                if (use.src_index == 0 && method::is_init(use_method) &&
+                    use_method != object_init &&
+                    use_method->get_class() != new_instance_type) {
+                  items.insert(new_instance_type);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+  std::unordered_set<const DexType*> result(items.begin(), items.end());
+  return result;
+}
 } // namespace constructor_analysis
