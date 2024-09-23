@@ -7,11 +7,15 @@
 
 #include "OutliningProfileGuidanceImpl.h"
 
+#include <boost/regex.hpp>
+
+#include "BaselineProfileConfig.h"
 #include "CallGraph.h"
 #include "ConfigFiles.h"
 #include "MethodOverrideGraph.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
+#include "RedexContext.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "Walkers.h"
@@ -20,11 +24,40 @@ namespace outliner_impl {
 
 using namespace outliner;
 
+void get_throughput_interactions(
+    ConfigFiles& config_files,
+    const outliner::ProfileGuidanceConfig& config,
+    std::unordered_set<size_t>* throughput_interaction_indices,
+    std::unordered_set<std::string>* throughput_interaction_ids) {
+  if (config.throughput_interaction_name_pattern.empty()) {
+    return;
+  }
+
+  boost::regex rx(config.throughput_interaction_name_pattern);
+  for (auto&& [interaction_id, interaction_name] :
+       config_files.get_baseline_profile_config().interactions) {
+    if (boost::regex_match(interaction_name, rx)) {
+      throughput_interaction_ids->insert(interaction_id);
+      auto index = g_redex->get_sb_interaction_index(interaction_id);
+      if (index >= g_redex->num_sb_interaction_indices()) {
+        TRACE(ISO, 1,
+              "get_throughput_interactions: throughput interaction [%s] %s has "
+              "no index!",
+              interaction_id.c_str(), interaction_name.c_str());
+        continue;
+      }
+      throughput_interaction_indices->insert(index);
+    }
+  }
+}
+
 void gather_sufficiently_warm_and_hot_methods(
     const Scope& scope,
     ConfigFiles& config_files,
     PassManager& mgr,
     const ProfileGuidanceConfig& config,
+    const std::unordered_set<std::string>& throughput_interaction_ids,
+    std::unordered_set<DexMethod*>* throughput_methods,
     std::unordered_set<DexMethod*>* sufficiently_warm_methods,
     std::unordered_set<DexMethod*>* sufficiently_hot_methods) {
   bool has_method_profiles{false};
@@ -33,25 +66,40 @@ void gather_sufficiently_warm_and_hot_methods(
     if (method_profiles.has_stats()) {
       has_method_profiles = true;
       for (auto& p : method_profiles.all_interactions()) {
+        bool is_throughput_interaction =
+            throughput_interaction_ids.count(p.first) != 0;
         auto& method_stats = p.second;
-        walk::methods(scope,
-                      [sufficiently_warm_methods, sufficiently_hot_methods,
-                       &method_stats, &config](DexMethod* method) {
-                        auto it = method_stats.find(method);
-                        if (it == method_stats.end()) {
-                          return;
-                        }
-                        if (it->second.appear_percent >=
-                            config.method_profiles_appear_percent) {
-                          if (it->second.call_count >
-                              config.method_profiles_hot_call_count) {
-                            sufficiently_hot_methods->insert(method);
-                          } else if (it->second.call_count >=
-                                     config.method_profiles_warm_call_count) {
-                            sufficiently_warm_methods->insert(method);
-                          }
-                        }
-                      });
+        walk::methods(
+            scope,
+            [throughput_methods, sufficiently_warm_methods,
+             sufficiently_hot_methods, &method_stats, &config,
+             is_throughput_interaction](DexMethod* method) {
+              auto it = method_stats.find(method);
+              if (it == method_stats.end()) {
+                return;
+              }
+              if (it->second.appear_percent <
+                  config.method_profiles_appear_percent) {
+                return;
+              }
+              if (is_throughput_interaction &&
+                  it->second.call_count >
+                      config.method_profiles_throughput_hot_call_count) {
+                throughput_methods->insert(method);
+                return;
+              }
+
+              if (it->second.call_count >
+                  config.method_profiles_hot_call_count) {
+                sufficiently_hot_methods->insert(method);
+                return;
+              }
+
+              if (it->second.call_count >=
+                  config.method_profiles_warm_call_count) {
+                sufficiently_warm_methods->insert(method);
+              }
+            });
       }
     }
   }
@@ -344,20 +392,26 @@ PerfSensitivity parse_perf_sensitivity(const std::string& str) {
 
 CanOutlineBlockDecider::CanOutlineBlockDecider(
     const outliner::ProfileGuidanceConfig& config,
+    const std::unordered_set<size_t>& throughput_interaction_indices,
+    bool throughput,
     bool sufficiently_warm,
     bool sufficiently_hot)
     : m_config(config),
+      m_throughput_interaction_indices(throughput_interaction_indices),
+      m_throughput(throughput),
       m_sufficiently_warm(sufficiently_warm),
       m_sufficiently_hot(sufficiently_hot) {}
 
 CanOutlineBlockDecider::Result
 CanOutlineBlockDecider::can_outline_from_big_block(
     const big_blocks::BigBlock& big_block) const {
-  if (!m_sufficiently_hot && !m_sufficiently_warm) {
+  if (!m_throughput && !m_sufficiently_hot && !m_sufficiently_warm) {
     return Result::CanOutline;
   }
-  if (!m_sufficiently_hot) {
+
+  if (!m_throughput && !m_sufficiently_hot) {
     always_assert(m_sufficiently_warm);
+
     // Make sure m_is_in_loop is initialized
     if (!m_is_in_loop) {
       m_is_in_loop.reset(
@@ -383,14 +437,47 @@ CanOutlineBlockDecider::can_outline_from_big_block(
           }));
     }
     if (!(*m_is_in_loop)[big_block.get_first_block()]) {
-      return Result::CanOutline;
+      bool has_throughput_source_block = false;
+      if (!m_throughput_interaction_indices.empty()) {
+        // Make sure m_is_throughput is initialized
+        if (!m_is_throughput) {
+          m_is_throughput.reset(new LazyUnorderedMap<cfg::Block*, bool>(
+              [this](cfg::Block* block) -> bool {
+                auto* sb = source_blocks::get_first_source_block(block);
+                if (sb == nullptr) {
+                  return false;
+                }
+                for (auto index : m_throughput_interaction_indices) {
+                  auto& val_pair = sb->vals[index];
+                  if (!val_pair &&
+                      val_pair->val > m_config.block_profiles_hits) {
+                    return true;
+                  }
+                }
+                return false;
+              }));
+        }
+        for (auto block : big_block.get_blocks()) {
+          if ((*m_is_throughput)[block]) {
+            has_throughput_source_block = true;
+            break;
+          }
+        }
+      }
+
+      if (!has_throughput_source_block) {
+        return Result::CanOutline;
+      }
     }
   }
   // If we get here,
-  // - the method is hot, or
-  // - the method is not hot but warm, and the big block is in a loop
+  // - the method is throughput or hot, or
+  // - the method is neither throughput nor hot but warm, and the big block is
+  // in a loop or has a throughput interaction sourceblock
   if (m_config.block_profiles_hits < 0) {
-    return m_sufficiently_hot ? Result::Hot : Result::WarmLoop;
+    return m_throughput         ? Result::Throughput
+           : m_sufficiently_hot ? Result::Hot
+                                : Result::WarmLoop;
   }
   // Make sure m_max_vals is initialized
   if (!m_max_vals) {
@@ -422,12 +509,14 @@ CanOutlineBlockDecider::can_outline_from_big_block(
     }
   }
   if (!val) {
-    return m_sufficiently_hot ? Result::HotNoSourceBlocks
-                              : Result::WarmLoopNoSourceBlocks;
+    return m_throughput         ? Result::ThroughputNoSourceBlocks
+           : m_sufficiently_hot ? Result::HotNoSourceBlocks
+                                : Result::WarmLoopNoSourceBlocks;
   }
   if (*val > m_config.block_profiles_hits) {
-    return m_sufficiently_hot ? Result::HotExceedsThresholds
-                              : Result::WarmLoopExceedsThresholds;
+    return m_throughput         ? Result::ThroughputExceedsThresholds
+           : m_sufficiently_hot ? Result::HotExceedsThresholds
+                                : Result::WarmLoopExceedsThresholds;
   }
   return Result::CanOutline;
 }

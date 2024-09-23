@@ -255,6 +255,8 @@ using CalleeCallerClasses =
 void gather_caller_callees(
     const ProfileGuidanceConfig& profile_guidance_config,
     const Scope& scope,
+    const std::unordered_set<size_t>& throughput_interaction_indices,
+    const std::unordered_set<DexMethod*>& throughput_methods,
     const std::unordered_set<DexMethod*>& sufficiently_warm_methods,
     const std::unordered_set<DexMethod*>& sufficiently_hot_methods,
     const GetCalleeFunction& get_callee_fn,
@@ -270,7 +272,9 @@ void gather_caller_callees(
     }
     always_assert(code.editable_cfg_built());
     CanOutlineBlockDecider block_decider(
-        profile_guidance_config, sufficiently_warm_methods.count(caller),
+        profile_guidance_config, throughput_interaction_indices,
+        throughput_methods.count(caller),
+        sufficiently_warm_methods.count(caller),
         sufficiently_hot_methods.count(caller));
     MoveAwareChains move_aware_chains(code.cfg());
     const auto use_def_chains = move_aware_chains.get_use_def_chains();
@@ -1159,6 +1163,14 @@ void PartialApplicationPass::bind_config() {
   bind("method_profiles_appear_percent", pg.method_profiles_appear_percent,
        pg.method_profiles_appear_percent,
        "Cut off when a method in a method profile is deemed relevant");
+  bind("throughput_interaction_name_pattern",
+       pg.throughput_interaction_name_pattern,
+       pg.throughput_interaction_name_pattern,
+       "Regular expression identifying throughput interaction names");
+  bind("method_profiles_throughput_hot_call_count",
+       pg.method_profiles_throughput_hot_call_count,
+       pg.method_profiles_throughput_hot_call_count,
+       "No code is outlined out of methods in throughput interactions");
   bind("method_profiles_hot_call_count",
        pg.method_profiles_hot_call_count,
        pg.method_profiles_hot_call_count,
@@ -1202,11 +1214,22 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
   RefChecker ref_checker(&xstores, xstores.largest_root_store_id(),
                          min_sdk_api);
 
+  std::unordered_set<size_t> throughput_interaction_indices;
+  std::unordered_set<std::string> throughput_interaction_ids;
+  get_throughput_interactions(conf, m_profile_guidance_config,
+                              &throughput_interaction_indices,
+                              &throughput_interaction_ids);
+  mgr.incr_metric("num_throughput_interactions",
+                  throughput_interaction_ids.size());
+
+  std::unordered_set<DexMethod*> throughput_methods;
   std::unordered_set<DexMethod*> sufficiently_warm_methods;
   std::unordered_set<DexMethod*> sufficiently_hot_methods;
   gather_sufficiently_warm_and_hot_methods(
-      scope, conf, mgr, m_profile_guidance_config, &sufficiently_warm_methods,
+      scope, conf, mgr, m_profile_guidance_config, throughput_interaction_ids,
+      &throughput_methods, &sufficiently_warm_methods,
       &sufficiently_hot_methods);
+  mgr.incr_metric("num_throughput_methods", throughput_methods.size());
   mgr.incr_metric("num_sufficiently_warm_methods",
                   sufficiently_warm_methods.size());
   mgr.incr_metric("num_sufficiently_hot_methods",
@@ -1256,9 +1279,10 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
   InsnsArgExclusivity arg_exclusivity;
   CalleeCallerClasses callee_caller_classes;
   gather_caller_callees(
-      m_profile_guidance_config, scope, sufficiently_warm_methods,
-      sufficiently_hot_methods, get_callee_fn, &callee_caller, &caller_callee,
-      &arg_exclusivity, &excluded_invoke_insns, &callee_caller_classes);
+      m_profile_guidance_config, scope, throughput_interaction_indices,
+      throughput_methods, sufficiently_warm_methods, sufficiently_hot_methods,
+      get_callee_fn, &callee_caller, &caller_callee, &arg_exclusivity,
+      &excluded_invoke_insns, &callee_caller_classes);
 
   TRACE(PA, 1, "[PartialApplication] %zu callers, %zu callees",
         caller_callee.size(), callee_caller.size());

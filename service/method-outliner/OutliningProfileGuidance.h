@@ -29,7 +29,9 @@ enum class PerfSensitivity : char {
 struct ProfileGuidanceConfig {
   bool use_method_profiles{true};
   bool enable_hotness_propagation{false};
+  std::string throughput_interaction_name_pattern;
   float method_profiles_appear_percent{1};
+  float method_profiles_throughput_hot_call_count{1};
   float method_profiles_hot_call_count{10};
   float method_profiles_warm_call_count{1};
   PerfSensitivity perf_sensitivity{PerfSensitivity::kAlwaysHot};
