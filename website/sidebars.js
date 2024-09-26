@@ -125,6 +125,11 @@ module.exports = {
                     id: 'fb/redex_team_internal/redex_introduction/developer_environment',
                     label: 'Developer Environment',
                   },
+                  {
+                    type: 'doc',
+                    id: 'fb/redex_team_internal/redex_introduction/architecture',
+                    label: 'Architecture',
+                  },
                 ]
               }
             ]
