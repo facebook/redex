@@ -120,6 +120,11 @@ module.exports = {
                     id: 'fb/redex_team_internal/redex_introduction/communication_channels',
                     label: 'Communication Channels',
                   },
+                  {
+                    type: 'doc',
+                    id: 'fb/redex_team_internal/redex_introduction/developer_environment',
+                    label: 'Developer Environment',
+                  },
                 ]
               }
             ]
