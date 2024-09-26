@@ -150,6 +150,11 @@ module.exports = {
                     id: 'fb/redex_team_internal/redex_introduction/writing_tests',
                     label: 'Writing Tests',
                   },
+                  {
+                    type: 'doc',
+                    id: 'fb/redex_team_internal/redex_introduction/shipping_a_diff',
+                    label: 'Shipping a Diff',
+                  },
                 ]
               }
             ]
