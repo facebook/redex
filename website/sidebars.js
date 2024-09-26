@@ -145,6 +145,11 @@ module.exports = {
                     id: 'fb/redex_team_internal/redex_introduction/debugging',
                     label: 'Debugging',
                   },
+                  {
+                    type: 'doc',
+                    id: 'fb/redex_team_internal/redex_introduction/writing_tests',
+                    label: 'Writing Tests',
+                  },
                 ]
               }
             ]
