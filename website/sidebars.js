@@ -115,6 +115,11 @@ module.exports = {
                     id: 'fb/redex_team_internal/redex_introduction/what_is_redex',
                     label: 'What is Redex?',
                   },
+                  {
+                    type: 'doc',
+                    id: 'fb/redex_team_internal/redex_introduction/communication_channels',
+                    label: 'Communication Channels',
+                  },
                 ]
               }
             ]

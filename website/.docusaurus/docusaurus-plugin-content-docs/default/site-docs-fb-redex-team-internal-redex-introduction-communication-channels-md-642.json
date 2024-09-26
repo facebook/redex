@@ -1,0 +1,33 @@
+{
+  "unversionedId": "fb/redex_team_internal/redex_introduction/communication_channels",
+  "id": "fb/redex_team_internal/redex_introduction/communication_channels",
+  "title": "Communication Channels",
+  "description": "Redex Internal Communication Channels",
+  "source": "@site/docs/fb/redex_team_internal/redex_introduction/communication_channels.md",
+  "sourceDirName": "fb/redex_team_internal/redex_introduction",
+  "slug": "/fb/redex_team_internal/redex_introduction/communication_channels",
+  "permalink": "/docs/fb/redex_team_internal/redex_introduction/communication_channels",
+  "draft": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "id": "communication_channels",
+    "title": "Communication Channels",
+    "description": "Redex Internal Communication Channels",
+    "keywords": [
+      "Redex",
+      "Internal Communication",
+      "Getting Started"
+    ],
+    "oncall": "redex"
+  },
+  "sidebar": "mySidebar",
+  "previous": {
+    "title": "What is Redex?",
+    "permalink": "/docs/fb/redex_team_internal/redex_introduction/what_is_redex"
+  },
+  "next": {
+    "title": "Related Teams",
+    "permalink": "/docs/fb/related_teams/"
+  }
+}
