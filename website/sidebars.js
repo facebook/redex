@@ -130,6 +130,11 @@ module.exports = {
                     id: 'fb/redex_team_internal/redex_introduction/architecture',
                     label: 'Architecture',
                   },
+                  {
+                    type: 'doc',
+                    id: 'fb/redex_team_internal/redex_introduction/running_redex',
+                    label: 'Running Redex',
+                  },
                 ]
               }
             ]
