@@ -140,6 +140,11 @@ module.exports = {
                     id: 'fb/redex_team_internal/redex_introduction/tracing',
                     label: 'Tracing',
                   },
+                  {
+                    type: 'doc',
+                    id: 'fb/redex_team_internal/redex_introduction/debugging',
+                    label: 'Debugging',
+                  },
                 ]
               }
             ]
