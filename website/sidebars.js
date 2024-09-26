@@ -105,8 +105,18 @@ module.exports = {
           {
             type: 'category',
             label: 'Redex Team Internal',
-            link: { type: 'doc', id: 'fb/redex_team_internal/index' },
             items: [
+              {
+                type: 'category',
+                label: 'Redex Introduction',
+                items: [
+                  {
+                    type: 'doc',
+                    id: 'fb/redex_team_internal/redex_introduction/what_is_redex',
+                    label: 'What is Redex?',
+                  },
+                ]
+              }
             ]
           },
           {
