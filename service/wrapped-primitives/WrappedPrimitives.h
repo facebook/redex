@@ -103,6 +103,11 @@ class WrappedPrimitives {
  private:
   void increment_consts();
   void increment_casts();
+  bool is_wrapped_method_ref(const DexType* wrapper_type, DexMethodRef* ref);
+  // Checks what is configured for the given type and wrapped method ref;
+  // asserts there is a primitive version of it.
+  DexMethodRef* unwrapped_method_ref_for(const DexType* wrapper_type,
+                                         DexMethodRef* ref);
   std::vector<Spec> m_wrapper_specs;
   std::unordered_map<DexType*, Spec> m_type_to_spec;
   std::unordered_set<const DexMethodRef*> m_all_wrapped_apis;

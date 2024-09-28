@@ -141,6 +141,21 @@ bool needs_cast(const TypeSystem& type_system,
 }
 } // namespace
 
+bool WrappedPrimitives::is_wrapped_method_ref(const DexType* wrapper_type,
+                                              DexMethodRef* ref) {
+  auto search = m_type_to_spec.find(const_cast<DexType*>(wrapper_type));
+  if (search != m_type_to_spec.end()) {
+    return search->second.allowed_invokes.count(ref) > 0;
+  }
+  return false;
+};
+
+DexMethodRef* WrappedPrimitives::unwrapped_method_ref_for(
+    const DexType* wrapper_type, DexMethodRef* ref) {
+  auto spec = m_type_to_spec.at(const_cast<DexType*>(wrapper_type));
+  return spec.allowed_invokes.at(ref);
+};
+
 void WrappedPrimitives::increment_consts() { m_consts_inserted++; }
 
 void WrappedPrimitives::increment_casts() { m_casts_inserted++; }
@@ -166,19 +181,67 @@ void WrappedPrimitives::optimize_method(
     if (env.is_bottom()) {
       continue;
     }
+
     auto last_insn = block->get_last_insn();
     auto ii = InstructionIterable(block);
     for (auto it = ii.begin(); it != ii.end(); it++) {
       auto cfg_it = block->to_cfg_instruction_iterator(it);
-      auto insn = cfg_it->insn;
+      auto move_result_it = cfg.move_result_of(cfg_it);
 
+      auto insn = cfg_it->insn;
       if (insn->has_method() &&
           m_all_wrapped_apis.count(insn->get_method()) > 0) {
-        TRACE(WP, 2, "Relevant invoke: %s", SHOW(insn));
-        // Inline the wrapped constant value and change method ref.
+        TRACE(WP, 2, "Relevant invoke: %s in B%zu", SHOW(insn), block->id());
+        auto ref = insn->get_method();
+
+        // Inline the wrapped constant value and change method ref, if all
+        // information is known.
         auto srcs_size = insn->srcs_size();
         auto& reg_env = env.get_register_environment();
+
         bool changed_ref{false};
+        auto updated_insn = new IRInstruction(*insn);
+        // HELPER FUNCTIONS
+        auto perform_unwrapping = [&](const DexType* wrapper_type,
+                                      src_index_t idx, reg_t literal_reg) {
+          updated_insn->set_src(idx, literal_reg);
+          auto unwrapped_ref = unwrapped_method_ref_for(wrapper_type, ref);
+          if (!changed_ref) {
+            if (needs_cast(type_system, ref, unwrapped_ref)) {
+              auto to_type = unwrapped_ref->get_class();
+              auto opcode = is_interface(type_class(to_type))
+                                ? OPCODE_INVOKE_INTERFACE
+                                : OPCODE_INVOKE_VIRTUAL;
+              auto obj_reg = cfg.allocate_temp();
+              auto cast = (new IRInstruction(OPCODE_CHECK_CAST))
+                              ->set_type(to_type)
+                              ->set_src(0, insn->src(0));
+              auto move_pseudo =
+                  (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+                      ->set_dest(obj_reg);
+              updated_insn->set_method(unwrapped_ref);
+              updated_insn->set_opcode(opcode);
+              updated_insn->set_src(0, obj_reg);
+              mutation.insert_before(cfg_it, {cast, move_pseudo});
+              increment_casts();
+            } else {
+              updated_insn->set_method(unwrapped_ref);
+            }
+            changed_ref = true;
+          }
+        };
+        auto inject_const = [&](const cfg::InstructionIterator& anchor,
+                                int64_t literal, reg_t literal_reg,
+                                bool is_wide) {
+          auto const_insn =
+              (new IRInstruction(is_wide ? OPCODE_CONST_WIDE : OPCODE_CONST))
+                  ->set_literal(literal)
+                  ->set_dest(literal_reg);
+
+          mutation.insert_before(anchor, {const_insn});
+          increment_consts();
+        };
+
         for (size_t i = 0; i < srcs_size; i++) {
           auto current_reg = insn->src(i);
           TRACE(WP, 2, "  Checking v%d", current_reg);
@@ -196,48 +259,25 @@ void WrappedPrimitives::optimize_method(
 
             auto search =
                 m_type_to_spec.find(const_cast<DexType*>(wrapper_type));
-            auto ref = insn->get_method();
             if (search != m_type_to_spec.end()) {
               auto spec = search->second;
-              if (spec.allowed_invokes.count(ref)) {
-                auto unwrapped_ref = spec.allowed_invokes.at(ref);
+              if (is_wrapped_method_ref(wrapper_type, ref)) {
                 auto is_wide = type::is_wide_type(spec.primitive);
                 auto literal_reg =
                     is_wide ? cfg.allocate_wide_temp() : cfg.allocate_temp();
-                auto const_insn = (new IRInstruction(is_wide ? OPCODE_CONST_WIDE
-                                                             : OPCODE_CONST))
-                                      ->set_literal(literal)
-                                      ->set_dest(literal_reg);
-
-                mutation.insert_before(cfg_it, {const_insn});
-                increment_consts();
-                insn->set_src(i, literal_reg);
-                if (!changed_ref) {
-                  if (needs_cast(type_system, ref, unwrapped_ref)) {
-                    auto to_type = unwrapped_ref->get_class();
-                    auto opcode = is_interface(type_class(to_type))
-                                      ? OPCODE_INVOKE_INTERFACE
-                                      : OPCODE_INVOKE_VIRTUAL;
-                    auto obj_reg = cfg.allocate_temp();
-                    auto cast = (new IRInstruction(OPCODE_CHECK_CAST))
-                                    ->set_type(to_type)
-                                    ->set_src(0, insn->src(0));
-                    auto move_pseudo =
-                        (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
-                            ->set_dest(obj_reg);
-                    insn->set_method(unwrapped_ref);
-                    insn->set_opcode(opcode);
-                    insn->set_src(0, obj_reg);
-                    mutation.insert_before(cfg_it, {cast, move_pseudo});
-                    increment_casts();
-                  } else {
-                    insn->set_method(unwrapped_ref);
-                  }
-                  changed_ref = true;
-                }
+                inject_const(cfg_it, literal, literal_reg, is_wide);
+                perform_unwrapping(wrapper_type, i, literal_reg);
               }
             }
           }
+        }
+        // END FOR
+        if (changed_ref) {
+          std::vector<IRInstruction*> replacements{updated_insn};
+          if (!move_result_it.is_end()) {
+            replacements.push_back(new IRInstruction(*move_result_it->insn));
+          }
+          mutation.replace(cfg_it, replacements);
         }
       }
       intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
