@@ -188,6 +188,11 @@ module.exports = {
                           },
                           {
                             type: 'doc',
+                            id: 'fb/related_teams/pogo/pogo_team_internal/betamap/data_collection',
+                            label: 'Data Collection'
+                          },
+                          {
+                            type: 'doc',
                             id: 'fb/related_teams/pogo/pogo_team_internal/betamap/data_pipelines',
                             label: 'Data Pipelines'
                           },
