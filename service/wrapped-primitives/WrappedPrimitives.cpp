@@ -19,6 +19,7 @@
 #include "DexUtil.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "InitDeps.h"
+#include "Lazy.h"
 #include "LiveRange.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
@@ -139,6 +140,32 @@ bool needs_cast(const TypeSystem& type_system,
     }
   }
 }
+
+// For definitions of a wrapper type that flow into an invoke, makes sure they
+// are all known ObjectWithImmutAttr instances and they agree on the type of
+// the object. Empty return value will signal an invalid state that should not
+// be transformed.
+template <typename T>
+std::vector<KnownDef> validate_known_defs(
+    const std::unordered_map<IRInstruction*, KnownDef>& known_defs,
+    const T& actual_defs) {
+  std::vector<KnownDef> known_vec;
+  std::unordered_set<const DexType*> type_set;
+  for (auto& d : actual_defs) {
+    auto is_known_search = known_defs.find(d);
+    if (is_known_search != known_defs.end()) {
+      auto& kd = is_known_search->second;
+      known_vec.push_back(kd);
+      type_set.emplace(kd.wrapper_type);
+    }
+  }
+  if (known_vec.size() == actual_defs.size() && type_set.size() == 1) {
+    return known_vec;
+  } else {
+    // Return empty to signal that validation did not pass.
+    return {};
+  }
+}
 } // namespace
 
 bool WrappedPrimitives::is_wrapped_method_ref(const DexType* wrapper_type,
@@ -160,6 +187,56 @@ void WrappedPrimitives::increment_consts() { m_consts_inserted++; }
 
 void WrappedPrimitives::increment_casts() { m_casts_inserted++; }
 
+// The initial phase of analyzing a method; for a known ObjectWithImmutAttr
+// instance, keep track of the sget-object instruction that defines it, the
+// register they get moved into, and the primitive value that is stored.
+// Computing this up front can make subsequent transformations easier.
+std::unordered_map<IRInstruction*, KnownDef>
+WrappedPrimitives::build_known_definitions(
+    const cp::intraprocedural::FixpointIterator& intra_cp,
+    cfg::ControlFlowGraph& cfg) {
+  std::unordered_map<IRInstruction*, KnownDef> known_defs;
+  for (const auto& block : cfg.blocks()) {
+    auto env = intra_cp.get_entry_state_at(block);
+    // This block is unreachable
+    if (env.is_bottom()) {
+      continue;
+    }
+    auto last_insn = block->get_last_insn();
+    auto ii = InstructionIterable(block);
+    for (auto it = ii.begin(); it != ii.end(); it++) {
+      auto insn = it->insn;
+      intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
+      if (insn->opcode() != IOPCODE_MOVE_RESULT_PSEUDO_OBJECT) {
+        continue;
+      }
+      auto cfg_it = block->to_cfg_instruction_iterator(it);
+      auto primary_it = cfg.primary_instruction_of_move_result(cfg_it);
+      always_assert(!primary_it.is_end());
+      if (primary_it->insn->opcode() != OPCODE_SGET_OBJECT) {
+        continue;
+      }
+      auto primary_insn = primary_it->insn;
+      auto search = m_type_to_spec.find(primary_insn->get_field()->get_type());
+      if (search != m_type_to_spec.end()) {
+        auto& reg_env = env.get_register_environment();
+        auto dest_reg = insn->dest();
+        auto& value = reg_env.get(dest_reg);
+        auto maybe_pair = extract_object_with_attr_value(value);
+        if (maybe_pair != boost::none) {
+          // Store a mapping of primary instruction to its dest register and
+          // value. This may be useful later for ambiguous data flow into a
+          // wrapped API method.
+          KnownDef kd{maybe_pair->first, primary_insn, dest_reg,
+                      maybe_pair->second};
+          known_defs.emplace(primary_insn, kd);
+        }
+      }
+    }
+  }
+  return known_defs;
+}
+
 void WrappedPrimitives::optimize_method(
     const TypeSystem& type_system,
     const cp::intraprocedural::FixpointIterator& intra_cp,
@@ -174,6 +251,13 @@ void WrappedPrimitives::optimize_method(
   }
 
   TRACE(WP, 2, "optimize_method: %s", SHOW(method));
+  TRACE(WP, 8, "Initial %s", SHOW(cfg));
+  // Initial replay of the analysis, to build up an understanding of sget-object
+  // instructions, their possible known value and the registers they populate.
+  auto known_defs = build_known_definitions(intra_cp, cfg);
+  // Subsequent replay of analysis, which will set up mutations as needed.
+  Lazy<live_range::LazyLiveRanges> live_ranges(
+      [&]() { return std::make_unique<live_range::LazyLiveRanges>(cfg); });
   cfg::CFGMutation mutation(cfg);
   for (const auto& block : cfg.blocks()) {
     auto env = intra_cp.get_entry_state_at(block);
@@ -181,7 +265,6 @@ void WrappedPrimitives::optimize_method(
     if (env.is_bottom()) {
       continue;
     }
-
     auto last_insn = block->get_last_insn();
     auto ii = InstructionIterable(block);
     for (auto it = ii.begin(); it != ii.end(); it++) {
@@ -199,14 +282,14 @@ void WrappedPrimitives::optimize_method(
         auto srcs_size = insn->srcs_size();
         auto& reg_env = env.get_register_environment();
 
-        bool changed_ref{false};
+        bool updated_ref{false};
         auto updated_insn = new IRInstruction(*insn);
         // HELPER FUNCTIONS
         auto perform_unwrapping = [&](const DexType* wrapper_type,
                                       src_index_t idx, reg_t literal_reg) {
           updated_insn->set_src(idx, literal_reg);
           auto unwrapped_ref = unwrapped_method_ref_for(wrapper_type, ref);
-          if (!changed_ref) {
+          if (!updated_ref) {
             if (needs_cast(type_system, ref, unwrapped_ref)) {
               auto to_type = unwrapped_ref->get_class();
               auto opcode = is_interface(type_class(to_type))
@@ -227,7 +310,7 @@ void WrappedPrimitives::optimize_method(
             } else {
               updated_insn->set_method(unwrapped_ref);
             }
-            changed_ref = true;
+            updated_ref = true;
           }
         };
         auto inject_const = [&](const cfg::InstructionIterator& anchor,
@@ -269,10 +352,52 @@ void WrappedPrimitives::optimize_method(
                 perform_unwrapping(wrapper_type, i, literal_reg);
               }
             }
+          } else {
+            // Check if the src idx is a wrapper type in the proto. If so, do a
+            // fallback to check if N known ObjectWithImmutAttr instances are
+            // flowing into this call.
+            TRACE(WP, 2,
+                  "  v%d is not a known object (i = %zu); will fall back and "
+                  "look for "
+                  "multiple incoming definitions",
+                  current_reg, i);
+            live_range::Use use{insn, (src_index_t)i};
+            auto f = live_ranges->use_def_chains->find(use);
+            if (f != live_ranges->use_def_chains->end() &&
+                f->second.size() > 1) {
+              // Only check if there are multiple defs; a single def that was
+              // not understood in the environment will have no value taking
+              // this fallback path.
+              auto valid_defs = validate_known_defs(known_defs, f->second);
+              if (!valid_defs.empty()) {
+                TRACE(WP, 2,
+                      " ** Should be able to patch dataflow to this invoke!!");
+                auto wrapper_type =
+                    valid_defs.at(0).wrapper_type; // all types in vec will be
+                                                   // the same, per validation
+                                                   // step
+                auto search =
+                    m_type_to_spec.find(const_cast<DexType*>(wrapper_type));
+                if (search != m_type_to_spec.end()) {
+                  auto spec = search->second;
+                  if (is_wrapped_method_ref(wrapper_type, ref)) {
+                    // Perform unwrapping as above, but with an injected const
+                    // alongside each definition.
+                    auto is_wide = type::is_wide_type(spec.primitive);
+                    auto literal_reg = is_wide ? cfg.allocate_wide_temp()
+                                               : cfg.allocate_temp();
+                    for (auto& kd : valid_defs) {
+                      inject_const(cfg.find_insn(kd.primary_insn),
+                                   kd.primitive_value, literal_reg, is_wide);
+                    }
+                    perform_unwrapping(wrapper_type, i, literal_reg);
+                  }
+                }
+              }
+            }
           }
-        }
-        // END FOR
-        if (changed_ref) {
+        } // END SRCS FOR LOOP
+        if (updated_ref) {
           std::vector<IRInstruction*> replacements{updated_insn};
           if (!move_result_it.is_end()) {
             replacements.push_back(new IRInstruction(*move_result_it->insn));
@@ -284,6 +409,7 @@ void WrappedPrimitives::optimize_method(
     }
   }
   mutation.flush();
+  TRACE(WP, 8, "Post edit %s %s", SHOW(method), SHOW(cfg));
 }
 
 bool is_wrapped_api(const DexMethodRef* ref) {

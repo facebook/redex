@@ -73,6 +73,33 @@ TEST_F(PostVerify, VerifyTransform) {
     EXPECT_EQ(simple_cast_str, assembler::to_string(expected.get()));
   }
 
+  {
+    auto multiple_defs = find_method_named(*usage_cls, "multipleDefs");
+    auto multiple_defs_str = stringify_for_comparision(multiple_defs);
+    auto expected = assembler::ircode_from_string(R"((
+      (load-param-object v5)
+      (invoke-static () "Ljava/lang/System;.currentTimeMillis:()J")
+      (move-result-wide v3)
+      (const-wide v1 100)
+      (cmp-long v0 v3 v1)
+      (if-lez v0 :L1)
+      (const-wide v1 1) ; inserted by the optimization pass
+      (sget-object "Lcom/facebook/redex/AllValues;.L1:Lcom/facebook/redex/MyLong;")
+      (move-result-pseudo-object v0)
+      (:L0)
+      (invoke-virtual (v5 v1) "Lcom/facebook/redex/Receiver;.getLong:(J)J")
+      (move-result-wide v0)
+      (return-wide v0)
+      (:L1)
+      (const-wide v1 2) ; inserted by the optimization pass
+      (sget-object "Lcom/facebook/redex/AllValues;.L2:Lcom/facebook/redex/MyLong;")
+      (move-result-pseudo-object v0)
+      (goto :L0)
+    ))");
+    std::cerr << multiple_defs_str << std::endl;
+    EXPECT_EQ(multiple_defs_str, assembler::to_string(expected.get()));
+  }
+
   // Just for convenience, dump some methods as a much more readable CFG form.
   dump_method(find_method_named(*usage_cls, "run"));
   dump_method(find_method_named(*usage_cls, "runMonitor"));

@@ -64,6 +64,13 @@ struct Spec {
   }
 };
 
+struct KnownDef {
+  const DexType* wrapper_type;
+  IRInstruction* primary_insn;
+  reg_t dest_reg;
+  int64_t primitive_value;
+};
+
 namespace cp = constant_propagation;
 class WrappedPrimitives {
  public:
@@ -87,6 +94,9 @@ class WrappedPrimitives {
   }
   void mark_roots();
   void unmark_roots();
+  std::unordered_map<IRInstruction*, KnownDef> build_known_definitions(
+      const cp::intraprocedural::FixpointIterator& intra_cp,
+      cfg::ControlFlowGraph& cfg);
   void optimize_method(const TypeSystem& type_system,
                        const cp::intraprocedural::FixpointIterator& intra_cp,
                        const cp::WholeProgramState& wps,

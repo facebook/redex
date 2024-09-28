@@ -14,7 +14,7 @@ public class WrappedPrimitivesTest {
   @Test
   public void testTranformableLookup() {
     long[] results = com.facebook.redex.WrappedPrimitives.run();
-    assertThat(results.length).isEqualTo(8);
+    assertThat(results.length).isEqualTo(9);
     assertThat(results[0]).isEqualTo(1);
     assertThat(results[1]).isEqualTo(1);
     assertThat(results[2]).isEqualTo(2);

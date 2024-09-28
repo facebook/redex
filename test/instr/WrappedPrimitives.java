@@ -111,8 +111,9 @@ public class WrappedPrimitives {
 
   private static final Object LOCK = new Object();
 
+  // Larger method for actually running in instr test and asserting via JUnit
   public static long[] run() {
-    long[] results = new long[8];
+    long[] results = new long[9];
     Receiver r = new Receiver();
     results[0] = r.getLong(AllValues.L1);
     results[1] = r.peekLong(AllValues.L1);
@@ -124,15 +125,21 @@ public class WrappedPrimitives {
     results[5] = r.getLong(Intermediate.L8);
     results[6] = r.getLong(Intermediate2.L8);
     results[7] = r.getLong(MoreValues.L9);
+    results[8] = r.getLong(System.currentTimeMillis() > 100 ? AllValues.L1 : AllValues.L2);
     return results;
   }
 
+  // Smaller methods that are suitable for verifying via s-expr comparisons.
   public static long simple(Receiver r) {
     return r.getLong(AllValues.L1);
   }
 
   public static long simpleCast(Safe s) {
     return s.getLong(AllValues.L1);
+  }
+
+  public static long multipleDefs(Receiver r) {
+    return r.getLong(System.currentTimeMillis() > 100 ? AllValues.L1 : AllValues.L2);
   }
 
   // Another expected usage; Interface type is given, and will need a check-cast
