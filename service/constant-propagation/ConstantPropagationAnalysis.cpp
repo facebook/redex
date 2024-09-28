@@ -792,7 +792,8 @@ bool ClinitFieldAnalyzer::analyze_invoke(const DexType* class_under_init,
  */
 bool StaticFinalFieldAnalyzer::analyze_sget(const IRInstruction* insn,
                                             ConstantEnvironment* env) {
-  if (insn->opcode() != OPCODE_SGET) {
+  auto opcode = insn->opcode();
+  if (opcode != OPCODE_SGET && opcode != OPCODE_SGET_WIDE) {
     return false;
   }
 
