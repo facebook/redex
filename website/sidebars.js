@@ -177,6 +177,17 @@ module.exports = {
                         id: 'fb/related_teams/pogo/pogo_team_internal/overview',
                         label: 'Team Overview',
                       },
+                      {
+                        type: 'category',
+                        label: 'Betamap',
+                        items: [
+                          {
+                            type: 'doc',
+                            id: 'fb/related_teams/pogo/pogo_team_internal/betamap/overview',
+                            label: 'Overview'
+                          },
+                        ],
+                      },
                     ],
                   }
                 ],
