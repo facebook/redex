@@ -340,6 +340,7 @@ libredex_la_SOURCES = \
 	service/type-analysis/TypeAnalysisRuntimeAssert.cpp \
 	service/type-analysis/ResolveMethodRefs.cpp \
 	service/type-string-rewriter/TypeStringRewriter.cpp \
+	service/wrapped-primitives/WrappedPrimitives.cpp \
 	shared/DexDefs.cpp \
 	shared/DexEncoding.cpp \
 	shared/file-utils.cpp \
@@ -526,7 +527,7 @@ libopt_la_SOURCES = \
 	opt/virtual_merging/DedupVirtualMethods.cpp \
 	opt/virtual_merging/VirtualMerging.cpp \
 	opt/virtual_scope/MethodDevirtualizationPass.cpp \
-	opt/wrapped-primitives/WrappedPrimitives.cpp
+	opt/wrapped-primitives/WrappedPrimitivesPass.cpp
 
 libopt_la_LIBADD = \
     libredex.la \

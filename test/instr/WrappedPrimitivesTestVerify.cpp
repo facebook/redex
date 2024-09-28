@@ -13,51 +13,67 @@
 using namespace testing;
 
 namespace {
-std::set<std::string> SUPPORTED_FIELDS{"L1", "L4", "L8"};
-std::set<std::string> UNSUPPORTED_FIELDS{"L2", "L3", "L5", "L6", "L7"};
-} // namespace
-
-TEST_F(PreVerify, VerifyBaseState) {
-  auto wrapped_cls = find_class_named(classes, "Lcom/facebook/redex/MyLong;");
-  auto wrapped_type = wrapped_cls->get_type();
-  auto cls = find_class_named(classes, "Lcom/facebook/redex/AllValues;");
-
-  std::vector<std::string> all_fields;
-  all_fields.insert(all_fields.end(), SUPPORTED_FIELDS.begin(),
-                    SUPPORTED_FIELDS.end());
-  all_fields.insert(all_fields.end(), UNSUPPORTED_FIELDS.begin(),
-                    UNSUPPORTED_FIELDS.end());
-  for (const auto& name : all_fields) {
-    auto f = find_sfield_named(*cls, name.c_str());
-    EXPECT_NE(f, nullptr) << "Did not find field " << name;
-    EXPECT_EQ(f->get_type(), wrapped_type);
-  }
+void dump_method(DexMethod* method) {
+  method->balloon();
+  method->get_code()->build_cfg();
+  auto& cfg = method->get_code()->cfg();
+  std::cout << show(method) << " " << show(cfg) << std::endl;
 }
 
-TEST_F(PostVerify, VerifyTransform) {
-  auto wrapped_cls = find_class_named(classes, "Lcom/facebook/redex/MyLong;");
-  auto wrapped_type = wrapped_cls->get_type();
-  auto primitive_long = type::_long();
-  auto cls = find_class_named(classes, "Lcom/facebook/redex/AllValues;");
-  for (const auto& name : SUPPORTED_FIELDS) {
-    auto f = find_sfield_named(*cls, name.c_str());
-    EXPECT_NE(f, nullptr) << "Did not find field " << name;
-    EXPECT_EQ(f->get_type(), primitive_long)
-        << "Field " << SHOW(f) << " should be unboxed!";
+std::string stringify_for_comparision(DexMethod* method) {
+  method->balloon();
+  // Remove positions to make asserts easier to write with IRAssembler.
+  auto code = method->get_code();
+  for (auto it = code->begin(); it != code->end();) {
+    if (it->type == MFLOW_POSITION) {
+      it = code->erase_and_dispose(it);
+    } else {
+      it++;
+    }
   }
-  for (const auto& name : UNSUPPORTED_FIELDS) {
-    auto f = find_sfield_named(*cls, name.c_str());
-    EXPECT_NE(f, nullptr) << "Did not find field " << name;
-    EXPECT_EQ(f->get_type(), wrapped_type)
-        << "Field " << SHOW(f) << " should be unchanged!";
-  }
+  return assembler::to_string(code);
+}
+} // namespace
 
+TEST_F(PostVerify, VerifyTransform) {
   auto usage_cls =
       find_class_named(classes, "Lcom/facebook/redex/WrappedPrimitives;");
-  auto run = find_method_named(*usage_cls, "run");
-  EXPECT_NE(run, nullptr);
-  run->balloon();
-  run->get_code()->build_cfg();
-  auto& cfg = run->get_code()->cfg();
-  std::cout << show(cfg) << std::endl;
+
+  // Simple unboxing.
+  {
+    auto simple = find_method_named(*usage_cls, "simple");
+    auto simple_str = stringify_for_comparision(simple);
+    auto expected = assembler::ircode_from_string(R"((
+      (load-param-object v2)
+      (sget-object "Lcom/facebook/redex/AllValues;.L1:Lcom/facebook/redex/MyLong;")
+      (move-result-pseudo-object v0)
+      (const-wide v0 1)
+      (invoke-virtual (v2 v0) "Lcom/facebook/redex/Receiver;.getLong:(J)J")
+      (move-result-wide v0)
+      (return-wide v0)
+    ))");
+    EXPECT_EQ(simple_str, assembler::to_string(expected.get()));
+  }
+
+  // Insertion of a cast to the underlying unwrapped API.
+  {
+    auto simple_cast = find_method_named(*usage_cls, "simpleCast");
+    auto simple_cast_str = stringify_for_comparision(simple_cast);
+    auto expected = assembler::ircode_from_string(R"((
+      (load-param-object v2)
+      (sget-object "Lcom/facebook/redex/AllValues;.L1:Lcom/facebook/redex/MyLong;")
+      (move-result-pseudo-object v0)
+      (const-wide v0 1)
+      (check-cast v2 "Lcom/facebook/redex/Receiver;")
+      (move-result-pseudo-object v2)
+      (invoke-virtual (v2 v0) "Lcom/facebook/redex/Receiver;.getLong:(J)J")
+      (move-result-wide v0)
+      (return-wide v0)
+    ))");
+    EXPECT_EQ(simple_cast_str, assembler::to_string(expected.get()));
+  }
+
+  // Just for convenience, dump some methods as a much more readable CFG form.
+  dump_method(find_method_named(*usage_cls, "run"));
+  dump_method(find_method_named(*usage_cls, "runMonitor"));
 }

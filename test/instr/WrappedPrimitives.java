@@ -7,6 +7,8 @@
 
 package com.facebook.redex;
 
+import java.util.Arrays;
+
 class Constants {
   public static final long ONE = 1L;
   public static final long TWO = 2L;
@@ -24,6 +26,10 @@ class MyLong {
   public MyLong(long value) {
     this.value = value;
   }
+
+  public static MyLong make(long value) {
+    return new MyLong(value);
+  }
 };
 
 class Bad {
@@ -31,7 +37,7 @@ class Bad {
 }
 
 class AllValues {
-  public static final MyLong L1 = new MyLong(Constants.ONE);
+  public static final MyLong L1 = MyLong.make(Constants.ONE);
   public static final MyLong L2 = new MyLong(Constants.TWO);
   public static final MyLong L3 = new MyLong(Constants.THREE);
   public static final MyLong L4 = new MyLong(Constants.FOUR);
@@ -73,7 +79,12 @@ class MoreValues {
   }
 }
 
-class Receiver {
+interface Safe {
+  long getLong(MyLong l);
+  long peekLong(MyLong l);
+}
+
+class Receiver implements Safe {
   public long getLong(MyLong l) {
     return l.value;
   }
@@ -97,6 +108,9 @@ class Receiver {
 }
 
 public class WrappedPrimitives {
+
+  private static final Object LOCK = new Object();
+
   public static long[] run() {
     long[] results = new long[8];
     Receiver r = new Receiver();
@@ -111,5 +125,47 @@ public class WrappedPrimitives {
     results[6] = r.getLong(Intermediate2.L8);
     results[7] = r.getLong(MoreValues.L9);
     return results;
+  }
+
+  public static long simple(Receiver r) {
+    return r.getLong(AllValues.L1);
+  }
+
+  public static long simpleCast(Safe s) {
+    return s.getLong(AllValues.L1);
+  }
+
+  // Another expected usage; Interface type is given, and will need a check-cast
+  // to underlying impl which has the unwrapped method. Will need to ensure that
+  // monitor-enter/exit instructions are properly balanced under such an
+  // insertion
+  public static synchronized long[] runMonitor(Safe s) {
+    long[] results = new long[1];
+    long l;
+    synchronized (LOCK) {
+      l = s.getLong(AllValues.L1);
+    }
+    results[0] = l;
+    return results;
+  }
+
+    public static synchronized long[] runAnother(Safe s) {
+    String tag = "X";
+    long[] results = new long[1];
+    try {
+      results[0] = s.getLong(AllValues.L1);
+    } catch (IllegalStateException e) {
+      android.util.Log.w(tag, e);
+    }
+    return results;
+  }
+
+  public static long[] runWithInterface() {
+    Receiver r = new Receiver();
+    long[] one = runMonitor(r);
+    long[] two = runAnother(r);
+    long[] result = Arrays.copyOf(one, one.length + two.length);
+    System.arraycopy(two, 0, result, one.length, two.length);
+    return result;
   }
 }

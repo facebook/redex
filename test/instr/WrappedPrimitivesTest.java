@@ -24,4 +24,12 @@ public class WrappedPrimitivesTest {
     assertThat(results[6]).isEqualTo(8);
     assertThat(results[7]).isEqualTo(9);
   }
+
+  @Test
+  public void testTranformableCastLookup() {
+    long[] results = com.facebook.redex.WrappedPrimitives.runWithInterface();
+    assertThat(results.length).isEqualTo(2);
+    assertThat(results[0]).isEqualTo(1);
+    assertThat(results[1]).isEqualTo(1);
+  }
 }
