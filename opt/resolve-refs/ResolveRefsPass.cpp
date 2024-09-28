@@ -20,6 +20,7 @@
 #include "Trace.h"
 #include "TypeInference.h"
 #include "Walkers.h"
+#include "WrappedPrimitives.h"
 
 namespace mog = method_override_graph;
 using namespace resolve_refs;
@@ -260,6 +261,10 @@ void ResolveRefsPass::resolve_method_refs(const DexMethod* caller,
                                           RefStats& stats) {
   always_assert(insn->has_method());
   auto mref = insn->get_method();
+  if (wrapped_primitives::is_wrapped_api(mref)) {
+    TRACE(RESO, 4, "skipping resolution for %s", SHOW(mref));
+    return;
+  }
   bool resolved_virtual_to_interface;
   auto mdef =
       resolve_invoke_method(insn, caller, &resolved_virtual_to_interface);
@@ -431,6 +436,10 @@ RefStats ResolveRefsPass::refine_virtual_callsites(const XStoreRefs& xstores,
     }
 
     auto mref = insn->get_method();
+    if (wrapped_primitives::is_wrapped_api(mref)) {
+      TRACE(RESO, 4, "skipping resolution for %s", SHOW(mref));
+      continue;
+    }
     auto callee = resolve_method(mref, opcode_to_search(insn), method);
     if (!callee) {
       if (mref != method::java_lang_Objects_clone()) {
