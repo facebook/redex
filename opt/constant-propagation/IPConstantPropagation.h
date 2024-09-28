@@ -14,6 +14,7 @@
 #include "ConstantPropagationWholeProgramState.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "Pass.h"
+#include "TypeSystem.h"
 
 namespace constant_propagation {
 
@@ -104,6 +105,7 @@ class PassImpl : public Pass {
                               const std::unordered_set<const DexField*>&);
 
   void optimize(const Scope&,
+                const TypeSystem& type_system,
                 const XStoreRefs& xstores,
                 const FixpointIterator&,
                 const ImmutableAttributeAnalyzerState*,
