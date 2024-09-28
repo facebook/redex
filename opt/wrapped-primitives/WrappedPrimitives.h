@@ -345,7 +345,12 @@ class WrappedPrimitivesPass : public Pass {
       const override {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
-    return {};
+    return {
+        {DexLimitsObeyed, Preserves},
+        {NoResolvablePureRefs, Preserves},
+        {UltralightCodePatterns, Preserves},
+        {InitialRenameClass, Preserves},
+    };
   }
 
   void bind_config() override;
