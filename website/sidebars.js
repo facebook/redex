@@ -166,9 +166,20 @@ module.exports = {
             items: [
               {
                 type: 'category',
-                label: 'Pogo',
-                link: { type: 'doc', id: 'fb/related_teams/pogo/index' },
-                items: [],
+                label: 'Pogo Stick',
+                items: [
+                  {
+                    type: 'category',
+                    label: 'Pogo Stick Team Internal',
+                    items: [
+                      {
+                        type: 'doc',
+                        id: 'fb/related_teams/pogo/pogo_team_internal/overview',
+                        label: 'Team Overview',
+                      },
+                    ],
+                  }
+                ],
               },
             ]
           },
