@@ -94,8 +94,9 @@ void WrappedPrimitivesPass::bind_config() {
       auto api = members.at(0);
       TRACE(WP, 2, "Checking for API '%s'", api.c_str());
       auto wrapped_api = DexMethod::get_method(api);
-      always_assert_log(wrapped_api != nullptr, "Method %s does not exist",
-                        api.c_str());
+      if (wrapped_api == nullptr) {
+        continue;
+      }
       std::string unwrapped_api_desc;
       JsonWrapper jobj = JsonWrapper(obj);
       jobj.get(api.c_str(), "", unwrapped_api_desc);
