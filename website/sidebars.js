@@ -201,6 +201,11 @@ module.exports = {
                             id: 'fb/related_teams/pogo/pogo_team_internal/betamap/betamap_format',
                             label: 'Betamap Format'
                           },
+                          {
+                            type: 'doc',
+                            id: 'fb/related_teams/pogo/pogo_team_internal/betamap/create_a_betamap',
+                            label: 'Create a Betamap'
+                          },
                         ],
                       },
                     ],
