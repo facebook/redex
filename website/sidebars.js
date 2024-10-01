@@ -213,6 +213,17 @@ module.exports = {
                           },
                         ],
                       },
+                      {
+                        type: 'category',
+                        label: 'DeepData',
+                        items: [
+                          {
+                            type: 'doc',
+                            id: 'fb/related_teams/pogo/pogo_team_internal/deepdata/overview',
+                            label: 'Overview'
+                          },
+                        ],
+                      },
                     ],
                   }
                 ],
