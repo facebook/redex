@@ -232,6 +232,11 @@ module.exports = {
                             id: 'fb/related_teams/pogo/pogo_team_internal/deepdata/profiling',
                             label: 'Profiling'
                           },
+                          {
+                            type: 'doc',
+                            id: 'fb/related_teams/pogo/pogo_team_internal/deepdata/optimizations',
+                            label: 'Optimizations'
+                          },
                         ],
                       },
                     ],
