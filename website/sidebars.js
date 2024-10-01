@@ -247,6 +247,11 @@ module.exports = {
                             type: 'doc',
                             id: 'fb/related_teams/pogo/pogo_team_internal/baseline_profiles/overview',
                             label: 'Overview'
+                          },
+                          {
+                            type: 'doc',
+                            id: 'fb/related_teams/pogo/pogo_team_internal/baseline_profiles/generation',
+                            label: 'Generation'
                           }
                         ]
                       }
