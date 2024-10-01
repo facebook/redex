@@ -222,6 +222,11 @@ module.exports = {
                             id: 'fb/related_teams/pogo/pogo_team_internal/deepdata/overview',
                             label: 'Overview'
                           },
+                          {
+                            type: 'doc',
+                            id: 'fb/related_teams/pogo/pogo_team_internal/deepdata/source_blocks',
+                            label: 'Source Blocks'
+                          },
                         ],
                       },
                     ],
