@@ -239,6 +239,17 @@ module.exports = {
                           },
                         ],
                       },
+                      {
+                        type: 'category',
+                        label: 'Baseline Profiles',
+                        items: [
+                          {
+                            type: 'doc',
+                            id: 'fb/related_teams/pogo/pogo_team_internal/baseline_profiles/overview',
+                            label: 'Overview'
+                          }
+                        ]
+                      }
                     ],
                   }
                 ],
