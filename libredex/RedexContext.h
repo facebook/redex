@@ -225,6 +225,8 @@ struct RedexContext {
   // versions.
   void compact();
 
+  InsertOnlyConcurrentSet<const DexString*> library_names;
+
  private:
   struct Strcmp;
   struct TruncatedStringHash;
