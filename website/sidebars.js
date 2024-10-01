@@ -168,6 +168,17 @@ module.exports = {
                 type: 'category',
                 label: 'Pogo Stick',
                 items: [
+                  { 
+                    type: 'category',
+                    label: 'Baseline Profiles',
+                    items: [
+                      {
+                        type: 'doc',
+                        id: 'fb/related_teams/pogo/baseline_profiles/manual_profile_generation',
+                        label: 'Manual Profile Generation'
+                      }
+                    ]
+                  },
                   {
                     type: 'category',
                     label: 'Pogo Stick Team Internal',
