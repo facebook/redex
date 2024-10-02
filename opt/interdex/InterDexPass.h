@@ -119,6 +119,9 @@ class InterDexPass : public Pass {
   std::vector<std::string> m_methods_for_canary_clinit_reference;
   bool m_transitively_close_interdex_order{false};
   bool m_exclude_baseline_profile_classes;
+  bool m_move_coldstart_classes;
+  size_t m_min_betamap_move_threshold;
+  size_t m_max_betamap_move_threshold;
 
   int64_t m_stable_partitions;
 

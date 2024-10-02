@@ -63,6 +63,9 @@ class InterDex {
       ClassReferencesCache& class_references_cache,
       bool exclude_baseline_profile_classes,
       const baseline_profiles::BaselineProfileConfig& baseline_profile_config,
+      bool move_coldstart_classes,
+      size_t min_betamap_move_threshold,
+      size_t max_betamap_move_threshold,
       int64_t stable_partitions,
       bool is_root_store = true)
       : m_dexen(dexen),
@@ -94,6 +97,9 @@ class InterDex {
         m_class_references_cache(class_references_cache),
         m_exclude_baseline_profile_classes(exclude_baseline_profile_classes),
         m_baseline_profile_config(baseline_profile_config),
+        m_move_coldstart_classes(move_coldstart_classes),
+        m_min_betamap_move_threshold(min_betamap_move_threshold),
+        m_max_betamap_move_threshold(max_betamap_move_threshold),
         m_stable_partitions(stable_partitions),
         m_is_root_store(is_root_store) {
     m_emitting_state.dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
@@ -230,6 +236,10 @@ class InterDex {
 
   void initialize_baseline_profile_classes();
 
+  void get_movable_coldstart_classes(
+      const std::vector<DexType*>& interdex_types,
+      std::unordered_map<const DexClass*, std::string>& move_coldstart_classes);
+
   EmittingState m_emitting_state;
 
   const DexClassesVector& m_dexen;
@@ -275,6 +285,9 @@ class InterDex {
   bool m_exclude_baseline_profile_classes;
   const baseline_profiles::BaselineProfileConfig& m_baseline_profile_config;
   std::optional<std::unordered_set<DexType*>> m_baseline_profile_classes;
+  bool m_move_coldstart_classes;
+  size_t m_min_betamap_move_threshold;
+  size_t m_max_betamap_move_threshold;
 
   const uint64_t m_stable_partitions;
   const bool m_is_root_store;

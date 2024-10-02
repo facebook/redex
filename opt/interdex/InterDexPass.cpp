@@ -118,6 +118,12 @@ void InterDexPass::bind_config() {
   bind("exclude_baseline_profile_classes", false,
        m_exclude_baseline_profile_classes);
 
+  bind("move_coldstart_classes", false, m_move_coldstart_classes);
+
+  bind("min_betamap_move_threshold", 0, m_min_betamap_move_threshold);
+
+  bind("max_betamap_move_threshold", 0, m_max_betamap_move_threshold);
+
   bind("stable_partitions", 0, m_stable_partitions,
        "For the unordered classes, how many dexes they should be distributed "
        "over in a stable manner, or 0 if stability is not desired");
@@ -176,7 +182,8 @@ void InterDexPass::run_pass(
       init_classes_with_side_effects, m_transitively_close_interdex_order,
       m_minimize_cross_dex_refs_explore_alternatives, cache,
       m_exclude_baseline_profile_classes, conf.get_baseline_profile_config(),
-      m_stable_partitions);
+      m_move_coldstart_classes, m_min_betamap_move_threshold,
+      m_max_betamap_move_threshold, m_stable_partitions);
 
   if (m_expect_order_list) {
     always_assert_log(
@@ -296,7 +303,9 @@ void InterDexPass::run_pass_on_nonroot_store(
       init_classes_with_side_effects, m_transitively_close_interdex_order,
       m_minimize_cross_dex_refs_explore_alternatives, cache,
       m_exclude_baseline_profile_classes, conf.get_baseline_profile_config(),
-      m_stable_partitions, /* is_root_store */ false);
+      m_move_coldstart_classes, m_min_betamap_move_threshold,
+      m_max_betamap_move_threshold, m_stable_partitions,
+      /* is_root_store */ false);
 
   interdex.run_on_nonroot_store();
 
