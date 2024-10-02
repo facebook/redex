@@ -238,6 +238,125 @@ void exclude_extra_dynamically_dead_class(
 
 namespace interdex {
 
+void InterDex::get_movable_coldstart_classes(
+    const std::vector<DexType*>& interdex_types,
+    std::unordered_map<const DexClass*, std::string>& move_coldstart_classes) {
+  auto class_freqs = m_conf.get_class_frequencies();
+  const std::vector<std::string>& interactions = m_conf.get_interactions();
+  always_assert_log(!class_freqs.empty(), "empty class freqs map");
+  // all betamaps should have a ColdStart section, so this is a sanity check
+  auto coldstart_it =
+      std::find(interactions.begin(), interactions.end(), "ColdStart");
+  always_assert_log(coldstart_it != interactions.end(),
+                    "no ColdStart in class frequencies");
+  size_t coldstart_idx = std::distance(interactions.begin(), coldstart_it);
+  auto backgroundset_it =
+      std::find(interactions.begin(), interactions.end(), "BackgroundSet");
+  always_assert_log(backgroundset_it != interactions.end(),
+                    "no BackgroundSet in class frequencies");
+  size_t backgroundset_idx =
+      std::distance(interactions.begin(), backgroundset_it);
+  size_t curr_idx = coldstart_idx;
+
+  for (auto* type : interdex_types) {
+    DexClass* cls = type_class(type);
+    if (!cls) {
+      if (boost::algorithm::starts_with(type->get_name()->str(),
+                                        BG_SET_START_FORMAT)) {
+        curr_idx = backgroundset_idx;
+        continue;
+      }
+      auto index_it = std::find(interactions.begin(), interactions.end(),
+                                type->str().substr(1, type->str().size() - 8));
+      if (index_it == interactions.end()) {
+        continue;
+      }
+      curr_idx = std::distance(interactions.begin(), index_it);
+      continue;
+    }
+    if (class_freqs.count(cls->get_name()) != 1) {
+      continue;
+    }
+    auto freqs = class_freqs.at(cls->get_name());
+    if (freqs.size() <= curr_idx) {
+      continue;
+    }
+    auto curr_interaction_freq = freqs.at(curr_idx);
+    if (curr_interaction_freq == 0) {
+      continue;
+    }
+    // if we've already marked the class for moving, don't check it again
+    else if (move_coldstart_classes.find(cls) != move_coldstart_classes.end()) {
+      continue;
+    }
+    // if the class has more than m_max_betamap_move_threshold% freq in
+    // coldstart, do not move it elsewhere
+    else if (curr_idx == coldstart_idx &&
+             curr_interaction_freq > m_max_betamap_move_threshold) {
+      continue;
+    } else if (curr_idx == backgroundset_idx) {
+      size_t max_idx = curr_idx;
+      bool move_class = false;
+
+      for (size_t i = 0; i < freqs.size(); i++) {
+        auto freq = freqs.at(i);
+        if (i != backgroundset_idx && freq > m_min_betamap_move_threshold) {
+          if (move_class) {
+            move_class = false;
+            break;
+          } else if (freq > freqs.at(curr_idx)) {
+            move_class = true;
+            max_idx = i;
+          }
+        }
+      }
+      if (move_class && max_idx != curr_idx) {
+        move_coldstart_classes.emplace(cls, interactions.at(max_idx));
+        TRACE(IDEX, 3, "moving %s from backgroundset to %s", SHOW(cls),
+              interactions.at(max_idx).c_str());
+      }
+    } else {
+      auto max_freq = freqs.at(curr_idx);
+      size_t max_idx = curr_idx;
+
+      for (size_t i = 0; i < freqs.size(); i++) {
+        auto freq = freqs.at(i);
+        // backgroundset classes are deduped from coldstart classes, so do
+        // not check the backgorundset frequencies when moving coldstart
+        // classes. The backgroundset threshold is 10%, so if the backgroundset
+        // frequency is at least 10%, we've already seen the class before and do
+        // not need to consider it again.
+        if (curr_idx != coldstart_idx &&
+            ((i == coldstart_idx && freq > m_max_betamap_move_threshold) ||
+             (i == backgroundset_idx && freq > 10))) {
+          max_idx = i;
+          break;
+        }
+        if (freq > max_freq) {
+          max_freq = freq;
+          max_idx = i;
+        }
+      }
+      if (curr_idx == coldstart_idx) {
+        if (max_freq > curr_interaction_freq &&
+            max_freq > m_min_betamap_move_threshold &&
+            max_idx != backgroundset_idx) {
+          move_coldstart_classes.emplace(cls, interactions.at(max_idx));
+          TRACE(IDEX, 3, "moving %s from coldstart to %s", SHOW(cls),
+                interactions.at(max_idx).c_str());
+        }
+      } else if (max_idx != coldstart_idx && max_idx != backgroundset_idx) {
+        if (max_idx != curr_idx) {
+          move_coldstart_classes.emplace(cls, interactions.at(max_idx));
+          TRACE(IDEX, 3, "moving %s from %s to %s", SHOW(cls),
+                interactions.at(curr_idx).c_str(),
+                interactions.at(max_idx).c_str());
+        }
+      }
+    }
+  }
+}
+
 bool InterDex::should_skip_class_due_to_dynamically_dead(
     DexClass* clazz) const {
   return clazz->is_dynamically_dead();
@@ -404,11 +523,19 @@ void InterDex::emit_interdex_classes(
     return;
   }
 
+  auto class_freqs = m_conf.get_class_frequencies();
+  const std::vector<std::string>& interactions = m_conf.get_interactions();
+  std::unordered_map<const DexClass*, std::string> move_coldstart_classes;
+  if (m_move_coldstart_classes) {
+    get_movable_coldstart_classes(interdex_types, move_coldstart_classes);
+  }
+
   // NOTE: coldstart has no interaction with extended and scroll set, but that
   //       is not true for the later 2.
   dex_info.coldstart = true;
 
   size_t cls_skipped_in_secondary = 0;
+  std::string curr_interaction = "ColdStart";
 
   bool reset_coldstart_on_overflow = false;
   for (auto it = interdex_types.begin(); it != interdex_types.end(); ++it) {
@@ -476,6 +603,11 @@ void InterDex::emit_interdex_classes(
             if (end_marker == cold_start_end_marker) {
               dex_info.coldstart = false;
             }
+          } else if (m_move_coldstart_classes &&
+                     std::find(interactions.begin(), interactions.end(),
+                               type->str().substr(1, type->str().size() - 8)) !=
+                         interactions.end()) {
+            curr_interaction = type->str();
           } else {
             reset_coldstart_on_overflow = true;
             TRACE(IDEX, 2, "Not flushing out marker %s to fill dex.",
@@ -495,6 +627,15 @@ void InterDex::emit_interdex_classes(
         m_emitting_extended = true;
       }
       dex_info.betamap_ordered = true;
+
+      if (m_move_coldstart_classes && move_coldstart_classes.count(cls)) {
+        auto interaction = move_coldstart_classes.at(cls);
+        if (!boost::starts_with(curr_interaction, "L" + interaction)) {
+          continue;
+        } else {
+          move_coldstart_classes.erase(cls);
+        }
+      }
       auto res =
           emit_class(m_emitting_state, dex_info, cls, /* check_if_skip */ true,
                      /* perf_sensitive */ true, canary_cls);
@@ -601,6 +742,10 @@ void InterDex::load_interdex_types() {
   std::unordered_set<DexType*> moved_or_double{};
   std::unordered_set<DexType*> transitive_added{};
 
+  const std::vector<std::string>* interactions;
+  if (m_move_coldstart_classes) {
+    interactions = &m_conf.get_interactions();
+  }
   for (const auto& entry : interdexorder) {
     DexType* type = DexType::get_type(entry);
     if (!type) {
@@ -649,6 +794,12 @@ void InterDex::load_interdex_types() {
         TRACE(IDEX, 4,
               "[interdex order]: Found 1pct cold start end class marker %s.",
               entry.c_str());
+        // trim off the _Start suffix to get the interaction name
+      } else if (m_move_coldstart_classes &&
+                 std::find(interactions->begin(), interactions->end(),
+                           entry.substr(1, entry.size() - 8)) !=
+                     interactions->end()) {
+        type = DexType::make_type(entry);
       } else {
         continue;
       }
