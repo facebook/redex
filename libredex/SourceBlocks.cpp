@@ -19,6 +19,7 @@
 #include "ControlFlow.h"
 #include "Debug.h"
 #include "DexClass.h"
+#include "DexStructure.h"
 #include "Dominators.h"
 #include "IRList.h"
 #include "IROpcode.h"
@@ -1013,6 +1014,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
       return chain_and_dom_violations_cfg(cfg);
     case Violation::kUncoveredSourceBlocks:
       return uncovered_source_blocks_violations_cfg(cfg);
+    case Violation::kHotMethodColdEntry:
+      return hot_method_cold_entry_violations_cfg(cfg);
     }
     not_reached();
   }
@@ -1169,6 +1172,25 @@ struct ViolationsHelper::ViolationsHelperImpl {
         sum++;
       }
     }
+    return sum;
+  }
+
+  static size_t hot_method_cold_entry_violations_cfg(
+      cfg::ControlFlowGraph& cfg) {
+    size_t sum{0};
+    auto* entry_block = cfg.entry_block();
+    if (entry_block == nullptr) {
+      return 0;
+    }
+    auto* sb = get_first_source_block(entry_block);
+    if (sb == nullptr) {
+      return 0;
+    }
+    sb->foreach_val([&sum](const auto& val) {
+      if (val->appear100 != 0 && val->val == 0) {
+        sum++;
+      }
+    });
     return sum;
   }
 
@@ -1334,6 +1356,60 @@ struct ViolationsHelper::ViolationsHelperImpl {
         void end_block(std::ostream&, cfg::Block*) {}
       };
       print_cfg_with_violations<UncoveredSourceBlocks>(m);
+      return;
+    }
+    case Violation::kHotMethodColdEntry: {
+      struct HotMethodColdEntry {
+        bool is_entry_block{false};
+        bool first_in_block{false};
+
+        explicit HotMethodColdEntry(cfg::ControlFlowGraph&) {}
+
+        void mie_before(std::ostream&, const MethodItemEntry&) {}
+        void mie_after(std::ostream& os, const MethodItemEntry& mie) {
+          if (mie.type != MFLOW_SOURCE_BLOCK || !is_entry_block ||
+              !first_in_block) {
+            return;
+          }
+          first_in_block = false;
+
+          auto* sb = mie.src_block.get();
+          bool violation_found_in_head{false};
+          sb->foreach_val([&violation_found_in_head](const auto& val) {
+            if (val->appear100 != 0 && val->val == 0) {
+              violation_found_in_head = true;
+            }
+          });
+          if (violation_found_in_head) {
+            os << " !!! HEAD SB: METHOD IS HOT BUT ENTRY IS COLD";
+          }
+
+          bool violation_found_in_chain{false};
+          for (auto* cur_sb = sb->next.get(); cur_sb != nullptr;
+               cur_sb = cur_sb->next.get()) {
+            cur_sb->foreach_val([&violation_found_in_chain](const auto& val) {
+              if (val->appear100 != 0 && val->val == 0) {
+                violation_found_in_chain = true;
+              }
+            });
+          }
+          if (violation_found_in_chain) {
+            os << " !!! CHAIN SB: METHOD IS HOT BUT ENTRY IS COLD";
+          }
+          os << "\n";
+        }
+
+        void start_block(std::ostream&, cfg::Block* b) {
+          if (b->preds().empty()) {
+            is_entry_block = true;
+          } else {
+            is_entry_block = false;
+          }
+          first_in_block = true;
+        }
+        void end_block(std::ostream&, cfg::Block*) {}
+      };
+      print_cfg_with_violations<HotMethodColdEntry>(m);
       return;
     }
     }
