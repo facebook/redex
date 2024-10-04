@@ -252,7 +252,7 @@ class _FindAndroidBuildToolHelper:
         )
 
     def _load_android_buckconfig_values(self) -> typing.Dict[str, typing.Any]:
-        cmd = ["buck", "audit", "config", "android", "--json"]
+        cmd = ["buck2", "audit", "config", "android", "--json"]
         rdfb = self.root_dir_for_buck
         cwd = rdfb if rdfb is not None else os.getcwd()
         # Set NO_BUCKD to minimize disruption to any currently running buckd
