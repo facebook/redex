@@ -75,6 +75,11 @@ module.exports = {
             ]
           },
           {
+            type: 'doc',
+            label: 'Configuring Redex',
+            id: 'fb/redex_configuration'
+          },
+          {
             type: 'category',
             label: 'FAQ',
             link: { type: 'doc', id: 'fb/faq/index' },
