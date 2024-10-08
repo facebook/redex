@@ -96,8 +96,39 @@ module.exports = {
           {
             type: 'category',
             label: 'Useful Tooling',
-            link: { type: 'doc', id: 'fb/useful_tooling/index' },
             items: [
+              {
+                type: 'doc',
+                id: 'fb/useful_tooling/symbolication',
+              },
+              {
+                type: 'doc',
+                id: 'fb/useful_tooling/bytecode_analysis_tool',
+              },
+              {
+                type: 'doc',
+                id: 'fb/useful_tooling/reachability_tool',
+              },
+              {
+                type: 'doc',
+                id: 'fb/useful_tooling/query_tool',
+              },
+              {
+                type: 'doc',
+                id: 'fb/useful_tooling/bisection_tool',
+              },
+              {
+                type: 'doc',
+                id: 'fb/useful_tooling/e2e_test_tool',
+              },
+              {
+                type: 'doc',
+                id: 'fb/useful_tooling/interactive_debugging_tool',
+              },
+              {
+                type: 'doc',
+                id: 'fb/useful_tooling/profiling_tool',
+              },
             ]
           },
           {
@@ -173,7 +204,7 @@ module.exports = {
                 type: 'category',
                 label: 'Pogo Stick',
                 items: [
-                  { 
+                  {
                     type: 'category',
                     label: 'Baseline Profiles',
                     items: [
