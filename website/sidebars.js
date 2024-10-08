@@ -84,6 +84,26 @@ module.exports = {
             label: 'FAQ',
             link: { type: 'doc', id: 'fb/faq/index' },
             items: [
+              {
+                type: 'doc',
+                id: 'fb/faq/CNF',
+              },
+              {
+                type: 'doc',
+                id: 'fb/faq/NSME',
+              },
+              {
+                type: 'doc',
+                id: 'fb/faq/donotstrip',
+              },
+              {
+                type: 'doc',
+                id: 'fb/faq/resources',
+              },
+              {
+                type: 'doc',
+                id: 'fb/faq/betteroptimizing',
+              },
             ]
           },
           {
