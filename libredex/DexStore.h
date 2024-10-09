@@ -210,8 +210,9 @@ class XStoreRefs {
                                                      // header.
 
   bool is_store_shared_module(const DexStore* store) const {
+    // If prefix is given, check if name has that prefix.
     return !m_shared_module_prefix.empty() &&
-           store->get_name().find(m_shared_module_prefix) == 0;
+           store->get_name().rfind(m_shared_module_prefix, 0) == 0;
   }
 
  public:
