@@ -252,10 +252,10 @@ void InterDex::get_movable_coldstart_classes(
   size_t coldstart_idx = std::distance(interactions.begin(), coldstart_it);
   auto backgroundset_it =
       std::find(interactions.begin(), interactions.end(), "BackgroundSet");
-  always_assert_log(backgroundset_it != interactions.end(),
-                    "no BackgroundSet in class frequencies");
   size_t backgroundset_idx =
-      std::distance(interactions.begin(), backgroundset_it);
+      backgroundset_it != interactions.end()
+          ? std::distance(interactions.begin(), backgroundset_it)
+          : interactions.size();
   size_t curr_idx = coldstart_idx;
 
   for (auto* type : interdex_types) {
