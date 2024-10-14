@@ -64,9 +64,9 @@ TEST_F(PostVerify, VerifyTransform) {
       (sget-object "Lcom/facebook/redex/AllValues;.L1:Lcom/facebook/redex/MyLong;")
       (move-result-pseudo-object v0)
       (const-wide v0 1)
-      (check-cast v2 "Lcom/facebook/redex/Receiver;")
+      (check-cast v2 "Lcom/facebook/redex/Unsafe;")
       (move-result-pseudo-object v2)
-      (invoke-virtual (v2 v0) "Lcom/facebook/redex/Receiver;.getLong:(J)J")
+      (invoke-interface (v2 v0) "Lcom/facebook/redex/Unsafe;.getLong:(J)J")
       (move-result-wide v0)
       (return-wide v0)
     ))");

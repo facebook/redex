@@ -79,12 +79,21 @@ class MoreValues {
   }
 }
 
+interface Unsafe {
+  long getLong(long l);
+  long peekLong(long l);
+}
+
 interface Safe {
   long getLong(MyLong l);
   long peekLong(MyLong l);
 }
 
-class Receiver implements Safe {
+interface ThingToUse extends Safe {
+
+}
+
+class Receiver implements ThingToUse, Safe, Unsafe {
   public long getLong(MyLong l) {
     return l.value;
   }
@@ -134,8 +143,8 @@ public class WrappedPrimitives {
     return r.getLong(AllValues.L1);
   }
 
-  public static long simpleCast(Safe s) {
-    return s.getLong(AllValues.L1);
+  public static long simpleCast(ThingToUse t) {
+    return t.getLong(AllValues.L1);
   }
 
   public static long multipleDefs(Receiver r) {
@@ -146,21 +155,21 @@ public class WrappedPrimitives {
   // to underlying impl which has the unwrapped method. Will need to ensure that
   // monitor-enter/exit instructions are properly balanced under such an
   // insertion
-  public static synchronized long[] runMonitor(Safe s) {
+  public static synchronized long[] runMonitor(ThingToUse t) {
     long[] results = new long[1];
     long l;
     synchronized (LOCK) {
-      l = s.getLong(AllValues.L1);
+      l = t.getLong(AllValues.L1);
     }
     results[0] = l;
     return results;
   }
 
-    public static synchronized long[] runAnother(Safe s) {
+    public static synchronized long[] runAnother(ThingToUse t) {
     String tag = "X";
     long[] results = new long[1];
     try {
-      results[0] = s.getLong(AllValues.L1);
+      results[0] = t.getLong(AllValues.L1);
     } catch (IllegalStateException e) {
       android.util.Log.w(tag, e);
     }
