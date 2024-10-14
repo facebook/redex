@@ -21,6 +21,7 @@
 #include "Timer.h"
 #include "Trace.h"
 #include "Walkers.h"
+#include "WrappedPrimitives.h"
 
 namespace mog = method_override_graph;
 
@@ -260,6 +261,12 @@ void PassImpl::optimize(
               code.cfg(),
               &xstores,
               method->get_class());
+          // If configured, plug in IPCP state to do additional transforms
+          // (API unwrapping to primitives for known ObjectWithImmutAttr
+          // instances).
+          wrapped_primitives::optimize_method(type_system, ipa->fp_iter,
+                                              fp_iter.get_whole_program_state(),
+                                              method, code.cfg());
           return tf.get_stats();
         }
       });

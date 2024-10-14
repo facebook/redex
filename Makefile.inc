@@ -132,6 +132,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/service/switch-partitioning \
 	-I$(top_srcdir)/service/type-analysis \
 	-I$(top_srcdir)/service/type-string-rewriter \
+	-I$(top_srcdir)/service/wrapped-primitives \
 	-I$(top_srcdir)/shared \
 	-I$(top_srcdir)/sparta/include \
 	-I$(top_srcdir)/tools/common \

@@ -172,6 +172,7 @@ class DexType;
   TM(VIRT)              \
   TM(VM)                \
   TM(VMERGE)            \
+  TM(WP)                \
   TM(KOTLIN_INSTANCE)   \
   TM(KOTLIN_STATS)      \
   TM(KOTLIN_OBJ_INLINE) \
