@@ -37,6 +37,7 @@ struct InterproceduralConstantPropagationTest : public RedexTest {
     object_ctor->set_access(ACC_PUBLIC | ACC_CONSTRUCTOR);
     object_ctor->set_external();
     type_class(type::java_lang_Object())->add_method(object_ctor);
+    type_class(type::java_lang_Object())->set_external();
 
     // EnumFieldAnalyzer requires that this method exists
     method::java_lang_Enum_equals();

@@ -227,6 +227,7 @@ void PassImpl::compute_analysis_stats(
  */
 void PassImpl::optimize(
     const Scope& scope,
+    const TypeSystem& type_system,
     const XStoreRefs& xstores,
     const FixpointIterator& fp_iter,
     const ImmutableAttributeAnalyzerState* immut_analyzer_state,
@@ -286,7 +287,9 @@ void PassImpl::run(const DexStoresVector& stores, int min_sdk) {
   auto fp_iter = analyze(scope, &immut_analyzer_state,
                          &api_level_analyzer_state, cp_state);
   m_stats.fp_iter = fp_iter->get_stats();
-  optimize(scope, xstores, *fp_iter, &immut_analyzer_state, cp_state);
+  TypeSystem type_system(scope);
+  optimize(scope, type_system, xstores, *fp_iter, &immut_analyzer_state,
+           cp_state);
 }
 
 void PassImpl::run_pass(DexStoresVector& stores,
