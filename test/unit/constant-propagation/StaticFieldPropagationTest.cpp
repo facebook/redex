@@ -38,6 +38,13 @@ struct StaticFieldTest : public ConstantPropagationTest {
     creator2.add_field(integer_loop_count);
 
     creator2.create();
+
+    assembler::class_from_string(R"(
+    (class (public final) "LAnother;"
+      (field (public static) "LAnother;.a:J")
+      (field (public static final) "LAnother;.b:J" "80000000")
+    )
+  )");
   }
 };
 
@@ -106,5 +113,35 @@ TEST_F(StaticFieldTest, NotFinalLessThan) {
   auto expected_code = assembler::ircode_from_string(code_expression);
 
   do_const_prop(code.get(), StaticFieldAnalyzer());
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(StaticFieldTest, WideFinals) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (sget-wide "LAnother;.b:J")
+     (move-result-pseudo-wide v0)
+     (if-ltz v0 :if-true-label)
+     (const v0 1)
+     (return v0)
+     (:if-true-label)
+     (new-instance "Ljava/lang/RuntimeException;")
+     (move-result-pseudo-object v0)
+     (const-string "Oh no")
+     (move-result-pseudo-object v1)
+     (invoke-direct (v0 v1) "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V")
+     (throw v0)
+    )
+)");
+
+  do_const_prop(code.get(), StaticFieldAnalyzer());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const-wide v0 2147483648)
+     (const v0 1)
+     (return v0)
+    )
+)");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
