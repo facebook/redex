@@ -22,6 +22,7 @@
 #include "ConfigFiles.h"
 #include "DexStructure.h"
 #include "IRCode.h"
+#include "LoopInfo.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "Show.h"
@@ -231,6 +232,76 @@ void never_inline(bool attach_annotations,
                   callees_annotation_attached.load());
 }
 
+void never_compile(const Scope& scope,
+                   const method_profiles::MethodProfiles& method_profiles,
+                   const std::vector<std::string>& interactions,
+                   PassManager& mgr,
+                   int64_t never_compile_threshold,
+                   baseline_profiles::BaselineProfile* baseline_profile) {
+  DexAnnotationSet anno_set;
+  anno_set.add_annotation(std::make_unique<DexAnnotation>(
+      type::dalvik_annotation_optimization_NeverCompile(),
+      DexAnnotationVisibility::DAV_BUILD));
+
+  std::atomic<size_t> never_compile_methods = 0;
+  std::atomic<size_t> methods_already_never_compile = 0;
+  std::atomic<size_t> methods_annotation_attached = 0;
+  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
+    if (method::is_clinit(method)) {
+      return;
+    }
+    auto it = baseline_profile->methods.find(method);
+    if (it == baseline_profile->methods.end()) {
+      return;
+    }
+    auto& mf = it->second;
+    if (!mf.hot) {
+      return;
+    }
+    double call_count = 0;
+    for (auto& interaction_id : interactions) {
+      auto method_stats =
+          method_profiles.get_method_stat(interaction_id, method);
+      if (!method_stats) {
+        continue;
+      }
+      call_count = std::max(call_count, method_stats->call_count);
+    }
+    if (call_count > never_compile_threshold) {
+      return;
+    }
+    loop_impl::LoopInfo loop_info(code.cfg());
+    if (loop_info.num_loops() > 0) {
+      return;
+    }
+    never_compile_methods.fetch_add(1);
+
+    if (has_anno(method, type::dalvik_annotation_optimization_NeverCompile())) {
+      methods_already_never_compile.fetch_add(1);
+      return;
+    }
+
+    methods_annotation_attached.fetch_add(1);
+    if (method->get_anno_set()) {
+      method->get_anno_set()->combine_with(anno_set);
+      return;
+    }
+    auto access = method->get_access();
+    // attach_annotation_set requires the method to be synthetic.
+    // A bit bizarre, and suggests that Redex' code to mutate annotations is
+    // ripe for an overhaul. But I won't fight that here.
+    method->set_access(access | ACC_SYNTHETIC);
+    method->attach_annotation_set(std::make_unique<DexAnnotationSet>(anno_set));
+    method->set_access(access);
+    mf.hot = false;
+  });
+  mgr.incr_metric("never_compile_methods", never_compile_methods.load());
+  mgr.incr_metric("methods_already_never_compile",
+                  methods_already_never_compile.load());
+  mgr.incr_metric("methods_annotation_attached",
+                  methods_annotation_attached.load());
+}
+
 } // namespace
 
 std::ostream& operator<<(std::ostream& os,
@@ -264,6 +335,7 @@ void ArtProfileWriterPass::bind_config() {
   bind("never_inline_attach_annotations", false,
        m_never_inline_attach_annotations);
   bind("legacy_mode", true, m_legacy_mode);
+  bind("never_compile_threshold", -1, m_never_compile_threshold);
   after_configuration([this] {
     always_assert(m_perf_config.coldstart_appear100_nonhot_threshold <=
                   m_perf_config.coldstart_appear100_threshold);
@@ -364,9 +436,13 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
                               : baseline_profiles::get_baseline_profile(
                                     conf.get_baseline_profile_config(),
                                     method_profiles, &method_refs_without_def);
+  auto scope = build_class_scope(stores);
+  if (m_never_compile_threshold > -1) {
+    never_compile(scope, method_profiles, m_perf_config.interactions, mgr,
+                  m_never_compile_threshold, &baseline_profile);
+  }
 
   std::ofstream ofs{conf.metafile(BASELINE_PROFILES_FILE)};
-  auto scope = build_class_scope(stores);
   walk::classes(scope, [&](DexClass* cls) {
     for (auto* method : cls->get_all_methods()) {
       auto it = baseline_profile.methods.find(method);
