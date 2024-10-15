@@ -37,6 +37,8 @@
   FOR_EACH(dalvik_annotation_MemberClasses,                              \
            "Ldalvik/annotation/"                                         \
            "MemberClasses;")                                             \
+  FOR_EACH(dalvik_annotation_optimization_NeverCompile,                  \
+           "Ldalvik/annotation/optimization/NeverCompile;")              \
   FOR_EACH(dalvik_annotation_optimization_NeverInline,                   \
            "Ldalvik/annotation/optimization/NeverInline;")
 
