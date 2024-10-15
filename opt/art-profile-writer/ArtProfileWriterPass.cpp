@@ -14,6 +14,7 @@
 #include "ArtProfileWriterPass.h"
 
 #include <boost/algorithm/string.hpp>
+#include <boost/regex.hpp>
 #include <fstream>
 #include <string>
 
@@ -232,12 +233,28 @@ void never_inline(bool attach_annotations,
                   callees_annotation_attached.load());
 }
 
-void never_compile(const Scope& scope,
-                   const method_profiles::MethodProfiles& method_profiles,
-                   const std::vector<std::string>& interactions,
-                   PassManager& mgr,
-                   int64_t never_compile_threshold,
-                   baseline_profiles::BaselineProfile* baseline_profile) {
+void never_compile(
+    const Scope& scope,
+    const baseline_profiles::BaselineProfileConfig& baseline_profile_config,
+    const method_profiles::MethodProfiles& method_profiles,
+    const std::vector<std::string>& interactions,
+    PassManager& mgr,
+    int64_t never_compile_threshold,
+    const std::string& excluded_interaction_pattern,
+    int64_t excluded_appear100_threshold,
+    int64_t excluded_call_count_threshold,
+    baseline_profiles::BaselineProfile* baseline_profile) {
+  std::unordered_set<std::string> excluded_interaction_ids;
+  if (!excluded_interaction_pattern.empty()) {
+    boost::regex rx(excluded_interaction_pattern);
+    for (auto&& [interaction_id, interaction_name] :
+         baseline_profile_config.interactions) {
+      if (boost::regex_match(interaction_name, rx)) {
+        excluded_interaction_ids.insert(interaction_id);
+      }
+    }
+  }
+
   DexAnnotationSet anno_set;
   anno_set.add_annotation(std::make_unique<DexAnnotation>(
       type::dalvik_annotation_optimization_NeverCompile(),
@@ -264,6 +281,11 @@ void never_compile(const Scope& scope,
           method_profiles.get_method_stat(interaction_id, method);
       if (!method_stats) {
         continue;
+      }
+      if (excluded_interaction_ids.count(interaction_id) &&
+          method_stats->appear_percent > excluded_appear100_threshold &&
+          method_stats->call_count > excluded_call_count_threshold) {
+        return;
       }
       call_count = std::max(call_count, method_stats->call_count);
     }
@@ -336,6 +358,12 @@ void ArtProfileWriterPass::bind_config() {
        m_never_inline_attach_annotations);
   bind("legacy_mode", true, m_legacy_mode);
   bind("never_compile_threshold", -1, m_never_compile_threshold);
+  bind("never_compile_excluded_interaction_pattern", "",
+       m_never_compile_excluded_interaction_pattern);
+  bind("never_compile_excluded_appear100_threshold", 20,
+       m_never_compile_excluded_appear100_threshold);
+  bind("never_compile_excluded_call_count_threshold", 0,
+       m_never_compile_excluded_call_count_threshold);
   after_configuration([this] {
     always_assert(m_perf_config.coldstart_appear100_nonhot_threshold <=
                   m_perf_config.coldstart_appear100_threshold);
@@ -438,8 +466,12 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
                                     method_profiles, &method_refs_without_def);
   auto scope = build_class_scope(stores);
   if (m_never_compile_threshold > -1) {
-    never_compile(scope, method_profiles, m_perf_config.interactions, mgr,
-                  m_never_compile_threshold, &baseline_profile);
+    never_compile(scope, conf.get_baseline_profile_config(), method_profiles,
+                  m_perf_config.interactions, mgr, m_never_compile_threshold,
+                  m_never_compile_excluded_interaction_pattern,
+                  m_never_compile_excluded_appear100_threshold,
+                  m_never_compile_excluded_call_count_threshold,
+                  &baseline_profile);
   }
 
   std::ofstream ofs{conf.metafile(BASELINE_PROFILES_FILE)};
