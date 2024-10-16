@@ -102,6 +102,14 @@ module.exports = {
               },
               {
                 type: 'doc',
+                id: 'fb/faq/build',
+              },
+              {
+                type: 'doc',
+                id: 'fb/faq/symbolication',
+              },
+              {
+                type: 'doc',
                 id: 'fb/faq/betteroptimizing',
               },
             ]
