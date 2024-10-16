@@ -27,7 +27,8 @@ enum RedexError {
   INVALID_BETAMAP = 9,
   BUFFER_END_EXCEEDED = 10,
   TYPE_CHECK_ERROR = 11,
-  MAX = 11,
+  INVALID_DEX = 12,
+  MAX = 12,
 };
 
 class RedexException : public std::exception {

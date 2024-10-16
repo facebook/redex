@@ -35,6 +35,15 @@ static void validate_dex_header(const dex_header* dh,
                     "Header size (%zu) is larger than file size (%zu)\n",
                     dexsize,
                     sizeof(dex_header));
+
+  // Cleanliness check. Also helps with fuzzers creating at least halfway
+  // valid files that may be dumped.
+  if (dh->endian_tag != ENDIAN_CONSTANT) {
+    throw RedexException(RedexError::INVALID_DEX,
+                         "Bad/unsupported endian tag",
+                         {{"tag", std::to_string(dh->endian_tag)}});
+  }
+
   bool supported = false;
   switch (support_dex_version) {
   case 39:
