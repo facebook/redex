@@ -36,6 +36,7 @@ ConstantEnvironment env_with_params(bool is_static,
   return env;
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 FixpointIterator::~FixpointIterator() {
   // We are going to destroy a lot of patricia trees, which can be expensive. To
   // speed this up, we are going to do it in parallel.

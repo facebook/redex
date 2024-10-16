@@ -45,6 +45,7 @@ RedexContext::RedexContext(bool allow_class_duplicates)
   }
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 RedexContext::~RedexContext() {
   // We parallelize destruction for efficiency.
   auto parallel_run = [](const std::vector<std::function<void()>>& fns,

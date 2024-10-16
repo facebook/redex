@@ -1020,6 +1020,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
     not_reached();
   }
 
+  // NOLINTNEXTLINE(bugprone-exception-escape)
   ~ViolationsHelperImpl() { process(nullptr); }
 
   void silence() { processed = true; }
