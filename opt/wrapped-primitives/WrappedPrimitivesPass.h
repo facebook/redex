@@ -34,4 +34,21 @@ class WrappedPrimitivesPass : public Pass {
   void bind_config() override;
   void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+ private:
+  // Used for later validation and informational metrics.
+  std::set<std::string> m_wrapper_type_names;
+  friend class ValidateWrappedPrimitivesPass;
+};
+
+class ValidateWrappedPrimitivesPass : public Pass {
+ public:
+  ValidateWrappedPrimitivesPass() : Pass("ValidateWrappedPrimitivesPass") {}
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    return redex_properties::simple::preserves_all();
+  }
+
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

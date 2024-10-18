@@ -10,6 +10,8 @@
 #include <inttypes.h>
 
 #include "DexUtil.h"
+#include "Lazy.h"
+#include "LiveRange.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"
@@ -54,6 +56,31 @@ DexType* get_wrapped_final_field_type(DexType* type) {
                     SHOW(cls));
   return candidates.at(0)->get_type();
 }
+
+size_t how_many_fields(const Scope& scope, const DexType* t) {
+  size_t result{0};
+  walk::fields(scope, [&](DexField* f) {
+    if (f->get_type() == t) {
+      result++;
+    }
+  });
+  return result;
+}
+
+void emit_field_count_metric(const std::string& metric_prefix,
+                             const Scope& scope,
+                             const std::string& name,
+                             const DexType* type,
+                             PassManager* mgr) {
+  size_t value = type != nullptr ? how_many_fields(scope, type) : 0;
+  TRACE(WP, 2, "%s: %zu field(s) of type %s", metric_prefix.c_str(), value,
+        name.c_str());
+  std::ostringstream name_builder;
+  name_builder << metric_prefix << "_" << java_names::internal_to_simple(name)
+               << "_fields";
+  auto metric_name = name_builder.str();
+  mgr->set_metric(metric_name, value);
+}
 } // namespace
 
 void WrappedPrimitivesPass::bind_config() {
@@ -73,6 +100,7 @@ void WrappedPrimitivesPass::bind_config() {
                       wrapper_desc.c_str());
     // Ensure the wrapper type matches expectations by the pass.
     validate_wrapper_type(spec.wrapper);
+    m_wrapper_type_names.emplace(spec.wrapper->str());
     spec.primitive = get_wrapped_final_field_type(spec.wrapper);
 
     // Unpack an array of objects, each object is just a 1 key/value to map an
@@ -118,7 +146,12 @@ void WrappedPrimitivesPass::bind_config() {
 
 void WrappedPrimitivesPass::eval_pass(DexStoresVector& stores,
                                       ConfigFiles& conf,
-                                      PassManager&) {
+                                      PassManager& mgr) {
+  auto scope = build_class_scope(stores);
+  for (const auto& name : m_wrapper_type_names) {
+    emit_field_count_metric("input", scope, name, DexType::get_type(name),
+                            &mgr);
+  }
   wp::get_instance()->mark_roots();
 }
 
@@ -140,4 +173,173 @@ void WrappedPrimitivesPass::run_pass(DexStoresVector& stores,
   wp::initialize({});
 }
 
+namespace {
+using PreceedingSourceBlockMap =
+    std::unordered_map<IRInstruction*, SourceBlock*>;
+
+PreceedingSourceBlockMap build_preceeding_source_block_map(
+    cfg::ControlFlowGraph& cfg) {
+  PreceedingSourceBlockMap result;
+  for (auto b : cfg.blocks()) {
+    SourceBlock* preceeding_source_block{nullptr};
+    for (const auto& mie : *b) {
+      if (mie.type == MFLOW_SOURCE_BLOCK) {
+        preceeding_source_block = mie.src_block.get();
+      } else if (mie.type == MFLOW_OPCODE) {
+        result.emplace(mie.insn, preceeding_source_block);
+      }
+    }
+  }
+  return result;
+}
+
+void trace_field_usage(const std::string& field_name,
+                       const std::string& method_name,
+                       IRInstruction* insn,
+                       SourceBlock* source_block) {
+  if (source_block != nullptr && method_name != source_block->src->c_str()) {
+    auto src = source_block->src->c_str();
+    TRACE(WP, 2,
+          "Note: unoptimized field %s use near "
+          "%s or %s",
+          field_name.c_str(), method_name.c_str(), src);
+  } else {
+    auto shown = show_deobfuscated(insn);
+    TRACE(WP, 2, "Note: unoptimized field %s use in method %s at %s",
+          field_name.c_str(), method_name.c_str(), shown.c_str());
+  }
+}
+} // namespace
+
+void ValidateWrappedPrimitivesPass::run_pass(DexStoresVector& stores,
+                                             ConfigFiles& /* unused */,
+                                             PassManager& mgr) {
+  auto wrapped_primitives_pass = static_cast<WrappedPrimitivesPass*>(
+      mgr.find_pass("WrappedPrimitivesPass"));
+  if (wrapped_primitives_pass == nullptr) {
+    return;
+  }
+  auto scope = build_class_scope(stores);
+  // Look up types that were processed previously by name, in case of rename or
+  // complete deletion.
+  std::map<std::string, DexType*> wrapper_types_post;
+  std::unordered_map<DexType*, std::string> wrapper_types_post_inverse;
+  auto find_impl = [&](DexClass* cls, const std::string& name) {
+    auto search = wrapped_primitives_pass->m_wrapper_type_names.find(name);
+    if (search != wrapped_primitives_pass->m_wrapper_type_names.end()) {
+      wrapper_types_post.emplace(name, cls->get_type());
+      wrapper_types_post_inverse.emplace(cls->get_type(), name);
+      return true;
+    }
+    return false;
+  };
+  for (auto& cls : scope) {
+    if (!find_impl(cls, cls->get_deobfuscated_name_or_empty_copy())) {
+      find_impl(cls, cls->get_name()->str_copy());
+    }
+  }
+
+  for (auto&& [name, type] : wrapper_types_post) {
+    emit_field_count_metric("post", scope, name, type, &mgr);
+  }
+  // Emit zero values for anything fully deleted.
+  for (const auto& name : wrapped_primitives_pass->m_wrapper_type_names) {
+    if (wrapper_types_post.count(name) == 0) {
+      emit_field_count_metric("post", scope, name, nullptr, &mgr);
+    }
+  }
+
+  // Stats for how many fields of wrapper types exist in the output program, and
+  // how many of those fields were covered by keep rules.
+  std::mutex stats_mtx;
+  using FieldUsages = std::map<DexField*, size_t, dexfields_comparator>;
+  std::map<DexType*, FieldUsages, dextypes_comparator> field_puts;
+  std::map<DexType*, FieldUsages, dextypes_comparator> field_gets;
+  auto incr_puts = [&](DexField* def) {
+    std::lock_guard<std::mutex> lock(stats_mtx);
+    field_puts[def->get_type()][def]++;
+  };
+  auto incr_gets = [&](DexField* def) {
+    std::lock_guard<std::mutex> lock(stats_mtx);
+    field_gets[def->get_type()][def]++;
+  };
+  walk::parallel::methods(scope, [&](DexMethod* m) {
+    auto code = m->get_code();
+    if (code == nullptr) {
+      return;
+    }
+    auto method_name = show_deobfuscated(m);
+    auto& cfg = code->cfg();
+    Lazy<live_range::LazyLiveRanges> live_ranges(
+        [&]() { return std::make_unique<live_range::LazyLiveRanges>(cfg); });
+    Lazy<PreceedingSourceBlockMap> sb_lookup(
+        [&]() { return build_preceeding_source_block_map(cfg); });
+    for (MethodItemEntry& mie : cfg::InstructionIterable(cfg)) {
+      if (mie.type != MFLOW_OPCODE) {
+        continue;
+      }
+      auto insn = mie.insn;
+      auto opcode = insn->opcode();
+      if (opcode == OPCODE_SGET_OBJECT || opcode == OPCODE_SPUT_OBJECT) {
+        auto def = insn->get_field()->as_def();
+        if (def != nullptr &&
+            wrapper_types_post_inverse.count(def->get_type()) > 0) {
+          if (opcode == OPCODE_SGET_OBJECT) {
+            incr_gets(def);
+            if (traceEnabled(WP, 2)) {
+              auto search = live_ranges->def_use_chains->find(insn);
+              if (search != live_ranges->def_use_chains->end()) {
+                // Print some info about immediate usages of the fields. Best
+                // effort to give some information that could point the reader
+                // to the original location of the usage before optimizations.
+                auto field_name = show_deobfuscated(def);
+                for (auto& use : search->second) {
+                  SourceBlock* preceeding_source_block{nullptr};
+                  auto sb = sb_lookup->find(use.insn);
+                  if (sb != sb_lookup->end() && sb->second != nullptr) {
+                    preceeding_source_block = sb->second;
+                  }
+                  trace_field_usage(field_name, method_name, insn,
+                                    preceeding_source_block);
+                }
+              }
+            }
+          } else {
+            incr_puts(def);
+          }
+        }
+      }
+    }
+  });
+
+  for (auto&& [wrapper, map] : field_puts) {
+    size_t put_but_unread_count{0};
+    size_t keep_count{0};
+    for (auto&& [def, puts] : map) {
+      const auto& field_gets_map = field_gets[wrapper];
+      auto search = field_gets_map.find(def);
+      if (search == field_gets_map.end() || search->second == 0) {
+        auto shown = show_deobfuscated(def);
+        if (!can_delete(def)) {
+          keep_count++;
+          TRACE(WP, 2, "Field %s was written but not read (keep)!",
+                shown.c_str());
+        } else {
+          TRACE(WP, 2, "Field %s was written but not read!", shown.c_str());
+        }
+        put_but_unread_count++;
+      }
+    }
+    const auto& name = wrapper_types_post_inverse.at(wrapper);
+    auto simple_name = java_names::internal_to_simple(name);
+    TRACE(WP, 2, "%s fields that cannot be deleted (keep): %zu", name.c_str(),
+          keep_count);
+    mgr.set_metric(simple_name + "_field_keeps", keep_count);
+    TRACE(WP, 2, "%s fields that were unread: %zu", name.c_str(),
+          put_but_unread_count);
+    mgr.set_metric(simple_name + "_field_put_but_unread", put_but_unread_count);
+  }
+}
+
 static WrappedPrimitivesPass s_pass;
+static ValidateWrappedPrimitivesPass s_validate_pass;
