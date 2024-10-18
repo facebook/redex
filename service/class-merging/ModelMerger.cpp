@@ -169,12 +169,15 @@ void update_code_type_refs(
       always_assert(type_class(type));
       auto merger_type = mergeable_to_merger.at(type);
       if (type::is_array(ref_type)) {
-        auto array_merger_type = type::make_array_type(merger_type);
+        auto array_merger_type =
+            type::make_array_type(merger_type, type::get_array_level(ref_type));
         insn->set_type(array_merger_type);
         TRACE(CLMG,
               9,
-              "  replacing %s referencing array type of %s",
+              "  replacing %s (%s -> %s) referencing array type of %s",
               SHOW(insn),
+              SHOW(ref_type),
+              SHOW(array_merger_type),
               SHOW(type));
       } else {
         insn->set_type(const_cast<DexType*>(merger_type));
