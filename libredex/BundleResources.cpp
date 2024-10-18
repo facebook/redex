@@ -398,7 +398,6 @@ void read_single_manifest(const std::string& manifest,
 bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
                              android::ResTable_config* out_config,
                              std::string* out_error) {
-  using namespace aapt;
   using ConfigDescription = android::ResTable_config;
   out_config->mcc = static_cast<uint16_t>(pb_config.mcc());
   out_config->mnc = static_cast<uint16_t>(pb_config.mnc());
@@ -416,13 +415,13 @@ bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
   }
 
   switch (pb_config.layout_direction()) {
-  case pb::Configuration_LayoutDirection_LAYOUT_DIRECTION_LTR:
+  case aapt::pb::Configuration_LayoutDirection_LAYOUT_DIRECTION_LTR:
     out_config->screenLayout =
         (out_config->screenLayout & ~ConfigDescription::MASK_LAYOUTDIR) |
         ConfigDescription::LAYOUTDIR_LTR;
     break;
 
-  case pb::Configuration_LayoutDirection_LAYOUT_DIRECTION_RTL:
+  case aapt::pb::Configuration_LayoutDirection_LAYOUT_DIRECTION_RTL:
     out_config->screenLayout =
         (out_config->screenLayout & ~ConfigDescription::MASK_LAYOUTDIR) |
         ConfigDescription::LAYOUTDIR_RTL;
@@ -440,25 +439,25 @@ bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
       static_cast<uint16_t>(pb_config.screen_height_dp());
 
   switch (pb_config.screen_layout_size()) {
-  case pb::Configuration_ScreenLayoutSize_SCREEN_LAYOUT_SIZE_SMALL:
+  case aapt::pb::Configuration_ScreenLayoutSize_SCREEN_LAYOUT_SIZE_SMALL:
     out_config->screenLayout =
         (out_config->screenLayout & ~ConfigDescription::MASK_SCREENSIZE) |
         ConfigDescription::SCREENSIZE_SMALL;
     break;
 
-  case pb::Configuration_ScreenLayoutSize_SCREEN_LAYOUT_SIZE_NORMAL:
+  case aapt::pb::Configuration_ScreenLayoutSize_SCREEN_LAYOUT_SIZE_NORMAL:
     out_config->screenLayout =
         (out_config->screenLayout & ~ConfigDescription::MASK_SCREENSIZE) |
         ConfigDescription::SCREENSIZE_NORMAL;
     break;
 
-  case pb::Configuration_ScreenLayoutSize_SCREEN_LAYOUT_SIZE_LARGE:
+  case aapt::pb::Configuration_ScreenLayoutSize_SCREEN_LAYOUT_SIZE_LARGE:
     out_config->screenLayout =
         (out_config->screenLayout & ~ConfigDescription::MASK_SCREENSIZE) |
         ConfigDescription::SCREENSIZE_LARGE;
     break;
 
-  case pb::Configuration_ScreenLayoutSize_SCREEN_LAYOUT_SIZE_XLARGE:
+  case aapt::pb::Configuration_ScreenLayoutSize_SCREEN_LAYOUT_SIZE_XLARGE:
     out_config->screenLayout =
         (out_config->screenLayout & ~ConfigDescription::MASK_SCREENSIZE) |
         ConfigDescription::SCREENSIZE_XLARGE;
@@ -469,13 +468,13 @@ bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
   }
 
   switch (pb_config.screen_layout_long()) {
-  case pb::Configuration_ScreenLayoutLong_SCREEN_LAYOUT_LONG_LONG:
+  case aapt::pb::Configuration_ScreenLayoutLong_SCREEN_LAYOUT_LONG_LONG:
     out_config->screenLayout =
         (out_config->screenLayout & ~ConfigDescription::MASK_SCREENLONG) |
         ConfigDescription::SCREENLONG_YES;
     break;
 
-  case pb::Configuration_ScreenLayoutLong_SCREEN_LAYOUT_LONG_NOTLONG:
+  case aapt::pb::Configuration_ScreenLayoutLong_SCREEN_LAYOUT_LONG_NOTLONG:
     out_config->screenLayout =
         (out_config->screenLayout & ~ConfigDescription::MASK_SCREENLONG) |
         ConfigDescription::SCREENLONG_NO;
@@ -486,13 +485,13 @@ bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
   }
 
   switch (pb_config.screen_round()) {
-  case pb::Configuration_ScreenRound_SCREEN_ROUND_ROUND:
+  case aapt::pb::Configuration_ScreenRound_SCREEN_ROUND_ROUND:
     out_config->screenLayout2 =
         (out_config->screenLayout2 & ~ConfigDescription::MASK_SCREENROUND) |
         ConfigDescription::SCREENROUND_YES;
     break;
 
-  case pb::Configuration_ScreenRound_SCREEN_ROUND_NOTROUND:
+  case aapt::pb::Configuration_ScreenRound_SCREEN_ROUND_NOTROUND:
     out_config->screenLayout2 =
         (out_config->screenLayout2 & ~ConfigDescription::MASK_SCREENROUND) |
         ConfigDescription::SCREENROUND_NO;
@@ -503,13 +502,13 @@ bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
   }
 
   switch (pb_config.wide_color_gamut()) {
-  case pb::Configuration_WideColorGamut_WIDE_COLOR_GAMUT_WIDECG:
+  case aapt::pb::Configuration_WideColorGamut_WIDE_COLOR_GAMUT_WIDECG:
     out_config->colorMode =
         (out_config->colorMode & ~ConfigDescription::MASK_WIDE_COLOR_GAMUT) |
         ConfigDescription::WIDE_COLOR_GAMUT_YES;
     break;
 
-  case pb::Configuration_WideColorGamut_WIDE_COLOR_GAMUT_NOWIDECG:
+  case aapt::pb::Configuration_WideColorGamut_WIDE_COLOR_GAMUT_NOWIDECG:
     out_config->colorMode =
         (out_config->colorMode & ~ConfigDescription::MASK_WIDE_COLOR_GAMUT) |
         ConfigDescription::WIDE_COLOR_GAMUT_NO;
@@ -520,13 +519,13 @@ bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
   }
 
   switch (pb_config.hdr()) {
-  case pb::Configuration_Hdr_HDR_HIGHDR:
+  case aapt::pb::Configuration_Hdr_HDR_HIGHDR:
     out_config->colorMode =
         (out_config->colorMode & ~ConfigDescription::MASK_HDR) |
         ConfigDescription::HDR_YES;
     break;
 
-  case pb::Configuration_Hdr_HDR_LOWDR:
+  case aapt::pb::Configuration_Hdr_HDR_LOWDR:
     out_config->colorMode =
         (out_config->colorMode & ~ConfigDescription::MASK_HDR) |
         ConfigDescription::HDR_NO;
@@ -537,15 +536,15 @@ bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
   }
 
   switch (pb_config.orientation()) {
-  case pb::Configuration_Orientation_ORIENTATION_PORT:
+  case aapt::pb::Configuration_Orientation_ORIENTATION_PORT:
     out_config->orientation = ConfigDescription::ORIENTATION_PORT;
     break;
 
-  case pb::Configuration_Orientation_ORIENTATION_LAND:
+  case aapt::pb::Configuration_Orientation_ORIENTATION_LAND:
     out_config->orientation = ConfigDescription::ORIENTATION_LAND;
     break;
 
-  case pb::Configuration_Orientation_ORIENTATION_SQUARE:
+  case aapt::pb::Configuration_Orientation_ORIENTATION_SQUARE:
     out_config->orientation = ConfigDescription::ORIENTATION_SQUARE;
     break;
 
@@ -554,43 +553,43 @@ bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
   }
 
   switch (pb_config.ui_mode_type()) {
-  case pb::Configuration_UiModeType_UI_MODE_TYPE_NORMAL:
+  case aapt::pb::Configuration_UiModeType_UI_MODE_TYPE_NORMAL:
     out_config->uiMode =
         (out_config->uiMode & ~ConfigDescription::MASK_UI_MODE_TYPE) |
         ConfigDescription::UI_MODE_TYPE_NORMAL;
     break;
 
-  case pb::Configuration_UiModeType_UI_MODE_TYPE_DESK:
+  case aapt::pb::Configuration_UiModeType_UI_MODE_TYPE_DESK:
     out_config->uiMode =
         (out_config->uiMode & ~ConfigDescription::MASK_UI_MODE_TYPE) |
         ConfigDescription::UI_MODE_TYPE_DESK;
     break;
 
-  case pb::Configuration_UiModeType_UI_MODE_TYPE_CAR:
+  case aapt::pb::Configuration_UiModeType_UI_MODE_TYPE_CAR:
     out_config->uiMode =
         (out_config->uiMode & ~ConfigDescription::MASK_UI_MODE_TYPE) |
         ConfigDescription::UI_MODE_TYPE_CAR;
     break;
 
-  case pb::Configuration_UiModeType_UI_MODE_TYPE_TELEVISION:
+  case aapt::pb::Configuration_UiModeType_UI_MODE_TYPE_TELEVISION:
     out_config->uiMode =
         (out_config->uiMode & ~ConfigDescription::MASK_UI_MODE_TYPE) |
         ConfigDescription::UI_MODE_TYPE_TELEVISION;
     break;
 
-  case pb::Configuration_UiModeType_UI_MODE_TYPE_APPLIANCE:
+  case aapt::pb::Configuration_UiModeType_UI_MODE_TYPE_APPLIANCE:
     out_config->uiMode =
         (out_config->uiMode & ~ConfigDescription::MASK_UI_MODE_TYPE) |
         ConfigDescription::UI_MODE_TYPE_APPLIANCE;
     break;
 
-  case pb::Configuration_UiModeType_UI_MODE_TYPE_WATCH:
+  case aapt::pb::Configuration_UiModeType_UI_MODE_TYPE_WATCH:
     out_config->uiMode =
         (out_config->uiMode & ~ConfigDescription::MASK_UI_MODE_TYPE) |
         ConfigDescription::UI_MODE_TYPE_WATCH;
     break;
 
-  case pb::Configuration_UiModeType_UI_MODE_TYPE_VRHEADSET:
+  case aapt::pb::Configuration_UiModeType_UI_MODE_TYPE_VRHEADSET:
     out_config->uiMode =
         (out_config->uiMode & ~ConfigDescription::MASK_UI_MODE_TYPE) |
         ConfigDescription::UI_MODE_TYPE_VR_HEADSET;
@@ -601,13 +600,13 @@ bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
   }
 
   switch (pb_config.ui_mode_night()) {
-  case pb::Configuration_UiModeNight_UI_MODE_NIGHT_NIGHT:
+  case aapt::pb::Configuration_UiModeNight_UI_MODE_NIGHT_NIGHT:
     out_config->uiMode =
         (out_config->uiMode & ~ConfigDescription::MASK_UI_MODE_NIGHT) |
         ConfigDescription::UI_MODE_NIGHT_YES;
     break;
 
-  case pb::Configuration_UiModeNight_UI_MODE_NIGHT_NOTNIGHT:
+  case aapt::pb::Configuration_UiModeNight_UI_MODE_NIGHT_NOTNIGHT:
     out_config->uiMode =
         (out_config->uiMode & ~ConfigDescription::MASK_UI_MODE_NIGHT) |
         ConfigDescription::UI_MODE_NIGHT_NO;
@@ -620,15 +619,15 @@ bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
   out_config->density = static_cast<uint16_t>(pb_config.density());
 
   switch (pb_config.touchscreen()) {
-  case pb::Configuration_Touchscreen_TOUCHSCREEN_NOTOUCH:
+  case aapt::pb::Configuration_Touchscreen_TOUCHSCREEN_NOTOUCH:
     out_config->touchscreen = ConfigDescription::TOUCHSCREEN_NOTOUCH;
     break;
 
-  case pb::Configuration_Touchscreen_TOUCHSCREEN_STYLUS:
+  case aapt::pb::Configuration_Touchscreen_TOUCHSCREEN_STYLUS:
     out_config->touchscreen = ConfigDescription::TOUCHSCREEN_STYLUS;
     break;
 
-  case pb::Configuration_Touchscreen_TOUCHSCREEN_FINGER:
+  case aapt::pb::Configuration_Touchscreen_TOUCHSCREEN_FINGER:
     out_config->touchscreen = ConfigDescription::TOUCHSCREEN_FINGER;
     break;
 
@@ -637,19 +636,19 @@ bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
   }
 
   switch (pb_config.keys_hidden()) {
-  case pb::Configuration_KeysHidden_KEYS_HIDDEN_KEYSEXPOSED:
+  case aapt::pb::Configuration_KeysHidden_KEYS_HIDDEN_KEYSEXPOSED:
     out_config->inputFlags =
         (out_config->inputFlags & ~ConfigDescription::MASK_KEYSHIDDEN) |
         ConfigDescription::KEYSHIDDEN_NO;
     break;
 
-  case pb::Configuration_KeysHidden_KEYS_HIDDEN_KEYSHIDDEN:
+  case aapt::pb::Configuration_KeysHidden_KEYS_HIDDEN_KEYSHIDDEN:
     out_config->inputFlags =
         (out_config->inputFlags & ~ConfigDescription::MASK_KEYSHIDDEN) |
         ConfigDescription::KEYSHIDDEN_YES;
     break;
 
-  case pb::Configuration_KeysHidden_KEYS_HIDDEN_KEYSSOFT:
+  case aapt::pb::Configuration_KeysHidden_KEYS_HIDDEN_KEYSSOFT:
     out_config->inputFlags =
         (out_config->inputFlags & ~ConfigDescription::MASK_KEYSHIDDEN) |
         ConfigDescription::KEYSHIDDEN_SOFT;
@@ -660,15 +659,15 @@ bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
   }
 
   switch (pb_config.keyboard()) {
-  case pb::Configuration_Keyboard_KEYBOARD_NOKEYS:
+  case aapt::pb::Configuration_Keyboard_KEYBOARD_NOKEYS:
     out_config->keyboard = ConfigDescription::KEYBOARD_NOKEYS;
     break;
 
-  case pb::Configuration_Keyboard_KEYBOARD_QWERTY:
+  case aapt::pb::Configuration_Keyboard_KEYBOARD_QWERTY:
     out_config->keyboard = ConfigDescription::KEYBOARD_QWERTY;
     break;
 
-  case pb::Configuration_Keyboard_KEYBOARD_TWELVEKEY:
+  case aapt::pb::Configuration_Keyboard_KEYBOARD_TWELVEKEY:
     out_config->keyboard = ConfigDescription::KEYBOARD_12KEY;
     break;
 
@@ -677,13 +676,13 @@ bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
   }
 
   switch (pb_config.nav_hidden()) {
-  case pb::Configuration_NavHidden_NAV_HIDDEN_NAVEXPOSED:
+  case aapt::pb::Configuration_NavHidden_NAV_HIDDEN_NAVEXPOSED:
     out_config->inputFlags =
         (out_config->inputFlags & ~ConfigDescription::MASK_NAVHIDDEN) |
         ConfigDescription::NAVHIDDEN_NO;
     break;
 
-  case pb::Configuration_NavHidden_NAV_HIDDEN_NAVHIDDEN:
+  case aapt::pb::Configuration_NavHidden_NAV_HIDDEN_NAVHIDDEN:
     out_config->inputFlags =
         (out_config->inputFlags & ~ConfigDescription::MASK_NAVHIDDEN) |
         ConfigDescription::NAVHIDDEN_YES;
@@ -694,19 +693,19 @@ bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
   }
 
   switch (pb_config.navigation()) {
-  case pb::Configuration_Navigation_NAVIGATION_NONAV:
+  case aapt::pb::Configuration_Navigation_NAVIGATION_NONAV:
     out_config->navigation = ConfigDescription::NAVIGATION_NONAV;
     break;
 
-  case pb::Configuration_Navigation_NAVIGATION_DPAD:
+  case aapt::pb::Configuration_Navigation_NAVIGATION_DPAD:
     out_config->navigation = ConfigDescription::NAVIGATION_DPAD;
     break;
 
-  case pb::Configuration_Navigation_NAVIGATION_TRACKBALL:
+  case aapt::pb::Configuration_Navigation_NAVIGATION_TRACKBALL:
     out_config->navigation = ConfigDescription::NAVIGATION_TRACKBALL;
     break;
 
-  case pb::Configuration_Navigation_NAVIGATION_WHEEL:
+  case aapt::pb::Configuration_Navigation_NAVIGATION_WHEEL:
     out_config->navigation = ConfigDescription::NAVIGATION_WHEEL;
     break;
 
