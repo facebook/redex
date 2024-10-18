@@ -1387,6 +1387,9 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   }
   case OPCODE_SPUT_OBJECT: {
     assume_reference(current_state, insn->src(0));
+    always_assert(insn->has_field());
+    const auto f_type = insn->get_field()->get_type();
+    assume_assignable(current_state->get_dex_type(insn->src(0)), f_type);
     break;
   }
   case OPCODE_INVOKE_CUSTOM:

@@ -2934,3 +2934,153 @@ TEST_F(IRTypeCheckerTest, invokeVirtualOnInterfaceMethod) {
     EXPECT_FALSE(checker.fail());
   }
 }
+
+TEST_F(IRTypeCheckerTest, sputObjectPass) {
+  const auto type_a = DexType::make_type("LA;");
+  {
+    ClassCreator cls_a_creator(type_a);
+    cls_a_creator.set_super(type::java_lang_Object());
+    cls_a_creator.add_field(DexField::make_field("LA;.f:LA;")
+                                ->make_concrete(ACC_PUBLIC | ACC_STATIC));
+    cls_a_creator.create();
+  }
+
+  const auto type_b = DexType::make_type("LB;");
+  {
+    ClassCreator cls_b_creator(type_b);
+    cls_b_creator.set_super(type_a);
+    cls_b_creator.create();
+  }
+
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:(LA;)V;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (sput-object v1 "LA;.f:LA;")
+      (return-void)
+    )
+  )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_FALSE(checker.fail());
+  }
+
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:(LB;)V;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (sput-object v1 "LA;.f:LA;")
+      (return-void)
+    )
+  )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_FALSE(checker.fail());
+  }
+}
+
+TEST_F(IRTypeCheckerTest, sputObjectFail) {
+  const auto type_a = DexType::make_type("LA;");
+  {
+    ClassCreator cls_a_creator(type_a);
+    cls_a_creator.set_super(type::java_lang_Object());
+    cls_a_creator.add_field(DexField::make_field("LA;.f:LA;")
+                                ->make_concrete(ACC_PUBLIC | ACC_STATIC));
+    cls_a_creator.create();
+  }
+
+  const auto type_b = DexType::make_type("LB;");
+  {
+    ClassCreator cls_b_creator(type_b);
+    cls_b_creator.set_super(type::java_lang_Object());
+    cls_b_creator.create();
+  }
+
+  auto method = DexMethod::make_method("LFoo;.bar:(LB;)V;")
+                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (sput-object v1 "LA;.f:LA;")
+      (return-void)
+    )
+  )"));
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_TRUE(checker.fail());
+}
+
+TEST_F(IRTypeCheckerTest, sputObjectArrayFail) {
+  const auto type_a = DexType::make_type("LA;");
+  const auto type_a_arr = type::make_array_type(type_a);
+
+  {
+    ClassCreator cls_a_creator(type_a);
+    cls_a_creator.set_super(type::java_lang_Object());
+    cls_a_creator.add_field(DexField::make_field("LA;.f:[LA;")
+                                ->make_concrete(ACC_PUBLIC | ACC_STATIC));
+    cls_a_creator.create();
+  }
+
+  const auto type_b = DexType::make_type("LB;");
+  {
+    ClassCreator cls_b_creator(type_b);
+    cls_b_creator.set_super(type::java_lang_Object());
+    cls_b_creator.create();
+  }
+
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:([LA;)V;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (sput-object v1 "LA;.f:[LA;")
+      (return-void)
+    )
+  )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_FALSE(checker.fail());
+  }
+
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:([[LA;)V;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (sput-object v1 "LA;.f:[LA;")
+      (return-void)
+    )
+  )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_TRUE(checker.fail());
+  }
+
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:([LB;)V;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (sput-object v1 "LA;.f:[LA;")
+      (return-void)
+    )
+  )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_TRUE(checker.fail());
+  }
+}
