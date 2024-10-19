@@ -23,10 +23,18 @@ constexpr const char* COMPANION_SUFFIX = "$cp";
 constexpr const char* COMPANION_CLASS = "$Companion";
 constexpr const char* PRIVATE_SUFFIX = "$p";
 
+constexpr const char* INT_REF_CLS = "Lkotlin/jvm/internal/Ref$IntRef;";
+constexpr const char* INT_REF_FIELD =
+    "Lkotlin/jvm/internal/Ref$IntRef;.element:I";
+constexpr const char* OBJ_REF_CLS = "Lkotlin/jvm/internal/Ref$ObjectRef;";
+constexpr const char* OBJ_REF_FIELD =
+    "Lkotlin/jvm/internal/Ref$ObjectRef;.element:Ljava/lang/Object;";
+
 namespace {
 
 bool is_int(const type_inference::TypeEnvironment& env, reg_t reg) {
-  return !env.get_int_type(reg).is_top() && !env.get_int_type(reg).is_bottom();
+  return env.get_dex_type(reg) != boost::none &&
+         type::is_int(*env.get_dex_type(reg));
 }
 
 // if there's no dex type, the value is null, and the checker does not enforce
@@ -39,6 +47,13 @@ bool is_string(const type_inference::TypeEnvironment& env, reg_t reg) {
 
 bool is_not_str_nor_int(const type_inference::TypeEnvironment& env, reg_t reg) {
   return !is_string(env, reg) && !is_int(env, reg);
+}
+
+bool is_int_or_obj_ref(const type_inference::TypeEnvironment& env, reg_t reg) {
+  return env.get_dex_type(reg) != boost::none
+             ? (*env.get_dex_type(reg) == DexType::make_type(INT_REF_CLS) ||
+                *env.get_dex_type(reg) == DexType::make_type(OBJ_REF_CLS))
+             : true;
 }
 
 DexMethod* resolve_method(DexMethod* caller, IRInstruction* insn) {
@@ -566,7 +581,8 @@ void SynthAccessorPatcher::patch_ctor_params_from_synth_cls_fields(
           continue;
         }
         auto& env = ctor_envs.at(insn);
-        if (!is_int(env, insn->dest()) && !is_string(env, insn->dest())) {
+        if (is_not_str_nor_int(env, insn->dest()) &&
+            !is_int_or_obj_ref(env, insn->dest())) {
           continue;
         }
         auto udchains_it = ctor_du_chains.find(insn);
@@ -595,6 +611,56 @@ void SynthAccessorPatcher::patch_ctor_params_from_synth_cls_fields(
   }
 }
 
+void patch_synthetic_field_from_local_var_lambda(
+    const live_range::UseDefChains& ud_chains,
+    IRInstruction* insn,
+    const src_index_t src,
+    DexAnnotationSet* anno_set) {
+  live_range::Use use_of_id{insn, src};
+  auto udchains_it = ud_chains.find(use_of_id);
+  auto defs_set = udchains_it->second;
+  for (IRInstruction* def : defs_set) {
+    DexField* field;
+    if (def->opcode() == OPCODE_CHECK_CAST) {
+      live_range::Use cc_use_of_id{def, (src_index_t)(0)};
+      auto cc_udchains_it = ud_chains.find(cc_use_of_id);
+      auto cc_defs_set = cc_udchains_it->second;
+      for (IRInstruction* cc_def : cc_defs_set) {
+        if (!opcode::is_an_iget(cc_def->opcode())) {
+          continue;
+        }
+        field = cc_def->get_field()->as_def();
+      }
+    } else if (opcode::is_an_iget(def->opcode())) {
+      field = def->get_field()->as_def();
+    } else {
+      continue;
+    }
+    if (!field) {
+      continue;
+    }
+
+    if (field->get_deobfuscated_name_or_empty() == INT_REF_FIELD ||
+        field->get_deobfuscated_name_or_empty() == OBJ_REF_FIELD) {
+      live_range::Use ref_use_of_id{def, 0};
+      auto ref_udchains_it = ud_chains.find(ref_use_of_id);
+      auto ref_defs_set = ref_udchains_it->second;
+      for (IRInstruction* ref_def : ref_defs_set) {
+        if (!opcode::is_an_iget(ref_def->opcode())) {
+          continue;
+        }
+        auto original_field = ref_def->get_field()->as_def();
+        if (!original_field) {
+          continue;
+        }
+        add_annotations(original_field, anno_set);
+      }
+    } else {
+      add_annotations(field, anno_set);
+    }
+  }
+}
+
 // Given a method, named 'callee', inside a lambda and the UseDefChains and
 // TypeInference of the synthetic caller method, check if the callee has
 // annotated parameters. If it does, finds the synthetic field representing the
@@ -614,22 +680,11 @@ void annotate_local_var_field_from_callee(
     auto annotation = type_inference::get_typedef_annotation(
         param_anno.second->get_annotations(), inference.get_annotations());
     if (annotation != boost::none) {
-      live_range::Use use_of_id{insn, (src_index_t)(param_anno.first + 1)};
-      auto udchains_it = ud_chains.find(use_of_id);
-      auto defs_set = udchains_it->second;
-      for (IRInstruction* def : defs_set) {
-        if (!opcode::is_an_iget(def->opcode())) {
-          continue;
-        }
-        auto field = def->get_field()->as_def();
-        if (!field) {
-          continue;
-        }
-        DexAnnotationSet anno_set = DexAnnotationSet();
-        anno_set.add_annotation(std::make_unique<DexAnnotation>(
-            DexType::make_type(annotation.get()->get_name()), DAV_RUNTIME));
-        add_annotations(field, &anno_set);
-      }
+      DexAnnotationSet anno_set = DexAnnotationSet();
+      anno_set.add_annotation(std::make_unique<DexAnnotation>(
+          DexType::make_type(annotation.get()->get_name()), DAV_RUNTIME));
+      patch_synthetic_field_from_local_var_lambda(
+          ud_chains, insn, param_anno.first + 1, &anno_set);
     }
   }
 }
@@ -706,20 +761,8 @@ void SynthAccessorPatcher::patch_local_var_lambda(DexMethod* method) {
         collect_annos_from_default_method(static_method, missing_param_annos);
         // Patch missing param annotations
         for (auto& pair : missing_param_annos) {
-          DexAnnotationSet anno_set = pair.second;
-          live_range::Use use_of_id{insn, pair.first};
-          auto udchains_it = ud_chains.find(use_of_id);
-          auto defs_set = udchains_it->second;
-          for (IRInstruction* def : defs_set) {
-            if (!opcode::is_an_iget(def->opcode())) {
-              continue;
-            }
-            auto field = def->get_field()->as_def();
-            if (!field) {
-              continue;
-            }
-            add_annotations(field, &anno_set);
-          }
+          patch_synthetic_field_from_local_var_lambda(ud_chains, insn,
+                                                      pair.first, &pair.second);
         }
       } else if (opcode::is_invoke_interface(insn->opcode())) {
         auto* callee_def = resolve_method(method, insn);
@@ -1573,6 +1616,21 @@ bool TypedefAnnoChecker::check_typedef_value(
             << ".\n failed instruction: " << show(def) << "\n";
         m_error += out.str();
         m_good = false;
+      }
+      break;
+    }
+    case OPCODE_NEW_INSTANCE: {
+      live_range::MoveAwareChains chains(m->get_code()->cfg());
+      live_range::DefUseChains du_chains = chains.get_def_use_chains();
+      auto duchains_it = du_chains.find(def);
+      auto uses_set = duchains_it->second;
+      for (live_range::Use use : uses_set) {
+        IRInstruction* use_insn = use.insn;
+        if (opcode::is_an_iput(use_insn->opcode()) ||
+            opcode::is_an_sput(use_insn->opcode())) {
+          check_typedef_value(m, annotation, ud_chains, use_insn, 0, inference,
+                              envs);
+        }
       }
       break;
     }

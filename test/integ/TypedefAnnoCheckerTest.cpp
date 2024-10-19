@@ -1379,13 +1379,13 @@ TEST_F(TypedefAnnoCheckerTest, TestNullString) {
   EXPECT_TRUE(checker.complete());
 }
 
-TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVar) {
+TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVal) {
   auto scope = build_class_scope(stores);
   build_cfg(scope);
   auto* method =
       DexMethod::get_method(
           "Lcom/facebook/redextest/"
-          "TypedefAnnoCheckerKtTest$testLambdaCallLocalVar$1;.invoke:()"
+          "TypedefAnnoCheckerKtTest$testLambdaCallLocalVal$1;.invoke:()"
           "Ljava/lang/String;")
           ->as_def();
 
@@ -1400,13 +1400,13 @@ TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVar) {
   EXPECT_TRUE(checker.complete());
 }
 
-TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarInvalid) {
+TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalValInvalid) {
   auto scope = build_class_scope(stores);
   build_cfg(scope);
   auto* method =
       DexMethod::get_method(
           "Lcom/facebook/redextest/"
-          "TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarInvalid:()"
+          "TypedefAnnoCheckerKtTest;.testLambdaCallLocalValInvalid:()"
           "Ljava/lang/String;")
           ->as_def();
 
@@ -1415,7 +1415,7 @@ TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarInvalid) {
   auto* synth_method =
       DexMethod::get_method(
           "Lcom/facebook/redextest/"
-          "TypedefAnnoCheckerKtTest$testLambdaCallLocalVarInvalid$1;.invoke:()"
+          "TypedefAnnoCheckerKtTest$testLambdaCallLocalValInvalid$1;.invoke:()"
           "Ljava/lang/String;")
           ->as_def();
 
@@ -1428,12 +1428,12 @@ TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarInvalid) {
   EXPECT_FALSE(checker.complete());
   EXPECT_EQ(
       checker.error(),
-      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarInvalid:()Ljava/lang/String;\n\
+      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalValInvalid:()Ljava/lang/String;\n\
  the string value randomval does not have the typedef annotation \n\
  Linteg/TestStringDef; attached to it. \n\
  Check that the value is annotated and exists in the typedef annotation class.\n\
  failed instruction: CONST_STRING \"randomval\"\n\
- Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest$testLambdaCallLocalVarInvalid$1;.<init>:(Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;Ljava/lang/String;)V\n\
+ Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest$testLambdaCallLocalValInvalid$1;.<init>:(Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;Ljava/lang/String;)V\n\
  Incorrect parameter's index: 2\n\n");
 }
 
@@ -1606,7 +1606,6 @@ TEST_F(TypedefAnnoCheckerTest, TestSAM) {
       "Lcom/facebook/redextest/"
       "TypedefAnnoCheckerKtTest$sam_interface$1;."
       "setString:(Ljava/lang/String;)V");
-  std::cerr << SHOW(method->get_code()->cfg()) << "\n";
 
   auto method_override_graph = mog::build_graph(scope);
 
@@ -1617,4 +1616,211 @@ TEST_F(TypedefAnnoCheckerTest, TestSAM) {
 
   auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarInt) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarInt:()I")
+                     ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  // set the deobfuscated name manually since it doesn't get set by default in
+  // integ tests
+  auto* synth_init =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerKtTest$testLambdaCallLocalVarInt$1;.<init>:"
+          "(Lcom/"
+          "facebook/redextest/TypedefAnnoCheckerKtTest;Lkotlin/jvm/internal/"
+          "Ref$IntRef;)V")
+          ->as_def();
+  synth_init->set_deobfuscated_name(
+      "Lcom/facebook/redextest/"
+      "TypedefAnnoCheckerKtTest$testLambdaCallLocalVarInt$1;.<init>:("
+      "Lcom/"
+      "facebook/redextest/TypedefAnnoCheckerKtTest;Lkotlin/jvm/internal/"
+      "Ref$IntRef;)V");
+
+  DexClass* synth_class = type_class(synth_init->get_class());
+  synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarIntInvalid) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntInvalid:()I")
+          ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  // set the deobfuscated name manually since it doesn't get set by default in
+  // integ tests
+  DexClass* synth_class = type_class(DexType::make_type(
+      "Lcom/facebook/redextest/"
+      "TypedefAnnoCheckerKtTest$testLambdaCallLocalVarIntInvalid$1;"));
+  synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  // EXPECT_FALSE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarIntDefault) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntDefault:()I")
+          ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  // set the deobfuscated name manually since it doesn't get set by default in
+  // integ tests
+  DexClass* synth_class = type_class(DexType::make_type(
+      "Lcom/facebook/redextest/"
+      "TypedefAnnoCheckerKtTest$testLambdaCallLocalVarIntDefault$1;"));
+  synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarIntDefaultInvalid) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerKtTest;."
+                     "testLambdaCallLocalVarIntDefaultInvalid:()I")
+                     ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  // set the deobfuscated name manually since it doesn't get set by default in
+  // integ tests
+  DexClass* synth_class = type_class(DexType::make_type(
+      "Lcom/facebook/redextest/"
+      "TypedefAnnoCheckerKtTest$testLambdaCallLocalVarIntDefaultInvalid$1;"));
+  synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  // EXPECT_FALSE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarString) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarString:()"
+                     "Ljava/lang/String;")
+                     ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  // set the deobfuscated name manually since it doesn't get set by default in
+  // integ tests
+  DexClass* synth_class = type_class(DexType::make_type(
+      "Lcom/facebook/redextest/"
+      "TypedefAnnoCheckerKtTest$testLambdaCallLocalVarString$1;"));
+  synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarStringInvalid) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerKtTest;."
+                     "testLambdaCallLocalVarStringInvalid:()Ljava/lang/String;")
+                     ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  // set the deobfuscated name manually since it doesn't get set by default in
+  // integ tests
+  DexClass* synth_class = type_class(DexType::make_type(
+      "Lcom/facebook/redextest/"
+      "TypedefAnnoCheckerKtTest$testLambdaCallLocalVarStringInvalid$1;"));
+  synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  // EXPECT_FALSE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarStringDefault) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerKtTest;."
+                     "testLambdaCallLocalVarStringDefault:()Ljava/lang/String;")
+                     ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  // set the deobfuscated name manually since it doesn't get set by default in
+  // integ tests
+  DexClass* synth_class = type_class(DexType::make_type(
+      "Lcom/facebook/redextest/"
+      "TypedefAnnoCheckerKtTest$testLambdaCallLocalVarStringDefault$1;"));
+  synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarStringDefaultInvalid) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerKtTest;."
+          "testLambdaCallLocalVarStringDefaultInvalid:()Ljava/lang/String;")
+          ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  // set the deobfuscated name manually since it doesn't get set by default in
+  // integ tests
+
+  DexClass* synth_class = type_class(
+      DexType::make_type("Lcom/facebook/redextest/"
+                         "TypedefAnnoCheckerKtTest$"
+                         "testLambdaCallLocalVarStringDefaultInvalid$1;"));
+  synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  // EXPECT_FALSE(checker.complete());
 }

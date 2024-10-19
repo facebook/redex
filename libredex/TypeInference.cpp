@@ -16,6 +16,10 @@
 #include "Trace.h"
 #include "TypeUtil.h"
 
+constexpr const char* KT_INT_REF = "Lkotlin/jvm/internal/Ref$IntRef;.element:I";
+constexpr const char* KT_OBJ_REF =
+    "Lkotlin/jvm/internal/Ref$ObjectRef;.element:Ljava/lang/Object;";
+
 std::ostream& operator<<(std::ostream& output, const IRType& type) {
   switch (type) {
   case IRType::BOTTOM: {
@@ -1035,9 +1039,17 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   }
   case OPCODE_IGET: {
     refine_reference(current_state, insn->src(0));
-    const DexType* type = insn->get_field()->get_type();
+    DexFieldRef* field = insn->get_field();
+    const DexType* type = field->get_type();
     boost::optional<const DexType*> annotation =
-        get_typedef_anno_from_member(insn->get_field(), m_annotations);
+        get_typedef_anno_from_member(field, m_annotations);
+    boost::optional<const DexType*> src_anno =
+        current_state->get_annotation(insn->src(0));
+    DexField* field_def = field->as_def();
+    if (field_def &&
+        field_def->get_deobfuscated_name_or_empty() == KT_INT_REF) {
+      annotation = src_anno;
+    }
     if (type::is_float(type)) {
       set_float(current_state, RESULT_REGISTER);
     } else {
@@ -1081,6 +1093,13 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
         get_typedef_anno_from_member(insn->get_field(), m_annotations);
     always_assert(insn->has_field());
     const auto field = insn->get_field();
+    boost::optional<const DexType*> src_anno =
+        current_state->get_annotation(insn->src(0));
+    DexField* field_def = field->as_def();
+    if (field_def &&
+        field_def->get_deobfuscated_name_or_empty() == KT_OBJ_REF) {
+      annotation = src_anno;
+    }
     set_reference_with_anno(current_state, RESULT_REGISTER, field->get_type(),
                             annotation);
     break;
