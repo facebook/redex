@@ -70,14 +70,38 @@ bool is_lamdda_callback(DexMethod* m) {
          m->get_simple_deobfuscated_name() == "onClick";
 }
 
+// The patcher cannot annotate these read methods used by ModelGen, so the
+// checker will fail when it expects an annotated returned value. We can skip
+// these reads because all the ModelGen Parcel and Json write methods only write
+// annotated values. Since all values that flow into the writes are annotated,
+// we know that all reads are safe too.
+bool is_parcel_or_json_read(const DexMethod* m) {
+  return m->get_deobfuscated_name_or_empty_copy() ==
+             "Landroid/os/Parcel;.readInt:()I" ||
+         m->get_deobfuscated_name_or_empty_copy() ==
+             "Landroid/os/Parcel;.readString:()Ljava/lang/String;" ||
+         m->get_deobfuscated_name_or_empty_copy() ==
+             "Lcom/facebook/common/json/"
+             "AutoGenJsonHelper;.readStringValue:(Lcom/fasterxml/jackson/core/"
+             "JsonParser;)Ljava/lang/String;" ||
+         m->get_deobfuscated_name_or_empty_copy() ==
+             "Lcom/fasterxml/jackson/core/JsonParser;.getValueAsInt:()I";
+}
+
+// The ModelGen class with the ModelDefinition annotation is the original
+// _Spec class that all the other classes ($Builder, $Serializer, $Deserializer,
+// etc.) are derived from. When we check a Parcel or Json read, we know that we
+// are either in the $Builder or $Deserializer class and need to derive the base
+// Spec class from the name
 bool is_model_gen(const DexMethod* m) {
   DexType* type = m->get_class();
   auto model_gen_cls_name =
       type->str().substr(0, type->str().size() - 1) + "Spec;";
   DexClass* cls = type_class(DexType::make_type(model_gen_cls_name));
   if (!cls) {
+    // the class could end in $Builder or $Deserializer
     auto model_gen_cls_name_from_builder =
-        type->str().substr(0, type->str().find("$Builder;")) + "Spec;";
+        type->str().substr(0, type->str().find('$')) + "Spec;";
     cls = type_class(DexType::make_type(model_gen_cls_name_from_builder));
   }
   if (!cls || !cls->get_anno_set()) {
@@ -1126,11 +1150,6 @@ void TypedefAnnoChecker::run(DexMethod* m) {
     return;
   }
 
-  if (is_model_gen(m) &&
-      boost::starts_with(m->get_simple_deobfuscated_name(), "get")) {
-    return;
-  }
-
   always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   std::unordered_set<DexType*> anno_set;
@@ -1197,10 +1216,6 @@ void TypedefAnnoChecker::check_instruction(
     for (const DexMethod* callee : callees) {
       if (!callee->get_param_anno()) {
         // Callee does not expect any Typedef value. Nothing to do.
-        return;
-      }
-      if (is_model_gen(callee) &&
-          boost::starts_with(callee->get_simple_deobfuscated_name(), "set")) {
         return;
       }
       for (auto const& param_anno : *callee->get_param_anno()) {
@@ -1476,6 +1491,9 @@ bool TypedefAnnoChecker::check_typedef_value(
         m_good = false;
         m_error += out.str();
         return false;
+      }
+      if (is_parcel_or_json_read(def_method) && is_model_gen(m)) {
+        break;
       }
       std::vector<const DexMethod*> callees;
       if (mog::is_true_virtual(m_method_override_graph, def_method) &&
