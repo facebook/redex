@@ -40,6 +40,7 @@ class DexType;
   TM(CHECKRECURSION)    \
   TM(CIC)               \
   TM(CLA)               \
+  TM(CLINIT_OUTLINE)    \
   TM(CLMG)              \
   TM(CLP_LITHO)         \
   TM(CONSTP)            \
