@@ -1044,6 +1044,37 @@ void IRTypeChecker::assume_assignable(boost::optional<const DexType*> from,
   }
 }
 
+namespace {
+
+void assume_array(const DexType* array_type) {
+  if (!type::is_array(array_type)) {
+    std::ostringstream out;
+    out << "Expected  " << array_type << " to be an array type\n";
+    throw TypeCheckingException(out.str());
+  }
+}
+
+void assume_array(TypeEnvironment* state, reg_t reg) {
+  assume_type(state,
+              reg,
+              /* expected= */ IRType::REFERENCE,
+              /* ignore_top= */ false);
+
+  // TODO: Make sure we have state for every location.
+  if (state->is_bottom()) {
+    return;
+  }
+
+  auto dtype = state->get_dex_type(reg);
+  if (!dtype) {
+    return;
+  }
+
+  assume_array(*dtype);
+}
+
+} // namespace
+
 // This method performs type checking only: the type environment is not updated
 // and the source registers of the instruction are checked against their
 // expected types.
@@ -1238,7 +1269,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     break;
   }
   case OPCODE_AGET: {
-    assume_reference(current_state, insn->src(0));
+    assume_array(current_state, insn->src(0));
     assume_integer(current_state, insn->src(1));
     break;
   }
@@ -1246,23 +1277,23 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_AGET_BYTE:
   case OPCODE_AGET_CHAR:
   case OPCODE_AGET_SHORT: {
-    assume_reference(current_state, insn->src(0));
+    assume_array(current_state, insn->src(0));
     assume_integer(current_state, insn->src(1));
     break;
   }
   case OPCODE_AGET_WIDE: {
-    assume_reference(current_state, insn->src(0));
+    assume_array(current_state, insn->src(0));
     assume_integer(current_state, insn->src(1));
     break;
   }
   case OPCODE_AGET_OBJECT: {
-    assume_reference(current_state, insn->src(0));
+    assume_array(current_state, insn->src(0));
     assume_integer(current_state, insn->src(1));
     break;
   }
   case OPCODE_APUT: {
     assume_scalar(current_state, insn->src(0));
-    assume_reference(current_state, insn->src(1));
+    assume_array(current_state, insn->src(1));
     assume_integer(current_state, insn->src(2));
     break;
   }
@@ -1271,19 +1302,19 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_APUT_CHAR:
   case OPCODE_APUT_SHORT: {
     assume_integer(current_state, insn->src(0));
-    assume_reference(current_state, insn->src(1));
+    assume_array(current_state, insn->src(1));
     assume_integer(current_state, insn->src(2));
     break;
   }
   case OPCODE_APUT_WIDE: {
     assume_wide_scalar(current_state, insn->src(0));
-    assume_reference(current_state, insn->src(1));
+    assume_array(current_state, insn->src(1));
     assume_integer(current_state, insn->src(2));
     break;
   }
   case OPCODE_APUT_OBJECT: {
     assume_reference(current_state, insn->src(0));
-    assume_reference(current_state, insn->src(1));
+    assume_array(current_state, insn->src(1));
     assume_integer(current_state, insn->src(2));
     break;
   }

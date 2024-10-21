@@ -3084,3 +3084,110 @@ TEST_F(IRTypeCheckerTest, sputObjectArrayFail) {
     EXPECT_TRUE(checker.fail());
   }
 }
+
+TEST_F(IRTypeCheckerTest, agetArrayTypePass) {
+  const auto type_a = DexType::make_type("LA;");
+  {
+    ClassCreator cls_a_creator(type_a);
+    cls_a_creator.set_super(type::java_lang_Object());
+    cls_a_creator.create();
+  }
+
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:(I[LA;)V;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param v1)
+      (load-param-object v2)
+      (aget-object v2 v1)
+      (move-result-pseudo-object v3)
+      (return-void)
+    )
+  )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_FALSE(checker.fail()) << checker.what();
+  }
+}
+
+TEST_F(IRTypeCheckerTest, agetArrayTypeFail) {
+  const auto type_a = DexType::make_type("LA;");
+  {
+    ClassCreator cls_a_creator(type_a);
+    cls_a_creator.set_super(type::java_lang_Object());
+    cls_a_creator.create();
+  }
+
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:(ILA;)V;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param v1)
+      (load-param-object v2)
+      (aget-object v2 v1)
+      (move-result-pseudo-object v3)
+      (return-void)
+    )
+  )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_TRUE(checker.fail());
+  }
+}
+
+TEST_F(IRTypeCheckerTest, aputArrayTypePass) {
+  const auto type_a = DexType::make_type("LA;");
+  {
+    ClassCreator cls_a_creator(type_a);
+    cls_a_creator.set_super(type::java_lang_Object());
+    cls_a_creator.create();
+  }
+
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:(ILA;[LA;)V;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param v1)
+      (load-param-object v2)
+      (load-param-object v3)
+      (aput-object v2 v3 v1)
+      (return-void)
+    )
+  )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_FALSE(checker.fail());
+  }
+}
+
+TEST_F(IRTypeCheckerTest, aputArrayTypeFail) {
+  const auto type_a = DexType::make_type("LA;");
+  {
+    ClassCreator cls_a_creator(type_a);
+    cls_a_creator.set_super(type::java_lang_Object());
+    cls_a_creator.create();
+  }
+
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:(ILA;)V;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param v1)
+      (load-param-object v2)
+      (aput-object v2 v2 v1)
+      (return-void)
+    )
+  )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_TRUE(checker.fail());
+  }
+}
