@@ -28,21 +28,109 @@ DexLoader::DexLoader(const DexLocation* location)
       m_file(new boost::iostreams::mapped_file()),
       m_location(location) {}
 
+namespace {
+
+// Lazy eval system. Because of the map interface this is a bit
+// annoying to implement nicely. Current design uses RAII
+
+struct AssertHelper {
+  std::optional<std::string> message{};
+  std::optional<std::map<std::string, std::string>> extra_info{};
+
+  explicit AssertHelper() {}
+
+  // Yeah, it's not good form to throw in a destructor. But...
+  // NOLINTNEXTLINE(bugprone-exception-escape)
+  ~AssertHelper() noexcept(false) {
+    throw RedexException(
+        RedexError::INVALID_DEX, message ? *message : std::string(""),
+        extra_info ? *extra_info : std::map<std::string, std::string>());
+  }
+
+  AssertHelper& set_message(std::string&& msg) {
+    message = std::move(msg);
+    return *this;
+  }
+
+  template <typename T>
+  AssertHelper& add_info(std::string&& key, T value) {
+    if (!extra_info) {
+      extra_info = std::map<std::string, std::string>();
+    }
+    extra_info->emplace(key, std::to_string(value));
+    return *this;
+  }
+};
+
+// std::to_string doesn't take std::string, so need to specialize.
+template <>
+AssertHelper& AssertHelper::add_info<std::string>(std::string&& key,
+                                                  std::string value) {
+  if (!extra_info) {
+    extra_info = std::map<std::string, std::string>();
+  }
+  extra_info->emplace(key, std::move(value));
+  return *this;
+}
+
+// Macro for lazy eval. The exception interface is not great.
+//
+// This leaves an "open" AssertHelper that can be filled with
+// literate style calls:
+// DEX_ASSERT(x == y).set_message("x not equal y").add_info("x",
+// x).add_info("z", z);
+#define DEX_ASSERT(expr) \
+  if (!(expr)) AssertHelper()
+
+void dex_range_assert(uint64_t offset,
+                      size_t extent,
+                      size_t dexsize,
+                      const std::string& msg_invalid,
+                      const std::string& msg_invalid_extent,
+                      const std::string& offset_name) {
+  if (offset >= dexsize) {
+    throw RedexException(RedexError::INVALID_DEX, msg_invalid,
+                         {{offset_name, std::to_string(offset)},
+                          {"extent", std::to_string(extent)},
+                          {"dex_size", std::to_string(dexsize)}});
+  }
+  if (extent > dexsize || offset > dexsize - extent) {
+    throw RedexException(RedexError::INVALID_DEX, msg_invalid_extent,
+                         {{offset_name, std::to_string(offset)},
+                          {"extent", std::to_string(extent)},
+                          {"dex_size", std::to_string(dexsize)}});
+  }
+}
+
+template <typename T>
+void dex_type_range_assert(uint64_t offset,
+                           uint64_t size,
+                           size_t dexsize,
+                           const std::string& type_name) {
+  // The string operations are a bit annoying as they are not lazy.
+  dex_range_assert(offset,
+                   size * sizeof(T),
+                   dexsize,
+                   type_name + " out of range",
+                   "invalid " + type_name + " size",
+                   type_name + "_off");
+}
+
+} // namespace
+
 static void validate_dex_header(const dex_header* dh,
                                 size_t dexsize,
                                 int support_dex_version) {
-  always_assert_log(sizeof(dex_header) <= dexsize,
-                    "Header size (%zu) is larger than file size (%zu)\n",
-                    dexsize,
-                    sizeof(dex_header));
+  DEX_ASSERT(sizeof(dex_header) <= dexsize)
+      .set_message("Header size is larger than file size")
+      .add_info("header_size", sizeof(dex_header))
+      .add_info("dex_size", dexsize);
 
   // Cleanliness check. Also helps with fuzzers creating at least halfway
   // valid files that may be dumped.
-  if (dh->endian_tag != ENDIAN_CONSTANT) {
-    throw RedexException(RedexError::INVALID_DEX,
-                         "Bad/unsupported endian tag",
-                         {{"tag", std::to_string(dh->endian_tag)}});
-  }
+  DEX_ASSERT(dh->endian_tag == ENDIAN_CONSTANT)
+      .set_message("Bad/unsupported endian tag")
+      .add_info("tag", dh->endian_tag);
 
   bool supported = false;
   switch (support_dex_version) {
@@ -66,87 +154,66 @@ static void validate_dex_header(const dex_header* dh,
     not_reached_log("Unrecognized support_dex_version %d\n",
                     support_dex_version);
   }
-  always_assert_log(supported,
-                    "Bad dex magic %s for "
-                    "support_dex_version %d\n",
-                    // There may not be a null terminator, so roundtrip.
-                    std::string(dh->magic, sizeof(dh->magic)).c_str(),
-                    support_dex_version);
-  always_assert_log(
-      dh->file_size == dexsize,
-      "Reported size in header (%zu) does not match file size (%u)\n",
-      dexsize,
-      dh->file_size);
+  DEX_ASSERT(supported)
+      .set_message("Bad dex magic for support_dex_version")
+      .add_info("magic", std::string(dh->magic, sizeof(dh->magic)))
+      .add_info("support_dex_version", support_dex_version);
+  DEX_ASSERT(dh->file_size == dexsize)
+      .set_message("Reported size in header does not match file size")
+      .add_info("dexsize", dexsize)
+      .add_info("header_size", dh->file_size);
 
-  auto map_list_off = (uint64_t)dh->map_off;
-  always_assert_log(map_list_off < dexsize, "map_off out of range");
-  const uint8_t* dexbase = (const uint8_t*)dh;
-  const dex_map_list* map_list = (dex_map_list*)(dexbase + dh->map_off);
-  auto map_list_limit = map_list_off + map_list->size * sizeof(dex_map_item);
-  always_assert_log(map_list_limit < dexsize, "inavlid map_list size");
+  auto map_list = [&]() {
+    auto map_list_off = (uint64_t)dh->map_off;
+    dex_range_assert(map_list_off, sizeof(dex_map_list), dexsize,
+                     "map_off invalid", "map_list out of range (struct)",
+                     "map_list_off");
+    const dex_map_list* map_list_tmp =
+        (dex_map_list*)(((const uint8_t*)dh) + dh->map_off);
+    dex_range_assert(
+        map_list_off,
+        sizeof(uint32_t) + map_list_tmp->size * sizeof(dex_map_item), dexsize,
+        "map_off invalid", "map_list out of range (data)", "map_list_off");
+    return map_list_tmp;
+  }();
 
   for (uint32_t i = 0; i < map_list->size; i++) {
     auto& item = map_list->items[i];
     switch (item.type) {
     case TYPE_CALL_SITE_ID_ITEM: {
       auto callsite_ids_off = (uint64_t)item.offset;
-      always_assert_log(callsite_ids_off < dexsize,
-                        "callsite_ids out of range");
-      dex_callsite_id* callsite_ids =
-          (dex_callsite_id*)((uint8_t*)dh + item.offset);
-      auto callsite_ids_limit =
-          callsite_ids_off + item.size * sizeof(dex_callsite_id);
-      always_assert_log(callsite_ids_limit < dexsize,
-                        "inavlid callsite_ids size");
+      dex_type_range_assert<dex_callsite_id>(callsite_ids_off, item.size,
+                                             dexsize, "callsite_ids");
+      // dex_callsite_id* callsite_ids =
+      //     (dex_callsite_id*)((uint8_t*)dh + item.offset);
     } break;
     case TYPE_METHOD_HANDLE_ITEM: {
       auto methodhandle_ids_off = (uint64_t)item.offset;
-      always_assert_log(methodhandle_ids_off < dexsize,
-                        "methodhandle_ids out of range");
-      dex_methodhandle_id* methodhandle_ids =
-          (dex_methodhandle_id*)((uint8_t*)dh + item.offset);
-      auto methodhandle_ids_limit =
-          methodhandle_ids_off + item.size * sizeof(dex_methodhandle_id);
-      always_assert_log(methodhandle_ids_limit < dexsize,
-                        "inavlid methodhandle_ids size");
+      dex_type_range_assert<dex_methodhandle_id>(
+          methodhandle_ids_off, item.size, dexsize, "methodhandle_ids");
+      // dex_methodhandle_id* methodhandle_ids =
+      //     (dex_methodhandle_id*)((uint8_t*)dh + item.offset);
     } break;
     }
   }
 
-  auto str_ids_off = (uint64_t)dh->string_ids_off;
-  auto str_ids_limit =
-      str_ids_off + dh->string_ids_size * sizeof(dex_string_id);
-  always_assert_log(str_ids_off < dexsize, "string_ids_off out of range");
-  always_assert_log(str_ids_limit <= dexsize, "invalid string_ids_size");
+  dex_type_range_assert<dex_string_id>(dh->string_ids_off, dh->string_ids_size,
+                                       dexsize, "string_ids");
 
-  auto type_ids_off = (uint64_t)dh->type_ids_off;
-  auto type_ids_limit = type_ids_off + dh->type_ids_size * sizeof(dex_type_id);
-  always_assert_log(type_ids_off < dexsize, "type_ids_off out of range");
-  always_assert_log(type_ids_limit <= dexsize, "invalid type_ids_size");
+  dex_type_range_assert<dex_type_id>(dh->type_ids_off, dh->type_ids_size,
+                                     dexsize, "type_ids");
 
-  auto proto_ids_off = (uint64_t)dh->proto_ids_off;
-  auto proto_ids_limit =
-      proto_ids_off + dh->proto_ids_size * sizeof(dex_proto_id);
-  always_assert_log(proto_ids_off < dexsize, "proto_ids_off out of range");
-  always_assert_log(proto_ids_limit <= dexsize, "invalid proto_ids_size");
+  dex_type_range_assert<dex_proto_id>(dh->proto_ids_off, dh->proto_ids_size,
+                                      dexsize, "proto_ids");
 
-  auto field_ids_off = (uint64_t)dh->field_ids_off;
-  auto field_ids_limit =
-      field_ids_off + dh->field_ids_size * sizeof(dex_field_id);
-  always_assert_log(field_ids_off < dexsize, "field_ids_off out of range");
-  always_assert_log(field_ids_limit <= dexsize, "invalid field_ids_size");
+  dex_type_range_assert<dex_field_id>(dh->field_ids_off, dh->field_ids_size,
+                                      dexsize, "field_ids");
 
-  auto meth_ids_off = (uint64_t)dh->method_ids_off;
-  auto meth_ids_limit =
-      meth_ids_off + dh->method_ids_size * sizeof(dex_method_id);
-  always_assert_log(meth_ids_off < dexsize, "method_ids_off out of range");
-  always_assert_log(meth_ids_limit <= dexsize, "invalid method_ids_size");
+  dex_type_range_assert<dex_method_id>(dh->method_ids_off, dh->method_ids_size,
+                                       dexsize, "method_ids");
 
-  auto cls_defs_off = (uint64_t)dh->class_defs_off;
-  auto cls_defs_limit =
-      cls_defs_off + dh->class_defs_size * sizeof(dex_class_def);
-  always_assert_log(cls_defs_off < dexsize, "class_defs_off out of range");
-  always_assert_log(cls_defs_limit <= dexsize, "invalid class_defs_size");
+  dex_type_range_assert<dex_class_def>(dh->class_defs_off, dh->class_defs_size,
+                                       dexsize, "class_defs");
 }
 
 void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
