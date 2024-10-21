@@ -85,14 +85,16 @@ static MethodItemEntry* get_target(const MethodItemEntry* mei,
   uint32_t base = bm.by<Entry>().at(const_cast<MethodItemEntry*>(mei));
   int offset = mei->dex_insn->offset();
   uint32_t target = base + offset;
-  always_assert_log(
-      bm.by<Addr>().count(target) != 0,
-      "Invalid opcode target %08x[%p](%08x) %08x in get_target %s\n",
-      base,
-      mei,
-      offset,
-      target,
-      SHOW(mei->insn));
+  if (bm.by<Addr>().count(target) == 0) {
+    throw RedexException(
+        RedexError::INVALID_DEX, "Invalid opcode target in get_target",
+        // TODO: Bring back formatting, was "%08x[%p](%08x) %08x"
+        {{"base", std::to_string(base)},
+         {"mei", std::to_string(reinterpret_cast<uintptr_t>(mei))},
+         {"offset", std::to_string(offset)},
+         {"target", std::to_string(target)},
+         {"insn", show(mei->insn)}});
+  }
   return bm.by<Addr>().at(target);
 }
 
@@ -232,7 +234,9 @@ static void generate_branch_targets(
         if (dex_opcode::is_switch(insn->opcode())) {
           auto* fopcode_entry = get_target(mentry, bm);
           auto data_it = entry_to_data.find(fopcode_entry);
-          always_assert(data_it != entry_to_data.end());
+          if (data_it == entry_to_data.end()) {
+            throw RedexException(RedexError::INVALID_DEX, "Missing entry data");
+          }
           shard_multi_target(ir, data_it->second.get(), mentry, bm);
           entry_to_data.erase(data_it);
         } else {
@@ -362,7 +366,12 @@ void translate_dex_to_ir(
     }
     auto* dex_insn = it->dex_insn;
     auto dex_op = dex_insn->opcode();
-    auto op = opcode::from_dex_opcode(dex_op);
+    auto maybe_op = opcode::from_dex_opcode(dex_op);
+    if (!maybe_op) {
+      throw RedexException(RedexError::INVALID_DEX, "Invalid opcode",
+                           {{"dex_op", std::to_string(dex_op)}});
+    }
+    auto op = *maybe_op;
     auto* insn = new IRInstruction(op);
 
     IRInstruction* move_result_pseudo{nullptr};

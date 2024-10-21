@@ -37,7 +37,7 @@ Ref ref(IROpcode opcode) {
 }
 // clang-format on
 
-IROpcode from_dex_opcode(DexOpcode op) {
+std::optional<IROpcode> from_dex_opcode(DexOpcode op) {
   switch (op) {
   case DOPCODE_NOP:
     return OPCODE_NOP;
@@ -488,20 +488,20 @@ IROpcode from_dex_opcode(DexOpcode op) {
   case FOPCODE_PACKED_SWITCH:
   case FOPCODE_SPARSE_SWITCH:
   case FOPCODE_FILLED_ARRAY:
-    not_reached_log("Cannot create IROpcode from %s", SHOW(op));
+    return std::nullopt;
     // clang-format off
   SWITCH_FORMAT_QUICK_FIELD_REF {
-    not_reached_log("Invalid use of a quick ref opcode %02x\n", op);
+    return std::nullopt;
   }
   SWITCH_FORMAT_QUICK_METHOD_REF {
-    not_reached_log("Invalid use of a quick method opcode %02x\n", op);
+    return std::nullopt;
   }
   SWITCH_FORMAT_RETURN_VOID_NO_BARRIER {
-    not_reached_log("Invalid use of return-void-no-barrier opcode %02x\n", op);
+    return std::nullopt;
   }
     // clang-format on
   }
-  not_reached_log("Unknown opcode %02x\n", op);
+  return std::nullopt;
 }
 
 DexOpcode to_dex_opcode(IROpcode op) {

@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <iosfwd>
+#include <optional>
 #include <string>
 
 class DexField;
@@ -63,7 +64,7 @@ Ref ref(IROpcode);
  * for the const-wide opcode family.
  * All other DexOpcodes have a 1-1 mapping with an IROpcode.
  */
-IROpcode from_dex_opcode(DexOpcode);
+std::optional<IROpcode> from_dex_opcode(DexOpcode);
 
 /*
  * Only non-internal IROpcodes are valid inputs to this function.
