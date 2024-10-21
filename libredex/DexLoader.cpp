@@ -330,18 +330,16 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
 
     switch (item.type) {
     case TYPE_HEADER_ITEM:
-      always_assert_log(
-          !header_seen,
-          "Expected header_item to be unique in the map_list, "
-          "but encountered one at index i=%u and another at index j=%u.",
-          header_index,
-          i);
+      DEX_ASSERT(!header_seen)
+          .set_message("Expected header_item to be unique in the map_list")
+          .add_info("i", header_index)
+          .add_info("j", i);
       header_seen = true;
       header_index = i;
-      always_assert_log(1 == item.size,
-                        "Expected count of header_items in the map_list to be "
-                        "exactly 1, but got ct=%u.",
-                        item.size);
+      DEX_ASSERT(1 == item.size)
+          .set_message(
+              "Expected count of header_items in the map_list to be exactly 1")
+          .add_info("size", item.size);
       stats->header_item_count += item.size;
       stats->header_item_bytes += item.size * sizeof(dex_header);
       break;
@@ -613,21 +611,23 @@ void DexLoader::load_dex_class(int num) {
   auto annotations_off = cdef->annotations_off;
   if (annotations_off != 0) {
     // Validate dex_annotations_directory_item layout
-    always_assert_log(
-        annotations_off + sizeof(dex_annotations_directory_item) <= dexsize,
-        "Invalid cdef->annotations_off");
+    dex_type_range_assert<dex_annotations_directory_item>(
+        annotations_off, 1, dexsize, "cdef->annotations");
     const dex_annotations_directory_item* annodir =
         idx->get_data<dex_annotations_directory_item>(annotations_off);
     auto cls_annos_off = annodir->class_annotations_off;
-    always_assert_log(cls_annos_off < dexsize,
-                      "Invalid annodir->class_annotations_off");
+    DEX_ASSERT(cls_annos_off < dexsize)
+        .set_message("Invalid annodir->class_annotations_off");
     if (cls_annos_off != 0) {
       // annotation_off_item is of size uint. So this is probably precise
       // enough.
       const uint32_t* adata = idx->get_uint_data(cls_annos_off);
       uint32_t count = *adata;
-      always_assert_log(cls_annos_off + count <= dexsize,
-                        "Invalid class annotation set count");
+      DEX_ASSERT(cls_annos_off + count <= dexsize)
+          .set_message("Invalid class annotation set count")
+          .add_info("cls_annos_off", cls_annos_off)
+          .add_info("count", count)
+          .add_info("dexsize", dexsize);
     }
   }
 
