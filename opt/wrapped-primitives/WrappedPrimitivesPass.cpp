@@ -96,8 +96,11 @@ void WrappedPrimitivesPass::bind_config() {
     std::string wrapper_desc;
     json_obj.get("wrapper", "", wrapper_desc);
     spec.wrapper = DexType::get_type(wrapper_desc);
-    always_assert_log(spec.wrapper != nullptr, "Type %s does not exist",
-                      wrapper_desc.c_str());
+    if (spec.wrapper == nullptr) {
+      TRACE(WP, 2, "Spec type %s does not exist; skipping.",
+            wrapper_desc.c_str());
+      continue;
+    }
     // Ensure the wrapper type matches expectations by the pass.
     validate_wrapper_type(spec.wrapper);
     m_wrapper_type_names.emplace(spec.wrapper->str());
