@@ -9,6 +9,7 @@
 
 #include "AnnoUtils.h"
 #include "ClassUtil.h"
+#include "KotlinNullCheckMethods.h"
 #include "PassManager.h"
 #include "Resolver.h"
 #include "Show.h"
@@ -54,6 +55,34 @@ bool is_int_or_obj_ref(const type_inference::TypeEnvironment& env, reg_t reg) {
              ? (*env.get_dex_type(reg) == DexType::make_type(INT_REF_CLS) ||
                 *env.get_dex_type(reg) == DexType::make_type(OBJ_REF_CLS))
              : true;
+}
+
+bool is_null_check(const DexMethod* m) {
+  for (DexMethodRef* kotlin_null_method :
+       kotlin_nullcheck_wrapper::get_kotlin_null_assertions()) {
+    if (kotlin_null_method->get_name() == m->get_name()) {
+      return true;
+    }
+  }
+  return m->get_deobfuscated_name_or_empty_copy() ==
+         "Lcom/google/common/base/Preconditions;.checkNotNull:(Ljava/lang/"
+         "Object;)Ljava/lang/Object;";
+}
+
+bool has_typedef_annos(ParamAnnotations* param_annos,
+                       const std::unordered_set<DexType*>& typedef_annos) {
+  if (!param_annos) {
+    return false;
+  }
+  for (auto& anno : *param_annos) {
+    auto& anno_set = anno.second;
+    auto typedef_anno = type_inference::get_typedef_annotation(
+        anno_set->get_annotations(), typedef_annos);
+    if (typedef_anno != boost::none) {
+      return true;
+    }
+  }
+  return false;
 }
 
 DexMethod* resolve_method(DexMethod* caller, IRInstruction* insn) {
@@ -345,13 +374,14 @@ void patch_return_anno_from_get(type_inference::TypeInference& inference,
                                 IRInstruction* insn) {
   always_assert(opcode::is_an_iget(insn->opcode()) ||
                 opcode::is_an_sget(insn->opcode()));
-  auto name = caller->get_deobfuscated_name_or_empty();
-  auto pos = name.rfind('$');
-  if (pos == std::string::npos) {
+  auto name = caller->get_simple_deobfuscated_name();
+  auto last_dollar = name.find('$');
+  if (last_dollar == std::string::npos) {
     return;
   }
-  pos++;
-  if (!(pos < name.size() && name[pos] >= '0' && name[pos] <= '9')) {
+  last_dollar++;
+  if (!(last_dollar < name.size() && name[last_dollar] >= '0' &&
+        name[last_dollar] <= '9')) {
     return;
   }
   auto field_ref = insn->get_field();
@@ -534,7 +564,7 @@ void SynthAccessorPatcher::run(const Scope& scope) {
     }
     patch_synth_methods_overriding_annotated_methods(m);
     if (is_constructor(m)) {
-      if (m->get_param_anno()) {
+      if (has_typedef_annos(m->get_param_anno(), m_typedef_annos)) {
         patch_synth_cls_fields_from_ctor_param(m);
       } else {
         if (has_kotlin_default_ctor_marker(m)) {
@@ -1367,6 +1397,16 @@ void TypedefAnnoChecker::check_instruction(
           << ".\n failed instruction: " << show(insn) << "\n\n";
       m_error += out.str();
       m_good = false;
+    } else if (env_anno == boost::none && field_anno != boost::none) {
+      bool good = check_typedef_value(m, field_anno, ud_chains, insn, 0,
+                                      inference, envs);
+      if (!good) {
+        std::ostringstream out;
+        out << " Error writing to field " << show(insn->get_field())
+            << "in method" << SHOW(m) << "\n\n";
+        m_error += out.str();
+        TRACE(TAC, 1, "writing to field: %s", SHOW(insn->get_field()));
+      }
     }
     break;
   }
@@ -1566,6 +1606,12 @@ bool TypedefAnnoChecker::check_typedef_value(
       if (is_parcel_or_json_read(def_method) && is_model_gen(m)) {
         break;
       }
+      // the result of usedef chains on a check cast could resolve to this
+      // look further up for the real source
+      if (is_null_check(def_method)) {
+        check_typedef_value(m, annotation, ud_chains, def, 0, inference, envs);
+        break;
+      }
       std::vector<const DexMethod*> callees;
       if (mog::is_true_virtual(m_method_override_graph, def_method) &&
           !def_method->get_code()) {
@@ -1650,6 +1696,10 @@ bool TypedefAnnoChecker::check_typedef_value(
                               envs);
         }
       }
+      break;
+    }
+    case OPCODE_CHECK_CAST: {
+      check_typedef_value(m, annotation, ud_chains, def, 0, inference, envs);
       break;
     }
     default: {

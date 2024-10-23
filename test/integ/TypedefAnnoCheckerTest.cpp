@@ -1115,8 +1115,15 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidVarField) {
   run_patcher(scope, *method_override_graph);
 
   auto checker = run_checker(scope, method, *method_override_graph);
-  // See T193638685: Temporarily disabling to unblock SDK 35
-  // EXPECT_FALSE(checker.complete());
+  EXPECT_FALSE(checker.complete());
+  EXPECT_EQ(
+      checker.error(),
+      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testInvalidVarField:()Ljava/lang/String;\n\
+ the string value 5 does not have the typedef annotation \n\
+ Linteg/TestStringDef; attached to it. \n\
+ Check that the value is annotated and exists in the typedef annotation class.\n\
+ failed instruction: CONST_STRING \"5\"\n\
+ Error writing to field Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.var_field:Ljava/lang/String;in methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testInvalidVarField:()Ljava/lang/String;\n\n");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestReturnIntField) {
@@ -1182,18 +1189,15 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidCompanionVarSetter) {
   run_patcher(scope, *method_override_graph);
 
   auto checker = run_checker(scope, method, *method_override_graph);
-  // See T193638685: Temporarily disabling to unblock SDK 35
-  // EXPECT_FALSE(checker.complete());
-  // EXPECT_EQ(
-  //     checker.error(),
-  //     "TypedefAnnoCheckerPass: in method
-  //     Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testInvalidCompanionVarSetter:()Ljava/lang/String;\n\
-  //  the string value 5 does not have the typedef annotation \n\
-  //  Linteg/TestStringDef; attached to it. \n\
-  //  Check that the value is annotated and exists in the typedef annotation
-  //  class.\n\
-  //  failed instruction: CONST_STRING \"5\"\n\
-  //  Error caught when returning the faulty value\n\n");
+  EXPECT_FALSE(checker.complete());
+  EXPECT_EQ(
+      checker.error(),
+      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testInvalidCompanionVarSetter:()Ljava/lang/String;\n\
+ the string value 5 does not have the typedef annotation \n\
+ Linteg/TestStringDef; attached to it. \n\
+ Check that the value is annotated and exists in the typedef annotation class.\n\
+ failed instruction: CONST_STRING \"5\"\n\
+ Error writing to field Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.companion_var:Ljava/lang/String;in methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testInvalidCompanionVarSetter:()Ljava/lang/String;\n\n");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestCompanionIntVarSetter) {
@@ -1675,7 +1679,22 @@ TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarIntInvalid) {
   run_patcher(scope, *method_override_graph);
 
   auto checker = run_checker(scope, method, *method_override_graph);
-  // EXPECT_FALSE(checker.complete());
+  EXPECT_FALSE(checker.complete());
+  EXPECT_EQ(
+      checker.error(),
+      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntInvalid:()I\n\
+ the int value 7 does not have the typedef annotation \n\
+ Linteg/TestIntDef; attached to it. \n\
+ Check that the value is annotated and exists in its typedef annotation class.\n\
+ failed instruction: CONST v1, 7\n\
+ Error writing to field Lkotlin/jvm/internal/Ref$IntRef;.element:Iin methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntInvalid:()I\n\
+\n\
+TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntInvalid:()I\n\
+ the int value 9 does not have the typedef annotation \n\
+ Linteg/TestIntDef; attached to it. \n\
+ Check that the value is annotated and exists in its typedef annotation class.\n\
+ failed instruction: CONST v1, 9\n\
+ Error writing to field Lkotlin/jvm/internal/Ref$IntRef;.element:Iin methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntInvalid:()I\n\n");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarIntDefault) {
@@ -1723,7 +1742,22 @@ TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarIntDefaultInvalid) {
   run_patcher(scope, *method_override_graph);
 
   auto checker = run_checker(scope, method, *method_override_graph);
-  // EXPECT_FALSE(checker.complete());
+  EXPECT_FALSE(checker.complete());
+  EXPECT_EQ(
+      checker.error(),
+      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntDefaultInvalid:()I\n\
+ the int value 7 does not have the typedef annotation \n\
+ Linteg/TestIntDef; attached to it. \n\
+ Check that the value is annotated and exists in its typedef annotation class.\n\
+ failed instruction: CONST v1, 7\n\
+ Error writing to field Lkotlin/jvm/internal/Ref$IntRef;.element:Iin methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntDefaultInvalid:()I\n\
+\n\
+TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntDefaultInvalid:()I\n\
+ the int value 9 does not have the typedef annotation \n\
+ Linteg/TestIntDef; attached to it. \n\
+ Check that the value is annotated and exists in its typedef annotation class.\n\
+ failed instruction: CONST v1, 9\n\
+ Error writing to field Lkotlin/jvm/internal/Ref$IntRef;.element:Iin methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntDefaultInvalid:()I\n\n");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarString) {
@@ -1771,7 +1805,22 @@ TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarStringInvalid) {
   run_patcher(scope, *method_override_graph);
 
   auto checker = run_checker(scope, method, *method_override_graph);
-  // EXPECT_FALSE(checker.complete());
+  EXPECT_FALSE(checker.complete());
+  EXPECT_EQ(
+      checker.error(),
+      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringInvalid:()Ljava/lang/String;\n\
+ the string value seven does not have the typedef annotation \n\
+ Linteg/TestStringDef; attached to it. \n\
+ Check that the value is annotated and exists in the typedef annotation class.\n\
+ failed instruction: CONST_STRING \"seven\"\n\
+ Error writing to field Lkotlin/jvm/internal/Ref$ObjectRef;.element:Ljava/lang/Object;in methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringInvalid:()Ljava/lang/String;\n\
+\n\
+TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringInvalid:()Ljava/lang/String;\n\
+ the string value eight does not have the typedef annotation \n\
+ Linteg/TestStringDef; attached to it. \n\
+ Check that the value is annotated and exists in the typedef annotation class.\n\
+ failed instruction: CONST_STRING \"eight\"\n\
+ Error writing to field Lkotlin/jvm/internal/Ref$ObjectRef;.element:Ljava/lang/Object;in methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringInvalid:()Ljava/lang/String;\n\n");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarStringDefault) {
@@ -1822,5 +1871,20 @@ TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarStringDefaultInvalid) {
   run_patcher(scope, *method_override_graph);
 
   auto checker = run_checker(scope, method, *method_override_graph);
-  // EXPECT_FALSE(checker.complete());
+  EXPECT_FALSE(checker.complete());
+  EXPECT_EQ(
+      checker.error(),
+      "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringDefaultInvalid:()Ljava/lang/String;\n\
+ the string value seven does not have the typedef annotation \n\
+ Linteg/TestStringDef; attached to it. \n\
+ Check that the value is annotated and exists in the typedef annotation class.\n\
+ failed instruction: CONST_STRING \"seven\"\n\
+ Error writing to field Lkotlin/jvm/internal/Ref$ObjectRef;.element:Ljava/lang/Object;in methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringDefaultInvalid:()Ljava/lang/String;\n\
+\n\
+TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringDefaultInvalid:()Ljava/lang/String;\n\
+ the string value eight does not have the typedef annotation \n\
+ Linteg/TestStringDef; attached to it. \n\
+ Check that the value is annotated and exists in the typedef annotation class.\n\
+ failed instruction: CONST_STRING \"eight\"\n\
+ Error writing to field Lkotlin/jvm/internal/Ref$ObjectRef;.element:Ljava/lang/Object;in methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringDefaultInvalid:()Ljava/lang/String;\n\n");
 }
