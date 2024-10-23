@@ -1556,7 +1556,8 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     set_int(current_state, RESULT_REGISTER);
     break;
   }
-  case IOPCODE_INIT_CLASS: {
+  case IOPCODE_INIT_CLASS:
+  case IOPCODE_WRITE_BARRIER: {
     break;
   }
   }

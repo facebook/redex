@@ -284,6 +284,7 @@ const DexType* OutlinerTypeAnalysis::get_result_type_helper(
   case OPCODE_THROW:
   case IOPCODE_INIT_CLASS:
   case IOPCODE_INJECTION_ID:
+  case IOPCODE_WRITE_BARRIER:
     not_reached();
 
   case OPCODE_MOVE_EXCEPTION:
@@ -489,6 +490,7 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(IRInstruction* insn,
   case IOPCODE_INIT_CLASS:
   case IOPCODE_INJECTION_ID:
   case IOPCODE_UNREACHABLE:
+  case IOPCODE_WRITE_BARRIER:
     not_reached();
 
   case OPCODE_RETURN:

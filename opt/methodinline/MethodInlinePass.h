@@ -24,6 +24,7 @@ class MethodInlinePass : public Pass {
         // This may be too conservative as the inliner can be configured not to
         // DCE in the shrinker.
         {SpuriousGetClassCallsInterned, RequiresAndPreserves},
+        {NoWriteBarrierInstructions, Destroys},
     };
   }
 

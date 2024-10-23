@@ -890,6 +890,9 @@ static size_t analyze_read_locations(
               case IOPCODE_INIT_CLASS:
                 unknown = true;
                 break;
+              case IOPCODE_WRITE_BARRIER:
+                unknown = true;
+                break;
               case OPCODE_NEW_INSTANCE:
                 if (for_conditional_purity ||
                     !clinit_has_no_side_effects(insn->get_type())) {

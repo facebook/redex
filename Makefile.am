@@ -100,6 +100,7 @@ libredex_la_SOURCES = \
 	checkers/NoInitClassInstructionsChecker.cpp \
 	checkers/NoResolvablePureRefsChecker.cpp \
 	checkers/NoUnreachableInstructionsChecker.cpp \
+	checkers/NoWriteBarrierInstructionsChecker.cpp \
 	liblocator/locator.cpp \
 	libredex/AggregateException.cpp \
 	libredex/AnalysisUsage.cpp \
@@ -528,7 +529,8 @@ libopt_la_SOURCES = \
 	opt/virtual_merging/DedupVirtualMethods.cpp \
 	opt/virtual_merging/VirtualMerging.cpp \
 	opt/virtual_scope/MethodDevirtualizationPass.cpp \
-	opt/wrapped-primitives/WrappedPrimitivesPass.cpp
+	opt/wrapped-primitives/WrappedPrimitivesPass.cpp \
+	opt/write_barrier/WriteBarrierLoweringPass.cpp
 
 libopt_la_LIBADD = \
     libredex.la \

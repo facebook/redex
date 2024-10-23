@@ -27,7 +27,8 @@ class CFGInliner {
                          DexType* needs_init_class,
                          const ControlFlowGraph& callee,
                          size_t next_caller_reg,
-                         DexMethod* rewrite_invoke_super_callee = nullptr);
+                         DexMethod* rewrite_invoke_super_callee = nullptr,
+                         bool needs_constructor_fence = false);
 
   /*
    * Copy callee's blocks into caller:
@@ -40,7 +41,8 @@ class CFGInliner {
                          const ControlFlowGraph& callee,
                          size_t next_caller_reg,
                          CFGInlinerPlugin& plugin,
-                         DexMethod* rewrite_invoke_super_callee = nullptr);
+                         DexMethod* rewrite_invoke_super_callee = nullptr,
+                         bool needs_constructor_fence = false);
 
  private:
   /*
@@ -94,7 +96,8 @@ class CFGInliner {
                            const std::vector<Block*>& callee_blocks,
                            Block* callee_entry,
                            const std::vector<Block*>& callee_exits,
-                           Block* callsite_split);
+                           Block* callsite_split,
+                           bool needs_constructor_fence = false);
 
   /*
    * Convert load-params to moves, from a set of sources.

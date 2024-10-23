@@ -875,6 +875,7 @@ bool may_throw(IROpcode op) {
   case OPCODE_CONST_STRING:
   case OPCODE_CONST_CLASS:
   case IOPCODE_INIT_CLASS:
+  case IOPCODE_WRITE_BARRIER:
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT:
   case OPCODE_CHECK_CAST:
@@ -1378,6 +1379,7 @@ bool has_side_effects(IROpcode opc) {
   case IOPCODE_LOAD_PARAM_OBJECT:
   case IOPCODE_LOAD_PARAM_WIDE:
   case IOPCODE_INIT_CLASS:
+  case IOPCODE_WRITE_BARRIER:
     return true;
   default:
     return false;
@@ -1391,7 +1393,7 @@ namespace opcode_impl {
 
 bool has_dest(IROpcode op) {
   if (opcode::is_an_internal(op)) {
-    return op != IOPCODE_INIT_CLASS;
+    return op != IOPCODE_INIT_CLASS && op != IOPCODE_WRITE_BARRIER;
   } else {
     auto dex_op = opcode::to_dex_opcode(op);
     return !opcode::may_throw(op) && dex_opcode::has_dest(dex_op);

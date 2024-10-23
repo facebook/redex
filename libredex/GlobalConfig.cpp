@@ -11,6 +11,8 @@ void InlinerConfig::bind_config() {
   bind("delete_non_virtuals", delete_non_virtuals, delete_non_virtuals);
   bind("true_virtual_inline", true_virtual_inline, true_virtual_inline);
   bind("relaxed_init_inline", relaxed_init_inline, relaxed_init_inline);
+  bind("unfinalize_relaxed_init_inline", unfinalize_relaxed_init_inline,
+       unfinalize_relaxed_init_inline);
   bind("strict_throwable_init_inline", strict_throwable_init_inline,
        strict_throwable_init_inline);
   bind("intermediate_shrinking", intermediate_shrinking,

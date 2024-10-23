@@ -161,6 +161,9 @@ IRInstruction* IRInstruction::set_srcs_size(size_t count) {
 
 uint16_t IRInstruction::size() const {
   auto op = m_opcode;
+  if (opcode::is_write_barrier(op)) {
+    op = OPCODE_INVOKE_STATIC;
+  }
   if (opcode::is_an_internal(op)) {
     return opcode::is_injection_id(op) ? 2 : opcode::is_unreachable(op) ? 1 : 0;
   }

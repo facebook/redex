@@ -33,7 +33,8 @@ bool inline_with_cfg(DexMethod* caller_method,
                      DexType* needs_init_class,
                      size_t next_caller_reg,
                      const cfg::ControlFlowGraph* reduced_cfg = nullptr,
-                     DexMethod* rewrite_invoke_super_callee = nullptr);
+                     DexMethod* rewrite_invoke_super_callee = nullptr,
+                     bool needs_constructor_fence = false);
 
 } // namespace inliner
 
@@ -252,7 +253,9 @@ class MultiMethodInliner {
           configured_finalish_field_names = {},
       bool local_only = false,
       bool consider_hot_cold = false,
-      InlinerCostConfig inliner_cost_config = DEFAULT_COST_CONFIG);
+      InlinerCostConfig inliner_cost_config = DEFAULT_COST_CONFIG,
+      const std::unordered_set<const DexMethod*>* unfinalized_init_methods =
+          nullptr);
 
   /*
    * Applies certain delayed scope-wide changes, including in particular
@@ -272,8 +275,12 @@ class MultiMethodInliner {
    * Return the set of unique inlined methods.
    */
   std::unordered_set<DexMethod*> get_inlined() const {
-    std::unordered_set<DexMethod*> res(m_inlined.begin(), m_inlined.end());
-    return res;
+    return std::unordered_set<DexMethod*>(m_inlined.begin(), m_inlined.end());
+  }
+
+  std::unordered_set<const DexMethod*> get_inlined_with_fence() const {
+    return std::unordered_set<const DexMethod*>(m_inlined_with_fence.begin(),
+                                                m_inlined_with_fence.end());
   }
 
   size_t get_not_cold_methods() const { return m_not_cold_methods.size(); }
@@ -322,6 +329,9 @@ class MultiMethodInliner {
 
  private:
   DexType* get_needs_init_class(DexMethod* callee) const;
+
+  bool get_needs_constructor_fence(const DexMethod* caller,
+                                   const DexMethod* callee) const;
 
   DexMethod* get_callee(DexMethod* caller, IRInstruction* insn);
 
@@ -591,6 +601,8 @@ class MultiMethodInliner {
 
   InsertOnlyConcurrentSet<const DexMethod*> m_not_cold_methods;
 
+  ConcurrentSet<const DexMethod*> m_inlined_with_fence;
+
   //
   // Maps from callee to callers and reverse map from caller to callees.
   // Those are used to perform bottom up inlining.
@@ -700,6 +712,7 @@ class MultiMethodInliner {
     std::atomic<size_t> kotlin_lambda_inlined{0};
     std::atomic<size_t> calls_inlined{0};
     std::atomic<size_t> init_classes{0};
+    std::atomic<size_t> constructor_fences{0};
     std::atomic<size_t> calls_not_inlinable{0};
     std::atomic<size_t> calls_not_inlined{0};
     std::atomic<size_t> no_returns{0};
@@ -762,6 +775,10 @@ class MultiMethodInliner {
   bool m_consider_hot_cold;
 
   InlinerCostConfig m_inliner_cost_config;
+
+  const std::unordered_set<const DexMethod*>* m_unfinalized_init_methods;
+  InsertOnlyConcurrentMap<const DexMethod*, const DexMethod*>
+      m_unfinalized_overloads;
 
  public:
   const InliningInfo& get_info() { return info; }

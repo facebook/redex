@@ -7,25 +7,30 @@
 
 #pragma once
 
-#include "DexClass.h"
 #include "Pass.h"
+#include "PassManager.h"
 
-class BridgeSynthInlinePass : public Pass {
+class WriteBarrierLoweringPass : public Pass {
  public:
-  BridgeSynthInlinePass() : Pass("BridgeSynthInlinePass") {}
+  WriteBarrierLoweringPass() : Pass("WriteBarrierLoweringPass") {}
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
-        {NoResolvablePureRefs, Preserves},
-        // This may be too conservative as the inliner can be configured not to
-        // DCE in the shrinker.
-        {SpuriousGetClassCallsInterned, RequiresAndPreserves},
-        {NoWriteBarrierInstructions, Destroys},
+        {NoWriteBarrierInstructions, Establishes},
+        {NoUnreachableInstructions, Preserves},
+        {RenameClass, Preserves},
+        {DexLimitsObeyed, Preserves},
+        {NoInitClassInstructions, Preserves},
     };
   }
 
+  void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+ private:
+  std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
 };

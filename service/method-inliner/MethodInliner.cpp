@@ -16,6 +16,7 @@
 #include "AnnoUtils.h"
 #include "ClassHierarchy.h"
 #include "ConfigFiles.h"
+#include "ConstructorAnalysis.h"
 #include "Deleter.h"
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -718,6 +719,61 @@ void gather_true_virtual_methods(
   }
 }
 
+// If a constructor cannot be inlined because it writes to final fields, then we
+// can "simply" remove the final modifier. We typically run the
+// AccessMarkingMarking pass multiple times, including after the final inliner,
+// so that the final modifier gets re-added where appropriate.
+//
+// Assigning final fields in a constructor comes certain visibility guarantees.
+// See https://gee.cs.oswego.edu/dl/jmm/cookbook.html In particular, when we
+// remove the final modifier of any field, then we need to insert an explicit
+// store-store fence when the constructor returns. Eventually, the CFGInliner is
+// inserting a write barrier pseudo instruction to lower at the end.
+void unfinalize_fields_if_beneficial_for_relaxed_init_inlining(
+    const Scope& scope,
+    InsertOnlyConcurrentMap<DexField*, std::vector<DexMethod*>>*
+        unfinalized_fields) {
+  walk::parallel::classes(scope, [&](DexClass* cls) {
+    // We also exclude possibly anonymous classes as those may
+    // regress the effectiveness of the class-merging passes.
+    // TODO T184662680: While this is not a correctness issue,
+    // we should fully support relaxed init methods in
+    // class-merging. Align with what happens in
+    // MultiMethodInliner::can_inline_init.
+    if (klass::maybe_anonymous_class(cls)) {
+      return;
+    }
+    std::unordered_set<DexField*> final_ifields;
+    for (auto* field : cls->get_ifields()) {
+      if (is_final(field)) {
+        final_ifields.insert(field);
+      }
+    }
+    if (final_ifields.empty()) {
+      return;
+    }
+    std::unordered_map<DexField*, std::vector<DexMethod*>>
+        local_unfinalized_fields;
+    for (auto* init_method : cls->get_ctors()) {
+      std::unordered_set<DexField*> written_final_fields;
+      if (!constructor_analysis::can_inline_init(
+              init_method, /* finalizable_fields */ nullptr,
+              /* relaxed */ true, &written_final_fields)) {
+        for (auto* field : written_final_fields) {
+          always_assert(final_ifields.count(field));
+          local_unfinalized_fields[field].push_back(init_method);
+        }
+      }
+    }
+    for (auto&& [field, init_methods] : local_unfinalized_fields) {
+      field->set_access(field->get_access() & ~ACC_FINAL);
+      auto emplaced =
+          unfinalized_fields->emplace(field, std::move(init_methods)).second;
+      always_assert(emplaced);
+    }
+  });
+}
+
 } // namespace
 
 namespace inliner {
@@ -792,6 +848,23 @@ void run_inliner(
     inliner_config.delete_non_virtuals = true;
   }
 
+  InsertOnlyConcurrentMap<DexField*, std::vector<DexMethod*>>
+      unfinalized_fields;
+  std::unordered_set<const DexMethod*> unfinalized_init_methods;
+  if (inliner_config.relaxed_init_inline &&
+      inliner_config.unfinalize_relaxed_init_inline && min_sdk >= 21) {
+    unfinalize_fields_if_beneficial_for_relaxed_init_inlining(
+        scope, &unfinalized_fields);
+    mgr.set_metric("unfinalized_fields", unfinalized_fields.size());
+    TRACE(INLINE, 3, "unfinalized %zu fields", unfinalized_fields.size());
+    for (auto&& [_, init_methods] : unfinalized_fields) {
+      unfinalized_init_methods.insert(init_methods.begin(), init_methods.end());
+    }
+    mgr.set_metric("unfinalized_init_methods", unfinalized_init_methods.size());
+    TRACE(INLINE, 3, "unfinalized %zu init methods",
+          unfinalized_init_methods.size());
+  }
+
   inliner_config.unique_inlined_registers = false;
 
   std::unique_ptr<const mog::Graph> method_override_graph;
@@ -853,8 +926,24 @@ void run_inliner(
       analyze_and_prune_inits, conf.get_pure_methods(), min_sdk_api,
       cross_dex_penalty,
       /* configured_finalish_field_names */ {}, local_only, consider_hot_cold,
-      inliner_cost_config);
+      inliner_cost_config, &unfinalized_init_methods);
   inliner.inline_methods();
+
+  // refinalize where possible
+  if (!unfinalized_fields.empty()) {
+    auto inlined_with_fence = inliner.get_inlined_with_fence();
+    size_t refinalized_fields = 0;
+    for (auto&& [field, init_methods] : unfinalized_fields) {
+      if (std::none_of(
+              init_methods.begin(), init_methods.end(),
+              [&](DexMethod* m) { return inlined_with_fence.count(m); })) {
+        set_final(field);
+        refinalized_fields++;
+      }
+    }
+    mgr.set_metric("refinalized_fields", refinalized_fields);
+    TRACE(INLINE, 3, "refinalized %zu fields", refinalized_fields);
+  }
 
   // delete all methods that can be deleted
   auto inlined = inliner.get_inlined();
@@ -941,6 +1030,7 @@ void run_inliner(
   mgr.incr_metric("caller_too_large", inliner.get_info().caller_too_large);
   mgr.incr_metric("inlined_init_count", inlined_init_count);
   mgr.incr_metric("init_classes", inliner.get_info().init_classes);
+  mgr.incr_metric("constructor_fences", inliner.get_info().constructor_fences);
   mgr.incr_metric("calls_inlined", inliner.get_info().calls_inlined);
   mgr.incr_metric("kotlin_lambda_inlined",
                   inliner.get_info().kotlin_lambda_inlined);

@@ -490,6 +490,8 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("virtual", true, inliner_config->virtual_inline);
   jw.get("true_virtual_inline", false, inliner_config->true_virtual_inline);
   jw.get("relaxed_init_inline", false, inliner_config->relaxed_init_inline);
+  jw.get("unfinalize_relaxed_init_inline", false,
+         inliner_config->unfinalize_relaxed_init_inline);
   jw.get("strict_throwable_init_inline", false,
          inliner_config->strict_throwable_init_inline);
   jw.get("throws", false, inliner_config->throws_inline);
