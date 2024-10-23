@@ -26,6 +26,7 @@ class PerfMethodInlinePass : public Pass {
         // DCE in the shrinker.
         {SpuriousGetClassCallsInterned, RequiresAndPreserves},
         {InitialRenameClass, Preserves},
+        {NoWriteBarrierInstructions, Destroys},
     };
   }
 

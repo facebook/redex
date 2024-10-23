@@ -27,6 +27,7 @@ class IntraDexInlinePass : public Pass {
         // to DCE in the shrinker.
         {SpuriousGetClassCallsInterned, RequiresAndPreserves},
         {InitialRenameClass, Preserves},
+        {NoWriteBarrierInstructions, Destroys},
     };
   }
 

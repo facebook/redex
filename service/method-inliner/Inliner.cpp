@@ -133,7 +133,8 @@ MultiMethodInliner::MultiMethodInliner(
     const std::unordered_set<const DexString*>& configured_finalish_field_names,
     bool local_only,
     bool consider_hot_cold,
-    InlinerCostConfig inliner_cost_config)
+    InlinerCostConfig inliner_cost_config,
+    const std::unordered_set<const DexMethod*>* unfinalized_init_methods)
     : m_concurrent_resolver(std::move(concurrent_resolve_fn)),
       m_scheduler(
           [this](DexMethod* method) {
@@ -171,7 +172,8 @@ MultiMethodInliner::MultiMethodInliner(
                  configured_finalish_field_names),
       m_local_only(local_only),
       m_consider_hot_cold(consider_hot_cold),
-      m_inliner_cost_config(inliner_cost_config) {
+      m_inliner_cost_config(inliner_cost_config),
+      m_unfinalized_init_methods(unfinalized_init_methods) {
   Timer t("MultiMethodInliner construction");
   for (const auto& callee_callers : true_virtual_callers) {
     auto callee = callee_callers.first;
@@ -612,6 +614,21 @@ DexType* MultiMethodInliner::get_needs_init_class(DexMethod* callee) const {
   return type;
 }
 
+bool MultiMethodInliner::get_needs_constructor_fence(
+    const DexMethod* caller, const DexMethod* callee) const {
+  if (!method::is_init(callee)) {
+    return false;
+  }
+  if (caller != nullptr && method::is_init(caller) &&
+      caller->get_class() == callee->get_class()) {
+    return false;
+  }
+  if (m_unfinalized_init_methods && m_unfinalized_init_methods->count(callee)) {
+    return true;
+  }
+  return m_unfinalized_overloads.count(callee);
+}
+
 size_t MultiMethodInliner::inline_inlinables(
     DexMethod* caller_method,
     const std::vector<Inlinable>& inlinables,
@@ -694,6 +711,7 @@ size_t MultiMethodInliner::inline_inlinables(
   VisibilityChanges visibility_changes;
   std::unordered_set<DexMethod*> visibility_changes_for;
   size_t init_classes = 0;
+  size_t constructor_fences = 0;
   for (const auto& inlinable : ordered_inlinables) {
     auto callee_method = inlinable.callee;
     auto callee = callee_method->get_code();
@@ -826,10 +844,13 @@ size_t MultiMethodInliner::inline_inlinables(
     auto needs_init_class = get_needs_init_class(callee_method);
     const auto& reduced_code = inlinable.reduced_code;
     const auto* reduced_cfg = reduced_code ? &reduced_code->cfg() : nullptr;
+    auto needs_constructor_fence =
+        get_needs_constructor_fence(caller_method, callee_method);
     bool success = inliner::inline_with_cfg(
         caller_method, callee_method, callsite_insn,
         inlinable.needs_receiver_cast, needs_init_class, *cfg_next_caller_reg,
-        reduced_cfg, m_config.rewrite_invoke_super ? callee_method : nullptr);
+        reduced_cfg, m_config.rewrite_invoke_super ? callee_method : nullptr,
+        needs_constructor_fence);
     if (!success) {
       calls_not_inlined++;
       continue;
@@ -846,6 +867,25 @@ size_t MultiMethodInliner::inline_inlinables(
     }
     if (needs_init_class) {
       init_classes++;
+    }
+    if (needs_constructor_fence) {
+      const DexMethod* m = callee_method;
+      m_inlined_with_fence.insert(m);
+      while (auto* ptr = m_unfinalized_overloads.get(m)) {
+        m = *ptr;
+        m_inlined_with_fence.insert(m);
+      }
+      constructor_fences++;
+    } else if (get_needs_constructor_fence(/* caller */ nullptr,
+                                           callee_method)) {
+      // Inlining callee in any other context would need a constructor fence;
+      // that means that final fields are involved, and we just didn't need a
+      // constructor fence here because we inlined into an init overload. Record
+      // this.
+      always_assert(method::is_init(caller_method));
+      always_assert(method::is_init(callee_method));
+      always_assert(caller_method->get_class() == callee_method->get_class());
+      m_unfinalized_overloads.emplace(caller_method, callee_method);
     }
 
     inlined_callees.push_back(callee_method);
@@ -896,6 +936,9 @@ size_t MultiMethodInliner::inline_inlinables(
   }
   if (init_classes) {
     info.init_classes += init_classes;
+  }
+  if (constructor_fences) {
+    info.constructor_fences += constructor_fences;
   }
   return inlined_callees.size();
 }
@@ -1240,6 +1283,8 @@ static size_t get_inlined_cost(IRInstruction* insn,
       cost += cost_config.op_injection_id_cost;
     } else if (op == IOPCODE_UNREACHABLE) {
       cost += cost_config.op_unreachable_cost;
+    } else if (op == IOPCODE_WRITE_BARRIER) {
+      cost += cost_config.cost_invoke;
     }
   } else {
     cost++;
@@ -1443,7 +1488,6 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
     // control flow
     cost += returns - 1;
   }
-
   auto result_used =
       call_site_summary ? call_site_summary->result_used : !proto->is_void();
 
@@ -1679,7 +1723,8 @@ bool MultiMethodInliner::can_inline_init(const DexMethod* init_method) {
                     // regress the effectiveness of the class-merging passes.
                     // TODO T184662680: While this is not a correctness issue,
                     // we should fully support relaxed init methods in
-                    // class-merging.
+                    // class-merging. Align with what happens in
+                    // unfinalize_fields_if_beneficial.
 
                     // We also don't want to inline constructors of throwable
                     // (exception, error) classes, as they capture the current
@@ -1766,9 +1811,14 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   // 2. Determine costs of keeping the invoke instruction
 
   size_t caller_count{0};
-  for (auto& p : callers) {
-    caller_count += p.second;
+  size_t total_fence_cost{0};
+  for (auto [caller, count] : callers) {
+    caller_count += count;
+    if (get_needs_constructor_fence(caller, callee)) {
+      total_fence_cost += 3 * count;
+    }
   }
+  float average_fence_cost = total_fence_cost * 1.0 / caller_count;
   float invoke_cost =
       get_invoke_cost(m_inliner_cost_config, callee, inlined_cost->result_used);
   TRACE(INLINE, 3,
@@ -1789,7 +1839,7 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   // If we inline invocations to this method everywhere, we could delete the
   // method. Is this worth it, given the number of callsites and costs
   // involved?
-  if ((inlined_cost->code -
+  if ((inlined_cost->code + average_fence_cost -
        inlined_cost->unused_args * m_inliner_cost_config.unused_args_discount) *
               caller_count +
           classes * (cross_dex_penalty - cross_dex_bonus) >
@@ -1851,7 +1901,8 @@ bool MultiMethodInliner::should_inline_at_call_site(
 
   float invoke_cost =
       get_invoke_cost(m_inliner_cost_config, callee, inlined_cost->result_used);
-  if (inlined_cost->code -
+  auto fence_cost = get_needs_constructor_fence(caller, callee) ? 3 : 0;
+  if (inlined_cost->code + fence_cost -
           inlined_cost->unused_args *
               m_inliner_cost_config.unused_args_discount +
           cross_dex_penalty >
@@ -2353,7 +2404,8 @@ bool inline_with_cfg(DexMethod* caller_method,
                      DexType* needs_init_class,
                      size_t next_caller_reg,
                      const cfg::ControlFlowGraph* reduced_cfg,
-                     DexMethod* rewrite_invoke_super_callee) {
+                     DexMethod* rewrite_invoke_super_callee,
+                     bool needs_constructor_fence) {
 
   auto caller_code = caller_method->get_code();
   always_assert(caller_code->editable_cfg_built());
@@ -2405,7 +2457,8 @@ bool inline_with_cfg(DexMethod* caller_method,
 
   cfg::CFGInliner::inline_cfg(&caller_cfg, callsite_it, needs_receiver_cast,
                               needs_init_class, callee_cfg, next_caller_reg,
-                              rewrite_invoke_super_callee);
+                              rewrite_invoke_super_callee,
+                              needs_constructor_fence);
 
   return true;
 }

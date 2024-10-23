@@ -242,6 +242,7 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
   case IOPCODE_INIT_CLASS:
   case IOPCODE_INJECTION_ID:
   case IOPCODE_UNREACHABLE:
+  case IOPCODE_WRITE_BARRIER:
     not_reached();
 
   case OPCODE_RETURN:

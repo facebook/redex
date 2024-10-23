@@ -27,7 +27,8 @@ namespace constructor_analysis {
 bool can_inline_init(
     const DexMethod* init_method,
     const std::unordered_set<const DexField*>* finalizable_fields = nullptr,
-    bool relaxed = false);
+    bool relaxed = false,
+    std::unordered_set<DexField*>* written_final_fields = nullptr);
 
 // Checks that the invocation of one constructor within another constructor
 // of the same class can be inlined, either for a particular or for all

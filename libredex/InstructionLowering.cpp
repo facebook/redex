@@ -287,6 +287,9 @@ DexInstruction* create_dex_instruction(const IRInstruction* insn) {
   if (insn->opcode() == IOPCODE_UNREACHABLE) {
     return new DexInstruction(DOPCODE_CONST);
   }
+  if (insn->opcode() == IOPCODE_WRITE_BARRIER) {
+    always_assert(false);
+  }
 
   auto op = opcode::to_dex_opcode(insn->opcode());
   switch (opcode::ref(insn->opcode())) {

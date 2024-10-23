@@ -226,7 +226,8 @@ namespace constructor_analysis {
 bool can_inline_init(
     const DexMethod* init_method,
     const std::unordered_set<const DexField*>* finalizable_fields,
-    bool relaxed) {
+    bool relaxed,
+    std::unordered_set<DexField*>* written_final_fields) {
   always_assert(method::is_init(init_method));
   auto code = init_method->get_code();
   if (!code) {
@@ -262,6 +263,7 @@ bool can_inline_init(
           SHOW(block->get_last_insn()->insn), SHOW(cfg));
     }
   }
+  bool res = true;
   for (const auto& mie : InstructionIterable(cfg)) {
     auto insn = mie.insn;
     if (opcode::is_an_iput(insn->opcode())) {
@@ -271,11 +273,14 @@ bool can_inline_init(
           (field->get_class() == declaring_type &&
            (is_final(field) ||
             (finalizable_fields && finalizable_fields->count(field))))) {
-        return false;
+        if (written_final_fields) {
+          written_final_fields->emplace(field);
+        }
+        res = false;
       }
     }
   }
-  return true;
+  return res;
 }
 
 bool can_inline_inits_in_same_class(DexMethod* caller_method,

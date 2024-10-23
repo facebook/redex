@@ -152,8 +152,14 @@ std::vector<DexMethod*> GatheredTypes::get_dexmethod_emitlist() {
         TRACE(OPUT, 3, "  [dexmethod_emitlist][dmethod] %s", dmeth->c_str());
       }
       for (const auto& vmeth : vmethods) {
-        TRACE(OPUT, 3, "  [dexmethod_emitlist][dmethod] %s", vmeth->c_str());
+        TRACE(OPUT, 3, "  [dexmethod_emitlist][vmethod] %s", vmeth->c_str());
       }
+    }
+    for (auto* m : dmethods) {
+      always_assert(!m->is_external());
+    }
+    for (auto* m : vmethods) {
+      always_assert(!m->is_external());
     }
     methlist.insert(methlist.end(), dmethods.begin(), dmethods.end());
     methlist.insert(methlist.end(), vmethods.begin(), vmethods.end());

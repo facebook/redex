@@ -32,11 +32,12 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                             DexType* needs_init_class,
                             const ControlFlowGraph& callee_orig,
                             size_t next_caller_reg,
-                            DexMethod* rewrite_invoke_super_callee) {
+                            DexMethod* rewrite_invoke_super_callee,
+                            bool needs_constructor_fence) {
   CFGInlinerPlugin base_plugin;
   inline_cfg(caller, callsite, needs_receiver_cast, needs_init_class,
              callee_orig, next_caller_reg, base_plugin,
-             rewrite_invoke_super_callee);
+             rewrite_invoke_super_callee, needs_constructor_fence);
 }
 
 namespace {
@@ -60,7 +61,8 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                             const ControlFlowGraph& callee_orig,
                             size_t next_caller_reg,
                             CFGInlinerPlugin& plugin,
-                            DexMethod* rewrite_invoke_super_callee) {
+                            DexMethod* rewrite_invoke_super_callee,
+                            bool needs_constructor_fence) {
   always_assert(&inline_site.cfg() == caller);
 
   // copy the callee because we're going to move its contents into the caller
@@ -189,7 +191,8 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   const std::vector<Block*> callee_blocks = callee.blocks();
   steal_contents(caller, callsite_blk, &callee);
   connect_cfgs(inline_after, caller, callsite_blk, callee_blocks,
-               callee_entry_block, callee_return_blocks, split_on_inline);
+               callee_entry_block, callee_return_blocks, split_on_inline,
+               needs_constructor_fence);
   if (need_reg_size_recompute) {
     caller->recompute_registers_size();
   } else {
@@ -342,7 +345,8 @@ void CFGInliner::connect_cfgs(bool inline_after,
                               const std::vector<Block*>& callee_blocks,
                               Block* callee_entry,
                               const std::vector<Block*>& callee_exits,
-                              Block* callsite_split) {
+                              Block* callsite_split,
+                              bool needs_constructor_fence) {
 
   // Add edges from callee throw sites to caller catch sites
   const auto& caller_throws = callsite->get_outgoing_throws_in_order();
@@ -371,11 +375,38 @@ void CFGInliner::connect_cfgs(bool inline_after,
   }
   // TODO: tail call optimization (if callsite_split is a return & inline_after)
 
+  auto constructor_fence = [&](Block* b) {
+    if (!needs_constructor_fence) {
+      return b;
+    }
+    auto* c = cfg->create_block();
+    c->push_back((new IRInstruction(IOPCODE_WRITE_BARRIER)));
+    // Get this block its own source block and debug position
+    // if this method has any.
+    auto template_sb = source_blocks::get_first_source_block(b);
+    if (template_sb) {
+      auto new_sb = std::make_unique<SourceBlock>(*template_sb);
+      new_sb->id = SourceBlock::kSyntheticId;
+      new_sb->next = nullptr;
+      auto c_it = c->get_first_insn();
+      c->insert_before(c_it, std::move(new_sb));
+    }
+
+    auto last_insn = b->get_last_insn();
+    auto b_it = b->to_cfg_instruction_iterator(last_insn);
+    auto pos = cfg->get_dbg_pos(b_it);
+    if (pos) {
+      cfg->insert_before(c, c->begin(), std::make_unique<DexPosition>(*pos));
+    }
+    cfg->add_edge(c, b, EDGE_GOTO);
+    return c;
+  };
+
   if (inline_after) {
-    connect(callee_exits, callsite_split);
+    connect(callee_exits, constructor_fence(callsite_split));
   } else {
     cfg->delete_pred_edges(callsite);
-    connect(callee_exits, callsite);
+    connect(callee_exits, constructor_fence(callsite));
   }
 }
 
@@ -462,8 +493,8 @@ void CFGInliner::split_on_callee_throws(ControlFlowGraph* callee) {
 }
 
 /*
- * Add a throw edge from each may_throw to each catch that is thrown to from the
- * callsite
+ * Add a throw edge from each may_throw to each catch that is thrown to from
+ * the callsite
  *   * If there are already throw edges in callee, add this edge to the end
  *     of the list
  *
@@ -475,12 +506,11 @@ void CFGInliner::add_callee_throws_to_caller(
     const std::vector<Edge*>& caller_catches) {
 
   // There are two requirements about the catch indices here:
-  //   1) New throw edges must be added to the end of a callee's existing throw
-  //   chain. This is ensured by using the max index of the already existing
-  //   throws
-  //   2) New throw edges must go to the callsite's catch blocks in the same
-  //   order that the existing catch chain does. This is ensured by sorting
-  //   caller_catches by their throw indices.
+  //   1) New throw edges must be added to the end of a callee's existing
+  //   throw chain. This is ensured by using the max index of the already
+  //   existing throws 2) New throw edges must go to the callsite's catch
+  //   blocks in the same order that the existing catch chain does. This is
+  //   ensured by sorting caller_catches by their throw indices.
 
   // Add throw edges from callee_block to all the caller catches
   const auto& add_throw_edges =
@@ -496,10 +526,11 @@ void CFGInliner::add_callee_throws_to_caller(
   for (Block* callee_block : callee_blocks) {
     const auto& existing_throws = callee_block->get_outgoing_throws_in_order();
     if (existing_throws.empty()) {
-      // Blocks that end in a throwing instruction but don't have outgoing throw
-      // instructions yet.
+      // Blocks that end in a throwing instruction but don't have outgoing
+      // throw instructions yet.
       //   * Instructions that can throw that were not in a try region before
-      //   being inlined. These may have been created by split_on_callee_throws.
+      //   being inlined. These may have been created by
+      //   split_on_callee_throws.
       //   * OPCODE_THROW instructions without any catch blocks before being
       //   inlined.
       IRList::iterator last = callee_block->get_last_insn();
@@ -511,8 +542,8 @@ void CFGInliner::add_callee_throws_to_caller(
       }
     } else if (existing_throws.back()->throw_info()->catch_type != nullptr) {
       // Blocks that throw already
-      //   * Instructions that can throw that were already in a try region with
-      //   catch blocks
+      //   * Instructions that can throw that were already in a try region
+      //   with catch blocks
       //   * But don't add to the end of a throw list if there's a catchall
       //   already
       add_throw_edges(callee_block,

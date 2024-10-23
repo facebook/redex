@@ -60,7 +60,8 @@
   X(binop_lit)        \
   X(init_class)       \
   X(injection_id)     \
-  X(unreachable)
+  X(unreachable)      \
+  X(write_barrier)
 
 /* clang-format on */
 
@@ -400,6 +401,9 @@ class InstructionAnalyzerCombiner final {
           std::index_sequence_for<Analyzers...>{}, insn, env);
     case IOPCODE_UNREACHABLE:
       return analyze_unreachable(
+          std::index_sequence_for<Analyzers...>{}, insn, env);
+    case IOPCODE_WRITE_BARRIER:
+      return analyze_write_barrier(
           std::index_sequence_for<Analyzers...>{}, insn, env);
     }
   }
