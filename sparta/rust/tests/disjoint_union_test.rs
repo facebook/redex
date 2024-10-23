@@ -11,6 +11,7 @@ use sparta::datatype::AbstractDomain;
 use sparta::datatype::DisjointUnion;
 use sparta::datatype::HashSetAbstractDomain;
 
+#[allow(dead_code)]
 #[derive(Clone, DisjointUnion, PartialEq, Eq)]
 enum MyUnionedDomain {
     FirstCase(HashSetAbstractDomain<i32>),
@@ -119,6 +120,7 @@ fn test_meet_diff_arm() {
     assert!(met_mudom.is_bottom());
 }
 
+#[allow(dead_code)]
 #[derive(Clone, DisjointUnion, PartialEq, Eq)]
 enum TestGenericsDeriveTypechecks<S, T>
 where
@@ -129,6 +131,7 @@ where
     SecondCase(HashSetAbstractDomain<T>),
 }
 
+#[allow(dead_code)]
 #[derive(Clone, DisjointUnion, PartialEq, Eq)]
 enum TestGenericsDeriveForWholeDomainTypechecks<S: AbstractDomain, T>
 where
