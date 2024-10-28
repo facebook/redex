@@ -675,6 +675,23 @@ size_t chain_hot_violations_tmpl(Block* block, const Fn& fn) {
   return sum;
 }
 
+template <typename Fn>
+size_t hot_method_cold_entry_violations_tmpl(Block* block, const Fn& fn) {
+  size_t sum{0};
+  if (block->preds().empty()) {
+    auto* sb = get_first_source_block(block);
+    if (sb != nullptr) {
+      sb->foreach_val([&sum](const auto& val) {
+        if (val && val->appear100 != 0 && val->val == 0) {
+          sum++;
+        }
+      });
+    }
+  }
+  sum = fn(sum);
+  return sum;
+}
+
 size_t chain_hot_violations(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
@@ -686,6 +703,20 @@ size_t chain_hot_one_violations(
     const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
   return chain_hot_violations_tmpl(block,
                                    [](auto val) { return val > 0 ? 1 : 0; });
+}
+
+size_t hot_method_cold_entry_violations(
+    Block* block,
+    const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
+  return hot_method_cold_entry_violations_tmpl(block,
+                                               [](auto val) { return val; });
+}
+
+size_t hot_method_cold_entry_block_violations(
+    Block* block,
+    const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
+  return hot_method_cold_entry_violations_tmpl(
+      block, [](auto val) { return val > 0 ? 1 : 0; });
 }
 
 struct ChainAndDomState {
@@ -793,19 +824,21 @@ size_t chain_and_dom_violations_coldstart(
 using CounterFnPtr = size_t (*)(
     Block*, const dominators::SimpleFastDominators<cfg::GraphInterface>&);
 
-constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 8> gCounters = {
-    {
-        {"~blocks~count", &count_blocks},
-        {"~blocks~with~source~blocks", &count_block_has_sbs},
-        {"~blocks~with~incomplete-source~blocks",
-         &count_block_has_incomplete_sbs},
-        {"~assessment~source~blocks~total", &count_all_sbs},
-        {"~flow~violation~in~chain", &chain_hot_violations},
-        {"~flow~violation~in~chain~one", &chain_hot_one_violations},
-        {"~flow~violation~chain~and~dom", &chain_and_dom_violations},
-        {"~flow~violation~chain~and~dom.cold_start",
-         &chain_and_dom_violations_coldstart},
-    }};
+constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 10> gCounters =
+    {{{"~blocks~count", &count_blocks},
+      {"~blocks~with~source~blocks", &count_block_has_sbs},
+      {"~blocks~with~incomplete-source~blocks",
+       &count_block_has_incomplete_sbs},
+      {"~assessment~source~blocks~total", &count_all_sbs},
+      {"~flow~violation~in~chain", &chain_hot_violations},
+      {"~flow~violation~in~chain~one", &chain_hot_one_violations},
+      {"~flow~violation~chain~and~dom", &chain_and_dom_violations},
+      {"~flow~violation~chain~and~dom.cold_start",
+       &chain_and_dom_violations_coldstart},
+      {"~flow~violation~seen~method~cold~entry",
+       &hot_method_cold_entry_violations},
+      {"~flow~violation~seen~method~cold~entry~blocks",
+       &hot_method_cold_entry_block_violations}}};
 
 constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 3>
     gCountersNonEntry = {{
@@ -1188,7 +1221,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
       return 0;
     }
     sb->foreach_val([&sum](const auto& val) {
-      if (val->appear100 != 0 && val->val == 0) {
+      if (val && val->appear100 != 0 && val->val == 0) {
         sum++;
       }
     });
@@ -1377,7 +1410,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
           auto* sb = mie.src_block.get();
           bool violation_found_in_head{false};
           sb->foreach_val([&violation_found_in_head](const auto& val) {
-            if (val->appear100 != 0 && val->val == 0) {
+            if (val && val->appear100 != 0 && val->val == 0) {
               violation_found_in_head = true;
             }
           });
@@ -1389,7 +1422,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
           for (auto* cur_sb = sb->next.get(); cur_sb != nullptr;
                cur_sb = cur_sb->next.get()) {
             cur_sb->foreach_val([&violation_found_in_chain](const auto& val) {
-              if (val->appear100 != 0 && val->val == 0) {
+              if (val && val->appear100 != 0 && val->val == 0) {
                 violation_found_in_chain = true;
               }
             });
