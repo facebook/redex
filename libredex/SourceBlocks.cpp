@@ -1567,4 +1567,54 @@ void fill_source_block(SourceBlock& sb,
   }
 }
 
+std::unique_ptr<SourceBlock> clone_as_synthetic(SourceBlock* sb,
+                                                DexMethod* ref,
+                                                const SourceBlock::Val& val) {
+  std::unique_ptr<SourceBlock> new_sb = std::make_unique<SourceBlock>(*sb);
+  new_sb->next.reset();
+  new_sb->id = SourceBlock::kSyntheticId;
+  if (ref) {
+    new_sb->src = ref->get_deobfuscated_name_or_null();
+  }
+  for (size_t i = 0; i < new_sb->vals_size; i++) {
+    new_sb->vals[i] = val;
+  }
+  return new_sb;
+}
+
+std::unique_ptr<SourceBlock> clone_as_synthetic(
+    SourceBlock* sb,
+    DexMethod* ref,
+    const std::optional<SourceBlock::Val>& opt_val) {
+  std::unique_ptr<SourceBlock> new_sb = std::make_unique<SourceBlock>(*sb);
+  new_sb->next.reset();
+  new_sb->id = SourceBlock::kSyntheticId;
+  if (ref) {
+    new_sb->src = ref->get_deobfuscated_name_or_null();
+  }
+  if (opt_val) {
+    for (size_t i = 0; i < new_sb->vals_size; i++) {
+      new_sb->vals[i] = *opt_val;
+    }
+  }
+  return new_sb;
+}
+
+std::unique_ptr<SourceBlock> clone_as_synthetic(
+    SourceBlock* sb, DexMethod* ref, const std::vector<SourceBlock*>& many) {
+  std::unique_ptr<SourceBlock> new_sb = std::make_unique<SourceBlock>(*sb);
+  new_sb->next.reset();
+  new_sb->id = SourceBlock::kSyntheticId;
+  if (ref) {
+    new_sb->src = ref->get_deobfuscated_name_or_null();
+  }
+  for (size_t i = 0; i < new_sb->vals_size; i++) {
+    new_sb->vals[i] = SourceBlock::Val::none();
+  }
+  for (auto& other : many) {
+    new_sb->max(*other);
+  }
+  return new_sb;
+}
+
 } // namespace source_blocks
