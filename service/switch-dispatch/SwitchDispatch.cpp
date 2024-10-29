@@ -186,10 +186,8 @@ DexMethod* materialize_dispatch(DexMethod* orig_method,
 
   if (template_sb) {
     source_blocks::insert_synthetic_source_blocks_in_method(dispatch, [&]() {
-      auto new_sb = std::make_unique<SourceBlock>(*template_sb);
-      source_blocks::fill_source_block(
-          *new_sb, dispatch, SourceBlock::kSyntheticId, SourceBlock::Val{1, 0});
-      return new_sb;
+      return source_blocks::clone_as_synthetic(template_sb, dispatch,
+                                               SourceBlock::Val{1, 0});
     });
   }
 
@@ -429,11 +427,8 @@ dispatch::DispatchMethod create_two_level_switch_dispatch(
   if (template_sb) {
     source_blocks::insert_synthetic_source_blocks_in_method(
         dispatch_meth, [&]() {
-          auto new_sb = std::make_unique<SourceBlock>(*template_sb);
-          source_blocks::fill_source_block(*new_sb, dispatch_meth,
-                                           SourceBlock::kSyntheticId,
-                                           SourceBlock::Val{1, 0});
-          return new_sb;
+          return source_blocks::clone_as_synthetic(template_sb, dispatch_meth,
+                                                   SourceBlock::Val{1, 0});
         });
   }
 

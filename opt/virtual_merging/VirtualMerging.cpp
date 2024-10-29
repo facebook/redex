@@ -967,10 +967,8 @@ struct SBHelper {
       float val = 0) const {
     return [overridden_method = this->overridden,
             template_sb = get_arbitrary_first_sb(), val]() {
-      auto new_sb = std::make_unique<SourceBlock>(*template_sb);
-      source_blocks::fill_source_block(*new_sb, overridden_method,
-                                       SourceBlock::kSyntheticId,
-                                       SourceBlock::Val{val, 0});
+      auto new_sb = source_blocks::clone_as_synthetic(
+          template_sb, overridden_method, SourceBlock::Val{val, 0});
       return new_sb;
     };
   }
@@ -1001,12 +999,11 @@ struct SBHelper {
       if (block != nullptr) {
         auto overriding_sb =
             source_blocks::get_first_source_block_of_method(overriding);
-        auto new_sb = std::make_unique<SourceBlock>(
-            overriding_sb != nullptr ? *overriding_sb
-            : first_sb != nullptr    ? *first_sb
-                                     : *parent->get_arbitrary_first_sb());
-        new_sb->src = parent->overridden->get_deobfuscated_name_or_null();
-        new_sb->id = SourceBlock::kSyntheticId;
+        auto new_sb = source_blocks::clone_as_synthetic(
+            overriding_sb != nullptr ? overriding_sb
+            : first_sb != nullptr    ? first_sb
+                                     : parent->get_arbitrary_first_sb(),
+            parent->overridden);
         if (overriding_sb != nullptr && first_sb != nullptr) {
           for (size_t i = 0; i != new_sb->vals_size; ++i) {
             if (!new_sb->get_val(i)) {

@@ -110,12 +110,8 @@ void ThrowPropagator::insert_unreachable(
   new_block->push_back(insns);
   auto template_source_block = source_blocks::get_first_source_block(block);
   if (template_source_block != nullptr) {
-    auto new_source_block =
-        std::make_unique<SourceBlock>(*template_source_block);
-    source_blocks::fill_source_block(*new_source_block,
-                                     m_method,
-                                     SourceBlock::kSyntheticId,
-                                     SourceBlock::Val(0, 0));
+    auto new_source_block = source_blocks::clone_as_synthetic(
+        template_source_block, m_method, SourceBlock::Val(0, 0));
     auto new_block_it = new_block->begin();
     new_block->insert_before(new_block_it, std::move(new_source_block));
   }
