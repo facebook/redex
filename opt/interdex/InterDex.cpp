@@ -603,16 +603,17 @@ void InterDex::emit_interdex_classes(
             if (end_marker == cold_start_end_marker) {
               dex_info.coldstart = false;
             }
-          } else if (m_move_coldstart_classes &&
-                     std::find(interactions.begin(), interactions.end(),
-                               type->str().substr(1, type->str().size() - 8)) !=
-                         interactions.end()) {
-            curr_interaction = type->str();
           } else {
             reset_coldstart_on_overflow = true;
             TRACE(IDEX, 2, "Not flushing out marker %s to fill dex.",
                   SHOW(type));
           }
+        }
+        if (m_move_coldstart_classes &&
+            std::find(interactions.begin(), interactions.end(),
+                      type->str().substr(1, type->str().size() - 8)) !=
+                interactions.end()) {
+          curr_interaction = type->str();
         }
       }
     } else {
@@ -633,6 +634,8 @@ void InterDex::emit_interdex_classes(
         if (!boost::starts_with(curr_interaction, "L" + interaction)) {
           continue;
         } else {
+          TRACE(IDEX, 3, "moving %s into %s", SHOW(cls),
+                SHOW(curr_interaction));
           move_coldstart_classes.erase(cls);
         }
       }
