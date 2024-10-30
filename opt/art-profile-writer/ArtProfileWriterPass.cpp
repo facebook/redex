@@ -410,7 +410,7 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
                          : m_perf_config.appear100_threshold) &&
             stat.call_count >= m_perf_config.call_count_threshold) {
           auto& mf = res.methods[method];
-          mf.hot = startup ? stat.appear_percent >
+          mf.hot = startup ? stat.appear_percent >=
                                  m_perf_config.coldstart_appear100_threshold
                            : true;
           if (startup) {

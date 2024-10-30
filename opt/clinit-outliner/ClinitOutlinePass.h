@@ -31,4 +31,6 @@ class ClinitOutlinePass : public Pass {
 
  private:
   int64_t m_min_clinit_size{0};
+  std::string m_interaction_pattern;
+  int64_t m_interaction_threshold_override{0};
 };

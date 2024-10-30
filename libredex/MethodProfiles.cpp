@@ -276,6 +276,12 @@ bool MethodProfiles::apply_main_internal_result(ParsedMain v,
   }
 }
 
+void MethodProfiles::set_method_stats(const std::string& interaction_id,
+                                      const DexMethodRef* m,
+                                      Stats stats) {
+  m_method_stats.at(interaction_id)[m] = stats;
+}
+
 size_t MethodProfiles::derive_stats(DexMethod* target,
                                     const std::vector<DexMethod*>& sources) {
   size_t res = 0;
