@@ -345,7 +345,8 @@ void InterDex::get_movable_coldstart_classes(
           TRACE(IDEX, 3, "moving %s from coldstart to %s", SHOW(cls),
                 interactions.at(max_idx).c_str());
         }
-      } else if (max_idx != coldstart_idx && max_idx != backgroundset_idx) {
+      } else if (max_idx != coldstart_idx && max_idx != backgroundset_idx &&
+                 max_freq > m_max_betamap_move_threshold) {
         if (max_idx != curr_idx) {
           move_coldstart_classes.emplace(cls, interactions.at(max_idx));
           TRACE(IDEX, 3, "moving %s from %s to %s", SHOW(cls),
