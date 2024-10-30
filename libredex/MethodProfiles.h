@@ -126,6 +126,10 @@ class MethodProfiles {
     return it->second;
   }
 
+  void set_method_stats(const std::string& interaction_id,
+                        const DexMethodRef* m,
+                        Stats stats);
+
   boost::optional<uint32_t> get_interaction_count(
       const std::string& interaction_id) const;
 

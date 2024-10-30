@@ -7,6 +7,8 @@
 
 #include "ClinitOutlinePass.h"
 
+#include <boost/regex.hpp>
+
 #include "ApiLevelChecker.h"
 #include "BaselineProfile.h"
 #include "ConfigFiles.h"
@@ -15,10 +17,13 @@
 #include "PassManager.h"
 #include "Show.h"
 #include "SourceBlocks.h"
+#include "StlUtil.h"
 #include "Walkers.h"
 
 void ClinitOutlinePass::bind_config() {
   bind("min_clinit_size", 16, m_min_clinit_size);
+  bind("interaction_pattern", "", m_interaction_pattern);
+  bind("interaction_threshold_override", -1, m_interaction_threshold_override);
   trait(Traits::Pass::unique, true);
 }
 
@@ -26,8 +31,29 @@ void ClinitOutlinePass::run_pass(DexStoresVector& stores,
                                  ConfigFiles& conf,
                                  PassManager& mgr) {
   auto& method_profiles = conf.get_method_profiles();
+  auto baseline_profile_config = conf.get_baseline_profile_config();
+  if (!m_interaction_pattern.empty()) {
+    boost::regex rx(m_interaction_pattern);
+    std20::erase_if(baseline_profile_config.interaction_configs,
+                    [&](auto& p) { return !boost::regex_match(p.first, rx); });
+  }
+  std::unordered_map<std::string, std::pair<int64_t, int64_t>>
+      overridden_thresholds;
+  if (m_interaction_threshold_override >= 0) {
+    for (auto& [interaction_id, config] :
+         baseline_profile_config.interaction_configs) {
+      auto old_threshold = config.threshold;
+      config.threshold = m_interaction_threshold_override;
+      overridden_thresholds.emplace(
+          interaction_id, std::make_pair(old_threshold, config.threshold));
+    }
+  }
+  for (auto& [interaction_id, config] :
+       baseline_profile_config.interaction_configs) {
+    mgr.set_metric("interaction_" + interaction_id, config.threshold);
+  }
   auto baseline_profile = baseline_profiles::get_baseline_profile(
-      conf.get_baseline_profile_config(), method_profiles);
+      baseline_profile_config, method_profiles);
 
   auto scope = build_class_scope(stores);
   std::atomic<size_t> affected_final_fields{0};
@@ -101,6 +127,20 @@ void ClinitOutlinePass::run_pass(DexStoresVector& stores,
   for (auto [method, outlined_clinit] : outlined_clinits) {
     type_class(method->get_class())->add_method(outlined_clinit);
     method_profiles.derive_stats(outlined_clinit, {method});
+    // "Upgrade" appear_percent if configured threshold override applies, so
+    // that ArtProfileWriter will consider outlined method as appropriate
+    // considering threshold override.
+    for (auto& [interaction_id, p] : overridden_thresholds) {
+      auto [old_threshold, new_threshold] = p;
+      auto stats =
+          method_profiles.get_method_stat(interaction_id, outlined_clinit);
+      if (stats && stats->appear_percent >= new_threshold &&
+          stats->appear_percent < old_threshold) {
+        stats->appear_percent = old_threshold;
+        method_profiles.set_method_stats(interaction_id, outlined_clinit,
+                                         *stats);
+      }
+    }
   }
 
   mgr.set_metric("affected_clinits", outlined_clinits.size());
