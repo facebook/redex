@@ -489,6 +489,7 @@ struct ViolationsHelper {
   enum class Violation {
     kHotImmediateDomNotHot,
     kChainAndDom,
+    kUncoveredSourceBlocks,
   };
 
   ViolationsHelper(Violation v,

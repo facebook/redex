@@ -107,9 +107,9 @@ DexClass* create_class(const DexType* type,
 std::vector<DexField*> create_merger_fields(const DexType* owner,
                                             const FieldsMap& fields_map) {
   std::vector<DexField*> res;
-  const auto& mergeable_fields = fields_map.begin()->second;
+  const std::vector<DexField*>& mergeable_fields = fields_map.begin()->second;
   size_t cnt = 0;
-  for (const auto* f : mergeable_fields) {
+  for (const DexField* f : mergeable_fields) {
     auto type = f->get_type();
     std::string name;
     if (type == type::_byte() || type == type::_char() ||
@@ -157,11 +157,13 @@ std::vector<DexField*> create_merger_fields(const DexType* owner,
     }
   }
 
+  always_assert(res.size() == mergeable_fields.size());
   for (size_t i = 0; i < res.size(); i++) {
-    redex_assert(acc_final_map.size() > i);
     if (acc_final_map[i]) {
-      set_final(res.at(i));
-      TRACE(CLMG, 5, "marking merger field final %s", SHOW(res.at(i)));
+      DexField* f = res.at(i);
+      always_assert(f != nullptr && f->is_def());
+      set_final(f);
+      TRACE(CLMG, 5, "marking merger field final %s", SHOW(f));
     }
   }
 

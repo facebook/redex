@@ -13,7 +13,8 @@ namespace throw_propagation_impl {
 
 class ThrowPropagator {
  public:
-  explicit ThrowPropagator(cfg::ControlFlowGraph& cfg) : m_cfg(cfg) {}
+  explicit ThrowPropagator(cfg::ControlFlowGraph& cfg, DexMethod* method)
+      : m_cfg(cfg), m_method(method) {}
 
   bool try_apply(const cfg::InstructionIterator& cfg_it);
 
@@ -24,6 +25,7 @@ class ThrowPropagator {
   void insert_unreachable(const cfg::InstructionIterator& cfg_it);
 
   cfg::ControlFlowGraph& m_cfg;
+  DexMethod* m_method;
   boost::optional<reg_t> m_reg;
 };
 

@@ -8,6 +8,7 @@
 #pragma once
 
 #include <iosfwd>
+#include <string_view>
 
 #include "DexUtil.h"
 #include "ProguardConfiguration.h"
@@ -19,8 +20,9 @@ void show_configuration(std::ostream& output,
                         const ProguardConfiguration& config);
 
 std::string show_keep(const KeepSpec& keep_rule, bool show_source = true);
-std::string show_assumenosideeffect(const KeepSpec& keep_rule,
-                                    bool show_source = true);
+std::string show_simple_keep_rule(const KeepSpec& keep_rule,
+                                  std::string_view command,
+                                  bool show_source = true);
 } // namespace keep_rules
 
 // namespace keep_rules

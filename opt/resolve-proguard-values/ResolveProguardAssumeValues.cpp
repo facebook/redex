@@ -23,9 +23,8 @@ void ResolveProguardAssumeValuesPass::run_pass(DexStoresVector& stores,
   Scope scope = build_class_scope(stores);
 
   Stats stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
-    Stats stat;
     if (!method || !method->get_code()) {
-      return stat;
+      return Stats{};
     }
     always_assert(method->get_code()->editable_cfg_built());
     auto& cfg = method->get_code()->cfg();
@@ -67,9 +66,13 @@ ResolveProguardAssumeValuesPass::process_for_code(cfg::ControlFlowGraph& cfg) {
         IRInstruction* new_insn = new IRInstruction(OPCODE_CONST);
         new_insn->set_literal(val)->set_dest(move_insn->dest());
 
-        TRACE(PGR, 5, "Changing:\n %s and %s", SHOW(insn), SHOW(move_insn));
-        TRACE(PGR, 5, "TO:\n %s", SHOW(new_insn));
-        mutation.replace(move_result_it, {new_insn});
+        TRACE(PGR,
+              5,
+              "Inserting after:\n %s and %s\nWith:\n %s",
+              SHOW(insn),
+              SHOW(move_insn),
+              SHOW(new_insn));
+        mutation.insert_after(move_result_it, {new_insn});
         stat.field_values_changed++;
       }
       break;

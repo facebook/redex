@@ -533,4 +533,31 @@ std::string convert_utf8_to_mutf8(const std::string& input) {
   }
   return out.str();
 }
+
+void resources_inlining_find_refs(
+    const std::unordered_map<uint32_t, uint32_t>& past_refs,
+    std::unordered_map<uint32_t, resources::InlinableValue>*
+        inlinable_resources) {
+  for (auto& ref : past_refs) {
+    uint32_t id = ref.first;
+    uint32_t ref_id = ref.second;
+    uint32_t current_ref_id = ref_id;
+    std::unordered_set<uint32_t> visited_refs; // To detect cycles
+    while (true) {
+      if (!visited_refs.insert(current_ref_id).second) {
+        break; // Cycle detected, break the loop
+      }
+      auto it = inlinable_resources->find(current_ref_id);
+      if (it != inlinable_resources->end()) {
+        inlinable_resources->insert({id, it->second});
+        break;
+      }
+      auto ref_it = past_refs.find(current_ref_id);
+      if (ref_it == past_refs.end()) {
+        break;
+      }
+      current_ref_id = ref_it->second;
+    }
+  }
+}
 } // namespace resources

@@ -1306,12 +1306,42 @@ TEST_F(TypedefAnnoCheckerTest, TestAccessGet) {
   EXPECT_TRUE(checker.complete());
 }
 
-TEST_F(TypedefAnnoCheckerTest, TestSyntheticValField) {
+TEST_F(TypedefAnnoCheckerTest, TestAccessSet) {
   auto scope = build_class_scope(stores);
   build_cfg(scope);
   auto* method = DexMethod::get_method(
                      "Lcom/facebook/redextest/"
                      "TypedefAnnoCheckerTest$2;.override_method:()V")
+                     ->as_def();
+
+  auto code = method->get_code();
+  code->build_cfg();
+  auto method_override_graph = mog::build_graph(scope);
+
+  auto* synth_getter =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/TypedefAnnoCheckerTest;.access$000:()I")
+          ->as_def();
+  synth_getter->set_deobfuscated_name(synth_getter->get_name()->c_str());
+
+  auto* synth_setter =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/TypedefAnnoCheckerTest;.access$002:(I)I")
+          ->as_def();
+  synth_setter->set_deobfuscated_name(synth_setter->get_name()->c_str());
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestSyntheticValField) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerTest$3;.override_method:()V")
                      ->as_def();
 
   auto code = method->get_code();
@@ -1442,7 +1472,24 @@ TEST_F(TypedefAnnoCheckerTest, TestAnnotatedPropertyGetterPatching) {
   EXPECT_TRUE(checker.complete());
 }
 
-TEST_F(TypedefAnnoCheckerTest, TestAnnotatedCompanionPropertyAccessorPatching) {
+TEST_F(TypedefAnnoCheckerTest, TestAnnotatedPropertySetterPatching) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerKtTest;.testAnnotatedPropertySetterPatching:()V")
+          ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestAnnotatedCompanionPropertyAccessorGetter) {
   auto scope = build_class_scope(stores);
   build_cfg(scope);
   auto* method = DexMethod::get_method(
@@ -1459,10 +1506,26 @@ TEST_F(TypedefAnnoCheckerTest, TestAnnotatedCompanionPropertyAccessorPatching) {
   EXPECT_TRUE(checker.complete());
 }
 
+TEST_F(TypedefAnnoCheckerTest, TestAnnotatedCompanionPropertyAccessorSetter) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerKtTest$Listener$Companion;.setOne:("
+                     "Ljava/lang/String;)V")
+                     ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_TRUE(checker.complete());
+}
+
 TEST_F(TypedefAnnoCheckerTest, TestClassPrivatePropertyGetter) {
   auto scope = build_class_scope(stores);
   build_cfg(scope);
-  std::cout << "!!! before method: " << std::endl;
   auto* method = DexMethod::get_method(
                      "Lcom/facebook/redextest/"
                      "TypedefAnnoCheckerKtTest$ClassWithPrivateProperty$"
@@ -1487,6 +1550,68 @@ TEST_F(TypedefAnnoCheckerTest, TestClassPrivatePropertyGetter) {
       "TypedefAnnoCheckerKtTest$ClassWithPrivateProperty;.access$getInt_field$"
       "p:(Lcom/facebook/redextest/"
       "TypedefAnnoCheckerKtTest$ClassWithPrivateProperty;)I");
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestClassPrivatePropertySetter) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerKtTest$ClassWithPrivateProperty$"
+                     "setInt$lmd$1;.invoke:()Ljava/lang/Object;")
+                     ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  DexClass* synth_class = type_class(method->get_class());
+  synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
+
+  // set the deobfuscated name manually since it doesn't get set by default in
+  // integ tests
+  auto* access_p = DexMethod::get_method(
+                       "Lcom/facebook/redextest/"
+                       "TypedefAnnoCheckerKtTest$ClassWithPrivateProperty;."
+                       "access$setInt_field$p:(Lcom/facebook/redextest/"
+                       "TypedefAnnoCheckerKtTest$ClassWithPrivateProperty;I)V")
+                       ->as_def();
+  access_p->set_deobfuscated_name(
+      "Lcom/facebook/redextest/"
+      "TypedefAnnoCheckerKtTest$ClassWithPrivateProperty;.access$setInt_field$"
+      "p:(Lcom/facebook/redextest/"
+      "TypedefAnnoCheckerKtTest$ClassWithPrivateProperty;I)");
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestSAM) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerKtTest$sam_interface$1;."
+                     "setString:(Ljava/lang/String;)V")
+                     ->as_def();
+
+  // set the deobfuscated name manually since it doesn't get set by default in
+  // integ tests
+  method->set_deobfuscated_name(
+      "Lcom/facebook/redextest/"
+      "TypedefAnnoCheckerKtTest$sam_interface$1;."
+      "setString:(Ljava/lang/String;)V");
+  std::cerr << SHOW(method->get_code()->cfg()) << "\n";
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  DexClass* synth_class = type_class(method->get_class());
+  synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
 
   run_patcher(scope, *method_override_graph);
 

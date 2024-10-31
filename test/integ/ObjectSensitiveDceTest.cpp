@@ -290,3 +290,72 @@ TEST_F(ObjectSensitiveDceTest, array_clone) {
   ASSERT_TRUE(it != ii.end());
   ASSERT_EQ(it->insn->opcode(), OPCODE_RETURN_VOID);
 }
+
+TEST_F(ObjectSensitiveDceTest, do_not_reduce_finalize) {
+  auto method_ref = DexMethod::get_method(
+      "Lcom/facebook/redextest/"
+      "ObjectSensitiveDceTest;.do_not_reduce_finalize:("
+      ")V");
+  EXPECT_NE(method_ref, nullptr);
+  auto method = method_ref->as_def();
+  EXPECT_NE(method, nullptr);
+
+  std::vector<Pass*> passes = {
+      new ObjectSensitiveDcePass(),
+  };
+
+  run_passes(passes);
+
+  auto code = method->get_code();
+
+  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_NEW_INSTANCE}), 1);
+  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_DIRECT}), 1);
+  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_VIRTUAL}), 1);
+  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_RETURN_VOID}), 1);
+}
+
+TEST_F(ObjectSensitiveDceTest, do_not_reduce_finalize_field) {
+  auto method_ref = DexMethod::get_method(
+      "Lcom/facebook/redextest/"
+      "ObjectSensitiveDceTest;.do_not_reduce_finalize_field:("
+      ")V");
+  EXPECT_NE(method_ref, nullptr);
+  auto method = method_ref->as_def();
+  EXPECT_NE(method, nullptr);
+
+  std::vector<Pass*> passes = {
+      new ObjectSensitiveDcePass(),
+  };
+
+  run_passes(passes);
+
+  auto code = method->get_code();
+
+  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_NEW_INSTANCE}), 1);
+  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_DIRECT}), 1);
+  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_IPUT}), 1);
+  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_RETURN_VOID}), 1);
+}
+
+TEST_F(ObjectSensitiveDceTest, do_not_reduce_finalize_derived) {
+  auto method_ref = DexMethod::get_method(
+      "Lcom/facebook/redextest/"
+      "ObjectSensitiveDceTest;.do_not_reduce_finalize_derived:("
+      ")V");
+  EXPECT_NE(method_ref, nullptr);
+  auto method = method_ref->as_def();
+  EXPECT_NE(method, nullptr);
+
+  std::vector<Pass*> passes = {
+      new ObjectSensitiveDcePass(),
+  };
+
+  run_passes(passes);
+
+  auto code = method->get_code();
+
+  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_NEW_INSTANCE}), 1);
+  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_DIRECT}), 1);
+  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_VIRTUAL}), 1);
+  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_RETURN_VOID}), 1);
+}

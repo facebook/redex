@@ -940,7 +940,8 @@ TEST_F(ProguardTest, assortment) {
     for (const keep_rules::KeepSpec* keep_rule :
          proguard_rule_recorder.used_assumenosideeffect_rules) {
       used_assumenosideeffects_rule_strings.push_back(
-          keep_rules::show_assumenosideeffect(*keep_rule, false));
+          keep_rules::show_simple_keep_rule(
+              *keep_rule, "-assumenosideeffects", false));
     }
     EXPECT_THAT(used_assumenosideeffects_rule_strings,
                 ::testing::UnorderedElementsAre(

@@ -17,26 +17,32 @@
 void resource_inlining_PreVerify(ResourceTableFile* res_table) {
   EXPECT_THAT(res_table->sorted_res_ids,
               testing::ElementsAre(
-                  /* bool */
+                  /* integer array */
                   0x7f010000,
-                  /* color */
+                  /* bool */
                   0x7f020000,
-                  0x7f020001,
-                  0x7f020002,
-                  0x7f020003,
-                  /* dimen */
+                  /* color */
                   0x7f030000,
                   0x7f030001,
-                  /* integer */
+                  0x7f030002,
+                  0x7f030003,
+                  0x7f030004,
+                  0x7f030005,
+                  0x7f030006,
+                  0x7f030007,
+                  /* dimen */
                   0x7f040000,
-                  /* layout */
+                  0x7f040001,
+                  /* integer */
                   0x7f050000,
-                  0x7f050001,
-                  0x7f050002,
-                  /* string */
+                  /* layout */
                   0x7f060000,
                   0x7f060001,
-                  0x7f060002));
+                  0x7f060002,
+                  /* string */
+                  0x7f070000,
+                  0x7f070001,
+                  0x7f070002));
   std::unordered_map<uint32_t, resources::InlinableValue> inlinable_pre_filter =
       res_table->get_inlinable_resource_values();
   std::unordered_set<std::string> resource_type_names = {"bool", "color",
@@ -47,49 +53,59 @@ void resource_inlining_PreVerify(ResourceTableFile* res_table) {
                                                         inlinable_pre_filter,
                                                         resource_type_names,
                                                         resource_entry_names);
-  EXPECT_TRUE(inlinable.find(0x7f010000) != inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f010000) == inlinable.end());
 
   EXPECT_TRUE(inlinable.find(0x7f020000) != inlinable.end());
-  EXPECT_TRUE(inlinable.find(0x7f020001) != inlinable.end());
-  EXPECT_TRUE(inlinable.find(0x7f020002) != inlinable.end());
-  EXPECT_TRUE(inlinable.find(0x7f020003) == inlinable.end());
 
-  EXPECT_TRUE(inlinable.find(0x7f030000) == inlinable.end());
-  EXPECT_TRUE(inlinable.find(0x7f030001) == inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f030000) != inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f030001) != inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f030002) != inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f030003) != inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f030004) == inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f030005) == inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f030006) == inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f030007) == inlinable.end());
 
-  EXPECT_TRUE(inlinable.find(0x7f040000) != inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f040000) == inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f040001) == inlinable.end());
 
-  EXPECT_TRUE(inlinable.find(0x7f050000) == inlinable.end());
-  EXPECT_TRUE(inlinable.find(0x7f050001) == inlinable.end());
-  EXPECT_TRUE(inlinable.find(0x7f050002) == inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f050000) != inlinable.end());
 
-  EXPECT_TRUE(inlinable.find(0x7f060000) != inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f060000) == inlinable.end());
   EXPECT_TRUE(inlinable.find(0x7f060001) == inlinable.end());
   EXPECT_TRUE(inlinable.find(0x7f060002) == inlinable.end());
 
-  auto val = inlinable.at(0x7f010000);
+  EXPECT_TRUE(inlinable.find(0x7f070000) != inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f070001) == inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f070002) == inlinable.end());
+
+  auto val = inlinable.at(0x7f020000);
   EXPECT_EQ(val.type, android::Res_value::TYPE_INT_BOOLEAN);
   EXPECT_TRUE(val.bool_value);
 
-  val = inlinable.at(0x7f020000);
+  val = inlinable.at(0x7f030000);
   EXPECT_EQ(val.type, android::Res_value::TYPE_INT_COLOR_RGB8);
   EXPECT_EQ(val.uint_value, 0xff673ab7);
 
-  val = inlinable.at(0x7f020001);
+  val = inlinable.at(0x7f030001);
   EXPECT_GE(val.type, android::Res_value::TYPE_FIRST_COLOR_INT);
   EXPECT_LE(val.type, android::Res_value::TYPE_LAST_COLOR_INT);
   EXPECT_EQ(val.uint_value, 0xffff0000);
 
-  val = inlinable.at(0x7f020002);
+  val = inlinable.at(0x7f030002);
   EXPECT_EQ(val.type, android::Res_value::TYPE_INT_COLOR_RGB8);
   EXPECT_EQ(val.uint_value, 0xff673ab7);
 
-  val = inlinable.at(0x7f040000);
+  val = inlinable.at(0x7f030003);
+  EXPECT_EQ(val.type, android::Res_value::TYPE_INT_COLOR_RGB8);
+  EXPECT_EQ(val.uint_value, 0xff673ab7);
+
+  val = inlinable.at(0x7f050000);
   EXPECT_GE(val.type, android::Res_value::TYPE_FIRST_INT);
   EXPECT_LE(val.type, android::Res_value::TYPE_INT_HEX);
   EXPECT_EQ(val.uint_value, 3);
 
-  val = inlinable.at(0x7f060000);
+  val = inlinable.at(0x7f070000);
   EXPECT_EQ(val.type, android::Res_value::TYPE_STRING);
   EXPECT_EQ(val.string_value.substr(0, 6), "Hello,");
 }
@@ -125,18 +141,47 @@ void resource_inlining_PostVerify(DexClass* cls) {
         } else if (line_num == 52) {
           ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO);
         } else if (line_num == 53) {
-          ASSERT_EQ(insn->opcode(), OPCODE_INVOKE_VIRTUAL);
-        } else if (line_num == 54) {
-          ASSERT_EQ(insn->opcode(), OPCODE_MOVE_RESULT);
-        } else if (line_num == 69) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST);
           ASSERT_EQ(uint32_t(insn->get_literal()), 3);
-        } else if (line_num == 72) {
+        } else if (line_num == 56) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
           auto string_char_star = insn->get_string()->c_str();
           auto string = (std::string)string_char_star;
           ASSERT_EQ(string.substr(0, 6), "Hello,");
-        } else if (line_num == 73) {
+        } else if (line_num == 57) {
+          ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+        }
+      } else if (block->id() == 4) {
+        if (line_num == 31) {
+          ASSERT_EQ(insn->opcode(), OPCODE_CONST);
+          ASSERT_EQ(uint32_t(insn->get_literal()), 0xFFFFFFFF);
+        } else if (line_num == 46) {
+          ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
+          auto string_char_star = insn->get_string()->c_str();
+          auto string = (std::string)string_char_star;
+          ASSERT_EQ(string, "#ff673ab7");
+        } else if (line_num == 47) {
+          ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+        } else if (line_num == 60) {
+          ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
+          auto string_char_star = insn->get_string()->c_str();
+          auto string = (std::string)string_char_star;
+          ASSERT_EQ(string, "3");
+        } else if (line_num == 61) {
+          ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+        } else if (line_num == 74) {
+          ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
+          auto string_char_star = insn->get_string()->c_str();
+          auto string = (std::string)string_char_star;
+          ASSERT_EQ(string, "com.fb.resources:integer/loop_count");
+        } else if (line_num == 75) {
+          ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+        } else if (line_num == 88) {
+          ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
+          auto string_char_star = insn->get_string()->c_str();
+          auto string = (std::string)string_char_star;
+          ASSERT_EQ(string, "loop_count");
+        } else if (line_num == 89) {
           ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
         }
       }

@@ -24,6 +24,8 @@ struct ProguardRuleRecorder {
   ConcurrentSet<const KeepSpec*> used_keep_rules;
   ConcurrentSet<const KeepSpec*> unused_assumenosideeffect_rules;
   ConcurrentSet<const KeepSpec*> used_assumenosideeffect_rules;
+  ConcurrentSet<const KeepSpec*> unused_assumevalues_rules;
+  ConcurrentSet<const KeepSpec*> used_assumevalues_rules;
 };
 
 ProguardRuleRecorder process_proguard_rules(

@@ -91,7 +91,7 @@ std::string show_fields(
     ss << show_access_flags(
         field.requiredSetAccessFlags, field.requiredUnsetAccessFlags, false);
     auto name = field.name.empty() ? "*" : field.name;
-    ss << field.descriptor << " " << name << "; ";
+    ss << field.descriptor << " " << name << field.return_value << "; ";
   }
   return ss.str();
 }
@@ -106,7 +106,8 @@ std::string show_methods(
     ss << show_access_flags(
         method.requiredSetAccessFlags, method.requiredUnsetAccessFlags, true);
     auto name = method.name.empty() ? "*" : method.name;
-    ss << method.descriptor << " " << name << "(); ";
+    ss << method.descriptor << " " << name << "()" << method.return_value
+       << "; ";
   }
   return ss.str();
 }
@@ -163,6 +164,17 @@ bool operator==(const KeepSpec& lhs, const KeepSpec& rhs) {
          lhs.allowoptimization == rhs.allowoptimization &&
          lhs.allowobfuscation == rhs.allowobfuscation &&
          lhs.class_spec == rhs.class_spec;
+}
+
+std::ostream& operator<<(std::ostream& oss, const AssumeReturnValue& asr) {
+  switch (asr.value_type) {
+  case AssumeReturnValue::ValueType::ValueNone:
+    break;
+  case AssumeReturnValue::ValueType::ValueBool:
+    oss << " return " << (asr.value.v == 0 ? "false" : "true");
+    break;
+  }
+  return oss;
 }
 
 std::ostream& operator<<(std::ostream& text, const KeepSpec& keep_rule) {

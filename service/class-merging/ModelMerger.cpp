@@ -581,8 +581,10 @@ std::vector<DexClass*> ModelMerger::merge_model(
     }
     cls->rstate.set_interdex_subgroup(subgroup_idx);
     cls->rstate.set_generated();
-    TRACE(CLMG, 5, "Set interdex subgroup %u (%u) for %s", *subgroup_idx,
-          *merger.interdex_subgroup, SHOW(merger.type));
+    if (subgroup_idx) {
+      TRACE(CLMG, 5, "Set interdex subgroup %u (%u) for %s", *subgroup_idx,
+            *merger.interdex_subgroup, SHOW(merger.type));
+    }
 
     add_class(cls, scope, stores, merger.dex_id);
     merger_classes.push_back(cls);

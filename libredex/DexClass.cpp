@@ -641,7 +641,7 @@ std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
     always_assert(cdata <= end);
     always_assert((uint8_t*)(end) <= idx->end());
     while (cdata < end) {
-      DexInstruction* dop = DexInstruction::make_instruction(idx, &cdata);
+      DexInstruction* dop = DexInstruction::make_instruction(idx, &cdata, end);
       always_assert_log(dop != nullptr,
                         "Failed to parse method at offset 0x%08x", offset);
       dc->m_insns->push_back(dop);

@@ -11,6 +11,7 @@
 #include <functional>
 
 #include "CFGMutation.h"
+#include "ClassHierarchy.h"
 #include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
 #include "DexUtil.h"
@@ -174,9 +175,15 @@ void ObjectSensitiveDce::dce() {
   auto call_graph = call_graph::Graph(CallGraphStrategy(
       m_method_override_graph, m_scope, m_pure_methods, *m_escape_summaries,
       *m_effect_summaries, m_big_override_threshold));
+  auto class_hierarchy = build_internal_type_hierarchy(m_scope);
 
-  auto ptrs_fp_iter_map =
-      ptrs::analyze_scope(m_scope, call_graph, m_escape_summaries);
+  // R8 does not remove a new instance instruction if the class defines a
+  // finalize method So we do the same here.
+  auto excluded_classes =
+      method_override_graph::get_classes_with_overridden_finalize(
+          m_method_override_graph, class_hierarchy);
+  auto ptrs_fp_iter_map = ptrs::analyze_scope(
+      m_scope, call_graph, m_escape_summaries, &excluded_classes);
 
   side_effects::analyze_scope(*m_init_classes_with_side_effects, m_scope,
                               call_graph, ptrs_fp_iter_map, m_effect_summaries);

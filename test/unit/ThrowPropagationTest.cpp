@@ -97,7 +97,7 @@ void run_throw_propagation(const ConcurrentSet<DexMethod*>& no_return_methods,
     return return_methods.empty();
   };
 
-  throw_propagation_impl::ThrowPropagator impl(cfg);
+  throw_propagation_impl::ThrowPropagator impl(cfg, nullptr);
   size_t throws_inserted{0};
   for (auto block : cfg.blocks()) {
     auto ii = InstructionIterable(block);

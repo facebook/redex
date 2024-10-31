@@ -201,7 +201,7 @@ void GlobalConfig::bind_config() {
   bind("recognize_betamap_coldstart_pct_marker", false, bool_param);
   bind("baseline_profile", {}, json_param);
   bind("betamap_interactions", {}, json_param);
-  
+
   for (const auto& entry : m_registry) {
     m_global_configs.emplace(entry.name,
                              entry.bind_operation(this, entry.name));

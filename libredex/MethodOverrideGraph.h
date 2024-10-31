@@ -11,6 +11,12 @@
 #include "DexClass.h"
 #include "DexStore.h"
 
+// The definition of TypeSet is defined differently in ClassHierarchy, so we
+// need to manually define ClassHierarchy here.
+using ClassHierarchy =
+    std::unordered_map<const DexType*,
+                       std::set<const DexType*, dextypes_comparator>>;
+
 /*
  * This module builds a DAG that enables us to quickly answer the following
  * question: Given a method reference, what is the set of methods that it could
@@ -92,15 +98,16 @@ struct Node {
   // Checks whther the current method's class, or any other implementation
   // class, can be cast to the given base type.
   bool overrides(const DexMethod* current, const DexType* base_type) const;
+
+  void gather_connected_methods(
+      std::unordered_set<const DexMethod*>* visited) const;
 };
 
 class Graph {
  public:
   const Node& get_node(const DexMethod* method) const;
 
-  const ConcurrentMap<const DexMethod*, std::unique_ptr<Node>>& nodes() const {
-    return m_nodes;
-  }
+  const ConcurrentMap<const DexMethod*, Node>& nodes() const { return m_nodes; }
 
   void add_edge(const DexMethod* overridden, const DexMethod* overriding);
 
@@ -117,7 +124,7 @@ class Graph {
 
  private:
   static Node empty_node;
-  ConcurrentMap<const DexMethod*, std::unique_ptr<Node>> m_nodes;
+  ConcurrentMap<const DexMethod*, Node> m_nodes;
 };
 
 bool all_overriding_methods(const Graph& graph,
@@ -143,5 +150,8 @@ bool any_overridden_methods(
     const DexMethod* method,
     const std::function<bool(const DexMethod*)>& f = [](auto*) { return true; },
     bool include_interfaces = false);
+
+std::unordered_set<DexClass*> get_classes_with_overridden_finalize(
+    const Graph& method_override_graph, const ClassHierarchy& class_hierarchy);
 
 } // namespace method_override_graph

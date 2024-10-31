@@ -25,6 +25,7 @@
 #include "Purity.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "StlUtil.h"
 #include "Walkers.h"
 
 using namespace opt_metadata;
@@ -98,8 +99,10 @@ void RemoveArgs::gather_results_used() {
       }
       auto method =
           resolve_method(insn->get_method(), opcode_to_search(insn->opcode()));
+      // The above should return any callee for a virtual callsite. Because we
+      // only remove results for groups of related methods where every result
+      // can be removed, the logic works for true virtuals.
       if (!method) {
-        // TODO: T31388603 -- Remove unused results for true virtuals.
         continue;
       }
       result_used.insert(method);
@@ -247,66 +250,11 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
 }
 
 /**
- * Returns a vector of live argument indices.
- * Updates dead_insns with the load_params that await removal.
- * For instance methods, the 'this' argument is always considered live.
- * e.g. We return {0, 2} for a method whose 0th and 2nd args are live.
- *
- * NOTE: In the IR, invoke instructions specify exactly one register
- *       for any param size.
- */
-std::deque<uint16_t> compute_live_args(
-    DexMethod* method,
-    size_t num_args,
-    std::vector<cfg::InstructionIterator>* dead_insns) {
-  auto code = method->get_code();
-  always_assert(code->editable_cfg_built());
-  auto& cfg = code->cfg();
-  cfg.calculate_exit_block();
-  LivenessFixpointIterator fixpoint_iter(cfg);
-  fixpoint_iter.run(LivenessDomain());
-  auto entry_block = cfg.entry_block();
-
-  std::deque<uint16_t> live_arg_idxs;
-  bool is_instance_method = !is_static(method);
-  size_t last_arg_idx = is_instance_method ? num_args : num_args - 1;
-  auto first_insn = entry_block->get_first_insn()->insn;
-  // live_vars contains all the registers needed by entry_block's
-  // successors.
-  auto live_vars = fixpoint_iter.get_live_out_vars_at(entry_block);
-
-  for (auto it = entry_block->rbegin(); it != entry_block->rend(); ++it) {
-    if (it->type != MFLOW_OPCODE) {
-      continue;
-    }
-    auto insn = it->insn;
-    if (opcode::is_a_load_param(insn->opcode())) {
-      if (live_vars.contains(insn->dest()) ||
-          (is_instance_method && it->insn == first_insn)) {
-        // Mark live args live, and always mark the "this" arg live.
-        live_arg_idxs.push_front(last_arg_idx);
-      } else {
-        dead_insns->emplace_back(
-            entry_block->to_cfg_instruction_iterator(--(it.base())));
-      }
-      last_arg_idx--;
-    }
-    fixpoint_iter.analyze_instruction(insn, &live_vars);
-  }
-
-  always_assert(live_arg_idxs.size() + dead_insns->size() == is_instance_method
-                    ? num_args + 1
-                    : num_args);
-
-  return live_arg_idxs;
-}
-
-/**
  * Returns an updated argument type list for the given method with the given
  * live argument indices.
  */
 DexTypeList::ContainerType RemoveArgs::get_live_arg_type_list(
-    DexMethod* method, const std::deque<uint16_t>& live_arg_idxs) {
+    const DexMethod* method, const std::deque<uint16_t>& live_arg_idxs) {
   DexTypeList::ContainerType live_args;
   auto args_list = method->get_proto()->get_args();
 
@@ -326,36 +274,10 @@ DexTypeList::ContainerType RemoveArgs::get_live_arg_type_list(
  * Returns true on successful update to the given method's signature, where
  * the updated args list is specified by live_args.
  */
-bool RemoveArgs::update_method_signature(
-    DexMethod* method,
-    const std::deque<uint16_t>& live_arg_idxs,
-    bool remove_result,
-    DexProto* reordered_proto) {
-  always_assert_log(method->is_def(),
-                    "We don't treat virtuals, so methods must be defined\n");
-
+bool RemoveArgs::update_method_signature(DexMethod* method,
+                                         DexProto* updated_proto,
+                                         bool is_reordered) {
   const auto full_name = method->get_deobfuscated_name_or_empty();
-  for (const auto& s : m_blocklist) {
-    if (full_name.find(s) != std::string::npos) {
-      TRACE(ARGS, 3,
-            "Skipping {%s} due to black list match of {%s} against {%s}",
-            SHOW(method), str_copy(full_name).c_str(), s.c_str());
-      return false;
-    }
-  }
-
-  DexProto* updated_proto;
-  DexTypeList* live_args_list{nullptr};
-  if (reordered_proto != nullptr) {
-    updated_proto = reordered_proto;
-  } else {
-    auto live_args = get_live_arg_type_list(method, live_arg_idxs);
-    live_args_list = DexTypeList::make_type_list(std::move(live_args));
-    DexType* rtype =
-        remove_result ? type::_void() : method->get_proto()->get_rtype();
-    updated_proto = DexProto::make_proto(rtype, live_args_list);
-  }
-  always_assert(updated_proto != method->get_proto());
 
   auto colliding_mref = DexMethod::get_method(
       method->get_class(), method->get_name(), updated_proto);
@@ -369,7 +291,6 @@ bool RemoveArgs::update_method_signature(
 
   auto name = method->get_name();
   if (method->is_virtual()) {
-    // TODO: T31388603 -- Remove unused args for true virtuals.
 
     // When changing the proto, we need to worry about changes to virtual scopes
     // --- for this particular method change, but also across all other upcoming
@@ -379,7 +300,7 @@ bool RemoveArgs::update_method_signature(
     NamedRenameMap& named_rename_map = m_rename_maps[name];
     size_t name_index;
     std::string kind;
-    if (reordered_proto) {
+    if (is_reordered) {
       // When we reorder protos, possibly for entire virtual scopes, we need to
       // make the name unique for each virtual scope, which is defined by the
       // pair (name, original proto args).
@@ -387,23 +308,30 @@ bool RemoveArgs::update_method_signature(
       // "rvp" stands for reordered virtual proto
       kind = "$rvp";
       auto original_args = method->get_proto()->get_args();
-      auto it = named_rename_map.reordering_uniquifiers.find(original_args);
-      if (it != named_rename_map.reordering_uniquifiers.end()) {
-        name_index = it->second;
-      } else {
-        named_rename_map.reordering_uniquifiers.emplace(
-            original_args,
-            name_index = named_rename_map.next_reordering_uniquifiers++);
+      auto [it, emplaced] = named_rename_map.reordering_uniquifiers.emplace(
+          original_args, named_rename_map.next_reordering_uniquifiers);
+      if (emplaced) {
+        named_rename_map.next_reordering_uniquifiers++;
       }
+      name_index = it->second;
     } else {
-      // We currently only change protos for non-true virtual methods, we need
-      // to worry about creating collisions across other proto changes. Thus, we
-      // make the name unique for each instance of the pair (name, final proto
-      // args).
+      // We want everything in the same virtual scope to have the same name
+      // but for it to not collide with any other method. We thus rename
+      // every instance of a related method to the same name. We do this by
+      // keeping a map from representative map to uniquifer.
 
       // "uva" stands for unused virtual args
       kind = "$uva";
-      name_index = named_rename_map.general_uniquifiers[live_args_list]++;
+      auto representative_method_it = m_method_representative_map.find(method);
+      always_assert(representative_method_it !=
+                    m_method_representative_map.end());
+      auto [it, emplaced] = named_rename_map.removal_uniquifiers.emplace(
+          representative_method_it->second,
+          named_rename_map.next_removal_uniquifiers);
+      if (emplaced) {
+        named_rename_map.next_removal_uniquifiers++;
+      }
+      name_index = it->second;
     }
 
     std::stringstream ss;
@@ -422,7 +350,7 @@ bool RemoveArgs::update_method_signature(
     tmp = show(method);
   }
 
-  method->change(spec, true /* rename on collision */);
+  method->change(spec, !method->is_virtual() /* rename on collision */);
 
   // We make virtual method names unique via $rvp / $uva name mangling; check
   // that this worked:
@@ -434,49 +362,89 @@ bool RemoveArgs::update_method_signature(
   return true;
 }
 
-static void compute_dead_insns_and_remove_result(
-    DexMethod* method,
-    const mog::Graph& override_graph,
-    const ConcurrentSet<DexMethod*>& results_used,
-    std::deque<uint16_t>* live_arg_idxs,
-    std::vector<cfg::InstructionIterator>* dead_insns,
-    bool* remove_result) {
-  if (method->get_code() == nullptr) {
-    return;
-  }
-
-  if (!can_rename(method)) {
-    // Nothing to do if ProGuard says we can't change the method args.
-    TRACE(ARGS,
-          5,
-          "Method is disqualified from being updated by ProGuard rules: %s",
-          SHOW(method));
-    return;
-  }
-
-  // If a method is devirtualizable, proceed with live arg computation.
-  if (method->is_virtual() && mog::is_true_virtual(override_graph, method)) {
-    // TODO: T31388603 -- Remove unused args for true virtuals.
-    return;
-  }
-
+std::deque<uint16_t> live_args(const DexMethod* method,
+                               const std::set<uint16_t>& dead_args) {
   auto proto = method->get_proto();
-  auto result_used = !!results_used.count_unsafe(method);
   auto num_args = proto->get_args()->size();
-  *remove_result = !proto->is_void() && !result_used;
+  if (!is_static(method)) {
+    num_args++;
+  }
+  std::deque<uint16_t> live_args;
+  for (uint16_t i = 0; i < num_args; i++) {
+    if (!dead_args.count(i)) {
+      live_args.emplace_back(i);
+    }
+  }
+  return live_args;
+}
+
+bool RemoveArgs::compute_remove_result(const DexMethod* method) {
+  auto proto = method->get_proto();
+  return !proto->is_void() && !m_result_used.count_unsafe(method);
+}
+
+/**
+ * Takes in a method. Populates a mapping of dead args to
+ * corresponding load instructions. This
+ * function is not meant to be called on abstract methods.
+ * For instance methods, the 'this' argument is always considered live.
+ * e.g. We return {0:insn0, 2:insn2} for a method whose 0th and 2nd args are
+ * dead.
+ *
+ * NOTE: In the IR, invoke instructions specify exactly one register
+ *       for any param size.
+ */
+std::map<uint16_t, cfg::InstructionIterator> compute_dead_insns(
+    const DexMethod* method, const IRCode& code) {
+  auto proto = method->get_proto();
+  auto num_args = proto->get_args()->size();
+
+  always_assert(method->get_code() != nullptr);
+
+  std::map<uint16_t, cfg::InstructionIterator> dead_args_and_insns;
 
   // For instance methods, num_args does not count the 'this' argument.
-  if (num_args == 0 && !remove_result) {
+  if (num_args == 0) {
     // Nothing to do if the method doesn't have args or result to remove.
-    return;
+    return dead_args_and_insns;
   }
 
-  *live_arg_idxs = compute_live_args(method, num_args, dead_insns);
+  always_assert(code.editable_cfg_built());
+  auto& cfg = code.cfg();
+  LivenessFixpointIterator fixpoint_iter(cfg);
+  fixpoint_iter.run(LivenessDomain());
+  auto entry_block = cfg.entry_block();
+  bool is_instance_method = !is_static(method);
+  size_t last_arg_idx = is_instance_method ? num_args : num_args - 1;
+  auto first_insn = entry_block->get_first_insn()->insn;
+  // live_vars contains all the registers needed by entry_block's
+  // successors.
+  auto live_vars = fixpoint_iter.get_live_out_vars_at(entry_block);
+
+  for (auto it = entry_block->rbegin(); it != entry_block->rend(); ++it) {
+    if (it->type != MFLOW_OPCODE) {
+      continue;
+    }
+    auto insn = it->insn;
+    if (opcode::is_a_load_param(insn->opcode())) {
+      if (!live_vars.contains(insn->dest()) &&
+          !(is_instance_method && it->insn == first_insn)) {
+        // Mark dead args as dead and never mark the "this" arg.
+        dead_args_and_insns.emplace(
+            last_arg_idx,
+            entry_block->to_cfg_instruction_iterator(--(it.base())));
+      }
+      last_arg_idx--;
+    }
+    fixpoint_iter.analyze_instruction(insn, &live_vars);
+  }
+
+  return dead_args_and_insns;
 }
 
 // When reordering a method's proto, we need to update the method's load-param
-// instructions accordingly. We return the accordingly reshuffled list of (live)
-// argument indices.
+// instructions accordingly. We return the accordingly reshuffled list of
+// (live) argument indices.
 static std::deque<uint16_t> update_method_body_for_reordered_proto(
     DexMethod* method, DexProto* original_proto, DexProto* reordered_proto) {
   // We store a copy of opcode, reg to enable re-assigning in permutated
@@ -550,56 +518,215 @@ void run_cleanup(DexMethod* method,
 } // namespace
 
 /**
+ * Partitions the methods into related groups. A method is considered related
+ * if it is connected in the method override graph. For each group, a
+ * representative method is chosen. Populates m_methods_representative_map
+ * with a mapping from each method to its representative. Populates
+ * m_related_method_groups with a mapping from each representative method to
+ * the group (including itself) of related methods.
+ */
+void RemoveArgs::populate_representative_ids(
+    const mog::Graph& override_graph,
+    const std::unordered_set<DexType*>& no_devirtualize_annos) {
+  // Group methods that are related (somehow connect in override graph)
+  // For each related group, assign a single representative method.
+  walk::parallel::methods(m_scope, [&](DexMethod* method) {
+    if (m_method_representative_map.count(method)) {
+      return;
+    }
+    std::unordered_set<const DexMethod*> visited;
+    visited.insert(method);
+    override_graph.get_node(method).gather_connected_methods(&visited);
+    auto representative = *std::min_element(visited.begin(), visited.end(),
+                                            dexmethods_comparator());
+    m_related_method_groups.get_or_emplace_and_assert_equal(representative,
+                                                            visited);
+    for (auto m : visited) {
+      auto existing_representative =
+          m_method_representative_map.emplace(m, representative);
+      always_assert(*existing_representative.first == representative);
+    }
+  });
+}
+
+/* This function does the heavy lifting for computing updated protos and
+ * whether we can update a method. When reordering/removing arguments from
+ * virtual methods, the problem of whether we can update the method is a bit
+ * more complex. We can only update a method if every method connected to it
+ * in the method override graph can also be updated. Furthermore, we can only
+ * remove the arguments that can be removed in all connected methods. This
+ * function returns a list of entries for all methods that should be updated.
+ */
+void RemoveArgs::gather_updated_entries(
+    const std::unordered_set<DexType*>& no_devirtualize_annos,
+    InsertOnlyConcurrentMap<DexMethod*, Entry>* updated_entries) {
+  // Loop over all related groups
+  using MethodAndMethodSet =
+      std::pair<const DexMethod* const, std::unordered_set<const DexMethod*>>;
+
+  InsertOnlyConcurrentMap<const DexMethod*,
+                          std::map<uint16_t, cfg::InstructionIterator>>
+      all_dead_insns;
+
+  // Fill in preliminary dead instruction data for methods.
+  walk::parallel::code(m_scope, [&](DexMethod* method, IRCode& code) {
+    all_dead_insns.emplace(method, compute_dead_insns(method, code));
+  });
+
+  auto kvp_workqueue = workqueue_foreach<const MethodAndMethodSet*>(
+      [&](const MethodAndMethodSet* kvp) {
+        bool remove_result = true;
+
+        // First iteration, perform some basic checks for whether we can edit
+        // this method.
+        for (auto m : kvp->second) {
+          // If we can't edit, just skip
+          if (!can_rename(m) || is_native(m) || m->rstate.no_optimizations() ||
+              has_any_annotation(m, no_devirtualize_annos)) {
+            return;
+          }
+
+          // Run other checks if we can edit
+          const auto full_name = m->get_deobfuscated_name_or_empty();
+          for (const auto& s : m_blocklist) {
+            if (full_name.find(s) != std::string::npos) {
+              return;
+            }
+          }
+
+          // Compute remove result and && it with the remove result for the
+          // whole group
+          remove_result &= compute_remove_result(m);
+        }
+
+        // Second iteration, at this point we have all the dead args for the
+        // related group. We need to iterate over the methods again and take the
+        // intersection of the dead args
+        auto num_args = kvp->first->get_proto()->get_args()->size();
+        if (!is_static(kvp->first)) {
+          num_args++;
+        }
+        // All method start out with all args dead except for `this`.
+        std::set<uint16_t> running_dead_args;
+        for (uint16_t i = (is_static(kvp->first) ? 0 : 1); i < num_args; i++) {
+          running_dead_args.insert(i);
+        }
+        for (auto m : kvp->second) {
+          if (m->get_code()) {
+            auto& dead_insn_map = all_dead_insns.at(m);
+            std20::erase_if(running_dead_args,
+                            [&](auto e) { return !dead_insn_map.count(e); });
+          }
+        }
+
+        // Third iteration, delete all args/insns that aren't in
+        // `running_dead_args`.
+        for (auto m : kvp->second) {
+          if (m->get_code()) {
+            auto& dead_insn_map = all_dead_insns.at_unsafe(m);
+            std20::erase_if(dead_insn_map, [&](auto e) {
+              return !running_dead_args.count(e.first);
+            });
+          }
+        }
+
+        // Now we have enough to construct the proto for each
+        // method. Also run some last checks that rely on having the proto
+        // constructed.
+        bool is_reordered;
+        DexProto* updated_proto;
+        std::deque<uint16_t> live_arg_idxs;
+        auto reordered_it = m_reordered_protos.find(kvp->first->get_proto());
+        if (reordered_it != m_reordered_protos.end()) {
+          is_reordered = true;
+          live_arg_idxs = live_args(kvp->first, {});
+          updated_proto = reordered_it->second;
+        } else {
+          is_reordered = false;
+          // Otherwise, try to construct the dead args proto
+          live_arg_idxs = live_args(kvp->first, running_dead_args);
+          auto live_args = get_live_arg_type_list(kvp->first, live_arg_idxs);
+          auto live_args_list =
+              DexTypeList::make_type_list(std::move(live_args));
+          DexType* rtype = remove_result ? type::_void()
+                                         : kvp->first->get_proto()->get_rtype();
+          updated_proto = DexProto::make_proto(rtype, live_args_list);
+        }
+        if (updated_proto == kvp->first->get_proto()) {
+          return;
+        }
+
+        // Fourth iteration, check that none of the renamed methods collide.
+        if (method::is_constructor(kvp->first)) {
+          for (auto m : kvp->second) {
+            auto colliding_mref = DexMethod::get_method(
+                m->get_class(), m->get_name(), updated_proto);
+            if (colliding_mref) {
+              auto colliding_method = colliding_mref->as_def();
+              if (colliding_method) {
+                // We can't rename constructors, so we give up on removing args.
+                return;
+              }
+            }
+          }
+        }
+
+        // Fifth iteration, we loop one more time and add all the updated protos
+        // to the final data structure.
+        for (auto method : kvp->second) {
+          std::vector<cfg::InstructionIterator> dead_insns;
+          // Compile the list of dead instructions that we computed earlier
+          if (!is_reordered) {
+            auto dead_insns_it = all_dead_insns.find(method);
+            if (dead_insns_it != all_dead_insns.end()) {
+              for (const auto& dead_insn : dead_insns_it->second) {
+                dead_insns.emplace_back(dead_insn.second);
+              }
+            }
+          }
+          always_assert(method->get_code() == nullptr ||
+                        dead_insns.size() + updated_proto->get_args()->size() ==
+                            method->get_proto()->get_args()->size());
+          updated_entries->emplace(const_cast<DexMethod*>(method),
+                                   (Entry){std::move(dead_insns), live_arg_idxs,
+                                           remove_result, is_reordered,
+                                           updated_proto, method->get_proto()});
+        }
+      });
+  for (const auto& kvp : m_related_method_groups) {
+    kvp_workqueue.add_item(&kvp);
+  }
+  kvp_workqueue.run_all();
+}
+
+/**
  * For methods that have unused arguments, record live argument registers.
  */
 RemoveArgs::MethodStats RemoveArgs::update_method_protos(
     const mog::Graph& override_graph,
     const std::unordered_set<DexType*>& no_devirtualize_annos) {
-  // Phase 1: Find (in parallel) all methods that we can potentially update
 
-  struct Entry {
-    std::vector<cfg::InstructionIterator> dead_insns;
-    std::deque<uint16_t> live_arg_idxs;
-    bool remove_result;
-    DexProto* original_proto;
-    DexProto* reordered_proto;
-  };
-  InsertOnlyConcurrentMap<DexMethod*, Entry> unordered_entries;
+  // Phase 1: Calculate exit blocks for all methods
   walk::parallel::methods(m_scope, [&](DexMethod* method) {
-    std::deque<uint16_t> live_arg_idxs;
-    std::vector<cfg::InstructionIterator> dead_insns;
-    bool remove_result{false};
-    DexProto* reordered_proto{nullptr};
-
-    auto it = m_reordered_protos.find(method->get_proto());
-    if (it != m_reordered_protos.end()) {
-      reordered_proto = it->second;
-    } else {
-      // Only if there's no reordering, we'll look at dead args and results
-      compute_dead_insns_and_remove_result(method, override_graph,
-                                           m_result_used, &live_arg_idxs,
-                                           &dead_insns, &remove_result);
-      if (dead_insns.empty() && !remove_result) {
-        return;
-      }
+    auto code = method->get_code();
+    if (code != nullptr) {
+      always_assert(code->editable_cfg_built());
+      auto& cfg = code->cfg();
+      cfg.calculate_exit_block();
     }
-    // If method is annotated with @DoNotVirtualize, careful about removing this
-    // param that might make the method static. For now do not remove any unused
-    // arguments for this.
-    if (has_any_annotation(method, no_devirtualize_annos)) {
-      return;
-    }
-    if (method->rstate.no_optimizations()) {
-      return;
-    }
-
-    // Remember entry
-    unordered_entries.emplace(method,
-                              (Entry){dead_insns, live_arg_idxs, remove_result,
-                                      method->get_proto(), reordered_proto});
   });
 
-  // Phase 2: Deterministically update proto (including (re)name as needed)
+  // Phase 2: Removing args for virtual methods is slightly more complex
+  // because we need to make sure that the args are unused across all
+  // implementations of the method. In order to do this, we need to partition
+  // the methods into related groups. A related group is a group of methods
+  // that are connected in the method override graph. For each group, we
+  // assign a single representative method as an identifier for the graph.
+  populate_representative_ids(override_graph, no_devirtualize_annos);
+
+  // Phase 3: Find all methods that we can potentially update
+  InsertOnlyConcurrentMap<DexMethod*, Entry> unordered_entries;
+  gather_updated_entries(no_devirtualize_annos, &unordered_entries);
 
   // Sort entries, so that we process all renaming operations in a
   // deterministic order.
@@ -618,8 +745,11 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
   for (auto& p : ordered_entries) {
     DexMethod* method = p.first;
     const Entry& entry = p.second;
-    if (!update_method_signature(method, entry.live_arg_idxs,
-                                 entry.remove_result, entry.reordered_proto)) {
+    always_assert(entry.updated_proto->get_args()->size() +
+                      (is_static(method) ? 0 : 1) ==
+                  entry.live_arg_idxs.size());
+    if (!update_method_signature(method, entry.updated_proto,
+                                 entry.is_reordered)) {
       continue;
     }
 
@@ -630,11 +760,11 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
     method_stats.methods_updated_count++;
     method_stats.method_params_removed_count += entry.dead_insns.size();
     method_stats.method_results_removed_count += entry.remove_result ? 1 : 0;
-    method_stats.method_protos_reordered_count += entry.reordered_proto ? 1 : 0;
+    method_stats.method_protos_reordered_count += entry.is_reordered ? 1 : 0;
   }
   sort_unique(classes);
 
-  // Phase 3: Update body of updated methods (in parallel)
+  // Phase 4: Update body of updated methods (in parallel)
 
   std::mutex local_dce_stats_mutex;
   auto& local_dce_stats = method_stats.local_dce_stats;
@@ -643,18 +773,20 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
       DexMethod* method = p.first;
       const Entry& entry = p.second;
 
-      if (!entry.dead_insns.empty()) {
-        always_assert(method->get_code()->editable_cfg_built());
-        auto& cfg = method->get_code()->cfg();
-        // We update the method signature, so we must remove unused
-        // OPCODE_LOAD_PARAM_* to satisfy IRTypeChecker.
-        for (const auto& dead_insn : entry.dead_insns) {
-          cfg.remove_insn(dead_insn);
+      if (!entry.is_reordered) {
+        if (!entry.dead_insns.empty()) {
+          always_assert(method->get_code()->editable_cfg_built());
+          auto& cfg = method->get_code()->cfg();
+          // We update the method signature, so we must remove unused
+          // OPCODE_LOAD_PARAM_* to satisfy IRTypeChecker.
+          for (const auto& dead_insn : entry.dead_insns) {
+            cfg.remove_insn(dead_insn);
+          }
         }
         m_live_arg_idxs_map.emplace(method, entry.live_arg_idxs);
       }
 
-      if (entry.remove_result) {
+      if (entry.remove_result && method->get_code() != nullptr) {
         always_assert(method->get_code()->editable_cfg_built());
         auto& cfg = method->get_code()->cfg();
         for (const auto& mie : InstructionIterable(cfg)) {
@@ -673,9 +805,9 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
                     local_dce_stats);
       }
 
-      if (entry.reordered_proto != nullptr) {
+      if (entry.is_reordered) {
         auto idxs = update_method_body_for_reordered_proto(
-            method, entry.original_proto, entry.reordered_proto);
+            method, entry.original_proto, entry.updated_proto);
         m_live_arg_idxs_map.emplace(method, std::move(idxs));
       }
     }
@@ -690,7 +822,7 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
 size_t RemoveArgs::update_callsite(IRInstruction* instr) {
   auto method = instr->get_method()->as_def();
   if (!method) {
-    // TODO: T31388603 -- Remove unused args for true virtuals.
+    // TODO: Properly resolve method.
     return 0;
   };
 

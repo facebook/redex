@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <boost/functional/hash.hpp>
 #include <functional>
+#include <iosfwd>
 #include <set>
 #include <string>
 #include <unordered_set>
@@ -30,6 +31,8 @@ struct AssumeReturnValue {
     int v;
   } value;
 };
+
+std::ostream& operator<<(std::ostream& oss, const AssumeReturnValue& asr);
 
 struct MemberSpecification {
   DexAccessFlags requiredSetAccessFlags = DexAccessFlags(0);
@@ -188,6 +191,7 @@ struct ProguardConfiguration {
   KeepSpecSet keep_rules;
   std::optional<KeepSpecSet::iterator> keep_rules_native_begin;
   KeepSpecSet assumenosideeffects_rules;
+  KeepSpecSet assumevalues_rules;
   KeepSpecSet whyareyoukeeping_rules;
   std::vector<std::string> optimization_filters;
   std::vector<std::string> keepattributes;

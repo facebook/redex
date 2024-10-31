@@ -220,6 +220,7 @@ enum class RuleType {
   WHY_ARE_YOU_KEEPING,
   KEEP,
   ASSUME_NO_SIDE_EFFECTS,
+  ASSUME_VALUES,
   KEEP_NATIVE,
 };
 
@@ -229,6 +230,7 @@ bool rule_type_is_keep(RuleType rule_type) {
   case RuleType::KEEP_NATIVE:
     return true;
   case RuleType::ASSUME_NO_SIDE_EFFECTS:
+  case RuleType::ASSUME_VALUES:
   case RuleType::WHY_ARE_YOU_KEEPING:
     return false;
   }
@@ -242,6 +244,8 @@ std::string to_string(RuleType rule_type) {
     return "classes and members";
   case RuleType::ASSUME_NO_SIDE_EFFECTS:
     return "assumenosideeffects";
+  case RuleType::ASSUME_VALUES:
+    return "assumevalues";
   case RuleType::KEEP_NATIVE:
     return "classes with native members";
   }
@@ -311,6 +315,7 @@ class KeepRuleMatcher {
   bool process_mark_conditionally(const DexClass* cls);
 
   void process_assumenosideeffects(DexClass* cls);
+  void process_assumevalues(DexClass* cls);
 
   template <class DexMember>
   void apply_rule(DexMember*);
@@ -411,35 +416,31 @@ class ProguardMatcher {
   ProguardRuleRecorder m_recorder;
 };
 
-template <class DexMember>
-void apply_assume_field_return_value(const KeepSpec& k, DexMember* member) {
-  for (auto& field_spec : k.class_spec.fieldSpecifications) {
-    auto field_val = field_spec.return_value;
-    switch (field_val.value_type) {
-    case keep_rules::AssumeReturnValue::ValueBool:
-      always_assert(type::is_boolean(member->get_type()));
-      g_redex->set_field_value(member, field_val);
-      continue;
-    case keep_rules::AssumeReturnValue::ValueNone:
-      g_redex->unset_field_value(member);
-      continue;
-    }
+void apply_assume_field_return_value(const MemberSpecification& field_spec,
+                                     DexField* member) {
+  auto field_val = field_spec.return_value;
+  switch (field_val.value_type) {
+  case keep_rules::AssumeReturnValue::ValueBool:
+    always_assert(type::is_boolean(member->get_type()));
+    g_redex->set_field_value(member, field_val);
+    break;
+  case keep_rules::AssumeReturnValue::ValueNone:
+    g_redex->unset_field_value(member);
+    break;
   }
 }
 
-template <class DexMember>
-void apply_assume_method_return_value(const KeepSpec& k, DexMember* member) {
-  for (auto& method_spec : k.class_spec.methodSpecifications) {
-    auto return_val = method_spec.return_value;
-    switch (return_val.value_type) {
-    case keep_rules::AssumeReturnValue::ValueBool:
-      always_assert(type::is_boolean(member->get_proto()->get_rtype()));
-      g_redex->set_return_value(member, return_val);
-      continue;
-    case keep_rules::AssumeReturnValue::ValueNone:
-      g_redex->unset_return_value(member);
-      continue;
-    }
+void apply_assume_method_return_value(const MemberSpecification& method_spec,
+                                      DexMethod* member) {
+  auto return_val = method_spec.return_value;
+  switch (return_val.value_type) {
+  case keep_rules::AssumeReturnValue::ValueBool:
+    always_assert(type::is_boolean(member->get_proto()->get_rtype()));
+    g_redex->set_return_value(member, return_val);
+    break;
+  case keep_rules::AssumeReturnValue::ValueNone:
+    g_redex->unset_return_value(member);
+    break;
   }
 }
 
@@ -557,8 +558,9 @@ void KeepRuleMatcher::keep_fields(const Container& fields,
     if (rule_type_is_keep(m_rule_type)) {
       apply_keep_modifiers(m_keep_rule, field);
     }
-    if (m_rule_type == RuleType::ASSUME_NO_SIDE_EFFECTS) {
-      apply_assume_field_return_value(m_keep_rule, field);
+    if (m_rule_type == RuleType::ASSUME_NO_SIDE_EFFECTS ||
+        m_rule_type == RuleType::ASSUME_VALUES) {
+      apply_assume_field_return_value(fieldSpecification, field);
     }
     apply_rule(field);
   }
@@ -616,7 +618,8 @@ void KeepRuleMatcher::keep_methods(
         break;
       }
       case RuleType::ASSUME_NO_SIDE_EFFECTS:
-        apply_assume_method_return_value(m_keep_rule, method);
+      case RuleType::ASSUME_VALUES:
+        apply_assume_method_return_value(methodSpecification, method);
         break;
       case RuleType::WHY_ARE_YOU_KEEPING:
         break;
@@ -791,6 +794,15 @@ void KeepRuleMatcher::process_whyareyoukeeping(DexClass* cls) {
 // This function is also executed concurrently.
 void KeepRuleMatcher::process_assumenosideeffects(DexClass* cls) {
   ++m_class_matches;
+  apply_field_keeps(cls);
+  // Apply any method-level keep specifications.
+  apply_method_keeps(cls);
+}
+
+// This function is also executed concurrently.
+void KeepRuleMatcher::process_assumevalues(DexClass* cls) {
+  ++m_class_matches;
+  apply_field_keeps(cls);
   // Apply any method-level keep specifications.
   apply_method_keeps(cls);
 }
@@ -828,6 +840,9 @@ void KeepRuleMatcher::apply_rule(DexMember* member) {
     ++m_member_matches;
     member->rstate.set_assumenosideeffects();
     break;
+  case RuleType::ASSUME_VALUES:
+    ++m_member_matches;
+    break;
   }
 }
 
@@ -842,6 +857,9 @@ void KeepRuleMatcher::keep_processor(DexClass* cls) {
     break;
   case RuleType::ASSUME_NO_SIDE_EFFECTS:
     process_assumenosideeffects(cls);
+    break;
+  case RuleType::ASSUME_VALUES:
+    process_assumevalues(cls);
     break;
   }
 }
@@ -862,18 +880,31 @@ DexClass* ProguardMatcher::find_single_class(
 void ProguardMatcher::classify_rules(const KeepRuleMatcher& rule_matcher,
                                      const RuleType& rule_type,
                                      const KeepSpec* keep_rule) {
-  if (rule_type == RuleType::KEEP) {
+  switch (rule_type) {
+  case RuleType::KEEP:
     if (rule_matcher.is_unused()) {
       m_recorder.unused_keep_rules.insert(keep_rule);
     } else {
       m_recorder.used_keep_rules.insert(keep_rule);
     }
-  } else if (rule_type == RuleType::ASSUME_NO_SIDE_EFFECTS) {
+    break;
+  case RuleType::ASSUME_NO_SIDE_EFFECTS:
     if (rule_matcher.is_unused()) {
       m_recorder.unused_assumenosideeffect_rules.insert(keep_rule);
     } else {
       m_recorder.used_assumenosideeffect_rules.insert(keep_rule);
     }
+    break;
+  case RuleType::ASSUME_VALUES:
+    if (rule_matcher.is_unused()) {
+      m_recorder.unused_assumevalues_rules.insert(keep_rule);
+    } else {
+      m_recorder.used_assumevalues_rules.insert(keep_rule);
+    }
+    break;
+  case RuleType::WHY_ARE_YOU_KEEPING:
+  case RuleType::KEEP_NATIVE:
+    break;
   }
 }
 
@@ -997,6 +1028,11 @@ void ProguardMatcher::process_proguard_rules(
                pg_config.assumenosideeffects_rules.end(),
                RuleType::ASSUME_NO_SIDE_EFFECTS,
                /* process_external = */ true);
+
+  process_keep(pg_config.assumevalues_rules.begin(),
+               pg_config.assumevalues_rules.end(),
+               RuleType::ASSUME_VALUES,
+               /* process_external = */ true);
 }
 
 void ProguardMatcher::mark_all_annotation_classes_as_keep() {
@@ -1027,9 +1063,15 @@ void ProguardRuleRecorder::record_accessed_rules(
     for (const keep_rules::KeepSpec* keep_rule : used_keep_rules) {
       used_out.push_back(keep_rules::show_keep(*keep_rule));
     }
-    for (const keep_rules::KeepSpec* keep_rule :
-         used_assumenosideeffect_rules) {
-      used_out.push_back(keep_rules::show_assumenosideeffect(*keep_rule));
+    for (auto& [keep_rules, command] : std::array<
+             std::pair<ConcurrentSet<const KeepSpec*>*, std::string_view>, 2>{{
+             {&used_assumenosideeffect_rules, "-assumenosideeffects"},
+             {&used_assumevalues_rules, "-assumevalues"},
+         }}) {
+      for (auto* keep_rule : *keep_rules) {
+        used_out.push_back(
+            keep_rules::show_simple_keep_rule(*keep_rule, command));
+      }
     }
     // Make output deterministic
     std::sort(used_out.begin(), used_out.end());
@@ -1043,9 +1085,15 @@ void ProguardRuleRecorder::record_accessed_rules(
     for (const keep_rules::KeepSpec* keep_rule : unused_keep_rules) {
       unused_out.push_back(keep_rules::show_keep(*keep_rule));
     }
-    for (const keep_rules::KeepSpec* keep_rule :
-         unused_assumenosideeffect_rules) {
-      unused_out.push_back(keep_rules::show_assumenosideeffect(*keep_rule));
+    for (auto& [keep_rules, command] : std::array<
+             std::pair<ConcurrentSet<const KeepSpec*>*, std::string_view>, 2>{{
+             {&unused_assumenosideeffect_rules, "-assumenosideeffects"},
+             {&unused_assumevalues_rules, "-assumevalues"},
+         }}) {
+      for (auto* keep_rule : *keep_rules) {
+        unused_out.push_back(
+            keep_rules::show_simple_keep_rule(*keep_rule, command));
+      }
     }
     // Make output deterministic
     std::sort(unused_out.begin(), unused_out.end());

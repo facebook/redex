@@ -393,7 +393,7 @@ const Node& Graph::get_node(const DexMethod* method) const {
   if (it == m_nodes.end()) {
     return empty_node;
   }
-  return *it->second;
+  return it->second;
 }
 
 void Graph::add_edge(const DexMethod* overridden, const DexMethod* overriding) {
@@ -412,48 +412,61 @@ void Graph::add_edge(const DexMethod* overridden,
                      const DexMethod* overriding,
                      bool overriding_is_interface) {
   Node* overriding_node = nullptr;
-  m_nodes.update(overriding, [&](const DexMethod*, std::unique_ptr<Node>& node,
-                                 bool exists) {
+  m_nodes.update(overriding, [&](const DexMethod*, Node& node, bool exists) {
     if (!exists) {
-      node = std::make_unique<Node>();
-      node->method = overriding;
-      node->is_interface = overriding_is_interface;
+      node.method = overriding;
+      node.is_interface = overriding_is_interface;
     }
-    overriding_node = node.get();
+    overriding_node = &node;
   });
 
   Node* overridden_node = nullptr;
-  m_nodes.update(overridden, [&](const DexMethod*, std::unique_ptr<Node>& node,
-                                 bool exists) {
+  m_nodes.update(overridden, [&](const DexMethod*, Node& node, bool exists) {
     if (exists) {
-      always_assert(node->is_interface == overridden_is_interface);
+      always_assert(node.is_interface == overridden_is_interface);
     } else {
-      node = std::make_unique<Node>();
-      node->method = overridden;
-      node->is_interface = overridden_is_interface;
+      node.method = overridden;
+      node.is_interface = overridden_is_interface;
     }
-    node->children.push_back(overriding_node);
-    overridden_node = node.get();
+    node.children.push_back(overriding_node);
+    overridden_node = &node;
   });
 
-  m_nodes.update(overriding, [&](const DexMethod*, std::unique_ptr<Node>& node,
-                                 bool exists) {
+  m_nodes.update(overriding, [&](const DexMethod*, Node& node, bool exists) {
     redex_assert(exists);
-    node->parents.push_back(overridden_node);
+    node.parents.push_back(overridden_node);
   });
+}
+
+void Node::gather_connected_methods(
+    std::unordered_set<const DexMethod*>* visited) const {
+  if (method == nullptr) {
+    return;
+  }
+  visited->insert(method);
+  for (auto* child : children) {
+    if (visited->count(child->method)) {
+      continue;
+    }
+    child->gather_connected_methods(visited);
+  }
+  for (auto* parent : parents) {
+    if (visited->count(parent->method)) {
+      continue;
+    }
+    parent->gather_connected_methods(visited);
+  }
 }
 
 bool Graph::add_other_implementation_class(const DexMethod* overridden,
                                            const DexMethod* overriding,
                                            const DexClass* cls) {
   bool parent_inserted = false;
-  m_nodes.update(overriding, [&](const DexMethod*, std::unique_ptr<Node>& node,
-                                 bool exists) {
+  m_nodes.update(overriding, [&](const DexMethod*, Node& node, bool exists) {
     if (!exists) {
-      node = std::make_unique<Node>();
-      node->method = overriding;
+      node.method = overriding;
     }
-    auto& oii = node->other_interface_implementations;
+    auto& oii = node.other_interface_implementations;
     if (!oii) {
       oii = std::make_unique<OtherInterfaceImplementations>();
     }
@@ -574,6 +587,27 @@ bool any_overridden_methods(const Graph& graph,
   return !all_overridden_methods_impl(
       graph, method, [&](const DexMethod* m) { return !f(m); },
       include_interfaces);
+}
+
+std::unordered_set<DexClass*> get_classes_with_overridden_finalize(
+    const Graph& method_override_graph, const ClassHierarchy& class_hierarchy) {
+  std::unordered_set<DexClass*> res;
+  for (auto* overriding_method : method_override_graph::get_overriding_methods(
+           method_override_graph, method::java_lang_Object_finalize())) {
+    auto type = overriding_method->get_class();
+    auto* cls = type_class(type);
+    if (cls && !cls->is_external()) {
+      res.insert(cls);
+      auto children = get_all_children(class_hierarchy, type);
+      for (auto child : children) {
+        auto* child_cls = type_class(child);
+        if (child_cls && !child_cls->is_external()) {
+          res.insert(child_cls);
+        }
+      }
+    }
+  }
+  return res;
 }
 
 } // namespace method_override_graph

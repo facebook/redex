@@ -25,7 +25,7 @@
  */
 struct InlinableOptimization {
   IRInstruction* insn;
-  resources::InlinableValue inlinable_value;
+  std::variant<resources::InlinableValue, std::string> inlinable;
 };
 
 using MethodTransformsMap =
@@ -34,6 +34,18 @@ using MethodTransformsMap =
 class ResourcesInliningPass : public Pass {
  public:
   ResourcesInliningPass() : Pass("ResourcesInliningPass") {}
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {DexLimitsObeyed, Preserves},
+        {NoResolvablePureRefs, Preserves},
+        {InitialRenameClass, Preserves},
+        {RenameClass, Preserves},
+    };
+  }
 
   void bind_config() override {
     bind("resource_type_names", {}, m_resource_type_names);
@@ -60,7 +72,10 @@ class ResourcesInliningPass : public Pass {
    */
   static MethodTransformsMap find_transformations(
       const Scope&,
-      const std::unordered_map<uint32_t, resources::InlinableValue>&);
+      const std::unordered_map<uint32_t, resources::InlinableValue>&,
+      const std::map<uint32_t, std::string>& id_to_name,
+      const std::vector<std::string>& type_names,
+      const boost::optional<std::string>& package_name);
 
   static void inline_resource_values_dex(
       DexMethod* method,

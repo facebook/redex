@@ -484,6 +484,23 @@ public class ObjectEscapeAnalysisTest {
     return p.getX();
   }
 
+  public static class PDerived extends P{
+
+    public PDerived(int x) {
+      super(x);
+    }
+
+    public int getX() {
+      return this.x;
+    }
+  }
+
+  public static int doNotReduceTo42FinalizeDerived() {
+    // This object creation can NOT be reduced
+    PDerived p = new PDerived(42);
+    return p.getX();
+  }
+
   static class Q {
     public Q() {}
 

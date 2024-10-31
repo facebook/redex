@@ -698,6 +698,7 @@ void chain_and_dom_update(
     cfg::Block* block,
     const SourceBlock* sb,
     bool first_in_block,
+    bool prev_insn_can_throw,
     ChainAndDomState& state,
     const dominators::SimpleFastDominators<cfg::GraphInterface>& dom) {
   if (first_in_block) {
@@ -721,7 +722,14 @@ void chain_and_dom_update(
       auto last_val = state.last->get_val(i);
       auto sb_val = sb->get_val(i);
       if (last_val) {
-        if (sb_val && *last_val < *sb_val) {
+        // Within and across basic blocks, we want to make sure that no cold
+        // value precedes a hot value
+        bool cold_precedes_hot = sb_val && *last_val < *sb_val;
+        // Within a basic block, we want to make sure that no hot value precedes
+        // a cold value
+        bool hot_precedes_cold = sb_val && *last_val > *sb_val &&
+                                 !first_in_block && !prev_insn_can_throw;
+        if (cold_precedes_hot || hot_precedes_cold) {
           state.violations++;
           break;
         }
@@ -736,33 +744,48 @@ void chain_and_dom_update(
   state.last = sb;
 }
 
-size_t chain_and_dom_violations(
+template <uint32_t kMaxInteraction>
+size_t chain_and_dom_violations_impl(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>& dom) {
   ChainAndDomState state{};
-
   bool first = true;
-  foreach_source_block(block, [block, &state, &first, &dom](const auto* sb) {
-    chain_and_dom_update<std::numeric_limits<uint32_t>::max()>(block, sb, first,
-                                                               state, dom);
-    first = false;
-  });
+  // True if any instruction that we've encountered since the last source block
+  // can throw
+  bool prev_insn_can_throw = false;
+  for (const auto& mie : *block) {
+    switch (mie.type) {
+    case MFLOW_OPCODE:
+      prev_insn_can_throw =
+          prev_insn_can_throw || opcode::can_throw(mie.insn->opcode());
+      break;
+    case MFLOW_SOURCE_BLOCK:
+      for (auto* sb = mie.src_block.get(); sb != nullptr; sb = sb->next.get()) {
+        chain_and_dom_update<kMaxInteraction>(block, sb, first,
+                                              prev_insn_can_throw, state, dom);
+        first = false;
+        prev_insn_can_throw = false;
+      }
+      break;
+    default:
+      break;
+    }
+  }
 
   return state.violations;
+}
+
+size_t chain_and_dom_violations(
+    Block* block,
+    const dominators::SimpleFastDominators<cfg::GraphInterface>& dom) {
+  return chain_and_dom_violations_impl<std::numeric_limits<uint32_t>::max()>(
+      block, dom);
 }
 
 size_t chain_and_dom_violations_coldstart(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>& dom) {
-  ChainAndDomState state{};
-
-  bool first = true;
-  foreach_source_block(block, [block, &state, &first, &dom](const auto* sb) {
-    chain_and_dom_update<1>(block, sb, first, state, dom);
-    first = false;
-  });
-
-  return state.violations;
+  return chain_and_dom_violations_impl<1>(block, dom);
 }
 
 // Ugly but necessary for constexpr below.
@@ -988,6 +1011,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
       return hot_immediate_dom_not_hot_cfg(cfg);
     case Violation::kChainAndDom:
       return chain_and_dom_violations_cfg(cfg);
+    case Violation::kUncoveredSourceBlocks:
+      return uncovered_source_blocks_violations_cfg(cfg);
     }
     not_reached();
   }
@@ -1135,6 +1160,18 @@ struct ViolationsHelper::ViolationsHelperImpl {
     return sum;
   }
 
+  static size_t uncovered_source_blocks_violations_cfg(
+      cfg::ControlFlowGraph& cfg) {
+    size_t sum{0};
+    for (auto* b : cfg.blocks()) {
+      auto* sb = get_first_source_block(b);
+      if (sb == nullptr) {
+        sum++;
+      }
+    }
+    return sum;
+  }
+
   void print_all() const {
     for (const auto& m_str : print) {
       auto* m = DexMethod::get_method(m_str);
@@ -1223,6 +1260,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
         cfg::Block* cur{nullptr};
         ChainAndDomState state{};
         bool first_in_block{false};
+        bool prev_insn_can_throw{false};
 
         dominators::SimpleFastDominators<cfg::GraphInterface> dom;
 
@@ -1232,6 +1270,9 @@ struct ViolationsHelper::ViolationsHelperImpl {
         void mie_before(std::ostream&, const MethodItemEntry&) {}
         void mie_after(std::ostream& os, const MethodItemEntry& mie) {
           if (mie.type != MFLOW_SOURCE_BLOCK) {
+            prev_insn_can_throw =
+                prev_insn_can_throw || (mie.type == MFLOW_OPCODE &&
+                                        opcode::can_throw(mie.insn->opcode()));
             return;
           }
 
@@ -1240,8 +1281,9 @@ struct ViolationsHelper::ViolationsHelperImpl {
           auto* sb = mie.src_block.get();
 
           chain_and_dom_update<std::numeric_limits<uint32_t>::max()>(
-              cur, sb, first_in_block, state, dom);
+              cur, sb, first_in_block, prev_insn_can_throw, state, dom);
           first_in_block = false;
+          prev_insn_can_throw = false;
 
           const bool head_error = state.violations > old_count;
           const auto* dom_block = state.dom_block;
@@ -1249,7 +1291,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
           for (auto* cur_sb = sb->next.get(); cur_sb != nullptr;
                cur_sb = cur_sb->next.get()) {
             chain_and_dom_update<std::numeric_limits<uint32_t>::max()>(
-                cur, cur_sb, false, state, dom);
+                cur, cur_sb, false, false, state, dom);
           }
 
           if (state.violations > old_count) {
@@ -1275,6 +1317,23 @@ struct ViolationsHelper::ViolationsHelperImpl {
         void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
       };
       print_cfg_with_violations<ChainAndDom>(m);
+      return;
+    }
+    case Violation::kUncoveredSourceBlocks: {
+      struct UncoveredSourceBlocks {
+        explicit UncoveredSourceBlocks(cfg::ControlFlowGraph&) {}
+
+        void mie_before(std::ostream&, const MethodItemEntry&) {}
+        void mie_after(std::ostream&, const MethodItemEntry&) {}
+
+        void start_block(std::ostream& os, cfg::Block* b) {
+          if (get_first_source_block(b) == nullptr) {
+            os << "!!!MISSING SOURCE BLOCK\n";
+          }
+        }
+        void end_block(std::ostream&, cfg::Block*) {}
+      };
+      print_cfg_with_violations<UncoveredSourceBlocks>(m);
       return;
     }
     }

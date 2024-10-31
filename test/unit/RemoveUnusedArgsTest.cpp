@@ -42,6 +42,24 @@ struct RemoveUnusedArgsTest : public RedexTest {
   ~RemoveUnusedArgsTest() {}
 };
 
+void calculate_exit_block(DexMethod* method) {
+  auto code = method->get_code();
+  if (code != nullptr) {
+    auto& cfg = code->cfg();
+    cfg.calculate_exit_block();
+  }
+}
+
+std::vector<uint16_t> vector_from_map(
+    const std::map<uint16_t, cfg::InstructionIterator>& map) {
+  std::vector<uint16_t> vec;
+  vec.reserve(map.size());
+  for (const auto& pair : map) {
+    vec.emplace_back(pair.first);
+  }
+  return vec;
+}
+
 // Checks argument liveness on a method with no arguments
 TEST_F(RemoveUnusedArgsTest, noArgs) {
   // no args alive
@@ -56,12 +74,11 @@ TEST_F(RemoveUnusedArgsTest, noArgs) {
   )");
 
   method->get_code()->build_cfg();
-  std::vector<cfg::InstructionIterator> dead_insns;
-  size_t num_args = 0;
-  auto live_arg_idxs =
-      remove_unused_args::compute_live_args(method, num_args, &dead_insns);
-  EXPECT_THAT(live_arg_idxs, ::testing::ElementsAre());
-  EXPECT_THAT(dead_insns.size(), 0);
+  calculate_exit_block(method);
+
+  auto dead_args = vector_from_map(
+      remove_unused_args::compute_dead_insns(method, *(method->get_code())));
+  EXPECT_THAT(dead_args, ::testing::ElementsAre());
 }
 
 // Checks liveness on methods with a single used argument
@@ -77,12 +94,10 @@ TEST_F(RemoveUnusedArgsTest, simpleUsedArg) {
     )
   )");
   method->get_code()->build_cfg();
-  std::vector<cfg::InstructionIterator> dead_insns;
-  size_t num_args = 0;
-  auto live_arg_idxs =
-      remove_unused_args::compute_live_args(method, num_args, &dead_insns);
-  EXPECT_THAT(live_arg_idxs, ::testing::ElementsAre(0));
-  EXPECT_THAT(dead_insns.size(), 0);
+  calculate_exit_block(method);
+  auto dead_args = vector_from_map(
+      remove_unused_args::compute_dead_insns(method, *(method->get_code())));
+  EXPECT_THAT(dead_args, ::testing::ElementsAre());
 }
 
 // Checks liveness on methods with a single used WIDE argument
@@ -98,12 +113,11 @@ TEST_F(RemoveUnusedArgsTest, simpleUsedArgWide) {
   )");
 
   method->get_code()->build_cfg();
+  calculate_exit_block(method);
   std::vector<cfg::InstructionIterator> dead_insns;
-  size_t num_args = 0;
-  auto live_arg_idxs =
-      remove_unused_args::compute_live_args(method, num_args, &dead_insns);
-  EXPECT_THAT(live_arg_idxs, ::testing::ElementsAre(0));
-  EXPECT_THAT(dead_insns.size(), 0);
+  auto dead_args = vector_from_map(
+      remove_unused_args::compute_dead_insns(method, *(method->get_code())));
+  EXPECT_THAT(dead_args, ::testing::ElementsAre());
 }
 
 // Checks liveness on methods with multiple args, not wide
@@ -123,12 +137,11 @@ TEST_F(RemoveUnusedArgsTest, simpleUsedArgs) {
   )");
 
   method->get_code()->build_cfg();
+  calculate_exit_block(method);
   std::vector<cfg::InstructionIterator> dead_insns;
-  size_t num_args = 2;
-  auto live_arg_idxs =
-      remove_unused_args::compute_live_args(method, num_args, &dead_insns);
-  EXPECT_THAT(live_arg_idxs, ::testing::ElementsAre(0, 2));
-  EXPECT_THAT(dead_insns.size(), 1);
+  auto dead_args = vector_from_map(
+      remove_unused_args::compute_dead_insns(method, *(method->get_code())));
+  EXPECT_THAT(dead_args, ::testing::ElementsAre(2));
 }
 
 // Checks liveness on methods with multiple wide args
@@ -147,12 +160,11 @@ TEST_F(RemoveUnusedArgsTest, simpleUsedArgsWide) {
   )");
 
   method->get_code()->build_cfg();
+  calculate_exit_block(method);
   std::vector<cfg::InstructionIterator> dead_insns;
-  size_t num_args = 2;
-  auto live_arg_idxs =
-      remove_unused_args::compute_live_args(method, num_args, &dead_insns);
-  EXPECT_THAT(live_arg_idxs, ::testing::ElementsAre(0, 1));
-  EXPECT_THAT(dead_insns.size(), 1);
+  auto dead_args = vector_from_map(
+      remove_unused_args::compute_dead_insns(method, *(method->get_code())));
+  EXPECT_THAT(dead_args, ::testing::ElementsAre(3));
 }
 
 // Checks liveness on methods with multiple blocks, only default sized args
@@ -181,12 +193,11 @@ TEST_F(RemoveUnusedArgsTest, multipleBlocksRegularArgs) {
   )");
 
   method->get_code()->build_cfg();
+  calculate_exit_block(method);
   std::vector<cfg::InstructionIterator> dead_insns;
-  size_t num_args = 2;
-  auto live_arg_idxs =
-      remove_unused_args::compute_live_args(method, num_args, &dead_insns);
-  EXPECT_THAT(live_arg_idxs, ::testing::ElementsAre(0, 1, 2));
-  EXPECT_THAT(dead_insns.size(), 0);
+  auto dead_args = vector_from_map(
+      remove_unused_args::compute_dead_insns(method, *(method->get_code())));
+  EXPECT_THAT(dead_args, ::testing::ElementsAre());
 }
 
 // Checks liveness on methods with multiple blocks, only wide sized args
@@ -215,12 +226,11 @@ TEST_F(RemoveUnusedArgsTest, multipleBlocksWideArgs) {
   )");
 
   method->get_code()->build_cfg();
+  calculate_exit_block(method);
   std::vector<cfg::InstructionIterator> dead_insns;
-  size_t num_args = 2;
-  auto live_arg_idxs =
-      remove_unused_args::compute_live_args(method, num_args, &dead_insns);
-  EXPECT_THAT(live_arg_idxs, ::testing::ElementsAre(0, 1, 2));
-  EXPECT_THAT(dead_insns.size(), 0);
+  auto dead_args = vector_from_map(
+      remove_unused_args::compute_dead_insns(method, *(method->get_code())));
+  EXPECT_THAT(dead_args, ::testing::ElementsAre());
 }
 
 // Checks liveness on methods with multiple blocks, mixed size args
@@ -251,10 +261,9 @@ TEST_F(RemoveUnusedArgsTest, multipleBlocksMixedArgs) {
   )");
 
   method->get_code()->build_cfg();
+  calculate_exit_block(method);
   std::vector<cfg::InstructionIterator> dead_insns;
-  size_t num_args = 3;
-  auto live_arg_idxs =
-      remove_unused_args::compute_live_args(method, num_args, &dead_insns);
-  EXPECT_THAT(live_arg_idxs, ::testing::ElementsAre(0, 1, 2, 3));
-  EXPECT_THAT(dead_insns.size(), 0);
+  auto dead_args = vector_from_map(
+      remove_unused_args::compute_dead_insns(method, *(method->get_code())));
+  EXPECT_THAT(dead_args, ::testing::ElementsAre());
 }

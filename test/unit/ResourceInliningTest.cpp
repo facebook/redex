@@ -47,8 +47,12 @@ MethodTransformsMap build_test(
         inlinable_resources) {
   walk::code(scope, [&](DexMethod*, IRCode& code) { code.build_cfg(); });
 
-  auto transforms =
-      ResourcesInliningPass::find_transformations(scope, inlinable_resources);
+  const std::map<uint32_t, std::string> id_to_name;
+  const std::vector<std::string> type_names;
+  const boost::optional<std::string> package_name;
+
+  auto transforms = ResourcesInliningPass::find_transformations(
+      scope, inlinable_resources, id_to_name, type_names, package_name);
   return transforms;
 }
 
@@ -82,7 +86,7 @@ TEST_F(ResourcesInliningPassTest, TestOptimizationHappy_Sad) {
   for (auto& val : transforms1) {
     for (auto& vec : val.second) {
       auto insn = vec.insn;
-      auto inlinable_data = vec.inlinable_value;
+      auto inlinable_data = std::get<resources::InlinableValue>(vec.inlinable);
       EXPECT_TRUE(insn->opcode() == OPCODE_INVOKE_VIRTUAL);
       EXPECT_EQ(insn->get_method(),
                 DexMethod::get_method(

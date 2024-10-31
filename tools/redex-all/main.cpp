@@ -111,6 +111,7 @@ struct Arguments {
   RedexOptions redex_options;
   bool properties_check{false};
   bool properties_check_allow_disabled{false};
+  std::optional<std::string> assert_abort{};
 };
 
 UNUSED void dump_args(const Arguments& args) {
@@ -310,6 +311,16 @@ Json::Value reflect_property_definitions() {
   return properties;
 }
 
+void __attribute__((noinline, optnone)) assert_abort(const std::string& message,
+                                                     size_t depth) {
+  // Ensure some stack for testing.
+  if (depth < 3) {
+    assert_abort(message, depth + 1);
+  } else {
+    always_assert_log(false, "%s", message.c_str());
+  }
+}
+
 Arguments parse_args(int argc, char* argv[]) {
   Arguments args;
   args.out_dir = ".";
@@ -416,6 +427,11 @@ Arguments parse_args(int argc, char* argv[]) {
   od.add_options()("jni-summary",
                    po::value<std::string>(),
                    "Path to JNI summary directory of json files.");
+
+  // For testing purposes.
+  od.add_options()("assert-abort", po::value<std::string>(),
+                   "Assert on startup with the given message.");
+
   po::positional_options_description pod;
   pod.add("dex-files", -1);
   po::variables_map vm;
@@ -435,6 +451,10 @@ Arguments parse_args(int argc, char* argv[]) {
   if (vm.count("help")) {
     od.print(std::cout);
     exit(EXIT_SUCCESS);
+  }
+
+  if (vm.count("assert-abort")) {
+    assert_abort(vm["assert-abort"].as<std::string>(), 0);
   }
 
   // --reflect-config handling must be next
@@ -1379,7 +1399,7 @@ void collect_classes_for_full_json(const DexStore& store,
   store_entry["classes"] = std::move(classes_entry);
   store_entry["root"] = store.is_root_store();
   store_entry["generated"] = store.is_generated();
-  store_entry["num_dexes"] = (uint64_t)store.num_dexes();
+  store_entry["num_dexes"] = (Json::UInt64)store.num_dexes();
 
   Json::Value deps_entry{Json::ValueType::arrayValue};
   for (const auto& dep : store.get_dependencies()) {

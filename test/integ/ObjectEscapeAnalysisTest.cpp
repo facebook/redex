@@ -659,6 +659,26 @@ TEST_F(ObjectEscapeAnalysisTest, doNotReduceTo42Finalize) {
   ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
 }
 
+TEST_F(ObjectEscapeAnalysisTest, doNotReduceTo42FinalizeDervied) {
+  run();
+
+  auto actual = get_s_expr(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest;.doNotReduceTo42FinalizeDerived:()I");
+  auto expected = assembler::ircode_from_string(R"(
+   (
+      (new-instance "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$PDerived;")
+      (move-result-pseudo-object v0)
+      (const v1 42)
+      (invoke-direct (v0 v1) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$PDerived;.<init>:(I)V")
+      (invoke-virtual (v0) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$PDerived;.getX:()I")
+      (move-result v1)
+      (return v1)
+    )
+)");
+  ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
+}
+
 TEST_F(ObjectEscapeAnalysisTest, nothingToReduce) {
   run();
 
