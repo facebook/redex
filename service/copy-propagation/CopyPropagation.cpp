@@ -183,7 +183,9 @@ class AliasFixpointIterator final
             (dst.upper == src.upper || // Don't ask `aliases` about Value::none
              aliases.are_aliases(dst.upper, src.upper))) {
           // insn is a no-op. Delete it.
-          if (mutation != nullptr) {
+          // TODO BUG T206169001: The `&& !block->is_catch()` is a workaround
+          // for this bug and shouldn't be needed.
+          if (mutation != nullptr && !block->is_catch()) {
             ++moves_eliminated;
             auto cfg_it = block->to_cfg_instruction_iterator(it);
             if (opcode::is_a_move_result_pseudo(op)) {
