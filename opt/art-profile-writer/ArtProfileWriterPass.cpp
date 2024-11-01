@@ -23,14 +23,42 @@
 #include "ConfigFiles.h"
 #include "DexStructure.h"
 #include "IRCode.h"
+#include "InstructionLowering.h"
 #include "LoopInfo.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "Walkers.h"
 
 namespace {
 const std::string BASELINE_PROFILES_FILE = "additional-baseline-profiles.list";
+
+// Helper function that checks if a block is not hit in any interaction.
+bool is_cold(cfg::Block* b) {
+  const auto* sb = source_blocks::get_first_source_block(b);
+  if (sb == nullptr) {
+    return true;
+  }
+
+  bool may_be_hot = false;
+  sb->foreach_val_early([&may_be_hot](const auto& val) {
+    may_be_hot = (!val || val->val > 0.0f);
+    return may_be_hot;
+  });
+
+  return !may_be_hot;
+}
+
+bool is_sparse(cfg::Block* switch_block) {
+  instruction_lowering::CaseKeysExtentBuilder ckeb;
+  for (auto* e : switch_block->succs()) {
+    if (e->type() == cfg::EDGE_BRANCH) {
+      ckeb.insert(*e->case_key());
+    }
+  }
+  return ckeb->sufficiently_sparse();
+}
 
 // Only certain "hot" methods get compiled.
 bool is_compiled(DexMethod* method,
@@ -239,7 +267,8 @@ void never_compile(
     const method_profiles::MethodProfiles& method_profiles,
     const std::vector<std::string>& interactions,
     PassManager& mgr,
-    int64_t never_compile_threshold,
+    int64_t never_compile_callcount_threshold,
+    int64_t never_compile_perf_threshold,
     const std::string& excluded_interaction_pattern,
     int64_t excluded_appear100_threshold,
     int64_t excluded_call_count_threshold,
@@ -289,13 +318,69 @@ void never_compile(
       }
       call_count = std::max(call_count, method_stats->call_count);
     }
-    if (call_count > never_compile_threshold) {
+    if (never_compile_callcount_threshold > -1 &&
+        call_count > never_compile_callcount_threshold) {
       return;
     }
     loop_impl::LoopInfo loop_info(code.cfg());
     if (loop_info.num_loops() > 0) {
       return;
     }
+
+    if (never_compile_perf_threshold > -1) {
+      int64_t sparse_switch_cases = 0;
+      int64_t interpretation_cost =
+          20; // overhead of going into/out of interpreter
+      for (auto* block : code.cfg().blocks()) {
+        if (is_cold(block)) {
+          continue;
+        }
+        for (auto& mie : InstructionIterable(block)) {
+          auto* insn = mie.insn;
+          if (opcode::is_an_internal(insn->opcode())) {
+            continue;
+          }
+          // The interpreter uses expensive helper routines for a number of
+          // instructions, which lead to an update of the hotness for JIT
+          // purposes:
+          // https://android.googlesource.com/platform/art/+/refs/heads/main/runtime/interpreter/mterp/nterp.cc
+          // We assume that those instructions are more expensive than others by
+          // an order of magnitude.
+          interpretation_cost +=
+              (insn->has_field() || insn->has_method() || insn->has_type() ||
+               insn->has_string() || opcode::is_a_new(insn->opcode()))
+                  ? 10
+                  : 1;
+          if (opcode::is_switch(insn->opcode()) && is_sparse(block)) {
+            sparse_switch_cases += block->succs().size();
+          }
+        }
+      }
+
+      if (sparse_switch_cases == 0) {
+        return;
+      }
+
+      // We want to compare
+      //    interpretation_cost / sparse_switch_cases
+      //                            (the average cost of code per switch case)
+      // with
+      //    never_compile_perf_threshold * sparse_switch_cases
+      //                                     (cost of executing sparse switch)
+      // to find a case where the cost of the executing sparse switch
+      // excessively dominates the cost of code per switch case, which the
+      // following achieves.
+      if (interpretation_cost / std::pow(sparse_switch_cases, 2) >
+          never_compile_perf_threshold) {
+        return;
+      }
+
+      TRACE(APW, 5, "[%s] is within perf threshold: %d / sqr(%d) > %d\n%s",
+            method->get_fully_deobfuscated_name().c_str(),
+            (int32_t)interpretation_cost, (int32_t)sparse_switch_cases,
+            (int32_t)never_compile_perf_threshold, SHOW(code.cfg()));
+    }
+
     never_compile_methods.fetch_add(1);
 
     if (has_anno(method, type::dalvik_annotation_optimization_NeverCompile())) {
@@ -357,7 +442,9 @@ void ArtProfileWriterPass::bind_config() {
   bind("never_inline_attach_annotations", false,
        m_never_inline_attach_annotations);
   bind("legacy_mode", true, m_legacy_mode);
-  bind("never_compile_threshold", -1, m_never_compile_threshold);
+  bind("never_compile_callcount_threshold", -1,
+       m_never_compile_callcount_threshold);
+  bind("never_compile_perf_threshold", -1, m_never_compile_perf_threshold);
   bind("never_compile_excluded_interaction_pattern", "",
        m_never_compile_excluded_interaction_pattern);
   bind("never_compile_excluded_appear100_threshold", 20,
@@ -465,13 +552,15 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
                                     conf.get_baseline_profile_config(),
                                     method_profiles, &method_refs_without_def);
   auto scope = build_class_scope(stores);
-  if (m_never_compile_threshold > -1) {
-    never_compile(scope, conf.get_baseline_profile_config(), method_profiles,
-                  m_perf_config.interactions, mgr, m_never_compile_threshold,
-                  m_never_compile_excluded_interaction_pattern,
-                  m_never_compile_excluded_appear100_threshold,
-                  m_never_compile_excluded_call_count_threshold,
-                  &baseline_profile);
+  if (m_never_compile_callcount_threshold > -1 ||
+      m_never_compile_perf_threshold > -1) {
+    never_compile(
+        scope, conf.get_baseline_profile_config(), method_profiles,
+        m_perf_config.interactions, mgr, m_never_compile_callcount_threshold,
+        m_never_compile_perf_threshold,
+        m_never_compile_excluded_interaction_pattern,
+        m_never_compile_excluded_appear100_threshold,
+        m_never_compile_excluded_call_count_threshold, &baseline_profile);
   }
 
   std::ofstream ofs{conf.metafile(BASELINE_PROFILES_FILE)};

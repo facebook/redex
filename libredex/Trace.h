@@ -22,6 +22,7 @@ class DexType;
   TM(ANNO)              \
   TM(API_UTILS)         \
   TM(APP_MOD_USE)       \
+  TM(APW)               \
   TM(ARGS)              \
   TM(ARSC)              \
   TM(ASSESSOR)          \
