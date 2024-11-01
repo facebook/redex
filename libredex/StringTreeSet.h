@@ -14,7 +14,8 @@
 #include <vector>
 
 // The StringTreeSet and StringTreeMap provide a compact encoding for
-// collections of strings that tend to share prefices.
+// collections of strings that tend to share prefices. The string keys that are
+// currently supported are limited to only valid Java identifier characters.
 template <typename ValueType>
 class StringTreeMap {
  public:
@@ -42,4 +43,14 @@ class StringTreeSet {
 
  private:
   std::set<std::string> m_set;
+};
+
+// An map of limited string keys, with the same caveat as StringTreeMap above,
+// to string values (which can be anything).
+// NOTE: Given string values are assumed to be in MUTF-8 format! NO VALIDATION
+// IS DONE SO GET IT RIGHT OR CHAOS WILL ENSUE.
+class StringTreeStringMap {
+ public:
+  static std::string encode_string_tree_map(
+      const std::map<std::string, std::string>& strings);
 };

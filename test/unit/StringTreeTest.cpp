@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 
+#include "RedexResources.h"
 #include "RedexTest.h"
 #include "StringTreeSet.h"
 
@@ -559,4 +560,24 @@ TEST_F(StringTreeTest, testVariableLengthPayloads) {
   EXPECT_EQ(hex,
             "1003617816010162017f026302404102640241410179027f7f027a03404041027a"
             "0341404101");
+}
+
+TEST_F(StringTreeTest, testStringToString) {
+  auto encoded = StringTreeStringMap::encode_string_tree_map(
+      {{"ab", "one"}, {"abc", "two"}});
+  std::string hex = toHexRepresentation(encoded);
+  EXPECT_EQ(hex, "0701010f010161620802630146010401016f6e6504010174776f");
+}
+
+TEST_F(StringTreeTest, testStringToStringWithJavaSurrogatePairs) {
+  auto hello_world_mutf8 =
+      resources::convert_utf8_to_mutf8(u8"Hello, \U0001F30E!");
+
+  auto encoded = StringTreeStringMap::encode_string_tree_map(
+      {{"ab", "one"}, {"abc", "two"}, {"another", hello_world_mutf8}});
+  std::string hex = toHexRepresentation(encoded);
+  EXPECT_EQ(hex,
+            "0701011d0101611003626e0f01010802630146016f74686572014c010401016f6e"
+            "6504010174776f0b010148656c6c6f2c20ffffffedffffffa0ffffffbcffffffed"
+            "ffffffbcffffff8e21");
 }
