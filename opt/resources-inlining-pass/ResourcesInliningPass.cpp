@@ -225,6 +225,53 @@ MethodTransformsMap ResourcesInliningPass::find_transformations(
     intra_cp.run(ConstantEnvironment());
 
     std::vector<InlinableOptimization> transforms;
+    auto handle_instruction = [&](ConstantEnvironment& env,
+                                  IRInstruction* insn) {
+      if (insn->opcode() != OPCODE_INVOKE_VIRTUAL) {
+        return;
+      }
+      DexMethodRef* method_ref = insn->get_method();
+      auto value_method_comp =
+          value_method_refs.find(method_ref) != value_method_refs.end();
+      auto name_method_comp =
+          name_method_refs.find(method_ref) != name_method_refs.end();
+      if (!value_method_comp && !name_method_comp) {
+        return;
+      }
+      auto field_domain = env.get<SignedConstantDomain>(insn->src(1));
+      auto const_value = field_domain.get_constant();
+      if (const_value != boost::none &&
+          inlinable_resources.find(const_value.value()) !=
+              inlinable_resources.end() &&
+          value_method_comp) {
+        // Adding to list of possible optimizations if it is
+        auto insertable = InlinableOptimization();
+        insertable.insn = insn;
+        insertable.inlinable = inlinable_resources.at(const_value.value());
+        transforms.push_back(insertable);
+      } else if (const_value != boost::none && name_method_comp) {
+        auto elem_id = const_value.value();
+        auto insertable = InlinableOptimization();
+        insertable.insn = insn;
+        if (id_to_name.find(elem_id) == id_to_name.end()) {
+          return;
+        }
+        if (method_ref == getResourceEntryName) {
+          insertable.inlinable = id_to_name.at(elem_id);
+        } else {
+          auto masked_type = elem_id & 0x00FF0000;
+          const std::string& type_name =
+              type_names.at((masked_type >> TYPE_INDEX_BIT_SHIFT) - 1);
+          if (package_name == boost::none) {
+            return;
+          }
+          insertable.inlinable =
+              *package_name + ":" + type_name + "/" + id_to_name.at(elem_id);
+        }
+        transforms.push_back(insertable);
+      }
+    };
+
     // Looping through each block and replaying
     for (auto* block : cfg.blocks()) {
       auto env = intra_cp.get_entry_state_at(block);
@@ -233,48 +280,7 @@ MethodTransformsMap ResourcesInliningPass::find_transformations(
       // virtual, if it is inlinable and if it is a valid API call
       for (auto& mie : InstructionIterable(block)) {
         auto insn = mie.insn;
-        if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
-          DexMethodRef* method_ref = insn->get_method();
-          auto value_method_comp =
-              value_method_refs.find(method_ref) != value_method_refs.end();
-          auto name_method_comp =
-              name_method_refs.find(method_ref) != name_method_refs.end();
-          if (value_method_comp || name_method_comp) {
-            auto field_domain = env.get<SignedConstantDomain>(insn->src(1));
-            auto const_value = field_domain.get_constant();
-            if (const_value != boost::none &&
-                inlinable_resources.find(const_value.value()) !=
-                    inlinable_resources.end() &&
-                value_method_comp) {
-              // Adding to list of possible optimizations if it is
-              auto insertable = InlinableOptimization();
-              insertable.insn = insn;
-              insertable.inlinable =
-                  inlinable_resources.at(const_value.value());
-              transforms.push_back(insertable);
-            } else if (const_value != boost::none && name_method_comp) {
-              auto elem_id = const_value.value();
-              auto insertable = InlinableOptimization();
-              insertable.insn = insn;
-              if (id_to_name.find(elem_id) == id_to_name.end()) {
-                continue;
-              }
-              if (method_ref == getResourceEntryName) {
-                insertable.inlinable = id_to_name.at(elem_id);
-              } else {
-                auto masked_type = elem_id & 0x00FF0000;
-                const std::string& type_name =
-                    type_names.at((masked_type >> TYPE_INDEX_BIT_SHIFT) - 1);
-                if (package_name == boost::none) {
-                  continue;
-                }
-                insertable.inlinable = *package_name + ":" + type_name + "/" +
-                                       id_to_name.at(elem_id);
-              }
-              transforms.push_back(insertable);
-            }
-          }
-        }
+        handle_instruction(env, insn);
         intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
       }
     }
