@@ -312,7 +312,11 @@ size_t TableSnapshot::package_count() {
 
 void TableSnapshot::get_type_names(uint32_t package_id,
                                    std::vector<std::string>* out) {
-  auto& pool = m_type_strings.at(package_id);
+  auto search = m_type_strings.find(package_id);
+  if (search == m_type_strings.end()) {
+    return;
+  }
+  auto& pool = search->second;
   for (size_t i = 0; i < pool.size(); i++) {
     out->emplace_back(arsc::get_string_from_pool(pool, i));
   }
@@ -323,7 +327,11 @@ void TableSnapshot::get_configurations(
     const std::string& type_name,
     std::vector<android::ResTable_config>* out) {
   uint8_t type_id = 0;
-  auto& pool = m_type_strings.at(package_id);
+  auto search = m_type_strings.find(package_id);
+  if (search == m_type_strings.end()) {
+    return;
+  }
+  auto& pool = search->second;
   for (size_t i = 0; i < pool.size(); i++) {
     if (type_name == arsc::get_string_from_pool(pool, i)) {
       type_id = i + 1;
