@@ -91,7 +91,7 @@ void write_short_at_pos(size_t index,
 }
 
 void encode_string8(const char* string,
-                    size_t& len,
+                    size_t len,
                     android::Vector<char>* vec) {
   // aapt2 writes both the utf16 length followed by utf8 length
   auto u16_len = utf8_to_utf16_length((const uint8_t*)string, len);
@@ -666,72 +666,70 @@ void ResStringPoolBuilder::add_string(std::string s) {
 void ResStringPoolBuilder::add_style(const char* s,
                                      size_t len,
                                      SpanVector spans) {
-  StringHolder holder(s, len);
-  StyleInfo info{.str = std::move(holder), .spans = std::move(spans)};
-  m_styles.emplace_back(std::move(info));
+  m_styles.emplace_back(StringHolder(s, len), std::move(spans));
 }
 
 void ResStringPoolBuilder::add_style(const char16_t* s,
                                      size_t len,
                                      SpanVector spans) {
-  StringHolder holder(s, len);
-  StyleInfo info{.str = std::move(holder), .spans = std::move(spans)};
-  m_styles.emplace_back(std::move(info));
+  m_styles.emplace_back(StringHolder(s, len), std::move(spans));
 }
 
 void ResStringPoolBuilder::add_style(std::string s, SpanVector spans) {
   auto len = s.length();
-  StringHolder holder(std::move(s), len);
-  StyleInfo info{.str = std::move(holder), .spans = std::move(spans)};
-  m_styles.emplace_back(std::move(info));
+  m_styles.emplace_back(StringHolder(std::move(s), len), std::move(spans));
 }
 
 std::string ResStringPoolBuilder::get_string(size_t idx) {
   arsc::StringHolder holder = m_strings.at(idx);
-  if (holder.kind == StringKind::STRING_8) {
-    return std::string(holder.string8);
-  }
-  if (holder.kind == StringKind::STRING_16) {
-    android::String16 s16(holder.string16, holder.length);
+  if (holder.is_char_ptr()) {
+    return std::string(std::get<const char*>(holder.data));
+  } else if (holder.is_char16_ptr()) {
+    auto ptr = std::get<const char16_t*>(holder.data);
+    android::String16 s16(ptr, holder.length);
     android::String8 s8(s16);
     return std::string(s8.string());
-  }
-  else {
-    return holder.str;
+  } else {
+    LOG_ALWAYS_FATAL_IF(!holder.is_str(), "unknown variant");
+    return std::get<std::string>(holder.data);
   }
 }
 
 namespace {
-void write_string8(StringHolder& holder, android::Vector<char>* out) {
-  if (holder.kind == StringKind::STRING_8) {
-    encode_string8(holder.string8, holder.length, out);
-  } else if (holder.kind == StringKind::STRING_16) {
-    android::String8 s8(holder.string16, holder.length);
+void write_string8(const StringHolder& holder, android::Vector<char>* out) {
+  if (holder.is_char_ptr()) {
+    encode_string8(std::get<const char*>(holder.data), holder.length, out);
+  } else if (holder.is_char16_ptr()) {
+    android::String8 s8(std::get<const char16_t*>(holder.data), holder.length);
     size_t len = s8.length();
     encode_string8(s8.string(), len, out);
-  } else if (holder.kind == StringKind::STD_STRING) {
-    android::String8 s8(holder.str.c_str());
+  } else {
+    LOG_ALWAYS_FATAL_IF(!holder.is_str(), "unknown variant");
+    android::String8 s8(std::get<std::string>(holder.data).c_str());
     size_t len = s8.length();
     encode_string8(s8.string(), len, out);
   }
 }
 
-void write_string16(StringHolder& holder, android::Vector<char>* out) {
-  if (holder.kind == StringKind::STRING_8) {
-    android::String8 s8(holder.string8, holder.length);
+void write_string16(const StringHolder& holder, android::Vector<char>* out) {
+  if (holder.is_char_ptr()) {
+    android::String8 s8(std::get<const char*>(holder.data), holder.length);
     android::String16 s16(s8);
     size_t len = s16.size();
     encode_string16(s16.string(), len, out);
-  } else if (holder.kind == StringKind::STRING_16) {
-    encode_string16(holder.string16, holder.length, out);
-  } else if (holder.kind == StringKind::STD_STRING) {
-    android::String16 s16(holder.str.c_str());
+  } else if (holder.is_char16_ptr()) {
+    encode_string16(std::get<const char16_t*>(holder.data), holder.length, out);
+  } else {
+    LOG_ALWAYS_FATAL_IF(!holder.is_str(), "unknown variant");
+    android::String16 s16(std::get<std::string>(holder.data).c_str());
     size_t len = s16.size();
     encode_string16(s16.string(), len, out);
   }
 }
 
-void write_string(bool utf8, StringHolder& holder, android::Vector<char>* out) {
+void write_string(bool utf8,
+                  const StringHolder& holder,
+                  android::Vector<char>* out) {
   if (utf8) {
     write_string8(holder, out);
   } else {
