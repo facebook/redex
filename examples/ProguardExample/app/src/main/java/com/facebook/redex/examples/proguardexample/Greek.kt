@@ -5,4 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-include ':app'
+package com.facebook.redex.examples.proguardexample
+
+interface Greek {
+  fun doubleWombat(): Int
+}

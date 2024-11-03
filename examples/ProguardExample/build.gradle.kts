@@ -5,8 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-package com.facebook.redex.examples.proguardexample;
-
-public interface Greek {
-    int doubleWombat();
+plugins {
+  alias(libs.plugins.android.application) apply false
+  alias(libs.plugins.jetbrains.kotlin.android) apply false
 }
