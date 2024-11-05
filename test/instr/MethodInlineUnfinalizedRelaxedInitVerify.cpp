@@ -57,7 +57,24 @@ TEST_F(PostVerify, InlineWithFinalField) {
       nullptr,
       find_invoke(
           m, DOPCODE_INVOKE_DIRECT, "<init>", final_field_cls->get_type()));
-  ASSERT_NE(nullptr, find_invoke(m, DOPCODE_INVOKE_STATIC, "storeStoreFence"));
+  auto testWithFinalField_str = stringify_for_comparision(m);
+  auto expected = assembler::ircode_from_string(R"((
+      (load-param-object v3)
+      (new-instance "Lcom/facebook/redexinline/WithFinalField;")
+      (move-result-pseudo-object v2)
+      (const v1 5)
+      (invoke-direct (v2) "Ljava/lang/Object;.<init>:()V")
+      (iput v1 v2 "Lcom/facebook/redexinline/WithFinalField;.finalField:I")
+      (const v0 0)
+      (sput v0 "Lredex/$StoreFenceHelper;.DUMMY_VOLATILE:I")
+      (iget v2 "Lcom/facebook/redexinline/WithFinalField;.finalField:I")
+      (move-result-pseudo v0)
+      (invoke-static (v0) "Lorg/assertj/core/api/Assertions;.assertThat:(I)Lorg/assertj/core/api/AbstractIntegerAssert;")
+      (move-result-object v0)
+      (invoke-virtual (v0 v1) "Lorg/assertj/core/api/AbstractIntegerAssert;.isEqualTo:(I)Lorg/assertj/core/api/AbstractIntegerAssert;")
+      (return-void)
+  ))");
+  EXPECT_EQ(testWithFinalField_str, assembler::to_string(expected.get()));
 }
 
 /*
@@ -103,7 +120,7 @@ TEST_F(PostVerify, NoInlineWithFinalize) {
       nullptr,
       find_invoke(
           m, DOPCODE_INVOKE_DIRECT, "<init>", final_field_cls->get_type()));
-  ASSERT_EQ(nullptr, find_invoke(m, DOPCODE_INVOKE_STATIC, "storeStoreFence"));
+  ASSERT_EQ(nullptr, find_instruction(m, DOPCODE_SPUT));
 }
 
 /*
@@ -149,7 +166,7 @@ TEST_F(PostVerify, InlineWithoutBarrier) {
       nullptr,
       find_invoke(
           m, DOPCODE_INVOKE_DIRECT, "<init>", normal_field_cls->get_type()));
-  ASSERT_EQ(nullptr, find_invoke(m, DOPCODE_INVOKE_STATIC, "storeStoreFence"));
+  ASSERT_EQ(nullptr, find_instruction(m, DOPCODE_SPUT));
 }
 
 /*
@@ -210,7 +227,7 @@ TEST_F(PostVerify, InlineTwoCtorClass) {
       nullptr,
       find_invoke(
           m, DOPCODE_INVOKE_DIRECT, "<init>", final_field_cls->get_type()));
-  ASSERT_EQ(nullptr, find_invoke(m, DOPCODE_INVOKE_STATIC, "storeStoreFence"));
+  ASSERT_EQ(nullptr, find_instruction(m, DOPCODE_SPUT));
 
   DexMethod* no_arg_ctor = nullptr;
   for (auto ctor : final_field_cls->get_ctors()) {

@@ -89,3 +89,6 @@ void verify_class_merged(const DexClass* cls, size_t num_dmethods = 0);
 void dump_cfgs(bool is_prev_verify,
                const DexClass* cls,
                const std::function<bool(const DexMethod*)>& filter);
+
+// Remove positions to make asserts easier to write with IRAssembler.
+std::string stringify_for_comparision(DexMethod* method);
