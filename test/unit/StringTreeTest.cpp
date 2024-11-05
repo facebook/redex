@@ -581,3 +581,20 @@ TEST_F(StringTreeTest, testStringToStringWithJavaSurrogatePairs) {
             "6504010174776f0b010148656c6c6f2c20ffffffedffffffa0ffffffbcffffffed"
             "ffffffbcffffff8e21");
 }
+
+TEST_F(StringTreeTest, testStringToStringWithComplexStrings) {
+  auto encoded =
+      StringTreeStringMap::encode_string_tree_map({{"ONE", "one"},
+                                                   {"ONE_V0", "one_v0"},
+                                                   {"TWO", "two"},
+                                                   {"THREE", "three"},
+                                                   {"FOUR", "(parentheses)"},
+                                                   {"FIVE", "::,"},
+                                                   {"SIX", "dash-"}});
+  std::string hex = toHexRepresentation(encoded);
+  EXPECT_EQ(hex,
+            "0701014701011005464f200101532b0101543001011003494f1b01015645080155"
+            "520146014e450156025f5630015c014958016501100348573d0101524545016d01"
+            "4f0175010401013a3a2c0e010128706172656e746865736573290401016f6e6507"
+            "01016f6e655f7630060101646173682d060101746872656504010174776f");
+}
