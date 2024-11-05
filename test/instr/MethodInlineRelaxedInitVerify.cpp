@@ -56,7 +56,7 @@ TEST_F(PostVerify, InlineWithFinalField) {
       nullptr,
       find_invoke(
           m, DOPCODE_INVOKE_DIRECT, "<init>", final_field_cls->get_type()));
-  ASSERT_EQ(nullptr, find_invoke(m, DOPCODE_INVOKE_STATIC, "storeStoreFence"));
+  ASSERT_EQ(nullptr, find_instruction(m, DOPCODE_SPUT));
 }
 
 /*
@@ -102,7 +102,7 @@ TEST_F(PostVerify, NoInlineWithFinalize) {
       nullptr,
       find_invoke(
           m, DOPCODE_INVOKE_DIRECT, "<init>", final_field_cls->get_type()));
-  ASSERT_EQ(nullptr, find_invoke(m, DOPCODE_INVOKE_STATIC, "storeStoreFence"));
+  ASSERT_EQ(nullptr, find_instruction(m, DOPCODE_SPUT));
 }
 
 /*
@@ -148,7 +148,7 @@ TEST_F(PostVerify, InlineWithoutBarrier) {
       nullptr,
       find_invoke(
           m, DOPCODE_INVOKE_DIRECT, "<init>", normal_field_cls->get_type()));
-  ASSERT_EQ(nullptr, find_invoke(m, DOPCODE_INVOKE_STATIC, "storeStoreFence"));
+  ASSERT_EQ(nullptr, find_instruction(m, DOPCODE_SPUT));
 }
 
 /*
@@ -209,7 +209,7 @@ TEST_F(PostVerify, InlineTwoCtorClass) {
       nullptr,
       find_invoke(
           m, DOPCODE_INVOKE_DIRECT, "<init>", final_field_cls->get_type()));
-  ASSERT_EQ(nullptr, find_invoke(m, DOPCODE_INVOKE_STATIC, "storeStoreFence"));
+  ASSERT_EQ(nullptr, find_instruction(m, DOPCODE_SPUT));
 
   DexMethod* no_arg_ctor = nullptr;
   for (auto ctor : final_field_cls->get_ctors()) {

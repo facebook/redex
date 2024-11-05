@@ -19,20 +19,6 @@ void dump_method(DexMethod* method) {
   auto& cfg = method->get_code()->cfg();
   std::cout << show(method) << " " << show(cfg) << std::endl;
 }
-
-std::string stringify_for_comparision(DexMethod* method) {
-  method->balloon();
-  // Remove positions to make asserts easier to write with IRAssembler.
-  auto code = method->get_code();
-  for (auto it = code->begin(); it != code->end();) {
-    if (it->type == MFLOW_POSITION) {
-      it = code->erase_and_dispose(it);
-    } else {
-      it++;
-    }
-  }
-  return assembler::to_string(code);
-}
 } // namespace
 
 TEST_F(PostVerify, VerifyTransform) {

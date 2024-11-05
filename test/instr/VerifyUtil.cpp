@@ -265,3 +265,16 @@ void dump_cfgs(bool is_prev_verify,
     file << boost::regex_replace(ss.str(), addr, "");
   });
 }
+
+std::string stringify_for_comparision(DexMethod* method) {
+  method->balloon();
+  auto code = method->get_code();
+  for (auto it = code->begin(); it != code->end();) {
+    if (it->type == MFLOW_POSITION) {
+      it = code->erase_and_dispose(it);
+    } else {
+      it++;
+    }
+  }
+  return assembler::to_string(code);
+}
