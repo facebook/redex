@@ -131,6 +131,21 @@ bool is_model_gen(const DexMethod* m) {
   return false;
 }
 
+bool is_composer_generated(const DexMethod* m) {
+  DexType* type = m->get_class();
+  DexClass* cls = type_class(type);
+  if (!cls->get_anno_set()) {
+    return false;
+  }
+  DexAnnotation* anno = get_annotation(
+      cls, DexType::make_type(
+               "Lcom/facebook/xapp/messaging/composer/annotation/Generated;"));
+  if (anno) {
+    return true;
+  }
+  return false;
+}
+
 bool has_kotlin_default_ctor_marker(DexMethod* m) {
   auto params = m->get_proto()->get_args();
   if (params->size() > 1 &&
@@ -1443,6 +1458,9 @@ bool TypedefAnnoChecker::check_typedef_value(
     switch (def->opcode()) {
     case OPCODE_CONST_STRING: {
       auto const const_value = def->get_string();
+      if (const_value->str().empty() && is_composer_generated(m)) {
+        break;
+      }
       if (str_value_set->count(const_value) == 0) {
         std::ostringstream out;
         out << "TypedefAnnoCheckerPass: in method " << show(m)
