@@ -33,6 +33,7 @@
 
 namespace {
 const std::string BASELINE_PROFILES_FILE = "additional-baseline-profiles.list";
+const std::string STORE_FENCE_HELPER_NAME = "Lredex/$StoreFenceHelper;";
 
 // Helper function that checks if a block is not hit in any interaction.
 bool is_cold(cfg::Block* b) {
@@ -561,6 +562,14 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
         m_never_compile_excluded_interaction_pattern,
         m_never_compile_excluded_appear100_threshold,
         m_never_compile_excluded_call_count_threshold, &baseline_profile);
+  }
+  auto store_fence_helper_type = DexType::get_type(STORE_FENCE_HELPER_NAME);
+  if (store_fence_helper_type) {
+    // helper class existing means we materialized IOPCODE_WRITE_BARRIER
+    // Add it in for it to be compiled.
+    auto store_fence_helper_cls = type_class(store_fence_helper_type);
+    always_assert(store_fence_helper_cls);
+    baseline_profile.classes.insert(store_fence_helper_cls);
   }
 
   std::ofstream ofs{conf.metafile(BASELINE_PROFILES_FILE)};
