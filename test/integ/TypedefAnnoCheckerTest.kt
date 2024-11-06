@@ -125,6 +125,20 @@ public class TypedefAnnoCheckerKtTest {
     print(def_param)
   }
 
+  @TestIntDef
+  fun call_lambda_int(lambda_func: () -> Int): Int {
+    return lambda_func()
+  }
+
+  fun assign_and_print_int(@TestIntDef param: Int) {
+    print(param)
+  }
+
+  fun assign_and_print_default_int(@TestIntDef param: Int, def_param: String = "hello") {
+    print(param)
+    print(def_param)
+  }
+
   @TestStringDef
   fun testLambdaCall(@TestStringDef param: String): String {
     return call_lambda({
@@ -147,7 +161,7 @@ public class TypedefAnnoCheckerKtTest {
   }
 
   @TestStringDef
-  fun testLambdaCallLocalVar(): String {
+  fun testLambdaCallLocalVal(): String {
     val local_val = "two"
     return call_lambda({
       assign_and_print_default(local_val)
@@ -156,11 +170,107 @@ public class TypedefAnnoCheckerKtTest {
   }
 
   @TestStringDef
-  fun testLambdaCallLocalVarInvalid(): String {
+  fun testLambdaCallLocalValInvalid(): String {
     val local_val = "randomval"
     return call_lambda({
       assign_and_print_default(local_val)
       local_val
+    })
+  }
+
+  @TestStringDef
+  fun testLambdaCallLocalVarString(): String {
+    var local_var: String = "two"
+    if (var_field == "one") {
+      local_var = "one"
+    }
+    return call_lambda({
+      assign_and_print(local_var)
+      local_var
+    })
+  }
+
+  @TestStringDef
+  fun testLambdaCallLocalVarStringInvalid(): String {
+    var local_var: String = "seven"
+    if (var_field == "one") {
+      local_var = "eight"
+    }
+    return call_lambda({
+      assign_and_print(local_var)
+      local_var
+    })
+  }
+
+  @TestStringDef
+  fun testLambdaCallLocalVarStringDefault(): String {
+    var local_var: String = "two"
+    if (var_field == "one") {
+      local_var = "one"
+    }
+    return call_lambda({
+      assign_and_print_default(local_var)
+      local_var
+    })
+  }
+
+  @TestStringDef
+  fun testLambdaCallLocalVarStringDefaultInvalid(): String {
+    var local_var: String = "seven"
+    if (var_field == "one") {
+      local_var = "eight"
+    }
+    return call_lambda({
+      assign_and_print_default(local_var)
+      local_var
+    })
+  }
+
+  @TestIntDef
+  fun testLambdaCallLocalVarInt(): Int {
+    var local_var: Int = 2
+    if (var_field == "one") {
+      local_var = 1
+    }
+    return call_lambda_int({
+      assign_and_print_int(local_var)
+      local_var
+    })
+  }
+
+  @TestIntDef
+  fun testLambdaCallLocalVarIntInvalid(): Int {
+    var local_var: Int = 7
+    if (var_field == "one") {
+      local_var = 9
+    }
+    return call_lambda_int({
+      assign_and_print_int(local_var)
+      local_var
+    })
+  }
+
+  @TestIntDef
+  fun testLambdaCallLocalVarIntDefault(): Int {
+    var local_var: Int = 2
+    if (var_field == "one") {
+      local_var = 1
+    }
+    return call_lambda_int({
+      assign_and_print_default_int(local_var)
+      local_var
+    })
+  }
+
+  @TestIntDef
+  fun testLambdaCallLocalVarIntDefaultInvalid(): Int {
+    var local_var: Int = 7
+    if (var_field == "one") {
+      local_var = 9
+    }
+    return call_lambda_int({
+      assign_and_print_default_int(local_var)
+      local_var
     })
   }
 
