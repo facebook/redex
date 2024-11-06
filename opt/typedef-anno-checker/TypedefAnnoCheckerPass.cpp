@@ -184,14 +184,24 @@ DexField* lookup_property_field(DexMethod* m) {
   }
 
   std::string_view int_or_string;
-  if (boost::starts_with(m->get_simple_deobfuscated_name(), "set")) {
+  if (boost::starts_with(m->get_simple_deobfuscated_name(), "set") ||
+      boost::starts_with(m->get_simple_deobfuscated_name(), "access$set")) {
     auto args = m->get_proto()->get_args();
     if (args->empty()) {
       return nullptr;
     }
-    DexType* param_type = m->get_proto()->get_args()->at(0);
+    DexType* param_type = args->at(0);
     if (!type::is_int(param_type) && param_type != type::java_lang_String()) {
-      return nullptr;
+      // handles P1570013473
+      if (param_type == m->get_class() && args->size() > 1) {
+        param_type = args->at(1);
+        if (!type::is_int(param_type) &&
+            param_type != type::java_lang_String()) {
+          return nullptr;
+        }
+      } else {
+        return nullptr;
+      }
     }
     int_or_string = type::is_int(param_type)
                         ? "I"
