@@ -16,6 +16,7 @@
 #include "RedexTest.h"
 #include "ScopedCFG.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "Trace.h"
 
 namespace cfg {
@@ -1559,6 +1560,110 @@ TEST_F(ControlFlowTest, insertion_after_may_throw_with_move_result) {
     )
   )");
   EXPECT_CODE_EQ(expected.get(), code.get());
+}
+
+TEST_F(ControlFlowTest, insertion_with_source_blocks) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (:main)
+      (.src_block "LFoo;.bar:()V" 1 (1.0 1.0) (1.0 1.0) (1.0 1.0))
+      (load-param-object v0)
+      (load-param-object v1)
+      (load-param v2)
+      (.try_start foo)
+      (.src_block "LFoo;.bar:()V" 2 (1.0 1.0) (1.0 1.0) (1.0 1.0))
+      (aput-object v0 v1 v2)
+      (goto :return)
+      (.try_end foo)
+
+      (:return)
+      (return v1)
+
+      (:catch)
+      (.catch (foo))
+      (.src_block "LFoo;.bar:()V" 3 (1.0 1.0) (1.0 1.0) (1.0 1.0))
+      (const v1 0)
+      (return v1)
+    )
+  )");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    auto insn = it->insn;
+    if (opcode::is_an_aput(insn->opcode())) {
+      std::vector<IRInstruction*> new_insns;
+      auto new_insn = new IRInstruction(OPCODE_DIV_INT);
+      new_insn->set_srcs_size(2);
+      new_insn->set_src(0, 2);
+      new_insn->set_src(1, 2);
+      new_insns.push_back(new_insn);
+      new_insn = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
+      new_insn->set_dest(2);
+      new_insns.push_back(new_insn);
+      cfg.insert_after(it, new_insns);
+      break;
+    }
+  }
+  code->clear_cfg();
+  code->build_cfg();
+  auto& cfg2 = code->cfg();
+  for (auto block : cfg2.blocks()) {
+    always_assert(source_blocks::has_source_blocks(block));
+  }
+}
+
+TEST_F(ControlFlowTest, insertion_with_source_blocks_middle) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (:main)
+      (.src_block "LFoo;.bar:()V" 1 (1.0 1.0) (1.0 1.0) (1.0 1.0))
+      (load-param-object v0)
+      (load-param-object v1)
+      (load-param v2)
+      (.try_start foo)
+      (.src_block "LFoo;.bar:()V" 2 (1.0 1.0) (1.0 1.0) (1.0 1.0))
+      (add-int v1 v1 v1)
+      (aput-object v0 v1 v2)
+      (goto :return)
+      (.try_end foo)
+
+      (:return)
+      (.src_block "LFoo;.bar:()V" 4 (1.0 1.0) (1.0 1.0) (1.0 1.0))
+      (return v1)
+
+      (:catch)
+      (.catch (foo))
+      (.src_block "LFoo;.bar:()V" 3 (1.0 1.0) (1.0 1.0) (1.0 1.0))
+      (const v1 0)
+      (return v1)
+    )
+  )");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    auto insn = it->insn;
+    if (insn->opcode() == OPCODE_ADD_INT) {
+      std::vector<IRInstruction*> new_insns;
+      auto new_insn = new IRInstruction(OPCODE_DIV_INT);
+      new_insn->set_srcs_size(2);
+      new_insn->set_src(0, 2);
+      new_insn->set_src(1, 2);
+      new_insns.push_back(new_insn);
+      new_insn = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
+      new_insn->set_dest(2);
+      new_insns.push_back(new_insn);
+      cfg.insert_after(it, new_insns);
+      break;
+    }
+  }
+  code->clear_cfg();
+  code->build_cfg();
+  auto& cfg2 = code->cfg();
+  for (auto block : cfg2.blocks()) {
+    always_assert(source_blocks::has_source_blocks(block));
+  }
 }
 
 TEST_F(ControlFlowTest, add_sget) {

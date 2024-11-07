@@ -17,6 +17,7 @@
 #include "Debug.h"
 #include "IRCode.h"
 #include "IRList.h"
+#include "SourceBlocksUtils.h"
 
 class DexMethod;
 class DexStore;
@@ -514,17 +515,5 @@ SourceBlock* get_any_first_source_block_of_methods(
 void insert_synthetic_source_blocks_in_method(
     DexMethod* method,
     const std::function<std::unique_ptr<SourceBlock>()>& source_block_creator);
-
-std::unique_ptr<SourceBlock> clone_as_synthetic(SourceBlock* sb,
-                                                DexMethod* ref,
-                                                const SourceBlock::Val& val);
-
-std::unique_ptr<SourceBlock> clone_as_synthetic(
-    SourceBlock* sb,
-    DexMethod* ref = nullptr,
-    const std::optional<SourceBlock::Val>& opt_val = std::nullopt);
-
-std::unique_ptr<SourceBlock> clone_as_synthetic(
-    SourceBlock* sb, DexMethod* ref, const std::vector<SourceBlock*>& many);
 
 } // namespace source_blocks
