@@ -192,6 +192,8 @@ struct ConfigFiles {
    */
   const baseline_profiles::BaselineProfileConfig& get_baseline_profile_config();
 
+  bool get_did_use_bzl_baseline_profile_config();
+
   boost::optional<std::string> get_android_sdk_api_file(int32_t api_level) {
     std::string api_file;
     std::string key = "android_sdk_api_" + std::to_string(api_level) + "_file";
@@ -270,6 +272,7 @@ struct ConfigFiles {
       m_baseline_profile_config;
   std::string m_coldstart_class_filename;
   std::string m_coldstart_methods_filename;
+  std::string m_baseline_profile_config_file_name;
   std::vector<std::string> m_interactions;
   std::unordered_map<const DexString*, std::vector<uint8_t>> m_class_freq_map;
   std::vector<std::string> m_coldstart_classes;

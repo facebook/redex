@@ -622,6 +622,9 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
 
   mgr.incr_metric("method_refs_without_def", method_refs_without_def.size());
 
+  mgr.incr_metric("used_bzl_baseline_profile_config",
+                  conf.get_did_use_bzl_baseline_profile_config());
+
   if (!m_never_inline_estimate && !m_never_inline_attach_annotations) {
     return;
   }
