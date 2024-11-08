@@ -4,7 +4,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from collections import defaultdict
+from collections import defaultdict, deque
 
 from . import core  # noqa F401
 from .core import ReachableObjectType
@@ -198,39 +198,50 @@ class Ranker(object):
         """
         visited = set()
 
-        def mark_rec(node):
-            if node in visited or node not in self.leaked_set:
-                return
-            visited.add(node)
-            self.counts[node] += 1
-            for succ in node.succs:
-                mark_rec(succ)
+        # Recursive solution does not work well for deep graphs
+        def mark_iter(node):
+            queue = deque([node])
+
+            while queue:
+                node = queue.popleft()
+                if node in visited or node not in self.leaked_set:
+                    continue
+
+                visited.add(node)
+                self.counts[node] += 1
+                queue.extend(node.succs)
 
         for succ in root.succs:
-            mark_rec(succ)
+            mark_iter(succ)
 
     def get_rank(self, root):
         rank = 0.0
         dominated = set()
         visited = set()
 
-        def visit(node):
+        # Recursive solution does not work well for deep graphs
+        def visit_iter(node):
             nonlocal rank
             nonlocal dominated
 
-            if node in visited or node not in self.leaked_set:
-                return
-            visited.add(node)
+            queue = deque([node])
 
-            if self.counts[node] == 1:
-                dominated.add(node)
-            if node.type == ReachableObjectType.METHOD:
-                rank += 1.0 / self.counts[node]
-            for succ in node.succs:
-                visit(succ)
+            while queue:
+                node = queue.popleft()
+
+                if node in visited or node not in self.leaked_set:
+                    return
+                visited.add(node)
+
+                if self.counts[node] == 1:
+                    dominated.add(node)
+                if node.type == ReachableObjectType.METHOD:
+                    rank += 1.0 / self.counts[node]
+
+                queue.extend(node.succs)
 
         for succ in root.succs:
-            visit(succ)
+            visit_iter(succ)
 
         return (rank, dominated)
 
