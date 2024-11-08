@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
+#include <optional>
 
 #include "Pass.h"
 #include "Trace.h"
@@ -26,10 +26,10 @@ class ObjectSensitiveDcePass final : public Pass {
   }
 
   void bind_config() override {
-    bind("side_effect_summaries", {boost::none},
+    bind("side_effect_summaries", {std::nullopt},
          m_external_side_effect_summaries_file, "TODO: Document me!",
          Configurable::bindflags::optionals::skip_empty_string);
-    bind("escape_summaries", {boost::none}, m_external_escape_summaries_file,
+    bind("escape_summaries", {std::nullopt}, m_external_escape_summaries_file,
          "TODO: Document me!",
          Configurable::bindflags::optionals::skip_empty_string);
     bind("big_override_threshold", UINT32_C(5), m_big_override_threshold);
@@ -45,7 +45,7 @@ class ObjectSensitiveDcePass final : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  boost::optional<std::string> m_external_side_effect_summaries_file;
-  boost::optional<std::string> m_external_escape_summaries_file;
+  std::optional<std::string> m_external_side_effect_summaries_file;
+  std::optional<std::string> m_external_escape_summaries_file;
   uint32_t m_big_override_threshold;
 };
