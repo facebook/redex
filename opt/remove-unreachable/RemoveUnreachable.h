@@ -28,34 +28,10 @@ class RemoveUnreachablePassBase : public Pass {
     };
   }
 
-  void bind_config() override {
-    bind("ignore_string_literals", {}, m_ignore_sets.string_literals);
-    bind("ignore_string_literal_annos", {}, m_ignore_sets.string_literal_annos);
-    bind("keep_class_in_string", true, m_ignore_sets.keep_class_in_string);
-    bind("emit_graph_on_run", std::optional<uint32_t>{}, m_emit_graph_on_run);
-    bind("always_emit_unreachable_symbols",
-         false,
-         m_always_emit_unreachable_symbols);
-    // This config allows unused constructors without argument to be removed.
-    // This is only used for testing in microbenchmarks.
-    bind("remove_no_argument_constructors",
-         false,
-         m_remove_no_argument_constructors);
-    bind("output_full_removed_symbols", false, m_output_full_removed_symbols);
-    bind("relaxed_keep_class_members", false, m_relaxed_keep_class_members);
-    bind("prune_uninstantiable_insns", false, m_prune_uninstantiable_insns);
-    bind("prune_uncallable_instance_method_bodies",
-         false,
-         m_prune_uncallable_instance_method_bodies);
-    bind("prune_uncallable_virtual_methods",
-         false,
-         m_prune_uncallable_virtual_methods);
-    bind("prune_unreferenced_interfaces",
-         false,
-         m_prune_unreferenced_interfaces);
-    bind("throw_propagation", false, m_throw_propagation);
-  }
-
+  void bind_config() override;
+  void eval_pass(DexStoresVector& /*stores*/,
+                 ConfigFiles& /*conf*/,
+                 PassManager& /*mgr*/) override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   virtual std::unique_ptr<reachability::ReachableObjects>
@@ -97,6 +73,10 @@ class RemoveUnreachablePassBase : public Pass {
   bool m_prune_uncallable_virtual_methods = false;
   bool m_prune_unreferenced_interfaces = false;
   bool m_throw_propagation = false;
+
+  static bool s_emit_graph_on_last_run;
+  static size_t s_all_reachability_runs;
+  static size_t s_all_reachability_run;
 };
 
 class RemoveUnreachablePass : public RemoveUnreachablePassBase {

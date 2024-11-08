@@ -22,6 +22,10 @@
 #include "Trace.h"
 #include "Walkers.h"
 
+bool RemoveUnreachablePassBase::s_emit_graph_on_last_run{false};
+size_t RemoveUnreachablePassBase::s_all_reachability_runs{0};
+size_t RemoveUnreachablePassBase::s_all_reachability_run{0};
+
 namespace {
 const std::string UNREACHABLE_SYMBOLS_FILENAME =
     "redex-unreachable-removed-symbols.txt";
@@ -183,9 +187,50 @@ reachability::ObjectCounts RemoveUnreachablePassBase::before_metrics(
   return before;
 }
 
+void RemoveUnreachablePassBase::bind_config() {
+  bind("ignore_string_literals", {}, m_ignore_sets.string_literals);
+  bind("ignore_string_literal_annos", {}, m_ignore_sets.string_literal_annos);
+  bind("keep_class_in_string", true, m_ignore_sets.keep_class_in_string);
+  bind("emit_graph_on_run", std::optional<uint32_t>{}, m_emit_graph_on_run);
+  bool emit_on_last{false};
+  bind("emit_graph_on_last_run", emit_on_last, emit_on_last);
+  bind("always_emit_unreachable_symbols",
+       false,
+       m_always_emit_unreachable_symbols);
+  // This config allows unused constructors without argument to be removed.
+  // This is only used for testing in microbenchmarks.
+  bind("remove_no_argument_constructors",
+       false,
+       m_remove_no_argument_constructors);
+  bind("output_full_removed_symbols", false, m_output_full_removed_symbols);
+  bind("relaxed_keep_class_members", false, m_relaxed_keep_class_members);
+  bind("prune_uninstantiable_insns", false, m_prune_uninstantiable_insns);
+  bind("prune_uncallable_instance_method_bodies",
+       false,
+       m_prune_uncallable_instance_method_bodies);
+  bind("prune_uncallable_virtual_methods",
+       false,
+       m_prune_uncallable_virtual_methods);
+  bind("prune_unreferenced_interfaces", false, m_prune_unreferenced_interfaces);
+  bind("throw_propagation", false, m_throw_propagation);
+  after_configuration([emit_on_last]() {
+    if (emit_on_last) {
+      s_emit_graph_on_last_run = true;
+    }
+  });
+}
+
+void RemoveUnreachablePassBase::eval_pass(DexStoresVector& /*stores*/,
+                                          ConfigFiles& /*conf*/,
+                                          PassManager& /*mgr*/) {
+  ++s_all_reachability_runs;
+}
+
 void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
                                          ConfigFiles& conf,
                                          PassManager& pm) {
+  ++s_all_reachability_run;
+
   // Store names of removed classes and methods
   ConcurrentSet<std::string> removed_symbols;
 
@@ -203,11 +248,12 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
 
   root_metrics(stores, pm);
   auto before = before_metrics(stores, pm);
-
   bool emit_graph_this_run =
-      m_emit_graph_on_run &&
-      static_cast<int64_t>(pm.get_current_pass_info()->repeat + 1) ==
-          *m_emit_graph_on_run;
+      (m_emit_graph_on_run &&
+       static_cast<int64_t>(pm.get_current_pass_info()->repeat + 1) ==
+           *m_emit_graph_on_run) ||
+      (s_emit_graph_on_last_run &&
+       s_all_reachability_runs == s_all_reachability_run);
   bool output_unreachable_symbols =
       m_always_emit_unreachable_symbols ||
       (pm.get_current_pass_info()->repeat == 0 &&
@@ -274,6 +320,7 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
     auto uninstantiables_stats = reachability::sweep_uncallable_virtual_methods(
         stores, reachable_aspects);
     uninstantiables_stats.report(pm);
+    {}
   }
 
   reachability::ObjectCounts after = reachability::count_objects(stores);
