@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkstaticdocs_starter=self.webpackChunkstaticdocs_starter||[]).push([[3215],{17646:e=>{e.exports=JSON.parse('{"tags":[{"label":"redex","permalink":"/blog/tags/redex","count":1}]}')}}]);

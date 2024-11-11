@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkstaticdocs_starter=self.webpackChunkstaticdocs_starter||[]).push([[7472],{55513:e=>{e.exports=JSON.parse('{"title":"Recent posts","items":[{"title":"Office Hours","permalink":"/blog/office-hours","unlisted":false,"date":"2022-10-26T00:00:00.000Z"}]}')}}]);
