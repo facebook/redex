@@ -11,11 +11,7 @@
 #include "Pass.h"
 #include "PassManager.h"
 #include "Trace.h"
-/*
- * Convert "Lredex/$NullCheck;.null_check:(Ljava/lang/Object;)V" to
- * java/lang/Object.getClass:()Ljava/lang/Class;. Check IntrinsifyNullChecksPass
- * for details.
- */
+
 class MaterializeNullChecksPass : public Pass {
  public:
   struct Stats {
@@ -50,6 +46,14 @@ class MaterializeNullChecksPass : public Pass {
         {RenameClass, Preserves},
         {SpuriousGetClassCallsInterned, Requires},
     };
+  }
+
+  std::string get_config_doc() override {
+    return trim(R"(
+Convert `Lredex/$NullCheck;.null_check:(Ljava/lang/Object;)V` to
+`java/lang/Object.getClass:()Ljava/lang/Class;`. Check `IntrinsifyNullChecksPass`
+for details.
+    )");
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
