@@ -17,12 +17,6 @@
 
 class IRInstruction;
 
-/**
- * This pass only makes sense when applied at the end of a redex optimization
- * run. It does not work on its own when applied to a "random" apk.
- * It relies on the fact that deleted classes/methods/fields are still
- * around at the end of a run.
- */
 class CheckBreadcrumbsPass : public Pass {
  public:
   CheckBreadcrumbsPass() : Pass("CheckBreadcrumbsPass") {}
@@ -32,6 +26,15 @@ class CheckBreadcrumbsPass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return redex_properties::simple::preserves_all();
+  }
+
+  std::string get_config_doc() override {
+    return trim(R"(
+This pass only makes sense when applied at the end of a redex optimization
+run. It does not work on its own when applied to a "random" apk.
+It relies on the fact that deleted classes/methods/fields are still
+around at the end of a run.
+    )");
   }
 
   void bind_config() override {
