@@ -25,23 +25,6 @@ using Violations = std::map<std::string /* entrypoint */,
                             std::set<std::string /* module name */>>;
 } // namespace app_module_usage
 
-/**
- * `AppModuleUsagePass` generates a report of violations of unannotated app
- * module references. The `@UsesAppModule` annotation should be present and
- * contain the name of the module at the entrypoint of an app module, or there
- * is a violation. By default the pass crashes on an occurence of a violation.
- *
- * When configured to continue with `crash_with_violations` set to false a
- * report of all violations is output at
- * "redex-app-module-annotation-violations.csv". Each line of the violation
- * report is the full descriptor of the unannotated entrypoint to a module,
- * followed by the name of the module.
- *
- * By enabling `output_module_use` the pass also generates
- * "redex-app-module-usage.csv" mapping methods to all the app modules used by
- * each method, and "redex-app-module-count.csv" mapping app modules to the
- * number of places it's referenced.
- */
 class AppModuleUsagePass : public Pass {
  public:
   AppModuleUsagePass() : Pass("AppModuleUsagePass") {}
@@ -54,6 +37,26 @@ class AppModuleUsagePass : public Pass {
         {DexLimitsObeyed, Preserves},
         {UltralightCodePatterns, Preserves},
     };
+  }
+
+  std::string get_config_doc() override {
+    return trim(R"(
+`AppModuleUsagePass` generates a report of violations of unannotated app
+module references. The `@UsesAppModule` annotation should be present and
+contain the name of the module at the entrypoint of an app module, or there
+is a violation. By default the pass crashes on an occurence of a violation.
+
+When configured to continue with `crash_with_violations` set to false a
+report of all violations is output at
+"redex-app-module-annotation-violations.csv". Each line of the violation
+report is the full descriptor of the unannotated entrypoint to a module,
+followed by the name of the module.
+
+By enabling `output_module_use` the pass also generates
+"redex-app-module-usage.csv" mapping methods to all the app modules used by
+each method, and "redex-app-module-count.csv" mapping app modules to the
+number of places it's referenced.
+    )");
   }
 
   void bind_config() override {
