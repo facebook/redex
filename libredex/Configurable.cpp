@@ -177,6 +177,17 @@ optional<std::vector<std::string>> parse_str_vec(
 
 } // namespace
 
+std::string Configurable::trim(std::string s) {
+  s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](auto ch) {
+            return !std::isspace(ch) && ch != '\n';
+          }));
+  s.erase(std::find_if(s.rbegin(), s.rend(),
+                       [](auto ch) { return !std::isspace(ch) && ch != '\n'; })
+              .base(),
+          s.end());
+  return s;
+}
+
 void Configurable::parse_config(const JsonWrapper& json) {
   m_after_configuration = {};
   m_reflecting = false;
