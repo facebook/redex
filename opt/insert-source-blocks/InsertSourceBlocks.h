@@ -13,11 +13,6 @@ namespace cfg {
 class ControlFlowGraph;
 } // namespace cfg
 
-// A pass to insert SourceBlock MIEs into CFGs.
-//
-// This is a pass so it can be more freely scheduled. A simple example is
-// to run this *after* the first RemoveUnreachables pass, so as to not
-// create unnecessary bloat.
 class InsertSourceBlocksPass : public Pass {
  public:
   InsertSourceBlocksPass() : Pass("InsertSourceBlocksPass") {}
@@ -31,6 +26,16 @@ class InsertSourceBlocksPass : public Pass {
         {HasSourceBlocks, Establishes},
         {UltralightCodePatterns, Preserves},
     };
+  }
+
+  std::string get_config_doc() override {
+    return trim(R"(
+A pass to insert SourceBlock MIEs into CFGs.
+
+This is a pass so it can be more freely scheduled. A simple example is
+to run this *after* the first RemoveUnreachables pass, so as to not
+create unnecessary bloat.
+    )");
   }
 
   void bind_config() override;
