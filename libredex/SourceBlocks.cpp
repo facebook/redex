@@ -1419,44 +1419,6 @@ void insert_synthetic_source_blocks_in_method(
   block->insert_before(it, std::move(new_sb));
 }
 
-void fill_source_block(SourceBlock& sb,
-                       DexMethod* ref,
-                       uint32_t id,
-                       const SourceBlock::Val& val) {
-  sb.src = ref->get_deobfuscated_name_or_null();
-  sb.id = id;
-  for (size_t i = 0; i < sb.vals_size; i++) {
-    sb.vals[i] = val;
-  }
-}
-
-void fill_source_block(SourceBlock& sb,
-                       DexMethod* ref,
-                       uint32_t id,
-                       const std::optional<SourceBlock::Val>& opt_val) {
-  sb.src = ref->get_deobfuscated_name_or_null();
-  sb.id = id;
-  if (opt_val) {
-    for (size_t i = 0; i < sb.vals_size; i++) {
-      sb.vals[i] = *opt_val;
-    }
-  }
-}
-
-void fill_source_block(SourceBlock& sb,
-                       DexMethod* ref,
-                       uint32_t id,
-                       const std::vector<SourceBlock*>& many) {
-  sb.src = ref->get_deobfuscated_name_or_null();
-  sb.id = id;
-  for (size_t i = 0; i < sb.vals_size; i++) {
-    sb.vals[i] = SourceBlock::Val::none();
-  }
-  for (auto& other : many) {
-    sb.max(*other);
-  }
-}
-
 std::unique_ptr<SourceBlock> clone_as_synthetic(SourceBlock* sb,
                                                 DexMethod* ref,
                                                 const SourceBlock::Val& val) {

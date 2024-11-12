@@ -514,24 +514,6 @@ void insert_synthetic_source_blocks_in_method(
     DexMethod* method,
     const std::function<std::unique_ptr<SourceBlock>()>& source_block_creator);
 
-void fill_source_block(SourceBlock& sb,
-                       DexMethod* ref,
-                       uint32_t id,
-                       const SourceBlock::Val& val);
-
-void fill_source_block(
-    SourceBlock& sb,
-    DexMethod* ref,
-    uint32_t id,
-    const std::optional<SourceBlock::Val>& opt_val = std::nullopt);
-
-// Fill a source block with the maximum values of the provided many
-// source-blocks.
-void fill_source_block(SourceBlock& sb,
-                       DexMethod* ref,
-                       uint32_t id,
-                       const std::vector<SourceBlock*>& many);
-
 std::unique_ptr<SourceBlock> clone_as_synthetic(SourceBlock* sb,
                                                 DexMethod* ref,
                                                 const SourceBlock::Val& val);
