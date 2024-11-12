@@ -111,8 +111,7 @@ void ClinitOutlinePass::run_pass(DexStoresVector& stores,
     auto new_code = method->get_code();
     auto sb = source_blocks::get_first_source_block_of_method(outlined_clinit);
     if (sb) {
-      auto new_sb = std::make_unique<SourceBlock>(*sb);
-      new_sb->id = SourceBlock::kSyntheticId;
+      auto new_sb = source_blocks::clone_as_synthetic(sb);
       new_code->push_back(std::move(new_sb));
     }
     new_code->push_back(

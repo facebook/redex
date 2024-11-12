@@ -120,9 +120,7 @@ void split_blocks(DexMethod* method,
       }
       auto template_sb = source_blocks::get_first_source_block(block);
       if (template_sb && !source_blocks::get_first_source_block(split_block)) {
-        auto new_sb = std::make_unique<SourceBlock>(*template_sb);
-        new_sb->src = method->get_deobfuscated_name_or_null();
-        new_sb->id = SourceBlock::kSyntheticId;
+        auto new_sb = source_blocks::clone_as_synthetic(template_sb, method);
         auto split_it = split_block->get_first_insn();
         split_block->insert_before(split_it, std::move(new_sb));
       }
