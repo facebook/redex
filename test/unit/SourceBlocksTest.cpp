@@ -1059,3 +1059,140 @@ TEST_F(SourceBlocksTest, dedup_multiple_interactions_in_same_block) {
   auto expected_code = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
+
+TEST_F(SourceBlocksTest, create_synth_sb_from_val) {
+  g_redex->instrument_mode = true;
+  IRList::CONSECUTIVE_STYLE = IRList::ConsecutiveStyle::kChain;
+  auto foo_method = create_method("LFoo");
+
+  constexpr const char* kFoo = R"(
+    (
+      (.src_block "LFoo;.bar:()V" 0 (1.0 1.0) (0.0 1.0) (0.5 0.4))
+      (.src_block "LFoo;.bar:()V" 1 (1.0 1.0) (0.0 1.0) (0.5 0.4))
+      (const v0 0)
+      (.src_block "LFoo;.bar:()V" 2 (1.0 1.0) (0.0 1.0) (0.5 0.4))
+      (const v1 1)
+
+      (.src_block "LFoo;.bar:()V" 3 (1.0 1.0) (0.0 1.0) (0.5 0.4))
+
+      (return-void)
+    )
+  )";
+
+  foo_method->set_code(assembler::ircode_from_string(kFoo));
+  foo_method->get_code()->build_cfg();
+
+  auto bar_method = create_method("LBar");
+
+  constexpr const char* kBar = R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (return-void)
+    )
+  )";
+
+  bar_method->set_code(assembler::ircode_from_string(kBar));
+  bar_method->get_code()->build_cfg();
+
+  source_blocks::insert_synthetic_source_blocks_in_method(bar_method, [&]() {
+    return clone_as_synthetic(
+        source_blocks::get_first_source_block_of_method(foo_method), bar_method,
+        SourceBlock::Val{1, 0});
+  });
+
+  EXPECT_EQ(get_blocks_as_txt(bar_method->get_code()->cfg().blocks()),
+            R"(B0: LBar;.bar:()V@4294967295(1:0|1:0|1:0))");
+}
+
+TEST_F(SourceBlocksTest, create_synth_sb_from_opt_val) {
+  g_redex->instrument_mode = true;
+  IRList::CONSECUTIVE_STYLE = IRList::ConsecutiveStyle::kChain;
+  auto foo_method = create_method("LFoo");
+
+  constexpr const char* kFoo = R"(
+    (
+      (.src_block "LFoo;.bar:()V" 0 (1.0 1.0) (0.0 1.0) (0.5 0.4))
+      (.src_block "LFoo;.bar:()V" 1 (1.0 1.0) (0.0 1.0) (0.5 0.4))
+      (const v0 0)
+      (.src_block "LFoo;.bar:()V" 2 (1.0 1.0) (0.0 1.0) (0.5 0.4))
+      (const v1 1)
+
+      (.src_block "LFoo;.bar:()V" 3 (1.0 1.0) (0.0 1.0) (0.5 0.4))
+
+      (return-void)
+    )
+  )";
+
+  foo_method->set_code(assembler::ircode_from_string(kFoo));
+  foo_method->get_code()->build_cfg();
+
+  auto bar_method = create_method("LBar");
+
+  constexpr const char* kBar = R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (return-void)
+    )
+  )";
+
+  bar_method->set_code(assembler::ircode_from_string(kBar));
+  bar_method->get_code()->build_cfg();
+
+  source_blocks::insert_synthetic_source_blocks_in_method(bar_method, [&]() {
+    return clone_as_synthetic(
+        source_blocks::get_first_source_block_of_method(foo_method),
+        bar_method);
+  });
+
+  EXPECT_EQ(get_blocks_as_txt(bar_method->get_code()->cfg().blocks()),
+            R"(B0: LBar;.bar:()V@4294967295(1:1|0:1|0.5:0.4))");
+}
+
+TEST_F(SourceBlocksTest, create_synth_sb_from_val_list) {
+  g_redex->instrument_mode = true;
+  IRList::CONSECUTIVE_STYLE = IRList::ConsecutiveStyle::kChain;
+  auto foo_method = create_method("LFoo");
+
+  constexpr const char* kFoo = R"(
+    (
+      (.src_block "LFoo;.bar:()V" 0 (1.0 1.0) (0.0 1.0) (0.5 0.4))
+      (.src_block "LFoo;.bar:()V" 1 (1.0 1.0) (0.0 1.0) (0.5 0.4))
+      (const v0 0)
+      (.src_block "LFoo;.bar:()V" 2 (1.0 1.0) (0.0 1.0) (0.5 0.4))
+      (const v1 1)
+
+      (.src_block "LFoo;.bar:()V" 3 (0.5 1.0) (0.0 1.0) (1.0 0.4))
+
+      (return-void)
+    )
+  )";
+
+  foo_method->set_code(assembler::ircode_from_string(kFoo));
+  foo_method->get_code()->build_cfg();
+
+  auto bar_method = create_method("LBar");
+
+  constexpr const char* kBar = R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (return-void)
+    )
+  )";
+
+  bar_method->set_code(assembler::ircode_from_string(kBar));
+  bar_method->get_code()->build_cfg();
+
+  source_blocks::insert_synthetic_source_blocks_in_method(bar_method, [&]() {
+    auto first_sb = source_blocks::get_first_source_block_of_method(foo_method);
+    auto last_sb = source_blocks::get_last_source_block(
+        foo_method->get_code()->cfg().entry_block());
+    std::vector<SourceBlock*> vec = {first_sb, last_sb};
+    return clone_as_synthetic(first_sb, foo_method, vec);
+  });
+
+  EXPECT_EQ(get_blocks_as_txt(bar_method->get_code()->cfg().blocks()),
+            R"(B0: LFoo;.bar:()V@4294967295(1:1|0:1|1:0.4))");
+}

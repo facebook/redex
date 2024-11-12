@@ -532,4 +532,16 @@ void fill_source_block(SourceBlock& sb,
                        uint32_t id,
                        const std::vector<SourceBlock*>& many);
 
+std::unique_ptr<SourceBlock> clone_as_synthetic(SourceBlock* sb,
+                                                DexMethod* ref,
+                                                const SourceBlock::Val& val);
+
+std::unique_ptr<SourceBlock> clone_as_synthetic(
+    SourceBlock* sb,
+    DexMethod* ref = nullptr,
+    const std::optional<SourceBlock::Val>& opt_val = std::nullopt);
+
+std::unique_ptr<SourceBlock> clone_as_synthetic(
+    SourceBlock* sb, DexMethod* ref, const std::vector<SourceBlock*>& many);
+
 } // namespace source_blocks
