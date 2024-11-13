@@ -78,6 +78,13 @@ class RemoveUnreachablePassBase : public Pass {
       const ConcurrentSet<std::string>& removed_symbols);
 
  protected:
+  virtual bool should_sweep_code() const {
+    return m_prune_uninstantiable_insns || m_throw_propagation;
+  }
+
+  static reachability::ObjectCounts before_metrics(DexStoresVector& stores,
+                                                   PassManager& pm);
+
   reachability::IgnoreSets m_ignore_sets;
   bool m_remove_no_argument_constructors = false;
   std::optional<uint32_t> m_emit_graph_on_run;

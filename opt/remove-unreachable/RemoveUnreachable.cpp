@@ -172,13 +172,24 @@ void write_out_removed_symbols_references(
 
 namespace mog = method_override_graph;
 
+reachability::ObjectCounts RemoveUnreachablePassBase::before_metrics(
+    DexStoresVector& stores, PassManager& pm) {
+  reachability::ObjectCounts before = reachability::count_objects(stores);
+  TRACE(RMU, 1, "before: %zu classes, %zu fields, %zu methods",
+        before.num_classes, before.num_fields, before.num_methods);
+  pm.set_metric("before.num_classes", before.num_classes);
+  pm.set_metric("before.num_fields", before.num_fields);
+  pm.set_metric("before.num_methods", before.num_methods);
+  return before;
+}
+
 void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
                                          ConfigFiles& conf,
                                          PassManager& pm) {
   // Store names of removed classes and methods
   ConcurrentSet<std::string> removed_symbols;
 
-  auto sweep_code = m_prune_uninstantiable_insns || m_throw_propagation;
+  auto sweep_code = should_sweep_code();
   auto scope = build_class_scope(stores);
   always_assert(!pm.unreliable_virtual_scopes());
   auto method_override_graph = mog::build_graph(scope);
@@ -191,6 +202,7 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
   }
 
   root_metrics(stores, pm);
+  auto before = before_metrics(stores, pm);
 
   bool emit_graph_this_run =
       m_emit_graph_on_run &&
@@ -212,13 +224,6 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
       m_prune_unreferenced_interfaces, m_prune_uninstantiable_insns,
       m_prune_uncallable_instance_method_bodies, m_throw_propagation,
       m_remove_no_argument_constructors);
-
-  reachability::ObjectCounts before = reachability::count_objects(stores);
-  TRACE(RMU, 1, "before: %zu classes, %zu fields, %zu methods",
-        before.num_classes, before.num_fields, before.num_methods);
-  pm.set_metric("before.num_classes", before.num_classes);
-  pm.set_metric("before.num_fields", before.num_fields);
-  pm.set_metric("before.num_methods", before.num_methods);
   reachability::report(pm, *reachables, reachable_aspects);
 
   ConcurrentReferencesMap references;
