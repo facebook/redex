@@ -38,45 +38,61 @@ namespace {
 
 using RegexMap = std::unordered_map<std::string, boost::regex>;
 
-std::unique_ptr<boost::regex> make_rx(const std::string& s,
-                                      bool convert = true) {
-  if (s.empty()) return nullptr;
+using MatchingStringsCache =
+    ConcurrentMap<std::string, InsertOnlyConcurrentMap<const DexString*, bool>>;
+
+struct RegexWithCache {
+  std::unique_ptr<boost::regex> regex;
+  InsertOnlyConcurrentMap<const DexString*, bool>* cache;
+  explicit operator bool() const { return !!regex; }
+  bool match(const DexString* s) const {
+    return boost::regex_match(s->c_str(), *regex);
+  }
+};
+
+RegexWithCache make_rx(const std::string& s,
+                       MatchingStringsCache* cache,
+                       bool convert = true) {
+  if (s.empty()) return {{}, nullptr};
   auto wc = convert ? proguard_parser::convert_wildcard_type(s) : s;
-  auto rx = proguard_parser::form_type_regex(wc);
-  return std::make_unique<boost::regex>(rx);
+  auto rx =
+      std::make_unique<boost::regex>(proguard_parser::form_type_regex(wc));
+  InsertOnlyConcurrentMap<const DexString*, bool>* c = nullptr;
+  cache->update(wc, [&](auto, auto& value, bool) { c = &value; });
+  return (RegexWithCache){std::move(rx), c};
 }
 
-std::vector<std::unique_ptr<boost::regex>> make_rxs(
-    const std::vector<ClassSpecification::ClassNameSpec>& strs) {
-  std::vector<std::unique_ptr<boost::regex>> rxs;
+std::vector<RegexWithCache> make_rxs(
+    const std::vector<ClassSpecification::ClassNameSpec>& strs,
+    MatchingStringsCache* cache) {
+  std::vector<RegexWithCache> rxs;
   rxs.reserve(strs.size());
   for (const auto& str : strs) {
-    rxs.push_back(make_rx(str.name));
+    rxs.push_back(make_rx(str.name, cache));
   }
   return rxs;
 }
 
-std::string_view get_deobfuscated_name(const DexType* type) {
-  auto cls = type_class(type);
-  if (cls == nullptr) {
-    return type->str();
-  }
-  return cls->get_deobfuscated_name().str();
+bool match_with_cache(const DexString* s, const RegexWithCache& rx_with_cache) {
+  return *rx_with_cache.cache
+              ->get_or_create_and_assert_equal(
+                  s, [&](auto t) { return rx_with_cache.match(t); })
+              .first;
 }
 
-const char* get_deobfuscated_name_cstr(const DexType* type) {
+const DexString* get_deobfuscated_name(const DexType* type) {
   auto cls = type_class(type);
   if (cls == nullptr) {
-    return type->c_str();
+    return type->get_name();
   }
-  return cls->get_deobfuscated_name().c_str();
+  return &cls->get_deobfuscated_name();
 }
 
-bool match_annotation_rx(const DexClass* cls, const boost::regex& annorx) {
+bool match_annotation_rx(const DexClass* cls, const RegexWithCache& annorx) {
   const auto* annos = cls->get_anno_set();
   if (!annos) return false;
   for (const auto& anno : annos->get_annotations()) {
-    if (boost::regex_match(get_deobfuscated_name_cstr(anno->type()), annorx)) {
+    if (match_with_cache(get_deobfuscated_name(anno->type()), annorx)) {
       return true;
     }
   }
@@ -88,17 +104,18 @@ bool match_annotation_rx(const DexClass* cls, const boost::regex& annorx) {
  * rule.
  */
 struct ClassMatcher {
-  explicit ClassMatcher(const KeepSpec& ks)
+  ClassMatcher(const KeepSpec& ks, MatchingStringsCache* cache)
       : setFlags_(ks.class_spec.setAccessFlags),
         unsetFlags_(ks.class_spec.unsetAccessFlags),
         m_class_names(ks.class_spec.classNames),
-        m_cls(make_rxs(ks.class_spec.classNames)),
-        m_anno(make_rx(ks.class_spec.annotationType, false)),
-        m_extends(make_rx(ks.class_spec.extendsClassName)),
-        m_extends_anno(make_rx(ks.class_spec.extendsAnnotationType, false)) {}
+        m_cls(make_rxs(ks.class_spec.classNames, cache)),
+        m_anno(make_rx(ks.class_spec.annotationType, cache, false)),
+        m_extends(make_rx(ks.class_spec.extendsClassName, cache)),
+        m_extends_anno(
+            make_rx(ks.class_spec.extendsAnnotationType, cache, false)) {}
 
   bool match(const DexClass* cls) {
-    for (std::size_t i = 0; i < m_class_names.size(); i++) {
+    for (size_t i = 0; i < m_class_names.size(); i++) {
       const auto& class_name = m_class_names[i];
 
       // Check for class name match `match_name` is really slow; let's
@@ -130,10 +147,9 @@ struct ClassMatcher {
   }
 
  private:
-  bool match_name(const DexClass* cls, int index) const {
-    auto deob_name_cstr = cls->get_deobfuscated_name().c_str();
-    const auto& rx = *m_cls[index];
-    return boost::regex_match(deob_name_cstr, rx);
+  bool match_name(const DexClass* cls, size_t index) const {
+    always_assert(index < m_cls.size());
+    return match_with_cache(&cls->get_deobfuscated_name(), m_cls[index]);
   }
 
   bool match_access(const DexClass* cls) const {
@@ -142,7 +158,7 @@ struct ClassMatcher {
 
   bool match_annotation(const DexClass* cls) const {
     if (!m_anno) return true;
-    return match_annotation_rx(cls, *m_anno);
+    return match_annotation_rx(cls, m_anno);
   }
 
   bool match_extends(const DexClass* cls) {
@@ -155,12 +171,11 @@ struct ClassMatcher {
     if (cls->get_type() == type::java_lang_Object()) return false;
     // First check to see if an annotation type needs to be matched.
     if (m_extends_anno) {
-      if (!match_annotation_rx(cls, *m_extends_anno)) {
+      if (!match_annotation_rx(cls, m_extends_anno)) {
         return false;
       }
     }
-    auto deob_name_cstr = cls->get_deobfuscated_name().c_str();
-    return boost::regex_match(deob_name_cstr, *m_extends);
+    return match_with_cache(&cls->get_deobfuscated_name(), m_extends);
   }
 
   bool search_interfaces(const DexClass* cls) {
@@ -208,10 +223,10 @@ struct ClassMatcher {
   DexAccessFlags setFlags_;
   DexAccessFlags unsetFlags_;
   std::vector<ClassSpecification::ClassNameSpec> m_class_names;
-  std::vector<std::unique_ptr<boost::regex>> m_cls;
-  std::unique_ptr<boost::regex> m_anno;
-  std::unique_ptr<boost::regex> m_extends;
-  std::unique_ptr<boost::regex> m_extends_anno;
+  std::vector<RegexWithCache> m_cls;
+  RegexWithCache m_anno;
+  RegexWithCache m_extends;
+  RegexWithCache m_extends_anno;
 
   std::unordered_map<const DexClass*, bool> m_extends_result_cache;
 };
@@ -414,6 +429,7 @@ class ProguardMatcher {
   const Scope& m_external_classes;
   ClassHierarchy m_hierarchy;
   ProguardRuleRecorder m_recorder;
+  MatchingStringsCache m_matching_strings_cache;
 };
 
 void apply_assume_field_return_value(const MemberSpecification& field_spec,
@@ -492,7 +508,7 @@ bool KeepRuleMatcher::has_annotation(const DexMember* member,
   }
   if (!proguard_parser::has_special_char(annotation)) {
     for (const auto& anno : annos->get_annotations()) {
-      if (get_deobfuscated_name(anno->type()) == annotation) {
+      if (get_deobfuscated_name(anno->type())->str() == annotation) {
         return true;
       }
     }
@@ -500,7 +516,7 @@ bool KeepRuleMatcher::has_annotation(const DexMember* member,
     auto annotation_regex = proguard_parser::form_type_regex(annotation);
     const boost::regex& annotation_matcher = register_matcher(annotation_regex);
     for (const auto& anno : annos->get_annotations()) {
-      if (boost::regex_match(get_deobfuscated_name_cstr(anno->type()),
+      if (boost::regex_match(get_deobfuscated_name(anno->type())->c_str(),
                              annotation_matcher)) {
         return true;
       }
@@ -939,7 +955,7 @@ void ProguardMatcher::process_keep(KeepSpecSet::iterator keep_rules_begin,
   // We only parallelize if keep_rule needs to be applied to all classes.
   auto wq = workqueue_foreach<const KeepSpec*>([&](const KeepSpec* keep_rule) {
     RegexMap regex_map;
-    ClassMatcher class_match(*keep_rule);
+    ClassMatcher class_match(*keep_rule, &m_matching_strings_cache);
     KeepRuleMatcher rule_matcher(rule_type, *keep_rule, regex_map);
 
     for (const auto& cls : m_classes) {
@@ -957,7 +973,7 @@ void ProguardMatcher::process_keep(KeepSpecSet::iterator keep_rules_begin,
   RegexMap regex_map;
   for (auto it = keep_rules_begin; it != keep_rules_end; ++it) {
     const auto& keep_rule = *(*it);
-    ClassMatcher class_match(keep_rule);
+    ClassMatcher class_match(keep_rule, &m_matching_strings_cache);
 
     bool has_negation = std::any_of(keep_rule.class_spec.classNames.begin(),
                                     keep_rule.class_spec.classNames.end(),
@@ -1121,7 +1137,8 @@ ProguardRuleRecorder process_proguard_rules(
 namespace testing {
 
 bool matches(const KeepSpec& ks, const DexClass* c) {
-  ClassMatcher cm{ks};
+  MatchingStringsCache cache;
+  ClassMatcher cm{ks, &cache};
   return cm.match(c);
 }
 
