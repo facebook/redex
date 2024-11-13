@@ -19,6 +19,7 @@
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "Show.h"
+#include "Timer.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -344,11 +345,13 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
   }
   if (emit_graph_this_run) {
     {
+      Timer t("Writing reachability graph");
       std::ofstream os;
       open_or_die(conf.metafile("reachability-graph"), &os);
       reachability::dump_graph(os, reachables->retainers_of());
     }
     {
+      Timer t("Writing method-override graph");
       std::ofstream os;
       open_or_die(conf.metafile("method-override-graph"), &os);
       method_override_graph = mog::build_graph(build_class_scope(stores));
