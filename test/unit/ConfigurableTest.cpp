@@ -5,7 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/optional.hpp>
+#include <optional>
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -27,8 +28,8 @@ struct Base : public Configurable {
   DexType* m_unresolvable_type_param;
   std::vector<std::string> m_vector_of_string_param;
   std::vector<uint32_t> m_vector_of_uint_param;
-  boost::optional<uint32_t> m_optional_uint32;
-  boost::optional<std::string> m_optional_string;
+  std::optional<uint32_t> m_optional_uint32;
+  std::optional<std::string> m_optional_string;
 };
 
 struct BadBindFlags : public Base {

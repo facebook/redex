@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <functional>
 #include <map>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
@@ -17,7 +18,6 @@
 #include <utility>
 #include <vector>
 
-#include <boost/optional.hpp>
 #include <json/value.h>
 
 #include "Debug.h"
@@ -369,7 +369,7 @@ class Configurable {
              T defaultValue,
              T& dest,
              bindflags_t bindflags) {
-    boost::optional<const Json::Value&> value = m_parser(name);
+    auto value = m_parser(name);
     if (value) {
       dest = Configurable::as<T>(*value, bindflags);
     } else {
@@ -379,7 +379,7 @@ class Configurable {
 
   template <typename T>
   void parse_required(const std::string& name, T& dest, bindflags_t bindflags) {
-    boost::optional<const Json::Value&> value = m_parser(name);
+    auto value = m_parser(name);
     always_assert_log(value,
                       "Missing required parameter: %s.%s",
                       get_config_name().c_str(),
@@ -387,9 +387,9 @@ class Configurable {
     dest = Configurable::as<T>(*value, bindflags);
   }
 
- private:
   std::function<void()> m_after_configuration;
-  std::function<boost::optional<const Json::Value&>(const std::string& name)>
+  std::function<std::optional<std::reference_wrapper<const Json::Value>>(
+      const std::string& name)>
       m_parser;
   ReflectorParamFunc m_param_reflector;
   ReflectorTraitFunc m_trait_reflector;
@@ -413,19 +413,19 @@ DEFINE_CONFIGURABLE_PRIMITIVE(float)
 DEFINE_CONFIGURABLE_PRIMITIVE(bool)
 DEFINE_CONFIGURABLE_PRIMITIVE(int)
 DEFINE_CONFIGURABLE_PRIMITIVE(unsigned int)
-DEFINE_CONFIGURABLE_PRIMITIVE(boost::optional<int>)
-DEFINE_CONFIGURABLE_PRIMITIVE(boost::optional<unsigned int>)
+DEFINE_CONFIGURABLE_PRIMITIVE(std::optional<int>)
+DEFINE_CONFIGURABLE_PRIMITIVE(std::optional<unsigned int>)
 DEFINE_CONFIGURABLE_PRIMITIVE(long)
 DEFINE_CONFIGURABLE_PRIMITIVE(unsigned long)
-DEFINE_CONFIGURABLE_PRIMITIVE(boost::optional<long>)
-DEFINE_CONFIGURABLE_PRIMITIVE(boost::optional<unsigned long>)
+DEFINE_CONFIGURABLE_PRIMITIVE(std::optional<long>)
+DEFINE_CONFIGURABLE_PRIMITIVE(std::optional<unsigned long>)
 DEFINE_CONFIGURABLE_PRIMITIVE(long long)
 DEFINE_CONFIGURABLE_PRIMITIVE(unsigned long long)
 DEFINE_CONFIGURABLE_PRIMITIVE(DexType*)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::string)
 DEFINE_CONFIGURABLE_PRIMITIVE(Json::Value)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<Json::Value>)
-DEFINE_CONFIGURABLE_PRIMITIVE(boost::optional<std::string>)
+DEFINE_CONFIGURABLE_PRIMITIVE(std::optional<std::string>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<std::string>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<unsigned int>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<std::string>)

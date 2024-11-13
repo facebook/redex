@@ -7,12 +7,10 @@
 
 #include "Configurable.h"
 
-#include <boost/optional.hpp>
-
 #include "DexClass.h"
 
 template <typename T>
-using optional = boost::optional<T>;
+using optional = std::optional<T>;
 
 #define error_or_warn(error, warn, msg, ...)         \
   always_assert_log(!(error), msg, ##__VA_ARGS__);   \
@@ -24,6 +22,8 @@ using optional = boost::optional<T>;
   always_assert_log(!bindflags, "No bindflags may be specified for a " #type);
 
 namespace {
+
+using OptJsonVal = std::optional<std::reference_wrapper<const Json::Value>>;
 
 // NOTE: "Leaf" parse functions return an `optional` return type to allow
 //       unified checking of the value in container parsing, without having
@@ -53,7 +53,7 @@ optional<DexType*> parse_type(const Json::Value& str,
         bindflags & Configurable::bindflags::types::error_if_unresolvable,
         bindflags & Configurable::bindflags::types::warn_if_unresolvable,
         "\"%s\" failed to resolve to a known type\n", str.asString().c_str());
-    return boost::none;
+    return std::nullopt;
   }
   return type;
 }
@@ -68,7 +68,7 @@ optional<DexClass*> parse_class(const Json::Value& value,
         bindflags & Configurable::bindflags::classes::warn_if_unresolvable,
         "\"%s\" failed to resolve to a known class\n",
         value.asString().c_str());
-    return boost::none;
+    return std::nullopt;
   }
   return cls;
 }
@@ -88,7 +88,7 @@ optional<DexMethodRef*> parse_method_ref(const Json::Value& str,
         bindflags & Configurable::bindflags::methods::warn_if_unresolvable,
         "\"%s\" failed to resolve to a known method\n",
         str.asString().c_str());
-    return boost::none;
+    return std::nullopt;
   }
   return meth;
 }
@@ -97,7 +97,7 @@ optional<DexMethod*> parse_method(const Json::Value& str,
                                   Configurable::bindflags_t bindflags) {
   auto meth_ref_opt = parse_method_ref(str, bindflags);
   if (!meth_ref_opt) {
-    return boost::none;
+    return std::nullopt;
   }
   auto meth_ref = *meth_ref_opt;
   if (!meth_ref->is_def()) {
@@ -105,12 +105,12 @@ optional<DexMethod*> parse_method(const Json::Value& str,
         bindflags & Configurable::bindflags::methods::error_if_not_def,
         bindflags & Configurable::bindflags::methods::warn_if_not_def,
         "\"%s\" resolved to a method reference\n", str.asString().c_str());
-    return boost::none;
+    return std::nullopt;
   }
   return meth_ref->as_def();
 }
 
-// NOTE: For parsing into containers, `boost::none` values of the parsing
+// NOTE: For parsing into containers, `std::nullopt` values of the parsing
 //       function will be skipped.
 
 // Infer the result of the parsing function.
@@ -190,9 +190,9 @@ void Configurable::parse_config(const JsonWrapper& json) {
   m_parser = [&json](const std::string& name) {
     // TODO: add std::string API for contains
     if (json.contains(name.c_str())) {
-      return boost::optional<const Json::Value&>(json[name.c_str()]);
+      return OptJsonVal(json[name.c_str()]);
     } else {
-      return boost::optional<const Json::Value&>{};
+      return OptJsonVal{};
     }
   };
   bind_config();
@@ -207,9 +207,7 @@ Configurable::Reflection Configurable::reflect() {
   cr.name = get_config_name();
   cr.doc = get_config_doc();
   m_after_configuration = {};
-  m_parser = [](const std::string&) {
-    return boost::optional<const Json::Value&>{};
-  };
+  m_parser = [](const std::string&) { return OptJsonVal{}; };
   // N.B. using std::tuple here, meant to evolve to use of std::variant w/ c++17
   m_reflecting = true;
   m_param_reflector =
@@ -268,14 +266,14 @@ unsigned int Configurable::as<unsigned int>(const Json::Value& value,
 }
 
 template <>
-boost::optional<int> Configurable::as<boost::optional<int>>(
+std::optional<int> Configurable::as<std::optional<int>>(
     const Json::Value& value, bindflags_t bindflags) {
   ASSERT_NO_BINDFLAGS(unsigned int);
   return value.asInt();
 }
 
 template <>
-boost::optional<unsigned int> Configurable::as<boost::optional<unsigned int>>(
+std::optional<unsigned int> Configurable::as<std::optional<unsigned int>>(
     const Json::Value& value, bindflags_t bindflags) {
   ASSERT_NO_BINDFLAGS(unsigned int);
   return value.asUInt();
@@ -295,14 +293,14 @@ unsigned long Configurable::as<unsigned long>(const Json::Value& value,
 }
 
 template <>
-boost::optional<long> Configurable::as<boost::optional<long>>(
+std::optional<long> Configurable::as<std::optional<long>>(
     const Json::Value& value, bindflags_t bindflags) {
   ASSERT_NO_BINDFLAGS(unsigned long);
   return value.asInt64();
 }
 
 template <>
-boost::optional<unsigned long> Configurable::as<boost::optional<unsigned long>>(
+std::optional<unsigned long> Configurable::as<std::optional<unsigned long>>(
     const Json::Value& value, bindflags_t bindflags) {
   ASSERT_NO_BINDFLAGS(unsigned long);
   return value.asUInt64();
@@ -335,16 +333,16 @@ std::string Configurable::as<std::string>(const Json::Value& value,
 }
 
 template <>
-boost::optional<std::string> Configurable::as<boost::optional<std::string>>(
+std::optional<std::string> Configurable::as<std::optional<std::string>>(
     const Json::Value& value, bindflags_t bindflags) {
   always_assert_log(
       !(bindflags & ~Configurable::bindflags::optionals::skip_empty_string),
       "Only bindflags::optionals::skip_empty_string may be specified for a "
-      "boost::optional<std::string>");
+      "std::optional<std::string>");
   std::string str = value.asString();
   if (str.empty() &&
       (bindflags & Configurable::bindflags::optionals::skip_empty_string)) {
-    return boost::none;
+    return std::nullopt;
   } else {
     return str;
   }
@@ -419,7 +417,7 @@ Configurable::as<std::unordered_set<const DexType*>>(const Json::Value& value,
   return std::move(*parse_set(
       value,
       [](const Json::Value& v, bindflags_t b) {
-        return boost::optional<const DexType*>(parse_type(v, b));
+        return std::optional<const DexType*>(parse_type(v, b));
       },
       bindflags));
 }
@@ -536,8 +534,8 @@ IMPLEMENT_REFLECTOR(float)
 IMPLEMENT_REFLECTOR_WITH_DFLT_VALUE(bool)
 IMPLEMENT_REFLECTOR_EX(int, "int")
 IMPLEMENT_REFLECTOR_EX(unsigned int, "int")
-IMPLEMENT_REFLECTOR_EX(boost::optional<int>, "int")
-IMPLEMENT_REFLECTOR_EX(boost::optional<unsigned int>, "int")
+IMPLEMENT_REFLECTOR_EX(std::optional<int>, "int")
+IMPLEMENT_REFLECTOR_EX(std::optional<unsigned int>, "int")
 IMPLEMENT_REFLECTOR_EX(long, "long")
 IMPLEMENT_REFLECTOR_EX(unsigned long, "long")
 IMPLEMENT_REFLECTOR_EX(long long, "long")
@@ -546,7 +544,7 @@ IMPLEMENT_REFLECTOR_EX(DexType*, "string")
 IMPLEMENT_REFLECTOR_EX(std::string, "string")
 IMPLEMENT_REFLECTOR_EX(Json::Value, "json")
 IMPLEMENT_REFLECTOR_EX(std::vector<Json::Value>, "list")
-IMPLEMENT_REFLECTOR_EX(boost::optional<std::string>, "string")
+IMPLEMENT_REFLECTOR_EX(std::optional<std::string>, "string")
 IMPLEMENT_REFLECTOR_EX(std::vector<std::string>, "list")
 IMPLEMENT_REFLECTOR_EX(std::vector<unsigned int>, "list")
 IMPLEMENT_REFLECTOR_EX(std::unordered_set<std::string>, "set")

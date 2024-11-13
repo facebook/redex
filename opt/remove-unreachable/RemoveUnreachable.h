@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "Pass.h"
 #include "Reachability.h"
 
@@ -30,7 +32,7 @@ class RemoveUnreachablePassBase : public Pass {
     bind("ignore_string_literals", {}, m_ignore_sets.string_literals);
     bind("ignore_string_literal_annos", {}, m_ignore_sets.string_literal_annos);
     bind("keep_class_in_string", true, m_ignore_sets.keep_class_in_string);
-    bind("emit_graph_on_run", boost::optional<uint32_t>{}, m_emit_graph_on_run);
+    bind("emit_graph_on_run", std::optional<uint32_t>{}, m_emit_graph_on_run);
     bind("always_emit_unreachable_symbols",
          false,
          m_always_emit_unreachable_symbols);
@@ -78,7 +80,7 @@ class RemoveUnreachablePassBase : public Pass {
  protected:
   reachability::IgnoreSets m_ignore_sets;
   bool m_remove_no_argument_constructors = false;
-  boost::optional<uint32_t> m_emit_graph_on_run;
+  std::optional<uint32_t> m_emit_graph_on_run;
   bool m_always_emit_unreachable_symbols = false;
   bool m_emit_removed_symbols_references = false;
   bool m_output_full_removed_symbols = false;
