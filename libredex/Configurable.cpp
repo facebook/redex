@@ -491,6 +491,7 @@ Json::Value Configurable::as<Json::Value>(const Json::Value& value,
   return value;
 }
 
+// NOLINTBEGIN(bugprone-macro-parentheses)
 #define IMPLEMENT_REFLECTOR(type)                                              \
   template <>                                                                  \
   void Configurable::reflect(                                                  \
@@ -540,6 +541,7 @@ Json::Value Configurable::as<Json::Value>(const Json::Value& value,
                                    const std::string& name, type value) { \
     reflector_trait(name, Json::Value(value));                            \
   }
+// NOLINTEND(bugprone-macro-parentheses)
 
 IMPLEMENT_REFLECTOR(float)
 IMPLEMENT_REFLECTOR_WITH_DFLT_VALUE(bool)

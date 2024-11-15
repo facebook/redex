@@ -184,7 +184,6 @@ class Configurable {
     Json::Value value;
   };
 
- public:
   virtual ~Configurable() {}
 
   /**
@@ -399,6 +398,7 @@ class Configurable {
 
 // Specializations for primitives
 
+// NOLINTBEGIN(bugprone-macro-parentheses)
 #define DEFINE_CONFIGURABLE_PRIMITIVE(T)                                  \
   template <>                                                             \
   T Configurable::as<T>(const Json::Value& value, bindflags_t bindflags); \
@@ -408,6 +408,7 @@ class Configurable {
       const std::string& param_doc, const bool param_is_required,         \
       const Configurable::bindflags_t param_bindflags, T& param,          \
       typename DefaultValueType<T>::type default_value);
+// NOLINTEND(bugprone-macro-parentheses)
 
 #define SINGLE_ARG(...) __VA_ARGS__
 DEFINE_CONFIGURABLE_PRIMITIVE(float)
