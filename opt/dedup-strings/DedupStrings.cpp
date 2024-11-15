@@ -19,6 +19,7 @@
 #include "InstructionSequenceOutliner.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
+#include "RedexContext.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "Walkers.h"
@@ -295,6 +296,8 @@ void DedupStrings::gather_non_load_strings(
                     /* exclude_loads */ true);
 
   strings->insert(lstring.begin(), lstring.end());
+  auto& library_names = g_redex->library_names;
+  strings->insert(library_names.begin(), library_names.end());
 }
 
 ConcurrentMap<const DexString*, std::unordered_map<size_t, size_t>>

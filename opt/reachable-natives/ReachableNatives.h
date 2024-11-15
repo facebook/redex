@@ -33,6 +33,7 @@
     default, and stats on the number of (un)reachable native methods are
     logged.
 
+    Optionally, the pass can also track which libraries are loaded by name.
 */
 
 class ReachableNativesPass : public Pass {
@@ -52,9 +53,28 @@ class ReachableNativesPass : public Pass {
   }
 
   void bind_config() override;
+
+  void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
+  bool gather_load_library(DexMethod* caller,
+                           InsertOnlyConcurrentSet<const DexString*>* names);
+
+  void analyze_final_load_library(
+      const DexClasses&,
+      ConfigFiles&,
+      PassManager&,
+      const std::function<bool(DexMethod*)>& reachable_fn);
+
   std::string m_output_file_name;
   size_t m_run_number = 0;
+  size_t m_eval_number = 0;
+  bool m_analyze_load_library = false;
+  std::string m_live_load_library_file_name;
+  std::string m_dead_load_library_file_name;
+  std::vector<std::string> m_additional_load_library_names;
+  std::unordered_set<DexMethod*> m_load_library_unsafe_methods;
+  std::unordered_set<DexMethod*> m_load_library_methods;
 };
