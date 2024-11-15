@@ -22,6 +22,19 @@
 
 #include "utils/SharedBuffer.h"
 
+#define LIBUTILS_PRAGMA(arg) _Pragma(#arg)
+#if defined(__clang__)
+#define LIBUTILS_PRAGMA_FOR_COMPILER(arg) LIBUTILS_PRAGMA(clang arg)
+#elif defined(__GNUC__)
+#define LIBUTILS_PRAGMA_FOR_COMPILER(arg) LIBUTILS_PRAGMA(GCC arg)
+#else
+#define LIBUTILS_PRAGMA_FOR_COMPILER(arg)
+#endif
+#define LIBUTILS_IGNORE(warning_flag)           \
+  LIBUTILS_PRAGMA_FOR_COMPILER(diagnostic push) \
+  LIBUTILS_PRAGMA_FOR_COMPILER(diagnostic ignored warning_flag)
+#define LIBUTILS_IGNORE_END() LIBUTILS_PRAGMA_FOR_COMPILER(diagnostic pop)
+
 namespace android {
 
 static const StaticString16 emptyString(u"");
@@ -390,7 +403,9 @@ void String16::release()
 bool String16::isStaticString() const {
     // See String16.h for notes on the memory layout of String16::StaticData and
     // SharedBuffer.
+    LIBUTILS_IGNORE("-Winvalid-offsetof")
     static_assert(sizeof(SharedBuffer) - offsetof(SharedBuffer, mClientMetadata) == 4);
+    LIBUTILS_IGNORE_END()
     const uint32_t* p = reinterpret_cast<const uint32_t*>(mString);
     return (*(p - 1) & kIsSharedBufferAllocated) == 0;
 }
@@ -398,7 +413,9 @@ bool String16::isStaticString() const {
 size_t String16::staticStringSize() const {
     // See String16.h for notes on the memory layout of String16::StaticData and
     // SharedBuffer.
+    LIBUTILS_IGNORE("-Winvalid-offsetof")
     static_assert(sizeof(SharedBuffer) - offsetof(SharedBuffer, mClientMetadata) == 4);
+    LIBUTILS_IGNORE_END()
     const uint32_t* p = reinterpret_cast<const uint32_t*>(mString);
     return static_cast<size_t>(*(p - 1));
 }
