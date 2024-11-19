@@ -571,12 +571,10 @@ void skip_to_semicolon(TokenIndex& idx) {
   }
 }
 
-void parse_member_specification(TokenIndex& idx,
+bool parse_member_specification(TokenIndex& idx,
                                 ClassSpecification* class_spec,
-                                bool allow_return,
-                                bool* ok) {
+                                bool allow_return) {
   MemberSpecification member_specification;
-  *ok = true;
   member_specification.annotationType = parse_annotation_type(idx);
   if (!parse_access_flags(idx,
                           member_specification.requiredSetAccessFlags,
@@ -584,18 +582,16 @@ void parse_member_specification(TokenIndex& idx,
     // There was a problem parsing the access flags. Return an empty class spec
     // for now.
     std::cerr << "Problem parsing access flags for member specification.\n";
-    *ok = false;
     skip_to_semicolon(idx);
-    return;
+    return false;
   }
   // The next TokenType better be an identifier.
   if (idx.type() != TokenType::identifier) {
     std::cerr << "Expecting field or member specification but got "
               << idx.show() << " at line " << idx.line() << std::endl
               << idx.show_context(2) << std::endl;
-    *ok = false;
     skip_to_semicolon(idx);
-    return;
+    return false;
   }
   const auto& ident = idx.data();
   // Check for "*".
@@ -603,28 +599,31 @@ void parse_member_specification(TokenIndex& idx,
     member_specification.name = "";
     member_specification.descriptor = "";
     idx.next();
-    gobble_semicolon(idx, ok);
+    bool ok = true;
+    gobble_semicolon(idx, &ok);
     class_spec->methodSpecifications.push_back(member_specification);
     class_spec->fieldSpecifications.push_back(member_specification);
-    return;
+    return ok;
   }
   // Check for <methods>
   if (ident == "<methods>") {
     member_specification.name = "";
     member_specification.descriptor = "";
     idx.next();
-    gobble_semicolon(idx, ok);
+    bool ok = true;
+    gobble_semicolon(idx, &ok);
     class_spec->methodSpecifications.push_back(member_specification);
-    return;
+    return ok;
   }
   // Check for <fields>
   if (ident == "<fields>") {
     member_specification.name = "";
     member_specification.descriptor = "";
     idx.next();
-    gobble_semicolon(idx, ok);
+    bool ok = true;
+    gobble_semicolon(idx, &ok);
     class_spec->fieldSpecifications.push_back(member_specification);
-    return;
+    return ok;
   }
   // Check for <init>
   if (ident == "<init>") {
@@ -639,9 +638,8 @@ void parse_member_specification(TokenIndex& idx,
       std::cerr << "Expecting type identifier but got " << idx.show()
                 << " at line " << idx.line() << std::endl
                 << idx.show_context(2) << std::endl;
-      *ok = false;
       skip_to_semicolon(idx);
-      return;
+      return false;
     }
     const auto& typ = idx.data();
     idx.next();
@@ -650,9 +648,8 @@ void parse_member_specification(TokenIndex& idx,
       std::cerr << "Expecting identifier name for class member but got "
                 << idx.show() << " at line " << idx.line() << std::endl
                 << idx.show_context(2) << std::endl;
-      *ok = false;
       skip_to_semicolon(idx);
-      return;
+      return false;
     }
     member_specification.name = idx.str();
     idx.next();
@@ -671,8 +668,7 @@ void parse_member_specification(TokenIndex& idx,
         std::cerr << "Expecting type identifier but got " << idx.show()
                   << " at line " << idx.line() << std::endl
                   << idx.show_context(2) << std::endl;
-        *ok = false;
-        return;
+        return false;
       }
       const auto& typ = idx.data();
       consume_token(idx, TokenType::identifier);
@@ -683,8 +679,7 @@ void parse_member_specification(TokenIndex& idx,
         std::cerr << "Expecting comma or ) but got " << idx.show()
                   << " at line " << idx.line() << std::endl
                   << idx.show_context(2) << std::endl;
-        *ok = false;
-        return;
+        return false;
       }
       // If the next TokenType is a comma (rather than closing bracket) consume
       // it and check that it is followed by an identifier.
@@ -694,8 +689,7 @@ void parse_member_specification(TokenIndex& idx,
           std::cerr << "Expecting type identifier after comma but got "
                     << idx.show() << " at line " << idx.line() << std::endl
                     << idx.show_context(2) << std::endl;
-          *ok = false;
-          return;
+          return false;
         }
       }
     }
@@ -721,15 +715,17 @@ void parse_member_specification(TokenIndex& idx,
     }
   }
   // Make sure member specification ends with a semicolon.
-  gobble_semicolon(idx, ok);
+  bool ok = true;
+  gobble_semicolon(idx, &ok);
   if (!ok) {
-    return;
+    return false;
   }
   if (member_specification.descriptor[0] == '(') {
     class_spec->methodSpecifications.push_back(member_specification);
   } else {
     class_spec->fieldSpecifications.push_back(member_specification);
   }
+  return true;
 }
 
 bool parse_member_specifications(TokenIndex& idx,
@@ -740,11 +736,11 @@ bool parse_member_specifications(TokenIndex& idx,
     idx.next();
     while ((idx.type() != TokenType::closeCurlyBracket) &&
            (idx.type() != TokenType::eof_token)) {
-      parse_member_specification(idx, class_spec, allow_return, &ok);
-      if (!ok) {
+      if (!parse_member_specification(idx, class_spec, allow_return)) {
         // We failed to parse a member specification so skip to the next
         // semicolon.
         skip_to_semicolon(idx);
+        ok = false;
       }
     }
     if (idx.type() == TokenType::closeCurlyBracket) {
