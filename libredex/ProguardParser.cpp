@@ -732,16 +732,16 @@ void parse_member_specification(TokenIndex& idx,
   }
 }
 
-void parse_member_specifications(TokenIndex& idx,
+bool parse_member_specifications(TokenIndex& idx,
                                  ClassSpecification* class_spec,
-                                 bool allow_return,
-                                 bool* ok) {
+                                 bool allow_return) {
+  bool ok = true;
   if (idx.type() == TokenType::openCurlyBracket) {
     idx.next();
     while ((idx.type() != TokenType::closeCurlyBracket) &&
            (idx.type() != TokenType::eof_token)) {
-      parse_member_specification(idx, class_spec, allow_return, ok);
-      if (!*ok) {
+      parse_member_specification(idx, class_spec, allow_return, &ok);
+      if (!ok) {
         // We failed to parse a member specification so skip to the next
         // semicolon.
         skip_to_semicolon(idx);
@@ -751,6 +751,7 @@ void parse_member_specifications(TokenIndex& idx,
       idx.next();
     }
   }
+  return ok;
 }
 
 bool member_comparison(const MemberSpecification& m1,
@@ -844,10 +845,9 @@ std::optional<ClassSpecification> parse_class_specification(TokenIndex& idx,
     idx.next();
   }
   // Parse the member specifications, if there are any
-  const bool orig_ok = ok;
-  parse_member_specifications(idx, &class_spec, allow_return, &ok);
-  always_assert(orig_ok || !ok);
-  if (!ok) {
+  const bool member_ok =
+      parse_member_specifications(idx, &class_spec, allow_return);
+  if (!ok || !member_ok) {
     return std::nullopt;
   }
   std::sort(class_spec.fieldSpecifications.begin(),
