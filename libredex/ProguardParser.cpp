@@ -169,39 +169,40 @@ void parse_filepaths(TokenIndex& idx, std::vector<std::string>* into) {
   }
 }
 
-bool parse_filepath_command(TokenIndex& idx,
-                            TokenType filepath_command_token,
-                            const std::string& basedir,
-                            std::vector<std::string>* filepaths) {
-  if (idx.type() == filepath_command_token) {
-    unsigned int line_number = idx.line();
-    idx.next(); // Consume the command token.
-    // Fail without consumption if this is an end of file token.
-    if (idx.type() == TokenType::eof_token) {
-      std::cerr
-          << "Expecting at least one file as an argument but found end of "
-             "file at line "
-          << line_number << std::endl;
-      return true;
-    }
-    // Fail without consumption if this is a command token.
-    if (idx.it->is_command()) {
-      std::cerr << "Expecting a file path argument but got command "
-                << idx.show() << " at line  " << idx.line() << std::endl
-                << idx.show_context(2) << std::endl;
-      return true;
-    }
-    // Parse the filename.
-    if (idx.type() != TokenType::filepath) {
-      std::cerr << "Expected a filepath but got " << idx.show() << " at line "
-                << idx.line() << std::endl
-                << idx.show_context(2) << std::endl;
-      return true;
-    }
-    parse_filepaths(idx, filepaths);
-    return true;
+std::optional<std::vector<std::string>> parse_filepath_command(
+    TokenIndex& idx,
+    TokenType filepath_command_token,
+    const std::string& basedir) {
+  if (idx.type() != filepath_command_token) {
+    return std::nullopt;
   }
-  return false;
+
+  unsigned int line_number = idx.line();
+  idx.next(); // Consume the command token.
+  // Fail without consumption if this is an end of file token.
+  if (idx.type() == TokenType::eof_token) {
+    std::cerr << "Expecting at least one file as an argument but found end of "
+                 "file at line "
+              << line_number << std::endl;
+    return {};
+  }
+  // Fail without consumption if this is a command token.
+  if (idx.it->is_command()) {
+    std::cerr << "Expecting a file path argument but got command " << idx.show()
+              << " at line  " << idx.line() << std::endl
+              << idx.show_context(2) << std::endl;
+    return {};
+  }
+  // Parse the filename.
+  if (idx.type() != TokenType::filepath) {
+    std::cerr << "Expected a filepath but got " << idx.show() << " at line "
+              << idx.line() << std::endl
+              << idx.show_context(2) << std::endl;
+    return {};
+  }
+  std::vector<std::string> filepaths;
+  parse_filepaths(idx, &filepaths);
+  return std::move(filepaths);
 }
 
 bool parse_optional_filepath_command(TokenIndex& idx,
@@ -865,10 +866,12 @@ void parse(const std::vector<Token>& vec,
     }
 
     // Input/Output Options
-    if (parse_filepath_command(idx,
-                               TokenType::include,
-                               pg_config->basedirectory,
-                               &pg_config->includes)) {
+    if (auto fp = parse_filepath_command(
+            idx, TokenType::include, pg_config->basedirectory)) {
+      pg_config->includes.insert(pg_config->includes.end(),
+                                 std::make_move_iterator(fp->begin()),
+                                 std::make_move_iterator(fp->end()));
+      // TODO: parse error on fp == {}?
       continue;
     }
     if (auto sfc =
@@ -904,10 +907,12 @@ void parse(const std::vector<Token>& vec,
       continue;
     }
     // -dontskipnonpubliclibraryclassmembers not supported
-    if (parse_filepath_command(idx,
-                               TokenType::keepdirectories,
-                               pg_config->basedirectory,
-                               &pg_config->keepdirectories)) {
+    if (auto fp = parse_filepath_command(
+            idx, TokenType::keepdirectories, pg_config->basedirectory)) {
+      pg_config->keepdirectories.insert(pg_config->keepdirectories.end(),
+                                        std::make_move_iterator(fp->begin()),
+                                        std::make_move_iterator(fp->end()));
+      // TODO: parse error on fp == {}?
       continue;
     }
     if (parse_target(idx, &pg_config->target_version)) {
