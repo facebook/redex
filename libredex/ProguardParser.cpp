@@ -153,7 +153,7 @@ std::optional<std::string> parse_single_filepath_command(
 }
 
 template <bool kOptional = false>
-void parse_filepaths(TokenIndex& idx, std::vector<std::string>* into) {
+std::vector<std::string> parse_filepaths(TokenIndex& idx) {
   std::vector<std::string> filepaths;
   if (idx.type() != TokenType::filepath) {
     if (!kOptional) {
@@ -161,12 +161,14 @@ void parse_filepaths(TokenIndex& idx, std::vector<std::string>* into) {
                 << idx.line() << std::endl
                 << idx.show_context(2) << std::endl;
     }
-    return;
+    {};
   }
+  std::vector<std::string> res;
   while (idx.type() == TokenType::filepath) {
-    into->push_back(idx.str());
+    res.push_back(idx.str());
     idx.next();
   }
+  return res;
 }
 
 std::optional<std::vector<std::string>> parse_filepath_command(
@@ -200,9 +202,7 @@ std::optional<std::vector<std::string>> parse_filepath_command(
               << idx.show_context(2) << std::endl;
     return {};
   }
-  std::vector<std::string> filepaths;
-  parse_filepaths(idx, &filepaths);
-  return std::move(filepaths);
+  return parse_filepaths(idx);
 }
 
 std::optional<std::vector<std::string>> parse_optional_filepath_command(
@@ -212,9 +212,7 @@ std::optional<std::vector<std::string>> parse_optional_filepath_command(
   }
   idx.next(); // Consume the command token.
   // Parse an optional filepath argument.
-  std::vector<std::string> filepaths;
-  parse_filepaths</*kOptional=*/true>(idx, &filepaths);
-  return std::move(filepaths);
+  return parse_filepaths</*kOptional=*/true>(idx);
 }
 
 std::optional<std::vector<std::string>> parse_jars(TokenIndex& idx,
@@ -233,9 +231,7 @@ std::optional<std::vector<std::string>> parse_jars(TokenIndex& idx,
       return {};
     }
     // Parse the list of filenames.
-    std::vector<std::string> jars;
-    parse_filepaths(idx, &jars);
-    return std::move(jars);
+    return parse_filepaths(idx);
   }
   return std::nullopt;
 }
