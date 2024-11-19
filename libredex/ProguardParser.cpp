@@ -848,6 +848,13 @@ void parse(const std::vector<Token>& vec,
            const std::string& filename) {
   bool ok;
   TokenIndex idx{vec, vec.begin()};
+
+  auto check_empty = [&stats](const auto& opt_val) {
+    if (opt_val->empty() && false) {
+      ++stats.parse_errors;
+    }
+  };
+
   while (idx.it != idx.vec.end()) {
     // Break out if we are at the end of the TokenType stream.
     if (idx.type() == TokenType::eof_token) {
@@ -872,7 +879,7 @@ void parse(const std::vector<Token>& vec,
     if (auto fp = parse_filepath_command(
             idx, TokenType::include, pg_config->basedirectory)) {
       move_vector_elements(*fp, pg_config->includes);
-      // TODO: parse error on fp == {}?
+      check_empty(fp);
       continue;
     }
     if (auto sfc =
@@ -886,19 +893,19 @@ void parse(const std::vector<Token>& vec,
     if (auto jars =
             parse_jars(idx, TokenType::injars, pg_config->basedirectory)) {
       move_vector_elements(*jars, pg_config->injars);
-      // TODO: parse error on jars == {}?
+      check_empty(jars);
       continue;
     }
     if (auto jars =
             parse_jars(idx, TokenType::outjars, pg_config->basedirectory)) {
       move_vector_elements(*jars, pg_config->outjars);
-      // TODO: parse error on jars == {}?
+      check_empty(jars);
       continue;
     }
     if (auto jars =
             parse_jars(idx, TokenType::libraryjars, pg_config->basedirectory)) {
       move_vector_elements(*jars, pg_config->libraryjars);
-      // TODO: parse error on jars == {}?
+      check_empty(jars);
       continue;
     }
     // -skipnonpubliclibraryclasses not supported
@@ -911,7 +918,7 @@ void parse(const std::vector<Token>& vec,
     if (auto fp = parse_filepath_command(
             idx, TokenType::keepdirectories, pg_config->basedirectory)) {
       move_vector_elements(*fp, pg_config->keepdirectories);
-      // TODO: parse error on fp == {}?
+      check_empty(fp);
       continue;
     }
     if (auto target = parse_target(idx)) {
@@ -1031,7 +1038,7 @@ void parse(const std::vector<Token>& vec,
     }
     if (auto fl = parse_filter_list_command(idx, TokenType::optimizations)) {
       move_vector_elements(*fl, pg_config->optimization_filters);
-      // TODO: parse error on fp == {}?
+      check_empty(fl);
       continue;
     }
     if (parse_optimizationpasses_command(idx)) {
@@ -1103,7 +1110,7 @@ void parse(const std::vector<Token>& vec,
     }
     if (auto fl = parse_filter_list_command(idx, TokenType::keeppackagenames)) {
       move_vector_elements(*fl, pg_config->keeppackagenames);
-      // TODO: parse error on fp == {}?
+      check_empty(fl);
       continue;
     }
     if (test_and_consume(idx, TokenType::dontpreverify_token)) {
@@ -1120,12 +1127,12 @@ void parse(const std::vector<Token>& vec,
 
     if (auto fl = parse_filter_list_command(idx, TokenType::dontwarn)) {
       move_vector_elements(*fl, pg_config->dontwarn);
-      // TODO: parse error on fp == {}?
+      check_empty(fl);
       continue;
     }
     if (auto fl = parse_filter_list_command(idx, TokenType::keepattributes)) {
       move_vector_elements(*fl, pg_config->keepattributes);
-      // TODO: parse error on fp == {}?
+      check_empty(fl);
       continue;
     }
 
