@@ -290,12 +290,15 @@ std::optional<std::vector<std::string>> parse_filter_list_command(
   return std::move(filters);
 }
 
-bool parse_optimizationpasses_command(TokenIndex& idx) {
+std::optional<bool> parse_optimizationpasses_command(TokenIndex& idx) {
   if (idx.type() != TokenType::optimizationpasses) {
-    return false;
+    return std::nullopt;
   }
   idx.next();
   // Comsume the next token.
+  if (idx.type() == TokenType::eof_token) {
+    return false;
+  }
   idx.next();
   return true;
 }
@@ -1071,7 +1074,10 @@ void parse(const std::vector<Token>& vec,
       check_empty(fl);
       continue;
     }
-    if (parse_optimizationpasses_command(idx)) {
+    if (auto op = parse_optimizationpasses_command(idx)) {
+      if (!*op) {
+        ++stats.parse_errors;
+      }
       continue;
     }
 
