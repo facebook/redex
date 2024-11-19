@@ -806,29 +806,26 @@ void parse_class_names(
   }
 }
 
-ClassSpecification parse_class_specification(TokenIndex& idx,
-                                             bool allow_return,
-                                             bool* ok) {
+std::optional<ClassSpecification> parse_class_specification(TokenIndex& idx,
+                                                            bool allow_return) {
   ClassSpecification class_spec;
-  *ok = true;
   class_spec.annotationType = parse_annotation_type(idx);
   if (!parse_access_flags(
           idx, class_spec.setAccessFlags, class_spec.unsetAccessFlags)) {
     // There was a problem parsing the access flags. Return an empty class spec
     // for now.
     std::cerr << "Problem parsing access flags for class specification.\n";
-    *ok = false;
-    return class_spec;
+    return std::nullopt;
   }
   if (!parse_class_token(
           idx, class_spec.setAccessFlags, class_spec.unsetAccessFlags)) {
-    *ok = false;
-    return class_spec;
+    return std::nullopt;
   }
   // Parse the class name(s).
-  parse_class_names(idx, ok, class_spec.classNames);
-  if (!*ok) {
-    return class_spec;
+  bool ok = true;
+  parse_class_names(idx, &ok, class_spec.classNames);
+  if (!ok) {
+    return std::nullopt;
   }
   // Parse extends/implements if present, treating implements like extends.
   if ((idx.type() == TokenType::extends) ||
@@ -839,7 +836,7 @@ ClassSpecification parse_class_specification(TokenIndex& idx,
       std::cerr << "Expecting a class name after extends/implements but got "
                 << idx.show() << " at line " << idx.line() << std::endl
                 << idx.show_context(2) << std::endl;
-      *ok = false;
+      ok = false;
       class_spec.extendsClassName = "";
     } else {
       class_spec.extendsClassName = idx.str();
@@ -847,14 +844,19 @@ ClassSpecification parse_class_specification(TokenIndex& idx,
     idx.next();
   }
   // Parse the member specifications, if there are any
-  parse_member_specifications(idx, &class_spec, allow_return, ok);
+  const bool orig_ok = ok;
+  parse_member_specifications(idx, &class_spec, allow_return, &ok);
+  always_assert(orig_ok || !ok);
+  if (!ok) {
+    return std::nullopt;
+  }
   std::sort(class_spec.fieldSpecifications.begin(),
             class_spec.fieldSpecifications.end(),
             member_comparison);
   std::sort(class_spec.methodSpecifications.begin(),
             class_spec.methodSpecifications.end(),
             member_comparison);
-  return class_spec;
+  return std::move(class_spec);
 }
 
 std::optional<bool> parse_keep(TokenIndex& idx,
@@ -878,10 +880,12 @@ std::optional<bool> parse_keep(TokenIndex& idx,
       skip_to_next_command(idx);
       return false;
     }
-    bool ok;
-    keep->class_spec = parse_class_specification(idx, allow_return, &ok);
+    auto class_spec = parse_class_specification(idx, allow_return);
+    if (class_spec) {
+      keep->class_spec = std::move(*class_spec);
+    }
     spec->emplace(std::move(keep));
-    return ok;
+    return class_spec.has_value();
   }
   return std::nullopt;
 }
