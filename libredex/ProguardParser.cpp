@@ -385,8 +385,7 @@ bool parse_modifiers(TokenIndex& idx, KeepSpec* keep) {
   return true;
 }
 
-DexAccessFlags process_access_modifier(TokenType type, bool* is_access_flag) {
-  *is_access_flag = true;
+std::optional<DexAccessFlags> process_access_modifier(TokenType type) {
   switch (type) {
   case TokenType::publicToken:
     return ACC_PUBLIC;
@@ -409,8 +408,7 @@ DexAccessFlags process_access_modifier(TokenType type, bool* is_access_flag) {
   case TokenType::transient:
     return ACC_TRANSIENT;
   default:
-    *is_access_flag = false;
-    return ACC_PUBLIC;
+    return std::nullopt;
   }
 }
 
@@ -471,29 +469,27 @@ bool parse_access_flags(TokenIndex& idx,
       negated = true;
       ++access_it;
     }
-    bool ok;
-    DexAccessFlags access_flag = process_access_modifier(access_it->type, &ok);
-    if (ok) {
+    if (auto access_flag = process_access_modifier(access_it->type)) {
       idx.it = ++access_it;
       if (negated) {
-        if (is_access_flag_set(setFlags_, access_flag)) {
+        if (is_access_flag_set(setFlags_, *access_flag)) {
           std::cerr << "Access flag " << idx.show()
                     << " occurs with conflicting settings at line "
                     << idx.line() << std::endl
                     << idx.show_context(2) << std::endl;
           return false;
         }
-        set_access_flag(unsetFlags_, access_flag);
+        set_access_flag(unsetFlags_, *access_flag);
         negated = false;
       } else {
-        if (is_access_flag_set(unsetFlags_, access_flag)) {
+        if (is_access_flag_set(unsetFlags_, *access_flag)) {
           std::cerr << "Access flag " << idx.show()
                     << " occurs with conflicting settings at line "
                     << idx.line() << std::endl
                     << idx.show_context(2) << std::endl;
           return false;
         }
-        set_access_flag(setFlags_, access_flag);
+        set_access_flag(setFlags_, *access_flag);
         negated = false;
       }
     } else {
