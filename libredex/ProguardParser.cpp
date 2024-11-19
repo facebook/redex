@@ -751,17 +751,16 @@ bool member_comparison(const MemberSpecification& m1,
   return m1.name < m2.name;
 }
 
-std::string parse_class_name(TokenIndex& idx, bool* ok) {
+std::optional<std::string> parse_class_name(TokenIndex& idx) {
   if (idx.type() != TokenType::identifier) {
     std::cerr << "Expected class name but got " << idx.show() << " at line "
               << idx.line() << std::endl
               << idx.show_context(2) << std::endl;
-    *ok = false;
-    return "";
+    return std::nullopt;
   }
   auto name = idx.str();
   idx.next();
-  return name;
+  return std::move(name);
 }
 
 bool parse_class_names(
@@ -780,9 +779,9 @@ bool parse_class_names(
   };
 
   maybe_negated();
-  bool ok = true;
-  push_to(parse_class_name(idx, &ok));
-  if (!ok) {
+  if (auto cn = parse_class_name(idx)) {
+    push_to(std::move(*cn));
+  } else {
     return false;
   }
 
@@ -792,8 +791,9 @@ bool parse_class_names(
     idx.next();
 
     maybe_negated();
-    push_to(parse_class_name(idx, &ok));
-    if (!ok) {
+    if (auto cn = parse_class_name(idx)) {
+      push_to(std::move(*cn));
+    } else {
       return false;
     }
   }
