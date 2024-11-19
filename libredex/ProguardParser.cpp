@@ -771,9 +771,8 @@ std::string parse_class_name(TokenIndex& idx, bool* ok) {
   return name;
 }
 
-void parse_class_names(
+bool parse_class_names(
     TokenIndex& idx,
-    bool* ok,
     std::vector<ClassSpecification::ClassNameSpec>& class_names) {
   bool negated{false};
   auto maybe_negated = [&]() {
@@ -788,9 +787,10 @@ void parse_class_names(
   };
 
   maybe_negated();
-  push_to(parse_class_name(idx, ok));
-  if (!*ok) {
-    return;
+  bool ok = true;
+  push_to(parse_class_name(idx, &ok));
+  if (!ok) {
+    return false;
   }
 
   // Maybe consume comma delimited list
@@ -799,11 +799,12 @@ void parse_class_names(
     idx.next();
 
     maybe_negated();
-    push_to(parse_class_name(idx, ok));
-    if (!*ok) {
-      return;
+    push_to(parse_class_name(idx, &ok));
+    if (!ok) {
+      return false;
     }
   }
+  return true;
 }
 
 std::optional<ClassSpecification> parse_class_specification(TokenIndex& idx,
@@ -822,11 +823,10 @@ std::optional<ClassSpecification> parse_class_specification(TokenIndex& idx,
     return std::nullopt;
   }
   // Parse the class name(s).
-  bool ok = true;
-  parse_class_names(idx, &ok, class_spec.classNames);
-  if (!ok) {
+  if (!parse_class_names(idx, class_spec.classNames)) {
     return std::nullopt;
   }
+  bool ok = true;
   // Parse extends/implements if present, treating implements like extends.
   if ((idx.type() == TokenType::extends) ||
       (idx.type() == TokenType::implements)) {
