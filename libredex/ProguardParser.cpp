@@ -250,7 +250,7 @@ bool parse_repackageclasses(TokenIndex& idx) {
   return true;
 }
 
-bool parse_target(TokenIndex& idx, std::string* target_version) {
+std::optional<std::string> parse_target(TokenIndex& idx) {
   if (idx.type() == TokenType::target) {
     idx.next(); // Consume the target command token.
     // Check to make sure the next TokenType is a version token.
@@ -258,14 +258,14 @@ bool parse_target(TokenIndex& idx, std::string* target_version) {
       std::cerr << "Expected a target version but got " << idx.show()
                 << " at line " << idx.line() << std::endl
                 << idx.show_context(2) << std::endl;
-      return true;
+      return "";
     }
-    *target_version = idx.str();
+    auto str = idx.str();
     // Consume the target version token.
     idx.next();
-    return true;
+    return str;
   }
-  return false;
+  return std::nullopt;
 }
 
 bool test_and_consume(TokenIndex& idx, TokenType to_test) {
@@ -914,7 +914,10 @@ void parse(const std::vector<Token>& vec,
       // TODO: parse error on fp == {}?
       continue;
     }
-    if (parse_target(idx, &pg_config->target_version)) {
+    if (auto target = parse_target(idx)) {
+      if (!target->empty()) {
+        pg_config->target_version = std::move(*target);
+      }
       continue;
     }
     // -forceprocessing not supported
