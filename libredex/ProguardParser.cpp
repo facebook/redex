@@ -240,34 +240,6 @@ bool parse_jars(TokenIndex& idx,
   return false;
 }
 
-bool parse_dontusemixedcaseclassnames(TokenIndex& idx,
-                                      bool* dontusemixedcaseclassnames) {
-  if (idx.type() != TokenType::dontusemixedcaseclassnames_token) {
-    return false;
-  }
-  *dontusemixedcaseclassnames = true;
-  idx.next();
-  return true;
-}
-
-bool parse_dontpreverify(TokenIndex& idx, bool* dontpreverify) {
-  if (idx.type() != TokenType::dontpreverify_token) {
-    return false;
-  }
-  *dontpreverify = true;
-  idx.next();
-  return true;
-}
-
-bool parse_verbose(TokenIndex& idx, bool* verbose) {
-  if (idx.type() != TokenType::verbose_token) {
-    return false;
-  }
-  *verbose = true;
-  idx.next();
-  return true;
-}
-
 bool parse_repackageclasses(TokenIndex& idx) {
   if (idx.type() != TokenType::repackageclasses) {
     return false;
@@ -300,13 +272,11 @@ bool parse_target(TokenIndex& idx, std::string* target_version) {
   return false;
 }
 
-bool parse_allowaccessmodification(TokenIndex& idx,
-                                   bool* allowaccessmodification) {
-  if (idx.type() != TokenType::allowaccessmodification_token) {
+bool test_and_consume(TokenIndex& idx, TokenType to_test) {
+  if (idx.type() != to_test) {
     return false;
   }
   idx.next();
-  *allowaccessmodification = true;
   return true;
 }
 
@@ -1109,22 +1079,24 @@ void parse(const std::vector<Token>& vec,
       continue;
     }
 
-    if (parse_allowaccessmodification(idx,
-                                      &pg_config->allowaccessmodification)) {
+    if (test_and_consume(idx, TokenType::allowaccessmodification_token)) {
+      pg_config->allowaccessmodification = true;
       continue;
     }
-    if (parse_dontusemixedcaseclassnames(
-            idx, &pg_config->dontusemixedcaseclassnames)) {
+    if (test_and_consume(idx, TokenType::dontusemixedcaseclassnames_token)) {
+      pg_config->dontusemixedcaseclassnames = true;
       continue;
     }
     if (parse_filter_list_command(
             idx, TokenType::keeppackagenames, &pg_config->keeppackagenames)) {
       continue;
     }
-    if (parse_dontpreverify(idx, &pg_config->dontpreverify)) {
+    if (test_and_consume(idx, TokenType::dontpreverify_token)) {
+      pg_config->dontpreverify = true;
       continue;
     }
-    if (parse_verbose(idx, &pg_config->verbose)) {
+    if (test_and_consume(idx, TokenType::verbose_token)) {
+      pg_config->verbose = true;
       continue;
     }
     if (parse_repackageclasses(idx)) {
