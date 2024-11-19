@@ -835,6 +835,94 @@ std::optional<bool> parse_keep(TokenIndex& idx,
   return std::nullopt;
 }
 
+struct KeepSpecDesc {
+  enum class Target {
+    Keep,
+    AssumeNoSideEffects,
+    AssumeValues,
+    WhyAreYouKeeping,
+  };
+  TokenType token_type;
+  Target spec_set;
+  bool mark_classes;
+  bool mark_conditionally;
+  bool allowshrinking;
+  bool allow_return;
+
+  KeepSpecSet* get_spec_set(ProguardConfiguration* pg_config) const {
+    switch (spec_set) {
+    case Target::Keep:
+      return &pg_config->keep_rules;
+    case Target::AssumeNoSideEffects:
+      return &pg_config->assumenosideeffects_rules;
+    case Target::AssumeValues:
+      return &pg_config->assumevalues_rules;
+    case Target::WhyAreYouKeeping:
+      return &pg_config->whyareyoukeeping_rules;
+    }
+    UNREACHABLE();
+  }
+};
+
+// Technically needs C++20, but GCC/Clang support this.
+constexpr std::array<KeepSpecDesc, 9> KEEP_SPECS = {
+    // Keep commands.
+    {{.token_type = TokenType::keep,
+      .spec_set = KeepSpecDesc::Target::Keep,
+      .mark_classes = true,
+      .mark_conditionally = false,
+      .allowshrinking = false,
+      .allow_return = false},
+     {.token_type = TokenType::keepclassmembers,
+      .spec_set = KeepSpecDesc::Target::Keep,
+      .mark_classes = false,
+      .mark_conditionally = false,
+      .allowshrinking = false,
+      .allow_return = false},
+     {.token_type = TokenType::keepclasseswithmembers,
+      .spec_set = KeepSpecDesc::Target::Keep,
+      .mark_classes = false,
+      .mark_conditionally = true,
+      .allowshrinking = false,
+      .allow_return = false},
+     {.token_type = TokenType::keepnames,
+      .spec_set = KeepSpecDesc::Target::Keep,
+      .mark_classes = true,
+      .mark_conditionally = false,
+      .allowshrinking = true,
+      .allow_return = false},
+     {.token_type = TokenType::keepclassmembernames,
+      .spec_set = KeepSpecDesc::Target::Keep,
+      .mark_classes = false,
+      .mark_conditionally = false,
+      .allowshrinking = true,
+      .allow_return = false},
+     {.token_type = TokenType::keepclasseswithmembernames,
+      .spec_set = KeepSpecDesc::Target::Keep,
+      .mark_classes = false,
+      .mark_conditionally = true,
+      .allowshrinking = true,
+      .allow_return = false},
+     // Not-keep commands.
+     {.token_type = TokenType::assumenosideeffects,
+      .spec_set = KeepSpecDesc::Target::AssumeNoSideEffects,
+      .mark_classes = false,
+      .mark_conditionally = false,
+      .allowshrinking = false,
+      .allow_return = true},
+     {.token_type = TokenType::assumevalues,
+      .spec_set = KeepSpecDesc::Target::AssumeValues,
+      .mark_classes = false,
+      .mark_conditionally = false,
+      .allowshrinking = false,
+      .allow_return = true},
+     {.token_type = TokenType::whyareyoukeeping,
+      .spec_set = KeepSpecDesc::Target::WhyAreYouKeeping,
+      .mark_classes = false,
+      .mark_conditionally = false,
+      .allowshrinking = false,
+      .allow_return = false}}};
+
 template <typename T>
 void move_vector_elements(std::vector<T>& from, std::vector<T>& to) {
   to.insert(to.end(),
@@ -934,79 +1022,28 @@ void parse(const std::vector<Token>& vec,
     }
     // -forceprocessing not supported
 
-    // Keep Options
-    if (auto val_ok = parse_keep(idx,
-                                 TokenType::keep,
-                                 &pg_config->keep_rules,
-                                 true, // mark_classes
-                                 false, // mark_conditionally
-                                 false, // allowshrinking
-                                 /* allow_return= */ false,
-                                 filename,
-                                 line)) {
-      check_keep(val_ok);
+    // Keep(-like) Options
+    auto parse_all_keep = [&]() {
+      for (auto& keep_spec : KEEP_SPECS) {
+        if (auto val_ok = parse_keep(idx,
+                                     keep_spec.token_type,
+                                     keep_spec.get_spec_set(pg_config),
+                                     keep_spec.mark_classes,
+                                     keep_spec.mark_conditionally,
+                                     keep_spec.allowshrinking,
+                                     keep_spec.allow_return,
+                                     filename,
+                                     line)) {
+          check_keep(val_ok);
+          return true;
+        }
+      }
+      return false;
+    };
+    if (parse_all_keep()) {
       continue;
     }
-    if (auto val_ok = parse_keep(idx,
-                                 TokenType::keepclassmembers,
-                                 &pg_config->keep_rules,
-                                 false, // mark_classes
-                                 false, // mark_conditionally
-                                 false, // allowshrinking
-                                 /* allow_return= */ false,
-                                 filename,
-                                 line)) {
-      check_keep(val_ok);
-      continue;
-    }
-    if (auto val_ok = parse_keep(idx,
-                                 TokenType::keepclasseswithmembers,
-                                 &pg_config->keep_rules,
-                                 false, // mark_classes
-                                 true, // mark_conditionally
-                                 false, // allowshrinking
-                                 /* allow_return= */ false,
-                                 filename,
-                                 line)) {
-      check_keep(val_ok);
-      continue;
-    }
-    if (auto val_ok = parse_keep(idx,
-                                 TokenType::keepnames,
-                                 &pg_config->keep_rules,
-                                 true, // mark_classes
-                                 false, // mark_conditionally
-                                 true, // allowshrinking
-                                 /* allow_return= */ false,
-                                 filename,
-                                 line)) {
-      check_keep(val_ok);
-      continue;
-    }
-    if (auto val_ok = parse_keep(idx,
-                                 TokenType::keepclassmembernames,
-                                 &pg_config->keep_rules,
-                                 false, // mark_classes
-                                 false, // mark_conditionally
-                                 true, // allowshrinking
-                                 /* allow_return= */ false,
-                                 filename,
-                                 line)) {
-      check_keep(val_ok);
-      continue;
-    }
-    if (auto val_ok = parse_keep(idx,
-                                 TokenType::keepclasseswithmembernames,
-                                 &pg_config->keep_rules,
-                                 false, // mark_classes
-                                 true, // mark_conditionally
-                                 true, // allowshrinking
-                                 /* allow_return= */ false,
-                                 filename,
-                                 line)) {
-      check_keep(val_ok);
-      continue;
-    }
+
     if (auto ofp =
             parse_optional_filepath_command(idx, TokenType::printseeds)) {
       move_vector_elements(*ofp, pg_config->printseeds);
@@ -1035,42 +1072,6 @@ void parse(const std::vector<Token>& vec,
       continue;
     }
     if (parse_optimizationpasses_command(idx)) {
-      continue;
-    }
-    if (auto val_ok = parse_keep(idx,
-                                 TokenType::assumenosideeffects,
-                                 &pg_config->assumenosideeffects_rules,
-                                 false, // mark_classes
-                                 false, // mark_conditionally
-                                 false, // allowshrinking
-                                 /* allow_return= */ true,
-                                 filename,
-                                 line)) {
-      check_keep(val_ok);
-      continue;
-    }
-    if (auto val_ok = parse_keep(idx,
-                                 TokenType::assumevalues,
-                                 &pg_config->assumevalues_rules,
-                                 false, // mark_classes
-                                 false, // mark_conditionally
-                                 false, // allowshrinking
-                                 /* allow_return= */ true,
-                                 filename,
-                                 line)) {
-      check_keep(val_ok);
-      continue;
-    }
-    if (auto val_ok = parse_keep(idx,
-                                 TokenType::whyareyoukeeping,
-                                 &pg_config->whyareyoukeeping_rules,
-                                 false, // mark_classes
-                                 false, // mark_conditionally
-                                 false, // allowshrinking
-                                 /* allow_return= */ false,
-                                 filename,
-                                 line)) {
-      check_keep(val_ok);
       continue;
     }
 
