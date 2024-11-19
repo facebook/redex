@@ -101,16 +101,14 @@ struct TokenIndex {
   }
 };
 
-bool parse_boolean_command(TokenIndex& idx,
-                           TokenType boolean_option,
-                           bool* option,
-                           bool value) {
+std::optional<bool> parse_boolean_command(TokenIndex& idx,
+                                          TokenType boolean_option,
+                                          bool value) {
   if (idx.type() != boolean_option) {
-    return false;
+    return std::nullopt;
   }
   idx.next();
-  *option = value;
-  return true;
+  return value;
 }
 
 void skip_to_next_command(TokenIndex& idx) {
@@ -268,18 +266,6 @@ bool parse_verbose(TokenIndex& idx, bool* verbose) {
   *verbose = true;
   idx.next();
   return true;
-}
-
-bool parse_bool_command(TokenIndex& idx,
-                        TokenType bool_command_token,
-                        bool new_value,
-                        bool* bool_value) {
-  if (idx.type() == bool_command_token) {
-    idx.next(); // Consume the boolean command token.
-    *bool_value = new_value;
-    return true;
-  }
-  return false;
 }
 
 bool parse_repackageclasses(TokenIndex& idx) {
@@ -1047,8 +1033,8 @@ void parse(const std::vector<Token>& vec,
     }
 
     // Shrinking Options
-    if (parse_bool_command(
-            idx, TokenType::dontshrink, false, &pg_config->shrink)) {
+    if (auto val = parse_boolean_command(idx, TokenType::dontshrink, false)) {
+      pg_config->shrink = *val;
       continue;
     }
     if (parse_optional_filepath_command(
@@ -1057,8 +1043,8 @@ void parse(const std::vector<Token>& vec,
     }
 
     // Optimization Options
-    if (parse_boolean_command(
-            idx, TokenType::dontoptimize, &pg_config->optimize, false)) {
+    if (auto val = parse_boolean_command(idx, TokenType::dontoptimize, false)) {
+      pg_config->optimize = *val;
       continue;
     }
     if (parse_filter_list_command(
