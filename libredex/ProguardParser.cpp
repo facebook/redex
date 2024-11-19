@@ -217,10 +217,9 @@ std::optional<std::vector<std::string>> parse_optional_filepath_command(
   return std::move(filepaths);
 }
 
-bool parse_jars(TokenIndex& idx,
-                TokenType jar_token,
-                const std::string& basedir,
-                std::vector<std::string>* jars) {
+std::optional<std::vector<std::string>> parse_jars(TokenIndex& idx,
+                                                   TokenType jar_token,
+                                                   const std::string& basedir) {
   if (idx.type() == jar_token) {
     unsigned int line_number = idx.line();
     idx.next(); // Consume the jar token.
@@ -231,13 +230,14 @@ bool parse_jars(TokenIndex& idx,
              "file at line "
           << line_number << std::endl
           << idx.show_context(2) << std::endl;
-      return true;
+      return {};
     }
     // Parse the list of filenames.
-    parse_filepaths(idx, jars);
-    return true;
+    std::vector<std::string> jars;
+    parse_filepaths(idx, &jars);
+    return std::move(jars);
   }
-  return false;
+  return std::nullopt;
 }
 
 bool parse_repackageclasses(TokenIndex& idx) {
@@ -887,22 +887,22 @@ void parse(const std::vector<Token>& vec,
       }
       continue;
     }
-    if (parse_jars(idx,
-                   TokenType::injars,
-                   pg_config->basedirectory,
-                   &pg_config->injars)) {
+    if (auto jars =
+            parse_jars(idx, TokenType::injars, pg_config->basedirectory)) {
+      move_vector_elements(*jars, pg_config->injars);
+      // TODO: parse error on jars == {}?
       continue;
     }
-    if (parse_jars(idx,
-                   TokenType::outjars,
-                   pg_config->basedirectory,
-                   &pg_config->outjars)) {
+    if (auto jars =
+            parse_jars(idx, TokenType::outjars, pg_config->basedirectory)) {
+      move_vector_elements(*jars, pg_config->outjars);
+      // TODO: parse error on jars == {}?
       continue;
     }
-    if (parse_jars(idx,
-                   TokenType::libraryjars,
-                   pg_config->basedirectory,
-                   &pg_config->libraryjars)) {
+    if (auto jars =
+            parse_jars(idx, TokenType::libraryjars, pg_config->basedirectory)) {
+      move_vector_elements(*jars, pg_config->libraryjars);
+      // TODO: parse error on jars == {}?
       continue;
     }
     // -skipnonpubliclibraryclasses not supported
