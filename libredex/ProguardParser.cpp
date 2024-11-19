@@ -117,40 +117,39 @@ void skip_to_next_command(TokenIndex& idx) {
   }
 }
 
-bool parse_single_filepath_command(TokenIndex& idx,
-                                   TokenType filepath_command_token,
-                                   std::string* filepath) {
-  if (idx.type() == filepath_command_token) {
-    unsigned int line_number = idx.line();
-    idx.next(); // Consume the command token.
-    // Fail without consumption if this is an end of file token.
-    if (idx.type() == TokenType::eof_token) {
-      std::cerr
-          << "Expecting at least one file as an argument but found end of "
-             "file at line "
-          << line_number << std::endl
-          << idx.show_context(2) << std::endl;
-      return true;
-    }
-    // Fail without consumption if this is a command token.
-    if (idx.it->is_command()) {
-      std::cerr << "Expecting a file path argument but got command "
-                << idx.show() << " at line  " << idx.line() << std::endl
-                << idx.show_context(2) << std::endl;
-      return true;
-    }
-    // Parse the filename.
-    if (idx.type() != TokenType::filepath) {
-      std::cerr << "Expected a filepath but got " << idx.show() << " at line "
-                << idx.line() << std::endl
-                << idx.show_context(2) << std::endl;
-      return true;
-    }
-    *filepath = idx.str();
-    idx.next(); // Consume the filepath token
-    return true;
+std::optional<std::string> parse_single_filepath_command(
+    TokenIndex& idx, TokenType filepath_command_token) {
+  if (idx.type() != filepath_command_token) {
+    return std::nullopt;
   }
-  return false;
+
+  unsigned int line_number = idx.line();
+  idx.next(); // Consume the command token.
+  // Fail without consumption if this is an end of file token.
+  if (idx.type() == TokenType::eof_token) {
+    std::cerr << "Expecting at least one file as an argument but found end of "
+                 "file at line "
+              << line_number << std::endl
+              << idx.show_context(2) << std::endl;
+    return "";
+  }
+  // Fail without consumption if this is a command token.
+  if (idx.it->is_command()) {
+    std::cerr << "Expecting a file path argument but got command " << idx.show()
+              << " at line  " << idx.line() << std::endl
+              << idx.show_context(2) << std::endl;
+    return "";
+  }
+  // Parse the filename.
+  if (idx.type() != TokenType::filepath) {
+    std::cerr << "Expected a filepath but got " << idx.show() << " at line "
+              << idx.line() << std::endl
+              << idx.show_context(2) << std::endl;
+    return "";
+  }
+  auto str = idx.str();
+  idx.next(); // Consume the filepath token
+  return std::move(str);
 }
 
 template <bool kOptional = false>
@@ -872,8 +871,12 @@ void parse(const std::vector<Token>& vec,
                                &pg_config->includes)) {
       continue;
     }
-    if (parse_single_filepath_command(
-            idx, TokenType::basedirectory, &pg_config->basedirectory)) {
+    if (auto sfc =
+            parse_single_filepath_command(idx, TokenType::basedirectory)) {
+      pg_config->basedirectory = *sfc;
+      if (sfc->empty()) {
+        ++stats.parse_errors;
+      }
       continue;
     }
     if (parse_jars(idx,
