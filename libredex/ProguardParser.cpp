@@ -850,7 +850,7 @@ void parse(const std::vector<Token>& vec,
   TokenIndex idx{vec, vec.begin()};
 
   auto check_empty = [&stats](const auto& opt_val) {
-    if (opt_val->empty() && false) {
+    if (opt_val->empty()) {
       ++stats.parse_errors;
     }
   };
