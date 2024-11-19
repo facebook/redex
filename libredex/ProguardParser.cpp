@@ -857,16 +857,15 @@ ClassSpecification parse_class_specification(TokenIndex& idx,
   return class_spec;
 }
 
-bool parse_keep(TokenIndex& idx,
-                TokenType keep_kind,
-                KeepSpecSet* spec,
-                bool mark_classes,
-                bool mark_conditionally,
-                bool allowshrinking,
-                bool allow_return,
-                const std::string& filename,
-                uint32_t line,
-                bool* ok) {
+std::optional<bool> parse_keep(TokenIndex& idx,
+                               TokenType keep_kind,
+                               KeepSpecSet* spec,
+                               bool mark_classes,
+                               bool mark_conditionally,
+                               bool allowshrinking,
+                               bool allow_return,
+                               const std::string& filename,
+                               uint32_t line) {
   if (idx.type() == keep_kind) {
     idx.next(); // Consume the keep token
     auto keep = std::make_unique<KeepSpec>();
@@ -877,13 +876,14 @@ bool parse_keep(TokenIndex& idx,
     keep->source_line = line;
     if (!parse_modifiers(idx, &*keep)) {
       skip_to_next_command(idx);
-      return true;
+      return false;
     }
-    keep->class_spec = parse_class_specification(idx, allow_return, ok);
+    bool ok;
+    keep->class_spec = parse_class_specification(idx, allow_return, &ok);
     spec->emplace(std::move(keep));
-    return true;
+    return ok;
   }
-  return false;
+  return std::nullopt;
 }
 
 void parse(const std::vector<Token>& vec,
@@ -960,92 +960,86 @@ void parse(const std::vector<Token>& vec,
     // -forceprocessing not supported
 
     // Keep Options
-    if (parse_keep(idx,
-                   TokenType::keep,
-                   &pg_config->keep_rules,
-                   true, // mark_classes
-                   false, // mark_conditionally
-                   false, // allowshrinking
-                   /* allow_return= */ false,
-                   filename,
-                   line,
-                   &ok)) {
-      if (!ok) {
+    if (auto val_ok = parse_keep(idx,
+                                 TokenType::keep,
+                                 &pg_config->keep_rules,
+                                 true, // mark_classes
+                                 false, // mark_conditionally
+                                 false, // allowshrinking
+                                 /* allow_return= */ false,
+                                 filename,
+                                 line)) {
+      if (!*val_ok) {
         ++stats.parse_errors;
       }
       continue;
     }
-    if (parse_keep(idx,
-                   TokenType::keepclassmembers,
-                   &pg_config->keep_rules,
-                   false, // mark_classes
-                   false, // mark_conditionally
-                   false, // allowshrinking
-                   /* allow_return= */ false,
-                   filename,
-                   line,
-                   &ok)) {
-      if (!ok) {
+    if (auto val_ok = parse_keep(idx,
+                                 TokenType::keepclassmembers,
+                                 &pg_config->keep_rules,
+                                 false, // mark_classes
+                                 false, // mark_conditionally
+                                 false, // allowshrinking
+                                 /* allow_return= */ false,
+                                 filename,
+                                 line)) {
+      if (!*val_ok) {
         ++stats.parse_errors;
       }
       continue;
     }
-    if (parse_keep(idx,
-                   TokenType::keepclasseswithmembers,
-                   &pg_config->keep_rules,
-                   false, // mark_classes
-                   true, // mark_conditionally
-                   false, // allowshrinking
-                   /* allow_return= */ false,
-                   filename,
-                   line,
-                   &ok)) {
-      if (!ok) {
+    if (auto val_ok = parse_keep(idx,
+                                 TokenType::keepclasseswithmembers,
+                                 &pg_config->keep_rules,
+                                 false, // mark_classes
+                                 true, // mark_conditionally
+                                 false, // allowshrinking
+                                 /* allow_return= */ false,
+                                 filename,
+                                 line)) {
+      if (!*val_ok) {
         ++stats.parse_errors;
       }
       continue;
     }
-    if (parse_keep(idx,
-                   TokenType::keepnames,
-                   &pg_config->keep_rules,
-                   true, // mark_classes
-                   false, // mark_conditionally
-                   true, // allowshrinking
-                   /* allow_return= */ false,
-                   filename,
-                   line,
-                   &ok)) {
-      if (!ok) {
+    if (auto val_ok = parse_keep(idx,
+                                 TokenType::keepnames,
+                                 &pg_config->keep_rules,
+                                 true, // mark_classes
+                                 false, // mark_conditionally
+                                 true, // allowshrinking
+                                 /* allow_return= */ false,
+                                 filename,
+                                 line)) {
+      if (!*val_ok) {
         ++stats.parse_errors;
       }
       continue;
     }
-    if (parse_keep(idx,
-                   TokenType::keepclassmembernames,
-                   &pg_config->keep_rules,
-                   false, // mark_classes
-                   false, // mark_conditionally
-                   true, // allowshrinking
-                   /* allow_return= */ false,
-                   filename,
-                   line,
-                   &ok)) {
-      if (!ok) {
+    if (auto val_ok = parse_keep(idx,
+                                 TokenType::keepclassmembernames,
+                                 &pg_config->keep_rules,
+                                 false, // mark_classes
+                                 false, // mark_conditionally
+                                 true, // allowshrinking
+                                 /* allow_return= */ false,
+                                 filename,
+                                 line)) {
+      if (!*val_ok) {
         ++stats.parse_errors;
       }
       continue;
     }
-    if (parse_keep(idx,
-                   TokenType::keepclasseswithmembernames,
-                   &pg_config->keep_rules,
-                   false, // mark_classes
-                   true, // mark_conditionally
-                   true, // allowshrinking
-                   /* allow_return= */ false,
-                   filename,
-                   line,
-                   &ok)) {
-      if (!ok) {
+    if (auto val_ok = parse_keep(idx,
+                                 TokenType::keepclasseswithmembernames,
+                                 &pg_config->keep_rules,
+                                 false, // mark_classes
+                                 true, // mark_conditionally
+                                 true, // allowshrinking
+                                 /* allow_return= */ false,
+                                 filename,
+                                 line)) {
+      if (!*val_ok) {
         ++stats.parse_errors;
       }
       continue;
@@ -1085,8 +1079,7 @@ void parse(const std::vector<Token>& vec,
                    false, // allowshrinking
                    /* allow_return= */ true,
                    filename,
-                   line,
-                   &ok)) {
+                   line)) {
       continue;
     }
     if (parse_keep(idx,
@@ -1097,8 +1090,7 @@ void parse(const std::vector<Token>& vec,
                    false, // allowshrinking
                    /* allow_return= */ true,
                    filename,
-                   line,
-                   &ok)) {
+                   line)) {
       continue;
     }
     if (parse_keep(idx,
@@ -1109,8 +1101,7 @@ void parse(const std::vector<Token>& vec,
                    false, // allowshrinking
                    /* allow_return= */ false,
                    filename,
-                   line,
-                   &ok)) {
+                   line)) {
       continue;
     }
 
