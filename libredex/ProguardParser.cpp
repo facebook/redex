@@ -276,18 +276,18 @@ bool test_and_consume(TokenIndex& idx, TokenType to_test) {
   return true;
 }
 
-bool parse_filter_list_command(TokenIndex& idx,
-                               TokenType filter_command_token,
-                               std::vector<std::string>* filters) {
+std::optional<std::vector<std::string>> parse_filter_list_command(
+    TokenIndex& idx, TokenType filter_command_token) {
   if (idx.type() != filter_command_token) {
-    return false;
+    return std::nullopt;
   }
   idx.next();
+  std::vector<std::string> filters;
   while (idx.type() == TokenType::filter_pattern) {
-    filters->push_back(idx.str());
+    filters.push_back(idx.str());
     idx.next();
   }
-  return true;
+  return std::move(filters);
 }
 
 bool parse_optimizationpasses_command(TokenIndex& idx) {
@@ -1029,8 +1029,9 @@ void parse(const std::vector<Token>& vec,
       pg_config->optimize = *val;
       continue;
     }
-    if (parse_filter_list_command(
-            idx, TokenType::optimizations, &pg_config->optimization_filters)) {
+    if (auto fl = parse_filter_list_command(idx, TokenType::optimizations)) {
+      move_vector_elements(*fl, pg_config->optimization_filters);
+      // TODO: parse error on fp == {}?
       continue;
     }
     if (parse_optimizationpasses_command(idx)) {
@@ -1100,8 +1101,9 @@ void parse(const std::vector<Token>& vec,
       pg_config->dontusemixedcaseclassnames = true;
       continue;
     }
-    if (parse_filter_list_command(
-            idx, TokenType::keeppackagenames, &pg_config->keeppackagenames)) {
+    if (auto fl = parse_filter_list_command(idx, TokenType::keeppackagenames)) {
+      move_vector_elements(*fl, pg_config->keeppackagenames);
+      // TODO: parse error on fp == {}?
       continue;
     }
     if (test_and_consume(idx, TokenType::dontpreverify_token)) {
@@ -1116,12 +1118,14 @@ void parse(const std::vector<Token>& vec,
       continue;
     }
 
-    if (parse_filter_list_command(
-            idx, TokenType::dontwarn, &pg_config->dontwarn)) {
+    if (auto fl = parse_filter_list_command(idx, TokenType::dontwarn)) {
+      move_vector_elements(*fl, pg_config->dontwarn);
+      // TODO: parse error on fp == {}?
       continue;
     }
-    if (parse_filter_list_command(
-            idx, TokenType::keepattributes, &pg_config->keepattributes)) {
+    if (auto fl = parse_filter_list_command(idx, TokenType::keepattributes)) {
+      move_vector_elements(*fl, pg_config->keepattributes);
+      // TODO: parse error on fp == {}?
       continue;
     }
 
