@@ -789,8 +789,8 @@ std::optional<ClassSpecification> parse_class_specification(TokenIndex& idx,
       class_spec.extendsClassName = "";
     } else {
       class_spec.extendsClassName = idx.str();
+      idx.next();
     }
-    idx.next();
   }
   // Parse the member specifications, if there are any
   const bool member_ok =
@@ -1005,9 +1005,8 @@ void parse(const std::vector<Token>& vec,
       continue;
     }
     // -skipnonpubliclibraryclasses not supported
-    if (idx.type() == TokenType::dontskipnonpubliclibraryclasses) {
+    if (test_and_consume(idx, TokenType::dontskipnonpubliclibraryclasses)) {
       // Silenty ignore the dontskipnonpubliclibraryclasses option.
-      idx.next();
       continue;
     }
     // -dontskipnonpubliclibraryclassmembers not supported
@@ -1082,14 +1081,12 @@ void parse(const std::vector<Token>& vec,
     }
 
     // Obfuscation Options
-    if (idx.type() == TokenType::dontobfuscate) {
+    if (test_and_consume(idx, TokenType::dontobfuscate)) {
       pg_config->dontobfuscate = true;
-      idx.next();
       continue;
     }
     // Redex ignores -dontskipnonpubliclibraryclasses
-    if (idx.type() == TokenType::dontskipnonpubliclibraryclasses) {
-      idx.next();
+    if (test_and_consume(idx, TokenType::dontskipnonpubliclibraryclasses)) {
       continue;
     }
     if (auto ofp =
