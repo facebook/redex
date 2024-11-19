@@ -547,14 +547,14 @@ bool consume_token(TokenIndex& idx, const TokenType& tok) {
 }
 
 // Consume an expected semicolon, complaining if one was not found.
-void gobble_semicolon(TokenIndex& idx, bool* ok) {
-  *ok = consume_token(idx, TokenType::semiColon);
-  if (!*ok) {
+bool gobble_semicolon(TokenIndex& idx) {
+  if (!consume_token(idx, TokenType::semiColon)) {
     std::cerr << "Expecting a semicolon but found " << idx.show() << " at line "
               << idx.line() << std::endl
               << idx.show_context(2) << std::endl;
-    return;
+    return false;
   }
+  return true;
 }
 
 void skip_to_semicolon(TokenIndex& idx) {
@@ -595,31 +595,34 @@ bool parse_member_specification(TokenIndex& idx,
     member_specification.name = "";
     member_specification.descriptor = "";
     idx.next();
-    bool ok = true;
-    gobble_semicolon(idx, &ok);
+    if (!gobble_semicolon(idx)) {
+      return false;
+    }
     class_spec->methodSpecifications.push_back(member_specification);
     class_spec->fieldSpecifications.push_back(member_specification);
-    return ok;
+    return true;
   }
   // Check for <methods>
   if (ident == "<methods>") {
     member_specification.name = "";
     member_specification.descriptor = "";
     idx.next();
-    bool ok = true;
-    gobble_semicolon(idx, &ok);
+    if (!gobble_semicolon(idx)) {
+      return false;
+    }
     class_spec->methodSpecifications.push_back(member_specification);
-    return ok;
+    return true;
   }
   // Check for <fields>
   if (ident == "<fields>") {
     member_specification.name = "";
     member_specification.descriptor = "";
     idx.next();
-    bool ok = true;
-    gobble_semicolon(idx, &ok);
+    if (!gobble_semicolon(idx)) {
+      return false;
+    }
     class_spec->fieldSpecifications.push_back(member_specification);
-    return ok;
+    return true;
   }
   // Check for <init>
   if (ident == "<init>") {
@@ -711,9 +714,7 @@ bool parse_member_specification(TokenIndex& idx,
     }
   }
   // Make sure member specification ends with a semicolon.
-  bool ok = true;
-  gobble_semicolon(idx, &ok);
-  if (!ok) {
+  if (!gobble_semicolon(idx)) {
     return false;
   }
   if (member_specification.descriptor[0] == '(') {
