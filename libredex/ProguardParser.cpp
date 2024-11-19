@@ -205,16 +205,16 @@ std::optional<std::vector<std::string>> parse_filepath_command(
   return std::move(filepaths);
 }
 
-bool parse_optional_filepath_command(TokenIndex& idx,
-                                     TokenType filepath_command_token,
-                                     std::vector<std::string>* filepaths) {
+std::optional<std::vector<std::string>> parse_optional_filepath_command(
+    TokenIndex& idx, TokenType filepath_command_token) {
   if (idx.type() != filepath_command_token) {
-    return false;
+    return std::nullopt;
   }
   idx.next(); // Consume the command token.
   // Parse an optional filepath argument.
-  parse_filepaths</*kOptional=*/true>(idx, filepaths);
-  return true;
+  std::vector<std::string> filepaths;
+  parse_filepaths</*kOptional=*/true>(idx, &filepaths);
+  return std::move(filepaths);
 }
 
 bool parse_jars(TokenIndex& idx,
@@ -839,6 +839,13 @@ std::optional<bool> parse_keep(TokenIndex& idx,
   return std::nullopt;
 }
 
+template <typename T>
+void move_vector_elements(std::vector<T>& from, std::vector<T>& to) {
+  to.insert(to.end(),
+            std::make_move_iterator(from.begin()),
+            std::make_move_iterator(from.end()));
+}
+
 void parse(const std::vector<Token>& vec,
            ProguardConfiguration* pg_config,
            Stats& stats,
@@ -868,9 +875,7 @@ void parse(const std::vector<Token>& vec,
     // Input/Output Options
     if (auto fp = parse_filepath_command(
             idx, TokenType::include, pg_config->basedirectory)) {
-      pg_config->includes.insert(pg_config->includes.end(),
-                                 std::make_move_iterator(fp->begin()),
-                                 std::make_move_iterator(fp->end()));
+      move_vector_elements(*fp, pg_config->includes);
       // TODO: parse error on fp == {}?
       continue;
     }
@@ -909,9 +914,7 @@ void parse(const std::vector<Token>& vec,
     // -dontskipnonpubliclibraryclassmembers not supported
     if (auto fp = parse_filepath_command(
             idx, TokenType::keepdirectories, pg_config->basedirectory)) {
-      pg_config->keepdirectories.insert(pg_config->keepdirectories.end(),
-                                        std::make_move_iterator(fp->begin()),
-                                        std::make_move_iterator(fp->end()));
+      move_vector_elements(*fp, pg_config->keepdirectories);
       // TODO: parse error on fp == {}?
       continue;
     }
@@ -1005,8 +1008,9 @@ void parse(const std::vector<Token>& vec,
       }
       continue;
     }
-    if (parse_optional_filepath_command(
-            idx, TokenType::printseeds, &pg_config->printseeds)) {
+    if (auto ofp =
+            parse_optional_filepath_command(idx, TokenType::printseeds)) {
+      move_vector_elements(*ofp, pg_config->printseeds);
       continue;
     }
 
@@ -1015,8 +1019,9 @@ void parse(const std::vector<Token>& vec,
       pg_config->shrink = *val;
       continue;
     }
-    if (parse_optional_filepath_command(
-            idx, TokenType::printusage, &pg_config->printusage)) {
+    if (auto ofp =
+            parse_optional_filepath_command(idx, TokenType::printusage)) {
+      move_vector_elements(*ofp, pg_config->printusage);
       continue;
     }
 
@@ -1077,13 +1082,14 @@ void parse(const std::vector<Token>& vec,
       idx.next();
       continue;
     }
-    if (parse_optional_filepath_command(
-            idx, TokenType::printmapping, &pg_config->printmapping)) {
+    if (auto ofp =
+            parse_optional_filepath_command(idx, TokenType::printmapping)) {
+      move_vector_elements(*ofp, pg_config->printmapping);
       continue;
     }
-    if (parse_optional_filepath_command(idx,
-                                        TokenType::printconfiguration,
-                                        &pg_config->printconfiguration)) {
+    if (auto ofp = parse_optional_filepath_command(
+            idx, TokenType::printconfiguration)) {
+      move_vector_elements(*ofp, pg_config->printconfiguration);
       continue;
     }
 
