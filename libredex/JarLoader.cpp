@@ -30,6 +30,7 @@
 #include "JarLoader.h"
 #include "Show.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 #include "Util.h"
 
 /******************
@@ -291,10 +292,10 @@ void init_basic_types() {
 namespace {
 
 DexType* parse_type(std::string_view& buf) {
-  char typebuffer[MAX_CLASS_NAMELEN];
   always_assert(!buf.empty());
   char desc = buf.at(0);
-  buf = buf.substr(1);
+  const std::string_view buf_start = buf;
+  buf = buf.substr(1); // Simplifies primitive types.
   switch (desc) {
   case 'B':
     return sSimpleTypeB;
@@ -314,44 +315,55 @@ DexType* parse_type(std::string_view& buf) {
     return sSimpleTypeZ;
   case 'V':
     return sSimpleTypeV;
+  }
+
+  buf = buf_start;
+  const size_t start_size = buf.size();
+  switch (desc) {
   case 'L': {
-    char* tpout = typebuffer;
-    *tpout++ = desc;
-    always_assert(!buf.empty());
-    while (buf.at(0) != ';') {
-      *tpout++ = buf[0];
-      buf = buf.substr(1);
+    // Find semicolon.
+    for (size_t i = 1; i < buf.size(); i++) {
+      if (buf[i] == ';') {
+        if (i == 1) {
+          std::cerr << "Empty class name, bailing\n";
+          return nullptr;
+        }
+        auto ret = buf.substr(0, i + 1);
+        buf = buf.substr(i + 1);
+        redex_assert(buf.size() < start_size);
+        return DexType::make_type(ret);
+      }
+      // TODO: Check valid class name chars.
     }
-    always_assert(!buf.empty());
-    *tpout++ = buf.at(0);
-    buf = buf.substr(1);
-    *tpout = '\0';
-    return DexType::make_type(typebuffer);
-    break;
+    std::cerr << "Could not parse reference type, no suffix semicolon\n";
+    return nullptr;
   }
   case '[': {
-    char* tpout = typebuffer;
-    *tpout++ = desc;
-    always_assert(!buf.empty());
-    while (buf.at(0) == '[') {
-      *tpout++ = buf[0];
-      buf = buf.substr(1);
-      always_assert(!buf.empty());
-    }
-    if (buf.at(0) == 'L') {
-      while (buf.at(0) != ';') {
-        *tpout++ = buf[0];
-        buf = buf.substr(1);
-        always_assert(!buf.empty());
+    // Figure out array depth.
+    auto depth = [&]() {
+      for (size_t i = 1; i < buf.size(); ++i) {
+        if (buf[i] != '[') {
+          return i;
+        }
       }
-      *tpout++ = buf.at(0);
-      buf = buf.substr(1);
-    } else {
-      *tpout++ = buf[0];
-      buf = buf.substr(1);
+      return buf.size();
+    }();
+    if (depth == buf.size()) {
+      std::cerr << "Could not parse array type, no element type\n";
+      return nullptr;
     }
-    *tpout++ = '\0';
-    return DexType::make_type(typebuffer);
+
+    // Easiest to go recursive here.
+    buf = buf.substr(depth);
+    auto* elem_type = parse_type(buf);
+    if (elem_type == nullptr) {
+      return nullptr;
+    }
+    redex_assert(!type::is_array(elem_type));
+    redex_assert(buf.size() < start_size);
+    auto ret = type::make_array_type(elem_type, depth);
+
+    return ret;
   }
   }
   std::cerr << "Invalid parse-type '" << desc << "', bailing\n";
