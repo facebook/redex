@@ -450,9 +450,13 @@ bool parse_class(uint8_t* buffer,
   std::vector<cp_entry> cpool;
   cpool.resize(cp_count);
   /* The zero'th entry is always empty.  Java is annoying. */
-  for (int i = 1; i < cp_count; i++) {
+  for (size_t i = 1; i < cp_count; i++) {
     if (!parse_cp_entry(buffer, buffer_end, cpool[i])) return false;
     if (cpool[i].tag == CP_CONST_LONG || cpool[i].tag == CP_CONST_DOUBLE) {
+      if (i + 1 >= cp_count) {
+        std::cerr << "Bad long/double constant, bailing.\n";
+        return false;
+      }
       cpool[i + 1] = cpool[i];
       i++;
     }
