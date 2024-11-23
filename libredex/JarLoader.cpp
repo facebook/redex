@@ -292,7 +292,7 @@ void init_basic_types() {
 namespace {
 
 DexType* parse_type(std::string_view& buf) {
-  always_assert(!buf.empty());
+  redex_assert(!buf.empty());
   char desc = buf.at(0);
   const std::string_view buf_start = buf;
   buf = buf.substr(1); // Simplifies primitive types.
@@ -371,7 +371,9 @@ DexType* parse_type(std::string_view& buf) {
 }
 
 DexTypeList* extract_arguments(std::string_view& buf) {
-  always_assert(buf.size() >= 2);
+  if (buf.size() < 2) {
+    return nullptr;
+  }
   buf = buf.substr(1);
   if (buf.at(0) == ')') {
     buf = buf.substr(1);
@@ -386,7 +388,9 @@ DexTypeList* extract_arguments(std::string_view& buf) {
       return nullptr;
     }
     args.push_back(dtype);
-    always_assert(!buf.empty());
+    if (buf.empty()) {
+      return nullptr;
+    }
   }
   buf = buf.substr(1);
   return DexTypeList::make_type_list(std::move(args));
@@ -766,11 +770,17 @@ bool extract_jar_entry(const uint8_t*& mapping,
     return false;
   }
   offset += sizeof(pk_cd_file);
-  always_assert_log(offset < total_size, "Reading mapping out of bound");
+  if (offset >= total_size) {
+    std::cerr << "Reading mapping out of bound\n";
+    return false;
+  }
   memcpy(&je.cd_entry, mapping, sizeof(pk_cd_file));
   mapping += sizeof(pk_cd_file);
   offset += je.cd_entry.fname_len;
-  always_assert_log(offset < total_size, "Reading mapping out of bound");
+  if (offset >= total_size) {
+    std::cerr << "Reading mapping out of bound\n";
+    return false;
+  }
   je.filename = std::string((const char*)mapping, je.cd_entry.fname_len);
   mapping += je.cd_entry.fname_len;
   offset = offset + je.cd_entry.extra_len + je.cd_entry.comment_len;
