@@ -84,7 +84,7 @@ class DexIdx {
     }
 
     always_assert_type_log(
-        typeidx < m_type_ids_size, RedexError::CACHE_INDEX_OUT_OF_BOUND,
+        typeidx < m_type_ids_size, RedexError::INVALID_DEX,
         "Type index is out of bound. index: %d, cache size: %d", typeidx,
         m_type_ids_size);
 
@@ -97,7 +97,7 @@ class DexIdx {
 
   DexFieldRef* get_fieldidx(uint32_t fidx) {
     always_assert_type_log(
-        fidx < m_field_ids_size, RedexError::CACHE_INDEX_OUT_OF_BOUND,
+        fidx < m_field_ids_size, RedexError::INVALID_DEX,
         "Field index is out of bound. index: %d, cache size: %d", fidx,
         m_field_ids_size);
 
@@ -112,7 +112,7 @@ class DexIdx {
 
   DexMethodRef* get_methodidx(uint32_t midx) {
     always_assert_type_log(
-        midx < m_method_ids_size, RedexError::CACHE_INDEX_OUT_OF_BOUND,
+        midx < m_method_ids_size, RedexError::INVALID_DEX,
         "Method index is out of bound. index: %d, cache size: %d", midx,
         m_method_ids_size);
 
@@ -127,7 +127,7 @@ class DexIdx {
 
   DexCallSite* get_callsiteidx(uint32_t csidx) {
     always_assert_type_log(
-        csidx < m_callsite_ids_size, RedexError::CACHE_INDEX_OUT_OF_BOUND,
+        csidx < m_callsite_ids_size, RedexError::INVALID_DEX,
         "CallSite index is out of bound. index: %d, cache size: %d", csidx,
         m_callsite_ids_size);
 
@@ -142,7 +142,7 @@ class DexIdx {
 
   DexMethodHandle* get_methodhandleidx(uint32_t mhidx) {
     always_assert_type_log(
-        mhidx < m_methodhandle_ids_size, RedexError::CACHE_INDEX_OUT_OF_BOUND,
+        mhidx < m_methodhandle_ids_size, RedexError::INVALID_DEX,
         "Methodhandle index is out of bound. index: %d, cache size: %d", mhidx,
         m_methodhandle_ids_size);
 
@@ -157,7 +157,7 @@ class DexIdx {
 
   DexProto* get_protoidx(uint32_t pidx) {
     always_assert_type_log(
-        pidx < m_proto_ids_size, RedexError::CACHE_INDEX_OUT_OF_BOUND,
+        pidx < m_proto_ids_size, RedexError::INVALID_DEX,
         "Prototype index is out of bound. index: %d, cache size: %d", pidx,
         m_proto_ids_size);
 
