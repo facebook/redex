@@ -318,7 +318,6 @@ TEST_F(SourceBlocksTest, source_blocks_insert_after_exc) {
     std::unordered_set<uint32_t> seen_ids;
     size_t max_seen{0};
     for (const auto* b : cfg->blocks()) {
-      bool seen_source_block_in_b{false};
       size_t b_seen{0};
       for (const auto& mie : *b) {
         if (mie.type != MFLOW_SOURCE_BLOCK) {

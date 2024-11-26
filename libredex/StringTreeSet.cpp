@@ -19,7 +19,6 @@ constexpr uint8_t FLAG_PAYLOAD_UNIT = 1 << BITS_PER_PAYLOAD_UNIT;
 constexpr uint8_t PAYLOAD_MASK = FLAG_PAYLOAD_UNIT - 1;
 constexpr uint8_t FLAG_NONTERMINAL = 1 << 4;
 constexpr uint8_t FLAG_NO_PAYLOAD = 1 << 3;
-constexpr uint8_t PAYLOAD_UNITS_MASK = FLAG_NO_PAYLOAD - 1;
 
 template <typename ValueType>
 size_t payload_unit_count(ValueType value) {

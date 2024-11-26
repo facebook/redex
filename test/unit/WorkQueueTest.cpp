@@ -15,7 +15,6 @@
 
 #include "Macros.h"
 
-constexpr unsigned int NUM_STRINGS = 100'000;
 constexpr unsigned int NUM_INTS = 1000;
 
 //==========

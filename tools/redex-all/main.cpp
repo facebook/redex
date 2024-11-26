@@ -815,7 +815,6 @@ Json::Value get_lowering_stats(const instruction_lowering::Stats& stats) {
       Json::Value buckets(Json::ValueType::objectValue);
 
       auto per_bucket = span / kBuckets;
-      size_t cur_bucket_start = it->first;
       for (size_t i = 0; i != kBuckets; ++i) {
         auto start_size = first + i * per_bucket;
         auto end_size = first + (i + 1) * per_bucket;

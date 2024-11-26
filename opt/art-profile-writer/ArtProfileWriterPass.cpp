@@ -124,12 +124,6 @@ void never_inline(bool attach_annotations,
       type::dalvik_annotation_optimization_NeverInline(),
       DexAnnotationVisibility::DAV_BUILD));
 
-  // Only "hot" methods get compiled.
-  auto is_hot = [&](DexMethod* method) {
-    auto it = baseline_profile.methods.find(method);
-    return it != baseline_profile.methods.end() && it->second.hot;
-  };
-
   auto consider_callee = [&](DexMethod* callee) {
     if (callee == nullptr || !callee->get_code()) {
       return false;

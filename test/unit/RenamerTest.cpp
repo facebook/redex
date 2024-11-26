@@ -138,8 +138,6 @@ TEST_F(RenamerTest, NoOverload) {
 
   print_scope(scope);
   EXPECT_EQ(2, rename_virtuals(scope));
-  const auto a_t = DexType::get_type("LA;");
-  const auto b_t = DexType::get_type("LB;");
   walk::methods(scope, [&](DexMethod* meth) {
     ASSERT_NE(meth->get_name(), DexString::make_string("f"));
     ASSERT_NE(meth->get_name(), DexString::make_string("g"));

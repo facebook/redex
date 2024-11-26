@@ -1357,7 +1357,6 @@ bool ApkResources::rename_classes_in_layout(
     const std::map<std::string, std::string>& rename_map,
     size_t* out_num_renamed) {
   RedexMappedFile f = RedexMappedFile::open(file_path, /* read_only= */ false);
-  size_t len = f.size();
 
   android::Vector<char> serialized;
   auto status = replace_in_xml_string_pool(f.data(), f.size(), rename_map,

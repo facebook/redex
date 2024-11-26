@@ -334,7 +334,6 @@ TEST_F(ConfigurableTest, MethodsBindFlags) {
 
   json["methods_param"] = array;
 
-  DexMethodRef* m1 = DexMethod::get_method(m1desc);
   DexMethod* m3 =
       DexMethod::get_method(m3desc)->make_concrete((DexAccessFlags)0, false);
   std::unordered_set<DexMethod*> resolved_methods = {m3};

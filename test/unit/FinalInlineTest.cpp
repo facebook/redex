@@ -184,7 +184,8 @@ TEST_F(ConstPropTest, simplePropagate) {
         add_concrete_field(parent, "CONST", test_case.type, test_case.value);
 
     auto child = create_class("Lcom/redex/Child_" + test_case.name + ";");
-    auto child_field = add_dependent_field(child, "CONST", parent_field);
+    [[maybe_unused]] auto child_field =
+        add_dependent_field(child, "CONST", parent_field);
 
     Scope classes = {parent, child};
     FinalInlinePass::propagate_constants_for_test(

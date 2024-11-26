@@ -357,12 +357,6 @@ void write_metadata(const ConfigFiles& cfg,
     return boost::algorithm::join(fields, ";");
   };
 
-  auto to_hex = [](auto n) {
-    std::stringstream ss;
-    ss << std::setfill('0') << std::setw(sizeof(n) * 2) << std::hex << n;
-    return ss.str();
-  };
-
   auto source_blocks = [&method_dict](const auto& entry_source_blocks,
                                       const auto& bit_id_2_source_blocks) {
     std::stringstream ss;

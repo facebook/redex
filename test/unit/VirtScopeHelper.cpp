@@ -39,7 +39,6 @@ std::vector<DexClass*> create_scope_1() {
 
   // make sigs
   auto void_t = type::_void();
-  auto bool_t = type::_boolean();
   auto void_void =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
 
@@ -61,7 +60,6 @@ std::vector<DexClass*> create_scope_1() {
  */
 std::vector<DexClass*> create_scope_2() {
   std::vector<DexClass*> scope = create_scope_1();
-  auto a_t = DexType::get_type("LA;");
   auto b_t = DexType::get_type("LB;");
 
   // class C
@@ -116,8 +114,6 @@ std::vector<DexClass*> create_scope_3() {
   auto int_t = type::_int();
   auto bool_t = type::_boolean();
   auto obj_t = type::java_lang_Object();
-  auto void_void =
-      DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
   auto void_int =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({int_t}));
   auto bool_object =
@@ -235,9 +231,6 @@ std::vector<DexClass*> create_scope_5() {
   // make sigs
   auto void_t = type::_void();
   auto int_t = type::_int();
-  auto obj_t = type::java_lang_Object();
-  auto void_void =
-      DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
   auto void_int =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({int_t}));
   // Intf2.g(int)

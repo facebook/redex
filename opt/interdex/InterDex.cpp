@@ -1462,7 +1462,6 @@ InterDex::FlushOutDexResult InterDex::flush_out_dex(
     DexInfo& dex_info,
     DexClass* canary_cls) const {
 
-  int dexnum = emitting_state.dexes_structure.get_num_dexes();
   if (dex_info.primary) {
     TRACE(IDEX, 2, "Writing out primary dex with %zu classes.",
           emitting_state.dexes_structure.get_current_dex().size());

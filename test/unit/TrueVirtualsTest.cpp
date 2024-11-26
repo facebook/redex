@@ -88,7 +88,7 @@ std::vector<DexClass*> create_scope_2() {
 std::vector<DexClass*> create_scope_3() {
   auto scope = create_scope_2();
 
-  auto obj_t = type::java_lang_Object();
+  [[maybe_unused]] auto obj_t = type::java_lang_Object();
   auto void_t = type::_void();
   auto args = DexTypeList::make_type_list({});
   auto void_void = DexProto::make_proto(void_t, args);
@@ -186,7 +186,7 @@ std::vector<DexClass*> create_scope_5() {
 std::vector<DexClass*> create_scope_6() {
   std::vector<DexClass*> scope = create_scope_5();
 
-  auto obj_t = type::java_lang_Object();
+  [[maybe_unused]] auto obj_t = type::java_lang_Object();
   auto void_t = type::_void();
   auto args = DexTypeList::make_type_list({});
   auto void_void = DexProto::make_proto(void_t, args);
@@ -218,7 +218,7 @@ std::vector<DexClass*> create_scope_6() {
 std::vector<DexClass*> create_scope_7() {
   std::vector<DexClass*> scope = create_scope_6();
 
-  auto obj_t = type::java_lang_Object();
+  [[maybe_unused]] auto obj_t = type::java_lang_Object();
   auto void_t = type::_void();
   auto args = DexTypeList::make_type_list({});
   auto void_void = DexProto::make_proto(void_t, args);
@@ -254,7 +254,7 @@ std::vector<DexClass*> create_scope_7() {
 std::vector<DexClass*> create_scope_8() {
   std::vector<DexClass*> scope = create_scope_7();
 
-  auto obj_t = type::java_lang_Object();
+  [[maybe_unused]] auto obj_t = type::java_lang_Object();
   auto void_t = type::_void();
   auto int_t = type::_int();
   auto void_args = DexTypeList::make_type_list({});

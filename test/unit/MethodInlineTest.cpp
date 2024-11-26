@@ -455,10 +455,11 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
     canidates.insert(bar_m1);
     canidates.insert(bar_m2);
     // foo_main calls foo_m1 and bar_m2.
-    auto foo_main =
+    [[maybe_unused]] auto foo_main =
         make_a_method_calls_others(foo_cls, "foo_main", {foo_m1, bar_m2});
     // bar_main calls bar_m1.
-    auto bar_main = make_a_method_calls_others(bar_cls, "bar_main", {bar_m1});
+    [[maybe_unused]] auto bar_main =
+        make_a_method_calls_others(bar_cls, "bar_main", {bar_m1});
     // Expect foo_m1 and bar_m1 be inlined if `intra_dex` is true.
     expected_inlined.insert(foo_m1);
     expected_inlined.insert(bar_m1);
@@ -515,7 +516,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_new_references) {
     auto bar_m1 = make_a_method_calls_others(bar_cls, "bar_m1", {baz_m1});
 
     // foo_main calls foo_m1 and bar_m1.
-    auto foo_main =
+    [[maybe_unused]] auto foo_main =
         make_a_method_calls_others(foo_cls, "foo_main", {foo_m1, bar_m1});
 
     canidates.insert(foo_m1);
@@ -602,7 +603,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_init_class) {
     bar_m1->set_code(std::move(init_code));
 
     // foo_main calls foo_m1 and init.
-    auto foo_main =
+    [[maybe_unused]] auto foo_main =
         make_a_method_calls_others(foo_cls, "foo_main", {foo_m1, bar_m1});
 
     canidates.insert(foo_m1);

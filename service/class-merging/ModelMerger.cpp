@@ -136,8 +136,8 @@ void update_code_type_refs(
           continue;
         }
         bool resolved_virtual_to_interface;
-        const auto meth_def =
-            resolve_invoke_method(insn, meth, &resolved_virtual_to_interface);
+        /*const auto meth_def =*/
+        resolve_invoke_method(insn, meth, &resolved_virtual_to_interface);
         // This is a very tricky case where ResolveRefs cannot resolve a
         // MethodRef to MethodDef. It is a invoke-virtual with a MethodRef
         // referencing an interface method implmentation defined in a subclass

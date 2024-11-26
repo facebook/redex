@@ -333,7 +333,7 @@ class IRTypeCheckerTest : public RedexTest {
     ClassCreator cc(type::java_lang_Object());
     cc.set_access(ACC_PUBLIC);
     cc.set_external();
-    auto object_class = cc.create();
+    [[maybe_unused]] auto object_class = cc.create();
 
     auto proto = DexProto::make_proto(type::_boolean(), args);
     m_method =
@@ -3022,7 +3022,7 @@ TEST_F(IRTypeCheckerTest, sputObjectFail) {
 
 TEST_F(IRTypeCheckerTest, sputObjectArrayFail) {
   const auto type_a = DexType::make_type("LA;");
-  const auto type_a_arr = type::make_array_type(type_a);
+  [[maybe_unused]] const auto type_a_arr = type::make_array_type(type_a);
 
   {
     ClassCreator cls_a_creator(type_a);

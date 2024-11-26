@@ -197,7 +197,6 @@ bool validate_result(const DexClass* cls,
     return false;
   }
   std::vector<bool> ordinals(constants.size(), false);
-  bool synth_values_field = false;
   size_t synth_values_field_cnt = 0;
 
   auto enum_field_access = optimize_enums::enum_field_access();

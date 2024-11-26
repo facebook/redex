@@ -642,10 +642,6 @@ void InstrumentPass::eval_pass(DexStoresVector& stores,
   // introduce a new field. We introduce a type reference to the analysis class
   // in each dex. We will introduce more method refs from analysis methods.
 
-  interdex::InterDexRegistry* registry =
-      static_cast<interdex::InterDexRegistry*>(
-          PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
-
   size_t max_analysis_methods;
   if (m_options.instrumentation_strategy == SIMPLE_METHOD_TRACING) {
     max_analysis_methods = m_options.num_shards;

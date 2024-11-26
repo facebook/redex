@@ -153,8 +153,6 @@ void initialize_regs(
     const std::map<DexField*, size_t, dexfields_comparator>& field_to_reg,
     cfg::ControlFlowGraph& cfg) {
 
-  auto params = cfg.get_param_instructions();
-
   for (const auto& pair : field_to_reg) {
     auto field = pair.first;
     auto reg = pair.second;

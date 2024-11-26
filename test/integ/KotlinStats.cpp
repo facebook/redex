@@ -24,24 +24,24 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
 
   PrintKotlinStats::Stats stats = klr->get_stats();
 
-  ASSERT_EQ(stats.kotlin_null_check_insns, 9);
-  ASSERT_EQ(stats.kotlin_public_param_objects, 21);
+  EXPECT_EQ(stats.kotlin_null_check_insns, 9);
+  EXPECT_EQ(stats.kotlin_public_param_objects, 21);
 
   // LExample;.$$delegatedProperties:[Lkotlin/reflect/KProperty;
   // LFooDelagates;.lazyValue$delegate:Lkotlin/Lazy;
   // Lfoo;.unsafeLazy:Lkotlin/Lazy;
-  ASSERT_EQ(stats.kotlin_delegates, 1);
-  ASSERT_EQ(stats.kotlin_lazy_delegates, 2);
+  EXPECT_EQ(stats.kotlin_delegates, 1);
+  EXPECT_EQ(stats.kotlin_lazy_delegates, 2);
 
   // LKotlinLambdaInline$foo$1;
   // LFooDelagates$lazyValue$2;
-  ASSERT_EQ(stats.kotlin_lambdas, 2);
+  EXPECT_EQ(stats.kotlin_lambdas, 2);
 
   // LKotlinLambdaInline$foo$1;
-  ASSERT_EQ(stats.kotlin_class_with_instance, 1);
+  EXPECT_EQ(stats.kotlin_class_with_instance, 1);
 
   // LKotlinLambdaInline$foo$1;
-  ASSERT_EQ(stats.kotlin_non_capturing_lambda, 1);
+  EXPECT_EQ(stats.kotlin_non_capturing_lambda, 1);
 
   // LDelegate1;
   // LKotlinLambdaInline$foo$1;
@@ -57,14 +57,14 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   // LKotlinCompanionObjKt;
   // Lfoo;
   // LAnotherCompanionClass;
-  ASSERT_EQ(stats.kotlin_class, 14);
+  EXPECT_EQ(stats.kotlin_class, 14);
 
   // Named companion object is not counted yet
   // LCompanionClass$Companion;
-  ASSERT_EQ(stats.kotlin_companion_class, 1);
+  EXPECT_EQ(stats.kotlin_companion_class, 1);
 
   // LKotlinLambdaInline$foo$1;
   // LFooDelagates$lazyValue$2;
-  ASSERT_EQ(stats.kotlin_anonymous_class, 2);
+  EXPECT_EQ(stats.kotlin_anonymous_class, 2);
 }
 } // namespace

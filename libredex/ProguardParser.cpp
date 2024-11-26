@@ -937,7 +937,6 @@ void parse(const std::vector<Token>& vec,
            ProguardConfiguration* pg_config,
            Stats& stats,
            const std::string& filename) {
-  bool ok;
   TokenIndex idx{vec, vec.begin()};
 
   auto check_empty = [&stats](const auto& opt_val) {

@@ -277,8 +277,6 @@ DexTypeList::ContainerType RemoveArgs::get_live_arg_type_list(
 bool RemoveArgs::update_method_signature(DexMethod* method,
                                          DexProto* updated_proto,
                                          bool is_reordered) {
-  const auto full_name = method->get_deobfuscated_name_or_empty();
-
   auto colliding_mref = DexMethod::get_method(
       method->get_class(), method->get_name(), updated_proto);
   if (colliding_mref) {

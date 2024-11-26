@@ -544,8 +544,8 @@ size_t num_interactions(const cfg::ControlFlowGraph& cfg,
     return *caller;
   }
   auto callee = nums(source_blocks::get_first_source_block(cfg.entry_block()));
-  if (caller) {
-    return *caller;
+  if (callee) {
+    return *callee;
   }
 
   return 0;
@@ -952,10 +952,6 @@ void track_source_block_coverage(ScopedMetrics& sm,
         auto dominators =
             dominators::SimpleFastDominators<cfg::GraphInterface>(cfg);
 
-        bool seen_dir_cold_dir_pred = false;
-        bool seen_idom_viol = false;
-        bool seen_direct_pred_viol = false;
-        bool seen_sb = false;
         for (auto block : cfg.blocks()) {
           for (size_t i = 0; i != gCounters.size(); ++i) {
             ret.global[i].count += (*gCounters[i].second)(block, dominators);

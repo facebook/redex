@@ -27,7 +27,6 @@ namespace {
 
 template <class Func>
 bool parse_cells(std::string_view line, const Func& parse_cell) {
-  char* save_ptr = nullptr;
   uint32_t i = 0;
   // Assuming there are no quoted strings containing commas!
   for (auto cell : split_string(line, ",")) {

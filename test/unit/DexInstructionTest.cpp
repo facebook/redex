@@ -18,7 +18,7 @@ TEST_F(DexInstructionTest, test_encode_fill_array_data_payload_8) {
   const uint16_t* udata16 = payload->data();
 
   // data32 removed the 16 bit width field
-  const int8_t* data8 = (const int8_t*)(payload->data() + 3);
+  [[maybe_unused]] const int8_t* data8 = (const int8_t*)(payload->data() + 3);
 
   // DexOpcodeData constructor ignored the FOPCODE_FILL_ARRAY
   EXPECT_EQ(udata16[0], 1); // width
@@ -36,7 +36,7 @@ TEST_F(DexInstructionTest, test_encode_fill_array_data_payload_16) {
   std::vector<int16_t> vec{1, 2, 3, 4, 5};
   auto payload = encode_fill_array_data_payload(vec);
   const uint16_t* udata16 = payload->data();
-  const int16_t* data16 = (const int16_t*)payload->data() + 3;
+  [[maybe_unused]] const int16_t* data16 = (const int16_t*)payload->data() + 3;
 
   // DexOpcodeData constructor ignored the FOPCODE_FILL_ARRAY
   EXPECT_EQ(udata16[0], 2); // width
@@ -56,7 +56,8 @@ TEST_F(DexInstructionTest, test_encode_fill_array_data_payload_32) {
   const uint16_t* udata16 = payload->data();
 
   // data32 removed the 16 bit width field
-  const int32_t* data32 = (const int32_t*)(payload->data() + 1);
+  [[maybe_unused]] const int32_t* data32 =
+      (const int32_t*)(payload->data() + 1);
 
   // DexOpcodeData constructor ignored the FOPCODE_FILL_ARRAY
   EXPECT_EQ(udata16[0], 4); // width

@@ -468,7 +468,7 @@ TEST_F(MatchFlowTest, ResultFlagHidesMoveResult) {
 }
 
 TEST_F(MatchFlowTest, ResultSrc) {
-  auto* Foo_src = DexMethod::make_method("LFoo;.src:()I");
+  [[maybe_unused]] auto* Foo_src = DexMethod::make_method("LFoo;.src:()I");
 
   flow_t f;
   auto fst = f.insn(m::invoke_static_() || m::const_string_());

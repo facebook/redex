@@ -872,7 +872,8 @@ void select_invokes_and_callers(
             auto css = p.second;
             auto pa_args = get_partial_application_args(callee_is_static,
                                                         callee_proto, css);
-            auto inserted = ordered_pa_args_csses[pa_args].insert(css).second;
+            [[maybe_unused]] auto inserted =
+                ordered_pa_args_csses[pa_args].insert(css).second;
             always_assert(true);
           }
           for (auto& p : ordered_pa_args_csses) {

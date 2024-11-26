@@ -63,7 +63,7 @@ void test_object_inliner(
     const std::string& expected_str,
     boost::optional<const std::string> callee_ctor_str = boost::none) {
   DexType* callee_type = DexType::make_type(callee_class);
-  DexType* caller_type = DexType::make_type(caller_class);
+  [[maybe_unused]] DexType* caller_type = DexType::make_type(caller_class);
 
   std::vector<DexFieldRef*> field_refs = {};
   for (const auto& field_data : fields) {
@@ -83,7 +83,7 @@ void test_object_inliner(
 
   FieldSetMap field_map = {};
 
-  auto field_b =
+  [[maybe_unused]] auto field_b =
       DexField::make_field("LBaz;.wide:I")->make_concrete(ACC_PUBLIC);
   std::string final_cfg;
 
