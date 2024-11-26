@@ -42,8 +42,8 @@ struct AssertHelper {
   // Yeah, it's not good form to throw in a destructor. But...
   // NOLINTNEXTLINE(bugprone-exception-escape)
   ~AssertHelper() noexcept(false) {
-    throw RedexException(
-        RedexError::INVALID_DEX, message ? *message : std::string(""),
+    assert_or_throw(
+        false, RedexError::INVALID_DEX, message ? *message : std::string(""),
         extra_info ? *extra_info : std::map<std::string, std::string>());
   }
 
@@ -88,18 +88,17 @@ void dex_range_assert(uint64_t offset,
                       const std::string& msg_invalid,
                       const std::string& msg_invalid_extent,
                       const std::string& offset_name) {
-  if (offset >= dexsize) {
-    throw RedexException(RedexError::INVALID_DEX, msg_invalid,
-                         {{offset_name, std::to_string(offset)},
-                          {"extent", std::to_string(extent)},
-                          {"dex_size", std::to_string(dexsize)}});
-  }
-  if (extent > dexsize || offset > dexsize - extent) {
-    throw RedexException(RedexError::INVALID_DEX, msg_invalid_extent,
-                         {{offset_name, std::to_string(offset)},
-                          {"extent", std::to_string(extent)},
-                          {"dex_size", std::to_string(dexsize)}});
-  }
+  assert_or_throw(offset < dexsize, RedexError::INVALID_DEX, msg_invalid,
+                  {{offset_name, std::to_string(offset)},
+                   {"extent", std::to_string(extent)},
+                   {"dex_size", std::to_string(dexsize)}});
+
+  assert_or_throw(extent <= dexsize && offset <= dexsize - extent,
+                  RedexError::INVALID_DEX,
+                  msg_invalid_extent,
+                  {{offset_name, std::to_string(offset)},
+                   {"extent", std::to_string(extent)},
+                   {"dex_size", std::to_string(dexsize)}});
 }
 
 template <typename T>
