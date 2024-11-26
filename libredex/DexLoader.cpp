@@ -115,6 +115,79 @@ void dex_type_range_assert(uint64_t offset,
                    type_name + "_off");
 }
 
+uint32_t read_uleb128_checked(std::string_view& ptr) {
+  auto next = [&ptr]() {
+    always_assert_type_log(!ptr.empty(), INVALID_DEX, "ULEB128 underflow");
+    uint8_t result = *ptr.data();
+    ptr = ptr.substr(1);
+    return result;
+  };
+
+  uint32_t result = next();
+  if (result > 0x7f) {
+    uint32_t cur = next();
+    result = (result & 0x7f) | ((cur & 0x7f) << 7);
+    if (cur > 0x7f) {
+      cur = next();
+      result |= (cur & 0x7f) << 14;
+      if (cur > 0x7f) {
+        cur = next();
+        result |= (cur & 0x7f) << 21;
+        if (cur > 0x7f) {
+          cur = next();
+          result |= cur << 28;
+        }
+      }
+    }
+  }
+  return result;
+}
+
+int32_t read_sleb128_checked(std::string_view& ptr) {
+  auto next = [&ptr]() {
+    always_assert_type_log(!ptr.empty(), INVALID_DEX, "SLEB128 underflow");
+    uint8_t result = *ptr.data();
+    ptr = ptr.substr(1);
+    return result;
+  };
+
+  int32_t result = next();
+
+  if (result <= 0x7f) {
+    result = (result << 25) >> 25;
+  } else {
+    int cur = next();
+    result = (result & 0x7f) | ((cur & 0x7f) << 7);
+    if (cur <= 0x7f) {
+      result = (result << 18) >> 18;
+    } else {
+      cur = next();
+      result |= (cur & 0x7f) << 14;
+      if (cur <= 0x7f) {
+        result = (result << 11) >> 11;
+      } else {
+        cur = next();
+        result |= (cur & 0x7f) << 21;
+        if (cur <= 0x7f) {
+          result = (result << 4) >> 4;
+        } else {
+          cur = next();
+          // Change from AOSP: avoid undefined shifting behavior.
+          result |= (cur & 0x0f) << 28;
+        }
+      }
+    }
+  }
+  return result;
+}
+
+void align_ptr(std::string_view& ptr, const size_t alignment) {
+  const size_t alignment_error = ((uintptr_t)ptr.data()) % alignment;
+  if (alignment_error != 0) {
+    ptr = ptr.substr(alignment - alignment_error);
+  }
+}
+
 } // namespace
 
 static void validate_dex_header(const dex_header* dh,
@@ -324,8 +397,8 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
   for (uint32_t i = 0; i < map_list->size; i++) {
     const auto& item = map_list->items[i];
 
-    const uint8_t* encdata = m_idx->get_uleb_data(item.offset);
-    const uint8_t* initial_encdata = encdata;
+    std::string_view encdata{(const char*)m_idx->get_uleb_data(item.offset),
+                             m_idx->get_file_size() - item.offset};
 
     switch (item.type) {
     case TYPE_HEADER_ITEM:
@@ -377,9 +450,11 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
     case TYPE_MAP_LIST:
       stats->map_list_count += item.size;
       for (uint32_t j = 0; j < item.size; j++) {
-        encdata = align_ptr(encdata, 4);
+        align_ptr(encdata, 4);
 
-        uint32_t map_list_entries = *(uint32_t*)(encdata);
+        always_assert_type_log(encdata.size() >= sizeof(uint32_t), INVALID_DEX,
+                               "Dex out of bounds");
+        uint32_t map_list_entries = *(uint32_t*)(encdata.data());
         stats->map_list_bytes +=
             sizeof(uint32_t) + map_list_entries * sizeof(dex_map_item);
       }
@@ -387,9 +462,11 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
     case TYPE_TYPE_LIST:
       stats->type_list_count += item.size;
       for (uint32_t j = 0; j < item.size; j++) {
-        encdata = align_ptr(encdata, 4);
+        align_ptr(encdata, 4);
 
-        uint32_t type_list_entries = *(uint32_t*)(encdata);
+        always_assert_type_log(encdata.size() >= sizeof(uint32_t), INVALID_DEX,
+                               "Dex out of bounds");
+        uint32_t type_list_entries = *(uint32_t*)(encdata.data());
         stats->type_list_bytes +=
             sizeof(uint32_t) + type_list_entries * sizeof(dex_type_item);
       }
@@ -397,9 +474,11 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
     case TYPE_ANNOTATION_SET_REF_LIST:
       stats->annotation_set_ref_list_count += item.size;
       for (uint32_t j = 0; j < item.size; j++) {
-        encdata = align_ptr(encdata, 4);
+        align_ptr(encdata, 4);
 
-        uint32_t annotation_set_ref_list_entries = *(uint32_t*)(encdata);
+        always_assert_type_log(encdata.size() >= sizeof(uint32_t), INVALID_DEX,
+                               "Dex out of bounds");
+        uint32_t annotation_set_ref_list_entries = *(uint32_t*)(encdata.data());
         stats->annotation_set_ref_list_bytes +=
             sizeof(uint32_t) + annotation_set_ref_list_entries *
                                    sizeof(dex_annotation_set_ref_item);
@@ -408,109 +487,133 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
     case TYPE_ANNOTATION_SET_ITEM:
       stats->annotation_set_count += item.size;
       for (uint32_t j = 0; j < item.size; j++) {
-        encdata = align_ptr(encdata, 4);
+        align_ptr(encdata, 4);
 
-        uint32_t annotation_set_entries = *(uint32_t*)(encdata);
+        always_assert_type_log(encdata.size() >= sizeof(uint32_t), INVALID_DEX,
+                               "Dex out of bounds");
+        uint32_t annotation_set_entries = *(uint32_t*)(encdata.data());
         stats->annotation_set_bytes +=
             sizeof(uint32_t) +
             annotation_set_entries * sizeof(dex_annotation_off_item);
       }
       break;
-    case TYPE_CLASS_DATA_ITEM:
+    case TYPE_CLASS_DATA_ITEM: {
+      size_t orig_size = encdata.size();
+
       stats->class_data_count += item.size;
 
       for (uint32_t j = 0; j < item.size; j++) {
         // Read in field sizes.
-        uint32_t static_fields_size = read_uleb128(&encdata);
-        uint32_t instance_fields_size = read_uleb128(&encdata);
-        uint32_t direct_methods_size = read_uleb128(&encdata);
-        uint32_t virtual_methods_size = read_uleb128(&encdata);
+        uint32_t static_fields_size = read_uleb128_checked(encdata);
+        uint32_t instance_fields_size = read_uleb128_checked(encdata);
+        uint32_t direct_methods_size = read_uleb128_checked(encdata);
+        uint32_t virtual_methods_size = read_uleb128_checked(encdata);
 
         for (uint32_t k = 0; k < static_fields_size + instance_fields_size;
              ++k) {
           // Read and skip all of the encoded_field data.
-          read_uleb128(&encdata);
-          read_uleb128(&encdata);
+          read_uleb128_checked(encdata);
+          read_uleb128_checked(encdata);
         }
 
         for (uint32_t k = 0; k < direct_methods_size + virtual_methods_size;
              ++k) {
           // Read and skip all of the encoded_method data.
-          read_uleb128(&encdata);
-          read_uleb128(&encdata);
-          read_uleb128(&encdata);
+          read_uleb128_checked(encdata);
+          read_uleb128_checked(encdata);
+          read_uleb128_checked(encdata);
         }
       }
 
-      stats->class_data_bytes += encdata - initial_encdata;
+      stats->class_data_bytes += orig_size - encdata.size();
       break;
-    case TYPE_CODE_ITEM:
+    }
+    case TYPE_CODE_ITEM: {
+      size_t orig_size = encdata.size();
+
       stats->code_count += item.size;
 
       for (uint32_t j = 0; j < item.size; j++) {
-        encdata = align_ptr(encdata, 4);
+        align_ptr(encdata, 4);
 
-        dex_code_item* code_item = (dex_code_item*)encdata;
+        dex_code_item* code_item = (dex_code_item*)encdata.data();
+        always_assert_type_log(encdata.size() >= sizeof(dex_code_item),
+                               INVALID_DEX, "Dex overflow");
 
-        encdata += sizeof(dex_code_item);
-        encdata += code_item->insns_size * sizeof(uint16_t);
+        encdata = encdata.substr(sizeof(dex_code_item) +
+                                 code_item->insns_size * sizeof(uint16_t));
 
         if (code_item->tries_size != 0 && code_item->insns_size % 2 == 1) {
-          encdata += sizeof(uint16_t);
+          encdata = encdata.substr(sizeof(uint16_t));
         }
 
-        encdata += code_item->tries_size * sizeof(dex_tries_item);
+        encdata =
+            encdata.substr(code_item->tries_size * sizeof(dex_tries_item));
 
         if (code_item->tries_size != 0) {
-          uint32_t catch_handler_list_size = read_uleb128(&encdata);
+          uint32_t catch_handler_list_size = read_uleb128_checked(encdata);
           for (uint32_t k = 0; k < catch_handler_list_size; ++k) {
-            int32_t catch_handler_size = read_sleb128(&encdata);
+            int32_t catch_handler_size = read_sleb128_checked(encdata);
             uint32_t abs_size = (uint32_t)std::abs(catch_handler_size);
             for (uint32_t l = 0; l < abs_size; ++l) {
               // Read encoded_type_addr_pair.
-              read_uleb128(&encdata);
-              read_uleb128(&encdata);
+              read_uleb128_checked(encdata);
+              read_uleb128_checked(encdata);
             }
             // Read catch_all_addr
             if (catch_handler_size <= 0) {
-              read_uleb128(&encdata);
+              read_uleb128_checked(encdata);
             }
           }
         }
       }
-      stats->code_bytes += encdata - initial_encdata;
+      stats->code_bytes += orig_size - encdata.size();
       break;
-    case TYPE_STRING_DATA_ITEM:
+    }
+    case TYPE_STRING_DATA_ITEM: {
+      size_t orig_size = encdata.size();
+
       stats->string_data_count += item.size;
 
       for (uint32_t j = 0; j < item.size; j++) {
         // Skip data that encodes the number of UTF-16 code units.
-        read_uleb128(&encdata);
+        read_uleb128_checked(encdata);
 
         // Read up to and including the NULL-terminating byte.
-        while (true) {
-          const uint8_t byte = *encdata;
-          encdata++;
-          if (byte == 0) break;
+        bool terminated = false;
+        while (!encdata.empty()) {
+          const uint8_t byte = encdata[0];
+          encdata = encdata.substr(1);
+          if (byte == 0) {
+            terminated = true;
+            break;
+          }
         }
+        always_assert_type_log(terminated, INVALID_DEX,
+                               "String not null-terminated");
       }
 
-      stats->string_data_bytes += encdata - initial_encdata;
+      stats->string_data_bytes += encdata.size() - orig_size;
       break;
-    case TYPE_DEBUG_INFO_ITEM:
+    }
+    case TYPE_DEBUG_INFO_ITEM: {
+      size_t orig_size = encdata.size();
+
       stats->num_dbg_items += item.size;
       for (uint32_t j = 0; j < item.size; j++) {
         // line_start
-        read_uleb128(&encdata);
+        read_uleb128_checked(encdata);
         // param_count
-        uint32_t param_count = read_uleb128(&encdata);
+        uint32_t param_count = read_uleb128_checked(encdata);
         while (param_count--) {
           // Each parameter is one uleb128p1
-          read_uleb128p1(&encdata);
+          read_uleb128_checked(encdata);
         }
         bool running = true;
         while (running) {
-          uint8_t opcode = *encdata++;
+          always_assert_type_log(!encdata.empty(), INVALID_DEX, "Dex overflow");
+          uint8_t opcode = encdata[0];
+          encdata = encdata.substr(1);
           switch (opcode) {
           case DBG_END_SEQUENCE:
             running = false;
@@ -522,33 +625,33 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
             // - addr_diff
             // - register_num
             // - register_num
-            read_uleb128(&encdata);
+            read_uleb128_checked(encdata);
             break;
           case DBG_ADVANCE_LINE:
             // line_diff
-            read_sleb128(&encdata);
+            read_sleb128_checked(encdata);
             break;
           case DBG_START_LOCAL:
             // register_num
-            read_uleb128(&encdata);
+            read_uleb128_checked(encdata);
             // name_idx
-            read_uleb128p1(&encdata);
+            read_uleb128_checked(encdata);
             // type_idx
-            read_uleb128p1(&encdata);
+            read_uleb128_checked(encdata);
             break;
           case DBG_START_LOCAL_EXTENDED:
             // register_num
-            read_uleb128(&encdata);
+            read_uleb128_checked(encdata);
             // name_idx
-            read_uleb128p1(&encdata);
+            read_uleb128_checked(encdata);
             // type_idx
-            read_uleb128p1(&encdata);
+            read_uleb128_checked(encdata);
             // sig_idx
-            read_uleb128p1(&encdata);
+            read_uleb128_checked(encdata);
             break;
           case DBG_SET_FILE:
             // name_idx
-            read_uleb128p1(&encdata);
+            read_uleb128_checked(encdata);
             break;
           case DBG_SET_PROLOGUE_END:
           case DBG_SET_EPILOGUE_BEGIN:
@@ -561,33 +664,43 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
           }
         }
       }
-      stats->dbg_total_size += encdata - initial_encdata;
+      stats->dbg_total_size += orig_size - encdata.size();
       break;
+    }
     case TYPE_ANNOTATION_ITEM:
       // TBD!
       break;
     case TYPE_ENCODED_ARRAY_ITEM:
       // TBD!
       break;
-    case TYPE_ANNOTATIONS_DIR_ITEM:
+    case TYPE_ANNOTATIONS_DIR_ITEM: {
+      size_t orig_size = encdata.size();
+
       stats->annotations_directory_count += item.size;
 
       for (uint32_t j = 0; j < item.size; ++j) {
-        encdata = align_ptr(encdata, 4);
+        align_ptr(encdata, 4);
         dex_annotations_directory_item* annotations_directory_item =
-            (dex_annotations_directory_item*)encdata;
+            (dex_annotations_directory_item*)encdata.data();
+        always_assert_type_log(encdata.size() >=
+                                   sizeof(dex_annotations_directory_item),
+                               INVALID_DEX, "Dex overflow");
 
-        encdata += sizeof(dex_annotations_directory_item);
-        encdata += sizeof(dex_field_annotation) *
-                   annotations_directory_item->fields_size;
-        encdata += sizeof(dex_method_annotation) *
-                   annotations_directory_item->methods_size;
-        encdata += sizeof(dex_parameter_annotation) *
-                   annotations_directory_item->parameters_size;
+        size_t advance = sizeof(dex_annotations_directory_item) +
+                         sizeof(dex_field_annotation) *
+                             annotations_directory_item->fields_size +
+                         sizeof(dex_method_annotation) *
+                             annotations_directory_item->methods_size +
+                         sizeof(dex_parameter_annotation) *
+                             annotations_directory_item->parameters_size;
+        always_assert_type_log(encdata.size() >= advance, INVALID_DEX,
+                               "Dex overflow");
+        encdata = encdata.substr(advance);
       }
 
-      stats->annotations_directory_bytes += encdata - initial_encdata;
+      stats->annotations_directory_bytes += encdata.size() - orig_size;
       break;
+    }
     case TYPE_HIDDENAPI_CLASS_DATA_ITEM:
       // No stats gathered.
       break;
