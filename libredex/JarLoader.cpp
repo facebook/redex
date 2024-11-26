@@ -41,9 +41,8 @@ namespace JarLoaderUtil {
 uint32_t read32(uint8_t*& buffer, uint8_t* buffer_end) {
   uint32_t rv;
   auto next = buffer + sizeof(uint32_t);
-  if (next > buffer_end) {
-    throw RedexException(RedexError::BUFFER_END_EXCEEDED);
-  }
+  always_assert_type_log(next <= buffer_end, BUFFER_END_EXCEEDED,
+                         "Buffer overflow");
   memcpy(&rv, buffer, sizeof(uint32_t));
   buffer = next;
   return htonl(rv);
@@ -52,18 +51,16 @@ uint32_t read32(uint8_t*& buffer, uint8_t* buffer_end) {
 uint16_t read16(uint8_t*& buffer, uint8_t* buffer_end) {
   uint16_t rv;
   auto next = buffer + sizeof(uint16_t);
-  if (next > buffer_end) {
-    throw RedexException(RedexError::BUFFER_END_EXCEEDED);
-  }
+  always_assert_type_log(next <= buffer_end, BUFFER_END_EXCEEDED,
+                         "Buffer overflow");
   memcpy(&rv, buffer, sizeof(uint16_t));
   buffer = next;
   return htons(rv);
 }
 
 uint8_t read8(uint8_t*& buffer, uint8_t* buffer_end) {
-  if (buffer >= buffer_end) {
-    throw RedexException(RedexError::BUFFER_END_EXCEEDED);
-  }
+  always_assert_type_log(buffer <= buffer_end, BUFFER_END_EXCEEDED,
+                         "Buffer overflow");
   return *buffer++;
 }
 } // namespace JarLoaderUtil
@@ -163,9 +160,8 @@ bool parse_cp_entry(uint8_t*& buffer, uint8_t* buffer_end, cp_entry& cpe) {
     cpe.len = read16(buffer, buffer_end);
     cpe.data = buffer;
     buffer += cpe.len;
-    if (buffer > buffer_end) {
-      throw RedexException(RedexError::BUFFER_END_EXCEEDED);
-    }
+    always_assert_type_log(buffer <= buffer_end, BUFFER_END_EXCEEDED,
+                           "Buffer overflow");
     return true;
   case CP_CONST_INVOKEDYN:
     std::cerr << "INVOKEDYN constant unsupported, Bailing\n";

@@ -58,6 +58,14 @@ class InvalidDexException : public RedexException {
       : RedexException(RedexError::INVALID_DEX, message, extra_info) {}
 };
 
+class BufferEndExceededException : public RedexException {
+ public:
+  explicit BufferEndExceededException(
+      const std::string& message,
+      const std::map<std::string, std::string>& extra_info = {})
+      : RedexException(RedexError::BUFFER_END_EXCEEDED, message, extra_info) {}
+};
+
 } // namespace redex
 
 void assert_or_throw(bool cond,

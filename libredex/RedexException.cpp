@@ -38,6 +38,8 @@ void assert_or_throw(bool cond,
   if (!cond) {
     if (redex::throw_typed_exception()) {
       switch (type) {
+      case RedexError::BUFFER_END_EXCEEDED:
+        throw redex::BufferEndExceededException(message, extra_info);
       case RedexError::INVALID_DEX:
         throw redex::InvalidDexException(message, extra_info);
       default:
