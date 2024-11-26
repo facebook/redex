@@ -649,13 +649,16 @@ const dex_header* DexLoader::get_dex_header(const char* file_name) {
 
 DexClasses DexLoader::load_dex(const char* file_name,
                                dex_stats_t* stats,
-                               int support_dex_version) {
+                               int support_dex_version,
+                               Parallel p) {
   const dex_header* dh = get_dex_header(file_name);
   validate_dex_header(dh, m_file->size(), support_dex_version);
-  return load_dex(dh, stats);
+  return load_dex(dh, stats, p);
 }
 
-DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
+DexClasses DexLoader::load_dex(const dex_header* dh,
+                               dex_stats_t* stats,
+                               Parallel p) {
   if (dh->class_defs_size == 0) {
     return DexClasses(0);
   }
@@ -666,7 +669,14 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
   DexClasses classes(dh->class_defs_size);
   m_classes = &classes;
 
-  {
+  switch (p) {
+  case Parallel::kNo: {
+    for (size_t i = 0; i < dh->class_defs_size; ++i) {
+      load_dex_class(i);
+    }
+    break;
+  }
+  case Parallel::kYes: {
     auto num_threads = redex_parallel::default_num_threads();
     std::vector<std::exception_ptr> all_exceptions;
     std::mutex all_exceptions_mutex;
@@ -684,10 +694,11 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
         num_threads);
 
     if (!all_exceptions.empty()) {
-      // At least one of the workers raised an exception
       aggregate_exception ae(all_exceptions);
       throw ae;
     }
+    break;
+  }
   }
 
   gather_input_stats(stats, dh);
@@ -731,22 +742,24 @@ static void balloon_all(const Scope& scope, bool throw_on_error) {
 DexClasses load_classes_from_dex(const DexLocation* location,
                                  bool balloon,
                                  bool throw_on_balloon_error,
-                                 int support_dex_version) {
+                                 int support_dex_version,
+                                 DexLoader::Parallel p) {
   dex_stats_t stats;
   return load_classes_from_dex(location, &stats, balloon,
-                               throw_on_balloon_error, support_dex_version);
+                               throw_on_balloon_error, support_dex_version, p);
 }
 
 DexClasses load_classes_from_dex(const DexLocation* location,
                                  dex_stats_t* stats,
                                  bool balloon,
                                  bool throw_on_balloon_error,
-                                 int support_dex_version) {
+                                 int support_dex_version,
+                                 DexLoader::Parallel p) {
   TRACE(MAIN, 1, "Loading classes from dex from %s",
         location->get_file_name().c_str());
   DexLoader dl(location);
   auto classes = dl.load_dex(location->get_file_name().c_str(), stats,
-                             support_dex_version);
+                             support_dex_version, p);
   if (balloon) {
     balloon_all(classes, throw_on_balloon_error);
   }
@@ -756,9 +769,10 @@ DexClasses load_classes_from_dex(const DexLocation* location,
 DexClasses load_classes_from_dex(const dex_header* dh,
                                  const DexLocation* location,
                                  bool balloon,
-                                 bool throw_on_balloon_error) {
+                                 bool throw_on_balloon_error,
+                                 DexLoader::Parallel p) {
   DexLoader dl(location);
-  auto classes = dl.load_dex(dh, nullptr);
+  auto classes = dl.load_dex(dh, nullptr, p);
   if (balloon) {
     balloon_all(classes, throw_on_balloon_error);
   }

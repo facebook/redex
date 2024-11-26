@@ -23,31 +23,43 @@ class DexLoader {
   const DexLocation* m_location;
 
  public:
+  enum class Parallel { kYes, kNo };
+
   explicit DexLoader(const DexLocation* location);
 
   const dex_header* get_dex_header(const char* file_name);
   DexClasses load_dex(const char* file_name,
                       dex_stats_t* stats,
-                      int support_dex_version);
-  DexClasses load_dex(const dex_header* dh, dex_stats_t* stats);
+                      int support_dex_version,
+                      Parallel p = Parallel::kYes);
+  DexClasses load_dex(const dex_header* dh,
+                      dex_stats_t* stats,
+                      Parallel p = Parallel::kYes);
   void load_dex_class(int num);
   void gather_input_stats(dex_stats_t* stats, const dex_header* dh);
   DexIdx* get_idx() { return m_idx.get(); }
 };
 
-DexClasses load_classes_from_dex(const DexLocation* location,
-                                 bool balloon = true,
-                                 bool throw_on_balloon_error = true,
-                                 int support_dex_version = 35);
-DexClasses load_classes_from_dex(const DexLocation* location,
-                                 dex_stats_t* stats,
-                                 bool balloon = true,
-                                 bool throw_on_balloon_error = true,
-                                 int support_dex_version = 35);
-DexClasses load_classes_from_dex(const dex_header* dh,
-                                 const DexLocation* location,
-                                 bool balloon = true,
-                                 bool throw_on_balloon_error = true);
+DexClasses load_classes_from_dex(
+    const DexLocation* location,
+    bool balloon = true,
+    bool throw_on_balloon_error = true,
+    int support_dex_version = 35,
+    DexLoader::Parallel p = DexLoader::Parallel::kYes);
+DexClasses load_classes_from_dex(
+    const DexLocation* location,
+    dex_stats_t* stats,
+    bool balloon = true,
+    bool throw_on_balloon_error = true,
+    int support_dex_version = 35,
+    DexLoader::Parallel p = DexLoader::Parallel::kYes);
+DexClasses load_classes_from_dex(
+    const dex_header* dh,
+    const DexLocation* location,
+    bool balloon = true,
+    bool throw_on_balloon_error = true,
+    DexLoader::Parallel p = DexLoader::Parallel::kYes);
+
 std::string load_dex_magic_from_dex(const DexLocation* location);
 void balloon_for_test(const Scope& scope);
 
