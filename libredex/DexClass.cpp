@@ -1573,20 +1573,19 @@ DexAnnotationDirectory* DexClass::get_annotation_directory() {
 DexClass* DexClass::create(DexIdx* idx,
                            const dex_class_def* cdef,
                            const DexLocation* location) {
-  DexClass* cls = new DexClass(idx, cdef, location);
-  if (g_redex->class_already_loaded(cls)) {
+  std::unique_ptr<DexClass> cls{new DexClass(idx, cdef, location)};
+  if (g_redex->class_already_loaded(cls.get())) {
     // FIXME: This isn't deterministic. We're keeping whichever class we loaded
     // first, which may not always be from the same dex (if we load them in
     // parallel, for example).
-    delete cls;
     return nullptr;
   }
   cls->load_class_annotations(idx, cdef->annotations_off);
   auto deva = std::unique_ptr<DexEncodedValueArray>(
       load_static_values(idx, cdef->static_values_off));
   cls->load_class_data_item(idx, cdef->class_data_offset, std::move(deva));
-  g_redex->publish_class(cls);
-  return cls;
+  g_redex->publish_class(cls.get());
+  return cls.release();
 }
 
 DexClass::DexClass(DexType* type, const DexLocation* location)
