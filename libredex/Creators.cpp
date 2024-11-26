@@ -558,6 +558,10 @@ void MethodBlock::push_instruction(IRInstruction* insn) {
   curr = mc->push_instruction(curr, insn);
 }
 
+void MethodBlock::push_position(std::unique_ptr<DexPosition> pos) {
+  curr = mc->push_position(curr, std::move(pos));
+}
+
 IRList::iterator MethodCreator::push_instruction(const IRList::iterator& curr,
                                                  IRInstruction* insn) {
   if (curr == meth_code->end()) {
@@ -565,6 +569,16 @@ IRList::iterator MethodCreator::push_instruction(const IRList::iterator& curr,
     return std::prev(meth_code->end());
   } else {
     return meth_code->insert_after(curr, insn);
+  }
+}
+
+IRList::iterator MethodCreator::push_position(
+    const IRList::iterator& curr, std::unique_ptr<DexPosition> pos) {
+  if (curr == meth_code->end()) {
+    meth_code->push_back(std::move(pos));
+    return std::prev(meth_code->end());
+  } else {
+    return meth_code->insert_after(curr, std::move(pos));
   }
 }
 

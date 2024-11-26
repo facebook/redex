@@ -126,6 +126,10 @@ void handle_default_block(
                       SHOW(spec.overridden_meth));
     // Note that the overridden can be an default interface or external default
     // interface method.
+    auto artificial_pos = std::make_unique<DexPosition>(
+        DexString::make_string(show_deobfuscated(spec.overridden_meth)),
+        DexString::make_string("UnknownSource"), 0);
+    def_block->push_position(std::move(artificial_pos));
     emit_call(spec, OPCODE_INVOKE_SUPER, args, ret_loc, spec.overridden_meth,
               def_block);
   } else if (!spec.proto->is_void()) {
