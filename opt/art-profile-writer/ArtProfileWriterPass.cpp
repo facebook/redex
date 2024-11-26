@@ -243,7 +243,9 @@ void never_inline(bool attach_annotations,
     // A bit bizarre, and suggests that Redex' code to mutate annotations is
     // ripe for an overhaul. But I won't fight that here.
     method->set_access(access | ACC_SYNTHETIC);
-    method->attach_annotation_set(std::make_unique<DexAnnotationSet>(anno_set));
+    auto res = method->attach_annotation_set(
+        std::make_unique<DexAnnotationSet>(anno_set));
+    always_assert(res);
     method->set_access(access);
   });
   mgr.incr_metric("never_inline_callees_already_never_inline",
@@ -393,7 +395,9 @@ void never_compile(
     // A bit bizarre, and suggests that Redex' code to mutate annotations is
     // ripe for an overhaul. But I won't fight that here.
     method->set_access(access | ACC_SYNTHETIC);
-    method->attach_annotation_set(std::make_unique<DexAnnotationSet>(anno_set));
+    auto res = method->attach_annotation_set(
+        std::make_unique<DexAnnotationSet>(anno_set));
+    always_assert(res);
     method->set_access(access);
     mf.hot = false;
   });

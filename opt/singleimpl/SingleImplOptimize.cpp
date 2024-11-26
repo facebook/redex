@@ -82,8 +82,9 @@ DexProto* get_or_make_proto(const DexType* intf,
 void setup_method(DexMethod* orig_method, DexMethod* new_method) {
   auto method_anno = orig_method->get_anno_set();
   if (method_anno) {
-    new_method->attach_annotation_set(
+    auto res = new_method->attach_annotation_set(
         std::make_unique<DexAnnotationSet>(*method_anno));
+    always_assert(res);
   }
   const auto& params_anno = orig_method->get_param_anno();
   if (params_anno) {
@@ -273,7 +274,8 @@ void OptimizationImpl::set_field_defs(const DexType* intf,
     f->rstate = field->rstate;
     auto field_anno = field->release_annotations();
     if (field_anno) {
-      f->attach_annotation_set(std::move(field_anno));
+      auto res = f->attach_annotation_set(std::move(field_anno));
+      always_assert(res);
     }
     f->make_concrete(field->get_access(),
                      field->get_static_value() == nullptr

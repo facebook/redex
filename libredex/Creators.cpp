@@ -658,7 +658,8 @@ MethodCreator::MethodCreator(DexType* cls,
       m_with_debug_item(with_debug_item) {
   always_assert_log(!method->is_concrete(), "Method already defined");
   if (anno) {
-    method->attach_annotation_set(std::move(anno));
+    auto res = method->attach_annotation_set(std::move(anno));
+    always_assert(res);
   }
   method->make_concrete(
       access, !(access & (ACC_STATIC | ACC_PRIVATE | ACC_CONSTRUCTOR)));

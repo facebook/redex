@@ -74,7 +74,7 @@ AuxiliaryDefs create_auxiliary_defs(DexType* nopper_type) {
   // A bit bizarre, and suggests that Redex' code to mutate annotations is
   // ripe for an overhaul. But I won't fight that here.
   res.fib_method->set_access(access | ACC_SYNTHETIC);
-  res.fib_method->attach_annotation_set(
+  (void)res.fib_method->attach_annotation_set(
       std::make_unique<DexAnnotationSet>(anno_set));
   res.fib_method->set_access(access);
   res.fib_method->get_code()->build_cfg();

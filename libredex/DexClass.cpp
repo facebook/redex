@@ -292,16 +292,15 @@ void DexField::set_value(std::unique_ptr<DexEncodedValue> v) {
 
 void DexField::clear_annotations() { m_anno.reset(); }
 
-void DexField::attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset) {
-  always_assert_type_log(!m_concrete || is_synthetic(get_access()),
-                         RedexError::BAD_ANNOTATION,
-                         "field %s.%s is concrete\n",
-                         m_spec.cls->get_name()->c_str(), m_spec.name->c_str());
-  always_assert_type_log(!m_anno, RedexError::BAD_ANNOTATION,
-                         "field %s.%s annotation exists\n",
-                         m_spec.cls->get_name()->c_str(), m_spec.name->c_str());
-
+bool DexField::attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset) {
+  if (m_concrete && !is_synthetic(get_access())) {
+    return false;
+  }
+  if (m_anno != nullptr) {
+    return false;
+  }
   m_anno = std::move(aset);
+  return true;
 }
 
 std::unique_ptr<DexAnnotationSet> DexField::release_annotations() {
@@ -945,13 +944,15 @@ std::unique_ptr<ParamAnnotations> DexMethod::release_param_anno() {
   return std::move(m_param_anno);
 }
 
-void DexMethod::attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset) {
-  always_assert_type_log((!m_concrete) || is_synthetic(get_access()),
-                         RedexError::BAD_ANNOTATION, "method %s is concrete\n",
-                         self_show().c_str());
-  always_assert_type_log(!m_anno, RedexError::BAD_ANNOTATION,
-                         "method %s annotation exists\n", self_show().c_str());
+bool DexMethod::attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset) {
+  if (m_concrete && !is_synthetic(get_access())) {
+    return false;
+  }
+  if (m_anno != nullptr) {
+    return false;
+  }
   m_anno = std::move(aset);
+  return true;
 }
 void DexMethod::attach_param_annotation_set(
     int paramno, std::unique_ptr<DexAnnotationSet> aset) {
@@ -1425,7 +1426,8 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
     uint32_t off = *annodata++;
     DexField* field = static_cast<DexField*>(idx->get_fieldidx(fidx));
     auto aset = DexAnnotationSet::get_annotation_set(idx, off);
-    field->attach_annotation_set(std::move(aset));
+    auto res = field->attach_annotation_set(std::move(aset));
+    always_assert_type_log(res, INVALID_DEX, "Failed to attach annotation set");
   }
   always_assert(annodata <= annodata + annodir->methods_size * 2);
   always_assert((uint8_t*)(annodata + annodir->methods_size * 2) <= idx->end());
@@ -1434,7 +1436,8 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
     uint32_t off = *annodata++;
     DexMethod* method = static_cast<DexMethod*>(idx->get_methodidx(midx));
     auto aset = DexAnnotationSet::get_annotation_set(idx, off);
-    method->attach_annotation_set(std::move(aset));
+    auto res = method->attach_annotation_set(std::move(aset));
+    always_assert_type_log(res, INVALID_DEX, "Failed to attach method set");
   }
   always_assert(annodata <= annodata + annodir->parameters_size * 2);
   always_assert((uint8_t*)(annodata + annodir->parameters_size * 2) <=
@@ -1474,8 +1477,9 @@ void DexClass::combine_annotations_with(DexClass* other) {
   combine_annotations_with(other->get_anno_set());
 }
 
-void DexClass::attach_annotation_set(std::unique_ptr<DexAnnotationSet> anno) {
+bool DexClass::attach_annotation_set(std::unique_ptr<DexAnnotationSet> anno) {
   m_anno = std::move(anno);
+  return true;
 }
 
 void DexClass::clear_annotations() { m_anno.reset(); }

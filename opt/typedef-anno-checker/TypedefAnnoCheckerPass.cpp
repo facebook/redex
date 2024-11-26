@@ -291,8 +291,9 @@ bool add_annotations(DexMember* member, DexAnnotationSet* anno_set) {
     } else {
       DexAccessFlags access = def_member->get_access();
       def_member->set_access(ACC_SYNTHETIC);
-      def_member->attach_annotation_set(
+      auto res = def_member->attach_annotation_set(
           std::make_unique<DexAnnotationSet>(*anno_set));
+      always_assert(res);
       def_member->set_access(access);
     }
     return true;
@@ -390,8 +391,9 @@ void patch_return_anno_from_get(type_inference::TypeInference& inference,
 
   if (field_anno != boost::none) {
     // Patch missing return annotations from accessed fields
-    caller->attach_annotation_set(std::make_unique<DexAnnotationSet>(
+    auto res = caller->attach_annotation_set(std::make_unique<DexAnnotationSet>(
         *field_ref->as_def()->get_anno_set()));
+    always_assert(res);
   }
 }
 
