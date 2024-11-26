@@ -36,6 +36,14 @@ void assert_or_throw(bool cond,
                      const std::string& message,
                      const std::map<std::string, std::string>& extra_info) {
   if (!cond) {
+    if (redex::throw_typed_exception()) {
+      switch (type) {
+      case RedexError::INVALID_DEX:
+        throw redex::InvalidDexException(message, extra_info);
+      default:
+        break;
+      }
+    }
     throw RedexException(type, message, extra_info);
   }
 }

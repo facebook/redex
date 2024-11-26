@@ -202,6 +202,17 @@ void set_abort_if_not_this_thread() {
 #endif
 }
 
+namespace redex {
+
+bool g_throw_typed{false};
+
+void set_throw_typed_exception(bool throw_typed) {
+  g_throw_typed = throw_typed;
+}
+bool throw_typed_exception() { return g_throw_typed; }
+
+} // namespace redex
+
 void assert_fail(const char* expr,
                  const char* file,
                  unsigned line,
@@ -272,6 +283,14 @@ void assert_fail(const char* expr,
   }
 #endif
 
+  if (redex::g_throw_typed) {
+    switch (type) {
+    case RedexError::INVALID_DEX:
+      throw redex::InvalidDexException(msg);
+    default:
+      break;
+    }
+  }
   throw boost::enable_error_info(RedexException(type, msg)) << traced(StType());
 }
 

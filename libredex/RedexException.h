@@ -48,6 +48,18 @@ class RedexException : public std::exception {
   std::string m_msg;
 };
 
+namespace redex {
+
+class InvalidDexException : public RedexException {
+ public:
+  explicit InvalidDexException(
+      const std::string& message,
+      const std::map<std::string, std::string>& extra_info = {})
+      : RedexException(RedexError::INVALID_DEX, message, extra_info) {}
+};
+
+} // namespace redex
+
 void assert_or_throw(bool cond,
                      RedexError type = RedexError::GENERIC_ASSERTION_ERROR,
                      const std::string& message = "",
