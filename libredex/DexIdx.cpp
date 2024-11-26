@@ -15,11 +15,11 @@
 #include "DexClass.h"
 #include "DexMethodHandle.h"
 
-#define INIT_DMAP_ID(TYPE)                                             \
-  always_assert_log(dh->TYPE##_ids_off < dh->file_size,                \
-                    #TYPE " section offset out of range");             \
-  m_##TYPE##_ids = (dex_##TYPE##_id*)(m_dexbase + dh->TYPE##_ids_off); \
-  m_##TYPE##_ids_size = dh->TYPE##_ids_size;                           \
+#define INIT_DMAP_ID(TYPE)                                                \
+  always_assert_type_log(dh->TYPE##_ids_off < dh->file_size, INVALID_DEX, \
+                         #TYPE " section offset out of range");           \
+  m_##TYPE##_ids = (dex_##TYPE##_id*)(m_dexbase + dh->TYPE##_ids_off);    \
+  m_##TYPE##_ids_size = dh->TYPE##_ids_size;                              \
   m_##TYPE##_cache.resize(dh->TYPE##_ids_size)
 
 DexIdx::DexIdx(const dex_header* dh) {
@@ -61,17 +61,21 @@ DexCallSite* DexIdx::get_callsiteidx_fromdex(uint32_t csidx) {
   auto callsite_eva = get_encoded_value_array(this, callsite_data);
   auto evalues = callsite_eva->evalues();
   DexEncodedValue* ev_linker_method_handle = evalues->at(0).get();
-  always_assert_log(ev_linker_method_handle->evtype() == DEVT_METHOD_HANDLE,
-                    "Unexpected evtype callsite item arg 0: %d",
-                    ev_linker_method_handle->evtype());
+  always_assert_type_log(ev_linker_method_handle->evtype() ==
+                             DEVT_METHOD_HANDLE,
+                         INVALID_DEX,
+                         "Unexpected evtype callsite item arg 0: %d",
+                         ev_linker_method_handle->evtype());
   DexEncodedValue* ev_linker_method_name = evalues->at(1).get();
-  always_assert_log(ev_linker_method_name->evtype() == DEVT_STRING,
-                    "Unexpected evtype callsite item arg 1: %d",
-                    ev_linker_method_name->evtype());
+  always_assert_type_log(ev_linker_method_name->evtype() == DEVT_STRING,
+                         INVALID_DEX,
+                         "Unexpected evtype callsite item arg 1: %d",
+                         ev_linker_method_name->evtype());
   DexEncodedValue* ev_linker_method_type = evalues->at(2).get();
-  always_assert_log(ev_linker_method_type->evtype() == DEVT_METHOD_TYPE,
-                    "Unexpected evtype callsite item arg 2: %d",
-                    ev_linker_method_type->evtype());
+  always_assert_type_log(ev_linker_method_type->evtype() == DEVT_METHOD_TYPE,
+                         INVALID_DEX,
+                         "Unexpected evtype callsite item arg 2: %d",
+                         ev_linker_method_type->evtype());
   DexMethodHandle* linker_method_handle =
       ((DexEncodedValueMethodHandle*)ev_linker_method_handle)->methodhandle();
   auto linker_method_name =
@@ -93,9 +97,10 @@ DexCallSite* DexIdx::get_callsiteidx_fromdex(uint32_t csidx) {
 DexMethodHandle* DexIdx::get_methodhandleidx_fromdex(uint32_t mhidx) {
   redex_assert(mhidx < m_methodhandle_ids_size);
   auto type_uint16 = m_methodhandle_ids[mhidx].method_handle_type;
-  always_assert_log(
+  always_assert_type_log(
       type_uint16 >= MethodHandleType::METHOD_HANDLE_TYPE_STATIC_PUT &&
           type_uint16 <= MethodHandleType::METHOD_HANDLE_TYPE_INVOKE_INTERFACE,
+      INVALID_DEX,
       "Invalid MethodHandle type");
   MethodHandleType method_handle_type = (MethodHandleType)type_uint16;
   if (DexMethodHandle::isInvokeType(method_handle_type)) {
@@ -112,14 +117,27 @@ DexMethodHandle* DexIdx::get_methodhandleidx_fromdex(uint32_t mhidx) {
 const DexString* DexIdx::get_stringidx_fromdex(uint32_t stridx) {
   redex_assert(stridx < m_string_ids_size);
   uint32_t stroff = m_string_ids[stridx].offset;
-  always_assert_log(stroff < ((dex_header*)m_dexbase)->file_size,
-                    "String data offset out of range");
+  // Bounds check is conservative. May incorrectly reject short strings
+  // at the end of the file.
+  always_assert_type_log(stroff < ((dex_header*)m_dexbase)->file_size - 6,
+                         INVALID_DEX, "String data offset out of range");
   const uint8_t* dstr = m_dexbase + stroff;
   /* Strip off uleb128 size encoding */
+
   uint32_t utfsize = read_uleb128(&dstr);
-  auto ret = DexString::make_string((const char*)dstr);
-  always_assert_log(
+  // Find null terminator.
+  auto null_cur = dstr;
+  while (*null_cur != '\0' && null_cur < m_dexbase + get_file_size()) {
+    ++null_cur;
+  }
+  always_assert_type_log(null_cur < m_dexbase + get_file_size(), INVALID_DEX,
+                         "Missing null terminator");
+
+  auto ret = DexString::make_string(
+      std::string_view((const char*)dstr, null_cur - dstr));
+  always_assert_type_log(
       ret->length() == utfsize,
+      INVALID_DEX,
       "Parsed string UTF size is not the same as stringidx size. %u != %u",
       ret->length(),
       utfsize);
@@ -164,8 +182,10 @@ DexTypeList* DexIdx::get_type_list(uint32_t offset) {
   const uint32_t* tlp = get_uint_data(offset);
   uint32_t size = *tlp++;
   // T137425749
-  redex_assert(size < get_file_size() / 2);
-  redex_assert(offset <= get_file_size() - 2 * size);
+  always_assert_type_log(size < get_file_size() - offset, INVALID_DEX,
+                         "Size too big");
+  always_assert_type_log(offset <= get_file_size() - 2 * size, INVALID_DEX,
+                         "Offset out of bounds");
   const uint16_t* typep = (const uint16_t*)tlp;
   DexTypeList::ContainerType tlist;
   tlist.reserve(size);
