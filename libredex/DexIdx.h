@@ -65,7 +65,11 @@ class DexIdx {
   explicit DexIdx(const dex_header* dh);
 
   const DexString* get_stringidx(uint32_t stridx) {
-    redex_assert(stridx < m_string_ids_size);
+    always_assert_type_log(
+        stridx < m_string_ids_size, RedexError::INVALID_DEX,
+        "String index is out of bound. index: %d, cache size: %d", stridx,
+        m_string_ids_size);
+
     if (m_string_cache[stridx] == nullptr) {
       m_string_cache[stridx] = get_stringidx_fromdex(stridx);
     }
