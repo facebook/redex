@@ -66,6 +66,14 @@ class BufferEndExceededException : public RedexException {
       : RedexException(RedexError::BUFFER_END_EXCEEDED, message, extra_info) {}
 };
 
+class DuplicateMethodsException : public RedexException {
+ public:
+  explicit DuplicateMethodsException(
+      const std::string& message,
+      const std::map<std::string, std::string>& extra_info = {})
+      : RedexException(RedexError::DUPLICATE_METHODS, message, extra_info) {}
+};
+
 } // namespace redex
 
 void assert_or_throw(bool cond,
