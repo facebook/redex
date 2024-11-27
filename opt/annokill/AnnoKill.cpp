@@ -128,6 +128,43 @@ AnnoKill::AnnoKill(
   }
 }
 
+namespace {
+void gather_complete_referenced_annos(
+    const AnnoKill::AnnoSet& initial_referenced_annos,
+    DexType* type,
+    AnnoKill::AnnoSet* result) {
+  auto cls = type_class(type);
+  if (cls == nullptr || !is_annotation(cls) || cls->is_external()) {
+    return;
+  }
+  if (result->count(type) > 0) {
+    return;
+  }
+  result->emplace(type);
+  if (initial_referenced_annos.count(type) == 0) {
+    TRACE(ANNO, 3,
+          "Annotation type %s referenced indirectly from a referenced "
+          "annotation; keeping.",
+          SHOW(type));
+  }
+  auto process = [&](DexType* t) {
+    auto effective_type =
+        const_cast<DexType*>(type::get_element_type_if_array(t));
+    gather_complete_referenced_annos(initial_referenced_annos, effective_type,
+                                     result);
+  };
+  // gather_types too broad here (that will keep too much). Just check return
+  // type of members of the annotation (arguments should be disallowed) and
+  // static field types.
+  for (auto m : cls->get_all_methods()) {
+    process(m->get_proto()->get_rtype());
+  }
+  for (auto f : cls->get_sfields()) {
+    process(f->get_type());
+  }
+}
+} // namespace
+
 AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
   Timer timer{"get_referenced_annos"};
 
@@ -330,6 +367,13 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
       });
   referenced_annos.insert(concurrent_referenced_annos.begin(),
                           concurrent_referenced_annos.end());
+  // For each referenced annotation, make sure any annotations it references are
+  // also tracked as referenced, so we don't end up with a dangling ref.
+  AnnoKill::AnnoSet gathered;
+  for (auto referenced : referenced_annos) {
+    gather_complete_referenced_annos(referenced_annos, referenced, &gathered);
+  }
+  referenced_annos.insert(gathered.begin(), gathered.end());
   return referenced_annos;
 }
 
