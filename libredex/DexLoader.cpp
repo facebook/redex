@@ -288,6 +288,22 @@ static void validate_dex_header(const dex_header* dh,
                                        dexsize, "class_defs");
 }
 
+namespace {
+
+template <typename T>
+const T* get_and_consume(std::string_view& ptr, size_t align) {
+  if (align > 1) {
+    align_ptr(ptr, align);
+  }
+  always_assert_type_log(ptr.size() >= sizeof(T), INVALID_DEX,
+                         "Dex out of bounds");
+  const T* result = (const T*)ptr.data();
+  ptr = ptr.substr(sizeof(T));
+  return result;
+}
+
+} // namespace
+
 void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
   if (!stats) {
     return;
@@ -400,6 +416,12 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
     std::string_view encdata{(const char*)m_idx->get_uleb_data(item.offset),
                              m_idx->get_file_size() - item.offset};
 
+    auto consume_encdata = [&](size_t size) {
+      always_assert_type_log(encdata.size() >= size, INVALID_DEX,
+                             "Dex out of bounds");
+      encdata = encdata.substr(size);
+    };
+
     switch (item.type) {
     case TYPE_HEADER_ITEM:
       DEX_ASSERT(!header_seen)
@@ -450,51 +472,43 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
     case TYPE_MAP_LIST:
       stats->map_list_count += item.size;
       for (uint32_t j = 0; j < item.size; j++) {
-        align_ptr(encdata, 4);
-
-        always_assert_type_log(encdata.size() >= sizeof(uint32_t), INVALID_DEX,
-                               "Dex out of bounds");
-        uint32_t map_list_entries = *(uint32_t*)(encdata.data());
+        uint32_t map_list_entries = *get_and_consume<uint32_t>(encdata, 4);
         stats->map_list_bytes +=
             sizeof(uint32_t) + map_list_entries * sizeof(dex_map_item);
+        consume_encdata(map_list_entries * sizeof(dex_map_item));
       }
       break;
     case TYPE_TYPE_LIST:
       stats->type_list_count += item.size;
       for (uint32_t j = 0; j < item.size; j++) {
-        align_ptr(encdata, 4);
-
-        always_assert_type_log(encdata.size() >= sizeof(uint32_t), INVALID_DEX,
-                               "Dex out of bounds");
-        uint32_t type_list_entries = *(uint32_t*)(encdata.data());
+        uint32_t type_list_entries = *get_and_consume<uint32_t>(encdata, 4);
         stats->type_list_bytes +=
             sizeof(uint32_t) + type_list_entries * sizeof(dex_type_item);
+        consume_encdata(type_list_entries * sizeof(dex_type_item));
       }
       break;
     case TYPE_ANNOTATION_SET_REF_LIST:
       stats->annotation_set_ref_list_count += item.size;
       for (uint32_t j = 0; j < item.size; j++) {
-        align_ptr(encdata, 4);
-
-        always_assert_type_log(encdata.size() >= sizeof(uint32_t), INVALID_DEX,
-                               "Dex out of bounds");
-        uint32_t annotation_set_ref_list_entries = *(uint32_t*)(encdata.data());
+        uint32_t annotation_set_ref_list_entries =
+            *get_and_consume<uint32_t>(encdata, 4);
         stats->annotation_set_ref_list_bytes +=
             sizeof(uint32_t) + annotation_set_ref_list_entries *
                                    sizeof(dex_annotation_set_ref_item);
+        consume_encdata(annotation_set_ref_list_entries *
+                        sizeof(dex_annotation_set_ref_item));
       }
       break;
     case TYPE_ANNOTATION_SET_ITEM:
       stats->annotation_set_count += item.size;
       for (uint32_t j = 0; j < item.size; j++) {
-        align_ptr(encdata, 4);
-
-        always_assert_type_log(encdata.size() >= sizeof(uint32_t), INVALID_DEX,
-                               "Dex out of bounds");
-        uint32_t annotation_set_entries = *(uint32_t*)(encdata.data());
+        uint32_t annotation_set_entries =
+            *get_and_consume<uint32_t>(encdata, 4);
         stats->annotation_set_bytes +=
             sizeof(uint32_t) +
             annotation_set_entries * sizeof(dex_annotation_off_item);
+        consume_encdata(annotation_set_entries *
+                        sizeof(dex_annotation_off_item));
       }
       break;
     case TYPE_CLASS_DATA_ITEM: {
@@ -534,21 +548,15 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
       stats->code_count += item.size;
 
       for (uint32_t j = 0; j < item.size; j++) {
-        align_ptr(encdata, 4);
+        auto* code_item = get_and_consume<dex_code_item>(encdata, 4);
 
-        dex_code_item* code_item = (dex_code_item*)encdata.data();
-        always_assert_type_log(encdata.size() >= sizeof(dex_code_item),
-                               INVALID_DEX, "Dex overflow");
-
-        encdata = encdata.substr(sizeof(dex_code_item) +
-                                 code_item->insns_size * sizeof(uint16_t));
+        consume_encdata(code_item->insns_size * sizeof(uint16_t));
 
         if (code_item->tries_size != 0 && code_item->insns_size % 2 == 1) {
-          encdata = encdata.substr(sizeof(uint16_t));
+          consume_encdata(sizeof(uint16_t));
         }
 
-        encdata =
-            encdata.substr(code_item->tries_size * sizeof(dex_tries_item));
+        consume_encdata(code_item->tries_size * sizeof(dex_tries_item));
 
         if (code_item->tries_size != 0) {
           uint32_t catch_handler_list_size = read_uleb128_checked(encdata);
@@ -580,17 +588,8 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
         read_uleb128_checked(encdata);
 
         // Read up to and including the NULL-terminating byte.
-        bool terminated = false;
-        while (!encdata.empty()) {
-          const uint8_t byte = encdata[0];
-          encdata = encdata.substr(1);
-          if (byte == 0) {
-            terminated = true;
-            break;
-          }
+        while (*get_and_consume<char>(encdata, 1) != '\0') {
         }
-        always_assert_type_log(terminated, INVALID_DEX,
-                               "String not null-terminated");
       }
 
       stats->string_data_bytes += encdata.size() - orig_size;
@@ -611,9 +610,7 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
         }
         bool running = true;
         while (running) {
-          always_assert_type_log(!encdata.empty(), INVALID_DEX, "Dex overflow");
-          uint8_t opcode = encdata[0];
-          encdata = encdata.substr(1);
+          uint8_t opcode = *get_and_consume<uint8_t>(encdata, 1);
           switch (opcode) {
           case DBG_END_SEQUENCE:
             running = false;
@@ -679,23 +676,16 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
       stats->annotations_directory_count += item.size;
 
       for (uint32_t j = 0; j < item.size; ++j) {
-        align_ptr(encdata, 4);
-        dex_annotations_directory_item* annotations_directory_item =
-            (dex_annotations_directory_item*)encdata.data();
-        always_assert_type_log(encdata.size() >=
-                                   sizeof(dex_annotations_directory_item),
-                               INVALID_DEX, "Dex overflow");
+        auto* annotations_directory_item =
+            get_and_consume<dex_annotations_directory_item>(encdata, 4);
 
-        size_t advance = sizeof(dex_annotations_directory_item) +
-                         sizeof(dex_field_annotation) *
+        size_t advance = sizeof(dex_field_annotation) *
                              annotations_directory_item->fields_size +
                          sizeof(dex_method_annotation) *
                              annotations_directory_item->methods_size +
                          sizeof(dex_parameter_annotation) *
                              annotations_directory_item->parameters_size;
-        always_assert_type_log(encdata.size() >= advance, INVALID_DEX,
-                               "Dex overflow");
-        encdata = encdata.substr(advance);
+        consume_encdata(advance);
       }
 
       stats->annotations_directory_bytes += encdata.size() - orig_size;
