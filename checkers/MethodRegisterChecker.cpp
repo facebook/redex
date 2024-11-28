@@ -7,6 +7,7 @@
 
 #include "MethodRegisterChecker.h"
 
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexOpcode.h"
 #include "IRInstruction.h"
@@ -117,7 +118,8 @@ void MethodRegisterChecker::run_checker(DexStoresVector& stores,
               SHOW(insn),
               SHOW(method));
         }
-        insn->normalize_registers();
+        auto norm_res = insn->normalize_registers();
+        redex_assert(norm_res);
       }
       // 5. All src registers are below max param reg and register limits.
       for (size_t i = 0; i < insn->srcs_size(); ++i) {

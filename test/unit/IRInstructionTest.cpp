@@ -124,7 +124,8 @@ TEST_F(IRInstructionTest, NormalizeInvoke) {
 
   auto orig = new IRInstruction(*insn);
 
-  insn->normalize_registers();
+  auto norm_res = insn->normalize_registers();
+  ASSERT_TRUE(norm_res);
   EXPECT_EQ(*insn, *dasm(OPCODE_INVOKE_VIRTUAL, method, {1_v, 2_v, 4_v, 5_v}));
 
   insn->denormalize_registers();

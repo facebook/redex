@@ -291,7 +291,7 @@ bool IRInstruction::src_is_wide(src_index_t i) const {
   }
 }
 
-void IRInstruction::normalize_registers() {
+bool IRInstruction::normalize_registers(std::string* error_msg) {
   if (opcode::is_an_invoke(opcode())) {
     auto* args = get_method()->get_proto()->get_args();
     size_t old_srcs_idx{0};
@@ -301,18 +301,24 @@ void IRInstruction::normalize_registers() {
       ++old_srcs_idx;
     }
     for (size_t args_idx = 0; args_idx < args->size(); ++args_idx) {
-      always_assert_log(
-          old_srcs_idx < srcs_size(),
-          "Invalid arg indices in %s args_idx %zu old_srcs_idx %zu",
-          SHOW(this),
-          args_idx,
-          old_srcs_idx);
+      if (old_srcs_idx >= srcs_size()) {
+        if (error_msg != nullptr) {
+          *error_msg = "Invalid arg indices in " + show(this);
+        }
+        return false;
+      }
       set_src(srcs_idx++, src(old_srcs_idx));
       old_srcs_idx += type::is_wide_type(args->at(args_idx)) ? 2 : 1;
     }
-    always_assert(old_srcs_idx == srcs_size());
+    if (old_srcs_idx != srcs_size()) {
+      if (error_msg != nullptr) {
+        *error_msg = "Number of registers wrong in " + show(this);
+      }
+      return false;
+    }
     set_srcs_size(srcs_idx);
   }
+  return true;
 }
 
 void IRInstruction::denormalize_registers() {

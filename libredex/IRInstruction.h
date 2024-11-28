@@ -145,7 +145,7 @@ class IRInstruction final {
    * Ensures that wide registers only have their first register referenced
    * in the srcs list. This only affects invoke-* instructions.
    */
-  void normalize_registers();
+  [[nodiscard]] bool normalize_registers(std::string* error_msg = nullptr);
   /*
    * Ensures that wide registers have both registers in the pair referenced
    * in the srcs list.

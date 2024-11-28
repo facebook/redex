@@ -433,7 +433,11 @@ void translate_dex_to_ir(
       entry_to_data.erase(data_it);
     }
 
-    insn->normalize_registers();
+    std::string norm_error;
+    const auto norm_result = insn->normalize_registers(&norm_error);
+    always_assert_type_log(norm_result, INVALID_DEX,
+                           "Cannot normalize registers of instruction: %s",
+                           norm_error.c_str());
 
     delete it->dex_insn;
     it->type = MFLOW_OPCODE;
