@@ -176,8 +176,10 @@ class DexIdx {
 
   template <typename T>
   const T* get_data(uint32_t offset) {
-    always_assert(offset < offset + sizeof(T));
-    always_assert(offset + sizeof(T) <= get_file_size());
+    always_assert_type_log(offset < offset + sizeof(T), INVALID_DEX,
+                           "Dex overflow");
+    always_assert_type_log(offset + sizeof(T) <= get_file_size(), INVALID_DEX,
+                           "Dex overflow");
     return (T*)(m_dexbase + offset);
   }
 
@@ -188,7 +190,9 @@ class DexIdx {
   const uint8_t* end() const { return m_dexbase + get_file_size(); }
 
   const uint8_t* get_uleb_data(uint32_t offset) {
-    always_assert(offset < get_file_size()); // Best effort.
+    // Best effort.
+    always_assert_type_log(offset < get_file_size(), INVALID_DEX,
+                           "Dex overflow");
     return m_dexbase + offset;
   }
 
