@@ -814,31 +814,46 @@ DexClasses DexLoader::load_dex(const dex_header* dh,
   return classes;
 }
 
-static void balloon_all(const Scope& scope, bool throw_on_error) {
-  InsertOnlyConcurrentMap<DexMethod*, std::string> ir_balloon_errors;
-  walk::parallel::methods(scope, [&](DexMethod* m) {
-    if (m->get_dex_code()) {
-      try {
+static void balloon_all(const Scope& scope,
+                        bool throw_on_error,
+                        DexLoader::Parallel p) {
+  switch (p) {
+  case DexLoader::Parallel::kNo: {
+    walk::methods(scope, [&](DexMethod* m) {
+      if (m->get_dex_code()) {
         m->balloon();
-      } catch (RedexException& re) {
-        ir_balloon_errors.emplace(m, re.what());
       }
-    }
-  });
+    });
+    break;
+  }
+  case DexLoader::Parallel::kYes: {
+    InsertOnlyConcurrentMap<DexMethod*, std::string> ir_balloon_errors;
+    walk::parallel::methods(scope, [&](DexMethod* m) {
+      if (m->get_dex_code()) {
+        try {
+          m->balloon();
+        } catch (RedexException& re) {
+          ir_balloon_errors.emplace(m, re.what());
+        }
+      }
+    });
 
-  if (!ir_balloon_errors.empty()) {
-    std::ostringstream oss;
-    oss << "Error lifting DexCode to IRCode for the following methods:"
-        << std::endl;
-    for (const auto& [method, msg] : ir_balloon_errors) {
-      oss << show(method) << ": " << msg << std::endl;
-    }
+    if (!ir_balloon_errors.empty()) {
+      std::ostringstream oss;
+      oss << "Error lifting DexCode to IRCode for the following methods:"
+          << std::endl;
+      for (const auto& [method, msg] : ir_balloon_errors) {
+        oss << show(method) << ": " << msg << std::endl;
+      }
 
-    always_assert_log(!throw_on_error,
-                      "%s" /* format string must be a string literal */,
-                      oss.str().c_str());
-    TRACE(MAIN, 1, "%s" /* format string must be a string literal */,
-          oss.str().c_str());
+      always_assert_log(!throw_on_error,
+                        "%s" /* format string must be a string literal */,
+                        oss.str().c_str());
+      TRACE(MAIN, 1, "%s" /* format string must be a string literal */,
+            oss.str().c_str());
+    }
+    break;
+  }
   }
 }
 
@@ -864,7 +879,7 @@ DexClasses load_classes_from_dex(const DexLocation* location,
   auto classes = dl.load_dex(location->get_file_name().c_str(), stats,
                              support_dex_version, p);
   if (balloon) {
-    balloon_all(classes, throw_on_balloon_error);
+    balloon_all(classes, throw_on_balloon_error, p);
   }
   return classes;
 }
@@ -877,7 +892,7 @@ DexClasses load_classes_from_dex(const dex_header* dh,
   DexLoader dl(location);
   auto classes = dl.load_dex(dh, nullptr, p);
   if (balloon) {
-    balloon_all(classes, throw_on_balloon_error);
+    balloon_all(classes, throw_on_balloon_error, p);
   }
   return classes;
 }
@@ -888,4 +903,6 @@ std::string load_dex_magic_from_dex(const DexLocation* location) {
   return dh->magic;
 }
 
-void balloon_for_test(const Scope& scope) { balloon_all(scope, true); }
+void balloon_for_test(const Scope& scope) {
+  balloon_all(scope, true, DexLoader::Parallel::kYes);
+}
