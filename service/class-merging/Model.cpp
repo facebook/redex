@@ -832,16 +832,22 @@ void Model::collect_methods() {
   // collect all virtual scope up the hierarchy from a root
   for (const MergerType* merger_root : m_roots) {
     std::vector<const VirtualScope*> base_scopes;
-    const auto root_type = merger_root->type;
     // get the first existing type from roots (has a DexClass)
-    auto cls = type_class(root_type);
-    while (cls == nullptr) {
-      const auto parent = m_parents.find(root_type);
-      if (parent == m_parents.end()) {
-        break;
+    auto find_class = [&]() {
+      auto root_type = merger_root->type;
+      auto cls = type_class(root_type);
+      while (cls == nullptr) {
+        const auto parent = m_parents.find(root_type);
+        if (parent == m_parents.end()) {
+          break;
+        }
+        cls = type_class(parent->second);
       }
-      cls = type_class(parent->second);
-    }
+      return cls;
+    };
+    auto cls = find_class();
+    always_assert_log(cls != nullptr, "No class for %s",
+                      SHOW(merger_root->type));
     // load all parents scopes
     const auto& parents = m_type_system.parent_chain(cls->get_type());
     if (parents.size() > 1) {
