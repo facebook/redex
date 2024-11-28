@@ -177,6 +177,9 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
   }
   for (const auto& pair : parent_children) {
     auto parent = pair.first;
+    if (!type_class(parent)) {
+      continue;
+    }
     auto& children = pair.second;
     if (children.size() >= global_min_count) {
       TRACE(CLMG,
