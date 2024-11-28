@@ -793,7 +793,7 @@ void DexMethod::set_code(std::unique_ptr<IRCode> code) {
 
 void DexMethod::balloon() {
   redex_assert(m_code == nullptr);
-  m_code = std::make_unique<IRCode>(this);
+  m_code = IRCode::for_method(this);
   m_dex_code.reset();
 }
 

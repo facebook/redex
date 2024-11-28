@@ -372,15 +372,15 @@ void translate_dex_to_ir(
                            {{"dex_op", std::to_string(dex_op)}});
     }
     auto op = *maybe_op;
-    auto* insn = new IRInstruction(op);
+    auto insn = std::make_unique<IRInstruction>(op);
 
-    IRInstruction* move_result_pseudo{nullptr};
+    std::unique_ptr<IRInstruction> move_result_pseudo;
     if (insn->has_dest()) {
       insn->set_dest(dex_insn->dest());
     } else if (opcode::may_throw(op)) {
       if (op == OPCODE_CHECK_CAST) {
         move_result_pseudo =
-            new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+            std::make_unique<IRInstruction>(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
         move_result_pseudo->set_dest(dex_insn->src(0));
       } else if (dex_insn->has_dest()) {
         IROpcode move_op;
@@ -391,7 +391,7 @@ void translate_dex_to_ir(
         } else {
           move_op = IOPCODE_MOVE_RESULT_PSEUDO;
         }
-        move_result_pseudo = new IRInstruction(move_op);
+        move_result_pseudo = std::make_unique<IRInstruction>(move_op);
         move_result_pseudo->set_dest(dex_insn->dest());
       }
     }
@@ -441,10 +441,10 @@ void translate_dex_to_ir(
 
     delete it->dex_insn;
     it->type = MFLOW_OPCODE;
-    it->insn = insn;
+    it->insn = insn.release();
     if (move_result_pseudo != nullptr) {
-      it = ir_list->insert_before(std::next(it),
-                                  *(new MethodItemEntry(move_result_pseudo)));
+      it = ir_list->insert_before(
+          std::next(it), *(new MethodItemEntry(move_result_pseudo.release())));
     }
   }
 }
@@ -620,6 +620,16 @@ IRCode::IRCode(DexMethod* method) : m_ir_list(new IRList()) {
                        this);
   balloon(const_cast<DexMethod*>(method), m_ir_list);
   m_dbg = dc->release_debug_item();
+}
+
+std::unique_ptr<IRCode> IRCode::for_method(DexMethod* method) {
+  auto code = std::make_unique<IRCode>();
+  auto* dc = method->get_dex_code();
+  generate_load_params(method, dc->get_registers_size() - dc->get_ins_size(),
+                       code.get());
+  balloon(const_cast<DexMethod*>(method), code->m_ir_list);
+  code->m_dbg = dc->release_debug_item();
+  return code;
 }
 
 IRCode::IRCode(DexMethod* method, size_t temp_regs) : m_ir_list(new IRList()) {
