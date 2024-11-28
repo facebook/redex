@@ -377,12 +377,13 @@ std::unique_ptr<DexEncodedValueArray> get_encoded_value_array(
     DexIdx* idx, const uint8_t*& encdata) {
   always_assert(encdata < idx->end());
   uint32_t size = read_uleb128(&encdata);
-  auto* evlist = new std::vector<std::unique_ptr<DexEncodedValue>>();
-  evlist->reserve(size);
+  using Vec = std::vector<std::unique_ptr<DexEncodedValue>>;
+  auto evlist = Vec{};
+  evlist.reserve(size);
   for (uint32_t i = 0; i < size; i++) {
-    evlist->emplace_back(DexEncodedValue::get_encoded_value(idx, encdata));
+    evlist.emplace_back(DexEncodedValue::get_encoded_value(idx, encdata));
   }
-  return std::make_unique<DexEncodedValueArray>(evlist);
+  return std::make_unique<DexEncodedValueArray>(new Vec{std::move(evlist)});
 }
 
 bool DexEncodedValue::is_evtype_primitive() const {
