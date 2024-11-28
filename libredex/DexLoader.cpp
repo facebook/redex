@@ -827,28 +827,36 @@ static void balloon_all(const Scope& scope,
     break;
   }
   case DexLoader::Parallel::kYes: {
-    InsertOnlyConcurrentMap<DexMethod*, std::string> ir_balloon_errors;
+    InsertOnlyConcurrentMap<DexMethod*,
+                            std::pair<std::string, std::exception_ptr>>
+        ir_balloon_errors;
     walk::parallel::methods(scope, [&](DexMethod* m) {
       if (m->get_dex_code()) {
         try {
           m->balloon();
         } catch (RedexException& re) {
-          ir_balloon_errors.emplace(m, re.what());
+          ir_balloon_errors.emplace(
+              m, std::make_pair(re.what(), std::make_exception_ptr(re)));
         }
       }
     });
 
     if (!ir_balloon_errors.empty()) {
+      if (throw_on_error) {
+        std::vector<std::exception_ptr> all_exceptions;
+        for (const auto& [_, data] : ir_balloon_errors) {
+          all_exceptions.emplace_back(data.second);
+        }
+        throw aggregate_exception(std::move(all_exceptions));
+      }
+
       std::ostringstream oss;
       oss << "Error lifting DexCode to IRCode for the following methods:"
           << std::endl;
-      for (const auto& [method, msg] : ir_balloon_errors) {
-        oss << show(method) << ": " << msg << std::endl;
+      for (const auto& [method, data] : ir_balloon_errors) {
+        oss << show(method) << ": " << data.first << std::endl;
       }
 
-      always_assert_log(!throw_on_error,
-                        "%s" /* format string must be a string literal */,
-                        oss.str().c_str());
       TRACE(MAIN, 1, "%s" /* format string must be a string literal */,
             oss.str().c_str());
     }
