@@ -841,6 +841,7 @@ void Model::collect_methods() {
         if (parent == m_parents.end()) {
           break;
         }
+        root_type = parent->second;
         cls = type_class(parent->second);
       }
       return cls;
