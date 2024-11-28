@@ -625,6 +625,9 @@ DexCode::~DexCode() {
 
 std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
   if (offset == 0) return std::unique_ptr<DexCode>();
+  always_assert_type_log(offset <= idx->get_file_size() - sizeof(dex_code_item),
+                         INVALID_DEX, "Dex overflow");
+  always_assert_type_log(offset % 4 == 0, INVALID_DEX, "Alignment violation");
   const dex_code_item* code = idx->get_data<dex_code_item>(offset);
   std::unique_ptr<DexCode> dc(new DexCode());
   dc->m_registers_size = code->registers_size;
@@ -634,15 +637,22 @@ std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
   const uint16_t* cdata = (const uint16_t*)(code + 1);
   uint32_t tries = code->tries_size;
   if (code->insns_size) {
+    always_assert_type_log(
+        code->insns_size * sizeof(uint16_t) <=
+            idx->get_file_size() - offset - sizeof(dex_code_item),
+        INVALID_DEX, "Dex overflow");
+    // The spec does not restrict this, but this improves things like fuzzing.
+    always_assert_type_log(code->insns_size <= 1000000, INVALID_DEX,
+                           "Too many instructions");
+
     // On average there seem to be about two code units per instruction
     dc->m_insns->reserve(code->insns_size / 2);
     const uint16_t* end = cdata + code->insns_size;
-    always_assert(cdata <= end);
-    always_assert((uint8_t*)(end) <= idx->end());
+
     while (cdata < end) {
       DexInstruction* dop = DexInstruction::make_instruction(idx, &cdata, end);
-      always_assert_log(dop != nullptr,
-                        "Failed to parse method at offset 0x%08x", offset);
+      always_assert_type_log(dop != nullptr, INVALID_DEX,
+                             "Failed to parse method at offset 0x%08x", offset);
       dc->m_insns->push_back(dop);
     }
     /*
@@ -656,13 +666,14 @@ std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
 
   if (tries) {
     const dex_tries_item* dti = (const dex_tries_item*)cdata;
-    always_assert(dti <= dti + tries);
-    always_assert((uint8_t*)(dti + tries) <= idx->end());
+    always_assert_type_log(dti <= dti + tries, INVALID_DEX, "Dex overflow");
+    always_assert_type_log((uint8_t*)(dti + tries) <= idx->end(), INVALID_DEX,
+                           "Dex overflow");
     const uint8_t* handlers = (const uint8_t*)(dti + tries);
     for (uint32_t i = 0; i < tries; i++) {
       DexTryItem* dextry = new DexTryItem(dti[i].start_addr, dti[i].insn_count);
       const uint8_t* handler = handlers + dti[i].handler_off;
-      always_assert(handler < idx->end());
+      always_assert_type_log(handler < idx->end(), INVALID_DEX, "Dex overflow");
       int32_t count = read_sleb128(&handler);
       bool has_catchall = false;
       if (count <= 0) {
@@ -670,15 +681,18 @@ std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
         has_catchall = true;
       }
       while (count--) {
-        always_assert(handler < idx->end());
+        always_assert_type_log(handler < idx->end(), INVALID_DEX,
+                               "Dex overflow");
         uint32_t tidx = read_uleb128(&handler);
-        always_assert(handler < idx->end());
+        always_assert_type_log(handler < idx->end(), INVALID_DEX,
+                               "Dex overflow");
         uint32_t hoff = read_uleb128(&handler);
         DexType* dt = idx->get_typeidx(tidx);
         dextry->m_catches.push_back(std::make_pair(dt, hoff));
       }
       if (has_catchall) {
-        always_assert(handler < idx->end());
+        always_assert_type_log(handler < idx->end(), INVALID_DEX,
+                               "Dex overflow");
         auto hoff = read_uleb128(&handler);
         dextry->m_catches.push_back(std::make_pair(nullptr, hoff));
       }
