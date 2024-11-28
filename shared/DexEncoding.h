@@ -187,18 +187,6 @@ inline uint32_t mutf8_next_code_point(const char*& s) {
   dex_encoding::details::throw_invalid("Invalid size encoding mutf8 string");
 }
 
-inline uint32_t length_of_utf8_string(const char* s) {
-  if (s == nullptr) {
-    return 0;
-  }
-  uint32_t len = 0;
-  while (*s != '\0') {
-    ++len;
-    mutf8_next_code_point(s);
-  }
-  return len;
-}
-
 // https://docs.oracle.com/javase/8/docs/api/java/lang/String.html#hashCode--
 inline int32_t java_hashcode_of_utf8_string(const char* s) {
   if (s == nullptr) {
