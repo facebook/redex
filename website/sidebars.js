@@ -75,9 +75,19 @@ module.exports = {
             ]
           },
           {
-            type: 'doc',
+            type: 'category',
             label: 'Configuring Redex',
-            id: 'fb/redex_configuration'
+            link: { type: 'doc', id: 'fb/configuring_redex/redex_configuration' },
+            items: [
+              {
+                type: 'doc',
+                id: 'fb/configuring_redex/redex_configuration',
+              },
+              {
+                type: 'doc',
+                id: 'fb/configuring_redex/refig',
+              }
+            ]
           },
           {
             type: 'category',
