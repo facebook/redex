@@ -199,16 +199,20 @@ static void shard_multi_target(IRList* ir,
     int32_t case_key = read_int32(data);
     for (int i = 0; i < entries; i++) {
       uint32_t targetaddr = base + read_int32(data);
-      auto target = bm.by<Addr>().at(targetaddr);
-      insert_multi_branch_target(ir, case_key + i, target, src);
+      auto it = bm.by<Addr>().find(targetaddr);
+      always_assert_type_log(it != bm.by<Addr>().end(), RedexError::INVALID_DEX,
+                             "Target is not an instruction address");
+      insert_multi_branch_target(ir, case_key + i, it->second, src);
     }
   } else if (ftype == FOPCODE_SPARSE_SWITCH) {
     const uint16_t* tdata = data + 2 * entries; // entries are 32b
     for (int i = 0; i < entries; i++) {
       int32_t case_key = read_int32(data);
       uint32_t targetaddr = base + read_int32(tdata);
-      auto target = bm.by<Addr>().at(targetaddr);
-      insert_multi_branch_target(ir, case_key, target, src);
+      auto it = bm.by<Addr>().find(targetaddr);
+      always_assert_type_log(it != bm.by<Addr>().end(), RedexError::INVALID_DEX,
+                             "Target is not an instruction address");
+      insert_multi_branch_target(ir, case_key, it->second, src);
     }
   } else {
     not_reached_log("Bad fopcode 0x%04x in shard_multi_target", ftype);
