@@ -115,72 +115,6 @@ void dex_type_range_assert(uint64_t offset,
                    type_name + "_off");
 }
 
-uint32_t read_uleb128_checked(std::string_view& ptr) {
-  auto next = [&ptr]() {
-    always_assert_type_log(!ptr.empty(), INVALID_DEX, "ULEB128 underflow");
-    uint8_t result = *ptr.data();
-    ptr = ptr.substr(1);
-    return result;
-  };
-
-  uint32_t result = next();
-  if (result > 0x7f) {
-    uint32_t cur = next();
-    result = (result & 0x7f) | ((cur & 0x7f) << 7);
-    if (cur > 0x7f) {
-      cur = next();
-      result |= (cur & 0x7f) << 14;
-      if (cur > 0x7f) {
-        cur = next();
-        result |= (cur & 0x7f) << 21;
-        if (cur > 0x7f) {
-          cur = next();
-          result |= cur << 28;
-        }
-      }
-    }
-  }
-  return result;
-}
-
-int32_t read_sleb128_checked(std::string_view& ptr) {
-  auto next = [&ptr]() {
-    always_assert_type_log(!ptr.empty(), INVALID_DEX, "SLEB128 underflow");
-    uint8_t result = *ptr.data();
-    ptr = ptr.substr(1);
-    return result;
-  };
-
-  int32_t result = next();
-
-  if (result <= 0x7f) {
-    result = (result << 25) >> 25;
-  } else {
-    int cur = next();
-    result = (result & 0x7f) | ((cur & 0x7f) << 7);
-    if (cur <= 0x7f) {
-      result = (result << 18) >> 18;
-    } else {
-      cur = next();
-      result |= (cur & 0x7f) << 14;
-      if (cur <= 0x7f) {
-        result = (result << 11) >> 11;
-      } else {
-        cur = next();
-        result |= (cur & 0x7f) << 21;
-        if (cur <= 0x7f) {
-          result = (result << 4) >> 4;
-        } else {
-          cur = next();
-          // Change from AOSP: avoid undefined shifting behavior.
-          result |= (cur & 0x0f) << 28;
-        }
-      }
-    }
-  }
-  return result;
-}
-
 void align_ptr(std::string_view& ptr, const size_t alignment) {
   const size_t alignment_error = ((uintptr_t)ptr.data()) % alignment;
   if (alignment_error != 0) {
@@ -518,24 +452,28 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
 
       for (uint32_t j = 0; j < item.size; j++) {
         // Read in field sizes.
-        uint32_t static_fields_size = read_uleb128_checked(encdata);
-        uint32_t instance_fields_size = read_uleb128_checked(encdata);
-        uint32_t direct_methods_size = read_uleb128_checked(encdata);
-        uint32_t virtual_methods_size = read_uleb128_checked(encdata);
+        uint32_t static_fields_size =
+            read_uleb128_checked<redex::DexAssert>(encdata);
+        uint32_t instance_fields_size =
+            read_uleb128_checked<redex::DexAssert>(encdata);
+        uint32_t direct_methods_size =
+            read_uleb128_checked<redex::DexAssert>(encdata);
+        uint32_t virtual_methods_size =
+            read_uleb128_checked<redex::DexAssert>(encdata);
 
         for (uint32_t k = 0; k < static_fields_size + instance_fields_size;
              ++k) {
           // Read and skip all of the encoded_field data.
-          read_uleb128_checked(encdata);
-          read_uleb128_checked(encdata);
+          read_uleb128_checked<redex::DexAssert>(encdata);
+          read_uleb128_checked<redex::DexAssert>(encdata);
         }
 
         for (uint32_t k = 0; k < direct_methods_size + virtual_methods_size;
              ++k) {
           // Read and skip all of the encoded_method data.
-          read_uleb128_checked(encdata);
-          read_uleb128_checked(encdata);
-          read_uleb128_checked(encdata);
+          read_uleb128_checked<redex::DexAssert>(encdata);
+          read_uleb128_checked<redex::DexAssert>(encdata);
+          read_uleb128_checked<redex::DexAssert>(encdata);
         }
       }
 
@@ -559,18 +497,20 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
         consume_encdata(code_item->tries_size * sizeof(dex_tries_item));
 
         if (code_item->tries_size != 0) {
-          uint32_t catch_handler_list_size = read_uleb128_checked(encdata);
+          uint32_t catch_handler_list_size =
+              read_uleb128_checked<redex::DexAssert>(encdata);
           for (uint32_t k = 0; k < catch_handler_list_size; ++k) {
-            int32_t catch_handler_size = read_sleb128_checked(encdata);
+            int32_t catch_handler_size =
+                read_sleb128_checked<redex::DexAssert>(encdata);
             uint32_t abs_size = (uint32_t)std::abs(catch_handler_size);
             for (uint32_t l = 0; l < abs_size; ++l) {
               // Read encoded_type_addr_pair.
-              read_uleb128_checked(encdata);
-              read_uleb128_checked(encdata);
+              read_uleb128_checked<redex::DexAssert>(encdata);
+              read_uleb128_checked<redex::DexAssert>(encdata);
             }
             // Read catch_all_addr
             if (catch_handler_size <= 0) {
-              read_uleb128_checked(encdata);
+              read_uleb128_checked<redex::DexAssert>(encdata);
             }
           }
         }
@@ -585,7 +525,7 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
 
       for (uint32_t j = 0; j < item.size; j++) {
         // Skip data that encodes the number of UTF-16 code units.
-        read_uleb128_checked(encdata);
+        read_uleb128_checked<redex::DexAssert>(encdata);
 
         // Read up to and including the NULL-terminating byte.
         while (*get_and_consume<char>(encdata, 1) != '\0') {
@@ -601,12 +541,12 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
       stats->num_dbg_items += item.size;
       for (uint32_t j = 0; j < item.size; j++) {
         // line_start
-        read_uleb128_checked(encdata);
+        read_uleb128_checked<redex::DexAssert>(encdata);
         // param_count
-        uint32_t param_count = read_uleb128_checked(encdata);
+        uint32_t param_count = read_uleb128_checked<redex::DexAssert>(encdata);
         while (param_count--) {
           // Each parameter is one uleb128p1
-          read_uleb128_checked(encdata);
+          read_uleb128_checked<redex::DexAssert>(encdata);
         }
         bool running = true;
         while (running) {
@@ -622,33 +562,33 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
             // - addr_diff
             // - register_num
             // - register_num
-            read_uleb128_checked(encdata);
+            read_uleb128_checked<redex::DexAssert>(encdata);
             break;
           case DBG_ADVANCE_LINE:
             // line_diff
-            read_sleb128_checked(encdata);
+            read_sleb128_checked<redex::DexAssert>(encdata);
             break;
           case DBG_START_LOCAL:
             // register_num
-            read_uleb128_checked(encdata);
+            read_uleb128_checked<redex::DexAssert>(encdata);
             // name_idx
-            read_uleb128_checked(encdata);
+            read_uleb128_checked<redex::DexAssert>(encdata);
             // type_idx
-            read_uleb128_checked(encdata);
+            read_uleb128_checked<redex::DexAssert>(encdata);
             break;
           case DBG_START_LOCAL_EXTENDED:
             // register_num
-            read_uleb128_checked(encdata);
+            read_uleb128_checked<redex::DexAssert>(encdata);
             // name_idx
-            read_uleb128_checked(encdata);
+            read_uleb128_checked<redex::DexAssert>(encdata);
             // type_idx
-            read_uleb128_checked(encdata);
+            read_uleb128_checked<redex::DexAssert>(encdata);
             // sig_idx
-            read_uleb128_checked(encdata);
+            read_uleb128_checked<redex::DexAssert>(encdata);
             break;
           case DBG_SET_FILE:
             // name_idx
-            read_uleb128_checked(encdata);
+            read_uleb128_checked<redex::DexAssert>(encdata);
             break;
           case DBG_SET_PROLOGUE_END:
           case DBG_SET_EPILOGUE_BEGIN:
