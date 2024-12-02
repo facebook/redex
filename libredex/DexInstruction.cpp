@@ -134,8 +134,14 @@ unsigned DexInstruction::srcs_size() const {
     return 3;
   case FMT_f35c:
   case FMT_f45cc:
-  case FMT_f57c:
-    return arg_word_count();
+  case FMT_f57c: {
+    auto count = arg_word_count();
+    always_assert_type_log((format == FMT_f35c && count <= 5) ||
+                               (format == FMT_f45cc && count <= 5) ||
+                               (format == FMT_f57c && count <= 7),
+                           INVALID_DEX, "Invalid src size");
+    return count;
+  }
   case FMT_f20bc:
   case FMT_f22cs:
   case FMT_f35ms:
