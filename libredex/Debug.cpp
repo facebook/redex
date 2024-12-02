@@ -287,6 +287,8 @@ void assert_fail(const char* expr,
     switch (type) {
     case RedexError::DUPLICATE_METHODS:
       throw redex::DuplicateMethodsException(msg);
+    case RedexError::BAD_ANNOTATION:
+      throw redex::BadAnnotationException(msg);
     case RedexError::BUFFER_END_EXCEEDED:
       throw redex::BufferEndExceededException(msg);
     case RedexError::INVALID_DEX:

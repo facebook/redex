@@ -74,6 +74,14 @@ class DuplicateMethodsException : public RedexException {
       : RedexException(RedexError::DUPLICATE_METHODS, message, extra_info) {}
 };
 
+class BadAnnotationException : public RedexException {
+ public:
+  explicit BadAnnotationException(
+      const std::string& message,
+      const std::map<std::string, std::string>& extra_info = {})
+      : RedexException(RedexError::BAD_ANNOTATION, message, extra_info) {}
+};
+
 } // namespace redex
 
 void assert_or_throw(bool cond,
