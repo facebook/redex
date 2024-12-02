@@ -823,6 +823,9 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx,
     }
   }
     /* Format 10, fall through for NOP */
+    // While nops allow any upper byte (except the ones above), we do not want
+    // to distinguish that.
+    fopcode = DexOpcode::DOPCODE_NOP;
     FALLTHROUGH_INTENDED;
   case DOPCODE_MOVE:
   case DOPCODE_MOVE_WIDE:
