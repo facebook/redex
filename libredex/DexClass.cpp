@@ -1189,6 +1189,8 @@ void DexClass::load_class_data_item(
     ndex += read_uleb128(&encd);
     always_assert(encd < idx->end());
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
+    always_assert_type_log(is_static(access_flags), INVALID_DEX,
+                           "Static field not marked static");
     DexField* df = static_cast<DexField*>(idx->get_fieldidx(ndex));
     std::unique_ptr<DexEncodedValue> ev = nullptr;
     if (it != used.end()) {
@@ -1206,6 +1208,8 @@ void DexClass::load_class_data_item(
     ndex += read_uleb128(&encd);
     always_assert(encd < idx->end());
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
+    always_assert_type_log(!is_static(access_flags), INVALID_DEX,
+                           "Non-Static field marked static");
     DexField* df = static_cast<DexField*>(idx->get_fieldidx(ndex));
     df->make_concrete(access_flags);
     m_ifields.push_back(df);
