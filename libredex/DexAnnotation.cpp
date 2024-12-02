@@ -602,7 +602,7 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
         new DexEncodedValueAnnotation(type, std::move(eanno)));
   }
   };
-  not_reached_log("Bogus annotation");
+  always_assert_type_log(false, INVALID_DEX, "Bogus annotation type");
 }
 
 std::unique_ptr<DexAnnotation> DexAnnotation::get_annotation(
