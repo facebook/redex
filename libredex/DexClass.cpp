@@ -672,28 +672,27 @@ std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
     const uint8_t* handlers = (const uint8_t*)(dti + tries);
     for (uint32_t i = 0; i < tries; i++) {
       DexTryItem* dextry = new DexTryItem(dti[i].start_addr, dti[i].insn_count);
-      const uint8_t* handler = handlers + dti[i].handler_off;
-      always_assert_type_log(handler < idx->end(), INVALID_DEX, "Dex overflow");
-      int32_t count = read_sleb128(&handler);
+      auto handler = [&]() {
+        auto offset = dti[i].handler_off;
+        always_assert_type_log(handlers + offset < idx->end(), INVALID_DEX,
+                               "Dex overflow");
+        return std::string_view((const char*)handlers + offset,
+                                idx->end() - handlers - offset);
+      }();
+      int32_t count = read_sleb128_checked<redex::DexAssert>(handler);
       bool has_catchall = false;
       if (count <= 0) {
         count = -count;
         has_catchall = true;
       }
       while (count--) {
-        always_assert_type_log(handler < idx->end(), INVALID_DEX,
-                               "Dex overflow");
-        uint32_t tidx = read_uleb128(&handler);
-        always_assert_type_log(handler < idx->end(), INVALID_DEX,
-                               "Dex overflow");
-        uint32_t hoff = read_uleb128(&handler);
+        uint32_t tidx = read_uleb128_checked<redex::DexAssert>(handler);
+        uint32_t hoff = read_uleb128_checked<redex::DexAssert>(handler);
         DexType* dt = idx->get_typeidx(tidx);
         dextry->m_catches.push_back(std::make_pair(dt, hoff));
       }
       if (has_catchall) {
-        always_assert_type_log(handler < idx->end(), INVALID_DEX,
-                               "Dex overflow");
-        auto hoff = read_uleb128(&handler);
+        auto hoff = read_uleb128_checked<redex::DexAssert>(handler);
         dextry->m_catches.push_back(std::make_pair(nullptr, hoff));
       }
       dc->m_tries.emplace_back(dextry);
