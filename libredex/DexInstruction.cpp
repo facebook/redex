@@ -802,23 +802,26 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx,
   case DOPCODE_NOP: {
     if (fopcode == FOPCODE_PACKED_SWITCH) {
       int count = (*insns--) * 2 + 4;
-      always_assert(count >= 0);
+      always_assert_type_log(count >= 0, RedexError::INVALID_DEX,
+                             "Negative count");
       insns += count;
-      always_assert(insns <= end);
+      always_assert_type_log(insns <= end, RedexError::INVALID_DEX, "Overflow");
       return new DexOpcodeData(insns - count, count - 1);
     } else if (fopcode == FOPCODE_SPARSE_SWITCH) {
       int count = (*insns--) * 4 + 2;
-      always_assert(count >= 0);
+      always_assert_type_log(count >= 0, RedexError::INVALID_DEX,
+                             "Negative count");
       insns += count;
-      always_assert(insns <= end);
+      always_assert_type_log(insns <= end, RedexError::INVALID_DEX, "Overflow");
       return new DexOpcodeData(insns - count, count - 1);
     } else if (fopcode == FOPCODE_FILLED_ARRAY) {
       uint16_t ewidth = *insns++;
       uint32_t size = *((uint32_t*)insns);
       int count = (ewidth * size + 1) / 2 + 4;
-      always_assert(count >= 0);
+      always_assert_type_log(count >= 0, RedexError::INVALID_DEX,
+                             "Negative count");
       insns += count - 2;
-      always_assert(insns <= end);
+      always_assert_type_log(insns <= end, RedexError::INVALID_DEX, "Overflow");
       return new DexOpcodeData(insns - count, count - 1);
     }
   }
