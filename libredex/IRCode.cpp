@@ -85,16 +85,10 @@ static MethodItemEntry* get_target(const MethodItemEntry* mei,
   uint32_t base = bm.by<Entry>().at(const_cast<MethodItemEntry*>(mei));
   int offset = mei->dex_insn->offset();
   uint32_t target = base + offset;
-  if (bm.by<Addr>().count(target) == 0) {
-    throw RedexException(
-        RedexError::INVALID_DEX, "Invalid opcode target in get_target",
-        // TODO: Bring back formatting, was "%08x[%p](%08x) %08x"
-        {{"base", std::to_string(base)},
-         {"mei", std::to_string(reinterpret_cast<uintptr_t>(mei))},
-         {"offset", std::to_string(offset)},
-         {"target", std::to_string(target)},
-         {"insn", show(mei->insn)}});
-  }
+  always_assert_type_log(
+      bm.by<Addr>().count(target) != 0, RedexError::INVALID_DEX,
+      "Invalid opcode target %08x[%p](%08x) %08x in get_target %s", base, mei,
+      offset, target, SHOW(mei->dex_insn));
   return bm.by<Addr>().at(target);
 }
 
