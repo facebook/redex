@@ -9,6 +9,7 @@
 
 #include <assert.h>
 #include <string>
+#include <string_view>
 
 #include "Debug.h"
 #include "DexDefs.h"
@@ -206,18 +207,19 @@ class DexIdx {
 };
 
 inline const DexString* decode_noindexable_string(DexIdx* idx,
-                                                  const uint8_t*& encdata) {
+                                                  std::string_view& encdata) {
   const DexString* str = nullptr;
-  uint32_t sidx = read_uleb128p1(&encdata);
+  uint32_t sidx = read_uleb128p1_checked<redex::DexAssert>(encdata);
   if (sidx != DEX_NO_INDEX) {
     str = idx->get_stringidx(sidx);
   }
   return str;
 }
 
-inline DexType* decode_noindexable_type(DexIdx* idx, const uint8_t*& encdata) {
+inline DexType* decode_noindexable_type(DexIdx* idx,
+                                        std::string_view& encdata) {
   DexType* type = nullptr;
-  uint32_t tidx = read_uleb128p1(&encdata);
+  uint32_t tidx = read_uleb128p1_checked<redex::DexAssert>(encdata);
   if (tidx != DEX_NO_INDEX) {
     type = idx->get_typeidx(tidx);
   }

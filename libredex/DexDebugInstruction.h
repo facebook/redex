@@ -8,6 +8,7 @@
 #pragma once
 
 #include <list>
+#include <string_view>
 
 #include "DexDefs.h"
 #include "Gatherable.h"
@@ -39,7 +40,7 @@ class DexDebugInstruction : public Gatherable {
  public:
   virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
   static DexDebugInstruction* make_instruction(DexIdx* idx,
-                                               const uint8_t** encdata_ptr);
+                                               std::string_view& encdata_ptr);
   virtual std::unique_ptr<DexDebugInstruction> clone() const {
     return std::make_unique<DexDebugInstruction>(*this);
   }

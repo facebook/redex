@@ -356,7 +356,7 @@ void DexDebugEntry::gather_types(std::vector<DexType*>& ltype) const {
 static std::vector<DexDebugEntry> eval_debug_instructions(
     DexDebugItem* dbg,
     DexIdx* idx,
-    const uint8_t** encdata_ptr,
+    std::string_view& encdata_ptr,
     uint32_t absolute_line) {
   std::vector<DexDebugEntry> entries;
   // Likely overallocate and then shrink down in an effort to avoid the
@@ -365,6 +365,7 @@ static std::vector<DexDebugEntry> eval_debug_instructions(
   entries.reserve(kReserveSize);
 
   uint32_t pc = 0;
+
   while (true) {
     std::unique_ptr<DexDebugInstruction> opcode(
         DexDebugInstruction::make_instruction(idx, encdata_ptr));
@@ -410,12 +411,13 @@ static std::vector<DexDebugEntry> eval_debug_instructions(
 
 DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset)
     : m_source_checksum(idx->get_checksum()), m_source_offset(offset) {
-  const uint8_t* encdata = idx->get_uleb_data(offset);
-  const uint8_t* base_encdata = encdata;
-  always_assert(encdata < idx->end());
-  uint32_t line_start = read_uleb128(&encdata);
-  always_assert(encdata < idx->end());
-  uint32_t paramcount = read_uleb128(&encdata);
+  const uint8_t* encdata_ptr = idx->get_uleb_data(offset);
+  always_assert_type_log(encdata_ptr < idx->end(), INVALID_DEX, "Dex overflow");
+  std::string_view encdata{(const char*)encdata_ptr,
+                           (size_t)(idx->end() - encdata_ptr)};
+  const auto orig_size = encdata.size();
+  uint32_t line_start = read_uleb128_checked<redex::DexAssert>(encdata);
+  uint32_t paramcount = read_uleb128_checked<redex::DexAssert>(encdata);
   while (paramcount--) {
     // We intentionally drop the parameter string name here because we don't
     // have a convenient representation of it, and our internal tooling doesn't
@@ -423,8 +425,8 @@ DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset)
     // We emit matching number of nulls as method arguments at the end.
     decode_noindexable_string(idx, encdata);
   }
-  m_dbg_entries = eval_debug_instructions(this, idx, &encdata, line_start);
-  m_on_disk_size = encdata - base_encdata;
+  m_dbg_entries = eval_debug_instructions(this, idx, encdata, line_start);
+  m_on_disk_size = orig_size - encdata.size();
 }
 
 uint32_t DexDebugItem::get_line_start() const {

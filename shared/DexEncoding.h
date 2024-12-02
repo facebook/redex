@@ -113,6 +113,12 @@ uint32_t read_uleb128_checked(std::string_view& ptr) {
   return result;
 }
 
+template <typename Assert>
+inline uint32_t read_uleb128p1_checked(std::string_view& ptr) {
+  int v = read_uleb128_checked<Assert>(ptr);
+  return (v - 1);
+}
+
 inline int32_t read_sleb128(const uint8_t** _ptr) {
   const uint8_t* ptr = *_ptr;
   int32_t result = *(ptr++);
