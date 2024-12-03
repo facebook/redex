@@ -33,13 +33,15 @@ IRInstruction::IRInstruction(const IRInstruction& other)
       m_num_inline_srcs(other.m_num_inline_srcs),
       m_dest(other.m_dest),
       m_literal(other.m_literal) {
-  always_assert(!other.has_data());
   if (m_num_inline_srcs <= MAX_NUM_INLINE_SRCS) {
     for (auto i = 0; i < m_num_inline_srcs; ++i) {
       m_inline_srcs[i] = other.m_inline_srcs[i];
     }
   } else {
     m_srcs = new std::vector<reg_t>(*other.m_srcs);
+  }
+  if (other.has_data()) {
+    m_data = other.m_data->clone();
   }
 }
 

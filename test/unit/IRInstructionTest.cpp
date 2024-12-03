@@ -134,6 +134,9 @@ TEST_F(IRInstructionTest, NormalizeInvoke) {
       *dasm(OPCODE_INVOKE_VIRTUAL, method, {1_v, 2_v, 3_v, 4_v, 5_v, 6_v}));
 
   EXPECT_EQ(*insn, *orig);
+
+  delete insn;
+  delete orig;
 }
 
 /*
@@ -279,6 +282,8 @@ TEST_F(IRInstructionTest, SelectConst) {
   insn->set_literal(0xf0ffffffffffffff);
   EXPECT_THROW(select_const_opcode(insn), RedexException);
 
+  delete insn;
+
   auto wide_insn = dasm(OPCODE_CONST_WIDE, {0_v});
 
   EXPECT_EQ(DOPCODE_CONST_WIDE_16, select_const_opcode(wide_insn));
@@ -291,6 +296,8 @@ TEST_F(IRInstructionTest, SelectConst) {
 
   wide_insn->set_literal(0xffff000000000001);
   EXPECT_EQ(DOPCODE_CONST_WIDE, select_const_opcode(wide_insn));
+
+  delete wide_insn;
 }
 
 TEST_F(IRInstructionTest, SelectBinopLit) {
@@ -346,6 +353,8 @@ TEST_F(IRInstructionTest, SelectBinopLit) {
     insn->set_literal(0xffffff);
     EXPECT_THROW(select_binop_lit_opcode(insn), RedexException)
         << "at " << show(ops[i]);
+
+    delete insn;
   }
 }
 
@@ -359,6 +368,8 @@ TEST_F(IRInstructionTest, InvokeSourceIsWideBasic) {
   insn->set_method(m);
 
   EXPECT_TRUE(insn->invoke_src_is_wide(0));
+
+  delete insn;
 }
 
 TEST_F(IRInstructionTest, InvokeSourceIsWideComplex) {
@@ -376,6 +387,8 @@ TEST_F(IRInstructionTest, InvokeSourceIsWideComplex) {
   EXPECT_FALSE(insn->invoke_src_is_wide(1));
   EXPECT_TRUE(insn->invoke_src_is_wide(2));
   EXPECT_FALSE(insn->invoke_src_is_wide(3));
+
+  delete insn;
 }
 
 TEST_F(IRInstructionTest, InvokeSourceIsWideComplex2) {
@@ -395,4 +408,26 @@ TEST_F(IRInstructionTest, InvokeSourceIsWideComplex2) {
   EXPECT_TRUE(insn->invoke_src_is_wide(2));
   EXPECT_FALSE(insn->invoke_src_is_wide(3));
   EXPECT_TRUE(insn->invoke_src_is_wide(4));
+
+  delete insn;
+}
+
+TEST_F(IRInstructionTest, CopyInstructionWithData) {
+  IRInstruction* insn = new IRInstruction(OPCODE_FILL_ARRAY_DATA);
+  insn->set_src(0, 0);
+  std::vector<uint16_t> data(2);
+  uint16_t* ptr = data.data();
+  ptr[0] = FOPCODE_FILLED_ARRAY; // header
+  ptr[1] = 0;
+  insn->set_data(std::make_unique<DexOpcodeData>(data));
+
+  auto* copy = new IRInstruction(*insn);
+
+  EXPECT_NE(insn->get_data(), copy->get_data());
+  EXPECT_EQ(insn->get_data()->data_size(), copy->get_data()->data_size());
+  EXPECT_EQ(insn->get_data()->data_size(), 1);
+  EXPECT_EQ(insn->get_data()->data()[0], insn->get_data()->data()[0]);
+
+  delete insn;
+  delete copy;
 }
