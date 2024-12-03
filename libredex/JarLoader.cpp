@@ -245,7 +245,8 @@ bool extract_utf8(std::vector<cp_entry>& cpool,
 
 DexField* make_dexfield(std::vector<cp_entry>& cpool,
                         DexType* self,
-                        cp_field_info& finfo) {
+                        cp_field_info& finfo,
+                        std::unordered_set<const DexField*>& added) {
   std::string_view dbuffer;
   std::string_view nbuffer;
   if (!extract_utf8(cpool, finfo.nameNdx, &nbuffer) ||
@@ -256,6 +257,13 @@ DexField* make_dexfield(std::vector<cp_entry>& cpool,
   DexType* desc = DexType::make_type(dbuffer);
   DexField* field =
       static_cast<DexField*>(DexField::make_field(self, name, desc));
+
+  // We cannot do an existence check because of mixed sources. At least make
+  // sure we only add a field here once.
+  auto inserted = added.insert(field).second;
+  always_assert_type_log(inserted, INVALID_JAVA, "Duplicate field %s",
+                         SHOW(field));
+
   field->set_access((DexAccessFlags)finfo.aflags);
   field->set_external();
   return field;
@@ -557,6 +565,7 @@ bool parse_class(uint8_t* buffer,
         }
       };
 
+  std::unordered_set<const DexField*> added_fields;
   for (int i = 0; i < fcount; i++) {
     cp_field_info cpfield;
     cpfield.aflags = read16(buffer, buffer_end);
@@ -564,7 +573,7 @@ bool parse_class(uint8_t* buffer,
     cpfield.descNdx = read16(buffer, buffer_end);
     uint8_t* attrPtr = buffer;
     skip_attributes(buffer, buffer_end);
-    DexField* field = make_dexfield(cpool, self, cpfield);
+    DexField* field = make_dexfield(cpool, self, cpfield, added_fields);
     if (field == nullptr) return false;
     cc.add_field(field);
     invoke_attr_hook({field}, attrPtr);
