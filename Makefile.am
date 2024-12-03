@@ -255,6 +255,7 @@ libredex_la_SOURCES = \
 	libresource/VectorImpl.cpp \
 	libresource/Visitor.cpp \
 	service/api-levels/ApiLevelsUtils.cpp \
+	service/branch-prefix-hoisting/BranchPrefixHoisting.cpp \
 	service/class-merging/ApproximateShapeMerging.cpp \
 	service/class-merging/ClassAssemblingUtils.cpp \
 	service/class-merging/ClassMerging.cpp \
@@ -394,7 +395,7 @@ libopt_la_SOURCES = \
 	opt/builder_pattern/BuilderAnalysis.cpp \
 	opt/builder_pattern/BuilderTransform.cpp \
 	opt/builder_pattern/RemoveBuilderPattern.cpp \
-	opt/branch-prefix-hoisting/BranchPrefixHoisting.cpp \
+	opt/branch-prefix-hoisting/BranchPrefixHoistingPass.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
 	opt/check-recursion/CheckRecursion.cpp \
 	opt/class-merging/AnonymousClassMergingPass.cpp \

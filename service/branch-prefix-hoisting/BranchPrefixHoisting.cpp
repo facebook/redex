@@ -7,62 +7,14 @@
 
 #include "BranchPrefixHoisting.h"
 
-#include <algorithm>
-#include <boost/optional/optional.hpp>
-#include <iterator>
-
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "GraphUtil.h"
-#include "IRCode.h"
-#include "IRInstruction.h"
-#include "IRList.h"
-#include "IROpcode.h"
-#include "PassManager.h"
-#include "ScopedCFG.h"
 #include "Show.h"
 #include "Trace.h"
-#include "Util.h"
-#include "Walkers.h"
-
-/**
- * This pass eliminates sibling branches that begin with identical instructions,
- * (aka prefix hoisting).
- * example code pattern
- * if (condition) {
- *   insn_1;
- *   insn_2;
- *   insn_3;
- * } else {
- *   insn_1;
- *   insn_2;
- *   insn_4;
- * }
- * will be optimized into
- * insn_1;
- * insn_2;
- * if (condition) {
- *   insn_3;
- * } else {
- *   insn_4;
- * }
- * given that the hoisted instructions doesn't have a side effect on the branch
- * condition.
- *
- * We leave debug and position info in the original block. This is required for
- * correctness of the suffix.
- *
- * We hoist source blocks. The reasoning for that is tracking of exceptional
- * flow.
- *
- * Note: if an instruction gets hoisted may throw, the line numbers in stack
- * trace may be pointing to before the branch.
- */
 
 namespace {
-constexpr const char* METRIC_INSTRUCTIONS_HOISTED = "num_instructions_hoisted";
-
 // Record critical registers that will be clobbered by the hoisted insns.
 void setup_side_effect_on_vregs(const IRInstruction* insn,
                                 std::unordered_map<reg_t, bool>& vregs) {
@@ -591,9 +543,9 @@ size_t process_hoisting_for_block(
 
 } // namespace
 
-size_t BranchPrefixHoistingPass::process_code(IRCode* code,
-                                              DexMethod* method,
-                                              bool can_allocate_regs) {
+namespace branch_prefix_hoisting_impl {
+
+size_t process_code(IRCode* code, DexMethod* method, bool can_allocate_regs) {
   auto& cfg = code->cfg();
   TRACE(BPH, 5, "%s", SHOW(cfg));
   Lazy<const constant_uses::ConstantUses> constant_uses([&] {
@@ -605,10 +557,9 @@ size_t BranchPrefixHoistingPass::process_code(IRCode* code,
   return ret;
 }
 
-size_t BranchPrefixHoistingPass::process_cfg(
-    cfg::ControlFlowGraph& cfg,
-    Lazy<const constant_uses::ConstantUses>& constant_uses,
-    bool can_allocate_regs) {
+size_t process_cfg(cfg::ControlFlowGraph& cfg,
+                   Lazy<const constant_uses::ConstantUses>& constant_uses,
+                   bool can_allocate_regs) {
   size_t ret_insns_hoisted = 0;
   bool performed_transformation = false;
   do {
@@ -630,31 +581,4 @@ size_t BranchPrefixHoistingPass::process_cfg(
   return ret_insns_hoisted;
 }
 
-void BranchPrefixHoistingPass::run_pass(DexStoresVector& stores,
-                                        ConfigFiles& /* unused */,
-                                        PassManager& mgr) {
-  auto scope = build_class_scope(stores);
-
-  bool can_allocate_regs = !mgr.regalloc_has_run();
-  int total_insns_hoisted = walk::parallel::methods<int>(
-      scope, [can_allocate_regs](DexMethod* method) -> int {
-        const auto code = method->get_code();
-        if (!code || method->rstate.no_optimizations()) {
-          return 0;
-        }
-        TraceContext context{method};
-
-        int insns_hoisted = BranchPrefixHoistingPass::process_code(
-            code, method, can_allocate_regs);
-        if (insns_hoisted) {
-          TRACE(BPH, 3,
-                "[branch prefix hoisting] Moved %u insns in method {%s}",
-                insns_hoisted, SHOW(method));
-        }
-        return insns_hoisted;
-      });
-
-  mgr.incr_metric(METRIC_INSTRUCTIONS_HOISTED, total_insns_hoisted);
-}
-
-static BranchPrefixHoistingPass s_pass;
+} // namespace branch_prefix_hoisting_impl

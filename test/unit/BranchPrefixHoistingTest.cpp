@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include "BranchPrefixHoisting.h"
+#include "BranchPrefixHoistingPass.h"
 #include "ControlFlow.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
@@ -44,7 +45,7 @@ void test(const std::string& code_str,
         cfg, method,
         /* force_type_inference */ true);
   });
-  int actual_insns_hoisted = BranchPrefixHoistingPass::process_cfg(
+  int actual_insns_hoisted = branch_prefix_hoisting_impl::process_cfg(
       cfg, constant_uses, can_allocate_regs);
 
   std::cerr << "after:" << std::endl << SHOW(code->cfg());
