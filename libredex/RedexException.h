@@ -28,7 +28,8 @@ enum RedexError {
   BUFFER_END_EXCEEDED = 10,
   TYPE_CHECK_ERROR = 11,
   INVALID_DEX = 12,
-  MAX = 12,
+  INVALID_JAVA = 13,
+  MAX = 13,
 };
 
 class RedexException : public std::exception {
@@ -80,6 +81,14 @@ class BadAnnotationException : public RedexException {
       const std::string& message,
       const std::map<std::string, std::string>& extra_info = {})
       : RedexException(RedexError::BAD_ANNOTATION, message, extra_info) {}
+};
+
+class InvalidJavaException : public RedexException {
+ public:
+  explicit InvalidJavaException(
+      const std::string& message,
+      const std::map<std::string, std::string>& extra_info = {})
+      : RedexException(RedexError::INVALID_JAVA, message, extra_info) {}
 };
 
 } // namespace redex

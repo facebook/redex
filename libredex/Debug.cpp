@@ -293,6 +293,8 @@ void assert_fail(const char* expr,
       throw redex::BufferEndExceededException(msg);
     case RedexError::INVALID_DEX:
       throw redex::InvalidDexException(msg);
+    case RedexError::INVALID_JAVA:
+      throw redex::InvalidJavaException(msg);
     default:
       break;
     }

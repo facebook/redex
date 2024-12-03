@@ -46,6 +46,8 @@ void assert_or_throw(bool cond,
         throw redex::BufferEndExceededException(message, extra_info);
       case RedexError::INVALID_DEX:
         throw redex::InvalidDexException(message, extra_info);
+      case RedexError::INVALID_JAVA:
+        throw redex::InvalidJavaException(message, extra_info);
       default:
         break;
       }
