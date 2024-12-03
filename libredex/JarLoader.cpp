@@ -402,7 +402,8 @@ DexTypeList* extract_arguments(std::string_view& buf) {
 
 DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
                           DexType* self,
-                          cp_method_info& finfo) {
+                          cp_method_info& finfo,
+                          std::unordered_set<const DexMethod*>& added) {
   std::string_view dbuffer;
   std::string_view nbuffer;
   if (!extract_utf8(cpool, finfo.nameNdx, &nbuffer) ||
@@ -418,6 +419,9 @@ DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
   DexProto* proto = DexProto::make_proto(rtype, tlist);
   DexMethod* method =
       static_cast<DexMethod*>(DexMethod::make_method(self, name, proto));
+  auto inserted = added.insert(method).second;
+  always_assert_type_log(inserted, INVALID_JAVA, "Duplicate method %s",
+                         SHOW(method));
   if (method->is_concrete()) {
     std::cerr << "Pre-concrete method attempted to load '" << show(method)
               << "', bailing\n";
@@ -580,6 +584,7 @@ bool parse_class(uint8_t* buffer,
   }
 
   uint16_t mcount = read16(buffer, buffer_end);
+  std::unordered_set<const DexMethod*> added_methods;
   if (mcount) {
     for (int i = 0; i < mcount; i++) {
       cp_method_info cpmethod;
@@ -589,7 +594,7 @@ bool parse_class(uint8_t* buffer,
 
       uint8_t* attrPtr = buffer;
       skip_attributes(buffer, buffer_end);
-      DexMethod* method = make_dexmethod(cpool, self, cpmethod);
+      DexMethod* method = make_dexmethod(cpool, self, cpmethod, added_methods);
       if (method == nullptr) return false;
       cc.add_method(method);
       invoke_attr_hook({method}, attrPtr);
