@@ -1666,6 +1666,11 @@ bool dest_is_object(IROpcode op) {
   case OPCODE_NEW_ARRAY:
   case OPCODE_FILLED_NEW_ARRAY:
     return true;
+
+  case OPCODE_CONST_METHOD_HANDLE:
+  case OPCODE_CONST_METHOD_TYPE:
+    return true;
+
   case IOPCODE_LOAD_PARAM:
     return false;
   case IOPCODE_LOAD_PARAM_OBJECT:
@@ -1681,9 +1686,12 @@ bool dest_is_object(IROpcode op) {
   case IOPCODE_INJECTION_ID:
   case IOPCODE_UNREACHABLE:
     return false;
-  default:
-    not_reached_log("Unknown opcode %02x\n", op);
+
+  case IOPCODE_INIT_CLASS:
+  case IOPCODE_WRITE_BARRIER:
+    not_reached_log("No dest");
   }
+  not_reached_log("Unknown opcode %02x\n", op);
 }
 
 } // namespace opcode_impl
