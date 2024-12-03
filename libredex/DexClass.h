@@ -1175,7 +1175,12 @@ class DexClass {
   friend struct ClassCreator;
 
   // This constructor is private on purpose, use DexClass::create instead
-  DexClass(DexIdx* idx, const dex_class_def* cdef, const DexLocation* location);
+  DexClass(DexType* super_type,
+           DexType* self_type,
+           DexTypeList* interfaces,
+           const DexString* source_file,
+           const DexLocation* location,
+           DexAccessFlags access_flags);
 
   std::string self_show() const; // To avoid "Show.h" in the header.
 

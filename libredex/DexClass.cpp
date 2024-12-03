@@ -1602,7 +1602,40 @@ DexAnnotationDirectory* DexClass::get_annotation_directory() {
 DexClass* DexClass::create(DexIdx* idx,
                            const dex_class_def* cdef,
                            const DexLocation* location) {
-  std::unique_ptr<DexClass> cls{new DexClass(idx, cdef, location)};
+  auto cls = [&]() {
+    auto check_type = [](DexType* type) {
+      always_assert_type_log(type != nullptr, INVALID_DEX, "no type");
+      always_assert_type_log(type::is_object(type), INVALID_DEX,
+                             "Not a reference type: %s", SHOW(type));
+      always_assert_type_log(!type::is_array(type), INVALID_DEX,
+                             "Must not be array type: %s", SHOW(type));
+    };
+
+    auto self_type = idx->get_typeidx(cdef->typeidx);
+    check_type(self_type);
+
+    auto super_type = idx->get_typeidx(cdef->super_idx);
+    if (super_type == nullptr) {
+      always_assert_type_log(self_type == type::java_lang_Object(), INVALID_DEX,
+                             "Only Object has super=null");
+    } else {
+      check_type(super_type);
+    }
+
+    auto interfaces = idx->get_type_list(cdef->interfaces_off);
+    if (interfaces != nullptr) {
+      for (auto* intf : *interfaces) {
+        check_type(intf);
+      }
+    }
+    auto source_file = idx->get_nullable_stringidx(cdef->source_file_idx);
+    // TODO: Check access_flags.
+    auto access_flags = (DexAccessFlags)cdef->access_flags;
+
+    return std::unique_ptr<DexClass>{new DexClass(super_type, self_type,
+                                                  interfaces, source_file,
+                                                  location, access_flags)};
+  }();
   if (g_redex->class_already_loaded(cls.get())) {
     // FIXME: This isn't deterministic. We're keeping whichever class we loaded
     // first, which may not always be from the same dex (if we load them in
@@ -1634,21 +1667,22 @@ DexClass::DexClass(DexType* type, const DexLocation* location)
   set_deobfuscated_name(type->get_name());
 }
 
-DexClass::DexClass(DexIdx* idx,
-                   const dex_class_def* cdef,
-                   const DexLocation* location)
-    : m_super_class(idx->get_typeidx(cdef->super_idx)),
-      m_self(idx->get_typeidx(cdef->typeidx)),
-      m_interfaces(idx->get_type_list(cdef->interfaces_off)),
-      m_source_file(idx->get_nullable_stringidx(cdef->source_file_idx)),
+DexClass::DexClass(DexType* super_type,
+                   DexType* self_type,
+                   DexTypeList* interfaces,
+                   const DexString* source_file,
+                   const DexLocation* location,
+                   DexAccessFlags access_flags)
+    : m_super_class(super_type),
+      m_self(self_type),
+      m_interfaces(interfaces),
+      m_source_file(source_file),
       m_anno(nullptr),
       m_location(location),
-      m_access_flags((DexAccessFlags)cdef->access_flags),
+      m_access_flags(access_flags),
       m_external(false),
       m_perf_sensitive(PerfSensitiveGroup::NONE),
-      m_dynamically_dead(false) {
-  always_assert(m_self != nullptr);
-}
+      m_dynamically_dead(false) {}
 
 DexClass::~DexClass() = default; // For forwarding.
 
