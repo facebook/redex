@@ -82,6 +82,9 @@ class Shrinker {
   const dedup_blocks_impl::Stats& get_dedup_blocks_stats() const {
     return m_dedup_blocks_stats;
   }
+  size_t get_branch_prefix_hoisting_stats() const {
+    return m_branch_prefix_hoisting_stats;
+  }
   size_t get_methods_shrunk() const { return m_methods_shrunk; }
   size_t get_methods_reg_alloced() const { return m_methods_reg_alloced; }
 
@@ -103,6 +106,9 @@ class Shrinker {
   }
   double get_local_dce_seconds() const {
     return m_local_dce_timer.get_seconds();
+  }
+  double get_branch_prefix_hoisting_seconds() const {
+    return m_branch_prefix_hoisting_timer.get_seconds();
   }
   double get_dedup_blocks_seconds() const {
     return m_dedup_blocks_timer.get_seconds();
@@ -167,6 +173,8 @@ class Shrinker {
   copy_propagation_impl::Stats m_copy_prop_stats;
   AccumulatingTimer m_local_dce_timer;
   LocalDce::Stats m_local_dce_stats;
+  AccumulatingTimer m_branch_prefix_hoisting_timer;
+  size_t m_branch_prefix_hoisting_stats{0};
   AccumulatingTimer m_dedup_blocks_timer;
   dedup_blocks_impl::Stats m_dedup_blocks_stats;
   AccumulatingTimer m_reg_alloc_timer;

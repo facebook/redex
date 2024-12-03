@@ -28,6 +28,8 @@ void ShrinkerPass::bind_config() {
        "Whether to run fast register allocation.");
   bind("run_dedup_blocks", true, m_config.run_dedup_blocks,
        "Whether to run dedup-blocks.");
+  bind("run_branch_prefix_hoisting", true, m_config.run_branch_prefix_hoisting,
+       "Whether to run branch-prefix hoisting.");
 
   bind("compute_pure_methods", true, m_config.compute_pure_methods,
        "Whether to compute pure methods with a relatively expensive analysis "
@@ -87,6 +89,8 @@ void ShrinkerPass::run_pass(DexStoresVector& stores,
                   shrinker.get_dedup_blocks_stats().insns_removed);
   mgr.incr_metric("blocks_eliminated_by_dedup_blocks",
                   shrinker.get_dedup_blocks_stats().blocks_removed);
+  mgr.incr_metric("instructions_eliminated_branch_prefix_hoisting",
+                  shrinker.get_branch_prefix_hoisting_stats());
   mgr.incr_metric("methods_reg_alloced", shrinker.get_methods_reg_alloced());
   mgr.incr_metric("localdce_init_class_instructions_added",
                   shrinker.get_local_dce_stats().init_class_instructions_added);
@@ -110,6 +114,8 @@ void ShrinkerPass::run_pass(DexStoresVector& stores,
                    shrinker.get_local_dce_seconds());
   Timer::add_timer("Shrinker.Shrinking.DedupBlocks",
                    shrinker.get_dedup_blocks_seconds());
+  Timer::add_timer("Shrinker.Shrinking.BranchPrefixHoisting",
+                   shrinker.get_branch_prefix_hoisting_seconds());
   Timer::add_timer("Shrinker.Shrinking.RegAlloc",
                    shrinker.get_reg_alloc_seconds());
 }

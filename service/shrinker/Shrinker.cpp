@@ -9,6 +9,8 @@
 
 #include <fstream>
 
+#include "BranchPrefixHoisting.h"
+#include "ConstantUses.h"
 #include "ConstructorParams.h"
 #include "LinearScan.h"
 #include "RandomForest.h"
@@ -86,7 +88,7 @@ Shrinker::Shrinker(
       m_enabled(config.run_const_prop || config.run_cse ||
                 config.run_copy_prop || config.run_local_dce ||
                 config.run_reg_alloc || config.run_fast_reg_alloc ||
-                config.run_dedup_blocks),
+                config.run_dedup_blocks || config.run_branch_prefix_hoisting),
       m_init_classes_with_side_effects(init_classes_with_side_effects),
       m_pure_methods(configured_pure_methods),
       m_finalish_field_names(configured_finalish_field_names),
@@ -218,6 +220,7 @@ void Shrinker::shrink_code(
   copy_propagation_impl::Stats copy_prop_stats;
   LocalDce::Stats local_dce_stats;
   dedup_blocks_impl::Stats dedup_blocks_stats;
+  size_t branch_prefix_hoisting_stats{0};
 
   code->build_cfg();
   if (m_config.run_const_prop) {
@@ -312,6 +315,19 @@ void Shrinker::shrink_code(
     dedup_blocks_stats = dedup_blocks.get_stats();
   }
 
+  if (m_config.run_branch_prefix_hoisting) {
+    auto timer = m_branch_prefix_hoisting_timer.scope();
+    auto& cfg = code->cfg();
+    Lazy<const constant_uses::ConstantUses> constant_uses([&] {
+      return std::make_unique<const constant_uses::ConstantUses>(
+          cfg, is_static, declaring_type, proto->get_rtype(), proto->get_args(),
+          method_describer,
+          /* force_type_inference */ true);
+    });
+    branch_prefix_hoisting_stats = branch_prefix_hoisting_impl::process_cfg(
+        cfg, constant_uses, /* can_allocate_regs */ true);
+  }
+
   auto data_after_dedup = get_features(kMMINLDataCollectionLevel);
   if (traceEnabled(MMINL, kMMINLDataCollectionLevel)) {
     TRACE(
@@ -331,6 +347,7 @@ void Shrinker::shrink_code(
   m_dedup_blocks_stats += dedup_blocks_stats;
   m_methods_shrunk++;
   m_methods_reg_alloced += reg_alloc_inc;
+  m_branch_prefix_hoisting_stats += branch_prefix_hoisting_stats;
 }
 
 void Shrinker::log_metrics(ScopedMetrics& sm) const {

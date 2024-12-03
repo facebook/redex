@@ -22,6 +22,7 @@ struct ShrinkerConfig {
   bool run_reg_alloc{false};
   bool run_fast_reg_alloc{false};
   bool run_dedup_blocks{false};
+  bool run_branch_prefix_hoisting{false};
 
   bool normalize_new_instances{true};
 

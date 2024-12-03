@@ -28,6 +28,8 @@ void InlinerConfig::bind_config() {
   bind("run_cse", shrinker.run_cse, shrinker.run_cse);
   bind("run_dedup_blocks", shrinker.run_dedup_blocks,
        shrinker.run_dedup_blocks);
+  bind("run_branch_prefix_hoisting", shrinker.run_branch_prefix_hoisting,
+       shrinker.run_branch_prefix_hoisting);
   bind("run_copy_prop", shrinker.run_copy_prop, shrinker.run_copy_prop);
   bind("run_reg_alloc", shrinker.run_reg_alloc, shrinker.run_reg_alloc);
   bind("run_fast_reg_alloc", shrinker.run_fast_reg_alloc,
