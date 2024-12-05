@@ -78,6 +78,14 @@ struct Addr {};
 using EntryAddrBiMap = bimap<tagged<MethodItemEntry*, Entry>,
                              unordered_set_of<tagged<uint32_t, Addr>>>;
 
+MethodItemEntry* get_bm_target_checked(const EntryAddrBiMap& bm,
+                                       uint32_t addr) {
+  auto it = bm.by<Addr>().find(addr);
+  always_assert_type_log(it != bm.by<Addr>().end(), RedexError::INVALID_DEX,
+                         "Target is not an instruction address");
+  return it->second;
+}
+
 } // namespace
 
 static MethodItemEntry* get_target(const MethodItemEntry* mei,
@@ -85,11 +93,7 @@ static MethodItemEntry* get_target(const MethodItemEntry* mei,
   uint32_t base = bm.by<Entry>().at(const_cast<MethodItemEntry*>(mei));
   int offset = mei->dex_insn->offset();
   uint32_t target = base + offset;
-  always_assert_type_log(
-      bm.by<Addr>().count(target) != 0, RedexError::INVALID_DEX,
-      "Invalid opcode target %08x[%p](%08x) %08x in get_target %s", base, mei,
-      offset, target, SHOW(mei->dex_insn));
-  return bm.by<Addr>().at(target);
+  return get_bm_target_checked(bm, target);
 }
 
 static void insert_branch_target(IRList* ir,
@@ -199,20 +203,16 @@ static void shard_multi_target(IRList* ir,
     int32_t case_key = read_int32(data);
     for (int i = 0; i < entries; i++) {
       uint32_t targetaddr = base + read_int32(data);
-      auto it = bm.by<Addr>().find(targetaddr);
-      always_assert_type_log(it != bm.by<Addr>().end(), RedexError::INVALID_DEX,
-                             "Target is not an instruction address");
-      insert_multi_branch_target(ir, case_key + i, it->second, src);
+      insert_multi_branch_target(ir, case_key + i,
+                                 get_bm_target_checked(bm, targetaddr), src);
     }
   } else if (ftype == FOPCODE_SPARSE_SWITCH) {
     const uint16_t* tdata = data + 2 * entries; // entries are 32b
     for (int i = 0; i < entries; i++) {
       int32_t case_key = read_int32(data);
       uint32_t targetaddr = base + read_int32(tdata);
-      auto it = bm.by<Addr>().find(targetaddr);
-      always_assert_type_log(it != bm.by<Addr>().end(), RedexError::INVALID_DEX,
-                             "Target is not an instruction address");
-      insert_multi_branch_target(ir, case_key, it->second, src);
+      insert_multi_branch_target(ir, case_key,
+                                 get_bm_target_checked(bm, targetaddr), src);
     }
   } else {
     not_reached_log("Bad fopcode 0x%04x in shard_multi_target", ftype);
@@ -288,7 +288,7 @@ static void associate_try_items(IRList* ir,
     MethodItemEntry* catch_start = nullptr;
     CatchEntry* last_catch = nullptr;
     for (const auto& catz : tri->m_catches) {
-      auto catzop = bm.by<Addr>().at(catz.second);
+      auto catzop = get_bm_target_checked(bm, catz.second);
       TRACE(MTRANS, 3, "try_catch %08x mei %p", catz.second, catzop);
       auto catch_mie = new MethodItemEntry(catz.first);
       catch_start = catch_start == nullptr ? catch_mie : catch_start;
@@ -300,12 +300,12 @@ static void associate_try_items(IRList* ir,
       catches_to_insert.emplace_back(catzop, catch_mie);
     }
 
-    auto begin = bm.by<Addr>().at(tri->m_start_addr);
+    auto begin = get_bm_target_checked(bm, tri->m_start_addr);
     TRACE(MTRANS, 3, "try_start %08x mei %p", tri->m_start_addr, begin);
     auto try_start = new MethodItemEntry(TRY_START, catch_start);
     ir->insert_before(ir->iterator_to(*begin), *try_start);
     uint32_t lastaddr = tri->m_start_addr + tri->m_insn_count;
-    auto end = bm.by<Addr>().at(lastaddr);
+    auto end = get_bm_target_checked(bm, lastaddr);
     TRACE(MTRANS, 3, "try_end %08x mei %p", lastaddr, end);
     auto try_end = new MethodItemEntry(TRY_END, catch_start);
     ir->insert_before(ir->iterator_to(*end), *try_end);
