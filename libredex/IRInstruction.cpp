@@ -64,13 +64,30 @@ IRInstruction* IRInstruction::set_data(std::unique_ptr<DexOpcodeData> data) {
 // Structural equality of opcodes except branches offsets are ignored
 // because they are unknown until we sync back to DexInstructions.
 bool IRInstruction::operator==(const IRInstruction& that) const {
-  bool simple_fields_match =
-      m_opcode == that.m_opcode &&
-      m_num_inline_srcs == that.m_num_inline_srcs && m_dest == that.m_dest &&
-      m_literal == that.m_literal; // just test one member of the union
+  bool simple_fields_match = m_opcode == that.m_opcode &&
+                             m_num_inline_srcs == that.m_num_inline_srcs &&
+                             m_dest == that.m_dest;
   if (!simple_fields_match) {
     return false;
   }
+
+  // Avoid calling opcode::ref(); there's only one instruction that has data.
+  if (m_opcode == OPCODE_FILL_ARRAY_DATA) {
+    redex_assert(opcode::ref(m_opcode) == opcode::Ref::Data);
+    auto size = m_data->data_size();
+    if (size != that.m_data->data_size() ||
+        std::memcmp(m_data->data(),
+                    that.m_data->data(),
+                    size * sizeof(uint16_t)) != 0) {
+      return false;
+    }
+  } else {
+    redex_assert(opcode::ref(m_opcode) != opcode::Ref::Data);
+    if (m_literal != that.m_literal) { // just test one member of the union
+      return false;
+    }
+  }
+
   // Check the source registers union
   if (m_num_inline_srcs <= MAX_NUM_INLINE_SRCS) {
     for (auto i = 0; i < m_num_inline_srcs; ++i) {
