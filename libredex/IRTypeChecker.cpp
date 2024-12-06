@@ -1346,13 +1346,25 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   }
   case OPCODE_APUT: {
     assume_scalar(current_state, insn->src(0));
-    assume_array(current_state, insn->src(1), [](const auto* e_type) {
-      // TODO: Refine with type of src(0).
-      if (e_type != type::_int() && e_type != type::_float()) {
-        Throw().oss << "Expected int or float array, got component type "
-                    << *e_type;
-      }
-    });
+    assume_array(current_state,
+                 insn->src(1),
+                 [&insn, &current_state](const auto* e_type) {
+                   if (e_type != type::_int() && e_type != type::_float()) {
+                     Throw().oss
+                         << "Expected int or float array, got component type "
+                         << *e_type;
+                   }
+
+                   // We cannot use DexType for the value as primitive types are
+                   // not tracked in the DexTypeEnvironment.
+                   if (e_type == type::_int()) {
+                     assume_integer(current_state, insn->src(0));
+                   } else {
+                     // NOLINTNEXTLINE(bugprone-assert-side-effect)
+                     redex_assert(e_type == type::_float());
+                     assume_float(current_state, insn->src(0));
+                   }
+                 });
     assume_integer(current_state, insn->src(2));
     break;
   }
