@@ -1425,11 +1425,11 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_APUT_OBJECT: {
     assume_reference(current_state, insn->src(0));
     assume_array(current_state, insn->src(1), [](const auto* e_type) {
-      // TODO: Refine with type of src(0).
       if (!type::is_object(e_type)) {
         Throw().oss << "Expected reference array, got component type "
                     << *e_type;
       }
+      // Array stores are checked at runtime. Nothing else to do.
     });
     assume_integer(current_state, insn->src(2));
     break;
