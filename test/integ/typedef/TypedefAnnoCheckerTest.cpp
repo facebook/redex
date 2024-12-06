@@ -1888,3 +1888,28 @@ TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTe
  failed instruction: CONST_STRING \"eight\"\n\
  Error writing to field Lkotlin/jvm/internal/Ref$ObjectRef;.element:Ljava/lang/Object;in methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringDefaultInvalid:()Ljava/lang/String;\n\n");
 }
+
+TEST_F(TypedefAnnoCheckerTest, TestFunInterfaceSyntheticFields) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+
+  auto* method =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/"
+          "TypedefAnnoCheckerKtTest$testFunInterface$1;.onListen:()V")
+          ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  // set the deobfuscated name manually since it doesn't get set by default in
+  // integ tests
+
+  DexClass* synth_class = type_class(DexType::make_type(
+      "Lcom/facebook/redextest/TypedefAnnoCheckerKtTest$testFunInterface$1;"));
+  synth_class->set_deobfuscated_name(synth_class->get_name()->c_str());
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_TRUE(checker.complete());
+}

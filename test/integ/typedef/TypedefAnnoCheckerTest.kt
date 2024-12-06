@@ -350,4 +350,25 @@ public class TypedefAnnoCheckerKtTest {
       lmd()
     }
   }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////
+  ////////// fun interface tests /////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////
+  fun interface OnListener {
+    fun onListen()
+  }
+
+  fun setOnListener(listener: OnListener) {
+    listener.onListen()
+  }
+
+  @TestStringDef
+  fun getTestString(): String {
+    return "one"
+  }
+
+  fun testFunInterface() {
+    val constVal = getTestString()
+    setOnListener({ wrongDefaultCaller(constVal) })
+  }
 }

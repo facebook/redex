@@ -109,9 +109,78 @@ bool is_synthetic_kotlin_annotations_method(DexMethod* m) {
                           ANNOTATIONS_SUFFIX);
 }
 
-bool is_lamdda_callback(DexMethod* m) {
-  return m->get_simple_deobfuscated_name() == "invoke" ||
-         m->get_simple_deobfuscated_name() == "onClick";
+/**
+ * A class that ressembles a fun interface class like the one in P1690830372.
+ */
+bool is_fun_interface_class(const DexClass* cls) {
+  if (!klass::maybe_anonymous_class(cls)) {
+    return false;
+  }
+  if (cls->get_super_class() != type::java_lang_Object()) {
+    return false;
+  }
+  if (cls->get_interfaces()->size() != 1) {
+    return false;
+  }
+  if (!cls->get_sfields().empty()) {
+    return false;
+  }
+  for (const auto* f : cls->get_ifields()) {
+    if (!is_synthetic(f)) {
+      return false;
+    }
+  }
+  if (cls->get_ctors().size() != 1) {
+    return false;
+  }
+  if (cls->get_vmethods().size() != 1) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Kotlinc style synthesized lambda class (not D8 desugared style). An example
+ * is shared in P1690836921.
+ */
+bool is_synthesized_lambda_class(const DexClass* cls) {
+  if (!klass::maybe_anonymous_class(cls)) {
+    return false;
+  }
+  if (cls->get_super_class() !=
+      DexType::make_type("Lkotlin/jvm/internal/Lambda;")) {
+    return false;
+  }
+  if (cls->get_interfaces()->size() != 1) {
+    return false;
+  }
+  const auto* intf = cls->get_interfaces()->at(0);
+  if (!boost::starts_with(intf->get_name()->str(),
+                          "Lkotlin/jvm/functions/Function")) {
+    return false;
+  }
+  if (!cls->get_sfields().empty()) {
+    return false;
+  }
+  for (const auto* f : cls->get_ifields()) {
+    if (!is_synthetic(f)) {
+      return false;
+    }
+  }
+  if (cls->get_ctors().size() != 1) {
+    return false;
+  }
+  const auto vmethods = cls->get_vmethods();
+  if (vmethods.empty()) {
+    return false;
+  }
+  for (const auto* m : vmethods) {
+    const auto name = m->get_simple_deobfuscated_name();
+    if (name != "invoke") {
+      return false;
+    }
+  }
+  return true;
 }
 
 // The patcher cannot annotate these read methods used by ModelGen, so the
@@ -574,8 +643,8 @@ void SynthAccessorPatcher::run(const Scope& scope) {
         }
       }
     }
-    if (is_lamdda_callback(m) &&
-        klass::maybe_anonymous_class(type_class(m->get_class()))) {
+    const auto cls = type_class(m->get_class());
+    if (is_synthesized_lambda_class(cls) || is_fun_interface_class(cls)) {
       patch_local_var_lambda(m);
     }
   });
@@ -1674,9 +1743,7 @@ bool TypedefAnnoChecker::check_typedef_value(
     case OPCODE_SGET_OBJECT: {
       auto field = resolve_field(def->get_field());
       if (is_synthetic(field)) {
-        // Skip synthetic fields for now. TODO: fix checking for fun interface
-        // synth fields.
-        break;
+        // TODO: add stats for this
       }
       auto field_anno = type_inference::get_typedef_anno_from_member(
           def->get_field(), inference->get_annotations());
