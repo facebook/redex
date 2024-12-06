@@ -3575,3 +3575,107 @@ INSTANTIATE_TEST_CASE_P(
         IRTypeCheckerAputIntFloatMismatchTest::ParamType>& info) {
       return format_param(info.param);
     });
+
+namespace {
+
+std::unordered_map<std::string, std::pair<std::string, std::string>>
+get_aput_wide_pass_descriptors() {
+  return {
+      {"long-long", {"[J", "J"}},
+      {"double-double", {"[D", "D"}},
+  };
+}
+
+using AputWidePairType =
+    typename decltype(get_aput_wide_pass_descriptors())::value_type;
+
+} // namespace
+
+class IRTypeCheckerAputWidePassTest
+    : public IRTypeCheckerTest,
+      public ::testing::WithParamInterface<AputWidePairType> {};
+
+TEST_P(IRTypeCheckerAputWidePassTest, test) {
+  auto& [name, array_type_val_type] = GetParam();
+  auto& [array_type, val_type] = array_type_val_type;
+  std::string method_descr =
+      std::regex_replace(std::regex_replace("LFoo;.bar:(ATYPEVTYPE)V;",
+                                            std::regex("ATYPE"), array_type),
+                         std::regex("VTYPE"), val_type);
+  auto method = DexMethod::make_method(method_descr)
+                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+
+  auto body_template = R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (load-param-wide v2)
+      (const v4 0)
+      (aput-wide v2 v1 v4)
+      (return-void)
+    )
+  )";
+  method->set_code(assembler::ircode_from_string(body_template));
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_FALSE(checker.fail()) << checker.what();
+}
+INSTANTIATE_TEST_CASE_P(
+    APutWideMatching,
+    IRTypeCheckerAputWidePassTest,
+    ::testing::ValuesIn(get_aput_wide_pass_descriptors()),
+    [](const testing::TestParamInfo<IRTypeCheckerAputWidePassTest::ParamType>&
+           info) { return format_param(info.param); });
+
+namespace {
+
+std::unordered_map<std::string, std::pair<std::string, std::string>>
+get_aput_wide_mismatch_descriptors() {
+  return {
+      {"long-double", {"[J", "D"}},
+      {"double-long", {"[D", "J"}},
+  };
+}
+
+using AputWideMissPairType =
+    typename decltype(get_aput_wide_mismatch_descriptors())::value_type;
+
+} // namespace
+
+class IRTypeCheckerAputWideMismatchTest
+    : public IRTypeCheckerTest,
+      public ::testing::WithParamInterface<AputWideMissPairType> {};
+
+TEST_P(IRTypeCheckerAputWideMismatchTest, test) {
+  auto& [name, array_type_val_type] = GetParam();
+  auto& [array_type, val_type] = array_type_val_type;
+  std::string method_descr =
+      std::regex_replace(std::regex_replace("LFoo;.bar:(ATYPEVTYPE)V;",
+                                            std::regex("ATYPE"), array_type),
+                         std::regex("VTYPE"), val_type);
+  auto method = DexMethod::make_method(method_descr)
+                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+
+  auto body_template = R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (load-param-wide v2)
+      (const v4 0)
+      (aput-wide v2 v1 v4)
+      (return-void)
+    )
+  )";
+  method->set_code(assembler::ircode_from_string(body_template));
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_TRUE(checker.fail()) << method_descr << body_template;
+}
+INSTANTIATE_TEST_CASE_P(
+    APutWideMismatching,
+    IRTypeCheckerAputWideMismatchTest,
+    ::testing::ValuesIn(get_aput_wide_mismatch_descriptors()),
+    [](const testing::TestParamInfo<
+        IRTypeCheckerAputWideMismatchTest::ParamType>& info) {
+      return format_param(info.param);
+    });

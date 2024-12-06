@@ -1401,12 +1401,24 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   }
   case OPCODE_APUT_WIDE: {
     assume_wide_scalar(current_state, insn->src(0));
-    assume_array(current_state, insn->src(1), [](const auto* e_type) {
-      // TODO: Refine with type of src(0).
-      if (!type::is_wide_type(e_type)) {
-        Throw().oss << "Expected wide array, got component type " << *e_type;
-      }
-    });
+    assume_array(current_state,
+                 insn->src(1),
+                 [&insn, &current_state](const auto* e_type) {
+                   if (!type::is_wide_type(e_type)) {
+                     Throw().oss << "Expected wide array, got component type "
+                                 << *e_type;
+                   }
+
+                   // We cannot use DexType for the value as primitive types are
+                   // not tracked in the DexTypeEnvironment.
+                   if (e_type == type::_long()) {
+                     assume_long(current_state, insn->src(0));
+                   } else {
+                     // NOLINTNEXTLINE(bugprone-assert-side-effect)
+                     redex_assert(e_type == type::_double());
+                     assume_double(current_state, insn->src(0));
+                   }
+                 });
     assume_integer(current_state, insn->src(2));
     break;
   }
