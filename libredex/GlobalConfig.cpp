@@ -203,6 +203,7 @@ void GlobalConfig::bind_config() {
   bind("recognize_betamap_coldstart_pct_marker", false, bool_param);
   bind("baseline_profile", {}, json_param);
   bind("baseline_profile_config", "", string_param);
+  bind("preprocessed_baseline_profile_directory", "", string_param);
   bind("betamap_interactions", {}, json_param);
 
   for (const auto& entry : m_registry) {

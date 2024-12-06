@@ -80,6 +80,8 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
           config.get("coldstart_methods_file", "").asString()),
       m_baseline_profile_config_file_name(
           config.get("baseline_profile_config", "").asString()),
+      m_preprocessed_baseline_profile_directory(
+          config.get("preprocessed_baseline_profile_directory", "").asString()),
       m_printseeds(config.get("printseeds", "").asString()),
       m_method_profiles(new method_profiles::MethodProfiles()) {
 

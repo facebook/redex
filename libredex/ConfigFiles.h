@@ -273,6 +273,7 @@ struct ConfigFiles {
   std::string m_coldstart_class_filename;
   std::string m_coldstart_methods_filename;
   std::string m_baseline_profile_config_file_name;
+  std::string m_preprocessed_baseline_profile_directory;
   std::vector<std::string> m_interactions;
   std::unordered_map<const DexString*, std::vector<uint8_t>> m_class_freq_map;
   std::vector<std::string> m_coldstart_classes;
