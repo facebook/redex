@@ -133,8 +133,10 @@ MethodItemEntry::~MethodItemEntry() {
   case MFLOW_SOURCE_BLOCK:
     src_block.~unique_ptr<SourceBlock>();
     break;
-  case MFLOW_OPCODE:
   case MFLOW_DEX_OPCODE:
+    delete dex_insn;
+    break;
+  case MFLOW_OPCODE:
   case MFLOW_FALLTHROUGH:
     /* nothing to delete */
     break;

@@ -890,6 +890,13 @@ std::unique_ptr<DexCode> IRCode::sync(const DexMethod* method) {
     print_stack_trace(std::cerr, e);
     throw;
   }
+  // The IRList no longer owns the dex instructions.
+  for (auto& mie : *m_ir_list) {
+    if (mie.type == MFLOW_DEX_OPCODE) {
+      mie.dex_insn = nullptr;
+    }
+  }
+
   return dex_code;
 }
 
