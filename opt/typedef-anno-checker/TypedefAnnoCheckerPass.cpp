@@ -133,8 +133,22 @@ bool is_fun_interface_class(const DexClass* cls) {
   if (cls->get_ctors().size() != 1) {
     return false;
   }
-  if (cls->get_vmethods().size() != 1) {
+  const auto& vmethods = cls->get_vmethods();
+  if (vmethods.empty()) {
     return false;
+  }
+  size_t cnt = 0;
+  const auto* callback_name = vmethods.at(0)->get_name();
+  for (const auto* m : vmethods) {
+    if (m->get_name() != callback_name) {
+      return false;
+    }
+    if (!is_synthetic(m)) {
+      cnt++;
+    }
+    if (cnt > 1) {
+      return false;
+    }
   }
   return true;
 }
