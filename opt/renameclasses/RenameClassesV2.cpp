@@ -1049,13 +1049,6 @@ std::string RenameClassesPassV2::prepend_package_prefix(
 
 std::unordered_set<DexClass*> RenameClassesPassV2::get_renamable_classes(
     Scope& scope, ConfigFiles& conf, PassManager& mgr) {
-  if (!m_package_prefix.empty()) {
-    always_assert_log(
-        !(conf.get_json_config().get("emit_locator_strings", false)),
-        "Rename classes package_prefix doesn't work together with "
-        "emit_locator_strings.\n");
-  }
-
   ClassHierarchy class_hierarchy = build_type_hierarchy(scope);
   eval_classes_post(scope, class_hierarchy, mgr);
 
@@ -1088,12 +1081,6 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
 
   auto avoid_type_lookup_table_collisions =
       m_avoid_type_lookup_table_collisions;
-  if (conf.get_json_config().get("emit_locator_strings", false)) {
-    TRACE(RENAME, 1,
-          "Ignoring avoid_type_lookup_table_collisions configuration as it is "
-          "incompatible with emitting locator strings");
-    avoid_type_lookup_table_collisions = false;
-  }
 
   size_t avoided_collisions = 0;
   size_t skipped_indices = 0;

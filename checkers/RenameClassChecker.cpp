@@ -26,10 +26,6 @@ void RenameClassChecker::run_checker(DexStoresVector& stores,
     return;
   }
 
-  const JsonWrapper& json_config = conf.get_json_config();
-  bool use_locator_strings = json_config.get("emit_locator_strings", false);
-
-  uint32_t sequence_nr = 0;
   int64_t max_sequence_nr_in_prev_stores = -1;
   for (auto& store : stores) {
     auto& dexen = store.get_dexen();
@@ -64,19 +60,9 @@ void RenameClassChecker::run_checker(DexStoresVector& stores,
                               cls_name);
           }
           last_sequence_nr_in_dex = global_cls_nr;
-
-          if (use_locator_strings) {
-            // If we are using locator strings, we require strict global
-            // ordering.
-            always_assert_log(
-                sequence_nr == global_cls_nr,
-                "[%s] invalid class number, expected %u, got %u, class %s!\n",
-                get_name(get_property()), sequence_nr, global_cls_nr, cls_name);
-          }
           max_sequence_nr_in_store =
               std::max(max_sequence_nr_in_store, (int64_t)global_cls_nr);
         }
-        ++sequence_nr;
       }
     }
     max_sequence_nr_in_prev_stores =

@@ -357,7 +357,6 @@ TEST(Dex038Test, ReadWriteDex038) {
       output_dex,
       &classes,
       std::move(gtypes),
-      nullptr,
       0,
       nullptr,
       0,

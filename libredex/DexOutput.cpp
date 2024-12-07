@@ -575,7 +575,6 @@ DexOutput::DexOutput(
     const char* path,
     DexClasses* classes,
     std::shared_ptr<GatheredTypes> gtypes,
-    LocatorIndex* locator_index,
     bool normal_primary_dex,
     size_t store_number,
     const std::string* store_name,
@@ -633,7 +632,6 @@ DexOutput::DexOutput(
   m_store_number = store_number;
   m_store_name = store_name;
   m_dex_number = dex_number;
-  m_locator_index = locator_index;
   m_normal_primary_dex = normal_primary_dex;
   m_debug_info_kind = debug_info_kind;
 }
@@ -733,61 +731,6 @@ void DexOutput::insert_map_item(uint16_t maptype,
   }
 }
 
-void DexOutput::emit_locator(Locator locator) {
-  char buf[Locator::encoded_max];
-  size_t locator_length = locator.encode(buf);
-  write_uleb128(m_output.get() + m_offset, (uint32_t)locator_length);
-  inc_offset(uleb128_encoding_size((uint32_t)locator_length));
-  memcpy(m_output.get() + m_offset, buf, locator_length + 1);
-  inc_offset(locator_length + 1);
-}
-
-std::unique_ptr<Locator> DexOutput::locator_for_descriptor(
-    const std::unordered_set<const DexString*>& type_names,
-    const DexString* descriptor) {
-  LocatorIndex* locator_index = m_locator_index;
-  if (locator_index != nullptr) {
-    const char* s = descriptor->c_str();
-    uint32_t global_clsnr = Locator::decodeGlobalClassIndex(s);
-    if (global_clsnr != Locator::invalid_global_class_index) {
-      // We don't need locators for renamed classes since
-      // name-based-locators are enabled.
-      return nullptr;
-    }
-
-    auto locator_it = locator_index->find(descriptor);
-    if (locator_it != locator_index->end()) {
-      // This string is the name of a type we define in one of our
-      // dex files.
-      return std::unique_ptr<Locator>(new Locator(locator_it->second));
-    }
-
-    if (type_names.count(descriptor)) {
-      // If we're emitting an array name, see whether the element
-      // type is one of ours; if so, emit a locator for that type.
-      if (s[0] == '[') {
-        while (*s == '[') {
-          ++s;
-        }
-        auto elementDescriptor = DexString::get_string(s);
-        if (elementDescriptor != nullptr) {
-          locator_it = locator_index->find(elementDescriptor);
-          if (locator_it != locator_index->end()) {
-            return std::unique_ptr<Locator>(new Locator(locator_it->second));
-          }
-        }
-      }
-
-      // We have the name of a type, but it's not a type we define.
-      // Emit the special locator that indicates we should look in the
-      // system classloader.
-      return std::unique_ptr<Locator>(new Locator(Locator::make(0, 0, 0)));
-    }
-  }
-
-  return nullptr;
-}
-
 void DexOutput::generate_string_data(SortMode mode) {
   /*
    * This is a index to position within the string data.  There
@@ -813,45 +756,12 @@ void DexOutput::generate_string_data(SortMode mode) {
 
   std::unordered_set<const DexString*> type_names =
       m_gtypes->index_type_names();
-  unsigned locator_size = 0;
 
-  // If we're generating locator strings, we need to include them in
-  // the total count of strings in this section.
-  size_t locators = 0;
-  for (auto* str : string_order) {
-    if (locator_for_descriptor(type_names, str)) {
-      ++locators;
-    }
-  }
-
-  if (m_locator_index != nullptr) {
-    locators += 3;
-    always_assert(m_dodx.stringidx(DexString::make_string("")) == 0);
-  }
-
-  size_t nrstr = string_order.size() + locators;
+  size_t nrstr = string_order.size();
   const uint32_t str_data_start = m_offset;
 
   for (auto* str : string_order) {
-    // Emit lookup acceleration string if requested
-    std::unique_ptr<Locator> locator = locator_for_descriptor(type_names, str);
-    if (locator) {
-      unsigned orig_offset = m_offset;
-      emit_locator(*locator);
-      locator_size += m_offset - orig_offset;
-    }
-
-    // Emit name-based lookup acceleration information for string with index 0
-    // if requested
     uint32_t idx = m_dodx.stringidx(str);
-    if (idx == 0 && m_locator_index != nullptr) {
-      always_assert(!locator);
-      unsigned orig_offset = m_offset;
-      emit_magic_locators();
-      locator_size += m_offset - orig_offset;
-    }
-
-    // Emit the string itself
     TRACE(CUSTOMSORT, 3, "str emit %s", SHOW(str));
     stringids[idx].offset = m_offset;
     str->encode(m_output.get() + m_offset);
@@ -861,71 +771,6 @@ void DexOutput::generate_string_data(SortMode mode) {
 
   insert_map_item(TYPE_STRING_DATA_ITEM, (uint32_t)nrstr, str_data_start,
                   m_offset - str_data_start);
-
-  if (m_locator_index != nullptr) {
-    TRACE(LOC, 2, "Used %u bytes for %zu locator strings", locator_size,
-          locators);
-  }
-}
-
-void DexOutput::emit_magic_locators() {
-  uint32_t global_class_indices_first = Locator::invalid_global_class_index;
-  uint32_t global_class_indices_last = Locator::invalid_global_class_index;
-
-  // We decode all class names --- to find the first and last renamed one,
-  // and also check that all renamed names are indeed in the right place.
-  for (uint32_t i = 0; i < hdr.class_defs_size; i++) {
-    DexClass* clz = m_classes->at(i);
-    const char* str = clz->get_name()->c_str();
-    uint32_t global_clsnr = Locator::decodeGlobalClassIndex(str);
-    TRACE(LOC, 3, "Class %s has global class index %u", str, global_clsnr);
-    if (global_clsnr != Locator::invalid_global_class_index) {
-      global_class_indices_last = global_clsnr;
-      if (global_class_indices_first == Locator::invalid_global_class_index) {
-        // First time we come across a properly renamed class - let's store the
-        // global_class_indices_first.
-        // Note that the first class in this dex might not actually be a renamed
-        // class. But we want our class loaders to be able to determine a the
-        // actual class table index of a class by simply subtracting a number.
-        // So we set global_class_indices_first to be the global class index of
-        // the actual first class the dex, which was the class i iterations
-        // earlier.
-        global_class_indices_first = global_clsnr - i;
-      } else {
-        always_assert_log(
-            global_clsnr == global_class_indices_first + i,
-            "Out of order global class index: got %u, expected %u\n",
-            global_clsnr, global_class_indices_first + i);
-      }
-    }
-  }
-
-  TRACE(LOC, 2,
-        "Global class indices for store %zu, dex %zu: first %u, last %u",
-        m_store_number, m_dex_number, global_class_indices_first,
-        global_class_indices_last);
-
-  // Emit three locator strings
-
-  if (global_class_indices_first == Locator::invalid_global_class_index) {
-    // This dex defines no renamed classes. We encode this with a special
-    // otherwise illegal convention:
-    global_class_indices_first = 1;
-    global_class_indices_last = 0;
-  }
-
-  // 1. Locator for the last renamed class in this Dex
-  emit_locator(
-      Locator(m_store_number, m_dex_number + 1, global_class_indices_last));
-
-  // 2. Locator for what would be the first class in this Dex
-  //    (see comment for computation of global_class_indices_first above)
-  emit_locator(
-      Locator(m_store_number, m_dex_number + 1, global_class_indices_first));
-
-  // magic locator
-  emit_locator(Locator(Locator::magic_strnr, Locator::magic_dexnr,
-                       Locator::magic_clsnr));
 }
 
 void DexOutput::generate_type_data() {
@@ -3116,7 +2961,6 @@ enhanced_dex_stats_t write_classes_to_dex(
     const std::string& filename,
     DexClasses* classes,
     std::shared_ptr<GatheredTypes> gtypes,
-    LocatorIndex* locator_index,
     size_t store_number,
     const std::string* store_name,
     size_t dex_number,
@@ -3143,7 +2987,7 @@ enhanced_dex_stats_t write_classes_to_dex(
 
   TRACE(OPUT, 2, "[write_classes_to_dex][filename] %s", filename.c_str());
 
-  DexOutput dout(filename.c_str(), classes, std::move(gtypes), locator_index,
+  DexOutput dout(filename.c_str(), classes, std::move(gtypes),
                  normal_primary_dex, store_number, store_name, dex_number,
                  debug_info_kind, iodi_metadata, conf, pos_mapper, method_to_id,
                  code_debug_lines, dex_output_config, min_sdk);
@@ -3152,45 +2996,6 @@ enhanced_dex_stats_t write_classes_to_dex(
   dout.write();
   dout.metrics();
   return dout.m_stats;
-}
-
-LocatorIndex make_locator_index(DexStoresVector& stores) {
-  LocatorIndex index;
-
-  for (uint32_t strnr = 0; strnr < stores.size(); strnr++) {
-    DexClassesVector& dexen = stores[strnr].get_dexen();
-    uint32_t dexnr = 1; // Zero is reserved for Android classes
-    for (auto dexit = dexen.begin(); dexit != dexen.end(); ++dexit, ++dexnr) {
-      const DexClasses& classes = *dexit;
-      uint32_t clsnr = 0;
-      for (auto clsit = classes.begin(); clsit != classes.end();
-           ++clsit, ++clsnr) {
-        auto clsname = (*clsit)->get_type()->get_name();
-        const auto cstr = clsname->c_str();
-        uint32_t global_clsnr = Locator::decodeGlobalClassIndex(cstr);
-        if (global_clsnr != Locator::invalid_global_class_index) {
-          TRACE(LOC, 3,
-                "%s (%u, %u, %u) needs no locator; global class index=%u", cstr,
-                strnr, dexnr, clsnr, global_clsnr);
-          // This prefix is followed by the global class index; this case
-          // doesn't need a locator.
-          continue;
-        }
-
-        bool inserted = index
-                            .insert(std::make_pair(
-                                clsname, Locator::make(strnr, dexnr, clsnr)))
-                            .second;
-        // We shouldn't see the same class defined in two dexen
-        always_assert_log(
-            inserted, "This was already inserted %s\n",
-            (*clsit)->get_deobfuscated_name_or_empty_copy().c_str());
-        (void)inserted; // Shut up compiler when defined(NDEBUG)
-      }
-    }
-  }
-
-  return index;
 }
 
 void DexOutput::inc_offset(uint32_t v) {
