@@ -18,6 +18,7 @@
 #include "MethodReference.h"
 #include "PassManager.h"
 #include "RedexContext.h"
+#include "ScopedCFG.h"
 #include "Show.h"
 #include "Shrinker.h"
 #include "ShrinkerConfig.h"
@@ -589,6 +590,35 @@ void maybe_unset_dynamic_analysis(DexStoresVector& stores,
     // Make it final. The default value should be 0, and may lead to other
     // optimizations, e.g., by FinalInline.
     field->set_access(field->get_access() | DexAccessFlags::ACC_FINAL);
+
+    redex_assert(field->get_type() == type::_int());
+    field->set_value(std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValuePrimitive(DexEncodedValueTypes::DEVT_INT, 0)));
+
+    // Look through all methods and remove accesses.
+    walk::code(std::vector<DexClass*>{analysis_cls},
+               [&](auto* method, auto& code) {
+                 cfg::ScopedCFG c{&code};
+                 cfg::CFGMutation mut{*c};
+                 bool found = false;
+                 auto iterable = cfg::InstructionIterable(*c);
+                 auto end = iterable.end();
+                 for (auto it = iterable.begin(); it != end; ++it) {
+                   auto* insn = it->insn;
+                   if (insn->opcode() != OPCODE_SPUT) {
+                     continue;
+                   }
+                   if (insn->get_field() == field) {
+                     found = true;
+                     mut.remove(it);
+                   }
+                 }
+                 if (found) {
+                   mut.flush();
+                 } else {
+                   mut.clear();
+                 }
+               });
   }
 }
 
