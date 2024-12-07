@@ -174,7 +174,6 @@ void InjectDebug::write_dex() {
           filename.c_str(), // filename
           &store.get_dexen()[i], // classes
           std::move(gtypes),
-          nullptr, // locator_index
           false, // normal_primary_dex
           store_num,
           nullptr, // store name

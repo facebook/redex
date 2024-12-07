@@ -1191,7 +1191,6 @@ def prepare_redex(args: argparse.Namespace) -> State:
                 args.input_apk,
                 extracted_apk_dir,
                 dex_dir,
-                have_locators=config_dict.get("emit_locator_strings"),
                 debug_mode=debug_mode,
                 fast_repackage=args.dev,
                 reset_timestamps=args.reset_zip_timestamps or args.dev,

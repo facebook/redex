@@ -104,7 +104,6 @@ int main(int argc, char* argv[]) {
   write_classes_to_dex(dex,
                        &classes,
                        std::move(gtypes),
-                       nullptr /* LocatorIndex* */,
                        0,
                        nullptr /* store_name */,
                        0,

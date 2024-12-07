@@ -81,7 +81,6 @@ class IODITest : public ::testing::Test {
     DexOutput output("tmp.dex", /* filename */
                      dexen.data(),
                      std::move(gtypes),
-                     nullptr, /* locator_index */
                      false, /* normal_primary_dex */
                      0,
                      nullptr, /* store name */

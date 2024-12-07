@@ -1438,13 +1438,6 @@ void redex_backend(ConfigFiles& conf,
   TRACE(MAIN, 1, "Writing out new DexClasses...");
   const JsonWrapper& json_config = conf.get_json_config();
 
-  LocatorIndex* locator_index = nullptr;
-  if (json_config.get("emit_locator_strings", false)) {
-    TRACE(LOC, 1,
-          "Will emit class-locator strings for classloader optimization");
-    locator_index = new LocatorIndex(make_locator_index(stores));
-  }
-
   enhanced_dex_stats_t output_totals;
   std::vector<std::pair<std::string, enhanced_dex_stats_t>> output_dexes_stats;
 
@@ -1516,7 +1509,6 @@ void redex_backend(ConfigFiles& conf,
             redex::get_dex_output_name(output_dir, store, i),
             classes,
             gtypes,
-            locator_index,
             store_number,
             &store_name,
             i,
