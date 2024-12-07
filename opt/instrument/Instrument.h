@@ -105,6 +105,7 @@ class InstrumentPass : public Pass {
     bool inline_onBlockHit;
     bool inline_onNonLoopBlockHit;
     bool apply_CSE_CopyProp;
+    std::optional<std::string> analysis_package_prefix;
   };
 
  private:

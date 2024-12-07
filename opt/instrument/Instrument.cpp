@@ -8,6 +8,8 @@
 #include "Instrument.h"
 
 #include "BlockInstrument.h"
+#include "CFGMutation.h"
+#include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRList.h"
@@ -541,6 +543,9 @@ void InstrumentPass::bind_config() {
   bind("inline_onBlockHit", false, m_options.inline_onBlockHit);
   bind("inline_onNonLoopBlockHit", false, m_options.inline_onNonLoopBlockHit);
   bind("apply_CSE_CopyProp", false, m_options.apply_CSE_CopyProp);
+  bind("analysis_package_prefix", std::nullopt,
+       m_options.analysis_package_prefix);
+
   trait(Traits::Pass::unique, true);
 
   after_configuration([this] {
@@ -560,65 +565,81 @@ void InstrumentPass::bind_config() {
 namespace {
 
 // Possible finalize some fields to help Redex clean up unused instrumentation.
-void maybe_unset_dynamic_analysis(DexStoresVector& stores,
-                                  ConfigFiles& conf,
-                                  const std::string& analysis_class_name) {
-  auto analysis_type = DexType::get_type(analysis_class_name);
-  if (analysis_type == nullptr) {
-    return;
-  }
-  auto analysis_cls = type_class(analysis_type);
-  if (analysis_cls == nullptr) {
-    return;
-  }
+void maybe_unset_dynamic_analysis(
+    DexStoresVector& stores,
+    ConfigFiles& conf,
+    const std::string& analysis_class_name,
+    const std::optional<std::string>& analysis_package_prefix) {
+  auto undo_rename_delete = [](auto* cls) {
+    // Undo all can_rename and can_delete on it.
+    cls->rstate.unset_root();
+    for (auto* m : cls->get_all_methods()) {
+      m->rstate.unset_root();
+    }
+    for (auto* f : cls->get_all_fields()) {
+      f->rstate.unset_root();
+    }
 
-  // Undo all can_rename and can_delete on it.
-  analysis_cls->rstate.unset_root();
-  for (auto* m : analysis_cls->get_all_methods()) {
-    m->rstate.unset_root();
-  }
-  for (auto* f : analysis_cls->get_all_fields()) {
-    f->rstate.unset_root();
-  }
+    // We don't care about running its clinit
+    cls->rstate.set_clinit_has_no_side_effects();
+  };
 
-  // We don't care about running it's clinit
-  analysis_cls->rstate.set_clinit_has_no_side_effects();
+  [&]() {
+    auto analysis_type = DexType::get_type(analysis_class_name);
+    if (analysis_type == nullptr) {
+      return;
+    }
+    auto analysis_cls = type_class(analysis_type);
+    if (analysis_cls == nullptr) {
+      return;
+    }
 
-  auto field = analysis_cls->find_field_from_simple_deobfuscated_name(
-      "sNumStaticallyInstrumented");
-  if (field != nullptr) {
-    // Make it final. The default value should be 0, and may lead to other
-    // optimizations, e.g., by FinalInline.
-    field->set_access(field->get_access() | DexAccessFlags::ACC_FINAL);
+    undo_rename_delete(analysis_cls);
 
-    redex_assert(field->get_type() == type::_int());
-    field->set_value(std::unique_ptr<DexEncodedValue>(
-        new DexEncodedValuePrimitive(DexEncodedValueTypes::DEVT_INT, 0)));
+    auto field = analysis_cls->find_field_from_simple_deobfuscated_name(
+        "sNumStaticallyInstrumented");
+    if (field != nullptr) {
+      // Make it final. The default value should be 0, and may lead to other
+      // optimizations, e.g., by FinalInline.
+      field->set_access(field->get_access() | DexAccessFlags::ACC_FINAL);
 
-    // Look through all methods and remove accesses.
-    walk::code(std::vector<DexClass*>{analysis_cls},
-               [&](auto* method, auto& code) {
-                 cfg::ScopedCFG c{&code};
-                 cfg::CFGMutation mut{*c};
-                 bool found = false;
-                 auto iterable = cfg::InstructionIterable(*c);
-                 auto end = iterable.end();
-                 for (auto it = iterable.begin(); it != end; ++it) {
-                   auto* insn = it->insn;
-                   if (insn->opcode() != OPCODE_SPUT) {
-                     continue;
+      redex_assert(field->get_type() == type::_int());
+      field->set_value(std::unique_ptr<DexEncodedValue>(
+          new DexEncodedValuePrimitive(DexEncodedValueTypes::DEVT_INT, 0)));
+
+      // Look through all methods and remove accesses.
+      walk::code(std::vector<DexClass*>{analysis_cls},
+                 [&](auto* method, auto& code) {
+                   cfg::ScopedCFG c{&code};
+                   cfg::CFGMutation mut{*c};
+                   bool found = false;
+                   auto iterable = cfg::InstructionIterable(*c);
+                   auto end = iterable.end();
+                   for (auto it = iterable.begin(); it != end; ++it) {
+                     auto* insn = it->insn;
+                     if (insn->opcode() != OPCODE_SPUT) {
+                       continue;
+                     }
+                     if (insn->get_field() == field) {
+                       found = true;
+                       mut.remove(it);
+                     }
                    }
-                   if (insn->get_field() == field) {
-                     found = true;
-                     mut.remove(it);
+                   if (found) {
+                     mut.flush();
+                   } else {
+                     mut.clear();
                    }
-                 }
-                 if (found) {
-                   mut.flush();
-                 } else {
-                   mut.clear();
-                 }
-               });
+                 });
+    }
+  }();
+
+  if (analysis_package_prefix) {
+    walk::parallel::classes(build_class_scope(stores), [&](auto* cls) {
+      if (cls->get_name()->str().find(*analysis_package_prefix) == 0) {
+        undo_rename_delete(cls);
+      }
+    });
   }
 }
 
@@ -659,7 +680,8 @@ void InstrumentPass::eval_pass(DexStoresVector& stores,
                                PassManager& mgr) {
   if (!conf.get_json_config().get("instrument_pass_enabled", false) &&
       !mgr.get_redex_options().instrument_pass_enabled) {
-    maybe_unset_dynamic_analysis(stores, conf, m_options.analysis_class_name);
+    maybe_unset_dynamic_analysis(stores, conf, m_options.analysis_class_name,
+                                 m_options.analysis_package_prefix);
     return;
   }
 
