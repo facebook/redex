@@ -273,8 +273,10 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
       if (class_anno_off) {
         const uint32_t* anno_data = m_idx->get_uint_data(class_anno_off);
         uint32_t count = *anno_data++;
-        always_assert(anno_data <= anno_data + count);
-        always_assert((uint8_t*)(anno_data + count) <= m_idx->end());
+        always_assert_type_log(anno_data <= anno_data + count, INVALID_DEX,
+                               "Dex overflow");
+        always_assert_type_log((uint8_t*)(anno_data + count) <= m_idx->end(),
+                               INVALID_DEX, "Dex overflow");
         for (uint32_t aidx = 0; aidx < count; ++aidx) {
           anno_offsets.insert(anno_data[aidx]);
         }
@@ -294,8 +296,10 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
         if (xrefoff != 0) {
           const uint32_t* annoxref = m_idx->get_uint_data(xrefoff);
           uint32_t count = *annoxref++;
-          always_assert(annoxref < annoxref + count);
-          always_assert((uint8_t*)(annoxref + count) <= m_idx->end());
+          always_assert_type_log(annoxref < annoxref + count, INVALID_DEX,
+                                 "Dex overflow");
+          always_assert_type_log((uint8_t*)(annoxref + count) <= m_idx->end(),
+                                 INVALID_DEX, "Dex overflow");
           for (uint32_t j = 0; j < count; j++) {
             uint32_t off = annoxref[j];
             anno_offsets.insert(off);
