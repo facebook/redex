@@ -673,6 +673,64 @@ void set_no_opt_flag_on_analysis_methods(
   }
 }
 
+size_t check_integrity(DexStoresVector& stores, const std::string& prefix) {
+  auto scope = build_class_scope(stores);
+  InsertOnlyConcurrentSet<DexType*> checked_types;
+  auto check_type = [&prefix, &checked_types](DexType* type) {
+    if (type->get_name()->str().find(prefix) != 0) {
+      return true;
+    }
+    checked_types.insert(type);
+    return type_class(type) != nullptr;
+  };
+  walk::parallel::classes(scope, [&](DexClass* cls) {
+    check_type(cls->get_type()); // Just for counting purposes.
+    check_type(cls->get_super_class());
+    if (cls->get_interfaces() != nullptr) {
+      for (auto* intf : *cls->get_interfaces()) {
+        check_type(intf);
+      }
+    }
+    for (auto* field : cls->get_all_fields()) {
+      always_assert_log(check_type(field->get_type()), "%s", SHOW(field));
+    }
+  });
+  walk::parallel::methods(scope, [&](DexMethod* m) {
+    auto code = m->get_code();
+    if (code == nullptr) {
+      return;
+    }
+    cfg::ScopedCFG cfg{code};
+    for (auto& mie : cfg::InstructionIterable(*cfg)) {
+      auto insn = mie.insn;
+      always_assert_log(!insn->has_type() || check_type(insn->get_type()), "%s",
+                        SHOW(insn));
+
+      always_assert_log(!insn->has_field() ||
+                            check_type(insn->get_field()->get_type()),
+                        "%s", SHOW(insn));
+      always_assert_log(!insn->has_field() ||
+                            check_type(insn->get_field()->get_class()),
+                        "%s", SHOW(insn));
+
+      always_assert_log(!insn->has_method() ||
+                            check_type(insn->get_method()->get_class()),
+                        "%s", SHOW(insn));
+      always_assert_log(
+          !insn->has_method() ||
+              check_type(insn->get_method()->get_proto()->get_rtype()),
+          "%s", SHOW(insn));
+      always_assert_log(
+          !insn->has_method() ||
+              std::all_of(insn->get_method()->get_proto()->get_args()->begin(),
+                          insn->get_method()->get_proto()->get_args()->end(),
+                          check_type),
+          "%s", SHOW(insn));
+    }
+  });
+  return checked_types.size();
+}
+
 } // namespace
 
 void InstrumentPass::eval_pass(DexStoresVector& stores,
@@ -683,6 +741,11 @@ void InstrumentPass::eval_pass(DexStoresVector& stores,
     maybe_unset_dynamic_analysis(stores, conf, m_options.analysis_class_name,
                                  m_options.analysis_package_prefix);
     return;
+  }
+
+  if (m_options.analysis_package_prefix) {
+    m_integrity_types =
+        check_integrity(stores, *m_options.analysis_package_prefix);
   }
 
   // Note: Could do the inverse and protect necessary members here.
@@ -1132,6 +1195,10 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
   // future.
   set_no_opt_flag_on_analysis_methods(true, m_options.analysis_class_name,
                                       m_options.analysis_method_names);
+
+  if (m_integrity_types) {
+    pm.set_metric("integrity_checked_types", *m_integrity_types);
+  }
 }
 
 static InstrumentPass s_pass;

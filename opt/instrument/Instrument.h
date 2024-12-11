@@ -112,6 +112,7 @@ class InstrumentPass : public Pass {
   Options m_options;
   std::unique_ptr<interdex::InterDexPassPlugin> m_plugin;
   std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
+  std::optional<size_t> m_integrity_types;
 };
 
 } // namespace instrument
