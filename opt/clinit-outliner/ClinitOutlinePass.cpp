@@ -31,7 +31,7 @@ void ClinitOutlinePass::run_pass(DexStoresVector& stores,
                                  ConfigFiles& conf,
                                  PassManager& mgr) {
   auto& method_profiles = conf.get_method_profiles();
-  auto baseline_profile_config = conf.get_baseline_profile_config();
+  auto baseline_profile_config = conf.get_default_baseline_profile_config();
   if (!m_interaction_pattern.empty()) {
     boost::regex rx(m_interaction_pattern);
     std20::erase_if(baseline_profile_config.interaction_configs,

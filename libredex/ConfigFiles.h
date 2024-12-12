@@ -14,6 +14,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "BaselineProfileConfig.h"
 #include "GlobalConfig.h"
 #include "JsonWrapper.h"
 
@@ -32,10 +33,6 @@ class Value;
 namespace api {
 class AndroidSDK;
 } // namespace api
-
-namespace baseline_profiles {
-struct BaselineProfileConfig;
-} // namespace baseline_profiles
 
 namespace inliner {
 struct InlinerConfig;
@@ -190,7 +187,8 @@ struct ConfigFiles {
   /**
    * Get the global baseline profile config.
    */
-  const baseline_profiles::BaselineProfileConfig& get_baseline_profile_config();
+  const baseline_profiles::BaselineProfileConfig&
+  get_default_baseline_profile_config();
 
   bool get_did_use_bzl_baseline_profile_config();
 
@@ -268,8 +266,8 @@ struct ConfigFiles {
   bool m_load_class_lists_attempted{false};
   std::unique_ptr<ProguardMap> m_proguard_map;
   std::string m_class_frequency_filename;
-  std::unique_ptr<baseline_profiles::BaselineProfileConfig>
-      m_baseline_profile_config;
+  std::unordered_map<std::string, baseline_profiles::BaselineProfileConfig>
+      m_baseline_profile_config_list;
   std::string m_coldstart_class_filename;
   std::string m_coldstart_methods_filename;
   std::string m_baseline_profile_config_file_name;

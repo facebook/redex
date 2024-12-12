@@ -29,6 +29,7 @@ namespace {
 constexpr const char* CLASS_MARKER_DELIMITER = "DexEndMarker";
 constexpr const char* COLD_START_20PCT_END = "LColdStart20PctEnd";
 constexpr const char* COLD_START_1PCT_END = "LColdStart1PctEnd";
+constexpr const char* DEFAULT_BASELINE_PROFILE_CONFIG_NAME = "default";
 
 class StringTabSplitter {
  private:
@@ -574,78 +575,96 @@ bool ConfigFiles::get_did_use_bzl_baseline_profile_config() {
 }
 
 const baseline_profiles::BaselineProfileConfig&
-ConfigFiles::get_baseline_profile_config() {
-  if (m_baseline_profile_config) {
-    return *m_baseline_profile_config;
+ConfigFiles::get_default_baseline_profile_config() {
+  if (!m_baseline_profile_config_list.empty()) {
+    auto it = m_baseline_profile_config_list.find(
+        DEFAULT_BASELINE_PROFILE_CONFIG_NAME);
+    always_assert(it != m_baseline_profile_config_list.end());
+    return it->second;
   }
-  m_baseline_profile_config =
-      std::make_unique<baseline_profiles::BaselineProfileConfig>();
 
-  Json::Value baseline_profile_config_json;
+  Json::Value baseline_profile_config_list_json;
   if (!m_baseline_profile_config_file_name.empty()) {
     std::ifstream input(m_baseline_profile_config_file_name);
     Json::Reader reader;
-    bool parsing_succeeded = reader.parse(input, baseline_profile_config_json);
+    bool parsing_succeeded =
+        reader.parse(input, baseline_profile_config_list_json);
     always_assert_log(parsing_succeeded,
                       "Failed to parse class list json from file: %s\n%s",
                       m_baseline_profile_config_file_name.c_str(),
                       reader.getFormattedErrorMessages().c_str());
   } else {
-    get_json_config().get("baseline_profile", {}, baseline_profile_config_json);
+    get_json_config().get("baseline_profile", {},
+                          baseline_profile_config_list_json);
   }
 
-  auto baseline_profile_config_jw = JsonWrapper(baseline_profile_config_json);
-
-  if (baseline_profile_config_json.empty()) {
-    return *m_baseline_profile_config;
-  }
-
-  baseline_profile_config_jw.get(
-      "oxygen_modules", false,
-      m_baseline_profile_config->options.oxygen_modules);
-  baseline_profile_config_jw.get(
-      "strip_classes", false, m_baseline_profile_config->options.strip_classes);
-  baseline_profile_config_jw.get(
-      "use_redex_generated_profile", false,
-      m_baseline_profile_config->options.use_redex_generated_profile);
-  baseline_profile_config_jw.get(
-      "include_betamap_20pct_coldstart", true,
-      m_baseline_profile_config->options.include_betamap_20pct_coldstart);
-  baseline_profile_config_jw.get(
-      "betamap_include_coldstart_1pct", false,
-      m_baseline_profile_config->options.betamap_include_coldstart_1pct);
-
-  auto deepdata_interactions_json =
-      baseline_profile_config_json.get("deep_data_interaction_config", {});
-  always_assert(!deepdata_interactions_json.empty());
-
-  for (auto it = deepdata_interactions_json.begin();
-       it != deepdata_interactions_json.end();
+  // Make sure that if list is not empty, it has a default config
+  always_assert(baseline_profile_config_list_json.empty() ||
+                baseline_profile_config_list_json.isMember(
+                    std::string(DEFAULT_BASELINE_PROFILE_CONFIG_NAME)));
+  for (auto it = baseline_profile_config_list_json.begin();
+       it != baseline_profile_config_list_json.end();
        ++it) {
-    std::string key = it.memberName();
+    std::string config_name = it.memberName();
+    const auto& baseline_profile_config_jw = JsonWrapper(*it);
+    auto current_baseline_profile_config =
+        baseline_profiles::BaselineProfileConfig();
+    baseline_profile_config_jw.get(
+        "oxygen_modules", false,
+        current_baseline_profile_config.options.oxygen_modules);
+    baseline_profile_config_jw.get(
+        "strip_classes", false,
+        current_baseline_profile_config.options.strip_classes);
+    baseline_profile_config_jw.get(
+        "use_redex_generated_profile", false,
+        current_baseline_profile_config.options.use_redex_generated_profile);
+    baseline_profile_config_jw.get("include_betamap_20pct_coldstart", true,
+                                   current_baseline_profile_config.options
+                                       .include_betamap_20pct_coldstart);
+    baseline_profile_config_jw.get(
+        "betamap_include_coldstart_1pct", false,
+        current_baseline_profile_config.options.betamap_include_coldstart_1pct);
+    Json::Value deepdata_interactions_json;
+    baseline_profile_config_jw.get("deep_data_interaction_config", {},
+                                   deepdata_interactions_json);
+    always_assert(!deepdata_interactions_json.empty());
+    for (auto interaction_it = deepdata_interactions_json.begin();
+         interaction_it != deepdata_interactions_json.end();
+         ++interaction_it) {
+      std::string key = interaction_it.memberName();
 
-    const auto& interaction_id = key;
+      const auto& interaction_id = key;
 
-    m_baseline_profile_config->interaction_configs[interaction_id] = {};
+      current_baseline_profile_config.interaction_configs[interaction_id] = {};
 
-    auto& bpi_config =
-        m_baseline_profile_config->interaction_configs[interaction_id];
+      auto& bpi_config =
+          current_baseline_profile_config.interaction_configs[interaction_id];
 
-    const auto& bpi_config_jw = JsonWrapper(*it);
+      const auto& bpi_config_jw = JsonWrapper(*interaction_it);
 
-    bpi_config_jw.get("call_threshold", 1, bpi_config.call_threshold);
-    bpi_config_jw.get("classes", true, bpi_config.classes);
-    bpi_config_jw.get("post_startup", true, bpi_config.post_startup);
-    bpi_config_jw.get("startup", false, bpi_config.startup);
-    bpi_config_jw.get("threshold", 80, bpi_config.threshold);
-    always_assert(bpi_config_jw.contains("name"));
-    std::string name = bpi_config_jw.get("name", std::string());
+      bpi_config_jw.get("call_threshold", 1, bpi_config.call_threshold);
+      bpi_config_jw.get("classes", true, bpi_config.classes);
+      bpi_config_jw.get("post_startup", true, bpi_config.post_startup);
+      bpi_config_jw.get("startup", false, bpi_config.startup);
+      bpi_config_jw.get("threshold", 80, bpi_config.threshold);
+      always_assert(bpi_config_jw.contains("name"));
+      std::string name = bpi_config_jw.get("name", std::string());
 
-    m_baseline_profile_config->interactions.emplace_back(interaction_id,
-                                                         std::move(name));
+      current_baseline_profile_config.interactions.emplace_back(
+          interaction_id, std::move(name));
+    }
+    m_baseline_profile_config_list.emplace(std::move(config_name),
+                                           current_baseline_profile_config);
   }
 
-  return *m_baseline_profile_config;
+  // Insert a default-constructed config with default values if
+  // no "default" key was found.  Otherwise, this looks up the existing
+  // value for "default".
+  auto [it_default, _] = m_baseline_profile_config_list.emplace(
+      std::string(DEFAULT_BASELINE_PROFILE_CONFIG_NAME),
+      baseline_profiles::BaselineProfileConfig());
+
+  return it_default->second;
 }
 
 void ConfigFiles::parse_global_config() {
