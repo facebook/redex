@@ -145,6 +145,8 @@ class TypedefAnnoChecker {
         m_intdef_constants(intdef_constants),
         m_method_override_graph(method_override_graph) {}
 
+  bool is_value_of_opt(const DexMethod* m);
+
   void run(DexMethod* m);
 
   void check_instruction(
