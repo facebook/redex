@@ -193,19 +193,31 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
     }
   }
   for (const auto& pair : intfs_implementors) {
-    auto intf = pair.first;
+    auto intfs = pair.first;
+    const auto has_defs = [&intfs]() {
+      for (const auto* intf : *intfs) {
+        if (!type_class(intf)) {
+          return false;
+        }
+      }
+      return true;
+    };
+    if (!has_defs()) {
+      // Skip if any interface definition is missing.
+      continue;
+    }
     auto& implementors = pair.second;
     if (implementors.size() >= global_min_count) {
       TRACE(CLMG,
             9,
             "Discover interface root %s with %zu implementors",
-            SHOW(intf),
+            SHOW(intfs),
             pair.second.size());
       auto first_implementor = type_class(implementors[0]);
       merging_spec->roots.insert(first_implementor->get_super_class());
       merging_spec->merging_targets.insert(implementors.begin(),
                                            implementors.end());
-      mgr.incr_metric("intf_" + show(intf), implementors.size());
+      mgr.incr_metric("intf_" + show(intfs), implementors.size());
     }
   }
 
