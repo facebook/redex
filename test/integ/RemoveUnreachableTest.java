@@ -40,6 +40,18 @@ class D extends A {
   public void bor() {}
 }
 
+class EBase {
+  EBase(int dummy) {}
+  void foo() {}
+}
+class E extends EBase { 
+  E(int dummy) { super(dummy); }
+  @Override void foo() {
+    bar();
+  }
+  static void bar() {}
+}
+
 interface I {
   public void wat();
 }
@@ -196,5 +208,10 @@ public class RemoveUnreachableTest {
   public static void unreferencedInterface() {
     ReferencedInterface ri = new ClassImplementingUnreferencedInterface();
     ri.foo();
+  }
+
+  public static void testRelaxedInit() {
+    EBase e = new E(42);
+    e.foo();
   }
 }

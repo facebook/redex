@@ -33,6 +33,66 @@ class RemoveUnreachableTest : public RedexIntegrationTest {
   }
 };
 
+TEST_F(RemoveUnreachableTest, RelaxedInit) {
+  // Regression test that makes sure that we identify that types are
+  // instantiable when an instance is created with new-instance, even if the
+  // invoked constructor got "relaxed".
+
+  // Check that later unreachable methods are initially present
+  ASSERT_TRUE(find_dmethod(*classes, "LE;", "V", "<init>", {"I"}));
+  ASSERT_TRUE(find_dmethod(*classes, "LE;", "V", "bar", {}));
+
+  // Rewrite constructor reference when creating instance of E,
+  // "relaxing" it by rewriting to the base class.
+  auto* test_method = find_dmethod(
+      *classes, "LRemoveUnreachableTest;", "V", "testRelaxedInit", {});
+  ASSERT_TRUE(test_method);
+  auto* init_method = find_dmethod(*classes, "LE;", "V", "<init>", {"I"});
+  ASSERT_TRUE(init_method);
+  auto* base_init_method =
+      find_dmethod(*classes, "LEBase;", "V", "<init>", {"I"});
+  ASSERT_TRUE(init_method);
+
+  size_t rewritten = 0;
+  for (auto& mie : InstructionIterable(*test_method->get_code())) {
+    if (mie.insn->opcode() == OPCODE_INVOKE_DIRECT &&
+        mie.insn->get_method() == init_method) {
+      mie.insn->set_method(base_init_method);
+      rewritten++;
+    }
+  }
+  ASSERT_EQ(rewritten, 1);
+  type_class(init_method->get_class())->remove_method(init_method);
+
+  const auto& dexen = stores[0].get_dexen();
+  auto pg_config = process_and_get_proguard_config(dexen, R"(
+    -keepclasseswithmembers public class RemoveUnreachableTest {
+      public void testRelaxedInit();
+    }
+  )");
+
+  ASSERT_TRUE(pg_config->ok);
+  ASSERT_EQ(pg_config->keep_rules.size(), 1);
+
+  RedexOptions options{};
+  options.min_sdk = 22; // so that IRTypeChecker allows for relaxed inits
+  run_passes({new RemoveUnreachablePass()},
+             std::move(pg_config),
+             Json::nullValue,
+             options);
+
+  // Seed elements
+  ASSERT_TRUE(find_class(*classes, "LRemoveUnreachableTest;"));
+  ASSERT_TRUE(find_dmethod(
+      *classes, "LRemoveUnreachableTest;", "V", "testRelaxedInit", {}));
+
+  // Elements transitively reachable via seeds.
+  ASSERT_TRUE(find_class(*classes, "LE;"));
+  ASSERT_FALSE(find_dmethod(*classes, "LE;", "V", "<init>", {"I"}));
+  ASSERT_TRUE(find_vmethod(*classes, "LE;", "V", "foo", {}));
+  ASSERT_TRUE(find_dmethod(*classes, "LE;", "V", "bar", {}));
+}
+
 TEST_F(RemoveUnreachableTest, InheritanceTest) {
   // Make sure some unreachable things exist before we start.
   ASSERT_TRUE(find_vmethod(*classes, "LA;", "V", "bor", {}));
