@@ -550,7 +550,8 @@ class ParallelMonotonicFixpointIterator
   }
 
  private:
-  WeakPartialOrdering<NodeId, NodeHash> m_wpo;
+  WeakPartialOrdering<NodeId, NodeHash, /*Support_is_from_outside=*/false>
+      m_wpo;
   size_t m_num_thread;
   std::unordered_set<NodeId> m_all_nodes;
   static constexpr size_t ChunkSize = 512;
@@ -673,7 +674,8 @@ class MonotonicFixpointIterator
   }
 
  private:
-  WeakPartialOrdering<NodeId, NodeHash> m_wpo;
+  WeakPartialOrdering<NodeId, NodeHash, /*Support_is_from_outside=*/false>
+      m_wpo;
 };
 
 /*
