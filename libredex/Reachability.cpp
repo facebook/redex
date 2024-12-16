@@ -1541,9 +1541,7 @@ void TransitiveClosureMarkerWorker::directly_instantiable(DexType* type) {
           type)) {
     return;
   }
-  if (m_shared_state->cfg_gathering_check_instance_callable) {
-    instantiable(type);
-  }
+  instantiable(type);
   std::unordered_set<const DexMethod*> overridden_methods;
   for (auto cls = type_class(type); cls && !cls->is_external();
        cls = type_class(cls->get_super_class())) {
