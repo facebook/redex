@@ -324,6 +324,19 @@ size_t exclude_unremovables(const Scope& scope,
     if (!code) {
       return current_excluded;
     }
+
+    if (!can_rename(meth)) {
+      std::vector<DexType*> types;
+      meth->get_proto()->gather_types(types);
+      for (auto type : types) {
+        if (candidates.count(type) != 0) {
+          TRACE(RM_INTF, 5, "Excluding %s cannot rename %s", SHOW(type),
+                SHOW(meth));
+          current_excluded.insert(type);
+        }
+      }
+    }
+
     always_assert(code->editable_cfg_built());
     auto& cfg = code->cfg();
     for (const auto& mie : cfg::InstructionIterable(cfg)) {
