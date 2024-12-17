@@ -146,6 +146,7 @@ class TypedefAnnoChecker {
         m_method_override_graph(method_override_graph) {}
 
   bool is_value_of_opt(const DexMethod* m);
+  bool is_delegate(const DexMethod* m);
 
   void run(DexMethod* m);
 
