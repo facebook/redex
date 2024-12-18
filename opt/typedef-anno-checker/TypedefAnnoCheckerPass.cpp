@@ -1242,9 +1242,62 @@ void SynthAccessorPatcher::patch_accessors(DexMethod* m) {
   }
 }
 
+bool TypedefAnnoChecker::is_delegate(const DexMethod* m) {
+  auto* cls = type_class(m->get_class());
+  DexTypeList* interfaces = cls->get_interfaces();
+
+  if (interfaces->empty()) {
+    return false;
+  }
+
+  auto& cfg = m->get_code()->cfg();
+  DexField* delegate = nullptr;
+
+  for (auto* block : cfg.blocks()) {
+    for (const auto& mie : InstructionIterable(block)) {
+      auto* insn = mie.insn;
+      if (insn->opcode() == OPCODE_IGET_OBJECT) {
+        DexField* field = insn->get_field()->as_def();
+        if (!field) {
+          continue;
+        }
+        // find methods that delegate with $$delegate_ P1697234372
+        if (boost::starts_with(field->get_simple_deobfuscated_name(),
+                               "$$delegate_")) {
+          delegate = field;
+        } else {
+          // find methods that delegate without $$delegate_ P1698648093
+          // the field type must match one of the interfaces
+          for (auto interface : *interfaces) {
+            if (interface->get_name() == field->get_type()->get_name()) {
+              delegate = field;
+            }
+          }
+        }
+      } else if (opcode::is_an_invoke(insn->opcode()) && delegate) {
+        auto* callee = insn->get_method()->as_def();
+        if (!callee) {
+          continue;
+        }
+        if (m->get_simple_deobfuscated_name() ==
+                callee->get_simple_deobfuscated_name() &&
+            m->get_proto() == callee->get_proto()) {
+          TRACE(TAC, 2, "skipping delegate method %s", SHOW(m));
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 void TypedefAnnoChecker::run(DexMethod* m) {
   IRCode* code = m->get_code();
   if (!code) {
+    return;
+  }
+
+  if (is_delegate(m)) {
     return;
   }
 
