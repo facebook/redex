@@ -7,9 +7,11 @@
 
 #include "StringTreeSet.h"
 
-#include "Debug.h"
 #include <cmath>
 #include <unordered_map>
+
+#include "Debug.h"
+#include "DexEncoding.h"
 
 namespace {
 constexpr uint8_t BITS_PER_PAYLOAD_UNIT = 6;
@@ -153,5 +155,69 @@ std::string StringTreeSet::encode_string_tree_set(
   }
   std::ostringstream oss;
   stm.encode(oss);
+  return oss.str();
+}
+
+std::string StringTreeStringMap::encode_string_tree_map(
+    const std::map<std::string, std::string>& strings) {
+  // pushes the base 127 encoding of an integer
+  constexpr int32_t ENCODED_INT_SIZE = 3;
+  auto push_int = [](int32_t value, std::ostringstream* dest) {
+    always_assert(value < 127 * 127 * 127);
+    auto& stream = *dest;
+    stream.put((value % 127) + 1);
+    stream.put(((value / 127) % 127) + 1);
+    stream.put((value / (127 * 127)) + 1);
+  };
+
+  auto compute_utf16_length = [](const std::string& str) {
+    auto s = str.data();
+    int32_t result{0};
+    while (*s != '\0') {
+      auto code_point = mutf8_next_code_point(s);
+      ++result;
+      if (code_point >= 0x10000) {
+        ++result;
+      }
+    }
+    return result;
+  };
+
+  std::ostringstream pool;
+  std::map<std::string, int32_t> value_to_offset;
+  // NOTE: DO NOT use tellp() here to figure out the size and offsets! Offsets
+  // must appear in terms of Java char counts, which will be UTF-16 code units.
+  int32_t pool_size{0};
+  for (auto&& [key, value] : strings) {
+    // if a value already exists, its offset will be reused
+    auto it = value_to_offset.try_emplace(value, pool_size);
+    if (it.second) {
+      auto length = compute_utf16_length(value);
+      push_int(length, &pool);
+      pool << value;
+      pool_size += ENCODED_INT_SIZE + length;
+    }
+  }
+
+  std::ostringstream tree;
+  StringTreeMap<int32_t> stm;
+  for (const auto& [key, value] : strings) {
+    auto off = value_to_offset.at(value);
+    stm.insert(key, off);
+  }
+  stm.encode(tree);
+
+  // NOTE: tellp() OK here because tree will use only non-zero ascii chars. Be
+  // sure to update this if the constraint ever changes.
+  auto tree_size = (int32_t)tree.tellp();
+  constexpr int32_t header_size{6};
+  std::ostringstream oss;
+  // Offset to string tree
+  push_int(header_size, &oss);
+  // Offset to pool
+  push_int(header_size + tree_size, &oss);
+  auto encoded_tree = tree.str();
+  oss << encoded_tree;
+  oss << pool.str();
   return oss.str();
 }
