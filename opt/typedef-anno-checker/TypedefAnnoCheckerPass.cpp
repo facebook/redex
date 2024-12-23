@@ -1242,6 +1242,45 @@ void SynthAccessorPatcher::patch_accessors(DexMethod* m) {
   }
 }
 
+
+bool TypedefAnnoChecker::is_value_of_opt(const DexMethod* m) {
+  if (m->get_simple_deobfuscated_name() != "valueOfOpt") {
+    return false;
+  }
+
+  // the util class
+  auto cls = type_class(m->get_class());
+  if (!boost::ends_with(cls->get_deobfuscated_name_or_empty_copy(), "$Util;")) {
+    return false;
+  }
+
+  if (!cls || !cls->get_anno_set()) {
+    return false;
+  }
+
+  DexClass* typedef_cls = nullptr;
+  DexAnnotation* anno = get_annotation(
+      cls, DexType::make_type("Ldalvik/annotation/EnclosingClass;"));
+  if (anno) {
+    auto& value = anno->anno_elems().begin()->encoded_value;
+    if (value->evtype() == DexEncodedValueTypes::DEVT_TYPE) {
+      auto type_value = static_cast<DexEncodedValueType*>(value.get());
+      auto type_name = type_value->show_deobfuscated();
+      typedef_cls = type_class(DexType::make_type(type_name));
+    }
+  }
+
+  if (!typedef_cls || !typedef_cls->get_anno_set()) {
+    return false;
+  }
+
+  if (!get_annotation(typedef_cls, m_config.int_typedef) &&
+      !get_annotation(typedef_cls, m_config.str_typedef)) {
+    return false;
+  }
+  return true;
+}
+
 bool TypedefAnnoChecker::is_delegate(const DexMethod* m) {
   auto* cls = type_class(m->get_class());
   DexTypeList* interfaces = cls->get_interfaces();
@@ -1297,7 +1336,7 @@ void TypedefAnnoChecker::run(DexMethod* m) {
     return;
   }
 
-  if (is_delegate(m)) {
+  if (is_value_of_opt(m) || is_delegate(m)) {
     return;
   }
 

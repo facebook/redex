@@ -147,6 +147,8 @@ class TypedefAnnoChecker {
 
   bool is_delegate(const DexMethod* m);
 
+  bool is_value_of_opt(const DexMethod* m);
+
   void run(DexMethod* m);
 
   void check_instruction(

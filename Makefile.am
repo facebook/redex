@@ -519,6 +519,7 @@ libopt_la_SOURCES = \
 	opt/strip-debug-info/StripDebugInfo.cpp \
 	opt/optimize_resources/OptimizeResources.cpp \
 	opt/typedef-anno-checker/TypedefAnnoCheckerPass.cpp \
+	opt/typedef-anno-checker/TypedefAnnoOptPass.cpp \
 	opt/type-analysis/CallGraphFileGenerationPass.cpp \
 	opt/type-analysis/GlobalTypeAnalysisPass.cpp \
 	opt/type-analysis/TypeAnalysisCallGraphGenerationPass.cpp \
