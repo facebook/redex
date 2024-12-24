@@ -201,6 +201,7 @@ DexClass* create_merger_class(const DexType* type,
             type, DexString::make_string(INTERNAL_TYPE_TAG_FIELD_NAME),
             type::_int())
             ->make_concrete(ACC_PUBLIC | ACC_FINAL);
+    type_tag_field->rstate.set_name_used();
     fields.push_back(type_tag_field);
   }
 
