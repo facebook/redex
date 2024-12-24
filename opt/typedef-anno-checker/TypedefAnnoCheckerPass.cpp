@@ -69,11 +69,6 @@ bool is_null_check(const DexMethod* m) {
          "Object;)Ljava/lang/Object;";
 }
 
-bool is_kotlin_result(const DexMethod* m) {
-  return boost::starts_with(m->get_deobfuscated_name_or_empty_copy(),
-                            "Lkotlin/Result");
-}
-
 bool has_typedef_annos(ParamAnnotations* param_annos,
                        const std::unordered_set<DexType*>& typedef_annos) {
   if (!param_annos) {
@@ -1705,7 +1700,7 @@ bool TypedefAnnoChecker::check_typedef_value(
       }
       // the result of usedef chains on a check cast could resolve to this
       // look further up for the real source
-      if (is_null_check(def_method) || is_kotlin_result(def_method)) {
+      if (is_null_check(def_method)) {
         check_typedef_value(m, annotation, ud_chains, def, 0, inference, envs);
         break;
       }
@@ -1799,9 +1794,6 @@ bool TypedefAnnoChecker::check_typedef_value(
                               envs);
         }
       }
-      break;
-    }
-    case OPCODE_MOVE_EXCEPTION: {
       break;
     }
     case OPCODE_CHECK_CAST: {
