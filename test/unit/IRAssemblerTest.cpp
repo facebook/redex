@@ -788,9 +788,9 @@ TEST_F(IRAssemblerTest, assembleInterfaceFromString) {
       (field "LIface;.seven:Ljava/lang/String;" hello)
       (field "LIface;.eight:Z" true)
       (field "LIface;.nine:Z" false)
-      (field "LIface;.ten:I;" a)
-      (field "LIface;.eleven:I;" b)
-      (field "LIface;.twelve:I;" ab)
+      (field "LIface;.ten:Ljava/lang/String;" a)
+      (field "LIface;.eleven:Ljava/lang/String;" b)
+      (field "LIface;.twelve:Ljava/lang/String;" ab)
     )
   )");
   EXPECT_TRUE(is_interface(iface));
@@ -850,13 +850,13 @@ TEST_F(IRAssemblerTest, assembleInterfaceFromString) {
       EXPECT_EQ(static_value->value(), 0);
     } else if (name == "ten") {
       auto static_value = f->get_static_value();
-      EXPECT_EQ(static_value->value(), 10);
+      EXPECT_EQ(static_value->show(), "a");
     } else if (name == "eleven") {
       auto static_value = f->get_static_value();
-      EXPECT_EQ(static_value->value(), 11);
+      EXPECT_EQ(static_value->show(), "b");
     } else if (name == "twelve") {
       auto static_value = f->get_static_value();
-      EXPECT_EQ(static_value->value(), 171);
+      EXPECT_EQ(static_value->show(), "ab");
     }
   }
 
