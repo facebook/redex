@@ -72,17 +72,17 @@ struct DexTypeEnvironmentTest : public RedexTest {
     ClassCreator creator = ClassCreator(type::java_lang_Object());
     creator.create();
 
-    m_type_a = DexType::make_type("LA");
+    m_type_a = DexType::make_type("LA;");
     creator = ClassCreator(m_type_a);
     creator.set_super(type::java_lang_Object());
     creator.create();
 
-    m_type_a1 = DexType::make_type("LA1");
+    m_type_a1 = DexType::make_type("LA1;");
     creator = ClassCreator(m_type_a1);
     creator.set_super(m_type_a);
     creator.create();
 
-    m_type_a2 = DexType::make_type("LA2");
+    m_type_a2 = DexType::make_type("LA2;");
     creator = ClassCreator(m_type_a2);
     creator.set_super(m_type_a);
     creator.create();
@@ -91,96 +91,96 @@ struct DexTypeEnvironmentTest : public RedexTest {
     m_a1_array = type::make_array_type(m_type_a1);
     m_a2_array = type::make_array_type(m_type_a2);
 
-    m_type_a21 = DexType::make_type("LA21");
+    m_type_a21 = DexType::make_type("LA21;");
     creator = ClassCreator(m_type_a21);
     creator.set_super(m_type_a2);
     creator.create();
 
-    m_type_a211 = DexType::make_type("LA211");
+    m_type_a211 = DexType::make_type("LA211;");
     creator = ClassCreator(m_type_a211);
     creator.set_super(m_type_a21);
     creator.create();
 
-    m_type_b = DexType::make_type("LB");
+    m_type_b = DexType::make_type("LB;");
     creator = ClassCreator(m_type_b);
     creator.set_super(type::java_lang_Object());
     creator.create();
 
-    m_type_b1 = DexType::make_type("LB1");
+    m_type_b1 = DexType::make_type("LB1;");
     creator = ClassCreator(m_type_b1);
     creator.set_super(m_type_b);
     creator.create();
 
-    m_type_c = DexType::make_type("LC");
+    m_type_c = DexType::make_type("LC;");
     creator = ClassCreator(m_type_c);
     creator.set_super(type::java_lang_Object());
     creator.create();
 
-    m_type_c1 = DexType::make_type("LC1");
+    m_type_c1 = DexType::make_type("LC1;");
     creator = ClassCreator(m_type_c1);
     creator.set_super(m_type_c);
     creator.create();
 
-    m_type_c2 = DexType::make_type("LC2");
+    m_type_c2 = DexType::make_type("LC2;");
     creator = ClassCreator(m_type_c2);
     creator.set_super(m_type_c);
     creator.create();
 
-    m_type_c3 = DexType::make_type("LC3");
+    m_type_c3 = DexType::make_type("LC3;");
     creator = ClassCreator(m_type_c3);
     creator.set_super(m_type_c);
     creator.create();
 
-    m_type_c4 = DexType::make_type("LC4");
+    m_type_c4 = DexType::make_type("LC4;");
     creator = ClassCreator(m_type_c4);
     creator.set_super(m_type_c);
     creator.create();
 
-    m_type_c5 = DexType::make_type("LC5");
+    m_type_c5 = DexType::make_type("LC5;");
     creator = ClassCreator(m_type_c5);
     creator.set_super(m_type_c);
     creator.create();
 
-    m_type_d = DexType::make_type("LD");
+    m_type_d = DexType::make_type("LD;");
     creator = ClassCreator(m_type_d);
     creator.set_super(type::java_lang_Object());
     creator.create();
 
-    m_type_base = DexType::make_type("LBase");
+    m_type_base = DexType::make_type("LBase;");
     creator = ClassCreator(m_type_base);
     creator.set_super(type::java_lang_Object());
     creator.create();
 
-    m_type_if1 = DexType::make_type("LIf1");
+    m_type_if1 = DexType::make_type("LIf1;");
     creator = ClassCreator(m_type_if1);
     creator.set_super(type::java_lang_Object());
     creator.set_access(ACC_PUBLIC | ACC_INTERFACE);
     creator.create();
-    m_type_if2 = DexType::make_type("LIf2");
+    m_type_if2 = DexType::make_type("LIf2;");
     creator = ClassCreator(m_type_if2);
     creator.set_super(type::java_lang_Object());
     creator.set_access(ACC_PUBLIC | ACC_INTERFACE);
     creator.create();
 
-    m_type_sub1 = DexType::make_type("LSub1");
+    m_type_sub1 = DexType::make_type("LSub1;");
     creator = ClassCreator(m_type_sub1);
     creator.set_super(m_type_base);
     creator.add_interface(m_type_if1);
     creator.create();
 
-    m_type_sub2 = DexType::make_type("LSub2");
+    m_type_sub2 = DexType::make_type("LSub2;");
     creator = ClassCreator(m_type_sub2);
     creator.set_super(m_type_base);
     creator.add_interface(m_type_if2);
     creator.create();
 
-    m_type_sub3 = DexType::make_type("LSub3");
+    m_type_sub3 = DexType::make_type("LSub3;");
     creator = ClassCreator(m_type_sub3);
     creator.set_super(m_type_sub1);
     creator.add_interface(m_type_if1);
     creator.create();
 
-    m_type_sub4 = DexType::make_type("LSub4");
+    m_type_sub4 = DexType::make_type("LSub4;");
     creator = ClassCreator(m_type_sub4);
     creator.set_super(m_type_sub2);
     creator.add_interface(m_type_if1);
@@ -193,49 +193,49 @@ struct DexTypeEnvironmentTest : public RedexTest {
     m_sub2_array = type::make_array_type(m_type_sub2);
     m_sub3_array = type::make_array_type(m_type_sub3);
 
-    m_map_entry = DexType::make_type("LMapEntry");
+    m_map_entry = DexType::make_type("LMapEntry;");
     creator = ClassCreator(m_map_entry);
     creator.set_super(type::java_lang_Object());
     creator.set_access(ACC_PUBLIC | ACC_INTERFACE);
     creator.create();
 
-    m_abs_map_entry = DexType::make_type("LAbstractMapEntry");
+    m_abs_map_entry = DexType::make_type("LAbstractMapEntry;");
     creator = ClassCreator(m_abs_map_entry);
     creator.set_super(type::java_lang_Object());
     creator.add_interface(m_map_entry);
     creator.create();
 
-    m_im_entry = DexType::make_type("LImmutableEntry");
+    m_im_entry = DexType::make_type("LImmutableEntry;");
     creator = ClassCreator(m_im_entry);
     creator.set_super(m_abs_map_entry);
     creator.create();
 
-    m_im_map_entry = DexType::make_type("LImmutableMapEntry");
+    m_im_map_entry = DexType::make_type("LImmutableMapEntry;");
     creator = ClassCreator(m_im_map_entry);
     creator.set_super(m_im_entry);
     creator.create();
 
-    m_type_d1 = DexType::make_type("LD1");
+    m_type_d1 = DexType::make_type("LD1;");
     creator = ClassCreator(m_type_d1);
     creator.set_super(type::java_lang_Object());
     creator.create();
 
-    m_type_d2 = DexType::make_type("LD2");
+    m_type_d2 = DexType::make_type("LD2;");
     creator = ClassCreator(m_type_d2);
     creator.set_super(type::java_lang_Object());
     creator.create();
 
-    m_type_d3 = DexType::make_type("LD3");
+    m_type_d3 = DexType::make_type("LD3;");
     creator = ClassCreator(m_type_d3);
     creator.set_super(type::java_lang_Object());
     creator.create();
 
-    m_type_d4 = DexType::make_type("LD4");
+    m_type_d4 = DexType::make_type("LD4;");
     creator = ClassCreator(m_type_d4);
     creator.set_super(type::java_lang_Object());
     creator.create();
 
-    m_type_d5 = DexType::make_type("LD5");
+    m_type_d5 = DexType::make_type("LD5;");
     creator = ClassCreator(m_type_d5);
     creator.set_super(type::java_lang_Object());
     creator.create();
