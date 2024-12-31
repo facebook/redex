@@ -101,7 +101,10 @@ bool is_valid(std::string_view descriptor) {
 }
 
 bool is_primitive(const DexType* type) {
-  switch (type->get_name()->str().at(0)) {
+  auto const name = type->get_name()->str();
+  always_assert_type_log(is_valid(name), INVALID_DEX, "Invalid type name: %s",
+                         type->get_name()->c_str());
+  switch (name[0]) {
   case 'Z':
   case 'B':
   case 'S':

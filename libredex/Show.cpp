@@ -132,7 +132,7 @@ std::string show_type(const DexType* t, bool deobfuscated) {
           return std::string("");
         }
         auto name = t->get_name()->str();
-        if (!deobfuscated) {
+        if (!deobfuscated || name.empty()) {
           return str_copy(name);
         }
         if (name[0] == 'L') {
