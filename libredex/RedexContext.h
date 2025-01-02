@@ -117,6 +117,9 @@ struct RedexContext {
   DexMethodRef* get_method(const DexType* type,
                            const DexString* name,
                            const DexProto* proto);
+  std::unordered_map<std::string,
+                     std::unordered_map<std::string, DexMethodRef*>>
+  get_baseline_profile_method_map();
 
   /**
    * Add an additional name to refer to a method (a deobfuscated name for

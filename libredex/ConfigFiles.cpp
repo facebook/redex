@@ -466,7 +466,14 @@ void ConfigFiles::build_dead_class_and_live_class_split_lists() {
   }
 }
 
-void ConfigFiles::ensure_agg_method_stats_loaded() const {
+const method_profiles::MethodProfiles& ConfigFiles::get_method_profiles()
+    const {
+  always_assert_log(m_method_profiles->is_initialized(),
+                    "Cannot initialize method stats in a const function.");
+  return *m_method_profiles;
+}
+
+void ConfigFiles::ensure_agg_method_stats_loaded() {
   if (m_method_profiles->is_initialized()) {
     return;
   }
@@ -475,7 +482,12 @@ void ConfigFiles::ensure_agg_method_stats_loaded() const {
   if (csv_filenames.empty()) {
     return;
   }
-  m_method_profiles->initialize(csv_filenames);
+  baseline_profiles::BaselineProfileConfig baseline_profile_config =
+      get_default_baseline_profile_config();
+  m_method_profiles->initialize(
+      csv_filenames,
+      baseline_profile_config.manual_files,
+      get_json_config().get("ingest_baseline_profile_data", false));
 }
 
 void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
@@ -653,6 +665,12 @@ ConfigFiles::get_default_baseline_profile_config() {
       current_baseline_profile_config.interactions.emplace_back(
           interaction_id, std::move(name));
     }
+
+    baseline_profile_config_jw.get(
+        "manual_profiles",
+        std::vector<std::string>(),
+        current_baseline_profile_config.manual_files);
+
     m_baseline_profile_config_list.emplace(std::move(config_name),
                                            current_baseline_profile_config);
   }

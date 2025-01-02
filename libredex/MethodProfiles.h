@@ -69,7 +69,9 @@ class MethodProfiles {
  public:
   MethodProfiles() {}
 
-  void initialize(const std::vector<std::string>& csv_filenames) {
+  void initialize(const std::vector<std::string>& csv_filenames,
+                  const std::vector<std::string>& manual_filenames,
+                  const bool ingest_baseline_profile_data) {
     m_initialized = true;
     Timer t("Parsing agg_method_stats_files");
     for (const std::string& csv_filename : csv_filenames) {
@@ -83,6 +85,9 @@ class MethodProfiles {
                         "No valid data found in the profile %s. See stderr "
                         "for more details.",
                         csv_filename.c_str());
+    }
+    if (ingest_baseline_profile_data) {
+      parse_manual_files(manual_filenames);
     }
   }
 
@@ -181,6 +186,14 @@ class MethodProfiles {
   // m_method_stats
   bool parse_stats_file(const std::string& csv_filename);
 
+  // Read a list of manual profiles and populate m_method_stats
+  void parse_manual_files(const std::vector<std::string>& manual_filenames);
+  void parse_manual_file(
+      const std::string& manual_filename,
+      const std::unordered_map<std::string,
+                               std::unordered_map<std::string, DexMethodRef*>>&
+          baseline_profile_method_map);
+
   // Read a line of data (not a header)
   bool parse_line(const std::string& line);
   // Read a line from the main section of the aggregated stats file and put an
@@ -188,6 +201,7 @@ class MethodProfiles {
   bool parse_main(const std::string& line, std::string* interaction_id);
   std::optional<ParsedMain> parse_main_internal(std::string_view line);
   bool apply_main_internal_result(ParsedMain v, std::string* interaction_id);
+  void apply_manual_profile(DexMethodRef* ref, const std::string& flags);
   // Read a line of data from the metadata section (at the top of the file)
   bool parse_metadata(std::string_view line);
 

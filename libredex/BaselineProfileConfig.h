@@ -50,6 +50,7 @@ struct BaselineProfileConfig {
       interaction_configs;
   std::vector<std::pair<std::string, std::string>> interactions;
   BaselineProfileOptions options;
+  std::vector<std::string> manual_files;
 };
 
 } // namespace baseline_profiles

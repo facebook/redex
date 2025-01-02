@@ -79,7 +79,7 @@ bool compare_dexclasses_for_compressed_size(DexClass* c1, DexClass* c2) {
 }
 
 void sort_classes_for_compressed_size(const std::string& name,
-                                      const ConfigFiles& conf,
+                                      ConfigFiles& conf,
                                       PassManager& mgr,
                                       DexClasses* classes) {
   std::vector<DexClass*> perf_sensitive_classes;
