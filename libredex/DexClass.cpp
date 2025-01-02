@@ -690,7 +690,7 @@ std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
       while (count--) {
         uint32_t tidx = read_uleb128_checked<redex::DexAssert>(handler);
         uint32_t hoff = read_uleb128_checked<redex::DexAssert>(handler);
-        DexType* dt = idx->get_typeidx(tidx);
+        DexType* dt = idx->get_nullable_typeidx(tidx);
         dextry->m_catches.push_back(std::make_pair(dt, hoff));
       }
       if (has_catchall) {
@@ -1614,7 +1614,7 @@ DexClass* DexClass::create(DexIdx* idx,
     auto self_type = idx->get_typeidx(cdef->typeidx);
     check_type(self_type);
 
-    auto super_type = idx->get_typeidx(cdef->super_idx);
+    auto super_type = idx->get_nullable_typeidx(cdef->super_idx);
     if (super_type == nullptr) {
       always_assert_type_log(self_type == type::java_lang_Object(), INVALID_DEX,
                              "Only Object has super=null");

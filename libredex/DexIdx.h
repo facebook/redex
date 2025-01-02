@@ -84,12 +84,9 @@ class DexIdx {
   }
 
   DexType* get_typeidx(uint32_t typeidx) {
-    if (typeidx == DEX_NO_INDEX) {
-      return nullptr;
-    }
-
     always_assert_type_log(
-        typeidx < m_type_ids_size, RedexError::INVALID_DEX,
+        typeidx < m_type_ids_size && typeidx != DEX_NO_INDEX,
+        RedexError::INVALID_DEX,
         "Type index is out of bound. index: %d, cache size: %d", typeidx,
         m_type_ids_size);
 
@@ -98,6 +95,11 @@ class DexIdx {
     }
     redex_assert(m_type_cache[typeidx]);
     return m_type_cache[typeidx];
+  }
+
+  DexType* get_nullable_typeidx(uint32_t typeidx) {
+    if (typeidx == DEX_NO_INDEX) return nullptr;
+    return get_typeidx(typeidx);
   }
 
   DexFieldRef* get_fieldidx(uint32_t fidx) {
