@@ -13,48 +13,48 @@
 #include "DexStats.h"
 #include "DexUtil.h"
 
-namespace dex::loader::details {
-struct Accessor;
-} // namespace dex::loader::details
-
 class DexLoader {
  public:
   using DataUPtr =
       std::unique_ptr<const uint8_t, std::function<void(const uint8_t*)>>;
 
+  enum class Parallel { kYes, kNo };
+
  private:
   const dex_header* m_dh;
   std::unique_ptr<DexIdx> m_idx;
   const dex_class_def* m_class_defs;
-  DexClasses* m_classes;
+  DexClasses m_classes;
   DataUPtr m_data;
   size_t m_file_size;
   const DexLocation* m_location;
+  dex_stats_t m_stats{};
+  int m_support_dex_version;
+  Parallel m_parallel;
 
  public:
-  enum class Parallel { kYes, kNo };
-
   static DexLoader create(const DexLocation* location,
                           DataUPtr data,
-                          size_t size);
+                          size_t size,
+                          int support_dex_version = 35,
+                          Parallel parallel = Parallel::kYes);
 
+  DexClasses& get_classes() { return m_classes; }
   DexIdx* get_idx() { return m_idx.get(); }
+  dex_stats_t& get_stats() { return m_stats; }
 
  private:
-  explicit DexLoader(const DexLocation* location, DataUPtr data, size_t size);
+  explicit DexLoader(const DexLocation* location,
+                     DataUPtr data,
+                     size_t size,
+                     int support_dex_version,
+                     Parallel parallel);
 
-  DexClasses load_dex(dex_stats_t* stats,
-                      int support_dex_version,
-                      Parallel p = Parallel::kYes);
-  DexClasses load_dex(dex_stats_t* stats, Parallel p = Parallel::kYes);
+  void load_dex();
 
   void load_dex_class(int num);
 
-  void gather_input_stats(dex_stats_t* stats, const dex_header* dh);
-
-  friend struct dex::loader::details::Accessor;
-  friend struct Dex038TestAccessor;
-  friend struct Dex039TestAccessor;
+  void gather_input_stats();
 };
 
 DexClasses load_classes_from_dex(

@@ -75,26 +75,14 @@ std::pair<DexLoader::DataUPtr, size_t> mmap_data(const char* dexfile) {
   return std::make_pair(std::move(data), mapped_file_ptr->size());
 }
 
-struct Dex038TestAccessor {
-  DexLoader dl;
-  dex_stats_t stats{};
-  DexClasses classes;
-  DexIdx* idx;
-
-  explicit Dex038TestAccessor(const char* dexfile)
-      : dl([&]() {
-          auto data = mmap_data(dexfile);
-          return DexLoader::create(DexLocation::make_location("", dexfile),
-                                   std::move(data.first),
-                                   data.second);
-        }()),
-        classes(dl.load_dex(&stats, 38)),
-        idx(dl.get_idx()) {}
-};
-
 void testReadDex(const char* dexfile) {
-  Dex038TestAccessor dl(dexfile);
-  auto idx = dl.idx;
+  auto data = mmap_data(dexfile);
+  auto dl = DexLoader::create(DexLocation::make_location("", dexfile),
+                              std::move(data.first),
+                              data.second,
+                              38,
+                              DexLoader::Parallel::kYes);
+  auto idx = dl.get_idx();
 
   EXPECT_EQ(idx->get_callsite_ids_size(), 7);
   EXPECT_EQ(idx->get_methodhandle_ids_size(), 8);

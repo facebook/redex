@@ -50,23 +50,6 @@ std::pair<DexLoader::DataUPtr, size_t> mmap_data(const char* dexfile) {
   return std::make_pair(std::move(data), mapped_file_ptr->size());
 }
 
-struct Dex039TestAccessor {
-  DexLoader dl;
-  dex_stats_t stats{};
-  DexClasses classes;
-  DexIdx* idx;
-
-  explicit Dex039TestAccessor(const char* dexfile)
-      : dl([&]() {
-          auto data = mmap_data(dexfile);
-          return DexLoader::create(DexLocation::make_location("", dexfile),
-                                   std::move(data.first),
-                                   data.second);
-        }()),
-        classes(dl.load_dex(&stats, 39)),
-        idx(dl.get_idx()) {}
-};
-
 TEST(Dex039Test, ReadDex039) {
   // const-method-handle.dex is sourced from https://fburl.com/prikp912
   // ground truth dexdump is found at https://fburl.com/27ekisha
@@ -77,9 +60,14 @@ TEST(Dex039Test, ReadDex039) {
   g_redex = new RedexContext();
 
   // bare minium test to ensure the dex loads okay
-  Dex039TestAccessor dl(dexfile);
-  const auto& classes = dl.classes;
-  auto idx = dl.idx;
+  auto data = mmap_data(dexfile);
+  auto dl = DexLoader::create(DexLocation::make_location("", dexfile),
+                              std::move(data.first),
+                              data.second,
+                              39,
+                              DexLoader::Parallel::kYes);
+  const auto& classes = dl.get_classes();
+  auto idx = dl.get_idx();
 
   // ensure that instructions can be shown
   std::ostringstream o;
