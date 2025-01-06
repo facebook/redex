@@ -479,6 +479,7 @@ libopt_la_SOURCES = \
 	opt/reduce-array-literals/ReduceArrayLiterals.cpp \
 	opt/reduce-boolean-branches/ReduceBooleanBranchesPass.cpp \
 	opt/reduce-gotos/ReduceGotos.cpp \
+	opt/reduce-sparse-switches/ReduceSparseSwitchesPass.cpp \
 	opt/resolve-refs/ResolveRefsPass.cpp \
 	opt/resolve-refs/ExternalRefsManglingPass.cpp \
 	opt/resolve-refs/SpecializeRtype.cpp \

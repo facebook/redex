@@ -143,6 +143,7 @@ class DexType;
   TM(RMUF)              \
   TM(RMUNINST)          \
   TM(ROR)               \
+  TM(RSS)               \
   TM(RP)                \
   TM(SBCC)              \
   TM(SDIS)              \
