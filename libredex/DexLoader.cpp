@@ -255,12 +255,11 @@ void validate_type_ids_table(DexIdx* idx, const dex_header* dh) {
     always_assert_type_log(type_id.string_idx < str_size, INVALID_DEX,
                            "Type index out of bounds");
 
-    // This will preload the string, but otherwise we duplicate some nontrivial
-    // decode checking.
-    auto* dex_str = idx->get_stringidx(type_id.string_idx);
-    always_assert_type_log(type::is_valid(dex_str->str()), INVALID_DEX,
-                           "%s is not a valid type descriptor",
-                           dex_str->c_str());
+    // Don't preload the string, just check the plain data.
+    auto dex_str =
+        idx->get_string_data(type_id.string_idx, /*utfsize=*/nullptr);
+    always_assert_type_log(type::is_valid(dex_str), INVALID_DEX,
+                           "%s is not a valid type descriptor", dex_str.data());
   }
 }
 

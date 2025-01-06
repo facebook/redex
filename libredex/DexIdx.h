@@ -65,6 +65,7 @@ class DexIdx {
  public:
   explicit DexIdx(const dex_header* dh);
 
+  std::string_view get_string_data(uint32_t stridx, uint32_t* utfsize) const;
   const DexString* get_stringidx(uint32_t stridx) {
     always_assert_type_log(
         stridx < m_string_ids_size, RedexError::INVALID_DEX,

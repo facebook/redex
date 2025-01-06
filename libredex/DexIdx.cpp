@@ -115,7 +115,8 @@ DexMethodHandle* DexIdx::get_methodhandleidx_fromdex(uint32_t mhidx) {
   }
 }
 
-const DexString* DexIdx::get_stringidx_fromdex(uint32_t stridx) {
+std::string_view DexIdx::get_string_data(uint32_t stridx,
+                                         uint32_t* utfsize) const {
   redex_assert(stridx < m_string_ids_size);
   uint32_t stroff = m_string_ids[stridx].offset;
   // Bounds check is conservative. May incorrectly reject short strings
@@ -125,7 +126,10 @@ const DexString* DexIdx::get_stringidx_fromdex(uint32_t stridx) {
   const uint8_t* dstr = m_dexbase + stroff;
   /* Strip off uleb128 size encoding */
 
-  uint32_t utfsize = read_uleb128(&dstr);
+  uint32_t utfsize_local = read_uleb128(&dstr);
+  if (utfsize != nullptr) {
+    *utfsize = utfsize_local;
+  }
   // Find null terminator.
   auto null_cur = dstr;
   while (*null_cur != '\0' && null_cur < m_dexbase + get_file_size()) {
@@ -133,9 +137,12 @@ const DexString* DexIdx::get_stringidx_fromdex(uint32_t stridx) {
   }
   always_assert_type_log(null_cur < m_dexbase + get_file_size(), INVALID_DEX,
                          "Missing null terminator");
-
-  auto ret = DexString::make_string(
-      std::string_view((const char*)dstr, null_cur - dstr));
+  return std::string_view((const char*)dstr, null_cur - dstr);
+}
+const DexString* DexIdx::get_stringidx_fromdex(uint32_t stridx) {
+  uint32_t utfsize;
+  auto str_data = get_string_data(stridx, &utfsize);
+  auto ret = DexString::make_string(str_data);
   always_assert_type_log(
       ret->length() == utfsize,
       INVALID_DEX,
