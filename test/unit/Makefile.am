@@ -140,6 +140,7 @@ check_PROGRAMS = \
     reduce_array_literals_test \
     reduce_boolean_branches_test \
     reduce_gotos_test \
+    reduce_sparse_switches_test \
     reflection_analysis_test \
     reg_alloc_test \
     registers_test \
@@ -426,6 +427,8 @@ reduce_boolean_branches_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 reduce_gotos_test_SOURCES = ReduceGotosTest.cpp
 reduce_gotos_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+reduce_sparse_switches_test_SOURCES = ReduceSparseSwitchesTest.cpp
 
 reflection_analysis_test_SOURCES = ReflectionAnalysisTest.cpp
 reflection_analysis_test_LDADD = $(COMMON_MOCK_TEST_LIBS)

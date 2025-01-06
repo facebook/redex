@@ -58,6 +58,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/reduce-array-literals \
 	-I$(top_srcdir)/opt/reduce-boolean-branches \
 	-I$(top_srcdir)/opt/reduce-gotos \
+	-I$(top_srcdir)/opt/reduce-sparse-switches \
 	-I$(top_srcdir)/opt/redundant_move_elimination \
 	-I$(top_srcdir)/opt/regalloc \
 	-I$(top_srcdir)/opt/remove-apilevel-checks \
