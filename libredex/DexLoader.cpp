@@ -144,11 +144,9 @@ void align_ptr(std::string_view& ptr, const size_t alignment) {
   }
 }
 
-} // namespace
-
-static void validate_dex_header(const dex_header* dh,
-                                size_t dexsize,
-                                int support_dex_version) {
+void validate_dex_header(const dex_header* dh,
+                         size_t dexsize,
+                         int support_dex_version) {
   DEX_ASSERT(sizeof(dex_header) <= dexsize)
       .set_message("Header size is larger than file size")
       .add_info("header_size", sizeof(dex_header))
@@ -244,7 +242,27 @@ static void validate_dex_header(const dex_header* dh,
                                        dexsize, "class_defs");
 }
 
-namespace {
+void validate_type_ids_table(DexIdx* idx, const dex_header* dh) {
+  // The sizes of type and string table have been checked here. We iterate
+  // over the table directly instead of using the DexIdx functions as we
+  // do not want to load `DexType`s at this point.
+  const dex_type_id* type_ids_base =
+      (const dex_type_id*)(reinterpret_cast<const uint8_t*>(dh) +
+                           dh->type_ids_off);
+  const auto str_size = dh->string_ids_size;
+  for (size_t i = 0; i != dh->type_ids_size; ++i) {
+    auto& type_id = type_ids_base[i];
+    always_assert_type_log(type_id.string_idx < str_size, INVALID_DEX,
+                           "Type index out of bounds");
+
+    // This will preload the string, but otherwise we duplicate some nontrivial
+    // decode checking.
+    auto* dex_str = idx->get_stringidx(type_id.string_idx);
+    always_assert_type_log(type::is_valid(dex_str->str()), INVALID_DEX,
+                           "%s is not a valid type descriptor",
+                           dex_str->c_str());
+  }
+}
 
 template <typename T>
 const T* get_and_consume(std::string_view& ptr, size_t align) {
@@ -706,10 +724,16 @@ void DexLoader::load_dex_class(int num) {
 
 void DexLoader::load_dex() {
   validate_dex_header(m_dh, m_file_size, m_support_dex_version);
+
+  // Populate DexIdx because it has some checking capabilities that will be
+  // useful.
+  m_idx = std::make_unique<DexIdx>(m_dh);
+
+  validate_type_ids_table(m_idx.get(), m_dh);
+
   if (m_dh->class_defs_size == 0) {
     return;
   }
-  m_idx = std::make_unique<DexIdx>(m_dh);
   auto off = (uint64_t)m_dh->class_defs_off;
   m_class_defs =
       reinterpret_cast<const dex_class_def*>((const uint8_t*)m_dh + off);

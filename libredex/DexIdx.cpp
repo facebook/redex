@@ -14,6 +14,7 @@
 #include "DexCallSite.h"
 #include "DexClass.h"
 #include "DexMethodHandle.h"
+#include "TypeUtil.h"
 
 #define INIT_DMAP_ID(TYPE)                                                \
   always_assert_type_log(dh->TYPE##_ids_off < dh->file_size, INVALID_DEX, \
@@ -148,6 +149,8 @@ DexType* DexIdx::get_typeidx_fromdex(uint32_t typeidx) {
   redex_assert(typeidx < m_type_ids_size);
   uint32_t stridx = m_type_ids[typeidx].string_idx;
   auto dexstr = get_stringidx(stridx);
+  always_assert_type_log(type::is_valid(dexstr->str()), INVALID_DEX,
+                         "Not a valid type descriptor");
   return DexType::make_type(dexstr);
 }
 
