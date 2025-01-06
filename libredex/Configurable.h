@@ -194,6 +194,7 @@ class Configurable {
 
   /** Returns help text explaining this Configurable's purpose. */
   virtual std::string get_config_doc() { return default_doc(); };
+  static std::string trim(std::string s);
 
   /**
    * Configurables should override this function in order to declare their
