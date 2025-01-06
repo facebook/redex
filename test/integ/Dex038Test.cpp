@@ -50,11 +50,22 @@ static const char* STRING_CLASS_NAME = "Ljava/lang/String;";
 static const char* VOID_RETURN_OBJECT_PROTO = "()Ljava/lang/Object;";
 static const char* VOID_RETURN_STRING_PROTO = "()Ljava/lang/String;";
 
+// This is temporary for refactoring purposes.
+struct Dex038TestAccessor {
+  DexLoader dl;
+  dex_stats_t stats{};
+  DexClasses classes;
+  DexIdx* idx;
+
+  explicit Dex038TestAccessor(const char* dexfile)
+      : dl(DexLocation::make_location("", dexfile)),
+        classes(dl.load_dex(dexfile, &stats, 38)),
+        idx(dl.get_idx()) {}
+};
+
 void testReadDex(const char* dexfile) {
-  DexLoader dl(DexLocation::make_location("", dexfile));
-  dex_stats_t stats{{0}};
-  auto classes = dl.load_dex(dexfile, &stats, 38);
-  auto idx = dl.get_idx();
+  Dex038TestAccessor dl(dexfile);
+  auto idx = dl.idx;
 
   EXPECT_EQ(idx->get_callsite_ids_size(), 7);
   EXPECT_EQ(idx->get_methodhandle_ids_size(), 8);
@@ -325,8 +336,12 @@ TEST(Dex038Test, ReadWriteDex038) {
   DexMetadata dm;
   dm.set_id("classes");
   DexStore root_store(dm);
-  root_store.add_classes(load_classes_from_dex(
-      DexLocation::make_location("dex", dexfile), true, true, 38));
+  root_store.add_classes(
+      load_classes_from_dex(DexLocation::make_location("dex", dexfile),
+                            /*stats=*/nullptr,
+                            true,
+                            true,
+                            38));
   DexClasses& classes = root_store.get_dexen().back();
   std::vector<DexStore> stores;
   stores.emplace_back(std::move(root_store));

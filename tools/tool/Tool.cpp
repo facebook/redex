@@ -33,6 +33,7 @@ void load_store_dexen(DexStore& store,
     }
     DexClasses classes =
         load_classes_from_dex(DexLocation::make_location("", file_path),
+                              /*stats=*/nullptr,
                               balloon,
                               throw_on_balloon_error,
                               support_dex_version);

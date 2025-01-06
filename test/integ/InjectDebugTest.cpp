@@ -79,7 +79,7 @@ class InjectDebugTest : public ::testing::Test {
     DexStore store("classes");
     store.add_classes(
         load_classes_from_dex(DexLocation::make_location("dex", path),
-                              /* balloon */ false));
+                              /*stats=*/nullptr, /* balloon */ false));
     return store.get_dexen()[0];
   }
 

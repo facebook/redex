@@ -25,6 +25,19 @@
 #include "Show.h"
 #include "Walkers.h"
 
+// This is temporary for refactoring purposes.
+struct Dex039TestAccessor {
+  DexLoader dl;
+  dex_stats_t stats{};
+  DexClasses classes;
+  DexIdx* idx;
+
+  explicit Dex039TestAccessor(const char* dexfile)
+      : dl(DexLocation::make_location("", dexfile)),
+        classes(dl.load_dex(dexfile, &stats, 39)),
+        idx(dl.get_idx()) {}
+};
+
 TEST(Dex039Test, ReadDex039) {
   // const-method-handle.dex is sourced from https://fburl.com/prikp912
   // ground truth dexdump is found at https://fburl.com/27ekisha
@@ -33,12 +46,11 @@ TEST(Dex039Test, ReadDex039) {
   EXPECT_NE(nullptr, dexfile);
 
   g_redex = new RedexContext();
-  DexLoader dl(DexLocation::make_location("", dexfile));
-  dex_stats_t stats{{0}};
 
   // bare minium test to ensure the dex loads okay
-  auto classes = dl.load_dex(dexfile, &stats, 39);
-  auto idx = dl.get_idx();
+  Dex039TestAccessor dl(dexfile);
+  const auto& classes = dl.classes;
+  auto idx = dl.idx;
 
   // ensure that instructions can be shown
   std::ostringstream o;

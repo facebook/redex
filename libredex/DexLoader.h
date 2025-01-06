@@ -15,6 +15,10 @@
 #include "DexStats.h"
 #include "DexUtil.h"
 
+namespace dex::loader::details {
+struct Accessor;
+} // namespace dex::loader::details
+
 class DexLoader {
   std::unique_ptr<DexIdx> m_idx;
   const dex_class_def* m_class_defs;
@@ -25,9 +29,15 @@ class DexLoader {
  public:
   enum class Parallel { kYes, kNo };
 
+  static DexLoader create(const DexLocation* location);
+
+  DexIdx* get_idx() { return m_idx.get(); }
+
+ private:
   explicit DexLoader(const DexLocation* location);
 
   const dex_header* get_dex_header(const char* file_name);
+
   DexClasses load_dex(const char* file_name,
                       dex_stats_t* stats,
                       int support_dex_version,
@@ -35,20 +45,19 @@ class DexLoader {
   DexClasses load_dex(const dex_header* dh,
                       dex_stats_t* stats,
                       Parallel p = Parallel::kYes);
+
   void load_dex_class(int num);
+
   void gather_input_stats(dex_stats_t* stats, const dex_header* dh);
-  DexIdx* get_idx() { return m_idx.get(); }
+
+  friend struct dex::loader::details::Accessor;
+  friend struct Dex038TestAccessor;
+  friend struct Dex039TestAccessor;
 };
 
 DexClasses load_classes_from_dex(
     const DexLocation* location,
-    bool balloon = true,
-    bool throw_on_balloon_error = true,
-    int support_dex_version = 35,
-    DexLoader::Parallel p = DexLoader::Parallel::kYes);
-DexClasses load_classes_from_dex(
-    const DexLocation* location,
-    dex_stats_t* stats,
+    dex_stats_t* stats = nullptr,
     bool balloon = true,
     bool throw_on_balloon_error = true,
     int support_dex_version = 35,

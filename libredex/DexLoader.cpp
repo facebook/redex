@@ -28,6 +28,10 @@ DexLoader::DexLoader(const DexLocation* location)
       m_file(new boost::iostreams::mapped_file()),
       m_location(location) {}
 
+DexLoader DexLoader::create(const DexLocation* location) {
+  return DexLoader(location);
+}
+
 namespace {
 
 // Lazy eval system. Because of the map interface this is a bit
@@ -809,15 +813,52 @@ static void balloon_all(const Scope& scope,
   }
 }
 
-DexClasses load_classes_from_dex(const DexLocation* location,
-                                 bool balloon,
-                                 bool throw_on_balloon_error,
-                                 int support_dex_version,
-                                 DexLoader::Parallel p) {
-  dex_stats_t stats;
-  return load_classes_from_dex(location, &stats, balloon,
-                               throw_on_balloon_error, support_dex_version, p);
-}
+namespace dex::loader::details {
+
+struct Accessor {
+  static DexClasses load_classes_from_dex(const DexLocation* location,
+                                          dex_stats_t* stats,
+                                          bool balloon,
+                                          bool throw_on_balloon_error,
+                                          int support_dex_version,
+                                          DexLoader::Parallel p) {
+    dex_stats_t tmp_stats;
+    if (stats == nullptr) {
+      stats = &tmp_stats;
+    }
+
+    TRACE(MAIN, 1, "Loading classes from dex from %s",
+          location->get_file_name().c_str());
+    DexLoader dl = DexLoader::create(location);
+    auto classes = dl.load_dex(location->get_file_name().c_str(), stats,
+                               support_dex_version, p);
+    if (balloon) {
+      balloon_all(classes, throw_on_balloon_error, p);
+    }
+    return classes;
+  }
+
+  static DexClasses load_classes_from_dex(const dex_header* dh,
+                                          const DexLocation* location,
+                                          bool balloon,
+                                          bool throw_on_balloon_error,
+                                          DexLoader::Parallel p) {
+    DexLoader dl = DexLoader::create(location);
+    auto classes = dl.load_dex(dh, nullptr, p);
+    if (balloon) {
+      balloon_all(classes, throw_on_balloon_error, p);
+    }
+    return classes;
+  }
+
+  static std::string load_dex_magic_from_dex(const DexLocation* location) {
+    DexLoader dl = DexLoader::create(location);
+    auto dh = dl.get_dex_header(location->get_file_name().c_str());
+    return dh->magic;
+  }
+};
+
+} // namespace dex::loader::details
 
 DexClasses load_classes_from_dex(const DexLocation* location,
                                  dex_stats_t* stats,
@@ -825,15 +866,8 @@ DexClasses load_classes_from_dex(const DexLocation* location,
                                  bool throw_on_balloon_error,
                                  int support_dex_version,
                                  DexLoader::Parallel p) {
-  TRACE(MAIN, 1, "Loading classes from dex from %s",
-        location->get_file_name().c_str());
-  DexLoader dl(location);
-  auto classes = dl.load_dex(location->get_file_name().c_str(), stats,
-                             support_dex_version, p);
-  if (balloon) {
-    balloon_all(classes, throw_on_balloon_error, p);
-  }
-  return classes;
+  return dex::loader::details::Accessor::load_classes_from_dex(
+      location, stats, balloon, throw_on_balloon_error, support_dex_version, p);
 }
 
 DexClasses load_classes_from_dex(const dex_header* dh,
@@ -841,18 +875,12 @@ DexClasses load_classes_from_dex(const dex_header* dh,
                                  bool balloon,
                                  bool throw_on_balloon_error,
                                  DexLoader::Parallel p) {
-  DexLoader dl(location);
-  auto classes = dl.load_dex(dh, nullptr, p);
-  if (balloon) {
-    balloon_all(classes, throw_on_balloon_error, p);
-  }
-  return classes;
+  return dex::loader::details::Accessor::load_classes_from_dex(
+      dh, location, balloon, throw_on_balloon_error, p);
 }
 
 std::string load_dex_magic_from_dex(const DexLocation* location) {
-  DexLoader dl(location);
-  auto dh = dl.get_dex_header(location->get_file_name().c_str());
-  return dh->magic;
+  return dex::loader::details::Accessor::load_dex_magic_from_dex(location);
 }
 
 void balloon_for_test(const Scope& scope) {

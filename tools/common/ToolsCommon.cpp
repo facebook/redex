@@ -145,7 +145,6 @@ void load_intermediate_dex(const std::string& input_ir_dir,
                            const Json::Value& dex_files,
                            DexStoresVector& stores) {
   Timer t("Load intermediate dex");
-  dex_stats_t dex_stats;
   for (const Json::Value& store_files : dex_files) {
     std::string store_name = store_files["name"].asString();
     DexStore store(store_name);
@@ -155,8 +154,7 @@ void load_intermediate_dex(const std::string& input_ir_dir,
       location /= file_name.asString();
       // `string().c_str()` to get guaranteed `const char*`.
       DexClasses classes = load_classes_from_dex(
-          DexLocation::make_location(store_name, location.string()),
-          &dex_stats);
+          DexLocation::make_location(store_name, location.string()));
       stores.back().add_classes(std::move(classes));
     }
   }
