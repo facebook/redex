@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <boost/iostreams/device/mapped_file.hpp>
-
 #include "DexClass.h"
 #include "DexDefs.h"
 #include "DexIdx.h"
@@ -20,31 +18,35 @@ struct Accessor;
 } // namespace dex::loader::details
 
 class DexLoader {
+ public:
+  using DataUPtr =
+      std::unique_ptr<const uint8_t, std::function<void(const uint8_t*)>>;
+
+ private:
+  const dex_header* m_dh;
   std::unique_ptr<DexIdx> m_idx;
   const dex_class_def* m_class_defs;
   DexClasses* m_classes;
-  std::unique_ptr<boost::iostreams::mapped_file> m_file;
+  DataUPtr m_data;
+  size_t m_file_size;
   const DexLocation* m_location;
 
  public:
   enum class Parallel { kYes, kNo };
 
-  static DexLoader create(const DexLocation* location);
+  static DexLoader create(const DexLocation* location,
+                          DataUPtr data,
+                          size_t size);
 
   DexIdx* get_idx() { return m_idx.get(); }
 
  private:
-  explicit DexLoader(const DexLocation* location);
+  explicit DexLoader(const DexLocation* location, DataUPtr data, size_t size);
 
-  const dex_header* get_dex_header(const char* file_name);
-
-  DexClasses load_dex(const char* file_name,
-                      dex_stats_t* stats,
+  DexClasses load_dex(dex_stats_t* stats,
                       int support_dex_version,
                       Parallel p = Parallel::kYes);
-  DexClasses load_dex(const dex_header* dh,
-                      dex_stats_t* stats,
-                      Parallel p = Parallel::kYes);
+  DexClasses load_dex(dex_stats_t* stats, Parallel p = Parallel::kYes);
 
   void load_dex_class(int num);
 

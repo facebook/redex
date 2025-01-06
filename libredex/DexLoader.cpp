@@ -7,6 +7,8 @@
 
 #include "DexLoader.h"
 
+#include <boost/iostreams/device/mapped_file.hpp>
+
 #include "AggregateException.h"
 #include "DexAccess.h"
 #include "DexCallSite.h"
@@ -23,16 +25,32 @@
 #include <stdexcept>
 #include <vector>
 
-DexLoader::DexLoader(const DexLocation* location)
-    : m_idx(nullptr),
-      m_file(new boost::iostreams::mapped_file()),
-      m_location(location) {}
-
-DexLoader DexLoader::create(const DexLocation* location) {
-  return DexLoader(location);
-}
-
 namespace {
+
+// Helper to get a DataUPtr that's backed by an mmap.
+std::pair<DexLoader::DataUPtr, size_t> mmap_data(const DexLocation* location) {
+  auto mapped_file = std::make_unique<boost::iostreams::mapped_file>();
+
+  mapped_file->open(location->get_file_name(),
+                    boost::iostreams::mapped_file::readonly);
+  if (!mapped_file->is_open()) {
+    fprintf(stderr, "error: cannot create memory-mapped file: %s\n",
+            location->get_file_name().c_str());
+    exit(EXIT_FAILURE);
+  }
+  auto mapped_file_ptr = mapped_file.get();
+  auto data = DexLoader::DataUPtr((const uint8_t*)mapped_file->const_data(),
+                                  [mapped_file_ptr](auto*) {
+                                    // Data is mapped, don't actually destroy
+                                    // that, close the file and delete that.
+                                    mapped_file_ptr->close();
+                                    delete mapped_file_ptr;
+                                  });
+  // At this point we can release mapped_file.
+  (void)mapped_file.release();
+
+  return std::make_pair(std::move(data), mapped_file_ptr->size());
+}
 
 // Lazy eval system. Because of the map interface this is a bit
 // annoying to implement nicely. Current design uses RAII
@@ -349,7 +367,7 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
   }
 
   const dex_map_list* map_list =
-      reinterpret_cast<const dex_map_list*>(m_file->const_data() + dh->map_off);
+      reinterpret_cast<const dex_map_list*>(m_data.get() + dh->map_off);
   bool header_seen = false;
   uint32_t header_index = 0;
   for (uint32_t i = 0; i < map_list->size; i++) {
@@ -653,7 +671,7 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
 }
 
 void DexLoader::load_dex_class(int num) {
-  size_t dexsize = m_file->size();
+  auto dexsize = m_file_size;
   const dex_class_def* cdef = m_class_defs + num;
   auto idx = m_idx.get();
 
@@ -689,40 +707,27 @@ void DexLoader::load_dex_class(int num) {
   m_classes->at(num) = dc;
 }
 
-const dex_header* DexLoader::get_dex_header(const char* file_name) {
-  m_file->open(file_name, boost::iostreams::mapped_file::readonly);
-  if (!m_file->is_open()) {
-    fprintf(stderr, "error: cannot create memory-mapped file: %s\n", file_name);
-    exit(EXIT_FAILURE);
-  }
-  return reinterpret_cast<const dex_header*>(m_file->const_data());
-}
-
-DexClasses DexLoader::load_dex(const char* file_name,
-                               dex_stats_t* stats,
+DexClasses DexLoader::load_dex(dex_stats_t* stats,
                                int support_dex_version,
                                Parallel p) {
-  const dex_header* dh = get_dex_header(file_name);
-  validate_dex_header(dh, m_file->size(), support_dex_version);
-  return load_dex(dh, stats, p);
+  validate_dex_header(m_dh, m_file_size, support_dex_version);
+  return load_dex(stats, p);
 }
 
-DexClasses DexLoader::load_dex(const dex_header* dh,
-                               dex_stats_t* stats,
-                               Parallel p) {
-  if (dh->class_defs_size == 0) {
+DexClasses DexLoader::load_dex(dex_stats_t* stats, Parallel p) {
+  if (m_dh->class_defs_size == 0) {
     return DexClasses(0);
   }
-  m_idx = std::make_unique<DexIdx>(dh);
-  auto off = (uint64_t)dh->class_defs_off;
+  m_idx = std::make_unique<DexIdx>(m_dh);
+  auto off = (uint64_t)m_dh->class_defs_off;
   m_class_defs =
-      reinterpret_cast<const dex_class_def*>((const uint8_t*)dh + off);
-  DexClasses classes(dh->class_defs_size);
+      reinterpret_cast<const dex_class_def*>((const uint8_t*)m_dh + off);
+  DexClasses classes(m_dh->class_defs_size);
   m_classes = &classes;
 
   switch (p) {
   case Parallel::kNo: {
-    for (size_t i = 0; i < dh->class_defs_size; ++i) {
+    for (size_t i = 0; i < m_dh->class_defs_size; ++i) {
       load_dex_class(i);
     }
     break;
@@ -732,7 +737,7 @@ DexClasses DexLoader::load_dex(const dex_header* dh,
     std::vector<std::exception_ptr> all_exceptions;
     std::mutex all_exceptions_mutex;
     workqueue_run_for<size_t>(
-        0, dh->class_defs_size,
+        0, m_dh->class_defs_size,
         [&all_exceptions, &all_exceptions_mutex, this](uint32_t num) {
           try {
             load_dex_class(num);
@@ -752,7 +757,7 @@ DexClasses DexLoader::load_dex(const dex_header* dh,
   }
   }
 
-  gather_input_stats(stats, dh);
+  gather_input_stats(stats, m_dh);
 
   // Remove nulls from the classes list. They may have been introduced by benign
   // duplicate classes.
@@ -760,6 +765,20 @@ DexClasses DexLoader::load_dex(const dex_header* dh,
                 classes.end());
 
   return classes;
+}
+
+DexLoader::DexLoader(const DexLocation* location, DataUPtr data, size_t size)
+    : m_dh((const dex_header*)data.get()),
+      m_idx(nullptr),
+      m_data(std::move(data)),
+      m_file_size(size),
+      m_location(location) {}
+
+DexLoader DexLoader::create(const DexLocation* location,
+                            DataUPtr data,
+                            size_t size) {
+  // TODO: Validation of size.
+  return DexLoader(location, std::move(data), size);
 }
 
 static void balloon_all(const Scope& scope,
@@ -829,9 +848,12 @@ struct Accessor {
 
     TRACE(MAIN, 1, "Loading classes from dex from %s",
           location->get_file_name().c_str());
-    DexLoader dl = DexLoader::create(location);
-    auto classes = dl.load_dex(location->get_file_name().c_str(), stats,
-                               support_dex_version, p);
+
+    auto data = mmap_data(location);
+
+    DexLoader dl =
+        DexLoader::create(location, std::move(data.first), data.second);
+    auto classes = dl.load_dex(stats, support_dex_version, p);
     if (balloon) {
       balloon_all(classes, throw_on_balloon_error, p);
     }
@@ -843,8 +865,15 @@ struct Accessor {
                                           bool balloon,
                                           bool throw_on_balloon_error,
                                           DexLoader::Parallel p) {
-    DexLoader dl = DexLoader::create(location);
-    auto classes = dl.load_dex(dh, nullptr, p);
+    // We don't actually own things here.
+    auto non_owning = DexLoader::DataUPtr((const uint8_t*)dh, [](auto*) {});
+
+    // TODO: This is dangerous and we should change the API.
+    auto size = dh->file_size;
+
+    DexLoader dl = DexLoader::create(location, std::move(non_owning), size);
+
+    auto classes = dl.load_dex(nullptr, p);
     if (balloon) {
       balloon_all(classes, throw_on_balloon_error, p);
     }
