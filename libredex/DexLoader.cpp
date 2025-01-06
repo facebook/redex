@@ -780,6 +780,14 @@ DexLoader DexLoader::create(const DexLocation* location,
   return dl;
 }
 
+DexLoader DexLoader::create(const DexLocation* location,
+                            int support_dex_version,
+                            Parallel parallel) {
+  auto data = mmap_data(location);
+  return create(location, std::move(data.first), data.second,
+                support_dex_version, parallel);
+}
+
 static void balloon_all(const Scope& scope,
                         bool throw_on_error,
                         DexLoader::Parallel p) {
@@ -840,10 +848,7 @@ DexClasses load_classes_from_dex(const DexLocation* location,
   TRACE(MAIN, 1, "Loading classes from dex from %s",
         location->get_file_name().c_str());
 
-  auto data = mmap_data(location);
-
-  DexLoader dl = DexLoader::create(location, std::move(data.first), data.second,
-                                   support_dex_version, p);
+  DexLoader dl = DexLoader::create(location, support_dex_version, p);
   if (balloon) {
     balloon_all(dl.get_classes(), throw_on_balloon_error, p);
   }

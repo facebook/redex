@@ -8,7 +8,6 @@
 #include <gtest/gtest.h>
 
 #include <boost/filesystem.hpp>
-#include <boost/iostreams/device/mapped_file.hpp>
 
 #include "DexCallSite.h"
 #include "DexClass.h"
@@ -51,37 +50,9 @@ static const char* STRING_CLASS_NAME = "Ljava/lang/String;";
 static const char* VOID_RETURN_OBJECT_PROTO = "()Ljava/lang/Object;";
 static const char* VOID_RETURN_STRING_PROTO = "()Ljava/lang/String;";
 
-// This is temporary for refactoring purposes.
-// Helper to get a DataUPtr that's backed by an mmap.
-std::pair<DexLoader::DataUPtr, size_t> mmap_data(const char* dexfile) {
-  auto mapped_file = std::make_unique<boost::iostreams::mapped_file>();
-
-  mapped_file->open(dexfile, boost::iostreams::mapped_file::readonly);
-  if (!mapped_file->is_open()) {
-    fprintf(stderr, "error: cannot create memory-mapped file: %s\n", dexfile);
-    exit(EXIT_FAILURE);
-  }
-  auto mapped_file_ptr = mapped_file.get();
-  auto data = DexLoader::DataUPtr((const uint8_t*)mapped_file->const_data(),
-                                  [mapped_file_ptr](auto*) {
-                                    // Data is mapped, don't actually destroy
-                                    // that, close the file and delete that.
-                                    mapped_file_ptr->close();
-                                    delete mapped_file_ptr;
-                                  });
-  // At this point we can release mapped_file.
-  (void)mapped_file.release();
-
-  return std::make_pair(std::move(data), mapped_file_ptr->size());
-}
-
 void testReadDex(const char* dexfile) {
-  auto data = mmap_data(dexfile);
-  auto dl = DexLoader::create(DexLocation::make_location("", dexfile),
-                              std::move(data.first),
-                              data.second,
-                              38,
-                              DexLoader::Parallel::kYes);
+  auto dl = DexLoader::create(
+      DexLocation::make_location("", dexfile), 38, DexLoader::Parallel::kYes);
   auto idx = dl.get_idx();
 
   EXPECT_EQ(idx->get_callsite_ids_size(), 7);

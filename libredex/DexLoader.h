@@ -39,6 +39,11 @@ class DexLoader {
                           int support_dex_version = 35,
                           Parallel parallel = Parallel::kYes);
 
+  // Convenience API to load from file.
+  static DexLoader create(const DexLocation* location,
+                          int support_dex_version = 35,
+                          Parallel parallel = Parallel::kYes);
+
   DexClasses& get_classes() { return m_classes; }
   DexIdx* get_idx() { return m_idx.get(); }
   dex_stats_t& get_stats() { return m_stats; }
