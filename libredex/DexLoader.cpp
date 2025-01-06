@@ -850,12 +850,6 @@ struct Accessor {
     }
     return classes;
   }
-
-  static std::string load_dex_magic_from_dex(const DexLocation* location) {
-    DexLoader dl = DexLoader::create(location);
-    auto dh = dl.get_dex_header(location->get_file_name().c_str());
-    return dh->magic;
-  }
 };
 
 } // namespace dex::loader::details
@@ -880,7 +874,18 @@ DexClasses load_classes_from_dex(const dex_header* dh,
 }
 
 std::string load_dex_magic_from_dex(const DexLocation* location) {
-  return dex::loader::details::Accessor::load_dex_magic_from_dex(location);
+  boost::iostreams::mapped_file file;
+  file.open(location->get_file_name().c_str(),
+            boost::iostreams::mapped_file::readonly);
+  if (!file.is_open()) {
+    fprintf(stderr, "error: cannot create memory-mapped file: %s\n",
+            location->get_file_name().c_str());
+    exit(EXIT_FAILURE);
+  }
+  always_assert_type_log(file.size() >= sizeof(dex_header), INVALID_DEX,
+                         "Dex too small");
+  auto dh = reinterpret_cast<const dex_header*>(file.const_data());
+  return dh->magic;
 }
 
 void balloon_for_test(const Scope& scope) {
