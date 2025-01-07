@@ -75,6 +75,14 @@ DexClasses load_classes_from_dex(
     bool balloon = true,
     bool throw_on_balloon_error = true,
     DexLoader::Parallel p = DexLoader::Parallel::kYes);
+DexClasses load_classes_from_dex(
+    DexLoader::DataUPtr data,
+    size_t data_size,
+    const DexLocation* location,
+    bool balloon = true,
+    bool throw_on_balloon_error = true,
+    int support_dex_version = 35,
+    DexLoader::Parallel p = DexLoader::Parallel::kYes);
 
 std::string load_dex_magic_from_dex(const DexLocation* location);
 void balloon_for_test(const Scope& scope);

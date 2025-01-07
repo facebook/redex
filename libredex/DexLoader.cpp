@@ -881,6 +881,21 @@ DexClasses load_classes_from_dex(const DexLocation* location,
   return std::move(dl.get_classes());
 }
 
+DexClasses load_classes_from_dex(DexLoader::DataUPtr data,
+                                 size_t data_size,
+                                 const DexLocation* location,
+                                 bool balloon,
+                                 bool throw_on_balloon_error,
+                                 int support_dex_version,
+                                 DexLoader::Parallel p) {
+  DexLoader dl = DexLoader::create(location, std::move(data), data_size,
+                                   support_dex_version, p);
+  if (balloon) {
+    balloon_all(dl.get_classes(), throw_on_balloon_error, p);
+  }
+  return std::move(dl.get_classes());
+}
+
 DexClasses load_classes_from_dex(const dex_header* dh,
                                  const DexLocation* location,
                                  bool balloon,
@@ -888,16 +903,11 @@ DexClasses load_classes_from_dex(const dex_header* dh,
                                  DexLoader::Parallel p) {
   // We don't actually own things here.
   auto non_owning = DexLoader::DataUPtr((const uint8_t*)dh, [](auto*) {});
-
   // TODO: This is dangerous and we should change the API.
   auto size = dh->file_size;
 
-  DexLoader dl =
-      DexLoader::create(location, std::move(non_owning), size, 35, p);
-  if (balloon) {
-    balloon_all(dl.get_classes(), throw_on_balloon_error, p);
-  }
-  return std::move(dl.get_classes());
+  return load_classes_from_dex(std::move(non_owning), size, location, balloon,
+                               throw_on_balloon_error, 35, p);
 }
 
 std::string load_dex_magic_from_dex(const DexLocation* location) {
