@@ -232,9 +232,8 @@ static void generate_branch_targets(
         if (dex_opcode::is_switch(insn->opcode())) {
           auto* fopcode_entry = get_target(mentry, bm);
           auto data_it = entry_to_data.find(fopcode_entry);
-          if (data_it == entry_to_data.end()) {
-            throw RedexException(RedexError::INVALID_DEX, "Missing entry data");
-          }
+          always_assert_type_log(data_it != entry_to_data.end(), INVALID_DEX,
+                                 "Missing entry data");
           shard_multi_target(ir, data_it->second.get(), mentry, bm);
           entry_to_data.erase(data_it);
         } else {
@@ -365,10 +364,7 @@ void translate_dex_to_ir(
     auto* dex_insn = it->dex_insn;
     auto dex_op = dex_insn->opcode();
     auto maybe_op = opcode::from_dex_opcode(dex_op);
-    if (!maybe_op) {
-      throw RedexException(RedexError::INVALID_DEX, "Invalid opcode",
-                           {{"dex_op", std::to_string(dex_op)}});
-    }
+    always_assert_type_log(maybe_op, INVALID_DEX, "Invalid opcode %d", dex_op);
     auto op = *maybe_op;
     auto insn = std::make_unique<IRInstruction>(op);
 
