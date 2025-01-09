@@ -24,10 +24,11 @@ namespace {
 struct TokenIndex {
   const std::vector<Token>& vec;
   std::vector<Token>::const_iterator it;
+  std::vector<Token>::const_iterator last_it;
 
   TokenIndex(const std::vector<Token>& vec,
              std::vector<Token>::const_iterator it)
-      : vec(vec), it(it) {}
+      : vec(vec), it(it), last_it(it) {}
 
   void skip_comments() {
     while (it != vec.end() && it->type == TokenType::comment) {
@@ -36,11 +37,13 @@ struct TokenIndex {
   }
 
   void next() {
+    last_it = it;
     redex_assert(it != vec.end());
     redex_assert(type() != TokenType::eof_token);
     ++it;
     skip_comments();
   }
+  void to_last() { it = last_it; }
 
   std::string str_next() {
     auto val = str();
@@ -57,19 +60,30 @@ struct TokenIndex {
   TokenType type() const { return it->type; }
 
   std::string show_context(size_t lines) const {
-    redex_assert(it != vec.end());
+    return show_context(vec, it, lines);
+  }
 
-    size_t this_line = line();
-    auto start_it = it;
-    while (start_it != vec.begin() && start_it->line >= this_line - lines) {
+  std::string show_last_context(size_t lines) const {
+    return show_context(vec, last_it, lines);
+  }
+
+  // static so no accidental use of struct fields.
+  static std::string show_context(const std::vector<Token>& v,
+                                  const std::vector<Token>::const_iterator& i,
+                                  size_t lines) {
+    redex_assert(i != v.end());
+
+    size_t this_line = i->line;
+    auto start_it = i;
+    while (start_it != v.begin() && start_it->line >= this_line - lines) {
       --start_it;
     }
     if (start_it->line < this_line - lines) {
       ++start_it;
     }
 
-    auto end_it = it;
-    while (end_it != vec.end() && end_it->line <= this_line + lines) {
+    auto end_it = i;
+    while (end_it != v.end() && end_it->line <= this_line + lines) {
       ++end_it;
     }
 
@@ -90,13 +104,13 @@ struct TokenIndex {
         ret.append(" ");
       }
 
-      if (show_it == it) {
+      if (show_it == i) {
         ret.append("!>");
       }
 
       ret.append(show_it->show());
 
-      if (show_it == it) {
+      if (show_it == i) {
         ret.append("<!");
       }
 
@@ -107,35 +121,18 @@ struct TokenIndex {
   }
 };
 
-std::optional<bool> parse_boolean_command(TokenIndex& idx,
-                                          TokenType boolean_option,
-                                          bool value) {
-  if (idx.type() != boolean_option) {
-    return std::nullopt;
-  }
-  idx.next();
-  return value;
-}
-
 void skip_to_next_command(TokenIndex& idx) {
   while ((idx.type() != TokenType::eof_token) && (!idx.it->is_command())) {
     idx.next();
   }
 }
 
-std::optional<std::string> parse_single_filepath_command(
-    TokenIndex& idx, TokenType filepath_command_token) {
-  if (idx.type() != filepath_command_token) {
-    return std::nullopt;
-  }
-
-  unsigned int line_number = idx.line();
-  idx.next(); // Consume the command token.
+std::string parse_single_filepath_command(TokenIndex& idx) {
   // Fail without consumption if this is an end of file token.
   if (idx.type() == TokenType::eof_token) {
     std::cerr << "Expecting at least one file as an argument but found end of "
                  "file at line "
-              << line_number << std::endl
+              << idx.last_it->line << std::endl
               << idx.show_context(2) << std::endl;
     return "";
   }
@@ -174,21 +171,13 @@ std::vector<std::string> parse_filepaths(TokenIndex& idx) {
   return res;
 }
 
-std::optional<std::vector<std::string>> parse_filepath_command(
-    TokenIndex& idx,
-    TokenType filepath_command_token,
-    const std::string& basedir) {
-  if (idx.type() != filepath_command_token) {
-    return std::nullopt;
-  }
-
-  unsigned int line_number = idx.line();
-  idx.next(); // Consume the command token.
+std::vector<std::string> parse_filepath_command(TokenIndex& idx,
+                                                const std::string& basedir) {
   // Fail without consumption if this is an end of file token.
   if (idx.type() == TokenType::eof_token) {
     std::cerr << "Expecting at least one file as an argument but found end of "
                  "file at line "
-              << line_number << std::endl;
+              << idx.last_it->line << std::endl;
     return {};
   }
   // Fail without consumption if this is a command token.
@@ -208,84 +197,48 @@ std::optional<std::vector<std::string>> parse_filepath_command(
   return parse_filepaths(idx);
 }
 
-std::optional<std::vector<std::string>> parse_optional_filepath_command(
-    TokenIndex& idx, TokenType filepath_command_token) {
-  if (idx.type() != filepath_command_token) {
-    return std::nullopt;
+std::vector<std::string> parse_jars(TokenIndex& idx,
+                                    const std::string& basedir) {
+  // Fail without consumption if this is an end of file token.
+  if (idx.type() == TokenType::eof_token) {
+    std::cerr
+        << "Expecting at least one file as an argument but found end of file "
+        << idx.show_last_context(2) << std::endl;
+    return {};
   }
-  idx.next(); // Consume the command token.
-  // Parse an optional filepath argument.
-  return parse_filepaths</*kOptional=*/true>(idx);
+  // Parse the list of filenames.
+  return parse_filepaths(idx);
 }
 
-std::optional<std::vector<std::string>> parse_jars(TokenIndex& idx,
-                                                   TokenType jar_token,
-                                                   const std::string& basedir) {
-  if (idx.type() == jar_token) {
-    unsigned int line_number = idx.line();
-    idx.next(); // Consume the jar token.
-    // Fail without consumption if this is an end of file token.
-    if (idx.type() == TokenType::eof_token) {
-      std::cerr
-          << "Expecting at least one file as an argument but found end of "
-             "file at line "
-          << line_number << std::endl
-          << idx.show_context(2) << std::endl;
-      return {};
-    }
-    // Parse the list of filenames.
-    return parse_filepaths(idx);
-  }
-  return std::nullopt;
-}
-
-bool parse_repackageclasses(TokenIndex& idx) {
-  if (idx.type() != TokenType::repackageclasses) {
-    return false;
-  }
+void parse_repackageclasses(TokenIndex& idx) {
   // Ignore repackageclasses.
-  idx.next();
   if (idx.type() == TokenType::identifier) {
     std::cerr << "Ignoring -repackageclasses " << idx.data() << std::endl
               << idx.show_context(2) << std::endl;
     idx.next();
   }
-  return true;
 }
 
-std::optional<std::string> parse_target(TokenIndex& idx) {
-  if (idx.type() == TokenType::target) {
-    idx.next(); // Consume the target command token.
-    // Check to make sure the next TokenType is a version token.
-    if (idx.type() != TokenType::target_version_token) {
-      std::cerr << "Expected a target version but got " << idx.show()
-                << " at line " << idx.line() << std::endl
-                << idx.show_context(2) << std::endl;
-      return "";
-    }
-    return idx.str_next(); // Consume the filepath token
+std::string parse_target(TokenIndex& idx) {
+  // Check to make sure the next TokenType is a version token.
+  if (idx.type() != TokenType::target_version_token) {
+    std::cerr << "Expected a target version but got " << idx.show()
+              << " at line " << idx.line() << std::endl
+              << idx.show_context(2) << std::endl;
+    return "";
   }
-  return std::nullopt;
+  return idx.str_next(); // Consume the filepath token
 }
 
-std::optional<std::vector<std::string>> parse_filter_list_command(
-    TokenIndex& idx, TokenType filter_command_token) {
-  if (idx.type() != filter_command_token) {
-    return std::nullopt;
-  }
-  idx.next();
+std::vector<std::string> parse_filter_list_command(TokenIndex& idx) {
   std::vector<std::string> filters;
   while (idx.type() == TokenType::filter_pattern) {
     filters.push_back(idx.str_next());
   }
-  return std::move(filters);
+  return filters;
 }
 
-std::optional<bool> parse_optimizationpasses_command(TokenIndex& idx) {
-  if (idx.type() != TokenType::optimizationpasses) {
-    return std::nullopt;
-  }
-  idx.next();
+bool parse_optimizationpasses_command(TokenIndex& idx) {
   // Comsume the next token.
   if (idx.type() == TokenType::eof_token) {
     return false;
@@ -926,8 +879,8 @@ void parse(const std::vector<Token>& vec,
            const std::string& filename) {
   TokenIndex idx{vec, vec.begin()};
 
-  auto check_empty = [&stats](const auto& opt_val) {
-    if (opt_val->empty()) {
+  auto check_empty = [&stats](const auto& val) {
+    if (val.empty()) {
       ++stats.parse_errors;
     }
   };
@@ -958,67 +911,59 @@ void parse(const std::vector<Token>& vec,
       continue;
     }
 
-    switch (idx.type()) {
+    auto type = idx.type();
+    idx.next();
+
+    switch (type) {
     case TokenType::include: {
-      auto fp = parse_filepath_command(
-          idx, TokenType::include, pg_config->basedirectory);
-      always_assert(fp);
-      move_vector_elements(*fp, pg_config->includes);
+      auto fp = parse_filepath_command(idx, pg_config->basedirectory);
+      move_vector_elements(fp, pg_config->includes);
       check_empty(fp);
       continue;
     }
     case TokenType::basedirectory: {
-      auto sfc = parse_single_filepath_command(idx, TokenType::basedirectory);
-      always_assert(sfc);
-      pg_config->basedirectory = *sfc;
-      if (sfc->empty()) {
+      auto sfc = parse_single_filepath_command(idx);
+      if (sfc.empty()) {
         ++stats.parse_errors;
+      } else {
+        pg_config->basedirectory = sfc;
       }
       continue;
     }
     case TokenType::injars: {
-      auto jars = parse_jars(idx, TokenType::injars, pg_config->basedirectory);
-      always_assert(jars);
-      move_vector_elements(*jars, pg_config->injars);
+      auto jars = parse_jars(idx, pg_config->basedirectory);
+      move_vector_elements(jars, pg_config->injars);
       check_empty(jars);
       continue;
     }
     case TokenType::outjars: {
-      auto jars = parse_jars(idx, TokenType::outjars, pg_config->basedirectory);
-      always_assert(jars);
-      move_vector_elements(*jars, pg_config->outjars);
+      auto jars = parse_jars(idx, pg_config->basedirectory);
+      move_vector_elements(jars, pg_config->outjars);
       check_empty(jars);
       continue;
     }
     case TokenType::libraryjars: {
-      auto jars =
-          parse_jars(idx, TokenType::libraryjars, pg_config->basedirectory);
-      always_assert(jars);
-      move_vector_elements(*jars, pg_config->libraryjars);
+      auto jars = parse_jars(idx, pg_config->basedirectory);
+      move_vector_elements(jars, pg_config->libraryjars);
       check_empty(jars);
       continue;
     }
     case TokenType::keepdirectories: {
-      auto fp = parse_filepath_command(
-          idx, TokenType::keepdirectories, pg_config->basedirectory);
-      always_assert(fp);
-      move_vector_elements(*fp, pg_config->keepdirectories);
+      auto fp = parse_filepath_command(idx, pg_config->basedirectory);
+      move_vector_elements(fp, pg_config->keepdirectories);
       check_empty(fp);
       continue;
     }
     case TokenType::target: {
       auto target = parse_target(idx);
-      always_assert(target);
-      if (!target->empty()) {
-        pg_config->target_version = std::move(*target);
+      if (!target.empty()) {
+        pg_config->target_version = std::move(target);
       }
       continue;
     }
     case TokenType::dontskipnonpubliclibraryclasses: {
       // -skipnonpubliclibraryclasses not supported
       // -dontskipnonpubliclibraryclassmembers not supported
-      auto res = consume_token(idx, TokenType::dontskipnonpubliclibraryclasses);
-      always_assert(res);
       // Silenty ignore the dontskipnonpubliclibraryclasses option.
       continue;
     }
@@ -1034,6 +979,7 @@ void parse(const std::vector<Token>& vec,
     case TokenType::whyareyoukeeping: {
       // Keep(-like) Options
       auto parse_all_keep = [&]() {
+        idx.to_last();
         for (auto& keep_spec : KEEP_SPECS) {
           if (auto val_ok = parse_keep(idx,
                                        keep_spec.token_type,
@@ -1056,114 +1002,88 @@ void parse(const std::vector<Token>& vec,
     }
 
     case TokenType::printseeds: {
-      auto ofp = parse_optional_filepath_command(idx, TokenType::printseeds);
-      always_assert(ofp);
-      move_vector_elements(*ofp, pg_config->printseeds);
+      auto ofp = parse_filepaths</*kOptional=*/true>(idx);
+      move_vector_elements(ofp, pg_config->printseeds);
       continue;
     }
 
     case TokenType::dontshrink: {
-      auto val = parse_boolean_command(idx, TokenType::dontshrink, false);
-      always_assert(val);
-      pg_config->shrink = *val;
+      pg_config->shrink = false;
       continue;
     }
     case TokenType::printusage: {
-      auto ofp = parse_optional_filepath_command(idx, TokenType::printusage);
-      always_assert(ofp);
-      move_vector_elements(*ofp, pg_config->printusage);
+      auto ofp = parse_filepaths</*kOptional=*/true>(idx);
+      move_vector_elements(ofp, pg_config->printusage);
       continue;
     }
 
     case TokenType::dontoptimize: {
-      auto val = parse_boolean_command(idx, TokenType::dontoptimize, false);
-      always_assert(val);
-      pg_config->optimize = *val;
+      pg_config->optimize = false;
       continue;
     }
     case TokenType::optimizations: {
-      auto fl = parse_filter_list_command(idx, TokenType::optimizations);
-      always_assert(fl);
-      move_vector_elements(*fl, pg_config->optimization_filters);
+      auto fl = parse_filter_list_command(idx);
+      move_vector_elements(fl, pg_config->optimization_filters);
       check_empty(fl);
       continue;
     }
     case TokenType::optimizationpasses: {
       auto op = parse_optimizationpasses_command(idx);
-      always_assert(op);
-      if (!*op) {
+      if (!op) {
         ++stats.parse_errors;
       }
       continue;
     }
 
     case TokenType::allowaccessmodification_token: {
-      auto res = consume_token(idx, TokenType::allowaccessmodification_token);
-      always_assert(res);
       pg_config->allowaccessmodification = true;
       continue;
     }
     case TokenType::dontobfuscate: {
-      auto res = consume_token(idx, TokenType::dontobfuscate);
-      always_assert(res);
       pg_config->dontobfuscate = true;
       continue;
     }
     case TokenType::printmapping: {
-      auto ofp = parse_optional_filepath_command(idx, TokenType::printmapping);
-      always_assert(ofp);
-      move_vector_elements(*ofp, pg_config->printmapping);
+      auto ofp = parse_filepaths</*kOptional=*/true>(idx);
+      move_vector_elements(ofp, pg_config->printmapping);
       continue;
     }
     case TokenType::repackageclasses: {
-      auto res = parse_repackageclasses(idx);
-      always_assert(res);
+      parse_repackageclasses(idx);
       continue;
     }
     case TokenType::keepattributes: {
-      auto fl = parse_filter_list_command(idx, TokenType::keepattributes);
-      always_assert(fl);
-      move_vector_elements(*fl, pg_config->keepattributes);
+      auto fl = parse_filter_list_command(idx);
+      move_vector_elements(fl, pg_config->keepattributes);
       check_empty(fl);
       continue;
     }
     case TokenType::dontusemixedcaseclassnames_token: {
-      auto res =
-          consume_token(idx, TokenType::dontusemixedcaseclassnames_token);
-      always_assert(res);
       pg_config->dontusemixedcaseclassnames = true;
       continue;
     }
     case TokenType::keeppackagenames: {
-      auto fl = parse_filter_list_command(idx, TokenType::keeppackagenames);
-      always_assert(fl);
-      move_vector_elements(*fl, pg_config->keeppackagenames);
+      auto fl = parse_filter_list_command(idx);
+      move_vector_elements(fl, pg_config->keeppackagenames);
       check_empty(fl);
       continue;
     }
     case TokenType::dontpreverify_token: {
-      auto res = consume_token(idx, TokenType::dontpreverify_token);
-      always_assert(res);
       pg_config->dontpreverify = true;
       continue;
     }
     case TokenType::printconfiguration: {
-      auto ofp =
-          parse_optional_filepath_command(idx, TokenType::printconfiguration);
-      always_assert(ofp);
-      move_vector_elements(*ofp, pg_config->printconfiguration);
+      auto ofp = parse_filepaths</*kOptional=*/true>(idx);
+      move_vector_elements(ofp, pg_config->printconfiguration);
       continue;
     }
     case TokenType::dontwarn: {
-      auto fl = parse_filter_list_command(idx, TokenType::dontwarn);
-      always_assert(fl);
-      move_vector_elements(*fl, pg_config->dontwarn);
+      auto fl = parse_filter_list_command(idx);
+      move_vector_elements(fl, pg_config->dontwarn);
       check_empty(fl);
       continue;
     }
     case TokenType::verbose_token: {
-      auto res = consume_token(idx, TokenType::verbose_token);
-      always_assert(res);
       pg_config->verbose = true;
       continue;
     }
@@ -1172,6 +1092,7 @@ void parse(const std::vector<Token>& vec,
     case TokenType::dump:
     case TokenType::mergeinterfacesaggressively:
     case TokenType::returns: {
+      idx.to_last(); // Unwind moving forward.
       always_assert(idx.it->is_command());
       const auto& name = idx.data();
       // It is benign to drop -dontnote
@@ -1232,8 +1153,9 @@ void parse(const std::vector<Token>& vec,
     case TokenType::allowoptimization_token:
     case TokenType::allowobfuscation_token:
     case TokenType::unknownToken:
+      idx.to_last(); // Unwind moving forward.
       always_assert(!idx.it->is_command());
-      UNREACHABLE();
+      always_assert(false);
       break;
     }
   }
