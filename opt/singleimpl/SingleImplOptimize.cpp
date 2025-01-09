@@ -222,7 +222,10 @@ struct OptimizationImpl {
   EscapeReason can_optimize(const DexType* intf,
                             const SingleImplData& data,
                             bool rename_on_collision);
-  CheckCastSet do_optimize(const DexType* intf, const SingleImplData& data);
+  CheckCastSet do_optimize(
+      const DexType* intf,
+      const SingleImplData& data,
+      std::unordered_map<DexMethod*, cfg::CFGMutation>& method_mutations);
   EscapeReason check_field_collision(const DexType* intf,
                                      const SingleImplData& data);
   EscapeReason check_method_collision(const DexType* intf,
@@ -232,8 +235,10 @@ struct OptimizationImpl {
                                   DexMethod* method);
   void set_field_defs(const DexType* intf, const SingleImplData& data);
   void set_field_refs(const DexType* intf, const SingleImplData& data);
-  CheckCastSet fix_instructions(const DexType* intf,
-                                const SingleImplData& data);
+  CheckCastSet fix_instructions(
+      const DexType* intf,
+      const SingleImplData& data,
+      std::unordered_map<DexMethod*, cfg::CFGMutation>& method_mutations);
   void set_method_defs(const DexType* intf, const SingleImplData& data);
   void set_method_refs(const DexType* intf, const SingleImplData& data);
   void rewrite_interface_methods(const DexType* intf,
@@ -243,7 +248,7 @@ struct OptimizationImpl {
                                   const SingleImplData& data);
 
   check_casts::impl::Stats post_process(
-      const std::unordered_set<DexMethod*>& methods,
+      const std::vector<DexMethod*>& methods,
       std::vector<IRInstruction*>* removed_instruction);
 
   std::unique_ptr<SingleImplAnalysis> single_impls;
@@ -350,8 +355,10 @@ void for_all_methods(const T& methods, Fn fn, bool parallel = true) {
 // field value. Expectation is that unnecessary insertions (e.g.,
 // duplicate check-casts) will be eliminated, for example, in
 // `post_process`.
-CheckCastSet OptimizationImpl::fix_instructions(const DexType* intf,
-                                                const SingleImplData& data) {
+CheckCastSet OptimizationImpl::fix_instructions(
+    const DexType* intf,
+    const SingleImplData& data,
+    std::unordered_map<DexMethod*, cfg::CFGMutation>& method_mutations) {
   if (data.referencing_methods.empty()) {
     return {};
   }
@@ -372,19 +379,23 @@ CheckCastSet OptimizationImpl::fix_instructions(const DexType* intf,
       [&](const DexMethod* caller_const) {
         auto caller = const_cast<DexMethod*>(caller_const);
         std::vector<reg_t> temps; // Cached temps.
-        auto code = caller->get_code();
-        redex_assert(!code->editable_cfg_built());
-
+        auto* code = caller->get_code();
+        always_assert(code->editable_cfg_built());
+        auto& cfg = code->cfg();
+        auto& mutation = method_mutations.at(caller);
         for (const auto& insn_it_pair : data.referencing_methods.at(caller)) {
           auto insn_it = insn_it_pair.second;
           auto insn = insn_it_pair.first;
+          always_assert(&insn_it.cfg() == &cfg);
 
           auto temp_it = temps.begin();
           auto add_check_cast = [&](reg_t reg) {
+            std::vector<IRInstruction*> new_insns;
+            new_insns.reserve(2);
             auto check_cast = new IRInstruction(OPCODE_CHECK_CAST);
             check_cast->set_src(0, reg);
             check_cast->set_type(data.cls);
-            code->insert_before(insn_it, *new MethodItemEntry(check_cast));
+            new_insns.push_back(check_cast);
 
             if (PARALLEL) {
               std::unique_lock<std::mutex> lock(ret_lock);
@@ -396,7 +407,7 @@ CheckCastSet OptimizationImpl::fix_instructions(const DexType* intf,
             // See if we need a new temp.
             reg_t out;
             if (temp_it == temps.end()) {
-              reg_t new_temp = code->allocate_temp();
+              reg_t new_temp = cfg.allocate_temp();
               temps.push_back(new_temp);
               temp_it = temps.end();
               out = new_temp;
@@ -408,9 +419,8 @@ CheckCastSet OptimizationImpl::fix_instructions(const DexType* intf,
             auto pseudo_move_result =
                 new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
             pseudo_move_result->set_dest(out);
-            code->insert_before(insn_it,
-                                *new MethodItemEntry(pseudo_move_result));
-
+            new_insns.push_back(pseudo_move_result);
+            mutation.insert_before(insn_it, std::move(new_insns));
             return out;
           };
 
@@ -809,9 +819,11 @@ void OptimizationImpl::rename_possible_collisions(const DexType* intf,
 /**
  * Perform the optimization.
  */
-CheckCastSet OptimizationImpl::do_optimize(const DexType* intf,
-                                           const SingleImplData& data) {
-  CheckCastSet ret = fix_instructions(intf, data);
+CheckCastSet OptimizationImpl::do_optimize(
+    const DexType* intf,
+    const SingleImplData& data,
+    std::unordered_map<DexMethod*, cfg::CFGMutation>& method_mutations) {
+  CheckCastSet ret = fix_instructions(intf, data, method_mutations);
   set_type_refs(intf, data);
   set_field_defs(intf, data);
   set_field_refs(intf, data);
@@ -830,7 +842,23 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
   TypeList to_optimize;
   single_impls->get_interfaces(to_optimize);
   std::sort(to_optimize.begin(), to_optimize.end(), compare_dextypes);
-  std::unordered_set<DexMethod*> for_post_processing;
+
+  std::unordered_map<DexMethod*, cfg::CFGMutation> method_mutations;
+  std::vector<DexMethod*> mutated_methods;
+  for (auto intf : to_optimize) {
+    auto& intf_data = single_impls->get_single_impl_data(intf);
+    for (auto&& [method, _] : intf_data.referencing_methods) {
+      auto* code = method->get_code();
+      always_assert(code->editable_cfg_built());
+      auto emplaced =
+          method_mutations.emplace(method, cfg::CFGMutation(code->cfg()))
+              .second;
+      if (emplaced) {
+        mutated_methods.push_back(method);
+      }
+    }
+  }
+
   CheckCastSet inserted_check_casts;
   for (auto intf : to_optimize) {
     auto& intf_data = single_impls->get_single_impl_data(intf);
@@ -841,12 +869,13 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
       single_impls->escape_interface(intf, escape);
       continue;
     }
-    auto check_casts = do_optimize(intf, intf_data);
+    auto check_casts = do_optimize(intf, intf_data, method_mutations);
     inserted_check_casts.insert(check_casts.begin(), check_casts.end());
-    for (auto& p : intf_data.referencing_methods) {
-      for_post_processing.insert(p.first);
-    }
     optimized.insert(intf);
+  }
+
+  for (auto&& [_, mutation] : method_mutations) {
+    mutation.flush();
   }
 
   // make a new scope deleting all single impl interfaces
@@ -863,13 +892,15 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
 
   std::vector<IRInstruction*> removed_instructions;
   auto post_process_stats =
-      post_process(for_post_processing, &removed_instructions);
+      post_process(mutated_methods, &removed_instructions);
   std::atomic<size_t> retained{0};
   {
-    for_all_methods(for_post_processing, [&](const DexMethod* m) {
-      auto code = m->get_code();
+    for_all_methods(mutated_methods, [&](const DexMethod* m) {
+      auto* code = m->get_code();
+      always_assert(code->editable_cfg_built());
+      auto& cfg = code->cfg();
       size_t found = 0;
-      for (const auto& mie : ir_list::ConstInstructionIterable(*code)) {
+      for (const auto& mie : InstructionIterable(cfg)) {
         if (inserted_check_casts.count(mie.insn) != 0) {
           ++found;
         }
@@ -892,7 +923,7 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
 }
 
 check_casts::impl::Stats OptimizationImpl::post_process(
-    const std::unordered_set<DexMethod*>& methods,
+    const std::vector<DexMethod*>& methods,
     std::vector<IRInstruction*>* removed_instructions) {
   // The analysis times the number of methods is easily expensive, run in
   // parallel.
@@ -904,22 +935,22 @@ check_casts::impl::Stats OptimizationImpl::post_process(
       [&stats, &mutex, removed_instructions, &api](const DexMethod* m_const) {
         auto m = const_cast<DexMethod*>(m_const);
         auto code = m->get_code();
-        always_assert(!code->editable_cfg_built());
-        cfg::ScopedCFG cfg(code);
+        always_assert(code->editable_cfg_built());
+        auto& cfg = code->cfg();
         // T131253060 If enable weaken, we are hitting an assertion in
         // CheckCastAnalysis where a definition of a value is unknown. This only
         // occurs here within SingleImplPass, but not in subsequent
         // CheckCastRemovals where weaken is enabled by default.
         check_casts::CheckCastConfig config{.weaken = false};
         check_casts::impl::CheckCastAnalysis analysis(
-            config, *cfg, is_static(m), m->get_class(),
+            config, cfg, is_static(m), m->get_class(),
             m->get_proto()->get_args(), m->get_proto()->get_rtype(),
             m->get_param_anno(), api);
         auto casts = analysis.collect_redundant_checks_replacement();
-        auto local_stats = check_casts::impl::apply(*cfg, casts);
+        auto local_stats = check_casts::impl::apply(cfg, casts);
+        auto insns = cfg.release_removed_instructions();
         std::lock_guard<std::mutex> lock_guard(mutex);
         stats += local_stats;
-        auto insns = cfg->release_removed_instructions();
         removed_instructions->insert(removed_instructions->end(), insns.begin(),
                                      insns.end());
       },
