@@ -422,7 +422,8 @@ void translate_dex_to_ir(
     } else if (op == OPCODE_FILL_ARRAY_DATA) {
       auto target = get_target(&*it, bm);
       auto data_it = entry_to_data.find(target);
-      always_assert(data_it != entry_to_data.end());
+      always_assert_type_log(data_it != entry_to_data.end(), INVALID_DEX,
+                             "Incorrect reference");
       insn->set_data(std::move(data_it->second));
       entry_to_data.erase(data_it);
     }
