@@ -701,15 +701,15 @@ std::optional<ClassSpecification> parse_class_specification(TokenIndex& idx,
                                                             bool allow_return) {
   ClassSpecification class_spec;
   class_spec.annotationType = parse_annotation_type(idx);
-  if (!parse_access_flags(
-          idx, class_spec.setAccessFlags, class_spec.unsetAccessFlags)) {
+  if (!parse_access_flags(idx, class_spec.setAccessFlags,
+                          class_spec.unsetAccessFlags)) {
     // There was a problem parsing the access flags. Return an empty class spec
     // for now.
     std::cerr << "Problem parsing access flags for class specification.\n";
     return std::nullopt;
   }
-  if (!parse_class_token(
-          idx, class_spec.setAccessFlags, class_spec.unsetAccessFlags)) {
+  if (!parse_class_token(idx, class_spec.setAccessFlags,
+                         class_spec.unsetAccessFlags)) {
     return std::nullopt;
   }
   // Parse the class name(s).
@@ -747,124 +747,171 @@ std::optional<ClassSpecification> parse_class_specification(TokenIndex& idx,
   return std::move(class_spec);
 }
 
-std::optional<bool> parse_keep(TokenIndex& idx,
-                               TokenType keep_kind,
-                               KeepSpecSet* spec,
-                               bool mark_classes,
-                               bool mark_conditionally,
-                               bool allowshrinking,
-                               bool allow_return,
-                               const std::string& filename,
-                               uint32_t line) {
-  if (idx.type() == keep_kind) {
-    idx.next(); // Consume the keep token
-    auto keep = std::make_unique<KeepSpec>();
-    keep->mark_classes = mark_classes;
-    keep->mark_conditionally = mark_conditionally;
-    keep->allowshrinking = allowshrinking;
-    keep->source_filename = filename;
-    keep->source_line = line;
-    if (!parse_modifiers(idx, &*keep)) {
-      skip_to_next_command(idx);
-      return false;
-    }
-    auto class_spec = parse_class_specification(idx, allow_return);
-    if (class_spec) {
-      keep->class_spec = std::move(*class_spec);
-    }
-    spec->emplace(std::move(keep));
-    return class_spec.has_value();
+bool parse_keep(TokenIndex& idx,
+                KeepSpecSet* spec,
+                bool mark_classes,
+                bool mark_conditionally,
+                bool allowshrinking,
+                bool allow_return,
+                const std::string& filename,
+                uint32_t line) {
+  auto keep = std::make_unique<KeepSpec>();
+  keep->mark_classes = mark_classes;
+  keep->mark_conditionally = mark_conditionally;
+  keep->allowshrinking = allowshrinking;
+  keep->source_filename = filename;
+  keep->source_line = line;
+  if (!parse_modifiers(idx, &*keep)) {
+    skip_to_next_command(idx);
+    return false;
   }
-  return std::nullopt;
+  auto class_spec = parse_class_specification(idx, allow_return);
+  if (class_spec) {
+    keep->class_spec = std::move(*class_spec);
+  }
+  spec->emplace(std::move(keep));
+  return class_spec.has_value();
 }
 
-struct KeepSpecDesc {
-  enum class Target {
-    Keep,
-    AssumeNoSideEffects,
-    AssumeValues,
-    WhyAreYouKeeping,
-  };
-  TokenType token_type;
-  Target spec_set;
-  bool mark_classes;
-  bool mark_conditionally;
-  bool allowshrinking;
-  bool allow_return;
+namespace keep_spec_desc {
 
-  KeepSpecSet* get_spec_set(ProguardConfiguration* pg_config) const {
-    switch (spec_set) {
-    case Target::Keep:
-      return &pg_config->keep_rules;
-    case Target::AssumeNoSideEffects:
-      return &pg_config->assumenosideeffects_rules;
-    case Target::AssumeValues:
-      return &pg_config->assumevalues_rules;
-    case Target::WhyAreYouKeeping:
-      return &pg_config->whyareyoukeeping_rules;
-    }
-    UNREACHABLE();
-  }
+enum class Target {
+  Keep,
+  AssumeNoSideEffects,
+  AssumeValues,
+  WhyAreYouKeeping,
 };
 
-// Technically needs C++20, but GCC/Clang support this.
-constexpr std::array<KeepSpecDesc, 9> KEEP_SPECS = {
-    // Keep commands.
-    {{.token_type = TokenType::keep,
-      .spec_set = KeepSpecDesc::Target::Keep,
-      .mark_classes = true,
-      .mark_conditionally = false,
-      .allowshrinking = false,
-      .allow_return = false},
-     {.token_type = TokenType::keepclassmembers,
-      .spec_set = KeepSpecDesc::Target::Keep,
-      .mark_classes = false,
-      .mark_conditionally = false,
-      .allowshrinking = false,
-      .allow_return = false},
-     {.token_type = TokenType::keepclasseswithmembers,
-      .spec_set = KeepSpecDesc::Target::Keep,
-      .mark_classes = false,
-      .mark_conditionally = true,
-      .allowshrinking = false,
-      .allow_return = false},
-     {.token_type = TokenType::keepnames,
-      .spec_set = KeepSpecDesc::Target::Keep,
-      .mark_classes = true,
-      .mark_conditionally = false,
-      .allowshrinking = true,
-      .allow_return = false},
-     {.token_type = TokenType::keepclassmembernames,
-      .spec_set = KeepSpecDesc::Target::Keep,
-      .mark_classes = false,
-      .mark_conditionally = false,
-      .allowshrinking = true,
-      .allow_return = false},
-     {.token_type = TokenType::keepclasseswithmembernames,
-      .spec_set = KeepSpecDesc::Target::Keep,
-      .mark_classes = false,
-      .mark_conditionally = true,
-      .allowshrinking = true,
-      .allow_return = false},
-     // Not-keep commands.
-     {.token_type = TokenType::assumenosideeffects,
-      .spec_set = KeepSpecDesc::Target::AssumeNoSideEffects,
-      .mark_classes = false,
-      .mark_conditionally = false,
-      .allowshrinking = false,
-      .allow_return = true},
-     {.token_type = TokenType::assumevalues,
-      .spec_set = KeepSpecDesc::Target::AssumeValues,
-      .mark_classes = false,
-      .mark_conditionally = false,
-      .allowshrinking = false,
-      .allow_return = true},
-     {.token_type = TokenType::whyareyoukeeping,
-      .spec_set = KeepSpecDesc::Target::WhyAreYouKeeping,
-      .mark_classes = false,
-      .mark_conditionally = false,
-      .allowshrinking = false,
-      .allow_return = false}}};
+template <TokenType kk>
+struct KeepSpecDesc {
+  // static TokenType token_type;
+  // static Target spec_set;
+  // static bool mark_classes;
+  // static bool mark_conditionally;
+  // static bool allowshrinking;
+  // static bool allow_return;
+};
+
+KeepSpecSet* get_spec_set(Target spec_set, ProguardConfiguration* pg_config) {
+  switch (spec_set) {
+  case Target::Keep:
+    return &pg_config->keep_rules;
+  case Target::AssumeNoSideEffects:
+    return &pg_config->assumenosideeffects_rules;
+  case Target::AssumeValues:
+    return &pg_config->assumevalues_rules;
+  case Target::WhyAreYouKeeping:
+    return &pg_config->whyareyoukeeping_rules;
+  }
+  UNREACHABLE();
+}
+
+template <>
+struct KeepSpecDesc<TokenType::keep> {
+  constexpr static TokenType token_type{TokenType::keep};
+  constexpr static Target spec_set{Target::Keep};
+  constexpr static bool mark_classes{true};
+  constexpr static bool mark_conditionally{false};
+  constexpr static bool allowshrinking{false};
+  constexpr static bool allow_return{false};
+};
+
+template <>
+struct KeepSpecDesc<TokenType::keepclassmembers> {
+  constexpr static TokenType token_type{TokenType::keepclassmembers};
+  constexpr static Target spec_set{Target::Keep};
+  constexpr static bool mark_classes{false};
+  constexpr static bool mark_conditionally{false};
+  constexpr static bool allowshrinking{false};
+  constexpr static bool allow_return{false};
+};
+
+template <>
+struct KeepSpecDesc<TokenType::keepclasseswithmembers> {
+  constexpr static TokenType token_type{TokenType::keepclasseswithmembers};
+  constexpr static Target spec_set{Target::Keep};
+  constexpr static bool mark_classes{false};
+  constexpr static bool mark_conditionally{true};
+  constexpr static bool allowshrinking{false};
+  constexpr static bool allow_return{false};
+};
+
+template <>
+struct KeepSpecDesc<TokenType::keepnames> {
+  constexpr static TokenType token_type{TokenType::keepnames};
+  constexpr static Target spec_set{Target::Keep};
+  constexpr static bool mark_classes{true};
+  constexpr static bool mark_conditionally{false};
+  constexpr static bool allowshrinking{true};
+  constexpr static bool allow_return{false};
+};
+
+template <>
+struct KeepSpecDesc<TokenType::keepclassmembernames> {
+  constexpr static TokenType token_type{TokenType::keepclassmembernames};
+  constexpr static Target spec_set{Target::Keep};
+  constexpr static bool mark_classes{false};
+  constexpr static bool mark_conditionally{false};
+  constexpr static bool allowshrinking{true};
+  constexpr static bool allow_return{false};
+};
+
+template <>
+struct KeepSpecDesc<TokenType::keepclasseswithmembernames> {
+  constexpr static TokenType token_type{TokenType::keepclasseswithmembernames};
+  constexpr static Target spec_set{Target::Keep};
+  constexpr static bool mark_classes{false};
+  constexpr static bool mark_conditionally{true};
+  constexpr static bool allowshrinking{true};
+  constexpr static bool allow_return{false};
+};
+
+template <>
+struct KeepSpecDesc<TokenType::assumenosideeffects> {
+  constexpr static TokenType token_type{TokenType::assumenosideeffects};
+  constexpr static Target spec_set{Target::AssumeNoSideEffects};
+  constexpr static bool mark_classes{false};
+  constexpr static bool mark_conditionally{false};
+  constexpr static bool allowshrinking{false};
+  constexpr static bool allow_return{true};
+};
+
+template <>
+struct KeepSpecDesc<TokenType::assumevalues> {
+  constexpr static TokenType token_type{TokenType::assumevalues};
+  constexpr static Target spec_set{Target::AssumeValues};
+  constexpr static bool mark_classes{false};
+  constexpr static bool mark_conditionally{false};
+  constexpr static bool allowshrinking{false};
+  constexpr static bool allow_return{true};
+};
+
+template <>
+struct KeepSpecDesc<TokenType::whyareyoukeeping> {
+  constexpr static TokenType token_type{TokenType::whyareyoukeeping};
+  constexpr static Target spec_set{Target::WhyAreYouKeeping};
+  constexpr static bool mark_classes{false};
+  constexpr static bool mark_conditionally{false};
+  constexpr static bool allowshrinking{false};
+  constexpr static bool allow_return{false};
+};
+
+} // namespace keep_spec_desc
+
+template <TokenType kk>
+bool parse_keep(TokenIndex& idx,
+                ProguardConfiguration* pg_config,
+                const std::string& filename,
+                uint32_t line) {
+  using namespace keep_spec_desc;
+  redex_assert(kk == KeepSpecDesc<kk>::token_type);
+
+  return parse_keep(idx, get_spec_set(KeepSpecDesc<kk>::spec_set, pg_config),
+                    KeepSpecDesc<kk>::mark_classes,
+                    KeepSpecDesc<kk>::mark_conditionally,
+                    KeepSpecDesc<kk>::allowshrinking,
+                    KeepSpecDesc<kk>::allow_return, filename, line);
+}
 
 template <typename T>
 void move_vector_elements(std::vector<T>& from, std::vector<T>& to) {
@@ -884,8 +931,8 @@ void parse(const std::vector<Token>& vec,
       ++stats.parse_errors;
     }
   };
-  auto check_keep = [&stats](const auto& opt_val) {
-    if (!*opt_val) {
+  auto check_keep = [&stats](const auto opt_val) {
+    if (!opt_val) {
       ++stats.parse_errors;
     }
   };
@@ -967,39 +1014,42 @@ void parse(const std::vector<Token>& vec,
       // Silenty ignore the dontskipnonpubliclibraryclasses option.
       continue;
     }
-    // TODO: Improve this block.
     case TokenType::keep:
-    case TokenType::keepclassmembers:
-    case TokenType::keepclasseswithmembers:
-    case TokenType::keepnames:
-    case TokenType::keepclassmembernames:
-    case TokenType::keepclasseswithmembernames:
-    case TokenType::assumenosideeffects:
-    case TokenType::assumevalues:
-    case TokenType::whyareyoukeeping: {
-      // Keep(-like) Options
-      auto parse_all_keep = [&]() {
-        idx.to_last();
-        for (auto& keep_spec : KEEP_SPECS) {
-          if (auto val_ok = parse_keep(idx,
-                                       keep_spec.token_type,
-                                       keep_spec.get_spec_set(pg_config),
-                                       keep_spec.mark_classes,
-                                       keep_spec.mark_conditionally,
-                                       keep_spec.allowshrinking,
-                                       keep_spec.allow_return,
-                                       filename,
-                                       line)) {
-            check_keep(val_ok);
-            return true;
-          }
-        }
-        return false;
-      };
-      auto res = parse_all_keep();
-      always_assert(res);
+      check_keep(parse_keep<TokenType::keep>(idx, pg_config, filename, line));
       continue;
-    }
+    case TokenType::keepclassmembers:
+      check_keep(parse_keep<TokenType::keepclassmembers>(idx, pg_config,
+                                                         filename, line));
+      continue;
+    case TokenType::keepclasseswithmembers:
+      check_keep(parse_keep<TokenType::keepclasseswithmembers>(idx, pg_config,
+                                                               filename, line));
+      continue;
+    case TokenType::keepnames:
+      check_keep(
+          parse_keep<TokenType::keepnames>(idx, pg_config, filename, line));
+      continue;
+    case TokenType::keepclassmembernames:
+      check_keep(parse_keep<TokenType::keepclassmembernames>(idx, pg_config,
+                                                             filename, line));
+      continue;
+    case TokenType::keepclasseswithmembernames:
+      check_keep(parse_keep<TokenType::keepclasseswithmembernames>(
+          idx, pg_config, filename, line));
+      continue;
+
+    case TokenType::assumenosideeffects:
+      check_keep(parse_keep<TokenType::assumenosideeffects>(idx, pg_config,
+                                                            filename, line));
+      continue;
+    case TokenType::assumevalues:
+      check_keep(
+          parse_keep<TokenType::assumevalues>(idx, pg_config, filename, line));
+      continue;
+    case TokenType::whyareyoukeeping:
+      check_keep(parse_keep<TokenType::whyareyoukeeping>(idx, pg_config,
+                                                         filename, line));
+      continue;
 
     case TokenType::printseeds: {
       auto ofp = parse_filepaths</*kOptional=*/true>(idx);
