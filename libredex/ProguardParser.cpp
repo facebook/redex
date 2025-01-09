@@ -967,46 +967,234 @@ void parse(const std::vector<Token>& vec,
     }
 
     switch (idx.type()) {
-    // TODO: "Implement."
-    case TokenType::command:
-    case TokenType::include:
-    case TokenType::basedirectory:
-    case TokenType::dump:
-    case TokenType::injars:
-    case TokenType::outjars:
-    case TokenType::libraryjars:
-    case TokenType::keepdirectories:
-    case TokenType::target:
-    case TokenType::dontskipnonpubliclibraryclasses:
+    case TokenType::include: {
+      auto fp = parse_filepath_command(
+          idx, TokenType::include, pg_config->basedirectory);
+      always_assert(fp);
+      move_vector_elements(*fp, pg_config->includes);
+      check_empty(fp);
+      continue;
+    }
+    case TokenType::basedirectory: {
+      auto sfc = parse_single_filepath_command(idx, TokenType::basedirectory);
+      always_assert(sfc);
+      pg_config->basedirectory = *sfc;
+      if (sfc->empty()) {
+        ++stats.parse_errors;
+      }
+      continue;
+    }
+    case TokenType::injars: {
+      auto jars = parse_jars(idx, TokenType::injars, pg_config->basedirectory);
+      always_assert(jars);
+      move_vector_elements(*jars, pg_config->injars);
+      check_empty(jars);
+      continue;
+    }
+    case TokenType::outjars: {
+      auto jars = parse_jars(idx, TokenType::outjars, pg_config->basedirectory);
+      always_assert(jars);
+      move_vector_elements(*jars, pg_config->outjars);
+      check_empty(jars);
+      continue;
+    }
+    case TokenType::libraryjars: {
+      auto jars =
+          parse_jars(idx, TokenType::libraryjars, pg_config->basedirectory);
+      always_assert(jars);
+      move_vector_elements(*jars, pg_config->libraryjars);
+      check_empty(jars);
+      continue;
+    }
+    case TokenType::keepdirectories: {
+      auto fp = parse_filepath_command(
+          idx, TokenType::keepdirectories, pg_config->basedirectory);
+      always_assert(fp);
+      move_vector_elements(*fp, pg_config->keepdirectories);
+      check_empty(fp);
+      continue;
+    }
+    case TokenType::target: {
+      auto target = parse_target(idx);
+      always_assert(target);
+      if (!target->empty()) {
+        pg_config->target_version = std::move(*target);
+      }
+      continue;
+    }
+    case TokenType::dontskipnonpubliclibraryclasses: {
+      // -skipnonpubliclibraryclasses not supported
+      // -dontskipnonpubliclibraryclassmembers not supported
+      auto res =
+          test_and_consume(idx, TokenType::dontskipnonpubliclibraryclasses);
+      always_assert(res);
+      // Silenty ignore the dontskipnonpubliclibraryclasses option.
+      continue;
+    }
+    // TODO: Improve this block.
     case TokenType::keep:
     case TokenType::keepclassmembers:
     case TokenType::keepclasseswithmembers:
     case TokenType::keepnames:
     case TokenType::keepclassmembernames:
     case TokenType::keepclasseswithmembernames:
-    case TokenType::printseeds:
-    case TokenType::dontshrink:
-    case TokenType::printusage:
-    case TokenType::whyareyoukeeping:
-    case TokenType::dontoptimize:
-    case TokenType::optimizations:
-    case TokenType::optimizationpasses:
     case TokenType::assumenosideeffects:
     case TokenType::assumevalues:
+    case TokenType::whyareyoukeeping: {
+      // Keep(-like) Options
+      auto parse_all_keep = [&]() {
+        for (auto& keep_spec : KEEP_SPECS) {
+          if (auto val_ok = parse_keep(idx,
+                                       keep_spec.token_type,
+                                       keep_spec.get_spec_set(pg_config),
+                                       keep_spec.mark_classes,
+                                       keep_spec.mark_conditionally,
+                                       keep_spec.allowshrinking,
+                                       keep_spec.allow_return,
+                                       filename,
+                                       line)) {
+            check_keep(val_ok);
+            return true;
+          }
+        }
+        return false;
+      };
+      auto res = parse_all_keep();
+      always_assert(res);
+      continue;
+    }
+
+    case TokenType::printseeds: {
+      auto ofp = parse_optional_filepath_command(idx, TokenType::printseeds);
+      always_assert(ofp);
+      move_vector_elements(*ofp, pg_config->printseeds);
+      continue;
+    }
+
+    case TokenType::dontshrink: {
+      auto val = parse_boolean_command(idx, TokenType::dontshrink, false);
+      always_assert(val);
+      pg_config->shrink = *val;
+      continue;
+    }
+    case TokenType::printusage: {
+      auto ofp = parse_optional_filepath_command(idx, TokenType::printusage);
+      always_assert(ofp);
+      move_vector_elements(*ofp, pg_config->printusage);
+      continue;
+    }
+
+    case TokenType::dontoptimize: {
+      auto val = parse_boolean_command(idx, TokenType::dontoptimize, false);
+      always_assert(val);
+      pg_config->optimize = *val;
+      continue;
+    }
+    case TokenType::optimizations: {
+      auto fl = parse_filter_list_command(idx, TokenType::optimizations);
+      always_assert(fl);
+      move_vector_elements(*fl, pg_config->optimization_filters);
+      check_empty(fl);
+      continue;
+    }
+    case TokenType::optimizationpasses: {
+      auto op = parse_optimizationpasses_command(idx);
+      always_assert(op);
+      if (!*op) {
+        ++stats.parse_errors;
+      }
+      continue;
+    }
+
+    case TokenType::allowaccessmodification_token: {
+      auto res =
+          test_and_consume(idx, TokenType::allowaccessmodification_token);
+      always_assert(res);
+      pg_config->allowaccessmodification = true;
+      continue;
+    }
+    case TokenType::dontobfuscate: {
+      auto res = test_and_consume(idx, TokenType::dontobfuscate);
+      always_assert(res);
+      pg_config->dontobfuscate = true;
+      continue;
+    }
+    case TokenType::printmapping: {
+      auto ofp = parse_optional_filepath_command(idx, TokenType::printmapping);
+      always_assert(ofp);
+      move_vector_elements(*ofp, pg_config->printmapping);
+      continue;
+    }
+    case TokenType::repackageclasses: {
+      auto res = parse_repackageclasses(idx);
+      always_assert(res);
+      continue;
+    }
+    case TokenType::keepattributes: {
+      auto fl = parse_filter_list_command(idx, TokenType::keepattributes);
+      always_assert(fl);
+      move_vector_elements(*fl, pg_config->keepattributes);
+      check_empty(fl);
+      continue;
+    }
+    case TokenType::dontusemixedcaseclassnames_token: {
+      auto res =
+          test_and_consume(idx, TokenType::dontusemixedcaseclassnames_token);
+      always_assert(res);
+      pg_config->dontusemixedcaseclassnames = true;
+      continue;
+    }
+    case TokenType::keeppackagenames: {
+      auto fl = parse_filter_list_command(idx, TokenType::keeppackagenames);
+      always_assert(fl);
+      move_vector_elements(*fl, pg_config->keeppackagenames);
+      check_empty(fl);
+      continue;
+    }
+    case TokenType::dontpreverify_token: {
+      auto res = test_and_consume(idx, TokenType::dontpreverify_token);
+      always_assert(res);
+      pg_config->dontpreverify = true;
+      continue;
+    }
+    case TokenType::printconfiguration: {
+      auto ofp =
+          parse_optional_filepath_command(idx, TokenType::printconfiguration);
+      always_assert(ofp);
+      move_vector_elements(*ofp, pg_config->printconfiguration);
+      continue;
+    }
+    case TokenType::dontwarn: {
+      auto fl = parse_filter_list_command(idx, TokenType::dontwarn);
+      always_assert(fl);
+      move_vector_elements(*fl, pg_config->dontwarn);
+      check_empty(fl);
+      continue;
+    }
+    case TokenType::verbose_token: {
+      auto res = test_and_consume(idx, TokenType::verbose_token);
+      always_assert(res);
+      pg_config->verbose = true;
+      continue;
+    }
+
+    case TokenType::command:
+    case TokenType::dump:
     case TokenType::mergeinterfacesaggressively:
-    case TokenType::allowaccessmodification_token:
-    case TokenType::returns:
-    case TokenType::dontobfuscate:
-    case TokenType::printmapping:
-    case TokenType::repackageclasses:
-    case TokenType::keepattributes:
-    case TokenType::dontusemixedcaseclassnames_token:
-    case TokenType::keeppackagenames:
-    case TokenType::dontpreverify_token:
-    case TokenType::printconfiguration:
-    case TokenType::dontwarn:
-    case TokenType::verbose_token:
-      break;
+    case TokenType::returns: {
+      always_assert(idx.it->is_command());
+      const auto& name = idx.data();
+      // It is benign to drop -dontnote
+      if (name != "dontnote") {
+        std::cerr << "Unimplemented command (skipping): " << idx.show()
+                  << " at line " << idx.line() << std::endl
+                  << idx.show_context(2) << std::endl;
+        ++stats.unimplemented;
+      }
+      idx.next();
+      skip_to_next_command(idx);
+      continue;
+    }
 
     // These should not reach the switch.
 
@@ -1054,193 +1242,10 @@ void parse(const std::vector<Token>& vec,
     case TokenType::allowoptimization_token:
     case TokenType::allowobfuscation_token:
     case TokenType::unknownToken:
+      always_assert(!idx.it->is_command());
       UNREACHABLE();
       break;
     }
-
-    // Input/Output Options
-    if (auto fp = parse_filepath_command(
-            idx, TokenType::include, pg_config->basedirectory)) {
-      move_vector_elements(*fp, pg_config->includes);
-      check_empty(fp);
-      continue;
-    }
-    if (auto sfc =
-            parse_single_filepath_command(idx, TokenType::basedirectory)) {
-      pg_config->basedirectory = *sfc;
-      if (sfc->empty()) {
-        ++stats.parse_errors;
-      }
-      continue;
-    }
-    if (auto jars =
-            parse_jars(idx, TokenType::injars, pg_config->basedirectory)) {
-      move_vector_elements(*jars, pg_config->injars);
-      check_empty(jars);
-      continue;
-    }
-    if (auto jars =
-            parse_jars(idx, TokenType::outjars, pg_config->basedirectory)) {
-      move_vector_elements(*jars, pg_config->outjars);
-      check_empty(jars);
-      continue;
-    }
-    if (auto jars =
-            parse_jars(idx, TokenType::libraryjars, pg_config->basedirectory)) {
-      move_vector_elements(*jars, pg_config->libraryjars);
-      check_empty(jars);
-      continue;
-    }
-    // -skipnonpubliclibraryclasses not supported
-    if (test_and_consume(idx, TokenType::dontskipnonpubliclibraryclasses)) {
-      // Silenty ignore the dontskipnonpubliclibraryclasses option.
-      continue;
-    }
-    // -dontskipnonpubliclibraryclassmembers not supported
-    if (auto fp = parse_filepath_command(
-            idx, TokenType::keepdirectories, pg_config->basedirectory)) {
-      move_vector_elements(*fp, pg_config->keepdirectories);
-      check_empty(fp);
-      continue;
-    }
-    if (auto target = parse_target(idx)) {
-      if (!target->empty()) {
-        pg_config->target_version = std::move(*target);
-      }
-      continue;
-    }
-    // -forceprocessing not supported
-
-    // Keep(-like) Options
-    auto parse_all_keep = [&]() {
-      for (auto& keep_spec : KEEP_SPECS) {
-        if (auto val_ok = parse_keep(idx,
-                                     keep_spec.token_type,
-                                     keep_spec.get_spec_set(pg_config),
-                                     keep_spec.mark_classes,
-                                     keep_spec.mark_conditionally,
-                                     keep_spec.allowshrinking,
-                                     keep_spec.allow_return,
-                                     filename,
-                                     line)) {
-          check_keep(val_ok);
-          return true;
-        }
-      }
-      return false;
-    };
-    if (parse_all_keep()) {
-      continue;
-    }
-
-    if (auto ofp =
-            parse_optional_filepath_command(idx, TokenType::printseeds)) {
-      move_vector_elements(*ofp, pg_config->printseeds);
-      continue;
-    }
-
-    // Shrinking Options
-    if (auto val = parse_boolean_command(idx, TokenType::dontshrink, false)) {
-      pg_config->shrink = *val;
-      continue;
-    }
-    if (auto ofp =
-            parse_optional_filepath_command(idx, TokenType::printusage)) {
-      move_vector_elements(*ofp, pg_config->printusage);
-      continue;
-    }
-
-    // Optimization Options
-    if (auto val = parse_boolean_command(idx, TokenType::dontoptimize, false)) {
-      pg_config->optimize = *val;
-      continue;
-    }
-    if (auto fl = parse_filter_list_command(idx, TokenType::optimizations)) {
-      move_vector_elements(*fl, pg_config->optimization_filters);
-      check_empty(fl);
-      continue;
-    }
-    if (auto op = parse_optimizationpasses_command(idx)) {
-      if (!*op) {
-        ++stats.parse_errors;
-      }
-      continue;
-    }
-
-    // Obfuscation Options
-    if (test_and_consume(idx, TokenType::dontobfuscate)) {
-      pg_config->dontobfuscate = true;
-      continue;
-    }
-    // Redex ignores -dontskipnonpubliclibraryclasses
-    if (test_and_consume(idx, TokenType::dontskipnonpubliclibraryclasses)) {
-      continue;
-    }
-    if (auto ofp =
-            parse_optional_filepath_command(idx, TokenType::printmapping)) {
-      move_vector_elements(*ofp, pg_config->printmapping);
-      continue;
-    }
-    if (auto ofp = parse_optional_filepath_command(
-            idx, TokenType::printconfiguration)) {
-      move_vector_elements(*ofp, pg_config->printconfiguration);
-      continue;
-    }
-
-    if (test_and_consume(idx, TokenType::allowaccessmodification_token)) {
-      pg_config->allowaccessmodification = true;
-      continue;
-    }
-    if (test_and_consume(idx, TokenType::dontusemixedcaseclassnames_token)) {
-      pg_config->dontusemixedcaseclassnames = true;
-      continue;
-    }
-    if (auto fl = parse_filter_list_command(idx, TokenType::keeppackagenames)) {
-      move_vector_elements(*fl, pg_config->keeppackagenames);
-      check_empty(fl);
-      continue;
-    }
-    if (test_and_consume(idx, TokenType::dontpreverify_token)) {
-      pg_config->dontpreverify = true;
-      continue;
-    }
-    if (test_and_consume(idx, TokenType::verbose_token)) {
-      pg_config->verbose = true;
-      continue;
-    }
-    if (parse_repackageclasses(idx)) {
-      continue;
-    }
-
-    if (auto fl = parse_filter_list_command(idx, TokenType::dontwarn)) {
-      move_vector_elements(*fl, pg_config->dontwarn);
-      check_empty(fl);
-      continue;
-    }
-    if (auto fl = parse_filter_list_command(idx, TokenType::keepattributes)) {
-      move_vector_elements(*fl, pg_config->keepattributes);
-      check_empty(fl);
-      continue;
-    }
-
-    // Skip unknown token.
-    if (idx.it->is_command()) {
-      const auto& name = idx.data();
-      // It is benign to drop -dontnote
-      if (name != "dontnote") {
-        std::cerr << "Unimplemented command (skipping): " << idx.show()
-                  << " at line " << idx.line() << std::endl
-                  << idx.show_context(2) << std::endl;
-        ++stats.unimplemented;
-      }
-    } else {
-      std::cerr << "Unexpected TokenType " << idx.show() << " at line "
-                << idx.line() << std::endl
-                << idx.show_context(2) << std::endl;
-      ++stats.parse_errors;
-    }
-    idx.next();
-    skip_to_next_command(idx);
   }
 }
 
