@@ -954,6 +954,7 @@ void parse(const std::vector<Token>& vec,
       idx.next();
       continue;
     }
+
     uint32_t line = idx.line();
     if (!idx.it->is_command()) {
       std::cerr << "Expecting command but found " << idx.show() << " at line "
@@ -963,6 +964,98 @@ void parse(const std::vector<Token>& vec,
       skip_to_next_command(idx);
       ++stats.unknown_commands;
       continue;
+    }
+
+    switch (idx.type()) {
+    // TODO: "Implement."
+    case TokenType::command:
+    case TokenType::include:
+    case TokenType::basedirectory:
+    case TokenType::dump:
+    case TokenType::injars:
+    case TokenType::outjars:
+    case TokenType::libraryjars:
+    case TokenType::keepdirectories:
+    case TokenType::target:
+    case TokenType::dontskipnonpubliclibraryclasses:
+    case TokenType::keep:
+    case TokenType::keepclassmembers:
+    case TokenType::keepclasseswithmembers:
+    case TokenType::keepnames:
+    case TokenType::keepclassmembernames:
+    case TokenType::keepclasseswithmembernames:
+    case TokenType::printseeds:
+    case TokenType::dontshrink:
+    case TokenType::printusage:
+    case TokenType::whyareyoukeeping:
+    case TokenType::dontoptimize:
+    case TokenType::optimizations:
+    case TokenType::optimizationpasses:
+    case TokenType::assumenosideeffects:
+    case TokenType::assumevalues:
+    case TokenType::mergeinterfacesaggressively:
+    case TokenType::allowaccessmodification_token:
+    case TokenType::returns:
+    case TokenType::dontobfuscate:
+    case TokenType::printmapping:
+    case TokenType::repackageclasses:
+    case TokenType::keepattributes:
+    case TokenType::dontusemixedcaseclassnames_token:
+    case TokenType::keeppackagenames:
+    case TokenType::dontpreverify_token:
+    case TokenType::printconfiguration:
+    case TokenType::dontwarn:
+    case TokenType::verbose_token:
+      break;
+
+    // These should not reach the switch.
+
+    // Handled explicitly.
+    case TokenType::eof_token:
+    case TokenType::comment:
+    // Not commands.
+    case TokenType::openCurlyBracket:
+    case TokenType::closeCurlyBracket:
+    case TokenType::openBracket:
+    case TokenType::closeBracket:
+    case TokenType::semiColon:
+    case TokenType::colon:
+    case TokenType::notToken:
+    case TokenType::comma:
+    case TokenType::slash:
+    case TokenType::classToken:
+    case TokenType::publicToken:
+    case TokenType::final:
+    case TokenType::abstract:
+    case TokenType::interface:
+    case TokenType::enumToken:
+    case TokenType::extends:
+    case TokenType::implements:
+    case TokenType::privateToken:
+    case TokenType::protectedToken:
+    case TokenType::staticToken:
+    case TokenType::volatileToken:
+    case TokenType::transient:
+    case TokenType::annotation:
+    case TokenType::annotation_application:
+    case TokenType::synchronized:
+    case TokenType::native:
+    case TokenType::strictfp:
+    case TokenType::synthetic:
+    case TokenType::bridge:
+    case TokenType::varargs:
+    case TokenType::identifier:
+    case TokenType::arrayType:
+    case TokenType::filepath:
+    case TokenType::target_version_token:
+    case TokenType::filter_pattern:
+    case TokenType::includedescriptorclasses_token:
+    case TokenType::allowshrinking_token:
+    case TokenType::allowoptimization_token:
+    case TokenType::allowobfuscation_token:
+    case TokenType::unknownToken:
+      UNREACHABLE();
+      break;
     }
 
     // Input/Output Options
