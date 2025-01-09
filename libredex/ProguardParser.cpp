@@ -42,6 +42,12 @@ struct TokenIndex {
     skip_comments();
   }
 
+  std::string str_next() {
+    auto val = str();
+    next();
+    return val;
+  }
+
   std::string_view data() const { return it->data; }
   std::string str() const { return std::string{it->data}; }
   std::string show() const { return it->show(); }
@@ -147,9 +153,7 @@ std::optional<std::string> parse_single_filepath_command(
               << idx.show_context(2) << std::endl;
     return "";
   }
-  auto str = idx.str();
-  idx.next(); // Consume the filepath token
-  return std::move(str);
+  return idx.str_next(); // Consume the filepath token
 }
 
 template <bool kOptional = false>
@@ -165,8 +169,7 @@ std::vector<std::string> parse_filepaths(TokenIndex& idx) {
   }
   std::vector<std::string> res;
   while (idx.type() == TokenType::filepath) {
-    res.push_back(idx.str());
-    idx.next();
+    res.push_back(idx.str_next());
   }
   return res;
 }
@@ -260,10 +263,7 @@ std::optional<std::string> parse_target(TokenIndex& idx) {
                 << idx.show_context(2) << std::endl;
       return "";
     }
-    auto str = idx.str();
-    // Consume the target version token.
-    idx.next();
-    return str;
+    return idx.str_next(); // Consume the filepath token
   }
   return std::nullopt;
 }
@@ -284,8 +284,7 @@ std::optional<std::vector<std::string>> parse_filter_list_command(
   idx.next();
   std::vector<std::string> filters;
   while (idx.type() == TokenType::filter_pattern) {
-    filters.push_back(idx.str());
-    idx.next();
+    filters.push_back(idx.str_next());
   }
   return std::move(filters);
 }
@@ -605,8 +604,7 @@ bool parse_member_specification(TokenIndex& idx,
       skip_to_semicolon(idx);
       return false;
     }
-    member_specification.name = idx.str();
-    idx.next();
+    member_specification.name = idx.str_next();
   }
   // Check to see if this is a method specification.
   if (idx.type() == TokenType::openBracket) {
@@ -714,9 +712,7 @@ std::optional<std::string> parse_class_name(TokenIndex& idx) {
               << idx.show_context(2) << std::endl;
     return std::nullopt;
   }
-  auto name = idx.str();
-  idx.next();
-  return std::move(name);
+  return idx.str_next();
 }
 
 bool parse_class_names(
@@ -788,8 +784,7 @@ std::optional<ClassSpecification> parse_class_specification(TokenIndex& idx,
       ok = false;
       class_spec.extendsClassName = "";
     } else {
-      class_spec.extendsClassName = idx.str();
-      idx.next();
+      class_spec.extendsClassName = idx.str_next();
     }
   }
   // Parse the member specifications, if there are any
