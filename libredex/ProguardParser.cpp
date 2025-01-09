@@ -268,14 +268,6 @@ std::optional<std::string> parse_target(TokenIndex& idx) {
   return std::nullopt;
 }
 
-bool test_and_consume(TokenIndex& idx, TokenType to_test) {
-  if (idx.type() != to_test) {
-    return false;
-  }
-  idx.next();
-  return true;
-}
-
 std::optional<std::vector<std::string>> parse_filter_list_command(
     TokenIndex& idx, TokenType filter_command_token) {
   if (idx.type() != filter_command_token) {
@@ -1025,8 +1017,7 @@ void parse(const std::vector<Token>& vec,
     case TokenType::dontskipnonpubliclibraryclasses: {
       // -skipnonpubliclibraryclasses not supported
       // -dontskipnonpubliclibraryclassmembers not supported
-      auto res =
-          test_and_consume(idx, TokenType::dontskipnonpubliclibraryclasses);
+      auto res = consume_token(idx, TokenType::dontskipnonpubliclibraryclasses);
       always_assert(res);
       // Silenty ignore the dontskipnonpubliclibraryclasses option.
       continue;
@@ -1107,14 +1098,13 @@ void parse(const std::vector<Token>& vec,
     }
 
     case TokenType::allowaccessmodification_token: {
-      auto res =
-          test_and_consume(idx, TokenType::allowaccessmodification_token);
+      auto res = consume_token(idx, TokenType::allowaccessmodification_token);
       always_assert(res);
       pg_config->allowaccessmodification = true;
       continue;
     }
     case TokenType::dontobfuscate: {
-      auto res = test_and_consume(idx, TokenType::dontobfuscate);
+      auto res = consume_token(idx, TokenType::dontobfuscate);
       always_assert(res);
       pg_config->dontobfuscate = true;
       continue;
@@ -1139,7 +1129,7 @@ void parse(const std::vector<Token>& vec,
     }
     case TokenType::dontusemixedcaseclassnames_token: {
       auto res =
-          test_and_consume(idx, TokenType::dontusemixedcaseclassnames_token);
+          consume_token(idx, TokenType::dontusemixedcaseclassnames_token);
       always_assert(res);
       pg_config->dontusemixedcaseclassnames = true;
       continue;
@@ -1152,7 +1142,7 @@ void parse(const std::vector<Token>& vec,
       continue;
     }
     case TokenType::dontpreverify_token: {
-      auto res = test_and_consume(idx, TokenType::dontpreverify_token);
+      auto res = consume_token(idx, TokenType::dontpreverify_token);
       always_assert(res);
       pg_config->dontpreverify = true;
       continue;
@@ -1172,7 +1162,7 @@ void parse(const std::vector<Token>& vec,
       continue;
     }
     case TokenType::verbose_token: {
-      auto res = test_and_consume(idx, TokenType::verbose_token);
+      auto res = consume_token(idx, TokenType::verbose_token);
       always_assert(res);
       pg_config->verbose = true;
       continue;
