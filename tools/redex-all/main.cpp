@@ -321,6 +321,19 @@ void __attribute__((noinline, optnone)) assert_abort(const std::string& message,
   }
 }
 
+void __attribute__((noinline)) asan_abort() {
+  // Use a use-after-scope issue for simplicity.
+  volatile int* tmp;
+  {
+    int x = 5;
+    tmp = &x;
+  }
+  *tmp = 6;
+
+  // Uh-oh.
+  always_assert_log(false, "Should have failed by now. :-(");
+}
+
 Arguments parse_args(int argc, char* argv[]) {
   Arguments args;
   args.out_dir = ".";
@@ -431,6 +444,7 @@ Arguments parse_args(int argc, char* argv[]) {
   // For testing purposes.
   od.add_options()("assert-abort", po::value<std::string>(),
                    "Assert on startup with the given message.");
+  od.add_options()("asan-abort", "Run code that should trigger an ASAN abort.");
 
   po::positional_options_description pod;
   pod.add("dex-files", -1);
@@ -455,6 +469,9 @@ Arguments parse_args(int argc, char* argv[]) {
 
   if (vm.count("assert-abort")) {
     assert_abort(vm["assert-abort"].as<std::string>(), 0);
+  }
+  if (vm.count("asan-abort")) {
+    asan_abort();
   }
 
   // --reflect-config handling must be next
