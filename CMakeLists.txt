@@ -132,7 +132,7 @@ target_link_libraries(redex-all
         ${STATIC_LINK_FLAG}
         ${Boost_LIBRARIES}
         ${REDEX_JSONCPP_LIBRARY}
-        ${REDEX_ZLIB_LIBRARY}
+        ZLIB::ZLIB
         ${CMAKE_DL_LIBS}
         redex
         resource
