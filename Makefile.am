@@ -416,7 +416,6 @@ libopt_la_SOURCES = \
 	opt/dedup-strings/DedupStrings.cpp \
 	opt/delsuper/DelSuper.cpp \
 	opt/evaluate_type_checks/EvaluateTypeChecks.cpp \
-	opt/final_inline/FinalInline.cpp \
 	opt/final_inline/FinalInlineV2.cpp \
 	opt/fully-qualify-layouts/FullyQualifyLayouts.cpp \
 	opt/init-classes/InitClassLoweringPass.cpp \

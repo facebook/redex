@@ -69,8 +69,7 @@ using SwitchIndices = std::set<int>;
  * CONSTRAINTS:
  * As specified in OptimizeResources.h, this pass requires that resource
  * identifier values have not been inlined throughout the dex code in the
- * application. So, this pass must happen before FinalInlinePass /
- * FinalInlinePassV2.
+ * application. So, this pass must happen before FinalInlinePassV2.
  *
  * OTHER NOTES:
  * This pass's name is a misnomer; it is actually creating resource types (i.e.
