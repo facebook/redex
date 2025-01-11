@@ -55,7 +55,7 @@ this config:
   "passes" : [
     "ReBindRefsPass",
     "BridgeSynthInlinePass",
-    "FinalInlinePass",
+    "FinalInlinePassV2",
     "DelSuperPass",
     "SingleImplPass",
     "MethodInlinePass",
