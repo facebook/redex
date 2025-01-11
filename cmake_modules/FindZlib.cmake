@@ -83,6 +83,24 @@ if (ZLIB_FOUND)
       message(STATUS "Found the ZLIB library: ${ZLIB_LIBRARIES}")
     endif ()
   endif ()
+
+  # Need to export as target as modern cmake does it.
+  set(ZLIB_INCLUDE_DIRS ${ZLIB_INCLUDE_DIR})
+
+  # Fix up ZLIB_LIBRARIES for the static result if necessary.
+  if (ZLIB_USE_STATIC_LIBS)
+    set(ZLIB_LIBRARIES ${ZLIB_STATIC_LIB})
+  else()
+    set(ZLIB_LIBRARIES ${ZLIB_SHARED_LIB})
+  endif()
+
+  if(NOT TARGET ZLIB::ZLIB)
+    add_library(ZLIB::ZLIB UNKNOWN IMPORTED)
+    set_target_properties(ZLIB::ZLIB PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${ZLIB_INCLUDE_DIRS}")
+    set_property(TARGET ZLIB::ZLIB APPEND PROPERTY
+      IMPORTED_LOCATION "${ZLIB_LIBRARIES}")
+  endif()
 else ()
   if (NOT ZLIB_FIND_QUIETLY)
     set(ZLIB_ERR_MSG "Could not find the ZLIB library. Looked in ")
