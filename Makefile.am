@@ -521,6 +521,7 @@ libopt_la_SOURCES = \
 	opt/optimize_resources/OptimizeResources.cpp \
 	opt/typedef-anno-checker/TypedefAnnoCheckerPass.cpp \
 	opt/typedef-anno-checker/TypedefAnnoOptPass.cpp \
+	opt/typedef-anno-checker/TypedefAnnoPatcher.cpp \
 	opt/type-analysis/CallGraphFileGenerationPass.cpp \
 	opt/type-analysis/GlobalTypeAnalysisPass.cpp \
 	opt/type-analysis/TypeAnalysisCallGraphGenerationPass.cpp \

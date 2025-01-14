@@ -11,6 +11,7 @@
 #include "RedexTest.h"
 #include "Show.h"
 #include "TypedefAnnoCheckerPass.h"
+#include "TypedefAnnoPatcher.h"
 #include "Walkers.h"
 
 struct TypedefAnnoCheckerTest : public RedexIntegrationTest {
@@ -49,7 +50,7 @@ struct TypedefAnnoCheckerTest : public RedexIntegrationTest {
   void run_patcher(const Scope& scope,
                    const method_override_graph::Graph& method_override_graph) {
     auto config = get_config();
-    SynthAccessorPatcher patcher(config, method_override_graph);
+    TypedefAnnoPatcher patcher(config, method_override_graph);
     walk::parallel::classes(scope, [&](DexClass* cls) {
       if (klass::maybe_anonymous_class(cls)) {
         patcher.patch_first_level_nested_lambda(cls);
@@ -684,7 +685,7 @@ TEST_F(TypedefAnnoCheckerTest, testSynthAccessor) {
  Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.takesStrConst:(Ljava/lang/String;)Ljava/lang/String;\n\
  Incorrect parameter's index: 1\n\n");
 
-  SynthAccessorPatcher patcher(config, *method_override_graph);
+  TypedefAnnoPatcher patcher(config, *method_override_graph);
   patcher.run(scope);
 
   TypedefAnnoChecker checker2 = TypedefAnnoChecker(
@@ -801,7 +802,7 @@ TEST_F(TypedefAnnoCheckerTest, testDefaultArg) {
   ///////////////////////////////////////////////////
   // Patch the default synth stub param !!!
   ///////////////////////////////////////////////////
-  SynthAccessorPatcher patcher(config, *method_override_graph);
+  TypedefAnnoPatcher patcher(config, *method_override_graph);
   patcher.run(scope);
 
   TypedefAnnoChecker checker4 = TypedefAnnoChecker(

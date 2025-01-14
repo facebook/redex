@@ -87,54 +87,6 @@ using StrDefConstants =
 using IntDefConstants =
     InsertOnlyConcurrentMap<const DexClass*, std::unordered_set<uint64_t>>;
 
-class SynthAccessorPatcher {
- public:
-  explicit SynthAccessorPatcher(
-      const TypedefAnnoCheckerPass::Config& config,
-      const method_override_graph::Graph& method_override_graph)
-      : m_method_override_graph(method_override_graph) {
-    m_typedef_annos.insert(config.int_typedef);
-    m_typedef_annos.insert(config.str_typedef);
-  }
-
-  void run(const Scope& scope);
-
-  void patch_first_level_nested_lambda(DexClass* cls);
-
- private:
-  void try_adding_annotation_to_accessor(DexMethod* m, const DexField* field);
-
-  void patch_kotlin_annotated_property_getter_setter(DexMethod* m);
-  void patch_kotlin_companion_property_accessor(DexMethod* m);
-  void patch_kotlin_property_private_getter(DexMethod* m);
-
-  bool patch_synth_methods_overriding_annotated_methods(DexMethod* m);
-
-  void patch_accessors(DexMethod* method);
-
-  void patch_kotlin_annotations(DexMethod* method);
-
-  void patch_enclosed_method(DexClass* cls);
-
-  void patch_synth_cls_fields_from_ctor_param(DexMethod* ctor);
-
-  void patch_local_var_lambda(DexMethod* method);
-
-  void patch_data_class_component(DexMethod* method);
-
-  void collect_annos_from_default_method(
-      DexMethod* method,
-      std::vector<std::pair<src_index_t, DexAnnotationSet&>>&
-          missing_param_annos);
-
-  void patch_ctor_params_from_synth_cls_fields(DexClass* cls);
-
-  std::unordered_set<DexType*> m_typedef_annos;
-  const method_override_graph::Graph& m_method_override_graph;
-  InsertOnlyConcurrentMap<std::string, std::vector<const DexField*>>
-      m_lambda_anno_map;
-};
-
 class TypedefAnnoChecker {
  public:
   explicit TypedefAnnoChecker(
