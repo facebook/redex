@@ -52,6 +52,7 @@ void ReachableNativesPass::bind_config() {
        m_dead_load_library_file_name);
   bind("analyze_load_library", false, m_analyze_load_library);
   bind("additional_load_library_names", {}, m_additional_load_library_names);
+  bind("sweep", false, m_sweep);
 }
 
 bool ReachableNativesPass::gather_load_library(
@@ -324,6 +325,37 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
 
   mgr.set_metric("reachable_natives", reachable_natives.size());
   mgr.set_metric("unreachable_natives", unreachable_natives.size());
+
+  if (m_sweep) {
+    // Native methods and their declaring classes themselves must remain
+    // reachable, as they may get referenced by native registration code, so we
+    // re-include them in the reachable object set, and mark classes as abstract
+    // that are only kept for this reason.
+    size_t classes_abstracted{0};
+    for (auto* m : unreachable_natives) {
+      reachable_objects->mark(m);
+      auto* cls = type_class(m->get_class());
+      if (reachable_objects->marked_unsafe(cls)) {
+        continue;
+      }
+      reachable_objects->mark(cls);
+      if (!is_abstract(cls)) {
+        classes_abstracted++;
+        cls->set_access((cls->get_access() & ~ACC_FINAL) | ACC_ABSTRACT);
+      }
+    }
+
+    auto before = reachability::count_objects(stores);
+    reachability::sweep(stores, *reachable_objects);
+    auto after = reachability::count_objects(stores);
+
+    TRACE(NATIVE, 1, "after: %zu classes, %zu fields, %zu methods",
+          after.num_classes, after.num_fields, after.num_methods);
+    mgr.incr_metric("classes_removed", before.num_classes - after.num_classes);
+    mgr.incr_metric("fields_removed", before.num_fields - after.num_fields);
+    mgr.incr_metric("methods_removed", before.num_methods - after.num_methods);
+    mgr.incr_metric("classes_abstracted", classes_abstracted);
+  }
 
   if (m_run_number != m_eval_number) {
     return;
