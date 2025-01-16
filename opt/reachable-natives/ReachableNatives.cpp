@@ -325,7 +325,7 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("reachable_natives", reachable_natives.size());
   mgr.set_metric("unreachable_natives", unreachable_natives.size());
 
-  if (m_run_number != 2) {
+  if (m_run_number != m_eval_number) {
     return;
   }
 
