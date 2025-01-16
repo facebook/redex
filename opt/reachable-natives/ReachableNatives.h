@@ -34,6 +34,9 @@
     logged.
 
     Optionally, the pass can also track which libraries are loaded by name.
+
+    Optionally, the pass can also remove classes/fields/methods (except actual
+    native methods) only kept because of blanket native keep rules.
 */
 
 class ReachableNativesPass : public Pass {
@@ -77,4 +80,5 @@ class ReachableNativesPass : public Pass {
   std::vector<std::string> m_additional_load_library_names;
   std::unordered_set<DexMethod*> m_load_library_unsafe_methods;
   std::unordered_set<DexMethod*> m_load_library_methods;
+  bool m_sweep;
 };
