@@ -51,6 +51,7 @@ struct BaselineProfileConfig {
   std::vector<std::pair<std::string, std::string>> interactions;
   BaselineProfileOptions options;
   std::vector<std::string> manual_files;
+  std::string deepdata_directory;
 };
 
 } // namespace baseline_profiles

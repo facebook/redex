@@ -80,7 +80,10 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
       m_coldstart_methods_filename(
           config.get("coldstart_methods_file", "").asString()),
       m_baseline_profile_config_file_name(
-          config.get("baseline_profile_config", "").asString()),
+          config.get("baseline_profile_config", "").asString().empty()
+              ? ""
+              : config.get("baseline_profile_config", "").asString() +
+                    "/baseline_profile_configs.json"),
       m_preprocessed_baseline_profile_directory(
           config.get("preprocessed_baseline_profile_directory", "").asString()),
       m_printseeds(config.get("printseeds", "").asString()),
@@ -485,8 +488,7 @@ void ConfigFiles::ensure_agg_method_stats_loaded() {
   baseline_profiles::BaselineProfileConfig baseline_profile_config =
       get_default_baseline_profile_config();
   m_method_profiles->initialize(
-      csv_filenames,
-      baseline_profile_config.manual_files,
+      csv_filenames, baseline_profile_config,
       get_json_config().get("ingest_baseline_profile_data", false));
 }
 
@@ -670,6 +672,10 @@ ConfigFiles::get_default_baseline_profile_config() {
         "manual_profiles",
         std::vector<std::string>(),
         current_baseline_profile_config.manual_files);
+
+    baseline_profile_config_jw.get(
+        "deep_data_path", "",
+        current_baseline_profile_config.deepdata_directory);
 
     m_baseline_profile_config_list.emplace(std::move(config_name),
                                            current_baseline_profile_config);
