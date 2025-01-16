@@ -10,7 +10,6 @@
 #include <boost/optional.hpp>
 #include <string_view>
 
-#include "BaselineProfileConfig.h"
 #include "DexClass.h"
 #include "Timer.h"
 #include "Trace.h"
@@ -70,24 +69,25 @@ class MethodProfiles {
  public:
   MethodProfiles() {}
 
-  void initialize(
-      const std::vector<std::string>& csv_filenames,
-      const baseline_profiles::BaselineProfileConfig& baseline_profile_config,
-      const bool ingest_baseline_profile_data) {
+  void initialize(const std::vector<std::string>& csv_filenames,
+                  const std::vector<std::string>& manual_filenames,
+                  const bool ingest_baseline_profile_data) {
     m_initialized = true;
     Timer t("Parsing agg_method_stats_files");
     for (const std::string& csv_filename : csv_filenames) {
-      parse_stats_file_or_throw(csv_filename, nullptr);
+      m_interaction_id = "";
+      m_mode = NONE;
+      bool success = parse_stats_file(csv_filename);
+      always_assert_log(success,
+                        "Failed to parse %s. See stderr for more details",
+                        csv_filename.c_str());
+      always_assert_log(!m_method_stats.empty(),
+                        "No valid data found in the profile %s. See stderr "
+                        "for more details.",
+                        csv_filename.c_str());
     }
     if (ingest_baseline_profile_data) {
-      for (const auto& interaction : baseline_profile_config.interactions) {
-        std::string file_name =
-            baseline_profile_config.deepdata_directory + "/agg_stats_";
-        file_name += interaction.first + "_Whole.csv";
-        parse_stats_file_or_throw(file_name,
-                                  &m_baseline_interactions["default"]);
-      }
-      parse_manual_files(baseline_profile_config.manual_files);
+      parse_manual_files(manual_filenames);
     }
   }
 
@@ -160,7 +160,6 @@ class MethodProfiles {
  private:
   static AccumulatingTimer s_process_unresolved_lines_timer;
   AllInteractions m_method_stats;
-  std::map<std::string, AllInteractions> m_baseline_interactions;
   // Resolution may fail because of renaming or generated methods. Store the
   // unresolved lines here (per interaction) so we can update after passes run
   // and change the names of methods
@@ -183,13 +182,9 @@ class MethodProfiles {
   std::string m_interaction_id;
   bool m_initialized{false};
 
-  void parse_stats_file_or_throw(const std::string& csv_filename,
-                                 AllInteractions* interaction_map);
-
   // Read a "simple" csv file (no quoted commas or extra spaces) and populate
   // m_method_stats
-  bool parse_stats_file(const std::string& csv_filename,
-                        AllInteractions* interaction_map);
+  bool parse_stats_file(const std::string& csv_filename);
 
   // Read a list of manual profiles and populate m_method_stats
   void parse_manual_files(const std::vector<std::string>& manual_filenames);
@@ -200,16 +195,12 @@ class MethodProfiles {
           baseline_profile_method_map);
 
   // Read a line of data (not a header)
-  bool parse_line(const std::string& line, AllInteractions* interaction_map);
+  bool parse_line(const std::string& line);
   // Read a line from the main section of the aggregated stats file and put an
   // entry into m_method_stats
-  bool parse_main(const std::string& line,
-                  std::string* interaction_id,
-                  AllInteractions* interaction_map);
+  bool parse_main(const std::string& line, std::string* interaction_id);
   std::optional<ParsedMain> parse_main_internal(std::string_view line);
-  bool apply_main_internal_result(ParsedMain v,
-                                  std::string* interaction_id,
-                                  AllInteractions* interaction_map);
+  bool apply_main_internal_result(ParsedMain v, std::string* interaction_id);
   void apply_manual_profile(DexMethodRef* ref, const std::string& flags);
   // Read a line of data from the metadata section (at the top of the file)
   bool parse_metadata(std::string_view line);

@@ -240,22 +240,7 @@ void MethodProfiles::parse_manual_files(
   }
 }
 
-void MethodProfiles::parse_stats_file_or_throw(
-    const std::string& csv_filename, AllInteractions* interaction_map) {
-  m_interaction_id = "";
-  m_mode = NONE;
-  bool success = parse_stats_file(csv_filename, nullptr);
-  always_assert_log(success,
-                    "Failed to parse %s. See stderr for more details",
-                    csv_filename.c_str());
-  always_assert_log(!m_method_stats.empty(),
-                    "No valid data found in the profile %s. See stderr "
-                    "for more details.",
-                    csv_filename.c_str());
-}
-
-bool MethodProfiles::parse_stats_file(const std::string& csv_filename,
-                                      AllInteractions* interaction_map) {
+bool MethodProfiles::parse_stats_file(const std::string& csv_filename) {
   TRACE(METH_PROF, 3, "input csv filename: %s", csv_filename.c_str());
   if (csv_filename.empty()) {
     TRACE(METH_PROF, 2, "No csv file given");
@@ -285,7 +270,7 @@ bool MethodProfiles::parse_stats_file(const std::string& csv_filename,
     if (m_mode == NONE) {
       success = parse_header(line);
     } else {
-      success = parse_line(line, interaction_map);
+      success = parse_line(line);
     }
     if (!success) {
       return false;
@@ -433,10 +418,8 @@ std::optional<MethodProfiles::ParsedMain> MethodProfiles::parse_main_internal(
   return std::move(result);
 }
 
-bool MethodProfiles::apply_main_internal_result(
-    ParsedMain v,
-    std::string* interaction_id,
-    AllInteractions* interaction_map) {
+bool MethodProfiles::apply_main_internal_result(ParsedMain v,
+                                                std::string* interaction_id) {
   if (v.ref != nullptr) {
     if (v.line_interaction_id) {
       // Interaction IDs from the current row have priority over the interaction
@@ -448,11 +431,7 @@ bool MethodProfiles::apply_main_internal_result(
     TRACE(METH_PROF, 6, "(%s, %s) -> {%f, %f, %f, %d}", SHOW(v.ref),
           interaction_id->c_str(), v.stats.appear_percent, v.stats.call_count,
           v.stats.order_percent, v.stats.min_api_level);
-    if (interaction_map != nullptr) {
-      (*interaction_map)[*interaction_id].emplace(v.ref, v.stats);
-    } else {
-      m_method_stats[*interaction_id].emplace(v.ref, v.stats);
-    }
+    m_method_stats[*interaction_id].emplace(v.ref, v.stats);
     return true;
   } else if (v.ref_str == nullptr) {
     std::cerr << "FAILED to parse line. Missing name column\n";
@@ -555,21 +534,18 @@ size_t MethodProfiles::substitute_stats(
 }
 
 bool MethodProfiles::parse_main(const std::string& line,
-                                std::string* interaction_id,
-                                AllInteractions* interaction_map) {
+                                std::string* interaction_id) {
   auto result = parse_main_internal(line);
   if (!result) {
     return false;
   }
-  (void)apply_main_internal_result(std::move(result.value()), interaction_id,
-                                   interaction_map);
+  (void)apply_main_internal_result(std::move(result.value()), interaction_id);
   return true;
 }
 
-bool MethodProfiles::parse_line(const std::string& line,
-                                AllInteractions* interaction_map) {
+bool MethodProfiles::parse_line(const std::string& line) {
   if (m_mode == MAIN) {
-    return parse_main(line, &m_interaction_id, interaction_map);
+    return parse_main(line, &m_interaction_id);
   } else if (m_mode == METADATA) {
     return parse_metadata(line);
   } else {
@@ -615,7 +591,7 @@ void MethodProfiles::process_unresolved_lines() {
     auto interaction_id_ptr = &*parsed_main_ptr->line_interaction_id;
     always_assert(parsed_main_ptr->ref != nullptr);
     bool success = apply_main_internal_result(std::move(*parsed_main_ptr),
-                                              interaction_id_ptr, nullptr);
+                                              interaction_id_ptr);
     always_assert(success);
   }
   always_assert(unresolved_lines == m_unresolved_lines.size());
@@ -669,7 +645,7 @@ void MethodProfiles::resolve_method_descriptor_tokens(
       auto interaction_id_ptr = &*resolved_parsed_main.line_interaction_id;
       always_assert(resolved_parsed_main.ref != nullptr);
       bool success = apply_main_internal_result(std::move(resolved_parsed_main),
-                                                interaction_id_ptr, nullptr);
+                                                interaction_id_ptr);
       always_assert(success);
       added++;
     }
