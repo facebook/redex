@@ -19,6 +19,7 @@
 #include "BinarySerialization.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
+#include "CppUtil.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -268,7 +269,7 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
   reachability::IgnoreSets ignore_sets;
   reachability::Stats stats;
   reachability::TransitiveClosureMarkerSharedState shared_state{
-      std::move(scope_set),
+      scope_set,
       &ignore_sets,
       method_override_graph.get(),
       false,
@@ -334,15 +335,24 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
     size_t classes_abstracted{0};
     for (auto* m : unreachable_natives) {
       reachable_objects->mark(m);
-      auto* cls = type_class(m->get_class());
-      if (reachable_objects->marked_unsafe(cls)) {
-        continue;
-      }
-      reachable_objects->mark(cls);
-      if (!is_abstract(cls)) {
-        classes_abstracted++;
-        cls->set_access((cls->get_access() & ~ACC_FINAL) | ACC_ABSTRACT);
-      }
+      self_recursive_fn(
+          [&](auto self, DexType* type) {
+            auto* cls = type_class(type);
+            if (!scope_set.count(cls) ||
+                reachable_objects->marked_unsafe(cls)) {
+              return;
+            }
+            reachable_objects->mark(cls);
+            self(self, cls->get_super_class());
+            for (auto* intf_type : *cls->get_interfaces()) {
+              self(self, intf_type);
+            }
+            if (!is_abstract(cls)) {
+              classes_abstracted++;
+              cls->set_access((cls->get_access() & ~ACC_FINAL) | ACC_ABSTRACT);
+            }
+          },
+          m->get_class());
     }
 
     auto before = reachability::count_objects(stores);
