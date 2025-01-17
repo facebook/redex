@@ -550,6 +550,29 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
                               : baseline_profiles::get_baseline_profile(
                                     conf.get_default_baseline_profile_config(),
                                     method_profiles, &method_refs_without_def);
+  if (conf.get_default_baseline_profile_config()
+          .options.include_all_startup_classes) {
+    const std::vector<std::string>& interdexorder =
+        conf.get_coldstart_classes();
+    std::vector<DexClass*> coldstart_classes;
+    for (const auto& entry : interdexorder) {
+      DexType* type = DexType::get_type(entry);
+      if (type) {
+        auto coldstart_class = type_class(type);
+        if (coldstart_class) {
+          coldstart_classes.push_back(coldstart_class);
+          baseline_profile.classes.insert(coldstart_class);
+        }
+      }
+    }
+    baseline_profiles::MethodFlags flags;
+    flags.hot = true;
+    flags.startup = true;
+    walk::methods(coldstart_classes,
+                  [&baseline_profile, flags](DexMethod* method) {
+                    baseline_profile.methods.emplace(method, flags);
+                  });
+  }
   auto scope = build_class_scope(stores);
   if (m_never_compile_callcount_threshold > -1 ||
       m_never_compile_perf_threshold > -1) {

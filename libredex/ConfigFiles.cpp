@@ -637,6 +637,9 @@ ConfigFiles::get_default_baseline_profile_config() {
         "betamap_include_coldstart_1pct", false,
         current_baseline_profile_config.options.betamap_include_coldstart_1pct);
     Json::Value deepdata_interactions_json;
+    baseline_profile_config_jw.get(
+        "include_all_startup_classes", false,
+        current_baseline_profile_config.options.include_all_startup_classes);
     baseline_profile_config_jw.get("deep_data_interaction_config", {},
                                    deepdata_interactions_json);
     always_assert(!deepdata_interactions_json.empty());
