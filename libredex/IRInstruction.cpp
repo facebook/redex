@@ -73,6 +73,7 @@ bool IRInstruction::operator==(const IRInstruction& that) const {
 
   // Avoid calling opcode::ref(); there's only one instruction that has data.
   if (m_opcode == OPCODE_FILL_ARRAY_DATA) {
+    // NOLINTNEXTLINE(bugprone-assert-side-effect) No side effect here.
     redex_assert(opcode::ref(m_opcode) == opcode::Ref::Data);
     auto size = m_data->data_size();
     if (size != that.m_data->data_size() ||
@@ -82,6 +83,7 @@ bool IRInstruction::operator==(const IRInstruction& that) const {
       return false;
     }
   } else {
+    // NOLINTNEXTLINE(bugprone-assert-side-effect) No side effect here.
     redex_assert(opcode::ref(m_opcode) != opcode::Ref::Data);
     if (m_literal != that.m_literal) { // just test one member of the union
       return false;
