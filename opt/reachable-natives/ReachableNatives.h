@@ -81,4 +81,5 @@ class ReachableNativesPass : public Pass {
   std::unordered_set<DexMethod*> m_load_library_unsafe_methods;
   std::unordered_set<DexMethod*> m_load_library_methods;
   bool m_sweep;
+  bool m_sweep_native_methods;
 };
