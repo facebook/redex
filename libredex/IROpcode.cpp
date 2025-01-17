@@ -21,22 +21,6 @@ std::ostream& operator<<(std::ostream& os, const IROpcode& op) {
 
 namespace opcode {
 
-// clang-format off
-Ref ref(IROpcode opcode) {
-  switch (opcode) {
-#define OP(uc, lc, ref, ...) \
-  case OPCODE_##uc:          \
-    return ref;
-#define IOP(uc, lc, ref, ...) \
-  case IOPCODE_##uc:          \
-    return ref;
-#define OPRANGE(...)
-#include "IROpcodes.def"
-  }
-  not_reached_log("Unexpected opcode 0x%x", opcode);
-}
-// clang-format on
-
 std::optional<IROpcode> from_dex_opcode(DexOpcode op) {
   switch (op) {
   case DOPCODE_NOP:
