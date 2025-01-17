@@ -1983,10 +1983,7 @@ static void rewrite_at_location(DexMethod* outlined_method,
   std::vector<IRInstruction*> outlined_method_invocation;
   IRInstruction* invoke_insn = new IRInstruction(OPCODE_INVOKE_STATIC);
   invoke_insn->set_method(outlined_method);
-  invoke_insn->set_srcs_size(arg_regs.size());
-  for (size_t i = 0; i < arg_regs.size(); i++) {
-    invoke_insn->set_src(i, arg_regs.at(i));
-  }
+  invoke_insn->set_srcs(arg_regs);
   outlined_method_invocation.push_back(invoke_insn);
   IRInstruction* move_result_insn = nullptr;
   if (c.res_type) {
@@ -2934,10 +2931,7 @@ class OutlinedMethodBodySetter {
           code->push_back(const_insn);
         }
         auto insn = new IRInstruction(ci.core.opcode);
-        insn->set_srcs_size(ci.srcs.size());
-        for (size_t i = 0; i < ci.srcs.size(); i++) {
-          insn->set_src(i, ci.srcs.at(i));
-        }
+        insn->set_srcs(ci.srcs);
         if (ci.dest) {
           insn->set_dest(*ci.dest);
         }

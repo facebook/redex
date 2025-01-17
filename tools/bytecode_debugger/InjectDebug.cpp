@@ -108,7 +108,7 @@ void InjectDebug::inject_method(DexMethod* dex_method, int* line_start) {
       // Make debugger stop at every instruction, and provide local variables to
       // debug each instruction's source and destination registers
       type_inf.analyze_instruction(ir_it->insn, &type_envs.at(ir_it->insn));
-      for (reg_t src_reg : ir_it->insn->srcs_vec()) {
+      for (reg_t src_reg : ir_it->insn->srcs_copy()) {
         inject_register(ir_code, ir_it, type_envs.at(ir_it->insn), src_reg);
       }
       if (ir_it->insn->has_dest()) {

@@ -59,7 +59,7 @@ IRInstruction* make_load_const(reg_t dest, size_t val);
 
 IRInstruction* make_invoke(DexMethod* callee,
                            IROpcode opcode,
-                           std::vector<reg_t> args);
+                           const std::vector<reg_t>& args);
 
 /**
  * A callsite consists of a caller, a callee and the instruction.

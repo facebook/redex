@@ -83,6 +83,13 @@ class Impl final {
     }
   }
   template <class T>
+  void hash(const boost::iterator_range<const reg_t*>& l) {
+    hash((uint64_t)l.size());
+    for (const auto& elem : l) {
+      hash(elem);
+    }
+  }
+  template <class T>
   void hash(const std::deque<T>& l) {
     hash((uint64_t)l.size());
     for (const auto& elem : l) {
@@ -175,7 +182,7 @@ void Impl::hash(const IRInstruction* insn) {
 
   auto old_hash = m_hash;
   m_hash = 0;
-  hash(insn->srcs_vec());
+  hash(insn->srcs());
   if (insn->has_dest()) {
     hash(insn->dest());
   }

@@ -269,11 +269,19 @@ class IRInstruction final {
     operator bool() const = delete;
     // inherit the constructors
     using reg_range_super::reg_range_super;
+
+   public:
+    explicit reg_range(const std::vector<reg_t>& srcs)
+        : reg_range_super(srcs.data(), srcs.data() + srcs.size()) {}
   };
   // Provides a read-only view into the source registers
   reg_range srcs() const;
   // Provides a copy of the source registers
-  std::vector<reg_t> srcs_vec() const;
+  std::vector<reg_t> srcs_copy() const;
+  IRInstruction* set_srcs(const reg_range&);
+  IRInstruction* set_srcs(const std::vector<reg_t>& srcs) {
+    return set_srcs(reg_range(srcs));
+  }
 
   /*
    * Setters for logical parts of the instruction.
@@ -413,24 +421,21 @@ class IRInstruction final {
  private:
   std::string show_opcode() const; // To avoid "Show.h" in the header.
 
-  // 2 is chosen because it's the maximum number of registers (32 bits each) we
-  // can fit in the size of a pointer (on a 64bit system).
-  // In practice, most IRInstructions have 2 or fewer source registers, so we
-  // can avoid a vector allocation most of the time.
-  static constexpr uint8_t MAX_NUM_INLINE_SRCS = 2;
+  // 4 is chosen as it brings up the size of IRInstruction to 32 bytes (on a 64
+  // bit system). We could bring it down to 24 with a maximum value of 2, but
+  // jemalloc puts both 24-bytes and 32-byte objects into the same bucket. In
+  // practice, most IRInstructions have 2 or fewer source registers, so we can
+  // avoid a vector allocation most of the time.
+  static constexpr uint8_t MAX_NUM_INLINE_SRCS = 4;
 
   // The fields of IRInstruction are carefully selected and ordered to avoid
   // empty packing bytes and minimize total size. This is optimized for 8 byte
   // alignment on a 64bit system.
 
   IROpcode m_opcode; // 2 bytes
-  // m_num_inline_srcs can take a small set of possible values:
-  //   * 0, ..., MAX_NUM_INLINE_SRCS: the size of the valid section of
-  //     m_inline_srcs
-  //   * MAX_NUM_INLINE_SRCS + 1: indicates that m_srcs should be used, not
-  //     m_inline_srcs
-  uint16_t m_num_inline_srcs{0}; // 2 bytes. Could be 1 byte
-                                 // but extra byte would just be padding
+  // If m_num_srcs > MAX_NUM_INLINE_SRCS, then the registers reside in an
+  // outline m_srcs array which is appropriately sized.
+  src_index_t m_num_srcs{0}; // 2 bytes
   reg_t m_dest{0}; // 4 bytes
   // 8 bytes so far
   union {
@@ -448,13 +453,13 @@ class IRInstruction final {
   };
   // 16 bytes so far
   union {
-    // m_num_inline_srcs indicates how to interpret the union. See comment above
+    // m_inline_srcs is used when m_num_srcs <= MAX_NUM_INLINE_SRCS
     reg_t m_inline_srcs[MAX_NUM_INLINE_SRCS] = {0};
-    // Use a pointer here because it's 8 bytes instead of ~24.
-    // Be careful to new and delete it correctly!
-    std::vector<reg_t>* m_srcs;
+    // m_srcs points to an array of srcs when m_num_srcs > MAX_NUM_INLINE_SRCS
+    // Be careful to malloc and free it correctly!
+    reg_t* m_srcs;
   };
-  // 24 bytes total
+  // 32 bytes total
 };
 
 /*

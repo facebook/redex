@@ -946,10 +946,7 @@ class CodeTransformer final {
       return;
     }
     auto new_insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
-    new_insn->set_method(integer_meth)->set_srcs_size(insn->srcs_size());
-    for (size_t id = 0; id < insn->srcs_size(); ++id) {
-      new_insn->set_src(id, insn->src(id));
-    }
+    new_insn->set_method(integer_meth)->set_srcs(insn->srcs());
     m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
   }
 

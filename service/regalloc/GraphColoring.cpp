@@ -144,14 +144,14 @@ bool needs_remap(const transform::RegMap& reg_map, reg_t reg, vreg_t vreg) {
  */
 int score_range_fit(
     const interference::Graph& ig,
-    const std::vector<reg_t>& range_regs,
+    const boost::iterator_range<const reg_t*>& range_regs,
     vreg_t range_base,
     const std::unordered_map<reg_t, VirtualRegistersFile>& vreg_files,
     const transform::RegMap& reg_map) {
   int score{0};
   auto vreg = range_base;
   for (size_t i = 0; i < range_regs.size(); ++i) {
-    auto reg = range_regs.at(i);
+    auto reg = range_regs[i];
     const auto& node = ig.get_node(reg);
     const auto& vreg_file = vreg_files.at(reg);
     if (!vreg_file.is_free(vreg, node.width())) {
@@ -171,7 +171,7 @@ int score_range_fit(
  */
 vreg_t find_best_range_fit(
     const interference::Graph& ig,
-    const std::vector<reg_t>& range_regs,
+    const boost::iterator_range<const reg_t*>& range_regs,
     vreg_t range_base_start,
     vreg_t range_base_end,
     const std::unordered_map<reg_t, VirtualRegistersFile>& vreg_files,
@@ -586,7 +586,7 @@ void Allocator::select_ranges(const cfg::ControlFlowGraph& cfg,
     }
 
     vreg_t range_base =
-        find_best_range_fit(ig, insn->srcs_vec(), 0, reg_transform->size,
+        find_best_range_fit(ig, insn->srcs(), 0, reg_transform->size,
                             vreg_files, reg_transform->map);
     fit_range_instruction(ig, insn, range_base, vreg_files, reg_transform,
                           spill_plan);
@@ -616,9 +616,9 @@ void Allocator::select_params(const cfg::ControlFlowGraph& cfg,
 
   auto min_param_reg =
       reg_transform->size < params_size ? 0 : reg_transform->size - params_size;
-  auto params_base =
-      find_best_range_fit(ig, param_regs, min_param_reg, reg_transform->size,
-                          vreg_files, reg_transform->map);
+  auto params_base = find_best_range_fit(
+      ig, IRInstruction::reg_range(param_regs), min_param_reg,
+      reg_transform->size, vreg_files, reg_transform->map);
   fit_params(ig, param_insns, params_base, vreg_files, reg_transform,
              spill_plan);
 }

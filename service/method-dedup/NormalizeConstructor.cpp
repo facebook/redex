@@ -438,7 +438,7 @@ void reorder_callsite_args(
     const std::vector<FieldOrigin>& new_field_id_to_arg_id,
     IRInstruction* insn) {
   redex_assert(old_field_id_to_arg_id.size() == new_field_id_to_arg_id.size());
-  auto old_srcs = insn->srcs_vec();
+  auto old_srcs = insn->srcs_copy();
   for (uint32_t field_id = 0; field_id < new_field_id_to_arg_id.size();
        field_id++) {
     if (new_field_id_to_arg_id[field_id].type != FieldOriginType::ARG) {

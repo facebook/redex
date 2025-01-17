@@ -961,8 +961,7 @@ class RootMethodReducer {
       insn->set_opcode(OPCODE_INVOKE_STATIC);
     }
     auto obj_reg = insn->src(param_index);
-    auto srcs_range = insn->srcs();
-    std::vector<reg_t> srcs_copy(srcs_range.begin(), srcs_range.end());
+    std::vector<reg_t> srcs_copy = insn->srcs_copy();
     insn->set_srcs_size(srcs_copy.size() - 1 + fields->size());
     for (param_index_t i = param_index; i < srcs_copy.size() - 1; i++) {
       insn->set_src(i + fields->size(), srcs_copy.at(i + 1));
