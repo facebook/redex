@@ -40,6 +40,7 @@ struct InlinerConfig {
   bool debug{false};
   bool check_min_sdk_refs{true};
   bool rewrite_invoke_super{false};
+  bool partial_hot_hot_inline{false};
 
   /*
    * Some versions of ART (5.0.0 - 5.0.2) will fail to verify a method if it

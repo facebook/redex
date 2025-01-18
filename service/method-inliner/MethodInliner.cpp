@@ -783,6 +783,7 @@ void run_inliner(
     ConfigFiles& conf,
     InlinerCostConfig inliner_cost_config /* DEFAULT_COST_CONFIG */,
     bool consider_hot_cold /* false */,
+    bool partial_hot_hot /* false */,
     bool intra_dex /* false */,
     InlineForSpeed* inline_for_speed /* nullptr */,
     bool inline_bridge_synth_only /* false */,
@@ -806,6 +807,10 @@ void run_inliner(
     } else {
       min_sdk_api = &conf.get_android_sdk_api(min_sdk);
     }
+  }
+
+  if (partial_hot_hot) {
+    inliner_config.partial_hot_hot_inline = true;
   }
 
   CalleeCallerInsns true_virtual_callers;
@@ -1016,8 +1021,11 @@ void run_inliner(
   TRACE(INLINE, 3, "caller too large %zu",
         (size_t)inliner.get_info().caller_too_large);
   TRACE(INLINE, 3, "inlined ctors %zu", inlined_init_count);
-  TRACE(INLINE, 1, "%zu inlined calls over %zu methods and %zu methods removed",
-        (size_t)inliner.get_info().calls_inlined, inlined_count,
+  TRACE(INLINE, 1,
+        "%zu inlined calls (of which %zu partial) over %zu methods and %zu "
+        "methods removed",
+        (size_t)inliner.get_info().calls_inlined,
+        (size_t)inliner.get_info().partially_inlined, inlined_count,
         deleted.size());
 
   const auto& shrinker = inliner.get_shrinker();
@@ -1034,6 +1042,29 @@ void run_inliner(
   mgr.incr_metric("calls_inlined", inliner.get_info().calls_inlined);
   mgr.incr_metric("kotlin_lambda_inlined",
                   inliner.get_info().kotlin_lambda_inlined);
+  mgr.incr_metric("partially_inlined", inliner.get_info().partially_inlined);
+
+  // Log top-10 partially inlined callees
+  std::vector<std::pair<const DexMethod*, size_t>> partially_inlined_callees;
+  auto& atomic_map = inliner.get_info().partially_inlined_callees;
+  partially_inlined_callees.reserve(atomic_map.size());
+  for (auto&& [callee, count] : atomic_map) {
+    partially_inlined_callees.emplace_back(callee, count.load());
+  }
+  std::sort(partially_inlined_callees.begin(), partially_inlined_callees.end(),
+            [](const auto& p, const auto& q) {
+              if (p.second != q.second) {
+                return p.second > q.second;
+              }
+              return compare_dexmethods(p.first, q.first);
+            });
+  for (size_t i = 0; i < partially_inlined_callees.size() && i < 10; i++) {
+    auto [callee, count] = partially_inlined_callees[i];
+    mgr.incr_metric(
+        "partially_inlined_callee_" + std::to_string(i) + "_" + show(callee),
+        count);
+  }
+
   mgr.incr_metric("calls_not_inlinable",
                   inliner.get_info().calls_not_inlinable);
   mgr.incr_metric("no_returns", inliner.get_info().no_returns);

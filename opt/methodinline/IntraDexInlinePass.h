@@ -35,4 +35,5 @@ class IntraDexInlinePass : public Pass {
 
  private:
   bool m_consider_hot_cold;
+  bool m_partial_hot_hot;
 };

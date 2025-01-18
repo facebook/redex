@@ -149,6 +149,11 @@ struct CallerInsns {
   bool empty() const { return caller_insns.empty() && !other_call_sites; }
 };
 
+struct Callee {
+  DexMethod* method;
+  bool true_virtual;
+};
+
 using CalleeCallerInsns = std::unordered_map<DexMethod*, CallerInsns>;
 
 class ReducedCode {
@@ -161,6 +166,16 @@ class ReducedCode {
   IRCode m_code;
 };
 
+struct PartialCode {
+  std::shared_ptr<ReducedCode> reduced_code{nullptr};
+  size_t insn_size{0};
+  bool is_valid() const { return reduced_code != nullptr; }
+  bool operator==(const PartialCode& other) const {
+    // TODO: Also check that reduced_cfg's are equivalent
+    return insn_size == other.insn_size;
+  }
+};
+
 struct Inlinable {
   DexMethod* callee;
   // Invoke instruction to callee
@@ -169,6 +184,8 @@ struct Inlinable {
   // return normally, and instead of inlining, a throw statement should be
   // inserted afterwards.
   bool no_return{false};
+  // Whether the reduced-code represent a partial inlining transformation.
+  bool partial{false};
   // For a specific call-site, reduced cfg template after applying call-site
   // summary
   std::shared_ptr<ReducedCode> reduced_code;
@@ -207,13 +224,15 @@ struct InlinedCost {
   std::shared_ptr<ReducedCode> reduced_code;
   // Maximum or call-site specific estimated callee size after pruning
   size_t insn_size;
+  // For a specific call-site, partially inlined code.
+  PartialCode partial_code{};
 
   bool operator==(const InlinedCost& other) const {
     // TODO: Also check that reduced_cfg's are equivalent
     return full_code == other.full_code && code == other.code &&
            method_refs == other.method_refs && other_refs == other.other_refs &&
            no_return == other.no_return && result_used == other.result_used &&
-           insn_size == other.insn_size;
+           insn_size == other.insn_size && partial_code == other.partial_code;
   }
 };
 
@@ -328,12 +347,14 @@ class MultiMethodInliner {
   shrinker::Shrinker& get_shrinker() { return m_shrinker; }
 
  private:
+  void make_partial(const DexMethod* method, InlinedCost* inlined_Cost);
+
   DexType* get_needs_init_class(DexMethod* callee) const;
 
   bool get_needs_constructor_fence(const DexMethod* caller,
                                    const DexMethod* callee) const;
 
-  DexMethod* get_callee(DexMethod* caller, IRInstruction* insn);
+  std::optional<Callee> get_callee(DexMethod* caller, IRInstruction* insn);
 
   size_t inline_inlinables(
       DexMethod* caller,
@@ -467,7 +488,16 @@ class MultiMethodInliner {
       DexMethod* callee,
       bool* no_return = nullptr,
       std::shared_ptr<ReducedCode>* reduced_code = nullptr,
-      size_t* insn_size = nullptr);
+      size_t* insn_size = nullptr,
+      PartialCode* partial_code = nullptr);
+
+  /**
+   * Whether we should partially inline a particular callee.
+   */
+  bool should_partially_inline(cfg::Block* block,
+                               bool true_virtual,
+                               DexMethod* callee,
+                               PartialCode* partial_code);
 
   /**
    * should_inline_fast will return true for a subset of methods compared to
@@ -475,6 +505,11 @@ class MultiMethodInliner {
    * doesn't need to peek into the callee code.
    */
   bool should_inline_fast(const DexMethod* callee);
+
+  /**
+   * Gets the partially inlined callee, if any.
+   */
+  PartialCode get_callee_partial_code(const DexMethod* callee);
 
   /**
    * Gets the number of instructions in a callee.
@@ -601,6 +636,8 @@ class MultiMethodInliner {
 
   InsertOnlyConcurrentSet<const DexMethod*> m_not_cold_methods;
 
+  InsertOnlyConcurrentSet<const DexMethod*> m_hot_methods;
+
   ConcurrentSet<const DexMethod*> m_inlined_with_fence;
 
   //
@@ -678,6 +715,10 @@ class MultiMethodInliner {
   std::unique_ptr<InsertOnlyConcurrentMap<const DexMethod*, size_t>>
       m_callee_insn_sizes;
 
+  // Optional cache for get_partial_callee function
+  std::unique_ptr<InsertOnlyConcurrentMap<const DexMethod*, PartialCode>>
+      m_callee_partial_code;
+
   // Optional cache for get_callee_type_refs function
   std::unique_ptr<
       InsertOnlyConcurrentMap<const DexMethod*,
@@ -710,6 +751,7 @@ class MultiMethodInliner {
 
     // statistics that may be incremented concurrently
     std::atomic<size_t> kotlin_lambda_inlined{0};
+    std::atomic<size_t> partially_inlined{0};
     std::atomic<size_t> calls_inlined{0};
     std::atomic<size_t> init_classes{0};
     std::atomic<size_t> constructor_fences{0};
@@ -740,6 +782,7 @@ class MultiMethodInliner {
     std::atomic<size_t> constant_invoke_callees_unused_results{0};
     std::atomic<size_t> constant_invoke_callees_no_return{0};
     inliner::CallSiteSummaryStats call_site_summary_stats;
+    AtomicMap<const DexMethod*, size_t> partially_inlined_callees{};
   };
   InliningInfo info;
 

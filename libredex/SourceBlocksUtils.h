@@ -14,15 +14,17 @@ class DexMethod;
 namespace source_blocks {
 
 std::unique_ptr<SourceBlock> clone_as_synthetic(SourceBlock* sb,
-                                                DexMethod* ref,
+                                                const DexMethod* ref,
                                                 const SourceBlock::Val& val);
 
 std::unique_ptr<SourceBlock> clone_as_synthetic(
     SourceBlock* sb,
-    DexMethod* ref = nullptr,
+    const DexMethod* ref = nullptr,
     const std::optional<SourceBlock::Val>& opt_val = std::nullopt);
 
 std::unique_ptr<SourceBlock> clone_as_synthetic(
-    SourceBlock* sb, DexMethod* ref, const std::vector<SourceBlock*>& many);
+    SourceBlock* sb,
+    const DexMethod* ref,
+    const std::vector<SourceBlock*>& many);
 
 } // namespace source_blocks

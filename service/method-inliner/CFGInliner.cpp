@@ -20,6 +20,10 @@
 
 namespace cfg {
 
+const DexString* get_partial_inline_source() {
+  return DexString::make_string("PartiallyInlinedSource");
+}
+
 // TODO:
 //  * should this really be a friend class to ControlFlowGraph, Block, and Edge?
 
@@ -554,13 +558,21 @@ void CFGInliner::add_callee_throws_to_caller(
 
 void CFGInliner::set_dbg_pos_parents(ControlFlowGraph* callee,
                                      DexPosition* callsite_dbg_pos) {
+  auto* partial_inline_source = get_partial_inline_source();
+
   for (auto& entry : callee->m_blocks) {
     Block* b = entry.second;
     for (auto& mie : *b) {
       // Don't overwrite existing parent pointers because those are probably
       // methods that were inlined into callee before
       if (mie.type == MFLOW_POSITION && mie.pos->parent == nullptr) {
-        mie.pos->parent = callsite_dbg_pos;
+        // Deal with specially marked position that represents partially inlined
+        // fallback invocation.
+        if (mie.pos->file == partial_inline_source) {
+          mie.pos = std::make_unique<DexPosition>(*callsite_dbg_pos);
+        } else {
+          mie.pos->parent = callsite_dbg_pos;
+        }
       }
     }
   }

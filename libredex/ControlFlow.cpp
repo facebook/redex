@@ -2675,10 +2675,10 @@ Block* ControlFlowGraph::split_block(const cfg::InstructionIterator& it) {
 Block* ControlFlowGraph::split_block_before(Block* old_block,
                                             const IRList::iterator& raw_it) {
   always_assert(editable());
-  // Do not split in front of special move instructions. This would likely end
-  // up being illegal.
-  always_assert(!opcode::is_a_move_result(raw_it->insn->opcode()) &&
-                !opcode::is_a_move_result_pseudo(raw_it->insn->opcode()));
+  // Do not split in front of special move-result instructions. This would
+  // likely end up being illegal.
+  always_assert(raw_it == old_block->end() || raw_it->type != MFLOW_OPCODE ||
+                !opcode::is_move_result_any(raw_it->insn->opcode()));
 
   // new_block will be the predecessor.
   Block* new_block = create_block();
