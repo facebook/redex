@@ -8,7 +8,7 @@ BOOST_VERSION="1.71.0"
 
 BOOST_VERSION_UNDERSCORE="${BOOST_VERSION//./_}"
 BOOST_FILE="boost_${BOOST_VERSION_UNDERSCORE}.tar.bz2"
-BOOST_TAR_URL="https://boostorg.jfrog.io/artifactory/main/release/${BOOST_VERSION}/source/${BOOST_FILE}"
+BOOST_TAR_URL="https://archives.boost.io/release/${BOOST_VERSION}/source/${BOOST_FILE}"
 BOOST_CACHE_DIR="dl_cache/boost_cache"
 BOOST_TAR_LOCAL="${BOOST_CACHE_DIR}/${BOOST_FILE}"
 BOOST_DIR="boost_${BOOST_VERSION_UNDERSCORE}"
