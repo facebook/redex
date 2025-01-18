@@ -13,6 +13,10 @@
 
 namespace cfg {
 
+// Special marker source file name used by partial inlining to make the position
+// of the fallback code.
+const DexString* get_partial_inline_source();
+
 class CFGInlinerPlugin;
 class CFGInliner {
  public:

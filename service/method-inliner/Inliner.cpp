@@ -28,6 +28,7 @@
 #include "Mutators.h"
 #include "OptData.h"
 #include "OutlinedMethods.h"
+#include "PartialInliner.h"
 #include "RecursionPruner.h"
 #include "SourceBlocks.h"
 #include "StlUtil.h"
@@ -265,7 +266,7 @@ MultiMethodInliner::MultiMethodInliner(
     }
   }
 
-  if (m_consider_hot_cold) {
+  if (m_consider_hot_cold || m_config.partial_hot_hot_inline) {
     std::vector<const DexMethod*> methods;
     for (auto&& [callee, _] : callee_caller) {
       methods.push_back(callee);
@@ -277,15 +278,6 @@ MultiMethodInliner::MultiMethodInliner(
     }
     // Now try to get the hot blocks and exclude them too based on the
     // instrumented SourceBlock data.
-    auto is_not_cold = [](cfg::Block* b) {
-      auto* sb = source_blocks::get_first_source_block(b);
-      if (sb == nullptr) {
-        // Conservatively assume that missing SBs mean no profiling data.
-        return true;
-      }
-      return sb->foreach_val_early(
-          [](const auto& v) { return v && v->val > 0; });
-    };
     workqueue_run<const DexMethod*>(
         [&](const DexMethod* method) {
           auto* code = method->get_code();
@@ -293,9 +285,16 @@ MultiMethodInliner::MultiMethodInliner(
             return;
           }
           auto& cfg = code->cfg();
-          auto blocks = cfg.blocks();
-          if (std::any_of(blocks.begin(), blocks.end(), is_not_cold)) {
-            m_not_cold_methods.insert(method);
+          if (m_consider_hot_cold) {
+            auto blocks = cfg.blocks();
+            if (std::any_of(blocks.begin(), blocks.end(),
+                            inliner::is_not_cold)) {
+              m_not_cold_methods.insert(method);
+            }
+          }
+          if (m_config.partial_hot_hot_inline &&
+              inliner::is_hot(cfg.entry_block())) {
+            m_hot_methods.insert(method);
           }
         },
         methods);
@@ -310,6 +309,8 @@ void MultiMethodInliner::inline_methods() {
   // - its set of method refs
   // - whether all callers are in the same class, and are called from how many
   //   classes
+  m_callee_partial_code = std::make_unique<
+      InsertOnlyConcurrentMap<const DexMethod*, PartialCode>>();
   m_callee_insn_sizes =
       std::make_unique<InsertOnlyConcurrentMap<const DexMethod*, size_t>>();
   m_callee_type_refs = std::make_unique<InsertOnlyConcurrentMap<
@@ -347,7 +348,8 @@ void MultiMethodInliner::inline_methods() {
     m_call_site_summarizer = std::make_unique<inliner::CallSiteSummarizer>(
         m_shrinker, callee_caller, caller_callee,
         [this](DexMethod* caller, IRInstruction* insn) -> DexMethod* {
-          return this->get_callee(caller, insn);
+          auto callee_opt = this->get_callee(caller, insn);
+          return callee_opt ? callee_opt->method : nullptr;
         },
         [this](DexMethod* callee) -> bool {
           return m_recursive_callees.count(callee) || root(callee) ||
@@ -396,25 +398,27 @@ void MultiMethodInliner::inline_methods() {
   info.waited_seconds = m_scheduler.get_thread_pool().get_waited_seconds();
 }
 
-DexMethod* MultiMethodInliner::get_callee(DexMethod* caller,
-                                          IRInstruction* insn) {
+std::optional<Callee> MultiMethodInliner::get_callee(DexMethod* caller,
+                                                     IRInstruction* insn) {
   if (!opcode::is_an_invoke(insn->opcode())) {
-    return nullptr;
+    return std::nullopt;
   }
   auto callee =
       m_concurrent_resolver(insn->get_method(), opcode_to_search(insn), caller);
   auto it = m_caller_virtual_callees.find(caller);
   if (it == m_caller_virtual_callees.end()) {
-    return callee;
+    return std::make_optional<Callee>({callee, /* true_virtual */ false});
   }
   const auto& cvc = it->second;
   auto it2 = cvc.insns.find(insn);
   if (it2 == cvc.insns.end()) {
     // We couldn't find a matching true virtual invocation; only allow callee if
     // it's not exclusive to matching true virtuals.
-    return cvc.exclusive_callees.count(callee) ? nullptr : callee;
+    return cvc.exclusive_callees.count(callee)
+               ? std::nullopt
+               : std::make_optional<Callee>({callee, /* true_virtual */ true});
   }
-  return it2->second;
+  return std::make_optional<Callee>({it2->second, /* true_virtual */ false});
 }
 
 void MultiMethodInliner::inline_callees(
@@ -427,62 +431,80 @@ void MultiMethodInliner::inline_callees(
     auto timer = m_inline_callees_timer.scope();
 
     always_assert(caller->get_code()->editable_cfg_built());
-    auto ii = InstructionIterable(caller->get_code()->cfg());
-    // walk the caller opcodes collecting all candidates to inline
-    // Build a callee to opcode map
-    for (auto it = ii.begin(); it != ii.end(); ++it) {
-      auto insn = it->insn;
-      auto callee = get_callee(caller, insn);
-      if (!callee || !callees.count(callee)) {
-        continue;
-      }
-      std::shared_ptr<ReducedCode> reduced_code;
-      bool no_return{false};
-      size_t insn_size{0};
-      if (filter_via_should_inline) {
-        auto timer2 = m_inline_callees_should_inline_timer.scope();
-        // Cost model is based on fully inlining callee everywhere; let's
-        // see if we can get more detailed call-site specific information
-        if (should_inline_at_call_site(caller, insn, callee, &no_return,
-                                       &reduced_code, &insn_size)) {
-          always_assert(!no_return);
-          // Yes, we know might have dead_blocks and a refined insn_size
-        } else if (should_inline_always(callee)) {
-          // We'll fully inline the callee without any adjustments
-          no_return = false;
-          insn_size = get_callee_insn_size(callee);
-        } else if (no_return) {
-          always_assert(insn_size == 0);
-          always_assert(!reduced_code);
-        } else {
+    auto& cfg = caller->get_code()->cfg();
+    for (auto* block : cfg.blocks()) {
+      auto ii = InstructionIterable(block);
+      // walk the caller opcodes collecting all candidates to inline
+      // Build a callee to opcode map
+      for (auto it = ii.begin(); it != ii.end(); ++it) {
+        auto insn = it->insn;
+        auto callee_opt = get_callee(caller, insn);
+        if (!callee_opt) {
           continue;
         }
-      } else {
-        insn_size = get_callee_insn_size(callee);
-      }
-      always_assert(callee->is_concrete());
-      if (m_analyze_and_prune_inits && method::is_init(callee) && !no_return) {
-        auto timer2 = m_inline_callees_init_timer.scope();
-        if (!callee->get_code()->editable_cfg_built()) {
+        auto callee = callee_opt->method;
+        auto true_virtual = callee_opt->true_virtual;
+        if (!callees.count(callee)) {
           continue;
         }
-        if (!can_inline_init(callee)) {
-          if (!method::is_init(caller) ||
-              caller->get_class() != callee->get_class() ||
-              !caller->get_code()->editable_cfg_built() ||
-              !constructor_analysis::can_inline_inits_in_same_class(
-                  caller, callee, insn)) {
+        std::shared_ptr<ReducedCode> reduced_code;
+        bool no_return{false};
+        bool partial{false};
+        size_t insn_size{0};
+        PartialCode partial_code;
+        if (filter_via_should_inline) {
+          auto timer2 = m_inline_callees_should_inline_timer.scope();
+          // Cost model is based on fully inlining callee everywhere; let's
+          // see if we can get more detailed call-site specific information
+          if (should_inline_at_call_site(caller, insn, callee, &no_return,
+                                         &reduced_code, &insn_size,
+                                         &partial_code)) {
+            always_assert(!no_return);
+            // Yes, we know might have dead_blocks and a refined insn_size
+          } else if (should_inline_always(callee)) {
+            // We'll fully inline the callee without any adjustments
+            no_return = false;
+            reduced_code = nullptr;
+            insn_size = get_callee_insn_size(callee);
+          } else if (should_partially_inline(block, true_virtual, callee,
+                                             &partial_code)) {
+            partial = true;
+            reduced_code = partial_code.reduced_code;
+            insn_size = partial_code.insn_size;
+          } else if (no_return) {
+            always_assert(insn_size == 0);
+            always_assert(!reduced_code);
+          } else {
             continue;
           }
+        } else {
+          insn_size = get_callee_insn_size(callee);
         }
-      }
+        always_assert(callee->is_concrete());
+        if (m_analyze_and_prune_inits && method::is_init(callee) &&
+            !no_return) {
+          auto timer2 = m_inline_callees_init_timer.scope();
+          if (!callee->get_code()->editable_cfg_built()) {
+            continue;
+          }
+          if (!can_inline_init(callee)) {
+            if (!method::is_init(caller) ||
+                caller->get_class() != callee->get_class() ||
+                !caller->get_code()->editable_cfg_built() ||
+                !constructor_analysis::can_inline_inits_in_same_class(
+                    caller, callee, insn)) {
+              continue;
+            }
+          }
+        }
 
-      auto it2 = m_inlined_invokes_need_cast.find(insn);
-      auto needs_receiver_cast =
-          it2 == m_inlined_invokes_need_cast.end() ? nullptr : it2->second;
-      inlinables.push_back((Inlinable){callee, insn, no_return,
-                                       std::move(reduced_code), insn_size,
-                                       needs_receiver_cast});
+        auto it2 = m_inlined_invokes_need_cast.find(insn);
+        auto needs_receiver_cast =
+            it2 == m_inlined_invokes_need_cast.end() ? nullptr : it2->second;
+        inlinables.push_back((Inlinable){callee, insn, no_return, partial,
+                                         std::move(reduced_code), insn_size,
+                                         needs_receiver_cast});
+      }
     }
   }
   if (!inlinables.empty()) {
@@ -500,15 +522,16 @@ size_t MultiMethodInliner::inline_callees(
   for (auto& mie : InstructionIterable(caller->get_code()->cfg())) {
     auto insn = mie.insn;
     if (insns.count(insn)) {
-      auto callee = get_callee(caller, insn);
-      if (callee == nullptr) {
+      auto callee_opt = get_callee(caller, insn);
+      if (!callee_opt) {
         continue;
       }
+      auto* callee = callee_opt->method;
       always_assert(callee->is_concrete());
       auto it2 = m_inlined_invokes_need_cast.find(insn);
       auto needs_receiver_cast =
           it2 == m_inlined_invokes_need_cast.end() ? nullptr : it2->second;
-      inlinables.push_back((Inlinable){callee, insn, false, nullptr,
+      inlinables.push_back((Inlinable){callee, insn, false, false, nullptr,
                                        get_callee_insn_size(callee),
                                        needs_receiver_cast});
     }
@@ -538,7 +561,7 @@ size_t MultiMethodInliner::inline_callees(
                                  callee->get_class())
             ? nullptr
             : callee->get_class();
-    inlinables.push_back((Inlinable){callee, insn, false, nullptr,
+    inlinables.push_back((Inlinable){callee, insn, false, false, nullptr,
                                      get_callee_insn_size(callee),
                                      needs_receiver_cast});
   }
@@ -599,6 +622,17 @@ std::string create_inlining_trace_msg(const DexMethod* caller,
 
 } // namespace
 
+void MultiMethodInliner::make_partial(const DexMethod* method,
+                                      InlinedCost* inlined_cost) {
+  if (!m_config.partial_hot_hot_inline || !m_hot_methods.count_unsafe(method) ||
+      !inlined_cost->reduced_code) {
+    inlined_cost->reduced_code.reset();
+    return;
+  }
+  inlined_cost->partial_code = inliner::get_partially_inlined_code(
+      method, inlined_cost->reduced_code->cfg());
+}
+
 DexType* MultiMethodInliner::get_needs_init_class(DexMethod* callee) const {
   if (!is_static(callee) || assumenosideeffects(callee)) {
     return nullptr;
@@ -656,7 +690,12 @@ size_t MultiMethodInliner::inline_inlinables(
         if (a.no_return != b.no_return) {
           return a.no_return > b.no_return;
         }
-        // Second, if appropriate, prefer inlining not-cold callees
+        // Second, prefer inlining non-partial callees to preserve integrity of
+        // the global cost function
+        if (a.partial != b.partial) {
+          return a.partial < b.partial;
+        }
+        // Third, if appropriate, prefer inlining not-cold callees
         if (consider_not_cold) {
           auto a_not_cold = m_not_cold_methods.count_unsafe(a.callee);
           auto b_not_cold = m_not_cold_methods.count_unsafe(b.callee);
@@ -664,7 +703,7 @@ size_t MultiMethodInliner::inline_inlinables(
             return a_not_cold > b_not_cold;
           }
         }
-        // Third, prefer smaller methods, to avoid hitting size
+        // Fourth, prefer smaller methods, to avoid hitting size
         // limits too soon
         return a.insn_size < b.insn_size;
       });
@@ -892,6 +931,10 @@ size_t MultiMethodInliner::inline_inlinables(
     if (type::is_kotlin_lambda(type_class(callee_method->get_class()))) {
       info.kotlin_lambda_inlined++;
     }
+    if (inlinable.partial) {
+      info.partially_inlined++;
+      info.partially_inlined_callees.fetch_add(callee_method, 1);
+    }
   }
 
   if (!inlined_callees.empty()) {
@@ -993,7 +1036,7 @@ void MultiMethodInliner::compute_callee_costs(DexMethod* method) {
           CalleeCallSiteSummary key{method, call_site_summary};
           const auto* cached = m_call_site_inlined_costs.get(key);
           if (cached) {
-            const_cast<InlinedCost*>(cached)->reduced_code.reset();
+            make_partial(method, const_cast<InlinedCost*>(cached));
           }
         }
       });
@@ -1215,6 +1258,25 @@ bool MultiMethodInliner::should_inline_always(const DexMethod* callee) {
                       return false;
                     }
                     return true;
+                  })
+              .first;
+}
+
+PartialCode MultiMethodInliner::get_callee_partial_code(
+    const DexMethod* callee) {
+  if (!m_config.partial_hot_hot_inline) {
+    return PartialCode();
+  }
+  if (!m_callee_partial_code) {
+    return inliner::get_partially_inlined_code(callee,
+                                               callee->get_code()->cfg());
+  }
+  return *m_callee_partial_code
+              ->get_or_create_and_assert_equal(
+                  callee,
+                  [&](const auto&) {
+                    return inliner::get_partially_inlined_code(
+                        callee, callee->get_code()->cfg());
                   })
               .first;
 }
@@ -1608,7 +1670,7 @@ const InlinedCost* MultiMethodInliner::get_call_site_inlined_cost(
                 inlined_cost.result_used, !!inlined_cost.reduced_code,
                 inlined_cost.insn_size);
             if (inlined_cost.insn_size >= fully_inlined_cost->insn_size) {
-              inlined_cost.reduced_code.reset();
+              make_partial(callee, &inlined_cost);
             }
             return inlined_cost;
           })
@@ -1884,7 +1946,8 @@ bool MultiMethodInliner::should_inline_at_call_site(
     DexMethod* callee,
     bool* no_return,
     std::shared_ptr<ReducedCode>* reduced_code,
-    size_t* insn_size) {
+    size_t* insn_size,
+    PartialCode* partial_code) {
   auto inlined_cost = get_call_site_inlined_cost(invoke_insn, callee);
   if (!inlined_cost) {
     return false;
@@ -1910,6 +1973,9 @@ bool MultiMethodInliner::should_inline_at_call_site(
     if (no_return) {
       *no_return = inlined_cost->no_return;
     }
+    if (partial_code) {
+      *partial_code = inlined_cost->partial_code;
+    }
     return false;
   }
 
@@ -1920,6 +1986,23 @@ bool MultiMethodInliner::should_inline_at_call_site(
     *insn_size = inlined_cost->insn_size;
   }
   return true;
+}
+
+bool MultiMethodInliner::should_partially_inline(cfg::Block* block,
+                                                 bool true_virtual,
+                                                 DexMethod* callee,
+                                                 PartialCode* partial_code) {
+  if (!m_config.partial_hot_hot_inline || true_virtual ||
+      !inliner::is_hot(block)) {
+    return false;
+  }
+  // If we don't already have pre-computed partially inlined code for this
+  // particular callsite, then we'll fetch the partially inlined derived from
+  // the full callee.
+  if (!partial_code->is_valid()) {
+    *partial_code = get_callee_partial_code(callee);
+  }
+  return partial_code->is_valid();
 }
 
 bool MultiMethodInliner::caller_is_blocklisted(const DexMethod* caller) {

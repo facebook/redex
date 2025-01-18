@@ -310,6 +310,7 @@ libredex_la_SOURCES = \
 	service/method-inliner/LegacyInliner.cpp \
 	service/method-inliner/MethodInliner.cpp \
 	service/method-inliner/ObjectInlinePlugin.cpp \
+	service/method-inliner/PartialInliner.cpp \
 	service/method-inliner/RecursionPruner.cpp \
 	service/method-merger/MethodMerger.cpp \
 	service/method-outliner/OutliningProfileGuidanceImpl.cpp \

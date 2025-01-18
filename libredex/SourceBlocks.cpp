@@ -1420,7 +1420,7 @@ void insert_synthetic_source_blocks_in_method(
 }
 
 std::unique_ptr<SourceBlock> clone_as_synthetic(SourceBlock* sb,
-                                                DexMethod* ref,
+                                                const DexMethod* ref,
                                                 const SourceBlock::Val& val) {
   std::unique_ptr<SourceBlock> new_sb = std::make_unique<SourceBlock>(*sb);
   new_sb->next.reset();
@@ -1436,7 +1436,7 @@ std::unique_ptr<SourceBlock> clone_as_synthetic(SourceBlock* sb,
 
 std::unique_ptr<SourceBlock> clone_as_synthetic(
     SourceBlock* sb,
-    DexMethod* ref,
+    const DexMethod* ref,
     const std::optional<SourceBlock::Val>& opt_val) {
   std::unique_ptr<SourceBlock> new_sb = std::make_unique<SourceBlock>(*sb);
   new_sb->next.reset();
@@ -1453,7 +1453,9 @@ std::unique_ptr<SourceBlock> clone_as_synthetic(
 }
 
 std::unique_ptr<SourceBlock> clone_as_synthetic(
-    SourceBlock* sb, DexMethod* ref, const std::vector<SourceBlock*>& many) {
+    SourceBlock* sb,
+    const DexMethod* ref,
+    const std::vector<SourceBlock*>& many) {
   std::unique_ptr<SourceBlock> new_sb = std::make_unique<SourceBlock>(*sb);
   new_sb->next.reset();
   new_sb->id = SourceBlock::kSyntheticId;
