@@ -80,7 +80,7 @@ jobs:
     - uses: actions/checkout@v4.1.1
     - uses: "./.github/actions/setup-build-and-test-windows"
   build-windows-artifacts:
-    if: github.event_name == 'schedule'
+    # if: github.event_name == 'schedule'
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4.1.1
