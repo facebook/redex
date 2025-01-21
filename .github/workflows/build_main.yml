@@ -60,9 +60,9 @@ jobs:
     strategy:
       matrix:
         clang_version:
-        - 0
-        - 15
+        - 0  # At time of edit 18.
         - 17
+        - 19
     steps:
     - uses: actions/checkout@v4.1.1
     - uses: "./.github/actions/prepare_debian"
@@ -90,25 +90,3 @@ jobs:
         name: redex-windows
         retention-days: 7
         path: build/Redex*.zip
-  build-deb_stable-w-clang-llvm-org_nightly:
-    if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
-    env:
-      CC: clang
-      CXX: clang++
-    strategy:
-      matrix:
-        clang_version:
-        - 0
-        - 15
-        - 17
-    steps:
-    - uses: actions/checkout@v4.1.1
-    - uses: "./.github/actions/prepare_debian"
-      with:
-        install_clang_llvm_org: "${{ matrix.clang_version }}"
-    - uses: ./.github/actions/setup-build-and-test-w-make
-      with:
-        save_boost_cache: false
-        mode_32: false
-        job_name: "clang_upstream-${{ matrix.clang_version }}"
