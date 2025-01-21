@@ -311,6 +311,11 @@ Json::Value reflect_property_definitions() {
   return properties;
 }
 
+#pragma GCC diagnostic push
+// Necessary for unknown errors in older versions.
+#pragma GCC diagnostic ignored "-Wpragmas"
+#pragma GCC diagnostic ignored "-Wdangling-pointer"
+#pragma GCC diagnostic ignored "-Winfinite-recursion"
 void __attribute__((noinline, optnone)) assert_abort(const std::string& message,
                                                      size_t depth) {
   // Ensure some stack for testing.
@@ -333,6 +338,7 @@ void __attribute__((noinline)) asan_abort() {
   // Uh-oh.
   always_assert_log(false, "Should have failed by now. :-(");
 }
+#pragma GCC diagnostic pop
 
 Arguments parse_args(int argc, char* argv[]) {
   Arguments args;
