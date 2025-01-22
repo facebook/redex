@@ -670,6 +670,9 @@ static bool can_outline_insn(const RefChecker& ref_checker,
       // TODO: Remove this limitation imposed by symbolication infrastructure.
       return false;
     }
+    if (method->rstate.should_not_outline()) {
+      return false;
+    }
   } else if (insn->has_field()) {
     auto field = resolve_field(insn->get_field());
     if (field == nullptr || field != insn->get_field()) {
