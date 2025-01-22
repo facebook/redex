@@ -116,6 +116,7 @@ void ReachableNativesPass::eval_pass(DexStoresVector& stores,
                       std::string(method_name).c_str());
     method->rstate.set_root();
     method->rstate.set_dont_inline();
+    method->rstate.set_no_outlining();
     m_load_library_unsafe_methods.insert(method);
   }
   for (std::string_view method_name :
@@ -135,6 +136,7 @@ void ReachableNativesPass::eval_pass(DexStoresVector& stores,
                       std::string(method_name).c_str());
     method->rstate.set_root();
     method->rstate.set_dont_inline();
+    method->rstate.set_no_outlining();
     m_load_library_methods.insert(method);
   }
 
