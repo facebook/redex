@@ -1,0 +1,20 @@
+name: Build Main Nightly
+on:
+  schedule:
+    - cron: 0 0 * * *
+env:
+  CACHE_VERSION: xxxxx1
+jobs:
+  build:
+    uses: "./.github/workflows/build_and_test.yml"
+
+  build-windows-artifacts:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4.1.1
+    - uses: "./.github/actions/setup-build-and-test-windows"
+    - uses: actions/upload-artifact@v4.0.0
+      with:
+        name: redex-windows
+        retention-days: 7
+        path: build/Redex*.zip

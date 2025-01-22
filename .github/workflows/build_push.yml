@@ -1,0 +1,11 @@
+name: Build on Push
+on:
+  push:
+    branches:
+    - main
+    - stable
+env:
+  CACHE_VERSION: xxxxx1
+jobs:
+  build:
+    uses: "./.github/workflows/build_and_test.yml"

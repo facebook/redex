@@ -1,14 +1,6 @@
-name: facebook/redex/build_main
+name: facebook/redex/build_and_test
 on:
-  pull_request:
-    branches:
-    - main
-    - stable
-  push:
-    branches:
-    - main
-  schedule:
-    - cron: 0 0 * * *
+  workflow_call
 env:
   CACHE_VERSION: xxxxx1
 jobs:
@@ -79,14 +71,3 @@ jobs:
     steps:
     - uses: actions/checkout@v4.1.1
     - uses: "./.github/actions/setup-build-and-test-windows"
-  build-windows-artifacts:
-    if: github.event_name == 'schedule'
-    runs-on: windows-latest
-    steps:
-    - uses: actions/checkout@v4.1.1
-    - uses: "./.github/actions/setup-build-and-test-windows"
-    - uses: actions/upload-artifact@v4.0.0
-      with:
-        name: redex-windows
-        retention-days: 7
-        path: build/Redex*.zip
