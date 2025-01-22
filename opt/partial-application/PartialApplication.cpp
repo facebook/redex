@@ -267,7 +267,8 @@ void gather_caller_callees(
     CalleeCallerClasses* callee_caller_classes) {
   Timer timer("gather_caller_callees");
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
-    if (caller->rstate.no_optimizations()) {
+    if (caller->rstate.no_optimizations() ||
+        caller->rstate.should_not_outline()) {
       return;
     }
     always_assert(code.editable_cfg_built());
