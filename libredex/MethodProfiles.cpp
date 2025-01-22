@@ -147,19 +147,46 @@ std::string wildcard_to_regex(const std::string& wildcard_string) {
          suffix;
 }
 
-void MethodProfiles::apply_manual_profile(DexMethodRef* ref,
-                                          const std::string& flags) {
+void MethodProfiles::apply_manual_profile(
+    DexMethodRef* ref,
+    const std::string& flags,
+    const std::string& manual_filename,
+    const std::vector<std::string>& config_names) {
   // These are just randomly selected stats that seemed reasonable
   const struct Stats stats = {100.0, 100, 50, 0};
-  m_method_stats["manual"].emplace(ref, stats);
-  if (flags.find('H') != std::string::npos) {
-    m_method_stats["manual_hot"].emplace(ref, stats);
+  always_assert_log(!config_names.empty(),
+                    "Manual profiles must come from a baseline config.");
+  if (config_names.size() > 1 ||
+      config_names.front() !=
+          baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME) {
+    auto& manual_all_interactions =
+        m_manual_profile_interactions[manual_filename];
+    manual_all_interactions["manual"].emplace(ref, stats);
+    if (flags.find('H') != std::string::npos) {
+      manual_all_interactions["manual_hot"].emplace(ref, stats);
+    }
+    if (flags.find('S') != std::string::npos) {
+      manual_all_interactions["manual_startup"].emplace(ref, stats);
+    }
+    if (flags.find('P') != std::string::npos) {
+      manual_all_interactions["manual_post_startup"].emplace(ref, stats);
+    }
   }
-  if (flags.find('S') != std::string::npos) {
-    m_method_stats["manual_startup"].emplace(ref, stats);
-  }
-  if (flags.find('P') != std::string::npos) {
-    m_method_stats["manual_post_startup"].emplace(ref, stats);
+  // We store the default config manual profile in method_stats so it can be
+  // used by other passes
+  if (std::find(config_names.begin(), config_names.end(),
+                baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME) !=
+      config_names.end()) {
+    m_method_stats["manual"].emplace(ref, stats);
+    if (flags.find('H') != std::string::npos) {
+      m_method_stats["manual_hot"].emplace(ref, stats);
+    }
+    if (flags.find('S') != std::string::npos) {
+      m_method_stats["manual_startup"].emplace(ref, stats);
+    }
+    if (flags.find('P') != std::string::npos) {
+      m_method_stats["manual_post_startup"].emplace(ref, stats);
+    }
   }
 }
 
@@ -167,9 +194,18 @@ void MethodProfiles::parse_manual_file(
     const std::string& manual_filename,
     const std::unordered_map<std::string,
                              std::unordered_map<std::string, DexMethodRef*>>&
-        baseline_profile_method_map) {
+        baseline_profile_method_map,
+    const std::vector<std::string>& config_names) {
   std::ifstream manual_file(manual_filename);
+  always_assert_log(manual_file.good(),
+                    "Could not open manual profile at %s",
+                    manual_filename.c_str());
   std::string current_line;
+  m_manual_profile_interactions[manual_filename] = AllInteractions();
+  for (const auto& config_name : config_names) {
+    m_baseline_manual_interactions[config_name] =
+        &(m_manual_profile_interactions[manual_filename]);
+  }
   while (std::getline(manual_file, current_line)) {
     if (current_line.empty() || current_line[0] == '#') {
       continue;
@@ -202,7 +238,8 @@ void MethodProfiles::parse_manual_file(
       if (class_it != baseline_profile_method_map.end()) {
         auto method_it = class_it->second.find(method_and_class[1]);
         if (method_it != class_it->second.end()) {
-          apply_manual_profile(method_it->second, flags);
+          apply_manual_profile(method_it->second, flags, manual_filename,
+                               config_names);
         }
       }
     } else {
@@ -223,7 +260,8 @@ void MethodProfiles::parse_manual_file(
           auto methodname = method_it->first;
           boost::smatch method_matches;
           if (boost::regex_search(methodname, method_matches, methodregex)) {
-            apply_manual_profile(method_it->second, flags);
+            apply_manual_profile(method_it->second, flags, manual_filename,
+                                 config_names);
           }
         }
       }
@@ -232,11 +270,12 @@ void MethodProfiles::parse_manual_file(
 }
 
 void MethodProfiles::parse_manual_files(
-    const std::vector<std::string>& manual_filenames) {
+    const std::unordered_map<std::string, std::vector<std::string>>&
+        manual_file_to_config_names) {
   Timer t("parse_manual_files");
   auto baseline_profile_method_map = g_redex->get_baseline_profile_method_map();
-  for (const std::string& manual_filename : manual_filenames) {
-    parse_manual_file(manual_filename, baseline_profile_method_map);
+  for (const auto& [manual_file, config_name] : manual_file_to_config_names) {
+    parse_manual_file(manual_file, baseline_profile_method_map, config_name);
   }
 }
 

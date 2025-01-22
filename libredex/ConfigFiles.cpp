@@ -29,7 +29,6 @@ namespace {
 constexpr const char* CLASS_MARKER_DELIMITER = "DexEndMarker";
 constexpr const char* COLD_START_20PCT_END = "LColdStart20PctEnd";
 constexpr const char* COLD_START_1PCT_END = "LColdStart1PctEnd";
-constexpr const char* DEFAULT_BASELINE_PROFILE_CONFIG_NAME = "default";
 
 class StringTabSplitter {
  private:
@@ -79,8 +78,6 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
                           config.get("use_new_rename_map", 0).asBool())),
       m_coldstart_methods_filename(
           config.get("coldstart_methods_file", "").asString()),
-      m_baseline_profile_config_file_name(
-          config.get("baseline_profile_config", "").asString()),
       m_preprocessed_baseline_profile_directory(
           config.get("preprocessed_baseline_profile_directory", "").asString()),
       m_printseeds(config.get("printseeds", "").asString()),
@@ -108,6 +105,12 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
 
   m_recognize_coldstart_pct_marker =
       config.get("recognize_betamap_coldstart_pct_marker", false).asBool();
+
+  m_baseline_profile_config_file_name =
+      config.get("baseline_profile_config", "").asString();
+  if (!m_baseline_profile_config_file_name.empty()) {
+    m_baseline_profile_config_file_name += "/baseline_profile_configs.json";
+  }
 }
 
 ConfigFiles::ConfigFiles(const Json::Value& config) : ConfigFiles(config, "") {}
@@ -482,11 +485,8 @@ void ConfigFiles::ensure_agg_method_stats_loaded() {
   if (csv_filenames.empty()) {
     return;
   }
-  baseline_profiles::BaselineProfileConfig baseline_profile_config =
-      get_default_baseline_profile_config();
   m_method_profiles->initialize(
-      csv_filenames,
-      baseline_profile_config.manual_files,
+      csv_filenames, get_baseline_profile_configs(),
       get_json_config().get("ingest_baseline_profile_data", false));
 }
 
@@ -586,15 +586,7 @@ bool ConfigFiles::get_did_use_bzl_baseline_profile_config() {
   return !m_baseline_profile_config_file_name.empty();
 }
 
-const baseline_profiles::BaselineProfileConfig&
-ConfigFiles::get_default_baseline_profile_config() {
-  if (!m_baseline_profile_config_list.empty()) {
-    auto it = m_baseline_profile_config_list.find(
-        DEFAULT_BASELINE_PROFILE_CONFIG_NAME);
-    always_assert(it != m_baseline_profile_config_list.end());
-    return it->second;
-  }
-
+void ConfigFiles::init_baseline_profile_configs() {
   Json::Value baseline_profile_config_list_json;
   if (!m_baseline_profile_config_file_name.empty()) {
     std::ifstream input(m_baseline_profile_config_file_name);
@@ -612,8 +604,8 @@ ConfigFiles::get_default_baseline_profile_config() {
 
   // Make sure that if list is not empty, it has a default config
   always_assert(baseline_profile_config_list_json.empty() ||
-                baseline_profile_config_list_json.isMember(
-                    std::string(DEFAULT_BASELINE_PROFILE_CONFIG_NAME)));
+                baseline_profile_config_list_json.isMember(std::string(
+                    baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME)));
   for (auto it = baseline_profile_config_list_json.begin();
        it != baseline_profile_config_list_json.end();
        ++it) {
@@ -674,6 +666,16 @@ ConfigFiles::get_default_baseline_profile_config() {
         std::vector<std::string>(),
         current_baseline_profile_config.manual_files);
 
+    // The manual profiles exist in the same folder as the config file
+    // so mutate the path to reflect that.
+    if (!m_baseline_profile_config_file_name.empty()) {
+      boost::filesystem::path p(m_baseline_profile_config_file_name);
+      boost::filesystem::path dir = p.parent_path();
+      for (auto& manual_file : current_baseline_profile_config.manual_files) {
+        manual_file = (dir / manual_file).string();
+      }
+    }
+
     m_baseline_profile_config_list.emplace(std::move(config_name),
                                            current_baseline_profile_config);
   }
@@ -681,11 +683,29 @@ ConfigFiles::get_default_baseline_profile_config() {
   // Insert a default-constructed config with default values if
   // no "default" key was found.  Otherwise, this looks up the existing
   // value for "default".
-  auto [it_default, _] = m_baseline_profile_config_list.emplace(
-      std::string(DEFAULT_BASELINE_PROFILE_CONFIG_NAME),
+  m_baseline_profile_config_list.emplace(
+      std::string(baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME),
       baseline_profiles::BaselineProfileConfig());
+}
 
-  return it_default->second;
+const baseline_profiles::BaselineProfileConfigMap&
+ConfigFiles::get_baseline_profile_configs() {
+  if (m_baseline_profile_config_list.empty()) {
+    init_baseline_profile_configs();
+  }
+
+  always_assert(m_baseline_profile_config_list.count(
+      baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME));
+  return m_baseline_profile_config_list;
+}
+
+const baseline_profiles::BaselineProfileConfig&
+ConfigFiles::get_default_baseline_profile_config() {
+  if (m_baseline_profile_config_list.empty()) {
+    init_baseline_profile_configs();
+  }
+  return m_baseline_profile_config_list.at(
+      std::string(baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME));
 }
 
 void ConfigFiles::parse_global_config() {

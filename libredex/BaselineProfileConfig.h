@@ -15,6 +15,8 @@
 
 namespace baseline_profiles {
 
+constexpr const char* DEFAULT_BASELINE_PROFILE_CONFIG_NAME = "default";
+
 // Note: Not everything is relevant to Redex in here. This should mostly 1:1
 // map to the JSON config currently being passed to the baseline profile
 // driver.
@@ -56,5 +58,8 @@ struct BaselineProfileConfig {
   BaselineProfileOptions options;
   std::vector<std::string> manual_files;
 };
+
+using BaselineProfileConfigMap =
+    std::unordered_map<std::string, BaselineProfileConfig>;
 
 } // namespace baseline_profiles
