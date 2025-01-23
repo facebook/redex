@@ -483,11 +483,10 @@ void ReduceSparseSwitchesPass::run_pass(DexStoresVector& stores,
   std::optional<baseline_profiles::BaselineProfile> baseline_profile;
   if (m_config.min_binary_search_switch_cases_hot_per_call !=
       m_config.min_binary_search_switch_cases_cold_per_call) {
-    const auto& baseline_profile_config =
-        conf.get_default_baseline_profile_config();
+    const auto& baseline_profile_configs = conf.get_baseline_profile_configs();
     baseline_profile = std::make_optional<baseline_profiles::BaselineProfile>(
-        baseline_profiles::get_baseline_profile(baseline_profile_config,
-                                                method_profiles));
+        baseline_profiles::get_default_baseline_profile(
+            baseline_profile_configs, method_profiles, false));
   }
 
   std::vector<DexClasses*> dexen;

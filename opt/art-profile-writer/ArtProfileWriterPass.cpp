@@ -260,7 +260,9 @@ void never_inline(bool attach_annotations,
 
 void never_compile(
     const Scope& scope,
-    const baseline_profiles::BaselineProfileConfig& baseline_profile_config,
+    const std::unordered_map<std::string,
+                             baseline_profiles::BaselineProfileConfig>&
+        baseline_profile_configs,
     const method_profiles::MethodProfiles& method_profiles,
     const std::vector<std::string>& interactions,
     PassManager& mgr,
@@ -269,143 +271,149 @@ void never_compile(
     const std::string& excluded_interaction_pattern,
     int64_t excluded_appear100_threshold,
     int64_t excluded_call_count_threshold,
-    baseline_profiles::BaselineProfile* baseline_profile) {
-  std::unordered_set<std::string> excluded_interaction_ids;
-  if (!excluded_interaction_pattern.empty()) {
-    boost::regex rx(excluded_interaction_pattern);
-    for (auto&& [interaction_id, interaction_name] :
-         baseline_profile_config.interactions) {
-      if (boost::regex_match(interaction_name, rx)) {
-        excluded_interaction_ids.insert(interaction_id);
+    std::unordered_map<std::string, baseline_profiles::BaselineProfile>*
+        baseline_profiles) {
+  for (const auto& [config_name, baseline_profile_config] :
+       baseline_profile_configs) {
+    auto baseline_profile = baseline_profiles->at(config_name);
+    std::unordered_set<std::string> excluded_interaction_ids;
+    if (!excluded_interaction_pattern.empty()) {
+      boost::regex rx(excluded_interaction_pattern);
+      for (auto&& [interaction_id, interaction_name] :
+           baseline_profile_config.interactions) {
+        if (boost::regex_match(interaction_name, rx)) {
+          excluded_interaction_ids.insert(interaction_id);
+        }
       }
     }
-  }
 
-  DexAnnotationSet anno_set;
-  anno_set.add_annotation(std::make_unique<DexAnnotation>(
-      type::dalvik_annotation_optimization_NeverCompile(),
-      DexAnnotationVisibility::DAV_BUILD));
+    DexAnnotationSet anno_set;
+    anno_set.add_annotation(std::make_unique<DexAnnotation>(
+        type::dalvik_annotation_optimization_NeverCompile(),
+        DexAnnotationVisibility::DAV_BUILD));
 
-  std::atomic<size_t> never_compile_methods = 0;
-  std::atomic<size_t> methods_already_never_compile = 0;
-  std::atomic<size_t> methods_annotation_attached = 0;
-  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    if (method::is_clinit(method)) {
-      return;
-    }
-    auto it = baseline_profile->methods.find(method);
-    if (it == baseline_profile->methods.end()) {
-      return;
-    }
-    auto& mf = it->second;
-    if (!mf.hot) {
-      return;
-    }
-    double call_count = 0;
-    for (auto& interaction_id : interactions) {
-      auto method_stats =
-          method_profiles.get_method_stat(interaction_id, method);
-      if (!method_stats) {
-        continue;
-      }
-      if (excluded_interaction_ids.count(interaction_id) &&
-          method_stats->appear_percent > excluded_appear100_threshold &&
-          method_stats->call_count > excluded_call_count_threshold) {
+    std::atomic<size_t> never_compile_methods = 0;
+    std::atomic<size_t> methods_already_never_compile = 0;
+    std::atomic<size_t> methods_annotation_attached = 0;
+    walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
+      if (method::is_clinit(method)) {
         return;
       }
-      call_count = std::max(call_count, method_stats->call_count);
-    }
-    if (never_compile_callcount_threshold > -1 &&
-        call_count > never_compile_callcount_threshold) {
-      return;
-    }
-    loop_impl::LoopInfo loop_info(code.cfg());
-    if (loop_info.num_loops() > 0) {
-      return;
-    }
-
-    if (never_compile_perf_threshold > -1) {
-      int64_t sparse_switch_cases = 0;
-      int64_t interpretation_cost =
-          20; // overhead of going into/out of interpreter
-      for (auto* block : code.cfg().blocks()) {
-        if (is_cold(block)) {
+      auto it = baseline_profile.methods.find(method);
+      if (it == baseline_profile.methods.end()) {
+        return;
+      }
+      auto& mf = it->second;
+      if (!mf.hot) {
+        return;
+      }
+      double call_count = 0;
+      for (auto& interaction_id : interactions) {
+        auto method_stats =
+            method_profiles.get_method_stat(interaction_id, method);
+        if (!method_stats) {
           continue;
         }
-        for (auto& mie : InstructionIterable(block)) {
-          auto* insn = mie.insn;
-          if (opcode::is_an_internal(insn->opcode())) {
+        if (excluded_interaction_ids.count(interaction_id) &&
+            method_stats->appear_percent > excluded_appear100_threshold &&
+            method_stats->call_count > excluded_call_count_threshold) {
+          return;
+        }
+        call_count = std::max(call_count, method_stats->call_count);
+      }
+      if (never_compile_callcount_threshold > -1 &&
+          call_count > never_compile_callcount_threshold) {
+        return;
+      }
+      loop_impl::LoopInfo loop_info(code.cfg());
+      if (loop_info.num_loops() > 0) {
+        return;
+      }
+
+      if (never_compile_perf_threshold > -1) {
+        int64_t sparse_switch_cases = 0;
+        int64_t interpretation_cost =
+            20; // overhead of going into/out of interpreter
+        for (auto* block : code.cfg().blocks()) {
+          if (is_cold(block)) {
             continue;
           }
-          // The interpreter uses expensive helper routines for a number of
-          // instructions, which lead to an update of the hotness for JIT
-          // purposes:
-          // https://android.googlesource.com/platform/art/+/refs/heads/main/runtime/interpreter/mterp/nterp.cc
-          // We assume that those instructions are more expensive than others by
-          // an order of magnitude.
-          interpretation_cost +=
-              (insn->has_field() || insn->has_method() || insn->has_type() ||
-               insn->has_string() || opcode::is_a_new(insn->opcode()))
-                  ? 10
-                  : 1;
-          if (opcode::is_switch(insn->opcode()) && is_sparse(block)) {
-            sparse_switch_cases += block->succs().size();
+          for (auto& mie : InstructionIterable(block)) {
+            auto* insn = mie.insn;
+            if (opcode::is_an_internal(insn->opcode())) {
+              continue;
+            }
+            // The interpreter uses expensive helper routines for a number of
+            // instructions, which lead to an update of the hotness for JIT
+            // purposes:
+            // https://android.googlesource.com/platform/art/+/refs/heads/main/runtime/interpreter/mterp/nterp.cc
+            // We assume that those instructions are more expensive than others
+            // by an order of magnitude.
+            interpretation_cost +=
+                (insn->has_field() || insn->has_method() || insn->has_type() ||
+                 insn->has_string() || opcode::is_a_new(insn->opcode()))
+                    ? 10
+                    : 1;
+            if (opcode::is_switch(insn->opcode()) && is_sparse(block)) {
+              sparse_switch_cases += block->succs().size();
+            }
           }
         }
+
+        if (sparse_switch_cases == 0) {
+          return;
+        }
+
+        // We want to compare
+        //    interpretation_cost / sparse_switch_cases
+        //                            (the average cost of code per switch case)
+        // with
+        //    never_compile_perf_threshold * sparse_switch_cases
+        //                                     (cost of executing sparse switch)
+        // to find a case where the cost of the executing sparse switch
+        // excessively dominates the cost of code per switch case, which the
+        // following achieves.
+        if (interpretation_cost / std::pow(sparse_switch_cases, 2) >
+            never_compile_perf_threshold) {
+          return;
+        }
+
+        TRACE(APW, 5, "[%s] is within perf threshold: %d / sqr(%d) > %d\n%s",
+              method->get_fully_deobfuscated_name().c_str(),
+              (int32_t)interpretation_cost, (int32_t)sparse_switch_cases,
+              (int32_t)never_compile_perf_threshold, SHOW(code.cfg()));
       }
 
-      if (sparse_switch_cases == 0) {
+      never_compile_methods.fetch_add(1);
+
+      if (has_anno(method,
+                   type::dalvik_annotation_optimization_NeverCompile())) {
+        methods_already_never_compile.fetch_add(1);
         return;
       }
 
-      // We want to compare
-      //    interpretation_cost / sparse_switch_cases
-      //                            (the average cost of code per switch case)
-      // with
-      //    never_compile_perf_threshold * sparse_switch_cases
-      //                                     (cost of executing sparse switch)
-      // to find a case where the cost of the executing sparse switch
-      // excessively dominates the cost of code per switch case, which the
-      // following achieves.
-      if (interpretation_cost / std::pow(sparse_switch_cases, 2) >
-          never_compile_perf_threshold) {
+      methods_annotation_attached.fetch_add(1);
+      if (method->get_anno_set()) {
+        method->get_anno_set()->combine_with(anno_set);
         return;
       }
-
-      TRACE(APW, 5, "[%s] is within perf threshold: %d / sqr(%d) > %d\n%s",
-            method->get_fully_deobfuscated_name().c_str(),
-            (int32_t)interpretation_cost, (int32_t)sparse_switch_cases,
-            (int32_t)never_compile_perf_threshold, SHOW(code.cfg()));
-    }
-
-    never_compile_methods.fetch_add(1);
-
-    if (has_anno(method, type::dalvik_annotation_optimization_NeverCompile())) {
-      methods_already_never_compile.fetch_add(1);
-      return;
-    }
-
-    methods_annotation_attached.fetch_add(1);
-    if (method->get_anno_set()) {
-      method->get_anno_set()->combine_with(anno_set);
-      return;
-    }
-    auto access = method->get_access();
-    // attach_annotation_set requires the method to be synthetic.
-    // A bit bizarre, and suggests that Redex' code to mutate annotations is
-    // ripe for an overhaul. But I won't fight that here.
-    method->set_access(access | ACC_SYNTHETIC);
-    auto res = method->attach_annotation_set(
-        std::make_unique<DexAnnotationSet>(anno_set));
-    always_assert(res);
-    method->set_access(access);
-    mf.hot = false;
-  });
-  mgr.incr_metric("never_compile_methods", never_compile_methods.load());
-  mgr.incr_metric("methods_already_never_compile",
-                  methods_already_never_compile.load());
-  mgr.incr_metric("methods_annotation_attached",
-                  methods_annotation_attached.load());
+      auto access = method->get_access();
+      // attach_annotation_set requires the method to be synthetic.
+      // A bit bizarre, and suggests that Redex' code to mutate annotations is
+      // ripe for an overhaul. But I won't fight that here.
+      method->set_access(access | ACC_SYNTHETIC);
+      auto res = method->attach_annotation_set(
+          std::make_unique<DexAnnotationSet>(anno_set));
+      always_assert(res);
+      method->set_access(access);
+      mf.hot = false;
+    });
+    mgr.incr_metric("never_compile_methods", never_compile_methods.load());
+    mgr.incr_metric("methods_already_never_compile",
+                    methods_already_never_compile.load());
+    mgr.incr_metric("methods_annotation_attached",
+                    methods_annotation_attached.load());
+  }
 }
 
 } // namespace
@@ -467,6 +475,28 @@ void ArtProfileWriterPass::eval_pass(DexStoresVector& stores,
   }
 }
 
+void write_methods(const Scope& scope,
+                   const baseline_profiles::BaselineProfile& baseline_profile,
+                   std::ofstream& ofs) {
+  walk::classes(scope, [&](DexClass* cls) {
+    for (auto* method : cls->get_all_methods()) {
+      auto it = baseline_profile.methods.find(method);
+      if (it == baseline_profile.methods.end()) {
+        continue;
+      }
+      std::string descriptor = show_deobfuscated(method);
+      // reformat it into manual profile pattern so baseline profile
+      // generator in post-process can recognize the method
+      boost::replace_all(descriptor, ".", "->");
+      boost::replace_all(descriptor, ":(", "(");
+      ofs << it->second << descriptor << "\n";
+      if (baseline_profile.classes.count(cls)) {
+        ofs << show_deobfuscated(cls) << "\n";
+      }
+    }
+  });
+}
+
 void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
                                     ConfigFiles& conf,
                                     PassManager& mgr) {
@@ -479,6 +509,8 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   std::unordered_set<const DexMethodRef*> method_refs_without_def;
   const auto& method_profiles = conf.get_method_profiles();
   auto get_legacy_baseline_profile = [&]() {
+    std::unordered_map<std::string, baseline_profiles::BaselineProfile>
+        baseline_profiles;
     baseline_profiles::BaselineProfile res;
     for (auto& interaction_id : m_perf_config.interactions) {
       bool startup = interaction_id == "ColdStart";
@@ -542,47 +574,55 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
         }
       }
     }
-    return res;
+    baseline_profiles[baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME] =
+        res;
+    return baseline_profiles;
   };
 
-  auto baseline_profile = m_legacy_mode
-                              ? get_legacy_baseline_profile()
-                              : baseline_profiles::get_baseline_profile(
-                                    conf.get_default_baseline_profile_config(),
-                                    method_profiles, &method_refs_without_def);
-  if (conf.get_default_baseline_profile_config()
-          .options.include_all_startup_classes) {
-    const std::vector<std::string>& interdexorder =
-        conf.get_coldstart_classes();
-    std::vector<DexClass*> coldstart_classes;
-    for (const auto& entry : interdexorder) {
-      DexType* type = DexType::get_type(entry);
-      if (type) {
-        auto coldstart_class = type_class(type);
-        if (coldstart_class) {
-          coldstart_classes.push_back(coldstart_class);
-          baseline_profile.classes.insert(coldstart_class);
+  auto baseline_profiles = m_legacy_mode
+                               ? get_legacy_baseline_profile()
+                               : baseline_profiles::get_baseline_profiles(
+                                     conf.get_baseline_profile_configs(),
+                                     method_profiles,
+                                     conf.get_json_config().get(
+                                         "ingest_baseline_profile_data", false),
+                                     &method_refs_without_def);
+  for (const auto& [config_name, baseline_profile_config] :
+       conf.get_baseline_profile_configs()) {
+    if (baseline_profile_config.options.include_all_startup_classes) {
+      const std::vector<std::string>& interdexorder =
+          conf.get_coldstart_classes();
+      std::vector<DexClass*> coldstart_classes;
+      auto& baseline_profile = baseline_profiles[config_name];
+      for (const auto& entry : interdexorder) {
+        DexType* type = DexType::get_type(entry);
+        if (type) {
+          auto coldstart_class = type_class(type);
+          if (coldstart_class) {
+            coldstart_classes.push_back(coldstart_class);
+            baseline_profile.classes.insert(coldstart_class);
+          }
         }
       }
+      baseline_profiles::MethodFlags flags;
+      flags.hot = true;
+      flags.startup = true;
+      walk::methods(coldstart_classes,
+                    [&baseline_profile, flags](DexMethod* method) {
+                      baseline_profile.methods.emplace(method, flags);
+                    });
     }
-    baseline_profiles::MethodFlags flags;
-    flags.hot = true;
-    flags.startup = true;
-    walk::methods(coldstart_classes,
-                  [&baseline_profile, flags](DexMethod* method) {
-                    baseline_profile.methods.emplace(method, flags);
-                  });
   }
   auto scope = build_class_scope(stores);
   if (m_never_compile_callcount_threshold > -1 ||
       m_never_compile_perf_threshold > -1) {
     never_compile(
-        scope, conf.get_default_baseline_profile_config(), method_profiles,
+        scope, conf.get_baseline_profile_configs(), method_profiles,
         m_perf_config.interactions, mgr, m_never_compile_callcount_threshold,
         m_never_compile_perf_threshold,
         m_never_compile_excluded_interaction_pattern,
         m_never_compile_excluded_appear100_threshold,
-        m_never_compile_excluded_call_count_threshold, &baseline_profile);
+        m_never_compile_excluded_call_count_threshold, &baseline_profiles);
   }
   auto store_fence_helper_type = DexType::get_type(STORE_FENCE_HELPER_NAME);
   if (store_fence_helper_type) {
@@ -590,49 +630,68 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     // Add it in for it to be compiled.
     auto store_fence_helper_cls = type_class(store_fence_helper_type);
     always_assert(store_fence_helper_cls);
-    baseline_profile.classes.insert(store_fence_helper_cls);
+    for (auto it = baseline_profiles.begin(); it != baseline_profiles.end();
+         it++) {
+      it->second.classes.insert(store_fence_helper_cls);
+    }
   }
 
-  std::ofstream ofs{conf.metafile(BASELINE_PROFILES_FILE)};
-  walk::classes(scope, [&](DexClass* cls) {
-    for (auto* method : cls->get_all_methods()) {
-      auto it = baseline_profile.methods.find(method);
-      if (it == baseline_profile.methods.end()) {
-        continue;
+  if (conf.get_json_config().get("ingest_baseline_profile_data", false)) {
+    for (const auto& entry : baseline_profiles) {
+      const auto& bp_name = entry.first;
+      const auto& bp = entry.second;
+      auto preprocessed_profile_name =
+          conf.get_preprocessed_baseline_profile_file(bp_name);
+      auto output_name = conf.metafile(bp_name + "-baseline-profile.txt");
+      std::ofstream ofs{output_name.c_str()};
+      std::ifstream preprocessed_profile(preprocessed_profile_name);
+      std::string current_line;
+      while (std::getline(preprocessed_profile, current_line)) {
+        if (current_line.empty() || current_line[0] != 'L') {
+          continue;
+        }
+        ofs << current_line << "\n";
       }
-      std::string descriptor = show_deobfuscated(method);
-      // reformat it into manual profile pattern so baseline profile generator
-      // in post-process can recognize the method
-      boost::replace_all(descriptor, ".", "->");
-      boost::replace_all(descriptor, ":(", "(");
-      ofs << it->second << descriptor << std::endl;
+      write_methods(scope, bp, ofs);
     }
-    if (baseline_profile.classes.count(cls)) {
-      ofs << show_deobfuscated(cls) << std::endl;
-    }
-  });
+  } else {
+    std::ofstream ofs{conf.metafile(BASELINE_PROFILES_FILE)};
+    auto baseline_profile = baseline_profiles.at(
+        baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME);
+    write_methods(scope, baseline_profile, ofs);
+  }
 
   std::atomic<size_t> methods_with_baseline_profile_code_units{0};
   std::atomic<size_t> compiled{0};
   std::atomic<size_t> compiled_code_units{0};
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    auto it = baseline_profile.methods.find(method);
-    if (it == baseline_profile.methods.end()) {
-      return;
-    }
-    auto ecu = code.estimate_code_units();
-    methods_with_baseline_profile_code_units += ecu;
-    if (is_compiled(method, it->second)) {
-      compiled++;
-      compiled_code_units += ecu;
+    for (auto profile_it = baseline_profiles.begin();
+         profile_it != baseline_profiles.end();
+         profile_it++) {
+      auto it = profile_it->second.methods.find(method);
+      if (it == profile_it->second.methods.end()) {
+        return;
+      }
+      auto ecu = code.estimate_code_units();
+      methods_with_baseline_profile_code_units += ecu;
+      if (is_compiled(method, it->second)) {
+        compiled++;
+        compiled_code_units += ecu;
+      }
     }
   });
 
-  mgr.incr_metric("classes_with_baseline_profile",
-                  baseline_profile.classes.size());
+  mgr.incr_metric(
+      "classes_with_baseline_profile",
+      baseline_profiles
+          .at(baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME)
+          .classes.size());
 
-  mgr.incr_metric("methods_with_baseline_profile",
-                  baseline_profile.methods.size());
+  mgr.incr_metric(
+      "methods_with_baseline_profile",
+      baseline_profiles
+          .at(baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME)
+          .methods.size());
 
   mgr.incr_metric("methods_with_baseline_profile_code_units",
                   (size_t)methods_with_baseline_profile_code_units);
@@ -650,7 +709,10 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  never_inline(m_never_inline_attach_annotations, scope, baseline_profile, mgr);
+  never_inline(m_never_inline_attach_annotations, scope,
+               baseline_profiles.at(
+                   baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME),
+               mgr);
 }
 
 static ArtProfileWriterPass s_pass;

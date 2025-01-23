@@ -52,6 +52,46 @@ bool empty_column(std::string_view sv) { return sv.empty() || sv == "\n"; }
 AccumulatingTimer MethodProfiles::s_process_unresolved_lines_timer(
     "MethodProfiles::process_unresolved_lines");
 
+std::tuple<const StatsMap&, bool> method_stats_for_interaction_id(
+    const std::string& interaction_id, const AllInteractions& interactions) {
+  const auto& search1 = interactions.find(interaction_id);
+  if (search1 != interactions.end()) {
+    return {search1->second, true};
+  }
+  if (interaction_id == COLD_START) {
+    // Originally, the stats file had no interaction_id column and it only
+    // covered coldstart. Search for the default (empty string) for backwards
+    // compatibility when we're searching for coldstart but it's not found.
+    const auto& search2 = interactions.find("");
+    if (search2 != interactions.end()) {
+      return {search2->second, true};
+    }
+  }
+
+  static StatsMap empty_map = {};
+  return {empty_map, false};
+}
+
+const StatsMap& MethodProfiles::method_stats_for_baseline_config(
+    const std::string& interaction_id,
+    const std::string& baseline_config_name) const {
+  if (baseline_config_name !=
+      baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME) {
+    if (m_baseline_manual_interactions.count(baseline_config_name)) {
+      const auto& method_stats =
+          *(m_baseline_manual_interactions.at(baseline_config_name));
+      const auto& [stats, found] =
+          method_stats_for_interaction_id(interaction_id, method_stats);
+      if (found) {
+        return stats;
+      }
+    }
+  }
+  const auto& [stats, _] =
+      method_stats_for_interaction_id(interaction_id, m_method_stats);
+  return stats;
+}
+
 const StatsMap& MethodProfiles::method_stats(
     const std::string& interaction_id) const {
   const auto& search1 = m_method_stats.find(interaction_id);
