@@ -801,7 +801,8 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
                              // is conservative
                         : overridden_method->get_code()->estimate_code_units();
                 if (!inliner.is_inlinable(
-                        overridden_method, m, nullptr /* invoke_virtual_insn */,
+                        overridden_method, m, nullptr /* reduced_cfg */,
+                        nullptr /* invoke_virtual_insn */,
                         estimated_caller_size, estimated_callee_size)) {
                   TRACE(VM,
                         3,
@@ -1093,10 +1094,10 @@ VirtualMergingStats apply_ordering(
             is_abstract(overridden_method)
                 ? 64 // we'll need some extra instruction; 64 is conservative
                 : overridden_method->get_code()->estimate_code_units();
-        bool is_inlineable =
-            inliner.is_inlinable(overridden_method, overriding_method,
-                                 nullptr /* invoke_virtual_insn */,
-                                 estimated_insn_size, estimated_callee_size);
+        bool is_inlineable = inliner.is_inlinable(
+            overridden_method, overriding_method, nullptr /* reduced_cfg */,
+            nullptr /* invoke_virtual_insn */, estimated_insn_size,
+            estimated_callee_size);
         always_assert_log(is_inlineable, "[VM] Cannot inline %s into %s",
                           SHOW(overriding_method), SHOW(overridden_method));
 

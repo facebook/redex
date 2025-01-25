@@ -13,50 +13,51 @@
 #include "Trace.h"
 #include "TypeUtil.h"
 
-CodeRefs::CodeRefs(const DexMethod* method) {
+CodeRefs::CodeRefs(const DexMethod* method,
+                   const cfg::ControlFlowGraph* reduced_cfg) {
   if (!method->get_code()) {
     return;
   }
+  always_assert(method->get_code()->editable_cfg_built());
+  auto& cfg = reduced_cfg ? *reduced_cfg : method->get_code()->cfg();
   std::unordered_set<const DexType*> types_set;
   std::unordered_set<const DexMethod*> methods_set;
   std::unordered_set<const DexField*> fields_set;
-  editable_cfg_adapter::iterate(
-      method->get_code(), [&](const MethodItemEntry& mie) {
-        auto insn = mie.insn;
-        if (insn->has_type()) {
-          always_assert(insn->get_type());
-          types_set.insert(insn->get_type());
-        } else if (insn->has_method()) {
-          auto callee = resolve_invoke_method(insn, method);
-          if (!callee) {
-            invalid_refs = true;
-            return editable_cfg_adapter::LOOP_BREAK;
-          }
-          auto callee_ref = insn->get_method();
-          if (callee != callee_ref) {
-            types_set.insert(callee_ref->get_class());
-          }
-          methods_set.insert(callee);
-        } else if (insn->has_field()) {
-          auto field_ref = insn->get_field();
-          auto field = resolve_field(field_ref);
-          if (!field) {
-            invalid_refs = true;
-            return editable_cfg_adapter::LOOP_BREAK;
-          }
-          if (field != field_ref) {
-            types_set.insert(field_ref->get_class());
-          }
-          fields_set.insert(field);
-        }
-        return editable_cfg_adapter::LOOP_CONTINUE;
-      });
+  for (auto& mie : InstructionIterable(cfg)) {
+    auto insn = mie.insn;
+    if (insn->has_type()) {
+      always_assert(insn->get_type());
+      types_set.insert(insn->get_type());
+    } else if (insn->has_method()) {
+      auto callee = resolve_invoke_method(insn, method);
+      if (!callee) {
+        invalid_refs = true;
+        break;
+      }
+      auto callee_ref = insn->get_method();
+      if (callee != callee_ref) {
+        types_set.insert(callee_ref->get_class());
+      }
+      methods_set.insert(callee);
+    } else if (insn->has_field()) {
+      auto field_ref = insn->get_field();
+      auto field = resolve_field(field_ref);
+      if (!field) {
+        invalid_refs = true;
+        break;
+      }
+      if (field != field_ref) {
+        types_set.insert(field_ref->get_class());
+      }
+      fields_set.insert(field);
+    }
+  }
   if (invalid_refs) {
     return;
   }
 
   std::vector<DexType*> catch_types;
-  method->get_code()->gather_catch_types(catch_types);
+  cfg.gather_catch_types(catch_types);
   for (auto type : catch_types) {
     if (type) {
       types_set.insert(type);

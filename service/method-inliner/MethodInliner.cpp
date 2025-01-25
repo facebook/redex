@@ -1032,6 +1032,7 @@ void run_inliner(
   mgr.incr_metric("recursive", inliner.get_info().recursive);
   mgr.incr_metric("max_call_stack_depth",
                   inliner.get_info().max_call_stack_depth);
+  mgr.incr_metric("cross_dex", inliner.get_info().cross_dex);
   mgr.incr_metric("cross_store", inliner.get_info().cross_store);
   mgr.incr_metric("api_level_mismatch", inliner.get_info().api_level_mismatch);
   mgr.incr_metric("problematic_refs", inliner.get_info().problematic_refs);
@@ -1104,9 +1105,6 @@ void run_inliner(
                   inliner.get_info().critical_path_length);
   mgr.incr_metric("methods_shrunk", shrinker.get_methods_shrunk());
   mgr.incr_metric("callers", inliner.get_callers());
-  if (intra_dex) {
-    mgr.incr_metric("x-dex-callees", inliner.get_x_dex_callees());
-  }
   mgr.incr_metric(
       "instructions_eliminated_const_prop",
       shrinker.get_const_prop_stats().branches_removed +
