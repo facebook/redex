@@ -10,15 +10,20 @@
 #include "Pass.h"
 #include "PassManager.h"
 
+namespace cfg {
+class ControlFlowGraph;
+} // namespace cfg
+
 class ReduceSparseSwitchesPass : public Pass {
  public:
   struct Stats {
     size_t splitting_transformations{0};
     size_t splitting_transformations_switch_cases{0};
-    size_t binary_search_transformations{0};
-    size_t binary_search_transformations_switch_cases{0};
-    size_t field_refs_exceeded{0};
-    size_t method_refs_exceeded{0};
+
+    size_t multiplexing_abandoned{0};
+    size_t multiplexing_transformations{0};
+    size_t multiplexing_transformations_switch_cases{0};
+    size_t multiplexing_transformations_speedup{0};
 
     Stats& operator+=(const Stats&);
   };
@@ -27,9 +32,7 @@ class ReduceSparseSwitchesPass : public Pass {
     // Starting at 10, the splitting transformation is always a code-size win
     uint64_t min_splitting_switch_cases{10};
 
-    uint64_t min_binary_search_switch_cases_cold_per_call{400};
-    uint64_t min_binary_search_switch_cases_hot_per_call{200};
-    uint64_t min_binary_search_switch_cases{40};
+    uint64_t min_multiplexing_switch_cases{64};
   };
 
   ReduceSparseSwitchesPass() : Pass("ReduceSparseSwitchesPass") {}
@@ -62,37 +65,36 @@ runtime performance:
    so that we shave off at least one operation from the binary search the
    interpreter needs to do over the remaining sparse case keys, making sure
    we never degrade worst-case complexity. We run this to a fixed point.
-2. Replacing sparse switches with a binary search followed by a packed
-   switch. This transformation is only performed if the switch is
-   sufficiently large, also taking into account whether it is hot, and how
-   often it(s containing method) is called. We perform the binary search over
-   an array of integers. The array is cached in a static field, and lazily
-   initialized when it is first needed. The initialization is done via a
-   separate generated helper method, which we mark as @NeverCompile as it
-   will only run once, and it only contains a handfull of instructions, one
-   of which is the powerful fill-array-data instruction.
+2. Multiplexing sparse switches into a main packed switch with secondary sparse
+   switches for each main switch case. The basic idea is that we partition a 
+   large number of sparse switch cases into several buckets of relatively small 
+   sparse switch cases. The bucket index is basically a hash of the case keys, 
+   computed with one or two bit-twiddling instructions, and limited to a small 
+   numeric range, which allows us to perform a packed switch over it. Ideally, 
+   each bucket holds roughly the same number of switch cases, and we want to 
+   avoid excessively large outlier buckets.
+   This transformation comes with a modest size regression. 
+   Given a switch with N case keys, we aim at partitioning it into 
+   M = ~sqrt(N) buckets with ~sqrt(N) case keys in each bucket. (We don't 
+   achieve that in practice, and there are rounding effects as well.)
+   In that case, before the transformation, the interpreter would have O(log N)
+   and compiled code O(N). After the tranformation, the interpreter gets down 
+   to O(log sqrt(N)) and compiled code to O(sqrt(N)).
+   (We could try to partition buckets even further, e.g. down to log(N), but 
+   that might result in an excessive size regression.)
     )");
   }
 
   void bind_config() override;
 
-  void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   static ReduceSparseSwitchesPass::Stats splitting_transformation(
-      size_t min_switch_cases, DexMethod* method);
+      size_t min_switch_cases, cfg::ControlFlowGraph& cfg);
 
-  static ReduceSparseSwitchesPass::Stats binary_search_transformation(
-      size_t min_switch_cases,
-      DexClass* cls,
-      DexMethod* method,
-      size_t& running_index,
-      size_t& method_refs,
-      size_t& field_refs,
-      InsertOnlyConcurrentMap<DexMethod*, DexMethod*>* init_methods);
+  static ReduceSparseSwitchesPass::Stats multiplexing_transformation(
+      size_t min_switch_cases, cfg::ControlFlowGraph& cfg);
 
  private:
   Config m_config;
-  std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
 };
