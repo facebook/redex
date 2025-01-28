@@ -174,16 +174,6 @@ bool is_synthesized_lambda_class(const DexClass* cls) {
   return true;
 }
 
-bool has_kotlin_default_ctor_marker(DexMethod* m) {
-  auto params = m->get_proto()->get_args();
-  if (params->size() > 1 &&
-      params->at(params->size() - 1)->str() ==
-          "Lkotlin/jvm/internal/DefaultConstructorMarker;") {
-    return true;
-  }
-  return false;
-}
-
 DexMethodRef* get_enclosing_method(DexClass* cls) {
   auto anno_set = cls->get_anno_set();
   if (!anno_set) {
@@ -390,14 +380,9 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
 
       patch_parameters_and_returns(m);
       patch_synth_methods_overriding_annotated_methods(m);
-      if (is_constructor(m)) {
-        if (has_typedef_annos(m->get_param_anno(), m_typedef_annos)) {
-          patch_synth_cls_fields_from_ctor_param(m);
-        } else {
-          if (has_kotlin_default_ctor_marker(m)) {
-            patch_parameters_and_returns(m);
-          }
-        }
+      if (is_constructor(m) &&
+          has_typedef_annos(m->get_param_anno(), m_typedef_annos)) {
+        patch_synth_cls_fields_from_ctor_param(m);
       }
       if (is_synthesized_lambda_class(cls) || is_fun_interface_class(cls)) {
         patch_local_var_lambda(m);
