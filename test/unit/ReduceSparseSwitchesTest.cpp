@@ -36,7 +36,8 @@ TEST_F(ReduceSparseSwitchesTest, splittingEvenSizeSwitch) {
   )");
   method->get_code()->build_cfg();
 
-  auto stats = ReduceSparseSwitchesPass::splitting_transformation(4, method);
+  auto stats = ReduceSparseSwitchesPass::splitting_transformation(
+      4, method->get_code()->cfg());
   method->get_code()->clear_cfg();
   // Rebuild an extra time to work around an ordering quirk in switch cases.
   method->get_code()->build_cfg();
@@ -96,7 +97,8 @@ TEST_F(ReduceSparseSwitchesTest, splittingOddSizeSwitch) {
   )");
   method->get_code()->build_cfg();
 
-  auto stats = ReduceSparseSwitchesPass::splitting_transformation(5, method);
+  auto stats = ReduceSparseSwitchesPass::splitting_transformation(
+      5, method->get_code()->cfg());
   method->get_code()->clear_cfg();
   // Rebuild an extra time to work around an ordering quirk in switch cases.
   method->get_code()->build_cfg();
@@ -130,105 +132,140 @@ TEST_F(ReduceSparseSwitchesTest, splittingOddSizeSwitch) {
   EXPECT_CODE_EQ(expected.get(), method->get_code());
 }
 
-TEST_F(ReduceSparseSwitchesTest, binarySearch) {
-  ClassCreator cc(DexType::make_type("LtestClass;"));
-  cc.set_super(type::java_lang_Object());
-  auto* cls = cc.create();
+TEST_F(ReduceSparseSwitchesTest, multiplexing) {
   auto* method = assembler::method_from_string(std::string("") + R"(
     (method (public static) ")LtestClass;.testMethod(:(I)V"
       (
         (load-param v0)
         (switch v0 (:L0 :L1 :L2 :L3 :L4))
-
         (return-void)
 
         (:L0 0) 
         (return-void)
-        (:L1 50) 
+        (:L1 3) 
         (return-void)
-        (:L2 100) 
+        (:L2 6) 
         (return-void)
-        (:L3 102) 
+        (:L3 9) 
         (return-void)
-        (:L4 104) 
+        (:L4 12) 
         (return-void)
       )
     )
   )");
   method->get_code()->build_cfg();
 
-  size_t running_index{42};
-  size_t method_refs{0};
-  size_t field_refs{0};
-  InsertOnlyConcurrentMap<DexMethod*, DexMethod*> init_methods;
-
-  auto stats = ReduceSparseSwitchesPass::binary_search_transformation(
-      4, cls, method, running_index, method_refs, field_refs, &init_methods);
+  auto stats = ReduceSparseSwitchesPass::multiplexing_transformation(
+      5, method->get_code()->cfg());
   method->get_code()->clear_cfg();
   // Rebuild an extra time to work around an ordering quirk in switch cases.
   method->get_code()->build_cfg();
   method->get_code()->clear_cfg();
 
-  EXPECT_EQ(stats.binary_search_transformations, 1);
-  EXPECT_EQ(stats.binary_search_transformations_switch_cases, 6);
-
-  auto* array_type = DexType::make_type("[I");
-  // Static array holder field got created
-  auto* field = cls->find_sfield("$sparse_index$42", array_type);
-  EXPECT_NE(field, nullptr);
-  EXPECT_TRUE(is_volatile(field));
+  EXPECT_EQ(stats.multiplexing_transformations, 1);
+  EXPECT_EQ(stats.multiplexing_transformations_switch_cases, 5);
+  EXPECT_EQ(stats.multiplexing_transformations_speedup, 2);
+  EXPECT_EQ(stats.multiplexing_abandoned, 0);
 
   const auto& expected_str = R"(
     (
-      (load-param v0)
-      (sget-object "LtestClass;.$sparse_index$42:[I")
-      (move-result-pseudo-object v1)
-      (if-nez v1 :initialized)
-      (invoke-static () "LtestClass;.$sparse_index_init$42:()[I")
-      (move-result-object v1)
-      (:initialized)
-      (invoke-static (v1 v0) "Ljava/util/Arrays;.binarySearch:([II)I")
-      (move-result v1)
-      (switch v1 (:L0 :L1 :L2 :L3 :L4))
-      (return-void)
-
-      (:L0 0) 
-      (return-void)
-      (:L1 1) 
-      (return-void)
-      (:L2 2) 
-      (return-void)
-      (:L3 3) 
-      (return-void)
-      (:L4 4) 
+      (load-param v0) 
+      (and-int/lit v1 v0 3) 
+      (switch v1 (:L1 :L2 :L3 :L4)) 
+    (:L0) 
+      (return-void) 
+    (:L1 0) 
+      (switch v0 (:L5 :L6)) 
+      (goto :L0) 
+    (:L2 1) 
+      (const v1 9) 
+      (if-ne v0 v1 :L0)
+      (return-void) 
+    (:L3 2) 
+      (const v1 6) 
+      (if-ne v0 v1 :L0) 
+      (return-void) 
+    (:L4 3) 
+      (const v1 3) 
+      (if-ne v0 v1 :L0) 
+      (return-void) 
+    (:L5 0) 
+      (return-void) 
+    (:L6 12) 
       (return-void)
     )
   )";
   auto expected = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected.get(), method->get_code());
+}
 
-  auto* init_method =
-      cls->find_method_from_simple_deobfuscated_name("$sparse_index_init$42");
-  EXPECT_NE(init_method, nullptr);
-  ASSERT_EQ(init_methods.size(), 1);
-  ASSERT_EQ(init_methods.count(init_method), 1);
-  EXPECT_EQ(init_methods.at(init_method), method);
-  EXPECT_EQ(running_index, 42 + 1);
-  EXPECT_EQ(method_refs, 1); // init method
-  EXPECT_EQ(field_refs, 1); // array holder field
+TEST_F(ReduceSparseSwitchesTest, multiplexing_shr) {
+  // Almost same situation as in multiplexing test, but now all the case keys
+  // are doubled, and here our algorithm figures out that we should first shift
+  // the selector by 1 to get the best distribution.
+  auto* method = assembler::method_from_string(std::string("") + R"(
+    (method (public static) ")LtestClass;.testMethod(:(I)V"
+      (
+        (load-param v0)
+        (switch v0 (:L0 :L1 :L2 :L3 :L4))
+        (return-void)
 
-  init_method->get_code()->clear_cfg();
+        (:L0 0) 
+        (return-void)
+        (:L1 6) 
+        (return-void)
+        (:L2 12) 
+        (return-void)
+        (:L3 18) 
+        (return-void)
+        (:L4 24) 
+        (return-void)
+      )
+    )
+  )");
+  method->get_code()->build_cfg();
+
+  auto stats = ReduceSparseSwitchesPass::multiplexing_transformation(
+      5, method->get_code()->cfg());
+  method->get_code()->clear_cfg();
   // Rebuild an extra time to work around an ordering quirk in switch cases.
-  const auto& expected_init_str = R"(
+  method->get_code()->build_cfg();
+  method->get_code()->clear_cfg();
+
+  EXPECT_EQ(stats.multiplexing_transformations, 1);
+  EXPECT_EQ(stats.multiplexing_transformations_switch_cases, 5);
+  EXPECT_EQ(stats.multiplexing_transformations_speedup, 2);
+  EXPECT_EQ(stats.multiplexing_abandoned, 0);
+
+  const auto& expected_str = R"(
     (
-      (const v0 5) 
-      (new-array v0 "[I") 
-      (move-result-pseudo-object v0) 
-      (fill-array-data v0 #4 (0 32 64 66 68)) 
-      (sput-object v0 "LtestClass;.$sparse_index$42:[I") 
-      (return-object v0)
+      (load-param v0) 
+      (shr-int/lit v1 v0 1)
+      (and-int/lit v1 v1 3) 
+      (switch v1 (:L1 :L2 :L3 :L4)) 
+    (:L0) 
+      (return-void) 
+    (:L1 0) 
+      (switch v0 (:L5 :L6)) 
+      (goto :L0) 
+    (:L2 1) 
+      (const v1 18) 
+      (if-ne v0 v1 :L0)
+      (return-void) 
+    (:L3 2) 
+      (const v1 12) 
+      (if-ne v0 v1 :L0) 
+      (return-void) 
+    (:L4 3) 
+      (const v1 6)
+      (if-ne v0 v1 :L0) 
+      (return-void) 
+    (:L5 0) 
+      (return-void) 
+    (:L6 24) 
+      (return-void)
     )
   )";
-  auto expected_init = assembler::ircode_from_string(expected_init_str);
-  EXPECT_CODE_EQ(expected_init.get(), init_method->get_code());
+  auto expected = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected.get(), method->get_code());
 }
