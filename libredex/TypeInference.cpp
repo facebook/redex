@@ -1106,13 +1106,6 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   }
   case OPCODE_IPUT: {
     const DexType* type = insn->get_field()->get_type();
-    if (!m_annotations.empty()) {
-      auto annotation = current_state->get_annotation(insn->src(0));
-      const DexAnnoType anno = DexAnnoType(annotation);
-      const DexTypeDomain dex_type_domain =
-          DexTypeDomain::create_nullable(type, &anno);
-      current_state->set_dex_type(insn->src(1), dex_type_domain);
-    }
     if (type::is_float(type)) {
       refine_float(current_state, insn->src(0));
     } else {
@@ -1147,15 +1140,6 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     break;
   }
   case OPCODE_IPUT_OBJECT: {
-    if (!m_annotations.empty()) {
-      auto annotation = current_state->get_annotation(insn->src(0));
-      const auto anno = DexAnnoType(annotation);
-      auto type = current_state->get_dex_type(insn->src(1));
-      auto dex_type = type ? *type : nullptr;
-      const DexTypeDomain dex_type_domain =
-          DexTypeDomain::create_nullable(dex_type, &anno);
-      current_state->set_dex_type(insn->src(1), dex_type_domain);
-    }
     refine_reference(current_state, insn->src(0));
     refine_reference(current_state, insn->src(1));
     break;

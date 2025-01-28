@@ -20,9 +20,7 @@
 constexpr const char* ACCESS_PREFIX = "access$";
 constexpr const char* DEFAULT_SUFFIX = "$default";
 constexpr const char* ANNOTATIONS_SUFFIX = "$annotations";
-constexpr const char* COMPANION_SUFFIX = "$cp";
 constexpr const char* COMPANION_CLASS = "$Companion";
-constexpr const char* PRIVATE_SUFFIX = "$p";
 
 constexpr const char* INT_REF_CLS = "Lkotlin/jvm/internal/Ref$IntRef;";
 constexpr const char* INT_REF_FIELD =
@@ -30,8 +28,6 @@ constexpr const char* INT_REF_FIELD =
 constexpr const char* OBJ_REF_CLS = "Lkotlin/jvm/internal/Ref$ObjectRef;";
 constexpr const char* OBJ_REF_FIELD =
     "Lkotlin/jvm/internal/Ref$ObjectRef;.element:Ljava/lang/Object;";
-
-constexpr const char* DATA_CLASS_COMPONENT = "component";
 
 namespace typedef_anno {
 bool is_int(const type_inference::TypeEnvironment& env, reg_t reg) {
@@ -90,10 +86,6 @@ DexMethod* resolve_method(DexMethod* caller, IRInstruction* insn) {
 bool is_synthetic_accessor(DexMethod* m) {
   return boost::starts_with(m->get_simple_deobfuscated_name(), ACCESS_PREFIX) ||
          boost::ends_with(m->get_simple_deobfuscated_name(), DEFAULT_SUFFIX);
-}
-
-bool is_synthetic_bridge(DexMethod* m) {
-  return m->get_access() & ACC_SYNTHETIC && m->get_access() & ACC_BRIDGE;
 }
 
 bool is_synthetic_kotlin_annotations_method(DexMethod* m) {
@@ -217,83 +209,6 @@ DexMethodRef* get_enclosing_method(DexClass* cls) {
   return nullptr;
 }
 
-DexField* lookup_property_field(DexMethod* m) {
-  std::basic_string<char> field_name;
-  auto method_name = m->get_simple_deobfuscated_name();
-  const auto method_name_len = method_name.length();
-
-  if (boost::starts_with(method_name, "get") ||
-      boost::starts_with(method_name, "set")) {
-    if (method_name_len <= 3) {
-      return nullptr;
-    }
-    // getSomeField -> SomeField
-    field_name = method_name.substr(3);
-    // SomeField -> someField
-    field_name.at(0) = std::tolower(field_name.at(0));
-  } else if (boost::starts_with(method_name, ACCESS_PREFIX) &&
-             boost::ends_with(method_name, COMPANION_SUFFIX)) {
-    if (method_name_len <= (7 + 3)) {
-      return nullptr;
-    }
-
-    // access$getBLOKS_RENDERING_TYPE$cp -> getBLOKS_RENDERING_TYPE
-    field_name = method_name.substr(7, method_name_len - (7 + 3));
-    // getBLOKS_RENDERING_TYPE -> BLOKS_RENDERING_TYPE
-    field_name = field_name.substr(3);
-  } else if (boost::starts_with(method_name, ACCESS_PREFIX) &&
-             boost::ends_with(method_name, PRIVATE_SUFFIX)) {
-    if (method_name_len <= (7 + 2)) {
-      return nullptr;
-    }
-
-    // access$getUiSection$p -> getUiSection
-    field_name = method_name.substr(7, method_name_len - (7 + 2));
-    // getUiSection -> uiSection
-    field_name = field_name.substr(3);
-    field_name.at(0) = std::tolower(field_name.at(0));
-  } else {
-    return nullptr;
-  }
-
-  std::string_view int_or_string;
-  if (boost::starts_with(m->get_simple_deobfuscated_name(), "set") ||
-      boost::starts_with(m->get_simple_deobfuscated_name(), "access$set")) {
-    auto args = m->get_proto()->get_args();
-    if (args->empty()) {
-      return nullptr;
-    }
-    DexType* param_type = args->at(0);
-    if (!type::is_int(param_type) && param_type != type::java_lang_String()) {
-      // handles P1570013473
-      if (param_type == m->get_class() && args->size() > 1) {
-        param_type = args->at(1);
-        if (!type::is_int(param_type) &&
-            param_type != type::java_lang_String()) {
-          return nullptr;
-        }
-      } else {
-        return nullptr;
-      }
-    }
-    int_or_string = type::is_int(param_type)
-                        ? "I"
-                        : type::java_lang_String()->get_name()->str();
-  } else {
-    const auto* rtype = m->get_proto()->get_rtype();
-    if (!type::is_int(rtype) && rtype != type::java_lang_String()) {
-      return nullptr;
-    }
-    int_or_string =
-        type::is_int(rtype) ? "I" : type::java_lang_String()->get_name()->str();
-  }
-
-  auto class_name_dot = m->get_class()->get_name()->str() + ".";
-  auto* fref =
-      DexField::get_field(class_name_dot + field_name + ":" + int_or_string);
-  return fref && fref->is_def() ? fref->as_def() : nullptr;
-}
-
 // make the methods and fields temporarily synthetic to add annotations
 template <typename DexMember>
 bool add_annotations(DexMember* member, DexAnnotationSet* anno_set) {
@@ -335,12 +250,42 @@ void add_param_annotations(DexMethod* m,
   m->set_access(access);
 }
 
-void collect_param_anno_from_instruction(
+void patch_parameter_from_field(DexMethod* m,
+                                IRInstruction* insn,
+                                src_index_t arg_index,
+                                DexAnnotationSet* anno_set,
+                                live_range::UseDefChains* ud_chains) {
+  // Patch missing parameter annotations from accessed fields
+  live_range::Use use_of_id{insn, arg_index};
+  auto udchains_it = ud_chains->find(use_of_id);
+  auto defs_set = udchains_it->second;
+
+  for (auto* def : defs_set) {
+    if (!opcode::is_a_load_param(def->opcode())) {
+      continue;
+    }
+    auto param_index = 0;
+    for (auto& mie :
+         InstructionIterable(m->get_code()->cfg().get_param_instructions())) {
+      if (mie.insn == def) {
+        if (!is_static(m)) {
+          param_index -= 1;
+        }
+        add_param_annotations(m, anno_set, param_index);
+      }
+      param_index += 1;
+    }
+  }
+}
+
+void patch_param_from_method_invoke(
     TypeEnvironments& envs,
     type_inference::TypeInference& inference,
     DexMethod* caller,
     IRInstruction* insn,
-    std::vector<std::pair<src_index_t, DexAnnotationSet&>>& missing_param_annos,
+    live_range::UseDefChains* ud_chains,
+    std::vector<std::pair<src_index_t, DexAnnotationSet&>>*
+        missing_param_annos = nullptr,
     bool patch_accessor = true) {
   always_assert(opcode::is_an_invoke(insn->opcode()));
   auto* def_method = resolve_method(caller, insn);
@@ -359,94 +304,45 @@ void collect_param_anno_from_instruction(
       if (!annotation) {
         continue;
       }
-      int param_index = insn->opcode() == OPCODE_INVOKE_STATIC
-                            ? param_anno.first
-                            : param_anno.first + 1;
-      reg_t param_reg = insn->src(param_index);
-      auto anno_type = env.get_annotation(param_reg);
-      if (patch_accessor && anno_type && anno_type == annotation) {
-        // Safe assignment. Nothing to do.
-        continue;
+      int arg_index = insn->opcode() == OPCODE_INVOKE_STATIC
+                          ? param_anno.first
+                          : param_anno.first + 1;
+      reg_t arg_reg = insn->src(arg_index);
+      auto anno_type = env.get_annotation(arg_reg);
+      if (patch_accessor) {
+        if (anno_type && anno_type == annotation) {
+          // Safe assignment. Nothing to do.
+          continue;
+        }
+        DexAnnotationSet anno_set = DexAnnotationSet();
+        anno_set.add_annotation(std::make_unique<DexAnnotation>(
+            DexType::make_type(annotation.get()->get_name()), DAV_RUNTIME));
+        patch_parameter_from_field(caller, insn, arg_index, &anno_set,
+                                   ud_chains);
       }
       DexAnnotationSet& param_anno_set = *param_anno.second;
-      missing_param_annos.push_back({param_index, param_anno_set});
+      if (missing_param_annos) {
+        missing_param_annos->push_back({arg_index, param_anno_set});
+      }
       TRACE(TAC, 2, "Missing param annotation %s in %s", SHOW(&param_anno_set),
             SHOW(caller));
     }
   }
-  if (def_method->get_anno_set()) {
-    auto return_annotation = type_inference::get_typedef_annotation(
-        def_method->get_anno_set()->get_annotations(),
-        inference.get_annotations());
-    if (return_annotation) {
-      add_annotations(caller, def_method->get_anno_set());
-    }
-  }
 }
 
-void patch_return_anno_from_get(type_inference::TypeInference& inference,
-                                DexMethod* caller,
-                                IRInstruction* insn) {
-  always_assert(opcode::is_an_iget(insn->opcode()) ||
-                opcode::is_an_sget(insn->opcode()));
-  auto name = caller->get_simple_deobfuscated_name();
-  auto last_dollar = name.find('$');
-
-  // the caller methods are either data class components, named "componentX",
-  // or they're Java field accessors, which have the pattern access$XXX, where
-  // X is an integer
-  if (!boost::starts_with(caller->get_simple_deobfuscated_name(),
-                          DATA_CLASS_COMPONENT)) {
-    if (last_dollar == std::string::npos) {
-      return;
-    }
-    last_dollar++;
-    if (!(last_dollar < name.size() && name[last_dollar] >= '0' &&
-          name[last_dollar] <= '9')) {
-      return;
-    }
-  }
-  auto field_ref = insn->get_field();
-  auto field_anno = type_inference::get_typedef_anno_from_member(
-      field_ref, inference.get_annotations());
-
-  if (field_anno != boost::none) {
-    // Patch missing return annotations from accessed fields
-    add_annotations(caller, field_ref->as_def()->get_anno_set());
-  }
-}
-
-void patch_parameter_from_put(type_inference::TypeInference& inference,
-                              DexMethod* caller,
-                              IRInstruction* insn) {
+void patch_setter_method(type_inference::TypeInference& inference,
+                         DexMethod* caller,
+                         IRInstruction* insn,
+                         live_range::UseDefChains* ud_chains) {
   always_assert(opcode::is_an_iput(insn->opcode()) ||
                 opcode::is_an_sput(insn->opcode()));
-  auto name = caller->get_simple_deobfuscated_name();
-  auto last_dollar = name.find('$');
-  if (last_dollar == std::string::npos) {
-    return;
-  }
-  last_dollar++;
-  if (!(last_dollar < name.size() && name[last_dollar] >= '0' &&
-        name[last_dollar] <= '9')) {
-    return;
-  }
   auto field_ref = insn->get_field();
   auto field_anno = type_inference::get_typedef_anno_from_member(
       field_ref, inference.get_annotations());
 
   if (field_anno != boost::none) {
-    // Patch missing parameter annotations from accessed fields
-    size_t param_index = 1;
-    if (opcode::is_an_sput(insn->opcode())) {
-      param_index = 0;
-    }
-    DexAccessFlags access = caller->get_access();
-    caller->set_access(ACC_SYNTHETIC);
-    caller->attach_param_annotation_set(
-        param_index, std::make_unique<DexAnnotationSet>(
-                         *field_ref->as_def()->get_anno_set()));
-    caller->set_access(access);
+    patch_parameter_from_field(caller, insn, 0,
+                               field_ref->as_def()->get_anno_set(), ud_chains);
   }
 }
 
@@ -495,108 +391,27 @@ bool TypedefAnnoPatcher::patch_synth_methods_overriding_annotated_methods(
   return false;
 }
 
-// check if the field has any typedef annotations. If it does, patch the method
-// return if it's a getter or the parameter if it's a setter
-void TypedefAnnoPatcher::try_adding_annotation_to_accessor(
-    DexMethod* m, const DexField* field) {
-  always_assert(field != nullptr);
-  auto anno =
-      type_inference::get_typedef_anno_from_member(field, m_typedef_annos);
-  if (anno == boost::none) {
-    return;
-  }
-
-  DexAnnotationSet anno_set = DexAnnotationSet();
-  anno_set.add_annotation(std::make_unique<DexAnnotation>(
-      DexType::make_type(anno.get()->get_name()), DAV_RUNTIME));
-
-  // annotate the parameter
-  if (boost::starts_with(m->get_simple_deobfuscated_name(), "set") ||
-      boost::starts_with(m->get_simple_deobfuscated_name(), "access$set")) {
-    size_t param_index = 0;
-    if (boost::ends_with(m->get_simple_deobfuscated_name(), PRIVATE_SUFFIX)) {
-      param_index = 1;
-    }
-    add_param_annotations(m, &anno_set, param_index);
-  } else {
-    add_annotations(m, &anno_set);
-  }
-}
-
-void TypedefAnnoPatcher::patch_kotlin_annotated_property_getter_setter(
-    DexMethod* m) {
-  if (!boost::starts_with(m->get_simple_deobfuscated_name(), "get") &&
-      !boost::starts_with(m->get_simple_deobfuscated_name(), "set")) {
-    return;
-  }
-
-  const auto* property_field = lookup_property_field(m);
-  if (property_field == nullptr) {
-    return;
-  }
-  try_adding_annotation_to_accessor(m, property_field);
-}
-
-/*
- * A synthesized Kotlin method like access$getBLOKS_RENDERING_TYPE$cp(); that
- * enables access to private property for Kotlin Companion property.
- */
-void TypedefAnnoPatcher::patch_kotlin_companion_property_accessor(
-    DexMethod* m) {
-  if (!boost::starts_with(m->get_simple_deobfuscated_name(), ACCESS_PREFIX) ||
-      !boost::ends_with(m->get_simple_deobfuscated_name(), COMPANION_SUFFIX)) {
-    return;
-  }
-
-  const auto* property_field = lookup_property_field(m);
-  if (property_field == nullptr) {
-    return;
-  }
-  try_adding_annotation_to_accessor(m, property_field);
-}
-
-/*
- * A synthesized Kotlin method like access$getUiSection$p(); that enables access
- * to private property on the class.
- */
-void TypedefAnnoPatcher::patch_kotlin_property_private_getter(DexMethod* m) {
-  if (!boost::starts_with(m->get_simple_deobfuscated_name(), ACCESS_PREFIX) ||
-      !boost::ends_with(m->get_simple_deobfuscated_name(), PRIVATE_SUFFIX)) {
-    return;
-  }
-
-  const auto* property_field = lookup_property_field(m);
-  if (property_field == nullptr) {
-    return;
-  }
-  try_adding_annotation_to_accessor(m, property_field);
-}
-
 void TypedefAnnoPatcher::run(const Scope& scope) {
-  walk::parallel::methods(scope, [this](DexMethod* m) {
-    patch_kotlin_annotated_property_getter_setter(m);
-    patch_data_class_component(m);
-    if (is_synthetic_accessor(m) || is_synthetic_bridge(m)) {
-      patch_accessors(m);
-    }
-    patch_kotlin_companion_property_accessor(m);
-    patch_kotlin_property_private_getter(m);
-    if (is_synthetic_kotlin_annotations_method(m)) {
-      patch_kotlin_annotations(m);
-    }
-    patch_synth_methods_overriding_annotated_methods(m);
-    if (is_constructor(m)) {
-      if (has_typedef_annos(m->get_param_anno(), m_typedef_annos)) {
-        patch_synth_cls_fields_from_ctor_param(m);
-      } else {
-        if (has_kotlin_default_ctor_marker(m)) {
-          patch_accessors(m);
+  walk::parallel::classes(scope, [this](DexClass* cls) {
+    for (auto m : cls->get_all_methods()) {
+
+      patch_parameters_and_returns(m);
+      if (is_synthetic_kotlin_annotations_method(m)) {
+        patch_kotlin_annotations(m);
+      }
+      patch_synth_methods_overriding_annotated_methods(m);
+      if (is_constructor(m)) {
+        if (has_typedef_annos(m->get_param_anno(), m_typedef_annos)) {
+          patch_synth_cls_fields_from_ctor_param(m);
+        } else {
+          if (has_kotlin_default_ctor_marker(m)) {
+            patch_parameters_and_returns(m);
+          }
         }
       }
-    }
-    const auto cls = type_class(m->get_class());
-    if (is_synthesized_lambda_class(cls) || is_fun_interface_class(cls)) {
-      patch_local_var_lambda(m);
+      if (is_synthesized_lambda_class(cls) || is_fun_interface_class(cls)) {
+        patch_local_var_lambda(m);
+      }
     }
   });
   walk::parallel::classes(scope, [&](DexClass* cls) {
@@ -605,16 +420,6 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
       patch_ctor_params_from_synth_cls_fields(cls);
     }
   });
-}
-
-void TypedefAnnoPatcher::patch_data_class_component(DexMethod* m) {
-  if (type_class(m->get_class())->get_super_class()->str() ==
-          "Lcom/facebook/kotlin/compilerplugins/dataclassgenerate/superclass/"
-          "DataClassSuper;" &&
-      boost::starts_with(m->get_simple_deobfuscated_name(),
-                         DATA_CLASS_COMPONENT)) {
-    patch_accessors(m);
-  }
 }
 
 void TypedefAnnoPatcher::patch_ctor_params_from_synth_cls_fields(
@@ -789,15 +594,26 @@ void TypedefAnnoPatcher::collect_annos_from_default_method(
                                           &m_method_override_graph);
   inference.run(method);
   TypeEnvironments& envs = inference.get_type_environments();
+  live_range::MoveAwareChains chains(method->get_code()->cfg());
+  live_range::UseDefChains ud_chains = chains.get_use_def_chains();
 
   for (cfg::Block* b : cfg.blocks()) {
     for (auto& mie : InstructionIterable(b)) {
       auto* insn = mie.insn;
       IROpcode opcode = insn->opcode();
       if (opcode::is_an_invoke(opcode)) {
-        collect_param_anno_from_instruction(envs, inference,
-                                            insn->get_method()->as_def(), insn,
-                                            missing_param_annos, false);
+        auto* caller = insn->get_method()->as_def();
+        patch_param_from_method_invoke(envs, inference, caller, insn,
+                                       &ud_chains, &missing_param_annos, false);
+        auto def_method = resolve_method(caller, insn);
+        if (def_method && def_method->get_anno_set()) {
+          auto anno_set = def_method->get_anno_set();
+          auto return_annotation = type_inference::get_typedef_annotation(
+              anno_set->get_annotations(), inference.get_annotations());
+          if (return_annotation) {
+            add_annotations(caller, anno_set);
+          }
+        }
       }
     }
   }
@@ -905,14 +721,16 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
                 ? "I"
                 : type::java_lang_String()->get_name()->str();
         // add annotations to the Kotlin getter and setter methods
-        add_annotations(
-            DexMethod::get_method(class_name_dot + "get" + field_name + ":()" +
-                                  int_or_string),
-            &anno_set);
-        add_annotations(
-            DexMethod::get_method(class_name_dot + "set" + field_name + ":(" +
-                                  int_or_string + ")V"),
-            &anno_set);
+        auto getter_method = DexMethod::get_method(
+            class_name_dot + "get" + field_name + ":()" + int_or_string);
+        if (getter_method) {
+          patch_parameters_and_returns(getter_method->as_def());
+        }
+        auto setter_method = DexMethod::get_method(
+            class_name_dot + "set" + field_name + ":(" + int_or_string + ")V");
+        if (setter_method) {
+          patch_parameters_and_returns(setter_method->as_def());
+        }
       }
     }
   }
@@ -1226,10 +1044,13 @@ void TypedefAnnoPatcher::patch_kotlin_annotations(DexMethod* m) {
   }
 }
 
-// patch $default methods and java access methods. access$000 patterened methods
-// with a get/put opcode are java access methods that either get a field or
-// write to a field.
-void TypedefAnnoPatcher::patch_accessors(DexMethod* m) {
+// This does 3 things:
+// 1. if a parameter is passed into an invoked method that expects an annotated
+// argument, patch the parameter
+// 2. if a parameter is passed into a field write and the field is annotated,
+// patch the parameter
+// 3. if all method returns are annotated as per TypeInference, patch the method
+void TypedefAnnoPatcher::patch_parameters_and_returns(DexMethod* m) {
   IRCode* code = m->get_code();
   if (!code) {
     return;
@@ -1242,36 +1063,36 @@ void TypedefAnnoPatcher::patch_accessors(DexMethod* m) {
   inference.run(m);
 
   TypeEnvironments& envs = inference.get_type_environments();
-  std::vector<std::pair<src_index_t, DexAnnotationSet&>> missing_param_annos;
+  live_range::MoveAwareChains chains(m->get_code()->cfg());
+  live_range::UseDefChains ud_chains = chains.get_use_def_chains();
+
+  boost::optional<const DexType*> anno = boost::none;
+  bool patch_return = true;
   for (cfg::Block* b : cfg.blocks()) {
     for (auto& mie : InstructionIterable(b)) {
       auto* insn = mie.insn;
       IROpcode opcode = insn->opcode();
       if (opcode::is_an_invoke(opcode)) {
-        collect_param_anno_from_instruction(envs, inference, m, insn,
-                                            missing_param_annos);
-      } else if (opcode::is_an_iget(opcode) || opcode::is_an_sget(opcode)) {
-        if (m->as_def()->get_proto()->get_rtype() == type::java_lang_String() ||
-            type::is_int(m->as_def()->get_proto()->get_rtype())) {
-          patch_return_anno_from_get(inference, m, insn);
-        }
+        patch_param_from_method_invoke(envs, inference, m, insn, &ud_chains);
       } else if (opcode::is_an_iput(opcode) || opcode::is_an_sput(opcode)) {
-        patch_parameter_from_put(inference, m, insn);
+        patch_setter_method(inference, m, insn, &ud_chains);
+      } else if ((opcode == OPCODE_RETURN_OBJECT || opcode == OPCODE_RETURN) &&
+                 patch_return) {
+        auto return_anno = envs.at(insn).get_annotation(insn->src(0));
+        if (return_anno == boost::none ||
+            (anno != boost::none && return_anno != anno)) {
+          patch_return = false;
+        } else {
+          anno = return_anno;
+        }
       }
     }
   }
 
-  // Patch missing param annotations
-  for (auto& pair : missing_param_annos) {
-    int param_index = pair.first;
-    if (is_synthetic_accessor(m)) {
-      always_assert(is_static(m));
-    } else {
-      always_assert(is_constructor(m) || is_synthetic_bridge(m));
-      param_index -= 1;
-    }
-    add_param_annotations(m, &pair.second, param_index);
-    TRACE(TAC, 2, "Add param annotation %s at %d to %s", SHOW(&pair.second),
-          param_index, SHOW(m));
+  if (patch_return && anno != boost::none) {
+    DexAnnotationSet anno_set = DexAnnotationSet();
+    anno_set.add_annotation(std::make_unique<DexAnnotation>(
+        DexType::make_type(anno.get()->get_name()), DAV_RUNTIME));
+    add_annotations(m, &anno_set);
   }
 }

@@ -177,10 +177,10 @@ TEST_F(TypedefAnnosTest, test_int_field) {
     auto insn = mie.insn;
     inference.analyze_instruction(insn, &env);
     if (insn->opcode() == OPCODE_IPUT) {
-      EXPECT_EQ(*(env.get_annotation(insn->src(1))),
-                DexType::get_type("Linteg/TestIntDef;"));
+      EXPECT_EQ(env.get_annotation(insn->src(1)), boost::none);
       auto domain = env.get_type_domain(insn->src(1));
-      auto dex_type = DexType::make_type("I");
+      auto dex_type =
+          DexType::make_type("Lcom/facebook/redextest/TypedefAnnosTest;");
       EXPECT_TRUE(domain.is_nullable());
       EXPECT_EQ(domain.get<1>(), SingletonDexTypeDomain(dex_type));
       EXPECT_TRUE(domain.get<2>().is_top());
@@ -208,8 +208,7 @@ TEST_F(TypedefAnnosTest, test_str_field) {
       auto domain = env.get_type_domain(insn->src(1));
       auto dex_type =
           DexType::make_type("Lcom/facebook/redextest/TypedefAnnosTest;");
-      EXPECT_EQ(*(env.get_annotation(insn->src(1))),
-                DexType::get_type("Linteg/TestStringDef;"));
+      EXPECT_EQ(env.get_annotation(insn->src(1)), boost::none);
       EXPECT_TRUE(domain.is_nullable());
       EXPECT_EQ(domain.get<1>(), SingletonDexTypeDomain(dex_type));
       EXPECT_TRUE(domain.get<2>().is_top());
