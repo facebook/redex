@@ -38,8 +38,6 @@ class TypedefAnnoPatcher {
 
   void patch_parameters_and_returns(DexMethod* method);
 
-  void patch_kotlin_annotations(DexMethod* method);
-
   void patch_enclosed_method(DexClass* cls);
 
   void patch_synth_cls_fields_from_ctor_param(DexMethod* ctor);
