@@ -51,11 +51,6 @@ struct TypedefAnnoCheckerTest : public RedexIntegrationTest {
                    const method_override_graph::Graph& method_override_graph) {
     auto config = get_config();
     TypedefAnnoPatcher patcher(config, method_override_graph);
-    walk::parallel::classes(scope, [&](DexClass* cls) {
-      if (klass::maybe_anonymous_class(cls)) {
-        patcher.patch_first_level_nested_lambda(cls);
-      }
-    });
     patcher.run(scope);
   }
 
