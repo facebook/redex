@@ -31,23 +31,20 @@ class TypedefAnnoPatcher {
 
   void run(const Scope& scope);
 
-  void patch_first_level_nested_lambda(DexClass* cls);
-
  private:
   bool patch_synth_methods_overriding_annotated_methods(DexMethod* m);
 
-  void patch_parameters_and_returns(DexMethod* method);
+  void patch_parameters_and_returns(
+      DexMethod* method,
+      std::vector<std::pair<src_index_t, DexAnnotationSet&>>*
+          missing_param_annos = nullptr);
 
   void patch_enclosed_method(DexClass* cls);
 
   void patch_synth_cls_fields_from_ctor_param(DexMethod* ctor);
 
-  void patch_local_var_lambda(DexMethod* method);
-
-  void collect_annos_from_default_method(
-      DexMethod* method,
-      std::vector<std::pair<src_index_t, DexAnnotationSet&>>&
-          missing_param_annos);
+  void patch_lambdas(DexMethod* method,
+                     std::vector<const DexField*>* patched_fields);
 
   void patch_ctor_params_from_synth_cls_fields(DexClass* cls);
 

@@ -703,13 +703,6 @@ void TypedefAnnoCheckerPass::run_pass(DexStoresVector& stores,
   TypedefAnnoPatcher patcher(m_config, *method_override_graph);
   walk::parallel::classes(scope, [&](DexClass* cls) {
     gather_typedef_values(cls, strdef_constants, intdef_constants);
-
-    // to reduce the number of walk::parallel::classes necessary,
-    // run the first level nested lambda patcher here instead of
-    // having a dedicated run along inside patcher.run
-    if (klass::maybe_anonymous_class(cls)) {
-      patcher.patch_first_level_nested_lambda(cls);
-    }
   });
 
   patcher.run(scope);
