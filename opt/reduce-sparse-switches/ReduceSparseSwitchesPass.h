@@ -20,10 +20,19 @@ class ReduceSparseSwitchesPass : public Pass {
     size_t splitting_transformations{0};
     size_t splitting_transformations_switch_cases{0};
 
-    size_t multiplexing_abandoned{0};
-    size_t multiplexing_transformations{0};
-    size_t multiplexing_transformations_switch_cases{0};
-    size_t multiplexing_transformations_speedup{0};
+    struct Multiplexing {
+      size_t abandoned{0};
+      size_t transformations{0};
+      size_t switch_cases{0};
+      size_t inefficiency{0};
+
+      Multiplexing& operator+=(const Multiplexing&);
+    };
+    std::unordered_map<size_t, Multiplexing> multiplexing;
+
+    size_t multiplexing_transformations() const;
+
+    size_t multiplexing_switch_cases() const;
 
     Stats& operator+=(const Stats&);
   };

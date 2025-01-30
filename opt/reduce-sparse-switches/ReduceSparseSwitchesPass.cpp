@@ -18,14 +18,15 @@ namespace {
 
 constexpr const char* METRIC_SPLITTING_TRANSFORMATIONS =
     "num_splitting_transformations";
-constexpr const char* METRIC_MULTIPLEXING_ABANDONED =
-    "num_multiplexing_abandoned";
+constexpr const char* METRIC_MULTIPLEXING_ABANDONED_PREFIX =
+    "num_multiplexing_abandoned_";
 constexpr const char* METRIC_SPLITTING_TRANSFORMATIONS_SWITCH_CASES =
     "num_splitting_transformations_switch_cases";
 constexpr const char* METRIC_MULTIPLEXING_TRANSFORMATIONS =
     "num_multiplexing_transformations";
-constexpr const char* METRIC_MULTIPLEXING_TRANSFORMATIONS_AVERAGE_SPEEEDUP =
-    "num_multiplexing_transformations_average_speedup";
+constexpr const char*
+    METRIC_MULTIPLEXING_TRANSFORMATIONS_AVERAGE_INEFFICIENCY_PREFIX =
+        "num_multiplexing_transformations_average_inefficiency_";
 constexpr const char* METRIC_MULTIPLEXING_TRANSFORMATIONS_SWITCH_CASES =
     "num_multiplexing_transformations_switch_cases";
 
@@ -334,7 +335,7 @@ ReduceSparseSwitchesPass::multiplexing_transformation(
           "Sparse switch with %zu cases >> %d %% %zu ==> %zu max; abandon: %d",
           switch_cases, shr_by, M, max_cases, abandon);
     if (abandon) {
-      stats.multiplexing_abandoned++;
+      stats.multiplexing[M].abandoned++;
       continue;
     }
 
@@ -352,9 +353,11 @@ ReduceSparseSwitchesPass::multiplexing_transformation(
     multiplex_sparse_switch_into_packed_and_sparse(
         cfg, block, last_insn_it, *tmp_reg, shr_by, multiplexed_cases);
 
-    stats.multiplexing_transformations++;
-    stats.multiplexing_transformations_switch_cases += switch_cases;
-    stats.multiplexing_transformations_speedup += switch_cases / max_cases;
+    stats.multiplexing[M].transformations++;
+    stats.multiplexing[M].switch_cases += switch_cases;
+    always_assert(M * max_cases >= switch_cases);
+    stats.multiplexing[M].inefficiency +=
+        static_cast<size_t>(std::log2(M * max_cases / switch_cases));
   }
   return stats;
 }
@@ -400,7 +403,7 @@ void ReduceSparseSwitchesPass::run_pass(DexStoresVector& stores,
     local_stats += multiplexing_transformation(
         m_config.min_multiplexing_switch_cases, cfg);
     if (local_stats.splitting_transformations == 0 &&
-        local_stats.multiplexing_transformations_switch_cases == 0) {
+        local_stats.multiplexing_transformations() == 0) {
       return;
     }
 
@@ -409,8 +412,8 @@ void ReduceSparseSwitchesPass::run_pass(DexStoresVector& stores,
           "cases) switches in {%s}",
           local_stats.splitting_transformations,
           local_stats.splitting_transformations_switch_cases,
-          local_stats.multiplexing_transformations,
-          local_stats.multiplexing_transformations_switch_cases, SHOW(method));
+          local_stats.multiplexing_transformations(),
+          local_stats.multiplexing_switch_cases(), SHOW(method));
 
     TRACE(RSS, 4, "Rewrote {%s}:\n%s", SHOW(method), SHOW(cfg));
 
@@ -423,27 +426,62 @@ void ReduceSparseSwitchesPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_SPLITTING_TRANSFORMATIONS_SWITCH_CASES,
                   stats.splitting_transformations_switch_cases);
   mgr.incr_metric(METRIC_MULTIPLEXING_TRANSFORMATIONS,
-                  stats.multiplexing_transformations);
+                  stats.multiplexing_transformations());
   mgr.incr_metric(METRIC_MULTIPLEXING_TRANSFORMATIONS_SWITCH_CASES,
-                  stats.multiplexing_transformations_switch_cases);
-  mgr.incr_metric(METRIC_MULTIPLEXING_TRANSFORMATIONS_AVERAGE_SPEEEDUP,
-                  stats.multiplexing_transformations == 0
-                      ? 0
-                      : stats.multiplexing_transformations_speedup /
-                            stats.multiplexing_transformations);
-  mgr.incr_metric(METRIC_MULTIPLEXING_ABANDONED, stats.multiplexing_abandoned);
+                  stats.multiplexing_switch_cases());
+  for (auto&& [M, mstats] : stats.multiplexing) {
+    if (mstats.abandoned > 0) {
+      mgr.incr_metric(METRIC_MULTIPLEXING_ABANDONED_PREFIX + std::to_string(M),
+                      mstats.abandoned);
+    }
+    if (mstats.transformations > 0) {
+      mgr.incr_metric(
+          METRIC_MULTIPLEXING_TRANSFORMATIONS_AVERAGE_INEFFICIENCY_PREFIX +
+              std::to_string(M),
+          mstats.inefficiency / mstats.transformations);
+    }
+  }
 
   TRACE(RSS, 1,
-        "[reduce gotos] Split %zu (%zu cases) switches, multiplexed %zu (%zu "
-        "cases) switches with average speed-up %zu",
+        "[reduce sparse switches] Split %zu (%zu cases) switches, multiplexed "
+        "%zu (%zu "
+        "cases) switches",
         stats.splitting_transformations,
         stats.splitting_transformations_switch_cases,
-        stats.multiplexing_transformations,
-        stats.multiplexing_transformations_switch_cases,
-        stats.multiplexing_transformations == 0
-            ? 0
-            : stats.multiplexing_transformations_speedup /
-                  stats.multiplexing_transformations);
+        stats.multiplexing_transformations(),
+        stats.multiplexing_switch_cases());
+  for (auto&& [M, mstats] : stats.multiplexing) {
+    TRACE(RSS, 2,
+          "[reduce sparse switches] M=%zu: %zu abandoned, %zu accumulated "
+          "inefficiency / %zu transformed = %zu average inefficiency",
+          M, mstats.abandoned, mstats.inefficiency, mstats.transformations,
+          mstats.transformations == 0
+              ? 0
+              : mstats.inefficiency / mstats.transformations);
+  }
+}
+
+size_t ReduceSparseSwitchesPass::Stats::multiplexing_transformations() const {
+  return std::accumulate(
+      multiplexing.begin(), multiplexing.end(), 0,
+      [](size_t acc, const auto& p) { return acc + p.second.transformations; });
+}
+
+size_t ReduceSparseSwitchesPass::Stats::multiplexing_switch_cases() const {
+  return std::accumulate(
+      multiplexing.begin(), multiplexing.end(), 0,
+      [](size_t acc, const auto& p) { return acc + p.second.switch_cases; });
+}
+
+ReduceSparseSwitchesPass::Stats::Multiplexing&
+ReduceSparseSwitchesPass::Stats::Multiplexing::operator+=(
+    const ReduceSparseSwitchesPass::Stats::Multiplexing& that) {
+  abandoned += that.abandoned;
+  transformations += that.transformations;
+  switch_cases += that.switch_cases;
+  inefficiency += that.inefficiency;
+
+  return *this;
 }
 
 ReduceSparseSwitchesPass::Stats& ReduceSparseSwitchesPass::Stats::operator+=(
@@ -451,12 +489,9 @@ ReduceSparseSwitchesPass::Stats& ReduceSparseSwitchesPass::Stats::operator+=(
   splitting_transformations += that.splitting_transformations;
   splitting_transformations_switch_cases +=
       that.splitting_transformations_switch_cases;
-  multiplexing_transformations += that.multiplexing_transformations;
-  multiplexing_transformations_switch_cases +=
-      that.multiplexing_transformations_switch_cases;
-  multiplexing_transformations_speedup +=
-      that.multiplexing_transformations_speedup;
-  multiplexing_abandoned += that.multiplexing_abandoned;
+  for (auto&& [M, mstats] : that.multiplexing) {
+    multiplexing[M] += mstats;
+  }
   return *this;
 }
 
