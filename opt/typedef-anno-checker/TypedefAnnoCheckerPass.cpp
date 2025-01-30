@@ -630,10 +630,6 @@ bool TypedefAnnoChecker::check_typedef_value(
     case OPCODE_SGET:
     case OPCODE_IGET_OBJECT:
     case OPCODE_SGET_OBJECT: {
-      auto field = resolve_field(def->get_field());
-      if (is_synthetic(field)) {
-        // TODO: add stats for this
-      }
       auto field_anno = type_inference::get_typedef_anno_from_member(
           def->get_field(), inference->get_annotations());
       if (!field_anno || field_anno != annotation) {
