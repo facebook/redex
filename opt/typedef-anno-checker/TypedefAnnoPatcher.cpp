@@ -19,8 +19,6 @@
 
 constexpr const char* ACCESS_PREFIX = "access$";
 constexpr const char* DEFAULT_SUFFIX = "$default";
-constexpr const char* ANNOTATIONS_SUFFIX = "$annotations";
-constexpr const char* COMPANION_CLASS = "$Companion";
 
 constexpr const char* INT_REF_CLS = "Lkotlin/jvm/internal/Ref$IntRef;";
 constexpr const char* INT_REF_FIELD =
@@ -86,11 +84,6 @@ DexMethod* resolve_method(DexMethod* caller, IRInstruction* insn) {
 bool is_synthetic_accessor(DexMethod* m) {
   return boost::starts_with(m->get_simple_deobfuscated_name(), ACCESS_PREFIX) ||
          boost::ends_with(m->get_simple_deobfuscated_name(), DEFAULT_SUFFIX);
-}
-
-bool is_synthetic_kotlin_annotations_method(DexMethod* m) {
-  return boost::ends_with(m->get_simple_deobfuscated_name(),
-                          ANNOTATIONS_SUFFIX);
 }
 
 /**
@@ -395,9 +388,6 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
     for (auto m : cls->get_all_methods()) {
 
       patch_parameters_and_returns(m);
-      if (is_synthetic_kotlin_annotations_method(m)) {
-        patch_kotlin_annotations(m);
-      }
       patch_synth_methods_overriding_annotated_methods(m);
       if (is_constructor(m)) {
         if (has_typedef_annos(m->get_param_anno(), m_typedef_annos)) {
@@ -930,117 +920,6 @@ void TypedefAnnoPatcher::patch_first_level_nested_lambda(DexClass* cls) {
   }
 
   m_lambda_anno_map.emplace(class_prefix, annotated_fields);
-}
-
-void TypedefAnnoPatcher::patch_kotlin_annotations(DexMethod* m) {
-  IRCode* code = m->get_code();
-  if (!code) {
-    return;
-  }
-
-  DexAnnotationSet* anno_set = m->get_anno_set();
-  if (!anno_set) {
-    return;
-  }
-  DexType* safe_annotation = nullptr;
-  bool has_typedef = false;
-  for (auto const& anno : anno_set->get_annotations()) {
-    auto const anno_class = type_class(anno->type());
-    if (!anno_class) {
-      continue;
-    }
-    for (auto safe_anno : m_typedef_annos) {
-      if (get_annotation(anno_class, safe_anno)) {
-        if (has_typedef) {
-          always_assert_log(
-              false,
-              "Method %s cannot have more than one TypeDef annotation",
-              SHOW(m));
-          return;
-        }
-        has_typedef = true;
-        safe_annotation = safe_anno;
-      }
-    }
-  }
-  if (!safe_annotation) {
-    return;
-  }
-  // example method name:
-  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.getField_three$annotations:()V
-  // getter:
-  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.getField_three:()Ljava/lang/String;
-  // setter:
-  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.setField_three:(Ljava/lang/String;)V;
-  // field is one of:
-  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.Field_three:Ljava/lang/String;
-  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.field_three:Ljava/lang/String;
-  // companion example
-  // companion method:
-  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest$Companion;.getField_one$annotations:()V
-  // getters:
-  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest$Companion.getField_one:()I
-  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.access$getField_one$cp:()I
-  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.access$getField_one$p:()I
-  // setters:
-  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest$Companion.setField_one:(I)
-  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.access$setField_one$cp:(I)V
-  // field is one of:
-  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.Field_one:I
-  //    Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.field_one:I
-
-  // some synthetic interfaces' names have $-CC. Delete it from the name
-  auto original_class_name = m->get_class()->get_name()->str();
-  auto class_name = original_class_name + ".";
-  auto pos = class_name.find("$-CC");
-  if (pos != std::string::npos) class_name.erase(pos, 4);
-  auto companion_pos = class_name.find(COMPANION_CLASS);
-  auto base_class_name = (companion_pos != std::string::npos)
-                             ? class_name.substr(0, companion_pos) + ";."
-                             : class_name;
-
-  auto anno_method_name = m->get_simple_deobfuscated_name();
-  auto method_name =
-      anno_method_name.substr(0, anno_method_name.find(ANNOTATIONS_SUFFIX));
-  auto int_or_string = safe_annotation->get_name()->str() ==
-                               "Lcom/facebook/redex/annotations/SafeStringDef;"
-                           ? type::java_lang_String()->get_name()->str()
-                           : "I";
-  // we need to remove the first three characters, 'get', from the annotations
-  // methoid name to derive the field name
-  auto field_name = method_name.substr(3, method_name.size());
-
-  // add annotations to getter and setter methods
-  add_annotations(
-      DexMethod::get_method(class_name + method_name + ":()" + int_or_string),
-      anno_set);
-  add_annotations(DexMethod::get_method(class_name + "set" + field_name + ":(" +
-                                        int_or_string + ")V"),
-                  anno_set);
-
-  // add annotations to access non-companion getter and setter methods
-  add_annotations(
-      DexMethod::get_method(base_class_name + ACCESS_PREFIX + "get" +
-                            field_name + "$cp:()" + int_or_string),
-      anno_set);
-  add_annotations(
-      DexMethod::get_method(base_class_name + ACCESS_PREFIX + "set" +
-                            field_name + "$cp:(" + int_or_string + ")V"),
-      anno_set);
-  add_annotations(DexMethod::get_method(
-                      base_class_name + ACCESS_PREFIX + "get" + field_name +
-                      "$p:(" + original_class_name + ")" + int_or_string),
-                  anno_set);
-
-  // add annotations to field
-  if (!add_annotations(DexField::get_field(base_class_name + field_name + ":" +
-                                           int_or_string),
-                       anno_set)) {
-    field_name.at(0) = std::tolower(field_name.at(0));
-    add_annotations(
-        DexField::get_field(base_class_name + field_name + ":" + int_or_string),
-        anno_set);
-  }
 }
 
 // This does 3 things:
