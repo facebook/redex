@@ -204,7 +204,6 @@ void GlobalConfig::bind_config() {
   bind("ingest_baseline_profile_data", false, bool_param);
   bind("baseline_profile_config", "", string_param);
   bind("preprocessed_baseline_profile_directory", "", string_param);
-  bind("betamap_interactions", {}, json_param);
 
   for (const auto& entry : m_registry) {
     m_global_configs.emplace(entry.name,

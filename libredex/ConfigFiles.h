@@ -254,7 +254,6 @@ struct ConfigFiles {
   std::vector<std::string> load_coldstart_classes();
   std::unordered_map<const DexString*, std::vector<uint8_t>>
   load_class_frequencies();
-  std::unordered_map<std::string, std::string> load_qpl_interactions_map();
   std::unordered_map<std::string, std::vector<std::string>> load_class_lists();
   void ensure_agg_method_stats_loaded();
   void ensure_secondary_method_stats_loaded() const;
