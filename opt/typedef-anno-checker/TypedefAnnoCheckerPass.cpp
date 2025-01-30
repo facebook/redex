@@ -31,6 +31,8 @@ constexpr const char* OBJ_REF_CLS = "Lkotlin/jvm/internal/Ref$ObjectRef;";
 constexpr const char* OBJ_REF_FIELD =
     "Lkotlin/jvm/internal/Ref$ObjectRef;.element:Ljava/lang/Object;";
 
+constexpr const char* DATA_CLASS_COMPONENT = "component";
+
 namespace {
 
 bool is_int(const type_inference::TypeEnvironment& env, reg_t reg) {
@@ -381,13 +383,20 @@ void patch_return_anno_from_get(type_inference::TypeInference& inference,
                 opcode::is_an_sget(insn->opcode()));
   auto name = caller->get_simple_deobfuscated_name();
   auto last_dollar = name.find('$');
-  if (last_dollar == std::string::npos) {
-    return;
-  }
-  last_dollar++;
-  if (!(last_dollar < name.size() && name[last_dollar] >= '0' &&
-        name[last_dollar] <= '9')) {
-    return;
+
+  // the caller methods are either data class components, named "componentX",
+  // or they're Java field accessors, which have the pattern access$XXX, where
+  // X is an integer
+  if (!boost::starts_with(caller->get_simple_deobfuscated_name(),
+                          DATA_CLASS_COMPONENT)) {
+    if (last_dollar == std::string::npos) {
+      return;
+    }
+    last_dollar++;
+    if (!(last_dollar < name.size() && name[last_dollar] >= '0' &&
+          name[last_dollar] <= '9')) {
+      return;
+    }
   }
   auto field_ref = insn->get_field();
   auto field_anno = type_inference::get_typedef_anno_from_member(
@@ -395,8 +404,7 @@ void patch_return_anno_from_get(type_inference::TypeInference& inference,
 
   if (field_anno != boost::none) {
     // Patch missing return annotations from accessed fields
-    caller->attach_annotation_set(std::make_unique<DexAnnotationSet>(
-        *field_ref->as_def()->get_anno_set()));
+    add_annotations(caller, field_ref->as_def()->get_anno_set());
   }
 }
 
@@ -559,6 +567,7 @@ void SynthAccessorPatcher::patch_kotlin_property_private_getter(DexMethod* m) {
 void SynthAccessorPatcher::run(const Scope& scope) {
   walk::parallel::methods(scope, [this](DexMethod* m) {
     patch_kotlin_annotated_property_getter_setter(m);
+    patch_data_class_component(m);
     if (is_synthetic_accessor(m) || is_synthetic_bridge(m)) {
       patch_accessors(m);
     }
@@ -588,6 +597,16 @@ void SynthAccessorPatcher::run(const Scope& scope) {
       patch_ctor_params_from_synth_cls_fields(cls);
     }
   });
+}
+
+void SynthAccessorPatcher::patch_data_class_component(DexMethod* m) {
+  if (type_class(m->get_class())->get_super_class()->str() ==
+          "Lcom/facebook/kotlin/compilerplugins/dataclassgenerate/superclass/"
+          "DataClassSuper;" &&
+      boost::starts_with(m->get_simple_deobfuscated_name(),
+                         DATA_CLASS_COMPONENT)) {
+    patch_accessors(m);
+  }
 }
 
 void SynthAccessorPatcher::patch_ctor_params_from_synth_cls_fields(

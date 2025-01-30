@@ -120,6 +120,8 @@ class SynthAccessorPatcher {
 
   void patch_local_var_lambda(DexMethod* method);
 
+  void patch_data_class_component(DexMethod* method);
+
   void collect_annos_from_default_method(
       DexMethod* method,
       std::vector<std::pair<src_index_t, DexAnnotationSet&>>&
