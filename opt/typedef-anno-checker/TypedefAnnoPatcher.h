@@ -34,15 +34,9 @@ class TypedefAnnoPatcher {
   void patch_first_level_nested_lambda(DexClass* cls);
 
  private:
-  void try_adding_annotation_to_accessor(DexMethod* m, const DexField* field);
-
-  void patch_kotlin_annotated_property_getter_setter(DexMethod* m);
-  void patch_kotlin_companion_property_accessor(DexMethod* m);
-  void patch_kotlin_property_private_getter(DexMethod* m);
-
   bool patch_synth_methods_overriding_annotated_methods(DexMethod* m);
 
-  void patch_accessors(DexMethod* method);
+  void patch_parameters_and_returns(DexMethod* method);
 
   void patch_kotlin_annotations(DexMethod* method);
 
@@ -51,8 +45,6 @@ class TypedefAnnoPatcher {
   void patch_synth_cls_fields_from_ctor_param(DexMethod* ctor);
 
   void patch_local_var_lambda(DexMethod* method);
-
-  void patch_data_class_component(DexMethod* method);
 
   void collect_annos_from_default_method(
       DexMethod* method,
