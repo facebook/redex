@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <limits>
+
 #include "Pass.h"
 #include "PassManager.h"
 
@@ -42,6 +44,8 @@ class ReduceSparseSwitchesPass : public Pass {
     uint64_t min_splitting_switch_cases{10};
 
     uint64_t min_multiplexing_switch_cases{64};
+
+    uint64_t write_sparse_switches{std::numeric_limits<uint64_t>::max()};
   };
 
   ReduceSparseSwitchesPass() : Pass("ReduceSparseSwitchesPass") {}

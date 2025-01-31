@@ -7,8 +7,13 @@
 
 #include "ReduceSparseSwitchesPass.h"
 
+#include <filesystem>
+#include <system_error>
+
+#include "ConfigFiles.h"
 #include "DexInstruction.h"
 #include "InstructionLowering.h"
+#include "ScopedCFG.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "Trace.h"
@@ -205,6 +210,56 @@ static void multiplex_sparse_switch_into_packed_and_sparse(
                     (new IRInstruction(OPCODE_SWITCH))->set_src(0, tmp_reg),
                     goto_block, packed_cases);
 }
+
+void write_sparse_switches(DexStoresVector& stores,
+                           ConfigFiles& conf,
+                           uint64_t threshold) {
+  std::filesystem::path dirpath(conf.metafile("sparse_switches"));
+  std::error_code ec;
+  std::filesystem::create_directories(dirpath, ec);
+  always_assert(ec.value() == 0);
+
+  walk::parallel::methods(build_class_scope(stores), [&](DexMethod* method) {
+    if (method->get_code() == nullptr) {
+      return;
+    }
+    cfg::ScopedCFG cfg(method->get_code());
+    size_t running_index = 0;
+    for (auto* block : cfg->blocks()) {
+      auto last_insn_it = block->get_last_insn();
+      if (last_insn_it == block->end()) {
+        continue;
+      }
+      if (!opcode::is_switch(last_insn_it->insn->opcode())) {
+        continue;
+      }
+      if (block->succs().size() - 1 < threshold) {
+        continue;
+      }
+
+      if (!is_sufficiently_sparse(block)) {
+        continue;
+      }
+
+      auto method_name = show_deobfuscated(method);
+      std::replace(method_name.begin(), method_name.end(), '/', '.');
+      method_name.append(".");
+      method_name.append(std::to_string(running_index));
+      method_name.append(".csv");
+      ++running_index;
+
+      auto name = dirpath / method_name;
+
+      std::ofstream file(name);
+      for (auto* e : block->succs()) {
+        if (e->type() == cfg::EDGE_BRANCH) {
+          file << *e->case_key() << "\n";
+        }
+      }
+    }
+  });
+}
+
 } // namespace
 
 // Find switches which can be split into packed and sparse switches, and apply
@@ -370,11 +425,18 @@ void ReduceSparseSwitchesPass::bind_config() {
   bind("min_multiplexing_switch_cases",
        m_config.min_multiplexing_switch_cases,
        m_config.min_multiplexing_switch_cases);
+
+  bind("write_sparse_switches", m_config.write_sparse_switches,
+       m_config.write_sparse_switches);
 };
 
 void ReduceSparseSwitchesPass::run_pass(DexStoresVector& stores,
                                         ConfigFiles& conf,
                                         PassManager& mgr) {
+  if (m_config.write_sparse_switches < std::numeric_limits<uint64_t>::max()) {
+    write_sparse_switches(stores, conf, m_config.write_sparse_switches);
+  }
+
   // Don't run under instrumentation.
   if (mgr.get_redex_options().instrument_pass_enabled) {
     return;

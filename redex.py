@@ -1417,6 +1417,16 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             None,
             CompressionLevel.DEFAULT,  # Bit larger.
         ),
+        CompressionEntry(
+            "Redex Sparse Switches Data",
+            lambda args: True,
+            True,
+            [],
+            ["sparse_switches"],
+            "redex-sparse-switches.tar.xz",
+            None,
+            CompressionLevel.DEFAULT,  # Bit larger.
+        ),
     ]
 
 
