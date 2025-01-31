@@ -8,6 +8,7 @@
 #include "ReduceSparseSwitchesPass.h"
 
 #include <filesystem>
+#include <fstream>
 #include <system_error>
 
 #include "ConfigFiles.h"
