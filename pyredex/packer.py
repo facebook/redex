@@ -148,7 +148,7 @@ class _ZipCompressor(_Compressor):
         self.zipfile.writestr(name, content)
 
 
-class _TarGzCompressor(_Compressor):
+class _TarXzCompressor(_Compressor):
     def __init__(
         self,
         targz_path: str,
@@ -159,7 +159,8 @@ class _TarGzCompressor(_Compressor):
         self.tarfile: tarfile.TarFile = tarfile.open(
             name=targz_path,
             mode="w:xz",
-            compresslevel=_TarGzCompressor._get_compress_level(compression_level),
+            # pyre-ignore[6]: Can't use extensions to type literals.
+            preset=_TarXzCompressor._get_compress_level(compression_level),
         )
 
     @staticmethod
@@ -320,7 +321,7 @@ def _compress(
             # Compress to archive.
             compressor = None
             if name.endswith(".tar.xz"):
-                compressor = _TarGzCompressor(
+                compressor = _TarXzCompressor(
                     name, item.checksum_name, item.compression_level
                 )
             elif name.endswith(".zip"):
