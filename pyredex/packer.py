@@ -342,7 +342,17 @@ def _compress(
 
             for f in inputs:
                 f_full = os.path.join(src_dir, f)
-                compressor.handle_file(f_full, f)
+                if os.path.isdir(f_full):
+                    # We do not support recursion.
+                    with os.scandir(f_full) as it:
+                        for sub_f in it:
+                            if sub_f.is_file():
+                                compressor.handle_file(
+                                    sub_f.path,
+                                    os.path.join(f, sub_f.name),
+                                )
+                else:
+                    compressor.handle_file(f_full, f)
 
             compressor.finalize()
         else:
@@ -359,7 +369,11 @@ def _compress(
 
         if item.remove_source:
             for f in inputs:
-                os.remove(os.path.join(src_dir, f))
+                f_full = os.path.join(src_dir, f)
+                if os.path.isdir(f_full):
+                    shutil.rmtree(f_full, ignore_errors=True)
+                else:
+                    os.remove(os.path.join(src_dir, f))
 
 
 def compress_entries(
