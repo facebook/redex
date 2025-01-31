@@ -209,6 +209,8 @@ void InterDexPass::run_pass(
     mgr.set_metric(key_prefix + "scroll", info.scroll);
     mgr.set_metric(key_prefix + "background", info.background);
     mgr.set_metric(key_prefix + "betamap_ordered", info.betamap_ordered);
+    mgr.set_metric(key_prefix + "class_freqs_moved_classes",
+                   info.class_freqs_moved_classes);
     size_t hash{0};
     for (auto* cls : dexen[i]) {
       boost::hash_combine(hash, cls->get_name()->str());

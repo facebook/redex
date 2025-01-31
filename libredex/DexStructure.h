@@ -50,6 +50,7 @@ struct DexInfo {
   bool extended{false};
   bool scroll{false};
   bool betamap_ordered{false};
+  size_t class_freqs_moved_classes{0};
 };
 
 struct OverflowStats {
