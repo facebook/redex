@@ -266,6 +266,8 @@ void InterDex::get_movable_coldstart_classes(
           : interactions.size();
   size_t curr_idx = coldstart_idx;
 
+  initialize_baseline_profile_classes();
+
   for (auto* type : interdex_types) {
     DexClass* cls = type_class(type);
     if (!cls) {
@@ -284,7 +286,8 @@ void InterDex::get_movable_coldstart_classes(
       curr_idx = std::distance(interactions.begin(), index_it);
       continue;
     }
-    if (class_freqs.count(cls->get_name()) != 1) {
+    if (class_freqs.count(cls->get_name()) != 1 ||
+        this->is_baseline_profile_class(type)) {
       continue;
     }
     auto freqs = class_freqs.at(cls->get_name());
@@ -1612,9 +1615,10 @@ void InterDex::exclude_baseline_profile_classes() {
 }
 
 void InterDex::initialize_baseline_profile_classes() {
-  always_assert(m_exclude_baseline_profile_classes);
-  // I.e. this should only ever be called once.
-  always_assert(!m_baseline_profile_classes);
+  always_assert(m_exclude_baseline_profile_classes || m_move_coldstart_classes);
+  if (m_baseline_profile_classes) {
+    return;
+  }
 
   m_baseline_profile_classes = std::unordered_set<DexType*>();
 
