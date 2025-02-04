@@ -44,7 +44,11 @@ class ReduceSparseSwitchesPass : public Pass {
 
   struct Config {
     // Starting at 10, the splitting transformation is always a code-size win
+    // when using 1 packed segment.
     uint64_t min_splitting_switch_cases{10};
+
+    // To avoid excessive overhead.
+    uint64_t min_splitting_switch_cases_per_segment{3};
 
     uint64_t min_multiplexing_switch_cases{64};
 
@@ -75,12 +79,17 @@ O(N) time to execute, where N is the number of switch cases.
 This pass performs two transformations which are designed to improve
 runtime performance:
 
-1. Splitting sparse switches into a main packed switch and a secondary sparse
-   switch. This transformation is only performed if we find a packed
-   sub-sequence of case keys that contains at least half of all case keys,
-   so that we shave off at least one operation from the binary search the
-   interpreter needs to do over the remaining sparse case keys, making sure
-   we never degrade worst-case complexity. We run this to a fixed point.
+1. Splitting sparse switches into packed segments and remaining sparse 
+   switches. We only do this if we can find a partitioning of a sparse 
+   switch of size N into M packed segments and a remaining sparse switch 
+   of size L such that
+       M + log2(L) <= log2(N).
+   This transformation is largely size neutral. 
+   Before the transformation, the interpreter would have O(log2(N)) and
+   compiled code O(N). After the tranformation, the interpreter gets down 
+   to O(M + log2(L)) and compiled code to O(M + L). So while the runtime 
+   performance of the interpreter won't change much, compiled code will run
+   must faster; if L gets close to 0, we get O(M) <= O(log2(N)).
 2. Multiplexing sparse switches into a main packed switch with secondary sparse
    switches for each main switch case. The basic idea is that we partition a 
    large number of sparse switch cases into several buckets of relatively small 
@@ -93,10 +102,10 @@ runtime performance:
    Given a switch with N case keys, we aim at partitioning it into 
    M = ~sqrt(N) buckets with ~sqrt(N) case keys in each bucket. (We don't 
    achieve that in practice, and there are rounding effects as well.)
-   In that case, before the transformation, the interpreter would have O(log N)
+   In that case, before the transformation, the interpreter would have O(log2(N))
    and compiled code O(N). After the tranformation, the interpreter gets down 
-   to O(log sqrt(N)) and compiled code to O(sqrt(N)).
-   (We could try to partition buckets even further, e.g. down to log(N), but 
+   to O(log2(sqrt(N))) and compiled code to O(sqrt(N)).
+   (We could try to partition buckets even further, e.g. down to log2(N), but 
    that might result in an excessive size regression.)
     )");
   }
@@ -106,7 +115,9 @@ runtime performance:
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   static ReduceSparseSwitchesPass::Stats splitting_transformation(
-      size_t min_switch_cases, cfg::ControlFlowGraph& cfg);
+      size_t min_switch_cases,
+      size_t min_switch_cases_per_segment,
+      cfg::ControlFlowGraph& cfg);
 
   static ReduceSparseSwitchesPass::Stats multiplexing_transformation(
       size_t min_switch_cases, cfg::ControlFlowGraph& cfg);

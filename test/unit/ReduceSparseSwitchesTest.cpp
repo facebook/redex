@@ -37,7 +37,7 @@ TEST_F(ReduceSparseSwitchesTest, splittingEvenSizeSwitch) {
   method->get_code()->build_cfg();
 
   auto stats = ReduceSparseSwitchesPass::splitting_transformation(
-      4, method->get_code()->cfg());
+      4, 2, method->get_code()->cfg());
   method->get_code()->clear_cfg();
   // Rebuild an extra time to work around an ordering quirk in switch cases.
   method->get_code()->build_cfg();
@@ -63,6 +63,63 @@ TEST_F(ReduceSparseSwitchesTest, splittingEvenSizeSwitch) {
       (:L2 100) 
       (return-void)
       (:L3 101) 
+      (return-void)
+    )
+  )";
+  auto expected = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected.get(), method->get_code());
+}
+
+TEST_F(ReduceSparseSwitchesTest, splittingEvenSizeSwitch2) {
+  auto* method = assembler::method_from_string(std::string("") + R"(
+    (method (public static) ")LtestClass;.testMethod(:(I)V"
+      (
+        (load-param v0)
+        (switch v0 (:L0 :L1 :L2 :L3))
+
+        (return-void)
+
+        (:L0 0) 
+        (return-void)
+        (:L1 1) 
+        (return-void)
+
+        (:L2 100) 
+        (return-void)
+        (:L3 101) 
+        (return-void)
+      )
+    )
+  )");
+  method->get_code()->build_cfg();
+
+  auto stats = ReduceSparseSwitchesPass::splitting_transformation(
+      4, 2, method->get_code()->cfg());
+  method->get_code()->clear_cfg();
+  // Rebuild an extra time to work around an ordering quirk in switch cases.
+  method->get_code()->build_cfg();
+  method->get_code()->clear_cfg();
+
+  EXPECT_EQ(stats.splitting_transformations, 1);
+  EXPECT_EQ(stats.splitting_transformations_packed_segments, 2);
+  EXPECT_EQ(stats.splitting_transformations_switch_cases_packed, 4);
+
+  const auto& expected_str = R"(
+    (
+      (load-param v0)
+      (switch v0 (:L2 :L3))
+
+      (switch v0 (:L0 :L1))
+      (return-void)
+
+      (:L0 100) 
+      (return-void)
+      (:L1 101) 
+      (return-void)
+
+      (:L2 0) 
+      (return-void)
+      (:L3 1) 
       (return-void)
     )
   )";
@@ -99,7 +156,7 @@ TEST_F(ReduceSparseSwitchesTest, splittingOddSizeSwitch) {
   method->get_code()->build_cfg();
 
   auto stats = ReduceSparseSwitchesPass::splitting_transformation(
-      5, method->get_code()->cfg());
+      5, 2, method->get_code()->cfg());
   method->get_code()->clear_cfg();
   // Rebuild an extra time to work around an ordering quirk in switch cases.
   method->get_code()->build_cfg();
@@ -158,7 +215,7 @@ TEST_F(ReduceSparseSwitchesTest, splittingPerfectly) {
   method->get_code()->build_cfg();
 
   auto stats = ReduceSparseSwitchesPass::splitting_transformation(
-      4, method->get_code()->cfg());
+      4, 2, method->get_code()->cfg());
   method->get_code()->clear_cfg();
   // Rebuild an extra time to work around an ordering quirk in switch cases.
   method->get_code()->build_cfg();
@@ -327,6 +384,111 @@ TEST_F(ReduceSparseSwitchesTest, multiplexing_shr) {
     (:L5 0) 
       (return-void) 
     (:L6 24) 
+      (return-void)
+    )
+  )";
+  auto expected = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected.get(), method->get_code());
+}
+
+TEST_F(ReduceSparseSwitchesTest, splittingIntoLog2ManyChunks) {
+  auto* method = assembler::method_from_string(std::string("") + R"(
+    (method (public static) ")LtestClass;.testMethod(:(I)V"
+      (
+        (load-param v0)
+        (switch v0 (:L0 :L1 :L2 :L3 :L4 :L5 :L6 :L7 :L8 :L9 :L10 :L11 :L12 :L13 :L14 :L15))
+
+        (return-void)
+
+        (:L0 0) 
+        (return-void)
+        (:L1 1) 
+        (return-void)
+        (:L2 2) 
+        (return-void)
+        (:L3 3) 
+        (return-void)
+        (:L4 4) 
+        (return-void)
+        (:L5 5) 
+        (return-void)
+        (:L6 6) 
+        (return-void)
+
+        (:L7 50) 
+        (return-void)
+
+        (:L8 100) 
+        (return-void)
+        (:L9 101) 
+        (return-void)
+        (:L10 102) 
+        (return-void)
+        (:L11 103) 
+        (return-void)
+        (:L12 104) 
+        (return-void)
+        (:L13 105) 
+        (return-void)
+        (:L14 106) 
+        (return-void)
+
+        (:L15 150) 
+        (return-void)
+      )
+    )
+  )");
+  method->get_code()->build_cfg();
+
+  auto stats = ReduceSparseSwitchesPass::splitting_transformation(
+      10, 3, method->get_code()->cfg());
+  method->get_code()->clear_cfg();
+
+  EXPECT_EQ(stats.splitting_transformations, 1);
+  EXPECT_EQ(stats.splitting_transformations_packed_segments, 2);
+  EXPECT_EQ(stats.splitting_transformations_switch_cases_packed, 14);
+
+  const auto& expected_str = R"(
+    (
+      (load-param v0) 
+      (switch v0 (:L9 :L10 :L11 :L12 :L13 :L14 :L15)) 
+      (switch v0 (:L2 :L3 :L4 :L5 :L6 :L7 :L8)) 
+      (switch v0 (:L0 :L1)) 
+      (return-void) 
+
+      (:L0 150) 
+      (return-void) 
+      (:L1 50) 
+      (return-void) 
+      
+      (:L2 106) 
+      (return-void) 
+      (:L3 105) 
+      (return-void) 
+      (:L4 104) 
+      (return-void) 
+      (:L5 103) 
+      (return-void) 
+      (:L6 102) 
+      (return-void) 
+      (:L7 101) 
+      (return-void) 
+      (:L8 100) 
+      (return-void) 
+      
+      (:L9 6) 
+      (return-void) 
+      (:L10 5) 
+      (return-void) 
+      (:L11 4) 
+      (return-void) 
+      (:L12 3) 
+      (return-void) 
+      (:L13 2) 
+      (return-void) 
+      (:L14 1) 
+      (return-void) 
+      (:L15 0) 
       (return-void)
     )
   )";
