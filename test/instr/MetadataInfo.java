@@ -9,6 +9,7 @@ package com.facebook.redextest;
 
 import java.util.HashMap;
 import java.util.ArrayList;
+import java.util.Set;
 
 import com.facebook.proguard.annotations.DoNotStrip;
 
@@ -132,6 +133,11 @@ public class MetadataInfo {
     @DoNotStrip
     public int getBlockBit (int block) {
         return block2BitMap.get(block);
+    }
+
+    @DoNotStrip
+    public Set<Integer> getBlocks () {
+        return block2BitMap.keySet();
     }
 
     @DoNotStrip
