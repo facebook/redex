@@ -22,12 +22,15 @@
 
 namespace {
 
+constexpr const char* METRIC_AFFECTED_METHODS = "num_affected_methods";
 constexpr const char* METRIC_SPLITTING_TRANSFORMATIONS =
     "num_splitting_transformations";
+constexpr const char* METRIC_SPLITTING_TRANSFORMATIONS_PACKED_SEGMENTS =
+    "num_splitting_transformations_packed_segments";
+constexpr const char* METRIC_SPLITTING_TRANSFORMATIONS_SWITCH_CASES_PACKED =
+    "num_splitting_transformations_switch_cases_packed";
 constexpr const char* METRIC_MULTIPLEXING_ABANDONED_PREFIX =
     "num_multiplexing_abandoned_";
-constexpr const char* METRIC_SPLITTING_TRANSFORMATIONS_SWITCH_CASES =
-    "num_splitting_transformations_switch_cases";
 constexpr const char* METRIC_MULTIPLEXING_TRANSFORMATIONS =
     "num_multiplexing_transformations";
 constexpr const char*
@@ -47,7 +50,7 @@ bool is_sufficiently_sparse(cfg::Block* block) {
   return ckeb->sufficiently_sparse();
 }
 
-static void split_sparse_switch_into_packed_and_sparse(
+static cfg::Block* split_sparse_switch_into_packed_and_sparse(
     cfg::ControlFlowGraph& cfg,
     cfg::Block* block,
     const IRList::iterator& switch_insn_it,
@@ -114,6 +117,7 @@ static void split_sparse_switch_into_packed_and_sparse(
       secondary_switch_case_to_block);
 
   always_assert(!is_sufficiently_sparse(block));
+  return secondary_switch_block;
 }
 
 static void multiplex_sparse_switch_into_packed_and_sparse(
@@ -326,11 +330,17 @@ ReduceSparseSwitchesPass::splitting_transformation(size_t min_switch_cases,
       continue;
     }
 
-    split_sparse_switch_into_packed_and_sparse(cfg, block, last_insn_it,
-                                               case_keys, first, last);
+    auto* remaining_block = split_sparse_switch_into_packed_and_sparse(
+        cfg, block, last_insn_it, case_keys, first, last);
 
     stats.splitting_transformations++;
-    stats.splitting_transformations_switch_cases += last - first + 1;
+    if (is_sufficiently_sparse(remaining_block)) {
+      stats.splitting_transformations_packed_segments++;
+      stats.splitting_transformations_switch_cases_packed += last - first + 1;
+    } else {
+      stats.splitting_transformations_packed_segments += 2;
+      stats.splitting_transformations_switch_cases_packed += case_keys.size();
+    }
   }
   return stats;
 }
@@ -471,23 +481,28 @@ void ReduceSparseSwitchesPass::run_pass(DexStoresVector& stores,
     }
 
     TRACE(RSS, 3,
-          "[reduce gotos] Split %zu (%zu cases) switches, multiplexed %zu (%zu "
-          "cases) switches in {%s}",
+          "[reduce gotos] Split %zu (packed %zu segments with %zu cases) "
+          "switches, multiplexed %zu (%zu cases) switches in {%s}",
           local_stats.splitting_transformations,
-          local_stats.splitting_transformations_switch_cases,
+          local_stats.splitting_transformations_packed_segments,
+          local_stats.splitting_transformations_switch_cases_packed,
           local_stats.multiplexing_transformations(),
           local_stats.multiplexing_switch_cases(), SHOW(method));
 
     TRACE(RSS, 4, "Rewrote {%s}:\n%s", SHOW(method), SHOW(cfg));
 
+    local_stats.affected_methods++;
     std::lock_guard<std::mutex> lock_guard(stats_mutex);
     stats += local_stats;
   });
 
+  mgr.incr_metric(METRIC_AFFECTED_METHODS, stats.affected_methods);
   mgr.incr_metric(METRIC_SPLITTING_TRANSFORMATIONS,
                   stats.splitting_transformations);
-  mgr.incr_metric(METRIC_SPLITTING_TRANSFORMATIONS_SWITCH_CASES,
-                  stats.splitting_transformations_switch_cases);
+  mgr.incr_metric(METRIC_SPLITTING_TRANSFORMATIONS_PACKED_SEGMENTS,
+                  stats.splitting_transformations_packed_segments);
+  mgr.incr_metric(METRIC_SPLITTING_TRANSFORMATIONS_SWITCH_CASES_PACKED,
+                  stats.splitting_transformations_switch_cases_packed);
   mgr.incr_metric(METRIC_MULTIPLEXING_TRANSFORMATIONS,
                   stats.multiplexing_transformations());
   mgr.incr_metric(METRIC_MULTIPLEXING_TRANSFORMATIONS_SWITCH_CASES,
@@ -506,11 +521,11 @@ void ReduceSparseSwitchesPass::run_pass(DexStoresVector& stores,
   }
 
   TRACE(RSS, 1,
-        "[reduce sparse switches] Split %zu (%zu cases) switches, multiplexed "
-        "%zu (%zu "
-        "cases) switches",
+        "[reduce sparse switches] Split %zu (packed %zu segments with %zu "
+        "cases) switches, multiplexed %zu (%zu cases) switches",
         stats.splitting_transformations,
-        stats.splitting_transformations_switch_cases,
+        stats.splitting_transformations_packed_segments,
+        stats.splitting_transformations_switch_cases_packed,
         stats.multiplexing_transformations(),
         stats.multiplexing_switch_cases());
   for (auto&& [M, mstats] : stats.multiplexing) {
@@ -549,9 +564,12 @@ ReduceSparseSwitchesPass::Stats::Multiplexing::operator+=(
 
 ReduceSparseSwitchesPass::Stats& ReduceSparseSwitchesPass::Stats::operator+=(
     const ReduceSparseSwitchesPass::Stats& that) {
+  affected_methods += that.affected_methods;
   splitting_transformations += that.splitting_transformations;
-  splitting_transformations_switch_cases +=
-      that.splitting_transformations_switch_cases;
+  splitting_transformations_packed_segments +=
+      that.splitting_transformations_packed_segments;
+  splitting_transformations_switch_cases_packed +=
+      that.splitting_transformations_switch_cases_packed;
   for (auto&& [M, mstats] : that.multiplexing) {
     multiplexing[M] += mstats;
   }

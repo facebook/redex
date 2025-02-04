@@ -19,8 +19,11 @@ class ControlFlowGraph;
 class ReduceSparseSwitchesPass : public Pass {
  public:
   struct Stats {
+    size_t affected_methods{0};
+
     size_t splitting_transformations{0};
-    size_t splitting_transformations_switch_cases{0};
+    size_t splitting_transformations_packed_segments{0};
+    size_t splitting_transformations_switch_cases_packed{0};
 
     struct Multiplexing {
       size_t abandoned{0};
