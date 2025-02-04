@@ -202,24 +202,6 @@ const std::unordered_set<DexType*>& ConfigFiles::get_do_not_devirt_anon() {
   return m_no_devirtualize_annos;
 }
 
-std::unordered_map<std::string, std::string>
-ConfigFiles::load_qpl_interactions_map() {
-  std::unordered_map<std::string, std::string> interaction_starts;
-  Json::Value interactions_json;
-  get_json_config().get("betamap_interactions", {}, interactions_json);
-
-  if (interactions_json.empty()) {
-    return interaction_starts;
-  }
-
-  for (auto& interaction_pair_json : interactions_json) {
-    auto id = interaction_pair_json[0].asString();
-    auto name = interaction_pair_json[1].asString();
-    interaction_starts[id] = name;
-  }
-  return interaction_starts;
-}
-
 std::unordered_map<const DexString*, std::vector<uint8_t>>
 ConfigFiles::load_class_frequencies() {
   if (m_class_frequency_filename.empty()) {
@@ -229,23 +211,12 @@ ConfigFiles::load_class_frequencies() {
   std::ifstream input(m_class_frequency_filename, std::ios_base::in);
 
   std::unordered_map<const DexString*, std::vector<uint8_t>> class_freq_map;
-  std::vector<std::string> qpl_ids;
 
   std::string line;
   std::getline(input, line);
   // line containing all interactions
   boost::trim(line);
-  boost::split(qpl_ids, line, boost::is_any_of(" "));
-
-  std::unordered_map<std::string, std::string> qpl_interactions_map =
-      load_qpl_interactions_map();
-  if (qpl_interactions_map.empty()) {
-    boost::split(m_interactions, line, boost::is_any_of(" "));
-  } else {
-    for (const std::string& qpl_id : qpl_ids) {
-      m_interactions.push_back(qpl_interactions_map.at(qpl_id));
-    }
-  }
+  boost::split(m_interactions, line, boost::is_any_of(" "));
 
   while (std::getline(input, line)) {
     // each line follows the format

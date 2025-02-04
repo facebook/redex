@@ -49,6 +49,9 @@ constexpr const char* BG_SET_END_FORMAT = "LBackgroundSetEnd";
 constexpr const char* COLD_START_20PCT_END_FORMAT = "LColdStart20PctEnd";
 constexpr const char* COLD_START_1PCT_END_FORMAT = "LColdStart1PctEnd";
 
+constexpr const char* INTERACTION_ID_FORMAT = "LINTERACTION_ID_";
+constexpr const char* START_FORMAT = "_Start;";
+
 static DexInfo EMPTY_DEX_INFO;
 
 std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
@@ -234,6 +237,11 @@ void exclude_extra_dynamically_dead_class(
   }
 }
 
+bool is_interaction_id_start_marker(std::string_view betamap_entry) {
+  return boost::algorithm::starts_with(betamap_entry, INTERACTION_ID_FORMAT) &&
+         boost::algorithm::ends_with(betamap_entry, START_FORMAT);
+}
+
 } // namespace
 
 namespace interdex {
@@ -261,13 +269,15 @@ void InterDex::get_movable_coldstart_classes(
   for (auto* type : interdex_types) {
     DexClass* cls = type_class(type);
     if (!cls) {
-      if (boost::algorithm::starts_with(type->get_name()->str(),
-                                        BG_SET_START_FORMAT)) {
-        curr_idx = backgroundset_idx;
-        continue;
+      auto index_it = interactions.end();
+      auto cls_name = type->get_name()->str();
+      if (is_interaction_id_start_marker(cls_name)) {
+        index_it = std::find(
+            interactions.begin(), interactions.end(),
+            cls_name.substr(strlen(INTERACTION_ID_FORMAT),
+                            cls_name.size() - strlen(INTERACTION_ID_FORMAT) -
+                                strlen(START_FORMAT)));
       }
-      auto index_it = std::find(interactions.begin(), interactions.end(),
-                                type->str().substr(1, type->str().size() - 8));
       if (index_it == interactions.end()) {
         continue;
       }
@@ -525,7 +535,6 @@ void InterDex::emit_interdex_classes(
   }
 
   auto class_freqs = m_conf.get_class_frequencies();
-  const std::vector<std::string>& interactions = m_conf.get_interactions();
   std::unordered_map<const DexClass*, std::string> move_coldstart_classes;
   if (m_move_coldstart_classes) {
     get_movable_coldstart_classes(interdex_types, move_coldstart_classes);
@@ -611,9 +620,7 @@ void InterDex::emit_interdex_classes(
           }
         }
         if (m_move_coldstart_classes &&
-            std::find(interactions.begin(), interactions.end(),
-                      type->str().substr(1, type->str().size() - 8)) !=
-                interactions.end()) {
+            is_interaction_id_start_marker(type->str())) {
           curr_interaction = type->str();
         }
       }
@@ -632,7 +639,8 @@ void InterDex::emit_interdex_classes(
 
       if (m_move_coldstart_classes && move_coldstart_classes.count(cls)) {
         auto interaction = move_coldstart_classes.at(cls);
-        if (!boost::starts_with(curr_interaction, "L" + interaction)) {
+        if (!boost::starts_with(curr_interaction,
+                                INTERACTION_ID_FORMAT + interaction)) {
           continue;
         } else {
           TRACE(IDEX, 3, "moving %s into %s", SHOW(cls),
@@ -746,10 +754,6 @@ void InterDex::load_interdex_types() {
   std::unordered_set<DexType*> moved_or_double{};
   std::unordered_set<DexType*> transitive_added{};
 
-  const std::vector<std::string>* interactions;
-  if (m_move_coldstart_classes) {
-    interactions = &m_conf.get_interactions();
-  }
   for (const auto& entry : interdexorder) {
     DexType* type = DexType::get_type(entry);
     if (!type) {
@@ -798,10 +802,7 @@ void InterDex::load_interdex_types() {
         TRACE(IDEX, 4,
               "[interdex order]: Found 1pct cold start end class marker %s.",
               entry.c_str());
-      } else if (m_move_coldstart_classes &&
-                 std::find(interactions->begin(), interactions->end(),
-                           entry.substr(1, entry.size() - 8)) !=
-                     interactions->end()) {
+      } else if (is_interaction_id_start_marker(entry)) {
         type = DexType::make_type(entry);
       } else {
         continue;
