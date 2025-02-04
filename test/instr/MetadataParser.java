@@ -11,6 +11,9 @@ import java.io.InputStream;
 import java.util.Scanner;
 import java.util.HashMap;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 
 import com.facebook.proguard.annotations.DoNotStrip;
 
@@ -124,6 +127,33 @@ public class MetadataParser{
     }
 
     @DoNotStrip
+    public static String getBlockHits(String funcName, short[] stats) {
+        Set<Integer> blocks = getBlocks(funcName);
+        if (blocks == null) {
+            return "0[]";
+        }
+        List<Integer> ordered_blocks = new ArrayList<>(blocks);
+        Collections.sort(ordered_blocks);
+        StringBuilder sb = new StringBuilder();
+        sb.append(ordered_blocks.size());
+        sb.append('[');
+        boolean first = true;
+        for (int block : ordered_blocks) {
+            if (first) {
+                first = false;
+            } else {
+                sb.append(',');
+            }
+            sb.append(block);
+            sb.append(':');
+            int hit = checkBlockHit(funcName, stats, block);
+            sb.append(hit);
+        }
+        sb.append(']');
+        return sb.toString();
+    }
+
+    @DoNotStrip
     public static int checkBlockHit (String funcName, short[] stats, int block) {
         int completed = -1;
         int blockIndex = -1;
@@ -151,6 +181,47 @@ public class MetadataParser{
         completed = (bitvector >> bit) & 1;
 
         return completed;
+    }
+
+    @DoNotStrip
+    public static String getBlockHits(String funcName, short[] stats, short[] hits) {
+        Set<Integer> blocks = getBlocks(funcName);
+        if (blocks == null) {
+            return "0[]";
+        }
+        List<Integer> ordered_blocks = new ArrayList<>(blocks);
+        Collections.sort(ordered_blocks);
+        StringBuilder sb = new StringBuilder();
+        sb.append(ordered_blocks.size());
+        sb.append('[');
+        boolean first = true;
+        for (int block : ordered_blocks) {
+            if (first) {
+                first = false;
+            } else {
+                sb.append(',');
+            }
+            sb.append(block);
+            sb.append(':');
+            int hit = checkBlockNumHits(funcName, stats, hits, block);
+            sb.append(hit);
+        }
+        sb.append(']');
+        return sb.toString();
+    }
+
+    @DoNotStrip
+    public static Set<Integer> getBlocks(String funcName) {
+        if (indexMap.containsKey(funcName)) {
+            int index = indexMap.get(funcName);
+
+            if (metadataMap.containsKey(index)) {
+                MetadataInfo mi = metadataMap.get(index);
+                return mi.getBlocks();
+            }
+        }
+
+        return null;
     }
 
     @DoNotStrip
