@@ -646,6 +646,7 @@ void InterDex::emit_interdex_classes(
           TRACE(IDEX, 3, "moving %s into %s", SHOW(cls),
                 SHOW(curr_interaction));
           move_coldstart_classes.erase(cls);
+          dex_info.class_freqs_moved_classes += 1;
         }
       }
       auto res =

@@ -208,6 +208,8 @@ void InterDexPass::run_pass(
     mgr.set_metric(key_prefix + "scroll", info.scroll);
     mgr.set_metric(key_prefix + "background", info.background);
     mgr.set_metric(key_prefix + "betamap_ordered", info.betamap_ordered);
+    mgr.set_metric(key_prefix + "class_freqs_moved_classes",
+                   info.class_freqs_moved_classes);
   }
 
   auto final_scope = build_class_scope(stores);
