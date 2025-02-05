@@ -1145,6 +1145,23 @@ TEST_F(TypedefAnnoCheckerTest, TestCompanionObject) {
           "TypedefAnnoCheckerKtTest;.testCompanionObject:()Ljava/lang/String;")
           ->as_def();
 
+  auto method_override_graph = mog::build_graph(scope);
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, method, *method_override_graph);
+  EXPECT_TRUE(checker.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestCompanionObjectGetter) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerKtTest$Companion;."
+                     "testCompanionObjectGetter:()Ljava/lang/String;")
+                     ->as_def();
+
   auto companion_class =
       type_class(DexType::make_type("Lcom/facebook/redextest/"
                                     "TypedefAnnoCheckerKtTest$Companion;"));
@@ -1164,21 +1181,6 @@ TEST_F(TypedefAnnoCheckerTest, TestCompanionObject) {
 
   auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
-
-  auto companion_getter = DexMethod::get_method(
-                              "Lcom/facebook/redextest/"
-                              "TypedefAnnoCheckerKtTest$Companion;."
-                              "getCompanion_val:()Ljava/lang/String;")
-                              ->as_def();
-
-  auto found_annotation = false;
-  for (auto const& param :
-       companion_getter->get_anno_set()->get_annotations()) {
-    if (param->type()->str() == "Linteg/TestStringDef;") {
-      found_annotation = true;
-    }
-  }
-  EXPECT_TRUE(found_annotation);
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestCompanionVarSetter) {

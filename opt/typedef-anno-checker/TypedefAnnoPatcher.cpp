@@ -765,11 +765,6 @@ void TypedefAnnoPatcher::patch_parameters_and_returns(
     return;
   }
 
-  if (has_typedef_annos(m->get_param_anno(), m_typedef_annos) ||
-      type_inference::get_typedef_anno_from_member(m, m_typedef_annos)) {
-    return;
-  }
-
   always_assert_log(code->editable_cfg_built(), "%s has no cfg built", SHOW(m));
   auto& cfg = code->cfg();
   type_inference::TypeInference inference(cfg, false, m_typedef_annos,

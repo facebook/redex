@@ -30,6 +30,11 @@ public class TypedefAnnoCheckerKtTest {
     @TestStringDef val companion_val: String = TestStringDef.ONE
     @TestStringDef var companion_var: String = TestStringDef.FOUR
     @TestIntDef var companion_int_var: Int = TestIntDef.FOUR
+
+    @TestStringDef
+    fun testCompanionObjectGetter(): String {
+      return companion_val
+    }
   }
 
   fun testSynthAccessor() {
