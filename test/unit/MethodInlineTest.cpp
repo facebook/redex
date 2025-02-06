@@ -3013,3 +3013,132 @@ TEST_F(MethodInlineTest, partially_inline) {
   auto caller_expected = assembler::ircode_from_string(caller_expected_str);
   EXPECT_CODE_EQ(caller_actual, caller_expected.get());
 }
+
+// Partially inlining invoke-super is not supported.
+TEST_F(MethodInlineTest, partially_inline_invoke_super_regression) {
+  auto base_cls = create_a_class("LBase;");
+  ClassCreator foo_cc(DexType::make_type("LFoo;"));
+  foo_cc.set_super(base_cls->get_type());
+  auto foo_cls = foo_cc.create();
+
+  DexMethod* caller =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+  caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+
+  DexMethod* base_callee = static_cast<DexMethod*>(
+      DexMethod::make_method("LBase;.callee:(Ljava/lang/Object;)V"));
+  base_callee->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+
+  DexMethod* callee = static_cast<DexMethod*>(
+      DexMethod::make_method("LFoo;.callee:(Ljava/lang/Object;)V"));
+  callee->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+
+  base_cls->add_method(base_callee);
+  foo_cls->add_method(caller);
+  foo_cls->add_method(callee);
+
+  const auto& caller_str = R"(
+    (
+      (.src_block "LFoo;.caller:()V" 1 (1.0 1.0))
+      (.pos "LFoo;.caller:()V" "Foo.java" 10)
+      (const v0 0)
+      (const-string "Some string")
+      (move-result-pseudo-object v1)
+      (invoke-super (v0 v1) "LFoo;.callee:(Ljava/lang/Object;)V")
+      (move-result-pseudo-object v0)
+      (invoke-super (v0 v1) "LFoo;.callee:(Ljava/lang/Object;)V")
+      (return-void)
+    )
+  )";
+
+  caller->set_code(assembler::ircode_from_string(caller_str));
+  caller->get_code()->set_debug_item(std::make_unique<DexDebugItem>());
+
+  // We insert a "dummy" instruction into the cold portion of the callee to make
+  // the callee large enough to make the transformation worthwhile.
+  const auto& callee_str = R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (.src_block "LFoo;.callee:(Ljava/lang/Object;)V" 1 (1.0 1.0))
+      (.pos "LFoo;.callee:(Ljava/lang/Object;)V" "Foo.java" 20)
+      (if-eqz v1 :exit)
+      (.src_block "LFoo;.callee:(Ljava/lang/Object;)V" 2 (0.0 0.0))
+      (.pos "LFoo;.callee:(Ljava/lang/Object;)V" "Foo.java" 30)
+      (const v1 0)
+      (invoke-static (v1) "Ldummy;.dummy:(Ljava/lang/Object;)V")
+      (throw v1)
+      (:exit)
+      (return-void)
+    )
+  )";
+
+  base_callee->set_code(assembler::ircode_from_string(callee_str));
+  callee->set_code(assembler::ircode_from_string(callee_str));
+
+  ConcurrentMethodResolver concurrent_method_resolver;
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> candidates;
+  std::unordered_set<DexMethod*> expected_inlined;
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({base_cls, foo_cls});
+    stores.push_back(std::move(store));
+  }
+  {
+    candidates.insert(caller);
+    candidates.insert(callee);
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.partial_hot_hot_inline = true;
+  inliner_config.multiple_callers = false;
+  inliner_config.virtual_inline = true;
+  inliner_config.true_virtual_inline = true;
+  inliner_config.use_call_site_summaries = false;
+  inliner_config.throws_inline = true;
+  inliner_config.shrinker.run_local_dce = true;
+  inliner_config.shrinker.run_const_prop = false;
+  inliner_config.shrinker.compute_pure_methods = false;
+
+  base_callee->get_code()->build_cfg();
+  caller->get_code()->build_cfg();
+  callee->get_code()->build_cfg();
+
+  CalleeCallerInsns true_virtual_callers;
+  for (auto& mie : InstructionIterable(caller->get_code()->cfg())) {
+    if (mie.insn->opcode() == OPCODE_INVOKE_SUPER) {
+      true_virtual_callers[callee].caller_insns[caller].insert(mie.insn);
+    }
+  }
+  {
+    init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+        scope, /* create_init_class_insns */ false);
+    int min_sdk = 0;
+    MultiMethodInliner inliner(
+        scope, init_classes_with_side_effects, stores, candidates,
+        std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+        intra_dex ? IntraDex : InterDex, true_virtual_callers);
+    inliner.inline_methods();
+
+    auto inlined = inliner.get_inlined();
+    EXPECT_EQ(inlined.size(), expected_inlined.size());
+    for (auto method : expected_inlined) {
+      EXPECT_EQ(inlined.count(method), 1);
+    }
+  }
+
+  base_callee->get_code()->clear_cfg();
+  caller->get_code()->clear_cfg();
+  callee->get_code()->clear_cfg();
+
+  auto caller_actual = caller->get_code();
+  auto caller_expected = assembler::ircode_from_string(caller_str);
+  EXPECT_CODE_EQ(caller_actual, caller_expected.get());
+}

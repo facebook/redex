@@ -466,7 +466,7 @@ void MultiMethodInliner::inline_callees(
             no_return = false;
             reduced_code = nullptr;
             insn_size = get_callee_insn_size(callee);
-          } else if (should_partially_inline(block, true_virtual, callee,
+          } else if (should_partially_inline(block, insn, true_virtual, callee,
                                              &partial_code)) {
             partial = true;
             reduced_code = partial_code.reduced_code;
@@ -1989,11 +1989,17 @@ bool MultiMethodInliner::should_inline_at_call_site(
 }
 
 bool MultiMethodInliner::should_partially_inline(cfg::Block* block,
+                                                 IRInstruction* insn,
                                                  bool true_virtual,
                                                  DexMethod* callee,
                                                  PartialCode* partial_code) {
+  // Note that we don't want to attempt to partially inline an invoke-super
+  // instruction, as this would make it necessary to track different versions of
+  // partially-inlined code based on the invoke-instruction, as then the
+  // fallback invocation that's contained in the partial code may have to be
+  // either invoke-super or invoke-virtual depending on the context.
   if (!m_config.partial_hot_hot_inline || true_virtual ||
-      !inliner::is_hot(block)) {
+      insn->opcode() == OPCODE_INVOKE_SUPER || !inliner::is_hot(block)) {
     return false;
   }
   // If we don't already have pre-computed partially inlined code for this
