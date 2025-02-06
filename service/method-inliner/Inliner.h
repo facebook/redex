@@ -506,6 +506,7 @@ class MultiMethodInliner {
    * Whether we should partially inline a particular callee.
    */
   bool should_partially_inline(cfg::Block* block,
+                               IRInstruction* insn,
                                bool true_virtual,
                                DexMethod* callee,
                                PartialCode* partial_code);
