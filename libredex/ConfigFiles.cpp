@@ -78,6 +78,8 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
                           config.get("use_new_rename_map", 0).asBool())),
       m_coldstart_methods_filename(
           config.get("coldstart_methods_file", "").asString()),
+      m_baseline_profile_config_file_name(
+          config.get("baseline_profile_config", "").asString()),
       m_printseeds(config.get("printseeds", "").asString()),
       m_method_profiles(new method_profiles::MethodProfiles()) {
 
@@ -534,6 +536,10 @@ const inliner::InlinerConfig& ConfigFiles::get_inliner_config() {
   return *m_inliner_config;
 }
 
+bool ConfigFiles::get_did_use_bzl_baseline_profile_config() {
+  return !m_baseline_profile_config_file_name.empty();
+}
+
 const baseline_profiles::BaselineProfileConfig&
 ConfigFiles::get_baseline_profile_config() {
   if (m_baseline_profile_config) {
@@ -543,7 +549,17 @@ ConfigFiles::get_baseline_profile_config() {
       std::make_unique<baseline_profiles::BaselineProfileConfig>();
 
   Json::Value baseline_profile_config_json;
-  get_json_config().get("baseline_profile", {}, baseline_profile_config_json);
+  if (!m_baseline_profile_config_file_name.empty()) {
+    std::ifstream input(m_baseline_profile_config_file_name);
+    Json::Reader reader;
+    bool parsing_succeeded = reader.parse(input, baseline_profile_config_json);
+    always_assert_log(parsing_succeeded,
+                      "Failed to parse class list json from file: %s\n%s",
+                      m_baseline_profile_config_file_name.c_str(),
+                      reader.getFormattedErrorMessages().c_str());
+  } else {
+    get_json_config().get("baseline_profile", {}, baseline_profile_config_json);
+  }
 
   if (baseline_profile_config_json.empty()) {
     return *m_baseline_profile_config;
