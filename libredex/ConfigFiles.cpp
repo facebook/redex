@@ -79,8 +79,6 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
                           config.get("use_new_rename_map", 0).asBool())),
       m_coldstart_methods_filename(
           config.get("coldstart_methods_file", "").asString()),
-      m_baseline_profile_config_file_name(
-          config.get("baseline_profile_config", "").asString()),
       m_preprocessed_baseline_profile_directory(
           config.get("preprocessed_baseline_profile_directory", "").asString()),
       m_printseeds(config.get("printseeds", "").asString()),
@@ -108,6 +106,12 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
 
   m_recognize_coldstart_pct_marker =
       config.get("recognize_betamap_coldstart_pct_marker", false).asBool();
+  
+  m_baseline_profile_config_file_name =
+      config.get("baseline_profile_config", "").asString();
+  if (!m_baseline_profile_config_file_name.empty()) {
+    m_baseline_profile_config_file_name += "/baseline_profile_configs.json";
+  }
 }
 
 ConfigFiles::ConfigFiles(const Json::Value& config) : ConfigFiles(config, "") {}
@@ -594,6 +598,9 @@ ConfigFiles::get_default_baseline_profile_config() {
         "betamap_include_coldstart_1pct", false,
         current_baseline_profile_config.options.betamap_include_coldstart_1pct);
     Json::Value deepdata_interactions_json;
+    baseline_profile_config_jw.get(
+        "include_all_startup_classes", false,
+        current_baseline_profile_config.options.include_all_startup_classes);
     baseline_profile_config_jw.get("deep_data_interaction_config", {},
                                    deepdata_interactions_json);
     always_assert(!deepdata_interactions_json.empty());

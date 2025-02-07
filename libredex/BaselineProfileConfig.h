@@ -43,6 +43,10 @@ struct BaselineProfileOptions {
   // NOTE: This requires that include_betamap_20pct_coldstart be set to have any
   // effect
   bool betamap_include_coldstart_1pct;
+
+  // If this is true, then the ArtProfileWriter will insert all methods/classes
+  // from the betamap into the baseline profile.
+  bool include_all_startup_classes;
 };
 
 struct BaselineProfileConfig {
