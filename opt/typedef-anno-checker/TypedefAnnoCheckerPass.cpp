@@ -684,7 +684,7 @@ bool TypedefAnnoChecker::check_typedef_value(
 
 void TypedefAnnoCheckerPass::run_pass(DexStoresVector& stores,
                                       ConfigFiles& /* unused */,
-                                      PassManager& /* unused */) {
+                                      PassManager& mgr) {
   assert(m_config.int_typedef != nullptr);
   assert(m_config.str_typedef != nullptr);
   auto scope = build_class_scope(stores);
@@ -697,6 +697,24 @@ void TypedefAnnoCheckerPass::run_pass(DexStoresVector& stores,
   });
 
   patcher.run(scope);
+
+  mgr.set_metric("patched fields and methods",
+                 patcher.get_patcher_stats().num_patched_fields_and_methods);
+  mgr.set_metric("patched parameters",
+                 patcher.get_patcher_stats().num_patched_parameters);
+
+  mgr.set_metric(
+      "patched chained fields and methods",
+      patcher.get_chained_patcher_stats().num_patched_fields_and_methods);
+  mgr.set_metric("patched chained parameters",
+                 patcher.get_chained_patcher_stats().num_patched_parameters);
+
+  mgr.set_metric("patched chained getter fields and methods",
+                 patcher.get_chained_getter_patcher_stats()
+                     .num_patched_fields_and_methods);
+  mgr.set_metric(
+      "patched chained getter parameters",
+      patcher.get_chained_getter_patcher_stats().num_patched_parameters);
   TRACE(TAC, 2, "Finish patching synth accessors");
 
   auto stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* m) {
