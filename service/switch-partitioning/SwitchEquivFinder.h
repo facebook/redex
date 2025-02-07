@@ -89,6 +89,7 @@ class SwitchEquivFinder {
   bool success() const { return m_success; }
   const KeyToCase& key_to_case() const { return m_key_to_case; }
   const ExtraLoads& extra_loads() const { return m_extra_loads; }
+  bool duplicate_case_keys() const { return m_duplicate_case_keys; }
   // Returns if the keys in the cases are only of the specific kind or default
   // case. A method with only the default case will not be considered to be
   // uniform for other types (that is ambiguous).
@@ -185,6 +186,8 @@ class SwitchEquivFinder {
   // This stores the blocks visited and how many times in building m_key_to_case
   // Note that this does not include the root branch.
   std::unordered_map<cfg::Block*, uint16_t> m_visit_count;
+
+  bool m_duplicate_case_keys{false};
 };
 
 std::ostream& operator<<(std::ostream& os,

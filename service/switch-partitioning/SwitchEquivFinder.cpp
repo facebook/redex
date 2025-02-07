@@ -594,6 +594,7 @@ void SwitchEquivFinder::find_case_keys(const std::vector<cfg::Edge*>& leaves) {
               "supplanted by B%zu.",
               it->second->id(), b->id());
         it->second = b;
+        m_duplicate_case_keys = true;
       } else {
         not_reached();
       }
