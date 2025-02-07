@@ -563,50 +563,39 @@ ConfigFiles::get_baseline_profile_config() {
     get_json_config().get("baseline_profile", {}, baseline_profile_config_json);
   }
 
+  auto baseline_profile_config_jw = JsonWrapper(baseline_profile_config_json);
+
   if (baseline_profile_config_json.empty()) {
     return *m_baseline_profile_config;
   }
 
-  auto interactions_json = baseline_profile_config_json.get("interactions", {});
-  always_assert(!interactions_json.empty());
-
-  for (auto& interaction_pair_json : interactions_json) {
-    auto id = interaction_pair_json[0].asString();
-    auto name = interaction_pair_json[1].asString();
-
-    m_baseline_profile_config->interaction_configs[id] = {};
-    m_baseline_profile_config->interactions.emplace_back(std::move(id),
-                                                         std::move(name));
-  }
-
-  auto options_json = baseline_profile_config_json.get("options", {});
-  always_assert(!options_json.empty());
-
-  auto options_jw = JsonWrapper(options_json);
-
-  options_jw.get("oxygen_modules", false,
-                 m_baseline_profile_config->options.oxygen_modules);
-  options_jw.get("strip_classes", false,
-                 m_baseline_profile_config->options.strip_classes);
-  options_jw.get(
+  baseline_profile_config_jw.get(
+      "oxygen_modules", false,
+      m_baseline_profile_config->options.oxygen_modules);
+  baseline_profile_config_jw.get(
+      "strip_classes", false, m_baseline_profile_config->options.strip_classes);
+  baseline_profile_config_jw.get(
       "use_redex_generated_profile", false,
       m_baseline_profile_config->options.use_redex_generated_profile);
-  options_jw.get(
-      "include_betamap_20pct_coldstart", false,
+  baseline_profile_config_jw.get(
+      "include_betamap_20pct_coldstart", true,
       m_baseline_profile_config->options.include_betamap_20pct_coldstart);
-  options_jw.get(
+  baseline_profile_config_jw.get(
       "betamap_include_coldstart_1pct", false,
       m_baseline_profile_config->options.betamap_include_coldstart_1pct);
 
-  for (auto it = baseline_profile_config_json.begin();
-       it != baseline_profile_config_json.end();
+  auto deepdata_interactions_json =
+      baseline_profile_config_json.get("deep_data_interaction_config", {});
+  always_assert(!deepdata_interactions_json.empty());
+
+  for (auto it = deepdata_interactions_json.begin();
+       it != deepdata_interactions_json.end();
        ++it) {
     std::string key = it.memberName();
-    if (key == "interactions" || key == "options") {
-      continue;
-    }
 
     const auto& interaction_id = key;
+
+    m_baseline_profile_config->interaction_configs[interaction_id] = {};
 
     auto& bpi_config =
         m_baseline_profile_config->interaction_configs[interaction_id];
@@ -614,10 +603,15 @@ ConfigFiles::get_baseline_profile_config() {
     const auto& bpi_config_jw = JsonWrapper(*it);
 
     bpi_config_jw.get("call_threshold", 1, bpi_config.call_threshold);
-    bpi_config_jw.get("classes", false, bpi_config.classes);
-    bpi_config_jw.get("post_startup", false, bpi_config.post_startup);
+    bpi_config_jw.get("classes", true, bpi_config.classes);
+    bpi_config_jw.get("post_startup", true, bpi_config.post_startup);
     bpi_config_jw.get("startup", false, bpi_config.startup);
     bpi_config_jw.get("threshold", 80, bpi_config.threshold);
+    always_assert(bpi_config_jw.contains("name"));
+    std::string name = bpi_config_jw.get("name", std::string());
+
+    m_baseline_profile_config->interactions.emplace_back(interaction_id,
+                                                         std::move(name));
   }
 
   return *m_baseline_profile_config;
