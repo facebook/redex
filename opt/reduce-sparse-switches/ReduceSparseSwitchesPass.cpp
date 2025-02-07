@@ -43,6 +43,10 @@ constexpr const char*
         "num_multiplexing_transformations_average_inefficiency_";
 constexpr const char* METRIC_MULTIPLEXING_TRANSFORMATIONS_SWITCH_CASES =
     "num_multiplexing_transformations_switch_cases";
+constexpr const char* METRIC_EXPANDED_TRANSFORMATIONS =
+    "num_expanded_transformations";
+constexpr const char* METRIC_EXPANDED_SWITCH_CASES =
+    "num_expanded_switch_cases";
 
 bool is_sufficiently_sparse(cfg::Block* block) {
   always_assert(opcode::is_switch(block->get_last_insn()->insn->opcode()));
@@ -233,6 +237,51 @@ static void multiplex_sparse_switch_into_packed_and_sparse(
   cfg.create_branch(block,
                     (new IRInstruction(OPCODE_SWITCH))->set_src(0, tmp_reg),
                     goto_block, packed_cases);
+}
+
+static bool fits_16(int32_t v) { return v >= -32768 && v < 32768; }
+
+static void expand_switch(
+    cfg::ControlFlowGraph& cfg,
+    cfg::Block* block,
+    reg_t tmp_reg,
+    const IRList::iterator& switch_insn_it,
+    const std::vector<std::pair<int32_t, cfg::Block*>>& cases,
+    cfg::Block* default_target) {
+  auto selector_reg = switch_insn_it->insn->src(0);
+  cfg.remove_insn(block->to_cfg_instruction_iterator(switch_insn_it));
+
+  std::optional<int32_t> prev_case_key;
+  for (size_t i = 0; i < cases.size(); i++) {
+    auto [case_key, target] = cases[i];
+    cfg::Block* next_block =
+        i == cases.size() - 1 ? default_target : cfg.create_block();
+    IRInstruction* if_insn;
+    if (case_key == 0) {
+      if_insn = new IRInstruction(OPCODE_IF_EQZ);
+    } else {
+      IRInstruction* init_insn = [&, case_key = case_key] {
+        if (prev_case_key && !fits_16(case_key)) {
+          int32_t diff = case_key - *prev_case_key;
+          if (fits_16(diff)) {
+            return (new IRInstruction(OPCODE_ADD_INT_LIT))
+                ->set_dest(tmp_reg)
+                ->set_src(0, tmp_reg)
+                ->set_literal(diff);
+          }
+        }
+        return (new IRInstruction(OPCODE_CONST))
+            ->set_dest(tmp_reg)
+            ->set_literal(case_key);
+      }();
+      block->push_back(init_insn);
+      if_insn = (new IRInstruction(OPCODE_IF_EQ))->set_src(1, tmp_reg);
+    }
+    if_insn->set_src(0, selector_reg);
+    cfg.create_branch(block, if_insn, next_block, target);
+    block = next_block;
+    prev_case_key = case_key;
+  }
 }
 
 void write_sparse_switches(DexStoresVector& stores,
@@ -536,6 +585,72 @@ ReduceSparseSwitchesPass::multiplexing_transformation(
   return stats;
 }
 
+// Expanding remaining sparse switches, and also very small packed switches.
+ReduceSparseSwitchesPass::Stats ReduceSparseSwitchesPass::expand_transformation(
+    cfg::ControlFlowGraph& cfg) {
+  ReduceSparseSwitchesPass::Stats stats;
+  std::optional<reg_t> tmp_reg;
+  for (auto* block : cfg.blocks()) {
+    auto last_insn_it = block->get_last_insn();
+    if (last_insn_it == block->end()) {
+      continue;
+    }
+    if (!opcode::is_switch(last_insn_it->insn->opcode())) {
+      continue;
+    }
+    bool sparse = is_sufficiently_sparse(block);
+    auto switch_cases = block->succs().size() - 1;
+    if (!sparse && switch_cases > 6) {
+      // It's never worth expanding a large packed switch.
+      continue;
+    }
+    std::vector<std::pair<int32_t, cfg::Block*>> cases;
+    cfg::Block* default_target = nullptr;
+    for (auto* e : block->succs()) {
+      if (e->type() == cfg::EDGE_GOTO) {
+        default_target = e->target();
+        continue;
+      }
+      always_assert(e->type() == cfg::EDGE_BRANCH);
+      auto case_key = *e->case_key();
+      auto* target = e->target();
+      cases.emplace_back(case_key, target);
+    }
+    always_assert(default_target != nullptr);
+    always_assert(!cases.empty());
+
+    // TODO: Consider sorting cases by target-hotness (for speed)
+    std::sort(cases.begin(), cases.end(),
+              [&](auto& p, auto& q) { return p.first < q.first; });
+    uint32_t original_size = (sparse ? 5 : 7) + (2 + 2 * sparse) * cases.size();
+    uint32_t expanded_size = 0;
+    std::optional<int32_t> prev_case_key;
+    for (auto [case_key, _] : cases) {
+      if (case_key >= -8 && case_key < 8) {
+        expanded_size += 3;
+      } else if (!fits_16(case_key) || !prev_case_key ||
+                 !fits_16(case_key - *prev_case_key)) {
+        expanded_size += 5;
+      } else {
+        expanded_size += 4;
+      }
+      prev_case_key = case_key;
+    }
+    if (expanded_size >= original_size) {
+      // Nothing to gain by exploding instructions
+      continue;
+    }
+
+    if (!tmp_reg) {
+      tmp_reg = cfg.allocate_temp();
+    }
+    expand_switch(cfg, block, *tmp_reg, last_insn_it, cases, default_target);
+    stats.expanded_transformations++;
+    stats.expanded_switch_cases += switch_cases;
+  }
+  return stats;
+}
+
 void ReduceSparseSwitchesPass::bind_config() {
   bind("min_splitting_switch_cases",
        m_config.min_splitting_switch_cases,
@@ -549,6 +664,8 @@ void ReduceSparseSwitchesPass::bind_config() {
        m_config.min_multiplexing_switch_cases,
        m_config.min_multiplexing_switch_cases);
 
+  bind("expand_remaining", m_config.expand_remaining,
+       m_config.expand_remaining);
   bind("write_sparse_switches", m_config.write_sparse_switches,
        m_config.write_sparse_switches);
 };
@@ -584,23 +701,31 @@ void ReduceSparseSwitchesPass::run_pass(DexStoresVector& stores,
 
     local_stats += multiplexing_transformation(
         m_config.min_multiplexing_switch_cases, cfg);
+
+    if (m_config.expand_remaining) {
+      local_stats += expand_transformation(cfg);
+    }
+
     if (local_stats.removed_trivial_switch_cases == 0 &&
         local_stats.splitting_transformations == 0 &&
-        local_stats.multiplexing_transformations() == 0) {
+        local_stats.multiplexing_transformations() == 0 &&
+        local_stats.expanded_transformations == 0) {
       return;
     }
 
     TRACE(RSS, 3,
           "[reduce gotos] Removed %zu (%zu cases) trivial switches, split %zu "
           "(packed %zu segments with %zu cases) switches, multiplexed %zu (%zu "
-          "cases) switches in {%s}",
+          "cases) switches, expanded %zu (%zu cases) switches in {%s}",
           local_stats.removed_trivial_switches,
           local_stats.removed_trivial_switch_cases,
           local_stats.splitting_transformations,
           local_stats.splitting_transformations_packed_segments,
           local_stats.splitting_transformations_switch_cases_packed,
           local_stats.multiplexing_transformations(),
-          local_stats.multiplexing_switch_cases(), SHOW(method));
+          local_stats.multiplexing_switch_cases(),
+          local_stats.expanded_transformations,
+          local_stats.expanded_switch_cases, SHOW(method));
 
     TRACE(RSS, 4, "Rewrote {%s}:\n%s", SHOW(method), SHOW(cfg));
 
@@ -637,17 +762,20 @@ void ReduceSparseSwitchesPass::run_pass(DexStoresVector& stores,
           mstats.inefficiency / mstats.transformations);
     }
   }
+  mgr.incr_metric(METRIC_EXPANDED_TRANSFORMATIONS,
+                  stats.expanded_transformations);
+  mgr.incr_metric(METRIC_EXPANDED_SWITCH_CASES, stats.expanded_switch_cases);
 
   TRACE(RSS, 1,
         "[reduce sparse switches] Removed %zu (%zu cases) trivial switches, "
         "split %zu (packed %zu segments with %zu cases) switches, multiplexed "
-        "%zu (%zu cases) switches",
+        "%zu (%zu cases) switches, expanded %zu (%zu cases) switches",
         stats.removed_trivial_switches, stats.removed_trivial_switch_cases,
         stats.splitting_transformations,
         stats.splitting_transformations_packed_segments,
         stats.splitting_transformations_switch_cases_packed,
-        stats.multiplexing_transformations(),
-        stats.multiplexing_switch_cases());
+        stats.multiplexing_transformations(), stats.multiplexing_switch_cases(),
+        stats.expanded_transformations, stats.expanded_switch_cases);
   for (auto&& [M, mstats] : stats.multiplexing) {
     TRACE(RSS, 2,
           "[reduce sparse switches] M=%zu: %zu abandoned, %zu accumulated "
@@ -692,6 +820,9 @@ ReduceSparseSwitchesPass::Stats& ReduceSparseSwitchesPass::Stats::operator+=(
       that.splitting_transformations_packed_segments;
   splitting_transformations_switch_cases_packed +=
       that.splitting_transformations_switch_cases_packed;
+  expanded_transformations += that.expanded_transformations;
+  expanded_switch_cases += that.expanded_switch_cases;
+
   for (auto&& [M, mstats] : that.multiplexing) {
     multiplexing[M] += mstats;
   }

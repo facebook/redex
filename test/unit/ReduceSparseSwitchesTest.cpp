@@ -574,3 +574,180 @@ TEST_F(ReduceSparseSwitchesTest, splittingIntoLog2ManyChunks) {
   auto expected = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected.get(), method->get_code());
 }
+
+TEST_F(ReduceSparseSwitchesTest, expand_sparse) {
+  auto* method = assembler::method_from_string(std::string("") + R"(
+    (method (public static) ")LtestClass;.testMethod(:(I)V"
+      (
+        (load-param v0)
+
+        (switch v0 (:L0 :L1 :L2))
+        (return-void)
+
+        (:L0 0) 
+        (return-void)
+        (:L1 11) 
+        (return-void)
+        (:L2 222) 
+        (return-void)
+      )
+    )
+  )");
+  method->get_code()->build_cfg();
+
+  auto stats = ReduceSparseSwitchesPass::expand_transformation(
+      method->get_code()->cfg());
+  method->get_code()->clear_cfg();
+
+  EXPECT_EQ(stats.expanded_transformations, 1);
+  EXPECT_EQ(stats.expanded_switch_cases, 3);
+
+  const auto& expected_str = R"(
+    (
+      (load-param v0) 
+      (if-eqz v0 :L2) 
+      (const v1 11) 
+      (if-eq v0 v1 :L1) 
+      (const v1 222) 
+      (if-eq v0 v1 :L0) 
+      (return-void) 
+      (:L0) 
+      (return-void) 
+      (:L1) 
+      (return-void) 
+      (:L2) 
+      (return-void)
+    )
+  )";
+  auto expected = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected.get(), method->get_code());
+}
+
+TEST_F(ReduceSparseSwitchesTest, expand_very_small_packed) {
+  auto* method = assembler::method_from_string(std::string("") + R"(
+    (method (public static) ")LtestClass;.testMethod(:(I)V"
+      (
+        (load-param v0)
+
+        (switch v0 (:L0 :L1 :L2))
+        (return-void)
+
+        (:L0 0) 
+        (return-void)
+        (:L1 1) 
+        (return-void)
+        (:L2 2) 
+        (return-void)
+      )
+    )
+  )");
+  method->get_code()->build_cfg();
+
+  auto stats = ReduceSparseSwitchesPass::expand_transformation(
+      method->get_code()->cfg());
+  method->get_code()->clear_cfg();
+
+  EXPECT_EQ(stats.expanded_transformations, 1);
+  EXPECT_EQ(stats.expanded_switch_cases, 3);
+
+  const auto& expected_str = R"(
+    (
+      (load-param v0) 
+      (if-eqz v0 :L2) 
+      (const v1 1) 
+      (if-eq v0 v1 :L1) 
+      (const v1 2) 
+      (if-eq v0 v1 :L0) 
+      (return-void) 
+      (:L0) 
+      (return-void) 
+      (:L1) 
+      (return-void) 
+      (:L2) 
+      (return-void)
+    )
+  )";
+  auto expected = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected.get(), method->get_code());
+}
+
+TEST_F(ReduceSparseSwitchesTest, expand_add) {
+  auto* method = assembler::method_from_string(std::string("") + R"(
+    (method (public static) ")LtestClass;.testMethod(:(I)V"
+      (
+        (load-param v0)
+
+        (switch v0 (:L0 :L1 :L2))
+        (return-void)
+
+        (:L0 10000000) 
+        (return-void)
+        (:L1 10000011) 
+        (return-void)
+        (:L2 10000022) 
+        (return-void)
+      )
+    )
+  )");
+  method->get_code()->build_cfg();
+
+  auto stats = ReduceSparseSwitchesPass::expand_transformation(
+      method->get_code()->cfg());
+  method->get_code()->clear_cfg();
+
+  EXPECT_EQ(stats.expanded_transformations, 1);
+  EXPECT_EQ(stats.expanded_switch_cases, 3);
+
+  const auto& expected_str = R"(
+    (
+      (load-param v0) 
+      (const v1 10000000) 
+      (if-eq v0 v1 :L2) 
+      (add-int/lit v1 v1 11) 
+      (if-eq v0 v1 :L1) 
+      (add-int/lit v1 v1 11) 
+      (if-eq v0 v1 :L0) 
+      (return-void) 
+      (:L0) 
+      (return-void) 
+      (:L1) 
+      (return-void) 
+      (:L2) 
+      (return-void)
+    )
+  )";
+  auto expected = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected.get(), method->get_code());
+}
+
+TEST_F(ReduceSparseSwitchesTest, expand_not) {
+  auto* method = assembler::method_from_string(std::string("") + R"(
+    (method (public static) ")LtestClass;.testMethod(:(I)V"
+      (
+        (load-param v0)
+
+        (switch v0 (:L0 :L1 :L2 :L3 :L4))
+        (return-void)
+
+        (:L0 10000000) 
+        (return-void)
+        (:L1 10000011) 
+        (return-void)
+        (:L2 10000022) 
+        (return-void)
+        (:L3 10000023) 
+        (return-void)
+        (:L4 10000024) 
+        (return-void)
+      )
+    )
+  )");
+  method->get_code()->build_cfg();
+
+  auto stats = ReduceSparseSwitchesPass::expand_transformation(
+      method->get_code()->cfg());
+  method->get_code()->clear_cfg();
+
+  EXPECT_EQ(stats.expanded_transformations, 0);
+  EXPECT_EQ(stats.expanded_switch_cases, 0);
+}
