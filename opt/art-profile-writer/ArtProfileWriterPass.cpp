@@ -477,6 +477,7 @@ void ArtProfileWriterPass::eval_pass(DexStoresVector& stores,
 
 void write_methods(const Scope& scope,
                    const baseline_profiles::BaselineProfile& baseline_profile,
+                   bool strip_classes,
                    std::ofstream& ofs) {
   walk::classes(scope, [&](DexClass* cls) {
     for (auto* method : cls->get_all_methods()) {
@@ -490,7 +491,7 @@ void write_methods(const Scope& scope,
       boost::replace_all(descriptor, ".", "->");
       boost::replace_all(descriptor, ":(", "(");
       ofs << it->second << descriptor << "\n";
-      if (baseline_profile.classes.count(cls)) {
+      if (baseline_profile.classes.count(cls) && !strip_classes) {
         ofs << show_deobfuscated(cls) << "\n";
       }
     }
@@ -640,25 +641,31 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     for (const auto& entry : baseline_profiles) {
       const auto& bp_name = entry.first;
       const auto& bp = entry.second;
+      const auto strip_classes =
+          conf.get_baseline_profile_configs().at(bp_name).options.strip_classes;
       auto preprocessed_profile_name =
           conf.get_preprocessed_baseline_profile_file(bp_name);
       auto output_name = conf.metafile(bp_name + "-baseline-profile.txt");
       std::ofstream ofs{output_name.c_str()};
       std::ifstream preprocessed_profile(preprocessed_profile_name);
       std::string current_line;
-      while (std::getline(preprocessed_profile, current_line)) {
-        if (current_line.empty() || current_line[0] != 'L') {
-          continue;
+      if (!strip_classes) {
+        while (std::getline(preprocessed_profile, current_line)) {
+          if (current_line.empty() || current_line[0] != 'L') {
+            continue;
+          }
+          ofs << current_line << "\n";
         }
-        ofs << current_line << "\n";
       }
-      write_methods(scope, bp, ofs);
+      write_methods(scope, bp, strip_classes, ofs);
     }
   } else {
     std::ofstream ofs{conf.metafile(BASELINE_PROFILES_FILE)};
     auto baseline_profile = baseline_profiles.at(
         baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME);
-    write_methods(scope, baseline_profile, ofs);
+    const auto strip_classes =
+        conf.get_default_baseline_profile_config().options.strip_classes;
+    write_methods(scope, baseline_profile, strip_classes, ofs);
   }
 
   std::atomic<size_t> methods_with_baseline_profile_code_units{0};
