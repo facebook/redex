@@ -35,7 +35,7 @@ void get_throughput_interactions(
 
   boost::regex rx(config.throughput_interaction_name_pattern);
   for (auto&& [interaction_id, interaction_name] :
-       config_files.get_baseline_profile_config().interactions) {
+       config_files.get_default_baseline_profile_config().interactions) {
     if (boost::regex_match(interaction_name, rx)) {
       throughput_interaction_ids->insert(interaction_id);
       auto index = g_redex->get_sb_interaction_index(interaction_id);

@@ -550,13 +550,13 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   auto baseline_profile = m_legacy_mode
                               ? get_legacy_baseline_profile()
                               : baseline_profiles::get_baseline_profile(
-                                    conf.get_baseline_profile_config(),
+                                    conf.get_default_baseline_profile_config(),
                                     method_profiles, &method_refs_without_def);
   auto scope = build_class_scope(stores);
   if (m_never_compile_callcount_threshold > -1 ||
       m_never_compile_perf_threshold > -1) {
     never_compile(
-        scope, conf.get_baseline_profile_config(), method_profiles,
+        scope, conf.get_default_baseline_profile_config(), method_profiles,
         m_perf_config.interactions, mgr, m_never_compile_callcount_threshold,
         m_never_compile_perf_threshold,
         m_never_compile_excluded_interaction_pattern,
