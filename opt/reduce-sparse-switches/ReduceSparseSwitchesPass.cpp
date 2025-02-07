@@ -24,6 +24,10 @@
 namespace {
 
 constexpr const char* METRIC_AFFECTED_METHODS = "num_affected_methods";
+constexpr const char* METRIC_REMOVED_TRIVIAL_SWITCH_CASES =
+    "num_removed_trivial_switch_cases";
+constexpr const char* METRIC_REMOVED_TRIVIAL_SWITCHES =
+    "num_removed_trivial_switches";
 constexpr const char* METRIC_SPLITTING_TRANSFORMATIONS =
     "num_splitting_transformations";
 constexpr const char* METRIC_SPLITTING_TRANSFORMATIONS_PACKED_SEGMENTS =
@@ -364,6 +368,36 @@ bool partition(const std::vector<int32_t>& case_keys,
 // Find switches which can be split into packed and sparse switches, and apply
 // the transformation.
 ReduceSparseSwitchesPass::Stats
+ReduceSparseSwitchesPass::trivial_transformation(cfg::ControlFlowGraph& cfg) {
+  ReduceSparseSwitchesPass::Stats stats;
+  for (auto* block : cfg.blocks()) {
+    auto last_insn_it = block->get_last_insn();
+    if (last_insn_it == block->end()) {
+      continue;
+    }
+    if (!opcode::is_switch(last_insn_it->insn->opcode())) {
+      continue;
+    }
+    std::vector<cfg::Edge*> trivial_edges;
+    auto* default_target = block->goes_to();
+    for (auto* e : block->succs()) {
+      if (e->type() == cfg::EDGE_BRANCH && e->target() == default_target) {
+        trivial_edges.push_back(e);
+      }
+    }
+    cfg.delete_edges(trivial_edges.begin(), trivial_edges.end());
+    stats.removed_trivial_switch_cases += trivial_edges.size();
+    if (block->succs().size() == 1) {
+      stats.removed_trivial_switches++;
+      continue;
+    }
+  }
+  return stats;
+}
+
+// Find switches which can be split into packed and sparse switches, and apply
+// the transformation.
+ReduceSparseSwitchesPass::Stats
 ReduceSparseSwitchesPass::splitting_transformation(
     size_t min_switch_cases,
     size_t min_switch_cases_per_segment,
@@ -542,20 +576,26 @@ void ReduceSparseSwitchesPass::run_pass(DexStoresVector& stores,
     }
 
     auto& cfg = code.cfg();
-    Stats local_stats = splitting_transformation(
+    auto local_stats = trivial_transformation(cfg);
+
+    local_stats += splitting_transformation(
         m_config.min_splitting_switch_cases,
         m_config.min_splitting_switch_cases_per_segment, cfg);
 
     local_stats += multiplexing_transformation(
         m_config.min_multiplexing_switch_cases, cfg);
-    if (local_stats.splitting_transformations == 0 &&
+    if (local_stats.removed_trivial_switch_cases == 0 &&
+        local_stats.splitting_transformations == 0 &&
         local_stats.multiplexing_transformations() == 0) {
       return;
     }
 
     TRACE(RSS, 3,
-          "[reduce gotos] Split %zu (packed %zu segments with %zu cases) "
-          "switches, multiplexed %zu (%zu cases) switches in {%s}",
+          "[reduce gotos] Removed %zu (%zu cases) trivial switches, split %zu "
+          "(packed %zu segments with %zu cases) switches, multiplexed %zu (%zu "
+          "cases) switches in {%s}",
+          local_stats.removed_trivial_switches,
+          local_stats.removed_trivial_switch_cases,
           local_stats.splitting_transformations,
           local_stats.splitting_transformations_packed_segments,
           local_stats.splitting_transformations_switch_cases_packed,
@@ -570,6 +610,11 @@ void ReduceSparseSwitchesPass::run_pass(DexStoresVector& stores,
   });
 
   mgr.incr_metric(METRIC_AFFECTED_METHODS, stats.affected_methods);
+  mgr.incr_metric(METRIC_REMOVED_TRIVIAL_SWITCH_CASES,
+                  stats.removed_trivial_switch_cases);
+  mgr.incr_metric(METRIC_REMOVED_TRIVIAL_SWITCHES,
+                  stats.removed_trivial_switches);
+
   mgr.incr_metric(METRIC_SPLITTING_TRANSFORMATIONS,
                   stats.splitting_transformations);
   mgr.incr_metric(METRIC_SPLITTING_TRANSFORMATIONS_PACKED_SEGMENTS,
@@ -594,8 +639,10 @@ void ReduceSparseSwitchesPass::run_pass(DexStoresVector& stores,
   }
 
   TRACE(RSS, 1,
-        "[reduce sparse switches] Split %zu (packed %zu segments with %zu "
-        "cases) switches, multiplexed %zu (%zu cases) switches",
+        "[reduce sparse switches] Removed %zu (%zu cases) trivial switches, "
+        "split %zu (packed %zu segments with %zu cases) switches, multiplexed "
+        "%zu (%zu cases) switches",
+        stats.removed_trivial_switches, stats.removed_trivial_switch_cases,
         stats.splitting_transformations,
         stats.splitting_transformations_packed_segments,
         stats.splitting_transformations_switch_cases_packed,
@@ -638,6 +685,8 @@ ReduceSparseSwitchesPass::Stats::Multiplexing::operator+=(
 ReduceSparseSwitchesPass::Stats& ReduceSparseSwitchesPass::Stats::operator+=(
     const ReduceSparseSwitchesPass::Stats& that) {
   affected_methods += that.affected_methods;
+  removed_trivial_switch_cases += that.removed_trivial_switch_cases;
+  removed_trivial_switches += that.removed_trivial_switches;
   splitting_transformations += that.splitting_transformations;
   splitting_transformations_packed_segments +=
       that.splitting_transformations_packed_segments;

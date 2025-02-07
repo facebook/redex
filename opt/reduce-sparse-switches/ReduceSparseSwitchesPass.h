@@ -21,6 +21,9 @@ class ReduceSparseSwitchesPass : public Pass {
   struct Stats {
     size_t affected_methods{0};
 
+    size_t removed_trivial_switch_cases{0};
+    size_t removed_trivial_switches{0};
+
     size_t splitting_transformations{0};
     size_t splitting_transformations_packed_segments{0};
     size_t splitting_transformations_switch_cases_packed{0};
@@ -113,6 +116,9 @@ runtime performance:
   void bind_config() override;
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+  static ReduceSparseSwitchesPass::Stats trivial_transformation(
+      cfg::ControlFlowGraph& cfg);
 
   static ReduceSparseSwitchesPass::Stats splitting_transformation(
       size_t min_switch_cases,

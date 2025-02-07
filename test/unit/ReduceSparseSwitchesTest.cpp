@@ -13,6 +13,85 @@
 
 struct ReduceSparseSwitchesTest : public RedexTest {};
 
+TEST_F(ReduceSparseSwitchesTest, trivial_switch_case) {
+  auto* method = assembler::method_from_string(std::string("") + R"(
+    (method (public static) ")LtestClass;.testMethod(:(I)V"
+      (
+        (load-param v0)
+        (switch v0 (:L0 :L1 :L2))
+
+        (:L1 50)
+        (return-void)
+
+        (:L0 0) 
+        (return-void)
+
+        (:L2 100) 
+        (return-void)
+      )
+    )
+  )");
+  method->get_code()->build_cfg();
+
+  auto stats = ReduceSparseSwitchesPass::trivial_transformation(
+      method->get_code()->cfg());
+  method->get_code()->clear_cfg();
+  // Rebuild an extra time to work around an ordering quirk in switch cases.
+  method->get_code()->build_cfg();
+  method->get_code()->clear_cfg();
+
+  EXPECT_EQ(stats.removed_trivial_switch_cases, 1);
+  EXPECT_EQ(stats.removed_trivial_switches, 0);
+
+  const auto& expected_str = R"(
+    (
+      (load-param v0) 
+      (switch v0 (:L0 :L1)) 
+      (return-void) 
+      (:L0 0)
+      (return-void) 
+      (:L1 100) 
+      (return-void)
+    )
+  )";
+  auto expected = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected.get(), method->get_code());
+}
+
+TEST_F(ReduceSparseSwitchesTest, trivial_switch) {
+  auto* method = assembler::method_from_string(std::string("") + R"(
+    (method (public static) ")LtestClass;.testMethod(:(I)V"
+      (
+        (load-param v0)
+        (switch v0 (:L0))
+
+        (:L0 50)
+        (return-void)
+      )
+    )
+  )");
+  method->get_code()->build_cfg();
+
+  auto stats = ReduceSparseSwitchesPass::trivial_transformation(
+      method->get_code()->cfg());
+  method->get_code()->clear_cfg();
+  // Rebuild an extra time to work around an ordering quirk in switch cases.
+  method->get_code()->build_cfg();
+  method->get_code()->clear_cfg();
+
+  EXPECT_EQ(stats.removed_trivial_switch_cases, 1);
+  EXPECT_EQ(stats.removed_trivial_switches, 1);
+
+  const auto& expected_str = R"(
+    (
+      (load-param v0) 
+      (return-void) 
+    )
+  )";
+  auto expected = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected.get(), method->get_code());
+}
+
 TEST_F(ReduceSparseSwitchesTest, splittingEvenSizeSwitch) {
   auto* method = assembler::method_from_string(std::string("") + R"(
     (method (public static) ")LtestClass;.testMethod(:(I)V"
