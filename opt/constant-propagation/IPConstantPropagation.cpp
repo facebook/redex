@@ -318,11 +318,8 @@ void PassImpl::run_pass(DexStoresVector& stores,
         RuntimeAssertTransform::Config(config.get_proguard_map());
   }
 
-  int min_sdk = mgr.get_redex_options().min_sdk;
-  std::string zip_dir;
-  config.get_json_config().get("apk_dir", "", zip_dir);
-  auto resources = create_resource_reader(zip_dir);
-  run(stores, min_sdk, resources->get_manifest_package_name());
+  auto& options = mgr.get_redex_options();
+  run(stores, options.min_sdk, options.package_name);
 
   ScopedMetrics sm(mgr);
   m_transform_stats.log_metrics(sm, /* with_scope= */ false);

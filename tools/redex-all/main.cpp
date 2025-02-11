@@ -1888,6 +1888,7 @@ int main(int argc, char* argv[]) {
       TRACE(MAIN, 2, "parsed minSdkVersion = %d", *maybe_sdk);
       args.redex_options.min_sdk = *maybe_sdk;
     }
+    args.redex_options.package_name = resources->get_manifest_package_name();
 
     {
       auto profile_frontend =

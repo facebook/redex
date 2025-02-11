@@ -1241,7 +1241,8 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
   shrinker_config.run_local_dce = true;
   shrinker_config.compute_pure_methods = false;
   Shrinker shrinker(stores, scope, init_classes_with_side_effects,
-                    shrinker_config, min_sdk);
+                    shrinker_config, min_sdk, {}, {}, {},
+                    mgr.get_redex_options().package_name);
 
   ConcurrentSet<const IRInstruction*> excluded_invoke_insns;
   auto get_callee_fn = [&excluded_classes, &excluded_invoke_insns](

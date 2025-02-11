@@ -20,6 +20,9 @@ void RedexOptions::serialize(Json::Value& entry_data) const {
   options["min_sdk"] = min_sdk;
   options["debug_info_kind"] = debug_info_kind_to_string(debug_info_kind);
   options["jni_summary_path"] = jni_summary_path;
+  if (package_name != boost::none) {
+    options["package_name"] = *package_name;
+  }
 }
 
 void RedexOptions::deserialize(const Json::Value& entry_data) {
@@ -32,6 +35,9 @@ void RedexOptions::deserialize(const Json::Value& entry_data) {
   debug_info_kind =
       parse_debug_info_kind(options_data["debug_info_kind"].asString());
   jni_summary_path = options_data["jni_summary_path"].asString();
+  if (options_data.isMember("package_name")) {
+    package_name = options_data["package_name"].asString();
+  }
 }
 
 Architecture parse_architecture(const std::string& s) {
