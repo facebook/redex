@@ -260,9 +260,9 @@ static void expand_switch(
     if (case_key == 0) {
       if_insn = new IRInstruction(OPCODE_IF_EQZ);
     } else {
-      IRInstruction* init_insn = [&, case_key = case_key] {
-        if (prev_case_key && !fits_16(case_key)) {
-          int32_t diff = case_key - *prev_case_key;
+      IRInstruction* init_insn = [&, case_key_copy = case_key] {
+        if (prev_case_key && !fits_16(case_key_copy)) {
+          int32_t diff = case_key_copy - *prev_case_key;
           if (fits_16(diff)) {
             return (new IRInstruction(OPCODE_ADD_INT_LIT))
                 ->set_dest(tmp_reg)
@@ -272,7 +272,7 @@ static void expand_switch(
         }
         return (new IRInstruction(OPCODE_CONST))
             ->set_dest(tmp_reg)
-            ->set_literal(case_key);
+            ->set_literal(case_key_copy);
       }();
       block->push_back(init_insn);
       if_insn = (new IRInstruction(OPCODE_IF_EQ))->set_src(1, tmp_reg);
