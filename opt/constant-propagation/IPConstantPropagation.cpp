@@ -17,6 +17,7 @@
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "Purity.h"
+#include "RedexResources.h"
 #include "ScopedMetrics.h"
 #include "Timer.h"
 #include "Trace.h"
@@ -54,21 +55,25 @@ using CombinedAnalyzer =
                                 StringAnalyzer,
                                 ConstantClassObjectAnalyzer,
                                 ApiLevelAnalyzer,
+                                PackageNameAnalyzer,
                                 NewObjectAnalyzer,
                                 PrimitiveAnalyzer>;
 
 class AnalyzerGenerator {
   const ImmutableAttributeAnalyzerState* m_immut_analyzer_state;
   const ApiLevelAnalyzerState* m_api_level_analyzer_state;
+  const PackageNameState* m_package_name_state;
   const State& m_cp_state;
 
  public:
   explicit AnalyzerGenerator(
       const ImmutableAttributeAnalyzerState* immut_analyzer_state,
       const ApiLevelAnalyzerState* api_level_analyzer_state,
+      const PackageNameState* package_name_state,
       const State& cp_state)
       : m_immut_analyzer_state(immut_analyzer_state),
         m_api_level_analyzer_state(api_level_analyzer_state),
+        m_package_name_state(package_name_state),
         m_cp_state(cp_state) {
     // Initialize the singletons that `operator()` needs ahead of time to
     // avoid a data race.
@@ -111,6 +116,7 @@ class AnalyzerGenerator {
             EnumFieldAnalyzerState::get(), BoxedBooleanAnalyzerState::get(),
             nullptr, nullptr,
             *const_cast<ApiLevelAnalyzerState*>(m_api_level_analyzer_state),
+            const_cast<PackageNameState*>(m_package_name_state),
             immut_analyzer_state, nullptr),
         std::move(env));
   }
@@ -133,6 +139,7 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
     const Scope& scope,
     const ImmutableAttributeAnalyzerState* immut_analyzer_state,
     const ApiLevelAnalyzerState* api_level_analyzer_state,
+    const PackageNameState* package_name_state,
     const State& cp_state) {
   auto method_override_graph = mog::build_graph(scope);
   std::shared_ptr<call_graph::Graph> cg;
@@ -154,7 +161,7 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
   auto fp_iter = std::make_unique<FixpointIterator>(
       cg,
       AnalyzerGenerator(immut_analyzer_state, api_level_analyzer_state,
-                        cp_state),
+                        package_name_state, cp_state),
       cg_for_wps);
   // Run the bootstrap. All field value and method return values are
   // represented by Top.
@@ -272,7 +279,9 @@ void PassImpl::optimize(
       });
 }
 
-void PassImpl::run(const DexStoresVector& stores, int min_sdk) {
+void PassImpl::run(const DexStoresVector& stores,
+                   int min_sdk,
+                   const boost::optional<std::string>& package_name) {
   // reset statistics, to be meaningful when pass runs multiple times
   m_stats = Stats();
   m_transform_stats = Transform::Stats();
@@ -290,9 +299,11 @@ void PassImpl::run(const DexStoresVector& stores, int min_sdk) {
   immutable_state::analyze_constructors(scope, &immut_analyzer_state);
   ApiLevelAnalyzerState api_level_analyzer_state =
       ApiLevelAnalyzerState::get(min_sdk);
+  auto package_name_state = PackageNameState::get(package_name);
   State cp_state;
-  auto fp_iter = analyze(scope, &immut_analyzer_state,
-                         &api_level_analyzer_state, cp_state);
+  auto fp_iter =
+      analyze(scope, &immut_analyzer_state, &api_level_analyzer_state,
+              &package_name_state, cp_state);
   m_stats.fp_iter = fp_iter->get_stats();
   TypeSystem type_system(scope);
   optimize(scope, type_system, xstores, *fp_iter, &immut_analyzer_state,
@@ -308,7 +319,10 @@ void PassImpl::run_pass(DexStoresVector& stores,
   }
 
   int min_sdk = mgr.get_redex_options().min_sdk;
-  run(stores, min_sdk);
+  std::string zip_dir;
+  config.get_json_config().get("apk_dir", "", zip_dir);
+  auto resources = create_resource_reader(zip_dir);
+  run(stores, min_sdk, resources->get_manifest_package_name());
 
   ScopedMetrics sm(mgr);
   m_transform_stats.log_metrics(sm, /* with_scope= */ false);

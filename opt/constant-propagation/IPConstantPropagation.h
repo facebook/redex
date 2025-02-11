@@ -89,7 +89,9 @@ class PassImpl : public Pass {
    * tests. run() is a more direct way to call this pass. The caller is
    * responsible for picking the right Config settings.
    */
-  void run(const DexStoresVector& stores, int min_sdk = 0);
+  void run(const DexStoresVector& stores,
+           int min_sdk = 0,
+           const boost::optional<std::string>& = boost::none);
 
   /*
    * Exposed for testing purposes.
@@ -98,6 +100,7 @@ class PassImpl : public Pass {
       const Scope&,
       const ImmutableAttributeAnalyzerState*,
       const ApiLevelAnalyzerState*,
+      const PackageNameState*,
       const State&);
 
  private:

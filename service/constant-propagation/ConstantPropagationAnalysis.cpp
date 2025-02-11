@@ -1551,6 +1551,49 @@ bool ApiLevelAnalyzer::analyze_sget(const ApiLevelAnalyzerState& state,
   return false;
 }
 
+boost::optional<std::unordered_set<DexMethodRef*>> g_get_package_name_refs{
+    boost::none};
+static std::mutex s_package_name_mutex;
+PackageNameState PackageNameState::get(const std::string& package_name) {
+  return PackageNameState::get(boost::optional<std::string>(package_name));
+}
+
+PackageNameState PackageNameState::get(
+    const boost::optional<std::string>& package_name) {
+  std::lock_guard<std::mutex> lock(s_package_name_mutex);
+  if (!g_get_package_name_refs) {
+    std::unordered_set<DexMethodRef*> refs{
+        DexMethod::get_method(
+            "Landroid/content/Context;.getPackageName:()Ljava/lang/String;"),
+        DexMethod::get_method(
+            "Landroid/content/ContextWrapper;.getPackageName:()Ljava/lang/"
+            "String;")};
+    g_get_package_name_refs = refs;
+    // In tests, we create and destroy g_redex repeatedly. So we need to reset
+    // the singleton.
+    g_redex->add_destruction_task([]() {
+      std::lock_guard<std::mutex> task_lock(s_package_name_mutex);
+      g_get_package_name_refs = boost::none;
+    });
+  }
+  const DexString* dex_string = package_name != boost::none
+                                    ? DexString::make_string(*package_name)
+                                    : nullptr;
+  return {*g_get_package_name_refs, dex_string};
+}
+
+bool PackageNameAnalyzer::analyze_invoke(const PackageNameState* state,
+                                         const IRInstruction* insn,
+                                         ConstantEnvironment* env) {
+  auto method = insn->get_method();
+  if (method && state && state->package_name &&
+      state->getter_methods.count(method) > 0) {
+    env->set(RESULT_REGISTER, StringDomain(state->package_name));
+    return true;
+  }
+  return false;
+}
+
 namespace intraprocedural {
 
 FixpointIterator::FixpointIterator(

@@ -11,6 +11,7 @@
 #include <unordered_set>
 #include <utility>
 
+#include <boost/optional.hpp>
 #include <sparta/MonotonicFixpointIterator.h>
 
 #include "BaseIRAnalyzer.h"
@@ -451,6 +452,24 @@ class ApiLevelAnalyzer final
                            ConstantEnvironment* env);
 };
 
+struct PackageNameState {
+  static PackageNameState get(const std::string& package_name);
+  static PackageNameState get(const boost::optional<std::string>& package_name);
+
+  const std::unordered_set<DexMethodRef*> getter_methods;
+  const DexString* package_name;
+};
+
+class PackageNameAnalyzer final
+    : public InstructionAnalyzerBase<PackageNameAnalyzer,
+                                     ConstantEnvironment,
+                                     PackageNameState*> {
+ public:
+  static bool analyze_invoke(const PackageNameState* state,
+                             const IRInstruction* insn,
+                             ConstantEnvironment* env);
+};
+
 class NewObjectAnalyzer
     : public InstructionAnalyzerBase<NewObjectAnalyzer,
                                      ConstantEnvironment,
@@ -620,6 +639,7 @@ using ConstantPrimitiveAndBoxedAnalyzer =
                                 BoxedBooleanAnalyzer,
                                 StringAnalyzer,
                                 ApiLevelAnalyzer,
+                                PackageNameAnalyzer,
                                 ConstantClassObjectAnalyzer,
                                 NewObjectAnalyzer,
                                 PrimitiveAnalyzer>;

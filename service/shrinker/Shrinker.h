@@ -41,7 +41,8 @@ class Shrinker {
       const std::unordered_set<const DexString*>&
           configured_finalish_field_names = {},
       const std::unordered_set<const DexField*>& configured_finalish_fields =
-          {});
+          {},
+      const boost::optional<std::string>& package_name = boost::none);
 
   constant_propagation::Transform::Stats constant_propagation(
       bool is_static,
@@ -135,6 +136,10 @@ class Shrinker {
     return &m_immut_analyzer_state;
   }
 
+  constant_propagation::PackageNameState* get_package_name_state() {
+    return &m_package_name_state;
+  }
+
   const constant_propagation::State& get_cp_state() const { return m_cp_state; }
 
   void log_metrics(ScopedMetrics& sm) const;
@@ -161,6 +166,7 @@ class Shrinker {
   std::unordered_set<const DexField*> m_finalish_fields;
 
   constant_propagation::ImmutableAttributeAnalyzerState m_immut_analyzer_state;
+  constant_propagation::PackageNameState m_package_name_state;
   constant_propagation::State m_cp_state;
 
   // THe mutex protects all other mutable (stats) fields.
