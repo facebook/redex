@@ -166,6 +166,7 @@ class Shrinker {
   std::unordered_set<const DexField*> m_finalish_fields;
 
   constant_propagation::ImmutableAttributeAnalyzerState m_immut_analyzer_state;
+  constant_propagation::StringAnalyzerState m_string_analyzer_state;
   constant_propagation::PackageNameState m_package_name_state;
   constant_propagation::State m_cp_state;
 

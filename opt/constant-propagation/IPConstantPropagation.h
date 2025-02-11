@@ -80,6 +80,8 @@ class PassImpl : public Pass {
          "they are read, in order to ignore the default value 0.");
   }
 
+  void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
   void run_pass(DexStoresVector& stores,
                 ConfigFiles& conf,
                 PassManager& mgr) override;
@@ -100,6 +102,7 @@ class PassImpl : public Pass {
       const Scope&,
       const ImmutableAttributeAnalyzerState*,
       const ApiLevelAnalyzerState*,
+      const StringAnalyzerState*,
       const PackageNameState*,
       const State&);
 

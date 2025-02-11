@@ -302,7 +302,8 @@ CallSiteSummarizer::get_invoke_call_site_summaries(
           m_shrinker.get_immut_analyzer_state(),
           m_shrinker.get_immut_analyzer_state(),
           constant_propagation::EnumFieldAnalyzerState::get(),
-          constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr,
+          constant_propagation::BoxedBooleanAnalyzerState::get(),
+          /* TODO update */ nullptr,
           constant_propagation::ApiLevelAnalyzerState::get(),
           m_shrinker.get_package_name_state(), nullptr,
           m_shrinker.get_immut_analyzer_state(), nullptr));

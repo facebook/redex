@@ -410,16 +410,28 @@ class BoxedBooleanAnalyzer final
                              ConstantEnvironment*);
 };
 
-class StringAnalyzer
-    : public InstructionAnalyzerBase<StringAnalyzer, ConstantEnvironment> {
+struct StringAnalyzerState {
+  static StringAnalyzerState get();
+  explicit StringAnalyzerState(const std::unordered_set<DexMethod*>& methods)
+      : string_equality_methods(methods) {}
+  void set_methods_as_root();
+  std::unordered_set<DexMethod*> string_equality_methods;
+};
+
+class StringAnalyzer : public InstructionAnalyzerBase<StringAnalyzer,
+                                                      ConstantEnvironment,
+                                                      StringAnalyzerState*> {
  public:
-  static bool analyze_const_string(const IRInstruction* insn,
+  static bool analyze_const_string(const StringAnalyzerState* state,
+                                   const IRInstruction* insn,
                                    ConstantEnvironment* env) {
     env->set(RESULT_REGISTER, StringDomain(insn->get_string()));
     return true;
   }
 
-  static bool analyze_invoke(const IRInstruction*, ConstantEnvironment*);
+  static bool analyze_invoke(const StringAnalyzerState* state,
+                             const IRInstruction*,
+                             ConstantEnvironment*);
 };
 
 class ConstantClassObjectAnalyzer

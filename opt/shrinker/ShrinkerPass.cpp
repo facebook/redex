@@ -8,6 +8,7 @@
 #include "ShrinkerPass.h"
 
 #include "ConfigFiles.h"
+#include "ConstantPropagationAnalysis.h"
 #include "PassManager.h"
 #include "ScopedMetrics.h"
 #include "Shrinker.h"
@@ -41,6 +42,13 @@ void ShrinkerPass::bind_config() {
   bind("analyze_constructors", false, m_config.analyze_constructors,
        "Whether to analyze constructors to find immutable attributes (only "
        "relevant when using constant-propagaation)");
+}
+
+void ShrinkerPass::eval_pass(DexStoresVector& stores,
+                             ConfigFiles& conf,
+                             PassManager&) {
+  auto string_analyzer_state = constant_propagation::StringAnalyzerState::get();
+  string_analyzer_state.set_methods_as_root();
 }
 
 void ShrinkerPass::run_pass(DexStoresVector& stores,

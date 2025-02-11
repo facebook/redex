@@ -49,6 +49,7 @@ struct InterproceduralConstantPropagationTest : public RedexTest {
   const std::string package_name = "com.facebook.redextest";
   ImmutableAttributeAnalyzerState m_immut_analyzer_state;
   ApiLevelAnalyzerState m_api_level_analyzer_state;
+  StringAnalyzerState m_string_analyzer_state = StringAnalyzerState::get();
   PackageNameState m_package_name_state = PackageNameState::get(package_name);
   State m_cp_state;
 };
@@ -1084,7 +1085,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
 
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
       scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
-      &m_package_name_state, m_cp_state);
+      &m_string_analyzer_state, &m_package_name_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
   EXPECT_EQ(wps.get_field_value(field_qux), SignedConstantDomain(0));
   EXPECT_EQ(wps.get_field_value(field_corge), SignedConstantDomain(1));
@@ -1177,7 +1178,7 @@ TEST_F(InterproceduralConstantPropagationTest,
 
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
       scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
-      &m_package_name_state, m_cp_state);
+      &m_string_analyzer_state, &m_package_name_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
   EXPECT_EQ(wps.get_field_value(field_qux), ConstantValue::top());
 
@@ -1667,7 +1668,7 @@ TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {
   config.max_heap_analysis_iterations = 1;
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
       scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
-      &m_package_name_state, m_cp_state);
+      &m_string_analyzer_state, &m_package_name_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
 
   // Make sure we mark methods that have a reachable return-void statement as
@@ -1704,7 +1705,7 @@ TEST_F(InterproceduralConstantPropagationTest, min_sdk) {
   config.max_heap_analysis_iterations = 1;
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
       scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
-      &m_package_name_state, m_cp_state);
+      &m_string_analyzer_state, &m_package_name_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
 
   // Make sure we mark methods that have a reachable return-void statement as
@@ -1818,7 +1819,7 @@ TEST_F(InterproceduralConstantPropagationTest,
 
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
       scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
-      &m_package_name_state, m_cp_state);
+      &m_string_analyzer_state, &m_package_name_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
   // as the field is definitely-assigned, 0 was not added to the numeric
   // interval domain
@@ -1894,7 +1895,7 @@ TEST_F(InterproceduralConstantPropagationTest,
 
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
       scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
-      &m_package_name_state, m_cp_state);
+      &m_string_analyzer_state, &m_package_name_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
   // as the field is definitely-assigned, even with the branching in the
   // constructor, 0 was not added to the numeric interval domain
@@ -1963,7 +1964,7 @@ TEST_F(InterproceduralConstantPropagationTest,
 
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
       scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
-      &m_package_name_state, m_cp_state);
+      &m_string_analyzer_state, &m_package_name_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
   // 0 is included in the numeric interval as 'this' escaped before the
   // assignment
@@ -2030,7 +2031,7 @@ TEST_F(InterproceduralConstantPropagationTest,
 
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
       scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
-      &m_package_name_state, m_cp_state);
+      &m_string_analyzer_state, &m_package_name_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
   // 0 is included in the numeric interval as 'this' escaped before the
   // assignment
@@ -2098,7 +2099,7 @@ TEST_F(InterproceduralConstantPropagationTest,
 
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
       scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
-      &m_package_name_state, m_cp_state);
+      &m_string_analyzer_state, &m_package_name_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
   // 0 is included in the numeric interval as no actual constructor was ever
   // called
@@ -2169,7 +2170,7 @@ TEST_F(InterproceduralConstantPropagationTest,
 
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
       scope, &m_immut_analyzer_state, &m_api_level_analyzer_state,
-      &m_package_name_state, m_cp_state);
+      &m_string_analyzer_state, &m_package_name_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
   // 0 is included in the numeric interval as the field was read before written
   EXPECT_EQ(wps.get_field_value(field_f), SignedConstantDomain(0, 42));

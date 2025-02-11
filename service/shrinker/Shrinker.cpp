@@ -94,6 +94,7 @@ Shrinker::Shrinker(
       m_pure_methods(configured_pure_methods),
       m_finalish_field_names(configured_finalish_field_names),
       m_finalish_fields(configured_finalish_fields),
+      m_string_analyzer_state(constant_propagation::StringAnalyzerState::get()),
       m_package_name_state(
           constant_propagation::PackageNameState::get(package_name)) {
   // Initialize the singletons that `operator()` needs ahead of time to
@@ -155,7 +156,8 @@ constant_propagation::Transform::Stats Shrinker::constant_propagation(
       constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
           &m_immut_analyzer_state, &m_immut_analyzer_state,
           constant_propagation::EnumFieldAnalyzerState::get(),
-          constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr,
+          constant_propagation::BoxedBooleanAnalyzerState::get(),
+          &m_string_analyzer_state,
           constant_propagation::ApiLevelAnalyzerState::get(m_min_sdk),
           &m_package_name_state, nullptr, &m_immut_analyzer_state, nullptr),
       /* imprecise_switches */ true);

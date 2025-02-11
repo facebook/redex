@@ -994,7 +994,39 @@ bool BoxedBooleanAnalyzer::analyze_invoke(
   }
 }
 
-bool StringAnalyzer::analyze_invoke(const IRInstruction* insn,
+static boost::optional<StringAnalyzerState> s_string_analyzer_state{
+    boost::none};
+static std::mutex s_string_analyzer_state_mtx;
+StringAnalyzerState StringAnalyzerState::get() {
+  std::lock_guard<std::mutex> lock(s_string_analyzer_state_mtx);
+  if (s_string_analyzer_state == boost::none) {
+    std::unordered_set<DexMethod*> methods;
+    auto kotlin_are_equal = DexMethod::get_method(
+        "Lkotlin/jvm/internal/Intrinsics;.areEqual:(Ljava/lang/Object;Ljava/"
+        "lang/Object;)Z");
+    if (kotlin_are_equal != nullptr && kotlin_are_equal->as_def() != nullptr) {
+      methods.emplace(kotlin_are_equal->as_def());
+    }
+    s_string_analyzer_state = StringAnalyzerState(methods);
+    // For tests.
+    g_redex->add_destruction_task([]() {
+      std::lock_guard<std::mutex> task_lock(s_string_analyzer_state_mtx);
+      s_string_analyzer_state = boost::none;
+    });
+  }
+  return *s_string_analyzer_state;
+}
+
+void StringAnalyzerState::set_methods_as_root() {
+  for (const auto& method : string_equality_methods) {
+    if (!method->is_external()) {
+      method->rstate.set_root();
+    }
+  }
+}
+
+bool StringAnalyzer::analyze_invoke(const StringAnalyzerState* state,
+                                    const IRInstruction* insn,
                                     ConstantEnvironment* env) {
   DexMethod* method =
       resolve_method(insn->get_method(), opcode_to_search(insn));
@@ -1013,7 +1045,9 @@ bool StringAnalyzer::analyze_invoke(const IRInstruction* insn,
     return nullptr;
   };
 
-  if (method == method::java_lang_String_equals()) {
+  if (method == method::java_lang_String_equals() ||
+      (state != nullptr && state->string_equality_methods.find(method) !=
+                               state->string_equality_methods.end())) {
     always_assert(insn->srcs_size() == 2);
     if (const auto* arg0 = maybe_string(0)) {
       if (const auto* arg1 = maybe_string(1)) {
