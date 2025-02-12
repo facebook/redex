@@ -212,11 +212,14 @@ void add_param_annotations(DexMethod* m,
 
 // Run usedefs to see if the source of the annotated value is a parameter
 // If it is, return the index the parameter. If not, return -1
-int find_and_patch_parameter(DexMethod* m,
-                             IRInstruction* insn,
-                             src_index_t arg_index,
-                             DexAnnotationSet* anno_set,
-                             live_range::UseDefChains* ud_chains) {
+int find_and_patch_parameter(
+    DexMethod* m,
+    IRInstruction* insn,
+    src_index_t arg_index,
+    DexAnnotationSet* anno_set,
+    live_range::UseDefChains* ud_chains,
+    std::vector<std::pair<src_index_t, DexAnnotationSet&>>*
+        missing_param_annos = nullptr) {
   // Patch missing parameter annotations from accessed fields
   live_range::Use use_of_id{insn, arg_index};
   auto udchains_it = ud_chains->find(use_of_id);
@@ -233,7 +236,9 @@ int find_and_patch_parameter(DexMethod* m,
         if (!is_static(m)) {
           param_index -= 1;
         }
-        add_param_annotations(m, anno_set, param_index);
+        if (!missing_param_annos) {
+          add_param_annotations(m, anno_set, param_index);
+        }
         return param_index;
       }
       param_index += 1;
@@ -391,7 +396,31 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
       patch_enclosed_method(cls);
       patch_ctor_params_from_synth_cls_fields(cls);
     }
+    populate_chained_getters(cls);
   });
+  patch_chained_getters();
+}
+
+void TypedefAnnoPatcher::populate_chained_getters(DexClass* cls) {
+  auto class_name = cls->get_deobfuscated_name_or_empty_copy();
+  auto class_name_prefix = class_name.substr(0, class_name.find('$'));
+  if (m_patched_returns.count(class_name_prefix)) {
+    m_chained_getters.insert(cls);
+  }
+}
+
+void TypedefAnnoPatcher::patch_chained_getters() {
+  std::vector<DexClass*> sorted_candidates;
+  for (auto* cls : m_chained_getters) {
+    sorted_candidates.push_back(cls);
+  }
+  std::sort(sorted_candidates.begin(), sorted_candidates.end(),
+            compare_dexclasses);
+  for (auto* cls : sorted_candidates) {
+    for (auto m : cls->get_all_methods()) {
+      patch_parameters_and_returns(m);
+    }
+  }
 }
 
 void TypedefAnnoPatcher::patch_ctor_params_from_synth_cls_fields(
@@ -642,7 +671,8 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
   for (cfg::Block* b : cfg.blocks()) {
     for (auto& mie : InstructionIterable(b)) {
       auto* insn = mie.insn;
-      if (!opcode::is_an_iput(insn->opcode())) {
+      if (insn->opcode() != OPCODE_IPUT &&
+          insn->opcode() != OPCODE_IPUT_OBJECT) {
         continue;
       }
       DexField* field = insn->get_field()->as_def();
@@ -734,6 +764,11 @@ void TypedefAnnoPatcher::patch_parameters_and_returns(
     return;
   }
 
+  if (has_typedef_annos(m->get_param_anno(), m_typedef_annos) ||
+      type_inference::get_typedef_anno_from_member(m, m_typedef_annos)) {
+    return;
+  }
+
   always_assert_log(code->editable_cfg_built(), "%s has no cfg built", SHOW(m));
   auto& cfg = code->cfg();
   type_inference::TypeInference inference(cfg, false, m_typedef_annos,
@@ -774,5 +809,10 @@ void TypedefAnnoPatcher::patch_parameters_and_returns(
     anno_set.add_annotation(std::make_unique<DexAnnotation>(
         DexType::make_type(anno.get()->get_name()), DAV_RUNTIME));
     add_annotations(m, &anno_set);
+    auto class_name = type_class(m->get_class())->str();
+    auto class_name_prefix = class_name.substr(0, class_name.size() - 1);
+    if (!m_patched_returns.count(class_name_prefix)) {
+      m_patched_returns.insert(class_name_prefix);
+    }
   }
 }
