@@ -135,6 +135,9 @@ class Shrinker {
   get_immut_analyzer_state() {
     return &m_immut_analyzer_state;
   }
+  constant_propagation::StringAnalyzerState* get_string_analyzer_state() {
+    return &m_string_analyzer_state;
+  }
 
   constant_propagation::PackageNameState* get_package_name_state() {
     return &m_package_name_state;
