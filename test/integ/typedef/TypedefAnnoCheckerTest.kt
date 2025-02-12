@@ -355,4 +355,26 @@ public class TypedefAnnoCheckerKtTest {
       lmd()
     }
   }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////
+  ////////// enum ctor test //////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////
+  // The expected enum ctor signature is:
+  // $ShareType;.<init>:(Ljava/lang/String;ILcom/facebook/redextest/$Error;ZLjava/lang/String;)V
+  enum class ShareType(
+      val error: Error,
+      val isPackageName: Boolean = false,
+      @TestStringDef val externalShareOptionType: String? = null
+  ) {
+    HAA(error = Mismatch(), isPackageName = false, externalShareOptionType = TestStringDef.ONE),
+    HOO(error = Mismatch(), isPackageName = true, externalShareOptionType = TestStringDef.TWO),
+    YEA(error = Mismatch(), isPackageName = true, externalShareOptionType = TestStringDef.THREE),
+  }
+
+  fun testKotlinEnumCtor() {
+    val shareType = ShareType.HAA
+    if (shareType.externalShareOptionType != null) {
+      testLambdaCall(shareType.externalShareOptionType)
+    }
+  }
 }

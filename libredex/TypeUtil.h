@@ -287,6 +287,8 @@ inline bool can_access(const DexMethod* accessor, const DexClass* accessee) {
  */
 bool is_kotlin_lambda(const DexClass* cls);
 
+bool is_kotlin_class(DexClass* cls);
+
 /*
  * Return true if the cls is kotlin non capturing lambda.
  */
