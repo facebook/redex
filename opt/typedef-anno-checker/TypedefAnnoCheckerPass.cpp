@@ -314,15 +314,23 @@ void TypedefAnnoChecker::check_instruction(
           m_error += out.str();
           m_good = false;
         } else if (typedef_anno::is_not_str_nor_int(env, reg)) {
-          std::ostringstream out;
-          out << "TypedefAnnoCheckerPass: the annotation " << show(annotation)
-              << "\n annotates a parameter with an incompatible type "
-              << show(type) << "\n or a non-constant parameter in method "
-              << show(m) << "\n while trying to invoke the method "
-              << show(callee) << ".\n failed instruction: " << show(insn)
-              << "\n\n";
-          m_error += out.str();
-          m_good = false;
+          auto* cls = type_class(callee->get_class());
+          if (method::is_constructor(callee) && is_enum(cls) &&
+              type::is_kotlin_class(cls)) {
+            // Kotlin enums ctors param annotations are off by two because of
+            // the artificially injected two params at the beginning.
+            m_good = true;
+          } else {
+            std::ostringstream out;
+            out << "TypedefAnnoCheckerPass: the annotation " << show(annotation)
+                << "\n annotates a parameter with an incompatible type "
+                << show(type) << "\n or a non-constant parameter in method "
+                << show(m) << "\n while trying to invoke the method "
+                << show(callee) << ".\n failed instruction: " << show(insn)
+                << "\n\n";
+            m_error += out.str();
+            m_good = false;
+          }
         } else if (!anno_type) {
           // TypeInference didn't infer anything
           bool good = check_typedef_value(m, annotation, ud_chains, insn,
@@ -483,7 +491,7 @@ bool TypedefAnnoChecker::check_typedef_value(
         // nullness.
         break;
       }
-      if (int_value_set->count(const_value) == 0) {
+      if (int_value_set && int_value_set->count(const_value) == 0) {
         // when passing an integer to a default method, the value will be 0 if
         // the default method will the default value. The const 0 is not
         // annotated and might not be in the IntDef. Since the checker will

@@ -1939,3 +1939,34 @@ TEST_F(TypedefAnnoCheckerTest, TestFunInterfaceSyntheticFields) {
   auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker.complete());
 }
+
+TEST_F(TypedefAnnoCheckerTest, TestKotlinEnumCtorValid) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+
+  auto* clinit = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerKtTest$ShareType;.<clinit>:()V")
+                     ->as_def();
+
+  auto method_override_graph = mog::build_graph(scope);
+
+  // set the deobfuscated name manually since it doesn't get set by default in
+  // integ tests
+
+  DexClass* enum_class = type_class(DexType::make_type(
+      "Lcom/facebook/redextest/TypedefAnnoCheckerKtTest$ShareType;"));
+  enum_class->set_deobfuscated_name(enum_class->get_name()->c_str());
+
+  run_patcher(scope, *method_override_graph);
+
+  auto checker = run_checker(scope, clinit, *method_override_graph);
+  EXPECT_TRUE(checker.complete());
+
+  auto* method = DexMethod::get_method(
+                     "Lcom/facebook/redextest/"
+                     "TypedefAnnoCheckerKtTest;.testKotlinEnumCtor:()V")
+                     ->as_def();
+  auto checker2 = run_checker(scope, method, *method_override_graph);
+  EXPECT_TRUE(checker2.complete());
+}

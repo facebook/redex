@@ -520,6 +520,14 @@ bool is_kotlin_lambda(const DexClass* cls) {
   return false;
 }
 
+bool is_kotlin_class(DexClass* cls) {
+  auto src_string = cls->get_source_file();
+  if (src_string && boost::algorithm::ends_with(src_string->str(), ".kt")) {
+    return true;
+  }
+  return false;
+}
+
 bool is_kotlin_non_capturing_lambda(const DexClass* cls) {
   if (!is_kotlin_lambda(cls)) {
     return false;

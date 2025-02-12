@@ -71,6 +71,8 @@ class TypedefAnnoPatcher {
   void patch_ctor_params_from_synth_cls_fields(DexClass* cls,
                                                PatcherStats& class_stats);
 
+  void fix_kt_enum_ctor_param(const DexClass* cls, PatcherStats& class_stats);
+
   void populate_chained_getters(DexClass* cls);
   void patch_chained_getters(PatcherStats& class_stats);
 

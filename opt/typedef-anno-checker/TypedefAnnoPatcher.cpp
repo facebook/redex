@@ -183,6 +183,8 @@ bool add_annotations(DexMember* member,
       existing_annos->combine_with(*anno_set);
       if (existing_annos->get_annotations().size() != anno_size) {
         class_stats.num_patched_fields_and_methods += 1;
+        TRACE(TAC, 3, "[patcher] patched member %s w/ %s", SHOW(member),
+              SHOW(anno_set));
       }
     } else {
       DexAccessFlags access = def_member->get_access();
@@ -192,16 +194,19 @@ bool add_annotations(DexMember* member,
       always_assert(res);
       def_member->set_access(access);
       class_stats.num_patched_fields_and_methods += 1;
+      TRACE(TAC, 3, "[patcher] patched member %s w/ %s", SHOW(member),
+            SHOW(anno_set));
     }
     return true;
   }
   return false;
 }
 
-void add_param_annotations(DexMethod* m,
+bool add_param_annotations(DexMethod* m,
                            DexAnnotationSet* anno_set,
                            int param,
                            PatcherStats& class_stats) {
+  bool added = false;
   if (m->get_param_anno()) {
     if (m->get_param_anno()->count(param) == 1) {
       std::unique_ptr<DexAnnotationSet>& param_anno_set =
@@ -211,8 +216,9 @@ void add_param_annotations(DexMethod* m,
         param_anno_set->combine_with(*anno_set);
         if (param_anno_set->get_annotations().size() != anno_size) {
           class_stats.num_patched_parameters += 1;
+          added = true;
         }
-        return;
+        return added;
       }
     }
   }
@@ -221,6 +227,7 @@ void add_param_annotations(DexMethod* m,
   m->attach_param_annotation_set(param,
                                  std::make_unique<DexAnnotationSet>(*anno_set));
   m->set_access(access);
+  return true;
 }
 
 // Run usedefs to see if the source of the annotated value is a parameter
@@ -338,6 +345,45 @@ void patch_setter_method(type_inference::TypeInference& inference,
 
 } // namespace
 
+void TypedefAnnoPatcher::fix_kt_enum_ctor_param(const DexClass* cls,
+                                                PatcherStats& class_stats) {
+  const auto& ctors = cls->get_ctors();
+  for (auto* ctor : ctors) {
+    if (is_synthetic(ctor)) {
+      continue;
+    }
+
+    auto param_annos = ctor->get_param_anno();
+    if (!param_annos) {
+      continue;
+    }
+    const DexTypeList* args = ctor->get_proto()->get_args();
+    for (const auto& panno : *param_annos) {
+      auto annotation = type_inference::get_typedef_annotation(
+          panno.second->get_annotations(), m_typedef_annos);
+      if (annotation == boost::none) {
+        continue;
+      }
+      size_t patch_idx = panno.first + 2;
+      if (patch_idx >= args->size()) {
+        continue;
+      }
+      if (!type::is_int(args->at(patch_idx)) &&
+          args->at(patch_idx) != type::java_lang_String()) {
+        continue;
+      }
+      DexAnnotationSet anno_set = DexAnnotationSet();
+      anno_set.add_annotation(std::make_unique<DexAnnotation>(
+          DexType::make_type(annotation.get()->get_name()), DAV_RUNTIME));
+      if (add_param_annotations(ctor, &anno_set, patch_idx, class_stats)) {
+        TRACE(TAC, 2,
+              "[patcher] Fixed Kotlin enum ctor param w/ %s at %ld on %s",
+              SHOW(panno.second), patch_idx, SHOW(ctor));
+      }
+    }
+  }
+}
+
 // https://kotlinlang.org/docs/fun-interfaces.html#sam-conversions
 // sam conversions appear in Kotlin and provide a more concise way to override
 // methods. This method handles sam conversiona and all synthetic methods that
@@ -385,6 +431,9 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
   m_patcher_stats =
       walk::parallel::classes<PatcherStats>(scope, [this](DexClass* cls) {
         auto class_stats = PatcherStats();
+        if (is_enum(cls) && type::is_kotlin_class(cls)) {
+          fix_kt_enum_ctor_param(cls, class_stats);
+        }
         if (is_synthesized_lambda_class(cls) || is_fun_interface_class(cls)) {
           std::vector<const DexField*> patched_fields;
           for (auto m : cls->get_all_methods()) {
@@ -635,8 +684,8 @@ void TypedefAnnoPatcher::patch_lambdas(
         }
         // If the static method is synthetic, it might still expect annotated
         // parameters. Find any missing parameter annotations and add them to
-        // the map of src index to annotation, but don't patch the static method
-        // since a different visit of that method will patch it
+        // the map of src index to annotation, but don't patch the static
+        // method since a different visit of that method will patch it
         std::vector<std::pair<src_index_t, DexAnnotationSet&>>
             missing_param_annos;
         patch_parameters_and_returns(static_method, class_stats,
