@@ -95,16 +95,17 @@ bool is_model_gen(const DexMethod* m) {
   return false;
 }
 
-bool is_composer_generated(const DexMethod* m) {
+bool is_generated(const DexMethod* m) {
   DexType* type = m->get_class();
   DexClass* cls = type_class(type);
   if (!cls->get_anno_set()) {
     return false;
   }
-  DexAnnotation* anno = get_annotation(
-      cls, DexType::make_type(
-               "Lcom/facebook/xapp/messaging/composer/annotation/Generated;"));
-  if (anno) {
+  std::unordered_set<DexType*> generated_annos = {
+      DexType::make_type(
+          "Lcom/facebook/xapp/messaging/composer/annotation/Generated;"),
+      DexType::make_type("Lcom/facebook/litho/annotations/Generated;")};
+  if (has_any_annotation(cls, generated_annos)) {
     return true;
   }
   return false;
@@ -207,7 +208,7 @@ void TypedefAnnoChecker::run(DexMethod* m) {
     return;
   }
 
-  if (is_value_of_opt(m) || is_delegate(m)) {
+  if (is_value_of_opt(m) || is_delegate(m) || is_generated(m)) {
     return;
   }
 
@@ -469,7 +470,7 @@ bool TypedefAnnoChecker::check_typedef_value(
     switch (def->opcode()) {
     case OPCODE_CONST_STRING: {
       auto const const_value = def->get_string();
-      if (const_value->str().empty() && is_composer_generated(m)) {
+      if (const_value->str().empty() && is_generated(m)) {
         break;
       }
       if (str_value_set->count(const_value) == 0) {
