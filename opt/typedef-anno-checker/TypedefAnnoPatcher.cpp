@@ -174,9 +174,11 @@ DexMethodRef* get_enclosing_method(DexClass* cls) {
 template <typename DexMember>
 bool add_annotations(DexMember* member,
                      DexAnnotationSet* anno_set,
+                     std::mutex& anno_patching_mutex,
                      PatcherStats& class_stats) {
   if (member && member->is_def()) {
     auto def_member = member->as_def();
+    std::lock_guard<std::mutex> lock(anno_patching_mutex);
     auto existing_annos = def_member->get_anno_set();
     if (existing_annos) {
       size_t anno_size = existing_annos->get_annotations().size();
@@ -405,7 +407,7 @@ bool TypedefAnnoPatcher::patch_synth_methods_overriding_annotated_methods(
       DexAnnotationSet anno_set = DexAnnotationSet();
       anno_set.add_annotation(std::make_unique<DexAnnotation>(
           DexType::make_type(return_anno.get()->get_name()), DAV_RUNTIME));
-      add_annotations(m, &anno_set, class_stats);
+      add_annotations(m, &anno_set, m_anno_patching_mutex, class_stats);
     }
 
     if (callee->get_param_anno() == nullptr) {
@@ -575,6 +577,7 @@ void patch_synthetic_field_from_local_var_lambda(
     const src_index_t src,
     DexAnnotationSet* anno_set,
     std::vector<const DexField*>* patched_fields,
+    std::mutex& anno_patching_mutex,
     PatcherStats& class_stats) {
   live_range::Use use_of_id{insn, src};
   auto udchains_it = ud_chains.find(use_of_id);
@@ -614,11 +617,12 @@ void patch_synthetic_field_from_local_var_lambda(
           continue;
         }
         patched_fields->push_back(original_field);
-        add_annotations(original_field, anno_set, class_stats);
+        add_annotations(original_field, anno_set, anno_patching_mutex,
+                        class_stats);
       }
     } else {
       patched_fields->push_back(field);
-      add_annotations(field, anno_set, class_stats);
+      add_annotations(field, anno_set, anno_patching_mutex, class_stats);
     }
   }
 }
@@ -633,6 +637,7 @@ void annotate_local_var_field_from_callee(
     const live_range::UseDefChains& ud_chains,
     const type_inference::TypeInference& inference,
     std::vector<const DexField*>* patched_fields,
+    std::mutex& anno_patching_mutex,
     PatcherStats& class_stats) {
   if (!callee) {
     return;
@@ -649,7 +654,7 @@ void annotate_local_var_field_from_callee(
           DexType::make_type(annotation.get()->get_name()), DAV_RUNTIME));
       patch_synthetic_field_from_local_var_lambda(
           ud_chains, insn, param_anno.first + 1, &anno_set, patched_fields,
-          class_stats);
+          anno_patching_mutex, class_stats);
     }
   }
 }
@@ -694,7 +699,7 @@ void TypedefAnnoPatcher::patch_lambdas(
         for (auto& pair : missing_param_annos) {
           patch_synthetic_field_from_local_var_lambda(
               ud_chains, insn, pair.first, &pair.second, patched_fields,
-              class_stats);
+              m_anno_patching_mutex, class_stats);
         }
         // If the static method has parameter annotations, patch the synthetic
         // fields as expected
@@ -705,7 +710,7 @@ void TypedefAnnoPatcher::patch_lambdas(
             if (annotation != boost::none) {
               patch_synthetic_field_from_local_var_lambda(
                   ud_chains, insn, param_anno.first, param_anno.second.get(),
-                  patched_fields, class_stats);
+                  patched_fields, m_anno_patching_mutex, class_stats);
             }
           }
         }
@@ -715,7 +720,8 @@ void TypedefAnnoPatcher::patch_lambdas(
             mog::get_overriding_methods(m_method_override_graph, callee_def);
         for (auto callee : callees) {
           annotate_local_var_field_from_callee(
-              callee, insn, ud_chains, inference, patched_fields, class_stats);
+              callee, insn, ud_chains, inference, patched_fields,
+              m_anno_patching_mutex, class_stats);
         }
       } else if (opcode::is_an_invoke(insn->opcode())) {
         auto* callee_def = resolve_method(method, insn);
@@ -724,7 +730,8 @@ void TypedefAnnoPatcher::patch_lambdas(
         callees.push_back(callee_def);
         for (auto callee : callees) {
           annotate_local_var_field_from_callee(
-              callee, insn, ud_chains, inference, patched_fields, class_stats);
+              callee, insn, ud_chains, inference, patched_fields,
+              m_anno_patching_mutex, class_stats);
         }
       }
     }
@@ -771,7 +778,7 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
         DexAnnotationSet anno_set = DexAnnotationSet();
         anno_set.add_annotation(std::make_unique<DexAnnotation>(
             DexType::make_type(annotation.get()->get_name()), DAV_RUNTIME));
-        add_annotations(field, &anno_set, class_stats);
+        add_annotations(field, &anno_set, m_anno_patching_mutex, class_stats);
         auto field_name = field->get_simple_deobfuscated_name();
         field_name.at(0) = std::toupper(field_name.at(0));
         const auto int_or_string =
@@ -823,7 +830,7 @@ void TypedefAnnoPatcher::patch_enclosed_method(DexClass* cls,
       a_set.combine_with(*field->get_anno_set());
       DexField* dex_field = field_ref->as_def();
       if (dex_field) {
-        add_annotations(dex_field, &a_set, class_stats);
+        add_annotations(dex_field, &a_set, m_anno_patching_mutex, class_stats);
       }
     }
   }
@@ -887,7 +894,7 @@ void TypedefAnnoPatcher::patch_parameters_and_returns(
     DexAnnotationSet anno_set = DexAnnotationSet();
     anno_set.add_annotation(std::make_unique<DexAnnotation>(
         DexType::make_type(anno.get()->get_name()), DAV_RUNTIME));
-    add_annotations(m, &anno_set, class_stats);
+    add_annotations(m, &anno_set, m_anno_patching_mutex, class_stats);
     auto class_name = type_class(m->get_class())->str();
     auto class_name_prefix = class_name.substr(0, class_name.size() - 1);
     if (!m_patched_returns.count(class_name_prefix)) {

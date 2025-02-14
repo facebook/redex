@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <mutex>
+
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
 #include "LiveRange.h"
@@ -86,4 +88,6 @@ class TypedefAnnoPatcher {
   PatcherStats m_patcher_stats;
   PatcherStats m_chained_patcher_stats;
   PatcherStats m_chained_getter_patcher_stats;
+
+  std::mutex m_anno_patching_mutex;
 };
