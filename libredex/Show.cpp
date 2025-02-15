@@ -1516,11 +1516,14 @@ std::ostream& operator<<(std::ostream& o, const DexCallSite& cs) {
   return o;
 }
 
-std::string show(const IRList* ir) {
+std::string show(const IRList* ir, bool code_only) {
   std::string ret;
-  for (auto const& mei : *ir) {
-    ret += show(mei);
-    ret += "\n";
+  for (auto const& mie : *ir) {
+    if (!code_only || (code_only && mie.type != MFLOW_POSITION &&
+                       mie.type != MFLOW_SOURCE_BLOCK)) {
+      ret += show(mie);
+      ret += "\n";
+    }
   }
   return ret;
 }
@@ -1536,14 +1539,14 @@ struct NoneSpecial {
 
 } // namespace
 
-std::string show(const cfg::Block* block) {
+std::string show(const cfg::Block* block, bool code_only) {
   NoneSpecial nothing{};
-  return show(block, nothing);
+  return show(block, nothing, code_only);
 }
 
-std::string show(const cfg::ControlFlowGraph& cfg) {
+std::string show(const cfg::ControlFlowGraph& cfg, bool code_only) {
   NoneSpecial nothing{};
-  return show(cfg, nothing);
+  return show(cfg, nothing, code_only);
 }
 
 std::string show(const MethodCreator* mc) {
@@ -1594,7 +1597,10 @@ std::string show(DexIdx* p) {
   return ss.str();
 }
 
-std::string show(const IRCode* mt) { return show(mt->m_ir_list); }
+std::string show(const IRCode* mt, bool code_only) {
+  return mt->cfg_built() ? show(mt->cfg(), code_only)
+                         : show(mt->m_ir_list, code_only);
+}
 
 std::string show(const ir_list::InstructionIterable& it) {
   std::ostringstream ss;

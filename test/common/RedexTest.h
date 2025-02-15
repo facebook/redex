@@ -30,6 +30,7 @@
 #include "SanitizersConfig.h"
 #endif
 #include "RedexTestUtils.h"
+#include "Show.h"
 
 inline std::string get_env(const char* name) {
   const char* env_file = std::getenv(name);
