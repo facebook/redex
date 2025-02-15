@@ -676,7 +676,8 @@ bool TypedefAnnoChecker::check_typedef_value(
     }
     default: {
       std::ostringstream out;
-      out << "TypedefAnnoCheckerPass: the method " << show(m)
+      out << "TypedefAnnoCheckerPass: the method " << show(m) << "\n"
+          << show(m->get_code()->cfg(), true) << "\n"
           << "\n does not guarantee value safety for the value with typedef "
              "annotation "
           << show(annotation)

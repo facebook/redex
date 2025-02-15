@@ -471,13 +471,16 @@ TEST_F(TypedefAnnoCheckerTest, TestNonConstInt) {
 
   auto checker = run_checker(scope, method, *method_override_graph);
   EXPECT_FALSE(checker.complete());
-  EXPECT_EQ(
-      checker.error(),
-      "TypedefAnnoCheckerPass: the method Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testNonConstInt:(I)I\n\
- does not guarantee value safety for the value with typedef annotation  Linteg/TestIntDef; .\n\
- Check that this value does not change within the method\n\
- failed instruction: ADD_INT_LIT v0, v0, 2\n\
- Error caught when returning the faulty value\n\n");
+  auto err_str = checker.error();
+  EXPECT_TRUE(err_str.find("TypedefAnnoCheckerPass: the method "
+                           "Lcom/facebook/redextest/"
+                           "TypedefAnnoCheckerTest;.testNonConstInt:(I)I") !=
+              std::string::npos);
+  EXPECT_TRUE(err_str.find("does not guarantee value safety for the value with "
+                           "typedef annotation  Linteg/TestIntDef;") !=
+              std::string::npos);
+  EXPECT_TRUE(err_str.find("failed instruction: ADD_INT_LIT v0, v0, 2") !=
+              std::string::npos);
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestInvalidType) {
