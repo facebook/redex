@@ -336,7 +336,7 @@ class IRCode {
     m_ir_list->chain_consecutive_source_blocks();
   }
 
-  friend std::string show(const IRCode*);
+  friend std::string show(const IRCode*, bool code_only);
 
   friend class MethodSplicer;
 };

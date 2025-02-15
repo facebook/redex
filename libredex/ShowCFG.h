@@ -11,18 +11,25 @@
 #include "Show.h"
 
 template <typename Special>
-std::string show(const cfg::Block* block, Special& special) {
+std::string show(const cfg::Block* block,
+                 Special& special,
+                 bool code_only = false) {
   std::ostringstream ss;
   for (const auto& mie : *block) {
     special.mie_before(ss, mie);
-    ss << "   " << show(mie) << "\n";
+    if (!code_only || (code_only && mie.type != MFLOW_POSITION &&
+                       mie.type != MFLOW_SOURCE_BLOCK)) {
+      ss << "   " << show(mie) << "\n";
+    }
     special.mie_after(ss, mie);
   }
   return ss.str();
 }
 
 template <typename Special>
-std::string show(const cfg::ControlFlowGraph& cfg, Special& special) {
+std::string show(const cfg::ControlFlowGraph& cfg,
+                 Special& special,
+                 bool code_only = false) {
   const auto& blocks = cfg.blocks();
   std::ostringstream ss;
   ss << "CFG:\n";
@@ -40,7 +47,7 @@ std::string show(const cfg::ControlFlowGraph& cfg, Special& special) {
     }
     ss << "\n";
 
-    ss << show(b, special);
+    ss << show(b, special, code_only);
 
     ss << "   succs:";
     for (auto& s : b->succs()) {

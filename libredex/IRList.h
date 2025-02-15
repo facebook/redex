@@ -621,10 +621,10 @@ class IRList {
   void chain_consecutive_source_blocks(
       ConsecutiveStyle style = CONSECUTIVE_STYLE);
 
-  friend std::string show(const IRCode*);
+  friend std::string show(const IRCode*, bool code_only);
 };
 
-std::string show(const IRList*);
+std::string show(const IRList*, bool code_only = false);
 
 namespace ir_list {
 
