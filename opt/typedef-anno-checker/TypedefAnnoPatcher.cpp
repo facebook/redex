@@ -468,7 +468,7 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
       walk::parallel::classes<PatcherStats>(scope, [&](DexClass* cls) {
         auto class_stats = PatcherStats();
         if (klass::maybe_anonymous_class(cls) && get_enclosing_method(cls)) {
-          patch_enclosed_method(cls, class_stats);
+          patch_enclosing_lambda_fields(cls, class_stats);
           patch_ctor_params_from_synth_cls_fields(cls, class_stats);
         }
         populate_chained_getters(cls);
@@ -801,36 +801,47 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
   }
 }
 
-void TypedefAnnoPatcher::patch_enclosed_method(DexClass* cls,
-                                               PatcherStats& class_stats) {
-  auto cls_name = cls->get_deobfuscated_name_or_empty_copy();
-  auto first_dollar = cls_name.find('$');
+void TypedefAnnoPatcher::patch_enclosing_lambda_fields(
+    const DexClass* anon_cls, PatcherStats& class_stats) {
+  auto anon_cls_name = anon_cls->get_deobfuscated_name_or_empty_copy();
+  auto first_dollar = anon_cls_name.find('$');
   always_assert_log(first_dollar != std::string::npos,
                     "The enclosed method class %s should have a $ in the name",
-                    SHOW(cls));
-  auto original_cls_name = cls_name.substr(0, first_dollar) + ";";
-  DexClass* original_class =
-      type_class(DexType::make_type(DexString::make_string(original_cls_name)));
-  if (!original_class) {
+                    SHOW(anon_cls));
+  auto enclosing_cls_name = anon_cls_name.substr(0, first_dollar) + ";";
+  DexClass* enclosing_class = type_class(
+      DexType::make_type(DexString::make_string(enclosing_cls_name)));
+  if (!enclosing_class) {
     return;
   }
 
-  auto second_dollar = cls_name.find('$', first_dollar + 1);
-  auto fields = m_lambda_anno_map.get(cls_name.substr(0, second_dollar));
-  if (!fields) {
+  auto second_dollar = anon_cls_name.find('$', first_dollar + 1);
+  auto enclosing_prefix = anon_cls_name.substr(0, second_dollar);
+  auto patched_fields = m_lambda_anno_map.get(enclosing_prefix);
+  if (!patched_fields) {
     return;
   }
 
-  for (auto field : *fields) {
-    auto field_name = cls_name + "." + field->get_simple_deobfuscated_name() +
-                      ":" + field->get_type()->str_copy();
-    DexFieldRef* field_ref = DexField::get_field(field_name);
-    if (field_ref && field->get_deobfuscated_name() != field_name) {
+  // Patch synthesized fields of the enclosing anonymous/lambda class. The field
+  // being patched is on a class enclosing an inner lambda class with it's field
+  // already patched in an earlier step.
+  for (const auto patched_field : *patched_fields) {
+    auto enclosing_field_name = anon_cls_name + "." +
+                                patched_field->get_simple_deobfuscated_name() +
+                                ":" + patched_field->get_type()->str_copy();
+    DexFieldRef* enclosing_field_ref =
+        DexField::get_field(enclosing_field_name);
+    if (enclosing_field_ref &&
+        patched_field->get_deobfuscated_name() != enclosing_field_name) {
+      TRACE(TAC, 2,
+            "[patcher] patching enclosing field %s from patched field %s",
+            SHOW(enclosing_field_name), SHOW(patched_field));
       DexAnnotationSet a_set = DexAnnotationSet();
-      a_set.combine_with(*field->get_anno_set());
-      DexField* dex_field = field_ref->as_def();
-      if (dex_field) {
-        add_annotations(dex_field, &a_set, m_anno_patching_mutex, class_stats);
+      a_set.combine_with(*patched_field->get_anno_set());
+      DexField* enclosing_field = enclosing_field_ref->as_def();
+      if (enclosing_field) {
+        add_annotations(enclosing_field, &a_set, m_anno_patching_mutex,
+                        class_stats);
       }
     }
   }

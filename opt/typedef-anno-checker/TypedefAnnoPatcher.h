@@ -61,7 +61,8 @@ class TypedefAnnoPatcher {
       std::vector<std::pair<src_index_t, DexAnnotationSet&>>*
           missing_param_annos = nullptr);
 
-  void patch_enclosed_method(DexClass* cls, PatcherStats& class_stats);
+  void patch_enclosing_lambda_fields(const DexClass* cls,
+                                     PatcherStats& class_stats);
 
   void patch_synth_cls_fields_from_ctor_param(DexMethod* ctor,
                                               PatcherStats& class_stats);
