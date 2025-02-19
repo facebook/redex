@@ -45,11 +45,7 @@ class TypedefAnnoPatcher {
 
   void run(const Scope& scope);
 
-  PatcherStats get_patcher_stats() { return m_patcher_stats; }
-  PatcherStats get_chained_patcher_stats() { return m_chained_patcher_stats; }
-  PatcherStats get_chained_getter_patcher_stats() {
-    return m_chained_getter_patcher_stats;
-  }
+  void print_stats(PassManager& mgr);
 
  private:
   bool patch_synth_methods_overriding_annotated_methods(

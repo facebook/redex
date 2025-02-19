@@ -913,3 +913,31 @@ void TypedefAnnoPatcher::patch_parameters_and_returns(
     }
   }
 }
+
+void TypedefAnnoPatcher::print_stats(PassManager& mgr) {
+  mgr.set_metric("patched fields and methods",
+                 m_patcher_stats.num_patched_fields_and_methods);
+  TRACE(TAC, 1, "[patcher] patched fields and methods %zu",
+        m_patcher_stats.num_patched_fields_and_methods);
+  mgr.set_metric("patched parameters", m_patcher_stats.num_patched_parameters);
+  TRACE(TAC, 1, "[patcher] patched parameters %zu",
+        m_patcher_stats.num_patched_parameters);
+
+  mgr.set_metric("patched chained fields and methods",
+                 m_chained_getter_patcher_stats.num_patched_fields_and_methods);
+  TRACE(TAC, 1, "[patcher] patched chained fields and methods %zu",
+        m_chained_getter_patcher_stats.num_patched_fields_and_methods);
+  mgr.set_metric("patched chained parameters",
+                 m_chained_getter_patcher_stats.num_patched_parameters);
+  TRACE(TAC, 1, "[patcher] patched chained parameters %zu",
+        m_chained_getter_patcher_stats.num_patched_parameters);
+
+  mgr.set_metric("patched chained getter fields and methods",
+                 m_chained_getter_patcher_stats.num_patched_fields_and_methods);
+  TRACE(TAC, 1, "[patcher] patched chained getter fields and methods %zu",
+        m_chained_getter_patcher_stats.num_patched_fields_and_methods);
+  mgr.set_metric("patched chained getter parameters",
+                 m_chained_getter_patcher_stats.num_patched_parameters);
+  TRACE(TAC, 1, "[patcher] patched chained getter parameters %zu",
+        m_chained_getter_patcher_stats.num_patched_parameters);
+}

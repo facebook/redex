@@ -708,38 +708,6 @@ void TypedefAnnoCheckerPass::run_pass(DexStoresVector& stores,
 
   patcher.run(scope);
 
-  mgr.set_metric("patched fields and methods",
-                 patcher.get_patcher_stats().num_patched_fields_and_methods);
-  TRACE(TAC, 1, "[patcher] patched fields and methods %zu",
-        patcher.get_patcher_stats().num_patched_fields_and_methods);
-  mgr.set_metric("patched parameters",
-                 patcher.get_patcher_stats().num_patched_parameters);
-  TRACE(TAC, 1, "[patcher] patched parameters %zu",
-        patcher.get_patcher_stats().num_patched_parameters);
-
-  mgr.set_metric(
-      "patched chained fields and methods",
-      patcher.get_chained_patcher_stats().num_patched_fields_and_methods);
-  TRACE(TAC, 1, "[patcher] patched chained fields and methods %zu",
-        patcher.get_chained_patcher_stats().num_patched_fields_and_methods);
-  mgr.set_metric("patched chained parameters",
-                 patcher.get_chained_patcher_stats().num_patched_parameters);
-  TRACE(TAC, 1, "[patcher] patched chained parameters %zu",
-        patcher.get_chained_patcher_stats().num_patched_parameters);
-
-  mgr.set_metric("patched chained getter fields and methods",
-                 patcher.get_chained_getter_patcher_stats()
-                     .num_patched_fields_and_methods);
-  TRACE(TAC, 1, "[patcher] patched chained getter fields and methods %zu",
-        patcher.get_chained_getter_patcher_stats()
-            .num_patched_fields_and_methods);
-  mgr.set_metric(
-      "patched chained getter parameters",
-      patcher.get_chained_getter_patcher_stats().num_patched_parameters);
-  TRACE(TAC, 1, "[patcher] patched chained getter parameters %zu",
-        patcher.get_chained_getter_patcher_stats().num_patched_parameters);
-  TRACE(TAC, 1, "Finish patching synth accessors");
-
   auto stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* m) {
     TypedefAnnoChecker checker = TypedefAnnoChecker(
         strdef_constants, intdef_constants, m_config, *method_override_graph);
