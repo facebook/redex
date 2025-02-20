@@ -450,7 +450,21 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
                   cls_name.find('$', cls_name.find('$') + 1);
             }
             auto class_prefix = cls_name.substr(0, common_class_name_end);
-            m_lambda_anno_map.emplace(class_prefix, patched_fields);
+            if (traceEnabled(TAC, 2)) {
+              std::ostringstream os;
+              for (auto f : patched_fields) {
+                os << f->get_name()->str() << " " << f << "|";
+              }
+              TRACE(TAC, 2, "[patcher] Adding lambda map %s of fields %zu %s",
+                    class_prefix.c_str(), patched_fields.size(),
+                    os.str().c_str());
+            }
+            m_lambda_anno_map.update(
+                class_prefix, [&patched_fields](auto, auto& fields, auto) {
+                  for (auto f : patched_fields) {
+                    fields.push_back(f);
+                  }
+                });
           }
         }
         for (auto m : cls->get_all_methods()) {
@@ -817,15 +831,18 @@ void TypedefAnnoPatcher::patch_enclosing_lambda_fields(
 
   auto second_dollar = anon_cls_name.find('$', first_dollar + 1);
   auto enclosing_prefix = anon_cls_name.substr(0, second_dollar);
-  auto patched_fields = m_lambda_anno_map.get(enclosing_prefix);
-  if (!patched_fields) {
+  auto it = m_lambda_anno_map.find(enclosing_prefix);
+  if (it == m_lambda_anno_map.end() || it->second.empty()) {
     return;
   }
+  auto patched_fields = it->second;
+  TRACE(TAC, 2, "[patcher] lookup lambda map %s of field %zu",
+        enclosing_prefix.c_str(), patched_fields.size());
 
   // Patch synthesized fields of the enclosing anonymous/lambda class. The field
   // being patched is on a class enclosing an inner lambda class with it's field
   // already patched in an earlier step.
-  for (const auto patched_field : *patched_fields) {
+  for (const auto patched_field : patched_fields) {
     auto enclosing_field_name = anon_cls_name + "." +
                                 patched_field->get_simple_deobfuscated_name() +
                                 ":" + patched_field->get_type()->str_copy();
@@ -940,4 +957,7 @@ void TypedefAnnoPatcher::print_stats(PassManager& mgr) {
                  m_chained_getter_patcher_stats.num_patched_parameters);
   TRACE(TAC, 1, "[patcher] patched chained getter parameters %zu",
         m_chained_getter_patcher_stats.num_patched_parameters);
+
+  mgr.set_metric("patched_returns", m_patched_returns.size());
+  TRACE(TAC, 1, "[patcher] patched returns %zu", m_patched_returns.size());
 }

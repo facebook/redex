@@ -77,8 +77,7 @@ class TypedefAnnoPatcher {
 
   std::unordered_set<DexType*> m_typedef_annos;
   const method_override_graph::Graph& m_method_override_graph;
-  InsertOnlyConcurrentMap<std::string, std::vector<const DexField*>>
-      m_lambda_anno_map;
+  ConcurrentMap<std::string, std::vector<const DexField*>> m_lambda_anno_map;
   InsertOnlyConcurrentSet<std::string_view> m_patched_returns;
   InsertOnlyConcurrentSet<DexClass*> m_chained_getters;
 
