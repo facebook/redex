@@ -443,14 +443,24 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
           }
           if (!patched_fields.empty()) {
             auto cls_name = cls->get_deobfuscated_name_or_empty_copy();
-            auto common_class_name_end = cls_name.find('$') + 1;
-            if (cls_name[common_class_name_end] < '0' ||
-                cls_name[common_class_name_end] > '9') {
-              common_class_name_end =
-                  cls_name.find('$', cls_name.find('$') + 1);
+            size_t after_first_dollar = cls_name.find('$') + 1;
+            size_t class_prefix_end;
+            if (isdigit(cls_name[after_first_dollar])) {
+              // Patched lambda class is directly under the top most class. No
+              // in-between chained lambda exists. We simply drop everything
+              // after the 1st dollar. e.g.,
+              // Lcom/xxx/yyy/zzz/TimelineCoverPhotoMenuBuilder$1
+              class_prefix_end = after_first_dollar - 1;
+            } else {
+              // Patched lambda class is nested under an enclosing function.
+              // There might be an enclosing chained lambda. We include whatever
+              // is before the 2nd dollar. e.g.,
+              // Lcom/xxx/yyy/zzz/TimelineCoverPhotoMenuBuilder$render
+              class_prefix_end = cls_name.find('$', cls_name.find('$') + 1);
             }
-            auto class_prefix = cls_name.substr(0, common_class_name_end);
-            if (traceEnabled(TAC, 2)) {
+            const auto class_prefix = cls_name.substr(0, class_prefix_end);
+            const auto trace_update = [&patched_fields](
+                                          const std::string& class_prefix) {
               std::ostringstream os;
               for (auto f : patched_fields) {
                 os << f->get_name()->str() << " " << f << "|";
@@ -458,6 +468,9 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
               TRACE(TAC, 2, "[patcher] Adding lambda map %s of fields %zu %s",
                     class_prefix.c_str(), patched_fields.size(),
                     os.str().c_str());
+            };
+            if (traceEnabled(TAC, 2)) {
+              trace_update(class_prefix);
             }
             m_lambda_anno_map.update(
                 class_prefix, [&patched_fields](auto, auto& fields, auto) {
@@ -830,6 +843,8 @@ void TypedefAnnoPatcher::patch_enclosing_lambda_fields(
   }
 
   auto second_dollar = anon_cls_name.find('$', first_dollar + 1);
+  // e.g.
+  // Lcom/xxx/yyy/xxx/InspirationDiscImpl$maybeShowDisclosure
   auto enclosing_prefix = anon_cls_name.substr(0, second_dollar);
   auto it = m_lambda_anno_map.find(enclosing_prefix);
   if (it == m_lambda_anno_map.end() || it->second.empty()) {
