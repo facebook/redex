@@ -710,14 +710,14 @@ void TypedefAnnoCheckerPass::run_pass(DexStoresVector& stores,
   patcher.print_stats(mgr);
   TRACE(TAC, 1, "Finished patcher run");
 
-  auto stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* m) {
+  auto stats = walk::parallel::methods<CheckerStats>(scope, [&](DexMethod* m) {
     TypedefAnnoChecker checker = TypedefAnnoChecker(
         strdef_constants, intdef_constants, m_config, *method_override_graph);
     checker.run(m);
     if (!checker.complete()) {
-      return Stats(checker.error());
+      return CheckerStats(checker.error());
     }
-    return Stats();
+    return CheckerStats();
   });
 
   if (stats.m_count > 0) {
