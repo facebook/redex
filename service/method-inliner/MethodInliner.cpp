@@ -30,6 +30,7 @@
 #include "ScopedCFG.h"
 #include "ScopedMetrics.h"
 #include "Shrinker.h"
+#include "SourceBlocks.h"
 #include "StlUtil.h"
 #include "Timer.h"
 #include "Walkers.h"
@@ -719,6 +720,24 @@ void gather_true_virtual_methods(
   }
 }
 
+// If a method's entry block is hot, consider this method is hot.
+bool is_hot(DexMethod* method) {
+  auto& cfg = method->get_code()->cfg();
+  return source_blocks::is_hot(cfg.entry_block());
+}
+
+// If a method's entry block may be hot, consider this method may be hot.
+bool maybe_hot(DexMethod* method) {
+  auto& cfg = method->get_code()->cfg();
+  return source_blocks::maybe_hot(cfg.entry_block());
+}
+
+// If a method's entry block is not cold, consider this method is not cold.
+bool is_not_cold(DexMethod* method) {
+  auto& cfg = method->get_code()->cfg();
+  return source_blocks::is_not_cold(cfg.entry_block());
+}
+
 // If a constructor cannot be inlined because it writes to final fields, then we
 // can "simply" remove the final modifier. We typically run the
 // AccessMarkingMarking pass multiple times, including after the final inliner,
@@ -731,6 +750,7 @@ void gather_true_virtual_methods(
 // inserting a write barrier pseudo instruction to lower at the end.
 void unfinalize_fields_if_beneficial_for_relaxed_init_inlining(
     const Scope& scope,
+    const inliner::UnfinalizePerfMode& unfinalize_perf_mode,
     InsertOnlyConcurrentMap<DexField*, std::vector<DexMethod*>>*
         unfinalized_fields) {
   walk::parallel::classes(scope, [&](DexClass* cls) {
@@ -754,7 +774,17 @@ void unfinalize_fields_if_beneficial_for_relaxed_init_inlining(
     }
     std::unordered_map<DexField*, std::vector<DexMethod*>>
         local_unfinalized_fields;
+    bool perf_sensitive = false;
     for (auto* init_method : cls->get_ctors()) {
+      if ((unfinalize_perf_mode == inliner::UnfinalizePerfMode::NOT_COLD &&
+           is_not_cold(init_method)) ||
+          (unfinalize_perf_mode == inliner::UnfinalizePerfMode::MAYBE_HOT &&
+           maybe_hot(init_method)) ||
+          (unfinalize_perf_mode == inliner::UnfinalizePerfMode::HOT &&
+           is_hot(init_method))) {
+        perf_sensitive = true;
+        break;
+      }
       std::unordered_set<DexField*> written_final_fields;
       if (!constructor_analysis::can_inline_init(
               init_method, /* finalizable_fields */ nullptr,
@@ -764,6 +794,14 @@ void unfinalize_fields_if_beneficial_for_relaxed_init_inlining(
           local_unfinalized_fields[field].push_back(init_method);
         }
       }
+    }
+    if (perf_sensitive) {
+      // If we turned on perf checking mode and any constructor meet the check,
+      // we need to give up unfinalizing the field, otherwise even not inlining
+      // the non-hot constructor, we would still need to add write barrier
+      // before return if there is another constructor being inlined and the
+      // field kept being unfinalized.
+      return;
     }
     for (auto&& [field, init_methods] : local_unfinalized_fields) {
       field->set_access(field->get_access() & ~ACC_FINAL);
@@ -872,7 +910,7 @@ void run_inliner(
   if (inliner_config.relaxed_init_inline &&
       inliner_config.unfinalize_relaxed_init_inline && min_sdk >= 21) {
     unfinalize_fields_if_beneficial_for_relaxed_init_inlining(
-        scope, &unfinalized_fields);
+        scope, inliner_config.unfinalize_perf_mode, &unfinalized_fields);
     mgr.set_metric("unfinalized_fields", unfinalized_fields.size());
     TRACE(INLINE, 3, "unfinalized %zu fields", unfinalized_fields.size());
     for (auto&& [_, init_methods] : unfinalized_fields) {

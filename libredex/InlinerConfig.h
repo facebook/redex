@@ -16,6 +16,13 @@ const size_t MAX_COST_FOR_CONSTANT_PROPAGATION = 5000;
 
 namespace inliner {
 
+enum UnfinalizePerfMode {
+  NONE = 0,
+  NOT_COLD = 1,
+  MAYBE_HOT = 2,
+  HOT = 3,
+};
+
 /**
  * The global inliner config.
  */
@@ -59,6 +66,9 @@ struct InlinerConfig {
   // max_cost_for_constant_propagation is amoungt of constant propagation
   // analysis redex compiler can tolerate when making decision to inline
   size_t max_cost_for_constant_propagation{MAX_COST_FOR_CONSTANT_PROPAGATION};
+
+  std::string unfinalize_perf_mode_str{"not-cold"};
+  UnfinalizePerfMode unfinalize_perf_mode{UnfinalizePerfMode::NOT_COLD};
 
   // We will populate the information to rstate of classes and methods.
   std::unordered_set<DexType*> no_inline_annos;
