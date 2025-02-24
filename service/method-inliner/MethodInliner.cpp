@@ -774,6 +774,19 @@ void unfinalize_fields_if_beneficial_for_relaxed_init_inlining(
   });
 }
 
+void insert_barrier_at_init_return(DexMethod* init) {
+  auto& cfg = init->get_code()->cfg();
+  auto return_blocks = cfg.return_blocks();
+  for (auto ret_block : return_blocks) {
+    auto last_insn_it = ret_block->get_last_insn();
+    always_assert(opcode::is_return_void(last_insn_it->insn->opcode()));
+    auto last_insn_cfg_it =
+        ret_block->to_cfg_instruction_iterator(last_insn_it);
+    ret_block->insert_before(last_insn_cfg_it,
+                             (new IRInstruction(IOPCODE_WRITE_BARRIER)));
+  }
+}
+
 } // namespace
 
 namespace inliner {
@@ -938,14 +951,29 @@ void run_inliner(
   if (!unfinalized_fields.empty()) {
     auto inlined_with_fence = inliner.get_inlined_with_fence();
     size_t refinalized_fields = 0;
+    std::unordered_set<DexMethod*> inits_inserted_barrier;
     for (auto&& [field, init_methods] : unfinalized_fields) {
       if (std::none_of(
               init_methods.begin(), init_methods.end(),
               [&](DexMethod* m) { return inlined_with_fence.count(m); })) {
         set_final(field);
         refinalized_fields++;
+      } else {
+        // We need to insert a write barrier for the constructors that has
+        // fields not refinalized, in case the constructor is not inlined at all
+        // callsites, or it's called reflectively. We are inserting write
+        // barrier for every constructors because can_inline_init can have early
+        // return before registering written_final_fields.
+        for (auto init_method : type_class(field->get_class())->get_ctors()) {
+          auto emplaced = inits_inserted_barrier.emplace(init_method).second;
+          if (!emplaced) {
+            continue;
+          }
+          insert_barrier_at_init_return(init_method);
+        }
       }
     }
+    mgr.set_metric("inits_inserted_barrier", inits_inserted_barrier.size());
     mgr.set_metric("refinalized_fields", refinalized_fields);
     TRACE(INLINE, 3, "refinalized %zu fields", refinalized_fields);
   }

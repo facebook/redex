@@ -24,6 +24,9 @@ TEST_F(PreVerify, InlineWithFinalField) {
   ASSERT_NE(nullptr, cls);
   auto m = find_vmethod_named(*cls, "testWithFinalField");
   ASSERT_NE(nullptr, m);
+  auto m_with_no_optimize =
+      find_vmethod_named(*cls, "testWithFinalFieldAndNoOptimize");
+  ASSERT_NE(nullptr, m_with_no_optimize);
 
   auto final_field_cls =
       find_class_named(classes, "Lcom/facebook/redexinline/WithFinalField;");
@@ -32,10 +35,16 @@ TEST_F(PreVerify, InlineWithFinalField) {
   ASSERT_NE(nullptr, f);
   ASSERT_TRUE(is_final(f));
 
-  ASSERT_NE(
-      nullptr,
-      find_invoke(
-          m, DOPCODE_INVOKE_DIRECT, "<init>", final_field_cls->get_type()));
+  ASSERT_NE(nullptr,
+            find_invoke(m,
+                        DOPCODE_INVOKE_DIRECT_RANGE,
+                        "<init>",
+                        final_field_cls->get_type()));
+  ASSERT_NE(nullptr,
+            find_invoke(m_with_no_optimize,
+                        DOPCODE_INVOKE_DIRECT_RANGE,
+                        "<init>",
+                        final_field_cls->get_type()));
 }
 
 TEST_F(PostVerify, InlineWithFinalField) {
@@ -44,6 +53,9 @@ TEST_F(PostVerify, InlineWithFinalField) {
   ASSERT_NE(nullptr, cls);
   auto m = find_vmethod_named(*cls, "testWithFinalField");
   ASSERT_NE(nullptr, m);
+  auto m_with_no_optimize =
+      find_vmethod_named(*cls, "testWithFinalFieldAndNoOptimize");
+  ASSERT_NE(nullptr, m);
 
   auto final_field_cls =
       find_class_named(classes, "Lcom/facebook/redexinline/WithFinalField;");
@@ -51,12 +63,22 @@ TEST_F(PostVerify, InlineWithFinalField) {
   auto f = find_field_named(*final_field_cls, "finalField");
   ASSERT_NE(nullptr, f);
   ASSERT_TRUE(is_final(f));
+  auto m_ctor = find_dmethod_named(*final_field_cls, "<init>");
+  ASSERT_NE(nullptr, m_ctor);
 
-  ASSERT_NE(
-      nullptr,
-      find_invoke(
-          m, DOPCODE_INVOKE_DIRECT, "<init>", final_field_cls->get_type()));
+  ASSERT_NE(nullptr,
+            find_invoke(m,
+                        DOPCODE_INVOKE_DIRECT_RANGE,
+                        "<init>",
+                        final_field_cls->get_type()));
+  ASSERT_NE(nullptr,
+            find_invoke(m_with_no_optimize,
+                        DOPCODE_INVOKE_DIRECT_RANGE,
+                        "<init>",
+                        final_field_cls->get_type()));
   ASSERT_EQ(nullptr, find_instruction(m, DOPCODE_SPUT));
+  ASSERT_EQ(nullptr, find_instruction(m_with_no_optimize, DOPCODE_SPUT));
+  ASSERT_EQ(nullptr, find_instruction(m_ctor, DOPCODE_SPUT));
 }
 
 /*

@@ -9,11 +9,13 @@ package com.facebook.redexinline;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.facebook.annotations.DoNotOptimize;
 import org.junit.Test;
 
 class WithFinalField {
   public final int finalField;
-  public WithFinalField(int finalField) {
+  public WithFinalField(
+      int finalField, int unused, int unused2, int unused3, int unused4) {
     this.finalField = finalField;
   }
 }
@@ -46,8 +48,15 @@ class WithFinalFieldTwoCtor {
 public class MethodInlineRelaxedInitTest {
   @Test
   public void testWithFinalField() {
-    WithFinalField a = new WithFinalField(5);
+    WithFinalField a = new WithFinalField(5, 1, 2, 3, 4);
     assertThat(a.finalField).isEqualTo(5);
+  }
+
+  @Test
+  @DoNotOptimize
+  public void testWithFinalFieldAndNoOptimize() {
+    WithFinalField a = new WithFinalField(51, 1, 2, 3, 4);
+    assertThat(a.finalField).isEqualTo(51);
   }
 
   @Test
