@@ -465,6 +465,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
     fprintf(stderr, "WARNING: No inliner config\n");
     return;
   }
+  std::string unfinalize_perf_mode_str;
   JsonWrapper jw(config);
   jw.get("delete_non_virtuals", true, inliner_config->delete_non_virtuals);
   jw.get("virtual", true, inliner_config->virtual_inline);
@@ -472,6 +473,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("relaxed_init_inline", false, inliner_config->relaxed_init_inline);
   jw.get("unfinalize_relaxed_init_inline", false,
          inliner_config->unfinalize_relaxed_init_inline);
+  jw.get("unfinalize_perf_mode", "not-cold", unfinalize_perf_mode_str);
   jw.get("strict_throwable_init_inline", false,
          inliner_config->strict_throwable_init_inline);
   jw.get("throws", false, inliner_config->throws_inline);
@@ -533,6 +535,21 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
               type_s.c_str());
     }
   }
+
+  const static std::unordered_map<std::string, inliner::UnfinalizePerfMode>
+      unfinalize_perf_mode_mapping = {
+          {"none", inliner::UnfinalizePerfMode::NONE},
+          {"not-cold", inliner::UnfinalizePerfMode::NOT_COLD},
+          {"maybe-hot", inliner::UnfinalizePerfMode::MAYBE_HOT},
+          {"hot", inliner::UnfinalizePerfMode::HOT}};
+  always_assert_log(
+      unfinalize_perf_mode_mapping.count(unfinalize_perf_mode_str) > 0,
+      "Unexpected unfinalize perf mode input provided %s",
+      unfinalize_perf_mode_str.c_str());
+  inliner_config->unfinalize_perf_mode =
+      unfinalize_perf_mode_mapping.at(unfinalize_perf_mode_str);
+  inliner_config->unfinalize_perf_mode_str =
+      std::move(unfinalize_perf_mode_str);
 }
 
 const inliner::InlinerConfig& ConfigFiles::get_inliner_config() {
