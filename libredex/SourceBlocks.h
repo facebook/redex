@@ -314,6 +314,33 @@ inline const SourceBlock* get_first_source_block(const cfg::Block* b) {
   return nullptr;
 }
 
+inline bool is_not_cold(cfg::Block* b) {
+  auto* sb = get_first_source_block(b);
+  if (sb == nullptr) {
+    // Conservatively assume that missing SBs mean no profiling data.
+    return true;
+  }
+  return sb->foreach_val_early([](const auto& v) { return v && v->val > 0; });
+}
+
+inline bool maybe_hot(cfg::Block* b) {
+  auto* sb = get_first_source_block(b);
+  if (sb == nullptr) {
+    // Conservatively assume that missing SBs mean no profiling data.
+    return true;
+  }
+  return sb->foreach_val_early([](const auto& v) { return !v || v->val > 0; });
+}
+
+inline bool is_hot(cfg::Block* b) {
+  auto* sb = get_first_source_block(b);
+  if (sb == nullptr) {
+    // Conservatively assume that missing SBs mean no profiling data.
+    return false;
+  }
+  return sb->foreach_val_early([](const auto& v) { return v && v->val > 0; });
+}
+
 template <typename Iterator>
 inline SourceBlock* find_between(const Iterator& start, const Iterator& end) {
   auto it = std::find_if(

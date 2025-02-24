@@ -45,36 +45,9 @@ std::unordered_set<cfg::Block*> get_normal_blocks(
 
 namespace inliner {
 
-bool is_not_cold(cfg::Block* b) {
-  auto* sb = source_blocks::get_first_source_block(b);
-  if (sb == nullptr) {
-    // Conservatively assume that missing SBs mean no profiling data.
-    return true;
-  }
-  return sb->foreach_val_early([](const auto& v) { return v && v->val > 0; });
-}
-
-bool maybe_hot(cfg::Block* b) {
-  auto* sb = source_blocks::get_first_source_block(b);
-  if (sb == nullptr) {
-    // Conservatively assume that missing SBs mean no profiling data.
-    return true;
-  }
-  return sb->foreach_val_early([](const auto& v) { return !v || v->val > 0; });
-}
-
-bool is_hot(cfg::Block* b) {
-  auto* sb = source_blocks::get_first_source_block(b);
-  if (sb == nullptr) {
-    // Conservatively assume that missing SBs mean no profiling data.
-    return false;
-  }
-  return sb->foreach_val_early([](const auto& v) { return v && v->val > 0; });
-}
-
 PartialCode get_partially_inlined_code(const DexMethod* method,
                                        const cfg::ControlFlowGraph& cfg) {
-  if (!is_hot(cfg.entry_block())) {
+  if (!source_blocks::is_hot(cfg.entry_block())) {
     // No hot entry block? That suggests that something went wrong with our
     // source-blocks. Anyway, we are not going to fight that here.
     TRACE(INLINE, 4,
@@ -135,7 +108,7 @@ PartialCode get_partially_inlined_code(const DexMethod* method,
     if (!visited.emplace(block).second) {
       continue;
     }
-    if (!normal_blocks.count(block) || !maybe_hot(block)) {
+    if (!normal_blocks.count(block) || !source_blocks::maybe_hot(block)) {
       // We ignore blocks that are cold or will eventually throw exception.
       continue;
     }

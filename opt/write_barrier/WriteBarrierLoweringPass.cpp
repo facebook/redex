@@ -11,6 +11,7 @@
 #include "ControlFlow.h"
 #include "DexAsm.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "Walkers.h"
 #include <DexStructure.h>
 
@@ -73,19 +74,49 @@ void WriteBarrierLoweringPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
 
   InsertOnlyConcurrentSet<IRInstruction*> volatile_field_writes;
+  std::atomic<size_t> num_barriers_in_not_cold{0};
+  std::atomic<size_t> num_barriers_in_maybe_hot{0};
+  std::atomic<size_t> num_barriers_in_hot{0};
 
   walk::parallel::code(scope, [&](DexMethod*, IRCode& code) {
+    size_t local_write_barrier_instructions{0};
+    size_t local_num_barriers_in_not_cold{0};
+    size_t local_num_barriers_in_maybe_hot{0};
+    size_t local_num_barriers_in_hot{0};
     auto& cfg = code.cfg();
+    for (auto* b : cfg.blocks()) {
+      size_t local_block_write_barrier_instructions{0};
+      auto ii = InstructionIterable(b);
+      for (auto it = ii.begin(); it != ii.end(); it++) {
+        if (!opcode::is_write_barrier(it->insn->opcode())) {
+          continue;
+        }
+        local_block_write_barrier_instructions++;
+      }
+      if (local_block_write_barrier_instructions != 0) {
+        local_write_barrier_instructions +=
+            local_block_write_barrier_instructions;
+        if (source_blocks::is_not_cold(b)) {
+          local_num_barriers_in_not_cold +=
+              local_block_write_barrier_instructions;
+        }
+        if (source_blocks::maybe_hot(b)) {
+          local_num_barriers_in_maybe_hot +=
+              local_block_write_barrier_instructions;
+        }
+        if (source_blocks::is_hot(b)) {
+          local_num_barriers_in_hot += local_block_write_barrier_instructions;
+        }
+      }
+    }
     auto ii = InstructionIterable(cfg);
     std::unique_ptr<cfg::CFGMutation> mutation;
-    size_t local_write_barrier_instructions{0};
     boost::optional<reg_t> tmp_reg = boost::none;
     for (auto it = ii.begin(); it != ii.end(); ++it) {
       auto& mie = *it;
       if (!opcode::is_write_barrier(mie.insn->opcode())) {
         continue;
       }
-
       if (!mutation) {
         mutation = std::make_unique<cfg::CFGMutation>(cfg);
       }
@@ -101,11 +132,13 @@ void WriteBarrierLoweringPass::run_pass(DexStoresVector& stores,
       sput_insn->set_src(0, tmp_reg.get());
       volatile_field_writes.insert(sput_insn);
       mutation->replace(it, {const_insn, sput_insn});
-      ++local_write_barrier_instructions;
     }
     if (mutation) {
       mutation->flush();
       write_barrier_instructions += local_write_barrier_instructions;
+      num_barriers_in_not_cold += local_num_barriers_in_not_cold;
+      num_barriers_in_maybe_hot += local_num_barriers_in_maybe_hot;
+      num_barriers_in_hot += local_num_barriers_in_hot;
     } else {
       always_assert(local_write_barrier_instructions == 0);
     }
@@ -114,6 +147,10 @@ void WriteBarrierLoweringPass::run_pass(DexStoresVector& stores,
   always_assert(write_barrier_instructions == volatile_field_writes.size());
 
   mgr.incr_metric("added_write_barriers", (size_t)write_barrier_instructions);
+  mgr.incr_metric("num_barriers_in_not_cold", (size_t)num_barriers_in_not_cold);
+  mgr.incr_metric("num_barriers_in_maybe_hot",
+                  (size_t)num_barriers_in_maybe_hot);
+  mgr.incr_metric("num_barriers_in_hot", (size_t)num_barriers_in_hot);
   if (volatile_field_writes.empty()) {
     return;
   }
