@@ -269,12 +269,12 @@ MultiMethodInliner::MultiMethodInliner(
           if (m_consider_hot_cold) {
             auto blocks = cfg.blocks();
             if (std::any_of(blocks.begin(), blocks.end(),
-                            inliner::is_not_cold)) {
+                            source_blocks::is_not_cold)) {
               m_not_cold_methods.insert(method);
             }
           }
           if (m_config.partial_hot_hot_inline &&
-              inliner::is_hot(cfg.entry_block())) {
+              source_blocks::is_hot(cfg.entry_block())) {
             m_hot_methods.insert(method);
           }
         },
@@ -1991,7 +1991,7 @@ bool MultiMethodInliner::should_partially_inline(cfg::Block* block,
   // fallback invocation that's contained in the partial code may have to be
   // either invoke-super or invoke-virtual depending on the context.
   if (!m_config.partial_hot_hot_inline || true_virtual ||
-      insn->opcode() == OPCODE_INVOKE_SUPER || !inliner::is_hot(block)) {
+      insn->opcode() == OPCODE_INVOKE_SUPER || !source_blocks::is_hot(block)) {
     return false;
   }
   // If we don't already have pre-computed partially inlined code for this
