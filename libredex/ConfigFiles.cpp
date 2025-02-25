@@ -459,11 +459,15 @@ void ConfigFiles::ensure_agg_method_stats_loaded() {
   }
   std::vector<std::string> csv_filenames;
   get_json_config().get("agg_method_stats_files", {}, csv_filenames);
-  if (csv_filenames.empty()) {
+  std::vector<std::string> baseline_profile_csv_filenames;
+  get_json_config().get("baseline_profile_agg_method_stats_files", {},
+                        baseline_profile_csv_filenames);
+  if (csv_filenames.empty() && baseline_profile_csv_filenames.empty()) {
     return;
   }
   m_method_profiles->initialize(
-      csv_filenames, get_baseline_profile_configs(),
+      csv_filenames, baseline_profile_csv_filenames,
+      get_baseline_profile_configs(),
       get_json_config().get("ingest_baseline_profile_data", false));
 }
 

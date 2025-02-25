@@ -72,6 +72,7 @@ class MethodProfiles {
 
   void initialize(
       const std::vector<std::string>& csv_filenames,
+      const std::vector<std::string>& baseline_profile_csv_filenames,
       const std::unordered_map<std::string,
                                baseline_profiles::BaselineProfileConfig>&
           baseline_profile_configs,
@@ -81,7 +82,7 @@ class MethodProfiles {
     for (const std::string& csv_filename : csv_filenames) {
       m_interaction_id = "";
       m_mode = NONE;
-      bool success = parse_stats_file(csv_filename);
+      bool success = parse_stats_file(csv_filename, false);
       always_assert_log(success,
                         "Failed to parse %s. See stderr for more details",
                         csv_filename.c_str());
@@ -91,6 +92,20 @@ class MethodProfiles {
                         csv_filename.c_str());
     }
     if (ingest_baseline_profile_data) {
+      // Parse csv files that are only used in baseline profile variants
+      for (const std::string& csv_filename : baseline_profile_csv_filenames) {
+        m_interaction_id = "";
+        m_mode = NONE;
+        bool success = parse_stats_file(csv_filename, true);
+        always_assert_log(success,
+                          "Failed to parse %s. See stderr for more details",
+                          csv_filename.c_str());
+        always_assert_log(!m_method_stats.empty(),
+                          "No valid data found in the profile %s. See stderr "
+                          "for more details.",
+                          csv_filename.c_str());
+      }
+      // Parse manual interactions
       std::unordered_map<std::string, std::vector<std::string>>
           manual_file_to_config_names;
       // Create a mapping of manual_file to config names
@@ -179,6 +194,7 @@ class MethodProfiles {
  private:
   static AccumulatingTimer s_process_unresolved_lines_timer;
   AllInteractions m_method_stats;
+  AllInteractions m_baseline_profile_method_stats;
   std::map<std::string, AllInteractions*> m_baseline_manual_interactions;
   std::map<std::string, AllInteractions> m_manual_profile_interactions;
   // Resolution may fail because of renaming or generated methods. Store the
@@ -192,6 +208,7 @@ class MethodProfiles {
     Stats stats;
   };
   std::vector<ParsedMain> m_unresolved_lines;
+  std::vector<ParsedMain> m_baseline_profile_unresolved_lines;
   ParsingMode m_mode{NONE};
   // A map from interaction ID to the number of times that interaction was
   // triggered. This can be used to compare relative prevalence of different
@@ -205,7 +222,8 @@ class MethodProfiles {
 
   // Read a "simple" csv file (no quoted commas or extra spaces) and populate
   // m_method_stats
-  bool parse_stats_file(const std::string& csv_filename);
+  bool parse_stats_file(const std::string& csv_filename,
+                        bool baseline_profile_variant);
 
   // Read a list of manual profiles and populate m_baseline_manual_interactions
   void parse_manual_files(
@@ -219,12 +237,16 @@ class MethodProfiles {
       const std::vector<std::string>& config_names);
 
   // Read a line of data (not a header)
-  bool parse_line(const std::string& line);
+  bool parse_line(const std::string& line, bool baseline_profile_variant);
   // Read a line from the main section of the aggregated stats file and put an
   // entry into m_method_stats
-  bool parse_main(const std::string& line, std::string* interaction_id);
+  bool parse_main(const std::string& line,
+                  std::string* interaction_id,
+                  bool baseline_profile_variant);
   std::optional<ParsedMain> parse_main_internal(std::string_view line);
-  bool apply_main_internal_result(ParsedMain v, std::string* interaction_id);
+  bool apply_main_internal_result(ParsedMain v,
+                                  std::string* interaction_id,
+                                  bool baseline_profile_variant);
   void apply_manual_profile(DexMethodRef* ref,
                             const std::string& flags,
                             const std::string& manual_filename,
@@ -234,6 +256,12 @@ class MethodProfiles {
 
   // Parse the first line and make sure it matches our expectations
   bool parse_header(std::string_view line);
+
+  void process_unresolved_lines(bool baseline_profile_variant);
+  void resolve_method_descriptor_tokens(
+      const std::unordered_map<dex_member_refs::MethodDescriptorTokens,
+                               std::vector<DexMethodRef*>>& map,
+      bool baseline_profile_variant);
 };
 
 // NOTE: Do not use this comparator directly in `std::sort` calls, as it is
