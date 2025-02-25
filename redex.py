@@ -781,6 +781,12 @@ Given an APK, produce a better APK!
     )
 
     parser.add_argument(
+        "--baseline-profile-config",
+        type=str,
+        help="Baseline profile config list",
+    )
+
+    parser.add_argument(
         "--jni-summary",
         default=None,
         type=str,
@@ -999,6 +1005,11 @@ def _check_android_sdk_api(args: argparse.Namespace) -> None:
             args.passthru.append(arg)
     except ImportError:
         LOGGER.warning("No embedded files, please add manually!")
+        
+
+def _handle_baseline_profiles(args: argparse.Namespace) -> None:
+    if args.baseline_profile_config:
+        args.passthru.append(f"baseline_profile_config={args.baseline_profile_config}")
 
 
 def _handle_profiles(
@@ -1212,6 +1223,8 @@ def prepare_redex(args: argparse.Namespace) -> State:
             if args.deep_data_enabled_interactions
             else config_dict.get("deep_data_enabled_interactions", [])
         )
+
+        _handle_baseline_profiles(args)
 
         _handle_profiles(args, dd_enabled_interactions)
 
