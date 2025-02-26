@@ -75,8 +75,7 @@ class MethodProfiles {
       const std::vector<std::string>& baseline_profile_csv_filenames,
       const std::unordered_map<std::string,
                                baseline_profiles::BaselineProfileConfig>&
-          baseline_profile_configs,
-      const bool ingest_baseline_profile_data) {
+          baseline_profile_configs) {
     m_initialized = true;
     Timer t("Parsing agg_method_stats_files");
     for (const std::string& csv_filename : csv_filenames) {
@@ -91,34 +90,32 @@ class MethodProfiles {
                         "for more details.",
                         csv_filename.c_str());
     }
-    if (ingest_baseline_profile_data) {
-      // Parse csv files that are only used in baseline profile variants
-      for (const std::string& csv_filename : baseline_profile_csv_filenames) {
-        m_interaction_id = "";
-        m_mode = NONE;
-        bool success = parse_stats_file(csv_filename, true);
-        always_assert_log(success,
-                          "Failed to parse %s. See stderr for more details",
-                          csv_filename.c_str());
-        always_assert_log(!m_method_stats.empty(),
-                          "No valid data found in the profile %s. See stderr "
-                          "for more details.",
-                          csv_filename.c_str());
-      }
-      // Parse manual interactions
-      std::unordered_map<std::string, std::vector<std::string>>
-          manual_file_to_config_names;
-      // Create a mapping of manual_file to config names
-      // this way we can only parse each manual_file exactly once
-      for (const auto& [baseline_config_name, baseline_profile_config] :
-           baseline_profile_configs) {
-        for (const auto& manual_file : baseline_profile_config.manual_files) {
-          manual_file_to_config_names[manual_file].emplace_back(
-              baseline_config_name);
-        }
-      }
-      parse_manual_files(manual_file_to_config_names);
+    // Parse csv files that are only used in baseline profile variants
+    for (const std::string& csv_filename : baseline_profile_csv_filenames) {
+      m_interaction_id = "";
+      m_mode = NONE;
+      bool success = parse_stats_file(csv_filename, true);
+      always_assert_log(success,
+                        "Failed to parse %s. See stderr for more details",
+                        csv_filename.c_str());
+      always_assert_log(!m_method_stats.empty(),
+                        "No valid data found in the profile %s. See stderr "
+                        "for more details.",
+                        csv_filename.c_str());
     }
+    // Parse manual interactions
+    std::unordered_map<std::string, std::vector<std::string>>
+        manual_file_to_config_names;
+    // Create a mapping of manual_file to config names
+    // this way we can only parse each manual_file exactly once
+    for (const auto& [baseline_config_name, baseline_profile_config] :
+         baseline_profile_configs) {
+      for (const auto& manual_file : baseline_profile_config.manual_files) {
+        manual_file_to_config_names[manual_file].emplace_back(
+            baseline_config_name);
+      }
+    }
+    parse_manual_files(manual_file_to_config_names);
   }
 
   // For testing purposes.

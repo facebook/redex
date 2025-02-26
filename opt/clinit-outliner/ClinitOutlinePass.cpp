@@ -53,7 +53,7 @@ void ClinitOutlinePass::run_pass(DexStoresVector& stores,
     mgr.set_metric("interaction_" + interaction_id, config.threshold);
   }
   auto baseline_profile = baseline_profiles::get_default_baseline_profile(
-      conf.get_baseline_profile_configs(), conf.get_method_profiles(), false);
+      conf.get_baseline_profile_configs(), conf.get_method_profiles());
 
   auto scope = build_class_scope(stores);
   std::atomic<size_t> affected_final_fields{0};

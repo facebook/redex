@@ -49,6 +49,7 @@ struct BaselineProfileOptions {
   // If this is true, then the ArtProfileWriter will insert all methods/classes
   // from the betamap into the baseline profile.
   bool include_all_startup_classes;
+  bool use_final_redex_generated_profile;
 };
 
 struct BaselineProfileConfig {

@@ -509,7 +509,10 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
 
   std::unordered_set<const DexMethodRef*> method_refs_without_def;
   const auto& method_profiles = conf.get_method_profiles();
-  auto get_legacy_baseline_profile = [&]() {
+  auto get_legacy_baseline_profile = [&]()
+      -> std::tuple<
+          baseline_profiles::BaselineProfile,
+          std::unordered_map<std::string, baseline_profiles::BaselineProfile>> {
     std::unordered_map<std::string, baseline_profiles::BaselineProfile>
         baseline_profiles;
     baseline_profiles::BaselineProfile res;
@@ -577,17 +580,17 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     }
     baseline_profiles[baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME] =
         res;
-    return baseline_profiles;
+    return {res, baseline_profiles};
   };
 
-  auto baseline_profiles = m_legacy_mode
-                               ? get_legacy_baseline_profile()
-                               : baseline_profiles::get_baseline_profiles(
-                                     conf.get_baseline_profile_configs(),
-                                     method_profiles,
-                                     conf.get_json_config().get(
-                                         "ingest_baseline_profile_data", false),
-                                     &method_refs_without_def);
+  auto baseline_profiles_tuple = m_legacy_mode
+                                     ? get_legacy_baseline_profile()
+                                     : baseline_profiles::get_baseline_profiles(
+                                           conf.get_baseline_profile_configs(),
+                                           method_profiles,
+                                           &method_refs_without_def);
+  auto baseline_profiles = std::get<1>(baseline_profiles_tuple);
+  auto manual_profile = std::get<0>(baseline_profiles_tuple);
   for (const auto& [config_name, baseline_profile_config] :
        conf.get_baseline_profile_configs()) {
     if (baseline_profile_config.options.include_all_startup_classes) {
@@ -637,36 +640,31 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     }
   }
 
-  if (conf.get_json_config().get("ingest_baseline_profile_data", false)) {
-    for (const auto& entry : baseline_profiles) {
-      const auto& bp_name = entry.first;
-      const auto& bp = entry.second;
-      const auto strip_classes =
-          conf.get_baseline_profile_configs().at(bp_name).options.strip_classes;
-      auto preprocessed_profile_name =
-          conf.get_preprocessed_baseline_profile_file(bp_name);
-      auto output_name = conf.metafile(bp_name + "-baseline-profile.txt");
-      std::ofstream ofs{output_name.c_str()};
-      std::ifstream preprocessed_profile(preprocessed_profile_name);
-      std::string current_line;
-      if (!strip_classes) {
-        while (std::getline(preprocessed_profile, current_line)) {
-          if (current_line.empty() || current_line[0] != 'L') {
-            continue;
-          }
-          ofs << current_line << "\n";
-        }
-      }
-      write_methods(scope, bp, strip_classes, ofs);
-    }
-  } else {
-    std::ofstream ofs{conf.metafile(BASELINE_PROFILES_FILE)};
-    auto baseline_profile = baseline_profiles.at(
-        baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME);
+  for (const auto& entry : baseline_profiles) {
+    const auto& bp_name = entry.first;
+    const auto& bp = entry.second;
     const auto strip_classes =
-        conf.get_default_baseline_profile_config().options.strip_classes;
-    write_methods(scope, baseline_profile, strip_classes, ofs);
+        conf.get_baseline_profile_configs().at(bp_name).options.strip_classes;
+    auto preprocessed_profile_name =
+        conf.get_preprocessed_baseline_profile_file(bp_name);
+    auto output_name = conf.metafile(bp_name + "-baseline-profile.txt");
+    std::ofstream ofs{output_name.c_str()};
+    std::ifstream preprocessed_profile(preprocessed_profile_name);
+    std::string current_line;
+    if (!strip_classes) {
+      while (std::getline(preprocessed_profile, current_line)) {
+        if (current_line.empty() || current_line[0] != 'L') {
+          continue;
+        }
+        ofs << current_line << "\n";
+      }
+    }
+    write_methods(scope, bp, strip_classes, ofs);
   }
+  std::ofstream ofs{conf.metafile(BASELINE_PROFILES_FILE)};
+  const auto strip_classes =
+      conf.get_default_baseline_profile_config().options.strip_classes;
+  write_methods(scope, manual_profile, strip_classes, ofs);
 
   std::atomic<size_t> methods_with_baseline_profile_code_units{0};
   std::atomic<size_t> compiled{0};
@@ -688,17 +686,11 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     }
   });
 
-  mgr.incr_metric(
-      "classes_with_baseline_profile",
-      baseline_profiles
-          .at(baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME)
-          .classes.size());
+  mgr.incr_metric("classes_with_baseline_profile",
+                  manual_profile.classes.size());
 
-  mgr.incr_metric(
-      "methods_with_baseline_profile",
-      baseline_profiles
-          .at(baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME)
-          .methods.size());
+  mgr.incr_metric("methods_with_baseline_profile",
+                  manual_profile.methods.size());
 
   mgr.incr_metric("methods_with_baseline_profile_code_units",
                   (size_t)methods_with_baseline_profile_code_units);
@@ -716,10 +708,7 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  never_inline(m_never_inline_attach_annotations, scope,
-               baseline_profiles.at(
-                   baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME),
-               mgr);
+  never_inline(m_never_inline_attach_annotations, scope, manual_profile, mgr);
 }
 
 static ArtProfileWriterPass s_pass;

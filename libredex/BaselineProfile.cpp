@@ -13,25 +13,23 @@ namespace baseline_profiles {
 BaselineProfile get_default_baseline_profile(
     const std::unordered_map<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
-    const bool ingest_baseline_profile_data,
     std::unordered_set<const DexMethodRef*>* method_refs_without_def) {
-  auto baseline_profiles = get_baseline_profiles(configs,
-                                                 method_profiles,
-                                                 ingest_baseline_profile_data,
-                                                 method_refs_without_def);
-  return baseline_profiles.at(DEFAULT_BASELINE_PROFILE_CONFIG_NAME);
+  auto [baseline_profile, _] =
+      get_baseline_profiles(configs, method_profiles, method_refs_without_def);
+  return baseline_profile;
 }
 
-std::unordered_map<std::string, BaselineProfile> get_baseline_profiles(
+std::tuple<BaselineProfile, std::unordered_map<std::string, BaselineProfile>>
+get_baseline_profiles(
     const std::unordered_map<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
-    const bool ingest_baseline_profile_data,
     std::unordered_set<const DexMethodRef*>* method_refs_without_def) {
   std::unordered_map<std::string, BaselineProfile> baseline_profiles;
+  BaselineProfile manual_baseline_profile;
   for (const auto& [config_name, config] : configs) {
     // If we're not using this as the final pass of baseline profiles, just
     // continue on all configs that aren't the default
-    if (!ingest_baseline_profile_data &&
+    if (!config.options.use_final_redex_generated_profile &&
         config_name != DEFAULT_BASELINE_PROFILE_CONFIG_NAME) {
       continue;
     }
@@ -130,9 +128,15 @@ std::unordered_map<std::string, BaselineProfile> get_baseline_profiles(
     for (auto* type : classes) {
       res.classes.insert(type_class(type));
     }
-    baseline_profiles[config_name] = res;
+    if (config_name != DEFAULT_BASELINE_PROFILE_CONFIG_NAME ||
+        config.options.use_final_redex_generated_profile) {
+      baseline_profiles[config_name] = res;
+    }
+    if (config_name == DEFAULT_BASELINE_PROFILE_CONFIG_NAME) {
+      manual_baseline_profile = std::move(res);
+    }
   }
-  return baseline_profiles;
+  return {manual_baseline_profile, baseline_profiles};
 }
 
 } // namespace baseline_profiles

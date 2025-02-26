@@ -28,16 +28,20 @@ struct BaselineProfile {
   std::unordered_set<const DexClass*> classes;
 };
 
-std::unordered_map<std::string, BaselineProfile> get_baseline_profiles(
+// Returns a tuple of BaselineProfile and std::unordered_map<std::string,
+// BaselineProfile> The first is the default profile that will be fed into the
+// baseline profile driver as a manual input. The second is a mapping of config
+// name to final baseline profile for every baseline profile that redex is
+// generating.
+std::tuple<BaselineProfile, std::unordered_map<std::string, BaselineProfile>>
+get_baseline_profiles(
     const std::unordered_map<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
-    const bool ingest_baseline_profile_data,
     std::unordered_set<const DexMethodRef*>* method_refs_without_def = nullptr);
 
 BaselineProfile get_default_baseline_profile(
     const std::unordered_map<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
-    const bool ingest_baseline_profile_data,
     std::unordered_set<const DexMethodRef*>* method_refs_without_def = nullptr);
 
 } // namespace baseline_profiles
