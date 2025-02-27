@@ -436,6 +436,24 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
         if (is_enum(cls) && type::is_kotlin_class(cls)) {
           fix_kt_enum_ctor_param(cls, class_stats.fix_kt_enum_ctor_param);
         }
+        for (auto m : cls->get_all_methods()) {
+          patch_parameters_and_returns(
+              m, class_stats.patch_parameters_and_returns);
+          patch_synth_methods_overriding_annotated_methods(
+              m, class_stats.patch_synth_methods_overriding_annotated_methods);
+          if (is_constructor(m) &&
+              has_typedef_annos(m->get_param_anno(), m_typedef_annos)) {
+            patch_synth_cls_fields_from_ctor_param(
+                m, class_stats.patch_synth_cls_fields_from_ctor_param);
+          }
+        }
+        return class_stats;
+      });
+
+  m_patcher_stats +=
+      walk::parallel::classes<PatcherStats>(scope, [this](DexClass* cls) {
+        auto class_stats = PatcherStats();
+
         if (is_synthesized_lambda_class(cls) || is_fun_interface_class(cls)) {
           std::vector<const DexField*> patched_fields;
           for (auto m : cls->get_all_methods()) {
@@ -478,17 +496,6 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
                     fields.push_back(f);
                   }
                 });
-          }
-        }
-        for (auto m : cls->get_all_methods()) {
-          patch_parameters_and_returns(
-              m, class_stats.patch_parameters_and_returns);
-          patch_synth_methods_overriding_annotated_methods(
-              m, class_stats.patch_synth_methods_overriding_annotated_methods);
-          if (is_constructor(m) &&
-              has_typedef_annos(m->get_param_anno(), m_typedef_annos)) {
-            patch_synth_cls_fields_from_ctor_param(
-                m, class_stats.patch_synth_cls_fields_from_ctor_param);
           }
         }
         return class_stats;
