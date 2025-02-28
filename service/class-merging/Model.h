@@ -200,6 +200,8 @@ struct ModelSpec {
   bool use_stable_shape_names{false};
 
   bool mergeability_checks_use_of_const_class{false};
+
+  bool skip_anonymous_classes{false};
 };
 
 struct ModelStats {

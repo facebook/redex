@@ -63,7 +63,11 @@ void load_roots_subtypes_as_merging_targets(const TypeSystem& type_system,
       const auto& implementors = type_system.get_implementors(*root);
       for (auto impl_type : implementors) {
         auto impl_cls = type_class(impl_type);
-        // Note: Bellow is to simply make the logic unchange after the
+        if (spec->skip_anonymous_classes &&
+            klass::maybe_anonymous_class(impl_cls)) {
+          continue;
+        }
+        // Note: Below is to simply make the logic unchange after the
         // refactoring.
         // Find the first internal class at the top of the type
         // hierarchy of the impl_cls. if it extends java.lang.Object and
@@ -86,7 +90,17 @@ void load_roots_subtypes_as_merging_targets(const TypeSystem& type_system,
       }
       root = spec->roots.erase(root);
     } else {
-      type_system.get_all_children(*root, merging_targets_set);
+      TypeSet children;
+      type_system.get_all_children(*root, children);
+
+      for (const auto* child : children) {
+        const auto* child_cls = type_class(child);
+        if (spec->skip_anonymous_classes &&
+            klass::maybe_anonymous_class(child_cls)) {
+          continue;
+        }
+        merging_targets_set.insert(child);
+      }
       root++;
     }
   }
