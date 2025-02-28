@@ -419,7 +419,8 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
   TRACE(OPTRES, 2, "Total external_id_roots count: %zu",
         external_id_roots.size());
 
-  // 4. Get all resources referenced by custom frameworks.
+  // 4. Get all resources referenced by custom frameworks and configuration
+  // options.
   std::unordered_set<uint32_t> accessible_id_roots;
   auto& plugin_registery = opt_res::ReachableResourcesPluginRegistry::get();
   for (const auto& p : plugin_registery.get_plugins()) {
@@ -430,13 +431,20 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
     accessible_id_roots.insert(ids.begin(), ids.end());
   }
 
+  // Configured roots by prefix.
   std::unordered_set<uint32_t> assumed_reachable_roots =
       get_resources_by_name_prefix(m_assume_reachable_prefixes,
                                    res_table->name_to_ids);
   TRACE(OPTRES, 2, "Total assumed_reachable_roots count: %zu",
         assumed_reachable_roots.size());
+  // Configured roots by resource type. These should be traversed like any other
+  // reachable root.
+  std::unordered_set<uint32_t> disallowed_types =
+      res_table->get_types_by_name(m_disallowed_types);
+  std::unordered_set<uint32_t> disallowed_resouces =
+      get_disallowed_resources(res_table->sorted_res_ids, disallowed_types);
 
-  // 5a. Merge above resources (2, 3 & 4). These will be the 'roots' of all
+  // 5. Merge above resources (2, 3 & 4). These will be the 'roots' of all
   // referenced resources. Then, compute the transitive closure of all the
   // roots. This will be the set of all referenced resources (to be kept).
   accessible_id_roots.insert(external_id_roots.begin(),
@@ -444,6 +452,8 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
   accessible_id_roots.insert(ids_from_code.begin(), ids_from_code.end());
   accessible_id_roots.insert(assumed_reachable_roots.begin(),
                              assumed_reachable_roots.end());
+  accessible_id_roots.insert(disallowed_resouces.begin(),
+                             disallowed_resouces.end());
 
   TRACE(OPTRES, 2, "Root resource count: %zu", accessible_id_roots.size());
 
@@ -451,16 +461,6 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
   compute_transitive_closure(res_table.get(), zip_dir, resources.get(),
                              accessible_id_roots, &nodes_visited,
                              &explored_xml_files);
-
-  // 5b. "Visit" all resources for any disallowed types. This will prevent any
-  // cleanup within the disallowed types.
-  std::unordered_set<uint32_t> disallowed_types =
-      res_table->get_types_by_name(m_disallowed_types);
-
-  std::unordered_set<uint32_t> disallowed_resouces =
-      get_disallowed_resources(res_table->sorted_res_ids, disallowed_types);
-
-  nodes_visited.insert(disallowed_resouces.begin(), disallowed_resouces.end());
 
   // 6. Remove any unvisited resources. The removal of the unused
   //    files happens in step 11 (if configured) and cleanup of unused strings
