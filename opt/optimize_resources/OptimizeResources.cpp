@@ -406,7 +406,7 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
   // Set of ID's directly accessible from the manifest or anims XML files,
   // without walking any reference chains.
   std::unordered_set<std::string> explored_xml_files;
-  std::unordered_set<uint32_t> external_id_roots;
+  std::unordered_set<uint32_t> manifest_roots;
   const auto& xml_files = resources->find_all_xml_files();
   for (const std::string& path : xml_files) {
     if (path.find("AndroidManifest.xml") == std::string::npos) {
@@ -414,10 +414,9 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
     }
     explored_xml_files.emplace(path);
     const auto& id_roots = resources->get_xml_reference_attributes(path);
-    external_id_roots.insert(id_roots.begin(), id_roots.end());
+    manifest_roots.insert(id_roots.begin(), id_roots.end());
   }
-  TRACE(OPTRES, 2, "Total external_id_roots count: %zu",
-        external_id_roots.size());
+  TRACE(OPTRES, 2, "Total manifest_roots count: %zu", manifest_roots.size());
 
   // 4. Get all resources referenced by custom frameworks and configuration
   // options.
@@ -447,8 +446,7 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
   // 5. Merge above resources (2, 3 & 4). These will be the 'roots' of all
   // referenced resources. Then, compute the transitive closure of all the
   // roots. This will be the set of all referenced resources (to be kept).
-  accessible_id_roots.insert(external_id_roots.begin(),
-                             external_id_roots.end());
+  accessible_id_roots.insert(manifest_roots.begin(), manifest_roots.end());
   accessible_id_roots.insert(ids_from_code.begin(), ids_from_code.end());
   accessible_id_roots.insert(assumed_reachable_roots.begin(),
                              assumed_reachable_roots.end());
