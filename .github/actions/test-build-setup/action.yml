@@ -12,7 +12,7 @@ runs:
       echo "CACHE_VERSION=${CACHE_VERSION}" >> "$GITHUB_OUTPUT"
     shell: bash
   - name: Cache SDK
-    uses: actions/cache@v3.3.2
+    uses: actions/cache@v4
     with:
       key: v4-android-build-tools
       path: sdk.tar.zstd
