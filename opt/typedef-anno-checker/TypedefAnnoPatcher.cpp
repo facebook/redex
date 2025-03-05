@@ -52,8 +52,9 @@ bool is_int_or_obj_ref(const type_inference::TypeEnvironment& env, reg_t reg) {
 
 namespace {
 
-bool has_typedef_annos(ParamAnnotations* param_annos,
-                       const std::unordered_set<DexType*>& typedef_annos) {
+bool has_typedef_annos(
+    ParamAnnotations* param_annos,
+    const std::unordered_set<TypedefAnnoType*>& typedef_annos) {
   if (!param_annos) {
     return false;
   }
@@ -206,12 +207,12 @@ bool add_annotation_set(DexMember* member,
 
 template <typename DexMember>
 bool add_annotation(DexMember* member,
-                    const DexType* anno,
+                    const TypedefAnnoType* anno,
                     std::mutex& anno_patching_mutex,
                     Stats& class_stats) {
   DexAnnotationSet anno_set = DexAnnotationSet();
-  anno_set.add_annotation(
-      std::make_unique<DexAnnotation>(const_cast<DexType*>(anno), DAV_RUNTIME));
+  anno_set.add_annotation(std::make_unique<DexAnnotation>(
+      const_cast<TypedefAnnoType*>(anno), DAV_RUNTIME));
   return add_annotation_set(member, &anno_set, anno_patching_mutex,
                             class_stats);
 }
@@ -245,12 +246,12 @@ bool add_param_annotation_set(DexMethod* m,
 }
 
 bool add_param_annotation(DexMethod* m,
-                          const DexType* anno,
+                          const TypedefAnnoType* anno,
                           const int param,
                           Stats& class_stats) {
   DexAnnotationSet anno_set = DexAnnotationSet();
-  anno_set.add_annotation(
-      std::make_unique<DexAnnotation>(const_cast<DexType*>(anno), DAV_RUNTIME));
+  anno_set.add_annotation(std::make_unique<DexAnnotation>(
+      const_cast<TypedefAnnoType*>(anno), DAV_RUNTIME));
   return add_param_annotation_set(m, &anno_set, param, class_stats);
 }
 
@@ -260,7 +261,7 @@ int find_and_patch_parameter(
     DexMethod* m,
     IRInstruction* insn,
     src_index_t arg_index,
-    const DexType* typedef_anno,
+    const TypedefAnnoType* typedef_anno,
     live_range::UseDefChains* ud_chains,
     Stats& class_stats,
     std::vector<std::pair<src_index_t, DexAnnotationSet&>>*
@@ -299,8 +300,8 @@ void patch_param_from_method_invoke(
     IRInstruction* invoke,
     live_range::UseDefChains* ud_chains,
     Stats& class_stats,
-    std::vector<std::pair<src_index_t, const DexType*>>* missing_param_annos =
-        nullptr,
+    std::vector<std::pair<src_index_t, const TypedefAnnoType*>>*
+        missing_param_annos = nullptr,
     bool patch_accessor = true) {
   always_assert(opcode::is_an_invoke(invoke->opcode()));
   auto* def_method = resolve_method(caller, invoke);
@@ -340,13 +341,14 @@ void patch_param_from_method_invoke(
   }
 }
 
-void patch_setter_method(type_inference::TypeInference& inference,
-                         DexMethod* caller,
-                         IRInstruction* insn,
-                         live_range::UseDefChains* ud_chains,
-                         Stats& class_stats,
-                         std::vector<std::pair<src_index_t, const DexType*>>*
-                             missing_param_annos = nullptr) {
+void patch_setter_method(
+    type_inference::TypeInference& inference,
+    DexMethod* caller,
+    IRInstruction* insn,
+    live_range::UseDefChains* ud_chains,
+    Stats& class_stats,
+    std::vector<std::pair<src_index_t, const TypedefAnnoType*>>*
+        missing_param_annos = nullptr) {
   always_assert(opcode::is_an_iput(insn->opcode()) ||
                 opcode::is_an_sput(insn->opcode()));
   auto field_ref = insn->get_field();
@@ -618,7 +620,7 @@ void patch_synthetic_field_from_local_var_lambda(
     const live_range::UseDefChains& ud_chains,
     IRInstruction* insn,
     const src_index_t src,
-    const DexType* anno,
+    const TypedefAnnoType* anno,
     std::vector<const DexField*>* patched_fields,
     std::mutex& anno_patching_mutex,
     Stats& class_stats) {
@@ -730,7 +732,8 @@ void TypedefAnnoPatcher::patch_lambdas(
         // parameters. Find any missing parameter annotations and add them to
         // the map of src index to annotation, but don't patch the static
         // method since a different visit of that method will patch it
-        std::vector<std::pair<src_index_t, const DexType*>> missing_param_annos;
+        std::vector<std::pair<src_index_t, const TypedefAnnoType*>>
+            missing_param_annos;
         patch_parameters_and_returns(static_method, class_stats,
                                      &missing_param_annos);
         // Patch missing param annotations
@@ -899,7 +902,8 @@ void TypedefAnnoPatcher::patch_enclosing_lambda_fields(const DexClass* anon_cls,
 void TypedefAnnoPatcher::patch_parameters_and_returns(
     DexMethod* m,
     Stats& class_stats,
-    std::vector<std::pair<src_index_t, const DexType*>>* missing_param_annos) {
+    std::vector<std::pair<src_index_t, const TypedefAnnoType*>>*
+        missing_param_annos) {
   IRCode* code = m->get_code();
   if (!code) {
     return;
@@ -915,7 +919,7 @@ void TypedefAnnoPatcher::patch_parameters_and_returns(
   live_range::MoveAwareChains chains(m->get_code()->cfg());
   live_range::UseDefChains ud_chains = chains.get_use_def_chains();
 
-  boost::optional<const DexType*> anno = boost::none;
+  boost::optional<const TypedefAnnoType*> anno = boost::none;
   bool patch_return = missing_param_annos == nullptr;
   for (cfg::Block* b : cfg.blocks()) {
     for (auto& mie : InstructionIterable(b)) {
@@ -941,8 +945,8 @@ void TypedefAnnoPatcher::patch_parameters_and_returns(
   }
 
   if (patch_return && anno != boost::none) {
-    add_annotation(m, const_cast<DexType*>(*anno), m_anno_patching_mutex,
-                   class_stats);
+    add_annotation(m, const_cast<TypedefAnnoType*>(*anno),
+                   m_anno_patching_mutex, class_stats);
     auto class_name = type_class(m->get_class())->str();
     auto class_name_prefix = class_name.substr(0, class_name.size() - 1);
     if (!m_patched_returns.count(class_name_prefix)) {

@@ -21,6 +21,8 @@ namespace typedef_anno {
 bool is_not_str_nor_int(const type_inference::TypeEnvironment& env, reg_t reg);
 } // namespace typedef_anno
 
+using TypedefAnnoType = DexType;
+
 struct Stats {
   size_t num_patched_parameters{0};
   size_t num_patched_fields_and_methods{0};
@@ -82,8 +84,8 @@ class TypedefAnnoPatcher {
   void patch_parameters_and_returns(
       DexMethod* method,
       Stats& class_stats,
-      std::vector<std::pair<src_index_t, const DexType*>>* missing_param_annos =
-          nullptr);
+      std::vector<std::pair<src_index_t, const TypedefAnnoType*>>*
+          missing_param_annos = nullptr);
 
   void patch_enclosing_lambda_fields(const DexClass* cls, Stats& class_stats);
 
@@ -102,7 +104,7 @@ class TypedefAnnoPatcher {
   void populate_chained_getters(DexClass* cls);
   void patch_chained_getters(Stats& class_stats);
 
-  std::unordered_set<DexType*> m_typedef_annos;
+  std::unordered_set<TypedefAnnoType*> m_typedef_annos;
   const method_override_graph::Graph& m_method_override_graph;
   ConcurrentMap<std::string, std::vector<const DexField*>> m_lambda_anno_map;
   InsertOnlyConcurrentSet<std::string_view> m_patched_returns;
