@@ -63,6 +63,24 @@ struct PatcherStats {
   }
 };
 
+class PatchingCandidates {
+
+ public:
+  void add_field_candidate(DexField* field, const TypedefAnnoType* anno) {
+    m_field_candidates.insert_or_assign(
+        std::make_pair(field, const_cast<TypedefAnnoType*>(anno)));
+  }
+  void add_method_candidate(DexMethod* method, const TypedefAnnoType* anno) {
+    m_method_candidates.insert_or_assign(
+        std::make_pair(method, const_cast<TypedefAnnoType*>(anno)));
+  }
+  void apply_patching(std::mutex& mutex, Stats& class_stats);
+
+ private:
+  ConcurrentMap<DexField*, TypedefAnnoType*> m_field_candidates;
+  ConcurrentMap<DexMethod*, TypedefAnnoType*> m_method_candidates;
+};
+
 class TypedefAnnoPatcher {
  public:
   explicit TypedefAnnoPatcher(
@@ -78,8 +96,7 @@ class TypedefAnnoPatcher {
   void print_stats(PassManager& mgr);
 
  private:
-  bool patch_synth_methods_overriding_annotated_methods(DexMethod* m,
-                                                        Stats& class_stats);
+  bool patch_if_overriding_annotated_methods(DexMethod* m, Stats& class_stats);
 
   void patch_parameters_and_returns(
       DexMethod* method,

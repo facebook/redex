@@ -341,9 +341,13 @@ void patch_param_from_method_invoke(
   }
 }
 
-void patch_setter_method(
+/*
+ * Collect missing param Typedef annotation if the current method writes to an
+ * annotated field thru a value passed from param.
+ */
+void collect_setter_missing_param_annos(
     type_inference::TypeInference& inference,
-    DexMethod* caller,
+    DexMethod* setter,
     IRInstruction* insn,
     live_range::UseDefChains* ud_chains,
     Stats& class_stats,
@@ -356,7 +360,7 @@ void patch_setter_method(
       field_ref, inference.get_annotations());
 
   if (field_anno != boost::none) {
-    auto param_index = find_and_patch_parameter(caller, insn, 0, *field_anno,
+    auto param_index = find_and_patch_parameter(setter, insn, 0, *field_anno,
                                                 ud_chains, class_stats);
     if (missing_param_annos && param_index != -1) {
       missing_param_annos->push_back({param_index, *field_anno});
@@ -365,6 +369,19 @@ void patch_setter_method(
 }
 
 } // namespace
+
+void PatchingCandidates::apply_patching(std::mutex& mutex, Stats& class_stats) {
+  for (auto& pair : m_field_candidates) {
+    auto* field = pair.first;
+    auto* anno = pair.second;
+    add_annotation(field, anno, mutex, class_stats);
+  }
+  for (auto& pair : m_method_candidates) {
+    auto* method = pair.first;
+    auto* anno = pair.second;
+    add_annotation(method, anno, mutex, class_stats);
+  }
+}
 
 void TypedefAnnoPatcher::fix_kt_enum_ctor_param(const DexClass* cls,
                                                 Stats& class_stats) {
@@ -406,27 +423,27 @@ void TypedefAnnoPatcher::fix_kt_enum_ctor_param(const DexClass* cls,
 // sam conversions appear in Kotlin and provide a more concise way to override
 // methods. This method handles sam conversiona and all synthetic methods that
 // override methods with return or parameter annotations
-bool TypedefAnnoPatcher::patch_synth_methods_overriding_annotated_methods(
+bool TypedefAnnoPatcher::patch_if_overriding_annotated_methods(
     DexMethod* m, Stats& class_stats) {
   DexClass* cls = type_class(m->get_class());
   if (!klass::maybe_anonymous_class(cls)) {
     return false;
   }
 
-  auto callees = mog::get_overridden_methods(m_method_override_graph, m,
-                                             true /*include_interfaces*/);
-  for (auto callee : callees) {
-    auto return_anno =
-        type_inference::get_typedef_anno_from_member(callee, m_typedef_annos);
+  auto overriddens = mog::get_overridden_methods(m_method_override_graph, m,
+                                                 true /*include_interfaces*/);
+  for (auto overridden : overriddens) {
+    auto return_anno = type_inference::get_typedef_anno_from_member(
+        overridden, m_typedef_annos);
 
     if (return_anno != boost::none) {
       add_annotation(m, *return_anno, m_anno_patching_mutex, class_stats);
     }
 
-    if (callee->get_param_anno() == nullptr) {
+    if (overridden->get_param_anno() == nullptr) {
       continue;
     }
-    for (auto const& param_anno : *callee->get_param_anno()) {
+    for (auto const& param_anno : *overridden->get_param_anno()) {
       auto annotation = type_inference::get_typedef_annotation(
           param_anno.second->get_annotations(), m_typedef_annos);
       if (annotation == boost::none) {
@@ -441,6 +458,8 @@ bool TypedefAnnoPatcher::patch_synth_methods_overriding_annotated_methods(
 void TypedefAnnoPatcher::run(const Scope& scope) {
   m_patcher_stats =
       walk::parallel::classes<PatcherStats>(scope, [this](DexClass* cls) {
+        // All the updates happening in this walk is local to the current class.
+        // Therefore, there's no race condition.
         auto class_stats = PatcherStats();
         if (is_enum(cls) && type::is_kotlin_class(cls)) {
           fix_kt_enum_ctor_param(cls, class_stats.fix_kt_enum_ctor_param);
@@ -448,7 +467,7 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
         for (auto m : cls->get_all_methods()) {
           patch_parameters_and_returns(
               m, class_stats.patch_parameters_and_returns);
-          patch_synth_methods_overriding_annotated_methods(
+          patch_if_overriding_annotated_methods(
               m, class_stats.patch_synth_methods_overriding_annotated_methods);
           if (is_constructor(m) &&
               has_typedef_annos(m->get_param_anno(), m_typedef_annos)) {
@@ -459,53 +478,56 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
         return class_stats;
       });
 
+  PatchingCandidates candidates;
   m_patcher_stats +=
       walk::parallel::classes<PatcherStats>(scope, [this](DexClass* cls) {
         auto class_stats = PatcherStats();
 
-        if (is_synthesized_lambda_class(cls) || is_fun_interface_class(cls)) {
-          std::vector<const DexField*> patched_fields;
-          for (auto m : cls->get_all_methods()) {
-            patch_lambdas(m, &patched_fields, class_stats.patch_lambdas);
+        if (!is_synthesized_lambda_class(cls) && !is_fun_interface_class(cls)) {
+          return class_stats;
+        }
+
+        std::vector<const DexField*> patched_fields;
+        for (auto m : cls->get_all_methods()) {
+          patch_lambdas(m, &patched_fields, class_stats.patch_lambdas);
+        }
+        if (!patched_fields.empty()) {
+          auto cls_name = cls->get_deobfuscated_name_or_empty_copy();
+          size_t after_first_dollar = cls_name.find('$') + 1;
+          size_t class_prefix_end;
+          if (isdigit(cls_name[after_first_dollar])) {
+            // Patched lambda class is directly under the top most class. No
+            // in-between chained lambda exists. We simply drop everything
+            // after the 1st dollar. e.g.,
+            // Lcom/xxx/yyy/zzz/TimelineCoverPhotoMenuBuilder$1
+            class_prefix_end = after_first_dollar - 1;
+          } else {
+            // Patched lambda class is nested under an enclosing function.
+            // There might be an enclosing chained lambda. We include whatever
+            // is before the 2nd dollar. e.g.,
+            // Lcom/xxx/yyy/zzz/TimelineCoverPhotoMenuBuilder$render
+            class_prefix_end = cls_name.find('$', cls_name.find('$') + 1);
           }
-          if (!patched_fields.empty()) {
-            auto cls_name = cls->get_deobfuscated_name_or_empty_copy();
-            size_t after_first_dollar = cls_name.find('$') + 1;
-            size_t class_prefix_end;
-            if (isdigit(cls_name[after_first_dollar])) {
-              // Patched lambda class is directly under the top most class. No
-              // in-between chained lambda exists. We simply drop everything
-              // after the 1st dollar. e.g.,
-              // Lcom/xxx/yyy/zzz/TimelineCoverPhotoMenuBuilder$1
-              class_prefix_end = after_first_dollar - 1;
-            } else {
-              // Patched lambda class is nested under an enclosing function.
-              // There might be an enclosing chained lambda. We include whatever
-              // is before the 2nd dollar. e.g.,
-              // Lcom/xxx/yyy/zzz/TimelineCoverPhotoMenuBuilder$render
-              class_prefix_end = cls_name.find('$', cls_name.find('$') + 1);
-            }
-            const auto class_prefix = cls_name.substr(0, class_prefix_end);
-            const auto trace_update = [&patched_fields](
-                                          const std::string& class_prefix) {
-              std::ostringstream os;
-              for (auto f : patched_fields) {
-                os << f->get_name()->str() << " " << f << "|";
-              }
-              TRACE(TAC, 2, "[patcher] Adding lambda map %s of fields %zu %s",
-                    class_prefix.c_str(), patched_fields.size(),
-                    os.str().c_str());
-            };
-            if (traceEnabled(TAC, 2)) {
-              trace_update(class_prefix);
-            }
-            m_lambda_anno_map.update(
-                class_prefix, [&patched_fields](auto, auto& fields, auto) {
-                  for (auto f : patched_fields) {
-                    fields.push_back(f);
-                  }
-                });
+          const auto class_prefix = cls_name.substr(0, class_prefix_end);
+          const auto trace_update =
+              [&patched_fields](const std::string& class_prefix) {
+                std::ostringstream os;
+                for (auto f : patched_fields) {
+                  os << f->get_name()->str() << " " << f << "|";
+                }
+                TRACE(TAC, 2, "[patcher] Adding lambda map %s of fields %zu %s",
+                      class_prefix.c_str(), patched_fields.size(),
+                      os.str().c_str());
+              };
+          if (traceEnabled(TAC, 2)) {
+            trace_update(class_prefix);
           }
+          m_lambda_anno_map.update(class_prefix,
+                                   [&patched_fields](auto, auto& fields, auto) {
+                                     for (auto f : patched_fields) {
+                                       fields.push_back(f);
+                                     }
+                                   });
         }
         return class_stats;
       });
@@ -929,8 +951,8 @@ void TypedefAnnoPatcher::patch_parameters_and_returns(
         patch_param_from_method_invoke(envs, inference, m, insn, &ud_chains,
                                        class_stats, missing_param_annos);
       } else if (opcode::is_an_iput(opcode) || opcode::is_an_sput(opcode)) {
-        patch_setter_method(inference, m, insn, &ud_chains, class_stats,
-                            missing_param_annos);
+        collect_setter_missing_param_annos(inference, m, insn, &ud_chains,
+                                           class_stats, missing_param_annos);
       } else if ((opcode == OPCODE_RETURN_OBJECT || opcode == OPCODE_RETURN) &&
                  patch_return) {
         auto return_anno = envs.at(insn).get_annotation(insn->src(0));
