@@ -61,6 +61,7 @@ def display_retainers(retainers):
 class NodeDisplayOptions(enum.Flag):
     PREDS = enum.auto()
     SUCCS = enum.auto()
+    # pyre-fixme[8]: Attribute has type `int`; used as `NodeDisplayOptions`.
     BOTH = PREDS | SUCCS
 
 
