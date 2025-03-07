@@ -141,10 +141,7 @@ struct ConfigFiles {
     return *m_method_profiles;
   }
 
-  const method_profiles::MethodProfiles& get_method_profiles() const {
-    ensure_agg_method_stats_loaded();
-    return *m_method_profiles;
-  }
+  const method_profiles::MethodProfiles& get_method_profiles() const;
 
   void process_unresolved_method_profile_lines();
 
@@ -250,7 +247,7 @@ struct ConfigFiles {
   std::unordered_map<const DexString*, std::vector<uint8_t>>
   load_class_frequencies();
   std::unordered_map<std::string, std::vector<std::string>> load_class_lists();
-  void ensure_agg_method_stats_loaded() const;
+  void ensure_agg_method_stats_loaded();
   void ensure_secondary_method_stats_loaded() const;
   void load_inliner_config(inliner::InlinerConfig*);
   void build_dead_class_and_live_class_split_lists();

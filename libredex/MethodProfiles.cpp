@@ -7,7 +7,10 @@
 
 #include "MethodProfiles.h"
 
+#include "RedexContext.h"
+
 #include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/regex.hpp>
 #include <fstream>
 #include <iostream>
 #include <stdio.h>
@@ -68,6 +71,174 @@ const StatsMap& MethodProfiles::method_stats(
 
   static StatsMap empty_map = {};
   return empty_map;
+}
+
+// Escape any special character in regex
+inline std::string regex_escape(const std::string& text) {
+  const boost::regex esc("[.^$|()\\[\\]{}*+?\\\\]");
+  const std::string rep("\\\\&");
+  return regex_replace(text, esc, rep,
+                       boost::match_default | boost::format_sed);
+}
+
+// Converts a wildcard string (*, **, and ?) to a regular expression
+std::string wildcard_to_regex(const std::string& wildcard_string) {
+  const std::string star_star_regex = "[-\\w\\$<>/;\[\\]]*";
+  const std::string star_regex = "[-\\w\\$<>\\[\\]]*";
+  const std::string question_regex = "[\\w<>\\[\\]]";
+
+  // A list of strings divided first by "**", then by "*", then by "?"
+  // For example, "this*is?a*very**long*sentence?that**will**be*tokens"
+  // would become [[[this], [is, a], [very]], [[long], [sentence, that]],
+  // [[[will]]], [[be], [tokens]]]
+  std::vector<std::vector<std::vector<std::string>>> tokenized_list;
+  std::vector<std::string> stars_list;
+  boost::split_regex(stars_list, wildcard_string, boost::regex("\\*\\*"));
+  for (const std::string& stars_str : stars_list) {
+    std::vector<std::string> star_list;
+    boost::split(star_list, stars_str, boost::is_any_of("*"));
+    std::vector<std::vector<std::string>> star_and_question_list;
+    for (const std::string& star_str : star_list) {
+      std::vector<std::string> question_list;
+      boost::split(question_list, star_str, boost::is_any_of("?"));
+      star_and_question_list.emplace_back(question_list);
+    }
+    tokenized_list.emplace_back(star_and_question_list);
+  }
+
+  // Reduce list back into a string, substituting in the redex values
+  // and escaping non-tokens
+  std::vector<std::string> escaped_with_questions_and_stars;
+  for (const auto& star_and_question_list : tokenized_list) {
+    std::vector<std::string> escaped_with_questions;
+    for (const auto& question_list : star_and_question_list) {
+      std::vector<std::string> escaped_list;
+      escaped_list.reserve(question_list.size());
+      for (const auto& str : question_list) {
+        escaped_list.emplace_back(regex_escape(str));
+      }
+      escaped_with_questions.emplace_back(
+          boost::join(escaped_list, question_regex));
+    }
+    escaped_with_questions_and_stars.emplace_back(
+        boost::join(escaped_with_questions, star_regex));
+  }
+
+  // The above algorithm doesn't take into account whether the string begins or
+  // ends with a special character, so we check that now
+  std::string prefix;
+  if (wildcard_string.find("**") == 0) {
+    prefix = star_star_regex;
+  } else if (wildcard_string.find('*') == 0) {
+    prefix = star_regex;
+  } else if (wildcard_string.find('?') == 0) {
+    prefix = question_regex;
+  }
+  std::string suffix;
+  if (wildcard_string.rfind("**") == wildcard_string.size() - 2) {
+    suffix = star_star_regex;
+  } else if (wildcard_string.rfind('*') == wildcard_string.size() - 1) {
+    suffix = star_regex;
+  } else if (wildcard_string.rfind('?') == wildcard_string.size() - 1) {
+    suffix = question_regex;
+  }
+
+  return prefix +
+         boost::join(escaped_with_questions_and_stars, star_star_regex) +
+         suffix;
+}
+
+void MethodProfiles::apply_manual_profile(DexMethodRef* ref,
+                                          const std::string& flags) {
+  // These are just randomly selected stats that seemed reasonable
+  const struct Stats stats = {100.0, 100, 50, 0};
+  m_method_stats["manual"].emplace(ref, stats);
+  if (flags.find('H') != std::string::npos) {
+    m_method_stats["manual_hot"].emplace(ref, stats);
+  }
+  if (flags.find('S') != std::string::npos) {
+    m_method_stats["manual_startup"].emplace(ref, stats);
+  }
+  if (flags.find('P') != std::string::npos) {
+    m_method_stats["manual_post_startup"].emplace(ref, stats);
+  }
+}
+
+void MethodProfiles::parse_manual_file(
+    const std::string& manual_filename,
+    const std::unordered_map<std::string,
+                             std::unordered_map<std::string, DexMethodRef*>>&
+        baseline_profile_method_map) {
+  std::ifstream manual_file(manual_filename);
+  std::string current_line;
+  while (std::getline(manual_file, current_line)) {
+    if (current_line.empty() || current_line[0] == '#') {
+      continue;
+    }
+    auto hash_pos = current_line.find('#');
+    if (hash_pos != std::string::npos) {
+      current_line = current_line.substr(0, hash_pos);
+    }
+    // Extract flags
+    boost::smatch flag_matches;
+    boost::regex flag_expression("^([HSP]{0,3})(L.+)");
+    always_assert_log(
+        boost::regex_search(current_line, flag_matches, flag_expression,
+                            boost::match_default),
+        "Line %s did not match the regular expression \"^([HSP]*)L.+\"",
+        current_line.c_str());
+    auto flags = flag_matches[1].str();
+    current_line = flag_matches[2].str();
+    std::vector<std::string> method_and_class;
+    boost::split_regex(method_and_class, current_line, boost::regex("->"));
+    always_assert(method_and_class.size() == 1 || method_and_class.size() == 2);
+    // This is not a method, so do nothing
+    if (method_and_class.size() != 2) {
+      continue;
+    }
+    // If the line contains wildcard characters, do a regex search
+    if (current_line.find('*') == std::string::npos &&
+        current_line.find('?') == std::string::npos) {
+      auto class_it = baseline_profile_method_map.find(method_and_class[0]);
+      if (class_it != baseline_profile_method_map.end()) {
+        auto method_it = class_it->second.find(method_and_class[1]);
+        if (method_it != class_it->second.end()) {
+          apply_manual_profile(method_it->second, flags);
+        }
+      }
+    } else {
+      // Otherwise, just do a map lookup
+      auto classregex = boost::regex(wildcard_to_regex(method_and_class[0]));
+      auto methodregex = boost::regex(wildcard_to_regex(method_and_class[1]));
+      for (auto class_it = baseline_profile_method_map.begin();
+           class_it != baseline_profile_method_map.end();
+           class_it++) {
+        auto classname = class_it->first;
+        boost::smatch class_matches;
+        if (!boost::regex_search(classname, class_matches, classregex)) {
+          continue;
+        }
+        for (auto method_it = class_it->second.begin();
+             method_it != class_it->second.end();
+             method_it++) {
+          auto methodname = method_it->first;
+          boost::smatch method_matches;
+          if (boost::regex_search(methodname, method_matches, methodregex)) {
+            apply_manual_profile(method_it->second, flags);
+          }
+        }
+      }
+    }
+  }
+}
+
+void MethodProfiles::parse_manual_files(
+    const std::vector<std::string>& manual_filenames) {
+  Timer t("parse_manual_files");
+  auto baseline_profile_method_map = g_redex->get_baseline_profile_method_map();
+  for (const std::string& manual_filename : manual_filenames) {
+    parse_manual_file(manual_filename, baseline_profile_method_map);
+  }
 }
 
 bool MethodProfiles::parse_stats_file(const std::string& csv_filename) {

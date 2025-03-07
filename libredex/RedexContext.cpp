@@ -7,6 +7,7 @@
 
 #include "RedexContext.h"
 
+#include <boost/algorithm/string.hpp>
 #include <boost/thread/thread.hpp>
 #include <exception>
 #include <mutex>
@@ -665,6 +666,28 @@ DexMethodRef* RedexContext::get_method(const DexType* type,
   DexMethodSpec r(const_cast<DexType*>(type), name,
                   const_cast<DexProto*>(proto));
   return s_method_map.load(r, nullptr);
+}
+
+std::unordered_map<std::string, std::unordered_map<std::string, DexMethodRef*>>
+RedexContext::get_baseline_profile_method_map() {
+  auto baseline_profile_method_map =
+      std::unordered_map<std::string,
+                         std::unordered_map<std::string, DexMethodRef*>>();
+  for (auto it = s_method_map.begin(); it != s_method_map.end(); it++) {
+    auto method_spec = it->first;
+    auto method = s_method_map.load(method_spec, nullptr);
+    std::string descriptor = show_deobfuscated(method);
+    boost::replace_all(descriptor, ":(", "(");
+    std::vector<std::string> class_and_method;
+    boost::split(class_and_method, descriptor, boost::is_any_of("."));
+    always_assert(class_and_method.size() == 2);
+    auto method_name_to_method =
+        std::unordered_map<std::string, DexMethodRef*>();
+    method_name_to_method.emplace(class_and_method[1], method);
+    baseline_profile_method_map.emplace(class_and_method[0],
+                                        method_name_to_method);
+  }
+  return baseline_profile_method_map;
 }
 
 void RedexContext::alias_method_name(DexMethodRef* method,

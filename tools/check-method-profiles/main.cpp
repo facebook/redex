@@ -27,6 +27,6 @@ int main(int argc, char* argv[]) {
   RedexContext rc;
   g_redex = &rc;
   method_profiles::MethodProfiles m;
-  m.initialize(files);
+  m.initialize(files, std::vector<std::string>(), false);
   g_redex = nullptr;
 }
