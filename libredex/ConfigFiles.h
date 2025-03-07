@@ -181,6 +181,11 @@ struct ConfigFiles {
    */
   const inliner::InlinerConfig& get_inliner_config();
 
+  void init_baseline_profile_configs();
+
+  const baseline_profiles::BaselineProfileConfigMap&
+  get_baseline_profile_configs();
+
   /**
    * Get the global baseline profile config.
    */
