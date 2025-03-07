@@ -194,6 +194,9 @@ struct ConfigFiles {
 
   bool get_did_use_bzl_baseline_profile_config();
 
+  std::string get_preprocessed_baseline_profile_file(
+      const std::string& config_name);
+
   boost::optional<std::string> get_android_sdk_api_file(int32_t api_level) {
     std::string api_file;
     std::string key = "android_sdk_api_" + std::to_string(api_level) + "_file";

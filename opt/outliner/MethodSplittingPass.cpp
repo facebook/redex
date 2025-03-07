@@ -77,8 +77,8 @@ void MethodSplittingPass::run_pass(DexStoresVector& stores,
   it = interdex_metrics.find(interdex::METRIC_RESERVED_TREFS);
   size_t reserved_trefs = it == interdex_metrics.end() ? 0 : it->second;
 
-  auto baseline_profile = baseline_profiles::get_baseline_profile(
-      conf.get_default_baseline_profile_config(), conf.get_method_profiles());
+  auto baseline_profile = baseline_profiles::get_default_baseline_profile(
+      conf.get_baseline_profile_configs(), conf.get_method_profiles(), false);
   InsertOnlyConcurrentSet<const DexMethod*> concurrent_hot_methods;
   for (auto&& [method, flags] : baseline_profile.methods) {
     if (flags.hot) {

@@ -28,9 +28,16 @@ struct BaselineProfile {
   std::unordered_set<const DexClass*> classes;
 };
 
-BaselineProfile get_baseline_profile(
-    const BaselineProfileConfig& config,
+std::unordered_map<std::string, BaselineProfile> get_baseline_profiles(
+    const std::unordered_map<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
+    const bool ingest_baseline_profile_data,
+    std::unordered_set<const DexMethodRef*>* method_refs_without_def = nullptr);
+
+BaselineProfile get_default_baseline_profile(
+    const std::unordered_map<std::string, BaselineProfileConfig>& configs,
+    const method_profiles::MethodProfiles& method_profiles,
+    const bool ingest_baseline_profile_data,
     std::unordered_set<const DexMethodRef*>* method_refs_without_def = nullptr);
 
 } // namespace baseline_profiles

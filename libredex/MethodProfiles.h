@@ -134,6 +134,10 @@ class MethodProfiles {
   // If no interactions are found by that interaction id, Return an empty map.
   const StatsMap& method_stats(const std::string& interaction_id) const;
 
+  const StatsMap& method_stats_for_baseline_config(
+      const std::string& interaction_id,
+      const std::string& baseline_config_name) const;
+
   const AllInteractions& all_interactions() const { return m_method_stats; }
 
   boost::optional<Stats> get_method_stat(const std::string& interaction_id,
