@@ -76,6 +76,7 @@ std::tuple<const StatsMap&, bool> method_stats_for_interaction_id(
 const StatsMap& MethodProfiles::method_stats_for_baseline_config(
     const std::string& interaction_id,
     const std::string& baseline_config_name) const {
+  // Try to find the interaction id first in the manual profile map
   if (baseline_config_name !=
       baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME) {
     if (m_baseline_manual_interactions.count(baseline_config_name)) {
@@ -88,9 +89,17 @@ const StatsMap& MethodProfiles::method_stats_for_baseline_config(
       }
     }
   }
-  const auto& [stats, _] =
+  // If we can't find it there, try to find it in the default method stats
+  const auto& [stats, found] =
       method_stats_for_interaction_id(interaction_id, m_method_stats);
-  return stats;
+  if (found) {
+    return stats;
+  }
+  // If we can't find it there, try to find it in the baseline profile variant
+  // stats
+  const auto& [variant_stats, _] = method_stats_for_interaction_id(
+      interaction_id, m_baseline_profile_method_stats);
+  return variant_stats;
 }
 
 const StatsMap& MethodProfiles::method_stats(
@@ -320,7 +329,8 @@ void MethodProfiles::parse_manual_files(
   }
 }
 
-bool MethodProfiles::parse_stats_file(const std::string& csv_filename) {
+bool MethodProfiles::parse_stats_file(const std::string& csv_filename,
+                                      bool baseline_profile_variant) {
   TRACE(METH_PROF, 3, "input csv filename: %s", csv_filename.c_str());
   if (csv_filename.empty()) {
     TRACE(METH_PROF, 2, "No csv file given");
@@ -350,7 +360,7 @@ bool MethodProfiles::parse_stats_file(const std::string& csv_filename) {
     if (m_mode == NONE) {
       success = parse_header(line);
     } else {
-      success = parse_line(line);
+      success = parse_line(line, baseline_profile_variant);
     }
     if (!success) {
       return false;
@@ -499,7 +509,8 @@ std::optional<MethodProfiles::ParsedMain> MethodProfiles::parse_main_internal(
 }
 
 bool MethodProfiles::apply_main_internal_result(ParsedMain v,
-                                                std::string* interaction_id) {
+                                                std::string* interaction_id,
+                                                bool baseline_profile_variant) {
   if (v.ref != nullptr) {
     if (v.line_interaction_id) {
       // Interaction IDs from the current row have priority over the interaction
@@ -511,7 +522,11 @@ bool MethodProfiles::apply_main_internal_result(ParsedMain v,
     TRACE(METH_PROF, 6, "(%s, %s) -> {%f, %f, %f, %d}", SHOW(v.ref),
           interaction_id->c_str(), v.stats.appear_percent, v.stats.call_count,
           v.stats.order_percent, v.stats.min_api_level);
-    m_method_stats[*interaction_id].emplace(v.ref, v.stats);
+    if (baseline_profile_variant) {
+      m_baseline_profile_method_stats[*interaction_id].emplace(v.ref, v.stats);
+    } else {
+      m_method_stats[*interaction_id].emplace(v.ref, v.stats);
+    }
     return true;
   } else if (v.ref_str == nullptr) {
     std::cerr << "FAILED to parse line. Missing name column\n";
@@ -521,7 +536,11 @@ bool MethodProfiles::apply_main_internal_result(ParsedMain v,
     if (!v.line_interaction_id) {
       v.line_interaction_id = std::make_unique<std::string>(*interaction_id);
     }
-    m_unresolved_lines.emplace_back(std::move(v));
+    if (baseline_profile_variant) {
+      m_baseline_profile_unresolved_lines.emplace_back(std::move(v));
+    } else {
+      m_unresolved_lines.emplace_back(std::move(v));
+    }
     return false;
   }
 }
@@ -614,18 +633,21 @@ size_t MethodProfiles::substitute_stats(
 }
 
 bool MethodProfiles::parse_main(const std::string& line,
-                                std::string* interaction_id) {
+                                std::string* interaction_id,
+                                bool baseline_profile_variant) {
   auto result = parse_main_internal(line);
   if (!result) {
     return false;
   }
-  (void)apply_main_internal_result(std::move(result.value()), interaction_id);
+  (void)apply_main_internal_result(std::move(result.value()), interaction_id,
+                                   baseline_profile_variant);
   return true;
 }
 
-bool MethodProfiles::parse_line(const std::string& line) {
+bool MethodProfiles::parse_line(const std::string& line,
+                                bool baseline_profile_variant) {
   if (m_mode == MAIN) {
-    return parse_main(line, &m_interaction_id);
+    return parse_main(line, &m_interaction_id, baseline_profile_variant);
   } else if (m_mode == METADATA) {
     return parse_metadata(line);
   } else {
@@ -644,7 +666,15 @@ boost::optional<uint32_t> MethodProfiles::get_interaction_count(
 }
 
 void MethodProfiles::process_unresolved_lines() {
-  if (m_unresolved_lines.empty()) {
+  process_unresolved_lines(false);
+  process_unresolved_lines(true);
+}
+
+void MethodProfiles::process_unresolved_lines(bool baseline_profile_variant) {
+  auto& unresolved_lines_ref = baseline_profile_variant
+                                   ? m_baseline_profile_unresolved_lines
+                                   : m_unresolved_lines;
+  if (unresolved_lines_ref.empty()) {
     return;
   }
 
@@ -652,8 +682,8 @@ void MethodProfiles::process_unresolved_lines() {
 
   std::set<ParsedMain*> resolved;
   std::mutex resolved_mutex;
-  workqueue_run_for<size_t>(0, m_unresolved_lines.size(), [&](size_t index) {
-    auto& parsed_main = m_unresolved_lines.at(index);
+  workqueue_run_for<size_t>(0, unresolved_lines_ref.size(), [&](size_t index) {
+    auto& parsed_main = unresolved_lines_ref.at(index);
     always_assert(parsed_main.ref_str != nullptr);
     always_assert(parsed_main.mdt);
     parsed_main.ref = DexMethod::get_method(*parsed_main.mdt);
@@ -664,22 +694,23 @@ void MethodProfiles::process_unresolved_lines() {
       resolved.emplace(&parsed_main);
     }
   });
-  auto unresolved_lines = m_unresolved_lines.size();
+  auto unresolved_lines = unresolved_lines_ref.size();
   // Note that resolved is ordered by the (addresses of the) unresolved lines,
   // to ensure determinism
   for (auto& parsed_main_ptr : resolved) {
     auto interaction_id_ptr = &*parsed_main_ptr->line_interaction_id;
     always_assert(parsed_main_ptr->ref != nullptr);
     bool success = apply_main_internal_result(std::move(*parsed_main_ptr),
-                                              interaction_id_ptr);
+                                              interaction_id_ptr,
+                                              baseline_profile_variant);
     always_assert(success);
   }
-  always_assert(unresolved_lines == m_unresolved_lines.size());
-  std20::erase_if(m_unresolved_lines, [&](auto& unresolved_line) {
+  always_assert(unresolved_lines == unresolved_lines_ref.size());
+  std20::erase_if(unresolved_lines_ref, [&](auto& unresolved_line) {
     return resolved.count(&unresolved_line);
   });
   always_assert(unresolved_lines - resolved.size() ==
-                m_unresolved_lines.size());
+                unresolved_lines_ref.size());
 
   size_t total_rows = 0;
   for (const auto& pair : m_method_stats) {
@@ -698,18 +729,33 @@ MethodProfiles::get_unresolved_method_descriptor_tokens() const {
     always_assert(parsed_main.mdt);
     result.insert(*parsed_main.mdt);
   }
+  for (auto& parsed_main : m_baseline_profile_unresolved_lines) {
+    always_assert(parsed_main.mdt);
+    result.insert(*parsed_main.mdt);
+  }
   return result;
 }
 
 void MethodProfiles::resolve_method_descriptor_tokens(
     const std::unordered_map<dex_member_refs::MethodDescriptorTokens,
                              std::vector<DexMethodRef*>>& map) {
+  resolve_method_descriptor_tokens(map, true);
+  resolve_method_descriptor_tokens(map, false);
+}
+
+void MethodProfiles::resolve_method_descriptor_tokens(
+    const std::unordered_map<dex_member_refs::MethodDescriptorTokens,
+                             std::vector<DexMethodRef*>>& map,
+    bool baseline_profile_variant) {
   size_t removed{0};
   size_t added{0};
-  // Note that we don't remove m_unresolved_lines as we go, as the given map
+  // Note that we don't remove unresolved_lines_ref as we go, as the given map
   // might reference its mdts.
   std::unordered_set<std::string*> to_remove;
-  for (auto& parsed_main : m_unresolved_lines) {
+  auto& unresolved_lines_ref = baseline_profile_variant
+                                   ? m_baseline_profile_unresolved_lines
+                                   : m_unresolved_lines;
+  for (auto& parsed_main : unresolved_lines_ref) {
     always_assert(parsed_main.mdt);
     auto it = map.find(*parsed_main.mdt);
     if (it == map.end()) {
@@ -725,12 +771,13 @@ void MethodProfiles::resolve_method_descriptor_tokens(
       auto interaction_id_ptr = &*resolved_parsed_main.line_interaction_id;
       always_assert(resolved_parsed_main.ref != nullptr);
       bool success = apply_main_internal_result(std::move(resolved_parsed_main),
-                                                interaction_id_ptr);
+                                                interaction_id_ptr,
+                                                baseline_profile_variant);
       always_assert(success);
       added++;
     }
   }
-  std20::erase_if(m_unresolved_lines, [&to_remove](auto& parsed_main) {
+  std20::erase_if(unresolved_lines_ref, [&to_remove](auto& parsed_main) {
     return to_remove.count(parsed_main.ref_str.get());
   });
   TRACE(METH_PROF, 1,

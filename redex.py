@@ -1005,11 +1005,31 @@ def _check_android_sdk_api(args: argparse.Namespace) -> None:
             args.passthru.append(arg)
     except ImportError:
         LOGGER.warning("No embedded files, please add manually!")
-        
+
 
 def _handle_baseline_profiles(args: argparse.Namespace) -> None:
     if args.baseline_profile_config:
         args.passthru.append(f"baseline_profile_config={args.baseline_profile_config}")
+
+
+# Returns a tuple of baseline profile interactions
+# The first element is all interactions
+# The second element is default interactions
+def _get_baseline_profile_interactions(
+    args: argparse.Namespace,
+) -> typing.Tuple[typing.Set[str], typing.Set[str]]:
+    if not args.baseline_profile_config:
+        return set(), set()
+    with open(
+        os.path.join(args.baseline_profile_config, "baseline_profile_configs.json")
+    ) as f:
+        json_config = json.load(f)
+        LOGGER.error(json_config)
+        return {
+            interaction_id
+            for _, config in json_config.items()
+            for interaction_id in config["deep_data_interaction_config"]
+        }, set(json_config["default"]["deep_data_interaction_config"].keys())
 
 
 def _handle_profiles(
@@ -1021,18 +1041,34 @@ def _handle_profiles(
     directory = make_temp_dir(".redex_profiles", False)
     unpack_tar_xz(args.packed_profiles, directory)
 
-    method_profiles_paths = (
+    baseline_profile_interactions, default_baseline_profile_interactions = (
+        _get_baseline_profile_interactions(args)
+    )
+
+    all_method_profiles_paths = [
         f'"{f.path}"'
         for f in os.scandir(directory)
         if f.is_file() and ("method_stats" in f.name or "agg_stats" in f.name)
-    )
+    ]
+
+    method_profiles_paths: typing.List[str]
 
     if len(dd_enabled_interactions) > 0:
         method_profiles_paths = [
             mpp
-            for mpp in method_profiles_paths
-            if any([f"_{i}_" in mpp for i in dd_enabled_interactions])
+            for mpp in all_method_profiles_paths
+            if any(f"_{i}_" in mpp for i in dd_enabled_interactions)
+            or any(f"_{i}_" in mpp for i in default_baseline_profile_interactions)
         ]
+    else:
+        method_profiles_paths = all_method_profiles_paths.copy()
+
+    variant_method_profiles_paths = [
+        mpp
+        for mpp in all_method_profiles_paths
+        if any(f"_{i}_" in mpp for i in baseline_profile_interactions)
+        and mpp not in method_profiles_paths
+    ]
 
     # Create input for method profiles.
     method_profiles_str = ", ".join(method_profiles_paths)
@@ -1041,6 +1077,18 @@ def _handle_profiles(
         args.passthru_json.append(f"agg_method_stats_files=[{method_profiles_str}]")
     else:
         LOGGER.info("No method profiles found in %s", args.packed_profiles)
+
+    # Create input for variant method profiles.
+    variant_method_profiles_str = ", ".join(variant_method_profiles_paths)
+    if method_profiles_str:
+        LOGGER.debug(
+            "Found variant method profiles: %s", variant_method_profiles_str
+        )
+        args.passthru_json.append(
+            f"baseline_profile_agg_method_stats_files=[{variant_method_profiles_str}]"
+        )
+    else:
+        LOGGER.info("No variant method profiles found in %s", args.packed_profiles)
 
     # Create input for basic blocks.
 
