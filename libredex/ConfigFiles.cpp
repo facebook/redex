@@ -465,10 +465,8 @@ void ConfigFiles::ensure_agg_method_stats_loaded() {
   if (csv_filenames.empty() && baseline_profile_csv_filenames.empty()) {
     return;
   }
-  m_method_profiles->initialize(
-      csv_filenames, baseline_profile_csv_filenames,
-      get_baseline_profile_configs(),
-      get_json_config().get("ingest_baseline_profile_data", false));
+  m_method_profiles->initialize(csv_filenames, baseline_profile_csv_filenames,
+                                get_baseline_profile_configs());
 }
 
 void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
@@ -618,6 +616,9 @@ void ConfigFiles::init_baseline_profile_configs() {
     baseline_profile_config_jw.get(
         "use_redex_generated_profile", false,
         current_baseline_profile_config.options.use_redex_generated_profile);
+    baseline_profile_config_jw.get("use_final_redex_generated_profile", false,
+                                   current_baseline_profile_config.options
+                                       .use_final_redex_generated_profile);
     baseline_profile_config_jw.get("include_betamap_20pct_coldstart", true,
                                    current_baseline_profile_config.options
                                        .include_betamap_20pct_coldstart);
