@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <mutex>
+
 #include "ControlFlow.h"
 #include "Pass.h"
 #include "TypeInference.h"
@@ -44,9 +46,11 @@ class TypedefAnnoOptPass : public Pass {
 
  private:
   void populate_value_of_opt_str(DexClass* cls);
+  void emit_old_to_new(DexMethod*, DexMethod*);
 
   friend struct TypedefAnnoOptTest;
 
   Config m_config;
   std::unordered_map<DexMethod*, DexMethod*> old_to_new_callee;
+  std::mutex m_old_to_new_mtx;
 };

@@ -55,6 +55,11 @@ void fill_encoded_string(DexMethod* m, const DexString* encoded_dex_str) {
   set_public(m);
 }
 
+void TypedefAnnoOptPass::emit_old_to_new(DexMethod* k, DexMethod* v) {
+  std::lock_guard<std::mutex> lock(m_old_to_new_mtx);
+  old_to_new_callee.emplace(k, v);
+}
+
 void TypedefAnnoOptPass::populate_value_of_opt_str(DexClass* cls) {
   const std::vector<DexField*>& fields = cls->get_sfields();
   if (get_annotation(cls, m_config.str_typedef)) {
@@ -77,7 +82,7 @@ void TypedefAnnoOptPass::populate_value_of_opt_str(DexClass* cls) {
         StringTreeStringMap::encode_string_tree_map(string_tree_items);
     auto encoded_dex_str = DexString::make_string(encoded_str);
     fill_encoded_string(m, encoded_dex_str);
-    old_to_new_callee.emplace(get_util_method(cls, VALUE_OF), m);
+    emit_old_to_new(get_util_method(cls, VALUE_OF), m);
 
   } else if (get_annotation(cls, m_config.int_typedef)) {
 
@@ -97,7 +102,7 @@ void TypedefAnnoOptPass::populate_value_of_opt_str(DexClass* cls) {
         StringTreeMap<int32_t>::encode_string_tree_map(string_tree_items);
     auto encoded_dex_str = DexString::make_string(encoded_str);
     fill_encoded_string(m, encoded_dex_str);
-    old_to_new_callee.emplace(get_util_method(cls, VALUE_OF), m);
+    emit_old_to_new(get_util_method(cls, VALUE_OF), m);
   }
 }
 
