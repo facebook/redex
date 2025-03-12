@@ -170,6 +170,24 @@ class XmlStringCollector : public arsc::SimpleXmlParser {
 
   std::unordered_map<std::string, size_t> m_encountered_strings;
 };
+
+class OverlayableIdsCollector : public arsc::ResourceTableVisitor {
+ public:
+  ~OverlayableIdsCollector() override {}
+
+  OverlayableIdsCollector() {}
+
+  bool visit_overlayable_id(
+      android::ResTable_package* /* unused */,
+      android::ResTable_overlayable_header* /* unused */,
+      android::ResTable_overlayable_policy_header* /* unused */,
+      uint32_t id) override {
+    m_ids.emplace(id);
+    return true;
+  }
+
+  std::unordered_set<uint32_t> m_ids;
+};
 } // namespace
 
 TEST(Visitor, ParsePackageAndTypes) {
@@ -226,4 +244,17 @@ TEST(Visitor, VisitXmlStrings) {
   EXPECT_EQ(collector.m_encountered_strings.at(
                 "http://schemas.android.com/apk/res/android"),
             7);
+}
+
+TEST(Visitor, VisitOverlayableIds) {
+  auto f = RedexMappedFile::open(get_env("test_res_path"));
+  std::vector<uint32_t> expected_ids{0x7f090002, 0x7f090006, 0x7f090007,
+                                     0x7f09000f, 0x7f090010};
+  OverlayableIdsCollector collector;
+  collector.visit(const_cast<char*>(f.const_data()), f.size());
+  EXPECT_EQ(collector.m_ids.size(), expected_ids.size());
+  for (auto id : expected_ids) {
+    EXPECT_TRUE(collector.m_ids.count(id) > 0)
+        << "Did not find 0x" << std::hex << id;
+  }
 }
