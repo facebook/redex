@@ -66,8 +66,10 @@ bool TableParser::visit_global_strings(android::ResStringPool_header* pool) {
 
 bool TableParser::visit_package(android::ResTable_package* package) {
   m_packages.emplace(package);
-  std::vector<android::ResChunk_header*> headers;
-  m_package_unknown_chunks.emplace(package, std::move(headers));
+  // Initialize empty collections for this package, for ease of use by consumers
+  // later.
+  m_package_overlayables[package];
+  m_package_unknown_chunks[package];
   arsc::StringPoolRefVisitor::visit_package(package);
   return true;
 }
@@ -111,6 +113,42 @@ bool TableParser::visit_type(android::ResTable_package* package,
     }
   }
   arsc::StringPoolRefVisitor::visit_type(package, type_spec, type);
+  return true;
+}
+
+bool TableParser::visit_overlayable(
+    android::ResTable_package* package,
+    android::ResTable_overlayable_header* overlayable) {
+  auto search = m_package_overlayables.find(package);
+  if (search != m_package_overlayables.end()) {
+    search->second.emplace(overlayable, arsc::OverlayInfo(overlayable));
+  }
+  // else, should not happen (malformed data or bug in parser code)
+  arsc::StringPoolRefVisitor::visit_overlayable(package, overlayable);
+  return true;
+}
+
+bool TableParser::visit_overlayable_policy(
+    android::ResTable_package* package,
+    android::ResTable_overlayable_header* overlayable,
+    android::ResTable_overlayable_policy_header* policy,
+    uint32_t* ids_ptr) {
+  auto search = m_package_overlayables.find(package);
+  if (search != m_package_overlayables.end()) {
+    auto& lookup = search->second;
+    auto& info = lookup.at(overlayable);
+    if (ids_ptr != nullptr) {
+      info.policies.emplace(policy, ids_ptr);
+    } else {
+      // Unexpected.
+      TRACE(RES, 3,
+            "Dropping empty ResTable_overlayable_policy_header. Offset = %ld",
+            get_file_offset(policy));
+    }
+  }
+  // else, should not happen (malformed data or bug in parser code)
+  arsc::StringPoolRefVisitor::visit_overlayable_policy(package, overlayable,
+                                                       policy, ids_ptr);
   return true;
 }
 
@@ -1586,6 +1624,9 @@ void ResourcesArscFile::remap_reorder_and_serialize(
         package_builder->add_type(type_info);
       }
     }
+    // Emit overlays.
+    auto& overlayables = table_parser.m_package_overlayables.at(package);
+    package_builder->add_overlays(overlayables);
     // Copy unknown chunks that we did not parse
     auto& unknown_chunks = table_parser.m_package_unknown_chunks.at(package);
     for (auto& header : unknown_chunks) {
@@ -2046,6 +2087,9 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
     }
     package_builder->set_type_strings(type_strings_builder);
 
+    // Emit overlays.
+    auto& overlayables = collector.m_package_overlayables.at(package);
+    package_builder->add_overlays(overlayables);
     // Finally, preserve any chunks that we are not parsing.
     auto& unknown_chunks = collector.m_package_unknown_chunks.at(package);
     for (auto& header : unknown_chunks) {
@@ -2246,6 +2290,9 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
       }
     }
 
+    // Emit overlays.
+    auto& overlayables = collector.m_package_overlayables.at(package);
+    package_builder->add_overlays(overlayables);
     // Finally, preserve any chunks that we are not parsing.
     auto& unknown_chunks = collector.m_package_unknown_chunks.at(package);
     for (auto& header : unknown_chunks) {
@@ -2479,6 +2526,9 @@ size_t ResourcesArscFile::serialize() {
       }
       package_builder->add_type(type_definer);
     }
+    // Emit overlays.
+    auto& overlayables = table_parser.m_package_overlayables.at(package);
+    package_builder->add_overlays(overlayables);
     // Copy unknown chunks that we did not parse
     auto& unknown_chunks = table_parser.m_package_unknown_chunks.at(package);
     for (auto& header : unknown_chunks) {
@@ -2557,6 +2607,24 @@ class EntryRemapper : public arsc::ResourceTableVisitor {
                        android::ResTable_map* value) override {
     remap_value_impl(&value->value);
     remap_ref_impl(&value->name);
+    return true;
+  }
+
+  bool visit_overlayable_policy(
+      android::ResTable_package* /* unused */,
+      android::ResTable_overlayable_header* /* unused */,
+      android::ResTable_overlayable_policy_header* policy,
+      uint32_t* ids) override {
+    auto ids_count = dtohl(policy->entry_count);
+    for (size_t i = 0; i < ids_count; i++) {
+      auto search = m_old_to_new.find(dtohl(ids[i]));
+      if (search != m_old_to_new.end()) {
+        ids[i] = htodl(search->second);
+      }
+      // Else, not found would normally signal deletion (or setting to zero) in
+      // remapping conventions. Since overlayable IDs will be considered as root
+      // this logic will elect to not change the structure.
+    }
     return true;
   }
 
