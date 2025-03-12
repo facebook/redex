@@ -152,6 +152,15 @@ bool TableParser::visit_overlayable_policy(
   return true;
 }
 
+bool TableParser::visit_overlayable_id(
+    android::ResTable_package* /* unused */,
+    android::ResTable_overlayable_header* /* unused */,
+    android::ResTable_overlayable_policy_header* /* unused */,
+    uint32_t id) {
+  m_overlayable_ids.emplace(id);
+  return true;
+}
+
 bool TableParser::visit_unknown_chunk(android::ResTable_package* package,
                                       android::ResChunk_header* header) {
   auto& chunks = m_package_unknown_chunks.at(package);
@@ -2844,6 +2853,12 @@ ResourcesArscFile::get_inlinable_resource_values() {
   // it's actual value to the map (instead of the reference).
   resources::resources_inlining_find_refs(past_refs, &inlinable_resources);
   return inlinable_resources;
+}
+
+std::unordered_set<uint32_t> ResourcesArscFile::get_overlayable_id_roots() {
+  auto& table_snapshot = get_table_snapshot();
+  auto& parsed_table = table_snapshot.get_parsed_table();
+  return parsed_table.m_overlayable_ids;
 }
 
 ResourcesArscFile::~ResourcesArscFile() {}

@@ -15,6 +15,7 @@
 #include "RedexResources.h"
 #include "RedexTest.h"
 #include "RedexTestUtils.h"
+#include "ResourcesTestDefs.h"
 #include "Trace.h"
 
 using namespace boost::filesystem;
@@ -94,6 +95,14 @@ TEST(ApkResources, TestReadingWritingOverlays) {
     redex::copy_file(arsc_path, arsc_path + ".orig");
     auto res_table = resources->load_res_table();
     ASSERT_OVERLAYABLES(res_table);
+    // Check the correct ids are returned as roots.
+    auto overlayables = res_table->get_overlayable_id_roots();
+    EXPECT_EQ(overlayables.size(),
+              sample_app::EXPECTED_OVERLAYABLE_RESOURCES.size());
+    for (auto& name : sample_app::EXPECTED_OVERLAYABLE_RESOURCES) {
+      EXPECT_TRUE(is_overlayable(name, res_table.get()))
+          << name << " is not overlayable!";
+    }
     // Make a remapping that doesn't change anything, just to ensure builder
     // code is emitting the same file as was given.
     std::map<uint32_t, uint32_t> no_change_remapping;

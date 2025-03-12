@@ -2483,6 +2483,16 @@ ResourcesPbFile::get_inlinable_resource_values() {
   return inlinable_resources;
 }
 
+std::unordered_set<uint32_t> ResourcesPbFile::get_overlayable_id_roots() {
+  std::unordered_set<uint32_t> overlayable_ids;
+  for (auto&& [id, entry] : m_res_id_to_entry) {
+    if (entry.has_overlayable_item()) {
+      overlayable_ids.emplace(id);
+    }
+  }
+  return overlayable_ids;
+}
+
 ResourcesPbFile::~ResourcesPbFile() {}
 
 #endif // HAS_PROTOBUF

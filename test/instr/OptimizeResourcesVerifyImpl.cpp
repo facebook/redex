@@ -55,6 +55,8 @@ const std::unordered_set<std::string> KEPT_RESOURCES = {
     "string/keep_me_unused_str",
     "string/indirection",
     "string/log_msg",
+    "string/log_msg_again", // This is here because at the time of writing, it
+                            // is assumed to be a root because it's overlayable.
     "string/some_fragment",
     "string/toast_fmt",
     "string/too_many",

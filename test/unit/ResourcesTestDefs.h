@@ -46,3 +46,14 @@ inline std::unordered_set<std::string> string_values_for_key(
   }
   return result;
 }
+
+inline bool is_overlayable(const std::string& name,
+                           ResourceTableFile* res_table) {
+  auto id = res_table->name_to_ids[name][0];
+  return res_table->get_overlayable_id_roots().count(id) > 0;
+}
+
+namespace sample_app {
+inline std::vector<std::string> EXPECTED_OVERLAYABLE_RESOURCES{
+    "button_txt", "log_msg", "log_msg_again", "welcome", "yummy_orange"};
+} // namespace sample_app

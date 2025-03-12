@@ -616,3 +616,18 @@ TEST(BundleResources, GetConfigsWithValue) {
         EXPECT_STREQ(it->toString().c_str(), "night");
       });
 }
+
+TEST(BundleResources, GetOverlayableRootIds) {
+  setup_resources_and_run(
+      [&](const std::string& /* unused */, BundleResources* resources) {
+        auto res_table = resources->load_res_table();
+        // Check the correct ids are returned as roots.
+        auto overlayables = res_table->get_overlayable_id_roots();
+        EXPECT_EQ(overlayables.size(),
+                  sample_app::EXPECTED_OVERLAYABLE_RESOURCES.size());
+        for (auto& name : sample_app::EXPECTED_OVERLAYABLE_RESOURCES) {
+          EXPECT_TRUE(is_overlayable(name, res_table.get()))
+              << name << " is not overlayable!";
+        }
+      });
+}
