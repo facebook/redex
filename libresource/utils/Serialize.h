@@ -380,6 +380,23 @@ struct TypeInfo {
   std::vector<android::ResTable_type*> configs;
 };
 
+// Overlays, specified in device order.
+struct OverlayInfo {
+  using PolicyInfo =
+      std::map<android::ResTable_overlayable_policy_header*, uint32_t*>;
+  android::ResTable_overlayable_header* header;
+  PolicyInfo policies;
+  OverlayInfo(android::ResTable_overlayable_header* h) : header(h) {}
+  bool empty() const {
+    for (auto&& [policy, _] : policies) {
+      if (dtohl(policy->entry_count) > 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+};
+
 // Builder class for copying existing data to a new/modified package.
 // Subsequent work, to make this more full featured could be to define a
 // ResTypeBuilder class, and let this append either TypeInfo (to copy existing
@@ -429,6 +446,15 @@ class ResPackageBuilder {
   void set_type_strings(android::ResStringPool_header* existing_data) {
     m_type_strings.second = existing_data;
   }
+  void add_overlay(arsc::OverlayInfo overlay) {
+    m_overlays.emplace_back(overlay);
+  }
+  template <typename T>
+  void add_overlays(const T& item) {
+    for (auto&& [_, overlay] : item) {
+      add_overlay(overlay);
+    }
+  }
   void add_chunk(android::ResChunk_header* header) {
     m_unknown_chunks.emplace_back(header);
   }
@@ -445,6 +471,8 @@ class ResPackageBuilder {
       m_type_strings;
   std::map<uint8_t, std::pair<std::shared_ptr<ResTableTypeBuilder>, TypeInfo>>
       m_id_to_type;
+  // Overlays for the package. Will be emitted in sequential order.
+  std::vector<arsc::OverlayInfo> m_overlays;
   // Chunks to emit after all type info. Meant to represent any unparsed struct
   // like libraries, overlay, etc.
   std::vector<android::ResChunk_header*> m_unknown_chunks;
