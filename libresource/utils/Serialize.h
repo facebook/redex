@@ -108,25 +108,15 @@ ssize_t find_attribute_ordinal(
 struct StringHolder {
   std::variant<const char*, const char16_t*, std::string> data;
   size_t length;
-  StringHolder(const char* s, size_t len)
-      : data(s),
-        length(len) {}
-  StringHolder(const char16_t* s, size_t len)
-      : data(s),
-        length(len) {}
-  StringHolder(std::string s, size_t len)
-      : data(std::move(s)),
-        length(len) {}
+  StringHolder(const char* s, size_t len) : data(s), length(len) {}
+  StringHolder(const char16_t* s, size_t len) : data(s), length(len) {}
+  StringHolder(std::string s, size_t len) : data(std::move(s)), length(len) {}
 
-  bool is_char_ptr() const {
-    return std::holds_alternative<const char*>(data);
-  }
+  bool is_char_ptr() const { return std::holds_alternative<const char*>(data); }
   bool is_char16_ptr() const {
     return std::holds_alternative<const char16_t*>(data);
   }
-  bool is_str() const {
-    return std::holds_alternative<std::string>(data);
-  }
+  bool is_str() const { return std::holds_alternative<std::string>(data); }
 };
 
 using SpanVector = std::vector<android::ResStringPool_span*>;
@@ -134,8 +124,8 @@ using SpanVector = std::vector<android::ResStringPool_span*>;
 struct StyleInfo {
   StringHolder str;
   SpanVector spans;
-  StyleInfo (StringHolder holder, SpanVector vec)
-    : str(std::move(holder)), spans(std::move(vec)) {}
+  StyleInfo(StringHolder holder, SpanVector vec)
+      : str(std::move(holder)), spans(std::move(vec)) {}
 };
 
 template <typename T>
