@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="StringDescriptionRequired">
+  <!-- The following elements generate RES_TABLE_OVERLAYABLE_TYPE, RES_TABLE_OVERLAYABLE_POLICY_TYPE
+       chunks in the .arsc file, which need to be parsed, understood as roots, and remapped. -->
+  <overlayable name="WelcomeConfig">
+    <policy type="vendor">
+      <item type="string" translatable="false" description="Something something, welcome" name="welcome" />
+    </policy>
+    <policy type="product|signature">
+      <item type="string" translatable="false" description="Logs are great" name="log_msg" />
+      <item type="string" translatable="false" description="Logs are great" name="log_msg_again" />
+    </policy>
+  </overlayable>
+  <overlayable name="YoloConfig">
+    <policy type="product">
+      <item type="string" translatable="false" description="Yolo County" name="button_txt" />
+      <item type="string" translatable="false" description="Population: You" name="yummy_orange" />
+    </policy>
+  </overlayable>
+</resources>
