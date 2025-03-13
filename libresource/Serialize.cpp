@@ -137,6 +137,11 @@ void push_chunk(android::ResChunk_header* header, android::Vector<char>* out) {
   push_data_no_swap(header, dtohl(header->size), out);
 }
 
+// Does not swap byte order, just copy data as-is
+void push_header(android::ResChunk_header* header, android::Vector<char>* out) {
+  push_data_no_swap(header, dtohl(header->headerSize), out);
+}
+
 void push_vec(android::Vector<char>& vec, android::Vector<char>* out) {
   if (!vec.empty()) {
     out->appendVector(vec);
@@ -894,6 +899,21 @@ void ResPackageBuilder::serialize(android::Vector<char>* out) {
     }
   }
   // All other chunks
+  for (auto& overlay : m_overlays) {
+    if (overlay.empty()) {
+      continue;
+    }
+    push_header((android::ResChunk_header*)overlay.header, &temp);
+    for (auto [policy, ids] : overlay.policies) {
+      auto count = dtohl(policy->entry_count);
+      if (count > 0) {
+        push_header((android::ResChunk_header*)policy, &temp);
+        for (size_t i = 0; i < count; i++) {
+          push_long(ids[i], &temp);
+        }
+      }
+    }
+  }
   for (auto header : m_unknown_chunks) {
     push_chunk(header, &temp);
   }

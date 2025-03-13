@@ -105,15 +105,41 @@ class ResourceTableVisitor : public VisitorBase {
                                android::ResTable_type* type,
                                android::ResTable_map_entry* entry,
                                android::ResTable_map* value);
+  // Visit an overlayable header; policies and individual ids will be dispatched
+  // to separate calls.
+  virtual bool visit_overlayable(
+      android::ResTable_package* package,
+      android::ResTable_overlayable_header* overlayable);
+  // Visit an overlayable policy header; individual ids will be dispatched to
+  // separate calls.
+  virtual bool visit_overlayable_policy(
+      android::ResTable_package* package,
+      android::ResTable_overlayable_header* overlayable,
+      android::ResTable_overlayable_policy_header* policy,
+      uint32_t* ids);
+  // Visit an overlayable id.
+  virtual bool visit_overlayable_id(
+      android::ResTable_package* package,
+      android::ResTable_overlayable_header* overlayable,
+      android::ResTable_overlayable_policy_header* policy,
+      uint32_t id);
   // Callback for a chunk type that was not recognized (the format does change)
   virtual bool visit_unknown_chunk(android::ResTable_package* package,
                                    android::ResChunk_header* header);
   virtual ~ResourceTableVisitor() {}
 
+ protected:
+  // Look beyond the policy for the array of ints, if applicable. May return
+  // nullptr for no entries (which would be somewhat malformed data but we
+  // should gracefully handle).
+  uint32_t* policy_ids(android::ResTable_overlayable_policy_header* policy);
+
  private:
   bool valid(const android::ResTable_package*);
   bool valid(const android::ResTable_typeSpec*);
   bool valid(const android::ResTable_type*);
+  bool valid(const android::ResTable_overlayable_header* overlayable,
+             const android::ResTable_overlayable_policy_header* policy);
 };
 
 // A visitor that can find string pool references into multiple different pools!

@@ -410,6 +410,9 @@ void DedupResourcesPass::prepare_disallowed_ids(
     const auto& v = res_table->get_res_ids_by_name(n);
     disallowed_ids->insert(v.begin(), v.end());
   }
+  // Overlayable ids, keep as-is.
+  auto overlayable_ids = res_table->get_overlayable_id_roots();
+  disallowed_ids->insert(overlayable_ids.begin(), overlayable_ids.end());
 }
 
 void DedupResourcesPass::run_pass(DexStoresVector& stores,

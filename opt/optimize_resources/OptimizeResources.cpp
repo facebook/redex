@@ -443,6 +443,8 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
       res_table->get_types_by_name(m_disallowed_types);
   std::unordered_set<uint32_t> disallowed_resouces =
       get_disallowed_resources(res_table->sorted_res_ids, disallowed_types);
+  // Overlayable ids
+  auto overlayable_ids = res_table->get_overlayable_id_roots();
 
   // 5. Merge above resources (2, 3 & 4). These will be the 'roots' of all
   // referenced resources. Then, compute the transitive closure of all the
@@ -454,6 +456,7 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
                              assumed_reachable_roots.end());
   accessible_id_roots.insert(disallowed_resouces.begin(),
                              disallowed_resouces.end());
+  accessible_id_roots.insert(overlayable_ids.begin(), overlayable_ids.end());
 
   TRACE(OPTRES, 2, "Root resource count: %zu", accessible_id_roots.size());
 

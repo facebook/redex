@@ -11,6 +11,8 @@
 
 #include <fstream>
 
+#include "Debug.h"
+
 namespace redex {
 
 using namespace boost::filesystem;
@@ -58,4 +60,5 @@ inline void copy_file(const std::string& from, const std::string& to) {
   dest_stream << src_stream.rdbuf();
 }
 
+bool are_files_equal(const std::string&, const std::string&);
 } // namespace redex

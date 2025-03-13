@@ -95,6 +95,9 @@ class XmlFileEditor : public arsc::XmlFileVisitor {
   std::vector<android::Res_value*> m_typed_data;
 };
 
+using OverlayLookup =
+    std::map<android::ResTable_overlayable_header*, arsc::OverlayInfo>;
+
 // Read the ResTable data structures and store a convenient organization of the
 // data pointers and the packages.
 // NOTE: Visitor super classes simply follow pointers, so all subclasses which
@@ -115,6 +118,18 @@ class TableParser : public arsc::StringPoolRefVisitor {
   bool visit_type(android::ResTable_package* package,
                   android::ResTable_typeSpec* type_spec,
                   android::ResTable_type* type) override;
+  bool visit_overlayable(
+      android::ResTable_package* package,
+      android::ResTable_overlayable_header* overlayable) override;
+  bool visit_overlayable_policy(
+      android::ResTable_package* package,
+      android::ResTable_overlayable_header* overlayable,
+      android::ResTable_overlayable_policy_header* policy,
+      uint32_t* ids_ptr) override;
+  bool visit_overlayable_id(android::ResTable_package*,
+                            android::ResTable_overlayable_header*,
+                            android::ResTable_overlayable_policy_header*,
+                            uint32_t id) override;
   bool visit_unknown_chunk(android::ResTable_package* package,
                            android::ResChunk_header* header) override;
 
@@ -128,6 +143,8 @@ class TableParser : public arsc::StringPoolRefVisitor {
   std::map<android::ResTable_package*, std::vector<arsc::TypeInfo>>
       m_package_types;
   std::set<android::ResTable_package*> m_packages;
+  std::map<android::ResTable_package*, OverlayLookup> m_package_overlayables;
+  std::unordered_set<uint32_t> m_overlayable_ids;
   // Chunks belonging to a package that we do not parse/edit. Meant to be
   // preserved as-is when preparing output file.
   std::map<android::ResTable_package*, std::vector<android::ResChunk_header*>>
@@ -314,6 +331,7 @@ class ResourcesArscFile : public ResourceTableFile {
       uint32_t ref, std::vector<std::string>* values) override;
   std::unordered_map<uint32_t, resources::InlinableValue>
   get_inlinable_resource_values() override;
+  std::unordered_set<uint32_t> get_overlayable_id_roots() override;
   ~ResourcesArscFile() override;
 
   size_t get_length() const;

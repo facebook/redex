@@ -284,6 +284,9 @@ class ResourceTableFile {
   virtual std::unordered_map<uint32_t, resources::InlinableValue>
   get_inlinable_resource_values() = 0;
 
+  // Returns a set of IDs that are overlayable, to be used as reachability roots
+  virtual std::unordered_set<uint32_t> get_overlayable_id_roots() = 0;
+
   // Takes effect during serialization. Appends a new type with the given
   // details (id, name) to the package. It will contain types with the given
   // configs and use existing resource entry/value data of "source_res_ids" to

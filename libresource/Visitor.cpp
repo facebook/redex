@@ -255,6 +255,32 @@ bool ResourceTableVisitor::valid(const android::ResTable_type* type) {
   return true;
 }
 
+bool ResourceTableVisitor::valid(
+    const android::ResTable_overlayable_header* overlayable,
+    const android::ResTable_overlayable_policy_header* policy) {
+  if (overlayable == nullptr || policy == nullptr) {
+    return false;
+  }
+  auto total_size = dtohl(overlayable->header.size);
+  auto policy_size = dtohl(policy->header.size);
+  if (total_size < dtohs(overlayable->header.headerSize) + policy_size) {
+    ALOGE(
+        "ResTable_overlayable_header size too small for policy. "
+        "Offset = %ld",
+        get_file_offset(overlayable));
+    return false;
+  }
+  auto id_size = dtohl(policy->entry_count) * sizeof(uint32_t);
+  if (policy_size != dtohs(policy->header.headerSize) + id_size) {
+    ALOGE(
+        "ResTable_overlayable_policy_header size does not match entry count. "
+        "Offset = %ld",
+        get_file_offset(policy));
+    return false;
+  }
+  return true;
+}
+
 bool ResourceTableVisitor::visit(void* data, size_t len) {
   m_data = data;
   m_length = len;
@@ -327,6 +353,7 @@ bool ResourceTableVisitor::visit_package(android::ResTable_package* package) {
   android::ResStringPool_header* key_strings = nullptr;
   android::ResTable_typeSpec* type_spec = nullptr;
   android::ResTable_type* type = nullptr;
+  android::ResTable_overlayable_header* overlayable = nullptr;
   ResChunkPullParser parser(get_data(&package->header),
                             get_data_len(&package->header));
   while (ResChunkPullParser::IsGoodEvent(parser.Next())) {
@@ -374,6 +401,17 @@ bool ResourceTableVisitor::visit_package(android::ResTable_package* package) {
         return false;
       }
       if (!visit_type(package, type_spec, type)) {
+        return false;
+      }
+      break;
+    case android::RES_TABLE_OVERLAYABLE_TYPE:
+      overlayable =
+          convert_chunk<android::ResTable_overlayable_header>(parser.chunk());
+      if (overlayable == nullptr) {
+        ALOGE("bad overlayable chunk");
+        return false;
+      }
+      if (!visit_overlayable(package, overlayable)) {
         return false;
       }
       break;
@@ -496,6 +534,65 @@ bool ResourceTableVisitor::visit_map_value(
     android::ResTable_map_entry* entry,
     android::ResTable_map* value) {
   LOGVV("visit map value offset = %ld", get_file_offset(value));
+  return true;
+}
+
+uint32_t* ResourceTableVisitor::policy_ids(
+    android::ResTable_overlayable_policy_header* policy) {
+  return dtohl(policy->entry_count) > 0 ? (uint32_t*)get_data(&policy->header)
+                                        : nullptr;
+}
+
+bool ResourceTableVisitor::visit_overlayable(
+    android::ResTable_package* package,
+    android::ResTable_overlayable_header* overlayable) {
+  LOGVV("visit overlayable header offset = %ld", get_file_offset(overlayable));
+  ResChunkPullParser parser(get_data(&overlayable->header),
+                            get_data_len(&overlayable->header));
+  while (ResChunkPullParser::IsGoodEvent(parser.Next())) {
+    auto chunk_type = dtohs(parser.chunk()->type);
+    if (chunk_type == android::RES_TABLE_OVERLAYABLE_POLICY_TYPE) {
+      auto policy = convert_chunk<android::ResTable_overlayable_policy_header>(
+          parser.chunk());
+      if (!valid(overlayable, policy)) {
+        ALOGE("bad overlayable policy chunk");
+        return false;
+      }
+      auto ids_ptr = policy_ids(policy);
+      if (!visit_overlayable_policy(package, overlayable, policy, ids_ptr)) {
+        return false;
+      }
+    } else {
+      ALOGE(
+          "Unexpected chunk type %x in ResTable_overlayable_header. Offset = "
+          "%ld; ignoring",
+          chunk_type, get_file_offset(parser.chunk()));
+    }
+  }
+  return true;
+}
+
+bool ResourceTableVisitor::visit_overlayable_policy(
+    android::ResTable_package* package,
+    android::ResTable_overlayable_header* overlayable,
+    android::ResTable_overlayable_policy_header* policy,
+    uint32_t* ids) {
+  LOGVV("visit overlayable policy offset = %ld", get_file_offset(policy));
+  auto count = dtohl(policy->entry_count);
+  for (size_t i = 0; i < count; i++, ids++) {
+    LOGVV("visit overlayable policy id offset = %ld", get_file_offset(ids));
+    if (!visit_overlayable_id(package, overlayable, policy, *ids)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool ResourceTableVisitor::visit_overlayable_id(
+    android::ResTable_package* package,
+    android::ResTable_overlayable_header* overlayable,
+    android::ResTable_overlayable_policy_header* policy,
+    uint32_t id) {
   return true;
 }
 
