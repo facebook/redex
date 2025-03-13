@@ -846,16 +846,30 @@ TEST(Configs, TestConfigEquivalence) {
   }
 }
 
-TEST(ResTable, TestBuilderRoundTrip) {
-  auto tmp_dir = redex::make_tmp_dir("ResTable%%%%%%%%");
-  auto res_path = tmp_dir.path + "/resources.arsc";
-  copy_file(get_env("test_arsc_path"), res_path);
-  ResourcesArscFile res_table(res_path);
-  res_table.serialize();
-  EXPECT_TRUE(are_files_equal(get_env("test_arsc_path"), res_path));
-}
-
 namespace {
+class TypeSpecCollector : public arsc::ResourceTableVisitor {
+ public:
+  bool visit_type_spec(android::ResTable_package* package,
+                       android::ResTable_typeSpec* type_spec) override {
+    type_specs.emplace(type_spec->id, type_spec);
+    return arsc::ResourceTableVisitor::visit_type_spec(package, type_spec);
+  }
+
+  // Sets the reserved short to 0, like older tool versions would do.
+  void clear_reserved_fields() {
+    for (auto&& [id, ptr] : type_specs) {
+      ptr->res1 = 0;
+    }
+  }
+
+  // Get the repurposed short field in the header.
+  uint16_t get_reserved_field(uint8_t type_id) {
+    return type_specs.at(type_id)->res1;
+  }
+
+  std::map<uint8_t, android::ResTable_typeSpec*> type_specs;
+};
+
 void build_arsc_file_and_validate(
     const std::function<void(const std::string& temp_dir,
                              const std::string& arsc_path)>& callback) {
@@ -1022,6 +1036,23 @@ std::vector<arsc::TypeInfo> load_types(const RedexMappedFile& arsc_file) {
   })
 } // namespace
 
+TEST(ResTable, TestBuilderRoundTrip) {
+  auto tmp_dir = redex::make_tmp_dir("ResTable%%%%%%%%");
+  auto res_path = tmp_dir.path + "/resources.arsc";
+  copy_file(get_env("test_arsc_path"), res_path);
+  ResourcesArscFile res_table(res_path);
+  res_table.serialize();
+  // To match the old, checked in binary that was made with outdated aapt tool,
+  // stamp over the reserved fields that got repurposed to set them to be zero.
+  {
+    auto f = RedexMappedFile::open(res_path, false);
+    TypeSpecCollector collector;
+    collector.visit(f.data(), f.size());
+    collector.clear_reserved_fields();
+  }
+  EXPECT_TRUE(are_files_equal(get_env("test_arsc_path"), res_path));
+}
+
 TEST(ResTable, BuildNewTable) {
   build_arsc_file_and_validate([&](const std::string& /* unused */,
                                    const std::string& arsc_path) {
@@ -1038,6 +1069,14 @@ TEST(ResTable, BuildNewTable) {
     ASSERT_ENTRY_VALUES(table_dump, "land", "foo:dimen/first", e0_land);
     // Separate validation for plurals, styles, etc.
     ASSERT_MAP_ENTRY_VALUES(table_dump, "xxhdpi", "foo:style/fourth", style);
+    // Sanity check header values for number of types in each type spec.
+    auto f = RedexMappedFile::open(arsc_path, false);
+    TypeSpecCollector collector;
+    collector.visit(f.data(), f.size());
+    ASSERT_EQ(collector.get_reserved_field(0x1), 2)
+        << "dimen should have two ResTable_type entries";
+    ASSERT_EQ(collector.get_reserved_field(0x2), 1)
+        << "style should have one ResTable_type entry";
   });
 }
 
@@ -1624,6 +1663,11 @@ TEST(ResTable, BuildDumpAndParseSparseType) {
     EXPECT_EQ(types.at(1)->header.size,
               sizeof(android::ResTable_type) + size_of_entry_value_and_offset)
         << "Expected small type size due to sparse encoding";
+    // Additional validation that ResTableTypeProjector filled out headers
+    // properly.
+    EXPECT_EQ(parsed_table.m_types.begin()->second->res1, 2)
+        << "First ResTable_typeSpec should specify two ResTable_type structs "
+           "to follow";
   }
 }
 

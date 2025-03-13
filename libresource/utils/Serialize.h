@@ -324,7 +324,7 @@ class ResTableTypeProjector : public ResTableTypeBuilder {
   virtual ~ResTableTypeProjector() {}
 
  private:
-  void serialize_type(android::ResTable_type*,
+  bool serialize_type(android::ResTable_type*,
                       size_t,
                       android::Vector<char>* out);
   android::ResTable_typeSpec* m_spec;

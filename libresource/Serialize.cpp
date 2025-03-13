@@ -70,6 +70,7 @@ namespace {
 // Just a random thing to make it easy to see (when dumping bytes) if we forgot
 // to go back and correct a chunk size.
 constexpr uint32_t FILL_IN_LATER = 0xEEEEEEEE;
+constexpr uint16_t FILL_IN_LATER_SHORT = 0xEEEE;
 
 void write_long_at_pos(size_t index,
                        uint32_t data,
@@ -79,6 +80,14 @@ void write_long_at_pos(size_t index,
   vec->replaceAt((char)(swapped >> 8), index + 1);
   vec->replaceAt((char)(swapped >> 16), index + 2);
   vec->replaceAt((char)(swapped >> 24), index + 3);
+}
+
+void write_short_at_pos(size_t index,
+                        uint16_t data,
+                        android::Vector<char>* vec) {
+  auto swapped = htods(data);
+  vec->replaceAt((char)swapped, index);
+  vec->replaceAt((char)(swapped >> 8), index + 1);
 }
 
 void encode_string8(const char* string,
@@ -373,13 +382,13 @@ void ResTableTypeBuilder::encode_offsets_as_sparse(
   }
 }
 
-void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
+bool ResTableTypeProjector::serialize_type(android::ResTable_type* type,
                                            size_t last_non_deleted,
                                            android::Vector<char>* out) {
   if (dtohl(type->entryCount) == 0 || dtohs(type->entriesStart) == 0) {
     // Wonky input data, omit this config.
     ALOGD("Wonky config for type %d, dropping!", type->id);
-    return;
+    return false;
   }
   // Check if this config has all of its entries deleted. If a non-default
   // config has everything deleted, skip emitting data.
@@ -397,7 +406,7 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
     }
     if (num_non_deleted_non_empty_entries == 0) {
       // No meaningful values for this config, don't emit the struct.
-      return;
+      return false;
     }
   }
   // Write entry/value data by iterating the existing offset data again, and
@@ -474,6 +483,7 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
     push_long(offsets[i], out);
   }
   push_vec(temp, out);
+  return true;
 }
 
 void ResTableTypeProjector::serialize(android::Vector<char>* out) {
@@ -507,8 +517,9 @@ void ResTableTypeProjector::serialize(android::Vector<char>* out) {
   push_long(total_size, out);
   out->push_back(m_type);
   out->push_back(0);
-  out->push_back(0);
-  out->push_back(0);
+  // Number of types (used to be a reserved field). Will be stamped in later.
+  auto type_count_pos = out->size();
+  push_short(FILL_IN_LATER_SHORT, out);
   push_long(entries, out);
   // Copy all existing spec flags for non-deleted entries
   for (uint16_t i = 0; i < original_entries; i++) {
@@ -521,9 +532,13 @@ void ResTableTypeProjector::serialize(android::Vector<char>* out) {
   }
   // Write all applicable ResTable_type structures (and their corresponding
   // entries/values).
+  uint16_t type_count{0};
   for (size_t i = 0; i < m_configs.size(); i++) {
-    serialize_type(m_configs.at(i), last_non_deleted, out);
+    if (serialize_type(m_configs.at(i), last_non_deleted, out)) {
+      type_count++;
+    }
   }
+  write_short_at_pos(type_count_pos, type_count, out);
 }
 
 void ResTableTypeDefiner::serialize(android::Vector<char>* out) {
@@ -561,18 +576,21 @@ void ResTableTypeDefiner::serialize(android::Vector<char>* out) {
   push_long(total_size, out);
   out->push_back(m_type);
   out->push_back(0);
-  out->push_back(0);
-  out->push_back(0);
+  // Number of types (used to be a reserved field). Will be stamped in later.
+  auto type_count_pos = out->size();
+  push_short(FILL_IN_LATER_SHORT, out);
   push_long(entries, out);
   // Write all given spec flags
   for (uint16_t i = 0; i < entries; i++) {
     push_long(dtohl(m_flags.at(i)), out);
   }
   // Write the N configs given and all their entries/values
+  uint16_t type_count{0};
   for (auto& config : m_configs) {
     if (empty_configs.count(config) > 0) {
       continue;
     }
+    type_count++;
     auto& data = m_data.at(config);
     // Compute offsets and entry/value data size.
     CanonicalEntries canonical_entries;
@@ -626,6 +644,7 @@ void ResTableTypeDefiner::serialize(android::Vector<char>* out) {
     }
     push_vec(entry_data, out);
   }
+  write_short_at_pos(type_count_pos, type_count, out);
 }
 
 void ResStringPoolBuilder::add_string(const char* s, size_t len) {
