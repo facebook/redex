@@ -142,6 +142,20 @@ void push_header(android::ResChunk_header* header, android::Vector<char>* out) {
   push_data_no_swap(header, dtohl(header->headerSize), out);
 }
 
+// Does not swap byte order of header, just copy data and update the size.
+void push_header_with_updated_size(android::ResChunk_header* header,
+                                   uint32_t new_size,
+                                   android::Vector<char>* out) {
+  auto start_pos = out->size();
+  push_header(header, out);
+  auto bytes_written = out->size() - start_pos;
+  LOG_ALWAYS_FATAL_IF(
+      bytes_written < sizeof(android::ResChunk_header),
+      "Expected at least %ld header bytes. Actual %ld.",
+      sizeof(android::ResChunk_header), bytes_written);
+  write_long_at_pos(start_pos + 2 * sizeof(uint16_t), new_size, out);
+}
+
 void push_vec(android::Vector<char>& vec, android::Vector<char>* out) {
   if (!vec.empty()) {
     out->appendVector(vec);
@@ -869,6 +883,28 @@ void write_string_pool(std::pair<std::shared_ptr<ResStringPoolBuilder>,
 }
 } // namespace
 
+uint32_t OverlayInfo::compute_size(
+    android::ResTable_overlayable_policy_header* policy) const {
+  auto entry_count = dtohl(policy->entry_count);
+  if (entry_count == 0) {
+    // This will be skipped during serialization.
+    return 0;
+  }
+  return dtohs(policy->header.headerSize) + sizeof(uint32_t) * entry_count;
+}
+
+uint32_t OverlayInfo::compute_size() const {
+  uint32_t policies_size{0};
+  for (auto&& [policy, ids_ptr] : policies) {
+    policies_size += compute_size(policy);
+  }
+  if (policies_size == 0) {
+    // This will be skipped during serialization.
+    return 0;
+  }
+  return dtohs(header->header.headerSize) + policies_size;
+}
+
 ResPackageBuilder::ResPackageBuilder(android::ResTable_package* package) {
   set_id(dtohl(package->id));
   copy_package_name(package);
@@ -897,15 +933,19 @@ void ResPackageBuilder::serialize(android::Vector<char>* out) {
     }
   }
   // All other chunks
-  for (auto& overlay : m_overlays) {
-    if (overlay.empty()) {
+  for (auto& overlayable : m_overlays) {
+    if (overlayable.empty()) {
       continue;
     }
-    push_header((android::ResChunk_header*)overlay.header, &temp);
-    for (auto [policy, ids] : overlay.policies) {
+    auto overlayable_size = overlayable.compute_size();
+    push_header_with_updated_size((android::ResChunk_header*)overlayable.header,
+                                  overlayable_size, &temp);
+    for (auto [policy, ids] : overlayable.policies) {
       auto count = dtohl(policy->entry_count);
       if (count > 0) {
-        push_header((android::ResChunk_header*)policy, &temp);
+        auto policy_size = overlayable.compute_size(policy);
+        push_header_with_updated_size((android::ResChunk_header*)policy,
+                                      policy_size, &temp);
         for (size_t i = 0; i < count; i++) {
           push_long(ids[i], &temp);
         }

@@ -395,6 +395,8 @@ struct OverlayInfo {
     }
     return true;
   }
+  uint32_t compute_size(android::ResTable_overlayable_policy_header*) const;
+  uint32_t compute_size() const;
 };
 
 // Builder class for copying existing data to a new/modified package.

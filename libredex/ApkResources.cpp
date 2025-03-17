@@ -2624,15 +2624,27 @@ class EntryRemapper : public arsc::ResourceTableVisitor {
       android::ResTable_overlayable_header* /* unused */,
       android::ResTable_overlayable_policy_header* policy,
       uint32_t* ids) override {
-    auto ids_count = dtohl(policy->entry_count);
-    for (size_t i = 0; i < ids_count; i++) {
+    const uint32_t initial_size = dtohl(policy->entry_count);
+    std::vector<uint32_t> remapped;
+    for (size_t i = 0; i < initial_size; i++) {
       auto search = m_old_to_new.find(dtohl(ids[i]));
       if (search != m_old_to_new.end()) {
-        ids[i] = htodl(search->second);
+        remapped.push_back(search->second);
       }
-      // Else, not found would normally signal deletion (or setting to zero) in
-      // remapping conventions. Since overlayable IDs will be considered as root
-      // this logic will elect to not change the structure.
+      // Else, not found signals deletion. Count will be adjusted and subsequent
+      // entries shifted forward.
+    }
+    // NOTE: size of structs here will not be updated, this concern is left to
+    // the serializer to figure out and drop completely empty structs.
+    const uint32_t new_size = remapped.size();
+    policy->entry_count = htodl(new_size);
+    for (size_t i = 0; i < new_size; i++) {
+      ids[i] = htodl(remapped[i]);
+    }
+    // For readability, set to 0 so intermediate states of the file look more
+    // sensible.
+    for (size_t i = new_size; i < initial_size; i++) {
+      ids[i] = 0;
     }
     return true;
   }
