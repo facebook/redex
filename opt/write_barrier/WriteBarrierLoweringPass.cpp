@@ -10,10 +10,10 @@
 #include "CFGMutation.h"
 #include "ControlFlow.h"
 #include "DexAsm.h"
+#include "DexStructure.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "Walkers.h"
-#include <DexStructure.h>
 
 namespace {
 using namespace dex_asm;

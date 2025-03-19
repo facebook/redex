@@ -274,6 +274,8 @@ class MultiMethodInliner {
       bool consider_hot_cold = false,
       InlinerCostConfig inliner_cost_config = DEFAULT_COST_CONFIG,
       const std::unordered_set<const DexMethod*>* unfinalized_init_methods =
+          nullptr,
+      InsertOnlyConcurrentSet<DexMethod*>* methods_with_write_barrier =
           nullptr);
 
   /*
@@ -758,6 +760,7 @@ class MultiMethodInliner {
     std::atomic<size_t> constructor_fences{0};
     std::atomic<size_t> calls_not_inlinable{0};
     std::atomic<size_t> calls_not_inlined{0};
+    std::atomic<size_t> calls_not_inlined_with_perf_sensitive_constructors{0};
     std::atomic<size_t> no_returns{0};
     std::atomic<size_t> unreachable_insns{0};
     std::atomic<size_t> intermediate_shrinkings{0};
@@ -823,6 +826,8 @@ class MultiMethodInliner {
   const std::unordered_set<const DexMethod*>* m_unfinalized_init_methods;
   InsertOnlyConcurrentMap<const DexMethod*, const DexMethod*>
       m_unfinalized_overloads;
+
+  InsertOnlyConcurrentSet<DexMethod*>* m_methods_with_write_barrier;
 
  public:
   const InliningInfo& get_info() { return info; }

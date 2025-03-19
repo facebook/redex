@@ -2595,6 +2595,7 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_relaxed) {
   inliner_config.shrinker.run_local_dce = true;
   inliner_config.shrinker.compute_pure_methods = false;
   inliner_config.relaxed_init_inline = true;
+  inliner_config.unfinalize_perf_mode = inliner::UnfinalizePerfMode::NONE;
 
   caller->get_code()->build_cfg();
   init->get_code()->build_cfg();
