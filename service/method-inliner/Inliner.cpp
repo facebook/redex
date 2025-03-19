@@ -134,7 +134,8 @@ MultiMethodInliner::MultiMethodInliner(
     bool local_only,
     bool consider_hot_cold,
     InlinerCostConfig inliner_cost_config,
-    const std::unordered_set<const DexMethod*>* unfinalized_init_methods)
+    const std::unordered_set<const DexMethod*>* unfinalized_init_methods,
+    InsertOnlyConcurrentSet<DexMethod*>* methods_with_write_barrier)
     : m_concurrent_resolver(std::move(concurrent_resolve_fn)),
       m_scheduler(
           [this](DexMethod* method) {
@@ -173,7 +174,8 @@ MultiMethodInliner::MultiMethodInliner(
       m_local_only(local_only),
       m_consider_hot_cold(consider_hot_cold),
       m_inliner_cost_config(inliner_cost_config),
-      m_unfinalized_init_methods(unfinalized_init_methods) {
+      m_unfinalized_init_methods(unfinalized_init_methods),
+      m_methods_with_write_barrier(methods_with_write_barrier) {
   Timer t("MultiMethodInliner construction");
   for (const auto& callee_callers : true_virtual_callers) {
     auto callee = callee_callers.first;
@@ -699,7 +701,8 @@ size_t MultiMethodInliner::inline_inlinables(
     cfg_next_caller_reg = caller->cfg().get_registers_size();
   }
   size_t calls_not_inlinable{0}, calls_not_inlined{0}, no_returns{0},
-      unreachable_insns{0}, caller_too_large{0};
+      unreachable_insns{0}, caller_too_large{0},
+      calls_not_inlined_with_perf_sensitive_constructors{0};
 
   size_t intermediate_shrinkings{0};
   size_t intermediate_remove_unreachable_blocks{0};
@@ -869,6 +872,23 @@ size_t MultiMethodInliner::inline_inlinables(
     auto needs_init_class = get_needs_init_class(callee_method);
     auto needs_constructor_fence =
         get_needs_constructor_fence(caller_method, callee_method);
+    auto callee_has_constructor_fence =
+        m_config.unfinalize_relaxed_init_inline &&
+        m_methods_with_write_barrier &&
+        m_methods_with_write_barrier->count(callee_method) > 0;
+    if (needs_constructor_fence || callee_has_constructor_fence) {
+      if ((m_config.unfinalize_perf_mode ==
+               inliner::UnfinalizePerfMode::NOT_COLD &&
+           source_blocks::method_is_not_cold(caller_method)) ||
+          (m_config.unfinalize_perf_mode ==
+               inliner::UnfinalizePerfMode::MAYBE_HOT &&
+           source_blocks::method_maybe_hot(caller_method)) ||
+          (m_config.unfinalize_perf_mode == inliner::UnfinalizePerfMode::HOT &&
+           source_blocks::method_is_hot(caller_method))) {
+        calls_not_inlined_with_perf_sensitive_constructors++;
+        continue;
+      }
+    }
     bool success = inliner::inline_with_cfg(
         caller_method, callee_method, callsite_insn,
         inlinable.needs_receiver_cast, needs_init_class, *cfg_next_caller_reg,
@@ -899,16 +919,23 @@ size_t MultiMethodInliner::inline_inlinables(
         m_inlined_with_fence.insert(m);
       }
       constructor_fences++;
-    } else if (get_needs_constructor_fence(/* caller */ nullptr,
-                                           callee_method)) {
-      // Inlining callee in any other context would need a constructor fence;
-      // that means that final fields are involved, and we just didn't need a
-      // constructor fence here because we inlined into an init overload. Record
-      // this.
-      always_assert(method::is_init(caller_method));
-      always_assert(method::is_init(callee_method));
-      always_assert(caller_method->get_class() == callee_method->get_class());
-      m_unfinalized_overloads.emplace(caller_method, callee_method);
+      if (m_methods_with_write_barrier) {
+        m_methods_with_write_barrier->insert(caller_method);
+      }
+    } else {
+      if (callee_has_constructor_fence) {
+        m_methods_with_write_barrier->insert(caller_method);
+      }
+      if (get_needs_constructor_fence(/* caller */ nullptr, callee_method)) {
+        // Inlining callee in any other context would need a constructor fence;
+        // that means that final fields are involved, and we just didn't need a
+        // constructor fence here because we inlined into an init overload.
+        // Record this.
+        always_assert(method::is_init(caller_method));
+        always_assert(method::is_init(callee_method));
+        always_assert(caller_method->get_class() == callee_method->get_class());
+        m_unfinalized_overloads.emplace(caller_method, callee_method);
+      }
     }
 
     inlined_callees.push_back(callee_method);
@@ -943,6 +970,10 @@ size_t MultiMethodInliner::inline_inlinables(
   }
   if (calls_not_inlined) {
     info.calls_not_inlined += calls_not_inlined;
+  }
+  if (calls_not_inlined_with_perf_sensitive_constructors) {
+    info.calls_not_inlined_with_perf_sensitive_constructors +=
+        calls_not_inlined_with_perf_sensitive_constructors;
   }
   if (no_returns) {
     info.no_returns += no_returns;

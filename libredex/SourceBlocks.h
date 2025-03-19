@@ -341,6 +341,24 @@ inline bool is_hot(cfg::Block* b) {
   return sb->foreach_val_early([](const auto& v) { return v && v->val > 0; });
 }
 
+// If a method's entry block is hot, consider this method is hot.
+inline bool method_is_hot(DexMethod* method) {
+  auto& cfg = method->get_code()->cfg();
+  return is_hot(cfg.entry_block());
+}
+
+// If a method's entry block may be hot, consider this method may be hot.
+inline bool method_maybe_hot(DexMethod* method) {
+  auto& cfg = method->get_code()->cfg();
+  return maybe_hot(cfg.entry_block());
+}
+
+// If a method's entry block is not cold, consider this method is not cold.
+inline bool method_is_not_cold(DexMethod* method) {
+  auto& cfg = method->get_code()->cfg();
+  return is_not_cold(cfg.entry_block());
+}
+
 template <typename Iterator>
 inline SourceBlock* find_between(const Iterator& start, const Iterator& end) {
   auto it = std::find_if(

@@ -720,24 +720,6 @@ void gather_true_virtual_methods(
   }
 }
 
-// If a method's entry block is hot, consider this method is hot.
-bool is_hot(DexMethod* method) {
-  auto& cfg = method->get_code()->cfg();
-  return source_blocks::is_hot(cfg.entry_block());
-}
-
-// If a method's entry block may be hot, consider this method may be hot.
-bool maybe_hot(DexMethod* method) {
-  auto& cfg = method->get_code()->cfg();
-  return source_blocks::maybe_hot(cfg.entry_block());
-}
-
-// If a method's entry block is not cold, consider this method is not cold.
-bool is_not_cold(DexMethod* method) {
-  auto& cfg = method->get_code()->cfg();
-  return source_blocks::is_not_cold(cfg.entry_block());
-}
-
 // If a constructor cannot be inlined because it writes to final fields, then we
 // can "simply" remove the final modifier. We typically run the
 // AccessMarkingMarking pass multiple times, including after the final inliner,
@@ -752,8 +734,25 @@ void unfinalize_fields_if_beneficial_for_relaxed_init_inlining(
     const Scope& scope,
     const inliner::UnfinalizePerfMode& unfinalize_perf_mode,
     InsertOnlyConcurrentMap<DexField*, std::vector<DexMethod*>>*
-        unfinalized_fields) {
+        unfinalized_fields,
+    InsertOnlyConcurrentSet<DexMethod*>* methods_with_write_barrier) {
   walk::parallel::classes(scope, [&](DexClass* cls) {
+    // Since we run inliner several times, in previous inliner run we might
+    // unfinalized some fields and added write barrier in method already.
+    // We need to take these method into consideration when we check
+    // inlining eligibility.
+    for (auto method : cls->get_all_methods()) {
+      if (method->get_code() == nullptr) {
+        continue;
+      }
+      for (const auto& mie : InstructionIterable(method->get_code()->cfg())) {
+        if (opcode::is_write_barrier(mie.insn->opcode())) {
+          methods_with_write_barrier->insert(method);
+          break;
+        }
+      }
+    }
+
     // We also exclude possibly anonymous classes as those may
     // regress the effectiveness of the class-merging passes.
     // TODO T184662680: While this is not a correctness issue,
@@ -777,11 +776,11 @@ void unfinalize_fields_if_beneficial_for_relaxed_init_inlining(
     bool perf_sensitive = false;
     for (auto* init_method : cls->get_ctors()) {
       if ((unfinalize_perf_mode == inliner::UnfinalizePerfMode::NOT_COLD &&
-           is_not_cold(init_method)) ||
+           source_blocks::method_is_not_cold(init_method)) ||
           (unfinalize_perf_mode == inliner::UnfinalizePerfMode::MAYBE_HOT &&
-           maybe_hot(init_method)) ||
+           source_blocks::method_maybe_hot(init_method)) ||
           (unfinalize_perf_mode == inliner::UnfinalizePerfMode::HOT &&
-           is_hot(init_method))) {
+           source_blocks::method_is_hot(init_method))) {
         perf_sensitive = true;
         break;
       }
@@ -906,11 +905,13 @@ void run_inliner(
 
   InsertOnlyConcurrentMap<DexField*, std::vector<DexMethod*>>
       unfinalized_fields;
+  InsertOnlyConcurrentSet<DexMethod*> methods_with_write_barrier;
   std::unordered_set<const DexMethod*> unfinalized_init_methods;
   if (inliner_config.relaxed_init_inline &&
       inliner_config.unfinalize_relaxed_init_inline && min_sdk >= 21) {
     unfinalize_fields_if_beneficial_for_relaxed_init_inlining(
-        scope, inliner_config.unfinalize_perf_mode, &unfinalized_fields);
+        scope, inliner_config.unfinalize_perf_mode, &unfinalized_fields,
+        &methods_with_write_barrier);
     mgr.set_metric("unfinalized_fields", unfinalized_fields.size());
     TRACE(INLINE, 3, "unfinalized %zu fields", unfinalized_fields.size());
     for (auto&& [_, init_methods] : unfinalized_fields) {
@@ -982,7 +983,8 @@ void run_inliner(
       analyze_and_prune_inits, conf.get_pure_methods(), min_sdk_api,
       cross_dex_penalty,
       /* configured_finalish_field_names */ {}, local_only, consider_hot_cold,
-      inliner_cost_config, &unfinalized_init_methods);
+      inliner_cost_config, &unfinalized_init_methods,
+      &methods_with_write_barrier);
   inliner.inline_methods();
 
   // refinalize where possible
@@ -1140,6 +1142,9 @@ void run_inliner(
   mgr.incr_metric("intermediate_remove_unreachable_blocks",
                   inliner.get_info().intermediate_remove_unreachable_blocks);
   mgr.incr_metric("calls_not_inlined", inliner.get_info().calls_not_inlined);
+  mgr.incr_metric(
+      "calls_not_inlined_with_perf_sensitive_constructors",
+      inliner.get_info().calls_not_inlined_with_perf_sensitive_constructors);
   mgr.incr_metric("methods_removed", deleted.size());
   mgr.incr_metric("escaped_virtual", inliner.get_info().escaped_virtual);
   mgr.incr_metric("unresolved_methods", inliner.get_info().unresolved_methods);
