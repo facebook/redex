@@ -67,9 +67,11 @@ inline void obfuscateresource_preverify(ResourceTableFile* res_table) {
 }
 
 inline void obfuscateresource_postverify(ResourceTableFile* res_table) {
-  std::vector<std::string> kept{"unused_dimen_1",    "unused_dimen_2",
-                                "unused_pineapple",  "welcome",
-                                "welcome_text_size", "welcome_view"};
+  std::vector<std::string> kept{"button_txt",     "log_msg",
+                                "log_msg_again",  "unused_dimen_1",
+                                "unused_dimen_2", "unused_pineapple",
+                                "welcome",        "welcome_text_size",
+                                "welcome_view",   "yummy_orange"};
   std::vector<std::string> removed{
       "app_name",   "delay",         "duplicate_name", "keep_me_unused_color",
       "margin_top", "padding_right", "padding_right"};
@@ -82,7 +84,7 @@ inline void obfuscateresource_postverify(ResourceTableFile* res_table) {
     EXPECT_EQ(ids.size(), 0) << "Name \"" << s << "\" should be removed!";
   }
   auto name_removed_ids = res_table->get_res_ids_by_name(RESOURCE_NAME_REMOVED);
-  EXPECT_EQ(name_removed_ids.size(), 40);
+  EXPECT_EQ(name_removed_ids.size(), 36);
 
   auto string_id = res_table->get_res_ids_by_name("welcome")[0];
   std::unordered_set<std::string> types = {"string"};
