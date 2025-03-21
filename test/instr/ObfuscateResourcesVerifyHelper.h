@@ -7,6 +7,9 @@
 
 #include <gtest/gtest.h>
 
+#include <string>
+#include <vector>
+
 #include "RedexResources.h"
 #include "verify/VerifyUtil.h"
 
@@ -64,32 +67,28 @@ inline void obfuscateresource_preverify(ResourceTableFile* res_table) {
 }
 
 inline void obfuscateresource_postverify(ResourceTableFile* res_table) {
-  auto margin_top_ids = res_table->get_res_ids_by_name("margin_top");
-  auto padding_right_ids = res_table->get_res_ids_by_name("padding_right");
-  auto unused_dimen_1_ids = res_table->get_res_ids_by_name("unused_dimen_1");
-  auto unused_dimen_2_ids = res_table->get_res_ids_by_name("unused_dimen_2");
-  auto keep_me_unused_color_ids =
-      res_table->get_res_ids_by_name("keep_me_unused_color");
-  auto welcome_text_size_ids =
-      res_table->get_res_ids_by_name("welcome_text_size");
-  auto app_name_ids = res_table->get_res_ids_by_name("app_name");
+  std::vector<std::string> kept{"unused_dimen_1",    "unused_dimen_2",
+                                "unused_pineapple",  "welcome",
+                                "welcome_text_size", "welcome_view"};
+  std::vector<std::string> removed{
+      "app_name",   "delay",         "duplicate_name", "keep_me_unused_color",
+      "margin_top", "padding_right", "padding_right"};
+  for (const auto& s : kept) {
+    auto ids = res_table->get_res_ids_by_name(s);
+    EXPECT_EQ(ids.size(), 1) << "Name \"" << s << "\" should be kept!";
+  }
+  for (const auto& s : removed) {
+    auto ids = res_table->get_res_ids_by_name(s);
+    EXPECT_EQ(ids.size(), 0) << "Name \"" << s << "\" should be removed!";
+  }
   auto name_removed_ids = res_table->get_res_ids_by_name(RESOURCE_NAME_REMOVED);
-  auto duplicate_name_ids = res_table->get_res_ids_by_name("duplicate_name");
-  EXPECT_EQ(margin_top_ids.size(), 0);
-  EXPECT_EQ(padding_right_ids.size(), 0);
-  EXPECT_EQ(unused_dimen_1_ids.size(), 1);
-  EXPECT_EQ(unused_dimen_2_ids.size(), 1);
-  EXPECT_EQ(keep_me_unused_color_ids.size(), 0);
-  EXPECT_EQ(app_name_ids.size(), 1);
-  EXPECT_EQ(welcome_text_size_ids.size(), 1);
-  EXPECT_EQ(duplicate_name_ids.size(), 1);
-  EXPECT_EQ(name_removed_ids.size(), 27);
+  EXPECT_EQ(name_removed_ids.size(), 40);
 
-  auto duplicate_name_id = res_table->get_res_ids_by_name("duplicate_name")[0];
+  auto string_id = res_table->get_res_ids_by_name("welcome")[0];
   std::unordered_set<std::string> types = {"string"};
   auto string_type = res_table->get_types_by_name(types);
-  EXPECT_EQ(string_type.size(), 1);
-  EXPECT_EQ(duplicate_name_id & TYPE_MASK_BIT, *(string_type.begin()));
+  ASSERT_EQ(string_type.size(), 1);
+  EXPECT_EQ(string_id & TYPE_MASK_BIT, *(string_type.begin()));
 
   auto x_prickly_ids = res_table->get_res_ids_by_name("x_prickly");
   EXPECT_EQ(x_prickly_ids.size(), 1);
@@ -102,11 +101,4 @@ inline void obfuscateresource_postverify(ResourceTableFile* res_table) {
   files = res_table->get_files_by_rid(activity_main_ids[0]);
   EXPECT_EQ(files.size(), 1);
   EXPECT_EQ(*files.begin(), "res/layout/activity_main.xml");
-
-  // id name used in .xml layout
-  auto welcome_view_ids = res_table->get_res_ids_by_name("welcome_view");
-  EXPECT_EQ(welcome_view_ids.size(), 1);
-  // id name that should be elligible for obfuscation
-  auto delay_ids = res_table->get_res_ids_by_name("delay");
-  EXPECT_EQ(delay_ids.size(), 0);
 }
