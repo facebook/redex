@@ -259,6 +259,16 @@ void ObfuscateResourcesPass::run_pass(DexStoresVector& stores,
     collect_string_values_from_code(scope, m_code_references_okay_to_obfuscate,
                                     &keep_resource_names_specific);
   }
+  // Ensure overlayable IDs keep their resource name.
+  auto overlayable_ids = res_table->get_overlayable_id_roots();
+  for (auto id : overlayable_ids) {
+    auto search = res_table->id_to_name.find(id);
+    if (search != res_table->id_to_name.end()) {
+      TRACE(OBFUS_RES, 3, "Keeping overlayable name '%s'",
+            search->second.c_str());
+      keep_resource_names_specific.emplace(search->second);
+    }
+  }
 
   std::map<std::string, std::string> filepath_old_to_new;
   if (m_obfuscate_resource_file) {
