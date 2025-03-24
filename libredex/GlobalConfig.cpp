@@ -64,6 +64,7 @@ void IRTypeCheckerConfig::bind_config() {
        annotated_cfg_on_error);
   bind("check_classes", {}, check_classes);
   bind("run_on_input", {}, run_on_input);
+  bind("run_after_all_passes", {}, run_after_all_passes);
 }
 
 void HasherConfig::bind_config() {
