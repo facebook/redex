@@ -1474,6 +1474,27 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             None,
             CompressionLevel.DEFAULT,  # Bit larger.
         ),
+        CompressionEntry(
+            "Redex Class Rename Map",
+            lambda args: not _is_preserve_input_dexes(args),
+            False,
+            ["redex-class-rename-map.txt"],
+            [],
+            "redex-class-rename-map.txt.zst",
+            None,
+            CompressionLevel.DEFAULT,  # Bit larger.
+        ),
+        CompressionEntry(
+            "Redex Class ID Map",
+            lambda args: not _is_preserve_input_dexes(args),
+            False,
+            # Not written in no-custom-debug mode, too complicated to filter.
+            [],
+            ["redex-class-id-map.txt"],
+            "redex-class-id-map.txt.zst",
+            None,
+            CompressionLevel.BETTER,  # Usually small.
+        ),
     ]
 
 
