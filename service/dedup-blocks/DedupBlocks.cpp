@@ -717,23 +717,21 @@ class DedupBlocksImpl {
             continue;
           }
 
-          MethodItemEntry* mie;
-          switch (it->type) {
-          case MFLOW_OPCODE: {
-            mie = new MethodItemEntry(it->insn);
-            break;
-          }
-          case MFLOW_SOURCE_BLOCK: {
-            redex_assert(is_instrument_mode());
-            mie = new MethodItemEntry(
-                std::make_unique<SourceBlock>(*it->src_block));
-            break;
-          }
-          default:
-            always_assert_log(false,
-                              "the iterator type should always be either an "
-                              "opcode or source block");
-          }
+          MethodItemEntry* mie = [&]() {
+            switch (it->type) {
+            case MFLOW_OPCODE: {
+              return &*it;
+            }
+            case MFLOW_SOURCE_BLOCK: {
+              redex_assert(is_instrument_mode());
+              return &*it;
+            }
+            default:
+              not_reached_log(
+                  "the iterator type should always be either an "
+                  "opcode or source block");
+            }
+          }();
           // Count the MIEs and locate the majority
           auto& count_group = mie_count[mie];
           count_group.count++;
