@@ -285,7 +285,6 @@ void BuilderTransform::cleanup() {
           "Replacing method with its original version %s",
           SHOW(method));
     method->set_code(copy->release_code());
-    DexMethod::erase_method(copy);
     DexMethod::delete_method_DO_NOT_USE(copy);
   }
   m_inliner->flush();

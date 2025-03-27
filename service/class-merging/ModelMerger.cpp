@@ -694,7 +694,6 @@ std::vector<DexClass*> ModelMerger::merge_model(
                            for (auto* m : dmethods) {
                              if (!method::is_clinit(m)) {
                                cls->remove_method(m);
-                               DexMethod::erase_method(m);
                                DexMethod::delete_method(m);
                              }
                            }

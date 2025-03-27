@@ -305,7 +305,6 @@ Stats reduce_uncallable_instance_methods(
                             auto& cpp = class_post_processing.at_unsafe(cls);
                             for (auto& p : cpp.remove_vmethods) {
                               cls->remove_method(p.first);
-                              DexMethod::erase_method(p.first);
                               DexMethod::delete_method(p.first);
                             }
                           });

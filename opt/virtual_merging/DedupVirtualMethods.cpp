@@ -133,7 +133,6 @@ uint32_t remove_duplicated_vmethods(
           TRACE(VM, 8, "\t%s", SHOW(m));
           type_class(m->get_class())->remove_method(m);
           removed_vmethods.emplace(m, method);
-          DexMethod::erase_method(m);
           DexMethod::delete_method(m);
         }
         ret += duplicates.size();

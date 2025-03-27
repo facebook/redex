@@ -760,6 +760,16 @@ void RedexContext::erase_method(const DexType* type,
   }
 }
 
+void RedexContext::leak_method(DexMethodRef* method) {
+  std::lock_guard<std::mutex> l(m_leaked_methods_mutex);
+  m_leaked_methods.push(method);
+}
+
+size_t RedexContext::leaked_methods() {
+  std::lock_guard<std::mutex> l(m_leaked_methods_mutex);
+  return m_leaked_methods.size();
+}
+
 // TODO: Need a better interface.
 void RedexContext::mutate_method(DexMethodRef* method,
                                  const DexMethodSpec& new_spec,

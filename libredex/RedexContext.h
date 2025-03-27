@@ -17,6 +17,7 @@
 #include <list>
 #include <map>
 #include <mutex>
+#include <queue>
 #include <set>
 #include <sstream>
 #include <string_view>
@@ -137,6 +138,15 @@ struct RedexContext {
   void mutate_method(DexMethodRef* method,
                      const DexMethodSpec& new_spec,
                      bool rename_on_collision);
+
+  // Registers a method as leaked. This is because
+  // `DexMethod::delete_method(DexMethodRef)` does not currently delete a given
+  // method, as there may still be references. Until that is addressed, we store
+  // a reference to the method here to make sure that lsan doesn't find any
+  // actual leak.
+  void leak_method(DexMethodRef*);
+
+  size_t leaked_methods();
 
   DexLocation* make_location(std::string_view store_name,
                              std::string_view file_name);
@@ -509,4 +519,7 @@ struct RedexContext {
       method_return_values;
 
   bool m_ordering_changes_allowed{true};
+
+  std::queue<DexMethodRef*> m_leaked_methods;
+  std::mutex m_leaked_methods_mutex;
 };

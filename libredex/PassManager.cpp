@@ -1598,6 +1598,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
     jemalloc_stats.process_jemalloc_stats_for_pass(pass, pass_run);
 
+    set_metric("~redex_context.leaked_methods", g_redex->leaked_methods());
+
     sanitizers::lsan_do_recoverable_leak_check();
 
     graph_visualizer.add_pass(pass, i);

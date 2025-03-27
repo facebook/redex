@@ -1619,7 +1619,6 @@ compute_reduced_methods(
               });
           return;
         }
-        DexMethod::erase_method(copy);
         DexMethod::delete_method_DO_NOT_USE(copy);
       },
       ordered_root_methods_variants);
@@ -1969,7 +1968,6 @@ void reduce(const Scope& scope,
         }
         stats->reduced_methods_variants += reduced_methods_variants.size();
         for (auto& reduced_method : reduced_methods_variants) {
-          DexMethod::erase_method(reduced_method.method);
           DexMethod::delete_method_DO_NOT_USE(reduced_method.method);
         }
       },

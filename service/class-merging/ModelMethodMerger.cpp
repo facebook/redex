@@ -851,7 +851,6 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
       always_assert(m_mergeable_to_merger_ctor.count(owner));
       auto cls = type_class(owner);
       cls->remove_method(m);
-      DexMethod::erase_method(m);
       DexMethod::delete_method(m);
       return true;
     };

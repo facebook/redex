@@ -371,7 +371,6 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
           removed_builders.emplace(builder_cls);
         }
 
-        DexMethod::erase_method(method_copy);
         DexMethod::delete_method_DO_NOT_USE(method_copy);
       }
     }

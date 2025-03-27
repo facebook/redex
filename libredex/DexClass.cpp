@@ -238,6 +238,11 @@ dex_member_refs::FieldDescriptorTokens DexFieldRef::get_descriptor_tokens()
   return res;
 }
 
+void DexFieldRef::delete_field_DO_NOT_USE(DexFieldRef* field) {
+  erase_field(field);
+  delete dynamic_cast<DexField*>(field);
+}
+
 DexFieldRef* DexField::get_field(
     const dex_member_refs::FieldDescriptorTokens& fdt) {
   auto cls = DexType::get_type(fdt.cls);
@@ -778,7 +783,13 @@ DexMethod::DexMethod(DexType* type, const DexString* name, DexProto* proto)
 
 DexMethod::~DexMethod() = default;
 
-void DexMethod::delete_method(DexMethod* m) { m->make_non_concrete(); }
+void DexMethodRef::delete_method(DexMethodRef* m) {
+  erase_method(m);
+  if (m->is_def()) {
+    m->as_def()->make_non_concrete();
+  }
+  g_redex->leak_method(m);
+}
 
 std::string DexMethod::get_fully_deobfuscated_name() const {
   if (m_deobfuscated_name != nullptr &&
@@ -2380,6 +2391,11 @@ void DexMethodRef::erase_method(DexMethodRef* mref) {
                             m->get_proto());
     }
   }
+}
+
+void DexMethodRef::delete_method_DO_NOT_USE(DexMethodRef* method) {
+  erase_method(method);
+  delete static_cast<DexMethod*>(method);
 }
 
 dex_member_refs::MethodDescriptorTokens DexMethodRef::get_descriptor_tokens()

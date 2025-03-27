@@ -325,14 +325,11 @@ class DexFieldRef {
   dex_member_refs::FieldDescriptorTokens get_descriptor_tokens() const;
 
   // This method frees the given `DexFieldRed` - different from `erase_field`,
-  // which removes the field from the `RedexContext`.
+  // which only removes the field from the `RedexContext`.
   //
   // BE SURE YOU REALLY WANT TO DO THIS! Many Redex passes and structures
   // currently cache references and do not clean up, including global ones.
-  static void delete_field_DO_NOT_USE(DexFieldRef* f) {
-    erase_field(f);
-    delete f;
-  }
+  static void delete_field_DO_NOT_USE(DexFieldRef* field);
 };
 
 class DexField : public DexFieldRef {
@@ -869,6 +866,20 @@ class DexMethodRef {
   // does not free the method.
   static void erase_method(DexMethodRef* mref);
 
+  // This method frees the given `DexMethod` - different from `erase_method`,
+  // which only removes the method from the `RedexContext`.
+  //
+  // BE SURE YOU REALLY WANT TO DO THIS! Many Redex passes and structures
+  // currently cache references and do not clean up, including global ones like
+  // `MethodProfiles` which maps `DexMethodRef`s to data.
+  static void delete_method_DO_NOT_USE(DexMethodRef* method);
+
+  // This method currently does *NOT* free the `DexMethod`, as there may still
+  // be references. This will free most resources associated with the
+  // DexMethod, though. Eventually this will become a full delete. For now, the
+  // leaked methods are registered with the RedexContext for tracking.
+  static void delete_method(DexMethodRef* method);
+
   dex_member_refs::MethodDescriptorTokens get_descriptor_tokens() const;
 };
 
@@ -1104,19 +1115,6 @@ class DexMethod : public DexMethodRef {
    */
   void balloon();
   void sync();
-
-  // This method frees the given `DexMethod` - different from `erase_method`,
-  // which removes the method from the `RedexContext`.
-  //
-  // BE SURE YOU REALLY WANT TO DO THIS! Many Redex passes and structures
-  // currently cache references and do not clean up, including global ones like
-  // `MethodProfiles` which maps `DexMethodRef`s to data.
-  static void delete_method_DO_NOT_USE(DexMethod* method) { delete method; }
-
-  // This method currently does *NOT* free the `DexMethod`, as there may still
-  // be references. This may will free most resources associated with the
-  // DexMethod, though. Eventually this will become a full delete.
-  static void delete_method(DexMethod* method);
 
  private:
   template <typename C>

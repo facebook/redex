@@ -61,7 +61,6 @@ std::vector<DexMethod*> delete_methods(
                       "%s is concrete but does not have a DexClass\n",
                       SHOW(callee));
     cls->remove_method(callee);
-    DexMethod::erase_method(callee);
     DexMethod::delete_method(callee);
     deleted.push_back(callee);
     TRACE(DELMET, 4, "removing %s", SHOW(callee));
