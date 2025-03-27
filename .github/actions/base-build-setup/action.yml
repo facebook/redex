@@ -11,13 +11,13 @@ runs:
   steps:
   - name: Cache boost
     if: inputs.save_boost_cache == 'true'
-    uses: actions/cache@v3.3.2
+    uses: actions/cache@v4
     with:
       key: boost-1-71-0-v5
       path: /tmp/toolchain/dl_cache/boost_cache
   - name: Cache protobuf
     if: inputs.save_boost_cache == 'true'
-    uses: actions/cache@v3.3.2
+    uses: actions/cache@v4
     with:
       key: protobuf3-v3
       path: /tmp/toolchain/dl_cache/protobuf
