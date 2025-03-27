@@ -128,6 +128,10 @@ void WrappedPrimitivesPass::bind_config() {
       if (wrapped_api == nullptr) {
         continue;
       }
+      always_assert_log(wrapped_api->as_def(),
+                        "Allowed invoke %s must be defined on the type and not "
+                        "referenced from a sub type",
+                        api.c_str());
       std::string unwrapped_api_desc;
       JsonWrapper jobj = JsonWrapper(obj);
       jobj.get(api.c_str(), "", unwrapped_api_desc);
