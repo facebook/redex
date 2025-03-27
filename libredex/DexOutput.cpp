@@ -756,7 +756,6 @@ void DexOutput::generate_string_data(SortMode mode) {
 
   std::unordered_set<const DexString*> type_names =
       m_gtypes->index_type_names();
-  unsigned locator_size = 0;
 
   size_t nrstr = string_order.size();
   const uint32_t str_data_start = m_offset;
@@ -2988,7 +2987,7 @@ enhanced_dex_stats_t write_classes_to_dex(
 
   TRACE(OPUT, 2, "[write_classes_to_dex][filename] %s", filename.c_str());
 
-  DexOutput dout(filename.c_str(), classes, std::move(gtypes), 
+  DexOutput dout(filename.c_str(), classes, std::move(gtypes),
                  normal_primary_dex, store_number, store_name, dex_number,
                  debug_info_kind, iodi_metadata, conf, pos_mapper, method_to_id,
                  code_debug_lines, dex_output_config, min_sdk);

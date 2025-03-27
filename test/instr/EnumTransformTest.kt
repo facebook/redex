@@ -113,7 +113,7 @@ enum class F {
   F2;
 
   companion object {
-    fun getFByName(name: String): F = valueOf(name.toUpperCase())
+    fun getFByName(name: String): F = valueOf(name.uppercase())
   }
 }
 

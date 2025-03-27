@@ -165,7 +165,6 @@ std::string convert_wildcard_type(const std::string& typ) {
 }
 
 std::string convert_wildcard_type(std::string_view typ) {
-  redex_assert(!typ.empty());
   const std::string& desc = convert_type(typ);
   // Fix up the descriptor to move Ls that occur before wildcards.
   std::string wildcard_descriptor;
@@ -173,17 +172,17 @@ std::string convert_wildcard_type(std::string_view typ) {
   bool supress_semicolon = false;
   bool keep_dots = false;
   for (unsigned int i = 0; i < desc.size(); i++) {
-    if (desc[i] == 'L') {
+    if (desc[i] == 'L' && i + 1 < desc.size()) {
       if (desc[i + 1] == '%') {
         supress_semicolon = true;
         continue;
       }
-      if (desc[i + 1] == '*' && desc.size() >= i + 2 && desc[i + 2] == '*' &&
+      if (desc[i + 1] == '*' && i + 3 < desc.size() && desc[i + 2] == '*' &&
           desc[i + 3] == '*') {
         supress_semicolon = true;
         continue;
       }
-      if (desc[i + 1] == '/' && desc.size() >= i + 2 && desc[i + 2] == '/' &&
+      if (desc[i + 1] == '/' && i + 3 < desc.size() && desc[i + 2] == '/' &&
           desc[i + 3] == '/') {
         supress_semicolon = true;
         keep_dots = true;

@@ -27,7 +27,7 @@ void testcase(uint64_t value, std::initializer_list<uint8_t> t) {
 
 TEST(EvWriteTest, empty) {
   uint8_t buf[16] = {0};
-  uint8_t* bufp = buf;
+  [[maybe_unused]] uint8_t* bufp = buf;
 
   testcase(0xffffffffffffff37, {0x37, 0xff});
   testcase(0x37, {0x37});

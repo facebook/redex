@@ -33,11 +33,11 @@ TEST(Dex039Test, ReadDex039) {
   EXPECT_NE(nullptr, dexfile);
 
   g_redex = new RedexContext();
-  DexLoader dl(DexLocation::make_location("", dexfile));
-  dex_stats_t stats{{0}};
 
   // bare minium test to ensure the dex loads okay
-  auto classes = dl.load_dex(dexfile, &stats, 39);
+  auto dl = DexLoader::create(
+      DexLocation::make_location("", dexfile), 39, DexLoader::Parallel::kYes);
+  const auto& classes = dl.get_classes();
   auto idx = dl.get_idx();
 
   // ensure that instructions can be shown

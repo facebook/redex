@@ -48,7 +48,6 @@ DexMethod* resolve_method(DexMethod* caller, IRInstruction* insn) {
   return def_method;
 }
 
-
 // The patcher cannot annotate these read methods used by ModelGen, so the
 // checker will fail when it expects an annotated returned value. We can skip
 // these reads because all the ModelGen Parcel and Json write methods only write
@@ -112,8 +111,6 @@ bool is_generated(const DexMethod* m) {
 }
 
 } // namespace
-
-
 
 bool TypedefAnnoChecker::is_value_of_opt(const DexMethod* m) {
   if (m->get_simple_deobfuscated_name() != "valueOfOpt") {
@@ -670,11 +667,11 @@ bool TypedefAnnoChecker::check_typedef_value(
       }
       break;
     }
-    case OPCODE_MOVE_EXCEPTION: {
-      break;
-    }
     case OPCODE_CHECK_CAST: {
       check_typedef_value(m, annotation, ud_chains, def, 0, inference, envs);
+      break;
+    }
+    case OPCODE_MOVE_EXCEPTION: {
       break;
     }
     default: {
@@ -710,34 +707,17 @@ void TypedefAnnoCheckerPass::run_pass(DexStoresVector& stores,
   });
 
   patcher.run(scope);
+  patcher.print_stats(mgr);
+  TRACE(TAC, 1, "Finished patcher run");
 
-  mgr.set_metric("patched fields and methods",
-                 patcher.get_patcher_stats().num_patched_fields_and_methods);
-  mgr.set_metric("patched parameters",
-                 patcher.get_patcher_stats().num_patched_parameters);
-
-  mgr.set_metric(
-      "patched chained fields and methods",
-      patcher.get_chained_patcher_stats().num_patched_fields_and_methods);
-  mgr.set_metric("patched chained parameters",
-                 patcher.get_chained_patcher_stats().num_patched_parameters);
-
-  mgr.set_metric("patched chained getter fields and methods",
-                 patcher.get_chained_getter_patcher_stats()
-                     .num_patched_fields_and_methods);
-  mgr.set_metric(
-      "patched chained getter parameters",
-      patcher.get_chained_getter_patcher_stats().num_patched_parameters);
-  TRACE(TAC, 2, "Finish patching synth accessors");
-
-  auto stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* m) {
+  auto stats = walk::parallel::methods<CheckerStats>(scope, [&](DexMethod* m) {
     TypedefAnnoChecker checker = TypedefAnnoChecker(
         strdef_constants, intdef_constants, m_config, *method_override_graph);
     checker.run(m);
     if (!checker.complete()) {
-      return Stats(checker.error());
+      return CheckerStats(checker.error());
     }
-    return Stats();
+    return CheckerStats();
   });
 
   if (stats.m_count > 0) {

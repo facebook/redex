@@ -23,7 +23,7 @@ class InterDexPassPlugin {
   virtual void configure(const Scope&, ConfigFiles&) {}
 
   // Will prevent clazz from going into any output dex.
-  virtual bool should_skip_class(const DexClass*) { return false; }
+  virtual bool should_skip_class(const DexClass*) const { return false; }
 
   // Calculate the amount of refs that any classes from additional_classes
   // will add to the output dex (see below).

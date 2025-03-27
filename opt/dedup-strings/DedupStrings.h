@@ -106,70 +106,6 @@ class DedupStrings {
   const method_profiles::MethodProfiles& m_method_profiles;
 };
 
-/**
- * This pass de-duplicates strings across dexes when this would decrease overall
- * size.
- *
- * Without this pass, if a string is used in multiple dexes, it would be
- * separately embedded in all those different dexes. This results in wasted
- * space on disk, even after compression.
- *
- * This pass de-duplicates those string across dexes for which this would result
- * in a decrease in code size:
- * - A particular dex is chosen to host a string --- the dex which references
- *   the string most often in const-string instructions
- * - A dispatcher function is introduced in that dex. It roughly has the
- *   following form:
- *
- *     static String $const$string(int id) {
- *       switch (id) {
- *         case 0: return "string_0";
- *         ...
- *         default: // case n-1
- *           return "string_n_minus_1";
- *       }
- *     }
- *
- * - References to the string from other dexes (except the primary dex and other
- *   perf sensitive classes) are rewritten to invoke the hosting function.
- *   An instruction like
- *
- *     const-string v0, "foo"
- *
- *   turns into
- *
- *     const v0, 123 // index of "foo" in some hosting dex
- *     invoke-static {v0}, $const-string // of hosting dex
- *     move-result-object v0
- *
- * - If a dex also refers to the string separately from const-string
- *   instructions, then the string does not participate in the de-duplication
- *   logic, as it's not possible to de-dup it anyway.
- * - References from the primary dex are not rewritten, as the primary dex may
- *   not include forward references to other dexes. Also, perf sensitive
- *   classes, which are those used for cold start or mixed mode as determined
- *   by the InterDex pass, are not rewritten.
- * - We perform a benefits/costs analysis for each string:
- *   - Dropping a string from a dex will save a string table entry, which
- *     consists of an encoding of the length of the string, plus the MUTF8
- *     encoding of the string itself, plus a 4 byte index into the table.
- *   - The hosting function will need around 10 bytes for each switch case.
- *   - Rewriting a const-string reference into a hosting function invocation
- *     adds 8 bytes. (Sometimes less, if we can condense a const-string/jumbo,
- *     or if the new index fits into fewer bits.)
- *
- * Besides the space savings, there are other perf implications:
- * - The string tables shrink; this is probably good, as they likely tend to
- *   be kept in memory, e.g. due to type locator look-ups.
- * - De-duped strings need to get interned less often by the VM (they are
- *   interned on first access), and the VM will store less metadata. This should
- *   be good.
- * - De-duped string look-ups from other dexes become slightly more expensive,
- *   due to the dispatcher indirection.
- *
- * This pass should run at the very end of all passes, certainly after the
- * inter-dex pass, but before the replace-gotos-with-returns pass.
- */
 class DedupStringsPass : public Pass {
  public:
   DedupStringsPass() : Pass("DedupStringsPass") {}
@@ -184,6 +120,73 @@ class DedupStringsPass : public Pass {
         {NoResolvablePureRefs, Preserves},
         {InitialRenameClass, Preserves},
     };
+  }
+
+  std::string get_config_doc() override {
+    return trim(R"(
+This pass de-duplicates strings across dexes when this would decrease overall
+size.
+
+Without this pass, if a string is used in multiple dexes, it would be
+separately embedded in all those different dexes. This results in wasted
+space on disk, even after compression.
+
+This pass de-duplicates those string across dexes for which this would result
+in a decrease in code size:
+- A particular dex is chosen to host a string --- the dex which references
+  the string most often in const-string instructions
+- A dispatcher function is introduced in that dex. It roughly has the
+  following form:
+```
+    static String $const$string(int id) {
+      switch (id) {
+        case 0: return "string_0";
+        ...
+        default: // case n-1
+          return "string_n_minus_1";
+      }
+    }
+```
+- References to the string from other dexes (except the primary dex and other
+  perf sensitive classes) are rewritten to invoke the hosting function.
+  An instruction like
+```
+    const-string v0, "foo"
+```
+  turns into
+```
+    const v0, 123 // index of "foo" in some hosting dex
+    invoke-static {v0}, $const-string // of hosting dex
+    move-result-object v0
+```
+- If a dex also refers to the string separately from const-string
+  instructions, then the string does not participate in the de-duplication
+  logic, as it's not possible to de-dup it anyway.
+- References from the primary dex are not rewritten, as the primary dex may
+  not include forward references to other dexes. Also, perf sensitive
+  classes, which are those used for cold start or mixed mode as determined
+  by the InterDex pass, are not rewritten.
+- We perform a benefits/costs analysis for each string:
+  - Dropping a string from a dex will save a string table entry, which
+    consists of an encoding of the length of the string, plus the MUTF8
+    encoding of the string itself, plus a 4 byte index into the table.
+  - The hosting function will need around 10 bytes for each switch case.
+  - Rewriting a const-string reference into a hosting function invocation
+    adds 8 bytes. (Sometimes less, if we can condense a const-string/jumbo,
+    or if the new index fits into fewer bits.)
+
+Besides the space savings, there are other perf implications:
+- The string tables shrink; this is probably good, as they likely tend to
+  be kept in memory, e.g. due to type locator look-ups.
+- De-duped strings need to get interned less often by the VM (they are
+  interned on first access), and the VM will store less metadata. This should
+  be good.
+- De-duped string look-ups from other dexes become slightly more expensive,
+  due to the dispatcher indirection.
+
+This pass should run at the very end of all passes, certainly after the
+inter-dex pass, but before the replace-gotos-with-returns pass.
+    )");
   }
 
   void bind_config() override;

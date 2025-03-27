@@ -56,7 +56,8 @@ TEST_F(RenameMembersTest, rename) {
   auto int_t = DexType::make_type("I");
   auto a = DexType::make_type("A");
   auto field = make_field_def(a, "wombat", int_t, ACC_PUBLIC, true);
-  auto cls_A = create_class(a, obj_t, {field}, ACC_PUBLIC, true);
+  [[maybe_unused]] auto cls_A =
+      create_class(a, obj_t, {field}, ACC_PUBLIC, true);
   std::string name_before = field->get_name()->c_str();
   ASSERT_EQ("wombat", name_before);
   DexFieldSpec spec;

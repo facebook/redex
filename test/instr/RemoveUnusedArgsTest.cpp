@@ -368,7 +368,7 @@ TEST_F(PreVerify, PublicNonVirtualsUnusedArgs) {
 
   auto non_virtual1 = find_vmethod_named(*non_virtuals, "non_virtual1");
   ASSERT_NE(nullptr, non_virtual1);
-  auto code = non_virtual1->get_code();
+  [[maybe_unused]] auto code = non_virtual1->get_code();
 
   auto non_virtuals_user = find_class_named(
       classes, "Lcom/facebook/redex/test/instr/NonVirtualsUser;");

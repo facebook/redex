@@ -359,9 +359,16 @@ void AnalysisImpl::collect_method_defs() {
  * fieldref or methodref.
  */
 void AnalysisImpl::analyze_opcodes() {
+  auto register_reference = [](SingleImplData& si, DexMethod* referrer,
+                               IRInstruction* insn,
+                               const cfg::InstructionIterator& insn_it) {
+    auto& map = si.referencing_methods[referrer];
+    auto [it, emplaced] = map.emplace(insn, insn_it);
+    always_assert(emplaced || it->second == insn_it);
+  };
 
   auto check_arg = [&](DexMethod* referrer,
-                       const IRList::iterator& insn_it,
+                       const cfg::InstructionIterator& insn_it,
                        DexType* type,
                        DexMethodRef* meth,
                        IRInstruction* insn) {
@@ -369,13 +376,13 @@ void AnalysisImpl::analyze_opcodes() {
     if (intf) {
       auto& si = single_impls.at(intf);
       std::lock_guard<std::mutex> lock(si.mutex);
-      si.referencing_methods[referrer][insn] = insn_it;
+      register_reference(si, referrer, insn, insn_it);
       si.methodrefs[meth].insert(insn);
     }
   };
 
   auto check_sig = [&](DexMethod* referrer,
-                       const IRList::iterator& insn_it,
+                       const cfg::InstructionIterator& insn_it,
                        DexMethodRef* meth,
                        IRInstruction* insn) {
     // check the sig for single implemented interface
@@ -387,7 +394,7 @@ void AnalysisImpl::analyze_opcodes() {
   };
 
   auto check_field = [&](DexMethod* referrer,
-                         const IRList::iterator& insn_it,
+                         const cfg::InstructionIterator& insn_it,
                          DexFieldRef* field,
                          IRInstruction* insn) {
     auto cls = field->get_class();
@@ -400,27 +407,27 @@ void AnalysisImpl::analyze_opcodes() {
     if (intf) {
       auto& si = single_impls.at(intf);
       std::lock_guard<std::mutex> lock(si.mutex);
-      si.referencing_methods[referrer][insn] = insn_it;
+      register_reference(si, referrer, insn, insn_it);
       si.fieldrefs[field].push_back(insn);
     }
   };
 
   auto check_return = [&](DexMethod* referrer,
-                          const IRList::iterator& insn_it,
+                          const cfg::InstructionIterator& insn_it,
                           IRInstruction* insn) {
     auto rtype = referrer->get_proto()->get_rtype();
     auto intf = get_and_check_single_impl(rtype);
     if (intf) {
       auto& si = single_impls.at(intf);
       std::lock_guard<std::mutex> lock(si.mutex);
-      si.referencing_methods[referrer][insn] = insn_it;
+      register_reference(si, referrer, insn, insn_it);
     }
   };
 
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    redex_assert(!code.editable_cfg_built()); // Need *one* way to
-    auto ii = ir_list::InstructionIterable(code);
-    const auto& end = ii.end();
+    redex_assert(code.editable_cfg_built());
+    auto ii = InstructionIterable(code.cfg());
+    auto end = ii.end();
     for (auto it = ii.begin(); it != end; ++it) {
       auto insn = it->insn;
       auto op = insn->opcode();
@@ -436,7 +443,7 @@ void AnalysisImpl::analyze_opcodes() {
         if (intf) {
           auto& si = single_impls.at(intf);
           std::lock_guard<std::mutex> lock(si.mutex);
-          si.referencing_methods[method][insn] = it.unwrap();
+          register_reference(si, method, insn, it);
           si.typerefs.push_back(insn);
         }
         break;
@@ -453,7 +460,7 @@ void AnalysisImpl::analyze_opcodes() {
         if (field == nullptr) {
           field = insn->get_field();
         }
-        check_field(method, it.unwrap(), field, insn);
+        check_field(method, it, field, insn);
         break;
       }
       case OPCODE_SGET:
@@ -467,7 +474,7 @@ void AnalysisImpl::analyze_opcodes() {
         if (field == nullptr) {
           field = insn->get_field();
         }
-        check_field(method, it.unwrap(), field, insn);
+        check_field(method, it, field, insn);
         break;
       }
       // method ref
@@ -485,11 +492,11 @@ void AnalysisImpl::analyze_opcodes() {
           } else {
             auto& si = single_impls.at(intf);
             std::lock_guard<std::mutex> lock(si.mutex);
-            si.referencing_methods[method][insn] = it.unwrap();
+            register_reference(si, method, insn, it);
             si.intf_methodrefs[meth].insert(insn);
           }
         }
-        check_sig(method, it.unwrap(), meth, insn);
+        check_sig(method, it, meth, insn);
         break;
       }
 
@@ -498,11 +505,11 @@ void AnalysisImpl::analyze_opcodes() {
       case OPCODE_INVOKE_VIRTUAL:
       case OPCODE_INVOKE_SUPER: {
         const auto meth = insn->get_method();
-        check_sig(method, it.unwrap(), meth, insn);
+        check_sig(method, it, meth, insn);
         break;
       }
       case OPCODE_RETURN_OBJECT: {
-        check_return(method, it.unwrap(), insn);
+        check_return(method, it, insn);
         break;
       }
       default:

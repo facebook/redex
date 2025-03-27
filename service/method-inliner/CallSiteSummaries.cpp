@@ -302,8 +302,10 @@ CallSiteSummarizer::get_invoke_call_site_summaries(
           m_shrinker.get_immut_analyzer_state(),
           m_shrinker.get_immut_analyzer_state(),
           constant_propagation::EnumFieldAnalyzerState::get(),
-          constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr,
-          constant_propagation::ApiLevelAnalyzerState::get(), nullptr,
+          constant_propagation::BoxedBooleanAnalyzerState::get(),
+          m_shrinker.get_string_analyzer_state(),
+          constant_propagation::ApiLevelAnalyzerState::get(),
+          m_shrinker.get_package_name_state(), nullptr,
           m_shrinker.get_immut_analyzer_state(), nullptr));
   intra_cp.run(initial_env);
   for (const auto& block : cfg.blocks()) {

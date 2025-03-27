@@ -114,7 +114,7 @@ class IODITest : public ::testing::Test {
     auto result =
         load_classes_from_dex(reinterpret_cast<dex_header*>(data.get()),
                               DexLocation::make_location("", "tmp.dex"),
-                              false);
+                              /*balloon=*/false);
     return result;
   }
 
@@ -240,8 +240,8 @@ void log_debug_to_methods(const std::map<void*, DexMethods>& result) {
     std::unordered_map<std::string, uint32_t> result;
     const char* dexfile = std::getenv("dexfile");
     redex_assert(dexfile);
-    auto pre_classes =
-        load_classes_from_dex(DexLocation::make_location("", dexfile), false);
+    auto pre_classes = load_classes_from_dex(
+        DexLocation::make_location("", dexfile), /*stats=*/nullptr, false);
     auto pre_debug_data = debug_to_methods(pre_classes);
     for (auto& data : pre_debug_data) {
       EXPECT_EQ(data.second.size(), 1);

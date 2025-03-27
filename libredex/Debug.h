@@ -11,6 +11,8 @@
 #include "RedexException.h"
 
 #include <cstdint>
+#include <string>
+#include <string_view>
 #include <type_traits>
 
 constexpr bool debug =
@@ -83,3 +85,25 @@ extern bool slow_invariants_debug;
   static_cast<std::add_pointer<typename std::add_const<            \
       typename std::remove_pointer<typename std::remove_reference< \
           decltype(e)>::type>::type>::type>::type>(e)
+
+namespace redex {
+
+void set_throw_typed_exception(bool throw_typed);
+bool throw_typed_exception();
+
+struct DexAssert {
+  static void always(bool cond, const std::string& msg) {
+    always_assert_type_log(cond, RedexError::INVALID_DEX, "%s", msg.c_str());
+  }
+
+  static void always(bool cond, const std::string_view& msg) {
+    always_assert_type_log(
+        cond, RedexError::INVALID_DEX, "%s", std::string(msg).c_str());
+  }
+
+  static void always(bool cond, const char* msg) {
+    always_assert_type_log(cond, RedexError::INVALID_DEX, "%s", msg);
+  }
+};
+
+} // namespace redex

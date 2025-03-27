@@ -53,7 +53,7 @@ TEST_F(TypeAnalysisTransformTest, MethodHasNoEqDefined) {
   auto jj = InstructionIterable(y_method->get_code());
   auto end2 = jj.end();
   for (auto it = jj.begin(); it != end2; ++it) {
-    auto insn = it->insn;
+    [[maybe_unused]] auto insn = it->insn;
   }
 }
 

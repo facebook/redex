@@ -27,6 +27,7 @@ struct PreVerify : public RedexTest {
   PreVerify()
       : classes(load_classes_from_dex(
             DexLocation::make_location("", std::getenv("dex_pre")),
+            /*stats=*/nullptr,
             /* balloon */ false)),
         resources(
             decode_resource_paths(std::getenv("extracted_resources"), "pre")) {}
@@ -38,6 +39,7 @@ struct PostVerify : public RedexTest {
   PostVerify()
       : classes(load_classes_from_dex(
             DexLocation::make_location("", std::getenv("dex_post")),
+            /*stats=*/nullptr,
             /* balloon */ false)),
         resources(decode_resource_paths(std::getenv("extracted_resources"),
                                         "post")) {}

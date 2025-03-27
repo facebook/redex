@@ -28,18 +28,9 @@ bool has_catch_all(const cfg::ControlFlowGraph& cfg, const cfg::Block* block) {
   });
 }
 
-bool has_try(const IRCode& code) {
-  if (code.cfg_built()) {
-    auto& cfg = code.cfg();
-    for (auto block : cfg.blocks()) {
-      if (has_catch(cfg, block)) {
-        return true;
-      }
-    }
-    return false;
-  }
-  for (auto& mie : code) {
-    if (mie.type == MFLOW_TRY) {
+bool has_try(const cfg::ControlFlowGraph& cfg) {
+  for (auto block : cfg.blocks()) {
+    if (has_catch(cfg, block)) {
       return true;
     }
   }
@@ -204,24 +195,18 @@ void Analyzer::analyze_instruction(const IRInstruction* insn,
   }
 }
 
-bool cannot_inline_sketchy_code(const IRCode& caller,
-                                const IRCode& callee,
+bool cannot_inline_sketchy_code(const cfg::ControlFlowGraph& caller_cfg,
+                                const cfg::ControlFlowGraph& callee_cfg,
                                 const IRInstruction* invoke_insn) {
   // All failure conditions depend on that we have some try regions.
-  if (!has_try(callee) || !has_try(caller)) {
+  if (!has_try(callee_cfg) || !has_try(caller_cfg)) {
     return false;
-  }
-
-  // We are conservative without cfgs.
-  if (!callee.cfg_built() || !caller.cfg_built()) {
-    return true;
   }
 
   // If callee has try regions without catch-alls, we must not inline that at a
   // sketchy call-site.
-  if (has_try_without_catch_all(callee.cfg())) {
-    auto caller_sketchy_insns =
-        Analyzer(caller.cfg()).get_sketchy_instructions();
+  if (has_try_without_catch_all(callee_cfg)) {
+    auto caller_sketchy_insns = Analyzer(caller_cfg).get_sketchy_instructions();
     if (contains_invoke_insn(caller_sketchy_insns, invoke_insn)) {
       return true;
     }
@@ -230,8 +215,8 @@ bool cannot_inline_sketchy_code(const IRCode& caller,
   // The caller has try regions. Let's make sure we won't inline a sketchy
   // method into a try region.
   auto is_callee_sketchy =
-      !Analyzer(callee.cfg()).get_sketchy_instructions().empty();
-  if (is_callee_sketchy && is_invoke_insn_in_try(caller.cfg(), invoke_insn)) {
+      !Analyzer(callee_cfg).get_sketchy_instructions().empty();
+  if (is_callee_sketchy && is_invoke_insn_in_try(caller_cfg, invoke_insn)) {
     return true;
   }
 

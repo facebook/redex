@@ -6,11 +6,14 @@
  */
 
 #include "gtest/gtest.h"
+#include <algorithm>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <limits>
+#include <regex>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <unordered_set>
 
 #include "Creators.h"
@@ -330,7 +333,7 @@ class IRTypeCheckerTest : public RedexTest {
     ClassCreator cc(type::java_lang_Object());
     cc.set_access(ACC_PUBLIC);
     cc.set_external();
-    auto object_class = cc.create();
+    [[maybe_unused]] auto object_class = cc.create();
 
     auto proto = DexProto::make_proto(type::_boolean(), args);
     m_method =
@@ -3019,7 +3022,7 @@ TEST_F(IRTypeCheckerTest, sputObjectFail) {
 
 TEST_F(IRTypeCheckerTest, sputObjectArrayFail) {
   const auto type_a = DexType::make_type("LA;");
-  const auto type_a_arr = type::make_array_type(type_a);
+  [[maybe_unused]] const auto type_a_arr = type::make_array_type(type_a);
 
   {
     ClassCreator cls_a_creator(type_a);
@@ -3084,3 +3087,595 @@ TEST_F(IRTypeCheckerTest, sputObjectArrayFail) {
     EXPECT_TRUE(checker.fail());
   }
 }
+
+TEST_F(IRTypeCheckerTest, agetArrayTypePass) {
+  const auto type_a = DexType::make_type("LA;");
+  {
+    ClassCreator cls_a_creator(type_a);
+    cls_a_creator.set_super(type::java_lang_Object());
+    cls_a_creator.create();
+  }
+
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:(I[LA;)V;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param v1)
+      (load-param-object v2)
+      (aget-object v2 v1)
+      (move-result-pseudo-object v3)
+      (return-void)
+    )
+  )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_FALSE(checker.fail()) << checker.what();
+  }
+}
+
+namespace {
+
+std::unordered_map<std::string, std::pair<std::string, std::string>>
+get_aget_opcodes_and_descriptors() {
+  return {
+      {"aget", {"I", ""}}, // Does not test float. Oh well.
+      {"aget-wide", {"J", "-wide"}}, // Does not test double. Oh well.
+      {"aget-boolean", {"Z", ""}},
+      {"aget-byte", {"B", ""}},
+      {"aget-char", {"C", ""}},
+      {"aget-short", {"S", ""}},
+      {"aget-object", {"LA;", "-object"}},
+  };
+}
+
+using AgetPairType =
+    typename decltype(get_aget_opcodes_and_descriptors())::value_type;
+
+std::string format_param(const AgetPairType& data) {
+  std::string name = data.first;
+  name.append("_");
+  name.append(data.second.first);
+  name.append("_");
+  name.append(data.second.second);
+  std::replace_if(
+      name.begin(), name.end(), [](char c) { return !std::isalnum(c); }, '_');
+  return name;
+}
+
+} // namespace
+
+class IRTypeCheckerAgetPassTest
+    : public IRTypeCheckerTest,
+      public ::testing::WithParamInterface<AgetPairType> {};
+
+TEST_P(IRTypeCheckerAgetPassTest, test) {
+  const auto type_a = DexType::make_type("LA;");
+  {
+    ClassCreator cls_a_creator(type_a);
+    cls_a_creator.set_super(type::java_lang_Object());
+    cls_a_creator.create();
+  }
+
+  auto& [opcode, type_and_pseudo] = GetParam();
+  auto& [type, pseudo] = type_and_pseudo;
+  std::string method_descr =
+      std::regex_replace("LFoo;.bar:(I[TYPE)V;", std::regex("TYPE"), type);
+  auto method = DexMethod::make_method(method_descr)
+                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  auto body_template = R"(
+    (
+      (load-param-object v0)
+      (load-param v1)
+      (load-param-object v2)
+      (OPCODE v2 v1)
+      (move-result-pseudoPSEUDO v3)
+      (return-void)
+    )
+    )";
+  method->set_code(assembler::ircode_from_string(std::regex_replace(
+      std::regex_replace(body_template, std::regex("OPCODE"), opcode),
+      std::regex("PSEUDO"), pseudo)));
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_FALSE(checker.fail()) << checker.what();
+}
+INSTANTIATE_TEST_CASE_P(
+    AGetMatching,
+    IRTypeCheckerAgetPassTest,
+    ::testing::ValuesIn(get_aget_opcodes_and_descriptors()),
+    [](const testing::TestParamInfo<IRTypeCheckerAgetPassTest::ParamType>&
+           info) { return format_param(info.param); });
+
+TEST_F(IRTypeCheckerTest, agetArrayTypeFail) {
+  const auto type_a = DexType::make_type("LA;");
+  {
+    ClassCreator cls_a_creator(type_a);
+    cls_a_creator.set_super(type::java_lang_Object());
+    cls_a_creator.create();
+  }
+
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:(ILA;)V;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param v1)
+      (load-param-object v2)
+      (aget-object v2 v1)
+      (move-result-pseudo-object v3)
+      (return-void)
+    )
+  )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_TRUE(checker.fail());
+  }
+}
+
+namespace {
+
+std::vector<std::pair<AgetPairType, AgetPairType>> get_aget_mismatches() {
+  std::vector<std::pair<AgetPairType, AgetPairType>> tmp;
+  for (auto& lhs : get_aget_opcodes_and_descriptors()) {
+    for (auto& rhs : get_aget_opcodes_and_descriptors()) {
+      if (lhs.first == rhs.first) {
+        continue;
+      }
+      tmp.emplace_back(lhs, rhs);
+    }
+  }
+  return tmp;
+}
+
+using AgetFailType = typename decltype(get_aget_mismatches())::value_type;
+
+} // namespace
+
+class IRTypeCheckerAgetFailTest
+    : public IRTypeCheckerTest,
+      public ::testing::WithParamInterface<AgetFailType> {};
+
+TEST_P(IRTypeCheckerAgetFailTest, failArrayType) {
+  const auto type_a = DexType::make_type("LA;");
+  {
+    ClassCreator cls_a_creator(type_a);
+    cls_a_creator.set_super(type::java_lang_Object());
+    cls_a_creator.create();
+  }
+
+  auto& [lhs, rhs] = GetParam();
+
+  auto& [opcode1, type_and_pseudo1] = lhs;
+  auto& [type1, pseudo1] = type_and_pseudo1;
+  auto& [opcode2, type_and_pseudo2] = rhs;
+  auto& [type2, pseudo2] = type_and_pseudo2;
+
+  std::string method_descr =
+      std::regex_replace("LFoo;.bar:(I[TYPE1)V;", std::regex("TYPE1"), type1);
+  auto method = DexMethod::make_method(method_descr)
+                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  auto body_template = R"(
+    (
+      (load-param-object v0)
+      (load-param v1)
+      (load-param-object v2)
+      (OPCODE2 v2 v1)
+      (move-result-pseudoPSEUDO2 v3)
+      (return-void)
+    )
+    )";
+  method->set_code(assembler::ircode_from_string(std::regex_replace(
+      std::regex_replace(body_template, std::regex("OPCODE2"), opcode2),
+      std::regex("PSEUDO2"), pseudo2)));
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_TRUE(checker.fail());
+}
+INSTANTIATE_TEST_CASE_P(AGetNotMatching,
+                        IRTypeCheckerAgetFailTest,
+                        ::testing::ValuesIn(get_aget_mismatches()),
+                        [](const testing::TestParamInfo<
+                            IRTypeCheckerAgetFailTest::ParamType>& info) {
+                          std::string name = format_param(info.param.first);
+                          name.append("_");
+                          name.append(format_param(info.param.second));
+                          return name;
+                        });
+
+TEST_F(IRTypeCheckerTest, aputArrayTypePass) {
+  const auto type_a = DexType::make_type("LA;");
+  {
+    ClassCreator cls_a_creator(type_a);
+    cls_a_creator.set_super(type::java_lang_Object());
+    cls_a_creator.create();
+  }
+
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:(ILA;[LA;)V;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param v1)
+      (load-param-object v2)
+      (load-param-object v3)
+      (aput-object v2 v3 v1)
+      (return-void)
+    )
+  )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_FALSE(checker.fail());
+  }
+}
+
+namespace {
+
+std::unordered_map<std::string, std::pair<std::string, std::string>>
+get_aput_opcodes_and_descriptors() {
+  return {
+      {"aput", {"I", ""}}, // Does not test float. Oh well.
+      {"aput-wide", {"J", "-wide"}}, // Does not test double. Oh well.
+      {"aput-boolean", {"Z", ""}},
+      {"aput-byte", {"B", ""}},
+      {"aput-char", {"C", ""}},
+      {"aput-short", {"S", ""}},
+      {"aput-object", {"LA;", "-object"}},
+  };
+}
+
+using AputPairType =
+    typename decltype(get_aput_opcodes_and_descriptors())::value_type;
+
+} // namespace
+
+class IRTypeCheckerAputPassTest
+    : public IRTypeCheckerTest,
+      public ::testing::WithParamInterface<AputPairType> {};
+
+TEST_P(IRTypeCheckerAputPassTest, test) {
+  auto& [opcode, type_and_loadp] = GetParam();
+  auto& [type, loadp] = type_and_loadp;
+  std::string method_descr =
+      std::regex_replace("LFoo;.bar:(ITYPE[TYPE)V;", std::regex("TYPE"), type);
+  auto method = DexMethod::make_method(method_descr)
+                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+
+  auto body_template = R"(
+    (
+      (load-param-object v0)
+      (load-param v1)
+      (load-paramLOADP v2)
+      (load-param-object v4)
+      (OPCODE v2 v4 v1)
+      (return-void)
+    )
+  )";
+  method->set_code(assembler::ircode_from_string(std::regex_replace(
+      std::regex_replace(body_template, std::regex("LOADP"), loadp),
+      std::regex("OPCODE"), opcode)));
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_FALSE(checker.fail()) << checker.what();
+}
+INSTANTIATE_TEST_CASE_P(
+    APutMatching,
+    IRTypeCheckerAputPassTest,
+    ::testing::ValuesIn(get_aput_opcodes_and_descriptors()),
+    [](const testing::TestParamInfo<IRTypeCheckerAputPassTest::ParamType>&
+           info) { return format_param(info.param); });
+
+TEST_F(IRTypeCheckerTest, aputArrayTypeFail) {
+  const auto type_a = DexType::make_type("LA;");
+  {
+    ClassCreator cls_a_creator(type_a);
+    cls_a_creator.set_super(type::java_lang_Object());
+    cls_a_creator.create();
+  }
+
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:(ILA;)V;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+    method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param v1)
+      (load-param-object v2)
+      (aput-object v2 v2 v1)
+      (return-void)
+    )
+  )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_TRUE(checker.fail());
+  }
+}
+
+namespace {
+
+std::vector<std::pair<AputPairType, AputPairType>> get_aput_mismatches() {
+  std::vector<std::pair<AputPairType, AputPairType>> tmp;
+  for (auto& lhs : get_aput_opcodes_and_descriptors()) {
+    for (auto& rhs : get_aput_opcodes_and_descriptors()) {
+      if (lhs.first == rhs.first) {
+        continue;
+      }
+      tmp.emplace_back(lhs, rhs);
+    }
+  }
+  return tmp;
+}
+
+using AputFailType = typename decltype(get_aput_mismatches())::value_type;
+
+} // namespace
+
+class IRTypeCheckerAputFailTest
+    : public IRTypeCheckerTest,
+      public ::testing::WithParamInterface<AputFailType> {};
+
+TEST_P(IRTypeCheckerAputFailTest, failArrayType) {
+  const auto type_a = DexType::make_type("LA;");
+  {
+    ClassCreator cls_a_creator(type_a);
+    cls_a_creator.set_super(type::java_lang_Object());
+    cls_a_creator.create();
+  }
+
+  auto& [lhs, rhs] = GetParam();
+
+  auto& [opcode1, type_and_loadp1] = lhs;
+  auto& [type1, loadp1] = type_and_loadp1;
+  auto& [opcode2, type_and_loadp2] = rhs;
+  auto& [type2, loadp2] = type_and_loadp2;
+
+  std::string method_descr =
+      std::regex_replace(std::regex_replace("LFoo;.bar:(I[TYPE1TYPE2)V;",
+                                            std::regex("TYPE1"), type1),
+                         std::regex("TYPE2"), type2);
+  auto method = DexMethod::make_method(method_descr)
+                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  auto body_template = R"(
+    (
+      (load-param-object v0)
+      (load-param v1)
+      (load-param-object v2)
+      (load-paramLOADP2 v3)
+      (OPCODE2 v3 v2 v1)
+      (return-void)
+    )
+    )";
+  auto body = std::regex_replace(
+      std::regex_replace(body_template, std::regex("OPCODE2"), opcode2),
+      std::regex("LOADP2"), loadp2);
+
+  method->set_code(assembler::ircode_from_string(body));
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_TRUE(checker.fail()) << body;
+}
+INSTANTIATE_TEST_CASE_P(APutNotMatching,
+                        IRTypeCheckerAputFailTest,
+                        ::testing::ValuesIn(get_aput_mismatches()),
+                        [](const testing::TestParamInfo<
+                            IRTypeCheckerAputFailTest::ParamType>& info) {
+                          std::string name = format_param(info.param.first);
+                          name.append("_");
+                          name.append(format_param(info.param.second));
+                          return name;
+                        });
+
+namespace {
+
+std::unordered_map<std::string, std::pair<std::string, std::string>>
+get_aput_intfloat_pass_descriptors() {
+  return {
+      {"int-int", {"[I", "I"}},     {"int-short", {"[I", "S"}},
+      {"int-char", {"[I", "C"}},    {"int-byte", {"[I", "B"}},
+      {"int-boolean", {"[I", "Z"}}, {"float-float", {"[F", "F"}},
+  };
+}
+
+using AputIntFloatPairType =
+    typename decltype(get_aput_intfloat_pass_descriptors())::value_type;
+
+} // namespace
+
+class IRTypeCheckerAputIntFloatPassTest
+    : public IRTypeCheckerTest,
+      public ::testing::WithParamInterface<AputIntFloatPairType> {};
+
+TEST_P(IRTypeCheckerAputIntFloatPassTest, test) {
+  auto& [name, array_type_val_type] = GetParam();
+  auto& [array_type, val_type] = array_type_val_type;
+  std::string method_descr =
+      std::regex_replace(std::regex_replace("LFoo;.bar:(ATYPEVTYPE)V;",
+                                            std::regex("ATYPE"), array_type),
+                         std::regex("VTYPE"), val_type);
+  auto method = DexMethod::make_method(method_descr)
+                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+
+  auto body_template = R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (load-param v2)
+      (const v3 0)
+      (aput v2 v1 v3)
+      (return-void)
+    )
+  )";
+  method->set_code(assembler::ircode_from_string(body_template));
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_FALSE(checker.fail()) << checker.what();
+}
+INSTANTIATE_TEST_CASE_P(
+    APutIntFloatMatching,
+    IRTypeCheckerAputIntFloatPassTest,
+    ::testing::ValuesIn(get_aput_intfloat_pass_descriptors()),
+    [](const testing::TestParamInfo<
+        IRTypeCheckerAputIntFloatPassTest::ParamType>& info) {
+      return format_param(info.param);
+    });
+
+namespace {
+
+std::unordered_map<std::string, std::pair<std::string, std::string>>
+get_aput_intfloat_mismatch_descriptors() {
+  return {
+      {"float-int", {"[F", "I"}},     {"float-short", {"[F", "S"}},
+      {"float-char", {"[F", "C"}},    {"float-byte", {"[F", "B"}},
+      {"float-boolean", {"[F", "Z"}}, {"int-float", {"[I", "F"}},
+  };
+}
+
+using AputIntFloatMissPairType =
+    typename decltype(get_aput_intfloat_mismatch_descriptors())::value_type;
+
+} // namespace
+
+class IRTypeCheckerAputIntFloatMismatchTest
+    : public IRTypeCheckerTest,
+      public ::testing::WithParamInterface<AputIntFloatMissPairType> {};
+
+TEST_P(IRTypeCheckerAputIntFloatMismatchTest, test) {
+  auto& [name, array_type_val_type] = GetParam();
+  auto& [array_type, val_type] = array_type_val_type;
+  std::string method_descr =
+      std::regex_replace(std::regex_replace("LFoo;.bar:(ATYPEVTYPE)V;",
+                                            std::regex("ATYPE"), array_type),
+                         std::regex("VTYPE"), val_type);
+  auto method = DexMethod::make_method(method_descr)
+                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+
+  auto body_template = R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (load-param v2)
+      (const v3 0)
+      (aput v2 v1 v3)
+      (return-void)
+    )
+  )";
+  method->set_code(assembler::ircode_from_string(body_template));
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_TRUE(checker.fail()) << method_descr << body_template;
+}
+INSTANTIATE_TEST_CASE_P(
+    APutIntFloatMismatching,
+    IRTypeCheckerAputIntFloatMismatchTest,
+    ::testing::ValuesIn(get_aput_intfloat_mismatch_descriptors()),
+    [](const testing::TestParamInfo<
+        IRTypeCheckerAputIntFloatMismatchTest::ParamType>& info) {
+      return format_param(info.param);
+    });
+
+namespace {
+
+std::unordered_map<std::string, std::pair<std::string, std::string>>
+get_aput_wide_pass_descriptors() {
+  return {
+      {"long-long", {"[J", "J"}},
+      {"double-double", {"[D", "D"}},
+  };
+}
+
+using AputWidePairType =
+    typename decltype(get_aput_wide_pass_descriptors())::value_type;
+
+} // namespace
+
+class IRTypeCheckerAputWidePassTest
+    : public IRTypeCheckerTest,
+      public ::testing::WithParamInterface<AputWidePairType> {};
+
+TEST_P(IRTypeCheckerAputWidePassTest, test) {
+  auto& [name, array_type_val_type] = GetParam();
+  auto& [array_type, val_type] = array_type_val_type;
+  std::string method_descr =
+      std::regex_replace(std::regex_replace("LFoo;.bar:(ATYPEVTYPE)V;",
+                                            std::regex("ATYPE"), array_type),
+                         std::regex("VTYPE"), val_type);
+  auto method = DexMethod::make_method(method_descr)
+                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+
+  auto body_template = R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (load-param-wide v2)
+      (const v4 0)
+      (aput-wide v2 v1 v4)
+      (return-void)
+    )
+  )";
+  method->set_code(assembler::ircode_from_string(body_template));
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_FALSE(checker.fail()) << checker.what();
+}
+INSTANTIATE_TEST_CASE_P(
+    APutWideMatching,
+    IRTypeCheckerAputWidePassTest,
+    ::testing::ValuesIn(get_aput_wide_pass_descriptors()),
+    [](const testing::TestParamInfo<IRTypeCheckerAputWidePassTest::ParamType>&
+           info) { return format_param(info.param); });
+
+namespace {
+
+std::unordered_map<std::string, std::pair<std::string, std::string>>
+get_aput_wide_mismatch_descriptors() {
+  return {
+      {"long-double", {"[J", "D"}},
+      {"double-long", {"[D", "J"}},
+  };
+}
+
+using AputWideMissPairType =
+    typename decltype(get_aput_wide_mismatch_descriptors())::value_type;
+
+} // namespace
+
+class IRTypeCheckerAputWideMismatchTest
+    : public IRTypeCheckerTest,
+      public ::testing::WithParamInterface<AputWideMissPairType> {};
+
+TEST_P(IRTypeCheckerAputWideMismatchTest, test) {
+  auto& [name, array_type_val_type] = GetParam();
+  auto& [array_type, val_type] = array_type_val_type;
+  std::string method_descr =
+      std::regex_replace(std::regex_replace("LFoo;.bar:(ATYPEVTYPE)V;",
+                                            std::regex("ATYPE"), array_type),
+                         std::regex("VTYPE"), val_type);
+  auto method = DexMethod::make_method(method_descr)
+                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+
+  auto body_template = R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (load-param-wide v2)
+      (const v4 0)
+      (aput-wide v2 v1 v4)
+      (return-void)
+    )
+  )";
+  method->set_code(assembler::ircode_from_string(body_template));
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_TRUE(checker.fail()) << method_descr << body_template;
+}
+INSTANTIATE_TEST_CASE_P(
+    APutWideMismatching,
+    IRTypeCheckerAputWideMismatchTest,
+    ::testing::ValuesIn(get_aput_wide_mismatch_descriptors()),
+    [](const testing::TestParamInfo<
+        IRTypeCheckerAputWideMismatchTest::ParamType>& info) {
+      return format_param(info.param);
+    });

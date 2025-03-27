@@ -154,7 +154,8 @@ TEST_F(PostVerify, RemoveBarBuilder) {
 }
 
 TEST_F(PostVerify, RemoveBarBuilder_simpleCase) {
-  auto bar = find_class_named(classes, "Lcom/facebook/redex/test/instr/Bar;");
+  [[maybe_unused]] auto bar =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/Bar;");
   auto using_no_escape_builders = find_class_named(
       classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
   auto initialize_bar =
@@ -257,7 +258,7 @@ TEST_F(PostVerify, RemoveCarBuilder) {
 
 TEST_F(PostVerify, RemoveCarBuilder_uninitializedModel) {
   auto car = find_class_named(classes, "Lcom/facebook/redex/test/instr/Car;");
-  auto car_builder =
+  [[maybe_unused]] auto car_builder =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/Car$Builder;");
   auto using_no_escape_builders = find_class_named(
       classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
@@ -321,8 +322,9 @@ TEST_F(PostVerify, RemoveDarBuilder) {
 }
 
 TEST_F(PostVerify, RemoveCarBuilder_uninitializedModelInOneCase) {
-  auto car = find_class_named(classes, "Lcom/facebook/redex/test/instr/Car;");
-  auto car_builder =
+  [[maybe_unused]] auto car =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/Car;");
+  [[maybe_unused]] auto car_builder =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/Car$Builder;");
   auto using_no_escape_builders = find_class_named(
       classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");

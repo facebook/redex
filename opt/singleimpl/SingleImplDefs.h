@@ -15,9 +15,8 @@
 
 #include "CheckCastTransform.h"
 #include "ClassHierarchy.h"
+#include "ControlFlow.h"
 #include "DexClass.h"
-#include "IRInstruction.h"
-#include "IRList.h"
 #include "SingleImpl.h"
 
 namespace api {
@@ -128,8 +127,9 @@ struct SingleImplData {
   // opcodes to a methodref with the single impl interface in the signature
   MethodToOpcodes methodrefs;
 
-  std::unordered_map<DexMethod*,
-                     std::unordered_map<IRInstruction*, IRList::iterator>>
+  std::unordered_map<
+      DexMethod*,
+      std::unordered_map<IRInstruction*, cfg::InstructionIterator>>
       referencing_methods;
 
   std::mutex mutex;

@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include "BranchPrefixHoisting.h"
+#include "BranchPrefixHoistingPass.h"
 #include "ControlFlow.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
@@ -44,7 +45,7 @@ void test(const std::string& code_str,
         cfg, method,
         /* force_type_inference */ true);
   });
-  int actual_insns_hoisted = BranchPrefixHoistingPass::process_cfg(
+  int actual_insns_hoisted = branch_prefix_hoisting_impl::process_cfg(
       cfg, constant_uses, can_allocate_regs);
 
   std::cerr << "after:" << std::endl << SHOW(code->cfg());
@@ -848,4 +849,41 @@ TEST_F(BranchPrefixHoistingTest, try_catch_in_succ_block) {
     )
   )";
   test(code_str, expected_str, 0, /* full_validation */ true);
+}
+
+TEST_F(BranchPrefixHoistingTest, fill_array_data) {
+  const auto& code_str = R"(
+    (
+      (load-param v0)
+      (const v1 1)
+      (new-array v1 "[I")
+      (move-result-pseudo-object v1)
+      (if-eqz v0 :true)
+      (fill-array-data v1 #4 (0))
+      (fill-array-data v1 #4 (1))
+      (goto :end)
+      (:true)
+      (fill-array-data v1 #4 (0))
+      (fill-array-data v1 #4 (2))
+      (:end)
+      (return-void)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (load-param v0)
+      (const v1 1)
+      (new-array v1 "[I")
+      (move-result-pseudo-object v1)
+      (fill-array-data v1 #4 (0))
+      (if-eqz v0 :true)
+      (fill-array-data v1 #4 (1))
+      (goto :end)
+      (:true)
+      (fill-array-data v1 #4 (2))
+      (:end)
+      (return-void)
+    )
+  )";
+  test(code_str, expected_str, 1);
 }

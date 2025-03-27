@@ -338,6 +338,7 @@ class MultiMethodInliner {
    */
   bool is_inlinable(const DexMethod* caller,
                     const DexMethod* callee,
+                    const cfg::ControlFlowGraph* reduced_cfg,
                     const IRInstruction* insn,
                     uint64_t estimated_caller_size,
                     uint64_t estimated_callee_size,
@@ -376,7 +377,8 @@ class MultiMethodInliner {
    * Return true if the callee contains external catch exception types
    * which are not public.
    */
-  bool has_external_catch(const DexMethod* callee);
+  bool has_external_catch(const DexMethod* callee,
+                          const cfg::ControlFlowGraph* reduced_cfg);
 
   /**
    * Return true if the callee contains certain opcodes that are difficult
@@ -385,6 +387,7 @@ class MultiMethodInliner {
    */
   bool cannot_inline_opcodes(const DexMethod* caller,
                              const DexMethod* callee,
+                             const cfg::ControlFlowGraph* reduced_cfg,
                              const IRInstruction* invk_insn);
 
   /**
@@ -435,7 +438,13 @@ class MultiMethodInliner {
    * Return true if a caller is in a DEX in a store and any opcode in callee
    * refers to a DexMember in a different store .
    */
-  bool cross_store_reference(const DexMethod* caller, const DexMethod* callee);
+  bool cross_store_reference(const DexMethod* caller,
+                             const DexMethod* callee,
+                             const cfg::ControlFlowGraph* reduced_cfg);
+
+  bool cross_dex_reference(const DexMethod* caller,
+                           const DexMethod* callee,
+                           const cfg::ControlFlowGraph* reduced_cfg);
 
   bool cross_hot_cold(const DexMethod* caller,
                       const DexMethod* callee,
@@ -446,7 +455,9 @@ class MultiMethodInliner {
    * refers to a problematic ref, i.e. one that directly or indirectly refers to
    * another store, or a non-min-sdk API.
    */
-  bool problematic_refs(const DexMethod* caller, const DexMethod* callee);
+  bool problematic_refs(const DexMethod* caller,
+                        const DexMethod* callee,
+                        const cfg::ControlFlowGraph* reduced_cfg);
 
   bool is_estimate_over_max(uint64_t estimated_caller_size,
                             uint64_t estimated_callee_size,
@@ -523,12 +534,19 @@ class MultiMethodInliner {
    * Gets the set of referenced types in a callee.
    */
   std::shared_ptr<std::vector<DexType*>> get_callee_type_refs(
-      const DexMethod* callee);
+      const DexMethod* callee, const cfg::ControlFlowGraph* reduced_cfg);
 
   /**
    * Gets the set of references in a callee's code.
    */
-  std::shared_ptr<CodeRefs> get_callee_code_refs(const DexMethod* callee);
+  std::shared_ptr<CodeRefs> get_callee_code_refs(
+      const DexMethod* callee, const cfg::ControlFlowGraph* reduced_cfg);
+
+  /**
+   * Gets the set of x-dex references in a callee's code.
+   */
+  std::shared_ptr<XDexMethodRefs::Refs> get_callee_x_dex_refs(
+      const DexMethod* callee, const cfg::ControlFlowGraph* reduced_cfg);
 
   /**
    * Computes information about callers of a method.
@@ -670,10 +688,9 @@ class MultiMethodInliner {
   std::unordered_set<const DexMethod*> m_recursive_callees;
   std::unordered_set<const DexMethod*> m_speed_excluded_callees;
 
-  // If mode == IntraDex, then this is the set of callees that is reachable via
-  // an (otherwise ignored) invocation from a caller in a different dex. If mode
-  // != IntraDex, then the set is empty.
-  std::unordered_set<const DexMethod*> m_x_dex_callees;
+  // If mode == IntraDex, then we maintaing information about x-dex method
+  // references.
+  std::unique_ptr<XDexMethodRefs> m_x_dex;
 
   // Cache of the inlined costs of fully inlining a calle without using any
   // summaries for pruning.
@@ -737,6 +754,12 @@ class MultiMethodInliner {
   std::unique_ptr<InsertOnlyConcurrentMap<const DexMethod*, CalleeCallerRefs>>
       m_callee_caller_refs;
 
+  // Optional cache for get_callee_x_dex_refs function
+  std::unique_ptr<
+      InsertOnlyConcurrentMap<const DexMethod*,
+                              std::shared_ptr<XDexMethodRefs::Refs>>>
+      m_callee_x_dex_refs;
+
   // Cache of whether a constructor can be unconditionally inlined.
   mutable InsertOnlyConcurrentMap<const DexMethod*, bool> m_can_inline_init;
 
@@ -778,6 +801,7 @@ class MultiMethodInliner {
     std::atomic<size_t> escaped_field{0};
     std::atomic<size_t> non_pub_field{0};
     std::atomic<size_t> non_pub_ctor{0};
+    std::atomic<size_t> cross_dex{0};
     std::atomic<size_t> cross_store{0};
     std::atomic<size_t> api_level_mismatch{0};
     std::atomic<size_t> problematic_refs{0};
@@ -833,8 +857,6 @@ class MultiMethodInliner {
   const InliningInfo& get_info() { return info; }
 
   size_t get_callers() { return caller_callee.size(); }
-
-  size_t get_x_dex_callees() { return m_x_dex_callees.size(); }
 
   double get_call_site_inlined_cost_seconds() const {
     return m_call_site_inlined_cost_timer.get_seconds();

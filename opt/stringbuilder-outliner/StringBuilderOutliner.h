@@ -13,60 +13,6 @@
 #include "LocalPointersAnalysis.h"
 #include "Pass.h"
 
-/*
- * This pass looks for recurring sequences of StringBuilder calls and outlines
- * them. This outlining is special-cased because StringBuilders are one of the
- * most commonly instantiated objects in Java code, and because we can use
- * knowledge of the semantics of StringBuilder methods to perform code motion
- * as part of that outlining. In particular, StringBuilder calls tend to occur
- * in the following pattern:
- *
- *   new-instance v0 StringBuilder;
- *   invoke-direct v0 StringBuilder;.<init>:()V
- *   [sget v1 Foo;.bar:I | iget-object v1 v2 Foo;.baz:I | ...]
- *   invoke-virtual {v0, v1} StringBuilder;.append:(I)Ljava/lang/StringBuilder;
- *   [sget v1 Foo;.bar:I | iget-object v1 v2 Foo;.baz:I | ...]
- *   invoke-virtual {v0, v1} StringBuilder;.append:(I)Ljava/lang/StringBuilder;
- *   [sget v1 Foo;.bar:I | iget-object v1 v2 Foo;.baz:I | ...]
- *   invoke-virtual {v0, v1} StringBuilder;.append:(I)Ljava/lang/StringBuilder;
- *   invoke-virtual v0 StringBuilder;.toString:()Ljava/lang/String;
- *   move-result-object v0
- *
- * The instructions inside [...] denote a variety of possible instructions that
- * can generate the values passed to append(). Since these value-generating
- * instructions tend to vary between StringBuilder use sites, an outliner that
- * tries to factor out common patterns without reordering instructions would
- * be thwarted by them. However, since we know that StringBuilder methods are
- * independent of any state in user code, we can safely move them down to create
- * contiguous sequences of repetitive code:
- *
- *   [sget v1 Foo;.bar:I | iget-object v1 v4 Foo;.baz:I | ...]
- *   [sget v2 Foo;.bar:I | iget-object v2 v4 Foo;.baz:I | ...]
- *   [sget v3 Foo;.bar:I | iget-object v3 v4 Foo;.baz:I | ...]
- *   // Beginning of outlinable section
- *   new-instance v0 StringBuilder;
- *   invoke-direct v0 StringBuilder;.<init>:()V
- *   invoke-virtual {v0, v1} StringBuilder;.append:(I)Ljava/lang/StringBuilder;
- *   invoke-virtual {v0, v2} StringBuilder;.append:(I)Ljava/lang/StringBuilder;
- *   invoke-virtual {v0, v3} StringBuilder;.append:(I)Ljava/lang/StringBuilder;
- *   invoke-virtual v0 StringBuilder;.toString:()Ljava/lang/String;
- *   move-result-object v0
- *
- * This code reordering is conceptual -- we don't actually perform the
- * reordering separately from the outlining. Instead, we use Abstract
- * Interpretation to model the state of StringBuilder instances, so we can
- * generate outlined code based on that state.
- *
- * Note that this transformation means that the StringBuilder instance is no
- * longer accessible in the caller. That means that it cannot be used by any
- * operations aside from those in the outlined code. It is a little tricky to
- * do this analysis, so we defer it to a later run of the ObjectSensitiveDce
- * pass. Here we just replace calls to StringBuilder.toString() with calls to
- * the outline helper functions and assume that in most cases the StringBuilder
- * instance and the append operations on them are going to be removable by
- * OSDCE. This is generally true in practice.
- */
-
 namespace stringbuilder_outliner {
 
 /*
@@ -262,6 +208,63 @@ class Outliner {
 class StringBuilderOutlinerPass : public Pass {
  public:
   StringBuilderOutlinerPass() : Pass("StringBuilderOutlinerPass") {}
+
+  std::string get_config_doc() override {
+    return trim(R"(
+
+This pass looks for recurring sequences of StringBuilder calls and outlines
+them. This outlining is special-cased because StringBuilders are one of the
+most commonly instantiated objects in Java code, and because we can use
+knowledge of the semantics of StringBuilder methods to perform code motion
+as part of that outlining. In particular, StringBuilder calls tend to occur
+in the following pattern:
+```
+  new-instance v0 StringBuilder;
+  invoke-direct v0 StringBuilder;.<init>:()V
+  [sget v1 Foo;.bar:I | iget-object v1 v2 Foo;.baz:I | ...]
+  invoke-virtual {v0, v1} StringBuilder;.append:(I)Ljava/lang/StringBuilder;
+  [sget v1 Foo;.bar:I | iget-object v1 v2 Foo;.baz:I | ...]
+  invoke-virtual {v0, v1} StringBuilder;.append:(I)Ljava/lang/StringBuilder;
+  [sget v1 Foo;.bar:I | iget-object v1 v2 Foo;.baz:I | ...]
+  invoke-virtual {v0, v1} StringBuilder;.append:(I)Ljava/lang/StringBuilder;
+  invoke-virtual v0 StringBuilder;.toString:()Ljava/lang/String;
+  move-result-object v0
+```
+The instructions inside [...] denote a variety of possible instructions that
+can generate the values passed to append(). Since these value-generating
+instructions tend to vary between StringBuilder use sites, an outliner that
+tries to factor out common patterns without reordering instructions would
+be thwarted by them. However, since we know that StringBuilder methods are
+independent of any state in user code, we can safely move them down to create
+contiguous sequences of repetitive code:
+```
+  [sget v1 Foo;.bar:I | iget-object v1 v4 Foo;.baz:I | ...]
+  [sget v2 Foo;.bar:I | iget-object v2 v4 Foo;.baz:I | ...]
+  [sget v3 Foo;.bar:I | iget-object v3 v4 Foo;.baz:I | ...]
+  // Beginning of outlinable section
+  new-instance v0 StringBuilder;
+  invoke-direct v0 StringBuilder;.<init>:()V
+  invoke-virtual {v0, v1} StringBuilder;.append:(I)Ljava/lang/StringBuilder;
+  invoke-virtual {v0, v2} StringBuilder;.append:(I)Ljava/lang/StringBuilder;
+  invoke-virtual {v0, v3} StringBuilder;.append:(I)Ljava/lang/StringBuilder;
+  invoke-virtual v0 StringBuilder;.toString:()Ljava/lang/String;
+  move-result-object v0
+```
+This code reordering is conceptual -- we don't actually perform the
+reordering separately from the outlining. Instead, we use Abstract
+Interpretation to model the state of StringBuilder instances, so we can
+generate outlined code based on that state.
+
+Note that this transformation means that the StringBuilder instance is no
+longer accessible in the caller. That means that it cannot be used by any
+operations aside from those in the outlined code. It is a little tricky to
+do this analysis, so we defer it to a later run of the ObjectSensitiveDce
+pass. Here we just replace calls to StringBuilder.toString() with calls to
+the outline helper functions and assume that in most cases the StringBuilder
+instance and the append operations on them are going to be removable by
+OSDCE. This is generally true in practice.
+    )");
+  }
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {

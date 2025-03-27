@@ -12,22 +12,6 @@
 #include "PassManager.h"
 #include "Trace.h"
 
-/*
- * Current D8 rewrites API 19 Objects.requireNonNull method into Method
- * java/lang/Object.getClass:()Ljava/lang/Class;. However, during this
- * conversion, D8 just replaces the former invoke-statck to later invoke-virtual
- * and ingores the return value. In Redex,
- * "java/lang/Object.getClass:()Ljava/lang/Class;" is viewed as a purity method.
- * Therefore, with this D8 conversion, Redex will opt out
- * java/lang/Object.getClass:()Ljava/lang/Class; and lose the null check
- * semantic.  Therefore, in this Pass,  a D8 desugred getClass() (i.e no
- * move-object followed by) will be converted into a explict redex null_check
- * method "Lredex/$NullCheck;.null_check:(Ljava/lang/Object;)V" to keep null
- * checking feature. Redex null-check analysis will remove some redandent redex
- * null check. Then at the end  of  redex optimizaiton,
- * MaterializeNullChecksPass will convert the rest redex null_check method back
- * to getClass().
- */
 class IntrinsifyNullChecksPass : public Pass {
  public:
   struct Stats {
@@ -64,6 +48,26 @@ class IntrinsifyNullChecksPass : public Pass {
         {SpuriousGetClassCallsInterned, Establishes},
         {UltralightCodePatterns, Preserves},
     };
+  }
+
+  std::string get_config_doc() override {
+    return trim(R"(
+Current D8 rewrites API 19 `Objects.requireNonNull` method into Method
+`java/lang/Object.getClass:()Ljava/lang/Class;`. However, during this
+conversion, D8 just replaces the former `invoke-static` to later `invoke-virtual`
+and ingores the return value.
+
+In Redex, `java/lang/Object.getClass:()Ljava/lang/Class;` is viewed as a pure
+method. Therefore, with this D8 conversion, Redex will optimize out
+`java/lang/Object.getClass:()Ljava/lang/Class;` and lose the null check
+semantic.  Therefore, in this Pass, a D8 desugared `getClass()` (i.e not
+followed by `move-object`) will be converted into a explict redex null-check
+method `Lredex/$NullCheck;.null_check:(Ljava/lang/Object;)V` to keep null
+checking feature. Redex null-check analysis will remove some redandent redex
+null check. Then at the end of redex optimization, `MaterializeNullChecksPass`
+will convert the rest redex null_check method back
+to getClass().
+    )");
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

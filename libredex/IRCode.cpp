@@ -78,6 +78,14 @@ struct Addr {};
 using EntryAddrBiMap = bimap<tagged<MethodItemEntry*, Entry>,
                              unordered_set_of<tagged<uint32_t, Addr>>>;
 
+MethodItemEntry* get_bm_target_checked(const EntryAddrBiMap& bm,
+                                       uint32_t addr) {
+  auto it = bm.by<Addr>().find(addr);
+  always_assert_type_log(it != bm.by<Addr>().end(), RedexError::INVALID_DEX,
+                         "Target is not an instruction address");
+  return it->second;
+}
+
 } // namespace
 
 static MethodItemEntry* get_target(const MethodItemEntry* mei,
@@ -85,15 +93,7 @@ static MethodItemEntry* get_target(const MethodItemEntry* mei,
   uint32_t base = bm.by<Entry>().at(const_cast<MethodItemEntry*>(mei));
   int offset = mei->dex_insn->offset();
   uint32_t target = base + offset;
-  always_assert_log(
-      bm.by<Addr>().count(target) != 0,
-      "Invalid opcode target %08x[%p](%08x) %08x in get_target %s\n",
-      base,
-      mei,
-      offset,
-      target,
-      SHOW(mei->insn));
-  return bm.by<Addr>().at(target);
+  return get_bm_target_checked(bm, target);
 }
 
 static void insert_branch_target(IRList* ir,
@@ -203,16 +203,16 @@ static void shard_multi_target(IRList* ir,
     int32_t case_key = read_int32(data);
     for (int i = 0; i < entries; i++) {
       uint32_t targetaddr = base + read_int32(data);
-      auto target = bm.by<Addr>().at(targetaddr);
-      insert_multi_branch_target(ir, case_key + i, target, src);
+      insert_multi_branch_target(ir, case_key + i,
+                                 get_bm_target_checked(bm, targetaddr), src);
     }
   } else if (ftype == FOPCODE_SPARSE_SWITCH) {
     const uint16_t* tdata = data + 2 * entries; // entries are 32b
     for (int i = 0; i < entries; i++) {
       int32_t case_key = read_int32(data);
       uint32_t targetaddr = base + read_int32(tdata);
-      auto target = bm.by<Addr>().at(targetaddr);
-      insert_multi_branch_target(ir, case_key, target, src);
+      insert_multi_branch_target(ir, case_key,
+                                 get_bm_target_checked(bm, targetaddr), src);
     }
   } else {
     not_reached_log("Bad fopcode 0x%04x in shard_multi_target", ftype);
@@ -232,7 +232,8 @@ static void generate_branch_targets(
         if (dex_opcode::is_switch(insn->opcode())) {
           auto* fopcode_entry = get_target(mentry, bm);
           auto data_it = entry_to_data.find(fopcode_entry);
-          always_assert(data_it != entry_to_data.end());
+          always_assert_type_log(data_it != entry_to_data.end(), INVALID_DEX,
+                                 "Missing entry data");
           shard_multi_target(ir, data_it->second.get(), mentry, bm);
           entry_to_data.erase(data_it);
         } else {
@@ -286,7 +287,7 @@ static void associate_try_items(IRList* ir,
     MethodItemEntry* catch_start = nullptr;
     CatchEntry* last_catch = nullptr;
     for (const auto& catz : tri->m_catches) {
-      auto catzop = bm.by<Addr>().at(catz.second);
+      auto catzop = get_bm_target_checked(bm, catz.second);
       TRACE(MTRANS, 3, "try_catch %08x mei %p", catz.second, catzop);
       auto catch_mie = new MethodItemEntry(catz.first);
       catch_start = catch_start == nullptr ? catch_mie : catch_start;
@@ -298,12 +299,12 @@ static void associate_try_items(IRList* ir,
       catches_to_insert.emplace_back(catzop, catch_mie);
     }
 
-    auto begin = bm.by<Addr>().at(tri->m_start_addr);
+    auto begin = get_bm_target_checked(bm, tri->m_start_addr);
     TRACE(MTRANS, 3, "try_start %08x mei %p", tri->m_start_addr, begin);
     auto try_start = new MethodItemEntry(TRY_START, catch_start);
     ir->insert_before(ir->iterator_to(*begin), *try_start);
     uint32_t lastaddr = tri->m_start_addr + tri->m_insn_count;
-    auto end = bm.by<Addr>().at(lastaddr);
+    auto end = get_bm_target_checked(bm, lastaddr);
     TRACE(MTRANS, 3, "try_end %08x mei %p", lastaddr, end);
     auto try_end = new MethodItemEntry(TRY_END, catch_start);
     ir->insert_before(ir->iterator_to(*end), *try_end);
@@ -362,16 +363,18 @@ void translate_dex_to_ir(
     }
     auto* dex_insn = it->dex_insn;
     auto dex_op = dex_insn->opcode();
-    auto op = opcode::from_dex_opcode(dex_op);
-    auto* insn = new IRInstruction(op);
+    auto maybe_op = opcode::from_dex_opcode(dex_op);
+    always_assert_type_log(maybe_op, INVALID_DEX, "Invalid opcode %d", dex_op);
+    auto op = *maybe_op;
+    auto insn = std::make_unique<IRInstruction>(op);
 
-    IRInstruction* move_result_pseudo{nullptr};
+    std::unique_ptr<IRInstruction> move_result_pseudo;
     if (insn->has_dest()) {
       insn->set_dest(dex_insn->dest());
     } else if (opcode::may_throw(op)) {
       if (op == OPCODE_CHECK_CAST) {
         move_result_pseudo =
-            new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+            std::make_unique<IRInstruction>(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
         move_result_pseudo->set_dest(dex_insn->src(0));
       } else if (dex_insn->has_dest()) {
         IROpcode move_op;
@@ -382,7 +385,7 @@ void translate_dex_to_ir(
         } else {
           move_op = IOPCODE_MOVE_RESULT_PSEUDO;
         }
-        move_result_pseudo = new IRInstruction(move_op);
+        move_result_pseudo = std::make_unique<IRInstruction>(move_op);
         move_result_pseudo->set_dest(dex_insn->dest());
       }
     }
@@ -419,19 +422,24 @@ void translate_dex_to_ir(
     } else if (op == OPCODE_FILL_ARRAY_DATA) {
       auto target = get_target(&*it, bm);
       auto data_it = entry_to_data.find(target);
-      always_assert(data_it != entry_to_data.end());
+      always_assert_type_log(data_it != entry_to_data.end(), INVALID_DEX,
+                             "Incorrect reference");
       insn->set_data(std::move(data_it->second));
       entry_to_data.erase(data_it);
     }
 
-    insn->normalize_registers();
+    std::string norm_error;
+    const auto norm_result = insn->normalize_registers(&norm_error);
+    always_assert_type_log(norm_result, INVALID_DEX,
+                           "Cannot normalize registers of instruction: %s",
+                           norm_error.c_str());
 
     delete it->dex_insn;
     it->type = MFLOW_OPCODE;
-    it->insn = insn;
+    it->insn = insn.release();
     if (move_result_pseudo != nullptr) {
-      it = ir_list->insert_before(std::next(it),
-                                  *(new MethodItemEntry(move_result_pseudo)));
+      it = ir_list->insert_before(
+          std::next(it), *(new MethodItemEntry(move_result_pseudo.release())));
     }
   }
 }
@@ -607,6 +615,16 @@ IRCode::IRCode(DexMethod* method) : m_ir_list(new IRList()) {
                        this);
   balloon(const_cast<DexMethod*>(method), m_ir_list);
   m_dbg = dc->release_debug_item();
+}
+
+std::unique_ptr<IRCode> IRCode::for_method(DexMethod* method) {
+  auto code = std::make_unique<IRCode>();
+  auto* dc = method->get_dex_code();
+  generate_load_params(method, dc->get_registers_size() - dc->get_ins_size(),
+                       code.get());
+  balloon(const_cast<DexMethod*>(method), code->m_ir_list);
+  code->m_dbg = dc->release_debug_item();
+  return code;
 }
 
 IRCode::IRCode(DexMethod* method, size_t temp_regs) : m_ir_list(new IRList()) {
@@ -869,6 +887,13 @@ std::unique_ptr<DexCode> IRCode::sync(const DexMethod* method) {
     print_stack_trace(std::cerr, e);
     throw;
   }
+  // The IRList no longer owns the dex instructions.
+  for (auto& mie : *m_ir_list) {
+    if (mie.type == MFLOW_DEX_OPCODE) {
+      mie.dex_insn = nullptr;
+    }
+  }
+
   return dex_code;
 }
 

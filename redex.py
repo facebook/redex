@@ -1038,116 +1038,119 @@ def _handle_profiles(
     if not args.packed_profiles:
         return
 
-    directory = make_temp_dir(".redex_profiles", False)
-    unpack_tar_xz(args.packed_profiles, directory)
+    with BuckPartScope("redex::UnpackProfiles", "Unpacking Profiles"):
+        directory = make_temp_dir(".redex_profiles", False)
+        unpack_tar_xz(args.packed_profiles, directory)
 
-    baseline_profile_interactions, default_baseline_profile_interactions = (
-        _get_baseline_profile_interactions(args)
-    )
+        baseline_profile_interactions, default_baseline_profile_interactions = (
+            _get_baseline_profile_interactions(args)
+        )
 
-    all_method_profiles_paths = [
-        f'"{f.path}"'
-        for f in os.scandir(directory)
-        if f.is_file() and ("method_stats" in f.name or "agg_stats" in f.name)
-    ]
+        all_method_profiles_paths = [
+            f'"{f.path}"'
+            for f in os.scandir(directory)
+            if f.is_file() and ("method_stats" in f.name or "agg_stats" in f.name)
+        ]
 
-    method_profiles_paths: typing.List[str]
+        method_profiles_paths: typing.List[str]
+        if len(dd_enabled_interactions) > 0:
+            method_profiles_paths = [
+                mpp
+                for mpp in all_method_profiles_paths
+                if any(f"_{i}_" in mpp for i in dd_enabled_interactions)
+                or any(f"_{i}_" in mpp for i in default_baseline_profile_interactions)
+            ]
+        else:
+            method_profiles_paths = all_method_profiles_paths.copy()
 
-    if len(dd_enabled_interactions) > 0:
-        method_profiles_paths = [
+        variant_method_profiles_paths = [
             mpp
             for mpp in all_method_profiles_paths
-            if any(f"_{i}_" in mpp for i in dd_enabled_interactions)
-            or any(f"_{i}_" in mpp for i in default_baseline_profile_interactions)
-        ]
-    else:
-        method_profiles_paths = all_method_profiles_paths.copy()
-
-    variant_method_profiles_paths = [
-        mpp
-        for mpp in all_method_profiles_paths
-        if any(f"_{i}_" in mpp for i in baseline_profile_interactions)
-        and mpp not in method_profiles_paths
-    ]
-
-    # Create input for method profiles.
-    method_profiles_str = ", ".join(method_profiles_paths)
-    if method_profiles_str:
-        LOGGER.debug("Found method profiles: %s", method_profiles_str)
-        args.passthru_json.append(f"agg_method_stats_files=[{method_profiles_str}]")
-    else:
-        LOGGER.info("No method profiles found in %s", args.packed_profiles)
-
-    # Create input for variant method profiles.
-    variant_method_profiles_str = ", ".join(variant_method_profiles_paths)
-    if method_profiles_str:
-        LOGGER.debug(
-            "Found variant method profiles: %s", variant_method_profiles_str
-        )
-        args.passthru_json.append(
-            f"baseline_profile_agg_method_stats_files=[{variant_method_profiles_str}]"
-        )
-    else:
-        LOGGER.info("No variant method profiles found in %s", args.packed_profiles)
-
-    # Create input for basic blocks.
-
-    block_profiles_paths = (
-        f"{f.path}"
-        for f in os.scandir(directory)
-        if f.is_file() and f.name.startswith("block_profiles_")
-    )
-
-    if len(dd_enabled_interactions) > 0:
-        block_profiles_paths = [
-            bpp
-            for bpp in block_profiles_paths
-            if any([f"_{i}_" in bpp for i in dd_enabled_interactions])
+            if any(f"_{i}_" in mpp for i in baseline_profile_interactions)
+            and mpp not in method_profiles_paths
         ]
 
-    join_str = ";" if IS_WINDOWS else ":"
-    block_profiles_str = join_str.join(block_profiles_paths)
-    if block_profiles_str:
-        LOGGER.debug("Found block profiles: %s", block_profiles_str)
-        # Assume there's at most one.
-        args.passthru.append(
-            f"InsertSourceBlocksPass.profile_files={block_profiles_str}"
-        )
-    else:
-        LOGGER.info("No block profiles found in %s", args.packed_profiles)
+        # Create input for method profiles.
+        method_profiles_str = ", ".join(method_profiles_paths)
+        if method_profiles_str:
+            LOGGER.debug("Found method profiles: %s", method_profiles_str)
+            args.passthru_json.append(f"agg_method_stats_files=[{method_profiles_str}]")
+        else:
+            LOGGER.info("No method profiles found in %s", args.packed_profiles)
 
-    coldstart_method_ordering_str = join_str.join(
-        f"{f.path}"
-        for f in os.scandir(directory)
-        if f.is_file() and f.name.startswith("coldstart_method_ordering")
-    )
-    if coldstart_method_ordering_str:
-        LOGGER.debug("Found coldstart ordering: %s", coldstart_method_ordering_str)
-        # Assume there's at most one.
-        args.passthru.append(f"coldstart_methods_file={coldstart_method_ordering_str}")
-    else:
-        LOGGER.info("No coldstart ordering found in %s", args.packed_profiles)
+        # Create input for variant method profiles.
+        variant_method_profiles_str = ", ".join(variant_method_profiles_paths)
+        if method_profiles_str:
+            LOGGER.debug(
+                "Found variant method profiles: %s", variant_method_profiles_str
+            )
+            args.passthru_json.append(
+                f"baseline_profile_agg_method_stats_files=[{variant_method_profiles_str}]"
+            )
+        else:
+            LOGGER.info("No variant method profiles found in %s", args.packed_profiles)
+
+        # Create input for basic blocks.
+
+        block_profiles_paths = (
+            f"{f.path}"
+            for f in os.scandir(directory)
+            if f.is_file() and f.name.startswith("block_profiles_")
+        )
+
+        if len(dd_enabled_interactions) > 0:
+            block_profiles_paths = [
+                bpp
+                for bpp in block_profiles_paths
+                if any([f"_{i}_" in bpp for i in dd_enabled_interactions])
+            ]
+
+        join_str = ";" if IS_WINDOWS else ":"
+        block_profiles_str = join_str.join(block_profiles_paths)
+        if block_profiles_str:
+            LOGGER.debug("Found block profiles: %s", block_profiles_str)
+            # Assume there's at most one.
+            args.passthru.append(
+                f"InsertSourceBlocksPass.profile_files={block_profiles_str}"
+            )
+        else:
+            LOGGER.info("No block profiles found in %s", args.packed_profiles)
+
+        coldstart_method_ordering_str = join_str.join(
+            f"{f.path}"
+            for f in os.scandir(directory)
+            if f.is_file() and f.name.startswith("coldstart_method_ordering")
+        )
+        if coldstart_method_ordering_str:
+            LOGGER.debug("Found coldstart ordering: %s", coldstart_method_ordering_str)
+            # Assume there's at most one.
+            args.passthru.append(
+                f"coldstart_methods_file={coldstart_method_ordering_str}"
+            )
+        else:
+            LOGGER.info("No coldstart ordering found in %s", args.packed_profiles)
 
 
 def _handle_class_frequencies(args: argparse.Namespace) -> None:
     if not args.class_frequencies:
         return
-    class_freq_directory = make_temp_dir(".redex_class_frequencies", False)
-    with zipfile.ZipFile(args.class_frequencies, "r") as class_freq_zip:
-        class_freq_zip.extractall(path=class_freq_directory)
+    with BuckPartScope("redex::UnpackClassFreqs", "Unpacking Class Frequencies"):
+        class_freq_directory = make_temp_dir(".redex_class_frequencies", False)
+        with zipfile.ZipFile(args.class_frequencies, "r") as class_freq_zip:
+            class_freq_zip.extractall(path=class_freq_directory)
 
-    join_str = ";" if IS_WINDOWS else ":"
-    class_frequencies_str = join_str.join(
-        f"{f.path}"
-        for f in os.scandir(class_freq_directory)
-        if f.is_file() and f.name.startswith("class_freqs")
-    )
-    if class_frequencies_str:
-        LOGGER.debug("Found class_frequencies: %s", class_frequencies_str)
-        # Assume there's at most one.
-        args.passthru.append(f"class_frequencies={class_frequencies_str}")
-    else:
-        LOGGER.info("No class_frequencies found in %s", args.class_frequencies)
+        join_str = ";" if IS_WINDOWS else ":"
+        class_frequencies_str = join_str.join(
+            f"{f.path}"
+            for f in os.scandir(class_freq_directory)
+            if f.is_file() and f.name.startswith("class_freqs")
+        )
+        if class_frequencies_str:
+            LOGGER.debug("Found class_frequencies: %s", class_frequencies_str)
+            # Assume there's at most one.
+            args.passthru.append(f"class_frequencies={class_frequencies_str}")
+        else:
+            LOGGER.info("No class_frequencies found in %s", args.class_frequencies)
 
 
 def prepare_redex(args: argparse.Namespace) -> State:
@@ -1471,6 +1474,16 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             ["redex-full-rename-map.json"],
             [],
             "redex-full-rename-map.json.zst",
+            None,
+            CompressionLevel.DEFAULT,  # Bit larger.
+        ),
+        CompressionEntry(
+            "Redex Sparse Switches Data",
+            lambda args: True,
+            True,
+            [],
+            ["sparse_switches"],
+            "redex-sparse-switches.tar.xz",
             None,
             CompressionLevel.DEFAULT,  # Bit larger.
         ),

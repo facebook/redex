@@ -44,13 +44,9 @@ IRInstruction* make_load_const(reg_t dest, size_t val) {
 
 IRInstruction* make_invoke(DexMethod* callee,
                            IROpcode opcode,
-                           std::vector<reg_t> args) {
+                           const std::vector<reg_t>& args) {
   always_assert(callee->is_def() && is_public(callee));
-  auto invoke = (new IRInstruction(opcode))->set_method(callee);
-  invoke->set_srcs_size(args.size());
-  for (size_t i = 0; i < args.size(); i++) {
-    invoke->set_src(i, args.at(i));
-  }
+  auto invoke = (new IRInstruction(opcode))->set_method(callee)->set_srcs(args);
   return invoke;
 }
 

@@ -1061,7 +1061,7 @@ TEST(ResTable, BuildNewTable) {
 TEST(ResTable, ComputeSizes) {
   EntryAndValue simple(0, android::Res_value::TYPE_DIMENSION, 1000);
   #pragma clang diagnostic push
-  #pragma clang diagnostic ignored "-Waddress-of-packed-member"
+  #pragma clang diagnostic ignored "-Waddress-of-packed-member"  
   EXPECT_EQ(arsc::compute_entry_value_length(&simple.entry),
             sizeof(EntryAndValue));
   #pragma clang diagnostic pop

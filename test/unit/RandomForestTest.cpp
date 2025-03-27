@@ -80,7 +80,7 @@ TEST_F(RandomForestTest, deserialize_feat) {
 
 TEST_F(RandomForestTest, accept_acc) {
   RandomForestTestHelper mfth{};
-  auto& context = mfth.context;
+  [[maybe_unused]] auto& context = mfth.context;
   auto& caller = mfth.caller;
   auto& callee = mfth.callee;
 
@@ -90,7 +90,7 @@ TEST_F(RandomForestTest, accept_acc) {
 
 TEST_F(RandomForestTest, accept_feat_caller) {
   RandomForestTestHelper mfth{};
-  auto& context = mfth.context;
+  [[maybe_unused]] auto& context = mfth.context;
   auto& caller = mfth.caller;
   auto& callee = mfth.callee;
 

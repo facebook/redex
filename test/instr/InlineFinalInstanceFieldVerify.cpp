@@ -163,7 +163,8 @@ TEST_F(PreVerify, InlineFinalInstanceField) {
   EXPECT_THAT(field_names,
               ::testing::UnorderedElementsAre("m_non_final_inlineable"));
 
-  auto read_ctors_cls1 = find_class_named(classes, "Lredex/ReadInCtors1;");
+  [[maybe_unused]] auto read_ctors_cls1 =
+      find_class_named(classes, "Lredex/ReadInCtors1;");
   auto read_ctors_cls2 = find_class_named(classes, "Lredex/ReadInCtors2;");
 
   for (auto& meth : read_ctors_cls2->get_dmethods()) {

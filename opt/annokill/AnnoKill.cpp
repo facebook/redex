@@ -394,8 +394,8 @@ AnnoKill::AnnoSet AnnoKill::get_removable_annotation_instances() {
     for (auto& anno : annos) {
       if (m_kill.count(anno->type())) {
         bannotations.insert(clazz->get_type());
-        TRACE(
-            ANNO, 3, "removable annotation class %s", SHOW(clazz->get_type()));
+        TRACE(ANNO, 3, "removable annotation class %s",
+              SHOW(clazz->get_type()));
       }
     }
   }
@@ -568,8 +568,8 @@ bool AnnoKill::kill_annotations() {
 
   {
     Timer timer{"optimize methods"};
-    m_stats += walk::parallel::methods<
-        AnnoKillStats>(m_scope, [&](DexMethod* method) {
+    m_stats += walk::parallel::methods<AnnoKillStats>(m_scope, [&](DexMethod*
+                                                                       method) {
       // Method annotations
       AnnoKillStats local_stats{};
 
@@ -601,8 +601,8 @@ bool AnnoKill::kill_annotations() {
             continue;
           }
           auto keep_list = build_anno_keep(param_aset.get());
-          cleanup_aset(
-              param_aset.get(), referenced_annos, local_stats, keep_list);
+          cleanup_aset(param_aset.get(), referenced_annos, local_stats,
+                       keep_list);
           if (param_aset->size() == 0) {
             continue;
           }
@@ -655,26 +655,25 @@ bool AnnoKill::kill_annotations() {
   bool classes_removed = false;
   // We're done removing annotation instances, go ahead and remove annotation
   // classes.
-  m_scope.erase(
-      std::remove_if(m_scope.begin(),
-                     m_scope.end(),
-                     [&](DexClass* cls) {
-                       if (!is_annotation(cls)) {
-                         return false;
-                       }
-                       auto type = cls->get_type();
-                       if (referenced_annos.count(type)) {
-                         return false;
-                       }
-                       if (m_keep.count(type)) {
-                         return false;
-                       }
-                       TRACE(
-                           ANNO, 3, "Removing annotation type: %s", SHOW(type));
-                       classes_removed = true;
-                       return true;
-                     }),
-      m_scope.end());
+  m_scope.erase(std::remove_if(m_scope.begin(),
+                               m_scope.end(),
+                               [&](DexClass* cls) {
+                                 if (!is_annotation(cls)) {
+                                   return false;
+                                 }
+                                 auto type = cls->get_type();
+                                 if (referenced_annos.count(type)) {
+                                   return false;
+                                 }
+                                 if (m_keep.count(type)) {
+                                   return false;
+                                 }
+                                 TRACE(ANNO, 3, "Removing annotation type: %s",
+                                       SHOW(type));
+                                 classes_removed = true;
+                                 return true;
+                               }),
+                m_scope.end());
 
   if (traceEnabled(ANNO, 3)) {
     for (const auto& p : m_build_anno_map) {

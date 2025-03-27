@@ -14,7 +14,7 @@
 #include <string>
 #include <unistd.h>
 
-#include "BranchPrefixHoisting.h"
+#include "BranchPrefixHoistingPass.h"
 #include "ControlFlow.h"
 #include "DexAsm.h"
 #include "DexClass.h"

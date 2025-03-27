@@ -134,8 +134,14 @@ unsigned DexInstruction::srcs_size() const {
     return 3;
   case FMT_f35c:
   case FMT_f45cc:
-  case FMT_f57c:
-    return arg_word_count();
+  case FMT_f57c: {
+    auto count = arg_word_count();
+    always_assert_type_log((format == FMT_f35c && count <= 5) ||
+                               (format == FMT_f45cc && count <= 5) ||
+                               (format == FMT_f57c && count <= 7),
+                           INVALID_DEX, "Invalid src size");
+    return count;
+  }
   case FMT_f20bc:
   case FMT_f22cs:
   case FMT_f35ms:
@@ -796,27 +802,33 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx,
   case DOPCODE_NOP: {
     if (fopcode == FOPCODE_PACKED_SWITCH) {
       int count = (*insns--) * 2 + 4;
-      always_assert(count >= 0);
+      always_assert_type_log(count >= 0, RedexError::INVALID_DEX,
+                             "Negative count");
       insns += count;
-      always_assert(insns <= end);
+      always_assert_type_log(insns <= end, RedexError::INVALID_DEX, "Overflow");
       return new DexOpcodeData(insns - count, count - 1);
     } else if (fopcode == FOPCODE_SPARSE_SWITCH) {
       int count = (*insns--) * 4 + 2;
-      always_assert(count >= 0);
+      always_assert_type_log(count >= 0, RedexError::INVALID_DEX,
+                             "Negative count");
       insns += count;
-      always_assert(insns <= end);
+      always_assert_type_log(insns <= end, RedexError::INVALID_DEX, "Overflow");
       return new DexOpcodeData(insns - count, count - 1);
     } else if (fopcode == FOPCODE_FILLED_ARRAY) {
       uint16_t ewidth = *insns++;
       uint32_t size = *((uint32_t*)insns);
       int count = (ewidth * size + 1) / 2 + 4;
-      always_assert(count >= 0);
+      always_assert_type_log(count >= 0, RedexError::INVALID_DEX,
+                             "Negative count");
       insns += count - 2;
-      always_assert(insns <= end);
+      always_assert_type_log(insns <= end, RedexError::INVALID_DEX, "Overflow");
       return new DexOpcodeData(insns - count, count - 1);
     }
   }
     /* Format 10, fall through for NOP */
+    // While nops allow any upper byte (except the ones above), we do not want
+    // to distinguish that.
+    fopcode = DexOpcode::DOPCODE_NOP;
     FALLTHROUGH_INTENDED;
   case DOPCODE_MOVE:
   case DOPCODE_MOVE_WIDE:

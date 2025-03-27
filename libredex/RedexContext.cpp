@@ -46,6 +46,7 @@ RedexContext::RedexContext(bool allow_class_duplicates)
   }
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 RedexContext::~RedexContext() {
   // We parallelize destruction for efficiency.
   auto parallel_run = [](const std::vector<std::function<void()>>& fns,
@@ -388,6 +389,38 @@ char* RedexContext::store_string(std::string_view str) {
 }
 
 const DexString* RedexContext::make_string(std::string_view str) {
+  auto mutf8_next_cp = [](const char*& s) -> uint32_t {
+    uint8_t v = *s++;
+    /* Simple common case first, a utf8 char... */
+    if (!(v & 0x80)) return v;
+    uint8_t v2 = *s++;
+    always_assert_type_log((v2 & 0xc0) == 0x80, INVALID_DEX,
+                           "Invalid 2nd byte on mutf8 string");
+    /* Two byte code point */
+    if ((v & 0xe0) == 0xc0) {
+      return (v & 0x1f) << 6 | (v2 & 0x3f);
+    }
+    /* Three byte code point */
+    always_assert_type_log((v & 0xf0) == 0xe0, INVALID_DEX,
+                           "Invalid size encoding mutf8 string");
+    uint8_t v3 = *s++;
+    always_assert_type_log((v2 & 0xc0) == 0x80, INVALID_DEX,
+                           "Invalid 3rd byte on mutf8 string");
+    return (v & 0x1f) << 12 | (v2 & 0x3f) << 6 | (v3 & 0x3f);
+  };
+
+  auto length_of_utf8_string = [&](const char* s) -> uint32_t {
+    if (s == nullptr) {
+      return 0;
+    }
+    uint32_t len = 0;
+    while (*s != '\0') {
+      ++len;
+      mutf8_next_cp(s);
+    }
+    return len;
+  };
+
   // We are creating a DexString key that is just "defined enough" to be used as
   // a key into our string set. The provided string does not have to be zero
   // terminated, and we won't compute the utf size, as neither is needed for

@@ -14,15 +14,13 @@
 
 namespace arsc {
 
-#define VERY_VERBOSE false
-
-#if VERY_VERBOSE
+#ifdef RES_VERY_VERBOSE
 #define LOGVV(...) ALOGV(__VA_ARGS__)
 #else
 #define LOGVV(...) \
   do {             \
   } while (0)
-#endif
+#endif // RES_VERY_VERBOSE
 
 // Resource table structs have been added to over time. Define a set of
 // backwards compatible minimum known sizes for the structs that could exist

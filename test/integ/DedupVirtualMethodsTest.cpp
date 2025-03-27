@@ -83,8 +83,8 @@ TEST_F(DedupVirtualMethodsTest, dedup_with_call) {
   auto methods_annotated_by_pub = annotated_by_publicized(scope);
   check_public(methods_annotated_by_pub, false);
 
-  auto before_stats = count_methods(scope, annotation);
-  auto deduplicated_vmethods = dedup_vmethods::dedup(stores);
+  [[maybe_unused]] auto before_stats = count_methods(scope, annotation);
+  [[maybe_unused]] auto deduplicated_vmethods = dedup_vmethods::dedup(stores);
   auto after_stats = count_methods(scope, annotation);
 
   EXPECT_EQ(after_stats.annotated, 0);

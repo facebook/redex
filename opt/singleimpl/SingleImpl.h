@@ -50,7 +50,6 @@ class SingleImplPass : public Pass {
          m_pass_config.filter_proguard_special_interfaces);
   }
 
-  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   // count of removed interfaces

@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <boost/iostreams/device/mapped_file.hpp>
-
 #include "DexClass.h"
 #include "DexDefs.h"
 #include "DexIdx.h"
@@ -16,38 +14,76 @@
 #include "DexUtil.h"
 
 class DexLoader {
+ public:
+  using DataUPtr =
+      std::unique_ptr<const uint8_t, std::function<void(const uint8_t*)>>;
+
+  enum class Parallel { kYes, kNo };
+
+ private:
+  const dex_header* m_dh;
   std::unique_ptr<DexIdx> m_idx;
   const dex_class_def* m_class_defs;
-  DexClasses* m_classes;
-  std::unique_ptr<boost::iostreams::mapped_file> m_file;
+  DexClasses m_classes;
+  DataUPtr m_data;
+  size_t m_file_size;
   const DexLocation* m_location;
+  dex_stats_t m_stats{};
+  int m_support_dex_version;
+  Parallel m_parallel;
 
  public:
-  explicit DexLoader(const DexLocation* location);
+  static DexLoader create(const DexLocation* location,
+                          DataUPtr data,
+                          size_t size,
+                          int support_dex_version = 35,
+                          Parallel parallel = Parallel::kYes);
 
-  const dex_header* get_dex_header(const char* file_name);
-  DexClasses load_dex(const char* file_name,
-                      dex_stats_t* stats,
-                      int support_dex_version);
-  DexClasses load_dex(const dex_header* dh, dex_stats_t* stats);
-  void load_dex_class(int num);
-  void gather_input_stats(dex_stats_t* stats, const dex_header* dh);
+  // Convenience API to load from file.
+  static DexLoader create(const DexLocation* location,
+                          int support_dex_version = 35,
+                          Parallel parallel = Parallel::kYes);
+
+  DexClasses& get_classes() { return m_classes; }
   DexIdx* get_idx() { return m_idx.get(); }
+  dex_stats_t& get_stats() { return m_stats; }
+
+ private:
+  explicit DexLoader(const DexLocation* location,
+                     DataUPtr data,
+                     size_t size,
+                     int support_dex_version,
+                     Parallel parallel);
+
+  void load_dex();
+
+  void load_dex_class(int num);
+
+  void gather_input_stats();
 };
 
-DexClasses load_classes_from_dex(const DexLocation* location,
-                                 bool balloon = true,
-                                 bool throw_on_balloon_error = true,
-                                 int support_dex_version = 35);
-DexClasses load_classes_from_dex(const DexLocation* location,
-                                 dex_stats_t* stats,
-                                 bool balloon = true,
-                                 bool throw_on_balloon_error = true,
-                                 int support_dex_version = 35);
-DexClasses load_classes_from_dex(const dex_header* dh,
-                                 const DexLocation* location,
-                                 bool balloon = true,
-                                 bool throw_on_balloon_error = true);
+DexClasses load_classes_from_dex(
+    const DexLocation* location,
+    dex_stats_t* stats = nullptr,
+    bool balloon = true,
+    bool throw_on_balloon_error = true,
+    int support_dex_version = 35,
+    DexLoader::Parallel p = DexLoader::Parallel::kYes);
+DexClasses load_classes_from_dex(
+    const dex_header* dh,
+    const DexLocation* location,
+    bool balloon = true,
+    bool throw_on_balloon_error = true,
+    DexLoader::Parallel p = DexLoader::Parallel::kYes);
+DexClasses load_classes_from_dex(
+    DexLoader::DataUPtr data,
+    size_t data_size,
+    const DexLocation* location,
+    bool balloon = true,
+    bool throw_on_balloon_error = true,
+    int support_dex_version = 35,
+    DexLoader::Parallel p = DexLoader::Parallel::kYes);
+
 std::string load_dex_magic_from_dex(const DexLocation* location);
 void balloon_for_test(const Scope& scope);
 

@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-const lightCodeTheme = require('prism-react-renderer/themes/github');
-const darkCodeTheme = require('prism-react-renderer/themes/dracula');
+const lightCodeTheme = require('prism-react-renderer').themes.github;
+const darkCodeTheme = require('prism-react-renderer').themes.dracula;
 
 // With JSDoc @type annotations, IDEs can provide config autocompletion
 /** @type {import('@docusaurus/types').DocusaurusConfig} */
@@ -41,6 +41,7 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula');
         trackingFile: '',
         blog: {
           showReadingTime: true,
+          onUntruncatedBlogPosts: 'ignore',
         },
         theme: {
           customCss: require.resolve('./src/css/custom.css'),

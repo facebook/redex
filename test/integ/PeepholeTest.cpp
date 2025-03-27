@@ -811,6 +811,10 @@ static void aputget_peep_hole_test(const std::string& code_str,
   store.add_classes({creator.create()});
   std::vector<DexStore> stores;
   stores.emplace_back(std::move(store));
+  if (code_str == expected_str) {
+    // Negative test case? Maybe it's broken code, suppress type checker exit.
+    manager.disable_checker();
+  }
   manager.run_passes(stores, config);
 
   auto expected_code = assembler::ircode_from_string(expected_str);
@@ -905,7 +909,7 @@ TEST(PeepholeTestA, RemoveArrayPutGetCharArray) {
        (
         (const v0 0)
         (const v1 1)
-        (new-array v1 "[Z") ; create an array of char of length 1
+        (new-array v1 "[C") ; create an array of char of length 1
         (move-result-pseudo-object v2)
         (aput-char v1 v2 v0) ; write 1 into first element of array
         (aget-char v2 v0)
@@ -917,7 +921,7 @@ TEST(PeepholeTestA, RemoveArrayPutGetCharArray) {
         (
          (const v0 0)
          (const v1 1)
-         (new-array v1 "[Z") ; create an array of char of length 1
+         (new-array v1 "[C") ; create an array of char of length 1
          (move-result-pseudo-object v2)
          (aput-char v1 v2 v0) ; write 1 into first element of array
          (return-void)

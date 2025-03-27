@@ -94,8 +94,10 @@ std::string get_apk_dir(const ConfigFiles& config) {
 
 class CheckerConfig {
  public:
-  explicit CheckerConfig(const ConfigFiles& conf, bool relaxed_init_check)
-      : m_relaxed_init_check(relaxed_init_check) {
+  explicit CheckerConfig(const ConfigFiles& conf,
+                         bool relaxed_init_check,
+                         bool disabled = false)
+      : m_relaxed_init_check(relaxed_init_check), m_disabled(disabled) {
     const Json::Value& type_checker_args =
         conf.get_json_config()["ir_type_checker"];
     m_run_type_checker_on_input =
@@ -125,6 +127,9 @@ class CheckerConfig {
   }
 
   void on_input(const Scope& scope) {
+    if (m_disabled) {
+      return;
+    }
     if (!m_run_type_checker_on_input) {
       std::cerr << "Note: input type checking is turned off!" << std::endl;
       return;
@@ -182,6 +187,9 @@ class CheckerConfig {
 
   boost::optional<std::string> run_verifier(const Scope& scope,
                                             bool exit_on_fail = true) {
+    if (m_disabled) {
+      return boost::none;
+    }
     TRACE(PM, 1, "Running IRTypeChecker...");
     Timer t("IRTypeChecker");
 
@@ -312,6 +320,7 @@ class CheckerConfig {
   bool m_annotated_cfg_on_error_reduced{true};
   bool m_check_classes;
   bool m_relaxed_init_check;
+  bool m_disabled;
 };
 
 class CheckUniqueDeobfuscatedNames {
@@ -1333,7 +1342,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   // Retrieve the type checker's settings.
   bool relaxed_init_check = m_redex_options.min_sdk >= 21;
-  CheckerConfig checker_conf{conf, relaxed_init_check};
+  CheckerConfig checker_conf{conf, relaxed_init_check, m_checker_disabled};
   checker_conf.on_input(scope);
 
   // Pull on method-profiles, so that they get initialized, and are matched

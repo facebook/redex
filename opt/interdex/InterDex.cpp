@@ -247,8 +247,8 @@ bool is_interaction_id_start_marker(std::string_view betamap_entry) {
 namespace interdex {
 
 void InterDex::get_movable_coldstart_classes(
-  const std::vector<DexType*>& interdex_types,
-  std::unordered_map<const DexClass*, std::string>& move_coldstart_classes) {
+    const std::vector<DexType*>& interdex_types,
+    std::unordered_map<const DexClass*, std::string>& move_coldstart_classes) {
   auto class_freqs = m_conf.get_class_frequencies();
   const std::vector<std::string>& interactions = m_conf.get_interactions();
   always_assert_log(!class_freqs.empty(), "empty class freqs map");
@@ -305,7 +305,7 @@ void InterDex::get_movable_coldstart_classes(
     // if the class has more than m_max_betamap_move_threshold% freq in
     // coldstart, do not move it elsewhere
     else if (curr_idx == coldstart_idx &&
-              curr_interaction_freq > m_max_betamap_move_threshold) {
+             curr_interaction_freq > m_max_betamap_move_threshold) {
       continue;
     } else if (curr_idx == backgroundset_idx) {
       size_t max_idx = curr_idx;
@@ -341,7 +341,7 @@ void InterDex::get_movable_coldstart_classes(
         // not need to consider it again.
         if (curr_idx != coldstart_idx &&
             ((i == coldstart_idx && freq > m_max_betamap_move_threshold) ||
-              (i == backgroundset_idx && freq > 10))) {
+             (i == backgroundset_idx && freq > 10))) {
           max_idx = i;
           break;
         }
@@ -806,6 +806,7 @@ void InterDex::load_interdex_types() {
         TRACE(IDEX, 4,
               "[interdex order]: Found 1pct cold start end class marker %s.",
               entry.c_str());
+        // trim off the _Start suffix to get the interaction name
       } else if (is_interaction_id_start_marker(entry)) {
         type = DexType::make_type(entry);
       } else {
@@ -1472,7 +1473,6 @@ InterDex::FlushOutDexResult InterDex::flush_out_dex(
     DexInfo& dex_info,
     DexClass* canary_cls) const {
 
-  int dexnum = emitting_state.dexes_structure.get_num_dexes();
   if (dex_info.primary) {
     TRACE(IDEX, 2, "Writing out primary dex with %zu classes.",
           emitting_state.dexes_structure.get_current_dex().size());

@@ -24,10 +24,11 @@ namespace {
 struct TokenIndex {
   const std::vector<Token>& vec;
   std::vector<Token>::const_iterator it;
+  std::vector<Token>::const_iterator last_it;
 
   TokenIndex(const std::vector<Token>& vec,
              std::vector<Token>::const_iterator it)
-      : vec(vec), it(it) {}
+      : vec(vec), it(it), last_it(it) {}
 
   void skip_comments() {
     while (it != vec.end() && it->type == TokenType::comment) {
@@ -36,10 +37,18 @@ struct TokenIndex {
   }
 
   void next() {
+    last_it = it;
     redex_assert(it != vec.end());
     redex_assert(type() != TokenType::eof_token);
     ++it;
     skip_comments();
+  }
+  void to_last() { it = last_it; }
+
+  std::string str_next() {
+    auto val = str();
+    next();
+    return val;
   }
 
   std::string_view data() const { return it->data; }
@@ -51,19 +60,30 @@ struct TokenIndex {
   TokenType type() const { return it->type; }
 
   std::string show_context(size_t lines) const {
-    redex_assert(it != vec.end());
+    return show_context(vec, it, lines);
+  }
 
-    size_t this_line = line();
-    auto start_it = it;
-    while (start_it != vec.begin() && start_it->line >= this_line - lines) {
+  std::string show_last_context(size_t lines) const {
+    return show_context(vec, last_it, lines);
+  }
+
+  // static so no accidental use of struct fields.
+  static std::string show_context(const std::vector<Token>& v,
+                                  const std::vector<Token>::const_iterator& i,
+                                  size_t lines) {
+    redex_assert(i != v.end());
+
+    size_t this_line = i->line;
+    auto start_it = i;
+    while (start_it != v.begin() && start_it->line >= this_line - lines) {
       --start_it;
     }
     if (start_it->line < this_line - lines) {
       ++start_it;
     }
 
-    auto end_it = it;
-    while (end_it != vec.end() && end_it->line <= this_line + lines) {
+    auto end_it = i;
+    while (end_it != v.end() && end_it->line <= this_line + lines) {
       ++end_it;
     }
 
@@ -84,13 +104,13 @@ struct TokenIndex {
         ret.append(" ");
       }
 
-      if (show_it == it) {
+      if (show_it == i) {
         ret.append("!>");
       }
 
       ret.append(show_it->show());
 
-      if (show_it == it) {
+      if (show_it == i) {
         ret.append("<!");
       }
 
@@ -101,62 +121,40 @@ struct TokenIndex {
   }
 };
 
-bool parse_boolean_command(TokenIndex& idx,
-                           TokenType boolean_option,
-                           bool* option,
-                           bool value) {
-  if (idx.type() != boolean_option) {
-    return false;
-  }
-  idx.next();
-  *option = value;
-  return true;
-}
-
 void skip_to_next_command(TokenIndex& idx) {
   while ((idx.type() != TokenType::eof_token) && (!idx.it->is_command())) {
     idx.next();
   }
 }
 
-bool parse_single_filepath_command(TokenIndex& idx,
-                                   TokenType filepath_command_token,
-                                   std::string* filepath) {
-  if (idx.type() == filepath_command_token) {
-    unsigned int line_number = idx.line();
-    idx.next(); // Consume the command token.
-    // Fail without consumption if this is an end of file token.
-    if (idx.type() == TokenType::eof_token) {
-      std::cerr
-          << "Expecting at least one file as an argument but found end of "
-             "file at line "
-          << line_number << std::endl
-          << idx.show_context(2) << std::endl;
-      return true;
-    }
-    // Fail without consumption if this is a command token.
-    if (idx.it->is_command()) {
-      std::cerr << "Expecting a file path argument but got command "
-                << idx.show() << " at line  " << idx.line() << std::endl
-                << idx.show_context(2) << std::endl;
-      return true;
-    }
-    // Parse the filename.
-    if (idx.type() != TokenType::filepath) {
-      std::cerr << "Expected a filepath but got " << idx.show() << " at line "
-                << idx.line() << std::endl
-                << idx.show_context(2) << std::endl;
-      return true;
-    }
-    *filepath = idx.str();
-    idx.next(); // Consume the filepath token
-    return true;
+std::string parse_single_filepath_command(TokenIndex& idx) {
+  // Fail without consumption if this is an end of file token.
+  if (idx.type() == TokenType::eof_token) {
+    std::cerr << "Expecting at least one file as an argument but found end of "
+                 "file at line "
+              << idx.last_it->line << std::endl
+              << idx.show_context(2) << std::endl;
+    return "";
   }
-  return false;
+  // Fail without consumption if this is a command token.
+  if (idx.it->is_command()) {
+    std::cerr << "Expecting a file path argument but got command " << idx.show()
+              << " at line  " << idx.line() << std::endl
+              << idx.show_context(2) << std::endl;
+    return "";
+  }
+  // Parse the filename.
+  if (idx.type() != TokenType::filepath) {
+    std::cerr << "Expected a filepath but got " << idx.show() << " at line "
+              << idx.line() << std::endl
+              << idx.show_context(2) << std::endl;
+    return "";
+  }
+  return idx.str_next(); // Consume the filepath token
 }
 
 template <bool kOptional = false>
-void parse_filepaths(TokenIndex& idx, std::vector<std::string>* into) {
+std::vector<std::string> parse_filepaths(TokenIndex& idx) {
   std::vector<std::string> filepaths;
   if (idx.type() != TokenType::filepath) {
     if (!kOptional) {
@@ -164,186 +162,87 @@ void parse_filepaths(TokenIndex& idx, std::vector<std::string>* into) {
                 << idx.line() << std::endl
                 << idx.show_context(2) << std::endl;
     }
-    return;
+    {};
   }
+  std::vector<std::string> res;
   while (idx.type() == TokenType::filepath) {
-    into->push_back(idx.str());
-    idx.next();
+    res.push_back(idx.str_next());
   }
+  return res;
 }
 
-bool parse_filepath_command(TokenIndex& idx,
-                            TokenType filepath_command_token,
-                            const std::string& basedir,
-                            std::vector<std::string>* filepaths) {
-  if (idx.type() == filepath_command_token) {
-    unsigned int line_number = idx.line();
-    idx.next(); // Consume the command token.
-    // Fail without consumption if this is an end of file token.
-    if (idx.type() == TokenType::eof_token) {
-      std::cerr
-          << "Expecting at least one file as an argument but found end of "
-             "file at line "
-          << line_number << std::endl;
-      return true;
-    }
-    // Fail without consumption if this is a command token.
-    if (idx.it->is_command()) {
-      std::cerr << "Expecting a file path argument but got command "
-                << idx.show() << " at line  " << idx.line() << std::endl
-                << idx.show_context(2) << std::endl;
-      return true;
-    }
-    // Parse the filename.
-    if (idx.type() != TokenType::filepath) {
-      std::cerr << "Expected a filepath but got " << idx.show() << " at line "
-                << idx.line() << std::endl
-                << idx.show_context(2) << std::endl;
-      return true;
-    }
-    parse_filepaths(idx, filepaths);
-    return true;
+std::vector<std::string> parse_filepath_command(TokenIndex& idx,
+                                                const std::string& basedir) {
+  // Fail without consumption if this is an end of file token.
+  if (idx.type() == TokenType::eof_token) {
+    std::cerr << "Expecting at least one file as an argument but found end of "
+                 "file at line "
+              << idx.last_it->line << std::endl;
+    return {};
   }
-  return false;
+  // Fail without consumption if this is a command token.
+  if (idx.it->is_command()) {
+    std::cerr << "Expecting a file path argument but got command " << idx.show()
+              << " at line  " << idx.line() << std::endl
+              << idx.show_context(2) << std::endl;
+    return {};
+  }
+  // Parse the filename.
+  if (idx.type() != TokenType::filepath) {
+    std::cerr << "Expected a filepath but got " << idx.show() << " at line "
+              << idx.line() << std::endl
+              << idx.show_context(2) << std::endl;
+    return {};
+  }
+  return parse_filepaths(idx);
 }
 
-bool parse_optional_filepath_command(TokenIndex& idx,
-                                     TokenType filepath_command_token,
-                                     std::vector<std::string>* filepaths) {
-  if (idx.type() != filepath_command_token) {
-    return false;
+std::vector<std::string> parse_jars(TokenIndex& idx,
+                                    const std::string& basedir) {
+  // Fail without consumption if this is an end of file token.
+  if (idx.type() == TokenType::eof_token) {
+    std::cerr
+        << "Expecting at least one file as an argument but found end of file "
+        << idx.show_last_context(2) << std::endl;
+    return {};
   }
-  idx.next(); // Consume the command token.
-  // Parse an optional filepath argument.
-  parse_filepaths</*kOptional=*/true>(idx, filepaths);
-  return true;
+  // Parse the list of filenames.
+  return parse_filepaths(idx);
 }
 
-bool parse_jars(TokenIndex& idx,
-                TokenType jar_token,
-                const std::string& basedir,
-                std::vector<std::string>* jars) {
-  if (idx.type() == jar_token) {
-    unsigned int line_number = idx.line();
-    idx.next(); // Consume the jar token.
-    // Fail without consumption if this is an end of file token.
-    if (idx.type() == TokenType::eof_token) {
-      std::cerr
-          << "Expecting at least one file as an argument but found end of "
-             "file at line "
-          << line_number << std::endl
-          << idx.show_context(2) << std::endl;
-      return true;
-    }
-    // Parse the list of filenames.
-    parse_filepaths(idx, jars);
-    return true;
-  }
-  return false;
-}
-
-bool parse_dontusemixedcaseclassnames(TokenIndex& idx,
-                                      bool* dontusemixedcaseclassnames) {
-  if (idx.type() != TokenType::dontusemixedcaseclassnames_token) {
-    return false;
-  }
-  *dontusemixedcaseclassnames = true;
-  idx.next();
-  return true;
-}
-
-bool parse_dontpreverify(TokenIndex& idx, bool* dontpreverify) {
-  if (idx.type() != TokenType::dontpreverify_token) {
-    return false;
-  }
-  *dontpreverify = true;
-  idx.next();
-  return true;
-}
-
-bool parse_verbose(TokenIndex& idx, bool* verbose) {
-  if (idx.type() != TokenType::verbose_token) {
-    return false;
-  }
-  *verbose = true;
-  idx.next();
-  return true;
-}
-
-bool parse_bool_command(TokenIndex& idx,
-                        TokenType bool_command_token,
-                        bool new_value,
-                        bool* bool_value) {
-  if (idx.type() == bool_command_token) {
-    idx.next(); // Consume the boolean command token.
-    *bool_value = new_value;
-    return true;
-  }
-  return false;
-}
-
-bool parse_repackageclasses(TokenIndex& idx) {
-  if (idx.type() != TokenType::repackageclasses) {
-    return false;
-  }
+void parse_repackageclasses(TokenIndex& idx) {
   // Ignore repackageclasses.
-  idx.next();
   if (idx.type() == TokenType::identifier) {
     std::cerr << "Ignoring -repackageclasses " << idx.data() << std::endl
               << idx.show_context(2) << std::endl;
     idx.next();
   }
-  return true;
 }
 
-bool parse_target(TokenIndex& idx, std::string* target_version) {
-  if (idx.type() == TokenType::target) {
-    idx.next(); // Consume the target command token.
-    // Check to make sure the next TokenType is a version token.
-    if (idx.type() != TokenType::target_version_token) {
-      std::cerr << "Expected a target version but got " << idx.show()
-                << " at line " << idx.line() << std::endl
-                << idx.show_context(2) << std::endl;
-      return true;
-    }
-    *target_version = idx.str();
-    // Consume the target version token.
-    idx.next();
-    return true;
+std::string parse_target(TokenIndex& idx) {
+  // Check to make sure the next TokenType is a version token.
+  if (idx.type() != TokenType::target_version_token) {
+    std::cerr << "Expected a target version but got " << idx.show()
+              << " at line " << idx.line() << std::endl
+              << idx.show_context(2) << std::endl;
+    return "";
   }
-  return false;
+  return idx.str_next(); // Consume the filepath token
 }
 
-bool parse_allowaccessmodification(TokenIndex& idx,
-                                   bool* allowaccessmodification) {
-  if (idx.type() != TokenType::allowaccessmodification_token) {
-    return false;
-  }
-  idx.next();
-  *allowaccessmodification = true;
-  return true;
-}
-
-bool parse_filter_list_command(TokenIndex& idx,
-                               TokenType filter_command_token,
-                               std::vector<std::string>* filters) {
-  if (idx.type() != filter_command_token) {
-    return false;
-  }
-  idx.next();
+std::vector<std::string> parse_filter_list_command(TokenIndex& idx) {
+  std::vector<std::string> filters;
   while (idx.type() == TokenType::filter_pattern) {
-    filters->push_back(idx.str());
-    idx.next();
+    filters.push_back(idx.str_next());
   }
-  return true;
+  return filters;
 }
 
 bool parse_optimizationpasses_command(TokenIndex& idx) {
-  if (idx.type() != TokenType::optimizationpasses) {
+  // Comsume the next token.
+  if (idx.type() == TokenType::eof_token) {
     return false;
   }
-  idx.next();
-  // Comsume the next token.
   idx.next();
   return true;
 }
@@ -385,8 +284,7 @@ bool parse_modifiers(TokenIndex& idx, KeepSpec* keep) {
   return true;
 }
 
-DexAccessFlags process_access_modifier(TokenType type, bool* is_access_flag) {
-  *is_access_flag = true;
+std::optional<DexAccessFlags> process_access_modifier(TokenType type) {
   switch (type) {
   case TokenType::publicToken:
     return ACC_PUBLIC;
@@ -409,8 +307,7 @@ DexAccessFlags process_access_modifier(TokenType type, bool* is_access_flag) {
   case TokenType::transient:
     return ACC_TRANSIENT;
   default:
-    *is_access_flag = false;
-    return ACC_PUBLIC;
+    return std::nullopt;
   }
 }
 
@@ -471,29 +368,27 @@ bool parse_access_flags(TokenIndex& idx,
       negated = true;
       ++access_it;
     }
-    bool ok;
-    DexAccessFlags access_flag = process_access_modifier(access_it->type, &ok);
-    if (ok) {
+    if (auto access_flag = process_access_modifier(access_it->type)) {
       idx.it = ++access_it;
       if (negated) {
-        if (is_access_flag_set(setFlags_, access_flag)) {
+        if (is_access_flag_set(setFlags_, *access_flag)) {
           std::cerr << "Access flag " << idx.show()
                     << " occurs with conflicting settings at line "
                     << idx.line() << std::endl
                     << idx.show_context(2) << std::endl;
           return false;
         }
-        set_access_flag(unsetFlags_, access_flag);
+        set_access_flag(unsetFlags_, *access_flag);
         negated = false;
       } else {
-        if (is_access_flag_set(unsetFlags_, access_flag)) {
+        if (is_access_flag_set(unsetFlags_, *access_flag)) {
           std::cerr << "Access flag " << idx.show()
                     << " occurs with conflicting settings at line "
                     << idx.line() << std::endl
                     << idx.show_context(2) << std::endl;
           return false;
         }
-        set_access_flag(setFlags_, access_flag);
+        set_access_flag(setFlags_, *access_flag);
         negated = false;
       }
     } else {
@@ -551,14 +446,14 @@ bool consume_token(TokenIndex& idx, const TokenType& tok) {
 }
 
 // Consume an expected semicolon, complaining if one was not found.
-void gobble_semicolon(TokenIndex& idx, bool* ok) {
-  *ok = consume_token(idx, TokenType::semiColon);
-  if (!*ok) {
+bool gobble_semicolon(TokenIndex& idx) {
+  if (!consume_token(idx, TokenType::semiColon)) {
     std::cerr << "Expecting a semicolon but found " << idx.show() << " at line "
               << idx.line() << std::endl
               << idx.show_context(2) << std::endl;
-    return;
+    return false;
   }
+  return true;
 }
 
 void skip_to_semicolon(TokenIndex& idx) {
@@ -571,12 +466,10 @@ void skip_to_semicolon(TokenIndex& idx) {
   }
 }
 
-void parse_member_specification(TokenIndex& idx,
+bool parse_member_specification(TokenIndex& idx,
                                 ClassSpecification* class_spec,
-                                bool allow_return,
-                                bool* ok) {
+                                bool allow_return) {
   MemberSpecification member_specification;
-  *ok = true;
   member_specification.annotationType = parse_annotation_type(idx);
   if (!parse_access_flags(idx,
                           member_specification.requiredSetAccessFlags,
@@ -584,18 +477,16 @@ void parse_member_specification(TokenIndex& idx,
     // There was a problem parsing the access flags. Return an empty class spec
     // for now.
     std::cerr << "Problem parsing access flags for member specification.\n";
-    *ok = false;
     skip_to_semicolon(idx);
-    return;
+    return false;
   }
   // The next TokenType better be an identifier.
   if (idx.type() != TokenType::identifier) {
     std::cerr << "Expecting field or member specification but got "
               << idx.show() << " at line " << idx.line() << std::endl
               << idx.show_context(2) << std::endl;
-    *ok = false;
     skip_to_semicolon(idx);
-    return;
+    return false;
   }
   const auto& ident = idx.data();
   // Check for "*".
@@ -603,28 +494,34 @@ void parse_member_specification(TokenIndex& idx,
     member_specification.name = "";
     member_specification.descriptor = "";
     idx.next();
-    gobble_semicolon(idx, ok);
+    if (!gobble_semicolon(idx)) {
+      return false;
+    }
     class_spec->methodSpecifications.push_back(member_specification);
     class_spec->fieldSpecifications.push_back(member_specification);
-    return;
+    return true;
   }
   // Check for <methods>
   if (ident == "<methods>") {
     member_specification.name = "";
     member_specification.descriptor = "";
     idx.next();
-    gobble_semicolon(idx, ok);
+    if (!gobble_semicolon(idx)) {
+      return false;
+    }
     class_spec->methodSpecifications.push_back(member_specification);
-    return;
+    return true;
   }
   // Check for <fields>
   if (ident == "<fields>") {
     member_specification.name = "";
     member_specification.descriptor = "";
     idx.next();
-    gobble_semicolon(idx, ok);
+    if (!gobble_semicolon(idx)) {
+      return false;
+    }
     class_spec->fieldSpecifications.push_back(member_specification);
-    return;
+    return true;
   }
   // Check for <init>
   if (ident == "<init>") {
@@ -639,9 +536,8 @@ void parse_member_specification(TokenIndex& idx,
       std::cerr << "Expecting type identifier but got " << idx.show()
                 << " at line " << idx.line() << std::endl
                 << idx.show_context(2) << std::endl;
-      *ok = false;
       skip_to_semicolon(idx);
-      return;
+      return false;
     }
     const auto& typ = idx.data();
     idx.next();
@@ -650,12 +546,10 @@ void parse_member_specification(TokenIndex& idx,
       std::cerr << "Expecting identifier name for class member but got "
                 << idx.show() << " at line " << idx.line() << std::endl
                 << idx.show_context(2) << std::endl;
-      *ok = false;
       skip_to_semicolon(idx);
-      return;
+      return false;
     }
-    member_specification.name = idx.str();
-    idx.next();
+    member_specification.name = idx.str_next();
   }
   // Check to see if this is a method specification.
   if (idx.type() == TokenType::openBracket) {
@@ -671,8 +565,7 @@ void parse_member_specification(TokenIndex& idx,
         std::cerr << "Expecting type identifier but got " << idx.show()
                   << " at line " << idx.line() << std::endl
                   << idx.show_context(2) << std::endl;
-        *ok = false;
-        return;
+        return false;
       }
       const auto& typ = idx.data();
       consume_token(idx, TokenType::identifier);
@@ -683,8 +576,7 @@ void parse_member_specification(TokenIndex& idx,
         std::cerr << "Expecting comma or ) but got " << idx.show()
                   << " at line " << idx.line() << std::endl
                   << idx.show_context(2) << std::endl;
-        *ok = false;
-        return;
+        return false;
       }
       // If the next TokenType is a comma (rather than closing bracket) consume
       // it and check that it is followed by an identifier.
@@ -694,8 +586,7 @@ void parse_member_specification(TokenIndex& idx,
           std::cerr << "Expecting type identifier after comma but got "
                     << idx.show() << " at line " << idx.line() << std::endl
                     << idx.show_context(2) << std::endl;
-          *ok = false;
-          return;
+          return false;
         }
       }
     }
@@ -721,36 +612,37 @@ void parse_member_specification(TokenIndex& idx,
     }
   }
   // Make sure member specification ends with a semicolon.
-  gobble_semicolon(idx, ok);
-  if (!ok) {
-    return;
+  if (!gobble_semicolon(idx)) {
+    return false;
   }
   if (member_specification.descriptor[0] == '(') {
     class_spec->methodSpecifications.push_back(member_specification);
   } else {
     class_spec->fieldSpecifications.push_back(member_specification);
   }
+  return true;
 }
 
-void parse_member_specifications(TokenIndex& idx,
+bool parse_member_specifications(TokenIndex& idx,
                                  ClassSpecification* class_spec,
-                                 bool allow_return,
-                                 bool* ok) {
+                                 bool allow_return) {
+  bool ok = true;
   if (idx.type() == TokenType::openCurlyBracket) {
     idx.next();
     while ((idx.type() != TokenType::closeCurlyBracket) &&
            (idx.type() != TokenType::eof_token)) {
-      parse_member_specification(idx, class_spec, allow_return, ok);
-      if (!*ok) {
+      if (!parse_member_specification(idx, class_spec, allow_return)) {
         // We failed to parse a member specification so skip to the next
         // semicolon.
         skip_to_semicolon(idx);
+        ok = false;
       }
     }
     if (idx.type() == TokenType::closeCurlyBracket) {
       idx.next();
     }
   }
+  return ok;
 }
 
 bool member_comparison(const MemberSpecification& m1,
@@ -758,22 +650,18 @@ bool member_comparison(const MemberSpecification& m1,
   return m1.name < m2.name;
 }
 
-std::string parse_class_name(TokenIndex& idx, bool* ok) {
+std::optional<std::string> parse_class_name(TokenIndex& idx) {
   if (idx.type() != TokenType::identifier) {
     std::cerr << "Expected class name but got " << idx.show() << " at line "
               << idx.line() << std::endl
               << idx.show_context(2) << std::endl;
-    *ok = false;
-    return "";
+    return std::nullopt;
   }
-  auto name = idx.str();
-  idx.next();
-  return name;
+  return idx.str_next();
 }
 
-void parse_class_names(
+bool parse_class_names(
     TokenIndex& idx,
-    bool* ok,
     std::vector<ClassSpecification::ClassNameSpec>& class_names) {
   bool negated{false};
   auto maybe_negated = [&]() {
@@ -788,9 +676,10 @@ void parse_class_names(
   };
 
   maybe_negated();
-  push_to(parse_class_name(idx, ok));
-  if (!*ok) {
-    return;
+  if (auto cn = parse_class_name(idx)) {
+    push_to(std::move(*cn));
+  } else {
+    return false;
   }
 
   // Maybe consume comma delimited list
@@ -799,37 +688,35 @@ void parse_class_names(
     idx.next();
 
     maybe_negated();
-    push_to(parse_class_name(idx, ok));
-    if (!*ok) {
-      return;
+    if (auto cn = parse_class_name(idx)) {
+      push_to(std::move(*cn));
+    } else {
+      return false;
     }
   }
+  return true;
 }
 
-ClassSpecification parse_class_specification(TokenIndex& idx,
-                                             bool allow_return,
-                                             bool* ok) {
+std::optional<ClassSpecification> parse_class_specification(TokenIndex& idx,
+                                                            bool allow_return) {
   ClassSpecification class_spec;
-  *ok = true;
   class_spec.annotationType = parse_annotation_type(idx);
-  if (!parse_access_flags(
-          idx, class_spec.setAccessFlags, class_spec.unsetAccessFlags)) {
+  if (!parse_access_flags(idx, class_spec.setAccessFlags,
+                          class_spec.unsetAccessFlags)) {
     // There was a problem parsing the access flags. Return an empty class spec
     // for now.
     std::cerr << "Problem parsing access flags for class specification.\n";
-    *ok = false;
-    return class_spec;
+    return std::nullopt;
   }
-  if (!parse_class_token(
-          idx, class_spec.setAccessFlags, class_spec.unsetAccessFlags)) {
-    *ok = false;
-    return class_spec;
+  if (!parse_class_token(idx, class_spec.setAccessFlags,
+                         class_spec.unsetAccessFlags)) {
+    return std::nullopt;
   }
   // Parse the class name(s).
-  parse_class_names(idx, ok, class_spec.classNames);
-  if (!*ok) {
-    return class_spec;
+  if (!parse_class_names(idx, class_spec.classNames)) {
+    return std::nullopt;
   }
+  bool ok = true;
   // Parse extends/implements if present, treating implements like extends.
   if ((idx.type() == TokenType::extends) ||
       (idx.type() == TokenType::implements)) {
@@ -839,59 +726,217 @@ ClassSpecification parse_class_specification(TokenIndex& idx,
       std::cerr << "Expecting a class name after extends/implements but got "
                 << idx.show() << " at line " << idx.line() << std::endl
                 << idx.show_context(2) << std::endl;
-      *ok = false;
+      ok = false;
       class_spec.extendsClassName = "";
     } else {
-      class_spec.extendsClassName = idx.str();
+      class_spec.extendsClassName = idx.str_next();
     }
-    idx.next();
   }
   // Parse the member specifications, if there are any
-  parse_member_specifications(idx, &class_spec, allow_return, ok);
+  const bool member_ok =
+      parse_member_specifications(idx, &class_spec, allow_return);
+  if (!ok || !member_ok) {
+    return std::nullopt;
+  }
   std::sort(class_spec.fieldSpecifications.begin(),
             class_spec.fieldSpecifications.end(),
             member_comparison);
   std::sort(class_spec.methodSpecifications.begin(),
             class_spec.methodSpecifications.end(),
             member_comparison);
-  return class_spec;
+  return std::move(class_spec);
 }
 
 bool parse_keep(TokenIndex& idx,
-                TokenType keep_kind,
                 KeepSpecSet* spec,
                 bool mark_classes,
                 bool mark_conditionally,
                 bool allowshrinking,
                 bool allow_return,
                 const std::string& filename,
-                uint32_t line,
-                bool* ok) {
-  if (idx.type() == keep_kind) {
-    idx.next(); // Consume the keep token
-    auto keep = std::make_unique<KeepSpec>();
-    keep->mark_classes = mark_classes;
-    keep->mark_conditionally = mark_conditionally;
-    keep->allowshrinking = allowshrinking;
-    keep->source_filename = filename;
-    keep->source_line = line;
-    if (!parse_modifiers(idx, &*keep)) {
-      skip_to_next_command(idx);
-      return true;
-    }
-    keep->class_spec = parse_class_specification(idx, allow_return, ok);
-    spec->emplace(std::move(keep));
-    return true;
+                uint32_t line) {
+  auto keep = std::make_unique<KeepSpec>();
+  keep->mark_classes = mark_classes;
+  keep->mark_conditionally = mark_conditionally;
+  keep->allowshrinking = allowshrinking;
+  keep->source_filename = filename;
+  keep->source_line = line;
+  if (!parse_modifiers(idx, &*keep)) {
+    skip_to_next_command(idx);
+    return false;
   }
-  return false;
+  auto class_spec = parse_class_specification(idx, allow_return);
+  if (class_spec) {
+    keep->class_spec = std::move(*class_spec);
+  }
+  spec->emplace(std::move(keep));
+  return class_spec.has_value();
+}
+
+namespace keep_spec_desc {
+
+enum class Target {
+  Keep,
+  AssumeNoSideEffects,
+  AssumeValues,
+  WhyAreYouKeeping,
+};
+
+template <TokenType kk>
+struct KeepSpecDesc {
+  // static TokenType token_type;
+  // static Target spec_set;
+  // static bool mark_classes;
+  // static bool mark_conditionally;
+  // static bool allowshrinking;
+  // static bool allow_return;
+};
+
+KeepSpecSet* get_spec_set(Target spec_set, ProguardConfiguration* pg_config) {
+  switch (spec_set) {
+  case Target::Keep:
+    return &pg_config->keep_rules;
+  case Target::AssumeNoSideEffects:
+    return &pg_config->assumenosideeffects_rules;
+  case Target::AssumeValues:
+    return &pg_config->assumevalues_rules;
+  case Target::WhyAreYouKeeping:
+    return &pg_config->whyareyoukeeping_rules;
+  }
+  UNREACHABLE();
+}
+
+template <>
+struct KeepSpecDesc<TokenType::keep> {
+  constexpr static TokenType token_type{TokenType::keep};
+  constexpr static Target spec_set{Target::Keep};
+  constexpr static bool mark_classes{true};
+  constexpr static bool mark_conditionally{false};
+  constexpr static bool allowshrinking{false};
+  constexpr static bool allow_return{false};
+};
+
+template <>
+struct KeepSpecDesc<TokenType::keepclassmembers> {
+  constexpr static TokenType token_type{TokenType::keepclassmembers};
+  constexpr static Target spec_set{Target::Keep};
+  constexpr static bool mark_classes{false};
+  constexpr static bool mark_conditionally{false};
+  constexpr static bool allowshrinking{false};
+  constexpr static bool allow_return{false};
+};
+
+template <>
+struct KeepSpecDesc<TokenType::keepclasseswithmembers> {
+  constexpr static TokenType token_type{TokenType::keepclasseswithmembers};
+  constexpr static Target spec_set{Target::Keep};
+  constexpr static bool mark_classes{false};
+  constexpr static bool mark_conditionally{true};
+  constexpr static bool allowshrinking{false};
+  constexpr static bool allow_return{false};
+};
+
+template <>
+struct KeepSpecDesc<TokenType::keepnames> {
+  constexpr static TokenType token_type{TokenType::keepnames};
+  constexpr static Target spec_set{Target::Keep};
+  constexpr static bool mark_classes{true};
+  constexpr static bool mark_conditionally{false};
+  constexpr static bool allowshrinking{true};
+  constexpr static bool allow_return{false};
+};
+
+template <>
+struct KeepSpecDesc<TokenType::keepclassmembernames> {
+  constexpr static TokenType token_type{TokenType::keepclassmembernames};
+  constexpr static Target spec_set{Target::Keep};
+  constexpr static bool mark_classes{false};
+  constexpr static bool mark_conditionally{false};
+  constexpr static bool allowshrinking{true};
+  constexpr static bool allow_return{false};
+};
+
+template <>
+struct KeepSpecDesc<TokenType::keepclasseswithmembernames> {
+  constexpr static TokenType token_type{TokenType::keepclasseswithmembernames};
+  constexpr static Target spec_set{Target::Keep};
+  constexpr static bool mark_classes{false};
+  constexpr static bool mark_conditionally{true};
+  constexpr static bool allowshrinking{true};
+  constexpr static bool allow_return{false};
+};
+
+template <>
+struct KeepSpecDesc<TokenType::assumenosideeffects> {
+  constexpr static TokenType token_type{TokenType::assumenosideeffects};
+  constexpr static Target spec_set{Target::AssumeNoSideEffects};
+  constexpr static bool mark_classes{false};
+  constexpr static bool mark_conditionally{false};
+  constexpr static bool allowshrinking{false};
+  constexpr static bool allow_return{true};
+};
+
+template <>
+struct KeepSpecDesc<TokenType::assumevalues> {
+  constexpr static TokenType token_type{TokenType::assumevalues};
+  constexpr static Target spec_set{Target::AssumeValues};
+  constexpr static bool mark_classes{false};
+  constexpr static bool mark_conditionally{false};
+  constexpr static bool allowshrinking{false};
+  constexpr static bool allow_return{true};
+};
+
+template <>
+struct KeepSpecDesc<TokenType::whyareyoukeeping> {
+  constexpr static TokenType token_type{TokenType::whyareyoukeeping};
+  constexpr static Target spec_set{Target::WhyAreYouKeeping};
+  constexpr static bool mark_classes{false};
+  constexpr static bool mark_conditionally{false};
+  constexpr static bool allowshrinking{false};
+  constexpr static bool allow_return{false};
+};
+
+} // namespace keep_spec_desc
+
+template <TokenType kk>
+bool parse_keep(TokenIndex& idx,
+                ProguardConfiguration* pg_config,
+                const std::string& filename,
+                uint32_t line) {
+  using namespace keep_spec_desc;
+  redex_assert(kk == KeepSpecDesc<kk>::token_type);
+
+  return parse_keep(idx, get_spec_set(KeepSpecDesc<kk>::spec_set, pg_config),
+                    KeepSpecDesc<kk>::mark_classes,
+                    KeepSpecDesc<kk>::mark_conditionally,
+                    KeepSpecDesc<kk>::allowshrinking,
+                    KeepSpecDesc<kk>::allow_return, filename, line);
+}
+
+template <typename T>
+void move_vector_elements(std::vector<T>& from, std::vector<T>& to) {
+  to.insert(to.end(),
+            std::make_move_iterator(from.begin()),
+            std::make_move_iterator(from.end()));
 }
 
 void parse(const std::vector<Token>& vec,
            ProguardConfiguration* pg_config,
            Stats& stats,
            const std::string& filename) {
-  bool ok;
   TokenIndex idx{vec, vec.begin()};
+
+  auto check_empty = [&stats](const auto& val) {
+    if (val.empty()) {
+      ++stats.parse_errors;
+    }
+  };
+  auto check_keep = [&stats](const auto opt_val) {
+    if (!opt_val) {
+      ++stats.parse_errors;
+    }
+  };
+
   while (idx.it != idx.vec.end()) {
     // Break out if we are at the end of the TokenType stream.
     if (idx.type() == TokenType::eof_token) {
@@ -901,6 +946,7 @@ void parse(const std::vector<Token>& vec,
       idx.next();
       continue;
     }
+
     uint32_t line = idx.line();
     if (!idx.it->is_command()) {
       std::cerr << "Expecting command but found " << idx.show() << " at line "
@@ -912,262 +958,192 @@ void parse(const std::vector<Token>& vec,
       continue;
     }
 
-    // Input/Output Options
-    if (parse_filepath_command(idx,
-                               TokenType::include,
-                               pg_config->basedirectory,
-                               &pg_config->includes)) {
+    auto type = idx.type();
+    idx.next();
+
+    switch (type) {
+    case TokenType::include: {
+      auto fp = parse_filepath_command(idx, pg_config->basedirectory);
+      move_vector_elements(fp, pg_config->includes);
+      check_empty(fp);
       continue;
     }
-    if (parse_single_filepath_command(
-            idx, TokenType::basedirectory, &pg_config->basedirectory)) {
+    case TokenType::basedirectory: {
+      auto sfc = parse_single_filepath_command(idx);
+      if (sfc.empty()) {
+        ++stats.parse_errors;
+      } else {
+        pg_config->basedirectory = sfc;
+      }
       continue;
     }
-    if (parse_jars(idx,
-                   TokenType::injars,
-                   pg_config->basedirectory,
-                   &pg_config->injars)) {
+    case TokenType::injars: {
+      auto jars = parse_jars(idx, pg_config->basedirectory);
+      move_vector_elements(jars, pg_config->injars);
+      check_empty(jars);
       continue;
     }
-    if (parse_jars(idx,
-                   TokenType::outjars,
-                   pg_config->basedirectory,
-                   &pg_config->outjars)) {
+    case TokenType::outjars: {
+      auto jars = parse_jars(idx, pg_config->basedirectory);
+      move_vector_elements(jars, pg_config->outjars);
+      check_empty(jars);
       continue;
     }
-    if (parse_jars(idx,
-                   TokenType::libraryjars,
-                   pg_config->basedirectory,
-                   &pg_config->libraryjars)) {
+    case TokenType::libraryjars: {
+      auto jars = parse_jars(idx, pg_config->basedirectory);
+      move_vector_elements(jars, pg_config->libraryjars);
+      check_empty(jars);
       continue;
     }
-    // -skipnonpubliclibraryclasses not supported
-    if (idx.type() == TokenType::dontskipnonpubliclibraryclasses) {
+    case TokenType::keepdirectories: {
+      auto fp = parse_filepath_command(idx, pg_config->basedirectory);
+      move_vector_elements(fp, pg_config->keepdirectories);
+      check_empty(fp);
+      continue;
+    }
+    case TokenType::target: {
+      auto target = parse_target(idx);
+      if (!target.empty()) {
+        pg_config->target_version = std::move(target);
+      }
+      continue;
+    }
+    case TokenType::dontskipnonpubliclibraryclasses: {
+      // -skipnonpubliclibraryclasses not supported
+      // -dontskipnonpubliclibraryclassmembers not supported
       // Silenty ignore the dontskipnonpubliclibraryclasses option.
-      idx.next();
       continue;
     }
-    // -dontskipnonpubliclibraryclassmembers not supported
-    if (parse_filepath_command(idx,
-                               TokenType::keepdirectories,
-                               pg_config->basedirectory,
-                               &pg_config->keepdirectories)) {
+    case TokenType::keep:
+      check_keep(parse_keep<TokenType::keep>(idx, pg_config, filename, line));
       continue;
-    }
-    if (parse_target(idx, &pg_config->target_version)) {
+    case TokenType::keepclassmembers:
+      check_keep(parse_keep<TokenType::keepclassmembers>(idx, pg_config,
+                                                         filename, line));
       continue;
-    }
-    // -forceprocessing not supported
+    case TokenType::keepclasseswithmembers:
+      check_keep(parse_keep<TokenType::keepclasseswithmembers>(idx, pg_config,
+                                                               filename, line));
+      continue;
+    case TokenType::keepnames:
+      check_keep(
+          parse_keep<TokenType::keepnames>(idx, pg_config, filename, line));
+      continue;
+    case TokenType::keepclassmembernames:
+      check_keep(parse_keep<TokenType::keepclassmembernames>(idx, pg_config,
+                                                             filename, line));
+      continue;
+    case TokenType::keepclasseswithmembernames:
+      check_keep(parse_keep<TokenType::keepclasseswithmembernames>(
+          idx, pg_config, filename, line));
+      continue;
 
-    // Keep Options
-    if (parse_keep(idx,
-                   TokenType::keep,
-                   &pg_config->keep_rules,
-                   true, // mark_classes
-                   false, // mark_conditionally
-                   false, // allowshrinking
-                   /* allow_return= */ false,
-                   filename,
-                   line,
-                   &ok)) {
-      if (!ok) {
-        ++stats.parse_errors;
-      }
+    case TokenType::assumenosideeffects:
+      check_keep(parse_keep<TokenType::assumenosideeffects>(idx, pg_config,
+                                                            filename, line));
       continue;
-    }
-    if (parse_keep(idx,
-                   TokenType::keepclassmembers,
-                   &pg_config->keep_rules,
-                   false, // mark_classes
-                   false, // mark_conditionally
-                   false, // allowshrinking
-                   /* allow_return= */ false,
-                   filename,
-                   line,
-                   &ok)) {
-      if (!ok) {
-        ++stats.parse_errors;
-      }
+    case TokenType::assumevalues:
+      check_keep(
+          parse_keep<TokenType::assumevalues>(idx, pg_config, filename, line));
       continue;
-    }
-    if (parse_keep(idx,
-                   TokenType::keepclasseswithmembers,
-                   &pg_config->keep_rules,
-                   false, // mark_classes
-                   true, // mark_conditionally
-                   false, // allowshrinking
-                   /* allow_return= */ false,
-                   filename,
-                   line,
-                   &ok)) {
-      if (!ok) {
-        ++stats.parse_errors;
-      }
+    case TokenType::whyareyoukeeping:
+      check_keep(parse_keep<TokenType::whyareyoukeeping>(idx, pg_config,
+                                                         filename, line));
       continue;
-    }
-    if (parse_keep(idx,
-                   TokenType::keepnames,
-                   &pg_config->keep_rules,
-                   true, // mark_classes
-                   false, // mark_conditionally
-                   true, // allowshrinking
-                   /* allow_return= */ false,
-                   filename,
-                   line,
-                   &ok)) {
-      if (!ok) {
-        ++stats.parse_errors;
-      }
-      continue;
-    }
-    if (parse_keep(idx,
-                   TokenType::keepclassmembernames,
-                   &pg_config->keep_rules,
-                   false, // mark_classes
-                   false, // mark_conditionally
-                   true, // allowshrinking
-                   /* allow_return= */ false,
-                   filename,
-                   line,
-                   &ok)) {
-      if (!ok) {
-        ++stats.parse_errors;
-      }
-      continue;
-    }
-    if (parse_keep(idx,
-                   TokenType::keepclasseswithmembernames,
-                   &pg_config->keep_rules,
-                   false, // mark_classes
-                   true, // mark_conditionally
-                   true, // allowshrinking
-                   /* allow_return= */ false,
-                   filename,
-                   line,
-                   &ok)) {
-      if (!ok) {
-        ++stats.parse_errors;
-      }
-      continue;
-    }
-    if (parse_optional_filepath_command(
-            idx, TokenType::printseeds, &pg_config->printseeds)) {
+
+    case TokenType::printseeds: {
+      auto ofp = parse_filepaths</*kOptional=*/true>(idx);
+      move_vector_elements(ofp, pg_config->printseeds);
       continue;
     }
 
-    // Shrinking Options
-    if (parse_bool_command(
-            idx, TokenType::dontshrink, false, &pg_config->shrink)) {
+    case TokenType::dontshrink: {
+      pg_config->shrink = false;
       continue;
     }
-    if (parse_optional_filepath_command(
-            idx, TokenType::printusage, &pg_config->printusage)) {
-      continue;
-    }
-
-    // Optimization Options
-    if (parse_boolean_command(
-            idx, TokenType::dontoptimize, &pg_config->optimize, false)) {
-      continue;
-    }
-    if (parse_filter_list_command(
-            idx, TokenType::optimizations, &pg_config->optimization_filters)) {
-      continue;
-    }
-    if (parse_optimizationpasses_command(idx)) {
-      continue;
-    }
-    if (parse_keep(idx,
-                   TokenType::assumenosideeffects,
-                   &pg_config->assumenosideeffects_rules,
-                   false, // mark_classes
-                   false, // mark_conditionally
-                   false, // allowshrinking
-                   /* allow_return= */ true,
-                   filename,
-                   line,
-                   &ok)) {
-      continue;
-    }
-    if (parse_keep(idx,
-                   TokenType::assumevalues,
-                   &pg_config->assumevalues_rules,
-                   false, // mark_classes
-                   false, // mark_conditionally
-                   false, // allowshrinking
-                   /* allow_return= */ true,
-                   filename,
-                   line,
-                   &ok)) {
-      continue;
-    }
-    if (parse_keep(idx,
-                   TokenType::whyareyoukeeping,
-                   &pg_config->whyareyoukeeping_rules,
-                   false, // mark_classes
-                   false, // mark_conditionally
-                   false, // allowshrinking
-                   /* allow_return= */ false,
-                   filename,
-                   line,
-                   &ok)) {
+    case TokenType::printusage: {
+      auto ofp = parse_filepaths</*kOptional=*/true>(idx);
+      move_vector_elements(ofp, pg_config->printusage);
       continue;
     }
 
-    // Obfuscation Options
-    if (idx.type() == TokenType::dontobfuscate) {
+    case TokenType::dontoptimize: {
+      pg_config->optimize = false;
+      continue;
+    }
+    case TokenType::optimizations: {
+      auto fl = parse_filter_list_command(idx);
+      move_vector_elements(fl, pg_config->optimization_filters);
+      check_empty(fl);
+      continue;
+    }
+    case TokenType::optimizationpasses: {
+      auto op = parse_optimizationpasses_command(idx);
+      if (!op) {
+        ++stats.parse_errors;
+      }
+      continue;
+    }
+
+    case TokenType::allowaccessmodification_token: {
+      pg_config->allowaccessmodification = true;
+      continue;
+    }
+    case TokenType::dontobfuscate: {
       pg_config->dontobfuscate = true;
-      idx.next();
       continue;
     }
-    // Redex ignores -dontskipnonpubliclibraryclasses
-    if (idx.type() == TokenType::dontskipnonpubliclibraryclasses) {
-      idx.next();
+    case TokenType::printmapping: {
+      auto ofp = parse_filepaths</*kOptional=*/true>(idx);
+      move_vector_elements(ofp, pg_config->printmapping);
       continue;
     }
-    if (parse_optional_filepath_command(
-            idx, TokenType::printmapping, &pg_config->printmapping)) {
+    case TokenType::repackageclasses: {
+      parse_repackageclasses(idx);
       continue;
     }
-    if (parse_optional_filepath_command(idx,
-                                        TokenType::printconfiguration,
-                                        &pg_config->printconfiguration)) {
+    case TokenType::keepattributes: {
+      auto fl = parse_filter_list_command(idx);
+      move_vector_elements(fl, pg_config->keepattributes);
+      check_empty(fl);
+      continue;
+    }
+    case TokenType::dontusemixedcaseclassnames_token: {
+      pg_config->dontusemixedcaseclassnames = true;
+      continue;
+    }
+    case TokenType::keeppackagenames: {
+      auto fl = parse_filter_list_command(idx);
+      move_vector_elements(fl, pg_config->keeppackagenames);
+      check_empty(fl);
+      continue;
+    }
+    case TokenType::dontpreverify_token: {
+      pg_config->dontpreverify = true;
+      continue;
+    }
+    case TokenType::printconfiguration: {
+      auto ofp = parse_filepaths</*kOptional=*/true>(idx);
+      move_vector_elements(ofp, pg_config->printconfiguration);
+      continue;
+    }
+    case TokenType::dontwarn: {
+      auto fl = parse_filter_list_command(idx);
+      move_vector_elements(fl, pg_config->dontwarn);
+      check_empty(fl);
+      continue;
+    }
+    case TokenType::verbose_token: {
+      pg_config->verbose = true;
       continue;
     }
 
-    if (parse_allowaccessmodification(idx,
-                                      &pg_config->allowaccessmodification)) {
-      continue;
-    }
-    if (parse_dontusemixedcaseclassnames(
-            idx, &pg_config->dontusemixedcaseclassnames)) {
-      continue;
-    }
-    if (parse_filter_list_command(
-            idx, TokenType::keeppackagenames, &pg_config->keeppackagenames)) {
-      continue;
-    }
-    if (parse_dontpreverify(idx, &pg_config->dontpreverify)) {
-      continue;
-    }
-    if (parse_verbose(idx, &pg_config->verbose)) {
-      continue;
-    }
-    if (parse_repackageclasses(idx)) {
-      continue;
-    }
-
-    if (parse_filter_list_command(
-            idx, TokenType::dontwarn, &pg_config->dontwarn)) {
-      continue;
-    }
-    if (parse_filter_list_command(
-            idx, TokenType::keepattributes, &pg_config->keepattributes)) {
-      continue;
-    }
-
-    // Skip unknown token.
-    if (idx.it->is_command()) {
+    case TokenType::command:
+    case TokenType::dump:
+    case TokenType::mergeinterfacesaggressively:
+    case TokenType::returns: {
+      idx.to_last(); // Unwind moving forward.
+      always_assert(idx.it->is_command());
       const auto& name = idx.data();
       // It is benign to drop -dontnote
       if (name != "dontnote") {
@@ -1176,14 +1152,62 @@ void parse(const std::vector<Token>& vec,
                   << idx.show_context(2) << std::endl;
         ++stats.unimplemented;
       }
-    } else {
-      std::cerr << "Unexpected TokenType " << idx.show() << " at line "
-                << idx.line() << std::endl
-                << idx.show_context(2) << std::endl;
-      ++stats.parse_errors;
+      idx.next();
+      skip_to_next_command(idx);
+      continue;
     }
-    idx.next();
-    skip_to_next_command(idx);
+
+    // These should not reach the switch.
+
+    // Handled explicitly.
+    case TokenType::eof_token:
+    case TokenType::comment:
+    // Not commands.
+    case TokenType::openCurlyBracket:
+    case TokenType::closeCurlyBracket:
+    case TokenType::openBracket:
+    case TokenType::closeBracket:
+    case TokenType::semiColon:
+    case TokenType::colon:
+    case TokenType::notToken:
+    case TokenType::comma:
+    case TokenType::slash:
+    case TokenType::classToken:
+    case TokenType::publicToken:
+    case TokenType::final:
+    case TokenType::abstract:
+    case TokenType::interface:
+    case TokenType::enumToken:
+    case TokenType::extends:
+    case TokenType::implements:
+    case TokenType::privateToken:
+    case TokenType::protectedToken:
+    case TokenType::staticToken:
+    case TokenType::volatileToken:
+    case TokenType::transient:
+    case TokenType::annotation:
+    case TokenType::annotation_application:
+    case TokenType::synchronized:
+    case TokenType::native:
+    case TokenType::strictfp:
+    case TokenType::synthetic:
+    case TokenType::bridge:
+    case TokenType::varargs:
+    case TokenType::identifier:
+    case TokenType::arrayType:
+    case TokenType::filepath:
+    case TokenType::target_version_token:
+    case TokenType::filter_pattern:
+    case TokenType::includedescriptorclasses_token:
+    case TokenType::allowshrinking_token:
+    case TokenType::allowoptimization_token:
+    case TokenType::allowobfuscation_token:
+    case TokenType::unknownToken:
+      idx.to_last(); // Unwind moving forward.
+      always_assert(!idx.it->is_command());
+      always_assert(false);
+      break;
+    }
   }
 }
 

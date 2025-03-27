@@ -62,14 +62,15 @@ class TypedefAnnoCheckerPass : public Pass {
   friend struct TypedefAnnoCheckerTest;
 };
 
-struct Stats {
+struct CheckerStats {
   std::string m_errors;
   size_t m_count{0};
 
-  explicit Stats(std::string error) : m_errors(std::move(error)), m_count(1) {}
-  Stats() = default;
+  explicit CheckerStats(std::string error)
+      : m_errors(std::move(error)), m_count(1) {}
+  CheckerStats() = default;
 
-  Stats& operator+=(const Stats& other) {
+  CheckerStats& operator+=(const CheckerStats& other) {
     m_count += other.m_count;
     if (m_errors.empty()) {
       m_errors = other.m_errors;
@@ -99,9 +100,8 @@ class TypedefAnnoChecker {
         m_intdef_constants(intdef_constants),
         m_method_override_graph(method_override_graph) {}
 
-  bool is_delegate(const DexMethod* m);
-
   bool is_value_of_opt(const DexMethod* m);
+  bool is_delegate(const DexMethod* m);
 
   void run(DexMethod* m);
 

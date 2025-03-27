@@ -36,6 +36,22 @@ void assert_or_throw(bool cond,
                      const std::string& message,
                      const std::map<std::string, std::string>& extra_info) {
   if (!cond) {
+    if (redex::throw_typed_exception()) {
+      switch (type) {
+      case RedexError::DUPLICATE_METHODS:
+        throw redex::DuplicateMethodsException(message, extra_info);
+      case RedexError::BAD_ANNOTATION:
+        throw redex::BadAnnotationException(message, extra_info);
+      case RedexError::BUFFER_END_EXCEEDED:
+        throw redex::BufferEndExceededException(message, extra_info);
+      case RedexError::INVALID_DEX:
+        throw redex::InvalidDexException(message, extra_info);
+      case RedexError::INVALID_JAVA:
+        throw redex::InvalidJavaException(message, extra_info);
+      default:
+        break;
+      }
+    }
     throw RedexException(type, message, extra_info);
   }
 }

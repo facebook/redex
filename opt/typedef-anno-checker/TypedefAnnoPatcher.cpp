@@ -174,9 +174,11 @@ DexMethodRef* get_enclosing_method(DexClass* cls) {
 template <typename DexMember>
 bool add_annotations(DexMember* member,
                      DexAnnotationSet* anno_set,
-                     PatcherStats& class_stats) {
+                     std::mutex& anno_patching_mutex,
+                     Stats& class_stats) {
   if (member && member->is_def()) {
     auto def_member = member->as_def();
+    std::lock_guard<std::mutex> lock(anno_patching_mutex);
     auto existing_annos = def_member->get_anno_set();
     if (existing_annos) {
       size_t anno_size = existing_annos->get_annotations().size();
@@ -189,8 +191,9 @@ bool add_annotations(DexMember* member,
     } else {
       DexAccessFlags access = def_member->get_access();
       def_member->set_access(ACC_SYNTHETIC);
-      def_member->attach_annotation_set(
+      auto res = def_member->attach_annotation_set(
           std::make_unique<DexAnnotationSet>(*anno_set));
+      always_assert(res);
       def_member->set_access(access);
       class_stats.num_patched_fields_and_methods += 1;
       TRACE(TAC, 3, "[patcher] patched member %s w/ %s", SHOW(member),
@@ -204,7 +207,7 @@ bool add_annotations(DexMember* member,
 bool add_param_annotations(DexMethod* m,
                            DexAnnotationSet* anno_set,
                            int param,
-                           PatcherStats& class_stats) {
+                           Stats& class_stats) {
   bool added = false;
   if (m->get_param_anno()) {
     if (m->get_param_anno()->count(param) == 1) {
@@ -237,7 +240,7 @@ int find_and_patch_parameter(
     src_index_t arg_index,
     DexAnnotationSet* anno_set,
     live_range::UseDefChains* ud_chains,
-    PatcherStats& class_stats,
+    Stats& class_stats,
     std::vector<std::pair<src_index_t, DexAnnotationSet&>>*
         missing_param_annos = nullptr) {
   // Patch missing parameter annotations from accessed fields
@@ -273,7 +276,7 @@ void patch_param_from_method_invoke(
     DexMethod* caller,
     IRInstruction* insn,
     live_range::UseDefChains* ud_chains,
-    PatcherStats& class_stats,
+    Stats& class_stats,
     std::vector<std::pair<src_index_t, DexAnnotationSet&>>*
         missing_param_annos = nullptr,
     bool patch_accessor = true) {
@@ -322,7 +325,7 @@ void patch_setter_method(type_inference::TypeInference& inference,
                          DexMethod* caller,
                          IRInstruction* insn,
                          live_range::UseDefChains* ud_chains,
-                         PatcherStats& class_stats,
+                         Stats& class_stats,
                          std::vector<std::pair<src_index_t, DexAnnotationSet&>>*
                              missing_param_annos = nullptr) {
   always_assert(opcode::is_an_iput(insn->opcode()) ||
@@ -345,7 +348,7 @@ void patch_setter_method(type_inference::TypeInference& inference,
 } // namespace
 
 void TypedefAnnoPatcher::fix_kt_enum_ctor_param(const DexClass* cls,
-                                                PatcherStats& class_stats) {
+                                                Stats& class_stats) {
   const auto& ctors = cls->get_ctors();
   for (auto* ctor : ctors) {
     if (is_synthetic(ctor)) {
@@ -388,7 +391,7 @@ void TypedefAnnoPatcher::fix_kt_enum_ctor_param(const DexClass* cls,
 // methods. This method handles sam conversiona and all synthetic methods that
 // override methods with return or parameter annotations
 bool TypedefAnnoPatcher::patch_synth_methods_overriding_annotated_methods(
-    DexMethod* m, PatcherStats& class_stats) {
+    DexMethod* m, Stats& class_stats) {
   DexClass* cls = type_class(m->get_class());
   if (!klass::maybe_anonymous_class(cls)) {
     return false;
@@ -404,7 +407,7 @@ bool TypedefAnnoPatcher::patch_synth_methods_overriding_annotated_methods(
       DexAnnotationSet anno_set = DexAnnotationSet();
       anno_set.add_annotation(std::make_unique<DexAnnotation>(
           DexType::make_type(return_anno.get()->get_name()), DAV_RUNTIME));
-      add_annotations(m, &anno_set, class_stats);
+      add_annotations(m, &anno_set, m_anno_patching_mutex, class_stats);
     }
 
     if (callee->get_param_anno() == nullptr) {
@@ -431,48 +434,80 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
       walk::parallel::classes<PatcherStats>(scope, [this](DexClass* cls) {
         auto class_stats = PatcherStats();
         if (is_enum(cls) && type::is_kotlin_class(cls)) {
-          fix_kt_enum_ctor_param(cls, class_stats);
+          fix_kt_enum_ctor_param(cls, class_stats.fix_kt_enum_ctor_param);
         }
         if (is_synthesized_lambda_class(cls) || is_fun_interface_class(cls)) {
           std::vector<const DexField*> patched_fields;
           for (auto m : cls->get_all_methods()) {
-            patch_lambdas(m, &patched_fields, class_stats);
+            patch_lambdas(m, &patched_fields, class_stats.patch_lambdas);
           }
           if (!patched_fields.empty()) {
             auto cls_name = cls->get_deobfuscated_name_or_empty_copy();
-            auto common_class_name_end = cls_name.find('$') + 1;
-            if (cls_name[common_class_name_end] < '0' ||
-                cls_name[common_class_name_end] > '9') {
-              common_class_name_end =
-                  cls_name.find('$', cls_name.find('$') + 1);
+            size_t after_first_dollar = cls_name.find('$') + 1;
+            size_t class_prefix_end;
+            if (isdigit(cls_name[after_first_dollar])) {
+              // Patched lambda class is directly under the top most class. No
+              // in-between chained lambda exists. We simply drop everything
+              // after the 1st dollar. e.g.,
+              // Lcom/xxx/yyy/zzz/TimelineCoverPhotoMenuBuilder$1
+              class_prefix_end = after_first_dollar - 1;
+            } else {
+              // Patched lambda class is nested under an enclosing function.
+              // There might be an enclosing chained lambda. We include whatever
+              // is before the 2nd dollar. e.g.,
+              // Lcom/xxx/yyy/zzz/TimelineCoverPhotoMenuBuilder$render
+              class_prefix_end = cls_name.find('$', cls_name.find('$') + 1);
             }
-            auto class_prefix = cls_name.substr(0, common_class_name_end);
-            m_lambda_anno_map.emplace(class_prefix, patched_fields);
+            const auto class_prefix = cls_name.substr(0, class_prefix_end);
+            const auto trace_update = [&patched_fields](
+                                          const std::string& class_prefix) {
+              std::ostringstream os;
+              for (auto f : patched_fields) {
+                os << f->get_name()->str() << " " << f << "|";
+              }
+              TRACE(TAC, 2, "[patcher] Adding lambda map %s of fields %zu %s",
+                    class_prefix.c_str(), patched_fields.size(),
+                    os.str().c_str());
+            };
+            if (traceEnabled(TAC, 2)) {
+              trace_update(class_prefix);
+            }
+            m_lambda_anno_map.update(
+                class_prefix, [&patched_fields](auto, auto& fields, auto) {
+                  for (auto f : patched_fields) {
+                    fields.push_back(f);
+                  }
+                });
           }
         }
         for (auto m : cls->get_all_methods()) {
-          patch_parameters_and_returns(m, class_stats);
-          patch_synth_methods_overriding_annotated_methods(m, class_stats);
+          patch_parameters_and_returns(
+              m, class_stats.patch_parameters_and_returns);
+          patch_synth_methods_overriding_annotated_methods(
+              m, class_stats.patch_synth_methods_overriding_annotated_methods);
           if (is_constructor(m) &&
               has_typedef_annos(m->get_param_anno(), m_typedef_annos)) {
-            patch_synth_cls_fields_from_ctor_param(m, class_stats);
+            patch_synth_cls_fields_from_ctor_param(
+                m, class_stats.patch_synth_cls_fields_from_ctor_param);
           }
         }
         return class_stats;
       });
 
-  m_chained_patcher_stats =
+  m_patcher_stats +=
       walk::parallel::classes<PatcherStats>(scope, [&](DexClass* cls) {
         auto class_stats = PatcherStats();
         if (klass::maybe_anonymous_class(cls) && get_enclosing_method(cls)) {
-          patch_enclosed_method(cls, class_stats);
-          patch_ctor_params_from_synth_cls_fields(cls, class_stats);
+          patch_enclosing_lambda_fields(
+              cls, class_stats.patch_enclosing_lambda_fields);
+          patch_ctor_params_from_synth_cls_fields(
+              cls, class_stats.patch_ctor_params_from_synth_cls_fields);
         }
         populate_chained_getters(cls);
         return class_stats;
       });
 
-  patch_chained_getters(m_chained_getter_patcher_stats);
+  patch_chained_getters(m_patcher_stats.patch_chained_getters);
 }
 
 void TypedefAnnoPatcher::populate_chained_getters(DexClass* cls) {
@@ -483,7 +518,7 @@ void TypedefAnnoPatcher::populate_chained_getters(DexClass* cls) {
   }
 }
 
-void TypedefAnnoPatcher::patch_chained_getters(PatcherStats& class_stats) {
+void TypedefAnnoPatcher::patch_chained_getters(Stats& class_stats) {
   std::vector<DexClass*> sorted_candidates;
   for (auto* cls : m_chained_getters) {
     sorted_candidates.push_back(cls);
@@ -498,7 +533,7 @@ void TypedefAnnoPatcher::patch_chained_getters(PatcherStats& class_stats) {
 }
 
 void TypedefAnnoPatcher::patch_ctor_params_from_synth_cls_fields(
-    DexClass* cls, PatcherStats& class_stats) {
+    DexClass* cls, Stats& class_stats) {
   bool has_annotated_fields = false;
   for (auto field : cls->get_ifields()) {
     DexAnnotationSet* anno_set = field->get_anno_set();
@@ -574,7 +609,8 @@ void patch_synthetic_field_from_local_var_lambda(
     const src_index_t src,
     DexAnnotationSet* anno_set,
     std::vector<const DexField*>* patched_fields,
-    PatcherStats& class_stats) {
+    std::mutex& anno_patching_mutex,
+    Stats& class_stats) {
   live_range::Use use_of_id{insn, src};
   auto udchains_it = ud_chains.find(use_of_id);
   auto defs_set = udchains_it->second;
@@ -613,11 +649,12 @@ void patch_synthetic_field_from_local_var_lambda(
           continue;
         }
         patched_fields->push_back(original_field);
-        add_annotations(original_field, anno_set, class_stats);
+        add_annotations(original_field, anno_set, anno_patching_mutex,
+                        class_stats);
       }
     } else {
       patched_fields->push_back(field);
-      add_annotations(field, anno_set, class_stats);
+      add_annotations(field, anno_set, anno_patching_mutex, class_stats);
     }
   }
 }
@@ -632,7 +669,8 @@ void annotate_local_var_field_from_callee(
     const live_range::UseDefChains& ud_chains,
     const type_inference::TypeInference& inference,
     std::vector<const DexField*>* patched_fields,
-    PatcherStats& class_stats) {
+    std::mutex& anno_patching_mutex,
+    Stats& class_stats) {
   if (!callee) {
     return;
   }
@@ -648,7 +686,7 @@ void annotate_local_var_field_from_callee(
           DexType::make_type(annotation.get()->get_name()), DAV_RUNTIME));
       patch_synthetic_field_from_local_var_lambda(
           ud_chains, insn, param_anno.first + 1, &anno_set, patched_fields,
-          class_stats);
+          anno_patching_mutex, class_stats);
     }
   }
 }
@@ -658,7 +696,7 @@ void annotate_local_var_field_from_callee(
 void TypedefAnnoPatcher::patch_lambdas(
     DexMethod* method,
     std::vector<const DexField*>* patched_fields,
-    PatcherStats& class_stats) {
+    Stats& class_stats) {
   IRCode* code = method->get_code();
   if (!code) {
     return;
@@ -693,7 +731,7 @@ void TypedefAnnoPatcher::patch_lambdas(
         for (auto& pair : missing_param_annos) {
           patch_synthetic_field_from_local_var_lambda(
               ud_chains, insn, pair.first, &pair.second, patched_fields,
-              class_stats);
+              m_anno_patching_mutex, class_stats);
         }
         // If the static method has parameter annotations, patch the synthetic
         // fields as expected
@@ -704,7 +742,7 @@ void TypedefAnnoPatcher::patch_lambdas(
             if (annotation != boost::none) {
               patch_synthetic_field_from_local_var_lambda(
                   ud_chains, insn, param_anno.first, param_anno.second.get(),
-                  patched_fields, class_stats);
+                  patched_fields, m_anno_patching_mutex, class_stats);
             }
           }
         }
@@ -714,7 +752,8 @@ void TypedefAnnoPatcher::patch_lambdas(
             mog::get_overriding_methods(m_method_override_graph, callee_def);
         for (auto callee : callees) {
           annotate_local_var_field_from_callee(
-              callee, insn, ud_chains, inference, patched_fields, class_stats);
+              callee, insn, ud_chains, inference, patched_fields,
+              m_anno_patching_mutex, class_stats);
         }
       } else if (opcode::is_an_invoke(insn->opcode())) {
         auto* callee_def = resolve_method(method, insn);
@@ -723,7 +762,8 @@ void TypedefAnnoPatcher::patch_lambdas(
         callees.push_back(callee_def);
         for (auto callee : callees) {
           annotate_local_var_field_from_callee(
-              callee, insn, ud_chains, inference, patched_fields, class_stats);
+              callee, insn, ud_chains, inference, patched_fields,
+              m_anno_patching_mutex, class_stats);
         }
       }
     }
@@ -734,7 +774,7 @@ void TypedefAnnoPatcher::patch_lambdas(
 // parameters. If it does, find the field that the parameter got put into and
 // annotate it.
 void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
-    DexMethod* ctor, PatcherStats& class_stats) {
+    DexMethod* ctor, Stats& class_stats) {
   IRCode* code = ctor->get_code();
   if (!code) {
     return;
@@ -770,7 +810,7 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
         DexAnnotationSet anno_set = DexAnnotationSet();
         anno_set.add_annotation(std::make_unique<DexAnnotation>(
             DexType::make_type(annotation.get()->get_name()), DAV_RUNTIME));
-        add_annotations(field, &anno_set, class_stats);
+        add_annotations(field, &anno_set, m_anno_patching_mutex, class_stats);
         auto field_name = field->get_simple_deobfuscated_name();
         field_name.at(0) = std::toupper(field_name.at(0));
         const auto int_or_string =
@@ -793,36 +833,52 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
   }
 }
 
-void TypedefAnnoPatcher::patch_enclosed_method(DexClass* cls,
-                                               PatcherStats& class_stats) {
-  auto cls_name = cls->get_deobfuscated_name_or_empty_copy();
-  auto first_dollar = cls_name.find('$');
+void TypedefAnnoPatcher::patch_enclosing_lambda_fields(const DexClass* anon_cls,
+                                                       Stats& class_stats) {
+  auto anon_cls_name = anon_cls->get_deobfuscated_name_or_empty_copy();
+  auto first_dollar = anon_cls_name.find('$');
   always_assert_log(first_dollar != std::string::npos,
                     "The enclosed method class %s should have a $ in the name",
-                    SHOW(cls));
-  auto original_cls_name = cls_name.substr(0, first_dollar) + ";";
-  DexClass* original_class =
-      type_class(DexType::make_type(DexString::make_string(original_cls_name)));
-  if (!original_class) {
+                    SHOW(anon_cls));
+  auto enclosing_cls_name = anon_cls_name.substr(0, first_dollar) + ";";
+  DexClass* enclosing_class = type_class(
+      DexType::make_type(DexString::make_string(enclosing_cls_name)));
+  if (!enclosing_class) {
     return;
   }
 
-  auto second_dollar = cls_name.find('$', first_dollar + 1);
-  auto fields = m_lambda_anno_map.get(cls_name.substr(0, second_dollar));
-  if (!fields) {
+  auto second_dollar = anon_cls_name.find('$', first_dollar + 1);
+  // e.g.
+  // Lcom/xxx/yyy/xxx/InspirationDiscImpl$maybeShowDisclosure
+  auto enclosing_prefix = anon_cls_name.substr(0, second_dollar);
+  auto it = m_lambda_anno_map.find(enclosing_prefix);
+  if (it == m_lambda_anno_map.end() || it->second.empty()) {
     return;
   }
+  auto patched_fields = it->second;
+  TRACE(TAC, 2, "[patcher] lookup lambda map %s of field %zu",
+        enclosing_prefix.c_str(), patched_fields.size());
 
-  for (auto field : *fields) {
-    auto field_name = cls_name + "." + field->get_simple_deobfuscated_name() +
-                      ":" + field->get_type()->str_copy();
-    DexFieldRef* field_ref = DexField::get_field(field_name);
-    if (field_ref && field->get_deobfuscated_name() != field_name) {
+  // Patch synthesized fields of the enclosing anonymous/lambda class. The field
+  // being patched is on a class enclosing an inner lambda class with it's field
+  // already patched in an earlier step.
+  for (const auto patched_field : patched_fields) {
+    auto enclosing_field_name = anon_cls_name + "." +
+                                patched_field->get_simple_deobfuscated_name() +
+                                ":" + patched_field->get_type()->str_copy();
+    DexFieldRef* enclosing_field_ref =
+        DexField::get_field(enclosing_field_name);
+    if (enclosing_field_ref &&
+        patched_field->get_deobfuscated_name() != enclosing_field_name) {
+      TRACE(TAC, 2,
+            "[patcher] patching enclosing field %s from patched field %s",
+            SHOW(enclosing_field_name), SHOW(patched_field));
       DexAnnotationSet a_set = DexAnnotationSet();
-      a_set.combine_with(*field->get_anno_set());
-      DexField* dex_field = field_ref->as_def();
-      if (dex_field) {
-        add_annotations(dex_field, &a_set, class_stats);
+      a_set.combine_with(*patched_field->get_anno_set());
+      DexField* enclosing_field = enclosing_field_ref->as_def();
+      if (enclosing_field) {
+        add_annotations(enclosing_field, &a_set, m_anno_patching_mutex,
+                        class_stats);
       }
     }
   }
@@ -839,7 +895,7 @@ void TypedefAnnoPatcher::patch_enclosed_method(DexClass* cls,
 // the parameter annotations, just add them to missing_param_annos
 void TypedefAnnoPatcher::patch_parameters_and_returns(
     DexMethod* m,
-    PatcherStats& class_stats,
+    Stats& class_stats,
     std::vector<std::pair<src_index_t, DexAnnotationSet&>>*
         missing_param_annos) {
   IRCode* code = m->get_code();
@@ -886,11 +942,162 @@ void TypedefAnnoPatcher::patch_parameters_and_returns(
     DexAnnotationSet anno_set = DexAnnotationSet();
     anno_set.add_annotation(std::make_unique<DexAnnotation>(
         DexType::make_type(anno.get()->get_name()), DAV_RUNTIME));
-    add_annotations(m, &anno_set, class_stats);
+    add_annotations(m, &anno_set, m_anno_patching_mutex, class_stats);
     auto class_name = type_class(m->get_class())->str();
     auto class_name_prefix = class_name.substr(0, class_name.size() - 1);
     if (!m_patched_returns.count(class_name_prefix)) {
       m_patched_returns.insert(class_name_prefix);
     }
   }
+}
+
+void TypedefAnnoPatcher::print_stats(PassManager& mgr) {
+  size_t total_member_patched = 0;
+  size_t total_param_patched = 0;
+  mgr.set_metric(
+      "fix_kt_enum_ctor_param field/methods",
+      m_patcher_stats.fix_kt_enum_ctor_param.num_patched_fields_and_methods);
+  mgr.set_metric("fix_kt_enum_ctor_param params",
+                 m_patcher_stats.fix_kt_enum_ctor_param.num_patched_parameters);
+  TRACE(TAC, 1, "[patcher] fix_kt_enum_ctor_param field/methods %zu",
+        m_patcher_stats.fix_kt_enum_ctor_param.num_patched_fields_and_methods);
+  TRACE(TAC, 1, "[patcher] fix_kt_enum_ctor_param params %zu",
+        m_patcher_stats.fix_kt_enum_ctor_param.num_patched_parameters);
+  total_member_patched +=
+      m_patcher_stats.fix_kt_enum_ctor_param.num_patched_fields_and_methods;
+  total_param_patched +=
+      m_patcher_stats.fix_kt_enum_ctor_param.num_patched_parameters;
+
+  mgr.set_metric("patch_lambdas field/methods",
+                 m_patcher_stats.patch_lambdas.num_patched_fields_and_methods);
+  mgr.set_metric("patch_lambdas params",
+                 m_patcher_stats.patch_lambdas.num_patched_parameters);
+  TRACE(TAC, 1, "[patcher] patch_lambdas field/methods %zu",
+        m_patcher_stats.patch_lambdas.num_patched_fields_and_methods);
+  TRACE(TAC, 1, "[patcher] patch_lambdas params %zu",
+        m_patcher_stats.patch_lambdas.num_patched_parameters);
+  total_member_patched +=
+      m_patcher_stats.patch_lambdas.num_patched_fields_and_methods;
+  total_param_patched += m_patcher_stats.patch_lambdas.num_patched_parameters;
+
+  mgr.set_metric("patch_parameters_and_returns field/methods",
+                 m_patcher_stats.patch_parameters_and_returns
+                     .num_patched_fields_and_methods);
+  mgr.set_metric(
+      "patch_parameters_and_returns params",
+      m_patcher_stats.patch_parameters_and_returns.num_patched_parameters);
+  TRACE(TAC, 1, "[patcher] patch_parameters_and_returns field/methods %zu",
+        m_patcher_stats.patch_parameters_and_returns
+            .num_patched_fields_and_methods);
+  TRACE(TAC, 1, "[patcher] patch_parameters_and_returns params %zu",
+        m_patcher_stats.patch_parameters_and_returns.num_patched_parameters);
+  total_member_patched += m_patcher_stats.patch_parameters_and_returns
+                              .num_patched_fields_and_methods;
+  total_param_patched +=
+      m_patcher_stats.patch_parameters_and_returns.num_patched_parameters;
+
+  mgr.set_metric(
+      "patch_synth_methods_overriding_annotated_methods field/methods",
+      m_patcher_stats.patch_synth_methods_overriding_annotated_methods
+          .num_patched_fields_and_methods);
+  mgr.set_metric(
+      "patch_synth_methods_overriding_annotated_methods params",
+      m_patcher_stats.patch_synth_methods_overriding_annotated_methods
+          .num_patched_parameters);
+  TRACE(TAC, 1,
+        "[patcher] patch_synth_methods_overriding_annotated_methods "
+        "field/methods %zu",
+        m_patcher_stats.patch_synth_methods_overriding_annotated_methods
+            .num_patched_fields_and_methods);
+  TRACE(TAC, 1,
+        "[patcher] patch_synth_methods_overriding_annotated_methods params %zu",
+        m_patcher_stats.patch_synth_methods_overriding_annotated_methods
+            .num_patched_parameters);
+  total_member_patched +=
+      m_patcher_stats.patch_synth_methods_overriding_annotated_methods
+          .num_patched_fields_and_methods;
+  total_param_patched +=
+      m_patcher_stats.patch_synth_methods_overriding_annotated_methods
+          .num_patched_parameters;
+
+  mgr.set_metric("patch_synth_cls_fields_from_ctor_param field/methods",
+                 m_patcher_stats.patch_synth_cls_fields_from_ctor_param
+                     .num_patched_fields_and_methods);
+  mgr.set_metric("patch_synth_cls_fields_from_ctor_param params",
+                 m_patcher_stats.patch_synth_cls_fields_from_ctor_param
+                     .num_patched_parameters);
+  TRACE(TAC, 1,
+        "[patcher] patch_synth_cls_fields_from_ctor_param "
+        "field/methods %zu",
+        m_patcher_stats.patch_synth_cls_fields_from_ctor_param
+            .num_patched_fields_and_methods);
+  TRACE(TAC, 1, "[patcher] patch_synth_cls_fields_from_ctor_param params %zu",
+        m_patcher_stats.patch_synth_cls_fields_from_ctor_param
+            .num_patched_parameters);
+  total_member_patched += m_patcher_stats.patch_synth_cls_fields_from_ctor_param
+                              .num_patched_fields_and_methods;
+  total_param_patched += m_patcher_stats.patch_synth_cls_fields_from_ctor_param
+                             .num_patched_parameters;
+
+  mgr.set_metric("patch_enclosing_lambda_fields field/methods",
+                 m_patcher_stats.patch_enclosing_lambda_fields
+                     .num_patched_fields_and_methods);
+  mgr.set_metric(
+      "patch_enclosing_lambda_fields params",
+      m_patcher_stats.patch_enclosing_lambda_fields.num_patched_parameters);
+  TRACE(TAC, 1,
+        "[patcher] patch_enclosing_lambda_fields "
+        "field/methods %zu",
+        m_patcher_stats.patch_enclosing_lambda_fields
+            .num_patched_fields_and_methods);
+  TRACE(TAC, 1, "[patcher] patch_enclosing_lambda_fields params %zu",
+        m_patcher_stats.patch_enclosing_lambda_fields.num_patched_parameters);
+  total_member_patched += m_patcher_stats.patch_enclosing_lambda_fields
+                              .num_patched_fields_and_methods;
+  total_param_patched +=
+      m_patcher_stats.patch_enclosing_lambda_fields.num_patched_parameters;
+
+  mgr.set_metric("patch_ctor_params_from_synth_cls_fields field/methods",
+                 m_patcher_stats.patch_ctor_params_from_synth_cls_fields
+                     .num_patched_fields_and_methods);
+  mgr.set_metric("patch_ctor_params_from_synth_cls_fields params",
+                 m_patcher_stats.patch_ctor_params_from_synth_cls_fields
+                     .num_patched_parameters);
+  TRACE(TAC, 1,
+        "[patcher] patch_ctor_params_from_synth_cls_fields "
+        "field/methods %zu",
+        m_patcher_stats.patch_ctor_params_from_synth_cls_fields
+            .num_patched_fields_and_methods);
+  TRACE(TAC, 1, "[patcher] patch_ctor_params_from_synth_cls_fields params %zu",
+        m_patcher_stats.patch_ctor_params_from_synth_cls_fields
+            .num_patched_parameters);
+  total_member_patched +=
+      m_patcher_stats.patch_ctor_params_from_synth_cls_fields
+          .num_patched_fields_and_methods;
+  total_param_patched += m_patcher_stats.patch_ctor_params_from_synth_cls_fields
+                             .num_patched_parameters;
+
+  mgr.set_metric(
+      "patch_chained_getters field/methods",
+      m_patcher_stats.patch_chained_getters.num_patched_fields_and_methods);
+  mgr.set_metric("patch_chained_getters params",
+                 m_patcher_stats.patch_chained_getters.num_patched_parameters);
+  TRACE(TAC, 1,
+        "[patcher] patch_chained_getters "
+        "field/methods %zu",
+        m_patcher_stats.patch_chained_getters.num_patched_fields_and_methods);
+  TRACE(TAC, 1, "[patcher] patch_chained_getters params %zu",
+        m_patcher_stats.patch_chained_getters.num_patched_parameters);
+  total_member_patched +=
+      m_patcher_stats.patch_chained_getters.num_patched_fields_and_methods;
+  total_param_patched +=
+      m_patcher_stats.patch_chained_getters.num_patched_parameters;
+
+  mgr.set_metric("patched_returns", m_patched_returns.size());
+  TRACE(TAC, 1, "[patcher] patched returns %zu", m_patched_returns.size());
+
+  mgr.set_metric("total_member_patched", total_member_patched);
+  TRACE(TAC, 1, "[patcher] total_member_patched %zu", total_member_patched);
+  mgr.set_metric("total_param_patched", total_param_patched);
+  TRACE(TAC, 1, "[patcher] total_param_patched %zu", total_param_patched);
 }

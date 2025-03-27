@@ -994,7 +994,39 @@ bool BoxedBooleanAnalyzer::analyze_invoke(
   }
 }
 
-bool StringAnalyzer::analyze_invoke(const IRInstruction* insn,
+static boost::optional<StringAnalyzerState> s_string_analyzer_state{
+    boost::none};
+static std::mutex s_string_analyzer_state_mtx;
+StringAnalyzerState StringAnalyzerState::get() {
+  std::lock_guard<std::mutex> lock(s_string_analyzer_state_mtx);
+  if (s_string_analyzer_state == boost::none) {
+    std::unordered_set<DexMethod*> methods;
+    auto kotlin_are_equal = DexMethod::get_method(
+        "Lkotlin/jvm/internal/Intrinsics;.areEqual:(Ljava/lang/Object;Ljava/"
+        "lang/Object;)Z");
+    if (kotlin_are_equal != nullptr && kotlin_are_equal->as_def() != nullptr) {
+      methods.emplace(kotlin_are_equal->as_def());
+    }
+    s_string_analyzer_state = StringAnalyzerState(methods);
+    // For tests.
+    g_redex->add_destruction_task([]() {
+      std::lock_guard<std::mutex> task_lock(s_string_analyzer_state_mtx);
+      s_string_analyzer_state = boost::none;
+    });
+  }
+  return *s_string_analyzer_state;
+}
+
+void StringAnalyzerState::set_methods_as_root() {
+  for (const auto& method : string_equality_methods) {
+    if (!method->is_external()) {
+      method->rstate.set_root();
+    }
+  }
+}
+
+bool StringAnalyzer::analyze_invoke(const StringAnalyzerState* state,
+                                    const IRInstruction* insn,
                                     ConstantEnvironment* env) {
   DexMethod* method =
       resolve_method(insn->get_method(), opcode_to_search(insn));
@@ -1013,7 +1045,9 @@ bool StringAnalyzer::analyze_invoke(const IRInstruction* insn,
     return nullptr;
   };
 
-  if (method == method::java_lang_String_equals()) {
+  if (method == method::java_lang_String_equals() ||
+      (state != nullptr && state->string_equality_methods.find(method) !=
+                               state->string_equality_methods.end())) {
     always_assert(insn->srcs_size() == 2);
     if (const auto* arg0 = maybe_string(0)) {
       if (const auto* arg1 = maybe_string(1)) {
@@ -1546,6 +1580,49 @@ bool ApiLevelAnalyzer::analyze_sget(const ApiLevelAnalyzerState& state,
     env->set(RESULT_REGISTER,
              SignedConstantDomain(state.min_sdk,
                                   std::numeric_limits<int32_t>::max()));
+    return true;
+  }
+  return false;
+}
+
+boost::optional<std::unordered_set<DexMethodRef*>> g_get_package_name_refs{
+    boost::none};
+static std::mutex s_package_name_mutex;
+PackageNameState PackageNameState::get(const std::string& package_name) {
+  return PackageNameState::get(boost::optional<std::string>(package_name));
+}
+
+PackageNameState PackageNameState::get(
+    const boost::optional<std::string>& package_name) {
+  std::lock_guard<std::mutex> lock(s_package_name_mutex);
+  if (!g_get_package_name_refs) {
+    std::unordered_set<DexMethodRef*> refs{
+        DexMethod::get_method(
+            "Landroid/content/Context;.getPackageName:()Ljava/lang/String;"),
+        DexMethod::get_method(
+            "Landroid/content/ContextWrapper;.getPackageName:()Ljava/lang/"
+            "String;")};
+    g_get_package_name_refs = refs;
+    // In tests, we create and destroy g_redex repeatedly. So we need to reset
+    // the singleton.
+    g_redex->add_destruction_task([]() {
+      std::lock_guard<std::mutex> task_lock(s_package_name_mutex);
+      g_get_package_name_refs = boost::none;
+    });
+  }
+  const DexString* dex_string = package_name != boost::none
+                                    ? DexString::make_string(*package_name)
+                                    : nullptr;
+  return {*g_get_package_name_refs, dex_string};
+}
+
+bool PackageNameAnalyzer::analyze_invoke(const PackageNameState* state,
+                                         const IRInstruction* insn,
+                                         ConstantEnvironment* env) {
+  auto method = insn->get_method();
+  if (method && state && state->package_name &&
+      state->getter_methods.count(method) > 0) {
+    env->set(RESULT_REGISTER, StringDomain(state->package_name));
     return true;
   }
   return false;

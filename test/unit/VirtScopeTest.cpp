@@ -1487,32 +1487,16 @@ TEST_F(VirtScopeTest, Interface3IntfOverEscape) {
 TEST_F(VirtScopeTest, VitualInterfaceResolutionTest) {
   std::vector<DexClass*> scope = create_scope_10();
   TypeSystem type_system(scope);
-  auto eq = DexString::get_string("equals");
-  auto f = DexString::get_string("f");
   auto g = DexString::get_string("g");
-  auto obj_t = type::java_lang_Object();
-  auto a_t = DexType::get_type("LA;");
-  auto b_t = DexType::get_type("LB;");
-  auto c_t = DexType::get_type("LC;");
-  auto d_t = DexType::get_type("LD;");
   auto e_t = DexType::get_type("LE;");
-  auto f_t = DexType::get_type("LF;");
   auto g_t = DexType::get_type("LG;");
   auto h_t = DexType::get_type("LH;");
   auto k_t = DexType::get_type("LK;");
   auto i_t = DexType::get_type("LI;");
   auto j_t = DexType::get_type("LJ;");
-  auto l_t = DexType::get_type("LL;");
-  auto intf1_t = DexType::get_type("LIntf1;");
   auto intf2_t = DexType::get_type("LIntf2;");
-  auto intf3_t = DexType::get_type("LIntf3;");
-  auto intf4_t = DexType::get_type("LIntf4;");
-  auto void_void =
-      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
   auto void_int = DexProto::make_proto(
       type::_void(), DexTypeList::make_type_list({type::_int()}));
-  auto bool_obj = DexProto::make_proto(type::_boolean(),
-                                       DexTypeList::make_type_list({obj_t}));
 
   // invoke_virtual I.g(int)
   // Resolve the above call and obtain G.g(int) virtual scope

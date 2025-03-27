@@ -8,7 +8,6 @@
 #include "SwitchEquivFinder.h"
 
 #include <algorithm>
-#include <queue>
 #include <vector>
 
 #include "CFGMutation.h"
@@ -204,13 +203,15 @@ SwitchEquivFinder::SwitchEquivFinder(
     uint32_t leaf_duplication_threshold,
     std::shared_ptr<constant_propagation::intraprocedural::FixpointIterator>
         fixpoint_iterator,
-    DuplicateCaseStrategy duplicates_strategy)
+    DuplicateCaseStrategy duplicates_strategy,
+    std::shared_ptr<DefUseBlocks> def_use_blocks)
     : m_cfg(cfg),
       m_root_branch(root_branch),
       m_switching_reg(switching_reg),
       m_leaf_duplication_threshold(leaf_duplication_threshold),
       m_fixpoint_iterator(std::move(fixpoint_iterator)),
-      m_duplicates_strategy(duplicates_strategy) {
+      m_duplicates_strategy(duplicates_strategy),
+      m_def_use_blocks(std::move(def_use_blocks)) {
   {
     // make sure the input is well-formed
     auto insn = m_root_branch->insn;
@@ -298,7 +299,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
             if (next->num_opcodes() < m_leaf_duplication_threshold) {
               // A switch cannot represent this control flow graph unless we
               // duplicate this leaf. See the comment on
-              // m_leaf_duplication_theshold for more details.
+              // m_leaf_duplication_threshold for more details.
               always_assert(m_cfg->editable());
               cfg::Block* copy = m_cfg->duplicate_block(next);
               edges_to_move.emplace_back(succ, copy);
@@ -477,35 +478,12 @@ bool SwitchEquivFinder::move_edges(
   return true;
 }
 
-// Before this function, m_extra_loads is overly broad
-// * Remove loads that are never used outside the if-else chain blocks
-// * Remove empty lists of loads from the map (possibly emptying the map)
-void SwitchEquivFinder::normalize_extra_loads(
-    const std::unordered_map<cfg::Block*, bool>& block_to_is_leaf) {
-
-  // collect the extra loads
-  std::unordered_set<IRInstruction*> extra_loads;
-  for (const auto& [b, is_leaf] : block_to_is_leaf) {
-    if (is_leaf) {
-      continue;
-    }
-    for (const auto& mie : InstructionIterable(b)) {
-      if (is_valid_load_for_nonleaf(mie.insn->opcode())) {
-        extra_loads.insert(mie.insn);
-      }
-    }
-  }
-
-  // Use ReachingDefinitions to find the loads that are used outside the if-else
-  // chain blocks
-  std::unordered_set<IRInstruction*> used_defs;
-  reaching_defs::FixpointIterator fixpoint_iter(*m_cfg);
+SwitchEquivFinder::DefUseBlocks SwitchEquivFinder::GetDefUseBlocks(
+    cfg::ControlFlowGraph& cfg) {
+  DefUseBlocks res;
+  reaching_defs::FixpointIterator fixpoint_iter(cfg);
   fixpoint_iter.run(reaching_defs::Environment());
-  for (cfg::Block* block : m_cfg->blocks()) {
-    auto search = block_to_is_leaf.find(block);
-    if (search != block_to_is_leaf.end() && !search->second) {
-      continue;
-    }
+  for (cfg::Block* block : cfg.blocks()) {
     reaching_defs::Environment defs_in =
         fixpoint_iter.get_entry_state_at(block);
     if (defs_in.is_bottom()) {
@@ -518,12 +496,40 @@ void SwitchEquivFinder::normalize_extra_loads(
         const auto& defs = defs_in.get(src);
         always_assert_log(!defs.is_top(), "Undefined register v%u", src);
         for (IRInstruction* def : defs.elements()) {
-          if (extra_loads.count(def)) {
-            used_defs.insert(def);
-          }
+          res[def].insert(block);
         }
       }
       fixpoint_iter.analyze_instruction(insn, &defs_in);
+    }
+  }
+  return res;
+}
+
+// Before this function, m_extra_loads is overly broad
+// * Remove loads that are never used outside the if-else chain blocks
+// * Remove empty lists of loads from the map (possibly emptying the map)
+void SwitchEquivFinder::normalize_extra_loads(
+    const std::unordered_map<cfg::Block*, bool>& block_to_is_leaf) {
+
+  // Use ReachingDefinitions to find the loads that are used outside the if-else
+  // chain blocks
+  auto& def_use_blocks = get_def_use_blocks();
+  std::unordered_set<IRInstruction*> used_defs;
+  for (const auto& [b, is_leaf] : block_to_is_leaf) {
+    if (is_leaf) {
+      continue;
+    }
+    for (const auto& mie : InstructionIterable(b)) {
+      if (!is_valid_load_for_nonleaf(mie.insn->opcode())) {
+        continue;
+      }
+      for (auto* use_block : def_use_blocks[mie.insn]) {
+        auto search = block_to_is_leaf.find(use_block);
+        if (search != block_to_is_leaf.end() && !search->second) {
+          continue;
+        }
+        used_defs.insert(mie.insn);
+      }
     }
   }
 
@@ -547,6 +553,13 @@ cp::intraprocedural::FixpointIterator& SwitchEquivFinder::get_analyzed_cfg() {
     m_fixpoint_iterator->run(ConstantEnvironment());
   }
   return *m_fixpoint_iterator;
+}
+
+SwitchEquivFinder::DefUseBlocks& SwitchEquivFinder::get_def_use_blocks() {
+  if (!m_def_use_blocks) {
+    m_def_use_blocks = std::make_shared<DefUseBlocks>(GetDefUseBlocks(*m_cfg));
+  }
+  return *m_def_use_blocks;
 }
 
 // Use a sparta analysis to find the value of reg at the beginning of each leaf
@@ -581,6 +594,7 @@ void SwitchEquivFinder::find_case_keys(const std::vector<cfg::Edge*>& leaves) {
               "supplanted by B%zu.",
               it->second->id(), b->id());
         it->second = b;
+        m_duplicate_case_keys = true;
       } else {
         not_reached();
       }

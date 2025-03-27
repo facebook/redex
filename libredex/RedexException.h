@@ -27,7 +27,9 @@ enum RedexError {
   INVALID_BETAMAP = 9,
   BUFFER_END_EXCEEDED = 10,
   TYPE_CHECK_ERROR = 11,
-  MAX = 11,
+  INVALID_DEX = 12,
+  INVALID_JAVA = 13,
+  MAX = 13,
 };
 
 class RedexException : public std::exception {
@@ -46,6 +48,50 @@ class RedexException : public std::exception {
  private:
   std::string m_msg;
 };
+
+namespace redex {
+
+class InvalidDexException : public RedexException {
+ public:
+  explicit InvalidDexException(
+      const std::string& message,
+      const std::map<std::string, std::string>& extra_info = {})
+      : RedexException(RedexError::INVALID_DEX, message, extra_info) {}
+};
+
+class BufferEndExceededException : public RedexException {
+ public:
+  explicit BufferEndExceededException(
+      const std::string& message,
+      const std::map<std::string, std::string>& extra_info = {})
+      : RedexException(RedexError::BUFFER_END_EXCEEDED, message, extra_info) {}
+};
+
+class DuplicateMethodsException : public RedexException {
+ public:
+  explicit DuplicateMethodsException(
+      const std::string& message,
+      const std::map<std::string, std::string>& extra_info = {})
+      : RedexException(RedexError::DUPLICATE_METHODS, message, extra_info) {}
+};
+
+class BadAnnotationException : public RedexException {
+ public:
+  explicit BadAnnotationException(
+      const std::string& message,
+      const std::map<std::string, std::string>& extra_info = {})
+      : RedexException(RedexError::BAD_ANNOTATION, message, extra_info) {}
+};
+
+class InvalidJavaException : public RedexException {
+ public:
+  explicit InvalidJavaException(
+      const std::string& message,
+      const std::map<std::string, std::string>& extra_info = {})
+      : RedexException(RedexError::INVALID_JAVA, message, extra_info) {}
+};
+
+} // namespace redex
 
 void assert_or_throw(bool cond,
                      RedexError type = RedexError::GENERIC_ASSERTION_ERROR,

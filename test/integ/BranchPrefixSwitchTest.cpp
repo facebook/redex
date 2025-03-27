@@ -6,6 +6,7 @@
  */
 
 #include "BranchPrefixHoisting.h"
+#include "ConstantUses.h"
 #include "RedexTest.h"
 #include "Show.h"
 
@@ -23,7 +24,7 @@ TEST_F(BranchPrefixWhenTest, switch_test) {
         code->cfg(), meth->as_def(),
         /* force_type_inference */ true);
   });
-  auto v = BranchPrefixHoistingPass::process_cfg(code->cfg(), constant_uses);
+  auto v = branch_prefix_hoisting_impl::process_cfg(code->cfg(), constant_uses);
   // All the cases in the switch precedes with System.out.print, including the
   // default path. Hence, all the paths has the following two instructions in
   // the prefix:

@@ -34,6 +34,10 @@ struct StringTest : public ConstantPropagationTest {
 
 using StringAnalyzer =
     InstructionAnalyzerCombiner<cp::StringAnalyzer, cp::PrimitiveAnalyzer>;
+using PackageStringAnalyzer =
+    InstructionAnalyzerCombiner<cp::PackageNameAnalyzer,
+                                cp::StringAnalyzer,
+                                cp::PrimitiveAnalyzer>;
 
 TEST_F(StringTest, neq) {
   auto code = assembler::ircode_from_string(R"(
@@ -49,7 +53,8 @@ TEST_F(StringTest, neq) {
     )
 )");
 
-  do_const_prop(code.get(), StringAnalyzer());
+  auto state = cp::StringAnalyzerState::get();
+  do_const_prop(code.get(), StringAnalyzer(&state, nullptr));
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -81,7 +86,8 @@ TEST_F(StringTest, equals_false) {
   std::unordered_set<DexMethodRef*> pure_methods{
       method::java_lang_String_equals()};
   config.pure_methods = &pure_methods;
-  do_const_prop(code.get(), StringAnalyzer(), config);
+  auto state = cp::StringAnalyzerState::get();
+  do_const_prop(code.get(), StringAnalyzer(&state, nullptr), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -115,7 +121,8 @@ TEST_F(StringTest, equals_true) {
   std::unordered_set<DexMethodRef*> pure_methods{
       method::java_lang_String_equals()};
   config.pure_methods = &pure_methods;
-  do_const_prop(code.get(), StringAnalyzer(), config);
+  auto state = cp::StringAnalyzerState::get();
+  do_const_prop(code.get(), StringAnalyzer(&state, nullptr), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -147,7 +154,8 @@ TEST_F(StringTest, hashCode) {
   std::unordered_set<DexMethodRef*> pure_methods{
       method::java_lang_String_hashCode()};
   config.pure_methods = &pure_methods;
-  do_const_prop(code.get(), StringAnalyzer(), config);
+  auto state = cp::StringAnalyzerState::get();
+  do_const_prop(code.get(), StringAnalyzer(&state, nullptr), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -159,5 +167,93 @@ TEST_F(StringTest, hashCode) {
     )
 )");
 
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(StringTest, package_equals_false) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v2)
+      (invoke-virtual (v2) "Landroid/content/ContextWrapper;.getPackageName:()Ljava/lang/String;")
+      (move-result-object v2)
+      (const-string "nope")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v1 v2) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v0)
+      (if-eqz v0 :zero)
+      (const v2 2)
+      (return v2)
+      (:zero)
+      (const v2 1)
+      (return v2)
+    )
+)");
+
+  cp::Transform::Config config;
+  std::unordered_set<DexMethodRef*> pure_methods{
+      method::java_lang_String_equals()};
+  config.pure_methods = &pure_methods;
+  auto state = cp::PackageNameState::get("com.facebook.redextest");
+  do_const_prop(code.get(), PackageStringAnalyzer(&state, nullptr, nullptr),
+                config);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v2)
+      (invoke-virtual (v2) "Landroid/content/ContextWrapper;.getPackageName:()Ljava/lang/String;")
+      (move-result-object v2)
+      (const-string "nope")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v1 v2) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (const v0 0)
+      (const v2 1)
+      (return v2)
+    )
+)");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(StringTest, package_equals_true) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v2)
+      (invoke-virtual (v2) "Landroid/content/ContextWrapper;.getPackageName:()Ljava/lang/String;")
+      (move-result-object v2)
+      (const-string "com.facebook.redextest")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v1 v2) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v0)
+      (if-eqz v0 :zero)
+      (const v2 2)
+      (return v2)
+      (:zero)
+      (const v2 1)
+      (return v2)
+    )
+)");
+
+  cp::Transform::Config config;
+  std::unordered_set<DexMethodRef*> pure_methods{
+      method::java_lang_String_equals()};
+  config.pure_methods = &pure_methods;
+  auto package_state = cp::PackageNameState::get("com.facebook.redextest");
+  auto string_state = cp::StringAnalyzerState::get();
+  do_const_prop(code.get(),
+                PackageStringAnalyzer(&package_state, &string_state, nullptr),
+                config);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v2)
+      (invoke-virtual (v2) "Landroid/content/ContextWrapper;.getPackageName:()Ljava/lang/String;")
+      (move-result-object v2)
+      (const-string "com.facebook.redextest")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v1 v2) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (const v0 1)
+      (const v2 2)
+      (return v2)
+    )
+)");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }

@@ -55,8 +55,6 @@ bool is_numeric(const std::string_view& s) {
                      [](auto c) { return '0' <= c && c <= '9'; });
 }
 
-SourceBlock::Val DEFAULT_VALUE = SourceBlock::Val(1, 1);
-
 namespace hasher {
 
 uint64_t stable_hash_value(const std::string& s) {

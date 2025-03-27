@@ -48,7 +48,6 @@ std::vector<std::string> get_overridden_methods(const mog::Graph& graph,
 }
 
 TEST_F(MethodOverrideGraphTest, verify) {
-  const char* dexfile = std::getenv("dexfile");
   const char* IA_M = "Lcom/facebook/redextest/IA;.m:()V";
   const char* IB_M = "Lcom/facebook/redextest/IB;.m:()V";
   const char* IB_N = "Lcom/facebook/redextest/IB;.n:()V";

@@ -39,7 +39,7 @@
  * The final values of the string fields are stored in the Dex file as
  * DexEncodedValues
  *
- * This should be done after FinalInline pass to make sure input strings are
+ * This should be done after FinalInlineV2 pass to make sure input strings are
  * resolved.
  *
  * TODO: someday, this should probably be subsumed by a more general purpose
@@ -390,6 +390,10 @@ void StringConcatenatorPass::run_pass(DexStoresVector& stores,
         }
 
         always_assert(code->editable_cfg_built());
+        // This legacy pass cannot deal with goto-chains. Force-linearize the
+        // cfg.
+        code->clear_cfg();
+        code->build_cfg(/* editable */ true);
         Stats stats =
             Concatenator{config}.run(&code->cfg(), m, &methods_to_remove);
 

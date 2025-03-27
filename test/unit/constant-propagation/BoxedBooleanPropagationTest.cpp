@@ -32,7 +32,7 @@ struct BoxedBooleanTest : public ConstantPropagationTest {
     auto valueof = DexMethod::make_method(
                        "Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;")
                        ->make_concrete(ACC_PUBLIC, true);
-    auto booleanvalue =
+    [[maybe_unused]] auto booleanvalue =
         DexMethod::make_method("Ljava/lang/Boolean;.booleanValue:()Z")
             ->make_concrete(ACC_PUBLIC, true);
     creator.add_method(valueof);

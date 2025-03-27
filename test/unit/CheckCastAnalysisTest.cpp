@@ -505,7 +505,8 @@ class CheckCastAnalysisSDKTest
           std::tuple<const char*, const char*, bool>> {};
 
 TEST_P(CheckCastAnalysisSDKTest, parameter) {
-  auto [t1_type, t2_type, t3_type, t4_type] = create_chain_of_four();
+  [[maybe_unused]] auto [t1_type, t2_type, t3_type, t4_type] =
+      create_chain_of_four();
 
   auto api = api::AndroidSDK::from_string(std::get<1>(GetParam()));
 

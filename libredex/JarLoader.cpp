@@ -41,9 +41,8 @@ namespace JarLoaderUtil {
 uint32_t read32(uint8_t*& buffer, uint8_t* buffer_end) {
   uint32_t rv;
   auto next = buffer + sizeof(uint32_t);
-  if (next > buffer_end) {
-    throw RedexException(RedexError::BUFFER_END_EXCEEDED);
-  }
+  always_assert_type_log(next <= buffer_end, BUFFER_END_EXCEEDED,
+                         "Buffer overflow");
   memcpy(&rv, buffer, sizeof(uint32_t));
   buffer = next;
   return htonl(rv);
@@ -52,18 +51,16 @@ uint32_t read32(uint8_t*& buffer, uint8_t* buffer_end) {
 uint16_t read16(uint8_t*& buffer, uint8_t* buffer_end) {
   uint16_t rv;
   auto next = buffer + sizeof(uint16_t);
-  if (next > buffer_end) {
-    throw RedexException(RedexError::BUFFER_END_EXCEEDED);
-  }
+  always_assert_type_log(next <= buffer_end, BUFFER_END_EXCEEDED,
+                         "Buffer overflow");
   memcpy(&rv, buffer, sizeof(uint16_t));
   buffer = next;
   return htons(rv);
 }
 
 uint8_t read8(uint8_t*& buffer, uint8_t* buffer_end) {
-  if (buffer >= buffer_end) {
-    throw RedexException(RedexError::BUFFER_END_EXCEEDED);
-  }
+  always_assert_type_log(buffer <= buffer_end, BUFFER_END_EXCEEDED,
+                         "Buffer overflow");
   return *buffer++;
 }
 } // namespace JarLoaderUtil
@@ -163,9 +160,8 @@ bool parse_cp_entry(uint8_t*& buffer, uint8_t* buffer_end, cp_entry& cpe) {
     cpe.len = read16(buffer, buffer_end);
     cpe.data = buffer;
     buffer += cpe.len;
-    if (buffer > buffer_end) {
-      throw RedexException(RedexError::BUFFER_END_EXCEEDED);
-    }
+    always_assert_type_log(buffer <= buffer_end, BUFFER_END_EXCEEDED,
+                           "Buffer overflow");
     return true;
   case CP_CONST_INVOKEDYN:
     std::cerr << "INVOKEDYN constant unsupported, Bailing\n";
@@ -249,7 +245,8 @@ bool extract_utf8(std::vector<cp_entry>& cpool,
 
 DexField* make_dexfield(std::vector<cp_entry>& cpool,
                         DexType* self,
-                        cp_field_info& finfo) {
+                        cp_field_info& finfo,
+                        std::unordered_set<const DexField*>& added) {
   std::string_view dbuffer;
   std::string_view nbuffer;
   if (!extract_utf8(cpool, finfo.nameNdx, &nbuffer) ||
@@ -260,6 +257,13 @@ DexField* make_dexfield(std::vector<cp_entry>& cpool,
   DexType* desc = DexType::make_type(dbuffer);
   DexField* field =
       static_cast<DexField*>(DexField::make_field(self, name, desc));
+
+  // We cannot do an existence check because of mixed sources. At least make
+  // sure we only add a field here once.
+  auto inserted = added.insert(field).second;
+  always_assert_type_log(inserted, INVALID_JAVA, "Duplicate field %s",
+                         SHOW(field));
+
   field->set_access((DexAccessFlags)finfo.aflags);
   field->set_external();
   return field;
@@ -398,7 +402,8 @@ DexTypeList* extract_arguments(std::string_view& buf) {
 
 DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
                           DexType* self,
-                          cp_method_info& finfo) {
+                          cp_method_info& finfo,
+                          std::unordered_set<const DexMethod*>& added) {
   std::string_view dbuffer;
   std::string_view nbuffer;
   if (!extract_utf8(cpool, finfo.nameNdx, &nbuffer) ||
@@ -414,6 +419,9 @@ DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
   DexProto* proto = DexProto::make_proto(rtype, tlist);
   DexMethod* method =
       static_cast<DexMethod*>(DexMethod::make_method(self, name, proto));
+  auto inserted = added.insert(method).second;
+  always_assert_type_log(inserted, INVALID_JAVA, "Duplicate method %s",
+                         SHOW(method));
   if (method->is_concrete()) {
     std::cerr << "Pre-concrete method attempted to load '" << show(method)
               << "', bailing\n";
@@ -561,6 +569,7 @@ bool parse_class(uint8_t* buffer,
         }
       };
 
+  std::unordered_set<const DexField*> added_fields;
   for (int i = 0; i < fcount; i++) {
     cp_field_info cpfield;
     cpfield.aflags = read16(buffer, buffer_end);
@@ -568,13 +577,14 @@ bool parse_class(uint8_t* buffer,
     cpfield.descNdx = read16(buffer, buffer_end);
     uint8_t* attrPtr = buffer;
     skip_attributes(buffer, buffer_end);
-    DexField* field = make_dexfield(cpool, self, cpfield);
+    DexField* field = make_dexfield(cpool, self, cpfield, added_fields);
     if (field == nullptr) return false;
     cc.add_field(field);
     invoke_attr_hook({field}, attrPtr);
   }
 
   uint16_t mcount = read16(buffer, buffer_end);
+  std::unordered_set<const DexMethod*> added_methods;
   if (mcount) {
     for (int i = 0; i < mcount; i++) {
       cp_method_info cpmethod;
@@ -584,7 +594,7 @@ bool parse_class(uint8_t* buffer,
 
       uint8_t* attrPtr = buffer;
       skip_attributes(buffer, buffer_end);
-      DexMethod* method = make_dexmethod(cpool, self, cpmethod);
+      DexMethod* method = make_dexmethod(cpool, self, cpmethod, added_methods);
       if (method == nullptr) return false;
       cc.add_method(method);
       invoke_attr_hook({method}, attrPtr);

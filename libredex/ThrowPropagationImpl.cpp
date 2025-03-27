@@ -97,7 +97,6 @@ bool ThrowPropagator::check_if_dead_code_present_and_prepare_block(
 void ThrowPropagator::insert_unreachable(
     const cfg::InstructionIterator& cfg_it) {
   const auto block = cfg_it.block();
-  IRInstruction* insn = cfg_it->insn;
 
   if (!m_reg) {
     m_reg = m_cfg.allocate_temp();

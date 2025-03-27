@@ -81,8 +81,8 @@ inline IRInstruction* find_synchronized_throw_outside_catch_all(
  * The invoke_insn is optional; if not provided, the analysis is
  * conservative over all instructions.
  */
-bool cannot_inline_sketchy_code(const IRCode& caller,
-                                const IRCode& callee,
+bool cannot_inline_sketchy_code(const cfg::ControlFlowGraph& caller_cfg,
+                                const cfg::ControlFlowGraph& callee_cfg,
                                 const IRInstruction* invoke_insn);
 
 } // namespace monitor_count

@@ -357,6 +357,10 @@ struct MethodBlock {
   MethodBlock* switch_op(Location test,
                          std::map<SwitchIndices, MethodBlock*>& cases);
 
+  void push_position(std::unique_ptr<DexPosition> pos);
+
+  void push_source_block(std::unique_ptr<SourceBlock> sb);
+
  private:
   MethodBlock(const IRList::iterator& iterator, MethodCreator* creator);
 
@@ -483,6 +487,10 @@ struct MethodCreator {
 
   IRList::iterator push_instruction(const IRList::iterator& curr,
                                     IRInstruction* insn);
+  IRList::iterator push_position(const IRList::iterator& curr,
+                                 std::unique_ptr<DexPosition> pos);
+  IRList::iterator push_source_block(const IRList::iterator& curr,
+                                     std::unique_ptr<SourceBlock> sb);
   IRList::iterator make_if_block(IRList::iterator curr,
                                  IRInstruction* insn,
                                  IRList::iterator* false_block);

@@ -84,6 +84,41 @@ inline uint8_t uleb128_encoding_size(uint32_t v) {
   return 5;
 }
 
+template <typename Assert>
+uint32_t read_uleb128_checked(std::string_view& ptr) {
+  auto next = [&ptr]() {
+    Assert::always(!ptr.empty(), "ULEB128 underflow");
+    uint8_t result = *ptr.data();
+    ptr = ptr.substr(1);
+    return result;
+  };
+
+  uint32_t result = next();
+  if (result > 0x7f) {
+    uint32_t cur = next();
+    result = (result & 0x7f) | ((cur & 0x7f) << 7);
+    if (cur > 0x7f) {
+      cur = next();
+      result |= (cur & 0x7f) << 14;
+      if (cur > 0x7f) {
+        cur = next();
+        result |= (cur & 0x7f) << 21;
+        if (cur > 0x7f) {
+          cur = next();
+          result |= cur << 28;
+        }
+      }
+    }
+  }
+  return result;
+}
+
+template <typename Assert>
+inline uint32_t read_uleb128p1_checked(std::string_view& ptr) {
+  int v = read_uleb128_checked<Assert>(ptr);
+  return (v - 1);
+}
+
 inline int32_t read_sleb128(const uint8_t** _ptr) {
   const uint8_t* ptr = *_ptr;
   int32_t result = *(ptr++);
@@ -113,6 +148,45 @@ inline int32_t read_sleb128(const uint8_t** _ptr) {
     }
   }
   *_ptr = ptr;
+  return result;
+}
+
+template <typename Assert>
+int32_t read_sleb128_checked(std::string_view& ptr) {
+  auto next = [&ptr]() {
+    Assert::always(!ptr.empty(), "SLEB128 underflow");
+    uint8_t result = *ptr.data();
+    ptr = ptr.substr(1);
+    return result;
+  };
+
+  int32_t result = next();
+
+  if (result <= 0x7f) {
+    result = (result << 25) >> 25;
+  } else {
+    int cur = next();
+    result = (result & 0x7f) | ((cur & 0x7f) << 7);
+    if (cur <= 0x7f) {
+      result = (result << 18) >> 18;
+    } else {
+      cur = next();
+      result |= (cur & 0x7f) << 14;
+      if (cur <= 0x7f) {
+        result = (result << 11) >> 11;
+      } else {
+        cur = next();
+        result |= (cur & 0x7f) << 21;
+        if (cur <= 0x7f) {
+          result = (result << 4) >> 4;
+        } else {
+          cur = next();
+          // Change from AOSP: avoid undefined shifting behavior.
+          result |= (cur & 0x0f) << 28;
+        }
+      }
+    }
+  }
   return result;
 }
 
@@ -185,18 +259,6 @@ inline uint32_t mutf8_next_code_point(const char*& s) {
   }
   /* Invalid string. */
   dex_encoding::details::throw_invalid("Invalid size encoding mutf8 string");
-}
-
-inline uint32_t length_of_utf8_string(const char* s) {
-  if (s == nullptr) {
-    return 0;
-  }
-  uint32_t len = 0;
-  while (*s != '\0') {
-    ++len;
-    mutf8_next_code_point(s);
-  }
-  return len;
 }
 
 // https://docs.oracle.com/javase/8/docs/api/java/lang/String.html#hashCode--

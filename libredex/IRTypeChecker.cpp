@@ -1044,6 +1044,54 @@ void IRTypeChecker::assume_assignable(boost::optional<const DexType*> from,
   }
 }
 
+namespace {
+
+// Discouraged to throw in destructor, but is safe here.
+struct Throw {
+  std::ostringstream oss;
+
+  explicit Throw() {}
+
+  // NOLINTNEXTLINE(bugprone-exception-escape)
+  ~Throw() noexcept(false) { throw TypeCheckingException(oss.str()); }
+
+  Throw(const Throw&) = delete;
+  Throw(Throw&&) = delete;
+
+  Throw& operator=(const Throw&) = delete;
+  Throw& operator=(Throw&&) = delete;
+};
+
+template <typename Fn>
+void assume_array(const DexType* array_type, const Fn& fn) {
+  if (!type::is_array(array_type)) {
+    Throw().oss << "Expected  " << *array_type << " to be an array type\n";
+  }
+  fn(type::get_array_component_type(array_type));
+}
+
+template <typename Fn>
+void assume_array(TypeEnvironment* state, reg_t reg, const Fn& fn) {
+  assume_type(state,
+              reg,
+              /* expected= */ IRType::REFERENCE,
+              /* ignore_top= */ false);
+
+  // TODO: Make sure we have state for every location.
+  if (state->is_bottom()) {
+    return;
+  }
+
+  auto dtype = state->get_dex_type(reg);
+  if (!dtype) {
+    return;
+  }
+
+  assume_array(*dtype, fn);
+}
+
+} // namespace
+
 // This method performs type checking only: the type environment is not updated
 // and the source registers of the instruction are checked against their
 // expected types.
@@ -1238,7 +1286,12 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     break;
   }
   case OPCODE_AGET: {
-    assume_reference(current_state, insn->src(0));
+    assume_array(current_state, insn->src(0), [](const auto* e_type) {
+      if (e_type != type::_int() && e_type != type::_float()) {
+        Throw().oss << "Expected int or float array, got component type "
+                    << *e_type;
+      }
+    });
     assume_integer(current_state, insn->src(1));
     break;
   }
@@ -1246,23 +1299,72 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_AGET_BYTE:
   case OPCODE_AGET_CHAR:
   case OPCODE_AGET_SHORT: {
-    assume_reference(current_state, insn->src(0));
+    assume_array(current_state, insn->src(0), [&insn](const auto* e_type) {
+      const DexType* expected;
+      switch (insn->opcode()) {
+      case OPCODE_AGET_BOOLEAN:
+        expected = type::_boolean();
+        break;
+      case OPCODE_AGET_BYTE:
+        expected = type::_byte();
+        break;
+      case OPCODE_AGET_CHAR:
+        expected = type::_char();
+        break;
+      case OPCODE_AGET_SHORT:
+        expected = type::_short();
+        break;
+      default:
+        not_reached();
+      };
+      if (e_type != expected) {
+        Throw().oss << "Expected from opcode " << *expected
+                    << " but got component type " << *e_type;
+      }
+    });
     assume_integer(current_state, insn->src(1));
     break;
   }
   case OPCODE_AGET_WIDE: {
-    assume_reference(current_state, insn->src(0));
+    assume_array(current_state, insn->src(0), [](const auto* e_type) {
+      if (!type::is_wide_type(e_type)) {
+        Throw().oss << "Expected wide array, got component type " << *e_type;
+      }
+    });
     assume_integer(current_state, insn->src(1));
     break;
   }
   case OPCODE_AGET_OBJECT: {
-    assume_reference(current_state, insn->src(0));
+    assume_array(current_state, insn->src(0), [](const auto* e_type) {
+      if (!type::is_object(e_type)) {
+        Throw().oss << "Expected reference array, got component type "
+                    << *e_type;
+      }
+    });
     assume_integer(current_state, insn->src(1));
     break;
   }
   case OPCODE_APUT: {
     assume_scalar(current_state, insn->src(0));
-    assume_reference(current_state, insn->src(1));
+    assume_array(current_state,
+                 insn->src(1),
+                 [&insn, &current_state](const auto* e_type) {
+                   if (e_type != type::_int() && e_type != type::_float()) {
+                     Throw().oss
+                         << "Expected int or float array, got component type "
+                         << *e_type;
+                   }
+
+                   // We cannot use DexType for the value as primitive types are
+                   // not tracked in the DexTypeEnvironment.
+                   if (e_type == type::_int()) {
+                     assume_integer(current_state, insn->src(0));
+                   } else {
+                     // NOLINTNEXTLINE(bugprone-assert-side-effect)
+                     redex_assert(e_type == type::_float());
+                     assume_float(current_state, insn->src(0));
+                   }
+                 });
     assume_integer(current_state, insn->src(2));
     break;
   }
@@ -1271,19 +1373,64 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_APUT_CHAR:
   case OPCODE_APUT_SHORT: {
     assume_integer(current_state, insn->src(0));
-    assume_reference(current_state, insn->src(1));
+    assume_array(current_state, insn->src(1), [&insn](const auto* e_type) {
+      const DexType* expected;
+      switch (insn->opcode()) {
+      case OPCODE_APUT_BOOLEAN:
+        expected = type::_boolean();
+        break;
+      case OPCODE_APUT_BYTE:
+        expected = type::_byte();
+        break;
+      case OPCODE_APUT_CHAR:
+        expected = type::_char();
+        break;
+      case OPCODE_APUT_SHORT:
+        expected = type::_short();
+        break;
+      default:
+        not_reached();
+      };
+      if (e_type != expected) {
+        Throw().oss << "Expected from opcode " << *expected
+                    << " but got component type " << *e_type;
+      }
+    });
     assume_integer(current_state, insn->src(2));
     break;
   }
   case OPCODE_APUT_WIDE: {
     assume_wide_scalar(current_state, insn->src(0));
-    assume_reference(current_state, insn->src(1));
+    assume_array(current_state,
+                 insn->src(1),
+                 [&insn, &current_state](const auto* e_type) {
+                   if (!type::is_wide_type(e_type)) {
+                     Throw().oss << "Expected wide array, got component type "
+                                 << *e_type;
+                   }
+
+                   // We cannot use DexType for the value as primitive types are
+                   // not tracked in the DexTypeEnvironment.
+                   if (e_type == type::_long()) {
+                     assume_long(current_state, insn->src(0));
+                   } else {
+                     // NOLINTNEXTLINE(bugprone-assert-side-effect)
+                     redex_assert(e_type == type::_double());
+                     assume_double(current_state, insn->src(0));
+                   }
+                 });
     assume_integer(current_state, insn->src(2));
     break;
   }
   case OPCODE_APUT_OBJECT: {
     assume_reference(current_state, insn->src(0));
-    assume_reference(current_state, insn->src(1));
+    assume_array(current_state, insn->src(1), [](const auto* e_type) {
+      if (!type::is_object(e_type)) {
+        Throw().oss << "Expected reference array, got component type "
+                    << *e_type;
+      }
+      // Array stores are checked at runtime. Nothing else to do.
+    });
     assume_integer(current_state, insn->src(2));
     break;
   }

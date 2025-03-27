@@ -104,24 +104,25 @@ void create_field_scope() {
   auto b = DexType::make_type("B");
   auto c = DexType::make_type("C");
   auto d = DexType::make_type("D");
-  auto u = DexType::make_type("U");
+  [[maybe_unused]] auto u = DexType::make_type("U");
   auto e = DexType::make_type("E");
   std::vector<DexField*> intf_fields{make_field_def(
       intf, "fin_f", int_t, ACC_PUBLIC | ACC_STATIC | ACC_FINAL, true)};
-  auto class_Intf =
+  [[maybe_unused]] auto class_Intf =
       create_class(intf, obj_t, intf_fields, ACC_PUBLIC | ACC_INTERFACE);
   std::vector<DexField*> a_fields{
       make_field_def(a, "f1", int_t, ACC_PUBLIC, true)};
-  auto cls_A = create_class(a, obj_t, a_fields, ACC_PUBLIC, true);
+  [[maybe_unused]] auto cls_A =
+      create_class(a, obj_t, a_fields, ACC_PUBLIC, true);
   std::vector<DexField*> b_fields{
       make_field_def(b, "f2", string_t, ACC_PUBLIC | ACC_STATIC)};
   std::vector<DexType*> intfs{intf};
-  auto cls_B = create_class(b, a, intfs, b_fields);
+  [[maybe_unused]] auto cls_B = create_class(b, a, intfs, b_fields);
   std::vector<DexField*> no_fields{};
-  auto cls_C = create_class(c, b, no_fields);
+  [[maybe_unused]] auto cls_C = create_class(c, b, no_fields);
   std::vector<DexField*> d_fields{make_field_def(d, "f", a)};
-  auto cls_D = create_class(d, obj_t, d_fields);
-  auto cls_E = create_class(e, obj_t, no_fields);
+  [[maybe_unused]] auto cls_D = create_class(d, obj_t, d_fields);
+  [[maybe_unused]] auto cls_E = create_class(e, obj_t, no_fields);
 }
 
 /**

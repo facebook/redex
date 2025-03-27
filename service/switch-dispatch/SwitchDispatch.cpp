@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include "Creators.h"
+#include "ScopedCFG.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "Trace.h"
@@ -66,18 +67,30 @@ void invoke_static(const dispatch::Spec& spec,
                    const std::vector<Location>& args,
                    Location& res_loc,
                    DexMethod* callee,
-                   MethodBlock* block) {
+                   MethodBlock* block,
+                   MethodCreator& mc) {
+  auto sb = source_blocks::get_first_source_block_of_method(callee);
+  if (sb) {
+    block->push_source_block(
+        source_blocks::clone_as_synthetic(sb, mc.get_method()->as_def(), {sb}));
+  }
   emit_call(spec, OPCODE_INVOKE_STATIC, args, res_loc, callee, block);
 }
 
 void emit_check_cast(const dispatch::Spec& spec,
                      std::vector<Location>& args,
                      DexMethod* callee,
-                     MethodBlock* block) {
+                     MethodBlock* block,
+                     MethodCreator& mc) {
   if (!args.empty() && !spec.proto->get_args()->empty()) {
     auto dispatch_head_arg_type = spec.proto->get_args()->at(0);
     auto callee_head_arg_type = callee->get_proto()->get_args()->at(0);
     if (dispatch_head_arg_type != callee_head_arg_type) {
+      auto sb = source_blocks::get_first_source_block_of_method(callee);
+      if (sb) {
+        block->push_source_block(source_blocks::clone_as_synthetic(
+            sb, mc.get_method()->as_def(), {sb}));
+      }
       block->check_cast(args.front(), callee_head_arg_type);
     }
   }
@@ -117,7 +130,7 @@ void handle_default_block(
     // Handle the last case in default block.
     auto last_indices = indices_to_callee.rbegin()->first;
     auto last_callee = indices_to_callee.at(last_indices);
-    invoke_static(spec, args, ret_loc, last_callee, def_block);
+    invoke_static(spec, args, ret_loc, last_callee, def_block, mc);
     return;
   }
   if (spec.overridden_meth) {
@@ -126,6 +139,10 @@ void handle_default_block(
                       SHOW(spec.overridden_meth));
     // Note that the overridden can be an default interface or external default
     // interface method.
+    auto artificial_pos = std::make_unique<DexPosition>(
+        DexString::make_string(show_deobfuscated(spec.overridden_meth)),
+        DexString::make_string("UnknownSource"), 0);
+    def_block->push_position(std::move(artificial_pos));
     emit_call(spec, OPCODE_INVOKE_SUPER, args, ret_loc, spec.overridden_meth,
               def_block);
   } else if (!spec.proto->is_void()) {
@@ -169,7 +186,48 @@ SourceBlock* get_template_source_block(
   for (auto&& [_, m] : indices_to_callee) {
     methods.push_back(m);
   }
-  return source_blocks::get_any_first_source_block_of_methods(methods);
+  auto sb = source_blocks::get_any_first_source_block_of_methods(methods);
+  if (sb) {
+    for (auto m : methods) {
+      sb->max(*source_blocks::get_first_source_block_of_method(m));
+    }
+    return sb;
+  }
+  return sb;
+}
+
+// add the template source block to all dispatch blocks that don't have
+// source blocks
+void add_remaining_source_blocks_to_dispatch(DexMethod* dispatch,
+                                             SourceBlock* template_sb) {
+  auto* code = dispatch->get_code();
+  cfg::ScopedCFG cfg(code);
+  for (auto* block : cfg->blocks()) {
+    if (block == cfg->entry_block()) {
+      continue;
+    }
+    auto source_block = source_blocks::get_first_source_block(block);
+    if (source_block) {
+      continue;
+    }
+    std::unique_ptr<SourceBlock> new_sb =
+        source_blocks::clone_as_synthetic(template_sb, dispatch, {template_sb});
+    auto it = block->get_first_insn();
+    if (it != block->end() && opcode::is_move_result_any(it->insn->opcode())) {
+      block->insert_after(it, std::move(new_sb));
+    } else {
+      block->insert_before(it, std::move(new_sb));
+    }
+  }
+
+  auto* block = cfg->entry_block();
+  auto source_block = source_blocks::get_first_source_block(block);
+  if (!source_block) {
+    auto new_sb =
+        source_blocks::clone_as_synthetic(template_sb, dispatch, {template_sb});
+    auto it = block->get_first_non_param_loading_insn();
+    block->insert_before(it, std::move(new_sb));
+  }
 }
 
 DexMethod* materialize_dispatch(DexMethod* orig_method,
@@ -185,10 +243,7 @@ DexMethod* materialize_dispatch(DexMethod* orig_method,
         SHOW(dispatch->get_code()));
 
   if (template_sb) {
-    source_blocks::insert_synthetic_source_blocks_in_method(dispatch, [&]() {
-      return source_blocks::clone_as_synthetic(template_sb, dispatch,
-                                               SourceBlock::Val{1, 0});
-    });
+    add_remaining_source_blocks_to_dispatch(dispatch, template_sb);
   }
 
   return dispatch;
@@ -262,7 +317,7 @@ DexMethod* create_simple_switch_dispatch(
 
   // Extra checks if there is no need for the switch statement.
   if (is_single_target_case(spec, indices_to_callee)) {
-    invoke_static(spec, args, ret_loc, orig_method, mb);
+    invoke_static(spec, args, ret_loc, orig_method, mb, mc);
     mb->ret(spec.proto->get_rtype(), ret_loc);
     auto template_sb = get_template_source_block(indices_to_callee);
     return materialize_dispatch(orig_method, mc, template_sb);
@@ -282,8 +337,8 @@ DexMethod* create_simple_switch_dispatch(
     auto callee = indices_to_callee.at(case_it.first);
     always_assert(is_static(callee));
     // check-cast and call
-    emit_check_cast(spec, args, callee, case_block);
-    invoke_static(spec, args, ret_loc, callee, case_block);
+    emit_check_cast(spec, args, callee, case_block, mc);
+    invoke_static(spec, args, ret_loc, callee, case_block, mc);
   }
 
   auto template_sb = get_template_source_block(indices_to_callee);
@@ -343,8 +398,8 @@ dispatch::DispatchMethod create_two_level_switch_dispatch(
       auto case_block = case_it.second;
       always_assert(case_block != nullptr);
       // check-cast and call
-      emit_check_cast(spec, args, sub_dispatch, case_block);
-      invoke_static(spec, args, ret_loc, sub_dispatch, case_block);
+      emit_check_cast(spec, args, sub_dispatch, case_block, mc);
+      invoke_static(spec, args, ret_loc, sub_dispatch, case_block, mc);
 
       sub_dispatches.push_back(sub_dispatch);
       dispatch_index++;
@@ -425,11 +480,7 @@ dispatch::DispatchMethod create_two_level_switch_dispatch(
   }
 
   if (template_sb) {
-    source_blocks::insert_synthetic_source_blocks_in_method(
-        dispatch_meth, [&]() {
-          return source_blocks::clone_as_synthetic(template_sb, dispatch_meth,
-                                                   SourceBlock::Val{1, 0});
-        });
+    add_remaining_source_blocks_to_dispatch(dispatch_meth, template_sb);
   }
 
   TRACE(SDIS, 9, "dispatch: split dispatch %s\n%s", SHOW(dispatch_meth),
@@ -600,7 +651,7 @@ DexMethod* create_ctor_or_static_dispatch(
   // corresponding keys in the map.
   std::vector<Location> args = get_args_from(orig_method, mc);
   if (is_single_target_case(spec, indices_to_callee)) {
-    invoke_static(spec, args, ret_loc, orig_method, mb);
+    invoke_static(spec, args, ret_loc, orig_method, mb, mc);
     mb->ret(spec.proto->get_rtype(), ret_loc);
     auto template_sb = get_template_source_block(indices_to_callee);
     return materialize_dispatch(orig_method, mc, template_sb);
@@ -617,7 +668,7 @@ DexMethod* create_ctor_or_static_dispatch(
     always_assert(case_block != nullptr);
     auto callee = indices_to_callee.at(case_it.first);
     always_assert(is_static(callee));
-    invoke_static(spec, args, ret_loc, callee, case_block);
+    invoke_static(spec, args, ret_loc, callee, case_block, mc);
   }
 
   auto template_sb = get_template_source_block(indices_to_callee);

@@ -9,7 +9,10 @@
 
 #include <cstdint>
 #include <iosfwd>
+#include <optional>
 #include <string>
+
+#include "Debug.h"
 
 class DexField;
 class DexMethod;
@@ -51,7 +54,21 @@ using bit_width_t = uint8_t;
 
 namespace opcode {
 
-Ref ref(IROpcode);
+// clang-format off
+constexpr inline Ref ref(IROpcode opcode) {
+  switch (opcode) {
+#define OP(uc, lc, ref, ...) \
+  case OPCODE_##uc:          \
+    return ref;
+#define IOP(uc, lc, ref, ...) \
+  case IOPCODE_##uc:          \
+    return ref;
+#define OPRANGE(...)
+#include "IROpcodes.def"
+  }
+  not_reached_log("Unexpected opcode 0x%x", opcode);
+}
+// clang-format on
 
 /*
  * 2addr and non-2addr DexOpcode pairs will get mapped to the same IROpcode.
@@ -63,7 +80,7 @@ Ref ref(IROpcode);
  * for the const-wide opcode family.
  * All other DexOpcodes have a 1-1 mapping with an IROpcode.
  */
-IROpcode from_dex_opcode(DexOpcode);
+std::optional<IROpcode> from_dex_opcode(DexOpcode);
 
 /*
  * Only non-internal IROpcodes are valid inputs to this function.
@@ -106,12 +123,14 @@ bool may_throw(IROpcode);
  *   inline bool is_move(IROpcode op);    // OP(MOVE, move, ...)
  *   inline bool is_load_param(IROpcode); // IOP(LOAD_PARAM, load_param, ...)
  */
-#define OPRANGE(NAME, FST, LST) \
-  inline bool is_##NAME(IROpcode op) { return (FST) <= op && op <= (LST); }
+#define OPRANGE(NAME, FST, LST)                  \
+  constexpr inline bool is_##NAME(IROpcode op) { \
+    return (FST) <= op && op <= (LST);           \
+  }
 #define OP(UC, LC, ...) \
-  inline bool is_##LC(IROpcode op) { return op == OPCODE_##UC; }
+  constexpr inline bool is_##LC(IROpcode op) { return op == OPCODE_##UC; }
 #define IOP(UC, LC, ...) \
-  inline bool is_##LC(IROpcode op) { return op == IOPCODE_##UC; }
+  constexpr inline bool is_##LC(IROpcode op) { return op == IOPCODE_##UC; }
 #include "IROpcodes.def"
 
 /**
@@ -120,11 +139,11 @@ bool may_throw(IROpcode);
  */
 inline bool can_throw(IROpcode op) { return may_throw(op) || is_throw(op); }
 
-inline bool writes_result_register(IROpcode op) {
+constexpr inline bool writes_result_register(IROpcode op) {
   return is_an_invoke(op) || is_filled_new_array(op);
 }
 
-inline bool is_branch(IROpcode op) {
+constexpr inline bool is_branch(IROpcode op) {
   switch (op) {
   case OPCODE_SWITCH:
   case OPCODE_IF_EQ:
@@ -146,11 +165,11 @@ inline bool is_branch(IROpcode op) {
   }
 }
 
-inline bool is_div_int_or_long(IROpcode op) {
+constexpr inline bool is_div_int_or_long(IROpcode op) {
   return op == OPCODE_DIV_INT || op == OPCODE_DIV_LONG;
 }
 
-inline bool is_rem_int_or_long(IROpcode op) {
+constexpr inline bool is_rem_int_or_long(IROpcode op) {
   return op == OPCODE_REM_INT || op == OPCODE_REM_LONG;
 }
 

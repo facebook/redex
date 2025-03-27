@@ -368,7 +368,7 @@ TEST_F(BlamingEscapeTest, safeMethods) {
 
   auto* const Bar_v2 = insns[6].insn;
   auto* const Bar_v3 = insns[8].insn;
-  auto* const Bar_v4 = insns[10].insn;
+  [[maybe_unused]] auto* const Bar_v4 = insns[10].insn;
   auto* const Bar_v5 = insns[12].insn;
   auto* const ret = insns[14].insn;
 

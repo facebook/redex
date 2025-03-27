@@ -536,6 +536,7 @@ struct ViolationsHelper {
     kHotImmediateDomNotHot,
     kChainAndDom,
     kUncoveredSourceBlocks,
+    kHotMethodColdEntry,
   };
 
   ViolationsHelper(Violation v,

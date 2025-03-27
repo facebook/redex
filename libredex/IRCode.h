@@ -84,6 +84,10 @@ class IRCode {
 
   explicit IRCode(DexMethod*);
 
+  // Same as constructor above but better for error-handling purposes. New
+  // code should use this method.
+  static std::unique_ptr<IRCode> for_method(DexMethod* method);
+
   explicit IRCode(std::unique_ptr<cfg::ControlFlowGraph>);
 
   /*

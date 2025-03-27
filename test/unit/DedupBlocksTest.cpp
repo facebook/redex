@@ -54,7 +54,6 @@ struct DedupBlocksTest : public RedexTest {
     walk::code(std::vector<DexClass*>{m_class},
                [&](DexMethod* method, IRCode& code) {
                  code.build_cfg();
-                 auto& cfg = code.cfg();
                  dedup_blocks_impl::Config config;
                  dedup_blocks_impl::DedupBlocks impl(&config, method);
                  impl.run();
@@ -66,7 +65,6 @@ struct DedupBlocksTest : public RedexTest {
                                        uint32_t max_iteration) {
     method->get_code()->build_cfg();
 
-    auto& cfg = method->get_code()->cfg();
     dedup_blocks_impl::Config config;
     config.max_iteration = max_iteration;
     dedup_blocks_impl::DedupBlocks impl(&config, method);

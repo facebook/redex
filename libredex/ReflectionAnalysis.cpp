@@ -1167,7 +1167,6 @@ ReflectionSites ReflectionAnalysis::get_reflection_sites() const {
   }
   always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
-  auto reg_size = cfg.get_registers_size();
   for (auto& mie : InstructionIterable(cfg)) {
     IRInstruction* insn = mie.insn;
     std::map<reg_t, ReflectionAbstractObject> abstract_objects;

@@ -16,13 +16,18 @@
 #include "MethodOverrideGraph.h"
 #include "TypeUtil.h"
 
+namespace cfg {
+class ControlFlowGraph;
+} // namespace cfg
+
 // All references occurring in some method.
 struct CodeRefs {
   std::vector<const DexType*> types;
   std::vector<const DexMethod*> methods;
   std::vector<const DexField*> fields;
   bool invalid_refs{false};
-  explicit CodeRefs(const DexMethod* method);
+  explicit CodeRefs(const DexMethod* method,
+                    const cfg::ControlFlowGraph* reduced_cfg = nullptr);
 };
 
 // Helper class that checks if it's safe to use a type/method/field in

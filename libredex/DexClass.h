@@ -428,7 +428,8 @@ class DexField : public DexFieldRef {
   std::unique_ptr<DexAnnotationSet> release_annotations();
   void clear_annotations();
 
-  void attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset);
+  [[nodiscard]] bool attach_annotation_set(
+      std::unique_ptr<DexAnnotationSet> aset);
 
   template <typename C>
   void gather_types(C& ltype) const;
@@ -1068,7 +1069,8 @@ class DexMethod : public DexMethodRef {
   void combine_annotations_with(DexMethod* other);
 
   void add_load_params(size_t num_add_loads);
-  void attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset);
+  [[nodiscard]] bool attach_annotation_set(
+      std::unique_ptr<DexAnnotationSet> aset);
   void attach_param_annotation_set(int paramno,
                                    std::unique_ptr<DexAnnotationSet> aset);
 
@@ -1173,7 +1175,12 @@ class DexClass {
   friend struct ClassCreator;
 
   // This constructor is private on purpose, use DexClass::create instead
-  DexClass(DexIdx* idx, const dex_class_def* cdef, const DexLocation* location);
+  DexClass(DexType* super_type,
+           DexType* self_type,
+           DexTypeList* interfaces,
+           const DexString* source_file,
+           const DexLocation* location,
+           DexAccessFlags access_flags);
 
   std::string self_show() const; // To avoid "Show.h" in the header.
 
@@ -1271,7 +1278,8 @@ class DexClass {
   std::unique_ptr<DexEncodedValueArray> get_static_values();
   const DexAnnotationSet* get_anno_set() const { return m_anno.get(); }
   DexAnnotationSet* get_anno_set() { return m_anno.get(); }
-  void attach_annotation_set(std::unique_ptr<DexAnnotationSet> anno);
+  [[nodiscard]] bool attach_annotation_set(
+      std::unique_ptr<DexAnnotationSet> anno);
   void set_source_file(const DexString* source_file) {
     m_source_file = source_file;
   }

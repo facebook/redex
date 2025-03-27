@@ -8,6 +8,7 @@
 #include "ShrinkerPass.h"
 
 #include "ConfigFiles.h"
+#include "ConstantPropagationAnalysis.h"
 #include "PassManager.h"
 #include "ScopedMetrics.h"
 #include "Shrinker.h"
@@ -28,6 +29,8 @@ void ShrinkerPass::bind_config() {
        "Whether to run fast register allocation.");
   bind("run_dedup_blocks", true, m_config.run_dedup_blocks,
        "Whether to run dedup-blocks.");
+  bind("run_branch_prefix_hoisting", true, m_config.run_branch_prefix_hoisting,
+       "Whether to run branch-prefix hoisting.");
 
   bind("compute_pure_methods", true, m_config.compute_pure_methods,
        "Whether to compute pure methods with a relatively expensive analysis "
@@ -41,6 +44,13 @@ void ShrinkerPass::bind_config() {
        "relevant when using constant-propagaation)");
 }
 
+void ShrinkerPass::eval_pass(DexStoresVector& stores,
+                             ConfigFiles& conf,
+                             PassManager&) {
+  auto string_analyzer_state = constant_propagation::StringAnalyzerState::get();
+  string_analyzer_state.set_methods_as_root();
+}
+
 void ShrinkerPass::run_pass(DexStoresVector& stores,
                             ConfigFiles& conf,
                             PassManager& mgr) {
@@ -51,7 +61,8 @@ void ShrinkerPass::run_pass(DexStoresVector& stores,
   int min_sdk = mgr.get_redex_options().min_sdk;
   shrinker::Shrinker shrinker(stores, scope, init_classes_with_side_effects,
                               m_config, min_sdk, conf.get_pure_methods(),
-                              conf.get_finalish_field_names());
+                              conf.get_finalish_field_names(), {},
+                              mgr.get_redex_options().package_name);
 
   walk::parallel::code(scope, [&](DexMethod* method, IRCode&) {
     if (!method->rstate.no_optimizations()) {
@@ -87,6 +98,8 @@ void ShrinkerPass::run_pass(DexStoresVector& stores,
                   shrinker.get_dedup_blocks_stats().insns_removed);
   mgr.incr_metric("blocks_eliminated_by_dedup_blocks",
                   shrinker.get_dedup_blocks_stats().blocks_removed);
+  mgr.incr_metric("instructions_eliminated_branch_prefix_hoisting",
+                  shrinker.get_branch_prefix_hoisting_stats());
   mgr.incr_metric("methods_reg_alloced", shrinker.get_methods_reg_alloced());
   mgr.incr_metric("localdce_init_class_instructions_added",
                   shrinker.get_local_dce_stats().init_class_instructions_added);
@@ -110,6 +123,8 @@ void ShrinkerPass::run_pass(DexStoresVector& stores,
                    shrinker.get_local_dce_seconds());
   Timer::add_timer("Shrinker.Shrinking.DedupBlocks",
                    shrinker.get_dedup_blocks_seconds());
+  Timer::add_timer("Shrinker.Shrinking.BranchPrefixHoisting",
+                   shrinker.get_branch_prefix_hoisting_seconds());
   Timer::add_timer("Shrinker.Shrinking.RegAlloc",
                    shrinker.get_reg_alloc_seconds());
 }

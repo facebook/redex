@@ -31,6 +31,10 @@ class SwitchEquivFinder {
       constant_propagation::ConstantClassObjectAnalyzer,
       constant_propagation::PrimitiveAnalyzer>;
 
+  using DefUseBlocks =
+      std::unordered_map<IRInstruction*, std::unordered_set<cfg::Block*>>;
+  static DefUseBlocks GetDefUseBlocks(cfg::ControlFlowGraph& cfg);
+
   static constexpr uint32_t NO_LEAF_DUPLICATION = 0;
 
   // Token to denote the default case/last else block.
@@ -73,7 +77,8 @@ class SwitchEquivFinder {
       uint32_t leaf_duplication_threshold = NO_LEAF_DUPLICATION,
       std::shared_ptr<constant_propagation::intraprocedural::FixpointIterator>
           fixpoint_iterator = {},
-      DuplicateCaseStrategy duplicates_strategy = NOT_ALLOWED);
+      DuplicateCaseStrategy duplicates_strategy = NOT_ALLOWED,
+      std::shared_ptr<DefUseBlocks> def_use_blocks = {});
 
   SwitchEquivFinder() = delete;
   SwitchEquivFinder(const SwitchEquivFinder&) = delete;
@@ -84,6 +89,7 @@ class SwitchEquivFinder {
   bool success() const { return m_success; }
   const KeyToCase& key_to_case() const { return m_key_to_case; }
   const ExtraLoads& extra_loads() const { return m_extra_loads; }
+  bool duplicate_case_keys() const { return m_duplicate_case_keys; }
   // Returns if the keys in the cases are only of the specific kind or default
   // case. A method with only the default case will not be considered to be
   // uniform for other types (that is ambiguous).
@@ -125,6 +131,7 @@ class SwitchEquivFinder {
       const std::vector<std::pair<cfg::Edge*, cfg::Block*>>& edges_to_move);
   void find_case_keys(const std::vector<cfg::Edge*>& leaves);
   constant_propagation::intraprocedural::FixpointIterator& get_analyzed_cfg();
+  DefUseBlocks& get_def_use_blocks();
 
   cfg::ControlFlowGraph* m_cfg;
   // The top-most branch instruction of the tree
@@ -140,7 +147,7 @@ class SwitchEquivFinder {
   // between a switch statment and its case blocks (where there is for an
   // if-else chain).
   //
-  // The SwitchEquivFinder could represent this situation as aswitch if case
+  // The SwitchEquivFinder could represent this situation as a switch if case
   // blocks like this are duplicated. Each different program state is directed
   // to a different copy of the block. This way, each block has a separate set
   // of extra_loads. If a block has fewer than `m_leaf_duplication_threshold`
@@ -157,6 +164,9 @@ class SwitchEquivFinder {
   // block that would be encountered at runtime, if all later duplicates have no
   // extra loads.
   DuplicateCaseStrategy m_duplicates_strategy;
+  // Def-use-blocks for the given cfg; will be lazily constructed if not passed
+  // from above.
+  std::shared_ptr<DefUseBlocks> m_def_use_blocks;
   // If a switch equivalent cannot be found starting from `m_root_branch` this
   // flag will be false, otherwise true.
   bool m_success{false};
@@ -176,6 +186,8 @@ class SwitchEquivFinder {
   // This stores the blocks visited and how many times in building m_key_to_case
   // Note that this does not include the root branch.
   std::unordered_map<cfg::Block*, uint16_t> m_visit_count;
+
+  bool m_duplicate_case_keys{false};
 };
 
 std::ostream& operator<<(std::ostream& os,

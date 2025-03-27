@@ -17,6 +17,7 @@
 #include "CanonicalizeLocks.h"
 #include "ConstantUses.h"
 #include "ControlFlow.h"
+#include "Debug.h"
 #include "DexOpcode.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
@@ -585,7 +586,8 @@ Stats CopyPropagation::run(IRCode* code,
         if (needs_range_conversion(insn)) {
           range_set.emplace(insn);
         }
-        insn->normalize_registers();
+        auto norm_res = insn->normalize_registers();
+        redex_assert(norm_res);
       }
     }
   }

@@ -41,7 +41,8 @@ class Shrinker {
       const std::unordered_set<const DexString*>&
           configured_finalish_field_names = {},
       const std::unordered_set<const DexField*>& configured_finalish_fields =
-          {});
+          {},
+      const boost::optional<std::string>& package_name = boost::none);
 
   constant_propagation::Transform::Stats constant_propagation(
       bool is_static,
@@ -82,6 +83,9 @@ class Shrinker {
   const dedup_blocks_impl::Stats& get_dedup_blocks_stats() const {
     return m_dedup_blocks_stats;
   }
+  size_t get_branch_prefix_hoisting_stats() const {
+    return m_branch_prefix_hoisting_stats;
+  }
   size_t get_methods_shrunk() const { return m_methods_shrunk; }
   size_t get_methods_reg_alloced() const { return m_methods_reg_alloced; }
 
@@ -103,6 +107,9 @@ class Shrinker {
   }
   double get_local_dce_seconds() const {
     return m_local_dce_timer.get_seconds();
+  }
+  double get_branch_prefix_hoisting_seconds() const {
+    return m_branch_prefix_hoisting_timer.get_seconds();
   }
   double get_dedup_blocks_seconds() const {
     return m_dedup_blocks_timer.get_seconds();
@@ -127,6 +134,13 @@ class Shrinker {
   constant_propagation::ImmutableAttributeAnalyzerState*
   get_immut_analyzer_state() {
     return &m_immut_analyzer_state;
+  }
+  constant_propagation::StringAnalyzerState* get_string_analyzer_state() {
+    return &m_string_analyzer_state;
+  }
+
+  constant_propagation::PackageNameState* get_package_name_state() {
+    return &m_package_name_state;
   }
 
   const constant_propagation::State& get_cp_state() const { return m_cp_state; }
@@ -155,6 +169,8 @@ class Shrinker {
   std::unordered_set<const DexField*> m_finalish_fields;
 
   constant_propagation::ImmutableAttributeAnalyzerState m_immut_analyzer_state;
+  constant_propagation::StringAnalyzerState m_string_analyzer_state;
+  constant_propagation::PackageNameState m_package_name_state;
   constant_propagation::State m_cp_state;
 
   // THe mutex protects all other mutable (stats) fields.
@@ -167,6 +183,8 @@ class Shrinker {
   copy_propagation_impl::Stats m_copy_prop_stats;
   AccumulatingTimer m_local_dce_timer;
   LocalDce::Stats m_local_dce_stats;
+  AccumulatingTimer m_branch_prefix_hoisting_timer;
+  size_t m_branch_prefix_hoisting_stats{0};
   AccumulatingTimer m_dedup_blocks_timer;
   dedup_blocks_impl::Stats m_dedup_blocks_stats;
   AccumulatingTimer m_reg_alloc_timer;

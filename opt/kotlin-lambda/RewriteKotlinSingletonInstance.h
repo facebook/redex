@@ -12,27 +12,6 @@
 #include "KotlinInstanceRewriter.h"
 #include "Pass.h"
 
-// This pass Removes INSTANCE usage in Kotlin singletons with INSTANCE.
-// Instance setup in <clinit>
-// <clinit>:()V
-// new-instance v0, LKDexbolt$main$1;
-// invoke-direct {v0}, LKDexbolt$main$1;.<init>:()V
-// sput-object v0, LKDexbolt$main$1;.INSTANCE:LKDexbolt$main$1;
-// return-void
-//
-// And the INSTANCE reuse will be:
-// sget-object v3, LKDexbolt$main$1;.INSTANCE:LKDexbolt$main$1;
-// check-cast v3, Lkotlin/jvm/functions/Function2;
-// invoke-virtual {v2, v3},
-// LKDexbolt;.doCalc:(Lkotlin/jvm/functions/Function2;)J
-//
-// https://fburl.com/dexbolt/43t27was
-//
-// This pass removes the INSTANCE use so that Redex optimisations can optimize
-// them better.
-// Here the object stored in INSTANCE is not semantically relevant and can be
-// moved.
-//
 class RewriteKotlinSingletonInstance : public Pass {
 
  public:
@@ -46,6 +25,33 @@ class RewriteKotlinSingletonInstance : public Pass {
     return {
         {NoResolvablePureRefs, Preserves},
     };
+  }
+
+  std::string get_config_doc() override {
+    return trim(R"(
+This pass removes `INSTANCE` usage in Kotlin singletons with `INSTANCE`.
+Instance setup in `<clinit>`
+```
+<clinit>:()V
+new-instance v0, LKDexbolt$main$1;
+invoke-direct {v0}, LKDexbolt$main$1;.<init>:()V
+sput-object v0, LKDexbolt$main$1;.INSTANCE:LKDexbolt$main$1;
+return-void
+```
+And the `INSTANCE` reuse will be:
+```
+sget-object v3, LKDexbolt$main$1;.INSTANCE:LKDexbolt$main$1;
+check-cast v3, Lkotlin/jvm/functions/Function2;
+invoke-virtual {v2, v3},
+LKDexbolt;.doCalc:(Lkotlin/jvm/functions/Function2;)J
+```
+[Dexbolt example](https://fburl.com/dexbolt/43t27was)
+
+This pass removes the `INSTANCE` use so that Redex optimisations can optimize
+them better.
+Here the object stored in `INSTANCE` is not semantically relevant and can be
+moved.
+    )");
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

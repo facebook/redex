@@ -1,0 +1,73 @@
+name: facebook/redex/build_and_test
+on:
+  workflow_call
+env:
+  CACHE_VERSION: xxxxx1
+jobs:
+  build-20_04:
+    runs-on: 4-core-ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v4.1.1
+    - uses: "./.github/actions/prepare_debian"
+    - uses: ./.github/actions/setup-build-and-test-w-make
+      with:
+        save_boost_cache: false
+        mode_32: false
+        job_name: ubuntu_20.04
+  build-22_04:
+    runs-on: 4-core-ubuntu
+    steps:
+    - uses: actions/checkout@v4.1.1
+    - uses: "./.github/actions/prepare_debian"
+    - uses: ./.github/actions/setup-build-and-test-w-make
+      with:
+        save_boost_cache: false
+        mode_32: false
+        job_name: ubuntu_22.04
+
+  # No supported Github runners:
+  # * debian 10
+  # * debian 12
+  # * debian unstable
+# `mode_32` failed on boost lib
+#  build-deb_stable-32:
+#    runs-on: 4-core-ubuntu
+#    steps:
+#    - uses: actions/checkout@v4.1.1
+#    - uses: "./.github/actions/build_debian"
+#      with:
+#        mode_32: true
+#        job_name: debian_12_32
+#
+# For new-style config we'd need:
+#   setup_toolchain_extra: '32'
+#   configure_extra: "--host=i686-linux-gnu CFLAGS=-m32 CXXFLAGS=-m32 LDFLAGS=-m32"
+#
+#
+  build-deb_stable-w-clang-llvm-org:
+    runs-on: 4-core-ubuntu
+    env:
+      CC: clang
+      CXX: clang++
+    strategy:
+      matrix:
+        clang_version:
+        - 0  # At time of edit 18.
+        - 17
+        - 19
+    steps:
+    - uses: actions/checkout@v4.1.1
+    - uses: "./.github/actions/prepare_debian"
+      with:
+        install_clang_llvm_org: "${{ matrix.clang_version }}"
+    - uses: ./.github/actions/setup-build-and-test-w-make
+      with:
+        save_boost_cache: false
+        mode_32: false
+        job_name: "ubuntu_22_clang_upstream-${{ matrix.clang_version }}"
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4.1.1
+    - uses: "./.github/actions/setup-build-and-test-windows"

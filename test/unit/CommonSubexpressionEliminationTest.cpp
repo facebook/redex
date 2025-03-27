@@ -37,21 +37,24 @@ void test(
     DexType* declaring_type = nullptr,
     DexTypeList* args = DexTypeList::make_type_list({}),
     const std::unordered_set<const DexString*>& finalish_field_names = {}) {
-  auto field_a = DexField::make_field("LFoo;.a:I")->make_concrete(ACC_PUBLIC);
+  [[maybe_unused]] auto field_a =
+      DexField::make_field("LFoo;.a:I")->make_concrete(ACC_PUBLIC);
 
-  auto field_b = DexField::make_field("LFoo;.b:I")->make_concrete(ACC_PUBLIC);
+  [[maybe_unused]] auto field_b =
+      DexField::make_field("LFoo;.b:I")->make_concrete(ACC_PUBLIC);
 
-  auto field_s =
+  [[maybe_unused]] auto field_s =
       DexField::make_field("LFoo;.s:I")->make_concrete(ACC_PUBLIC | ACC_STATIC);
 
-  auto field_t =
+  [[maybe_unused]] auto field_t =
       DexField::make_field("LFoo;.t:I")->make_concrete(ACC_PUBLIC | ACC_STATIC);
 
-  auto field_u =
+  [[maybe_unused]] auto field_u =
       DexField::make_field("LFoo;.u:I")->make_concrete(ACC_PUBLIC | ACC_STATIC);
 
-  auto field_v = DexField::make_field("LFoo;.v:I")
-                     ->make_concrete(ACC_PUBLIC | ACC_VOLATILE);
+  [[maybe_unused]] auto field_v =
+      DexField::make_field("LFoo;.v:I")
+          ->make_concrete(ACC_PUBLIC | ACC_VOLATILE);
 
   auto code = assembler::ircode_from_string(code_str);
   auto expected = assembler::ircode_from_string(expected_str);
@@ -1573,7 +1576,8 @@ TEST_F(CommonSubexpressionEliminationTest, conditionally_pure_methods) {
   ClassCreator o_creator(DexType::make_type("LO;"));
   o_creator.set_super(type::java_lang_Object());
 
-  auto field_x = DexField::make_field("LO;.x:I")->make_concrete(ACC_PRIVATE);
+  [[maybe_unused]] auto field_x =
+      DexField::make_field("LO;.x:I")->make_concrete(ACC_PRIVATE);
 
   auto get_method = DexMethod::make_method("LO;.getX:()I")
                         ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
@@ -1619,7 +1623,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator o_creator(DexType::make_type("LO;"));
   o_creator.set_super(type::java_lang_Object());
 
-  auto field_x = DexField::make_field("LO;.x:I")->make_concrete(ACC_PRIVATE);
+  [[maybe_unused]] auto field_x =
+      DexField::make_field("LO;.x:I")->make_concrete(ACC_PRIVATE);
 
   auto get_method = DexMethod::make_method("LO;.getX:()I")
                         ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
@@ -1672,7 +1677,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator base_creator(DexType::make_type("LBase;"));
   base_creator.set_super(type::java_lang_Object());
 
-  auto field_x = DexField::make_field("LBase;.x:I")->make_concrete(ACC_PRIVATE);
+  [[maybe_unused]] auto field_x =
+      DexField::make_field("LBase;.x:I")->make_concrete(ACC_PRIVATE);
 
   auto get_method = DexMethod::make_method("LBase;.getX:()I")
                         ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
@@ -2180,7 +2186,8 @@ TEST_F(CommonSubexpressionEliminationTest, finalizable) {
   o_creator.set_super(type::java_lang_Object());
 
   // CSE will infer that x is finalizable
-  auto field_x = DexField::make_field("LO;.x:I")->make_concrete(ACC_PRIVATE);
+  [[maybe_unused]] auto field_x =
+      DexField::make_field("LO;.x:I")->make_concrete(ACC_PRIVATE);
 
   auto init_method =
       DexMethod::make_method("LO;.<init>:()V")

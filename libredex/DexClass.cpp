@@ -292,16 +292,15 @@ void DexField::set_value(std::unique_ptr<DexEncodedValue> v) {
 
 void DexField::clear_annotations() { m_anno.reset(); }
 
-void DexField::attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset) {
-  always_assert_type_log(!m_concrete || is_synthetic(get_access()),
-                         RedexError::BAD_ANNOTATION,
-                         "field %s.%s is concrete\n",
-                         m_spec.cls->get_name()->c_str(), m_spec.name->c_str());
-  always_assert_type_log(!m_anno, RedexError::BAD_ANNOTATION,
-                         "field %s.%s annotation exists\n",
-                         m_spec.cls->get_name()->c_str(), m_spec.name->c_str());
-
+bool DexField::attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset) {
+  if (m_concrete && !is_synthetic(get_access())) {
+    return false;
+  }
+  if (m_anno != nullptr) {
+    return false;
+  }
   m_anno = std::move(aset);
+  return true;
 }
 
 std::unique_ptr<DexAnnotationSet> DexField::release_annotations() {
@@ -357,7 +356,7 @@ void DexDebugEntry::gather_types(std::vector<DexType*>& ltype) const {
 static std::vector<DexDebugEntry> eval_debug_instructions(
     DexDebugItem* dbg,
     DexIdx* idx,
-    const uint8_t** encdata_ptr,
+    std::string_view& encdata_ptr,
     uint32_t absolute_line) {
   std::vector<DexDebugEntry> entries;
   // Likely overallocate and then shrink down in an effort to avoid the
@@ -366,6 +365,7 @@ static std::vector<DexDebugEntry> eval_debug_instructions(
   entries.reserve(kReserveSize);
 
   uint32_t pc = 0;
+
   while (true) {
     std::unique_ptr<DexDebugInstruction> opcode(
         DexDebugInstruction::make_instruction(idx, encdata_ptr));
@@ -411,12 +411,13 @@ static std::vector<DexDebugEntry> eval_debug_instructions(
 
 DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset)
     : m_source_checksum(idx->get_checksum()), m_source_offset(offset) {
-  const uint8_t* encdata = idx->get_uleb_data(offset);
-  const uint8_t* base_encdata = encdata;
-  always_assert(encdata < idx->end());
-  uint32_t line_start = read_uleb128(&encdata);
-  always_assert(encdata < idx->end());
-  uint32_t paramcount = read_uleb128(&encdata);
+  const uint8_t* encdata_ptr = idx->get_uleb_data(offset);
+  always_assert_type_log(encdata_ptr < idx->end(), INVALID_DEX, "Dex overflow");
+  std::string_view encdata{(const char*)encdata_ptr,
+                           (size_t)(idx->end() - encdata_ptr)};
+  const auto orig_size = encdata.size();
+  uint32_t line_start = read_uleb128_checked<redex::DexAssert>(encdata);
+  uint32_t paramcount = read_uleb128_checked<redex::DexAssert>(encdata);
   while (paramcount--) {
     // We intentionally drop the parameter string name here because we don't
     // have a convenient representation of it, and our internal tooling doesn't
@@ -424,8 +425,8 @@ DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset)
     // We emit matching number of nulls as method arguments at the end.
     decode_noindexable_string(idx, encdata);
   }
-  m_dbg_entries = eval_debug_instructions(this, idx, &encdata, line_start);
-  m_on_disk_size = encdata - base_encdata;
+  m_dbg_entries = eval_debug_instructions(this, idx, encdata, line_start);
+  m_on_disk_size = orig_size - encdata.size();
 }
 
 uint32_t DexDebugItem::get_line_start() const {
@@ -626,6 +627,9 @@ DexCode::~DexCode() {
 
 std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
   if (offset == 0) return std::unique_ptr<DexCode>();
+  always_assert_type_log(offset <= idx->get_file_size() - sizeof(dex_code_item),
+                         INVALID_DEX, "Dex overflow");
+  always_assert_type_log(offset % 4 == 0, INVALID_DEX, "Alignment violation");
   const dex_code_item* code = idx->get_data<dex_code_item>(offset);
   std::unique_ptr<DexCode> dc(new DexCode());
   dc->m_registers_size = code->registers_size;
@@ -635,15 +639,22 @@ std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
   const uint16_t* cdata = (const uint16_t*)(code + 1);
   uint32_t tries = code->tries_size;
   if (code->insns_size) {
+    always_assert_type_log(
+        code->insns_size * sizeof(uint16_t) <=
+            idx->get_file_size() - offset - sizeof(dex_code_item),
+        INVALID_DEX, "Dex overflow");
+    // The spec does not restrict this, but this improves things like fuzzing.
+    always_assert_type_log(code->insns_size <= 1000000, INVALID_DEX,
+                           "Too many instructions");
+
     // On average there seem to be about two code units per instruction
     dc->m_insns->reserve(code->insns_size / 2);
     const uint16_t* end = cdata + code->insns_size;
-    always_assert(cdata <= end);
-    always_assert((uint8_t*)(end) <= idx->end());
+
     while (cdata < end) {
       DexInstruction* dop = DexInstruction::make_instruction(idx, &cdata, end);
-      always_assert_log(dop != nullptr,
-                        "Failed to parse method at offset 0x%08x", offset);
+      always_assert_type_log(dop != nullptr, INVALID_DEX,
+                             "Failed to parse method at offset 0x%08x", offset);
       dc->m_insns->push_back(dop);
     }
     /*
@@ -657,30 +668,33 @@ std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
 
   if (tries) {
     const dex_tries_item* dti = (const dex_tries_item*)cdata;
-    always_assert(dti <= dti + tries);
-    always_assert((uint8_t*)(dti + tries) <= idx->end());
+    always_assert_type_log(dti <= dti + tries, INVALID_DEX, "Dex overflow");
+    always_assert_type_log((uint8_t*)(dti + tries) <= idx->end(), INVALID_DEX,
+                           "Dex overflow");
     const uint8_t* handlers = (const uint8_t*)(dti + tries);
     for (uint32_t i = 0; i < tries; i++) {
       DexTryItem* dextry = new DexTryItem(dti[i].start_addr, dti[i].insn_count);
-      const uint8_t* handler = handlers + dti[i].handler_off;
-      always_assert(handler < idx->end());
-      int32_t count = read_sleb128(&handler);
+      auto handler = [&]() {
+        auto offset = dti[i].handler_off;
+        always_assert_type_log(handlers + offset < idx->end(), INVALID_DEX,
+                               "Dex overflow");
+        return std::string_view((const char*)handlers + offset,
+                                idx->end() - handlers - offset);
+      }();
+      int32_t count = read_sleb128_checked<redex::DexAssert>(handler);
       bool has_catchall = false;
       if (count <= 0) {
         count = -count;
         has_catchall = true;
       }
       while (count--) {
-        always_assert(handler < idx->end());
-        uint32_t tidx = read_uleb128(&handler);
-        always_assert(handler < idx->end());
-        uint32_t hoff = read_uleb128(&handler);
-        DexType* dt = idx->get_typeidx(tidx);
+        uint32_t tidx = read_uleb128_checked<redex::DexAssert>(handler);
+        uint32_t hoff = read_uleb128_checked<redex::DexAssert>(handler);
+        DexType* dt = idx->get_nullable_typeidx(tidx);
         dextry->m_catches.push_back(std::make_pair(dt, hoff));
       }
       if (has_catchall) {
-        always_assert(handler < idx->end());
-        auto hoff = read_uleb128(&handler);
+        auto hoff = read_uleb128_checked<redex::DexAssert>(handler);
         dextry->m_catches.push_back(std::make_pair(nullptr, hoff));
       }
       dc->m_tries.emplace_back(dextry);
@@ -780,7 +794,7 @@ void DexMethod::set_code(std::unique_ptr<IRCode> code) {
 
 void DexMethod::balloon() {
   redex_assert(m_code == nullptr);
-  m_code = std::make_unique<IRCode>(this);
+  m_code = IRCode::for_method(this);
   m_dex_code.reset();
 }
 
@@ -945,13 +959,15 @@ std::unique_ptr<ParamAnnotations> DexMethod::release_param_anno() {
   return std::move(m_param_anno);
 }
 
-void DexMethod::attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset) {
-  always_assert_type_log((!m_concrete) || is_synthetic(get_access()),
-                         RedexError::BAD_ANNOTATION, "method %s is concrete\n",
-                         self_show().c_str());
-  always_assert_type_log(!m_anno, RedexError::BAD_ANNOTATION,
-                         "method %s annotation exists\n", self_show().c_str());
+bool DexMethod::attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset) {
+  if (m_concrete && !is_synthetic(get_access())) {
+    return false;
+  }
+  if (m_anno != nullptr) {
+    return false;
+  }
   m_anno = std::move(aset);
+  return true;
 }
 void DexMethod::attach_param_annotation_set(
     int paramno, std::unique_ptr<DexAnnotationSet> aset) {
@@ -1174,6 +1190,8 @@ void DexClass::load_class_data_item(
     ndex += read_uleb128(&encd);
     always_assert(encd < idx->end());
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
+    always_assert_type_log(is_static(access_flags), INVALID_DEX,
+                           "Static field not marked static");
     DexField* df = static_cast<DexField*>(idx->get_fieldidx(ndex));
     std::unique_ptr<DexEncodedValue> ev = nullptr;
     if (it != used.end()) {
@@ -1191,6 +1209,8 @@ void DexClass::load_class_data_item(
     ndex += read_uleb128(&encd);
     always_assert(encd < idx->end());
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
+    always_assert_type_log(!is_static(access_flags), INVALID_DEX,
+                           "Non-Static field marked static");
     DexField* df = static_cast<DexField*>(idx->get_fieldidx(ndex));
     df->make_concrete(access_flags);
     m_ifields.push_back(df);
@@ -1418,27 +1438,37 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
   m_anno =
       DexAnnotationSet::get_annotation_set(idx, annodir->class_annotations_off);
   const uint32_t* annodata = (uint32_t*)(annodir + 1);
-  always_assert(annodata <= annodata + annodir->fields_size * 2);
-  always_assert((uint8_t*)(annodata + annodir->fields_size * 2) <= idx->end());
+  always_assert_type_log(annodata <= annodata + annodir->fields_size * 2,
+                         INVALID_DEX, "Dex overflow");
+  always_assert_type_log((uint8_t*)(annodata + annodir->fields_size * 2) <=
+                             idx->end(),
+                         INVALID_DEX, "Dex overflow");
   for (uint32_t i = 0; i < annodir->fields_size; i++) {
     uint32_t fidx = *annodata++;
     uint32_t off = *annodata++;
     DexField* field = static_cast<DexField*>(idx->get_fieldidx(fidx));
     auto aset = DexAnnotationSet::get_annotation_set(idx, off);
-    field->attach_annotation_set(std::move(aset));
+    auto res = field->attach_annotation_set(std::move(aset));
+    always_assert_type_log(res, INVALID_DEX, "Failed to attach annotation set");
   }
-  always_assert(annodata <= annodata + annodir->methods_size * 2);
-  always_assert((uint8_t*)(annodata + annodir->methods_size * 2) <= idx->end());
+  always_assert_type_log(annodata <= annodata + annodir->methods_size * 2,
+                         INVALID_DEX, "Dex overflow");
+  always_assert_type_log((uint8_t*)(annodata + annodir->methods_size * 2) <=
+                             idx->end(),
+                         INVALID_DEX, "Dex overflow");
   for (uint32_t i = 0; i < annodir->methods_size; i++) {
     uint32_t midx = *annodata++;
     uint32_t off = *annodata++;
     DexMethod* method = static_cast<DexMethod*>(idx->get_methodidx(midx));
     auto aset = DexAnnotationSet::get_annotation_set(idx, off);
-    method->attach_annotation_set(std::move(aset));
+    auto res = method->attach_annotation_set(std::move(aset));
+    always_assert_type_log(res, INVALID_DEX, "Failed to attach method set");
   }
-  always_assert(annodata <= annodata + annodir->parameters_size * 2);
-  always_assert((uint8_t*)(annodata + annodir->parameters_size * 2) <=
-                idx->end());
+  always_assert_type_log(annodata <= annodata + annodir->parameters_size * 2,
+                         INVALID_DEX, "Dex overflow");
+  always_assert_type_log((uint8_t*)(annodata + annodir->parameters_size * 2) <=
+                             idx->end(),
+                         INVALID_DEX, "Dex overflow");
   for (uint32_t i = 0; i < annodir->parameters_size; i++) {
     uint32_t midx = *annodata++;
     uint32_t xrefoff = *annodata++;
@@ -1446,8 +1476,10 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
       DexMethod* method = static_cast<DexMethod*>(idx->get_methodidx(midx));
       const uint32_t* annoxref = idx->get_uint_data(xrefoff);
       uint32_t count = *annoxref++;
-      always_assert(annoxref <= annoxref + count);
-      always_assert((uint8_t*)(annoxref + count) <= idx->end());
+      always_assert_type_log(annoxref <= annoxref + count, INVALID_DEX,
+                             "Dex overflow");
+      always_assert_type_log((uint8_t*)(annoxref + count) <= idx->end(),
+                             INVALID_DEX, "Dex overflow");
       for (uint32_t j = 0; j < count; j++) {
         uint32_t off = annoxref[j];
         auto aset = DexAnnotationSet::get_annotation_set(idx, off);
@@ -1474,8 +1506,9 @@ void DexClass::combine_annotations_with(DexClass* other) {
   combine_annotations_with(other->get_anno_set());
 }
 
-void DexClass::attach_annotation_set(std::unique_ptr<DexAnnotationSet> anno) {
+bool DexClass::attach_annotation_set(std::unique_ptr<DexAnnotationSet> anno) {
   m_anno = std::move(anno);
+  return true;
 }
 
 void DexClass::clear_annotations() { m_anno.reset(); }
@@ -1569,20 +1602,52 @@ DexAnnotationDirectory* DexClass::get_annotation_directory() {
 DexClass* DexClass::create(DexIdx* idx,
                            const dex_class_def* cdef,
                            const DexLocation* location) {
-  DexClass* cls = new DexClass(idx, cdef, location);
-  if (g_redex->class_already_loaded(cls)) {
+  auto cls = [&]() {
+    auto check_type = [](DexType* type) {
+      always_assert_type_log(type != nullptr, INVALID_DEX, "no type");
+      always_assert_type_log(type::is_object(type), INVALID_DEX,
+                             "Not a reference type: %s", SHOW(type));
+      always_assert_type_log(!type::is_array(type), INVALID_DEX,
+                             "Must not be array type: %s", SHOW(type));
+    };
+
+    auto self_type = idx->get_typeidx(cdef->typeidx);
+    check_type(self_type);
+
+    auto super_type = idx->get_nullable_typeidx(cdef->super_idx);
+    if (super_type == nullptr) {
+      always_assert_type_log(self_type == type::java_lang_Object(), INVALID_DEX,
+                             "Only Object has super=null");
+    } else {
+      check_type(super_type);
+    }
+
+    auto interfaces = idx->get_type_list(cdef->interfaces_off);
+    if (interfaces != nullptr) {
+      for (auto* intf : *interfaces) {
+        check_type(intf);
+      }
+    }
+    auto source_file = idx->get_nullable_stringidx(cdef->source_file_idx);
+    // TODO: Check access_flags.
+    auto access_flags = (DexAccessFlags)cdef->access_flags;
+
+    return std::unique_ptr<DexClass>{new DexClass(super_type, self_type,
+                                                  interfaces, source_file,
+                                                  location, access_flags)};
+  }();
+  if (g_redex->class_already_loaded(cls.get())) {
     // FIXME: This isn't deterministic. We're keeping whichever class we loaded
     // first, which may not always be from the same dex (if we load them in
     // parallel, for example).
-    delete cls;
     return nullptr;
   }
   cls->load_class_annotations(idx, cdef->annotations_off);
   auto deva = std::unique_ptr<DexEncodedValueArray>(
       load_static_values(idx, cdef->static_values_off));
   cls->load_class_data_item(idx, cdef->class_data_offset, std::move(deva));
-  g_redex->publish_class(cls);
-  return cls;
+  g_redex->publish_class(cls.get());
+  return cls.release();
 }
 
 DexClass::DexClass(DexType* type, const DexLocation* location)
@@ -1602,21 +1667,22 @@ DexClass::DexClass(DexType* type, const DexLocation* location)
   set_deobfuscated_name(type->get_name());
 }
 
-DexClass::DexClass(DexIdx* idx,
-                   const dex_class_def* cdef,
-                   const DexLocation* location)
-    : m_super_class(idx->get_typeidx(cdef->super_idx)),
-      m_self(idx->get_typeidx(cdef->typeidx)),
-      m_interfaces(idx->get_type_list(cdef->interfaces_off)),
-      m_source_file(idx->get_nullable_stringidx(cdef->source_file_idx)),
+DexClass::DexClass(DexType* super_type,
+                   DexType* self_type,
+                   DexTypeList* interfaces,
+                   const DexString* source_file,
+                   const DexLocation* location,
+                   DexAccessFlags access_flags)
+    : m_super_class(super_type),
+      m_self(self_type),
+      m_interfaces(interfaces),
+      m_source_file(source_file),
       m_anno(nullptr),
       m_location(location),
-      m_access_flags((DexAccessFlags)cdef->access_flags),
+      m_access_flags(access_flags),
       m_external(false),
       m_perf_sensitive(PerfSensitiveGroup::NONE),
-      m_dynamically_dead(false) {
-  always_assert(m_self != nullptr);
-}
+      m_dynamically_dead(false) {}
 
 DexClass::~DexClass() = default; // For forwarding.
 

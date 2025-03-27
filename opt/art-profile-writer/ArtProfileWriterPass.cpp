@@ -124,12 +124,6 @@ void never_inline(bool attach_annotations,
       type::dalvik_annotation_optimization_NeverInline(),
       DexAnnotationVisibility::DAV_BUILD));
 
-  // Only "hot" methods get compiled.
-  auto is_hot = [&](DexMethod* method) {
-    auto it = baseline_profile.methods.find(method);
-    return it != baseline_profile.methods.end() && it->second.hot;
-  };
-
   auto consider_callee = [&](DexMethod* callee) {
     if (callee == nullptr || !callee->get_code()) {
       return false;
@@ -249,7 +243,9 @@ void never_inline(bool attach_annotations,
     // A bit bizarre, and suggests that Redex' code to mutate annotations is
     // ripe for an overhaul. But I won't fight that here.
     method->set_access(access | ACC_SYNTHETIC);
-    method->attach_annotation_set(std::make_unique<DexAnnotationSet>(anno_set));
+    auto res = method->attach_annotation_set(
+        std::make_unique<DexAnnotationSet>(anno_set));
+    always_assert(res);
     method->set_access(access);
   });
   mgr.incr_metric("never_inline_callees_already_never_inline",
@@ -406,8 +402,9 @@ void never_compile(
       // A bit bizarre, and suggests that Redex' code to mutate annotations is
       // ripe for an overhaul. But I won't fight that here.
       method->set_access(access | ACC_SYNTHETIC);
-      method->attach_annotation_set(
+      auto res = method->attach_annotation_set(
           std::make_unique<DexAnnotationSet>(anno_set));
+      always_assert(res);
       method->set_access(access);
       mf.hot = false;
     });

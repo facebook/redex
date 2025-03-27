@@ -159,6 +159,9 @@ class PassManager {
 
   ReserveRefsInfo get_reserved_refs() const;
 
+  // FOR TESTING ONLY!
+  void disable_checker() { m_checker_disabled = true; }
+
  private:
   void init(const ConfigFiles& config);
 
@@ -200,4 +203,6 @@ class PassManager {
   std::unique_ptr<InternalFields> m_internal_fields;
 
   redex_properties::Manager* m_properties_manager{nullptr};
+
+  bool m_checker_disabled{false};
 };

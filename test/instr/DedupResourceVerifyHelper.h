@@ -174,7 +174,7 @@ inline void dedupresource_postverify(const DexClasses& classes,
   auto unused_dimen_1 = find_sfield_named(*dimen_cls, "unused_dimen_1");
   auto unused_dimen_2 = find_sfield_named(*dimen_cls, "unused_dimen_2");
   auto welcome_text_size = find_sfield_named(*dimen_cls, "welcome_text_size");
-  auto small = find_sfield_named(*dimen_cls, "small");
+  [[maybe_unused]] auto small = find_sfield_named(*dimen_cls, "small");
   auto medium = find_sfield_named(*dimen_cls, "medium");
   auto medium2 = find_sfield_named(*dimen_cls, "medium2");
   auto foo = find_sfield_named(*dimen_cls, "foo");

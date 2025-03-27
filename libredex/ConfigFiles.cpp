@@ -105,7 +105,7 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
 
   m_recognize_coldstart_pct_marker =
       config.get("recognize_betamap_coldstart_pct_marker", false).asBool();
-  
+
   m_baseline_profile_config_file_name =
       config.get("baseline_profile_config", "").asString();
   if (!m_baseline_profile_config_file_name.empty()) {
@@ -513,6 +513,8 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("run_reg_alloc", false, shrinker_config.run_reg_alloc);
   jw.get("run_fast_reg_alloc", false, shrinker_config.run_fast_reg_alloc);
   jw.get("run_dedup_blocks", false, shrinker_config.run_dedup_blocks);
+  jw.get("run_branch_prefix_hoisting", false,
+         shrinker_config.run_branch_prefix_hoisting);
   jw.get("debug", false, inliner_config->debug);
   jw.get("blocklist", {}, inliner_config->blocklist);
   jw.get("caller_blocklist", {}, inliner_config->caller_blocklist);

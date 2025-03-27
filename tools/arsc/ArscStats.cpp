@@ -244,7 +244,8 @@ std::set<uint32_t> tally_type_and_entries(
     android::ResStringPool& key_strings,
     ResourceSizes* resource_sizes,
     ResourceConfigs* resource_configs,
-    ResourceNames* resource_names) {
+    ResourceNames* resource_names,
+    size_t* out_canonical_size_savings) {
   // Reverse map of actual data to the potentially many entries that it may
   // represent. This is to take into consideration the "canonical_entries" Redex
   // config item and make sure to represent this as shared size in the many ids
@@ -308,6 +309,17 @@ std::set<uint32_t> tally_type_and_entries(
              non_empty_res_ids.size(),
              resource_sizes);
   }
+
+  // For curiosity, count how many entries are being canonicalized and what size
+  // savings are.
+  size_t size_savings_due_to_canonicals{0};
+  for (auto&& [data, ids] : data_to_ids) {
+    if (ids.size() > 1) {
+      size_savings_due_to_canonicals +=
+          arsc::compute_entry_value_length(data) * (ids.size() - 1);
+    }
+  }
+  *out_canonical_size_savings = size_savings_due_to_canonicals;
 
   // Last step, re-iterate over the resource ids in each type, and compute
   // overhead of the type
@@ -520,9 +532,11 @@ std::vector<Result> ArscStats::compute() {
 
   // Add up sizes for every typeSpec and its type(s).
   std::set<uint32_t> all_non_empty_res_ids;
+  size_t all_types_size{0};
   for (auto& type_info : parser.m_package_types.at(package_header)) {
     // NOTE: we need to gather globally, the non-empty resource ids so we can
     // distribute the table_overhead figure above.
+    size_t canonical_size_savings;
     auto non_empty_res_ids = tally_type_and_entries(package_header,
                                                     type_info.spec,
                                                     type_info.configs,
@@ -530,10 +544,27 @@ std::vector<Result> ArscStats::compute() {
                                                     key_strings,
                                                     &resource_sizes,
                                                     &resource_configs,
-                                                    &resid_to_name);
+                                                    &resid_to_name,
+                                                    &canonical_size_savings);
     all_non_empty_res_ids.insert(non_empty_res_ids.begin(),
                                  non_empty_res_ids.end());
+    size_t type_size = type_info.spec->header.size;
+    for (auto& t : type_info.configs) {
+      type_size += t->header.size;
+    }
+    TRACE(ARSC, 1, "Type %s: entry count %d, size = %zu",
+          type_names.at(type_info.spec->id).c_str(), type_info.spec->entryCount,
+          type_size);
+    if (canonical_size_savings > 0) {
+      TRACE(ARSC, 2, "  %zu bytes of savings from canonical entries/values",
+            canonical_size_savings);
+    }
+    all_types_size += type_size;
   }
+  TRACE(
+      ARSC, 1,
+      "******************************\nTotal bytes for all types, entries: %zu",
+      all_types_size);
   auto table_overhead = dtohs(chunk_header->headerSize) +
                         dtohs(package_header->header.headerSize);
   for (const auto& res_id : all_non_empty_res_ids) {

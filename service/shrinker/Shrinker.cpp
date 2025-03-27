@@ -9,6 +9,8 @@
 
 #include <fstream>
 
+#include "BranchPrefixHoisting.h"
+#include "ConstantUses.h"
 #include "ConstructorParams.h"
 #include "LinearScan.h"
 #include "RandomForest.h"
@@ -78,7 +80,8 @@ Shrinker::Shrinker(
     int min_sdk,
     const std::unordered_set<DexMethodRef*>& configured_pure_methods,
     const std::unordered_set<const DexString*>& configured_finalish_field_names,
-    const std::unordered_set<const DexField*>& configured_finalish_fields)
+    const std::unordered_set<const DexField*>& configured_finalish_fields,
+    const boost::optional<std::string>& package_name)
     : m_forest(load(config.reg_alloc_random_forest)),
       m_xstores(stores),
       m_config(config),
@@ -86,11 +89,14 @@ Shrinker::Shrinker(
       m_enabled(config.run_const_prop || config.run_cse ||
                 config.run_copy_prop || config.run_local_dce ||
                 config.run_reg_alloc || config.run_fast_reg_alloc ||
-                config.run_dedup_blocks),
+                config.run_dedup_blocks || config.run_branch_prefix_hoisting),
       m_init_classes_with_side_effects(init_classes_with_side_effects),
       m_pure_methods(configured_pure_methods),
       m_finalish_field_names(configured_finalish_field_names),
-      m_finalish_fields(configured_finalish_fields) {
+      m_finalish_fields(configured_finalish_fields),
+      m_string_analyzer_state(constant_propagation::StringAnalyzerState::get()),
+      m_package_name_state(
+          constant_propagation::PackageNameState::get(package_name)) {
   // Initialize the singletons that `operator()` needs ahead of time to
   // avoid a data race.
   static_cast<void>(constant_propagation::EnumFieldAnalyzerState::get());
@@ -150,9 +156,10 @@ constant_propagation::Transform::Stats Shrinker::constant_propagation(
       constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
           &m_immut_analyzer_state, &m_immut_analyzer_state,
           constant_propagation::EnumFieldAnalyzerState::get(),
-          constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr,
-          constant_propagation::ApiLevelAnalyzerState::get(m_min_sdk), nullptr,
-          &m_immut_analyzer_state, nullptr),
+          constant_propagation::BoxedBooleanAnalyzerState::get(),
+          &m_string_analyzer_state,
+          constant_propagation::ApiLevelAnalyzerState::get(m_min_sdk),
+          &m_package_name_state, nullptr, &m_immut_analyzer_state, nullptr),
       /* imprecise_switches */ true);
   fp_iter.run(initial_env);
   constant_propagation::Transform tf(config, m_cp_state);
@@ -218,6 +225,7 @@ void Shrinker::shrink_code(
   copy_propagation_impl::Stats copy_prop_stats;
   LocalDce::Stats local_dce_stats;
   dedup_blocks_impl::Stats dedup_blocks_stats;
+  size_t branch_prefix_hoisting_stats{0};
 
   code->build_cfg();
   if (m_config.run_const_prop) {
@@ -312,6 +320,19 @@ void Shrinker::shrink_code(
     dedup_blocks_stats = dedup_blocks.get_stats();
   }
 
+  if (m_config.run_branch_prefix_hoisting) {
+    auto timer = m_branch_prefix_hoisting_timer.scope();
+    auto& cfg = code->cfg();
+    Lazy<const constant_uses::ConstantUses> constant_uses([&] {
+      return std::make_unique<const constant_uses::ConstantUses>(
+          cfg, is_static, declaring_type, proto->get_rtype(), proto->get_args(),
+          method_describer,
+          /* force_type_inference */ true);
+    });
+    branch_prefix_hoisting_stats = branch_prefix_hoisting_impl::process_cfg(
+        cfg, constant_uses, /* can_allocate_regs */ true);
+  }
+
   auto data_after_dedup = get_features(kMMINLDataCollectionLevel);
   if (traceEnabled(MMINL, kMMINLDataCollectionLevel)) {
     TRACE(
@@ -331,6 +352,7 @@ void Shrinker::shrink_code(
   m_dedup_blocks_stats += dedup_blocks_stats;
   m_methods_shrunk++;
   m_methods_reg_alloced += reg_alloc_inc;
+  m_branch_prefix_hoisting_stats += branch_prefix_hoisting_stats;
 }
 
 void Shrinker::log_metrics(ScopedMetrics& sm) const {

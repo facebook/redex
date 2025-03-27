@@ -169,7 +169,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   remap_registers(&callee, next_caller_reg);
 
   auto alt_srcs = plugin.inline_srcs();
-  move_arg_regs(&callee, alt_srcs ? *alt_srcs : inline_site->insn->srcs_vec());
+  move_arg_regs(&callee, alt_srcs ? *alt_srcs : inline_site->insn->srcs_copy());
 
   auto return_reg = plugin.reg_for_return();
 

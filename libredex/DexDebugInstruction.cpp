@@ -67,42 +67,39 @@ void DexDebugInstruction::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
 }
 
 DexDebugInstruction* DexDebugInstruction::make_instruction(
-    DexIdx* idx, const uint8_t** encdata_ptr) {
-  auto& encdata = *encdata_ptr;
-  always_assert(encdata < idx->end());
-  uint8_t opcode = *encdata++;
+    DexIdx* idx, std::string_view& encdata_ptr) {
+  always_assert_type_log(!encdata_ptr.empty(), RedexError::INVALID_DEX,
+                         "Dex overflow");
+  uint8_t opcode = encdata_ptr[0];
+  encdata_ptr = encdata_ptr.substr(1);
   switch (opcode) {
   case DBG_END_SEQUENCE:
     return nullptr;
   case DBG_ADVANCE_PC:
   case DBG_END_LOCAL:
   case DBG_RESTART_LOCAL: {
-    always_assert(encdata < idx->end());
-    uint32_t v = read_uleb128(&encdata);
+    uint32_t v = read_uleb128_checked<redex::DexAssert>(encdata_ptr);
     return new DexDebugInstruction((DexDebugItemOpcode)opcode, v);
   }
   case DBG_ADVANCE_LINE: {
-    always_assert(encdata < idx->end());
-    int32_t v = (uint32_t)read_sleb128(&encdata);
+    int32_t v = (uint32_t)read_sleb128_checked<redex::DexAssert>(encdata_ptr);
     return new DexDebugInstruction((DexDebugItemOpcode)opcode, v);
   }
   case DBG_START_LOCAL: {
-    always_assert(encdata < idx->end());
-    uint32_t rnum = read_uleb128(&encdata);
-    auto name = decode_noindexable_string(idx, encdata);
-    DexType* type = decode_noindexable_type(idx, encdata);
+    uint32_t rnum = read_uleb128_checked<redex::DexAssert>(encdata_ptr);
+    auto name = decode_noindexable_string(idx, encdata_ptr);
+    DexType* type = decode_noindexable_type(idx, encdata_ptr);
     return new DexDebugOpcodeStartLocal(rnum, name, type);
   }
   case DBG_START_LOCAL_EXTENDED: {
-    always_assert(encdata < idx->end());
-    uint32_t rnum = read_uleb128(&encdata);
-    auto name = decode_noindexable_string(idx, encdata);
-    DexType* type = decode_noindexable_type(idx, encdata);
-    auto sig = decode_noindexable_string(idx, encdata);
+    uint32_t rnum = read_uleb128_checked<redex::DexAssert>(encdata_ptr);
+    auto name = decode_noindexable_string(idx, encdata_ptr);
+    DexType* type = decode_noindexable_type(idx, encdata_ptr);
+    auto sig = decode_noindexable_string(idx, encdata_ptr);
     return new DexDebugOpcodeStartLocal(rnum, name, type, sig);
   }
   case DBG_SET_FILE: {
-    auto str = decode_noindexable_string(idx, encdata);
+    auto str = decode_noindexable_string(idx, encdata_ptr);
     return new DexDebugOpcodeSetFile(str);
   }
   default:

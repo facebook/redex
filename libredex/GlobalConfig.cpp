@@ -30,6 +30,8 @@ void InlinerConfig::bind_config() {
   bind("run_cse", shrinker.run_cse, shrinker.run_cse);
   bind("run_dedup_blocks", shrinker.run_dedup_blocks,
        shrinker.run_dedup_blocks);
+  bind("run_branch_prefix_hoisting", shrinker.run_branch_prefix_hoisting,
+       shrinker.run_branch_prefix_hoisting);
   bind("run_copy_prop", shrinker.run_copy_prop, shrinker.run_copy_prop);
   bind("run_reg_alloc", shrinker.run_reg_alloc, shrinker.run_reg_alloc);
   bind("run_fast_reg_alloc", shrinker.run_fast_reg_alloc,
@@ -206,7 +208,6 @@ void GlobalConfig::bind_config() {
   bind("baseline_profile", {}, json_param);
   bind("baseline_profile_config", "", string_param);
   bind("preprocessed_baseline_profile_directory", "", string_param);
-  bind("betamap_interactions", {}, json_param);
 
   for (const auto& entry : m_registry) {
     m_global_configs.emplace(entry.name,

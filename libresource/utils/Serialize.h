@@ -16,6 +16,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 #include "androidfw/ResourceTypes.h"
@@ -104,30 +105,28 @@ ssize_t find_attribute_ordinal(
     const size_t& attribute_id_count,
     const std::function<std::string(uint32_t)>& pool_lookup);
 
-enum StringKind { STD_STRING, STRING_8, STRING_16 };
-
 struct StringHolder {
-  StringKind kind;
-  const char* string8;
-  const char16_t* string16;
-  const std::string str;
+  std::variant<const char*, const char16_t*, std::string> data;
   size_t length;
   StringHolder(const char* s, size_t len)
-      : kind(StringKind::STRING_8),
-        string8(s),
-        string16(nullptr),
+      : data(s),
         length(len) {}
   StringHolder(const char16_t* s, size_t len)
-      : kind(StringKind::STRING_16),
-        string8(nullptr),
-        string16(s),
+      : data(s),
         length(len) {}
   StringHolder(std::string s, size_t len)
-      : kind(StringKind::STD_STRING),
-        string8(nullptr),
-        string16(nullptr),
-        str(std::move(s)),
+      : data(std::move(s)),
         length(len) {}
+
+  bool is_char_ptr() const {
+    return std::holds_alternative<const char*>(data);
+  }
+  bool is_char16_ptr() const {
+    return std::holds_alternative<const char16_t*>(data);
+  }
+  bool is_str() const {
+    return std::holds_alternative<std::string>(data);
+  }
 };
 
 using SpanVector = std::vector<android::ResStringPool_span*>;
@@ -135,6 +134,8 @@ using SpanVector = std::vector<android::ResStringPool_span*>;
 struct StyleInfo {
   StringHolder str;
   SpanVector spans;
+  StyleInfo (StringHolder holder, SpanVector vec)
+    : str(std::move(holder)), spans(std::move(vec)) {}
 };
 
 template <typename T>

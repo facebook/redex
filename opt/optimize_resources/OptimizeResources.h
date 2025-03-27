@@ -101,10 +101,10 @@ struct ReachableResourcesPluginRegistry {
  * pass can compact resource table entries, and it MUST NOT be run after any
  * tool has inlined resource identifiers into const opcodes. When false, the
  * pass will use sget opcodes on R class fields to discover which resources are
- * used. False value means this pass must happen before FinalInlinePass /
- * FinalInlinePassV2. If set to true, this pass can run later in the pass order,
- * but it will not adjust any resource identifier values and instead leave holes
- * in the resources.arsc file (this results in meaningful cleanup to the
+ * used. False value means this pass must happen before FinalInlinePassV2. If
+ * set to true, this pass can run later in the pass order, but it will not
+ * adjust any resource identifier values and instead leave holes in the
+ * resources.arsc file (this results in meaningful cleanup to the
  * datastructures, i.e. removing string data and stuff but can leave the
  * resulting file with empty/redundant space making it take up more disk space
  * than ideal).

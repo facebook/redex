@@ -176,7 +176,6 @@ size_t split_for_block(const SplitPlan& split_plan,
 
         auto block_edge =
             std::pair<cfg::Block*, cfg::Block*>(block, succ->target());
-        auto lastmei = block->rbegin();
         // Because in find_split we limited the try-catch edge to only deal
         // with catch block where reg died on all the exception edge toward it.
         // So even if there is a EDGE_GOTO we don't need to worry about should

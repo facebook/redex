@@ -1162,8 +1162,9 @@ TEST_F(ControlFlowTest, deep_copy_into_existing_cfg) {
 
 TEST_F(ControlFlowTest, line_numbers) {
 
-  DexMethod* m = DexMethod::make_method("LFoo;.m:()V")
-                     ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  [[maybe_unused]] DexMethod* m =
+      DexMethod::make_method("LFoo;.m:()V")
+          ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
 
   auto code = assembler::ircode_from_string(R"(
     (

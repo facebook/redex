@@ -364,25 +364,26 @@ void DexEncodedValueAnnotation::encode(DexOutputIdx* dodx,
 
 static DexAnnotationElement get_annotation_element(DexIdx* idx,
                                                    const uint8_t*& encdata) {
-  always_assert(encdata < idx->end());
+  always_assert_type_log(encdata < idx->end(), INVALID_DEX, "Dex overflow");
   uint32_t sidx = read_uleb128(&encdata);
   auto name = idx->get_stringidx(sidx);
-  always_assert_log(name != nullptr,
-                    "Invalid string idx in annotation element");
+  always_assert_type_log(name != nullptr, INVALID_DEX,
+                         "Invalid string idx in annotation element");
   return DexAnnotationElement(name,
                               DexEncodedValue::get_encoded_value(idx, encdata));
 }
 
 std::unique_ptr<DexEncodedValueArray> get_encoded_value_array(
     DexIdx* idx, const uint8_t*& encdata) {
-  always_assert(encdata < idx->end());
+  always_assert_type_log(encdata < idx->end(), INVALID_DEX, "Dex overflow");
   uint32_t size = read_uleb128(&encdata);
-  auto* evlist = new std::vector<std::unique_ptr<DexEncodedValue>>();
-  evlist->reserve(size);
+  using Vec = std::vector<std::unique_ptr<DexEncodedValue>>;
+  auto evlist = Vec{};
+  evlist.reserve(size);
   for (uint32_t i = 0; i < size; i++) {
-    evlist->emplace_back(DexEncodedValue::get_encoded_value(idx, encdata));
+    evlist.emplace_back(DexEncodedValue::get_encoded_value(idx, encdata));
   }
-  return std::make_unique<DexEncodedValueArray>(evlist);
+  return std::make_unique<DexEncodedValueArray>(new Vec{std::move(evlist)});
 }
 
 bool DexEncodedValue::is_evtype_primitive() const {
@@ -458,62 +459,69 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::zero_for_type(DexType* type) {
 
 std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
     DexIdx* idx, const uint8_t*& encdata) {
-  always_assert(encdata < idx->end());
+  always_assert_type_log(encdata < idx->end(), INVALID_DEX, "Dex overflow");
   uint8_t evhdr = *encdata++;
   DexEncodedValueTypes evt = (DexEncodedValueTypes)DEVT_HDR_TYPE(evhdr);
   uint8_t evarg = DEVT_HDR_ARG(evhdr);
   switch (evt) {
   case DEVT_SHORT:
-    always_assert(evarg <= 1);
+    always_assert_type_log(evarg <= 1, INVALID_DEX, "evarg out of bounds");
     [[fallthrough]];
   case DEVT_INT:
-    always_assert(evarg <= 3);
+    always_assert_type_log(evarg <= 3, INVALID_DEX, "evarg out of bounds");
     [[fallthrough]];
   case DEVT_LONG: {
-    always_assert(evarg <= 7);
-    always_assert(encdata + evarg < idx->end());
+    always_assert_type_log(evarg <= 7, INVALID_DEX, "evarg out of bounds");
+    always_assert_type_log(encdata + evarg < idx->end(), INVALID_DEX,
+                           "Dex overflow");
     uint64_t v = read_evarg(encdata, evarg, true /* sign_extend */);
     return std::unique_ptr<DexEncodedValue>(
         new DexEncodedValuePrimitive(evt, v));
   }
   case DEVT_BYTE:
-    always_assert(evarg == 0);
+    always_assert_type_log(evarg == 0, INVALID_DEX, "evarg out of bounds");
     [[fallthrough]];
   case DEVT_CHAR: {
-    always_assert(evarg <= 1);
-    always_assert(encdata + evarg < idx->end());
+    always_assert_type_log(evarg <= 1, INVALID_DEX, "evarg out of bounds");
+    always_assert_type_log(encdata + evarg < idx->end(), INVALID_DEX,
+                           "Dex overflow");
     uint64_t v = read_evarg(encdata, evarg, false /* sign_extend */);
     return std::unique_ptr<DexEncodedValue>(
         new DexEncodedValuePrimitive(evt, v));
   }
   case DEVT_FLOAT: {
-    always_assert_log(evarg <= 3, "Unexpected float size: %u", evarg);
+    always_assert_type_log(evarg <= 3, INVALID_DEX, "Unexpected float size: %u",
+                           evarg);
     // We sign extend floats so that they can be treated just like signed ints
-    always_assert(encdata + evarg < idx->end());
+    always_assert_type_log(encdata + evarg < idx->end(), INVALID_DEX,
+                           "Dex overflow");
     uint64_t v = read_evarg(encdata, evarg, true /* sign_extend */)
                  << ((3 - evarg) * 8);
     return std::unique_ptr<DexEncodedValue>(
         new DexEncodedValuePrimitive(evt, v));
   }
   case DEVT_DOUBLE: {
-    always_assert(evarg <= 7);
-    always_assert(encdata + evarg < idx->end());
+    always_assert_type_log(evarg <= 7, INVALID_DEX, "evarg out of bounds");
+    always_assert_type_log(encdata + evarg < idx->end(), INVALID_DEX,
+                           "Dex overflow");
     uint64_t v = read_evarg(encdata, evarg, false /* sign_extend */)
                  << ((7 - evarg) * 8);
     return std::unique_ptr<DexEncodedValue>(
         new DexEncodedValuePrimitive(evt, v));
   }
   case DEVT_METHOD_TYPE: {
-    always_assert(evarg <= 3);
-    always_assert(encdata + evarg < idx->end());
+    always_assert_type_log(evarg <= 3, INVALID_DEX, "evarg out of bounds");
+    always_assert_type_log(encdata + evarg < idx->end(), INVALID_DEX,
+                           "Dex overflow");
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     DexProto* evproto = idx->get_protoidx(evidx);
     return std::unique_ptr<DexEncodedValue>(
         new DexEncodedValueMethodType(evproto));
   }
   case DEVT_METHOD_HANDLE: {
-    always_assert(evarg <= 3);
-    always_assert(encdata + evarg < idx->end());
+    always_assert_type_log(evarg <= 3, INVALID_DEX, "evarg out of bounds");
+    always_assert_type_log(encdata + evarg < idx->end(), INVALID_DEX,
+                           "Dex overflow");
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     DexMethodHandle* evmethodhandle = idx->get_methodhandleidx(evidx);
     return std::unique_ptr<DexEncodedValue>(
@@ -521,67 +529,71 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
   }
 
   case DEVT_NULL:
-    always_assert(evarg == 0);
+    always_assert_type_log(evarg == 0, INVALID_DEX, "evarg out of bounds");
     return std::unique_ptr<DexEncodedValue>(new DexEncodedValueBit(evt, false));
   case DEVT_BOOLEAN:
-    always_assert(evarg <= 1);
+    always_assert_type_log(evarg <= 1, INVALID_DEX, "evarg out of bounds");
     return std::unique_ptr<DexEncodedValue>(
         new DexEncodedValueBit(evt, evarg > 0));
   case DEVT_STRING: {
-    always_assert(evarg <= 3);
-    always_assert(encdata + evarg < idx->end());
+    always_assert_type_log(evarg <= 3, INVALID_DEX, "evarg out of bounds");
+    always_assert_type_log(encdata + evarg < idx->end(), INVALID_DEX,
+                           "Dex overflow");
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     auto evstring = idx->get_stringidx(evidx);
-    always_assert_log(evstring != nullptr,
-                      "Invalid string idx in annotation element");
+    always_assert_type_log(evstring != nullptr, INVALID_DEX,
+                           "Invalid string idx in annotation element");
     return std::unique_ptr<DexEncodedValue>(
         new DexEncodedValueString(evstring));
   }
   case DEVT_TYPE: {
-    always_assert(evarg <= 3);
-    always_assert(encdata + evarg < idx->end());
+    always_assert_type_log(evarg <= 3, INVALID_DEX, "evarg out of bounds");
+    always_assert_type_log(encdata + evarg < idx->end(), INVALID_DEX,
+                           "Dex overflow");
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     DexType* evtype = idx->get_typeidx(evidx);
-    always_assert_log(evtype != nullptr,
-                      "Invalid type idx in annotation element");
+    always_assert_type_log(evtype != nullptr, INVALID_DEX,
+                           "Invalid type idx in annotation element");
     return std::unique_ptr<DexEncodedValue>(new DexEncodedValueType(evtype));
   }
   case DEVT_FIELD:
-    always_assert(evarg <= 3);
+    always_assert_type_log(evarg <= 3, INVALID_DEX, "evarg out of bounds");
     [[fallthrough]];
   case DEVT_ENUM: {
-    always_assert(evarg <= 3);
-    always_assert(encdata + evarg < idx->end());
+    always_assert_type_log(evarg <= 3, INVALID_DEX, "evarg out of bounds");
+    always_assert_type_log(encdata + evarg < idx->end(), INVALID_DEX,
+                           "Dex overflow");
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     DexFieldRef* evfield = idx->get_fieldidx(evidx);
-    always_assert_log(evfield != nullptr,
-                      "Invalid field idx in annotation element");
+    always_assert_type_log(evfield != nullptr, INVALID_DEX,
+                           "Invalid field idx in annotation element");
     return std::unique_ptr<DexEncodedValue>(
         new DexEncodedValueField(evt, evfield));
   }
   case DEVT_METHOD: {
-    always_assert(evarg <= 3);
-    always_assert(encdata + evarg < idx->end());
+    always_assert_type_log(evarg <= 3, INVALID_DEX, "evarg out of bounds");
+    always_assert_type_log(encdata + evarg < idx->end(), INVALID_DEX,
+                           "Dex overflow");
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     DexMethodRef* evmethod = idx->get_methodidx(evidx);
-    always_assert_log(evmethod != nullptr,
-                      "Invalid method idx in annotation element");
+    always_assert_type_log(evmethod != nullptr, INVALID_DEX,
+                           "Invalid method idx in annotation element");
     return std::unique_ptr<DexEncodedValue>(
         new DexEncodedValueMethod(evmethod));
   }
   case DEVT_ARRAY:
-    always_assert(evarg == 0);
+    always_assert_type_log(evarg == 0, INVALID_DEX, "evarg out of bounds");
     return get_encoded_value_array(idx, encdata);
   case DEVT_ANNOTATION: {
-    always_assert(evarg == 0);
+    always_assert_type_log(evarg == 0, INVALID_DEX, "evarg out of bounds");
     EncodedAnnotations eanno{};
-    always_assert(encdata < idx->end());
+    always_assert_type_log(encdata < idx->end(), INVALID_DEX, "Dex overflow");
     uint32_t tidx = read_uleb128(&encdata);
-    always_assert(encdata < idx->end());
+    always_assert_type_log(encdata < idx->end(), INVALID_DEX, "Dex overflow");
     uint32_t count = read_uleb128(&encdata);
     DexType* type = idx->get_typeidx(tidx);
-    always_assert_log(type != nullptr,
-                      "Invalid DEVT_ANNOTATION within annotation type");
+    always_assert_type_log(type != nullptr, INVALID_DEX,
+                           "Invalid DEVT_ANNOTATION within annotation type");
     eanno.reserve(count);
     for (uint32_t i = 0; i < count; i++) {
       eanno.emplace_back(get_annotation_element(idx, encdata));
@@ -590,22 +602,24 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
         new DexEncodedValueAnnotation(type, std::move(eanno)));
   }
   };
-  not_reached_log("Bogus annotation");
+  always_assert_type_log(false, INVALID_DEX, "Bogus annotation type");
 }
 
 std::unique_ptr<DexAnnotation> DexAnnotation::get_annotation(
     DexIdx* idx, uint32_t anno_off) {
   if (anno_off == 0) return nullptr;
   const uint8_t* encdata = idx->get_uleb_data(anno_off);
-  always_assert(encdata < idx->end());
+  always_assert_type_log(encdata < idx->end(), INVALID_DEX, "Dex overflow");
   uint8_t viz = *encdata++;
-  always_assert_log(viz <= DAV_SYSTEM, "Invalid annotation visibility %d", viz);
-  always_assert(encdata < idx->end());
+  always_assert_type_log(viz <= DAV_SYSTEM, INVALID_DEX,
+                         "Invalid annotation visibility %d", viz);
+  always_assert_type_log(encdata < idx->end(), INVALID_DEX, "Dex overflow");
   uint32_t tidx = read_uleb128(&encdata);
-  always_assert(encdata < idx->end());
+  always_assert_type_log(encdata < idx->end(), INVALID_DEX, "Dex overflow");
   uint32_t count = read_uleb128(&encdata);
   DexType* type = idx->get_typeidx(tidx);
-  always_assert_log(type != nullptr, "Invalid annotation type");
+  always_assert_type_log(type != nullptr, INVALID_DEX,
+                         "Invalid annotation type");
   auto anno =
       std::make_unique<DexAnnotation>(type, (DexAnnotationVisibility)viz);
   anno->m_anno_elems.reserve(count);
@@ -629,8 +643,9 @@ std::unique_ptr<DexAnnotationSet> DexAnnotationSet::get_annotation_set(
   const uint32_t* adata = idx->get_uint_data(aset_off);
   auto aset = std::make_unique<DexAnnotationSet>();
   uint32_t count = *adata++;
-  always_assert(adata <= adata + count);
-  always_assert((uint8_t*)(adata + count) <= idx->end());
+  always_assert_type_log(adata <= adata + count, INVALID_DEX, "Dex overflow");
+  always_assert_type_log((uint8_t*)(adata + count) <= idx->end(), INVALID_DEX,
+                         "Dex overflow");
 
   aset->m_annotations.reserve(count - std::count(adata, adata + count, 0));
 

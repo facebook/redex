@@ -21,23 +21,7 @@ std::ostream& operator<<(std::ostream& os, const IROpcode& op) {
 
 namespace opcode {
 
-// clang-format off
-Ref ref(IROpcode opcode) {
-  switch (opcode) {
-#define OP(uc, lc, ref, ...) \
-  case OPCODE_##uc:          \
-    return ref;
-#define IOP(uc, lc, ref, ...) \
-  case IOPCODE_##uc:          \
-    return ref;
-#define OPRANGE(...)
-#include "IROpcodes.def"
-  }
-  not_reached_log("Unexpected opcode 0x%x", opcode);
-}
-// clang-format on
-
-IROpcode from_dex_opcode(DexOpcode op) {
+std::optional<IROpcode> from_dex_opcode(DexOpcode op) {
   switch (op) {
   case DOPCODE_NOP:
     return OPCODE_NOP;
@@ -488,20 +472,20 @@ IROpcode from_dex_opcode(DexOpcode op) {
   case FOPCODE_PACKED_SWITCH:
   case FOPCODE_SPARSE_SWITCH:
   case FOPCODE_FILLED_ARRAY:
-    not_reached_log("Cannot create IROpcode from %s", SHOW(op));
+    return std::nullopt;
     // clang-format off
   SWITCH_FORMAT_QUICK_FIELD_REF {
-    not_reached_log("Invalid use of a quick ref opcode %02x\n", op);
+    return std::nullopt;
   }
   SWITCH_FORMAT_QUICK_METHOD_REF {
-    not_reached_log("Invalid use of a quick method opcode %02x\n", op);
+    return std::nullopt;
   }
   SWITCH_FORMAT_RETURN_VOID_NO_BARRIER {
-    not_reached_log("Invalid use of return-void-no-barrier opcode %02x\n", op);
+    return std::nullopt;
   }
     // clang-format on
   }
-  not_reached_log("Unknown opcode %02x\n", op);
+  return std::nullopt;
 }
 
 DexOpcode to_dex_opcode(IROpcode op) {
@@ -1666,6 +1650,11 @@ bool dest_is_object(IROpcode op) {
   case OPCODE_NEW_ARRAY:
   case OPCODE_FILLED_NEW_ARRAY:
     return true;
+
+  case OPCODE_CONST_METHOD_HANDLE:
+  case OPCODE_CONST_METHOD_TYPE:
+    return true;
+
   case IOPCODE_LOAD_PARAM:
     return false;
   case IOPCODE_LOAD_PARAM_OBJECT:
@@ -1681,9 +1670,12 @@ bool dest_is_object(IROpcode op) {
   case IOPCODE_INJECTION_ID:
   case IOPCODE_UNREACHABLE:
     return false;
-  default:
-    not_reached_log("Unknown opcode %02x\n", op);
+
+  case IOPCODE_INIT_CLASS:
+  case IOPCODE_WRITE_BARRIER:
+    not_reached_log("No dest");
   }
+  not_reached_log("Unknown opcode %02x\n", op);
 }
 
 } // namespace opcode_impl

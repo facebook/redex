@@ -54,6 +54,9 @@ void ReachableNativesPass::bind_config() {
   bind("analyze_load_library", false, m_analyze_load_library);
   bind("additional_load_library_names", {}, m_additional_load_library_names);
   bind("sweep", false, m_sweep);
+  bind("sweep_native_methods", false, m_sweep_native_methods);
+  after_configuration(
+      [this] { always_assert(!m_sweep_native_methods || m_sweep); });
 }
 
 bool ReachableNativesPass::gather_load_library(
@@ -329,32 +332,35 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("reachable_natives", reachable_natives.size());
   mgr.set_metric("unreachable_natives", unreachable_natives.size());
 
-  if (m_sweep) {
-    // Native methods and their declaring classes themselves must remain
-    // reachable, as they may get referenced by native registration code, so we
-    // re-include them in the reachable object set, and mark classes as abstract
-    // that are only kept for this reason.
+  if (m_sweep || m_sweep_native_methods) {
     size_t classes_abstracted{0};
-    for (auto* m : unreachable_natives) {
-      reachable_objects->mark(m);
-      self_recursive_fn(
-          [&](auto self, DexType* type) {
-            auto* cls = type_class(type);
-            if (!scope_set.count(cls) ||
-                reachable_objects->marked_unsafe(cls)) {
-              return;
-            }
-            reachable_objects->mark(cls);
-            self(self, cls->get_super_class());
-            for (auto* intf_type : *cls->get_interfaces()) {
-              self(self, intf_type);
-            }
-            if (!is_abstract(cls)) {
-              classes_abstracted++;
-              cls->set_access((cls->get_access() & ~ACC_FINAL) | ACC_ABSTRACT);
-            }
-          },
-          m->get_class());
+    if (!m_sweep_native_methods) {
+      // Native methods and their declaring classes themselves must remain
+      // reachable, as they may get referenced by native registration code, so
+      // we re-include them in the reachable object set, and mark classes as
+      // abstract that are only kept for this reason.
+      for (auto* m : unreachable_natives) {
+        reachable_objects->mark(m);
+        self_recursive_fn(
+            [&](auto self, DexType* type) {
+              auto* cls = type_class(type);
+              if (!scope_set.count(cls) ||
+                  reachable_objects->marked_unsafe(cls)) {
+                return;
+              }
+              reachable_objects->mark(cls);
+              self(self, cls->get_super_class());
+              for (auto* intf_type : *cls->get_interfaces()) {
+                self(self, intf_type);
+              }
+              if (!is_abstract(cls)) {
+                classes_abstracted++;
+                cls->set_access((cls->get_access() & ~ACC_FINAL) |
+                                ACC_ABSTRACT);
+              }
+            },
+            m->get_class());
+      }
     }
 
     auto before = reachability::count_objects(stores);
