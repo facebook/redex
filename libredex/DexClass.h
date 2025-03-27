@@ -281,7 +281,7 @@ class DexFieldRef {
   bool m_concrete;
   bool m_external;
 
-  virtual ~DexFieldRef() {}
+  ~DexFieldRef() {}
   DexFieldRef(DexType* container, const DexString* name, DexType* type) {
     m_spec.cls = container;
     m_spec.name = name;
@@ -352,6 +352,11 @@ class DexField : public DexFieldRef {
   DexField(DexField&&) = delete;
   DexField(const DexField&) = delete;
   ~DexField();
+
+  // For friend classes to use with smart pointers.
+  struct Deleter {
+    void operator()(DexField* f) { delete f; }
+  };
 
   ReferencedState rstate =
       ReferencedState(RefStateType::FieldState); // Tracks whether this field

@@ -240,7 +240,7 @@ dex_member_refs::FieldDescriptorTokens DexFieldRef::get_descriptor_tokens()
 
 void DexFieldRef::delete_field_DO_NOT_USE(DexFieldRef* field) {
   erase_field(field);
-  delete dynamic_cast<DexField*>(field);
+  delete static_cast<DexField*>(field);
 }
 
 DexFieldRef* DexField::get_field(
