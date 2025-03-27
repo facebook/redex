@@ -448,7 +448,7 @@ void ArtProfileWriterPass::bind_config() {
   bind("never_inline_estimate", false, m_never_inline_estimate);
   bind("never_inline_attach_annotations", false,
        m_never_inline_attach_annotations);
-  bind("legacy_mode", true, m_legacy_mode);
+  bind("legacy_mode", false, m_legacy_mode);
   bind("never_compile_callcount_threshold", -1,
        m_never_compile_callcount_threshold);
   bind("never_compile_perf_threshold", -1, m_never_compile_perf_threshold);
