@@ -128,6 +128,7 @@ struct ConfigFiles {
 
   const std::unordered_map<std::string, DeadClassLoadCounts>&
   get_dead_class_list();
+  const std::vector<std::string>& get_halfnosis_block_list();
   const std::unordered_set<std::string>& get_live_class_split_list();
 
   void clear_dead_class_and_live_relocated_sets() {
@@ -259,6 +260,7 @@ struct ConfigFiles {
   void ensure_secondary_method_stats_loaded() const;
   void load_inliner_config(inliner::InlinerConfig*);
   void build_dead_class_and_live_class_split_lists();
+  void build_halfnosis_block_list();
   bool is_relocated_class(std::string_view name) const;
   void remove_relocated_part(std::string_view* name);
   void build_cls_interdex_groups();
@@ -280,8 +282,10 @@ struct ConfigFiles {
   std::unordered_map<const DexString*, std::vector<uint8_t>> m_class_freq_map;
   std::vector<std::string> m_coldstart_classes;
   std::vector<std::string> m_coldstart_methods;
+  std::vector<std::string> m_halfnosis_block_list;
   std::unordered_map<std::string, std::vector<std::string>> m_class_lists;
   bool m_dead_class_list_attempted{false};
+  bool m_halfnosis_block_list_attempted{false};
   std::string m_printseeds; // Filename to dump computed seeds.
   mutable std::unique_ptr<method_profiles::MethodProfiles> m_method_profiles;
   std::unordered_map<std::string, DeadClassLoadCounts> m_dead_classes;
