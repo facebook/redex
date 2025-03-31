@@ -371,6 +371,11 @@ ConfigFiles::get_dead_class_list() {
   return m_dead_classes;
 }
 
+const std::vector<std::string>& ConfigFiles::get_halfnosis_block_list() {
+  build_halfnosis_block_list();
+  return m_halfnosis_block_list;
+}
+
 const std::unordered_set<std::string>&
 ConfigFiles::get_live_class_split_list() {
   build_dead_class_and_live_class_split_lists();
@@ -441,6 +446,32 @@ void ConfigFiles::build_dead_class_and_live_class_split_lists() {
           // from redex_frontend in main.cpp.
           m_live_relocated_classes.insert(std::move(converted));
         }
+      }
+    }
+  }
+}
+
+void ConfigFiles::build_halfnosis_block_list() {
+  if (!m_halfnosis_block_list_attempted) {
+    m_halfnosis_block_list_attempted = true;
+    std::string halfnosis_block_list_filename;
+    this->m_json.get("halfnosis_block_list", "", halfnosis_block_list_filename);
+    if (!halfnosis_block_list_filename.empty()) {
+      std::ifstream input(halfnosis_block_list_filename);
+      if (!input) {
+        fprintf(
+            stderr,
+            "[error] Can not open <halfnosis_block_list> file, path is %s\n",
+            halfnosis_block_list_filename.c_str());
+        exit(EXIT_FAILURE);
+      }
+      for (std::string line; std::getline(input, line);) {
+        // trim trailing whitespace
+        line.erase(std::find_if(line.rbegin(), line.rend(),
+                                [](auto c) { return c > ' '; })
+                       .base(),
+                   line.end());
+        m_halfnosis_block_list.push_back(line);
       }
     }
   }
