@@ -49,6 +49,7 @@
 #include "DedupBlockValueNumbering.h"
 
 #include <algorithm>
+#include <optional>
 
 #include "DexPosition.h"
 #include "Lazy.h"
@@ -1022,7 +1023,7 @@ class DedupBlocksImpl {
   //
   // We avoid this situation by skipping blocks that contain an init
   // invocation to an object that didn't come from a unique instruction.
-  static boost::optional<std::vector<IRInstruction*>>
+  static std::optional<std::vector<IRInstruction*>>
   get_init_receiver_instructions_defined_outside_of_block(
       cfg::Block* block, Lazy<live_range::LazyLiveRanges>& live_ranges) {
     std::vector<IRInstruction*> res;
@@ -1039,7 +1040,7 @@ class DedupBlocksImpl {
           // should never happen, but we are not going to fight that here
           TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] defs.size() = %zu",
                 defs.size());
-          return boost::none;
+          return std::nullopt;
         }
         auto def = *defs.begin();
         auto def_opcode = def->opcode();
@@ -1113,7 +1114,7 @@ class DedupBlocksImpl {
     // Next we check if there are disagreeing init-receiver instructions.
     // TODO: Instead of just dropping all blocks in this case, do
     // finer-grained partitioning.
-    boost::optional<std::vector<IRInstruction*>> insns;
+    std::optional<std::vector<IRInstruction*>> insns;
     for (cfg::Block* block : blocks) {
       auto other_insns =
           get_init_receiver_instructions_defined_outside_of_block(block,
@@ -1122,13 +1123,9 @@ class DedupBlocksImpl {
         return true;
       } else if (!insns) {
         insns = std::move(other_insns);
-      } else {
+      } else if (*insns != *other_insns) {
         always_assert(insns->size() == other_insns->size());
-        for (size_t i = 0; i < insns->size(); i++) {
-          if (insns->at(i) != other_insns->at(i)) {
-            return true;
-          }
-        }
+        return true;
       }
     }
 
@@ -1248,15 +1245,6 @@ class DedupBlocksImpl {
       }
     }
     return false;
-  }
-
-  static boost::optional<MethodItemEntry&> last_opcode(cfg::Block* block) {
-    for (auto it = block->rbegin(); it != block->rend(); it++) {
-      if (it->type == MFLOW_OPCODE) {
-        return *it;
-      }
-    }
-    return boost::none;
   }
 
   static size_t num_opcodes(cfg::Block* block) {
