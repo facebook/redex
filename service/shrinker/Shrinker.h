@@ -42,7 +42,8 @@ class Shrinker {
           configured_finalish_field_names = {},
       const std::unordered_set<const DexField*>& configured_finalish_fields =
           {},
-      const boost::optional<std::string>& package_name = boost::none);
+      const boost::optional<std::string>& package_name = boost::none,
+      const method_override_graph::Graph* method_override_graph = nullptr);
 
   constant_propagation::Transform::Stats constant_propagation(
       bool is_static,

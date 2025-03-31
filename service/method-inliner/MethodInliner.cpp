@@ -956,9 +956,6 @@ void run_inliner(
     same_implementation_map = nullptr;
   }
 
-  // TODO: The Shrinker will later create another method_override_graph. Use
-  // this one instead of re-creating.
-  method_override_graph = nullptr;
   non_virtual = nullptr;
 
   if (inline_bridge_synth_only) {
@@ -984,7 +981,7 @@ void run_inliner(
       cross_dex_penalty,
       /* configured_finalish_field_names */ {}, local_only, consider_hot_cold,
       inliner_cost_config, &unfinalized_init_methods,
-      &methods_with_write_barrier);
+      &methods_with_write_barrier, method_override_graph.get());
   inliner.inline_methods();
 
   // refinalize where possible

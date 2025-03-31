@@ -135,7 +135,8 @@ MultiMethodInliner::MultiMethodInliner(
     bool consider_hot_cold,
     InlinerCostConfig inliner_cost_config,
     const std::unordered_set<const DexMethod*>* unfinalized_init_methods,
-    InsertOnlyConcurrentSet<DexMethod*>* methods_with_write_barrier)
+    InsertOnlyConcurrentSet<DexMethod*>* methods_with_write_barrier,
+    const method_override_graph::Graph* method_override_graph)
     : m_concurrent_resolver(std::move(concurrent_resolve_fn)),
       m_scheduler(
           [this](DexMethod* method) {
@@ -170,7 +171,10 @@ MultiMethodInliner::MultiMethodInliner(
                  config.shrinker,
                  min_sdk,
                  configured_pure_methods,
-                 configured_finalish_field_names),
+                 configured_finalish_field_names,
+                 /* configured_finalish_fields */ {},
+                 /* package_name */ boost::none,
+                 /* package_name */ method_override_graph),
       m_local_only(local_only),
       m_consider_hot_cold(consider_hot_cold),
       m_inliner_cost_config(inliner_cost_config),

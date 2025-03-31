@@ -275,8 +275,8 @@ class MultiMethodInliner {
       InlinerCostConfig inliner_cost_config = DEFAULT_COST_CONFIG,
       const std::unordered_set<const DexMethod*>* unfinalized_init_methods =
           nullptr,
-      InsertOnlyConcurrentSet<DexMethod*>* methods_with_write_barrier =
-          nullptr);
+      InsertOnlyConcurrentSet<DexMethod*>* methods_with_write_barrier = nullptr,
+      const method_override_graph::Graph* method_override_graph = nullptr);
 
   /*
    * Applies certain delayed scope-wide changes, including in particular
