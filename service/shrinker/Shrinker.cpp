@@ -115,14 +115,11 @@ Shrinker::Shrinker(
           m_pure_methods, m_finalish_field_names, m_finalish_fields);
     }
     if (config.run_local_dce && config.compute_pure_methods) {
-      std::unique_ptr<const method_override_graph::Graph> owned_override_graph;
-      const method_override_graph::Graph* override_graph;
-      if (config.run_cse) {
-        override_graph = m_cse_shared_state->get_method_override_graph();
-      } else {
-        owned_override_graph = method_override_graph::build_graph(scope);
-        override_graph = owned_override_graph.get();
-      }
+      // Note that because we are not invoking m_cse_shared_state->init_scope(),
+      // we don't already have a method-override-graph.
+      always_assert(!config.run_cse ||
+                    m_cse_shared_state->get_method_override_graph() == nullptr);
+      auto override_graph = method_override_graph::build_graph(scope);
       std::unordered_set<const DexMethod*> computed_no_side_effects_methods;
       /* Returns computed_no_side_effects_methods_iterations */
       method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =
@@ -130,8 +127,8 @@ Shrinker::Shrinker(
             return !init_classes_with_side_effects.refine(type);
           };
       compute_no_side_effects_methods(
-          scope, override_graph, clinit_has_no_side_effects, m_pure_methods,
-          &computed_no_side_effects_methods);
+          scope, override_graph.get(), clinit_has_no_side_effects,
+          m_pure_methods, &computed_no_side_effects_methods);
       for (auto m : computed_no_side_effects_methods) {
         m_pure_methods.insert(const_cast<DexMethod*>(m));
       }
