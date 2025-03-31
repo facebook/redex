@@ -340,5 +340,20 @@ TypeSet MergeabilityChecker::get_non_mergeables() {
         4,
         "Non mergeables (unsafe refs) %zu",
         non_mergeables.size() - prev_size);
+  prev_size = non_mergeables.size();
+
+  if (m_spec.skip_anonymous_classes) {
+    for (const auto& type : m_spec.merging_targets) {
+      const auto* cls = type_class(type);
+      if (klass::maybe_anonymous_class(cls)) {
+        non_mergeables.insert(type);
+      }
+    }
+  }
+  TRACE(CLMG,
+        4,
+        "Non mergeables (skip anonymous classes) %zu",
+        non_mergeables.size() - prev_size);
+
   return non_mergeables;
 }
