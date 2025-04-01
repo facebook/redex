@@ -6,10 +6,10 @@
  */
 
 /*
- * This file defines a zero-cost wrapper around std::unordered_map that prevents
- * accidental non-deterministic iteration.
+ * This file defines zero-cost wrappers around std::unordered_map and
+ * std::unordered_set that prevent accidental non-deterministic iteration.
  *
- * TODO: Define UnorderedSet, UnorderedMultiMap.
+ * TODO: Define UnorderedMultiMap.
  * TODO: Replace (virtually) all usages of std::unordered_x with UnorderedX in
  * the codebase.
  *
@@ -79,6 +79,7 @@
 #include <numeric>
 #include <type_traits>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "TemplateUtil.h"
 
@@ -388,6 +389,263 @@ bool operator!=(const UnorderedMap<Key, Value, Hash, KeyEqual>& lhs,
   return lhs._internal_unsafe_unwrap() != rhs._internal_unsafe_unwrap();
 }
 
+template <class Key,
+          class Hash = std::hash<Key>,
+          class KeyEqual = std::equal_to<Key>>
+class UnorderedSet : UnorderedBase<UnorderedSet<Key, Hash, KeyEqual>> {
+  using Type = std::unordered_set<Key, Hash, KeyEqual>;
+  Type m_data;
+
+ public:
+  using key_type = typename Type::key_type;
+  using value_type = typename Type::value_type;
+  using size_type = typename Type::size_type;
+  using difference_type = typename Type::difference_type;
+  using hasher = typename Type::hasher;
+  using key_equal = typename Type::key_equal;
+  using reference = typename Type::reference;
+  using const_reference = typename Type::const_reference;
+  using pointer = typename Type::pointer;
+
+  class FixedIterator;
+
+  class ConstFixedIterator {
+    typename Type::const_iterator m_entry;
+
+   public:
+    const Key* operator->() const { return &*m_entry; }
+
+    const Key& operator*() const { return *m_entry; }
+
+    bool operator==(const FixedIterator& other) const {
+      return m_entry == other._internal_unsafe_unwrap();
+    }
+
+    bool operator!=(const FixedIterator& other) const {
+      return m_entry != other._internal_unsafe_unwrap();
+    }
+
+    bool operator==(const ConstFixedIterator& other) const {
+      return m_entry == other.m_entry;
+    }
+
+    bool operator!=(const ConstFixedIterator& other) const {
+      return m_entry != other.m_entry;
+    }
+
+    explicit ConstFixedIterator(typename Type::const_iterator entry)
+        : m_entry(entry) {}
+
+    typename Type::const_iterator _internal_unsafe_unwrap() const {
+      return m_entry;
+    }
+  };
+
+  class FixedIterator {
+    typename Type::iterator m_entry;
+
+   public:
+    // Note that the Set iterator doesn't expose mutable values at all.
+
+    const Key* operator->() const { return &*m_entry; }
+
+    const Key& operator*() const { return *m_entry; }
+
+    bool operator==(const FixedIterator& other) const {
+      return m_entry == other.m_entry;
+    }
+
+    bool operator!=(const FixedIterator& other) const {
+      return m_entry != other.m_entry;
+    }
+
+    bool operator==(const ConstFixedIterator& other) const {
+      return m_entry == other._internal_unsafe_unwrap();
+    }
+
+    bool operator!=(const ConstFixedIterator& other) const {
+      return m_entry != other._internal_unsafe_unwrap();
+    }
+
+    explicit FixedIterator(typename Type::iterator entry) : m_entry(entry) {}
+
+    typename Type::iterator _internal_unsafe_unwrap() const { return m_entry; }
+  };
+
+  // TODO: Make extra non-deterministic in debug builds
+  class UnorderedIterable {
+    Type& m_data;
+
+   public:
+    using iterator = typename Type::iterator;
+    using const_iterator = typename Type::const_iterator;
+
+    explicit UnorderedIterable(Type& data) : m_data(data) {}
+
+    iterator begin() { return m_data.begin(); }
+
+    iterator end() { return m_data.end(); }
+
+    const_iterator begin() const { return m_data.begin(); }
+
+    const_iterator end() const { return m_data.end(); }
+
+    const_iterator cbegin() const { return m_data.cbegin(); }
+
+    const_iterator cend() const { return m_data.cend(); }
+
+    iterator find(const Key& key) { return m_data.find(key); }
+
+    const_iterator find(const Key& key) const { return m_data.find(key); }
+
+    iterator erase(iterator position) { return m_data.erase(position); }
+
+    iterator erase(const_iterator position) { return m_data.erase(position); }
+  };
+
+  // TODO: Make extra non-deterministic in debug builds
+  class ConstUnorderedIterable {
+    const Type& m_data;
+
+   public:
+    using const_iterator = typename Type::const_iterator;
+
+    explicit ConstUnorderedIterable(const Type& data) : m_data(data) {}
+
+    const_iterator begin() const { return m_data.begin(); }
+
+    const_iterator end() const { return m_data.end(); }
+
+    const_iterator cbegin() const { return m_data.cbegin(); }
+
+    const_iterator cend() const { return m_data.cend(); }
+
+    const_iterator find(const Key& key) const { return m_data.find(key); }
+  };
+
+  UnorderedSet() : m_data() {}
+
+  explicit UnorderedSet(size_t bucket_count) : m_data(bucket_count) {}
+
+  UnorderedSet(size_t bucket_count, const Hash& hash)
+      : m_data(bucket_count, hash) {}
+
+  UnorderedSet(size_t bucket_count, const Hash& hash, const KeyEqual& equal)
+      : m_data(bucket_count, hash, equal) {}
+
+  UnorderedSet(const UnorderedSet& other) = default;
+
+  UnorderedSet(UnorderedSet&& other) noexcept = default;
+
+  // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
+  /* implicit */ UnorderedSet(std::initializer_list<Key> init) : m_data(init) {}
+
+  template <class InputIt>
+  UnorderedSet(InputIt first, InputIt last) : m_data(first, last) {}
+
+  UnorderedSet& operator=(const UnorderedSet& other) = default;
+
+  UnorderedSet& operator=(UnorderedSet&& other) noexcept = default;
+
+  template <typename... Args>
+  std::pair<FixedIterator, bool> emplace(Args&&... args) {
+    auto [it, success] = m_data.emplace(std::forward<Args>(args)...);
+    return std::pair<FixedIterator, bool>(FixedIterator(it), success);
+  }
+
+  std::pair<FixedIterator, bool> insert(const Key& value) {
+    auto [it, success] = m_data.insert(value);
+    return std::pair<FixedIterator, bool>(FixedIterator(it), success);
+  }
+
+  std::pair<FixedIterator, bool> insert(Key&& value) {
+    auto [it, success] = m_data.insert(std::forward<Key>(value));
+    return std::pair<FixedIterator, bool>(FixedIterator(it), success);
+  }
+
+  FixedIterator insert(FixedIterator hint, const Key& value) {
+    auto it = m_data.insert(hint._internal_unsafe_unwrap(), value);
+    return FixedIterator(it);
+  }
+
+  FixedIterator insert(FixedIterator hint, Key&& value) {
+    auto it =
+        m_data.insert(hint._internal_unsafe_unwrap(), std::forward<Key>(value));
+    return FixedIterator(it);
+  }
+
+  template <class InputIt>
+  void insert(InputIt first, InputIt last) {
+    m_data.insert(first, last);
+  }
+
+  void insert(std::initializer_list<Key> ilist) { m_data.insert(ilist); }
+
+  FixedIterator _internal_unordered_any() {
+    return FixedIterator(m_data.begin());
+  }
+
+  ConstFixedIterator _internal_unordered_any() const {
+    return ConstFixedIterator(m_data.begin());
+  }
+
+  FixedIterator find(const Key& key) { return FixedIterator(m_data.find(key)); }
+
+  ConstFixedIterator find(const Key& key) const {
+    return ConstFixedIterator(m_data.find(key));
+  }
+
+  ConstFixedIterator end() const { return ConstFixedIterator(m_data.end()); }
+
+  FixedIterator end() { return FixedIterator(m_data.end()); }
+
+  ConstFixedIterator cend() const { return ConstFixedIterator(m_data.end()); }
+
+  size_t erase(const Key& key) { return m_data.erase(key); }
+
+  void erase(FixedIterator position) {
+    m_data.erase(position._internal_unsafe_unwrap());
+  }
+
+  void erase(ConstFixedIterator position) {
+    m_data.erase(position._internal_unsafe_unwrap());
+  }
+
+  void clear() { m_data.clear(); }
+
+  size_t count(const Key& key) const { return m_data.count(key); }
+
+  void reserve(size_t size) { m_data.reserve(size); }
+
+  size_t size() const { return m_data.size(); }
+
+  bool empty() const { return m_data.empty(); }
+
+  UnorderedIterable _internal_unordered_iterable() {
+    return UnorderedIterable(m_data);
+  }
+
+  ConstUnorderedIterable _internal_unordered_iterable() const {
+    return ConstUnorderedIterable(m_data);
+  }
+
+  const Type& _internal_unsafe_unwrap() const { return m_data; }
+
+  Type& _internal_unsafe_unwrap() { return m_data; }
+};
+
+template <class Key, class Hash, class KeyEqual>
+bool operator==(const UnorderedSet<Key, Hash, KeyEqual>& lhs,
+                const UnorderedSet<Key, Hash, KeyEqual>& rhs) {
+  return lhs._internal_unsafe_unwrap() == rhs._internal_unsafe_unwrap();
+}
+
+template <class Key, class Hash, class KeyEqual>
+bool operator!=(const UnorderedSet<Key, Hash, KeyEqual>& lhs,
+                const UnorderedSet<Key, Hash, KeyEqual>& rhs) {
+  return lhs._internal_unsafe_unwrap() != rhs._internal_unsafe_unwrap();
+}
+
 template <class UnorderedCollection,
           std::enable_if_t<std::is_base_of_v<UnorderedBase<UnorderedCollection>,
                                              UnorderedCollection>,
@@ -511,10 +769,30 @@ template <
     class Compare,
     class Key = typename std::remove_const<typename Collection::key_type>::type,
     class Value =
-        typename std::remove_const<typename Collection::mapped_type>::type>
+        typename std::remove_const<typename Collection::mapped_type>::type,
+    std::enable_if_t<!std::is_same_v<typename Collection::key_type,
+                                     typename Collection::value_type>,
+                     bool> = true>
 std::vector<std::pair<Key, Value>> unordered_order(Collection& collection,
                                                    Compare comp) {
   std::vector<std::pair<Key, Value>> result;
+  result.reserve(collection.size());
+  for (auto& entry : UnorderedIterable(collection)) {
+    result.emplace_back(entry);
+  }
+  std::sort(result.begin(), result.end(), std::move(comp));
+  return result;
+}
+
+template <class Collection,
+          class Compare,
+          class Value =
+              typename std::remove_const<typename Collection::value_type>::type,
+          std::enable_if_t<std::is_same_v<typename Collection::key_type,
+                                          typename Collection::value_type>,
+                           bool> = true>
+std::vector<Value> unordered_order(Collection& collection, Compare comp) {
+  std::vector<Value> result;
   result.reserve(collection.size());
   for (auto& entry : UnorderedIterable(collection)) {
     result.emplace_back(entry);
@@ -547,6 +825,19 @@ std::vector<Key> unordered_order_keys(Collection& collection, Compare comp) {
     result.emplace_back(entry.first);
   }
   std::sort(result.begin(), result.end(), std::move(comp));
+  return result;
+}
+
+template <
+    class Collection,
+    class Key = typename std::remove_const<typename Collection::key_type>::type>
+auto unordered_keys(Collection& collection) {
+  UnorderedSet<Key, typename Collection::hasher, typename Collection::key_equal>
+      result;
+  result.reserve(collection.size());
+  for (auto& entry : UnorderedIterable(collection)) {
+    result.insert(entry.first);
+  }
   return result;
 }
 
@@ -628,6 +919,14 @@ template <class Target, class Source>
 void insert_unordered_iterable(Target& target, const Source& source) {
   auto ui = UnorderedIterable(source);
   target.insert(ui.begin(), ui.end());
+}
+
+template <class Target, class TargetIt, class Source>
+void insert_unordered_iterable(Target& target,
+                               const TargetIt& target_it,
+                               const Source& source) {
+  auto ui = UnorderedIterable(source);
+  target.insert(target_it, ui.begin(), ui.end());
 }
 
 template <class Collection>
