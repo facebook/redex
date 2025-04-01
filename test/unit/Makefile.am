@@ -68,6 +68,7 @@ check_PROGRAMS = \
     debug_test \
     dedup_blocks_test \
     deobfuscated_alias_test \
+    deterministic_containers_test \
     dex_class_test \
     dex_instruction_test \
     dex_loader_test \
@@ -256,6 +257,8 @@ debug_test_SOURCES = DebugTest.cpp
 dedup_blocks_test_SOURCES = DedupBlocksTest.cpp VirtScopeHelper.cpp ScopeHelper.cpp
 
 deobfuscated_alias_test_SOURCES = DeobfuscatedAliasTest.cpp
+
+deterministic_containers_test_SOURCES = DeterministicContainersTest.cpp
 
 dex_class_test_SOURCES = DexClassTest.cpp
 
