@@ -584,17 +584,17 @@ TEST(BundleResources, GetConfigurations) {
         auto res_table = resources->load_res_table();
         EXPECT_EQ(res_table->package_count(), 1);
         std::vector<android::ResTable_config> configs;
-        res_table->get_configurations(0x7f, "color", &configs);
+        res_table->get_configurations(APPLICATION_PACKAGE, "color", &configs);
         EXPECT_EQ(configs.size(), 2);
         EXPECT_STREQ(configs[0].toString().c_str(), "");
         EXPECT_STREQ(configs[1].toString().c_str(), "night");
         configs.clear();
-        res_table->get_configurations(0x7f, "dimen", &configs);
+        res_table->get_configurations(APPLICATION_PACKAGE, "dimen", &configs);
         EXPECT_EQ(configs.size(), 2);
         EXPECT_STREQ(configs[0].toString().c_str(), "");
         EXPECT_STREQ(configs[1].toString().c_str(), "land");
         configs.clear();
-        res_table->get_configurations(0x7f, "nope", &configs);
+        res_table->get_configurations(APPLICATION_PACKAGE, "nope", &configs);
         EXPECT_EQ(configs.size(), 0);
       });
 }
