@@ -62,7 +62,7 @@ struct Stats {
   }
 };
 
-using StatsMap = std::unordered_map<const DexMethodRef*, Stats>;
+using StatsMap = UnorderedMap<const DexMethodRef*, Stats>;
 using AllInteractions = std::map<std::string, StatsMap>;
 const std::string COLD_START = "ColdStart";
 
@@ -73,8 +73,7 @@ class MethodProfiles {
   void initialize(
       const std::vector<std::string>& csv_filenames,
       const std::vector<std::string>& baseline_profile_csv_filenames,
-      const std::unordered_map<std::string,
-                               baseline_profiles::BaselineProfileConfig>&
+      const UnorderedMap<std::string, baseline_profiles::BaselineProfileConfig>&
           baseline_profile_configs) {
     m_initialized = true;
     Timer t("Parsing agg_method_stats_files");
@@ -109,7 +108,7 @@ class MethodProfiles {
     // Create a mapping of manual_file to config names
     // this way we can only parse each manual_file exactly once
     for (const auto& [baseline_config_name, baseline_profile_config] :
-         baseline_profile_configs) {
+         UnorderedIterable(baseline_profile_configs)) {
       for (const auto& manual_file : baseline_profile_config.manual_files) {
         manual_file_to_config_names[manual_file].emplace_back(
             baseline_config_name);
@@ -121,7 +120,7 @@ class MethodProfiles {
   // For testing purposes.
   static MethodProfiles initialize(
       const std::string& interaction_id,
-      std::unordered_map<const DexMethodRef*, Stats> data) {
+      UnorderedMap<const DexMethodRef*, Stats> data) {
     MethodProfiles ret{};
     ret.m_initialized = true;
     ret.m_method_stats[interaction_id] = std::move(data);

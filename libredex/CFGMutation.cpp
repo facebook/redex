@@ -9,7 +9,6 @@
 #include "IRList.h"
 #include "IROpcode.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Timer.h"
 #include "Trace.h"
 
@@ -18,8 +17,8 @@ namespace cfg {
 static AccumulatingTimer s_timer("CFGMutation");
 
 void CFGMutation::clear() {
-  for (auto& [block, changes] : m_changes) {
-    for (auto& [insn, change] : changes) {
+  for (auto& [block, changes] : UnorderedIterable(m_changes)) {
+    for (auto& [insn, change] : UnorderedIterable(changes)) {
       change->dispose();
     }
   }
@@ -53,7 +52,7 @@ bool CFGMutation::reduce_block_changes(cfg::Block* block,
                                        bool* requires_slow_processing) {
   bool throws_or_returns{false};
   bool may_throw{false};
-  std20::erase_if(changes, [&](auto& p) {
+  unordered_erase_if(changes, [&](auto& p) {
     auto& [insn, change] = p;
     if (opcode::is_move_result_any(insn->opcode())) {
       auto primary_change = primary_change_of_move_result(block, *change);
@@ -77,7 +76,7 @@ bool CFGMutation::reduce_block_changes(cfg::Block* block,
   }
 
   if (changes.size() == 1) {
-    auto& [insn, change] = *changes.begin();
+    auto& [insn, change] = *unordered_any(changes);
     *requires_slow_processing =
         opcode::is_move_result_any(insn->opcode()) &&
         change->get_iterator() == block->get_first_insn();
@@ -117,7 +116,7 @@ bool CFGMutation::process_block_changes_slow(cfg::Block* block,
 
 void CFGMutation::process_block_changes(cfg::Block* block, Changes& changes) {
   always_assert(!changes.empty());
-  for (auto& [insn, change] : changes) {
+  for (auto& [insn, change] : UnorderedIterable(changes)) {
     auto& raw_it = change->get_iterator();
     always_assert(raw_it->type == MFLOW_OPCODE);
     always_assert(raw_it->insn == insn);
@@ -144,7 +143,7 @@ void CFGMutation::flush() {
     bool slow;
   };
   std::vector<OrderedChange> ordered_changes;
-  for (auto& [block, changes] : m_changes) {
+  for (auto& [block, changes] : UnorderedIterable(m_changes)) {
     bool slow{false};
     if (reduce_block_changes(block, changes, &slow)) {
       ordered_changes.push_back({block, &changes, slow});
@@ -166,7 +165,7 @@ void CFGMutation::flush() {
       always_assert(changes->empty());
       continue;
     }
-    for (auto& change : *changes) {
+    for (auto& change : UnorderedIterable(*changes)) {
       remaining_changes.emplace(std::move(change));
     }
     changes->clear();
@@ -184,7 +183,7 @@ void CFGMutation::flush() {
   // The effect of one change can erase the anchor for another.  The changes
   // left behind are the ones whose anchors were removed. They will never be
   // applied so clear them.
-  for (auto& [insn, change] : remaining_changes) {
+  for (auto& [insn, change] : UnorderedIterable(remaining_changes)) {
     change->dispose();
   }
   m_changes.clear();

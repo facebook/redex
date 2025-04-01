@@ -9,13 +9,13 @@
 
 #include <cstdlib>
 #include <cstring>
-#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include "ConcurrentContainers.h"
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 
 namespace cfg {
@@ -27,7 +27,7 @@ using DexStoresVector = std::vector<DexStore>;
 
 using DexStoreDependencies = std::unordered_set<const DexStore*>;
 using DexStoresDependencies =
-    std::unordered_map<const DexStore*, DexStoreDependencies>;
+    UnorderedMap<const DexStore*, DexStoreDependencies>;
 
 class DexMetadata {
   std::string id;
@@ -367,7 +367,7 @@ class XStoreRefs {
  * is used for quick validation for crossing-dex references.
  */
 class XDexRefs {
-  std::unordered_map<const DexType*, size_t> m_dexes;
+  UnorderedMap<const DexType*, size_t> m_dexes;
   size_t m_num_dexes;
 
  public:

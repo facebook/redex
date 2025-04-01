@@ -289,7 +289,7 @@ void read_single_manifest(const std::string& manifest,
   read_protobuf_file_contents(
       manifest,
       [&](google::protobuf::io::CodedInputStream& input, size_t size) {
-        std::unordered_map<std::string, ComponentTag> string_to_tag{
+        UnorderedMap<std::string, ComponentTag> string_to_tag{
             {"activity", ComponentTag::Activity},
             {"activity-alias", ComponentTag::ActivityAlias},
             {"provider", ComponentTag::Provider},
@@ -847,7 +847,7 @@ void apply_rename_map(const std::map<std::string, std::string>& rename_map,
 }
 
 void fully_qualify_element(
-    const std::unordered_map<std::string, std::string>& element_to_class_name,
+    const UnorderedMap<std::string, std::string>& element_to_class_name,
     aapt::pb::XmlNode* node,
     size_t* out_num_changed) {
   if (node->has_element()) {
@@ -912,7 +912,7 @@ bool BundleResources::rename_classes_in_layout(
 }
 
 void BundleResources::fully_qualify_layout(
-    const std::unordered_map<std::string, std::string>& element_to_class_name,
+    const UnorderedMap<std::string, std::string>& element_to_class_name,
     const std::string& file_path,
     size_t* changes) {
   read_protobuf_file_contents(
@@ -1001,7 +1001,7 @@ void collect_rids_for_element(const aapt::pb::XmlElement& element,
 
 void collect_layout_classes_and_attributes_for_element(
     const aapt::pb::XmlElement& element,
-    const std::unordered_map<std::string, std::string>& ns_uri_to_prefix,
+    const UnorderedMap<std::string, std::string>& ns_uri_to_prefix,
     const std::unordered_set<std::string>& attributes_to_read,
     resources::StringOrReferenceSet* out_classes,
     std::unordered_multimap<std::string, resources::StringOrReference>*
@@ -1271,7 +1271,7 @@ void BundleResources::collect_layout_classes_and_attributes_for_file(
                           file_path.c_str());
         if (pb_node.has_element()) {
           const auto& root = pb_node.element();
-          std::unordered_map<std::string, std::string> ns_uri_to_prefix;
+          UnorderedMap<std::string, std::string> ns_uri_to_prefix;
           for (const auto& ns_decl : root.namespace_declaration()) {
             if (!ns_decl.uri().empty() && !ns_decl.prefix().empty()) {
               ns_uri_to_prefix.emplace(ns_decl.uri(), ns_decl.prefix());
@@ -1554,7 +1554,7 @@ void remap_entry_file_paths(const std::function<void(aapt::pb::FileReference*,
 
 void ResourcesPbFile::remap_file_paths_and_serialize(
     const std::vector<std::string>& resource_files,
-    const std::unordered_map<std::string, std::string>& old_to_new) {
+    const UnorderedMap<std::string, std::string>& old_to_new) {
   auto remap_filepaths = [&old_to_new](aapt::pb::FileReference* file,
                                        uint32_t res_id) {
     auto search = old_to_new.find(file->path());
@@ -2400,11 +2400,11 @@ void ResourcesPbFile::resolve_string_values_for_resource_reference(
   std::copy(values_set.begin(), values_set.end(), std::back_inserter(*values));
 }
 
-std::unordered_map<uint32_t, resources::InlinableValue>
+UnorderedMap<uint32_t, resources::InlinableValue>
 ResourcesPbFile::get_inlinable_resource_values() {
   auto& res_id_to_configvalue = m_res_id_to_configvalue;
-  std::unordered_map<uint32_t, resources::InlinableValue> inlinable_resources;
-  std::unordered_map<uint32_t, uint32_t> past_refs;
+  UnorderedMap<uint32_t, resources::InlinableValue> inlinable_resources;
+  UnorderedMap<uint32_t, uint32_t> past_refs;
 
   for (auto& pair : res_id_to_configvalue) {
     uint32_t id = pair.first;

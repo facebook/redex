@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <unordered_map>
-
 #include <sparta/MonotonicFixpointIterator.h>
 
 #include "DexClass.h"

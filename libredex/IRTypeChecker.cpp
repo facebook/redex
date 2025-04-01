@@ -11,6 +11,7 @@
 
 #include "BigBlocks.h"
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
 #include "Match.h"
@@ -458,8 +459,8 @@ Result check_uninitialized(const DexMethod* method, bool relaxed_init_check) {
     for (auto b : big_block->get_blocks()) {
       block_visited.emplace(b->id());
     }
-    std::unordered_map<reg_t, IRInstruction*> uninitialized_regs;
-    std::unordered_map<IRInstruction*, std::unordered_set<reg_t>>
+    UnorderedMap<reg_t, IRInstruction*> uninitialized_regs;
+    UnorderedMap<IRInstruction*, std::unordered_set<reg_t>>
         uninitialized_regs_rev;
     auto remove_from_uninitialized_list = [&](reg_t reg) {
       auto it = uninitialized_regs.find(reg);

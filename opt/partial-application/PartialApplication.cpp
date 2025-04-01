@@ -88,6 +88,7 @@
 #include "CallSiteSummaries.h"
 #include "ConfigFiles.h"
 #include "Creators.h"
+#include "DeterministicContainers.h"
 #include "LiveRange.h"
 #include "MutablePriorityQueue.h"
 #include "OutliningProfileGuidanceImpl.h"
@@ -300,16 +301,14 @@ void gather_caller_callees(
           excluded_invoke_insns->insert(insn);
           continue;
         }
-        callee_caller->update(
-            callee,
-            [caller](const DexMethod*,
-                     std::unordered_map<DexMethod*, size_t>& v,
-                     bool) { ++v[caller]; });
-        caller_callee->update(
-            caller,
-            [callee](const DexMethod*,
-                     std::unordered_map<DexMethod*, size_t>& v,
-                     bool) { ++v[callee]; });
+        callee_caller->update(callee,
+                              [caller](const DexMethod*,
+                                       UnorderedMap<DexMethod*, size_t>& v,
+                                       bool) { ++v[caller]; });
+        caller_callee->update(caller,
+                              [callee](const DexMethod*,
+                                       UnorderedMap<DexMethod*, size_t>& v,
+                                       bool) { ++v[callee]; });
         arg_exclusivity->emplace(insn, std::move(ae));
         callee_caller_classes->update(
             callee,
@@ -322,7 +321,7 @@ void gather_caller_callees(
 }
 
 using InvokeCallSiteSummaries =
-    std::unordered_map<const IRInstruction*, const CallSiteSummary*>;
+    UnorderedMap<const IRInstruction*, const CallSiteSummary*>;
 
 // Whether to include a particular constant argument value. We only include
 // actual constant (not just abstract value like NEZ), and only if they don't
@@ -406,18 +405,18 @@ class CalleeInvocationSelector {
   CallSiteSummarySets m_css_sets;
 
   CallSiteSummarySet m_call_site_summaries;
-  using ArgumentCosts = std::unordered_map<src_index_t, int32_t>;
-  std::unordered_map<const CallSiteSummary*, ArgumentCosts>
+  using ArgumentCosts = UnorderedMap<src_index_t, int32_t>;
+  UnorderedMap<const CallSiteSummary*, ArgumentCosts>
       m_call_site_summary_argument_costs;
-  using KeyedCosts = std::unordered_map<std::string, int32_t>;
+  using KeyedCosts = UnorderedMap<std::string, int32_t>;
   std::vector<KeyedCosts> m_total_argument_costs;
-  using KeyedCsses = std::unordered_map<std::string, CallSiteSummarySet>;
+  using KeyedCsses = UnorderedMap<std::string, CallSiteSummarySet>;
   std::vector<KeyedCsses> m_dependencies;
   std::vector<std::pair<const IRInstruction*, const CallSiteSummary*>>
       m_call_site_invoke_summaries;
 
-  std::unordered_map<const CallSiteSummary*,
-                     std::unordered_map<src_index_t, AggregatedArgExclusivity>>
+  UnorderedMap<const CallSiteSummary*,
+               UnorderedMap<src_index_t, AggregatedArgExclusivity>>
       m_aggregated_arg_exclusivity;
 
   const PartialApplicationConfig& m_cost_config;
@@ -430,7 +429,7 @@ class CalleeInvocationSelector {
 
   static int32_t sum_call_sites_savings(const ArgumentCosts& ac) {
     int32_t savings = 0;
-    for (const auto& p : ac) {
+    for (const auto& p : UnorderedIterable(ac)) {
       savings += p.second;
     }
     return savings;
@@ -612,7 +611,7 @@ class CalleeInvocationSelector {
     // - keep track of which constant value for which parameter is involved in
     // that call-site summary, which we'll need later when re-prioritizing
     // call-site summaries in the priority queue.
-    for (auto& p : m_aggregated_arg_exclusivity) {
+    for (auto& p : UnorderedIterable(m_aggregated_arg_exclusivity)) {
       auto css = p.first;
       auto& aaem = p.second;
       m_call_site_summaries.insert(css);
@@ -691,7 +690,7 @@ class CalleeInvocationSelector {
         } else {
           m_pq.erase(reduced_css);
         }
-        for (auto& p : ac) {
+        for (auto& p : UnorderedIterable(ac)) {
           ac_it->second[p.first] += p.second;
         }
         ac_it->second.erase(src_idx);
@@ -721,7 +720,7 @@ class CalleeInvocationSelector {
   void select_invokes(std::atomic<size_t>* total_estimated_savings,
                       InvokeCallSiteSummaries* selected_invokes) {
     size_t partial_application_methods{0};
-    std::unordered_map<const CallSiteSummary*, const CallSiteSummary*>
+    UnorderedMap<const CallSiteSummary*, const CallSiteSummary*>
         selected_css_sets;
     uint32_t callee_estimated_savings = 0;
     while (!m_pq.empty()) {
@@ -821,9 +820,9 @@ void select_invokes_and_callers(
     const PartialApplicationConfig& config) {
   Timer t("select_invokes_and_callers");
   std::vector<const DexMethod*> callees;
-  std::unordered_map<const DexType*, std::vector<const DexMethod*>>
+  UnorderedMap<const DexType*, std::vector<const DexMethod*>>
       callees_by_classes;
-  std::unordered_map<const DexMethod*, InvokeCallSiteSummaries>
+  UnorderedMap<const DexMethod*, InvokeCallSiteSummaries>
       selected_invokes_by_callees;
   for (auto& p : callee_caller) {
     auto callee = p.first;
@@ -846,7 +845,7 @@ void select_invokes_and_callers(
 
   std::vector<const DexType*> callee_classes;
   callee_classes.reserve(callees_by_classes.size());
-  for (auto& p : callees_by_classes) {
+  for (auto& p : UnorderedIterable(callees_by_classes)) {
     callee_classes.push_back(p.first);
   }
   std::mutex mutex;
@@ -855,7 +854,7 @@ void select_invokes_and_callers(
         auto& class_callees = callees_by_classes.at(callee_class);
         std::sort(class_callees.begin(), class_callees.end(),
                   compare_dexmethods);
-        std::unordered_map<uint64_t, uint32_t> stable_hash_indices;
+        UnorderedMap<uint64_t, uint32_t> stable_hash_indices;
         for (auto callee : class_callees) {
           auto& callee_selected_invokes =
               selected_invokes_by_callees.at(callee);
@@ -869,7 +868,7 @@ void select_invokes_and_callers(
               ordered_pa_args_csses;
           auto callee_is_static = is_static(callee);
           auto callee_proto = callee->get_proto();
-          for (auto& p : callee_selected_invokes) {
+          for (auto& p : UnorderedIterable(callee_selected_invokes)) {
             auto css = p.second;
             auto pa_args = get_partial_application_args(callee_is_static,
                                                         callee_proto, css);
@@ -902,9 +901,8 @@ void select_invokes_and_callers(
             }
           }
           std::lock_guard<std::mutex> lock_guard(mutex);
-          selected_invokes->insert(callee_selected_invokes.begin(),
-                                   callee_selected_invokes.end());
-          for (auto& p : callee_caller.at_unsafe(callee)) {
+          insert_unordered_iterable(*selected_invokes, callee_selected_invokes);
+          for (auto& p : UnorderedIterable(callee_caller.at_unsafe(callee))) {
             selected_callers->insert(p.first);
           }
         }
@@ -926,7 +924,7 @@ void rewrite_callers(
     const Scope& scope,
     Shrinker& shrinker,
     const GetCalleeFunction& get_callee_fn,
-    const std::unordered_map<const IRInstruction*, const CallSiteSummary*>&
+    const UnorderedMap<const IRInstruction*, const CallSiteSummary*>&
         selected_invokes,
     const std::unordered_set<DexMethod*>& selected_callers,
     PaMethodRefs& pa_method_refs,
@@ -1310,8 +1308,7 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
 
   std::atomic<size_t> total_estimated_savings{0};
   PaMethodRefs pa_method_refs;
-  std::unordered_map<const IRInstruction*, const CallSiteSummary*>
-      selected_invokes;
+  UnorderedMap<const IRInstruction*, const CallSiteSummary*> selected_invokes;
   std::unordered_set<DexMethod*> selected_callers;
 
   select_invokes_and_callers(

@@ -1157,7 +1157,7 @@ class EnumTransformer final {
     post_update_enum_classes(scope);
     // Update all methods and fields references by replacing the candidate enum
     // types with Integer type.
-    std::unordered_map<DexType*, DexType*> type_mapping;
+    UnorderedMap<DexType*, DexType*> type_mapping;
     for (auto& pair : m_enum_attributes_map) {
       type_mapping[pair.first] = m_enum_util->INTEGER_TYPE;
     }

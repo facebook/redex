@@ -750,7 +750,7 @@ void ReduceSparseSwitchesPass::run_pass(DexStoresVector& stores,
                   stats.multiplexing_transformations());
   mgr.incr_metric(METRIC_MULTIPLEXING_TRANSFORMATIONS_SWITCH_CASES,
                   stats.multiplexing_switch_cases());
-  for (auto&& [M, mstats] : stats.multiplexing) {
+  for (auto&& [M, mstats] : UnorderedIterable(stats.multiplexing)) {
     if (mstats.abandoned > 0) {
       mgr.incr_metric(METRIC_MULTIPLEXING_ABANDONED_PREFIX + std::to_string(M),
                       mstats.abandoned);
@@ -776,7 +776,7 @@ void ReduceSparseSwitchesPass::run_pass(DexStoresVector& stores,
         stats.splitting_transformations_switch_cases_packed,
         stats.multiplexing_transformations(), stats.multiplexing_switch_cases(),
         stats.expanded_transformations, stats.expanded_switch_cases);
-  for (auto&& [M, mstats] : stats.multiplexing) {
+  for (auto&& [M, mstats] : UnorderedIterable(stats.multiplexing)) {
     TRACE(RSS, 2,
           "[reduce sparse switches] M=%zu: %zu abandoned, %zu accumulated "
           "inefficiency / %zu transformed = %zu average inefficiency",
@@ -788,15 +788,15 @@ void ReduceSparseSwitchesPass::run_pass(DexStoresVector& stores,
 }
 
 size_t ReduceSparseSwitchesPass::Stats::multiplexing_transformations() const {
-  return std::accumulate(
-      multiplexing.begin(), multiplexing.end(), 0,
-      [](size_t acc, const auto& p) { return acc + p.second.transformations; });
+  return unordered_accumulate(multiplexing, 0, [](size_t acc, const auto& p) {
+    return acc + p.second.transformations;
+  });
 }
 
 size_t ReduceSparseSwitchesPass::Stats::multiplexing_switch_cases() const {
-  return std::accumulate(
-      multiplexing.begin(), multiplexing.end(), 0,
-      [](size_t acc, const auto& p) { return acc + p.second.switch_cases; });
+  return unordered_accumulate(multiplexing, 0, [](size_t acc, const auto& p) {
+    return acc + p.second.switch_cases;
+  });
 }
 
 ReduceSparseSwitchesPass::Stats::Multiplexing&
@@ -823,7 +823,7 @@ ReduceSparseSwitchesPass::Stats& ReduceSparseSwitchesPass::Stats::operator+=(
   expanded_transformations += that.expanded_transformations;
   expanded_switch_cases += that.expanded_switch_cases;
 
-  for (auto&& [M, mstats] : that.multiplexing) {
+  for (auto&& [M, mstats] : UnorderedIterable(that.multiplexing)) {
     multiplexing[M] += mstats;
   }
   return *this;

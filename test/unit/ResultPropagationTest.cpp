@@ -33,8 +33,7 @@ void test_get_return_param_index(const std::string& code_str,
 
   method_override_graph::Graph graph;
   ReturnParamResolver resolver(graph);
-  std::unordered_map<const DexMethod*, ParamIndex>
-      methods_which_return_parameter;
+  UnorderedMap<const DexMethod*, ParamIndex> methods_which_return_parameter;
   auto const actual =
       resolver.get_return_param_index(cfg, methods_which_return_parameter);
 

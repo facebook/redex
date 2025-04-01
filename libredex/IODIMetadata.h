@@ -9,6 +9,7 @@
 
 #include <unordered_map>
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexStore.h"
 
@@ -71,7 +72,7 @@ class IODIMetadata {
   }
 
   // Write to disk, pretty usual. Does nothing if filename len is 0.
-  using MethodToIdMap = std::unordered_map<DexMethod*, uint64_t>;
+  using MethodToIdMap = UnorderedMap<DexMethod*, uint64_t>;
   void write(const std::string& iodi_metadata_filename,
              const MethodToIdMap& method_to_id);
 
@@ -108,9 +109,9 @@ class IODIMetadata {
 
  private:
   std::unordered_set<const DexMethod*> m_too_large_cluster_canonical_methods;
-  std::unordered_map<const DexMethod*, const DexMethod*> m_canonical;
+  UnorderedMap<const DexMethod*, const DexMethod*> m_canonical;
 
-  std::unordered_map<const DexMethod*, size_t> m_iodi_method_layers;
+  UnorderedMap<const DexMethod*, size_t> m_iodi_method_layers;
 
   // These exists for can_safely_use_iodi
   std::unordered_set<const DexMethod*> m_huge_methods;

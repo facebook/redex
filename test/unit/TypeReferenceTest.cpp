@@ -17,7 +17,7 @@ using namespace type_reference;
 
 struct TypeReferenceTest : public RedexTest {
   DexClass* m_class;
-  std::unordered_map<const DexType*, DexType*> m_old_to_new;
+  UnorderedMap<const DexType*, DexType*> m_old_to_new;
   std::vector<DexClass*> m_scope;
 
   TypeReferenceTest() {

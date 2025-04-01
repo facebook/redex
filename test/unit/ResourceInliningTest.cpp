@@ -25,7 +25,7 @@ class ResourcesInliningPassTest : public RedexTest {
   DexClass* class1;
   std::unordered_set<DexMethodRef*> dex_method_refs;
   Scope scope;
-  std::unordered_map<uint32_t, resources::InlinableValue> inlinable_resources;
+  UnorderedMap<uint32_t, resources::InlinableValue> inlinable_resources;
 
   ResourcesInliningPassTest() {
     std::string sdk_jar = android_sdk_jar_path();
@@ -43,7 +43,7 @@ class ResourcesInliningPassTest : public RedexTest {
 
 MethodTransformsMap build_test(
     const Scope& scope,
-    const std::unordered_map<uint32_t, resources::InlinableValue>&
+    const UnorderedMap<uint32_t, resources::InlinableValue>&
         inlinable_resources) {
   walk::code(scope, [&](DexMethod*, IRCode& code) { code.build_cfg(); });
 

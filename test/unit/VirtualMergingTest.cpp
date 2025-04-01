@@ -266,7 +266,7 @@ TEST_F(VirtualMergingTest, MergedFooNoProfiles) {
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
 
-  std::unordered_map<const DexMethodRef*, method_profiles::Stats> profile_data;
+  UnorderedMap<const DexMethodRef*, method_profiles::Stats> profile_data;
   auto make_call_count_stat = [](double call_count) {
     method_profiles::Stats stats{};
     stats.call_count = call_count;
@@ -314,7 +314,7 @@ TEST_F(VirtualMergingTest, MergedBarNoProfiles) {
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
 
-  std::unordered_map<const DexMethodRef*, method_profiles::Stats> profile_data;
+  UnorderedMap<const DexMethodRef*, method_profiles::Stats> profile_data;
   auto make_call_count_stat = [](double call_count) {
     method_profiles::Stats stats{};
     stats.call_count = call_count;
@@ -351,7 +351,7 @@ TEST_F(VirtualMergingTest, MergedFooProfiles) {
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
 
-  std::unordered_map<const DexMethodRef*, method_profiles::Stats> profile_data;
+  UnorderedMap<const DexMethodRef*, method_profiles::Stats> profile_data;
   auto make_call_count_stat = [](double call_count) {
     method_profiles::Stats stats{};
     stats.call_count = call_count;
@@ -388,7 +388,7 @@ TEST_F(VirtualMergingTest, MergedBarFooProfiles) {
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
 
-  std::unordered_map<const DexMethodRef*, method_profiles::Stats> profile_data;
+  UnorderedMap<const DexMethodRef*, method_profiles::Stats> profile_data;
   auto make_call_count_stat = [](double call_count) {
     method_profiles::Stats stats{};
     stats.call_count = call_count;
@@ -425,7 +425,7 @@ TEST_F(VirtualMergingTest, MergedFooProfilesAppearBucketsAllAppear100) {
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
 
-  std::unordered_map<const DexMethodRef*, method_profiles::Stats> profile_data;
+  UnorderedMap<const DexMethodRef*, method_profiles::Stats> profile_data;
   auto make_call_count_stat = [](double call_count, double appear100) {
     method_profiles::Stats stats{};
     stats.call_count = call_count;
@@ -463,7 +463,7 @@ TEST_F(VirtualMergingTest, MergedFooProfilesAppearBucketsDiffAppear100) {
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
 
-  std::unordered_map<const DexMethodRef*, method_profiles::Stats> profile_data;
+  UnorderedMap<const DexMethodRef*, method_profiles::Stats> profile_data;
   auto make_call_count_stat = [](double call_count, double appear100) {
     method_profiles::Stats stats{};
     stats.call_count = call_count;
@@ -502,7 +502,7 @@ TEST_F(VirtualMergingTest, MergedFooNoProfilesFallthrough) {
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
 
-  std::unordered_map<const DexMethodRef*, method_profiles::Stats> profile_data;
+  UnorderedMap<const DexMethodRef*, method_profiles::Stats> profile_data;
   auto make_call_count_stat = [](double call_count) {
     method_profiles::Stats stats{};
     stats.call_count = call_count;
@@ -540,7 +540,7 @@ TEST_F(VirtualMergingTest, PerfConfig) {
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
 
-  std::unordered_map<const DexMethodRef*, method_profiles::Stats> profile_data;
+  UnorderedMap<const DexMethodRef*, method_profiles::Stats> profile_data;
   auto make_call_count_stat = [](double appear100, double call_count) {
     method_profiles::Stats stats{};
     stats.appear_percent = appear100;

@@ -8,14 +8,14 @@
 #pragma once
 
 #include "ConcurrentContainers.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexStore.h"
 
 // The definition of TypeSet is defined differently in ClassHierarchy, so we
 // need to manually define ClassHierarchy here.
 using ClassHierarchy =
-    std::unordered_map<const DexType*,
-                       std::set<const DexType*, dextypes_comparator>>;
+    UnorderedMap<const DexType*, std::set<const DexType*, dextypes_comparator>>;
 
 /*
  * This module builds a DAG that enables us to quickly answer the following

@@ -12,7 +12,6 @@
 #include <map>
 #include <string>
 #include <sys/types.h>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -20,6 +19,7 @@
 #include "utils/Serialize.h"
 #include "utils/Visitor.h"
 
+#include "DeterministicContainers.h"
 #include "GlobalConfig.h"
 #include "RedexMappedFile.h"
 #include "RedexResources.h"
@@ -188,8 +188,7 @@ class TableEntryParser : public TableParser {
 
   // For a package, the mapping from each type within all type specs to all the
   // entries/values.
-  std::unordered_map<android::ResTable_package*, TypeToEntries>
-      m_types_to_entries;
+  UnorderedMap<android::ResTable_package*, TypeToEntries> m_types_to_entries;
   // Package and type ID to spec
   std::map<uint16_t, android::ResTable_typeSpec*> m_types;
   // Package and type ID to all configs in that type
@@ -308,7 +307,7 @@ class ResourcesArscFile : public ResourceTableFile {
       const std::map<uint32_t, uint32_t>& old_to_new) override;
   void remap_file_paths_and_serialize(
       const std::vector<std::string>& resource_files,
-      const std::unordered_map<std::string, std::string>& old_to_new) override;
+      const UnorderedMap<std::string, std::string>& old_to_new) override;
   void finalize_resource_table(const ResourceConfig& config) override;
   std::vector<std::string> get_files_by_rid(
       uint32_t res_id,
@@ -329,7 +328,7 @@ class ResourcesArscFile : public ResourceTableFile {
   // API/return values with BundleResources.
   void resolve_string_values_for_resource_reference(
       uint32_t ref, std::vector<std::string>* values) override;
-  std::unordered_map<uint32_t, resources::InlinableValue>
+  UnorderedMap<uint32_t, resources::InlinableValue>
   get_inlinable_resource_values() override;
   std::unordered_set<uint32_t> get_overlayable_id_roots() override;
   ~ResourcesArscFile() override;
@@ -371,7 +370,7 @@ class ApkResources : public AndroidResources {
       const std::string& file_path,
       std::unordered_set<std::string>* out) override;
   void fully_qualify_layout(
-      const std::unordered_map<std::string, std::string>& element_to_class_name,
+      const UnorderedMap<std::string, std::string>& element_to_class_name,
       const std::string& file_path,
       size_t* changes) override;
 

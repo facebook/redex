@@ -262,7 +262,7 @@ void remove_interface_references(
 
   walk::parallel::opcodes(scope, patcher);
 
-  std::unordered_map<const DexType*, DexType*> old_to_new;
+  UnorderedMap<const DexType*, DexType*> old_to_new;
   for (const auto intf : interfaces) {
     auto new_type = get_replacement_type(type_system, intf, root);
     old_to_new[intf] = const_cast<DexType*>(new_type);

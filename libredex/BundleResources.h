@@ -14,10 +14,10 @@
 
 #include <map>
 #include <string>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
+#include "DeterministicContainers.h"
 #include "GlobalConfig.h"
 #include "androidfw/ResourceTypes.h"
 #include "protocfg/config.pb.h"
@@ -35,7 +35,7 @@ class ResourcesPbFile : public ResourceTableFile {
       std::map<size_t, std::vector<uint32_t>>* res_by_hash) override;
   void remap_file_paths_and_serialize(
       const std::vector<std::string>& resource_files,
-      const std::unordered_map<std::string, std::string>& old_to_new) override;
+      const UnorderedMap<std::string, std::string>& old_to_new) override;
   void remap_res_ids_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::map<uint32_t, uint32_t>& old_to_new) override;
@@ -76,7 +76,7 @@ class ResourcesPbFile : public ResourceTableFile {
       uint32_t id) override;
   void resolve_string_values_for_resource_reference(
       uint32_t ref, std::vector<std::string>* values) override;
-  std::unordered_map<uint32_t, resources::InlinableValue>
+  UnorderedMap<uint32_t, resources::InlinableValue>
   get_inlinable_resource_values() override;
   std::unordered_set<uint32_t> get_overlayable_id_roots() override;
 
@@ -117,7 +117,7 @@ class BundleResources : public AndroidResources {
       const std::string& file_path,
       std::unordered_set<std::string>* out) override;
   void fully_qualify_layout(
-      const std::unordered_map<std::string, std::string>& element_to_class_name,
+      const UnorderedMap<std::string, std::string>& element_to_class_name,
       const std::string& file_path,
       size_t* changes) override;
   size_t remap_xml_reference_attributes(

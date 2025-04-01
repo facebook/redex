@@ -174,7 +174,7 @@ std::vector<DexField*> create_merger_fields(const DexType* owner,
 void cook_merger_fields_lookup(
     const std::vector<DexField*>& new_fields,
     const FieldsMap& fields_map,
-    std::unordered_map<DexField*, DexField*>& merger_fields_lookup) {
+    UnorderedMap<DexField*, DexField*>& merger_fields_lookup) {
   for (const auto& fmap : fields_map) {
     const auto& old_fields = fmap.second;
     always_assert(new_fields.size() == old_fields.size());

@@ -21,6 +21,7 @@
 #include "BaselineProfile.h"
 #include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
+#include "DeterministicContainers.h"
 #include "DexStructure.h"
 #include "IRCode.h"
 #include "InstructionLowering.h"
@@ -260,8 +261,7 @@ void never_inline(bool attach_annotations,
 
 void never_compile(
     const Scope& scope,
-    const std::unordered_map<std::string,
-                             baseline_profiles::BaselineProfileConfig>&
+    const UnorderedMap<std::string, baseline_profiles::BaselineProfileConfig>&
         baseline_profile_configs,
     const method_profiles::MethodProfiles& method_profiles,
     const std::vector<std::string>& interactions,
@@ -271,10 +271,10 @@ void never_compile(
     const std::string& excluded_interaction_pattern,
     int64_t excluded_appear100_threshold,
     int64_t excluded_call_count_threshold,
-    std::unordered_map<std::string, baseline_profiles::BaselineProfile>*
+    UnorderedMap<std::string, baseline_profiles::BaselineProfile>*
         baseline_profiles) {
   for (const auto& [config_name, baseline_profile_config] :
-       baseline_profile_configs) {
+       UnorderedIterable(baseline_profile_configs)) {
     auto baseline_profile = baseline_profiles->at(config_name);
     std::unordered_set<std::string> excluded_interaction_ids;
     if (!excluded_interaction_pattern.empty()) {
@@ -509,17 +509,17 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
 
   std::unordered_set<const DexMethodRef*> method_refs_without_def;
   const auto& method_profiles = conf.get_method_profiles();
-  auto get_legacy_baseline_profile = [&]()
-      -> std::tuple<
-          baseline_profiles::BaselineProfile,
-          std::unordered_map<std::string, baseline_profiles::BaselineProfile>> {
-    std::unordered_map<std::string, baseline_profiles::BaselineProfile>
+  auto get_legacy_baseline_profile =
+      [&]() -> std::tuple<
+                baseline_profiles::BaselineProfile,
+                UnorderedMap<std::string, baseline_profiles::BaselineProfile>> {
+    UnorderedMap<std::string, baseline_profiles::BaselineProfile>
         baseline_profiles;
     baseline_profiles::BaselineProfile res;
     for (auto& interaction_id : m_perf_config.interactions) {
       bool startup = interaction_id == "ColdStart";
       const auto& method_stats = method_profiles.method_stats(interaction_id);
-      for (auto&& [method_ref, stat] : method_stats) {
+      for (auto&& [method_ref, stat] : UnorderedIterable(method_stats)) {
         auto method = method_ref->as_def();
         if (method == nullptr) {
           method_refs_without_def.insert(method_ref);
@@ -592,7 +592,7 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   auto baseline_profiles = std::get<1>(baseline_profiles_tuple);
   auto manual_profile = std::get<0>(baseline_profiles_tuple);
   for (const auto& [config_name, baseline_profile_config] :
-       conf.get_baseline_profile_configs()) {
+       UnorderedIterable(conf.get_baseline_profile_configs())) {
     if (baseline_profile_config.options.include_all_startup_classes) {
       const std::vector<std::string>& interdexorder =
           conf.get_coldstart_classes();
@@ -634,13 +634,13 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     // Add it in for it to be compiled.
     auto store_fence_helper_cls = type_class(store_fence_helper_type);
     always_assert(store_fence_helper_cls);
-    for (auto it = baseline_profiles.begin(); it != baseline_profiles.end();
-         it++) {
-      it->second.classes.insert(store_fence_helper_cls);
+    for (auto& entry : UnorderedIterable(baseline_profiles)) {
+      auto& bp = entry.second;
+      bp.classes.insert(store_fence_helper_cls);
     }
   }
 
-  for (const auto& entry : baseline_profiles) {
+  for (const auto& entry : UnorderedIterable(baseline_profiles)) {
     const auto& bp_name = entry.first;
     const auto& bp = entry.second;
     const auto strip_classes =
@@ -670,11 +670,9 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   std::atomic<size_t> compiled{0};
   std::atomic<size_t> compiled_code_units{0};
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    for (auto profile_it = baseline_profiles.begin();
-         profile_it != baseline_profiles.end();
-         profile_it++) {
-      auto it = profile_it->second.methods.find(method);
-      if (it == profile_it->second.methods.end()) {
+    for (auto& profile : UnorderedIterable(baseline_profiles)) {
+      auto it = profile.second.methods.find(method);
+      if (it == profile.second.methods.end()) {
         return;
       }
       auto ecu = code.estimate_code_units();

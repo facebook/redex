@@ -8,8 +8,8 @@
 #pragma once
 
 #include <boost/optional/optional.hpp>
-#include <unordered_map>
 
+#include "DeterministicContainers.h"
 #include "GraphUtil.h"
 
 namespace dominators {
@@ -84,9 +84,9 @@ class SimpleFastDominators {
   }
 
  private:
-  std::unordered_map<NodeId, NodeId> m_idoms;
+  UnorderedMap<NodeId, NodeId> m_idoms;
   std::vector<NodeId> m_postordering;
-  std::unordered_map<NodeId, size_t> m_postorder_map;
+  UnorderedMap<NodeId, size_t> m_postorder_map;
 };
 
 } // namespace dominators

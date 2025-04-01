@@ -234,7 +234,7 @@ ModelMethodMerger::ModelMethodMerger(
     const std::vector<const MergerType*>& mergers,
     const MergerToField& type_tag_fields,
     const TypeTags* type_tags,
-    const std::unordered_map<DexMethod*, std::string>& method_debug_map,
+    const UnorderedMap<DexMethod*, std::string>& method_debug_map,
     const ModelSpec& model_spec,
     boost::optional<size_t> max_num_dispatch_target,
     boost::optional<method_profiles::MethodProfiles*> method_profiles)

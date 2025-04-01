@@ -15,7 +15,7 @@
 struct AnalysisUsageTest : public RedexTest {
   template <typename P>
   static void run_invalidation_policy_by_pass(
-      std::unordered_map<AnalysisID, Pass*>& preserved) {
+      UnorderedMap<AnalysisID, Pass*>& preserved) {
     P* p = new P();
     AnalysisUsage au;
     p->set_analysis_usage(au);
@@ -24,7 +24,7 @@ struct AnalysisUsageTest : public RedexTest {
 
   template <typename P>
   std::shared_ptr<int> get_analysis_result_for_pass(
-      const std::unordered_map<AnalysisID, Pass*>& preserved) {
+      const UnorderedMap<AnalysisID, Pass*>& preserved) {
     P* p = static_cast<P*>(preserved.at(get_analysis_id_by_pass<P>()));
     always_assert(p);
     return p->get_result();
@@ -190,7 +190,7 @@ class ConsumeAnalysis2Pass : public Pass {
 
 TEST_F(AnalysisUsageTest, testAnalysisInvalidation) {
   auto get_preserved_passes = []() {
-    std::unordered_map<AnalysisID, Pass*> ret;
+    UnorderedMap<AnalysisID, Pass*> ret;
 
     auto my = new MyAnalysisPass();
     my->set_result();

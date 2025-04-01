@@ -12,6 +12,7 @@
 #include <string>
 
 #include "ApproximateShapeMerging.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "InterDexGrouping.h"
 #include "MergerType.h"
@@ -28,7 +29,7 @@ using ConstTypeHashSet = std::unordered_set<const DexType*>;
 
 namespace class_merging {
 
-using TypeToTypeSet = std::unordered_map<const DexType*, TypeSet>;
+using TypeToTypeSet = UnorderedMap<const DexType*, TypeSet>;
 using TypeGroupByDex = std::vector<std::pair<boost::optional<size_t>, TypeSet>>;
 
 enum TypeTagConfig {

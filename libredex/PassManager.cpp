@@ -358,7 +358,7 @@ class CheckUniqueDeobfuscatedNames {
                                        const Scope& scope) {
     TRACE(PM, 1, "Running check_unique_deobfuscated_names...");
     Timer t("check_unique_deobfuscated_names");
-    std::unordered_map<const DexString*, DexMethod*> method_names;
+    UnorderedMap<const DexString*, DexMethod*> method_names;
     walk::methods(scope, [&method_names, pass_name](DexMethod* dex_method) {
       auto deob = dex_method->get_deobfuscated_name_or_null();
       auto it = method_names.find(deob);
@@ -372,7 +372,7 @@ class CheckUniqueDeobfuscatedNames {
       }
       method_names.emplace(deob, dex_method);
     });
-    std::unordered_map<std::string, DexField*> field_names;
+    UnorderedMap<std::string, DexField*> field_names;
     walk::fields(scope, [&field_names, pass_name](DexField* dex_field) {
       auto deob = dex_field->get_deobfuscated_name();
       auto it = field_names.find(deob);
@@ -423,7 +423,7 @@ class VisualizerHelper {
 
 class AnalysisUsageHelper {
  public:
-  using PreservedMap = std::unordered_map<AnalysisID, Pass*>;
+  using PreservedMap = UnorderedMap<AnalysisID, Pass*>;
 
   explicit AnalysisUsageHelper(PreservedMap& m)
       : m_preserved_analysis_passes(m) {}
@@ -978,7 +978,7 @@ class TraceClassAfterEachPass {
     fprintf(m_fd, "After Pass %s\n", pass_name.c_str());
     auto temp_scope = build_class_scope(stores);
     if (!m_trace_class_names.empty()) {
-      std::unordered_map<std::string_view, DexClass*> to_print;
+      UnorderedMap<std::string_view, DexClass*> to_print;
       for (auto cls : temp_scope) {
         auto name = cls->get_deobfuscated_name_or_empty();
         if (name.empty()) {
@@ -1003,7 +1003,7 @@ class TraceClassAfterEachPass {
     // code went and how it changes after each pass.
     using SetOfMethods = std::set<DexMethod*, dexmethods_comparator>;
     if (!m_trace_method_names.empty()) {
-      std::unordered_map<std::string_view, SetOfMethods> to_print;
+      UnorderedMap<std::string_view, SetOfMethods> to_print;
       for (const auto& s : m_trace_method_names) {
         auto ref = DexMethod::get_method(s);
         if (ref != nullptr) {
@@ -1200,13 +1200,13 @@ void PassManager::init(const ConfigFiles& config) {
   m_cloned_passes = std::move(activated.cloned_passes);
 
   // Count the number of appearances of each pass name.
-  std::unordered_map<const Pass*, size_t> pass_repeats;
+  UnorderedMap<const Pass*, size_t> pass_repeats;
   for (const Pass* pass : m_activated_passes) {
     ++pass_repeats[pass];
   }
 
   // Init m_pass_info
-  std::unordered_map<const Pass*, size_t> pass_counters;
+  UnorderedMap<const Pass*, size_t> pass_counters;
   m_pass_info.resize(m_activated_passes.size());
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
@@ -1478,7 +1478,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   JemallocStats jemalloc_stats{this, conf};
 
-  std::unordered_map<const Pass*, size_t> runs;
+  UnorderedMap<const Pass*, size_t> runs;
 
   /////////////////////
   // MAIN PASS LOOP. //
@@ -1784,14 +1784,13 @@ const std::vector<PassManager::PassInfo>& PassManager::get_pass_info() const {
   return m_pass_info;
 }
 
-const std::unordered_map<std::string, int64_t>&
-PassManager::get_interdex_metrics() {
+const UnorderedMap<std::string, int64_t>& PassManager::get_interdex_metrics() {
   for (const auto& pass_info : m_pass_info) {
     if (pass_info.pass->name() == "InterDexPass") {
       return pass_info.metrics;
     }
   }
-  static std::unordered_map<std::string, int64_t> empty;
+  static UnorderedMap<std::string, int64_t> empty;
   return empty;
 }
 

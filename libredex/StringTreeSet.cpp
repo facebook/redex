@@ -8,9 +8,9 @@
 #include "StringTreeSet.h"
 
 #include <cmath>
-#include <unordered_map>
 
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexEncoding.h"
 
 namespace {
@@ -94,7 +94,7 @@ void StringTreeMap<ValueType>::encode(std::ostringstream& oss) const {
   always_assert(map_size < 128);
   oss.put(map_size);
   bool first{true};
-  std::unordered_map<char, std::ostringstream::pos_type> offsets;
+  UnorderedMap<char, std::ostringstream::pos_type> offsets;
   for (auto&& [c, nested] : m_map) {
     oss.put(c);
     if (first) {

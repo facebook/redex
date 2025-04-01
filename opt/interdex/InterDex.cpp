@@ -192,7 +192,7 @@ void print_stats(DexesStructure* dexes_structure) {
  */
 void do_order_classes(const std::vector<std::string>& coldstart_class_names,
                       Scope* scope) {
-  std::unordered_map<const DexClass*, uint32_t> class_to_priority;
+  UnorderedMap<const DexClass*, uint32_t> class_to_priority;
   uint32_t priority = 0;
   for (const auto& class_name : coldstart_class_names) {
     if (DexType* type = DexType::get_type(class_name)) {
@@ -248,7 +248,7 @@ namespace interdex {
 
 void InterDex::get_movable_coldstart_classes(
     const std::vector<DexType*>& interdex_types,
-    std::unordered_map<const DexClass*, std::string>& move_coldstart_classes) {
+    UnorderedMap<const DexClass*, std::string>& move_coldstart_classes) {
   auto class_freqs = m_conf.get_class_frequencies();
   const std::vector<std::string>& interactions = m_conf.get_interactions();
   always_assert_log(!class_freqs.empty(), "empty class freqs map");
@@ -538,7 +538,7 @@ void InterDex::emit_interdex_classes(
   }
 
   auto class_freqs = m_conf.get_class_frequencies();
-  std::unordered_map<const DexClass*, std::string> move_coldstart_classes;
+  UnorderedMap<const DexClass*, std::string> move_coldstart_classes;
   if (m_move_coldstart_classes) {
     get_movable_coldstart_classes(interdex_types, move_coldstart_classes);
   }
@@ -1673,7 +1673,7 @@ void InterDex::initialize_baseline_profile_classes() {
     }
 
     const auto& method_stats = method_profiles.method_stats(interaction_id);
-    for (const auto& [method, stat] : method_stats) {
+    for (const auto& [method, stat] : UnorderedIterable(method_stats)) {
       if (stat.appear_percent >= interaction_config.threshold &&
           stat.call_count >= interaction_config.call_threshold) {
         auto* dex_type = method->get_class();

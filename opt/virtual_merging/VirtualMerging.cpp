@@ -248,12 +248,13 @@ struct SimpleOrdering {
     std::unordered_map<const DexMethodRef*, std::pair<double, double>>
         call_counts;
     // Fill first part with cold-start.
-    for (auto& p : profiles.method_stats(method_profiles::COLD_START)) {
+    for (auto& p : UnorderedIterable(
+             profiles.method_stats(method_profiles::COLD_START))) {
       call_counts.emplace(p.first, std::make_pair(p.second.call_count, 0.0));
     }
     // Second part with maximum of other interactions.
     for (auto& p : profiles.all_interactions()) {
-      for (auto& q : p.second) {
+      for (auto& q : UnorderedIterable(p.second)) {
         auto& cc = call_counts[q.first].second;
         cc = std::max(cc, q.second.call_count);
       }

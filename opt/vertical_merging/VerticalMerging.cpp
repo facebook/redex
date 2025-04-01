@@ -560,7 +560,7 @@ void move_fields(DexClass* from_cls, DexClass* to_cls) {
 }
 
 void update_references(const Scope& scope,
-                       const std::unordered_map<DexType*, DexType*>& update_map,
+                       const UnorderedMap<DexType*, DexType*>& update_map,
                        const MethodRefMap& methodref_update_map) {
   walk::parallel::opcodes(
       scope,
@@ -914,7 +914,7 @@ void VerticalMergingPass::move_methods(DexClass* from_cls,
 
 void VerticalMergingPass::merge_classes(const Scope& scope,
                                         const ClassMap& mergeable_to_merger) {
-  std::unordered_map<DexType*, DexType*> update_map;
+  UnorderedMap<DexType*, DexType*> update_map;
   // To store the needed changes from `Mergeable.method` to `Merger.method`.
   MethodRefMap methodref_update_map;
 

@@ -9,6 +9,7 @@
 
 #include <limits>
 
+#include "DeterministicContainers.h"
 #include "Pass.h"
 #include "PassManager.h"
 
@@ -39,7 +40,7 @@ class ReduceSparseSwitchesPass : public Pass {
 
       Multiplexing& operator+=(const Multiplexing&);
     };
-    std::unordered_map<size_t, Multiplexing> multiplexing;
+    UnorderedMap<size_t, Multiplexing> multiplexing;
 
     size_t multiplexing_transformations() const;
 

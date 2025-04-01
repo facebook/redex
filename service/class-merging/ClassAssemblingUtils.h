@@ -27,7 +27,7 @@ std::vector<DexField*> create_merger_fields(const DexType* owner,
 void cook_merger_fields_lookup(
     const std::vector<DexField*>& new_fields,
     const FieldsMap& fields_map,
-    std::unordered_map<DexField*, DexField*>& merger_fields_lookup);
+    UnorderedMap<DexField*, DexField*>& merger_fields_lookup);
 
 DexClass* create_class(const DexType* type,
                        const DexType* super_type,

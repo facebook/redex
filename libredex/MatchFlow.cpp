@@ -6,6 +6,8 @@
  */
 
 #include "MatchFlow.h"
+
+#include "DeterministicContainers.h"
 #include "Show.h"
 #include "Trace.h"
 
@@ -85,7 +87,7 @@ result_t::src_range result_t::matching(location_t l,
 
 std::ostream& operator<<(std::ostream& os, const result_t& res) {
   size_t iix = 0;
-  std::unordered_map<const IRInstruction*, size_t> iids;
+  UnorderedMap<const IRInstruction*, size_t> iids;
   const auto insn_id = [&iix, &iids](const IRInstruction* insn) {
     auto r = iids.emplace(insn, iix);
     if (r.second) {

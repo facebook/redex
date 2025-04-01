@@ -8,6 +8,7 @@
 #include "ExpandableMethodParams.h"
 #include "ApiLevelChecker.h"
 #include "CFGMutation.h"
+#include "DeterministicContainers.h"
 #include "LiveRange.h"
 #include "Resolver.h"
 #include "Show.h"
@@ -190,7 +191,7 @@ DexMethod* ExpandableMethodParams::make_expanded_method_concrete(
   mutation.insert_after(last_load_params_it, {null_insn});
 
   std::vector<IRInstruction*> new_load_param_insns;
-  std::unordered_map<DexField*, reg_t> field_regs;
+  UnorderedMap<DexField*, reg_t> field_regs;
   auto& fields = m_method_infos.at_unsafe(MethodKey::from_method(method))
                      .at(method)
                      .at(param_index);

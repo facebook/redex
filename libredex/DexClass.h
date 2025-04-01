@@ -15,10 +15,10 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <unordered_map>
 #include <utility>
 
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexAccess.h"
 #include "DexDefs.h"
 #include "DexEncoding.h"
@@ -1126,7 +1126,7 @@ class DexMethod : public DexMethodRef {
   void gather_strings_internal(C& lstring, bool exclude_loads) const;
 };
 
-using dexcode_to_offset = std::unordered_map<DexCode*, uint32_t>;
+using dexcode_to_offset = UnorderedMap<DexCode*, uint32_t>;
 
 class DexLocation {
   friend struct RedexContext;

@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "DexUtil.h"
 #include "Pass.h"
 #include "RedexResources.h"
@@ -55,10 +56,10 @@ class ResourcesInliningPass : public Pass {
   // Runs the pass on the given Scope
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  static std::unordered_map<uint32_t, resources::InlinableValue>
+  static UnorderedMap<uint32_t, resources::InlinableValue>
   filter_inlinable_resources(
       ResourceTableFile* res_table,
-      const std::unordered_map<uint32_t, resources::InlinableValue>&
+      const UnorderedMap<uint32_t, resources::InlinableValue>&
           inlinable_resources,
       const std::unordered_set<std::string>& resource_type_names,
       const std::unordered_set<std::string>& resource_entry_names);
@@ -72,7 +73,7 @@ class ResourcesInliningPass : public Pass {
    */
   static MethodTransformsMap find_transformations(
       const Scope&,
-      const std::unordered_map<uint32_t, resources::InlinableValue>&,
+      const UnorderedMap<uint32_t, resources::InlinableValue>&,
       const std::map<uint32_t, std::string>& id_to_name,
       const std::vector<std::string>& type_names,
       const boost::optional<std::string>& package_name);

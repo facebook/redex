@@ -386,7 +386,7 @@ static void sanity_check(const Scope& scope,
   // Class.forName() expects strings of the form "foo.bar.Baz". We should be
   // very suspicious if we see these strings in the string pool that
   // correspond to the old name of a class that we have renamed...
-  for (const auto& it : name_mapping.get_class_map()) {
+  for (const auto& it : UnorderedIterable(name_mapping.get_class_map())) {
     external_names_vec.push_back(
         java_names::internal_to_external(it.first->str()));
   }
@@ -989,7 +989,7 @@ void RenameClassesPassV2::rename_classes(
   }
   /* Now rewrite all const-string strings for force renamed classes. */
   rewriter::TypeStringMap force_rename_map;
-  for (const auto& pair : name_mapping.get_class_map()) {
+  for (const auto& pair : UnorderedIterable(name_mapping.get_class_map())) {
     auto type = DexType::get_type(pair.first);
     if (!type) {
       continue;
@@ -1020,7 +1020,8 @@ void RenameClassesPassV2::rename_classes_in_layouts(
   // in their "external" name, i.e. java.lang.String instead of
   // Ljava/lang/String;
   std::map<std::string, std::string> rename_map_for_layouts;
-  for (auto&& [old_name, new_name] : name_mapping.get_class_map()) {
+  for (auto&& [old_name, new_name] :
+       UnorderedIterable(name_mapping.get_class_map())) {
     // Application should be configuring specific packages/class names to
     // prevent collisions/accidental rewrites of unrelated xml
     // elements/attributes/values; filter the given map to only be known View
@@ -1098,7 +1099,7 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
     mgr.incr_metric(METRIC_SKIPPED_INDICES, skipped_indices);
   }
 
-  for (auto [_, dstring] : name_mapping.get_class_map()) {
+  for (auto [_, dstring] : UnorderedIterable(name_mapping.get_class_map())) {
     always_assert_log(!DexType::get_type(dstring),
                       "Type name collision detected. %s already exists.",
                       dstring->c_str());

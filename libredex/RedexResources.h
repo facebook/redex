@@ -17,7 +17,6 @@
 #include <memory>
 #include <set>
 #include <string>
-#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -25,6 +24,7 @@
 #include "androidfw/ResourceTypes.h"
 
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexUtil.h"
 #include "GlobalConfig.h"
 #include "RedexMappedFile.h"
@@ -107,9 +107,8 @@ std::string convert_utf8_to_mutf8(const std::string& input);
 // id in past_refs, if it is inlinable, adds it to inlinable_resources with the
 // value that it's reference holds
 void resources_inlining_find_refs(
-    const std::unordered_map<uint32_t, uint32_t>& past_refs,
-    std::unordered_map<uint32_t, resources::InlinableValue>*
-        inlinable_resources);
+    const UnorderedMap<uint32_t, uint32_t>& past_refs,
+    UnorderedMap<uint32_t, resources::InlinableValue>* inlinable_resources);
 } // namespace resources
 
 /*
@@ -223,7 +222,7 @@ class ResourceTableFile {
 
   virtual void remap_file_paths_and_serialize(
       const std::vector<std::string>& resource_files,
-      const std::unordered_map<std::string, std::string>& old_to_new) = 0;
+      const UnorderedMap<std::string, std::string>& old_to_new) = 0;
   // Rename qualified resource names that are in allowed type, and are not in
   // the specific list of resource names to keep and don't have a prefix in the
   // keep_resource_prefixes set. All such resource names will be rewritten to
@@ -281,7 +280,7 @@ class ResourceTableFile {
   virtual void resolve_string_values_for_resource_reference(
       uint32_t ref, std::vector<std::string>* values) = 0;
 
-  virtual std::unordered_map<uint32_t, resources::InlinableValue>
+  virtual UnorderedMap<uint32_t, resources::InlinableValue>
   get_inlinable_resource_values() = 0;
 
   // Returns a set of IDs that are overlayable, to be used as reachability roots
@@ -377,7 +376,7 @@ class AndroidResources {
   // class name specified fully qualified. Out param indicates the number of
   // elements that were changed.
   virtual void fully_qualify_layout(
-      const std::unordered_map<std::string, std::string>& element_to_class_name,
+      const UnorderedMap<std::string, std::string>& element_to_class_name,
       const std::string& file_path,
       size_t* changes) = 0;
 

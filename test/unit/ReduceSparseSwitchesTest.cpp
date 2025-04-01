@@ -357,8 +357,8 @@ TEST_F(ReduceSparseSwitchesTest, multiplexing) {
   method->get_code()->clear_cfg();
 
   EXPECT_EQ(stats.multiplexing.size(), 1);
-  EXPECT_EQ(stats.multiplexing.begin()->first, 4);
-  auto& mstats = stats.multiplexing.begin()->second;
+  EXPECT_EQ(unordered_any(stats.multiplexing)->first, 4);
+  auto& mstats = unordered_any(stats.multiplexing)->second;
   EXPECT_EQ(mstats.abandoned, 0);
   EXPECT_EQ(mstats.transformations, 1);
   EXPECT_EQ(mstats.switch_cases, 5);
@@ -430,8 +430,8 @@ TEST_F(ReduceSparseSwitchesTest, multiplexing_shr) {
   method->get_code()->clear_cfg();
 
   EXPECT_EQ(stats.multiplexing.size(), 1);
-  EXPECT_EQ(stats.multiplexing.begin()->first, 4);
-  auto& mstats = stats.multiplexing.begin()->second;
+  EXPECT_EQ(unordered_any(stats.multiplexing)->first, 4);
+  auto& mstats = unordered_any(stats.multiplexing)->second;
   EXPECT_EQ(mstats.abandoned, 0);
   EXPECT_EQ(mstats.transformations, 1);
   EXPECT_EQ(mstats.switch_cases, 5);

@@ -63,8 +63,8 @@ class IODITest : public ::testing::Test {
     instruction_lowering::run(stores, true);
 
     std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make("tmp"));
-    std::unordered_map<DexMethod*, uint64_t> method_to_id;
-    std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
+    UnorderedMap<DexMethod*, uint64_t> method_to_id;
+    UnorderedMap<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
     IODIMetadata iodi_metadata;
     iodi_metadata.mark_methods(stores, iodi_layers);
 
@@ -96,7 +96,7 @@ class IODITest : public ::testing::Test {
         // NOLINTNEXTLINE(bugprone-string-literal-with-embedded-nul)
         SortMode::DEFAULT, {SortMode::DEFAULT}, dummy_cfg, "dex\n035\0");
     if (mids) {
-      for (auto& iter : method_to_id) {
+      for (auto& iter : UnorderedIterable(method_to_id)) {
         DexMethod* method = iter.first;
         redex_assert(CONSTP(method)->get_dex_code() != nullptr);
         redex_assert(CONSTP(method)->get_dex_code()->get_debug_item() !=

@@ -12,6 +12,8 @@
 #include <istream>
 #include <sstream>
 
+#include "DeterministicContainers.h"
+
 namespace api {
 
 bool FrameworkAPI::has_method(const std::string& simple_deobfuscated_name,
@@ -93,7 +95,7 @@ namespace {
 
 void parse_framework_description(
     std::istream& input,
-    std::unordered_map<const DexType*, FrameworkAPI>* framework_classes) {
+    UnorderedMap<const DexType*, FrameworkAPI>* framework_classes) {
   std::string framework_cls_str;
   std::string super_cls_str;
   std::string class_name;

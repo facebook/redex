@@ -8,10 +8,10 @@
 #pragma once
 
 #include <map>
-#include <unordered_map>
 #include <vector>
 
 #include "ClassHierarchy.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "Timer.h"
@@ -273,11 +273,9 @@ std::vector<const DexMethod*> select_from(const VirtualScope* scope,
  * the type. So the number of VirtualScope is always smaller or
  * equals to the number of vmethods (unimplemented interface aside).
  */
-using Scopes =
-    std::unordered_map<const DexType*, std::vector<const VirtualScope*>>;
+using Scopes = UnorderedMap<const DexType*, std::vector<const VirtualScope*>>;
 using InterfaceScopes =
-    std::unordered_map<const DexType*,
-                       std::vector<std::vector<const VirtualScope*>>>;
+    UnorderedMap<const DexType*, std::vector<std::vector<const VirtualScope*>>>;
 
 class ClassScopes {
  private:

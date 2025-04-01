@@ -11,6 +11,7 @@
 #include <unordered_map>
 
 #include "ConfigFiles.h"
+#include "DeterministicContainers.h"
 #include "RedexResources.h"
 #include "Trace.h"
 #include "WorkQueue.h"
@@ -18,7 +19,7 @@
 namespace {
 constexpr const char* METRIC_CHANGED_ELEMENTS = "fully_qualified_elements";
 
-std::unordered_map<std::string, std::string> KNOWN_ELEMENTS = {
+UnorderedMap<std::string, std::string> KNOWN_ELEMENTS = {
     {"SurfaceView", "android.view.SurfaceView"},
     {"TextureView", "android.view.TextureView"},
     {"View", "android.view.View"},

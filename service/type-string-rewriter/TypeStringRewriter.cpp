@@ -120,8 +120,8 @@ const DexString* make_array(const DexString* name, uint32_t level) {
 namespace rewriter {
 
 TypeStringMap::TypeStringMap(
-    const std::unordered_map<const DexType*, DexType*>& type_mapping) {
-  for (const auto& pair : type_mapping) {
+    const UnorderedMap<const DexType*, DexType*>& type_mapping) {
+  for (const auto& pair : UnorderedIterable(type_mapping)) {
     add_type_name(pair.first->get_name(), pair.second->get_name());
   }
 }

@@ -767,7 +767,7 @@ Json::Value get_pass_stats(const PassManager& mgr) {
       continue;
     }
     Json::Value pass;
-    for (const auto& pass_metric : pass_info.metrics) {
+    for (const auto& pass_metric : UnorderedIterable(pass_info.metrics)) {
       pass[pass_metric.first] = (Json::Int64)pass_metric.second;
     }
     all[pass_info.name] = pass;
@@ -955,9 +955,8 @@ Json::Value get_threads_stats() {
 
 void write_debug_line_mapping(
     const std::string& debug_line_map_filename,
-    const std::unordered_map<DexMethod*, uint64_t>& method_to_id,
-    const std::unordered_map<DexCode*, std::vector<DebugLineItem>>&
-        code_debug_lines,
+    const UnorderedMap<DexMethod*, uint64_t>& method_to_id,
+    const UnorderedMap<DexCode*, std::vector<DebugLineItem>>& code_debug_lines,
     DexStoresVector& stores,
     const std::vector<DexMethod*>& needs_debug_line_mapping) {
   /*
@@ -1473,8 +1472,8 @@ void redex_backend(ConfigFiles& conf,
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(
       dik == DebugInfoKind::NoCustomSymbolication ? ""
                                                   : line_number_map_filename));
-  std::unordered_map<DexMethod*, uint64_t> method_to_id;
-  std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
+  UnorderedMap<DexMethod*, uint64_t> method_to_id;
+  UnorderedMap<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
 
   auto iodi_metadata = [&]() {
     auto val = conf.get_json_config().get("iodi_layer_mode", Json::Value());
@@ -1616,11 +1615,8 @@ void redex_backend(ConfigFiles& conf,
     if (dex_output_config.write_class_sizes) {
       Timer t2("Writing class sizes");
       // Sort for stability.
-      std::vector<const DexClass*> keys;
-      std::transform(output_totals.class_size.begin(),
-                     output_totals.class_size.end(), std::back_inserter(keys),
-                     [](const auto& p) { return p.first; });
-      std::sort(keys.begin(), keys.end(), compare_dexclasses);
+      auto keys =
+          unordered_order_keys(output_totals.class_size, compare_dexclasses);
       std::ofstream ofs{conf.metafile("redex-class-sizes.csv")};
       for (auto* c : keys) {
         ofs << c->get_deobfuscated_name_or_empty() << ","

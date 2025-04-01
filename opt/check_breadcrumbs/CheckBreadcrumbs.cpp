@@ -17,6 +17,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
 
+#include "DeterministicContainers.h"
 #include "DexAccess.h"
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -133,7 +134,7 @@ void build_allowed_violations(const Scope& scope,
             allowed_violations_file_path.c_str());
     return;
   }
-  std::unordered_map<std::string, bool> allowed_class_names;
+  UnorderedMap<std::string, bool> allowed_class_names;
   std::string line;
   while (std::getline(input, line)) {
     if (line.empty() || boost::algorithm::starts_with(line, "#")) {
@@ -153,7 +154,7 @@ void build_allowed_violations(const Scope& scope,
     }
   }
   if (enforce_types_exist) {
-    for (const auto& pair : allowed_class_names) {
+    for (const auto& pair : UnorderedIterable(allowed_class_names)) {
       if (!pair.second) {
         unneeded_lines->emplace_back(pair.first);
       }

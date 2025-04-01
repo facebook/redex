@@ -10,6 +10,7 @@
 #include "CFGMutation.h"
 #include "ConcurrentContainers.h"
 #include "Creators.h"
+#include "DeterministicContainers.h"
 #include "IRCode.h"
 #include "LiveRange.h"
 #include "Mutators.h"
@@ -359,7 +360,7 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
 
   InsertOnlyConcurrentMap<DexClass*, DexClass*> map;
   ConcurrentSet<DexClass*> bad;
-  std::unordered_map<DexClass*, unsigned> outer_cls_count;
+  UnorderedMap<DexClass*, unsigned> outer_cls_count;
   std::unordered_set<DexType*> do_not_inline_set;
   Stats stats;
   for (auto& p : m_do_not_inline_list) {

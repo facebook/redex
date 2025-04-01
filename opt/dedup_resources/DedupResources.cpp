@@ -322,7 +322,7 @@ void deduplicate_resource_files(PassManager& mgr, const std::string& zip_dir) {
                                 [](const std::string& s) { return s; });
 
   // Build remapping, this must be done in terms of device paths.
-  std::unordered_map<std::string, std::string> file_mapping;
+  UnorderedMap<std::string, std::string> file_mapping;
   std::unordered_set<std::string> files_to_delete;
   for (const auto& vec : duplicates) {
     auto size = vec.size();

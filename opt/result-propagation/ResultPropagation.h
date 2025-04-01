@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "MethodOverrideGraph.h"
 #include "Pass.h"
 #include "Resolver.h"
@@ -45,7 +46,7 @@ class ReturnParamResolver {
    */
   boost::optional<ParamIndex> get_return_param_index(
       const IRInstruction* insn,
-      const std::unordered_map<const DexMethod*, ParamIndex>&
+      const UnorderedMap<const DexMethod*, ParamIndex>&
           methods_which_return_parameter,
       MethodRefCache& resolved_refs) const;
 
@@ -55,7 +56,7 @@ class ReturnParamResolver {
    */
   boost::optional<ParamIndex> get_return_param_index(
       const cfg::ControlFlowGraph& cfg,
-      const std::unordered_map<const DexMethod*, ParamIndex>&
+      const UnorderedMap<const DexMethod*, ParamIndex>&
           methods_which_return_parameter) const;
 
  private:
@@ -97,7 +98,7 @@ class ResultPropagation {
     }
   };
 
-  ResultPropagation(const std::unordered_map<const DexMethod*, ParamIndex>&
+  ResultPropagation(const UnorderedMap<const DexMethod*, ParamIndex>&
                         methods_which_return_parameter,
                     const ReturnParamResolver& resolver,
                     const std::unordered_set<DexMethod*>& callee_blocklist)
@@ -113,7 +114,7 @@ class ResultPropagation {
   void patch(PassManager&, cfg::ControlFlowGraph&);
 
  private:
-  const std::unordered_map<const DexMethod*, ParamIndex>&
+  const UnorderedMap<const DexMethod*, ParamIndex>&
       m_methods_which_return_parameter;
   const ReturnParamResolver& m_resolver;
   mutable Stats m_stats;
@@ -159,7 +160,7 @@ class ResultPropagationPass : public Pass {
    * figure out all methods which return an incoming parameter, taking into
    * account deep call chains.
    */
-  static std::unordered_map<const DexMethod*, ParamIndex>
+  static UnorderedMap<const DexMethod*, ParamIndex>
   find_methods_which_return_parameter(PassManager& mgr,
                                       const Scope& scope,
                                       const ReturnParamResolver& resolver);

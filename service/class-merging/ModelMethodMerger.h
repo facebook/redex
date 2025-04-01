@@ -55,7 +55,7 @@ class ModelMethodMerger {
       const std::vector<const MergerType*>& mergers,
       const MergerToField& type_tag_fields,
       const TypeTags* type_tags,
-      const std::unordered_map<DexMethod*, std::string>& method_debug_map,
+      const UnorderedMap<DexMethod*, std::string>& method_debug_map,
       const ModelSpec& model_spec,
       boost::optional<size_t> max_num_dispatch_target,
       boost::optional<method_profiles::MethodProfiles*> method_profiles);
@@ -86,7 +86,7 @@ class ModelMethodMerger {
   const std::vector<const MergerType*> m_mergers;
   const MergerToField m_type_tag_fields;
   const TypeTags* m_type_tags;
-  const std::unordered_map<DexMethod*, std::string>& m_method_debug_map;
+  const UnorderedMap<DexMethod*, std::string>& m_method_debug_map;
   const ModelSpec m_model_spec;
   // This member is only used for testing purpose. If its value is greator than
   // zero, the splitting decision will bypass the instruction count limit.

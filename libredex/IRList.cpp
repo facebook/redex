@@ -667,9 +667,8 @@ bool IRList::structural_equals(
   auto it1 = m_list.begin();
   auto it2 = other.begin();
 
-  std::unordered_map<const MethodItemEntry*, const MethodItemEntry*> matches;
-  std::unordered_map<const MethodItemEntry*, const MethodItemEntry*>
-      delayed_matches;
+  UnorderedMap<const MethodItemEntry*, const MethodItemEntry*> matches;
+  UnorderedMap<const MethodItemEntry*, const MethodItemEntry*> delayed_matches;
   auto may_match = [&](const MethodItemEntry* mie1,
                        const MethodItemEntry* mie2) {
     always_assert(mie1 && mie1->type != MFLOW_DEBUG &&

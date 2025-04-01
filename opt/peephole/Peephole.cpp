@@ -12,7 +12,6 @@
 #include <cmath>
 #include <iostream>
 #include <numeric>
-#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -21,6 +20,7 @@
 
 #include "CFGMutation.h"
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexUtil.h"
@@ -275,11 +275,11 @@ struct Matcher {
   size_t match_index;
   std::vector<IRInstruction*> matched_instructions;
 
-  std::unordered_map<Register, reg_t, EnumClassHash> matched_regs;
-  std::unordered_map<String, const DexString*, EnumClassHash> matched_strings;
-  std::unordered_map<Literal, int64_t, EnumClassHash> matched_literals;
-  std::unordered_map<Type, DexType*, EnumClassHash> matched_types;
-  std::unordered_map<Field, DexFieldRef*, EnumClassHash> matched_fields;
+  UnorderedMap<Register, reg_t, EnumClassHash> matched_regs;
+  UnorderedMap<String, const DexString*, EnumClassHash> matched_strings;
+  UnorderedMap<Literal, int64_t, EnumClassHash> matched_literals;
+  UnorderedMap<Type, DexType*, EnumClassHash> matched_types;
+  UnorderedMap<Field, DexFieldRef*, EnumClassHash> matched_fields;
 
   explicit Matcher(const Pattern& pattern) : pattern(pattern), match_index(0) {}
 

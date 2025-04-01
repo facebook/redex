@@ -9,9 +9,10 @@
 
 #include <string>
 #include <typeinfo>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+#include "DeterministicContainers.h"
 
 class Pass;
 
@@ -61,7 +62,7 @@ class AnalysisUsage {
   // invalidation policy set up by the pass in which the AnalysisUsage is
   // defined.
   void do_pass_invalidation(
-      std::unordered_map<AnalysisID, Pass*>* preserved_analysis_passes) const;
+      UnorderedMap<AnalysisID, Pass*>* preserved_analysis_passes) const;
 
   // Called from PassManager. Performs checks on analysis pass dependencies
   // without running any pass.

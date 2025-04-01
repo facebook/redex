@@ -272,7 +272,7 @@ struct ConfigFiles {
   bool m_load_class_lists_attempted{false};
   std::unique_ptr<ProguardMap> m_proguard_map;
   std::string m_class_frequency_filename;
-  std::unordered_map<std::string, baseline_profiles::BaselineProfileConfig>
+  UnorderedMap<std::string, baseline_profiles::BaselineProfileConfig>
       m_baseline_profile_config_list;
   std::string m_coldstart_class_filename;
   std::string m_coldstart_methods_filename;

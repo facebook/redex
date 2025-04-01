@@ -8,6 +8,7 @@
 #include "DexClass.h"
 
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexAccess.h"
 #include "DexAnnotation.h"
 #include "DexDebugInstruction.h"
@@ -33,7 +34,6 @@
 #include <boost/optional.hpp>
 #include <memory>
 #include <mutex>
-#include <unordered_map>
 #include <unordered_set>
 
 #define INSTANTIATE(METHOD, TYPE)                        \
@@ -448,7 +448,7 @@ uint32_t DexDebugItem::get_line_start() const {
 }
 
 DexDebugItem::DexDebugItem(const DexDebugItem& that) {
-  std::unordered_map<DexPosition*, DexPosition*> pos_map;
+  UnorderedMap<DexPosition*, DexPosition*> pos_map;
   m_dbg_entries.reserve(that.m_dbg_entries.size());
   for (auto& entry : that.m_dbg_entries) {
     switch (entry.type) {
@@ -739,7 +739,7 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
   }
   hemit = write_uleb128(hemit, catches_set.size());
   int tryno = 0;
-  std::unordered_map<DexCatches, uint32_t, boost::hash<DexCatches>> catches_map;
+  UnorderedMap<DexCatches, uint32_t, boost::hash<DexCatches>> catches_map;
   for (auto it = m_tries.begin(); it != m_tries.end(); ++it, ++tryno) {
     auto& dextry = *it;
     always_assert(dextry->m_start_addr < code->insns_size);

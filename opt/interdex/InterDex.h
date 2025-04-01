@@ -12,6 +12,7 @@
 #include "AssetManager.h"
 #include "BaselineProfileConfig.h"
 #include "CrossDexRefMinimizer.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexStoreUtil.h"
 #include "DexStructure.h"
@@ -238,7 +239,7 @@ class InterDex {
 
   void get_movable_coldstart_classes(
       const std::vector<DexType*>& interdex_types,
-      std::unordered_map<const DexClass*, std::string>& move_coldstart_classes);
+      UnorderedMap<const DexClass*, std::string>& move_coldstart_classes);
 
   EmittingState m_emitting_state;
 
@@ -259,7 +260,7 @@ class InterDex {
   // True if dynamically_dead_classes are emitting.
   bool m_emitting_dynamically_dead_dex;
 
-  std::unordered_map<const DexClass*, size_t> m_interdex_order;
+  UnorderedMap<const DexClass*, size_t> m_interdex_order;
   bool m_emitting_scroll_set;
   bool m_emitting_bg_set;
   bool m_emitted_bg_set;

@@ -639,7 +639,7 @@ void gather_true_virtual_methods(
         }
         std::unordered_set<DexType*> formal_callee_types;
         bool any_same_implementation_invokes{false};
-        for (auto& p : caller_to_invocations.caller_insns) {
+        for (auto& p : UnorderedIterable(caller_to_invocations.caller_insns)) {
           for (auto insn : p.second) {
             formal_callee_types.insert(insn->get_method()->get_class());
             if (same_implementation_invokes.count_unsafe(insn)) {
@@ -671,7 +671,7 @@ void gather_true_virtual_methods(
             });
           }
         }
-        for (auto& p : caller_to_invocations.caller_insns) {
+        for (auto& p : UnorderedIterable(caller_to_invocations.caller_insns)) {
           for (auto it = p.second.begin(); it != p.second.end();) {
             auto insn = *it;
             if (!formal_callee_types.count(insn->get_method()->get_class())) {
@@ -710,8 +710,8 @@ void gather_true_virtual_methods(
             it++;
           }
         }
-        std20::erase_if(caller_to_invocations.caller_insns,
-                        [&](auto& p) { return p.second.empty(); });
+        unordered_erase_if(caller_to_invocations.caller_insns,
+                           [&](auto& p) { return p.second.empty(); });
       },
       true_virtual_callees);
   for (auto& pair : concurrent_true_virtual_callers) {
@@ -1032,7 +1032,7 @@ void run_inliner(
     // didn't inline, but in run time the callsite may still be resolved to
     // those methods that are inlined. We are relying on RMU to clean up
     // true virtual methods that are not referenced.
-    for (const auto& pair : true_virtual_callers) {
+    for (const auto& pair : UnorderedIterable(true_virtual_callers)) {
       inlined.erase(pair.first);
     }
     deleted =

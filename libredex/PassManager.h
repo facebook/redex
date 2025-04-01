@@ -12,12 +12,12 @@
 #include <memory>
 #include <string>
 #include <typeinfo>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "AnalysisUsage.h"
 #include "AssetManager.h"
+#include "DeterministicContainers.h"
 #include "DexHasher.h"
 #include "JsonWrapper.h"
 #include "RedexOptions.h"
@@ -71,7 +71,7 @@ class PassManager {
     size_t repeat; // zero-based
     size_t total_repeat;
     std::string name;
-    std::unordered_map<std::string, int64_t> metrics;
+    UnorderedMap<std::string, int64_t> metrics;
     JsonWrapper config;
     boost::optional<hashing::DexHash> hash;
     redex_properties::PropertyInteractions property_interactions;
@@ -88,7 +88,7 @@ class PassManager {
   const RedexOptions& get_redex_options() const { return m_redex_options; }
 
   // A temporary hack to return the interdex metrics. Will be removed later.
-  const std::unordered_map<std::string, int64_t>& get_interdex_metrics();
+  const UnorderedMap<std::string, int64_t>& get_interdex_metrics();
 
   const keep_rules::ProguardConfiguration& get_proguard_config() {
     return *m_pg_config;
@@ -176,7 +176,7 @@ class PassManager {
   AssetManager m_asset_mgr;
   std::vector<Pass*> m_registered_passes;
   std::vector<Pass*> m_activated_passes;
-  std::unordered_map<AnalysisID, Pass*> m_preserved_analysis_passes;
+  UnorderedMap<AnalysisID, Pass*> m_preserved_analysis_passes;
 
   // Per-pass information and metrics
   std::vector<PassManager::PassInfo> m_pass_info;

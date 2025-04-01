@@ -939,7 +939,7 @@ void extract_classes_from_layout(
     return;
   }
 
-  std::unordered_map<int, std::string> namespace_prefix_map;
+  UnorderedMap<int, std::string> namespace_prefix_map;
   android::ResXMLParser::event_code_t type;
   do {
     type = parser.next();
@@ -1073,8 +1073,8 @@ class NodeAttributeTransformer : public XmlElementCollector {
   ~NodeAttributeTransformer() override {}
 
   NodeAttributeTransformer(
-      const std::unordered_map<std::string, std::string>& element_to_class_name,
-      const std::unordered_map<std::string, uint32_t>& class_name_to_idx,
+      const UnorderedMap<std::string, std::string>& element_to_class_name,
+      const UnorderedMap<std::string, uint32_t>& class_name_to_idx,
       uint32_t class_attr_idx,
       uint32_t view_idx)
       : m_element_to_class_name(element_to_class_name),
@@ -1162,8 +1162,8 @@ class NodeAttributeTransformer : public XmlElementCollector {
   }
 
   // Offset information about the string pool of the document
-  const std::unordered_map<std::string, std::string>& m_element_to_class_name;
-  const std::unordered_map<std::string, uint32_t>& m_class_name_to_idx;
+  const UnorderedMap<std::string, std::string>& m_element_to_class_name;
+  const UnorderedMap<std::string, uint32_t>& m_class_name_to_idx;
   // This is the string pool index for the string "class"
   uint32_t m_class_attr_idx;
   // This is the string pool index for the string "view"
@@ -1189,7 +1189,7 @@ void ApkResources::collect_xml_attribute_string_values_for_file(
 }
 
 void ApkResources::fully_qualify_layout(
-    const std::unordered_map<std::string, std::string>& element_to_class_name,
+    const UnorderedMap<std::string, std::string>& element_to_class_name,
     const std::string& file_path,
     size_t* changes) {
   // Check if this file has any applicable elements to fully qualify. If any
@@ -1197,14 +1197,15 @@ void ApkResources::fully_qualify_layout(
   // string pool, along with the replacement element name and attribute name
   // that we'll need.
   std::set<std::string> strings_to_add;
-  std::unordered_map<std::string, uint32_t> string_to_idx;
+  UnorderedMap<std::string, uint32_t> string_to_idx;
   bool needs_changes = false;
   android::Vector<char> file_vec;
 
   redex::read_file_with_contents(file_path, [&](const char* data, size_t size) {
     XmlElementCollector collector;
     if (collector.visit((void*)data, size)) {
-      for (const auto& [element, class_name] : element_to_class_name) {
+      for (const auto& [element, class_name] :
+           UnorderedIterable(element_to_class_name)) {
         if (collector.m_element_names.count(element) > 0) {
           strings_to_add.emplace(class_name);
           needs_changes = true;
@@ -1214,8 +1215,9 @@ void ApkResources::fully_qualify_layout(
     if (needs_changes) {
       strings_to_add.emplace("class");
       strings_to_add.emplace("view");
-      auto result = arsc::ensure_strings_in_xml_pool(data, size, strings_to_add,
-                                                     &file_vec, &string_to_idx);
+      auto result = arsc::ensure_strings_in_xml_pool(
+          data, size, strings_to_add, &file_vec,
+          &unordered_unsafe_unwrap(string_to_idx));
       always_assert_log(result == android::OK,
                         "Failed to edit file %s; it may not be valid",
                         file_path.c_str());
@@ -1697,7 +1699,7 @@ class GlobalStringPoolReader : public arsc::ResourceTableVisitor {
   std::shared_ptr<android::ResStringPool> m_global_strings =
       std::make_shared<android::ResStringPool>();
   android::ResStringPool_header* m_global_strings_header = nullptr;
-  std::unordered_map<std::string, uint32_t> m_string_to_idx;
+  UnorderedMap<std::string, uint32_t> m_string_to_idx;
 };
 
 class StringPoolRefRemappingVisitor : public arsc::StringPoolRefVisitor {
@@ -1705,7 +1707,7 @@ class StringPoolRefRemappingVisitor : public arsc::StringPoolRefVisitor {
   ~StringPoolRefRemappingVisitor() override {}
 
   explicit StringPoolRefRemappingVisitor(
-      const std::unordered_map<uint32_t, uint32_t>& old_to_new)
+      const UnorderedMap<uint32_t, uint32_t>& old_to_new)
       : m_old_to_new(old_to_new) {}
 
   void remap_impl(const uint32_t& idx,
@@ -1727,7 +1729,7 @@ class StringPoolRefRemappingVisitor : public arsc::StringPoolRefVisitor {
   }
 
  private:
-  const std::unordered_map<uint32_t, uint32_t>& m_old_to_new;
+  const UnorderedMap<uint32_t, uint32_t>& m_old_to_new;
 };
 
 // Collects string references into the global string pool from values and styles
@@ -1793,12 +1795,12 @@ class PackageStringRefCollector : public apk::TableParser {
 
 void ResourcesArscFile::remap_file_paths_and_serialize(
     const std::vector<std::string>& /* resource_files */,
-    const std::unordered_map<std::string, std::string>& old_to_new) {
+    const UnorderedMap<std::string, std::string>& old_to_new) {
   TRACE(RES, 9, "BEGIN GlobalStringPoolReader");
   GlobalStringPoolReader string_reader;
   string_reader.visit(m_f.data(), m_arsc_len);
-  std::unordered_map<uint32_t, uint32_t> old_to_new_idx;
-  for (auto& pair : old_to_new) {
+  UnorderedMap<uint32_t, uint32_t> old_to_new_idx;
+  for (auto& pair : UnorderedIterable(old_to_new)) {
     old_to_new_idx.emplace(
         string_reader.get_index_of_utf8s_string(pair.first),
         string_reader.get_index_of_utf8s_string(pair.second));
@@ -1841,7 +1843,7 @@ void add_string_idx_to_builder(
 // against the spans required by a kept index.
 void rebuild_string_pool(
     const android::ResStringPool& string_pool,
-    const std::unordered_map<uint32_t, uint32_t>& kept_old_to_new,
+    const UnorderedMap<uint32_t, uint32_t>& kept_old_to_new,
     const std::function<void(android::ResStringPool_span*)>& span_remapper,
     arsc::ResStringPoolBuilder* builder) {
   const auto is_utf8 = string_pool.isUTF8();
@@ -1850,7 +1852,7 @@ void rebuild_string_pool(
                     "Pool remapping is too large");
 
   std::vector<ssize_t> output_order(new_string_pool_size, -1);
-  for (const auto& pair : kept_old_to_new) {
+  for (const auto& pair : UnorderedIterable(kept_old_to_new)) {
     always_assert_log(pair.second < new_string_pool_size,
                       "Pool remap idx out of bounds");
     always_assert_log(output_order.at(pair.second) == -1,
@@ -1875,7 +1877,7 @@ void rebuild_string_pool(
 // builder in the order specified.
 void rebuild_string_pool(
     const android::ResStringPool& string_pool,
-    const std::unordered_map<uint32_t, uint32_t>& kept_old_to_new,
+    const UnorderedMap<uint32_t, uint32_t>& kept_old_to_new,
     arsc::ResStringPoolBuilder* builder) {
   rebuild_string_pool(
       string_pool, kept_old_to_new, [](android::ResStringPool_span*) {},
@@ -1884,11 +1886,10 @@ void rebuild_string_pool(
 
 // Given the kept strings, build the mapping from old -> new in the projected
 // new string pool.
-void project_string_mapping(
-    const std::unordered_set<uint32_t>& used_strings,
-    const android::ResStringPool& string_pool,
-    std::unordered_map<uint32_t, uint32_t>* kept_old_to_new,
-    bool sort_by_string_value = false) {
+void project_string_mapping(const std::unordered_set<uint32_t>& used_strings,
+                            const android::ResStringPool& string_pool,
+                            UnorderedMap<uint32_t, uint32_t>* kept_old_to_new,
+                            bool sort_by_string_value = false) {
   always_assert(kept_old_to_new->empty());
 
   std::vector<uint32_t> used_indices(used_strings.begin(), used_strings.end());
@@ -1970,7 +1971,7 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
   }
 
   // 2) Build the compacted map of old -> new indicies for used global strings.
-  std::unordered_map<uint32_t, uint32_t> global_old_to_new;
+  UnorderedMap<uint32_t, uint32_t> global_old_to_new;
   project_string_mapping(used_global_strings, *string_pool, &global_old_to_new);
 
   // 3) Remap all Res_value structs
@@ -2026,7 +2027,7 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
     for (auto& ref : refs) {
       used_key_strings.emplace(dtohl(ref->index));
     }
-    std::unordered_map<uint32_t, uint32_t> key_old_to_new;
+    UnorderedMap<uint32_t, uint32_t> key_old_to_new;
     project_string_mapping(used_key_strings, *key_string_pool, &key_old_to_new,
                            config.sort_key_strings);
 
@@ -2810,15 +2811,15 @@ bool is_inlinable_resource_value(
  * Finds a map of the resource id to an inlinable value, if a certain resource
  * value could be eligible for inlining
  */
-std::unordered_map<uint32_t, resources::InlinableValue>
+UnorderedMap<uint32_t, resources::InlinableValue>
 ResourcesArscFile::get_inlinable_resource_values() {
   apk::TableSnapshot& table_snapshot = get_table_snapshot();
   android::ResStringPool& global_string_pool =
       table_snapshot.get_global_strings(); // gives pool of strings
   apk::TableEntryParser& parsed_table = table_snapshot.get_parsed_table();
   auto& res_id_to_entries = parsed_table.m_res_id_to_entries;
-  std::unordered_map<uint32_t, resources::InlinableValue> inlinable_resources;
-  std::unordered_map<uint32_t, uint32_t> past_refs;
+  UnorderedMap<uint32_t, resources::InlinableValue> inlinable_resources;
+  UnorderedMap<uint32_t, uint32_t> past_refs;
 
   for (auto& pair : res_id_to_entries) {
     uint32_t id = pair.first;

@@ -9,11 +9,11 @@
 
 #include <deque>
 #include <mutex>
-#include <unordered_map>
 #include <vector>
 
 #include "AnnoUtils.h"
 #include "ConfigFiles.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRCode.h"
@@ -224,7 +224,7 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
   }
   std::sort(ordered_fixed_protos.begin(), ordered_fixed_protos.end(),
             compare_weighted_dexprotos);
-  std::unordered_map<DexProto*, DexProto*> fixed_representatives;
+  UnorderedMap<DexProto*, DexProto*> fixed_representatives;
   for (auto p : ordered_fixed_protos) {
     auto proto = p.first;
     auto normalized_proto = normalize_proto(proto);
@@ -464,7 +464,7 @@ static std::deque<uint16_t> update_method_body_for_reordered_proto(
   }
 
   std::deque<uint16_t> idxs;
-  std::unordered_map<DexType*, std::deque<uint16_t>> idxs_by_type;
+  UnorderedMap<DexType*, std::deque<uint16_t>> idxs_by_type;
   int idx = 0;
   if (!is_static(method)) {
     idxs.push_back(idx++);
@@ -738,7 +738,7 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
 
   RemoveArgs::MethodStats method_stats;
   std::vector<DexClass*> classes;
-  std::unordered_map<DexClass*, std::vector<std::pair<DexMethod*, Entry>>>
+  UnorderedMap<DexClass*, std::vector<std::pair<DexMethod*, Entry>>>
       class_entries;
   for (auto& p : ordered_entries) {
     DexMethod* method = p.first;

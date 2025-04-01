@@ -83,15 +83,11 @@ bool is_subset(const Set& left, const Set& right) {
 
 void print_interface_maps(const TypeToTypeSet& intf_to_classes,
                           const ConstTypeHashSet& types) {
-  std::vector<const DexType*> intfs;
-  for (const auto& intf_to_classes_it : intf_to_classes) {
-    intfs.emplace_back(intf_to_classes_it.first);
-  }
-  std::sort(intfs.begin(), intfs.end(),
-            [&](const DexType* first, const DexType* second) {
-              return intf_to_classes.at(first).size() <
-                     intf_to_classes.at(second).size();
-            });
+  auto intfs = unordered_order_keys(
+      intf_to_classes, [&](const DexType* first, const DexType* second) {
+        return intf_to_classes.at(first).size() <
+               intf_to_classes.at(second).size();
+      });
   for (const auto& intf : intfs) {
     const auto& classes = intf_to_classes.at(intf);
     TRACE(CLMG, 8, "- interface %s -> %zu", SHOW(intf), classes.size());

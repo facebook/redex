@@ -85,8 +85,7 @@ void IODIMetadata::mark_methods(DexStoresVector& scope, bool iodi_layers) {
   for (auto& store : scope) {
     for (auto& classes : store.get_dexen()) {
       for (auto& cls : classes) {
-        std::unordered_map<std::string, std::pair<const DexMethod*, size_t>>
-            name_map;
+        UnorderedMap<std::string, std::pair<const DexMethod*, size_t>> name_map;
 
         auto emplace_entry = [this, &name_map, large_bound](
                                  const std::string& str, DexMethod* m) {
@@ -142,7 +141,7 @@ void IODIMetadata::mark_method_huge(const DexMethod* method) {
 
 void IODIMetadata::write(
     const std::string& iodi_metadata_filename,
-    const std::unordered_map<DexMethod*, uint64_t>& method_to_id) {
+    const UnorderedMap<DexMethod*, uint64_t>& method_to_id) {
   if (iodi_metadata_filename.empty()) {
     return;
   }
@@ -152,8 +151,7 @@ void IODIMetadata::write(
 }
 
 void IODIMetadata::write(
-    std::ostream& ofs,
-    const std::unordered_map<DexMethod*, uint64_t>& method_to_id) {
+    std::ostream& ofs, const UnorderedMap<DexMethod*, uint64_t>& method_to_id) {
   /*
    * Binary file format
    * {
@@ -192,7 +190,7 @@ void IODIMetadata::write(
   size_t max_layer{0};
   size_t layered_count{0};
 
-  for (const auto& [method, layer] : m_iodi_method_layers) {
+  for (const auto& [method, layer] : UnorderedIterable(m_iodi_method_layers)) {
     count += 1;
     always_assert_log(count != 0, "Too many entries found, overflowed");
 

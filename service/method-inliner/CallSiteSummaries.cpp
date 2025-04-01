@@ -197,7 +197,7 @@ void CallSiteSummarizer::summarize() {
   // Helper function to retrieve a list of callers of a callee such that all
   // possible call-sites to the callee are in the returned callers.
   auto get_dependencies =
-      [&](DexMethod* callee) -> const std::unordered_map<DexMethod*, size_t>* {
+      [&](DexMethod* callee) -> const UnorderedMap<DexMethod*, size_t>* {
     const auto* ptr = m_callee_caller.get_unsafe(callee);
     if (ptr == nullptr || m_has_callee_other_call_sites_fn(callee)) {
       return nullptr;
@@ -277,7 +277,7 @@ void CallSiteSummarizer::summarize() {
     callers.push_back(method);
     auto dependencies = get_dependencies(method);
     if (dependencies) {
-      for (auto& q : *dependencies) {
+      for (auto& q : UnorderedIterable(*dependencies)) {
         summaries_scheduler.add_dependency(method, q.first);
       }
     }
@@ -289,7 +289,7 @@ void CallSiteSummarizer::summarize() {
 InvokeCallSiteSummariesAndDeadBlocks
 CallSiteSummarizer::get_invoke_call_site_summaries(
     DexMethod* caller,
-    const std::unordered_map<DexMethod*, size_t>& callees,
+    const UnorderedMap<DexMethod*, size_t>& callees,
     const ConstantEnvironment& initial_env) {
   IRCode* code = caller->get_code();
 

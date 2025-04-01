@@ -14,7 +14,7 @@ AnalysisID get_analysis_id_by_pass(const Pass* pass) {
 }
 
 void AnalysisUsage::do_pass_invalidation(
-    std::unordered_map<AnalysisID, Pass*>* preserved_analysis_passes) const {
+    UnorderedMap<AnalysisID, Pass*>* preserved_analysis_passes) const {
 
   if (m_preserve_all) {
     return;
@@ -22,7 +22,7 @@ void AnalysisUsage::do_pass_invalidation(
 
   std::unordered_set<AnalysisID> erase_list;
   // Invalidate existing preserved analyses.
-  for (const auto& entry : *preserved_analysis_passes) {
+  for (const auto& entry : UnorderedIterable(*preserved_analysis_passes)) {
     AnalysisID id = entry.first;
     if (m_preserve_specific.count(id)) {
       continue;
@@ -42,7 +42,7 @@ void AnalysisUsage::do_pass_invalidation(
 }
 
 void AnalysisUsage::check_dependencies(const std::vector<Pass*>& passes) {
-  std::unordered_map<AnalysisID, Pass*> preserved_passes;
+  UnorderedMap<AnalysisID, Pass*> preserved_passes;
   std::ostringstream error;
   bool has_error = false;
   for (const Pass* pass : passes) {

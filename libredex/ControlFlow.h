@@ -18,6 +18,7 @@
 
 #include <sparta/WeakTopologicalOrdering.h>
 
+#include "DeterministicContainers.h"
 #include "DexPosition.h"
 #include "IRCode.h"
 #include "SingletonIterable.h"
@@ -75,7 +76,7 @@ using ParamIndex = uint32_t;
  * A helper function that computes the mapping of load param instructions
  * to their respective indices.
  */
-std::unordered_map<const IRInstruction*, ParamIndex> get_load_param_map(
+UnorderedMap<const IRInstruction*, ParamIndex> get_load_param_map(
     const cfg::ControlFlowGraph& cfg);
 
 namespace source_blocks {
@@ -1057,10 +1058,10 @@ class ControlFlowGraph {
   friend class Block;
 
   using BranchToTargets =
-      std::unordered_map<MethodItemEntry*,
-                         std::vector<std::pair<Block*, MethodItemEntry*>>>;
+      UnorderedMap<MethodItemEntry*,
+                   std::vector<std::pair<Block*, MethodItemEntry*>>>;
   using TryEnds = std::vector<std::pair<TryEntry*, Block*>>;
-  using TryCatches = std::unordered_map<CatchEntry*, Block*>;
+  using TryCatches = UnorderedMap<CatchEntry*, Block*>;
   using Blocks = std::map<BlockId, Block*>;
   friend class InstructionIteratorImpl<false>;
   friend class InstructionIteratorImpl<true>;
@@ -1095,9 +1096,9 @@ class ControlFlowGraph {
 
   // helper functions
   void build_chains(std::vector<std::unique_ptr<BlockChain>>* chains,
-                    std::unordered_map<Block*, BlockChain*>* block_to_chain);
+                    UnorderedMap<Block*, BlockChain*>* block_to_chain);
   sparta::WeakTopologicalOrdering<BlockChain*> build_wto(
-      const std::unordered_map<Block*, BlockChain*>& block_to_chain);
+      const UnorderedMap<Block*, BlockChain*>& block_to_chain);
   std::vector<Block*> wto_chains(
       sparta::WeakTopologicalOrdering<BlockChain*> wto);
 
@@ -1123,7 +1124,7 @@ class ControlFlowGraph {
   //     CatchEntry(BazException)
   MethodItemEntry* create_catch(
       Block* block,
-      std::unordered_map<MethodItemEntry*, Block*>* catch_to_containing_block);
+      UnorderedMap<MethodItemEntry*, Block*>* catch_to_containing_block);
 
   // Materialize TRY_STARTs, TRY_ENDs, and MFLOW_CATCHes
   // Used while turning back into a linear representation.

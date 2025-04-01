@@ -26,6 +26,7 @@
 
 #include "ConcurrentContainers.h"
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexMemberRefs.h"
 #include "FrequentlyUsedPointersCache.h"
 
@@ -216,12 +217,10 @@ struct RedexContext {
     }
     return it->second;
   }
-  const std::unordered_map<std::string, size_t>& get_sb_interaction_indices()
-      const {
+  const UnorderedMap<std::string, size_t>& get_sb_interaction_indices() const {
     return m_sb_interaction_indices;
   }
-  void set_sb_interaction_index(
-      const std::unordered_map<std::string, size_t>& input);
+  void set_sb_interaction_index(const UnorderedMap<std::string, size_t>& input);
 
   // This is for convenience.
   bool instrument_mode{false};
@@ -503,7 +502,7 @@ struct RedexContext {
   std::mutex m_destruction_tasks_lock;
   std::vector<Task> m_destruction_tasks;
 
-  std::unordered_map<std::string, size_t> m_sb_interaction_indices;
+  UnorderedMap<std::string, size_t> m_sb_interaction_indices;
 
   bool m_allow_class_duplicates;
 

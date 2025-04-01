@@ -19,6 +19,7 @@
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "CppUtil.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRCode.h"
@@ -122,7 +123,7 @@ void InlineForSpeedMethodProfiles::compute_hot_methods() {
     const std::string& interaction_id = pair.first;
     const auto& method_stats = pair.second;
     size_t popular_set_size = 0;
-    for (const auto& entry : method_stats) {
+    for (const auto& entry : UnorderedIterable(method_stats)) {
       if (entry.second.appear_percent >= MIN_APPEAR_PERCENT) {
         ++popular_set_size;
       }
@@ -149,7 +150,7 @@ void InlineForSpeedMethodProfiles::compute_hot_methods() {
         q.pop();
       }
     };
-    for (const auto& entry : method_stats) {
+    for (const auto& entry : UnorderedIterable(method_stats)) {
       const auto& stat = entry.second;
       if (stat.appear_percent >= MIN_APPEAR_PERCENT) {
         auto score = stat.call_count;
@@ -548,7 +549,7 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
     top_n_entries.resize(interactions.size());
 
     const auto& all = method_profiles->all_interactions();
-    for (const auto& p : interactions) {
+    for (const auto& p : UnorderedIterable(interactions)) {
       auto it = all.find(p.first);
       redex_assert(it != all.end());
       const auto& stats_map = it->second;
@@ -556,11 +557,12 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
       tmp_vec.reserve(stats_map.size());
 
       boost::transform(
-          stats_map | boost::adaptors::filtered([&](const auto& p) {
-            return !m_config.exp_force_top_x_entries_min_appear100 ||
-                   p.second.appear_percent >=
-                       *m_config.exp_force_top_x_entries_min_appear100;
-          }),
+          UnorderedIterable(stats_map) |
+              boost::adaptors::filtered([&](const auto& p) {
+                return !m_config.exp_force_top_x_entries_min_appear100 ||
+                       p.second.appear_percent >=
+                           *m_config.exp_force_top_x_entries_min_appear100;
+              }),
           std::back_inserter(tmp_vec), [](const auto& p) {
             return std::make_pair(p.first, p.second.call_count);
           });
@@ -615,7 +617,7 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
     auto filtered_map = m_inline_calls;
 
     // Fill the queue with all our edges.
-    for (const auto& p : m_inline_calls) {
+    for (const auto& p : UnorderedIterable(m_inline_calls)) {
       for (const auto* callee : p.second) {
         if (p.first != callee) { // No cycles.
           queue.emplace(p.first, callee);
@@ -641,15 +643,8 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
       filtered_map.at(callee).clear();
     }
 
-    {
-      for (auto it = filtered_map.begin(); it != filtered_map.end();) {
-        if (it->second.empty()) {
-          it = filtered_map.erase(it);
-        } else {
-          ++it;
-        }
-      }
-    }
+    unordered_erase_if(filtered_map,
+                       [](const auto& p) { return p.second.empty(); });
 
     m_inline_calls = std::move(filtered_map);
 
@@ -657,13 +652,13 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
   }
 
   MethodContextContext m_method_context_context;
-  std::unordered_map<const DexMethod*, MethodContext> m_cache;
+  UnorderedMap<const DexMethod*, MethodContext> m_cache;
   PGIForest m_forest;
   DecisionTreesConfig m_config;
   std::vector<std::unordered_set<const DexMethodRef*>> top_n_entries;
   // Collect "yes" decisions based on methods, possibly to break chains later.
   std::mutex m_inline_calls_mutex;
-  std::unordered_map<const DexMethod*, std::unordered_set<const DexMethod*>>
+  UnorderedMap<const DexMethod*, std::unordered_set<const DexMethod*>>
       m_inline_calls;
   bool m_inline_calls_culled{false};
 };
@@ -878,7 +873,7 @@ class InlineForSpeedCallerList final : public InlineForSpeedBase {
 
   // For TRACE.
   MethodContextContext m_method_context_context;
-  std::unordered_map<const DexMethod*, MethodContext> m_cache;
+  UnorderedMap<const DexMethod*, MethodContext> m_cache;
 };
 
 enum class IFSMode {

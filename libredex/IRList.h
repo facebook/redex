@@ -18,11 +18,11 @@
 #include <set>
 #include <string>
 #include <type_traits>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include "Debug.h"
+#include "DeterministicContainers.h"
 
 class DexCallSite;
 class DexDebugInstruction;
@@ -377,9 +377,9 @@ struct MethodItemEntry {
 class MethodItemEntryCloner {
   // We need a map of MethodItemEntry we have created because a branch
   // points to another MethodItemEntry which may have been created or not
-  std::unordered_map<const MethodItemEntry*, MethodItemEntry*> m_entry_map;
+  UnorderedMap<const MethodItemEntry*, MethodItemEntry*> m_entry_map;
   // for remapping the parent position pointers
-  std::unordered_map<DexPosition*, DexPosition*> m_pos_map;
+  UnorderedMap<DexPosition*, DexPosition*> m_pos_map;
   std::vector<DexPosition*> m_positions_to_fix;
 
  public:

@@ -11,6 +11,7 @@
 
 #include "ClassHierarchy.h"
 #include "ConcurrentContainers.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 
 using TypeSet = std::set<const DexType*, dextypes_comparator>;
@@ -40,8 +41,7 @@ class TypeRefUpdater final {
    * trying to update a virtual method that may override any external virtual
    * method.
    */
-  explicit TypeRefUpdater(
-      const std::unordered_map<DexType*, DexType*>& old_to_new);
+  explicit TypeRefUpdater(const UnorderedMap<DexType*, DexType*>& old_to_new);
 
   void update_methods_fields(const Scope& scope);
 
@@ -66,7 +66,7 @@ class TypeRefUpdater final {
   bool mangling(DexMethodRef* method);
 
   InsertOnlyConcurrentMap<DexMethod*, DexProto*> m_inits;
-  const std::unordered_map<DexType*, DexType*>& m_old_to_new;
+  const UnorderedMap<DexType*, DexType*>& m_old_to_new;
 };
 
 /**
@@ -88,7 +88,7 @@ bool proto_has_reference_to(const DexProto* proto,
  */
 DexProto* get_new_proto(
     const DexProto* proto,
-    const std::unordered_map<const DexType*, DexType*>& old_to_new);
+    const UnorderedMap<const DexType*, DexType*>& old_to_new);
 
 /**
  * Update all method signature type references in-place using the old_to_new
@@ -99,14 +99,14 @@ DexProto* get_new_proto(
  */
 void update_method_signature_type_references(
     const Scope& scope,
-    const std::unordered_map<const DexType*, DexType*>& old_to_new,
+    const UnorderedMap<const DexType*, DexType*>& old_to_new,
     const ClassHierarchy& ch,
-    boost::optional<std::unordered_map<DexMethod*, std::string>&>
-        method_debug_map = boost::none);
+    boost::optional<UnorderedMap<DexMethod*, std::string>&> method_debug_map =
+        boost::none);
 
 void update_field_type_references(
     const Scope& scope,
-    const std::unordered_map<const DexType*, DexType*>& old_to_new);
+    const UnorderedMap<const DexType*, DexType*>& old_to_new);
 
 void fix_colliding_dmethods(
     const Scope& scope,

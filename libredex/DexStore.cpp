@@ -19,9 +19,9 @@
 namespace {
 constexpr const char* ROOT_STORE_NAME = "classes";
 
-std::unordered_map<std::string, const DexStore*> get_named_stores(
+UnorderedMap<std::string, const DexStore*> get_named_stores(
     const DexStoresVector& stores) {
-  std::unordered_map<std::string, const DexStore*> named_stores;
+  UnorderedMap<std::string, const DexStore*> named_stores;
   auto& root_store = stores.front();
   // For some reason, the root store is referenced by the name "dex" via
   // dependencies

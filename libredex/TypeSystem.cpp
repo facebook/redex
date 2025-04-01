@@ -148,7 +148,7 @@ const VirtualScope* TypeSystem::find_virtual_scope(
 std::vector<const DexMethod*> TypeSystem::select_from(
     const VirtualScope* scope, const DexType* type) const {
   std::vector<const DexMethod*> refined_scope;
-  std::unordered_map<const DexType*, DexMethod*> non_child_methods;
+  UnorderedMap<const DexType*, DexMethod*> non_child_methods;
   bool found_root_method = false;
   for (const auto& method : scope->methods) {
     if (is_subtype(type, method.first->get_class())) {
@@ -174,7 +174,7 @@ std::vector<const DexMethod*> TypeSystem::select_from(
 void TypeSystem::make_instanceof_interfaces_table() {
   TypeVector no_parents;
   const auto& hierarchy = m_class_scopes.get_class_hierarchy();
-  for (const auto& children_it : hierarchy) {
+  for (const auto& children_it : UnorderedIterable(hierarchy)) {
     const auto parent = children_it.first;
     const auto parent_cls = type_class(parent);
     if (parent_cls != nullptr) continue;
@@ -222,7 +222,7 @@ void TypeSystem::select_methods(const VirtualScope& scope,
   filter.insert(types.begin(), types.end());
 
   TRACE(VIRT, 1, "select_methods make type_method map");
-  std::unordered_map<const DexType*, DexMethod*> type_method;
+  UnorderedMap<const DexType*, DexMethod*> type_method;
   for (const auto& vmeth : scope.methods) {
     const auto meth = vmeth.first;
     if (!meth->is_def()) continue;

@@ -2628,7 +2628,7 @@ std::unordered_map<const DexMethodRef*, double> get_methods_global_order(
     TRACE(ISO, 3,
           "[instruction sequence outliner] Interaction [%s] gets index %zu",
           interaction_id.c_str(), index);
-    for (auto& q : method_stats) {
+    for (auto& q : UnorderedIterable(method_stats)) {
       auto& global_order = methods_global_order[q.first];
       global_order =
           std::min(global_order, index * 100 + q.second.order_percent);

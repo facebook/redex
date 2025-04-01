@@ -985,7 +985,7 @@ void RedexContext::add_destruction_task(const Task& t) {
 }
 
 void RedexContext::set_sb_interaction_index(
-    const std::unordered_map<std::string, size_t>& input) {
+    const UnorderedMap<std::string, size_t>& input) {
   m_sb_interaction_indices = input;
 }
 

@@ -6,12 +6,13 @@
  */
 
 #include "BaselineProfile.h"
+#include "DeterministicContainers.h"
 #include "StlUtil.h"
 
 namespace baseline_profiles {
 
 BaselineProfile get_default_baseline_profile(
-    const std::unordered_map<std::string, BaselineProfileConfig>& configs,
+    const UnorderedMap<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
     std::unordered_set<const DexMethodRef*>* method_refs_without_def) {
   auto [baseline_profile, _] =
@@ -19,14 +20,14 @@ BaselineProfile get_default_baseline_profile(
   return baseline_profile;
 }
 
-std::tuple<BaselineProfile, std::unordered_map<std::string, BaselineProfile>>
+std::tuple<BaselineProfile, UnorderedMap<std::string, BaselineProfile>>
 get_baseline_profiles(
-    const std::unordered_map<std::string, BaselineProfileConfig>& configs,
+    const UnorderedMap<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
     std::unordered_set<const DexMethodRef*>* method_refs_without_def) {
-  std::unordered_map<std::string, BaselineProfile> baseline_profiles;
+  UnorderedMap<std::string, BaselineProfile> baseline_profiles;
   BaselineProfile manual_baseline_profile;
-  for (const auto& [config_name, config] : configs) {
+  for (const auto& [config_name, config] : UnorderedIterable(configs)) {
     // If we're not using this as the final pass of baseline profiles, just
     // continue on all configs that aren't the default
     if (!config.options.use_final_redex_generated_profile &&
@@ -37,11 +38,11 @@ get_baseline_profiles(
     std::unordered_set<const DexMethod*> startup_methods;
     std::unordered_set<const DexMethod*> post_startup_methods;
     for (auto&& [interaction_id, interaction_config] :
-         config.interaction_configs) {
+         UnorderedIterable(config.interaction_configs)) {
       const auto& method_stats =
           method_profiles.method_stats_for_baseline_config(interaction_id,
                                                            config_name);
-      for (auto&& [method_ref, stat] : method_stats) {
+      for (auto&& [method_ref, stat] : UnorderedIterable(method_stats)) {
         auto method = method_ref->as_def();
         if (method == nullptr) {
           if (method_refs_without_def != nullptr) {
@@ -72,7 +73,7 @@ get_baseline_profiles(
       const auto& method_stats =
           method_profiles.method_stats_for_baseline_config(interaction_id,
                                                            config_name);
-      for (auto&& [method_ref, stat] : method_stats) {
+      for (auto&& [method_ref, stat] : UnorderedIterable(method_stats)) {
         auto method = method_ref->as_def();
         if (method == nullptr) {
           if (method_refs_without_def != nullptr) {

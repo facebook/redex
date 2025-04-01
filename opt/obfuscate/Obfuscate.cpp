@@ -8,6 +8,7 @@
 #include <list>
 
 #include "ClassHierarchy.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRCode.h"
@@ -160,7 +161,7 @@ void obfuscate(Scope& scope,
   DexFieldManager field_name_manager = new_dex_field_manager();
   DexMethodManager method_name_manager = new_dex_method_manager();
 
-  std::unordered_map<const DexClass*, int> next_dmethod_seeds;
+  UnorderedMap<const DexClass*, int> next_dmethod_seeds;
   for (DexClass* cls : scope) {
     always_assert_log(!cls->is_external(),
                       "Shouldn't rename members of external classes. %s",

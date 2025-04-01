@@ -12,6 +12,7 @@
 #include "SortRemainingClassesPass.h"
 
 #include "ConfigFiles.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "InterDex.h"
@@ -152,8 +153,7 @@ void sort_classes_for_speed_and_compression(
     PassManager& mgr,
     DexClasses* classes,
     bool sort_for_compression,
-    std::unordered_map<const DexMethod*, unsigned int>&
-        coldstart_method_ordering) {
+    UnorderedMap<const DexMethod*, unsigned int>& coldstart_method_ordering) {
   std::vector<DexClass*> perf_sensitive_classes;
   using DexClassWithSortNum = std::pair<DexClass*, unsigned int>;
   std::vector<DexClassWithSortNum> classes_with_sort_num;
@@ -247,8 +247,7 @@ void SortRemainingClassesPass::run_pass(DexStoresVector& stores,
 
   if (m_sort_for_speed) {
     auto& coldstart_methods = conf.get_coldstart_methods();
-    std::unordered_map<const DexMethod*, unsigned int>
-        coldstart_method_ordering;
+    UnorderedMap<const DexMethod*, unsigned int> coldstart_method_ordering;
     for (auto& method : coldstart_methods) {
       DexMethodRef* method_ref = DexMethod::get_method(method);
       if (method_ref == nullptr || !method_ref->is_def()) {

@@ -9,9 +9,9 @@
 
 #include <functional>
 #include <memory>
-#include <unordered_map>
 
 #include "Debug.h"
+#include "DeterministicContainers.h"
 
 template <typename T>
 // A convenient helper class for lazy initialization.
@@ -54,8 +54,7 @@ class Lazy {
 template <class Key,
           class T,
           class Hash = std::hash<Key>,
-          class KeyEqual = std::equal_to<Key>,
-          class Allocator = std::allocator<std::pair<const Key, T>>>
+          class KeyEqual = std::equal_to<Key>>
 // A convenient helper class for lazily initialized maps.
 // This class is not thread-safe.
 class LazyUnorderedMap {
@@ -75,5 +74,5 @@ class LazyUnorderedMap {
 
  private:
   std::function<T(const Key& key)> m_creator;
-  std::unordered_map<Key, T, Hash, KeyEqual, Allocator> m_map;
+  UnorderedMap<Key, T, Hash, KeyEqual> m_map;
 };

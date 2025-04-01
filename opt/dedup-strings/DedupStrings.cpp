@@ -141,7 +141,7 @@ std::unordered_set<const DexMethod*> DedupStrings::get_perf_sensitive_methods(
   if (m_method_profiles.has_stats()) {
     for (auto& p : m_method_profiles.all_interactions()) {
       auto& method_stats = p.second;
-      for (auto& q : method_stats) {
+      for (auto& q : UnorderedIterable(method_stats)) {
         if (q.second.appear_percent >=
             m_method_profiles_appear_percent_threshold) {
           sufficiently_popular_methods.insert(q.first);

@@ -16,10 +16,10 @@
 #include "Trace.h"
 #include "Walkers.h"
 
-std::unordered_map<uint32_t, resources::InlinableValue>
+UnorderedMap<uint32_t, resources::InlinableValue>
 ResourcesInliningPass::filter_inlinable_resources(
     ResourceTableFile* res_table,
-    const std::unordered_map<uint32_t, resources::InlinableValue>&
+    const UnorderedMap<uint32_t, resources::InlinableValue>&
         inlinable_resources,
     const std::unordered_set<std::string>& resource_type_names,
     const std::unordered_set<std::string>& resource_entry_names) {
@@ -51,10 +51,9 @@ ResourcesInliningPass::filter_inlinable_resources(
     TRACE(RIP, 1, "num_colors: %d", num_colors);
   }
 
-  std::unordered_map<uint32_t, resources::InlinableValue>
-      refined_inlinable_resources;
+  UnorderedMap<uint32_t, resources::InlinableValue> refined_inlinable_resources;
 
-  for (auto& pair : inlinable_resources) {
+  for (auto& pair : UnorderedIterable(inlinable_resources)) {
     auto& id = pair.first;
     auto& value = pair.second;
 
@@ -84,7 +83,7 @@ void ResourcesInliningPass::run_pass(DexStoresVector& stores,
   auto resources = create_resource_reader(zip_dir);
   auto res_table = resources->load_res_table();
   auto inlinable = res_table->get_inlinable_resource_values();
-  std::unordered_map<uint32_t, resources::InlinableValue> inlinable_resources =
+  UnorderedMap<uint32_t, resources::InlinableValue> inlinable_resources =
       filter_inlinable_resources(res_table.get(),
                                  inlinable,
                                  m_resource_type_names,
@@ -121,9 +120,9 @@ void ResourcesInliningPass::run_pass(DexStoresVector& stores,
  https://cs.android.com/android/platform/superproject/+/android-14.0.0_r1:frameworks/base/core/java/android/content/res/Resources.java;l=1073
  https://cs.android.com/android/platform/superproject/+/android-14.0.0_r1:frameworks/base/core/java/android/content/res/Resources.java;l=1206
 */
-std::unordered_map<DexMethodRef*, std::tuple<uint8_t, uint8_t>>
+UnorderedMap<DexMethodRef*, std::tuple<uint8_t, uint8_t>>
 generate_valid_method_refs() {
-  std::unordered_map<DexMethodRef*, std::tuple<uint8_t, uint8_t>> usable_apis;
+  UnorderedMap<DexMethodRef*, std::tuple<uint8_t, uint8_t>> usable_apis;
 
   DexMethodRef* bool_method =
       DexMethod::get_method("Landroid/content/res/Resources;.getBoolean:(I)Z");
@@ -155,7 +154,7 @@ generate_valid_method_refs() {
 
 bool exists_possible_transformation(
     const cfg::ControlFlowGraph& cfg,
-    const std::unordered_map<DexMethodRef*, std::tuple<uint8_t, uint8_t>>&
+    const UnorderedMap<DexMethodRef*, std::tuple<uint8_t, uint8_t>>&
         value_method_refs,
     const std::unordered_set<DexMethodRef*>& name_method_refs) {
   for (auto* block : cfg.blocks()) {
@@ -175,7 +174,7 @@ bool exists_possible_transformation(
 
 MethodTransformsMap ResourcesInliningPass::find_transformations(
     const Scope& scope,
-    const std::unordered_map<uint32_t, resources::InlinableValue>&
+    const UnorderedMap<uint32_t, resources::InlinableValue>&
         inlinable_resources,
     const std::map<uint32_t, std::string>& id_to_name,
     const std::vector<std::string>& type_names,
@@ -189,8 +188,8 @@ MethodTransformsMap ResourcesInliningPass::find_transformations(
   std::unordered_set<DexMethodRef*> name_method_refs = {getResourceEntryName,
                                                         getResourceName};
 
-  std::unordered_map<DexMethodRef*, std::tuple<uint8_t, uint8_t>>
-      value_method_refs = generate_valid_method_refs();
+  UnorderedMap<DexMethodRef*, std::tuple<uint8_t, uint8_t>> value_method_refs =
+      generate_valid_method_refs();
 
   MethodTransformsMap possible_transformations;
 
@@ -299,7 +298,7 @@ void ResourcesInliningPass::inline_resource_values_dex(
   auto& cfg = method->get_code()->cfg();
   cfg::CFGMutation mutator(cfg);
 
-  std::unordered_map<DexMethodRef*, std::tuple<uint8_t, uint8_t>> usable_apis =
+  UnorderedMap<DexMethodRef*, std::tuple<uint8_t, uint8_t>> usable_apis =
       generate_valid_method_refs();
 
   IRInstruction* new_insn;

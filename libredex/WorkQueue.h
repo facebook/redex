@@ -12,6 +12,7 @@
 
 #include <sparta/WorkQueue.h>
 
+#include "DeterministicContainers.h"
 #include "ThreadPool.h"
 
 namespace redex_workqueue_impl {
@@ -99,7 +100,7 @@ void workqueue_run(
       Input, redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>(
       redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>{fn}, num_threads,
       push_tasks_while_running, redex_thread_pool::ThreadPool::get_instance());
-  for (Input item : items) {
+  for (Input item : UnorderedIterable(items)) {
     wq.add_item(std::move(item));
   }
   wq.run_all();
@@ -117,7 +118,7 @@ void workqueue_run(
       Input, redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>(
       redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>{fn}, num_threads,
       push_tasks_while_running, redex_thread_pool::ThreadPool::get_instance());
-  for (Input item : items) {
+  for (Input item : UnorderedIterable(items)) {
     wq.add_item(std::move(item));
   }
   wq.run_all();
@@ -136,7 +137,7 @@ void workqueue_run(
       redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>{fn},
       num_threads, push_tasks_while_running,
       redex_thread_pool::ThreadPool::get_instance());
-  for (Input item : items) {
+  for (Input item : UnorderedIterable(items)) {
     wq.add_item(std::move(item));
   }
   wq.run_all();
@@ -155,7 +156,7 @@ void workqueue_run(
       redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>{fn},
       num_threads, push_tasks_while_running,
       redex_thread_pool::ThreadPool::get_instance());
-  for (Input item : items) {
+  for (Input item : UnorderedIterable(items)) {
     wq.add_item(std::move(item));
   }
   wq.run_all();

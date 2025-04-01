@@ -28,8 +28,7 @@ class ApiLevelsUtils {
     return m_types_to_framework_api;
   }
 
-  const std::unordered_map<const DexType*, FrameworkAPI>&
-  get_framework_classes() {
+  const UnorderedMap<const DexType*, FrameworkAPI>& get_framework_classes() {
     return m_sdk_api.get_framework_classes();
   }
 

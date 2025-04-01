@@ -17,6 +17,7 @@
 
 #include "ClassHierarchy.h"
 #include "ConcurrentContainers.h"
+#include "DeterministicContainers.h"
 #include "DexAnnotation.h"
 #include "DexUtil.h"
 #include "IRCode.h"
@@ -36,7 +37,7 @@ using namespace keep_rules;
 
 namespace {
 
-using RegexMap = std::unordered_map<std::string, boost::regex>;
+using RegexMap = UnorderedMap<std::string, boost::regex>;
 
 using MatchingStringsCache =
     ConcurrentMap<std::string, InsertOnlyConcurrentMap<const DexString*, bool>>;
@@ -228,7 +229,7 @@ struct ClassMatcher {
   RegexWithCache m_extends;
   RegexWithCache m_extends_anno;
 
-  std::unordered_map<const DexClass*, bool> m_extends_result_cache;
+  UnorderedMap<const DexClass*, bool> m_extends_result_cache;
 };
 
 enum class RuleType {
