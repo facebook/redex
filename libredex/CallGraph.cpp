@@ -161,7 +161,7 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
   });
   // Gather methods that override or implement external or native methods
   // as well.
-  for (auto& pair : m_method_override_graph.nodes()) {
+  for (auto& pair : UnorderedIterable(m_method_override_graph.nodes())) {
     auto method = pair.first;
     if (method->is_external()) {
       dynamic_methods.emplace(method);
@@ -254,7 +254,7 @@ RootAndDynamic CompleteCallGraphStrategy::get_roots() const {
     }
   });
   // Gather methods that override or implement external methods
-  for (auto& pair : m_method_override_graph.nodes()) {
+  for (auto& pair : UnorderedIterable(m_method_override_graph.nodes())) {
     auto method = pair.first;
     if (method->is_external()) {
       const auto& overriding_methods =
@@ -353,9 +353,8 @@ RootAndDynamic MultipleCalleeStrategy::get_roots() const {
       root_and_dynamic.roots.insert(method);
     }
   };
-  std::for_each(m_big_virtuals.begin(), m_big_virtuals.end(), add_root);
-  std::for_each(m_big_virtual_overrides.begin(), m_big_virtual_overrides.end(),
-                add_root);
+  unordered_for_each(m_big_virtuals, add_root);
+  unordered_for_each(m_big_virtual_overrides, add_root);
   return root_and_dynamic;
 }
 

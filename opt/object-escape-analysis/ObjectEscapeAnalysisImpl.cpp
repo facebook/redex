@@ -476,7 +476,7 @@ MethodSummaries compute_method_summaries(
   Timer t("compute_method_summaries");
 
   std::unordered_set<DexMethod*> impacted_methods;
-  for (auto&& [method, _] : dependencies) {
+  for (auto&& [method, _] : UnorderedIterable(dependencies)) {
     impacted_methods.insert(method);
   }
 
@@ -535,7 +535,8 @@ MethodSummaries compute_method_summaries(
     std::unordered_set<DexMethod*> changed_methods;
     // (Recomputed) summaries can only grow; assert that, update summaries when
     // necessary, and remember for which methods the summaries actually changed.
-    for (auto&& [method, recomputed_summary] : recomputed_method_summaries) {
+    for (auto&& [method, recomputed_summary] :
+         UnorderedIterable(recomputed_method_summaries)) {
       auto& summary = method_summaries[method];
       for (auto src_index : summary.benign_params) {
         always_assert(recomputed_summary.benign_params.count(src_index));

@@ -392,7 +392,7 @@ EligibleIfields gather_safely_inferable_ifield_candidates(
   }
   auto blocklist_ifields =
       get_ifields_read_in_callees(scope, allowlist_method_names);
-  for (DexField* field : blocklist_ifields) {
+  for (DexField* field : UnorderedIterable(blocklist_ifields)) {
     eligible_ifields.erase(field);
   }
   return eligible_ifields;

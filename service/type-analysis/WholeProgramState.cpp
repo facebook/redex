@@ -180,7 +180,7 @@ WholeProgramState::WholeProgramState(
 
   // TODO: revisit this for multiple callee call graph.
   // Put non-root non true virtual methods in known methods.
-  for (const auto& non_true_virtual : non_true_virtuals) {
+  for (const auto& non_true_virtual : UnorderedIterable(non_true_virtuals)) {
     if (!root(non_true_virtual) && non_true_virtual->get_code()) {
       m_known_methods.emplace(non_true_virtual);
     }
@@ -315,12 +315,12 @@ void WholeProgramState::collect(const Scope& scope,
       }
     }
   });
-  for (const auto& pair : fields_tmp) {
+  for (const auto& pair : UnorderedIterable(fields_tmp)) {
     m_field_partition.update(pair.first, [&pair](auto* current_type) {
       current_type->join_with(pair.second);
     });
   }
-  for (const auto& pair : methods_tmp) {
+  for (const auto& pair : UnorderedIterable(methods_tmp)) {
     m_method_partition.update(pair.first, [&pair](auto* current_type) {
       current_type->join_with(pair.second);
     });

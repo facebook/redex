@@ -83,7 +83,7 @@ TEST_F(ResourcesInliningPassTest, TestOptimizationHappy_Sad) {
   scope.push_back(class2);
   auto transforms1 = build_test(scope, inlinable_resources);
   EXPECT_EQ(transforms1.size(), 1);
-  for (auto& val : transforms1) {
+  for (auto& val : UnorderedIterable(transforms1)) {
     for (auto& vec : val.second) {
       auto insn = vec.insn;
       auto inlinable_data = std::get<resources::InlinableValue>(vec.inlinable);

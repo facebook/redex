@@ -278,7 +278,7 @@ Stats reduce_uncallable_instance_methods(
   // all invocation references)
   std::vector<DexClass*> classes_with_removed_vmethods;
   std::unordered_map<DexMethodRef*, DexMethodRef*> removed_vmethods;
-  for (auto& p : class_post_processing) {
+  for (auto& p : UnorderedIterable(class_post_processing)) {
     auto cls = p.first;
     auto& cpp = p.second;
     if (!cpp.abstract_vmethods.empty()) {

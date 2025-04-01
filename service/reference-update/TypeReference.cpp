@@ -246,8 +246,8 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
   workqueue_run<DexMethodRef*>(
       [this](DexMethodRef* method) { mangling(method); }, methods);
 
-  std::map<DexMethod*, DexProto*, dexmethods_comparator> inits(m_inits.begin(),
-                                                               m_inits.end());
+  std::map<DexMethod*, DexProto*, dexmethods_comparator> inits;
+  insert_unordered_iterable(inits, m_inits);
   std::vector<std::pair<DexMethod*, DexProto*>> colliding_inits;
   for (auto& pair : inits) {
     auto* method = pair.first;

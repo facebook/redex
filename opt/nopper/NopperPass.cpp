@@ -110,7 +110,7 @@ void NopperPass::run_pass(DexStoresVector& stores,
   });
 
   std::vector<std::pair<DexMethod*, cfg::Block*>> noppable_blocks_vec;
-  for (auto&& [method, blocks] : gathered_noppable_blocks) {
+  for (auto&& [method, blocks] : UnorderedIterable(gathered_noppable_blocks)) {
     for (auto* block : blocks) {
       noppable_blocks_vec.emplace_back(method, block);
     }

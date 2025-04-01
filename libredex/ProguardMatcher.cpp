@@ -1077,7 +1077,8 @@ void ProguardRuleRecorder::record_accessed_rules(
     const std::string& used_rule_path, const std::string& unused_rule_path) {
   {
     std::vector<std::string> used_out;
-    for (const keep_rules::KeepSpec* keep_rule : used_keep_rules) {
+    for (const keep_rules::KeepSpec* keep_rule :
+         UnorderedIterable(used_keep_rules)) {
       used_out.push_back(keep_rules::show_keep(*keep_rule));
     }
     for (auto& [keep_rules, command] : std::array<
@@ -1085,7 +1086,7 @@ void ProguardRuleRecorder::record_accessed_rules(
              {&used_assumenosideeffect_rules, "-assumenosideeffects"},
              {&used_assumevalues_rules, "-assumevalues"},
          }}) {
-      for (auto* keep_rule : *keep_rules) {
+      for (auto* keep_rule : UnorderedIterable(*keep_rules)) {
         used_out.push_back(
             keep_rules::show_simple_keep_rule(*keep_rule, command));
       }
@@ -1099,7 +1100,8 @@ void ProguardRuleRecorder::record_accessed_rules(
   }
   {
     std::vector<std::string> unused_out;
-    for (const keep_rules::KeepSpec* keep_rule : unused_keep_rules) {
+    for (const keep_rules::KeepSpec* keep_rule :
+         UnorderedIterable(unused_keep_rules)) {
       unused_out.push_back(keep_rules::show_keep(*keep_rule));
     }
     for (auto& [keep_rules, command] : std::array<
@@ -1107,7 +1109,7 @@ void ProguardRuleRecorder::record_accessed_rules(
              {&unused_assumenosideeffect_rules, "-assumenosideeffects"},
              {&unused_assumevalues_rules, "-assumevalues"},
          }}) {
-      for (auto* keep_rule : *keep_rules) {
+      for (auto* keep_rule : UnorderedIterable(*keep_rules)) {
         unused_out.push_back(
             keep_rules::show_simple_keep_rule(*keep_rule, command));
       }

@@ -91,7 +91,7 @@ class InitClassFields {
   std::vector<std::pair<DexType*, size_t>>
   get_ordered_init_class_reference_counts() {
     std::vector<std::pair<DexType*, size_t>> res;
-    for (auto& p : m_init_class_fields) {
+    for (auto& p : UnorderedIterable(m_init_class_fields)) {
       size_t count = 0;
       for (auto& q : p.second) {
         count += q.second.count;
@@ -106,7 +106,7 @@ class InitClassFields {
 
   std::vector<DexField*> get_all() {
     std::unordered_set<DexField*> set;
-    for (auto& p : m_init_class_fields) {
+    for (auto& p : UnorderedIterable(m_init_class_fields)) {
       for (auto& q : p.second) {
         set.insert(q.second.field);
       }
@@ -434,7 +434,7 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
       });
 
   // Remove clinits that are now trivial.
-  for (auto clinit : clinits) {
+  for (auto clinit : UnorderedIterable(clinits)) {
     if (method::is_trivial_clinit(*clinit->get_code())) {
       type_class(clinit->get_class())->remove_method(clinit);
     }

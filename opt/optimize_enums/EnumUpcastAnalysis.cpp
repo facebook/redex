@@ -684,7 +684,7 @@ void reject_enums_for_colliding_constructors(
     }
   });
 
-  for (DexType* type : rejected_enums) {
+  for (DexType* type : UnorderedIterable(rejected_enums)) {
     candidate_enums->erase(type);
   }
 }
@@ -743,7 +743,7 @@ void reject_enums_for_relaxed_inits(const std::vector<DexClass*>& classes,
       }
     }
   });
-  for (DexType* type : rejected_enums) {
+  for (DexType* type : UnorderedIterable(rejected_enums)) {
     candidate_enums->erase(type);
   }
 }
@@ -832,7 +832,7 @@ void reject_unsafe_enums(
     detector.run(engine, cfg);
   });
 
-  for (DexType* type : rejected_enums) {
+  for (DexType* type : UnorderedIterable(rejected_enums)) {
     candidate_enums->erase(type);
   }
 

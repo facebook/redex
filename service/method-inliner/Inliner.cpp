@@ -258,10 +258,10 @@ MultiMethodInliner::MultiMethodInliner(
 
   if (m_consider_hot_cold || m_config.partial_hot_hot_inline) {
     std::vector<const DexMethod*> methods;
-    for (auto&& [callee, _] : callee_caller) {
+    for (auto&& [callee, _] : UnorderedIterable(callee_caller)) {
       methods.push_back(callee);
     }
-    for (auto&& [caller, _] : caller_callee) {
+    for (auto&& [caller, _] : UnorderedIterable(caller_callee)) {
       if (!callee_caller.count_unsafe(caller)) {
         methods.push_back(caller);
       }
@@ -363,7 +363,7 @@ void MultiMethodInliner::inline_methods() {
   // Second, compute caller priorities --- the callers get a priority assigned
   // that reflects how many other callers will be waiting for them.
   std::unordered_set<DexMethod*> methods_to_schedule;
-  for (auto& p : caller_callee) {
+  for (auto& p : UnorderedIterable(caller_callee)) {
     auto caller = p.first;
     for (auto& q : UnorderedIterable(p.second)) {
       auto callee = q.first;
@@ -377,10 +377,10 @@ void MultiMethodInliner::inline_methods() {
       methods_to_schedule.insert(method);
     });
   } else {
-    for (auto& p : caller_callee) {
+    for (auto& p : UnorderedIterable(caller_callee)) {
       methods_to_schedule.insert(const_cast<DexMethod*>(p.first));
     }
-    for (auto& p : callee_caller) {
+    for (auto& p : UnorderedIterable(callee_caller)) {
       methods_to_schedule.insert(const_cast<DexMethod*>(p.first));
     }
   }
@@ -2538,9 +2538,7 @@ void MultiMethodInliner::delayed_invoke_direct_to_static() {
   // Also, we didn't use an std::set keyed by method signature here because
   // make_static is mutating the signatures. The tree that implements the set
   // would have to be rebalanced after the mutations.
-  std::vector<DexMethod*> methods(m_delayed_make_static.begin(),
-                                  m_delayed_make_static.end());
-  std::sort(methods.begin(), methods.end(), compare_dexmethods);
+  auto methods = unordered_order(m_delayed_make_static, compare_dexmethods);
   for (auto method : methods) {
     TRACE(MMINL, 6, "making %s static", method->get_name()->c_str());
     mutators::make_static(method);

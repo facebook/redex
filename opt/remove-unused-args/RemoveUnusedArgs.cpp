@@ -219,7 +219,7 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
 
   std::vector<std::pair<DexProto*, size_t>> ordered_fixed_protos;
   ordered_fixed_protos.reserve(fixed_protos.size());
-  for (auto&& [proto, count] : fixed_protos) {
+  for (auto&& [proto, count] : UnorderedIterable(fixed_protos)) {
     ordered_fixed_protos.emplace_back(proto, count.load());
   }
   std::sort(ordered_fixed_protos.begin(), ordered_fixed_protos.end(),
@@ -231,7 +231,7 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
     // First one (with most references) wins
     fixed_representatives.emplace(normalized_proto, proto);
   }
-  for (auto proto : defined_protos) {
+  for (auto proto : UnorderedIterable(defined_protos)) {
     if (fixed_protos.count(proto)) {
       continue;
     }
@@ -691,7 +691,7 @@ void RemoveArgs::gather_updated_entries(
                                            updated_proto, method->get_proto()});
         }
       });
-  for (const auto& kvp : m_related_method_groups) {
+  for (const auto& kvp : UnorderedIterable(m_related_method_groups)) {
     kvp_workqueue.add_item(&kvp);
   }
   kvp_workqueue.run_all();
@@ -728,13 +728,12 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
 
   // Sort entries, so that we process all renaming operations in a
   // deterministic order.
-  std::vector<std::pair<DexMethod*, Entry>> ordered_entries(
-      unordered_entries.begin(), unordered_entries.end());
-  std::sort(ordered_entries.begin(), ordered_entries.end(),
-            [](const std::pair<DexMethod*, Entry>& a,
-               const std::pair<DexMethod*, Entry>& b) {
-              return compare_dexmethods(a.first, b.first);
-            });
+  auto ordered_entries =
+      unordered_order(unordered_entries,
+                      [](const std::pair<DexMethod*, Entry>& a,
+                         const std::pair<DexMethod*, Entry>& b) {
+                        return compare_dexmethods(a.first, b.first);
+                      });
 
   RemoveArgs::MethodStats method_stats;
   std::vector<DexClass*> classes;

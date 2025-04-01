@@ -413,7 +413,7 @@ template <typename MethodCollection>
 std::unordered_set<std::string> get_method_names(
     const MethodCollection& methods) {
   std::unordered_set<std::string> result;
-  for (auto* method : methods) {
+  for (auto* method : UnorderedIterable(methods)) {
     result.emplace(show(method));
   }
   return result;

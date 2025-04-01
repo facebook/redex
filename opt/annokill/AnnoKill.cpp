@@ -365,8 +365,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
           }
         }
       });
-  referenced_annos.insert(concurrent_referenced_annos.begin(),
-                          concurrent_referenced_annos.end());
+  insert_unordered_iterable(referenced_annos, concurrent_referenced_annos);
   // For each referenced annotation, make sure any annotations it references are
   // also tracked as referenced, so we don't end up with a dangling ref.
   AnnoKill::AnnoSet gathered;
@@ -676,7 +675,7 @@ bool AnnoKill::kill_annotations() {
                 m_scope.end());
 
   if (traceEnabled(ANNO, 3)) {
-    for (const auto& p : m_build_anno_map) {
+    for (const auto& p : UnorderedIterable(m_build_anno_map)) {
       TRACE(ANNO,
             3,
             "Build anno: %zu, %s",
@@ -684,7 +683,7 @@ bool AnnoKill::kill_annotations() {
             str_copy(p.first).c_str());
     }
 
-    for (const auto& p : m_runtime_anno_map) {
+    for (const auto& p : UnorderedIterable(m_runtime_anno_map)) {
       TRACE(ANNO,
             3,
             "Runtime anno: %zu, %s",
@@ -692,7 +691,7 @@ bool AnnoKill::kill_annotations() {
             str_copy(p.first).c_str());
     }
 
-    for (const auto& p : m_system_anno_map) {
+    for (const auto& p : UnorderedIterable(m_system_anno_map)) {
       TRACE(ANNO,
             3,
             "System anno: %zu, %s",

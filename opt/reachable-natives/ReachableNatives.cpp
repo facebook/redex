@@ -153,10 +153,8 @@ void ReachableNativesPass::eval_pass(DexStoresVector& stores,
   if (concurrent_non_const_load_library_names.empty()) {
     return;
   }
-  std::vector<DexMethod*> ordered(
-      concurrent_non_const_load_library_names.begin(),
-      concurrent_non_const_load_library_names.end());
-  std::sort(ordered.begin(), ordered.end(), compare_dexmethods);
+  auto ordered = unordered_order(concurrent_non_const_load_library_names,
+                                 compare_dexmethods);
   std::ostringstream oss;
   for (auto* caller : ordered) {
     oss << "  " << show(caller) << "\n";
@@ -203,12 +201,10 @@ void ReachableNativesPass::analyze_final_load_library(
   TRACE(NATIVE, 1, "Reachable Library Names: %zu => %zu",
         g_redex->library_names.size(), final_library_names.size());
 
-  for (auto* library_name : final_library_names) {
+  for (auto* library_name : UnorderedIterable(final_library_names)) {
     always_assert(g_redex->library_names.count(library_name));
   }
-  std::vector<const DexString*> ordered(g_redex->library_names.begin(),
-                                        g_redex->library_names.end());
-  std::sort(ordered.begin(), ordered.end(), compare_dexstrings);
+  auto ordered = unordered_order(g_redex->library_names, compare_dexstrings);
 
   std::ofstream live_ofs(cfg.metafile(m_live_load_library_file_name),
                          std::ofstream::out | std::ofstream::trunc);

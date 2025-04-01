@@ -481,8 +481,8 @@ class OptimizeEnums {
     });
 
     // Need to remember to understand what was rejected.
-    UnorderedSet<DexType*> orig_candidates{config.candidate_enums.begin(),
-                                           config.candidate_enums.end()};
+    UnorderedSet<DexType*> orig_candidates;
+    insert_unordered_iterable(orig_candidates, config.candidate_enums);
 
     auto add_unsafe_usage = [&](const DexType* type, UnsafeType u) {
       // May be called in parallel.
@@ -492,7 +492,7 @@ class OptimizeEnums {
 
     optimize_enums::reject_unsafe_enums(m_scope, &config, add_unsafe_usage);
     if (traceEnabled(ENUM, 4)) {
-      for (auto cls : config.candidate_enums) {
+      for (auto cls : UnorderedIterable(config.candidate_enums)) {
         TRACE(ENUM, 4, "candidate_enum %s", SHOW(cls));
       }
     }
@@ -507,12 +507,7 @@ class OptimizeEnums {
     {
       std::ofstream ofs(conf.metafile("redex-unsafe-enums.txt"),
                         std::ofstream::out | std::ofstream::app);
-      std::vector<const DexType*> unsafe_types;
-      unsafe_types.reserve(unsafe_enums.size());
-      std::transform(unsafe_enums.begin(), unsafe_enums.end(),
-                     std::back_inserter(unsafe_types),
-                     [](const auto& p) { return p.first; });
-      std::sort(unsafe_types.begin(), unsafe_types.end(), compare_dextypes);
+      auto unsafe_types = unordered_order_keys(unsafe_enums, compare_dextypes);
       for (auto* t : unsafe_types) {
         const auto& unsafe_enums_at_t = unsafe_enums.at_unsafe(t);
         ofs << show(t) << ":" << unsafe_enums_at_t << "\n";

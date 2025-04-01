@@ -388,11 +388,11 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
   });
   stats.kotlin_candidate_companion_objects = map.size();
 
-  for (auto& iter : map) {
+  for (auto& iter : UnorderedIterable(map)) {
     outer_cls_count[iter.second]++;
   }
 
-  for (auto iter : map) {
+  for (auto iter : UnorderedIterable(map)) {
     // We have multiple companion objects. But in each class, there is at most 1
     // companion object.
     if (outer_cls_count.find(iter.second)->second != 1) {
@@ -549,7 +549,7 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
 
   // Inline objects in candidate to maped class
   std::unordered_set<DexMethodRef*> relocated_methods;
-  for (auto& p : map) {
+  for (auto& p : UnorderedIterable(map)) {
     auto* comp_cls = p.first;
     auto* outer_cls = p.second;
     if (bad.count(comp_cls)) {

@@ -193,7 +193,7 @@ void collect_string_values_from_code(
       const_string_values.emplace(s);
     }
   });
-  out->insert(const_string_values.begin(), const_string_values.end());
+  insert_unordered_iterable(*out, const_string_values);
 }
 } // namespace
 

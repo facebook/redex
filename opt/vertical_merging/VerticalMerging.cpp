@@ -415,7 +415,7 @@ void record_code_reference(
           }
         }
       });
-  for (auto [type, state] : deferred_records) {
+  for (auto [type, state] : UnorderedIterable(deferred_records)) {
     record_dont_merge_element_state(type, state, dont_merge_status);
   }
 }
@@ -711,10 +711,10 @@ void resolve_virtual_calls_to_merger(const Scope& scope,
       return editable_cfg_adapter::LOOP_CONTINUE;
     });
   });
-  for (auto cls : excluded_mergeables) {
+  for (auto cls : UnorderedIterable(excluded_mergeables)) {
     mergeable_to_merger.erase(cls);
   }
-  for (auto& pair : resolved_virtual_calls) {
+  for (auto& pair : UnorderedIterable(resolved_virtual_calls)) {
     auto insn = pair.first;
     auto container = type_class(insn->get_method()->get_class());
     if (mergeable_to_merger.count(container)) {

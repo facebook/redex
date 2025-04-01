@@ -42,7 +42,7 @@ FixpointIterator::~FixpointIterator() {
   // speed this up, we are going to do it in parallel.
   auto wq = workqueue_foreach<const DexMethod*>(
       [&](const DexMethod* method) { m_cache.at_unsafe(method).clear(); });
-  for (auto&& [method, method_cache] : m_cache) {
+  for (auto&& [method, method_cache] : UnorderedIterable(m_cache)) {
     wq.add_item(method);
   }
   wq.run_all();

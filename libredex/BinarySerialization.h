@@ -80,7 +80,7 @@ class GraphWriter {
   template <class NodeContainer>
   void write(std::ostream& os, const NodeContainer& nodes) {
     // Give each node a unique ID.
-    for (const auto& node : nodes) {
+    for (const auto& node : UnorderedIterable(nodes)) {
       number_node_recursive(node);
     }
     // Emit the node label and adjacency list.

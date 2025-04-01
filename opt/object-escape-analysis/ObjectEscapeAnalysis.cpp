@@ -548,7 +548,7 @@ UnorderedMap<DexMethod*, InlinableTypes> compute_root_methods(
     }
   };
 
-  for (auto& [type, method_insn_pairs] : new_instances) {
+  for (auto& [type, method_insn_pairs] : UnorderedIterable(new_instances)) {
     auto it = inline_anchors.find(type);
     if (it == inline_anchors.end()) {
       continue;
@@ -600,8 +600,8 @@ UnorderedMap<DexMethod*, InlinableTypes> compute_root_methods(
       },
       inline_anchor_types);
 
-  inlinable_methods_kept->insert(concurrent_inlinable_methods_kept.begin(),
-                                 concurrent_inlinable_methods_kept.end());
+  insert_unordered_iterable(*inlinable_methods_kept,
+                            concurrent_inlinable_methods_kept);
   TRACE(OEA,
         1,
         "[object escape analysis] candidate types: %zu",
@@ -675,7 +675,7 @@ size_t shrink_root_methods(
         }
       },
       root_methods);
-  for (auto* method : methods_that_lost_allocation_insns) {
+  for (auto* method : UnorderedIterable(methods_that_lost_allocation_insns)) {
     auto& ms = method_summaries->at(method);
     always_assert(ms.allocation_insn() != nullptr);
     ms.returns = std::monostate();
@@ -1615,7 +1615,8 @@ UnorderedMap<DexMethod*, std::vector<ReducedMethod>> compute_reduced_methods(
   // For each root method, we order the reduced methods (if any) by how many
   // types were inlined, with the largest number of inlined types going first.
   UnorderedMap<DexMethod*, std::vector<ReducedMethod>> reduced_methods;
-  for (auto& [method, reduced_methods_variants] : concurrent_reduced_methods) {
+  for (auto& [method, reduced_methods_variants] :
+       UnorderedIterable(concurrent_reduced_methods)) {
     std::sort(
         reduced_methods_variants.begin(), reduced_methods_variants.end(),
         [&](auto& a, auto& b) { return a.types.size() > b.types.size(); });
@@ -1745,7 +1746,7 @@ void select_reduced_methods(
                     &ref_sizes);
 
   UnorderedMap<Ref, std::unordered_set<ReducedMethodVariant>> ref_rmvs;
-  for (auto&& [rmv, refs] : rmv_refs) {
+  for (auto&& [rmv, refs] : UnorderedIterable(rmv_refs)) {
     for (auto ref : refs) {
       ref_rmvs[ref].insert(rmv);
     }
@@ -1758,11 +1759,7 @@ void select_reduced_methods(
   // associated reduced method variants. For determinism, we incorporate a
   // deterministic reference order in the reference priorities.
   UnorderedMap<Ref, size_t> ref_indices;
-  std::vector<Ref> ordered_refs(ref_sizes.size());
-  for (auto [ref, _] : ref_sizes) {
-    ordered_refs.push_back(ref);
-  }
-  std::sort(ordered_refs.begin(), ordered_refs.end(), [&](Ref a, Ref b) {
+  auto ordered_refs = unordered_order_keys(ref_sizes, [&](Ref a, Ref b) {
     if (a.index() != b.index()) {
       return a.index() < b.index();
     }
@@ -1791,7 +1788,7 @@ void select_reduced_methods(
   };
 
   MutablePriorityQueue<Ref, int64_t> pq;
-  for (auto [ref, _] : ref_sizes) {
+  for (auto [ref, _] : UnorderedIterable(ref_sizes)) {
     pq.insert(ref, get_priority(ref));
   }
 

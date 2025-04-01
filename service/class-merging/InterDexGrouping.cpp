@@ -203,7 +203,7 @@ void InterDexGrouping::build_interdex_grouping(
 
   const auto& type_to_usages =
       get_type_usages(merging_targets, scope, m_config.inferring_mode);
-  for (const auto& pair : type_to_usages) {
+  for (const auto& pair : UnorderedIterable(type_to_usages)) {
     auto index = get_min_interdex_group(pair.second, cls_to_interdex_groups,
                                         num_interdex_groups);
     if (m_config.type == InterDexGroupingType::NON_HOT_SET) {

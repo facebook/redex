@@ -921,7 +921,7 @@ TEST_F(ProguardTest, assortment) {
     EXPECT_EQ(proguard_rule_recorder.unused_keep_rules.size(), 3);
     std::vector<std::string> unused_keep_rule_strings;
     for (const keep_rules::KeepSpec* keep_rule :
-         proguard_rule_recorder.unused_keep_rules) {
+         UnorderedIterable(proguard_rule_recorder.unused_keep_rules)) {
       unused_keep_rule_strings.push_back(
           keep_rules::show_keep(*keep_rule, false));
     }
@@ -937,8 +937,8 @@ TEST_F(ProguardTest, assortment) {
     EXPECT_EQ(proguard_rule_recorder.unused_assumenosideeffect_rules.size(), 0);
     EXPECT_EQ(proguard_rule_recorder.used_assumenosideeffect_rules.size(), 1);
     std::vector<std::string> used_assumenosideeffects_rule_strings;
-    for (const keep_rules::KeepSpec* keep_rule :
-         proguard_rule_recorder.used_assumenosideeffect_rules) {
+    for (const keep_rules::KeepSpec* keep_rule : UnorderedIterable(
+             proguard_rule_recorder.used_assumenosideeffect_rules)) {
       used_assumenosideeffects_rule_strings.push_back(
           keep_rules::show_simple_keep_rule(
               *keep_rule, "-assumenosideeffects", false));

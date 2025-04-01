@@ -454,7 +454,8 @@ FixpointIteratorMap analyze_scope(
           next_affected_methods->insert(callers.begin(), callers.end());
         },
         *affected_methods);
-    for (auto&& [method, summary] : changed_effect_summaries) {
+    for (auto&& [method, summary] :
+         UnorderedIterable(changed_effect_summaries)) {
       (*summary_map_ptr)[method] = std::move(summary);
     }
     std::swap(next_affected_methods, affected_methods);

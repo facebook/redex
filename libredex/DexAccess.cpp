@@ -35,7 +35,7 @@ void loosen_access_modifier_for_vmethods(const DexClasses& scope) {
   auto graph = method_override_graph::build_graph(scope);
   const auto& nodes = graph->nodes();
   std::unordered_set<const DexMethod*> should_not_mark;
-  for (const auto& pair : nodes) {
+  for (const auto& pair : UnorderedIterable(nodes)) {
     const auto* method = pair.first;
     // If a final method has children, it can only be package-private and we can
     // not change it to be public.

@@ -81,7 +81,7 @@ InitClassesWithSideEffects::InitClassesWithSideEffects(
         added_clinit_has_no_side_effects.insert(cls);
       }
     });
-    for (auto cls : added_clinit_has_no_side_effects) {
+    for (auto cls : UnorderedIterable(added_clinit_has_no_side_effects)) {
       cls->rstate.set_clinit_has_no_side_effects();
     }
     TRACE(ICL, 2,

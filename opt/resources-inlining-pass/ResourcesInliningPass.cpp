@@ -99,7 +99,7 @@ void ResourcesInliningPass::run_pass(DexStoresVector& stores,
       ResourcesInliningPass::find_transformations(
           scope, inlinable_resources, id_to_name, type_names, package_name);
 
-  for (auto& pair : possible_transformations) {
+  for (auto& pair : UnorderedIterable(possible_transformations)) {
     auto method = pair.first;
     auto& transforms = pair.second;
     ResourcesInliningPass::inline_resource_values_dex(method, transforms, mgr);

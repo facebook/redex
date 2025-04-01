@@ -26,7 +26,7 @@ void RecursionPruner::run() {
   std::unordered_map<DexMethod*, size_t> visited;
   std::vector<DexMethod*> ordered_callers;
   ordered_callers.reserve(m_caller_callee.size());
-  for (auto& p : m_caller_callee) {
+  for (auto& p : UnorderedIterable(m_caller_callee)) {
     ordered_callers.push_back(const_cast<DexMethod*>(p.first));
   }
   std::sort(ordered_callers.begin(), ordered_callers.end(), compare_dexmethods);

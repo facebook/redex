@@ -498,8 +498,7 @@ void split_methods_in_stores(
         reserved_mrefs, splittable_closures, name_infix, &uniquifiers, stats,
         &dex_states, &concurrent_added_methods, concurrent_hot_methods,
         concurrent_new_hot_split_methods);
-    stats->added_methods.insert(concurrent_added_methods.begin(),
-                                concurrent_added_methods.end());
+    insert_unordered_iterable(stats->added_methods, concurrent_added_methods);
     TRACE(MS, 1, "[%zu] Split out %zu methods", iteration,
           concurrent_added_methods.size());
   }

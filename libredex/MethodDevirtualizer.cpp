@@ -148,7 +148,7 @@ std::vector<DexMethod*> get_devirtualizable_vmethods(
   auto vmethods = mog::get_non_true_virtuals(*override_graph, scope);
   auto targets_set = UnorderedSet<DexClass*>(targets.begin(), targets.end());
 
-  for (auto m : vmethods) {
+  for (auto m : UnorderedIterable(vmethods)) {
     auto cls = type_class(m->get_class());
     if (!has_any_annotation(m, do_not_devirt_anno) &&
         targets_set.count(cls) > 0) {

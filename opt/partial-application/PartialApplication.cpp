@@ -824,7 +824,7 @@ void select_invokes_and_callers(
       callees_by_classes;
   UnorderedMap<const DexMethod*, InvokeCallSiteSummaries>
       selected_invokes_by_callees;
-  for (auto& p : callee_caller) {
+  for (auto& p : UnorderedIterable(callee_caller)) {
     auto callee = p.first;
     callees.push_back(callee);
     callees_by_classes[callee->get_class()].push_back(callee);
@@ -1060,7 +1060,7 @@ void create_partial_application_methods(EnumUtilsCache& enum_utils_cache,
   Timer t("create_partial_application_methods");
   std::map<DexMethodRef*, const CalleeCallSiteSummary*, dexmethods_comparator>
       inverse_ordered_pa_method_refs;
-  for (auto& p : pa_method_refs) {
+  for (auto& p : UnorderedIterable(pa_method_refs)) {
     bool success =
         inverse_ordered_pa_method_refs.emplace(p.second, &p.first).second;
     always_assert(success);
@@ -1124,7 +1124,7 @@ size_t derive_method_profiles_stats(ConfigFiles& config,
                                     const PaCallers& pa_callers) {
   auto& method_profiles = config.get_method_profiles();
   size_t res = 0;
-  for (auto& [pa_method_ref, callers] : pa_callers) {
+  for (auto& [pa_method_ref, callers] : UnorderedIterable(pa_callers)) {
     auto pa_method = pa_method_ref->as_def();
     always_assert(pa_method);
     res += method_profiles.derive_stats(pa_method, callers);

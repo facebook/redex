@@ -142,7 +142,7 @@ std::vector<DexCallSite*> GatheredTypes::get_dexcallsite_emitlist() {
 
 std::vector<DexMethod*> GatheredTypes::get_dexmethod_emitlist() {
   std::vector<DexMethod*> methlist;
-  for (auto cls : *m_classes) {
+  for (auto cls : UnorderedIterable(*m_classes)) {
     TRACE(OPUT, 3, "[dexmethod_emitlist][class] %s", cls->c_str());
     auto const& dmethods = cls->get_dmethods();
     auto const& vmethods = cls->get_vmethods();

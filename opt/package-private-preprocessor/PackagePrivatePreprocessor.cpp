@@ -433,7 +433,7 @@ PackagePrivatePreprocessorPass::Stats transform(
 
   // Make public all classes that are accessed via package-private accessibility
   // so that we can rename the packages.
-  for (auto* cls : package_private_accessed_classes) {
+  for (auto* cls : UnorderedIterable(package_private_accessed_classes)) {
     set_public(cls);
     stats.publicized_classes++;
   }
@@ -447,7 +447,7 @@ PackagePrivatePreprocessorPass::Stats transform(
     }
   };
   std::unordered_set<const DexMethod*> roots_to_publicize;
-  for (auto* method : package_private_accessed_methods) {
+  for (auto* method : UnorderedIterable(package_private_accessed_methods)) {
     auto it = true_virtual_roots.find(method);
     if (it != true_virtual_roots.end()) {
       roots_to_publicize.insert(it->second);
@@ -463,14 +463,14 @@ PackagePrivatePreprocessorPass::Stats transform(
 
   // Make public all fields that are accessed via package-private accessibility
   // so that we can rename the packages.
-  for (auto* field : package_private_accessed_fields) {
+  for (auto* field : UnorderedIterable(package_private_accessed_fields)) {
     set_public(field);
     stats.publicized_fields++;
   }
 
   std::unordered_set<const DexMethod*> new_true_virtual_scopes;
   std::unordered_set<const DexMethod*> new_true_virtual_scopes_methods;
-  for (auto&& [root, vs] : true_virtual_scopes) {
+  for (auto&& [root, vs] : UnorderedIterable(true_virtual_scopes)) {
     if (get_parent(graph, root) == nullptr) {
       // not a new root
       continue;

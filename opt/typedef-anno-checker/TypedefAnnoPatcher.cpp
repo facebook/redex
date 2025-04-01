@@ -371,12 +371,12 @@ void collect_setter_missing_param_annos(
 } // namespace
 
 void PatchingCandidates::apply_patching(std::mutex& mutex, Stats& class_stats) {
-  for (auto& pair : m_field_candidates) {
+  for (auto& pair : UnorderedIterable(m_field_candidates)) {
     auto* field = pair.first;
     auto* anno = pair.second;
     add_annotation(field, anno, mutex, class_stats);
   }
-  for (auto& pair : m_method_candidates) {
+  for (auto& pair : UnorderedIterable(m_method_candidates)) {
     auto* method = pair.first;
     auto* anno = pair.second;
     add_annotation(method, anno, mutex, class_stats);
@@ -557,12 +557,8 @@ void TypedefAnnoPatcher::populate_chained_getters(DexClass* cls) {
 }
 
 void TypedefAnnoPatcher::patch_chained_getters(Stats& class_stats) {
-  std::vector<DexClass*> sorted_candidates;
-  for (auto* cls : m_chained_getters) {
-    sorted_candidates.push_back(cls);
-  }
-  std::sort(sorted_candidates.begin(), sorted_candidates.end(),
-            compare_dexclasses);
+  auto sorted_candidates =
+      unordered_order(m_chained_getters, compare_dexclasses);
   for (auto* cls : sorted_candidates) {
     for (auto m : cls->get_all_methods()) {
       patch_parameters_and_returns(m, class_stats);

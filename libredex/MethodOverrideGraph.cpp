@@ -494,7 +494,7 @@ void Graph::dump(std::ostream& os) const {
                        [](auto* c) { return c->method; });
         return succs;
       });
-  gw.write(os, boost::adaptors::keys(m_nodes));
+  gw.write(os, unordered_keys(m_nodes));
 }
 
 std::unique_ptr<const Graph> build_graph(const Scope& scope) {

@@ -272,7 +272,7 @@ void CallSiteSummarizer::summarize() {
 
   std::vector<DexMethod*> callers;
   callers.reserve(m_caller_callee.size());
-  for (auto& p : m_caller_callee) {
+  for (auto& p : UnorderedIterable(m_caller_callee)) {
     auto method = const_cast<DexMethod*>(p.first);
     callers.push_back(method);
     auto dependencies = get_dependencies(method);

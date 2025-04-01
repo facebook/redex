@@ -108,7 +108,7 @@ TEST_F(MethodOverrideGraphTest, verify) {
               ::testing::UnorderedElementsAre(A_M, IA_M, IB_M, IC_M));
 
   // Check that parents and children do not contain duplicates
-  for (auto&& [method, node] : graph->nodes()) {
+  for (auto&& [method, node] : UnorderedIterable(graph->nodes())) {
     std::unordered_set<const mog::Node*> children(node.children.begin(),
                                                   node.children.end());
     EXPECT_EQ(node.children.size(), children.size());

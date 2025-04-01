@@ -1482,7 +1482,7 @@ void SharedState::cleanup() {
 
   std::vector<std::pair<Barrier, size_t>> ordered_barriers;
   ordered_barriers.reserve(m_barriers->size());
-  for (auto&& [barrier, count] : *m_barriers) {
+  for (auto&& [barrier, count] : UnorderedIterable(*m_barriers)) {
     ordered_barriers.emplace_back(barrier, count.load());
   }
   std::sort(

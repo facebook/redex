@@ -698,7 +698,7 @@ size_t compute_locations_closure_impl(
   UnorderedSet<const DexMethod*> impacted_methods;
   {
     Timer t{"Compute inverse dependencies"};
-    for (auto&& [method, lads] : method_lads) {
+    for (auto&& [method, lads] : UnorderedIterable(method_lads)) {
       if (!lads.dependencies.empty()) {
         for (auto d : UnorderedIterable(lads.dependencies)) {
           inverse_dependencies[d].push_back(method);
@@ -779,7 +779,7 @@ size_t compute_locations_closure_impl(
 
   // For all methods which have a known set of locations at this point,
   // persist that information
-  for (auto&& [method, lads] : method_lads) {
+  for (auto&& [method, lads] : UnorderedIterable(method_lads)) {
     result->emplace(method, std::move(lads.locations));
   }
 

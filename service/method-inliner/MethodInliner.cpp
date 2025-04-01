@@ -268,7 +268,7 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(
   });
   if (non_virtual) {
     non_virt_methods = non_virtual->size();
-    for (const auto& vmeth : *non_virtual) {
+    for (const auto& vmeth : UnorderedIterable(*non_virtual)) {
       auto code = vmeth->get_code();
       if (code == nullptr) {
         non_virtual_no_code++;
@@ -605,7 +605,7 @@ void gather_true_virtual_methods(
 
   // Post processing candidates.
   std::vector<const DexMethod*> true_virtual_callees;
-  for (auto& p : concurrent_true_virtual_callers) {
+  for (auto& p : UnorderedIterable(concurrent_true_virtual_callers)) {
     true_virtual_callees.push_back(p.first);
   }
   workqueue_run<const DexMethod*>(
@@ -714,7 +714,7 @@ void gather_true_virtual_methods(
                            [&](auto& p) { return p.second.empty(); });
       },
       true_virtual_callees);
-  for (auto& pair : concurrent_true_virtual_callers) {
+  for (auto& pair : UnorderedIterable(concurrent_true_virtual_callers)) {
     DexMethod* callee = const_cast<DexMethod*>(pair.first);
     true_virtual_callers->emplace(callee, std::move(pair.second));
   }
@@ -914,7 +914,7 @@ void run_inliner(
         &methods_with_write_barrier);
     mgr.set_metric("unfinalized_fields", unfinalized_fields.size());
     TRACE(INLINE, 3, "unfinalized %zu fields", unfinalized_fields.size());
-    for (auto&& [_, init_methods] : unfinalized_fields) {
+    for (auto&& [_, init_methods] : UnorderedIterable(unfinalized_fields)) {
       unfinalized_init_methods.insert(init_methods.begin(), init_methods.end());
     }
     mgr.set_metric("unfinalized_init_methods", unfinalized_init_methods.size());
@@ -989,7 +989,7 @@ void run_inliner(
     auto inlined_with_fence = inliner.get_inlined_with_fence();
     size_t refinalized_fields = 0;
     std::unordered_set<DexMethod*> inits_inserted_barrier;
-    for (auto&& [field, init_methods] : unfinalized_fields) {
+    for (auto&& [field, init_methods] : UnorderedIterable(unfinalized_fields)) {
       if (std::none_of(
               init_methods.begin(), init_methods.end(),
               [&](DexMethod* m) { return inlined_with_fence.count(m); })) {
@@ -1114,7 +1114,7 @@ void run_inliner(
   std::vector<std::pair<const DexMethod*, size_t>> partially_inlined_callees;
   auto& atomic_map = inliner.get_info().partially_inlined_callees;
   partially_inlined_callees.reserve(atomic_map.size());
-  for (auto&& [callee, count] : atomic_map) {
+  for (auto&& [callee, count] : UnorderedIterable(atomic_map)) {
     partially_inlined_callees.emplace_back(callee, count.load());
   }
   std::sort(partially_inlined_callees.begin(), partially_inlined_callees.end(),

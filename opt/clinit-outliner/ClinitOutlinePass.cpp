@@ -123,7 +123,7 @@ void ClinitOutlinePass::run_pass(DexStoresVector& stores,
     outlined_clinits.emplace(method, outlined_clinit);
   });
 
-  for (auto [method, outlined_clinit] : outlined_clinits) {
+  for (auto [method, outlined_clinit] : UnorderedIterable(outlined_clinits)) {
     type_class(method->get_class())->add_method(outlined_clinit);
     method_profiles.derive_stats(outlined_clinit, {method});
     // "Upgrade" appear_percent if configured threshold override applies, so

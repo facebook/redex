@@ -20,7 +20,7 @@ void IntTypePatcherPass::run_pass(DexStoresVector& stores,
   walk::parallel::methods(scope, [&](DexMethod* m) { run(m); });
 
   std::string printable_methods;
-  for (DexMethod* m : changed_methods) {
+  for (DexMethod* m : UnorderedIterable(changed_methods)) {
     printable_methods += m->get_deobfuscated_name_or_empty_copy() + " ";
   }
 

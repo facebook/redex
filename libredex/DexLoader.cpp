@@ -10,6 +10,7 @@
 #include <boost/iostreams/device/mapped_file.hpp>
 
 #include "AggregateException.h"
+#include "ConcurrentContainers.h"
 #include "DexAccess.h"
 #include "DexCallSite.h"
 #include "DexDefs.h"
@@ -841,7 +842,7 @@ static void balloon_all(const Scope& scope,
     if (!ir_balloon_errors.empty()) {
       if (throw_on_error) {
         std::vector<std::exception_ptr> all_exceptions;
-        for (const auto& [_, data] : ir_balloon_errors) {
+        for (const auto& [_, data] : UnorderedIterable(ir_balloon_errors)) {
           all_exceptions.emplace_back(data.second);
         }
         throw aggregate_exception(std::move(all_exceptions));
@@ -850,7 +851,7 @@ static void balloon_all(const Scope& scope,
       std::ostringstream oss;
       oss << "Error lifting DexCode to IRCode for the following methods:"
           << std::endl;
-      for (const auto& [method, data] : ir_balloon_errors) {
+      for (const auto& [method, data] : UnorderedIterable(ir_balloon_errors)) {
         oss << show(method) << ": " << data.first << std::endl;
       }
 

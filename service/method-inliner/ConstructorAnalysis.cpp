@@ -375,7 +375,8 @@ UnorderedSet<const DexType*> find_complex_init_inlined_types(
       }
     }
   });
-  UnorderedSet<const DexType*> result(items.begin(), items.end());
+  UnorderedSet<const DexType*> result;
+  insert_unordered_iterable(result, items);
   return result;
 }
 } // namespace constructor_analysis

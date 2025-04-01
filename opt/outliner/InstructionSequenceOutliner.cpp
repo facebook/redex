@@ -1261,7 +1261,7 @@ static void get_recurring_cores(
         block_deciders->emplace(method, std::move(block_decider));
       });
   size_t singleton_cores{0};
-  for (auto& p : concurrent_cores) {
+  for (auto& p : UnorderedIterable(concurrent_cores)) {
     auto count = p.second.load();
     always_assert(count > 0);
     if (count > 1) {
@@ -1530,7 +1530,7 @@ static void get_beneficial_candidates(
   std::map<DexMethod*, CandidateSet, dexmethods_comparator>
       candidates_by_methods;
   size_t beneficial_count{0}, maleficial_count{0};
-  for (auto& p : concurrent_candidates) {
+  for (auto& p : UnorderedIterable(concurrent_candidates)) {
     if (get_savings(config, store, store_dependencies, p.first, p.second,
                     *outlined_methods) > 0) {
       beneficial_count += p.second.count;

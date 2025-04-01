@@ -1112,7 +1112,7 @@ void process_proguard_rules(ConfigFiles& conf,
   if (unused_rule_abort) {
     std::vector<std::string> unused_out;
     for (const keep_rules::KeepSpec* keep_rule :
-         proguard_rule_recorder.unused_keep_rules) {
+         UnorderedIterable(proguard_rule_recorder.unused_keep_rules)) {
       unused_out.push_back(keep_rules::show_keep(*keep_rule));
     }
     // Make output deterministic

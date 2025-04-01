@@ -231,7 +231,7 @@ void Outliner::create_outline_helpers(DexStoresVector* stores) {
   ClassCreator cc(outline_helper_cls);
   cc.set_super(type::java_lang_Object());
   bool did_create_helper{false};
-  for (const auto& p : m_outline_typelists) {
+  for (const auto& p : UnorderedIterable(m_outline_typelists)) {
     const auto* typelist = p.first;
     auto count = p.second.load();
 

@@ -316,7 +316,7 @@ class DelSuper {
                 SHOW(meth));
         }
       });
-      for (auto&& [type, _] : m_delmeths) {
+      for (auto&& [type, _] : UnorderedIterable(m_delmeths)) {
         wq.add_item(type);
       }
       wq.run_all();

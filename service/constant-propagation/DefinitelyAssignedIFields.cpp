@@ -376,7 +376,9 @@ std::unordered_set<const DexField*> get_definitely_assigned_ifields(
     res.insert(definitely_assigned_ifields.begin(),
                definitely_assigned_ifields.end());
   });
-  return std::unordered_set<const DexField*>(res.begin(), res.end());
+  std::unordered_set<const DexField*> set;
+  insert_unordered_iterable(set, res);
+  return set;
 }
 } // namespace definitely_assigned_ifields
 } // namespace constant_propagation

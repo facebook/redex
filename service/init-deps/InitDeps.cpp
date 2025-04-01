@@ -94,18 +94,18 @@ auto compute_deps(const Scope& scope,
     all.insert(cls);
   });
   std::unordered_map<DexClass*, std::vector<DexClass*>> deps;
-  for (auto& kv : deps_parallel) {
+  for (auto& kv : UnorderedIterable(deps_parallel)) {
     deps[kv.first] = std::move(kv.second);
   }
   std::unordered_map<DexClass*, std::vector<DexClass*>> reverse_deps;
-  for (auto& kv : reverse_deps_parallel) {
+  for (auto& kv : UnorderedIterable(reverse_deps_parallel)) {
     reverse_deps[kv.first] = std::move(kv.second);
   }
 
   std::vector<DexClass*> roots;
-  std::copy_if(maybe_roots.begin(), maybe_roots.end(),
-               std::back_inserter(roots),
-               [&](auto* cls) { return is_target.count_unsafe(cls) == 0; });
+  unordered_copy_if(maybe_roots, std::back_inserter(roots), [&](auto* cls) {
+    return is_target.count_unsafe(cls) == 0;
+  });
   return std::make_tuple(std::move(deps), std::move(reverse_deps),
                          std::move(roots), all.size());
 }

@@ -41,6 +41,9 @@
  * - `unordered_copy(collection, ...)` / `unordered_copy_if(collection, ...)`
  *   provides the same functionality as `std::copy` / `std::copy_if`, except
  *   that it works on (potentially) unordered collections.
+ * - `unordered_count(collection, ...)` / `unordered_count_if(collection, ...)`
+ *   provides the same functionality as `std::count` / `std::count_if`, except
+ *   that it works on (potentially) unordered collections.
  * - `unordered_erase_if(collection, ...)` provides the same functionality as
  *   `std::erase_if`, except that it works on (potentially) unordered
  *   collections.
@@ -895,6 +898,20 @@ OutputIt unordered_copy_if(const Collection& collection,
                            UnaryPred pred) {
   auto ui = UnorderedIterable(collection);
   return std::copy_if(ui.begin(), ui.end(), target, std::move(pred));
+}
+
+template <class Collection, class T>
+typename Collection::difference_type unordered_count(
+    const Collection& collection, const T& value) {
+  auto ui = UnorderedIterable(collection);
+  return std::count(ui.begin(), ui.end(), value);
+}
+
+template <class Collection, class UnaryPred>
+typename Collection::difference_type unordered_count_if(
+    const Collection& collection, UnaryPred pred) {
+  auto ui = UnorderedIterable(collection);
+  return std::count_if(ui.begin(), ui.end(), std::move(pred));
 }
 
 template <class Collection, typename Pred>

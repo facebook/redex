@@ -167,7 +167,7 @@ struct RedexContext {
   DexType* class_type(const DexClass* cls) const;
   template <class TypeClassWalkerFn = void(const DexType*, const DexClass*)>
   void walk_type_class(TypeClassWalkerFn walker) {
-    for (auto* cls : m_classes) {
+    for (auto* cls : UnorderedIterable(m_classes)) {
       walker(class_type(cls), cls);
     }
   }

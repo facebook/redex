@@ -143,7 +143,7 @@ UnorderedSet<uint32_t> find_code_resource_references(
   });
 
   UnorderedSet<DexField*> array_fields;
-  for (auto* field : accessed_sfields) {
+  for (auto* field : UnorderedIterable(accessed_sfields)) {
     auto is_r_field =
         resources::is_non_customized_r_class(type_class(field->get_class()));
     if (type::is_primitive(field->get_type()) && field->get_static_value() &&
@@ -157,10 +157,8 @@ UnorderedSet<uint32_t> find_code_resource_references(
 
   r_class_reader.extract_resource_ids_from_static_arrays(scope, array_fields,
                                                          &ids_from_code);
-  ids_from_code.insert(potential_ids_from_code.begin(),
-                       potential_ids_from_code.end());
-  ids_from_code.insert(potential_ids_from_strings.begin(),
-                       potential_ids_from_strings.end());
+  insert_unordered_iterable(ids_from_code, potential_ids_from_code);
+  insert_unordered_iterable(ids_from_code, potential_ids_from_strings);
   return ids_from_code;
 }
 } // namespace

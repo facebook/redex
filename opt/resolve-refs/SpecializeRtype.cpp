@@ -424,7 +424,7 @@ void RtypeSpecialization::specialize_rtypes(const Scope& scope) {
   // Sort and update virtual targets.
   m_stats.num_virtual_candidates = virtual_roots.size();
   std::vector<DexMethod*> virtuals_lst;
-  for (auto& pair : virtual_roots) {
+  for (auto& pair : UnorderedIterable(virtual_roots)) {
     virtuals_lst.push_back(pair.first);
   }
   std::sort(virtuals_lst.begin(), virtuals_lst.end(), compare_dexmethods);

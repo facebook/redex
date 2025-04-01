@@ -1072,10 +1072,8 @@ class EnumTransformer final {
   EnumTransformer(const Config& config, DexStoresVector* stores)
       : m_stores(*stores), m_int_objs(0) {
     m_enum_util = std::make_unique<EnumUtil>(config);
-    for (auto it = config.candidate_enums.begin();
-         it != config.candidate_enums.end();
-         ++it) {
-      auto enum_cls = type_class(*it);
+    for (auto& enum_type : UnorderedIterable(config.candidate_enums)) {
+      auto enum_cls = type_class(enum_type);
       auto attributes = optimize_enums::analyze_enum_clinit(
           enum_cls, config.support_kt_19_enum_entries);
       size_t num_enum_constants = attributes.m_constants_map.size();
@@ -1085,7 +1083,7 @@ class EnumTransformer final {
               enum_cls->get_sfields().size());
         continue;
       } else if (num_enum_constants > config.max_enum_size) {
-        if (!config.breaking_reference_equality_allowlist.count(*it)) {
+        if (!config.breaking_reference_equality_allowlist.count(enum_type)) {
           TRACE(ENUM, 2, "\tSkip %s %zu values", SHOW(enum_cls),
                 num_enum_constants);
           continue;
@@ -1098,7 +1096,7 @@ class EnumTransformer final {
       }
       m_int_objs = std::max<uint32_t>(m_int_objs, num_enum_constants);
       m_enum_objs += num_enum_constants;
-      m_enum_attributes_map.emplace(*it, attributes);
+      m_enum_attributes_map.emplace(enum_type, attributes);
       TRACE(ENUM, 2, "\tcleaning enum %s with num const values %zu",
             SHOW(enum_cls), num_enum_constants);
       clean_generated_methods_fields(enum_cls);
@@ -1140,17 +1138,14 @@ class EnumTransformer final {
           code_updater.run();
         });
     create_substitute_methods(m_enum_util->m_substitute_methods);
-    std::vector<DexMethod*> instance_methods(
-        m_enum_util->m_instance_methods.begin(),
-        m_enum_util->m_instance_methods.end());
-    std::sort(instance_methods.begin(), instance_methods.end(),
-              dexmethods_comparator());
+    auto instance_methods = unordered_order(m_enum_util->m_instance_methods,
+                                            dexmethods_comparator());
     for (auto method : instance_methods) {
       mutators::make_static(method);
     }
-    std::map<DexFieldRef*, DexMethodRef*, dexfields_comparator> field_to_method(
-        m_enum_util->m_get_instance_field_methods.begin(),
-        m_enum_util->m_get_instance_field_methods.end());
+    std::map<DexFieldRef*, DexMethodRef*, dexfields_comparator> field_to_method;
+    insert_unordered_iterable(field_to_method,
+                              m_enum_util->m_get_instance_field_methods);
     for (auto& pair : field_to_method) {
       create_get_instance_field_method(pair.second, pair.first);
     }
@@ -1215,7 +1210,7 @@ class EnumTransformer final {
   }
 
   void create_substitute_methods(const ConcurrentSet<DexMethodRef*>& methods) {
-    for (auto ref : methods) {
+    for (auto ref : UnorderedIterable(methods)) {
       if (ref->get_name() == m_enum_util->REDEX_NAME) {
         create_name_method(ref);
       } else if (ref->get_name() == m_enum_util->REDEX_HASHCODE) {

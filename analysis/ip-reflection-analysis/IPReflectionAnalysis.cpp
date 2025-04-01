@@ -237,7 +237,7 @@ void IPReflectionAnalysisPass::run_pass(DexStoresVector& stores,
   analysis.run();
   const auto& summaries = analysis.registry.get_map();
   m_result = std::make_shared<Result>();
-  for (const auto& entry : summaries) {
+  for (const auto& entry : UnorderedIterable(summaries)) {
     (*m_result)[entry.first] = entry.second.get_reflection_sites();
   }
   if (m_export_results) {

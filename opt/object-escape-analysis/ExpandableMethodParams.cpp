@@ -345,9 +345,7 @@ size_t ExpandableMethodParams::flush(
       used_expanded_method_refs);
 
   // Add the newly concretized methods to their classes.
-  std::vector<DexMethod*> ordered(expanded_methods.begin(),
-                                  expanded_methods.end());
-  std::sort(ordered.begin(), ordered.end(), compare_dexmethods);
+  auto ordered = unordered_order(expanded_methods, compare_dexmethods);
   for (auto expanded_method : ordered) {
     type_class(expanded_method->get_class())->add_method(expanded_method);
   }

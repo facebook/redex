@@ -56,7 +56,8 @@ void write_method_module_usages_to_file(
 
   TRACE(APP_MOD_USE, 4, "Outputting module usages at %s", path.c_str());
   std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
-  for (const auto& [method, store_refs] : method_store_refs) {
+  for (const auto& [method, store_refs] :
+       UnorderedIterable(method_store_refs)) {
     if (store_refs.empty()) {
       continue;
     }
@@ -88,7 +89,8 @@ void write_app_module_use_stats(
 
   UnorderedMap<DexStore*, ModuleUseCount> counts;
 
-  for (const auto& [method, store_refs] : method_store_refs) {
+  for (const auto& [method, store_refs] :
+       UnorderedIterable(method_store_refs)) {
     for (const auto& [store, refl_only] : store_refs) {
       auto& count = counts[store];
       if (refl_only) {
@@ -319,7 +321,8 @@ unsigned AppModuleUsagePass::gather_violations(
   int trace_level = m_crash_with_violations ? 0 : 1;
 
   unsigned n_violations{0u};
-  for (const auto& [method, stores_referenced] : method_store_refs) {
+  for (const auto& [method, stores_referenced] :
+       UnorderedIterable(method_store_refs)) {
     auto method_name = show(method);
     for (const auto& [store, only_reflection] : stores_referenced) {
       if (access_granted_by_annotation(method, store)) {
@@ -340,7 +343,7 @@ unsigned AppModuleUsagePass::gather_violations(
     }
   }
 
-  for (const auto& [field, store] : field_store_refs) {
+  for (const auto& [field, store] : UnorderedIterable(field_store_refs)) {
     auto field_name = show(field);
     if (access_granted_by_annotation(field, store)) {
       continue;

@@ -155,12 +155,12 @@ void VirtualMerging::find_unsupported_virtual_scopes() {
   m_stats.invoke_super_unresolved_method_refs =
       invoke_super_unresolved_method_refs.size();
 
-  for (auto method : invoke_super_methods) {
+  for (auto method : UnorderedIterable(invoke_super_methods)) {
     m_unsupported_virtual_scopes.insert(
         m_type_system.find_virtual_scope(method));
   }
 
-  for (auto method : invoke_super_unresolved_method_refs) {
+  for (auto method : UnorderedIterable(invoke_super_unresolved_method_refs)) {
     m_unsupported_named_protos[method->get_name()].insert(method->get_proto());
   }
 }
@@ -213,7 +213,7 @@ void VirtualMerging::compute_mergeable_scope_methods() {
   });
 
   m_stats.mergeable_scope_methods = m_mergeable_scope_methods.size();
-  for (auto& p : m_mergeable_scope_methods) {
+  for (auto& p : UnorderedIterable(m_mergeable_scope_methods)) {
     m_stats.mergeable_virtual_methods += p.second.size();
   }
 }
@@ -660,7 +660,7 @@ VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
     VirtualMergingStats& stats) const {
   InsertOnlyConcurrentMap<const VirtualScope*, LocalStats> local_stats;
   std::vector<const VirtualScope*> virtual_scopes;
-  for (auto& p : m_mergeable_scope_methods) {
+  for (auto& p : UnorderedIterable(m_mergeable_scope_methods)) {
     virtual_scopes.push_back(p.first);
   }
   InsertOnlyConcurrentMap<
@@ -687,7 +687,7 @@ VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
       mergeable_pairs_by_virtual_scopes.size();
 
   size_t overriding_methods = 0;
-  for (auto& p : local_stats) {
+  for (auto& p : UnorderedIterable(local_stats)) {
     overriding_methods += p.second.overriding_methods;
     stats.cross_store_refs += p.second.cross_store_refs;
     stats.cross_dex_refs += p.second.cross_dex_refs;
@@ -701,7 +701,7 @@ VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
       stats.mergeable_virtual_methods - overriding_methods;
 
   MergablePairsByVirtualScope out;
-  for (auto& p : mergeable_pairs_by_virtual_scopes) {
+  for (auto& p : UnorderedIterable(mergeable_pairs_by_virtual_scopes)) {
     const auto& mergeable_pairs = p.second;
     stats.mergeable_pairs += mergeable_pairs.size();
     out.insert(p);

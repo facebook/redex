@@ -296,7 +296,7 @@ void RootSetMarker::record_is_seed(Seed* seed) {
  */
 void RootSetMarker::mark_external_method_overriders() {
   std::unordered_set<const DexMethod*> visited;
-  for (auto& pair : m_method_override_graph.nodes()) {
+  for (auto& pair : UnorderedIterable(m_method_override_graph.nodes())) {
     auto method = pair.first;
     if (!method->is_external() || visited.count(method)) {
       continue;
@@ -1821,7 +1821,8 @@ void compute_zombie_methods(
                        [&](auto*, auto& set, bool) { set.insert(cls); });
       },
       reachable_aspects.zombie_implementation_methods);
-  for (auto&& [m, unmarked_implementation_methods_classes] : zombies) {
+  for (auto&& [m, unmarked_implementation_methods_classes] :
+       UnorderedIterable(zombies)) {
     for (auto* cls : unmarked_implementation_methods_classes) {
       reachable_objects.record_reachability(cls, m);
     }
@@ -1844,8 +1845,8 @@ void ReachableAspects::finish(const ConditionallyMarked& cond_marked,
       remaining_mrefs_gatherers.emplace(method, mrefs_gatherer.get());
     }
   };
-  for (auto&& [cls, map] :
-       cond_marked.method_references_gatherers_if_class_instantiable) {
+  for (auto&& [cls, map] : UnorderedIterable(
+           cond_marked.method_references_gatherers_if_class_instantiable)) {
     if (map.empty()) {
       always_assert(instantiable_types.count(cls));
       continue;
@@ -1854,8 +1855,8 @@ void ReachableAspects::finish(const ConditionallyMarked& cond_marked,
     uninstantiable_dependencies.insert(cls);
     add(map);
   }
-  for (auto&& [method, map] :
-       cond_marked.method_references_gatherers_if_method_returning) {
+  for (auto&& [method, map] : UnorderedIterable(
+           cond_marked.method_references_gatherers_if_method_returning)) {
     if (map.empty()) {
       always_assert(returning_methods.count(method));
       continue;
@@ -1891,7 +1892,7 @@ void ReachableAspects::finish(const ConditionallyMarked& cond_marked,
 
   // Prune all unmarked methods from callable_instance_methods
   std::vector<const DexMethod*> to_erase;
-  for (auto* m : callable_instance_methods) {
+  for (auto* m : UnorderedIterable(callable_instance_methods)) {
     if (!reachable_objects.marked_unsafe(m)) {
       to_erase.push_back(m);
     }
@@ -2404,9 +2405,7 @@ void dump_graph(std::ostream& os, const ReachableObjectGraph& retainers_of) {
       });
 
   // Gotta sort the keys or the output is nondeterministic.
-  auto key_adaptor = boost::adaptors::keys(retainers_of);
-  std::vector<ReachableObject> keys(key_adaptor.begin(), key_adaptor.end());
-  std::sort(keys.begin(), keys.end(), compare);
+  auto keys = unordered_order_keys(retainers_of, compare);
   gw.write(os, keys);
 }
 

@@ -160,7 +160,7 @@ WholeProgramState::WholeProgramState(
     m_known_fields.emplace(field);
   });
   // Put non-root non true virtual methods in known methods.
-  for (const auto& non_true_virtual : non_true_virtuals) {
+  for (const auto& non_true_virtual : UnorderedIterable(non_true_virtuals)) {
     if (!root(non_true_virtual) && non_true_virtual->get_code()) {
       m_known_methods.emplace(non_true_virtual);
     }
@@ -208,12 +208,12 @@ void WholeProgramState::collect(
       }
     }
   });
-  for (const auto& pair : fields_value_tmp) {
+  for (const auto& pair : UnorderedIterable(fields_value_tmp)) {
     m_field_partition.update(pair.first, [&pair](auto* current_value) {
       current_value->join_with(pair.second);
     });
   }
-  for (const auto& pair : methods_value_tmp) {
+  for (const auto& pair : UnorderedIterable(methods_value_tmp)) {
     m_method_partition.update(pair.first, [&pair](auto* current_value) {
       current_value->join_with(pair.second);
     });

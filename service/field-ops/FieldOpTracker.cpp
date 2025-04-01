@@ -496,8 +496,8 @@ FieldStatsMap analyze(const Scope& scope) {
     }
   });
 
-  FieldStatsMap field_stats(concurrent_field_stats.begin(),
-                            concurrent_field_stats.end());
+  FieldStatsMap field_stats;
+  insert_unordered_iterable(field_stats, concurrent_field_stats);
 
   // Gather field reads from annotations.
   walk::annotations(scope, [&](DexAnnotation* anno) {

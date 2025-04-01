@@ -70,7 +70,7 @@ RedexContext::~RedexContext() {
                   // DexStrings map to the same DexType), so we have to dedup
                   // the set of types before deleting to avoid double-frees.
                   std::unordered_set<DexType*> delete_types;
-                  for (auto const& p : s_type_map) {
+                  for (auto const& p : UnorderedIterable(s_type_map)) {
                     if (delete_types.emplace(p.second).second) {
                       delete p.second;
                     }
@@ -79,28 +79,28 @@ RedexContext::~RedexContext() {
                 },
                 [&] {
                   Timer timer("Delete DexTypeLists", /* indent */ false);
-                  for (auto const& p : s_typelist_map) {
+                  for (auto const& p : UnorderedIterable(s_typelist_map)) {
                     delete p.second;
                   }
                   s_typelist_map.clear();
                 },
                 [&] {
                   Timer timer("Delete DexProtos", /* indent */ false);
-                  for (auto* proto : s_proto_set) {
+                  for (auto* proto : UnorderedIterable(s_proto_set)) {
                     delete proto;
                   }
                   s_proto_set.clear();
                 },
                 [&] {
                   Timer timer("Delete DexClasses", /* indent */ false);
-                  for (auto* cls : m_classes) {
+                  for (auto* cls : UnorderedIterable(m_classes)) {
                     delete cls;
                   }
                   m_classes.clear();
                 },
                 [&] {
                   Timer timer("Delete DexLocations", /* indent */ false);
-                  for (auto const& p : s_location_map) {
+                  for (auto const& p : UnorderedIterable(s_location_map)) {
                     delete p.second;
                   }
                   s_location_map.clear();
@@ -141,7 +141,7 @@ RedexContext::~RedexContext() {
           fns.push_back([bucket, this]() {
             // Delete DexMethods. Use set to prevent double freeing aliases
             std::unordered_set<DexMethod*> delete_methods;
-            for (auto&& [_, loc] : s_method_map) {
+            for (auto&& [_, loc] : UnorderedIterable(s_method_map)) {
               auto method = static_cast<DexMethod*>(loc.load());
               if ((reinterpret_cast<size_t>(method) >> 16) %
                           method_buckets_count ==
@@ -165,7 +165,7 @@ RedexContext::~RedexContext() {
           fns.push_back([bucket, this]() {
             // Delete DexFields. Use set to prevent double freeing aliases
             std::unordered_set<DexField*> delete_fields;
-            for (auto&& [_, loc] : s_field_map) {
+            for (auto&& [_, loc] : UnorderedIterable(s_field_map)) {
               auto field = static_cast<DexField*>(loc.load());
               if ((reinterpret_cast<size_t>(field) >> 16) %
                           field_buckets_count ==
@@ -706,9 +706,7 @@ RedexContext::get_baseline_profile_method_map() {
   auto baseline_profile_method_map =
       std::unordered_map<std::string,
                          std::unordered_map<std::string, DexMethodRef*>>();
-  for (auto it = s_method_map.begin(); it != s_method_map.end(); it++) {
-    auto method_spec = it->first;
-    auto method = s_method_map.load(method_spec, nullptr);
+  for (auto&& [method_spec, method] : UnorderedIterable(s_method_map)) {
     std::string descriptor = show_deobfuscated(method);
     boost::replace_all(descriptor, ":(", "(");
     std::vector<std::string> class_and_method;

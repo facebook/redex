@@ -135,7 +135,7 @@ uint64_t verifyStore(const DexStoresVector& stores,
                      FILE* fd) {
   const auto& allowed_stores = getAllowedStores(stores, store, store_map);
   uint64_t dependencies{0};
-  for (auto& [target, sources] : class_refs.at(&store)) {
+  for (auto& [target, sources] : UnorderedIterable(class_refs.at(&store))) {
     always_assert(!sources.empty());
     auto find = map.find(target);
     static const std::string external_store_name = "external";

@@ -33,7 +33,7 @@ std::vector<DexMethod*> delete_methods(
           }
         }
       });
-  for (auto method : removable_to_erase) {
+  for (auto method : UnorderedIterable(removable_to_erase)) {
     removable.erase(method);
   }
 

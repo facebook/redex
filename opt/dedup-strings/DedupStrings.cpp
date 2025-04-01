@@ -297,7 +297,7 @@ void DedupStrings::gather_non_load_strings(
 
   strings->insert(lstring.begin(), lstring.end());
   auto& library_names = g_redex->library_names;
-  strings->insert(library_names.begin(), library_names.end());
+  insert_unordered_iterable(*strings, library_names);
 }
 
 ConcurrentMap<const DexString*, std::unordered_map<size_t, size_t>>
@@ -362,7 +362,7 @@ DedupStrings::get_occurrences(
 
   // Also, add all the strings that occurred in perf-sensitive methods
   // to the non_load_strings datastructure, as we won't attempt to dedup them.
-  for (const auto& it : perf_sensitive_strings) {
+  for (const auto& it : UnorderedIterable(perf_sensitive_strings)) {
     const auto str = it.first;
     TRACE(DS, 3, "[dedup strings] perf sensitive string: {%s}", SHOW(str));
 
@@ -401,7 +401,7 @@ DedupStrings::get_strings_to_dedup(
   std::unordered_set<size_t> hosting_dexnrs;
   std::vector<const DexString*> ordered_strings;
   ordered_strings.reserve(occurrences.size());
-  for (auto& p : occurrences) {
+  for (auto& p : UnorderedIterable(occurrences)) {
     const auto& m = p.second;
     always_assert(!m.empty());
     if (m.size() == 1) continue;

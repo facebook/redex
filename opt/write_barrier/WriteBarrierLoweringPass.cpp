@@ -155,7 +155,7 @@ void WriteBarrierLoweringPass::run_pass(DexStoresVector& stores,
     return;
   }
   DexFieldRef* volatile_field = materialize_write_barrier_field(&stores);
-  for (auto insn : volatile_field_writes) {
+  for (auto insn : UnorderedIterable(volatile_field_writes)) {
     insn->set_field(volatile_field);
   }
 }
