@@ -9,7 +9,6 @@
 
 
 import argparse
-import distutils.version
 import glob
 import inspect
 import json
@@ -27,6 +26,8 @@ import typing
 import zipfile
 from contextlib import contextmanager
 from os.path import basename, dirname, isfile, join
+
+import packaging.version
 
 from pyredex.logger import log
 
@@ -178,7 +179,7 @@ class _FindAndroidBuildToolHelper:
                 "0.0.1",
                 *[d for d in os.listdir(build_tools) if re.match(VERSION_REGEXP, d)],
             ),
-            key=distutils.version.StrictVersion,
+            key=packaging.version.parse,
         )
         if version == "0.0.1":
             LOGGER.debug(
