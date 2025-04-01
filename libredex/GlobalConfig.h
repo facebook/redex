@@ -8,9 +8,9 @@
 #pragma once
 
 #include <functional>
-#include <unordered_set>
 
 #include "Configurable.h"
+#include "DeterministicContainers.h"
 #include "InlinerConfig.h"
 
 struct InlinerConfig : public inliner::InlinerConfig, Configurable {
@@ -35,7 +35,7 @@ struct IRTypeCheckerConfig : public Configurable {
   bool run_after_each_pass;
   bool verify_moves;
   bool validate_invoke_super;
-  std::unordered_set<std::string> run_after_passes;
+  UnorderedSet<std::string> run_after_passes;
   bool check_no_overwrite_this;
   bool annotated_cfg_on_error{false};
   bool check_classes;
@@ -110,7 +110,7 @@ struct MethodProfileOrderingConfig : public Configurable {
            "log that explains the optimizations it has performed.";
   }
 
-  std::unordered_set<std::string> method_sorting_allowlisted_substrings{};
+  UnorderedSet<std::string> method_sorting_allowlisted_substrings{};
   float min_appear_percent{10.0f};
   float second_min_appear_percent{10.0f};
   bool skip_similarity_reordering{false};
@@ -174,10 +174,10 @@ struct ResourceConfig : public Configurable {
 
   // Outer R class names that have been customized to hold extra data (which
   // need special treatment when remapping constants). Not used by all apps.
-  std::unordered_set<std::string> customized_r_classes;
+  UnorderedSet<std::string> customized_r_classes;
   // Type names in the resource table (example: "id") which should enable
   // canonical offsets for entries/values.
-  std::unordered_set<std::string> canonical_entry_types;
+  UnorderedSet<std::string> canonical_entry_types;
   bool sort_key_strings{false};
   // For instrumentation scenarios, R classes will have unexpected method
   // invocations. Allow certain validation/cleanup behaviors to be omitted.

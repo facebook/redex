@@ -149,7 +149,8 @@ bool valid_r_class_init(const DexMethod* init,
 bool is_customized_resource_class_name(
     const std::string_view& cls_name,
     const ResourceConfig& global_resources_config) {
-  for (const auto& s : global_resources_config.customized_r_classes) {
+  for (const auto& s :
+       UnorderedIterable(global_resources_config.customized_r_classes)) {
     if (cls_name == s) {
       return true;
     }
@@ -283,7 +284,7 @@ FieldArrayValues RClassReader::analyze_clinit(
   Lazy<live_range::UseDefChains> udchain(
       [&]() { return live_range::Chains(cfg).get_use_def_chains(); });
 
-  std::unordered_set<DexField*> locally_built_fields;
+  UnorderedSet<DexField*> locally_built_fields;
   for (auto* block : cfg.blocks()) {
     auto env = intra_cp.get_entry_state_at(block);
     auto last_insn = block->get_last_insn();
@@ -340,7 +341,7 @@ FieldArrayValues RClassReader::analyze_clinit(
   }
 
   auto env = intra_cp.get_exit_state_at(cfg.exit_block());
-  for (auto f : locally_built_fields) {
+  for (auto f : UnorderedIterable(locally_built_fields)) {
     auto field_value = env.get(f);
     auto heap_ptr = field_value.maybe_get<AbstractHeapPointer>();
     always_assert_log(heap_ptr && heap_ptr->is_value(),
@@ -385,8 +386,8 @@ void RClassReader::ordered_r_class_iteration(
 
 void RClassReader::extract_resource_ids_from_static_arrays(
     const Scope& scope,
-    const std::unordered_set<DexField*>& array_fields,
-    std::unordered_set<uint32_t>* out_values) const {
+    const UnorderedSet<DexField*>& array_fields,
+    UnorderedSet<uint32_t>* out_values) const {
   Timer t("extract_resource_ids_from_static_arrays");
   FieldArrayValues field_values;
   ordered_r_class_iteration(scope, [&](DexClass* cls) {
@@ -462,7 +463,7 @@ void perform_dce(Scope& scope) {
       scope, true, method_override_graph.get());
   // Assume no pure methods or summaries for external/framework code for
   // simplicity. OSDCE should make conservative assumptions in the face of this.
-  std::unordered_set<DexMethodRef*> pure_methods;
+  UnorderedSet<DexMethodRef*> pure_methods;
   local_pointers::SummaryMap escape_summaries;
   side_effects::SummaryMap effect_summaries;
   ObjectSensitiveDce impl(scope,

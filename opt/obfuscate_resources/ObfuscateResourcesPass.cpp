@@ -12,7 +12,6 @@
 #include <boost/format.hpp>
 #include <cstdio>
 #include <string>
-#include <unordered_set>
 
 #include "ApkResources.h"
 #include "BundleResources.h"
@@ -101,8 +100,8 @@ std::string remove_module(const std::string& filename) {
 
 void rename_files(const std::string& zip_dir,
                   std::map<std::string, std::string>* filename_old_to_new) {
-  std::unordered_set<std::string> not_exists;
-  std::unordered_set<std::string> created_file_directory;
+  UnorderedSet<std::string> not_exists;
+  UnorderedSet<std::string> created_file_directory;
   for (const auto& pair : *filename_old_to_new) {
     std::string full_path = zip_dir + "/" + pair.first;
     if (exists(boost::filesystem::path(full_path))) {
@@ -122,7 +121,7 @@ void rename_files(const std::string& zip_dir,
       not_exists.emplace(pair.first);
     }
   }
-  for (const auto& not_exist : not_exists) {
+  for (const auto& not_exist : UnorderedIterable(not_exists)) {
     filename_old_to_new->erase(not_exist);
   }
 }
@@ -130,10 +129,10 @@ void rename_files(const std::string& zip_dir,
 // Handle patterns like
 // https://developer.android.com/reference/androidx/constraintlayout/widget/Barrier#example
 void handle_known_resource_name_patterns(
-    const std::unordered_set<std::string>& values,
-    std::unordered_set<std::string>* possible_resource_names) {
+    const UnorderedSet<std::string>& values,
+    UnorderedSet<std::string>* possible_resource_names) {
   // check for comma separated list of resource names.
-  for (const auto& s : values) {
+  for (const auto& s : UnorderedIterable(values)) {
     if (s.find(',') != std::string::npos) {
       std::vector<std::string> parts;
       boost::split(parts, s, boost::is_any_of(","));
@@ -150,17 +149,15 @@ void handle_known_resource_name_patterns(
 // Returns false if the deobfuscated name of item starts with anything in the
 // given set.
 template <typename Item>
-bool should_check_for_strings(
-    const std::unordered_set<std::string>& code_to_skip, Item* item) {
+bool should_check_for_strings(const UnorderedSet<std::string>& code_to_skip,
+                              Item* item) {
   if (code_to_skip.empty()) {
     return true;
   }
   auto item_name = show_deobfuscated(item);
-  return std::find_if(code_to_skip.begin(),
-                      code_to_skip.end(),
-                      [&](const std::string& prefix) {
-                        return boost::algorithm::starts_with(item_name, prefix);
-                      }) == code_to_skip.end();
+  return unordered_none_of(code_to_skip, [&](const std::string& prefix) {
+    return boost::algorithm::starts_with(item_name, prefix);
+  });
 }
 
 // Check primarily const-string opcodes and static field values for strings that
@@ -168,8 +165,8 @@ bool should_check_for_strings(
 // annotations, for example).
 void collect_string_values_from_code(
     Scope& scope,
-    const std::unordered_set<std::string>& code_to_skip,
-    std::unordered_set<std::string>* out) {
+    const UnorderedSet<std::string>& code_to_skip,
+    UnorderedSet<std::string>* out) {
   ConcurrentSet<std::string> const_string_values;
   walk::parallel::classes(scope, [&](DexClass* cls) {
     if (!should_check_for_strings(code_to_skip, cls)) {
@@ -229,7 +226,7 @@ void ObfuscateResourcesPass::run_pass(DexStoresVector& stores,
                                    m_do_not_obfuscate_elements);
   }
 
-  std::unordered_set<uint32_t> shifted_allow_type_ids;
+  UnorderedSet<uint32_t> shifted_allow_type_ids;
   if (m_obfuscate_resource_name || m_obfuscate_id_name) {
     if (m_obfuscate_id_name) {
       if (!m_obfuscate_resource_name) {
@@ -237,21 +234,21 @@ void ObfuscateResourcesPass::run_pass(DexStoresVector& stores,
       }
       m_name_obfuscation_allowed_types.emplace("id");
     }
-    std::unordered_set<uint32_t> allow_type_ids =
+    UnorderedSet<uint32_t> allow_type_ids =
         res_table->get_types_by_name_prefixes(m_name_obfuscation_allowed_types);
-    for (auto& type_id : allow_type_ids) {
+    for (auto& type_id : UnorderedIterable(allow_type_ids)) {
       shifted_allow_type_ids.emplace(type_id >> TYPE_INDEX_BIT_SHIFT);
     }
   }
 
-  std::unordered_set<std::string> keep_resource_names_specific;
+  UnorderedSet<std::string> keep_resource_names_specific;
   if (m_keep_resource_names_from_string_literals) {
     // Rather broad step to search for string constants, in case they could be
     // used as resource identifier lookups. NOTE: This step should happen before
     // file path obfuscation, as traversing directory structure becomes wonky
     // after that point.
     Timer t("resource_names_from_string_literals");
-    std::unordered_set<std::string> xml_attribute_values;
+    UnorderedSet<std::string> xml_attribute_values;
     resources->collect_xml_attribute_string_values(&xml_attribute_values);
     handle_known_resource_name_patterns(xml_attribute_values,
                                         &keep_resource_names_specific);
@@ -261,7 +258,7 @@ void ObfuscateResourcesPass::run_pass(DexStoresVector& stores,
   }
   // Ensure overlayable IDs keep their resource name.
   auto overlayable_ids = res_table->get_overlayable_id_roots();
-  for (auto id : overlayable_ids) {
+  for (auto id : UnorderedIterable(overlayable_ids)) {
     auto search = res_table->id_to_name.find(id);
     if (search != res_table->id_to_name.end()) {
       TRACE(OBFUS_RES, 3, "Keeping overlayable name '%s'",
@@ -283,11 +280,10 @@ void ObfuscateResourcesPass::run_pass(DexStoresVector& stores,
     }
     size_t index = 0;
     for (const auto& filename : all_files) {
-      if (std::find_if(m_keep_resource_file_names.begin(),
-                       m_keep_resource_file_names.end(),
-                       [&](const std::string& v) {
-                         return filename.find(v) != std::string::npos;
-                       }) != m_keep_resource_file_names.end()) {
+      if (unordered_any_of(m_keep_resource_file_names,
+                           [&](const std::string& v) {
+                             return filename.find(v) != std::string::npos;
+                           })) {
         TRACE(OBFUS_RES, 5, "Not obfuscating %s within keep list",
               filename.c_str());
       } else {
@@ -298,8 +294,8 @@ void ObfuscateResourcesPass::run_pass(DexStoresVector& stores,
       }
     }
     rename_files(zip_dir, &filepath_old_to_new);
-    std::unordered_set<std::string> existing_old_name;
-    std::unordered_set<std::string> existing_new_name;
+    UnorderedSet<std::string> existing_old_name;
+    UnorderedSet<std::string> existing_new_name;
     if (!filepath_old_to_new.empty()) {
       Json::Value resfile_mapping_json;
       for (const auto& pair : filepath_old_to_new) {

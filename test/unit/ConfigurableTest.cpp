@@ -263,7 +263,7 @@ struct TypesBindFlags : public Base {
     bind("types_param", {}, m_types_param, "", m_bindflags);
   }
   bindflags_t m_bindflags;
-  std::unordered_set<DexType*> m_types_param;
+  UnorderedSet<DexType*> m_types_param;
 };
 
 TEST_F(ConfigurableTest, TypesBindFlags) {
@@ -279,8 +279,8 @@ TEST_F(ConfigurableTest, TypesBindFlags) {
 
   json["types_param"] = array;
 
-  std::unordered_set<DexType*> resolved_types = {DexType::get_type("Ltype1;"),
-                                                 DexType::get_type("Ltype3;")};
+  UnorderedSet<DexType*> resolved_types = {DexType::get_type("Ltype1;"),
+                                           DexType::get_type("Ltype3;")};
 
   {
     // Check reflection
@@ -314,7 +314,7 @@ struct MethodsBindFlags : public Base {
     bind("methods_param", {}, m_methods_param, "", m_bindflags);
   }
   bindflags_t m_bindflags;
-  std::unordered_set<DexMethod*> m_methods_param;
+  UnorderedSet<DexMethod*> m_methods_param;
 };
 
 TEST_F(ConfigurableTest, MethodsBindFlags) {
@@ -336,7 +336,7 @@ TEST_F(ConfigurableTest, MethodsBindFlags) {
 
   DexMethod* m3 =
       DexMethod::get_method(m3desc)->make_concrete((DexAccessFlags)0, false);
-  std::unordered_set<DexMethod*> resolved_methods = {m3};
+  UnorderedSet<DexMethod*> resolved_methods = {m3};
 
   EXPECT_EQ(false, DexMethod::get_method(m1desc)->is_def());
   EXPECT_EQ(true, DexMethod::get_method(m3desc)->is_def());

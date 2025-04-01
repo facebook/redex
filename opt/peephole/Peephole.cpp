@@ -12,7 +12,6 @@
 #include <cmath>
 #include <iostream>
 #include <numeric>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -159,7 +158,7 @@ static const char* LjavaStringBuilder = "Ljava/lang/StringBuilder;";
 static const char* LjavaObject = "Ljava/lang/Object;";
 
 struct DexPattern {
-  const std::unordered_set<uint16_t> opcodes;
+  const UnorderedSet<uint16_t> opcodes;
   const std::vector<Register> srcs;
   const std::vector<Register> dests;
 
@@ -183,7 +182,7 @@ struct DexPattern {
     Field field;
   };
 
-  DexPattern(std::unordered_set<uint16_t>&& opcodes,
+  DexPattern(UnorderedSet<uint16_t>&& opcodes,
              std::vector<Register>&& srcs,
              std::vector<Register>&& dests)
       : opcodes(std::move(opcodes)),
@@ -192,7 +191,7 @@ struct DexPattern {
         kind(DexPattern::Kind::none),
         dummy(nullptr) {}
 
-  DexPattern(std::unordered_set<uint16_t>&& opcodes,
+  DexPattern(UnorderedSet<uint16_t>&& opcodes,
              std::vector<Register>&& srcs,
              std::vector<Register>&& dests,
              DexMethodRef* const method)
@@ -202,7 +201,7 @@ struct DexPattern {
         kind(DexPattern::Kind::method),
         method(method) {}
 
-  DexPattern(std::unordered_set<uint16_t>&& opcodes,
+  DexPattern(UnorderedSet<uint16_t>&& opcodes,
              std::vector<Register>&& srcs,
              std::vector<Register>&& dests,
              const String string)
@@ -212,7 +211,7 @@ struct DexPattern {
         kind(DexPattern::Kind::string),
         string(string) {}
 
-  DexPattern(std::unordered_set<uint16_t>&& opcodes,
+  DexPattern(UnorderedSet<uint16_t>&& opcodes,
              std::vector<Register>&& srcs,
              std::vector<Register>&& dests,
              const Literal literal)
@@ -222,7 +221,7 @@ struct DexPattern {
         kind(DexPattern::Kind::literal),
         literal(literal) {}
 
-  DexPattern(std::unordered_set<uint16_t>&& opcodes,
+  DexPattern(UnorderedSet<uint16_t>&& opcodes,
              std::vector<Register>&& srcs,
              std::vector<Register>&& dests,
              const Type type)
@@ -232,7 +231,7 @@ struct DexPattern {
         kind(DexPattern::Kind::type),
         type(type) {}
 
-  DexPattern(std::unordered_set<uint16_t>&& opcodes,
+  DexPattern(UnorderedSet<uint16_t>&& opcodes,
              std::vector<Register>&& srcs,
              std::vector<Register>&& dests,
              const Field field)
@@ -428,7 +427,7 @@ struct Matcher {
       not_reached_log("Replacement must have unique opcode");
     }
 
-    const auto opcode = *begin(replace.opcodes);
+    const auto opcode = *unordered_any(replace.opcodes);
     switch (opcode) {
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_STATIC:
@@ -1751,7 +1750,7 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
 
         // Overlapping matches are not correctly handled by the current
         // CFGMutation capabilities.
-        std::unordered_set<IRInstruction*> removed_insns;
+        UnorderedSet<IRInstruction*> removed_insns;
 
         for (auto& mie : InstructionIterable(block)) {
           if (!matcher.try_match(mie.insn)) {

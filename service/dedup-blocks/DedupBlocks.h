@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 
 class IRInstruction;
@@ -14,7 +15,7 @@ class IRInstruction;
 namespace dedup_blocks_impl {
 
 struct Config {
-  std::unordered_set<DexMethod*> method_blocklist;
+  UnorderedSet<DexMethod*> method_blocklist;
   static const unsigned int DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT = 1;
   unsigned int block_split_min_opcode_count =
       DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT;

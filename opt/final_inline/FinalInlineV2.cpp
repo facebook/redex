@@ -10,7 +10,6 @@
 #include <boost/variant.hpp>
 #include <iostream>
 #include <sstream>
-#include <unordered_set>
 #include <vector>
 
 #include <sparta/WeakTopologicalOrdering.h>
@@ -179,13 +178,13 @@ call_graph::Graph build_class_init_graph(const Scope& scope) {
 
 StaticFieldReadAnalysis::StaticFieldReadAnalysis(
     const call_graph::Graph& call_graph,
-    const std::unordered_set<std::string>& allowed_opaque_callee_names)
+    const UnorderedSet<std::string>& allowed_opaque_callee_names)
     : m_graph(call_graph) {
 
   // By default, the analysis gives up when it sees a true virtual callee.
   // However, we can allow some methods to be treated as if no field is read
   // from the callees so the analysis gives up less often.
-  for (const auto& name : allowed_opaque_callee_names) {
+  for (const auto& name : UnorderedIterable(allowed_opaque_callee_names)) {
     DexMethodRef* callee = DexMethod::get_method(name);
     if (callee) {
       m_allowed_opaque_callees.emplace(callee);
@@ -209,7 +208,7 @@ StaticFieldReadAnalysis::StaticFieldReadAnalysis(
 
 StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
     const DexMethod* method) {
-  std::unordered_set<const DexMethod*> pending;
+  UnorderedSet<const DexMethod*> pending;
 
   Result last = Result::bottom();
   while (true) {
@@ -225,8 +224,7 @@ StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
 }
 
 StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
-    const DexMethod* method,
-    std::unordered_set<const DexMethod*>& pending_methods) {
+    const DexMethod* method, UnorderedSet<const DexMethod*>& pending_methods) {
 
   if (!method) {
     return {};
@@ -315,11 +313,11 @@ cp::WholeProgramState analyze_and_simplify_clinits(
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
     const XStoreRefs* xstores,
-    const std::unordered_set<const DexType*>& blocklist_types,
-    const std::unordered_set<std::string>& allowed_opaque_callee_names,
+    const UnorderedSet<const DexType*>& blocklist_types,
+    const UnorderedSet<std::string>& allowed_opaque_callee_names,
     const cp::State& cp_state,
     size_t& init_cycles) {
-  const std::unordered_set<DexMethodRef*> pure_methods = get_pure_methods();
+  const UnorderedSet<DexMethodRef*> pure_methods = get_pure_methods();
   cp::WholeProgramState wps(blocklist_types);
 
   auto method_override_graph = method_override_graph::build_graph(scope);
@@ -400,11 +398,11 @@ cp::WholeProgramState analyze_and_simplify_inits(
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
     const XStoreRefs* xstores,
-    const std::unordered_set<const DexType*>& blocklist_types,
+    const UnorderedSet<const DexType*>& blocklist_types,
     const cp::EligibleIfields& eligible_ifields,
     const cp::State& cp_state,
     size_t& possible_cycles) {
-  const std::unordered_set<DexMethodRef*> pure_methods = get_pure_methods();
+  const UnorderedSet<DexMethodRef*> pure_methods = get_pure_methods();
   cp::WholeProgramState wps(blocklist_types);
   for (DexClass* cls : reverse_tsort_by_init_deps(scope, possible_cycles)) {
     if (cls->is_external()) {
@@ -477,7 +475,7 @@ FinalInlinePassV2::Stats inline_final_gets(
         init_classes_with_side_effects,
     const XStoreRefs* xstores,
     const cp::WholeProgramState& wps,
-    const std::unordered_set<const DexType*>& blocklist_types,
+    const UnorderedSet<const DexType*>& blocklist_types,
     cp::FieldType field_type) {
   std::atomic<size_t> inlined_count{0};
   std::atomic<size_t> init_classes{0};

@@ -17,7 +17,6 @@
 #include <memory>
 #include <set>
 #include <string>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -97,7 +96,7 @@ struct StringOrReferenceHasher {
 };
 
 using StringOrReferenceSet =
-    std::unordered_set<StringOrReference, StringOrReferenceHasher>;
+    UnorderedSet<StringOrReference, StringOrReferenceHasher>;
 
 // Helper for dealing with differences in character encoding between .arsc and
 // .pb files.
@@ -134,7 +133,7 @@ enum class BooleanXMLAttribute {
 
 // Populate the ComponentTagInfo list of authority class names
 void parse_authorities(const std::string& text,
-                       std::unordered_set<std::string>* authority_classes);
+                       UnorderedSet<std::string>* authority_classes);
 
 struct ComponentTagInfo {
   ComponentTag tag;
@@ -145,7 +144,7 @@ struct ComponentTagInfo {
   // Not defined on <provider>
   bool has_intent_filters{false};
   // Only defined on <provider>
-  std::unordered_set<std::string> authority_classes;
+  UnorderedSet<std::string> authority_classes;
 
   ComponentTagInfo(ComponentTag tag,
                    const std::string& classname,
@@ -160,8 +159,8 @@ struct ComponentTagInfo {
 };
 
 struct ManifestClassInfo {
-  std::unordered_set<std::string> application_classes;
-  std::unordered_set<std::string> instrumentation_classes;
+  UnorderedSet<std::string> application_classes;
+  UnorderedSet<std::string> instrumentation_classes;
   std::vector<ComponentTagInfo> component_tags;
 };
 
@@ -194,17 +193,17 @@ class ResourceTableFile {
   // Return type ids for the given set of type names. Type ids will be shifted
   // to TT0000 range, so type 0x1 will be returned as 0x10000 (for ease of
   // comparison with resource IDs).
-  virtual std::unordered_set<uint32_t> get_types_by_name(
-      const std::unordered_set<std::string>& type_names) = 0;
+  virtual UnorderedSet<uint32_t> get_types_by_name(
+      const UnorderedSet<std::string>& type_names) = 0;
   // Same as above, return values will be given in no particular order.
-  std::unordered_set<uint32_t> get_types_by_name(
+  UnorderedSet<uint32_t> get_types_by_name(
       const std::vector<std::string>& type_names) {
-    std::unordered_set<std::string> set;
+    UnorderedSet<std::string> set;
     set.insert(type_names.begin(), type_names.end());
     return get_types_by_name(set);
   }
-  virtual std::unordered_set<uint32_t> get_types_by_name_prefixes(
-      const std::unordered_set<std::string>& type_name_prefixes) = 0;
+  virtual UnorderedSet<uint32_t> get_types_by_name_prefixes(
+      const UnorderedSet<std::string>& type_name_prefixes) = 0;
   virtual void delete_resource(uint32_t red_id) = 0;
 
   virtual void remap_res_ids_and_serialize(
@@ -230,9 +229,9 @@ class ResourceTableFile {
   virtual size_t obfuscate_resource_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::map<std::string, std::string>& filepath_old_to_new,
-      const std::unordered_set<uint32_t>& allowed_types,
-      const std::unordered_set<std::string>& keep_resource_prefixes,
-      const std::unordered_set<std::string>& keep_resource_specific) = 0;
+      const UnorderedSet<uint32_t>& allowed_types,
+      const UnorderedSet<std::string>& keep_resource_prefixes,
+      const UnorderedSet<std::string>& keep_resource_specific) = 0;
 
   // Removes entries from string pool structures that are not referenced by
   // entries/values in the resource table and other structural changes that are
@@ -253,8 +252,8 @@ class ResourceTableFile {
   virtual void walk_references_for_resource(
       uint32_t resID,
       ResourcePathType path_type,
-      std::unordered_set<uint32_t>* nodes_visited,
-      std::unordered_set<std::string>* potential_file_paths) = 0;
+      UnorderedSet<uint32_t>* nodes_visited,
+      UnorderedSet<std::string>* potential_file_paths) = 0;
 
   // Mainly used by test to check if a resource has been nullified
   virtual uint64_t resource_value_count(uint32_t res_id) = 0;
@@ -284,7 +283,7 @@ class ResourceTableFile {
   get_inlinable_resource_values() = 0;
 
   // Returns a set of IDs that are overlayable, to be used as reachability roots
-  virtual std::unordered_set<uint32_t> get_overlayable_id_roots() = 0;
+  virtual UnorderedSet<uint32_t> get_overlayable_id_roots() = 0;
 
   // Takes effect during serialization. Appends a new type with the given
   // details (id, name) to the package. It will contain types with the given
@@ -317,7 +316,7 @@ class ResourceTableFile {
   std::map<std::string, std::vector<uint32_t>> name_to_ids;
   bool m_nullify_removed{false};
   // Pending changes to take effect during serialization
-  std::unordered_set<uint32_t> m_ids_to_remove;
+  UnorderedSet<uint32_t> m_ids_to_remove;
   std::vector<resources::TypeDefinition> m_added_types;
 
  protected:
@@ -331,11 +330,11 @@ class AndroidResources {
   virtual ManifestClassInfo get_manifest_class_info() = 0;
   virtual boost::optional<std::string> get_manifest_package_name() = 0;
 
-  virtual std::unordered_set<std::string> get_service_loader_classes() = 0;
+  virtual UnorderedSet<std::string> get_service_loader_classes() = 0;
 
   // Given the xml file name, return the list of resource ids referred in xml
   // attributes.
-  virtual std::unordered_set<uint32_t> get_xml_reference_attributes(
+  virtual UnorderedSet<uint32_t> get_xml_reference_attributes(
       const std::string& filename) = 0;
 
   // Rewrites all tag names/attribute values that are in the given map, for
@@ -353,25 +352,24 @@ class AndroidResources {
   // resolved against the resource table, and all possible discovered values (in
   // all configs) will be included in the output.
   void collect_layout_classes_and_attributes(
-      const std::unordered_set<std::string>& attributes_to_read,
-      std::unordered_set<std::string>* out_classes,
+      const UnorderedSet<std::string>& attributes_to_read,
+      UnorderedSet<std::string>* out_classes,
       std::unordered_multimap<std::string, std::string>* out_attributes);
 
   // Same as above, for single file.
   virtual void collect_layout_classes_and_attributes_for_file(
       const std::string& file_path,
-      const std::unordered_set<std::string>& attributes_to_read,
+      const UnorderedSet<std::string>& attributes_to_read,
       resources::StringOrReferenceSet* out_classes,
       std::unordered_multimap<std::string, resources::StringOrReference>*
           out_attributes) = 0;
   // Similar to collect_layout_classes_and_attributes, but less focused to cover
   // custom View subclasses that might be doing interesting things with string
   // values
-  void collect_xml_attribute_string_values(
-      std::unordered_set<std::string>* out);
+  void collect_xml_attribute_string_values(UnorderedSet<std::string>* out);
   // As above, for single file.
   virtual void collect_xml_attribute_string_values_for_file(
-      const std::string& file_path, std::unordered_set<std::string>* out) = 0;
+      const std::string& file_path, UnorderedSet<std::string>* out) = 0;
   // Transforms element names in the given map to be <view> elements with their
   // class name specified fully qualified. Out param indicates the number of
   // elements that were changed.
@@ -384,7 +382,7 @@ class AndroidResources {
   virtual size_t remap_xml_reference_attributes(
       const std::string& filename,
       const std::map<uint32_t, uint32_t>& kept_to_remapped_ids) = 0;
-  virtual std::unordered_set<std::string> find_all_xml_files() = 0;
+  virtual UnorderedSet<std::string> find_all_xml_files() = 0;
   virtual std::vector<std::string> find_resources_files() = 0;
   virtual std::string get_base_assets_dir() = 0;
   // For drawable/layout .xml files, remove/shorten attribute names where
@@ -392,13 +390,12 @@ class AndroidResources {
   // intact by convention (this method will be overly cautious when applying
   // keeps).
   virtual void obfuscate_xml_files(
-      const std::unordered_set<std::string>& allowed_types,
-      const std::unordered_set<std::string>& do_not_obfuscate_elements) = 0;
-  bool can_obfuscate_xml_file(
-      const std::unordered_set<std::string>& allowed_types,
-      const std::string& dirname);
+      const UnorderedSet<std::string>& allowed_types,
+      const UnorderedSet<std::string>& do_not_obfuscate_elements) = 0;
+  bool can_obfuscate_xml_file(const UnorderedSet<std::string>& allowed_types,
+                              const std::string& dirname);
   // Classnames present in native libraries (lib/*/*.so)
-  std::unordered_set<std::string> get_native_classes();
+  UnorderedSet<std::string> get_native_classes();
   // Sets up BundleConfig.pb file with relevant options for resource
   // optimizations that need to executed by bundletool/aapt2.
   virtual void finalize_bundle_config(const ResourceConfig& config);
@@ -427,16 +424,16 @@ class AndroidResources {
 std::unique_ptr<AndroidResources> create_resource_reader(
     const std::string& directory);
 
-std::unordered_set<std::string> get_service_loader_classes_helper(
+UnorderedSet<std::string> get_service_loader_classes_helper(
     const std::string& path_dir);
 
 // For testing only!
-std::unordered_set<std::string> extract_classes_from_native_lib(
+UnorderedSet<std::string> extract_classes_from_native_lib(
     const std::string& lib_contents);
 
-std::unordered_set<std::string> get_files_by_suffix(
-    const std::string& directory, const std::string& suffix);
-std::unordered_set<std::string> get_xml_files(const std::string& directory);
+UnorderedSet<std::string> get_files_by_suffix(const std::string& directory,
+                                              const std::string& suffix);
+UnorderedSet<std::string> get_xml_files(const std::string& directory);
 // Checks if the file is in a res/raw folder. Such a file won't be considered
 // for resource remapping, class name extraction, etc. These files don't follow
 // binary XML format, and thus are out of scope for many optimizations.

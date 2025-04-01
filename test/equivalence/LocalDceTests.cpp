@@ -14,7 +14,7 @@
 
 class DceTest : public EquivalenceTest {
   void transform_method(DexMethod* m) override {
-    const std::unordered_set<DexMethodRef*> pure_methods = get_pure_methods();
+    const UnorderedSet<DexMethodRef*> pure_methods = get_pure_methods();
     LocalDce(/* init_classes_with_side_effects */ nullptr, pure_methods)
         .dce(m->get_code());
   }

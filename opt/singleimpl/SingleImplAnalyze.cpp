@@ -8,10 +8,10 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexOutput.h"
 #include "DexStore.h"
 #include "DexUtil.h"
@@ -142,7 +142,7 @@ void AnalysisImpl::filter_proguard_special_interface() {
 
 void AnalysisImpl::filter_by_annotations(
     const std::vector<std::string>& blocklist) {
-  std::unordered_set<DexType*> anno_types;
+  UnorderedSet<DexType*> anno_types;
   for (const auto& s : blocklist) {
     auto ty = DexType::get_type(s);
     if (ty != nullptr) {

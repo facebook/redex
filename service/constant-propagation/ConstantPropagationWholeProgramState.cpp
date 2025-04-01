@@ -139,7 +139,7 @@ WholeProgramState::WholeProgramState(
     const Scope& scope,
     const interprocedural::FixpointIterator& fp_iter,
     const InsertOnlyConcurrentSet<DexMethod*>& non_true_virtuals,
-    const std::unordered_set<const DexType*>& field_blocklist,
+    const UnorderedSet<const DexType*>& field_blocklist,
     const std::unordered_set<const DexField*>& definitely_assigned_ifields,
     std::shared_ptr<const call_graph::Graph> call_graph)
     : m_call_graph(std::move(call_graph)), m_field_blocklist(field_blocklist) {

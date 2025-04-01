@@ -10,6 +10,7 @@
 #include <sparta/AbstractDomain.h>
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
 
+#include "DeterministicContainers.h"
 #include "LocalPointersAnalysis.h"
 #include "Pass.h"
 
@@ -128,13 +129,13 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
   bool is_eligible_append(const DexMethodRef*) const;
 
   const DexType* m_stringbuilder;
-  std::unordered_set<DexType*> m_immutable_types;
+  UnorderedSet<DexType*> m_immutable_types;
   const DexMethodRef* m_stringbuilder_no_param_init;
   const DexMethodRef* m_stringbuilder_init_with_string;
   const DexString* m_append_str;
 };
 
-using InstructionSet = std::unordered_set<const IRInstruction*>;
+using InstructionSet = UnorderedSet<const IRInstruction*>;
 
 using BuilderStateMap =
     std::vector<std::pair<const IRInstruction*, BuilderState>>;

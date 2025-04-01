@@ -137,7 +137,7 @@ struct ModelSpec {
   // set of generated types
   std::unordered_set<DexType*> gen_types;
   // set of annotations marking generated code
-  std::unordered_set<DexType*> gen_annos;
+  UnorderedSet<DexType*> gen_annos;
   // set of types safe to consume the class obj of merged classes
   std::unordered_set<DexType*> const_class_safe_types;
   // The merging strategy of the model

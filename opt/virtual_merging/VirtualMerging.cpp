@@ -121,7 +121,7 @@ VirtualMerging::VirtualMerging(DexStoresVector& stores,
       /* true_virtual_callers */ {},
       /* inline_for_speed */ nullptr,
       /* bool analyze_and_prune_inits */ false,
-      /* const std::unordered_set<DexMethodRef*>& configured_pure_methods */ {},
+      /* const UnorderedSet<DexMethodRef*>& configured_pure_methods */ {},
       min_sdk_api));
 }
 

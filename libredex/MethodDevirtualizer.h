@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "Pass.h"
 
 struct DevirtualizerConfigs {
@@ -15,7 +16,7 @@ struct DevirtualizerConfigs {
                        bool dmethods_not_using_this,
                        bool dmethods_using_this,
                        bool ignore_keep,
-                       const std::unordered_set<DexType*>& do_not_devirt_anno)
+                       const UnorderedSet<DexType*>& do_not_devirt_anno)
       : vmethods_not_using_this(vmethods_not_using_this),
         vmethods_using_this(vmethods_using_this),
         dmethods_not_using_this(dmethods_not_using_this),
@@ -30,7 +31,7 @@ struct DevirtualizerConfigs {
   bool dmethods_not_using_this = true;
   bool dmethods_using_this = false;
   bool ignore_keep = false;
-  const std::unordered_set<DexType*>& do_not_devirt_anno;
+  const UnorderedSet<DexType*>& do_not_devirt_anno;
 };
 
 struct DevirtualizerMetrics {
@@ -50,7 +51,7 @@ class MethodDevirtualizer {
                       bool dmethods_not_using_this,
                       bool dmethods_using_this,
                       bool ignore_keep,
-                      const std::unordered_set<DexType*>& do_not_devirt_anno)
+                      const UnorderedSet<DexType*>& do_not_devirt_anno)
 
       : m_config(vmethods_not_using_this,
                  vmethods_using_this,
@@ -72,15 +73,14 @@ class MethodDevirtualizer {
 
   void reset_metrics() { m_metrics = DevirtualizerMetrics(); }
 
-  void staticize_methods_using_this(
-      const std::vector<DexClass*>& scope,
-      const std::unordered_set<DexMethod*>& methods);
+  void staticize_methods_using_this(const std::vector<DexClass*>& scope,
+                                    const UnorderedSet<DexMethod*>& methods);
 
   void staticize_methods_not_using_this(
       const std::vector<DexClass*>& scope,
-      const std::unordered_set<DexMethod*>& methods);
+      const UnorderedSet<DexMethod*>& methods);
 
   void verify_and_split(const std::vector<DexMethod*>& candidates,
-                        std::unordered_set<DexMethod*>& using_this,
-                        std::unordered_set<DexMethod*>& not_using_this);
+                        UnorderedSet<DexMethod*>& using_this,
+                        UnorderedSet<DexMethod*>& not_using_this);
 };

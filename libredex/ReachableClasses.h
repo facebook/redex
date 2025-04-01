@@ -9,6 +9,7 @@
 
 #include <string>
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "JsonWrapper.h"
@@ -16,7 +17,7 @@
 struct ReachableClassesConfig {
   std::string apk_dir;
   std::vector<std::string> reflected_package_names;
-  std::unordered_set<std::string> prune_unexported_components;
+  UnorderedSet<std::string> prune_unexported_components;
   bool compute_xml_reachability = true;
   bool analyze_native_lib_reachability = true;
   std::vector<std::string> keep_methods;

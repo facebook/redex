@@ -57,7 +57,7 @@ class ObjectSensitiveDce {
       const Scope& scope,
       const init_classes::InitClassesWithSideEffects*
           init_classes_with_side_effects,
-      const std::unordered_set<DexMethodRef*>& pure_methods,
+      const UnorderedSet<DexMethodRef*>& pure_methods,
       const method_override_graph::Graph& method_override_graph,
       const uint32_t big_override_threshold,
       local_pointers::SummaryMap* escape_summaries,
@@ -78,7 +78,7 @@ class ObjectSensitiveDce {
   const Scope& m_scope;
   const init_classes::InitClassesWithSideEffects*
       m_init_classes_with_side_effects;
-  const std::unordered_set<DexMethodRef*>& m_pure_methods;
+  const UnorderedSet<DexMethodRef*>& m_pure_methods;
   const method_override_graph::Graph& m_method_override_graph;
   uint32_t m_big_override_threshold;
   // The following are mutated internally.

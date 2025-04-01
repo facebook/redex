@@ -123,19 +123,15 @@ Scope build_class_scope(const DexStoresVector& stores) {
 
 namespace {
 
-template <typename PrefixIt>
 bool starts_with_any_prefix(const DexString* str,
-                            const PrefixIt& begin,
-                            const PrefixIt& end) {
+                            const UnorderedSet<std::string>& prefixes) {
   if (str == nullptr) {
     return false;
   }
-  auto it = begin;
-  while (it != end) {
-    if (boost::algorithm::starts_with(str->str(), *it)) {
+  for (const auto& prefix : UnorderedIterable(prefixes)) {
+    if (boost::algorithm::starts_with(str->str(), prefix)) {
       return true;
     }
-    it++;
   }
   return false;
 }
@@ -144,14 +140,13 @@ bool starts_with_any_prefix(const DexString* str,
 
 Scope build_class_scope_for_packages(
     const DexStoresVector& stores,
-    const std::unordered_set<std::string>& package_names) {
+    const UnorderedSet<std::string>& package_names) {
   Scope v;
   for (auto const& store : stores) {
     for (auto& dex : store.get_dexen()) {
       for (auto& clazz : dex) {
         if (starts_with_any_prefix(clazz->get_deobfuscated_name_or_null(),
-                                   package_names.begin(),
-                                   package_names.end())) {
+                                   package_names)) {
           v.push_back(clazz);
         }
       }
@@ -274,9 +269,9 @@ VisibilityChanges get_visibility_changes(const DexMethod* method,
 }
 
 void VisibilityChanges::insert(const VisibilityChanges& other) {
-  classes.insert(other.classes.begin(), other.classes.end());
-  fields.insert(other.fields.begin(), other.fields.end());
-  methods.insert(other.methods.begin(), other.methods.end());
+  insert_unordered_iterable(classes, other.classes);
+  insert_unordered_iterable(fields, other.fields);
+  insert_unordered_iterable(methods, other.methods);
 }
 
 void VisibilityChanges::clear() {
@@ -286,13 +281,13 @@ void VisibilityChanges::clear() {
 }
 
 void VisibilityChanges::apply() const {
-  for (auto cls : classes) {
+  for (auto cls : UnorderedIterable(classes)) {
     set_public(cls);
   }
-  for (auto field : fields) {
+  for (auto field : UnorderedIterable(fields)) {
     set_public(field);
   }
-  for (auto method : methods) {
+  for (auto method : UnorderedIterable(methods)) {
     set_public(method);
   }
 }
@@ -404,7 +399,7 @@ VisibilityChanges get_visibility_changes(
 // won't need to change a referenced method into a virtual or static one.
 bool gather_invoked_methods_that_prevent_relocation(
     const DexMethod* method,
-    std::unordered_set<DexMethodRef*>* methods_preventing_relocation) {
+    UnorderedSet<DexMethodRef*>* methods_preventing_relocation) {
   auto code = method->get_code();
   always_assert(code);
   always_assert(code->editable_cfg_built());

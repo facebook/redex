@@ -60,7 +60,7 @@ constexpr const char* METHOD_REPLACEMENT = "methods_replacement";
 // For example, say that "Lcom/facebook/debug/" is in the set. We match either
 // "^Lcom/facebook/debug/*" or "^Lcom/facebook/debug;".
 bool match_class_name(std::string cls_name,
-                      const std::unordered_set<std::string>& set) {
+                      const UnorderedSet<std::string>& set) {
   always_assert(cls_name.back() == ';');
   // We also support exact class name (e.g., "Lcom/facebook/Debug;")
   if (set.count(cls_name)) {
@@ -780,7 +780,7 @@ void InstrumentPass::eval_pass(DexStoresVector& stores,
 // - "Lcom/fb/foo;.bar()V" matches exact full method names.
 // - "Lcom/fb/foo;.bar*" matches method name prefixes.
 bool InstrumentPass::is_included(const DexMethod* method,
-                                 const std::unordered_set<std::string>& set) {
+                                 const UnorderedSet<std::string>& set) {
   if (set.empty()) {
     return false;
   }
@@ -792,7 +792,7 @@ bool InstrumentPass::is_included(const DexMethod* method,
   }
 
   // Prefix method name matching.
-  for (const auto& pattern : set) {
+  for (const auto& pattern : UnorderedIterable(set)) {
     if (pattern.back() == '*') {
       if (full_method_name.find(pattern.substr(0, pattern.length() - 1)) !=
           std::string::npos) {
@@ -1139,7 +1139,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     shrinker_config.run_copy_prop = true;
   }
 
-  std::unordered_set<const DexField*> finalish_fields;
+  UnorderedSet<const DexField*> finalish_fields;
   if (m_options.apply_CSE_CopyProp) {
     auto* field =
         analysis_cls->find_field_from_simple_deobfuscated_name("sHitStats");

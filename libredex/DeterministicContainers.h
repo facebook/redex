@@ -498,9 +498,10 @@ class UnorderedSet : UnorderedBase<UnorderedSet<Key, Hash, KeyEqual>> {
 
     const_iterator find(const Key& key) const { return m_data.find(key); }
 
-    iterator erase(iterator position) { return m_data.erase(position); }
-
-    iterator erase(const_iterator position) { return m_data.erase(position); }
+    template <typename possibly_const_iterator>
+    iterator erase(possibly_const_iterator position) {
+      return m_data.erase(position);
+    }
   };
 
   // TODO: Make extra non-deterministic in debug builds
@@ -604,11 +605,15 @@ class UnorderedSet : UnorderedBase<UnorderedSet<Key, Hash, KeyEqual>> {
   size_t erase(const Key& key) { return m_data.erase(key); }
 
   void erase(FixedIterator position) {
-    m_data.erase(position._internal_unsafe_unwrap());
+    // We intentionally do not return the iterator here, as it is not
+    // ordered.
+    (void)m_data.erase(position._internal_unsafe_unwrap());
   }
 
   void erase(ConstFixedIterator position) {
-    m_data.erase(position._internal_unsafe_unwrap());
+    // We intentionally do not return the iterator here, as it is not
+    // ordered.
+    (void)m_data.erase(position._internal_unsafe_unwrap());
   }
 
   void clear() { m_data.clear(); }

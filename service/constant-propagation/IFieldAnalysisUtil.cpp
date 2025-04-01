@@ -143,13 +143,12 @@ class ThisObjectAnalysis final
  * accessed in blocklist_ifields.
  * Return false if all ifields are excluded - no need to check further.
  */
-bool get_ifields_read(
-    const std::unordered_set<std::string>& allowlist_method_names,
-    const std::unordered_set<const DexType*>& parent_intf_set,
-    const DexClass* ifield_cls,
-    const DexMethod* method,
-    ConcurrentSet<DexField*>* blocklist_ifields,
-    std::unordered_set<const DexMethod*>* visited) {
+bool get_ifields_read(const UnorderedSet<std::string>& allowlist_method_names,
+                      const std::unordered_set<const DexType*>& parent_intf_set,
+                      const DexClass* ifield_cls,
+                      const DexMethod* method,
+                      ConcurrentSet<DexField*>* blocklist_ifields,
+                      std::unordered_set<const DexMethod*>* visited) {
   if (visited->count(method)) {
     return true;
   }
@@ -159,7 +158,7 @@ bool get_ifields_read(
       // For call on its parent's ctor, no need to proceed.
       return true;
     }
-    for (const auto& name : allowlist_method_names) {
+    for (const auto& name : UnorderedIterable(allowlist_method_names)) {
       // Allowed methods name from config, ignore.
       // We have this allowlist so that we can ignore some methods that
       // are safe and won't read instance field.
@@ -257,7 +256,7 @@ bool get_ifields_read(
  */
 ConcurrentSet<DexField*> get_ifields_read_in_callees(
     const Scope& scope,
-    const std::unordered_set<std::string>& allowlist_method_names) {
+    const UnorderedSet<std::string>& allowlist_method_names) {
   ConcurrentSet<DexField*> return_ifields;
   TypeSystem ts(scope);
   std::vector<DexClass*> relevant_classes;
@@ -328,7 +327,7 @@ namespace constant_propagation {
 
 EligibleIfields gather_safely_inferable_ifield_candidates(
     const Scope& scope,
-    const std::unordered_set<std::string>& allowlist_method_names) {
+    const UnorderedSet<std::string>& allowlist_method_names) {
   EligibleIfields eligible_ifields;
   std::unordered_set<DexField*> ifields_candidates;
   walk::fields(scope, [&](DexField* field) {

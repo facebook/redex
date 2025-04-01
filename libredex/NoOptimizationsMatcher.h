@@ -20,8 +20,8 @@ namespace keep_rules {
  * to check whether a `method` matched.
  */
 void process_no_optimizations_rules(
-    const std::unordered_set<DexType*>& no_optimizations_annos,
-    const std::unordered_set<std::string>& no_optimizations_blocklist,
+    const UnorderedSet<DexType*>& no_optimizations_annos,
+    const UnorderedSet<std::string>& no_optimizations_blocklist,
     const Scope& scope);
 
 } // namespace keep_rules

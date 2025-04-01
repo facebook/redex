@@ -47,7 +47,7 @@ class WholeProgramState {
 
   // By default, the field and method partitions are initialized to Bottom.
   explicit WholeProgramState(
-      const std::unordered_set<const DexType*>& field_blocklist)
+      const UnorderedSet<const DexType*>& field_blocklist)
       : m_field_blocklist(field_blocklist) {}
 
   // By default, the field and method partitions are initialized to Bottom.
@@ -58,7 +58,7 @@ class WholeProgramState {
   WholeProgramState(const Scope&,
                     const interprocedural::FixpointIterator&,
                     const InsertOnlyConcurrentSet<DexMethod*>&,
-                    const std::unordered_set<const DexType*>&,
+                    const UnorderedSet<const DexType*>&,
                     const std::unordered_set<const DexField*>&,
                     std::shared_ptr<const call_graph::Graph> call_graph);
 
@@ -150,7 +150,7 @@ class WholeProgramState {
   std::unordered_set<const DexField*> m_known_fields;
   std::unordered_set<const DexMethod*> m_known_methods;
 
-  std::unordered_set<const DexType*> m_field_blocklist;
+  UnorderedSet<const DexType*> m_field_blocklist;
 
   // A partition represents a set of execution paths that reach certain control
   // points (like invoke/return statements). The abstract information

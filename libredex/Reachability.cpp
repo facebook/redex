@@ -1220,7 +1220,7 @@ void TransitiveClosureMarkerWorker::gather_and_push(
   }
   if (cls && check_strings) {
     for (const auto& ignore_anno_type :
-         m_shared_state->ignore_sets->string_literal_annos) {
+         UnorderedIterable(m_shared_state->ignore_sets->string_literal_annos)) {
       if (has_anno(cls, ignore_anno_type)) {
         ++m_shared_state->stats->num_ignore_check_strings;
         check_strings = false;

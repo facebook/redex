@@ -10,6 +10,7 @@
 #include <sparta/PatriciaTreeSet.h>
 
 #include "ConcurrentContainers.h"
+#include "DeterministicContainers.h"
 #include "IROpcode.h"
 #include "MethodOverrideGraph.h"
 #include "Purity.h"
@@ -72,9 +73,9 @@ struct BarrierHasher {
 class SharedState {
  public:
   explicit SharedState(
-      const std::unordered_set<DexMethodRef*>& pure_methods,
-      const std::unordered_set<const DexString*>& finalish_field_names,
-      const std::unordered_set<const DexField*>& finalish_fields);
+      const UnorderedSet<DexMethodRef*>& pure_methods,
+      const UnorderedSet<const DexString*>& finalish_field_names,
+      const UnorderedSet<const DexField*>& finalish_fields);
   void init_scope(const Scope&,
                   const method::ClInitHasNoSideEffectsPredicate&
                       clinit_has_no_side_effects);
@@ -91,11 +92,11 @@ class SharedState {
   get_read_locations_of_conditionally_pure_method(
       const DexMethodRef* method_ref, IROpcode opcode) const;
   const SharedStateStats& get_stats() const { return m_stats; }
-  const std::unordered_set<DexMethodRef*>& get_pure_methods() const {
+  const UnorderedSet<DexMethodRef*>& get_pure_methods() const {
     return m_pure_methods;
   }
   const method_override_graph::Graph* get_method_override_graph() const;
-  const std::unordered_set<const DexField*>& get_finalizable_fields() const {
+  const UnorderedSet<const DexField*>& get_finalizable_fields() const {
     return m_finalizable_fields;
   }
 
@@ -117,14 +118,14 @@ class SharedState {
   CseUnorderedLocationSet get_relevant_written_locations(
       const IRInstruction* insn, const CseUnorderedLocationSet& read_locations);
   // after init_scope, m_pure_methods will include m_conditionally_pure_methods
-  std::unordered_set<DexMethodRef*> m_pure_methods;
+  UnorderedSet<DexMethodRef*> m_pure_methods;
   // methods which never represent barriers
-  std::unordered_set<DexMethodRef*> m_safe_methods;
+  UnorderedSet<DexMethodRef*> m_safe_methods;
   // subset of safe methods which are in fact defs
-  std::unordered_set<const DexMethod*> m_safe_method_defs;
-  const std::unordered_set<const DexString*>& m_finalish_field_names;
-  const std::unordered_set<const DexField*>& m_finalish_fields;
-  std::unordered_set<const DexField*> m_finalizable_fields;
+  UnorderedSet<const DexMethod*> m_safe_method_defs;
+  const UnorderedSet<const DexString*>& m_finalish_field_names;
+  const UnorderedSet<const DexField*>& m_finalish_fields;
+  UnorderedSet<const DexField*> m_finalizable_fields;
   std::unique_ptr<AtomicMap<Barrier, size_t, BarrierHasher>> m_barriers;
   std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
       m_method_written_locations;

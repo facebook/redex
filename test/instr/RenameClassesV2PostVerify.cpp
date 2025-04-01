@@ -29,7 +29,7 @@ void verify_layout(const std::string& filename) {
 
   EXPECT_EQ(classes.size(), 1)
       << "Expected 1 View in layout file: " << filename;
-  auto cls_name = *classes.begin();
+  auto cls_name = *unordered_any(classes);
   EXPECT_FALSE(cls_name.is_reference());
   EXPECT_EQ(cls_name.str.find("X."), 0)
       << "Got unexpected class name in layout: " << cls_name.str;

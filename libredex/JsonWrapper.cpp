@@ -94,7 +94,7 @@ void JsonWrapper::get(const char* name,
 
 void JsonWrapper::get(const char* name,
                       const std::vector<std::string>& dflt,
-                      std::unordered_set<std::string>& param) const {
+                      UnorderedSet<std::string>& param) const {
   auto it = (*m_config)[name];
   param.clear();
   // NOLINTNEXTLINE(readability-container-size-empty)

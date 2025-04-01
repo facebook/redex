@@ -69,7 +69,7 @@ class InstrumentPass : public Pass {
                                  const std::string_view field_name,
                                  const int new_number);
   static bool is_included(const DexMethod* method,
-                          const std::unordered_set<std::string>& set);
+                          const UnorderedSet<std::string>& set);
 
   static std::unordered_map<int /*shard_num*/, DexFieldRef*>
   patch_sharded_arrays(
@@ -89,8 +89,8 @@ class InstrumentPass : public Pass {
     std::string instrumentation_strategy;
     std::string analysis_class_name;
     std::string analysis_method_name;
-    std::unordered_set<std::string> blocklist;
-    std::unordered_set<std::string> allowlist;
+    UnorderedSet<std::string> blocklist;
+    UnorderedSet<std::string> allowlist;
     std::string blocklist_file_name;
     std::string metadata_file_name;
     int64_t num_stats_per_method;

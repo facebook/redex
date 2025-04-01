@@ -11,14 +11,14 @@
 namespace keep_rules {
 
 void process_no_optimizations_rules(
-    const std::unordered_set<DexType*>& no_optimizations_annos,
-    const std::unordered_set<std::string>& no_optimizations_blocklist,
+    const UnorderedSet<DexType*>& no_optimizations_annos,
+    const UnorderedSet<std::string>& no_optimizations_blocklist,
     const Scope& scope) {
   auto match = m::any_annos<DexMethod>(
       m::as_type<DexAnnotation>(m::in<DexType*>(no_optimizations_annos)));
   auto is_blocklisted = [&](DexClass* cls) {
     while (cls != nullptr) {
-      for (const auto& type_s : no_optimizations_blocklist) {
+      for (const auto& type_s : UnorderedIterable(no_optimizations_blocklist)) {
         if (boost::starts_with(cls->get_name()->c_str(), type_s)) {
           return true;
         }

@@ -10,7 +10,6 @@
 #include <sstream>
 #include <type_traits>
 #include <unordered_map>
-#include <unordered_set>
 
 #include <boost/optional.hpp>
 

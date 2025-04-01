@@ -12,7 +12,6 @@
 #include <map>
 #include <string>
 #include <sys/types.h>
-#include <unordered_set>
 #include <vector>
 
 #include "androidfw/ResourceTypes.h"
@@ -72,7 +71,7 @@ class XmlValueCollector : public arsc::XmlFileVisitor {
     return true;
   }
 
-  std::unordered_set<uint32_t> m_ids;
+  UnorderedSet<uint32_t> m_ids;
 };
 
 class XmlFileEditor : public arsc::XmlFileVisitor {
@@ -144,7 +143,7 @@ class TableParser : public arsc::StringPoolRefVisitor {
       m_package_types;
   std::set<android::ResTable_package*> m_packages;
   std::map<android::ResTable_package*, OverlayLookup> m_package_overlayables;
-  std::unordered_set<uint32_t> m_overlayable_ids;
+  UnorderedSet<uint32_t> m_overlayable_ids;
   // Chunks belonging to a package that we do not parse/edit. Meant to be
   // preserved as-is when preparing output file.
   std::map<android::ResTable_package*, std::vector<android::ResChunk_header*>>
@@ -281,9 +280,9 @@ class ResourcesArscFile : public ResourceTableFile {
   size_t obfuscate_resource_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::map<std::string, std::string>& filepath_old_to_new,
-      const std::unordered_set<uint32_t>& allowed_types,
-      const std::unordered_set<std::string>& keep_resource_prefixes,
-      const std::unordered_set<std::string>& keep_resource_specific) override;
+      const UnorderedSet<uint32_t>& allowed_types,
+      const UnorderedSet<std::string>& keep_resource_prefixes,
+      const UnorderedSet<std::string>& keep_resource_specific) override;
   size_t serialize();
 
   size_t package_count() override;
@@ -292,10 +291,10 @@ class ResourcesArscFile : public ResourceTableFile {
       std::map<size_t, std::vector<uint32_t>>* res_by_hash) override;
   bool resource_value_identical(uint32_t a_id, uint32_t b_id) override;
   void get_type_names(std::vector<std::string>* type_names) override;
-  std::unordered_set<uint32_t> get_types_by_name(
-      const std::unordered_set<std::string>& type_names) override;
-  std::unordered_set<uint32_t> get_types_by_name_prefixes(
-      const std::unordered_set<std::string>& type_name_prefixes) override;
+  UnorderedSet<uint32_t> get_types_by_name(
+      const UnorderedSet<std::string>& type_names) override;
+  UnorderedSet<uint32_t> get_types_by_name_prefixes(
+      const UnorderedSet<std::string>& type_name_prefixes) override;
   void delete_resource(uint32_t res_id) override;
   void remap_res_ids_and_serialize(
       const std::vector<std::string>& resource_files,
@@ -315,8 +314,8 @@ class ResourcesArscFile : public ResourceTableFile {
   void walk_references_for_resource(
       uint32_t resID,
       ResourcePathType path_type,
-      std::unordered_set<uint32_t>* nodes_visited,
-      std::unordered_set<std::string>* potential_file_paths) override;
+      UnorderedSet<uint32_t>* nodes_visited,
+      UnorderedSet<std::string>* potential_file_paths) override;
   uint64_t resource_value_count(uint32_t res_id) override;
   void get_configurations(
       uint32_t package_id,
@@ -330,7 +329,7 @@ class ResourcesArscFile : public ResourceTableFile {
       uint32_t ref, std::vector<std::string>* values) override;
   UnorderedMap<uint32_t, resources::InlinableValue>
   get_inlinable_resource_values() override;
-  std::unordered_set<uint32_t> get_overlayable_id_roots() override;
+  UnorderedSet<uint32_t> get_overlayable_id_roots() override;
   ~ResourcesArscFile() override;
 
   size_t get_length() const;
@@ -357,18 +356,17 @@ class ApkResources : public AndroidResources {
   boost::optional<int32_t> get_min_sdk() override;
   ManifestClassInfo get_manifest_class_info() override;
   boost::optional<std::string> get_manifest_package_name() override;
-  std::unordered_set<std::string> get_service_loader_classes() override;
-  std::unordered_set<uint32_t> get_xml_reference_attributes(
+  UnorderedSet<std::string> get_service_loader_classes() override;
+  UnorderedSet<uint32_t> get_xml_reference_attributes(
       const std::string& filename) override;
   void collect_layout_classes_and_attributes_for_file(
       const std::string& file_path,
-      const std::unordered_set<std::string>& attributes_to_read,
+      const UnorderedSet<std::string>& attributes_to_read,
       resources::StringOrReferenceSet* out_classes,
       std::unordered_multimap<std::string, resources::StringOrReference>*
           out_attributes) override;
   void collect_xml_attribute_string_values_for_file(
-      const std::string& file_path,
-      std::unordered_set<std::string>* out) override;
+      const std::string& file_path, UnorderedSet<std::string>* out) override;
   void fully_qualify_layout(
       const UnorderedMap<std::string, std::string>& element_to_class_name,
       const std::string& file_path,
@@ -389,12 +387,12 @@ class ApkResources : public AndroidResources {
       const std::string& filename,
       const std::map<uint32_t, uint32_t>& kept_to_remapped_ids) override;
   std::unique_ptr<ResourceTableFile> load_res_table() override;
-  std::unordered_set<std::string> find_all_xml_files() override;
+  UnorderedSet<std::string> find_all_xml_files() override;
   std::vector<std::string> find_resources_files() override;
   std::string get_base_assets_dir() override;
-  void obfuscate_xml_files(const std::unordered_set<std::string>& allowed_types,
-                           const std::unordered_set<std::string>&
-                               do_not_obfuscate_elements) override;
+  void obfuscate_xml_files(
+      const UnorderedSet<std::string>& allowed_types,
+      const UnorderedSet<std::string>& do_not_obfuscate_elements) override;
 
  protected:
   std::vector<std::string> find_res_directories() override;

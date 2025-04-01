@@ -14,13 +14,13 @@
 #include <string>
 #include <type_traits>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include <json/value.h>
 
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "JsonWrapper.h"
 
 class DexClass;
@@ -430,13 +430,13 @@ DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<Json::Value>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::optional<std::string>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<std::string>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<unsigned int>)
-DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<std::string>)
+DEFINE_CONFIGURABLE_PRIMITIVE(UnorderedSet<std::string>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<DexType*>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<DexMethod*>)
-DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<DexType*>)
-DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<const DexType*>)
-DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<DexClass*>)
-DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<DexMethod*>)
+DEFINE_CONFIGURABLE_PRIMITIVE(UnorderedSet<DexType*>)
+DEFINE_CONFIGURABLE_PRIMITIVE(UnorderedSet<const DexType*>)
+DEFINE_CONFIGURABLE_PRIMITIVE(UnorderedSet<DexClass*>)
+DEFINE_CONFIGURABLE_PRIMITIVE(UnorderedSet<DexMethod*>)
 DEFINE_CONFIGURABLE_PRIMITIVE(Configurable::MapOfMethods)
 DEFINE_CONFIGURABLE_PRIMITIVE(Configurable::MapOfVectorOfStrings)
 DEFINE_CONFIGURABLE_PRIMITIVE(Configurable::MapOfStrings)

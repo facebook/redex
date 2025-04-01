@@ -229,7 +229,7 @@ static void filter_candidates_local_only(
 std::unordered_set<DexMethod*> gather_non_virtual_methods(
     Scope& scope,
     const InsertOnlyConcurrentSet<DexMethod*>* non_virtual,
-    const std::unordered_set<DexType*>& no_devirtualize_anno) {
+    const UnorderedSet<DexType*>& no_devirtualize_anno) {
   // trace counter
   size_t all_methods = 0;
   size_t direct_methods = 0;
@@ -784,11 +784,11 @@ void unfinalize_fields_if_beneficial_for_relaxed_init_inlining(
         perf_sensitive = true;
         break;
       }
-      std::unordered_set<DexField*> written_final_fields;
+      UnorderedSet<DexField*> written_final_fields;
       if (!constructor_analysis::can_inline_init(
               init_method, /* finalizable_fields */ nullptr,
               /* relaxed */ true, &written_final_fields)) {
-        for (auto* field : written_final_fields) {
+        for (auto* field : UnorderedIterable(written_final_fields)) {
           always_assert(final_ifields.count(field));
           local_unfinalized_fields[field].push_back(init_method);
         }

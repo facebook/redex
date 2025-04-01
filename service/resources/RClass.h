@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "GlobalConfig.h"
 #include "PassManager.h"
@@ -60,8 +61,8 @@ class RClassReader {
   // are known statically to be contained inside.
   void extract_resource_ids_from_static_arrays(
       const Scope& scope,
-      const std::unordered_set<DexField*>& array_fields,
-      std::unordered_set<uint32_t>* out_values) const;
+      const UnorderedSet<DexField*>& array_fields,
+      UnorderedSet<uint32_t>* out_values) const;
 
  private:
   bool valid_r_class_structure(const DexClass* cls) const;

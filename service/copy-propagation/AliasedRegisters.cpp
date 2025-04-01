@@ -6,6 +6,7 @@
  */
 
 #include "AliasedRegisters.h"
+#include "DeterministicContainers.h"
 
 #include <algorithm>
 #ifdef __GNUC__
@@ -22,7 +23,6 @@
 #include <boost/range/iterator_range.hpp>
 #include <limits>
 #include <numeric>
-#include <unordered_set>
 
 using namespace sparta;
 
@@ -436,7 +436,7 @@ void AliasedRegisters::handle_edge_intersection_insert_order(
   // Clear out stale values in `m_insert_order` for vertices removed from
   // groups.
   auto groups = all_groups();
-  std::unordered_set<vertex_t> non_singletons;
+  UnorderedSet<vertex_t> non_singletons;
   for (const auto& group : groups) {
     non_singletons.insert(group.begin(), group.end());
   }

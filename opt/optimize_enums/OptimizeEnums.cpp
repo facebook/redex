@@ -12,7 +12,6 @@
 #include <ostream>
 #include <set>
 #include <sstream>
-#include <unordered_set>
 
 #include "ClassAssemblingUtils.h"
 #include "ConfigFiles.h"
@@ -56,7 +55,7 @@ using LookupTableToEnum = std::unordered_map<DexField*, DexType*>;
 
 // Sets of types.  Intended to be sub-classes of Ljava/lang/Enum; but not
 // guaranteed by the type.
-using EnumTypes = std::unordered_set<DexType*>;
+using EnumTypes = UnorderedSet<DexType*>;
 
 using GeneratedSwitchCases = optimize_enums::GeneratedSwitchCases;
 using EnumFieldToOrdinal = optimize_enums::EnumFieldToOrdinal;
@@ -482,8 +481,8 @@ class OptimizeEnums {
     });
 
     // Need to remember to understand what was rejected.
-    std::unordered_set<DexType*> orig_candidates{config.candidate_enums.begin(),
-                                                 config.candidate_enums.end()};
+    UnorderedSet<DexType*> orig_candidates{config.candidate_enums.begin(),
+                                           config.candidate_enums.end()};
 
     auto add_unsafe_usage = [&](const DexType* type, UnsafeType u) {
       // May be called in parallel.
@@ -498,7 +497,7 @@ class OptimizeEnums {
       }
     }
 
-    for (auto* t : orig_candidates) {
+    for (auto* t : UnorderedIterable(orig_candidates)) {
       if (config.candidate_enums.count_unsafe(t) == 0) {
         unsafe_enums.emplace_unsafe(t, UnsafeTypes{UnsafeType::kUsage});
       }

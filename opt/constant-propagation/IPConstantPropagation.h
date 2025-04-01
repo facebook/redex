@@ -12,6 +12,7 @@
 #include "ConstantPropagationRuntimeAssert.h"
 #include "ConstantPropagationTransform.h"
 #include "ConstantPropagationWholeProgramState.h"
+#include "DeterministicContainers.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "Pass.h"
 #include "TypeSystem.h"
@@ -31,7 +32,7 @@ class PassImpl : public Pass {
     // be treated as Top.
     uint64_t max_heap_analysis_iterations{0};
     uint32_t big_override_threshold{5};
-    std::unordered_set<const DexType*> field_blocklist;
+    UnorderedSet<const DexType*> field_blocklist;
     bool compute_definitely_assigned_ifields{true};
 
     Transform::Config transform;

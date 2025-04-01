@@ -10,6 +10,7 @@
 #include <set>
 #include <string>
 
+#include "DeterministicContainers.h"
 #include "Pass.h"
 
 /**
@@ -90,12 +91,12 @@ class ObfuscateResourcesPass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  std::unordered_set<std::string> m_name_obfuscation_allowed_types;
-  std::unordered_set<std::string> m_keep_resource_name_prefixes;
-  std::unordered_set<std::string> m_xml_obfuscation_allowed_types;
-  std::unordered_set<std::string> m_do_not_obfuscate_elements;
-  std::unordered_set<std::string> m_keep_resource_file_names;
-  std::unordered_set<std::string> m_code_references_okay_to_obfuscate;
+  UnorderedSet<std::string> m_name_obfuscation_allowed_types;
+  UnorderedSet<std::string> m_keep_resource_name_prefixes;
+  UnorderedSet<std::string> m_xml_obfuscation_allowed_types;
+  UnorderedSet<std::string> m_do_not_obfuscate_elements;
+  UnorderedSet<std::string> m_keep_resource_file_names;
+  UnorderedSet<std::string> m_code_references_okay_to_obfuscate;
   bool m_obfuscate_resource_name;
   bool m_obfuscate_resource_file;
   bool m_obfuscate_id_name;

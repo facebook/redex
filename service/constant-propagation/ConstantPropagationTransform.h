@@ -40,7 +40,7 @@ class Transform final {
     // value.
     const ConcurrentSet<DexMethod*>* getter_methods_for_immutable_fields{
         nullptr};
-    const std::unordered_set<DexMethodRef*>* pure_methods{nullptr};
+    const UnorderedSet<DexMethodRef*>* pure_methods{nullptr};
     Config() {}
   };
 

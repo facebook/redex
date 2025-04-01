@@ -500,7 +500,7 @@ void run_cleanup(DexMethod* method,
                  cfg::ControlFlowGraph& cfg,
                  const init_classes::InitClassesWithSideEffects*
                      init_classes_with_side_effects,
-                 const std::unordered_set<DexMethodRef*>& pure_methods,
+                 const UnorderedSet<DexMethodRef*>& pure_methods,
                  std::mutex& mutex,
                  LocalDce::Stats& stats) {
   auto local_dce = LocalDce(init_classes_with_side_effects, pure_methods);
@@ -525,7 +525,7 @@ void run_cleanup(DexMethod* method,
  */
 void RemoveArgs::populate_representative_ids(
     const mog::Graph& override_graph,
-    const std::unordered_set<DexType*>& no_devirtualize_annos) {
+    const UnorderedSet<DexType*>& no_devirtualize_annos) {
   // Group methods that are related (somehow connect in override graph)
   // For each related group, assign a single representative method.
   walk::parallel::methods(m_scope, [&](DexMethod* method) {
@@ -556,7 +556,7 @@ void RemoveArgs::populate_representative_ids(
  * function returns a list of entries for all methods that should be updated.
  */
 void RemoveArgs::gather_updated_entries(
-    const std::unordered_set<DexType*>& no_devirtualize_annos,
+    const UnorderedSet<DexType*>& no_devirtualize_annos,
     InsertOnlyConcurrentMap<DexMethod*, Entry>* updated_entries) {
   // Loop over all related groups
   using MethodAndMethodSet =
@@ -702,7 +702,7 @@ void RemoveArgs::gather_updated_entries(
  */
 RemoveArgs::MethodStats RemoveArgs::update_method_protos(
     const mog::Graph& override_graph,
-    const std::unordered_set<DexType*>& no_devirtualize_annos) {
+    const UnorderedSet<DexType*>& no_devirtualize_annos) {
 
   // Phase 1: Calculate exit blocks for all methods
   walk::parallel::methods(m_scope, [&](DexMethod* method) {

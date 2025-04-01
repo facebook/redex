@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "GlobalConfig.h"
 #include "Pass.h"
 #include "ReachableResources.h"
@@ -28,7 +29,7 @@ class ReachableResourcesPlugin {
   // Given the directory holding the unpacked input zip, and a list of resource
   // names to their corresponding ids, return a list of resource IDs that should
   // be considered reachable.
-  virtual std::unordered_set<uint32_t> get_reachable_resources(
+  virtual UnorderedSet<uint32_t> get_reachable_resources(
       const std::string& unpack_dir,
       const std::map<std::string, std::vector<uint32_t>>& name_to_ids) const {
     return {};

@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "Pass.h"
 
 /*
@@ -34,9 +35,9 @@ struct Config {
   bool remove_unwritten_fields;
   bool remove_zero_written_fields;
   bool remove_vestigial_objects_written_fields;
-  std::unordered_set<const DexType*> blocklist_types;
-  std::unordered_set<const DexType*> blocklist_classes;
-  std::unordered_set<const DexType*> allowlist_types;
+  UnorderedSet<const DexType*> blocklist_types;
+  UnorderedSet<const DexType*> blocklist_classes;
+  UnorderedSet<const DexType*> allowlist_types;
 };
 
 class PassImpl : public Pass {

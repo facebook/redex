@@ -954,15 +954,15 @@ std::vector<std::string> find_subdirs_in_modules(
 
 } // namespace
 
-std::unordered_set<std::string> BundleResources::get_service_loader_classes() {
+UnorderedSet<std::string> BundleResources::get_service_loader_classes() {
   std::vector<std::string> subdirs =
       find_subdirs_in_modules(m_directory, {"root/META-INF/services/"});
 
-  std::unordered_set<std::string> ret_set;
+  UnorderedSet<std::string> ret_set;
   for (const auto& subdir : subdirs) {
-    std::unordered_set<std::string> temp_set =
+    UnorderedSet<std::string> temp_set =
         get_service_loader_classes_helper(subdir);
-    ret_set.insert(temp_set.begin(), temp_set.end());
+    insert_unordered_iterable(ret_set, temp_set);
   }
 
   return ret_set;
@@ -984,7 +984,7 @@ namespace {
 // Collect all resource ids referred in an given xml element.
 // attr->compiled_item->ref->id
 void collect_rids_for_element(const aapt::pb::XmlElement& element,
-                              std::unordered_set<uint32_t>& result) {
+                              UnorderedSet<uint32_t>& result) {
   for (const aapt::pb::XmlAttribute& pb_attr : element.attribute()) {
     if (!pb_attr.has_compiled_item()) {
       continue;
@@ -1002,7 +1002,7 @@ void collect_rids_for_element(const aapt::pb::XmlElement& element,
 void collect_layout_classes_and_attributes_for_element(
     const aapt::pb::XmlElement& element,
     const UnorderedMap<std::string, std::string>& ns_uri_to_prefix,
-    const std::unordered_set<std::string>& attributes_to_read,
+    const UnorderedSet<std::string>& attributes_to_read,
     resources::StringOrReferenceSet* out_classes,
     std::unordered_multimap<std::string, resources::StringOrReference>*
         out_attributes) {
@@ -1163,7 +1163,7 @@ aapt::pb::Entry* new_remapped_entry(
 }
 
 void remove_or_change_resource_ids(
-    const std::unordered_set<uint32_t>& ids_to_remove,
+    const UnorderedSet<uint32_t>& ids_to_remove,
     const std::map<uint32_t, uint32_t>& old_to_new,
     uint32_t package_id,
     aapt::pb::Type* type) {
@@ -1181,7 +1181,7 @@ void remove_or_change_resource_ids(
   type->mutable_entry()->Swap(&new_entries);
 }
 
-void nullify_resource_ids(const std::unordered_set<uint32_t>& ids_to_remove,
+void nullify_resource_ids(const UnorderedSet<uint32_t>& ids_to_remove,
                           uint32_t package_id,
                           aapt::pb::Type* type) {
   int entry_size = type->entry_size();
@@ -1251,7 +1251,7 @@ void change_resource_id_in_xml_references(
 
 void BundleResources::collect_layout_classes_and_attributes_for_file(
     const std::string& file_path,
-    const std::unordered_set<std::string>& attributes_to_read,
+    const UnorderedSet<std::string>& attributes_to_read,
     resources::StringOrReferenceSet* out_classes,
     std::unordered_multimap<std::string, resources::StringOrReference>*
         out_attributes) {
@@ -1289,7 +1289,7 @@ void BundleResources::collect_layout_classes_and_attributes_for_file(
 }
 
 void BundleResources::collect_xml_attribute_string_values_for_file(
-    const std::string& file_path, std::unordered_set<std::string>* out) {
+    const std::string& file_path, UnorderedSet<std::string>* out) {
   if (is_raw_resource(file_path)) {
     return;
   }
@@ -1372,8 +1372,8 @@ std::vector<std::string> BundleResources::find_resources_files() {
   return paths;
 }
 
-std::unordered_set<std::string> BundleResources::find_all_xml_files() {
-  std::unordered_set<std::string> all_xml_files;
+UnorderedSet<std::string> BundleResources::find_all_xml_files() {
+  UnorderedSet<std::string> all_xml_files;
   boost::filesystem::path dir(m_directory);
   for (auto& entry : boost::make_iterator_range(
            boost::filesystem::directory_iterator(dir), {})) {
@@ -1382,16 +1382,14 @@ std::unordered_set<std::string> BundleResources::find_all_xml_files() {
       all_xml_files.emplace(manifest.string());
     }
     auto res_path = entry.path() / "/res";
-    for (const std::string& path : get_xml_files(res_path.string())) {
-      all_xml_files.emplace(path);
-    }
+    insert_unordered_iterable(all_xml_files, get_xml_files(res_path.string()));
   }
   return all_xml_files;
 }
 
-std::unordered_set<uint32_t> BundleResources::get_xml_reference_attributes(
+UnorderedSet<uint32_t> BundleResources::get_xml_reference_attributes(
     const std::string& filename) {
-  std::unordered_set<uint32_t> result;
+  UnorderedSet<uint32_t> result;
   if (is_raw_resource(filename)) {
     return result;
   }
@@ -1602,20 +1600,18 @@ void ResourcesPbFile::remap_file_paths_and_serialize(
   }
 }
 
-bool find_prefix_match(const std::unordered_set<std::string>& prefixes,
+bool find_prefix_match(const UnorderedSet<std::string>& prefixes,
                        const std::string& name) {
-  return std::find_if(prefixes.begin(), prefixes.end(),
-                      [&](const std::string& v) {
-                        return name.find(v) == 0;
-                      }) != prefixes.end();
+  return unordered_any_of(
+      prefixes, [&](const std::string& v) { return name.find(v) == 0; });
 }
 
 size_t ResourcesPbFile::obfuscate_resource_and_serialize(
     const std::vector<std::string>& resource_files,
     const std::map<std::string, std::string>& filepath_old_to_new,
-    const std::unordered_set<uint32_t>& allowed_types,
-    const std::unordered_set<std::string>& keep_resource_prefixes,
-    const std::unordered_set<std::string>& keep_resource_specific) {
+    const UnorderedSet<uint32_t>& allowed_types,
+    const UnorderedSet<std::string>& keep_resource_prefixes,
+    const UnorderedSet<std::string>& keep_resource_specific) {
   if (allowed_types.empty() && filepath_old_to_new.empty()) {
     TRACE(RES, 9, "BundleResources: Nothing to change, returning");
     return 0;
@@ -1921,10 +1917,10 @@ void ResourcesPbFile::get_type_names(std::vector<std::string>* type_names) {
   }
 }
 
-std::unordered_set<uint32_t> ResourcesPbFile::get_types_by_name(
-    const std::unordered_set<std::string>& type_names) {
+UnorderedSet<uint32_t> ResourcesPbFile::get_types_by_name(
+    const UnorderedSet<std::string>& type_names) {
   always_assert(!m_type_id_to_names.empty());
-  std::unordered_set<uint32_t> type_ids;
+  UnorderedSet<uint32_t> type_ids;
   for (const auto& pair : m_type_id_to_names) {
     if (type_names.count(pair.second) == 1) {
       type_ids.emplace((pair.first) << TYPE_INDEX_BIT_SHIFT);
@@ -1933,16 +1929,15 @@ std::unordered_set<uint32_t> ResourcesPbFile::get_types_by_name(
   return type_ids;
 }
 
-std::unordered_set<uint32_t> ResourcesPbFile::get_types_by_name_prefixes(
-    const std::unordered_set<std::string>& type_name_prefixes) {
+UnorderedSet<uint32_t> ResourcesPbFile::get_types_by_name_prefixes(
+    const UnorderedSet<std::string>& type_name_prefixes) {
   always_assert(!m_type_id_to_names.empty());
-  std::unordered_set<uint32_t> type_ids;
+  UnorderedSet<uint32_t> type_ids;
   for (const auto& pair : m_type_id_to_names) {
     const auto& type_name = pair.second;
-    if (std::find_if(type_name_prefixes.begin(), type_name_prefixes.end(),
-                     [&](const std::string& prefix) {
-                       return type_name.find(prefix) == 0;
-                     }) != type_name_prefixes.end()) {
+    if (unordered_any_of(type_name_prefixes, [&](const std::string& prefix) {
+          return type_name.find(prefix) == 0;
+        })) {
       type_ids.emplace((pair.first) << TYPE_INDEX_BIT_SHIFT);
     }
   }
@@ -1999,8 +1994,8 @@ std::vector<std::string> ResourcesPbFile::get_files_by_rid(
 void ResourcesPbFile::walk_references_for_resource(
     uint32_t resID,
     ResourcePathType path_type,
-    std::unordered_set<uint32_t>* nodes_visited,
-    std::unordered_set<std::string>* potential_file_paths) {
+    UnorderedSet<uint32_t>* nodes_visited,
+    UnorderedSet<std::string>* potential_file_paths) {
   if (nodes_visited->find(resID) != nodes_visited->end()) {
     // Return directly if a node is visited.
     return;
@@ -2254,7 +2249,7 @@ bool ResourcesPbFile::resource_value_identical(uint32_t a_id, uint32_t b_id) {
 namespace {
 
 void maybe_obfuscate_element(
-    const std::unordered_set<std::string>& do_not_obfuscate_elements,
+    const UnorderedSet<std::string>& do_not_obfuscate_elements,
     aapt::pb::XmlElement* pb_element,
     size_t* change_count) {
   if (do_not_obfuscate_elements.count(pb_element->name()) > 0) {
@@ -2281,7 +2276,7 @@ void maybe_obfuscate_element(
 
 void obfuscate_xml_attributes(
     const std::string& filename,
-    const std::unordered_set<std::string>& do_not_obfuscate_elements) {
+    const UnorderedSet<std::string>& do_not_obfuscate_elements) {
   read_protobuf_file_contents(
       filename,
       [&](google::protobuf::io::CodedInputStream& input, size_t /* unused */) {
@@ -2304,8 +2299,8 @@ void obfuscate_xml_attributes(
 } // namespace
 
 void BundleResources::obfuscate_xml_files(
-    const std::unordered_set<std::string>& allowed_types,
-    const std::unordered_set<std::string>& do_not_obfuscate_elements) {
+    const UnorderedSet<std::string>& allowed_types,
+    const UnorderedSet<std::string>& do_not_obfuscate_elements) {
   using path_t = boost::filesystem::path;
   using dir_iterator = boost::filesystem::directory_iterator;
 
@@ -2321,9 +2316,7 @@ void BundleResources::obfuscate_xml_files(
         const auto& entry_string = entry_path.string();
         if (is_directory(entry_path) &&
             can_obfuscate_xml_file(allowed_types, entry_string)) {
-          for (const std::string& layout : get_xml_files(entry_string)) {
-            xml_paths.emplace(layout);
-          }
+          insert_unordered_iterable(xml_paths, get_xml_files(entry_string));
         }
       }
     }
@@ -2361,7 +2354,7 @@ namespace {
 void resolve_strings_for_id(
     const std::map<uint32_t, const ConfigValues>& table_snapshot,
     uint32_t id,
-    std::unordered_set<uint32_t>* seen,
+    UnorderedSet<uint32_t>* seen,
     std::set<std::string>* values) {
   // Annoyingly, Android build tools allow references to have cycles in them
   // without failing at build time. At runtime, such a situation would just loop
@@ -2393,7 +2386,7 @@ void resolve_strings_for_id(
 
 void ResourcesPbFile::resolve_string_values_for_resource_reference(
     uint32_t ref, std::vector<std::string>* values) {
-  std::unordered_set<uint32_t> seen;
+  UnorderedSet<uint32_t> seen;
   // Ensure no duplicates
   std::set<std::string> values_set;
   resolve_strings_for_id(get_res_id_to_configvalue(), ref, &seen, &values_set);
@@ -2483,8 +2476,8 @@ ResourcesPbFile::get_inlinable_resource_values() {
   return inlinable_resources;
 }
 
-std::unordered_set<uint32_t> ResourcesPbFile::get_overlayable_id_roots() {
-  std::unordered_set<uint32_t> overlayable_ids;
+UnorderedSet<uint32_t> ResourcesPbFile::get_overlayable_id_roots() {
+  UnorderedSet<uint32_t> overlayable_ids;
   for (auto&& [id, entry] : m_res_id_to_entry) {
     if (entry.has_overlayable_item()) {
       overlayable_ids.emplace(id);

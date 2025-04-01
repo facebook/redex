@@ -1460,9 +1460,9 @@ MethodInfo instrument_basic_blocks(
   return info;
 }
 
-std::unordered_set<std::string> get_cold_start_classes(ConfigFiles& cfg) {
+UnorderedSet<std::string> get_cold_start_classes(ConfigFiles& cfg) {
   auto interdex_list = cfg.get_coldstart_classes();
-  std::unordered_set<std::string> cold_start_classes;
+  UnorderedSet<std::string> cold_start_classes;
   std::string dex_end_marker0("LDexEndMarker0;");
   for (auto class_string : interdex_list) {
     if (class_string == dex_end_marker0) {

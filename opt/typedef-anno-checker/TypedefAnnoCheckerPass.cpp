@@ -100,7 +100,7 @@ bool is_generated(const DexMethod* m) {
   if (!cls->get_anno_set()) {
     return false;
   }
-  std::unordered_set<DexType*> generated_annos = {
+  UnorderedSet<DexType*> generated_annos = {
       DexType::make_type(
           "Lcom/facebook/xapp/messaging/composer/annotation/Generated;"),
       DexType::make_type("Lcom/facebook/litho/annotations/Generated;")};

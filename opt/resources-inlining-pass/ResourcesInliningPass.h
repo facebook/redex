@@ -61,8 +61,8 @@ class ResourcesInliningPass : public Pass {
       ResourceTableFile* res_table,
       const UnorderedMap<uint32_t, resources::InlinableValue>&
           inlinable_resources,
-      const std::unordered_set<std::string>& resource_type_names,
-      const std::unordered_set<std::string>& resource_entry_names);
+      const UnorderedSet<std::string>& resource_type_names,
+      const UnorderedSet<std::string>& resource_entry_names);
 
   /* This method finds possible transformations of invoke_virtuals and move
    * instructions that are also inlinable and are one of the following supported
@@ -83,6 +83,6 @@ class ResourcesInliningPass : public Pass {
       const std::vector<InlinableOptimization>& insn_inlinable,
       PassManager& mgr);
 
-  std::unordered_set<std::string> m_resource_type_names;
-  std::unordered_set<std::string> m_resource_entry_names;
+  UnorderedSet<std::string> m_resource_type_names;
+  UnorderedSet<std::string> m_resource_entry_names;
 };

@@ -60,7 +60,7 @@ ComponentTagInfo find_component_info(const std::vector<ComponentTagInfo>& list,
 
 void dump_string_reference_set(
     const resources::StringOrReferenceSet& layout_classes) {
-  for (const auto& c : layout_classes) {
+  for (const auto& c : UnorderedIterable(layout_classes)) {
     if (c.is_reference()) {
       std::cerr << "LAYOUT CLASS REF: 0x" << std::hex << c.ref << std::dec
                 << std::endl;
@@ -195,7 +195,7 @@ TEST(BundleResources, ReadLayout) {
   setup_resources_and_run([&](const std::string& extract_dir,
                               BundleResources* resources) {
     resources::StringOrReferenceSet layout_classes;
-    std::unordered_set<std::string> attrs_to_read;
+    UnorderedSet<std::string> attrs_to_read;
     attrs_to_read.emplace(ONCLICK_ATTRIBUTE);
     std::unordered_multimap<std::string, resources::StringOrReference>
         attribute_values;
@@ -242,8 +242,8 @@ TEST(BundleResources, ReadLayout) {
 TEST(BundleResources, ReadLayoutResolveRefs) {
   setup_resources_and_run(
       [&](const std::string& /* unused */, BundleResources* resources) {
-        std::unordered_set<std::string> layout_classes;
-        std::unordered_set<std::string> attrs_to_read;
+        UnorderedSet<std::string> layout_classes;
+        UnorderedSet<std::string> attrs_to_read;
         attrs_to_read.emplace(ONCLICK_ATTRIBUTE);
         std::unordered_multimap<std::string, std::string> attribute_values;
         resources->collect_layout_classes_and_attributes(
@@ -270,7 +270,7 @@ TEST(BundleResources, RenameLayout) {
 
         // Read the file again to see it take effect
         resources::StringOrReferenceSet layout_classes;
-        std::unordered_set<std::string> attrs_to_read;
+        UnorderedSet<std::string> attrs_to_read;
         std::unordered_multimap<std::string, resources::StringOrReference>
             attribute_values;
         resources->collect_layout_classes_and_attributes_for_file(
@@ -304,7 +304,7 @@ TEST(BundleResources, ReadResource) {
     EXPECT_EQ(bg_grey.size(), 1);
     obtain_resource_name_back = id_to_name.at(bg_grey[0]);
     EXPECT_EQ(obtain_resource_name_back, "bg_grey");
-    std::unordered_set<std::string> types = {"drawable"};
+    UnorderedSet<std::string> types = {"drawable"};
     auto drawable_type_id = res_table->get_types_by_name(types);
     EXPECT_EQ(drawable_type_id.size(), 1);
     std::unordered_set<std::string> drawable_res_names;
@@ -533,10 +533,10 @@ TEST(BundleResources, ObfuscateResourcesName) {
     EXPECT_EQ(files.size(), 1);
     EXPECT_EQ(*files.begin(), "base/res/drawable-mdpi-v4/icon.png");
 
-    std::unordered_set<std::string> types = {"color"};
+    UnorderedSet<std::string> types = {"color"};
     auto type_ids = res_table->get_types_by_name(types);
-    std::unordered_set<uint32_t> shifted_allow_type_ids;
-    for (auto& type_id : type_ids) {
+    UnorderedSet<uint32_t> shifted_allow_type_ids;
+    for (auto& type_id : UnorderedIterable(type_ids)) {
       shifted_allow_type_ids.emplace(type_id >> TYPE_INDEX_BIT_SHIFT);
     }
     std::map<std::string, std::string> filepath_old_to_new;

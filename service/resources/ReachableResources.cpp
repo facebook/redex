@@ -16,7 +16,6 @@
 #include "DexUtil.h"
 #include "IRInstruction.h"
 #include "RedexResources.h"
-#include "StlUtil.h"
 #include "Walkers.h"
 
 namespace {
@@ -38,10 +37,10 @@ bool is_resource_xml(const std::string& str) {
   return false;
 }
 
-std::unordered_set<uint32_t> get_disallowed_resources(
+UnorderedSet<uint32_t> get_disallowed_resources(
     const std::vector<uint32_t>& sorted_res_ids,
-    const std::unordered_set<uint32_t>& disallowed_types) {
-  std::unordered_set<uint32_t> disallowed_resources;
+    const UnorderedSet<uint32_t>& disallowed_types) {
+  UnorderedSet<uint32_t> disallowed_resources;
   for (size_t index = 0; index < sorted_res_ids.size(); ++index) {
     uint32_t id = sorted_res_ids[index];
     uint32_t type_id = id & TYPE_MASK_BIT;
@@ -52,12 +51,12 @@ std::unordered_set<uint32_t> get_disallowed_resources(
   return disallowed_resources;
 }
 
-std::unordered_set<uint32_t> get_resources_by_name_prefix(
+UnorderedSet<uint32_t> get_resources_by_name_prefix(
     const std::vector<std::string>& prefixes,
     const std::map<std::string, std::vector<uint32_t>>& name_to_ids) {
-  std::unordered_set<uint32_t> found_resources;
+  UnorderedSet<uint32_t> found_resources;
   for (const auto& pair : name_to_ids) {
-    for (const auto& prefix : prefixes) {
+    for (const auto& prefix : UnorderedIterable(prefixes)) {
       if (boost::algorithm::starts_with(pair.first, prefix)) {
         found_resources.insert(pair.second.begin(), pair.second.end());
       }
@@ -66,13 +65,13 @@ std::unordered_set<uint32_t> get_resources_by_name_prefix(
   return found_resources;
 }
 
-std::unordered_set<uint32_t> find_code_resource_references(
+UnorderedSet<uint32_t> find_code_resource_references(
     DexStoresVector& stores,
     const resources::RClassReader& r_class_reader,
     const std::map<std::string, std::vector<uint32_t>>& name_to_ids,
     bool check_string_for_name,
     bool assume_id_inlined) {
-  std::unordered_set<uint32_t> ids_from_code;
+  UnorderedSet<uint32_t> ids_from_code;
   Scope scope = build_class_scope(stores);
   ConcurrentSet<uint32_t> potential_ids_from_code;
   ConcurrentSet<DexField*> accessed_sfields;
@@ -143,7 +142,7 @@ std::unordered_set<uint32_t> find_code_resource_references(
     }
   });
 
-  std::unordered_set<DexField*> array_fields;
+  UnorderedSet<DexField*> array_fields;
   for (auto* field : accessed_sfields) {
     auto is_r_field =
         resources::is_non_customized_r_class(type_class(field->get_class()));
@@ -167,32 +166,32 @@ std::unordered_set<uint32_t> find_code_resource_references(
 } // namespace
 
 namespace resources {
-std::unordered_set<uint32_t> ReachableResources::get_resource_roots(
+UnorderedSet<uint32_t> ReachableResources::get_resource_roots(
     DexStoresVector& stores) {
   // Roots from dex code.
   auto ids_from_code = find_code_resource_references(
       stores, *m_r_class_reader, m_res_table->name_to_ids,
       m_options.check_string_for_name, m_options.assume_id_inlined);
   const auto& sorted_res_ids = m_res_table->sorted_res_ids;
-  std::unordered_set<uint32_t> existing_resids;
+  UnorderedSet<uint32_t> existing_resids;
   for (size_t index = 0; index < sorted_res_ids.size(); ++index) {
     existing_resids.emplace(sorted_res_ids[index]);
   }
-  std20::erase_if(ids_from_code, [&](const auto& resid) {
+  unordered_erase_if(ids_from_code, [&](const auto& resid) {
     return existing_resids.find(resid) == existing_resids.end();
   });
   m_code_roots = ids_from_code.size();
 
   // Roots from AndroidManifest.xml files.
-  std::unordered_set<uint32_t> manifest_roots;
+  UnorderedSet<uint32_t> manifest_roots;
   const auto& xml_files = m_resources->find_all_xml_files();
-  for (const std::string& path : xml_files) {
+  for (const std::string& path : UnorderedIterable(xml_files)) {
     if (path.find("AndroidManifest.xml") == std::string::npos) {
       continue;
     }
     m_explored_xml_files.emplace(path);
     const auto& id_roots = m_resources->get_xml_reference_attributes(path);
-    manifest_roots.insert(id_roots.begin(), id_roots.end());
+    insert_unordered_iterable(manifest_roots, id_roots);
   }
   m_manifest_roots = manifest_roots.size();
 
@@ -209,27 +208,27 @@ std::unordered_set<uint32_t> ReachableResources::get_resource_roots(
   // Overlayable ids
   auto overlayable_ids = m_res_table->get_overlayable_id_roots();
 
-  std::unordered_set<uint32_t> result;
-  result.insert(manifest_roots.begin(), manifest_roots.end());
-  result.insert(ids_from_code.begin(), ids_from_code.end());
-  result.insert(assumed_reachable_roots.begin(), assumed_reachable_roots.end());
-  result.insert(disallowed_resouces.begin(), disallowed_resouces.end());
-  result.insert(overlayable_ids.begin(), overlayable_ids.end());
+  UnorderedSet<uint32_t> result;
+  insert_unordered_iterable(result, manifest_roots);
+  insert_unordered_iterable(result, ids_from_code);
+  insert_unordered_iterable(result, assumed_reachable_roots);
+  insert_unordered_iterable(result, disallowed_resouces);
+  insert_unordered_iterable(result, overlayable_ids);
   return result;
 }
 
-std::unordered_set<uint32_t> ReachableResources::compute_transitive_closure(
-    const std::unordered_set<uint32_t>& roots) {
-  std::unordered_set<uint32_t> nodes_visited;
-  std::unordered_set<std::string> potential_file_paths;
-  for (uint32_t root : roots) {
+UnorderedSet<uint32_t> ReachableResources::compute_transitive_closure(
+    const UnorderedSet<uint32_t>& roots) {
+  UnorderedSet<uint32_t> nodes_visited;
+  UnorderedSet<std::string> potential_file_paths;
+  for (uint32_t root : UnorderedIterable(roots)) {
     m_res_table->walk_references_for_resource(
         root, ResourcePathType::ZipPath, &nodes_visited, &potential_file_paths);
   }
 
-  std::unordered_set<std::string> next_xml_files;
+  UnorderedSet<std::string> next_xml_files;
   while (!potential_file_paths.empty()) {
-    for (auto& str : potential_file_paths) {
+    for (auto& str : UnorderedIterable(potential_file_paths)) {
       if (is_resource_xml(str)) {
         auto r_str = std::string(m_zip_dir).append("/").append(str);
         if (m_explored_xml_files.find(r_str) == m_explored_xml_files.end()) {
@@ -239,10 +238,11 @@ std::unordered_set<uint32_t> ReachableResources::compute_transitive_closure(
     }
 
     potential_file_paths.clear();
-    for (auto& str : next_xml_files) {
+    for (auto& str : UnorderedIterable(next_xml_files)) {
       m_explored_xml_files.emplace(str);
-      for (uint32_t attribute :
-           m_resources->get_xml_reference_attributes(str)) {
+      auto xml_reference_attributes =
+          m_resources->get_xml_reference_attributes(str);
+      for (uint32_t attribute : UnorderedIterable(xml_reference_attributes)) {
         m_res_table->walk_references_for_resource(
             attribute, ResourcePathType::ZipPath, &nodes_visited,
             &potential_file_paths);

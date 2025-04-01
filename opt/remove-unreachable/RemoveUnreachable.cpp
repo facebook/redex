@@ -296,7 +296,7 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
     remove_uninstantiables_stats.report(pm);
     pm.incr_metric("throws_inserted", (size_t)throws_inserted);
     pm.incr_metric("methods_with_code_changes", affected_methods.size());
-    std::unordered_set<DexMethodRef*> pure_methods;
+    UnorderedSet<DexMethodRef*> pure_methods;
     LocalDce::Stats dce_stats;
     std::mutex dce_stats_mutex;
     workqueue_run<DexMethod*>(

@@ -83,8 +83,7 @@ TEST_F(StringTest, equals_false) {
 )");
 
   cp::Transform::Config config;
-  std::unordered_set<DexMethodRef*> pure_methods{
-      method::java_lang_String_equals()};
+  UnorderedSet<DexMethodRef*> pure_methods{method::java_lang_String_equals()};
   config.pure_methods = &pure_methods;
   auto state = cp::StringAnalyzerState::get();
   do_const_prop(code.get(), StringAnalyzer(&state, nullptr), config);
@@ -118,8 +117,7 @@ TEST_F(StringTest, equals_true) {
 )");
 
   cp::Transform::Config config;
-  std::unordered_set<DexMethodRef*> pure_methods{
-      method::java_lang_String_equals()};
+  UnorderedSet<DexMethodRef*> pure_methods{method::java_lang_String_equals()};
   config.pure_methods = &pure_methods;
   auto state = cp::StringAnalyzerState::get();
   do_const_prop(code.get(), StringAnalyzer(&state, nullptr), config);
@@ -151,8 +149,7 @@ TEST_F(StringTest, hashCode) {
 )");
 
   cp::Transform::Config config;
-  std::unordered_set<DexMethodRef*> pure_methods{
-      method::java_lang_String_hashCode()};
+  UnorderedSet<DexMethodRef*> pure_methods{method::java_lang_String_hashCode()};
   config.pure_methods = &pure_methods;
   auto state = cp::StringAnalyzerState::get();
   do_const_prop(code.get(), StringAnalyzer(&state, nullptr), config);
@@ -190,8 +187,7 @@ TEST_F(StringTest, package_equals_false) {
 )");
 
   cp::Transform::Config config;
-  std::unordered_set<DexMethodRef*> pure_methods{
-      method::java_lang_String_equals()};
+  UnorderedSet<DexMethodRef*> pure_methods{method::java_lang_String_equals()};
   config.pure_methods = &pure_methods;
   auto state = cp::PackageNameState::get("com.facebook.redextest");
   do_const_prop(code.get(), PackageStringAnalyzer(&state, nullptr, nullptr),
@@ -233,8 +229,7 @@ TEST_F(StringTest, package_equals_true) {
 )");
 
   cp::Transform::Config config;
-  std::unordered_set<DexMethodRef*> pure_methods{
-      method::java_lang_String_equals()};
+  UnorderedSet<DexMethodRef*> pure_methods{method::java_lang_String_equals()};
   config.pure_methods = &pure_methods;
   auto package_state = cp::PackageNameState::get("com.facebook.redextest");
   auto string_state = cp::StringAnalyzerState::get();

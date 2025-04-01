@@ -8,7 +8,6 @@
 #include "StringBuilderOutliner.h"
 
 #include <unordered_map>
-#include <unordered_set>
 
 #include "CFGMutation.h"
 #include "ConcurrentContainers.h"
@@ -124,7 +123,7 @@ Outliner::Outliner(Config config)
 
 InstructionSet Outliner::find_tostring_instructions(
     const cfg::ControlFlowGraph& cfg) const {
-  std::unordered_set<const IRInstruction*> instructions;
+  UnorderedSet<const IRInstruction*> instructions;
   for (auto* block : cfg.blocks()) {
     for (auto& mie : InstructionIterable(block)) {
       auto* insn = mie.insn;

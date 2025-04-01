@@ -721,9 +721,9 @@ void MethodProfiles::process_unresolved_lines(bool baseline_profile_variant) {
         total_rows, unresolved_size());
 }
 
-std::unordered_set<dex_member_refs::MethodDescriptorTokens>
+UnorderedSet<dex_member_refs::MethodDescriptorTokens>
 MethodProfiles::get_unresolved_method_descriptor_tokens() const {
-  std::unordered_set<dex_member_refs::MethodDescriptorTokens> result;
+  UnorderedSet<dex_member_refs::MethodDescriptorTokens> result;
   for (auto& parsed_main : m_unresolved_lines) {
     always_assert(parsed_main.mdt);
     result.insert(*parsed_main.mdt);
@@ -973,7 +973,8 @@ double dexmethods_profiled_comparator::get_method_sort_num(
 double dexmethods_profiled_comparator::get_method_sort_num_override(
     const DexMethod* method) {
   const auto deobfname = method->get_deobfuscated_name_or_empty();
-  for (const std::string& substr : *m_allowlisted_substrings) {
+  for (const std::string& substr :
+       UnorderedIterable(*m_allowlisted_substrings)) {
     if (deobfname.find(substr) != std::string::npos) {
       return COLD_START_RANGE_BEGIN + RANGE_SIZE / 2;
     }

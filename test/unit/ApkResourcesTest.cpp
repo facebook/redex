@@ -7,7 +7,6 @@
 
 #include <boost/filesystem.hpp>
 #include <gtest/gtest.h>
-#include <unordered_set>
 
 #include "ApkResources.h"
 #include "Debug.h"
@@ -71,8 +70,8 @@ TEST(ApkResources, TestReadManifest) {
 TEST(ApkResources, ReadLayoutResolveRefs) {
   setup_resources_and_run(
       [&](const std::string& /* unused */, ApkResources* resources) {
-        std::unordered_set<std::string> layout_classes;
-        std::unordered_set<std::string> attrs_to_read;
+        UnorderedSet<std::string> layout_classes;
+        UnorderedSet<std::string> attrs_to_read;
         attrs_to_read.emplace(ONCLICK_ATTRIBUTE);
         std::unordered_multimap<std::string, std::string> attribute_values;
         resources->collect_layout_classes_and_attributes(

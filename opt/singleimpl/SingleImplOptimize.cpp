@@ -11,7 +11,6 @@
 #include <stdio.h>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 
 #include "CheckCastAnalysis.h"
 #include "CheckCastTransform.h"
@@ -142,7 +141,7 @@ void remove_interface(const DexType* intf, const SingleImplData& data) {
   set_public(cls);
   // removing interfaces may bring the same parent interface down to the
   // concrete class, so use a set to guarantee uniqueness
-  std::unordered_set<DexType*> new_intfs;
+  UnorderedSet<DexType*> new_intfs;
   auto collect_interfaces = [&](DexClass* impl) {
     auto intfs = impl->get_interfaces();
     for (auto type : *intfs) {
@@ -168,9 +167,7 @@ void remove_interface(const DexType* intf, const SingleImplData& data) {
   auto intf_cls = type_class(intf);
   collect_interfaces(intf_cls);
 
-  DexTypeList::ContainerType revisited_intfs{new_intfs.begin(),
-                                             new_intfs.end()};
-  std::sort(revisited_intfs.begin(), revisited_intfs.end(), compare_dextypes);
+  auto revisited_intfs = unordered_order(new_intfs, compare_dextypes);
   cls->set_interfaces(DexTypeList::make_type_list(std::move(revisited_intfs)));
   combine_class_annotations(cls, intf_cls);
   TRACE(INTF, 3, "(REMI)\t=> %s", SHOW(cls));
@@ -208,7 +205,7 @@ bool update_method_proto(const DexType* old_type_ref,
   return true;
 }
 
-using CheckCastSet = std::unordered_set<const IRInstruction*>;
+using CheckCastSet = UnorderedSet<const IRInstruction*>;
 
 struct OptimizationImpl {
   OptimizationImpl(std::unique_ptr<SingleImplAnalysis> analysis,
@@ -256,7 +253,7 @@ struct OptimizationImpl {
   // map for rewriting method references in annotation.
   NewMethods m_intf_meth_to_impl_meth;
   // list of optimized types
-  std::unordered_set<DexType*> optimized;
+  UnorderedSet<DexType*> optimized;
   const ClassHierarchy& ch;
   std::unordered_map<std::string_view, size_t> deobfuscated_name_counters;
   const api::AndroidSDK& m_api;
@@ -870,7 +867,7 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
       continue;
     }
     auto check_casts = do_optimize(intf, intf_data, method_mutations);
-    inserted_check_casts.insert(check_casts.begin(), check_casts.end());
+    insert_unordered_iterable(inserted_check_casts, check_casts);
     optimized.insert(intf);
   }
 

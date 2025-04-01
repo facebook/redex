@@ -12,6 +12,7 @@
 #include "Pass.h"
 
 #include "ClassHierarchy.h"
+#include "DeterministicContainers.h"
 
 struct ProguardMap;
 
@@ -181,14 +182,14 @@ class RenameClassesPassV2 : public Pass {
   std::vector<std::string> m_dont_rename_annotated;
   std::vector<std::string> m_dont_rename_types_with_reflection;
   std::vector<std::string> m_dont_rename_packages;
-  std::unordered_set<std::string> m_dont_rename_specific;
+  UnorderedSet<std::string> m_dont_rename_specific;
   std::string m_package_prefix;
 
   // Decisions we made in the eval_classes pass
   std::unordered_map<const DexClass*, DontRenameReason> m_dont_rename_reasons;
 
   // State for ensuring xml files are rewritten properly.
-  std::unordered_set<const DexString*> m_renamable_layout_classes;
+  UnorderedSet<const DexString*> m_renamable_layout_classes;
 
   std::string m_apk_dir;
 

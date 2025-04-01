@@ -30,7 +30,7 @@ class RemoveBuildersPass : public Pass {
 
  private:
   std::unordered_set<DexType*> m_builders;
-  std::unordered_set<DexType*> m_blocklist;
+  UnorderedSet<DexType*> m_blocklist;
   bool m_enable_buildee_constr_change;
 
   std::vector<DexType*> created_builders(DexMethod*);

@@ -67,7 +67,6 @@
 #include "IRInstruction.h"
 #include "Resolver.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Trace.h"
 #include "TypeInference.h"
 #include "Walkers.h"
@@ -298,9 +297,9 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
         read_location_counts[location]++;
       } else if (opcode::is_an_invoke(insn->opcode()) &&
                  shared_state->has_pure_method(insn)) {
-        for (auto l :
-             shared_state->get_read_locations_of_conditionally_pure_method(
-                 insn->get_method(), insn->opcode())) {
+        for (auto l : UnorderedIterable(
+                 shared_state->get_read_locations_of_conditionally_pure_method(
+                     insn->get_method(), insn->opcode()))) {
           read_location_counts[l]++;
         }
       }
@@ -341,7 +340,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
           mie.insn, nullptr /* exact_virtual_scope */, m_read_locations);
       if (!locations.count(
               CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER))) {
-        for (const auto& location : locations) {
+        for (const auto& location : UnorderedIterable(locations)) {
           written_location_counts[location]++;
         }
       }
@@ -487,7 +486,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
 
     if (!clobbered_locations.empty()) {
       value_id_t mask = (value_id_t)0;
-      for (const auto& l : clobbered_locations) {
+      for (const auto& l : UnorderedIterable(clobbered_locations)) {
         mask |= get_location_value_id_mask(l);
       }
 
@@ -645,7 +644,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
   // After analysis, the insns in this list should be refined to call its
   // unboxing implementor.
   mutable std::vector<IRInstruction*> m_unboxing_insns;
-  mutable std::unordered_set<IRInstruction*> m_unboxing_insns_set;
+  mutable UnorderedSet<IRInstruction*> m_unboxing_insns_set;
 
   CseUnorderedLocationSet get_clobbered_locations(
       const IRInstruction* insn, const CseEnvironment* current_state) const {
@@ -989,9 +988,9 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
   value_id_t get_invoke_value_id_mask(const IRValue& value) const {
     always_assert(opcode::is_an_invoke(value.opcode));
     value_id_t mask = 0;
-    for (auto l :
-         m_shared_state->get_read_locations_of_conditionally_pure_method(
-             value.method, value.opcode)) {
+    for (auto l : UnorderedIterable(
+             m_shared_state->get_read_locations_of_conditionally_pure_method(
+                 value.method, value.opcode))) {
       mask |= get_location_value_id_mask(l);
     }
     return mask;
@@ -1019,7 +1018,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
       m_tracked_locations;
   SharedState* m_shared_state;
   mutable std::unordered_map<IRValue, value_id_t, IRValueHasher> m_value_ids;
-  mutable std::unordered_set<value_id_t> m_pre_state_value_ids;
+  mutable UnorderedSet<value_id_t> m_pre_state_value_ids;
   mutable std::unordered_map<value_id_t, const IRInstruction*>
       m_positional_insns;
   mutable std::unordered_map<value_id_t, IRValue> m_proper_id_values;
@@ -1032,9 +1031,9 @@ namespace cse_impl {
 ////////////////////////////////////////////////////////////////////////////////
 
 SharedState::SharedState(
-    const std::unordered_set<DexMethodRef*>& pure_methods,
-    const std::unordered_set<const DexString*>& finalish_field_names,
-    const std::unordered_set<const DexField*>& finalish_fields)
+    const UnorderedSet<DexMethodRef*>& pure_methods,
+    const UnorderedSet<const DexString*>& finalish_field_names,
+    const UnorderedSet<const DexField*>& finalish_fields)
     : m_pure_methods(pure_methods),
       m_safe_methods(pure_methods),
       m_finalish_field_names(finalish_field_names),
@@ -1282,7 +1281,7 @@ void SharedState::init_scope(
     m_pure_methods.insert(const_cast<DexMethod*>(p.first));
   }
 
-  for (auto method_ref : m_safe_methods) {
+  for (auto method_ref : UnorderedIterable(m_safe_methods)) {
     auto method = method_ref->as_def();
     if (method) {
       m_safe_method_defs.insert(method);
@@ -1398,14 +1397,14 @@ CseUnorderedLocationSet SharedState::get_relevant_written_locations(
             if (it == m_method_written_locations.end()) {
               return false;
             }
-            written_locations.insert(it->second.begin(), it->second.end());
+            insert_unordered_iterable(written_locations, it->second);
             return true;
           })) {
     return general_memory_barrier_locations;
   }
 
   // Remove written locations that are not read
-  std20::erase_if(written_locations, [&read_locations](auto& l) {
+  unordered_erase_if(written_locations, [&read_locations](auto& l) {
     return !read_locations.count(l);
   });
 
@@ -1699,8 +1698,8 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
   std::unordered_map<size_t, std::pair<IROpcode, reg_t>> temps;
   // We also remember for which instructions we'll need an iterator, as we'll
   // want to insert something after them.
-  std::unordered_set<const IRInstruction*> iterator_insns;
-  std::unordered_set<const IRInstruction*> combined_earlier_insns;
+  UnorderedSet<const IRInstruction*> iterator_insns;
+  UnorderedSet<const IRInstruction*> combined_earlier_insns;
   for (const auto& f : m_forward) {
     iterator_insns.insert(f.insn);
     if (temps.count(f.earlier_insns_index)) {
@@ -1717,7 +1716,7 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
                                                 : m_cfg.allocate_temp();
     temps.emplace(f.earlier_insns_index, std::make_pair(opcode, temp_reg));
   }
-  for (auto earlier_insn : combined_earlier_insns) {
+  for (auto earlier_insn : UnorderedIterable(combined_earlier_insns)) {
     iterator_insns.insert(earlier_insn);
     if (earlier_insn->has_dest()) {
       m_stats.results_captured++;

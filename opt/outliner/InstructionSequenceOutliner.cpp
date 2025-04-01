@@ -3037,7 +3037,8 @@ size_t update_method_profiles(
   std::unordered_map<std::string_view,
                      std::vector<dex_member_refs::MethodDescriptorTokens>>
       unresolved_names;
-  for (auto& mdt : method_profiles.get_unresolved_method_descriptor_tokens()) {
+  auto mdts = method_profiles.get_unresolved_method_descriptor_tokens();
+  for (auto& mdt : UnorderedIterable(mdts)) {
     unresolved_names[mdt.name].push_back(mdt);
   }
   std::unordered_map<dex_member_refs::MethodDescriptorTokens,

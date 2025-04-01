@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "GlobalConfig.h"
 #include "PassManager.h"
@@ -19,7 +20,7 @@ struct ReachabilityOptions {
   bool assume_id_inlined{false};
   bool check_string_for_name{false};
   std::vector<std::string> assume_reachable_prefixes;
-  std::unordered_set<std::string> disallowed_types;
+  UnorderedSet<std::string> disallowed_types;
 };
 
 class ReachableResources {
@@ -36,13 +37,13 @@ class ReachableResources {
   // Establishes reachable entry points from the given classes,
   // AndroidManifest.xml files in the unpack dir, and IDs matching any
   // configured resource name prefixes.
-  std::unordered_set<uint32_t> get_resource_roots(DexStoresVector& stores);
-  std::unordered_set<uint32_t> compute_transitive_closure(
-      const std::unordered_set<uint32_t>& roots);
+  UnorderedSet<uint32_t> get_resource_roots(DexStoresVector& stores);
+  UnorderedSet<uint32_t> compute_transitive_closure(
+      const UnorderedSet<uint32_t>& roots);
 
   // During the computation of roots and traversals, visited xml files will be
   // tracked. Returns the state of what this object instance has explored.
-  std::unordered_set<std::string> explored_xml_files() {
+  UnorderedSet<std::string> explored_xml_files() {
     return m_explored_xml_files;
   }
 
@@ -63,7 +64,7 @@ class ReachableResources {
   std::unique_ptr<RClassReader> m_r_class_reader;
   // State variables for what has been processed, during all API calls to this
   // class.
-  std::unordered_set<std::string> m_explored_xml_files;
+  UnorderedSet<std::string> m_explored_xml_files;
   // Metrics
   size_t m_code_roots{0};
   size_t m_manifest_roots{0};

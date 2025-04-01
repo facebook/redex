@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "ShrinkerConfig.h"
 
@@ -71,8 +72,8 @@ struct InlinerConfig {
   UnfinalizePerfMode unfinalize_perf_mode{UnfinalizePerfMode::NOT_COLD};
 
   // We will populate the information to rstate of classes and methods.
-  std::unordered_set<DexType*> no_inline_annos;
-  std::unordered_set<DexType*> force_inline_annos;
+  UnorderedSet<DexType*> no_inline_annos;
+  UnorderedSet<DexType*> force_inline_annos;
   // Prefixes of classes not to inline from / into
   std::vector<std::string> blocklist;
   std::vector<std::string> caller_blocklist;

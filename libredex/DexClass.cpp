@@ -36,17 +36,21 @@
 #include <mutex>
 #include <unordered_set>
 
-#define INSTANTIATE(METHOD, TYPE)                        \
-  template void METHOD(std::vector<TYPE>&) const;        \
-  template void METHOD(std::unordered_set<TYPE>&) const; \
-  template void METHOD(std::vector<const TYPE>&) const;  \
-  template void METHOD(std::unordered_set<const TYPE>&) const;
+#define INSTANTIATE(METHOD, TYPE)                              \
+  template void METHOD(std::vector<TYPE>&) const;              \
+  template void METHOD(std::unordered_set<TYPE>&) const;       \
+  template void METHOD(UnorderedSet<TYPE>&) const;             \
+  template void METHOD(std::vector<const TYPE>&) const;        \
+  template void METHOD(std::unordered_set<const TYPE>&) const; \
+  template void METHOD(UnorderedSet<const TYPE>&) const;
 
-#define INSTANTIATE2(METHOD, TYPE, OTYPE)                       \
-  template void METHOD(std::vector<TYPE>&, OTYPE) const;        \
-  template void METHOD(std::unordered_set<TYPE>&, OTYPE) const; \
-  template void METHOD(std::vector<const TYPE>&, OTYPE) const;  \
-  template void METHOD(std::unordered_set<const TYPE>&, OTYPE) const;
+#define INSTANTIATE2(METHOD, TYPE, OTYPE)                             \
+  template void METHOD(std::vector<TYPE>&, OTYPE) const;              \
+  template void METHOD(std::unordered_set<TYPE>&, OTYPE) const;       \
+  template void METHOD(UnorderedSet<TYPE>&, OTYPE) const;             \
+  template void METHOD(std::vector<const TYPE>&, OTYPE) const;        \
+  template void METHOD(std::unordered_set<const TYPE>&, OTYPE) const; \
+  template void METHOD(UnorderedSet<const TYPE>&, OTYPE) const;
 
 namespace {
 
@@ -67,6 +71,15 @@ struct InsertionHelper<std::unordered_set<T>, T> {
   void append(std::unordered_set<T>& c, T t) { c.emplace(std::move(t)); }
   template <typename It>
   void append_all(std::unordered_set<T>& c, It first, It last) {
+    c.insert(first, last);
+  }
+};
+
+template <typename T>
+struct InsertionHelper<UnorderedSet<T>, T> {
+  void append(UnorderedSet<T>& c, T t) { c.emplace(std::move(t)); }
+  template <typename It>
+  void append_all(UnorderedSet<T>& c, It first, It last) {
     c.insert(first, last);
   }
 };

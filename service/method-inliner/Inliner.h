@@ -266,11 +266,11 @@ class MultiMethodInliner {
       const CalleeCallerInsns& true_virtual_callers = {},
       InlineForSpeed* inline_for_speed = nullptr,
       bool analyze_and_prune_inits = false,
-      const std::unordered_set<DexMethodRef*>& configured_pure_methods = {},
+      const UnorderedSet<DexMethodRef*>& configured_pure_methods = {},
       const api::AndroidSDK* min_sdk_api = nullptr,
       bool cross_dex_penalty = false,
-      const std::unordered_set<const DexString*>&
-          configured_finalish_field_names = {},
+      const UnorderedSet<const DexString*>& configured_finalish_field_names =
+          {},
       bool local_only = false,
       bool consider_hot_cold = false,
       InlinerCostConfig inliner_cost_config = DEFAULT_COST_CONFIG,

@@ -42,10 +42,9 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
 
   auto pure_methods = get_pure_methods();
   auto configured_pure_methods = conf.get_pure_methods();
-  pure_methods.insert(configured_pure_methods.begin(),
-                      configured_pure_methods.end());
+  insert_unordered_iterable(pure_methods, configured_pure_methods);
   auto immutable_getters = get_immutable_getters(scope);
-  pure_methods.insert(immutable_getters.begin(), immutable_getters.end());
+  insert_unordered_iterable(pure_methods, immutable_getters);
 
   ptrs::SummaryMap escape_summaries;
   if (m_external_escape_summaries_file) {

@@ -7,11 +7,10 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexUtil.h"
-
-#include <unordered_set>
 
 /**
  * Parses the default value of an annotation given the annotation and the
@@ -88,7 +87,7 @@ DexAnnotation* get_annotation(const DexMember* member, DexType* anno_type) {
 
 template <class DexMember>
 bool has_any_annotation(DexMember* member,
-                        const std::unordered_set<DexType*>& anno_types) {
+                        const UnorderedSet<DexType*>& anno_types) {
   const auto& annos = member->get_anno_set();
   if (annos == nullptr) {
     return false;

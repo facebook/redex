@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "Pass.h"
 
 using SwitchIndices = std::set<int>;
@@ -107,7 +108,7 @@ class SplitResourceTablesPass : public Pass {
 
  private:
   bool is_type_allowed(const std::string& type_name);
-  std::unordered_set<std::string> m_allowed_types;
+  UnorderedSet<std::string> m_allowed_types;
   std::string m_static_ids_file_path;
   std::string m_getidentifier_compat_method;
   std::string m_typename_compat_method;

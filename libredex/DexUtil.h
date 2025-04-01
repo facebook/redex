@@ -12,11 +12,11 @@
 #include <cctype>
 #include <functional>
 #include <string_view>
-#include <unordered_set>
 #include <vector>
 
 #include "ClassUtil.h"
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexStore.h"
 #include "IRInstruction.h"
@@ -33,9 +33,9 @@ const DexType* get_init_class_type_demand(const IRInstruction* insn);
  * Data structure to represent requested but unapplied visibility changes.
  */
 struct VisibilityChanges {
-  std::unordered_set<DexClass*> classes;
-  std::unordered_set<DexField*> fields;
-  std::unordered_set<DexMethod*> methods;
+  UnorderedSet<DexClass*> classes;
+  UnorderedSet<DexField*> fields;
+  UnorderedSet<DexMethod*> methods;
   void insert(const VisibilityChanges& other);
   void apply() const;
   bool empty() const;
@@ -87,7 +87,7 @@ void relocate_field(DexField* field, DexType* to_type);
  */
 bool gather_invoked_methods_that_prevent_relocation(
     const DexMethod* method,
-    std::unordered_set<DexMethodRef*>* methods_preventing_relocation = nullptr);
+    UnorderedSet<DexMethodRef*>* methods_preventing_relocation = nullptr);
 
 /**
  * Relocates the method only if
@@ -150,7 +150,7 @@ Scope build_class_scope(const DexStoresVector& stores);
 
 Scope build_class_scope_for_packages(
     const DexStoresVector& stores,
-    const std::unordered_set<std::string>& package_names);
+    const UnorderedSet<std::string>& package_names);
 
 /**
  * Posts the changes made to the Scope& object to the
@@ -159,7 +159,7 @@ Scope build_class_scope_for_packages(
  */
 template <class T>
 void post_dexen_changes(const Scope& v, T& dexen) {
-  std::unordered_set<DexClass*> clookup(v.begin(), v.end());
+  UnorderedSet<DexClass*> clookup(v.begin(), v.end());
   for (auto& classes : dexen) {
     classes.erase(
         std::remove_if(classes.begin(),
@@ -168,13 +168,13 @@ void post_dexen_changes(const Scope& v, T& dexen) {
         classes.end());
   }
   if (debug) {
-    std::unordered_set<DexClass*> dlookup;
+    UnorderedSet<DexClass*> dlookup;
     for (auto const& classes : dexen) {
       for (auto const& cls : classes) {
         dlookup.insert(cls);
       }
     }
-    for (auto const& cls : clookup) {
+    for (auto const& cls : UnorderedIterable(clookup)) {
       assert_log(dlookup.count(cls), "Can't add classes in post_dexen_changes");
     }
   }
@@ -218,7 +218,7 @@ bool has_anno(const T* t, const DexType* anno_type) {
 }
 
 template <typename T>
-bool has_anno(const T* t, const std::unordered_set<DexType*>& anno_types) {
+bool has_anno(const T* t, const UnorderedSet<DexType*>& anno_types) {
   if (t->get_anno_set() == nullptr) return false;
   for (const auto& anno : t->get_anno_set()->get_annotations()) {
     if (anno_types.count(anno->type())) {

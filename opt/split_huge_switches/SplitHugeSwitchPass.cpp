@@ -9,7 +9,6 @@
 
 #include <algorithm>
 #include <iostream>
-#include <unordered_set>
 
 #include <boost/optional.hpp>
 #include <boost/regex.hpp>
@@ -169,7 +168,7 @@ ParamChain find_param_chain(cfg::ControlFlowGraph& cfg,
   std::vector<IRInstruction*> val;
   val.push_back(cur->insn);
 
-  std::unordered_set<IRInstruction*> seen;
+  UnorderedSet<IRInstruction*> seen;
   seen.insert(cur->insn);
 
   for (;;) {
@@ -672,7 +671,7 @@ Stats run_split_dexes(DexStoresVector& stores,
                       const method_profiles::MethodProfiles& method_profiles,
                       size_t case_threshold,
                       size_t reserved_mrefs) {
-  std::unordered_set<DexType*> cset;
+  UnorderedSet<DexType*> cset;
   std::unordered_map<DexType*, std::vector<AnalysisData>> mmap;
   for (auto& data : methods) {
     auto t = data.m->get_class();
@@ -700,7 +699,7 @@ Stats run_split_dexes(DexStoresVector& stores,
         if (dex_candidate_types.empty()) {
           return;
         }
-        std::unordered_set<DexMethodRef*> method_refs;
+        UnorderedSet<DexMethodRef*> method_refs;
         for (auto cls : *dex) {
           cls->gather_methods(method_refs);
         }

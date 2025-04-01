@@ -57,12 +57,11 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
 
   auto pure_methods = /* Android framework */ get_pure_methods();
   auto configured_pure_methods = conf.get_pure_methods();
-  pure_methods.insert(configured_pure_methods.begin(),
-                      configured_pure_methods.end());
+  insert_unordered_iterable(pure_methods, configured_pure_methods);
   auto immutable_getters = get_immutable_getters(scope);
-  pure_methods.insert(immutable_getters.begin(), immutable_getters.end());
+  insert_unordered_iterable(pure_methods, immutable_getters);
 
-  std::unordered_set<const DexField*> finalish_fields;
+  UnorderedSet<const DexField*> finalish_fields;
   auto shared_state = SharedState(
       pure_methods, conf.get_finalish_field_names(), finalish_fields);
   method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =

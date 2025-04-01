@@ -21,8 +21,8 @@ ResourcesInliningPass::filter_inlinable_resources(
     ResourceTableFile* res_table,
     const UnorderedMap<uint32_t, resources::InlinableValue>&
         inlinable_resources,
-    const std::unordered_set<std::string>& resource_type_names,
-    const std::unordered_set<std::string>& resource_entry_names) {
+    const UnorderedSet<std::string>& resource_type_names,
+    const UnorderedSet<std::string>& resource_entry_names) {
   auto type_ids = res_table->get_types_by_name(resource_type_names);
 
   std::vector<std::string> type_names;
@@ -156,7 +156,7 @@ bool exists_possible_transformation(
     const cfg::ControlFlowGraph& cfg,
     const UnorderedMap<DexMethodRef*, std::tuple<uint8_t, uint8_t>>&
         value_method_refs,
-    const std::unordered_set<DexMethodRef*>& name_method_refs) {
+    const UnorderedSet<DexMethodRef*>& name_method_refs) {
   for (auto* block : cfg.blocks()) {
     for (auto& mie : InstructionIterable(block)) {
       auto insn = mie.insn;
@@ -185,8 +185,8 @@ MethodTransformsMap ResourcesInliningPass::find_transformations(
   DexMethodRef* getResourceName = DexMethod::get_method(
       "Landroid/content/res/Resources;.getResourceName:(I)Ljava/lang/"
       "String;");
-  std::unordered_set<DexMethodRef*> name_method_refs = {getResourceEntryName,
-                                                        getResourceName};
+  UnorderedSet<DexMethodRef*> name_method_refs = {getResourceEntryName,
+                                                  getResourceName};
 
   UnorderedMap<DexMethodRef*, std::tuple<uint8_t, uint8_t>> value_method_refs =
       generate_valid_method_refs();

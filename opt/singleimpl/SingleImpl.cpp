@@ -11,7 +11,6 @@
 #include <memory>
 #include <stdio.h>
 #include <string>
-#include <unordered_set>
 
 #include "ClassHierarchy.h"
 #include "Debug.h"

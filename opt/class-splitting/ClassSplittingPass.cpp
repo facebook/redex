@@ -67,10 +67,10 @@ void ClassSplittingPass::run_pass(DexStoresVector& stores,
   // InterDex pass run can reshuffle the split-off classes across dexes
   // properly, accounting for all the changes to refs from the beginning.
 
-  std::unordered_set<DexMethod*> sufficiently_popular_methods;
+  UnorderedSet<DexMethod*> sufficiently_popular_methods;
   // Methods that appear in the profiles and whose frequency does not exceed
   // the threashold.
-  std::unordered_set<DexMethod*> insufficiently_popular_methods;
+  UnorderedSet<DexMethod*> insufficiently_popular_methods;
 
   Scope scope = build_class_scope(stores);
   for (auto& p : method_profiles.all_interactions()) {
@@ -92,7 +92,7 @@ void ClassSplittingPass::run_pass(DexStoresVector& stores,
   ClassSplitter class_splitter(m_config, mgr, sufficiently_popular_methods,
                                insufficiently_popular_methods);
   class_splitter.configure(scope);
-  std::unordered_set<DexType*> coldstart_types;
+  UnorderedSet<DexType*> coldstart_types;
   std::vector<std::string> previously_relocated_types;
   for (const auto& str : conf.get_coldstart_classes()) {
     DexType* type = DexType::get_type(str);

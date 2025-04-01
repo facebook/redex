@@ -337,7 +337,7 @@ size_t get_arsc_file_size(const std::string& unpack_dir) {
 } // namespace
 
 bool SplitResourceTablesPass::is_type_allowed(const std::string& type_name) {
-  if (m_allowed_types.size() == 1 && *m_allowed_types.begin() == "*") {
+  if (m_allowed_types.size() == 1 && *unordered_any(m_allowed_types) == "*") {
     // magic token to enable all types
     return true;
   }
@@ -448,7 +448,7 @@ void SplitResourceTablesPass::run_pass(DexStoresVector& stores,
 
   // Fix xml files
   auto all_xml_files = resources->find_all_xml_files();
-  for (const auto& f : all_xml_files) {
+  for (const auto& f : UnorderedIterable(all_xml_files)) {
     TRACE(SPLIT_RES, 4, "Remapping XML: %s", f.c_str());
     resources->remap_xml_reference_attributes(f, old_to_remapped_ids);
   }

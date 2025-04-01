@@ -11,6 +11,7 @@
 #include <string_view>
 
 #include "BaselineProfileConfig.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "Timer.h"
 #include "Trace.h"
@@ -171,7 +172,7 @@ class MethodProfiles {
   // Try to resolve previously unresolved lines
   void process_unresolved_lines();
 
-  std::unordered_set<dex_member_refs::MethodDescriptorTokens>
+  UnorderedSet<dex_member_refs::MethodDescriptorTokens>
   get_unresolved_method_descriptor_tokens() const;
 
   void resolve_method_descriptor_tokens(
@@ -265,7 +266,7 @@ class MethodProfiles {
 // `std::ref` of a local instance.
 class dexmethods_profiled_comparator {
   const MethodProfiles* m_method_profiles;
-  const std::unordered_set<std::string>* m_allowlisted_substrings;
+  const UnorderedSet<std::string>* m_allowlisted_substrings;
   std::unordered_map<DexMethod*, double> m_cache;
   double m_min_appear_percent;
   double m_second_min_appear_percent;

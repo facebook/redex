@@ -127,10 +127,10 @@ MultiMethodInliner::MultiMethodInliner(
     const CalleeCallerInsns& true_virtual_callers,
     InlineForSpeed* inline_for_speed,
     bool analyze_and_prune_inits,
-    const std::unordered_set<DexMethodRef*>& configured_pure_methods,
+    const UnorderedSet<DexMethodRef*>& configured_pure_methods,
     const api::AndroidSDK* min_sdk_api,
     bool cross_dex_penalty,
-    const std::unordered_set<const DexString*>& configured_finalish_field_names,
+    const UnorderedSet<const DexString*>& configured_finalish_field_names,
     bool local_only,
     bool consider_hot_cold,
     InlinerCostConfig inliner_cost_config,
@@ -2507,7 +2507,7 @@ void MultiMethodInliner::visibility_changes_apply_and_record_make_static(
   visibility_changes.apply();
   // any method that was just made public and isn't virtual or a constructor or
   // static must be made static
-  for (auto method : visibility_changes.methods) {
+  for (auto method : UnorderedIterable(visibility_changes.methods)) {
     always_assert(is_public(method));
     if (!method->is_virtual() && !method::is_init(method) &&
         !is_static(method)) {

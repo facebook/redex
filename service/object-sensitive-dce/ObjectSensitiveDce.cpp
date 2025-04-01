@@ -34,13 +34,12 @@ namespace {
 
 class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
  public:
-  explicit CallGraphStrategy(
-      const method_override_graph::Graph& graph,
-      const Scope& scope,
-      const std::unordered_set<DexMethodRef*>& pure_methods,
-      const ptrs::SummaryMap& escape_summaries,
-      const side_effects::SummaryMap& effect_summaries,
-      uint32_t big_override_threshold)
+  explicit CallGraphStrategy(const method_override_graph::Graph& graph,
+                             const Scope& scope,
+                             const UnorderedSet<DexMethodRef*>& pure_methods,
+                             const ptrs::SummaryMap& escape_summaries,
+                             const side_effects::SummaryMap& effect_summaries,
+                             uint32_t big_override_threshold)
       : call_graph::MultipleCalleeStrategy(
             graph, scope, big_override_threshold),
         m_pure_methods(pure_methods),
@@ -158,7 +157,7 @@ class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
     return method == method::java_lang_Object_ctor();
   }
 
-  const std::unordered_set<DexMethodRef*>& m_pure_methods;
+  const UnorderedSet<DexMethodRef*>& m_pure_methods;
   const ptrs::SummaryMap& m_escape_summaries;
   const side_effects::SummaryMap& m_effect_summaries;
   call_graph::RootAndDynamic m_root_and_dynamic;

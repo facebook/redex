@@ -9,7 +9,6 @@
 
 #include <boost/format.hpp>
 #include <json/value.h>
-#include <unordered_set>
 
 #include "ConfigFiles.h"
 #include "DexClass.h"
@@ -19,7 +18,6 @@
 #include "RClass.h"
 #include "RedexResources.h"
 #include "Show.h"
-#include "StlUtil.h"
 
 namespace opt_res {
 ReachableResourcesPlugin::ReachableResourcesPlugin(const std::string& name)
@@ -50,13 +48,13 @@ namespace {
 /*
  * Delete unvisited res ids from res table.
  */
-std::unordered_set<uint32_t> delete_unvisited_resources(
+UnorderedSet<uint32_t> delete_unvisited_resources(
     const std::string& out_file,
     const std::map<uint32_t, std::string>& id_to_name,
     const std::vector<std::string>& all_types,
-    const std::unordered_set<uint32_t>& nodes_visited,
+    const UnorderedSet<uint32_t>& nodes_visited,
     ResourceTableFile* table,
-    std::unordered_set<std::string>* out_files_to_delete) {
+    UnorderedSet<std::string>* out_files_to_delete) {
   std::fstream out(out_file, std::ios_base::app);
   bool write_to_file = true;
   if (!out.is_open()) {
@@ -66,8 +64,8 @@ std::unordered_set<uint32_t> delete_unvisited_resources(
   } else {
     TRACE(OPTRES, 1, "Writing removed resources to %s", out_file.c_str());
   }
-  std::unordered_set<uint32_t> deleted_resources;
-  std::unordered_set<std::string> files_to_keep;
+  UnorderedSet<uint32_t> deleted_resources;
+  UnorderedSet<std::string> files_to_keep;
   for (auto& p : id_to_name) {
     if (nodes_visited.find(p.first) == nodes_visited.end()) {
       // Collect any res/ files we can now delete. This will influence
@@ -97,7 +95,7 @@ std::unordered_set<uint32_t> delete_unvisited_resources(
       }
     }
   }
-  std20::erase_if(*out_files_to_delete, [&](const auto& filename) {
+  unordered_erase_if(*out_files_to_delete, [&](const auto& filename) {
     return files_to_keep.find(filename) != files_to_keep.end();
   });
   return deleted_resources;
@@ -106,7 +104,7 @@ std::unordered_set<uint32_t> delete_unvisited_resources(
 std::map<uint32_t, uint32_t> build_remapping(
     const std::vector<uint32_t>& sorted_res_ids,
     const std::map<uint32_t, std::string>& id_to_name,
-    const std::unordered_set<uint32_t>& deleted_resources,
+    const UnorderedSet<uint32_t>& deleted_resources,
     const std::string& out_file) {
   std::map<uint32_t, uint32_t> kept_to_remapped_ids;
   uint32_t current_type = 0;
@@ -194,7 +192,7 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
                                           res_table->name_to_ids);
     TRACE(OPTRES, 2, "Plugin %s retaining %zu root(s)", p->get_name().c_str(),
           ids.size());
-    initial_reachable_ids.insert(ids.begin(), ids.end());
+    insert_unordered_iterable(initial_reachable_ids, ids);
   }
   TRACE(OPTRES, 2, "Root resource count: %zu", initial_reachable_ids.size());
 
@@ -208,10 +206,10 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
   // 5. Remove any unvisited resources. The removal of the unused
   //    files happens in step 11 (if configured) and cleanup of unused strings
   //    will happen from main.cpp (if configured by global options).
-  std::unordered_set<std::string> files_to_delete;
+  UnorderedSet<std::string> files_to_delete;
   std::vector<std::string> type_names;
   res_table->get_type_names(&type_names);
-  std::unordered_set<uint32_t> deleted_resources = delete_unvisited_resources(
+  UnorderedSet<uint32_t> deleted_resources = delete_unvisited_resources(
       conf.metafile("redex-removed-resources.txt"), res_table->id_to_name,
       type_names, nodes_visited, res_table, &files_to_delete);
   report_metric(OPTRES, "num_deleted_resources", deleted_resources.size(), mgr);
@@ -228,7 +226,7 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
     // 7. Renumber resources in R$ classes and explored_xml_files
     r_class_writer.remap_resource_class_scalars(stores, kept_to_remapped_ids);
 
-    for (const std::string& path : explored_xml_files) {
+    for (const std::string& path : UnorderedIterable(explored_xml_files)) {
       resources->remap_xml_reference_attributes(path, kept_to_remapped_ids);
     }
 

@@ -1201,7 +1201,7 @@ TEST_F(MethodInlineTest, boxed_boolean) {
   inliner_config.shrinker.compute_pure_methods = false;
   check_method->get_code()->build_cfg();
   foo_main->get_code()->build_cfg();
-  std::unordered_set<DexMethodRef*> pure_methods{
+  UnorderedSet<DexMethodRef*> pure_methods{
       DexMethod::get_method("Ljava/lang/Boolean;.booleanValue:()Z")};
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
@@ -1290,7 +1290,7 @@ TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
   inliner_config.throws_inline = true;
   check_method->get_code()->build_cfg();
   foo_main->get_code()->build_cfg();
-  std::unordered_set<DexMethodRef*> pure_methods{
+  UnorderedSet<DexMethodRef*> pure_methods{
       DexMethod::get_method("Ljava/lang/Boolean;.booleanValue:()Z")};
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
@@ -2178,7 +2178,7 @@ TEST_F(MethodInlineTest, max_cost_for_constant_propagation) {
   check_method->get_code()->build_cfg();
   small_method->get_code()->build_cfg();
   foo_main->get_code()->build_cfg();
-  std::unordered_set<DexMethodRef*> pure_methods{
+  UnorderedSet<DexMethodRef*> pure_methods{
       DexMethod::get_method("Ljava/lang/Boolean;.booleanValue:()Z")};
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);

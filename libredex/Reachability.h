@@ -96,8 +96,8 @@ struct ReachableObjectHash {
 
 struct IgnoreSets {
   IgnoreSets() = default;
-  std::unordered_set<const DexType*> string_literals;
-  std::unordered_set<const DexType*> string_literal_annos;
+  UnorderedSet<const DexType*> string_literals;
+  UnorderedSet<const DexType*> string_literal_annos;
   bool keep_class_in_string{true};
 };
 
