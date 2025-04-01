@@ -70,6 +70,8 @@ class SwitchEquivFinder {
   // check on the same key.
   enum DuplicateCaseStrategy { NOT_ALLOWED, EXECUTION_ORDER };
 
+  using BlockPredicate = std::function<bool(cfg::Block*)>;
+
   SwitchEquivFinder(
       cfg::ControlFlowGraph* cfg,
       const cfg::InstructionIterator& root_branch,
@@ -78,7 +80,8 @@ class SwitchEquivFinder {
       std::shared_ptr<constant_propagation::intraprocedural::FixpointIterator>
           fixpoint_iterator = {},
       DuplicateCaseStrategy duplicates_strategy = NOT_ALLOWED,
-      std::shared_ptr<DefUseBlocks> def_use_blocks = {});
+      std::shared_ptr<DefUseBlocks> def_use_blocks = {},
+      BlockPredicate may_be_nonleaf = [](auto*) { return true; });
 
   SwitchEquivFinder() = delete;
   SwitchEquivFinder(const SwitchEquivFinder&) = delete;
@@ -124,7 +127,7 @@ class SwitchEquivFinder {
   std::vector<cfg::Block*> visited_blocks() const;
 
  private:
-  std::vector<cfg::Edge*> find_leaves();
+  std::vector<cfg::Edge*> find_leaves(BlockPredicate may_be_nonleaf);
   void normalize_extra_loads(
       const std::unordered_map<cfg::Block*, bool>& block_to_is_leaf);
   bool move_edges(

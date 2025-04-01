@@ -71,6 +71,8 @@ bool is_valid_load_for_nonleaf(IROpcode op) {
 
 // Return true if this block is a leaf.
 // Any block that is not part of the if/switch tree is considered a leaf.
+// TODO(T219644020): This function does to identify all blocks that must be
+// leafs.
 bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, reg_t reg) {
   // non-leaf nodes only have GOTO and BRANCH outgoing edges
   if (cfg->get_succ_edge_if(b, [](const cfg::Edge* e) {
@@ -204,7 +206,8 @@ SwitchEquivFinder::SwitchEquivFinder(
     std::shared_ptr<constant_propagation::intraprocedural::FixpointIterator>
         fixpoint_iterator,
     DuplicateCaseStrategy duplicates_strategy,
-    std::shared_ptr<DefUseBlocks> def_use_blocks)
+    std::shared_ptr<DefUseBlocks> def_use_blocks,
+    BlockPredicate may_be_nonleaf)
     : m_cfg(cfg),
       m_root_branch(root_branch),
       m_switching_reg(switching_reg),
@@ -220,7 +223,7 @@ SwitchEquivFinder::SwitchEquivFinder(
     always_assert(has_src(insn, m_switching_reg));
   }
 
-  const auto& leaves = find_leaves();
+  const auto& leaves = find_leaves(std::move(may_be_nonleaf));
   if (leaves.empty()) {
     m_extra_loads.clear();
     m_success = false;
@@ -236,7 +239,8 @@ SwitchEquivFinder::SwitchEquivFinder(
 // While we're searching for the leaf blocks, keep track of any constant loads
 // that occur between the root branch and the leaf block. Put those in
 // `m_extra_loads`.
-std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
+std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves(
+    BlockPredicate may_be_nonleaf) {
   std::vector<cfg::Edge*> leaves;
 
   // Traverse the tree in an depth first order so that the extra loads are
@@ -247,7 +251,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
     if (search != block_to_is_leaf.end()) {
       return search->second;
     }
-    auto ret = is_leaf(m_cfg, b, m_switching_reg);
+    auto ret = is_leaf(m_cfg, b, m_switching_reg) || !may_be_nonleaf(b);
     block_to_is_leaf[b] = ret;
     return ret;
   };
