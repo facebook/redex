@@ -482,6 +482,48 @@ TEST_F(SwitchEquivFinderTest, goto_default) {
   code->clear_cfg();
 }
 
+TEST_F(SwitchEquivFinderTest, goto_default_stops_at_unsupported) {
+  setup();
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (const v1 1)
+      (const v2 2)
+
+      (if-eq v0 v1 :case1)
+
+      (if-le v0 v2 :inequality)
+      (return-void)
+
+      (:inequality)
+      (return-void)
+
+      (:case1)
+      (return-void)
+    )
+)");
+
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  SwitchEquivFinder finder(
+      &cfg, get_first_branch(cfg), 0, SwitchEquivFinder::NO_LEAF_DUPLICATION,
+      nullptr, SwitchEquivFinder::DuplicateCaseStrategy::EXECUTION_ORDER, {},
+      [&](cfg::Block* block) {
+        auto last_insn = block->get_last_insn();
+        return last_insn != block->end() &&
+               last_insn->insn->opcode() != OPCODE_IF_LE;
+      });
+  ASSERT_TRUE(finder.success());
+  ASSERT_EQ(2, finder.key_to_case().size());
+  auto default_case = finder.default_case();
+  ASSERT_TRUE(default_case);
+  auto first_insn = default_case.value()->get_first_insn();
+  ASSERT_NE(default_case.value()->end(), first_insn);
+  ASSERT_EQ(OPCODE_IF_LE, first_insn->insn->opcode());
+  code->clear_cfg();
+}
+
 TEST_F(SwitchEquivFinderTest, divergent_leaf_entry_state) {
   setup();
 
@@ -1266,8 +1308,8 @@ TEST_F(SwitchEquivFinderTest,
   // This munges the cfg into a supported form; finder would fail otherwise.
   SwitchEquivEditor::normalize_sled_blocks(&cfg, DEFAULT_LEAF_DUP_THRESHOLD);
 
-  SwitchEquivFinder finder(
-      &cfg, get_first_branch(cfg), 0, DEFAULT_LEAF_DUP_THRESHOLD);
+  SwitchEquivFinder finder(&cfg, get_first_branch(cfg), 0,
+                           DEFAULT_LEAF_DUP_THRESHOLD);
   EXPECT_TRUE(finder.success());
   ASSERT_TRUE(finder.are_keys_uniform(SwitchEquivFinder::KeyKind::INT));
   auto& key_to_case = finder.key_to_case();
