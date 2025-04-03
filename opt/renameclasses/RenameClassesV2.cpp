@@ -131,7 +131,7 @@ bool is_allowed_layout_class(
 std::unordered_set<std::string>
 RenameClassesPassV2::build_dont_rename_class_name_literals(Scope& scope) {
   using namespace boost::algorithm;
-  std::unordered_set<const DexString*> all_strings;
+  UnorderedSet<const DexString*> all_strings;
   for (auto clazz : scope) {
     clazz->gather_strings(all_strings);
   }
@@ -140,7 +140,7 @@ RenameClassesPassV2::build_dont_rename_class_name_literals(Scope& scope) {
       "((org)|(com)|(android(x|\\.support)))\\."
       "([a-zA-Z][a-zA-Z\\d_$]*\\.)*"
       "[a-zA-Z][a-zA-Z\\d_$]*"};
-  for (auto dex_str : all_strings) {
+  for (auto dex_str : UnorderedIterable(all_strings)) {
     const std::string_view s = dex_str->str();
     if (!ends_with(s, ".java") &&
         boost::regex_match(dex_str->c_str(), external_name_regex)) {
@@ -394,12 +394,12 @@ static void sanity_check(const Scope& scope,
   for (auto& s : external_names_vec) {
     external_names.insert(s);
   }
-  std::unordered_set<const DexString*> all_strings;
+  UnorderedSet<const DexString*> all_strings;
   for (auto clazz : scope) {
     clazz->gather_strings(all_strings);
   }
   int sketchy_strings = 0;
-  for (auto s : all_strings) {
+  for (auto s : UnorderedIterable(all_strings)) {
     if (external_names.find(s->str()) != external_names.end() ||
         name_mapping.get_new_type_name(s)) {
       TRACE(RENAME, 2, "Found %s in string pool after renaming", s->c_str());

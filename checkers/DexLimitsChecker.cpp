@@ -26,18 +26,16 @@ namespace redex_properties {
 namespace {
 
 using dex_data_map_t =
-    std::unordered_map<std::string, std::vector<DexLimitsChecker::DexData>>;
+    UnorderedMap<std::string, std::vector<DexLimitsChecker::DexData>>;
 
 template <typename T>
-std::unordered_set<T> extract(const std::unordered_map<T, size_t>& input) {
-  // No insert iterator for unordered_set, have to go through vector.
+UnorderedSet<T> extract(const UnorderedMap<T, size_t>& input) {
+  // No insert iterator for UnorderedSet, have to go through vector.
   std::vector<T> tmp{};
   tmp.reserve(input.size());
-  std::transform(input.begin(),
-                 input.end(),
-                 std::back_inserter(tmp),
-                 [](auto& p) { return p.first; });
-  return std::unordered_set<T>(tmp.begin(), tmp.end());
+  unordered_transform(
+      input, std::back_inserter(tmp), [](auto& p) { return p.first; });
+  return UnorderedSet<T>(tmp.begin(), tmp.end());
 }
 
 dex_data_map_t create_data(
@@ -112,7 +110,7 @@ std::string print_new_entries(const dex_data_map_t& old_map,
         [&](const auto& old_data, const auto& new_data, const char* prefix) {
           // Won't be sorted, but sorting would be a template pain.
           bool have_changes = false;
-          for (auto* entry : new_data) {
+          for (auto* entry : UnorderedIterable(new_data)) {
             if (old_data.count(entry) != 0) {
               continue;
             }

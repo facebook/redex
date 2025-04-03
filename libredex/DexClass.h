@@ -311,8 +311,7 @@ class DexFieldRef {
   template <typename C>
   void gather_types_shallow(C& ltype) const;
   void gather_strings_shallow(std::vector<const DexString*>& lstring) const;
-  void gather_strings_shallow(
-      std::unordered_set<const DexString*>& lstring) const;
+  void gather_strings_shallow(UnorderedSet<const DexString*>& lstring) const;
 
   void change(const DexFieldSpec& ref, bool rename_on_collision = false);
 
@@ -436,7 +435,7 @@ class DexField : public DexFieldRef {
   template <typename C>
   void gather_types(C& ltype) const;
   void gather_strings(std::vector<const DexString*>& lstring) const;
-  void gather_strings(std::unordered_set<const DexString*>& lstring) const;
+  void gather_strings(UnorderedSet<const DexString*>& lstring) const;
   template <typename C>
   void gather_fields(C& lfield) const;
   template <typename C>
@@ -597,7 +596,7 @@ class DexProto {
   template <typename C>
   void gather_types(C& ltype) const;
   void gather_strings(std::vector<const DexString*>& lstring) const;
-  void gather_strings(std::unordered_set<const DexString*>& lstring) const;
+  void gather_strings(UnorderedSet<const DexString*>& lstring) const;
 };
 
 /* Non-optimizing DexSpec compliant ordering */
@@ -852,8 +851,7 @@ class DexMethodRef {
   template <typename C>
   void gather_types_shallow(C& ltype) const;
   void gather_strings_shallow(std::vector<const DexString*>& lstring) const;
-  void gather_strings_shallow(
-      std::unordered_set<const DexString*>& lstring) const;
+  void gather_strings_shallow(UnorderedSet<const DexString*>& lstring) const;
 
   void change(const DexMethodSpec& ref, bool rename_on_collision);
 
@@ -1100,7 +1098,7 @@ class DexMethod : public DexMethodRef {
   void gather_methods_from_annos(C& lmethod) const;
   void gather_strings(std::vector<const DexString*>& lstring,
                       bool exclude_loads = false) const;
-  void gather_strings(std::unordered_set<const DexString*>& lstring,
+  void gather_strings(UnorderedSet<const DexString*>& lstring,
                       bool exclude_loads = false) const;
   template <typename C>
   void gather_callsites(C& lcallsite) const;
@@ -1348,7 +1346,7 @@ class DexClass {
   void gather_types(C& ltype) const;
   void gather_strings(std::vector<const DexString*>& lstring,
                       bool exclude_loads = false) const;
-  void gather_strings(std::unordered_set<const DexString*>& lstring,
+  void gather_strings(UnorderedSet<const DexString*>& lstring,
                       bool exclude_loads = false) const;
   template <typename C>
   void gather_fields(C& lfield) const;

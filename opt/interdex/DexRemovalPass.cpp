@@ -91,14 +91,13 @@ void DexRemovalPass::sanity_check(Scope& original_scope,
   auto& root_store_new = stores.at(0);
   auto& root_dexen_new = root_store_new.get_dexen();
 
-  std::unordered_set<DexClass*> original_scope_set(original_scope.begin(),
-                                                   original_scope.end());
+  UnorderedSet<DexClass*> original_scope_set(original_scope.begin(),
+                                             original_scope.end());
   auto new_scope = build_class_scope(stores);
-  std::unordered_set<DexClass*> new_scope_set(new_scope.begin(),
-                                              new_scope.end());
+  UnorderedSet<DexClass*> new_scope_set(new_scope.begin(), new_scope.end());
   always_assert(original_scope_set.size() ==
                 new_scope_set.size() + removed_num_dexes);
-  for (auto cls : new_scope_set) {
+  for (auto cls : UnorderedIterable(new_scope_set)) {
     always_assert(original_scope_set.count(cls));
   }
 
@@ -151,7 +150,7 @@ void DexRemovalPass::run_pass(DexStoresVector& stores,
     TRACE(IDEXR, 1, "current number of dex is %zu", root_dexen.size());
 
     ReshuffleConfig config;
-    const std::unordered_set<size_t> dynamically_dead_dexes;
+    const UnorderedSet<size_t> dynamically_dead_dexes;
     InterDexReshuffleImpl impl(conf, mgr, config, original_scope, root_dexen,
                                dynamically_dead_dexes);
     if (!impl.compute_dex_removal_plan()) {

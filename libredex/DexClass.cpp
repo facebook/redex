@@ -1761,8 +1761,7 @@ void DexProto::gather_strings(std::vector<const DexString*>& lstring) const {
     c_append(lstring, m_shorty);
   }
 }
-void DexProto::gather_strings(
-    std::unordered_set<const DexString*>& lstring) const {
+void DexProto::gather_strings(UnorderedSet<const DexString*>& lstring) const {
   if (m_shorty) {
     c_append(lstring, m_shorty);
   }
@@ -1879,7 +1878,7 @@ void DexClass::gather_strings(std::vector<const DexString*>& lstring,
                               bool exclude_loads) const {
   gather_strings_internal(lstring, exclude_loads);
 }
-void DexClass::gather_strings(std::unordered_set<const DexString*>& lstring,
+void DexClass::gather_strings(UnorderedSet<const DexString*>& lstring,
                               bool exclude_loads) const {
   gather_strings_internal(lstring, exclude_loads);
 }
@@ -2013,7 +2012,7 @@ void DexFieldRef::gather_strings_shallow(
   c_append(lstring, m_spec.name);
 }
 void DexFieldRef::gather_strings_shallow(
-    std::unordered_set<const DexString*>& lstring) const {
+    UnorderedSet<const DexString*>& lstring) const {
   c_append(lstring, m_spec.name);
 }
 
@@ -2036,8 +2035,7 @@ void DexField::gather_strings_internal(C& lstring) const {
 void DexField::gather_strings(std::vector<const DexString*>& lstring) const {
   gather_strings_internal(lstring);
 }
-void DexField::gather_strings(
-    std::unordered_set<const DexString*>& lstring) const {
+void DexField::gather_strings(UnorderedSet<const DexString*>& lstring) const {
   gather_strings_internal(lstring);
 }
 
@@ -2129,7 +2127,7 @@ void DexMethod::gather_strings(std::vector<const DexString*>& lstring,
                                bool exclude_loads) const {
   gather_strings_internal(lstring, exclude_loads);
 }
-void DexMethod::gather_strings(std::unordered_set<const DexString*>& lstring,
+void DexMethod::gather_strings(UnorderedSet<const DexString*>& lstring,
                                bool exclude_loads) const {
   gather_strings_internal(lstring, exclude_loads);
 }
@@ -2205,7 +2203,7 @@ void DexMethodRef::gather_strings_shallow(
   m_spec.proto->gather_strings(lstring);
 }
 void DexMethodRef::gather_strings_shallow(
-    std::unordered_set<const DexString*>& lstring) const {
+    UnorderedSet<const DexString*>& lstring) const {
   lstring.insert(lstring.end(), m_spec.name);
   m_spec.proto->gather_strings(lstring);
 }
@@ -2294,12 +2292,12 @@ void gather_components(std::vector<const DexString*>& lstring,
                        const DexClasses& classes,
                        bool exclude_loads) {
   // Gather references reachable from each class.
-  std::unordered_set<const DexString*> strings;
-  std::unordered_set<DexType*> types;
-  std::unordered_set<DexFieldRef*> fields;
-  std::unordered_set<DexMethodRef*> methods;
-  std::unordered_set<DexCallSite*> callsites;
-  std::unordered_set<DexMethodHandle*> methodhandles;
+  UnorderedSet<const DexString*> strings;
+  UnorderedSet<DexType*> types;
+  UnorderedSet<DexFieldRef*> fields;
+  UnorderedSet<DexMethodRef*> methods;
+  UnorderedSet<DexCallSite*> callsites;
+  UnorderedSet<DexMethodHandle*> methodhandles;
   // Inside a lambda to ensure only visibility of the sets.
   [&classes, &exclude_loads, &strings, &types, &fields, &methods, &callsites,
    &methodhandles]() {
@@ -2313,29 +2311,28 @@ void gather_components(std::vector<const DexString*>& lstring,
     }
 
     // Gather types and strings needed for field and method refs.
-    for (auto meth : methods) {
+    for (auto meth : UnorderedIterable(methods)) {
       meth->gather_types_shallow(types);
       meth->gather_strings_shallow(strings);
     }
 
-    for (auto field : fields) {
+    for (auto field : UnorderedIterable(fields)) {
       field->gather_types_shallow(types);
       field->gather_strings_shallow(strings);
     }
 
     // Gather strings needed for each type.
-    for (auto type : types) {
+    for (auto type : UnorderedIterable(types)) {
       if (type) strings.insert(type->get_name());
     }
   }();
 
-  lstring.insert(lstring.end(), strings.begin(), strings.end());
-  ltype.insert(ltype.end(), types.begin(), types.end());
-  lfield.insert(lfield.end(), fields.begin(), fields.end());
-  lmethod.insert(lmethod.end(), methods.begin(), methods.end());
-  lcallsite.insert(lcallsite.end(), callsites.begin(), callsites.end());
-  lmethodhandle.insert(lmethodhandle.end(), methodhandles.begin(),
-                       methodhandles.end());
+  insert_unordered_iterable(lstring, lstring.end(), strings);
+  insert_unordered_iterable(ltype, ltype.end(), types);
+  insert_unordered_iterable(lfield, lfield.end(), fields);
+  insert_unordered_iterable(lmethod, lmethod.end(), methods);
+  insert_unordered_iterable(lcallsite, lcallsite.end(), callsites);
+  insert_unordered_iterable(lmethodhandle, lmethodhandle.end(), methodhandles);
 
   // This retains pre-set computation behavior.
   sort_unique(lstring);

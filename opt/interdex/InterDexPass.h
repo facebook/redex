@@ -8,6 +8,7 @@
 #pragma once
 
 #include "BaselineProfileConfig.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexStructure.h"
 #include "InterDex.h"
@@ -93,7 +94,7 @@ class InterDexPass : public Pass {
     return m_reorder_dynamically_dead_classes;
   }
 
-  const std::unordered_set<size_t>& get_dynamically_dead_dexes() const {
+  const UnorderedSet<size_t>& get_dynamically_dead_dexes() const {
     return m_dynamically_dead_dexes;
   }
 
@@ -114,7 +115,7 @@ class InterDexPass : public Pass {
       m_minimize_cross_dex_refs_config;
   bool m_expect_order_list;
   bool m_reorder_dynamically_dead_classes;
-  std::unordered_set<size_t> m_dynamically_dead_dexes;
+  UnorderedSet<size_t> m_dynamically_dead_dexes;
 
   std::vector<std::string> m_methods_for_canary_clinit_reference;
   bool m_transitively_close_interdex_order{false};

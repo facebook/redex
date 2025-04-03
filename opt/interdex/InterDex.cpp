@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <cinttypes>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 #include "CppUtil.h"
@@ -54,7 +53,7 @@ constexpr const char* START_FORMAT = "_Start;";
 
 static DexInfo EMPTY_DEX_INFO;
 
-std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
+UnorderedSet<DexClass*> find_unrefenced_coldstart_classes(
     const Scope& scope,
     const std::vector<DexType*>& interdex_types,
     bool static_prune_classes,
@@ -62,10 +61,10 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
   int old_no_ref = -1;
   int new_no_ref = 0;
 
-  std::unordered_set<DexType*> coldstart_classes(interdex_types.begin(),
-                                                 interdex_types.end());
-  std::unordered_set<DexType*> cold_cold_references;
-  std::unordered_set<DexClass*> unreferenced_classes;
+  UnorderedSet<DexType*> coldstart_classes(interdex_types.begin(),
+                                           interdex_types.end());
+  UnorderedSet<DexType*> cold_cold_references;
+  UnorderedSet<DexClass*> unreferenced_classes;
   Scope input_scope = scope;
 
   // Don't do analysis if we're not doing pruning.
@@ -121,7 +120,7 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
     }
 
     Scope output_scope;
-    for (auto& cls : coldstart_classes) {
+    for (auto& cls : UnorderedIterable(coldstart_classes)) {
       if (can_rename(type_class(cls)) && cold_cold_references.count(cls) == 0) {
         new_no_ref++;
         unreferenced_classes.insert(type_class(cls));
@@ -452,10 +451,10 @@ InterDex::EmitResult InterDex::emit_class(
 void InterDex::emit_primary_dex(
     const DexClasses& primary_dex,
     const std::vector<DexType*>& interdex_order,
-    const std::unordered_set<DexClass*>& unreferenced_classes) {
+    const UnorderedSet<DexClass*>& unreferenced_classes) {
 
-  std::unordered_set<DexClass*> primary_dex_set(primary_dex.begin(),
-                                                primary_dex.end());
+  UnorderedSet<DexClass*> primary_dex_set(primary_dex.begin(),
+                                          primary_dex.end());
 
   DexInfo primary_dex_info;
   primary_dex_info.primary = true;
@@ -516,7 +515,7 @@ void InterDex::emit_primary_dex(
 void InterDex::emit_interdex_classes(
     DexInfo& dex_info,
     const std::vector<DexType*>& interdex_types,
-    const std::unordered_set<DexClass*>& unreferenced_classes,
+    const UnorderedSet<DexClass*>& unreferenced_classes,
     DexClass** canary_cls) {
   if (interdex_types.empty()) {
     TRACE(IDEX, 2, "No interdex classes passed.");
@@ -745,9 +744,9 @@ void InterDex::load_interdex_types() {
       get_extra_classes_per_interdex_group(m_scope, m_is_root_store);
   size_t curr_interdex_group = 0;
 
-  std::unordered_set<DexClass*> classes(m_scope.begin(), m_scope.end());
+  UnorderedSet<DexClass*> classes(m_scope.begin(), m_scope.end());
 
-  std::unordered_set<DexType*> all_set{};
+  UnorderedSet<DexType*> all_set{};
 
   if (m_transitively_close_interdex_order && !m_force_single_dex) {
     for (auto* cls : m_dexen[0]) {
@@ -755,8 +754,8 @@ void InterDex::load_interdex_types() {
     }
   }
 
-  std::unordered_set<DexType*> moved_or_double{};
-  std::unordered_set<DexType*> transitive_added{};
+  UnorderedSet<DexType*> moved_or_double{};
+  UnorderedSet<DexType*> transitive_added{};
 
   for (const auto& entry : interdexorder) {
     DexType* type = DexType::get_type(entry);
@@ -879,8 +878,8 @@ void InterDex::load_interdex_types() {
   }
 
   if (m_transitively_close_interdex_order) {
-    std::unordered_set<DexType*> transitive_moved;
-    for (auto* t : moved_or_double) {
+    UnorderedSet<DexType*> transitive_moved;
+    for (auto* t : UnorderedIterable(moved_or_double)) {
       if (transitive_added.count(t) != 0) {
         transitive_moved.insert(t);
         transitive_added.erase(t);
@@ -1620,7 +1619,7 @@ void InterDex::initialize_baseline_profile_classes() {
     return;
   }
 
-  m_baseline_profile_classes = std::unordered_set<DexType*>();
+  m_baseline_profile_classes = UnorderedSet<DexType*>();
 
   // If the 20% cold start set from the betamap is included in the baseline
   // profile, read and insert  all classes in the betamap up until the 20% cold
