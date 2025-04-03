@@ -448,7 +448,6 @@ void ArtProfileWriterPass::bind_config() {
   bind("never_inline_estimate", false, m_never_inline_estimate);
   bind("never_inline_attach_annotations", false,
        m_never_inline_attach_annotations);
-  bind("legacy_mode", false, m_legacy_mode);
   bind("never_compile_callcount_threshold", -1,
        m_never_compile_callcount_threshold);
   bind("never_compile_perf_threshold", -1, m_never_compile_perf_threshold);
@@ -509,86 +508,11 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
 
   std::unordered_set<const DexMethodRef*> method_refs_without_def;
   const auto& method_profiles = conf.get_method_profiles();
-  auto get_legacy_baseline_profile =
-      [&]() -> std::tuple<
-                baseline_profiles::BaselineProfile,
-                UnorderedMap<std::string, baseline_profiles::BaselineProfile>> {
-    UnorderedMap<std::string, baseline_profiles::BaselineProfile>
-        baseline_profiles;
-    baseline_profiles::BaselineProfile res;
-    for (auto& interaction_id : m_perf_config.interactions) {
-      bool startup = interaction_id == "ColdStart";
-      const auto& method_stats = method_profiles.method_stats(interaction_id);
-      for (auto&& [method_ref, stat] : UnorderedIterable(method_stats)) {
-        auto method = method_ref->as_def();
-        if (method == nullptr) {
-          method_refs_without_def.insert(method_ref);
-          continue;
-        }
-        // for startup interaction, we can include it into baseline profile
-        // as non hot method if the method appear100 is above nonhot_threshold
-        if (stat.appear_percent >=
-                (startup ? m_perf_config.coldstart_appear100_nonhot_threshold
-                         : m_perf_config.appear100_threshold) &&
-            stat.call_count >= m_perf_config.call_count_threshold) {
-          auto& mf = res.methods[method];
-          mf.hot = startup ? stat.appear_percent >=
-                                 m_perf_config.coldstart_appear100_threshold
-                           : true;
-          if (startup) {
-            // consistent with buck python config in the post-process baseline
-            // profile generator, which is set both flags true for ColdStart
-            // methods
-            mf.startup = true;
-            // if startup method is not hot, we do not set its post_startup flag
-            // the method still has a change to get it set if it appears in
-            // other interactions' hot list. Remember, ART only uses this flag
-            // to guide dexlayout decision, so we don't have to be pedantic to
-            // assume it never gets exectued post startup
-            mf.post_startup = mf.hot;
-          } else {
-            mf.post_startup = true;
-          }
-        }
-      }
-    }
-    auto& dexen = stores.front().get_dexen();
-    int32_t min_sdk = mgr.get_redex_options().min_sdk;
-    mgr.incr_metric("min_sdk", min_sdk);
-    auto end = min_sdk >= 21 ? dexen.size() : 1;
-    for (size_t dex_idx = 0; dex_idx < end; dex_idx++) {
-      auto& dex = dexen.at(dex_idx);
-      for (auto* cls : dex) {
-        bool should_include_class = false;
-        for (auto* method : cls->get_all_methods()) {
-          auto it = res.methods.find(method);
-          if (it == res.methods.end()) {
-            continue;
-          }
-          // hot method's class should be included.
-          // In addition, if we include non-hot startup method, we also need to
-          // include its class.
-          if (it->second.hot ||
-              (it->second.startup && !it->second.post_startup)) {
-            should_include_class = true;
-          }
-        }
-        if (should_include_class) {
-          res.classes.insert(cls);
-        }
-      }
-    }
-    baseline_profiles[baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME] =
-        res;
-    return {res, baseline_profiles};
-  };
 
-  auto baseline_profiles_tuple = m_legacy_mode
-                                     ? get_legacy_baseline_profile()
-                                     : baseline_profiles::get_baseline_profiles(
-                                           conf.get_baseline_profile_configs(),
-                                           method_profiles,
-                                           &method_refs_without_def);
+  auto baseline_profiles_tuple = baseline_profiles::get_baseline_profiles(
+      conf.get_baseline_profile_configs(),
+      method_profiles,
+      &method_refs_without_def);
   auto baseline_profiles = std::get<1>(baseline_profiles_tuple);
   auto manual_profile = std::get<0>(baseline_profiles_tuple);
   for (const auto& [config_name, baseline_profile_config] :
