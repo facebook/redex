@@ -300,7 +300,7 @@ const MethodSummary* resolve_invoke_method_summary(
 }
 
 Analyzer::Analyzer(const mog::Graph& method_override_graph,
-                   const std::unordered_set<DexClass*>& excluded_classes,
+                   const UnorderedSet<DexClass*>& excluded_classes,
                    const MethodSummaries& method_summaries,
                    DexMethodRef* incomplete_marker_method,
                    DexMethod* method,
@@ -469,7 +469,7 @@ MethodSummaries compute_method_summaries(
     const ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>&
         dependencies,
     const mog::Graph& method_override_graph,
-    const std::unordered_set<DexClass*>& excluded_classes,
+    const UnorderedSet<DexClass*>& excluded_classes,
     size_t* analysis_iterations,
     CalleesCache* callees_cache,
     MethodSummaryCache* method_summary_cache) {

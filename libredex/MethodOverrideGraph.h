@@ -151,7 +151,7 @@ bool any_overridden_methods(
     const std::function<bool(const DexMethod*)>& f = [](auto*) { return true; },
     bool include_interfaces = false);
 
-std::unordered_set<DexClass*> get_classes_with_overridden_finalize(
+UnorderedSet<DexClass*> get_classes_with_overridden_finalize(
     const Graph& method_override_graph, const ClassHierarchy& class_hierarchy);
 
 } // namespace method_override_graph

@@ -182,7 +182,7 @@ void SummaryBuilder::analyze_instruction_effects(
       const auto& callee_summary = m_invoke_to_summary_cmap.at(insn);
       summary->effects |= callee_summary.effects;
       summary->may_read_external |= callee_summary.may_read_external;
-      for (auto idx : callee_summary.modified_params) {
+      for (auto idx : UnorderedIterable(callee_summary.modified_params)) {
         classify_heap_write(env, insn->src(idx), summary);
       }
     } else {
@@ -278,7 +278,7 @@ Summary analyze_method(const init_classes::InitClassesWithSideEffects&
           summary.effects);
     if (!summary.modified_params.empty()) {
       TRACE_NO_LINE(OSDCE, 3, "Modified params: ");
-      for (auto idx : summary.modified_params) {
+      for (auto idx : UnorderedIterable(summary.modified_params)) {
         TRACE_NO_LINE(OSDCE, 3, "%u ", idx);
       }
       TRACE(OSDCE, 3, "");
@@ -347,7 +347,7 @@ s_expr to_s_expr(const Summary& summary) {
   s_exprs.emplace_back(std::to_string(summary.effects));
   std::vector<s_expr> mod_param_s_exprs;
   mod_param_s_exprs.reserve(summary.modified_params.size());
-  for (auto idx : summary.modified_params) {
+  for (auto idx : UnorderedIterable(summary.modified_params)) {
     mod_param_s_exprs.emplace_back(idx);
   }
   s_exprs.emplace_back(mod_param_s_exprs);
@@ -357,11 +357,9 @@ s_expr to_s_expr(const Summary& summary) {
 std::ostream& operator<<(std::ostream& o, const Summary& summary) {
   o << "Effects: " << summary.effects << ", ";
   o << "Modified parameters: ";
-  std::vector<param_idx_t> modified_params(summary.modified_params.begin(),
-                                           summary.modified_params.end());
-  std::sort(modified_params.begin(), modified_params.end());
+  auto modified_params = unordered_order(summary.modified_params);
   bool first{true};
-  for (auto p_idx : summary.modified_params) {
+  for (auto p_idx : UnorderedIterable(modified_params)) {
     if (!first) {
       o << ", ";
     }
@@ -386,8 +384,7 @@ Summary Summary::from_s_expr(const s_expr& expr) {
 
 void Summary::join_with(const Summary& other) {
   effects |= other.effects;
-  modified_params.insert(other.modified_params.begin(),
-                         other.modified_params.end());
+  insert_unordered_iterable(modified_params, other.modified_params);
   if (other.may_read_external) {
     may_read_external = true;
   }

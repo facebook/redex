@@ -41,7 +41,7 @@ void print(std::ostream& output,
 // construct an unordered map here.
 template <typename V>
 size_t read(std::istream& input,
-            std::unordered_map<const DexMethodRef*, V>* map,
+            UnorderedMap<const DexMethodRef*, V>* map,
             bool no_load_external = true) {
   sparta::s_expr_istream s_expr_input(input);
   size_t load_count{0};

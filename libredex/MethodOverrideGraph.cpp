@@ -589,9 +589,9 @@ bool any_overridden_methods(const Graph& graph,
       include_interfaces);
 }
 
-std::unordered_set<DexClass*> get_classes_with_overridden_finalize(
+UnorderedSet<DexClass*> get_classes_with_overridden_finalize(
     const Graph& method_override_graph, const ClassHierarchy& class_hierarchy) {
-  std::unordered_set<DexClass*> res;
+  UnorderedSet<DexClass*> res;
   for (auto* overriding_method : method_override_graph::get_overriding_methods(
            method_override_graph, method::java_lang_Object_finalize())) {
     auto type = overriding_method->get_class();

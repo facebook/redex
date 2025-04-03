@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "DexUtil.h"
 #include "HierarchyUtil.h"
 #include "InitClassPruner.h"
@@ -17,12 +18,10 @@
 #include "SideEffectSummary.h"
 #include "SummarySerialization.h"
 
-#include <unordered_map>
-
 class ObjectSensitiveDce {
  public:
   struct Stats {
-    std::unordered_map<uint16_t, size_t> invokes_with_summaries;
+    UnorderedMap<uint16_t, size_t> invokes_with_summaries;
     init_classes::Stats init_class_stats;
     size_t external_escape_summaries{0};
     size_t external_side_effect_summaries{0};

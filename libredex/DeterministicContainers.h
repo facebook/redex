@@ -794,6 +794,22 @@ std::vector<std::pair<Key, Value>> unordered_order(Collection& collection,
 }
 
 template <class Collection,
+          class Value =
+              typename std::remove_const<typename Collection::value_type>::type,
+          std::enable_if_t<std::is_same_v<typename Collection::key_type,
+                                          typename Collection::value_type>,
+                           bool> = true>
+std::vector<Value> unordered_order(Collection& collection) {
+  std::vector<Value> result;
+  result.reserve(collection.size());
+  for (auto& entry : UnorderedIterable(collection)) {
+    result.emplace_back(entry);
+  }
+  std::sort(result.begin(), result.end());
+  return result;
+}
+
+template <class Collection,
           class Compare,
           class Value =
               typename std::remove_const<typename Collection::value_type>::type,

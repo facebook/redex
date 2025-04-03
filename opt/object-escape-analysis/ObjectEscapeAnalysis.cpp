@@ -102,7 +102,7 @@ ConcurrentMap<DexType*, InlineAnchorsOfType> compute_inline_anchors(
     const Scope& scope,
     const method_override_graph::Graph& method_override_graph,
     const MethodSummaries& method_summaries,
-    const std::unordered_set<DexClass*>& excluded_classes,
+    const UnorderedSet<DexClass*>& excluded_classes,
     CalleesCache* callees_cache,
     MethodSummaryCache* method_summary_cache) {
   Timer t("compute_inline_anchors");
@@ -828,7 +828,7 @@ class RootMethodReducer {
   DexMethodRef* m_incomplete_marker_method;
   MultiMethodInliner& m_inliner;
   const MethodSummaries& m_method_summaries;
-  const std::unordered_set<DexClass*>& m_excluded_classes;
+  const UnorderedSet<DexClass*>& m_excluded_classes;
   Stats* m_stats;
   bool m_is_init_or_clinit;
   DexMethod* m_method;
@@ -849,7 +849,7 @@ class RootMethodReducer {
       DexMethodRef* incomplete_marker_method,
       MultiMethodInliner& inliner,
       const MethodSummaries& method_summaries,
-      const std::unordered_set<DexClass*>& excluded_classes,
+      const UnorderedSet<DexClass*>& excluded_classes,
       Stats* stats,
       bool is_init_or_clinit,
       DexMethod* method,
@@ -1533,7 +1533,7 @@ UnorderedMap<DexMethod*, std::vector<ReducedMethod>> compute_reduced_methods(
     ExpandableMethodParams& expandable_method_params,
     MultiMethodInliner& inliner,
     const MethodSummaries& method_summaries,
-    const std::unordered_set<DexClass*>& excluded_classes,
+    const UnorderedSet<DexClass*>& excluded_classes,
     const UnorderedMap<DexMethod*, InlinableTypes>& root_methods,
     const UnorderedMap<DexType*, size_t>& inlinable_type_index,
     std::unordered_set<DexType*>* irreducible_types,
@@ -1898,7 +1898,7 @@ void reduce(const Scope& scope,
             const method_override_graph::Graph& method_override_graph,
             MultiMethodInliner& inliner,
             const MethodSummaries& method_summaries,
-            const std::unordered_set<DexClass*>& excluded_classes,
+            const UnorderedSet<DexClass*>& excluded_classes,
             const UnorderedMap<DexMethod*, InlinableTypes>& root_methods,
             Stats* stats,
             std::unordered_set<DexMethod*>* inlinable_methods_kept,

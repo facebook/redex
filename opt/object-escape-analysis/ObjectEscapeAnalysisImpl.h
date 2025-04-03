@@ -139,7 +139,7 @@ const MethodSummary* resolve_invoke_method_summary(
 class Analyzer final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
   explicit Analyzer(const method_override_graph::Graph& method_override_graph,
-                    const std::unordered_set<DexClass*>& excluded_classes,
+                    const UnorderedSet<DexClass*>& excluded_classes,
                     const MethodSummaries& method_summaries,
                     DexMethodRef* incomplete_marker_method,
                     DexMethod* method,
@@ -161,7 +161,7 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<Environment> {
 
  private:
   const method_override_graph::Graph& m_method_override_graph;
-  const std::unordered_set<DexClass*>& m_excluded_classes;
+  const UnorderedSet<DexClass*>& m_excluded_classes;
   const MethodSummaries& m_method_summaries;
   DexMethodRef* m_incomplete_marker_method;
   DexMethod* m_method;
@@ -181,7 +181,7 @@ MethodSummaries compute_method_summaries(
     const ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>&
         dependencies,
     const method_override_graph::Graph& method_override_graph,
-    const std::unordered_set<DexClass*>& excluded_classes,
+    const UnorderedSet<DexClass*>& excluded_classes,
     size_t* analysis_iterations,
     CalleesCache* callees_cache,
     MethodSummaryCache* method_summary_cache);

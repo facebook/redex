@@ -21,10 +21,10 @@ namespace {
  * Record the environment before the execution of every instruction. We need
  * this data during the backwards used vars analysis.
  */
-std::unordered_map<const IRInstruction*, ptrs::Environment>
+UnorderedMap<const IRInstruction*, ptrs::Environment>
 gen_instruction_environment_map(const cfg::ControlFlowGraph& cfg,
                                 const ptrs::FixpointIterator& fp_iter) {
-  std::unordered_map<const IRInstruction*, ptrs::Environment> result;
+  UnorderedMap<const IRInstruction*, ptrs::Environment> result;
   for (auto* block : cfg.blocks()) {
     auto env = fp_iter.get_entry_state_at(block);
     for (auto& mie : InstructionIterable(block)) {
@@ -203,10 +203,9 @@ bool FixpointIterator::is_required(const IRInstruction* insn,
       return true;
     }
     const auto& mod_params = summary.modified_params;
-    return std::any_of(
-        mod_params.begin(), mod_params.end(), [&](param_idx_t idx) {
-          return is_used_or_escaping_write(env, used_vars, insn->src(idx));
-        });
+    return unordered_any_of(mod_params, [&](param_idx_t idx) {
+      return is_used_or_escaping_write(env, used_vars, insn->src(idx));
+    });
   }
   default: {
     if (insn->has_dest()) {

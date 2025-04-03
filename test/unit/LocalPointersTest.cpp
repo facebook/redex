@@ -183,7 +183,8 @@ TEST_F(LocalPointersTest, generateEscapeSummary) {
 
   auto summary = ptrs::get_escape_summary(fp_iter, *code);
   EXPECT_EQ(summary.returned_parameters, ptrs::ParamSet({0}));
-  EXPECT_THAT(summary.escaping_parameters, UnorderedElementsAre(1));
+  EXPECT_THAT(unordered_unsafe_unwrap(summary.escaping_parameters),
+              UnorderedElementsAre(1));
 
   // Test (de)serialization.
   std::stringstream ss;
@@ -195,7 +196,8 @@ TEST_F(LocalPointersTest, generateEscapeSummary) {
   s_expr_in >> summary_s_expr;
   auto summary_copy = ptrs::EscapeSummary::from_s_expr(summary_s_expr);
   EXPECT_EQ(summary_copy.returned_parameters, ptrs::ParamSet({0}));
-  EXPECT_THAT(summary_copy.escaping_parameters, UnorderedElementsAre(1));
+  EXPECT_THAT(unordered_unsafe_unwrap(summary_copy.escaping_parameters),
+              UnorderedElementsAre(1));
 }
 
 TEST_F(LocalPointersTest, generateEscapeSummary2) {
@@ -215,7 +217,8 @@ TEST_F(LocalPointersTest, generateEscapeSummary2) {
 
   auto summary = ptrs::get_escape_summary(fp_iter, *code);
   EXPECT_EQ(summary.returned_parameters, ptrs::ParamSet::top());
-  EXPECT_THAT(summary.escaping_parameters, UnorderedElementsAre());
+  EXPECT_THAT(unordered_unsafe_unwrap(summary.escaping_parameters),
+              UnorderedElementsAre());
 
   // Test (de)serialization.
   std::stringstream ss;
@@ -227,7 +230,8 @@ TEST_F(LocalPointersTest, generateEscapeSummary2) {
   s_expr_in >> summary_s_expr;
   auto summary_copy = ptrs::EscapeSummary::from_s_expr(summary_s_expr);
   EXPECT_EQ(summary_copy.returned_parameters, ptrs::ParamSet::top());
-  EXPECT_THAT(summary_copy.escaping_parameters, UnorderedElementsAre());
+  EXPECT_THAT(unordered_unsafe_unwrap(summary_copy.escaping_parameters),
+              UnorderedElementsAre());
 }
 
 TEST_F(LocalPointersTest, collectExitingPointersWithThrow) {
@@ -254,7 +258,8 @@ TEST_F(LocalPointersTest, collectExitingPointersWithThrow) {
 
   auto summary = ptrs::get_escape_summary(fp_iter, *code);
   EXPECT_EQ(summary.returned_parameters, ptrs::ParamSet::bottom());
-  EXPECT_THAT(summary.escaping_parameters, UnorderedElementsAre(0));
+  EXPECT_THAT(unordered_unsafe_unwrap(summary.escaping_parameters),
+              UnorderedElementsAre(0));
 }
 
 /*
@@ -295,8 +300,9 @@ TEST_F(LocalPointersTest, returnFreshValue) {
     fresh_return_summary = ptrs::get_escape_summary(fp_iter, *code);
     EXPECT_EQ(fresh_return_summary.returned_parameters,
               ptrs::ParamSet(ptrs::FRESH_RETURN));
-    EXPECT_THAT(fresh_return_summary.escaping_parameters,
-                UnorderedElementsAre());
+    EXPECT_THAT(
+        unordered_unsafe_unwrap(fresh_return_summary.escaping_parameters),
+        UnorderedElementsAre());
   }
 
   // Now check that the caller handles the summary correctly.
@@ -361,8 +367,9 @@ TEST_F(LocalPointersTest, returnEscapedValue) {
 
     fresh_return_summary = ptrs::get_escape_summary(fp_iter, *code);
     EXPECT_EQ(fresh_return_summary.returned_parameters, ptrs::ParamSet::top());
-    EXPECT_THAT(fresh_return_summary.escaping_parameters,
-                UnorderedElementsAre());
+    EXPECT_THAT(
+        unordered_unsafe_unwrap(fresh_return_summary.escaping_parameters),
+        UnorderedElementsAre());
   }
 
   // Now check that the caller handles the summary correctly.
