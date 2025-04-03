@@ -8,7 +8,6 @@
 #pragma once
 
 #include <stdint.h>
-#include <unordered_set>
 
 #include "BaselineProfileConfig.h"
 #include "DeterministicContainers.h"
@@ -25,7 +24,7 @@ struct MethodFlags {
 
 struct BaselineProfile {
   UnorderedMap<const DexMethod*, MethodFlags> methods;
-  std::unordered_set<const DexClass*> classes;
+  UnorderedSet<const DexClass*> classes;
 };
 
 // Returns a tuple of BaselineProfile and UnorderedMap<std::string,
@@ -37,11 +36,11 @@ std::tuple<BaselineProfile, UnorderedMap<std::string, BaselineProfile>>
 get_baseline_profiles(
     const UnorderedMap<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
-    std::unordered_set<const DexMethodRef*>* method_refs_without_def = nullptr);
+    UnorderedSet<const DexMethodRef*>* method_refs_without_def = nullptr);
 
 BaselineProfile get_default_baseline_profile(
     const UnorderedMap<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
-    std::unordered_set<const DexMethodRef*>* method_refs_without_def = nullptr);
+    UnorderedSet<const DexMethodRef*>* method_refs_without_def = nullptr);
 
 } // namespace baseline_profiles

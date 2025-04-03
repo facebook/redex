@@ -506,7 +506,7 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     m_reserved_refs_handle = std::nullopt;
   }
 
-  std::unordered_set<const DexMethodRef*> method_refs_without_def;
+  UnorderedSet<const DexMethodRef*> method_refs_without_def;
   const auto& method_profiles = conf.get_method_profiles();
 
   auto baseline_profiles_tuple = baseline_profiles::get_baseline_profiles(
