@@ -58,7 +58,7 @@ class InitClassFields {
             cls->gather_fields(dex_referenced_sfields);
             m_class_dex_indices.emplace(cls->get_type(), p.first);
           }
-          std20::erase_if(dex_referenced_sfields, [](DexFieldRef* f) {
+          unordered_erase_if(dex_referenced_sfields, [](DexFieldRef* f) {
             return !f->is_def() || !is_static(f->as_def());
           });
         },
@@ -93,7 +93,7 @@ class InitClassFields {
     std::vector<std::pair<DexType*, size_t>> res;
     for (auto& p : UnorderedIterable(m_init_class_fields)) {
       size_t count = 0;
-      for (auto& q : p.second) {
+      for (auto& q : UnorderedIterable(p.second)) {
         count += q.second.count;
       }
       res.emplace_back(p.first, count);
@@ -105,19 +105,17 @@ class InitClassFields {
   }
 
   std::vector<DexField*> get_all() {
-    std::unordered_set<DexField*> set;
+    UnorderedSet<DexField*> set;
     for (auto& p : UnorderedIterable(m_init_class_fields)) {
-      for (auto& q : p.second) {
+      for (auto& q : UnorderedIterable(p.second)) {
         set.insert(q.second.field);
       }
     }
-    std::vector<DexField*> res(set.begin(), set.end());
-    std::sort(res.begin(), res.end(), compare_dexfields);
-    return res;
+    return unordered_order(set, compare_dexfields);
   }
 
  private:
-  std::vector<std::unordered_set<DexFieldRef*>> m_dex_referenced_sfields;
+  std::vector<UnorderedSet<DexFieldRef*>> m_dex_referenced_sfields;
   InsertOnlyConcurrentMap<DexType*, size_t> m_class_dex_indices;
   const DexString* m_field_name = DexString::make_string(redex_field_name);
   mutable std::atomic<size_t> m_fields_added{0};
@@ -125,7 +123,7 @@ class InitClassFields {
     DexField* field{nullptr};
     size_t count{0};
   };
-  mutable ConcurrentMap<DexType*, std::unordered_map<size_t, InitClassField>>
+  mutable ConcurrentMap<DexType*, UnorderedMap<size_t, InitClassField>>
       m_init_class_fields;
 
   DexField* get(DexType* type, size_t dex_idx) const {
@@ -212,7 +210,7 @@ class InitClassFields {
 void make_public(const std::vector<DexField*>& fields,
                  size_t* fields_made_public,
                  size_t* types_made_public) {
-  std::unordered_set<DexType*> visited;
+  UnorderedSet<DexType*> visited;
   std::function<void(DexType*)> visit;
   visit = [&](DexType* type) {
     auto cls = type_class(type);
@@ -299,7 +297,7 @@ std::string get_init_class_message(DexMethod* method,
   std::ostringstream oss;
   auto pos = cfg_it.cfg().get_dbg_pos(cfg_it);
   if (pos) {
-    std::unordered_set<DexPosition*> visited;
+    UnorderedSet<DexPosition*> visited;
     for (; pos; pos = pos->parent) {
       if (!visited.insert(pos).second) {
         oss << "Cyclic";
