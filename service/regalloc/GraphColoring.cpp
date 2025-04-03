@@ -297,7 +297,7 @@ std::string show(const interference::Graph& ig) {
 std::string show(const RegisterTransform& reg_transform) {
   std::ostringstream ss;
   ss << "size: " << reg_transform.size << "\n";
-  for (auto pair : reg_transform.map) {
+  for (auto pair : UnorderedIterable(reg_transform.map)) {
     ss << pair.first << " -> " << pair.second << "\n";
   }
   return ss.str();
