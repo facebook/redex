@@ -74,9 +74,8 @@ TEST_F(FlowSensitiveReachabilityTest,
   //// uninstantiable_dependencies
   EXPECT_EQ(reachable_aspects.uninstantiable_dependencies.size(), 1);
   auto is_uninstantiable_dependency = [&](const std::string_view& s) {
-    return std::any_of(reachable_aspects.uninstantiable_dependencies.begin(),
-                       reachable_aspects.uninstantiable_dependencies.end(),
-                       [s](const auto* cls) { return cls->str() == s; });
+    return unordered_any_of(reachable_aspects.uninstantiable_dependencies,
+                            [s](const auto* cls) { return cls->str() == s; });
   };
   EXPECT_TRUE(is_uninstantiable_dependency("LDataHolder;"));
 
@@ -156,9 +155,8 @@ TEST_F(FlowSensitiveReachabilityTest, cfg_gathering_check_instance_callable) {
   //// uninstantiable_dependencies
   EXPECT_EQ(reachable_aspects.uninstantiable_dependencies.size(), 1);
   auto is_uninstantiable_dependency = [&](const std::string_view& s) {
-    return std::any_of(reachable_aspects.uninstantiable_dependencies.begin(),
-                       reachable_aspects.uninstantiable_dependencies.end(),
-                       [s](const auto* cls) { return cls->str() == s; });
+    return unordered_any_of(reachable_aspects.uninstantiable_dependencies,
+                            [s](const auto* cls) { return cls->str() == s; });
   };
   EXPECT_TRUE(is_uninstantiable_dependency("LDataHolder;"));
 
@@ -239,9 +237,8 @@ TEST_F(FlowSensitiveReachabilityTest, sweep_uncallable_virtual_methods) {
   //// uninstantiable_dependencies
   EXPECT_EQ(reachable_aspects.uninstantiable_dependencies.size(), 1);
   auto is_uninstantiable_dependency = [&](const std::string_view& s) {
-    return std::any_of(reachable_aspects.uninstantiable_dependencies.begin(),
-                       reachable_aspects.uninstantiable_dependencies.end(),
-                       [s](const auto* cls) { return cls->str() == s; });
+    return unordered_any_of(reachable_aspects.uninstantiable_dependencies,
+                            [s](const auto* cls) { return cls->str() == s; });
   };
   EXPECT_TRUE(is_uninstantiable_dependency("LDataHolder;"));
 

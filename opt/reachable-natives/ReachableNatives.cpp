@@ -8,10 +8,6 @@
 #include "ReachableNatives.h"
 
 #include <algorithm>
-#include <boost/bimap/bimap.hpp>
-#include <boost/bimap/unordered_set_of.hpp>
-#include <boost/optional/optional.hpp>
-#include <boost/range/adaptor/map.hpp>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -244,7 +240,7 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
       ("ReachableNativesPass Run "s + std::to_string(m_run_number)).c_str());
 
   auto scope = build_class_scope(stores);
-  std::unordered_set<const DexClass*> scope_set(scope.begin(), scope.end());
+  UnorderedSet<const DexClass*> scope_set(scope.begin(), scope.end());
   auto reachable_objects = std::make_unique<reachability::ReachableObjects>();
   reachability::ReachableAspects reachable_aspects;
   reachability::ConditionallyMarked cond_marked;
@@ -296,8 +292,8 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
   compute_zombie_methods(*method_override_graph, *reachable_objects,
                          reachable_aspects);
 
-  std::unordered_set<DexMethod*> reachable_natives;
-  std::unordered_set<DexMethod*> unreachable_natives;
+  UnorderedSet<DexMethod*> reachable_natives;
+  UnorderedSet<DexMethod*> unreachable_natives;
 
   walk::methods(scope, [&](DexMethod* m) {
     if (is_native(m)) {
@@ -311,13 +307,13 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
   });
 
   log_line("Native methods reachable from non-native:");
-  for (auto* m : reachable_natives) {
+  for (auto* m : UnorderedIterable(reachable_natives)) {
     log_line(SHOW(m));
   }
   log_line("");
 
   log_line("Native methods unreachable from non-native:");
-  for (auto* m : unreachable_natives) {
+  for (auto* m : UnorderedIterable(unreachable_natives)) {
     log_line(SHOW(m));
   }
   log_line("");
@@ -335,7 +331,7 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
       // reachable, as they may get referenced by native registration code, so
       // we re-include them in the reachable object set, and mark classes as
       // abstract that are only kept for this reason.
-      for (auto* m : unreachable_natives) {
+      for (auto* m : UnorderedIterable(unreachable_natives)) {
         reachable_objects->mark(m);
         self_recursive_fn(
             [&](auto self, DexType* type) {

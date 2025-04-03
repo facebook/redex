@@ -114,7 +114,7 @@ void Stats::report(PassManager& mgr) const {
 }
 
 Stats replace_uninstantiable_refs(
-    const std::unordered_set<DexType*>& scoped_uninstantiable_types,
+    const UnorderedSet<DexType*>& scoped_uninstantiable_types,
     cfg::ControlFlowGraph& cfg) {
   cfg::CFGMutation m(cfg);
 
