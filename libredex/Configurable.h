@@ -13,7 +13,6 @@
 #include <optional>
 #include <string>
 #include <type_traits>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -225,9 +224,9 @@ class Configurable {
 
   // Type aliases for convenience
   using MapOfVectorOfStrings =
-      std::unordered_map<std::string, std::vector<std::string>>;
-  using MapOfMethods = std::unordered_map<DexMethod*, DexMethod*>;
-  using MapOfStrings = std::unordered_map<std::string, std::string>;
+      UnorderedMap<std::string, std::vector<std::string>>;
+  using MapOfMethods = UnorderedMap<DexMethod*, DexMethod*>;
+  using MapOfStrings = UnorderedMap<std::string, std::string>;
 
   static constexpr const char* default_doc() { return "TODO: Document this"; }
 
@@ -441,11 +440,10 @@ DEFINE_CONFIGURABLE_PRIMITIVE(Configurable::MapOfMethods)
 DEFINE_CONFIGURABLE_PRIMITIVE(Configurable::MapOfVectorOfStrings)
 DEFINE_CONFIGURABLE_PRIMITIVE(Configurable::MapOfStrings)
 DEFINE_CONFIGURABLE_PRIMITIVE(
-    SINGLE_ARG(std::unordered_map<DexMethodRef*, DexMethodRef*>))
+    SINGLE_ARG(UnorderedMap<DexMethodRef*, DexMethodRef*>))
+DEFINE_CONFIGURABLE_PRIMITIVE(SINGLE_ARG(UnorderedMap<DexType*, DexType*>))
 DEFINE_CONFIGURABLE_PRIMITIVE(
-    SINGLE_ARG(std::unordered_map<DexType*, DexType*>))
-DEFINE_CONFIGURABLE_PRIMITIVE(
-    SINGLE_ARG(std::unordered_map<std::string, std::string>))
+    SINGLE_ARG(UnorderedMap<std::string, std::string>))
 #undef SINGLE_ARG
 
 #undef DEFINE_CONFIGURABLE_PRIMITIVE

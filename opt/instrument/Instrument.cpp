@@ -550,7 +550,7 @@ void InstrumentPass::bind_config() {
 
   after_configuration([this] {
     // Currently we only support instance call to static call.
-    for (auto& pair : m_options.methods_replacement) {
+    for (auto& pair : UnorderedIterable(m_options.methods_replacement)) {
       always_assert(!is_static(pair.first));
       always_assert(is_static(pair.second));
     }

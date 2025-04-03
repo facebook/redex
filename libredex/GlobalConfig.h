@@ -155,7 +155,7 @@ struct PassManagerConfig : public Configurable {
     return "This configuration holds values that influence the PassManager.";
   }
 
-  std::unordered_map<std::string, std::string> pass_aliases;
+  UnorderedMap<std::string, std::string> pass_aliases;
   bool jemalloc_full_stats{false};
   bool violations_tracking{false};
   bool check_pass_order_properties{false};

@@ -34,17 +34,16 @@ constexpr const char* METRIC_FIELD_ASETS_CLEARED = "num_field_cleared";
 constexpr const char* METRIC_FIELD_ASETS_TOTAL = "num_field_total";
 constexpr const char* METRIC_SIGNATURES_KILLED = "num_signatures_killed";
 
-AnnoKill::AnnoKill(
-    Scope& scope,
-    bool only_force_kill,
-    bool kill_bad_signatures,
-    const AnnoNames& keep,
-    const AnnoNames& kill,
-    const AnnoNames& force_kill,
-    const std::unordered_map<std::string, std::vector<std::string>>&
-        class_hierarchy_keep_annos,
-    const std::unordered_map<std::string, std::vector<std::string>>&
-        annotated_keep_annos)
+AnnoKill::AnnoKill(Scope& scope,
+                   bool only_force_kill,
+                   bool kill_bad_signatures,
+                   const AnnoNames& keep,
+                   const AnnoNames& kill,
+                   const AnnoNames& force_kill,
+                   const UnorderedMap<std::string, std::vector<std::string>>&
+                       class_hierarchy_keep_annos,
+                   const UnorderedMap<std::string, std::vector<std::string>>&
+                       annotated_keep_annos)
     : m_scope(scope),
       m_scope_set(scope.begin(), scope.end()),
       m_only_force_kill(only_force_kill),
@@ -93,7 +92,7 @@ AnnoKill::AnnoKill(
 
   // Populate class hierarchy keep map
   auto ch = build_type_hierarchy(m_scope);
-  for (const auto& it : class_hierarchy_keep_annos) {
+  for (const auto& it : UnorderedIterable(class_hierarchy_keep_annos)) {
     auto* type = DexType::get_type(it.first);
     auto* type_cls = type ? type_class(type) : nullptr;
     if (type_cls == nullptr) {
@@ -109,7 +108,7 @@ AnnoKill::AnnoKill(
       }
     }
   }
-  for (const auto& it : m_anno_class_hierarchy_keep) {
+  for (const auto& it : UnorderedIterable(m_anno_class_hierarchy_keep)) {
     for (auto type : it.second) {
       TRACE(ANNO,
             4,
@@ -119,7 +118,7 @@ AnnoKill::AnnoKill(
     }
   }
   // Populate anno keep map
-  for (const auto& it : annotated_keep_annos) {
+  for (const auto& it : UnorderedIterable(annotated_keep_annos)) {
     auto* type = DexType::get_type(it.first);
     for (auto& anno : it.second) {
       auto* anno_type = DexType::get_type(anno);

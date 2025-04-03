@@ -244,7 +244,7 @@ template CallSites collect_call_refs<std::unordered_set<DexMethod*>>(
 
 int wrap_instance_call_with_static(
     DexStoresVector& stores,
-    const std::unordered_map<DexMethod*, DexMethod*>& methods_replacement,
+    const UnorderedMap<DexMethod*, DexMethod*>& methods_replacement,
     bool exclude_primary_dex) {
   Scope classes;
   if (!exclude_primary_dex) {
@@ -253,7 +253,7 @@ int wrap_instance_call_with_static(
     classes = build_class_scope_excluding_primary_dex(stores);
   }
   std::unordered_set<DexType*> excluded_types;
-  for (const auto& pair : methods_replacement) {
+  for (const auto& pair : UnorderedIterable(methods_replacement)) {
     always_assert(!is_static(pair.first));
     always_assert(is_static(pair.second));
     excluded_types.insert(pair.second->get_class());

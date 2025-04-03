@@ -67,9 +67,9 @@ class AnnoKill {
            const AnnoNames& keep,
            const AnnoNames& kill,
            const AnnoNames& force_kill,
-           const std::unordered_map<std::string, std::vector<std::string>>&
+           const UnorderedMap<std::string, std::vector<std::string>>&
                class_hierarchy_keep_annos,
-           const std::unordered_map<std::string, std::vector<std::string>>&
+           const UnorderedMap<std::string, std::vector<std::string>>&
                annotated_keep_annos);
 
   bool kill_annotations();
@@ -107,9 +107,9 @@ class AnnoKill {
   mutable AtomicMap<std::string_view, size_t> m_build_anno_map;
   mutable AtomicMap<std::string_view, size_t> m_runtime_anno_map;
   mutable AtomicMap<std::string_view, size_t> m_system_anno_map;
-  std::unordered_map<const DexType*, std::unordered_set<const DexType*>>
+  UnorderedMap<const DexType*, std::unordered_set<const DexType*>>
       m_anno_class_hierarchy_keep;
-  std::unordered_map<const DexType*, std::unordered_set<const DexType*>>
+  UnorderedMap<const DexType*, std::unordered_set<const DexType*>>
       m_annotated_keep_annos;
 };
 
@@ -151,10 +151,9 @@ class AnnoKillPass : public Pass {
   std::vector<std::string> m_keep_annos;
   std::vector<std::string> m_kill_annos;
   std::vector<std::string> m_force_kill_annos;
-  std::unordered_map<std::string, std::vector<std::string>>
+  UnorderedMap<std::string, std::vector<std::string>>
       m_class_hierarchy_keep_annos;
-  std::unordered_map<std::string, std::vector<std::string>>
-      m_annotated_keep_annos;
+  UnorderedMap<std::string, std::vector<std::string>> m_annotated_keep_annos;
   bool m_kill_bad_signatures;
 
  protected:

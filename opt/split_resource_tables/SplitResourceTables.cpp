@@ -64,7 +64,7 @@ struct TypeSplit {
 
 void signatures_to_methods(
     const std::unordered_map<std::string, std::string>& signatures,
-    std::unordered_map<DexMethod*, DexMethod*>* methods) {
+    UnorderedMap<DexMethod*, DexMethod*>* methods) {
   for (const auto& pair : signatures) {
     auto first = DexMethod::get_method(pair.first);
     always_assert_log(first != nullptr, "Did not find method %s",
@@ -487,7 +487,7 @@ void SplitResourceTablesPass::run_pass(DexStoresVector& stores,
     framework_to_compat_signatures.emplace(RES_GET_TYPENAME_SIGNATURE,
                                            m_typename_compat_method);
   }
-  std::unordered_map<DexMethod*, DexMethod*> methods;
+  UnorderedMap<DexMethod*, DexMethod*> methods;
   signatures_to_methods(framework_to_compat_signatures, &methods);
   int replaced =
       method_reference::wrap_instance_call_with_static(stores, methods);
