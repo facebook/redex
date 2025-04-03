@@ -55,11 +55,11 @@ const uint64_t MAX_HOT_COLD_CALLEE_SIZE = 27;
  * gathering-logic mimics (the first part of) what
  * DexStructure::resolve_init_classes does.
  */
-std::unordered_set<DexType*> gather_resolved_init_class_types(
+UnorderedSet<DexType*> gather_resolved_init_class_types(
     const cfg::ControlFlowGraph& cfg,
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects) {
-  std::unordered_set<DexType*> refined_init_class_types;
+  UnorderedSet<DexType*> refined_init_class_types;
 
   for (auto& mie : InstructionIterable(cfg)) {
     auto insn = mie.insn;

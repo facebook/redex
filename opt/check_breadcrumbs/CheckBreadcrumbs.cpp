@@ -637,9 +637,9 @@ std::pair<bool, const DexType*> Breadcrumbs::is_illegal_cross_store(
   std::set<const DexType*, dextypes_comparator> load_types;
   if (m_verify_type_hierarchies) {
     auto callee_cls = type_class(callee);
-    std::unordered_set<DexType*> types;
+    UnorderedSet<DexType*> types;
     callee_cls->gather_load_types(types);
-    load_types.insert(types.begin(), types.end());
+    insert_unordered_iterable(load_types, types);
   } else {
     load_types.emplace(callee);
   }

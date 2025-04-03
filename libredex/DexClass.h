@@ -1359,7 +1359,7 @@ class DexClass {
   template <typename C>
   void gather_methodhandles(C& lmethodhandle) const;
 
-  void gather_load_types(std::unordered_set<DexType*>& ltype) const;
+  void gather_load_types(UnorderedSet<DexType*>& ltype) const;
   void gather_init_classes(std::vector<DexType*>& ltype) const;
 
   // Whether to optimize for perf, instead of space.

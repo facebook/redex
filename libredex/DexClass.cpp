@@ -1821,7 +1821,7 @@ void DexClass::gather_types(C& ltype) const {
 }
 INSTANTIATE(DexClass::gather_types, DexType*)
 
-void DexClass::gather_load_types(std::unordered_set<DexType*>& ltype) const {
+void DexClass::gather_load_types(UnorderedSet<DexType*>& ltype) const {
   if (is_external()) {
     return;
   }
