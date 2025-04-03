@@ -215,11 +215,11 @@ void TypeSystem::make_interfaces_table(const DexType* type) {
 }
 
 void TypeSystem::select_methods(const VirtualScope& scope,
-                                const std::unordered_set<DexType*>& types,
-                                std::unordered_set<DexMethod*>& methods) const {
+                                const UnorderedSet<DexType*>& types,
+                                UnorderedSet<DexMethod*>& methods) const {
   TRACE(VIRT, 1, "select_methods make filter");
-  std::unordered_set<DexType*> filter;
-  filter.insert(types.begin(), types.end());
+  UnorderedSet<DexType*> filter;
+  insert_unordered_iterable(filter, types);
 
   TRACE(VIRT, 1, "select_methods make type_method map");
   UnorderedMap<const DexType*, DexMethod*> type_method;
@@ -231,8 +231,9 @@ void TypeSystem::select_methods(const VirtualScope& scope,
 
   TRACE(VIRT, 1, "select_methods walk hierarchy");
   while (!filter.empty()) {
-    const auto type = *filter.begin();
-    filter.erase(filter.begin());
+    auto it = unordered_any(filter);
+    const auto type = *it;
+    filter.erase(it);
     TRACE(VIRT, 1, "check... %s", SHOW(type));
     if (!is_subtype(scope.type, type)) continue;
     const auto& meth = type_method.find(type);
@@ -248,8 +249,8 @@ void TypeSystem::select_methods(const VirtualScope& scope,
 }
 
 void TypeSystem::select_methods(const InterfaceScope& scope,
-                                const std::unordered_set<DexType*>& types,
-                                std::unordered_set<DexMethod*>& methods) const {
+                                const UnorderedSet<DexType*>& types,
+                                UnorderedSet<DexMethod*>& methods) const {
   for (const auto& virt_scope : scope) {
     select_methods(*virt_scope, types, methods);
   }

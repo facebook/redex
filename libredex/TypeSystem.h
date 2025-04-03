@@ -196,11 +196,11 @@ class TypeSystem {
    * types in a given scope.
    */
   void select_methods(const VirtualScope& scope,
-                      const std::unordered_set<DexType*>& types,
-                      std::unordered_set<DexMethod*>& methods) const;
+                      const UnorderedSet<DexType*>& types,
+                      UnorderedSet<DexMethod*>& methods) const;
   void select_methods(const InterfaceScope& scope,
-                      const std::unordered_set<DexType*>& types,
-                      std::unordered_set<DexMethod*>& methods) const;
+                      const UnorderedSet<DexType*>& types,
+                      UnorderedSet<DexMethod*>& methods) const;
 
   /**
    * Given a VirtualScope and a type return the list of methods that
