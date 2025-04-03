@@ -7,14 +7,15 @@
 
 #pragma once
 
+#include <cstdint>
+#include <functional>
+#include <queue>
+
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "IRCode.h"
 #include "LiveRange.h"
 #include "ScopedCFG.h"
-#include <cstdint>
-#include <functional>
-#include <queue>
-#include <unordered_map>
 
 namespace fastregalloc {
 
@@ -55,9 +56,9 @@ using LiveIntervals = std::vector<VRegLiveInterval>;
 using Def = live_range::Def;
 using Use = live_range::Use;
 using VRegDefsUses =
-    std::unordered_map<vreg_t, std::pair<std::vector<Def>, std::vector<Use>>>;
+    UnorderedMap<vreg_t, std::pair<std::vector<Def>, std::vector<Use>>>;
 
-using WideVReg = std::unordered_set<vreg_t>;
+using WideVReg = UnorderedSet<vreg_t>;
 
 /*
  * ActiveInterval, ordered first by start_point, and then by live_interval_idx.
@@ -238,7 +239,7 @@ class LinearScanAllocator final {
    * We index free-regs by their last-use instruction shape, to make it more
    * likely that dedup-blocks will find matching suffixes.
    */
-  std::unordered_map<IRInstructionShape, FreeRegPool, IRInstructionShapeHasher>
+  UnorderedMap<IRInstructionShape, FreeRegPool, IRInstructionShapeHasher>
       m_free_regs;
 
   /*
