@@ -420,7 +420,7 @@ bool MethodItemEntry::operator==(const MethodItemEntry& that) const {
 }
 
 // TODO: T62185151 - better way of applying this on CFGs
-void IRList::cleanup_debug(std::unordered_set<reg_t>& valid_regs) {
+void IRList::cleanup_debug(UnorderedSet<reg_t>& valid_regs) {
   auto it = m_list.begin();
   while (it != m_list.end()) {
     auto next = std::next(it);
@@ -452,7 +452,7 @@ void IRList::cleanup_debug(std::unordered_set<reg_t>& valid_regs) {
 }
 
 void IRList::cleanup_debug() {
-  std::unordered_set<reg_t> valid_regs;
+  UnorderedSet<reg_t> valid_regs;
   cleanup_debug(valid_regs);
 }
 
@@ -631,7 +631,7 @@ size_t IRList::count_opcodes() const {
 }
 
 void IRList::sanity_check() const {
-  std::unordered_set<const MethodItemEntry*> entries;
+  UnorderedSet<const MethodItemEntry*> entries;
   for (const auto& mie : m_list) {
     entries.insert(&mie);
   }

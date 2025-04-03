@@ -18,7 +18,6 @@
 #include <set>
 #include <string>
 #include <type_traits>
-#include <unordered_set>
 #include <vector>
 
 #include "Debug.h"
@@ -448,7 +447,7 @@ class IRList {
    * or DBG_START_LOCAL_EXTENDED. The DBG_END_LOCAL and DBG_RESTART_LOCAL
    * instructions are erased, unless valid_regs contains the registers they use.
    */
-  void cleanup_debug(std::unordered_set<reg_t>& valid_regs);
+  void cleanup_debug(UnorderedSet<reg_t>& valid_regs);
 
   /* DEPRECATED! Use the version below that passes in the iterator instead,
    * which is O(1) instead of O(n). */

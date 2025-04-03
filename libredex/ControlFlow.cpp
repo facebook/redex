@@ -233,7 +233,7 @@ void Block::free() {
   }
 }
 
-void Block::cleanup_debug(std::unordered_set<reg_t>& valid_regs) {
+void Block::cleanup_debug(UnorderedSet<reg_t>& valid_regs) {
   this->m_entries.cleanup_debug(valid_regs);
 }
 

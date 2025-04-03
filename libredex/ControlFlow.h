@@ -327,7 +327,7 @@ class Block final {
   // information of the CFG. That is, if a block is an ancestor of another,
   // then the valid registers that the ancestor block defines should be
   // acknowledged by the descendant block.
-  void cleanup_debug(std::unordered_set<reg_t>& valid_regs);
+  void cleanup_debug(UnorderedSet<reg_t>& valid_regs);
 
   opcode::Branchingness branchingness() const;
 
