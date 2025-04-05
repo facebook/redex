@@ -2016,13 +2016,19 @@ bool MultiMethodInliner::should_partially_inline(cfg::Block* block,
                                                  bool true_virtual,
                                                  DexMethod* callee,
                                                  PartialCode* partial_code) {
-  // Note that we don't want to attempt to partially inline an invoke-super
-  // instruction, as this would make it necessary to track different versions of
+  always_assert(opcode::is_an_invoke(insn->opcode()));
+  always_assert(insn->has_method());
+  // We don't want to partially inline true virtuals.
+  // To avoid dealing with inserting additional casts, we also avoid callees
+  // which don't match the formal method given by the instruction exctly. We
+  // also don't want to attempt to partially inline an invoke-super instruction,
+  // as this would make it necessary to track different versions of
   // partially-inlined code based on the invoke-instruction, as then the
   // fallback invocation that's contained in the partial code may have to be
   // either invoke-super or invoke-virtual depending on the context.
   if (!m_config.partial_hot_hot_inline || true_virtual ||
-      insn->opcode() == OPCODE_INVOKE_SUPER || !source_blocks::is_hot(block)) {
+      insn->get_method() != callee || insn->opcode() == OPCODE_INVOKE_SUPER ||
+      !source_blocks::is_hot(block)) {
     return false;
   }
   // If we don't already have pre-computed partially inlined code for this
