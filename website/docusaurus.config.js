@@ -26,6 +26,11 @@ const darkCodeTheme = require('prism-react-renderer').themes.dracula;
     ossRepoPath: '',
   },
 
+  markdown: {
+    format: 'md',
+    mermaid: true,
+  },
+
   presets: [
     [
       'docusaurus-plugin-internaldocs-fb/docusaurus-preset',
