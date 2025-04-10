@@ -81,6 +81,19 @@ class PatchingCandidates {
   ConcurrentMap<DexMethod*, TypedefAnnoType*> m_method_candidates;
 };
 
+struct ParamCandidate {
+  DexMethod* method;
+  TypedefAnnoType* anno;
+  src_index_t index;
+
+  ParamCandidate(DexMethod* method,
+                 const TypedefAnnoType* anno,
+                 src_index_t src_index)
+      : method(method),
+        anno(const_cast<TypedefAnnoType*>(anno)),
+        index(src_index) {}
+};
+
 class TypedefAnnoPatcher {
  public:
   explicit TypedefAnnoPatcher(
@@ -101,8 +114,7 @@ class TypedefAnnoPatcher {
   void patch_parameters_and_returns(
       DexMethod* method,
       Stats& class_stats,
-      std::vector<std::pair<src_index_t, const TypedefAnnoType*>>*
-          missing_param_annos = nullptr);
+      std::vector<ParamCandidate>* missing_param_annos = nullptr);
 
   void patch_enclosing_lambda_fields(const DexClass* cls, Stats& class_stats);
 
