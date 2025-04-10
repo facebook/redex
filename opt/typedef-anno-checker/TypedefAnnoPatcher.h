@@ -111,6 +111,7 @@ class TypedefAnnoPatcher {
 
   void patch_lambdas(DexMethod* method,
                      std::vector<const DexField*>* patched_fields,
+                     PatchingCandidates& candidates,
                      Stats& class_stats);
 
   void patch_ctor_params_from_synth_cls_fields(DexClass* cls,

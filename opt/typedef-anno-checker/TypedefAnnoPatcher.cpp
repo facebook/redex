@@ -371,14 +371,14 @@ void collect_setter_missing_param_annos(
 } // namespace
 
 void PatchingCandidates::apply_patching(std::mutex& mutex, Stats& class_stats) {
-  for (auto& pair : UnorderedIterable(m_field_candidates)) {
-    auto* field = pair.first;
-    auto* anno = pair.second;
+  for (auto* field :
+       unordered_order_keys(m_field_candidates, compare_dexfields)) {
+    auto* anno = m_field_candidates.at(field);
     add_annotation(field, anno, mutex, class_stats);
   }
-  for (auto& pair : UnorderedIterable(m_method_candidates)) {
-    auto* method = pair.first;
-    auto* anno = pair.second;
+  for (auto* method :
+       unordered_order_keys(m_method_candidates, compare_dexmethods)) {
+    auto* anno = m_method_candidates.at(method);
     add_annotation(method, anno, mutex, class_stats);
   }
 }
@@ -479,8 +479,8 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
       });
 
   PatchingCandidates candidates;
-  m_patcher_stats +=
-      walk::parallel::classes<PatcherStats>(scope, [this](DexClass* cls) {
+  m_patcher_stats += walk::parallel::classes<PatcherStats>(
+      scope, [this, &candidates](DexClass* cls) {
         auto class_stats = PatcherStats();
 
         if (!is_synthesized_lambda_class(cls) && !is_fun_interface_class(cls)) {
@@ -489,7 +489,8 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
 
         std::vector<const DexField*> patched_fields;
         for (auto m : cls->get_all_methods()) {
-          patch_lambdas(m, &patched_fields, class_stats.patch_lambdas);
+          patch_lambdas(m, &patched_fields, candidates,
+                        class_stats.patch_lambdas);
         }
         if (!patched_fields.empty()) {
           auto cls_name = cls->get_deobfuscated_name_or_empty_copy();
@@ -531,6 +532,8 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
         }
         return class_stats;
       });
+  candidates.apply_patching(m_anno_patching_mutex,
+                            m_patcher_stats.patch_lambdas);
 
   m_patcher_stats +=
       walk::parallel::classes<PatcherStats>(scope, [&](DexClass* cls) {
@@ -640,6 +643,7 @@ void patch_synthetic_field_from_local_var_lambda(
     const src_index_t src,
     const TypedefAnnoType* anno,
     std::vector<const DexField*>* patched_fields,
+    PatchingCandidates& candidates,
     std::mutex& anno_patching_mutex,
     Stats& class_stats) {
   live_range::Use use_of_id{insn, src};
@@ -680,11 +684,11 @@ void patch_synthetic_field_from_local_var_lambda(
           continue;
         }
         patched_fields->push_back(original_field);
-        add_annotation(original_field, anno, anno_patching_mutex, class_stats);
+        candidates.add_field_candidate(original_field, anno);
       }
     } else {
       patched_fields->push_back(field);
-      add_annotation(field, anno, anno_patching_mutex, class_stats);
+      candidates.add_field_candidate(field, anno);
     }
   }
 }
@@ -699,6 +703,7 @@ void annotate_local_var_field_from_callee(
     const live_range::UseDefChains& ud_chains,
     const type_inference::TypeInference& inference,
     std::vector<const DexField*>* patched_fields,
+    PatchingCandidates& candidates,
     std::mutex& anno_patching_mutex,
     Stats& class_stats) {
   if (!callee) {
@@ -713,7 +718,7 @@ void annotate_local_var_field_from_callee(
     if (annotation != boost::none) {
       patch_synthetic_field_from_local_var_lambda(
           ud_chains, insn, param_anno.first + 1, *annotation, patched_fields,
-          anno_patching_mutex, class_stats);
+          candidates, anno_patching_mutex, class_stats);
     }
   }
 }
@@ -723,6 +728,7 @@ void annotate_local_var_field_from_callee(
 void TypedefAnnoPatcher::patch_lambdas(
     DexMethod* method,
     std::vector<const DexField*>* patched_fields,
+    PatchingCandidates& candidates,
     Stats& class_stats) {
   IRCode* code = method->get_code();
   if (!code) {
@@ -758,7 +764,7 @@ void TypedefAnnoPatcher::patch_lambdas(
         for (auto& pair : missing_param_annos) {
           patch_synthetic_field_from_local_var_lambda(
               ud_chains, insn, pair.first, pair.second, patched_fields,
-              m_anno_patching_mutex, class_stats);
+              candidates, m_anno_patching_mutex, class_stats);
         }
         // If the static method has parameter annotations, patch the synthetic
         // fields as expected
@@ -769,7 +775,8 @@ void TypedefAnnoPatcher::patch_lambdas(
             if (annotation != boost::none) {
               patch_synthetic_field_from_local_var_lambda(
                   ud_chains, insn, param_anno.first, *annotation,
-                  patched_fields, m_anno_patching_mutex, class_stats);
+                  patched_fields, candidates, m_anno_patching_mutex,
+                  class_stats);
             }
           }
         }
@@ -779,7 +786,7 @@ void TypedefAnnoPatcher::patch_lambdas(
             mog::get_overriding_methods(m_method_override_graph, callee_def);
         for (auto callee : callees) {
           annotate_local_var_field_from_callee(
-              callee, insn, ud_chains, inference, patched_fields,
+              callee, insn, ud_chains, inference, patched_fields, candidates,
               m_anno_patching_mutex, class_stats);
         }
       } else if (opcode::is_an_invoke(insn->opcode())) {
@@ -789,7 +796,7 @@ void TypedefAnnoPatcher::patch_lambdas(
         callees.push_back(callee_def);
         for (auto callee : callees) {
           annotate_local_var_field_from_callee(
-              callee, insn, ud_chains, inference, patched_fields,
+              callee, insn, ud_chains, inference, patched_fields, candidates,
               m_anno_patching_mutex, class_stats);
         }
       }
