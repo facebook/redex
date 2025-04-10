@@ -901,16 +901,18 @@ void TypedefAnnoPatcher::patch_enclosing_lambda_fields(const DexClass* anon_cls,
         DexField::get_field(enclosing_field_name);
     if (enclosing_field_ref &&
         patched_field->get_deobfuscated_name() != enclosing_field_name) {
+      DexField* enclosing_field = enclosing_field_ref->as_def();
+      if (enclosing_field == nullptr) {
+        continue;
+      }
+      auto typedef_anno = type_inference::get_typedef_anno_from_member(
+          patched_field, m_typedef_annos);
+      always_assert(typedef_anno != boost::none);
       TRACE(TAC, 2,
             "[patcher] patching enclosing field %s from patched field %s",
             SHOW(enclosing_field_name), SHOW(patched_field));
-      DexAnnotationSet a_set = DexAnnotationSet();
-      a_set.combine_with(*patched_field->get_anno_set());
-      DexField* enclosing_field = enclosing_field_ref->as_def();
-      if (enclosing_field) {
-        add_annotation_set(enclosing_field, &a_set, m_anno_patching_mutex,
-                           class_stats);
-      }
+      add_annotation(enclosing_field, *typedef_anno, m_anno_patching_mutex,
+                     class_stats);
     }
   }
 }
