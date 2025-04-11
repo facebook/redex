@@ -20,13 +20,13 @@ enum BlockMode { BRANCH, TRYCATCH };
 struct SplitConstraints {
   // Map of catch blocks and number of incoming control flow edges on
   // which a given register dies.
-  std::unordered_map<cfg::Block*, size_t> catch_blocks;
+  UnorderedMap<cfg::Block*, size_t> catch_blocks;
   // Map of non-catch blocks and number of incoming control flow edges on
   // which a given register dies.
-  std::unordered_map<cfg::Block*, size_t> other_blocks;
+  UnorderedMap<cfg::Block*, size_t> other_blocks;
   // Set of MethodItemEntry of invoke-xxx or fill-new-array before move-result
   // if the move-result's dest is the given register.
-  std::unordered_set<MethodItemEntry*> write_result;
+  UnorderedSet<MethodItemEntry*> write_result;
   // Number of store needed if we split this given register.
   size_t split_store{0};
   // Number of Load needed if we split this given register.
@@ -34,24 +34,22 @@ struct SplitConstraints {
 };
 
 struct SplitCosts {
-  std::unordered_map<vreg_t, SplitConstraints> reg_constraints;
+  UnorderedMap<vreg_t, SplitConstraints> reg_constraints;
 
   size_t total_value_at(vreg_t u) const {
     const SplitConstraints& load_store = reg_constraints.at(u);
     return load_store.split_store + load_store.split_load;
   }
 
-  const std::unordered_map<cfg::Block*, size_t>& death_at_catch(
-      vreg_t u) const {
+  const UnorderedMap<cfg::Block*, size_t>& death_at_catch(vreg_t u) const {
     return reg_constraints.at(u).catch_blocks;
   }
 
-  const std::unordered_map<cfg::Block*, size_t>& death_at_other(
-      vreg_t u) const {
+  const UnorderedMap<cfg::Block*, size_t>& death_at_other(vreg_t u) const {
     return reg_constraints.at(u).other_blocks;
   }
 
-  const std::unordered_set<MethodItemEntry*>& get_write_result(vreg_t u) const {
+  const UnorderedSet<MethodItemEntry*>& get_write_result(vreg_t u) const {
     return reg_constraints.at(u).write_result;
   }
 
@@ -74,11 +72,11 @@ struct SplitCosts {
 
 struct SplitPlan {
   // A map between reg and a set of registers that will split around reg.
-  std::unordered_map<vreg_t, std::unordered_set<vreg_t>> split_around;
+  UnorderedMap<vreg_t, UnorderedSet<vreg_t>> split_around;
 };
 
 struct BlockModeInsn {
-  std::unordered_set<IRInstruction*> block_insns;
+  UnorderedSet<IRInstruction*> block_insns;
   BlockMode block_mode;
 
   void add_insn_mode(IRInstruction* insn, BlockMode mode) {
@@ -100,9 +98,9 @@ struct BlockLoadInfo {
   };
 
   // Map of catch blocks and registers already loaded in these blocks.
-  std::unordered_map<cfg::Block*, std::unordered_set<vreg_t>> try_loaded_regs;
+  UnorderedMap<cfg::Block*, UnorderedSet<vreg_t>> try_loaded_regs;
   // Map of non-catch blocks and registers already loaded in these blocks.
-  std::unordered_map<cfg::Block*, std::unordered_set<vreg_t>> other_loaded_regs;
+  UnorderedMap<cfg::Block*, UnorderedSet<vreg_t>> other_loaded_regs;
   // Map of the edges between two blocks and what their type is and load
   // instructions we should inserted for these edges.
   // This is an ordered map because we iterate through it.

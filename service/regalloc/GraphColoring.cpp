@@ -44,7 +44,7 @@ static void find_first_uses_dfs(
     reg_t reg,
     cfg::Block* block,
     std::vector<cfg::Block*>* blocks_with_uses,
-    std::unordered_set<const cfg::Block*>* visited_blocks) {
+    UnorderedSet<const cfg::Block*>* visited_blocks) {
   if (visited_blocks->count(block) != 0) {
     return;
   }
@@ -64,7 +64,7 @@ static void find_first_uses_dfs(
  * Search for the first uses of a register, starting from the entry block.
  */
 static std::vector<cfg::Block*> find_first_uses(reg_t reg, cfg::Block* entry) {
-  std::unordered_set<const cfg::Block*> visited_blocks;
+  UnorderedSet<const cfg::Block*> visited_blocks;
   std::vector<cfg::Block*> blocks_with_uses;
   find_first_uses_dfs(reg, entry, &blocks_with_uses, &visited_blocks);
   return blocks_with_uses;
@@ -142,12 +142,11 @@ bool needs_remap(const transform::RegMap& reg_map, reg_t reg, vreg_t vreg) {
  * Count the number of vregs we would need to spill if we allocated a
  * contiguous range of vregs starting at :range_base.
  */
-int score_range_fit(
-    const interference::Graph& ig,
-    const boost::iterator_range<const reg_t*>& range_regs,
-    vreg_t range_base,
-    const std::unordered_map<reg_t, VirtualRegistersFile>& vreg_files,
-    const transform::RegMap& reg_map) {
+int score_range_fit(const interference::Graph& ig,
+                    const boost::iterator_range<const reg_t*>& range_regs,
+                    vreg_t range_base,
+                    const UnorderedMap<reg_t, VirtualRegistersFile>& vreg_files,
+                    const transform::RegMap& reg_map) {
   int score{0};
   auto vreg = range_base;
   for (size_t i = 0; i < range_regs.size(); ++i) {
@@ -174,7 +173,7 @@ vreg_t find_best_range_fit(
     const boost::iterator_range<const reg_t*>& range_regs,
     vreg_t range_base_start,
     vreg_t range_base_end,
-    const std::unordered_map<reg_t, VirtualRegistersFile>& vreg_files,
+    const UnorderedMap<reg_t, VirtualRegistersFile>& vreg_files,
     const transform::RegMap& reg_map) {
   int min_score{INVALID_SCORE};
   vreg_t range_base = 0;
@@ -200,7 +199,7 @@ void fit_range_instruction(
     const interference::Graph& ig,
     const IRInstruction* insn,
     vreg_t range_base,
-    const std::unordered_map<reg_t, VirtualRegistersFile>& vreg_files,
+    const UnorderedMap<reg_t, VirtualRegistersFile>& vreg_files,
     RegisterTransform* reg_transform,
     SpillPlan* spills) {
   auto vreg = range_base;
@@ -226,13 +225,12 @@ void fit_range_instruction(
  * Map the parameters such that they start at :param_base. Insert spills as
  * necessary.
  */
-void fit_params(
-    const interference::Graph& ig,
-    const boost::sub_range<IRList>& param_insns,
-    vreg_t params_base,
-    const std::unordered_map<reg_t, VirtualRegistersFile>& vreg_files,
-    RegisterTransform* reg_transform,
-    SpillPlan* spills) {
+void fit_params(const interference::Graph& ig,
+                const boost::sub_range<IRList>& param_insns,
+                vreg_t params_base,
+                const UnorderedMap<reg_t, VirtualRegistersFile>& vreg_files,
+                RegisterTransform* reg_transform,
+                SpillPlan* spills) {
   auto vreg = params_base;
   for (const auto& mie : InstructionIterable(param_insns)) {
     auto* insn = mie.insn;
@@ -256,15 +254,15 @@ void fit_params(
 std::string show(const SpillPlan& spill_plan) {
   std::ostringstream ss;
   ss << "Global spills:\n";
-  for (auto pair : spill_plan.global_spills) {
+  for (auto pair : UnorderedIterable(spill_plan.global_spills)) {
     ss << pair.first << " -> " << pair.second << "\n";
   }
   ss << "Param spills:\n";
-  for (auto reg : spill_plan.param_spills) {
+  for (auto reg : UnorderedIterable(spill_plan.param_spills)) {
     ss << reg << "\n";
   }
   ss << "Range spills:\n";
-  for (const auto& pair : spill_plan.range_spills) {
+  for (const auto& pair : UnorderedIterable(spill_plan.range_spills)) {
     auto* insn = pair.first;
     ss << show(insn) << ": ";
     for (auto idx : pair.second) {
@@ -278,9 +276,9 @@ std::string show(const SpillPlan& spill_plan) {
 std::string show(const SplitPlan& split_plan) {
   std::ostringstream ss;
   ss << "split_around:\n";
-  for (const auto& pair : split_plan.split_around) {
+  for (const auto& pair : UnorderedIterable(split_plan.split_around)) {
     ss << pair.first << ": ";
-    for (auto reg : pair.second) {
+    for (auto reg : UnorderedIterable(pair.second)) {
       ss << reg << " ";
     }
     ss << "\n";
@@ -344,8 +342,8 @@ static bool has_2addr_form(IROpcode op) {
  */
 bool Allocator::coalesce(interference::Graph* ig, cfg::ControlFlowGraph& cfg) {
   // XXX We could use something more compact than an unordered_map?
-  using Rank = std::unordered_map<reg_t, size_t>;
-  using Parent = std::unordered_map<reg_t, reg_t>;
+  using Rank = UnorderedMap<reg_t, size_t>;
+  using Parent = UnorderedMap<reg_t, reg_t>;
   using RankPMap = boost::associative_property_map<Rank>;
   using ParentPMap = boost::associative_property_map<Parent>;
   using RegisterAliasSets = boost::disjoint_sets<RankPMap, ParentPMap>;
@@ -442,12 +440,10 @@ void Allocator::simplify(interference::Graph* ig,
   // of them here since some of them can have zero weight.
   std::set<reg_t> low;
   // Nodes that may not be colorable
-  std::unordered_set<reg_t> high;
+  UnorderedSet<reg_t> high;
 
-  for (const auto& pair : ig->active_nodes()) {
-    auto reg = pair.first;
-    auto& node = pair.second;
-    if (node.is_param() || node.is_range()) {
+  for (auto&& [reg, node] : UnorderedIterable(ig->nodes())) {
+    if (!node.is_active() || node.is_param() || node.is_range()) {
       continue;
     }
     if (node.definitely_colorable()) {
@@ -504,7 +500,7 @@ void Allocator::simplify(interference::Graph* ig,
     // weight) compared to v2 and v3 (tying with v4, but v4 still has a lower
     // spill cost).
     auto spill_candidate_it =
-        std::min_element(high.begin(), high.end(), [ig](reg_t a, reg_t b) {
+        unordered_min_element(high, [ig](reg_t a, reg_t b) {
           auto& node_a = ig->get_node(a);
           auto& node_b = ig->get_node(b);
           if (node_a.is_spilt() != node_b.is_spilt()) {
@@ -578,7 +574,7 @@ void Allocator::select_ranges(const cfg::ControlFlowGraph& cfg,
                               SpillPlan* spill_plan) {
   for (auto* insn : range_set) {
     TRACE(REG, 5, "Allocating %s as range kind", SHOW(insn));
-    std::unordered_map<reg_t, VirtualRegistersFile> vreg_files;
+    UnorderedMap<reg_t, VirtualRegistersFile> vreg_files;
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       auto src = insn->src(i);
       VirtualRegistersFile& vreg_file = vreg_files[src];
@@ -601,7 +597,7 @@ void Allocator::select_params(const cfg::ControlFlowGraph& cfg,
                               const interference::Graph& ig,
                               RegisterTransform* reg_transform,
                               SpillPlan* spill_plan) {
-  std::unordered_map<reg_t, VirtualRegistersFile> vreg_files;
+  UnorderedMap<reg_t, VirtualRegistersFile> vreg_files;
   std::vector<reg_t> param_regs;
   auto param_insns = cfg.get_param_instructions();
   size_t params_size{0};
@@ -630,7 +626,7 @@ void Allocator::select_params(const cfg::ControlFlowGraph& cfg,
 // will result in inserting move in between. Return true if there exist
 // this situation for register u and v, false otherwise.
 bool bad_move_result(reg_t u, reg_t v, const SplitCosts& split_costs) {
-  for (auto mei : split_costs.get_write_result(u)) {
+  for (auto mei : UnorderedIterable(split_costs.get_write_result(u))) {
     auto write_result_insn = mei->insn;
     for (size_t i = 0; i < write_result_insn->srcs_size(); ++i) {
       if (write_result_insn->src(i) == v) {
@@ -647,7 +643,7 @@ bool bad_move_result(reg_t u, reg_t v, const SplitCosts& split_costs) {
 // return false otherwise.
 bool bad_catch(reg_t reg, const SplitCosts& split_costs) {
   const auto& death_at_catch = split_costs.death_at_catch(reg);
-  for (auto pair : death_at_catch) {
+  for (auto pair : UnorderedIterable(death_at_catch)) {
     if (pair.first->preds().size() != pair.second) {
       return true;
     }
@@ -664,11 +660,12 @@ void Allocator::find_split(const interference::Graph& ig,
                            RegisterTransform* reg_transform,
                            SpillPlan* spill_plan,
                            SplitPlan* split_plan) {
-  std::unordered_set<reg_t> to_erase_spill;
+  UnorderedSet<reg_t> to_erase_spill;
   auto& reg_map = reg_transform->map;
   // Find best split/spill plan for all the global spill plan.
-  auto spill_it = spill_plan->global_spills.begin();
-  while (spill_it != spill_plan->global_spills.end()) {
+  auto global_spills_ui = UnorderedIterable(spill_plan->global_spills);
+  auto spill_it = global_spills_ui.begin();
+  while (spill_it != global_spills_ui.end()) {
     auto reg = spill_it->first;
     auto best_cost = ig.get_node(reg).spill_cost();
     if (best_cost == 0) {
@@ -680,7 +677,7 @@ void Allocator::find_split(const interference::Graph& ig,
     bool split_around_name = false;
     // Find all the vregs assigned to reg's neighbors.
     // Key is vreg, value is a set of registers that are mapped to this vreg.
-    std::unordered_map<vreg_t, std::unordered_set<vreg_t>> mapped_neighbors;
+    UnorderedMap<vreg_t, UnorderedSet<vreg_t>> mapped_neighbors;
     auto& node = ig.get_node(reg);
     for (auto adj : node.adjacent()) {
       auto it = reg_map.find(adj);
@@ -690,7 +687,7 @@ void Allocator::find_split(const interference::Graph& ig,
     }
     auto max_reg_bound = ig.get_node(reg).max_vreg();
     // For each vreg(color).
-    for (const auto& vreg_assigned : mapped_neighbors) {
+    for (const auto& vreg_assigned : UnorderedIterable(mapped_neighbors)) {
       // We only want to check neighbors that has vreg assigned that
       // can be used by the reg.
       if (vreg_assigned.first > max_reg_bound) {
@@ -700,7 +697,7 @@ void Allocator::find_split(const interference::Graph& ig,
       // Try to split vreg around reg.
       bool split_OK = true;
       size_t cost = 0;
-      for (auto neighbor : vreg_assigned.second) {
+      for (auto neighbor : UnorderedIterable(vreg_assigned.second)) {
         if (bad_move_result(reg, neighbor, split_costs) ||
             ig.has_containment_edge(neighbor, reg)) {
           split_OK = false;
@@ -721,7 +718,7 @@ void Allocator::find_split(const interference::Graph& ig,
       // Try to split reg around vreg.
       split_OK = true;
       cost = 0;
-      for (auto neighbor : vreg_assigned.second) {
+      for (auto neighbor : UnorderedIterable(vreg_assigned.second)) {
         if (bad_move_result(neighbor, reg, split_costs) ||
             ig.has_containment_edge(reg, neighbor)) {
           split_OK = false;
@@ -746,25 +743,24 @@ void Allocator::find_split(const interference::Graph& ig,
       reg_map.emplace(reg, best_vreg);
       auto neighbors = mapped_neighbors.at(best_vreg);
       if (split_around_name) {
-        for (auto neighbor : neighbors) {
+        for (auto neighbor : UnorderedIterable(neighbors)) {
           split_plan->split_around[reg].emplace(neighbor);
         }
       } else {
-        for (auto neighbor : neighbors) {
+        for (auto neighbor : UnorderedIterable(neighbors)) {
           split_plan->split_around[neighbor].emplace(reg);
         }
       }
-      spill_it = spill_plan->global_spills.erase(spill_it);
+      spill_it = global_spills_ui.erase(spill_it);
     } else {
       ++spill_it;
     }
   }
 }
 
-std::unordered_map<reg_t, cfg::InstructionIterator>
-Allocator::find_param_splits(const std::unordered_set<reg_t>& orig_params,
-                             cfg::ControlFlowGraph& cfg) {
-  std::unordered_map<reg_t, cfg::InstructionIterator> load_locations;
+UnorderedMap<reg_t, cfg::InstructionIterator> Allocator::find_param_splits(
+    const UnorderedSet<reg_t>& orig_params, cfg::ControlFlowGraph& cfg) {
+  UnorderedMap<reg_t, cfg::InstructionIterator> load_locations;
   if (orig_params.empty()) {
     return load_locations;
   }
@@ -772,7 +768,7 @@ Allocator::find_param_splits(const std::unordered_set<reg_t>& orig_params,
   // symreg.
   cfg::Block* first_block_with_insns = cfg.get_first_block_with_insns();
   auto pend = first_block_with_insns->get_first_non_param_loading_insn();
-  std::unordered_set<reg_t> params = orig_params;
+  UnorderedSet<reg_t> params = orig_params;
   auto ii = InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto* insn = it->insn;
@@ -800,7 +796,7 @@ Allocator::find_param_splits(const std::unordered_set<reg_t>& orig_params,
 
   cfg::Block* start_block = cfg.entry_block();
   auto doms = dominators::SimpleFastDominators<cfg::GraphInterface>(cfg);
-  for (auto param : params) {
+  for (auto param : UnorderedIterable(params)) {
     auto block_uses = find_first_uses(param, start_block);
     // Since this function only gets called for param regs that need to be
     // spilled, they must be constrained by at least one use.
@@ -857,7 +853,7 @@ Allocator::find_param_splits(const std::unordered_set<reg_t>& orig_params,
  * bit more complicated, so we just insert a load at the start of the method.
  */
 void Allocator::split_params(const interference::Graph& ig,
-                             const std::unordered_set<reg_t>& param_spills,
+                             const UnorderedSet<reg_t>& param_spills,
                              cfg::ControlFlowGraph& cfg) {
   auto load_locations = find_param_splits(param_spills, cfg);
   if (load_locations.empty()) {
@@ -867,7 +863,7 @@ void Allocator::split_params(const interference::Graph& ig,
   // Remap the operands of the load-param opcodes
   auto params = cfg.get_param_instructions();
   auto param_insns = InstructionIterable(params);
-  std::unordered_map<reg_t, reg_t> param_to_temp;
+  UnorderedMap<reg_t, reg_t> param_to_temp;
   for (auto& mie : param_insns) {
     auto insn = mie.insn;
     auto dest = insn->dest();
@@ -878,7 +874,7 @@ void Allocator::split_params(const interference::Graph& ig,
     }
   }
   // Insert the loads
-  for (const auto& param_pair : load_locations) {
+  for (const auto& param_pair : UnorderedIterable(load_locations)) {
     auto dest = param_pair.first;
     auto first_use_it = param_pair.second;
     cfg.insert_before(
