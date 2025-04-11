@@ -32,7 +32,7 @@ using namespace uninitialized_objects;
 struct ScoredClosure {
   cfg::Block* switch_block;
   std::vector<const Closure*> closures;
-  std::unordered_set<const ReducedBlock*> reduced_components{};
+  UnorderedSet<const ReducedBlock*> reduced_components{};
   size_t split_size{};
   size_t remaining_size{};
   HotSplitKind hot_split_kind{};
@@ -55,23 +55,22 @@ struct ScoredClosure {
 
 // For a given switch-block/closures, find all incoming preds which will be
 // eliminated by splitting them out.
-std::unordered_set<const ReducedEdge*> get_except_preds(
+UnorderedSet<const ReducedEdge*> get_except_preds(
     cfg::Block* switch_block,
     const std::vector<const Closure*>& closures,
-    const std::unordered_set<const ReducedBlock*>& reduced_components,
-    std::unordered_set<int32_t>* except_case_keys) {
-  std::unordered_set<const ReducedEdge*> except_preds;
+    const UnorderedSet<const ReducedBlock*>& reduced_components,
+    UnorderedSet<int32_t>* except_case_keys) {
+  UnorderedSet<const ReducedEdge*> except_preds;
   for (auto* c : closures) {
-    except_preds.insert(c->reduced_block->preds.begin(),
-                        c->reduced_block->preds.end());
+    insert_unordered_iterable(except_preds, c->reduced_block->preds);
   }
   if (switch_block) {
     for (auto* c : closures) {
-      for (auto* pred : c->reduced_block->preds) {
+      for (auto* pred : UnorderedIterable(c->reduced_block->preds)) {
         if (reduced_components.count(pred->src)) {
           continue;
         }
-        for (auto* e : pred->edges) {
+        for (auto* e : UnorderedIterable(pred->edges)) {
           if (e->src() != switch_block) {
             except_preds.erase(pred);
             break;
@@ -87,7 +86,7 @@ std::unordered_set<const ReducedEdge*> get_except_preds(
 
 bool is_large(const Config& config,
               cfg::Block* switch_block,
-              const std::unordered_set<int32_t>* except_case_keys = nullptr) {
+              const UnorderedSet<int32_t>* except_case_keys = nullptr) {
   // ">" and not ">=" because the succs include the default edge.
   return switch_block->succs().size() -
              (except_case_keys ? except_case_keys->size() : 0) >
@@ -95,7 +94,7 @@ bool is_large(const Config& config,
 }
 
 bool is_packed(cfg::Block* switch_block,
-               const std::unordered_set<int32_t>* except_case_keys = nullptr) {
+               const UnorderedSet<int32_t>* except_case_keys = nullptr) {
   instruction_lowering::CaseKeysExtentBuilder ckeb;
   for (auto* e : switch_block->succs()) {
     if (e->type() != cfg::EDGE_BRANCH) {
@@ -119,8 +118,7 @@ std::optional<ScoredClosure> score(
     const std::vector<const Closure*>& closures) {
   ScoredClosure sc{switch_block, closures};
   for (auto* c : closures) {
-    sc.reduced_components.insert(c->reduced_components.begin(),
-                                 c->reduced_components.end());
+    insert_unordered_iterable(sc.reduced_components, c->reduced_components);
   }
   auto reduced_components_code_size = code_size(sc.reduced_components);
   sc.split_size = config.cost_split_method + reduced_components_code_size;
@@ -131,7 +129,7 @@ std::optional<ScoredClosure> score(
   bool any_src_hot{false};
   bool any_target_hot{false};
   for (auto* c : closures) {
-    for (auto* pred : c->reduced_block->preds) {
+    for (auto* pred : UnorderedIterable(c->reduced_block->preds)) {
       any_src_hot |= pred->src->is_hot;
     }
     any_target_hot |= c->reduced_block->is_hot;
@@ -182,7 +180,7 @@ std::optional<ScoredClosure> score(
     not_reached();
   }
 
-  std::unordered_set<int32_t> except_case_keys;
+  UnorderedSet<int32_t> except_case_keys;
   auto except_preds = get_except_preds(
       switch_block, closures, sc.reduced_components, &except_case_keys);
   if (is_large_packed_switch) {
@@ -192,7 +190,7 @@ std::optional<ScoredClosure> score(
         !is_packed(switch_block, &except_case_keys);
     if (except_case_keys.size() >= config.min_large_switch_size) {
       instruction_lowering::CaseKeysExtentBuilder ckeb;
-      for (auto case_key : except_case_keys) {
+      for (auto case_key : UnorderedIterable(except_case_keys)) {
         ckeb.insert(case_key);
       }
       sc.creates_large_sparse_switch = ckeb->sufficiently_sparse();
@@ -213,20 +211,20 @@ std::optional<ScoredClosure> score(
   return std::optional<ScoredClosure>(std::move(sc));
 };
 
-std::unordered_set<const ReducedBlock*> get_critical_components(
+UnorderedSet<const ReducedBlock*> get_critical_components(
     const std::vector<std::pair<int32_t, const Closure*>>& keyed,
     const Closure* fallthrough) {
-  std::unordered_map<const ReducedBlock*, size_t> counts;
+  UnorderedMap<const ReducedBlock*, size_t> counts;
   auto add_to_counts = [&counts](const Closure* c) {
-    for (auto* component : c->reduced_components) {
+    for (auto* component : UnorderedIterable(c->reduced_components)) {
       counts[component]++;
     }
   };
   for (auto [_, c] : keyed) {
     add_to_counts(c);
   }
-  std::unordered_set<const ReducedBlock*> critical_components;
-  for (auto [c, count] : counts) {
+  UnorderedSet<const ReducedBlock*> critical_components;
+  for (auto [c, count] : UnorderedIterable(counts)) {
     if (count < keyed.size() && !fallthrough->reduced_components.count(c)) {
       critical_components.insert(c);
     }
@@ -366,7 +364,7 @@ std::vector<ScoredClosure> get_scored_closures(const Config& config,
   // For all possible closures, do some quick filtering, and score the
   // surviving ones
   std::vector<ScoredClosure> scored_closures;
-  std::unordered_map<cfg::Block*, std::vector<const Closure*>>
+  UnorderedMap<cfg::Block*, std::vector<const Closure*>>
       remaining_switch_case_closures;
   for (auto& c : mcs.closures) {
     auto opt_sc = score(config, mcs, max_overhead_ratio,
@@ -375,7 +373,7 @@ std::vector<ScoredClosure> get_scored_closures(const Config& config,
     if (opt_sc) {
       scored_closures.push_back(std::move(*opt_sc));
     }
-    for (auto* src : c.srcs) {
+    for (auto* src : UnorderedIterable(c.srcs)) {
       if (src->branchingness() == opcode::BRANCH_SWITCH) {
         remaining_switch_case_closures[src].push_back(&c);
       }
@@ -389,7 +387,8 @@ std::vector<ScoredClosure> get_scored_closures(const Config& config,
       [](const auto* c) { return !c->reduced_block->is_hot; },
       [](const auto* c) { return c->reduced_block->is_hot; },
       [](const auto*) { return true; }};
-  for (auto&& [switch_block, switched] : remaining_switch_case_closures) {
+  for (auto&& [switch_block, switched] :
+       UnorderedIterable(remaining_switch_case_closures)) {
     auto is_large_packed_switch =
         is_large(config, switch_block) && is_packed(switch_block);
     for (const auto& predicate : predicates) {
@@ -440,11 +439,11 @@ std::vector<SplittableClosure> to_splittable_closures(
     return std::make_unique<UninitializedObjectEnvironments>(
         get_uninitialized_object_environments(method));
   });
-  Lazy<std::unordered_map<IRInstruction*, const ReducedBlock*>> insns([&rcfg] {
-    auto res = std::make_unique<
-        std::unordered_map<IRInstruction*, const ReducedBlock*>>();
+  Lazy<UnorderedMap<IRInstruction*, const ReducedBlock*>> insns([&rcfg] {
+    auto res =
+        std::make_unique<UnorderedMap<IRInstruction*, const ReducedBlock*>>();
     for (auto* reduced_block : rcfg.blocks()) {
-      for (auto block : reduced_block->blocks) {
+      for (auto block : UnorderedIterable(reduced_block->blocks)) {
         for (auto& mie : InstructionIterable(block)) {
           res->emplace(mie.insn, reduced_block);
         }
@@ -456,7 +455,7 @@ std::vector<SplittableClosure> to_splittable_closures(
     return std::make_unique<live_range::DefUseChains>(
         live_range::Chains(cfg).get_def_use_chains());
   });
-  std::unordered_set<const ReducedBlock*> covered;
+  UnorderedSet<const ReducedBlock*> covered;
   std20::erase_if(scored_closures, [&covered, &ota, &liveness_fp_iter,
                                     &uninitialized_objects, &insns, &def_uses,
                                     max_live_in](auto& sc) {
@@ -515,7 +514,7 @@ std::vector<SplittableClosure> to_splittable_closures(
       }
     }
 
-    covered.insert(sc.reduced_components.begin(), sc.reduced_components.end());
+    insert_unordered_iterable(covered, sc.reduced_components);
     return false;
   });
   // remaining scored closures should be all non-overlapping now
@@ -533,13 +532,13 @@ std::vector<SplittableClosure> to_splittable_closures(
       oss << "\n";
       oss << "   - ";
       std::vector<const cfg::Block*> blocks;
-      std::unordered_set<const ReducedBlock*> reachable;
+      UnorderedSet<const ReducedBlock*> reachable;
       for (auto* c : sc.closures) {
-        blocks.insert(blocks.end(), c->reduced_block->blocks.begin(),
-                      c->reduced_block->blocks.end());
+        insert_unordered_iterable(blocks, blocks.end(),
+                                  c->reduced_block->blocks);
         oss << "R" << c->reduced_block->id << ",";
         auto c_reachable = rcfg.reachable(c->reduced_block);
-        reachable.insert(c_reachable.begin(), c_reachable.end());
+        insert_unordered_iterable(reachable, c_reachable);
       }
       oss << ": ";
       std::sort(blocks.begin(), blocks.end(),
@@ -548,7 +547,7 @@ std::vector<SplittableClosure> to_splittable_closures(
         oss << "B" << b->id() << ", ";
       }
       oss << "reaches ";
-      for (auto* other : reachable) {
+      for (auto* other : UnorderedIterable(reachable)) {
         oss << "R" << other->id << ", ";
       }
       oss << "\n";
@@ -687,7 +686,7 @@ select_splittable_closures_from_top_level_switch_cases(
 
     std::vector<ScoredClosure> scored_closures;
     for (auto& c : mcs->closures) {
-      if (c.srcs.size() != 1 || *c.srcs.begin() != entry_block) {
+      if (c.srcs.size() != 1 || *unordered_any(c.srcs) != entry_block) {
         continue;
       }
       if (c.reduced_block->blocks.count(default_block)) {
@@ -696,8 +695,7 @@ select_splittable_closures_from_top_level_switch_cases(
         continue;
       }
       ScoredClosure sc{/* switch_block */ nullptr, {&c}};
-      sc.reduced_components.insert(c.reduced_components.begin(),
-                                   c.reduced_components.end());
+      insert_unordered_iterable(sc.reduced_components, c.reduced_components);
       scored_closures.emplace_back(std::move(sc));
     }
     auto splittable_closures =

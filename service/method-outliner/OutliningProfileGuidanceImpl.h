@@ -8,6 +8,7 @@
 #pragma once
 
 #include "BigBlocks.h"
+#include "DeterministicContainers.h"
 #include "Lazy.h"
 #include "OutliningProfileGuidance.h"
 
@@ -19,8 +20,8 @@ namespace outliner_impl {
 void get_throughput_interactions(
     ConfigFiles& config_files,
     const outliner::ProfileGuidanceConfig& config,
-    std::unordered_set<size_t>* throughput_interaction_indices,
-    std::unordered_set<std::string>* throughput_interaction_ids);
+    UnorderedSet<size_t>* throughput_interaction_indices,
+    UnorderedSet<std::string>* throughput_interaction_ids);
 
 ////////////////////////////////////////////////////////////////////////////////
 // gather_sufficiently_warm_and_hot_methods
@@ -49,24 +50,23 @@ void gather_sufficiently_warm_and_hot_methods(
     ConfigFiles& config_files,
     PassManager& mgr,
     const outliner::ProfileGuidanceConfig& config,
-    const std::unordered_set<std::string>& throughput_interaction_ids,
-    std::unordered_set<DexMethod*>* throughput_methods,
-    std::unordered_set<DexMethod*>* sufficiently_warm_methods,
-    std::unordered_set<DexMethod*>* sufficiently_hot_methods);
+    const UnorderedSet<std::string>& throughput_interaction_ids,
+    UnorderedSet<DexMethod*>* throughput_methods,
+    UnorderedSet<DexMethod*>* sufficiently_warm_methods,
+    UnorderedSet<DexMethod*>* sufficiently_hot_methods);
 
-void propagate_hotness(
-    const Scope& scope,
-    ConfigFiles& config_files,
-    std::unordered_set<DexMethod*>* sufficiently_warm_methods,
-    std::unordered_set<DexMethod*>* sufficiently_hot_methods,
-    float block_profiles_hits);
+void propagate_hotness(const Scope& scope,
+                       ConfigFiles& config_files,
+                       UnorderedSet<DexMethod*>* sufficiently_warm_methods,
+                       UnorderedSet<DexMethod*>* sufficiently_hot_methods,
+                       float block_profiles_hits);
 
 outliner::PerfSensitivity parse_perf_sensitivity(const std::string& str);
 
 class CanOutlineBlockDecider {
  private:
   const outliner::ProfileGuidanceConfig& m_config;
-  const std::unordered_set<size_t>& m_throughput_interaction_indices;
+  const UnorderedSet<size_t>& m_throughput_interaction_indices;
   bool m_throughput;
   bool m_sufficiently_warm;
   bool m_sufficiently_hot;
@@ -78,7 +78,7 @@ class CanOutlineBlockDecider {
  public:
   CanOutlineBlockDecider(
       const outliner::ProfileGuidanceConfig& config,
-      const std::unordered_set<size_t>& throughput_interaction_indices,
+      const UnorderedSet<size_t>& throughput_interaction_indices,
       bool throughput,
       bool sufficiently_warm,
       bool sufficiently_hot);

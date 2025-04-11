@@ -95,6 +95,9 @@
  *       variable, always use `auto&&` to deal with the possibility that
  *       `UnorderedIterable(...)` returns a reference to the original collection
  *       that you don't want to copy.
+ *     - If you must refer to the type of an unordered iterator associated
+ *       with a `auto&& ui`, use
+ *       `using iterator = std::remove_reference_t<decltype(ui)>::iterator;`
  * - If you need to sort an unordered collection, see if the `unordered_order`
  *   or `ordered_order_keys` helper functions work for you.
  */
@@ -954,8 +957,12 @@ typename Collection::difference_type unordered_count_if(
   return std::count_if(ui.begin(), ui.end(), std::move(pred));
 }
 
-template <class Collection, typename Pred>
-size_t unordered_erase_if(Collection& collection, const Pred& pred) {
+template <class UnorderedCollection,
+          typename Pred,
+          std::enable_if_t<std::is_base_of_v<UnorderedBase<UnorderedCollection>,
+                                             UnorderedCollection>,
+                           bool> = true>
+size_t unordered_erase_if(UnorderedCollection& collection, const Pred& pred) {
   size_t removed = 0;
   auto&& ui = UnorderedIterable(collection);
   for (auto it = ui.begin(), end = ui.end(); it != end;) {

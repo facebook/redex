@@ -14,9 +14,9 @@ using namespace method_splitting_impl;
 ReducedCFGClosureAdapter::ReducedCFGClosureAdapter(
     OutlinerTypeAnalysis& ota,
     IRInstruction* first_insn,
-    Lazy<std::unordered_map<IRInstruction*,
-                            const method_splitting_impl::ReducedBlock*>>& insns,
-    const std::unordered_set<const ReducedBlock*>& reduced_components,
+    Lazy<UnorderedMap<IRInstruction*,
+                      const method_splitting_impl::ReducedBlock*>>& insns,
+    const UnorderedSet<const ReducedBlock*>& reduced_components,
     Lazy<live_range::DefUseChains>& def_uses)
     : m_ota(ota),
       m_first_insn(first_insn),
@@ -40,14 +40,14 @@ sparta::PatriciaTreeSet<IRInstruction*> ReducedCFGClosureAdapter::get_defs(
 }
 
 void ReducedCFGClosureAdapter::gather_type_demands(
-    std::unordered_set<reg_t> regs_to_track,
+    UnorderedSet<reg_t> regs_to_track,
     const std::function<bool(IRInstruction*, src_index_t)>& follow,
-    std::unordered_set<const DexType*>* type_demands) const {
+    UnorderedSet<const DexType*>* type_demands) const {
   std::queue<IRInstruction*> workqueue;
-  std::unordered_set<IRInstruction*> visited;
+  UnorderedSet<IRInstruction*> visited;
   auto irdef_env =
       m_ota.m_immediate_reaching_defs_environments->at(m_first_insn);
-  for (auto reg : regs_to_track) {
+  for (auto reg : UnorderedIterable(regs_to_track)) {
     auto defs = irdef_env.get(reg).elements();
     for (auto* def : defs) {
       workqueue.push(def);

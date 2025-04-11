@@ -176,8 +176,8 @@ class MethodProfiles {
   get_unresolved_method_descriptor_tokens() const;
 
   void resolve_method_descriptor_tokens(
-      const std::unordered_map<dex_member_refs::MethodDescriptorTokens,
-                               std::vector<DexMethodRef*>>& map);
+      const UnorderedMap<dex_member_refs::MethodDescriptorTokens,
+                         std::vector<DexMethodRef*>>& map);
 
   // If there are not observed stats for the target, derive it from the given
   // sources.
@@ -256,8 +256,8 @@ class MethodProfiles {
 
   void process_unresolved_lines(bool baseline_profile_variant);
   void resolve_method_descriptor_tokens(
-      const std::unordered_map<dex_member_refs::MethodDescriptorTokens,
-                               std::vector<DexMethodRef*>>& map,
+      const UnorderedMap<dex_member_refs::MethodDescriptorTokens,
+                         std::vector<DexMethodRef*>>& map,
       bool baseline_profile_variant);
 };
 

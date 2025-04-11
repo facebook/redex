@@ -9,10 +9,10 @@
 
 #include <atomic>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 #include "ConcurrentContainers.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "MethodSplittingConfig.h"
 #include "SplittableClosures.h"
@@ -35,7 +35,7 @@ struct Stats {
   std::atomic<size_t> kept_large_packed_switches{0};
   std::atomic<size_t> created_large_sparse_switches{0};
   std::atomic<size_t> destroyed_large_packed_switches{0};
-  std::unordered_set<DexMethod*> added_methods;
+  UnorderedSet<DexMethod*> added_methods;
   std::atomic<size_t> excluded_methods{0};
   size_t iterations{0};
 };

@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "Lazy.h"
 #include "OutlinerTypeAnalysis.h"
 #include "PartialCandidates.h"
@@ -20,9 +21,9 @@ class PartialCandidateAdapter : public CandidateAdapter {
   const type_inference::TypeEnvironment& get_type_env() const override;
   const reaching_defs::Environment& get_rdef_env() const override;
   void gather_type_demands(
-      std::unordered_set<reg_t> regs_to_track,
+      UnorderedSet<reg_t> regs_to_track,
       const std::function<bool(IRInstruction*, src_index_t)>& follow,
-      std::unordered_set<const DexType*>* type_demands) const override {
+      UnorderedSet<const DexType*>* type_demands) const override {
     gather_type_demands(m_pc.root, std::move(regs_to_track), follow,
                         type_demands);
   }
@@ -31,15 +32,15 @@ class PartialCandidateAdapter : public CandidateAdapter {
  private:
   void gather_type_demands(
       const PartialCandidateNode& pcn,
-      std::unordered_set<reg_t> regs_to_track,
+      UnorderedSet<reg_t> regs_to_track,
       const std::function<bool(IRInstruction*, src_index_t)>& follow,
-      std::unordered_set<const DexType*>* type_demands) const;
+      UnorderedSet<const DexType*>* type_demands) const;
 
   OutlinerTypeAnalysis& m_ota;
   PartialCandidate m_pc;
   std::optional<reg_t> m_out_reg;
   const DexType* m_res_type{nullptr};
-  mutable Lazy<std::unordered_set<IRInstruction*>> m_insns;
+  mutable Lazy<UnorderedSet<IRInstruction*>> m_insns;
 };
 
 } // namespace outliner_impl

@@ -26,7 +26,7 @@ namespace {
 
 using namespace method_splitting_impl;
 
-std::unordered_set<const ReducedBlock*> get_blocks_with_final_field_puts(
+UnorderedSet<const ReducedBlock*> get_blocks_with_final_field_puts(
     DexMethod* method, const ReducedControlFlowGraph* rcfg) {
   if (!method::is_any_init(method)) {
     return {};
@@ -51,10 +51,9 @@ std::unordered_set<const ReducedBlock*> get_blocks_with_final_field_puts(
     }
     return false;
   };
-  std::unordered_set<const ReducedBlock*> res;
+  UnorderedSet<const ReducedBlock*> res;
   for (auto* reduced_block : rcfg->blocks()) {
-    if (std::any_of(reduced_block->blocks.begin(), reduced_block->blocks.end(),
-                    has_unsplittable_insn)) {
+    if (unordered_any_of(reduced_block->blocks, has_unsplittable_insn)) {
       res.insert(reduced_block);
     }
   }
@@ -173,7 +172,7 @@ std::shared_ptr<MethodClosures> discover_closures(
     bool any_throw{false};
     bool any_non_zero_monitor_count{false};
     bool too_many_targets{false};
-    std::unordered_set<cfg::Block*> srcs;
+    UnorderedSet<cfg::Block*> srcs;
     cfg::Block* target{nullptr};
     for (auto* e : reduced_block->expand_preds()) {
       if (e->type() == cfg::EDGE_THROW) {
@@ -201,8 +200,8 @@ std::shared_ptr<MethodClosures> discover_closures(
       continue;
     }
     auto reachable = rcfg->reachable(reduced_block);
-    if (std::any_of(excluded_blocks.begin(), excluded_blocks.end(),
-                    [&](auto* e) { return reachable.count(e); })) {
+    if (unordered_any_of(excluded_blocks,
+                         [&](auto* e) { return reachable.count(e); })) {
       continue;
     }
     closures.push_back((Closure){reduced_block, std::move(reachable),

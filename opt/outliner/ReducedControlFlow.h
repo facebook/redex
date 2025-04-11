@@ -8,6 +8,7 @@
 #pragma once
 
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "SourceBlocks.h"
 
@@ -29,14 +30,14 @@ struct ReducedBlock;
 struct ReducedEdge {
   const ReducedBlock* src{nullptr};
   const ReducedBlock* target{nullptr};
-  std::unordered_set<const cfg::Edge*> edges{};
+  UnorderedSet<const cfg::Edge*> edges{};
 };
 
 struct ReducedBlock {
   size_t id;
-  std::unordered_set<const cfg::Block*> blocks;
-  std::unordered_set<const ReducedEdge*> preds;
-  std::unordered_set<const ReducedEdge*> succs;
+  UnorderedSet<const cfg::Block*> blocks;
+  UnorderedSet<const ReducedEdge*> preds;
+  UnorderedSet<const ReducedEdge*> succs;
   size_t code_size{0};
   bool is_hot{false};
 
@@ -53,9 +54,9 @@ class ReducedControlFlowGraph {
 
   const ReducedBlock* entry_block() const;
 
-  std::unordered_set<const ReducedBlock*> reachable(
+  UnorderedSet<const ReducedBlock*> reachable(
       const ReducedBlock* head,
-      const std::unordered_set<const ReducedEdge*>& except_edges = {}) const;
+      const UnorderedSet<const ReducedEdge*>& except_edges = {}) const;
 
   ReducedBlock* get_reduced_block(const cfg::Block* block) const;
 
@@ -69,17 +70,16 @@ class ReducedControlFlowGraph {
   }
   cfg::ControlFlowGraph& m_cfg;
   std::vector<std::unique_ptr<ReducedBlock>> m_reduced_blocks;
-  std::unordered_map<ReducedBlock*,
-                     std::unordered_map<ReducedBlock*, ReducedEdge>>
+  UnorderedMap<ReducedBlock*, UnorderedMap<ReducedBlock*, ReducedEdge>>
       m_reduced_edges;
-  std::unordered_map<const cfg::Block*, ReducedBlock*> m_blocks;
+  UnorderedMap<const cfg::Block*, ReducedBlock*> m_blocks;
   size_t m_code_size;
 };
 
 template <class ReducedBlockCollection>
 size_t code_size(const ReducedBlockCollection& blocks) {
   size_t res{0};
-  for (const ReducedBlock* block : blocks) {
+  for (const ReducedBlock* block : UnorderedIterable(blocks)) {
     res += block->code_size;
   }
   return res;

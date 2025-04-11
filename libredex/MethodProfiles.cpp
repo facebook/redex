@@ -736,15 +736,15 @@ MethodProfiles::get_unresolved_method_descriptor_tokens() const {
 }
 
 void MethodProfiles::resolve_method_descriptor_tokens(
-    const std::unordered_map<dex_member_refs::MethodDescriptorTokens,
-                             std::vector<DexMethodRef*>>& map) {
+    const UnorderedMap<dex_member_refs::MethodDescriptorTokens,
+                       std::vector<DexMethodRef*>>& map) {
   resolve_method_descriptor_tokens(map, true);
   resolve_method_descriptor_tokens(map, false);
 }
 
 void MethodProfiles::resolve_method_descriptor_tokens(
-    const std::unordered_map<dex_member_refs::MethodDescriptorTokens,
-                             std::vector<DexMethodRef*>>& map,
+    const UnorderedMap<dex_member_refs::MethodDescriptorTokens,
+                       std::vector<DexMethodRef*>>& map,
     bool baseline_profile_variant) {
   size_t removed{0};
   size_t added{0};

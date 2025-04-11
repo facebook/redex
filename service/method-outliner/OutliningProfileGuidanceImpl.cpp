@@ -27,8 +27,8 @@ using namespace outliner;
 void get_throughput_interactions(
     ConfigFiles& config_files,
     const outliner::ProfileGuidanceConfig& config,
-    std::unordered_set<size_t>* throughput_interaction_indices,
-    std::unordered_set<std::string>* throughput_interaction_ids) {
+    UnorderedSet<size_t>* throughput_interaction_indices,
+    UnorderedSet<std::string>* throughput_interaction_ids) {
   if (config.throughput_interaction_name_pattern.empty()) {
     return;
   }
@@ -56,10 +56,10 @@ void gather_sufficiently_warm_and_hot_methods(
     ConfigFiles& config_files,
     PassManager& mgr,
     const ProfileGuidanceConfig& config,
-    const std::unordered_set<std::string>& throughput_interaction_ids,
-    std::unordered_set<DexMethod*>* throughput_methods,
-    std::unordered_set<DexMethod*>* sufficiently_warm_methods,
-    std::unordered_set<DexMethod*>* sufficiently_hot_methods) {
+    const UnorderedSet<std::string>& throughput_interaction_ids,
+    UnorderedSet<DexMethod*>* throughput_methods,
+    UnorderedSet<DexMethod*>* sufficiently_warm_methods,
+    UnorderedSet<DexMethod*>* sufficiently_hot_methods) {
   bool has_method_profiles{false};
   if (config.use_method_profiles) {
     auto& method_profiles = config_files.get_method_profiles();
@@ -104,7 +104,7 @@ void gather_sufficiently_warm_and_hot_methods(
     }
   }
 
-  std::unordered_set<DexType*> perf_sensitive_classes;
+  UnorderedSet<DexType*> perf_sensitive_classes;
   if (mgr.interdex_has_run()) {
     walk::classes(scope, [&perf_sensitive_classes](DexClass* cls) {
       if (cls->is_perf_sensitive()) {
@@ -167,8 +167,8 @@ void gather_sufficiently_warm_and_hot_methods(
 std::vector<DexMethod*> get_possibly_warm_or_hot_methods(
     const Scope& scope,
     ConfigFiles& config_files,
-    std::unordered_set<DexMethod*>* sufficiently_warm_methods,
-    std::unordered_set<DexMethod*>* sufficiently_hot_methods,
+    UnorderedSet<DexMethod*>* sufficiently_warm_methods,
+    UnorderedSet<DexMethod*>* sufficiently_hot_methods,
     float block_profiles_hits) {
 
   // This function will identify all methods, m, which were not called
@@ -256,8 +256,8 @@ std::vector<DexMethod*> get_possibly_warm_or_hot_methods(
 void mark_callees_warm_or_hot(
     const Scope& scope,
     std::vector<DexMethod*>& possibly_warm_or_hot,
-    std::unordered_set<DexMethod*>* sufficiently_warm_methods,
-    std::unordered_set<DexMethod*>* sufficiently_hot_methods) {
+    UnorderedSet<DexMethod*>* sufficiently_warm_methods,
+    UnorderedSet<DexMethod*>* sufficiently_hot_methods) {
   // This function will mark methods from the possibly_warm_or_hot list hot or
   // warm if they have a caller which was warm or hot. Note that if a method
   // had a hot and a warm caller, it will be considered hot.
@@ -332,12 +332,11 @@ void mark_callees_warm_or_hot(
         num_new_hot);
 }
 
-void propagate_hotness(
-    const Scope& scope,
-    ConfigFiles& config_files,
-    std::unordered_set<DexMethod*>* sufficiently_warm_methods,
-    std::unordered_set<DexMethod*>* sufficiently_hot_methods,
-    float block_profiles_hits) {
+void propagate_hotness(const Scope& scope,
+                       ConfigFiles& config_files,
+                       UnorderedSet<DexMethod*>* sufficiently_warm_methods,
+                       UnorderedSet<DexMethod*>* sufficiently_hot_methods,
+                       float block_profiles_hits) {
   // When enabled in the config, this function will propagate sufficient
   // "hotness" or "warmness" to callees of sufficiently hot and warm methods
   // whose entry blocks were executed according to block profiles.
@@ -392,7 +391,7 @@ PerfSensitivity parse_perf_sensitivity(const std::string& str) {
 
 CanOutlineBlockDecider::CanOutlineBlockDecider(
     const outliner::ProfileGuidanceConfig& config,
-    const std::unordered_set<size_t>& throughput_interaction_indices,
+    const UnorderedSet<size_t>& throughput_interaction_indices,
     bool throughput,
     bool sufficiently_warm,
     bool sufficiently_hot)
@@ -416,7 +415,7 @@ CanOutlineBlockDecider::can_outline_from_big_block(
     if (!m_is_in_loop) {
       m_is_in_loop.reset(
           new LazyUnorderedMap<cfg::Block*, bool>([](cfg::Block* block) {
-            std::unordered_set<cfg::Block*> visited;
+            UnorderedSet<cfg::Block*> visited;
             std::queue<cfg::Block*> work_queue;
             for (auto e : block->succs()) {
               work_queue.push(e->target());
@@ -447,7 +446,8 @@ CanOutlineBlockDecider::can_outline_from_big_block(
                 if (sb == nullptr) {
                   return false;
                 }
-                for (auto index : m_throughput_interaction_indices) {
+                for (auto index :
+                     UnorderedIterable(m_throughput_interaction_indices)) {
                   auto& val_pair = sb->vals[index];
                   if (!val_pair &&
                       val_pair->val > m_config.block_profiles_hits) {
