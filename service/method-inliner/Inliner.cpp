@@ -191,9 +191,9 @@ MultiMethodInliner::MultiMethodInliner(
       for (auto insn : caller_insns.second) {
         m_caller_virtual_callees[caller_insns.first].insns[insn] = callee;
       }
-      auto ui =
-          UnorderedIterable(callee_callers.second.inlined_invokes_need_cast);
-      m_inlined_invokes_need_cast.insert(ui.begin(), ui.end());
+      insert_unordered_iterable(
+          m_inlined_invokes_need_cast,
+          callee_callers.second.inlined_invokes_need_cast);
     }
   }
   if (mode == IntraDex) {
