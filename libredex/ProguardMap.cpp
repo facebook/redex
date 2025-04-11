@@ -19,16 +19,15 @@
 
 namespace {
 
-std::string find_or_same(
-    const std::string& key,
-    const std::unordered_map<std::string, std::string>& map) {
+std::string find_or_same(const std::string& key,
+                         const UnorderedMap<std::string, std::string>& map) {
   auto it = map.find(key);
   if (it == map.end()) return key;
   return it->second;
 }
 
 std::string convert_scalar_type(std::string_view type) {
-  static const std::unordered_map<std::string_view, std::string> prim_map = {
+  static const UnorderedMap<std::string_view, std::string> prim_map = {
       {"void", "V"},  {"boolean", "Z"}, {"byte", "B"},
       {"short", "S"}, {"char", "C"},    {"int", "I"},
       {"long", "J"},  {"float", "F"},   {"double", "D"}};
