@@ -10,10 +10,10 @@
 #include <boost/optional.hpp>
 #include <map>
 #include <mutex>
-#include <unordered_map>
 #include <utility>
 
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "IRCode.h"
 #include "PassManager.h"
@@ -50,8 +50,8 @@ namespace {
 using StrBuilderId = uint32_t;
 
 class RegMap {
-  using RegStrMap = std::unordered_map<reg_t, std::string>;
-  using RegBuilderMap = std::unordered_map<reg_t, StrBuilderId>;
+  using RegStrMap = UnorderedMap<reg_t, std::string>;
+  using RegBuilderMap = UnorderedMap<reg_t, StrBuilderId>;
   RegStrMap m_strings;
   RegBuilderMap m_builders;
 
@@ -146,7 +146,7 @@ struct LockedMethodSet {
 
 class Concatenator {
 
-  using BuilderStrMap = std::unordered_map<StrBuilderId, std::string>;
+  using BuilderStrMap = UnorderedMap<StrBuilderId, std::string>;
   using FieldMap = std::map<DexFieldRef*, std::string, dexfields_comparator>;
 
   const ConcatenatorConfig& m_config;
