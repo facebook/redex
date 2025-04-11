@@ -10,8 +10,8 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <unordered_map>
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "IRInstruction.h"
 #include "OptDataDefs.h"
@@ -102,7 +102,7 @@ class MethodOptData {
   size_t m_line_num{0};
   std::vector<OptReason> m_opts;
   std::vector<NoptReason> m_nopts;
-  std::unordered_map<const IRInstruction*, std::shared_ptr<InsnOptData>>
+  UnorderedMap<const IRInstruction*, std::shared_ptr<InsnOptData>>
       m_insn_opt_map;
 };
 
@@ -123,8 +123,7 @@ class ClassOptData {
   std::string_view m_filename;
   std::vector<OptReason> m_opts;
   std::vector<NoptReason> m_nopts;
-  std::unordered_map<const DexMethod*, std::shared_ptr<MethodOptData>>
-      m_meth_opt_map;
+  UnorderedMap<const DexMethod*, std::shared_ptr<MethodOptData>> m_meth_opt_map;
 };
 
 /**
@@ -178,10 +177,9 @@ class OptDataMapper {
 
  private:
   bool m_logs_enabled{false};
-  std::unordered_map<const DexClass*, std::shared_ptr<ClassOptData>>
-      m_cls_opt_map;
-  std::unordered_map<int /*OptReason*/, std::string> m_opt_msg_map;
-  std::unordered_map<int /*NoptReason*/, std::string> m_nopt_msg_map;
+  UnorderedMap<const DexClass*, std::shared_ptr<ClassOptData>> m_cls_opt_map;
+  UnorderedMap<int /*OptReason*/, std::string> m_opt_msg_map;
+  UnorderedMap<int /*NoptReason*/, std::string> m_nopt_msg_map;
 
   OptDataMapper() {
     init_opt_messages();
@@ -197,8 +195,8 @@ class OptDataMapper {
   /**
    * For the table {msg_type}_messages, append each row as an entry to arr.
    */
-  void serialize_messages_helper(
-      const std::unordered_map<int, std::string>& msg_map, Json::Value* arr);
+  void serialize_messages_helper(const UnorderedMap<int, std::string>& msg_map,
+                                 Json::Value* arr);
 
   /**
    * For the tables {level}_opts and {level}_nopts, append each row as an
