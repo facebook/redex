@@ -241,8 +241,7 @@ void MethodProfiles::apply_manual_profile(
 
 void MethodProfiles::parse_manual_file(
     const std::string& manual_filename,
-    const std::unordered_map<std::string,
-                             std::unordered_map<std::string, DexMethodRef*>>&
+    const UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>&
         baseline_profile_method_map,
     const std::vector<std::string>& config_names) {
   std::ifstream manual_file(manual_filename);
@@ -295,21 +294,17 @@ void MethodProfiles::parse_manual_file(
       // Otherwise, just do a map lookup
       auto classregex = boost::regex(wildcard_to_regex(method_and_class[0]));
       auto methodregex = boost::regex(wildcard_to_regex(method_and_class[1]));
-      for (auto class_it = baseline_profile_method_map.begin();
-           class_it != baseline_profile_method_map.end();
-           class_it++) {
-        auto classname = class_it->first;
+      for (const auto& [classname, method_name_to_method] :
+           UnorderedIterable(baseline_profile_method_map)) {
         boost::smatch class_matches;
         if (!boost::regex_search(classname, class_matches, classregex)) {
           continue;
         }
-        for (auto method_it = class_it->second.begin();
-             method_it != class_it->second.end();
-             method_it++) {
-          auto methodname = method_it->first;
+        for (const auto& [method_name, method_ref] :
+             UnorderedIterable(method_name_to_method)) {
           boost::smatch method_matches;
-          if (boost::regex_search(methodname, method_matches, methodregex)) {
-            apply_manual_profile(method_it->second, flags, manual_filename,
+          if (boost::regex_search(method_name, method_matches, methodregex)) {
+            apply_manual_profile(method_ref, flags, manual_filename,
                                  config_names);
           }
         }
@@ -319,11 +314,12 @@ void MethodProfiles::parse_manual_file(
 }
 
 void MethodProfiles::parse_manual_files(
-    const std::unordered_map<std::string, std::vector<std::string>>&
+    const UnorderedMap<std::string, std::vector<std::string>>&
         manual_file_to_config_names) {
   Timer t("parse_manual_files");
   auto baseline_profile_method_map = g_redex->get_baseline_profile_method_map();
-  for (const auto& [manual_file, config_name] : manual_file_to_config_names) {
+  for (const auto& [manual_file, config_name] :
+       UnorderedIterable(manual_file_to_config_names)) {
     parse_manual_file(manual_file, baseline_profile_method_map, config_name);
   }
 }

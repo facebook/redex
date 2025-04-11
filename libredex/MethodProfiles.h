@@ -104,7 +104,7 @@ class MethodProfiles {
                         csv_filename.c_str());
     }
     // Parse manual interactions
-    std::unordered_map<std::string, std::vector<std::string>>
+    UnorderedMap<std::string, std::vector<std::string>>
         manual_file_to_config_names;
     // Create a mapping of manual_file to config names
     // this way we can only parse each manual_file exactly once
@@ -224,12 +224,11 @@ class MethodProfiles {
 
   // Read a list of manual profiles and populate m_baseline_manual_interactions
   void parse_manual_files(
-      const std::unordered_map<std::string, std::vector<std::string>>&
+      const UnorderedMap<std::string, std::vector<std::string>>&
           manual_file_to_config_names);
   void parse_manual_file(
       const std::string& manual_filename,
-      const std::unordered_map<std::string,
-                               std::unordered_map<std::string, DexMethodRef*>>&
+      const UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>&
           baseline_profile_method_map,
       const std::vector<std::string>& config_names);
 

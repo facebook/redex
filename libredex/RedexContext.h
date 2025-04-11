@@ -21,7 +21,6 @@
 #include <set>
 #include <sstream>
 #include <string_view>
-#include <unordered_map>
 #include <vector>
 
 #include "ConcurrentContainers.h"
@@ -119,8 +118,7 @@ struct RedexContext {
   DexMethodRef* get_method(const DexType* type,
                            const DexString* name,
                            const DexProto* proto);
-  std::unordered_map<std::string,
-                     std::unordered_map<std::string, DexMethodRef*>>
+  UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>
   get_baseline_profile_method_map();
 
   /**
@@ -317,7 +315,7 @@ struct RedexContext {
   };
 
   // Hashing is expensive on large strings (long Java type names, string
-  // literals), so we avoid using `std::unordered_map` directly.
+  // literals), so we avoid using `UnorderedMap` directly.
   //
   // For leaf-level storage we use `std::set` (i.e., a tree). In a sparse
   // string keyset with large keys this performs better as only the suffix

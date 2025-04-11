@@ -13,7 +13,6 @@
 #include <mutex>
 #include <regex>
 #include <sstream>
-#include <unordered_set>
 
 #include "Debug.h"
 #include "DexCallSite.h"
@@ -69,7 +68,7 @@ RedexContext::~RedexContext() {
                   // NB: This table intentionally contains aliases (multiple
                   // DexStrings map to the same DexType), so we have to dedup
                   // the set of types before deleting to avoid double-frees.
-                  std::unordered_set<DexType*> delete_types;
+                  UnorderedSet<DexType*> delete_types;
                   for (auto const& p : UnorderedIterable(s_type_map)) {
                     if (delete_types.emplace(p.second).second) {
                       delete p.second;
@@ -140,7 +139,7 @@ RedexContext::~RedexContext() {
         for (size_t bucket = 0; bucket < method_buckets_count; bucket++) {
           fns.push_back([bucket, this]() {
             // Delete DexMethods. Use set to prevent double freeing aliases
-            std::unordered_set<DexMethod*> delete_methods;
+            UnorderedSet<DexMethod*> delete_methods;
             for (auto&& [_, loc] : UnorderedIterable(s_method_map)) {
               auto method = static_cast<DexMethod*>(loc.load());
               if ((reinterpret_cast<size_t>(method) >> 16) %
@@ -164,7 +163,7 @@ RedexContext::~RedexContext() {
         for (size_t bucket = 0; bucket < field_buckets_count; bucket++) {
           fns.push_back([bucket, this]() {
             // Delete DexFields. Use set to prevent double freeing aliases
-            std::unordered_set<DexField*> delete_fields;
+            UnorderedSet<DexField*> delete_fields;
             for (auto&& [_, loc] : UnorderedIterable(s_field_map)) {
               auto field = static_cast<DexField*>(loc.load());
               if ((reinterpret_cast<size_t>(field) >> 16) %
@@ -701,19 +700,17 @@ DexMethodRef* RedexContext::get_method(const DexType* type,
   return s_method_map.load(r, nullptr);
 }
 
-std::unordered_map<std::string, std::unordered_map<std::string, DexMethodRef*>>
+UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>
 RedexContext::get_baseline_profile_method_map() {
   auto baseline_profile_method_map =
-      std::unordered_map<std::string,
-                         std::unordered_map<std::string, DexMethodRef*>>();
+      UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>();
   for (auto&& [method_spec, method] : UnorderedIterable(s_method_map)) {
     std::string descriptor = show_deobfuscated(method);
     boost::replace_all(descriptor, ":(", "(");
     std::vector<std::string> class_and_method;
     boost::split(class_and_method, descriptor, boost::is_any_of("."));
     always_assert(class_and_method.size() == 2);
-    auto method_name_to_method =
-        std::unordered_map<std::string, DexMethodRef*>();
+    auto method_name_to_method = UnorderedMap<std::string, DexMethodRef*>();
     method_name_to_method.emplace(class_and_method[1], method);
     baseline_profile_method_map.emplace(class_and_method[0],
                                         method_name_to_method);
