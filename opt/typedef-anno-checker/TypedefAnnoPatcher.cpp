@@ -366,12 +366,12 @@ void collect_setter_missing_param_annos(
 
 void PatchingCandidates::apply_patching(std::mutex& mutex, Stats& class_stats) {
   for (auto* field :
-       unordered_order_keys(m_field_candidates, compare_dexfields)) {
+       unordered_to_ordered_keys(m_field_candidates, compare_dexfields)) {
     auto* anno = m_field_candidates.at(field);
     add_annotation(field, anno, mutex, class_stats);
   }
   for (auto* method :
-       unordered_order_keys(m_method_candidates, compare_dexmethods)) {
+       unordered_to_ordered_keys(m_method_candidates, compare_dexmethods)) {
     auto* anno = m_method_candidates.at(method);
     add_annotation(method, anno, mutex, class_stats);
   }
@@ -555,7 +555,7 @@ void TypedefAnnoPatcher::populate_chained_getters(DexClass* cls) {
 
 void TypedefAnnoPatcher::patch_chained_getters(Stats& class_stats) {
   auto sorted_candidates =
-      unordered_order(m_chained_getters, compare_dexclasses);
+      unordered_to_ordered(m_chained_getters, compare_dexclasses);
   for (auto* cls : sorted_candidates) {
     for (auto m : cls->get_all_methods()) {
       patch_parameters_and_returns(m, class_stats);

@@ -507,7 +507,8 @@ class OptimizeEnums {
     {
       std::ofstream ofs(conf.metafile("redex-unsafe-enums.txt"),
                         std::ofstream::out | std::ofstream::app);
-      auto unsafe_types = unordered_order_keys(unsafe_enums, compare_dextypes);
+      auto unsafe_types =
+          unordered_to_ordered_keys(unsafe_enums, compare_dextypes);
       for (auto* t : unsafe_types) {
         const auto& unsafe_enums_at_t = unsafe_enums.at_unsafe(t);
         ofs << show(t) << ":" << unsafe_enums_at_t << "\n";

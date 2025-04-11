@@ -345,7 +345,7 @@ size_t ExpandableMethodParams::flush(
       used_expanded_method_refs);
 
   // Add the newly concretized methods to their classes.
-  auto ordered = unordered_order(expanded_methods, compare_dexmethods);
+  auto ordered = unordered_to_ordered(expanded_methods, compare_dexmethods);
   for (auto expanded_method : ordered) {
     type_class(expanded_method->get_class())->add_method(expanded_method);
   }

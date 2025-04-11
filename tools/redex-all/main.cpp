@@ -1615,8 +1615,8 @@ void redex_backend(ConfigFiles& conf,
     if (dex_output_config.write_class_sizes) {
       Timer t2("Writing class sizes");
       // Sort for stability.
-      auto keys =
-          unordered_order_keys(output_totals.class_size, compare_dexclasses);
+      auto keys = unordered_to_ordered_keys(output_totals.class_size,
+                                            compare_dexclasses);
       std::ofstream ofs{conf.metafile("redex-class-sizes.csv")};
       for (auto* c : keys) {
         ofs << c->get_deobfuscated_name_or_empty() << ","

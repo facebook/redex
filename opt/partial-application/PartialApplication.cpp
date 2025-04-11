@@ -368,7 +368,7 @@ bool filter(const RefChecker& ref_checker,
 using CallSiteSummarySet = UnorderedSet<const CallSiteSummary*>;
 using CallSiteSummaryVector = std::vector<const CallSiteSummary*>;
 CallSiteSummaryVector order_csses(const CallSiteSummarySet& csses) {
-  return unordered_order(
+  return unordered_to_ordered(
       csses, [](const CallSiteSummary* a, const CallSiteSummary* b) {
         return a->get_key() < b->get_key();
       });

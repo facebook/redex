@@ -111,7 +111,7 @@ class InitClassFields {
         set.insert(q.second.field);
       }
     }
-    return unordered_order(set, compare_dexfields);
+    return unordered_to_ordered(set, compare_dexfields);
   }
 
  private:
