@@ -56,24 +56,24 @@ TEST_F(DeterministicContainersTest, UnorderedIterable_set) {
             unordered_accumulate(set, 0, [](int a, int b) { return a + b; }));
 }
 
-TEST_F(DeterministicContainersTest, unordered_to_ordered_map) {
+TEST_F(DeterministicContainersTest, unordered_order_map) {
   UnorderedMap<int, int> map{{1, 42}, {2, 23}};
-  auto ordered = unordered_to_ordered(
+  auto ordered = unordered_order(
       map, [](const auto& p, const auto& q) { return p.first < q.first; });
   EXPECT_EQ(2, ordered.size());
   EXPECT_EQ(1, ordered[0].first);
   EXPECT_EQ(2, ordered[1].first);
 }
 
-TEST_F(DeterministicContainersTest, unordered_to_ordered_set) {
+TEST_F(DeterministicContainersTest, unordered_order_set) {
   UnorderedSet<int> set{1, 11, 7, 3, 5};
-  auto ordered = unordered_to_ordered(set, [](int a, int b) { return a < b; });
+  auto ordered = unordered_order(set, [](int a, int b) { return a < b; });
   EXPECT_EQ(std::vector<int>({1, 3, 5, 7, 11}), ordered);
 }
 
-TEST_F(DeterministicContainersTest, unordered_to_ordered_keys) {
+TEST_F(DeterministicContainersTest, unordered_order_keys) {
   UnorderedMap<int, int> map{{1, 42}, {2, 23}};
-  auto keys = unordered_to_ordered_keys(map);
+  auto keys = unordered_order_keys(map);
   EXPECT_EQ(2, keys.size());
   EXPECT_EQ(1, keys[0]);
   EXPECT_EQ(2, keys[1]);

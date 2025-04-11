@@ -170,7 +170,7 @@ void mark_methods_private(const ConcurrentSet<DexMethod*>& privates) {
   // a best-effort of inserting in an ordered matter.
   // But when dmethods and vmethods are not ordered to begin with, then the
   // order in which we attempt to add matters.
-  auto ordered_privates = unordered_to_ordered(privates, compare_dexmethods);
+  auto ordered_privates = unordered_order(privates, compare_dexmethods);
 
   for (auto method : ordered_privates) {
     TRACE(ACCESS, 2, "Privatized method: %s", SHOW(method));

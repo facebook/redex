@@ -516,7 +516,7 @@ void DexStructure::check_refs_count() {
   }
   UnorderedSet<DexMethodRef*> mrefs_set(mrefs.begin(), mrefs.end());
   if (mrefs_set.size() > m_mrefs.size()) {
-    auto mrefs_vec = unordered_to_ordered(mrefs_set, compare_dexmethods);
+    auto mrefs_vec = unordered_order(mrefs_set, compare_dexmethods);
     for (DexMethodRef* mr : mrefs_vec) {
       if (!m_mrefs.count(mr)) {
         TRACE(IDEX, 4, "WARNING: Could not find %s in predicted mrefs set",
@@ -531,7 +531,7 @@ void DexStructure::check_refs_count() {
   }
   UnorderedSet<DexFieldRef*> frefs_set(frefs.begin(), frefs.end());
   if (frefs_set.size() > m_frefs.size()) {
-    auto frefs_vec = unordered_to_ordered(frefs_set, compare_dexfields);
+    auto frefs_vec = unordered_order(frefs_set, compare_dexfields);
     for (auto* fr : frefs_vec) {
       if (!m_frefs.count(fr)) {
         TRACE(IDEX, 4, "WARNING: Could not find %s in predicted frefs set",

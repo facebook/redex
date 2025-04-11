@@ -759,8 +759,7 @@ void ClassSplitter::delayed_invoke_direct_to_static(const Scope& final_scope) {
   // Also, we didn't use an std::set keyed by method signature here because
   // make_static is mutating the signatures. The tree that implements the set
   // would have to be rebalanced after the mutations.
-  auto methods =
-      unordered_to_ordered(m_delayed_make_static, compare_dexmethods);
+  auto methods = unordered_order(m_delayed_make_static, compare_dexmethods);
   for (auto method : methods) {
     TRACE(MMINL, 6, "making %s static", method->get_name()->c_str());
     mutators::make_static(method);

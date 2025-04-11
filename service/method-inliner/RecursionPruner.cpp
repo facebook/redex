@@ -54,7 +54,7 @@ size_t RecursionPruner::recurse(
   // We'll only know the exact call stack depth at the end.
   visited->emplace(caller, std::numeric_limits<size_t>::max());
 
-  auto ordered_callees = unordered_to_ordered_keys(callees, compare_dexmethods);
+  auto ordered_callees = unordered_order_keys(callees, compare_dexmethods);
   size_t stack_depth = 0;
   // recurse into the callees in case they have something to inline on
   // their own. We want to inline bottom up so that a callee is

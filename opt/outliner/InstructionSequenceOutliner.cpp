@@ -1740,8 +1740,7 @@ class OutlinedMethodCreator {
                                           std::set<uint32_t>* pattern_ids) {
     auto manager = g_redex->get_position_pattern_switch_manager();
     // Order methods to make sure we get deterministic pattern-ids.
-    auto ordered_methods =
-        unordered_to_ordered_keys(ci.methods, compare_dexmethods);
+    auto ordered_methods = unordered_order_keys(ci.methods, compare_dexmethods);
     for (auto method : ordered_methods) {
       auto& cmls = ci.methods.at(method);
       for (auto& cml : cmls) {
@@ -2628,7 +2627,7 @@ UnorderedMap<const DexMethodRef*, double> get_methods_global_order(
           std::min(global_order, index * 100 + q.second.order_percent);
     }
   }
-  auto ordered_methods = unordered_to_ordered_keys(
+  auto ordered_methods = unordered_order_keys(
       methods_global_order, [&](const DexMethodRef* a, const DexMethodRef* b) {
         auto a_order = methods_global_order.at(a);
         auto b_order = methods_global_order.at(b);

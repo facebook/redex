@@ -563,7 +563,7 @@ class WtoOrdering {
 
   static std::vector<const DexMethod*> get_sorted_impacted_methods(
       const UnorderedSet<const DexMethod*>& impacted_methods) {
-    return unordered_to_ordered(impacted_methods, compare_dexmethods);
+    return unordered_order(impacted_methods, compare_dexmethods);
   }
 
   static std::vector<const DexMethod*> sort_by_inverse_deps(

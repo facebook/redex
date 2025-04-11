@@ -565,7 +565,7 @@ std::ostream& operator<<(std::ostream& o, const EscapeSummary& summary) {
 
 sparta::s_expr to_s_expr(const EscapeSummary& summary) {
   std::vector<sparta::s_expr> escaping_params_s_exprs;
-  auto escaping_parameters = unordered_to_ordered(summary.escaping_parameters);
+  auto escaping_parameters = unordered_order(summary.escaping_parameters);
   escaping_params_s_exprs.reserve(escaping_parameters.size());
   for (auto idx : escaping_parameters) {
     escaping_params_s_exprs.emplace_back(idx);

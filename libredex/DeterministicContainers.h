@@ -59,10 +59,10 @@
  *
  * A few additional global functions are provided that realize common operations
  * that use iterators, but don't ultimately rely on their order:
- * - `unordered_to_ordered_keys(collection, compare)`: Returns a vector of all
- *   keys, sorted.
- * - `unordered_to_ordered(collection, compare)`: Returns a vector of all
- *   key-value pairs, sorted by key.
+ * - `unordered_order_keys(collection, compare)`: Returns a vector of all keys,
+ *   sorted.
+ * - `unordered_order(collection, compare)`: Returns a vector of all key-value
+ *   pairs, sorted by key.
  *
  * The global function `unordered_unsafe_unwrap(collection)` provides the
  * ultimate escape mechanism to expose the raw unordered collection, or simply
@@ -98,9 +98,8 @@
  *     - If you must refer to the type of an unordered iterator associated
  *       with a `auto&& ui`, use
  *       `using iterator = std::remove_reference_t<decltype(ui)>::iterator;`
- * - If you need to sort an unordered collection, see if the
- *   `unordered_to_ordered` or `ordered_order_keys` helper functions work for
- *   you.
+ * - If you need to sort an unordered collection, see if the `unordered_order`
+ *   or `ordered_order_keys` helper functions work for you.
  */
 
 #pragma once
@@ -848,8 +847,8 @@ template <
     std::enable_if_t<!std::is_same_v<typename Collection::key_type,
                                      typename Collection::value_type>,
                      bool> = true>
-std::vector<std::pair<Key, Value>> unordered_to_ordered(Collection& collection,
-                                                        Compare comp) {
+std::vector<std::pair<Key, Value>> unordered_order(Collection& collection,
+                                                   Compare comp) {
   std::vector<std::pair<Key, Value>> result;
   result.reserve(collection.size());
   for (auto& entry : UnorderedIterable(collection)) {
@@ -865,7 +864,7 @@ template <class Collection,
           std::enable_if_t<std::is_same_v<typename Collection::key_type,
                                           typename Collection::value_type>,
                            bool> = true>
-std::vector<Value> unordered_to_ordered(Collection& collection) {
+std::vector<Value> unordered_order(Collection& collection) {
   std::vector<Value> result;
   result.reserve(collection.size());
   for (auto& entry : UnorderedIterable(collection)) {
@@ -882,7 +881,7 @@ template <class Collection,
           std::enable_if_t<std::is_same_v<typename Collection::key_type,
                                           typename Collection::value_type>,
                            bool> = true>
-std::vector<Value> unordered_to_ordered(Collection& collection, Compare comp) {
+std::vector<Value> unordered_order(Collection& collection, Compare comp) {
   std::vector<Value> result;
   result.reserve(collection.size());
   for (auto& entry : UnorderedIterable(collection)) {
@@ -895,7 +894,7 @@ std::vector<Value> unordered_to_ordered(Collection& collection, Compare comp) {
 template <
     class Collection,
     class Key = typename std::remove_const<typename Collection::key_type>::type>
-std::vector<Key> unordered_to_ordered_keys(Collection& collection) {
+std::vector<Key> unordered_order_keys(Collection& collection) {
   std::vector<Key> result;
   result.reserve(collection.size());
   for (auto& entry : UnorderedIterable(collection)) {
@@ -909,8 +908,7 @@ template <
     class Collection,
     class Compare,
     class Key = typename std::remove_const<typename Collection::key_type>::type>
-std::vector<Key> unordered_to_ordered_keys(Collection& collection,
-                                           Compare comp) {
+std::vector<Key> unordered_order_keys(Collection& collection, Compare comp) {
   std::vector<Key> result;
   result.reserve(collection.size());
   for (auto& entry : UnorderedIterable(collection)) {

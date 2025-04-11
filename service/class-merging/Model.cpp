@@ -83,7 +83,7 @@ bool is_subset(const Set& left, const Set& right) {
 
 void print_interface_maps(const TypeToTypeSet& intf_to_classes,
                           const ConstTypeHashSet& types) {
-  auto intfs = unordered_to_ordered_keys(
+  auto intfs = unordered_order_keys(
       intf_to_classes, [&](const DexType* first, const DexType* second) {
         return intf_to_classes.at(first).size() <
                intf_to_classes.at(second).size();

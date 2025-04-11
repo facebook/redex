@@ -125,8 +125,7 @@ class MethodSplitterTest : public RedexTest {
     if (!main_error.empty()) {
       return ::testing::AssertionFailure() << show(m) << ": " << main_error;
     }
-    auto ordered =
-        unordered_to_ordered(stats.added_methods, compare_dexmethods);
+    auto ordered = unordered_order(stats.added_methods, compare_dexmethods);
     for (auto out : ordered) {
       auto out_error = compare(out);
       if (!out_error.empty()) {
