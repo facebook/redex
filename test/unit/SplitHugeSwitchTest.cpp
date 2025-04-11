@@ -6,11 +6,9 @@
  */
 
 #include <atomic>
-#include <memory>
-#include <unordered_map>
-#include <unordered_set>
-
 #include <gtest/gtest.h>
+#include <memory>
+#include <string>
 
 #include "SplitHugeSwitchPass.h"
 
@@ -78,7 +76,7 @@ class SplitHugeSwitchTest : public RedexTest {
     auto stats = SplitHugeSwitchPass::run(m, m->get_code(),
                                           code_units_threshold, case_threshold,
                                           method_profiles, hotness_threshold);
-    std::unordered_map<std::string, std::string> expected_map;
+    UnorderedMap<std::string, std::string> expected_map;
     for (const auto& p : expected) {
       expected_map.insert(p);
     }
@@ -110,7 +108,7 @@ class SplitHugeSwitchTest : public RedexTest {
     if (!main_error.empty()) {
       return ::testing::AssertionFailure() << show(m) << ": " << main_error;
     }
-    for (auto out : stats.new_methods) {
+    for (auto out : UnorderedIterable(stats.new_methods)) {
       auto out_error = compare(out);
       if (!out_error.empty()) {
         return ::testing::AssertionFailure() << show(out) << ": " << out_error;

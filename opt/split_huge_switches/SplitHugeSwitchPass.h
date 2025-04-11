@@ -7,10 +7,9 @@
 
 #pragma once
 
-#include <unordered_map>
-#include <unordered_set>
 #include <utility>
 
+#include "DeterministicContainers.h"
 #include "Pass.h"
 
 class DexMethod;
@@ -24,15 +23,15 @@ class SplitHugeSwitchPass : public Pass {
  public:
   struct Stats {
     // For debugging purposes.
-    std::unordered_set<const DexMethod*> large_methods_set;
-    std::unordered_set<const DexMethod*> switch_methods_set;
-    std::unordered_set<const DexMethod*> large_switches_set;
-    std::unordered_set<const DexMethod*> easy_expr_set;
+    UnorderedSet<const DexMethod*> large_methods_set;
+    UnorderedSet<const DexMethod*> switch_methods_set;
+    UnorderedSet<const DexMethod*> large_switches_set;
+    UnorderedSet<const DexMethod*> easy_expr_set;
 
     // Source methods, with size before and cumulative size after.
-    std::unordered_map<DexMethod*, std::pair<size_t, size_t>> transformed_srcs;
+    UnorderedMap<DexMethod*, std::pair<size_t, size_t>> transformed_srcs;
     // Actual new methods inserted into their respective classes.
-    std::unordered_set<DexMethod*> new_methods;
+    UnorderedSet<DexMethod*> new_methods;
     // For each new method, mapping back to the original method.
     std::vector<std::pair<DexMethod*, DexMethod*>> orig_methods;
 

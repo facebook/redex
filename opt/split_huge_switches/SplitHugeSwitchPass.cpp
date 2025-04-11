@@ -672,7 +672,7 @@ Stats run_split_dexes(DexStoresVector& stores,
                       size_t case_threshold,
                       size_t reserved_mrefs) {
   UnorderedSet<DexType*> cset;
-  std::unordered_map<DexType*, std::vector<AnalysisData>> mmap;
+  UnorderedMap<DexType*, std::vector<AnalysisData>> mmap;
   for (auto& data : methods) {
     auto t = data.m->get_class();
     cset.insert(t);
@@ -793,18 +793,14 @@ Stats& Stats::operator+=(const Stats& rhs) {
   split_sources += rhs.split_sources;
   not_hot += rhs.not_hot;
   no_slots += rhs.no_slots;
-  large_methods_set.insert(rhs.large_methods_set.begin(),
-                           rhs.large_methods_set.end());
-  switch_methods_set.insert(rhs.switch_methods_set.begin(),
-                            rhs.switch_methods_set.end());
-  large_switches_set.insert(rhs.large_switches_set.begin(),
-                            rhs.large_switches_set.end());
-  easy_expr_set.insert(rhs.easy_expr_set.begin(), rhs.easy_expr_set.end());
-  new_methods.insert(rhs.new_methods.begin(), rhs.new_methods.end());
+  insert_unordered_iterable(large_methods_set, rhs.large_methods_set);
+  insert_unordered_iterable(switch_methods_set, rhs.switch_methods_set);
+  insert_unordered_iterable(large_switches_set, rhs.large_switches_set);
+  insert_unordered_iterable(easy_expr_set, rhs.easy_expr_set);
+  insert_unordered_iterable(new_methods, rhs.new_methods);
   orig_methods.insert(orig_methods.end(), rhs.orig_methods.begin(),
                       rhs.orig_methods.end());
-  transformed_srcs.insert(rhs.transformed_srcs.begin(),
-                          rhs.transformed_srcs.end());
+  insert_unordered_iterable(transformed_srcs, rhs.transformed_srcs);
   return *this;
 }
 
@@ -913,14 +909,9 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("not_hot", stats.not_hot);
 
   auto print_debug = [&](const Stats& stats, const Stats* result_stats) {
-    auto sorted = [](const auto& in) {
-      std::vector<const DexMethod*> tmp{in.begin(), in.end()};
-      std::sort(tmp.begin(), tmp.end(), compare_dexmethods);
-      return tmp;
-    };
     auto print = [&](const auto& in, const std::string& header) {
       std::cerr << header << std::endl;
-      for (const DexMethod* m : sorted(in)) {
+      for (const DexMethod* m : unordered_order(in, compare_dexmethods)) {
         std::cerr << " * " << show(m) << std::endl;
       }
     };
@@ -962,7 +953,7 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
       }
     }
   };
-  for (auto m : result_stats.new_methods) {
+  for (auto m : UnorderedIterable(result_stats.new_methods)) {
     std::string name = show(m);
     replace_chars(name);
     mgr.set_metric("method_created_" + name, 1);
@@ -973,7 +964,7 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
     }
     mgr.set_metric("derived_stats", result_stats.orig_methods.size());
   }
-  for (const auto& p : result_stats.transformed_srcs) {
+  for (const auto& p : UnorderedIterable(result_stats.transformed_srcs)) {
     std::string name = show(p.first);
     replace_chars(name);
     mgr.set_metric("method_size_orig_" + name, p.second.first);
