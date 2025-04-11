@@ -104,7 +104,7 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
 void make_methods_static(const UnorderedSet<DexMethod*>& methods,
                          bool keep_this) {
   // TODO" Change callers to pass this as a sorted vector or an ordered set.
-  auto meth_list = unordered_order(methods, compare_dexmethods);
+  auto meth_list = unordered_to_ordered(methods, compare_dexmethods);
 
   for (auto* method : meth_list) {
     TRACE(VIRT,

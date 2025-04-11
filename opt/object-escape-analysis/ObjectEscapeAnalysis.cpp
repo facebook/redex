@@ -1448,7 +1448,7 @@ class RootMethodReducer {
             (new IRInstruction(opcode))->set_literal(0)->set_dest(reg);
         insns.push_back(new_insn);
       }
-      auto ordered_created_regs = unordered_order_keys(created_regs);
+      auto ordered_created_regs = unordered_to_ordered_keys(created_regs);
       for (auto reg : ordered_created_regs) {
         auto created_reg = created_regs.at(reg);
         auto new_insn =
@@ -1547,7 +1547,7 @@ UnorderedMap<DexMethod*, std::vector<ReducedMethod>> compute_reduced_methods(
   std::vector<std::pair<DexMethod*, InlinableTypes>>
       ordered_root_methods_variants;
   for (auto&& [method, types] : UnorderedIterable(root_methods)) {
-    auto ordered_types = unordered_order(types, [&](auto& p, auto& q) {
+    auto ordered_types = unordered_to_ordered(types, [&](auto& p, auto& q) {
       return inlinable_type_index.at(p.first) <
              inlinable_type_index.at(q.first);
     });
@@ -1758,7 +1758,7 @@ void select_reduced_methods(
   // associated reduced method variants. For determinism, we incorporate a
   // deterministic reference order in the reference priorities.
   UnorderedMap<Ref, size_t> ref_indices;
-  auto ordered_refs = unordered_order_keys(ref_sizes, [&](Ref a, Ref b) {
+  auto ordered_refs = unordered_to_ordered_keys(ref_sizes, [&](Ref a, Ref b) {
     if (a.index() != b.index()) {
       return a.index() < b.index();
     }

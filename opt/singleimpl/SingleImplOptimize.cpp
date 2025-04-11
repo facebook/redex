@@ -166,7 +166,7 @@ void remove_interface(const DexType* intf, const SingleImplData& data) {
   auto intf_cls = type_class(intf);
   collect_interfaces(intf_cls);
 
-  auto revisited_intfs = unordered_order(new_intfs, compare_dextypes);
+  auto revisited_intfs = unordered_to_ordered(new_intfs, compare_dextypes);
   cls->set_interfaces(DexTypeList::make_type_list(std::move(revisited_intfs)));
   combine_class_annotations(cls, intf_cls);
   TRACE(INTF, 3, "(REMI)\t=> %s", SHOW(cls));

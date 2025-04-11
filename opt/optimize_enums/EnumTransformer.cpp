@@ -1138,8 +1138,8 @@ class EnumTransformer final {
           code_updater.run();
         });
     create_substitute_methods(m_enum_util->m_substitute_methods);
-    auto instance_methods = unordered_order(m_enum_util->m_instance_methods,
-                                            dexmethods_comparator());
+    auto instance_methods = unordered_to_ordered(
+        m_enum_util->m_instance_methods, dexmethods_comparator());
     for (auto method : instance_methods) {
       mutators::make_static(method);
     }

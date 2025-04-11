@@ -729,11 +729,11 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
   // Sort entries, so that we process all renaming operations in a
   // deterministic order.
   auto ordered_entries =
-      unordered_order(unordered_entries,
-                      [](const std::pair<DexMethod*, Entry>& a,
-                         const std::pair<DexMethod*, Entry>& b) {
-                        return compare_dexmethods(a.first, b.first);
-                      });
+      unordered_to_ordered(unordered_entries,
+                           [](const std::pair<DexMethod*, Entry>& a,
+                              const std::pair<DexMethod*, Entry>& b) {
+                             return compare_dexmethods(a.first, b.first);
+                           });
 
   RemoveArgs::MethodStats method_stats;
   std::vector<DexClass*> classes;

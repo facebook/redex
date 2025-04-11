@@ -2398,12 +2398,12 @@ void dump_graph(std::ostream& os, const ReachableObjectGraph& retainers_of) {
           return {};
         }
         const auto& preds = retainers_of.at_unsafe(obj);
-        auto preds_vec = unordered_order(preds, compare);
+        auto preds_vec = unordered_to_ordered(preds, compare);
         return preds_vec;
       });
 
   // Gotta sort the keys or the output is nondeterministic.
-  auto keys = unordered_order_keys(retainers_of, compare);
+  auto keys = unordered_to_ordered_keys(retainers_of, compare);
   gw.write(os, keys);
 }
 

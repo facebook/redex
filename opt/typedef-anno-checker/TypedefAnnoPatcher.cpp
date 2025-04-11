@@ -555,7 +555,7 @@ void TypedefAnnoPatcher::populate_chained_getters(DexClass* cls) {
 
 void TypedefAnnoPatcher::patch_chained_getters(Stats& class_stats) {
   auto sorted_candidates =
-      unordered_order(m_chained_getters, compare_dexclasses);
+      unordered_to_ordered(m_chained_getters, compare_dexclasses);
   for (auto* cls : sorted_candidates) {
     for (auto m : cls->get_all_methods()) {
       patch_parameters_and_returns(m, class_stats);

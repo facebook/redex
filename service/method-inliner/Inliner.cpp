@@ -1943,7 +1943,8 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
     // is_inlinable is recording some metrics around how often certain things
     // occur, so we are creating an ordered list of callers here to make sure we
     // always call is_inlinable in the same way.
-    auto ordered_callers = unordered_order_keys(callers, compare_dexmethods);
+    auto ordered_callers =
+        unordered_to_ordered_keys(callers, compare_dexmethods);
 
     // We can't eliminate the method entirely if it's not inlinable
     for (auto caller : ordered_callers) {
@@ -2544,7 +2545,8 @@ void MultiMethodInliner::delayed_invoke_direct_to_static() {
   // Also, we didn't use an std::set keyed by method signature here because
   // make_static is mutating the signatures. The tree that implements the set
   // would have to be rebalanced after the mutations.
-  auto methods = unordered_order(m_delayed_make_static, compare_dexmethods);
+  auto methods =
+      unordered_to_ordered(m_delayed_make_static, compare_dexmethods);
   for (auto method : methods) {
     TRACE(MMINL, 6, "making %s static", method->get_name()->c_str());
     mutators::make_static(method);

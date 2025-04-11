@@ -911,7 +911,7 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
   auto print_debug = [&](const Stats& stats, const Stats* result_stats) {
     auto print = [&](const auto& in, const std::string& header) {
       std::cerr << header << std::endl;
-      for (const DexMethod* m : unordered_order(in, compare_dexmethods)) {
+      for (const DexMethod* m : unordered_to_ordered(in, compare_dexmethods)) {
         std::cerr << " * " << show(m) << std::endl;
       }
     };

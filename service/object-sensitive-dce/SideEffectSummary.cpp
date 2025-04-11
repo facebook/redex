@@ -357,7 +357,7 @@ s_expr to_s_expr(const Summary& summary) {
 std::ostream& operator<<(std::ostream& o, const Summary& summary) {
   o << "Effects: " << summary.effects << ", ";
   o << "Modified parameters: ";
-  auto modified_params = unordered_order(summary.modified_params);
+  auto modified_params = unordered_to_ordered(summary.modified_params);
   bool first{true};
   for (auto p_idx : UnorderedIterable(modified_params)) {
     if (!first) {
