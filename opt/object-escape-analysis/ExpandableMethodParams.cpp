@@ -110,7 +110,7 @@ ExpandableMethodParams::MethodInfo ExpandableMethodParams::create_method_info(
       }
       bool expandable{true};
       std::vector<DexField*> fields;
-      for (auto& use : du_chains[it->insn]) {
+      for (auto& use : UnorderedIterable(du_chains[it->insn])) {
         if (opcode::is_an_iget(use.insn->opcode())) {
           auto* field =
               resolve_field(use.insn->get_field(), FieldSearch::Instance);
@@ -215,7 +215,7 @@ DexMethod* ExpandableMethodParams::make_expanded_method_concrete(
       [](auto* insn) { return opcode::is_a_load_param(insn->opcode()); });
   auto du_chains = chains.get_def_use_chains();
   std::unordered_set<IRInstruction*> use_insns;
-  for (auto& use : du_chains[load_param_it->insn]) {
+  for (auto& use : UnorderedIterable(du_chains[load_param_it->insn])) {
     use_insns.insert(use.insn);
   }
   auto ii = InstructionIterable(cfg);

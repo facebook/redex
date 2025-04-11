@@ -651,7 +651,7 @@ void gather_true_virtual_methods(
         // Note that the callee-rtype is the same for all methods in a
         // same-implementations cluster.
         auto callee_rtype = callee->get_proto()->get_rtype();
-        for (auto use : first_load_param_uses) {
+        for (auto use : UnorderedIterable(first_load_param_uses)) {
           if (opcode::is_a_move(use.insn->opcode())) {
             continue;
           }

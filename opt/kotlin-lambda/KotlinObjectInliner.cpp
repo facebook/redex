@@ -85,7 +85,7 @@ bool uses_this(const DexMethod* method, bool strict = false) {
     return false;
   }
 
-  for (auto use : first_load_param_uses) {
+  for (auto use : UnorderedIterable(first_load_param_uses)) {
     if (!strict &&
         (use.insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
          use.insn->opcode() == OPCODE_INVOKE_DIRECT) &&
@@ -320,7 +320,7 @@ bool is_def_trackable(IRInstruction* insn,
     return true;
   }
   const auto& use_set = du_chains_move_aware.at(insn);
-  for (const auto& p : use_set) {
+  for (const auto& p : UnorderedIterable(use_set)) {
     auto use_insn = p.insn;
     auto use_index = p.src_index;
     switch (use_insn->opcode()) {

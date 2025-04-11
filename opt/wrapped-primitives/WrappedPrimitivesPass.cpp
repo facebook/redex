@@ -300,7 +300,7 @@ void ValidateWrappedPrimitivesPass::run_pass(DexStoresVector& stores,
                 // effort to give some information that could point the reader
                 // to the original location of the usage before optimizations.
                 auto field_name = show_deobfuscated(def);
-                for (auto& use : search->second) {
+                for (auto& use : UnorderedIterable(search->second)) {
                   SourceBlock* preceeding_source_block{nullptr};
                   auto sb = sb_lookup->find(use.insn);
                   if (sb != sb_lookup->end() && sb->second != nullptr) {

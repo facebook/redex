@@ -360,7 +360,7 @@ UnorderedSet<const DexType*> find_complex_init_inlined_types(
           auto new_instance_type = insn->get_type();
           auto search = live_ranges->def_use_chains->find(insn);
           if (search != live_ranges->def_use_chains->end()) {
-            for (auto& use : search->second) {
+            for (auto& use : UnorderedIterable(search->second)) {
               if (use.insn->has_method()) {
                 auto use_method = use.insn->get_method();
                 if (use.src_index == 0 && method::is_init(use_method) &&

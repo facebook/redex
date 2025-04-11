@@ -712,8 +712,9 @@ void reject_enums_for_relaxed_inits(const std::vector<DexClass*>& classes,
     live_range::DefUseChains du_chains = chains.get_def_use_chains();
     for (auto* new_instance_insn : new_instances_to_verify) {
       auto* enum_type = new_instance_insn->get_type();
-      auto use_set = du_chains[const_cast<IRInstruction*>(new_instance_insn)];
-      for (const auto use : use_set) {
+      const auto& use_set =
+          du_chains[const_cast<IRInstruction*>(new_instance_insn)];
+      for (const auto& use : UnorderedIterable(use_set)) {
         if (use.src_index != 0) {
           continue;
         }

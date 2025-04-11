@@ -167,7 +167,7 @@ live_range::DefUseChains get_augmented_du_chains(
       });
   const auto du_chains = chains.get_def_use_chains();
   live_range::DefUseChains res;
-  for (auto&& [def, def_uses] : du_chains) {
+  for (auto&& [def, def_uses] : UnorderedIterable(du_chains)) {
     auto* inline_anchor_type = selector(def);
     if (!inline_anchor_type) {
       continue;
@@ -175,7 +175,7 @@ live_range::DefUseChains get_augmented_du_chains(
     auto& augmented_uses = res[def];
     std::stack<live_range::Use> stack;
     auto process_uses = [&](auto& uses) {
-      for (auto& use : uses) {
+      for (auto& use : UnorderedIterable(uses)) {
         if (opcode::is_check_cast(use.insn->opcode())) {
           if (throwing_check_cast &&
               !type::is_subclass(use.insn->get_type(), inline_anchor_type)) {
@@ -241,7 +241,7 @@ class InlinedEstimator {
       gather_inlinable_methods(callee, callee_allocation_insn, recursive,
                                visiting);
     }
-    for (auto& use : m_uses[{method, allocation_insn}]) {
+    for (auto& use : UnorderedIterable(m_uses[{method, allocation_insn}])) {
       if (opcode::is_an_invoke(use.insn->opcode())) {
         if (is_benign(use.insn->get_method())) {
           continue;
@@ -329,7 +329,7 @@ class InlinedEstimator {
           } else if (allocation_insn->opcode() == OPCODE_NEW_INSTANCE) {
             delta -= config.cost_new_instance;
           }
-          for (auto& use : m_uses[key]) {
+          for (auto& use : UnorderedIterable(m_uses[key])) {
             if (opcode::is_an_invoke(use.insn->opcode())) {
               delta -= config.cost_invoke;
               if (is_benign(use.insn->get_method())) {
@@ -1104,9 +1104,8 @@ class RootMethodReducer {
   }
 
   bool has_incomplete_marker(const live_range::Uses& uses) const {
-    return std::any_of(uses.begin(), uses.end(), [&](auto& use) {
-      return is_incomplete_marker(use.insn);
-    });
+    return unordered_any_of(
+        uses, [&](auto& use) { return is_incomplete_marker(use.insn); });
   }
 
   IRInstruction* find_incomplete_marker_methods() const {
@@ -1218,7 +1217,7 @@ class RootMethodReducer {
       }
       UnorderedMap<IRInstruction*, UnorderedMap<src_index_t, DexType*>>
           aggregated_uses;
-      for (auto& [insn, uses] : du_chains) {
+      for (auto& [insn, uses] : UnorderedIterable(du_chains)) {
         always_assert(is_inlinable_new_instance(insn));
         auto type = insn->get_type();
         auto kind = m_types.at(type).kind;
@@ -1226,7 +1225,7 @@ class RootMethodReducer {
             !has_incomplete_marker(uses)) {
           continue;
         }
-        for (auto& use : uses) {
+        for (auto& use : UnorderedIterable(uses)) {
           auto emplaced =
               aggregated_uses[use.insn].emplace(use.src_index, type).second;
           always_assert(emplaced);
@@ -1328,7 +1327,7 @@ class RootMethodReducer {
     };
 
     std::unordered_set<IRInstruction*> used_insns;
-    for (auto& use : new_instance_insn_uses) {
+    for (auto& use : UnorderedIterable(new_instance_insn_uses)) {
       auto opcode = use.insn->opcode();
       if (opcode::is_an_iput(opcode)) {
         always_assert(use.src_index == 1);

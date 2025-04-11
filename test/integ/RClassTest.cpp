@@ -77,13 +77,16 @@ IRInstruction* find_new_array_size_insn(live_range::UseDefChains* use_defs,
 }
 
 IRInstruction* find_fill_array_data_use(
-    const std::unordered_set<live_range::Use>& uses) {
-  for (const auto& u : uses) {
+    const UnorderedSet<live_range::Use>& uses) {
+  std::vector<IRInstruction*> matched;
+  for (const auto& u : UnorderedIterable(uses)) {
     if (u.insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
-      return u.insn;
+      matched.push_back(u.insn);
     }
   }
-  not_reached_log("Did not find expected use");
+  always_assert_log(matched.size() == 1,
+                    "Did not find exactly one expected use");
+  return matched.front();
 }
 
 // Build editable cfg, set rstate as we expect to simulate outlined methods

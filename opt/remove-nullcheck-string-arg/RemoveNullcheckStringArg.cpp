@@ -332,7 +332,7 @@ RemoveNullcheckStringArg::Stats RemoveNullcheckStringArg::change_in_cfg(
 
         auto use_set = du_chains[param_load_insn];
         if (use_set.size() == 1) {
-          for (const auto& p : use_set) {
+          for (const auto& p : UnorderedIterable(use_set)) {
             always_assert(p.insn == insn);
           }
           // If we have single use which is null check, remove null check.

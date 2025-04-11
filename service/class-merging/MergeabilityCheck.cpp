@@ -193,8 +193,8 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
   for (const auto& pair : const_classes_to_verify) {
     auto const_class_insn = pair.first;
     auto referenced_type = pair.second;
-    auto use_set = du_chains[const_class_insn];
-    for (const auto use : use_set) {
+    const auto& use_set = du_chains[const_class_insn];
+    for (const auto& use : UnorderedIterable(use_set)) {
       auto use_insn = use.insn;
       if (opcode::is_a_move(use_insn->opcode())) {
         // Ignore moves
@@ -224,8 +224,8 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
   // corresponding constructor on the instantiated class, and not just exclude.
   for (auto* new_instance_insn : new_instances_to_verify) {
     auto* type = new_instance_insn->get_type();
-    auto use_set = du_chains[new_instance_insn];
-    for (const auto use : use_set) {
+    const auto& use_set = du_chains[new_instance_insn];
+    for (const auto& use : UnorderedIterable(use_set)) {
       if (use.src_index != 0) {
         continue;
       }

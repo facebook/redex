@@ -609,8 +609,8 @@ void TypedefAnnoPatcher::patch_ctor_params_from_synth_cls_fields(
           continue;
         }
         auto udchains_it = ctor_du_chains.find(insn);
-        auto uses_set = udchains_it->second;
-        for (live_range::Use use : uses_set) {
+        const auto& uses_set = udchains_it->second;
+        for (live_range::Use use : UnorderedIterable(uses_set)) {
           IRInstruction* use_insn = use.insn;
           if (!opcode::is_an_iput(use_insn->opcode())) {
             continue;

@@ -334,9 +334,10 @@ std::unordered_set<const DexField*> get_definitely_assigned_ifields(
     live_range::MoveAwareChains chains(
         code.cfg(), /* ignore_unreachable */ false,
         [&](auto* insn) { return opcode::is_new_instance(insn->opcode()); });
-    for (auto& [def, uses] : chains.get_def_use_chains()) {
+    auto def_use_chains = chains.get_def_use_chains();
+    for (auto& [def, uses] : UnorderedIterable(def_use_chains)) {
       always_assert(opcode::is_new_instance(def->opcode()));
-      for (auto& use : uses) {
+      for (auto& use : UnorderedIterable(uses)) {
         if (opcode::is_invoke_direct(use.insn->opcode()) &&
             use.src_index == 0 && method::is_init(use.insn->get_method())) {
           auto resolved =

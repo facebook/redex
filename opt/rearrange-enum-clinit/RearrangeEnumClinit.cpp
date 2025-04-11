@@ -233,7 +233,7 @@ struct Rearranger {
     redex_assert(it != def_use.cend());
     std::optional<reg_t> which_reg{};
     std::optional<IRList::iterator> which_it{};
-    for (auto& obj_use : it->second) {
+    for (auto& obj_use : UnorderedIterable(it->second)) {
       if (obj_use.src_index == 0 &&
           opcode::is_an_invoke(obj_use.insn->opcode()) &&
           method::is_constructor(obj_use.insn->get_method())) {
@@ -295,7 +295,7 @@ struct Rearranger {
       auto new_array_uses_it = def_use.find(array_new_array->insn);
       redex_assert(new_array_uses_it != def_use.cend());
       std::optional<reg_t> extra_reg{};
-      for (auto& use : new_array_uses_it->second) {
+      for (auto& use : UnorderedIterable(new_array_uses_it->second)) {
         // Skip the sput.
         if (use.insn == array_sput) {
           continue;

@@ -225,7 +225,7 @@ ArgExclusivityVector get_arg_exclusivity(const UseDefChains& use_def_chains,
     const auto def = *defs.begin();
     bool other_use = false;
     param_index_t count = 0;
-    for (const auto& use : def_use_chains.at(def)) {
+    for (const auto& use : UnorderedIterable(def_use_chains.at(def))) {
       if (!opcode::is_a_move(use.insn->opcode()) &&
           (use.insn->opcode() != insn->opcode() ||
            use.insn->get_method() != insn->get_method())) {

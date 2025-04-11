@@ -59,8 +59,8 @@ void ReducedCFGClosureAdapter::gather_type_demands(
     if (!visited.insert(def).second) {
       continue;
     }
-    for (auto& use : (*m_def_uses)[def]) {
-      auto reduced_component = m_insns->at(use.insn);
+    for (auto& use : UnorderedIterable((*m_def_uses)[def])) {
+      const auto* reduced_component = m_insns->at(use.insn);
       if (!m_reduced_components.count(reduced_component)) {
         continue;
       }

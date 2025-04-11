@@ -1214,7 +1214,8 @@ class DedupBlocksImpl {
         // an array of an interface type.
         init_reaching_defs();
         for (auto reaching_def : reaching_defs.elements()) {
-          for (const auto& use : (*live_ranges->def_use_chains)[reaching_def]) {
+          for (const auto& use : UnorderedIterable(
+                   (*live_ranges->def_use_chains)[reaching_def])) {
             auto op = use.insn->opcode();
             if (opcode::is_an_aget(op) || opcode::is_an_iput(op) ||
                 opcode::is_an_sput(op) || opcode::is_an_invoke(op) ||
@@ -1235,7 +1236,8 @@ class DedupBlocksImpl {
       // instruction that expects *some* array type.
       init_reaching_defs();
       for (auto reaching_def : reaching_defs.elements()) {
-        for (const auto& use : (*live_ranges->def_use_chains)[reaching_def]) {
+        for (const auto& use :
+             UnorderedIterable((*live_ranges->def_use_chains)[reaching_def])) {
           auto op = use.insn->opcode();
           if (opcode::is_array_length(op) || opcode::is_an_aget(op) ||
               opcode::is_an_aput(op) || opcode::is_fill_array_data(op)) {

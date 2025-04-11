@@ -656,8 +656,8 @@ bool TypedefAnnoChecker::check_typedef_value(
       live_range::MoveAwareChains chains(m->get_code()->cfg());
       live_range::DefUseChains du_chains = chains.get_def_use_chains();
       auto duchains_it = du_chains.find(def);
-      auto uses_set = duchains_it->second;
-      for (live_range::Use use : uses_set) {
+      const auto& uses_set = duchains_it->second;
+      for (live_range::Use use : UnorderedIterable(uses_set)) {
         IRInstruction* use_insn = use.insn;
         if (opcode::is_an_iput(use_insn->opcode()) ||
             opcode::is_an_sput(use_insn->opcode())) {
