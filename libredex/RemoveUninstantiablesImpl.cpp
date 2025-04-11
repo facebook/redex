@@ -224,8 +224,8 @@ Stats reduce_uncallable_instance_methods(
   // We perform structural changes, i.e. whether a method has a body and
   // removal, as a post-processing step, to streamline the main operations
   struct ClassPostProcessing {
-    std::unordered_map<DexMethod*, DexMethod*> remove_vmethods;
-    std::unordered_set<DexMethod*> abstract_vmethods;
+    UnorderedMap<DexMethod*, DexMethod*> remove_vmethods;
+    UnorderedSet<DexMethod*> abstract_vmethods;
   };
   ConcurrentMap<DexClass*, ClassPostProcessing> class_post_processing;
   std::mutex stats_mutex;
@@ -286,7 +286,7 @@ Stats reduce_uncallable_instance_methods(
         stats.abstracted_classes++;
         cls->set_access((cls->get_access() & ~ACC_FINAL) | ACC_ABSTRACT);
       }
-      for (auto method : cpp.abstract_vmethods) {
+      for (auto method : UnorderedIterable(cpp.abstract_vmethods)) {
         method->set_access(
             (DexAccessFlags)((method->get_access() & ~ACC_FINAL) |
                              ACC_ABSTRACT));
@@ -295,19 +295,18 @@ Stats reduce_uncallable_instance_methods(
     }
     if (!cpp.remove_vmethods.empty()) {
       classes_with_removed_vmethods.push_back(cls);
-      removed_vmethods.insert(cpp.remove_vmethods.begin(),
-                              cpp.remove_vmethods.end());
+      insert_unordered_iterable(removed_vmethods, cpp.remove_vmethods);
     }
   }
 
-  walk::parallel::classes(classes_with_removed_vmethods,
-                          [&class_post_processing](DexClass* cls) {
-                            auto& cpp = class_post_processing.at_unsafe(cls);
-                            for (auto& p : cpp.remove_vmethods) {
-                              cls->remove_method(p.first);
-                              DexMethod::delete_method(p.first);
-                            }
-                          });
+  walk::parallel::classes(
+      classes_with_removed_vmethods, [&class_post_processing](DexClass* cls) {
+        auto& cpp = class_post_processing.at_unsafe(cls);
+        for (auto& p : UnorderedIterable(cpp.remove_vmethods)) {
+          cls->remove_method(p.first);
+          DexMethod::delete_method(p.first);
+        }
+      });
 
   // Forward chains.
   method_fixup::fixup_references_to_removed_methods(scope, removed_vmethods);
