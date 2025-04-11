@@ -1248,6 +1248,15 @@ class ConcurrentContainer {
 
   size_t erase_unsafe(const Key& key) { return erase(key); }
 
+  template <typename possibly_const_iterator>
+  auto _internal_to_fixed_iterator(possibly_const_iterator it) const {
+    if constexpr (std::is_same_v<possibly_const_iterator, const_iterator>) {
+      return ConstFixedIterator(it);
+    } else {
+      return FixedIterator(it);
+    }
+  }
+
  protected:
   // Only derived classes may be instantiated or copied.
   ConcurrentContainer() = default;

@@ -8,6 +8,8 @@
 #include "DeterministicContainers.h"
 
 #include <gtest/gtest.h>
+#include <map>
+#include <vector>
 
 class DeterministicContainersTest : public ::testing::Test {
  protected:
@@ -173,4 +175,115 @@ TEST_F(DeterministicContainersTest, insert_unordered_iterable_vector) {
   EXPECT_EQ(5, copy.size());
   EXPECT_EQ(1 + 11 + 7 + 3 + 5,
             unordered_accumulate(set, 0, [](int a, int b) { return a + b; }));
+}
+
+TEST_F(DeterministicContainersTest, unordered_min_element_set) {
+  UnorderedSet<int> set{42, 23, 7, 11, 5};
+  auto min = unordered_min_element(set);
+  EXPECT_EQ(5, *min);
+}
+
+TEST_F(DeterministicContainersTest, unordered_min_element_map) {
+  UnorderedMap<int, int> map{{1, 42}, {2, 23}, {3, 7}};
+  auto min = unordered_min_element(
+      map, [](const auto& a, const auto& b) { return a.second < b.second; });
+  EXPECT_EQ(3, min->first);
+  EXPECT_EQ(7, min->second);
+}
+
+TEST_F(DeterministicContainersTest, unordered_min_element_set_custom) {
+  UnorderedSet<int> set{-5, 4, -3, 2, -1};
+  auto min = unordered_min_element(
+      set, [](int a, int b) { return std::abs(a) < std::abs(b); });
+  EXPECT_EQ(-1, *min);
+}
+
+TEST_F(DeterministicContainersTest, unordered_min_element_map_custom) {
+  UnorderedMap<std::string, int> map{{"abc", 1}, {"a", 2}, {"abcd", 3}};
+  auto min = unordered_min_element(map, [](const auto& a, const auto& b) {
+    return a.first.length() < b.first.length();
+  });
+  EXPECT_EQ("a", min->first);
+  EXPECT_EQ(2, min->second);
+}
+
+TEST_F(DeterministicContainersTest, unordered_max_element_set) {
+  UnorderedSet<int> set{42, 23, 7, 11, 5};
+  auto max = unordered_max_element(set);
+  EXPECT_EQ(42, *max);
+}
+
+TEST_F(DeterministicContainersTest, unordered_max_element_map) {
+  UnorderedMap<int, int> map{{1, 42}, {2, 23}, {3, 7}};
+  auto max = unordered_max_element(
+      map, [](const auto& a, const auto& b) { return a.second < b.second; });
+  EXPECT_EQ(1, max->first);
+  EXPECT_EQ(42, max->second);
+}
+
+TEST_F(DeterministicContainersTest, unordered_max_element_set_custom) {
+  UnorderedSet<int> set{-5, 4, -3, 2, -1};
+  auto max = unordered_max_element(
+      set, [](int a, int b) { return std::abs(a) < std::abs(b); });
+  EXPECT_EQ(-5, *max);
+}
+
+TEST_F(DeterministicContainersTest, unordered_min_element_stdmap) {
+  std::map<int, int> map{{1, 42}, {2, 23}, {3, 7}};
+  auto min = unordered_min_element(
+      map, [](const auto& a, const auto& b) { return a.second < b.second; });
+  EXPECT_EQ(3, min->first);
+  EXPECT_EQ(7, min->second);
+}
+
+TEST_F(DeterministicContainersTest, unordered_min_element_stdmap_custom) {
+  std::map<std::string, int> map{{"abc", 1}, {"a", 2}, {"abcd", 3}};
+  auto min = unordered_min_element(map, [](const auto& a, const auto& b) {
+    return a.first.length() < b.first.length();
+  });
+  EXPECT_EQ("a", min->first);
+  EXPECT_EQ(2, min->second);
+}
+
+TEST_F(DeterministicContainersTest, unordered_max_element_stdmap) {
+  std::map<int, int> map{{1, 42}, {2, 23}, {3, 7}};
+  auto max = unordered_max_element(
+      map, [](const auto& a, const auto& b) { return a.second < b.second; });
+  EXPECT_EQ(1, max->first);
+  EXPECT_EQ(42, max->second);
+}
+
+TEST_F(DeterministicContainersTest, unordered_max_element_stdmap_custom) {
+  std::map<std::string, int> map{{"abc", 1}, {"a", 2}, {"abcd", 3}};
+  auto max = unordered_max_element(map, [](const auto& a, const auto& b) {
+    return a.first.length() < b.first.length();
+  });
+  EXPECT_EQ("abcd", max->first);
+  EXPECT_EQ(3, max->second);
+}
+
+TEST_F(DeterministicContainersTest, unordered_min_element_vector) {
+  std::vector<int> vec{42, 23, 7, 11, 5};
+  auto min = unordered_min_element(vec);
+  EXPECT_EQ(5, *min);
+}
+
+TEST_F(DeterministicContainersTest, unordered_min_element_vector_custom) {
+  std::vector<int> vec{-5, 4, -3, 2, -1};
+  auto min = unordered_min_element(
+      vec, [](int a, int b) { return std::abs(a) < std::abs(b); });
+  EXPECT_EQ(-1, *min);
+}
+
+TEST_F(DeterministicContainersTest, unordered_max_element_vector) {
+  std::vector<int> vec{42, 23, 7, 11, 5};
+  auto max = unordered_max_element(vec);
+  EXPECT_EQ(42, *max);
+}
+
+TEST_F(DeterministicContainersTest, unordered_max_element_vector_custom) {
+  std::vector<int> vec{-5, 4, -3, 2, -1};
+  auto max = unordered_max_element(
+      vec, [](int a, int b) { return std::abs(a) < std::abs(b); });
+  EXPECT_EQ(-5, *max);
 }

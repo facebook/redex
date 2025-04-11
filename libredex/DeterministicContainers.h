@@ -402,6 +402,16 @@ class UnorderedMap : UnorderedBase<UnorderedMap<Key, Value, Hash, KeyEqual>> {
     return ConstUnorderedIterable(m_data);
   }
 
+  template <typename possibly_const_iterator>
+  auto _internal_to_fixed_iterator(possibly_const_iterator it) const {
+    if constexpr (std::is_same_v<possibly_const_iterator,
+                                 typename Type::const_iterator>) {
+      return ConstFixedIterator(it);
+    } else {
+      return FixedIterator(it);
+    }
+  }
+
   const Type& _internal_unsafe_unwrap() const { return m_data; }
 
   Type& _internal_unsafe_unwrap() { return m_data; }
@@ -664,6 +674,16 @@ class UnorderedSet : UnorderedBase<UnorderedSet<Key, Hash, KeyEqual>> {
     return ConstUnorderedIterable(m_data);
   }
 
+  template <typename possibly_const_iterator>
+  auto _internal_to_fixed_iterator(possibly_const_iterator it) const {
+    if constexpr (std::is_same_v<possibly_const_iterator,
+                                 typename Type::const_iterator>) {
+      return ConstFixedIterator(it);
+    } else {
+      return FixedIterator(it);
+    }
+  }
+
   const Type& _internal_unsafe_unwrap() const { return m_data; }
 
   Type& _internal_unsafe_unwrap() { return m_data; }
@@ -765,6 +785,25 @@ template <
                      bool> = true>
 const Collection& UnorderedIterable(const Collection& collection) {
   return collection;
+}
+
+template <class UnorderedCollection,
+          class UnorderedIt,
+          std::enable_if_t<std::is_base_of_v<UnorderedBase<UnorderedCollection>,
+                                             UnorderedCollection>,
+                           bool> = true>
+auto unordered_to_fixed_iterator(const UnorderedCollection& collection,
+                                 UnorderedIt it) {
+  return collection._internal_to_fixed_iterator(it);
+}
+
+template <
+    class Collection,
+    class It,
+    std::enable_if_t<!std::is_base_of_v<UnorderedBase<Collection>, Collection>,
+                     bool> = true>
+It unordered_to_fixed_iterator(const Collection&, It it) {
+  return it;
 }
 
 template <class UnorderedCollection,
@@ -955,6 +994,94 @@ typename Collection::difference_type unordered_count_if(
     const Collection& collection, UnaryPred pred) {
   auto&& ui = UnorderedIterable(collection);
   return std::count_if(ui.begin(), ui.end(), std::move(pred));
+}
+
+template <class Collection>
+auto unordered_min_element(Collection& collection) {
+  auto&& ui = UnorderedIterable(collection);
+  return unordered_to_fixed_iterator(collection,
+                                     std::min_element(ui.begin(), ui.end()));
+}
+
+template <class Collection>
+auto unordered_min_element(const Collection& collection) {
+  auto&& ui = UnorderedIterable(collection);
+  return unordered_to_fixed_iterator(collection,
+                                     std::min_element(ui.begin(), ui.end()));
+}
+
+template <class Collection, bool skip_assert = false>
+auto unordered_min_element(Collection&& collection) {
+  static_assert(skip_assert,
+                "min_element from an rvalue collection would return an "
+                "undefined iterator");
+  return collection.end();
+}
+
+template <class Collection, class Compare>
+auto unordered_min_element(Collection& collection, Compare comp) {
+  auto&& ui = UnorderedIterable(collection);
+  return unordered_to_fixed_iterator(
+      collection, std::min_element(ui.begin(), ui.end(), std::move(comp)));
+}
+
+template <class Collection, class Compare>
+auto unordered_min_element(const Collection& collection, Compare comp) {
+  auto&& ui = UnorderedIterable(collection);
+  return unordered_to_fixed_iterator(
+      collection, std::min_element(ui.begin(), ui.end(), std::move(comp)));
+}
+
+template <class Collection, class Compare, bool skip_assert = false>
+auto unordered_min_element(Collection&& collection, Compare) {
+  static_assert(skip_assert,
+                "min_element from an rvalue collection would return an "
+                "undefined iterator");
+  return collection.end();
+}
+
+template <class Collection>
+auto unordered_max_element(Collection& collection) {
+  auto&& ui = UnorderedIterable(collection);
+  return unordered_to_fixed_iterator(collection,
+                                     std::max_element(ui.begin(), ui.end()));
+}
+
+template <class Collection>
+auto unordered_max_element(const Collection& collection) {
+  auto&& ui = UnorderedIterable(collection);
+  return unordered_to_fixed_iterator(collection,
+                                     std::max_element(ui.begin(), ui.end()));
+}
+
+template <class Collection, bool skip_assert = false>
+auto unordered_max_element(Collection&& collection) {
+  static_assert(skip_assert,
+                "max_element from an rvalue collection would return an "
+                "undefined iterator");
+  return collection.end();
+}
+
+template <class Collection, class Compare>
+auto unordered_max_element(Collection& collection, Compare comp) {
+  auto&& ui = UnorderedIterable(collection);
+  return unordered_to_fixed_iterator(
+      collection, std::max_element(ui.begin(), ui.end(), std::move(comp)));
+}
+
+template <class Collection, class Compare>
+auto unordered_max_element(const Collection& collection, Compare comp) {
+  auto&& ui = UnorderedIterable(collection);
+  return unordered_to_fixed_iterator(
+      collection, std::max_element(ui.begin(), ui.end(), std::move(comp)));
+}
+
+template <class Collection, class Compare, bool skip_assert = false>
+auto unordered_max_element(Collection&& collection, Compare) {
+  static_assert(skip_assert,
+                "max_element from an rvalue collection would return an "
+                "undefined iterator");
+  return collection.end();
 }
 
 template <class UnorderedCollection,
