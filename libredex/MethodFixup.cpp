@@ -16,18 +16,19 @@ namespace method_fixup {
 
 void fixup_references_to_removed_methods(
     const Scope& scope,
-    std::unordered_map<DexMethodRef*, DexMethodRef*>& removed_vmethods) {
+    UnorderedMap<DexMethodRef*, DexMethodRef*>& removed_vmethods) {
   // Forward chains.
-  using iterator = std::unordered_map<DexMethodRef*, DexMethodRef*>::iterator;
+  auto&& ui = UnorderedIterable(removed_vmethods);
+  using iterator = std::remove_reference_t<decltype(ui)>::iterator;
   std::function<DexMethodRef*(iterator&)> forward;
-  forward = [&forward, &removed_vmethods](iterator& it) {
-    auto it2 = removed_vmethods.find(it->second);
-    if (it2 != removed_vmethods.end()) {
+  forward = [&forward, &ui](iterator& it) {
+    auto it2 = ui.find(it->second);
+    if (it2 != ui.end()) {
       it->second = forward(it2);
     }
     return it->second;
   };
-  for (auto it = removed_vmethods.begin(); it != removed_vmethods.end(); it++) {
+  for (auto it = ui.begin(); it != ui.end(); it++) {
     forward(it);
   }
 

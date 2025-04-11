@@ -97,7 +97,7 @@ uint32_t remove_duplicated_vmethods(
     const ConcurrentSet<DexMethodRef*>& super_invoked_methods) {
   uint32_t ret = 0;
   auto graph = method_override_graph::build_graph(scope);
-  std::unordered_map<DexMethodRef*, DexMethodRef*> removed_vmethods;
+  UnorderedMap<DexMethodRef*, DexMethodRef*> removed_vmethods;
 
   walk::classes(scope, [&](DexClass* cls) {
     for (auto method : cls->get_vmethods()) {

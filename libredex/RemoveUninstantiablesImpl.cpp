@@ -277,7 +277,7 @@ Stats reduce_uncallable_instance_methods(
   // 2. remove methods (per class in parallel for best performance, and rewrite
   // all invocation references)
   std::vector<DexClass*> classes_with_removed_vmethods;
-  std::unordered_map<DexMethodRef*, DexMethodRef*> removed_vmethods;
+  UnorderedMap<DexMethodRef*, DexMethodRef*> removed_vmethods;
   for (auto& p : UnorderedIterable(class_post_processing)) {
     auto cls = p.first;
     auto& cpp = p.second;
