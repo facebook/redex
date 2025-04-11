@@ -76,6 +76,29 @@
  * specific function overloads, to get back the vanilla performance.
  */
 
+/*
+ * Best practices
+ *
+ * - Use `UnorderedSet` / `UnorderedMap` instead of `std::unordered_set` /
+ *   `std::unordered_map`.
+ * - If you want to iterate over an unordered collection, and you are certain
+ *   that the iteration order does not matter to produce ultimately
+ *   deterministic results, then use the `UnorderedIterable(...)` wrapper.
+ *   Examples:
+ *     - `for (auto x : UnorderedIterable(my_unordered_set)) ...`
+ *     - `auto&& ui = UnorderedIterable(my_unordered_set);`
+ *        `auto it = ui.begin();`
+ *        `while (it != ui.end()) ...`
+ * - Avoid storing `UnorderedIterable(...)` in an local variable.
+ *     - Instead, prefer using any of the `unordered_...` helper functions.
+ *     - If you must store the result of `UnorderedIterable(...)` in an local
+ *       variable, always use `auto&&` to deal with the possibility that
+ *       `UnorderedIterable(...)` returns a reference to the original collection
+ *       that you don't want to copy.
+ * - If you need to sort an unordered collection, see if the `unordered_order`
+ *   or `ordered_order_keys` helper functions work for you.
+ */
+
 #pragma once
 
 #include <algorithm>
@@ -868,44 +891,44 @@ auto unordered_keys(Collection& collection) {
 
 template <class Collection, class T>
 T unordered_accumulate(const Collection& collection, T init) {
-  auto ui = UnorderedIterable(collection);
+  auto&& ui = UnorderedIterable(collection);
   return std::accumulate(ui.begin(), ui.end(), std::move(init));
 }
 
 template <class Collection, class T, class BinaryOp>
 T unordered_accumulate(const Collection& collection, T init, BinaryOp op) {
-  auto ui = UnorderedIterable(collection);
+  auto&& ui = UnorderedIterable(collection);
   return std::accumulate(ui.begin(), ui.end(), std::move(init), std::move(op));
 }
 
 template <class Collection, class UnaryPred>
 bool unordered_all_of(const Collection& collection, UnaryPred p) {
-  auto ui = UnorderedIterable(collection);
+  auto&& ui = UnorderedIterable(collection);
   return std::all_of(ui.begin(), ui.end(), std::move(p));
 }
 
 template <class Collection, class UnaryPred>
 bool unordered_any_of(const Collection& collection, UnaryPred p) {
-  auto ui = UnorderedIterable(collection);
+  auto&& ui = UnorderedIterable(collection);
   return std::any_of(ui.begin(), ui.end(), std::move(p));
 }
 
 template <class Collection, class UnaryPred>
 bool unordered_none_of(const Collection& collection, UnaryPred p) {
-  auto ui = UnorderedIterable(collection);
+  auto&& ui = UnorderedIterable(collection);
   return std::none_of(ui.begin(), ui.end(), std::move(p));
 }
 
 template <class Collection, class UnaryFunc>
 UnaryFunc unordered_for_each(const Collection& collection, UnaryFunc f) {
-  auto ui = UnorderedIterable(collection);
+  auto&& ui = UnorderedIterable(collection);
   std::for_each(ui.begin(), ui.end(), std::move(f));
   return f;
 }
 
 template <class Collection, class OutputIt>
 OutputIt unordered_copy(const Collection& collection, OutputIt target) {
-  auto ui = UnorderedIterable(collection);
+  auto&& ui = UnorderedIterable(collection);
   return std::copy(ui.begin(), ui.end(), target);
 }
 
@@ -913,28 +936,28 @@ template <class Collection, class OutputIt, class UnaryPred>
 OutputIt unordered_copy_if(const Collection& collection,
                            OutputIt target,
                            UnaryPred pred) {
-  auto ui = UnorderedIterable(collection);
+  auto&& ui = UnorderedIterable(collection);
   return std::copy_if(ui.begin(), ui.end(), target, std::move(pred));
 }
 
 template <class Collection, class T>
 typename Collection::difference_type unordered_count(
     const Collection& collection, const T& value) {
-  auto ui = UnorderedIterable(collection);
+  auto&& ui = UnorderedIterable(collection);
   return std::count(ui.begin(), ui.end(), value);
 }
 
 template <class Collection, class UnaryPred>
 typename Collection::difference_type unordered_count_if(
     const Collection& collection, UnaryPred pred) {
-  auto ui = UnorderedIterable(collection);
+  auto&& ui = UnorderedIterable(collection);
   return std::count_if(ui.begin(), ui.end(), std::move(pred));
 }
 
 template <class Collection, typename Pred>
 size_t unordered_erase_if(Collection& collection, const Pred& pred) {
   size_t removed = 0;
-  auto ui = UnorderedIterable(collection);
+  auto&& ui = UnorderedIterable(collection);
   for (auto it = ui.begin(), end = ui.end(); it != end;) {
     if (pred(*it)) {
       it = ui.erase(it);
@@ -950,13 +973,13 @@ template <class Collection, class OutputIt, class UnaryOp>
 OutputIt unordered_transform(const Collection& collection,
                              OutputIt target,
                              UnaryOp unary_op) {
-  auto ui = UnorderedIterable(collection);
+  auto&& ui = UnorderedIterable(collection);
   return std::transform(ui.begin(), ui.end(), target, std::move(unary_op));
 }
 
 template <class Target, class Source>
 void insert_unordered_iterable(Target& target, const Source& source) {
-  auto ui = UnorderedIterable(source);
+  auto&& ui = UnorderedIterable(source);
   target.insert(ui.begin(), ui.end());
 }
 
@@ -964,7 +987,7 @@ template <class Target, class TargetIt, class Source>
 void insert_unordered_iterable(Target& target,
                                const TargetIt& target_it,
                                const Source& source) {
-  auto ui = UnorderedIterable(source);
+  auto&& ui = UnorderedIterable(source);
   target.insert(target_it, ui.begin(), ui.end());
 }
 
