@@ -7,7 +7,7 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
+
 #include <vector>
 
 #include "Debug.h"
@@ -20,7 +20,6 @@
 #include "Show.h"
 #include "SingleImpl.h"
 #include "SingleImplDefs.h"
-#include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -83,7 +82,7 @@ DexType* AnalysisImpl::get_and_check_single_impl(DexType* type) {
 void AnalysisImpl::create_single_impl(const TypeMap& single_impl,
                                       const TypeSet& intfs,
                                       const SingleImplConfig& config) {
-  for (auto const& intf_it : single_impl) {
+  for (auto const& intf_it : UnorderedIterable(single_impl)) {
     auto intf = intf_it.first;
     auto intf_cls = type_class(intf);
     always_assert(intf_cls && !intf_cls->is_external());
@@ -118,7 +117,7 @@ void AnalysisImpl::filter_list(const std::vector<std::string>& list,
     return false;
   };
 
-  for (const auto& intf_it : single_impls) {
+  for (const auto& intf_it : UnorderedIterable(single_impls)) {
     const auto intf = intf_it.first;
     const auto intf_cls = type_class(intf);
     const auto intf_name = intf_cls->get_deobfuscated_name_or_empty();
@@ -130,7 +129,7 @@ void AnalysisImpl::filter_list(const std::vector<std::string>& list,
 }
 
 void AnalysisImpl::filter_proguard_special_interface() {
-  for (const auto& intf_it : single_impls) {
+  for (const auto& intf_it : UnorderedIterable(single_impls)) {
     const auto intf = intf_it.first;
     const auto intf_cls = type_class(intf);
     std::string intf_name = intf_cls->get_deobfuscated_name_or_empty_copy();
@@ -150,7 +149,7 @@ void AnalysisImpl::filter_by_annotations(
     }
   }
 
-  for (const auto& intf_it : single_impls) {
+  for (const auto& intf_it : UnorderedIterable(single_impls)) {
     const auto intf = intf_it.first;
     const auto intf_cls = type_class(intf);
     if (has_anno(intf_cls, anno_types)) {
@@ -179,7 +178,7 @@ void AnalysisImpl::filter_single_impl(const SingleImplConfig& config) {
  * Do not optimize DoNotStrip interfaces.
  */
 void AnalysisImpl::filter_do_not_strip() {
-  for (const auto& intf_it : single_impls) {
+  for (const auto& intf_it : UnorderedIterable(single_impls)) {
     if (!can_delete(type_class(intf_it.first))) {
       escape_interface(intf_it.first, DO_NOT_STRIP);
     }
@@ -226,7 +225,7 @@ void AnalysisImpl::collect_children(const TypeSet& intfs) {
  * Escape if any parent is not known to redex.
  */
 void AnalysisImpl::check_impl_hierarchy() {
-  for (auto& intf_it : single_impls) {
+  for (auto& intf_it : UnorderedIterable(single_impls)) {
     if (!klass::has_hierarchy_in_scope(type_class(intf_it.second.cls))) {
       escape_interface(intf_it.first, IMPL_PARENT_ESCAPED);
     }
@@ -237,7 +236,7 @@ void AnalysisImpl::check_impl_hierarchy() {
  * Escape interfaces with static initializer.
  */
 void AnalysisImpl::escape_with_clinit() {
-  for (auto& intf_it : single_impls) {
+  for (auto& intf_it : UnorderedIterable(single_impls)) {
     // strictly speaking this is not checking for a clinit but it's all the
     // same. Interfaces should not have static methods and even if so we
     // just escape them. From our analysis it turns out there are few with
@@ -257,7 +256,7 @@ void AnalysisImpl::escape_with_clinit() {
  * a single impl.
  */
 void AnalysisImpl::escape_with_sfields() {
-  for (auto const& intf_it : single_impls) {
+  for (auto const& intf_it : UnorderedIterable(single_impls)) {
     auto intf_cls = type_class(intf_it.first);
     redex_assert(CONSTP(intf_cls)->get_ifields().empty());
     always_assert(!intf_cls->is_external());
@@ -279,7 +278,7 @@ void AnalysisImpl::escape_with_sfields() {
  * optimization.
  */
 void AnalysisImpl::escape_cross_stores() {
-  for (auto const& intf_it : single_impls) {
+  for (auto const& intf_it : UnorderedIterable(single_impls)) {
     if (xstores.illegal_ref(intf_it.first, intf_it.second.cls)) {
       escape_interface(intf_it.first, CROSS_STORES);
       continue;
@@ -312,7 +311,8 @@ void AnalysisImpl::escape_cross_stores() {
  * Clean up the single impl map.
  */
 void AnalysisImpl::remove_escaped() {
-  std20::erase_if(single_impls, [](auto& p) { return p.second.is_escaped(); });
+  unordered_erase_if(single_impls,
+                     [](auto& p) { return p.second.is_escaped(); });
 }
 
 /**
@@ -559,7 +559,7 @@ void SingleImplAnalysis::escape_interface(DexType* intf, EscapeReason reason) {
  * Collect the interfaces to optimize for an optimization step.
  */
 void SingleImplAnalysis::get_interfaces(TypeList& to_optimize) const {
-  for (const auto& sit : single_impls) {
+  for (const auto& sit : UnorderedIterable(single_impls)) {
     auto& data = sit.second;
     redex_assert(!data.is_escaped());
     if (data.children.empty()) {

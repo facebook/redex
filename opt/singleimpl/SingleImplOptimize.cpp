@@ -10,7 +10,6 @@
 #include <set>
 #include <stdio.h>
 #include <string>
-#include <unordered_map>
 
 #include "CheckCastAnalysis.h"
 #include "CheckCastTransform.h"
@@ -222,7 +221,7 @@ struct OptimizationImpl {
   CheckCastSet do_optimize(
       const DexType* intf,
       const SingleImplData& data,
-      std::unordered_map<DexMethod*, cfg::CFGMutation>& method_mutations);
+      UnorderedMap<DexMethod*, cfg::CFGMutation>& method_mutations);
   EscapeReason check_field_collision(const DexType* intf,
                                      const SingleImplData& data);
   EscapeReason check_method_collision(const DexType* intf,
@@ -235,7 +234,7 @@ struct OptimizationImpl {
   CheckCastSet fix_instructions(
       const DexType* intf,
       const SingleImplData& data,
-      std::unordered_map<DexMethod*, cfg::CFGMutation>& method_mutations);
+      UnorderedMap<DexMethod*, cfg::CFGMutation>& method_mutations);
   void set_method_defs(const DexType* intf, const SingleImplData& data);
   void set_method_refs(const DexType* intf, const SingleImplData& data);
   void rewrite_interface_methods(const DexType* intf,
@@ -255,7 +254,7 @@ struct OptimizationImpl {
   // list of optimized types
   UnorderedSet<DexType*> optimized;
   const ClassHierarchy& ch;
-  std::unordered_map<std::string_view, size_t> deobfuscated_name_counters;
+  UnorderedMap<std::string_view, size_t> deobfuscated_name_counters;
   const api::AndroidSDK& m_api;
 };
 
@@ -295,7 +294,7 @@ void OptimizationImpl::set_field_defs(const DexType* intf,
  */
 void OptimizationImpl::set_field_refs(const DexType* intf,
                                       const SingleImplData& data) {
-  for (const auto& fieldrefs : data.fieldrefs) {
+  for (const auto& fieldrefs : UnorderedIterable(data.fieldrefs)) {
     const auto field = fieldrefs.first;
     redex_assert(!single_impls->is_escaped(field->get_class()));
     DexFieldRef* f =
@@ -355,15 +354,14 @@ void for_all_methods(const T& methods, Fn fn, bool parallel = true) {
 CheckCastSet OptimizationImpl::fix_instructions(
     const DexType* intf,
     const SingleImplData& data,
-    std::unordered_map<DexMethod*, cfg::CFGMutation>& method_mutations) {
+    UnorderedMap<DexMethod*, cfg::CFGMutation>& method_mutations) {
   if (data.referencing_methods.empty()) {
     return {};
   }
   std::vector<const DexMethod*> methods;
   methods.reserve(data.referencing_methods.size());
-  std::transform(data.referencing_methods.begin(),
-                 data.referencing_methods.end(), std::back_inserter(methods),
-                 [](auto& p) { return p.first; });
+  unordered_transform(data.referencing_methods, std::back_inserter(methods),
+                      [](auto& p) { return p.first; });
   // The typical number of methods is too small, it is actually significant
   // overhead to spin up pool threads to just let them die.
   constexpr bool PARALLEL = false;
@@ -380,7 +378,8 @@ CheckCastSet OptimizationImpl::fix_instructions(
         always_assert(code->editable_cfg_built());
         auto& cfg = code->cfg();
         auto& mutation = method_mutations.at(caller);
-        for (const auto& insn_it_pair : data.referencing_methods.at(caller)) {
+        for (const auto& insn_it_pair :
+             UnorderedIterable(data.referencing_methods.at(caller))) {
           auto insn_it = insn_it_pair.second;
           auto insn = insn_it_pair.first;
           always_assert(&insn_it.cfg() == &cfg);
@@ -479,7 +478,7 @@ CheckCastSet OptimizationImpl::fix_instructions(
  */
 void OptimizationImpl::set_method_refs(const DexType* intf,
                                        const SingleImplData& data) {
-  for (const auto& mrefit : data.methodrefs) {
+  for (const auto& mrefit : UnorderedIterable(data.methodrefs)) {
     auto method = mrefit.first;
     TRACE(INTF, 3, "(MREF) update ref %s", SHOW(method));
     // next 2 lines will generate no new proto or method when the ref matches
@@ -551,13 +550,13 @@ void OptimizationImpl::rewrite_interface_methods(const DexType* intf,
   }
 
   // rewrite invoke-interface to invoke-virtual
-  for (const auto& mref_it : data.intf_methodrefs) {
+  for (const auto& mref_it : UnorderedIterable(data.intf_methodrefs)) {
     auto m = mref_it.first;
     always_assert(m_intf_meth_to_impl_meth.count(m));
     auto new_m = m_intf_meth_to_impl_meth[m];
     redex_assert(new_m && new_m != m);
     TRACE(INTF, 3, "(MITFOP) %s", SHOW(new_m));
-    for (auto mop : mref_it.second) {
+    for (auto mop : UnorderedIterable(mref_it.second)) {
       TRACE(INTF, 3, "(MITFOP) %s", SHOW(mop));
       mop->set_method(new_m);
       always_assert(mop->opcode() == OPCODE_INVOKE_INTERFACE);
@@ -579,7 +578,7 @@ void OptimizationImpl::rewrite_annotations(Scope& scope,
   // configured to run afterwards.
   using RewriteFn =
       std::function<void(const DexClass*, DexAnnotation*, DexEncodedValue*)>;
-  std::unordered_map<DexType*, RewriteFn> types_to_rewrite;
+  UnorderedMap<DexType*, RewriteFn> types_to_rewrite;
 
   auto rewrite_enclosing_method = [&](const DexClass* cls, DexAnnotation* anno,
                                       DexEncodedValue* value) {
@@ -803,7 +802,7 @@ void OptimizationImpl::rename_possible_collisions(const DexType* intf,
     TRACE(INTF, 9, "Changing def name for %s to %s", SHOW(meth), SHOW(name));
     rename(meth, name);
   }
-  for (const auto& refs_it : data.methodrefs) {
+  for (const auto& refs_it : UnorderedIterable(data.methodrefs)) {
     if (refs_it.first->is_def()) continue;
     always_assert(!method::is_init(refs_it.first));
     auto name = type_reference::new_name(refs_it.first);
@@ -819,7 +818,7 @@ void OptimizationImpl::rename_possible_collisions(const DexType* intf,
 CheckCastSet OptimizationImpl::do_optimize(
     const DexType* intf,
     const SingleImplData& data,
-    std::unordered_map<DexMethod*, cfg::CFGMutation>& method_mutations) {
+    UnorderedMap<DexMethod*, cfg::CFGMutation>& method_mutations) {
   CheckCastSet ret = fix_instructions(intf, data, method_mutations);
   set_type_refs(intf, data);
   set_field_defs(intf, data);
@@ -840,11 +839,12 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
   single_impls->get_interfaces(to_optimize);
   std::sort(to_optimize.begin(), to_optimize.end(), compare_dextypes);
 
-  std::unordered_map<DexMethod*, cfg::CFGMutation> method_mutations;
+  UnorderedMap<DexMethod*, cfg::CFGMutation> method_mutations;
   std::vector<DexMethod*> mutated_methods;
   for (auto intf : to_optimize) {
     auto& intf_data = single_impls->get_single_impl_data(intf);
-    for (auto&& [method, _] : intf_data.referencing_methods) {
+    for (auto&& [method, _] :
+         UnorderedIterable(intf_data.referencing_methods)) {
       auto* code = method->get_code();
       always_assert(code->editable_cfg_built());
       auto emplaced =
@@ -871,7 +871,7 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
     optimized.insert(intf);
   }
 
-  for (auto&& [_, mutation] : method_mutations) {
+  for (auto&& [_, mutation] : UnorderedIterable(method_mutations)) {
     mutation.flush();
   }
 

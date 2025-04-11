@@ -72,7 +72,7 @@ void breakup_by_package(SingleImpls& single_impls) {
   };
   std::vector<PackageBreakUp> by_package;
   uint32_t no_package_types = 0;
-  for (auto const& intf_it : single_impls) {
+  for (auto const& intf_it : UnorderedIterable(single_impls)) {
     const auto intf_name = intf_it.first->get_name()->c_str();
     auto ptr = const_cast<char*>(intf_name);
     if (*ptr != 'L') {
@@ -140,7 +140,7 @@ void class_type_stats(SingleImpls& single_impls) {
   size_t top_level_no_parent_count = 0;
   std::ostringstream top_level_no_parent;
 
-  for (auto const& intf_it : single_impls) {
+  for (auto const& intf_it : UnorderedIterable(single_impls)) {
     auto name = intf_it.second.cls->get_name()->c_str();
     auto anon = is_anonymous(name);
     auto nested_cls = false;
@@ -215,7 +215,7 @@ void print_stats(SingleImpls& single_impls) {
   // interface stats
   fprintf(
       stderr, "single implemented interface count: %zu\n", single_impls.size());
-  for (auto const& intf_it : single_impls) {
+  for (auto const& intf_it : UnorderedIterable(single_impls)) {
     fprintf(stderr, "+ %s\n", SHOW(intf_it.first));
   }
   if (debug) {
