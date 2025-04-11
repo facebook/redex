@@ -26,6 +26,7 @@
 #include "MethodOverrideGraph.h"
 #include "MethodProfiles.h"
 #include "ReachableClasses.h"
+#include "RedexContext.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"
 #include "ScopedMetrics.h"
@@ -859,7 +860,7 @@ void run_inliner(
     }
   }
 
-  if (partial_hot_hot) {
+  if (partial_hot_hot && !g_redex->instrument_mode) {
     inliner_config.partial_hot_hot_inline = true;
   }
 
