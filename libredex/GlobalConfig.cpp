@@ -208,6 +208,9 @@ void GlobalConfig::bind_config() {
   bind("baseline_profile", {}, json_param);
   bind("baseline_profile_config", "", string_param);
   bind("preprocessed_baseline_profile_directory", "", string_param);
+  bind("evaluate_package_name", true, bool_param,
+       "When true, AndroidManifest.xml will be consulted for the application "
+       "package name, and applied during constant propagation.");
 
   for (const auto& entry : m_registry) {
     m_global_configs.emplace(entry.name,

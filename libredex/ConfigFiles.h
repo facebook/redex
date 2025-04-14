@@ -246,6 +246,8 @@ struct ConfigFiles {
 
   bool finalize_resource_table() const;
 
+  bool evaluate_package_name() const;
+
  private:
   JsonWrapper m_json;
   std::string outdir;
