@@ -1888,7 +1888,6 @@ int main(int argc, char* argv[]) {
       TRACE(MAIN, 2, "parsed minSdkVersion = %d", *maybe_sdk);
       args.redex_options.min_sdk = *maybe_sdk;
     }
-    args.redex_options.package_name = resources->get_manifest_package_name();
 
     {
       auto profile_frontend =
@@ -1902,6 +1901,14 @@ int main(int argc, char* argv[]) {
         global_resources_config->cleanup_r_class_rewriting = false;
       }
       maybe_dump_jemalloc_profile("MALLOC_PROFILE_DUMP_FRONTEND");
+    }
+
+    if (conf.evaluate_package_name()) {
+      args.redex_options.package_name = resources->get_manifest_package_name();
+      if (args.redex_options.package_name != boost::none) {
+        auto name_str = args.redex_options.package_name->c_str();
+        TRACE(MAIN, 2, "Package name '%s' will be evaluated", name_str);
+      }
     }
 
     check_required_resources(conf, true);
