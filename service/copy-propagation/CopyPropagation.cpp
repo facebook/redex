@@ -18,6 +18,7 @@
 #include "ConstantUses.h"
 #include "ControlFlow.h"
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexOpcode.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
@@ -69,7 +70,7 @@ using namespace aliased_registers;
 
 namespace {
 
-using BlockRegs = std::unordered_map<cfg::Block*, std::unordered_set<reg_t>>;
+using BlockRegs = UnorderedMap<cfg::Block*, UnorderedSet<reg_t>>;
 
 // Represents a register that may be wide.
 // There are three valid states:
@@ -91,22 +92,21 @@ class AliasFixpointIterator final
   DexTypeList* m_args;
   std::function<std::string()> m_method_describer;
   const Config& m_config;
-  const std::unordered_set<const IRInstruction*>& m_range_set;
+  const UnorderedSet<const IRInstruction*>& m_range_set;
   Stats& m_stats;
   mutable std::unique_ptr<constant_uses::ConstantUses> m_constant_uses;
   const BlockRegs& m_check_cast_throw_targets_regs;
 
-  AliasFixpointIterator(
-      cfg::ControlFlowGraph& cfg,
-      bool is_static,
-      DexType* declaring_type,
-      DexType* rtype,
-      DexTypeList* args,
-      std::function<std::string()> method_describer,
-      const Config& config,
-      const std::unordered_set<const IRInstruction*>& range_set,
-      Stats& stats,
-      const BlockRegs& check_cast_throw_targets_regs)
+  AliasFixpointIterator(cfg::ControlFlowGraph& cfg,
+                        bool is_static,
+                        DexType* declaring_type,
+                        DexType* rtype,
+                        DexTypeList* args,
+                        std::function<std::string()> method_describer,
+                        const Config& config,
+                        const UnorderedSet<const IRInstruction*>& range_set,
+                        Stats& stats,
+                        const BlockRegs& check_cast_throw_targets_regs)
       : MonotonicFixpointIterator<cfg::GraphInterface, AliasDomain>(
             cfg, cfg.num_blocks()),
         m_cfg(cfg),
@@ -150,7 +150,7 @@ class AliasFixpointIterator final
       return;
     }
     auto& regs = it->second;
-    for (auto reg : regs) {
+    for (auto reg : UnorderedIterable(regs)) {
       aliases.break_alias(Value::create_register(reg));
     }
   }
@@ -577,7 +577,7 @@ Stats CopyPropagation::run(IRCode* code,
   // registers that belong to /range instructions. The easiest way to find out
   // which instructions are in this category is by temporarily denormalizing
   // the registers.
-  std::unordered_set<const IRInstruction*> range_set;
+  UnorderedSet<const IRInstruction*> range_set;
   if (m_config.regalloc_has_run) {
     for (auto& mie : InstructionIterable(cfg)) {
       auto* insn = mie.insn;

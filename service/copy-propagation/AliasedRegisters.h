@@ -14,6 +14,7 @@
 #include <sparta/PatriciaTreeMap.h>
 
 #include "ConstantUses.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 
 namespace aliased_registers {
@@ -126,7 +127,7 @@ using vertex_t = uint32_t;
 class VertexValues {
  private:
   mutable std::vector<Value> m_values;
-  mutable std::unordered_map<Value, vertex_t, ValueHash> m_indices;
+  mutable UnorderedMap<Value, vertex_t, ValueHash> m_indices;
 
  public:
   vertex_t get_vertex(const Value& value) const;
@@ -147,8 +148,8 @@ class AliasGraph {
   static const inline std::vector<vertex_t> no_vertices;
 
   std::shared_ptr<VertexValues> m_values;
-  std::unordered_map<vertex_t, std::vector<vertex_t>> m_vertices_ins;
-  std::unordered_map<vertex_t, vertex_t> m_vertices_outs;
+  UnorderedMap<vertex_t, std::vector<vertex_t>> m_vertices_ins;
+  UnorderedMap<vertex_t, vertex_t> m_vertices_outs;
   size_t m_edges{0};
 
  public:
@@ -183,12 +184,12 @@ class AliasGraph {
     return v_it == m_vertices_ins.end() ? no_vertices : v_it->second;
   }
 
-  const std::unordered_map<vertex_t, vertex_t>&
-  get_vertices_with_adjacent_vertex() const {
+  const UnorderedMap<vertex_t, vertex_t>& get_vertices_with_adjacent_vertex()
+      const {
     return m_vertices_outs;
   }
 
-  const std::unordered_map<vertex_t, std::vector<vertex_t>>&
+  const UnorderedMap<vertex_t, std::vector<vertex_t>>&
   get_vertices_with_inv_adjacent_vertices() const {
     return m_vertices_ins;
   }
