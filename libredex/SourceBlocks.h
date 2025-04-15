@@ -9,12 +9,12 @@
 
 #include <cstdint>
 #include <memory>
-#include <unordered_set>
 #include <vector>
 
 #include "ControlFlow.h"
 #include "CppUtil.h"
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "IRCode.h"
 #include "IRList.h"
 #include "SourceBlocksUtils.h"
@@ -117,7 +117,7 @@ void visit_in_order_rec(const ControlFlowGraph* cfg,
   // Do not rely on `blocks()`, as there are no ordering guarantees. For now,
   // do a simple DFS with explicitly ordered edges.
 
-  std::unordered_set<Block*> visited;
+  UnorderedSet<Block*> visited;
   self_recursive_fn(
       [&](auto self, Block* cur) {
         if (visited.count(cur)) {
@@ -149,7 +149,7 @@ void visit_in_order(const ControlFlowGraph* cfg,
                     const BlockStartFn& block_start_fn,
                     const EdgeFn& edge_fn,
                     const BlockEndFn& block_end_fn) {
-  std::unordered_set<Block*> visited;
+  UnorderedSet<Block*> visited;
 
   struct StackFrame {
     Block* cur{nullptr}; // The handled block.
