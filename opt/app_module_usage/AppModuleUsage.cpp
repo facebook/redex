@@ -66,7 +66,7 @@ void write_method_module_usages_to_file(
       ofs << "(" << it->second->get_name() << ") ";
     }
     ofs << show(method);
-    for (const auto& [store, refl_only] : store_refs) {
+    for (const auto& [store, refl_only] : UnorderedIterable(store_refs)) {
       ofs << ", ";
       if (refl_only) {
         ofs << "(reflection) ";
@@ -91,7 +91,7 @@ void write_app_module_use_stats(
 
   for (const auto& [method, store_refs] :
        UnorderedIterable(method_store_refs)) {
-    for (const auto& [store, refl_only] : store_refs) {
+    for (const auto& [store, refl_only] : UnorderedIterable(store_refs)) {
       auto& count = counts[store];
       if (refl_only) {
         count.reflective_count++;
@@ -324,7 +324,8 @@ unsigned AppModuleUsagePass::gather_violations(
   for (const auto& [method, stores_referenced] :
        UnorderedIterable(method_store_refs)) {
     auto method_name = show(method);
-    for (const auto& [store, only_reflection] : stores_referenced) {
+    for (const auto& [store, only_reflection] :
+         UnorderedIterable(stores_referenced)) {
       if (access_granted_by_annotation(method, store)) {
         continue;
       }
@@ -370,9 +371,9 @@ unsigned AppModuleUsagePass::gather_violations(
 }
 
 template <typename T>
-std::unordered_set<std::string_view> AppModuleUsagePass::get_modules_used(
+UnorderedSet<std::string_view> AppModuleUsagePass::get_modules_used(
     T* entrypoint, DexType* annotation_type) {
-  std::unordered_set<std::string_view> modules = {};
+  UnorderedSet<std::string_view> modules = {};
   auto anno_set = entrypoint->get_anno_set();
   if (anno_set) {
     for (const auto& annotation : anno_set->get_annotations()) {
@@ -395,13 +396,13 @@ std::unordered_set<std::string_view> AppModuleUsagePass::get_modules_used(
   return modules;
 }
 
-template std::unordered_set<std::string_view>
+template UnorderedSet<std::string_view>
 AppModuleUsagePass::get_modules_used<DexMethod>(DexMethod*, DexType*);
 
-template std::unordered_set<std::string_view>
+template UnorderedSet<std::string_view>
 AppModuleUsagePass::get_modules_used<DexField>(DexField*, DexType*);
 
-template std::unordered_set<std::string_view>
+template UnorderedSet<std::string_view>
 AppModuleUsagePass::get_modules_used<DexClass>(DexClass*, DexType*);
 
 bool AppModuleUsagePass::access_excused_due_to_preexisting(
