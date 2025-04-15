@@ -7,10 +7,11 @@
 
 #pragma once
 
-#include "ConcurrentContainers.h"
-#include "PriorityThreadPool.h"
 #include <cinttypes>
-#include <unordered_set>
+
+#include "ConcurrentContainers.h"
+#include "DeterministicContainers.h"
+#include "PriorityThreadPool.h"
 
 template <class Task>
 class PriorityThreadPoolDAGScheduler {
@@ -19,9 +20,9 @@ class PriorityThreadPoolDAGScheduler {
  private:
   PriorityThreadPool m_priority_thread_pool;
   Executor m_executor;
-  std::unordered_map<Task, std::unordered_set<Task>> m_waiting_for;
-  std::unordered_map<Task, std::atomic<uint32_t>> m_wait_counts;
-  std::unique_ptr<std::unordered_map<Task, int>> m_priorities;
+  UnorderedMap<Task, UnorderedSet<Task>> m_waiting_for;
+  UnorderedMap<Task, std::atomic<uint32_t>> m_wait_counts;
+  std::unique_ptr<UnorderedMap<Task, int>> m_priorities;
   int m_max_priority{-1};
   using Continuations = std::vector<std::function<void()>>;
   std::unique_ptr<ConcurrentMap<Task, Continuations>>
@@ -35,7 +36,7 @@ class PriorityThreadPoolDAGScheduler {
     }
     auto it2 = m_waiting_for.find(task);
     if (it2 != m_waiting_for.end()) {
-      for (auto other_task : it2->second) {
+      for (auto other_task : UnorderedIterable(it2->second)) {
         priority = std::max(priority, compute_priority(other_task) + 1);
       }
     }
@@ -77,7 +78,7 @@ class PriorityThreadPoolDAGScheduler {
 
     auto it = m_waiting_for.find(task);
     if (it != m_waiting_for.end()) {
-      for (auto waiting_task : m_waiting_for.at(task)) {
+      for (auto waiting_task : UnorderedIterable(m_waiting_for.at(task))) {
         if (m_wait_counts.at(waiting_task).fetch_sub(1) == 1) {
           schedule(waiting_task);
         }
@@ -134,7 +135,7 @@ class PriorityThreadPoolDAGScheduler {
   template <class ForwardIt>
   uint32_t run(const ForwardIt& begin, const ForwardIt& end) {
     always_assert(!m_concurrent_continuations);
-    m_priorities = std::make_unique<std::unordered_map<Task, int>>();
+    m_priorities = std::make_unique<UnorderedMap<Task, int>>();
     std::vector<std::vector<Task>> ready_tasks;
     for (auto it = begin; it != end; it++) {
       int priority = compute_priority(*it);
@@ -158,7 +159,7 @@ class PriorityThreadPoolDAGScheduler {
     m_priority_thread_pool.join();
     always_assert(m_concurrent_continuations->empty());
     m_concurrent_continuations = nullptr;
-    for (auto& p : m_wait_counts) {
+    for (auto& p : UnorderedIterable(m_wait_counts)) {
       always_assert(p.second.load(std::memory_order_relaxed) == 0);
     }
     m_wait_counts.clear();
