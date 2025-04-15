@@ -8,9 +8,8 @@
 #pragma once
 
 #include "ConcurrentContainers.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
-
-#include <unordered_map>
 
 namespace field_op_tracker {
 
@@ -36,7 +35,7 @@ struct FieldStats {
 // Certain types don't have lifetimes, or at least nobody should depend on them.
 class TypeLifetimes {
  private:
-  std::unordered_set<const DexType*> m_ignored_types;
+  UnorderedSet<const DexType*> m_ignored_types;
   const DexType* m_java_lang_Enum;
 
  public:
@@ -44,7 +43,7 @@ class TypeLifetimes {
   bool has_lifetime(const DexType* t) const;
 };
 
-using FieldStatsMap = std::unordered_map<DexField*, FieldStats>;
+using FieldStatsMap = UnorderedMap<DexField*, FieldStats>;
 
 FieldStatsMap analyze(const Scope& scope);
 

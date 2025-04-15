@@ -69,7 +69,7 @@ size_t mark_fields_final(const Scope& scope,
       field_op_tracker::analyze(scope);
 
   size_t n_fields_finalized = 0;
-  for (auto& pair : field_stats) {
+  for (auto& pair : UnorderedIterable(field_stats)) {
     auto* field = pair.first;
     auto& stats = pair.second;
     if (stats.init_writes == stats.writes && can_rename(field) &&

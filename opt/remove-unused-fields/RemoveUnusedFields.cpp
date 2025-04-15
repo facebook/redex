@@ -129,7 +129,7 @@ class RemoveUnusedFields final {
           field_writes.get());
     }
 
-    for (auto& pair : field_stats) {
+    for (auto& pair : UnorderedIterable(field_stats)) {
       auto* field = pair.first;
       auto& stats = pair.second;
       TRACE(RMUF,

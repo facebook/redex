@@ -27,9 +27,9 @@ namespace {
 // How a value can escape
 struct Escapes {
   // Fields in which the value was stored
-  std::unordered_set<DexField*> put_value_fields;
+  UnorderedSet<DexField*> put_value_fields;
   // Constructors to which the value was passed as the first argument
-  std::unordered_set<DexMethod*> invoked_ctors;
+  UnorderedSet<DexMethod*> invoked_ctors;
   // Value may have a (relevant) lifetime and escaped otherwise, or an object /
   // array in which a field / array element with a (relevant) lifetime type was
   // written to with a non-zero value.
@@ -37,7 +37,7 @@ struct Escapes {
 };
 
 // Escape information for instructions define a value
-using InstructionEscapes = std::unordered_map<IRInstruction*, Escapes>;
+using InstructionEscapes = UnorderedMap<IRInstruction*, Escapes>;
 
 bool operator==(const Escapes& a, const Escapes& b) {
   return a.put_value_fields == b.put_value_fields &&
@@ -48,7 +48,7 @@ bool operator==(const InstructionEscapes& a, const InstructionEscapes& b) {
   if (a.size() != b.size()) {
     return false;
   }
-  for (auto&& [insn, escapes] : a) {
+  for (auto&& [insn, escapes] : UnorderedIterable(a)) {
     auto it = b.find(insn);
     if (it == b.end()) {
       return false;
@@ -259,7 +259,7 @@ class WritesAnalyzer {
       return true;
     }
     bool any_non_vestigial_objects_written_fields{false};
-    std::unordered_set<DexMethod*> invoked_base_ctors;
+    UnorderedSet<DexMethod*> invoked_base_ctors;
     bool other_escapes{false};
     if (!get_writes(active, method->as_def(),
                     /* non_zero_written_fields */ nullptr,
@@ -271,10 +271,10 @@ class WritesAnalyzer {
       return true;
     }
     if (other_escapes || any_non_vestigial_objects_written_fields ||
-        (std::find_if(invoked_base_ctors.begin(), invoked_base_ctors.end(),
-                      [&](DexMethod* invoked_base_ctor) {
-                        return may_capture(active, invoked_base_ctor);
-                      }) != invoked_base_ctors.end())) {
+        (unordered_any_of(invoked_base_ctors,
+                          [&](DexMethod* invoked_base_ctor) {
+                            return may_capture(active, invoked_base_ctor);
+                          }))) {
       return true;
     }
     return false;
@@ -284,7 +284,7 @@ class WritesAnalyzer {
   // lifetimes, or itself, as part of its creation
   bool may_capture(const sparta::PatriciaTreeSet<const DexMethod*>& active,
                    const IRInstruction* insn,
-                   const std::unordered_set<DexMethod*>& invoked_ctors) const {
+                   const UnorderedSet<DexMethod*>& invoked_ctors) const {
     switch (insn->opcode()) {
     case OPCODE_NEW_ARRAY:
       return false;
@@ -294,13 +294,10 @@ class WritesAnalyzer {
     }
     case OPCODE_NEW_INSTANCE:
       always_assert(!invoked_ctors.empty());
-      for (auto method : invoked_ctors) {
+      return unordered_any_of(invoked_ctors, [&](DexMethod* method) {
         always_assert(type::is_subclass(method->get_class(), insn->get_type()));
-        if (may_capture(active, method)) {
-          return true;
-        }
-      }
-      return false;
+        return may_capture(active, method);
+      });
     default:
       not_reached();
     }
@@ -312,13 +309,10 @@ class WritesAnalyzer {
                           const field_op_tracker::TypeLifetimes* type_lifetimes)
       : m_type_lifetimes(type_lifetimes), m_field_stats(field_stats) {}
 
-  bool any_read(const std::unordered_set<DexField*>& fields) const {
-    for (auto field : fields) {
-      if (m_field_stats.at(field).reads != 0) {
-        return true;
-      }
-    }
-    return false;
+  bool any_read(const UnorderedSet<DexField*>& fields) const {
+    return unordered_any_of(fields, [&](DexField* field) {
+      return m_field_stats.at(field).reads != 0;
+    });
   }
 
   // Result indicates whether we ran into a recursive case.
@@ -328,7 +322,7 @@ class WritesAnalyzer {
       ConcurrentSet<DexField*>* non_zero_written_fields,
       ConcurrentSet<DexField*>* non_vestigial_objects_written_fields,
       bool* any_non_vestigial_objects_written_fields,
-      std::unordered_set<DexMethod*>* invoked_base_ctors,
+      UnorderedSet<DexMethod*>* invoked_base_ctors,
       bool* other_escapes) const {
     auto active = old_active;
     active.insert(method);
@@ -346,7 +340,7 @@ class WritesAnalyzer {
     // an non-vestigial value. Right now, we only consider as vestigial values
     // newly created objects and arrays which escape only to unread fields and
     // contain no non-vestigial objects.
-    for (auto& p : insn_escapes) {
+    for (auto& p : UnorderedIterable(insn_escapes)) {
       auto insn = p.first;
       auto& escapes = p.second;
       auto is_vestigial_object =
@@ -354,7 +348,7 @@ class WritesAnalyzer {
           !(any_read(escapes.put_value_fields) || escapes.other) &&
           !(has_lifetime(insn->get_type()) &&
             may_capture(active, insn, escapes.invoked_ctors));
-      for (auto field : escapes.put_value_fields) {
+      for (auto field : UnorderedIterable(escapes.put_value_fields)) {
         always_assert(field != nullptr);
         if (non_zero_written_fields) {
           non_zero_written_fields->insert(field);
@@ -370,8 +364,7 @@ class WritesAnalyzer {
       }
       if (!escapes.invoked_ctors.empty() && invoked_base_ctors &&
           insn == init_load_param_this) {
-        invoked_base_ctors->insert(escapes.invoked_ctors.begin(),
-                                   escapes.invoked_ctors.end());
+        insert_unordered_iterable(*invoked_base_ctors, escapes.invoked_ctors);
       }
       if (other_escapes && escapes.other) {
         *other_escapes = true;
@@ -434,7 +427,7 @@ FieldStatsMap analyze(const Scope& scope) {
     if (!method->get_code()) {
       return;
     }
-    std::unordered_map<DexField*, FieldStats> field_stats;
+    UnorderedMap<DexField*, FieldStats> field_stats;
     if (method::is_init(method)) {
       // compute init_writes by checking receiver of each iput
       cfg::ScopedCFG cfg(method->get_code());
@@ -490,7 +483,7 @@ FieldStatsMap analyze(const Scope& scope) {
           }
           return editable_cfg_adapter::LOOP_CONTINUE;
         });
-    for (auto& p : field_stats) {
+    for (auto& p : UnorderedIterable(field_stats)) {
       concurrent_field_stats.update(
           p.first, [&](DexField*, FieldStats& fs, bool) { fs += p.second; });
     }

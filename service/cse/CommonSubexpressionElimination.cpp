@@ -1253,7 +1253,7 @@ void SharedState::init_finalizable_fields(const Scope& scope) {
   field_op_tracker::FieldStatsMap field_stats =
       field_op_tracker::analyze(scope);
 
-  for (auto& pair : field_stats) {
+  for (auto& pair : UnorderedIterable(field_stats)) {
     auto* field = pair.first;
     auto& stats = pair.second;
     // We are checking a subset of what the AccessMarking pass is checking for
