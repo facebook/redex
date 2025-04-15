@@ -1020,7 +1020,7 @@ void run_inliner(
   auto inlined = inliner.get_inlined();
   size_t inlined_count = inlined.size();
   size_t inlined_init_count = 0;
-  for (DexMethod* m : inlined) {
+  for (DexMethod* m : UnorderedIterable(inlined)) {
     if (method::is_init(m)) {
       inlined_init_count++;
     }

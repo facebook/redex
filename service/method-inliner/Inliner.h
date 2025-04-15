@@ -296,15 +296,15 @@ class MultiMethodInliner {
   /**
    * Return the set of unique inlined methods.
    */
-  std::unordered_set<DexMethod*> get_inlined() const {
-    std::unordered_set<DexMethod*> res;
+  UnorderedSet<DexMethod*> get_inlined() const {
+    UnorderedSet<DexMethod*> res;
     res.reserve(m_inlined.size());
     insert_unordered_iterable(res, m_inlined);
     return res;
   }
 
-  std::unordered_set<const DexMethod*> get_inlined_with_fence() const {
-    std::unordered_set<const DexMethod*> res;
+  UnorderedSet<const DexMethod*> get_inlined_with_fence() const {
+    UnorderedSet<const DexMethod*> res;
     res.reserve(m_inlined_with_fence.size());
     insert_unordered_iterable(res, m_inlined_with_fence);
     return res;
