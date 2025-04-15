@@ -7,11 +7,10 @@
 
 #pragma once
 
-#include <unordered_map>
-
 #include <sparta/ConstantAbstractDomain.h>
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "IRInstruction.h"
 
@@ -24,7 +23,7 @@ using UninitializedObjectEnvironment =
                                                UninitializedObjectDomain>;
 
 using UninitializedObjectEnvironments =
-    std::unordered_map<const IRInstruction*, UninitializedObjectEnvironment>;
+    UnorderedMap<const IRInstruction*, UninitializedObjectEnvironment>;
 
 // For each instruction, ånd each incoming register, determine if it may contain
 // an uninitialized object, i.e. one that was created or passed in via the
