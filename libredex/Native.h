@@ -9,6 +9,7 @@
 
 #include <boost/filesystem.hpp>
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 
 namespace native {
@@ -26,7 +27,7 @@ class Function {
 
   const SoLibrary* get_so_library() const { return m_so_library; }
   std::string get_name() const { return m_name; }
-  const std::unordered_set<DexMethod*>& get_java_declarations() const {
+  const UnorderedSet<DexMethod*>& get_java_declarations() const {
     return m_java_declarations;
   }
 
@@ -37,7 +38,7 @@ class Function {
  private:
   const SoLibrary* m_so_library;
   std::string m_name;
-  std::unordered_set<DexMethod*> m_java_declarations;
+  UnorderedSet<DexMethod*> m_java_declarations;
 };
 
 class SoLibrary {
@@ -51,10 +52,10 @@ class SoLibrary {
   boost::filesystem::path get_json_path() const { return m_json_path; }
 
   void populate_functions();
-  std::unordered_map<std::string, Function>& get_functions() {
+  UnorderedMap<std::string, Function>& get_functions() {
     return m_name_to_functions;
   }
-  const std::unordered_map<std::string, Function>& get_functions() const {
+  const UnorderedMap<std::string, Function>& get_functions() const {
     return m_name_to_functions;
   }
 
@@ -69,7 +70,7 @@ class SoLibrary {
  private:
   std::string m_name;
   boost::filesystem::path m_json_path;
-  std::unordered_map<std::string, Function> m_name_to_functions;
+  UnorderedMap<std::string, Function> m_name_to_functions;
 };
 
 std::vector<SoLibrary> get_so_libraries(const boost::filesystem::path& path);
@@ -78,7 +79,7 @@ struct NativeContext {
   static NativeContext build(const std::string& path_to_native_results,
                              const Scope& java_scope);
   std::vector<SoLibrary> so_libraries;
-  std::unordered_map<DexMethod*, Function*> java_declaration_to_function;
+  UnorderedMap<DexMethod*, Function*> java_declaration_to_function;
 };
 
 }; // namespace native
