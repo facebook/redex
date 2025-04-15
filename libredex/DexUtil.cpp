@@ -7,6 +7,12 @@
 
 #include "DexUtil.h"
 
+#include <boost/algorithm/string.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/regex.hpp>
+#include <deque>
+#include <string_view>
+
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
@@ -15,12 +21,6 @@
 #include "Resolver.h"
 #include "Trace.h"
 #include "UnknownVirtuals.h"
-#include <boost/algorithm/string.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/regex.hpp>
-#include <deque>
-#include <string_view>
-#include <unordered_set>
 
 const DexType* get_init_class_type_demand(const IRInstruction* insn) {
   switch (insn->opcode()) {

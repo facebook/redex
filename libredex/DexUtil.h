@@ -236,7 +236,7 @@ bool is_valid_identifier(std::string_view s);
 namespace java_names {
 
 inline const std::string* primitive_desc_to_name(char desc) {
-  const static std::unordered_map<char, std::string> conversion_table{
+  const static UnorderedMap<char, std::string> conversion_table{
       {'V', "void"},    {'B', "byte"},  {'C', "char"},
       {'S', "short"},   {'I', "int"},   {'J', "long"},
       {'Z', "boolean"}, {'F', "float"}, {'D', "double"},
@@ -250,7 +250,7 @@ inline const std::string* primitive_desc_to_name(char desc) {
 }
 
 inline boost::optional<char> primitive_name_to_desc(std::string_view name) {
-  const static std::unordered_map<std::string_view, char> conversion_table{
+  const static UnorderedMap<std::string_view, char> conversion_table{
       {"void", 'V'},    {"byte", 'B'},  {"char", 'C'},
       {"short", 'S'},   {"int", 'I'},   {"long", 'J'},
       {"boolean", 'Z'}, {"float", 'F'}, {"double", 'D'},
