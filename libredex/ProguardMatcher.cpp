@@ -12,11 +12,8 @@
 #include <mutex>
 #include <sstream>
 #include <thread>
-#include <unordered_map>
-#include <unordered_set>
 
 #include "ClassHierarchy.h"
-#include "ConcurrentContainers.h"
 #include "DeterministicContainers.h"
 #include "DexAnnotation.h"
 #include "DexUtil.h"
@@ -391,7 +388,7 @@ class KeepRuleMatcher {
   RegexMap& m_regex_map;
 
   std::mutex m_warn_mutex;
-  std::unordered_set<std::string> m_already_warned;
+  UnorderedSet<std::string> m_already_warned;
 };
 
 class ProguardMatcher {
