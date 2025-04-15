@@ -9,9 +9,9 @@
 
 #include <algorithm>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
@@ -51,8 +51,7 @@ class DelSuper {
  private:
   const std::vector<DexClass*>& m_scope;
   // trivial return invoke super method -> invoked super method
-  ConcurrentMap<DexType*, std::unordered_map<DexMethod*, DexMethod*>>
-      m_delmeths;
+  ConcurrentMap<DexType*, UnorderedMap<DexMethod*, DexMethod*>> m_delmeths;
   std::atomic<int> m_num_methods;
   std::atomic<int> m_num_passed;
   std::atomic<int> m_num_trivial;
@@ -307,7 +306,7 @@ class DelSuper {
       auto wq = workqueue_foreach<DexType*>([&](DexType* type) {
         auto& map = m_delmeths.at_unsafe(type);
         auto clazz = type_class(type);
-        for (const auto& pair : map) {
+        for (const auto& pair : UnorderedIterable(map)) {
           auto meth = pair.first;
           always_assert(meth->is_virtual());
           clazz->remove_method(meth);
