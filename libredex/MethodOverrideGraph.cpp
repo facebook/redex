@@ -275,7 +275,7 @@ bool all_overriding_methods_impl(const Graph& graph,
     base_type = nullptr;
   }
   if (root.is_interface) {
-    std::unordered_set<const Node*> visited{&root};
+    UnorderedSet<const Node*> visited{&root};
     visited.reserve(root.children.size() * 7);
     return self_recursive_fn(
         [&](auto self, const auto& children) -> bool {
@@ -320,7 +320,7 @@ bool all_overridden_methods_impl(const Graph& graph,
                                  bool include_interfaces) {
   const Node& root = graph.get_node(method);
   if (include_interfaces) {
-    std::unordered_set<const Node*> visited{&root};
+    UnorderedSet<const Node*> visited{&root};
     visited.reserve(root.parents.size() * 7);
     return self_recursive_fn(
         [&](auto self, const auto& children) -> bool {
@@ -439,7 +439,7 @@ void Graph::add_edge(const DexMethod* overridden,
 }
 
 void Node::gather_connected_methods(
-    std::unordered_set<const DexMethod*>* visited) const {
+    UnorderedSet<const DexMethod*>* visited) const {
   if (method == nullptr) {
     return;
   }

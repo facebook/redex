@@ -532,14 +532,14 @@ void RemoveArgs::populate_representative_ids(
     if (m_method_representative_map.count(method)) {
       return;
     }
-    std::unordered_set<const DexMethod*> visited;
+    UnorderedSet<const DexMethod*> visited;
     visited.insert(method);
     override_graph.get_node(method).gather_connected_methods(&visited);
-    auto representative = *std::min_element(visited.begin(), visited.end(),
-                                            dexmethods_comparator());
+    auto representative =
+        *unordered_min_element(visited, dexmethods_comparator());
     m_related_method_groups.get_or_emplace_and_assert_equal(representative,
                                                             visited);
-    for (auto m : visited) {
+    for (auto m : UnorderedIterable(visited)) {
       auto existing_representative =
           m_method_representative_map.emplace(m, representative);
       always_assert(*existing_representative.first == representative);
@@ -560,7 +560,7 @@ void RemoveArgs::gather_updated_entries(
     InsertOnlyConcurrentMap<DexMethod*, Entry>* updated_entries) {
   // Loop over all related groups
   using MethodAndMethodSet =
-      std::pair<const DexMethod* const, std::unordered_set<const DexMethod*>>;
+      std::pair<const DexMethod* const, UnorderedSet<const DexMethod*>>;
 
   InsertOnlyConcurrentMap<const DexMethod*,
                           std::map<uint16_t, cfg::InstructionIterator>>
@@ -577,7 +577,7 @@ void RemoveArgs::gather_updated_entries(
 
         // First iteration, perform some basic checks for whether we can edit
         // this method.
-        for (auto m : kvp->second) {
+        for (auto m : UnorderedIterable(kvp->second)) {
           // If we can't edit, just skip
           if (!can_rename(m) || is_native(m) || m->rstate.no_optimizations() ||
               has_any_annotation(m, no_devirtualize_annos)) {
@@ -609,7 +609,7 @@ void RemoveArgs::gather_updated_entries(
         for (uint16_t i = (is_static(kvp->first) ? 0 : 1); i < num_args; i++) {
           running_dead_args.insert(i);
         }
-        for (auto m : kvp->second) {
+        for (auto m : UnorderedIterable(kvp->second)) {
           if (m->get_code()) {
             auto& dead_insn_map = all_dead_insns.at(m);
             std20::erase_if(running_dead_args,
@@ -619,7 +619,7 @@ void RemoveArgs::gather_updated_entries(
 
         // Third iteration, delete all args/insns that aren't in
         // `running_dead_args`.
-        for (auto m : kvp->second) {
+        for (auto m : UnorderedIterable(kvp->second)) {
           if (m->get_code()) {
             auto& dead_insn_map = all_dead_insns.at_unsafe(m);
             std20::erase_if(dead_insn_map, [&](auto e) {
@@ -656,7 +656,7 @@ void RemoveArgs::gather_updated_entries(
 
         // Fourth iteration, check that none of the renamed methods collide.
         if (method::is_constructor(kvp->first)) {
-          for (auto m : kvp->second) {
+          for (auto m : UnorderedIterable(kvp->second)) {
             auto colliding_mref = DexMethod::get_method(
                 m->get_class(), m->get_name(), updated_proto);
             if (colliding_mref) {
@@ -671,7 +671,7 @@ void RemoveArgs::gather_updated_entries(
 
         // Fifth iteration, we loop one more time and add all the updated protos
         // to the final data structure.
-        for (auto method : kvp->second) {
+        for (auto method : UnorderedIterable(kvp->second)) {
           std::vector<cfg::InstructionIterator> dead_insns;
           // Compile the list of dead instructions that we computed earlier
           if (!is_reordered) {

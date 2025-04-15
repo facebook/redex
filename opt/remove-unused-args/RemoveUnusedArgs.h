@@ -58,8 +58,7 @@ class RemoveArgs {
   const Scope& m_scope;
   InsertOnlyConcurrentMap<const DexMethod*, const DexMethod*>
       m_method_representative_map;
-  InsertOnlyConcurrentMap<const DexMethod*,
-                          std::unordered_set<const DexMethod*>>
+  InsertOnlyConcurrentMap<const DexMethod*, UnorderedSet<const DexMethod*>>
       m_related_method_groups;
   const init_classes::InitClassesWithSideEffects&
       m_init_classes_with_side_effects;

@@ -72,7 +72,7 @@ InsertOnlyConcurrentSet<DexMethod*> get_non_true_virtuals(const Graph& graph,
  */
 struct OtherInterfaceImplementations {
   // The set of immediately implemented interface methods.
-  std::unordered_set<const DexMethod*> parents;
+  UnorderedSet<const DexMethod*> parents;
   // The set of the classes for which the current method implements those
   // interface methods for the first time.
   std::vector<const DexClass*> classes;
@@ -99,8 +99,7 @@ struct Node {
   // class, can be cast to the given base type.
   bool overrides(const DexMethod* current, const DexType* base_type) const;
 
-  void gather_connected_methods(
-      std::unordered_set<const DexMethod*>* visited) const;
+  void gather_connected_methods(UnorderedSet<const DexMethod*>* visited) const;
 };
 
 class Graph {
