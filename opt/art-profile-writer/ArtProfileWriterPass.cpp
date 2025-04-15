@@ -276,7 +276,7 @@ void never_compile(
   for (const auto& [config_name, baseline_profile_config] :
        UnorderedIterable(baseline_profile_configs)) {
     auto baseline_profile = baseline_profiles->at(config_name);
-    std::unordered_set<std::string> excluded_interaction_ids;
+    UnorderedSet<std::string> excluded_interaction_ids;
     if (!excluded_interaction_pattern.empty()) {
       boost::regex rx(excluded_interaction_pattern);
       for (auto&& [interaction_id, interaction_name] :
