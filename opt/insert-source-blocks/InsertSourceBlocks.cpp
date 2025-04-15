@@ -114,7 +114,7 @@ uint64_t stable_hash(ControlFlowGraph& cfg) {
   uint64_t hash = 0;
 
   std::deque<Block*> queue;
-  std::unordered_set<Block*> seen;
+  UnorderedSet<Block*> seen;
 
   auto push = [&queue, &seen](auto* b) {
     if (seen.insert(b).second) {
@@ -256,7 +256,7 @@ struct ProfileFile {
   using MethodMeta = UnorderedMap<const DexMethodRef*, StringPos>;
   MethodMeta method_meta;
 
-  using UnresolvedMethods = std::unordered_set<std::string_view>;
+  using UnresolvedMethods = UnorderedSet<std::string_view>;
 
   UnresolvedMethods unresolved_methods;
 
@@ -851,9 +851,7 @@ struct Injector {
     // Assumption is set is small overall. Also helps for sorting strings.
     std::set<std::string_view> unresolved_uniqued;
     for (auto& p : profile_files) {
-      for (auto& sv : p->unresolved_methods) {
-        unresolved_uniqued.insert(sv);
-      }
+      insert_unordered_iterable(unresolved_uniqued, p->unresolved_methods);
     }
     std::ofstream ofs{fname};
     for (auto& sv : unresolved_uniqued) {
