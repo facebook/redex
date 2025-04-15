@@ -7,8 +7,6 @@
 
 #include "Transform.h"
 
-#include <stack>
-
 #include "ControlFlow.h"
 
 namespace {

@@ -9,9 +9,8 @@
 
 #include "IRCode.h"
 
-#include <unordered_set>
-
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "IRInstruction.h"
 
 namespace transform {
