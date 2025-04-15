@@ -10,8 +10,6 @@
 #include <algorithm>
 #include <boost/functional/hash.hpp>
 
-#include "StlUtil.h"
-
 namespace keep_rules {
 
 namespace {
@@ -226,8 +224,8 @@ size_t hash_value(const KeepSpec& spec) {
 }
 
 void KeepSpecSet::erase_if(const std::function<bool(const KeepSpec&)>& pred) {
-  std::unordered_set<const KeepSpec*> erased;
-  std20::erase_if(m_unordered_set, [&](auto& v) {
+  UnorderedSet<const KeepSpec*> erased;
+  unordered_erase_if(m_unordered_set, [&](auto& v) {
     if (pred(*v)) {
       erased.emplace(v.get());
       return true;

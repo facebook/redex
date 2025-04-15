@@ -13,9 +13,9 @@
 #include <iosfwd>
 #include <set>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
+#include "DeterministicContainers.h"
 #include "DexAccess.h"
 
 namespace keep_rules {
@@ -157,8 +157,8 @@ class KeepSpecSet {
 
  private:
   std::vector<KeepSpec*> m_ordered;
-  std::unordered_set<std::unique_ptr<KeepSpec>,
-                     boost::hash<std::unique_ptr<KeepSpec>>>
+  UnorderedSet<std::unique_ptr<KeepSpec>,
+               boost::hash<std::unique_ptr<KeepSpec>>>
       m_unordered_set;
 };
 
