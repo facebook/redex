@@ -593,8 +593,8 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
   mutation.insert_after(it, new_insns);
 
   // find iterators corresponding to the aput instructions
-  std::unordered_set<const IRInstruction*> aput_insns_set(aput_insns.begin(),
-                                                          aput_insns.end());
+  UnorderedSet<const IRInstruction*> aput_insns_set(aput_insns.begin(),
+                                                    aput_insns.end());
   UnorderedMap<const IRInstruction*, cfg::InstructionIterator>
       aput_insns_iterators;
   auto iterable = cfg::InstructionIterable(m_cfg);
