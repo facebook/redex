@@ -14,7 +14,6 @@
 #include "Lazy.h"
 #include "ReachingDefinitions.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Trace.h"
 
 namespace check_casts {
@@ -295,7 +294,7 @@ DexType* CheckCastAnalysis::weaken_to_demand(
   auto& demands = it->second;
   always_assert(!demands.empty());
   if (demands.size() == 1) {
-    auto weakened_type = *demands.begin();
+    auto weakened_type = *unordered_any(demands);
     // Nullptr indicates that the type demand could not be computed exactly, and
     // no weakening should take place.
     if (weakened_type == nullptr) {
@@ -313,7 +312,7 @@ DexType* CheckCastAnalysis::weaken_to_demand(
   }
   always_assert(!demands.count(nullptr));
   auto meets_demands = [&](DexType* t) {
-    for (auto d : demands) {
+    for (auto d : UnorderedIterable(demands)) {
       if (!type::check_cast(t, d)) {
         return false;
       }
@@ -412,17 +411,17 @@ CheckCastAnalysis::CheckCastAnalysis(const CheckCastConfig& config,
   }
 
   // Simplify demands
-  for (auto& p : *m_insn_demands) {
+  for (auto& p : UnorderedIterable(*m_insn_demands)) {
     auto& demands = p.second;
     if (demands.count(nullptr)) {
       // no need to keep around anything else
-      std20::erase_if(demands, [](auto* t) { return t; });
+      unordered_erase_if(demands, [](auto* t) { return t; });
       always_assert(demands.count(nullptr));
       always_assert(demands.size() == 1);
       continue;
     }
     // Remove weakened types.
-    std::unordered_set<DexType*> weakened_types;
+    UnorderedSet<DexType*> weakened_types;
     std::queue<DexType*> queue;
     auto enqueue_weakened_types = [&queue](DexType* type) {
       auto weakened_type = weaken_type(type);
@@ -437,7 +436,7 @@ CheckCastAnalysis::CheckCastAnalysis(const CheckCastConfig& config,
         }
       }
     };
-    for (auto demand : demands) {
+    for (auto demand : UnorderedIterable(demands)) {
       enqueue_weakened_types(demand);
     }
     while (!queue.empty()) {
@@ -447,14 +446,13 @@ CheckCastAnalysis::CheckCastAnalysis(const CheckCastConfig& config,
         enqueue_weakened_types(weakened_type);
       }
     }
-    for (auto weakened_type : weakened_types) {
+    for (auto weakened_type : UnorderedIterable(weakened_types)) {
       if (demands.erase(weakened_type)) {
         // Double check that the just erased demand was indeed redundant
-        always_assert(
-            std::find_if(demands.begin(), demands.end(), [&](DexType* demand) {
-              return !weakened_types.count(demand) &&
-                     type::check_cast(demand, weakened_type);
-            }) != demands.end());
+        always_assert(unordered_any_of(demands, [&](DexType* demand) {
+          return !weakened_types.count(demand) &&
+                 type::check_cast(demand, weakened_type);
+        }));
       }
     }
   }

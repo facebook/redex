@@ -12,6 +12,7 @@
 
 #include "CheckCastConfig.h"
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "TypeInference.h"
 
 namespace api {
@@ -75,7 +76,7 @@ class CheckCastAnalysis {
   DexType* m_rtype;
   const ParamAnnotations* m_param_anno;
   using InstructionTypeDemands =
-      std::unordered_map<IRInstruction*, std::unordered_set<DexType*>>;
+      UnorderedMap<IRInstruction*, UnorderedSet<DexType*>>;
   std::unique_ptr<InstructionTypeDemands> m_insn_demands;
   std::vector<cfg::InstructionIterator> m_check_cast_its;
   mutable std::unique_ptr<type_inference::TypeInference> m_type_inference;
