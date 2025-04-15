@@ -72,7 +72,8 @@ void FixpointIterator::analyze_node(call_graph::NodeId const& node,
   const auto* method_cache_entry =
       find_matching_method_cache_entry(method_cache, args);
   if (method_cache_entry) {
-    for (auto& [insn, out_args] : method_cache_entry->result) {
+    for (auto& [insn, out_args] :
+         UnorderedIterable(method_cache_entry->result)) {
       current_state->set(insn, out_args);
     }
     std::lock_guard<std::mutex> lock_guard(m_stats_mutex);
@@ -86,7 +87,7 @@ void FixpointIterator::analyze_node(call_graph::NodeId const& node,
   auto& intra_cp = ipa->fp_iter;
   const auto outgoing_edges =
       call_graph::GraphInterface::successors(*m_call_graph, node);
-  std::unordered_set<IRInstruction*> outgoing_insns;
+  UnorderedSet<IRInstruction*> outgoing_insns;
   for (const auto& edge : outgoing_edges) {
     if (edge->callee() == m_call_graph->exit()) {
       continue; // ghost edge to the ghost exit node
@@ -97,7 +98,7 @@ void FixpointIterator::analyze_node(call_graph::NodeId const& node,
   if (ipa->wps_accessor) {
     ipa->wps_accessor->start_recording(&record);
   }
-  std::unordered_map<const IRInstruction*, ArgumentDomain> result;
+  UnorderedMap<const IRInstruction*, ArgumentDomain> result;
   for (auto* block : cfg.blocks()) {
     auto state = intra_cp.get_entry_state_at(block);
     auto last_insn = block->get_last_insn();
@@ -118,7 +119,7 @@ void FixpointIterator::analyze_node(call_graph::NodeId const& node,
   if (ipa->wps_accessor) {
     ipa->wps_accessor->stop_recording();
   }
-  for (auto& [insn, out_args] : result) {
+  for (auto& [insn, out_args] : UnorderedIterable(result)) {
     current_state->set(insn, out_args);
   }
   method_cache.push_front(std::make_shared<MethodCacheEntry>((MethodCacheEntry){
@@ -181,19 +182,22 @@ bool FixpointIterator::method_cache_entry_matches(
     return false;
   }
   if (m_wps->has_call_graph()) {
-    for (auto&& [method, val] : mce.wps_accessor_record.method_dependencies) {
+    for (auto&& [method, val] :
+         UnorderedIterable(mce.wps_accessor_record.method_dependencies)) {
       if (!m_wps->get_method_partition().get(method).equals(val)) {
         return false;
       }
     }
   } else {
-    for (auto&& [method, val] : mce.wps_accessor_record.method_dependencies) {
+    for (auto&& [method, val] :
+         UnorderedIterable(mce.wps_accessor_record.method_dependencies)) {
       if (!m_wps->get_return_value(method).equals(val)) {
         return false;
       }
     }
   }
-  for (auto&& [field, val] : mce.wps_accessor_record.field_dependencies) {
+  for (auto&& [field, val] :
+       UnorderedIterable(mce.wps_accessor_record.field_dependencies)) {
     if (!m_wps->get_field_value(field).equals(val)) {
       return false;
     }

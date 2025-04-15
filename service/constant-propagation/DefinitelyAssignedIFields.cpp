@@ -67,7 +67,7 @@ class WrittenUnreadFieldDomainEnvironment final
 //   i.e. not read before written to
 // - whether the 'this' parameter escaped
 struct AnalysisResult {
-  std::unordered_set<const DexField*> definitely_assigned_ifields;
+  UnorderedSet<const DexField*> definitely_assigned_ifields;
   bool may_this_have_escaped{false};
   bool operator==(const AnalysisResult& other) const {
     return definitely_assigned_ifields == other.definitely_assigned_ifields &&
@@ -292,7 +292,7 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
 
 namespace constant_propagation {
 namespace definitely_assigned_ifields {
-std::unordered_set<const DexField*> get_definitely_assigned_ifields(
+UnorderedSet<const DexField*> get_definitely_assigned_ifields(
     const Scope& scope) {
   Timer t("get_definitely_assigned_ifields");
   InsertOnlyConcurrentMap<DexMethod*, AnalysisResult> analysis_results;
@@ -377,7 +377,7 @@ std::unordered_set<const DexField*> get_definitely_assigned_ifields(
     res.insert(definitely_assigned_ifields.begin(),
                definitely_assigned_ifields.end());
   });
-  std::unordered_set<const DexField*> set;
+  UnorderedSet<const DexField*> set;
   insert_unordered_iterable(set, res);
   return set;
 }

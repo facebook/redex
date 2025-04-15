@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "Pass.h"
@@ -78,7 +79,7 @@ class PrintKotlinStats : public Pass {
   Stats get_stats() { return m_stats; }
 
  private:
-  std::unordered_set<DexMethodRef*> m_kotlin_null_assertions;
+  UnorderedSet<DexMethodRef*> m_kotlin_null_assertions;
   DexType* m_kotlin_lambdas_base = nullptr;
   DexType* m_kotlin_coroutin_continuation_base = nullptr;
   const DexString* m_instance = nullptr;

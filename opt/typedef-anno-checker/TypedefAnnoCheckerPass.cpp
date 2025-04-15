@@ -22,8 +22,10 @@ constexpr const char* DEFAULT_SUFFIX = "$default";
 
 namespace {
 bool is_null_check(const DexMethod* m) {
+  auto null_check_methods =
+      kotlin_nullcheck_wrapper::get_kotlin_null_assertions();
   for (DexMethodRef* kotlin_null_method :
-       kotlin_nullcheck_wrapper::get_kotlin_null_assertions()) {
+       UnorderedIterable(null_check_methods)) {
     if (kotlin_null_method->get_name() == m->get_name()) {
       return true;
     }

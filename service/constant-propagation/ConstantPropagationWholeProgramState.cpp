@@ -109,7 +109,7 @@ bool not_eligible_ifield(DexField* field) {
 void initialize_ifields(
     const Scope& scope,
     ConstantFieldPartition* field_partition,
-    const std::unordered_set<const DexField*>& definitely_assigned_ifields) {
+    const UnorderedSet<const DexField*>& definitely_assigned_ifields) {
   walk::fields(scope, [&](DexField* field) {
     if (not_eligible_ifield(field)) {
       return;
@@ -140,7 +140,7 @@ WholeProgramState::WholeProgramState(
     const interprocedural::FixpointIterator& fp_iter,
     const InsertOnlyConcurrentSet<DexMethod*>& non_true_virtuals,
     const UnorderedSet<const DexType*>& field_blocklist,
-    const std::unordered_set<const DexField*>& definitely_assigned_ifields,
+    const UnorderedSet<const DexField*>& definitely_assigned_ifields,
     std::shared_ptr<const call_graph::Graph> call_graph)
     : m_call_graph(std::move(call_graph)), m_field_blocklist(field_blocklist) {
 
@@ -182,7 +182,7 @@ WholeProgramState::WholeProgramState(
 void WholeProgramState::collect(
     const Scope& scope,
     const interprocedural::FixpointIterator& fp_iter,
-    const std::unordered_set<const DexField*>& definitely_assigned_ifields) {
+    const UnorderedSet<const DexField*>& definitely_assigned_ifields) {
   initialize_ifields(scope, &m_field_partition, definitely_assigned_ifields);
   ConcurrentMap<const DexField*, ConstantValue> fields_value_tmp;
   ConcurrentMap<const DexMethod*, ConstantValue> methods_value_tmp;

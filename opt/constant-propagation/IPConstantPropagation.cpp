@@ -172,7 +172,7 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
   fp_iter->run(Domain{{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
   auto non_true_virtuals =
       mog::get_non_true_virtuals(*method_override_graph, scope);
-  std::unordered_set<const DexField*> definitely_assigned_ifields;
+  UnorderedSet<const DexField*> definitely_assigned_ifields;
   if (m_config.compute_definitely_assigned_ifields) {
     definitely_assigned_ifields =
         definitely_assigned_ifields::get_definitely_assigned_ifields(scope);
@@ -199,7 +199,7 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
 
 void PassImpl::compute_analysis_stats(
     const WholeProgramState& wps,
-    const std::unordered_set<const DexField*>& definitely_assigned_ifields) {
+    const UnorderedSet<const DexField*>& definitely_assigned_ifields) {
   if (!wps.get_field_partition().is_top()) {
     for (auto& pair : wps.get_field_partition().bindings()) {
       auto* field = pair.first;

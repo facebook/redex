@@ -79,7 +79,9 @@ void load_external_method_summaries(
     param_summary_map->emplace(method, summary);
   }
   // Load summaries for kotlin null assertion methods.
-  for (auto method : kotlin_nullcheck_wrapper::get_kotlin_null_assertions()) {
+  auto null_check_methods =
+      kotlin_nullcheck_wrapper::get_kotlin_null_assertions();
+  for (auto method : UnorderedIterable(null_check_methods)) {
     if (param_summary_map->count(method)) {
       // The method is defined in the apk and their summaries are analyzed from
       // the method code.

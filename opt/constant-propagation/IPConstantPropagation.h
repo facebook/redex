@@ -109,7 +109,7 @@ class PassImpl : public Pass {
 
  private:
   void compute_analysis_stats(const WholeProgramState&,
-                              const std::unordered_set<const DexField*>&);
+                              const UnorderedSet<const DexField*>&);
 
   void optimize(const Scope&,
                 const TypeSystem& type_system,

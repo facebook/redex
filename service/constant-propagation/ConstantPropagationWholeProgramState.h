@@ -11,13 +11,14 @@
 
 #include "CallGraph.h"
 #include "ConstantEnvironment.h"
+#include "DeterministicContainers.h"
 #include "InstructionAnalyzer.h"
 
 namespace constant_propagation {
 
 enum class FieldType { INSTANCE, STATIC };
 
-using EligibleIfields = std::unordered_set<DexField*>;
+using EligibleIfields = UnorderedSet<DexField*>;
 
 namespace interprocedural {
 
@@ -59,7 +60,7 @@ class WholeProgramState {
                     const interprocedural::FixpointIterator&,
                     const InsertOnlyConcurrentSet<DexMethod*>&,
                     const UnorderedSet<const DexType*>&,
-                    const std::unordered_set<const DexField*>&,
+                    const UnorderedSet<const DexField*>&,
                     std::shared_ptr<const call_graph::Graph> call_graph);
 
   /*
@@ -130,7 +131,7 @@ class WholeProgramState {
   void collect(
       const Scope& scope,
       const interprocedural::FixpointIterator& fp_iter,
-      const std::unordered_set<const DexField*>& definitely_assigned_ifields);
+      const UnorderedSet<const DexField*>& definitely_assigned_ifields);
 
   void collect_field_values(
       const IRInstruction* insn,
@@ -147,8 +148,8 @@ class WholeProgramState {
   std::shared_ptr<const call_graph::Graph> m_call_graph;
 
   // Unknown fields and methods will be treated as containing / returning Top.
-  std::unordered_set<const DexField*> m_known_fields;
-  std::unordered_set<const DexMethod*> m_known_methods;
+  UnorderedSet<const DexField*> m_known_fields;
+  UnorderedSet<const DexMethod*> m_known_methods;
 
   UnorderedSet<const DexType*> m_field_blocklist;
 
@@ -176,8 +177,8 @@ class WholeProgramState {
 };
 
 struct WholeProgramStateAccessorRecord {
-  std::unordered_map<const DexField*, ConstantValue> field_dependencies;
-  std::unordered_map<const DexMethod*, ConstantValue> method_dependencies;
+  UnorderedMap<const DexField*, ConstantValue> field_dependencies;
+  UnorderedMap<const DexMethod*, ConstantValue> method_dependencies;
 };
 
 class WholeProgramStateAccessor {

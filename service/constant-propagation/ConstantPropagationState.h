@@ -7,16 +7,14 @@
 
 #pragma once
 
-#include <unordered_set>
-
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 
 namespace constant_propagation {
 
 class State {
  public:
-  const std::unordered_set<DexMethodRef*>& kotlin_null_check_assertions()
-      const {
+  const UnorderedSet<DexMethodRef*>& kotlin_null_check_assertions() const {
     return m_kotlin_null_check_assertions;
   }
 
@@ -27,7 +25,7 @@ class State {
   State();
 
  private:
-  std::unordered_set<DexMethodRef*> m_kotlin_null_check_assertions;
+  UnorderedSet<DexMethodRef*> m_kotlin_null_check_assertions;
   const DexMethodRef* m_redex_null_check_assertion;
 };
 

@@ -43,9 +43,8 @@ class ThisObjectAnalysis final
     return exit_state_at_source;
   }
 
-  boost::optional<std::unordered_set<DexMethod*>>
-  collect_method_called_on_this() {
-    std::unordered_set<DexMethod*> return_set;
+  boost::optional<UnorderedSet<DexMethod*>> collect_method_called_on_this() {
+    UnorderedSet<DexMethod*> return_set;
     auto* code = m_method->get_code();
     auto& cfg = code->cfg();
     for (cfg::Block* block : cfg.blocks()) {
@@ -144,11 +143,11 @@ class ThisObjectAnalysis final
  * Return false if all ifields are excluded - no need to check further.
  */
 bool get_ifields_read(const UnorderedSet<std::string>& allowlist_method_names,
-                      const std::unordered_set<const DexType*>& parent_intf_set,
+                      const UnorderedSet<const DexType*>& parent_intf_set,
                       const DexClass* ifield_cls,
                       const DexMethod* method,
                       ConcurrentSet<DexField*>* blocklist_ifields,
-                      std::unordered_set<const DexMethod*>* visited) {
+                      UnorderedSet<const DexMethod*>* visited) {
   if (visited->count(method)) {
     return true;
   }
@@ -302,13 +301,13 @@ ConcurrentSet<DexField*> get_ifields_read_in_callees(
           return;
         }
         if (!check_methods->empty()) {
-          std::unordered_set<const DexMethod*> visited;
+          UnorderedSet<const DexMethod*> visited;
           const auto& parent_chain = ts.parent_chain(cls->get_type());
-          std::unordered_set<const DexType*> parent_intf_set{
-              parent_chain.begin(), parent_chain.end()};
+          UnorderedSet<const DexType*> parent_intf_set{parent_chain.begin(),
+                                                       parent_chain.end()};
           const auto& intf_set = ts.get_implemented_interfaces(cls->get_type());
           parent_intf_set.insert(intf_set.begin(), intf_set.end());
-          for (const auto method : *check_methods) {
+          for (const auto method : UnorderedIterable(*check_methods)) {
             bool keep_going =
                 get_ifields_read(allowlist_method_names, parent_intf_set, cls,
                                  method, &return_ifields, &visited);
@@ -329,7 +328,7 @@ EligibleIfields gather_safely_inferable_ifield_candidates(
     const Scope& scope,
     const UnorderedSet<std::string>& allowlist_method_names) {
   EligibleIfields eligible_ifields;
-  std::unordered_set<DexField*> ifields_candidates;
+  UnorderedSet<DexField*> ifields_candidates;
   walk::fields(scope, [&](DexField* field) {
     // Collect non-final instance field candidates that are non external,
     // and can be deleted.
@@ -385,7 +384,7 @@ EligibleIfields gather_safely_inferable_ifield_candidates(
           return editable_cfg_adapter::LOOP_CONTINUE;
         });
   });
-  for (DexField* field : ifields_candidates) {
+  for (DexField* field : UnorderedIterable(ifields_candidates)) {
     if (!invalid_candidates.count(field)) {
       eligible_ifields.emplace(field);
     }
