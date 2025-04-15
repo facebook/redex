@@ -12,8 +12,8 @@ use std::collections::HashSet;
 use std::iter::FromIterator;
 
 use smallvec::SmallVec;
-use sparta::graph::Graph;
 use sparta::graph::DEFAULT_GRAPH_SUCCS_NUM;
+use sparta::graph::Graph;
 
 pub type NodeId = u32;
 pub type EdgeId = u32;

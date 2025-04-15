@@ -8,8 +8,8 @@
 use std::rc::Rc;
 use std::string::ToString;
 
-use crate::datatype::bitvec::BitVec;
 use crate::datatype::AbstractDomain;
+use crate::datatype::bitvec::BitVec;
 
 /// This structure implements a map of integer/pointer keys to (possibly empty)
 /// values. It's based on the following paper:
