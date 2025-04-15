@@ -11,6 +11,7 @@
 
 #include "AggregateException.h"
 #include "ConcurrentContainers.h"
+#include "DeterministicContainers.h"
 #include "DexAccess.h"
 #include "DexCallSite.h"
 #include "DexDefs.h"
@@ -290,10 +291,10 @@ void DexLoader::gather_input_stats() {
   m_stats.num_callsites += 0;
   m_stats.num_methodhandles += 0;
 
-  std::unordered_set<DexEncodedValueArray, boost::hash<DexEncodedValueArray>>
+  UnorderedSet<DexEncodedValueArray, boost::hash<DexEncodedValueArray>>
       enc_arrays;
   std::set<DexTypeList*, dextypelists_comparator> type_lists;
-  std::unordered_set<uint32_t> anno_offsets;
+  UnorderedSet<uint32_t> anno_offsets;
 
   for (uint32_t cidx = 0; cidx < m_dh->class_defs_size; ++cidx) {
     auto* clz = m_classes.at(cidx);
