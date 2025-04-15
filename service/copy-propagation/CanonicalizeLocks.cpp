@@ -11,6 +11,7 @@
 
 #include "CFGMutation.h"
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "IRInstruction.h"
 #include "ReachingDefinitions.h"
@@ -28,8 +29,8 @@ struct MonitorData {
 };
 
 struct RDefs {
-  std::unordered_map<IRInstruction*, MonitorData> data;
-  std::unordered_map<IRInstruction*, size_t> ordering;
+  UnorderedMap<IRInstruction*, MonitorData> data;
+  UnorderedMap<IRInstruction*, size_t> ordering;
 };
 
 boost::optional<RDefs> compute_rdefs(ControlFlowGraph& cfg) {
@@ -60,7 +61,7 @@ boost::optional<RDefs> compute_rdefs(ControlFlowGraph& cfg) {
     return *defs0.elements().begin();
   };
 
-  std::unordered_map<const IRInstruction*, Block*> block_map;
+  UnorderedMap<const IRInstruction*, Block*> block_map;
   auto get_rdef = [&](IRInstruction* insn, reg_t reg) -> IRInstruction* {
     auto it = block_map.find(insn);
     redex_assert(it != block_map.cend());
@@ -155,15 +156,15 @@ using MonitorGroups =
     std::vector<std::pair<IRInstruction*, std::vector<MonitorData*>>>;
 
 MonitorGroups create_groups(RDefs& rdefs) {
-  std::unordered_map<IRInstruction*, std::vector<MonitorData*>> tmp;
-  for (const auto& p : rdefs.data) {
+  UnorderedMap<IRInstruction*, std::vector<MonitorData*>> tmp;
+  for (const auto& p : UnorderedIterable(rdefs.data)) {
     MonitorData& data = rdefs.data[p.first];
     tmp[data.source].push_back(&data);
   }
   // Sort for determinism, use the instruction order from the data.
   MonitorGroups ret;
   ret.reserve(tmp.size());
-  for (auto& p : tmp) {
+  for (auto& p : UnorderedIterable(tmp)) {
     std::sort(p.second.begin(),
               p.second.end(),
               [&](const auto& lhs, const auto& rhs) {
@@ -201,7 +202,7 @@ Result run(cfg::ControlFlowGraph& cfg) {
   CFGMutation mutation(cfg);
   for (const auto& p : groups) {
     auto& group = p.second;
-    std::unordered_set<IRInstruction*> immediate_srcs;
+    UnorderedSet<IRInstruction*> immediate_srcs;
     for (auto monitor_data : group) {
       immediate_srcs.insert(monitor_data->immediate_in);
     }
