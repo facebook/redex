@@ -6,6 +6,8 @@
  */
 
 #include "DexAccess.h"
+
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "MethodOverrideGraph.h"
 #include "Show.h"
@@ -15,7 +17,7 @@ namespace {
 void overriden_should_not_be_public(
     const method_override_graph::Node* method,
     const method_override_graph::Graph* graph,
-    std::unordered_set<const DexMethod*>* should_not_mark) {
+    UnorderedSet<const DexMethod*>* should_not_mark) {
   if (method->method->is_external()) {
     return;
   }
@@ -34,7 +36,7 @@ void overriden_should_not_be_public(
 void loosen_access_modifier_for_vmethods(const DexClasses& scope) {
   auto graph = method_override_graph::build_graph(scope);
   const auto& nodes = graph->nodes();
-  std::unordered_set<const DexMethod*> should_not_mark;
+  UnorderedSet<const DexMethod*> should_not_mark;
   for (const auto& pair : UnorderedIterable(nodes)) {
     const auto* method = pair.first;
     // If a final method has children, it can only be package-private and we can
