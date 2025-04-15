@@ -102,7 +102,7 @@ class BuilderTransform {
     // Maybe we can refactor this part.
     m_inliner_config.throws_inline = throws_inline;
 
-    std::unordered_set<DexMethod*> no_default_inlinables;
+    UnorderedSet<DexMethod*> no_default_inlinables;
     int min_sdk = 0;
     m_inliner = std::unique_ptr<MultiMethodInliner>(new MultiMethodInliner(
         scope, init_classes_with_side_effects, stores, no_default_inlinables,

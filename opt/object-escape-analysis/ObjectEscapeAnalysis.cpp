@@ -2038,7 +2038,7 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
       &method_summary_cache);
 
   ConcurrentMethodResolver concurrent_method_resolver;
-  std::unordered_set<DexMethod*> no_default_inlinables;
+  UnorderedSet<DexMethod*> no_default_inlinables;
   // customize shrinking options
   auto inliner_config = conf.get_inliner_config();
   inliner_config.shrinker = shrinker::ShrinkerConfig();

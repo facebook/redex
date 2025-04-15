@@ -118,7 +118,7 @@ MultiMethodInliner::MultiMethodInliner(
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
     DexStoresVector& stores,
-    const std::unordered_set<DexMethod*>& candidates,
+    const UnorderedSet<DexMethod*>& candidates,
     std::function<DexMethod*(DexMethodRef*, MethodSearch, const DexMethod*)>
         concurrent_resolve_fn,
     const inliner::InlinerConfig& config,

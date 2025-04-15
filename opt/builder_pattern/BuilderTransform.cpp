@@ -22,7 +22,7 @@ BuilderTransform::BuilderTransform(
     : m_type_system(type_system),
       m_root(root),
       m_inliner_config(inliner_config) {
-  std::unordered_set<DexMethod*> no_default_inlinables;
+  UnorderedSet<DexMethod*> no_default_inlinables;
   // customize shrinking options
   m_inliner_config.shrinker = shrinker::ShrinkerConfig();
   m_inliner_config.shrinker.run_const_prop = true;

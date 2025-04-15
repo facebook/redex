@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "DexStore.h"
 #include "FrameworkApi.h"
 #include "InitClassesWithSideEffects.h"
@@ -142,12 +143,12 @@ class VirtualMerging {
   VirtualMergingStats m_stats;
 
   void find_unsupported_virtual_scopes();
-  std::unordered_set<const VirtualScope*> m_unsupported_virtual_scopes;
-  std::unordered_map<const DexString*, std::unordered_set<DexProto*>>
+  UnorderedSet<const VirtualScope*> m_unsupported_virtual_scopes;
+  UnorderedMap<const DexString*, UnorderedSet<DexProto*>>
       m_unsupported_named_protos;
 
   void compute_mergeable_scope_methods();
-  ConcurrentMap<const VirtualScope*, std::unordered_set<const DexMethod*>>
+  ConcurrentMap<const VirtualScope*, UnorderedSet<const DexMethod*>>
       m_mergeable_scope_methods;
 
  public:
@@ -166,9 +167,9 @@ class VirtualMerging {
 
   void merge_methods(const MergablePairsByVirtualScope& mergeable_pairs,
                      InsertionStrategy insertion_strategy);
-  std::unordered_map<DexClass*, std::vector<const DexMethod*>>
+  UnorderedMap<DexClass*, std::vector<const DexMethod*>>
       m_virtual_methods_to_remove;
-  std::unordered_map<DexMethod*, DexMethod*> m_virtual_methods_to_remap;
+  UnorderedMap<DexMethod*, DexMethod*> m_virtual_methods_to_remap;
   PerfConfig m_perf_config;
 
   void remove_methods();

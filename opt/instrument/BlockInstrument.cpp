@@ -1936,7 +1936,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
 
   ConcurrentMethodResolver concurrent_method_resolver;
 
-  std::unordered_set<DexMethod*> no_default_inlinables;
+  UnorderedSet<DexMethod*> no_default_inlinables;
   auto inliner_config = cfg.get_inliner_config();
   int min_sdk = pm.get_redex_options().min_sdk;
   MultiMethodInliner inliner(

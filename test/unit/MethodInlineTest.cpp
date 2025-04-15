@@ -435,7 +435,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
   bool intra_dex = true;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> canidates;
+  UnorderedSet<DexMethod*> canidates;
   std::unordered_set<DexMethod*> expected_inlined;
   auto foo_cls = create_a_class("Lfoo;");
   auto bar_cls = create_a_class("Lbar;");
@@ -495,7 +495,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_new_references) {
   bool intra_dex = true;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> canidates;
+  UnorderedSet<DexMethod*> canidates;
   std::unordered_set<DexMethod*> expected_inlined;
   auto foo_cls = create_a_class("Lfoo;");
   auto bar_cls = create_a_class("Lbar;");
@@ -558,7 +558,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_init_class) {
   bool intra_dex = true;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> canidates;
+  UnorderedSet<DexMethod*> canidates;
   std::unordered_set<DexMethod*> expected_inlined;
   auto foo_cls = create_a_class("Lfoo;");
   auto bar_cls = create_a_class("Lbar;");
@@ -640,7 +640,7 @@ TEST_F(MethodInlineTest, size_limit) {
   ConcurrentMethodResolver concurrent_method_resolver;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> canidates;
+  UnorderedSet<DexMethod*> canidates;
   std::unordered_set<DexMethod*> expected_inlined;
   auto foo_cls = create_a_class("Lfoo;");
   auto bar_cls = create_a_class("Lbar;");
@@ -688,7 +688,7 @@ TEST_F(MethodInlineTest, minimal_self_loop_regression) {
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   auto foo_cls = create_a_class("Lfoo;");
   {
@@ -730,7 +730,7 @@ TEST_F(MethodInlineTest, non_unique_inlined_registers) {
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   auto foo_cls = create_a_class("Lfoo;");
   {
@@ -792,7 +792,7 @@ TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   auto foo_cls = create_a_class("Lfoo;");
   {
@@ -860,7 +860,7 @@ TEST_F(MethodInlineTest,
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   auto foo_cls = create_a_class("Lfoo;");
   {
@@ -937,7 +937,7 @@ TEST_F(MethodInlineTest, intradex_legal_after_constant_prop) {
   bool intra_dex = true;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   auto foo_cls = create_a_class("Lfoo;");
   auto bar_cls = create_a_class("Lbar;");
@@ -1018,7 +1018,7 @@ TEST_F(
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   auto foo_cls = create_a_class("Lfoo;");
   {
@@ -1095,7 +1095,7 @@ TEST_F(MethodInlineTest, throw_after_no_return) {
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   auto foo_cls = create_a_class("Lfoo;");
   {
     DexStore store("root");
@@ -1157,7 +1157,7 @@ TEST_F(MethodInlineTest, boxed_boolean) {
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   auto foo_cls = create_a_class("Lfoo;");
   {
@@ -1253,7 +1253,7 @@ TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   auto foo_cls = create_a_class("Lfoo;");
   {
@@ -1440,7 +1440,7 @@ TEST_F(MethodInlineTest, visibility_change_static_invoke) {
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   {
     DexStore store("root");
@@ -1621,7 +1621,7 @@ TEST_F(MethodInlineTest, unused_result) {
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   {
     DexStore store("root");
@@ -1764,7 +1764,7 @@ TEST_F(MethodInlineTest, caller_caller_callee_call_site) {
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   {
     DexStore store("root");
@@ -1891,7 +1891,7 @@ TEST_F(MethodInlineTest,
     store.add_classes({foo_cls});
     stores.push_back(std::move(store));
   }
-  std::unordered_set<DexMethod*> candidates{callee};
+  UnorderedSet<DexMethod*> candidates{callee};
   auto scope = build_class_scope(stores);
   api::LevelChecker::init(0, scope);
   inliner::InlinerConfig inliner_config;
@@ -1973,7 +1973,7 @@ TEST_F(MethodInlineTest, dont_inline_sketchy_callee_into_into_try) {
     store.add_classes({foo_cls});
     stores.push_back(std::move(store));
   }
-  std::unordered_set<DexMethod*> candidates{callee};
+  UnorderedSet<DexMethod*> candidates{callee};
   auto scope = build_class_scope(stores);
   api::LevelChecker::init(0, scope);
   inliner::InlinerConfig inliner_config;
@@ -2055,7 +2055,7 @@ TEST_F(MethodInlineTest, inline_with_string_analyzer) {
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   {
     DexStore store("root");
@@ -2127,7 +2127,7 @@ TEST_F(MethodInlineTest, max_cost_for_constant_propagation) {
 
   bool intra_dex = false;
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   auto foo_cls = create_a_class("Lfoo;");
   {
     DexStore store("root");
@@ -2239,7 +2239,7 @@ TEST_F(MethodInlineTest, inline_init_not_relaxed) {
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   {
     DexStore store("root");
@@ -2329,7 +2329,7 @@ TEST_F(MethodInlineTest, inline_init_relaxed) {
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   {
     DexStore store("root");
@@ -2436,7 +2436,7 @@ TEST_F(MethodInlineTest, inline_init_relaxed_finalize) {
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   {
     DexStore store("root");
@@ -2534,7 +2534,7 @@ TEST_F(MethodInlineTest, inline_init_relaxed_stores) {
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined; // intentionally empty.
   {
     DexStore store("classes");
@@ -2656,7 +2656,7 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_relaxed) {
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   {
     DexStore store("root");
@@ -2773,7 +2773,7 @@ TEST_F(MethodInlineTest, inline_init_no_unfinalized_relaxed) {
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   {
     DexStore store("root");
@@ -2892,7 +2892,7 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_with_finalize_norelax) {
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   {
     DexStore store("root");
@@ -3012,7 +3012,7 @@ TEST_F(MethodInlineTest, partially_inline) {
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   {
     DexStore store("root");
@@ -3162,7 +3162,7 @@ TEST_F(MethodInlineTest, partially_inline_invoke_super_regression) {
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   {
     DexStore store("root");
@@ -3292,7 +3292,7 @@ TEST_F(MethodInlineTest,
   bool intra_dex = false;
 
   DexStoresVector stores;
-  std::unordered_set<DexMethod*> candidates;
+  UnorderedSet<DexMethod*> candidates;
   std::unordered_set<DexMethod*> expected_inlined;
   {
     DexStore store("root");

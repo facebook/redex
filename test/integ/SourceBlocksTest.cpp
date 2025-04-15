@@ -208,7 +208,7 @@ TEST_F(SourceBlocksTest, source_blocks) {
     ASSERT_NE(baz_ref, nullptr);
     auto baz = baz_ref->as_def();
     ASSERT_NE(baz, nullptr);
-    std::unordered_set<DexMethod*> def_inlinables{baz};
+    UnorderedSet<DexMethod*> def_inlinables{baz};
 
     int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
@@ -438,8 +438,7 @@ TEST_F(SourceBlocksTest, scaling) {
 
     ConcurrentMethodResolver concurrent_method_resolver;
 
-    std::unordered_set<DexMethod*> def_inlinables{
-        hot_source_blocks_inlined_method};
+    UnorderedSet<DexMethod*> def_inlinables{hot_source_blocks_inlined_method};
 
     int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,

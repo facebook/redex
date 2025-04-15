@@ -111,7 +111,7 @@ static bool has_bridgelike_access(DexMethod* m) {
 static void filter_candidates_bridge_synth_only(
     PassManager& mgr,
     Scope& scope,
-    std::unordered_set<DexMethod*>& candidates,
+    UnorderedSet<DexMethod*>& candidates,
     const std::string& prefix) {
   ConcurrentSet<DexMethod*> bridgees;
   ConcurrentSet<DexMethod*> getters;
@@ -177,7 +177,7 @@ static void filter_candidates_bridge_synth_only(
       wrappers.insert(method);
     }
   });
-  std20::erase_if(candidates, [&](auto method) {
+  unordered_erase_if(candidates, [&](auto method) {
     return !bridgees.count_unsafe(method) && !wrappers.count_unsafe(method) &&
            !getters.count_unsafe(method) && !ctors.count_unsafe(method);
   });
@@ -195,7 +195,7 @@ static void filter_candidates_local_only(
     PassManager& mgr,
     Scope& scope,
     uint64_t max_relevant_invokes_when_local_only,
-    std::unordered_set<DexMethod*>& candidates) {
+    UnorderedSet<DexMethod*>& candidates) {
   ConcurrentSet<DexMethod*> large_candidates;
   walk::parallel::code(scope, [&large_candidates, &candidates,
                                max_relevant_invokes_when_local_only](
@@ -218,8 +218,8 @@ static void filter_candidates_local_only(
       large_candidates.insert(caller);
     }
   });
-  std20::erase_if(candidates,
-                  [&](auto method) { return large_candidates.count(method); });
+  unordered_erase_if(
+      candidates, [&](auto method) { return large_candidates.count(method); });
   mgr.incr_metric("large_candidates", large_candidates.size());
 }
 
@@ -227,7 +227,7 @@ static void filter_candidates_local_only(
  * Collect all non virtual methods and make all small methods candidates
  * for inlining.
  */
-std::unordered_set<DexMethod*> gather_non_virtual_methods(
+UnorderedSet<DexMethod*> gather_non_virtual_methods(
     Scope& scope,
     const InsertOnlyConcurrentSet<DexMethod*>* non_virtual,
     const UnorderedSet<DexType*>& no_devirtualize_anno) {
@@ -244,7 +244,7 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(
   size_t non_virt_dont_strip = 0;
   size_t non_virt_methods = 0;
   // collect all non virtual methods (dmethods and vmethods)
-  std::unordered_set<DexMethod*> methods;
+  UnorderedSet<DexMethod*> methods;
   walk::methods(scope, [&](DexMethod* method) {
     all_methods++;
     if (method->is_virtual()) return;
@@ -1042,8 +1042,8 @@ void run_inliner(
 
   if (inline_bridge_synth_only) {
     std::unordered_set<DexMethod*> deleted_set(deleted.begin(), deleted.end());
-    std20::erase_if(candidates,
-                    [&](auto method) { return deleted_set.count(method); });
+    unordered_erase_if(candidates,
+                       [&](auto method) { return deleted_set.count(method); });
     filter_candidates_bridge_synth_only(mgr, scope, candidates, "remaining_");
   }
 
