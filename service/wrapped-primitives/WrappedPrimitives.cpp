@@ -67,11 +67,11 @@ void WrappedPrimitives::mark_roots() {
 }
 
 void WrappedPrimitives::unmark_roots() {
-  for (auto& def : m_marked_root_methods) {
+  for (auto& def : UnorderedIterable(m_marked_root_methods)) {
     TRACE(WP, 2, "Unsetting %s as root", SHOW(def));
     def->rstate.unset_root();
   }
-  for (auto& cls : m_marked_root_classes) {
+  for (auto& cls : UnorderedIterable(m_marked_root_classes)) {
     TRACE(WP, 2, "Unsetting %s as root", SHOW(cls));
     cls->rstate.unset_root();
   }
@@ -79,8 +79,7 @@ void WrappedPrimitives::unmark_roots() {
 
 namespace {
 bool contains_relevant_invoke(
-    const std::unordered_set<const DexMethodRef*>& wrapped_apis,
-    DexMethod* method) {
+    const UnorderedSet<const DexMethodRef*>& wrapped_apis, DexMethod* method) {
   if (wrapped_apis.empty()) {
     return false;
   }
@@ -147,10 +146,10 @@ bool needs_cast(const TypeSystem& type_system,
 // be transformed.
 template <typename T>
 std::vector<KnownDef> validate_known_defs(
-    const std::unordered_map<IRInstruction*, KnownDef>& known_defs,
+    const UnorderedMap<IRInstruction*, KnownDef>& known_defs,
     const T& actual_defs) {
   std::vector<KnownDef> known_vec;
-  std::unordered_set<const DexType*> type_set;
+  UnorderedSet<const DexType*> type_set;
   for (auto& d : actual_defs) {
     auto is_known_search = known_defs.find(d);
     if (is_known_search != known_defs.end()) {
@@ -191,11 +190,11 @@ void WrappedPrimitives::increment_casts() { m_casts_inserted++; }
 // instance, keep track of the sget-object instruction that defines it, the
 // register they get moved into, and the primitive value that is stored.
 // Computing this up front can make subsequent transformations easier.
-std::unordered_map<IRInstruction*, KnownDef>
+UnorderedMap<IRInstruction*, KnownDef>
 WrappedPrimitives::build_known_definitions(
     const cp::intraprocedural::FixpointIterator& intra_cp,
     cfg::ControlFlowGraph& cfg) {
-  std::unordered_map<IRInstruction*, KnownDef> known_defs;
+  UnorderedMap<IRInstruction*, KnownDef> known_defs;
   for (const auto& block : cfg.blocks()) {
     auto env = intra_cp.get_entry_state_at(block);
     // This block is unreachable

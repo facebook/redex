@@ -14,6 +14,7 @@
 #include "ConstantPropagationState.h"
 #include "ConstantPropagationWholeProgramState.h"
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "GlobalConfig.h"
 #include "PassManager.h"
@@ -94,7 +95,7 @@ class WrappedPrimitives {
   }
   void mark_roots();
   void unmark_roots();
-  std::unordered_map<IRInstruction*, KnownDef> build_known_definitions(
+  UnorderedMap<IRInstruction*, KnownDef> build_known_definitions(
       const cp::intraprocedural::FixpointIterator& intra_cp,
       cfg::ControlFlowGraph& cfg);
   void optimize_method(const TypeSystem& type_system,
@@ -119,12 +120,12 @@ class WrappedPrimitives {
   DexMethodRef* unwrapped_method_ref_for(const DexType* wrapper_type,
                                          DexMethodRef* ref);
   std::vector<Spec> m_wrapper_specs;
-  std::unordered_map<DexType*, Spec> m_type_to_spec;
-  std::unordered_set<const DexMethodRef*> m_all_wrapped_apis;
+  UnorderedMap<DexType*, Spec> m_type_to_spec;
+  UnorderedSet<const DexMethodRef*> m_all_wrapped_apis;
   // Config driven optimization will create inbound references to new methods.
   // These methods need to not be deleted.
-  std::unordered_set<DexClass*> m_marked_root_classes;
-  std::unordered_set<DexMethod*> m_marked_root_methods;
+  UnorderedSet<DexClass*> m_marked_root_classes;
+  UnorderedSet<DexMethod*> m_marked_root_methods;
   // Concurrent stats
   std::atomic<size_t> m_consts_inserted{0};
   std::atomic<size_t> m_casts_inserted{0};
