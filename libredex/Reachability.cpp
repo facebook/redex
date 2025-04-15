@@ -2018,7 +2018,7 @@ void ReachableObjects::record_is_seed(Seed* seed) {
   m_retainers_of.update(
       ReachableObject(seed),
       [&](const ReachableObject&, ReachableObjectSet& set, bool /* exists */) {
-        for (const auto& reason : keep_reasons) {
+        for (const auto& reason : UnorderedIterable(keep_reasons)) {
           // -keepnames rules are irrelevant when analyzing reachability
           if (reason->type == keep_reason::KEEP_RULE &&
               reason->keep_rule->allowshrinking) {

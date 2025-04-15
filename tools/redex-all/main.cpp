@@ -1065,7 +1065,7 @@ void dump_keep_reasons(const ConfigFiles& conf,
       continue;
     }
     auto print_keep_reasons = [&ofs](const auto& reasons, const char* indent) {
-      for (const auto* r : reasons) {
+      for (const auto* r : UnorderedIterable(reasons)) {
         ofs << indent << "* " << *r << "\n";
       }
     };

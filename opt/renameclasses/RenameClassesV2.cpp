@@ -413,7 +413,7 @@ static void sanity_check(const Scope& scope,
 std::string get_keep_rule(const DexClass* clazz) {
   if (keep_reason::Reason::record_keep_reasons()) {
     const auto& keep_reasons = clazz->rstate.keep_reasons();
-    for (const auto* reason : keep_reasons) {
+    for (const auto* reason : UnorderedIterable(keep_reasons)) {
       if (reason->type == keep_reason::KEEP_RULE &&
           !reason->keep_rule->allowobfuscation) {
         return show(*reason);
@@ -583,7 +583,8 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
 
     if (!can_rename_if_also_renaming_xml(clazz)) {
       const auto& keep_reasons = clazz->rstate.keep_reasons();
-      auto rule = !keep_reasons.empty() ? show(*keep_reasons.begin()) : "";
+      auto rule =
+          !keep_reasons.empty() ? show(*unordered_any(keep_reasons)) : "";
       clazz->rstate.set_dont_rename();
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::ProguardCantRename,
                                       get_keep_rule(clazz)};
