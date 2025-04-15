@@ -6,6 +6,8 @@
  */
 
 #include "ThrowPropagationImpl.h"
+
+#include "DeterministicContainers.h"
 #include "MethodUtil.h"
 #include "Show.h"
 #include "SourceBlocks.h"
@@ -24,7 +26,7 @@ bool ThrowPropagator::try_apply(const cfg::InstructionIterator& cfg_it) {
 
 bool ThrowPropagator::will_throw_or_not_terminate_or_unreachable(
     cfg::InstructionIterator it) {
-  std::unordered_set<IRInstruction*> visited{it->insn};
+  UnorderedSet<IRInstruction*> visited{it->insn};
   while (true) {
     it = m_cfg.next_following_gotos(it);
     if (!visited.insert(it->insn).second) {
