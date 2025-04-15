@@ -78,7 +78,7 @@ void ClinitOutlinePass::run_pass(DexStoresVector& stores,
       return;
     }
 
-    std::unordered_set<DexField*> final_fields;
+    UnorderedSet<DexField*> final_fields;
     for (auto& mie : InstructionIterable(code.cfg())) {
       auto insn = mie.insn;
       if (opcode::is_an_sput(insn->opcode())) {
