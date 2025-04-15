@@ -8,6 +8,7 @@
 #pragma once
 
 #include "ClassHierarchy.h"
+#include "DeterministicContainers.h"
 #include "Pass.h"
 
 using TypeSet = std::set<const DexType*, dextypes_comparator>;
@@ -55,10 +56,10 @@ class RemoveInterfacePass : public Pass {
   size_t m_total_num_interface = 0;
   size_t m_num_interface_removed = 0;
   size_t m_num_interface_excluded = 0;
-  std::unordered_set<const DexType*> m_removed_interfaces;
+  UnorderedSet<const DexType*> m_removed_interfaces;
   bool m_include_primary_dex = false;
   bool m_keep_debug_info = false;
-  std::unordered_map<size_t, size_t> m_dispatch_stats;
+  UnorderedMap<size_t, size_t> m_dispatch_stats;
 
   void remove_interfaces_for_root(const Scope& scope,
                                   const DexStoresVector& stores,
