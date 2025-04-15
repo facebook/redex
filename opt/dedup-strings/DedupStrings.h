@@ -62,42 +62,39 @@ class DedupStrings {
  private:
   struct DedupStringInfo {
     size_t duplicate_string_loads;
-    std::unordered_set<size_t> dexes_to_dedup;
+    UnorderedSet<size_t> dexes_to_dedup;
 
     uint32_t index{0xFFFFFFFF};
     DexMethod* const_string_method{nullptr};
   };
 
-  std::unordered_map<const DexMethod*, size_t> get_methods_to_dex(
+  UnorderedMap<const DexMethod*, size_t> get_methods_to_dex(
       const DexClassesVector& dexen);
-  std::unordered_set<const DexMethod*> get_perf_sensitive_methods(
+  UnorderedSet<const DexMethod*> get_perf_sensitive_methods(
       const DexClassesVector& dexen);
   DexMethod* make_const_string_loader_method(
       DexClasses& dex,
       size_t dex_id,
       const std::vector<const DexString*>& strings);
   void gather_non_load_strings(DexClasses& classes,
-                               std::unordered_set<const DexString*>* strings);
-  ConcurrentMap<const DexString*, std::unordered_map<size_t, size_t>>
-  get_occurrences(
+                               UnorderedSet<const DexString*>* strings);
+  ConcurrentMap<const DexString*, UnorderedMap<size_t, size_t>> get_occurrences(
       const Scope& scope,
-      const std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
-      const std::unordered_set<const DexMethod*>& perf_sensitive_methods,
-      std::vector<std::unordered_set<const DexString*>>& non_load_strings);
-  std::unordered_map<const DexString*, DedupStringInfo> get_strings_to_dedup(
+      const UnorderedMap<const DexMethod*, size_t>& methods_to_dex,
+      const UnorderedSet<const DexMethod*>& perf_sensitive_methods,
+      std::vector<UnorderedSet<const DexString*>>& non_load_strings);
+  UnorderedMap<const DexString*, DedupStringInfo> get_strings_to_dedup(
       DexClassesVector& dexen,
-      const ConcurrentMap<const DexString*, std::unordered_map<size_t, size_t>>&
+      const ConcurrentMap<const DexString*, UnorderedMap<size_t, size_t>>&
           occurrences,
-      std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
-      std::unordered_set<const DexMethod*>& perf_sensitive_methods,
-      const std::vector<std::unordered_set<const DexString*>>&
-          non_load_strings);
+      UnorderedMap<const DexMethod*, size_t>& methods_to_dex,
+      UnorderedSet<const DexMethod*>& perf_sensitive_methods,
+      const std::vector<UnorderedSet<const DexString*>>& non_load_strings);
   void rewrite_const_string_instructions(
       const Scope& scope,
-      const std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
-      const std::unordered_set<const DexMethod*>& perf_sensitive_methods,
-      const std::unordered_map<const DexString*, DedupStringInfo>&
-          strings_to_dedup);
+      const UnorderedMap<const DexMethod*, size_t>& methods_to_dex,
+      const UnorderedSet<const DexMethod*>& perf_sensitive_methods,
+      const UnorderedMap<const DexString*, DedupStringInfo>& strings_to_dedup);
 
   mutable Stats m_stats;
   size_t m_max_factory_methods;

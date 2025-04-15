@@ -102,30 +102,29 @@ void DedupStrings::run(DexStoresVector& stores) {
   const auto scope = build_class_scope(dexen);
 
   // For each method, remember which dex it's defined in.
-  std::unordered_map<const DexMethod*, size_t> methods_to_dex =
+  UnorderedMap<const DexMethod*, size_t> methods_to_dex =
       get_methods_to_dex(dexen);
 
   // Gather set of methods that must not be touched because they are
   // in the primary dex or perf sensitive
-  std::unordered_set<const DexMethod*> perf_sensitive_methods =
+  UnorderedSet<const DexMethod*> perf_sensitive_methods =
       get_perf_sensitive_methods(dexen);
 
   // Compute set of non-load strings in each dex
-  std::vector<std::unordered_set<const DexString*>> non_load_strings(
-      dexen.size());
+  std::vector<UnorderedSet<const DexString*>> non_load_strings(dexen.size());
   workqueue_run_for<size_t>(0, dexen.size(), [&](size_t i) {
     auto& strings = non_load_strings[i];
     gather_non_load_strings(dexen[i], &strings);
   });
 
   // For each string, figure out how many times it's loaded per dex
-  ConcurrentMap<const DexString*, std::unordered_map<size_t, size_t>>
-      occurrences = get_occurrences(scope, methods_to_dex,
-                                    perf_sensitive_methods, non_load_strings);
+  ConcurrentMap<const DexString*, UnorderedMap<size_t, size_t>> occurrences =
+      get_occurrences(scope, methods_to_dex, perf_sensitive_methods,
+                      non_load_strings);
 
   // Use heuristics to determine which strings to dedup,
   // and figure out factory method details
-  std::unordered_map<const DexString*, DedupStrings::DedupStringInfo>
+  UnorderedMap<const DexString*, DedupStrings::DedupStringInfo>
       strings_to_dedup =
           get_strings_to_dedup(dexen, occurrences, methods_to_dex,
                                perf_sensitive_methods, non_load_strings);
@@ -135,9 +134,9 @@ void DedupStrings::run(DexStoresVector& stores) {
                                     perf_sensitive_methods, strings_to_dedup);
 }
 
-std::unordered_set<const DexMethod*> DedupStrings::get_perf_sensitive_methods(
+UnorderedSet<const DexMethod*> DedupStrings::get_perf_sensitive_methods(
     const DexClassesVector& dexen) {
-  std::unordered_set<const DexMethodRef*> sufficiently_popular_methods;
+  UnorderedSet<const DexMethodRef*> sufficiently_popular_methods;
   if (m_method_profiles.has_stats()) {
     for (auto& p : m_method_profiles.all_interactions()) {
       auto& method_stats = p.second;
@@ -172,7 +171,7 @@ std::unordered_set<const DexMethod*> DedupStrings::get_perf_sensitive_methods(
     }
     return sufficiently_popular_methods.count(method);
   };
-  std::unordered_set<const DexMethod*> perf_sensitive_methods;
+  UnorderedSet<const DexMethod*> perf_sensitive_methods;
   for (size_t dexnr = 0; dexnr < dexen.size(); dexnr++) {
     auto& classes = dexen[dexnr];
     for (auto cls : classes) {
@@ -196,12 +195,12 @@ std::unordered_set<const DexMethod*> DedupStrings::get_perf_sensitive_methods(
   return perf_sensitive_methods;
 }
 
-std::unordered_map<const DexMethod*, size_t> DedupStrings::get_methods_to_dex(
+UnorderedMap<const DexMethod*, size_t> DedupStrings::get_methods_to_dex(
     const DexClassesVector& dexen) {
   // Let's build a mapping that tells us for each method which dex it is
   // defined in.
 
-  std::unordered_map<const DexMethod*, size_t> methods_to_dex;
+  UnorderedMap<const DexMethod*, size_t> methods_to_dex;
   for (size_t dexnr = 0; dexnr < dexen.size(); dexnr++) {
     auto& classes = dexen[dexnr];
     for (auto cls : classes) {
@@ -282,7 +281,7 @@ DexMethod* DedupStrings::make_const_string_loader_method(
 }
 
 void DedupStrings::gather_non_load_strings(
-    DexClasses& classes, std::unordered_set<const DexString*>* strings) {
+    DexClasses& classes, UnorderedSet<const DexString*>* strings) {
   // Let's figure out the set of "non-load" strings, i.e. the strings which
   // are referenced by some metadata (and not just const-string instructions)
   std::vector<const DexString*> lstring;
@@ -300,17 +299,15 @@ void DedupStrings::gather_non_load_strings(
   insert_unordered_iterable(*strings, library_names);
 }
 
-ConcurrentMap<const DexString*, std::unordered_map<size_t, size_t>>
+ConcurrentMap<const DexString*, UnorderedMap<size_t, size_t>>
 DedupStrings::get_occurrences(
     const Scope& scope,
-    const std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
-    const std::unordered_set<const DexMethod*>& perf_sensitive_methods,
-    std::vector<std::unordered_set<const DexString*>>& non_load_strings) {
+    const UnorderedMap<const DexMethod*, size_t>& methods_to_dex,
+    const UnorderedSet<const DexMethod*>& perf_sensitive_methods,
+    std::vector<UnorderedSet<const DexString*>>& non_load_strings) {
   // For each string, figure out how many times it's loaded per dex
-  ConcurrentMap<const DexString*, std::unordered_map<size_t, size_t>>
-      occurrences;
-  ConcurrentMap<const DexString*, std::unordered_set<size_t>>
-      perf_sensitive_strings;
+  ConcurrentMap<const DexString*, UnorderedMap<size_t, size_t>> occurrences;
+  ConcurrentMap<const DexString*, UnorderedSet<size_t>> perf_sensitive_strings;
   std::atomic<size_t> perf_sensitive_insns{0};
   std::atomic<size_t> non_perf_sensitive_insns{0};
   walk::parallel::code(
@@ -338,15 +335,14 @@ DedupStrings::get_occurrences(
                 perf_sensitive_strings.update(
                     str,
                     [dexnr](const DexString*,
-                            std::unordered_set<size_t>& s,
+                            UnorderedSet<size_t>& s,
                             bool /* exists */) { s.emplace(dexnr); });
                 local_perf_sensitive_insns++;
               } else {
-                occurrences.update(
-                    str,
-                    [dexnr](const DexString*,
-                            std::unordered_map<size_t, size_t>& m,
-                            bool /* exists */) { ++m[dexnr]; });
+                occurrences.update(str,
+                                   [dexnr](const DexString*,
+                                           UnorderedMap<size_t, size_t>& m,
+                                           bool /* exists */) { ++m[dexnr]; });
                 local_non_perf_sensitive_insns++;
               }
             }
@@ -367,7 +363,7 @@ DedupStrings::get_occurrences(
     TRACE(DS, 3, "[dedup strings] perf sensitive string: {%s}", SHOW(str));
 
     const auto& dexes = it.second;
-    for (const auto dexnr : dexes) {
+    for (const auto dexnr : UnorderedIterable(dexes)) {
       auto& strings = non_load_strings[dexnr];
       strings.emplace(str);
     }
@@ -380,25 +376,25 @@ DedupStrings::get_occurrences(
   return occurrences;
 }
 
-std::unordered_map<const DexString*, DedupStrings::DedupStringInfo>
+UnorderedMap<const DexString*, DedupStrings::DedupStringInfo>
 DedupStrings::get_strings_to_dedup(
     DexClassesVector& dexen,
-    const ConcurrentMap<const DexString*, std::unordered_map<size_t, size_t>>&
+    const ConcurrentMap<const DexString*, UnorderedMap<size_t, size_t>>&
         occurrences,
-    std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
-    std::unordered_set<const DexMethod*>& perf_sensitive_methods,
-    const std::vector<std::unordered_set<const DexString*>>& non_load_strings) {
+    UnorderedMap<const DexMethod*, size_t>& methods_to_dex,
+    UnorderedSet<const DexMethod*>& perf_sensitive_methods,
+    const std::vector<UnorderedSet<const DexString*>>& non_load_strings) {
   // Use heuristics to determine which strings to dedup, create factory
   // methods as appropriate, and persist relevant information to aid the later
   // rewriting of all const-string instructions.
 
-  std::unordered_map<const DexString*, DedupStrings::DedupStringInfo>
+  UnorderedMap<const DexString*, DedupStrings::DedupStringInfo>
       strings_to_dedup;
 
   // Do a cost/benefit analysis to figure out which strings to access via
   // factory methods, and where to put to the factory method
   std::vector<std::vector<const DexString*>> strings_in_dexes(dexen.size());
-  std::unordered_set<size_t> hosting_dexnrs;
+  UnorderedSet<size_t> hosting_dexnrs;
   std::vector<const DexString*> ordered_strings;
   ordered_strings.reserve(occurrences.size());
   for (auto& p : UnorderedIterable(occurrences)) {
@@ -490,8 +486,8 @@ DedupStrings::get_strings_to_dedup(
     // instructions rewritten
     size_t total_size_reduction = 0;
     size_t duplicate_string_loads = 0;
-    std::unordered_set<size_t> dexes_to_dedup;
-    for (const auto& q : m) {
+    UnorderedSet<size_t> dexes_to_dedup;
+    for (const auto& q : UnorderedIterable(m)) {
       const auto dexnr = q.first;
       const auto loads = q.second;
       if (dexnr == hosting_dexnr) {
@@ -609,9 +605,9 @@ DedupStrings::get_strings_to_dedup(
 
 void DedupStrings::rewrite_const_string_instructions(
     const Scope& scope,
-    const std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
-    const std::unordered_set<const DexMethod*>& perf_sensitive_methods,
-    const std::unordered_map<const DexString*, DedupStrings::DedupStringInfo>&
+    const UnorderedMap<const DexMethod*, size_t>& methods_to_dex,
+    const UnorderedSet<const DexMethod*>& perf_sensitive_methods,
+    const UnorderedMap<const DexString*, DedupStrings::DedupStringInfo>&
         strings_to_dedup) {
 
   walk::parallel::code(
