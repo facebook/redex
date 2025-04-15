@@ -125,7 +125,7 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
 
 size_t get_min_interdex_group(
     const TypeHashSet& types,
-    const std::unordered_map<DexType*, size_t>& cls_to_interdex_groups,
+    const UnorderedMap<DexType*, size_t>& cls_to_interdex_groups,
     size_t interdex_groups) {
   // By default, we consider the class in the last group.
   size_t group = interdex_groups - 1;
@@ -140,7 +140,7 @@ size_t get_min_interdex_group(
 
 size_t get_interdex_group(
     DexType* type,
-    const std::unordered_map<DexType*, size_t>& cls_to_interdex_groups,
+    const UnorderedMap<DexType*, size_t>& cls_to_interdex_groups,
     size_t interdex_groups) {
   if (cls_to_interdex_groups.count(type)) {
     TRACE(CLMG, 5, "Found interdex group symbol match for %s", SHOW(type));

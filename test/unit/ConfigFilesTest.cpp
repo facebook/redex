@@ -18,7 +18,7 @@
 class ConfigFilesTest : public RedexTest {
  public:
   void validate_frequencies(
-      const std::unordered_map<const DexString*, std::vector<uint8_t>>&
+      const UnorderedMap<const DexString*, std::vector<uint8_t>>&
           class_freq_map,
       const std::string& class_name,
       const std::vector<uint8_t>& expected_frequencies) {
@@ -39,8 +39,8 @@ TEST_F(ConfigFilesTest, read_class_frequencies) {
   json_cfg["class_frequencies"] = class_frequency_path;
   ConfigFiles conf(json_cfg);
 
-  const std::unordered_map<const DexString*, std::vector<uint8_t>>&
-      class_freq_map = conf.get_class_frequencies();
+  const UnorderedMap<const DexString*, std::vector<uint8_t>>& class_freq_map =
+      conf.get_class_frequencies();
   const std::vector<std::string> interactions = conf.get_interactions();
   validate_frequencies(class_freq_map,
                        "Lcom/facebook/redextest/ColdStart;",

@@ -24,7 +24,7 @@ void populate_reshufflable_classes_types(
     ConfigFiles& conf,
     size_t interaction_frequency_threshold) {
   const auto& class_freqs = conf.get_class_frequencies();
-  for (const auto& class_freq : class_freqs) {
+  for (const auto& class_freq : UnorderedIterable(class_freqs)) {
     const std::vector<uint8_t>& frequencies = class_freq.second;
     bool below_threshold = true;
     for (auto freq : frequencies) {
