@@ -8,7 +8,6 @@
 #pragma once
 
 #include <type_traits>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -583,7 +582,7 @@ class ControlFlowGraph {
   template <typename EdgePredicate>
   void copy_succ_edges_if(Block* from, Block* to, EdgePredicate edge_predicate);
 
-  using EdgeSet = std::unordered_set<Edge*>;
+  using EdgeSet = UnorderedSet<Edge*>;
 
   // Make `e` point to a new target block.
   // The source block is unchanged.
@@ -663,14 +662,15 @@ class ControlFlowGraph {
 
   template <class ForwardIt>
   void delete_edges(const ForwardIt& begin, const ForwardIt& end) {
-    std::unordered_set<cfg::Edge*> edges;
-    std::unordered_set<cfg::Block*> srcs;
+    UnorderedSet<cfg::Edge*> edges;
+    UnorderedSet<cfg::Block*> srcs;
     for (auto it = begin; it != end; it++) {
       auto e = *it;
       edges.insert(e);
       srcs.insert(e->src());
     }
-    delete_succ_edge_if(srcs.begin(), srcs.end(),
+    auto&& srcs_ui = UnorderedIterable(srcs);
+    delete_succ_edge_if(srcs_ui.begin(), srcs_ui.end(),
                         [&](Edge* e) { return edges.count(e); });
   }
 
@@ -1205,7 +1205,7 @@ class ControlFlowGraph {
                               const ForwardIt& end,
                               EdgePredicate predicate,
                               bool cleanup = true) {
-    std::unordered_set<Block*> source_blocks;
+    UnorderedSet<Block*> source_blocks;
     EdgeSet to_remove;
     for (auto it = begin; it != end; it++) {
       auto& reverse_edges = (*it)->m_preds;
@@ -1223,7 +1223,7 @@ class ControlFlowGraph {
           reverse_edges.end());
     }
 
-    for (Block* source_block : source_blocks) {
+    for (Block* source_block : UnorderedIterable(source_blocks)) {
       auto& forward_edges = source_block->m_succs;
       forward_edges.erase(
           std::remove_if(
@@ -1243,8 +1243,8 @@ class ControlFlowGraph {
                               const ForwardIt& end,
                               EdgePredicate predicate,
                               bool cleanup = true) {
-    std::unordered_set<Block*> target_blocks;
-    std::unordered_set<Edge*> to_remove;
+    UnorderedSet<Block*> target_blocks;
+    UnorderedSet<Edge*> to_remove;
     for (auto it = begin; it != end; it++) {
       auto& forward_edges = (*it)->m_succs;
       forward_edges.erase(
@@ -1261,7 +1261,7 @@ class ControlFlowGraph {
           forward_edges.end());
     }
 
-    for (Block* target_block : target_blocks) {
+    for (Block* target_block : UnorderedIterable(target_blocks)) {
       auto& reverse_edges = target_block->m_preds;
       reverse_edges.erase(
           std::remove_if(
