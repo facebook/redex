@@ -69,12 +69,12 @@ bool is_in_non_root_store(const DexType* type,
   return false;
 }
 
-std::unordered_set<const DexType*> get_non_root_store_types(
+UnorderedSet<const DexType*> get_non_root_store_types(
     const DexStoresVector& stores,
     const XStoreRefs& xstores,
     const TypeSet& types,
     bool include_primary_dex) {
-  std::unordered_set<const DexType*> non_root_store_types;
+  UnorderedSet<const DexType*> non_root_store_types;
   for (const DexType* type : types) {
     if (is_in_non_root_store(type, stores, xstores, include_primary_dex)) {
       non_root_store_types.emplace(type);
@@ -83,7 +83,7 @@ std::unordered_set<const DexType*> get_non_root_store_types(
   return non_root_store_types;
 }
 
-std::unordered_set<const DexType*> get_non_root_store_types(
+UnorderedSet<const DexType*> get_non_root_store_types(
     const DexStoresVector& stores,
     const TypeSet& types,
     bool include_primary_dex) {
