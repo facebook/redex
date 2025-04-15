@@ -21,7 +21,6 @@
 #include "ScopedCFG.h"
 #include "Show.h"
 #include "ShowCFG.h"
-#include "StlUtil.h"
 #include "Trace.h"
 
 using namespace sparta;
@@ -444,7 +443,7 @@ Result check_uninitialized(const DexMethod* method, bool relaxed_init_check) {
   always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
 
-  std::unordered_set<cfg::BlockId> block_visited;
+  UnorderedSet<cfg::BlockId> block_visited;
   auto ordered_blocks = cfg.order();
 
   for (cfg::Block* block : ordered_blocks) {
@@ -460,8 +459,7 @@ Result check_uninitialized(const DexMethod* method, bool relaxed_init_check) {
       block_visited.emplace(b->id());
     }
     UnorderedMap<reg_t, IRInstruction*> uninitialized_regs;
-    UnorderedMap<IRInstruction*, std::unordered_set<reg_t>>
-        uninitialized_regs_rev;
+    UnorderedMap<IRInstruction*, UnorderedSet<reg_t>> uninitialized_regs_rev;
     auto remove_from_uninitialized_list = [&](reg_t reg) {
       auto it = uninitialized_regs.find(reg);
       if (it != uninitialized_regs.end()) {
@@ -544,7 +542,8 @@ Result check_uninitialized(const DexMethod* method, bool relaxed_init_check) {
                                         "initialized with the wrong type at " +
                                         show(*it) + " in \n" + show(cfg));
             }
-            for (auto reg : uninitialized_regs_rev[object_ir]) {
+            for (auto reg :
+                 UnorderedIterable(uninitialized_regs_rev[object_ir])) {
               uninitialized_regs.erase(reg);
             }
             uninitialized_regs_rev.erase(object_ir);
@@ -664,7 +663,7 @@ Result check_structure(const DexMethod* method,
  * Sanity-check the structure of the positions for editable cfg format.
  */
 Result check_positions_cfg(cfg::ControlFlowGraph& cfg) {
-  std::unordered_set<DexPosition*> positions;
+  UnorderedSet<DexPosition*> positions;
   auto iterable = cfg::InstructionIterable(cfg);
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {
     if (it->type != MFLOW_POSITION) {
@@ -676,8 +675,8 @@ Result check_positions_cfg(cfg::ControlFlowGraph& cfg) {
     }
   }
 
-  std::unordered_set<DexPosition*> visited_parents;
-  for (auto pos : positions) {
+  UnorderedSet<DexPosition*> visited_parents;
+  for (auto pos : UnorderedIterable(positions)) {
     if (!pos->parent) {
       continue;
     }
@@ -725,11 +724,11 @@ Result check_monitors(const DexMethod* method) {
   }
 
   auto sketchy_insns = monitor_analyzer.get_sketchy_instructions();
-  std::unordered_set<cfg::Block*> sketchy_blocks;
+  UnorderedSet<cfg::Block*> sketchy_blocks;
   for (auto& it : sketchy_insns) {
     sketchy_blocks.insert(it.block());
   }
-  std20::erase_if(sketchy_blocks, [&](auto* b) {
+  unordered_erase_if(sketchy_blocks, [&](auto* b) {
     return !code->cfg().get_succ_edge_of_type(b, cfg::EDGE_THROW);
   });
   if (!sketchy_blocks.empty()) {
