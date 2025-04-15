@@ -16,10 +16,10 @@ mod liveness {
     use sparta::datatype::HashSetAbstractDomain;
     use sparta::fixpoint_iter::FixpointIteratorTransformer;
     use sparta::fixpoint_iter::MonotonicFixpointIterator;
+    use sparta::graph::DEFAULT_GRAPH_SUCCS_NUM;
     use sparta::graph::Graph;
     use sparta::graph::ReverseGraph;
     use sparta::graph::ReversedRefGraph;
-    use sparta::graph::DEFAULT_GRAPH_SUCCS_NUM;
 
     pub type NodeId = u32;
     pub type EdgeId = u32;
@@ -406,8 +406,8 @@ mod numerical {
     use sparta::datatype::SetAbstractDomainOps;
     use sparta::fixpoint_iter::FixpointIteratorTransformer;
     use sparta::fixpoint_iter::MonotonicFixpointIterator;
-    use sparta::graph::Graph;
     use sparta::graph::DEFAULT_GRAPH_SUCCS_NUM;
+    use sparta::graph::Graph;
 
     type NodeId = usize;
     type EdgeId = usize;

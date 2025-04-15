@@ -9,10 +9,10 @@ use std::iter::FromIterator;
 use std::iter::Iterator;
 use std::marker::PhantomData;
 
+use crate::datatype::AbstractDomain;
 use crate::datatype::bitvec::BitVec;
 use crate::datatype::patricia_tree_impl::PatriciaTree;
 use crate::datatype::patricia_tree_impl::PatriciaTreePostOrderIterator;
-use crate::datatype::AbstractDomain;
 
 // Interface structs for PatriciaTreeMap. Does not require V to impl Clone.
 #[derive(Debug)]

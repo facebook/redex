@@ -10,9 +10,9 @@ use std::hash::Hash;
 
 use im::HashMap;
 
-use crate::datatype::bitvec::BitVec;
 use crate::datatype::AbstractDomain;
 use crate::datatype::PatriciaTreeMap;
+use crate::datatype::bitvec::BitVec;
 
 /*
  * An abstract environment is a type of abstract domain that maps the variables

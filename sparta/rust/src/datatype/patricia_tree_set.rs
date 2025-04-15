@@ -172,8 +172,8 @@ mod tests {
 
     use rand::Rng;
 
-    use crate::datatype::powerset::SetAbstractDomainOps;
     use crate::datatype::PatriciaTreeSet;
+    use crate::datatype::powerset::SetAbstractDomainOps;
 
     #[test]
     fn test_set_operations() {

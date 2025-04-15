@@ -8,8 +8,8 @@
 #![crate_type = "proc-macro"]
 
 use quote::quote;
-use syn::parse_macro_input;
 use syn::DeriveInput;
+use syn::parse_macro_input;
 
 extern crate proc_macro;
 use proc_macro::TokenStream;

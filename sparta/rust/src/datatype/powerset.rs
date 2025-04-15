@@ -179,9 +179,9 @@ pub type HashSetAbstractDomain<T> = PowersetLattice<HashSet<T>>;
 
 #[cfg(test)]
 mod tests {
-    use crate::datatype::abstract_domain::AbstractDomain;
     use crate::datatype::HashSetAbstractDomain;
     use crate::datatype::PatriciaTreeSetAbstractDomain;
+    use crate::datatype::abstract_domain::AbstractDomain;
 
     macro_rules! test_powerset_impl {
         ($powerset_type:ty) => {

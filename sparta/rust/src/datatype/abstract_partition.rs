@@ -10,9 +10,9 @@ use std::hash::Hash;
 
 use im::HashMap;
 
-use crate::datatype::bitvec::BitVec;
 use crate::datatype::AbstractDomain;
 use crate::datatype::PatriciaTreeMap;
+use crate::datatype::bitvec::BitVec;
 
 /*
  * A partition is a mapping from a set of labels to elements in an abstract
