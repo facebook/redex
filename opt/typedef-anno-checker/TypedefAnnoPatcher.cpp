@@ -426,7 +426,7 @@ bool TypedefAnnoPatcher::patch_if_overriding_annotated_methods(
 
   auto overriddens = mog::get_overridden_methods(m_method_override_graph, m,
                                                  true /*include_interfaces*/);
-  for (auto overridden : overriddens) {
+  for (auto overridden : UnorderedIterable(overriddens)) {
     auto return_anno = type_inference::get_typedef_anno_from_member(
         overridden, m_typedef_annos);
 
@@ -777,7 +777,7 @@ void TypedefAnnoPatcher::patch_lambdas(
         auto* callee_def = resolve_method(method, insn);
         auto callees =
             mog::get_overriding_methods(m_method_override_graph, callee_def);
-        for (auto callee : callees) {
+        for (auto callee : UnorderedIterable(callees)) {
           annotate_local_var_field_from_callee(
               callee, insn, ud_chains, inference, patched_fields, candidates,
               m_anno_patching_mutex, class_stats);
@@ -786,8 +786,8 @@ void TypedefAnnoPatcher::patch_lambdas(
         auto* callee_def = resolve_method(method, insn);
         auto callees =
             mog::get_overriding_methods(m_method_override_graph, callee_def);
-        callees.push_back(callee_def);
-        for (auto callee : callees) {
+        callees.insert(callee_def);
+        for (auto callee : UnorderedIterable(callees)) {
           annotate_local_var_field_from_callee(
               callee, insn, ud_chains, inference, patched_fields, candidates,
               m_anno_patching_mutex, class_stats);

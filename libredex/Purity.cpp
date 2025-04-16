@@ -833,8 +833,7 @@ static size_t analyze_read_locations(
         const auto overriding_methods =
             method_override_graph::get_overriding_methods(
                 *method_override_graph, pure_method);
-        pure_methods_closure.insert(overriding_methods.begin(),
-                                    overriding_methods.end());
+        insert_unordered_iterable(pure_methods_closure, overriding_methods);
       }
     }
   }

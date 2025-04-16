@@ -1296,10 +1296,9 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
       boost::optional<const DexType*> annotation =
           get_typedef_anno_from_member(dex_method, m_annotations);
       if (is_pure_virtual_with_annotation(dex_method)) {
-        std::vector<const DexMethod*> callees =
-            method_override_graph::get_overriding_methods(
-                *m_method_override_graph, dex_method->as_def());
-        for (const DexMethod* callee : callees) {
+        auto callees = method_override_graph::get_overriding_methods(
+            *m_method_override_graph, dex_method->as_def());
+        for (const DexMethod* callee : UnorderedIterable(callees)) {
           boost::optional<const DexType*> anno =
               get_typedef_anno_from_member(callee, m_annotations);
           if (anno == boost::none || anno != annotation) {
@@ -1317,10 +1316,9 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
         boost::optional<const DexType*> annotation =
             get_typedef_anno_from_member(dex_method, m_annotations);
         if (is_pure_virtual_with_annotation(dex_method)) {
-          std::vector<const DexMethod*> callees =
-              method_override_graph::get_overriding_methods(
-                  *m_method_override_graph, dex_method->as_def());
-          for (const DexMethod* callee : callees) {
+          auto callees = method_override_graph::get_overriding_methods(
+              *m_method_override_graph, dex_method->as_def());
+          for (const DexMethod* callee : UnorderedIterable(callees)) {
             boost::optional<const DexType*> anno =
                 get_typedef_anno_from_member(callee, m_annotations);
             if (anno == boost::none || anno != annotation) {

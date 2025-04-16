@@ -269,7 +269,7 @@ class MultipleCalleeBaseStrategy : public SingleCalleeStrategy {
 
   const std::vector<const DexMethod*>&
   init_ordered_overriding_methods_with_code_or_native(
-      const DexMethod* method, std::vector<const DexMethod*>) const;
+      const DexMethod* method, UnorderedBag<const DexMethod*>) const;
 
   const method_override_graph::Graph& m_method_override_graph;
 

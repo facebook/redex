@@ -107,14 +107,17 @@ MultipleCalleeBaseStrategy::get_ordered_overriding_methods_with_code_or_native(
 const std::vector<const DexMethod*>&
 MultipleCalleeBaseStrategy::init_ordered_overriding_methods_with_code_or_native(
     const DexMethod* method,
-    std::vector<const DexMethod*> overriding_methods) const {
-  std20::erase_if(overriding_methods,
-                  [](auto* m) { return !m->get_code() && !is_native(m); });
-  std::sort(overriding_methods.begin(), overriding_methods.end(),
-            compare_dexmethods);
+    UnorderedBag<const DexMethod*> overriding_methods) const {
   return *m_overriding_methods_cache
-              .get_or_emplace_and_assert_equal(method,
-                                               std::move(overriding_methods))
+              .get_or_create_and_assert_equal(
+                  method,
+                  [&](const auto*) {
+                    unordered_erase_if(overriding_methods, [](auto* m) {
+                      return !m->get_code() && !is_native(m);
+                    });
+                    return unordered_to_ordered(overriding_methods,
+                                                compare_dexmethods);
+                  })
               .first;
 }
 
@@ -155,7 +158,7 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
     }
     const auto& overriding_methods =
         mog::get_overriding_methods(m_method_override_graph, method);
-    for (auto overriding_method : overriding_methods) {
+    for (auto overriding_method : UnorderedIterable(overriding_methods)) {
       add_root_method_overrides(overriding_method);
     }
   });
@@ -167,7 +170,7 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
       dynamic_methods.emplace(method);
       const auto& overriding_methods =
           mog::get_overriding_methods(m_method_override_graph, method);
-      for (auto* overriding : overriding_methods) {
+      for (auto* overriding : UnorderedIterable(overriding_methods)) {
         // We don't need to add overriding to dynamic_methods here, as that will
         // happen anyway.
         if (!overriding->is_external() && overriding->get_code()) {
@@ -179,7 +182,7 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
       // by external methods as well.
       const auto& overridden_methods =
           mog::get_overridden_methods(m_method_override_graph, method, true);
-      for (auto m : overridden_methods) {
+      for (auto m : UnorderedIterable(overridden_methods)) {
         if (!m->is_external()) {
           dynamic_methods.emplace(m);
         }
@@ -215,7 +218,8 @@ CallSites CompleteCallGraphStrategy::get_callsites(
               opcode::is_invoke_interface(insn->opcode())) {
             const auto& overriding_methods =
                 get_ordered_overriding_methods_with_code_or_native(callee);
-            for (auto overriding_method : overriding_methods) {
+            for (auto overriding_method :
+                 UnorderedIterable(overriding_methods)) {
               callsites.emplace_back(overriding_method, insn);
             }
           }
@@ -249,7 +253,7 @@ RootAndDynamic CompleteCallGraphStrategy::get_roots() const {
     }
     const auto& overriding_methods =
         mog::get_overriding_methods(m_method_override_graph, method);
-    for (auto overriding_method : overriding_methods) {
+    for (auto overriding_method : UnorderedIterable(overriding_methods)) {
       add_root_method_overrides(overriding_method);
     }
   });
@@ -259,7 +263,7 @@ RootAndDynamic CompleteCallGraphStrategy::get_roots() const {
     if (method->is_external()) {
       const auto& overriding_methods =
           mog::get_overriding_methods(m_method_override_graph, method, true);
-      for (auto* overriding : overriding_methods) {
+      for (auto* overriding : UnorderedIterable(overriding_methods)) {
         roots.insert(overriding);
       }
     }
@@ -274,37 +278,36 @@ MultipleCalleeStrategy::MultipleCalleeStrategy(
     : MultipleCalleeBaseStrategy(method_override_graph, scope) {
   // Gather big overrides true virtual methods.
   ConcurrentSet<const DexMethod*> concurrent_callees;
-  walk::parallel::opcodes(
-      scope, [&](const DexMethod* method, IRInstruction* insn) {
-        if (opcode::is_an_invoke(insn->opcode())) {
-          auto callee = resolve_invoke_method(insn, method);
-          if (callee == nullptr) {
-            return;
-          }
-          if (!callee->is_virtual() || insn->opcode() == OPCODE_INVOKE_SUPER) {
-            return;
-          }
-          if (!concurrent_callees.insert(callee)) {
-            return;
-          }
-          auto overriding_methods =
-              mog::get_overriding_methods(m_method_override_graph, callee);
-          uint32_t num_override = 0;
-          for (auto overriding_method : overriding_methods) {
-            if (overriding_method->get_code()) {
-              ++num_override;
-            }
-          }
-          if (num_override <= big_override_threshold) {
-            init_ordered_overriding_methods_with_code_or_native(
-                callee, std::move(overriding_methods));
-          } else {
-            m_big_virtuals.emplace(callee);
-            m_big_virtual_overrides.insert(overriding_methods.begin(),
-                                           overriding_methods.end());
-          }
+  walk::parallel::opcodes(scope, [&](const DexMethod* method,
+                                     IRInstruction* insn) {
+    if (opcode::is_an_invoke(insn->opcode())) {
+      auto callee = resolve_invoke_method(insn, method);
+      if (callee == nullptr) {
+        return;
+      }
+      if (!callee->is_virtual() || insn->opcode() == OPCODE_INVOKE_SUPER) {
+        return;
+      }
+      if (!concurrent_callees.insert(callee)) {
+        return;
+      }
+      auto overriding_methods =
+          mog::get_overriding_methods(m_method_override_graph, callee);
+      uint32_t num_override = 0;
+      for (auto overriding_method : UnorderedIterable(overriding_methods)) {
+        if (overriding_method->get_code()) {
+          ++num_override;
         }
-      });
+      }
+      if (num_override <= big_override_threshold) {
+        init_ordered_overriding_methods_with_code_or_native(
+            callee, std::move(overriding_methods));
+      } else {
+        m_big_virtuals.emplace(callee);
+        insert_unordered_iterable(m_big_virtual_overrides, overriding_methods);
+      }
+    }
+  });
 }
 
 CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
@@ -333,7 +336,8 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
             }
             const auto& overriding_methods =
                 get_ordered_overriding_methods_with_code_or_native(callee);
-            for (auto overriding_method : overriding_methods) {
+            for (auto overriding_method :
+                 UnorderedIterable(overriding_methods)) {
               callsites.emplace_back(overriding_method, insn);
             }
           } else if (callee->is_concrete()) {

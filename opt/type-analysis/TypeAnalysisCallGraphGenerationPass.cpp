@@ -131,7 +131,7 @@ class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
     always_assert(!opcode::is_invoke_super(insn->opcode()));
     const auto& overriding_methods =
         mog::get_overriding_methods(m_method_override_graph, resolved_callee);
-    for (auto overriding_method : overriding_methods) {
+    for (auto overriding_method : UnorderedIterable(overriding_methods)) {
       callsites.emplace_back(overriding_method, insn);
     }
   }

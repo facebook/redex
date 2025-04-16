@@ -50,7 +50,8 @@ void find_duplications(const method_override_graph::Graph* graph,
   always_assert(root_code->editable_cfg_built());
   auto& root_cfg = root_code->cfg();
 
-  for (auto* child_node : graph->get_node(root_method).children) {
+  for (auto* child_node :
+       UnorderedIterable(graph->get_node(root_method).children)) {
     auto* child = child_node->method;
     // The method definition may be deleted after the overriding graph is
     // created, check if it's still a definition.
@@ -78,7 +79,7 @@ void find_duplications(const method_override_graph::Graph* graph,
 void publicize_methods(const method_override_graph::Graph* graph,
                        DexMethod* root_method) {
   set_public(root_method);
-  for (auto* child : graph->get_node(root_method).children) {
+  for (auto* child : UnorderedIterable(graph->get_node(root_method).children)) {
     if (is_public(child->method)) {
       // The children of child should all be public, otherwise the code is
       // invalid before this transformation.

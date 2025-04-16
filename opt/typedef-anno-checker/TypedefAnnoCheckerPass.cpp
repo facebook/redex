@@ -267,14 +267,14 @@ void TypedefAnnoChecker::check_instruction(
     if (!callee_def) {
       return;
     }
-    std::vector<const DexMethod*> callees;
+    UnorderedBag<const DexMethod*> callees;
     if (mog::is_true_virtual(m_method_override_graph, callee_def) &&
         !callee_def->get_code()) {
       callees =
           mog::get_overriding_methods(m_method_override_graph, callee_def);
     }
-    callees.push_back(callee_def);
-    for (const DexMethod* callee : callees) {
+    callees.insert(callee_def);
+    for (const DexMethod* callee : UnorderedIterable(callees)) {
       if (!callee->get_param_anno()) {
         // Callee does not expect any Typedef value. Nothing to do.
         return;
@@ -583,14 +583,14 @@ bool TypedefAnnoChecker::check_typedef_value(
         check_typedef_value(m, annotation, ud_chains, def, 0, inference, envs);
         break;
       }
-      std::vector<const DexMethod*> callees;
+      UnorderedBag<const DexMethod*> callees;
       if (mog::is_true_virtual(m_method_override_graph, def_method) &&
           !def_method->get_code()) {
         callees =
             mog::get_overriding_methods(m_method_override_graph, def_method);
       }
-      callees.push_back(def_method);
-      for (const DexMethod* callee : callees) {
+      callees.insert(def_method);
+      for (const DexMethod* callee : UnorderedIterable(callees)) {
         boost::optional<const DexType*> anno =
             type_inference::get_typedef_anno_from_member(
                 callee, inference->get_annotations());

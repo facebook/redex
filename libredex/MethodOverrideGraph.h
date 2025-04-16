@@ -34,9 +34,8 @@ std::unique_ptr<const Graph> build_graph(const Scope&);
 /*
  * Returns all the methods that override :method. The set does *not* include
  * :method itself.
- * While represented as a vector, the result is conceptually an unordered sets.
  */
-std::vector<const DexMethod*> get_overriding_methods(
+UnorderedBag<const DexMethod*> get_overriding_methods(
     const Graph& graph,
     const DexMethod* method,
     bool include_interfaces = false,
@@ -45,9 +44,8 @@ std::vector<const DexMethod*> get_overriding_methods(
 /*
  * Returns all the methods that are overridden by :method. The set does *not*
  * include the :method itself.
- * While represented as a vector, the result is conceptually an unordered sets.
  */
-std::vector<const DexMethod*> get_overridden_methods(
+UnorderedBag<const DexMethod*> get_overridden_methods(
     const Graph& graph,
     const DexMethod* method,
     bool include_interfaces = false);
@@ -75,7 +73,7 @@ struct OtherInterfaceImplementations {
   UnorderedSet<const DexMethod*> parents;
   // The set of the classes for which the current method implements those
   // interface methods for the first time.
-  std::vector<const DexClass*> classes;
+  UnorderedBag<const DexClass*> classes;
 };
 
 /*
@@ -85,9 +83,9 @@ struct OtherInterfaceImplementations {
 struct Node {
   const DexMethod* method{nullptr};
   // The set of immediately overridden / implemented methods.
-  std::vector<Node*> parents;
+  UnorderedBag<Node*> parents;
   // The set of immediately overriding / implementing methods.
-  std::vector<Node*> children;
+  UnorderedBag<Node*> children;
   // The set of parents and classes where this node implements a previously
   // unimplemented method. (This is usually absent.)
   std::unique_ptr<OtherInterfaceImplementations>

@@ -95,7 +95,7 @@ size_t hash_type(DexType* type) {
 const DexMethod* get_parent(const mog::Graph& graph, const DexMethod* method) {
   always_assert(!is_interface(type_class(method->get_class())));
   auto& node = graph.get_node(method);
-  for (auto* parent : node.parents) {
+  for (auto* parent : UnorderedIterable(node.parents)) {
     if (parent->is_interface) {
       continue;
     }

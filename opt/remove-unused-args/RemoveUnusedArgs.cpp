@@ -143,7 +143,7 @@ static bool compare_weighted_dexprotos(const std::pair<DexProto*, size_t>& a,
 
 template <typename Collection>
 static bool any_external(const Collection& methods) {
-  for (auto* method_node : methods) {
+  for (auto* method_node : UnorderedIterable(methods)) {
     auto cls = type_class(method_node->method->get_class());
     if (cls == nullptr || cls->is_external()) {
       return true;

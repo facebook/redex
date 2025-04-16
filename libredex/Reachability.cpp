@@ -300,7 +300,7 @@ void RootSetMarker::mark_external_method_overriders() {
     }
     const auto& overriding_methods =
         mog::get_overriding_methods(m_method_override_graph, method);
-    for (auto* overriding : overriding_methods) {
+    for (auto* overriding : UnorderedIterable(overriding_methods)) {
       // Avoid re-visiting methods found in overriding sets since we would
       // already have conditionally marked all their children.
       visited.emplace(overriding);
@@ -1590,8 +1590,7 @@ void TransitiveClosureMarkerWorker::implementation_method(
   auto newly_overridden_methods =
       mog::get_overridden_methods(*m_shared_state->method_override_graph,
                                   method, /* include_interfaces */ true);
-  overridden_methods->insert(newly_overridden_methods.begin(),
-                             newly_overridden_methods.end());
+  insert_unordered_iterable(*overridden_methods, newly_overridden_methods);
 
   if (!m_shared_state->reachable_aspects->implementation_methods.insert(
           method)) {
@@ -1605,7 +1604,7 @@ void TransitiveClosureMarkerWorker::implementation_method(
   };
   bool unconditionally_instance_callable{
       is_unconditionally_instance_callable(method)};
-  for (auto* overridden_method : newly_overridden_methods) {
+  for (auto* overridden_method : UnorderedIterable(newly_overridden_methods)) {
     if (is_unconditionally_instance_callable(overridden_method)) {
       unconditionally_instance_callable = true;
     }
@@ -1617,11 +1616,10 @@ void TransitiveClosureMarkerWorker::implementation_method(
   }
 
   if (!m_shared_state->reachable_objects->marked(method) &&
-      std::any_of(newly_overridden_methods.begin(),
-                  newly_overridden_methods.end(), [](auto* overridden_method) {
-                    return is_abstract(overridden_method) ||
-                           overridden_method->is_external();
-                  })) {
+      unordered_any_of(newly_overridden_methods, [](auto* overridden_method) {
+        return is_abstract(overridden_method) ||
+               overridden_method->is_external();
+      })) {
     m_shared_state->reachable_aspects->zombie_implementation_methods.insert(
         method);
   }
@@ -1673,7 +1671,7 @@ void TransitiveClosureMarkerWorker::base_invoke_virtual_target(
       (!is_child || !base_type || node.overrides(method, base_type))) {
     exact_invoke_virtual_target(method);
   }
-  for (auto* child : node.children) {
+  for (auto* child : UnorderedIterable(node.children)) {
     base_invoke_virtual_target(child->method, base_type, /* is_child */ true);
   }
 }
@@ -1787,7 +1785,8 @@ void compute_zombie_methods(
           if (reachable_objects.marked_unsafe(elder) || elder->is_external()) {
             any_abstract_methods = true;
           }
-          for (auto* parent : method_override_graph.get_node(elder).parents) {
+          for (auto* parent : UnorderedIterable(
+                   method_override_graph.get_node(elder).parents)) {
             if (is_abstract(parent->method)) {
               visit_abstract_method(parent->method);
             }
@@ -1800,8 +1799,8 @@ void compute_zombie_methods(
             return;
           }
           unmarked_elder = elder_parent;
-          for (auto* parent :
-               method_override_graph.get_node(unmarked_elder).parents) {
+          for (auto* parent : UnorderedIterable(
+                   method_override_graph.get_node(unmarked_elder).parents)) {
             if (is_abstract(parent->method)) {
               visit_abstract_method(parent->method);
             } else {

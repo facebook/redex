@@ -289,7 +289,7 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
     const auto overriding_methods =
         method_override_graph::get_overriding_methods(
             m_graph, callee, /* include_interfaces */ false, static_base_type);
-    for (auto* overriding : overriding_methods) {
+    for (auto* overriding : UnorderedIterable(overriding_methods)) {
       if (!method::may_be_invoke_target(overriding)) {
         continue;
       }

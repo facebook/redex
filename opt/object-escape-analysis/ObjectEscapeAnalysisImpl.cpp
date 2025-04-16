@@ -85,9 +85,11 @@ std::pair<const Callees*, bool> get_or_create_callees(
                 (root(resolved_callee) || !can_rename(resolved_callee))) {
               res.any_unknown = true;
             }
-            for (auto* overriding_method : mog::get_overriding_methods(
-                     method_override_graph, resolved_callee,
-                     /* include_interfaces */ false, static_base_type)) {
+            auto overriding_methods = mog::get_overriding_methods(
+                method_override_graph, resolved_callee,
+                /* include_interfaces */ false, static_base_type);
+            for (auto* overriding_method :
+                 UnorderedIterable(overriding_methods)) {
               visit_callee(overriding_method);
             }
           }

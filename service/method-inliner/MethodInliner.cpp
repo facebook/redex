@@ -352,7 +352,7 @@ SameImplementationMap get_same_implementation_map(
       same_implementation.methods.push_back(method);
       return true;
     };
-    for (auto overriding_method : overriding_methods) {
+    for (auto overriding_method : UnorderedIterable(overriding_methods)) {
       if (!method::may_be_invoke_target(overriding_method)) {
         continue;
       }
@@ -376,7 +376,7 @@ SameImplementationMap get_same_implementation_map(
     // methods and their representative implementation.
     auto sp = std::make_shared<SameImplementation>(same_implementation);
     method_to_implementations.emplace(method, sp);
-    for (auto overriding_method : overriding_methods) {
+    for (auto overriding_method : UnorderedIterable(overriding_methods)) {
       method_to_implementations.emplace(overriding_method, sp);
     }
   });
@@ -485,11 +485,11 @@ void gather_true_virtual_methods(
       return hash;
     }
   };
-  InsertOnlyConcurrentMap<Key, std::vector<const DexMethod*>, Hash>
+  InsertOnlyConcurrentMap<Key, UnorderedBag<const DexMethod*>, Hash>
       concurrent_overriding_methods;
   auto get_overriding_methods =
       [&](DexMethod* callee,
-          DexType* static_base_type) -> const std::vector<const DexMethod*>& {
+          DexType* static_base_type) -> const UnorderedBag<const DexMethod*>& {
     return *concurrent_overriding_methods
                 .get_or_create_and_assert_equal(
                     Key{callee, static_base_type},
@@ -497,7 +497,7 @@ void gather_true_virtual_methods(
                       auto overriding_methods = mog::get_overriding_methods(
                           method_override_graph, callee,
                           /* include_interfaces */ false, static_base_type);
-                      std20::erase_if(overriding_methods, [&](auto* m) {
+                      unordered_erase_if(overriding_methods, [&](auto* m) {
                         return !method::may_be_invoke_target(m);
                       });
                       return overriding_methods;
@@ -518,7 +518,7 @@ void gather_true_virtual_methods(
       } else {
         const auto& overridden_methods = mog::get_overridden_methods(
             method_override_graph, method, /* include_interfaces */ true);
-        for (auto overridden_method : overridden_methods) {
+        for (auto overridden_method : UnorderedIterable(overridden_methods)) {
           if (root(overridden_method) || overridden_method->is_external()) {
             add_other_call_site(method);
             break;
@@ -556,7 +556,8 @@ void gather_true_virtual_methods(
               consider_overriding_methods) {
             const auto& overriding_methods =
                 get_overriding_methods(callee, static_base_type);
-            for (auto overriding_method : overriding_methods) {
+            for (auto overriding_method :
+                 UnorderedIterable(overriding_methods)) {
               add_other_call_site(
                   overriding_method,
                   /* other_call_sites_overriding_methods_added */ true);
@@ -587,13 +588,14 @@ void gather_true_virtual_methods(
         } else if (is_abstract(callee) && overriding_methods.size() == 1) {
           // The method is an abstract method, the only override is its
           // implementation.
-          auto implementing_method = *overriding_methods.begin();
+          auto implementing_method = *unordered_any(overriding_methods);
           add_monomorphic_call_site(method, insn, implementing_method);
         } else {
           if (!add_other_call_site(
                   callee,
                   /* other_call_sites_overriding_methods_added */ true)) {
-            for (auto overriding_method : overriding_methods) {
+            for (auto overriding_method :
+                 UnorderedIterable(overriding_methods)) {
               add_other_call_site(
                   overriding_method,
                   /* other_call_sites_overriding_methods_added */ true);

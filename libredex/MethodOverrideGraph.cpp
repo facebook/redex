@@ -279,7 +279,7 @@ bool all_overriding_methods_impl(const Graph& graph,
     visited.reserve(root.children.size() * 7);
     return self_recursive_fn(
         [&](auto self, const auto& children) -> bool {
-          for (const auto* node : children) {
+          for (const auto* node : UnorderedIterable(children)) {
             if (!visited.emplace(node).second) {
               continue;
             }
@@ -299,7 +299,7 @@ bool all_overriding_methods_impl(const Graph& graph,
   // optimized code path
   return self_recursive_fn(
       [&](auto self, const auto& children) -> bool {
-        for (const auto* node : children) {
+        for (const auto* node : UnorderedIterable(children)) {
           if (!self(self, node->children)) {
             return false;
           }
@@ -324,7 +324,7 @@ bool all_overridden_methods_impl(const Graph& graph,
     visited.reserve(root.parents.size() * 7);
     return self_recursive_fn(
         [&](auto self, const auto& children) -> bool {
-          for (const auto* node : children) {
+          for (const auto* node : UnorderedIterable(children)) {
             if (!visited.emplace(node).second) {
               continue;
             }
@@ -348,7 +348,7 @@ bool all_overridden_methods_impl(const Graph& graph,
   // optimized code path
   return self_recursive_fn(
       [&](auto self, const auto& children) -> bool {
-        for (const auto* node : children) {
+        for (const auto* node : UnorderedIterable(children)) {
           if (node->is_interface) {
             continue;
           }
@@ -380,7 +380,8 @@ bool Node::overrides(const DexMethod* current, const DexType* base_type) const {
   if (!other_interface_implementations) {
     return false;
   }
-  for (auto* cls : other_interface_implementations->classes) {
+  for (auto* cls :
+       UnorderedIterable(other_interface_implementations->classes)) {
     if (type::check_cast(cls->get_type(), base_type)) {
       return true;
     }
@@ -428,13 +429,13 @@ void Graph::add_edge(const DexMethod* overridden,
       node.method = overridden;
       node.is_interface = overridden_is_interface;
     }
-    node.children.push_back(overriding_node);
+    node.children.insert(overriding_node);
     overridden_node = &node;
   });
 
   m_nodes.update(overriding, [&](const DexMethod*, Node& node, bool exists) {
     redex_assert(exists);
-    node.parents.push_back(overridden_node);
+    node.parents.insert(overridden_node);
   });
 }
 
@@ -444,13 +445,13 @@ void Node::gather_connected_methods(
     return;
   }
   visited->insert(method);
-  for (auto* child : children) {
+  for (auto* child : UnorderedIterable(children)) {
     if (visited->count(child->method)) {
       continue;
     }
     child->gather_connected_methods(visited);
   }
-  for (auto* parent : parents) {
+  for (auto* parent : UnorderedIterable(parents)) {
     if (visited->count(parent->method)) {
       continue;
     }
@@ -470,7 +471,7 @@ bool Graph::add_other_implementation_class(const DexMethod* overridden,
     if (!oii) {
       oii = std::make_unique<OtherInterfaceImplementations>();
     }
-    oii->classes.push_back(cls);
+    oii->classes.insert(cls);
     parent_inserted = oii->parents.insert(overridden).second;
   });
   return parent_inserted;
@@ -489,9 +490,9 @@ void Graph::dump(std::ostream& os) const {
         const auto& node = get_node(method);
         std::vector<const DexMethod*> succs;
         succs.reserve(node.children.size());
-        std::transform(node.children.begin(), node.children.end(),
-                       std::back_inserter(succs),
-                       [](auto* c) { return c->method; });
+        unordered_transform(node.children,
+                            std::back_inserter(succs),
+                            [](auto* c) { return c->method; });
         return succs;
       });
   gw.write(os, unordered_keys(m_nodes));
@@ -502,29 +503,30 @@ std::unique_ptr<const Graph> build_graph(const Scope& scope) {
   return GraphBuilder(scope).run();
 }
 
-std::vector<const DexMethod*> get_overriding_methods(const Graph& graph,
-                                                     const DexMethod* method,
-                                                     bool include_interfaces,
-                                                     const DexType* base_type) {
-  std::vector<const DexMethod*> res;
+UnorderedBag<const DexMethod*> get_overriding_methods(
+    const Graph& graph,
+    const DexMethod* method,
+    bool include_interfaces,
+    const DexType* base_type) {
+  UnorderedBag<const DexMethod*> res;
   all_overriding_methods_impl(
       graph, method,
       [&](const DexMethod* method) {
-        res.push_back(method);
+        res.insert(method);
         return true;
       },
       include_interfaces, base_type);
   return res;
 }
 
-std::vector<const DexMethod*> get_overridden_methods(const Graph& graph,
-                                                     const DexMethod* method,
-                                                     bool include_interfaces) {
-  std::vector<const DexMethod*> res;
+UnorderedBag<const DexMethod*> get_overridden_methods(const Graph& graph,
+                                                      const DexMethod* method,
+                                                      bool include_interfaces) {
+  UnorderedBag<const DexMethod*> res;
   all_overridden_methods_impl(
       graph, method,
       [&](const DexMethod* method) {
-        res.push_back(method);
+        res.insert(method);
         return true;
       },
       include_interfaces);
@@ -592,8 +594,9 @@ bool any_overridden_methods(const Graph& graph,
 UnorderedSet<DexClass*> get_classes_with_overridden_finalize(
     const Graph& method_override_graph, const ClassHierarchy& class_hierarchy) {
   UnorderedSet<DexClass*> res;
-  for (auto* overriding_method : method_override_graph::get_overriding_methods(
-           method_override_graph, method::java_lang_Object_finalize())) {
+  auto overriding_methods = method_override_graph::get_overriding_methods(
+      method_override_graph, method::java_lang_Object_finalize());
+  for (auto* overriding_method : UnorderedIterable(overriding_methods)) {
     auto type = overriding_method->get_class();
     auto* cls = type_class(type);
     if (cls && !cls->is_external()) {

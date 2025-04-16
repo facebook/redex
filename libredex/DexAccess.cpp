@@ -22,7 +22,7 @@ void overriden_should_not_be_public(
     return;
   }
   should_not_mark->insert(method->method);
-  for (const auto* overriden : method->parents) {
+  for (const auto* overriden : UnorderedIterable(method->parents)) {
     overriden_should_not_be_public(overriden, graph, should_not_mark);
   }
 }
@@ -45,7 +45,7 @@ void loosen_access_modifier_for_vmethods(const DexClasses& scope) {
       overriden_should_not_be_public(
           &pair.second, graph.get(), &should_not_mark);
       auto& children = pair.second.children;
-      auto* first_child = *children.begin();
+      auto* first_child = *unordered_any(children);
       always_assert_log(!is_public(method) && !is_protected(method),
                         "%s is visible final but it has children %s",
                         SHOW(method->get_deobfuscated_name()),
