@@ -449,4 +449,29 @@ public class MethodInlineTest {
       return 0;
     }
   }
+
+  @Test
+  public void noInlineBlocklistTest() {
+    // Should not be inlined
+    NoInlineClass.no_inline_method1();
+    InlineClass.no_inline_method2();
+    // Should get inlined
+    InlineClass.inline_method();
+  }
+
+  private static class NoInlineClass {
+    public static int no_inline_method1() {
+      return 42;
+    }
+  };
+
+  private static class InlineClass {
+    public static int inline_method() {
+      return 42;
+    }
+
+    public static int no_inline_method2() {
+      return 42;
+    }
+  };
 }
