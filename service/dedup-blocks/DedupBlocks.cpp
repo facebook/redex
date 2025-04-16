@@ -238,6 +238,7 @@ namespace dedup_blocks_impl {
 
 bool is_ineligible_because_of_fill_in_stack_trace(const IRInstruction* insn) {
   auto op = insn->opcode();
+  DexMethod* resolved_method{nullptr};
   // Direct call to a constructor whose class derives from Throwable?
   // (It would indirectly call java.lang.Throwable.fillInStackTrace.)
   if (opcode::is_invoke_direct(op) && method::is_init(insn->get_method()) &&
@@ -247,16 +248,33 @@ bool is_ineligible_because_of_fill_in_stack_trace(const IRInstruction* insn) {
   }
   // Explicit virtual call to the java.lang.Throwable.fillInStackTrace
   // method?
-  if (opcode::is_invoke_virtual(op) &&
-      resolve_method(insn->get_method(), MethodSearch::Virtual) ==
-          method::java_lang_Throwable_fillInStackTrace()) {
-    return true;
+  if (opcode::is_invoke_virtual(op)) {
+    resolved_method = resolve_method(insn->get_method(), MethodSearch::Virtual);
+    if (resolved_method == method::java_lang_Throwable_fillInStackTrace()) {
+      return true;
+    }
   }
   // An outlined method might invoke one of the above, so we are being
   // conservative here.
   if (opcode::is_invoke_static(op) &&
       outliner::is_outlined_method(insn->get_method())) {
     return true;
+  }
+  // We should not collapse the callsites of methods marked as dont-inline to
+  // preserve their stack traces more accurately
+  if (opcode::is_an_invoke(op)) {
+    if (resolved_method == nullptr) {
+      if (opcode::is_invoke_super(op)) {
+        // We don't have the caller method available, and thus cannot resolve an
+        // invoke-super. We are conservative.
+        return true;
+      }
+      resolved_method =
+          resolve_method(insn->get_method(), opcode_to_search(insn));
+    }
+    if (resolved_method && resolved_method->rstate.dont_inline()) {
+      return true;
+    }
   }
   return false;
 }

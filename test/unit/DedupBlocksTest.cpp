@@ -1647,6 +1647,55 @@ TEST_F(DedupBlocksTest, dont_dedup_indirect_fill_in_stack_trace) {
   EXPECT_CODE_EQ(expected_code.get(), code);
 }
 
+// Don't dedup invocations to methods marked as dont-inline
+TEST_F(DedupBlocksTest, dont_dedup_dont_inline) {
+  auto callee_code = assembler::ircode_from_string(R"(
+    (
+      (return-void)
+    )
+  )");
+  auto callee = get_fresh_method("bar");
+  callee->rstate.set_dont_inline();
+  callee->set_code(std::move(callee_code));
+
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (if-eqz v1 :lbl)
+
+      (invoke-static () "LTestClass.bar:()V")
+      (return-object v0)
+
+      (:lbl)
+      (invoke-static () "LTestClass.bar:()V")
+      (return-object v0)
+    )
+  )");
+  auto method = get_fresh_method("dont_dedup_dont_inline");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (if-eqz v1 :lbl)
+
+      (invoke-static () "LTestClass.bar:()V")
+      (return-object v0)
+
+      (:lbl)
+      (invoke-static () "LTestClass.bar:()V")
+      (return-object v0)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
 TEST_F(DedupBlocksTest, retainPositionWhenMayThrow) {
   using namespace dex_asm;
   DexMethod* method = get_fresh_method("postfixSwitchCase");
