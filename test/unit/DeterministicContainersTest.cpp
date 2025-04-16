@@ -287,3 +287,113 @@ TEST_F(DeterministicContainersTest, unordered_max_element_vector_custom) {
       vec, [](int a, int b) { return std::abs(a) < std::abs(b); });
   EXPECT_EQ(-5, *max);
 }
+
+TEST_F(DeterministicContainersTest, UnorderedBag_construction) {
+  UnorderedBag<int> bag{1, 2, 3};
+  EXPECT_EQ(3, bag.size());
+  EXPECT_FALSE(bag.empty());
+
+  UnorderedBag<int> empty_bag;
+  EXPECT_EQ(0, empty_bag.size());
+  EXPECT_TRUE(empty_bag.empty());
+}
+
+TEST_F(DeterministicContainersTest, UnorderedBag_basic_operations) {
+  UnorderedBag<int> bag;
+  EXPECT_TRUE(bag.empty());
+
+  bag.emplace(42);
+  EXPECT_EQ(1, bag.size());
+  EXPECT_FALSE(bag.empty());
+
+  bag.emplace(23);
+  EXPECT_EQ(2, bag.size());
+
+  bag.emplace(15);
+  bag.emplace(7);
+  EXPECT_EQ(4, bag.size());
+}
+
+TEST_F(DeterministicContainersTest, UnorderedBag_unordered_any) {
+  UnorderedBag<int> bag;
+  bag.emplace(42);
+  bag.emplace(23);
+  auto any = *unordered_any(bag);
+  EXPECT_TRUE(any == 42 || any == 23);
+
+  UnorderedBag<int> empty_bag;
+  EXPECT_EQ(empty_bag.end(), unordered_any(empty_bag));
+}
+
+TEST_F(DeterministicContainersTest, UnorderedBag_unordered_accumulate) {
+  UnorderedBag<int> bag{1, 2, 3, 4, 5};
+  int sum =
+      unordered_accumulate(bag, 0, [](int acc, int val) { return acc + val; });
+  EXPECT_EQ(15, sum);
+}
+
+TEST_F(DeterministicContainersTest, UnorderedBag_unordered_transform) {
+  UnorderedBag<int> bag{1, 2, 3};
+  std::vector<int> result(3);
+  unordered_transform(bag, result.begin(), [](int val) { return val * 2; });
+  EXPECT_EQ(12, unordered_accumulate(
+                    result, 0, [](int acc, int val) { return acc + val; }));
+}
+
+TEST_F(DeterministicContainersTest, UnorderedBag_unordered_copy) {
+  UnorderedBag<int> bag{1, 2, 3, 4};
+  std::vector<int> copy(4);
+  unordered_copy(bag, copy.begin());
+  EXPECT_EQ(4, copy.size());
+  EXPECT_EQ(10, unordered_accumulate(
+                    copy, 0, [](int acc, int val) { return acc + val; }));
+}
+
+TEST_F(DeterministicContainersTest, UnorderedBag_unordered_min_element) {
+  UnorderedBag<int> bag{42, 23, 7, 11, 5};
+  auto min = unordered_min_element(bag);
+  EXPECT_EQ(5, *min);
+}
+
+TEST_F(DeterministicContainersTest, UnorderedBag_unordered_max_element) {
+  UnorderedBag<int> bag{42, 23, 7, 11, 5};
+  auto max = unordered_max_element(bag);
+  EXPECT_EQ(42, *max);
+}
+
+TEST_F(DeterministicContainersTest, UnorderedBag_unordered_erase_if) {
+  UnorderedBag<int> bag{42, 23, 7, 11, 5};
+  unordered_erase_if(bag, [](int x) { return x > 20; });
+  EXPECT_EQ(3, bag.size());
+  EXPECT_EQ(23, unordered_accumulate(
+                    bag, 0, [](int acc, int val) { return acc + val; }));
+}
+
+TEST_F(DeterministicContainersTest, UnorderedBag_unordered_min_element_custom) {
+  UnorderedBag<int> bag{-5, 4, -3, 2, -1};
+  auto min = unordered_min_element(
+      bag, [](int a, int b) { return std::abs(a) < std::abs(b); });
+  EXPECT_EQ(-1, *min);
+}
+
+TEST_F(DeterministicContainersTest, UnorderedBag_unordered_max_element_custom) {
+  UnorderedBag<int> bag{-5, 4, -3, 2, -1};
+  auto max = unordered_max_element(
+      bag, [](int a, int b) { return std::abs(a) < std::abs(b); });
+  EXPECT_EQ(-5, *max);
+}
+
+TEST_F(DeterministicContainersTest, UnorderedBag_unordered_to_ordered) {
+  UnorderedBag<int> bag{5, 2, 8, 1, 9, 3};
+  auto ordered = unordered_to_ordered(bag, [](int a, int b) { return a < b; });
+  EXPECT_EQ(std::vector<int>({1, 2, 3, 5, 8, 9}), ordered);
+}
+
+TEST_F(DeterministicContainersTest,
+       UnorderedBag_unordered_erase_if_divisible_by_3) {
+  UnorderedBag<int> bag{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  unordered_erase_if(bag, [](int x) { return x % 3 == 0; });
+  EXPECT_EQ(7, bag.size());
+  auto ordered = unordered_to_ordered(bag, [](int a, int b) { return a < b; });
+  EXPECT_EQ(std::vector<int>({1, 2, 4, 5, 7, 8, 10}), ordered);
+}

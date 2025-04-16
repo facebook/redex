@@ -81,6 +81,8 @@
  *
  * - Use `UnorderedSet` / `UnorderedMap` instead of `std::unordered_set` /
  *   `std::unordered_map`.
+ * - Use `UnorderedBag` instead of `std::vector` if the order of the elements
+ *   within the vector is non-deterministic.
  * - If you want to iterate over an unordered collection, and you are certain
  *   that the iteration order does not matter to produce ultimately
  *   deterministic results, then use the `UnorderedIterable(...)` wrapper.
@@ -427,6 +429,228 @@ bool operator==(const UnorderedMap<Key, Value, Hash, KeyEqual>& lhs,
 template <class Key, class Value, class Hash, class KeyEqual>
 bool operator!=(const UnorderedMap<Key, Value, Hash, KeyEqual>& lhs,
                 const UnorderedMap<Key, Value, Hash, KeyEqual>& rhs) {
+  return lhs._internal_unsafe_unwrap() != rhs._internal_unsafe_unwrap();
+}
+
+class UnorderedBagBase {};
+
+template <class Value>
+class UnorderedBag : UnorderedBase<UnorderedBag<Value>>, UnorderedBagBase {
+  using Type = std::vector<Value>;
+  Type m_data;
+
+ public:
+  using key_type = void;
+  using value_type = typename Type::value_type;
+  using size_type = typename Type::size_type;
+  using difference_type = typename Type::difference_type;
+  using reference = typename Type::reference;
+  using const_reference = typename Type::const_reference;
+  using pointer = typename Type::pointer;
+  using const_pointer = typename Type::const_pointer;
+
+  class FixedIterator;
+
+  class ConstFixedIterator {
+    typename Type::const_iterator m_entry;
+
+   public:
+    const value_type* operator->() const { return &*m_entry; }
+
+    const value_type& operator*() const { return *m_entry; }
+
+    bool operator==(const FixedIterator& other) const {
+      return m_entry == other._internal_unsafe_unwrap();
+    }
+
+    bool operator!=(const FixedIterator& other) const {
+      return m_entry != other._internal_unsafe_unwrap();
+    }
+
+    bool operator==(const ConstFixedIterator& other) const {
+      return m_entry == other.m_entry;
+    }
+
+    bool operator!=(const ConstFixedIterator& other) const {
+      return m_entry != other.m_entry;
+    }
+
+    explicit ConstFixedIterator(typename Type::const_iterator entry)
+        : m_entry(entry) {}
+
+    typename Type::const_iterator _internal_unsafe_unwrap() const {
+      return m_entry;
+    }
+  };
+
+  class FixedIterator {
+    typename Type::iterator m_entry;
+
+   public:
+    value_type* operator->() const { return &*m_entry; }
+
+    value_type& operator*() const { return *m_entry; }
+
+    bool operator==(const FixedIterator& other) const {
+      return m_entry == other.m_entry;
+    }
+
+    bool operator!=(const FixedIterator& other) const {
+      return m_entry != other.m_entry;
+    }
+
+    bool operator==(const ConstFixedIterator& other) const {
+      return m_entry == other._internal_unsafe_unwrap();
+    }
+
+    bool operator!=(const ConstFixedIterator& other) const {
+      return m_entry != other._internal_unsafe_unwrap();
+    }
+
+    explicit FixedIterator(typename Type::iterator entry) : m_entry(entry) {}
+
+    typename Type::iterator _internal_unsafe_unwrap() const { return m_entry; }
+  };
+
+  // TODO: Make extra non-deterministic in debug builds
+  class UnorderedIterable {
+    Type& m_data;
+
+   public:
+    using iterator = typename Type::iterator;
+    using const_iterator = typename Type::const_iterator;
+
+    explicit UnorderedIterable(Type& data) : m_data(data) {}
+
+    iterator begin() { return m_data.begin(); }
+
+    iterator end() { return m_data.end(); }
+
+    const_iterator begin() const { return m_data.begin(); }
+
+    const_iterator end() const { return m_data.end(); }
+
+    const_iterator cbegin() const { return m_data.cbegin(); }
+
+    const_iterator cend() const { return m_data.cend(); }
+  };
+
+  // TODO: Make extra non-deterministic in debug builds
+  class ConstUnorderedIterable {
+    const Type& m_data;
+
+   public:
+    using const_iterator = typename Type::const_iterator;
+
+    explicit ConstUnorderedIterable(const Type& data) : m_data(data) {}
+
+    const_iterator begin() const { return m_data.begin(); }
+
+    const_iterator end() const { return m_data.end(); }
+
+    const_iterator cbegin() const { return m_data.cbegin(); }
+
+    const_iterator cend() const { return m_data.cend(); }
+  };
+
+  UnorderedBag() : m_data() {}
+
+  explicit UnorderedBag(size_type count) : m_data(count) {}
+
+  explicit UnorderedBag(size_type count, const Value& value = Value())
+      : m_data(count, value) {}
+
+  UnorderedBag(const UnorderedBag& other) = default;
+
+  UnorderedBag(UnorderedBag&& other) noexcept = default;
+
+  // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
+  /* implicit */ UnorderedBag(std::initializer_list<Value> init)
+      : m_data(init) {}
+
+  template <class InputIt>
+  UnorderedBag(InputIt first, InputIt last) : m_data(first, last) {}
+
+  UnorderedBag& operator=(const UnorderedBag& other) = default;
+
+  UnorderedBag& operator=(UnorderedBag&& other) noexcept = default;
+
+  template <typename... Args>
+  reference emplace(Args&&... args) {
+    return m_data.emplace_back(std::forward<Args>(args)...);
+  }
+
+  void insert(const Value& value) { m_data.push_back(value); }
+
+  void insert(Value&& value) { m_data.push_back(std::forward<Value>(value)); }
+
+  template <class InputIt>
+  void insert(InputIt first, InputIt last) {
+    m_data.insert(m_data.end(), first, last);
+  }
+
+  void insert(std::initializer_list<Value> ilist) {
+    m_data.insert(m_data.end(), ilist);
+  }
+
+  FixedIterator _internal_unordered_any() {
+    return FixedIterator(m_data.begin());
+  }
+
+  ConstFixedIterator _internal_unordered_any() const {
+    return ConstFixedIterator(m_data.begin());
+  }
+
+  ConstFixedIterator end() const { return ConstFixedIterator(m_data.end()); }
+
+  FixedIterator end() { return FixedIterator(m_data.end()); }
+
+  ConstFixedIterator cend() const { return ConstFixedIterator(m_data.end()); }
+
+  void clear() { m_data.clear(); }
+
+  void reserve(size_t size) { m_data.reserve(size); }
+
+  void shrink_to_fit() { m_data.shrink_to_fit(); }
+
+  size_type size() const { return m_data.size(); }
+
+  size_type capacity() const { return m_data.capacity(); }
+
+  bool empty() const { return m_data.empty(); }
+
+  UnorderedIterable _internal_unordered_iterable() {
+    return UnorderedIterable(m_data);
+  }
+
+  ConstUnorderedIterable _internal_unordered_iterable() const {
+    return ConstUnorderedIterable(m_data);
+  }
+
+  template <typename possibly_const_iterator>
+  auto _internal_to_fixed_iterator(possibly_const_iterator it) const {
+    if constexpr (std::is_same_v<possibly_const_iterator,
+                                 typename Type::const_iterator>) {
+      return ConstFixedIterator(it);
+    } else {
+      return FixedIterator(it);
+    }
+  }
+
+  const Type& _internal_unsafe_unwrap() const { return m_data; }
+
+  Type& _internal_unsafe_unwrap() { return m_data; }
+};
+
+template <class Value>
+bool operator==(const UnorderedBag<Value>& lhs,
+                const UnorderedBag<Value>& rhs) {
+  return lhs._internal_unsafe_unwrap() == rhs._internal_unsafe_unwrap();
+}
+
+template <class Value>
+bool operator!=(const UnorderedBag<Value>& lhs,
+                const UnorderedBag<Value>& rhs) {
   return lhs._internal_unsafe_unwrap() != rhs._internal_unsafe_unwrap();
 }
 
@@ -863,7 +1087,8 @@ template <class Collection,
           class Value =
               typename std::remove_const<typename Collection::value_type>::type,
           std::enable_if_t<std::is_same_v<typename Collection::key_type,
-                                          typename Collection::value_type>,
+                                          typename Collection::value_type> ||
+                               std::is_base_of_v<UnorderedBagBase, Collection>,
                            bool> = true>
 std::vector<Value> unordered_to_ordered(Collection& collection) {
   std::vector<Value> result;
@@ -879,8 +1104,9 @@ template <class Collection,
           class Compare,
           class Value =
               typename std::remove_const<typename Collection::value_type>::type,
-          std::enable_if_t<std::is_same_v<typename Collection::key_type,
-                                          typename Collection::value_type>,
+          std::enable_if_t<std::is_base_of_v<UnorderedBagBase, Collection> ||
+                               std::is_same_v<typename Collection::key_type,
+                                              typename Collection::value_type>,
                            bool> = true>
 std::vector<Value> unordered_to_ordered(Collection& collection, Compare comp) {
   std::vector<Value> result;
@@ -1088,9 +1314,11 @@ auto unordered_max_element(Collection&& collection, Compare) {
 
 template <class UnorderedCollection,
           typename Pred,
-          std::enable_if_t<std::is_base_of_v<UnorderedBase<UnorderedCollection>,
-                                             UnorderedCollection>,
-                           bool> = true>
+          std::enable_if_t<
+              std::is_base_of_v<UnorderedBase<UnorderedCollection>,
+                                UnorderedCollection> &&
+                  !std::is_base_of_v<UnorderedBagBase, UnorderedCollection>,
+              bool> = true>
 size_t unordered_erase_if(UnorderedCollection& collection, const Pred& pred) {
   size_t removed = 0;
   auto&& ui = UnorderedIterable(collection);
@@ -1102,6 +1330,21 @@ size_t unordered_erase_if(UnorderedCollection& collection, const Pred& pred) {
       ++it;
     }
   }
+  return removed;
+}
+
+template <class UnorderedCollection,
+          typename Pred,
+          std::enable_if_t<
+              std::is_base_of_v<UnorderedBase<UnorderedCollection>,
+                                UnorderedCollection> &&
+                  std::is_base_of_v<UnorderedBagBase, UnorderedCollection>,
+              bool> = true>
+size_t unordered_erase_if(UnorderedCollection& collection, const Pred& pred) {
+  auto& vec = unordered_unsafe_unwrap(collection);
+  auto it = std::remove_if(vec.begin(), vec.end(), pred);
+  auto removed = std::distance(it, vec.end());
+  vec.erase(it, vec.end());
   return removed;
 }
 
