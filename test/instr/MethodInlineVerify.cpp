@@ -541,3 +541,19 @@ TEST_F(PostVerify, inlineAcrossCallerAndroidO) {
   EXPECT_EQ(nullptr,
             find_invoke(shouldInlineNintoO, DOPCODE_INVOKE_STATIC, "useApi"));
 }
+
+TEST_F(PostVerify, noInlineBlocklist) {
+  auto cls =
+      find_class_named(classes, "Lcom/facebook/redexinline/MethodInlineTest;");
+  ASSERT_NE(nullptr, cls);
+
+  auto m = find_vmethod_named(*cls, "noInlineBlocklistTest");
+  ASSERT_NE(nullptr, m);
+
+  ASSERT_NE(nullptr,
+            find_invoke(m, DOPCODE_INVOKE_STATIC, "no_inline_method1"));
+  ASSERT_NE(nullptr,
+            find_invoke(m, DOPCODE_INVOKE_STATIC, "no_inline_method2"));
+
+  ASSERT_EQ(nullptr, find_invoke(m, DOPCODE_INVOKE_STATIC, "inline_method"));
+}
