@@ -37,10 +37,26 @@ void InlinerConfig::bind_config() {
   bind("run_fast_reg_alloc", shrinker.run_fast_reg_alloc,
        shrinker.run_fast_reg_alloc);
   bind("run_local_dce", shrinker.run_local_dce, shrinker.run_local_dce);
-  bind("no_inline_annos", {}, no_inline_annos);
-  bind("force_inline_annos", {}, force_inline_annos);
-  bind("blocklist", {}, blocklist);
-  bind("caller_blocklist", {}, caller_blocklist);
+  bind("no_inline_annos", {}, no_inline_annos,
+       "When any of these annotations is present on a method or class, then "
+       "this method or all methods of this class will not get inlined at any "
+       "callsite, and callsites will not get deduplicated.");
+  bind("no_inline_blocklist", {}, no_inline_blocklist,
+       "Any method matching any given prefix will not get inlined at any "
+       "callsite, and callsites will not get deduplicated.");
+  bind("force_inline_annos", {}, force_inline_annos,
+       "When any of these annotations is present on a method or class, then "
+       "this method or all methods of this class will get inlined at all "
+       "callsites if possible.");
+  bind("blocklist", {}, blocklist,
+       "Any method defined in a class matching any given prefix will not get "
+       "inlined at any callsite. This is problematic as Redex may move methods "
+       "across classes. Avoid this annotation, prefer using "
+       "no_inline_blocklist.");
+  bind("caller_blocklist", {}, caller_blocklist,
+       "Any method defined in a class matching any given prefix will not t "
+       "inlined at all callsite if possible. This is problematic as Redex may "
+       "move methods across classes.");
   bind("intradex_allowlist", {}, intradex_allowlist,
        "The purpose of this white-list is to remove black-list entries when "
        "inlining after the InterDex pass has run. (This reduces the impact of "

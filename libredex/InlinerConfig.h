@@ -77,14 +77,16 @@ struct InlinerConfig {
   std::vector<std::string> blocklist;
   std::vector<std::string> caller_blocklist;
   std::vector<std::string> intradex_allowlist;
+  std::vector<std::string> no_inline_blocklist;
 
   // Limit on number of relevant invokes to speed up local-only pass.
   uint64_t max_relevant_invokes_when_local_only{10};
 
   /**
-   * 1. Derive blocklist/caller_blocklist/intradex_allowlist from patterns.
+   * 1. Derive blocklist/caller_blocklist/intradex_allowlist/no_inline_allowlist
+   *    from patterns.
    * 2. Set rstate of classes and methods if they are annotated by any
-   * no_inline_annos and force_inline_annos.
+   *    no_inline_annos, force_inline_anno, or match no_inline_allowlist.
    */
   void populate(const Scope& scope);
 

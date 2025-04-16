@@ -549,6 +549,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("debug", false, inliner_config->debug);
   jw.get("blocklist", {}, inliner_config->blocklist);
   jw.get("caller_blocklist", {}, inliner_config->caller_blocklist);
+  jw.get("no_inline_blocklist", {}, inliner_config->no_inline_blocklist);
   jw.get("intradex_allowlist", {}, inliner_config->intradex_allowlist);
   jw.get("reg_alloc_random_forest", "",
          shrinker_config.reg_alloc_random_forest);

@@ -11,6 +11,7 @@
 
 #include "AnnoUtils.h"
 #include "DexClass.h"
+#include "Show.h"
 #include "Walkers.h"
 
 namespace inliner {
@@ -35,6 +36,18 @@ void InlinerConfig::populate(const Scope& scope) {
       if (boost::starts_with(cls->get_name()->str(), type_str)) {
         m_intradex_allowlist.emplace(cls->get_type());
         break;
+      }
+    }
+    for (const std::string& str : no_inline_blocklist) {
+      std::string_view class_str = cls->get_name()->str();
+      std::string_view class_prefix_str = std::string_view(str).substr(
+          0, std::min(str.size(), class_str.size()));
+      if (boost::starts_with(class_str, class_prefix_str)) {
+        for (auto method : cls->get_all_methods()) {
+          if (boost::starts_with(show(method), str)) {
+            method->rstate.set_dont_inline();
+          }
+        }
       }
     }
     // Class may be annotated by no_inline_annos.
