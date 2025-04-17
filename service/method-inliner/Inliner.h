@@ -103,7 +103,7 @@ struct InlinerCostConfig {
   float unused_arg_not_top_multiplier;
 };
 
-const struct InlinerCostConfig DEFAULT_COST_CONFIG = {
+inline const struct InlinerCostConfig DEFAULT_COST_CONFIG = {
     3.7f, // cost_invoke
     3.0f, // cost_move_result
     16, // cost_method
