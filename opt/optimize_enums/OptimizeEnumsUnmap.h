@@ -8,6 +8,7 @@
 #pragma once
 
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "MatchFlow.h"
 
 namespace optimize_enums {
@@ -17,7 +18,7 @@ namespace optimize_enums {
 // This is all or nothing per enum - if we know some of the ordinals
 // in an enum but are missing others, we don't know enough about the
 // enum to safely undo any switchmapping.
-using EnumFieldToOrdinal = std::unordered_map<DexField*, size_t>;
+using EnumFieldToOrdinal = UnorderedMap<DexField*, size_t>;
 
 // Lookup tables in generated classes map enum ordinals to the integers they
 // are represented by in switch statements using that lookup table:
@@ -29,9 +30,9 @@ using EnumFieldToOrdinal = std::unordered_map<DexField*, size_t>;
 //   gsc[lookup][case] = enum
 //
 // with lookup and enum identified by their fields.
-using GeneratedSwitchCasetoField = std::unordered_map<int64_t, DexField*>;
+using GeneratedSwitchCasetoField = UnorderedMap<int64_t, DexField*>;
 using GeneratedSwitchCases =
-    std::unordered_map<const DexFieldRef*, GeneratedSwitchCasetoField>;
+    UnorderedMap<const DexFieldRef*, GeneratedSwitchCasetoField>;
 
 /**
  * The match flow structure for switch map comparisons.

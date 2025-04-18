@@ -17,13 +17,13 @@ namespace optimize_enums {
 struct ParamSummary {
   // Indices of parameters that do not escape through other ways except escaping
   // as return value.
-  std::unordered_set<uint16_t> safe_params;
+  UnorderedSet<uint16_t> safe_params;
   // Index of parameter if it's exactly the return value.
   boost::optional<uint16_t> returned_param;
 
   ParamSummary() : returned_param(boost::none) {}
 
-  ParamSummary(std::unordered_set<uint16_t>&& safe_params,
+  ParamSummary(UnorderedSet<uint16_t>&& safe_params,
                boost::optional<uint16_t> returned_param)
       : safe_params(std::move(safe_params)), returned_param(returned_param) {}
 
@@ -47,7 +47,7 @@ struct Config {
    * Will try to optimize the enums in the allowlist without considering
    * reference equality of the enum objects.
    */
-  std::unordered_set<DexType*> breaking_reference_equality_allowlist;
+  UnorderedSet<DexType*> breaking_reference_equality_allowlist;
   SummaryMap param_summary_map;
   ConcurrentSet<DexType*> candidate_enums;
 

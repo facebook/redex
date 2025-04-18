@@ -222,7 +222,7 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
   // constructor of a super type, and not the exact instantiated type.
   // TODO T184662680: Fully support such scenario, e.g. by synthesizing a
   // corresponding constructor on the instantiated class, and not just exclude.
-  for (auto* new_instance_insn : new_instances_to_verify) {
+  for (auto* new_instance_insn : UnorderedIterable(new_instances_to_verify)) {
     auto* type = new_instance_insn->get_type();
     const auto& use_set = du_chains[new_instance_insn];
     for (const auto& use : UnorderedIterable(use_set)) {

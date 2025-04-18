@@ -47,7 +47,8 @@ TEST_F(OptimizeEnumsTest, test_param_summary_generating) {
     )
   )");
   EXPECT_EQ(summary2.returned_param, boost::none);
-  EXPECT_THAT(summary2.safe_params, UnorderedElementsAre(2));
+  EXPECT_THAT(unordered_unsafe_unwrap(summary2.safe_params),
+              UnorderedElementsAre(2));
 
   auto summary2_static = get_summary(R"(
     (method (static public) "LFoo;.param_0_is_not_safecast:(Ljava/lang/Enum;Ljava/lang/Object;)V"
@@ -59,7 +60,8 @@ TEST_F(OptimizeEnumsTest, test_param_summary_generating) {
     )
   )");
   EXPECT_EQ(summary2_static.returned_param, boost::none);
-  EXPECT_THAT(summary2_static.safe_params, UnorderedElementsAre(1));
+  EXPECT_THAT(unordered_unsafe_unwrap(summary2_static.safe_params),
+              UnorderedElementsAre(1));
 
   auto summary3 = get_summary(R"(
     (method () "LFoo;.check_cast:(Ljava/lang/Object;)Ljava/lang/Object;"

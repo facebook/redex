@@ -22,7 +22,7 @@ namespace {
 struct ExternalMethodData {
   std::string method_name;
   boost::optional<uint16_t> returned_param;
-  std::unordered_set<uint16_t> safe_params;
+  UnorderedSet<uint16_t> safe_params;
   ExternalMethodData(std::string name,
                      boost::optional<uint16_t> returned,
                      std::initializer_list<uint16_t> params)
@@ -35,7 +35,7 @@ void sanity_check_method_summary(const DexMethodRef* method,
                                  const optimize_enums::ParamSummary& summary,
                                  const DexType* object_type) {
   auto args = method->get_proto()->get_args();
-  for (auto param : summary.safe_params) {
+  for (auto param : UnorderedIterable(summary.safe_params)) {
     always_assert_log(param < args->size() &&
                           *(args->begin() + param) == object_type,
                       "%u is not Object;\n", param);
@@ -104,7 +104,7 @@ void ParamSummary::print(const DexMethodRef* method) const {
   }
   TRACE(ENUM, 9, "summary of %s", SHOW(method));
   TRACE_NO_LINE(ENUM, 9, "safe_params: ");
-  for (auto param : safe_params) {
+  for (auto param : UnorderedIterable(safe_params)) {
     TRACE_NO_LINE(ENUM, 9, "%d ", param);
   }
   if (returned_param) {

@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 
 namespace optimize_enums {
@@ -40,11 +41,11 @@ using EnumInstanceFieldValueMap = std::map<int64_t, EnumFieldValue>;
  * Maps enum instance fields to their value map for a particular enum.
  */
 using EnumInstanceFieldMap =
-    std::unordered_map<DexFieldRef*, EnumInstanceFieldValueMap>;
+    UnorderedMap<DexFieldRef*, EnumInstanceFieldValueMap>;
 /**
  * Maps enum fields to its ordinal and name.
  */
-using EnumConstantsMap = std::unordered_map<const DexFieldRef*, EnumConstant>;
+using EnumConstantsMap = UnorderedMap<const DexFieldRef*, EnumConstant>;
 
 struct EnumAttributes {
   EnumConstantsMap m_constants_map;
@@ -52,7 +53,7 @@ struct EnumAttributes {
 
   std::map<uint64_t, const DexString*> get_ordered_names() {
     std::map<uint64_t, const DexString*> names;
-    for (const auto& pair : m_constants_map) {
+    for (const auto& pair : UnorderedIterable(m_constants_map)) {
       names[pair.second.ordinal] = pair.second.name;
     }
     return names;

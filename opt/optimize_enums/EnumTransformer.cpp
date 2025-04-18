@@ -9,6 +9,7 @@
 
 #include "CFGMutation.h"
 #include "Creators.h"
+#include "DeterministicContainers.h"
 #include "DexAsm.h"
 #include "DexClass.h"
 #include "EnumUpcastAnalysis.h"
@@ -65,7 +66,7 @@
 namespace {
 using namespace optimize_enums;
 using namespace dex_asm;
-using EnumAttributeMap = std::unordered_map<DexType*, EnumAttributes>;
+using EnumAttributeMap = UnorderedMap<DexType*, EnumAttributes>;
 namespace ptrs = local_pointers;
 
 /**
@@ -1153,7 +1154,7 @@ class EnumTransformer final {
     // Update all methods and fields references by replacing the candidate enum
     // types with Integer type.
     UnorderedMap<DexType*, DexType*> type_mapping;
-    for (auto& pair : m_enum_attributes_map) {
+    for (auto& pair : UnorderedIterable(m_enum_attributes_map)) {
       type_mapping[pair.first] = m_enum_util->INTEGER_TYPE;
     }
     type_reference::TypeRefUpdater updater(type_mapping);
@@ -1470,7 +1471,7 @@ class EnumTransformer final {
     auto& enum_constants =
         m_enum_attributes_map[enum_cls->get_type()].m_constants_map;
     auto synth_field_access = synth_access();
-    std::unordered_set<DexField*> synth_fields;
+    UnorderedSet<DexField*> synth_fields;
 
     std20::erase_if(sfields, [&](auto* field) {
       if (enum_constants.count(field)) {
@@ -1530,7 +1531,7 @@ class EnumTransformer final {
                            const Config& config,
                            DexClass* enum_cls,
                            DexMethod* clinit,
-                           const std::unordered_set<DexField*>& synth_fields,
+                           const UnorderedSet<DexField*>& synth_fields,
                            DexMethodRef* kt_enum_entries_factory) {
     auto code = clinit->get_code();
     auto ctors = enum_cls->get_ctors();
