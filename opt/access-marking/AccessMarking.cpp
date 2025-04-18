@@ -7,8 +7,6 @@
 
 #include "AccessMarking.h"
 
-#include <unordered_map>
-
 #include "ClassHierarchy.h"
 #include "DexUtil.h"
 #include "FieldOpTracker.h"
