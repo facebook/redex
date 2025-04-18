@@ -5,16 +5,17 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "ProguardLexer.h"
+
 #include <cctype>
 #include <istream>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexUtil.h"
 #include "Macros.h"
-#include "ProguardLexer.h"
 
 namespace keep_rules {
 namespace proguard_parser {
@@ -466,7 +467,7 @@ bool Token::is_command() const {
 }
 
 std::vector<Token> lex(const std::string_view& in) {
-  std::unordered_map<char, TokenType> simple_tokens{
+  UnorderedMap<char, TokenType> simple_tokens{
       {'{', TokenType::openCurlyBracket},
       {'}', TokenType::closeCurlyBracket},
       {'(', TokenType::openBracket},
@@ -479,7 +480,7 @@ std::vector<Token> lex(const std::string_view& in) {
       {'@', TokenType::annotation_application},
   };
 
-  using TokenMap = std::unordered_map<std::string_view, TokenType>;
+  using TokenMap = UnorderedMap<std::string_view, TokenType>;
 
   TokenMap word_tokens{
       {"includedescriptorclasses", TokenType::includedescriptorclasses_token},
