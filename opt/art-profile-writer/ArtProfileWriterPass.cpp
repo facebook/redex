@@ -267,6 +267,7 @@ void never_compile(
     PassManager& mgr,
     int64_t never_compile_callcount_threshold,
     int64_t never_compile_perf_threshold,
+    int64_t never_compile_called_coverage_threshold,
     const std::string& excluded_interaction_pattern,
     int64_t excluded_appear100_threshold,
     int64_t excluded_call_count_threshold,
@@ -379,6 +380,35 @@ void never_compile(
             (int32_t)never_compile_perf_threshold, SHOW(code.cfg()));
     }
 
+    if (never_compile_called_coverage_threshold > -1) {
+      uint32_t covered_code_units = 0;
+      uint32_t total_code_units = 0;
+      for (auto* block : code.cfg().blocks()) {
+        auto ecu = block->estimate_code_units();
+        total_code_units += ecu;
+        if (!is_cold(block)) {
+          covered_code_units += ecu;
+        }
+      }
+      always_assert(total_code_units > 0);
+      if (total_code_units < 24) {
+        // Don't bother with small methods; adding annotation also creates
+        // overhead. The chosen value is a bit larger than the 14-code units
+        // inlining threshold of the AOT compiler.
+        return;
+      }
+      auto effective_call_count = std::max(1.0, call_count);
+      if (effective_call_count * covered_code_units * 100 / total_code_units >=
+          never_compile_called_coverage_threshold) {
+        return;
+      }
+      TRACE(APW, 5,
+            "[%s] is within coverage threshold: %f %u / %u > %d percent\n%s",
+            method->get_fully_deobfuscated_name().c_str(), effective_call_count,
+            covered_code_units, total_code_units,
+            (int32_t)never_compile_called_coverage_threshold, SHOW(code.cfg()));
+    }
+
     never_compile_methods.emplace(method,
                                   method->get_code()->estimate_code_units());
 
@@ -460,6 +490,8 @@ void ArtProfileWriterPass::bind_config() {
   bind("never_compile_callcount_threshold", -1,
        m_never_compile_callcount_threshold);
   bind("never_compile_perf_threshold", -1, m_never_compile_perf_threshold);
+  bind("never_compile_called_coverage_threshold", -1,
+       m_never_compile_called_coverage_threshold);
   bind("never_compile_excluded_interaction_pattern", "",
        m_never_compile_excluded_interaction_pattern);
   bind("never_compile_excluded_appear100_threshold", 20,
@@ -552,11 +584,13 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   }
   auto scope = build_class_scope(stores);
   if (m_never_compile_callcount_threshold > -1 ||
-      m_never_compile_perf_threshold > -1) {
+      m_never_compile_perf_threshold > -1 ||
+      m_never_compile_called_coverage_threshold > -1) {
     never_compile(
         scope, conf.get_default_baseline_profile_config(), method_profiles,
         m_perf_config.interactions, mgr, m_never_compile_callcount_threshold,
         m_never_compile_perf_threshold,
+        m_never_compile_called_coverage_threshold,
         m_never_compile_excluded_interaction_pattern,
         m_never_compile_excluded_appear100_threshold,
         m_never_compile_excluded_call_count_threshold, &manual_profile);
