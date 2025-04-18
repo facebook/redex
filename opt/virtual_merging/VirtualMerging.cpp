@@ -1094,12 +1094,13 @@ VirtualMergingStats apply_ordering(
             is_abstract(overridden_method)
                 ? 64 // we'll need some extra instruction; 64 is conservative
                 : overridden_method->get_code()->estimate_code_units();
-        bool is_inlineable = inliner.is_inlinable(
+        auto is_inlineable = inliner.is_inlinable(
             overridden_method, overriding_method, nullptr /* reduced_cfg */,
             nullptr /* invoke_virtual_insn */, estimated_insn_size,
             estimated_callee_size);
-        always_assert_log(is_inlineable, "[VM] Cannot inline %s into %s",
-                          SHOW(overriding_method), SHOW(overridden_method));
+        always_assert_log(is_inlineable, "[VM] Cannot inline %s into %s: %s",
+                          SHOW(overriding_method), SHOW(overridden_method),
+                          is_inlineable.to_str().c_str());
 
         TRACE(VM,
               4,
