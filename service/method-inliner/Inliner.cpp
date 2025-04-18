@@ -1082,56 +1082,87 @@ void MultiMethodInliner::compute_callee_costs(DexMethod* method) {
       /* continuation */ true);
 }
 
+std::string MultiMethodInliner::InlinableDecision::to_str() const {
+  switch (decision) {
+  case InlinableDecision::Decision::kInlinable:
+    return "inlinable";
+  case InlinableDecision::Decision::kCallerNoOpt:
+    return "not-inlinable-caller-no-opt";
+  case InlinableDecision::Decision::kCrossStore:
+    return "not-inlinable-cross-store";
+  case InlinableDecision::Decision::kCrossDexRef:
+    return "not-inlinable-cross-dex-ref";
+  case InlinableDecision::Decision::kHotCold:
+    return "not-inlinable-hot-cold";
+  case InlinableDecision::Decision::kBlocklisted:
+    return "not-inlinable-blocklisted";
+  case InlinableDecision::Decision::kExternalCatch:
+    return "not-inlinable-external-catch";
+  case InlinableDecision::Decision::kUninlinableOpcodes:
+    return "not-inlinable-uninlinable-opcodes";
+  case InlinableDecision::Decision::kApiMismatch:
+    return "not-inlinable-api-mismatch";
+  case InlinableDecision::Decision::kCalleeDontInline:
+    return "not-inlinable-callee-dont-inline";
+  case InlinableDecision::Decision::kCallerTooLarge:
+    return "not-inlinable-caller-too-large";
+  case InlinableDecision::Decision::kProblematicRefs:
+    return "not-inlinable-problematic-refs";
+  }
+  not_reached();
+}
+
 /**
  * Defines the set of rules that determine whether a function is inlinable.
  */
-bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
-                                      const DexMethod* callee,
-                                      const cfg::ControlFlowGraph* reduced_cfg,
-                                      const IRInstruction* insn,
-                                      uint64_t estimated_caller_size,
-                                      uint64_t estimated_callee_size,
-                                      bool* caller_too_large_) {
+MultiMethodInliner::InlinableDecision MultiMethodInliner::is_inlinable(
+    const DexMethod* caller,
+    const DexMethod* callee,
+    const cfg::ControlFlowGraph* reduced_cfg,
+    const IRInstruction* insn,
+    uint64_t estimated_caller_size,
+    uint64_t estimated_callee_size,
+    bool* caller_too_large_) {
   TraceContext context{caller};
   if (caller_too_large_) {
     *caller_too_large_ = false;
   }
   if (caller->rstate.no_optimizations()) {
-    return false;
+    return InlinableDecision(InlinableDecision::Decision::kCallerNoOpt);
   }
   // don't inline cross store references
   if (cross_store_reference(caller, callee, reduced_cfg)) {
     if (insn) {
       log_nopt(INL_CROSS_STORE_REFS, caller, insn);
     }
-    return false;
+    return InlinableDecision(InlinableDecision::Decision::kCrossStore);
   }
   if (cross_dex_reference(caller, callee, reduced_cfg)) {
-    return false;
+    return InlinableDecision(InlinableDecision::Decision::kCrossDexRef);
   }
   if (cross_hot_cold(caller, callee, estimated_callee_size)) {
-    return false;
+    return InlinableDecision(InlinableDecision::Decision::kHotCold);
   }
   if (is_blocklisted(callee)) {
     if (insn) {
       log_nopt(INL_BLOCK_LISTED_CALLEE, callee);
     }
-    return false;
+    return InlinableDecision(InlinableDecision::Decision::kBlocklisted);
   }
   if (caller_is_blocklisted(caller)) {
     if (insn) {
       log_nopt(INL_BLOCK_LISTED_CALLER, caller);
     }
-    return false;
+    return InlinableDecision(InlinableDecision::Decision::kBlocklisted);
   }
   if (has_external_catch(callee, reduced_cfg)) {
     if (insn) {
       log_nopt(INL_EXTERN_CATCH, callee);
     }
-    return false;
+    return InlinableDecision(InlinableDecision::Decision::kExternalCatch);
   }
   if (cannot_inline_opcodes(caller, callee, reduced_cfg, insn)) {
-    return false;
+    return InlinableDecision(InlinableDecision::Decision::kUninlinableOpcodes);
   }
   if (!callee->rstate.force_inline()) {
     // Don't inline code into a method that doesn't have the same (or higher)
@@ -1151,14 +1182,14 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
             show_deobfuscated(callee).c_str(),
             show_deobfuscated(caller).c_str());
       info.api_level_mismatch++;
-      return false;
+      return InlinableDecision(InlinableDecision::Decision::kApiMismatch);
     }
 
     if (callee->rstate.dont_inline()) {
       if (insn) {
         log_nopt(INL_DO_NOT_INLINE, caller, insn);
       }
-      return false;
+      return InlinableDecision(InlinableDecision::Decision::kCalleeDontInline);
     }
 
     if (caller_too_large(caller->get_class(), estimated_caller_size,
@@ -1169,16 +1200,16 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
       if (caller_too_large_) {
         *caller_too_large_ = true;
       }
-      return false;
+      return InlinableDecision(InlinableDecision::Decision::kCallerTooLarge);
     }
 
     if (caller->get_class() != callee->get_class() && m_ref_checkers &&
         problematic_refs(caller, callee, reduced_cfg)) {
-      return false;
+      return InlinableDecision(InlinableDecision::Decision::kProblematicRefs);
     }
   }
 
-  return true;
+  return InlinableDecision(InlinableDecision::Decision::kInlinable);
 }
 
 /**
