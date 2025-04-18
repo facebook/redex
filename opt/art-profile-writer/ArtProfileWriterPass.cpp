@@ -513,8 +513,8 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       conf.get_baseline_profile_configs(),
       method_profiles,
       &method_refs_without_def);
-  auto baseline_profiles = std::get<1>(baseline_profiles_tuple);
-  auto manual_profile = std::get<0>(baseline_profiles_tuple);
+  auto& baseline_profiles = std::get<1>(baseline_profiles_tuple);
+  auto& manual_profile = std::get<0>(baseline_profiles_tuple);
   for (const auto& [config_name, baseline_profile_config] :
        UnorderedIterable(conf.get_baseline_profile_configs())) {
     if (baseline_profile_config.options.include_all_startup_classes) {
@@ -590,36 +590,57 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       conf.get_default_baseline_profile_config().options.strip_classes;
   write_methods(scope, manual_profile, strip_classes, ofs);
 
-  std::atomic<size_t> methods_with_baseline_profile_code_units{0};
-  std::atomic<size_t> compiled{0};
-  std::atomic<size_t> compiled_code_units{0};
-  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    for (auto& profile : UnorderedIterable(baseline_profiles)) {
-      auto it = profile.second.methods.find(method);
-      if (it == profile.second.methods.end()) {
+  auto gather_metrics = [&](const auto& bp_name, const auto& profile) {
+    std::atomic<size_t> code_units{0};
+    std::atomic<size_t> compiled_methods{0};
+    std::atomic<size_t> compiled_code_units{0};
+    walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
+      auto it = profile.methods.find(method);
+      if (it == profile.methods.end()) {
         return;
       }
       auto ecu = code.estimate_code_units();
-      methods_with_baseline_profile_code_units += ecu;
+      code_units += ecu;
       if (is_compiled(method, it->second)) {
-        compiled++;
+        compiled_methods++;
         compiled_code_units += ecu;
       }
+    });
+
+    auto prefix = std::string("profile_") + bp_name + "_";
+    mgr.incr_metric(prefix + "classes", profile.classes.size());
+    mgr.incr_metric(prefix + "methods", profile.methods.size());
+    mgr.incr_metric(prefix + "code_units", (size_t)code_units);
+    mgr.incr_metric(prefix + "compiled", (size_t)compiled_methods);
+    mgr.incr_metric(prefix + "compiled_code_units",
+                    (size_t)compiled_code_units);
+
+    const auto& bp_config = conf.get_baseline_profile_configs().at(bp_name);
+    for (auto&& [interaction_id, interaction_name] : bp_config.interactions) {
+      mgr.incr_metric(prefix + "interaction_" + interaction_id, 1);
     }
-  });
-
-  mgr.incr_metric("classes_with_baseline_profile",
-                  manual_profile.classes.size());
-
-  mgr.incr_metric("methods_with_baseline_profile",
-                  manual_profile.methods.size());
-
-  mgr.incr_metric("methods_with_baseline_profile_code_units",
-                  (size_t)methods_with_baseline_profile_code_units);
-
-  mgr.incr_metric("compiled", (size_t)compiled);
-
-  mgr.incr_metric("compiled_code_units", (size_t)compiled_code_units);
+    const auto& bp_options = bp_config.options;
+    if (bp_options.oxygen_modules) {
+      mgr.incr_metric(prefix + "oxygen_modules", 1);
+    }
+    if (bp_options.strip_classes) {
+      mgr.incr_metric(prefix + "strip_classes", 1);
+    }
+    if (bp_options.use_redex_generated_profile) {
+      mgr.incr_metric(prefix + "use_redex_generated_profile", 1);
+    }
+    if (bp_options.include_all_startup_classes) {
+      mgr.incr_metric(prefix + "include_all_startup_classes", 1);
+    }
+    if (bp_options.use_final_redex_generated_profile) {
+      mgr.incr_metric(prefix + "use_final_redex_generated_profile", 1);
+    }
+  };
+  gather_metrics(baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME,
+                 manual_profile);
+  for (auto&& [name, profile] : UnorderedIterable(baseline_profiles)) {
+    gather_metrics(name, profile);
+  }
 
   mgr.incr_metric("method_refs_without_def", method_refs_without_def.size());
 
