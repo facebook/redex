@@ -7,7 +7,18 @@
 
 #include "BlockInstrument.h"
 
+#include <boost/algorithm/string/join.hpp>
+#include <fstream>
+#include <limits>
+#include <map>
+#include <optional>
+#include <set>
+#include <string>
+#include <tuple>
+#include <vector>
+
 #include "ConfigFiles.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "GraphUtil.h"
@@ -21,18 +32,6 @@
 #include "TypeSystem.h"
 #include "TypeUtil.h"
 #include "Walkers.h"
-
-#include <boost/algorithm/string/join.hpp>
-#include <fstream>
-#include <limits>
-#include <map>
-#include <optional>
-#include <set>
-#include <string>
-#include <tuple>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
 
 using namespace instrument;
 
