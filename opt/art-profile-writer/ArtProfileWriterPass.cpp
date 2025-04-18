@@ -490,9 +490,9 @@ void write_methods(const Scope& scope,
       boost::replace_all(descriptor, ".", "->");
       boost::replace_all(descriptor, ":(", "(");
       ofs << it->second << descriptor << "\n";
-      if (baseline_profile.classes.count(cls) && !strip_classes) {
-        ofs << show_deobfuscated(cls) << "\n";
-      }
+    }
+    if (baseline_profile.classes.count(cls) && !strip_classes) {
+      ofs << show_deobfuscated(cls) << "\n";
     }
   });
 }
