@@ -286,7 +286,7 @@ void never_compile(
       type::dalvik_annotation_optimization_NeverCompile(),
       DexAnnotationVisibility::DAV_BUILD));
 
-  std::atomic<size_t> never_compile_methods = 0;
+  InsertOnlyConcurrentMap<DexMethod*, uint32_t> never_compile_methods;
   std::atomic<size_t> methods_already_never_compile = 0;
   std::atomic<size_t> methods_annotation_attached = 0;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
@@ -378,7 +378,7 @@ void never_compile(
             (int32_t)never_compile_perf_threshold, SHOW(code.cfg()));
     }
 
-    never_compile_methods.fetch_add(1);
+    never_compile_methods.emplace(method, method->get_code()->estimate_code_units());
 
     if (has_anno(method,
                   type::dalvik_annotation_optimization_NeverCompile())) {
@@ -402,11 +402,29 @@ void never_compile(
     method->set_access(access);
     mf.hot = false;
   });
-  mgr.incr_metric("never_compile_methods", never_compile_methods.load());
+  mgr.incr_metric("never_compile_methods", never_compile_methods.size());
   mgr.incr_metric("methods_already_never_compile",
                   methods_already_never_compile.load());
   mgr.incr_metric("methods_annotation_attached",
                   methods_annotation_attached.load());
+  std::vector<std::pair<DexMethod*, uint32_t>> ordered_never_compile_methods(
+    never_compile_methods.begin(), never_compile_methods.end());
+  std::sort(
+    ordered_never_compile_methods.begin(), 
+    ordered_never_compile_methods.end(), 
+    [](const auto& a, const auto& b) {
+      if (a.second != b.second) {
+        return a.second > b.second;
+      }
+      return compare_dexmethods(a.first, b.first);
+    });
+  ordered_never_compile_methods.resize(
+    std::min(ordered_never_compile_methods.size(), size_t(10)));
+  for (size_t i = 0; i < ordered_never_compile_methods.size(); ++i) {
+    auto& [method, code_units] = ordered_never_compile_methods[i];
+    mgr.incr_metric("never_compile_methods_" + std::to_string(i) + 
+                    "_" + show_deobfuscated(method), code_units);
+  }
 }
 
 } // namespace
