@@ -181,9 +181,8 @@ class Outliner {
   std::unique_ptr<IRCode> create_outline_helper_code(DexMethod*) const;
 
   static void apply_changes(
-      const std::unordered_map<const IRInstruction*, IRInstruction*>&
-          insns_to_insert,
-      const std::unordered_map<const IRInstruction*, IRInstruction*>&
+      const UnorderedMap<const IRInstruction*, IRInstruction*>& insns_to_insert,
+      const UnorderedMap<const IRInstruction*, IRInstruction*>&
           insns_to_replace,
       IRCode* code);
 
@@ -201,7 +200,7 @@ class Outliner {
   AtomicMap<const DexTypeList*, size_t> m_outline_typelists;
   // Typelists of call sequences we have chosen to outline -> generated outline
   // helper method.
-  std::unordered_map<const DexTypeList*, DexMethod*> m_outline_helpers;
+  UnorderedMap<const DexTypeList*, DexMethod*> m_outline_helpers;
 
   InsertOnlyConcurrentMap<const IRCode*, BuilderStateMap> m_builder_state_maps;
 };

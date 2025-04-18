@@ -7,8 +7,6 @@
 
 #include "StringBuilderOutliner.h"
 
-#include <unordered_map>
-
 #include "CFGMutation.h"
 #include "ConcurrentContainers.h"
 #include "Creators.h"
@@ -365,8 +363,8 @@ void Outliner::transform(IRCode* code) {
   const auto& tostring_instruction_to_state = m_builder_state_maps.at(code);
   always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
-  std::unordered_map<const IRInstruction*, IRInstruction*> insns_to_insert;
-  std::unordered_map<const IRInstruction*, IRInstruction*> insns_to_replace;
+  UnorderedMap<const IRInstruction*, IRInstruction*> insns_to_insert;
+  UnorderedMap<const IRInstruction*, IRInstruction*> insns_to_replace;
   for (const auto& p : tostring_instruction_to_state) {
     const auto* tostring_insn = p.first;
     const auto& state = p.second;
@@ -414,10 +412,8 @@ void Outliner::transform(IRCode* code) {
  * obtain those iterators before doing the appropriate transforms.
  */
 void Outliner::apply_changes(
-    const std::unordered_map<const IRInstruction*, IRInstruction*>&
-        insns_to_insert,
-    const std::unordered_map<const IRInstruction*, IRInstruction*>&
-        insns_to_replace,
+    const UnorderedMap<const IRInstruction*, IRInstruction*>& insns_to_insert,
+    const UnorderedMap<const IRInstruction*, IRInstruction*>& insns_to_replace,
     IRCode* code) {
   auto& cfg = code->cfg();
   std::vector<std::pair<cfg::InstructionIterator, IRInstruction*>> to_insert;
