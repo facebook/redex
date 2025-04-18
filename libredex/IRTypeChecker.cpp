@@ -825,6 +825,16 @@ void validate_invoke_super(const DexMethod* caller,
   throw TypeCheckingException(out.str());
 }
 
+void validate_invoke_class_initializer(const DexMethodRef* callee_ref) {
+  redex_assert(callee_ref != nullptr);
+  if (method::is_clinit(callee_ref)) {
+    std::ostringstream out;
+    out << show_deobfuscated(callee_ref)
+        << ": invoking a class initializer, which is forbidden";
+    throw TypeCheckingException(out.str());
+  }
+}
+
 void validate_invoke_virtual(const DexMethod* caller,
                              const DexMethodRef* callee) {
   if (callee == nullptr || !callee->is_def()) {
@@ -1604,6 +1614,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     } else if (insn->opcode() == OPCODE_INVOKE_INTERFACE) {
       validate_invoke_interface(m_dex_method, dex_method);
     }
+    validate_invoke_class_initializer(dex_method);
     break;
   }
   case OPCODE_NEG_INT:
