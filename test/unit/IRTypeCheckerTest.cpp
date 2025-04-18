@@ -2917,6 +2917,29 @@ TEST_F(IRTypeCheckerTest, invokeOnClassInitializer) {
   EXPECT_TRUE(checker.fail());
 }
 
+TEST_F(IRTypeCheckerTest, invokeDirectOnConstructor) {
+  const auto type_foo = DexType::make_type("LFoo;");
+  ClassCreator cls_foo_creator(type_foo);
+  auto method =
+      DexMethod::make_method("LFoo;.bar:()V")
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (invoke-static () "LFoo;.<init>:()V")
+      (return-void)
+  ))"));
+  cls_foo_creator.add_method(method);
+  cls_foo_creator.set_super(type::java_lang_Object());
+  // Set to public to eliminate potential failure due to access check.
+  cls_foo_creator.set_access(ACC_PUBLIC);
+  cls_foo_creator.create();
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_THAT(checker.what(),
+              HasSubstr("invoking a constructor with an unexpected opcode"));
+  EXPECT_TRUE(checker.fail());
+}
+
 TEST_F(IRTypeCheckerTest, invokeVirtualOnInterfaceMethod) {
   const auto interface_type = DexType::make_type("LI;");
   ClassCreator interface_type_creator(interface_type);

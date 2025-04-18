@@ -835,6 +835,19 @@ void validate_invoke_class_initializer(const DexMethodRef* callee_ref) {
   }
 }
 
+void validate_invoke_direct_constructor(const DexMethodRef* callee_ref,
+                                        IROpcode opcode) {
+  redex_assert(callee_ref != nullptr);
+  if (method::is_init(callee_ref) && opcode != OPCODE_INVOKE_DIRECT) {
+    std::ostringstream out;
+    out << show_deobfuscated(callee_ref)
+        << ": invoking a constructor with an unexpected opcode (must be "
+           "invoke-direct): "
+        << opcode;
+    throw TypeCheckingException(out.str());
+  }
+}
+
 void validate_invoke_virtual(const DexMethod* caller,
                              const DexMethodRef* callee) {
   if (callee == nullptr || !callee->is_def()) {
@@ -1615,6 +1628,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
       validate_invoke_interface(m_dex_method, dex_method);
     }
     validate_invoke_class_initializer(dex_method);
+    validate_invoke_direct_constructor(dex_method, insn->opcode());
     break;
   }
   case OPCODE_NEG_INT:
