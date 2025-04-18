@@ -136,7 +136,7 @@ get_baseline_profiles(
       manual_baseline_profile = std::move(res);
     }
   }
-  return {manual_baseline_profile, baseline_profiles};
+  return {std::move(manual_baseline_profile), std::move(baseline_profiles)};
 }
 
 } // namespace baseline_profiles
