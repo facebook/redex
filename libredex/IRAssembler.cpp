@@ -13,10 +13,10 @@
 #include <cstdio>
 #include <sstream>
 #include <tuple>
-#include <unordered_map>
 #include <variant>
 
 #include "Creators.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexPosition.h"
@@ -28,7 +28,7 @@ using namespace sparta;
 namespace {
 
 // clang-format off
-std::unordered_map<IROpcode, std::string, boost::hash<IROpcode>>
+UnorderedMap<IROpcode, std::string, boost::hash<IROpcode>>
     opcode_to_string_table = {
 #define OP(UC, LC, KIND, STR) {OPCODE_##UC, STR},
 #define IOP(UC, LC, KIND, STR) {IOPCODE_##UC, STR},
@@ -36,7 +36,7 @@ std::unordered_map<IROpcode, std::string, boost::hash<IROpcode>>
 #include "IROpcodes.def"
 };
 
-std::unordered_map<std::string, IROpcode> string_to_opcode_table = {
+UnorderedMap<std::string, IROpcode> string_to_opcode_table = {
 #define OP(UC, LC, KIND, STR) {STR, OPCODE_##UC},
 #define IOP(UC, LC, KIND, STR) {STR, IOPCODE_##UC},
 #define OPRANGE(...)
@@ -44,9 +44,8 @@ std::unordered_map<std::string, IROpcode> string_to_opcode_table = {
 };
 // clang-format on
 
-using LabelDefs = std::unordered_map<std::string, MethodItemEntry*>;
-using LabelRefs =
-    std::unordered_map<const IRInstruction*, std::vector<std::string>>;
+using LabelDefs = UnorderedMap<std::string, MethodItemEntry*>;
+using LabelRefs = UnorderedMap<const IRInstruction*, std::vector<std::string>>;
 
 reg_t reg_from_str(const std::string& reg_str) {
   always_assert(reg_str.at(0) == 'v');
@@ -432,8 +431,7 @@ std::unique_ptr<DexDebugInstruction> debug_info_from_s_expr(const s_expr& e) {
 }
 
 std::unique_ptr<DexPosition> position_from_s_expr(
-    const s_expr& e,
-    const std::unordered_map<std::string, DexPosition*>& positions) {
+    const s_expr& e, const UnorderedMap<std::string, DexPosition*>& positions) {
   std::string method_str;
   std::string file_str;
   std::string line_str;
@@ -569,9 +567,9 @@ void handle_labels(IRCode* code,
   }
 }
 
-std::unordered_map<std::string, MethodItemEntry*> get_catch_name_map(
+UnorderedMap<std::string, MethodItemEntry*> get_catch_name_map(
     const s_expr& insns) {
-  std::unordered_map<std::string, MethodItemEntry*> result;
+  UnorderedMap<std::string, MethodItemEntry*> result;
   for (size_t i = 0; i < insns.size(); ++i) {
     std::string keyword;
     s_expr tail;
@@ -613,9 +611,9 @@ s_expr create_try_expr(TryEntryType type, const std::string& catch_name) {
   return s_expr({s_expr(type_str), s_expr(catch_name)});
 }
 
-s_expr create_catch_expr(const MethodItemEntry* mie,
-                         const std::unordered_map<const MethodItemEntry*,
-                                                  std::string>& catch_names) {
+s_expr create_catch_expr(
+    const MethodItemEntry* mie,
+    const UnorderedMap<const MethodItemEntry*, std::string>& catch_names) {
   // (.catch (this_name next_name) "LCatchType;")
   // where next_name and the "LCatchType;" are optional
   std::vector<s_expr> catch_name_exprs;
@@ -730,7 +728,7 @@ namespace assembler {
 s_expr to_s_expr(const IRCode* code) {
   std::vector<s_expr> exprs;
   LabelRefs label_refs;
-  std::unordered_map<const MethodItemEntry*, std::string> catch_names;
+  UnorderedMap<const MethodItemEntry*, std::string> catch_names;
 
   size_t label_ctr{0};
   auto generate_label_name = [&]() {
@@ -774,7 +772,7 @@ s_expr to_s_expr(const IRCode* code) {
   }
 
   // Now emit the exprs
-  std::unordered_map<IRInstruction*, size_t> unused_label_index;
+  UnorderedMap<IRInstruction*, size_t> unused_label_index;
   std::vector<const DexPosition*> positions_emitted;
   for (auto it = code->begin(); it != code->end(); ++it) {
     switch (it->type) {
@@ -870,7 +868,7 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
   LabelDefs label_defs;
   LabelRefs label_refs;
   boost::optional<reg_t> max_reg;
-  std::unordered_map<std::string, DexPosition*> positions;
+  UnorderedMap<std::string, DexPosition*> positions;
 
   // map from catch name to catch marker pointer
   const auto& catches = get_catch_name_map(insns_expr);
@@ -1008,12 +1006,12 @@ std::unique_ptr<IRCode> ircode_from_string(const std::string& s) {
 }
 
 #define AF(uc, lc, val) {ACC_##uc, #lc},
-std::unordered_map<DexAccessFlags, std::string, boost::hash<DexAccessFlags>>
+UnorderedMap<DexAccessFlags, std::string, boost::hash<DexAccessFlags>>
     access_to_string_table = {ACCESSFLAGS};
 #undef AF
 
 #define AF(uc, lc, val) {#lc, ACC_##uc},
-std::unordered_map<std::string, DexAccessFlags> string_to_access_table = {
+UnorderedMap<std::string, DexAccessFlags> string_to_access_table = {
     ACCESSFLAGS};
 #undef AF
 
