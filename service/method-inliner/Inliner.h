@@ -336,18 +336,43 @@ class MultiMethodInliner {
   size_t inline_callees(DexMethod* caller,
                         const UnorderedMap<IRInstruction*, DexMethod*>& insns);
 
+  struct InlinableDecision {
+    enum class Decision : uint8_t {
+      kInlinable,
+      kCallerNoOpt,
+      kCrossStore,
+      kCrossDexRef,
+      kHotCold,
+      kBlocklisted,
+      kExternalCatch,
+      kUninlinableOpcodes,
+      kApiMismatch,
+      kCalleeDontInline,
+      kCallerTooLarge,
+      kProblematicRefs,
+    };
+    Decision decision{Decision::kInlinable};
+
+    explicit InlinableDecision(Decision decision) : decision(decision) {}
+
+    // NOLINTNEXTLINE(google-explicit-constructor)
+    operator bool() const { return decision == Decision::kInlinable; }
+
+    std::string to_str() const;
+  };
+
   /**
    * Return true if the callee is inlinable into the caller.
    * The predicates below define the constraints for inlining.
    * Providing an instrucion is optional, and only used for logging.
    */
-  bool is_inlinable(const DexMethod* caller,
-                    const DexMethod* callee,
-                    const cfg::ControlFlowGraph* reduced_cfg,
-                    const IRInstruction* insn,
-                    uint64_t estimated_caller_size,
-                    uint64_t estimated_callee_size,
-                    bool* caller_too_large_ = nullptr);
+  InlinableDecision is_inlinable(const DexMethod* caller,
+                                 const DexMethod* callee,
+                                 const cfg::ControlFlowGraph* reduced_cfg,
+                                 const IRInstruction* insn,
+                                 uint64_t estimated_caller_size,
+                                 uint64_t estimated_callee_size,
+                                 bool* caller_too_large_ = nullptr);
 
   void visibility_changes_apply_and_record_make_static(
       const VisibilityChanges& visibility_changes);
