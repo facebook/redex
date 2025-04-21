@@ -259,6 +259,7 @@ dedup_blocks_test_SOURCES = DedupBlocksTest.cpp VirtScopeHelper.cpp ScopeHelper.
 deobfuscated_alias_test_SOURCES = DeobfuscatedAliasTest.cpp
 
 deterministic_containers_test_SOURCES = DeterministicContainersTest.cpp
+deterministic_containers_test_LDADD = $(COMMON_MOCK_TEST_LIBS) -lpthread
 
 dex_class_test_SOURCES = DexClassTest.cpp
 
