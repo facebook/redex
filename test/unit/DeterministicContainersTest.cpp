@@ -397,3 +397,77 @@ TEST_F(DeterministicContainersTest,
   auto ordered = unordered_to_ordered(bag, [](int a, int b) { return a < b; });
   EXPECT_EQ(std::vector<int>({1, 2, 4, 5, 7, 8, 10}), ordered);
 }
+
+TEST_F(DeterministicContainersTest, unordered_find_map) {
+  UnorderedMap<int, std::string> map{{1, "one"}, {2, "two"}, {3, "three"}};
+
+  // Test finding an existing pair
+  auto found = unordered_find(map, std::pair<const int, std::string>(2, "two"));
+  EXPECT_NE(map.end(), found);
+  EXPECT_EQ(2, found->first);
+  EXPECT_EQ("two", found->second);
+
+  // Test finding a non-existent pair (existing key, wrong value)
+  auto not_found1 =
+      unordered_find(map, std::pair<const int, std::string>(2, "three"));
+  EXPECT_EQ(map.end(), not_found1);
+
+  // Test finding a non-existent pair (non-existent key)
+  auto not_found2 =
+      unordered_find(map, std::pair<const int, std::string>(4, "four"));
+  EXPECT_EQ(map.end(), not_found2);
+}
+
+TEST_F(DeterministicContainersTest, unordered_find_set) {
+  UnorderedSet<int> set{1, 2, 3, 4, 5};
+  auto found = unordered_find(set, 3);
+  EXPECT_NE(set.end(), found);
+  EXPECT_EQ(3, *found);
+
+  auto not_found = unordered_find(set, 6);
+  EXPECT_EQ(set.end(), not_found);
+}
+
+TEST_F(DeterministicContainersTest, unordered_find_if_map) {
+  UnorderedMap<int, int> map{{1, 10}, {2, 20}, {3, 30}};
+  auto found =
+      unordered_find_if(map, [](const auto& p) { return p.second > 25; });
+  EXPECT_NE(map.end(), found);
+  EXPECT_EQ(30, found->second);
+
+  auto not_found =
+      unordered_find_if(map, [](const auto& p) { return p.second > 50; });
+  EXPECT_EQ(map.end(), not_found);
+}
+
+TEST_F(DeterministicContainersTest, unordered_find_if_set) {
+  UnorderedSet<int> set{1, 2, 3, 4, 5};
+  auto found = unordered_find_if(set, [](int x) { return x > 3; });
+  EXPECT_NE(set.end(), found);
+  EXPECT_TRUE(*found == 4 || *found == 5);
+
+  auto not_found = unordered_find_if(set, [](int x) { return x > 10; });
+  EXPECT_EQ(set.end(), not_found);
+}
+
+TEST_F(DeterministicContainersTest, unordered_find_if_not_map) {
+  UnorderedMap<int, int> map{{1, 10}, {2, 20}, {3, 30}};
+  auto found =
+      unordered_find_if_not(map, [](const auto& p) { return p.second > 25; });
+  EXPECT_NE(map.end(), found);
+  EXPECT_TRUE(found->second <= 25);
+
+  auto not_found =
+      unordered_find_if_not(map, [](const auto& p) { return p.second > 0; });
+  EXPECT_EQ(map.end(), not_found);
+}
+
+TEST_F(DeterministicContainersTest, unordered_find_if_not_set) {
+  UnorderedSet<int> set{1, 2, 3, 4, 5};
+  auto found = unordered_find_if_not(set, [](int x) { return x > 3; });
+  EXPECT_NE(set.end(), found);
+  EXPECT_TRUE(*found <= 3);
+
+  auto not_found = unordered_find_if_not(set, [](int x) { return x > 0; });
+  EXPECT_EQ(set.end(), not_found);
+}
