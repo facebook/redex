@@ -214,7 +214,7 @@ DexMethod* ExpandableMethodParams::make_expanded_method_concrete(
       cfg, /* ignore_unreachable */ false,
       [](auto* insn) { return opcode::is_a_load_param(insn->opcode()); });
   auto du_chains = chains.get_def_use_chains();
-  std::unordered_set<IRInstruction*> use_insns;
+  UnorderedSet<IRInstruction*> use_insns;
   for (auto& use : UnorderedIterable(du_chains[load_param_it->insn])) {
     use_insns.insert(use.insn);
   }
@@ -352,7 +352,7 @@ size_t ExpandableMethodParams::flush(
 
   // Finally, derived method-profiles for used candidates, and erase the unused
   // method refs.
-  for (auto&& [method, p] : m_candidates) {
+  for (auto&& [method, p] : UnorderedIterable(m_candidates)) {
     if (used_expanded_method_refs.count(method)) {
       method_profiles->derive_stats(method->as_def(), {p.first});
     } else {

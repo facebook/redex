@@ -10,6 +10,7 @@
 #include <mutex>
 
 #include "ConcurrentContainers.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "IRInstruction.h"
 #include "MethodProfiles.h"
@@ -48,9 +49,9 @@ class ExpandableMethodParams {
   };
 
  private:
-  using MethodInfo = std::unordered_map<
-      DexMethod*,
-      std::unordered_map<param_index_t, std::vector<DexField*>>>;
+  using MethodInfo =
+      UnorderedMap<DexMethod*,
+                   UnorderedMap<param_index_t, std::vector<DexField*>>>;
 
   static std::vector<DexType*> get_expanded_args_vector(
       DexMethod* method,
@@ -88,9 +89,9 @@ class ExpandableMethodParams {
   // For each requested expanded method ref, we remember the
   // original method, and which parameter was expanded.
   using MethodParam = std::pair<DexMethod*, param_index_t>;
-  mutable std::unordered_map<DexMethodRef*, MethodParam> m_candidates;
+  mutable UnorderedMap<DexMethodRef*, MethodParam> m_candidates;
   mutable std::mutex m_candidates_mutex;
   // We keep track of deobfuscated method names already in use before the
   // pass, to avoid reusing them.
-  std::unordered_set<const DexString*> m_deobfuscated_method_names;
+  UnorderedSet<const DexString*> m_deobfuscated_method_names;
 };
