@@ -26,12 +26,12 @@ namespace class_merging {
 
 using SwitchIndices = std::set<int>;
 using MethodOrderedSet = std::set<DexMethod*, dexmethods_comparator>;
-using TypeToMethod = std::unordered_map<const DexType*, const DexMethod*>;
+using TypeToMethod = UnorderedMap<const DexType*, const DexMethod*>;
 using MergerToField = std::map<const MergerType*, DexField*>;
 using MergerToMethods = std::map<const MergerType*, std::vector<DexMethod*>>;
 using MethodReplacementPair = std::pair<const std::string, const DexMethod*>;
 using TypeToMethodMap =
-    std::unordered_map<const DexType*, std::vector<MethodReplacementPair>>;
+    UnorderedMap<const DexType*, std::vector<MethodReplacementPair>>;
 using MethodToType = std::map<DexMethod*, DexType*, dexmethods_comparator>;
 
 constexpr const char* INSTANCE_OF_STUB_NAME = "$instanceof";
@@ -43,7 +43,7 @@ struct MergedMethod {
 };
 
 struct MethodStats {
-  std::vector<MergedMethod> merged_methods;
+  UnorderedBag<MergedMethod> merged_methods;
   void add(const MethodOrderedSet& methods);
   void print(const std::string& model_name, uint32_t num_mergeables);
 };
@@ -119,7 +119,7 @@ class ModelMethodMerger {
       DexField* type_tag_field,
       const std::vector<MergerType::VirtualMethod>& virt_methods,
       std::vector<std::pair<DexClass*, DexMethod*>>& dispatch_methods,
-      std::unordered_map<DexMethod*, DexMethod*>& old_to_new_callee);
+      UnorderedMap<DexMethod*, DexMethod*>& old_to_new_callee);
 
   std::map<SwitchIndices, DexMethod*> get_dedupped_indices_map(
       const std::vector<DexMethod*>& targets);

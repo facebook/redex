@@ -105,7 +105,7 @@ void patch_callsite(const CallSite& callsite, const NewCallee& new_callee) {
 
 void update_call_refs_simple(
     const Scope& scope,
-    const std::unordered_map<DexMethod*, DexMethod*>& old_to_new_callee) {
+    const UnorderedMap<DexMethod*, DexMethod*>& old_to_new_callee) {
   if (old_to_new_callee.empty()) {
     return;
   }
@@ -239,8 +239,8 @@ CallSites collect_call_refs(const Scope& scope, const T& callees) {
 using MethodOrderedSet = std::set<DexMethod*, dexmethods_comparator>;
 template CallSites collect_call_refs<MethodOrderedSet>(
     const Scope& scope, const MethodOrderedSet& callees);
-template CallSites collect_call_refs<std::unordered_set<DexMethod*>>(
-    const Scope& scope, const std::unordered_set<DexMethod*>& callees);
+template CallSites collect_call_refs<UnorderedSet<DexMethod*>>(
+    const Scope& scope, const UnorderedSet<DexMethod*>& callees);
 
 int wrap_instance_call_with_static(
     DexStoresVector& stores,

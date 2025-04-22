@@ -28,14 +28,14 @@ using namespace class_merging;
 
 namespace {
 
-using MethodTypeTags = std::unordered_map<const DexMethod*, uint32_t>;
+using MethodTypeTags = UnorderedMap<const DexMethod*, uint32_t>;
 
 const size_t CONST_LIFT_STUB_THRESHOLD = 2;
 
 void update_call_refs(
     const method_reference::CallSites& call_sites,
     const MethodTypeTags& type_tags,
-    const std::unordered_map<DexMethod*, DexMethod*>& old_to_new_callee,
+    const UnorderedMap<DexMethod*, DexMethod*>& old_to_new_callee,
     bool with_type_tag = false) {
   for (const auto& callsite : call_sites) {
     auto callee = callsite.callee;
@@ -143,15 +143,15 @@ static void find_common_ctor_invocations(
     cfg::Block* switch_block,
     cfg::Block* return_block,
     DexMethod*& common_ctor,
-    std::vector<cfg::InstructionIterator>& invocations) {
+    UnorderedBag<cfg::InstructionIterator>& invocations) {
   // edges could point to the same target, but we only care unique targets.
-  std::unordered_set<cfg::Block*> targets;
+  UnorderedSet<cfg::Block*> targets;
   for (auto& s : switch_block->succs()) {
     targets.insert(s->target());
   }
   if (targets.size() <= 1) return;
 
-  for (auto& target : targets) {
+  for (auto& target : UnorderedIterable(targets)) {
     if (return_block != target->goes_to_only_edge()) {
       // not all switch statements goto return block
       invocations.clear();
@@ -175,8 +175,7 @@ static void find_common_ctor_invocations(
       return;
     }
     common_ctor = meth;
-    invocations.emplace_back(
-        target->to_cfg_instruction_iterator(last_non_goto_insn));
+    invocations.insert(target->to_cfg_instruction_iterator(last_non_goto_insn));
   }
 }
 } // namespace
@@ -184,8 +183,8 @@ static void find_common_ctor_invocations(
 namespace class_merging {
 
 void MethodStats::add(const MethodOrderedSet& methods) {
-  std::unordered_map<std::string, size_t> method_counts;
-  std::unordered_map<std::string, std::vector<std::string>> samples;
+  UnorderedMap<std::string, size_t> method_counts;
+  UnorderedMap<std::string, std::vector<std::string>> samples;
   for (auto& m : methods) {
     auto simple_name = m->get_simple_deobfuscated_name();
     if (simple_name.find("get") == 0 || simple_name.find("set") == 0) {
@@ -201,11 +200,11 @@ void MethodStats::add(const MethodOrderedSet& methods) {
       samples[name].push_back(std::move(sample_str));
     }
   }
-  for (auto& it : method_counts) {
+  for (auto& it : UnorderedIterable(method_counts)) {
     auto name = it.first;
     auto count = it.second;
     MergedMethod mm{name, count, samples[name]};
-    merged_methods.push_back(mm);
+    merged_methods.insert(mm);
   }
 }
 
@@ -219,7 +218,7 @@ void MethodStats::print(const std::string& model_name,
         "==== methods stats for %s (%u) ====",
         model_name.c_str(),
         num_mergeables);
-  for (auto& mm : merged_methods) {
+  for (auto& mm : UnorderedIterable(merged_methods)) {
     TRACE(CLMG, 8, " %4zu %s", mm.count, mm.name.c_str());
     if (mm.count > 1) {
       for (const auto& sample : mm.samples) {
@@ -272,7 +271,7 @@ ModelMethodMerger::ModelMethodMerger(
 }
 
 void ModelMethodMerger::fix_visibility() {
-  std::unordered_set<DexMethod*> vmethods_created;
+  UnorderedSet<DexMethod*> vmethods_created;
   for (const auto& pair : m_merger_ctors) {
     const std::vector<DexMethod*>& ctors = pair.second;
     for (DexMethod* m : ctors) {
@@ -428,7 +427,7 @@ void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
     return;
   }
 
-  std::vector<cfg::InstructionIterator> invocations;
+  UnorderedBag<cfg::InstructionIterator> invocations;
   DexMethod* common_ctor = nullptr;
   find_common_ctor_invocations(switch_block, return_block, common_ctor,
                                invocations);
@@ -468,7 +467,7 @@ void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
   }
 
   cfg::CFGMutation mutation(cfg);
-  for (const auto& invocation : invocations) {
+  for (const auto& invocation : UnorderedIterable(invocations)) {
     // For "this" pointer.
     mutation.insert_before(invocation,
                            {(new IRInstruction(OPCODE_MOVE_OBJECT))
@@ -553,7 +552,7 @@ void ModelMethodMerger::merge_virtual_methods(
     DexField* type_tag_field,
     const std::vector<MergerType::VirtualMethod>& virt_methods,
     std::vector<std::pair<DexClass*, DexMethod*>>& dispatch_methods,
-    std::unordered_map<DexMethod*, DexMethod*>& old_to_new_callee) {
+    UnorderedMap<DexMethod*, DexMethod*>& old_to_new_callee) {
   DexClass* target_cls = type_class(target_type);
   for (auto& virt_meth : virt_methods) {
     auto& meth_lst = virt_meth.overrides;
@@ -567,7 +566,7 @@ void ModelMethodMerger::merge_virtual_methods(
 
     // Make static
     MethodTypeTags type_tags;
-    std::unordered_map<const DexType*, std::string> meth_signatures;
+    UnorderedMap<const DexType*, std::string> meth_signatures;
     for (auto m : meth_lst) {
       meth_signatures[m->get_class()] = get_method_signature_string(m);
       staticize_with_new_arg_head(m, target_type);
@@ -599,7 +598,7 @@ void ModelMethodMerger::merge_virtual_methods(
                                                     meth_lst);
     }
     // Populating method dedup map
-    for (auto& type_to_sig : meth_signatures) {
+    for (auto& type_to_sig : UnorderedIterable(meth_signatures)) {
       auto type = type_to_sig.first;
       auto map = std::make_pair(type_to_sig.second, dispatch.main_dispatch);
       m_method_dedup_map[type].push_back(map);
@@ -636,7 +635,7 @@ void ModelMethodMerger::merge_ctors() {
   //////////////////////////////////////////
   // Create dispatch and fixes
   //////////////////////////////////////////
-  std::unordered_map<DexMethod*, DexMethod*> old_to_new_callee;
+  UnorderedMap<DexMethod*, DexMethod*> old_to_new_callee;
   for (const auto& pair : m_merger_ctors) {
     auto merger = pair.first;
     auto target_type = const_cast<DexType*>(merger->type);
@@ -645,7 +644,7 @@ void ModelMethodMerger::merge_ctors() {
                               ? m_type_tag_fields.at(merger)
                               : nullptr;
     // Group by proto.
-    std::unordered_map<DexProto*, std::vector<DexMethod*>> proto_to_ctors;
+    UnorderedMap<DexProto*, std::vector<DexMethod*>> proto_to_ctors;
     for (const auto m : pair.second) {
       proto_to_ctors[m->get_proto()].push_back(m);
     }
@@ -655,11 +654,11 @@ void ModelMethodMerger::merge_ctors() {
           " Merging ctors for %s with %zu different protos",
           SHOW(target_type),
           proto_to_ctors.size());
-    std::unordered_set<DexMethod*> dispatches;
-    for (const auto& ctors_pair : proto_to_ctors) {
+    UnorderedSet<DexMethod*> dispatches;
+    for (const auto& ctors_pair : UnorderedIterable(proto_to_ctors)) {
       auto& ctors = ctors_pair.second;
       auto ctor_proto = ctors_pair.first;
-      std::unordered_map<const DexType*, std::string> ctor_signatures;
+      UnorderedMap<const DexType*, std::string> ctor_signatures;
       for (const auto ctor : ctors) {
         ctor_signatures[ctor->get_class()] =
             type_reference::get_method_signature(ctor);
@@ -721,7 +720,7 @@ void ModelMethodMerger::merge_ctors() {
       }
 
       // Populating method dedup map
-      for (auto& type_to_sig : ctor_signatures) {
+      for (auto& type_to_sig : UnorderedIterable(ctor_signatures)) {
         auto type = type_to_sig.first;
         auto map = std::make_pair(type_to_sig.second, dispatch);
         m_method_dedup_map[type].push_back(map);
@@ -737,7 +736,7 @@ void ModelMethodMerger::merge_ctors() {
     }
     // Update mergeable ctor map
     for (auto type : pair.first->mergeables) {
-      for (auto dispatch : dispatches) {
+      for (auto dispatch : UnorderedIterable(dispatches)) {
         m_mergeable_to_merger_ctor[type] = dispatch;
       }
     }
@@ -786,10 +785,9 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
 
     // Dedup non_ctors & non_vmethods
     std::vector<DexMethod*> replacements;
-    std::unordered_map<DexMethod*, MethodOrderedSet> new_to_old;
+    UnorderedMap<DexMethod*, MethodOrderedSet> new_to_old;
     auto new_to_old_optional =
-        boost::optional<std::unordered_map<DexMethod*, MethodOrderedSet>>(
-            new_to_old);
+        boost::optional<UnorderedMap<DexMethod*, MethodOrderedSet>>(new_to_old);
     m_stats.m_num_static_non_virt_dedupped += method_dedup::dedup_methods(
         m_scope, to_dedup, m_model_spec.dedup_fill_in_stack_trace, replacements,
         new_to_old_optional);
@@ -817,7 +815,7 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
     }
 
     // Update method dedup map
-    for (auto& pair : new_to_old) {
+    for (auto& pair : UnorderedIterable(new_to_old)) {
       auto old_list = pair.second;
       if (m_method_profiles != boost::none) {
         std::vector<DexMethod*> old_list_vec{old_list.begin(), old_list.end()};
@@ -870,7 +868,7 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
 
 void ModelMethodMerger::merge_virt_itf_methods() {
   std::vector<std::pair<DexClass*, DexMethod*>> dispatch_methods;
-  std::unordered_map<DexMethod*, DexMethod*> old_to_new_callee;
+  UnorderedMap<DexMethod*, DexMethod*> old_to_new_callee;
 
   for (auto merger : m_mergers) {
     auto merger_type = const_cast<DexType*>(merger->type);

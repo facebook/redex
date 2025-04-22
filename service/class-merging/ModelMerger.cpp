@@ -402,7 +402,7 @@ std::string merger_info(const MergerType& merger) {
     ss << "  interface methods " << imeths.methods.size() << "\n";
   }
   ss << " Field maps \n";
-  for (const auto& fmap : merger.field_map) {
+  for (const auto& fmap : UnorderedIterable(merger.field_map)) {
     ss << "  type " << SHOW(fmap.first) << "\n";
     size_t num_empty_fields = 0;
     for (const auto field : fmap.second) {

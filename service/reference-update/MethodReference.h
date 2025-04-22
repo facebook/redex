@@ -70,10 +70,10 @@ void patch_callsite(const CallSite& callsite, const NewCallee& new_callee);
 
 void update_call_refs_simple(
     const Scope& scope,
-    const std::unordered_map<DexMethod*, DexMethod*>& old_to_new_callee);
+    const UnorderedMap<DexMethod*, DexMethod*>& old_to_new_callee);
 
 // Allowed types: * std::set<DexMethod*, dexmethods_comparator>
-//                * std::unordered_set<DexMethod*>
+//                * std::UnorderedSet<DexMethod*>
 template <typename T>
 CallSites collect_call_refs(const Scope& scope, const T& callees);
 

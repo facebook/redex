@@ -25,7 +25,7 @@ struct ConfigFiles;
 class PassManager;
 class RefChecker;
 
-using ConstTypeHashSet = std::unordered_set<const DexType*>;
+using ConstTypeHashSet = UnorderedSet<const DexType*>;
 
 namespace class_merging {
 
@@ -124,7 +124,7 @@ struct ModelSpec {
   // types to exclude from the model
   ConstTypeHashSet exclude_types;
   // prefixes of types to exclude from the model
-  std::unordered_set<std::string> exclude_prefixes;
+  UnorderedSet<std::string> exclude_prefixes;
   // types to exclude only when they are placed in the ordred set
   ConstTypeHashSet exclude_ordered_set_types;
   // prefix for class generation
@@ -135,11 +135,11 @@ struct ModelSpec {
   // (no optimization otherwise)
   size_t min_count{2};
   // set of generated types
-  std::unordered_set<DexType*> gen_types;
+  UnorderedSet<DexType*> gen_types;
   // set of annotations marking generated code
   UnorderedSet<DexType*> gen_annos;
   // set of types safe to consume the class obj of merged classes
-  std::unordered_set<DexType*> const_class_safe_types;
+  UnorderedSet<DexType*> const_class_safe_types;
   // The merging strategy of the model
   strategy::Strategy strategy{strategy::BY_CLASS_COUNT};
   // Group splitting. This is looser than the per dex split and takes into
@@ -354,13 +354,13 @@ class Model {
   // child to parent relationship of types in the model.
   // Because nothing is changed during analysis DexClass::get_super_class()
   // may not have the correct relationship
-  std::unordered_map<const DexType*, const DexType*> m_parents;
+  UnorderedMap<const DexType*, const DexType*> m_parents;
   // class to interfaces map as known to the analysis
   TypeToTypeSet m_class_to_intfs;
   // interface to class relationship as known to the analysis
   TypeToTypeSet m_intf_to_classes;
   // type to merger map
-  std::unordered_map<const DexType*, MergerType> m_mergers;
+  UnorderedMap<const DexType*, MergerType> m_mergers;
   // Types excluded by the ModelSpec.exclude_types
   TypeSet m_excluded;
   // The set of non mergeables types. Those are types that are not
@@ -374,8 +374,7 @@ class Model {
   std::map<MergerType::Shape, size_t, MergerType::ShapeComp> m_shape_to_count;
   // Cache of the mergeable hashes looked up by the matching Shape. We use this
   // cache to detect potential hash collisions.
-  std::unordered_map<MergerType::Shape, std::unordered_set<size_t>>
-      m_shape_hash_cache;
+  UnorderedMap<MergerType::Shape, UnorderedSet<size_t>> m_shape_hash_cache;
 
   const Scope& m_scope;
   ConfigFiles& m_conf;

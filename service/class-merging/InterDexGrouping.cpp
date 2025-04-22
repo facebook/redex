@@ -49,14 +49,14 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
             .c_str());
   ConcurrentMap<DexType*, TypeHashSet> res;
   // Ensure all types will be handled.
-  for (auto* t : types) {
+  for (auto* t : UnorderedIterable(types)) {
     res.emplace(const_cast<DexType*>(t), TypeHashSet());
   }
 
   auto class_loads_update = [&](auto* insn, auto* cls) {
-    const auto& updater =
-        [&cls](DexType* /* key */, std::unordered_set<DexType*>& set,
-               bool /* already_exists */) { set.emplace(cls); };
+    const auto& updater = [&cls](
+                              DexType* /* key */, UnorderedSet<DexType*>& set,
+                              bool /* already_exists */) { set.emplace(cls); };
 
     if (insn->has_type()) {
       auto current_instance = check_current_instance(types, insn);
@@ -129,7 +129,7 @@ size_t get_min_interdex_group(
     size_t interdex_groups) {
   // By default, we consider the class in the last group.
   size_t group = interdex_groups - 1;
-  for (DexType* type : types) {
+  for (DexType* type : UnorderedIterable(types)) {
     if (cls_to_interdex_groups.count(type)) {
       group = std::min(group, cls_to_interdex_groups.at(type));
     }
@@ -170,14 +170,13 @@ void InterDexGrouping::build_interdex_grouping(
   }
   m_all_interdexing_groups = std::vector<ConstTypeHashSet>(num_group);
   if (num_group == 1) {
-    m_all_interdexing_groups[0].insert(merging_targets.begin(),
-                                       merging_targets.end());
+    insert_unordered_iterable(m_all_interdexing_groups[0], merging_targets);
     return;
   }
 
   if (m_config.inferring_mode ==
       InterDexGroupingInferringMode::kExactSymbolMatch) {
-    for (auto* type : merging_targets) {
+    for (auto* type : UnorderedIterable(merging_targets)) {
       size_t group_idx =
           get_interdex_group(const_cast<DexType*>(type), cls_to_interdex_groups,
                              num_interdex_groups);
@@ -256,7 +255,7 @@ void InterDexGrouping::visit_groups(
 
 void InterDexGroupingConfig::init_type(const std::string& interdex_grouping) {
 
-  const static std::unordered_map<std::string, InterDexGroupingType>
+  const static UnorderedMap<std::string, InterDexGroupingType>
       string_to_grouping = {
           {"disabled", InterDexGroupingType::DISABLED},
           {"non-hot-set", InterDexGroupingType::NON_HOT_SET},

@@ -81,7 +81,7 @@ bool verify_model_spec(const std::vector<ModelSpec>& model_specs,
 }
 
 strategy::Strategy get_merging_strategy(const std::string& merging_strategy) {
-  const static std::unordered_map<std::string, strategy::Strategy>
+  const static UnorderedMap<std::string, strategy::Strategy>
       string_to_strategy = {
           {"by_cls_count", strategy::Strategy::BY_CLASS_COUNT},
           {"by_code_size", strategy::Strategy::BY_CODE_SIZE},
@@ -95,12 +95,12 @@ strategy::Strategy get_merging_strategy(const std::string& merging_strategy) {
 }
 
 TypeTagConfig get_type_tag_config(const std::string& type_tag_config) {
-  const static std::unordered_map<std::string, TypeTagConfig> string_to_config =
-      {{"none", TypeTagConfig::NONE},
-       {"generate", TypeTagConfig::GENERATE},
-       {"input-pass-type-tag-to-ctor",
-        TypeTagConfig::INPUT_PASS_TYPE_TAG_TO_CTOR},
-       {"input-handled", TypeTagConfig::INPUT_HANDLED}};
+  const static UnorderedMap<std::string, TypeTagConfig> string_to_config = {
+      {"none", TypeTagConfig::NONE},
+      {"generate", TypeTagConfig::GENERATE},
+      {"input-pass-type-tag-to-ctor",
+       TypeTagConfig::INPUT_PASS_TYPE_TAG_TO_CTOR},
+      {"input-handled", TypeTagConfig::INPUT_HANDLED}};
   always_assert_log(string_to_config.count(type_tag_config) > 0,
                     "Type tag config type %s not found. Please check the list"
                     " of accepted values.",
@@ -112,7 +112,7 @@ TypeTagConfig get_type_tag_config(const std::string& type_tag_config) {
 
 TypeLikeStringConfig get_type_like_string_config(
     const std::string& type_like_string_config) {
-  const static std::unordered_map<std::string, TypeLikeStringConfig>
+  const static UnorderedMap<std::string, TypeLikeStringConfig>
       string_to_config = {{"replace", TypeLikeStringConfig::REPLACE},
                           {"exclude", TypeLikeStringConfig::EXCLUDE}};
   return string_to_config.at(type_like_string_config);

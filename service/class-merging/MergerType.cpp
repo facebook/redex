@@ -86,7 +86,7 @@ std::string MergerType::Shape::build_type_name(
     size_t group_count,
     const boost::optional<size_t>& opt_dex_id,
     const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
-    std::unordered_set<size_t>& hash_cache) const {
+    UnorderedSet<size_t>& hash_cache) const {
   auto parent = root_type;
   if (root_type == type::java_lang_Object() && intf_set.size() == 1) {
     parent = *intf_set.begin();

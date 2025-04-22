@@ -18,9 +18,9 @@
 
 namespace {
 
-std::unordered_set<DexMethod*> methodgroups_to_methodset(
+UnorderedSet<DexMethod*> methodgroups_to_methodset(
     const method_merger::MethodGroups& method_groups) {
-  std::unordered_set<DexMethod*> method_set;
+  UnorderedSet<DexMethod*> method_set;
   for (auto& methods : method_groups) {
     method_set.insert(methods.begin(), methods.end());
   }

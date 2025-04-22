@@ -87,7 +87,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     const TypeTags* type_tags,
     const std::vector<DexMethod*>& methods,
     const size_t stud_method_threshold) {
-  std::unordered_set<DexMethod*> lifted;
+  UnorderedSet<DexMethod*> lifted;
   std::unordered_map<DexMethod*, ConstantValues> lifted_constants;
   for (auto method : methods) {
     always_assert(has_anno(method, s_method_meta_anno));

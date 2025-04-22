@@ -134,8 +134,7 @@ size_t dedup_methods_helper(
     const std::vector<DexMethod*>& to_dedup,
     bool dedup_fill_in_stack_trace,
     std::vector<DexMethod*>& replacements,
-    boost::optional<std::unordered_map<DexMethod*, MethodOrderedSet>>&
-        new_to_old) {
+    boost::optional<UnorderedMap<DexMethod*, MethodOrderedSet>>& new_to_old) {
   if (to_dedup.size() <= 1) {
     replacements = to_dedup;
     return 0;
@@ -143,7 +142,7 @@ size_t dedup_methods_helper(
   size_t dedup_count = 0;
   auto grouped_methods =
       group_identical_methods(to_dedup, dedup_fill_in_stack_trace);
-  std::unordered_map<DexMethod*, DexMethod*> duplicates_to_replacement;
+  UnorderedMap<DexMethod*, DexMethod*> duplicates_to_replacement;
   for (auto& group : grouped_methods) {
     auto replacement = *group.begin();
     for (auto m : group) {
@@ -186,8 +185,7 @@ size_t dedup_methods(
     const std::vector<DexMethod*>& to_dedup,
     bool dedup_fill_in_stack_trace,
     std::vector<DexMethod*>& replacements,
-    boost::optional<std::unordered_map<DexMethod*, MethodOrderedSet>>&
-        new_to_old) {
+    boost::optional<UnorderedMap<DexMethod*, MethodOrderedSet>>& new_to_old) {
   size_t total_dedup_count = 0;
   auto to_dedup_temp = to_dedup;
   while (true) {
