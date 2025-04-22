@@ -213,7 +213,7 @@ void TypedefAnnoChecker::run(DexMethod* m) {
 
   always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
-  std::unordered_set<DexType*> anno_set;
+  UnorderedSet<DexType*> anno_set;
   anno_set.emplace(m_config.int_typedef);
   anno_set.emplace(m_config.str_typedef);
   type_inference::TypeInference inference(cfg, false, anno_set,

@@ -339,16 +339,15 @@ void refine_comparable(TypeEnvironment* state, reg_t reg1, reg_t reg2) {
   }
 }
 
-template <typename DexTypeIt>
-const DexType* merge_dex_types(const DexTypeIt& begin,
-                               const DexTypeIt& end,
+template <typename DexTypeCollection>
+const DexType* merge_dex_types(const DexTypeCollection& collection,
                                const DexType* default_type) {
-  if (begin == end) {
+  if (collection.empty()) {
     return default_type;
   }
 
-  return std::accumulate(
-      begin, end, static_cast<const DexType*>(nullptr),
+  return unordered_accumulate(
+      collection, static_cast<const DexType*>(nullptr),
       [&default_type](const DexType* t1, const DexType* t2) -> const DexType* {
         if (!t1) {
           return t2;
@@ -370,14 +369,14 @@ const DexType* merge_dex_types(const DexTypeIt& begin,
 
 boost::optional<const DexType*> get_typedef_annotation(
     const std::vector<std::unique_ptr<DexAnnotation>>& annotations,
-    const std::unordered_set<DexType*>& typedef_annotations) {
+    const UnorderedSet<DexType*>& typedef_annotations) {
   for (auto const& anno : annotations) {
     auto const anno_class = type_class(anno->type());
     if (!anno_class) {
       continue;
     }
     bool has_typedef = false;
-    for (auto annotation : typedef_annotations) {
+    for (auto annotation : UnorderedIterable(typedef_annotations)) {
       if (get_annotation(anno_class, annotation)) {
         if (has_typedef) {
           always_assert_log(
@@ -738,7 +737,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
       break;
     }
 
-    std::unordered_set<DexType*> catch_types;
+    UnorderedSet<DexType*> catch_types;
 
     for (cfg::Edge* edge : preds) {
       if (edge->type() != cfg::EDGE_THROW) {
@@ -755,7 +754,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     }
 
     auto merged_catch_type =
-        merge_dex_types(catch_types.begin(), catch_types.end(),
+        merge_dex_types(catch_types,
                         /* default */ type::java_lang_Throwable());
 
     set_reference(current_state, insn->dest(), merged_catch_type);

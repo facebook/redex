@@ -20,8 +20,8 @@ struct TypedefAnnosTest : public RedexIntegrationTest {
     cfg.calculate_exit_block();
     return cfg;
   }
-  std::unordered_set<DexType*> get_annotation_set() {
-    std::unordered_set<DexType*> anno_set;
+  UnorderedSet<DexType*> get_annotation_set() {
+    UnorderedSet<DexType*> anno_set;
     anno_set.emplace(
         DexType::make_type("Lcom/facebook/redex/annotations/SafeIntDef;"));
     anno_set.emplace(

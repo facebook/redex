@@ -157,12 +157,12 @@ namespace type_inference {
 // annotation, return it
 boost::optional<const DexType*> get_typedef_annotation(
     const std::vector<std::unique_ptr<DexAnnotation>>& annotations,
-    const std::unordered_set<DexType*>& typedef_annotations);
+    const UnorderedSet<DexType*>& typedef_annotations);
 
 template <typename DexMember>
 boost::optional<const DexType*> get_typedef_anno_from_member(
     const DexMember* member,
-    const std::unordered_set<DexType*>& typedef_annotations) {
+    const UnorderedSet<DexType*>& typedef_annotations) {
   if (!typedef_annotations.empty() && member->is_def()) {
     auto member_def = member->as_def();
     auto anno_set = member_def->get_anno_set();
@@ -278,8 +278,7 @@ class TypeInference final
   explicit TypeInference(
       const cfg::ControlFlowGraph& cfg,
       bool skip_check_cast_upcasting = false,
-      const std::unordered_set<DexType*>& annotations =
-          std::unordered_set<DexType*>(),
+      const UnorderedSet<DexType*>& annotations = UnorderedSet<DexType*>(),
       const method_override_graph::Graph* method_override_graph = nullptr)
       : ir_analyzer::BaseIRAnalyzer<TypeEnvironment>(cfg),
         m_cfg(cfg),
@@ -315,25 +314,24 @@ class TypeInference final
 
   void traceState(TypeEnvironment* state) const;
 
-  const std::unordered_map<const IRInstruction*, TypeEnvironment>&
+  const UnorderedMap<const IRInstruction*, TypeEnvironment>&
   get_type_environments() const {
     return m_type_envs;
   }
 
-  std::unordered_map<const IRInstruction*, TypeEnvironment>&
-  get_type_environments() {
+  UnorderedMap<const IRInstruction*, TypeEnvironment>& get_type_environments() {
     return m_type_envs;
   }
 
-  std::unordered_set<DexType*> get_annotations() const { return m_annotations; }
+  UnorderedSet<DexType*> get_annotations() const { return m_annotations; }
 
  private:
   void populate_type_environments();
 
   const cfg::ControlFlowGraph& m_cfg;
-  std::unordered_map<const IRInstruction*, TypeEnvironment> m_type_envs;
+  UnorderedMap<const IRInstruction*, TypeEnvironment> m_type_envs;
   const bool m_skip_check_cast_upcasting;
-  const std::unordered_set<DexType*> m_annotations;
+  const UnorderedSet<DexType*> m_annotations;
   const method_override_graph::Graph* m_method_override_graph;
   const DexMethod* m;
 

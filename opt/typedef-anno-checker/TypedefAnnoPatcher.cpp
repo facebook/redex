@@ -52,9 +52,8 @@ bool is_int_or_obj_ref(const type_inference::TypeEnvironment& env, reg_t reg) {
 
 namespace {
 
-bool has_typedef_annos(
-    ParamAnnotations* param_annos,
-    const std::unordered_set<TypedefAnnoType*>& typedef_annos) {
+bool has_typedef_annos(ParamAnnotations* param_annos,
+                       const UnorderedSet<TypedefAnnoType*>& typedef_annos) {
   if (!param_annos) {
     return false;
   }
