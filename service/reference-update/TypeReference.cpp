@@ -76,7 +76,7 @@ struct VMethodGroup {
   const DexString* possible_new_name{nullptr};
   DexType* old_type_ref{nullptr};
   DexType* new_type_ref{nullptr};
-  std::unordered_set<DexMethod*> methods;
+  UnorderedSet<DexMethod*> methods;
 };
 
 /**
@@ -162,10 +162,10 @@ DexProto* get_new_proto(const DexProto* proto,
  */
 void update_vmethods_group_one_type_ref(const VMethodGroup& group,
                                         const ClassHierarchy& ch) {
-  auto proto = (*group.methods.begin())->get_proto();
+  auto proto = (*unordered_any(group.methods))->get_proto();
   auto new_proto = get_new_proto(proto, group.old_type_ref, group.new_type_ref);
   bool need_rename = false;
-  for (auto method : group.methods) {
+  for (auto method : UnorderedIterable(group.methods)) {
     // if collision in the same container or in the hierarchy.
     auto collision = DexMethod::get_method(
                          method->get_class(), method->get_name(), new_proto) ||
@@ -181,14 +181,14 @@ void update_vmethods_group_one_type_ref(const VMethodGroup& group,
   }
   DexMethodSpec spec;
   if (need_rename) {
-    for (auto method : group.methods) {
+    for (auto method : UnorderedIterable(group.methods)) {
       always_assert_log(
           can_rename(method), "Can not rename %s\n", SHOW(method));
     }
     spec.name = group.possible_new_name;
   }
   spec.proto = new_proto;
-  for (auto method : group.methods) {
+  for (auto method : UnorderedIterable(group.methods)) {
     TRACE(REFU,
           8,
           "sig: updating virtual method %s to %s:%s",

@@ -15,7 +15,7 @@
 #include "DexClass.h"
 
 using TypeSet = std::set<const DexType*, dextypes_comparator>;
-using UnorderedTypeSet = std::unordered_set<const DexType*>;
+using UnorderedTypeSet = UnorderedSet<const DexType*>;
 
 namespace type_reference {
 

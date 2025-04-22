@@ -372,10 +372,10 @@ std::map<SwitchIndices, DexMethod*> ModelMethodMerger::get_dedupped_indices_map(
   always_assert(!targets.empty());
   std::map<SwitchIndices, DexMethod*> indices_to_callee;
   // Find equivalent methods.
-  std::vector<MethodOrderedSet> duplicates =
+  UnorderedBag<MethodOrderedSet> duplicates =
       method_dedup::group_identical_methods(
           targets, m_model_spec.dedup_fill_in_stack_trace);
-  for (const auto& duplicate : duplicates) {
+  for (const auto& duplicate : UnorderedIterable(duplicates)) {
     SwitchIndices switch_indices;
     for (auto& meth : duplicate) {
       switch_indices.emplace(m_type_tags->get_type_tag(meth->get_class()));

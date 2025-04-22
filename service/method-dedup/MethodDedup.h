@@ -23,7 +23,7 @@ namespace method_dedup {
  * Currently the only user of this function is in CleanupGQL. We can remove this
  * interface once that use is cleaned up.
  */
-std::vector<MethodOrderedSet> group_similar_methods(
+UnorderedBag<MethodOrderedSet> group_similar_methods(
     const std::vector<DexMethod*>&);
 
 /**
@@ -31,7 +31,7 @@ std::vector<MethodOrderedSet> group_similar_methods(
  * identical code. We ignore non-opcodes like debug info.
  * Note that there's no side affects other than the grouping here.
  */
-std::vector<MethodOrderedSet> group_identical_methods(
+UnorderedBag<MethodOrderedSet> group_identical_methods(
     const std::vector<DexMethod*>&, bool dedup_fill_in_stack_trace);
 
 /**

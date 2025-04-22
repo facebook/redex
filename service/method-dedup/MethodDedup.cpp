@@ -49,10 +49,9 @@ struct CodeHasher {
   }
 };
 
-using DuplicateMethods =
-    std::unordered_map<CodeAsKey, MethodOrderedSet, CodeHasher>;
+using DuplicateMethods = UnorderedMap<CodeAsKey, MethodOrderedSet, CodeHasher>;
 
-std::vector<MethodOrderedSet> get_duplicate_methods_simple(
+UnorderedBag<MethodOrderedSet> get_duplicate_methods_simple(
     const MethodOrderedSet& methods, bool dedup_fill_in_stack_trace) {
   DuplicateMethods duplicates;
   for (DexMethod* method : methods) {
@@ -62,9 +61,9 @@ std::vector<MethodOrderedSet> get_duplicate_methods_simple(
         .emplace(method);
   }
 
-  std::vector<MethodOrderedSet> result;
-  for (auto& duplicate : duplicates) {
-    result.push_back(std::move(duplicate.second));
+  UnorderedBag<MethodOrderedSet> result;
+  for (auto& duplicate : UnorderedIterable(duplicates)) {
+    result.insert(std::move(duplicate.second));
   }
 
   return result;
@@ -74,46 +73,45 @@ std::vector<MethodOrderedSet> get_duplicate_methods_simple(
 
 namespace method_dedup {
 
-std::vector<MethodOrderedSet> group_similar_methods(
+UnorderedBag<MethodOrderedSet> group_similar_methods(
     const std::vector<DexMethod*>& methods) {
 
   // Split based on size.
-  std::unordered_map<size_t, std::unordered_set<DexMethod*>> size_to_methods;
+  UnorderedMap<size_t, UnorderedSet<DexMethod*>> size_to_methods;
   for (const auto& method : methods) {
     size_to_methods[method->get_code()->estimate_code_units()].emplace(method);
   }
 
-  std::vector<MethodOrderedSet> result;
+  UnorderedBag<MethodOrderedSet> result;
 
   // Split based on signature (regardless of the method name).
-  std::unordered_map<DexProto*, MethodOrderedSet> proto_to_methods;
-  for (const auto& pair : size_to_methods) {
+  UnorderedMap<DexProto*, MethodOrderedSet> proto_to_methods;
+  for (const auto& pair : UnorderedIterable(size_to_methods)) {
     proto_to_methods.clear();
     const auto& meths = pair.second;
 
-    for (const auto& meth : meths) {
+    for (const auto& meth : UnorderedIterable(meths)) {
       proto_to_methods[meth->get_proto()].emplace(meth);
     }
 
-    for (auto& same_proto : proto_to_methods) {
-      result.emplace_back(std::move(same_proto.second));
+    for (auto& same_proto : UnorderedIterable(proto_to_methods)) {
+      result.insert(std::move(same_proto.second));
     }
   }
 
   return result;
 }
 
-std::vector<MethodOrderedSet> group_identical_methods(
+UnorderedBag<MethodOrderedSet> group_identical_methods(
     const std::vector<DexMethod*>& methods, bool dedup_fill_in_stack_trace) {
-  std::vector<MethodOrderedSet> result;
-  std::vector<MethodOrderedSet> same_protos = group_similar_methods(methods);
+  UnorderedBag<MethodOrderedSet> result;
+  UnorderedBag<MethodOrderedSet> same_protos = group_similar_methods(methods);
 
   // Find actual duplicates.
-  for (const auto& same_proto : same_protos) {
-    std::vector<MethodOrderedSet> duplicates =
+  for (const auto& same_proto : UnorderedIterable(same_protos)) {
+    UnorderedBag<MethodOrderedSet> duplicates =
         get_duplicate_methods_simple(same_proto, dedup_fill_in_stack_trace);
-
-    result.insert(result.end(), duplicates.begin(), duplicates.end());
+    insert_unordered_iterable(result, duplicates);
   }
 
   return result;
@@ -143,7 +141,7 @@ size_t dedup_methods_helper(
   auto grouped_methods =
       group_identical_methods(to_dedup, dedup_fill_in_stack_trace);
   UnorderedMap<DexMethod*, DexMethod*> duplicates_to_replacement;
-  for (auto& group : grouped_methods) {
+  for (auto& group : UnorderedIterable(grouped_methods)) {
     auto replacement = *group.begin();
     for (auto m : group) {
       if (m != replacement) {

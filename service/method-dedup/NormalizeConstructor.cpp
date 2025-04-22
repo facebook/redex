@@ -147,7 +147,7 @@ struct ConstructorSummary {
   }
 
   size_t get_arg_ids_origin_size() const {
-    std::unordered_set<uint32_t> used_arg_ids;
+    UnorderedSet<uint32_t> used_arg_ids;
     for (auto origin : field_id_to_origin) {
       if (origin.type == FieldOriginType::ARG) {
         // all fields should be originating from unique parameters
@@ -176,8 +176,8 @@ struct ConstructorSummary {
 bool is_simple_super_invoke(
     IRInstruction* insn,
     reaching_defs::Environment& env,
-    const std::unordered_map<IRInstruction*, uint32_t>& load_params,
-    std::unordered_set<uint32_t>& used_args,
+    const UnorderedMap<IRInstruction*, uint32_t>& load_params,
+    UnorderedSet<uint32_t>& used_args,
     std::vector<FieldOrigin>& ctor_params_to_origin) {
   for (size_t src_idx = 0; src_idx < insn->srcs_size(); src_idx++) {
     auto src = insn->src(src_idx);
@@ -228,14 +228,14 @@ boost::optional<ConstructorSummary> summarize_constructor_logic(
       method->get_code() == nullptr) {
     return boost::none;
   }
-  std::unordered_map<DexFieldRef*, FieldOrigin> field_to_origin;
+  UnorderedMap<DexFieldRef*, FieldOrigin> field_to_origin;
   std::vector<FieldOrigin> ctor_params_to_origin;
-  std::unordered_set<uint32_t> used_args;
+  UnorderedSet<uint32_t> used_args;
   ConstructorSummary summary;
 
   cfg::ScopedCFG cfg(method->get_code());
 
-  std::unordered_map<IRInstruction*, uint32_t> load_params;
+  UnorderedMap<IRInstruction*, uint32_t> load_params;
   uint32_t param_idx{0};
   auto param_instructions = cfg->get_param_instructions();
   for (auto& param_insn : param_instructions) {

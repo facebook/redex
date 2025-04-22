@@ -252,7 +252,7 @@ int wrap_instance_call_with_static(
   } else {
     classes = build_class_scope_excluding_primary_dex(stores);
   }
-  std::unordered_set<DexType*> excluded_types;
+  UnorderedSet<DexType*> excluded_types;
   for (const auto& pair : UnorderedIterable(methods_replacement)) {
     always_assert(!is_static(pair.first));
     always_assert(is_static(pair.second));
