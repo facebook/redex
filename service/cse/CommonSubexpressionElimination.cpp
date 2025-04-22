@@ -287,8 +287,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
            DexType* declaring_type)
       : BaseEdgeAwareIRAnalyzer(cfg), m_shared_state(shared_state) {
     // Collect all read locations
-    std::unordered_map<CseLocation, size_t, CseLocationHasher>
-        read_location_counts;
+    UnorderedMap<CseLocation, size_t, CseLocationHasher> read_location_counts;
     for (const auto& mie : cfg::InstructionIterable(cfg)) {
       auto insn = mie.insn;
       auto location = get_read_location(insn);
@@ -306,9 +305,8 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
     }
 
     // Prune those which are final fields that cannot get mutated in our context
-    for (auto it = read_location_counts.begin();
-         it != read_location_counts.end();) {
-      auto location = it->first;
+    unordered_erase_if(read_location_counts, [&](auto& p) {
+      auto location = p.first;
       // If we are reading a final field...
       if (location.has_field() &&
           shared_state->is_finalish(location.get_field()) &&
@@ -324,16 +322,15 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
           // ... then we don't need track the field as a memory location
           // (that in turn might get invalidated on general memory barriers).
           m_tracked_locations.emplace(location, ValueIdFlags::UNTRACKED);
-          it = read_location_counts.erase(it);
-          continue;
+          return true;
         }
       }
       m_read_locations.insert(location);
-      it++;
-    }
+      return false;
+    });
 
     // Collect all relevant written locations
-    std::unordered_map<CseLocation, size_t, CseLocationHasher>
+    UnorderedMap<CseLocation, size_t, CseLocationHasher>
         written_location_counts;
     for (const auto& mie : cfg::InstructionIterable(cfg)) {
       auto locations = shared_state->get_relevant_written_locations(
@@ -348,7 +345,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
 
     // Check which locations get written and read (vs. just written)
     std::vector<CseLocation> read_and_written_locations;
-    for (const auto& p : written_location_counts) {
+    for (const auto& p : UnorderedIterable(written_location_counts)) {
       always_assert(p.first !=
                     CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER));
       if (read_location_counts.count(p.first)) {
@@ -360,7 +357,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
     }
 
     // Also keep track of locations that get read but not written
-    for (const auto& p : read_location_counts) {
+    for (const auto& p : UnorderedIterable(read_location_counts)) {
       if (!written_location_counts.count(p.first)) {
         always_assert(!m_tracked_locations.count(p.first));
         m_tracked_locations.emplace(
@@ -756,7 +753,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
     } else {
       const auto& abs_map = m_shared_state->get_abstract_map();
       for (const auto [box_method, unbox_method] :
-           m_shared_state->get_boxing_map()) {
+           UnorderedIterable(m_shared_state->get_boxing_map())) {
         const DexMethodRef* abs_method = nullptr;
         auto abs_it = abs_map.find(unbox_method);
         if (abs_it != abs_map.end()) {
@@ -854,7 +851,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
   void init_pre_state(const IRInstruction* insn,
                       CseEnvironment* current_state) const {
     auto ref_env = current_state->get_ref_env();
-    std::unordered_map<reg_t, value_id_t> new_pre_state_src_values;
+    UnorderedMap<reg_t, value_id_t> new_pre_state_src_values;
     for (auto reg : insn->srcs()) {
       auto c = ref_env.get(reg).get_constant();
       if (!c) {
@@ -867,7 +864,7 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
     }
     if (!new_pre_state_src_values.empty()) {
       current_state->mutate_ref_env([&](RefEnvironment* env) {
-        for (const auto& p : new_pre_state_src_values) {
+        for (const auto& p : UnorderedIterable(new_pre_state_src_values)) {
           env->set(p.first, ValueIdDomain(p.second));
         }
       });
@@ -1014,14 +1011,12 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
 
   bool m_using_other_tracked_location_bit{false};
   CseUnorderedLocationSet m_read_locations;
-  std::unordered_map<CseLocation, value_id_t, CseLocationHasher>
-      m_tracked_locations;
+  UnorderedMap<CseLocation, value_id_t, CseLocationHasher> m_tracked_locations;
   SharedState* m_shared_state;
-  mutable std::unordered_map<IRValue, value_id_t, IRValueHasher> m_value_ids;
+  mutable UnorderedMap<IRValue, value_id_t, IRValueHasher> m_value_ids;
   mutable UnorderedSet<value_id_t> m_pre_state_value_ids;
-  mutable std::unordered_map<value_id_t, const IRInstruction*>
-      m_positional_insns;
-  mutable std::unordered_map<value_id_t, IRValue> m_proper_id_values;
+  mutable UnorderedMap<value_id_t, const IRInstruction*> m_positional_insns;
+  mutable UnorderedMap<value_id_t, IRValue> m_proper_id_values;
 };
 
 } // namespace
@@ -1240,7 +1235,7 @@ void SharedState::init_method_barriers(const Scope& scope) {
   m_stats.method_barriers_iterations = iterations;
   m_stats.method_barriers = m_method_written_locations.size();
 
-  for (const auto& p : m_method_written_locations) {
+  for (const auto& p : UnorderedIterable(m_method_written_locations)) {
     auto method = p.first;
     auto& written_locations = p.second;
     TRACE(CSE, 4, "[CSE] inferred barrier for %s: %s", SHOW(method),
@@ -1277,7 +1272,7 @@ void SharedState::init_scope(
       m_pure_methods, &m_conditionally_pure_methods);
   m_stats.conditionally_pure_methods = m_conditionally_pure_methods.size();
   m_stats.conditionally_pure_methods_iterations = iterations;
-  for (const auto& p : m_conditionally_pure_methods) {
+  for (const auto& p : UnorderedIterable(m_conditionally_pure_methods)) {
     m_pure_methods.insert(const_cast<DexMethod*>(p.first));
   }
 
@@ -1436,7 +1431,7 @@ SharedState::get_read_locations_of_conditionally_pure_method(
 bool SharedState::has_potential_unboxing_method(
     const IRInstruction* insn) const {
   auto method_ref = insn->get_method();
-  for (const auto& abs_pair : get_abstract_map()) {
+  for (const auto& abs_pair : UnorderedIterable(get_abstract_map())) {
     const auto* abs_method = abs_pair.second;
     if (method_ref == abs_method) {
       return true;
@@ -1525,8 +1520,7 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
     m_stats.methods_using_other_tracked_location_bit = 1;
   }
 
-  std::unordered_map<std::vector<size_t>, size_t,
-                     boost::hash<std::vector<size_t>>>
+  UnorderedMap<std::vector<size_t>, size_t, boost::hash<std::vector<size_t>>>
       insns_ids;
   auto get_earlier_insns_index =
       [&](const PatriciaTreeSet<const IRInstruction*>& insns) {
@@ -1695,7 +1689,7 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
 
   // We'll allocate one temp per "earlier_insns_index".
   // TODO: Do better, use less. A subset and its superset can share a temp.
-  std::unordered_map<size_t, std::pair<IROpcode, reg_t>> temps;
+  UnorderedMap<size_t, std::pair<IROpcode, reg_t>> temps;
   // We also remember for which instructions we'll need an iterator, as we'll
   // want to insert something after them.
   UnorderedSet<const IRInstruction*> iterator_insns;
@@ -1736,7 +1730,7 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
 
   // find all iterators in one sweep
 
-  std::unordered_map<IRInstruction*, cfg::InstructionIterator> iterators;
+  UnorderedMap<IRInstruction*, cfg::InstructionIterator> iterators;
   auto iterable = cfg::InstructionIterable(m_cfg);
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {
     auto* insn = it->insn;
@@ -1876,9 +1870,8 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
     for (auto unboxing_insn : m_unboxing) {
       auto& it = iterators.at(unboxing_insn);
       auto method_ref = unboxing_insn->get_method();
-      auto abs_it = std::find_if(
-          m_abs_map.begin(), m_abs_map.end(),
-          [method_ref](auto& p) { return p.second == method_ref; });
+      auto abs_it = unordered_find_if(
+          m_abs_map, [method_ref](auto& p) { return p.second == method_ref; });
       always_assert(abs_it != m_abs_map.end());
       auto impl = abs_it->first;
       auto src_reg = unboxing_insn->src(0);
@@ -1936,7 +1929,7 @@ void CommonSubexpressionElimination::insert_runtime_assertions(
   // the original block, we need to make sure that we track what throw-edges as\
   // needed. (All this is to appease the Android verifier in the presence of
   // monitor instructions.)
-  std::unordered_map<cfg::Block*, std::vector<cfg::Edge*>> outgoing_throws;
+  UnorderedMap<cfg::Block*, std::vector<cfg::Edge*>> outgoing_throws;
   for (auto b : m_cfg.blocks()) {
     outgoing_throws.emplace(b, b->get_outgoing_throws_in_order());
   }
@@ -2027,7 +2020,7 @@ Stats& Stats::operator+=(const Stats& that) {
   max_value_ids = std::max(max_value_ids, that.max_value_ids);
   methods_using_other_tracked_location_bit +=
       that.methods_using_other_tracked_location_bit;
-  for (const auto& p : that.eliminated_opcodes) {
+  for (const auto& p : UnorderedIterable(that.eliminated_opcodes)) {
     eliminated_opcodes[p.first] += p.second;
   }
   max_iterations = std::max(max_iterations, that.max_iterations);

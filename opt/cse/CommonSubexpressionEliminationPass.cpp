@@ -140,7 +140,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
                   shared_state_stats.conditionally_pure_methods);
   mgr.incr_metric(METRIC_CONDITIONALLY_PURE_METHODS_ITERATIONS,
                   shared_state_stats.conditionally_pure_methods_iterations);
-  for (auto& p : stats.eliminated_opcodes) {
+  for (auto& p : UnorderedIterable(stats.eliminated_opcodes)) {
     std::string name = METRIC_INSTR_PREFIX;
     name += SHOW(static_cast<IROpcode>(p.first));
     mgr.incr_metric(name, p.second);

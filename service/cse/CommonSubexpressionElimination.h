@@ -35,7 +35,7 @@ struct Stats {
   size_t max_value_ids{0};
   size_t methods_using_other_tracked_location_bit{0};
   // keys are IROpcode encoded as uint16_t, to make OSS build happy
-  std::unordered_map<uint16_t, size_t> eliminated_opcodes;
+  UnorderedMap<uint16_t, size_t> eliminated_opcodes;
   size_t max_iterations{0};
   size_t branches_eliminated{0};
 
@@ -100,12 +100,12 @@ class SharedState {
     return m_finalizable_fields;
   }
 
-  const std::unordered_map<const DexMethodRef*, const DexMethodRef*>&
-  get_boxing_map() const {
+  const UnorderedMap<const DexMethodRef*, const DexMethodRef*>& get_boxing_map()
+      const {
     return m_boxing_map;
   }
 
-  const std::unordered_map<const DexMethodRef*, const DexMethodRef*>&
+  const UnorderedMap<const DexMethodRef*, const DexMethodRef*>&
   get_abstract_map() const {
     return m_abstract_map;
   }
@@ -127,16 +127,16 @@ class SharedState {
   const UnorderedSet<const DexField*>& m_finalish_fields;
   UnorderedSet<const DexField*> m_finalizable_fields;
   std::unique_ptr<AtomicMap<Barrier, size_t, BarrierHasher>> m_barriers;
-  std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
+  UnorderedMap<const DexMethod*, CseUnorderedLocationSet>
       m_method_written_locations;
-  std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
+  UnorderedMap<const DexMethod*, CseUnorderedLocationSet>
       m_conditionally_pure_methods;
   std::unique_ptr<const method_override_graph::Graph> m_method_override_graph;
   SharedStateStats m_stats;
   // boxing to unboxing mapping
-  std::unordered_map<const DexMethodRef*, const DexMethodRef*> m_boxing_map;
+  UnorderedMap<const DexMethodRef*, const DexMethodRef*> m_boxing_map;
   // unboxing to its abstract mapping
-  std::unordered_map<const DexMethodRef*, const DexMethodRef*> m_abstract_map;
+  UnorderedMap<const DexMethodRef*, const DexMethodRef*> m_abstract_map;
 };
 
 class CommonSubexpressionElimination {
@@ -156,7 +156,7 @@ class CommonSubexpressionElimination {
   bool patch(bool runtime_assertions = false);
 
  private:
-  std::unordered_map<const IRInstruction*, size_t> m_earlier_insn_ids;
+  UnorderedMap<const IRInstruction*, size_t> m_earlier_insn_ids;
   // CSE is finding instances where the result (in the dest register) of an
   // earlier instruction can be forwarded to replace the result of another
   // (later) instruction.
@@ -176,7 +176,7 @@ class CommonSubexpressionElimination {
   DexTypeList* m_args;
 
   std::vector<IRInstruction*> m_unboxing;
-  const std::unordered_map<const DexMethodRef*, const DexMethodRef*>& m_abs_map;
+  const UnorderedMap<const DexMethodRef*, const DexMethodRef*>& m_abs_map;
 
   void insert_runtime_assertions(
       const std::vector<std::pair<Forward, IRInstruction*>>& to_check);
