@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRCode.h"
@@ -173,14 +174,14 @@ bool UpCodeMotionPass::gather_instructions_to_insert(
   // In the following, we check if all the registers assigned to by
   // movable instructions of the branch edge target block also
   // get assigned by the goto edge target block.
-  std::unordered_map<uint32_t, size_t> goto_instruction_ends;
+  UnorderedMap<uint32_t, size_t> goto_instruction_ends;
   for (size_t i = 0; i < ordered_instructions_in_goto_block.size(); i++) {
     IRInstruction* insn = ordered_instructions_in_goto_block[i];
     // only the first emplace for a particular register will stick
     goto_instruction_ends.emplace(insn->dest(), i + 1);
   }
 
-  std::unordered_set<uint32_t> destroyed_dests;
+  UnorderedSet<uint32_t> destroyed_dests;
   size_t ordered_instructions_in_goto_block_index_end = 0;
   for (IRInstruction* insn : ordered_branch_instructions) {
     uint32_t dest = insn->dest();
@@ -234,7 +235,7 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(
   always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   std::unique_ptr<type_inference::TypeInference> type_inference;
-  std::unordered_set<cfg::Block*> blocks_to_remove_set;
+  UnorderedSet<cfg::Block*> blocks_to_remove_set;
   std::vector<cfg::Block*> blocks_to_remove;
   for (cfg::Block* b : cfg.blocks()) {
     if (blocks_to_remove_set.count(b)) {
@@ -300,7 +301,7 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(
     // here, this is largely undone later by register allocation + copy
     // propagation.
 
-    std::unordered_map<uint32_t, uint32_t> temps;
+    UnorderedMap<uint32_t, uint32_t> temps;
     for (auto instruction_to_insert : instructions_to_insert) {
       auto dest = instruction_to_insert->dest();
       const auto& srcs = if_insn->srcs();
