@@ -11,6 +11,7 @@
 #include <ostream>
 
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexAccess.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
@@ -50,16 +51,15 @@ class Impl final {
   void hash(bool value);
   void hash(const IRCode* c);
   void hash(const cfg::ControlFlowGraph& cfg);
-  void hash_code_init(
-      const IRList::const_iterator& begin,
-      const IRList::const_iterator& end,
-      std::unordered_map<const MethodItemEntry*, uint32_t>* mie_ids,
-      std::unordered_map<DexPosition*, uint32_t>* pos_ids);
+  void hash_code_init(const IRList::const_iterator& begin,
+                      const IRList::const_iterator& end,
+                      UnorderedMap<const MethodItemEntry*, uint32_t>* mie_ids,
+                      UnorderedMap<DexPosition*, uint32_t>* pos_ids);
   void hash_code_flush(
       const IRList::const_iterator& begin,
       const IRList::const_iterator& end,
-      const std::unordered_map<const MethodItemEntry*, uint32_t>& mie_ids,
-      const std::unordered_map<DexPosition*, uint32_t>& pos_ids);
+      const UnorderedMap<const MethodItemEntry*, uint32_t>& mie_ids,
+      const UnorderedMap<DexPosition*, uint32_t>& pos_ids);
   void hash(const IRInstruction* insn);
   void hash(const EncodedAnnotations* a);
   void hash(const ParamAnnotations* m);
@@ -115,7 +115,7 @@ class Impl final {
   template <typename T>
   struct has_size<T, std::void_t<decltype(&T::size)>> : std::true_type {};
 
-  // Not applying to map-like things (like unordered_map) should be done by
+  // Not applying to map-like things (like UnorderedMap) should be done by
   // failures to hash the elements.
   template <typename T,
             typename std::enable_if<has_size<T>::value, T>::type* = nullptr>
@@ -225,8 +225,8 @@ void Impl::hash(const IRCode* c) {
   } else {
     hash(c->get_registers_size());
 
-    std::unordered_map<const MethodItemEntry*, uint32_t> mie_ids;
-    std::unordered_map<DexPosition*, uint32_t> pos_ids;
+    UnorderedMap<const MethodItemEntry*, uint32_t> mie_ids;
+    UnorderedMap<DexPosition*, uint32_t> pos_ids;
 
     hash_code_init(c->begin(), c->end(), &mie_ids, &pos_ids);
     hash_code_flush(c->begin(), c->end(), mie_ids, pos_ids);
@@ -239,8 +239,8 @@ void Impl::hash(const IRCode* c) {
 void Impl::hash(const cfg::ControlFlowGraph& cfg) {
   hash(cfg.get_registers_size());
   hash((uint32_t)cfg.entry_block()->id());
-  std::unordered_map<const MethodItemEntry*, uint32_t> mie_ids;
-  std::unordered_map<DexPosition*, uint32_t> pos_ids;
+  UnorderedMap<const MethodItemEntry*, uint32_t> mie_ids;
+  UnorderedMap<DexPosition*, uint32_t> pos_ids;
   for (auto b : cfg.blocks()) {
     hash((uint32_t)b->id());
     hash_code_init(b->begin(), b->end(), &mie_ids, &pos_ids);
@@ -272,8 +272,8 @@ void Impl::hash(const cfg::ControlFlowGraph& cfg) {
 void Impl::hash_code_init(
     const IRList::const_iterator& begin,
     const IRList::const_iterator& end,
-    std::unordered_map<const MethodItemEntry*, uint32_t>* mie_ids,
-    std::unordered_map<DexPosition*, uint32_t>* pos_ids) {
+    UnorderedMap<const MethodItemEntry*, uint32_t>* mie_ids,
+    UnorderedMap<DexPosition*, uint32_t>* pos_ids) {
   auto get_mie_id = [mie_ids](const MethodItemEntry* mie) {
     auto it = mie_ids->find(mie);
     if (it != mie_ids->end()) {
@@ -356,8 +356,8 @@ void Impl::hash_code_init(
 void Impl::hash_code_flush(
     const IRList::const_iterator& begin,
     const IRList::const_iterator& end,
-    const std::unordered_map<const MethodItemEntry*, uint32_t>& mie_ids,
-    const std::unordered_map<DexPosition*, uint32_t>& pos_ids) {
+    const UnorderedMap<const MethodItemEntry*, uint32_t>& mie_ids,
+    const UnorderedMap<DexPosition*, uint32_t>& pos_ids) {
   uint32_t mie_index = 0;
   for (auto code_it = begin; code_it != end; code_it++) {
     const MethodItemEntry& mie = *code_it;
@@ -572,7 +572,7 @@ std::string hash_to_string(size_t hash) {
 }
 
 DexHash DexScopeHasher::run() {
-  std::unordered_map<DexClass*, size_t> class_indices;
+  UnorderedMap<DexClass*, size_t> class_indices;
   walk::classes(m_scope, [&](DexClass* cls) {
     class_indices.emplace(cls, class_indices.size());
   });
@@ -614,7 +614,7 @@ DexHash DexClassHasher::run() { return m_fwd->run(); }
 void DexClassHasher::print(std::ostream& os) { m_fwd->print(os); }
 
 void print_classes(std::ostream& output, const Scope& classes) {
-  std::unordered_map<DexClass*, std::stringstream> class_strs;
+  UnorderedMap<DexClass*, std::stringstream> class_strs;
   walk::classes(classes, [&](DexClass* cls) {
     class_strs.emplace(cls, std::stringstream());
   });
