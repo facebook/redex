@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "Pass.h"
 
@@ -40,15 +41,14 @@ class VerticalMergingPass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  void merge_classes(const Scope&,
-                     const std::unordered_map<DexClass*, DexClass*>&);
+  void merge_classes(const Scope&, const UnorderedMap<DexClass*, DexClass*>&);
 
   void move_methods(DexClass*,
                     DexClass*,
                     bool,
-                    std::unordered_map<DexMethodRef*, DexMethodRef*>*);
-  void change_super_calls(const std::unordered_map<DexClass*, DexClass*>&);
+                    UnorderedMap<DexMethodRef*, DexMethodRef*>*);
+  void change_super_calls(const UnorderedMap<DexClass*, DexClass*>&);
   void change_init_calls(const Scope&,
-                         const std::unordered_map<DexClass*, DexClass*>&);
+                         const UnorderedMap<DexClass*, DexClass*>&);
   std::vector<std::string> m_blocklist;
 };

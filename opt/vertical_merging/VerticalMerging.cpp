@@ -23,8 +23,8 @@
 #include "WorkQueue.h"
 
 namespace {
-using ClassMap = std::unordered_map<DexClass*, DexClass*>;
-using MethodRefMap = std::unordered_map<DexMethodRef*, DexMethodRef*>;
+using ClassMap = UnorderedMap<DexClass*, DexClass*>;
+using MethodRefMap = UnorderedMap<DexMethodRef*, DexMethodRef*>;
 
 bool is_internal_def(DexMethodRef* method) {
   if (!method || !method->is_def()) {
@@ -62,7 +62,7 @@ enum DontMergeState { kConditional, kStrict };
 void record_dont_merge_element_state(
     const DexType* type,
     DontMergeState state,
-    std::unordered_map<const DexType*, DontMergeState>* dont_merge_status) {
+    UnorderedMap<const DexType*, DontMergeState>* dont_merge_status) {
   auto [it, emplaced] = dont_merge_status->emplace(type, state);
   if (!emplaced && it->second < state) {
     it->second = state;
@@ -72,7 +72,7 @@ void record_dont_merge_element_state(
 void record_dont_merge_state(
     const DexType* type,
     DontMergeState state,
-    std::unordered_map<const DexType*, DontMergeState>* dont_merge_status) {
+    UnorderedMap<const DexType*, DontMergeState>* dont_merge_status) {
   record_dont_merge_element_state(type::get_element_type_if_array(type), state,
                                   dont_merge_status);
 }
@@ -82,7 +82,7 @@ void record_dont_merge_state(
  * should be merged into which class, or not merge at all.
  */
 void check_dont_merge_list(
-    const std::unordered_map<const DexType*, DontMergeState>& dont_merge_status,
+    const UnorderedMap<const DexType*, DontMergeState>& dont_merge_status,
     DexClass* child_cls,
     DexClass* parent_cls,
     ClassMap* mergeable_to_merger) {
@@ -139,8 +139,7 @@ void check_dont_merge_list(
 void get_call_to_super(
     DexMethod* method,
     DexClass* parent_mergeable,
-    std::unordered_map<DexMethodRef*, std::vector<IRInstruction*>>*
-        callee_to_insns) {
+    UnorderedMap<DexMethodRef*, std::vector<IRInstruction*>>* callee_to_insns) {
   if (!method->get_code()) {
     return;
   }
@@ -160,23 +159,21 @@ void get_call_to_super(
 }
 
 using SuperCall = std::pair<DexMethodRef*, std::vector<IRInstruction*>>;
-using InitCall = std::pair<DexMethod*, std::unordered_set<DexMethod*>>;
+using InitCall = std::pair<DexMethod*, UnorderedSet<DexMethod*>>;
 
 /**
  * Relocate callee methods in IRInstruction from mergeable class to merger
  * class. Modify IRInstruction accordingly.
  */
 void handle_invoke_super(
-    const std::unordered_map<DexMethodRef*, std::vector<IRInstruction*>>&
+    const UnorderedMap<DexMethodRef*, std::vector<IRInstruction*>>&
         callee_to_insns,
     DexClass* merger,
     DexClass* parent_mergeable) {
-  std::vector<SuperCall> super_calls(callee_to_insns.begin(),
-                                     callee_to_insns.end());
-  std::sort(super_calls.begin(), super_calls.end(),
-            [](const SuperCall& call1, SuperCall& call2) {
-              return compare_dexmethods(call1.first, call2.first);
-            });
+  auto super_calls = unordered_to_ordered(
+      callee_to_insns, [](const SuperCall& call1, SuperCall& call2) {
+        return compare_dexmethods(call1.first, call2.first);
+      });
   for (const auto& callee_to_insn : super_calls) {
     auto callee_ref = callee_to_insn.first;
     if (is_internal_def(callee_ref)) {
@@ -211,15 +208,13 @@ void handle_invoke_super(
  * call to ctors and modify IRinstruction accordingly.
  */
 void handle_invoke_init(
-    const std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>>&
-        init_callers,
+    const UnorderedMap<DexMethod*, UnorderedSet<DexMethod*>>& init_callers,
     DexClass* merger,
     DexClass* mergeable) {
-  std::vector<InitCall> initcalls(init_callers.begin(), init_callers.end());
-  std::sort(initcalls.begin(), initcalls.end(),
-            [](const InitCall& call1, const InitCall& call2) {
-              return compare_dexmethods(call1.first, call2.first);
-            });
+  auto initcalls = unordered_to_ordered(
+      init_callers, [](const InitCall& call1, const InitCall& call2) {
+        return compare_dexmethods(call1.first, call2.first);
+      });
   for (const auto& callee_to_insn : initcalls) {
     DexMethod* callee = callee_to_insn.first;
     size_t num_orig_args = callee->get_proto()->get_args()->size();
@@ -228,9 +223,8 @@ void handle_invoke_init(
     size_t num_add_args = new_proto->get_args()->size() - num_orig_args;
     size_t num_orig_src = num_orig_args + 1;
     callee->add_load_params(num_add_args);
-    std::vector<DexMethod*> callers(callee_to_insn.second.begin(),
-                                    callee_to_insn.second.end());
-    std::sort(callers.begin(), callers.end(), compare_dexmethods);
+    auto callers =
+        unordered_to_ordered(callee_to_insn.second, compare_dexmethods);
     for (auto* caller : callers) {
       auto& cfg = caller->get_code()->cfg();
       auto ii = cfg::InstructionIterable(cfg);
@@ -280,7 +274,7 @@ void handle_invoke_init(
 ClassMap collect_can_merge(
     const Scope& scope,
     const XStoreRefs& xstores,
-    const std::unordered_map<const DexType*, DontMergeState>& dont_merge_status,
+    const UnorderedMap<const DexType*, DontMergeState>& dont_merge_status,
     size_t* num_single_extend_pairs) {
   ClassMap mergeable_to_merger;
   ClassHierarchy ch = build_type_hierarchy(scope);
@@ -322,7 +316,7 @@ ClassMap collect_can_merge(
 
 void record_annotation(
     const Scope& scope,
-    std::unordered_map<const DexType*, DontMergeState>* dont_merge_status) {
+    UnorderedMap<const DexType*, DontMergeState>* dont_merge_status) {
   // Remove class if it is the type of an annotation.
   // TODO(suree404): Merge the classes even though it appears in annotation?
   walk::annotations(scope, [&](DexAnnotation* anno) {
@@ -342,7 +336,7 @@ void record_annotation(
  */
 void record_code_reference(
     const Scope& scope,
-    std::unordered_map<const DexType*, DontMergeState>* dont_merge_status) {
+    UnorderedMap<const DexType*, DontMergeState>* dont_merge_status) {
   ConcurrentMap<const DexType*, DontMergeState> deferred_records;
   auto deferred_record_dont_merge_state =
       [&deferred_records](const DexType* type, DontMergeState state) {
@@ -427,7 +421,7 @@ void record_code_reference(
  */
 void record_method_signature(
     const Scope& scope,
-    std::unordered_map<const DexType*, DontMergeState>* dont_merge_status) {
+    UnorderedMap<const DexType*, DontMergeState>* dont_merge_status) {
   walk::methods(scope, [&](DexMethod* method) {
     if (is_native(method) || !can_rename(method)) {
       DexProto* proto = method->get_proto();
@@ -443,7 +437,7 @@ void record_method_signature(
 
 void record_blocklist(
     const Scope& scope,
-    std::unordered_map<const DexType*, DontMergeState>* dont_merge_status,
+    UnorderedMap<const DexType*, DontMergeState>* dont_merge_status,
     const std::vector<std::string>& blocklist) {
   if (blocklist.empty()) {
     return;
@@ -469,14 +463,14 @@ void record_blocklist(
  * Remove pair of classes from merging if they both have clinit function.
  */
 void remove_both_have_clinit(ClassMap* mergeable_to_merger) {
-  std::vector<DexClass*> to_delete;
-  for (const auto& pair : *mergeable_to_merger) {
+  UnorderedBag<DexClass*> to_delete;
+  for (const auto& pair : UnorderedIterable(*mergeable_to_merger)) {
     if (pair.first->get_clinit() != nullptr &&
         pair.second->get_clinit() != nullptr) {
-      to_delete.emplace_back(pair.first);
+      to_delete.insert(pair.first);
     }
   }
-  for (DexClass* cls : to_delete) {
+  for (DexClass* cls : UnorderedIterable(to_delete)) {
     mergeable_to_merger->erase(cls);
   }
 }
@@ -486,8 +480,8 @@ void remove_both_have_clinit(ClassMap* mergeable_to_merger) {
  * for static method that can't be renamed.
  */
 void remove_unrenamable_collisions(ClassMap* mergeable_to_merger) {
-  std::vector<DexClass*> to_delete;
-  for (const auto& pair : *mergeable_to_merger) {
+  UnorderedBag<DexClass*> to_delete;
+  for (const auto& pair : UnorderedIterable(*mergeable_to_merger)) {
     auto mergeable = pair.first;
     auto merger = pair.second;
     for (auto m : mergeable->get_dmethods()) {
@@ -497,12 +491,12 @@ void remove_unrenamable_collisions(ClassMap* mergeable_to_merger) {
       auto merger_method_ref = DexMethod::get_method(
           merger->get_type(), m->get_name(), m->get_proto());
       if (merger_method_ref) {
-        to_delete.emplace_back(mergeable);
+        to_delete.insert(mergeable);
         break;
       }
     }
   }
-  for (DexClass* cls : to_delete) {
+  for (DexClass* cls : UnorderedIterable(to_delete)) {
     mergeable_to_merger->erase(cls);
   }
 }
@@ -513,7 +507,7 @@ void remove_unrenamable_collisions(ClassMap* mergeable_to_merger) {
  */
 void record_field_reference(
     const Scope& scope,
-    std::unordered_map<const DexType*, DontMergeState>* dont_merge_status) {
+    UnorderedMap<const DexType*, DontMergeState>* dont_merge_status) {
   walk::fields(scope, [&](DexField* field) {
     if (is_static(field) && field->get_type() == type::java_lang_Class()) {
       // Checking type which might be stored as class in field.
@@ -536,7 +530,7 @@ void record_field_reference(
 void record_referenced(
     const Scope& scope,
     const std::vector<std::string>& blocklist,
-    std::unordered_map<const DexType*, DontMergeState>* dont_merge_status) {
+    UnorderedMap<const DexType*, DontMergeState>* dont_merge_status) {
   record_annotation(scope, dont_merge_status);
   record_code_reference(scope, dont_merge_status);
   record_field_reference(scope, dont_merge_status);
@@ -637,7 +631,7 @@ void remove_merged(Scope& scope, const ClassMap& mergeable_to_merger) {
   if (mergeable_to_merger.empty()) {
     return;
   }
-  for (const auto& pair : mergeable_to_merger) {
+  for (const auto& pair : UnorderedIterable(mergeable_to_merger)) {
     TRACE(VMERGE,
           5,
           "Removing class | %s | merged into | %s",
@@ -751,8 +745,7 @@ void VerticalMergingPass::change_super_calls(
   // Update invoke-super.
   // The invoke-super Parent.v could only be called from child class.
   auto process_subclass_methods = [&](DexClass* child, DexClass* parent) {
-    std::unordered_map<DexMethodRef*, std::vector<IRInstruction*>>
-        callee_to_insns;
+    UnorderedMap<DexMethodRef*, std::vector<IRInstruction*>> callee_to_insns;
     for (DexMethod* method : child->get_dmethods()) {
       get_call_to_super(method, parent, &callee_to_insns);
     }
@@ -765,7 +758,7 @@ void VerticalMergingPass::change_super_calls(
     handle_invoke_super(callee_to_insns, child, parent);
   };
 
-  for (const auto& pair : mergeable_to_merger) {
+  for (const auto& pair : UnorderedIterable(mergeable_to_merger)) {
     DexClass* merger = pair.second;
     DexClass* mergeable = pair.first;
     if (merger->get_super_class() == mergeable->get_type()) {
@@ -785,8 +778,7 @@ void VerticalMergingPass::change_init_calls(
   // The invoke-direct Parent.<init> could be called from child or from parent's
   // constructors, or from any other code.
 
-  ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>
-      concurrent_init_callers;
+  ConcurrentMap<DexMethod*, UnorderedSet<DexMethod*>> concurrent_init_callers;
   walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
     if (!insn->has_method()) {
       return;
@@ -807,13 +799,13 @@ void VerticalMergingPass::change_init_calls(
     TRACE(VMERGE, 5, "Changing init call %s", SHOW(insn));
   });
 
-  for (const auto& pair : mergeable_to_merger) {
+  for (const auto& pair : UnorderedIterable(mergeable_to_merger)) {
     DexClass* merger = pair.second;
     DexClass* mergeable = pair.first;
     if (merger->get_super_class() != mergeable->get_type()) {
       continue;
     }
-    std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>> init_callers;
+    UnorderedMap<DexMethod*, UnorderedSet<DexMethod*>> init_callers;
     for (auto* ctor : mergeable->get_ctors()) {
       auto it = concurrent_init_callers.find(ctor);
       if (it != concurrent_init_callers.end()) {
@@ -921,7 +913,7 @@ void VerticalMergingPass::merge_classes(const Scope& scope,
   change_super_calls(mergeable_to_merger);
   change_init_calls(scope, mergeable_to_merger);
 
-  for (const auto& pair : mergeable_to_merger) {
+  for (const auto& pair : UnorderedIterable(mergeable_to_merger)) {
     DexClass* merger = pair.second;
     DexClass* mergeable = pair.first;
     bool is_merging_super_to_sub =
@@ -949,7 +941,7 @@ void VerticalMergingPass::run_pass(DexStoresVector& stores,
                                    PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  std::unordered_map<const DexType*, DontMergeState> dont_merge_status;
+  UnorderedMap<const DexType*, DontMergeState> dont_merge_status;
   record_referenced(scope, m_blocklist, &dont_merge_status);
   XStoreRefs xstores(stores);
   size_t num_single_extend;
