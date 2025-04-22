@@ -318,7 +318,8 @@ TEST_F(PointsToSemanticsTest, semanticActionGeneration) {
   PointsToSemantics pt_semantics(scope);
 
   std::set<std::string> pt_output;
-  for (const auto& pt_entry : pt_semantics) {
+  for (const auto& pt_entry :
+       UnorderedIterable(pt_semantics.method_semantics())) {
     std::ostringstream out;
     EXPECT_NE(PTS_STUB, pt_entry.second.kind());
     out << pt_entry.second;
@@ -328,7 +329,8 @@ TEST_F(PointsToSemanticsTest, semanticActionGeneration) {
 
   // Testing the serialization mechanism based on S-expressions.
   std::stringstream serialization;
-  for (const auto& pt_entry : pt_semantics) {
+  for (const auto& pt_entry :
+       UnorderedIterable(pt_semantics.method_semantics())) {
     auto e = pt_entry.second.to_s_expr();
     serialization << e;
   }
