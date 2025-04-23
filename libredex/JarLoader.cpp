@@ -59,7 +59,7 @@ uint16_t read16(uint8_t*& buffer, uint8_t* buffer_end) {
 }
 
 uint8_t read8(uint8_t*& buffer, uint8_t* buffer_end) {
-  always_assert_type_log(buffer <= buffer_end, BUFFER_END_EXCEEDED,
+  always_assert_type_log(buffer < buffer_end, BUFFER_END_EXCEEDED,
                          "Buffer overflow");
   return *buffer++;
 }
