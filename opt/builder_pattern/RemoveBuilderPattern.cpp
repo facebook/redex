@@ -286,14 +286,6 @@ class RemoveClasses {
     for (; num_iterations < m_max_num_inline_iteration; num_iterations++) {
       analysis->run_analysis();
 
-      std::vector<IRInstruction*> deleted_insns;
-      // When ending the scope, free the instructions.
-      auto deleted_guard = at_scope_exit([&deleted_insns]() {
-        for (auto* insn : deleted_insns) {
-          delete insn;
-        }
-      });
-
       if (!analysis->has_usage()) {
         TRACE(BLD_PATTERN, 6, "No builder to remove from %s", SHOW(method));
         break;
@@ -345,8 +337,7 @@ class RemoveClasses {
       std::unordered_set<IRInstruction*> not_inlined_insns;
       if (m_root != type::java_lang_Object() ||
           !has_large_escaping_calls(to_inline)) {
-        not_inlined_insns =
-            m_transform.try_inline_calls(method, to_inline, &deleted_insns);
+        not_inlined_insns = m_transform.try_inline_calls(method, to_inline);
       } else {
         not_inlined_insns = to_inline;
       }

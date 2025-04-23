@@ -33,9 +33,7 @@ class BuilderTransform {
    * of call instructions that were not abled to be inlined.
    */
   std::unordered_set<IRInstruction*> try_inline_calls(
-      DexMethod* caller,
-      const std::unordered_set<IRInstruction*>& insns,
-      std::vector<IRInstruction*>* deleted_insns);
+      DexMethod* caller, const std::unordered_set<IRInstruction*>& insns);
 
   void update_virtual_calls(
       const std::unordered_map<IRInstruction*, DexType*>& insn_to_type);

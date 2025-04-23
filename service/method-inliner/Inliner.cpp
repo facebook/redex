@@ -507,9 +507,7 @@ void MultiMethodInliner::inline_callees(
 }
 
 size_t MultiMethodInliner::inline_callees(
-    DexMethod* caller,
-    const std::unordered_set<IRInstruction*>& insns,
-    std::vector<IRInstruction*>* deleted_insns) {
+    DexMethod* caller, const std::unordered_set<IRInstruction*>& insns) {
   TraceContext context{caller};
   std::vector<Inlinable> inlinables;
   always_assert(caller->get_code()->editable_cfg_built());
@@ -531,7 +529,7 @@ size_t MultiMethodInliner::inline_callees(
     }
   }
 
-  return inline_inlinables(caller, inlinables, deleted_insns);
+  return inline_inlinables(caller, inlinables);
 }
 
 size_t MultiMethodInliner::inline_callees(
@@ -657,9 +655,7 @@ bool MultiMethodInliner::get_needs_constructor_fence(
 }
 
 size_t MultiMethodInliner::inline_inlinables(
-    DexMethod* caller_method,
-    const std::vector<Inlinable>& inlinables,
-    std::vector<IRInstruction*>* deleted_insns) {
+    DexMethod* caller_method, const std::vector<Inlinable>& inlinables) {
   auto timer = m_inline_inlinables_timer.scope();
   auto caller = caller_method->get_code();
   always_assert(caller->editable_cfg_built());

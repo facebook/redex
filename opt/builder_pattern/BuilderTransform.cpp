@@ -38,11 +38,9 @@ BuilderTransform::BuilderTransform(
 }
 
 std::unordered_set<IRInstruction*> BuilderTransform::try_inline_calls(
-    DexMethod* caller,
-    const std::unordered_set<IRInstruction*>& insns,
-    std::vector<IRInstruction*>* deleted_insns) {
+    DexMethod* caller, const std::unordered_set<IRInstruction*>& insns) {
   always_assert(caller && caller->get_code());
-  m_inliner->inline_callees(caller, insns, deleted_insns);
+  m_inliner->inline_callees(caller, insns);
   std::unordered_set<IRInstruction*> not_inlined_insns;
   // Check if everything was inlined.
   auto* code = caller->get_code();
@@ -102,7 +100,7 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
       m_method_copy[method] = method_copy;
 
       size_t num_insns_not_inlined =
-          try_inline_calls(method, inlinable_insns, nullptr).size();
+          try_inline_calls(method, inlinable_insns).size();
       if (num_insns_not_inlined > 0) {
         return false;
       }
