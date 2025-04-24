@@ -259,7 +259,7 @@ void AndroidResources::collect_layout_classes_and_attributes(
     std::unordered_set<std::string>* out_classes,
     std::unordered_multimap<std::string, std::string>* out_attributes) {
   auto res_table = load_res_table();
-  auto collect_fn = [&](const std::vector<std::string>& prefixes) {
+  auto collect_fn = [&](const std::vector<std::string>& skip_dirs_prefixes) {
     std::mutex out_mutex;
     resources::StringOrReferenceSet classes;
     std::unordered_multimap<std::string, resources::StringOrReference>
@@ -274,7 +274,7 @@ void AndroidResources::collect_layout_classes_and_attributes(
               TRACE(RES, 9,
                     "Scanning %s for xml files for classes and attributes",
                     dir.c_str());
-              find_resource_xml_files(dir, prefixes,
+              find_resource_xml_files(dir, skip_dirs_prefixes,
                                       [&](const std::string& file) {
                                         worker_state->push_task(file);
                                       });
@@ -331,9 +331,6 @@ void AndroidResources::collect_layout_classes_and_attributes(
       "anim",
       // Colors do not have references.
       "color",
-      // There are usually a lot of drawable resources, non of
-      // which contain any code references.
-      "drawable",
       // Raw would not contain binary XML.
       "raw",
   });
