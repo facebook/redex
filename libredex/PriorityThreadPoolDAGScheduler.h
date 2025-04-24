@@ -50,7 +50,8 @@ class PriorityThreadPoolDAGScheduler {
 
   void push_back_continuation(Task task, std::function<void()> f) {
     m_concurrent_continuations->update(
-        task, [f = std::move(f)](Task, Continuations& continuations, bool) {
+        task,
+        [f = std::move(f)](Task, Continuations& continuations, bool) mutable {
           continuations.push_back(std::move(f));
         });
   }
@@ -77,13 +78,16 @@ class PriorityThreadPoolDAGScheduler {
     }
 
     auto it = m_waiting_for.find(task);
-    if (it != m_waiting_for.end()) {
-      for (auto waiting_task : UnorderedIterable(m_waiting_for.at(task))) {
-        if (m_wait_counts.at(waiting_task).fetch_sub(1) == 1) {
-          schedule(waiting_task);
-        }
+    if (it == m_waiting_for.end()) {
+      return;
+    }
+
+    for (auto waiting_task : UnorderedIterable(it->second)) {
+      if (m_wait_counts.at(waiting_task).fetch_sub(1) == 1) {
+        schedule(waiting_task);
       }
     }
+    it->second = decltype(it->second)();
   }
 
   void schedule(Task task) {
@@ -132,29 +136,32 @@ class PriorityThreadPoolDAGScheduler {
     });
   }
 
-  template <class ForwardIt>
-  uint32_t run(const ForwardIt& begin, const ForwardIt& end) {
+  template <class Collection>
+  uint32_t run(Collection collection) {
     always_assert(!m_concurrent_continuations);
     m_priorities = std::make_unique<UnorderedMap<Task, int>>();
-    std::vector<std::vector<Task>> ready_tasks;
-    for (auto it = begin; it != end; it++) {
-      int priority = compute_priority(*it);
-      auto& wait_count = m_wait_counts.emplace(*it, 0).first->second;
-      if (wait_count.load(std::memory_order_relaxed) != 0) {
-        continue;
+    {
+      std::vector<std::vector<Task>> ready_tasks;
+      for (auto task : collection) {
+        int priority = compute_priority(task);
+        auto& wait_count = m_wait_counts.emplace(task, 0).first->second;
+        if (wait_count.load(std::memory_order_relaxed) != 0) {
+          continue;
+        }
+        always_assert(priority >= 0);
+        if ((uint32_t)priority >= ready_tasks.size()) {
+          ready_tasks.resize(priority * 2 + 1);
+        }
+        ready_tasks[priority].push_back(task);
       }
-      always_assert(priority >= 0);
-      if ((uint32_t)priority >= ready_tasks.size()) {
-        ready_tasks.resize(priority * 2 + 1);
+      m_concurrent_continuations =
+          std::make_unique<ConcurrentMap<Task, Continuations>>();
+      for (size_t i = ready_tasks.size(); i > 0; --i) {
+        for (auto task : ready_tasks[i - 1]) {
+          schedule(task);
+        }
       }
-      ready_tasks[priority].push_back(*it);
-    }
-    m_concurrent_continuations =
-        std::make_unique<ConcurrentMap<Task, Continuations>>();
-    for (size_t i = ready_tasks.size(); i > 0; --i) {
-      for (auto task : ready_tasks[i - 1]) {
-        schedule(task);
-      }
+      collection = decltype(collection)();
     }
     m_priority_thread_pool.join();
     always_assert(m_concurrent_continuations->empty());
@@ -162,8 +169,8 @@ class PriorityThreadPoolDAGScheduler {
     for (auto& p : UnorderedIterable(m_wait_counts)) {
       always_assert(p.second.load(std::memory_order_relaxed) == 0);
     }
-    m_wait_counts.clear();
-    m_waiting_for.clear();
+    m_wait_counts = decltype(m_wait_counts)();
+    m_waiting_for = decltype(m_waiting_for)();
     m_priorities = nullptr;
     auto max_priority = m_max_priority;
     m_max_priority = 0;

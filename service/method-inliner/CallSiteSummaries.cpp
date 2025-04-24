@@ -283,7 +283,7 @@ void CallSiteSummarizer::summarize() {
     }
   }
   m_stats->constant_invoke_callers_critical_path_length =
-      summaries_scheduler.run(callers.begin(), callers.end());
+      summaries_scheduler.run(std::move(callers));
 }
 
 InvokeCallSiteSummariesAndDeadBlocks

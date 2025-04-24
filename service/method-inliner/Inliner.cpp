@@ -385,8 +385,7 @@ void MultiMethodInliner::inline_methods() {
     }
   }
 
-  info.critical_path_length =
-      m_scheduler.run(methods_to_schedule.begin(), methods_to_schedule.end());
+  info.critical_path_length = m_scheduler.run(std::move(methods_to_schedule));
 
   flush();
   info.waited_seconds = m_scheduler.get_thread_pool().get_waited_seconds();
