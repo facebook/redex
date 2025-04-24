@@ -621,7 +621,8 @@ void gather_true_virtual_methods(
         auto code = const_cast<DexMethod*>(callee)->get_code();
         if (!code || !method::no_invoke_super(*code)) {
           if (!caller_to_invocations.caller_insns.empty()) {
-            caller_to_invocations.caller_insns.clear();
+            caller_to_invocations.caller_insns =
+                decltype(caller_to_invocations.caller_insns)();
             caller_to_invocations.other_call_sites = true;
           }
           return;

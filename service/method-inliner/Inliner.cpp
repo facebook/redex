@@ -1008,6 +1008,21 @@ void MultiMethodInliner::postprocess_method(DexMethod* method) {
     m_shrinker.shrink_method(method);
   }
 
+  // Release some memory that is no longer needed as the method has been
+  // processed as a caller
+  {
+    auto it = m_caller_virtual_callees.find(method);
+    if (it != m_caller_virtual_callees.end()) {
+      it->second = decltype(it->second)();
+    }
+  }
+  {
+    auto it = caller_callee.find(method);
+    if (it != caller_callee.end()) {
+      it->second = decltype(it->second)();
+    }
+  }
+
   bool is_callee = !!callee_caller.count_unsafe(method);
   if (!is_callee) {
     // This method isn't the callee of another caller, so we can stop here.
