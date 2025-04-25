@@ -5,8 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <system_error>
 #include <vector>
 
 #include "Debug.h"
@@ -125,6 +127,21 @@ void skip_to_next_command(TokenIndex& idx) {
   while ((idx.type() != TokenType::eof_token) && (!idx.it->is_command())) {
     idx.next();
   }
+}
+
+constexpr std::string_view kUserDir{"<user.dir>"};
+
+std::string replace_user_dir(std::string&& in) {
+  auto pos = in.find(kUserDir);
+  if (pos == std::string::npos) {
+    return in;
+  }
+  // Could cache this but may make tests harder.
+  std::error_code ec;
+  auto cwd = std::filesystem::current_path(ec);
+  always_assert_log(!ec, "Failed to get cwd for <user.dir>: %s",
+                    ec.message().c_str());
+  return in.substr(0, pos) + cwd.string() + in.substr(pos + kUserDir.size());
 }
 
 std::string parse_single_filepath_command(TokenIndex& idx) {
@@ -973,6 +990,9 @@ void parse(const std::vector<Token>& vec,
       if (sfc.empty()) {
         ++stats.parse_errors;
       } else {
+        if (sfc == "<user.dir>") {
+          sfc = replace_user_dir(std::move(sfc));
+        }
         pg_config->basedirectory = sfc;
       }
       continue;
