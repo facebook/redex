@@ -755,6 +755,22 @@ Result check_monitors(const DexMethod* method) {
   return Result::Ok();
 }
 
+Result validate_no_private_virtual_method(const DexMethodRef* method) {
+  if (method == nullptr || !method->is_def()) {
+    // Forgive unresolved refs.
+    return Result::Ok();
+  }
+
+  if (method->as_def()->is_virtual() && is_private(method->as_def())) {
+    std::ostringstream out;
+    out << "A method cannot be both private and virtual: "
+        << show_deobfuscated(method);
+    return Result::make_error(out.str());
+  }
+
+  return Result::Ok();
+}
+
 /**
  * Validate if the caller has the permit to call a method or access a field.
  */
@@ -962,6 +978,14 @@ void IRTypeChecker::run() {
     // If the method has no associated code, the type checking trivially
     // succeeds.
     m_complete = true;
+    return;
+  }
+
+  if (auto result = validate_no_private_virtual_method(m_dex_method);
+      result != Result::Ok()) {
+    m_complete = true;
+    m_good = false;
+    m_what = result.error_message();
     return;
   }
 

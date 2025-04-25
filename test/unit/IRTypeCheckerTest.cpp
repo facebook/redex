@@ -2940,6 +2940,26 @@ TEST_F(IRTypeCheckerTest, invokeDirectOnConstructor) {
   EXPECT_TRUE(checker.fail());
 }
 
+TEST_F(IRTypeCheckerTest, checkVirtualPrivateMethod) {
+  const auto type_foo = DexType::make_type("LFoo;");
+  ClassCreator cls_foo_creator(type_foo);
+  auto method = DexMethod::make_method("LFoo;.bar:()V")
+                    ->make_concrete(ACC_PRIVATE, /* is_virtual */ true);
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (return-void)
+  ))"));
+  cls_foo_creator.add_method(method);
+  cls_foo_creator.set_super(type::java_lang_Object());
+  cls_foo_creator.create();
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_THAT(checker.what(),
+              HasSubstr("A method cannot be both private and virtual"));
+  EXPECT_TRUE(checker.fail());
+}
+
 TEST_F(IRTypeCheckerTest, invokeVirtualOnInterfaceMethod) {
   const auto interface_type = DexType::make_type("LI;");
   ClassCreator interface_type_creator(interface_type);
