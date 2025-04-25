@@ -826,7 +826,10 @@ void validate_invoke_super(const DexMethod* caller,
 }
 
 void validate_invoke_class_initializer(const DexMethodRef* callee_ref) {
-  redex_assert(callee_ref != nullptr);
+  if (callee_ref == nullptr) {
+    // Forgive unresolved refs.
+    return;
+  }
   if (method::is_clinit(callee_ref)) {
     std::ostringstream out;
     out << show_deobfuscated(callee_ref)
@@ -837,7 +840,10 @@ void validate_invoke_class_initializer(const DexMethodRef* callee_ref) {
 
 void validate_invoke_direct_constructor(const DexMethodRef* callee_ref,
                                         IROpcode opcode) {
-  redex_assert(callee_ref != nullptr);
+  if (callee_ref == nullptr) {
+    // Forgive unresolved refs.
+    return;
+  }
   if (method::is_init(callee_ref) && opcode != OPCODE_INVOKE_DIRECT) {
     std::ostringstream out;
     out << show_deobfuscated(callee_ref)
