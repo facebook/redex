@@ -198,6 +198,9 @@ struct ProguardConfiguration {
   std::vector<std::string> dontwarn;
   std::vector<std::string> keeppackagenames;
 
+  // If set to true `-basedirectory` will be ignored.
+  bool frozen_basedirectory{false};
+
   ProguardConfiguration() = default;
   ProguardConfiguration(const ProguardConfiguration&) = delete;
 };

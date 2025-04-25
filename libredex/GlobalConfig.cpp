@@ -126,6 +126,9 @@ void ProguardConfig::bind_config() {
        disable_default_blocklist);
   bind("fail_on_unknown_commands", fail_on_unknown_commands,
        fail_on_unknown_commands);
+  bind("frozen_basedirectory", frozen_basedirectory, frozen_basedirectory,
+       "When set, ignore -basedirectory directives in the proguard "
+       "configuration file and use the give value instead.");
 }
 
 void PassManagerConfig::bind_config() {
