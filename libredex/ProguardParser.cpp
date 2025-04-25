@@ -129,6 +129,8 @@ void skip_to_next_command(TokenIndex& idx) {
   }
 }
 
+using path = std::filesystem::path;
+
 constexpr std::string_view kUserDir{"<user.dir>"};
 
 std::string replace_user_dir(std::string&& in) {
@@ -171,7 +173,8 @@ std::string parse_single_filepath_command(TokenIndex& idx) {
 }
 
 template <bool kOptional = false>
-std::vector<std::string> parse_filepaths(TokenIndex& idx) {
+std::vector<std::string> parse_filepaths(TokenIndex& idx,
+                                         const std::string& basedir) {
   std::vector<std::string> filepaths;
   if (idx.type() != TokenType::filepath) {
     if (!kOptional) {
@@ -183,7 +186,9 @@ std::vector<std::string> parse_filepaths(TokenIndex& idx) {
   }
   std::vector<std::string> res;
   while (idx.type() == TokenType::filepath) {
-    res.push_back(idx.str_next());
+    res.emplace_back(basedir.empty()
+                         ? idx.str_next()
+                         : (path(basedir) / path(idx.str_next())).string());
   }
   return res;
 }
@@ -211,7 +216,7 @@ std::vector<std::string> parse_filepath_command(TokenIndex& idx,
               << idx.show_context(2) << std::endl;
     return {};
   }
-  return parse_filepaths(idx);
+  return parse_filepaths(idx, basedir);
 }
 
 std::vector<std::string> parse_jars(TokenIndex& idx,
@@ -224,7 +229,7 @@ std::vector<std::string> parse_jars(TokenIndex& idx,
     return {};
   }
   // Parse the list of filenames.
-  return parse_filepaths(idx);
+  return parse_filepaths(idx, basedir);
 }
 
 void parse_repackageclasses(TokenIndex& idx) {
@@ -1072,7 +1077,7 @@ void parse(const std::vector<Token>& vec,
       continue;
 
     case TokenType::printseeds: {
-      auto ofp = parse_filepaths</*kOptional=*/true>(idx);
+      auto ofp = parse_filepaths</*kOptional=*/true>(idx, "");
       move_vector_elements(ofp, pg_config->printseeds);
       continue;
     }
@@ -1082,7 +1087,7 @@ void parse(const std::vector<Token>& vec,
       continue;
     }
     case TokenType::printusage: {
-      auto ofp = parse_filepaths</*kOptional=*/true>(idx);
+      auto ofp = parse_filepaths</*kOptional=*/true>(idx, "");
       move_vector_elements(ofp, pg_config->printusage);
       continue;
     }
@@ -1114,7 +1119,7 @@ void parse(const std::vector<Token>& vec,
       continue;
     }
     case TokenType::printmapping: {
-      auto ofp = parse_filepaths</*kOptional=*/true>(idx);
+      auto ofp = parse_filepaths</*kOptional=*/true>(idx, "");
       move_vector_elements(ofp, pg_config->printmapping);
       continue;
     }
@@ -1143,7 +1148,7 @@ void parse(const std::vector<Token>& vec,
       continue;
     }
     case TokenType::printconfiguration: {
-      auto ofp = parse_filepaths</*kOptional=*/true>(idx);
+      auto ofp = parse_filepaths</*kOptional=*/true>(idx, "");
       move_vector_elements(ofp, pg_config->printconfiguration);
       continue;
     }

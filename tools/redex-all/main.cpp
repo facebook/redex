@@ -1190,6 +1190,33 @@ void load_library_jars(Arguments& args,
   }
 }
 
+template <typename C>
+void split_string(const std::string& str, C& out) {
+  std::istringstream in_stream(str);
+  std::string val;
+  constexpr char kDelim =
+#if IS_WINDOWS
+      ';';
+#else
+      ':';
+#endif
+  while (std::getline(in_stream, val, kDelim)) {
+    out.emplace(val);
+  }
+}
+
+template <typename C>
+std::string to_string(const C& c) {
+  std::string ret;
+  for (auto& e : c) {
+    if (!ret.empty()) {
+      ret.append(", ");
+    }
+    ret.append(e);
+  }
+  return ret;
+}
+
 /**
  * Pre processing steps: load dex and configurations
  */
@@ -1262,27 +1289,16 @@ void redex_frontend(ConfigFiles& conf, /* input */
     stats["proguard"] = d;
   }
 
-  const auto& pg_libs = pg_config.libraryjars;
-  args.jar_paths.insert(pg_libs.begin(), pg_libs.end());
-
-  std::set<std::string> library_jars;
+  // Initialize with PG config libraryjars. The parser separated out any list
+  // items.
+  std::set<std::string> library_jars{pg_config.libraryjars.begin(),
+                                     pg_config.libraryjars.end()};
+  // For command line jar paths we accept lists delimited with an OS-specific
+  // separator.
   for (const auto& jar_path : args.jar_paths) {
-    std::istringstream jar_stream(jar_path);
-    std::string dependent_jar_path;
-    constexpr char kDelim =
-#if IS_WINDOWS
-        ';';
-#else
-        ':';
-#endif
-    while (std::getline(jar_stream, dependent_jar_path, kDelim)) {
-      TRACE(MAIN,
-            2,
-            "Dependent JAR specified on command-line: %s",
-            dependent_jar_path.c_str());
-      library_jars.emplace(dependent_jar_path);
-    }
+    split_string(jar_path, library_jars);
   }
+  TRACE(MAIN, 2, "Library jars: %s", to_string(library_jars).c_str());
 
   DexStore root_store("classes");
   // Only set dex magic to root DexStore since all dex magic

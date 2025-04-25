@@ -129,6 +129,24 @@ TEST(ProguardParserTest, injars) {
   ASSERT_EQ(config.injars[5], "/iota/a/b/c/deer.txt");
 }
 
+TEST(ProguardParserTest, injars_basedir) {
+  ProguardConfiguration config;
+  std::istringstream ss(
+      "-basedirectory x/y \n"
+      "-injars alpha.txt \n"
+      "-injars alpha/beta.txt \n"
+      "-injars \"gamma.txt\" \n"
+      "-injars /alpha/beta2.txt:gamma/delta.txt:/iota/a/b/c/deer.txt\n");
+  proguard_parser::parse(ss, &config);
+  ASSERT_EQ(config.injars.size(), 6);
+  ASSERT_EQ(config.injars[0], "x/y/alpha.txt");
+  ASSERT_EQ(config.injars[1], "x/y/alpha/beta.txt");
+  ASSERT_EQ(config.injars[2], "x/y/gamma.txt");
+  ASSERT_EQ(config.injars[3], "/alpha/beta2.txt");
+  ASSERT_EQ(config.injars[4], "x/y/gamma/delta.txt");
+  ASSERT_EQ(config.injars[5], "/iota/a/b/c/deer.txt");
+}
+
 // Parse outjars
 TEST(ProguardParserTest, outjars) {
   ProguardConfiguration config;
@@ -147,6 +165,24 @@ TEST(ProguardParserTest, outjars) {
   ASSERT_EQ(config.outjars[5], "/iota/a/b/c/deer.txt");
 }
 
+TEST(ProguardParserTest, outjars_basedir) {
+  ProguardConfiguration config;
+  std::istringstream ss(
+      "-basedirectory x/y \n"
+      "-outjars alpha.txt \n"
+      "-outjars alpha/beta.txt \n"
+      "-outjars \"gamma.txt\" \n"
+      "-outjars /alpha/beta2.txt:gamma/delta.txt:/iota/a/b/c/deer.txt\n");
+  proguard_parser::parse(ss, &config);
+  ASSERT_EQ(config.outjars.size(), 6);
+  ASSERT_EQ(config.outjars[0], "x/y/alpha.txt");
+  ASSERT_EQ(config.outjars[1], "x/y/alpha/beta.txt");
+  ASSERT_EQ(config.outjars[2], "x/y/gamma.txt");
+  ASSERT_EQ(config.outjars[3], "/alpha/beta2.txt");
+  ASSERT_EQ(config.outjars[4], "x/y/gamma/delta.txt");
+  ASSERT_EQ(config.outjars[5], "/iota/a/b/c/deer.txt");
+}
+
 // Parse libraryjars
 TEST(ProguardParserTest, libraryjars) {
   ProguardConfiguration config;
@@ -162,6 +198,24 @@ TEST(ProguardParserTest, libraryjars) {
   ASSERT_EQ(config.libraryjars[2], "gamma.txt");
   ASSERT_EQ(config.libraryjars[3], "/alpha/beta2.txt");
   ASSERT_EQ(config.libraryjars[4], "gamma/delta.txt");
+  ASSERT_EQ(config.libraryjars[5], "/iota/a/b/c/deer.txt");
+}
+
+TEST(ProguardParserTest, libraryjars_basedir) {
+  ProguardConfiguration config;
+  std::istringstream ss(
+      "-basedirectory x/y \n"
+      "-libraryjars alpha.txt \n"
+      "-libraryjars alpha/beta.txt \n"
+      "-libraryjars \"gamma.txt\" \n"
+      "-libraryjars /alpha/beta2.txt:gamma/delta.txt:/iota/a/b/c/deer.txt\n");
+  proguard_parser::parse(ss, &config);
+  ASSERT_EQ(config.libraryjars.size(), 6);
+  ASSERT_EQ(config.libraryjars[0], "x/y/alpha.txt");
+  ASSERT_EQ(config.libraryjars[1], "x/y/alpha/beta.txt");
+  ASSERT_EQ(config.libraryjars[2], "x/y/gamma.txt");
+  ASSERT_EQ(config.libraryjars[3], "/alpha/beta2.txt");
+  ASSERT_EQ(config.libraryjars[4], "x/y/gamma/delta.txt");
   ASSERT_EQ(config.libraryjars[5], "/iota/a/b/c/deer.txt");
 }
 
