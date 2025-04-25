@@ -8,6 +8,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <filesystem>
 #include <istream>
 #include <vector>
 
@@ -1099,4 +1100,14 @@ TEST(ProguardParserTest, assumevalues_fields) {
     EXPECT_EQ(k2->class_spec.fieldSpecifications[2].return_value.value_type,
               keep_rules::AssumeReturnValue::ValueNone);
   }
+}
+
+// Make sure we can parse an empty string
+TEST(ProguardParserTest, user_dir) {
+  ProguardConfiguration config;
+  std::istringstream ss1("-basedirectory <user.dir>");
+  proguard_parser::parse(ss1, &config);
+  ASSERT_TRUE(config.ok);
+  auto cwd = std::filesystem::current_path();
+  EXPECT_EQ(cwd.string(), config.basedirectory);
 }
