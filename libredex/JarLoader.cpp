@@ -532,6 +532,10 @@ bool parse_class(uint8_t* buffer,
       return false;
     }
     cc.set_super(sclazz);
+  } else if (self->get_name()->str() != "Ljava/lang/Object;") {
+    std::cerr << "Missing super for class cpool index " << clazz
+              << ", Bailing\n";
+    return false;
   }
   cc.set_access((DexAccessFlags)aflags);
   if (ifcount) {
