@@ -324,7 +324,7 @@ std::vector<std::string> ConfigFiles::load_coldstart_methods() {
 std::string ConfigFiles::get_preprocessed_baseline_profile_file(
     const std::string& config_name) {
   return m_preprocessed_baseline_profile_directory + "/" + config_name +
-         "/baseline-profile.txt";
+         "-baseline-profile.txt";
 }
 
 /**
