@@ -994,7 +994,7 @@ void parse(const std::vector<Token>& vec,
       auto sfc = parse_single_filepath_command(idx);
       if (sfc.empty()) {
         ++stats.parse_errors;
-      } else {
+      } else if (!pg_config->frozen_basedirectory) {
         if (sfc == "<user.dir>") {
           sfc = replace_user_dir(std::move(sfc));
         }

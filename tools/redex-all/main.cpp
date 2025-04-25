@@ -1217,6 +1217,15 @@ std::string to_string(const C& c) {
   return ret;
 }
 
+ProguardConfig load_early_pg_config(ConfigFiles& conf) {
+  ProguardConfig pg_conf{};
+  if (conf.get_json_config().contains("proguard")) {
+    pg_conf.parse_config(
+        JsonWrapper(conf.get_json_config().get("proguard", Json::Value())));
+  }
+  return pg_conf;
+}
+
 /**
  * Pre processing steps: load dex and configurations
  */
@@ -1239,11 +1248,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
   size_t blocklisted_rules{0};
   {
     // We cannot use GlobalConfig here, it is too early.
-    ProguardConfig pg_conf{};
-    if (conf.get_json_config().contains("proguard")) {
-      pg_conf.parse_config(
-          JsonWrapper(conf.get_json_config().get("proguard", Json::Value())));
-    }
+    ProguardConfig pg_conf = load_early_pg_config(conf);
     for (const auto& block_rules : pg_conf.blocklist) {
       blocklisted_rules +=
           keep_rules::proguard_parser::remove_blocklisted_rules(block_rules,
@@ -1891,6 +1896,15 @@ int main(int argc, char* argv[]) {
     auto pg_config = std::make_unique<keep_rules::ProguardConfiguration>();
     DexStoresVector stores;
     ConfigFiles conf(args.config, args.out_dir);
+
+    {
+      // We cannot use GlobalConfig here, it is too early.
+      ProguardConfig pg_conf = load_early_pg_config(conf);
+      if (!pg_conf.frozen_basedirectory.empty()) {
+        pg_config->basedirectory = pg_conf.frozen_basedirectory;
+        pg_config->frozen_basedirectory = true;
+      }
+    }
 
     std::string apk_dir;
     conf.get_json_config().get("apk_dir", "", apk_dir);
