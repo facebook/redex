@@ -56,8 +56,8 @@ void trace_analysis_diff(DexMethod* method,
   std::ostringstream out;
   size_t param_idx = 0;
   bool found_improvement = false;
-  std::unordered_set<DexMethodRef*> callees;
-  std::unordered_set<DexFieldRef*> fields;
+  UnorderedSet<DexMethodRef*> callees;
+  UnorderedSet<DexFieldRef*> fields;
 
   for (const auto& block : cfg.blocks()) {
     auto genv = lta.get_entry_state_at(block);
