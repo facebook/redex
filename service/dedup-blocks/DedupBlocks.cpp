@@ -103,7 +103,7 @@ static bool same_branch_and_goto_successors(const cfg::Block* b1,
     return false;
   }
   using Key = std::pair<cfg::EdgeType, cfg::Edge::CaseKey>;
-  std::unordered_map<Key, cfg::Block*, boost::hash<Key>> b2_succs_map;
+  UnorderedMap<Key, cfg::Block*, boost::hash<Key>> b2_succs_map;
   for (auto b2_succ : b2_succs) {
     b2_succs_map.emplace(
         std::make_pair(b2_succ->type(), b2_succ->case_key().value_or(0)),
@@ -203,7 +203,7 @@ template <class UnorderedMap,
 std::vector<Entry*> get_id_order(UnorderedMap& umap) {
   std::vector<Entry*> order;
   order.reserve(umap.size());
-  for (Entry& entry : umap) {
+  for (Entry& entry : UnorderedIterable(umap)) {
     order.push_back(&entry);
   }
   std::sort(order.begin(), order.end(),
@@ -348,10 +348,10 @@ class DedupBlocksImpl {
   // Because `BlocksInSameGroup` depends on the CFG, modifications to the CFG
   // invalidate this map.
   using BlockSet = std::set<cfg::Block*, BlockCompare>;
-  using Duplicates = std::unordered_map<BlockAndBlockValuePair,
-                                        BlockSet,
-                                        BlockAndBlockValuePairHasher,
-                                        BlockAndBlockValuePairInSameGroup>;
+  using Duplicates = UnorderedMap<BlockAndBlockValuePair,
+                                  BlockSet,
+                                  BlockAndBlockValuePairHasher,
+                                  BlockAndBlockValuePairInSameGroup>;
   struct PostfixSplitGroup {
     BlockSet postfix_blocks;
     std::map<cfg::Block*, IRList::reverse_iterator, BlockCompare>
@@ -360,10 +360,10 @@ class DedupBlocksImpl {
   };
 
   // Be careful using `.at()` on this map for the same reason as on `Duplicates`
-  using PostfixSplitGroupMap = std::unordered_map<cfg::Block*,
-                                                  PostfixSplitGroup,
-                                                  BlockSuccHasher,
-                                                  SuccBlocksInSameGroup>;
+  using PostfixSplitGroupMap = UnorderedMap<cfg::Block*,
+                                            PostfixSplitGroup,
+                                            BlockSuccHasher,
+                                            SuccBlocksInSameGroup>;
   const Config* m_config;
   Stats& m_stats;
 
@@ -716,7 +716,7 @@ class DedupBlocksImpl {
         // @TODO - Instead of only keeping one group and calculate best savings
         // based on just one group, maintain multiple groups at the same time
         // and split/dedup those groups.
-        std::unordered_map<MethodItemEntry*, CountGroup, MIEHasher, MIEEquals>
+        UnorderedMap<MethodItemEntry*, CountGroup, MIEHasher, MIEEquals>
             mie_count;
 
         for (auto& block_iterator_pair : block_iterator_map) {
@@ -1045,7 +1045,7 @@ class DedupBlocksImpl {
   get_init_receiver_instructions_defined_outside_of_block(
       cfg::Block* block, Lazy<live_range::LazyLiveRanges>& live_ranges) {
     std::vector<IRInstruction*> res;
-    std::unordered_set<IRInstruction*> block_insns;
+    UnorderedSet<IRInstruction*> block_insns;
     for (auto& mie : InstructionIterable(block)) {
       auto insn = mie.insn;
       if (opcode::is_invoke_direct(insn->opcode()) &&
@@ -1098,7 +1098,7 @@ class DedupBlocksImpl {
   void record_stats(const Duplicates& duplicates) {
     // avoid the expensive lock if we won't actually print the information
     if (traceEnabled(DEDUP_BLOCKS, 2)) {
-      for (const auto& entry : duplicates) {
+      for (const auto& entry : UnorderedIterable(duplicates)) {
         const auto& blocks = entry.second;
         // all blocks have the same number of opcodes
         cfg::Block* block = *blocks.begin();
@@ -1113,11 +1113,10 @@ class DedupBlocksImpl {
             typename THash,
             typename TPred,
             typename NeedToRemove>
-  static void remove_if(
-      std::unordered_map<TKey, TValue, THash, TPred>& duplicates,
-      NeedToRemove need_to_remove) {
-    std20::erase_if(duplicates,
-                    [&](auto& p) { return need_to_remove(p.second); });
+  static void remove_if(UnorderedMap<TKey, TValue, THash, TPred>& duplicates,
+                        NeedToRemove need_to_remove) {
+    unordered_erase_if(duplicates,
+                       [&](auto& p) { return need_to_remove(p.second); });
   }
 
   static bool is_singleton_or_inconsistent(
@@ -1274,7 +1273,7 @@ class DedupBlocksImpl {
 
   static void print_dups(const Duplicates& dups) {
     TRACE(DEDUP_BLOCKS, 4, "duplicate blocks set: {");
-    for (const auto& entry : dups) {
+    for (const auto& entry : UnorderedIterable(dups)) {
       TRACE(
           DEDUP_BLOCKS, 4, "  hash = %zu",
           DedupBlkValueNumbering::BlockValueHasher{}(*entry.first.block_value));
@@ -1328,7 +1327,7 @@ Stats& Stats::operator+=(const Stats& that) {
   insns_removed += that.insns_removed;
   blocks_split += that.blocks_split;
   positions_inserted += that.positions_inserted;
-  for (auto& p : that.dup_sizes) {
+  for (auto& p : UnorderedIterable(that.dup_sizes)) {
     dup_sizes[p.first] += p.second;
   }
   return *this;

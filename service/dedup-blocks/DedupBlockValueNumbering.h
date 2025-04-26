@@ -112,9 +112,8 @@ class BlockValues {
   value_id_t get_value_id(const IROperation& operation) const;
 
   LivenessFixpointIterator& m_liveness_fixpoint_iter;
-  mutable std::unordered_map<const cfg::Block*, std::unique_ptr<BlockValue>>
+  mutable UnorderedMap<const cfg::Block*, std::unique_ptr<BlockValue>>
       m_block_values;
-  mutable std::unordered_map<IROperation, value_id_t, IROperationHasher>
-      m_value_ids;
+  mutable UnorderedMap<IROperation, value_id_t, IROperationHasher> m_value_ids;
 };
 } // namespace DedupBlkValueNumbering
