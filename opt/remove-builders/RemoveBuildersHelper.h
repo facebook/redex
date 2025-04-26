@@ -112,7 +112,7 @@ class BuilderTransform {
   bool inline_methods(
       DexMethod* method,
       DexType* type,
-      const std::function<std::unordered_set<DexMethod*>(IRCode*, DexType*)>&
+      const std::function<UnorderedSet<DexMethod*>(IRCode*, DexType*)>&
           get_methods_to_inline);
 
   void flush() { m_inliner->flush(); }
@@ -123,10 +123,9 @@ class BuilderTransform {
   ConcurrentMethodResolver m_concurrent_method_resolver;
 };
 
-std::unordered_set<DexMethod*> get_all_methods(IRCode* code, DexType* type);
+UnorderedSet<DexMethod*> get_all_methods(IRCode* code, DexType* type);
 
-std::unordered_set<DexMethod*> get_non_init_methods(IRCode* code,
-                                                    DexType* type);
+UnorderedSet<DexMethod*> get_non_init_methods(IRCode* code, DexType* type);
 
 bool has_builder_name(DexType* type);
 

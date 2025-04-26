@@ -54,14 +54,14 @@ class BuilderAnalysis final {
 
   std::unordered_map<IRInstruction*, DexType*>
   get_vinvokes_to_this_infered_type();
-  std::unordered_set<IRInstruction*> get_all_inlinable_insns();
+  UnorderedSet<IRInstruction*> get_all_inlinable_insns();
 
   ConstTypeHashSet get_instantiated_types();
 
   ConstTypeHashSet non_removable_types();
 
   ConstTypeHashSet get_escaped_types_from_invokes(
-      const std::unordered_set<IRInstruction*>& insns) const;
+      const UnorderedSet<IRInstruction*>& insns) const;
 
  private:
   std::unique_ptr<impl::Analyzer> m_analyzer;

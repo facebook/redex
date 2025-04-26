@@ -120,8 +120,8 @@ static void filter_candidates_bridge_synth_only(
   walk::parallel::code(scope, [&bridgees, &getters, &ctors,
                                &wrappers](DexMethod* method, IRCode& code) {
     cfg::ScopedCFG cfg(&code);
-    std::unordered_set<DexFieldRef*> field_refs;
-    std::unordered_set<DexMethod*> invoked_methods;
+    UnorderedSet<DexFieldRef*> field_refs;
+    UnorderedSet<DexMethod*> invoked_methods;
     size_t other = 0;
     for (auto& mie : InstructionIterable(*cfg)) {
       auto insn = mie.insn;
@@ -151,7 +151,7 @@ static void filter_candidates_bridge_synth_only(
 
     if (field_refs.size() + other == 0 && invoked_methods.size() == 1 &&
         has_bridgelike_access(method)) {
-      auto bridgee = (*invoked_methods.begin());
+      auto bridgee = *unordered_any(invoked_methods);
       if (method->get_class() == bridgee->get_class()) {
         bridgees.insert(bridgee);
       }
@@ -305,7 +305,7 @@ struct SameImplementation {
 };
 
 using SameImplementationMap =
-    std::unordered_map<const DexMethod*, std::shared_ptr<SameImplementation>>;
+    UnorderedMap<const DexMethod*, std::shared_ptr<SameImplementation>>;
 
 /**
  * Get a map of method -> implementation method that hold the same
@@ -316,7 +316,7 @@ using SameImplementationMap =
  */
 SameImplementationMap get_same_implementation_map(
     const Scope& scope, const mog::Graph& method_override_graph) {
-  std::unordered_map<const DexMethod*, std::shared_ptr<SameImplementation>>
+  UnorderedMap<const DexMethod*, std::shared_ptr<SameImplementation>>
       method_to_implementations;
   walk::methods(scope, [&](DexMethod* method) {
     if (method->is_external() || !method->is_virtual() ||
@@ -384,18 +384,17 @@ SameImplementationMap get_same_implementation_map(
 }
 
 static DexType* reduce_type_demands(
-    std::unique_ptr<std::unordered_set<DexType*>>& type_demands) {
+    std::unique_ptr<UnorderedSet<DexType*>>& type_demands) {
   if (!type_demands) {
     return nullptr;
   }
   // remove less specific object types
-  std20::erase_if(*type_demands, [&type_demands](auto u) {
-    return std::find_if(type_demands->begin(), type_demands->end(),
-                        [u](const DexType* t) {
-                          return t != u && type::check_cast(t, u);
-                        }) != type_demands->end();
+  unordered_erase_if(*type_demands, [&type_demands](auto u) {
+    return unordered_any_of(*type_demands, [u](const DexType* t) {
+      return t != u && type::check_cast(t, u);
+    });
   });
-  return type_demands->size() == 1 ? *type_demands->begin() : nullptr;
+  return type_demands->size() == 1 ? *unordered_any(*type_demands) : nullptr;
 }
 
 bool can_have_unknown_implementations(const mog::Graph& method_override_graph,
@@ -641,17 +640,17 @@ void gather_true_virtual_methods(
           first_load_param_uses =
               std::move(chains.get_def_use_chains()[first_load_param]);
         }
-        std::unordered_set<DexType*> formal_callee_types;
+        UnorderedSet<DexType*> formal_callee_types;
         bool any_same_implementation_invokes{false};
         for (auto& p : UnorderedIterable(caller_to_invocations.caller_insns)) {
-          for (auto insn : p.second) {
+          for (auto insn : UnorderedIterable(p.second)) {
             formal_callee_types.insert(insn->get_method()->get_class());
             if (same_implementation_invokes.count_unsafe(insn)) {
               any_same_implementation_invokes = true;
             }
           }
         }
-        auto type_demands = std::make_unique<std::unordered_set<DexType*>>();
+        auto type_demands = std::make_unique<UnorderedSet<DexType*>>();
         // Note that the callee-rtype is the same for all methods in a
         // same-implementations cluster.
         auto callee_rtype = callee->get_proto()->get_rtype();
@@ -670,14 +669,13 @@ void gather_true_virtual_methods(
                             "be castable to %s.",
                             SHOW(callee->get_class()), SHOW(type_demand));
           if (type_demands->insert(type_demand).second) {
-            std20::erase_if(formal_callee_types, [&](auto* t) {
+            unordered_erase_if(formal_callee_types, [&](auto* t) {
               return !type::check_cast(t, type_demand);
             });
           }
         }
         for (auto& p : UnorderedIterable(caller_to_invocations.caller_insns)) {
-          for (auto it = p.second.begin(); it != p.second.end();) {
-            auto insn = *it;
+          unordered_erase_if(p.second, [&](auto* insn) {
             if (!formal_callee_types.count(insn->get_method()->get_class())) {
               auto it2 = same_implementation_invokes.find(insn);
               if (it2 != same_implementation_invokes.end()) {
@@ -703,16 +701,15 @@ void gather_true_virtual_methods(
                   // subtypes happen the implement a set of interfaces.)
                   // TODO: Try harder.
                   caller_to_invocations.other_call_sites = true;
-                  it = p.second.erase(it);
-                  continue;
+                  return true;
                 }
               } else {
                 caller_to_invocations.inlined_invokes_need_cast.emplace(
                     insn, callee->get_class());
               }
             }
-            it++;
-          }
+            return false;
+          });
         }
         unordered_erase_if(caller_to_invocations.caller_insns,
                            [&](auto& p) { return p.second.empty(); });
@@ -766,7 +763,7 @@ void unfinalize_fields_if_beneficial_for_relaxed_init_inlining(
     if (klass::maybe_anonymous_class(cls)) {
       return;
     }
-    std::unordered_set<DexField*> final_ifields;
+    UnorderedSet<DexField*> final_ifields;
     for (auto* field : cls->get_ifields()) {
       if (is_final(field)) {
         final_ifields.insert(field);
@@ -775,8 +772,7 @@ void unfinalize_fields_if_beneficial_for_relaxed_init_inlining(
     if (final_ifields.empty()) {
       return;
     }
-    std::unordered_map<DexField*, std::vector<DexMethod*>>
-        local_unfinalized_fields;
+    UnorderedMap<DexField*, std::vector<DexMethod*>> local_unfinalized_fields;
     bool perf_sensitive = false;
     for (auto* init_method : cls->get_ctors()) {
       if ((unfinalize_perf_mode == inliner::UnfinalizePerfMode::NOT_COLD &&
@@ -806,7 +802,8 @@ void unfinalize_fields_if_beneficial_for_relaxed_init_inlining(
       // field kept being unfinalized.
       return;
     }
-    for (auto&& [field, init_methods] : local_unfinalized_fields) {
+    for (auto&& [field, init_methods] :
+         UnorderedIterable(local_unfinalized_fields)) {
       field->set_access(field->get_access() & ~ACC_FINAL);
       auto emplaced =
           unfinalized_fields->emplace(field, std::move(init_methods)).second;
@@ -910,7 +907,7 @@ void run_inliner(
   InsertOnlyConcurrentMap<DexField*, std::vector<DexMethod*>>
       unfinalized_fields;
   InsertOnlyConcurrentSet<DexMethod*> methods_with_write_barrier;
-  std::unordered_set<const DexMethod*> unfinalized_init_methods;
+  UnorderedSet<const DexMethod*> unfinalized_init_methods;
   if (inliner_config.relaxed_init_inline &&
       inliner_config.unfinalize_relaxed_init_inline && min_sdk >= 21) {
     unfinalize_fields_if_beneficial_for_relaxed_init_inlining(
@@ -992,7 +989,7 @@ void run_inliner(
   if (!unfinalized_fields.empty()) {
     auto inlined_with_fence = inliner.get_inlined_with_fence();
     size_t refinalized_fields = 0;
-    std::unordered_set<DexMethod*> inits_inserted_barrier;
+    UnorderedSet<DexMethod*> inits_inserted_barrier;
     for (auto&& [field, init_methods] : UnorderedIterable(unfinalized_fields)) {
       if (std::none_of(
               init_methods.begin(), init_methods.end(),
@@ -1044,7 +1041,7 @@ void run_inliner(
   }
 
   if (inline_bridge_synth_only) {
-    std::unordered_set<DexMethod*> deleted_set(deleted.begin(), deleted.end());
+    UnorderedSet<DexMethod*> deleted_set(deleted.begin(), deleted.end());
     unordered_erase_if(candidates,
                        [&](auto method) { return deleted_set.count(method); });
     filter_candidates_bridge_synth_only(mgr, scope, candidates, "remaining_");

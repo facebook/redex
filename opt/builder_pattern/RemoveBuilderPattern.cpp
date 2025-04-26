@@ -69,9 +69,8 @@ bool has_statics(const DexClass* cls) {
   return !cls->get_sfields().empty();
 }
 
-bool has_large_escaping_calls(
-    const std::unordered_set<IRInstruction*>& to_inline) {
-  for (const auto* invoke : to_inline) {
+bool has_large_escaping_calls(const UnorderedSet<IRInstruction*>& to_inline) {
+  for (const auto* invoke : UnorderedIterable(to_inline)) {
     always_assert(invoke->has_method());
     auto callee = invoke->get_method()->as_def();
     size_t callee_size = callee->get_code()->sum_opcode_sizes();
@@ -302,7 +301,7 @@ class RemoveClasses {
 
       // Inline all methods that are either called on the builder instance
       // or take the builder as an argument, except for the ctors.
-      std::unordered_set<IRInstruction*> to_inline =
+      UnorderedSet<IRInstruction*> to_inline =
           analysis->get_all_inlinable_insns();
       if (to_inline.empty()) {
         TRACE(BLD_PATTERN, 3,
@@ -334,7 +333,7 @@ class RemoveClasses {
       // For Simple Builders (the ones exntending j/l/Object;), if the escaping
       // callee is too large, we give up on inlining them. Instead, we treat all
       // `to_inline` calls as `not_inlined` and mark escaping types as excluded.
-      std::unordered_set<IRInstruction*> not_inlined_insns;
+      UnorderedSet<IRInstruction*> not_inlined_insns;
       if (m_root != type::java_lang_Object() ||
           !has_large_escaping_calls(to_inline)) {
         not_inlined_insns = m_transform.try_inline_calls(method, to_inline);
@@ -353,7 +352,7 @@ class RemoveClasses {
           // Nothing left to do, since nothing was inlined.
           TRACE(BLD_PATTERN, 4, "Couldn't inline any of the methods in %s",
                 SHOW(method));
-          for (const auto& insn : not_inlined_insns) {
+          for (const auto& insn : UnorderedIterable(not_inlined_insns)) {
             TRACE(BLD_PATTERN, 5, "\t%s", SHOW(insn));
           }
           break;
@@ -362,7 +361,7 @@ class RemoveClasses {
           // types.
           TRACE(BLD_PATTERN, 4, "Couldn't inline all the methods in %s",
                 SHOW(method));
-          for (const auto& insn : not_inlined_insns) {
+          for (const auto& insn : UnorderedIterable(not_inlined_insns)) {
             TRACE(BLD_PATTERN, 5, "\t%s", SHOW(insn));
           }
           method->set_code(std::make_unique<IRCode>(*original_code));

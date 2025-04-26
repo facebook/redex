@@ -32,8 +32,8 @@ class BuilderTransform {
    * Try to inline the given calls (`insns`) in the caller, and return the set
    * of call instructions that were not abled to be inlined.
    */
-  std::unordered_set<IRInstruction*> try_inline_calls(
-      DexMethod* caller, const std::unordered_set<IRInstruction*>& insns);
+  UnorderedSet<IRInstruction*> try_inline_calls(
+      DexMethod* caller, const UnorderedSet<IRInstruction*>& insns);
 
   void update_virtual_calls(
       const std::unordered_map<IRInstruction*, DexType*>& insn_to_type);

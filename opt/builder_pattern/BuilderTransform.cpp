@@ -37,11 +37,11 @@ BuilderTransform::BuilderTransform(
       MultiMethodInlinerMode::None));
 }
 
-std::unordered_set<IRInstruction*> BuilderTransform::try_inline_calls(
-    DexMethod* caller, const std::unordered_set<IRInstruction*>& insns) {
+UnorderedSet<IRInstruction*> BuilderTransform::try_inline_calls(
+    DexMethod* caller, const UnorderedSet<IRInstruction*>& insns) {
   always_assert(caller && caller->get_code());
   m_inliner->inline_callees(caller, insns);
-  std::unordered_set<IRInstruction*> not_inlined_insns;
+  UnorderedSet<IRInstruction*> not_inlined_insns;
   // Check if everything was inlined.
   auto* code = caller->get_code();
   auto& cfg = code->cfg();
@@ -76,7 +76,7 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
       continue;
     }
     auto& cfg = method->get_code()->cfg();
-    std::unordered_set<IRInstruction*> inlinable_insns;
+    UnorderedSet<IRInstruction*> inlinable_insns;
     for (const auto& mie : InstructionIterable(cfg)) {
       auto insn = mie.insn;
       if (insn->opcode() == OPCODE_INVOKE_SUPER) {

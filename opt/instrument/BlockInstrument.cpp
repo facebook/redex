@@ -1343,7 +1343,7 @@ MethodInfo instrument_basic_blocks(
                                      num_instrument_loop_blocks);
     if (options.inline_onBlockHit) {
       TRACE(INSTRUMENT, 4, "Inline onBlockHits\n");
-      std::unordered_set<IRInstruction*> insns(invokes.begin(), invokes.end());
+      UnorderedSet<IRInstruction*> insns(invokes.begin(), invokes.end());
       inliner.inline_callees(method, insns);
     }
 
@@ -1353,7 +1353,7 @@ MethodInfo instrument_basic_blocks(
         loop_shorts, options);
     if (options.inline_onNonLoopBlockHit) {
       TRACE(INSTRUMENT, 4, "Inline onNonLoopBlockHit\n");
-      std::unordered_set<IRInstruction*> insns(invokes.begin(), invokes.end());
+      UnorderedSet<IRInstruction*> insns(invokes.begin(), invokes.end());
       inliner.inline_callees(method, insns);
     }
   } else {
@@ -1944,7 +1944,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
       MultiMethodInlinerMode::None);
 
   for (auto& en : onNonLoopBlockHit_map) {
-    std::unordered_set<DexMethod*> insns;
+    UnorderedSet<DexMethod*> insns;
     insns.insert(binaryIncrementer);
     inliner.inline_callees(en.second, insns);
   }

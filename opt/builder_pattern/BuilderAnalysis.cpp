@@ -375,8 +375,8 @@ BuilderAnalysis::get_vinvokes_to_this_infered_type() {
   return result;
 }
 
-std::unordered_set<IRInstruction*> BuilderAnalysis::get_all_inlinable_insns() {
-  std::unordered_set<IRInstruction*> result;
+UnorderedSet<IRInstruction*> BuilderAnalysis::get_all_inlinable_insns() {
+  UnorderedSet<IRInstruction*> result;
 
   for (const auto& pair : m_usage) {
     if (opcode::is_an_invoke(pair.first->opcode())) {
@@ -392,36 +392,33 @@ std::unordered_set<IRInstruction*> BuilderAnalysis::get_all_inlinable_insns() {
   }
 
   // Filter out non-inlinable ones.
-  for (auto it = result.begin(); it != result.end();) {
-    auto insn = *it;
+  unordered_erase_if(result, [&](auto* insn) {
     always_assert(insn->has_method());
 
     auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
     if (!method || !method->get_code()) {
-      it = result.erase(it);
-      continue;
+      return true;
     }
 
     if (method::is_init(method)) {
       auto this_reg = insn->src(0);
       auto val = m_insn_to_env->at(insn).get(this_reg).get_constant();
       if (!val || get_instantiated_type(*val) != method->get_class()) {
-        it = result.erase(it);
-        continue;
+        return true;
       }
     }
 
-    it++;
-  }
+    return false;
+  });
 
   return result;
 }
 
 ConstTypeHashSet BuilderAnalysis::get_escaped_types_from_invokes(
-    const std::unordered_set<IRInstruction*>& invoke_insns) const {
+    const UnorderedSet<IRInstruction*>& invoke_insns) const {
   ConstTypeHashSet result;
 
-  for (const auto* invoke : invoke_insns) {
+  for (const auto* invoke : UnorderedIterable(invoke_insns)) {
     if (m_invoke_to_builder_instance.count(invoke)) {
       result.emplace(m_invoke_to_builder_instance.at(invoke));
     }

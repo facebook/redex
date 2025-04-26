@@ -245,12 +245,12 @@ bool is_trivial_builder_constructor(DexMethod* method) {
   return it == ii.end();
 }
 
-std::unordered_set<DexMethod*> get_non_trivial_init_methods(IRCode* code,
-                                                            DexType* type) {
+UnorderedSet<DexMethod*> get_non_trivial_init_methods(IRCode* code,
+                                                      DexType* type) {
   always_assert(code != nullptr);
   always_assert(type != nullptr);
 
-  std::unordered_set<DexMethod*> methods;
+  UnorderedSet<DexMethod*> methods;
   for (auto const& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode())) {
@@ -1099,11 +1099,11 @@ DexType* get_buildee(DexType* builder) {
   return DexType::get_type(buildee_name);
 }
 
-std::unordered_set<DexMethod*> get_all_methods(IRCode* code, DexType* type) {
+UnorderedSet<DexMethod*> get_all_methods(IRCode* code, DexType* type) {
   always_assert(code != nullptr);
   always_assert(type != nullptr);
 
-  std::unordered_set<DexMethod*> methods;
+  UnorderedSet<DexMethod*> methods;
   for (auto const& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode())) {
@@ -1117,23 +1117,16 @@ std::unordered_set<DexMethod*> get_all_methods(IRCode* code, DexType* type) {
   return methods;
 }
 
-std::unordered_set<DexMethod*> get_non_init_methods(IRCode* code,
-                                                    DexType* type) {
-  std::unordered_set<DexMethod*> methods = get_all_methods(code, type);
-  for (auto it = methods.begin(); it != methods.end();) {
-    if (method::is_init(*it)) {
-      it = methods.erase(it);
-    } else {
-      it++;
-    }
-  }
+UnorderedSet<DexMethod*> get_non_init_methods(IRCode* code, DexType* type) {
+  UnorderedSet<DexMethod*> methods = get_all_methods(code, type);
+  unordered_erase_if(methods, method::is_init);
   return methods;
 }
 
 bool BuilderTransform::inline_methods(
     DexMethod* method,
     DexType* type,
-    const std::function<std::unordered_set<DexMethod*>(IRCode*, DexType*)>&
+    const std::function<UnorderedSet<DexMethod*>(IRCode*, DexType*)>&
         get_methods_to_inline) {
   always_assert(method != nullptr);
   always_assert(type != nullptr);
@@ -1143,12 +1136,12 @@ bool BuilderTransform::inline_methods(
     return false;
   }
 
-  std::unordered_set<DexMethod*> previous_to_inline;
-  std::unordered_set<DexMethod*> to_inline = get_methods_to_inline(code, type);
+  UnorderedSet<DexMethod*> previous_to_inline;
+  UnorderedSet<DexMethod*> to_inline = get_methods_to_inline(code, type);
 
   while (!to_inline.empty()) {
 
-    for (const auto& inlinable : to_inline) {
+    for (const auto& inlinable : UnorderedIterable(to_inline)) {
       if (!inlinable->get_code()) {
         TRACE(BUILDERS,
               2,
@@ -1162,13 +1155,13 @@ bool BuilderTransform::inline_methods(
     always_assert(!to_inline.count(method));
     always_assert(!method->get_code()->editable_cfg_built());
     method->get_code()->build_cfg();
-    for (auto* m : to_inline) {
+    for (auto* m : UnorderedIterable(to_inline)) {
       always_assert(!m->get_code()->editable_cfg_built());
       m->get_code()->build_cfg();
     }
     m_inliner->inline_callees(method, to_inline);
     method->get_code()->clear_cfg();
-    for (auto* m : to_inline) {
+    for (auto* m : UnorderedIterable(to_inline)) {
       m->get_code()->clear_cfg();
     }
 

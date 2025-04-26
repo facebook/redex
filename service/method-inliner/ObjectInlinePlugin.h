@@ -17,15 +17,15 @@
 using namespace cfg;
 namespace object_inliner_plugin {
 
-using FieldSet = std::unordered_map<reg_t, std::unordered_set<IRInstruction*>>;
-using FieldSetMap = std::unordered_map<DexFieldRef*, FieldSet>;
+using FieldSet = UnorderedMap<reg_t, UnorderedSet<IRInstruction*>>;
+using FieldSetMap = UnorderedMap<DexFieldRef*, FieldSet>;
 
 class ObjectInlinePlugin : public CFGInlinerPlugin {
 
  public:
   ObjectInlinePlugin(
       const FieldSetMap& field_sets,
-      const std::unordered_map<DexFieldRef*, DexFieldRef*>& field_swaps,
+      const UnorderedMap<DexFieldRef*, DexFieldRef*>& field_swaps,
       const std::vector<reg_t>& srcs,
       boost::optional<reg_t> value_register,
       boost::optional<reg_t> caller_this,
@@ -56,7 +56,7 @@ class ObjectInlinePlugin : public CFGInlinerPlugin {
   // field removal in object inlining. All field reads and write will be
   // re-writen to use this.
   FieldSetMap m_set_field_sets;
-  const std::unordered_map<DexFieldRef*, DexFieldRef*> m_field_swaps;
+  const UnorderedMap<DexFieldRef*, DexFieldRef*> m_field_swaps;
   std::vector<reg_t> m_srcs;
   boost::optional<reg_t> m_value_reg;
   boost::optional<reg_t> m_caller_this_reg;

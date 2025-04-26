@@ -134,7 +134,7 @@ MultiMethodInliner::MultiMethodInliner(
     bool local_only,
     bool consider_hot_cold,
     InlinerCostConfig inliner_cost_config,
-    const std::unordered_set<const DexMethod*>* unfinalized_init_methods,
+    const UnorderedSet<const DexMethod*>* unfinalized_init_methods,
     InsertOnlyConcurrentSet<DexMethod*>* methods_with_write_barrier,
     const method_override_graph::Graph* method_override_graph)
     : m_concurrent_resolver(std::move(concurrent_resolve_fn)),
@@ -143,7 +143,7 @@ MultiMethodInliner::MultiMethodInliner(
             auto it = caller_callee.find(method);
             if (it != caller_callee.end()) {
               always_assert(method->get_code()->editable_cfg_built());
-              std::unordered_set<DexMethod*> callees;
+              UnorderedSet<DexMethod*> callees;
               callees.reserve(it->second.size());
               for (auto& p : UnorderedIterable(it->second)) {
                 callees.insert(p.first);
@@ -188,8 +188,11 @@ MultiMethodInliner::MultiMethodInliner(
     }
     for (const auto& caller_insns :
          UnorderedIterable(callee_callers.second.caller_insns)) {
-      for (auto insn : caller_insns.second) {
-        m_caller_virtual_callees[caller_insns.first].insns[insn] = callee;
+      for (auto insn : UnorderedIterable(caller_insns.second)) {
+        auto emplaced = m_caller_virtual_callees[caller_insns.first]
+                            .insns.emplace(insn, callee)
+                            .second;
+        always_assert(emplaced);
       }
       insert_unordered_iterable(
           m_inlined_invokes_need_cast,
@@ -304,7 +307,7 @@ void MultiMethodInliner::inline_methods() {
   m_callee_insn_sizes =
       std::make_unique<InsertOnlyConcurrentMap<const DexMethod*, size_t>>();
   m_callee_type_refs = std::make_unique<InsertOnlyConcurrentMap<
-      const DexMethod*, std::shared_ptr<std::vector<DexType*>>>>();
+      const DexMethod*, std::shared_ptr<UnorderedBag<DexType*>>>>();
   if (m_ref_checkers) {
     m_callee_code_refs = std::make_unique<
         InsertOnlyConcurrentMap<const DexMethod*, std::shared_ptr<CodeRefs>>>();
@@ -362,7 +365,7 @@ void MultiMethodInliner::inline_methods() {
 
   // Second, compute caller priorities --- the callers get a priority assigned
   // that reflects how many other callers will be waiting for them.
-  std::unordered_set<DexMethod*> methods_to_schedule;
+  UnorderedSet<DexMethod*> methods_to_schedule;
   for (auto& p : UnorderedIterable(caller_callee)) {
     auto caller = p.first;
     for (auto& q : UnorderedIterable(p.second)) {
@@ -414,10 +417,9 @@ std::optional<Callee> MultiMethodInliner::get_callee(DexMethod* caller,
   return std::make_optional<Callee>({it2->second, /* true_virtual */ false});
 }
 
-void MultiMethodInliner::inline_callees(
-    DexMethod* caller,
-    const std::unordered_set<DexMethod*>& callees,
-    bool filter_via_should_inline) {
+void MultiMethodInliner::inline_callees(DexMethod* caller,
+                                        const UnorderedSet<DexMethod*>& callees,
+                                        bool filter_via_should_inline) {
   TraceContext context{caller};
   std::vector<Inlinable> inlinables;
   {
@@ -506,7 +508,7 @@ void MultiMethodInliner::inline_callees(
 }
 
 size_t MultiMethodInliner::inline_callees(
-    DexMethod* caller, const std::unordered_set<IRInstruction*>& insns) {
+    DexMethod* caller, const UnorderedSet<IRInstruction*>& insns) {
   TraceContext context{caller};
   std::vector<Inlinable> inlinables;
   always_assert(caller->get_code()->editable_cfg_built());
@@ -715,17 +717,17 @@ size_t MultiMethodInliner::inline_inlinables(
   // Once blocks might have been freed, which can happen via
   // remove_unreachable_blocks and shrinking, callsite pointers are no longer
   // valid.
-  std::unique_ptr<std::unordered_set<const IRInstruction*>> remaining_callsites;
+  std::unique_ptr<UnorderedSet<const IRInstruction*>> remaining_callsites;
   auto recompute_remaining_callsites = [caller, &remaining_callsites,
                                         &ordered_inlinables]() {
     if (!remaining_callsites) {
       remaining_callsites =
-          std::make_unique<std::unordered_set<const IRInstruction*>>();
+          std::make_unique<UnorderedSet<const IRInstruction*>>();
       for (const auto& inlinable : ordered_inlinables) {
         remaining_callsites->insert(inlinable.insn);
       }
     }
-    std::unordered_set<const IRInstruction*> new_remaining_callsites;
+    UnorderedSet<const IRInstruction*> new_remaining_callsites;
     for (auto& mie : InstructionIterable(caller->cfg())) {
       if (mie.insn->has_method() && remaining_callsites->count(mie.insn)) {
         new_remaining_callsites.insert(mie.insn);
@@ -737,7 +739,7 @@ size_t MultiMethodInliner::inline_inlinables(
   };
 
   VisibilityChanges visibility_changes;
-  std::unordered_set<DexMethod*> visibility_changes_for;
+  UnorderedSet<DexMethod*> visibility_changes_for;
   size_t init_classes = 0;
   size_t constructor_fences = 0;
   for (const auto& inlinable : ordered_inlinables) {
@@ -950,7 +952,7 @@ size_t MultiMethodInliner::inline_inlinables(
   }
 
   if (!inlined_callees.empty()) {
-    for (auto callee_method : visibility_changes_for) {
+    for (auto callee_method : UnorderedIterable(visibility_changes_for)) {
       visibility_changes.insert(
           get_visibility_changes(callee_method, caller_method->get_class()));
     }
@@ -1548,8 +1550,8 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
   size_t cost{0};
   std::shared_ptr<ReducedCode> reduced_code;
   size_t returns{0};
-  std::unordered_set<DexMethodRef*> method_refs_set;
-  std::unordered_set<const void*> other_refs_set;
+  UnorderedSet<DexMethodRef*> method_refs_set;
+  UnorderedSet<const void*> other_refs_set;
   auto analyze_refs = [&](IRInstruction* insn) {
     if (insn->has_method()) {
       auto cls = type_class(insn->get_method()->get_class());
@@ -2384,7 +2386,8 @@ std::shared_ptr<XDexMethodRefs::Refs> MultiMethodInliner::get_callee_x_dex_refs(
   return x_dex_refs;
 }
 
-std::shared_ptr<std::vector<DexType*>> MultiMethodInliner::get_callee_type_refs(
+std::shared_ptr<UnorderedBag<DexType*>>
+MultiMethodInliner::get_callee_type_refs(
     const DexMethod* callee, const cfg::ControlFlowGraph* reduced_cfg) {
   if (m_callee_type_refs && !reduced_cfg) {
     auto* res = m_callee_type_refs->get(callee);
@@ -2393,7 +2396,7 @@ std::shared_ptr<std::vector<DexType*>> MultiMethodInliner::get_callee_type_refs(
     }
   }
 
-  std::unordered_set<DexType*> type_refs_set;
+  UnorderedSet<DexType*> type_refs_set;
   always_assert(callee->get_code()->editable_cfg_built());
   auto& callee_cfg = reduced_cfg ? *reduced_cfg : callee->get_code()->cfg();
   for (auto& mie : InstructionIterable(callee_cfg)) {
@@ -2418,13 +2421,13 @@ std::shared_ptr<std::vector<DexType*>> MultiMethodInliner::get_callee_type_refs(
     }
   }
 
-  auto type_refs = std::make_shared<std::vector<DexType*>>();
-  for (auto type : type_refs_set) {
+  auto type_refs = std::make_shared<UnorderedBag<DexType*>>();
+  for (auto type : UnorderedIterable(type_refs_set)) {
     // filter out what xstores.illegal_ref(...) doesn't care about
     if (type_class_internal(type) == nullptr) {
       continue;
     }
-    type_refs->push_back(type);
+    type_refs->insert(type);
   }
 
   if (m_callee_type_refs && !reduced_cfg) {
@@ -2443,7 +2446,7 @@ CalleeCallerRefs MultiMethodInliner::get_callee_caller_refs(
   }
 
   const auto& callers = callee_caller.at_unsafe(callee);
-  std::unordered_set<DexType*> caller_classes;
+  UnorderedSet<DexType*> caller_classes;
   for (auto& p : UnorderedIterable(callers)) {
     auto caller = p.first;
     caller_classes.insert(caller->get_class());
@@ -2451,7 +2454,7 @@ CalleeCallerRefs MultiMethodInliner::get_callee_caller_refs(
   auto callee_class = callee->get_class();
   CalleeCallerRefs callee_caller_refs{
       /* same_class */ caller_classes.size() == 1 &&
-          *caller_classes.begin() == callee_class,
+          *unordered_any(caller_classes) == callee_class,
       caller_classes.size()};
 
   if (m_callee_caller_refs) {
@@ -2485,7 +2488,7 @@ bool MultiMethodInliner::cross_store_reference(
   always_assert(callee_type_refs);
   const auto& xstores = m_shrinker.get_xstores();
   size_t store_idx = xstores.get_store_idx(caller->get_class());
-  for (auto type : *callee_type_refs) {
+  for (auto type : UnorderedIterable(*callee_type_refs)) {
     if (xstores.illegal_ref(store_idx, type)) {
       info.cross_store++;
       return true;

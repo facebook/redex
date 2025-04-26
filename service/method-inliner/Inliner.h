@@ -140,8 +140,7 @@ inline const struct InlinerCostConfig DEFAULT_COST_CONFIG = {
 // All call-sites of a callee.
 struct CallerInsns {
   // Invoke instructions per caller
-  UnorderedMap<const DexMethod*, std::unordered_set<IRInstruction*>>
-      caller_insns;
+  UnorderedMap<const DexMethod*, UnorderedSet<IRInstruction*>> caller_insns;
   // Invoke instructions that need a cast
   UnorderedMap<IRInstruction*, DexType*> inlined_invokes_need_cast;
   // Whether there may be any other unknown call-sites.
@@ -274,8 +273,7 @@ class MultiMethodInliner {
       bool local_only = false,
       bool consider_hot_cold = false,
       InlinerCostConfig inliner_cost_config = DEFAULT_COST_CONFIG,
-      const std::unordered_set<const DexMethod*>* unfinalized_init_methods =
-          nullptr,
+      const UnorderedSet<const DexMethod*>* unfinalized_init_methods = nullptr,
       InsertOnlyConcurrentSet<DexMethod*>* methods_with_write_barrier = nullptr,
       const method_override_graph::Graph* method_override_graph = nullptr);
 
@@ -318,7 +316,7 @@ class MultiMethodInliner {
    * Inline callees in the caller if is_inlinable below returns true.
    */
   void inline_callees(DexMethod* caller,
-                      const std::unordered_set<DexMethod*>& callees,
+                      const UnorderedSet<DexMethod*>& callees,
                       bool filter_via_should_inline = false);
 
   /**
@@ -326,7 +324,7 @@ class MultiMethodInliner {
    * below returns true.
    */
   size_t inline_callees(DexMethod* caller,
-                        const std::unordered_set<IRInstruction*>& insns);
+                        const UnorderedSet<IRInstruction*>& insns);
 
   /**
    * Inline callees in the given instructions in the caller, if is_inlinable
@@ -560,7 +558,7 @@ class MultiMethodInliner {
   /**
    * Gets the set of referenced types in a callee.
    */
-  std::shared_ptr<std::vector<DexType*>> get_callee_type_refs(
+  std::shared_ptr<UnorderedBag<DexType*>> get_callee_type_refs(
       const DexMethod* callee, const cfg::ControlFlowGraph* reduced_cfg);
 
   /**
@@ -701,18 +699,17 @@ class MultiMethodInliner {
     // Mapping of instructions to representative
     UnorderedMap<IRInstruction*, DexMethod*> insns;
     // Set of callees which must only be inlined via above insns
-    std::unordered_set<DexMethod*> exclusive_callees;
+    UnorderedSet<DexMethod*> exclusive_callees;
   };
   // Mapping from callers to auxiliary data for contained true virtual callees
   UnorderedMap<const DexMethod*, CallerVirtualCallees> m_caller_virtual_callees;
 
   UnorderedMap<IRInstruction*, DexType*> m_inlined_invokes_need_cast;
 
-  std::unordered_set<const DexMethod*>
-      m_true_virtual_callees_with_other_call_sites;
+  UnorderedSet<const DexMethod*> m_true_virtual_callees_with_other_call_sites;
 
-  std::unordered_set<const DexMethod*> m_recursive_callees;
-  std::unordered_set<const DexMethod*> m_speed_excluded_callees;
+  UnorderedSet<const DexMethod*> m_recursive_callees;
+  UnorderedSet<const DexMethod*> m_speed_excluded_callees;
 
   // If mode == IntraDex, then we maintaing information about x-dex method
   // references.
@@ -768,7 +765,7 @@ class MultiMethodInliner {
   // Optional cache for get_callee_type_refs function
   std::unique_ptr<
       InsertOnlyConcurrentMap<const DexMethod*,
-                              std::shared_ptr<std::vector<DexType*>>>>
+                              std::shared_ptr<UnorderedBag<DexType*>>>>
       m_callee_type_refs;
 
   // Optional cache for get_callee_code_refs function
@@ -873,7 +870,7 @@ class MultiMethodInliner {
 
   InlinerCostConfig m_inliner_cost_config;
 
-  const std::unordered_set<const DexMethod*>* m_unfinalized_init_methods;
+  const UnorderedSet<const DexMethod*>* m_unfinalized_init_methods;
   InsertOnlyConcurrentMap<const DexMethod*, const DexMethod*>
       m_unfinalized_overloads;
 

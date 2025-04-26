@@ -2681,7 +2681,7 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_relaxed) {
   init->get_code()->build_cfg();
 
   {
-    std::unordered_set<const DexMethod*> unfinalized_init_methods{init};
+    UnorderedSet<const DexMethod*> unfinalized_init_methods{init};
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
     int min_sdk = 21; // the "relaxed init inline" mode only kicks in starting
@@ -2915,7 +2915,7 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_with_finalize_norelax) {
   init->get_code()->build_cfg();
 
   {
-    std::unordered_set<const DexMethod*> unfinalized_init_methods{init};
+    UnorderedSet<const DexMethod*> unfinalized_init_methods{init};
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
     int min_sdk = 21; // the "relaxed init inline" mode only kicks in starting

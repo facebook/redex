@@ -142,7 +142,7 @@ class PriorityThreadPoolDAGScheduler {
     m_priorities = std::make_unique<UnorderedMap<Task, int>>();
     {
       std::vector<std::vector<Task>> ready_tasks;
-      for (auto task : collection) {
+      for (auto task : UnorderedIterable(collection)) {
         int priority = compute_priority(task);
         auto& wait_count = m_wait_counts.emplace(task, 0).first->second;
         if (wait_count.load(std::memory_order_relaxed) != 0) {
