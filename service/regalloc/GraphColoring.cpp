@@ -1059,7 +1059,7 @@ void Allocator::allocate(cfg::ControlFlowGraph& cfg, bool is_static) {
     // IRTypeChecker.h for the rationale.
     if (no_overwrite_this) {
       auto this_insn = cfg.get_param_instructions().begin()->insn;
-      for (const auto& pair : ig.nodes()) {
+      for (const auto& pair : UnorderedIterable(ig.nodes())) {
         ig.add_edge(this_insn->dest(), pair.first);
       }
     }

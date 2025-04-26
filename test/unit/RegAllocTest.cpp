@@ -195,7 +195,7 @@ TEST_F(RegAllocTest, BuildInterferenceGraph) {
   EXPECT_EQ(ig.get_node(3).spill_cost(), 2);
 
   // Check that the adjacency matrix is consistent with the adjacency lists
-  for (auto& pair : ig.nodes()) {
+  for (auto& pair : UnorderedIterable(ig.nodes())) {
     auto reg = pair.first;
     for (auto adj : pair.second.adjacent()) {
       EXPECT_TRUE(ig.is_adjacent(reg, adj));
