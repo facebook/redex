@@ -8,10 +8,10 @@
 #include "MethodSimilarityCompressionConsciousOrderer.h"
 
 #include <inttypes.h>
-#include <unordered_map>
 
 #include "BalancedPartitioning.h"
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "Show.h"
 
 namespace {
@@ -47,7 +47,7 @@ struct BinaryFunction {
 /// and merge duplicates.
 uint64_t compute_hash_code(
     BinaryFunction& func,
-    const std::unordered_map<uint64_t, uint32_t>& kmer_frequency) {
+    const UnorderedMap<uint64_t, uint32_t>& kmer_frequency) {
   const uint32_t k_min_kmer_frequency = 5;
   uint64_t hash = 0;
   for (uint64_t kmer : func.kmers) {
@@ -65,7 +65,7 @@ uint64_t compute_hash_code(
 void init_bipartite_graph(std::vector<BinaryFunction>& functions,
                           std::vector<Document>& documents) {
   // Compute k-mer frequency
-  std::unordered_map<uint64_t, uint32_t> kmer_frequency;
+  UnorderedMap<uint64_t, uint32_t> kmer_frequency;
   for (uint32_t f = 0; f < functions.size(); f++) {
     BinaryFunction& func = functions[f];
     for (uint64_t kmer : func.kmers) {
@@ -75,8 +75,8 @@ void init_bipartite_graph(std::vector<BinaryFunction>& functions,
 
   // Filter out unique and too frequent k-mers that do not affect compression;
   // for the remaining k-mers, assign an index from the range [0, |Kmers|)
-  std::unordered_map<uint64_t, uint32_t> kmer_index;
-  for (auto it : kmer_frequency) {
+  UnorderedMap<uint64_t, uint32_t> kmer_index;
+  for (auto it : UnorderedIterable(kmer_frequency)) {
     uint64_t kmer = it.first;
     uint32_t freq = it.second;
     if (freq <= 1) continue;
@@ -88,7 +88,7 @@ void init_bipartite_graph(std::vector<BinaryFunction>& functions,
 
   // Computing function hashes and record the first one having a specific hash
   // value (in order to merge duplicates)
-  std::unordered_map<uint64_t, uint32_t> first_func_with_hash;
+  UnorderedMap<uint64_t, uint32_t> first_func_with_hash;
   for (uint32_t f = 0; f < functions.size(); f++) {
     BinaryFunction& func = functions[f];
     func.hash = compute_hash_code(func, kmer_frequency);
