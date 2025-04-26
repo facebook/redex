@@ -20,7 +20,7 @@ void AnalysisUsage::do_pass_invalidation(
     return;
   }
 
-  std::unordered_set<AnalysisID> erase_list;
+  UnorderedSet<AnalysisID> erase_list;
   // Invalidate existing preserved analyses.
   for (const auto& entry : UnorderedIterable(*preserved_analysis_passes)) {
     AnalysisID id = entry.first;
@@ -36,7 +36,7 @@ void AnalysisUsage::do_pass_invalidation(
     erase_list.emplace(id);
   }
 
-  for (const auto& to_erase : erase_list) {
+  for (const auto& to_erase : UnorderedIterable(erase_list)) {
     preserved_analysis_passes->erase(to_erase);
   }
 }
@@ -54,7 +54,7 @@ void AnalysisUsage::check_dependencies(const std::vector<Pass*>& passes) {
     pass->set_analysis_usage(analysis_usage);
 
     const auto& required_passes = analysis_usage.get_required_passes();
-    for (const auto& required_pass : required_passes) {
+    for (const auto& required_pass : UnorderedIterable(required_passes)) {
       if (!preserved_passes.count(required_pass)) {
         if (!has_error) {
           has_error = true;

@@ -9,7 +9,6 @@
 
 #include <string>
 #include <typeinfo>
-#include <unordered_set>
 #include <vector>
 
 #include "DeterministicContainers.h"
@@ -54,7 +53,7 @@ class AnalysisUsage {
   }
 
   // Returns a set of passes used by (thus should precede) this current pass.
-  const std::unordered_set<AnalysisID>& get_required_passes() {
+  const UnorderedSet<AnalysisID>& get_required_passes() {
     return m_required_passes;
   }
 
@@ -70,6 +69,6 @@ class AnalysisUsage {
 
  private:
   bool m_preserve_all = false;
-  std::unordered_set<AnalysisID> m_required_passes;
-  std::unordered_set<AnalysisID> m_preserve_specific;
+  UnorderedSet<AnalysisID> m_required_passes;
+  UnorderedSet<AnalysisID> m_preserve_specific;
 };
