@@ -109,8 +109,8 @@ void JsonWrapper::get(const char* name,
 
 void JsonWrapper::get(
     const char* name,
-    const std::unordered_map<std::string, std::vector<std::string>>& dflt,
-    std::unordered_map<std::string, std::vector<std::string>>& param) const {
+    const UnorderedMap<std::string, std::vector<std::string>>& dflt,
+    UnorderedMap<std::string, std::vector<std::string>>& param) const {
   auto cfg = (*m_config)[name];
   param.clear();
   // NOLINTNEXTLINE(readability-container-size-empty)
@@ -143,10 +143,9 @@ void JsonWrapper::get(
   }
 }
 
-void JsonWrapper::get(
-    const char* name,
-    const std::unordered_map<std::string, std::string>& dflt,
-    std::unordered_map<std::string, std::string>& param) const {
+void JsonWrapper::get(const char* name,
+                      const UnorderedMap<std::string, std::string>& dflt,
+                      UnorderedMap<std::string, std::string>& param) const {
   auto cfg = (*m_config)[name];
   param.clear();
   // NOLINTNEXTLINE(readability-container-size-empty)
