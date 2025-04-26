@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <unordered_map>
-
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexStore.h"
@@ -94,7 +92,7 @@ class IODIMetadata {
     return it->second;
   }
 
-  const std::unordered_set<const DexMethod*>&
+  const UnorderedSet<const DexMethod*>&
   get_too_large_cluster_canonical_methods() const {
     return m_too_large_cluster_canonical_methods;
   }
@@ -108,13 +106,13 @@ class IODIMetadata {
   bool has_iodi_layer(const DexMethod* method) const;
 
  private:
-  std::unordered_set<const DexMethod*> m_too_large_cluster_canonical_methods;
+  UnorderedSet<const DexMethod*> m_too_large_cluster_canonical_methods;
   UnorderedMap<const DexMethod*, const DexMethod*> m_canonical;
 
   UnorderedMap<const DexMethod*, size_t> m_iodi_method_layers;
 
   // These exists for can_safely_use_iodi
-  std::unordered_set<const DexMethod*> m_huge_methods;
+  UnorderedSet<const DexMethod*> m_huge_methods;
 
   bool m_marked{false};
 };
