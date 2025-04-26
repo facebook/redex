@@ -7,9 +7,8 @@
 
 #pragma once
 
-#include <unordered_set>
-
 #include "WellKnownTypes.h"
+#include <DeterministicContainers.h>
 
 class DexType;
 class DexFieldRef;
@@ -54,7 +53,7 @@ class FrequentlyUsedPointers {
   WELL_KNOWN_METHODS
 #undef FOR_EACH
 
-  std::unordered_set<const DexType*> m_well_known_types;
+  UnorderedSet<const DexType*> m_well_known_types;
 };
 
 #undef STORE_TYPE
