@@ -102,11 +102,11 @@ void CrossDexRefMinimizer::ClassDiffSet::compact() {
 }
 
 void CrossDexRefMinimizer::reprioritize(
-    const std::unordered_map<DexClass*, CrossDexRefMinimizer::ClassInfoDelta>&
+    const UnorderedMap<DexClass*, CrossDexRefMinimizer::ClassInfoDelta>&
         affected_classes) {
   TRACE(IDEX, 4, "[dex ordering] Reprioritizing %zu classes",
         affected_classes.size());
-  for (auto p : affected_classes) {
+  for (auto p : UnorderedIterable(affected_classes)) {
     ++m_stats.reprioritizations;
     DexClass* affected_class = p.first;
     CrossDexRefMinimizer::ClassInfoDelta& delta = p.second;
@@ -241,7 +241,7 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
     add_weight(fref, m_config.field_ref_weight, m_config.field_seed_weight);
   }
 
-  std::unordered_map<DexClass*, CrossDexRefMinimizer::ClassInfoDelta>
+  UnorderedMap<DexClass*, CrossDexRefMinimizer::ClassInfoDelta>
       affected_classes;
   for (const auto& p : refs) {
     auto ref = p.first;
@@ -306,11 +306,11 @@ std::vector<DexClass*> CrossDexRefMinimizer::worst(size_t count,
       selected;
   size_t selected_count{0};
 
-  for (auto it = m_class_infos.begin(); it != m_class_infos.end(); ++it) {
-    const CrossDexRefMinimizer::ClassInfo& class_info = it->second;
+  // We want to pick the worst classes, but we don't want to pick the same
+  for (const auto& [cls, class_info] : UnorderedIterable(m_class_infos)) {
     uint64_t value = class_info.seed_weight;
 
-    if (it->first->rstate.is_generated()) {
+    if (cls->rstate.is_generated()) {
       if (!include_generated) {
         continue;
       }
@@ -324,7 +324,7 @@ std::vector<DexClass*> CrossDexRefMinimizer::worst(size_t count,
       continue;
     }
 
-    selected[value][class_info.index] = it->first;
+    selected[value][class_info.index] = cls;
     selected_count++;
 
     // If equal, prefer the class that was inserted earlier (smaller index) to
@@ -373,8 +373,7 @@ DexClass* CrossDexRefMinimizer::worst() {
 }
 
 size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
-  std::unordered_map<DexClass*, ClassInfo>::const_iterator class_info_it =
-      m_class_infos.end();
+  auto class_info_it = m_class_infos.end();
   if (cls) {
     m_prioritized_classes.erase(cls);
     class_info_it = m_class_infos.find(cls);
@@ -406,7 +405,7 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
     m_applied_refs.clear();
   }
 
-  std::unordered_map<DexClass*, CrossDexRefMinimizer::ClassInfoDelta>
+  UnorderedMap<DexClass*, CrossDexRefMinimizer::ClassInfoDelta>
       affected_classes;
   size_t old_applied_refs = m_applied_refs.size();
   if (class_info_it != m_class_infos.end()) {
@@ -458,9 +457,8 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
 
   if (reset) {
     m_prioritized_classes.clear();
-    for (auto it = m_class_infos.begin(); it != m_class_infos.end(); ++it) {
-      DexClass* reset_class = it->first;
-      CrossDexRefMinimizer::ClassInfo& reset_class_info = it->second;
+    for (auto& [reset_class, reset_class_info] :
+         UnorderedIterable(m_class_infos)) {
       reset_class_info.applied_refs_weight = 0;
       const auto priority = reset_class_info.get_priority();
       m_prioritized_classes.insert(reset_class, priority);
@@ -492,7 +490,7 @@ size_t CrossDexRefMinimizer::get_unapplied_refs(DexClass* cls) const {
 }
 
 void CrossDexRefMinimizer::compact() {
-  for (auto&& [ref, classes] : m_ref_classes) {
+  for (auto&& [ref, classes] : UnorderedIterable(m_ref_classes)) {
     classes.compact();
   }
 }
@@ -503,14 +501,15 @@ double CrossDexRefMinimizer::get_remaining_difficulty() const {
   // (Why? Unclear, but it seems to work well in practice.) The following does
   // this computation in a way that results in a high precision and is
   // deterministic using floating-point values.
-  std::unordered_map<size_t, size_t> counts;
-  for (auto& p : m_ref_classes) {
+  UnorderedMap<size_t, size_t> counts;
+  for (auto& p : UnorderedIterable(m_ref_classes)) {
     counts[p.second.size()]++;
   }
   std::vector<double> summands;
   summands.reserve(counts.size());
-  std::transform(counts.begin(), counts.end(), std::back_inserter(summands),
-                 [](auto& p) { return p.second * 1.0 / (p.first * p.first); });
+  unordered_transform(counts, std::back_inserter(summands), [](auto& p) {
+    return p.second * 1.0 / (p.first * p.first);
+  });
   std::sort(summands.begin(), summands.end());
   return std::accumulate(summands.begin(), summands.end(), 0.0);
 }
