@@ -113,7 +113,7 @@ class ClassSplitter final {
   };
 
   struct SplitClass {
-    std::unordered_map<DexMethod*, RelocatableMethodInfo> relocatable_methods;
+    UnorderedMap<DexMethod*, RelocatableMethodInfo> relocatable_methods;
   };
 
   struct TargetClassInfo {
@@ -137,10 +137,10 @@ class ClassSplitter final {
   bool has_source_block_positive_val(DexMethod* method);
   void materialize_trampoline_code(DexMethod* source, DexMethod* target);
 
-  std::unordered_map<int32_t, TargetClassInfo> m_target_classes_by_api_level;
+  UnorderedMap<int32_t, TargetClassInfo> m_target_classes_by_api_level;
   size_t m_next_target_class_index{0};
-  std::unordered_map<DexType*, DexClass*> m_target_classes_by_source_classes;
-  std::unordered_map<const DexClass*, SplitClass> m_split_classes;
+  UnorderedMap<DexType*, DexClass*> m_target_classes_by_source_classes;
+  UnorderedMap<const DexClass*, SplitClass> m_split_classes;
   std::vector<std::pair<DexMethod*, DexClass*>> m_methods_to_relocate;
   std::vector<std::pair<DexMethod*, DexMethod*>> m_methods_to_trampoline;
   ClassSplittingStats m_stats;

@@ -36,7 +36,7 @@ void update_coldstart_classes_order(
     bool log /* = true */) {
   const auto& coldstart_classes = conf.get_coldstart_classes();
 
-  std::unordered_map<std::string, std::string> replacement;
+  UnorderedMap<std::string, std::string> replacement;
   for (const auto& str : previously_relocated_types) {
     auto initial_type = str.substr(0, str.size() - 11) + ";";
 
@@ -468,7 +468,7 @@ void ClassSplitter::cleanup(const Scope& final_scope) {
 
   // We now rewrite all invoke-instructions as needed to reflect the fact that
   // we made some methods static as part of the relocation effort.
-  std::unordered_map<IROpcode, std::atomic<size_t>, boost::hash<IROpcode>>
+  UnorderedMap<IROpcode, std::atomic<size_t>, boost::hash<IROpcode>>
       rewritten_invokes;
   for (IROpcode op :
        {OPCODE_INVOKE_DIRECT, OPCODE_INVOKE_VIRTUAL, OPCODE_INVOKE_SUPER}) {
@@ -511,7 +511,7 @@ void ClassSplitter::cleanup(const Scope& final_scope) {
         (size_t)rewritten_invokes.at(OPCODE_INVOKE_SUPER));
 
   m_mgr.incr_metric(METRIC_STATICIZED_METHODS, methods_to_staticize.size());
-  for (auto& p : rewritten_invokes) {
+  for (auto& p : UnorderedIterable(rewritten_invokes)) {
     m_mgr.incr_metric(std::string(METRIC_REWRITTEN_INVOKES) + SHOW(p.first),
                       (size_t)p.second);
   }
