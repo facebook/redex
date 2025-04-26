@@ -70,12 +70,12 @@ class RemoveArgs {
   struct NamedRenameMap {
     size_t next_reordering_uniquifiers{0};
     size_t next_removal_uniquifiers{0};
-    std::unordered_map<DexTypeList*, size_t> reordering_uniquifiers;
-    std::unordered_map<const DexMethod*, size_t> removal_uniquifiers;
+    UnorderedMap<DexTypeList*, size_t> reordering_uniquifiers;
+    UnorderedMap<const DexMethod*, size_t> removal_uniquifiers;
   };
-  std::unordered_map<const DexString*, NamedRenameMap> m_rename_maps;
+  UnorderedMap<const DexString*, NamedRenameMap> m_rename_maps;
   ConcurrentSet<const DexMethod*> m_result_used;
-  std::unordered_map<DexProto*, DexProto*> m_reordered_protos;
+  UnorderedMap<DexProto*, DexProto*> m_reordered_protos;
   const std::vector<std::string>& m_blocklist;
   size_t m_iteration;
   const UnorderedSet<DexMethodRef*>& m_pure_methods;
