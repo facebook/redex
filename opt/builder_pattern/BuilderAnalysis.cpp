@@ -82,8 +82,8 @@ using IRInstructionConstantEnvironment =
     PatriciaTreeMapAbstractEnvironment<reg_t, IRInstructionConstantDomain>;
 
 class InstructionToEnvMap final
-    : public std::unordered_map<const IRInstruction*,
-                                impl::IRInstructionConstantEnvironment> {};
+    : public UnorderedMap<const IRInstruction*,
+                          impl::IRInstructionConstantEnvironment> {};
 
 class Analyzer final : public BaseIRAnalyzer<IRInstructionConstantEnvironment> {
 
@@ -240,7 +240,7 @@ void BuilderAnalysis::print_usage() {
   }
 
   TRACE(BLD_PATTERN, 4, "\nMethod %s", SHOW(m_method));
-  for (const auto& pair : m_usage) {
+  for (const auto& pair : UnorderedIterable(m_usage)) {
     TRACE(BLD_PATTERN, 4, "\nInitialization in %s", SHOW(pair.first));
 
     for (const auto& it : pair.second) {
@@ -343,11 +343,11 @@ void BuilderAnalysis::populate_usage() {
   }
 }
 
-std::unordered_map<IRInstruction*, DexType*>
+UnorderedMap<IRInstruction*, DexType*>
 BuilderAnalysis::get_vinvokes_to_this_infered_type() {
-  std::unordered_map<IRInstruction*, DexType*> result;
+  UnorderedMap<IRInstruction*, DexType*> result;
 
-  for (const auto& pair : m_usage) {
+  for (const auto& pair : UnorderedIterable(m_usage)) {
     if (opcode::is_invoke_virtual(pair.first->opcode())) {
       always_assert(!result.count(const_cast<IRInstruction*>(pair.first)));
 
@@ -378,7 +378,7 @@ BuilderAnalysis::get_vinvokes_to_this_infered_type() {
 UnorderedSet<IRInstruction*> BuilderAnalysis::get_all_inlinable_insns() {
   UnorderedSet<IRInstruction*> result;
 
-  for (const auto& pair : m_usage) {
+  for (const auto& pair : UnorderedIterable(m_usage)) {
     if (opcode::is_an_invoke(pair.first->opcode())) {
       result.emplace(const_cast<IRInstruction*>(pair.first));
     }
@@ -429,7 +429,7 @@ ConstTypeHashSet BuilderAnalysis::get_escaped_types_from_invokes(
 ConstTypeHashSet BuilderAnalysis::get_instantiated_types() {
   ConstTypeHashSet result;
 
-  for (const auto& pair : m_usage) {
+  for (const auto& pair : UnorderedIterable(m_usage)) {
     auto type = get_instantiated_type(pair.first);
     result.emplace(type);
   }
@@ -456,7 +456,7 @@ ConstTypeHashSet BuilderAnalysis::non_removable_types() {
   auto non_removable_types = escape_types();
 
   // Consider other non-removable usages (for example synchronization usage).
-  for (const auto& pair : m_usage) {
+  for (const auto& pair : UnorderedIterable(m_usage)) {
     auto instantiation = pair.first;
     auto current_instance = get_instantiated_type(instantiation);
 
@@ -495,7 +495,7 @@ ConstTypeHashSet BuilderAnalysis::escape_types() {
   auto acceptable_method = get_obj_default_ctor();
 
   ConstTypeHashSet escape_types;
-  for (const auto& pair : m_usage) {
+  for (const auto& pair : UnorderedIterable(m_usage)) {
     auto instantiation_insn = pair.first;
     auto current_instance = get_instantiated_type(instantiation_insn);
 

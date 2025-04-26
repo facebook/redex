@@ -68,8 +68,8 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
 
   const std::vector<DexMethod*>& super_ctors_list =
       type_class(m_root)->get_ctors();
-  std::unordered_set<DexMethod*> super_ctors(super_ctors_list.begin(),
-                                             super_ctors_list.end());
+  UnorderedSet<DexMethod*> super_ctors(super_ctors_list.begin(),
+                                       super_ctors_list.end());
 
   for (DexMethod* method : methods) {
     if (!method->get_code()) {
@@ -114,9 +114,9 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
  * Bind virtual calls to the actual implementation.
  */
 void BuilderTransform::update_virtual_calls(
-    const std::unordered_map<IRInstruction*, DexType*>& insn_to_type) {
+    const UnorderedMap<IRInstruction*, DexType*>& insn_to_type) {
 
-  for (const auto& pair : insn_to_type) {
+  for (const auto& pair : UnorderedIterable(insn_to_type)) {
     auto insn = pair.first;
     auto current_instance = pair.second;
 
@@ -274,7 +274,7 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
 }
 
 void BuilderTransform::cleanup() {
-  for (const auto& pair : m_method_copy) {
+  for (const auto& pair : UnorderedIterable(m_method_copy)) {
     auto method = pair.first;
     auto copy = pair.second;
 

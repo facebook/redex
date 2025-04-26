@@ -6,10 +6,11 @@
  */
 
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "IRInstruction.h"
 
 template <typename T>
-std::unique_ptr<std::unordered_map<IRInstruction*, T>> forwards_dataflow(
+std::unique_ptr<UnorderedMap<IRInstruction*, T>> forwards_dataflow(
     const std::vector<cfg::Block*>& blocks,
     const T& bottom,
     const std::function<void(IRList::iterator, T*)>& trans,
@@ -43,7 +44,7 @@ std::unique_ptr<std::unordered_map<IRInstruction*, T>> forwards_dataflow(
     }
   }
 
-  auto insn_in_map = std::make_unique<std::unordered_map<IRInstruction*, T>>();
+  auto insn_in_map = std::make_unique<UnorderedMap<IRInstruction*, T>>();
   for (const auto& block : blocks) {
     auto insn_in = bottom;
     if (block->id() == 0) {
@@ -66,7 +67,7 @@ std::unique_ptr<std::unordered_map<IRInstruction*, T>> forwards_dataflow(
 }
 
 template <typename T>
-std::unique_ptr<std::unordered_map<IRInstruction*, T>> forwards_dataflow(
+std::unique_ptr<UnorderedMap<IRInstruction*, T>> forwards_dataflow(
     const std::vector<cfg::Block*>& blocks,
     const T& bottom,
     const std::function<void(IRList::iterator, T*)>& trans) {

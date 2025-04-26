@@ -36,7 +36,7 @@ class BuilderTransform {
       DexMethod* caller, const UnorderedSet<IRInstruction*>& insns);
 
   void update_virtual_calls(
-      const std::unordered_map<IRInstruction*, DexType*>& insn_to_type);
+      const UnorderedMap<IRInstruction*, DexType*>& insn_to_type);
 
   void replace_fields(const InstantiationToUsage& usage, DexMethod* method);
 
@@ -52,7 +52,7 @@ class BuilderTransform {
   ConcurrentMethodResolver m_concurrent_method_resolver;
 
   // Used for tracking changes that we need to restore.
-  std::unordered_map<DexMethod*, DexMethod*> m_method_copy;
+  UnorderedMap<DexMethod*, DexMethod*> m_method_copy;
 };
 
 } // namespace builder_pattern

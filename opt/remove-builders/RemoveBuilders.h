@@ -29,7 +29,7 @@ class RemoveBuildersPass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  std::unordered_set<DexType*> m_builders;
+  UnorderedSet<DexType*> m_builders;
   UnorderedSet<DexType*> m_blocklist;
   bool m_enable_buildee_constr_change;
 

@@ -39,11 +39,11 @@ std::string only_class_name(const DexType* type) {
   return type_str.substr(class_start, type_str.size() - package_delim - 2);
 }
 
-std::unordered_set<DexType*> get_associated_buildees(
-    const std::unordered_set<const DexType*>& builders) {
+UnorderedSet<DexType*> get_associated_buildees(
+    const UnorderedSet<const DexType*>& builders) {
 
-  std::unordered_set<DexType*> buildees;
-  for (const auto& builder : builders) {
+  UnorderedSet<DexType*> buildees;
+  for (const auto& builder : UnorderedIterable(builders)) {
     const auto builder_name = builder->str();
     std::string buildee_name =
         builder_name.substr(0, builder_name.size() - 9) + ";";
@@ -111,7 +111,7 @@ class RemoveClasses {
 
     if (m_root != type::java_lang_Object()) {
       // We can't inline a method that has super calls.
-      for (const DexType* builder : m_classes) {
+      for (const DexType* builder : UnorderedIterable(m_classes)) {
         if (!m_transform.inline_super_calls_and_ctors(builder)) {
           TRACE(BLD_PATTERN, 2,
                 "Excluding type %s since we cannot inline super calls for all "
@@ -137,11 +137,11 @@ class RemoveClasses {
 
     TRACE(BLD_PATTERN, 1, "num_classes_excluded %zu", m_excluded_types.size());
     TRACE(BLD_PATTERN, 1, "num_classes_removed %zu", m_removed_types.size());
-    for (const auto& type : m_excluded_types) {
+    for (const auto& type : UnorderedIterable(m_excluded_types)) {
       TRACE(BLD_PATTERN, 2, "Excluded type: %s", SHOW(type));
     }
     mgr.set_metric(root_name + "_num_classes_removed", m_removed_types.size());
-    for (const auto& type : m_removed_types) {
+    for (const auto& type : UnorderedIterable(m_removed_types)) {
       TRACE(BLD_PATTERN, 2, "Removed type: %s", SHOW(type));
     }
     for (const auto& pair : m_num_inline_iterations) {
@@ -228,7 +228,7 @@ class RemoveClasses {
 
       auto removed_types = analysis.get_instantiated_types();
       TRACE(BLD_PATTERN, 2, "Removed following builders from %s", SHOW(method));
-      for (const auto& type : removed_types) {
+      for (const auto& type : UnorderedIterable(removed_types)) {
         m_removed_types.emplace(type);
         TRACE(BLD_PATTERN, 2, "\t %s", SHOW(type));
       }
@@ -311,9 +311,7 @@ class RemoveClasses {
         // Check if any of the instance builder types cannot be removed.
         auto non_removable_types = analysis->non_removable_types();
         if (!non_removable_types.empty()) {
-          for (const auto* type : non_removable_types) {
-            m_excluded_types.emplace(type);
-          }
+          insert_unordered_iterable(m_excluded_types, non_removable_types);
 
           // Restore method and re-try. We will only
           // try removing non-excluded types.
@@ -344,9 +342,7 @@ class RemoveClasses {
       if (!not_inlined_insns.empty()) {
         auto escaped_builders =
             analysis->get_escaped_types_from_invokes(not_inlined_insns);
-        for (auto* escaped_builder : escaped_builders) {
-          m_excluded_types.emplace(escaped_builder);
-        }
+        insert_unordered_iterable(m_excluded_types, escaped_builders);
 
         if (not_inlined_insns.size() == to_inline.size()) {
           // Nothing left to do, since nothing was inlined.
@@ -386,9 +382,9 @@ class RemoveClasses {
   const std::vector<DexType*>& m_blocklist;
   TypeSystem m_type_system;
   BuilderTransform m_transform;
-  std::unordered_set<const DexType*> m_classes;
-  std::unordered_set<const DexType*> m_excluded_types;
-  std::unordered_set<const DexType*> m_removed_types;
+  UnorderedSet<const DexType*> m_classes;
+  UnorderedSet<const DexType*> m_excluded_types;
+  UnorderedSet<const DexType*> m_removed_types;
   size_t m_num_usages{0};
   size_t m_num_removed_usages{0};
   size_t m_max_num_inline_iteration{0};

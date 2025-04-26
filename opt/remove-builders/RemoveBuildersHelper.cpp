@@ -33,7 +33,7 @@ void fields_mapping(const IRList::iterator& it,
       std::prev(it)->insn->opcode() == OPCODE_NEW_INSTANCE &&
       std::prev(it)->insn->get_type() == builder->get_type()) {
     // Set fields to UNDEFINED if new builder instance.
-    for (auto& pair : fregs->field_to_reg) {
+    for (auto& pair : UnorderedIterable(fregs->field_to_reg)) {
       fregs->field_to_reg[pair.first] = FieldOrRegStatus::UNDEFINED;
       fregs->field_to_iput_insns[pair.first].clear();
     }
@@ -43,7 +43,7 @@ void fields_mapping(const IRList::iterator& it,
   if (insn->has_dest()) {
     const int current_dest = insn->dest();
 
-    for (const auto& pair : fregs->field_to_reg) {
+    for (const auto& pair : UnorderedIterable(fregs->field_to_reg)) {
       if (pair.second == current_dest ||
           (insn->dest_is_wide() && pair.second == current_dest + 1)) {
         fregs->field_to_reg[pair.first] = FieldOrRegStatus::OVERWRITTEN;
@@ -70,7 +70,7 @@ void fields_mapping(const IRList::iterator& it,
  * - DIFFERENT: no unique register.
  * - OVERWRITTEN: register no longer holds the value.
  */
-std::unique_ptr<std::unordered_map<IRInstruction*, FieldsRegs>> fields_setters(
+std::unique_ptr<UnorderedMap<IRInstruction*, FieldsRegs>> fields_setters(
     const std::vector<cfg::Block*>& blocks, DexClass* builder) {
 
   std::function<void(IRList::iterator, FieldsRegs*)> trans =
@@ -151,10 +151,10 @@ void add_instr(IRCode* code,
   not_reached_log("insert position not found!");
 }
 
-using MoveList = std::unordered_map<const IRInstruction*, IRInstruction*>;
+using MoveList = UnorderedMap<const IRInstruction*, IRInstruction*>;
 
 void method_updates(DexMethod* method,
-                    const std::vector<IRInstruction*>& deletes,
+                    const UnorderedBag<IRInstruction*>& deletes,
                     const MoveList& move_list) {
   always_assert(method != nullptr);
 
@@ -166,13 +166,13 @@ void method_updates(DexMethod* method,
   // Example:
   //  iput v0, object // field -> move new_reg, v0
   //  iget v0, object // field -> move v0, new_reg
-  for (const auto& move_elem : move_list) {
+  for (const auto& move_elem : UnorderedIterable(move_list)) {
     const IRInstruction* position = move_elem.first;
     IRInstruction* insn = move_elem.second;
     add_instr(code, position, insn);
   }
 
-  for (const auto& insn : deletes) {
+  for (const auto& insn : UnorderedIterable(deletes)) {
     code->remove_opcode(insn);
   }
 }
@@ -184,11 +184,11 @@ void method_updates(DexMethod* method,
  * UNDEFINED.
  */
 int64_t get_new_reg_if_already_allocated(
-    const std::unordered_set<const IRInstruction*>& iput_insns,
+    const UnorderedSet<const IRInstruction*>& iput_insns,
     MoveList& move_replacements) {
 
   int64_t new_reg = FieldOrRegStatus::UNDEFINED;
-  for (const auto& iput_insn : iput_insns) {
+  for (const auto& iput_insn : UnorderedIterable(iput_insns)) {
     if (iput_insn != NULL_INSN) {
       if (move_replacements.find(iput_insn) != move_replacements.end()) {
         if (new_reg == FieldOrRegStatus::UNDEFINED) {
@@ -267,12 +267,12 @@ UnorderedSet<DexMethod*> get_non_trivial_init_methods(IRCode* code,
   return methods;
 }
 
-std::unordered_set<IRInstruction*> get_super_class_initializations(
+UnorderedSet<IRInstruction*> get_super_class_initializations(
     DexMethod* method, DexType* parent_type) {
   always_assert(method != nullptr);
   always_assert(parent_type != nullptr);
 
-  std::unordered_set<IRInstruction*> insns;
+  UnorderedSet<IRInstruction*> insns;
   auto code = method->get_code();
   if (!code) {
     return insns;
@@ -297,14 +297,14 @@ bool has_super_class_initializations(DexMethod* method, DexType* parent_type) {
 }
 
 void remove_super_class_calls(DexMethod* method, DexType* parent_type) {
-  std::unordered_set<IRInstruction*> to_delete =
+  UnorderedSet<IRInstruction*> to_delete =
       get_super_class_initializations(method, parent_type);
   auto code = method->get_code();
   if (!code) {
     return;
   }
 
-  for (const auto& insn : to_delete) {
+  for (const auto& insn : UnorderedIterable(to_delete)) {
     code->remove_opcode(insn);
   }
 }
@@ -312,20 +312,20 @@ void remove_super_class_calls(DexMethod* method, DexType* parent_type) {
 /**
  * Gathers all `MOVE` instructions that operate on a builder.
  */
-std::vector<IRInstruction*> gather_move_builders_insn(
+UnorderedBag<IRInstruction*> gather_move_builders_insn(
     IRCode* code, const std::vector<cfg::Block*>& blocks, DexType* builder) {
-  std::vector<IRInstruction*> insns;
+  UnorderedBag<IRInstruction*> insns;
 
   reg_t regs_size = code->get_registers_size();
   auto tainted_map = get_tainted_regs(regs_size, blocks, builder);
 
-  for (auto it : *tainted_map) {
+  for (auto it : UnorderedIterable(*tainted_map)) {
     auto insn = it.first;
     auto tainted = it.second.bits();
 
     if (opcode::is_a_move(insn->opcode())) {
       if (tainted[insn->src(0)]) {
-        insns.push_back(insn);
+        insns.insert(insn);
       }
     }
   }
@@ -431,10 +431,10 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
 
   // Instructions where the builder gets moved to a different
   // register need to be also removed (at the end).
-  std::vector<IRInstruction*> deletes =
+  UnorderedBag<IRInstruction*> deletes =
       gather_move_builders_insn(code, blocks, builder->get_type());
   MoveList move_replacements;
-  std::unordered_set<IRInstruction*> update_list;
+  UnorderedSet<IRInstruction*> update_list;
 
   for (auto& block : blocks) {
     auto ii = InstructionIterable(block);
@@ -447,7 +447,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
       if (opcode::is_an_iput(opcode)) {
         auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
         if (field != nullptr && field->get_class() == builder->get_type()) {
-          deletes.push_back(insn);
+          deletes.insert(insn);
           continue;
         }
 
@@ -474,7 +474,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
               extra_regs += is_wide ? 2 : 1;
             }
 
-            for (const auto& iput_insn : iput_insns) {
+            for (const auto& iput_insn : UnorderedIterable(iput_insns)) {
               if (iput_insn != NULL_INSN) {
                 if (move_replacements.find(iput_insn) !=
                     move_replacements.end()) {
@@ -523,7 +523,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
             }
 
             always_assert(iput_insns.size() == 1);
-            const IRInstruction* iput_insn = *iput_insns.begin();
+            const IRInstruction* iput_insn = *unordered_any(iput_insns);
 
             // Check if we already have a value for it.
             if (move_replacements.find(iput_insn) != move_replacements.end()) {
@@ -545,7 +545,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
             }
           }
 
-          deletes.push_back(insn);
+          deletes.insert(insn);
           continue;
         }
 
@@ -557,7 +557,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
           // Safely avoiding the case where multiple builders are initialized.
           if (num_builders > 1) return false;
 
-          deletes.push_back(insn);
+          deletes.insert(insn);
           continue;
         }
 
@@ -565,7 +565,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
         auto invoked = insn->get_method();
         if (invoked->get_class() == builder->get_type() &&
             invoked->get_name() == init) {
-          deletes.push_back(insn);
+          deletes.insert(insn);
           continue;
         }
       }
@@ -621,7 +621,7 @@ bool params_change_regs(DexMethod* method) {
     tainted.m_reg_set[arg_reg] = 1;
 
     auto taint_map = forwards_dataflow(blocks, tainted, trans);
-    for (auto it : *taint_map) {
+    for (auto it : UnorderedIterable(*taint_map)) {
       auto insn = it.first;
       auto insn_tainted = it.second.bits();
       auto op = insn->opcode();
@@ -677,7 +677,7 @@ DexProto* make_proto_for(DexClass* cls) {
 std::vector<IRInstruction*> generate_load_params(
     const std::vector<DexField*>& fields,
     uint32_t& params_reg_start,
-    std::unordered_map<DexField*, uint32_t>& field_to_reg) {
+    UnorderedMap<DexField*, uint32_t>& field_to_reg) {
 
   std::vector<IRInstruction*> load_params;
 
@@ -719,7 +719,7 @@ DexMethod* create_fields_constr(DexMethod* method, DexClass* cls) {
   auto code = method->get_code();
   uint32_t regs_size = code->get_registers_size();
   const auto& fields = cls->get_ifields();
-  std::unordered_map<DexField*, uint32_t> field_to_reg;
+  UnorderedMap<DexField*, uint32_t> field_to_reg;
 
   std::unique_ptr<IRCode> new_code = std::make_unique<IRCode>(*code);
 
@@ -731,7 +731,7 @@ DexMethod* create_fields_constr(DexMethod* method, DexClass* cls) {
   new_code->set_registers_size(new_regs_size);
 
   std::vector<IRList::iterator> to_delete;
-  std::unordered_map<IRInstruction*, IRInstruction*> to_replace;
+  UnorderedMap<IRInstruction*, IRInstruction*> to_replace;
   auto ii = InstructionIterable(*new_code);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     IRInstruction* insn = it->insn;
@@ -758,7 +758,7 @@ DexMethod* create_fields_constr(DexMethod* method, DexClass* cls) {
   }
 
   new_code->insert_after(nullptr, load_params);
-  for (const auto& it : to_replace) {
+  for (const auto& it : UnorderedIterable(to_replace)) {
     new_code->replace_opcode(it.first, it.second);
   }
   for (const auto& it : to_delete) {
@@ -899,7 +899,7 @@ bool TaintedRegs::operator!=(const TaintedRegs& that) const {
 }
 
 void FieldsRegs::meet(const FieldsRegs& that) {
-  for (const auto& pair : field_to_reg) {
+  for (const auto& pair : UnorderedIterable(field_to_reg)) {
     if (pair.second == FieldOrRegStatus::DEFAULT) {
       field_to_reg[pair.first] = that.field_to_reg.at(pair.first);
       field_to_iput_insns[pair.first] = that.field_to_iput_insns.at(pair.first);
@@ -912,9 +912,8 @@ void FieldsRegs::meet(const FieldsRegs& that) {
       }
 
       field_to_reg[pair.first] = FieldOrRegStatus::DIFFERENT;
-      field_to_iput_insns[pair.first].insert(
-          that.field_to_iput_insns.at(pair.first).begin(),
-          that.field_to_iput_insns.at(pair.first).end());
+      insert_unordered_iterable(field_to_iput_insns[pair.first],
+                                that.field_to_iput_insns.at(pair.first));
     }
   }
 }
@@ -962,11 +961,11 @@ void transfer_object_reach(DexType* obj,
 bool tainted_reg_escapes(
     DexType* ty,
     DexMethod* method,
-    const std::unordered_map<IRInstruction*, TaintedRegs>& taint_map,
+    const UnorderedMap<IRInstruction*, TaintedRegs>& taint_map,
     bool enable_buildee_constr_change) {
   always_assert(ty != nullptr);
 
-  for (auto it : taint_map) {
+  for (auto it : UnorderedIterable(taint_map)) {
     auto insn = it.first;
     auto tainted = it.second.bits();
     auto op = insn->opcode();
@@ -1044,10 +1043,8 @@ bool tainted_reg_escapes(
  * Keep track, per instruction, what register(s) holds
  * an instance of the `type`.
  */
-std::unique_ptr<std::unordered_map<IRInstruction*, TaintedRegs>>
-get_tainted_regs(uint32_t regs_size,
-                 const std::vector<cfg::Block*>& blocks,
-                 DexType* type) {
+std::unique_ptr<UnorderedMap<IRInstruction*, TaintedRegs>> get_tainted_regs(
+    uint32_t regs_size, const std::vector<cfg::Block*>& blocks, DexType* type) {
 
   std::function<void(IRList::iterator, TaintedRegs*)> trans =
       [&](const IRList::iterator& it, TaintedRegs* tregs) {

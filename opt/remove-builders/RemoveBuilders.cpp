@@ -116,13 +116,13 @@ std::vector<DexMethod*> get_static_methods(
  *  - has no static methods
  *  - has no static fields
  */
-std::unordered_set<DexClass*> get_trivial_builders(
-    const std::unordered_set<DexType*>& builders,
-    const std::unordered_set<DexType*>& stack_only_builders) {
+UnorderedSet<DexClass*> get_trivial_builders(
+    const UnorderedSet<DexType*>& builders,
+    const UnorderedSet<DexType*>& stack_only_builders) {
 
-  std::unordered_set<DexClass*> trivial_builders;
+  UnorderedSet<DexClass*> trivial_builders;
 
-  for (DexType* builder_type : builders) {
+  for (DexType* builder_type : UnorderedIterable(builders)) {
     DexClass* builder_class = type_class(builder_type);
 
     // Filter out builders that escape the stack.
@@ -150,10 +150,10 @@ std::unordered_set<DexClass*> get_trivial_builders(
 }
 
 void gather_removal_builder_stats(
-    const std::unordered_set<DexClass*>& builders,
-    const std::unordered_set<DexClass*>& kept_builders) {
+    const UnorderedSet<DexClass*>& builders,
+    const UnorderedSet<DexClass*>& kept_builders) {
 
-  for (DexClass* builder : builders) {
+  for (DexClass* builder : UnorderedIterable(builders)) {
     if (kept_builders.find(builder) == kept_builders.end()) {
       b_counter.classes_removed++;
       b_counter.methods_removed +=
@@ -163,8 +163,8 @@ void gather_removal_builder_stats(
   }
 }
 
-std::unordered_set<DexClass*> get_builders_with_subclasses(Scope& classes) {
-  std::unordered_set<DexClass*> builders_with_subclasses;
+UnorderedSet<DexClass*> get_builders_with_subclasses(Scope& classes) {
+  UnorderedSet<DexClass*> builders_with_subclasses;
 
   for (const auto& cls : classes) {
     DexType* super_type = cls->get_super_class();
@@ -242,7 +242,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
     }
   }
 
-  std::unordered_set<DexType*> escaped_builders;
+  UnorderedSet<DexType*> escaped_builders;
   walk::methods(scope, [&](DexMethod* m) {
     auto builders = created_builders(m);
     for (DexType* builder : builders) {
@@ -257,15 +257,15 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
     }
   });
 
-  std::unordered_set<DexType*> stack_only_builders;
-  for (DexType* builder : m_builders) {
+  UnorderedSet<DexType*> stack_only_builders;
+  for (DexType* builder : UnorderedIterable(m_builders)) {
     if (escaped_builders.find(builder) == escaped_builders.end()) {
       stack_only_builders.emplace(builder);
     }
   }
 
-  std::unordered_set<DexType*> builders_and_supers;
-  for (DexType* builder : stack_only_builders) {
+  UnorderedSet<DexType*> builders_and_supers;
+  for (DexType* builder : UnorderedIterable(stack_only_builders)) {
     DexType* cls = builder;
     while (cls != nullptr && cls != obj_type) {
       builders_and_supers.emplace(cls);
@@ -273,8 +273,8 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
     }
   }
 
-  std::unordered_set<DexType*> this_escapes;
-  for (DexType* cls_ty : builders_and_supers) {
+  UnorderedSet<DexType*> this_escapes;
+  for (DexType* cls_ty : UnorderedIterable(builders_and_supers)) {
     DexClass* cls = type_class(cls_ty);
     if (cls->is_external() ||
         this_arg_escapes(cls, m_enable_buildee_constr_change)) {
@@ -284,8 +284,8 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
 
   // set of builders that neither escape the stack nor pass their 'this' arg
   // to another function
-  std::unordered_set<DexType*> no_escapes;
-  for (DexType* builder : stack_only_builders) {
+  UnorderedSet<DexType*> no_escapes;
+  for (DexType* builder : UnorderedIterable(stack_only_builders)) {
     DexType* cls = builder;
     bool hierarchy_has_escape = false;
     while (cls != nullptr) {
@@ -303,7 +303,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   size_t dmethod_count = 0;
   size_t vmethod_count = 0;
   size_t build_count = 0;
-  for (DexType* builder : no_escapes) {
+  for (DexType* builder : UnorderedIterable(no_escapes)) {
     auto cls = type_class(builder);
     auto buildee = get_buildee(builder);
     dmethod_count += cls->get_dmethods().size();
@@ -315,11 +315,10 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
     }
   }
 
-  std::unordered_set<DexClass*> trivial_builders =
+  UnorderedSet<DexClass*> trivial_builders =
       get_trivial_builders(m_builders, no_escapes);
 
-  std::unordered_set<DexClass*> kept_builders =
-      get_builders_with_subclasses(scope);
+  UnorderedSet<DexClass*> kept_builders = get_builders_with_subclasses(scope);
 
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns());
@@ -330,7 +329,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
                                false);
 
   // Inline non init methods.
-  std::unordered_set<DexClass*> removed_builders;
+  UnorderedSet<DexClass*> removed_builders;
   walk::methods(scope, [&](DexMethod* method) {
     auto builders = created_builders(method);
 
