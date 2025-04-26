@@ -56,6 +56,7 @@
 #include "ObjectEscapeAnalysisImpl.h"
 #include "ObjectEscapeAnalysisPlugin.h"
 #include "PassManager.h"
+#include "RedexContext.h"
 #include "StringBuilder.h"
 #include "Walkers.h"
 
@@ -1571,6 +1572,12 @@ UnorderedMap<DexMethod*, std::vector<ReducedMethod>> compute_reduced_methods(
   ConcurrentMap<DexMethod*, std::vector<ReducedMethod>>
       concurrent_reduced_methods;
   CodeSizeCache code_size_cache;
+  // Computing root methods is very memory intensive, and "instrumented" builds
+  // are doubly so. We limit parallelism to limit maximum memory usage.
+  unsigned int num_threads = redex_parallel::default_num_threads();
+  if (g_redex->instrument_mode && g_redex->slow_invariants_debug) {
+    num_threads = std::min(num_threads, 16u);
+  }
   workqueue_run<std::pair<DexMethod*, InlinableTypes>>(
       [&](const std::pair<DexMethod*, InlinableTypes>& p) {
         auto* method = p.first;
@@ -1607,7 +1614,7 @@ UnorderedMap<DexMethod*, std::vector<ReducedMethod>> compute_reduced_methods(
         }
         DexMethod::delete_method_DO_NOT_USE(copy);
       },
-      ordered_root_methods_variants);
+      ordered_root_methods_variants, num_threads);
 
   // For each root method, we order the reduced methods (if any) by how many
   // types were inlined, with the largest number of inlined types going first.
