@@ -30,7 +30,7 @@ inline bool gather_linear_prologue_blocks(
       return false;
     }
   }
-  std::unordered_set<cfg::Block*> visited;
+  UnorderedSet<cfg::Block*> visited;
   for (cfg::Block* b = cfg->entry_block(); b != nullptr;
        b = b->goes_to_only_edge()) {
     if (!visited.insert(b).second) {

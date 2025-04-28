@@ -121,8 +121,8 @@ bool pred_creates_extra_loads(const SwitchEquivFinder::ExtraLoads& extra_loads,
                               cfg::Block* leaf) {
   // There is probably a more convenient way to do this, but this condition
   // being hit should be quite rare (probably doesn't matter this is loopy).
-  std::unordered_set<IRInstruction*> insns;
-  for (const auto& [b, map] : extra_loads) {
+  UnorderedSet<IRInstruction*> insns;
+  for (const auto& [b, map] : UnorderedIterable(extra_loads)) {
     for (const auto& [reg, insn] : map) {
       insns.emplace(insn);
     }
@@ -245,7 +245,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves(
 
   // Traverse the tree in an depth first order so that the extra loads are
   // tracked in the same order that they will be executed at runtime
-  std::unordered_map<cfg::Block*, bool> block_to_is_leaf;
+  UnorderedMap<cfg::Block*, bool> block_to_is_leaf;
   auto block_is_leaf = [&](cfg::Block* b) {
     auto search = block_to_is_leaf.find(b);
     if (search != block_to_is_leaf.end()) {
@@ -259,8 +259,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves(
                      const std::vector<SourceBlock*>&)>
       recurse;
   std::vector<std::pair<cfg::Edge*, cfg::Block*>> edges_to_move;
-  std::unordered_map<cfg::Block*, std::vector<SourceBlock*>>
-      source_blocks_to_move;
+  UnorderedMap<cfg::Block*, std::vector<SourceBlock*>> source_blocks_to_move;
 
   recurse = [&](cfg::Block* b, const InstructionSet& loads,
                 const std::vector<SourceBlock*>& source_blocks_in) {
@@ -396,7 +395,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves(
   if (!m_extra_loads.empty()) {
     // Make sure there are no other ways to reach the leaf nodes. If there were
     // other ways to reach them, m_extra_loads would be incorrect.
-    for (const auto& block_and_count : m_visit_count) {
+    for (const auto& block_and_count : UnorderedIterable(m_visit_count)) {
       cfg::Block* b = block_and_count.first;
       uint16_t count = block_and_count.second;
       if (b->preds().size() > count) {
@@ -415,7 +414,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves(
     return bail();
   }
 
-  for (auto& [blk, source_blocks] : source_blocks_to_move) {
+  for (auto& [blk, source_blocks] : UnorderedIterable(source_blocks_to_move)) {
     auto it_insert = source_blocks::find_first_block_insert_point(blk);
 
     for (auto source_block : source_blocks) {
@@ -513,13 +512,13 @@ SwitchEquivFinder::DefUseBlocks SwitchEquivFinder::GetDefUseBlocks(
 // * Remove loads that are never used outside the if-else chain blocks
 // * Remove empty lists of loads from the map (possibly emptying the map)
 void SwitchEquivFinder::normalize_extra_loads(
-    const std::unordered_map<cfg::Block*, bool>& block_to_is_leaf) {
+    const UnorderedMap<cfg::Block*, bool>& block_to_is_leaf) {
 
   // Use ReachingDefinitions to find the loads that are used outside the if-else
   // chain blocks
   auto& def_use_blocks = get_def_use_blocks();
-  std::unordered_set<IRInstruction*> used_defs;
-  for (const auto& [b, is_leaf] : block_to_is_leaf) {
+  UnorderedSet<IRInstruction*> used_defs;
+  for (const auto& [b, is_leaf] : UnorderedIterable(block_to_is_leaf)) {
     if (is_leaf) {
       continue;
     }
@@ -527,7 +526,7 @@ void SwitchEquivFinder::normalize_extra_loads(
       if (!is_valid_load_for_nonleaf(mie.insn->opcode())) {
         continue;
       }
-      for (auto* use_block : def_use_blocks[mie.insn]) {
+      for (auto* use_block : UnorderedIterable(def_use_blocks[mie.insn])) {
         auto search = block_to_is_leaf.find(use_block);
         if (search != block_to_is_leaf.end() && !search->second) {
           continue;
@@ -538,7 +537,7 @@ void SwitchEquivFinder::normalize_extra_loads(
   }
 
   // Remove loads that aren't used outside the if-else chain blocks
-  for (auto& block_and_insns : m_extra_loads) {
+  for (auto& block_and_insns : UnorderedIterable(m_extra_loads)) {
     InstructionSet& insns = block_and_insns.second;
     std20::erase_if(insns, [&used_defs](auto& p) {
       return used_defs.count(p.second) == 0;
@@ -546,7 +545,7 @@ void SwitchEquivFinder::normalize_extra_loads(
   }
 
   // Remove empty instruction lists from `m_extra_loads` (possibly emptying it)
-  std20::erase_if(m_extra_loads, [](auto& p) { return p.second.empty(); });
+  unordered_erase_if(m_extra_loads, [](auto& p) { return p.second.empty(); });
 }
 
 cp::intraprocedural::FixpointIterator& SwitchEquivFinder::get_analyzed_cfg() {
@@ -634,12 +633,12 @@ void SwitchEquivFinder::find_case_keys(const std::vector<cfg::Edge*>& leaves) {
   m_success = true;
 }
 
-std::vector<cfg::Block*> SwitchEquivFinder::visited_blocks() const {
-  std::vector<cfg::Block*> result;
+UnorderedBag<cfg::Block*> SwitchEquivFinder::visited_blocks() const {
+  UnorderedBag<cfg::Block*> result;
   result.reserve(1 + m_visit_count.size());
-  result.emplace_back(m_root_branch.block());
-  for (auto entry : m_visit_count) {
-    result.emplace_back(entry.first);
+  result.insert(m_root_branch.block());
+  for (auto entry : UnorderedIterable(m_visit_count)) {
+    result.insert(entry.first);
   }
   return result;
 }

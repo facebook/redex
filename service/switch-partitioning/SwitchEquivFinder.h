@@ -11,11 +11,11 @@
 #include <boost/variant.hpp>
 #include <map>
 #include <ostream>
-#include <unordered_set>
 
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "InstructionAnalyzer.h"
 #include "SignedConstantDomain.h"
 
@@ -31,8 +31,7 @@ class SwitchEquivFinder {
       constant_propagation::ConstantClassObjectAnalyzer,
       constant_propagation::PrimitiveAnalyzer>;
 
-  using DefUseBlocks =
-      std::unordered_map<IRInstruction*, std::unordered_set<cfg::Block*>>;
+  using DefUseBlocks = UnorderedMap<IRInstruction*, UnorderedSet<cfg::Block*>>;
   static DefUseBlocks GetDefUseBlocks(cfg::ControlFlowGraph& cfg);
 
   static constexpr uint32_t NO_LEAF_DUPLICATION = 0;
@@ -64,7 +63,7 @@ class SwitchEquivFinder {
 
   using KeyToCase = std::map<SwitchingKey, cfg::Block*, key_comparator>;
   using InstructionSet = std::map<reg_t, IRInstruction*>;
-  using ExtraLoads = std::unordered_map<cfg::Block*, InstructionSet>;
+  using ExtraLoads = UnorderedMap<cfg::Block*, InstructionSet>;
 
   // Specify how the finder should behave when encountering redundant equals
   // check on the same key.
@@ -124,12 +123,12 @@ class SwitchEquivFinder {
 
   // Return all the blocks traversed by the finder, including leaves and
   // non-leaves.
-  std::vector<cfg::Block*> visited_blocks() const;
+  UnorderedBag<cfg::Block*> visited_blocks() const;
 
  private:
   std::vector<cfg::Edge*> find_leaves(BlockPredicate may_be_nonleaf);
   void normalize_extra_loads(
-      const std::unordered_map<cfg::Block*, bool>& block_to_is_leaf);
+      const UnorderedMap<cfg::Block*, bool>& block_to_is_leaf);
   bool move_edges(
       const std::vector<std::pair<cfg::Edge*, cfg::Block*>>& edges_to_move);
   void find_case_keys(const std::vector<cfg::Edge*>& leaves);
@@ -188,7 +187,7 @@ class SwitchEquivFinder {
 
   // This stores the blocks visited and how many times in building m_key_to_case
   // Note that this does not include the root branch.
-  std::unordered_map<cfg::Block*, uint16_t> m_visit_count;
+  UnorderedMap<cfg::Block*, uint16_t> m_visit_count;
 
   bool m_duplicate_case_keys{false};
 };
