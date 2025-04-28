@@ -47,7 +47,7 @@ static bool is_reasonable_string(const char* str, size_t len) {
 }
 
 const DexString* get_suitable_string(
-    std::unordered_set<const DexString*>& set,
+    UnorderedSet<const DexString*>& set,
     std::vector<const DexString*>& dex_strings) {
   while (!dex_strings.empty()) {
     auto val = dex_strings.back();
@@ -69,9 +69,9 @@ static void strip_src_strings(DexStoresVector& stores,
                               PassManager& mgr) {
   size_t shortened = 0;
   size_t string_savings = 0;
-  std::unordered_map<const DexString*, std::vector<const DexString*>>
+  UnorderedMap<const DexString*, std::vector<const DexString*>>
       global_src_strings;
-  std::unordered_set<const DexString*> shortened_used;
+  UnorderedSet<const DexString*> shortened_used;
   for (auto& classes : DexStoreClassesIterator(stores)) {
     for (auto const& clazz : classes) {
       auto src_string = clazz->get_source_file();
@@ -85,7 +85,7 @@ static void strip_src_strings(DexStoresVector& stores,
   }
 
   for (auto& classes : DexStoreClassesIterator(stores)) {
-    std::unordered_map<const DexString*, const DexString*> src_to_shortened;
+    UnorderedMap<const DexString*, const DexString*> src_to_shortened;
     std::vector<const DexString*> current_dex_strings;
     for (auto const& clazz : classes) {
       clazz->gather_strings(current_dex_strings);
@@ -135,7 +135,7 @@ static void strip_src_strings(DexStoresVector& stores,
     return;
   }
 
-  for (const auto& it : global_src_strings) {
+  for (const auto& it : UnorderedIterable(global_src_strings)) {
     auto desc_vector = it.second;
     sort_unique(desc_vector);
     fprintf(fd, "%s ->", it.first->c_str());
