@@ -121,12 +121,11 @@ ModelStats merge_model(const TypeSystem& type_system,
                        PassManager& mgr,
                        DexStoresVector& stores,
                        ModelSpec& spec) {
-  TRACE(CLMG,
-        2,
-        "[ClassMerging] merging %s model merging targets %zu roots %zu",
-        spec.name.c_str(),
-        spec.merging_targets.size(),
-        spec.roots.size());
+  TRACE(CLMG, 2,
+        "[ClassMerging] merging %s model merging targets %zu roots %zu; "
+        "update_method_profiles_stats %d",
+        spec.name.c_str(), spec.merging_targets.size(), spec.roots.size(),
+        spec.update_method_profiles_stats);
   Timer t("erase_model");
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
   XStoreRefs xstores(stores);
@@ -136,8 +135,11 @@ ModelStats merge_model(const TypeSystem& type_system,
       Model::build_model(scope, stores, conf, spec, type_system, *refchecker);
   ModelStats stats = model.get_model_stats();
   bool update_method_profiles_stats;
-  conf.get_json_config().get(
-      "update_method_profiles_stats", false, update_method_profiles_stats);
+  conf.get_json_config().get("update_method_profiles_stats", false,
+                             update_method_profiles_stats);
+  if (!spec.update_method_profiles_stats) {
+    update_method_profiles_stats = false;
+  }
   ModelMerger mm;
   auto merger_classes =
       mm.merge_model(scope, stores, conf, model, update_method_profiles_stats);

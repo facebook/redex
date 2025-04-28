@@ -132,6 +132,9 @@ void ClassMergingPass::bind_config() {
   bind("use_stable_shape_names", false, use_stable_shape_names);
   bool skip_anonymous_classes;
   bind("skip_anonymous_classes", false, skip_anonymous_classes);
+  bool update_method_profiles_stats;
+  bind("update_method_profiles_stats", true, update_method_profiles_stats,
+       "Whether to update method profiles stats for merged methods.");
 
   // load model specifications
   std::vector<Json::Value> models;
@@ -250,6 +253,7 @@ void ClassMergingPass::bind_config() {
       model.max_num_dispatch_target = m_max_num_dispatch_target;
       model.use_stable_shape_names = use_stable_shape_names;
       model.skip_anonymous_classes = skip_anonymous_classes;
+      model.update_method_profiles_stats = update_method_profiles_stats;
       // Assume config based models are all generated code.
       model_spec.get("is_generated_code", true, model.is_generated_code);
 

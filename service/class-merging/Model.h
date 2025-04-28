@@ -203,6 +203,8 @@ struct ModelSpec {
   bool mergeability_checks_use_of_const_class{false};
 
   bool skip_anonymous_classes{false};
+  // By default, we always update method profiles for merged methods.
+  bool update_method_profiles_stats{true};
 };
 
 struct ModelStats {
