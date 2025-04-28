@@ -90,6 +90,7 @@ constexpr const char* DEBUG_LINE_MAP = "redex-debug-line-map-v2";
 constexpr const char* IODI_METADATA = "iodi-metadata";
 constexpr const char* OPT_DECISIONS = "redex-opt-decisions.json";
 constexpr const char* CLASS_METHOD_INFO_MAP = "redex-class-method-info-map.txt";
+constexpr const char* STRING_LOCALE_DUMP = "redex-string-locales.txt";
 
 const std::string k_usage_header = "usage: redex-all [options...] dex-files...";
 
@@ -380,6 +381,10 @@ Arguments parse_args(int argc, char* argv[]) {
   od.add_options()(
       "used-js-assets", po::value<std::vector<std::string>>(),
       "A JSON file (or files) containing a list of resources used by JS");
+  od.add_options()(
+      "dump-string-locales",
+      po::value<bool>(),
+      "Writes out the locales of all string resources into a file");
   od.add_options()("warn,w",
                    po::value<std::vector<int>>(),
                    "warning level:\n"
@@ -590,6 +595,10 @@ Arguments parse_args(int argc, char* argv[]) {
       array.append(list);
     }
     args.config["used-js-assets"] = array;
+  }
+
+  if (vm.count("dump-string-locales")) {
+    args.config["dump-string-locales"] = vm["dump-string-locales"].as<bool>();
   }
 
   if (vm.count("arch")) {
@@ -1711,6 +1720,14 @@ void dump_class_method_info_map(const std::string& file_path,
   });
 }
 
+void dump_string_locales(const std::string& file_path,
+                         const std::vector<android::ResTable_config>& configs) {
+  std::ofstream ofs(file_path, std::ofstream::out | std::ofstream::trunc);
+  ofs << configs_to_string(
+      std::set<android::ResTable_config>(configs.begin(), configs.end()));
+  ofs.close();
+}
+
 void maybe_dump_jemalloc_profile(const char* env_name) {
   auto* dump_path = std::getenv(env_name);
   if (dump_path != nullptr) {
@@ -1969,6 +1986,17 @@ int main(int argc, char* argv[]) {
 
     stats_output_path = conf.metafile(
         args.config.get("stats_output", "redex-stats.txt").asString());
+
+    const bool dump_strings =
+        args.config.get("dump-string-locales", false).asBool();
+    if (dump_strings) {
+      auto post_resources = create_resource_reader(apk_dir);
+      auto post_res_table = post_resources->load_res_table();
+      std::vector<android::ResTable_config> configs;
+      post_res_table->get_configurations(APPLICATION_PACKAGE, "string",
+                                         &configs);
+      dump_string_locales(STRING_LOCALE_DUMP, configs);
+    }
 
     {
       Timer t("Freeing global memory");
