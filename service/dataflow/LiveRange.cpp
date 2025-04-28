@@ -26,8 +26,8 @@ using namespace live_range;
 /*
  * Type aliases for disjoint_sets
  */
-using Rank = std::unordered_map<Def, size_t>;
-using Parent = std::unordered_map<Def, Def>;
+using Rank = UnorderedMap<Def, size_t>;
+using Parent = UnorderedMap<Def, Def>;
 using RankPMap = boost::associative_property_map<Rank>;
 using ParentPMap = boost::associative_property_map<Parent>;
 using DefSets = boost::disjoint_sets<RankPMap, ParentPMap>;
