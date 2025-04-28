@@ -85,21 +85,6 @@ void signatures_to_methods(
   }
 }
 
-std::string configs_to_string(
-    const std::set<android::ResTable_config>& configs) {
-  std::ostringstream s;
-  bool empty = true;
-  for (const auto& c : configs) {
-    if (!empty) {
-      s << ", ";
-    }
-    empty = false;
-    auto desc = c.toString();
-    s << (desc.length() > 0 ? desc.string() : "default");
-  }
-  return s.str();
-}
-
 TypeSplit make_split_struct(
     const std::string& base_type_name,
     const size_t splits_created,

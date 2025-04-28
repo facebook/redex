@@ -439,6 +439,9 @@ UnorderedSet<std::string> get_xml_files(const std::string& directory);
 // binary XML format, and thus are out of scope for many optimizations.
 bool is_raw_resource(const std::string& filename);
 
+std::string configs_to_string(
+    const std::set<android::ResTable_config>& configs);
+
 const int TYPE_INDEX_BIT_SHIFT = 16;
 const int PACKAGE_INDEX_BIT_SHIFT = 24;
 const uint32_t PACKAGE_MASK_BIT = 0xFF000000;

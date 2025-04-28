@@ -204,6 +204,21 @@ bool is_raw_resource(const std::string& filename) {
          filename.find("/res/raw-") != std::string::npos;
 }
 
+std::string configs_to_string(
+    const std::set<android::ResTable_config>& configs) {
+  std::ostringstream s;
+  bool empty = true;
+  for (const auto& c : configs) {
+    if (!empty) {
+      s << ", ";
+    }
+    empty = false;
+    auto desc = c.toString();
+    s << (desc.length() > 0 ? desc.string() : "default");
+  }
+  return s.str();
+}
+
 namespace {
 template <typename Fn>
 void find_resource_xml_files(const std::string& dir,
