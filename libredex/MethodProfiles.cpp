@@ -746,7 +746,7 @@ void MethodProfiles::resolve_method_descriptor_tokens(
   size_t added{0};
   // Note that we don't remove unresolved_lines_ref as we go, as the given map
   // might reference its mdts.
-  std::unordered_set<std::string*> to_remove;
+  UnorderedSet<std::string*> to_remove;
   auto& unresolved_lines_ref = baseline_profile_variant
                                    ? m_baseline_profile_unresolved_lines
                                    : m_unresolved_lines;

@@ -210,9 +210,9 @@ class MethodProfiles {
   // A map from interaction ID to the number of times that interaction was
   // triggered. This can be used to compare relative prevalence of different
   // interactions.
-  std::unordered_map<std::string, uint32_t> m_interaction_counts;
+  UnorderedMap<std::string, uint32_t> m_interaction_counts;
   // A map from column index to column header
-  std::unordered_map<uint32_t, std::string> m_optional_columns;
+  UnorderedMap<uint32_t, std::string> m_optional_columns;
   // The interaction id from the metadata at the top of the file
   std::string m_interaction_id;
   bool m_initialized{false};
@@ -266,7 +266,7 @@ class MethodProfiles {
 class dexmethods_profiled_comparator {
   const MethodProfiles* m_method_profiles;
   const UnorderedSet<std::string>* m_allowlisted_substrings;
-  std::unordered_map<DexMethod*, double> m_cache;
+  UnorderedMap<DexMethod*, double> m_cache;
   double m_min_appear_percent;
   double m_second_min_appear_percent;
   std::vector<std::string> m_interactions;
@@ -274,7 +274,7 @@ class dexmethods_profiled_comparator {
   const DexMethod* m_coldstart_start_marker;
   const DexMethod* m_coldstart_end_marker;
 
-  std::unordered_map<DexMethod*, size_t> m_initial_order;
+  UnorderedMap<DexMethod*, size_t> m_initial_order;
 
   // The profiled method order is broken into sections, one section for each
   // interaction. Each section has a range of floating point numbers assigned to
