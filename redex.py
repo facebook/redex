@@ -320,6 +320,9 @@ def run_redex_binary(
     if state.args.assert_abort:
         args += ["--assert-abort", state.args.assert_abort]
 
+    if state.args.stub_resource_optimizations:
+        args += ["--dump-string-locales", "true"]
+
     args += state.dexen
 
     # Stop before a pass and output intermediate dex and IR meta data.
