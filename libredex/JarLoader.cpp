@@ -410,6 +410,7 @@ DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
       !extract_utf8(cpool, finfo.descNdx, &dbuffer)) {
     return nullptr;
   }
+  always_assert_type_log(!nbuffer.empty(), INVALID_JAVA, "Empty method name");
   auto name = DexString::make_string(nbuffer);
   std::string_view ptr = dbuffer;
   DexTypeList* tlist = extract_arguments(ptr);
