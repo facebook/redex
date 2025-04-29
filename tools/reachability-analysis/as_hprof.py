@@ -362,6 +362,19 @@ def write_class_instance(
     return write_reachability_instance(hprof, "LClass;", name, succs, obj_id)
 
 
+def write_field_class(hprof: Hprof) -> ClassId:
+    return write_reachability_object_class(hprof, "LField;")
+
+
+def write_field_instance(
+    hprof: Hprof,
+    name: str,
+    succs: List[ObjectId],
+    obj_id: Optional[ObjectId] = None,
+) -> ObjectId:
+    return write_reachability_instance(hprof, "LField;", name, succs, obj_id)
+
+
 def reserve_reachable_type_object_ids(
     hprof: Hprof, graph: ReachabilityGraph, node_type: int
 ) -> Mapping[ReachableObject, ObjectId]:
@@ -426,6 +439,7 @@ def main() -> None:
     write_keep_class(hprof)
     write_method_class(hprof)
     write_class_class(hprof)
+    write_field_class(hprof)
 
     class_ids = reserve_reachable_type_object_ids(
         hprof, graph, ReachableObjectType.CLASS
@@ -437,18 +451,24 @@ def main() -> None:
     )
     logging.info("Found %d methods", len(method_ids))
 
+    field_ids = reserve_reachable_type_object_ids(
+        hprof, graph, ReachableObjectType.FIELD
+    )
+    logging.info("Found %d fields", len(field_ids))
+
     seeds_ids = reserve_reachable_type_object_ids(
         hprof, graph, ReachableObjectType.SEED
     )
     logging.info("Found %d seeds", len(seeds_ids))
 
-    global_ids = {**seeds_ids, **method_ids, **class_ids}
-    assert len(global_ids) == len(seeds_ids) + len(method_ids) + len(
-        class_ids
-    ), f"{len(global_ids)} != {len(seeds_ids)} + {len(method_ids)} + {len(class_ids)}"
+    global_ids = {**seeds_ids, **method_ids, **class_ids, **field_ids}
+    assert len(global_ids) == sum(
+        len(e) for e in [class_ids, method_ids, field_ids, seeds_ids]
+    )
 
-    write_reachable_type_objects(hprof, method_ids, global_ids, write_method_instance)
     write_reachable_type_objects(hprof, class_ids, global_ids, write_class_instance)
+    write_reachable_type_objects(hprof, method_ids, global_ids, write_method_instance)
+    write_reachable_type_objects(hprof, field_ids, global_ids, write_field_instance)
     write_reachable_type_objects(hprof, seeds_ids, global_ids, write_keep_instance)
     for seed_id in seeds_ids.values():
         hprof.make_root(seed_id)
