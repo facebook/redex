@@ -305,6 +305,18 @@ class Hprof:
 class ReachabilityHprof:
     def __init__(self, hprof: Hprof) -> None:
         self.hprof = hprof
+        self._strings: set[ObjectId] = set()
+
+    def finish(self) -> None:
+        # Write a synthetic holder for the strings that is a root. We do this
+        # so the names are not contained as retained size.
+        data = list(self._strings)
+        if data:
+            object_id = self.hprof.write_object_array(None, data)
+            self.hprof.make_root(object_id)
+            # Write it again so that unreferenced strings are not dominated.
+            object_id = self.hprof.write_object_array(None, data)
+            self.hprof.make_root(object_id)
 
     def write_reachability_object_class(self, class_name: str) -> ClassId:
         with self.hprof.write_class(class_name, None, 0) as (buf, class_id):
@@ -330,6 +342,7 @@ class ReachabilityHprof:
         succs_id = self.hprof.write_object_array(None, succs)
 
         name_id = self.hprof.write_string(name)
+        self._strings.add(name_id)
 
         if not obj_id:
             obj_id = self.hprof.next_object_id()
@@ -512,6 +525,7 @@ def main() -> None:
     for seed_id in seeds_ids.values():
         hprof.make_root(seed_id)
 
+    rhprof.finish()
     hprof.finish()
 
     logging.info("Writing to %s...", args.output)
