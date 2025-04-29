@@ -10,9 +10,9 @@ import argparse
 import io
 import logging
 from contextlib import contextmanager
-from typing import Any, Generator, List, NewType, Optional, Tuple
+from typing import Any, Generator, List, Mapping, NewType, Optional, Tuple
 
-from lib.core import ReachabilityGraph, ReachableObjectType
+from lib.core import ReachabilityGraph, ReachableObject, ReachableObjectType
 
 
 class Buffer:
@@ -286,8 +286,8 @@ class Hprof:
             buf.writeU4(object_id)
 
 
-def write_keep_class(hprof: Hprof) -> ClassId:
-    with hprof.write_class("LKeep;", None, 0) as (buf, class_id):
+def write_reachability_object_class(hprof: Hprof, class_name: str) -> ClassId:
+    with hprof.write_class(class_name, None, 0) as (buf, class_id):
         # A field for the name, and a field for the array holding successors.
         buf.writeU2(2)
 
@@ -300,20 +300,67 @@ def write_keep_class(hprof: Hprof) -> ClassId:
     return class_id
 
 
-def write_keep_instance(hprof: Hprof, name: str, succs: List[ObjectId]) -> ObjectId:
+def write_reachability_instance(
+    hprof: Hprof,
+    class_name: str,
+    name: str,
+    succs: List[ObjectId],
+    obj_id: Optional[ObjectId] = None,
+) -> ObjectId:
     # First write the succs and name.
     succs_id = hprof.write_object_array(None, succs)
 
     name_id = hprof.write_string(name)
 
-    next_id = hprof.next_object_id()
+    if not obj_id:
+        obj_id = hprof.next_object_id()
 
     # Then write the keep instance.
-    with hprof.write_heap_instance(next_id, hprof.lookup_class("LKeep;")) as buf:
+    with hprof.write_heap_instance(obj_id, hprof.lookup_class(class_name)) as buf:
         buf.writeU4(name_id)
         buf.writeU4(succs_id)
 
-    return next_id
+    return obj_id
+
+
+def write_keep_class(hprof: Hprof) -> ClassId:
+    return write_reachability_object_class(hprof, "LKeep;")
+
+
+def write_keep_instance(
+    hprof: Hprof,
+    name: str,
+    succs: List[ObjectId],
+    obj_id: Optional[ObjectId] = None,
+) -> ObjectId:
+    return write_reachability_instance(hprof, "LKeep;", name, succs, obj_id)
+
+
+def write_method_class(hprof: Hprof) -> ClassId:
+    return write_reachability_object_class(hprof, "LMethod;")
+
+
+def write_method_instance(
+    hprof: Hprof,
+    name: str,
+    succs: List[ObjectId],
+    obj_id: Optional[ObjectId] = None,
+) -> ObjectId:
+    return write_reachability_instance(hprof, "LMethod;", name, succs, obj_id)
+
+
+def reserve_reachable_type_object_ids(
+    hprof: Hprof, graph: ReachabilityGraph, node_type: int
+) -> Mapping[ReachableObject, ObjectId]:
+    ret = {}
+    for (nt, _), node in graph.nodes.items():
+        if nt != node_type:
+            continue
+
+        object_id = hprof.next_object_id()
+        ret[node] = object_id
+
+    return ret
 
 
 def parse_args() -> argparse.Namespace:
@@ -349,17 +396,36 @@ def main() -> None:
     hprof.make_root(obj1)
 
     write_keep_class(hprof)
+    write_method_class(hprof)
 
-    seeds = 0
-    for (node_type, _), node in graph.nodes.items():
-        if node_type != ReachableObjectType.SEED:
-            continue
+    method_ids = reserve_reachable_type_object_ids(
+        hprof, graph, ReachableObjectType.METHOD
+    )
+    logging.info("Found %d methods", len(method_ids))
+    for method_node, method_id in method_ids.items():
+        method_succs_ids = [
+            method_ids[succ_node]
+            for succ_node in method_node.succs.keys()
+            if succ_node.type == ReachableObjectType.METHOD
+        ]
+        write_method_instance(hprof, method_node.name, method_succs_ids, method_id)
 
-        keep_id = write_keep_instance(hprof, node.name, [])
-        hprof.make_root(keep_id)
+    seeds_ids = reserve_reachable_type_object_ids(
+        hprof, graph, ReachableObjectType.SEED
+    )
+    logging.info("Found %d seeds", len(seeds_ids))
 
-        seeds += 1
-    logging.info("Found %d seeds", seeds)
+    global_ids = {**seeds_ids, **method_ids}
+    assert len(global_ids) == len(seeds_ids) + len(method_ids)
+
+    for seed_node, seed_id in seeds_ids.items():
+        seeds_succs_ids = [
+            global_ids[succ_node]
+            for succ_node in seed_node.succs.keys()
+            if succ_node in global_ids
+        ]
+        write_keep_instance(hprof, seed_node.name, seeds_succs_ids, seed_id)
+        hprof.make_root(seed_id)
 
     hprof.finish()
 
