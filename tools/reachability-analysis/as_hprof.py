@@ -123,6 +123,7 @@ class Hprof:
         self._objects_buffer_check: bool = False
 
         self._string_class: Optional[ClassId] = None
+        self._object_array_class: Optional[ClassId] = None
 
     def finish(self) -> None:
         self._strings_buffer.write_to(self._buffer._buffer)
@@ -265,9 +266,24 @@ class Hprof:
 
         return object_id
 
+    def write_object_array_class(self) -> ClassId:
+        id = self._object_array_class
+        if id:
+            return id
+
+        with self.write_class("[Ljava/lang/Object;", None, 0) as (buf, class_id):
+            # TODO: Is it OK to elide the length field?
+            buf.writeU2(0)
+
+            self._object_array_class = class_id
+            return class_id
+
     def write_object_array(
         self, object_id: Optional[ObjectId], data: List[ObjectId]
     ) -> ObjectId:
+        # Ensure the array class exists.
+        self.write_object_array_class()
+
         if not object_id:
             object_id = self.next_object_id()
 
