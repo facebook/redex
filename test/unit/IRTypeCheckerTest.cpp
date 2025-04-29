@@ -2895,6 +2895,143 @@ TEST_F(IRTypeCheckerTest, synchronizedThrowOutsideCatchAllInTry) {
   EXPECT_TRUE(checker.fail());
 }
 
+TEST_F(IRTypeCheckerTest, invokePolymorphic) {
+  // Mimic java.lang.invoke.MethodHandle as closely as possible.
+  const auto type_method_handle =
+      DexType::make_type("Ljava/lang/invoke/MethodHandle;");
+  ClassCreator method_handle_creator(type_method_handle);
+  auto invoke_method = DexMethod::make_method(
+                           "Ljava/lang/invoke/MethodHandle;.invoke:([Ljava/"
+                           "lang/Object;)Ljava/lang/Object;")
+                           ->make_concrete(ACC_PUBLIC | ACC_FINAL | ACC_VARARGS,
+                                           /* is_virtual */ false);
+  method_handle_creator.add_method(invoke_method);
+  method_handle_creator.set_super(type::java_lang_Object());
+  method_handle_creator.set_access(ACC_PUBLIC | ACC_ABSTRACT);
+  method_handle_creator.create();
+
+  const auto type_foo = DexType::make_type("LFoo;");
+  ClassCreator cls_foo_creator(type_foo);
+  auto method =
+      DexMethod::make_method("LFoo;.bar:(Ljava/lang/invoke/MethodHandle;)V")
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (const-string "S1")
+      (move-result-pseudo-object v1)
+      (const-string "S2")
+      (move-result-pseudo-object v2)
+      (invoke-polymorphic (v0) "Ljava/lang/invoke/MethodHandle;.invoke:([Ljava/lang/Object;)Ljava/lang/Object;")
+      (invoke-polymorphic (v0 v1) "Ljava/lang/invoke/MethodHandle;.invoke:([Ljava/lang/Object;)Ljava/lang/Object;")
+      (invoke-polymorphic (v0 v1 v2) "Ljava/lang/invoke/MethodHandle;.invoke:([Ljava/lang/Object;)Ljava/lang/Object;")
+      (return-void)
+  ))"));
+  cls_foo_creator.add_method(method);
+  cls_foo_creator.set_super(type::java_lang_Object());
+  // Set to public to eliminate potential failure due to access check.
+  cls_foo_creator.set_access(ACC_PUBLIC);
+  cls_foo_creator.create();
+
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_TRUE(checker.good()) << checker.what();
+}
+
+TEST_F(IRTypeCheckerTest, invokePolymorphicOnUnexpectedExternalMethod) {
+  // Mimic java.lang.invoke.MethodHandle.invoke as closely as possible except
+  // name.
+  const auto type_method_handle =
+      DexType::make_type("Ljava/lang/invoke/MethodHandle;");
+  ClassCreator method_handle_creator(type_method_handle);
+  auto not_invoke_method =
+      DexMethod::make_method(
+          "Ljava/lang/invoke/MethodHandle;.notInvoke:([Ljava/"
+          "lang/Object;)Ljava/lang/Object;")
+          ->make_concrete(ACC_PUBLIC | ACC_FINAL | ACC_VARARGS,
+                          /* is_virtual */ false);
+  method_handle_creator.add_method(not_invoke_method);
+  method_handle_creator.set_super(type::java_lang_Object());
+  method_handle_creator.set_access(ACC_PUBLIC | ACC_ABSTRACT);
+  method_handle_creator.create();
+
+  const auto type_foo = DexType::make_type("LFoo;");
+  ClassCreator cls_foo_creator(type_foo);
+  auto method =
+      DexMethod::make_method("LFoo;.bar:(Ljava/lang/invoke/MethodHandle;)V")
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (const-string "S1")
+      (move-result-pseudo-object v1)
+      (const-string "S2")
+      (move-result-pseudo-object v2)
+      (invoke-polymorphic (v0 v1 v2) "Ljava/lang/invoke/MethodHandle;.notInvoke:([Ljava/lang/Object;)Ljava/lang/Object;")
+      (return-void)
+  ))"));
+  cls_foo_creator.add_method(method);
+  cls_foo_creator.set_super(type::java_lang_Object());
+  // Set to public to eliminate potential failure due to access check.
+  cls_foo_creator.set_access(ACC_PUBLIC);
+  cls_foo_creator.create();
+
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_THAT(checker.what(),
+              HasSubstr("invoke-polymorphic: Callee must be either "
+                        "MethodHandle.invoke or MethodHandle.invokeExact"));
+  EXPECT_TRUE(checker.fail());
+}
+
+TEST_F(IRTypeCheckerTest, invokePolymorphicOnWrongArgMethod) {
+  const auto type_foo = DexType::make_type("LFoo;");
+  ClassCreator cls_foo_creator(type_foo);
+  auto method = DexMethod::make_method("LFoo;.bar:()V;")
+                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+  cls_foo_creator.add_method(method);
+  cls_foo_creator.set_super(type::java_lang_Object());
+  // Set to public to eliminate potential failure due to access check.
+  cls_foo_creator.set_access(ACC_PUBLIC);
+  cls_foo_creator.create();
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (invoke-polymorphic (v0) "LFoo;.bar:()V")
+      (return-void)
+  ))"));
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_THAT(
+      checker.what(),
+      ContainsRegex("invoke-polymorphic.*Arg count.*is expected to be 1"));
+  EXPECT_TRUE(checker.fail());
+}
+
+TEST_F(IRTypeCheckerTest, invokePolymorphicOnFixedArgMethod) {
+  const auto type_foo = DexType::make_type("LFoo;");
+  ClassCreator cls_foo_creator(type_foo);
+  auto method = DexMethod::make_method("LFoo;.bar:(Ljava/lang/Object;)V;")
+                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+  cls_foo_creator.add_method(method);
+  cls_foo_creator.set_super(type::java_lang_Object());
+  // Set to public to eliminate potential failure due to access check.
+  cls_foo_creator.set_access(ACC_PUBLIC);
+  cls_foo_creator.create();
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (invoke-polymorphic (v0 v1) "LFoo;.bar:(Ljava/lang/Object;)V")
+      (return-void)
+  ))"));
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_THAT(checker.what(),
+              ContainsRegex("invoke-polymorphic.*is expected to be an array"));
+  EXPECT_TRUE(checker.fail());
+}
+
 TEST_F(IRTypeCheckerTest, invokeOnClassInitializer) {
   const auto type_foo = DexType::make_type("LFoo;");
   ClassCreator cls_foo_creator(type_foo);

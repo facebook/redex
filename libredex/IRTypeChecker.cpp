@@ -800,6 +800,48 @@ void validate_access(const DexMethod* accessor, const DexMember* accessee) {
   throw TypeCheckingException(out.str());
 }
 
+void validate_invoke_polymorphic(const DexMethodRef* callee) {
+  // callee must not be null, since this also acts as a precheck before any type
+  // check.
+  redex_assert(callee != nullptr);
+
+  if (callee->is_def()) {
+    // callee is a definition, we can match them exactly with what we want.
+    if (callee->as_def() != method::java_lang_invoke_MethodHandle_invoke() &&
+        callee->as_def() !=
+            method::java_lang_invoke_MethodHandle_invokeExact()) {
+      std::ostringstream out;
+      out << "invoke-polymorphic: Callee must be either MethodHandle.invoke or "
+             "MethodHandle.invokeExact, but found "
+          << show_deobfuscated(callee);
+      throw TypeCheckingException(out.str());
+    }
+    return;
+  }
+
+  // Fall back to manual check, since we don't know its full definition.
+  const auto* arg_types = callee->get_proto()->get_args();
+
+  // invoke-polymorphic works differently in terms of arg counts. The
+  // invoked function's arguments are always the object reference followed
+  // by an array of Objects (at least for now), but invoke-polymorphic
+  // accepts individual elements of the array as its arguments.
+  //   (invoke-polymorphic (v0 v1 v2)
+  //     "Ljava/lang/invoke/MethodHandle;.invoke:([Ljava/lang/Object;)Ljava/lang/Object;")
+  if (arg_types->size() != 1) {
+    std::ostringstream out;
+    out << "invoke-polymorphic: Arg count of " << show_deobfuscated(callee)
+        << " is expected to be 1, but found " << arg_types->size();
+    throw TypeCheckingException(out.str());
+  }
+  if (!type::is_array(arg_types->at(0))) {
+    std::ostringstream out;
+    out << "invoke-polymorphic: Arg type of " << show_deobfuscated(callee)
+        << " is expected to be an array, but found " << arg_types->at(0);
+    throw TypeCheckingException(out.str());
+  }
+}
+
 void validate_invoke_super(const DexMethod* caller,
                            const DexMethodRef* callee) {
   if (callee == nullptr) {
@@ -1603,7 +1645,9 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     const auto* arg_types = dex_method->get_proto()->get_args();
     size_t expected_args =
         (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types->size();
-    if (insn->srcs_size() != expected_args) {
+    if (insn->opcode() == OPCODE_INVOKE_POLYMORPHIC) {
+      validate_invoke_polymorphic(dex_method);
+    } else if (insn->srcs_size() != expected_args) {
       std::ostringstream out;
       out << SHOW(insn) << ": argument count mismatch; " << "expected "
           << expected_args << ", " << "but found " << insn->srcs_size()
@@ -1619,27 +1663,44 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
       assume_assignable(current_state->get_dex_type(src),
                         dex_method->get_class());
     }
-    for (DexType* arg_type : *arg_types) {
-      if (type::is_object(arg_type)) {
-        auto src = insn->src(src_idx++);
+    if (insn->opcode() == OPCODE_INVOKE_POLYMORPHIC) {
+      redex_assert(arg_types->size() == 1);
+      redex_assert(src_idx == 1);
+
+      // Starting from the second argument, every argument to invoke-polymorphic
+      // is an object. It is unclear whether invoke-polymorphic can be used to a
+      // function that accepts an array of other types. Therefore, here we only
+      // assume the argument is assignable to the element type of the array
+      // argument.
+      for (; src_idx < insn->srcs_size(); src_idx++) {
+        auto src = insn->src(src_idx);
         assume_reference(current_state, src);
-        assume_assignable(current_state->get_dex_type(src), arg_type);
-        continue;
+        assume_assignable(current_state->get_dex_type(src),
+                          type::get_array_element_type(arg_types->at(0)));
       }
-      if (type::is_integral(arg_type)) {
-        assume_integer(current_state, insn->src(src_idx++));
-        continue;
+    } else {
+      for (DexType* arg_type : *arg_types) {
+        if (type::is_object(arg_type)) {
+          auto src = insn->src(src_idx++);
+          assume_reference(current_state, src);
+          assume_assignable(current_state->get_dex_type(src), arg_type);
+          continue;
+        }
+        if (type::is_integral(arg_type)) {
+          assume_integer(current_state, insn->src(src_idx++));
+          continue;
+        }
+        if (type::is_long(arg_type)) {
+          assume_long(current_state, insn->src(src_idx++));
+          continue;
+        }
+        if (type::is_float(arg_type)) {
+          assume_float(current_state, insn->src(src_idx++));
+          continue;
+        }
+        always_assert(type::is_double(arg_type));
+        assume_double(current_state, insn->src(src_idx++));
       }
-      if (type::is_long(arg_type)) {
-        assume_long(current_state, insn->src(src_idx++));
-        continue;
-      }
-      if (type::is_float(arg_type)) {
-        assume_float(current_state, insn->src(src_idx++));
-        continue;
-      }
-      always_assert(type::is_double(arg_type));
-      assume_double(current_state, insn->src(src_idx++));
     }
     if (m_validate_access) {
       auto resolved =

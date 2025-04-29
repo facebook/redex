@@ -1224,14 +1224,14 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     refine_reference(current_state, insn->src(0));
     break;
   }
-  case OPCODE_INVOKE_CUSTOM:
-  case OPCODE_INVOKE_POLYMORPHIC: {
+  case OPCODE_INVOKE_CUSTOM: {
     // TODO(T59277083)
     not_reached_log(
         "TypeInference::analyze_instruction does not support "
-        "invoke-custom and invoke-polymorphic yet");
+        "invoke-custom yet");
     break;
   }
+  case OPCODE_INVOKE_POLYMORPHIC:
   case OPCODE_INVOKE_VIRTUAL:
   case OPCODE_INVOKE_SUPER:
   case OPCODE_INVOKE_DIRECT:
@@ -1239,53 +1239,63 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_INVOKE_INTERFACE: {
     DexMethodRef* dex_method = insn->get_method();
     const auto* arg_types = dex_method->get_proto()->get_args();
-    size_t expected_args =
-        (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types->size();
-    always_assert_log(insn->srcs_size() == expected_args, "%s", SHOW(insn));
-
-    size_t src_idx{0};
-    if (insn->opcode() != OPCODE_INVOKE_STATIC) {
-      // The first argument is a reference to the object instance on which the
-      // method is invoked.
-      refine_reference(current_state, insn->src(src_idx++));
-    }
-    for (DexType* arg_type : *arg_types) {
-      if (type::is_object(arg_type)) {
+    if (insn->opcode() == OPCODE_INVOKE_POLYMORPHIC) {
+      // invoke-polymorphic can only be used to invoke MethodHandle.invoke and
+      // MethodHandle.invokeExact. The first argument is a MethodHandle, and the
+      // rest are Objects.
+      for (auto src : insn->srcs()) {
+        refine_reference(current_state, src);
+      }
+    } else {
+      size_t expected_args =
+          (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types->size();
+      always_assert_log(insn->srcs_size() == expected_args,
+                        "instruction: %s\nexpected: %lu\nactual: %lu",
+                        SHOW(insn), expected_args, insn->srcs_size());
+      size_t src_idx{0};
+      if (insn->opcode() != OPCODE_INVOKE_STATIC) {
+        // The first argument is a reference to the object instance on which the
+        // method is invoked.
         refine_reference(current_state, insn->src(src_idx++));
-        continue;
       }
-      if (type::is_integral(arg_type)) {
-        if (type::is_int(arg_type)) {
-          refine_int(current_state, insn->src(src_idx++));
+      for (DexType* arg_type : *arg_types) {
+        if (type::is_object(arg_type)) {
+          refine_reference(current_state, insn->src(src_idx++));
           continue;
         }
-        if (type::is_char(arg_type)) {
-          refine_char(current_state, insn->src(src_idx++));
+        if (type::is_integral(arg_type)) {
+          if (type::is_int(arg_type)) {
+            refine_int(current_state, insn->src(src_idx++));
+            continue;
+          }
+          if (type::is_char(arg_type)) {
+            refine_char(current_state, insn->src(src_idx++));
+            continue;
+          }
+          if (type::is_boolean(arg_type)) {
+            refine_boolean(current_state, insn->src(src_idx++));
+            continue;
+          }
+          if (type::is_short(arg_type)) {
+            refine_short(current_state, insn->src(src_idx++));
+            continue;
+          }
+          if (type::is_byte(arg_type)) {
+            refine_byte(current_state, insn->src(src_idx++));
+            continue;
+          }
+        }
+        if (type::is_long(arg_type)) {
+          refine_long(current_state, insn->src(src_idx++));
           continue;
         }
-        if (type::is_boolean(arg_type)) {
-          refine_boolean(current_state, insn->src(src_idx++));
+        if (type::is_float(arg_type)) {
+          refine_float(current_state, insn->src(src_idx++));
           continue;
         }
-        if (type::is_short(arg_type)) {
-          refine_short(current_state, insn->src(src_idx++));
-          continue;
-        }
-        if (type::is_byte(arg_type)) {
-          refine_byte(current_state, insn->src(src_idx++));
-          continue;
-        }
+        always_assert(type::is_double(arg_type));
+        refine_double(current_state, insn->src(src_idx++));
       }
-      if (type::is_long(arg_type)) {
-        refine_long(current_state, insn->src(src_idx++));
-        continue;
-      }
-      if (type::is_float(arg_type)) {
-        refine_float(current_state, insn->src(src_idx++));
-        continue;
-      }
-      always_assert(type::is_double(arg_type));
-      refine_double(current_state, insn->src(src_idx++));
     }
     DexType* return_type = dex_method->get_proto()->get_rtype();
     if (type::is_void(return_type)) {
