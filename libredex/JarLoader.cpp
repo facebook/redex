@@ -296,7 +296,11 @@ void init_basic_types() {
 namespace {
 
 DexType* parse_type(std::string_view& buf) {
-  redex_assert(!buf.empty());
+  if (buf.empty()) {
+    std::cerr << "Invalid empty parse-type, bailing\n";
+    return nullptr;
+  }
+
   char desc = buf.at(0);
   const std::string_view buf_start = buf;
   buf = buf.substr(1); // Simplifies primitive types.
