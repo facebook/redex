@@ -10,7 +10,7 @@ import argparse
 import io
 import logging
 from contextlib import contextmanager
-from typing import Any, Generator, List, Mapping, NewType, Optional, Tuple
+from typing import Any, Callable, Generator, List, Mapping, NewType, Optional, Tuple
 
 from lib.core import ReachabilityGraph, ReachableObject, ReachableObjectType
 
@@ -349,6 +349,19 @@ def write_method_instance(
     return write_reachability_instance(hprof, "LMethod;", name, succs, obj_id)
 
 
+def write_class_class(hprof: Hprof) -> ClassId:
+    return write_reachability_object_class(hprof, "LClass;")
+
+
+def write_class_instance(
+    hprof: Hprof,
+    name: str,
+    succs: List[ObjectId],
+    obj_id: Optional[ObjectId] = None,
+) -> ObjectId:
+    return write_reachability_instance(hprof, "LClass;", name, succs, obj_id)
+
+
 def reserve_reachable_type_object_ids(
     hprof: Hprof, graph: ReachabilityGraph, node_type: int
 ) -> Mapping[ReachableObject, ObjectId]:
@@ -361,6 +374,21 @@ def reserve_reachable_type_object_ids(
         ret[node] = object_id
 
     return ret
+
+
+def write_reachable_type_objects(
+    hprof: Hprof,
+    nodes: Mapping[ReachableObject, ObjectId],
+    all_nodes: Mapping[ReachableObject, ObjectId],
+    write_fn: Callable[[Hprof, str, List[ObjectId], Optional[ObjectId]], ObjectId],
+) -> None:
+    for node, object_id in nodes.items():
+        succs_ids = [
+            all_nodes[succ_node]
+            for succ_node in node.succs.keys()
+            if succ_node in all_nodes
+        ]
+        write_fn(hprof, node.name, succs_ids, object_id)
 
 
 def parse_args() -> argparse.Namespace:
@@ -397,34 +425,32 @@ def main() -> None:
 
     write_keep_class(hprof)
     write_method_class(hprof)
+    write_class_class(hprof)
+
+    class_ids = reserve_reachable_type_object_ids(
+        hprof, graph, ReachableObjectType.CLASS
+    )
+    logging.info("Found %d classes", len(class_ids))
 
     method_ids = reserve_reachable_type_object_ids(
         hprof, graph, ReachableObjectType.METHOD
     )
     logging.info("Found %d methods", len(method_ids))
-    for method_node, method_id in method_ids.items():
-        method_succs_ids = [
-            method_ids[succ_node]
-            for succ_node in method_node.succs.keys()
-            if succ_node.type == ReachableObjectType.METHOD
-        ]
-        write_method_instance(hprof, method_node.name, method_succs_ids, method_id)
 
     seeds_ids = reserve_reachable_type_object_ids(
         hprof, graph, ReachableObjectType.SEED
     )
     logging.info("Found %d seeds", len(seeds_ids))
 
-    global_ids = {**seeds_ids, **method_ids}
-    assert len(global_ids) == len(seeds_ids) + len(method_ids)
+    global_ids = {**seeds_ids, **method_ids, **class_ids}
+    assert len(global_ids) == len(seeds_ids) + len(method_ids) + len(
+        class_ids
+    ), f"{len(global_ids)} != {len(seeds_ids)} + {len(method_ids)} + {len(class_ids)}"
 
-    for seed_node, seed_id in seeds_ids.items():
-        seeds_succs_ids = [
-            global_ids[succ_node]
-            for succ_node in seed_node.succs.keys()
-            if succ_node in global_ids
-        ]
-        write_keep_instance(hprof, seed_node.name, seeds_succs_ids, seed_id)
+    write_reachable_type_objects(hprof, method_ids, global_ids, write_method_instance)
+    write_reachable_type_objects(hprof, class_ids, global_ids, write_class_instance)
+    write_reachable_type_objects(hprof, seeds_ids, global_ids, write_keep_instance)
+    for seed_id in seeds_ids.values():
         hprof.make_root(seed_id)
 
     hprof.finish()
