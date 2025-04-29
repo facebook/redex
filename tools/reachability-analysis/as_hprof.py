@@ -12,7 +12,7 @@ import logging
 from contextlib import contextmanager
 from typing import Any, Generator, List, NewType, Optional, Tuple
 
-from lib.core import ReachabilityGraph
+from lib.core import ReachabilityGraph, ReachableObjectType
 
 
 class Buffer:
@@ -95,6 +95,7 @@ class Hprof:
 
     HPROF_GC_CLASS_DUMP: int = 0x20
     HPROF_GC_INSTANCE_DUMP: int = 0x21
+    HPROF_GC_OBJ_ARRAY_DUMP: int = 0x22
     HPROF_GC_PRIM_ARRAY_DUMP: int = 0x23
 
     HPROF_GC_ROOT_UNKNOWN: int = 0xFF
@@ -264,9 +265,55 @@ class Hprof:
 
         return object_id
 
+    def write_object_array(
+        self, object_id: Optional[ObjectId], data: List[ObjectId]
+    ) -> ObjectId:
+        if not object_id:
+            object_id = self.next_object_id()
+
+        with self.new_object(Hprof.HPROF_GC_OBJ_ARRAY_DUMP) as buf:
+            buf.writeU4(object_id)
+            buf.writeU4(0)  # stacktrace serial
+            buf.writeU4(len(data))
+            buf.writeU4(self.lookup_class("[Ljava/lang/Object;"))
+            for id in data:
+                buf.writeU4(id)
+
+        return object_id
+
     def make_root(self, object_id: ObjectId) -> None:
         with self.new_object(Hprof.HPROF_GC_ROOT_UNKNOWN) as buf:
             buf.writeU4(object_id)
+
+
+def write_keep_class(hprof: Hprof) -> ClassId:
+    with hprof.write_class("LKeep;", None, 0) as (buf, class_id):
+        # A field for the name, and a field for the array holding successors.
+        buf.writeU2(2)
+
+        buf.writeU4(hprof.lookup_str("name"))
+        buf.writeU1(Hprof.TYPE_OBJECT)
+
+        buf.writeU4(hprof.lookup_str("succs"))
+        buf.writeU1(Hprof.TYPE_OBJECT)
+
+    return class_id
+
+
+def write_keep_instance(hprof: Hprof, name: str, succs: List[ObjectId]) -> ObjectId:
+    # First write the succs and name.
+    succs_id = hprof.write_object_array(None, succs)
+
+    name_id = hprof.write_string(name)
+
+    next_id = hprof.next_object_id()
+
+    # Then write the keep instance.
+    with hprof.write_heap_instance(next_id, hprof.lookup_class("LKeep;")) as buf:
+        buf.writeU4(name_id)
+        buf.writeU4(succs_id)
+
+    return next_id
 
 
 def parse_args() -> argparse.Namespace:
@@ -300,6 +347,19 @@ def main() -> None:
     hprof.write_string("Hm")
 
     hprof.make_root(obj1)
+
+    write_keep_class(hprof)
+
+    seeds = 0
+    for (node_type, _), node in graph.nodes.items():
+        if node_type != ReachableObjectType.SEED:
+            continue
+
+        keep_id = write_keep_instance(hprof, node.name, [])
+        hprof.make_root(keep_id)
+
+        seeds += 1
+    logging.info("Found %d seeds", seeds)
 
     hprof.finish()
 
