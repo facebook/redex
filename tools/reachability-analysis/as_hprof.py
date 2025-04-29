@@ -763,11 +763,6 @@ def main() -> None:
 
     hprof = Hprof()
 
-    obj1 = hprof.write_string("Hello World")
-    hprof.write_string("Hm")
-
-    hprof.make_root(obj1)
-
     rhprof_type = (
         ReachabilityHprofOneClassPerEntity
         if args.class_each
