@@ -286,135 +286,128 @@ class Hprof:
             buf.writeU4(object_id)
 
 
-def write_reachability_object_class(hprof: Hprof, class_name: str) -> ClassId:
-    with hprof.write_class(class_name, None, 0) as (buf, class_id):
-        # A field for the name, and a field for the array holding successors.
-        buf.writeU2(2)
+class ReachabilityHprof:
+    def __init__(self, hprof: Hprof) -> None:
+        self.hprof = hprof
 
-        buf.writeU4(hprof.lookup_str("name"))
-        buf.writeU1(Hprof.TYPE_OBJECT)
+    def write_reachability_object_class(self, class_name: str) -> ClassId:
+        with self.hprof.write_class(class_name, None, 0) as (buf, class_id):
+            # A field for the name, and a field for the array holding successors.
+            buf.writeU2(2)
 
-        buf.writeU4(hprof.lookup_str("succs"))
-        buf.writeU1(Hprof.TYPE_OBJECT)
+            buf.writeU4(self.hprof.lookup_str("name"))
+            buf.writeU1(Hprof.TYPE_OBJECT)
 
-    return class_id
+            buf.writeU4(self.hprof.lookup_str("succs"))
+            buf.writeU1(Hprof.TYPE_OBJECT)
 
+        return class_id
 
-def write_reachability_instance(
-    hprof: Hprof,
-    class_name: str,
-    name: str,
-    succs: List[ObjectId],
-    obj_id: Optional[ObjectId] = None,
-) -> ObjectId:
-    # First write the succs and name.
-    succs_id = hprof.write_object_array(None, succs)
+    def write_reachability_instance(
+        self,
+        class_name: str,
+        name: str,
+        succs: List[ObjectId],
+        obj_id: Optional[ObjectId] = None,
+    ) -> ObjectId:
+        # First write the succs and name.
+        succs_id = self.hprof.write_object_array(None, succs)
 
-    name_id = hprof.write_string(name)
+        name_id = self.hprof.write_string(name)
 
-    if not obj_id:
-        obj_id = hprof.next_object_id()
+        if not obj_id:
+            obj_id = self.hprof.next_object_id()
 
-    # Then write the keep instance.
-    with hprof.write_heap_instance(obj_id, hprof.lookup_class(class_name)) as buf:
-        buf.writeU4(name_id)
-        buf.writeU4(succs_id)
+        # Then write the keep instance.
+        with self.hprof.write_heap_instance(
+            obj_id, self.hprof.lookup_class(class_name)
+        ) as buf:
+            buf.writeU4(name_id)
+            buf.writeU4(succs_id)
 
-    return obj_id
+        return obj_id
 
+    def write_keep_class(self) -> ClassId:
+        return self.write_reachability_object_class("LKeep;")
 
-def write_keep_class(hprof: Hprof) -> ClassId:
-    return write_reachability_object_class(hprof, "LKeep;")
+    def write_keep_instance(
+        self,
+        name: str,
+        succs: List[ObjectId],
+        obj_id: Optional[ObjectId] = None,
+    ) -> ObjectId:
+        return self.write_reachability_instance("LKeep;", name, succs, obj_id)
 
+    def write_method_class(self) -> ClassId:
+        return self.write_reachability_object_class("LMethod;")
 
-def write_keep_instance(
-    hprof: Hprof,
-    name: str,
-    succs: List[ObjectId],
-    obj_id: Optional[ObjectId] = None,
-) -> ObjectId:
-    return write_reachability_instance(hprof, "LKeep;", name, succs, obj_id)
+    def write_method_instance(
+        self,
+        name: str,
+        succs: List[ObjectId],
+        obj_id: Optional[ObjectId] = None,
+    ) -> ObjectId:
+        return self.write_reachability_instance("LMethod;", name, succs, obj_id)
 
+    def write_class_class(self) -> ClassId:
+        return self.write_reachability_object_class("LClass;")
 
-def write_method_class(hprof: Hprof) -> ClassId:
-    return write_reachability_object_class(hprof, "LMethod;")
+    def write_class_instance(
+        self,
+        name: str,
+        succs: List[ObjectId],
+        obj_id: Optional[ObjectId] = None,
+    ) -> ObjectId:
+        return self.write_reachability_instance("LClass;", name, succs, obj_id)
 
+    def write_field_class(self) -> ClassId:
+        return self.write_reachability_object_class("LField;")
 
-def write_method_instance(
-    hprof: Hprof,
-    name: str,
-    succs: List[ObjectId],
-    obj_id: Optional[ObjectId] = None,
-) -> ObjectId:
-    return write_reachability_instance(hprof, "LMethod;", name, succs, obj_id)
+    def write_field_instance(
+        self,
+        name: str,
+        succs: List[ObjectId],
+        obj_id: Optional[ObjectId] = None,
+    ) -> ObjectId:
+        return self.write_reachability_instance("LField;", name, succs, obj_id)
 
+    def write_anno_class(self) -> ClassId:
+        return self.write_reachability_object_class("LAnno;")
 
-def write_class_class(hprof: Hprof) -> ClassId:
-    return write_reachability_object_class(hprof, "LClass;")
+    def write_anno_instance(
+        self,
+        name: str,
+        succs: List[ObjectId],
+        obj_id: Optional[ObjectId] = None,
+    ) -> ObjectId:
+        return self.write_reachability_instance("LAnno;", name, succs, obj_id)
 
+    def reserve_reachable_type_object_ids(
+        self, graph: ReachabilityGraph, node_type: int
+    ) -> Mapping[ReachableObject, ObjectId]:
+        ret = {}
+        for (nt, _), node in graph.nodes.items():
+            if nt != node_type:
+                continue
 
-def write_class_instance(
-    hprof: Hprof,
-    name: str,
-    succs: List[ObjectId],
-    obj_id: Optional[ObjectId] = None,
-) -> ObjectId:
-    return write_reachability_instance(hprof, "LClass;", name, succs, obj_id)
+            object_id = self.hprof.next_object_id()
+            ret[node] = object_id
 
+        return ret
 
-def write_field_class(hprof: Hprof) -> ClassId:
-    return write_reachability_object_class(hprof, "LField;")
-
-
-def write_field_instance(
-    hprof: Hprof,
-    name: str,
-    succs: List[ObjectId],
-    obj_id: Optional[ObjectId] = None,
-) -> ObjectId:
-    return write_reachability_instance(hprof, "LField;", name, succs, obj_id)
-
-
-def write_anno_class(hprof: Hprof) -> ClassId:
-    return write_reachability_object_class(hprof, "LAnno;")
-
-
-def write_anno_instance(
-    hprof: Hprof,
-    name: str,
-    succs: List[ObjectId],
-    obj_id: Optional[ObjectId] = None,
-) -> ObjectId:
-    return write_reachability_instance(hprof, "LAnno;", name, succs, obj_id)
-
-
-def reserve_reachable_type_object_ids(
-    hprof: Hprof, graph: ReachabilityGraph, node_type: int
-) -> Mapping[ReachableObject, ObjectId]:
-    ret = {}
-    for (nt, _), node in graph.nodes.items():
-        if nt != node_type:
-            continue
-
-        object_id = hprof.next_object_id()
-        ret[node] = object_id
-
-    return ret
-
-
-def write_reachable_type_objects(
-    hprof: Hprof,
-    nodes: Mapping[ReachableObject, ObjectId],
-    all_nodes: Mapping[ReachableObject, ObjectId],
-    write_fn: Callable[[Hprof, str, List[ObjectId], Optional[ObjectId]], ObjectId],
-) -> None:
-    for node, object_id in nodes.items():
-        succs_ids = [
-            all_nodes[succ_node]
-            for succ_node in node.succs.keys()
-            if succ_node in all_nodes
-        ]
-        write_fn(hprof, node.name, succs_ids, object_id)
+    def write_reachable_type_objects(
+        self,
+        nodes: Mapping[ReachableObject, ObjectId],
+        all_nodes: Mapping[ReachableObject, ObjectId],
+        write_fn: Callable[[str, List[ObjectId], Optional[ObjectId]], ObjectId],
+    ) -> None:
+        for node, object_id in nodes.items():
+            succs_ids = [
+                all_nodes[succ_node]
+                for succ_node in node.succs.keys()
+                if succ_node in all_nodes
+            ]
+            write_fn(node.name, succs_ids, object_id)
 
 
 def parse_args() -> argparse.Namespace:
@@ -449,32 +442,34 @@ def main() -> None:
 
     hprof.make_root(obj1)
 
-    write_keep_class(hprof)
-    write_method_class(hprof)
-    write_class_class(hprof)
-    write_field_class(hprof)
-    write_anno_class(hprof)
+    rhprof = ReachabilityHprof(hprof)
 
-    class_ids = reserve_reachable_type_object_ids(
-        hprof, graph, ReachableObjectType.CLASS
+    rhprof.write_keep_class()
+    rhprof.write_method_class()
+    rhprof.write_class_class()
+    rhprof.write_field_class()
+    rhprof.write_anno_class()
+
+    class_ids = rhprof.reserve_reachable_type_object_ids(
+        graph, ReachableObjectType.CLASS
     )
     logging.info("Found %d classes", len(class_ids))
 
-    method_ids = reserve_reachable_type_object_ids(
-        hprof, graph, ReachableObjectType.METHOD
+    method_ids = rhprof.reserve_reachable_type_object_ids(
+        graph, ReachableObjectType.METHOD
     )
     logging.info("Found %d methods", len(method_ids))
 
-    field_ids = reserve_reachable_type_object_ids(
-        hprof, graph, ReachableObjectType.FIELD
+    field_ids = rhprof.reserve_reachable_type_object_ids(
+        graph, ReachableObjectType.FIELD
     )
     logging.info("Found %d fields", len(field_ids))
 
-    anno_ids = reserve_reachable_type_object_ids(hprof, graph, ReachableObjectType.ANNO)
+    anno_ids = rhprof.reserve_reachable_type_object_ids(graph, ReachableObjectType.ANNO)
     logging.info("Found %d annotations", len(anno_ids))
 
-    seeds_ids = reserve_reachable_type_object_ids(
-        hprof, graph, ReachableObjectType.SEED
+    seeds_ids = rhprof.reserve_reachable_type_object_ids(
+        graph, ReachableObjectType.SEED
     )
     logging.info("Found %d seeds", len(seeds_ids))
 
@@ -483,11 +478,21 @@ def main() -> None:
         len(e) for e in [class_ids, method_ids, field_ids, seeds_ids, anno_ids]
     )
 
-    write_reachable_type_objects(hprof, class_ids, global_ids, write_class_instance)
-    write_reachable_type_objects(hprof, method_ids, global_ids, write_method_instance)
-    write_reachable_type_objects(hprof, field_ids, global_ids, write_field_instance)
-    write_reachable_type_objects(hprof, anno_ids, global_ids, write_anno_instance)
-    write_reachable_type_objects(hprof, seeds_ids, global_ids, write_keep_instance)
+    rhprof.write_reachable_type_objects(
+        class_ids, global_ids, rhprof.write_class_instance
+    )
+    rhprof.write_reachable_type_objects(
+        method_ids, global_ids, rhprof.write_method_instance
+    )
+    rhprof.write_reachable_type_objects(
+        field_ids, global_ids, rhprof.write_field_instance
+    )
+    rhprof.write_reachable_type_objects(
+        anno_ids, global_ids, rhprof.write_anno_instance
+    )
+    rhprof.write_reachable_type_objects(
+        seeds_ids, global_ids, rhprof.write_keep_instance
+    )
     for seed_id in seeds_ids.values():
         hprof.make_root(seed_id)
 
