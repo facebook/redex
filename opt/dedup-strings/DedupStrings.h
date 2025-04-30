@@ -46,11 +46,13 @@ class DedupStrings {
   DedupStrings(size_t max_factory_methods,
                float method_profiles_appear_percent_threshold,
                DedupStringsPerfMode perf_mode,
+               const std::string& host_class_name_prefix,
                const method_profiles::MethodProfiles& method_profiles)
       : m_max_factory_methods(max_factory_methods),
         m_method_profiles_appear_percent_threshold(
             method_profiles_appear_percent_threshold),
         m_perf_mode(perf_mode),
+        m_host_class_name_prefix(host_class_name_prefix),
         m_method_profiles(method_profiles) {}
 
   const Stats& get_stats() const { return m_stats; }
@@ -98,6 +100,7 @@ class DedupStrings {
   size_t m_max_factory_methods;
   float m_method_profiles_appear_percent_threshold;
   DedupStringsPerfMode m_perf_mode;
+  const std::string& m_host_class_name_prefix;
   const method_profiles::MethodProfiles& m_method_profiles;
 };
 
@@ -194,5 +197,6 @@ inter-dex pass, but before the replace-gotos-with-returns pass.
   int64_t m_max_factory_methods;
   float m_method_profiles_appear_percent_threshold{1.f};
   DedupStringsPerfMode m_perf_mode;
+  std::string m_host_class_name_prefix;
   std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
 };
