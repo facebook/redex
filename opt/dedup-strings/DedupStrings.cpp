@@ -27,8 +27,6 @@
 
 namespace {
 
-constexpr const char* DEDUP_STRINGS_CLASS_NAME_PREFIX = "Lcom/redex/Strings$";
-
 constexpr const char* METRIC_PERF_SENSITIVE_STRINGS =
     "num_perf_sensitive_strings";
 constexpr const char* METRIC_NON_PERF_SENSITIVE_STRINGS =
@@ -225,9 +223,8 @@ DexMethod* DedupStrings::make_const_string_loader_method(
     size_t dex_id,
     const std::vector<const DexString*>& strings) {
   // Create a new class to host the string lookup method
-  auto host_cls_name =
-      DexString::make_string(std::string(DEDUP_STRINGS_CLASS_NAME_PREFIX) +
-                             std::to_string(dex_id) + ";");
+  auto host_cls_name = DexString::make_string(m_host_class_name_prefix +
+                                              std::to_string(dex_id) + ";");
   auto host_type = DexType::make_type(host_cls_name);
   ClassCreator host_cls_creator(host_type);
   host_cls_creator.set_access(ACC_PUBLIC | ACC_FINAL);
@@ -744,6 +741,8 @@ void DedupStringsPass::bind_config() {
        m_method_profiles_appear_percent_threshold);
   std::string perf_mode_str;
   bind("perf_mode", "exclude-hot-methods-or-classes", perf_mode_str);
+  bind("host_class_name_prefix", "Lcom/redex/Strings$",
+       m_host_class_name_prefix);
 
   trait(Traits::Pass::unique, true);
 
@@ -776,7 +775,7 @@ void DedupStringsPass::run_pass(DexStoresVector& stores,
 
   DedupStrings ds(m_max_factory_methods,
                   m_method_profiles_appear_percent_threshold, m_perf_mode,
-                  conf.get_method_profiles());
+                  m_host_class_name_prefix, conf.get_method_profiles());
   ds.run(stores);
   const auto stats = ds.get_stats();
   mgr.incr_metric(METRIC_PERF_SENSITIVE_STRINGS, stats.perf_sensitive_strings);
