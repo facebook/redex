@@ -17,8 +17,6 @@ class MethodProfiles;
 } // namespace method_profiles
 
 enum class DedupStringsPerfMode {
-  // Quirky. Don't use.
-  LEGACY,
   // Consider method-profiles, if available, otherwise fall back to excluding
   // all perf-sensitive classes.
   EXCLUDE_HOT_METHODS_OR_CLASSES,

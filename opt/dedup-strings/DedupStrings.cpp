@@ -54,9 +54,6 @@ constexpr const char* METRIC_EXCLUDED_OUT_OF_FACTORY_METHODS_STRINGS =
     "num_excluded_out_of_factory_methods_strings";
 
 DedupStringsPerfMode parse_perf_mode(const std::string& str) {
-  if (str == "legacy") {
-    return DedupStringsPerfMode::LEGACY;
-  }
   if (str == "exclude-hot-methods-or-classes") {
     return DedupStringsPerfMode::EXCLUDE_HOT_METHODS_OR_CLASSES;
   }
@@ -152,15 +149,6 @@ UnorderedSet<const DexMethod*> DedupStrings::get_perf_sensitive_methods(
                                DexMethod* method) -> bool {
     if (treat_all_blocks_as_hot(dexnr, method)) {
       return true;
-    }
-    if (m_perf_mode == DedupStringsPerfMode::LEGACY) {
-      // We used to have some strange logic for perf-sensitivity. Avoid using
-      // it.
-      if (!cls->is_perf_sensitive()) {
-        return false;
-      }
-      return !m_method_profiles.has_stats() ||
-             !sufficiently_popular_methods.count(method);
     }
     always_assert(
         m_perf_mode == DedupStringsPerfMode::EXCLUDE_HOT_METHODS_OR_CLASSES ||
