@@ -498,6 +498,7 @@ void ArtProfileWriterPass::bind_config() {
        m_never_compile_excluded_appear100_threshold);
   bind("never_compile_excluded_call_count_threshold", 0,
        m_never_compile_excluded_call_count_threshold);
+  bind("include_strings_lookup_class", false, m_include_strings_lookup_class);
   after_configuration([this] {
     always_assert(m_perf_config.coldstart_appear100_nonhot_threshold <=
                   m_perf_config.coldstart_appear100_threshold);
@@ -602,6 +603,14 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     auto store_fence_helper_cls = type_class(store_fence_helper_type);
     always_assert(store_fence_helper_cls);
     manual_profile.classes.insert(store_fence_helper_cls);
+  }
+  if (m_include_strings_lookup_class) {
+    walk::classes(scope, [&](DexClass* cls) {
+      if (cls->rstate.is_generated() &&
+          cls->get_perf_sensitive() == PerfSensitiveGroup::STRINGS_LOOKUP) {
+        manual_profile.classes.insert(cls);
+      }
+    });
   }
 
   for (const auto& entry : UnorderedIterable(baseline_profiles)) {
