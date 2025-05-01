@@ -65,7 +65,7 @@ struct MethodReferences {
   }
 };
 
-using InsnsMethods = std::unordered_map<const IRInstruction*, MethodReferences>;
+using InsnsMethods = UnorderedMap<const IRInstruction*, MethodReferences>;
 
 struct TypeAnalysisAwareClosureMarkerSharedState final
     : public reachability::TransitiveClosureMarkerSharedState {
