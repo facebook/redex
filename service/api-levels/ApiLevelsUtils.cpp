@@ -88,7 +88,7 @@ bool check_methods(
     const std::vector<DexMethod*>& methods,
     const api::FrameworkAPI& framework_api,
     const UnorderedMap<const DexType*, DexType*>& release_to_framework,
-    const std::unordered_set<DexMethodRef*>& methods_non_private) {
+    const UnorderedSet<DexMethodRef*>& methods_non_private) {
   if (methods.empty()) {
     return true;
   }
@@ -139,7 +139,7 @@ bool check_fields(
     const std::vector<DexField*>& fields,
     const api::FrameworkAPI& framework_api,
     const UnorderedMap<const DexType*, DexType*>& release_to_framework,
-    const std::unordered_set<DexFieldRef*>& fields_non_private) {
+    const UnorderedSet<DexFieldRef*>& fields_non_private) {
   if (fields.empty()) {
     return true;
   }
@@ -178,8 +178,8 @@ bool check_members(
     DexClass* cls,
     const api::FrameworkAPI& framework_api,
     const UnorderedMap<const DexType*, DexType*>& release_to_framework,
-    const std::unordered_set<DexMethodRef*>& methods_non_private,
-    const std::unordered_set<DexFieldRef*>& fields_non_private) {
+    const UnorderedSet<DexMethodRef*>& methods_non_private,
+    const UnorderedSet<DexFieldRef*>& fields_non_private) {
   if (!check_methods(cls->get_dmethods(), framework_api, release_to_framework,
                      methods_non_private)) {
     return false;
@@ -224,7 +224,7 @@ bool check_hierarchy(
     const api::FrameworkAPI& framework_api,
     const UnorderedMap<const DexType*, DexType*>& release_to_framework,
     const TypeSystem& type_system,
-    const std::unordered_set<const DexType*>& framework_classes) {
+    const UnorderedSet<const DexType*>& framework_classes) {
   DexType* type = cls->get_type();
   if (!is_interface(cls)) {
     // We don't need to worry about subclasses, as those we just need to update
@@ -293,16 +293,16 @@ void ApiLevelsUtils::check_and_update_release_to_framework(const Scope& scope) {
 
   // We need to check this in a loop, as an exclusion might have dependencies.
   while (true) {
-    std::unordered_set<const DexType*> to_remove;
+    UnorderedSet<const DexType*> to_remove;
 
     // We need an up to date pairing from release library to framework classes,
     // for later use. So computing this on the fly, once.
     UnorderedMap<const DexType*, DexType*> release_to_framework;
-    for (const auto& pair : m_types_to_framework_api) {
+    for (const auto& pair : UnorderedIterable(m_types_to_framework_api)) {
       release_to_framework[pair.first] = pair.second.cls;
     }
 
-    for (const auto& pair : m_types_to_framework_api) {
+    for (const auto& pair : UnorderedIterable(m_types_to_framework_api)) {
       DexClass* cls = type_class(pair.first);
       always_assert(cls);
 
@@ -332,7 +332,7 @@ void ApiLevelsUtils::check_and_update_release_to_framework(const Scope& scope) {
       break;
     }
 
-    for (const DexType* type : to_remove) {
+    for (const DexType* type : UnorderedIterable(to_remove)) {
       m_types_to_framework_api.erase(type);
     }
   }
@@ -409,7 +409,7 @@ void ApiLevelsUtils::load_framework_api(const Scope& scope) {
     return;
   }
 
-  std::unordered_set<std::string> simple_names_releases;
+  UnorderedSet<std::string> simple_names_releases;
   for (DexClass* cls : scope) {
     if (cls->is_external()) {
       continue;
@@ -448,9 +448,9 @@ void ApiLevelsUtils::load_framework_api(const Scope& scope) {
   check_and_update_release_to_framework(scope);
 }
 
-void ApiLevelsUtils::filter_types(
-    const std::unordered_set<const DexType*>& types, const Scope& scope) {
-  for (const auto* type : types) {
+void ApiLevelsUtils::filter_types(const UnorderedSet<const DexType*>& types,
+                                  const Scope& scope) {
+  for (const auto* type : UnorderedIterable(types)) {
     m_types_to_framework_api.erase(type);
   }
 
