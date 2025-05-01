@@ -276,7 +276,7 @@ class GatheredTypes {
   void sort_dexmethod_emitlist_profiled_order(std::vector<DexMethod*>& lmeth);
   void set_config(ConfigFiles* config);
 
-  std::unordered_set<const DexString*> index_type_names();
+  UnorderedSet<const DexString*> index_type_names();
 };
 
 template <class T>

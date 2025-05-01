@@ -20,7 +20,6 @@
 #include <memory>
 #include <stdlib.h>
 #include <sys/stat.h>
-#include <unordered_set>
 
 #ifdef _MSC_VER
 // TODO: Rewrite open/write/close with C/C++ standards. But it works for now.
@@ -112,8 +111,8 @@ GatheredTypes::GatheredTypes(DexClasses* classes) : m_classes(classes) {
                     m_lmethodhandle, *m_classes);
 }
 
-std::unordered_set<const DexString*> GatheredTypes::index_type_names() {
-  std::unordered_set<const DexString*> type_names;
+UnorderedSet<const DexString*> GatheredTypes::index_type_names() {
+  UnorderedSet<const DexString*> type_names;
   for (auto it = m_ltype.begin(); it != m_ltype.end(); ++it) {
     type_names.insert((*it)->get_name());
   }
@@ -179,7 +178,7 @@ void GatheredTypes::sort_dexmethod_emitlist_method_similarity_order(
   // This is similar to the exclusions that the InterDex pass applies when
   // sorting remaining classes for better compression.
   redex_assert(m_config != nullptr);
-  std::unordered_set<DexType*> perf_sensitive_classes;
+  UnorderedSet<DexType*> perf_sensitive_classes;
 
   auto& global_config = m_config->get_global_config();
   MethodProfileOrderingConfig* profiles_config{nullptr};
@@ -753,8 +752,7 @@ void DexOutput::generate_string_data(SortMode mode) {
   dex_string_id* stringids =
       (dex_string_id*)(m_output.get() + hdr.string_ids_off);
 
-  std::unordered_set<const DexString*> type_names =
-      m_gtypes->index_type_names();
+  UnorderedSet<const DexString*> type_names = m_gtypes->index_type_names();
 
   size_t nrstr = string_order.size();
   const uint32_t str_data_start = m_offset;
@@ -1384,7 +1382,7 @@ struct ParamSizeOrder {
 
   std::vector<const DexMethod*>::const_iterator method_cur;
   std::vector<const DexMethod*>::const_iterator method_end;
-  std::unordered_set<const DexMethod*> skip_methods;
+  UnorderedSet<const DexMethod*> skip_methods;
 
   std::map<uint32_t, DebugMethodMap>::const_iterator map_cur, map_end;
 
@@ -2045,7 +2043,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
         post_iodi_offset - initial_offset);
   // 3)
   auto size_offset_end = param_size_to_oset.end();
-  std::unordered_set<const DexMethod*> to_remove;
+  UnorderedSet<const DexMethod*> to_remove;
   for (auto& it : code_items) {
     if (pso.skip_methods.count(it->method)) {
       continue;
@@ -2415,7 +2413,7 @@ void compute_method_to_id_map(
     return;
   }
 
-  std::unordered_set<DexClass*> dex_classes(classes->begin(), classes->end());
+  UnorderedSet<DexClass*> dex_classes(classes->begin(), classes->end());
   for (auto& it : UnorderedIterable(dodx->method_to_idx())) {
     auto method = it.first;
     auto idx = it.second;
@@ -2458,8 +2456,7 @@ void write_method_mapping(const std::string& filename,
   FILE* fd = fopen(filename.c_str(), "a");
   assert_log(fd, "Can't open method mapping file %s: %s\n", filename.c_str(),
              strerror(errno));
-  std::unordered_set<DexClass*> classes_in_dex(classes->begin(),
-                                               classes->end());
+  UnorderedSet<DexClass*> classes_in_dex(classes->begin(), classes->end());
   for (auto& it : UnorderedIterable(dodx->method_to_idx())) {
     auto method = it.first;
     auto idx = it.second;
@@ -2824,11 +2821,11 @@ void DexOutput::write() {
 
 class UniqueReferences {
  public:
-  std::unordered_set<const DexString*> strings;
-  std::unordered_set<const DexType*> types;
-  std::unordered_set<const DexProto*> protos;
-  std::unordered_set<const DexFieldRef*> fields;
-  std::unordered_set<const DexMethodRef*> methods;
+  UnorderedSet<const DexString*> strings;
+  UnorderedSet<const DexType*> types;
+  UnorderedSet<const DexProto*> protos;
+  UnorderedSet<const DexFieldRef*> fields;
+  UnorderedSet<const DexMethodRef*> methods;
   int total_strings_size{0};
   int total_types_size{0};
   int total_protos_size{0};
