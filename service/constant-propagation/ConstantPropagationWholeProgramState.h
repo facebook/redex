@@ -207,14 +207,14 @@ class WholeProgramStateAccessor {
     if (callees.empty()) {
       return ConstantValue::top();
     }
-    for (const DexMethod* callee : callees) {
+    for (const DexMethod* callee : UnorderedIterable(callees)) {
       if (!callee->get_code()) {
         always_assert(is_abstract(callee) || is_native(callee));
         return ConstantValue::top();
       }
     }
     ConstantValue ret = ConstantValue::bottom();
-    for (const DexMethod* callee : callees) {
+    for (const DexMethod* callee : UnorderedIterable(callees)) {
       const auto& val = m_wps.get_method_partition().get(callee);
       if (m_record) {
         m_record->method_dependencies.emplace(callee, val);

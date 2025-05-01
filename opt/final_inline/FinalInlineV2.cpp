@@ -265,7 +265,7 @@ StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
               m_allowed_opaque_callees.count(callee_method_def)) {
             return editable_cfg_adapter::LOOP_CONTINUE;
           }
-          auto callees = resolve_callees_in_graph(m_graph, insn);
+          const auto& callees = resolve_callees_in_graph(m_graph, insn);
           if (callees.empty()) {
             TRACE(FINALINLINE, 2, "%s has opaque callees %s", SHOW(method),
                   SHOW(insn->get_method()));
@@ -274,7 +274,7 @@ StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
             return editable_cfg_adapter::LOOP_BREAK;
           }
 
-          for (const DexMethod* callee : callees) {
+          for (const DexMethod* callee : UnorderedIterable(callees)) {
             Result callee_result;
             if (pending_methods.count(callee)) {
               callee_pending = true;

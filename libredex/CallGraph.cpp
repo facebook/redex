@@ -373,7 +373,7 @@ Graph::Graph(const BuildStrategy& strat)
 
   auto root_and_dynamic = strat.get_roots();
   m_dynamic_methods = std::move(root_and_dynamic.dynamic_methods);
-  std::vector<Node*> root_nodes;
+  UnorderedBag<Node*> root_nodes;
 
   // Obtain the callsites of each method recursively, building the graph in the
   // process.
@@ -427,8 +427,7 @@ Graph::Graph(const BuildStrategy& strat)
                 invoke_insns(std::move(invoke_insns)) {}
         };
         std::vector<CalleePartition> callee_partitions;
-        std::unordered_map<const IRInstruction*,
-                           std::unordered_set<const DexMethod*>>
+        UnorderedMap<const IRInstruction*, UnorderedSet<const DexMethod*>>
             insn_to_callee;
         size_t caller_successors_size;
 
@@ -437,7 +436,7 @@ Graph::Graph(const BuildStrategy& strat)
           // Add edges from the single "ghost" entry node to all the "real" root
           // entry nodes in the graph.
           callee_partitions.reserve(root_nodes.size());
-          for (auto root_node : root_nodes) {
+          for (auto root_node : UnorderedIterable(root_nodes)) {
             callee_partitions.emplace_back(root_node, Insns{no_insn});
           }
           caller_successors_size = root_nodes.size();
@@ -451,7 +450,7 @@ Graph::Graph(const BuildStrategy& strat)
           } else {
             // Gather and create all "real" callee nodes, and kick off new
             // concurrent work
-            std::unordered_map<const DexMethod*, size_t> callee_indices;
+            UnorderedMap<const DexMethod*, size_t> callee_indices;
             for (const auto& callsite : callsites) {
               auto callee = callsite.callee;
               auto [it, emplaced] =
@@ -505,7 +504,8 @@ Graph::Graph(const BuildStrategy& strat)
         }
 
         // Populate insn-to-callee map
-        for (auto&& [invoke_insn, callees] : insn_to_callee) {
+        for (auto&& [invoke_insn, callees] :
+             UnorderedIterable(insn_to_callee)) {
           m_insn_to_callee.emplace(invoke_insn, std::move(callees));
         }
       },
@@ -514,11 +514,11 @@ Graph::Graph(const BuildStrategy& strat)
 
   successors_wq.add_item((WorkItem){/* caller */ nullptr, m_entry.get()});
   root_nodes.reserve(root_and_dynamic.roots.size());
-  for (const DexMethod* root : root_and_dynamic.roots) {
+  for (const DexMethod* root : UnorderedIterable(root_and_dynamic.roots)) {
     auto [root_node, emplaced] = m_nodes.emplace_unsafe(root, root);
     always_assert(emplaced);
     successors_wq.add_item((WorkItem){root, root_node});
-    root_nodes.emplace_back(root_node);
+    root_nodes.insert(root_node);
   }
   successors_wq.run_all();
   predecessors_wq.run_all();
@@ -553,7 +553,7 @@ bool invoke_is_dynamic(const Graph& graph, const IRInstruction* insn) {
 }
 
 CallgraphStats get_num_nodes_edges(const Graph& graph) {
-  std::unordered_set<NodeId> visited_node;
+  UnorderedSet<NodeId> visited_node;
   std::queue<NodeId> to_visit;
   uint32_t num_edge = 0;
   uint32_t num_callsites = 0;
@@ -563,7 +563,7 @@ CallgraphStats get_num_nodes_edges(const Graph& graph) {
     to_visit.pop();
     if (visited_node.emplace(front).second) {
       num_edge += front->callees().size();
-      std::unordered_set<IRInstruction*> callsites;
+      UnorderedSet<IRInstruction*> callsites;
       for (const auto& edge : front->callees()) {
         to_visit.push(edge->callee());
         auto invoke_insn = edge->invoke_insn();
@@ -577,19 +577,22 @@ CallgraphStats get_num_nodes_edges(const Graph& graph) {
   return CallgraphStats(visited_node.size(), num_edge, num_callsites);
 }
 
-const MethodVector& Graph::get_callers(const DexMethod* callee) const {
+const MethodBag& Graph::get_callers(const DexMethod* callee) const {
   return *m_callee_to_callers
               .get_or_create_and_assert_equal(
                   callee,
                   [&](const DexMethod*) {
-                    std::unordered_set<const DexMethod*> set;
+                    UnorderedSet<const DexMethod*> set;
                     if (has_node(callee)) {
                       for (const auto& edge : node(callee)->callers()) {
                         set.insert(edge->caller()->method());
                       }
                       set.erase(nullptr);
                     }
-                    return MethodVector(set.begin(), set.end());
+                    UnorderedBag<const DexMethod*> bag;
+                    bag.reserve(set.size());
+                    insert_unordered_iterable(bag, set);
+                    return bag;
                   })
               .first;
 }

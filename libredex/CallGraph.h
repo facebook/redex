@@ -57,8 +57,8 @@ struct CallSite {
 };
 
 using CallSites = std::vector<CallSite>;
-using MethodSet = std::unordered_set<const DexMethod*>;
-using MethodVector = std::vector<const DexMethod*>;
+using MethodSet = UnorderedSet<const DexMethod*>;
+using MethodBag = UnorderedBag<const DexMethod*>;
 
 struct RootAndDynamic {
   MethodSet roots;
@@ -208,25 +208,24 @@ class Graph final {
   }
 
   const InsertOnlyConcurrentMap<const IRInstruction*,
-                                std::unordered_set<const DexMethod*>>&
+                                UnorderedSet<const DexMethod*>>&
   get_insn_to_callee() const {
     return m_insn_to_callee;
   }
 
-  const std::unordered_set<const DexMethod*>& get_dynamic_methods() const {
+  const UnorderedSet<const DexMethod*>& get_dynamic_methods() const {
     return m_dynamic_methods;
   }
 
-  const MethodVector& get_callers(const DexMethod* callee) const;
+  const MethodBag& get_callers(const DexMethod* callee) const;
 
  private:
   std::unique_ptr<Node> m_entry;
   std::unique_ptr<Node> m_exit;
   InsertOnlyConcurrentMap<const DexMethod*, Node> m_nodes;
-  InsertOnlyConcurrentMap<const IRInstruction*,
-                          std::unordered_set<const DexMethod*>>
+  InsertOnlyConcurrentMap<const IRInstruction*, UnorderedSet<const DexMethod*>>
       m_insn_to_callee;
-  mutable InsertOnlyConcurrentMap<const DexMethod*, MethodVector>
+  mutable InsertOnlyConcurrentMap<const DexMethod*, MethodBag>
       m_callee_to_callers;
 
   // Methods that might have unknown inputs/outputs that we need special handle.
@@ -237,7 +236,7 @@ class Graph final {
   // We are only collecting those for multiple callee callgraph because we
   // need to avoid propagating method return values for those true virtual
   // methods.
-  std::unordered_set<const DexMethod*> m_dynamic_methods;
+  UnorderedSet<const DexMethod*> m_dynamic_methods;
 };
 
 class SingleCalleeStrategy : public BuildStrategy {
@@ -323,8 +322,8 @@ class GraphInterface {
 const MethodSet& resolve_callees_in_graph(const Graph& graph,
                                           const IRInstruction* insn);
 
-const MethodVector& get_callee_to_callers(const Graph& graph,
-                                          const DexMethod* callee);
+const MethodBag& get_callee_to_callers(const Graph& graph,
+                                       const DexMethod* callee);
 
 bool invoke_is_dynamic(const Graph& graph, const IRInstruction* insn);
 

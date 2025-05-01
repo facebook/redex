@@ -148,12 +148,12 @@ class ReflectionAnalyzer : public Base {
 
     reflection::SummaryQueryFn query_fn =
         [&](const IRInstruction* insn) -> reflection::AbstractObjectDomain {
-      auto callees =
+      const auto& callees =
           call_graph::resolve_callees_in_graph(*this->get_call_graph(), insn);
 
       reflection::AbstractObjectDomain ret =
           reflection::AbstractObjectDomain::bottom();
-      for (const DexMethod* method : callees) {
+      for (const DexMethod* method : UnorderedIterable(callees)) {
         auto domain = this->get_summaries()
                           ->get(method, Summary::top())
                           .get_return_value();
@@ -180,10 +180,10 @@ class ReflectionAnalyzer : public Base {
         auto op = insn->opcode();
         always_assert(opcode::is_an_invoke(op));
 
-        auto callees =
+        const auto& callees =
             call_graph::resolve_callees_in_graph(*this->get_call_graph(), insn);
 
-        for (const DexMethod* method : callees) {
+        for (const DexMethod* method : UnorderedIterable(callees)) {
           this->get_caller_context()->update(
               method, [&](const reflection::CallingContext& original_context) {
                 return calling_context.join(original_context);
