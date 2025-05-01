@@ -15,11 +15,11 @@
 #include <limits>
 #include <list>
 #include <memory>
-#include <unordered_set>
 
 #include "ControlFlow.h"
 #include "Debug.h"
 #include "DebugUtils.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
 #include "DexInstruction.h"
@@ -222,7 +222,7 @@ static void shard_multi_target(IRList* ir,
 static void generate_branch_targets(
     IRList* ir,
     const EntryAddrBiMap& bm,
-    std::unordered_map<MethodItemEntry*, std::unique_ptr<DexOpcodeData>>&
+    UnorderedMap<MethodItemEntry*, std::unique_ptr<DexOpcodeData>>&
         entry_to_data) {
   for (auto miter = ir->begin(); miter != ir->end(); ++miter) {
     MethodItemEntry* mentry = &*miter;
@@ -355,7 +355,7 @@ void generate_load_params(const DexMethod* method,
 void translate_dex_to_ir(
     IRList* ir_list,
     const EntryAddrBiMap& bm,
-    std::unordered_map<MethodItemEntry*, std::unique_ptr<DexOpcodeData>>&
+    UnorderedMap<MethodItemEntry*, std::unique_ptr<DexOpcodeData>>&
         entry_to_data) {
   for (auto it = ir_list->begin(); it != ir_list->end(); ++it) {
     if (it->type != MFLOW_DEX_OPCODE) {
@@ -450,9 +450,8 @@ void balloon(DexMethod* method, IRList* ir_list) {
   // This is a 1-to-1 map between MethodItemEntries of type MFLOW_OPCODE and
   // address offsets.
   EntryAddrBiMap bm;
-  std::unordered_map<MethodItemEntry*, std::unique_ptr<DexOpcodeData>>
-      entry_to_data;
-  std::unordered_set<DexOpcodeData*> data_set;
+  UnorderedMap<MethodItemEntry*, std::unique_ptr<DexOpcodeData>> entry_to_data;
+  UnorderedSet<DexOpcodeData*> data_set;
 
   uint32_t addr = 0;
   std::vector<std::unique_ptr<DexInstruction>> to_delete;
@@ -495,10 +494,9 @@ void balloon(DexMethod* method, IRList* ir_list) {
  * Map the `DexPositions` to a newly created clone. At the same time, it
  * preserves the relationship between a position and it's parent.
  */
-std::unordered_map<DexPosition*, std::unique_ptr<DexPosition>>
+UnorderedMap<DexPosition*, std::unique_ptr<DexPosition>>
 get_old_to_new_position_copies(IRList* ir_list) {
-  std::unordered_map<DexPosition*, std::unique_ptr<DexPosition>>
-      old_position_to_new;
+  UnorderedMap<DexPosition*, std::unique_ptr<DexPosition>> old_position_to_new;
   for (auto& mie : *ir_list) {
     if (mie.type == MFLOW_POSITION) {
       old_position_to_new.emplace(mie.pos.get(),
@@ -506,7 +504,7 @@ get_old_to_new_position_copies(IRList* ir_list) {
     }
   }
 
-  for (auto& old_to_new : old_position_to_new) {
+  for (auto& old_to_new : UnorderedIterable(old_position_to_new)) {
     DexPosition* old_pos = old_to_new.first;
     auto new_pos = old_to_new.second.get();
 
@@ -530,12 +528,12 @@ get_old_to_new_position_copies(IRList* ir_list) {
 IRList* deep_copy_ir_list(IRList* old_ir_list) {
   IRList* ir_list = new IRList();
 
-  std::unordered_map<DexPosition*, std::unique_ptr<DexPosition>>
-      old_position_to_new = get_old_to_new_position_copies(old_ir_list);
+  UnorderedMap<DexPosition*, std::unique_ptr<DexPosition>> old_position_to_new =
+      get_old_to_new_position_copies(old_ir_list);
 
   // Create a clone for each of the entries
   // and a mapping from old pointers to new pointers.
-  std::unordered_map<MethodItemEntry*, MethodItemEntry*> old_mentry_to_new;
+  UnorderedMap<MethodItemEntry*, MethodItemEntry*> old_mentry_to_new;
   for (auto& mie : *old_ir_list) {
     MethodItemEntry* copy_mie = new MethodItemEntry();
     copy_mie->type = mie.type;
@@ -788,11 +786,11 @@ void calculate_ins_size(const DexMethod* method, DexCode* dex_code) {
  */
 void gather_debug_entries(
     IRList* ir_list,
-    const std::unordered_map<MethodItemEntry*, uint32_t>& entry_to_addr,
+    const UnorderedMap<MethodItemEntry*, uint32_t>& entry_to_addr,
     std::vector<DexDebugEntry>* entries) {
   bool next_pos_is_root{false};
   // A root is the first DexPosition that precedes an opcode
-  std::unordered_set<DexPosition*> roots;
+  UnorderedSet<DexPosition*> roots;
   // The last root that we encountered on our reverse walk of the IRList
   DexPosition* last_root_pos{nullptr};
   for (auto it = ir_list->rbegin(); it != ir_list->rend(); ++it) {
@@ -812,8 +810,8 @@ void gather_debug_entries(
   // DexPositions have parent pointers that refer to other DexPositions in the
   // same method body; we want to recursively preserve the referents as well.
   // The rest of the DexPositions can be eliminated.
-  std::unordered_set<DexPosition*> positions_to_keep;
-  for (DexPosition* pos : roots) {
+  UnorderedSet<DexPosition*> positions_to_keep;
+  for (DexPosition* pos : UnorderedIterable(roots)) {
     positions_to_keep.emplace(pos);
     DexPosition* parent{pos->parent};
     while (parent != nullptr && positions_to_keep.count(parent) == 0) {
@@ -898,7 +896,7 @@ std::unique_ptr<DexCode> IRCode::sync(const DexMethod* method) {
 }
 
 bool IRCode::try_sync(DexCode* code) {
-  std::unordered_map<MethodItemEntry*, uint32_t> entry_to_addr;
+  UnorderedMap<MethodItemEntry*, uint32_t> entry_to_addr;
   uint32_t addr = 0;
   // Step 1, regenerate opcode list for the method, and
   // and calculate the opcode entries address offsets.
@@ -921,8 +919,8 @@ bool IRCode::try_sync(DexCode* code) {
   // we have reached the fixed point.
   TRACE(MTRANS, 5, "Recalculating branches");
   std::vector<MethodItemEntry*> multi_branches;
-  std::unordered_map<MethodItemEntry*, std::vector<BranchTarget*>> multis;
-  std::unordered_map<BranchTarget*, uint32_t> multi_targets;
+  UnorderedMap<MethodItemEntry*, std::vector<BranchTarget*>> multis;
+  UnorderedMap<BranchTarget*, uint32_t> multi_targets;
   bool needs_resync = false;
   for (auto miter = m_ir_list->begin(); miter != m_ir_list->end(); ++miter) {
     MethodItemEntry* mentry = &*miter;
@@ -1228,15 +1226,14 @@ uint32_t IRCode::estimate_code_units() const {
     return m_cfg->estimate_code_units();
   }
   uint32_t code_units = m_ir_list->estimate_code_units();
-  std::unordered_map<MethodItemEntry*,
-                     instruction_lowering::CaseKeysExtentBuilder>
+  UnorderedMap<MethodItemEntry*, instruction_lowering::CaseKeysExtentBuilder>
       switch_case_keys;
   for (auto it = m_ir_list->begin(); it != m_ir_list->end(); it++) {
     if (it->type == MFLOW_TARGET && it->target->type == BRANCH_MULTI) {
       switch_case_keys[it->target->src].insert(it->target->case_key);
     }
   }
-  for (auto&& [_, case_keys] : switch_case_keys) {
+  for (auto&& [_, case_keys] : UnorderedIterable(switch_case_keys)) {
     code_units += case_keys->estimate_switch_payload_code_units();
   }
   return code_units;
