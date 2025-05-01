@@ -49,34 +49,67 @@ class SignedConstantDomain final
  private:
   static constexpr int64_t MIN = std::numeric_limits<int64_t>::min();
   static constexpr int64_t MAX = std::numeric_limits<int64_t>::max();
-  struct Bounds {
-    bool nez;
+  struct Bounds final {
+    bool is_nez;
     int64_t l;
     int64_t u;
     bool operator==(const Bounds& other) const {
-      return nez == other.nez && l == other.l && u == other.u;
+      return is_nez == other.is_nez && l == other.l && u == other.u;
+    }
+    bool operator<=(const Bounds& other) const {
+      return this->is_bottom() ||
+             (other.l <= l && u <= other.u && other.is_nez <= is_nez);
     }
     inline bool is_constant() const { return l == u; }
+    bool is_top() const { return *this == top(); }
+    bool is_bottom() const { return *this == bottom(); }
     void normalize() {
-      if (nez) {
+      if (is_nez) {
         if (l == 0) l++;
         if (u == 0) u--;
       }
-      if (u < l) *this = BOTTOM;
+      if (u < l) this->set_to_bottom();
       always_assert(is_normalized());
     }
     bool is_normalized() const {
       // bottom has a particular shape
-      if (u < l) return *this == BOTTOM;
+      if (u < l) return this->is_bottom();
       // nez cannot be set if 0 is a lower or upper bound
-      if (l == 0 || u == 0) return !nez;
+      if (l == 0 || u == 0) return !is_nez;
       // nez must be set if 0 is not in range
-      return (l <= 0 && u >= 0) || nez;
+      return (l <= 0 && u >= 0) || is_nez;
     }
+
+    Bounds& set_to_top() {
+      *this = top();
+      return *this;
+    }
+
+    Bounds& set_to_bottom() {
+      *this = bottom();
+      return *this;
+    }
+
+    Bounds& join_with(const Bounds& that) {
+      l = std::min(l, that.l);
+      u = std::max(u, that.u);
+      is_nez &= that.is_nez;
+      always_assert(is_normalized());
+      return *this;
+    }
+
+    Bounds& meet_with(const Bounds& that) {
+      l = std::max(l, that.l);
+      u = std::min(u, that.u);
+      is_nez |= that.is_nez;
+      normalize();
+      return *this;
+    }
+
     static inline Bounds from_interval(sign_domain::Interval interval) {
       switch (interval) {
       case sign_domain::Interval::EMPTY:
-        return BOTTOM;
+        return bottom();
       case sign_domain::Interval::EQZ:
         return {false, 0, 0};
       case sign_domain::Interval::LEZ:
@@ -88,25 +121,40 @@ class SignedConstantDomain final
       case sign_domain::Interval::GTZ:
         return {true, 1, MAX};
       case sign_domain::Interval::ALL:
-        return TOP;
+        return top();
       case sign_domain::Interval::NEZ:
-        return NEZ;
+        return nez();
       case sign_domain::Interval::SIZE:
         not_reached();
       }
     }
+
+    static Bounds from_integer(int64_t integer) {
+      return Bounds{integer != 0, integer, integer};
+    }
+
+    static const Bounds& top() {
+      static const Bounds res{false, MIN, MAX};
+      return res;
+    }
+    static const Bounds& bottom() {
+      static const Bounds res{true, MAX, MIN};
+      return res;
+    }
+    static const Bounds& nez() {
+      static const Bounds res{true, MIN, MAX};
+      return res;
+    }
   };
-  static constexpr Bounds TOP = {false, MIN, MAX};
-  static constexpr Bounds BOTTOM = {true, MAX, MIN};
-  static constexpr Bounds NEZ = {true, MIN, MAX};
   Bounds m_bounds;
 
   explicit SignedConstantDomain(Bounds bounds) : m_bounds(bounds) {}
 
  public:
-  SignedConstantDomain() : m_bounds(TOP) {}
+  SignedConstantDomain() : m_bounds(Bounds::top()) {}
 
-  explicit SignedConstantDomain(int64_t v) : m_bounds{v != 0, v, v} {}
+  explicit SignedConstantDomain(int64_t v)
+      : m_bounds{Bounds::from_integer(v)} {}
 
   explicit SignedConstantDomain(sign_domain::Interval interval)
       : m_bounds(Bounds::from_interval(interval)) {}
@@ -116,32 +164,33 @@ class SignedConstantDomain final
     always_assert(min <= max);
   }
 
-  static SignedConstantDomain bottom() { return SignedConstantDomain(BOTTOM); }
-  static SignedConstantDomain top() { return SignedConstantDomain(TOP); }
-  static SignedConstantDomain nez() { return SignedConstantDomain(NEZ); }
-  bool is_bottom() const { return m_bounds == BOTTOM; }
-  bool is_top() const { return m_bounds == TOP; }
-  bool is_nez() const { return m_bounds.nez; }
+  static SignedConstantDomain bottom() {
+    return SignedConstantDomain(Bounds::bottom());
+  }
+  static SignedConstantDomain top() {
+    return SignedConstantDomain(Bounds::top());
+  }
+  static SignedConstantDomain nez() {
+    return SignedConstantDomain(Bounds::nez());
+  }
+  bool is_bottom() const { return m_bounds == Bounds::bottom(); }
+  bool is_top() const { return m_bounds == Bounds::top(); }
+  bool is_nez() const { return m_bounds.is_nez; }
 
   bool leq(const SignedConstantDomain& that) const {
-    if (m_bounds == BOTTOM) return true;
-    return that.m_bounds.l <= m_bounds.l && m_bounds.u <= that.m_bounds.u &&
-           that.m_bounds.nez <= m_bounds.nez;
+    return m_bounds <= that.m_bounds;
   }
 
   bool equals(const SignedConstantDomain& that) const {
     return m_bounds == that.m_bounds;
   }
 
-  void set_to_bottom() { m_bounds = BOTTOM; }
+  void set_to_bottom() { m_bounds.set_to_bottom(); }
 
-  void set_to_top() { m_bounds = TOP; }
+  void set_to_top() { m_bounds.set_to_top(); }
 
   void join_with(const SignedConstantDomain& that) {
-    m_bounds.l = std::min(m_bounds.l, that.m_bounds.l);
-    m_bounds.u = std::max(m_bounds.u, that.m_bounds.u);
-    m_bounds.nez &= that.m_bounds.nez;
-    always_assert(m_bounds.is_normalized());
+    m_bounds.join_with(that.m_bounds);
   }
 
   void widen_with(const SignedConstantDomain&) {
@@ -149,10 +198,7 @@ class SignedConstantDomain final
   }
 
   void meet_with(const SignedConstantDomain& that) {
-    m_bounds.l = std::max(m_bounds.l, that.m_bounds.l);
-    m_bounds.u = std::min(m_bounds.u, that.m_bounds.u);
-    m_bounds.nez |= that.m_bounds.nez;
-    m_bounds.normalize();
+    m_bounds.meet_with(that.m_bounds);
   }
 
   void narrow_with(const SignedConstantDomain&) {
@@ -164,7 +210,7 @@ class SignedConstantDomain final
   }
 
   sign_domain::Interval interval() const {
-    if (m_bounds == BOTTOM) return sign_domain::Interval::EMPTY;
+    if (m_bounds.is_bottom()) return sign_domain::Interval::EMPTY;
     if (m_bounds.l > 0) return sign_domain::Interval::GTZ;
     if (m_bounds.u < 0) return sign_domain::Interval::LTZ;
     if (m_bounds.l == 0) {
@@ -172,21 +218,21 @@ class SignedConstantDomain final
       return sign_domain::Interval::GEZ;
     }
     if (m_bounds.u == 0) return sign_domain::Interval::LEZ;
-    if (m_bounds.nez) return sign_domain::Interval::NEZ;
+    if (m_bounds.is_nez) return sign_domain::Interval::NEZ;
     return sign_domain::Interval::ALL;
   }
 
   ConstantDomain constant_domain() const {
     if (!m_bounds.is_constant()) {
-      if (m_bounds == BOTTOM) return ConstantDomain::bottom();
+      if (m_bounds.is_bottom()) return ConstantDomain::bottom();
       return ConstantDomain::top();
     }
     return ConstantDomain(m_bounds.l);
   }
 
   NumericIntervalDomain numeric_interval_domain() const {
-    if (m_bounds == BOTTOM) return NumericIntervalDomain::bottom();
-    if (m_bounds == NEZ) return NumericIntervalDomain::top();
+    if (m_bounds.is_bottom()) return NumericIntervalDomain::bottom();
+    if (m_bounds == Bounds::nez()) return NumericIntervalDomain::top();
     return numeric_interval_domain_from_int(m_bounds.l, m_bounds.u);
   }
 
