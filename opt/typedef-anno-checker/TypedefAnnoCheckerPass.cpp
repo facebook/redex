@@ -751,7 +751,7 @@ void TypedefAnnoCheckerPass::gather_typedef_values(
     IntDefConstants& intdef_constants) {
   const std::vector<DexField*>& fields = cls->get_sfields();
   if (get_annotation(cls, m_config.str_typedef)) {
-    std::unordered_set<const DexString*> str_values;
+    UnorderedSet<const DexString*> str_values;
     for (auto* field : fields) {
       str_values.emplace(
           static_cast<DexEncodedValueString*>(field->get_static_value())
@@ -759,7 +759,7 @@ void TypedefAnnoCheckerPass::gather_typedef_values(
     }
     strdef_constants.emplace(cls, std::move(str_values));
   } else if (get_annotation(cls, m_config.int_typedef)) {
-    std::unordered_set<uint64_t> int_values;
+    UnorderedSet<uint64_t> int_values;
     for (auto* field : fields) {
       int_values.emplace(field->get_static_value()->value());
     }

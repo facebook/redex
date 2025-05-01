@@ -53,10 +53,9 @@ class TypedefAnnoCheckerPass : public Pass {
  private:
   void gather_typedef_values(
       const DexClass* cls,
-      InsertOnlyConcurrentMap<const DexClass*,
-                              std::unordered_set<const DexString*>>&
+      InsertOnlyConcurrentMap<const DexClass*, UnorderedSet<const DexString*>>&
           strdef_constants,
-      InsertOnlyConcurrentMap<const DexClass*, std::unordered_set<uint64_t>>&
+      InsertOnlyConcurrentMap<const DexClass*, UnorderedSet<uint64_t>>&
           intdef_constants);
 
   Config m_config;
@@ -83,11 +82,10 @@ struct CheckerStats {
 };
 
 using StrDefConstants =
-    InsertOnlyConcurrentMap<const DexClass*,
-                            std::unordered_set<const DexString*>>;
+    InsertOnlyConcurrentMap<const DexClass*, UnorderedSet<const DexString*>>;
 
 using IntDefConstants =
-    InsertOnlyConcurrentMap<const DexClass*, std::unordered_set<uint64_t>>;
+    InsertOnlyConcurrentMap<const DexClass*, UnorderedSet<uint64_t>>;
 
 class TypedefAnnoChecker {
  public:
