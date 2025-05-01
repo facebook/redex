@@ -72,9 +72,9 @@ struct StaticCallGraph {
   std::vector<Vertex> vertices;
   // The direction of the edge points from the caller to callee. For example,
   // callees[0] = {1,2} means vertex 0 has two callees and they are 1 and 2
-  std::vector<std::unordered_set<int>> callees;
+  std::vector<UnorderedSet<int>> callees;
   // The direction of the edge points from the callee to caller
-  std::vector<std::unordered_set<int>> callers;
+  std::vector<UnorderedSet<int>> callers;
 
   // push into static methods to construct call graph
   void add_vertex(DexMethod* method) {
@@ -132,12 +132,12 @@ void color_vertex(StaticCallGraph& graph,
                   int color) {
   if (vertex.should_continue_color(color)) {
     // color the callees
-    for (int callee_id : graph.callees[vertex.id]) {
+    for (int callee_id : UnorderedIterable(graph.callees[vertex.id])) {
       color_vertex(graph, graph.vertices[callee_id], color);
     }
     if (is_private(vertex.method)) {
       // color callers within the same class of this private vertex.method
-      for (int caller_id : graph.callers[vertex.id]) {
+      for (int caller_id : UnorderedIterable(graph.callers[vertex.id])) {
         DexMethod* caller = graph.vertices[caller_id].method;
         if (caller->get_class() == vertex.method->get_class()) {
           color_vertex(graph, caller, color);
@@ -207,7 +207,7 @@ int relocate_clusters(const StaticCallGraph& graph, const Scope& scope) {
       if (number_of_callers == 1) {
         // Relocate the unreachable method to its caller class if only one
         // caller
-        int caller_id = *graph.callers[vertex.id].begin();
+        int caller_id = *unordered_any(graph.callers[vertex.id]);
         DexMethod* caller = graph.vertices[caller_id].method;
         change_visibility(vertex.method, caller->get_class());
         relocate_method(vertex.method, caller->get_class());
@@ -272,8 +272,8 @@ int StaticReloPassV2::run_relocation(
     const Scope& scope, std::vector<DexClass*>& candidate_classes) {
   StaticCallGraph graph;
   build_call_graph(candidate_classes, graph);
-  std::unordered_set<DexClass*> set(candidate_classes.begin(),
-                                    candidate_classes.end());
+  UnorderedSet<DexClass*> set(candidate_classes.begin(),
+                              candidate_classes.end());
   for (size_t color = 0; color < scope.size(); color++) {
     if (set.find(scope[color]) != set.end()) {
       continue;
