@@ -145,8 +145,8 @@ void analyze_reflection(const Scope& scope) {
   const auto ATOMIC_REF_FIELD_UPDATER =
       "Ljava/util/concurrent/atomic/AtomicReferenceFieldUpdater;";
 
-  const std::unordered_map<std::string_view,
-                           std::unordered_map<std::string_view, ReflectionType>>
+  const UnorderedMap<std::string_view,
+                     UnorderedMap<std::string_view, ReflectionType>>
       refls = {
           {JAVA_LANG_CLASS,
            {
@@ -441,7 +441,7 @@ void mark_manifest_root(const std::string& classname) {
 void analyze_reachable_from_manifest(
     const std::string& apk_dir,
     const UnorderedSet<std::string>& prune_unexported_components_str) {
-  std::unordered_map<std::string, ComponentTag> string_to_tag{
+  UnorderedMap<std::string, ComponentTag> string_to_tag{
       {"activity", ComponentTag::Activity},
       {"activity-alias", ComponentTag::ActivityAlias}};
   UnorderedSet<ComponentTag, EnumClassHash> prune_unexported_components;
