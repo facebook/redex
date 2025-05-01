@@ -25,7 +25,7 @@ std::ostream& operator<<(std::ostream& out, const DexMethod& method) {
 
 /* Map of method to known return type - Esepecially for the Boxed values. TODO
  * construct the list.*/
-std::unordered_map<const char*, const char*> STATIC_METHOD_TO_TYPE_MAP = {
+UnorderedMap<const char*, const char*> STATIC_METHOD_TO_TYPE_MAP = {
     {"Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;",
      "Ljava/lang/Boolean;"},
     {"Ljava/lang/Character;.valueOf:(C)Ljava/lang/Character;",
@@ -218,7 +218,7 @@ std::string WholeProgramState::show_method(const DexMethod* m) {
   return show(m);
 }
 void WholeProgramState::setup_known_method_returns() {
-  for (auto& p : STATIC_METHOD_TO_TYPE_MAP) {
+  for (auto& p : UnorderedIterable(STATIC_METHOD_TO_TYPE_MAP)) {
     auto method = DexMethod::make_method(p.first);
     auto type = DexTypeDomain::create_not_null(
         DexType::make_type(DexString::make_string(p.second)));

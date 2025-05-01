@@ -155,7 +155,7 @@ void GlobalTypeAnalyzer::analyze_node(
   auto intra_ta = get_internal_local_analysis(method);
   const auto outgoing_edges =
       call_graph::GraphInterface::successors(*m_call_graph, node);
-  std::unordered_set<IRInstruction*> outgoing_insns;
+  UnorderedSet<IRInstruction*> outgoing_insns;
   for (const auto& edge : outgoing_edges) {
     if (edge->callee() == m_call_graph->exit()) {
       continue; // ghost edge to the ghost exit node

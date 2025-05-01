@@ -224,16 +224,16 @@ class WholeProgramState {
   // The unknown fields can be written to by non-dex code or through reflection.
   // We currently do not have the infrastructure to analyze these cases
   // correctly.
-  std::unordered_set<const DexField*> m_known_fields;
+  UnorderedSet<const DexField*> m_known_fields;
   // Unknown methods will be treated as containing / returning Top.
-  std::unordered_set<const DexMethod*> m_known_methods;
+  UnorderedSet<const DexMethod*> m_known_methods;
   // Methods reachable from clinit that read static fields and reachable from
   // ctors that raed instance fields.
   const ConcurrentSet<const DexMethod*>* m_any_init_reachables{nullptr};
 
   DexTypeFieldPartition m_field_partition;
   DexTypeMethodPartition m_method_partition;
-  std::unordered_map<const DexMethodRef*, DexTypeDomain> m_known_method_returns;
+  UnorderedMap<const DexMethodRef*, DexTypeDomain> m_known_method_returns;
   bool m_only_aggregate_safely_inferrable_fields = false;
 };
 
