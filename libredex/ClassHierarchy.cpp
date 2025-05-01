@@ -69,7 +69,7 @@ void build_external_hierarchy(ClassHierarchy& hierarchy) {
 // Find all the interfaces that extend 'intf'
 bool gather_intf_extenders(const DexType* extender,
                            const DexType* intf,
-                           std::unordered_set<const DexType*>& intf_extenders) {
+                           UnorderedSet<const DexType*>& intf_extenders) {
   bool extends = false;
   const DexClass* extender_cls = type_class(extender);
   if (!extender_cls) return extends;
@@ -87,7 +87,7 @@ bool gather_intf_extenders(const DexType* extender,
 
 void gather_intf_extenders(const Scope& scope,
                            const DexType* intf,
-                           std::unordered_set<const DexType*>& intf_extenders) {
+                           UnorderedSet<const DexType*>& intf_extenders) {
   for (const auto& cls : scope) {
     gather_intf_extenders(cls->get_type(), intf, intf_extenders);
   }
@@ -163,12 +163,12 @@ TypeSet get_all_children(const ClassHierarchy& hierarchy, const DexType* type) {
 void get_all_implementors(const Scope& scope,
                           const DexType* intf,
                           TypeSet& impls) {
-  std::unordered_set<const DexType*> intf_extenders;
+  UnorderedSet<const DexType*> intf_extenders;
   gather_intf_extenders(scope, intf, intf_extenders);
 
-  std::unordered_set<const DexType*> intfs;
+  UnorderedSet<const DexType*> intfs;
   intfs.insert(intf);
-  intfs.insert(intf_extenders.begin(), intf_extenders.end());
+  insert_unordered_iterable(intfs, intf_extenders);
 
   for (auto cls : scope) {
     auto cur = cls;
