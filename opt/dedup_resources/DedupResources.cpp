@@ -241,8 +241,7 @@ void compute_res_file_hashes(
     const std::function<HashType(const void* data, size_t size, HashType seed)>&
         hash_fn,
     std::map<size_t, std::vector<std::string>>* hash_to_absolute_paths,
-    std::unordered_map<std::string, std::string>*
-        absolute_path_to_device_path) {
+    UnorderedMap<std::string, std::string>* absolute_path_to_device_path) {
   Timer t("compute_res_file_hashes");
   auto base_path = boost::filesystem::path(zip_dir);
   std::vector<std::string> tasks;
@@ -308,7 +307,7 @@ void deduplicate_resource_files(PassManager& mgr, const std::string& zip_dir) {
   auto res_table = resources->load_res_table();
 
   std::map<size_t, std::vector<std::string>> hash_to_absolute_paths;
-  std::unordered_map<std::string, std::string> absolute_path_to_device_path;
+  UnorderedMap<std::string, std::string> absolute_path_to_device_path;
   compute_res_file_hashes<uint32_t>(
       zip_dir, res_table.get(), res_table->sorted_res_ids, murmur_hash3,
       &hash_to_absolute_paths, &absolute_path_to_device_path);
