@@ -15,6 +15,7 @@
 #include "ApiLevelChecker.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
@@ -38,8 +39,8 @@ struct Rebinder {
   template <typename T>
   struct RefStats {
     int count = 0;
-    std::unordered_set<T> in;
-    std::unordered_set<T> out;
+    UnorderedSet<T> in;
+    UnorderedSet<T> out;
 
     void insert(T tin, T tout) {
       ++count;
@@ -66,12 +67,8 @@ struct Rebinder {
 
     RefStats& operator+=(const RefStats& rhs) {
       count += rhs.count;
-      if (!rhs.in.empty()) {
-        in.insert(rhs.in.begin(), rhs.in.end());
-      }
-      if (!rhs.out.empty()) {
-        out.insert(rhs.out.begin(), rhs.out.end());
-      }
+      insert_unordered_iterable(in, rhs.in);
+      insert_unordered_iterable(out, rhs.out);
       return *this;
     }
   };
