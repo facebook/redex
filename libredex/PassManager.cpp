@@ -22,7 +22,6 @@
 #include <sstream>
 #include <thread>
 #include <typeinfo>
-#include <unordered_set>
 
 #ifdef __linux__
 #include <sys/types.h>
@@ -306,7 +305,7 @@ class CheckerConfig {
   }
 
  private:
-  std::unordered_set<std::string> m_type_checker_trigger_passes;
+  UnorderedSet<std::string> m_type_checker_trigger_passes;
   bool m_run_type_checker_on_input;
   bool m_run_type_checker_after_each_pass;
   bool m_run_type_checker_after_all_passes;
@@ -507,7 +506,7 @@ class JNINativeContextHelper {
     output_symbols.reserve(m_removable_natives.size());
 
     // Might be non-deterministic in order, put them in a vector and sort.
-    for (auto func : m_removable_natives) {
+    for (auto func : UnorderedIterable(m_removable_natives)) {
       output_symbols.push_back(func->get_name());
     }
 
@@ -524,8 +523,8 @@ class JNINativeContextHelper {
   }
 
  private:
-  std::unordered_set<native::Function*> m_removable_natives;
-  std::unordered_set<DexMethod*> m_java_method_no_impl_on_input;
+  UnorderedSet<native::Function*> m_removable_natives;
+  UnorderedSet<DexMethod*> m_java_method_no_impl_on_input;
 };
 
 void process_method_profiles(PassManager& mgr, ConfigFiles& conf) {
@@ -1558,7 +1557,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
           size_t total_mrefs = 0;
           for (auto& dex : root_dexen) {
             std::vector<DexMethodRef*> mrefs;
-            std::unordered_set<DexMethodRef*> mrefs_set;
+            UnorderedSet<DexMethodRef*> mrefs_set;
             for (DexClass* cls : dex) {
               cls->gather_methods(mrefs);
             }
