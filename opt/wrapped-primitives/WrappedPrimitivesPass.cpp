@@ -181,8 +181,7 @@ void WrappedPrimitivesPass::run_pass(DexStoresVector& stores,
 }
 
 namespace {
-using PreceedingSourceBlockMap =
-    std::unordered_map<IRInstruction*, SourceBlock*>;
+using PreceedingSourceBlockMap = UnorderedMap<IRInstruction*, SourceBlock*>;
 
 PreceedingSourceBlockMap build_preceeding_source_block_map(
     cfg::ControlFlowGraph& cfg) {
@@ -230,7 +229,7 @@ void ValidateWrappedPrimitivesPass::run_pass(DexStoresVector& stores,
   // Look up types that were processed previously by name, in case of rename or
   // complete deletion.
   std::map<std::string, DexType*> wrapper_types_post;
-  std::unordered_map<DexType*, std::string> wrapper_types_post_inverse;
+  UnorderedMap<DexType*, std::string> wrapper_types_post_inverse;
   auto find_impl = [&](DexClass* cls, const std::string& name) {
     auto search = wrapped_primitives_pass->m_wrapper_type_names.find(name);
     if (search != wrapped_primitives_pass->m_wrapper_type_names.end()) {
