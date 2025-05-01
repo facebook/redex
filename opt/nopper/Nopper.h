@@ -8,6 +8,7 @@
 #pragma once
 
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 
 namespace nopper_impl {
 
@@ -23,7 +24,7 @@ AuxiliaryDefs create_auxiliary_defs(DexType* nopper_type);
 std::vector<cfg::Block*> get_noppable_blocks(cfg::ControlFlowGraph& cfg);
 
 size_t insert_nops(cfg::ControlFlowGraph& cfg,
-                   const std::unordered_set<cfg::Block*>& blocks,
+                   const UnorderedSet<cfg::Block*>& blocks,
                    AuxiliaryDefs* auxiliary_defs = nullptr);
 
 } // namespace nopper_impl
