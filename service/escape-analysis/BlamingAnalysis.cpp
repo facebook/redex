@@ -26,9 +26,9 @@ namespace blaming {
 
 FixpointIterator::FixpointIterator(
     const cfg::ControlFlowGraph& cfg,
-    std::unordered_set<const IRInstruction*> allocators,
-    std::unordered_set<DexMethodRef*> safe_method_refs,
-    std::unordered_set<const DexString*> safe_method_names)
+    UnorderedSet<const IRInstruction*> allocators,
+    UnorderedSet<DexMethodRef*> safe_method_refs,
+    UnorderedSet<const DexString*> safe_method_names)
     : ir_analyzer::BaseIRAnalyzer<Environment>(cfg),
       m_allocators(std::move(allocators)),
       m_safe_method_refs(std::move(safe_method_refs)),
@@ -59,11 +59,11 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
 }
 
 BlameMap analyze_escapes(cfg::ControlFlowGraph& cfg,
-                         std::unordered_set<const IRInstruction*> allocators,
+                         UnorderedSet<const IRInstruction*> allocators,
                          std::initializer_list<SafeMethod> safe_methods) {
 
-  std::unordered_set<DexMethodRef*> safe_method_refs;
-  std::unordered_set<const DexString*> safe_method_names;
+  UnorderedSet<DexMethodRef*> safe_method_refs;
+  UnorderedSet<const DexString*> safe_method_names;
   for (const auto& safe : safe_methods) {
     switch (safe.type) {
     case SafeMethod::ByRef:
@@ -82,7 +82,7 @@ BlameMap analyze_escapes(cfg::ControlFlowGraph& cfg,
   }
 
   BlameStore::Domain store;
-  for (auto* alloc : allocators) {
+  for (auto* alloc : UnorderedIterable(allocators)) {
     store.set(alloc, BlameStore::unallocated());
   }
 
