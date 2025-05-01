@@ -25,6 +25,7 @@
 #endif
 
 #include "Creators.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DuplicateClasses.h"
 #include "JarLoader.h"
@@ -246,7 +247,7 @@ bool extract_utf8(std::vector<cp_entry>& cpool,
 DexField* make_dexfield(std::vector<cp_entry>& cpool,
                         DexType* self,
                         cp_field_info& finfo,
-                        std::unordered_set<const DexField*>& added) {
+                        UnorderedSet<const DexField*>& added) {
   std::string_view dbuffer;
   std::string_view nbuffer;
   if (!extract_utf8(cpool, finfo.nameNdx, &nbuffer) ||
@@ -407,7 +408,7 @@ DexTypeList* extract_arguments(std::string_view& buf) {
 DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
                           DexType* self,
                           cp_method_info& finfo,
-                          std::unordered_set<const DexMethod*>& added) {
+                          UnorderedSet<const DexMethod*>& added) {
   std::string_view dbuffer;
   std::string_view nbuffer;
   if (!extract_utf8(cpool, finfo.nameNdx, &nbuffer) ||
@@ -578,7 +579,7 @@ bool parse_class(uint8_t* buffer,
         }
       };
 
-  std::unordered_set<const DexField*> added_fields;
+  UnorderedSet<const DexField*> added_fields;
   for (int i = 0; i < fcount; i++) {
     cp_field_info cpfield;
     cpfield.aflags = read16(buffer, buffer_end);
@@ -593,7 +594,7 @@ bool parse_class(uint8_t* buffer,
   }
 
   uint16_t mcount = read16(buffer, buffer_end);
-  std::unordered_set<const DexMethod*> added_methods;
+  UnorderedSet<const DexMethod*> added_methods;
   if (mcount) {
     for (int i = 0; i < mcount; i++) {
       cp_method_info cpmethod;
