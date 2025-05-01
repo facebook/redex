@@ -8,6 +8,7 @@
 #pragma once
 
 #include "ClassHierarchy.h"
+#include "DeterministicContainers.h"
 #include "Pass.h"
 
 class OriginalNamePass : public Pass {
@@ -40,7 +41,7 @@ class OriginalNamePass : public Pass {
       PassManager& mgr,
       const ClassHierarchy& ch,
       Scope& scope,
-      std::unordered_map<const DexType*, std::string_view>* hierarchies);
+      UnorderedMap<const DexType*, std::string_view>* hierarchies);
 
   std::vector<std::string> m_hierarchy_roots;
 };
