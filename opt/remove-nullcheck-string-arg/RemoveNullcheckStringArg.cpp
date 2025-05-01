@@ -27,7 +27,7 @@ void RemoveNullcheckStringArg::run_pass(DexStoresVector& stores,
   TransferMapForParam transfer_map_param;
   TransferMapForExpr transfer_map_expr;
 
-  std::unordered_set<DexMethod*> new_methods;
+  UnorderedSet<DexMethod*> new_methods;
   if (!setup(transfer_map_param, transfer_map_expr, new_methods)) {
     TRACE(NULLCHECK, 2, "RemoveNullcheckStringArgPass: setup failed");
     return;
@@ -49,10 +49,9 @@ void RemoveNullcheckStringArg::run_pass(DexStoresVector& stores,
   stats.report(mgr);
 }
 
-bool RemoveNullcheckStringArg::setup(
-    TransferMapForParam& transfer_map_param,
-    TransferMapForExpr& transfer_map_expr,
-    std::unordered_set<DexMethod*>& new_methods) {
+bool RemoveNullcheckStringArg::setup(TransferMapForParam& transfer_map_param,
+                                     TransferMapForExpr& transfer_map_expr,
+                                     UnorderedSet<DexMethod*>& new_methods) {
 
   DexMethodRef* builtin_param_V1_3 =
       DexMethod::get_method(CHECK_PARAM_NULL_SIGNATURE_V1_3);
