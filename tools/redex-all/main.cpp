@@ -293,9 +293,7 @@ Json::Value reflect_property_definitions() {
   }();
 
   auto create_sorted = [](const auto& input) {
-    std::vector<redex_properties::Property> tmp;
-    std::copy(input.begin(), input.end(), std::back_inserter(tmp));
-    std::sort(tmp.begin(), tmp.end());
+    auto tmp = unordered_to_ordered(input);
 
     Json::Value holder = Json::arrayValue;
     for (auto& prop : tmp) {
