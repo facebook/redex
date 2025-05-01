@@ -20,7 +20,7 @@ bool check_inits_has_side_effects(
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
     IRCode* code,
-    const std::unordered_set<DexMethodRef*>& safe_base_invoke) {
+    const UnorderedSet<DexMethodRef*>& safe_base_invoke) {
   always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   auto iterable = cfg::InstructionIterable(cfg);
@@ -56,7 +56,7 @@ bool init_for_type_has_side_effects(
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
     DexClass* cls,
-    const std::unordered_set<DexMethodRef*>& safe_base_invoke) {
+    const UnorderedSet<DexMethodRef*>& safe_base_invoke) {
   auto ifields = cls->get_ifields();
   if (!is_final(cls) || !ifields.empty()) {
     return true;
@@ -90,7 +90,7 @@ void RewriteKotlinSingletonInstance::run_pass(DexStoresVector& stores,
   if (!lamda_base_invoke || !obj_init) {
     return;
   }
-  std::unordered_set<DexMethodRef*> safe_base_invoke;
+  UnorderedSet<DexMethodRef*> safe_base_invoke;
   safe_base_invoke.insert(lamda_base_invoke);
   safe_base_invoke.insert(obj_init);
 

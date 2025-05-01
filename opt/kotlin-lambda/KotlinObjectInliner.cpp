@@ -229,7 +229,7 @@ DexClass* candidate_for_companion_inlining(DexClass* cls) {
 
 void relocate(DexClass* comp_cls,
               DexClass* outer_cls,
-              std::unordered_set<DexMethodRef*>& relocated_methods) {
+              UnorderedSet<DexMethodRef*>& relocated_methods) {
   // There should not be any sfields or ifieds in companion object class.
   always_assert(comp_cls->get_sfields().empty());
   always_assert(comp_cls->get_ifields().empty());
@@ -361,7 +361,7 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
   InsertOnlyConcurrentMap<DexClass*, DexClass*> map;
   ConcurrentSet<DexClass*> bad;
   UnorderedMap<DexClass*, unsigned> outer_cls_count;
-  std::unordered_set<DexType*> do_not_inline_set;
+  UnorderedSet<DexType*> do_not_inline_set;
   Stats stats;
   for (auto& p : m_do_not_inline_list) {
     auto* do_not_inline_cls = DexType::get_type(p);
@@ -548,7 +548,7 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
   stats.kotlin_untrackable_companion_objects = bad.size();
 
   // Inline objects in candidate to maped class
-  std::unordered_set<DexMethodRef*> relocated_methods;
+  UnorderedSet<DexMethodRef*> relocated_methods;
   for (auto& p : UnorderedIterable(map)) {
     auto* comp_cls = p.first;
     auto* outer_cls = p.second;
