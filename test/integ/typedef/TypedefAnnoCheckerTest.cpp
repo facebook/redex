@@ -182,7 +182,7 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongAnnotationReturned) {
  has an annotation Linteg/TestIntDef;\n\
  in its method signature, but the returned value contains the annotation \n\
  Linteg/TestStringDef; instead.\n\
- failed instruction: RETURN_OBJECT v0\n\n");
+ failed instruction: RETURN_OBJECT v0");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestWrongAnnoInvokeStatic) {
@@ -208,7 +208,7 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongAnnoInvokeStatic) {
  in method Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testWrongAnnoInvokeStatic:(I)I\n\
  parameter 0 has the annotation  Linteg/TestStringDef;\n\
  but the method expects the annotation to be Linteg/TestIntDef;.\n\
- failed instruction: INVOKE_STATIC v1, Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testValidIntAnnoReturn:(I)I\n\n");
+ failed instruction: INVOKE_STATIC v1, Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testValidIntAnnoReturn:(I)I");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestIntField) {
@@ -253,7 +253,7 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongIntField) {
  assigned a field wrong_anno_field\n\
  with annotation  Linteg/TestStringDef;\n\
  to a value with annotation  Linteg/TestIntDef;.\n\
- failed instruction: IPUT v1, v0, Lcom/facebook/redextest/TypedefAnnoCheckerTest;.wrong_anno_field:I\n\n");
+ failed instruction: IPUT v1, v0, Lcom/facebook/redextest/TypedefAnnoCheckerTest;.wrong_anno_field:I");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestStringField) {
@@ -308,7 +308,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstReturn) {
  Linteg/TestIntDef; attached to it. \n\
  Check that the value is annotated and exists in its typedef annotation class.\n\
  failed instruction: CONST v0, 5\n\
- Error caught when returning the faulty value\n\n");
+ Error caught when returning the faulty value");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestInvalidConstReturn2) {
@@ -330,7 +330,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstReturn2) {
  Linteg/TestIntDef; attached to it. \n\
  Check that the value is annotated and exists in its typedef annotation class.\n\
  failed instruction: CONST v0, 5\n\
- Error caught when returning the faulty value\n\n");
+ Error caught when returning the faulty value");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestInvalidConstStrReturn) {
@@ -354,7 +354,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstStrReturn) {
  Linteg/TestStringDef; attached to it. \n\
  Check that the value is annotated and exists in the typedef annotation class.\n\
  failed instruction: CONST_STRING \"five\"\n\
- Error caught when returning the faulty value\n\n");
+ Error caught when returning the faulty value");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic) {
@@ -377,7 +377,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic) {
  Check that the value is annotated and exists in its typedef annotation class.\n\
  failed instruction: CONST v0, 5\n\
  Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testIntAnnoInvokeStatic:(I)I\n\
- Incorrect parameter's index: 0\n\n");
+ Incorrect parameter's index: 0");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic2) {
@@ -401,7 +401,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic2) {
  Check that the value is annotated and exists in its typedef annotation class.\n\
  failed instruction: CONST v0, 5\n\
  Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testIntAnnoInvokeStatic:(I)I\n\
- Incorrect parameter's index: 0\n\n");
+ Incorrect parameter's index: 0");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestMultipleBlocksInt) {
@@ -456,7 +456,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidMultipleBlocksString) {
  the source of the value with annotation  Linteg/TestStringDef;\n\
  is produced by invoking an unresolveable callee, so the value safety is not guaranteed.\n\
  failed instruction: INVOKE_VIRTUAL v1, v0, Ljava/lang/String;.concat:(Ljava/lang/String;)Ljava/lang/String;\n\
- Error caught when returning the faulty value\n\n");
+ Error caught when returning the faulty value");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestNonConstInt) {
@@ -504,7 +504,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidType) {
             "TypedefAnnoCheckerPass: the annotation  Linteg/TestIntDef;\n\
  annotates a value with an incompatible type or a non-constant value in method\n\
  Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testInvalidType:(Lcom/facebook/redextest/I;)Lcom/facebook/redextest/I; .\n\
- failed instruction: RETURN_OBJECT v0\n\n");
+ failed instruction: RETURN_OBJECT v0");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestJoiningTwoAnnotations) {
@@ -527,7 +527,7 @@ TEST_F(TypedefAnnoCheckerTest, TestJoiningTwoAnnotations) {
  one of the parameters needs to have the typedef annotation  Linteg/TestStringDef;\n\
  attached to it. Check that the value is annotated and exists in the typedef annotation class.\n\
  failed instruction: IOPCODE_LOAD_PARAM_OBJECT v4\n\
- Error caught when returning the faulty value\n\n");
+ Error caught when returning the faulty value");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestJoiningTwoAnnotations2) {
@@ -681,7 +681,7 @@ TEST_F(TypedefAnnoCheckerTest, testSynthAccessor) {
  attached to it. Check that the value is annotated and exists in the typedef annotation class.\n\
  failed instruction: IOPCODE_LOAD_PARAM_OBJECT v2\n\
  Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.takesStrConst:(Ljava/lang/String;)Ljava/lang/String;\n\
- Incorrect parameter's index: 1\n\n");
+ Incorrect parameter's index: 1");
 
   TypedefAnnoPatcher patcher(config, *method_override_graph);
   patcher.run(scope);
@@ -713,7 +713,7 @@ TEST_F(TypedefAnnoCheckerTest, testSynthAccessor) {
  Check that the value is annotated and exists in the typedef annotation class.\n\
  failed instruction: CONST_STRING \"liu\"\n\
  Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.access$takesStrConst:(Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;Ljava/lang/String;)Ljava/lang/String;\n\
- Incorrect parameter's index: 1\n\n");
+ Incorrect parameter's index: 1");
 }
 
 TEST_F(TypedefAnnoCheckerTest, testDefaultArg) {
@@ -790,7 +790,7 @@ TEST_F(TypedefAnnoCheckerTest, testDefaultArg) {
  attached to it. Check that the value is annotated and exists in the typedef annotation class.\n\
  failed instruction: IOPCODE_LOAD_PARAM_OBJECT v1\n\
  Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.rightDefaultArg:(Ljava/lang/String;)Ljava/lang/String;\n\
- Incorrect parameter's index: 1\n\n");
+ Incorrect parameter's index: 1");
 
   TypedefAnnoChecker checker3 = TypedefAnnoChecker(
       strdef_constants, intdef_constants, config, *method_override_graph);
@@ -817,7 +817,7 @@ TEST_F(TypedefAnnoCheckerTest, testDefaultArg) {
  Check that the value is annotated and exists in the typedef annotation class.\n\
  failed instruction: CONST_STRING \"default\"\n\
  Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.wrongDefaultArg:(Ljava/lang/String;)Ljava/lang/String;\n\
- Incorrect parameter's index: 1\n\n");
+ Incorrect parameter's index: 1");
 
   TypedefAnnoChecker checker5 = TypedefAnnoChecker(
       strdef_constants, intdef_constants, config, *method_override_graph);
@@ -869,7 +869,7 @@ TEST_F(TypedefAnnoCheckerTest, TestNoAnnoField) {
       "TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testNoAnnoField:()I\n\
  the field no_anno_field\n\
  needs to have the annotation  Linteg/TestIntDef;.\n\
- failed instruction: IGET v1, Lcom/facebook/redextest/TypedefAnnoCheckerTest;.no_anno_field:I\n");
+ failed instruction: IGET v1, Lcom/facebook/redextest/TypedefAnnoCheckerTest;.no_anno_field:I");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestPureVirtualCall) {
@@ -892,7 +892,7 @@ TEST_F(TypedefAnnoCheckerTest, TestPureVirtualCall) {
  and any methods overriding it need to return a value with the annotation  Linteg/TestIntDef;\n\
  and include it in it's method signature.\n\
  failed instruction: INVOKE_VIRTUAL v0, v3, Lcom/facebook/redextest/AbstractClass;.pureVirtual:(I)I\n\
- Error caught when returning the faulty value\n\n");
+ Error caught when returning the faulty value");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestWrongConstPureVirtualCall) {
@@ -916,7 +916,7 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongConstPureVirtualCall) {
  and any methods overriding it need to return a value with the annotation  Linteg/TestIntDef;\n\
  and include it in it's method signature.\n\
  failed instruction: INVOKE_VIRTUAL v0, v3, Lcom/facebook/redextest/AbstractClass;.pureVirtual:(I)I\n\
- Error caught when returning the faulty value\n\n");
+ Error caught when returning the faulty value");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestWrongConstPureVirtual) {
@@ -938,7 +938,7 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongConstPureVirtual) {
  Linteg/TestIntDef; attached to it. \n\
  Check that the value is annotated and exists in its typedef annotation class.\n\
  failed instruction: CONST v0, 6\n\
- Error caught when returning the faulty value\n\n");
+ Error caught when returning the faulty value");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestPureVirtualCallNoAnno) {
@@ -959,7 +959,7 @@ TEST_F(TypedefAnnoCheckerTest, TestPureVirtualCallNoAnno) {
  and any methods overriding it need to return a value with the annotation  Linteg/TestIntDef;\n\
  and include it in it's method signature.\n\
  failed instruction: INVOKE_VIRTUAL v0, v3, Lcom/facebook/redextest/AbstractClass;.pureVirtualNoAnnoReturn:(I)I\n\
- Error caught when returning the faulty value\n\n");
+ Error caught when returning the faulty value");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestWrongConstPureVirtualCall2) {
@@ -981,7 +981,7 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongConstPureVirtualCall2) {
  and any methods overriding it need to return a value with the annotation  Linteg/TestIntDef;\n\
  and include it in it's method signature.\n\
  failed instruction: INVOKE_VIRTUAL v0, v3, Lcom/facebook/redextest/AbstractClass;.pureVirtualNoAnnoReturn:(I)I\n\
- Error caught when returning the faulty value\n\n");
+ Error caught when returning the faulty value");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestPureVirtualInvalidParamAnno) {
@@ -1003,7 +1003,7 @@ TEST_F(TypedefAnnoCheckerTest, TestPureVirtualInvalidParamAnno) {
  in method Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testPureVirtualInvalidParamAnno:(I)I\n\
  parameter 0 has the annotation  Linteg/TestIntDef;\n\
  but the method expects the annotation to be Linteg/TestStringDef;.\n\
- failed instruction: INVOKE_VIRTUAL v0, v3, Lcom/facebook/redextest/AbstractClass;.pureVirtualInvalidParamAnno:(I)I\n\n");
+ failed instruction: INVOKE_VIRTUAL v0, v3, Lcom/facebook/redextest/AbstractClass;.pureVirtualInvalidParamAnno:(I)I");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestPureVirtualInvalidParamAnno2) {
@@ -1025,7 +1025,7 @@ TEST_F(TypedefAnnoCheckerTest, TestPureVirtualInvalidParamAnno2) {
  in method Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testPureVirtualInvalidParamAnno2:(I)I\n\
  parameter 0 has the annotation  Linteg/TestIntDef;\n\
  but the method expects the annotation to be Linteg/TestStringDef;.\n\
- failed instruction: INVOKE_VIRTUAL v0, v3, Lcom/facebook/redextest/AbstractClass;.pureVirtualInvalidParamAnno:(I)I\n\n");
+ failed instruction: INVOKE_VIRTUAL v0, v3, Lcom/facebook/redextest/AbstractClass;.pureVirtualInvalidParamAnno:(I)I");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestPureVirtualInvalidReturn) {
@@ -1047,7 +1047,7 @@ TEST_F(TypedefAnnoCheckerTest, TestPureVirtualInvalidReturn) {
  and any methods overriding it need to return a value with the annotation  Linteg/TestIntDef;\n\
  and include it in it's method signature.\n\
  failed instruction: INVOKE_VIRTUAL v0, v3, Lcom/facebook/redextest/AbstractClass;.pureVirtualInvalidReturn:(I)I\n\
- Error caught when returning the faulty value\n\n");
+ Error caught when returning the faulty value");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestReturnWhen) {
@@ -1122,7 +1122,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidVarField) {
  Linteg/TestStringDef; attached to it. \n\
  Check that the value is annotated and exists in the typedef annotation class.\n\
  failed instruction: CONST_STRING \"5\"\n\
- Error writing to field Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.var_field:Ljava/lang/String;in methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testInvalidVarField:()Ljava/lang/String;\n\n");
+ Error writing to field Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.var_field:Ljava/lang/String;in methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testInvalidVarField:()Ljava/lang/String;");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestReturnIntField) {
@@ -1226,7 +1226,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidCompanionVarSetter) {
  Linteg/TestStringDef; attached to it. \n\
  Check that the value is annotated and exists in the typedef annotation class.\n\
  failed instruction: CONST_STRING \"5\"\n\
- Error writing to field Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.companion_var:Ljava/lang/String;in methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testInvalidCompanionVarSetter:()Ljava/lang/String;\n\n");
+ Error writing to field Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.companion_var:Ljava/lang/String;in methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testInvalidCompanionVarSetter:()Ljava/lang/String;");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestCompanionIntVarSetter) {
@@ -1467,7 +1467,7 @@ TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalValInvalid) {
  Check that the value is annotated and exists in the typedef annotation class.\n\
  failed instruction: CONST_STRING \"randomval\"\n\
  Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerKtTest$testLambdaCallLocalValInvalid$1;.<init>:(Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;Ljava/lang/String;)V\n\
- Incorrect parameter's index: 2\n\n");
+ Incorrect parameter's index: 2");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestClassConstructorDefaultArgs) {
@@ -1723,7 +1723,7 @@ TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTe
  Linteg/TestIntDef; attached to it. \n\
  Check that the value is annotated and exists in its typedef annotation class.\n\
  failed instruction: CONST v1, 9\n\
- Error writing to field Lkotlin/jvm/internal/Ref$IntRef;.element:Iin methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntInvalid:()I\n\n");
+ Error writing to field Lkotlin/jvm/internal/Ref$IntRef;.element:Iin methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntInvalid:()I");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarIntDefault) {
@@ -1786,7 +1786,7 @@ TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTe
  Linteg/TestIntDef; attached to it. \n\
  Check that the value is annotated and exists in its typedef annotation class.\n\
  failed instruction: CONST v1, 9\n\
- Error writing to field Lkotlin/jvm/internal/Ref$IntRef;.element:Iin methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntDefaultInvalid:()I\n\n");
+ Error writing to field Lkotlin/jvm/internal/Ref$IntRef;.element:Iin methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarIntDefaultInvalid:()I");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarString) {
@@ -1849,7 +1849,7 @@ TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTe
  Linteg/TestStringDef; attached to it. \n\
  Check that the value is annotated and exists in the typedef annotation class.\n\
  failed instruction: CONST_STRING \"eight\"\n\
- Error writing to field Lkotlin/jvm/internal/Ref$ObjectRef;.element:Ljava/lang/Object;in methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringInvalid:()Ljava/lang/String;\n\n");
+ Error writing to field Lkotlin/jvm/internal/Ref$ObjectRef;.element:Ljava/lang/Object;in methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringInvalid:()Ljava/lang/String;");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestLambdaCallLocalVarStringDefault) {
@@ -1915,7 +1915,7 @@ TypedefAnnoCheckerPass: in method Lcom/facebook/redextest/TypedefAnnoCheckerKtTe
  Linteg/TestStringDef; attached to it. \n\
  Check that the value is annotated and exists in the typedef annotation class.\n\
  failed instruction: CONST_STRING \"eight\"\n\
- Error writing to field Lkotlin/jvm/internal/Ref$ObjectRef;.element:Ljava/lang/Object;in methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringDefaultInvalid:()Ljava/lang/String;\n\n");
+ Error writing to field Lkotlin/jvm/internal/Ref$ObjectRef;.element:Ljava/lang/Object;in methodLcom/facebook/redextest/TypedefAnnoCheckerKtTest;.testLambdaCallLocalVarStringDefaultInvalid:()Ljava/lang/String;");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestFunInterfaceSyntheticFields) {
