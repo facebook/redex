@@ -126,6 +126,8 @@ class TypedefAnnoChecker {
   std::string error() { return m_error; }
 
  private:
+  void add_error(const std::string& error, bool double_newline = true);
+
   bool m_good{true};
   std::string m_error;
   TypedefAnnoCheckerPass::Config m_config;

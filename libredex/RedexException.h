@@ -29,7 +29,8 @@ enum RedexError {
   TYPE_CHECK_ERROR = 11,
   INVALID_DEX = 12,
   INVALID_JAVA = 13,
-  MAX = 13,
+  TYPEDEF_ANNO_CHECKER_ERROR = 14,
+  MAX = 14,
 };
 
 class RedexException : public std::exception {
