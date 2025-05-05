@@ -10,6 +10,8 @@
 
 #include "ApkResources.h"
 #include "Debug.h"
+#include "GlobalConfig.h"
+#include "ReachableResources.h"
 #include "RedexMappedFile.h"
 #include "RedexResources.h"
 #include "RedexTest.h"
@@ -312,4 +314,32 @@ TEST(ApkResources, TestDeleteOverlayableIds) {
     auto res_table = resources.load_res_table();
     run_verify(res_table.get(), 0, 0, {});
   }
+}
+
+TEST(ApkResources, TestReachableRoots) {
+  std::unordered_set<std::string> expected_resource_roots{
+      "keep_me_unused_color",
+      "keep_me_unused_str",
+  };
+  setup_resources_and_run(
+      [&](const std::string& temp_dir_path, ApkResources* resources) {
+        ResourceConfig global_resources_config;
+        resources::ReachabilityOptions options;
+        options.assume_reachable_prefixes.emplace_back("keep_me_");
+        auto res_table = resources->load_res_table();
+        resources::ReachableResources reachable_resources(
+            temp_dir_path, global_resources_config, options);
+        // For this test, no roots from code are applicable.
+        DexStoresVector stores;
+        DexStore store("classes");
+        store.add_classes({});
+        stores.emplace_back(store);
+        auto roots = reachable_resources.get_resource_roots(stores);
+        for (auto& name : expected_resource_roots) {
+          auto expected_id = res_table->name_to_ids.at(name).at(0);
+          EXPECT_EQ(roots.count(expected_id), 1)
+              << name << " (0x" << std::hex << expected_id << std::dec
+              << ") should have been returned as a reachable root!";
+        }
+      });
 }

@@ -33,6 +33,14 @@ class ReachableResources {
     m_res_table = m_resources->load_res_table();
     m_r_class_reader = std::make_unique<RClassReader>(global_config);
   }
+  ReachableResources(const std::string& zip_dir,
+                     const ResourceConfig& global_resources_config,
+                     const ReachabilityOptions& options)
+      : m_zip_dir(zip_dir), m_options(options) {
+    m_resources = create_resource_reader(zip_dir);
+    m_res_table = m_resources->load_res_table();
+    m_r_class_reader = std::make_unique<RClassReader>(global_resources_config);
+  }
 
   // Establishes reachable entry points from the given classes,
   // AndroidManifest.xml files in the unpack dir, and IDs matching any
