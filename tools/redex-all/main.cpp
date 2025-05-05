@@ -1996,7 +1996,7 @@ int main(int argc, char* argv[]) {
       std::vector<android::ResTable_config> configs;
       post_res_table->get_configurations(APPLICATION_PACKAGE, "string",
                                          &configs);
-      dump_string_locales(STRING_LOCALE_DUMP, configs);
+      dump_string_locales(conf.metafile(STRING_LOCALE_DUMP), configs);
     }
 
     {
