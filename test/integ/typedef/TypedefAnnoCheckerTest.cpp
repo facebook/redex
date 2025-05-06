@@ -206,7 +206,7 @@ TEST_F(TypedefAnnoCheckerTest, TestWrongAnnoInvokeStatic) {
       checker.error(),
       "TypedefAnnoCheckerPass: while invoking Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testValidIntAnnoReturn:(I)I\n\
  in method Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testWrongAnnoInvokeStatic:(I)I\n\
- parameter 0 has the annotation  Linteg/TestStringDef;\n\
+ parameter 0(val) has the annotation  Linteg/TestStringDef;\n\
  but the method expects the annotation to be Linteg/TestIntDef;.\n\
  failed instruction: INVOKE_STATIC v1, Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testValidIntAnnoReturn:(I)I");
 }
@@ -377,7 +377,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic) {
  Check that the value is annotated and exists in its typedef annotation class.\n\
  failed instruction: CONST v0, 5\n\
  Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testIntAnnoInvokeStatic:(I)I\n\
- Incorrect parameter's index: 0");
+ Incorrect parameter's index: 0(val)");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic2) {
@@ -401,7 +401,7 @@ TEST_F(TypedefAnnoCheckerTest, TestInvalidConstInvokeStatic2) {
  Check that the value is annotated and exists in its typedef annotation class.\n\
  failed instruction: CONST v0, 5\n\
  Error invoking Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testIntAnnoInvokeStatic:(I)I\n\
- Incorrect parameter's index: 0");
+ Incorrect parameter's index: 0(val)");
 }
 
 TEST_F(TypedefAnnoCheckerTest, TestMultipleBlocksInt) {
@@ -1001,7 +1001,7 @@ TEST_F(TypedefAnnoCheckerTest, TestPureVirtualInvalidParamAnno) {
       checker.error(),
       "TypedefAnnoCheckerPass: while invoking Lcom/facebook/redextest/NoAnnoVirtualTest;.pureVirtualInvalidParamAnno:(I)I\n\
  in method Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testPureVirtualInvalidParamAnno:(I)I\n\
- parameter 0 has the annotation  Linteg/TestIntDef;\n\
+ parameter 0(val) has the annotation  Linteg/TestIntDef;\n\
  but the method expects the annotation to be Linteg/TestStringDef;.\n\
  failed instruction: INVOKE_VIRTUAL v0, v3, Lcom/facebook/redextest/AbstractClass;.pureVirtualInvalidParamAnno:(I)I");
 }
@@ -1023,7 +1023,7 @@ TEST_F(TypedefAnnoCheckerTest, TestPureVirtualInvalidParamAnno2) {
       checker.error(),
       "TypedefAnnoCheckerPass: while invoking Lcom/facebook/redextest/NoAnnoVirtualTest;.pureVirtualInvalidParamAnno:(I)I\n\
  in method Lcom/facebook/redextest/TypedefAnnoCheckerTest;.testPureVirtualInvalidParamAnno2:(I)I\n\
- parameter 0 has the annotation  Linteg/TestIntDef;\n\
+ parameter 0(val) has the annotation  Linteg/TestIntDef;\n\
  but the method expects the annotation to be Linteg/TestStringDef;.\n\
  failed instruction: INVOKE_VIRTUAL v0, v3, Lcom/facebook/redextest/AbstractClass;.pureVirtualInvalidParamAnno:(I)I");
 }

@@ -7,6 +7,9 @@
 
 #pragma once
 
+#include <optional>
+#include <string_view>
+
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
@@ -170,5 +173,7 @@ inline unsigned count_opcode_of_types(
   }
   return ret;
 }
+
+std::optional<std::string_view> get_param_name(const DexMethod* m, size_t idx);
 
 }; // namespace method
