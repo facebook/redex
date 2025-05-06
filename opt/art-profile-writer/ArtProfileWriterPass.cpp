@@ -21,6 +21,7 @@
 #include "BaselineProfile.h"
 #include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
+#include "DexAssessments.h"
 #include "DexStructure.h"
 #include "IRCode.h"
 #include "InstructionLowering.h"
@@ -774,6 +775,18 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
 
   mgr.incr_metric("used_bzl_baseline_profile_config",
                   conf.get_did_use_bzl_baseline_profile_config());
+
+  InsertOnlyConcurrentMap<DexMethod*, uint32_t> huge_methods;
+  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
+    auto code_units = code.estimate_code_units();
+    code_units += code.cfg().get_size_adjustment();
+    if (code_units > assessments::HUGE_METHOD_THRESHOLD) {
+      huge_methods.emplace(method, code_units);
+    }
+  });
+  for (auto [method, code_units] : huge_methods) {
+    mgr.incr_metric("huge_methods_" + show_deobfuscated(method), code_units);
+  }
 
   if (!m_never_inline_estimate && !m_never_inline_attach_annotations) {
     return;

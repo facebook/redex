@@ -384,9 +384,7 @@ DexAssessment DexScopeAssessor::run() {
       code_units += code->cfg().get_size_adjustment();
     }
     method_stats.code_units.fetch_add(code_units, std::memory_order_relaxed);
-    if (code_units > 9000) {
-      // Why 9000? Because that's the default cut-off for SplitHugeSwitchPass to
-      // start splitting.
+    if (code_units > HUGE_METHOD_THRESHOLD) {
       method_stats.huge_methods.fetch_add(1, std::memory_order_relaxed);
     }
   });
