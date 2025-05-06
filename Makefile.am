@@ -490,6 +490,7 @@ libopt_la_SOURCES = \
 	opt/shorten-srcstrings/Shorten.cpp \
 	opt/shrinker/ShrinkerPass.cpp \
 	opt/unreachable/UnreachableLoweringPass.cpp \
+	opt/hot-cold-method-specializing/HotColdMethodSpecializingPass.cpp \
 	opt/make-public/MakePublicPass.cpp \
 	opt/methodinline/IntraDexInlinePass.cpp \
 	opt/methodinline/LocalMethodInlinePass.cpp \

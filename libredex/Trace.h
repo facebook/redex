@@ -66,6 +66,7 @@ class DexType;
   TM(GETTER)            \
   TM(GQL)               \
   TM(HASHER)            \
+  TM(HCMS)              \
   TM(ICL)               \
   TM(ICONSTP)           \
   TM(IDEX)              \
