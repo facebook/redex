@@ -112,6 +112,19 @@ bool is_generated(const DexMethod* m) {
   return false;
 }
 
+struct MaybeParamName {
+  std::optional<std::string_view> name;
+  MaybeParamName(const DexMethod* method, size_t param_index)
+      : name(method::get_param_name(method, param_index)) {}
+
+  friend std::ostream& operator<<(std::ostream& os, const MaybeParamName& obj) {
+    if (obj.name) {
+      os << "(" << *obj.name << ")";
+    }
+    return os;
+  }
+};
+
 } // namespace
 
 bool TypedefAnnoChecker::is_value_of_opt(const DexMethod* m) {
@@ -311,7 +324,8 @@ void TypedefAnnoChecker::check_instruction(
           if (anno_type.value() == type::java_lang_Object()) {
             out << "TypedefAnnoCheckerPass: while invoking " << show(callee)
                 << "\n in method " << show(m) << "\n parameter "
-                << param_anno.first << "should have the annotation "
+                << param_anno.first << MaybeParamName(callee, param_anno.first)
+                << "should have the annotation "
                 << annotation.value()->get_name()->c_str()
                 << "\n but it instead contains an ambiguous annotation, "
                    "implying that the parameter was joined with another "
@@ -322,7 +336,8 @@ void TypedefAnnoChecker::check_instruction(
           } else {
             out << "TypedefAnnoCheckerPass: while invoking " << show(callee)
                 << "\n in method " << show(m) << "\n parameter "
-                << param_anno.first << " has the annotation " << show(anno_type)
+                << param_anno.first << MaybeParamName(callee, param_anno.first)
+                << " has the annotation " << show(anno_type)
                 << "\n but the method expects the annotation to be "
                 << annotation.value()->get_name()->c_str()
                 << ".\n failed instruction: " << show(insn);
@@ -351,7 +366,8 @@ void TypedefAnnoChecker::check_instruction(
           if (!good) {
             std::ostringstream out;
             out << " Error invoking " << show(callee) << "\n";
-            out << " Incorrect parameter's index: " << param_index;
+            out << " Incorrect parameter's index: " << param_index
+                << MaybeParamName(callee, param_index);
             add_error(out.str(), /*double_newline=*/false);
             TRACE(TAC, 1, "invoke method: %s", SHOW(callee));
           }

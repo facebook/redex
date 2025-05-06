@@ -8,6 +8,7 @@
 #include "MethodUtil.h"
 
 #include "ControlFlow.h"
+#include "DexAnnotation.h"
 #include "EditableCfgAdapter.h"
 #include "RedexContext.h"
 #include "Resolver.h"
@@ -574,6 +575,64 @@ DexMethod* java_lang_invoke_MethodHandle_invokeExact() {
   return static_cast<DexMethod*>(DexMethod::get_method(
       "Ljava/lang/invoke/MethodHandle;.invokeExact:([Ljava/"
       "lang/Object;)Ljava/lang/Object;"));
+}
+
+std::optional<std::string_view> get_param_name(const DexMethod* m, size_t idx) {
+  auto anno_type = DexType::get_type("Ldalvik/annotation/MethodParameters;");
+  if (anno_type == nullptr) {
+    return std::nullopt;
+  }
+
+  // We are looking for MethodParameters, which is on the method, not the
+  // param.
+  auto* method_annos = m->get_anno_set();
+  if (method_annos == nullptr) {
+    return std::nullopt;
+  }
+
+  auto* anno = [&]() -> const DexAnnotation* {
+    for (auto& method_anno : method_annos->get_annotations()) {
+      if (method_anno->type() == anno_type) {
+        return method_anno.get();
+      }
+    }
+    return nullptr;
+  }();
+  if (anno == nullptr) {
+    return std::nullopt;
+  }
+
+  auto* names = [&]() -> const DexEncodedValueArray* {
+    for (auto& elem : anno->anno_elems()) {
+      if (elem.string->str() != "names") {
+        continue;
+      }
+      if (elem.encoded_value == nullptr) {
+        return nullptr;
+      }
+      if (elem.encoded_value->evtype() != DEVT_ARRAY) {
+        return nullptr;
+      }
+      return reinterpret_cast<const DexEncodedValueArray*>(
+          elem.encoded_value.get());
+    }
+    return nullptr;
+  }();
+  if (names == nullptr) {
+    return std::nullopt;
+  }
+  always_assert(names->evalues() != nullptr);
+
+  if (names->evalues()->size() <= idx) {
+    return std::nullopt;
+  }
+  auto& idx_val = names->evalues()->at(idx);
+  if (idx_val->evtype() != DEVT_STRING) {
+    return std::nullopt;
+  }
+  return reinterpret_cast<const DexEncodedValueString*>(idx_val.get())
+      ->string()
+      ->str();
 }
 
 }; // namespace method
