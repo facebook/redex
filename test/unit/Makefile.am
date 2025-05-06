@@ -308,6 +308,8 @@ graph_util_test_SOURCES = GraphUtilTest.cpp
 hierarchy_util_test_SOURCES = HierarchyUtilTest.cpp
 hierarchy_util_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
+hot_cold_method_specializing_test_SOURCES = HotColdMethodSpecializingTest.cpp
+
 init_class_test_SOURCES = InitClassTest.cpp
 
 init_class_pruner_test_SOURCES = InitClassPrunerTest.cpp
