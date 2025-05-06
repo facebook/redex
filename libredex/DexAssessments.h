@@ -21,6 +21,10 @@
 
 namespace assessments {
 
+// Why 9000? Because that's the default cut-off for SplitHugeSwitchPass to
+// start splitting.
+constexpr const uint32_t HUGE_METHOD_THRESHOLD = 9000;
+
 using DexAssessment = UnorderedMap<std::string, uint64_t>;
 using DexAssessmentItem = std::pair<std::string, uint64_t>;
 
