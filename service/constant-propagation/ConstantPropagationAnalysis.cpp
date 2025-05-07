@@ -53,6 +53,10 @@ namespace {
 // reinterpret the long's bits as a double
 template <typename Out, typename In>
 static Out reinterpret_bits(In in) {
+  static_assert(
+      sizeof(Out) == sizeof(In),
+      "Size mismatch, result of reinterpret_cast depends on implementation");
+
   if (std::is_same<In, Out>::value) {
     return in;
   }
@@ -77,6 +81,13 @@ bool is_less_than_bias(IROpcode op) {
 //   Should be float, double, or int64_t
 template <typename Operand, typename Stored>
 void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
+  static_assert(std::is_same_v<Stored, int32_t> ||
+                std::is_same_v<Stored, int64_t>);
+  static_assert(std::is_floating_point_v<Operand> ||
+                std::is_same_v<Operand, int64_t>);
+  static_assert(sizeof(Operand) == sizeof(Stored),
+                "Operand and Stored must have the same size.");
+
   IROpcode op = insn->opcode();
   auto left = env->get<SignedConstantDomain>(insn->src(0)).get_constant();
   auto right = env->get<SignedConstantDomain>(insn->src(1)).get_constant();
@@ -111,6 +122,10 @@ void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
 // https://cs.android.com/android/platform/superproject/main/+/main:art/runtime/entrypoints/entrypoint_utils-inl.h;l=702;drc=d5137445c0d4067406cb3e38aade5507ff2fcd16
 template <typename INT_TYPE, typename FLOAT_TYPE>
 inline INT_TYPE art_float_to_integral(FLOAT_TYPE f) {
+  static_assert(std::is_integral_v<INT_TYPE>, "INT_TYPE must be integral");
+  static_assert(std::is_floating_point_v<FLOAT_TYPE>,
+                "FLOAT_TYPE must be floating-point");
+
   const INT_TYPE kMaxInt =
       static_cast<INT_TYPE>(std::numeric_limits<INT_TYPE>::max());
   const INT_TYPE kMinInt =
