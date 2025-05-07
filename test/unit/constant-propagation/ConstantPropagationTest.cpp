@@ -859,7 +859,7 @@ TEST_F(ConstantPropagationTest, WhiteBox1) {
   EXPECT_EQ(exit_state.get<SignedConstantDomain>(1), SignedConstantDomain(0));
   // v2 can contain either the value 0 or 1
   EXPECT_EQ(exit_state.get<SignedConstantDomain>(2),
-            SignedConstantDomain(0, 1));
+            SignedConstantDomain::from_constants({0, 1}));
   EXPECT_EQ(exit_state.get<SignedConstantDomain>(3), SignedConstantDomain(0));
 }
 

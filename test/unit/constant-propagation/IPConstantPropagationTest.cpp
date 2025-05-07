@@ -1899,7 +1899,8 @@ TEST_F(InterproceduralConstantPropagationTest,
   auto& wps = fp_iter->get_whole_program_state();
   // as the field is definitely-assigned, even with the branching in the
   // constructor, 0 was not added to the numeric interval domain
-  EXPECT_EQ(wps.get_field_value(field_f), SignedConstantDomain(23, 42));
+  EXPECT_EQ(wps.get_field_value(field_f),
+            SignedConstantDomain::from_constants({23, 42}));
 
   InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
 
@@ -1968,7 +1969,8 @@ TEST_F(InterproceduralConstantPropagationTest,
   auto& wps = fp_iter->get_whole_program_state();
   // 0 is included in the numeric interval as 'this' escaped before the
   // assignment
-  EXPECT_EQ(wps.get_field_value(field_f), SignedConstantDomain(0, 42));
+  EXPECT_EQ(wps.get_field_value(field_f),
+            SignedConstantDomain::from_constants({0, 42}));
 
   InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
 
@@ -2035,7 +2037,8 @@ TEST_F(InterproceduralConstantPropagationTest,
   auto& wps = fp_iter->get_whole_program_state();
   // 0 is included in the numeric interval as 'this' escaped before the
   // assignment
-  EXPECT_EQ(wps.get_field_value(field_f), SignedConstantDomain(0, 42));
+  EXPECT_EQ(wps.get_field_value(field_f),
+            SignedConstantDomain::from_constants({0, 42}));
 
   InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
 
@@ -2103,7 +2106,8 @@ TEST_F(InterproceduralConstantPropagationTest,
   auto& wps = fp_iter->get_whole_program_state();
   // 0 is included in the numeric interval as no actual constructor was ever
   // called
-  EXPECT_EQ(wps.get_field_value(field_f), SignedConstantDomain(0, 42));
+  EXPECT_EQ(wps.get_field_value(field_f),
+            SignedConstantDomain::from_constants({0, 42}));
 
   InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
 
@@ -2173,7 +2177,8 @@ TEST_F(InterproceduralConstantPropagationTest,
       &m_string_analyzer_state, &m_package_name_state, m_cp_state);
   auto& wps = fp_iter->get_whole_program_state();
   // 0 is included in the numeric interval as the field was read before written
-  EXPECT_EQ(wps.get_field_value(field_f), SignedConstantDomain(0, 42));
+  EXPECT_EQ(wps.get_field_value(field_f),
+            SignedConstantDomain::from_constants({0, 42}));
 
   InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
 
