@@ -17,6 +17,7 @@ OUT_TMP="$(dirname "$SCRIPT")/test.out"
 # does not matter
 # shellcheck disable=SC2015
 "$FB_REDEX" --redex-binary "$REDEX_BINARY" \
+  --config /tmp/test.config \
   --outdir /tmp/test --dex-files /tmp/test.apk \
   --assert-abort "This is an abort test." \
   >"$OUT_TMP" 2>&1 && exit 1 || true

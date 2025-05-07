@@ -462,9 +462,9 @@ def align_and_sign_output_apk(
     reset_timestamps: bool,
     sign: bool,
     sign_v4: typing.Optional[bool],
-    keystore: str,
-    key_alias: str,
-    key_password: str,
+    keystore: typing.Optional[str],
+    key_alias: typing.Optional[str],
+    key_password: typing.Optional[str],
     ignore_zipalign: bool,
     ignore_apksigner: bool,
     page_align: bool,
@@ -485,6 +485,9 @@ def align_and_sign_output_apk(
 
     # Add new signature
     if sign:
+        assert keystore
+        assert key_alias
+        assert key_password
         sign_apk(
             sign_v4,
             keystore,
@@ -544,13 +547,7 @@ def validate_args(args: argparse.Namespace) -> None:
             )
 
 
-def arg_parser(
-    binary: typing.Optional[str] = None,
-    config: typing.Optional[str] = None,
-    keystore: typing.Optional[str] = None,
-    keyalias: typing.Optional[str] = None,
-    keypass: typing.Optional[str] = None,
-) -> argparse.ArgumentParser:
+def arg_parser() -> argparse.ArgumentParser:
     description = """
 Given an APK, produce a better APK!
 
@@ -577,19 +574,17 @@ Given an APK, produce a better APK!
         help="Path to dependent library jar file",
     )
 
-    parser.add_argument(
-        "--redex-binary", nargs="?", default=binary, help="Path to redex binary"
-    )
+    parser.add_argument("--redex-binary", required=True, help="Path to redex binary")
 
-    parser.add_argument("-c", "--config", default=config, help="Configuration file")
+    parser.add_argument("-c", "--config", required=True, help="Configuration file")
 
     argparse_yes_no_flag(parser, "sign", help="Sign the apk after optimizing it")
     argparse_yes_no_flag(
         parser, "sign-v4", default=None, help="Sign the apk with v4 signing"
     )
-    parser.add_argument("-s", "--keystore", nargs="?", default=keystore)
-    parser.add_argument("-a", "--keyalias", nargs="?", default=keyalias)
-    parser.add_argument("-p", "--keypass", nargs="?", default=keypass)
+    parser.add_argument("-s", "--keystore")
+    parser.add_argument("-a", "--keyalias")
+    parser.add_argument("-p", "--keypass")
 
     parser.add_argument(
         "-u",
@@ -1695,16 +1690,7 @@ def early_apply_args(args: argparse.Namespace) -> None:
 
 
 if __name__ == "__main__":
-    keys: typing.Dict[str, str] = {}
-    try:
-        keystore: str = join(os.environ["HOME"], ".android", "debug.keystore")
-        if isfile(keystore):
-            keys["keystore"] = keystore
-            keys["keyalias"] = "androiddebugkey"
-            keys["keypass"] = "android"
-    except Exception:
-        pass
-    args: argparse.Namespace = arg_parser(**keys).parse_args()
+    args: argparse.Namespace = arg_parser().parse_args()
     early_apply_args(args)
     validate_args(args)
     with_temp_cleanup(lambda: run_redex(args), args.always_clean_up)
