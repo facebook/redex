@@ -458,7 +458,8 @@ HotColdMethodSpecializingPass::analyze_and_specialize(
   for (auto* block : (*cold_copy)->get_code()->cfg().blocks()) {
     for (auto& mie : *block) {
       if (mie.type == MFLOW_SOURCE_BLOCK) {
-        mie.src_block->foreach_val([](auto& val) { val->val = 0; });
+        mie.src_block->foreach_val(
+            [](auto& val) { val = SourceBlock::Val(0, 0); });
       }
     }
   }
