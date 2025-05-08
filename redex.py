@@ -472,18 +472,49 @@ def extract_signing_args(
             return None
 
     keystore = args.keystore  # For pyre
+    keyalias = args.keyalias  # For pyre
+    keypass = args.keypass  # For pyre
+    keystore_properties = args.keystore_properties  # For pyre
+
+    if keystore_properties:
+        if keyalias or keypass:
+            return maybe_fail(
+                "Cannot specify --keystore-properties and --keyalias/--keypass"
+            )
+        if not isfile(keystore_properties):
+            return maybe_fail(
+                f'Keystore properties path "{keystore_properties}" is invalid.'
+            )
+        with open(keystore_properties) as f:
+            entries = {
+                entry[0]: entry[1]
+                for entry in (
+                    line.strip().split("=")
+                    for line in f
+                    if not line.startswith("#") and "=" in line
+                )
+            }
+        if "key.alias" not in entries:
+            return maybe_fail(
+                f'Keystore properties path "{keystore_properties}" does not contain "key.alias"'
+            )
+        keyalias = entries["key.alias"]
+        if "key.alias.password" not in entries:
+            return maybe_fail(
+                f'Keystore properties path "{keystore_properties}" does not contain "key.alias.password"'
+            )
+        keypass = entries["key.alias.password"]
+    else:
+        if not keyalias:
+            return maybe_fail("Requires --keyalias argument")
+
+        if not keypass:
+            return maybe_fail("Requires --keypass argument")
+
     if not keystore:
         return maybe_fail("Requires --keystore argument")
     if not isfile(keystore):
         return maybe_fail(f'Keystore path "{keystore}" is invalid.')
-
-    keyalias = args.keyalias  # For pyre
-    if not args.keyalias:
-        return maybe_fail("Requires --keyalias argument")
-
-    keypass = args.keypass  # For pyre
-    if not keypass:
-        return maybe_fail("Requires --keypass argument")
 
     return SigningConfig(
         keystore=keystore,
@@ -591,13 +622,15 @@ Given an APK, produce a better APK!
 
     parser.add_argument("-c", "--config", required=True, help="Configuration file")
 
-    argparse_yes_no_flag(parser, "sign", help="Sign the apk after optimizing it")
+    signing_group = parser.add_argument_group("Signing arguments")
+    argparse_yes_no_flag(signing_group, "sign", help="Sign the apk after optimizing it")
     argparse_yes_no_flag(
-        parser, "sign-v4", default=None, help="Sign the apk with v4 signing"
+        signing_group, "sign-v4", default=None, help="Sign the apk with v4 signing"
     )
-    parser.add_argument("-s", "--keystore")
-    parser.add_argument("-a", "--keyalias")
-    parser.add_argument("-p", "--keypass")
+    signing_group.add_argument("-s", "--keystore")
+    signing_group.add_argument("--keystore-properties")
+    signing_group.add_argument("-a", "--keyalias")
+    signing_group.add_argument("-p", "--keypass")
 
     parser.add_argument(
         "-u",
