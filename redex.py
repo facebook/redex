@@ -21,6 +21,7 @@ import tempfile
 import timeit
 import typing
 import zipfile
+from dataclasses import dataclass
 from os.path import abspath, dirname, getsize, isdir, isfile, join
 from pipes import quote
 
@@ -456,15 +457,51 @@ def zipalign(
     os.remove(unaligned_apk_path)
 
 
+@dataclass
+class SigningConfig:
+    keystore: str
+    keyalias: str
+    keypass: str
+
+
+def extract_signing_args(
+    args: argparse.Namespace,
+    fail_on_error: bool = True,
+) -> typing.Optional[SigningConfig]:
+    def maybe_fail(msg: str) -> typing.Optional[SigningConfig]:
+        if fail_on_error:
+            raise argparse.ArgumentTypeError(msg)
+        else:
+            return None
+
+    keystore = args.keystore  # For pyre
+    if not keystore:
+        return maybe_fail("Requires --keystore argument")
+    if not isfile(keystore):
+        return maybe_fail(f'Keystore path "{keystore}" is invalid.')
+
+    keyalias = args.keyalias  # For pyre
+    if not args.keyalias:
+        return maybe_fail("Requires --keyalias argument")
+
+    keypass = args.keypass  # For pyre
+    if not keypass:
+        return maybe_fail("Requires --keypass argument")
+
+    return SigningConfig(
+        keystore=keystore,
+        keyalias=keyalias,
+        keypass=keypass,
+    )
+
+
 def align_and_sign_output_apk(
     unaligned_apk_path: str,
     output_apk_path: str,
     reset_timestamps: bool,
     sign: bool,
     sign_v4: typing.Optional[bool],
-    keystore: typing.Optional[str],
-    key_alias: typing.Optional[str],
-    key_password: typing.Optional[str],
+    signing_config: typing.Optional[SigningConfig],
     ignore_zipalign: bool,
     ignore_apksigner: bool,
     page_align: bool,
@@ -485,14 +522,12 @@ def align_and_sign_output_apk(
 
     # Add new signature
     if sign:
-        assert keystore
-        assert key_alias
-        assert key_password
+        assert signing_config
         sign_apk(
             sign_v4,
-            keystore,
-            key_password,
-            key_alias,
+            signing_config.keystore,
+            signing_config.keypass,
+            signing_config.keyalias,
             output_apk_path,
             ignore_apksigner,
         )
@@ -524,27 +559,8 @@ def copy_all_file_to_out_dir(
 
 def validate_args(args: argparse.Namespace) -> None:
     if args.sign:
-
-        def raise_error(arg_name: str) -> None:
-            raise argparse.ArgumentTypeError(
-                "Could not find a suitable default for --{} and no value "
-                "was provided.  This argument is required when --sign "
-                "is used".format(arg_name)
-            )
-
-        if not args.keystore:
-            raise_error("keystore")
-
-        if not args.keyalias:
-            raise_error("keyalias")
-
-        if not args.keypass:
-            raise_error("keypass")
-
-        if not isfile(args.keystore):
-            raise argparse.ArgumentTypeError(
-                f'Keystore path "{args.keystore}" is invalid.'
-            )
+        # This will raise errors if necessary.
+        extract_signing_args(args)
 
 
 def arg_parser() -> argparse.ArgumentParser:
@@ -1547,9 +1563,7 @@ def finalize_redex(state: State) -> None:
                 state.args.reset_zip_timestamps or state.args.dev,
                 state.args.sign,
                 state.args.sign_v4,
-                state.args.keystore,
-                state.args.keyalias,
-                state.args.keypass,
+                extract_signing_args(state.args, fail_on_error=False),
                 state.args.ignore_zipalign,
                 state.args.ignore_apksigner,
                 state.args.page_align_libs,
