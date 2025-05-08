@@ -9,6 +9,7 @@
 
 #include <boost/functional/hash.hpp>
 #include <cinttypes>
+#include <cstring>
 #include <limits>
 #include <mutex>
 #include <set>
@@ -53,14 +54,17 @@ namespace {
 // reinterpret the long's bits as a double
 template <typename Out, typename In>
 static Out reinterpret_bits(In in) {
-  static_assert(
-      sizeof(Out) == sizeof(In),
-      "Size mismatch, result of reinterpret_cast depends on implementation");
+  static_assert(sizeof(Out) == sizeof(In), "Size mismatch");
+  static_assert(std::is_trivially_copyable_v<In> &&
+                    std::is_trivially_copyable_v<Out>,
+                "Not trivially copyable, can't safely memcpy");
 
-  if (std::is_same<In, Out>::value) {
+  if constexpr (std::is_same_v<In, Out>) {
     return in;
   }
-  return *reinterpret_cast<Out*>(&in);
+  Out res;
+  std::memcpy(&res, &in, sizeof(In));
+  return res;
 }
 
 bool is_compare_floating(IROpcode op) {
