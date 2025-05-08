@@ -109,6 +109,9 @@ void build_interface_map(InterfaceMap& interfaces,
 
 ClassHierarchy build_internal_type_hierarchy(const Scope& scope) {
   ClassHierarchy hierarchy;
+  hierarchy.reserve(std::count_if(scope.begin(), scope.end(), [](auto* cls) {
+    return !is_interface(cls);
+  }));
   // build the type hierarchy
   for (const auto& cls : scope) {
     if (is_interface(cls)) continue;
