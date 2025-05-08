@@ -358,6 +358,46 @@ TEST_P(ConstantBitwiseAndTest, DeterminableZeroLit) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
+TEST_P(ConstantBitwiseAndTest, DeterminableZeroInt) {
+  const auto& param = GetParam();
+
+  auto code = assembler::ircode_from_string(param.format_code(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (and-int/lit v1 v1 {operand})  ; Some bits of v1 must be 0 now
+     (and-int v0 v0 v1)  ; Some bits of v0 must be 0 now
+
+     (const v1 {comparee})
+     (if-ne v0 v1 :if-true-label)
+     (const v1 1)
+
+     (:if-true-label)
+     (const v0 2)
+
+     (return-void)
+    )
+)"));
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(param.format_code(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (and-int/lit v1 v1 {operand})
+     (and-int v0 v0 v1)
+
+     (const v1 {comparee})
+     (:if-true-label)
+     (const v0 2)
+
+     (return-void)
+    )
+)"));
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
 INSTANTIATE_TEST_CASE_P(
     ConstantBitwiseAndDeterminableZeroTests,
     ConstantBitwiseAndTest,
@@ -397,6 +437,30 @@ TEST_F(ConstantBitwiseAndTest, UndeterminableZeroLit) {
       ::testing::ContainsRegex("\\(if-ne v0 v1 :.*\\)\\s*\\(const v1 1\\)"));
 }
 
+TEST_F(ConstantBitwiseAndTest, UndeterminableZeroInt) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (and-int/lit v1 v1 -2)  ;; only the lowest bit is 0
+     (and-int v0 v0 v1)  ; lowest bit v0 must be 0 now, but can't infer v0 != 0
+
+     (if-nez v0 :if-true-label)
+     (const v1 1)
+
+     (:if-true-label)
+     (const v0 2)
+
+     (return-void)
+    )
+)");
+  do_const_prop(code.get());
+  EXPECT_THAT(
+      assembler::to_string(code.get()),
+      // if branch is not optimized out.
+      ::testing::ContainsRegex("\\(if-nez v0 :.*\\)\\s*\\(const v1 1\\)"));
+}
+
 class ConstantBitwiseOrTest
     : public ConstantBitwiseTest,
       public ::testing::WithParamInterface<ConstantBitwiseTest::Case> {};
@@ -422,6 +486,42 @@ TEST_F(ConstantBitwiseOrTest, NezLit) {
     (
      (load-param v0)
      (or-int/lit v0 v0 8)
+
+     (:if-true-label)
+     (const v0 2)
+
+     (return-void)
+    )
+)");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(ConstantBitwiseOrTest, NezInt) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (or-int/lit v1 v1 8)  ; 4th lowest bit of v1 must be 1
+     (or-int v0 v0 v1)  ; 4th lowest bit of v0 must be 1
+
+     (if-nez v0 :if-true-label)
+     (const v1 1)
+
+     (:if-true-label)
+     (const v0 2)
+
+     (return-void)
+    )
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (or-int/lit v1 v1 8)
+     (or-int v0 v0 v1)
 
      (:if-true-label)
      (const v0 2)
@@ -469,6 +569,46 @@ TEST_P(ConstantBitwiseOrTest, DeterminableOneLit) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
+TEST_P(ConstantBitwiseOrTest, DeterminableOneInt) {
+  const auto& param = GetParam();
+
+  auto code = assembler::ircode_from_string(param.format_code(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (or-int/lit v1 v1 {operand})  ; Some bits of v1 must be 1 now
+     (or-int v0 v0 v1)  ; Some bits of v0 must be 1 now
+
+     (const v1 {comparee})
+     (if-ne v0 v1 :if-true-label)
+     (const v1 1)
+
+     (:if-true-label)
+     (const v0 2)
+
+     (return-void)
+    )
+)"));
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(param.format_code(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (or-int/lit v1 v1 {operand})
+     (or-int v0 v0 v1)
+
+     (const v1 {comparee})
+     (:if-true-label)
+     (const v0 2)
+
+     (return-void)
+    )
+)"));
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
 INSTANTIATE_TEST_CASE_P(
     ConstantBitwiseOrDeterminableOneTests,
     ConstantBitwiseOrTest,
@@ -505,6 +645,31 @@ TEST_F(ConstantBitwiseOrTest, UndeterminableOneLit) {
       assembler::to_string(code.get()),
       // if branch is not optimized out.
       ::testing::ContainsRegex("\\(if-ne v0 v1 :.*\\)\\s*\\(const v1 1\\)"));
+}
+
+TEST_F(ConstantBitwiseOrTest, UndeterminableOneInt) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (or-int/lit v1 v1 1)  ; lowest bit v1 must be 1 now
+     (or-int v0 v0 v1)  ; lowest bit v0 must be 1 now, but can't infer v0 != 1
+
+     (const v3 1)
+     (if-ne v0 v3 :if-true-label)
+     (const v1 1)
+
+     (:if-true-label)
+     (const v0 2)
+
+     (return-void)
+    )
+)");
+  do_const_prop(code.get());
+  EXPECT_THAT(
+      assembler::to_string(code.get()),
+      // if branch is not optimized out.
+      ::testing::ContainsRegex("\\(if-ne v0 v3 :.*\\)\\s*\\(const v1 1\\)"));
 }
 
 TEST_F(ConstantBitwiseTest, DeterminableBitsWithXorLit) {
@@ -568,6 +733,73 @@ TEST_F(ConstantBitwiseTest, DeterminableBitsWithXorLit) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
+TEST_F(ConstantBitwiseTest, DeterminableBitsWithXorInt) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (and-int/lit v0 v0 -4)  ;; 1st and 2nd lowest bits of v0 must be 0
+     (or-int/lit v0 v0 12)  ;; 3rd and 4th lowest bits of v0 must be 1
+     (and-int/lit v1 v1 -11)  ;; 2nd and 4th lowest bits of v1 must be 0
+     (or-int/lit v1 v1 5)  ;; 1st and 3nd lowest bits of v1 must be 1
+     (xor-int v0 v0 v1)  ;; Lowest 4 bits: 1001
+
+     ;; Test each for the lowest 4 bits
+
+     (const v1 8)  ;; binary 0...01000
+     (if-ne v0 v1 :bit-0)
+     (const v2 1)
+     (:bit-0)
+
+     (const v1 11)  ;; binary 0...01011
+     (if-ne v0 v1 :bit-1)
+     (const v3 1)
+     (:bit-1)
+
+     (const v1 13)  ;; binary 0...01101
+     (if-ne v0 v1 :bit-2)
+     (const v4 1)
+     (:bit-2)
+
+     (const v1 1)  ;; binary 0...00001
+     (if-ne v0 v1 :bit-3)
+     (const v5 1)
+     (:bit-3)
+
+     (return-void)
+    )
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (and-int/lit v0 v0 -4)
+     (or-int/lit v0 v0 12)
+     (and-int/lit v1 v1 -11)
+     (or-int/lit v1 v1 5)
+     (xor-int v0 v0 v1)
+
+     (const v1 8)
+     (:bit-0)
+
+     (const v1 11)
+     (:bit-1)
+
+     (const v1 13)
+     (:bit-2)
+
+     (const v1 1)
+     (:bit-3)
+
+     (return-void)
+    )
+)");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
 TEST_F(ConstantBitwiseTest, UndeterminableBitsWithXorLit) {
   auto code = assembler::ircode_from_string(R"(
     (
@@ -575,6 +807,33 @@ TEST_F(ConstantBitwiseTest, UndeterminableBitsWithXorLit) {
      (and-int/lit v0 v0 -4)  ;; 1st and 2nd lowest bits of v0 must be 0
      (or-int/lit v0 v0 12)  ;; 3rd and 4th lowest bits of v0 must be 1
      (xor-int/lit v0 v0 5)  ;; Lowest 4 bits: 1001
+
+     (const v1 9)  ;; binary 0...01001
+     (if-ne v0 v1 :if-true-label)
+     (const v2 1)
+     (:if-true-label)
+
+     (return-void)
+    )
+)");
+  do_const_prop(code.get());
+
+  EXPECT_THAT(
+      assembler::to_string(code.get()),
+      // if branch is not optimized out.
+      ::testing::ContainsRegex("\\(if-ne v0 v1 :.*\\)\\s*\\(const v2 1\\)"));
+}
+
+TEST_F(ConstantBitwiseTest, UndeterminableBitsWithXorInt) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (and-int/lit v0 v0 -4)  ;; 1st and 2nd lowest bits of v0 must be 0
+     (or-int/lit v0 v0 12)  ;; 3rd and 4th lowest bits of v0 must be 1
+     (and-int/lit v1 v1 -11)  ;; 2nd and 4th lowest bits of v1 must be 0
+     (or-int/lit v1 v1 5)  ;; 1st and 3nd lowest bits of v1 must be 1
+     (xor-int v0 v0 v1)  ;; Lowest 4 bits: 1001
 
      (const v1 9)  ;; binary 0...01001
      (if-ne v0 v1 :if-true-label)
