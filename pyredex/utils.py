@@ -418,7 +418,7 @@ def remove_comments(lines: typing.Iterable[str]) -> str:
 
 
 def argparse_yes_no_flag(
-    parser: argparse.ArgumentParser,
+    parser: typing.Union[argparse.ArgumentParser, argparse._ArgumentGroup],
     flag_name: str,
     on_prefix: str = "",
     off_prefix: str = "no-",
