@@ -590,6 +590,12 @@ def validate_args(args: argparse.Namespace) -> None:
         # This will raise errors if necessary.
         extract_signing_args(args)
 
+    if not args.unpack_only:
+        if not args.redex_binary:
+            raise argparse.ArgumentTypeError("Requires --redex-binary argument")
+        if not args.config:
+            raise argparse.ArgumentTypeError("Requires --config argument")
+
 
 def arg_parser() -> argparse.ArgumentParser:
     description = """
@@ -618,9 +624,9 @@ Given an APK, produce a better APK!
         help="Path to dependent library jar file",
     )
 
-    parser.add_argument("--redex-binary", required=True, help="Path to redex binary")
+    parser.add_argument("--redex-binary", help="Path to redex binary")
 
-    parser.add_argument("-c", "--config", required=True, help="Configuration file")
+    parser.add_argument("-c", "--config", help="Configuration file")
 
     signing_group = parser.add_argument_group("Signing arguments")
     argparse_yes_no_flag(signing_group, "sign", help="Sign the apk after optimizing it")
