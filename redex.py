@@ -811,7 +811,7 @@ Given an APK, produce a better APK!
 
     parser.add_argument(
         "--log-level",
-        default="warning",
+        default="info",
         help="Specify the python logging level",
     )
     parser.add_argument(
