@@ -219,9 +219,9 @@ PartialCode get_partially_inlined_code(const DexMethod* method,
   }
   auto* fallback_block = partial_cfg.create_block();
   // Insert magic position that the cfg-inliner recognizes
-  auto new_pos =
-      std::make_unique<DexPosition>(DexString::make_string("RedexGenerated"),
-                                    cfg::get_partial_inline_source(), 0);
+  auto method_str = DexString::make_string(show_deobfuscated(method));
+  auto new_pos = std::make_unique<DexPosition>(
+      method_str, cfg::get_partial_inline_source(), 0);
   partial_cfg.insert_before(fallback_block, fallback_block->begin(),
                             std::move(new_pos));
   // Insert cold source-block
