@@ -79,13 +79,13 @@ void PrintKotlinStats::run_pass(DexStoresVector& stores,
                                 ConfigFiles&,
                                 PassManager& mgr) {
   Scope scope = build_class_scope(stores);
-  std::unordered_set<DexType*> delegate_types{
+  UnorderedSet<DexType*> delegate_types{
       DexType::get_type(KPROPERTY_ARRAY),
       DexType::get_type(R_PROP_SIGNATURE),
       DexType::get_type(W_PROP_SIGNATURE),
       DexType::get_type(RW_PROP_SIGNATURE),
   };
-  std::unordered_set<DexType*> lazy_delegate_types{
+  UnorderedSet<DexType*> lazy_delegate_types{
       DexType::get_type(LAZY_SIGNATURE),
   };
 
