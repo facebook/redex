@@ -239,7 +239,6 @@ libredex_la_SOURCES = \
 	libredex/TypeUtil.cpp \
 	libredex/UninitializedObjects.cpp \
 	libredex/UnknownVirtuals.cpp \
-	libredex/Vinfo.cpp \
 	libredex/VirtualScope.cpp \
 	libredex/Warning.cpp \
 	libredex/WorkQueue.cpp \
