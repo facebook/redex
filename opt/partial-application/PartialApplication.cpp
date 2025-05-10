@@ -391,9 +391,8 @@ class CalleeInvocationSelector {
   // we need to efficiently track what all the underlying call-site summaries
   // were. We do that via a "disjoint_sets" data structure what all the
   // underlying call-site summaries are.
-  using Rank = std::unordered_map<const CallSiteSummary*, size_t>;
-  using Parent =
-      std::unordered_map<const CallSiteSummary*, const CallSiteSummary*>;
+  using Rank = UnorderedMap<const CallSiteSummary*, size_t>;
+  using Parent = UnorderedMap<const CallSiteSummary*, const CallSiteSummary*>;
   using RankPMap = boost::associative_property_map<Rank>;
   using ParentPMap = boost::associative_property_map<Parent>;
   using CallSiteSummarySets = boost::disjoint_sets<RankPMap, ParentPMap>;
