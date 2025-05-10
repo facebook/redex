@@ -12,7 +12,6 @@
 #include "IPConstantPropagation.h"
 #include "RedexTest.h"
 #include "Resolver.h"
-#include "RewriteKotlinSingletonInstance.h"
 #include "Show.h"
 
 class KotlinDefaultArgsTest : public RedexIntegrationTest {
