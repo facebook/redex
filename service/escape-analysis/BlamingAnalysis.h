@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <unordered_set>
-
 #include <sparta/IntervalDomain.h>
 #include <sparta/LiftedDomain.h>
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>

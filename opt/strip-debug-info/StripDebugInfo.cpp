@@ -8,7 +8,6 @@
 #include "StripDebugInfo.h"
 
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include "DexClass.h"

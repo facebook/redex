@@ -14,7 +14,6 @@
 #include "Show.h"
 #include "Trace.h"
 #include "TypeUtil.h"
-#include <unordered_set>
 
 using namespace cfg;
 using namespace object_inliner_plugin;

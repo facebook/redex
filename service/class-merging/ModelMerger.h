@@ -8,8 +8,8 @@
 #pragma once
 
 #include <boost/optional.hpp>
-#include <unordered_set>
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "Model.h"
 #include "Trace.h"

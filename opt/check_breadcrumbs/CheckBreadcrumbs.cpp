@@ -11,7 +11,6 @@
 #include <fstream>
 #include <iosfwd>
 #include <sstream>
-#include <unordered_set>
 
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
