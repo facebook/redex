@@ -1267,20 +1267,19 @@ void PassManager::init_property_interactions(ConfigFiles& conf) {
     Pass* pass = m_activated_passes[i];
     auto* pass_info = &m_pass_info[i];
     auto m = pass->get_property_interactions();
-    for (auto it = m.begin(); it != m.end();) {
-      auto&& [name, property_interaction] = *it;
+    unordered_erase_if(m, [&](auto& p) {
+      auto&& [name, property_interaction] = p;
 
       if (m_properties_manager != nullptr &&
           !m_properties_manager->property_is_enabled(name)) {
-        it = m.erase(it);
-        continue;
+        return true;
       }
 
       always_assert_log(property_interaction.is_valid(),
                         "%s has an invalid property interaction for %s",
                         pass->name().c_str(), redex_properties::get_name(name));
-      ++it;
-    }
+      return false;
+    });
     pass_info->property_interactions = std::move(m);
   }
 }

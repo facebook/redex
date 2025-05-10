@@ -82,7 +82,7 @@ UnorderedSet<Property> Manager::get_final() const {
 UnorderedSet<Property> Manager::get_required(
     const PropertyInteractions& interactions) const {
   UnorderedSet<Property> res;
-  for (const auto& [property, interaction] : interactions) {
+  for (const auto& [property, interaction] : UnorderedIterable(interactions)) {
     if (interaction.requires_) {
       res.insert(property);
     }
@@ -108,7 +108,7 @@ const UnorderedSet<Property>& Manager::apply(
     const auto& interaction = it->second;
     return !interaction.preserves;
   });
-  for (const auto& [property, interaction] : interactions) {
+  for (const auto& [property, interaction] : UnorderedIterable(interactions)) {
     if (interaction.establishes) {
       m_established.insert(property);
     }
@@ -163,7 +163,8 @@ std::optional<std::string> Manager::verify_pass_interactions(
     oss << pass_name << "\n";
     m.apply(interactions);
     log_established_properties("establishes");
-    for (const auto& [property, interaction] : interactions) {
+    for (const auto& [property, interaction] :
+         UnorderedIterable(interactions)) {
       if (interaction.requires_finally) {
         final_properties.insert(property);
       }
