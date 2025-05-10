@@ -8,7 +8,6 @@
 #include "FullyQualifyLayouts.h"
 
 #include <cinttypes>
-#include <unordered_map>
 
 #include "ConfigFiles.h"
 #include "DeterministicContainers.h"
@@ -37,7 +36,7 @@ void FullyQualifyLayouts::run_pass(DexStoresVector& /* unused */,
   auto res_table = resources->load_res_table();
 
   auto type_ids = res_table->get_types_by_name_prefixes({"layout"});
-  std::unordered_set<std::string> all_files;
+  UnorderedSet<std::string> all_files;
   for (const auto& id : res_table->sorted_res_ids) {
     uint32_t type_id = id & TYPE_MASK_BIT;
     if (type_ids.count(type_id) > 0) {
