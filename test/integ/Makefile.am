@@ -36,6 +36,7 @@ check_PROGRAMS = \
     instruction_sequence_outliner_test \
     iodi_test \
     ip_reflection_analysis_test \
+    kotlin_default_args_test \
     max_depth_test \
     method_override_graph_test \
     monotonic_fixpoint_test \
@@ -81,6 +82,7 @@ TESTS = \
     final_inline_analysis_test \
     iodi_test \
     ip_reflection_analysis_test \
+    kotlin_default_args_test \
     max_depth_test \
     method_override_graph_test \
     peephole_test \
@@ -144,6 +146,9 @@ EXTRA_iodi_test_DEPENDENCIES = iodi_test-class.dex
 
 ip_reflection_analysis_test_SOURCES = IPReflectionAnalysisTest.cpp
 EXTRA_ip_reflection_analysis_test_DEPENDENCIES = ip_reflection_analysis_test-class.dex
+
+kotlin_default_args_test_SOURCES = KotlinDefaultArgsTest.cpp
+EXTRA_kotlin_default_args_test_DEPENDENCIES = kotlin_default_args_test-class.dex
 
 max_depth_test_SOURCES = MaxDepthAnalysisTest.cpp
 EXTRA_max_depth_test_DEPENDENCIES = max_depth_test-class.dex
@@ -211,6 +216,14 @@ define create_jar
 	jar cf $@ -C $@.tmp .
 endef
 
+kotlinc_source_target = -jvm-target 9
+
+define create_jar_from_kotlin
+	mkdir -p $@.tmp
+	$(KOTLINC) $(kotlinc_source_target) -cp "$(srcdir)" -d $@.tmp $^
+	jar cf $@ -C $@.tmp .
+endef
+
 SUFFIXES = .dex
 
 .jar.dex:
@@ -266,6 +279,9 @@ iodi_test-class.jar: IODI.java
 
 ip_reflection_analysis_test-class.jar: IPReflectionAnalysisTest.java
 	$(create_jar)
+
+kotlin_default_args_test-class.jar: KotlinDefaultArgs.kt
+	$(create_jar_from_kotlin)
 
 max_depth_test-class.jar: MaxDepthAnalysisTest.java
 	$(create_jar)

@@ -34,3 +34,4 @@ COMMON_MOCK_TEST_LIBS = \
 
 # By default use PATH to find tools.
 JAVAC = javac
+KOTLINC = kotlinc
