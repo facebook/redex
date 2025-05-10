@@ -7,6 +7,7 @@
 
 #include "TypeAnalysisTransform.h"
 
+#include "DeterministicContainers.h"
 #include "DexInstruction.h"
 #include "IRInstruction.h"
 #include "KotlinNullCheckMethods.h"
@@ -40,16 +41,17 @@ struct TestZeroNullnessResults {
  * later.
  * TODO: cover other branch type for constant values.
  */
-static const std::
-    unordered_map<IROpcode, TestZeroNullnessResults, boost::hash<IROpcode>>
-        test_zero_results{
-            {OPCODE_IF_EQZ, {ALWAYS_TAKEN, NEVER_TAKEN}},
-            {OPCODE_IF_NEZ, {NEVER_TAKEN, ALWAYS_TAKEN}},
-            {OPCODE_IF_LTZ, {UNKNOWN, UNKNOWN}},
-            {OPCODE_IF_GTZ, {UNKNOWN, UNKNOWN}},
-            {OPCODE_IF_LEZ, {UNKNOWN, UNKNOWN}},
-            {OPCODE_IF_GEZ, {UNKNOWN, UNKNOWN}},
-        };
+static const UnorderedMap<IROpcode,
+                          TestZeroNullnessResults,
+                          boost::hash<IROpcode>>
+    test_zero_results{
+        {OPCODE_IF_EQZ, {ALWAYS_TAKEN, NEVER_TAKEN}},
+        {OPCODE_IF_NEZ, {NEVER_TAKEN, ALWAYS_TAKEN}},
+        {OPCODE_IF_LTZ, {UNKNOWN, UNKNOWN}},
+        {OPCODE_IF_GTZ, {UNKNOWN, UNKNOWN}},
+        {OPCODE_IF_LEZ, {UNKNOWN, UNKNOWN}},
+        {OPCODE_IF_GEZ, {UNKNOWN, UNKNOWN}},
+    };
 
 BranchResult evaluate_branch(IROpcode op, Nullness operand_nullness) {
   always_assert(operand_nullness != NN_BOTTOM);
