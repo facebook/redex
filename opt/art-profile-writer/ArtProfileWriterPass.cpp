@@ -264,7 +264,6 @@ void never_compile(
     const Scope& scope,
     const baseline_profiles::BaselineProfileConfig& baseline_profile_config,
     const method_profiles::MethodProfiles& method_profiles,
-    const std::vector<std::string>& interactions,
     PassManager& mgr,
     int64_t never_compile_callcount_threshold,
     int64_t never_compile_perf_threshold,
@@ -305,7 +304,7 @@ void never_compile(
       return;
     }
     double call_count = 0;
-    for (auto& interaction_id : interactions) {
+    for (auto&& [interaction_id, _] : baseline_profile_config.interactions) {
       auto method_stats =
           method_profiles.get_method_stat(interaction_id, method);
       if (!method_stats) {
@@ -589,9 +588,8 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       m_never_compile_perf_threshold > -1 ||
       m_never_compile_called_coverage_threshold > -1) {
     never_compile(
-        scope, conf.get_default_baseline_profile_config(), method_profiles,
-        m_perf_config.interactions, mgr, m_never_compile_callcount_threshold,
-        m_never_compile_perf_threshold,
+        scope, conf.get_default_baseline_profile_config(), method_profiles, mgr,
+        m_never_compile_callcount_threshold, m_never_compile_perf_threshold,
         m_never_compile_called_coverage_threshold,
         m_never_compile_excluded_interaction_pattern,
         m_never_compile_excluded_appear100_threshold,
