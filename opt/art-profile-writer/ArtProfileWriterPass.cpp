@@ -260,6 +260,109 @@ void never_inline(bool attach_annotations,
                   callees_annotation_attached.load());
 }
 
+bool never_compile_callcount_threshold_met(
+    double call_count, int64_t never_compile_callcount_threshold) {
+  return never_compile_callcount_threshold > -1 &&
+         call_count <= never_compile_callcount_threshold;
+}
+
+bool never_compile_perf_threshold_met(DexMethod* method,
+                                      int64_t never_compile_perf_threshold) {
+  if (never_compile_perf_threshold <= -1) {
+    return false;
+  }
+
+  int64_t sparse_switch_cases = 0;
+  int64_t interpretation_cost = 20; // overhead of going into/out of interpreter
+  for (auto* block : method->get_code()->cfg().blocks()) {
+    if (is_cold(block)) {
+      continue;
+    }
+    for (auto& mie : InstructionIterable(block)) {
+      auto* insn = mie.insn;
+      if (opcode::is_an_internal(insn->opcode())) {
+        continue;
+      }
+      // The interpreter uses expensive helper routines for a number of
+      // instructions, which lead to an update of the hotness for JIT
+      // purposes:
+      // https://android.googlesource.com/platform/art/+/refs/heads/main/runtime/interpreter/mterp/nterp.cc
+      // We assume that those instructions are more expensive than others
+      // by an order of magnitude.
+      interpretation_cost +=
+          (insn->has_field() || insn->has_method() || insn->has_type() ||
+           insn->has_string() || opcode::is_a_new(insn->opcode()))
+              ? 10
+              : 1;
+      if (opcode::is_switch(insn->opcode()) && is_sparse(block)) {
+        sparse_switch_cases += block->succs().size();
+      }
+    }
+  }
+
+  if (sparse_switch_cases == 0) {
+    return false;
+  }
+
+  // We want to compare
+  //    interpretation_cost / sparse_switch_cases
+  //                            (the average cost of code per switch case)
+  // with
+  //    never_compile_perf_threshold * sparse_switch_cases
+  //                                     (cost of executing sparse switch)
+  // to find a case where the cost of the executing sparse switch
+  // excessively dominates the cost of code per switch case, which the
+  // following achieves.
+  if (interpretation_cost / std::pow(sparse_switch_cases, 2) >
+      never_compile_perf_threshold) {
+    return false;
+  }
+
+  TRACE(APW, 5, "[%s] is within perf threshold: %d / sqr(%d) > %d\n%s",
+        method->get_fully_deobfuscated_name().c_str(),
+        (int32_t)interpretation_cost, (int32_t)sparse_switch_cases,
+        (int32_t)never_compile_perf_threshold, SHOW(method->get_code()->cfg()));
+  return true;
+}
+
+bool never_compile_called_coverage_threshold_met(
+    DexMethod* method,
+    double call_count,
+    int64_t never_compile_called_coverage_threshold) {
+  if (never_compile_called_coverage_threshold <= -1) {
+    return false;
+  }
+
+  uint32_t covered_code_units = 0;
+  uint32_t total_code_units = 0;
+  for (auto* block : method->get_code()->cfg().blocks()) {
+    auto ecu = block->estimate_code_units();
+    total_code_units += ecu;
+    if (!is_cold(block)) {
+      covered_code_units += ecu;
+    }
+  }
+  always_assert(total_code_units > 0);
+  if (total_code_units < 24) {
+    // Don't bother with small methods; adding annotation also creates
+    // overhead. The chosen value is a bit larger than the 14-code units
+    // inlining threshold of the AOT compiler.
+    return false;
+  }
+  auto effective_call_count = std::max(1.0, call_count);
+  if (effective_call_count * covered_code_units * 100 / total_code_units >=
+      never_compile_called_coverage_threshold) {
+    return false;
+  }
+  TRACE(APW, 5,
+        "[%s] is within coverage threshold: %f %u / %u > %d percent\n%s",
+        method->get_fully_deobfuscated_name().c_str(), effective_call_count,
+        covered_code_units, total_code_units,
+        (int32_t)never_compile_called_coverage_threshold,
+        SHOW(method->get_code()->cfg()));
+  return true;
+}
+
 void never_compile(
     const Scope& scope,
     const baseline_profiles::BaselineProfileConfig& baseline_profile_config,
@@ -291,6 +394,9 @@ void never_compile(
   InsertOnlyConcurrentMap<DexMethod*, uint32_t> never_compile_methods;
   std::atomic<size_t> methods_already_never_compile = 0;
   std::atomic<size_t> methods_annotation_attached = 0;
+  std::atomic<size_t> never_compile_callcount_threshold_mets{0};
+  std::atomic<size_t> never_compile_perf_threshold_mets{0};
+  std::atomic<size_t> never_compile_called_coverage_threshold_mets{0};
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     if (method::is_clinit(method)) {
       return;
@@ -317,96 +423,33 @@ void never_compile(
       }
       call_count = std::max(call_count, method_stats->call_count);
     }
-    if (never_compile_callcount_threshold > -1 &&
-        call_count > never_compile_callcount_threshold) {
-      return;
-    }
+
     loop_impl::LoopInfo loop_info(code.cfg());
     if (loop_info.num_loops() > 0) {
       return;
     }
 
-    if (never_compile_perf_threshold > -1) {
-      int64_t sparse_switch_cases = 0;
-      int64_t interpretation_cost =
-          20; // overhead of going into/out of interpreter
-      for (auto* block : code.cfg().blocks()) {
-        if (is_cold(block)) {
-          continue;
-        }
-        for (auto& mie : InstructionIterable(block)) {
-          auto* insn = mie.insn;
-          if (opcode::is_an_internal(insn->opcode())) {
-            continue;
-          }
-          // The interpreter uses expensive helper routines for a number of
-          // instructions, which lead to an update of the hotness for JIT
-          // purposes:
-          // https://android.googlesource.com/platform/art/+/refs/heads/main/runtime/interpreter/mterp/nterp.cc
-          // We assume that those instructions are more expensive than others
-          // by an order of magnitude.
-          interpretation_cost +=
-              (insn->has_field() || insn->has_method() || insn->has_type() ||
-               insn->has_string() || opcode::is_a_new(insn->opcode()))
-                  ? 10
-                  : 1;
-          if (opcode::is_switch(insn->opcode()) && is_sparse(block)) {
-            sparse_switch_cases += block->succs().size();
-          }
-        }
-      }
-
-      if (sparse_switch_cases == 0) {
-        return;
-      }
-
-      // We want to compare
-      //    interpretation_cost / sparse_switch_cases
-      //                            (the average cost of code per switch case)
-      // with
-      //    never_compile_perf_threshold * sparse_switch_cases
-      //                                     (cost of executing sparse switch)
-      // to find a case where the cost of the executing sparse switch
-      // excessively dominates the cost of code per switch case, which the
-      // following achieves.
-      if (interpretation_cost / std::pow(sparse_switch_cases, 2) >
-          never_compile_perf_threshold) {
-        return;
-      }
-
-      TRACE(APW, 5, "[%s] is within perf threshold: %d / sqr(%d) > %d\n%s",
-            method->get_fully_deobfuscated_name().c_str(),
-            (int32_t)interpretation_cost, (int32_t)sparse_switch_cases,
-            (int32_t)never_compile_perf_threshold, SHOW(code.cfg()));
+    bool threshold_met = false;
+    if (never_compile_callcount_threshold_met(
+            call_count, never_compile_callcount_threshold)) {
+      never_compile_callcount_threshold_mets.fetch_add(1);
+      threshold_met = true;
     }
 
-    if (never_compile_called_coverage_threshold > -1) {
-      uint32_t covered_code_units = 0;
-      uint32_t total_code_units = 0;
-      for (auto* block : code.cfg().blocks()) {
-        auto ecu = block->estimate_code_units();
-        total_code_units += ecu;
-        if (!is_cold(block)) {
-          covered_code_units += ecu;
-        }
-      }
-      always_assert(total_code_units > 0);
-      if (total_code_units < 24) {
-        // Don't bother with small methods; adding annotation also creates
-        // overhead. The chosen value is a bit larger than the 14-code units
-        // inlining threshold of the AOT compiler.
-        return;
-      }
-      auto effective_call_count = std::max(1.0, call_count);
-      if (effective_call_count * covered_code_units * 100 / total_code_units >=
-          never_compile_called_coverage_threshold) {
-        return;
-      }
-      TRACE(APW, 5,
-            "[%s] is within coverage threshold: %f %u / %u > %d percent\n%s",
-            method->get_fully_deobfuscated_name().c_str(), effective_call_count,
-            covered_code_units, total_code_units,
-            (int32_t)never_compile_called_coverage_threshold, SHOW(code.cfg()));
+    if (never_compile_perf_threshold_met(method,
+                                         never_compile_perf_threshold)) {
+      never_compile_perf_threshold_mets.fetch_add(1);
+      threshold_met = true;
+    }
+
+    if (never_compile_called_coverage_threshold_met(
+            method, call_count, never_compile_called_coverage_threshold)) {
+      never_compile_called_coverage_threshold_mets.fetch_add(1);
+      threshold_met = true;
+    }
+
+    if (!threshold_met) {
+      return;
     }
 
     never_compile_methods.emplace(method,
@@ -438,6 +481,12 @@ void never_compile(
                   methods_already_never_compile.load());
   mgr.incr_metric("methods_annotation_attached",
                   methods_annotation_attached.load());
+  mgr.incr_metric("never_compile_callcount",
+                  never_compile_callcount_threshold_mets.load());
+  mgr.incr_metric("never_compile_perf",
+                  never_compile_perf_threshold_mets.load());
+  mgr.incr_metric("never_compile_called_coverage",
+                  never_compile_called_coverage_threshold_mets.load());
   auto ordered_never_compile_methods = unordered_to_ordered(
       never_compile_methods, [](const auto& a, const auto& b) {
         if (a.second != b.second) {
