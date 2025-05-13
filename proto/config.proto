@@ -292,8 +292,10 @@ message SplitDimension {
     SCREEN_DENSITY = 2;
     LANGUAGE = 3;
     TEXTURE_COMPRESSION_FORMAT = 4;
-    DEVICE_TIER = 6;
+    DEVICE_TIER = 6 [ deprecated = true ];
     COUNTRY_SET = 7;
+    AI_MODEL_VERSION = 8;
+    DEVICE_GROUP = 9;
   }
   Value value = 1;
 
