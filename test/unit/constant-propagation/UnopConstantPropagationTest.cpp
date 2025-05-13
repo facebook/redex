@@ -348,16 +348,16 @@ TEST_F(ConstantPropagationTest, UnopIntToFloatFolding) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (const v0 2147483647)
-      (const v1 1325400064) ; float 2147483647.0 
+      (const v1 1325400064) ; float 2147483647.0
 
       (const v2 16777216)
-      (const v3 1266679808) ; float 16777216.0  
+      (const v3 1266679808) ; float 16777216.0
 
       (const v4 -2147483648)
       (const v5 -822083584) ; float -2147483648.0
 
       (const v6 -16777216)
-      (const v7 -880803840) ; float -16777216.0 
+      (const v7 -880803840) ; float -16777216.0
 
       (return v1)
     )
@@ -432,7 +432,7 @@ TEST_F(ConstantPropagationTest, UnopLongToFloatFolding) {
       (const v13 1325400064) ; float 2147483648f
 
       (const-wide v14 -2147483648)
-      (const v15 -822083584) ; float -2147483648f 
+      (const v15 -822083584) ; float -2147483648f
 
       (const-wide v16 -2147483647)
       (const v17 -822083584) ; float -2147483648f
@@ -441,7 +441,7 @@ TEST_F(ConstantPropagationTest, UnopLongToFloatFolding) {
       (const v19 1325400064) ; float 2147483648f
 
       (const-wide v20 -51)
-      (const v21 -1035206656) ; float -51f 
+      (const v21 -1035206656) ; float -51f
 
       (return v1)
     )
@@ -488,7 +488,7 @@ TEST_F(ConstantPropagationTest, UnopDoubleToLongFolding) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-      (const v0 4638375897931557372) ; float 123.286f 
+      (const v0 4638375897931557372) ; float 123.286f
       (const-wide v1 123)
 
       (return v1)
@@ -525,14 +525,14 @@ TEST_F(ConstantPropagationTest, UnopIntToDoubleFolding) {
       (const-wide v1 -4476578029606273024) ; double -2147483648f
 
       (const v2 16777216)
-      (const-wide v3 4715268809856909312) ; double 16777216f 
+      (const-wide v3 4715268809856909312) ; double 16777216f
 
       (const v4 -16777216)
       (const-wide v5 -4508103226997866496) ; double -16777216f
 
       (const v6 2147483647)
       (const-wide v7 4746794007244308480) ; double  2147483647f
-      
+
       (return v1)
     )
     )");
@@ -567,7 +567,7 @@ TEST_F(ConstantPropagationTest, UnopLongToDoubleFolding) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (const-wide v0 -9223372036854775808)
-      (const-wide v1 -4332462841530417152) ; double -9223372036854775808f 
+      (const-wide v1 -4332462841530417152) ; double -9223372036854775808f
 
       (const-wide v2 -9223372036854775807)
       (const-wide v3 -4332462841530417152) ; double -9223372036854775808f
@@ -597,7 +597,7 @@ TEST_F(ConstantPropagationTest, UnopDoubleToFloatFolding) {
       (const-wide v2 -4620693219483568747) ; float -0.4999999f
       (double-to-float v3 v2)
 
-      (const-wide v4 -4620693217682128896) ; float -0.5f 
+      (const-wide v4 -4620693217682128896) ; float -0.5f
       (double-to-float v5 v4)
 
       (const-wide v6 4631135798580605878) ; float 42.199f
@@ -616,10 +616,10 @@ TEST_F(ConstantPropagationTest, UnopDoubleToFloatFolding) {
     (
 
       (const-wide v0 4607182418800017408) ; double 1.0000000000000001f
-      (const v1 1065353216) ; float 1.0000000000000001f 
+      (const v1 1065353216) ; float 1.0000000000000001f
 
       (const-wide v2 -4620693219483568747) ; double -0.4999999f
-      (const v3 -1090519043) ; float -0.4999999f 
+      (const v3 -1090519043) ; float -0.4999999f
 
       (const-wide v4 -4620693217682128896) ; double -0.5f
       (const v5 -1090519040) ; float -0.5f
@@ -628,7 +628,7 @@ TEST_F(ConstantPropagationTest, UnopDoubleToFloatFolding) {
       (const v7 1109969863) ; float 42.199f
 
       (const-wide v8 -4592236238274169930) ; double -42.199f
-      (const v9 -1037513785) ; float -42.199f 
+      (const v9 -1037513785) ; float -42.199f
 
 
       (return v1)
@@ -667,6 +667,107 @@ TEST_F(ConstantPropagationTest, UnopFloatToDoubleFolding) {
       (const v8 -1090519043) ; float -0.4999999f
       (const-wide v9 -4620693219292741632) ; double -0.4999999f
       (return v1)
+    )
+    )");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(ConstantPropagationTest, UnopNotIntFlipsBits) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (and-int/lit v0 v0 -3)  ; second lowest bit is zero
+      (not-int v0 v0)  ; second lowest bit is one
+      (const v2 4)
+      (if-ne v0 v2 :if-true-label-first)
+      (const v4 1)
+      (:if-true-label-first)
+
+      (or-int/lit v1 v1 1)  ; lowest bit is one
+      (not-int v1 v1)  ; lowest bit is zero
+      (const v3 3)
+      (if-ne v1 v3 :if-true-label-second)
+      (const v5 10)
+      (:if-true-label-second)
+
+      (return-void)
+    )
+   )");
+  do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
+                cp::Transform::Config());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (and-int/lit v0 v0 -3)
+      (not-int v0 v0)
+      (const v2 4)
+
+      (:if-true-label-first)
+
+      (or-int/lit v1 v1 1)  ; lowest bit is one
+      (not-int v1 v1)  ; lowest bit is zero
+      (const v3 3)
+      (:if-true-label-second)
+
+      (return-void)
+    )
+    )");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(ConstantPropagationTest, UnopNotLongFlipsBits) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-wide v0)
+      (load-param-wide v1)
+      (const-wide v2 -3)
+      (and-long v0 v0 v2)  ; second lowest bit is zero
+      (not-long v0 v0)  ; second lowest bit is one
+      (const-wide v2 4)
+      (cmp-long v2 v0 v2)
+      (if-nez v2 :if-true-label-first)
+      (const v4 1)
+      (:if-true-label-first)
+
+      (const-wide v2 1)
+      (or-long v1 v1 v2)  ; lowest bit is one
+      (not-long v1 v1)  ; lowest bit is zero
+      (const-wide v3 3)
+      (cmp-long v3 v1 v3)
+      (if-nez v3 :if-true-label-second)
+      (const v5 10)
+      (:if-true-label-second)
+
+      (return-void)
+    )
+   )");
+  do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
+                cp::Transform::Config());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-wide v0)
+      (load-param-wide v1)
+      (const-wide v2 -3)
+      (and-long v0 v0 v2)  ; second lowest bit is zero
+      (not-long v0 v0)  ; second lowest bit is one
+      (const-wide v2 4)
+      (cmp-long v2 v0 v2)
+      (:if-true-label-first)
+
+      (const-wide v2 1)
+      (or-long v1 v1 v2)  ; lowest bit is one
+      (not-long v1 v1)  ; lowest bit is zero
+      (const-wide v3 3)
+      (cmp-long v3 v1 v3)
+      (:if-true-label-second)
+
+      (return-void)
     )
     )");
 
