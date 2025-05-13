@@ -34,13 +34,13 @@ AC_CHECK_LIB([jsoncpp], [main], [], [AC_MSG_ERROR([Please install jsoncpp])])
 # check whether user enabled protobuf
 AC_ARG_ENABLE([protobuf],
     [AS_HELP_STRING([--enable-protobuf],
-        [Enable the protobuf for AppBundle build])],
-    [ AC_DEFINE(HAS_PROTOBUF) ]
+        [Enable the protobuf for AppBundle build])]
 )
 
 AS_IF([test "x$enable_protobuf" = "xyes"], [
     # user enabled protobuf
     # check if protobuf is installed
+    AC_DEFINE(HAS_PROTOBUF)
 
     # proto compiler
     # allow users to specify the path to protobuf compiler
