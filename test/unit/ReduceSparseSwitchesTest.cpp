@@ -720,6 +720,55 @@ TEST_F(ReduceSparseSwitchesTest, expand_add) {
   EXPECT_CODE_EQ(expected.get(), method->get_code());
 }
 
+TEST_F(ReduceSparseSwitchesTest, expand_add_overflowing) {
+  auto* method = assembler::method_from_string(std::string("") + R"(
+    (method (public static) ")LtestClass;.testMethod(:(I)V"
+      (
+        (load-param v0)
+
+        (switch v0 (:L0 :L1 :L2))
+        (return-void)
+
+        (:L0 1073741824)
+        (return-void)
+        (:L1 -2147483648)
+        (return-void)
+        (:L2 1073741825)
+        (return-void)
+      )
+    )
+  )");
+  method->get_code()->build_cfg();
+
+  auto stats = ReduceSparseSwitchesPass::expand_transformation(
+      method->get_code()->cfg());
+  method->get_code()->clear_cfg();
+
+  EXPECT_EQ(stats.expanded_transformations, 1);
+  EXPECT_EQ(stats.expanded_switch_cases, 3);
+
+  const auto& expected_str = R"(
+    (
+      (load-param v0)
+      (const v1 -2147483648)
+      (if-eq v0 v1 :L2)
+      (const v1 1073741824)
+      (if-eq v0 v1 :L1)
+      (add-int/lit v1 v1 1)
+      (if-eq v0 v1 :L0)
+      (return-void)
+      (:L0)
+      (return-void)
+      (:L1)
+      (return-void)
+      (:L2)
+      (return-void)
+    )
+  )";
+  auto expected = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected.get(), method->get_code());
+}
+
 TEST_F(ReduceSparseSwitchesTest, expand_not) {
   auto* method = assembler::method_from_string(std::string("") + R"(
     (method (public static) ")LtestClass;.testMethod(:(I)V"

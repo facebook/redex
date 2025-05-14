@@ -262,7 +262,7 @@ static void expand_switch(
     } else {
       IRInstruction* init_insn = [&, case_key_copy = case_key] {
         if (prev_case_key && !fits_16(case_key_copy)) {
-          int32_t diff = case_key_copy - *prev_case_key;
+          int32_t diff = (int64_t)case_key_copy - *prev_case_key;
           if (fits_16(diff)) {
             return (new IRInstruction(OPCODE_ADD_INT_LIT))
                 ->set_dest(tmp_reg)
@@ -629,7 +629,7 @@ ReduceSparseSwitchesPass::Stats ReduceSparseSwitchesPass::expand_transformation(
       if (case_key >= -8 && case_key < 8) {
         expanded_size += 3;
       } else if (!fits_16(case_key) || !prev_case_key ||
-                 !fits_16(case_key - *prev_case_key)) {
+                 !fits_16((int64_t)case_key - *prev_case_key)) {
         expanded_size += 5;
       } else {
         expanded_size += 4;
