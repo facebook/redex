@@ -709,7 +709,7 @@ bool PrimitiveAnalyzer::analyze_binop_lit(
   }
 
   if (op == OPCODE_AND_INT_LIT || op == OPCODE_OR_INT_LIT ||
-      op == OPCODE_XOR_INT_LIT) {
+      op == OPCODE_XOR_INT_LIT || op == OPCODE_USHR_INT_LIT) {
     TRACE(CONSTP, 5, "Attempting to set bits in %s with literal %d", SHOW(insn),
           lit);
     switch (op) {
@@ -737,8 +737,12 @@ bool PrimitiveAnalyzer::analyze_binop_lit(
           (determined_ones | new_determined_ones) & ~new_determined_zeros);
       break;
     }
+    case OPCODE_USHR_INT_LIT: {
+      scd.unsigned_right_shift_bits_int(lit);
+      break;
+    }
     default:
-      UNREACHABLE();
+      not_reached();
     }
 
     env->set(insn->dest(), scd);
@@ -859,9 +863,30 @@ bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
     env->set(insn->dest(), dest_scd);
     return true;
   }
-  default:
-    return analyze_default(insn, env);
+  case OPCODE_USHR_INT: {
+    if (!cst_right) {
+      break;
+    }
+
+    SignedConstantDomain dest_scd(scd_left);
+    dest_scd.unsigned_right_shift_bits_int(static_cast<int32_t>(*cst_right));
+    env->set(insn->dest(), dest_scd);
+    return true;
   }
+  case OPCODE_USHR_LONG: {
+    if (!cst_right) {
+      break;
+    }
+
+    SignedConstantDomain dest_scd(scd_left);
+    dest_scd.unsigned_right_shift_bits_long(static_cast<int32_t>(*cst_right));
+    env->set(insn->dest(), dest_scd);
+    return true;
+  }
+  default:
+    break;
+  }
+  return analyze_default(insn, env);
 }
 
 bool InjectionIdAnalyzer::analyze_injection_id(const IRInstruction* insn,

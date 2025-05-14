@@ -1188,6 +1188,203 @@ TEST_F(ConstantBitwiseTest, DeterminableBitJoinedFromConstants) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
+struct ConstantBitwiseShiftTestCase {
+  std::string name;
+  std::string shift_instruction;
+};
+
+class ConstantBitwiseUnsignedRightShiftTest
+    : public ConstantBitwiseTest,
+      public ::testing::WithParamInterface<ConstantBitwiseShiftTestCase> {};
+
+TEST_P(ConstantBitwiseUnsignedRightShiftTest,
+       DeterminableBitsAfterUnsignedRightShiftInt) {
+  const auto& param = GetParam();
+
+  auto code = assembler::ircode_from_string(
+      boost::replace_first_copy<std::string>(R"(
+    (
+     (load-param v0)
+     (and-int/lit v0 v0 -4)  ;; 1st and 2nd lowest bits of v0 must be 0
+     (or-int/lit v0 v0 12)  ;; 3rd and 4th lowest bits of v0 must be 1
+     {shift_instruction}  ;; Lowest 3 bits: 110
+
+     (const v1 7)  ;; binary 0...0111
+     (if-ne v0 v1 :bit-0)
+     (const v2 1)
+     (:bit-0)
+
+     (const v1 4)  ;; binary 0...0100
+     (if-ne v0 v1 :bit-1)
+     (const v3 1)
+     (:bit-1)
+
+     (const v1 2)  ;; binary 0...0010
+     (if-ne v0 v1 :bit-2)
+     (const v4 1)
+     (:bit-2)
+
+     (const v1 -2147483642)  ;; binary 1...0110, highest bit is known to be 1
+     (if-ne v0 v1 :bit-3)
+     (const v5 1)
+     (:bit-3)
+
+     (const v1 6)  ;; binary 0...0110, 4th bit should no longer be 1
+     (if-ne v0 v1 :bit-4)
+     (const v6 1)
+     (:bit-4)
+
+     (return-void)
+    )
+)",
+                                             "{shift_instruction}",
+                                             param.shift_instruction));
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(
+      boost::replace_first_copy<std::string>(R"(
+    (
+     (load-param v0)
+     (and-int/lit v0 v0 -4)
+     (or-int/lit v0 v0 12)
+     {shift_instruction}
+
+     (const v1 7)
+     (:bit-0)
+
+     (const v1 4)
+     (:bit-1)
+
+     (const v1 2)
+     (:bit-2)
+
+     (const v1 -2147483642)
+     (:bit-3)
+
+     (const v1 6)
+     (if-ne v0 v1 :bit-4)
+     (const v6 1)
+     (:bit-4)
+
+     (return-void)
+    )
+)",
+                                             "{shift_instruction}",
+                                             param.shift_instruction));
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_THAT(assembler::to_string(code.get()),
+              ::testing::HasSubstr("(const v6 1)"))
+      << "4th bit is determined to be 1 but it shouldn't";
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    ConstantBitwiseUnsignedRightShiftTests,
+    ConstantBitwiseUnsignedRightShiftTest,
+    ::testing::ValuesIn(
+        std::initializer_list<ConstantBitwiseUnsignedRightShiftTest::ParamType>{
+            {
+                .name = "ushr_int_lit",
+                // shifted 0x21 & 0x1F = 0x1
+                .shift_instruction = "(ushr-int/lit v0 v0 33)",
+            },
+            {.name = "ushr_int",
+             .shift_instruction = "(const v1 33)(ushr-int v0 v0 v1)"},
+        }),
+    [](const testing::TestParamInfo<
+        ConstantBitwiseUnsignedRightShiftTest::ParamType>& info) {
+      return info.param.name;
+    });
+
+TEST_F(ConstantBitwiseUnsignedRightShiftTest,
+       DeterminableBitsAfterUnsignedRightShiftLong) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param-wide v0)
+     (const-wide v1 -4)
+     (and-long v0 v0 v1)  ;; 1st and 2nd lowest bits of v0 must be 0
+     (const-wide v1 12)
+     (or-long v0 v0 v1)  ;; 3rd and 4th lowest bits of v0 must be 1
+     (const-wide v1 65)  ;; 0x41
+     (ushr-long v0 v0 v1)  ;; Lowest 3 bits: 110
+
+     (const-wide v1 7)  ;; binary 0...0111
+     (cmp-long v1 v0 v1)
+     (if-nez v1 :bit-0)
+     (const v2 1)
+     (:bit-0)
+
+     (const-wide v1 4)  ;; binary 0...0100
+     (cmp-long v1 v0 v1)
+     (if-nez v1 :bit-1)
+     (const v3 1)
+     (:bit-1)
+
+     (const-wide v1 2)  ;; binary 0...0100
+     (cmp-long v1 v0 v1)
+     (if-nez v1 :bit-2)
+     (const v4 1)
+     (:bit-2)
+
+     (const-wide v1 -9223372036854775802)  ;; binary 1...0110, highest bit is known to be 1
+     (cmp-long v1 v0 v1)
+     (if-nez v1 :bit-3)
+     (const v5 1)
+     (:bit-3)
+
+     (const-wide v1 6)  ;; binary 0...0110, 4th bit should no longer be 1
+     (cmp-long v1 v0 v1)
+     (if-nez v1 :bit-4)
+     (const v6 1)
+     (:bit-4)
+
+     (return-void)
+    )
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param-wide v0)
+     (const-wide v1 -4)
+     (and-long v0 v0 v1)
+     (const-wide v1 12)
+     (or-long v0 v0 v1)
+     (const-wide v1 65)
+     (ushr-long v0 v0 v1)
+
+     (const-wide v1 7)
+     (cmp-long v1 v0 v1)
+     (:bit-0)
+
+     (const-wide v1 4)
+     (cmp-long v1 v0 v1)
+     (:bit-1)
+
+     (const-wide v1 2)
+     (cmp-long v1 v0 v1)
+     (:bit-2)
+
+     (const-wide v1 -9223372036854775802)
+     (cmp-long v1 v0 v1)
+     (:bit-3)
+
+     (const-wide v1 6)
+     (cmp-long v1 v0 v1)
+     (if-nez v1 :bit-4)
+     (const v6 1)
+     (:bit-4)
+
+     (return-void)
+    )
+)");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_THAT(assembler::to_string(code.get()),
+              ::testing::HasSubstr("(const v6 1)"))
+      << "4th bit is determined to be 1 but it shouldn't";
+}
+
 TEST_F(ConstantBitwiseTest, UndeterminableBitJoinedFromConstants) {
   auto code = assembler::ircode_from_string(R"(
     (

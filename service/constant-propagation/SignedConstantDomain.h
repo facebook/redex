@@ -542,7 +542,33 @@ class SignedConstantDomain final
     return m_bitset.get_zero_bit_states();
   }
 
+  SignedConstantDomain& unsigned_right_shift_bits_int(int32_t shift) {
+    return unsigned_right_shift_bits(shift, BIT_SHIFT_MASK_INT);
+  }
+  SignedConstantDomain& unsigned_right_shift_bits_long(int32_t shift) {
+    return unsigned_right_shift_bits(shift, BIT_SHIFT_MASK_LONG);
+  }
+  // TODO(T222824773) Add signed right shift, which has implications on bounds.
+
  private:
+  static constexpr int32_t BIT_SHIFT_MASK_INT = 0x1f;
+  static constexpr int32_t BIT_SHIFT_MASK_LONG = 0x3f;
+  SignedConstantDomain& unsigned_right_shift_bits(int32_t shift, int32_t mask) {
+    if (is_bottom()) return *this;
+
+    shift &= mask;
+
+    // set_determined_bits_erasing_bounds() does not reset existing bit states.
+    // Set to top first to clear bit states.
+    const uint64_t new_determined_zeros =
+        ~((~get_determined_zero_bits()) >> shift);
+    const uint64_t new_determined_ones = get_determined_one_bits() >> shift;
+    set_to_top();
+    set_determined_bits_erasing_bounds(new_determined_zeros,
+                                       new_determined_ones);
+    return *this;
+  }
+
   static int32_t clamp_int(int64_t value) {
     return std::max(
         std::min(value,
