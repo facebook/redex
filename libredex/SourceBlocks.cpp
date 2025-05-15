@@ -603,6 +603,24 @@ void fix_idom_violations(ControlFlowGraph* cfg) {
       [&](Block* cur, const Edge* e) {}, [&](Block* cur) {});
 }
 
+void fix_hot_method_cold_entry_violations(ControlFlowGraph* cfg) {
+  auto* entry_block = cfg->entry_block();
+  if (entry_block == nullptr) {
+    return;
+  }
+  auto* sb = get_first_source_block(entry_block);
+  if (sb == nullptr) {
+    return;
+  }
+  uint32_t vals_size = sb->vals_size;
+  for (uint32_t i = 0; i < vals_size; i++) {
+    if (sb->get_val(i).value_or(0) <= 0 &&
+        sb->get_appear100(i).value_or(0) >= 0) {
+      sb->vals[i] = SourceBlock::Val(1, sb->get_appear100(i).value_or(1));
+    }
+  };
+}
+
 bool has_source_block_positive_val(const SourceBlock* sb) {
   bool any_positive_val = false;
   if (sb != nullptr) {
