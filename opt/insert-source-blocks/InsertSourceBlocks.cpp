@@ -878,6 +878,10 @@ void InsertSourceBlocksPass::bind_config() {
        "Use a default value for the inserted source blocks. The default value "
        "is defined in SourceBlocks.cpp");
   bind("ordered_interactions", {"ColdStart"}, m_ordered_interactions);
+  bind("fix_violations",
+       m_fix_violations,
+       m_fix_violations,
+       "Applies best effort fix to all source block violations.");
 }
 
 void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
