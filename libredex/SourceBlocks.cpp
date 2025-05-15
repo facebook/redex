@@ -7,6 +7,7 @@
 
 #include "SourceBlocks.h"
 
+#include <iostream>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -497,6 +498,72 @@ InsertResult insert_source_blocks(const DexString* method,
   auto idom_map = get_serialized_idom_map(cfg);
 
   return {helper.id, helper.oss.str(), std::move(idom_map), !had_failures};
+}
+
+void fix_chain_violations(ControlFlowGraph* cfg) {
+  impl::visit_in_order(
+      cfg,
+      [&](Block* cur) {
+        uint32_t vals_size =
+            source_blocks::get_first_source_block(cur)->vals_size;
+        // Iterate over the source blocks in reverse order
+        // If a source block is hit for an interaction, then all
+        // source blocks preceding it must be hit for that interaction
+        std::vector<bool> any_hit_rev(vals_size, false);
+        for (auto mie_it = cur->rbegin(); mie_it != cur->rend(); mie_it++) {
+          auto& mie = *mie_it;
+          switch (mie.type) {
+          case MFLOW_SOURCE_BLOCK:
+            for (auto* sb = mie.src_block.get(); sb != nullptr;
+                 sb = sb->next.get()) {
+              for (size_t i = 0; i < sb->vals_size; i++) {
+                if (sb->get_val(i).value_or(0) > 0) {
+                  any_hit_rev[i] = true;
+                }
+              }
+              for (size_t i = 0; i < sb->vals_size; i++) {
+                if (any_hit_rev[i] && sb->get_val(i).value_or(0) <= 0) {
+                  sb->vals[i] =
+                      SourceBlock::Val(1, sb->get_appear100(i).value_or(1));
+                }
+              }
+            }
+            break;
+          default:
+            break;
+          }
+        }
+        // Iterate over the source blocks in forward order
+        // If a source block is hit for an interaction, then all
+        // source blocks after it must be hit for that interaction
+        // unless it is separated by a throwing instruction
+        std::vector<bool> any_hit_for(vals_size, false);
+        for (auto& mie : *cur) {
+          switch (mie.type) {
+          case MFLOW_OPCODE:
+            if (opcode::can_throw(mie.insn->opcode())) {
+              any_hit_for = std::vector<bool>(vals_size, false);
+            }
+            break;
+          case MFLOW_SOURCE_BLOCK:
+            for (auto* sb = mie.src_block.get(); sb != nullptr;
+                 sb = sb->next.get()) {
+              for (size_t i = 0; i < sb->vals_size; i++) {
+                if (sb->get_val(i).value_or(0) > 0) {
+                  any_hit_for[i] = true;
+                } else if (any_hit_for[i]) {
+                  sb->vals[i] =
+                      SourceBlock::Val(1, sb->get_appear100(i).value_or(1));
+                }
+              }
+            }
+            break;
+          default:
+            break;
+          }
+        }
+      },
+      [&](Block* cur, const Edge* e) {}, [&](Block* cur) {});
 }
 
 bool has_source_block_positive_val(const SourceBlock* sb) {
@@ -1333,17 +1400,19 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
           chain_and_dom_update<std::numeric_limits<uint32_t>::max()>(
               cur, sb, first_in_block, prev_insn_can_throw, state, dom);
-          first_in_block = false;
-          prev_insn_can_throw = false;
 
           const bool head_error = state.violations > old_count;
           const auto* dom_block = state.dom_block;
 
+          first_in_block = false;
+
           for (auto* cur_sb = sb->next.get(); cur_sb != nullptr;
                cur_sb = cur_sb->next.get()) {
             chain_and_dom_update<std::numeric_limits<uint32_t>::max()>(
-                cur, cur_sb, false, false, state, dom);
+                cur, cur_sb, first_in_block, prev_insn_can_throw, state, dom);
           }
+
+          prev_insn_can_throw = false;
 
           if (state.violations > old_count) {
             os << " !!!";

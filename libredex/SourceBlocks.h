@@ -234,6 +234,8 @@ InsertResult insert_source_blocks(DexMethod* method,
                                   bool serialize = true,
                                   bool insert_after_excs = false);
 
+void fix_chain_violations(ControlFlowGraph* cfg);
+
 bool has_source_block_positive_val(const SourceBlock* sb);
 
 inline bool has_source_blocks(const cfg::Block* b) {
