@@ -227,18 +227,19 @@ class WeakTopologicalOrdering final {
 
   // Recursively iterate through the wto order and invoke a callback for each
   // node.
-  void visit_depth_first(std::function<void(const NodeId&)> f) {
-    std::function<void(const WtoComponent<NodeId>&)> visit_component;
-    visit_component = [&visit_component, &f](const WtoComponent<NodeId>& v) {
+  template <typename Visitor = std::function<void(const NodeId&)>>
+  void visit_depth_first(const Visitor& f) {
+    auto visit_component = [&f](const auto& self,
+                                const WtoComponent<NodeId>& v) -> void {
       f(v.head_node());
       if (v.is_scc()) {
         for (const auto& inner : v) {
-          visit_component(inner);
+          self(self, inner);
         }
       }
     };
     for (const auto& v : *this) {
-      visit_component(v);
+      visit_component(visit_component, v);
     }
   }
 
