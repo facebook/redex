@@ -73,12 +73,11 @@ class DirectProductAbstractDomain : public AbstractDomain<Derived> {
   /*
    * Updates a component of the tuple by applying a user-defined operation.
    */
-  template <size_t Index>
-  void apply(
-      std::function<void(
-          typename std::tuple_element<Index, std::tuple<Domains...>>::type*)>
-          operation,
-      bool do_reduction = false) {
+  template <
+      size_t Index,
+      typename Fn = std::function<void(
+          typename std::tuple_element<Index, std::tuple<Domains...>>::type*)>>
+  void apply(const Fn& operation, bool do_reduction = false) {
     if (is_bottom()) {
       return;
     }
