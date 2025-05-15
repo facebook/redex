@@ -467,6 +467,9 @@ void AliasedRegisters::handle_insert_order_at_merge(
     const VertexMapping& vertex_mapping) {
   UnorderedMap<vertex_t, uint32_t> insert_order_sums;
   std::vector<vertex_t> registers;
+  // On average we see high percentage of register values. Reserve the whole
+  // size for simplicity.
+  registers.reserve(group.size());
   for (auto v : group) {
     const Value& value = this->m_graph[v];
     if (!value.is_register()) {
