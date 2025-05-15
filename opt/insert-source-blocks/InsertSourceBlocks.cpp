@@ -661,6 +661,7 @@ struct Injector {
 
             if (fix_violations) {
               source_blocks::fix_chain_violations(&cfg);
+              source_blocks::fix_idom_violations(&cfg);
             }
 
             smi.add({sb_name, std::move(res.serialized),

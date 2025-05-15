@@ -236,6 +236,8 @@ InsertResult insert_source_blocks(DexMethod* method,
 
 void fix_chain_violations(ControlFlowGraph* cfg);
 
+void fix_idom_violations(ControlFlowGraph* cfg);
+
 bool has_source_block_positive_val(const SourceBlock* sb);
 
 inline bool has_source_blocks(const cfg::Block* b) {
@@ -363,8 +365,8 @@ inline bool method_is_not_cold(DexMethod* method) {
 
 template <typename Iterator>
 inline SourceBlock* find_between(const Iterator& start, const Iterator& end) {
-  auto it = std::find_if(
-      start, end, [](auto& e) { return e.type == MFLOW_SOURCE_BLOCK; });
+  auto it = std::find_if(start, end,
+                         [](auto& e) { return e.type == MFLOW_SOURCE_BLOCK; });
   return it != end ? it->src_block.get() : nullptr;
 }
 
@@ -518,8 +520,8 @@ inline void normalize(ControlFlowGraph& cfg,
                       size_t interactions) {
   // Assume that integrity is guaranteed, so that val at entry is
   // dominating all blocks.
-  normalize(
-      cfg, dominating, get_first_source_block(cfg.entry_block()), interactions);
+  normalize(cfg, dominating, get_first_source_block(cfg.entry_block()),
+            interactions);
 }
 
 } // namespace normalize

@@ -566,6 +566,43 @@ void fix_chain_violations(ControlFlowGraph* cfg) {
       [&](Block* cur, const Edge* e) {}, [&](Block* cur) {});
 }
 
+void fix_idom_violation(
+    Block* cur,
+    uint32_t vals_index,
+    const dominators::SimpleFastDominators<cfg::GraphInterface>& dom) {
+  bool first_source_block_changed = true;
+  if (source_blocks::get_first_source_block(cur)
+          ->get_val(vals_index)
+          .value_or(0) > 0) {
+    first_source_block_changed = false;
+  }
+  foreach_source_block(cur, [&](auto& sb) {
+    if (sb->get_val(vals_index).value_or(0) <= 0) {
+      sb->vals[vals_index] =
+          SourceBlock::Val(1, sb->get_appear100(vals_index).value_or(1));
+    }
+  });
+  if (first_source_block_changed) {
+    fix_idom_violation(dom.get_idom(cur), vals_index, dom);
+  }
+}
+
+void fix_idom_violations(ControlFlowGraph* cfg) {
+  dominators::SimpleFastDominators<cfg::GraphInterface> dom{*cfg};
+  impl::visit_in_order(
+      cfg,
+      [&](Block* cur) {
+        auto first_sb = source_blocks::get_first_source_block(cur);
+        uint32_t vals_size = first_sb->vals_size;
+        for (uint32_t i = 0; i < vals_size; i++) {
+          if (first_sb->get_val(i).value_or(0) > 0) {
+            fix_idom_violation(dom.get_idom(cur), i, dom);
+          }
+        }
+      },
+      [&](Block* cur, const Edge* e) {}, [&](Block* cur) {});
+}
+
 bool has_source_block_positive_val(const SourceBlock* sb) {
   bool any_positive_val = false;
   if (sb != nullptr) {
