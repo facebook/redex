@@ -56,6 +56,12 @@ check_PROGRAMS = \
     uses_app_module_annotation_test \
     verifier_artifacts_test
 
+if RUN_KOTLIN_TESTS
+# Add Kotlin tests here.
+check_PROGRAMS += \
+    kotlin_default_args_test
+endif
+
 # As CircleCI treats XFAIL tests as fails, we need to exclude failing
 # tests explicitly.
 #
@@ -96,6 +102,12 @@ TESTS = \
     type_analysis_transform_test \
     uses_app_module_annotation_test \
     verifier_artifacts_test
+
+if RUN_KOTLIN_TESTS
+# Add Kotlin tests here.
+TESTS += \
+    kotlin_default_args_test
+endif
 
 app_module_usage_test_SOURCES = AppModuleUsageTest.cpp
 EXTRA_app_module_usage_test_DEPNDENCIES = uses_app_module_annotation-class.dex app_module_usage_test-class.dex app_module_usage_test_other-class.dex app_module_usage_test_third-class.dex
@@ -326,3 +338,20 @@ uses_app_module_annotation_test-class.jar: UsesAppModuleAnnotated.java
 
 verifier_artifacts_test-class.jar: VerifierTest.java
 	$(create_jar)
+
+if RUN_KOTLIN_TESTS
+kotlinc_source_target = -jvm-target 9
+
+kotlin_default_args_test_SOURCES = KotlinDefaultArgsTest.cpp
+EXTRA_kotlin_default_args_test_DEPENDENCIES = kotlin_default_args_test-class.dex
+
+define create_jar_from_kotlin
+	mkdir -p $@.tmp
+	$(KOTLINC) $(kotlinc_source_target) -cp "$(srcdir)" -d $@.tmp $^
+	jar cf $@ -C $@.tmp .
+endef
+
+kotlin_default_args_test-class.jar: KotlinDefaultArgs.kt
+	$(create_jar_from_kotlin)
+
+endif

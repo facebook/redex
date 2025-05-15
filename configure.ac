@@ -150,6 +150,30 @@ AS_IF([test "x$NO_ANDROID_HOME" = "xno"],
     ]
 )
 
+# check whether user enabled kotlin tests
+AC_ARG_ENABLE([kotlin-tests],
+    [AS_HELP_STRING([--disable-kotlin-tests],
+        [Disable running kotlin tests])]
+)
+AM_CONDITIONAL([RUN_KOTLIN_TESTS],[test "x$enable_kotlin_tests" != "xno"])
+AS_IF([test "x$enable_kotlin_tests" != "xno"], [
+    # user enabled kotlin tests
+    # check if kotlinc is installed
+
+    # allow users to specify the path to kotlinc
+    # --with-kotlinc
+
+    AC_ARG_WITH([kotlinc],
+        [AS_HELP_STRING([--with-kotlinc=/path/to/kotlinc],
+            [Location of the Kotlin compiler.])],
+        [KOTLINC="$withval"],
+        [ AS_IF([test "x${KOTLINC}" == "x"],
+            [AC_PATH_PROG([KOTLINC], [kotlinc], [no_kotlinc])])
+        ]
+    )
+    AS_IF([test "${KOTLINC}" == "no_kotlinc"], [AC_MSG_ERROR([Kotlin compiler kotlinc not found.])])
+])
+
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h inttypes.h memory.h netinet/in.h stddef.h stdint.h stdlib.h string.h sys/time.h unistd.h])
 
