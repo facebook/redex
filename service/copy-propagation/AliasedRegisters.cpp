@@ -260,32 +260,39 @@ reg_t AliasedRegisters::get_representative(
   auto v = m_graph.get_vertex(orig);
   auto v_root = find_root(v);
 
-  // intentionally copy the vector so we can safely remove from it
-  std::vector<vertex_t> group = vertices_in_group(v_root);
-  // filter out non registers and other ineligible registers
-  group.erase(std::remove_if(group.begin(),
-                             group.end(),
-                             [this, &max_addressable](vertex_t elem) {
-                               // return true to remove it
-                               const Value& val = m_graph[elem];
-                               if (!val.is_register()) {
-                                 return true;
-                               }
-                               return max_addressable &&
-                                      val.reg() > *max_addressable;
-                             }),
-              group.end());
+  // std::min_element compares pairs, which would mean repeated filtering
+  // work. Do the whole computation ourselves.
+  auto should_filter = [&](vertex_t elem) {
+    const Value& val = m_graph[elem];
+    if (!val.is_register()) {
+      return true;
+    }
+    return max_addressable && val.reg() > *max_addressable;
+  };
+  std::optional<vertex_t> representative = std::nullopt;
+  uint32_t insertion_order_rep = 0;
+  auto update_representative = [&](vertex_t elem) {
+    if (should_filter(elem)) {
+      return;
+    }
+    if (!representative) {
+      representative = elem;
+      insertion_order_rep = m_insert_order.at(elem);
+    } else {
+      auto insertion_order_elem = m_insert_order.at(elem);
+      if (insertion_order_elem < insertion_order_rep) {
+        representative = elem;
+        insertion_order_rep = insertion_order_elem;
+      }
+    }
+  };
 
-  if (group.empty()) {
-    return orig.reg();
+  update_representative(v_root);
+  for (auto u : m_graph.inv_adjacent_vertices(v_root)) {
+    update_representative(u);
   }
 
-  // We want the oldest element. It has the lowest insertion number
-  const Value& representative = m_graph[*std::min_element(
-      group.begin(), group.end(), [this](vertex_t a, vertex_t b) {
-        return m_insert_order.at(a) < m_insert_order.at(b);
-      })];
-  return representative.reg();
+  return representative ? m_graph[*representative].reg() : orig.reg();
 }
 
 // If any nodes in the same tree as `in_this_tree` have the Value `r`, then
