@@ -157,12 +157,11 @@ class ReducedProductAbstractDomain
    * required depending on the nature of the operation performed, we leave it as
    * an optional step.
    */
-  template <size_t Index>
-  void apply(
-      std::function<void(
-          typename std::tuple_element<Index, std::tuple<Domains...>>::type*)>
-          operation,
-      bool do_reduction = false) {
+  template <
+      size_t Index,
+      typename Fn = std::function<void(
+          typename std::tuple_element<Index, std::tuple<Domains...>>::type*)>>
+  void apply(const Fn& operation, bool do_reduction = false) {
     if (is_bottom()) {
       return;
     }
