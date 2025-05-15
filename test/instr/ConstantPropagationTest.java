@@ -7,6 +7,8 @@
 
 package redex;
 
+import java.util.Random;
+
 import static org.assertj.core.api.Assertions.*;
 
 import org.junit.Before;
@@ -15,6 +17,16 @@ import org.junit.Test;
 import com.facebook.redexinline.ForceInline;
 
 public class ConstantPropagationTest {
+
+  // use getRandom* if need to prevent constant folding. Use a fixed seed to
+  // ensure test consistency.
+  private final Random random = new Random(0L);
+  private int getRandomInt() {
+    return random.nextInt();
+  }
+  private long getRandomLong() {
+    return random.nextLong();
+  }
 
   // use MethodInline so redex sees these constants but `javac` and d8 do not
   @ForceInline
@@ -565,6 +577,112 @@ public class ConstantPropagationTest {
     // CHECK: return-void
   }
 
+  // CHECK: method: virtual redex.ConstantPropagationTest.binop_and_non_const_lit
+  @Test
+  public void binop_and_non_const_lit() {
+    int x = getRandomInt();
+    // CHECK: and-int/lit{{.*}}
+    x &= ~2;  // x's 2nd bit is 0
+    int y = 6;  // 110
+    // PRECHECK: if-ne {{.*}}
+    // POSTCHECK-NOT: if-ne {{.*}}
+    if (x == y) {
+      System.out.println("Unreachable x == y");
+    }
+    assertThat(x).isNotEqualTo(y);
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.ConstantPropagationTest.binop_or_non_const_lit
+  @Test
+  public void binop_or_non_const_lit() {
+    int x = getRandomInt();
+    // CHECK: or-int/lit{{.*}}
+    x |= 2;  // x's 2nd bit is 1
+    int y = 4;  // 100
+    // PRECHECK: if-ne {{.*}}
+    // POSTCHECK-NOT: if-ne {{.*}}
+    if (x == y) {
+      System.out.println("Unreachable x == y");
+    }
+    assertThat(x).isNotEqualTo(y);
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.ConstantPropagationTest.binop_xor_non_const_lit
+  @Test
+  public void binop_xor_non_const_lit() {
+    int x = getRandomInt();
+    // CHECK: or-int/lit{{.*}}
+    x |= 2;
+    // CHECK: xor-int/lit{{.*}}
+    x ^= 2;  // x's 2nd bit is 0
+    int y = 6;  // 110
+    // PRECHECK: if-ne {{.*}}
+    // POSTCHECK-NOT: if-ne {{.*}}
+    if (x == y) {
+      System.out.println("Unreachable x == y");
+    }
+    assertThat(x).isNotEqualTo(y);
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.ConstantPropagationTest.binop_and_non_const
+  @Test
+  public void binop_and_non_const() {
+    int x = getRandomInt();
+    int z = getRandomInt() & ~2;
+    // CHECK: and-int/2addr {{.*}}
+    x &= z;  // x's 2nd bit is 0
+    int y = 6;  // 110
+    // PRECHECK: if-ne {{.*}}
+    // POSTCHECK-NOT: if-ne {{.*}}
+    if (x == y) {
+      System.out.println("Unreachable x == y");
+    }
+    assertThat(x).isNotEqualTo(y);
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.ConstantPropagationTest.binop_or_non_const
+  @Test
+  public void binop_or_non_const() {
+    int x = getRandomInt();
+    int z = getRandomInt() | 2;
+    // CHECK: or-int/2addr {{.*}}
+    x |= z;  // x's 2nd bit is 1
+    int y = 4;  // 100
+    // PRECHECK: if-ne {{.*}}
+    // POSTCHECK-NOT: if-ne {{.*}}
+    if (x == y) {
+      System.out.println("Unreachable x == y");
+    }
+    assertThat(x).isNotEqualTo(y);
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.ConstantPropagationTest.binop_xor_non_const
+  @Test
+  public void binop_xor_non_const() {
+    int x = getRandomInt();
+    int z = getRandomInt() | 2;
+    // CHECK: or-int/lit8 {{.*}}
+    x |= 2;
+    // CHECK: xor-int/2addr {{.*}}
+    x ^= z;  // x's 2nd bit is 0
+    int y = 6;  // 110
+    // PRECHECK: if-ne {{.*}}
+    // POSTCHECK-NOT: if-ne {{.*}}
+    if (x == y) {
+      System.out.println("Unreachable x == y");
+    }
+    assertThat(x).isNotEqualTo(y);
+    // CHECK: return-void
+  }
+
+  // Not adding unop_not_non_const here, because it seems like x = ~x is always
+  // compiled to "xor-int/lit8 v0, v0, -1", which is not what we want to test.
+
   // CHECK: method: virtual redex.ConstantPropagationTest.binop_add_long
   @Test
   public void binop_add_long() {
@@ -677,8 +795,7 @@ public class ConstantPropagationTest {
 
   long one_long() { return 1; }
 
-  // CHECK: method: virtual
-  // redex.ConstantPropagationTest.binop_add_long_overflow
+  // CHECK: method: virtual redex.ConstantPropagationTest.binop_add_long_overflow
   @Test
   public void binop_add_long_overflow() {
     long x = get_long_max();
@@ -689,4 +806,58 @@ public class ConstantPropagationTest {
     assertThat(z).isEqualTo(Long.MIN_VALUE);
     // CHECK: return-void
   }
+
+  // CHECK: method: virtual redex.ConstantPropagationTest.binop_and_long_non_const
+  @Test
+  public void binop_and_long_non_const() {
+    long x = getRandomLong();
+    // CHECK: and-long{{.*}}
+    x &= ~2L;  // x's 2nd bit is 0
+    long y = 6L;  // 110
+    // PRECHECK: if-nez {{.*}}
+    // POSTCHECK-NOT: if-nez {{.*}}
+    if (x == y) {
+      System.out.println("Unreachable x == y");
+    }
+    assertThat(x).isNotEqualTo(y);
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.ConstantPropagationTest.binop_or_long_non_const
+  @Test
+  public void binop_or_long_non_const() {
+    long x = getRandomLong();
+    // CHECK: or-long{{.*}}
+    x |= 2L;  // x's 2nd bit is 1
+    long y = 4L;  // 100
+    // PRECHECK: if-nez {{.*}}
+    // POSTCHECK-NOT: if-nez {{.*}}
+    if (x == y) {
+      System.out.println("Unreachable x == y");
+    }
+    assertThat(x).isNotEqualTo(y);
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.ConstantPropagationTest.binop_xor_long_non_const
+  @Test
+  public void binop_xor_long_non_const() {
+    long x = getRandomLong();
+    // CHECK: or-long{{.*}}
+    x |= 2L;
+    // CHECK: xor-long{{.*}}
+    x ^= 2L;  // x's 2nd bit is 0
+    long y = 6L;  // 110
+    // PRECHECK: if-nez {{.*}}
+    // POSTCHECK-NOT: if-nez {{.*}}
+    if (x == y) {
+      System.out.println("Unreachable x == y");
+    }
+    assertThat(x).isNotEqualTo(y);
+    // CHECK: return-void
+  }
+
+  // Not adding unop_not_long_non_const here, because it seems like x = ~x is
+  // always compiled to "const-wide/16 v1 -1; xor-long/2addr v0, v1", which is
+  // not what we want to test.
 }
