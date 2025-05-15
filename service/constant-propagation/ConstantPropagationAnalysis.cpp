@@ -617,8 +617,8 @@ bool PrimitiveAnalyzer::analyze_unop(const IRInstruction* insn,
           ~static_cast<uint64_t>(std::numeric_limits<uint32_t>::max());
       new_determined_ones &= std::numeric_limits<uint32_t>::max();
     }
-    scd.set_determined_bits_erasing_bounds(new_determined_zeros,
-                                           new_determined_ones);
+    scd.set_determined_bits_erasing_bounds(
+        new_determined_zeros, new_determined_ones, op == OPCODE_NOT_INT);
     env->set(insn->dest(), scd);
     return true;
   }
@@ -717,13 +717,14 @@ bool PrimitiveAnalyzer::analyze_binop_lit(
     case OPCODE_AND_INT_LIT: {
       scd.set_determined_bits_erasing_bounds(scd.get_determined_zero_bits() |
                                                  ~static_cast<uint64_t>(lit),
-                                             std::nullopt);
+                                             std::nullopt, /*bit32=*/true);
       break;
     }
     case OPCODE_OR_INT_LIT: {
       scd.set_determined_bits_erasing_bounds(std::nullopt,
                                              scd.get_determined_one_bits() |
-                                                 static_cast<uint64_t>(lit));
+                                                 static_cast<uint64_t>(lit),
+                                             /*bit32=*/true);
       break;
     }
     case OPCODE_XOR_INT_LIT: {
@@ -735,7 +736,8 @@ bool PrimitiveAnalyzer::analyze_binop_lit(
           determined_zeros & static_cast<uint64_t>(lit);
       scd.set_determined_bits_erasing_bounds(
           (determined_zeros | new_determined_zeros) & ~new_determined_ones,
-          (determined_ones | new_determined_ones) & ~new_determined_zeros);
+          (determined_ones | new_determined_ones) & ~new_determined_zeros,
+          /*bit32=*/true);
       break;
     }
     case OPCODE_SHL_INT_LIT: {
@@ -838,7 +840,8 @@ bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
         scd_left.get_determined_zero_bits() |
             scd_right.get_determined_zero_bits(),
         scd_left.get_determined_one_bits() &
-            scd_right.get_determined_one_bits());
+            scd_right.get_determined_one_bits(),
+        /*bit32=*/op == OPCODE_AND_INT);
     env->set(insn->dest(), dest_scd);
     return true;
   }
@@ -849,7 +852,8 @@ bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
         scd_left.get_determined_zero_bits() &
             scd_right.get_determined_zero_bits(),
         scd_left.get_determined_one_bits() |
-            scd_right.get_determined_one_bits());
+            scd_right.get_determined_one_bits(),
+        /*bit32=*/op == OPCODE_OR_INT);
     env->set(insn->dest(), dest_scd);
     return true;
   }
@@ -864,7 +868,8 @@ bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
         (scd_left.get_determined_zero_bits() &
          scd_right.get_determined_one_bits()) |
             (scd_left.get_determined_one_bits() &
-             scd_right.get_determined_zero_bits()));
+             scd_right.get_determined_zero_bits()),
+        /*bit32=*/op == OPCODE_XOR_INT);
     env->set(insn->dest(), dest_scd);
     return true;
   }

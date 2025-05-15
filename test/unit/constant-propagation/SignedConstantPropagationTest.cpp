@@ -462,15 +462,22 @@ INSTANTIATE_TEST_SUITE_P(
 TEST_F(ConstantBitwiseAndTest, UndeterminableZeroLit) {
   auto code = assembler::ircode_from_string(R"(
     (
-     (const v1 -2)  ;; only the lowest bit is 0
      (load-param v0)
+     (load-param v2)
+
+     (const v1 -2)  ;; only the lowest bit is 0
      (and-int/lit v0 v0 -2)  ; lowest bit v0 must be 0 now, but can't infer v0 != v1
 
      (if-ne v0 v1 :if-true-label)
      (const v1 1)
 
      (:if-true-label)
-     (const v0 2)
+
+     (const v3 2147483647) ;; only the highest bit is 0
+     (and-int/lit v2 v2 2147483647)  ; highest bit v2 must be 0 now, but can't infer v2 != v3
+     (if-ne v2 v3 :if-true-label2)
+     (const v1 2)
+     (:if-true-label2)
 
      (return-void)
     )
@@ -480,6 +487,10 @@ TEST_F(ConstantBitwiseAndTest, UndeterminableZeroLit) {
       assembler::to_string(code.get()),
       // if branch is not optimized out.
       ::testing::ContainsRegex("\\(if-ne v0 v1 :.*\\)\\s*\\(const v1 1\\)"));
+  EXPECT_THAT(
+      assembler::to_string(code.get()),
+      // if branch is not optimized out.
+      ::testing::ContainsRegex("\\(if-ne v2 v3 :.*\\)\\s*\\(const v1 2\\)"));
 }
 
 TEST_F(ConstantBitwiseAndTest, UndeterminableZeroInt) {
@@ -487,6 +498,9 @@ TEST_F(ConstantBitwiseAndTest, UndeterminableZeroInt) {
     (
      (load-param v0)
      (load-param v1)
+     (load-param v2)
+     (load-param v3)
+
      (and-int/lit v1 v1 -2)  ;; only the lowest bit is 0
      (and-int v0 v0 v1)  ; lowest bit v0 must be 0 now, but can't infer v0 != 0
 
@@ -494,7 +508,12 @@ TEST_F(ConstantBitwiseAndTest, UndeterminableZeroInt) {
      (const v1 1)
 
      (:if-true-label)
-     (const v0 2)
+
+     (and-int/lit v2 v2 2147483647)  ;; only the highest bit is 0
+     (and-int v3 v3 v2)  ; highest bit v3 must be 0 now, but can't infer v3 != v2
+     (if-ne v3 v2 :if-true-label2)
+     (const v1 2)
+     (:if-true-label2)
 
      (return-void)
     )
@@ -504,6 +523,10 @@ TEST_F(ConstantBitwiseAndTest, UndeterminableZeroInt) {
       assembler::to_string(code.get()),
       // if branch is not optimized out.
       ::testing::ContainsRegex("\\(if-nez v0 :.*\\)\\s*\\(const v1 1\\)"));
+  EXPECT_THAT(
+      assembler::to_string(code.get()),
+      // if branch is not optimized out.
+      ::testing::ContainsRegex("\\(if-ne v3 v2 :.*\\)\\s*\\(const v1 2\\)"));
 }
 
 TEST_F(ConstantBitwiseAndTest, UndeterminableZeroLong) {
@@ -787,8 +810,10 @@ INSTANTIATE_TEST_SUITE_P(
 TEST_F(ConstantBitwiseOrTest, UndeterminableOneLit) {
   auto code = assembler::ircode_from_string(R"(
     (
-     (const v1 1)  ;; only lowest bit is 1
      (load-param v0)
+     (load-param v2)
+
+     (const v1 1)  ;; only lowest bit is 1
      (or-int/lit v0 v0 1)  ; lowest bit v0 must be 1 now, but can't infer v0 != v1
 
      (if-ne v0 v1 :if-true-label)
@@ -797,6 +822,11 @@ TEST_F(ConstantBitwiseOrTest, UndeterminableOneLit) {
      (:if-true-label)
      (const v0 2)
 
+     (or-int/lit v2 v2 -2147483648)  ; highest bit v0 must be 1 now, but can't infer v0 != -1
+     (const v3 -1)
+     (if-ne v2 v3 :if-true-label2)
+     (const v3 1)
+     (:if-true-label2)
      (return-void)
     )
 )");
@@ -805,6 +835,10 @@ TEST_F(ConstantBitwiseOrTest, UndeterminableOneLit) {
       assembler::to_string(code.get()),
       // if branch is not optimized out.
       ::testing::ContainsRegex("\\(if-ne v0 v1 :.*\\)\\s*\\(const v1 1\\)"));
+  EXPECT_THAT(
+      assembler::to_string(code.get()),
+      // if branch is not optimized out.
+      ::testing::ContainsRegex("\\(if-ne v2 v3 :.*\\)\\s*\\(const v3 1\\)"));
 }
 
 TEST_F(ConstantBitwiseOrTest, UndeterminableOneInt) {
@@ -812,6 +846,8 @@ TEST_F(ConstantBitwiseOrTest, UndeterminableOneInt) {
     (
      (load-param v0)
      (load-param v1)
+     (load-param v4)
+     (load-param v5)
      (or-int/lit v1 v1 1)  ; lowest bit v1 must be 1 now
      (or-int v0 v0 v1)  ; lowest bit v0 must be 1 now, but can't infer v0 != 1
 
@@ -822,6 +858,12 @@ TEST_F(ConstantBitwiseOrTest, UndeterminableOneInt) {
      (:if-true-label)
      (const v0 2)
 
+     (or-int/lit v4 v4 -2147483648)  ; highest bit v4 must be 1
+     (or-int v5 v5 v4)  ; highest bit v5 must be 1, but can't infer v5 != -1
+     (const v6 -1)
+     (if-ne v5 v6 :if-true-label2)
+     (const v6 1)
+     (:if-true-label2)
      (return-void)
     )
 )");
@@ -830,6 +872,10 @@ TEST_F(ConstantBitwiseOrTest, UndeterminableOneInt) {
       assembler::to_string(code.get()),
       // if branch is not optimized out.
       ::testing::ContainsRegex("\\(if-ne v0 v3 :.*\\)\\s*\\(const v1 1\\)"));
+  EXPECT_THAT(
+      assembler::to_string(code.get()),
+      // if branch is not optimized out.
+      ::testing::ContainsRegex("\\(if-ne v5 v6 :.*\\)\\s*\\(const v6 1\\)"));
 }
 
 TEST_F(ConstantBitwiseOrTest, UndeterminableOneLong) {
@@ -1074,7 +1120,9 @@ TEST_F(ConstantBitwiseTest, UndeterminableBitsWithXorLit) {
      (load-param v0)
      (and-int/lit v0 v0 -4)  ;; 1st and 2nd lowest bits of v0 must be 0
      (or-int/lit v0 v0 12)  ;; 3rd and 4th lowest bits of v0 must be 1
+     (or-int/lit v0 v0 -2147483648)  ;; Highest bit of v0 must be 1
      (xor-int/lit v0 v0 5)  ;; Lowest 4 bits: 1001
+     (xor-int/lit v0 v0 -2147483648) ;; Highest bit of v0 must be 0
 
      (const v1 9)  ;; binary 0...01001
      (if-ne v0 v1 :if-true-label)
@@ -1099,9 +1147,11 @@ TEST_F(ConstantBitwiseTest, UndeterminableBitsWithXorInt) {
      (load-param v1)
      (and-int/lit v0 v0 -4)  ;; 1st and 2nd lowest bits of v0 must be 0
      (or-int/lit v0 v0 12)  ;; 3rd and 4th lowest bits of v0 must be 1
+     (or-int/lit v0 v0 -2147483648)  ;; Highest bit of v0 must be 1
      (and-int/lit v1 v1 -11)  ;; 2nd and 4th lowest bits of v1 must be 0
      (or-int/lit v1 v1 5)  ;; 1st and 3nd lowest bits of v1 must be 1
-     (xor-int v0 v0 v1)  ;; Lowest 4 bits: 1001
+     (or-int/lit v1 v1 -2147483648)  ;; Highest bit of v1 must be 1
+     (xor-int v0 v0 v1)  ;; Lowest 4 bits: 1001, highest bit: 0
 
      (const v1 9)  ;; binary 0...01001
      (if-ne v0 v1 :if-true-label)
@@ -1297,9 +1347,15 @@ TEST_P(ConstantBitwiseLeftShiftTest, LeftIntShiftDoesNotRetainHigher32Bits) {
      (or-int/lit v0 v0 -2147483648)  ;; highest bit of v0 must be 1
      {shift_instruction}  ;; highest bit should be shifted out now
 
-     (if-nez v0 :first)  ; This should stay, since v0 should have no determined one-bit
-     (const v3 1)
+     (if-nez v0 :first)
+     (const v3 1)  ; feasible, since v0 should have no determined one-bit
      (:first)
+
+     (const v2 -2)
+     (if-ne v0 v2 :end)
+     ;; feasible, since v0 should have no determined zero-bit other than the lowest bit
+     (const v3 2)
+     (:end)
 
      ; Long will keep the states of the higher 32 bits.
      (const-wide v2 2147483648)
@@ -1317,7 +1373,6 @@ TEST_P(ConstantBitwiseLeftShiftTest, LeftIntShiftDoesNotRetainHigher32Bits) {
 )",
                                              "{shift_instruction}",
                                              param.shift_instruction));
-  return;
   do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(
@@ -1331,6 +1386,11 @@ TEST_P(ConstantBitwiseLeftShiftTest, LeftIntShiftDoesNotRetainHigher32Bits) {
      (if-nez v0 :first)
      (const v3 1)
      (:first)
+
+     (const v2 -2)
+     (if-ne v0 v2 :end)
+     (const v3 2)
+     (:end)
 
      (const-wide v2 2147483648)
      (or-long v1 v1 v2)
