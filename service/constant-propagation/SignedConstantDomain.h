@@ -542,6 +542,39 @@ class SignedConstantDomain final
     return m_bitset.get_zero_bit_states();
   }
 
+  SignedConstantDomain& left_shift_bits_int(int32_t shift) {
+    if (is_bottom()) return *this;
+
+    shift &= BIT_SHIFT_MASK_INT;
+    // The higher 32 bits must be cleaned up, otherwise int meet may lead to
+    // unintended bottoms due to mismatch in the higher 32 bits.
+    // set_determined_bits_erasing_bounds() does not reset existing bit states.
+    // Set to top first to clear bit states.
+    const uint64_t new_determined_zeros =
+        ((~((~get_determined_zero_bits()) << shift)) & 0xffffffff) |
+        0xffffffff00000000ul;
+    const uint64_t new_determined_ones =
+        (get_determined_one_bits() << shift) & 0xffffffff;
+    set_to_top();
+    set_determined_bits_erasing_bounds(new_determined_zeros,
+                                       new_determined_ones);
+    return *this;
+  }
+  SignedConstantDomain& left_shift_bits_long(int32_t shift) {
+    if (is_bottom()) return *this;
+
+    shift &= BIT_SHIFT_MASK_LONG;
+    // set_determined_bits_erasing_bounds() does not reset existing bit states.
+    // Set to top first to clear bit states.
+    const uint64_t new_determined_zeros =
+        (~((~get_determined_zero_bits()) << shift));
+    const uint64_t new_determined_ones = get_determined_one_bits() << shift;
+    set_to_top();
+    set_determined_bits_erasing_bounds(new_determined_zeros,
+                                       new_determined_ones);
+    return *this;
+  }
+
   SignedConstantDomain& unsigned_right_shift_bits_int(int32_t shift) {
     return unsigned_right_shift_bits(shift, BIT_SHIFT_MASK_INT);
   }

@@ -1192,6 +1192,279 @@ struct ConstantBitwiseShiftTestCase {
   std::string name;
   std::string shift_instruction;
 };
+class ConstantBitwiseLeftShiftTest
+    : public ConstantBitwiseTest,
+      public ::testing::WithParamInterface<ConstantBitwiseShiftTestCase> {};
+
+TEST_P(ConstantBitwiseLeftShiftTest, DeterminableBitsAfterLeftShiftInt) {
+  const auto& param = GetParam();
+
+  auto code = assembler::ircode_from_string(
+      boost::replace_first_copy<std::string>(R"(
+    (
+     (load-param v0)
+     (and-int/lit v0 v0 -4)  ;; 1st and 2nd lowest bits of v0 must be 0
+     (or-int/lit v0 v0 12)  ;; 3rd and 4th lowest bits of v0 must be 1
+     (or-int/lit v0 v0 -2147483648)  ;; Highest bit of v0 must be 1
+     {shift_instruction}  ;; Lowest 5 bits: 11000
+
+     (const v1 25)  ;; binary 0...011001
+     (if-ne v0 v1 :bit-0)
+     (const v2 1)
+     (:bit-0)
+
+     (const v1 26)  ;; binary 0...011010
+     (if-ne v0 v1 :bit-1)
+     (const v3 1)
+     (:bit-1)
+
+     (const v1 28)  ;; binary 0...011100
+     (if-ne v0 v1 :bit-2)
+     (const v4 1)
+     (:bit-2)
+
+     (const v1 16)  ;; binary 0...010000
+     (if-ne v0 v1 :bit-3)
+     (const v5 1)
+     (:bit-3)
+
+     (const v1 8)  ;; binary 0...001000
+     (if-ne v0 v1 :bit-4)
+     (const v6 1)
+     (:bit-4)
+
+     (const v1 24)  ;; binary 0...011000
+     (if-ne v0 v1 :bit-5)
+     (const v7 1)
+     (:bit-5)
+
+     (return-void)
+    )
+)",
+                                             "{shift_instruction}",
+                                             param.shift_instruction));
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(
+      boost::replace_first_copy<std::string>(R"(
+    (
+     (load-param v0)
+     (and-int/lit v0 v0 -4)
+     (or-int/lit v0 v0 12)
+     (or-int/lit v0 v0 -2147483648)
+     {shift_instruction}
+
+     (const v1 25)
+     (:bit-0)
+
+     (const v1 26)
+     (:bit-1)
+
+     (const v1 28)
+     (:bit-2)
+
+     (const v1 16)
+     (:bit-3)
+
+     (const v1 8)
+     (:bit-4)
+
+     (const v1 24)
+     (if-ne v0 v1 :bit-5)
+     (const v7 1)
+     (:bit-5)
+
+     (return-void)
+    )
+)",
+                                             "{shift_instruction}",
+                                             param.shift_instruction));
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_THAT(assembler::to_string(code.get()),
+              ::testing::HasSubstr("(const v7 1)"))
+      << "Higest bit is determined to be 1, but it shouldn't";
+}
+
+TEST_P(ConstantBitwiseLeftShiftTest, LeftIntShiftDoesNotRetainHigher32Bits) {
+  const auto& param = GetParam();
+
+  auto code = assembler::ircode_from_string(
+      boost::replace_first_copy<std::string>(R"(
+    (
+     (load-param v0)
+     (load-param-wide v1)
+     (or-int/lit v0 v0 -2147483648)  ;; highest bit of v0 must be 1
+     {shift_instruction}  ;; highest bit should be shifted out now
+
+     (if-nez v0 :first)  ; This should stay, since v0 should have no determined one-bit
+     (const v3 1)
+     (:first)
+
+     ; Long will keep the states of the higher 32 bits.
+     (const-wide v2 2147483648)
+     (or-long v1 v1 v2)  ;; bit 31 of v1 must be 1
+     (const-wide v2 1)
+     (shl-long v1 v1 v2)
+     (const-wide v2 0)
+     (cmp-long v2 v1 v2)
+     (if-nez v2 :second)
+     (const v4 1)  ; infeasible
+     (:second)
+
+     (return-void)
+    )
+)",
+                                             "{shift_instruction}",
+                                             param.shift_instruction));
+  return;
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(
+      boost::replace_first_copy<std::string>(R"(
+    (
+     (load-param v0)
+     (load-param-wide v1)
+     (or-int/lit v0 v0 -2147483648)
+     {shift_instruction}
+
+     (if-nez v0 :first)
+     (const v3 1)
+     (:first)
+
+     (const-wide v2 2147483648)
+     (or-long v1 v1 v2)
+     (const-wide v2 1)
+     (shl-long v1 v1 v2)
+     (const-wide v2 0)
+     (cmp-long v2 v1 v2)
+     (:second)
+
+     (return-void)
+    )
+)",
+                                             "{shift_instruction}",
+                                             param.shift_instruction));
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    ConstantBitwiseLeftShiftTests,
+    ConstantBitwiseLeftShiftTest,
+    ::testing::ValuesIn(
+        std::initializer_list<ConstantBitwiseLeftShiftTest::ParamType>{
+            {
+                .name = "shl_int_lit",
+                .shift_instruction = "(shl-int/lit v0 v0 33)", // 0x21
+            },
+            {.name = "shl_int",
+             .shift_instruction = "(const v9 33)(shl-int v0 v0 v9)"},
+        }),
+    [](const testing::TestParamInfo<ConstantBitwiseLeftShiftTest::ParamType>&
+           info) { return info.param.name; });
+
+TEST_F(ConstantBitwiseLeftShiftTest, DeterminableBitsAfterLeftShiftLong) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param-wide v0)
+     (const-wide v1 -4)
+     (and-long v0 v0 v1)  ;; 1st and 2nd lowest bits of v0 must be 0
+     (const-wide v1 12)
+     (or-long v0 v0 v1)  ;; 3rd and 4th lowest bits of v0 must be 1
+     (const-wide v1 -9223372036854775808)
+     (or-long v0 v0 v1)  ;; Highest bit of v0 must be 1
+     (const-wide v1 65)  ;; 0x41
+     (shl-long v0 v0 v1)  ;; Lowest 5 bits: 11000
+
+     (const-wide v1 25)  ;; binary 0...011001
+     (cmp-long v1 v0 v1)
+     (if-nez v1 :bit-0)
+     (const v2 1)
+     (:bit-0)
+
+     (const-wide v1 26)  ;; binary 0...011010
+     (cmp-long v1 v0 v1)
+     (if-nez v1 :bit-1)
+     (const v3 1)
+     (:bit-1)
+
+     (const-wide v1 28)  ;; binary 0...011100
+     (cmp-long v1 v0 v1)
+     (if-nez v1 :bit-2)
+     (const v4 1)
+     (:bit-2)
+
+     (const-wide v1 16)  ;; binary 0...010000
+     (cmp-long v1 v0 v1)
+     (if-nez v1 :bit-3)
+     (const v5 1)
+     (:bit-3)
+
+     (const-wide v1 8)  ;; binary 0...001000
+     (cmp-long v1 v0 v1)
+     (if-nez v1 :bit-4)
+     (const v6 1)
+     (:bit-4)
+
+     (const-wide v1 24)  ;; binary 0...011000
+     (cmp-long v1 v0 v1)
+     (if-nez v1 :bit-5)
+     (const v7 1)
+     (:bit-5)
+
+     (return-void)
+    )
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param-wide v0)
+     (const-wide v1 -4)
+     (and-long v0 v0 v1)
+     (const-wide v1 12)
+     (or-long v0 v0 v1)
+     (const-wide v1 -9223372036854775808)
+     (or-long v0 v0 v1)
+     (const-wide v1 65)
+     (shl-long v0 v0 v1)
+
+     (const-wide v1 25)
+     (cmp-long v1 v0 v1)
+     (:bit-0)
+
+     (const-wide v1 26)
+     (cmp-long v1 v0 v1)
+     (:bit-1)
+
+     (const-wide v1 28)
+     (cmp-long v1 v0 v1)
+     (:bit-2)
+
+     (const-wide v1 16)
+     (cmp-long v1 v0 v1)
+     (:bit-3)
+
+     (const-wide v1 8)
+     (cmp-long v1 v0 v1)
+     (:bit-4)
+
+     (const-wide v1 24)
+     (cmp-long v1 v0 v1)
+     (if-nez v1 :bit-5)
+     (const v7 1)
+     (:bit-5)
+
+     (return-void)
+    )
+)");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_THAT(assembler::to_string(code.get()),
+              ::testing::HasSubstr("(const v7 1)"))
+      << "Higest bit is determined to be 1, but it shouldn't";
+}
 
 class ConstantBitwiseUnsignedRightShiftTest
     : public ConstantBitwiseTest,
