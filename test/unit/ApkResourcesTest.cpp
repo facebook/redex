@@ -318,14 +318,15 @@ TEST(ApkResources, TestDeleteOverlayableIds) {
 
 TEST(ApkResources, TestReachableRoots) {
   std::unordered_set<std::string> expected_resource_roots{
-      "keep_me_unused_color",
-      "keep_me_unused_str",
-  };
+      "keep_me_unused_color", "keep_me_unused_str", "red", "welcome", "plate"};
   setup_resources_and_run(
       [&](const std::string& temp_dir_path, ApkResources* resources) {
         ResourceConfig global_resources_config;
         resources::ReachabilityOptions options;
         options.assume_reachable_prefixes.emplace_back("keep_me_");
+        options.assume_reachable_names.insert("red");
+        options.assume_reachable_names.insert("welcome");
+        options.assume_reachable_names.insert("plate");
         auto res_table = resources->load_res_table();
         resources::ReachableResources reachable_resources(
             temp_dir_path, global_resources_config, options);

@@ -51,11 +51,17 @@ UnorderedSet<uint32_t> get_disallowed_resources(
   return disallowed_resources;
 }
 
-UnorderedSet<uint32_t> get_resources_by_name_prefix(
+UnorderedSet<uint32_t> get_resources_by_prefix_and_name(
     const std::vector<std::string>& prefixes,
+    const UnorderedSet<std::string>& names,
     const std::map<std::string, std::vector<uint32_t>>& name_to_ids) {
   UnorderedSet<uint32_t> found_resources;
   for (const auto& pair : name_to_ids) {
+    if (names.find(pair.first) != names.end()) {
+      found_resources.insert(pair.second.begin(), pair.second.end());
+      continue;
+    }
+
     for (const auto& prefix : UnorderedIterable(prefixes)) {
       if (boost::algorithm::starts_with(pair.first, prefix)) {
         found_resources.insert(pair.second.begin(), pair.second.end());
@@ -194,8 +200,9 @@ UnorderedSet<uint32_t> ReachableResources::get_resource_roots(
   m_manifest_roots = manifest_roots.size();
 
   // Configured assumptions.
-  auto assumed_reachable_roots = get_resources_by_name_prefix(
-      m_options.assume_reachable_prefixes, m_res_table->name_to_ids);
+  auto assumed_reachable_roots = get_resources_by_prefix_and_name(
+      m_options.assume_reachable_prefixes, m_options.assume_reachable_names,
+      m_res_table->name_to_ids);
   // Configured roots by resource type. These should be traversed like any other
   // reachable root.
   auto disallowed_type_ids =

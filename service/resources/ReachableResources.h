@@ -20,6 +20,7 @@ struct ReachabilityOptions {
   bool assume_id_inlined{false};
   bool check_string_for_name{false};
   std::vector<std::string> assume_reachable_prefixes;
+  UnorderedSet<std::string> assume_reachable_names;
   UnorderedSet<std::string> disallowed_types;
 };
 
