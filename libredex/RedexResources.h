@@ -59,6 +59,17 @@ const inline std::set<std::string> POSSIBLE_CLASS_ATTRIBUTES = {
 // Returns false if there is no dot or it's not a Java identifier.
 bool valid_xml_element(const std::string& ident);
 
+inline std::string fully_qualified_external_name(
+    const std::string& package_name, const std::string& class_name) {
+  if (class_name.empty()) {
+    return class_name;
+  }
+  if (class_name.at(0) == '.') {
+    return java_names::external_to_internal(package_name + class_name);
+  }
+  return java_names::external_to_internal(class_name);
+}
+
 struct StringOrReference {
   const std::string str;
   const uint32_t ref;
