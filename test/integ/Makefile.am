@@ -59,6 +59,7 @@ check_PROGRAMS = \
 if RUN_KOTLIN_TESTS
 # Add Kotlin tests here.
 check_PROGRAMS += \
+    bitwise_ops_constant_propagation_test \
     kotlin_default_args_test
 endif
 
@@ -106,6 +107,7 @@ TESTS = \
 if RUN_KOTLIN_TESTS
 # Add Kotlin tests here.
 TESTS += \
+    bitwise_ops_constant_propagation_test \
     kotlin_default_args_test
 endif
 
@@ -344,6 +346,8 @@ kotlinc_source_target = -jvm-target 9
 
 kotlin_default_args_test_SOURCES = KotlinDefaultArgsTest.cpp
 EXTRA_kotlin_default_args_test_DEPENDENCIES = kotlin_default_args_test-class.dex
+bitwise_ops_constant_propagation_test_SOURCES = BitwiseOpsConstantPropagationTest.cpp
+EXTRA_bitwise_ops_constant_propagation_test_DEPENDENCIES = bitwise_ops_constant_propagation_test-class.dex
 
 define create_jar_from_kotlin
 	mkdir -p $@.tmp
@@ -352,6 +356,9 @@ define create_jar_from_kotlin
 endef
 
 kotlin_default_args_test-class.jar: KotlinDefaultArgs.kt
+	$(create_jar_from_kotlin)
+
+bitwise_ops_constant_propagation_test-class.jar: BitwiseOpsConstantPropagationTest.kt
 	$(create_jar_from_kotlin)
 
 endif
