@@ -614,7 +614,8 @@ class SignedConstantDomain final
     // Set to top first to clear bit states.
     const uint64_t new_determined_zeros =
         ~((static_cast<uint32_t>(~get_determined_zero_bits())) >> shift);
-    const uint64_t new_determined_ones = get_determined_one_bits() >> shift;
+    const uint64_t new_determined_ones =
+        static_cast<uint32_t>(get_determined_one_bits()) >> shift;
     set_to_top();
     set_determined_bits_erasing_bounds(new_determined_zeros,
                                        new_determined_ones,
