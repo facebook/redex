@@ -246,6 +246,8 @@ struct ConfigFiles {
 
   bool evaluate_package_name() const;
 
+  bool enforce_class_order() const;
+
  private:
   JsonWrapper m_json;
   std::string outdir;

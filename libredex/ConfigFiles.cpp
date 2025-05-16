@@ -790,6 +790,10 @@ bool ConfigFiles::evaluate_package_name() const {
   return m_json.get("evaluate_package_name", true);
 }
 
+bool ConfigFiles::enforce_class_order() const {
+  return m_json.get("enforce_class_order", false);
+}
+
 void ConfigFiles::set_outdir(const std::string& new_outdir) {
   // Gotta ensure "meta" exists.
   auto meta_path = boost::filesystem::path(new_outdir) / "meta";

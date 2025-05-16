@@ -2758,6 +2758,39 @@ void write_bytecode_offset_mapping(
   fclose(fd);
 }
 
+int check_class_order(DexClasses* dex) {
+  auto valid_ordering =
+      [](const UnorderedMap<DexType*, uint32_t>& dexes_class_order,
+         DexType* cls_to_check,
+         uint32_t cur_index) -> bool {
+    auto find = dexes_class_order.find(cls_to_check);
+    if (find == dexes_class_order.end()) {
+      // Not defined in same dex, valid
+      return true;
+    }
+    // If cls_to_check was defined before cur_index, valid
+    // otherwise, invalid.
+    return find->second < cur_index;
+  };
+  UnorderedMap<DexType*, uint32_t> dexes_class_order;
+  int violation_count = 0;
+  for (uint32_t index = 0; index < dex->size(); ++index) {
+    dexes_class_order[dex->at(index)->get_type()] = index;
+  }
+  for (uint32_t index = 0; index < dex->size(); ++index) {
+    auto cur_cls = dex->at(index);
+    if (!valid_ordering(dexes_class_order, cur_cls->get_super_class(), index)) {
+      violation_count++;
+    }
+    for (auto intf : *cur_cls->get_interfaces()) {
+      if (!valid_ordering(dexes_class_order, intf, index)) {
+        violation_count++;
+      }
+    }
+  }
+  return violation_count;
+}
+
 } // namespace
 
 void DexOutput::write_symbol_files() {
@@ -2981,6 +3014,15 @@ enhanced_dex_stats_t write_classes_to_dex(
       interdex_config.get("normal_primary_dex", false).asBool();
 
   TRACE(OPUT, 2, "[write_classes_to_dex][filename] %s", filename.c_str());
+  auto this_class_order_violations = check_class_order(classes);
+  if (this_class_order_violations > 0) {
+    // If enforce_class_order was enabled we fail the program if there exist any
+    // violations, otherwise we just record the number of violation.
+    always_assert_log(!conf.enforce_class_order(),
+                      "Dex %s - %lu has %d class order violations",
+                      store_name->c_str(), dex_number,
+                      this_class_order_violations);
+  }
 
   DexOutput dout(filename.c_str(), classes, std::move(gtypes),
                  normal_primary_dex, store_number, store_name, dex_number,
@@ -2990,6 +3032,8 @@ enhanced_dex_stats_t write_classes_to_dex(
   dout.prepare(string_sort_mode, code_sort_mode, conf, dex_magic);
   dout.write();
   dout.metrics();
+
+  dout.m_stats.class_order_violations = this_class_order_violations;
   return dout.m_stats;
 }
 

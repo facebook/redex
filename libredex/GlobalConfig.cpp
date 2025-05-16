@@ -230,6 +230,9 @@ void GlobalConfig::bind_config() {
   bind("evaluate_package_name", true, bool_param,
        "When true, AndroidManifest.xml will be consulted for the application "
        "package name, and applied during constant propagation.");
+  bind("enforce_class_order", false, bool_param,
+       "When true, check class order is obeyed to fulfill dex37 verifier "
+       "requirements.");
 
   for (const auto& entry : m_registry) {
     m_global_configs.emplace(entry.name,
