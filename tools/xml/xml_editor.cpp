@@ -32,15 +32,10 @@ boost::optional<std::string> get_name_string(
     const struct android::ResStringPool_ref& name_ref,
     android::ResStringPool& pool) {
   auto idx = dtohl(name_ref.index);
-  size_t len;
-  auto chars = pool.stringAt(idx, &len);
-  if (chars != nullptr) {
-    android::String16 s16(chars, len);
-    android::String8 s8(s16);
-    return std::string(s8.string());
-  } else {
-    return boost::none;
+  if (arsc::is_valid_string_idx(pool, idx)) {
+    return arsc::get_string_from_pool(pool, idx);
   }
+  return boost::none;
 }
 
 // Writes the new string into the file's pool, if necessary and returns the pool
