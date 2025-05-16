@@ -757,6 +757,8 @@ Json::Value get_stats(const dex_stats_t& stats) {
   val["annotations_directory_count"] = stats.annotations_directory_count;
   val["annotations_directory_bytes"] = stats.annotations_directory_bytes;
 
+  val["class_order_violations"] = stats.class_order_violations;
+
   return val;
 }
 

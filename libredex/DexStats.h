@@ -107,5 +107,7 @@ struct dex_stats_t {
   int annotations_directory_count = 0;
   int annotations_directory_bytes = 0;
 
+  int class_order_violations = 0;
+
   dex_stats_t& operator+=(const dex_stats_t& rhs);
 };

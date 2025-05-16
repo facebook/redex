@@ -77,5 +77,7 @@ dex_stats_t& dex_stats_t::operator+=(const dex_stats_t& rhs) {
   annotations_directory_count += rhs.annotations_directory_count;
   annotations_directory_bytes += rhs.annotations_directory_bytes;
 
+  class_order_violations += rhs.class_order_violations;
+
   return *this;
 }
