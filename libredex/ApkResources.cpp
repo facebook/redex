@@ -673,7 +673,9 @@ bool find_nested_tag(const android::String16& search_tag,
  * Parse AndroidManifest from buffer, return a list of class names that are
  * referenced
  */
-ManifestClassInfo extract_classes_from_manifest(const char* data, size_t size) {
+ManifestClassInfo extract_classes_from_manifest(const std::string& package_name,
+                                                const char* data,
+                                                size_t size) {
   // Tags
   android::String16 activity("activity");
   android::String16 activity_alias("activity-alias");
@@ -723,19 +725,21 @@ ManifestClassInfo extract_classes_from_manifest(const char* data, size_t size) {
         // android:name is an optional attribute for <application>
         if (!classname.empty()) {
           manifest_classes.application_classes.emplace(
-              java_names::external_to_internal(classname));
+              resources::fully_qualified_external_name(package_name,
+                                                       classname));
         }
         std::string app_factory_cls =
             get_string_attribute_value(parser, app_component_factory);
         if (!app_factory_cls.empty()) {
           manifest_classes.application_classes.emplace(
-              java_names::external_to_internal(app_factory_cls));
+              resources::fully_qualified_external_name(package_name,
+                                                       app_factory_cls));
         }
       } else if (tag == instrumentation) {
         std::string classname = get_string_attribute_value(parser, name);
         always_assert(!classname.empty());
         manifest_classes.instrumentation_classes.emplace(
-            java_names::external_to_internal(classname));
+            resources::fully_qualified_external_name(package_name, classname));
       } else if (tag == queries) {
         // queries break the logic to find providers below because they don't
         // declare a name
@@ -774,11 +778,12 @@ ManifestClassInfo extract_classes_from_manifest(const char* data, size_t size) {
               get_string_attribute_value(parser, protection_level);
         }
 
-        ComponentTagInfo tag_info(string_to_tag.at(tag),
-                                  java_names::external_to_internal(classname),
-                                  export_attribute,
-                                  permission_attribute,
-                                  protection_level_attribute);
+        ComponentTagInfo tag_info(
+            string_to_tag.at(tag),
+            resources::fully_qualified_external_name(package_name, classname),
+            export_attribute,
+            permission_attribute,
+            protection_level_attribute);
 
         if (tag == provider) {
           std::string text = get_string_attribute_value(parser, authorities);
@@ -1325,7 +1330,16 @@ ManifestClassInfo ApkResources::get_manifest_class_info() {
         fprintf(stderr, "Unable to read manifest file: %s\n", manifest.c_str());
         return;
       }
-      classes = extract_classes_from_manifest(data, size);
+      auto package_name = get_manifest_package_name();
+      if (package_name == boost::none) {
+        // This possibly could be an assert instead of just tracing. For now,
+        // just mimic previous behavior which didn't even append package name.
+        TRACE(RES, 1,
+              "Unknown package name! Will assume manifest classes are fully "
+              "qualified.");
+        package_name = "";
+      }
+      classes = extract_classes_from_manifest(*package_name, data, size);
     });
   }
   return classes;

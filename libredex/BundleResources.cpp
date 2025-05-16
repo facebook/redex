@@ -194,17 +194,6 @@ bool find_nested_tag(const std::string& search_tag,
   return find_result;
 }
 
-inline std::string fully_qualified_external(const std::string& package_name,
-                                            const std::string& value) {
-  if (value.empty()) {
-    return value;
-  }
-  if (value.at(0) == '.') {
-    return java_names::external_to_internal(package_name + value);
-  }
-  return java_names::external_to_internal(value);
-}
-
 // Traverse a compound value message, and return a list of Item defined in
 // this message.
 std::vector<aapt::pb::Item> get_items_from_CV(
@@ -312,20 +301,22 @@ void read_single_manifest(const std::string& manifest,
                   auto classname = get_string_attribute_value(element, "name");
                   if (!classname.empty()) {
                     manifest_classes->application_classes.emplace(
-                        fully_qualified_external(package_name, classname));
+                        resources::fully_qualified_external_name(package_name,
+                                                                 classname));
                   }
                   auto app_factory_cls = get_string_attribute_value(
                       element, "appComponentFactory");
                   if (!app_factory_cls.empty()) {
                     manifest_classes->application_classes.emplace(
-                        fully_qualified_external(package_name,
-                                                 app_factory_cls));
+                        resources::fully_qualified_external_name(
+                            package_name, app_factory_cls));
                   }
                 } else if (tag == "instrumentation") {
                   auto classname = get_string_attribute_value(element, "name");
                   always_assert(!classname.empty());
                   manifest_classes->instrumentation_classes.emplace(
-                      fully_qualified_external(package_name, classname));
+                      resources::fully_qualified_external_name(package_name,
+                                                               classname));
                 } else if (string_to_tag.count(tag)) {
                   std::string classname = get_string_attribute_value(
                       element,
@@ -369,7 +360,8 @@ void read_single_manifest(const std::string& manifest,
 
                   ComponentTagInfo tag_info(
                       string_to_tag.at(tag),
-                      fully_qualified_external(package_name, classname),
+                      resources::fully_qualified_external_name(package_name,
+                                                               classname),
                       export_attribute,
                       permission_attribute,
                       protection_level_attribute);
