@@ -710,7 +710,7 @@ bool PrimitiveAnalyzer::analyze_binop_lit(
 
   if (op == OPCODE_AND_INT_LIT || op == OPCODE_OR_INT_LIT ||
       op == OPCODE_XOR_INT_LIT || op == OPCODE_USHR_INT_LIT ||
-      op == OPCODE_SHL_INT_LIT) {
+      op == OPCODE_SHR_INT_LIT || op == OPCODE_SHL_INT_LIT) {
     TRACE(CONSTP, 5, "Attempting to set bits in %s with literal %d", SHOW(insn),
           lit);
     switch (op) {
@@ -746,6 +746,10 @@ bool PrimitiveAnalyzer::analyze_binop_lit(
     }
     case OPCODE_USHR_INT_LIT: {
       scd.unsigned_right_shift_bits_int(lit);
+      break;
+    }
+    case OPCODE_SHR_INT_LIT: {
+      scd.signed_right_shift_bits_int(lit);
       break;
     }
     default:
@@ -910,6 +914,26 @@ bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
 
     SignedConstantDomain dest_scd(scd_left);
     dest_scd.unsigned_right_shift_bits_long(static_cast<int32_t>(*cst_right));
+    env->set(insn->dest(), dest_scd);
+    return true;
+  }
+  case OPCODE_SHR_INT: {
+    if (!cst_right) {
+      break;
+    }
+
+    SignedConstantDomain dest_scd(scd_left);
+    dest_scd.signed_right_shift_bits_int(static_cast<int32_t>(*cst_right));
+    env->set(insn->dest(), dest_scd);
+    return true;
+  }
+  case OPCODE_SHR_LONG: {
+    if (!cst_right) {
+      break;
+    }
+
+    SignedConstantDomain dest_scd(scd_left);
+    dest_scd.signed_right_shift_bits_long(static_cast<int32_t>(*cst_right));
     env->set(insn->dest(), dest_scd);
     return true;
   }
