@@ -49,6 +49,7 @@ create unnecessary bloat.
   bool m_insert_after_excs{true};
   bool m_always_inject{true};
   bool m_use_default_value{false};
+  bool m_fix_violations{false};
   std::vector<std::string> m_ordered_interactions;
 
   friend class SourceBlocksTest;
