@@ -385,11 +385,16 @@ struct Injector {
   std::vector<std::string> interactions;
   bool use_default_value;
   bool always_inject;
+  bool fix_violations;
 
-  Injector(ConfigFiles& conf, bool always_inject, bool use_default_value)
+  Injector(ConfigFiles& conf,
+           bool always_inject,
+           bool use_default_value,
+           bool fix_violations)
       : conf(conf),
         use_default_value(use_default_value),
-        always_inject(always_inject) {
+        always_inject(always_inject),
+        fix_violations(fix_violations) {
     // Prefetch the method profiles. We may need them when block profiles
     // are missing and it's easier to do it here than have to synchronize
     // loading later. (It's probably also amortized with later passes.)
@@ -654,6 +659,10 @@ struct Injector {
                 sb_name, &cfg, use_default_value, profiles.first, serialize,
                 exc_inject);
 
+            if (fix_violations) {
+              source_blocks::fix_chain_violations(&cfg);
+            }
+
             smi.add({sb_name, std::move(res.serialized),
                      std::move(res.serialized_idom_map)});
 
@@ -892,7 +901,7 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
   bool is_instr_mode = mgr.get_redex_options().instrument_pass_enabled;
   bool always_inject = m_always_inject || m_force_serialize || is_instr_mode;
 
-  Injector inj(conf, always_inject, m_use_default_value);
+  Injector inj(conf, always_inject, m_use_default_value, m_fix_violations);
 
   inj.prepare_profile_files_and_interactions(m_profile_files,
                                              m_ordered_interactions);
