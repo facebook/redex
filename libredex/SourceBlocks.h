@@ -238,6 +238,8 @@ void fix_chain_violations(ControlFlowGraph* cfg);
 
 void fix_idom_violations(ControlFlowGraph* cfg);
 
+void fix_hot_method_cold_entry_violations(ControlFlowGraph* cfg);
+
 bool has_source_block_positive_val(const SourceBlock* sb);
 
 inline bool has_source_blocks(const cfg::Block* b) {
