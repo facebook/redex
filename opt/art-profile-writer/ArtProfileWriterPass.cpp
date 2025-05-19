@@ -30,6 +30,7 @@
 #include "PassManager.h"
 #include "Show.h"
 #include "SourceBlocks.h"
+#include "TypeInference.h"
 #include "Walkers.h"
 
 namespace {
@@ -139,11 +140,30 @@ void never_inline(bool attach_annotations,
     return true;
   };
 
+  using ReceiverMap = std::unordered_map<const IRInstruction*, const DexType*>;
+  InsertOnlyConcurrentMap<DexMethod*, ReceiverMap> receiver_types;
   auto get_callee = [&](DexMethod* caller,
                         IRInstruction* invoke_insn) -> DexMethod* {
     DexMethod* callee;
     do {
-      callee = resolve_invoke_method(invoke_insn, caller);
+      callee = nullptr;
+      auto caller_it = receiver_types.find(caller);
+      if (caller_it != receiver_types.end()) {
+        const auto& map = caller_it->second;
+        auto map_it = map.find(invoke_insn);
+        if (map_it != map.end()) {
+          auto receiver_type = map_it->second;
+          auto receiver_cls = type_class(receiver_type);
+          if (receiver_cls && !is_interface(receiver_cls)) {
+            auto invoke_method = invoke_insn->get_method();
+            callee = resolve_virtual(receiver_cls, invoke_method->get_name(),
+                                     invoke_method->get_proto());
+          }
+        }
+      }
+      if (callee == nullptr) {
+        callee = resolve_invoke_method(invoke_insn, caller);
+      }
       if (!consider_callee(callee)) {
         return nullptr;
       }
@@ -154,29 +174,95 @@ void never_inline(bool attach_annotations,
   };
 
   // Analyze caller/callee relationships
-  std::atomic<size_t> callers_too_large{0};
+  std::atomic<size_t> callers_too_many_instructions{0};
+  std::atomic<size_t> callers_too_many_registers{0};
   InsertOnlyConcurrentSet<DexMethod*> hot_cold_callees;
   InsertOnlyConcurrentSet<DexMethod*> hot_hot_callees;
-  InsertOnlyConcurrentMap<DexMethod*, size_t> estimated_code_units;
+  InsertOnlyConcurrentMap<DexMethod*, uint32_t> estimated_code_units;
+  InsertOnlyConcurrentMap<DexMethod*, size_t> estimated_instructions;
+  InsertOnlyConcurrentMap<DexMethod*, bool> has_catches;
+  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
+    uint32_t ecu = code.estimate_code_units();
+    estimated_code_units.emplace(method, ecu);
+    size_t instructions = code.count_opcodes();
+    estimated_instructions.emplace(method, instructions);
+
+    auto blocks = code.cfg().blocks();
+    bool has_catch =
+        std::any_of(blocks.begin(), blocks.end(),
+                    [](cfg::Block* block) { return block->is_catch(); });
+    has_catches.emplace(method, has_catch);
+
+    type_inference::TypeInference ti(code.cfg());
+    ti.run(method);
+    const auto& type_envs = ti.get_type_environments();
+    ReceiverMap map;
+    for (auto& mie : InstructionIterable(code.cfg())) {
+      auto* insn = mie.insn;
+      auto op = insn->opcode();
+      if (!opcode::is_invoke_virtual(op) && !opcode::is_invoke_interface(op)) {
+        continue;
+      }
+      always_assert(type_envs.count(insn));
+      const auto& env = type_envs.at(insn);
+      auto dex_type = env.get_dex_type(insn->src(0));
+      if (dex_type.has_value()) {
+        map.emplace(insn, *dex_type);
+      }
+    }
+    receiver_types.emplace(method, std::move(map));
+  });
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
-    auto ecu = code.estimate_code_units();
-    estimated_code_units.emplace(caller, ecu);
     if (!is_compiled(baseline_profile, caller)) {
       return;
     }
-    if (ecu > 2048) {
-      // Way over the 1024 threshold of the AOT compiler, to be conservative.
-      callers_too_large.fetch_add(1);
+    size_t caller_instructions = estimated_instructions.at(caller);
+    // Over the 1024 threshold of the AOT compiler, to be conservative.
+    size_t MAX_INSTRUCTIONS = 1100;
+    if (caller_instructions > MAX_INSTRUCTIONS) {
+      callers_too_many_instructions.fetch_add(1);
+      return;
+    }
+    size_t caller_registers = code.cfg().get_registers_size();
+    size_t MAX_REGISTERS = 32;
+    if (caller_registers > MAX_REGISTERS) {
+      callers_too_many_registers.fetch_add(1);
       return;
     }
     for (auto* b : code.cfg().blocks()) {
-      for (auto& mie : InstructionIterable(b)) {
-        if (!opcode::is_an_invoke(mie.insn->opcode())) {
+      bool callsite_has_catch =
+          code.cfg().get_succ_edge_of_type(b, cfg::EDGE_THROW) != nullptr;
+      bool has_throw = false;
+      bool has_non_init_invoke = false;
+      for (auto rit = b->rbegin(); rit != b->rend(); ++rit) {
+        if (rit->type != MFLOW_OPCODE) {
+          continue;
+        }
+        auto* insn = rit->insn;
+        if (!opcode::is_an_invoke(insn->opcode())) {
+          if (opcode::is_throw(insn->opcode())) {
+            has_throw = true;
+          }
+          continue;
+        }
+        if (has_throw && !has_non_init_invoke) {
+          if (!method::is_init(insn->get_method())) {
+            has_non_init_invoke = true;
+          }
           continue;
         }
 
-        DexMethod* callee = get_callee(caller, mie.insn);
+        DexMethod* callee = get_callee(caller, insn);
         if (!callee) {
+          continue;
+        }
+
+        auto it = estimated_instructions.find(callee);
+        if (it == estimated_instructions.end()) {
+          continue;
+        }
+
+        if (callsite_has_catch && has_catches.at(callee)) {
           continue;
         }
 
@@ -188,7 +274,10 @@ void never_inline(bool attach_annotations,
       }
     }
   });
-  mgr.incr_metric("never_inline_callers_too_large", callers_too_large.load());
+  mgr.incr_metric("never_inline_callers_too_many_instructions",
+                  callers_too_many_instructions.load());
+  mgr.incr_metric("never_inline_callers_too_many_registers",
+                  callers_too_many_registers.load());
   mgr.incr_metric("never_inline_hot_cold_callees", hot_cold_callees.size());
   mgr.incr_metric("never_inline_hot_hot_callees", hot_hot_callees.size());
 
@@ -198,6 +287,7 @@ void never_inline(bool attach_annotations,
   std::atomic<size_t> callees_simple = 0;
   std::atomic<size_t> callees_too_small = 0;
   std::atomic<size_t> callees_too_large = 0;
+  std::atomic<size_t> callees_always_throw = 0;
   std::atomic<size_t> callees_annotation_attached = 0;
   walk::code(scope, [&](DexMethod* method, IRCode& code) {
     if (has_anno(method, type::dalvik_annotation_optimization_NeverInline())) {
@@ -214,14 +304,20 @@ void never_inline(bool attach_annotations,
       return;
     }
 
-    auto ecu = code.estimate_code_units();
-    if (ecu > 32) {
+    if (code.cfg().return_blocks().empty()) {
+      callees_always_throw.fetch_add(1);
+      return;
+    }
+
+    auto ecu = estimated_code_units.at(method);
+    if (ecu > 40) {
       // Way over the 14 threshold of the AOT compiler, to be conservative.
       callees_too_large.fetch_add(1);
       return;
     }
 
-    if (ecu <= 3) {
+    auto instructions = estimated_instructions.at(method);
+    if (instructions <= 3) {
       callees_too_small.fetch_add(1);
       return;
     }
@@ -255,6 +351,8 @@ void never_inline(bool attach_annotations,
   mgr.incr_metric("never_inline_callees_simple", callees_simple.load());
   mgr.incr_metric("never_inline_callees_too_small", callees_too_small.load());
   mgr.incr_metric("never_inline_callees_too_large", callees_too_large.load());
+  mgr.incr_metric("never_inline_callees_always_throw",
+                  callees_always_throw.load());
   mgr.incr_metric("never_inline_callees_annotation_attached",
                   callees_annotation_attached.load());
 }
