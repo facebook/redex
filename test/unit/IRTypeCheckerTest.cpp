@@ -3383,7 +3383,7 @@ TEST_P(IRTypeCheckerAgetPassTest, test) {
   checker.run();
   EXPECT_FALSE(checker.fail()) << checker.what();
 }
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     AGetMatching,
     IRTypeCheckerAgetPassTest,
     ::testing::ValuesIn(get_aget_opcodes_and_descriptors()),
@@ -3476,16 +3476,16 @@ TEST_P(IRTypeCheckerAgetFailTest, failArrayType) {
   checker.run();
   EXPECT_TRUE(checker.fail());
 }
-INSTANTIATE_TEST_CASE_P(AGetNotMatching,
-                        IRTypeCheckerAgetFailTest,
-                        ::testing::ValuesIn(get_aget_mismatches()),
-                        [](const testing::TestParamInfo<
-                            IRTypeCheckerAgetFailTest::ParamType>& info) {
-                          std::string name = format_param(info.param.first);
-                          name.append("_");
-                          name.append(format_param(info.param.second));
-                          return name;
-                        });
+INSTANTIATE_TEST_SUITE_P(AGetNotMatching,
+                         IRTypeCheckerAgetFailTest,
+                         ::testing::ValuesIn(get_aget_mismatches()),
+                         [](const testing::TestParamInfo<
+                             IRTypeCheckerAgetFailTest::ParamType>& info) {
+                           std::string name = format_param(info.param.first);
+                           name.append("_");
+                           name.append(format_param(info.param.second));
+                           return name;
+                         });
 
 TEST_F(IRTypeCheckerTest, aputArrayTypePass) {
   const auto type_a = DexType::make_type("LA;");
@@ -3563,7 +3563,7 @@ TEST_P(IRTypeCheckerAputPassTest, test) {
   checker.run();
   EXPECT_FALSE(checker.fail()) << checker.what();
 }
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     APutMatching,
     IRTypeCheckerAputPassTest,
     ::testing::ValuesIn(get_aput_opcodes_and_descriptors()),
@@ -3659,16 +3659,16 @@ TEST_P(IRTypeCheckerAputFailTest, failArrayType) {
   checker.run();
   EXPECT_TRUE(checker.fail()) << body;
 }
-INSTANTIATE_TEST_CASE_P(APutNotMatching,
-                        IRTypeCheckerAputFailTest,
-                        ::testing::ValuesIn(get_aput_mismatches()),
-                        [](const testing::TestParamInfo<
-                            IRTypeCheckerAputFailTest::ParamType>& info) {
-                          std::string name = format_param(info.param.first);
-                          name.append("_");
-                          name.append(format_param(info.param.second));
-                          return name;
-                        });
+INSTANTIATE_TEST_SUITE_P(APutNotMatching,
+                         IRTypeCheckerAputFailTest,
+                         ::testing::ValuesIn(get_aput_mismatches()),
+                         [](const testing::TestParamInfo<
+                             IRTypeCheckerAputFailTest::ParamType>& info) {
+                           std::string name = format_param(info.param.first);
+                           name.append("_");
+                           name.append(format_param(info.param.second));
+                           return name;
+                         });
 
 namespace {
 
@@ -3715,7 +3715,7 @@ TEST_P(IRTypeCheckerAputIntFloatPassTest, test) {
   checker.run();
   EXPECT_FALSE(checker.fail()) << checker.what();
 }
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     APutIntFloatMatching,
     IRTypeCheckerAputIntFloatPassTest,
     ::testing::ValuesIn(get_aput_intfloat_pass_descriptors()),
@@ -3769,7 +3769,7 @@ TEST_P(IRTypeCheckerAputIntFloatMismatchTest, test) {
   checker.run();
   EXPECT_TRUE(checker.fail()) << method_descr << body_template;
 }
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     APutIntFloatMismatching,
     IRTypeCheckerAputIntFloatMismatchTest,
     ::testing::ValuesIn(get_aput_intfloat_mismatch_descriptors()),
@@ -3822,7 +3822,7 @@ TEST_P(IRTypeCheckerAputWidePassTest, test) {
   checker.run();
   EXPECT_FALSE(checker.fail()) << checker.what();
 }
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     APutWideMatching,
     IRTypeCheckerAputWidePassTest,
     ::testing::ValuesIn(get_aput_wide_pass_descriptors()),
@@ -3873,7 +3873,7 @@ TEST_P(IRTypeCheckerAputWideMismatchTest, test) {
   checker.run();
   EXPECT_TRUE(checker.fail()) << method_descr << body_template;
 }
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     APutWideMismatching,
     IRTypeCheckerAputWideMismatchTest,
     ::testing::ValuesIn(get_aput_wide_mismatch_descriptors()),
