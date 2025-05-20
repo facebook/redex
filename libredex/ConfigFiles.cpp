@@ -647,7 +647,7 @@ void ConfigFiles::init_baseline_profile_configs() {
     baseline_profile_config_jw.get(
         "use_redex_generated_profile", false,
         current_baseline_profile_config.options.use_redex_generated_profile);
-    baseline_profile_config_jw.get("use_final_redex_generated_profile", false,
+    baseline_profile_config_jw.get("use_final_redex_generated_profile", true,
                                    current_baseline_profile_config.options
                                        .use_final_redex_generated_profile);
     baseline_profile_config_jw.get("include_betamap_20pct_coldstart", true,
