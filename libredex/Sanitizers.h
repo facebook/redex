@@ -23,6 +23,7 @@ inline void lsan_do_leak_check() { __lsan_do_leak_check(); }
 inline int lsan_do_recoverable_leak_check() {
   return __lsan_do_recoverable_leak_check();
 }
+inline void lsan_ignore_object(const void* p) { __lsan_ignore_object(p); }
 
 #else
 
@@ -30,6 +31,7 @@ static constexpr bool kIsAsan = false;
 
 inline void lsan_do_leak_check() {}
 inline int lsan_do_recoverable_leak_check() { return 0; }
+inline void lsan_ignore_object(const void*) {}
 
 #endif // __has_feature(address_sanitizer)
 
