@@ -81,6 +81,12 @@ bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, reg_t reg) {
     return true;
   }
 
+  if (b->preds().size() > 1) {
+    // If there exists multiple ways to get to a block, this can be problematic
+    // for tracking extra loads, which only is implemented for leafs.
+    return true;
+  }
+
   const auto& last = b->get_last_insn();
   if (last == b->end()) {
     // No instructions in this block => can't be part of the switching logic =>
