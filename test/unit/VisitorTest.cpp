@@ -13,6 +13,7 @@
 #include "utils/ByteOrder.h"
 #include "utils/Visitor.h"
 
+#include "ApkResources.h"
 #include "RedexMappedFile.h"
 #include "RedexTest.h"
 
@@ -247,13 +248,16 @@ TEST(Visitor, VisitXmlStrings) {
 }
 
 TEST(Visitor, VisitOverlayableIds) {
-  auto f = RedexMappedFile::open(get_env("test_res_path"));
-  std::vector<uint32_t> expected_ids{0x7f090002, 0x7f090006, 0x7f090007,
-                                     0x7f09000f, 0x7f090010};
+  auto arsc_path = get_env("test_res_path");
+  ResourcesArscFile res_table(arsc_path);
+  std::vector<std::string> expected_overlayable_names{
+      "button_txt", "log_msg", "log_msg_again", "welcome", "yummy_orange"};
   OverlayableIdsCollector collector;
+  auto f = RedexMappedFile::open(arsc_path);
   collector.visit(const_cast<char*>(f.const_data()), f.size());
-  EXPECT_EQ(collector.m_ids.size(), expected_ids.size());
-  for (auto id : expected_ids) {
+  EXPECT_EQ(collector.m_ids.size(), expected_overlayable_names.size());
+  for (auto& name : expected_overlayable_names) {
+    auto id = res_table.name_to_ids.at(name).at(0);
     EXPECT_TRUE(collector.m_ids.count(id) > 0)
         << "Did not find 0x" << std::hex << id;
   }
