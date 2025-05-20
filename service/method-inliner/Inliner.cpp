@@ -137,7 +137,8 @@ MultiMethodInliner::MultiMethodInliner(
     const UnorderedSet<const DexMethod*>* unfinalized_init_methods,
     InsertOnlyConcurrentSet<DexMethod*>* methods_with_write_barrier,
     const method_override_graph::Graph* method_override_graph)
-    : m_concurrent_resolver(std::move(concurrent_resolve_fn)),
+    : m_min_sdk_api(min_sdk_api),
+      m_concurrent_resolver(std::move(concurrent_resolve_fn)),
       m_scheduler(
           [this](DexMethod* method) {
             auto it = caller_callee.find(method);
@@ -205,13 +206,8 @@ MultiMethodInliner::MultiMethodInliner(
   // Walk every opcode in scope looking for calls to inlinable candidates and
   // build a map of callers to callees and the reverse callees to callers.
   if (min_sdk_api) {
-    const auto& xstores = m_shrinker.get_xstores();
     m_ref_checkers =
-        std::make_unique<std::vector<std::unique_ptr<RefChecker>>>();
-    for (size_t store_idx = 0; store_idx < xstores.size(); store_idx++) {
-      m_ref_checkers->emplace_back(
-          std::make_unique<RefChecker>(&xstores, store_idx, min_sdk_api));
-    }
+        std::make_unique<InsertOnlyConcurrentMap<size_t, RefChecker>>();
   }
 
   walk::parallel::opcodes(
@@ -2467,12 +2463,21 @@ bool MultiMethodInliner::problematic_refs(
     const DexMethod* caller,
     const DexMethod* callee,
     const cfg::ControlFlowGraph* reduced_cfg) {
+  always_assert(caller->get_class() != callee->get_class());
   always_assert(m_ref_checkers);
   auto callee_code_refs = get_callee_code_refs(callee, reduced_cfg);
   always_assert(callee_code_refs);
-  const auto& xstores = m_shrinker.get_xstores();
-  size_t store_idx = xstores.get_store_idx(caller->get_class());
-  auto& ref_checker = m_ref_checkers->at(store_idx);
+  size_t store_idx =
+      m_shrinker.get_xstores().get_store_idx(caller->get_class());
+  auto* ref_checker =
+      m_ref_checkers
+          ->get_or_create_and_assert_equal(
+              store_idx,
+              [&](auto) {
+                const auto& xstores = m_shrinker.get_xstores();
+                return RefChecker(&xstores, store_idx, m_min_sdk_api);
+              })
+          .first;
   if (!ref_checker->check_code_refs(*callee_code_refs)) {
     info.problematic_refs++;
     return true;

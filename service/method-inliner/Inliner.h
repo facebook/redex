@@ -666,7 +666,9 @@ class MultiMethodInliner {
   // Under these conditions, a constructor is universally inlinable.
   bool can_inline_init(const DexMethod* init_method);
 
-  std::unique_ptr<std::vector<std::unique_ptr<RefChecker>>> m_ref_checkers;
+  const api::AndroidSDK* m_min_sdk_api;
+
+  std::unique_ptr<InsertOnlyConcurrentMap<size_t, RefChecker>> m_ref_checkers;
 
   /**
    * Resolver function to map a method reference to a method definition. Must be
