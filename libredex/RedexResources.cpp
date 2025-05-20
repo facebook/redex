@@ -13,6 +13,8 @@
 #include <boost/filesystem/operations.hpp>
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <boost/optional.hpp>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/xml_parser.hpp>
 #include <boost/regex/pending/unicode_iterator.hpp>
 #include <map>
 #include <mutex>
@@ -21,6 +23,7 @@
 
 #include "ApkResources.h"
 #include "BundleResources.h"
+#include "CppUtil.h"
 #include "Debug.h"
 #include "DetectBundle.h"
 #include "DexUtil.h"
@@ -568,4 +571,45 @@ void resources_inlining_find_refs(
     }
   }
 }
+
+// TODO: Support pattern matching (T224930363)
+UnorderedSet<std::string> parse_keep_xml_file(
+    const std::string& xml_file_path) {
+  UnorderedSet<std::string> resource_names;
+  boost::property_tree::ptree tree;
+  std::ifstream xml_file(xml_file_path);
+
+  try {
+    boost::property_tree::read_xml(
+        xml_file, tree, boost::property_tree::xml_parser::trim_whitespace);
+  } catch (const std::exception& e) {
+    std::cerr << "Error parsing XML file at " << xml_file_path << ": "
+              << e.what() << std::endl;
+    return resource_names;
+  } catch (...) {
+    std::cerr << "Unknown error occurred while parsing XML file at "
+              << xml_file_path << std::endl;
+    return resource_names;
+  }
+
+  boost::optional<std::string> keep_value =
+      tree.get_optional<std::string>("resources.<xmlattr>.tools:keep");
+
+  if (!keep_value.has_value()) {
+    return resource_names;
+  }
+
+  std::string keep_str = keep_value.value();
+  for (const auto& token : split_string(keep_str, ",")) {
+    std::string_view trimmed_token = trim_whitespaces(token);
+    size_t pos = trimmed_token.find('/');
+    if (pos != std::string::npos) {
+      trimmed_token = trimmed_token.substr(pos + 1);
+    }
+    resource_names.insert(std::string(trimmed_token));
+  }
+
+  return resource_names;
+}
+
 } // namespace resources

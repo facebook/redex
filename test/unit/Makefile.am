@@ -535,7 +535,10 @@ resources_test_SOURCES = RedexResourcesTest.cpp
 EXTRA_resources_test_DEPENDENCIES = resources_test.env more_resources/res/layout/class_names.xml
 $(eval $(call make_env,resources_test,\
   test_layout_path=$(srcdir)/example_layout_with_onclick.xml \
-  another_layout_path=more_resources/res/layout/class_names.xml))
+  another_layout_path=more_resources/res/layout/class_names.xml \
+  single_resource_inclusion_path=$(srcdir)/example_single_resource_to_keep.xml \
+  multiple_resource_inclusion_path=$(srcdir)/example_multiple_resource_to_keep.xml \
+  empty_resource_inclusion_path=$(srcdir)/example_no_resource_to_keep.xml))
 
 more_resources/res/layout/class_names.xml:
 	mkdir -p more_resources && unzip ../samples/more_resources/unsigned.apk -d more_resources res/layout/class_names.xml

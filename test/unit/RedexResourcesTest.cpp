@@ -109,3 +109,25 @@ TEST(RedexResources, Mutf8Conversion) {
   // not changed
   verify(u8"e\u0205\u1E15", {0x65, 0xc8, 0x85, 0xe1, 0xb8, 0x95});
 }
+
+TEST(RedexResources, GetResourcesToKeep) {
+  UnorderedSet<std::string> single_class_to_keep =
+      resources::parse_keep_xml_file(get_env("single_resource_inclusion_path"));
+
+  UnorderedSet<std::string> expected_single_class{"CronetProviderClassName"};
+
+  EXPECT_EQ(expected_single_class, single_class_to_keep);
+
+  UnorderedSet<std::string> expected_multiple_class{
+      "CronetProviderClassName", "FooProviderClassName", "BarProviderClassName",
+      "AnakinProviderClassName"};
+  UnorderedSet<std::string> multiple_class_to_keep_and_spacing =
+      resources::parse_keep_xml_file(
+          get_env("multiple_resource_inclusion_path"));
+  EXPECT_EQ(expected_multiple_class, multiple_class_to_keep_and_spacing);
+
+  UnorderedSet<std::string> expected_empty_class{};
+  UnorderedSet<std::string> empty_class_to_keep =
+      resources::parse_keep_xml_file(get_env("empty_resource_inclusion_path"));
+  EXPECT_EQ(expected_empty_class, empty_class_to_keep);
+}

@@ -109,6 +109,9 @@ struct StringOrReferenceHasher {
 using StringOrReferenceSet =
     UnorderedSet<StringOrReference, StringOrReferenceHasher>;
 
+// Helper for parsing resources in "tools:keep" part of xml file
+UnorderedSet<std::string> parse_keep_xml_file(const std::string& xml_file_path);
+
 // Helper for dealing with differences in character encoding between .arsc and
 // .pb files.
 std::string convert_utf8_to_mutf8(const std::string& input);
