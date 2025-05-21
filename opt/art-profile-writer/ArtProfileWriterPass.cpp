@@ -690,12 +690,18 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   auto& manual_profile = std::get<0>(baseline_profiles_tuple);
   for (const auto& [config_name, baseline_profile_config] :
        UnorderedIterable(conf.get_baseline_profile_configs())) {
+
     if (baseline_profile_config.options.include_all_startup_classes) {
       const std::vector<std::string>& interdexorder =
           conf.get_coldstart_classes();
       std::vector<DexClass*> coldstart_classes;
       auto& baseline_profile = baseline_profiles[config_name];
       for (const auto& entry : interdexorder) {
+        // Limit to just the 20% cold start set
+        if (entry.find("ColdStart20PctEnd") != std::string::npos) {
+          break;
+        }
+
         DexType* type = DexType::get_type(entry);
         if (type) {
           auto coldstart_class = type_class(type);
@@ -705,15 +711,17 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
           }
         }
       }
+
       baseline_profiles::MethodFlags flags;
       flags.hot = true;
-      flags.startup = true;
+      flags.startup = false;
       walk::methods(coldstart_classes,
                     [&baseline_profile, flags](DexMethod* method) {
                       baseline_profile.methods.emplace(method, flags);
                     });
     }
   }
+
   auto scope = build_class_scope(stores);
   if (m_never_compile_callcount_threshold > -1 ||
       m_never_compile_perf_threshold > -1 ||
