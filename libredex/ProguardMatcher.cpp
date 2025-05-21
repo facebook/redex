@@ -659,7 +659,8 @@ std::string method_regex(const MemberSpecification& method_spec) {
 }
 
 void KeepRuleMatcher::apply_method_keeps(const DexClass* cls) {
-  auto methodSpecifications = m_keep_rule.class_spec.methodSpecifications;
+  const auto& methodSpecifications =
+      m_keep_rule.class_spec.methodSpecifications;
   for (auto& method_spec : methodSpecifications) {
     auto qualified_method_regex = method_regex(method_spec);
     const boost::regex& method_regex = register_matcher(qualified_method_regex);
