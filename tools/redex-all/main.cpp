@@ -75,6 +75,7 @@
 #include "SanitizersConfig.h"
 #include "ScopedMemStats.h"
 #include "Show.h"
+#include "SignedConstantDomain.h"
 #include "ThreadPool.h"
 #include "Timer.h"
 #include "ToolsCommon.h"
@@ -1879,6 +1880,9 @@ int main(int argc, char* argv[]) {
 
     keep_reason::Reason::set_record_keep_reasons(
         args.config.get("record_keep_reasons", false).asBool());
+
+    signed_constant_domain::enable_bitset =
+        args.config.get("enable_bitset_constant_propagation", false).asBool();
 
     // For convenience.
     g_redex->instrument_mode = args.redex_options.instrument_pass_enabled;
