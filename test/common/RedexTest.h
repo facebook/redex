@@ -53,9 +53,18 @@ inline std::string get_env(const char* name) {
   return env_file;
 }
 
+// TODO(TT222824773): Remove this.
+namespace signed_constant_domain {
+extern bool enable_bitset;
+} // namespace signed_constant_domain
+
 struct RedexTest : public testing::Test {
  public:
-  RedexTest() { g_redex = new RedexContext(); }
+  RedexTest() {
+    g_redex = new RedexContext();
+    // TODO(TT222824773): Remove this.
+    signed_constant_domain::enable_bitset = true;
+  }
 
   ~RedexTest() { delete g_redex; }
 

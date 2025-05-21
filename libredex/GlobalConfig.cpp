@@ -195,6 +195,8 @@ void GlobalConfig::bind_config() {
   bind("force_single_dex", false, bool_param);
   bind("emit_incoming_hashes", false, bool_param);
   bind("emit_outgoing_hashes", false, bool_param);
+  bind("enable_bitset_constant_propagation", false, bool_param,
+       "When true, enable bitset constant propagation");
   bind("ignore_no_keep_rules", {}, bool_param);
   bind("instruction_size_bitwidth_limit", 0u, uint32_param);
   bind("json_serde_supercls", {}, string_vector_param);
