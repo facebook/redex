@@ -1425,18 +1425,28 @@ void ControlFlowGraph::sanity_check() const {
                         SHOW(*this));
     }
 
-    const auto& throws = b->get_outgoing_throws_in_order();
-    bool last = true;
-    // Only the last throw edge can have a null catch type.
-    for (auto it = throws.rbegin(); it != throws.rend(); ++it) {
-      Edge* e = *it;
-      if (!last) {
-        always_assert_log(
-            e->throw_info()->catch_type != nullptr,
-            "Can't have a catchall (%zu -> %zu) that isn't last. %s",
-            e->src()->id(), e->target()->id(), SHOW(*this));
+    {
+      std::optional<uint32_t> first_null_index;
+      std::optional<uint32_t> last_non_null_index;
+      for (const auto* e : b->succs()) {
+        if (e->type() != EDGE_THROW) {
+          continue;
+        }
+        auto* info = e->throw_info();
+        if (info->catch_type == nullptr) {
+          first_null_index = first_null_index
+                                 ? std::min(*first_null_index, info->index)
+                                 : info->index;
+        } else {
+          last_non_null_index =
+              last_non_null_index ? std::max(*last_non_null_index, info->index)
+                                  : info->index;
+        }
       }
-      last = false;
+      always_assert_log(!last_non_null_index || !first_null_index ||
+                            (*last_non_null_index < *first_null_index),
+                        "Can't have a catchall that isn't last. %s",
+                        SHOW(*this));
     }
   }
 
