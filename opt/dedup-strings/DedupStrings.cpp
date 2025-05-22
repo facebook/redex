@@ -152,6 +152,10 @@ UnorderedSet<const DexMethod*> DedupStrings::get_perf_sensitive_methods(
         m_perf_mode == DedupStringsPerfMode::EXCLUDE_HOT_METHODS_OR_CLASSES ||
         m_perf_mode ==
             DedupStringsPerfMode::EXCLUDE_HOT_BLOCKS_IN_HOT_METHODS_OR_CLASSES);
+    auto it = m_baseline_profile.methods.find(method);
+    if (it != m_baseline_profile.methods.end() && it->second.hot) {
+      return true;
+    }
     if (!m_method_profiles.has_stats()) {
       return cls->is_perf_sensitive();
     }
@@ -727,6 +731,7 @@ void DedupStringsPass::bind_config() {
   bind("perf_mode", "exclude-hot-methods-or-classes", perf_mode_str);
   bind("host_class_name_prefix", "Lcom/redex/Strings$",
        m_host_class_name_prefix);
+  bind("use_baseline_profile", m_use_baseline_profile, m_use_baseline_profile);
 
   trait(Traits::Pass::unique, true);
 
@@ -757,9 +762,16 @@ void DedupStringsPass::run_pass(DexStoresVector& stores,
   mgr.release_reserved_refs(*m_reserved_refs_handle);
   m_reserved_refs_handle = std::nullopt;
 
+  const auto& method_profiles = conf.get_method_profiles();
+  auto baseline_profile =
+      m_use_baseline_profile
+          ? baseline_profiles::get_default_baseline_profile(
+                conf.get_baseline_profile_configs(), method_profiles)
+          : baseline_profiles::BaselineProfile();
+
   DedupStrings ds(m_max_factory_methods,
                   m_method_profiles_appear_percent_threshold, m_perf_mode,
-                  m_host_class_name_prefix, conf.get_method_profiles());
+                  m_host_class_name_prefix, method_profiles, baseline_profile);
   ds.run(stores);
   const auto stats = ds.get_stats();
   mgr.incr_metric(METRIC_PERF_SENSITIVE_STRINGS, stats.perf_sensitive_strings);
