@@ -598,8 +598,8 @@ bool PrimitiveAnalyzer::analyze_unop(const IRInstruction* insn,
           ~static_cast<uint64_t>(std::numeric_limits<uint32_t>::max());
       new_determined_ones &= std::numeric_limits<uint32_t>::max();
     }
-    scd.set_determined_bits_erasing_bounds(new_determined_zeros,
-                                           new_determined_ones);
+    scd.set_determined_bits_erasing_bounds(
+        new_determined_zeros, new_determined_ones, op == OPCODE_NOT_INT);
     env->set(insn->dest(), scd);
     return true;
   }
@@ -690,20 +690,22 @@ bool PrimitiveAnalyzer::analyze_binop_lit(
   }
 
   if (op == OPCODE_AND_INT_LIT || op == OPCODE_OR_INT_LIT ||
-      op == OPCODE_XOR_INT_LIT) {
+      op == OPCODE_XOR_INT_LIT || op == OPCODE_USHR_INT_LIT ||
+      op == OPCODE_SHL_INT_LIT) {
     TRACE(CONSTP, 5, "Attempting to set bits in %s with literal %d", SHOW(insn),
           lit);
     switch (op) {
     case OPCODE_AND_INT_LIT: {
       scd.set_determined_bits_erasing_bounds(scd.get_determined_zero_bits() |
                                                  ~static_cast<uint64_t>(lit),
-                                             std::nullopt);
+                                             std::nullopt, /*bit32=*/true);
       break;
     }
     case OPCODE_OR_INT_LIT: {
       scd.set_determined_bits_erasing_bounds(std::nullopt,
                                              scd.get_determined_one_bits() |
-                                                 static_cast<uint64_t>(lit));
+                                                 static_cast<uint64_t>(lit),
+                                             /*bit32=*/true);
       break;
     }
     case OPCODE_XOR_INT_LIT: {
@@ -715,11 +717,20 @@ bool PrimitiveAnalyzer::analyze_binop_lit(
           determined_zeros & static_cast<uint64_t>(lit);
       scd.set_determined_bits_erasing_bounds(
           (determined_zeros | new_determined_zeros) & ~new_determined_ones,
-          (determined_ones | new_determined_ones) & ~new_determined_zeros);
+          (determined_ones | new_determined_ones) & ~new_determined_zeros,
+          /*bit32=*/true);
+      break;
+    }
+    case OPCODE_SHL_INT_LIT: {
+      scd.left_shift_bits_int(lit);
+      break;
+    }
+    case OPCODE_USHR_INT_LIT: {
+      scd.unsigned_right_shift_bits_int(lit);
       break;
     }
     default:
-      UNREACHABLE();
+      not_reached();
     }
 
     env->set(insn->dest(), scd);
@@ -810,7 +821,8 @@ bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
         scd_left.get_determined_zero_bits() |
             scd_right.get_determined_zero_bits(),
         scd_left.get_determined_one_bits() &
-            scd_right.get_determined_one_bits());
+            scd_right.get_determined_one_bits(),
+        /*bit32=*/op == OPCODE_AND_INT);
     env->set(insn->dest(), dest_scd);
     return true;
   }
@@ -821,7 +833,8 @@ bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
         scd_left.get_determined_zero_bits() &
             scd_right.get_determined_zero_bits(),
         scd_left.get_determined_one_bits() |
-            scd_right.get_determined_one_bits());
+            scd_right.get_determined_one_bits(),
+        /*bit32=*/op == OPCODE_OR_INT);
     env->set(insn->dest(), dest_scd);
     return true;
   }
@@ -836,13 +849,55 @@ bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
         (scd_left.get_determined_zero_bits() &
          scd_right.get_determined_one_bits()) |
             (scd_left.get_determined_one_bits() &
-             scd_right.get_determined_zero_bits()));
+             scd_right.get_determined_zero_bits()),
+        /*bit32=*/op == OPCODE_XOR_INT);
+    env->set(insn->dest(), dest_scd);
+    return true;
+  }
+  case OPCODE_SHL_INT: {
+    if (!cst_right) {
+      break;
+    }
+
+    SignedConstantDomain dest_scd(scd_left);
+    dest_scd.left_shift_bits_int(static_cast<int32_t>(*cst_right));
+    env->set(insn->dest(), dest_scd);
+    return true;
+  }
+  case OPCODE_SHL_LONG: {
+    if (!cst_right) {
+      break;
+    }
+
+    SignedConstantDomain dest_scd(scd_left);
+    dest_scd.left_shift_bits_long(static_cast<int32_t>(*cst_right));
+    env->set(insn->dest(), dest_scd);
+    return true;
+  }
+  case OPCODE_USHR_INT: {
+    if (!cst_right) {
+      break;
+    }
+
+    SignedConstantDomain dest_scd(scd_left);
+    dest_scd.unsigned_right_shift_bits_int(static_cast<int32_t>(*cst_right));
+    env->set(insn->dest(), dest_scd);
+    return true;
+  }
+  case OPCODE_USHR_LONG: {
+    if (!cst_right) {
+      break;
+    }
+
+    SignedConstantDomain dest_scd(scd_left);
+    dest_scd.unsigned_right_shift_bits_long(static_cast<int32_t>(*cst_right));
     env->set(insn->dest(), dest_scd);
     return true;
   }
   default:
-    return analyze_default(insn, env);
+    break;
   }
+  return analyze_default(insn, env);
 }
 
 bool InjectionIdAnalyzer::analyze_injection_id(const IRInstruction* insn,

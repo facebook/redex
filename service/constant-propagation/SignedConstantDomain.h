@@ -177,6 +177,11 @@ class SignedConstantDomain final
     // are one, it means that the bit can be either one or zero, i.e., top for
     // that bit. If any bit is zero in both integers, then the bitset is bottom.
     // Use uint64_t instead of int64_t to avoid undefined behavior with >>.
+    //
+    // For 32-bit integers, the high 32 bits should be the same as the highest
+    // bit of the lower 32 bits, i.e., the sign bit of the integer. In this way,
+    // we achieve consistency with SignedConstantDomain initialized from a
+    // constant.
     uint64_t one_bit_states{std::numeric_limits<uint64_t>::max()};
     uint64_t zero_bit_states{std::numeric_limits<uint64_t>::max()};
 
@@ -514,9 +519,9 @@ class SignedConstantDomain final
   // Sets determined bits. This also wipes out any inference about bounds by
   // setting bounds to top if either zeros or ones is provided. Useful in
   // inferring results of bitwise ops, which usually invalidate any existing
-  // inferences on abounds.
+  // inferences on Bounds.
   SignedConstantDomain& set_determined_bits_erasing_bounds(
-      std::optional<uint64_t> zeros, std::optional<uint64_t> ones) {
+      std::optional<uint64_t> zeros, std::optional<uint64_t> ones, bool bit32) {
     // No bit can be 1 in both zeros and ones
     always_assert(!zeros.has_value() || !ones.has_value() ||
                   (*ones & *zeros) == 0u);
@@ -526,10 +531,26 @@ class SignedConstantDomain final
     }
 
     if (zeros.has_value()) {
-      m_bitset.set_determined_zero_bits(*zeros);
+      uint64_t new_zeros = *zeros;
+      if (bit32) {
+        if ((*zeros & 0x80000000) != 0) { // sign bit is 1
+          new_zeros |= static_cast<uint64_t>(0xffffffff00000000ul);
+        } else {
+          new_zeros &= static_cast<uint64_t>(0x7ffffffful);
+        }
+      }
+      m_bitset.set_determined_zero_bits(new_zeros);
     }
     if (ones.has_value()) {
-      m_bitset.set_determined_one_bits(*ones);
+      uint64_t new_ones = *ones;
+      if (bit32) {
+        if ((*ones & 0x80000000) != 0) { // sign bit is 1
+          new_ones |= static_cast<uint64_t>(0xffffffff00000000ul);
+        } else {
+          new_ones &= static_cast<uint64_t>(0x7ffffffful);
+        }
+      }
+      m_bitset.set_determined_one_bits(new_ones);
     }
 
     m_bounds.set_to_top();
@@ -542,7 +563,87 @@ class SignedConstantDomain final
     return m_bitset.get_zero_bit_states();
   }
 
+  SignedConstantDomain& left_shift_bits_int(int32_t shift) {
+    if (is_bottom()) return *this;
+
+    shift &= BIT_SHIFT_MASK_INT;
+    // The higher 32 bits must be cleaned up, otherwise int meet may lead to
+    // unintended bottoms due to mismatch in the higher 32 bits.
+    // set_determined_bits_erasing_bounds() does not reset existing bit states.
+    // Set to top first to clear bit states.
+    uint64_t new_determined_zeros =
+        ((~((~get_determined_zero_bits()) << shift)) & 0xffffffff);
+    uint64_t new_determined_ones =
+        (get_determined_one_bits() << shift) & 0xffffffff;
+    const bool sign_zero = (new_determined_zeros & (1ul << 31)) != 0;
+    const bool sign_one = (new_determined_ones & (1ul << 31)) != 0;
+    always_assert_log(!sign_zero || !sign_one,
+                      "When left shifting, the sign can't be determined to "
+                      "both zero and one");
+    if (sign_zero) {
+      new_determined_zeros |= 0xffffffff00000000ul;
+    } else if (sign_one) {
+      new_determined_ones |= 0xffffffff00000000ul;
+    }
+    set_to_top();
+    set_determined_bits_erasing_bounds(new_determined_zeros,
+                                       new_determined_ones, /*bit32=*/true);
+    return *this;
+  }
+  SignedConstantDomain& left_shift_bits_long(int32_t shift) {
+    if (is_bottom()) return *this;
+
+    shift &= BIT_SHIFT_MASK_LONG;
+    // set_determined_bits_erasing_bounds() does not reset existing bit states.
+    // Set to top first to clear bit states.
+    const uint64_t new_determined_zeros =
+        (~((~get_determined_zero_bits()) << shift));
+    const uint64_t new_determined_ones = get_determined_one_bits() << shift;
+    set_to_top();
+    set_determined_bits_erasing_bounds(new_determined_zeros,
+                                       new_determined_ones, /*bit32=*/false);
+    return *this;
+  }
+
+  SignedConstantDomain& unsigned_right_shift_bits_int(int32_t shift) {
+    if (is_bottom()) return *this;
+
+    shift &= BIT_SHIFT_MASK_INT;
+
+    // set_determined_bits_erasing_bounds() does not reset existing bit states.
+    // Set to top first to clear bit states.
+    const uint64_t new_determined_zeros =
+        ~((static_cast<uint32_t>(~get_determined_zero_bits())) >> shift);
+    const uint64_t new_determined_ones =
+        static_cast<uint32_t>(get_determined_one_bits()) >> shift;
+    set_to_top();
+    set_determined_bits_erasing_bounds(new_determined_zeros,
+                                       new_determined_ones,
+                                       /*bit32=*/true);
+    return *this;
+  }
+  SignedConstantDomain& unsigned_right_shift_bits_long(int32_t shift) {
+    if (is_bottom()) return *this;
+
+    shift &= BIT_SHIFT_MASK_LONG;
+
+    // set_determined_bits_erasing_bounds() does not reset existing bit states.
+    // Set to top first to clear bit states.
+    const uint64_t new_determined_zeros =
+        ~((~get_determined_zero_bits()) >> shift);
+    const uint64_t new_determined_ones = get_determined_one_bits() >> shift;
+    set_to_top();
+    set_determined_bits_erasing_bounds(new_determined_zeros,
+                                       new_determined_ones,
+                                       /*bit32=*/false);
+    return *this;
+  }
+  // TODO(T222824773) Add signed right shift, which has implications on bounds.
+
  private:
+  static constexpr int32_t BIT_SHIFT_MASK_INT = 0x1f;
+  static constexpr int32_t BIT_SHIFT_MASK_LONG = 0x3f;
+
   static int32_t clamp_int(int64_t value) {
     return std::max(
         std::min(value,
