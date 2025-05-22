@@ -12,8 +12,10 @@
 #include "IPConstantPropagation.h"
 #include "RedexTest.h"
 #include "Resolver.h"
-#include "RewriteKotlinSingletonInstance.h"
 #include "Show.h"
+
+using ::testing::HasSubstr;
+using ::testing::Not;
 
 class KotlinDefaultArgsTest : public RedexIntegrationTest {
  protected:
@@ -48,9 +50,16 @@ TEST_F(KotlinDefaultArgsTest, GreetDoesNotHaveBlock) {
       "String;Ljava/lang/String;ILjava/lang/Object;)V");
   auto code_syn_default_arg = syn_default_arg_method->as_def()->get_code();
   ASSERT_NE(nullptr, code_syn_default_arg);
+  EXPECT_THAT(assembler::to_string(code_syn_default_arg), HasSubstr("Guest"))
+      << "Default arg \"name\" is used, but the synthetic default method has "
+         "dropped its default value \"Guest\"";
   EXPECT_THAT(assembler::to_string(code_syn_default_arg),
-              ::testing::Not(::testing::HasSubstr("Hello")))
+              Not(HasSubstr("Hello")))
       << "Default arg \"greeting\" is never used, but the synthetic default "
          "method still contains its default value \"Hello\"";
+  EXPECT_THAT(assembler::to_string(code_syn_default_arg),
+              Not(HasSubstr("and-")))
+      << "Only one default arg is used, but the synthetic default method still "
+         "contains \"and-*\" instructions";
 }
 } // namespace
