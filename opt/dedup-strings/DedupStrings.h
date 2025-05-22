@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "BaselineProfile.h"
 #include "InterDexPass.h"
 #include "Pass.h"
 #include "PassManager.h"
@@ -49,13 +50,15 @@ class DedupStrings {
                float method_profiles_appear_percent_threshold,
                DedupStringsPerfMode perf_mode,
                const std::string& host_class_name_prefix,
-               const method_profiles::MethodProfiles& method_profiles)
+               const method_profiles::MethodProfiles& method_profiles,
+               const baseline_profiles::BaselineProfile& baseline_profile)
       : m_max_factory_methods(max_factory_methods),
         m_method_profiles_appear_percent_threshold(
             method_profiles_appear_percent_threshold),
         m_perf_mode(perf_mode),
         m_host_class_name_prefix(host_class_name_prefix),
-        m_method_profiles(method_profiles) {}
+        m_method_profiles(method_profiles),
+        m_baseline_profile(baseline_profile) {}
 
   const Stats& get_stats() const { return m_stats; }
 
@@ -107,6 +110,7 @@ class DedupStrings {
   DedupStringsPerfMode m_perf_mode;
   const std::string& m_host_class_name_prefix;
   const method_profiles::MethodProfiles& m_method_profiles;
+  const baseline_profiles::BaselineProfile& m_baseline_profile;
 };
 
 class DedupStringsPass : public Pass {
@@ -203,5 +207,6 @@ inter-dex pass, but before the replace-gotos-with-returns pass.
   float m_method_profiles_appear_percent_threshold{1.f};
   DedupStringsPerfMode m_perf_mode;
   std::string m_host_class_name_prefix;
+  bool m_use_baseline_profile{false};
   std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
 };
