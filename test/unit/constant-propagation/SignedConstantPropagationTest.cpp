@@ -398,7 +398,52 @@ TEST_P(ConstantBitwiseAndTest, DeterminableZeroInt) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-INSTANTIATE_TEST_CASE_P(
+TEST_P(ConstantBitwiseAndTest, DeterminableZeroLong) {
+  const auto& param = GetParam();
+
+  auto code = assembler::ircode_from_string(param.format_code(R"(
+    (
+     (load-param-wide v0)
+     (const-wide v1 {operand})
+     (and-long v0 v0 v1)  ; Some bits of v0 must be 0 now
+
+     (const-wide v1 {comparee})
+     (cmp-long v2 v0 v1)
+     (if-nez v2 :if-true-label)
+     (const v1 1)
+
+     (:if-true-label)
+     (const v0 2)
+
+     (return-void)
+    )
+)"));
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(param.format_code(R"(
+    (
+     (load-param-wide v0)
+     (const-wide v1 {operand})
+     (and-long v0 v0 v1)  ; Some bits of v0 must be 0 now
+
+     (const-wide v1 {comparee})
+     (cmp-long v2 v0 v1)
+
+     (:if-true-label)
+     (const v0 2)
+
+     (return-void)
+    )
+)"));
+
+  // Make sure that the and-long instruction is not optimized away with
+  // and-int/lit.
+  ASSERT_THAT(assembler::to_string(code.get()),
+              ::testing::HasSubstr("and-long"));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+INSTANTIATE_TEST_SUITE_P(
     ConstantBitwiseAndDeterminableZeroTests,
     ConstantBitwiseAndTest,
     ::testing::ValuesIn(
@@ -455,6 +500,35 @@ TEST_F(ConstantBitwiseAndTest, UndeterminableZeroInt) {
     )
 )");
   do_const_prop(code.get());
+  EXPECT_THAT(
+      assembler::to_string(code.get()),
+      // if branch is not optimized out.
+      ::testing::ContainsRegex("\\(if-nez v0 :.*\\)\\s*\\(const v1 1\\)"));
+}
+
+TEST_F(ConstantBitwiseAndTest, UndeterminableZeroLong) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param-wide v0)
+     (const-wide v1 -2)  ;; only the lowest bit is 0
+     (and-long v0 v0 v1)  ; lowest bit v0 must be 0 now, but can't infer v0 != 0
+
+     (const-wide v1 0)
+     (cmp-long v0 v0 v1)
+     (if-nez v0 :if-true-label)
+     (const v1 1)
+
+     (:if-true-label)
+     (const v0 2)
+
+     (return-void)
+    )
+)");
+  do_const_prop(code.get());
+  // Make sure that the and-long instruction is not optimized away with
+  // and-int/lit.
+  ASSERT_THAT(assembler::to_string(code.get()),
+              ::testing::HasSubstr("and-long"));
   EXPECT_THAT(
       assembler::to_string(code.get()),
       // if branch is not optimized out.
@@ -530,6 +604,48 @@ TEST_F(ConstantBitwiseOrTest, NezInt) {
     )
 )");
 
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(ConstantBitwiseOrTest, NezLong) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param-wide v0)
+     (const-wide v1 8)
+     (or-long v0 v0 v1)  ; 4th lowest bit of v0 must be 1, can infer v0 != 0
+     (const-wide v1 0)
+     (cmp-long v0 v0 v1)
+
+     (if-nez v0 :if-true-label)
+     (const v1 1)
+
+     (:if-true-label)
+     (const v0 2)
+
+     (return-void)
+    )
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param-wide v0)
+     (const-wide v1 8)
+     (or-long v0 v0 v1)
+     (const-wide v1 0)
+     (cmp-long v0 v0 v1)
+
+     (:if-true-label)
+     (const v0 2)
+
+     (return-void)
+    )
+)");
+
+  // Make sure that the or-long instruction is not optimized away with
+  // or-int/lit.
+  ASSERT_THAT(assembler::to_string(code.get()),
+              ::testing::HasSubstr("or-long"));
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -609,7 +725,51 @@ TEST_P(ConstantBitwiseOrTest, DeterminableOneInt) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-INSTANTIATE_TEST_CASE_P(
+TEST_P(ConstantBitwiseOrTest, DeterminableOneLong) {
+  const auto& param = GetParam();
+
+  auto code = assembler::ircode_from_string(param.format_code(R"(
+    (
+     (load-param-wide v0)
+     (const-wide v1 {operand})
+     (or-long v0 v0 v1)  ; some bits of v0 must be 1 now, can infer v0 != comparee
+     (const-wide v1 {comparee})
+     (cmp-long v0 v0 v1)
+
+     (if-nez v0 :if-true-label)
+     (const v1 1)
+
+     (:if-true-label)
+     (const v0 2)
+
+     (return-void)
+    )
+)"));
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(param.format_code(R"(
+    (
+     (load-param-wide v0)
+     (const-wide v1 {operand})
+     (or-long v0 v0 v1)
+     (const-wide v1 {comparee})
+     (cmp-long v0 v0 v1)
+
+     (:if-true-label)
+     (const v0 2)
+
+     (return-void)
+    )
+)"));
+
+  // Make sure that the or-long instruction is not optimized away with
+  // or-int/lit.
+  ASSERT_THAT(assembler::to_string(code.get()),
+              ::testing::HasSubstr("or-long"));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+INSTANTIATE_TEST_SUITE_P(
     ConstantBitwiseOrDeterminableOneTests,
     ConstantBitwiseOrTest,
     ::testing::ValuesIn(std::initializer_list<ConstantBitwiseOrTest::ParamType>{
@@ -670,6 +830,35 @@ TEST_F(ConstantBitwiseOrTest, UndeterminableOneInt) {
       assembler::to_string(code.get()),
       // if branch is not optimized out.
       ::testing::ContainsRegex("\\(if-ne v0 v3 :.*\\)\\s*\\(const v1 1\\)"));
+}
+
+TEST_F(ConstantBitwiseOrTest, UndeterminableOneLong) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param-wide v0)
+     (const-wide v1 1)
+     (or-long v0 v0 v1)  ; lowest bit v0 must be 1 now, but can't infer v0 != 1
+
+     (cmp-long v0 v0 v1)
+     (if-nez v0 :if-true-label)
+     (const v1 1)
+
+     (:if-true-label)
+     (const v0 2)
+
+     (return-void)
+    )
+)");
+  do_const_prop(code.get());
+
+  // Make sure that the or-long instruction is not optimized away with
+  // or-int/lit.
+  ASSERT_THAT(assembler::to_string(code.get()),
+              ::testing::HasSubstr("or-long"));
+  EXPECT_THAT(
+      assembler::to_string(code.get()),
+      // if branch is not optimized out.
+      ::testing::ContainsRegex("\\(if-nez v0 :.*\\)\\s*\\(const v1 1\\)"));
 }
 
 TEST_F(ConstantBitwiseTest, DeterminableBitsWithXorLit) {
@@ -800,6 +989,85 @@ TEST_F(ConstantBitwiseTest, DeterminableBitsWithXorInt) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
+TEST_F(ConstantBitwiseTest, DeterminableBitsWithXorLong) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param-wide v0)
+     (const-wide v1 -4)
+     (and-long v0 v0 v1)  ;; 1st and 2nd lowest bits of v0 must be 0
+     (const-wide v1 12)
+     (or-long v0 v0 v1)  ;; 3rd and 4th lowest bits of v0 must be 1
+     (const-wide v1 5)
+     (xor-long v0 v0 v1)  ;; Lowest 4 bits: 1001
+
+     ;; Test each for the lowest 4 bits
+
+     (const-wide v1 8)  ;; binary 0...01000
+     (cmp-long v2 v0 v1)
+     (if-nez v2 :bit-0)
+     (const v3 1)
+     (:bit-0)
+
+     (const-wide v1 11)  ;; binary 0...01011
+     (cmp-long v2 v0 v1)
+     (if-nez v2 :bit-1)
+     (const v4 1)
+     (:bit-1)
+
+     (const-wide v1 13)  ;; binary 0...01101
+     (cmp-long v2 v0 v1)
+     (if-nez v2 :bit-2)
+     (const v5 1)
+     (:bit-2)
+
+     (const-wide v1 1)  ;; binary 0...00001
+     (cmp-long v2 v0 v1)
+     (if-nez v2 :bit-3)
+     (const v6 1)
+     (:bit-3)
+
+     (return-void)
+    )
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param-wide v0)
+     (const-wide v1 -4)
+     (and-long v0 v0 v1)
+     (const-wide v1 12)
+     (or-long v0 v0 v1)
+     (const-wide v1 5)
+     (xor-long v0 v0 v1)
+
+     (const-wide v1 8)
+     (cmp-long v2 v0 v1)
+     (:bit-0)
+
+     (const-wide v1 11)
+     (cmp-long v2 v0 v1)
+     (:bit-1)
+
+     (const-wide v1 13)
+     (cmp-long v2 v0 v1)
+     (:bit-2)
+
+     (const-wide v1 1)
+     (cmp-long v2 v0 v1)
+     (:bit-3)
+
+     (return-void)
+    )
+)");
+
+  // Make sure that the xor-long instruction is not optimized away with
+  // xor-int/lit.
+  ASSERT_THAT(assembler::to_string(code.get()),
+              ::testing::HasSubstr("xor-long"));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
 TEST_F(ConstantBitwiseTest, UndeterminableBitsWithXorLit) {
   auto code = assembler::ircode_from_string(R"(
     (
@@ -849,6 +1117,38 @@ TEST_F(ConstantBitwiseTest, UndeterminableBitsWithXorInt) {
       assembler::to_string(code.get()),
       // if branch is not optimized out.
       ::testing::ContainsRegex("\\(if-ne v0 v1 :.*\\)\\s*\\(const v2 1\\)"));
+}
+
+TEST_F(ConstantBitwiseTest, UndeterminableBitsWithXorLong) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param-wide v0)
+     (const-wide v1 -4)
+     (and-long v0 v0 v1)  ;; 1st and 2nd lowest bits of v0 must be 0
+     (const-wide v1 12)
+     (or-long v0 v0 v1)  ;; 3rd and 4th lowest bits of v0 must be 1
+     (const-wide v1 5)
+     (xor-long v0 v0 v1)  ;; Lowest 4 bits: 1001
+
+     (const v1 9)  ;; binary 0...01001
+     (cmp-long v2 v0 v1)
+     (if-nez v2 :if-true-label)
+     (const v2 1)
+     (:if-true-label)
+
+     (return-void)
+    )
+)");
+  do_const_prop(code.get());
+
+  // Make sure that the xor-long instruction is not optimized away with
+  // xor-int/lit.
+  ASSERT_THAT(assembler::to_string(code.get()),
+              ::testing::HasSubstr("xor-long"));
+  EXPECT_THAT(
+      assembler::to_string(code.get()),
+      // if branch is not optimized out.
+      ::testing::ContainsRegex("\\(if-nez v2 :.*\\)\\s*\\(const v2 1\\)"));
 }
 
 TEST_F(ConstantBitwiseTest, DeterminableBitJoinedFromConstants) {

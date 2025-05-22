@@ -78,8 +78,10 @@ bool is_less_than_bias(IROpcode op) {
 template <typename Operand, typename Stored>
 void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
   IROpcode op = insn->opcode();
-  auto left = env->get<SignedConstantDomain>(insn->src(0)).get_constant();
-  auto right = env->get<SignedConstantDomain>(insn->src(1)).get_constant();
+  auto scd_left = env->get<SignedConstantDomain>(insn->src(0));
+  const auto scd_right = env->get<SignedConstantDomain>(insn->src(1));
+  const auto left = scd_left.get_constant();
+  const auto right = scd_right.get_constant();
 
   if (left && right) {
     int32_t result;
@@ -103,9 +105,19 @@ void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
           "Operands [%d] [%d] -> Result: [%d]",
           SHOW(insn), (int)l_val, (int)r_val, result);
     env->set(insn->dest(), SignedConstantDomain(result));
-  } else {
-    env->set(insn->dest(), SignedConstantDomain::top());
+    return;
   }
+
+  if (op == OPCODE_CMP_LONG) {
+    scd_left.meet_with(scd_right);
+    if (scd_left.is_bottom()) {
+      // No overlap, such as bitset or nez/zero mismatch.
+      env->set(insn->dest(), SignedConstantDomain::nez());
+      return;
+    }
+  }
+
+  env->set(insn->dest(), SignedConstantDomain::top());
 }
 
 // https://cs.android.com/android/platform/superproject/main/+/main:art/runtime/entrypoints/entrypoint_utils-inl.h;l=702;drc=d5137445c0d4067406cb3e38aade5507ff2fcd16
@@ -775,7 +787,8 @@ bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
   }
 
   switch (op) {
-  case OPCODE_AND_INT: {
+  case OPCODE_AND_INT:
+  case OPCODE_AND_LONG: {
     SignedConstantDomain dest_scd;
     dest_scd.set_determined_bits_erasing_bounds(
         scd_left.get_determined_zero_bits() |
@@ -785,7 +798,8 @@ bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
     env->set(insn->dest(), dest_scd);
     return true;
   }
-  case OPCODE_OR_INT: {
+  case OPCODE_OR_INT:
+  case OPCODE_OR_LONG: {
     SignedConstantDomain dest_scd;
     dest_scd.set_determined_bits_erasing_bounds(
         scd_left.get_determined_zero_bits() &
@@ -795,7 +809,8 @@ bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
     env->set(insn->dest(), dest_scd);
     return true;
   }
-  case OPCODE_XOR_INT: {
+  case OPCODE_XOR_INT:
+  case OPCODE_XOR_LONG: {
     SignedConstantDomain dest_scd;
     dest_scd.set_determined_bits_erasing_bounds(
         (scd_left.get_determined_zero_bits() &
