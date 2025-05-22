@@ -19,6 +19,11 @@ enum class SignedConstantDomain::BitShiftMask : int32_t {
   Long = 0x3f,
 };
 
+// TODO(TT222824773): Remove this.
+namespace signed_constant_domain {
+bool enable_bitset = false;
+} // namespace signed_constant_domain
+
 SignedConstantDomain& SignedConstantDomain::left_shift_bits_int(int32_t shift) {
   return left_shift_bits(shift, BitShiftMask::Int);
 }

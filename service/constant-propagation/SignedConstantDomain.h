@@ -48,6 +48,11 @@ inline NumericIntervalDomain numeric_interval_domain_from_int(int64_t min,
 class SignedConstantDomain;
 std::ostream& operator<<(std::ostream& o, const SignedConstantDomain& scd);
 
+// TODO(TT222824773): Remove this.
+namespace signed_constant_domain {
+extern bool enable_bitset;
+} // namespace signed_constant_domain
+
 // This class effectively implements a
 //   ReducedProductAbstractDomain<SignedConstantDomain,
 //     sign_domain::Domain, NumericIntervalDomain, ConstantDomain>
@@ -309,13 +314,174 @@ class SignedConstantDomain final
     }
   };
 
-  Bitset m_bitset;
+  // TODO(TT222824773): Remove OptionalBitset.
+  // Not using the abstract class/inheritence pattern to avoid heap allocation.
+  class OptionalBitset final {
+    // This class is a delegate to Bitset when bitset is enabled.
+    //
+    // When bitset is disabled, this is always top.
+    using BitsetType = std::optional<Bitset>;
+    BitsetType bitset;
+
+   public:
+    OptionalBitset(const OptionalBitset&) = default;
+    OptionalBitset(OptionalBitset&&) = default;
+    OptionalBitset& operator=(const OptionalBitset&) = default;
+    OptionalBitset& operator=(OptionalBitset&&) = default;
+
+    explicit OptionalBitset(const Bitset& bs = Bitset::top())
+        : bitset(signed_constant_domain::enable_bitset ? BitsetType(bs)
+                                                       : std::nullopt) {}
+
+    explicit OptionalBitset(int64_t value)
+        : bitset(signed_constant_domain::enable_bitset ? BitsetType(value)
+                                                       : std::nullopt) {}
+
+    OptionalBitset& operator=(const Bitset& bs) {
+      if (signed_constant_domain::enable_bitset) {
+        bitset = bs;
+      }
+      return *this;
+    }
+
+    bool is_bottom() const {
+      if (bitset) {
+        return bitset->is_bottom();
+      } else {
+        return false;
+      }
+    }
+
+    bool is_top() const {
+      if (bitset) {
+        return bitset->is_top();
+      } else {
+        return true;
+      }
+    }
+
+    uint64_t get_determined_zero_bits() const {
+      if (bitset) {
+        return bitset->get_determined_zero_bits();
+      } else {
+        return 0;
+      }
+    }
+
+    uint64_t get_determined_one_bits() const {
+      if (bitset) {
+        return bitset->get_determined_one_bits();
+      } else {
+        return 0;
+      }
+    }
+
+    OptionalBitset& set_determined_zero_bits(uint64_t bits) {
+      if (bitset) {
+        bitset->set_determined_zero_bits(bits);
+      }
+      return *this;
+    }
+
+    OptionalBitset& set_determined_one_bits(uint64_t bits) {
+      if (bitset) {
+        bitset->set_determined_one_bits(bits);
+      }
+      return *this;
+    }
+
+    uint64_t get_zero_bit_states() const {
+      if (bitset) {
+        return bitset->get_zero_bit_states();
+      } else {
+        return std::numeric_limits<uint64_t>::max();
+      }
+    }
+
+    uint64_t get_one_bit_states() const {
+      if (bitset) {
+        return bitset->get_one_bit_states();
+      } else {
+        return std::numeric_limits<uint64_t>::max();
+      }
+    }
+
+    bool is_constant() const {
+      if (bitset) {
+        return bitset->is_constant();
+      } else {
+        return false;
+      }
+    }
+
+    std::optional<int64_t> get_constant() const {
+      if (bitset) {
+        return bitset->get_constant();
+      }
+      return std::nullopt;
+    }
+
+    OptionalBitset& set_to_bottom() {
+      if (bitset) {
+        bitset->set_to_bottom();
+      }
+      return *this;
+    }
+
+    OptionalBitset& set_to_top() {
+      if (bitset) {
+        bitset->set_to_top();
+      }
+      return *this;
+    }
+
+    OptionalBitset& join_with(const OptionalBitset& that) {
+      if (bitset) {
+        always_assert(that.bitset);
+        bitset->join_with(*that.bitset);
+      }
+      return *this;
+    }
+
+    OptionalBitset& meet_with(const OptionalBitset& that) {
+      if (bitset) {
+        always_assert(that.bitset);
+        bitset->meet_with(*that.bitset);
+      }
+      return *this;
+    }
+
+    bool operator==(const OptionalBitset& that) const {
+      if (bitset) {
+        always_assert(that.bitset);
+        return *bitset == *that.bitset;
+      }
+      return true;
+    }
+
+    bool operator<=(const OptionalBitset& that) const {
+      if (bitset) {
+        always_assert(that.bitset);
+        return *bitset <= *that.bitset;
+      }
+      return true;
+    }
+
+    bool unequals_constant(int64_t integer) const {
+      if (bitset) {
+        return bitset->unequals_constant(integer);
+      }
+      return false;
+    }
+  };
+
+  OptionalBitset m_bitset;
 
   SignedConstantDomain(Bounds bounds, Bitset bitset)
       : m_bounds(bounds), m_bitset(bitset) {}
 
-  // When either bounds or bitset meets (become narrower), we can possibly infer
-  // the other one with some info.
+  // When either bounds or bitset meets (become narrower), we can possibly
+  // infer the other one with some info.
   void cross_infer_meet_from_bounds() {
     if (m_bitset.is_bottom()) {
       always_assert(m_bounds.is_bottom());
@@ -343,7 +509,8 @@ class SignedConstantDomain final
 
   void cross_infer_meet_from_bitset() {
     if (m_bounds.is_bottom()) {
-      always_assert(m_bitset.is_bottom());
+      always_assert(!signed_constant_domain::enable_bitset ||
+                    m_bitset.is_bottom());
       return;
     }
 
@@ -404,7 +571,8 @@ class SignedConstantDomain final
     return SignedConstantDomain(Bounds::nez(), Bitset::top());
   }
   bool is_bottom() const {
-    return m_bounds.is_bottom() || m_bitset.is_bottom();
+    return m_bounds.is_bottom() &&
+           (!signed_constant_domain::enable_bitset || m_bitset.is_bottom());
   }
   bool is_top() const { return m_bounds.is_top() && m_bitset.is_top(); }
   bool is_nez() const { return m_bounds.is_nez; }
@@ -480,8 +648,10 @@ class SignedConstantDomain final
 
   boost::optional<int64_t> get_constant() const {
     if (!m_bounds.is_constant()) return boost::none;
-    always_assert(m_bitset.is_constant() &&
-                  *m_bitset.get_constant() == m_bounds.l);
+    if (signed_constant_domain::enable_bitset) {
+      always_assert(m_bitset.is_constant() &&
+                    *m_bitset.get_constant() == m_bounds.l);
+    }
     return boost::optional<int64_t>(m_bounds.l);
   }
 
