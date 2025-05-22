@@ -583,10 +583,11 @@ bool PrimitiveAnalyzer::analyze_binop_lit(
     const IRInstruction* insn, ConstantEnvironment* env) NO_UBSAN_ARITH {
   auto op = insn->opcode();
   int32_t lit = insn->get_literal();
-  TRACE(CONSTP, 5, "Attempting to fold %s with literal %d", SHOW(insn), lit);
-  auto cst = env->get<SignedConstantDomain>(insn->src(0)).get_constant();
+  auto scd = env->get<SignedConstantDomain>(insn->src(0));
+  const auto cst = scd.get_constant();
   boost::optional<int64_t> result = boost::none;
   if (cst) {
+    TRACE(CONSTP, 5, "Attempting to fold %s with literal %d", SHOW(insn), lit);
     bool use_result_reg = false;
     switch (op) {
     case OPCODE_ADD_INT_LIT: {
@@ -657,6 +658,43 @@ bool PrimitiveAnalyzer::analyze_binop_lit(
       res_const_dom = SignedConstantDomain(result32);
     }
     env->set(use_result_reg ? RESULT_REGISTER : insn->dest(), res_const_dom);
+    return true;
+  }
+
+  if (op == OPCODE_AND_INT_LIT || op == OPCODE_OR_INT_LIT ||
+      op == OPCODE_XOR_INT_LIT) {
+    TRACE(CONSTP, 5, "Attempting to set bits in %s with literal %d", SHOW(insn),
+          lit);
+    switch (op) {
+    case OPCODE_AND_INT_LIT: {
+      scd.set_determined_bits_erasing_bounds(scd.get_determined_zero_bits() |
+                                                 ~static_cast<uint64_t>(lit),
+                                             std::nullopt);
+      break;
+    }
+    case OPCODE_OR_INT_LIT: {
+      scd.set_determined_bits_erasing_bounds(std::nullopt,
+                                             scd.get_determined_one_bits() |
+                                                 static_cast<uint64_t>(lit));
+      break;
+    }
+    case OPCODE_XOR_INT_LIT: {
+      const auto determined_zeros = scd.get_determined_zero_bits();
+      const auto determined_ones = scd.get_determined_one_bits();
+      const auto new_determined_zeros =
+          determined_ones & static_cast<uint64_t>(lit);
+      const auto new_determined_ones =
+          determined_zeros & static_cast<uint64_t>(lit);
+      scd.set_determined_bits_erasing_bounds(
+          (determined_zeros | new_determined_zeros) & ~new_determined_ones,
+          (determined_ones | new_determined_ones) & ~new_determined_zeros);
+      break;
+    }
+    default:
+      UNREACHABLE();
+    }
+
+    env->set(insn->dest(), scd);
     return true;
   }
   return analyze_default(insn, env);
