@@ -1050,7 +1050,7 @@ void MultiMethodInliner::compute_callee_costs(DexMethod* method) {
     }
     for (auto& p : UnorderedIterable(invokes)) {
       m_scheduler.augment(method, [this, call_site_summary = p.first,
-                                   insns = p.second, method]() {
+                                   insns = std::move(p.second), method]() {
         TraceContext context(method);
         // Populate caches
         auto timer = m_call_site_inlined_cost_timer.scope();
