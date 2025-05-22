@@ -437,11 +437,12 @@ DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset)
   uint32_t line_start = read_uleb128_checked<redex::DexAssert>(encdata);
   uint32_t paramcount = read_uleb128_checked<redex::DexAssert>(encdata);
   while (paramcount--) {
-    // We intentionally drop the parameter string name here because we don't
-    // have a convenient representation of it, and our internal tooling doesn't
-    // use this info anyway.
-    // We emit matching number of nulls as method arguments at the end.
-    decode_noindexable_string(idx, encdata);
+    // We keep the parameter string name for printing debug info in our
+    // checkers. However, we do not write them out into the output. We emit
+    // matching number of nulls as method arguments at the end.
+    const DexString* param_name = decode_noindexable_string(idx, encdata);
+    // param_name can be nullptr !!!
+    m_param_names.push_back(param_name);
   }
   m_dbg_entries = eval_debug_instructions(this, idx, encdata, line_start);
   m_on_disk_size = orig_size - encdata.size();
@@ -460,7 +461,8 @@ uint32_t DexDebugItem::get_line_start() const {
   return 0;
 }
 
-DexDebugItem::DexDebugItem(const DexDebugItem& that) {
+DexDebugItem::DexDebugItem(const DexDebugItem& that)
+    : m_param_names(that.m_param_names) {
   UnorderedMap<DexPosition*, DexPosition*> pos_map;
   m_dbg_entries.reserve(that.m_dbg_entries.size());
   for (auto& entry : that.m_dbg_entries) {

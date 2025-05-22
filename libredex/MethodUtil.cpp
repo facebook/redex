@@ -578,6 +578,15 @@ DexMethod* java_lang_invoke_MethodHandle_invokeExact() {
 }
 
 std::optional<std::string_view> get_param_name(const DexMethod* m, size_t idx) {
+  // First try to look it up from the debug info item.
+  auto code = m->get_code();
+  if (code && code->get_debug_item()) {
+    auto* debug_item = code->get_debug_item();
+    const auto param_names = debug_item->get_param_names();
+    if (idx < param_names.size() && param_names[idx] != nullptr) {
+      return param_names[idx]->str();
+    }
+  }
   auto anno_type = DexType::get_type("Ldalvik/annotation/MethodParameters;");
   if (anno_type == nullptr) {
     return std::nullopt;

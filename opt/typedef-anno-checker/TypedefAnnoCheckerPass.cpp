@@ -256,6 +256,10 @@ void TypedefAnnoChecker::run(DexMethod* m) {
   if (!m_good) {
     TRACE(TAC, 2, "Done checking %s", SHOW(m));
   }
+  // Clean up the param names from dex debug items
+  if (code->get_debug_item()) {
+    code->get_debug_item()->remove_param_names();
+  }
 }
 
 void TypedefAnnoChecker::add_error(const std::string& error,
