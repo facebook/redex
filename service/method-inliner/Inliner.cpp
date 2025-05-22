@@ -612,13 +612,12 @@ std::string create_inlining_trace_msg(const DexMethod* caller,
 
 void MultiMethodInliner::make_partial(const DexMethod* method,
                                       InlinedCost* inlined_cost) {
-  if (!m_config.partial_hot_hot_inline || !m_hot_methods.count_unsafe(method) ||
-      !inlined_cost->reduced_code) {
-    inlined_cost->reduced_code.reset();
-    return;
+  if (m_config.partial_hot_hot_inline && m_hot_methods.count_unsafe(method) &&
+      inlined_cost->reduced_code) {
+    inlined_cost->partial_code = inliner::get_partially_inlined_code(
+        method, inlined_cost->reduced_code->cfg());
   }
-  inlined_cost->partial_code = inliner::get_partially_inlined_code(
-      method, inlined_cost->reduced_code->cfg());
+  inlined_cost->reduced_code.reset();
 }
 
 DexType* MultiMethodInliner::get_needs_init_class(DexMethod* callee) const {
@@ -1684,6 +1683,8 @@ const InlinedCost* MultiMethodInliner::get_fully_inlined_cost(
                   inlined_cost.no_return ? "no_return" : "return",
                   inlined_cost.result_used, !!inlined_cost.reduced_code,
                   inlined_cost.insn_size);
+            always_assert(inlined_cost.reduced_code == nullptr);
+            always_assert(inlined_cost.partial_code.reduced_code == nullptr);
             return inlined_cost;
           })
       .first;
@@ -1735,7 +1736,9 @@ const InlinedCost* MultiMethodInliner::get_call_site_inlined_cost(
                 inlined_cost.no_return ? "no_return" : "return",
                 inlined_cost.result_used, !!inlined_cost.reduced_code,
                 inlined_cost.insn_size);
-            if (inlined_cost.insn_size >= fully_inlined_cost->insn_size) {
+            if (inlined_cost.insn_size >=
+                std::min(fully_inlined_cost->insn_size,
+                         m_config.max_reduced_size)) {
               make_partial(callee, &inlined_cost);
             }
             return inlined_cost;
