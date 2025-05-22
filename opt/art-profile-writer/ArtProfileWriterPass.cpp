@@ -461,17 +461,34 @@ bool never_compile_called_coverage_threshold_met(
   return true;
 }
 
+bool never_compile_string_lookup_method_matches(
+    DexMethod* method, bool never_compile_strings_lookup_methods) {
+  if (!never_compile_strings_lookup_methods) {
+    return false;
+  }
+  auto cls = type_class(method->get_class());
+  if (!cls || !cls->rstate.is_generated() ||
+      cls->get_perf_sensitive() != PerfSensitiveGroup::STRINGS_LOOKUP) {
+    return false;
+  }
+  TRACE(APW, 5, "[%s] matches string-lookup method",
+        method->get_fully_deobfuscated_name().c_str());
+  return true;
+}
+
 void never_compile(
     const Scope& scope,
     const baseline_profiles::BaselineProfileConfig& baseline_profile_config,
     const method_profiles::MethodProfiles& method_profiles,
     PassManager& mgr,
+    bool never_compile_ignore_hot,
     int64_t never_compile_callcount_threshold,
     int64_t never_compile_perf_threshold,
     int64_t never_compile_called_coverage_threshold,
     const std::string& excluded_interaction_pattern,
     int64_t excluded_appear100_threshold,
     int64_t excluded_call_count_threshold,
+    bool never_compile_strings_lookup_methods,
     baseline_profiles::BaselineProfile* baseline_profile) {
   UnorderedSet<std::string> excluded_interaction_ids;
   if (!excluded_interaction_pattern.empty()) {
@@ -495,17 +512,20 @@ void never_compile(
   std::atomic<size_t> never_compile_callcount_threshold_mets{0};
   std::atomic<size_t> never_compile_perf_threshold_mets{0};
   std::atomic<size_t> never_compile_called_coverage_threshold_mets{0};
+  std::atomic<size_t> never_compile_strings_lookup_methods_matches{0};
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     if (method::is_clinit(method)) {
       return;
     }
     auto it = baseline_profile->methods.find(method);
-    if (it == baseline_profile->methods.end()) {
-      return;
-    }
-    auto& mf = it->second;
-    if (!mf.hot) {
-      return;
+    if (!never_compile_ignore_hot) {
+      if (it == baseline_profile->methods.end()) {
+        return;
+      }
+      auto& mf = it->second;
+      if (!mf.hot) {
+        return;
+      }
     }
     double call_count = 0;
     for (auto&& [interaction_id, _] : baseline_profile_config.interactions) {
@@ -527,31 +547,41 @@ void never_compile(
       return;
     }
 
-    bool threshold_met = false;
+    bool selected = false;
     if (never_compile_callcount_threshold_met(
             call_count, never_compile_callcount_threshold)) {
       never_compile_callcount_threshold_mets.fetch_add(1);
-      threshold_met = true;
+      selected = true;
     }
 
     if (never_compile_perf_threshold_met(method,
                                          never_compile_perf_threshold)) {
       never_compile_perf_threshold_mets.fetch_add(1);
-      threshold_met = true;
+      selected = true;
     }
 
     if (never_compile_called_coverage_threshold_met(
             method, call_count, never_compile_called_coverage_threshold)) {
       never_compile_called_coverage_threshold_mets.fetch_add(1);
-      threshold_met = true;
+      selected = true;
     }
 
-    if (!threshold_met) {
+    if (never_compile_string_lookup_method_matches(
+            method, never_compile_strings_lookup_methods)) {
+      never_compile_strings_lookup_methods_matches.fetch_add(1);
+      selected = true;
+    }
+
+    if (!selected) {
       return;
     }
 
     never_compile_methods.emplace(method,
                                   method->get_code()->estimate_code_units());
+
+    if (it != baseline_profile->methods.end()) {
+      baseline_profile->methods.erase(it);
+    }
 
     if (has_anno(method, type::dalvik_annotation_optimization_NeverCompile())) {
       methods_already_never_compile.fetch_add(1);
@@ -572,7 +602,6 @@ void never_compile(
         std::make_unique<DexAnnotationSet>(anno_set));
     always_assert(res);
     method->set_access(access);
-    mf.hot = false;
   });
   mgr.incr_metric("never_compile_methods", never_compile_methods.size());
   mgr.incr_metric("methods_already_never_compile",
@@ -585,6 +614,8 @@ void never_compile(
                   never_compile_perf_threshold_mets.load());
   mgr.incr_metric("never_compile_called_coverage",
                   never_compile_called_coverage_threshold_mets.load());
+  mgr.incr_metric("never_compile_strings_lookup_methods_matches",
+                  never_compile_strings_lookup_methods_matches.load());
   auto ordered_never_compile_methods = unordered_to_ordered(
       never_compile_methods, [](const auto& a, const auto& b) {
         if (a.second != b.second) {
@@ -634,6 +665,9 @@ void ArtProfileWriterPass::bind_config() {
   bind("never_compile_excluded_call_count_threshold", 0,
        m_never_compile_excluded_call_count_threshold);
   bind("include_strings_lookup_class", false, m_include_strings_lookup_class);
+  bind("never_compile_ignore_hot", false, m_never_compile_ignore_hot);
+  bind("never_compile_strings_lookup_methods", false,
+       m_never_compile_strings_lookup_methods);
 }
 
 void ArtProfileWriterPass::eval_pass(DexStoresVector& stores,
@@ -725,14 +759,17 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   if (m_never_compile_callcount_threshold > -1 ||
       m_never_compile_perf_threshold > -1 ||
-      m_never_compile_called_coverage_threshold > -1) {
-    never_compile(
-        scope, conf.get_default_baseline_profile_config(), method_profiles, mgr,
-        m_never_compile_callcount_threshold, m_never_compile_perf_threshold,
-        m_never_compile_called_coverage_threshold,
-        m_never_compile_excluded_interaction_pattern,
-        m_never_compile_excluded_appear100_threshold,
-        m_never_compile_excluded_call_count_threshold, &manual_profile);
+      m_never_compile_called_coverage_threshold > -1 ||
+      m_never_compile_strings_lookup_methods) {
+    never_compile(scope, conf.get_default_baseline_profile_config(),
+                  method_profiles, mgr, m_never_compile_ignore_hot,
+                  m_never_compile_callcount_threshold,
+                  m_never_compile_perf_threshold,
+                  m_never_compile_called_coverage_threshold,
+                  m_never_compile_excluded_interaction_pattern,
+                  m_never_compile_excluded_appear100_threshold,
+                  m_never_compile_excluded_call_count_threshold,
+                  m_never_compile_strings_lookup_methods, &manual_profile);
   }
   auto store_fence_helper_type = DexType::get_type(STORE_FENCE_HELPER_NAME);
   if (store_fence_helper_type) {
