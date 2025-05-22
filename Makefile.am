@@ -281,6 +281,7 @@ libredex_la_SOURCES = \
 	service/constant-propagation/IPConstantPropagationAnalysis.cpp \
 	service/constant-propagation/ObjectDomain.cpp \
 	service/constant-propagation/SignDomain.cpp \
+	service/constant-propagation/SignedConstantDomain.cpp \
 	service/copy-propagation/AliasedRegisters.cpp \
 	service/copy-propagation/CanonicalizeLocks.cpp \
 	service/copy-propagation/CopyPropagation.cpp \
