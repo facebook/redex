@@ -692,9 +692,9 @@ class MultiMethodInliner {
   // Maps from callee to callers and reverse map from caller to callees.
   // Those are used to perform bottom up inlining.
   //
-  ConcurrentMethodToMethodOccurrences callee_caller;
+  ConcurrentMethodToMethodOccurrences m_callee_caller;
 
-  ConcurrentMethodToMethodOccurrences caller_callee;
+  ConcurrentMethodToMethodOccurrences m_caller_callee;
 
   // Auxiliary data for a caller that contains true virtual callees
   struct CallerVirtualCallees {
@@ -881,7 +881,7 @@ class MultiMethodInliner {
  public:
   const InliningInfo& get_info() { return info; }
 
-  size_t get_callers() { return caller_callee.size(); }
+  size_t get_callers() { return m_caller_callee.size(); }
 
   double get_call_site_inlined_cost_seconds() const {
     return m_call_site_inlined_cost_timer.get_seconds();

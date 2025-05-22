@@ -141,8 +141,8 @@ MultiMethodInliner::MultiMethodInliner(
       m_concurrent_resolver(std::move(concurrent_resolve_fn)),
       m_scheduler(
           [this](DexMethod* method) {
-            auto it = caller_callee.find(method);
-            if (it != caller_callee.end()) {
+            auto it = m_caller_callee.find(method);
+            if (it != m_caller_callee.end()) {
               always_assert(method->get_code()->editable_cfg_built());
               UnorderedSet<DexMethod*> callees;
               callees.reserve(it->second.size());
@@ -222,14 +222,14 @@ MultiMethodInliner::MultiMethodInliner(
             !candidates.count(callee)) {
           return;
         }
-        callee_caller.update(callee,
-                             [caller](const DexMethod*,
-                                      UnorderedMap<DexMethod*, size_t>& v,
-                                      bool) { ++v[caller]; });
-        caller_callee.update(caller,
-                             [callee](const DexMethod*,
-                                      UnorderedMap<DexMethod*, size_t>& v,
-                                      bool) { ++v[callee]; });
+        m_callee_caller.update(callee,
+                               [caller](const DexMethod*,
+                                        UnorderedMap<DexMethod*, size_t>& v,
+                                        bool) { ++v[caller]; });
+        m_caller_callee.update(caller,
+                               [callee](const DexMethod*,
+                                        UnorderedMap<DexMethod*, size_t>& v,
+                                        bool) { ++v[callee]; });
       });
   for (const auto& callee_callers : UnorderedIterable(true_virtual_callers)) {
     auto callee = callee_callers.first;
@@ -238,12 +238,12 @@ MultiMethodInliner::MultiMethodInliner(
       auto caller = const_cast<DexMethod*>(caller_insns.first);
       auto count = caller_insns.second.size();
       always_assert(count > 0);
-      callee_caller.update_unsafe(callee,
-                                  [&](const DexMethod*,
-                                      UnorderedMap<DexMethod*, size_t>& v,
-                                      bool) { v[caller] += count; });
+      m_callee_caller.update_unsafe(callee,
+                                    [&](const DexMethod*,
+                                        UnorderedMap<DexMethod*, size_t>& v,
+                                        bool) { v[caller] += count; });
       bool added_virtual_only = false;
-      caller_callee.update_unsafe(
+      m_caller_callee.update_unsafe(
           caller,
           [&](const DexMethod*, UnorderedMap<DexMethod*, size_t>& v, bool) {
             added_virtual_only = (v[callee] += count) == count;
@@ -257,11 +257,11 @@ MultiMethodInliner::MultiMethodInliner(
 
   if (m_consider_hot_cold || m_config.partial_hot_hot_inline) {
     std::vector<const DexMethod*> methods;
-    for (auto&& [callee, _] : UnorderedIterable(callee_caller)) {
+    for (auto&& [callee, _] : UnorderedIterable(m_callee_caller)) {
       methods.push_back(callee);
     }
-    for (auto&& [caller, _] : UnorderedIterable(caller_callee)) {
-      if (!callee_caller.count_unsafe(caller)) {
+    for (auto&& [caller, _] : UnorderedIterable(m_caller_callee)) {
+      if (!m_callee_caller.count_unsafe(caller)) {
         methods.push_back(caller);
       }
     }
@@ -328,7 +328,7 @@ void MultiMethodInliner::inline_methods() {
       return for_speed() &&
              !m_inline_for_speed->should_inline_generic(caller, callee);
     };
-    inliner::RecursionPruner recursion_pruner(callee_caller, caller_callee,
+    inliner::RecursionPruner recursion_pruner(m_callee_caller, m_caller_callee,
                                               std::move(exclude_fn));
     recursion_pruner.run();
     info.recursive = recursion_pruner.recursive_call_sites();
@@ -339,7 +339,7 @@ void MultiMethodInliner::inline_methods() {
 
   if (m_config.use_call_site_summaries) {
     m_call_site_summarizer = std::make_unique<inliner::CallSiteSummarizer>(
-        m_shrinker, callee_caller, caller_callee,
+        m_shrinker, m_callee_caller, m_caller_callee,
         [this](DexMethod* caller, IRInstruction* insn) -> DexMethod* {
           auto callee_opt = this->get_callee(caller, insn);
           return callee_opt ? callee_opt->method : nullptr;
@@ -362,7 +362,7 @@ void MultiMethodInliner::inline_methods() {
   // Second, compute caller priorities --- the callers get a priority assigned
   // that reflects how many other callers will be waiting for them.
   UnorderedSet<DexMethod*> methods_to_schedule;
-  for (auto& p : UnorderedIterable(caller_callee)) {
+  for (auto& p : UnorderedIterable(m_caller_callee)) {
     auto caller = p.first;
     for (auto& q : UnorderedIterable(p.second)) {
       auto callee = q.first;
@@ -376,10 +376,10 @@ void MultiMethodInliner::inline_methods() {
       methods_to_schedule.insert(method);
     });
   } else {
-    for (auto& p : UnorderedIterable(caller_callee)) {
+    for (auto& p : UnorderedIterable(m_caller_callee)) {
       methods_to_schedule.insert(const_cast<DexMethod*>(p.first));
     }
-    for (auto& p : UnorderedIterable(callee_caller)) {
+    for (auto& p : UnorderedIterable(m_callee_caller)) {
       methods_to_schedule.insert(const_cast<DexMethod*>(p.first));
     }
   }
@@ -1015,13 +1015,13 @@ void MultiMethodInliner::postprocess_method(DexMethod* method) {
     }
   }
   {
-    auto it = caller_callee.find(method);
-    if (it != caller_callee.end()) {
+    auto it = m_caller_callee.find(method);
+    if (it != m_caller_callee.end()) {
       it->second = decltype(it->second)();
     }
   }
 
-  bool is_callee = !!callee_caller.count_unsafe(method);
+  bool is_callee = !!m_callee_caller.count_unsafe(method);
   if (!is_callee) {
     // This method isn't the callee of another caller, so we can stop here.
     return;
@@ -1292,7 +1292,7 @@ bool MultiMethodInliner::should_inline_fast(const DexMethod* callee) {
 
   // non-root methods that are only ever called once should always be inlined,
   // as the method can be removed afterwards
-  const auto& callers = callee_caller.at_unsafe(callee);
+  const auto& callers = m_callee_caller.at_unsafe(callee);
   if (callers.size() == 1 && unordered_any(callers)->second == 1 &&
       !root(callee) && !method::is_argless_init(callee) &&
       !m_recursive_callees.count(callee) &&
@@ -1884,7 +1884,7 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
     can_delete_callee = false;
   }
 
-  const auto& callers = callee_caller.at_unsafe(callee);
+  const auto& callers = m_callee_caller.at_unsafe(callee);
 
   // Can we inline the init-callee into all callers?
   // If not, then we can give up, as there's no point in making the case that
@@ -2441,7 +2441,7 @@ CalleeCallerRefs MultiMethodInliner::get_callee_caller_refs(
     }
   }
 
-  const auto& callers = callee_caller.at_unsafe(callee);
+  const auto& callers = m_callee_caller.at_unsafe(callee);
   UnorderedSet<DexType*> caller_classes;
   for (auto& p : UnorderedIterable(callers)) {
     auto caller = p.first;
