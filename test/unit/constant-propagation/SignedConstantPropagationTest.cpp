@@ -1526,12 +1526,11 @@ TEST_F(ConstantBitwiseLeftShiftTest, DeterminableBitsAfterLeftShiftLong) {
       << "Higest bit is determined to be 1, but it shouldn't";
 }
 
-class ConstantBitwiseUnsignedRightShiftTest
+class ConstantBitwiseRightShiftIntTest
     : public ConstantBitwiseTest,
       public ::testing::WithParamInterface<ConstantBitwiseShiftTestCase> {};
 
-TEST_P(ConstantBitwiseUnsignedRightShiftTest,
-       DeterminableBitsAfterUnsignedRightShiftInt) {
+TEST_P(ConstantBitwiseRightShiftIntTest, DeterminableBitsAfterRightShift) {
   const auto& param = GetParam();
 
   auto code = assembler::ircode_from_string(
@@ -1556,11 +1555,6 @@ TEST_P(ConstantBitwiseUnsignedRightShiftTest,
      (if-ne v0 v1 :bit-2)
      (const v4 1)
      (:bit-2)
-
-     (const v1 -2147483642)  ;; binary 1...0110, highest bit is known to be 1
-     (if-ne v0 v1 :bit-3)
-     (const v5 1)
-     (:bit-3)
 
      (const v1 6)  ;; binary 0...0110, 4th bit should no longer be 1
      (if-ne v0 v1 :bit-4)
@@ -1591,9 +1585,6 @@ TEST_P(ConstantBitwiseUnsignedRightShiftTest,
      (const v1 2)
      (:bit-2)
 
-     (const v1 -2147483642)
-     (:bit-3)
-
      (const v1 6)
      (if-ne v0 v1 :bit-4)
      (const v6 1)
@@ -1612,10 +1603,10 @@ TEST_P(ConstantBitwiseUnsignedRightShiftTest,
 }
 
 INSTANTIATE_TEST_SUITE_P(
-    ConstantBitwiseUnsignedRightShiftTests,
-    ConstantBitwiseUnsignedRightShiftTest,
+    ConstantBitwiseRightShiftIntTests,
+    ConstantBitwiseRightShiftIntTest,
     ::testing::ValuesIn(
-        std::initializer_list<ConstantBitwiseUnsignedRightShiftTest::ParamType>{
+        std::initializer_list<ConstantBitwiseRightShiftIntTest::ParamType>{
             {
                 .name = "ushr_int_lit",
                 // shifted 0x21 & 0x1F = 0x1
@@ -1623,15 +1614,27 @@ INSTANTIATE_TEST_SUITE_P(
             },
             {.name = "ushr_int",
              .shift_instruction = "(const v1 33)(ushr-int v0 v0 v1)"},
+            {
+                .name = "shr_int_lit",
+                // shifted 0x21 & 0x1F = 0x1
+                .shift_instruction = "(shr-int/lit v0 v0 33)",
+            },
+            {.name = "shr_int",
+             .shift_instruction = "(const v1 33)(shr-int v0 v0 v1)"},
         }),
     [](const testing::TestParamInfo<
-        ConstantBitwiseUnsignedRightShiftTest::ParamType>& info) {
+        ConstantBitwiseRightShiftIntTest::ParamType>& info) {
       return info.param.name;
     });
 
-TEST_F(ConstantBitwiseUnsignedRightShiftTest,
-       DeterminableBitsAfterUnsignedRightShiftLong) {
-  auto code = assembler::ircode_from_string(R"(
+class ConstantBitwiseRightShiftLongTest
+    : public ConstantBitwiseTest,
+      public ::testing::WithParamInterface<ConstantBitwiseShiftTestCase> {};
+TEST_P(ConstantBitwiseRightShiftLongTest, DeterminableBitsAfterRightShift) {
+  const auto& param = GetParam();
+  auto code =
+      assembler::ircode_from_string(boost::replace_first_copy<std::string>(
+          R"(
     (
      (load-param-wide v0)
      (const-wide v1 -4)
@@ -1639,7 +1642,7 @@ TEST_F(ConstantBitwiseUnsignedRightShiftTest,
      (const-wide v1 12)
      (or-long v0 v0 v1)  ;; 3rd and 4th lowest bits of v0 must be 1
      (const-wide v1 65)  ;; 0x41
-     (ushr-long v0 v0 v1)  ;; Lowest 3 bits: 110
+     ({shift_instruction} v0 v0 v1)  ;; Lowest 3 bits: 110
 
      (const-wide v1 7)  ;; binary 0...0111
      (cmp-long v1 v0 v1)
@@ -1659,12 +1662,6 @@ TEST_F(ConstantBitwiseUnsignedRightShiftTest,
      (const v4 1)
      (:bit-2)
 
-     (const-wide v1 -9223372036854775802)  ;; binary 1...0110, highest bit is known to be 1
-     (cmp-long v1 v0 v1)
-     (if-nez v1 :bit-3)
-     (const v5 1)
-     (:bit-3)
-
      (const-wide v1 6)  ;; binary 0...0110, 4th bit should no longer be 1
      (cmp-long v1 v0 v1)
      (if-nez v1 :bit-4)
@@ -1673,10 +1670,13 @@ TEST_F(ConstantBitwiseUnsignedRightShiftTest,
 
      (return-void)
     )
-)");
+)",
+          "{shift_instruction}", param.shift_instruction));
   do_const_prop(code.get());
 
-  auto expected_code = assembler::ircode_from_string(R"(
+  auto expected_code =
+      assembler::ircode_from_string(boost::replace_first_copy<std::string>(
+          R"(
     (
      (load-param-wide v0)
      (const-wide v1 -4)
@@ -1684,7 +1684,7 @@ TEST_F(ConstantBitwiseUnsignedRightShiftTest,
      (const-wide v1 12)
      (or-long v0 v0 v1)
      (const-wide v1 65)
-     (ushr-long v0 v0 v1)
+     ({shift_instruction} v0 v0 v1)
 
      (const-wide v1 7)
      (cmp-long v1 v0 v1)
@@ -1698,10 +1698,6 @@ TEST_F(ConstantBitwiseUnsignedRightShiftTest,
      (cmp-long v1 v0 v1)
      (:bit-2)
 
-     (const-wide v1 -9223372036854775802)
-     (cmp-long v1 v0 v1)
-     (:bit-3)
-
      (const-wide v1 6)
      (cmp-long v1 v0 v1)
      (if-nez v1 :bit-4)
@@ -1710,12 +1706,291 @@ TEST_F(ConstantBitwiseUnsignedRightShiftTest,
 
      (return-void)
     )
-)");
+)",
+          "{shift_instruction}", param.shift_instruction));
 
   EXPECT_CODE_EQ(code.get(), expected_code.get());
   EXPECT_THAT(assembler::to_string(code.get()),
               ::testing::HasSubstr("(const v6 1)"))
       << "4th bit is determined to be 1 but it shouldn't";
+}
+INSTANTIATE_TEST_SUITE_P(
+    ConstantBitwiseRightShiftLongTests,
+    ConstantBitwiseRightShiftLongTest,
+    ::testing::ValuesIn(
+        std::initializer_list<ConstantBitwiseRightShiftLongTest::ParamType>{
+            {
+                .name = "ushr_long",
+                .shift_instruction = "ushr-long",
+            },
+            {.name = "shr_long", .shift_instruction = "shr-long"},
+        }),
+    [](const testing::TestParamInfo<
+        ConstantBitwiseRightShiftLongTest::ParamType>& info) {
+      return info.param.name;
+    });
+
+struct ConstantBitwiseUnsignedRightShiftPrependingZeroTestCase {
+  std::string name;
+  std::string highest_bit_setting_instructions;
+};
+class ConstantBitwiseUnsignedRightShiftPrependingZeroTest
+    : public ConstantBitwiseTest,
+      public ::testing::WithParamInterface<
+          ConstantBitwiseUnsignedRightShiftPrependingZeroTestCase> {};
+TEST_P(ConstantBitwiseUnsignedRightShiftPrependingZeroTest,
+       UnsignedRightShiftPrependsZero) {
+  auto code =
+      assembler::ircode_from_string(boost::replace_first_copy<std::string>(
+          R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (load-param-wide v2)
+     {highest_bit_setting_instructions}
+
+     (ushr-int/lit v0 v0 1)  ; highest bit is 0
+     (and-int/lit v0 v0 -2147483648) ; wiping out lower bits, equivalent to (const v0 0)
+
+     (const v5 1)
+     (ushr-int v1 v1 v5)  ; highest bit is 0
+     (and-int/lit v1 v1 -2147483648) ; wiping out lower bits, equivalent to (const v1 0)
+
+     (const v5 1)
+     (ushr-long v2 v2 v5)  ; highest bit is 0
+     (const-wide v5 -9223372036854775808)
+     (and-long v2 v2 v5)  ; wiping out lower bits, equivalent to (const-wide v2 0)
+
+     (return-void)
+    )
+)",
+          "{highest_bit_setting_instructions}",
+          GetParam().highest_bit_setting_instructions));
+
+  do_const_prop(code.get());
+
+  auto expected_code =
+      assembler::ircode_from_string(boost::replace_first_copy<std::string>(
+          R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (load-param-wide v2)
+     {highest_bit_setting_instructions}
+
+     (ushr-int/lit v0 v0 1)
+     (const v0 0)
+
+     (const v5 1)
+     (ushr-int v1 v1 v5)
+     (const v1 0)
+
+     (const v5 1)
+     (ushr-long v2 v2 v5)  ; highest bit is 0
+     (const-wide v5 -9223372036854775808)
+     (const-wide v2 0)
+
+     (return-void)
+    )
+)",
+          "{highest_bit_setting_instructions}",
+          GetParam().highest_bit_setting_instructions));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+INSTANTIATE_TEST_SUITE_P(
+    ConstantBitwiseUnsignedRightShiftPrependingZeroTests,
+    ConstantBitwiseUnsignedRightShiftPrependingZeroTest,
+    ::testing::ValuesIn(
+        std::initializer_list<
+            ConstantBitwiseUnsignedRightShiftPrependingZeroTest::ParamType>{
+            {
+                .name = "undetermined",
+                .highest_bit_setting_instructions = "",
+            },
+            {.name = "highest_bit_0", .highest_bit_setting_instructions = R"(
+              (and-int/lit v0 v0 2147483647)
+              (and-int/lit v1 v1 2147483647)
+              (const-wide v3 9223372036854775807)
+              (and-long v2 v2 v3)
+             )"},
+            {.name = "highest_bit_1", .highest_bit_setting_instructions = R"(
+                 (or-int/lit v0 v0 -2147483648)
+                 (or-int/lit v1 v1 -2147483648)
+                 (const-wide v3  -9223372036854775808)
+                 (or-long v2 v2 v3)
+            )"},
+        }),
+    [](const testing::TestParamInfo<
+        ConstantBitwiseUnsignedRightShiftPrependingZeroTest::ParamType>& info) {
+      return info.param.name;
+    });
+
+TEST_F(ConstantBitwiseTest,
+       SignedRightShiftPrependsUndeterminedBitWithUndeterminedSignBit) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (load-param-wide v2)
+
+     (shr-int/lit v0 v0 1)
+     (and-int/lit v0 v0 -2147483648)  ; only highest bit is undetermined, others are 0
+     (if-nez v0 :intlit-0)
+     (const v9 1) ; feasible
+     (:intlit-0)
+     (const v5 -2147483648)
+     (if-ne v0 v5 :intlit-1)
+     (const v9 2) ; feasible
+     (:intlit-1)
+
+     (const v5 1)
+     (shr-int v1 v1 v5)
+     (and-int/lit v1 v1 -2147483648)  ; only highest bit is undetermined, others are 0
+     (if-nez v1 :int-0)
+     (const v9 3) ; feasible
+     (:int-0)
+     (const v5 -2147483648)
+     (if-ne v1 v5 :int-1)
+     (const v9 4) ; feasible
+     (:int-1)
+
+     (const v5 1)
+     (shr-long v2 v2 v5)
+     (const-wide v5 -9223372036854775808)
+     (and-long v2 v2 v5)  ; only highest bit is undetermined, others are 0
+     (cmp-long v5 v2 v5)
+     (if-nez v5 :long-1)
+     (const v9 5) ; feasible
+     (:long-1)
+     (const-wide v5 0)
+     (cmp-long v5 v2 v5)
+     (if-nez v5 :long-0)
+     (const v9 6) ; feasible
+     (:long-0)
+
+     (return-void)
+    )
+)");
+
+  do_const_prop(code.get());
+
+  EXPECT_THAT(assembler::to_string(code.get()),
+              ::testing::AllOf(::testing::HasSubstr("(const v9 1)"),
+                               ::testing::HasSubstr("(const v9 2)")))
+      << "Highest bit in shr-int/lit is unexpectedly determined";
+  EXPECT_THAT(assembler::to_string(code.get()),
+              ::testing::AllOf(::testing::HasSubstr("(const v9 3)"),
+                               ::testing::HasSubstr("(const v9 4)")))
+      << "Highest bit in shr-int is unexpectedly determined";
+  EXPECT_THAT(assembler::to_string(code.get()),
+              ::testing::AllOf(::testing::HasSubstr("(const v9 5)"),
+                               ::testing::HasSubstr("(const v9 6)")))
+      << "Highest bit in shr-long is unexpectedly determined";
+}
+
+TEST_F(ConstantBitwiseTest, SignedRightShiftPrependsSignBitWhenDetermined) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (load-param-wide v2)
+
+     (or-int/lit v0 v0 -2147483648)  ; highest bit is 1
+     (shr-int/lit v0 v0 1)  ; highest bit is still 1
+     (if-nez v0 :intlit-1)
+     (const v9 1) ; infeasible
+     (:intlit-1)
+
+     (ushr-int/lit v0 v0 1)  ; highest bit is 0
+     (shr-int/lit v0 v0 1)  ; highest bit is still 0
+     (const v5 -2147483648)
+     (if-ne v0 v5 :intlit-0)
+     (const v9 2) ; infeasible
+     (:intlit-0)
+
+     (or-int/lit v1 v1 -2147483648)  ; highest bit is 1
+     (const v5 1)
+     (shr-int v0 v0 v5)  ; highest bit is still 1
+     (if-nez v0 :int-1)
+     (const v9 3) ; infeasible
+     (:int-1)
+
+     (ushr-int/lit v0 v0 1)  ; highest bit is 0
+     (shr-int v0 v0 v5)  ; highest bit is still 0
+     (const v5 -2147483648)
+     (if-ne v0 v5 :int-0)
+     (const v9 4) ; infeasible
+     (:int-0)
+
+     (const-wide v5 -9223372036854775808)
+     (or-long v2 v2 v5)  ; highest bit is 1
+     (const v5 1)
+     (shr-long v2 v2 v5)  ; highest bit is still 1
+     (const-wide v5 0)
+     (cmp-long v5 v2 v5)
+     (if-nez v5 :long-1)
+     (const v9 5) ; infeasible
+     (:long-1)
+
+     (const v5 1)
+     (ushr-long v2 v2 v5)  ; highest bit is 0
+     (shr-long v2 v2 v5)  ; highest bit is still 0
+     (const-wide v5 -9223372036854775808)
+     (cmp-long v5 v2 v5)
+     (if-nez v5 :long-0)
+     (const v9 6) ; infeasible
+     (:long-0)
+
+     (return-void)
+    )
+)");
+
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (load-param-wide v2)
+
+     (or-int/lit v0 v0 -2147483648)
+     (shr-int/lit v0 v0 1)
+     (:intlit-1)
+
+     (ushr-int/lit v0 v0 1)
+     (shr-int/lit v0 v0 1)
+     (const v5 -2147483648)
+     (:intlit-0)
+
+     (or-int/lit v1 v1 -2147483648)
+     (const v5 1)
+     (shr-int v0 v0 v5)
+     (:int-1)
+
+     (ushr-int/lit v0 v0 1)
+     (shr-int v0 v0 v5)
+     (const v5 -2147483648)
+     (:int-0)
+
+     (const-wide v5 -9223372036854775808)
+     (or-long v2 v2 v5)
+     (const v5 1)
+     (shr-long v2 v2 v5)
+     (const-wide v5 0)
+     (cmp-long v5 v2 v5)
+     (:long-1)
+
+     (const v5 1)
+     (ushr-long v2 v2 v5)
+     (shr-long v2 v2 v5)
+     (const-wide v5 -9223372036854775808)
+     (cmp-long v5 v2 v5)
+     (:long-0)
+
+     (return-void)
+    )
+)");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST_F(ConstantBitwiseTest, UndeterminableBitJoinedFromConstants) {
