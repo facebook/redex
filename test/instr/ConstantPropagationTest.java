@@ -627,6 +627,65 @@ public class ConstantPropagationTest {
     // CHECK: return-void
   }
 
+  // CHECK: method: virtual redex.ConstantPropagationTest.binop_ushr_non_const_lit
+  @Test
+  public void binop_ushr_non_const_lit() {
+    int x = getRandomInt() | 16;
+    // CHECK: ushr-int/lit8{{.*}}
+    int z = x >>> 2;  // 3rd bit is 1
+    int y = getRandomInt() & ~4;  // 3rd bit is 0
+    // PRECHECK: if-ne {{.*}}
+    // POSTCHECK-NOT: if-ne {{.*}}
+    if (z == y) {
+      System.out.println("Unreachable z == y");
+    }
+    assertThat(z).isNotEqualTo(y);
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.ConstantPropagationTest.binop_shr_non_const_lit
+  @Test
+  public void binop_shr_non_const_lit() {
+    int x = getRandomInt() | 16;
+    // CHECK: shr-int/lit8{{.*}}
+    int z = x >> 2;  // 3rd bit is 1
+    int y = getRandomInt() & ~4;  // 3rd bit is 0
+    // PRECHECK: if-ne {{.*}}
+    // POSTCHECK-NOT: if-ne {{.*}}
+    if (z == y) {
+      System.out.println("Unreachable z == y");
+    }
+    assertThat(z).isNotEqualTo(y);
+
+    x = getRandomInt() | Integer.MIN_VALUE;
+    // CHECK: shr-int/lit8{{.*}}
+    z = x >> 1;
+    y = getRandomInt() & Integer.MAX_VALUE;  // highest bit is 0
+    // PRECHECK: if-ne {{.*}}
+    // POSTCHECK-NOT: if-ne {{.*}}
+    if (z == y) {
+      System.out.println("Unreachable z == y");
+    }
+    assertThat(z).isNotEqualTo(y);
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.ConstantPropagationTest.binop_shl_non_const_lit
+  @Test
+  public void binop_shl_non_const_lit() {
+    int x = getRandomInt() | 2;
+    // CHECK: shl-int/lit8{{.*}}
+    int z = x << 2;  // 4th bit is 1
+    int y = getRandomInt() & ~8;  // 4th bit is 0
+    // PRECHECK: if-ne {{.*}}
+    // POSTCHECK-NOT: if-ne {{.*}}
+    if (z == y) {
+      System.out.println("Unreachable z == y");
+    }
+    assertThat(z).isNotEqualTo(y);
+    // CHECK: return-void
+  }
+
   // CHECK: method: virtual redex.ConstantPropagationTest.binop_and_non_const
   @Test
   public void binop_and_non_const() {
@@ -682,6 +741,9 @@ public class ConstantPropagationTest {
 
   // Not adding unop_not_non_const here, because it seems like x = ~x is always
   // compiled to "xor-int/lit8 v0, v0, -1", which is not what we want to test.
+
+  // Not adding binop_{ushr,shr,shl}_non_const here, because there's no easy way to
+  // elicit the non-literals version of ushr-int, shr-int, and shl-int.
 
   // CHECK: method: virtual redex.ConstantPropagationTest.binop_add_long
   @Test
@@ -860,4 +922,63 @@ public class ConstantPropagationTest {
   // Not adding unop_not_long_non_const here, because it seems like x = ~x is
   // always compiled to "const-wide/16 v1 -1; xor-long/2addr v0, v1", which is
   // not what we want to test.
+
+  // CHECK: method: virtual redex.ConstantPropagationTest.binop_ushr_long_non_const
+  @Test
+  public void binop_ushr_long_non_const() {
+    long x = getRandomLong() | 16L;
+    // CHECK: ushr-long{{.*}}
+    long z = x >>> 2;  // 3rd bit is 1
+    long y = getRandomLong() & ~4L;  // 3rd bit is 0
+    // PRECHECK: if-nez {{.*}}
+    // POSTCHECK-NOT: if-nez {{.*}}
+    if (z == y) {
+      System.out.println("Unreachable z == y");
+    }
+    assertThat(z).isNotEqualTo(y);
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.ConstantPropagationTest.binop_shr_long_non_const
+  @Test
+  public void binop_shr_long_non_const() {
+    long x = getRandomLong() | 16L;
+    // CHECK: shr-long{{.*}}
+    long z = x >> 2;  // 3rd bit is 1
+    long y = getRandomLong() & ~4L;  // 3rd bit is 0
+    // PRECHECK: if-nez {{.*}}
+    // POSTCHECK-NOT: if-nez {{.*}}
+    if (z == y) {
+      System.out.println("Unreachable z == y");
+    }
+    assertThat(z).isNotEqualTo(y);
+
+    x = getRandomLong() | Long.MIN_VALUE;
+    // CHECK: shr-long{{.*}}
+    z = x >> 1;
+    y = getRandomLong() & Long.MAX_VALUE;  // highest bit is 0
+    // PRECHECK: if-nez {{.*}}
+    // POSTCHECK-NOT: if-nez {{.*}}
+    if (z == y) {
+      System.out.println("Unreachable z == y");
+    }
+    assertThat(z).isNotEqualTo(y);
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.ConstantPropagationTest.binop_shl_long_non_const
+  @Test
+  public void binop_shl_long_non_const() {
+    long x = getRandomLong() | 2L;
+    // CHECK: shl-long{{.*}}
+    long z = x << 2;  // 4th bit is 1
+    long y = getRandomLong() & ~8L;  // 4th bit is 0
+    // PRECHECK: if-nez {{.*}}
+    // POSTCHECK-NOT: if-nez {{.*}}
+    if (z == y) {
+      System.out.println("Unreachable z == y");
+    }
+    assertThat(z).isNotEqualTo(y);
+    // CHECK: return-void
+  }
 }
