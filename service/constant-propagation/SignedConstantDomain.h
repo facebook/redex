@@ -7,6 +7,10 @@
 
 #pragma once
 
+#include <initializer_list>
+#include <limits>
+#include <optional>
+
 #include <sparta/AbstractDomain.h>
 #include <sparta/ConstantAbstractDomain.h>
 #include <sparta/IntervalDomain.h>
@@ -60,6 +64,11 @@ class SignedConstantDomain final
       return this->is_bottom() ||
              (other.l <= l && u <= other.u && other.is_nez <= is_nez);
     }
+    // Partial order only. Use <= instead.
+    bool operator>(const Bounds&) = delete;
+    bool operator<(const Bounds&) = delete;
+    bool operator>=(const Bounds&) = delete;
+
     inline bool is_constant() const { return l == u; }
     bool is_top() const { return *this == top(); }
     bool is_bottom() const { return *this == bottom(); }
@@ -70,6 +79,10 @@ class SignedConstantDomain final
       }
       if (u < l) this->set_to_bottom();
       always_assert(is_normalized());
+    }
+    // Is the constant not within the bounds?
+    bool unequals_constant(int64_t integer) const {
+      return (integer == 0 && is_nez) || integer < l || u < integer;
     }
     bool is_normalized() const {
       // bottom has a particular shape
@@ -148,49 +161,267 @@ class SignedConstantDomain final
   };
   Bounds m_bounds;
 
-  explicit SignedConstantDomain(Bounds bounds) : m_bounds(bounds) {}
+  class Bitset final {
+    // Albeit unusual, make sure the compiler uses 2's complement to represent
+    // int64, upon which much of this class relies.
+    static_assert(
+        static_cast<uint64_t>(static_cast<int64_t>(-1)) ==
+                std::numeric_limits<uint64_t>::max() &&
+            static_cast<int64_t>(std::numeric_limits<uint64_t>::max()) ==
+                static_cast<int64_t>(-1),
+        "Unsupported compiler: int64_t is not represented as 2's complement");
+
+    // We use two integers to represent the state of each bit. A bit of
+    // one_bit_states/zero_bit_states being one means that the corresponding bit
+    // of the integer can possibly be one/zero. Hence, if the same bits of both
+    // are one, it means that the bit can be either one or zero, i.e., top for
+    // that bit. If any bit is zero in both integers, then the bitset is bottom.
+    // Use uint64_t instead of int64_t to avoid undefined behavior with >>.
+    uint64_t one_bit_states{std::numeric_limits<uint64_t>::max()};
+    uint64_t zero_bit_states{std::numeric_limits<uint64_t>::max()};
+
+    void set_all_to(bool zero, bool one) {
+      zero_bit_states = zero ? std::numeric_limits<uint64_t>::max() : 0u;
+      one_bit_states = one ? std::numeric_limits<uint64_t>::max() : 0u;
+    }
+
+    // Construct with all bits set to a given bit state.
+    Bitset(bool zero, bool one) { set_all_to(zero, one); }
+
+   public:
+    Bitset() = default;
+    Bitset(const Bitset& that) = default;
+    Bitset(Bitset&& that) = default;
+    Bitset& operator=(const Bitset& that) = default;
+    Bitset& operator=(Bitset&& that) = default;
+
+    bool operator==(const Bitset& that) const {
+      return (one_bit_states == that.one_bit_states &&
+              zero_bit_states == that.zero_bit_states) ||
+             (is_bottom() && that.is_bottom());
+    }
+
+    bool operator<=(const Bitset& that) const {
+      if (is_bottom()) return true;
+      return ((one_bit_states | that.one_bit_states) == that.one_bit_states &&
+              (zero_bit_states | that.zero_bit_states) == that.zero_bit_states);
+    }
+
+    // Partial order only. Use <= instead.
+    bool operator>(const Bitset&) = delete;
+    bool operator<(const Bitset&) = delete;
+    bool operator>=(const Bitset&) = delete;
+
+    uint64_t get_one_bit_states() const { return one_bit_states; }
+    uint64_t get_zero_bit_states() const { return zero_bit_states; }
+
+    // Construct from a constant.
+    explicit Bitset(int64_t value) {
+      one_bit_states = static_cast<uint64_t>(value);
+      zero_bit_states = ~one_bit_states;
+    }
+
+    bool is_constant() const { return get_constant().has_value(); }
+
+    std::optional<int64_t> get_constant() const {
+      if (~one_bit_states == zero_bit_states) {
+        return static_cast<int64_t>(one_bit_states);
+      } else {
+        return std::nullopt;
+      }
+    }
+
+    void set_to_bottom() { set_all_to(false, false); }
+    void set_to_top() { set_all_to(true, true); }
+    Bitset& join_with(const Bitset& that) {
+      one_bit_states |= that.one_bit_states;
+      zero_bit_states |= that.zero_bit_states;
+      return *this;
+    }
+
+    Bitset& meet_with(const Bitset& that) {
+      one_bit_states &= that.one_bit_states;
+      zero_bit_states &= that.zero_bit_states;
+      return *this;
+    }
+
+    bool is_bottom() const {
+      // We don't use a single representation for bottom. Always use this
+      // function to check if it's bottom. It's bottom if any bit is zero in
+      // both integers.
+      return (one_bit_states | zero_bit_states) !=
+             std::numeric_limits<uint64_t>::max();
+    }
+
+    bool is_top() const { return *this == top(); }
+
+    // Get the bit that can be determined to be one or zero. The returned
+    // integer hosts all bits that are determined to be zero/one.
+    uint64_t get_determined_zero_bits() const {
+      return zero_bit_states & ~one_bit_states;
+    }
+    uint64_t get_determined_one_bits() const {
+      return one_bit_states & ~zero_bit_states;
+    }
+
+    // Set particular bits to be known to be zero/one.
+    Bitset& set_determined_zero_bits(uint64_t bits) {
+      one_bit_states &= ~bits;
+      zero_bit_states |= bits;
+      return *this;
+    }
+    Bitset& set_determined_one_bits(uint64_t bits) {
+      one_bit_states |= bits;
+      zero_bit_states &= ~bits;
+      return *this;
+    }
+
+    // Is the constant unrepresentable by the bitset?
+    bool unequals_constant(int64_t integer) const {
+      const auto determinable_one_bits = get_determined_one_bits();
+      if ((determinable_one_bits & integer) != determinable_one_bits) {
+        return true;
+      }
+
+      const auto determinable_zero_bits = get_determined_zero_bits();
+      if ((determinable_zero_bits & ~integer) != determinable_zero_bits) {
+        return true;
+      }
+
+      return false;
+    }
+
+    static const Bitset& bottom() {
+      static const Bitset res(false, false);
+      return res;
+    }
+    static const Bitset& top() {
+      static const Bitset res(true, true);
+      return res;
+    }
+  };
+
+  Bitset m_bitset;
+
+  SignedConstantDomain(Bounds bounds, Bitset bitset)
+      : m_bounds(bounds), m_bitset(bitset) {}
+
+  // When either bounds or bitset meets (become narrower), we can possibly infer
+  // the other one with some info.
+  void cross_infer_meet_from_bounds() {
+    if (m_bitset.is_bottom()) {
+      always_assert(m_bounds.is_bottom());
+      return;
+    }
+
+    // Constant inference
+    if (m_bounds.is_constant()) {
+      if (m_bitset.unequals_constant(m_bounds.l)) {
+        set_to_bottom();
+        return;
+      }
+      m_bitset = Bitset(m_bounds.l);
+      return;
+    }
+
+    // One is bottom, then all is bottom.
+    if (m_bounds.is_bottom()) {
+      set_to_bottom();
+      return;
+    }
+
+    // TODO(T222824773) More cross inference can be added here...
+  }
+
+  void cross_infer_meet_from_bitset() {
+    if (m_bounds.is_bottom()) {
+      always_assert(m_bitset.is_bottom());
+      return;
+    }
+
+    const auto bitset_constant = m_bitset.get_constant();
+
+    if (bitset_constant.has_value()) {
+      if (m_bounds.unequals_constant(bitset_constant.value())) {
+        set_to_bottom();
+        return;
+      }
+      m_bounds = Bounds::from_integer(bitset_constant.value());
+      return;
+    }
+
+    // One is bottom, then all is bottom.
+    if (m_bitset.is_bottom()) {
+      set_to_bottom();
+      return;
+    }
+
+    // TODO(T222824773) More cross inference can be added here...
+  }
 
  public:
-  SignedConstantDomain() : m_bounds(Bounds::top()) {}
+  SignedConstantDomain() : m_bounds(Bounds::top()), m_bitset(Bitset::top()) {}
 
   explicit SignedConstantDomain(int64_t v)
-      : m_bounds{Bounds::from_integer(v)} {}
+      : m_bounds{Bounds::from_integer(v)}, m_bitset(v) {}
 
   explicit SignedConstantDomain(sign_domain::Interval interval)
-      : m_bounds(Bounds::from_interval(interval)) {}
+      : m_bounds(Bounds::from_interval(interval)), m_bitset(Bitset::top()) {
+    cross_infer_meet_from_bounds();
+  }
 
   SignedConstantDomain(int64_t min, int64_t max)
-      : m_bounds({min > 0 || max < 0, min, max}) {
+      : m_bounds({min > 0 || max < 0, min, max}), m_bitset(Bitset::top()) {
     always_assert(min <= max);
+    cross_infer_meet_from_bounds();
+  }
+
+  // Construct a SignedConstantDomain that is the joint of multiple constants.
+  static SignedConstantDomain from_constants(
+      std::initializer_list<int64_t> constants) {
+    SignedConstantDomain scd(bottom());
+    for (const auto c : constants) {
+      scd.join_with(SignedConstantDomain(c));
+    }
+    return scd;
   }
 
   static SignedConstantDomain bottom() {
-    return SignedConstantDomain(Bounds::bottom());
+    return SignedConstantDomain(Bounds::bottom(), Bitset::bottom());
   }
   static SignedConstantDomain top() {
-    return SignedConstantDomain(Bounds::top());
+    return SignedConstantDomain(Bounds::top(), Bitset::top());
   }
   static SignedConstantDomain nez() {
-    return SignedConstantDomain(Bounds::nez());
+    return SignedConstantDomain(Bounds::nez(), Bitset::top());
   }
-  bool is_bottom() const { return m_bounds == Bounds::bottom(); }
-  bool is_top() const { return m_bounds == Bounds::top(); }
+  bool is_bottom() const {
+    return m_bounds.is_bottom() || m_bitset.is_bottom();
+  }
+  bool is_top() const { return m_bounds.is_top() && m_bitset.is_top(); }
   bool is_nez() const { return m_bounds.is_nez; }
 
   bool leq(const SignedConstantDomain& that) const {
-    return m_bounds <= that.m_bounds;
+    return m_bounds <= that.m_bounds && m_bitset <= that.m_bitset;
   }
 
   bool equals(const SignedConstantDomain& that) const {
-    return m_bounds == that.m_bounds;
+    return m_bounds == that.m_bounds && m_bitset == that.m_bitset;
   }
 
-  void set_to_bottom() { m_bounds.set_to_bottom(); }
+  void set_to_bottom() {
+    m_bounds.set_to_bottom();
+    m_bitset.set_to_bottom();
+  }
 
-  void set_to_top() { m_bounds.set_to_top(); }
+  void set_to_top() {
+    m_bounds.set_to_top();
+    m_bitset.set_to_top();
+  }
 
   void join_with(const SignedConstantDomain& that) {
     m_bounds.join_with(that.m_bounds);
+    m_bitset.join_with(that.m_bitset);
   }
 
   void widen_with(const SignedConstantDomain&) {
@@ -199,6 +430,9 @@ class SignedConstantDomain final
 
   void meet_with(const SignedConstantDomain& that) {
     m_bounds.meet_with(that.m_bounds);
+    cross_infer_meet_from_bounds();
+    m_bitset.meet_with(that.m_bitset);
+    cross_infer_meet_from_bitset();
   }
 
   void narrow_with(const SignedConstantDomain&) {
@@ -223,11 +457,11 @@ class SignedConstantDomain final
   }
 
   ConstantDomain constant_domain() const {
-    if (!m_bounds.is_constant()) {
-      if (m_bounds.is_bottom()) return ConstantDomain::bottom();
-      return ConstantDomain::top();
+    if (const auto constant = get_constant(); constant.has_value()) {
+      return ConstantDomain(*constant);
     }
-    return ConstantDomain(m_bounds.l);
+    if (is_bottom()) return ConstantDomain::bottom();
+    return ConstantDomain::top();
   }
 
   NumericIntervalDomain numeric_interval_domain() const {
@@ -238,6 +472,8 @@ class SignedConstantDomain final
 
   boost::optional<int64_t> get_constant() const {
     if (!m_bounds.is_constant()) return boost::none;
+    always_assert(m_bitset.is_constant() &&
+                  *m_bitset.get_constant() == m_bounds.l);
     return boost::optional<int64_t>(m_bounds.l);
   }
 
@@ -267,6 +503,45 @@ class SignedConstantDomain final
     return res;
   }
 
+  uint64_t get_determined_zero_bits() const {
+    return m_bitset.get_determined_zero_bits();
+  }
+
+  uint64_t get_determined_one_bits() const {
+    return m_bitset.get_determined_one_bits();
+  }
+
+  // Sets determined bits. This also wipes out any inference about bounds by
+  // setting bounds to top if either zeros or ones is provided. Useful in
+  // inferring results of bitwise ops, which usually invalidate any existing
+  // inferences on abounds.
+  SignedConstantDomain& set_determined_bits_erasing_bounds(
+      std::optional<uint64_t> zeros, std::optional<uint64_t> ones) {
+    // No bit can be 1 in both zeros and ones
+    always_assert(!zeros.has_value() || !ones.has_value() ||
+                  (*ones & *zeros) == 0u);
+
+    if (!zeros.has_value() && !ones.has_value()) {
+      return *this;
+    }
+
+    if (zeros.has_value()) {
+      m_bitset.set_determined_zero_bits(*zeros);
+    }
+    if (ones.has_value()) {
+      m_bitset.set_determined_one_bits(*ones);
+    }
+
+    m_bounds.set_to_top();
+    cross_infer_meet_from_bitset();
+    return *this;
+  }
+
+  uint64_t get_one_bit_states() const { return m_bitset.get_one_bit_states(); }
+  uint64_t get_zero_bit_states() const {
+    return m_bitset.get_zero_bit_states();
+  }
+
  private:
   static int32_t clamp_int(int64_t value) {
     return std::max(
@@ -279,38 +554,63 @@ class SignedConstantDomain final
 inline std::ostream& operator<<(std::ostream& o,
                                 const SignedConstantDomain& scd) {
   if (scd.is_bottom()) return o << "_|_";
+  if (scd.is_top()) return o << "T";
 
-  auto min = scd.min_element();
-  auto max = scd.max_element();
-  if (min == std::numeric_limits<int64_t>::min() &&
-      max == std::numeric_limits<int64_t>::max()) {
-    return o << (scd.is_nez() ? "NEZ" : "T");
-  }
+  const auto print_bounds =
+      [](std::ostream& o, const SignedConstantDomain& scd) -> std::ostream& {
+    const auto min = scd.min_element();
+    const auto max = scd.max_element();
+    if (min == std::numeric_limits<int64_t>::min() &&
+        max == std::numeric_limits<int64_t>::max()) {
+      return o << (scd.is_nez() ? "NEZ" : "TB");
+    }
 
-  if (min == std::numeric_limits<int64_t>::min()) {
-    if (max == -1) return o << "LTZ";
-    if (max == 0) return o << "LEZ";
-  }
-  if (max == std::numeric_limits<int64_t>::max()) {
-    if (min == 1) return o << "GTZ";
-    if (min == 0) return o << "GEZ";
-  }
+    if (min == std::numeric_limits<int64_t>::min()) {
+      if (max == -1) return o << "LTZ";
+      if (max == 0) return o << "LEZ";
+    }
+    if (max == std::numeric_limits<int64_t>::max()) {
+      if (min == 1) return o << "GTZ";
+      if (min == 0) return o << "GEZ";
+    }
 
-  auto append = [&o](int64_t v) -> std::ostream& {
-    if (v == std::numeric_limits<int64_t>::min()) return o << "min";
-    if (v == std::numeric_limits<int64_t>::max()) return o << "max";
-    return o << v;
+    auto append = [&o](int64_t v) -> std::ostream& {
+      if (v == std::numeric_limits<int64_t>::min()) return o << "min";
+      if (v == std::numeric_limits<int64_t>::max()) return o << "max";
+      return o << v;
+    };
+
+    if (min == max) return append(min);
+    o << "[";
+    append(min);
+    if (min < 0 && max > 0 && scd.is_nez()) {
+      o << ",-1]U[1,";
+    } else {
+      o << ",";
+    }
+    append(max);
+    return o << "]";
   };
 
-  if (min == max) return append(min);
+  print_bounds(o, scd);
 
-  o << "[";
-  append(min);
-  if (min < 0 && max > 0 && scd.is_nez()) {
-    o << ",-1]U[1,";
-  } else {
-    o << ",";
-  }
-  append(max);
-  return o << "]";
+  const auto print_bitset =
+      [](std::ostream& o, const SignedConstantDomain& scd) -> std::ostream& {
+    const auto min_max = SignedConstantDomain::from_constants(
+        {scd.min_element(), scd.max_element()});
+    if (min_max.get_zero_bit_states() == scd.get_zero_bit_states() &&
+        min_max.get_one_bit_states() == scd.get_one_bit_states()) {
+      // No interesting bitset info.
+      return o;
+    }
+
+    std::ios old_io_state(nullptr);
+    old_io_state.copyfmt(o);
+    o << "{" << std::hex << std::showbase << scd.get_zero_bit_states() << "/"
+      << scd.get_one_bit_states() << "}";
+    o.copyfmt(old_io_state);
+    return o;
+  };
+
+  return print_bitset(o, scd);
 }

@@ -7,6 +7,7 @@
 
 #include "ConstantPropagationPass.h"
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "AbstractDomainPropertyTest.h"
@@ -298,6 +299,67 @@ TEST_F(ConstantPropagationTest, IfToGoto) {
     )
 )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+class ConstantBitwiseTest : public RedexTest {};
+
+TEST_F(ConstantBitwiseTest, DeterminableBitJoinedFromConstants) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (if-eqz v0 :if-true-label)
+     (const v1 0)
+     (goto :end-if)
+     (:if-true-label)
+     (const v1 2)
+     (:end-if)
+     ;; Joining the two branches, the lowest bit of v1 must be 0, thus v1 != 1
+     (const v2 1)
+     (if-ne v1 v2 :end)
+     (const v0 10)
+     (:end)
+     (return-void)
+    )
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (if-eqz v0 :end-if)
+     (const v1 0)
+     (:if-true-label)
+     (const v2 1)
+     (return-void)
+     (:end-if)
+     (const v1 2)
+     (goto :if-true-label)
+    )
+)");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(ConstantBitwiseTest, UndeterminableBitJoinedFromConstants) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (if-eqz v0 :if-true-label)
+     (const v1 0)
+     (goto :end-if)
+     (:if-true-label)
+     (const v1 2)
+     (:end-if)
+     ;; Joining the two branches, the lowest bit of v1 must be 0, thus can't infer v1 != 0
+     (if-nez v1 :end)
+     (const v0 10)
+     (:end)
+     (return-void)
+    )
+)");
+  do_const_prop(code.get());
+  EXPECT_THAT(assembler::to_string(code.get()),
+              ::testing::HasSubstr("(if-nez v1"));
 }
 
 TEST_F(ConstantPropagationTest, FoldArithmeticAddLit) {
