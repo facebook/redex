@@ -515,7 +515,6 @@ bool PrimitiveAnalyzer::analyze_cmp(const IRInstruction* insn,
 bool PrimitiveAnalyzer::analyze_unop(const IRInstruction* insn,
                                      ConstantEnvironment* env) NO_UBSAN_ARITH {
   auto op = insn->opcode();
-  TRACE(CONSTP, 5, "Attempting to fold %s", SHOW(insn));
 
   auto apply = [&](auto val) {
     SignedConstantDomain result;
@@ -533,9 +532,11 @@ bool PrimitiveAnalyzer::analyze_unop(const IRInstruction* insn,
     return true;
   };
 
-  auto cst = env->get<SignedConstantDomain>(insn->src(0)).get_constant();
+  auto scd = env->get<SignedConstantDomain>(insn->src(0));
+  const auto cst = scd.get_constant();
 
   if (cst) {
+    TRACE(CONSTP, 5, "Attempting to fold %s", SHOW(insn));
     int64_t val = *cst;
     switch (op) {
     case OPCODE_NOT_INT:
@@ -588,6 +589,21 @@ bool PrimitiveAnalyzer::analyze_unop(const IRInstruction* insn,
       break;
     }
   }
+
+  if (op == OPCODE_NOT_INT || op == OPCODE_NOT_LONG) {
+    uint64_t new_determined_zeros = scd.get_determined_one_bits();
+    uint64_t new_determined_ones = scd.get_determined_zero_bits();
+    if (op == OPCODE_NOT_INT) {
+      new_determined_zeros |=
+          ~static_cast<uint64_t>(std::numeric_limits<uint32_t>::max());
+      new_determined_ones &= std::numeric_limits<uint32_t>::max();
+    }
+    scd.set_determined_bits_erasing_bounds(new_determined_zeros,
+                                           new_determined_ones);
+    env->set(insn->dest(), scd);
+    return true;
+  }
+
   return analyze_default(insn, env);
 }
 
