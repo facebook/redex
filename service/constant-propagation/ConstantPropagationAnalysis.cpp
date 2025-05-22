@@ -703,11 +703,13 @@ bool PrimitiveAnalyzer::analyze_binop_lit(
 bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
                                       ConstantEnvironment* env) NO_UBSAN_ARITH {
   auto op = insn->opcode();
-  TRACE(CONSTP, 5, "Attempting to fold %s", SHOW(insn));
-  auto cst_left = env->get<SignedConstantDomain>(insn->src(0)).get_constant();
-  auto cst_right = env->get<SignedConstantDomain>(insn->src(1)).get_constant();
+  const auto scd_left = env->get<SignedConstantDomain>(insn->src(0));
+  const auto cst_left = scd_left.get_constant();
+  const auto scd_right = env->get<SignedConstantDomain>(insn->src(1));
+  const auto cst_right = scd_right.get_constant();
   boost::optional<int64_t> result = boost::none;
   if (cst_left && cst_right) {
+    TRACE(CONSTP, 5, "Attempting to fold %s", SHOW(insn));
     bool use_result_reg = false;
     switch (op) {
     case OPCODE_ADD_INT:
@@ -771,7 +773,45 @@ bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
     env->set(use_result_reg ? RESULT_REGISTER : insn->dest(), res_const_dom);
     return true;
   }
-  return analyze_default(insn, env);
+
+  switch (op) {
+  case OPCODE_AND_INT: {
+    SignedConstantDomain dest_scd;
+    dest_scd.set_determined_bits_erasing_bounds(
+        scd_left.get_determined_zero_bits() |
+            scd_right.get_determined_zero_bits(),
+        scd_left.get_determined_one_bits() &
+            scd_right.get_determined_one_bits());
+    env->set(insn->dest(), dest_scd);
+    return true;
+  }
+  case OPCODE_OR_INT: {
+    SignedConstantDomain dest_scd;
+    dest_scd.set_determined_bits_erasing_bounds(
+        scd_left.get_determined_zero_bits() &
+            scd_right.get_determined_zero_bits(),
+        scd_left.get_determined_one_bits() |
+            scd_right.get_determined_one_bits());
+    env->set(insn->dest(), dest_scd);
+    return true;
+  }
+  case OPCODE_XOR_INT: {
+    SignedConstantDomain dest_scd;
+    dest_scd.set_determined_bits_erasing_bounds(
+        (scd_left.get_determined_zero_bits() &
+         scd_right.get_determined_zero_bits()) |
+            (scd_left.get_determined_one_bits() &
+             scd_right.get_determined_one_bits()),
+        (scd_left.get_determined_zero_bits() &
+         scd_right.get_determined_one_bits()) |
+            (scd_left.get_determined_one_bits() &
+             scd_right.get_determined_zero_bits()));
+    env->set(insn->dest(), dest_scd);
+    return true;
+  }
+  default:
+    return analyze_default(insn, env);
+  }
 }
 
 bool InjectionIdAnalyzer::analyze_injection_id(const IRInstruction* insn,
