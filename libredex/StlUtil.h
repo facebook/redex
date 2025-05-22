@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstring>
 #include <deque>
+#include <type_traits>
 #include <vector>
 
 namespace std20 {
@@ -54,3 +55,12 @@ constexpr To bit_cast(const From& src) noexcept {
 }
 
 } // namespace std20
+
+namespace std23 {
+// Functionality that will be in C++23 STL.
+template <class Enum>
+constexpr std::underlying_type_t<Enum> to_underlying(Enum e) noexcept {
+  return static_cast<std::underlying_type_t<Enum>>(e);
+}
+
+} // namespace std23

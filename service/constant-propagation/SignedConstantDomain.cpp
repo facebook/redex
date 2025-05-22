@@ -12,19 +12,26 @@
 
 #include "SignedConstantDomain.h"
 
+#include "StlUtil.h"
+
+enum class SignedConstantDomain::BitShiftMask : int32_t {
+  Int = 0x1f,
+  Long = 0x3f,
+};
+
 SignedConstantDomain& SignedConstantDomain::left_shift_bits_int(int32_t shift) {
-  return left_shift_bits(shift, BIT_SHIFT_MASK_INT);
+  return left_shift_bits(shift, BitShiftMask::Int);
 }
 SignedConstantDomain& SignedConstantDomain::left_shift_bits_long(
     int32_t shift) {
-  return left_shift_bits(shift, BIT_SHIFT_MASK_LONG);
+  return left_shift_bits(shift, BitShiftMask::Long);
 }
 
 SignedConstantDomain& SignedConstantDomain::unsigned_right_shift_bits_int(
     int32_t shift) {
   if (is_bottom()) return *this;
 
-  shift &= BIT_SHIFT_MASK_INT;
+  shift &= std23::to_underlying(BitShiftMask::Int);
 
   // set_determined_bits_erasing_bounds() does not reset existing bit states.
   // Set to top first to clear bit states.
@@ -42,7 +49,7 @@ SignedConstantDomain& SignedConstantDomain::unsigned_right_shift_bits_long(
     int32_t shift) {
   if (is_bottom()) return *this;
 
-  shift &= BIT_SHIFT_MASK_LONG;
+  shift &= std23::to_underlying(BitShiftMask::Long);
 
   // set_determined_bits_erasing_bounds() does not reset existing bit states.
   // Set to top first to clear bit states.
@@ -57,18 +64,18 @@ SignedConstantDomain& SignedConstantDomain::unsigned_right_shift_bits_long(
 }
 SignedConstantDomain& SignedConstantDomain::signed_right_shift_bits_int(
     int32_t shift) {
-  return signed_right_shift_bits(shift, BIT_SHIFT_MASK_INT);
+  return signed_right_shift_bits(shift, BitShiftMask::Int);
 }
 SignedConstantDomain& SignedConstantDomain::signed_right_shift_bits_long(
     int32_t shift) {
-  return signed_right_shift_bits(shift, BIT_SHIFT_MASK_LONG);
+  return signed_right_shift_bits(shift, BitShiftMask::Long);
 }
 
 SignedConstantDomain& SignedConstantDomain::left_shift_bits(int32_t shift,
-                                                            int32_t mask) {
+                                                            BitShiftMask mask) {
   if (is_bottom()) return *this;
 
-  shift &= mask;
+  shift &= std23::to_underlying(mask);
 
   // The higher 32 bits must be cleaned up, otherwise int meet may lead to
   // unintended bottoms due to mismatch in the higher 32 bits.
@@ -77,15 +84,15 @@ SignedConstantDomain& SignedConstantDomain::left_shift_bits(int32_t shift,
   set_to_top();
   set_determined_bits_erasing_bounds(new_determined_zeros,
                                      new_determined_ones,
-                                     /*bit32=*/mask == BIT_SHIFT_MASK_INT);
+                                     /*bit32=*/mask == BitShiftMask::Int);
   return *this;
 }
 
 SignedConstantDomain& SignedConstantDomain::signed_right_shift_bits(
-    int32_t shift, int32_t mask) {
+    int32_t shift, BitShiftMask mask) {
   if (is_bottom()) return *this;
 
-  shift &= mask;
+  shift &= std23::to_underlying(mask);
 
   // set_determined_bits_erasing_bounds() does not reset existing bit states.
   // Set to top first to clear bit states.
@@ -96,7 +103,7 @@ SignedConstantDomain& SignedConstantDomain::signed_right_shift_bits(
   set_to_top();
   set_determined_bits_erasing_bounds(new_determined_zeros,
                                      new_determined_ones,
-                                     /*bit32=*/mask == BIT_SHIFT_MASK_INT);
+                                     /*bit32=*/mask == BitShiftMask::Int);
 
   // Can explore additional inference on bounds here.
   return *this;

@@ -575,11 +575,12 @@ class SignedConstantDomain final
   SignedConstantDomain& signed_right_shift_bits_long(int32_t shift);
 
  private:
-  static constexpr int32_t BIT_SHIFT_MASK_INT = 0x1f;
-  static constexpr int32_t BIT_SHIFT_MASK_LONG = 0x3f;
+  // Bit shift masks as required by Dalvik spec.
+  enum class BitShiftMask : int32_t;
 
-  SignedConstantDomain& left_shift_bits(int32_t shift, int32_t mask);
-  SignedConstantDomain& signed_right_shift_bits(int32_t shift, int32_t mask);
+  SignedConstantDomain& left_shift_bits(int32_t shift, BitShiftMask mask);
+  SignedConstantDomain& signed_right_shift_bits(int32_t shift,
+                                                BitShiftMask mask);
 
   static int32_t clamp_int(int64_t value) {
     return std::max(
