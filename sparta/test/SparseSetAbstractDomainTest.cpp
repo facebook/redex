@@ -199,4 +199,16 @@ TEST(SparseSetAbstractDomainTest, destructiveOperations) {
   EXPECT_THAT(e1.elements(), ::testing::UnorderedElementsAre(1));
   e1.difference_with(Domain::top());
   EXPECT_TRUE(e1.is_bottom());
+
+  e1 = Domain(16);
+  e1.add(1);
+  e1.add(2);
+  e1.add(3);
+  e1.add(4);
+  e1.filter([](uint16_t element) { return element == 3 || element == 4; });
+  EXPECT_THAT(e1.elements(), ::testing::UnorderedElementsAre(3, 4));
+  e1.filter([](uint16_t element) { return element == 1 || element == 3; });
+  EXPECT_THAT(e1.elements(), ::testing::UnorderedElementsAre(3));
+  e1.filter([](uint16_t /* element */) { return false; });
+  EXPECT_TRUE(e1.elements().empty());
 }

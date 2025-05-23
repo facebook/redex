@@ -10,7 +10,6 @@
 #include <cstddef>
 #include <initializer_list>
 #include <ostream>
-#include <sstream>
 #include <type_traits>
 
 #include <sparta/AbstractDomain.h>
@@ -85,6 +84,12 @@ class PowersetImplementation : public AbstractValue<Derived> {
                                    std::declval<const Element>())),
                                void>::value,
                   "Derived::remove(const Element&) does not exist");
+
+    // void filter(Predicate&& predicate);
+    static_assert(std::is_same<decltype(std::declval<Derived>().filter(
+                                   std::declval<bool(const Element&)>())),
+                               void>::value,
+                  "Derived::filter(Predicate&&) does not exist");
 
     // AbstractValueKind difference_with(const Derived& other);
     static_assert(std::is_same<decltype(std::declval<Derived>().difference_with(
@@ -205,6 +210,13 @@ class PowersetAbstractDomain
       for (InputIterator it = first; it != last; ++it) {
         powerset->remove(*it);
       }
+    }
+  }
+
+  template <typename Predicate>
+  void filter(Predicate&& predicate) {
+    if (this->kind() == AbstractValueKind::Value) {
+      this->get_value()->filter(std::forward<Predicate>(predicate));
     }
   }
 
