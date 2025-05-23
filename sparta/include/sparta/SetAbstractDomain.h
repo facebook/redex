@@ -110,6 +110,11 @@ class SetValue final : public PowersetImplementation<typename Set::value_type,
 
   void remove(const Element& e) { m_set.remove(e); }
 
+  template <typename Predicate>
+  void filter(Predicate&& predicate) {
+    m_set.filter(std::forward<Predicate>(predicate));
+  }
+
   void clear() { m_set.clear(); }
 
   AbstractValueKind kind() const { return AbstractValueKind::Value; }

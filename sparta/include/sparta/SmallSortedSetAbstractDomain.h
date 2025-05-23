@@ -44,6 +44,11 @@ class SetValue final : public AbstractValue<SetValue<Element, MaxCount>> {
 
   void remove(const Element& e) { m_set.remove(e); }
 
+  template <typename Predicate>
+  void filter(Predicate&& predicate) const {
+    m_set.filter(std::forward<Predicate>(predicate));
+  }
+
   bool contains(const Element& e) const { return m_set.contains(e); }
 
   bool leq(const SetValue& other) const {
@@ -152,6 +157,13 @@ class SmallSortedSetAbstractDomain final
     if (this->kind() == AbstractValueKind::Value) {
       this->get_value()->remove(e);
       this->normalize();
+    }
+  }
+
+  template <typename Predicate>
+  void filter(Predicate&& predicate) const {
+    if (this->kind() == AbstractValueKind::Value) {
+      this->get_value()->filter(std::forward<Predicate>(predicate));
     }
   }
 

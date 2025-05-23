@@ -108,6 +108,22 @@ class SparseSetValue final
     }
   }
 
+  template <typename Predicate>
+  void filter(Predicate&& predicate) {
+    for (auto it = begin(); it != end();) {
+      if (predicate(*it)) {
+        // If predicate is true for this element, we just move on to the next
+        // position.
+        ++it;
+      } else {
+        // If predicate returns false for this element, we remove it using the
+        // current position. The function remove() will fill this position with
+        // the last element in the dense array.
+        remove(*it);
+      }
+    }
+  }
+
   iterator begin() { return m_dense.begin(); }
 
   iterator end() { return std::next(m_dense.begin(), m_element_num); }

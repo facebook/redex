@@ -159,4 +159,19 @@ TEST(HashedSetAbstractDomainTest, destructiveOperations) {
   EXPECT_THAT(e1.elements(), ::testing::UnorderedElementsAre("a"));
   e1.difference_with(Domain::top());
   EXPECT_TRUE(e1.is_bottom());
+
+  e1 = Domain({"a", "b", "c", "d"});
+  e1.filter([](const std::string& element) {
+    return element == "c" || element == "d";
+  });
+  EXPECT_THAT(e1.elements(), ::testing::UnorderedElementsAre("c", "d"));
+  e1.filter([](const std::string& element) { return element != "a"; });
+  EXPECT_THAT(e1.elements(), ::testing::UnorderedElementsAre("c", "d"));
+  std::unordered_set<std::string> s1 = {"a", "d"};
+  e1.filter([&s1](const std::string& element) {
+    return s1.find(element) == s1.end();
+  });
+  EXPECT_THAT(e1.elements(), ::testing::UnorderedElementsAre("c"));
+  e1.filter([](const std::string& element) { return element != "c"; });
+  EXPECT_TRUE(e1.elements().empty());
 }
