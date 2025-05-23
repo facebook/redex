@@ -503,9 +503,21 @@ UnorderedSet<std::string> AndroidResources::get_all_keep_resources() {
   for (const auto& dir : directories) {
     auto xml_files = get_xml_files(dir);
     for (const auto& path : UnorderedIterable(xml_files)) {
-      if (is_raw_resource(path)) {
-        auto resource_names = resources::parse_keep_xml_file(path);
-        insert_unordered_iterable(all_keep_resources, resource_names);
+      if (!is_raw_resource(path)) {
+        continue;
+      }
+
+      auto resource_names = resources::parse_keep_xml_file(path);
+      insert_unordered_iterable(all_keep_resources, resource_names);
+
+      if (!resource_names.empty() && traceEnabled(RES, 1)) {
+        auto iterable_resource_names = UnorderedIterable(resource_names);
+        std::string resources_str = boost::algorithm::join(
+            std::vector<std::string>(iterable_resource_names.begin(),
+                                     iterable_resource_names.end()),
+            ", ");
+        TRACE(RES, 1, "Resources kept from file %s: %s", path.c_str(),
+              resources_str.c_str());
       }
     }
   }

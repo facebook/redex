@@ -16,6 +16,7 @@
 #include "DexUtil.h"
 #include "IRInstruction.h"
 #include "RedexResources.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {
@@ -58,6 +59,7 @@ UnorderedSet<uint32_t> get_resources_by_prefix_and_name(
   UnorderedSet<uint32_t> found_resources;
   for (const auto& pair : name_to_ids) {
     if (names.find(pair.first) != names.end()) {
+      TRACE(RES, 1, "Resource added by name matching: %s", pair.first.c_str());
       found_resources.insert(pair.second.begin(), pair.second.end());
       continue;
     }
@@ -199,9 +201,13 @@ UnorderedSet<uint32_t> ReachableResources::get_resource_roots(
   }
   m_manifest_roots = manifest_roots.size();
 
+  auto resources_to_keep = m_resources->get_all_keep_resources();
+  insert_unordered_iterable(resources_to_keep,
+                            m_options.assume_reachable_names);
+
   // Configured assumptions.
   auto assumed_reachable_roots = get_resources_by_prefix_and_name(
-      m_options.assume_reachable_prefixes, m_options.assume_reachable_names,
+      m_options.assume_reachable_prefixes, resources_to_keep,
       m_res_table->name_to_ids);
   // Configured roots by resource type. These should be traversed like any other
   // reachable root.
