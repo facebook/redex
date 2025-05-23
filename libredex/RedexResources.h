@@ -416,6 +416,8 @@ class AndroidResources {
 
   const std::string& get_directory() { return m_directory; }
 
+  UnorderedSet<std::string> get_all_keep_resources();
+
   virtual ~AndroidResources() {}
 
  protected:

@@ -284,7 +284,7 @@ void postverify_nullify_impl(const DexClasses& classes,
   EXPECT_EQ(ids[0], 0x7f040000);
   ids = res_table->get_res_ids_by_name("_an_unused_string");
   EXPECT_EQ(ids.size(), 1);
-  EXPECT_EQ(ids[0], 0x7f090000);
+  EXPECT_EQ(ids[0], 0x7f0a0000);
   ids = res_table->get_res_ids_by_name("hex_or_file2");
   EXPECT_EQ(ids.size(), 1);
   EXPECT_EQ(ids[0], 0x7f030003);

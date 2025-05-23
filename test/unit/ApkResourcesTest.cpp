@@ -41,6 +41,18 @@ void setup_resources_and_run(
   auto layout_dest = layout_dir.string() + "/activity_main.xml";
   redex::copy_file(get_env("test_layout_path"), layout_dest);
 
+  auto raw_dir = p / "res/raw/";
+  create_directories(raw_dir);
+
+  path test_raw_path(get_env("test_raw_path"));
+  for (const auto& entry :
+       boost::filesystem::directory_iterator(test_raw_path)) {
+    auto file = entry.path().filename().string();
+    auto file_dest = raw_dir.string() + file;
+    auto file_source = entry.path().string();
+    redex::copy_file(file_source, file_dest);
+  }
+
   ApkResources resources(tmp_dir.path);
   callback(tmp_dir.path, &resources);
 }
@@ -342,5 +354,18 @@ TEST(ApkResources, TestReachableRoots) {
               << name << " (0x" << std::hex << expected_id << std::dec
               << ") should have been returned as a reachable root!";
         }
+      });
+}
+
+TEST(ApkResources, TestKeepResources) {
+  UnorderedSet<std::string> expected_keep_resources{
+      "CronetProviderClassName", "FooProviderClassName",
+      "BarProviderClassName",    "AnakinProviderClassName",
+      "YodaProviderClassName",   "PadmeProviderClassName",
+      "NabooProviderClassName",  "ObiWanProviderClassName"};
+  setup_resources_and_run(
+      [&](const std::string& /* unused */, ApkResources* resources) {
+        auto keep_resources_found = resources->get_all_keep_resources();
+        EXPECT_EQ(expected_keep_resources, keep_resources_found);
       });
 }

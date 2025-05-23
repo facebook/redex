@@ -497,6 +497,21 @@ void AndroidResources::finalize_bundle_config(const ResourceConfig& config) {
   // Do nothing in super implementation, sub class will override if relevant.
 }
 
+UnorderedSet<std::string> AndroidResources::get_all_keep_resources() {
+  UnorderedSet<std::string> all_keep_resources;
+  auto directories = find_res_directories();
+  for (const auto& dir : directories) {
+    auto xml_files = get_xml_files(dir);
+    for (const auto& path : UnorderedIterable(xml_files)) {
+      if (is_raw_resource(path)) {
+        auto resource_names = resources::parse_keep_xml_file(path);
+        insert_unordered_iterable(all_keep_resources, resource_names);
+      }
+    }
+  }
+  return all_keep_resources;
+}
+
 void ResourceTableFile::finalize_resource_table(const ResourceConfig& config) {
   // Intentionally left empty, proto resource table will not contain a relevant
   // structure to clean up.
