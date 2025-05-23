@@ -11,7 +11,6 @@
 #include "PrintKotlinStats.h"
 #include "RedexTest.h"
 #include "Resolver.h"
-#include "RewriteKotlinSingletonInstance.h"
 #include "Show.h"
 
 class KotlinStatsTest : public RedexIntegrationTest {};

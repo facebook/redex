@@ -74,7 +74,7 @@ runs:
     run: |-
       mkdir -p /tmp/test-results
       export GTEST_OUTPUT=xml:/tmp/test-results/
-      make -j4 check V=0
+      make -j4 check V=0 || ( cat test/integ/test-suite.log ; /bin/false )
     working-directory: build
     if: inputs.run_tests == 'true'
     shell: bash

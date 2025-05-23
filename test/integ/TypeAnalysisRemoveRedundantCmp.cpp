@@ -40,6 +40,7 @@ TEST_F(TypeAnalysisTransformTest, MethodHasNoEqDefined) {
   auto end = ii.end();
   for (auto it = ii.begin(); it != end; ++it) {
     auto insn = it->insn;
+    std::cout << "=====" << show(insn) << std::endl;
     EXPECT_NE(insn->opcode(), OPCODE_IF_EQZ);
     EXPECT_NE(insn->opcode(), OPCODE_IF_NEZ);
   }
