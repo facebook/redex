@@ -369,3 +369,12 @@ TEST(ApkResources, TestKeepResources) {
         EXPECT_EQ(expected_keep_resources, keep_resources_found);
       });
 }
+
+TEST(ApkResources, TestNames) {
+  setup_resources_and_run(
+      [&](const std::string& /* unused */, ApkResources* resources) {
+        auto res_table = resources->load_res_table();
+        EXPECT_TRUE(res_table->is_type_named(0x1, "array"));
+        EXPECT_TRUE(res_table->is_type_named(0x2, "attr"));
+      });
+}

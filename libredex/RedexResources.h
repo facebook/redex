@@ -78,6 +78,19 @@ inline std::string fully_qualified_external_name(
   return java_names::external_to_internal(class_name);
 }
 
+// If the given type name is a custom type, i.e. "dimen.2" return the actual
+// type it represents, in this example "dimen". Otherwise string is returned as
+// is.
+inline std::string type_name_from_possibly_custom_type_name(
+    const std::string& type_name) {
+  auto end_pos = type_name.rfind('.');
+  if (end_pos == std::string::npos) {
+    return type_name;
+  } else {
+    return type_name.substr(0, end_pos);
+  }
+}
+
 struct StringOrReference {
   const std::string str;
   const uint32_t ref;
@@ -334,6 +347,14 @@ class ResourceTableFile {
     return std::vector<uint32_t>{};
   }
 
+  // Checks if the given type id is of the given name, coalescing custom type
+  // names.
+  bool is_type_named(uint8_t type_id, const std::string& type_name) const {
+    auto search = m_application_type_ids_to_names.find(type_id);
+    return search != m_application_type_ids_to_names.end() &&
+           search->second == type_name;
+  }
+
   std::vector<uint32_t> sorted_res_ids;
   std::map<uint32_t, std::string> id_to_name;
   std::map<std::string, std::vector<uint32_t>> name_to_ids;
@@ -341,6 +362,9 @@ class ResourceTableFile {
   // Pending changes to take effect during serialization
   UnorderedSet<uint32_t> m_ids_to_remove;
   std::vector<resources::TypeDefinition> m_added_types;
+  // type ids to coalesced type names (i.e. type id for "style.2" will be mapped
+  // to "style" here).
+  UnorderedMap<uint8_t, std::string> m_application_type_ids_to_names;
 
  protected:
   ResourceTableFile() {}

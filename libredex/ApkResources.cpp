@@ -369,6 +369,29 @@ void TableSnapshot::get_type_names(uint32_t package_id,
   }
 }
 
+UnorderedMap<uint8_t, std::string>
+TableSnapshot::get_type_ids_to_resource_type_names(
+    uint32_t package_id, bool coalesce_custom_type_names) {
+  auto search = m_type_strings.find(package_id);
+  if (search == m_type_strings.end()) {
+    return {};
+  }
+  UnorderedMap<uint8_t, std::string> result;
+  auto& pool = search->second;
+  for (size_t i = 0; i < pool.size(); i++) {
+    uint8_t type_id = i + 1;
+    auto type_name = arsc::get_string_from_pool(pool, i);
+    if (coalesce_custom_type_names) {
+      auto effective_type_name =
+          resources::type_name_from_possibly_custom_type_name(type_name);
+      result.emplace(type_id, std::move(effective_type_name));
+    } else {
+      result.emplace(type_id, std::move(type_name));
+    }
+  }
+  return result;
+}
+
 void TableSnapshot::get_configurations(
     uint32_t package_id,
     const std::string& type_name,
@@ -2454,6 +2477,9 @@ ResourcesArscFile::ResourcesArscFile(const std::string& path)
     id_to_name.emplace(id, name);
     name_to_ids[name].push_back(id);
   }
+  m_application_type_ids_to_names =
+      m_table_snapshot->get_type_ids_to_resource_type_names(
+          APPLICATION_PACKAGE, true /* coalesce_custom_type_names */);
 }
 
 void ResourcesArscFile::mark_file_closed() {

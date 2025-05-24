@@ -226,6 +226,12 @@ class TableSnapshot {
   // Given a package id (shifted to low bits) emit the values from the type
   // strings pool.
   void get_type_names(uint32_t package_id, std::vector<std::string>* out);
+  // Given a package id (shifted to low bits) return the type ids to the string
+  // name of that type, optionally coalesing custom resource types to their
+  // "normal" type (i.e. when true "dimen.2" will be returned as "dimen" to
+  // reflect the fact that it's really meant to be interpreted as dimen).
+  UnorderedMap<uint8_t, std::string> get_type_ids_to_resource_type_names(
+      uint32_t package_id, bool coalesce_custom_type_names = false);
   // Fills the output vec with ResTable_config objects for the given type in the
   // package
   void get_configurations(uint32_t package_id,

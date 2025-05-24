@@ -588,6 +588,25 @@ TEST(ResTable, AppendNewType) {
   std::vector<std::string> type_names;
   round_trip_snapshot.get_type_names(APPLICATION_PACKAGE, &type_names);
   ASSERT_EQ(type_names.size(), original_type_names.size() + 1);
+
+  {
+    auto type_ids_to_names =
+        round_trip_snapshot.get_type_ids_to_resource_type_names(
+            APPLICATION_PACKAGE);
+    ASSERT_EQ(type_ids_to_names.size(), 3);
+    ASSERT_STREQ(type_ids_to_names[1].c_str(), "dimen");
+    ASSERT_STREQ(type_ids_to_names[2].c_str(), "string");
+    ASSERT_STREQ(type_ids_to_names[3].c_str(), "dimen.2");
+  }
+  {
+    auto type_ids_to_names =
+        round_trip_snapshot.get_type_ids_to_resource_type_names(
+            APPLICATION_PACKAGE, true);
+    ASSERT_EQ(type_ids_to_names.size(), 3);
+    ASSERT_STREQ(type_ids_to_names[1].c_str(), "dimen");
+    ASSERT_STREQ(type_ids_to_names[2].c_str(), "string");
+    ASSERT_STREQ(type_ids_to_names[3].c_str(), "dimen");
+  }
 }
 
 TEST(ResStringPoolBuilder, TestPoolRebuild8) {

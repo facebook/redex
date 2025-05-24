@@ -1881,6 +1881,12 @@ void ResourcesPbFile::collect_resource_data_for_file(
               m_res_id_to_configvalue.emplace(current_resource_id,
                                               pb_entry.config_value());
             }
+            if (current_package_id == APPLICATION_PACKAGE) {
+              m_application_type_ids_to_names.emplace(
+                  (uint8_t)current_type_id,
+                  resources::type_name_from_possibly_custom_type_name(
+                      current_type_name));
+            }
           }
         }
         std::sort(sorted_res_ids.begin(), sorted_res_ids.end());
