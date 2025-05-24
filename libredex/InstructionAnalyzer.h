@@ -149,7 +149,7 @@ class InstructionAnalyzerBase<Derived, Env_, std::nullptr_t> {
 };
 
 /*
- * The run() method of this class will run each sub-analyzer in the Analyzers
+ * operator() of this class will run each sub-analyzer in the Analyzers
  * list from left to right on the given instruction.
  */
 template <typename... Analyzers>
