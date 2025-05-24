@@ -488,6 +488,7 @@ libopt_la_SOURCES = \
 	opt/result-propagation/ResultPropagation.cpp \
 	opt/resolve-proguard-values/ResolveProguardAssumeValues.cpp \
 	opt/resources-inlining-pass/ResourcesInliningPass.cpp \
+	opt/resource-value-merging-pass/ResourceValueMergingPass.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
 	opt/shrinker/ShrinkerPass.cpp \
 	opt/unreachable/UnreachableLoweringPass.cpp \
