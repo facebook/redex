@@ -196,7 +196,7 @@ bool find_nested_tag(const std::string& search_tag,
 
 // Traverse a compound value message, and return a list of Item defined in
 // this message.
-std::vector<aapt::pb::Item> get_items_from_CV(
+std::vector<aapt::pb::Item> get_items_from_compound_value(
     const aapt::pb::CompoundValue& comp_value) {
   std::vector<aapt::pb::Item> ret;
   if (comp_value.has_style()) {
@@ -230,10 +230,10 @@ std::vector<aapt::pb::Item> get_items_from_CV(
 // Traverse a compound value message, and return a list of Reference messages
 // used in this message.
 std::vector<aapt::pb::Reference> get_references(
-    const aapt::pb::CompoundValue& comp_value) {
+    const aapt::pb::CompoundValue& comp_value,
+    const std::vector<aapt::pb::Item>& items) {
   std::vector<aapt::pb::Reference> ret;
   // Find refs from Item message.
-  const auto& items = get_items_from_CV(comp_value);
   for (size_t i = 0; i < items.size(); i++) {
     if (items[i].has_ref()) {
       ret.push_back(items[i].ref());
@@ -1970,8 +1970,8 @@ std::vector<std::string> ResourcesPbFile::get_files_by_rid(
       const auto& file_path = value.item().file().path();
       handle_path(file_path);
     } else if (value.has_compound_value()) {
-      // For coumpound value, we flatten it and check all its item messages.
-      const auto& items = get_items_from_CV(value.compound_value());
+      // For compound value, we flatten it and check all its Item messages.
+      const auto& items = get_items_from_compound_value(value.compound_value());
       for (size_t n = 0; n < items.size(); n++) {
         if (items[n].has_file()) {
           const auto& file_path = items[n].file().path();
@@ -1988,83 +1988,78 @@ void ResourcesPbFile::walk_references_for_resource(
     ResourcePathType path_type,
     UnorderedSet<uint32_t>* nodes_visited,
     UnorderedSet<std::string>* potential_file_paths) {
-  if (nodes_visited->find(resID) != nodes_visited->end()) {
+  if (nodes_visited->find(resID) != nodes_visited->end() ||
+      m_res_id_to_configvalue.count(resID) == 0) {
     // Return directly if a node is visited.
     return;
   }
   nodes_visited->emplace(resID);
-  if (m_res_id_to_configvalue.find(resID) == m_res_id_to_configvalue.end()) {
-    // We might have some potential resource ID that does not actually
-    // exist.
-    return;
-  }
-  auto module_name = resolve_module_name_for_resource_id(resID);
-  auto& initial_values = m_res_id_to_configvalue.at(resID);
-  std::stack<const aapt::pb::ConfigValue*> nodes_to_explore;
-  auto push_to_stack = [&nodes_to_explore](const aapt::pb::ConfigValue& cv) {
-    nodes_to_explore.push(&cv);
+
+  auto handle_item_if_file = [&](uint32_t id, const aapt::pb::Item& item) {
+    if (item.has_file()) {
+      if (path_type == ResourcePathType::ZipPath) {
+        auto item_path =
+            resolve_module_name_for_resource_id(id) + "/" + item.file().path();
+        potential_file_paths->insert(item_path);
+      } else {
+        potential_file_paths->insert(item.file().path());
+      }
+    }
   };
-  std::for_each(initial_values.begin(), initial_values.end(), push_to_stack);
+
+  // For a given ID, collect any file paths and emit reachable Reference data
+  // structures.
+  auto collect_impl = [&](uint32_t id, std::stack<aapt::pb::Reference>* out) {
+    auto res_id_search = m_res_id_to_configvalue.find(id);
+    if (res_id_search == m_res_id_to_configvalue.end()) {
+      // We might have some potential resource ID that does not actually exist.
+      return;
+    }
+    auto& config_values = res_id_search->second;
+    for (auto& cv : config_values) {
+      auto& value = cv.value();
+      if (value.has_compound_value()) {
+        auto items = get_items_from_compound_value(value.compound_value());
+        for (auto& i : items) {
+          handle_item_if_file(id, i);
+        }
+        auto refs = get_references(value.compound_value(), items);
+        for (auto& ref : refs) {
+          out->push(ref);
+        }
+      } else {
+        handle_item_if_file(id, value.item());
+        if (value.item().has_ref()) {
+          out->push(value.item().ref());
+        }
+      }
+    }
+  };
+
+  std::stack<aapt::pb::Reference> nodes_to_explore;
+  collect_impl(resID, &nodes_to_explore);
 
   while (!nodes_to_explore.empty()) {
-    const auto& r = nodes_to_explore.top();
-    const auto& value = r->value();
+    auto reference = nodes_to_explore.top();
     nodes_to_explore.pop();
 
-    std::vector<aapt::pb::Item> items;
-    std::vector<aapt::pb::Reference> refs;
-
-    if (value.has_compound_value()) {
-      items = get_items_from_CV(value.compound_value());
-      refs = get_references(value.compound_value());
-    } else {
-      items.push_back(value.item());
-      if (value.item().has_ref()) {
-        refs.push_back(value.item().ref());
-      }
+    std::vector<uint32_t> ref_ids;
+    if (reference.id() != 0) {
+      ref_ids.push_back(reference.id());
+    } else if (!reference.name().empty()) {
+      // Since id of a Reference message is optional, once ref_id =0, it is
+      // possible that the resource is refered by name. If we can make sure it
+      // won't happen, this branch can be removed.
+      ref_ids = get_res_ids_by_name(reference.name());
     }
-
-    // For each Item, store the path of FileReference into string values.
-    for (size_t i = 0; i < items.size(); i++) {
-      const auto& item = items[i];
-      if (item.has_file()) {
-        if (path_type == ResourcePathType::ZipPath) {
-          // NOTE: We are mapping original given resource ID to a module name,
-          // when in reality resource ID for current item from the stack could
-          // be several references away. This should work for all our expected
-          // inputs but is shaky nonetheless.
-          auto item_path = module_name + "/" + item.file().path();
-          potential_file_paths->insert(item_path);
-        } else {
-          potential_file_paths->insert(item.file().path());
-        }
+    for (auto ref_id : ref_ids) {
+      // Skip if the node has been visited.
+      if (ref_id <= PACKAGE_RESID_START ||
+          nodes_visited->find(ref_id) != nodes_visited->end()) {
         continue;
       }
-    }
-
-    // For each Reference, follow its id to traverse the resources.
-    for (size_t i = 0; i < refs.size(); i++) {
-      std::vector<uint32_t> ref_ids;
-      if (refs[i].id() != 0) {
-        ref_ids.push_back(refs[i].id());
-      } else if (!refs[i].name().empty()) {
-        // Since id of a Reference message is optional, once ref_id =0, it is
-        // possible that the resource is refered by name. If we can make sure it
-        // won't happen, this branch can be removed.
-        ref_ids = get_res_ids_by_name(refs[i].name());
-      }
-
-      for (size_t n = 0; n < ref_ids.size(); n++) {
-        // Skip if the node has been visited.
-        const auto ref_id = ref_ids[n];
-        if (ref_id <= PACKAGE_RESID_START ||
-            nodes_visited->find(ref_id) != nodes_visited->end()) {
-          continue;
-        }
-        nodes_visited->insert(ref_id);
-        const auto& inner_values = m_res_id_to_configvalue.at(ref_id);
-        std::for_each(inner_values.begin(), inner_values.end(), push_to_stack);
-      }
+      nodes_visited->insert(ref_id);
+      collect_impl(ref_id, &nodes_to_explore);
     }
   }
 }
