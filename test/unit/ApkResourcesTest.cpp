@@ -18,6 +18,7 @@
 #include "RedexTestUtils.h"
 #include "ResourcesTestDefs.h"
 #include "ResourcesValidationHelper.h"
+#include "Styles.h"
 #include "Trace.h"
 #include "androidfw/ResourceTypes.h"
 #include "arsc/TestStructures.h"
@@ -385,5 +386,28 @@ TEST(ApkResources, WalkReferences) {
       [&](const std::string& /* unused */, ApkResources* resources) {
         auto res_table = resources->load_res_table();
         validate_walk_references_for_resource(res_table.get());
+      });
+}
+
+TEST(ApkResources, StyleAnalysis) {
+  setup_resources_and_run(
+      [&](const std::string& temp_dir_path, ApkResources* resources) {
+        auto res_table = resources->load_res_table();
+        std::vector<std::string> ambiguous_style_names{
+            "AmbiguousBig", "AmbiguousParent", "AmbiguousSmall", "Confusing",
+            "DupTheme1",    "DupTheme2",       "NightParent",    "Unclear"};
+
+        resources::ReachabilityOptions options;
+        UnorderedSet<uint32_t> roots;
+        ResourceConfig global_resource_config;
+        opt_res::StyleAnalysis style_analysis(
+            temp_dir_path, global_resource_config, options, roots);
+        auto ambiguous = style_analysis.ambiguous_styles();
+        EXPECT_EQ(ambiguous.size(), ambiguous_style_names.size());
+        for (auto& name : ambiguous_style_names) {
+          auto id = res_table->name_to_ids.at(name).at(0);
+          EXPECT_EQ(ambiguous.count(id), 1)
+              << "Resource " << name << " should be marked as ambiguous";
+        }
       });
 }

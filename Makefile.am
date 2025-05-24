@@ -523,6 +523,7 @@ libopt_la_SOURCES = \
 	opt/stringbuilder-outliner/StringBuilderOutliner.cpp \
 	opt/strip-debug-info/StripDebugInfo.cpp \
 	opt/optimize_resources/OptimizeResources.cpp \
+	opt/optimize_resources/Styles.cpp \
 	opt/typedef-anno-checker/TypedefAnnoCheckerPass.cpp \
 	opt/typedef-anno-checker/TypedefAnnoOptPass.cpp \
 	opt/typedef-anno-checker/TypedefAnnoPatcher.cpp \
