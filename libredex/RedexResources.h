@@ -37,6 +37,15 @@ const uint32_t PACKAGE_RESID_START = 0x7f000000;
 const uint32_t APPLICATION_PACKAGE = 0x7f;
 
 namespace resources {
+// Use case specific options for traversing and establishing reachable roots.
+struct ReachabilityOptions {
+  bool assume_id_inlined{false};
+  bool check_string_for_name{false};
+  std::vector<std::string> assume_reachable_prefixes;
+  UnorderedSet<std::string> assume_reachable_names;
+  UnorderedSet<std::string> disallowed_types;
+};
+
 // Holder object for details about a type that is pending creation.
 struct TypeDefinition {
   uint32_t package_id;
