@@ -10,6 +10,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
+#include <boost/graph/adjacency_list.hpp>
 #include <boost/noncopyable.hpp>
 #include <boost/optional.hpp>
 #include <cstdint>
@@ -133,6 +134,72 @@ using StringOrReferenceSet =
 
 // Helper for parsing resources in "tools:keep" part of xml file
 UnorderedSet<std::string> parse_keep_xml_file(const std::string& xml_file_path);
+
+// Basic scaffolding to represent styles and their hierarchy in the application.
+// This representation is meant to be common between .apk and .aab inputs, which
+// is why android::ResTable_config is emitted as a copy here (since .pb
+// representation of config can be easily converted to the .arsc form, for a
+// common interface between the two).
+struct StyleResource {
+  struct Value {
+    uint8_t data_type{0};
+    uint32_t value_bytes{0};
+    boost::optional<std::string> value_string{boost::none};
+    bool operator==(const Value& other) const {
+      if (data_type != other.data_type) {
+        return false;
+      }
+      if (value_bytes != other.value_bytes) {
+        return false;
+      }
+      return value_string == other.value_string;
+    }
+  };
+
+  using AttrMap = std::map<uint32_t, Value>;
+
+  uint32_t id{0};
+  android::ResTable_config config{};
+  uint32_t parent{0};
+  AttrMap attributes;
+
+  bool operator==(const StyleResource& other) const {
+    if (parent != other.parent) {
+      return false;
+    }
+    return attributes == other.attributes;
+  }
+};
+
+// Map of ID to parsed style information (one ID can map to many due to
+// different configs, i.e. default / night mode / land, etc).
+using StyleMap = std::unordered_map<uint32_t, std::vector<StyleResource>>;
+
+struct StyleInfo {
+  // Graph of style resource IDs as vertex, edge to denote a style's parent (if
+  // that parent is also defined in the application). Note that styles which
+  // inherit from framework styles will lack an outbound edge.
+  struct Node {
+    uint32_t id{0};
+  };
+  using Graph =
+      boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS, Node>;
+  using vertex_t = boost::graph_traits<Graph>::vertex_descriptor;
+  Graph graph;
+  // Actual representation of the parsed style information from the application.
+  StyleMap styles;
+  // Returns information from the graph as a .dot format, for visualization.
+  // Optionally this can exclude nodes that have no outgoing/inbound edges which
+  // might not be interesting to look at.
+  std::string print_as_dot(bool exclude_nodes_with_no_edges = false);
+  // As above, "stringify" function is to convert the ID to a readable name. By
+  // default an implementation that prints the ID as hex will be used.
+  std::string print_as_dot(
+      const std::function<std::string(uint32_t)>& stringify,
+      const UnorderedMap<uint32_t, UnorderedMap<std::string, std::string>>&
+          node_options,
+      bool exclude_nodes_with_no_edges = false);
+};
 
 // Helper for dealing with differences in character encoding between .arsc and
 // .pb files.
@@ -320,6 +387,13 @@ class ResourceTableFile {
 
   // Returns a set of IDs that are overlayable, to be used as reachability roots
   virtual UnorderedSet<uint32_t> get_overlayable_id_roots() = 0;
+
+  // Builds a map of resource ID -> information about style resources in all
+  // configurations.
+  virtual resources::StyleMap get_style_map() = 0;
+  // Builds a graph of all styles in the application, with outgoing edges to the
+  // parent of each style.
+  resources::StyleInfo load_style_info();
 
   // Takes effect during serialization. Appends a new type with the given
   // details (id, name) to the package. It will contain types with the given

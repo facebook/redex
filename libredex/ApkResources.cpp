@@ -537,6 +537,37 @@ class EntryFlattener : public arsc::ResourceTableVisitor {
 
   std::vector<android::Res_value> m_values;
 };
+
+// Reads complex entries and their attributes/values into convenient form.
+class StyleCollector : public arsc::ResourceTableVisitor {
+ public:
+  StyleCollector() {}
+  ~StyleCollector() override {}
+
+  bool visit_map_entry(android::ResTable_package* /* unused */,
+                       android::ResTable_typeSpec* /* unused */,
+                       android::ResTable_type* /* unused */,
+                       android::ResTable_map_entry* entry) override {
+    auto parent = dtohl(entry->parent.ident);
+    if (parent != 0) {
+      m_parents.emplace(parent);
+    }
+    return true;
+  }
+
+  bool visit_map_value(android::ResTable_package* /* unused */,
+                       android::ResTable_typeSpec* /* unused */,
+                       android::ResTable_type* /* unused */,
+                       android::ResTable_map_entry* /* unused */,
+                       android::ResTable_map* value) override {
+    resources::StyleResource::Value attr_value{value->value.dataType,
+                                               value->value.data, boost::none};
+    m_attributes.emplace(dtohl(value->name.ident), attr_value);
+    return true;
+  }
+  resources::StyleResource::AttrMap m_attributes;
+  std::unordered_set<uint32_t> m_parents;
+};
 } // namespace
 
 void TableSnapshot::collect_resource_values(
@@ -584,6 +615,15 @@ std::string TableSnapshot::get_global_string_utf8s(size_t idx) const {
   return arsc::get_string_from_pool(m_global_strings, idx);
 }
 
+resources::StyleResource read_style_resource(
+    uint32_t id,
+    android::ResTable_config* config,
+    android::ResTable_map_entry* entry) {
+  StyleCollector collector;
+  collector.begin_visit_entry(nullptr, nullptr, nullptr, entry);
+  auto parent_id dtohl(entry->parent.ident);
+  return {id, *config, parent_id, std::move(collector.m_attributes)};
+}
 } // namespace apk
 
 namespace {
@@ -2906,6 +2946,41 @@ UnorderedSet<uint32_t> ResourcesArscFile::get_overlayable_id_roots() {
   auto& table_snapshot = get_table_snapshot();
   auto& parsed_table = table_snapshot.get_parsed_table();
   return parsed_table.m_overlayable_ids;
+}
+
+resources::StyleMap ResourcesArscFile::get_style_map() {
+  UnorderedSet<uint8_t> style_type_ids;
+  for (auto&& [type_id, name] :
+       UnorderedIterable(m_application_type_ids_to_names)) {
+    if (name == "style") {
+      style_type_ids.emplace(type_id);
+    }
+  }
+  auto& table_snapshot = get_table_snapshot();
+  auto& parsed_table = table_snapshot.get_parsed_table();
+  resources::StyleMap result;
+  for (auto&& [id, entries] : parsed_table.m_res_id_to_entries) {
+    auto type_id = (id & TYPE_MASK_BIT) >> TYPE_INDEX_BIT_SHIFT;
+    if (style_type_ids.count(type_id) > 0) {
+      std::vector<resources::StyleResource> vec;
+      for (auto&& [config, ev] : entries) {
+        auto style_entry = (android::ResTable_map_entry*)ev.getKey();
+        if (!arsc::is_empty(ev) &&
+            (style_entry->flags & android::ResTable_entry::FLAG_COMPLEX) ==
+                android::ResTable_entry::FLAG_COMPLEX) {
+          // The above should always be true, but instead of asserting in the
+          // event of wonky data, pass over it and not crash the program.
+          auto style_resource =
+              apk::read_style_resource(id, config, style_entry);
+          vec.push_back(std::move(style_resource));
+        }
+      }
+      if (!vec.empty()) {
+        result.emplace(id, std::move(vec));
+      }
+    }
+  }
+  return result;
 }
 
 ResourcesArscFile::~ResourcesArscFile() {}

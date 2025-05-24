@@ -11,6 +11,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
+#include <boost/graph/depth_first_search.hpp>
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <boost/optional.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -529,6 +530,35 @@ void ResourceTableFile::finalize_resource_table(const ResourceConfig& config) {
   // structure to clean up.
 }
 
+resources::StyleInfo ResourceTableFile::load_style_info() {
+  resources::StyleInfo style_info;
+  style_info.styles = get_style_map();
+  TRACE(RES,
+        3,
+        "Building style graph; style count = %zu",
+        style_info.styles.size());
+  std::unordered_map<uint32_t, resources::StyleInfo::vertex_t> added_nodes;
+  for (auto&& [id, _] : style_info.styles) {
+    auto v =
+        boost::add_vertex(resources::StyleInfo::Node{id}, style_info.graph);
+    added_nodes.emplace(id, v);
+  }
+  // In the unusual situation where a style has many different versions in
+  // different configurations, each with different parents, edges for each will
+  // be emitted.
+  for (auto&& [id, vec] : style_info.styles) {
+    for (auto& style : vec) {
+      if (style.parent != 0) {
+        auto search = added_nodes.find(style.parent);
+        if (search != added_nodes.end()) {
+          boost::add_edge(added_nodes.at(id), search->second, style_info.graph);
+        }
+      }
+    }
+  }
+  return style_info;
+}
+
 namespace resources {
 bool valid_xml_element(const std::string& ident) {
   return java_names::is_identifier(ident) &&
@@ -639,4 +669,82 @@ UnorderedSet<std::string> parse_keep_xml_file(
   return resource_names;
 }
 
+std::string StyleInfo::print_as_dot(bool exclude_nodes_with_no_edges) {
+  auto stringify = [](uint32_t id) {
+    std::ostringstream oss;
+    oss << "0x" << std::hex << id;
+    return oss.str();
+  };
+  return print_as_dot(stringify, {}, exclude_nodes_with_no_edges);
+}
+
+std::string StyleInfo::print_as_dot(
+    const std::function<std::string(uint32_t)>& stringify,
+    const UnorderedMap<uint32_t, UnorderedMap<std::string, std::string>>&
+        node_options,
+    bool exclude_nodes_with_no_edges) {
+  std::ostringstream oss;
+  // Make the output dot text stable, use sorted intermediate collections.
+  std::set<uint32_t> ordered_nodes;
+  std::map<uint32_t, std::set<uint32_t>> ordered_parents;
+  // Iterate through all nodes and their edges, optionally dropping some
+  // uninteresting stuff.
+  const auto& iters = boost::vertices(graph);
+  const auto& begin = iters.first;
+  const auto& end = iters.second;
+  for (auto v_it = begin; v_it != end; ++v_it) {
+    auto& node = graph[*v_it];
+    auto adj_vertices = boost::adjacent_vertices(*v_it, graph);
+    bool has_outbound_edges{false};
+    for (auto e_it = adj_vertices.first; e_it != adj_vertices.second; ++e_it) {
+      has_outbound_edges = true;
+      auto parent = graph[*e_it];
+      ordered_nodes.emplace(parent.id);
+      ordered_parents[node.id].emplace(parent.id);
+    }
+    if (!exclude_nodes_with_no_edges || has_outbound_edges) {
+      ordered_nodes.emplace(node.id);
+    }
+  }
+  // NOTE: this should get converted over to use boost graph printing
+  // functionality. Only reason for leaving as-is, for now, is to keep the
+  // existing API for letting users customize the display of nodes.
+  oss << "digraph {" << std::endl;
+  for (auto id : ordered_nodes) {
+    oss << "  " << "node" << id << " [";
+    bool emitted_label{false};
+    bool first{true};
+    auto search = node_options.find(id);
+    if (search != node_options.end()) {
+      auto& dot_options = search->second;
+      for (auto& k : unordered_to_ordered_keys(dot_options)) {
+        if (k == "label") {
+          emitted_label = true;
+        }
+        if (!first) {
+          oss << " ";
+        }
+        oss << k << "=\"" << dot_options.at(k) << "\"";
+        first = false;
+      }
+    }
+    if (!emitted_label) {
+      if (!first) {
+        oss << " ";
+      }
+      auto str = stringify(id);
+      oss << "label=\"" << str << "\"";
+    }
+    oss << "];" << std::endl;
+  }
+  oss << "  subgraph parents_edges {" << std::endl;
+  for (auto&& [id, set] : ordered_parents) {
+    for (auto parent : set) {
+      oss << "    node" << id << " -> node" << parent << ";" << std::endl;
+    }
+  }
+  oss << "  }" << std::endl;
+  oss << "}" << std::endl;
+  return oss.str();
+}
 } // namespace resources

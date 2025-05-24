@@ -44,6 +44,12 @@ bool get_bool_attribute_value(const android::ResXMLTree& parser,
                               bool default_value);
 
 namespace apk {
+
+resources::StyleResource read_style_resource(uint32_t id,
+                                             android::ResTable_config* config,
+                                             android::ResTable_map_entry* entry,
+                                             size_t entry_value_len);
+
 class XmlValueCollector : public arsc::XmlFileVisitor {
  public:
   ~XmlValueCollector() override {}
@@ -336,6 +342,7 @@ class ResourcesArscFile : public ResourceTableFile {
   UnorderedMap<uint32_t, resources::InlinableValue>
   get_inlinable_resource_values() override;
   UnorderedSet<uint32_t> get_overlayable_id_roots() override;
+  resources::StyleMap get_style_map() override;
   ~ResourcesArscFile() override;
 
   size_t get_length() const;

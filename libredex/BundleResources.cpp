@@ -2479,6 +2479,11 @@ UnorderedSet<uint32_t> ResourcesPbFile::get_overlayable_id_roots() {
   return overlayable_ids;
 }
 
+resources::StyleMap ResourcesPbFile::get_style_map() {
+  // TODO
+  return {};
+}
+
 ResourcesPbFile::~ResourcesPbFile() {}
 
 #endif // HAS_PROTOBUF

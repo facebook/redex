@@ -78,6 +78,7 @@ class ResourcesPbFile : public ResourceTableFile {
   UnorderedMap<uint32_t, resources::InlinableValue>
   get_inlinable_resource_values() override;
   UnorderedSet<uint32_t> get_overlayable_id_roots() override;
+  resources::StyleMap get_style_map() override;
 
   const std::map<uint32_t, const ConfigValues>& get_res_id_to_configvalue()
       const {
