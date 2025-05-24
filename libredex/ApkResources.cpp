@@ -487,6 +487,11 @@ namespace {
 // this will do byte swapping).
 class EntryFlattener : public arsc::ResourceTableVisitor {
  public:
+  EntryFlattener(bool include_map_entry_parents, bool include_map_elements)
+      : m_include_map_entry_parents(include_map_entry_parents),
+        m_include_map_elements(include_map_elements) {}
+  ~EntryFlattener() override {}
+
   void emit(android::Res_value* source) {
     android::Res_value value;
     value.size = dtohs(source->size);
@@ -520,7 +525,9 @@ class EntryFlattener : public arsc::ResourceTableVisitor {
     // to denote this is a "conceptual" value that is encompassed by the
     // resource ID we are being asked to traverse. This is useful for
     // reachability purposes but a bit misleading otherwise.
-    emit_shim(android::Res_value::TYPE_REFERENCE, dtohl(entry->parent.ident));
+    if (m_include_map_entry_parents) {
+      emit_shim(android::Res_value::TYPE_REFERENCE, dtohl(entry->parent.ident));
+    }
     return true;
   }
 
@@ -529,12 +536,16 @@ class EntryFlattener : public arsc::ResourceTableVisitor {
                        android::ResTable_type* /* unused */,
                        android::ResTable_map_entry* /* unused */,
                        android::ResTable_map* value) override {
-    emit(&value->value);
-    // API QUIRK: Same rationale as above.
-    emit_shim(android::Res_value::TYPE_ATTRIBUTE, dtohl(value->name.ident));
+    if (m_include_map_elements) {
+      emit(&value->value);
+      // API QUIRK: Same rationale as above.
+      emit_shim(android::Res_value::TYPE_ATTRIBUTE, dtohl(value->name.ident));
+    }
     return true;
   }
 
+  bool m_include_map_entry_parents;
+  bool m_include_map_elements;
   std::vector<android::Res_value> m_values;
 };
 
@@ -572,18 +583,19 @@ class StyleCollector : public arsc::ResourceTableVisitor {
 
 void TableSnapshot::collect_resource_values(
     uint32_t id, std::vector<android::Res_value>* out) {
-  collect_resource_values(id, {}, out);
+  CollectionOptions default_options;
+  collect_resource_values(id, default_options, out);
 }
 
 void TableSnapshot::collect_resource_values(
     uint32_t id,
-    std::vector<android::ResTable_config> include_configs,
+    const CollectionOptions& options,
     std::vector<android::Res_value>* out) {
   auto should_include_config = [&](android::ResTable_config* maybe) {
-    if (include_configs.empty()) {
+    if (options.include_configs == boost::none) {
       return true;
     }
-    for (auto& c : include_configs) {
+    for (const auto& c : *options.include_configs) {
       if (arsc::are_configs_equivalent(maybe, &c)) {
         return true;
       }
@@ -595,13 +607,54 @@ void TableSnapshot::collect_resource_values(
     if (should_include_config(pair.first)) {
       auto ev = pair.second;
       auto entry = (android::ResTable_entry*)ev.getKey();
-      EntryFlattener flattener;
+      EntryFlattener flattener(options.include_map_entry_parents,
+                               options.include_map_elements);
       flattener.begin_visit_entry(nullptr, nullptr, nullptr, entry);
       for (auto& v : flattener.m_values) {
         out->push_back(v);
       }
     }
   }
+}
+
+// Used to recursively collect parent attribute values for the given ID, while
+// tracking which IDs are encountered - because for some reason having cycles in
+// the style parent relationship does not result in a compile time error when
+// building an .apk. Nice.
+void TableSnapshot::union_style_and_parent_attribute_values_impl(
+    uint32_t id,
+    const CollectionOptions& options,
+    UnorderedSet<uint32_t>* seen,
+    std::vector<android::Res_value>* out) {
+  if (seen->count(id) > 0) {
+    return;
+  }
+  seen->insert(id);
+  auto search = m_table_parser.m_res_id_to_entries.find(id);
+  if (search == m_table_parser.m_res_id_to_entries.end()) {
+    return;
+  }
+  collect_resource_values(id, options, out);
+  auto& config_entries = search->second;
+  for (auto& pair : config_entries) {
+    auto& ev = pair.second;
+    if (!arsc::is_empty(ev)) {
+      auto entry = (android::ResTable_entry*)ev.getKey();
+      StyleCollector collector;
+      collector.begin_visit_entry(nullptr, nullptr, nullptr, entry);
+      for (auto parent_id : collector.m_parents) {
+        union_style_and_parent_attribute_values_impl(parent_id, options, seen,
+                                                     out);
+      }
+    }
+  }
+}
+
+void TableSnapshot::union_style_and_parent_attribute_values(
+    uint32_t id, std::vector<android::Res_value>* out) {
+  CollectionOptions options{boost::none, false, true};
+  UnorderedSet<uint32_t> seen;
+  union_style_and_parent_attribute_values_impl(id, options, &seen, out);
 }
 
 bool TableSnapshot::is_valid_global_string_idx(size_t idx) const {
@@ -2420,7 +2473,8 @@ uint64_t ResourcesArscFile::resource_value_count(uint32_t res_id) {
 
 void ResourcesArscFile::walk_references_for_resource(
     uint32_t resID,
-    ResourcePathType path_type,
+    const ResourcePathType& /* unused */,
+    const resources::ReachabilityOptions& reachability_options,
     UnorderedSet<uint32_t>* nodes_visited,
     UnorderedSet<std::string>* potential_file_paths) {
   if (nodes_visited->find(resID) != nodes_visited->end()) {
@@ -2429,8 +2483,21 @@ void ResourcesArscFile::walk_references_for_resource(
   nodes_visited->emplace(resID);
 
   auto& table_snapshot = get_table_snapshot();
+
+  auto collect_impl = [&](uint32_t id, std::vector<android::Res_value>* out) {
+    // Check if this ID is a style, and the traversal options have been turned
+    // on to disambiguate direct references vs parents.
+    uint8_t type_id = (id & TYPE_MASK_BIT) >> TYPE_INDEX_BIT_SHIFT;
+    if (reachability_options.granular_style_reachability &&
+        is_type_named(type_id, "style")) {
+      table_snapshot.union_style_and_parent_attribute_values(id, out);
+    } else {
+      table_snapshot.collect_resource_values(id, out);
+    }
+  };
+
   std::vector<android::Res_value> initial_values;
-  table_snapshot.collect_resource_values(resID, &initial_values);
+  collect_impl(resID, &initial_values);
 
   std::stack<android::Res_value> nodes_to_explore;
   for (size_t index = 0; index < initial_values.size(); ++index) {
@@ -2456,7 +2523,7 @@ void ResourcesArscFile::walk_references_for_resource(
 
     nodes_visited->insert(r.data);
     std::vector<android::Res_value> inner_values;
-    table_snapshot.collect_resource_values(r.data, &inner_values);
+    collect_impl(r.data, &inner_values);
     for (size_t index = 0; index < inner_values.size(); ++index) {
       nodes_to_explore.push(inner_values[index]);
     }

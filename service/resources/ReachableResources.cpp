@@ -233,8 +233,9 @@ UnorderedSet<uint32_t> ReachableResources::compute_transitive_closure(
   UnorderedSet<uint32_t> nodes_visited;
   UnorderedSet<std::string> potential_file_paths;
   for (uint32_t root : UnorderedIterable(roots)) {
-    m_res_table->walk_references_for_resource(
-        root, ResourcePathType::ZipPath, &nodes_visited, &potential_file_paths);
+    m_res_table->walk_references_for_resource(root, ResourcePathType::ZipPath,
+                                              m_options, &nodes_visited,
+                                              &potential_file_paths);
   }
 
   UnorderedSet<std::string> next_xml_files;
@@ -255,7 +256,7 @@ UnorderedSet<uint32_t> ReachableResources::compute_transitive_closure(
           m_resources->get_xml_reference_attributes(str);
       for (uint32_t attribute : UnorderedIterable(xml_reference_attributes)) {
         m_res_table->walk_references_for_resource(
-            attribute, ResourcePathType::ZipPath, &nodes_visited,
+            attribute, ResourcePathType::ZipPath, m_options, &nodes_visited,
             &potential_file_paths);
       }
     }

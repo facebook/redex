@@ -54,7 +54,8 @@ class ResourcesPbFile : public ResourceTableFile {
       ResourcePathType path_type = ResourcePathType::DevicePath) override;
   void walk_references_for_resource(
       uint32_t resID,
-      ResourcePathType path_type,
+      const ResourcePathType& path_type,
+      const resources::ReachabilityOptions& reachability_options,
       UnorderedSet<uint32_t>* nodes_visited,
       UnorderedSet<std::string>* potential_file_paths) override;
   uint64_t resource_value_count(uint32_t res_id) override;

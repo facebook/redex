@@ -65,8 +65,8 @@ size_t compute_entry_value_length(android::ResTable_entry* entry);
 uint32_t get_spec_flags(android::ResTable_typeSpec* spec, uint16_t entry_id);
 // Whether or not the two configs should be treated as equal (note: this is not
 // simply a byte by byte compare).
-bool are_configs_equivalent(android::ResTable_config* a,
-                            android::ResTable_config* b);
+bool are_configs_equivalent(const android::ResTable_config* a,
+                            const android::ResTable_config* b);
 // Returns whether or not the given config is the default (basically an empty
 // config).
 bool is_default_config(android::ResTable_config* c);

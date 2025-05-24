@@ -248,6 +248,17 @@ class TableSnapshot {
   // Returns true if the given ids are from the same type, and all
   // entries/values in all configurations are byte for byte identical.
   bool are_values_identical(uint32_t a, uint32_t b);
+  // Options for collect_resource_values() below.
+  struct CollectionOptions {
+    // If present, limit the result to only values in the given configs.
+    boost::optional<std::vector<android::ResTable_config>> include_configs{
+        boost::none};
+    // If true, collect the parent id for ResTable_map_entry occurrences.
+    bool include_map_entry_parents{true};
+    // If true, collect ids from ResTable_map structures that follow
+    // ResTable_map_entry occurrences.
+    bool include_map_elements{true};
+  };
   // For every non-empty entry in all configs, coalesce the entry into a list of
   // values. For complex entries, this emits Res_value structures representing
   // the entry's parent (which is useful for reachability purposes).
@@ -255,9 +266,21 @@ class TableSnapshot {
                                std::vector<android::Res_value>* out);
   // Same as above, but if given list of "include_configs" is non-empty, results
   // written to out will be restricted to only these configs.
-  void collect_resource_values(
+  void collect_resource_values(uint32_t id,
+                               const CollectionOptions& options,
+                               std::vector<android::Res_value>* out);
+  // Similar to collect_resource_values(), but look at all entry/values for the
+  // id, collecting attribute values, and recurse to do the same for any parent
+  // styles. This does not mimic any child overriding logic, as would happen at
+  // runtime (hence the name "union" in this method name) since choosing best
+  // configuration is not implemented here.
+  void union_style_and_parent_attribute_values(
+      uint32_t id, std::vector<android::Res_value>* out);
+  // Recursive helper for above.
+  void union_style_and_parent_attribute_values_impl(
       uint32_t id,
-      std::vector<android::ResTable_config> include_configs,
+      const CollectionOptions& options,
+      UnorderedSet<uint32_t>* seen,
       std::vector<android::Res_value>* out);
   bool is_valid_global_string_idx(size_t idx) const;
   // Convenience method to Read a string from the global string pool as standard
@@ -325,7 +348,8 @@ class ResourcesArscFile : public ResourceTableFile {
       ResourcePathType path_type = ResourcePathType::DevicePath) override;
   void walk_references_for_resource(
       uint32_t resID,
-      ResourcePathType path_type,
+      const ResourcePathType& path_type,
+      const resources::ReachabilityOptions& reachability_options,
       UnorderedSet<uint32_t>* nodes_visited,
       UnorderedSet<std::string>* potential_file_paths) override;
   uint64_t resource_value_count(uint32_t res_id) override;

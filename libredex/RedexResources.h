@@ -42,6 +42,7 @@ namespace resources {
 struct ReachabilityOptions {
   bool assume_id_inlined{false};
   bool check_string_for_name{false};
+  bool granular_style_reachability{false};
   std::vector<std::string> assume_reachable_prefixes;
   UnorderedSet<std::string> assume_reachable_names;
   UnorderedSet<std::string> disallowed_types;
@@ -354,7 +355,8 @@ class ResourceTableFile {
   // file paths.
   virtual void walk_references_for_resource(
       uint32_t resID,
-      ResourcePathType path_type,
+      const ResourcePathType& path_type,
+      const resources::ReachabilityOptions& reachability_options,
       UnorderedSet<uint32_t>* nodes_visited,
       UnorderedSet<std::string>* potential_file_paths) = 0;
 

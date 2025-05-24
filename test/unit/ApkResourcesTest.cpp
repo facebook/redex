@@ -17,6 +17,7 @@
 #include "RedexTest.h"
 #include "RedexTestUtils.h"
 #include "ResourcesTestDefs.h"
+#include "ResourcesValidationHelper.h"
 #include "Trace.h"
 #include "androidfw/ResourceTypes.h"
 #include "arsc/TestStructures.h"
@@ -376,5 +377,13 @@ TEST(ApkResources, TestNames) {
         auto res_table = resources->load_res_table();
         EXPECT_TRUE(res_table->is_type_named(0x1, "array"));
         EXPECT_TRUE(res_table->is_type_named(0x2, "attr"));
+      });
+}
+
+TEST(ApkResources, WalkReferences) {
+  setup_resources_and_run(
+      [&](const std::string& /* unused */, ApkResources* resources) {
+        auto res_table = resources->load_res_table();
+        validate_walk_references_for_resource(res_table.get());
       });
 }

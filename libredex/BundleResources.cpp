@@ -194,6 +194,46 @@ bool find_nested_tag(const std::string& search_tag,
   return find_result;
 }
 
+void union_style_and_parent_attribute_values_impl(
+    const uint32_t id,
+    const std::map<uint32_t, const ConfigValues>& id_to_configvalue,
+    UnorderedSet<uint32_t>* seen,
+    std::vector<aapt::pb::Style::Entry>* out) {
+  if (seen->count(id) > 0) {
+    return;
+  }
+  seen->insert(id);
+
+  auto search = id_to_configvalue.find(id);
+  if (search == id_to_configvalue.end()) {
+    return;
+  }
+  for (const auto& cv : search->second) {
+    const auto& value = cv.value();
+    if (value.has_compound_value() && value.compound_value().has_style()) {
+      const auto& style = value.compound_value().style();
+      const auto& entries = style.entry();
+      for (int i = 0; i < entries.size(); i++) {
+        out->push_back(entries[i]);
+      }
+      if (style.has_parent()) {
+        auto parent_id = style.parent().id();
+        union_style_and_parent_attribute_values_impl(
+            parent_id, id_to_configvalue, seen, out);
+      }
+    }
+  }
+}
+
+void union_style_and_parent_attribute_values(
+    const uint32_t id,
+    const std::map<uint32_t, const ConfigValues>& id_to_configvalue,
+    std::vector<aapt::pb::Style::Entry>* out) {
+  UnorderedSet<uint32_t> seen;
+  union_style_and_parent_attribute_values_impl(id, id_to_configvalue, &seen,
+                                               out);
+}
+
 // Traverse a compound value message, and return a list of Item defined in
 // this message.
 std::vector<aapt::pb::Item> get_items_from_compound_value(
@@ -1991,7 +2031,8 @@ std::vector<std::string> ResourcesPbFile::get_files_by_rid(
 
 void ResourcesPbFile::walk_references_for_resource(
     uint32_t resID,
-    ResourcePathType path_type,
+    const ResourcePathType& path_type,
+    const resources::ReachabilityOptions& reachability_options,
     UnorderedSet<uint32_t>* nodes_visited,
     UnorderedSet<std::string>* potential_file_paths) {
   if (nodes_visited->find(resID) != nodes_visited->end() ||
@@ -2024,20 +2065,42 @@ void ResourcesPbFile::walk_references_for_resource(
     auto& config_values = res_id_search->second;
     for (auto& cv : config_values) {
       auto& value = cv.value();
-      if (value.has_compound_value()) {
-        auto items = get_items_from_compound_value(value.compound_value());
-        for (auto& i : items) {
-          handle_item_if_file(id, i);
+      std::vector<aapt::pb::Item> items;
+      std::vector<aapt::pb::Reference> references;
+      if (reachability_options.granular_style_reachability &&
+          value.has_compound_value() && value.compound_value().has_style()) {
+        std::vector<aapt::pb::Style::Entry> style_entries;
+        // Resolve Style Entries up the parent hierarchy, without emitting a
+        // reference to the parent itself (to disambiguate).
+        union_style_and_parent_attribute_values(id, m_res_id_to_configvalue,
+                                                &style_entries);
+        for (auto& entry : style_entries) {
+          if (entry.has_item()) {
+            items.push_back(entry.item());
+            if (entry.item().has_ref()) {
+              references.push_back(entry.item().ref());
+            }
+          }
+          if (entry.has_key()) {
+            references.push_back(entry.key());
+          }
         }
-        auto refs = get_references(value.compound_value(), items);
-        for (auto& ref : refs) {
-          out->push(ref);
-        }
+      } else if (value.has_compound_value()) {
+        items = get_items_from_compound_value(value.compound_value());
+        references = get_references(value.compound_value(), items);
       } else {
-        handle_item_if_file(id, value.item());
+        items.push_back(value.item());
         if (value.item().has_ref()) {
-          out->push(value.item().ref());
+          references.push_back(value.item().ref());
         }
+      }
+
+      // Handle items, refs
+      for (auto& i : items) {
+        handle_item_if_file(id, i);
+      }
+      for (auto& ref : references) {
+        out->push(ref);
       }
     }
   };

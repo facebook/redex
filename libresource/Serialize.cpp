@@ -196,8 +196,8 @@ uint32_t get_spec_flags(android::ResTable_typeSpec* spec, uint16_t entry_id) {
 }
 
 namespace {
-bool are_configs_equivalent_compat(android::ResTable_config* a,
-                                   android::ResTable_config* b) {
+bool are_configs_equivalent_compat(const android::ResTable_config* a,
+                                   const android::ResTable_config* b) {
   auto config_size = sizeof(android::ResTable_config);
 
   android::ResTable_config config_a{};
@@ -212,8 +212,8 @@ bool are_configs_equivalent_compat(android::ResTable_config* a,
 }
 } // namespace
 
-bool are_configs_equivalent(android::ResTable_config* a,
-                            android::ResTable_config* b) {
+bool are_configs_equivalent(const android::ResTable_config* a,
+                            const android::ResTable_config* b) {
   auto a_size = dtohl(a->size);
   auto b_size = dtohl(b->size);
   if (a_size == b_size) {
