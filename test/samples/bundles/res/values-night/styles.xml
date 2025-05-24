@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <style name="AmbiguousParent">
+    <item name="android:background">#1B1B1B</item>
+  </style>
+  <style name="Confusing" parent="SimpleParent2">
+    <item name="android:textColor">#FF0000</item>
+  </style>
+  <style name="NightParent">
+    <item name="android:layout_gravity">center</item>
+  </style>
+</resources>
