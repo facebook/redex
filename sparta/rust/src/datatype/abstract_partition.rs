@@ -61,7 +61,7 @@ where
 
     fn bindings(&self) -> Option<&Self::ContainerType> {
         match self {
-            Self::Value(ref map) => Some(map),
+            Self::Value(map) => Some(map),
             _ => None,
         }
     }
@@ -101,7 +101,7 @@ where
     fn set(&mut self, label: L, domain: D) {
         let map = match self {
             Self::Top => return,
-            Self::Value(ref mut map) => map,
+            Self::Value(map) => map,
         };
 
         // Save some memory by implicitly storing bottom.
@@ -115,7 +115,7 @@ where
     fn update(&mut self, label: &L, op: impl FnOnce(&mut D)) {
         let map = match self {
             Self::Top => return,
-            Self::Value(ref mut map) => map,
+            Self::Value(map) => map,
         };
 
         match map.get_mut(label) {
@@ -302,7 +302,7 @@ where
 
     fn bindings(&self) -> Option<&Self::ContainerType> {
         match self {
-            Self::Value(ref map) => Some(map),
+            Self::Value(map) => Some(map),
             _ => None,
         }
     }
@@ -342,7 +342,7 @@ where
     fn set(&mut self, label: L, domain: D) {
         let map = match self {
             Self::Top => return,
-            Self::Value(ref mut map) => map,
+            Self::Value(map) => map,
         };
 
         // Save some memory by implicitly storing bottom.
@@ -356,7 +356,7 @@ where
     fn update(&mut self, label: &L, op: impl FnOnce(&mut D)) {
         let map = match self {
             Self::Top => return,
-            Self::Value(ref mut map) => map,
+            Self::Value(map) => map,
         };
 
         let mut update_domain = match map.get(label.clone()) {

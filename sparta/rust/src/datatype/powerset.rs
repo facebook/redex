@@ -119,9 +119,9 @@ impl<S: SetAbstractDomainOps> AbstractDomain for PowersetLattice<S> {
     fn leq(&self, rhs: &Self) -> bool {
         match self {
             Self::Top => rhs.is_top(),
-            Self::Value(ref s) => match rhs {
+            Self::Value(s) => match rhs {
                 Self::Top => true,
-                Self::Value(ref t) => s.is_subset(t),
+                Self::Value(t) => s.is_subset(t),
                 Self::Bottom => false,
             },
             Self::Bottom => true,
@@ -131,7 +131,7 @@ impl<S: SetAbstractDomainOps> AbstractDomain for PowersetLattice<S> {
     fn join_with(&mut self, rhs: Self) {
         match self {
             Self::Top => {}
-            Self::Value(ref mut s) => match rhs {
+            Self::Value(s) => match rhs {
                 Self::Top => *self = rhs,
                 Self::Value(t) => {
                     s.union_with(t);
@@ -145,7 +145,7 @@ impl<S: SetAbstractDomainOps> AbstractDomain for PowersetLattice<S> {
     fn meet_with(&mut self, rhs: Self) {
         match self {
             Self::Top => *self = rhs,
-            Self::Value(ref mut s) => match rhs {
+            Self::Value(s) => match rhs {
                 Self::Top => {}
                 Self::Value(ref t) => {
                     s.intersection_with(t);
