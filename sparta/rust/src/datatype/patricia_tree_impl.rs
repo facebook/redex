@@ -175,7 +175,7 @@ impl<V> Node<V> {
         use Node::*;
         if let Some(node) = maybe_node {
             match node.as_ref() {
-                Leaf { ref key, value: _ } => {
+                Leaf { key, value: _ } => {
                     if key == lookup_key {
                         Some(node)
                     } else {
@@ -183,9 +183,9 @@ impl<V> Node<V> {
                     }
                 }
                 Branch {
-                    ref prefix,
-                    ref left,
-                    ref right,
+                    prefix,
+                    left,
+                    right,
                 } => {
                     if prefix.len() < lookup_key.len() {
                         if !lookup_key.get(prefix.len()) {
@@ -661,7 +661,7 @@ impl<V> PatriciaTree<V> {
         let node = Node::find_leaf_by_key(self.root.as_ref(), key);
         match node {
             Some(leaf_node) => match leaf_node.as_ref() {
-                Leaf { key: _, ref value } => Some(value),
+                Leaf { key: _, value } => Some(value),
                 _ => panic!("Did not correctly get a leaf!"),
             },
             None => None,
@@ -689,11 +689,11 @@ impl<V> PatriciaTree<V> {
             (
                 Leaf {
                     key,
-                    value: ref l_value,
+                    value: l_value,
                 },
                 Leaf {
                     key: _,
-                    value: ref r_value,
+                    value: r_value,
                 },
             ) => Some(Rc::new(Leaf {
                 key: key.clone(),
@@ -829,7 +829,7 @@ impl<'a, V> PatriciaTreePostOrderIterator<'a, V> {
                 Node::Branch {
                     prefix: _,
                     left: _,
-                    ref right,
+                    right,
                 } => self.next_leaf(right),
                 _ => panic!("Malformed Patricia Tree Iterator"),
             }
@@ -841,7 +841,7 @@ impl<'a, V> PatriciaTreePostOrderIterator<'a, V> {
     fn into_tuple(node: Option<&Node<V>>) -> Option<(&BitVec, &V)> {
         match node {
             Some(leaf) => match leaf {
-                Node::Leaf { ref key, ref value } => Some((key, value)),
+                Node::Leaf { key, value } => Some((key, value)),
                 _ => panic!("Malformed Patricia Tree Iterator"),
             },
             None => None,

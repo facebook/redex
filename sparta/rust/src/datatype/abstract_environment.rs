@@ -64,7 +64,7 @@ where
 
     fn bindings(&self) -> Option<&HashMap<V, D>> {
         match self {
-            Self::Value(ref map) => Some(map),
+            Self::Value(map) => Some(map),
             _ => None,
         }
     }
@@ -312,7 +312,7 @@ where
 
     fn bindings(&self) -> Option<&PatriciaTreeMap<V, D>> {
         match self {
-            Self::Value(ref map) => Some(map),
+            Self::Value(map) => Some(map),
             _ => None,
         }
     }
@@ -364,7 +364,7 @@ where
     fn update(&mut self, variable: &V, op: impl FnOnce(&mut D)) {
         let map = match self {
             Self::Bottom => return,
-            Self::Value(ref mut map) => map,
+            Self::Value(map) => map,
         };
 
         let mut update_domain = match map.get(variable.clone()) {

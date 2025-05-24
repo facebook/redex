@@ -210,7 +210,7 @@ mod tests {
 
         let num_vals = 10000;
         for _ in 0..num_vals {
-            let i: u32 = rng.gen();
+            let i: u32 = rng.r#gen();
             items.insert(i);
             set.insert(i);
         }
