@@ -101,6 +101,7 @@ AnnoKill::AnnoKill(Scope& scope,
 
     TypeSet type_refs;
     get_all_children_or_implementors(ch, m_scope, type_cls, type_refs);
+    type_refs.insert(type_cls->get_type());
     for (auto& anno : it.second) {
       auto* anno_type = DexType::get_type(anno);
       for (auto type_ref : type_refs) {
