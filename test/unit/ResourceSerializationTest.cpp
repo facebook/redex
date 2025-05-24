@@ -552,7 +552,7 @@ TEST(ResTable, AppendNewType) {
     ResourcesArscFile arsc_file(dest_file_path);
     std::vector<android::ResTable_config*> config_ptrs;
     config_ptrs.emplace_back(&default_config);
-    arsc_file.define_type(0x7f, 3, "foo", config_ptrs, source_ids);
+    arsc_file.define_type(0x7f, 3, "dimen.2", config_ptrs, source_ids);
     arsc_file.serialize();
   }
 
