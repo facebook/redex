@@ -67,6 +67,7 @@ const std::unordered_set<std::string> KEPT_RESOURCES = {
     "style/CustomText.Prickly",
     "style/ThemeA",
     "style/ThemeB",
+    "style/ThemeParent",
 };
 
 // <declare-styleable> value names will generate entries in resource table, but
@@ -203,13 +204,16 @@ void assert_type_nullified(const std::unordered_set<std::string>& used_list,
     auto res_id = package_and_type | i;
     if (i >= current_entry_num) {
       EXPECT_FALSE(name_exists(res_id))
-          << "Values after current all entries still exist: " << res_id;
+          << "Values after current all entries still exist: 0x" << std::hex
+          << res_id << " (type is " << type << ")";
     } else if (values.count(i) == 0) {
       EXPECT_EQ(res_table->resource_value_count(res_id), 0)
-          << "Values are not nullified: " << res_id;
+          << "Values are not nullified: 0x" << std::hex << res_id
+          << " (type is " << type << ")";
     } else {
       EXPECT_NE(res_table->resource_value_count(res_id), 0)
-          << "Values are nullified: " << res_id;
+          << "Values are nullified: 0x" << std::hex << res_id << " (type is "
+          << type << ")";
     }
   }
 }
@@ -306,7 +310,7 @@ void postverify_nullify_impl(const DexClasses& classes,
   assert_type_nullified(modified_kept_resources, "string", 14, 14, res_table);
   assert_type_nullified(modified_kept_resources, "dimen", 15, 15, res_table);
   assert_type_nullified(modified_kept_resources, "array", 2, 1, res_table);
-  assert_type_nullified(modified_kept_resources, "style", 12, 9, res_table);
+  assert_type_nullified(modified_kept_resources, "style", 13, 12, res_table);
   assert_type_nullified(modified_kept_resources, "drawable", 4, 2, res_table);
 }
 
