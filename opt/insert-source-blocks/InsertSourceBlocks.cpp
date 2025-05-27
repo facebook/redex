@@ -893,6 +893,9 @@ void InsertSourceBlocksPass::bind_config() {
        m_fix_violations,
        m_fix_violations,
        "Applies best effort fix to all source block violations.");
+  bind("enable_source_block_fuzzing", m_enable_source_block_fuzzing,
+       m_enable_source_block_fuzzing,
+       "When enabled, applies fuzzing to inserted source block");
 }
 
 void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,

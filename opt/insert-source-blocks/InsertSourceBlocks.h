@@ -50,6 +50,7 @@ create unnecessary bloat.
   bool m_always_inject{true};
   bool m_use_default_value{false};
   bool m_fix_violations{false};
+  bool m_enable_source_block_fuzzing{false};
   std::vector<std::string> m_ordered_interactions;
 
   friend class SourceBlocksTest;
