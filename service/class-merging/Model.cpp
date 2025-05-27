@@ -410,25 +410,6 @@ bool Model::is_excluded(const DexType* type) const {
   return false;
 }
 
-bool Model::is_ordered_set_excluded(const DexType* type) const {
-  if (m_excluded.count(type)) {
-    return true;
-  }
-  for (const auto& root : UnorderedIterable(m_spec.exclude_ordered_set_types)) {
-    auto* cls = type_class(root);
-    if (is_interface(cls)) {
-      if (m_type_system.implements(type, root)) {
-        return true;
-      }
-    } else {
-      if (m_type_system.is_subtype(root, type)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 /**
  * Aggregate all mergeable types under a merger according to their shape.
  * Create a merger for every shape and move the mergeable types under
@@ -488,12 +469,6 @@ void Model::shape_merger(const MergerType& root,
       continue;
     }
     if (is_excluded(child)) {
-      m_excluded.insert(child);
-      continue;
-    }
-    if (interdex_grouping.is_in_ordered_set(child) &&
-        is_ordered_set_excluded(child)) {
-      TRACE(CLMG, 5, "Excluding ordered set type %s", SHOW(child));
       m_excluded.insert(child);
       continue;
     }
