@@ -16,6 +16,7 @@
 #include "ApkResources.h"
 #include "RedexMappedFile.h"
 #include "RedexTest.h"
+#include "ResourcesTestDefs.h"
 
 namespace {
 
@@ -250,13 +251,12 @@ TEST(Visitor, VisitXmlStrings) {
 TEST(Visitor, VisitOverlayableIds) {
   auto arsc_path = get_env("test_res_path");
   ResourcesArscFile res_table(arsc_path);
-  std::vector<std::string> expected_overlayable_names{
-      "button_txt", "log_msg", "log_msg_again", "welcome", "yummy_orange"};
   OverlayableIdsCollector collector;
   auto f = RedexMappedFile::open(arsc_path);
   collector.visit(const_cast<char*>(f.const_data()), f.size());
-  EXPECT_EQ(collector.m_ids.size(), expected_overlayable_names.size());
-  for (auto& name : expected_overlayable_names) {
+  EXPECT_EQ(collector.m_ids.size(),
+            sample_app::EXPECTED_OVERLAYABLE_RESOURCES.size());
+  for (auto& name : sample_app::EXPECTED_OVERLAYABLE_RESOURCES) {
     auto id = res_table.name_to_ids.at(name).at(0);
     EXPECT_TRUE(collector.m_ids.count(id) > 0)
         << "Did not find 0x" << std::hex << id;
