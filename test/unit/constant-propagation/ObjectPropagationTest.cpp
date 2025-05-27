@@ -13,9 +13,9 @@
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationTestUtil.h"
 
-INSTANTIATE_TYPED_TEST_CASE_P(ConstantObjectDomain,
-                              AbstractDomainPropertyTest,
-                              ConstantObjectDomain);
+INSTANTIATE_TYPED_TEST_SUITE_P(ConstantObjectDomain,
+                               AbstractDomainPropertyTest,
+                               ConstantObjectDomain);
 
 // We need RedexContext to be set up in order to call DexField::make_field...
 // XXX find a way to initialize this in a less hacky fashion.
