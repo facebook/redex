@@ -1105,4 +1105,36 @@ TEST_F(PostVerify, RemoveAbstractUnusedArg) {
   check_callsite_regs(use_foo, 1, 1);
 }
 
+TEST_F(PostVerify, DontRemoveAnnotatedParameter) {
+  auto annotated_parameter_class = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/AnnotatedParameterInterface;");
+  ASSERT_NE(nullptr, annotated_parameter_class);
+
+  auto annotated_parameter_method = find_vmethod(
+      *annotated_parameter_class, "annotated_parameter_method_1", "(I)V");
+  ASSERT_NE(nullptr, annotated_parameter_method);
+}
+
+TEST_F(PostVerify, RemoveNonAnnotatedParameterSingleParameterMethod) {
+  auto annotated_parameter_class = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/AnnotatedParameterInterface;");
+  ASSERT_NE(nullptr, annotated_parameter_class);
+
+  auto annotated_parameter_method = find_vmethod(
+      *annotated_parameter_class, "annotated_parameter_method_2", "(I)V");
+
+  ASSERT_EQ(nullptr, annotated_parameter_method);
+}
+
+TEST_F(PostVerify, DontRemoveNonAnnotatedParameterMultiParameterMethod) {
+  auto annotated_parameter_class = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/AnnotatedParameterInterface;");
+  ASSERT_NE(nullptr, annotated_parameter_class);
+
+  auto annotated_parameter_method = find_vmethod(
+      *annotated_parameter_class, "annotated_parameter_method_3", "(II)V");
+
+  ASSERT_NE(nullptr, annotated_parameter_method);
+}
+
 } // namespace

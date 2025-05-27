@@ -7,6 +7,11 @@
 
 package com.facebook.redex.test.instr;
 
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.Target;
+import java.lang.annotation.RetentionPolicy;
+
 import javax.security.auth.x500.X500Principal;
 
 class Foo {
@@ -433,4 +438,18 @@ class SubReorderables extends Reorderables implements ReorderablesInterface {
 
   public void reorderable2(Object x, int y, double z) {
   }
+}
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.PARAMETER)
+@interface CustomAnnotation {
+  String value() default "";
+}
+
+interface AnnotatedParameterInterface {
+  public void annotated_parameter_method_1(@CustomAnnotation("annotation 1") int x);
+
+  public void annotated_parameter_method_2(int x);
+
+  public void annotated_parameter_method_3(int x, @CustomAnnotation("annotation 2") int y);
 }
