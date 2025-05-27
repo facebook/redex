@@ -6,6 +6,7 @@
  */
 
 #include "ResourceValueMergingPass.h"
+#include "DeterministicContainers.h"
 #include "Pass.h"
 #include "PassManager.h"
 #include "Trace.h"
@@ -13,7 +14,12 @@
 void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
                                         ConfigFiles& conf,
                                         PassManager& mgr) {
-  TRACE(PM, 1, "Running %s...", name().c_str());
-};
+  TRACE(RES, 1, "ResourceValueMergingPass excluded_resources count: %zu",
+        m_excluded_resources.size());
+
+  for (const auto& resource : UnorderedIterable(m_excluded_resources)) {
+    TRACE(RES, 1, "  Excluded resource: %s", resource.c_str());
+  }
+}
 
 static ResourceValueMergingPass s_pass;
