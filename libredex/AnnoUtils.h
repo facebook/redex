@@ -100,6 +100,8 @@ bool has_any_annotation(DexMember* member,
   return false;
 }
 
+bool has_any_parameter_annotation(const DexMethod* method);
+
 std::unique_ptr<DexAnnotationSet> create_anno_set(
     const std::vector<std::pair<std::string, std::string>>& elements,
     DexType* anno_type);

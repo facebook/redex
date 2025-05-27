@@ -580,7 +580,8 @@ void RemoveArgs::gather_updated_entries(
         for (auto m : UnorderedIterable(kvp->second)) {
           // If we can't edit, just skip
           if (!can_rename(m) || is_native(m) || m->rstate.no_optimizations() ||
-              has_any_annotation(m, no_devirtualize_annos)) {
+              has_any_annotation(m, no_devirtualize_annos) ||
+              has_any_parameter_annotation(m)) {
             return;
           }
 

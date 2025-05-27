@@ -173,6 +173,14 @@ std::string parse_str_anno_value(const DexMethod* method,
                               std::move(name));
 }
 
+bool has_any_parameter_annotation(const DexMethod* method) {
+  const auto& param_annos = method->get_param_anno();
+  if (param_annos == nullptr) {
+    return false;
+  }
+  return !param_annos->empty();
+}
+
 std::unique_ptr<DexAnnotationSet> create_anno_set(
     const std::vector<std::pair<std::string, std::string>>& elements,
     DexType* anno_type) {
