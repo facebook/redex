@@ -9,7 +9,6 @@
 
 
 import enum
-import itertools
 import logging
 import os
 import platform
@@ -19,6 +18,7 @@ import signal
 import subprocess
 import sys
 import typing
+from functools import reduce
 
 from pyredex.logger import get_store_logs_temp_file
 
@@ -127,7 +127,7 @@ def _has_addr2line() -> bool:
 _ADDR2LINE_BASE_ARGS = ["-f", "-i", "-C", "-e"]
 
 
-def _symbolize(filename: str, offset: str) -> typing.List[str]:
+def _symbolize(filename: str, offset: str) -> typing.Optional[typing.List[str]]:
     # It's good enough not to use server mode.
     try:
         path = ADDR2LINE_PATH
@@ -135,51 +135,62 @@ def _symbolize(filename: str, offset: str) -> typing.List[str]:
         assert os.path.isabs(path)
 
         output = subprocess.check_output(
-            [path] + _ADDR2LINE_BASE_ARGS + [filename, offset]
+            [path] + _ADDR2LINE_BASE_ARGS + [filename, offset],
+            stderr=subprocess.DEVNULL,
         )
         return output.decode(sys.stderr.encoding).splitlines()
     except subprocess.CalledProcessError:
-        return ["<addr2line error>"]
+        return None
 
 
-def maybe_addr2line(lines: typing.Iterable[str]) -> typing.Optional[typing.List[str]]:
+def maybe_addr2line(crash_file: str) -> typing.Optional[typing.List[str]]:
+    if not os.path.exists(crash_file) or os.path.getsize(crash_file) == 0:
+        return None
+
+    def lines() -> typing.Generator[str, None, None]:
+        with open(crash_file, "r") as f:
+            for line in f:
+                yield line.strip()
+
     global _BACKTRACE_PATTERN
+    backtrace_matches = (
+        m
+        for line in lines()
+        for m in [_BACKTRACE_PATTERN.fullmatch(line)]
+        if m is not None
+    )
 
-    # Generate backtrace lines.
-    def find_matches() -> typing.Generator[typing.Match[str], None, None]:
-        for line in lines:
-            stripped_line = line.strip()
-            m = _BACKTRACE_PATTERN.fullmatch(stripped_line)
-            if m is not None:
-                yield m
+    filter_skips = (m for m in backtrace_matches if not _should_skip_line(m.string))
 
-    # Check whether there is anything to do.
-    matches_gen = find_matches()
-    first_elem = next(matches_gen, None)
-    if first_elem is None:
-        return None
-    matches_gen = itertools.chain([first_elem], matches_gen)
+    checked_addr2line: typing.Optional[bool] = None
 
-    if not _has_addr2line():
-        sys.stderr.write("Addr2line not found!\n")
-        # Note: no need for store-logs, as this has failed anyways.
-        return None
-    ret = []
+    def translate(m: typing.Match[str]) -> typing.Optional[typing.List[str]]:
+        nonlocal checked_addr2line
+        if checked_addr2line is None:
+            checked_addr2line = _has_addr2line()
+        if not checked_addr2line:
+            return None
 
-    for m in matches_gen:
-        if _should_skip_line(m.string):
-            continue
-
+        ret = []
         ret.append("%s(%s)[%s]" % (m.group(1), m.group(2), m.group(3)))
         decoded = _symbolize(m.group(1), m.group(3))
-        for idx, line in enumerate(decoded):
-            line = line.strip()
-            if _should_skip_line(line):
-                continue
+        if decoded is not None:
+            for idx, line in enumerate(decoded):
+                line = line.strip()
+                if _should_skip_line(line):
+                    continue
 
-            ret.append(f'{"  " * (1 if idx % 2 == 0 else 2)}{line}')
+                ret.append(f'{"  " * (1 if idx % 2 == 0 else 2)}{line}')
 
-    return ret
+        return ret
+
+    symbolized = (translate(m) for m in filter_skips)
+
+    reduced = reduce(
+        lambda a, b: None if a is None or b is None else a + b, symbolized, []
+    )
+
+    return reduced
 
 
 def find_abort_error(lines: typing.Iterable[str]) -> typing.Optional[str]:
@@ -194,30 +205,13 @@ def find_abort_error(lines: typing.Iterable[str]) -> typing.Optional[str]:
         if len(terminate_lines) > 0:
             terminate_lines.append(stripped_line)
 
-            # Stop on ten lines.
-            if len(terminate_lines) >= 10:
+            # Stop on three lines, keep it short.
+            if len(terminate_lines) >= 3:
                 break
             continue
 
     if not terminate_lines:
         return None
-
-    if len(terminate_lines) >= 3:
-        # Try to find the first line matching a backtrace.
-        backtrace_idx = None
-        global _BACKTRACE_PATTERN
-        for i in range(2, len(terminate_lines)):
-            m = _BACKTRACE_PATTERN.fullmatch(terminate_lines[i])
-            if m is not None:
-                backtrace_idx = i
-                break
-
-        if backtrace_idx:
-            terminate_lines = terminate_lines[:backtrace_idx]
-        else:
-            # Probably not one of ours, or with a very detailed error, just
-            # print two lines.
-            terminate_lines = terminate_lines[0:2]
 
     # Remove trailing newlines.
     while terminate_lines:
