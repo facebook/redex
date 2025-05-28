@@ -131,3 +131,108 @@ TEST(RedexResources, GetResourcesToKeep) {
       resources::parse_keep_xml_file(get_env("empty_resource_inclusion_path"));
   EXPECT_EQ(expected_empty_class, empty_class_to_keep);
 }
+
+TEST(RedexResources, StyleResourceSpan) {
+  resources::StyleResource::Value::Span span1{"bold", 0, 5};
+  resources::StyleResource::Value::Span span2{"bold", 0, 5};
+  EXPECT_TRUE(span1 == span2);
+
+  resources::StyleResource::Value::Span span3{"italic", 0, 5};
+  EXPECT_FALSE(span1 == span3);
+
+  resources::StyleResource::Value::Span span4{"bold", 1, 5};
+  EXPECT_FALSE(span1 == span4);
+
+  resources::StyleResource::Value::Span span5{"bold", 0, 6};
+  EXPECT_FALSE(span1 == span5);
+}
+
+TEST(RedexResources, StyleResourceValueBytes) {
+  const uint8_t data_type = 1;
+  const uint32_t bytes_value = 0x12345678;
+
+  resources::StyleResource::Value value1(data_type, bytes_value);
+  resources::StyleResource::Value value2(data_type, bytes_value);
+
+  EXPECT_TRUE(value1 == value2);
+
+  resources::StyleResource::Value value3(data_type + 1, bytes_value);
+  EXPECT_FALSE(value1 == value3);
+
+  resources::StyleResource::Value value4(data_type, bytes_value + 1);
+  EXPECT_FALSE(value1 == value4);
+}
+
+TEST(RedexResources, StyleResourceValueString) {
+  const uint8_t data_type = 2;
+  const std::string str_value = "test string";
+
+  resources::StyleResource::Value value1(data_type, str_value);
+  resources::StyleResource::Value value2(data_type, str_value);
+
+  EXPECT_TRUE(value1 == value2);
+
+  resources::StyleResource::Value value3(data_type + 1, str_value);
+  EXPECT_FALSE(value1 == value3);
+
+  resources::StyleResource::Value value4(data_type, str_value + " modified");
+  EXPECT_FALSE(value1 == value4);
+
+  const std::string empty_str;
+  resources::StyleResource::Value value5(data_type, empty_str);
+  resources::StyleResource::Value value6(data_type, empty_str);
+  EXPECT_TRUE(value5 == value6);
+  EXPECT_FALSE(value1 == value5);
+}
+
+TEST(RedexResources, StyleResourceValueStyled) {
+  const uint8_t data_type = 3;
+  std::vector<resources::StyleResource::Value::Span> spans1 = {
+      {"bold", 0, 5}, {"italic", 6, 10}};
+
+  resources::StyleResource::Value value1(data_type, spans1);
+
+  std::vector<resources::StyleResource::Value::Span> spans2 = {
+      {"bold", 0, 5}, {"italic", 6, 10}};
+  resources::StyleResource::Value value2(data_type, spans2);
+
+  EXPECT_TRUE(value1 == value2);
+
+  resources::StyleResource::Value value3(data_type + 1, spans1);
+  EXPECT_FALSE(value1 == value3);
+
+  std::vector<resources::StyleResource::Value::Span> spans3 = {{"bold", 0, 5}};
+  resources::StyleResource::Value value4(data_type, spans3);
+  EXPECT_FALSE(value1 == value4);
+
+  std::vector<resources::StyleResource::Value::Span> spans4 = {
+      {"bold", 0, 5}, {"underline", 6, 10}};
+  resources::StyleResource::Value value5(data_type, spans4);
+  EXPECT_FALSE(value1 == value5);
+
+  std::vector<resources::StyleResource::Value::Span> empty_spans;
+  resources::StyleResource::Value value6(data_type, empty_spans);
+  resources::StyleResource::Value value7(data_type, empty_spans);
+  EXPECT_TRUE(value6 == value7);
+  EXPECT_FALSE(value1 == value6);
+}
+
+TEST(RedexResources, StyleResourceValueMixedComparisons) {
+  const uint8_t bytes_type = 1;
+  const uint8_t string_type = 2;
+  const uint8_t styled_type = 3;
+
+  resources::StyleResource::Value bytes_value(bytes_type, 12345);
+  resources::StyleResource::Value string_value(string_type, "test");
+
+  std::vector<resources::StyleResource::Value::Span> spans = {{"bold", 0, 5}};
+  resources::StyleResource::Value styled_value(styled_type, spans);
+
+  resources::StyleResource::Value another_bytes_value(bytes_type, 0);
+  EXPECT_FALSE(bytes_value == string_value);
+  EXPECT_FALSE(bytes_value == styled_value);
+  EXPECT_FALSE(string_value == styled_value);
+
+  resources::StyleResource::Value bytes_as_string_type(string_type, 12345);
+  EXPECT_FALSE(bytes_value == bytes_as_string_type);
+}

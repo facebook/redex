@@ -572,7 +572,7 @@ class StyleCollector : public arsc::ResourceTableVisitor {
                        android::ResTable_map_entry* /* unused */,
                        android::ResTable_map* value) override {
     resources::StyleResource::Value attr_value{value->value.dataType,
-                                               value->value.data, boost::none};
+                                               value->value.data};
     m_attributes.emplace(dtohl(value->name.ident), attr_value);
     return true;
   }

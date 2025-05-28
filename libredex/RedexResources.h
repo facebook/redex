@@ -143,9 +143,28 @@ UnorderedSet<std::string> parse_keep_xml_file(const std::string& xml_file_path);
 // common interface between the two).
 struct StyleResource {
   struct Value {
-    uint8_t data_type{0};
-    uint32_t value_bytes{0};
-    boost::optional<std::string> value_string{boost::none};
+    struct Span {
+      std::string tag;
+      uint32_t first_char;
+      uint32_t last_char;
+
+      bool operator==(const Span& other) const {
+        if (tag != other.tag) {
+          return false;
+        }
+        if (first_char != other.first_char) {
+          return false;
+        }
+        return last_char == other.last_char;
+      }
+    };
+
+    Value(uint8_t dt, uint32_t bytes) : data_type(dt), value_bytes(bytes) {}
+    Value(uint8_t dt, const std::string& str)
+        : data_type(dt), value_string(str) {}
+    Value(uint8_t dt, std::vector<Span> styled)
+        : data_type(dt), styled_string(std::move(styled)) {}
+
     bool operator==(const Value& other) const {
       if (data_type != other.data_type) {
         return false;
@@ -153,8 +172,29 @@ struct StyleResource {
       if (value_bytes != other.value_bytes) {
         return false;
       }
-      return value_string == other.value_string;
+      if (value_string != other.value_string) {
+        return false;
+      }
+      if (styled_string != other.styled_string) {
+        return false;
+      }
+
+      if (styled_string.size() != other.styled_string.size()) {
+        return false;
+      }
+      if (!std::equal(styled_string.begin(),
+                      styled_string.end(),
+                      other.styled_string.begin())) {
+        return false;
+      }
+      return true;
     }
+
+   private:
+    uint8_t data_type{0};
+    uint32_t value_bytes{0};
+    boost::optional<std::string> value_string{boost::none};
+    std::vector<Span> styled_string;
   };
 
   using AttrMap = std::map<uint32_t, Value>;
