@@ -226,11 +226,12 @@ void TypedefAnnoChecker::run(DexMethod* m) {
 
   always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
-  UnorderedSet<DexType*> anno_set;
-  anno_set.emplace(m_config.int_typedef);
-  anno_set.emplace(m_config.str_typedef);
-  type_inference::TypeInference inference(cfg, false, anno_set,
-                                          &m_method_override_graph);
+  redex_assert(m_config.int_typedef != nullptr);
+  redex_assert(m_config.str_typedef != nullptr);
+  type_inference::TypeInference inference(
+      cfg, false,
+      UnorderedSet<DexType*>{m_config.int_typedef, m_config.str_typedef},
+      &m_method_override_graph);
   inference.run(m);
 
   live_range::MoveAwareChains chains(cfg);
