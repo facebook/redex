@@ -171,7 +171,8 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
         auto caller_proto = caller->get_proto();
         defined_protos.insert(caller_proto);
         if (!can_rename(caller) || is_native(caller) ||
-            caller->rstate.no_optimizations()) {
+            caller->rstate.no_optimizations() ||
+            has_any_parameter_annotation(caller)) {
           record_fixed_proto(caller_proto, 1);
         } else if (caller->is_virtual()) {
           auto is_interface_method =
