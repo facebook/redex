@@ -63,6 +63,22 @@ struct PatcherStats {
   }
 };
 
+struct ParamCandidate {
+  DexMethod* method;
+  src_index_t index;
+
+  ParamCandidate(DexMethod* method, src_index_t src_index)
+      : method(method), index(src_index) {}
+};
+
+inline size_t hash_value(ParamCandidate pc) {
+  return ((size_t)pc.method) ^ (size_t)(pc.index);
+}
+
+inline bool operator==(const ParamCandidate& a, const ParamCandidate& b) {
+  return a.method == b.method && a.index == b.index;
+}
+
 class PatchingCandidates {
 
  public:
@@ -74,24 +90,19 @@ class PatchingCandidates {
     m_method_candidates.insert_or_assign(
         std::make_pair(method, const_cast<TypedefAnnoType*>(anno)));
   }
+  void add_param_candidate(DexMethod* method,
+                           const TypedefAnnoType* anno,
+                           src_index_t index) {
+    m_param_candidates.insert_or_assign(std::make_pair(
+        ParamCandidate(method, index), const_cast<TypedefAnnoType*>(anno)));
+  }
   void apply_patching(std::mutex& mutex, Stats& class_stats);
 
  private:
   ConcurrentMap<DexField*, TypedefAnnoType*> m_field_candidates;
   ConcurrentMap<DexMethod*, TypedefAnnoType*> m_method_candidates;
-};
-
-struct ParamCandidate {
-  DexMethod* method;
-  TypedefAnnoType* anno;
-  src_index_t index;
-
-  ParamCandidate(DexMethod* method,
-                 const TypedefAnnoType* anno,
-                 src_index_t src_index)
-      : method(method),
-        anno(const_cast<TypedefAnnoType*>(anno)),
-        index(src_index) {}
+  ConcurrentMap<ParamCandidate, TypedefAnnoType*, boost::hash<ParamCandidate>>
+      m_param_candidates;
 };
 
 class TypedefAnnoPatcher {
@@ -111,10 +122,9 @@ class TypedefAnnoPatcher {
  private:
   bool patch_if_overriding_annotated_methods(DexMethod* m, Stats& class_stats);
 
-  void patch_parameters(
-      DexMethod* method,
-      Stats& class_stats,
-      std::vector<ParamCandidate>* missing_param_annos = nullptr);
+  void patch_parameters(DexMethod* method,
+                        Stats& class_stats,
+                        PatchingCandidates& candidates);
 
   void collect_return_candidates(DexMethod* method,
                                  PatchingCandidates& candidates);
