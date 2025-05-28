@@ -33,6 +33,10 @@ struct Stats {
     num_patched_fields_and_methods += other.num_patched_fields_and_methods;
     return *this;
   }
+
+  bool not_zero() const {
+    return num_patched_parameters != 0 || num_patched_fields_and_methods != 0;
+  }
 };
 
 struct PatcherStats {
@@ -104,6 +108,10 @@ class PatchingCandidates {
     m_param_candidates.insert_or_assign(std::make_pair(
         ParamCandidate(method, index), const_cast<TypedefAnnoType*>(anno)));
   }
+  size_t candidates_size() const {
+    return m_field_candidates.size() + m_method_candidates.size() +
+           m_param_candidates.size();
+  }
   void apply_patching(std::mutex& mutex, Stats& class_stats);
 
  private:
@@ -118,7 +126,8 @@ class TypedefAnnoPatcher {
   explicit TypedefAnnoPatcher(
       const TypedefAnnoCheckerPass::Config& config,
       const method_override_graph::Graph& method_override_graph)
-      : m_method_override_graph(method_override_graph) {
+      : m_method_override_graph(method_override_graph),
+        m_max_iteration(config.max_patcher_iteration) {
     m_typedef_annos.insert(config.int_typedef);
     m_typedef_annos.insert(config.str_typedef);
   }
@@ -157,6 +166,7 @@ class TypedefAnnoPatcher {
 
   UnorderedSet<TypedefAnnoType*> m_typedef_annos;
   const method_override_graph::Graph& m_method_override_graph;
+  const size_t m_max_iteration;
   ConcurrentMap<std::string, std::vector<const DexField*>> m_lambda_anno_map;
   InsertOnlyConcurrentSet<std::string_view> m_patched_returns;
   InsertOnlyConcurrentSet<DexClass*> m_chained_getters;

@@ -36,11 +36,13 @@ class TypedefAnnoCheckerPass : public Pass {
   struct Config {
     DexType* int_typedef{nullptr};
     DexType* str_typedef{nullptr};
+    size_t max_patcher_iteration{10};
   };
 
   void bind_config() override {
     bind("int_typedef", {}, m_config.int_typedef);
     bind("str_typedef", {}, m_config.str_typedef);
+    bind("max_patcher_iteration", 10, m_config.max_patcher_iteration);
   }
 
   explicit TypedefAnnoCheckerPass(Config config)

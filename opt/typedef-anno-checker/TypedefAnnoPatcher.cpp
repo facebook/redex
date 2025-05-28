@@ -444,31 +444,65 @@ bool TypedefAnnoPatcher::patch_if_overriding_annotated_methods(
 
 void TypedefAnnoPatcher::run(const Scope& scope) {
   PatchingCandidates candidates;
-  m_patcher_stats = walk::parallel::classes<PatcherStats>(
-      scope, [this, &candidates](DexClass* cls) {
-        // All the updates happening in this walk is local to the current class.
-        // Therefore, there's no race condition between individual annotation
-        // patching.
-        auto class_stats = PatcherStats();
-        if (is_enum(cls) && type::is_kotlin_class(cls)) {
-          fix_kt_enum_ctor_param(cls, class_stats.fix_kt_enum_ctor_param);
-        }
-        for (auto m : cls->get_all_methods()) {
-          collect_param_candidates(m, candidates);
-          collect_return_candidates(m, candidates);
-          patch_if_overriding_annotated_methods(
-              m, class_stats.patch_synth_methods_overriding_annotated_methods);
-          if (is_constructor(m) &&
-              has_typedef_annos(m->get_param_anno(), m_typedef_annos)) {
-            patch_synth_cls_fields_from_ctor_param(
-                m, class_stats.patch_synth_cls_fields_from_ctor_param,
-                candidates);
+  const auto phase_one = [this, &scope, &candidates]() {
+    m_patcher_stats += walk::parallel::classes<PatcherStats>(
+        scope, [this, &candidates](DexClass* cls) {
+          // All the updates happening in this walk is local to the current
+          // class. Therefore, there's no race condition between individual
+          // annotation patching.
+          auto class_stats = PatcherStats();
+          if (is_enum(cls) && type::is_kotlin_class(cls)) {
+            fix_kt_enum_ctor_param(cls, class_stats.fix_kt_enum_ctor_param);
           }
-        }
-        return class_stats;
-      });
-  candidates.apply_patching(m_anno_patching_mutex,
-                            m_patcher_stats.patch_parameters_and_returns);
+          for (auto m : cls->get_all_methods()) {
+            collect_param_candidates(m, candidates);
+            collect_return_candidates(m, candidates);
+            patch_if_overriding_annotated_methods(
+                m,
+                class_stats.patch_synth_methods_overriding_annotated_methods);
+            if (is_constructor(m) &&
+                has_typedef_annos(m->get_param_anno(), m_typedef_annos)) {
+              patch_synth_cls_fields_from_ctor_param(
+                  m, class_stats.patch_synth_cls_fields_from_ctor_param,
+                  candidates);
+            }
+          }
+          return class_stats;
+        });
+
+    size_t candidates_size = candidates.candidates_size();
+    if (candidates_size == 0) {
+      // Nothing to patch.
+      TRACE(TAC, 2, "[patcher] Nothing to patch");
+      return false;
+    }
+    Stats new_stats = {};
+    candidates.apply_patching(m_anno_patching_mutex, new_stats);
+    TRACE(TAC, 2,
+          "[patcher] Phase 1: Patches %zu candidates; patched params %zu; "
+          "patched field/methods %zu",
+          candidates_size, new_stats.num_patched_parameters,
+          new_stats.num_patched_fields_and_methods);
+    candidates = {};
+    if (new_stats.not_zero()) {
+      m_patcher_stats.patch_parameters_and_returns += new_stats;
+      return true;
+    }
+
+    // All candidates are patched. Nothing to do.
+    return false;
+  };
+
+  // Fix point iteration on phase one.
+  for (size_t i = 0;; i++) {
+    if (!phase_one()) {
+      break;
+    }
+    if (i >= m_max_iteration) {
+      always_assert_log(
+          false, "[patcher] Too many iterations to stabilize. Giving up.");
+    }
+  }
 
   candidates = {};
   m_patcher_stats += walk::parallel::classes<PatcherStats>(
