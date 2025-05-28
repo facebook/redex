@@ -79,6 +79,14 @@ inline bool operator==(const ParamCandidate& a, const ParamCandidate& b) {
   return a.method == b.method && a.index == b.index;
 }
 
+inline bool compare_param_candidate(const ParamCandidate& l,
+                                    const ParamCandidate& r) {
+  if (l.method == r.method) {
+    return l.index < r.index;
+  }
+  return compare_dexmethods(l.method, r.method);
+}
+
 class PatchingCandidates {
 
  public:

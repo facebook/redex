@@ -363,11 +363,10 @@ void PatchingCandidates::apply_patching(std::mutex& mutex, Stats& class_stats) {
     auto* anno = m_method_candidates.at(method);
     add_annotation(method, anno, mutex, class_stats);
   }
-  for (auto& pair : UnorderedIterable(m_param_candidates)) {
-    auto param_candidate = pair.first;
-    auto anno = pair.second;
-    add_param_annotation(param_candidate.method, anno, param_candidate.index,
-                         class_stats);
+  for (auto& pc :
+       unordered_to_ordered_keys(m_param_candidates, compare_param_candidate)) {
+    auto anno = m_param_candidates.at(pc);
+    add_param_annotation(pc.method, anno, pc.index, class_stats);
   }
 }
 
