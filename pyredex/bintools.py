@@ -41,6 +41,8 @@ _IGNORE_LINES_WITH_SUBSTR = [
     # libc
     "libc.so.6(abort",
     "libc.so.6(gsignal",
+    "libc.so.6(pthread_kill",
+    "libc.so.6(raise",
     "libc.so.6(__libc_start_main",
     # libc without name
     "libc.so.6(+0x",
@@ -91,7 +93,7 @@ def _has_addr2line() -> bool:
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
                     )
-                    LOGGER.info("Found addr2line at %s", cmd)
+                    LOGGER.debug("Found addr2line at %s", cmd)
                     return cmd
                 except Exception:
                     pass
@@ -106,7 +108,7 @@ def _has_addr2line() -> bool:
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
                     )
-                    LOGGER.info("Found addr2line at %s from `which`", cmd)
+                    LOGGER.debug("Found addr2line at %s from `which`", cmd)
                     return cmd
                 except Exception:
                     pass
