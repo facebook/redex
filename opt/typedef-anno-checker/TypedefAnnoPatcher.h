@@ -111,15 +111,19 @@ class TypedefAnnoPatcher {
  private:
   bool patch_if_overriding_annotated_methods(DexMethod* m, Stats& class_stats);
 
-  void patch_parameters_and_returns(
+  void patch_parameters(
       DexMethod* method,
       Stats& class_stats,
       std::vector<ParamCandidate>* missing_param_annos = nullptr);
 
+  void collect_return_candidates(DexMethod* method,
+                                 PatchingCandidates& candidates);
+
   void patch_enclosing_lambda_fields(const DexClass* cls, Stats& class_stats);
 
   void patch_synth_cls_fields_from_ctor_param(DexMethod* ctor,
-                                              Stats& class_stats);
+                                              Stats& class_stats,
+                                              PatchingCandidates& candidates);
 
   void patch_lambdas(DexMethod* method,
                      std::vector<const DexField*>* patched_fields,
@@ -132,7 +136,7 @@ class TypedefAnnoPatcher {
   void fix_kt_enum_ctor_param(const DexClass* cls, Stats& class_stats);
 
   void populate_chained_getters(DexClass* cls);
-  void patch_chained_getters(Stats& class_stats);
+  void patch_chained_getters(PatchingCandidates& candidates);
 
   UnorderedSet<TypedefAnnoType*> m_typedef_annos;
   const method_override_graph::Graph& m_method_override_graph;
