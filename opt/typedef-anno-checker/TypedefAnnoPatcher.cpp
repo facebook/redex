@@ -255,13 +255,13 @@ bool add_param_annotation(DexMethod* m,
 }
 
 // Run usedefs to see if the source of the annotated value is a parameter
-// If it is, return the index the parameter. If not, return -1
-void find_and_patch_parameter(DexMethod* m,
-                              IRInstruction* insn,
-                              src_index_t arg_index,
-                              const TypedefAnnoType* typedef_anno,
-                              live_range::UseDefChains* ud_chains,
-                              PatchingCandidates& param_candidates) {
+// If it is, add the param to the patching candidates.
+void find_patchable_parameters(DexMethod* m,
+                               IRInstruction* insn,
+                               src_index_t arg_index,
+                               const TypedefAnnoType* typedef_anno,
+                               live_range::UseDefChains* ud_chains,
+                               PatchingCandidates& param_candidates) {
   // Patch missing parameter annotations from accessed fields
   live_range::Use use_of_id{insn, arg_index};
   auto udchains_it = ud_chains->find(use_of_id);
@@ -320,8 +320,8 @@ void patch_param_from_method_invoke(TypeEnvironments& envs,
       // Safe assignment. Nothing to do.
       continue;
     }
-    find_and_patch_parameter(caller, invoke, arg_index, *param_typedef_anno,
-                             ud_chains, candidates);
+    find_patchable_parameters(caller, invoke, arg_index, *param_typedef_anno,
+                              ud_chains, candidates);
     TRACE(TAC, 2, "Missing param annotation %s in %s", SHOW(param_anno.second),
           SHOW(caller));
   }
@@ -336,7 +336,6 @@ void collect_setter_missing_param_annos(
     DexMethod* setter,
     IRInstruction* insn,
     live_range::UseDefChains* ud_chains,
-    Stats& class_stats,
     PatchingCandidates& candidates) {
   always_assert(opcode::is_an_iput(insn->opcode()) ||
                 opcode::is_an_sput(insn->opcode()));
@@ -347,7 +346,8 @@ void collect_setter_missing_param_annos(
     return;
   }
 
-  find_and_patch_parameter(setter, insn, 0, *field_anno, ud_chains, candidates);
+  find_patchable_parameters(setter, insn, 0, *field_anno, ud_chains,
+                            candidates);
 }
 
 } // namespace
@@ -447,14 +447,14 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
   m_patcher_stats = walk::parallel::classes<PatcherStats>(
       scope, [this, &candidates](DexClass* cls) {
         // All the updates happening in this walk is local to the current class.
-        // Therefore, there's no race condition.
+        // Therefore, there's no race condition between individual annotation
+        // patching.
         auto class_stats = PatcherStats();
         if (is_enum(cls) && type::is_kotlin_class(cls)) {
           fix_kt_enum_ctor_param(cls, class_stats.fix_kt_enum_ctor_param);
         }
         for (auto m : cls->get_all_methods()) {
-          patch_parameters(m, class_stats.patch_parameters_and_returns,
-                           candidates);
+          collect_param_candidates(m, candidates);
           collect_return_candidates(m, candidates);
           patch_if_overriding_annotated_methods(
               m, class_stats.patch_synth_methods_overriding_annotated_methods);
@@ -751,7 +751,7 @@ void TypedefAnnoPatcher::patch_lambdas(
         // parameters. Find any missing parameter annotations and add them to
         // the map of src index to annotation, but don't patch the static
         // method since a different visit of that method will patch it
-        patch_parameters(static_method, class_stats, candidates);
+        collect_param_candidates(static_method, candidates);
         // If the static method has parameter annotations, patch the synthetic
         // fields as expected
         if (static_method->get_param_anno()) {
@@ -827,7 +827,10 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
       }
       auto annotation = env.get_annotation(insn->src(0));
       if (annotation != boost::none) {
+        // We have to patch the field here now. Otherwise, the getter won't be
+        // considered as candidate by the collection logic down below.
         add_annotation(field, *annotation, m_anno_patching_mutex, class_stats);
+
         auto field_name = field->get_simple_deobfuscated_name();
         field_name.at(0) = std::toupper(field_name.at(0));
         const auto int_or_string =
@@ -843,7 +846,7 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
         auto setter = DexMethod::get_method(
             class_name_dot + "set" + field_name + ":(" + int_or_string + ")V");
         if (setter && setter->is_def()) {
-          patch_parameters(setter->as_def(), class_stats, candidates);
+          collect_param_candidates(setter->as_def(), candidates);
         }
       }
     }
@@ -911,9 +914,8 @@ void TypedefAnnoPatcher::patch_enclosing_lambda_fields(const DexClass* anon_cls,
 //
 // if missing_param_annos is not nullptr, do not patch anything. Upon obtaining
 // the parameter annotations, just add them to missing_param_annos
-void TypedefAnnoPatcher::patch_parameters(DexMethod* m,
-                                          Stats& class_stats,
-                                          PatchingCandidates& candidates) {
+void TypedefAnnoPatcher::collect_param_candidates(
+    DexMethod* m, PatchingCandidates& candidates) {
   IRCode* code = m->get_code();
   if (!code) {
     return;
@@ -938,7 +940,7 @@ void TypedefAnnoPatcher::patch_parameters(DexMethod* m,
                                        candidates);
       } else if (opcode::is_an_iput(opcode) || opcode::is_an_sput(opcode)) {
         collect_setter_missing_param_annos(inference, m, insn, &ud_chains,
-                                           class_stats, candidates);
+                                           candidates);
       }
     }
   }

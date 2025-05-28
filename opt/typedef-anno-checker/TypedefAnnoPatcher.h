@@ -130,9 +130,8 @@ class TypedefAnnoPatcher {
  private:
   bool patch_if_overriding_annotated_methods(DexMethod* m, Stats& class_stats);
 
-  void patch_parameters(DexMethod* method,
-                        Stats& class_stats,
-                        PatchingCandidates& candidates);
+  void collect_param_candidates(DexMethod* method,
+                                PatchingCandidates& candidates);
 
   void collect_return_candidates(DexMethod* method,
                                  PatchingCandidates& candidates);
