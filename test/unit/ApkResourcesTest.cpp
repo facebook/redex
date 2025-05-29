@@ -400,7 +400,7 @@ TEST(ApkResources, StyleAnalysis) {
         resources::ReachabilityOptions options;
         UnorderedSet<uint32_t> roots;
         ResourceConfig global_resource_config;
-        opt_res::StyleAnalysis style_analysis(
+        StyleAnalysis style_analysis(
             temp_dir_path, global_resource_config, options, roots);
         auto ambiguous = style_analysis.ambiguous_styles();
         EXPECT_EQ(ambiguous.size(), ambiguous_style_names.size());

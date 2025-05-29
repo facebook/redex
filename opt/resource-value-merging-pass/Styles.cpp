@@ -9,7 +9,6 @@
 
 #include "utils/Serialize.h"
 
-namespace opt_res {
 #define NON_AMBIGUOUS(style_vec) (*(style_vec).begin())
 
 bool is_style_ambiguous(uint32_t id,
@@ -86,4 +85,3 @@ std::string StyleAnalysis::dot(bool exclude_nodes_with_no_edges) {
   return m_style_info.print_as_dot(
       stringify, node_options, exclude_nodes_with_no_edges);
 }
-} // namespace opt_res

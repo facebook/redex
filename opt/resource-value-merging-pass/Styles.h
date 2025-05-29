@@ -13,7 +13,6 @@
 #include "RedexResources.h"
 #include "Trace.h"
 
-namespace opt_res {
 class StyleAnalysis {
  public:
   StyleAnalysis(const std::string& zip_dir,
@@ -47,4 +46,3 @@ class StyleAnalysis {
   std::unique_ptr<resources::ReachableResources> m_reachable_resources;
   resources::StyleInfo m_style_info;
 };
-} // namespace opt_res

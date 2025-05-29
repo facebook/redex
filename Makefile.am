@@ -489,6 +489,7 @@ libopt_la_SOURCES = \
 	opt/resolve-proguard-values/ResolveProguardAssumeValues.cpp \
 	opt/resources-inlining-pass/ResourcesInliningPass.cpp \
 	opt/resource-value-merging-pass/ResourceValueMergingPass.cpp \
+	opt/resource-value-merging-pass/Styles.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
 	opt/shrinker/ShrinkerPass.cpp \
 	opt/unreachable/UnreachableLoweringPass.cpp \
@@ -523,7 +524,6 @@ libopt_la_SOURCES = \
 	opt/stringbuilder-outliner/StringBuilderOutliner.cpp \
 	opt/strip-debug-info/StripDebugInfo.cpp \
 	opt/optimize_resources/OptimizeResources.cpp \
-	opt/optimize_resources/Styles.cpp \
 	opt/typedef-anno-checker/TypedefAnnoCheckerPass.cpp \
 	opt/typedef-anno-checker/TypedefAnnoOptPass.cpp \
 	opt/typedef-anno-checker/TypedefAnnoPatcher.cpp \
