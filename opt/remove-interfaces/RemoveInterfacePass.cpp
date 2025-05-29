@@ -151,7 +151,7 @@ DexMethod* generate_dispatch(const DexType* base_type,
 
 void update_interface_calls(
     const Scope& scope,
-    const std::unordered_map<DexMethod*, DexMethod*>& old_to_new_callee) {
+    const UnorderedMap<DexMethod*, DexMethod*>& old_to_new_callee) {
   auto patcher = [&old_to_new_callee](DexMethod* meth, IRInstruction* insn) {
     if (!insn->has_method()) {
       return;
@@ -230,7 +230,7 @@ void remove_interface_references(
     const Scope& scope,
     const TypeSystem& type_system,
     const DexType* root,
-    const std::unordered_set<const DexType*>& interfaces) {
+    const UnorderedSet<const DexType*>& interfaces) {
 
   auto patcher = [&](DexMethod*, IRInstruction* insn) {
     if (!insn->has_type()) {
@@ -262,8 +262,8 @@ void remove_interface_references(
 
   walk::parallel::opcodes(scope, patcher);
 
-  std::unordered_map<const DexType*, DexType*> old_to_new;
-  for (const auto intf : interfaces) {
+  UnorderedMap<const DexType*, DexType*> old_to_new;
+  for (const auto intf : UnorderedIterable(interfaces)) {
     auto new_type = get_replacement_type(type_system, intf, root);
     old_to_new[intf] = const_cast<DexType*>(new_type);
   }
@@ -319,7 +319,7 @@ size_t exclude_unremovables(const Scope& scope,
 
   // Scan unsupported opcodes.
   auto patcher = [&](DexMethod* meth) {
-    std::unordered_set<const DexType*> current_excluded;
+    UnorderedSet<const DexType*> current_excluded;
     auto code = meth->get_code();
     if (!code) {
       return current_excluded;
@@ -359,10 +359,10 @@ size_t exclude_unremovables(const Scope& scope,
   };
 
   auto excluded_by_opcode = walk::parallel::methods<
-      std::unordered_set<const DexType*>,
-      MergeContainers<std::unordered_set<const DexType*>>>(scope, patcher);
+      UnorderedSet<const DexType*>,
+      UnorderedMergeContainers<UnorderedSet<const DexType*>>>(scope, patcher);
 
-  for (const auto type : excluded_by_opcode) {
+  for (const auto type : UnorderedIterable(excluded_by_opcode)) {
     candidates.erase(type);
   }
   count += excluded_by_opcode.size();
@@ -498,11 +498,11 @@ TypeSet RemoveInterfacePass::remove_leaf_interfaces(
     }
   }
 
-  std::unordered_map<DexMethod*, DexMethod*> intf_meth_to_dispatch;
+  UnorderedMap<DexMethod*, DexMethod*> intf_meth_to_dispatch;
   for (const auto intf : leaf_interfaces) {
     TRACE(RM_INTF, 5, "Found leaf interface %s", SHOW(intf));
-    std::unordered_map<DexMethod*, DexMethod*> local_intf_meth_to_dispatch;
-    std::unordered_map<size_t, size_t> local_dispatch_stats;
+    UnorderedMap<DexMethod*, DexMethod*> local_intf_meth_to_dispatch;
+    UnorderedMap<size_t, size_t> local_dispatch_stats;
 
     const auto& implementors = type_system.get_implementors(intf);
     auto intf_methods = type_class(intf)->get_vmethods();
@@ -531,11 +531,11 @@ TypeSet RemoveInterfacePass::remove_leaf_interfaces(
     }
 
     // Merge stats
-    for (const auto& pair : local_dispatch_stats) {
+    for (const auto& pair : UnorderedIterable(local_dispatch_stats)) {
       m_dispatch_stats[pair.first] += pair.second;
     }
-    intf_meth_to_dispatch.insert(local_intf_meth_to_dispatch.begin(),
-                                 local_intf_meth_to_dispatch.end());
+    insert_unordered_iterable(intf_meth_to_dispatch,
+                              local_intf_meth_to_dispatch);
   }
   update_interface_calls(scope, intf_meth_to_dispatch);
   remove_inheritance(scope, type_system, leaf_interfaces);
@@ -617,7 +617,7 @@ void RemoveInterfacePass::run_pass(DexStoresVector& stores,
   TRACE(RM_INTF, 5, "number of removed interfaces %zu",
         m_num_interface_removed);
 
-  for (const auto& stat : m_dispatch_stats) {
+  for (const auto& stat : UnorderedIterable(m_dispatch_stats)) {
     std::stringstream metric;
     metric << "num_dispatch_" << stat.first;
     mgr.incr_metric(metric.str(), stat.second);

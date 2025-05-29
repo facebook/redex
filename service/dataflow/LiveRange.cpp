@@ -9,6 +9,7 @@
 
 #include <boost/pending/disjoint_sets.hpp>
 #include <boost/property_map/property_map.hpp>
+#include <unordered_map>
 
 #include "ControlFlow.h"
 #include "IRCode.h"
@@ -25,8 +26,8 @@ using namespace live_range;
 /*
  * Type aliases for disjoint_sets
  */
-using Rank = std::unordered_map<Def, size_t>;
-using Parent = std::unordered_map<Def, Def>;
+using Rank = UnorderedMap<Def, size_t>;
+using Parent = UnorderedMap<Def, Def>;
 using RankPMap = boost::associative_property_map<Rank>;
 using ParentPMap = boost::associative_property_map<Parent>;
 using DefSets = boost::disjoint_sets<RankPMap, ParentPMap>;
@@ -57,14 +58,14 @@ class SymRegMapper {
  private:
   bool m_width_aware;
   reg_t m_next_symreg{0};
-  std::unordered_map<Def, reg_t> m_def_to_reg;
+  UnorderedMap<Def, reg_t> m_def_to_reg;
 };
 
 /*
  * Put all defs with a use in common into the same set.
  */
 void unify_defs(const UseDefChains& chains, DefSets* def_sets) {
-  for (const auto& chain : chains) {
+  for (const auto& chain : UnorderedIterable(chains)) {
     auto& defs = chain.second;
     auto it = defs.begin();
     Def first = *it;

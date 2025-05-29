@@ -11,13 +11,14 @@
 #include <string>
 
 #include "ConcurrentContainers.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "Pass.h"
 #include "ReflectionAnalysis.h"
 
 namespace app_module_usage {
 using StoresReferenced =
-    std::unordered_map<DexStore*, bool /* used_only_reflectively */>;
+    UnorderedMap<DexStore*, bool /* used_only_reflectively */>;
 using MethodStoresReferenced =
     InsertOnlyConcurrentMap<DexMethod*, StoresReferenced>;
 
@@ -74,7 +75,7 @@ number of places it's referenced.
 
   // Returns the names of the modules annotated as used by the given entrypoint
   template <typename T>
-  static std::unordered_set<std::string_view> get_modules_used(
+  static UnorderedSet<std::string_view> get_modules_used(
       T* entrypoint, DexType* annotation_type);
 
  private:
@@ -101,8 +102,7 @@ number of places it's referenced.
 
   // Map of violations from entrypoint names to the names of stores used
   // by the entrypoint
-  std::unordered_map<std::string, std::unordered_set<DexStore*>>
-      m_preexisting_violations;
+  UnorderedMap<std::string, UnorderedSet<DexStore*>> m_preexisting_violations;
 
   // To quickly look up wich DexStore ("module") a DexType is from
   InsertOnlyConcurrentMap<DexType*, DexStore*> m_type_store_map;

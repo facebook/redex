@@ -1188,7 +1188,7 @@ static std::mutex s_string_analyzer_state_mtx;
 StringAnalyzerState StringAnalyzerState::get() {
   std::lock_guard<std::mutex> lock(s_string_analyzer_state_mtx);
   if (s_string_analyzer_state == boost::none) {
-    std::unordered_set<DexMethod*> methods;
+    UnorderedSet<DexMethod*> methods;
     auto kotlin_are_equal = DexMethod::get_method(
         "Lkotlin/jvm/internal/Intrinsics;.areEqual:(Ljava/lang/Object;Ljava/"
         "lang/Object;)Z");
@@ -1206,7 +1206,7 @@ StringAnalyzerState StringAnalyzerState::get() {
 }
 
 void StringAnalyzerState::set_methods_as_root() {
-  for (const auto& method : string_equality_methods) {
+  for (const auto& method : UnorderedIterable(string_equality_methods)) {
     if (!method->is_external()) {
       method->rstate.set_root();
     }
@@ -1773,7 +1773,7 @@ bool ApiLevelAnalyzer::analyze_sget(const ApiLevelAnalyzerState& state,
   return false;
 }
 
-boost::optional<std::unordered_set<DexMethodRef*>> g_get_package_name_refs{
+boost::optional<UnorderedSet<DexMethodRef*>> g_get_package_name_refs{
     boost::none};
 static std::mutex s_package_name_mutex;
 PackageNameState PackageNameState::get(const std::string& package_name) {
@@ -1784,7 +1784,7 @@ PackageNameState PackageNameState::get(
     const boost::optional<std::string>& package_name) {
   std::lock_guard<std::mutex> lock(s_package_name_mutex);
   if (!g_get_package_name_refs) {
-    std::unordered_set<DexMethodRef*> refs{
+    UnorderedSet<DexMethodRef*> refs{
         DexMethod::get_method(
             "Landroid/content/Context;.getPackageName:()Ljava/lang/String;"),
         DexMethod::get_method(
@@ -1870,7 +1870,7 @@ struct IfZeroMeetWith {
   boost::optional<sign_domain::Interval> left_zero_meet_interval{boost::none};
 };
 
-static const std::unordered_map<IROpcode, IfZeroMeetWith, boost::hash<IROpcode>>
+static const UnorderedMap<IROpcode, IfZeroMeetWith, boost::hash<IROpcode>>
     if_zero_meet_with{
         {OPCODE_IF_EQZ, {sign_domain::Interval::EQZ}},
         {OPCODE_IF_NEZ, {sign_domain::Interval::NEZ}},

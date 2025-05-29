@@ -75,7 +75,7 @@ TEST_F(DexClassTest, gather_load_types) {
   auto helper = redex::test::SimpleClassHierarchy{};
 
   auto make_expected_type_set = [](std::initializer_list<DexClass*> l) {
-    std::unordered_set<DexType*> ret;
+    UnorderedSet<DexType*> ret;
     for (auto c : l) {
       ret.emplace(c->get_type());
     }
@@ -86,21 +86,21 @@ TEST_F(DexClassTest, gather_load_types) {
   // field and method types are not.
 
   {
-    std::unordered_set<DexType*> types;
+    UnorderedSet<DexType*> types;
     helper.foo->gather_load_types(types);
     auto expected = make_expected_type_set({helper.foo});
     EXPECT_EQ(expected, types);
   }
 
   {
-    std::unordered_set<DexType*> types;
+    UnorderedSet<DexType*> types;
     helper.bar->gather_load_types(types);
     auto expected = make_expected_type_set({helper.foo, helper.bar});
     EXPECT_EQ(expected, types);
   }
 
   {
-    std::unordered_set<DexType*> types;
+    UnorderedSet<DexType*> types;
     helper.baz->gather_load_types(types);
     auto expected =
         make_expected_type_set({helper.foo, helper.bar, helper.baz});
@@ -108,7 +108,7 @@ TEST_F(DexClassTest, gather_load_types) {
   }
 
   {
-    std::unordered_set<DexType*> types;
+    UnorderedSet<DexType*> types;
     helper.qux->gather_load_types(types);
     auto expected = make_expected_type_set(
         {helper.foo, helper.bar, helper.baz, helper.qux});
@@ -116,14 +116,14 @@ TEST_F(DexClassTest, gather_load_types) {
   }
 
   {
-    std::unordered_set<DexType*> types;
+    UnorderedSet<DexType*> types;
     helper.iquux->gather_load_types(types);
     auto expected = make_expected_type_set({helper.iquux});
     EXPECT_EQ(expected, types);
   }
 
   {
-    std::unordered_set<DexType*> types;
+    UnorderedSet<DexType*> types;
     helper.quuz->gather_load_types(types);
     auto expected =
         make_expected_type_set({helper.iquux, helper.foo, helper.quuz});
@@ -131,7 +131,7 @@ TEST_F(DexClassTest, gather_load_types) {
   }
 
   {
-    std::unordered_set<DexType*> types;
+    UnorderedSet<DexType*> types;
     helper.xyzzy->gather_load_types(types);
     auto expected = make_expected_type_set({helper.xyzzy});
     EXPECT_EQ(expected, types);

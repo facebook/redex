@@ -34,13 +34,12 @@ namespace {
 
 class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
  public:
-  explicit CallGraphStrategy(
-      const method_override_graph::Graph& graph,
-      const Scope& scope,
-      const std::unordered_set<DexMethodRef*>& pure_methods,
-      const ptrs::SummaryMap& escape_summaries,
-      const side_effects::SummaryMap& effect_summaries,
-      uint32_t big_override_threshold)
+  explicit CallGraphStrategy(const method_override_graph::Graph& graph,
+                             const Scope& scope,
+                             const UnorderedSet<DexMethodRef*>& pure_methods,
+                             const ptrs::SummaryMap& escape_summaries,
+                             const side_effects::SummaryMap& effect_summaries,
+                             uint32_t big_override_threshold)
       : call_graph::MultipleCalleeStrategy(
             graph, scope, big_override_threshold),
         m_pure_methods(pure_methods),
@@ -158,7 +157,7 @@ class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
     return method == method::java_lang_Object_ctor();
   }
 
-  const std::unordered_set<DexMethodRef*>& m_pure_methods;
+  const UnorderedSet<DexMethodRef*>& m_pure_methods;
   const ptrs::SummaryMap& m_escape_summaries;
   const side_effects::SummaryMap& m_effect_summaries;
   call_graph::RootAndDynamic m_root_and_dynamic;
@@ -193,7 +192,7 @@ void ObjectSensitiveDce::dce() {
   std::mutex init_class_stats_mutex;
   init_classes::Stats init_class_stats;
   std::mutex invokes_with_summaries_mutex;
-  std::unordered_map<uint16_t, size_t> invokes_with_summaries{0};
+  UnorderedMap<uint16_t, size_t> invokes_with_summaries{0};
 
   walk::parallel::code(m_scope, [&](DexMethod* method, IRCode& code) {
     if (method->get_code() == nullptr || method->rstate.no_optimizations()) {
@@ -202,8 +201,8 @@ void ObjectSensitiveDce::dce() {
     auto& cfg = code.cfg();
     auto summary_map =
         build_summary_map(*m_effect_summaries, call_graph, method);
-    std::unordered_map<uint32_t, size_t> local_invokes_with_summaries;
-    for (auto&& [insn, summary] : summary_map) {
+    UnorderedMap<uint32_t, size_t> local_invokes_with_summaries;
+    for (auto&& [insn, summary] : UnorderedIterable(summary_map)) {
       if (!summary.effects) {
         local_invokes_with_summaries[insn->opcode()]++;
       }
@@ -252,7 +251,8 @@ void ObjectSensitiveDce::dce() {
     }
 
     std::lock_guard<std::mutex> lock(invokes_with_summaries_mutex);
-    for (auto&& [opcode, count] : local_invokes_with_summaries) {
+    for (auto&& [opcode, count] :
+         UnorderedIterable(local_invokes_with_summaries)) {
       invokes_with_summaries[opcode] += count;
     }
   });
@@ -260,7 +260,7 @@ void ObjectSensitiveDce::dce() {
   m_stats.removed_instructions = (size_t)removed;
   m_stats.init_class_instructions_added = init_class_instructions_added;
   m_stats.init_class_stats = init_class_stats;
-  for (auto&& [_, summary] : *m_effect_summaries) {
+  for (auto&& [_, summary] : UnorderedIterable(*m_effect_summaries)) {
     if (!summary.effects) {
       m_stats.methods_with_summaries++;
     }

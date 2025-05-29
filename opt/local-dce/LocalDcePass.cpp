@@ -8,7 +8,6 @@
 #include "LocalDcePass.h"
 
 #include <array>
-#include <unordered_set>
 #include <vector>
 
 #include <boost/dynamic_bitset.hpp>
@@ -25,7 +24,6 @@
 #include "PassManager.h"
 #include "Purity.h"
 #include "Resolver.h"
-#include "StlUtil.h"
 #include "Trace.h"
 #include "Transform.h"
 #include "TypeSystem.h"
@@ -63,10 +61,9 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
 
   auto pure_methods = get_pure_methods();
   auto configured_pure_methods = conf.get_pure_methods();
-  pure_methods.insert(configured_pure_methods.begin(),
-                      configured_pure_methods.end());
+  insert_unordered_iterable(pure_methods, configured_pure_methods);
   auto immutable_getters = get_immutable_getters(scope);
-  pure_methods.insert(immutable_getters.begin(), immutable_getters.end());
+  insert_unordered_iterable(pure_methods, immutable_getters);
   std::unique_ptr<const method_override_graph::Graph> override_graph;
   if (!mgr.unreliable_virtual_scopes()) {
     override_graph = method_override_graph::build_graph(scope);
@@ -79,7 +76,7 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
             scope, conf.create_init_class_insns(), override_graph.get());
   }
 
-  std::unordered_set<const DexMethod*> computed_no_side_effects_methods;
+  UnorderedSet<const DexMethod*> computed_no_side_effects_methods;
   size_t computed_no_side_effects_methods_iterations = 0;
   if (!mgr.unreliable_virtual_scopes()) {
     method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =
@@ -91,7 +88,7 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
         compute_no_side_effects_methods(
             scope, override_graph.get(), clinit_has_no_side_effects,
             pure_methods, &computed_no_side_effects_methods);
-    for (auto m : computed_no_side_effects_methods) {
+    for (auto m : UnorderedIterable(computed_no_side_effects_methods)) {
       pure_methods.insert(const_cast<DexMethod*>(m));
     }
   }
@@ -113,7 +110,7 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
     // compute_no_side_effects_methods might have found methods that have no
     // implementors. Let's not silently remove invocations to those in LocalDce,
     // as invoking them *will* unconditionally cause an exception.
-    std20::erase_if(pure_methods, [&](auto* m) {
+    unordered_erase_if(pure_methods, [&](auto* m) {
       return m->is_def() && !has_implementor(override_graph.get(), m->as_def());
     });
   }

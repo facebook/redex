@@ -148,8 +148,8 @@ void UnreachableLoweringPass::run_pass(DexStoresVector& stores,
       // (unreachable) DynamicAnalysis.onMethodExit invocation in between the
       // "unreachable" instruction and the "throw". This should be avoided, and
       // then we can assert even stricter code patterns here.
-      auto& uses = (*duchains)[mie.insn];
-      for (auto& use : uses) {
+      const auto& uses = (*duchains)[mie.insn];
+      for (auto& use : UnorderedIterable(uses)) {
         auto* insn = use.insn;
         if (opcode::is_move_object(insn->opcode())) {
           continue;

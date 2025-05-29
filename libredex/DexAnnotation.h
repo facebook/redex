@@ -12,7 +12,6 @@
 #include <cstring>
 #include <deque>
 #include <map>
-#include <unordered_set>
 #include <vector>
 
 #include "Gatherable.h"
@@ -543,18 +542,7 @@ class DexAnnotationSet : public Gatherable {
   /**
    * Add in annotation missing from other annotation set.
    */
-  void combine_with(const DexAnnotationSet& other) {
-    std::unordered_set<DexType*> existing_annos_type;
-    for (const auto& existing_anno : m_annotations) {
-      existing_annos_type.emplace(existing_anno->type());
-    }
-    auto const& other_annos = other.m_annotations;
-    for (auto const& anno : other_annos) {
-      if (existing_annos_type.count(anno->type()) == 0) {
-        m_annotations.emplace_back(new DexAnnotation(anno->clone()));
-      }
-    }
-  }
+  void combine_with(const DexAnnotationSet& other);
 
   const std::vector<std::unique_ptr<DexAnnotation>>& get_annotations() const {
     return m_annotations;

@@ -43,11 +43,10 @@ void resource_inlining_PreVerify(ResourceTableFile* res_table) {
                   0x7f070000,
                   0x7f070001,
                   0x7f070002));
-  std::unordered_map<uint32_t, resources::InlinableValue> inlinable_pre_filter =
+  UnorderedMap<uint32_t, resources::InlinableValue> inlinable_pre_filter =
       res_table->get_inlinable_resource_values();
-  std::unordered_set<std::string> resource_type_names = {"bool", "color",
-                                                         "integer"};
-  std::unordered_set<std::string> resource_entry_names = {"string/main_text"};
+  UnorderedSet<std::string> resource_type_names = {"bool", "color", "integer"};
+  UnorderedSet<std::string> resource_entry_names = {"string/main_text"};
   auto inlinable =
       ResourcesInliningPass::filter_inlinable_resources(res_table,
                                                         inlinable_pre_filter,

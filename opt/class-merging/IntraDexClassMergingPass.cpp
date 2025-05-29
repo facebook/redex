@@ -163,12 +163,11 @@ void IntraDexClassMergingPass::run_pass(DexStoresVector& stores,
       impl.apply_plan();
     }
     // Sanity check
-    std::unordered_set<DexClass*> original_scope_set(scope.begin(),
-                                                     scope.end());
+    UnorderedSet<DexClass*> original_scope_set(scope.begin(), scope.end());
     scope = build_class_scope(stores);
-    std::unordered_set<DexClass*> new_scope_set(scope.begin(), scope.end());
+    UnorderedSet<DexClass*> new_scope_set(scope.begin(), scope.end());
     always_assert(original_scope_set.size() == new_scope_set.size());
-    for (auto cls : original_scope_set) {
+    for (auto cls : UnorderedIterable(original_scope_set)) {
       always_assert(new_scope_set.count(cls));
     }
   }

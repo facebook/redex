@@ -9,6 +9,7 @@
 
 #include "ClassChecker.h"
 #include "ClassHierarchy.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "Show.h"
 #include "Timer.h"
@@ -21,7 +22,7 @@ void print_failed_things(const Collection& items,
                          const size_t print_limit,
                          std::ostringstream* oss) {
   size_t counter = 0;
-  for (auto& fail : items) {
+  for (auto& fail : UnorderedIterable(items)) {
     *oss << show(fail)
          << " (deobfuscated: " << fail->get_deobfuscated_name_or_empty_copy()
          << ")\n";

@@ -67,8 +67,7 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
 };
 
 using ReachingInitializedsEnvironments =
-    std::unordered_map<const IRInstruction*,
-                       reaching_initializeds::Environment>;
+    UnorderedMap<const IRInstruction*, reaching_initializeds::Environment>;
 
 inline ReachingInitializedsEnvironments get_reaching_initializeds(
     cfg::ControlFlowGraph& cfg, Mode mode) {

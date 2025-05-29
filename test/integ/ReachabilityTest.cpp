@@ -141,9 +141,8 @@ TEST_F(ReachabilityTest, NotDireclyInstantiatedClassesBecomeAbstract) {
   //// instantiable_types
   EXPECT_EQ(reachable_aspects.instantiable_types.size(), 3);
   auto is_instantiable = [&](const std::string_view& s) {
-    return std::any_of(reachable_aspects.instantiable_types.begin(),
-                       reachable_aspects.instantiable_types.end(),
-                       [s](const auto* cls) { return cls->str() == s; });
+    return unordered_any_of(reachable_aspects.instantiable_types,
+                            [s](const auto* cls) { return cls->str() == s; });
   };
   EXPECT_TRUE(is_instantiable("LJ;"));
   EXPECT_TRUE(is_instantiable("LInstantiated;"));

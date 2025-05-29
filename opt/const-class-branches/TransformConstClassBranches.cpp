@@ -133,7 +133,7 @@ bool finder_results_are_supported(SwitchEquivFinder* finder) {
 void order_blocks(const cfg::ControlFlowGraph& cfg,
                   std::vector<cfg::Block*>* out) {
   std::stack<cfg::Block*> to_visit;
-  std::unordered_set<cfg::BlockId> visited;
+  UnorderedSet<cfg::BlockId> visited;
   to_visit.push(cfg.entry_block());
   while (!to_visit.empty()) {
     cfg::Block* b = to_visit.top();
@@ -192,7 +192,7 @@ void gather_possible_transformations(
 
   std::vector<cfg::Block*> blocks;
   order_blocks(cfg, &blocks);
-  std::unordered_set<cfg::Block*> blocks_considered;
+  UnorderedSet<cfg::Block*> blocks_considered;
   for (const auto& b : blocks) {
     if (blocks_considered.count(b) > 0) {
       continue;
@@ -213,8 +213,7 @@ void gather_possible_transformations(
         TRACE(CCB, 2, "SwitchEquivFinder succeeded on B%zu for branch at: %s",
               b->id(), SHOW(last_insn));
         auto visited = finder->visited_blocks();
-        std::copy(visited.begin(), visited.end(),
-                  std::inserter(blocks_considered, blocks_considered.end()));
+        insert_unordered_iterable(blocks_considered, visited);
         const auto& key_to_case = finder->key_to_case();
         size_t relevant_case_count{0};
         for (auto&& [key, leaf] : key_to_case) {
@@ -530,8 +529,7 @@ void TransformConstClassBranchesPass::run_pass(DexStoresVector& stores,
     }
   });
 
-  std::unordered_map<DexClass*, std::vector<MethodTransform*>>
-      per_class_transforms;
+  UnorderedMap<DexClass*, std::vector<MethodTransform*>> per_class_transforms;
   for (auto& transform : method_transforms) {
     auto cls = type_class(transform.method->get_class());
     per_class_transforms[cls].emplace_back(&transform);

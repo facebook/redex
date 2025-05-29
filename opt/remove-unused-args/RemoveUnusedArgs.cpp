@@ -9,11 +9,11 @@
 
 #include <deque>
 #include <mutex>
-#include <unordered_map>
 #include <vector>
 
 #include "AnnoUtils.h"
 #include "ConfigFiles.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRCode.h"
@@ -143,7 +143,7 @@ static bool compare_weighted_dexprotos(const std::pair<DexProto*, size_t>& a,
 
 template <typename Collection>
 static bool any_external(const Collection& methods) {
-  for (auto* method_node : methods) {
+  for (auto* method_node : UnorderedIterable(methods)) {
     auto cls = type_class(method_node->method->get_class());
     if (cls == nullptr || cls->is_external()) {
       return true;
@@ -219,19 +219,19 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
 
   std::vector<std::pair<DexProto*, size_t>> ordered_fixed_protos;
   ordered_fixed_protos.reserve(fixed_protos.size());
-  for (auto&& [proto, count] : fixed_protos) {
+  for (auto&& [proto, count] : UnorderedIterable(fixed_protos)) {
     ordered_fixed_protos.emplace_back(proto, count.load());
   }
   std::sort(ordered_fixed_protos.begin(), ordered_fixed_protos.end(),
             compare_weighted_dexprotos);
-  std::unordered_map<DexProto*, DexProto*> fixed_representatives;
+  UnorderedMap<DexProto*, DexProto*> fixed_representatives;
   for (auto p : ordered_fixed_protos) {
     auto proto = p.first;
     auto normalized_proto = normalize_proto(proto);
     // First one (with most references) wins
     fixed_representatives.emplace(normalized_proto, proto);
   }
-  for (auto proto : defined_protos) {
+  for (auto proto : UnorderedIterable(defined_protos)) {
     if (fixed_protos.count(proto)) {
       continue;
     }
@@ -464,7 +464,7 @@ static std::deque<uint16_t> update_method_body_for_reordered_proto(
   }
 
   std::deque<uint16_t> idxs;
-  std::unordered_map<DexType*, std::deque<uint16_t>> idxs_by_type;
+  UnorderedMap<DexType*, std::deque<uint16_t>> idxs_by_type;
   int idx = 0;
   if (!is_static(method)) {
     idxs.push_back(idx++);
@@ -500,7 +500,7 @@ void run_cleanup(DexMethod* method,
                  cfg::ControlFlowGraph& cfg,
                  const init_classes::InitClassesWithSideEffects*
                      init_classes_with_side_effects,
-                 const std::unordered_set<DexMethodRef*>& pure_methods,
+                 const UnorderedSet<DexMethodRef*>& pure_methods,
                  std::mutex& mutex,
                  LocalDce::Stats& stats) {
   auto local_dce = LocalDce(init_classes_with_side_effects, pure_methods);
@@ -525,21 +525,21 @@ void run_cleanup(DexMethod* method,
  */
 void RemoveArgs::populate_representative_ids(
     const mog::Graph& override_graph,
-    const std::unordered_set<DexType*>& no_devirtualize_annos) {
+    const UnorderedSet<DexType*>& no_devirtualize_annos) {
   // Group methods that are related (somehow connect in override graph)
   // For each related group, assign a single representative method.
   walk::parallel::methods(m_scope, [&](DexMethod* method) {
     if (m_method_representative_map.count(method)) {
       return;
     }
-    std::unordered_set<const DexMethod*> visited;
+    UnorderedSet<const DexMethod*> visited;
     visited.insert(method);
     override_graph.get_node(method).gather_connected_methods(&visited);
-    auto representative = *std::min_element(visited.begin(), visited.end(),
-                                            dexmethods_comparator());
+    auto representative =
+        *unordered_min_element(visited, dexmethods_comparator());
     m_related_method_groups.get_or_emplace_and_assert_equal(representative,
                                                             visited);
-    for (auto m : visited) {
+    for (auto m : UnorderedIterable(visited)) {
       auto existing_representative =
           m_method_representative_map.emplace(m, representative);
       always_assert(*existing_representative.first == representative);
@@ -556,11 +556,11 @@ void RemoveArgs::populate_representative_ids(
  * function returns a list of entries for all methods that should be updated.
  */
 void RemoveArgs::gather_updated_entries(
-    const std::unordered_set<DexType*>& no_devirtualize_annos,
+    const UnorderedSet<DexType*>& no_devirtualize_annos,
     InsertOnlyConcurrentMap<DexMethod*, Entry>* updated_entries) {
   // Loop over all related groups
   using MethodAndMethodSet =
-      std::pair<const DexMethod* const, std::unordered_set<const DexMethod*>>;
+      std::pair<const DexMethod* const, UnorderedSet<const DexMethod*>>;
 
   InsertOnlyConcurrentMap<const DexMethod*,
                           std::map<uint16_t, cfg::InstructionIterator>>
@@ -577,7 +577,7 @@ void RemoveArgs::gather_updated_entries(
 
         // First iteration, perform some basic checks for whether we can edit
         // this method.
-        for (auto m : kvp->second) {
+        for (auto m : UnorderedIterable(kvp->second)) {
           // If we can't edit, just skip
           if (!can_rename(m) || is_native(m) || m->rstate.no_optimizations() ||
               has_any_annotation(m, no_devirtualize_annos)) {
@@ -609,7 +609,7 @@ void RemoveArgs::gather_updated_entries(
         for (uint16_t i = (is_static(kvp->first) ? 0 : 1); i < num_args; i++) {
           running_dead_args.insert(i);
         }
-        for (auto m : kvp->second) {
+        for (auto m : UnorderedIterable(kvp->second)) {
           if (m->get_code()) {
             auto& dead_insn_map = all_dead_insns.at(m);
             std20::erase_if(running_dead_args,
@@ -619,7 +619,7 @@ void RemoveArgs::gather_updated_entries(
 
         // Third iteration, delete all args/insns that aren't in
         // `running_dead_args`.
-        for (auto m : kvp->second) {
+        for (auto m : UnorderedIterable(kvp->second)) {
           if (m->get_code()) {
             auto& dead_insn_map = all_dead_insns.at_unsafe(m);
             std20::erase_if(dead_insn_map, [&](auto e) {
@@ -656,7 +656,7 @@ void RemoveArgs::gather_updated_entries(
 
         // Fourth iteration, check that none of the renamed methods collide.
         if (method::is_constructor(kvp->first)) {
-          for (auto m : kvp->second) {
+          for (auto m : UnorderedIterable(kvp->second)) {
             auto colliding_mref = DexMethod::get_method(
                 m->get_class(), m->get_name(), updated_proto);
             if (colliding_mref) {
@@ -671,7 +671,7 @@ void RemoveArgs::gather_updated_entries(
 
         // Fifth iteration, we loop one more time and add all the updated protos
         // to the final data structure.
-        for (auto method : kvp->second) {
+        for (auto method : UnorderedIterable(kvp->second)) {
           std::vector<cfg::InstructionIterator> dead_insns;
           // Compile the list of dead instructions that we computed earlier
           if (!is_reordered) {
@@ -691,7 +691,7 @@ void RemoveArgs::gather_updated_entries(
                                            updated_proto, method->get_proto()});
         }
       });
-  for (const auto& kvp : m_related_method_groups) {
+  for (const auto& kvp : UnorderedIterable(m_related_method_groups)) {
     kvp_workqueue.add_item(&kvp);
   }
   kvp_workqueue.run_all();
@@ -702,7 +702,7 @@ void RemoveArgs::gather_updated_entries(
  */
 RemoveArgs::MethodStats RemoveArgs::update_method_protos(
     const mog::Graph& override_graph,
-    const std::unordered_set<DexType*>& no_devirtualize_annos) {
+    const UnorderedSet<DexType*>& no_devirtualize_annos) {
 
   // Phase 1: Calculate exit blocks for all methods
   walk::parallel::methods(m_scope, [&](DexMethod* method) {
@@ -728,17 +728,16 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
 
   // Sort entries, so that we process all renaming operations in a
   // deterministic order.
-  std::vector<std::pair<DexMethod*, Entry>> ordered_entries(
-      unordered_entries.begin(), unordered_entries.end());
-  std::sort(ordered_entries.begin(), ordered_entries.end(),
-            [](const std::pair<DexMethod*, Entry>& a,
-               const std::pair<DexMethod*, Entry>& b) {
-              return compare_dexmethods(a.first, b.first);
-            });
+  auto ordered_entries =
+      unordered_to_ordered(unordered_entries,
+                           [](const std::pair<DexMethod*, Entry>& a,
+                              const std::pair<DexMethod*, Entry>& b) {
+                             return compare_dexmethods(a.first, b.first);
+                           });
 
   RemoveArgs::MethodStats method_stats;
   std::vector<DexClass*> classes;
-  std::unordered_map<DexClass*, std::vector<std::pair<DexMethod*, Entry>>>
+  UnorderedMap<DexClass*, std::vector<std::pair<DexMethod*, Entry>>>
       class_entries;
   for (auto& p : ordered_entries) {
     DexMethod* method = p.first;

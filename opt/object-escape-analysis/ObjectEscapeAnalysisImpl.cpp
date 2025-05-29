@@ -7,7 +7,6 @@
 
 #include "ObjectEscapeAnalysisImpl.h"
 
-#include "StlUtil.h"
 #include "Walkers.h"
 
 using namespace sparta;
@@ -25,7 +24,7 @@ bool Callees::operator==(const Callees& other) const {
       any_unknown != other.any_unknown) {
     return false;
   }
-  std::unordered_set<DexMethod*> set(with_code.begin(), with_code.end());
+  UnorderedSet<DexMethod*> set(with_code.begin(), with_code.end());
   for (auto* method : other.with_code) {
     if (!set.count(method)) {
       return false;
@@ -85,9 +84,11 @@ std::pair<const Callees*, bool> get_or_create_callees(
                 (root(resolved_callee) || !can_rename(resolved_callee))) {
               res.any_unknown = true;
             }
-            for (auto* overriding_method : mog::get_overriding_methods(
-                     method_override_graph, resolved_callee,
-                     /* include_interfaces */ false, static_base_type)) {
+            auto overriding_methods = mog::get_overriding_methods(
+                method_override_graph, resolved_callee,
+                /* include_interfaces */ false, static_base_type);
+            for (auto* overriding_method :
+                 UnorderedIterable(overriding_methods)) {
               visit_callee(overriding_method);
             }
           }
@@ -166,12 +167,12 @@ void analyze_scope(
     ConcurrentMap<DexType*, Locations>* new_instances,
     ConcurrentMap<DexMethod*, Locations>* single_callee_invokes,
     InsertOnlyConcurrentSet<DexMethod*>* multi_callee_invokes,
-    ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>* dependencies,
+    ConcurrentMap<DexMethod*, UnorderedSet<DexMethod*>>* dependencies,
     CalleesCache* callees_cache) {
   Timer t("analyze_scope");
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     always_assert(code.editable_cfg_built());
-    using Map = std::unordered_map<CalleesKey, const Callees*, CalleesKeyHash>;
+    using Map = UnorderedMap<CalleesKey, const Callees*, CalleesKeyHash>;
     std::array<Map, 2> local_callees_cache;
     auto resolve_invoke_callees = [&](auto* insn) {
       auto* resolved_callee = resolve_invoke_method(insn, method);
@@ -225,7 +226,7 @@ void analyze_scope(
 
 // A benign method invocation can be ignored during the escape analysis.
 bool is_benign(const DexMethodRef* method_ref) {
-  static const std::unordered_set<std::string> methods = {
+  static const UnorderedSet<std::string> methods = {
       // clang-format off
       "Ljava/lang/Object;.<init>:()V",
       // clang-format on
@@ -258,7 +259,7 @@ const MethodSummary* get_or_create_method_summary(
               if (it == method_summaries.end()) {
                 return MethodSummary();
               }
-              std20::erase_if(res.benign_params, [&](auto idx) {
+              unordered_erase_if(res.benign_params, [&](auto idx) {
                 return !it->second.benign_params.count(idx);
               });
               if (res.returns != it->second.returns) {
@@ -272,8 +273,8 @@ const MethodSummary* get_or_create_method_summary(
               }
             }
             if (callees->with_code.size() > 1) {
-              std20::erase_if(res.benign_params,
-                              [](auto idx) { return idx > 0; });
+              unordered_erase_if(res.benign_params,
+                                 [](auto idx) { return idx > 0; });
               if (res.returned_param_index() &&
                   !res.benign_params.count(*res.returned_param_index())) {
                 res.returns = std::monostate();
@@ -300,7 +301,7 @@ const MethodSummary* resolve_invoke_method_summary(
 }
 
 Analyzer::Analyzer(const mog::Graph& method_override_graph,
-                   const std::unordered_set<DexClass*>& excluded_classes,
+                   const UnorderedSet<DexClass*>& excluded_classes,
                    const MethodSummaries& method_summaries,
                    DexMethodRef* incomplete_marker_method,
                    DexMethod* method,
@@ -317,17 +318,20 @@ Analyzer::Analyzer(const mog::Graph& method_override_graph,
   MonotonicFixpointIterator::run(Environment::top());
 }
 
-template <class It>
-const IRInstruction* get_singleton_allocation(It it, const It& end) {
-  if (it == end) {
+template <class UnorderedCollection>
+const IRInstruction* get_singleton_allocation_unordered_iterable(
+    const UnorderedCollection& uc) {
+  if (uc.empty()) {
     return nullptr;
   }
+  auto ui = UnorderedIterable(uc);
+  auto it = ui.begin();
   const IRInstruction* a = *it++;
-  if (it == end) {
+  if (it == ui.end()) {
     return (a == NO_ALLOCATION || a == ZERO) ? nullptr : a;
   }
   const IRInstruction* b = *it++;
-  if (it != end || a == NO_ALLOCATION || b == NO_ALLOCATION ||
+  if (it != ui.end() || a == NO_ALLOCATION || b == NO_ALLOCATION ||
       (a != ZERO && b != ZERO)) {
     return nullptr;
   }
@@ -337,7 +341,7 @@ const IRInstruction* get_singleton_allocation(It it, const It& end) {
 const IRInstruction* get_singleton_allocation(const Domain& domain) {
   always_assert(domain.kind() == AbstractValueKind::Value);
   auto& elements = domain.elements();
-  return get_singleton_allocation(elements.begin(), elements.end());
+  return get_singleton_allocation_unordered_iterable(elements);
 }
 
 void Analyzer::analyze_instruction(const IRInstruction* insn,
@@ -447,9 +451,9 @@ void Analyzer::analyze_instruction(const IRInstruction* insn,
 
 // Returns set of new-instance and invoke- allocating instructions that do not
 // escape (or return).
-std::unordered_set<IRInstruction*> Analyzer::get_inlinables() const {
-  std::unordered_set<IRInstruction*> inlinables;
-  for (auto&& [insn, uses] : m_escapes) {
+UnorderedSet<IRInstruction*> Analyzer::get_inlinables() const {
+  UnorderedSet<IRInstruction*> inlinables;
+  for (auto&& [insn, uses] : UnorderedIterable(m_escapes)) {
     if (uses.empty() && insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT &&
         !m_returns.count(insn)) {
       auto op = insn->opcode();
@@ -466,17 +470,16 @@ std::unordered_set<IRInstruction*> Analyzer::get_inlinables() const {
 
 MethodSummaries compute_method_summaries(
     const Scope& scope,
-    const ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>&
-        dependencies,
+    const ConcurrentMap<DexMethod*, UnorderedSet<DexMethod*>>& dependencies,
     const mog::Graph& method_override_graph,
-    const std::unordered_set<DexClass*>& excluded_classes,
+    const UnorderedSet<DexClass*>& excluded_classes,
     size_t* analysis_iterations,
     CalleesCache* callees_cache,
     MethodSummaryCache* method_summary_cache) {
   Timer t("compute_method_summaries");
 
-  std::unordered_set<DexMethod*> impacted_methods;
-  for (auto&& [method, _] : dependencies) {
+  UnorderedSet<DexMethod*> impacted_methods;
+  for (auto&& [method, _] : UnorderedIterable(dependencies)) {
     impacted_methods.insert(method);
   }
 
@@ -500,7 +503,7 @@ MethodSummaries compute_method_summaries(
           const auto& escapes = analyzer.get_escapes();
           const auto& returns = analyzer.get_returns();
           auto returned_insn =
-              get_singleton_allocation(returns.begin(), returns.end());
+              get_singleton_allocation_unordered_iterable(returns);
           if (returned_insn && escapes.at(returned_insn).empty()) {
             if (returned_insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
               ms.returns = get_param_index(method, returned_insn);
@@ -532,12 +535,13 @@ MethodSummaries compute_method_summaries(
         },
         impacted_methods);
 
-    std::unordered_set<DexMethod*> changed_methods;
+    UnorderedSet<DexMethod*> changed_methods;
     // (Recomputed) summaries can only grow; assert that, update summaries when
     // necessary, and remember for which methods the summaries actually changed.
-    for (auto&& [method, recomputed_summary] : recomputed_method_summaries) {
+    for (auto&& [method, recomputed_summary] :
+         UnorderedIterable(recomputed_method_summaries)) {
       auto& summary = method_summaries[method];
-      for (auto src_index : summary.benign_params) {
+      for (auto src_index : UnorderedIterable(summary.benign_params)) {
         always_assert(recomputed_summary.benign_params.count(src_index));
       }
       if (recomputed_summary.benign_params.size() >
@@ -560,10 +564,10 @@ MethodSummaries compute_method_summaries(
       }
     }
     impacted_methods.clear();
-    for (auto method : changed_methods) {
+    for (auto method : UnorderedIterable(changed_methods)) {
       auto it = dependencies.find(method);
       if (it != dependencies.end()) {
-        impacted_methods.insert(it->second.begin(), it->second.end());
+        insert_unordered_iterable(impacted_methods, it->second);
       }
     }
   }

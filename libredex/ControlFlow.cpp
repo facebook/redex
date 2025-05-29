@@ -43,13 +43,13 @@ bool edge_type_structural_equals(std::vector<cfg::Edge*> e1,
   if (e1.size() != e2.size()) {
     return false;
   }
-  std::unordered_map<cfg::EdgeType, int> edge_types;
+  UnorderedMap<cfg::EdgeType, int> edge_types;
   for (size_t i = 0; i < e1.size(); i++) {
     edge_types[e1[i]->type()] += 1;
     edge_types[e2[i]->type()] -= 1;
   }
 
-  for (auto pair : edge_types) {
+  for (auto pair : UnorderedIterable(edge_types)) {
     if (pair.second != 0) {
       return false;
     }
@@ -117,8 +117,8 @@ bool ends_with_may_throw(cfg::Block* p) {
  */
 void remove_redundant_positions(IRList* ir) {
   // We build a set of duplicate positions.
-  std::unordered_set<DexPosition*> duplicate_positions;
-  std::unordered_map<DexPosition*, IRList::iterator> positions_to_remove;
+  UnorderedSet<DexPosition*> duplicate_positions;
+  UnorderedMap<DexPosition*, IRList::iterator> positions_to_remove;
   DexPosition* prev = nullptr;
   for (auto it = ir->begin(); it != ir->end(); it++) {
     if (it->type == MFLOW_POSITION) {
@@ -162,7 +162,7 @@ void remove_redundant_positions(IRList* ir) {
   }
 
   // Final pass to do the actual deletion.
-  for (auto& p : positions_to_remove) {
+  for (auto& p : UnorderedIterable(positions_to_remove)) {
     ir->erase_and_dispose(p.second);
   }
 }
@@ -180,7 +180,7 @@ bool catch_entries_equivalent_to_throw_edges(
     MethodItemEntry* first_mie,
     std::vector<cfg::Edge*>::iterator it,
     std::vector<cfg::Edge*>::iterator end,
-    const std::unordered_map<MethodItemEntry*, cfg::Block*>&
+    const UnorderedMap<MethodItemEntry*, cfg::Block*>&
         catch_to_containing_block) {
   for (auto mie = first_mie; mie != nullptr; mie = mie->centry->next) {
     always_assert(mie->type == MFLOW_CATCH);
@@ -233,7 +233,7 @@ void Block::free() {
   }
 }
 
-void Block::cleanup_debug(std::unordered_set<reg_t>& valid_regs) {
+void Block::cleanup_debug(UnorderedSet<reg_t>& valid_regs) {
   this->m_entries.cleanup_debug(valid_regs);
 }
 
@@ -365,7 +365,7 @@ uint32_t Block::estimate_code_units() const {
 }
 
 bool Block::is_unreachable() const {
-  std::unordered_set<const cfg::Block*> visited;
+  UnorderedSet<const cfg::Block*> visited;
   for (auto* block = this; block && visited.insert(block).second;) {
     auto ii = ir_list::ConstInstructionIterable(block);
     for (auto it = ii.begin(); it != ii.end(); ++it) {
@@ -1148,7 +1148,7 @@ void ControlFlowGraph::fix_dangling_parents(
   // position by its pointer value while maintaining ownership of the position
   // in the associated unique_ptr. We'll use this map later try to find parent
   // positions.
-  std::unordered_map<DexPosition*, std::unique_ptr<DexPosition>> map;
+  UnorderedMap<DexPosition*, std::unique_ptr<DexPosition>> map;
   for (auto& pos : dangling) {
     auto pos_ptr = pos.get();
     map.emplace(pos_ptr, std::move(pos));
@@ -1395,7 +1395,7 @@ void ControlFlowGraph::sanity_check() const {
     }
 
     // IRInstruction pointers must be unique.
-    std::unordered_set<IRInstruction*> pointer_check;
+    UnorderedSet<IRInstruction*> pointer_check;
     for (const auto& mie : ConstInstructionIterable(*this)) {
       auto insn = mie.insn;
       always_assert_log(
@@ -1474,7 +1474,7 @@ void ControlFlowGraph::recompute_registers_size() {
 }
 
 void ControlFlowGraph::no_dangling_dex_positions() const {
-  std::unordered_map<DexPosition*, bool> parents;
+  UnorderedMap<DexPosition*, bool> parents;
   for (const auto& entry : m_blocks) {
     Block* b = entry.second;
     for (const auto& mie : *b) {
@@ -1496,7 +1496,7 @@ void ControlFlowGraph::no_dangling_dex_positions() const {
     }
   }
 
-  for (const auto& entry : parents) {
+  for (const auto& entry : UnorderedIterable(parents)) {
     always_assert_log(entry.second, "%p is a dangling parent pointer in %s",
                       entry.first, SHOW(*this));
   }
@@ -1556,7 +1556,7 @@ uint32_t ControlFlowGraph::get_size_adjustment(
 Block* ControlFlowGraph::get_first_block_with_insns() const {
   always_assert(editable());
   Block* block = entry_block();
-  std::unordered_set<Block*> visited{block};
+  UnorderedSet<Block*> visited{block};
   while (block != nullptr &&
          (block->empty() || block->get_first_insn() == block->end())) {
     block = block->goes_to();
@@ -1583,7 +1583,7 @@ boost::sub_range<IRList> ControlFlowGraph::get_param_instructions() const {
 
 void ControlFlowGraph::gather_catch_types(std::vector<DexType*>& types) const {
   always_assert(editable());
-  std::unordered_set<DexType*> seen;
+  UnorderedSet<DexType*> seen;
   // get the catch types of all the incoming edges to all the catch blocks
   for (const auto& entry : m_blocks) {
     const Block* b = entry.second;
@@ -1719,7 +1719,7 @@ cfg::InstructionIterator ControlFlowGraph::next_following_gotos(
   }
   // The immediate goto-target block was empty, so we have to continue our
   // chase. We have to check for non-terminating self-loops while doing that.
-  std::unordered_set<cfg::Block*> visited{block};
+  UnorderedSet<cfg::Block*> visited{block};
   while (true) {
     block = block->goes_to();
     if (!block || !visited.insert(block).second) {
@@ -1755,11 +1755,11 @@ void ControlFlowGraph::deep_copy(ControlFlowGraph* new_cfg) const {
   new_cfg->m_editable = true;
   new_cfg->set_registers_size(this->get_registers_size());
 
-  std::unordered_map<const Edge*, Edge*> old_edge_to_new;
+  UnorderedMap<const Edge*, Edge*> old_edge_to_new;
   size_t num_edges = this->m_edges.size();
   new_cfg->m_edges.reserve(num_edges);
   old_edge_to_new.reserve(num_edges);
-  for (const Edge* old_edge : this->m_edges) {
+  for (const Edge* old_edge : UnorderedIterable(this->m_edges)) {
     // this shallowly copies block pointers inside, then we patch them later
     Edge* new_edge = new Edge(*old_edge);
     new_cfg->m_edges.insert(new_edge);
@@ -1791,7 +1791,7 @@ void ControlFlowGraph::deep_copy(ControlFlowGraph* new_cfg) const {
   }
 
   // patch the block pointers in the edges to their new cfg counterparts
-  for (Edge* e : new_cfg->m_edges) {
+  for (Edge* e : UnorderedIterable(new_cfg->m_edges)) {
     e->set_src(new_cfg->m_blocks.at(e->src()->id()));
     e->set_target(new_cfg->m_blocks.at(e->target()->id()));
   }
@@ -1860,7 +1860,7 @@ std::vector<Block*> ControlFlowGraph::order(
   // map
   std::vector<std::unique_ptr<BlockChain>> chains;
   // keep track of which blocks are in each chain, for quick lookup.
-  std::unordered_map<Block*, BlockChain*> block_to_chain;
+  UnorderedMap<Block*, BlockChain*> block_to_chain;
   block_to_chain.reserve(m_blocks.size());
 
   build_chains(&chains, &block_to_chain);
@@ -1880,7 +1880,7 @@ std::vector<Block*> ControlFlowGraph::order(
 
 void ControlFlowGraph::build_chains(
     std::vector<std::unique_ptr<BlockChain>>* chains,
-    std::unordered_map<Block*, BlockChain*>* block_to_chain) {
+    UnorderedMap<Block*, BlockChain*>* block_to_chain) {
   auto handle_block = [&](Block* b) {
     if (block_to_chain->count(b) != 0) {
       return;
@@ -1979,7 +1979,7 @@ void ControlFlowGraph::build_chains(
 }
 
 sparta::WeakTopologicalOrdering<BlockChain*> ControlFlowGraph::build_wto(
-    const std::unordered_map<Block*, BlockChain*>& block_to_chain) {
+    const UnorderedMap<Block*, BlockChain*>& block_to_chain) {
   return sparta::WeakTopologicalOrdering<BlockChain*>(
       block_to_chain.at(entry_block()),
       [&block_to_chain](BlockChain* const& chain) {
@@ -2141,7 +2141,7 @@ void ControlFlowGraph::insert_try_catch_markers(
         }
       };
 
-  std::unordered_map<MethodItemEntry*, Block*> catch_to_containing_block;
+  UnorderedMap<MethodItemEntry*, Block*> catch_to_containing_block;
   Block* prev = nullptr;
   MethodItemEntry* active_catch = nullptr;
   for (auto it = ordering.begin(); it != ordering.end(); prev = *(it++)) {
@@ -2185,7 +2185,7 @@ void ControlFlowGraph::insert_try_catch_markers(
 
 MethodItemEntry* ControlFlowGraph::create_catch(
     Block* block,
-    std::unordered_map<MethodItemEntry*, Block*>* catch_to_containing_block) {
+    UnorderedMap<MethodItemEntry*, Block*>* catch_to_containing_block) {
   always_assert(m_editable);
 
   using EdgeVector = std::vector<Edge*>;
@@ -2263,7 +2263,7 @@ std::vector<Block*> ControlFlowGraph::blocks_reverse_post_deprecated() const {
 
   std::vector<Block*> postorder;
   postorder.reserve(m_blocks.size());
-  std::unordered_set<Block*> visited;
+  UnorderedSet<Block*> visited;
   visited.reserve(m_blocks.size());
   while (!stack.empty()) {
     const auto& curr = stack.top();
@@ -2375,7 +2375,7 @@ void ControlFlowGraph::calculate_exit_block() {
   // Depth-first number. Special values:
   //   0 - unvisited
   //   UINT32_MAX - visited and determined to be in a separate SCC
-  std::unordered_map<const Block*, uint32_t> dfns;
+  UnorderedMap<const Block*, uint32_t> dfns;
   static constexpr uint32_t VISITED = std::numeric_limits<uint32_t>::max();
 
   auto collectExitBlocks = [&](Block* b) -> std::vector<Block*> {
@@ -2536,7 +2536,7 @@ void ControlFlowGraph::free_all_blocks_and_edges_and_removed_insns() {
     }
   }
 
-  for (Edge* e : m_edges) {
+  for (Edge* e : UnorderedIterable(m_edges)) {
     delete e;
   }
 
@@ -2582,7 +2582,7 @@ Edge* get_singleton_normal_forward_edge(Block* block) {
 // After `edges` have been removed from the graph,
 //   * Turn BRANCHes/SWITCHes with one outgoing edge into GOTOs
 void ControlFlowGraph::cleanup_deleted_edges(const EdgeSet& edges) {
-  for (Edge* e : edges) {
+  for (Edge* e : UnorderedIterable(edges)) {
     auto pred_block = e->src();
     auto last_it = pred_block->get_last_insn();
     if (last_it != pred_block->end()) {
@@ -2608,7 +2608,7 @@ void ControlFlowGraph::free_edge(Edge* edge) {
 }
 
 void ControlFlowGraph::free_edges(const EdgeSet& edges) {
-  for (Edge* e : edges) {
+  for (Edge* e : UnorderedIterable(edges)) {
     free_edge(e);
   }
 }
@@ -3215,7 +3215,7 @@ bool ControlFlowGraph::structural_equals(
 
   std::queue<Block*> this_blocks;
   std::queue<Block*> other_blocks;
-  std::unordered_set<BlockId> block_visited;
+  UnorderedSet<BlockId> block_visited;
   // Check entry block.
   if (!this->entry_block()->extended_structural_equals(other.entry_block(),
                                                        instruction_equals)) {
@@ -3322,7 +3322,7 @@ DexPosition* ControlFlowGraph::get_dbg_pos(const cfg::InstructionIterator& it) {
   // very amenable to the editable CFG.
 
   // while there's a single predecessor, follow that edge
-  std::unordered_set<Block*> visited;
+  UnorderedSet<Block*> visited;
   std::function<DexPosition*(Block*)> check_prev_block;
   check_prev_block = [this, &visited, &check_prev_block,
                       &search_block](Block* b) -> DexPosition* {
@@ -3403,9 +3403,9 @@ std::size_t ControlFlowGraph::opcode_hash() const {
 
 } // namespace cfg
 
-std::unordered_map<const IRInstruction*, ParamIndex> get_load_param_map(
+UnorderedMap<const IRInstruction*, ParamIndex> get_load_param_map(
     const cfg::ControlFlowGraph& cfg) {
-  std::unordered_map<const IRInstruction*, ParamIndex> map;
+  UnorderedMap<const IRInstruction*, ParamIndex> map;
   const auto param_insns = InstructionIterable(cfg.get_param_instructions());
   ParamIndex index = 0;
   for (auto it = param_insns.begin(); it != param_insns.end(); it++) {

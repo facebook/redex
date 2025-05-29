@@ -53,15 +53,15 @@ enum FieldOrRegStatus : int64_t {
 };
 
 struct FieldsRegs {
-  std::unordered_map<DexField*, int> field_to_reg;
-  std::unordered_map<DexField*, std::unordered_set<const IRInstruction*>>
+  UnorderedMap<DexField*, int> field_to_reg;
+  UnorderedMap<DexField*, UnorderedSet<const IRInstruction*>>
       field_to_iput_insns;
 
   explicit FieldsRegs(DexClass* builder) {
     const auto& ifields = builder->get_ifields();
     for (const auto& ifield : ifields) {
       field_to_reg[ifield] = FieldOrRegStatus::DEFAULT;
-      field_to_iput_insns[ifield] = std::unordered_set<const IRInstruction*>();
+      field_to_iput_insns[ifield] = UnorderedSet<const IRInstruction*>();
     }
   }
 
@@ -75,7 +75,7 @@ struct FieldsRegs {
 bool tainted_reg_escapes(
     DexType* type,
     DexMethod* method,
-    const std::unordered_map<IRInstruction*, TaintedRegs>& taint_map,
+    const UnorderedMap<IRInstruction*, TaintedRegs>& taint_map,
     bool enable_buildee_constr_change = false);
 
 void transfer_object_reach(DexType* object,
@@ -83,10 +83,8 @@ void transfer_object_reach(DexType* object,
                            const IRInstruction* insn,
                            RegSet& regs);
 
-std::unique_ptr<std::unordered_map<IRInstruction*, TaintedRegs>>
-get_tainted_regs(uint32_t regs_size,
-                 const std::vector<cfg::Block*>& blocks,
-                 DexType* type);
+std::unique_ptr<UnorderedMap<IRInstruction*, TaintedRegs>> get_tainted_regs(
+    uint32_t regs_size, const std::vector<cfg::Block*>& blocks, DexType* type);
 
 class BuilderTransform {
  public:
@@ -102,7 +100,7 @@ class BuilderTransform {
     // Maybe we can refactor this part.
     m_inliner_config.throws_inline = throws_inline;
 
-    std::unordered_set<DexMethod*> no_default_inlinables;
+    UnorderedSet<DexMethod*> no_default_inlinables;
     int min_sdk = 0;
     m_inliner = std::unique_ptr<MultiMethodInliner>(new MultiMethodInliner(
         scope, init_classes_with_side_effects, stores, no_default_inlinables,
@@ -112,7 +110,7 @@ class BuilderTransform {
   bool inline_methods(
       DexMethod* method,
       DexType* type,
-      const std::function<std::unordered_set<DexMethod*>(IRCode*, DexType*)>&
+      const std::function<UnorderedSet<DexMethod*>(IRCode*, DexType*)>&
           get_methods_to_inline);
 
   void flush() { m_inliner->flush(); }
@@ -123,10 +121,9 @@ class BuilderTransform {
   ConcurrentMethodResolver m_concurrent_method_resolver;
 };
 
-std::unordered_set<DexMethod*> get_all_methods(IRCode* code, DexType* type);
+UnorderedSet<DexMethod*> get_all_methods(IRCode* code, DexType* type);
 
-std::unordered_set<DexMethod*> get_non_init_methods(IRCode* code,
-                                                    DexType* type);
+UnorderedSet<DexMethod*> get_non_init_methods(IRCode* code, DexType* type);
 
 bool has_builder_name(DexType* type);
 

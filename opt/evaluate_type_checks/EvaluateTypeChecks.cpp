@@ -9,8 +9,6 @@
 
 #include <sstream>
 #include <type_traits>
-#include <unordered_map>
-#include <unordered_set>
 
 #include <boost/optional.hpp>
 
@@ -24,7 +22,6 @@
 #include "LiveRange.h"
 #include "PassManager.h"
 #include "ScopedCFG.h"
-#include "StlUtil.h"
 #include "Trace.h"
 #include "TypeInference.h"
 #include "TypeUtil.h"
@@ -134,14 +131,14 @@ void analyze_true_instance_ofs(
 
     auto print_uses = [&uses]() {
       std::ostringstream oss;
-      for (const auto& v : *uses) {
+      for (const auto& v : UnorderedIterable(*uses)) {
         oss << show(v.insn) << ",";
       }
       return oss.str();
     };
 
-    bool any_multi_def = std::any_of(
-        uses->begin(), uses->end(), [&ud_chains, &mie](const auto& use) {
+    bool any_multi_def =
+        unordered_any_of(*uses, [&ud_chains, &mie](const auto& use) {
           auto it = ud_chains.find(use);
           if (it == ud_chains.end()) {
             // Weird, fail.
@@ -162,35 +159,32 @@ void analyze_true_instance_ofs(
     }
 
     // Filter out moves.
-    bool has_moves =
-        std::any_of(uses->begin(), uses->end(), [](const auto& use) {
-          return opcode::is_a_move(use.insn->opcode());
-        });
+    bool has_moves = unordered_any_of(*uses, [](const auto& use) {
+      return opcode::is_a_move(use.insn->opcode());
+    });
     std::remove_cv_t<std::remove_pointer_t<decltype(uses)>> filtered_uses;
     if (has_moves) {
       filtered_uses = *uses;
-      std20::erase_if(filtered_uses, [](const auto& u) {
+      unordered_erase_if(filtered_uses, [](const auto& u) {
         return opcode::is_a_move(u.insn->opcode());
       });
       uses = &filtered_uses;
     }
 
-    bool non_branch_uses =
-        std::any_of(uses->begin(), uses->end(), [](const auto& use) {
-          return !opcode::is_a_conditional_branch(use.insn->opcode()) &&
-                 !opcode::is_a_move(use.insn->opcode());
-        });
+    bool non_branch_uses = unordered_any_of(*uses, [](const auto& use) {
+      return !opcode::is_a_conditional_branch(use.insn->opcode()) &&
+             !opcode::is_a_move(use.insn->opcode());
+    });
     if (non_branch_uses) {
       TRACE(EVALTC, 3, "Not all a branch: %s", print_uses().c_str());
       ++res.non_branch;
       continue;
     }
 
-    bool non_supp_branches =
-        std::any_of(uses->begin(), uses->end(), [](const auto& use) {
-          auto opcode = use.insn->opcode();
-          return opcode != OPCODE_IF_EQZ && opcode != OPCODE_IF_NEZ;
-        });
+    bool non_supp_branches = unordered_any_of(*uses, [](const auto& use) {
+      auto opcode = use.insn->opcode();
+      return opcode != OPCODE_IF_EQZ && opcode != OPCODE_IF_NEZ;
+    });
     if (non_supp_branches) {
       TRACE(EVALTC, 2, "Unexpected branch types: %s", print_uses().c_str());
       ++res.non_supported_branch;
@@ -210,7 +204,7 @@ void analyze_true_instance_ofs(
       mutation.insert_before(def_it, {copy_reg_insn});
     }
     // Rewrite the conditionals' input.
-    for (const auto& use : *uses) {
+    for (const auto& use : UnorderedIterable(*uses)) {
       use.insn->set_src(0, src_tmp);
       ++res.class_always_succeed_or_null_repl;
       ++res.overrides;

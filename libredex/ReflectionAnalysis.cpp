@@ -10,7 +10,6 @@
 #include <functional>
 #include <iomanip>
 #include <ostream>
-#include <unordered_map>
 
 #include <boost/optional.hpp>
 
@@ -29,15 +28,15 @@
 
 using namespace sparta;
 
-std::ostream& operator<<(std::ostream& out,
-                         const std::unordered_set<DexType*>& x) {
+std::ostream& operator<<(std::ostream& out, const UnorderedSet<DexType*>& x) {
   if (x.empty()) {
     return out;
   }
   out << "(";
-  for (auto i = x.begin(); i != x.end(); ++i) {
+  auto&& ui = UnorderedIterable(x);
+  for (auto i = ui.begin(); i != ui.end(); ++i) {
     out << SHOW(*i);
-    if (std::next(i) != x.end()) {
+    if (std::next(i) != ui.end()) {
       out << ",";
     }
   }
@@ -810,7 +809,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   // For instance, a const-class produces a CLASS obj. The mapping here includes
   // an entry from the const-class instruction to the AOEnvironment where the
   // created CLASS obj is at RESULT_REGISTER.
-  std::unordered_map<IRInstruction*, AbstractObjectEnvironment> m_environments;
+  UnorderedMap<IRInstruction*, AbstractObjectEnvironment> m_environments;
   mutable AbstractObjectDomain m_return_value;
   SummaryQueryFn* m_summary_query_fn;
 

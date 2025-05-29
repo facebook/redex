@@ -7,10 +7,11 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "GlobalConfig.h"
 #include "Pass.h"
+#include "ReachableResources.h"
 #include "Trace.h"
-#include "androidfw/ResourceTypes.h"
 
 namespace opt_res {
 
@@ -28,7 +29,7 @@ class ReachableResourcesPlugin {
   // Given the directory holding the unpacked input zip, and a list of resource
   // names to their corresponding ids, return a list of resource IDs that should
   // be considered reachable.
-  virtual std::unordered_set<uint32_t> get_reachable_resources(
+  virtual UnorderedSet<uint32_t> get_reachable_resources(
       const std::string& unpack_dir,
       const std::map<std::string, std::vector<uint32_t>>& name_to_ids) const {
     return {};
@@ -129,10 +130,10 @@ class OptimizeResourcesPass : public Pass {
 
   void bind_config() override {
     bind("delete_unused_files", false, m_delete_unused_files);
-    bind("assume_reachable_prefixes", {}, m_assume_reachable_prefixes);
-    bind("disallowed_types", {}, m_disallowed_types);
-    bind("assume_id_inlined", false, m_assume_id_inlined);
-    bind("check_string_for_name", false, m_check_string_for_name);
+    bind("assume_reachable_prefixes", {}, m_options.assume_reachable_prefixes);
+    bind("disallowed_types", {}, m_options.disallowed_types);
+    bind("assume_id_inlined", false, m_options.assume_id_inlined);
+    bind("check_string_for_name", false, m_options.check_string_for_name);
   }
 
   void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -148,10 +149,7 @@ class OptimizeResourcesPass : public Pass {
 
  private:
   bool m_delete_unused_files;
-  std::vector<std::string> m_assume_reachable_prefixes;
-  std::unordered_set<std::string> m_disallowed_types;
 
  protected:
-  bool m_assume_id_inlined;
-  bool m_check_string_for_name;
+  resources::ReachabilityOptions m_options;
 };

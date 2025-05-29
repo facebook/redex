@@ -158,10 +158,10 @@ TEST_F(LiveRangeTest, testDefUseChainSingleDefinition) {
   ASSERT_TRUE(du_chains.count(const_v0));
   ASSERT_TRUE(du_chains.count(const_v1));
 
-  EXPECT_THAT(du_chains[const_v0],
+  EXPECT_THAT(unordered_unsafe_unwrap(du_chains[const_v0]),
               ::testing::UnorderedElementsAre(Use{first_return, 0},
                                               Use{second_return, 0}));
-  EXPECT_THAT(du_chains[const_v1],
+  EXPECT_THAT(unordered_unsafe_unwrap(du_chains[const_v1]),
               ::testing::UnorderedElementsAre(Use{if_eq, 0}, Use{if_eq, 1}));
 }
 
@@ -203,8 +203,8 @@ TEST_F(LiveRangeTest, testDefUseChainMultiDefinition) {
   ASSERT_TRUE(du_chains.count(const_v1_1));
   ASSERT_TRUE(du_chains.count(const_v1_2));
 
-  EXPECT_THAT(du_chains[const_v1_1],
+  EXPECT_THAT(unordered_unsafe_unwrap(du_chains[const_v1_1]),
               ::testing::UnorderedElementsAre(Use{move, 0}));
-  EXPECT_THAT(du_chains[const_v1_2],
+  EXPECT_THAT(unordered_unsafe_unwrap(du_chains[const_v1_2]),
               ::testing::UnorderedElementsAre(Use{move, 0}));
 }

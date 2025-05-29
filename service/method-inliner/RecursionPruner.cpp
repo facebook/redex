@@ -23,10 +23,10 @@ void RecursionPruner::run() {
   // recurse into all inlinable callees until we hit a leaf and we start
   // inlining from there. First, we just gather data on
   // caller/non-recursive-callees pairs for each stack depth.
-  std::unordered_map<DexMethod*, size_t> visited;
+  UnorderedMap<DexMethod*, size_t> visited;
   std::vector<DexMethod*> ordered_callers;
   ordered_callers.reserve(m_caller_callee.size());
-  for (auto& p : m_caller_callee) {
+  for (auto& p : UnorderedIterable(m_caller_callee)) {
     ordered_callers.push_back(const_cast<DexMethod*>(p.first));
   }
   std::sort(ordered_callers.begin(), ordered_callers.end(), compare_dexmethods);
@@ -37,8 +37,8 @@ void RecursionPruner::run() {
   }
 }
 
-size_t RecursionPruner::recurse(
-    DexMethod* caller, std::unordered_map<DexMethod*, size_t>* visited) {
+size_t RecursionPruner::recurse(DexMethod* caller,
+                                UnorderedMap<DexMethod*, size_t>* visited) {
   auto caller_it = m_caller_callee.find(caller);
   if (caller_it == m_caller_callee.end()) {
     return 0;
@@ -54,12 +54,7 @@ size_t RecursionPruner::recurse(
   // We'll only know the exact call stack depth at the end.
   visited->emplace(caller, std::numeric_limits<size_t>::max());
 
-  std::vector<DexMethod*> ordered_callees;
-  ordered_callees.reserve(callees.size());
-  for (auto& p : callees) {
-    ordered_callees.push_back(p.first);
-  }
-  std::sort(ordered_callees.begin(), ordered_callees.end(), compare_dexmethods);
+  auto ordered_callees = unordered_to_ordered_keys(callees, compare_dexmethods);
   size_t stack_depth = 0;
   // recurse into the callees in case they have something to inline on
   // their own. We want to inline bottom up so that a callee is

@@ -213,7 +213,7 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
 
  private:
   const DexType* m_declaring_type;
-  std::unordered_set<DexType*> m_super_types;
+  UnorderedSet<DexType*> m_super_types;
   const IRInstruction* m_first_load_param;
   bool m_relaxed;
 };
@@ -223,11 +223,10 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
 
 namespace constructor_analysis {
 
-bool can_inline_init(
-    const DexMethod* init_method,
-    const std::unordered_set<const DexField*>* finalizable_fields,
-    bool relaxed,
-    std::unordered_set<DexField*>* written_final_fields) {
+bool can_inline_init(const DexMethod* init_method,
+                     const UnorderedSet<const DexField*>* finalizable_fields,
+                     bool relaxed,
+                     UnorderedSet<DexField*>* written_final_fields) {
   always_assert(method::is_init(init_method));
   auto code = init_method->get_code();
   if (!code) {
@@ -340,7 +339,7 @@ bool can_inline_inits_in_same_class(DexMethod* caller_method,
   }
 }
 
-std::unordered_set<const DexType*> find_complex_init_inlined_types(
+UnorderedSet<const DexType*> find_complex_init_inlined_types(
     const std::vector<DexClass*>& scope) {
   InsertOnlyConcurrentSet<const DexType*> items;
   // Calling this on an unknown type is apparently OK for verification.
@@ -361,7 +360,7 @@ std::unordered_set<const DexType*> find_complex_init_inlined_types(
           auto new_instance_type = insn->get_type();
           auto search = live_ranges->def_use_chains->find(insn);
           if (search != live_ranges->def_use_chains->end()) {
-            for (auto& use : search->second) {
+            for (auto& use : UnorderedIterable(search->second)) {
               if (use.insn->has_method()) {
                 auto use_method = use.insn->get_method();
                 if (use.src_index == 0 && method::is_init(use_method) &&
@@ -376,7 +375,8 @@ std::unordered_set<const DexType*> find_complex_init_inlined_types(
       }
     }
   });
-  std::unordered_set<const DexType*> result(items.begin(), items.end());
+  UnorderedSet<const DexType*> result;
+  insert_unordered_iterable(result, items);
   return result;
 }
 } // namespace constructor_analysis

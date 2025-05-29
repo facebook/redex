@@ -11,6 +11,7 @@
 
 #include "BigBlocks.h"
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
 #include "Match.h"
@@ -20,7 +21,6 @@
 #include "ScopedCFG.h"
 #include "Show.h"
 #include "ShowCFG.h"
-#include "StlUtil.h"
 #include "Trace.h"
 
 using namespace sparta;
@@ -443,7 +443,7 @@ Result check_uninitialized(const DexMethod* method, bool relaxed_init_check) {
   always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
 
-  std::unordered_set<cfg::BlockId> block_visited;
+  UnorderedSet<cfg::BlockId> block_visited;
   auto ordered_blocks = cfg.order();
 
   for (cfg::Block* block : ordered_blocks) {
@@ -458,9 +458,8 @@ Result check_uninitialized(const DexMethod* method, bool relaxed_init_check) {
     for (auto b : big_block->get_blocks()) {
       block_visited.emplace(b->id());
     }
-    std::unordered_map<reg_t, IRInstruction*> uninitialized_regs;
-    std::unordered_map<IRInstruction*, std::unordered_set<reg_t>>
-        uninitialized_regs_rev;
+    UnorderedMap<reg_t, IRInstruction*> uninitialized_regs;
+    UnorderedMap<IRInstruction*, UnorderedSet<reg_t>> uninitialized_regs_rev;
     auto remove_from_uninitialized_list = [&](reg_t reg) {
       auto it = uninitialized_regs.find(reg);
       if (it != uninitialized_regs.end()) {
@@ -543,7 +542,8 @@ Result check_uninitialized(const DexMethod* method, bool relaxed_init_check) {
                                         "initialized with the wrong type at " +
                                         show(*it) + " in \n" + show(cfg));
             }
-            for (auto reg : uninitialized_regs_rev[object_ir]) {
+            for (auto reg :
+                 UnorderedIterable(uninitialized_regs_rev[object_ir])) {
               uninitialized_regs.erase(reg);
             }
             uninitialized_regs_rev.erase(object_ir);
@@ -663,7 +663,7 @@ Result check_structure(const DexMethod* method,
  * Sanity-check the structure of the positions for editable cfg format.
  */
 Result check_positions_cfg(cfg::ControlFlowGraph& cfg) {
-  std::unordered_set<DexPosition*> positions;
+  UnorderedSet<DexPosition*> positions;
   auto iterable = cfg::InstructionIterable(cfg);
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {
     if (it->type != MFLOW_POSITION) {
@@ -675,8 +675,8 @@ Result check_positions_cfg(cfg::ControlFlowGraph& cfg) {
     }
   }
 
-  std::unordered_set<DexPosition*> visited_parents;
-  for (auto pos : positions) {
+  UnorderedSet<DexPosition*> visited_parents;
+  for (auto pos : UnorderedIterable(positions)) {
     if (!pos->parent) {
       continue;
     }
@@ -724,11 +724,11 @@ Result check_monitors(const DexMethod* method) {
   }
 
   auto sketchy_insns = monitor_analyzer.get_sketchy_instructions();
-  std::unordered_set<cfg::Block*> sketchy_blocks;
+  UnorderedSet<cfg::Block*> sketchy_blocks;
   for (auto& it : sketchy_insns) {
     sketchy_blocks.insert(it.block());
   }
-  std20::erase_if(sketchy_blocks, [&](auto* b) {
+  unordered_erase_if(sketchy_blocks, [&](auto* b) {
     return !code->cfg().get_succ_edge_of_type(b, cfg::EDGE_THROW);
   });
   if (!sketchy_blocks.empty()) {
@@ -752,6 +752,22 @@ Result check_monitors(const DexMethod* method) {
     out << " in\n" + show(code->cfg());
     return Result::make_error(out.str());
   }
+  return Result::Ok();
+}
+
+Result validate_no_private_virtual_method(const DexMethodRef* method) {
+  if (method == nullptr || !method->is_def()) {
+    // Forgive unresolved refs.
+    return Result::Ok();
+  }
+
+  if (method->as_def()->is_virtual() && is_private(method->as_def())) {
+    std::ostringstream out;
+    out << "A method cannot be both private and virtual: "
+        << show_deobfuscated(method);
+    return Result::make_error(out.str());
+  }
+
   return Result::Ok();
 }
 
@@ -782,6 +798,48 @@ void validate_access(const DexMethod* accessor, const DexMember* accessee) {
   }
 
   throw TypeCheckingException(out.str());
+}
+
+void validate_invoke_polymorphic(const DexMethodRef* callee) {
+  // callee must not be null, since this also acts as a precheck before any type
+  // check.
+  redex_assert(callee != nullptr);
+
+  if (callee->is_def()) {
+    // callee is a definition, we can match them exactly with what we want.
+    if (callee->as_def() != method::java_lang_invoke_MethodHandle_invoke() &&
+        callee->as_def() !=
+            method::java_lang_invoke_MethodHandle_invokeExact()) {
+      std::ostringstream out;
+      out << "invoke-polymorphic: Callee must be either MethodHandle.invoke or "
+             "MethodHandle.invokeExact, but found "
+          << show_deobfuscated(callee);
+      throw TypeCheckingException(out.str());
+    }
+    return;
+  }
+
+  // Fall back to manual check, since we don't know its full definition.
+  const auto* arg_types = callee->get_proto()->get_args();
+
+  // invoke-polymorphic works differently in terms of arg counts. The
+  // invoked function's arguments are always the object reference followed
+  // by an array of Objects (at least for now), but invoke-polymorphic
+  // accepts individual elements of the array as its arguments.
+  //   (invoke-polymorphic (v0 v1 v2)
+  //     "Ljava/lang/invoke/MethodHandle;.invoke:([Ljava/lang/Object;)Ljava/lang/Object;")
+  if (arg_types->size() != 1) {
+    std::ostringstream out;
+    out << "invoke-polymorphic: Arg count of " << show_deobfuscated(callee)
+        << " is expected to be 1, but found " << arg_types->size();
+    throw TypeCheckingException(out.str());
+  }
+  if (!type::is_array(arg_types->at(0))) {
+    std::ostringstream out;
+    out << "invoke-polymorphic: Arg type of " << show_deobfuscated(callee)
+        << " is expected to be an array, but found " << arg_types->at(0);
+    throw TypeCheckingException(out.str());
+  }
 }
 
 void validate_invoke_super(const DexMethod* caller,
@@ -823,6 +881,35 @@ void validate_invoke_super(const DexMethod* caller,
          "silently generate illegal invoke-supers to interface methods)";
 
   throw TypeCheckingException(out.str());
+}
+
+void validate_invoke_class_initializer(const DexMethodRef* callee_ref) {
+  if (callee_ref == nullptr) {
+    // Forgive unresolved refs.
+    return;
+  }
+  if (method::is_clinit(callee_ref)) {
+    std::ostringstream out;
+    out << show_deobfuscated(callee_ref)
+        << ": invoking a class initializer, which is forbidden";
+    throw TypeCheckingException(out.str());
+  }
+}
+
+void validate_invoke_direct_constructor(const DexMethodRef* callee_ref,
+                                        IROpcode opcode) {
+  if (callee_ref == nullptr) {
+    // Forgive unresolved refs.
+    return;
+  }
+  if (method::is_init(callee_ref) && opcode != OPCODE_INVOKE_DIRECT) {
+    std::ostringstream out;
+    out << show_deobfuscated(callee_ref)
+        << ": invoking a constructor with an unexpected opcode (must be "
+           "invoke-direct): "
+        << opcode;
+    throw TypeCheckingException(out.str());
+  }
 }
 
 void validate_invoke_virtual(const DexMethod* caller,
@@ -933,6 +1020,14 @@ void IRTypeChecker::run() {
     // If the method has no associated code, the type checking trivially
     // succeeds.
     m_complete = true;
+    return;
+  }
+
+  if (auto result = validate_no_private_virtual_method(m_dex_method);
+      result != Result::Ok()) {
+    m_complete = true;
+    m_good = false;
+    m_what = result.error_message();
     return;
   }
 
@@ -1550,7 +1645,9 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     const auto* arg_types = dex_method->get_proto()->get_args();
     size_t expected_args =
         (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types->size();
-    if (insn->srcs_size() != expected_args) {
+    if (insn->opcode() == OPCODE_INVOKE_POLYMORPHIC) {
+      validate_invoke_polymorphic(dex_method);
+    } else if (insn->srcs_size() != expected_args) {
       std::ostringstream out;
       out << SHOW(insn) << ": argument count mismatch; " << "expected "
           << expected_args << ", " << "but found " << insn->srcs_size()
@@ -1566,27 +1663,44 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
       assume_assignable(current_state->get_dex_type(src),
                         dex_method->get_class());
     }
-    for (DexType* arg_type : *arg_types) {
-      if (type::is_object(arg_type)) {
-        auto src = insn->src(src_idx++);
+    if (insn->opcode() == OPCODE_INVOKE_POLYMORPHIC) {
+      redex_assert(arg_types->size() == 1);
+      redex_assert(src_idx == 1);
+
+      // Starting from the second argument, every argument to invoke-polymorphic
+      // is an object. It is unclear whether invoke-polymorphic can be used to a
+      // function that accepts an array of other types. Therefore, here we only
+      // assume the argument is assignable to the element type of the array
+      // argument.
+      for (; src_idx < insn->srcs_size(); src_idx++) {
+        auto src = insn->src(src_idx);
         assume_reference(current_state, src);
-        assume_assignable(current_state->get_dex_type(src), arg_type);
-        continue;
+        assume_assignable(current_state->get_dex_type(src),
+                          type::get_array_element_type(arg_types->at(0)));
       }
-      if (type::is_integral(arg_type)) {
-        assume_integer(current_state, insn->src(src_idx++));
-        continue;
+    } else {
+      for (DexType* arg_type : *arg_types) {
+        if (type::is_object(arg_type)) {
+          auto src = insn->src(src_idx++);
+          assume_reference(current_state, src);
+          assume_assignable(current_state->get_dex_type(src), arg_type);
+          continue;
+        }
+        if (type::is_integral(arg_type)) {
+          assume_integer(current_state, insn->src(src_idx++));
+          continue;
+        }
+        if (type::is_long(arg_type)) {
+          assume_long(current_state, insn->src(src_idx++));
+          continue;
+        }
+        if (type::is_float(arg_type)) {
+          assume_float(current_state, insn->src(src_idx++));
+          continue;
+        }
+        always_assert(type::is_double(arg_type));
+        assume_double(current_state, insn->src(src_idx++));
       }
-      if (type::is_long(arg_type)) {
-        assume_long(current_state, insn->src(src_idx++));
-        continue;
-      }
-      if (type::is_float(arg_type)) {
-        assume_float(current_state, insn->src(src_idx++));
-        continue;
-      }
-      always_assert(type::is_double(arg_type));
-      assume_double(current_state, insn->src(src_idx++));
     }
     if (m_validate_access) {
       auto resolved =
@@ -1604,6 +1718,8 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     } else if (insn->opcode() == OPCODE_INVOKE_INTERFACE) {
       validate_invoke_interface(m_dex_method, dex_method);
     }
+    validate_invoke_class_initializer(dex_method);
+    validate_invoke_direct_constructor(dex_method, insn->opcode());
     break;
   }
   case OPCODE_NEG_INT:

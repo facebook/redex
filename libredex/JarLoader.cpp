@@ -59,7 +59,7 @@ uint16_t read16(uint8_t*& buffer, uint8_t* buffer_end) {
 }
 
 uint8_t read8(uint8_t*& buffer, uint8_t* buffer_end) {
-  always_assert_type_log(buffer <= buffer_end, BUFFER_END_EXCEEDED,
+  always_assert_type_log(buffer < buffer_end, BUFFER_END_EXCEEDED,
                          "Buffer overflow");
   return *buffer++;
 }
@@ -296,7 +296,11 @@ void init_basic_types() {
 namespace {
 
 DexType* parse_type(std::string_view& buf) {
-  redex_assert(!buf.empty());
+  if (buf.empty()) {
+    std::cerr << "Invalid empty parse-type, bailing\n";
+    return nullptr;
+  }
+
   char desc = buf.at(0);
   const std::string_view buf_start = buf;
   buf = buf.substr(1); // Simplifies primitive types.
@@ -410,6 +414,7 @@ DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
       !extract_utf8(cpool, finfo.descNdx, &dbuffer)) {
     return nullptr;
   }
+  always_assert_type_log(!nbuffer.empty(), INVALID_JAVA, "Empty method name");
   auto name = DexString::make_string(nbuffer);
   std::string_view ptr = dbuffer;
   DexTypeList* tlist = extract_arguments(ptr);
@@ -532,6 +537,10 @@ bool parse_class(uint8_t* buffer,
       return false;
     }
     cc.set_super(sclazz);
+  } else if (self->get_name()->str() != "Ljava/lang/Object;") {
+    std::cerr << "Missing super for class cpool index " << clazz
+              << ", Bailing\n";
+    return false;
   }
   cc.set_access((DexAccessFlags)aflags);
   if (ifcount) {

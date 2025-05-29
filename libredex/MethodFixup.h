@@ -7,14 +7,13 @@
 
 #pragma once
 
-#include <unordered_map>
-
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 
 namespace method_fixup {
 
 void fixup_references_to_removed_methods(
     const Scope& scope,
-    std::unordered_map<DexMethodRef*, DexMethodRef*>& removed_vmethods);
+    UnorderedMap<DexMethodRef*, DexMethodRef*>& removed_vmethods);
 
 } // namespace method_fixup

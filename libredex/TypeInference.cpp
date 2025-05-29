@@ -339,16 +339,15 @@ void refine_comparable(TypeEnvironment* state, reg_t reg1, reg_t reg2) {
   }
 }
 
-template <typename DexTypeIt>
-const DexType* merge_dex_types(const DexTypeIt& begin,
-                               const DexTypeIt& end,
+template <typename DexTypeCollection>
+const DexType* merge_dex_types(const DexTypeCollection& collection,
                                const DexType* default_type) {
-  if (begin == end) {
+  if (collection.empty()) {
     return default_type;
   }
 
-  return std::accumulate(
-      begin, end, static_cast<const DexType*>(nullptr),
+  return unordered_accumulate(
+      collection, static_cast<const DexType*>(nullptr),
       [&default_type](const DexType* t1, const DexType* t2) -> const DexType* {
         if (!t1) {
           return t2;
@@ -370,14 +369,14 @@ const DexType* merge_dex_types(const DexTypeIt& begin,
 
 boost::optional<const DexType*> get_typedef_annotation(
     const std::vector<std::unique_ptr<DexAnnotation>>& annotations,
-    const std::unordered_set<DexType*>& typedef_annotations) {
+    const UnorderedSet<DexType*>& typedef_annotations) {
   for (auto const& anno : annotations) {
     auto const anno_class = type_class(anno->type());
     if (!anno_class) {
       continue;
     }
     bool has_typedef = false;
-    for (auto annotation : typedef_annotations) {
+    for (auto annotation : UnorderedIterable(typedef_annotations)) {
       if (get_annotation(anno_class, annotation)) {
         if (has_typedef) {
           always_assert_log(
@@ -738,7 +737,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
       break;
     }
 
-    std::unordered_set<DexType*> catch_types;
+    UnorderedSet<DexType*> catch_types;
 
     for (cfg::Edge* edge : preds) {
       if (edge->type() != cfg::EDGE_THROW) {
@@ -755,7 +754,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     }
 
     auto merged_catch_type =
-        merge_dex_types(catch_types.begin(), catch_types.end(),
+        merge_dex_types(catch_types,
                         /* default */ type::java_lang_Throwable());
 
     set_reference(current_state, insn->dest(), merged_catch_type);
@@ -1225,14 +1224,14 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     refine_reference(current_state, insn->src(0));
     break;
   }
-  case OPCODE_INVOKE_CUSTOM:
-  case OPCODE_INVOKE_POLYMORPHIC: {
+  case OPCODE_INVOKE_CUSTOM: {
     // TODO(T59277083)
     not_reached_log(
         "TypeInference::analyze_instruction does not support "
-        "invoke-custom and invoke-polymorphic yet");
+        "invoke-custom yet");
     break;
   }
+  case OPCODE_INVOKE_POLYMORPHIC:
   case OPCODE_INVOKE_VIRTUAL:
   case OPCODE_INVOKE_SUPER:
   case OPCODE_INVOKE_DIRECT:
@@ -1240,53 +1239,63 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_INVOKE_INTERFACE: {
     DexMethodRef* dex_method = insn->get_method();
     const auto* arg_types = dex_method->get_proto()->get_args();
-    size_t expected_args =
-        (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types->size();
-    always_assert_log(insn->srcs_size() == expected_args, "%s", SHOW(insn));
-
-    size_t src_idx{0};
-    if (insn->opcode() != OPCODE_INVOKE_STATIC) {
-      // The first argument is a reference to the object instance on which the
-      // method is invoked.
-      refine_reference(current_state, insn->src(src_idx++));
-    }
-    for (DexType* arg_type : *arg_types) {
-      if (type::is_object(arg_type)) {
+    if (insn->opcode() == OPCODE_INVOKE_POLYMORPHIC) {
+      // invoke-polymorphic can only be used to invoke MethodHandle.invoke and
+      // MethodHandle.invokeExact. The first argument is a MethodHandle, and the
+      // rest are Objects.
+      for (auto src : insn->srcs()) {
+        refine_reference(current_state, src);
+      }
+    } else {
+      size_t expected_args =
+          (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types->size();
+      always_assert_log(insn->srcs_size() == expected_args,
+                        "instruction: %s\nexpected: %lu\nactual: %lu",
+                        SHOW(insn), expected_args, insn->srcs_size());
+      size_t src_idx{0};
+      if (insn->opcode() != OPCODE_INVOKE_STATIC) {
+        // The first argument is a reference to the object instance on which the
+        // method is invoked.
         refine_reference(current_state, insn->src(src_idx++));
-        continue;
       }
-      if (type::is_integral(arg_type)) {
-        if (type::is_int(arg_type)) {
-          refine_int(current_state, insn->src(src_idx++));
+      for (DexType* arg_type : *arg_types) {
+        if (type::is_object(arg_type)) {
+          refine_reference(current_state, insn->src(src_idx++));
           continue;
         }
-        if (type::is_char(arg_type)) {
-          refine_char(current_state, insn->src(src_idx++));
+        if (type::is_integral(arg_type)) {
+          if (type::is_int(arg_type)) {
+            refine_int(current_state, insn->src(src_idx++));
+            continue;
+          }
+          if (type::is_char(arg_type)) {
+            refine_char(current_state, insn->src(src_idx++));
+            continue;
+          }
+          if (type::is_boolean(arg_type)) {
+            refine_boolean(current_state, insn->src(src_idx++));
+            continue;
+          }
+          if (type::is_short(arg_type)) {
+            refine_short(current_state, insn->src(src_idx++));
+            continue;
+          }
+          if (type::is_byte(arg_type)) {
+            refine_byte(current_state, insn->src(src_idx++));
+            continue;
+          }
+        }
+        if (type::is_long(arg_type)) {
+          refine_long(current_state, insn->src(src_idx++));
           continue;
         }
-        if (type::is_boolean(arg_type)) {
-          refine_boolean(current_state, insn->src(src_idx++));
+        if (type::is_float(arg_type)) {
+          refine_float(current_state, insn->src(src_idx++));
           continue;
         }
-        if (type::is_short(arg_type)) {
-          refine_short(current_state, insn->src(src_idx++));
-          continue;
-        }
-        if (type::is_byte(arg_type)) {
-          refine_byte(current_state, insn->src(src_idx++));
-          continue;
-        }
+        always_assert(type::is_double(arg_type));
+        refine_double(current_state, insn->src(src_idx++));
       }
-      if (type::is_long(arg_type)) {
-        refine_long(current_state, insn->src(src_idx++));
-        continue;
-      }
-      if (type::is_float(arg_type)) {
-        refine_float(current_state, insn->src(src_idx++));
-        continue;
-      }
-      always_assert(type::is_double(arg_type));
-      refine_double(current_state, insn->src(src_idx++));
     }
     DexType* return_type = dex_method->get_proto()->get_rtype();
     if (type::is_void(return_type)) {
@@ -1296,10 +1305,9 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
       boost::optional<const DexType*> annotation =
           get_typedef_anno_from_member(dex_method, m_annotations);
       if (is_pure_virtual_with_annotation(dex_method)) {
-        std::vector<const DexMethod*> callees =
-            method_override_graph::get_overriding_methods(
-                *m_method_override_graph, dex_method->as_def());
-        for (const DexMethod* callee : callees) {
+        auto callees = method_override_graph::get_overriding_methods(
+            *m_method_override_graph, dex_method->as_def());
+        for (const DexMethod* callee : UnorderedIterable(callees)) {
           boost::optional<const DexType*> anno =
               get_typedef_anno_from_member(callee, m_annotations);
           if (anno == boost::none || anno != annotation) {
@@ -1317,10 +1325,9 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
         boost::optional<const DexType*> annotation =
             get_typedef_anno_from_member(dex_method, m_annotations);
         if (is_pure_virtual_with_annotation(dex_method)) {
-          std::vector<const DexMethod*> callees =
-              method_override_graph::get_overriding_methods(
-                  *m_method_override_graph, dex_method->as_def());
-          for (const DexMethod* callee : callees) {
+          auto callees = method_override_graph::get_overriding_methods(
+              *m_method_override_graph, dex_method->as_def());
+          for (const DexMethod* callee : UnorderedIterable(callees)) {
             boost::optional<const DexType*> anno =
                 get_typedef_anno_from_member(callee, m_annotations);
             if (anno == boost::none || anno != annotation) {

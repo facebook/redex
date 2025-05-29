@@ -136,10 +136,9 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
                                    PassManager& mgr,
                                    ModelSpec* merging_spec,
                                    bool skip_dynamically_dead) {
-  std::unordered_map<const DexTypeList*, std::vector<const DexType*>>
+  UnorderedMap<const DexTypeList*, std::vector<const DexType*>>
       intfs_implementors;
-  std::unordered_map<const DexType*, std::vector<const DexType*>>
-      parent_children;
+  UnorderedMap<const DexType*, std::vector<const DexType*>> parent_children;
   TypeSet throwable;
   type_system.get_all_children(type::java_lang_Throwable(), throwable);
   for (const auto* cls : scope) {
@@ -175,7 +174,7 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
       // interfaces.
     }
   }
-  for (const auto& pair : parent_children) {
+  for (const auto& pair : UnorderedIterable(parent_children)) {
     auto parent = pair.first;
     if (!type_class(parent)) {
       continue;
@@ -192,7 +191,7 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
       mgr.incr_metric("cls_" + show(parent), children.size());
     }
   }
-  for (const auto& pair : intfs_implementors) {
+  for (const auto& pair : UnorderedIterable(intfs_implementors)) {
     auto intfs = pair.first;
     const auto has_defs = [&intfs]() {
       for (const auto* intf : *intfs) {

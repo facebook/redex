@@ -10,8 +10,8 @@
 #include "ConfigFiles.h"
 #include "DexClass.h"
 
-using ConstTypeHashSet = std::unordered_set<const DexType*>;
-using TypeHashSet = std::unordered_set<DexType*>;
+using ConstTypeHashSet = UnorderedSet<const DexType*>;
+using TypeHashSet = UnorderedSet<DexType*>;
 using TypeSet = std::set<const DexType*, dextypes_comparator>;
 
 namespace class_merging {

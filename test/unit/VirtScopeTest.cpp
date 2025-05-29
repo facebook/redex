@@ -1506,18 +1506,18 @@ TEST_F(VirtScopeTest, VitualInterfaceResolutionTest) {
   const auto& g_g_virt_scope = type_system.find_virtual_scope(i_g_void_int);
   EXPECT_TRUE(g_g_virt_scope != nullptr);
 
-  std::unordered_set<DexMethod*> methods;
+  UnorderedSet<DexMethod*> methods;
   // Resolve invoke_virtual G.g(int) for I
   type_system.select_methods(*g_g_virt_scope, {i_t}, methods);
-  EXPECT_EQ(*methods.begin(), i_g_void_int);
+  EXPECT_EQ(*unordered_any(methods), i_g_void_int);
   methods.clear();
   // Resolve invoke_virtual G.g(int) for K
   type_system.select_methods(*g_g_virt_scope, {k_t}, methods);
-  EXPECT_EQ(*methods.begin(), DexMethod::get_method(k_t, g, void_int));
+  EXPECT_EQ(*unordered_any(methods), DexMethod::get_method(k_t, g, void_int));
   methods.clear();
   // Resolve invoke_virtual G.g(int) for J
   type_system.select_methods(*g_g_virt_scope, {j_t}, methods);
-  EXPECT_EQ(*methods.begin(), DexMethod::get_method(g_t, g, void_int));
+  EXPECT_EQ(*unordered_any(methods), DexMethod::get_method(g_t, g, void_int));
   methods.clear();
   // Resolve invoke_virtual G.g(int) for J, K
   type_system.select_methods(*g_g_virt_scope, {j_t, k_t}, methods);
@@ -1540,11 +1540,11 @@ TEST_F(VirtScopeTest, VitualInterfaceResolutionTest) {
 
   // Resolve invoke_interface Intf2.g(int) for I
   type_system.select_methods(intf2_g_intf_scope, {i_t}, methods);
-  EXPECT_EQ(*methods.begin(), DexMethod::get_method(i_t, g, void_int));
+  EXPECT_EQ(*unordered_any(methods), DexMethod::get_method(i_t, g, void_int));
   methods.clear();
   // Resolve invoke_interface Intf2.g(int) for E
   type_system.select_methods(intf2_g_intf_scope, {e_t}, methods);
-  EXPECT_EQ(*methods.begin(), DexMethod::get_method(e_t, g, void_int));
+  EXPECT_EQ(*unordered_any(methods), DexMethod::get_method(e_t, g, void_int));
   methods.clear();
   // Resolve invoke_interface Intf2.g(int) for E, I
   type_system.select_methods(intf2_g_intf_scope, {e_t, i_t}, methods);
@@ -1559,6 +1559,6 @@ TEST_F(VirtScopeTest, VitualInterfaceResolutionTest) {
   // Resolve invoke_interface Intf2.g(int) for J, H
   type_system.select_methods(intf2_g_intf_scope, {j_t, h_t}, methods);
   EXPECT_EQ(methods.size(), 1);
-  EXPECT_EQ(*methods.begin(), DexMethod::get_method(g_t, g, void_int));
+  EXPECT_EQ(*unordered_any(methods), DexMethod::get_method(g_t, g, void_int));
   methods.clear();
 }

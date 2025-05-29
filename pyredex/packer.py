@@ -159,7 +159,6 @@ class _TarXzCompressor(_Compressor):
         self.tarfile: tarfile.TarFile = tarfile.open(
             name=targz_path,
             mode="w:xz",
-            # pyre-ignore[6]: Can't use extensions to type literals.
             preset=_TarXzCompressor._get_compress_level(compression_level),
         )
 

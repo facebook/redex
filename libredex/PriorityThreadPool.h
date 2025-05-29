@@ -147,6 +147,7 @@ class PriorityThreadPool {
     for (auto& thread : m_pool) {
       thread.join();
     }
+    m_pool = decltype(m_pool)();
   }
 
  private:

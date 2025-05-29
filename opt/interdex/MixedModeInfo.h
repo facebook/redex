@@ -7,9 +7,8 @@
 
 #pragma once
 
-#include <unordered_set>
-
 #include "AssetManager.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 
 namespace interdex {
@@ -32,7 +31,7 @@ class MixedModeInfo {
   }
 
   void set_mixed_mode_dex_statuses(
-      std::unordered_set<interdex::DexStatus, std::hash<int>>&&
+      UnorderedSet<interdex::DexStatus, std::hash<int>>&&
           mixed_mode_dex_statuses) {
     m_type = MixedModeType::PRE_DEFINED_DEXES;
     m_mixed_mode_dex_statuses = std::move(mixed_mode_dex_statuses);
@@ -40,7 +39,7 @@ class MixedModeInfo {
 
  private:
   MixedModeType m_type;
-  std::unordered_set<DexStatus, std::hash<int>> m_mixed_mode_dex_statuses;
+  UnorderedSet<DexStatus, std::hash<int>> m_mixed_mode_dex_statuses;
 };
 
 } // namespace interdex

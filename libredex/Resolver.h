@@ -7,18 +7,14 @@
 
 #pragma once
 
+#include <boost/functional/hash.hpp>
+#include <type_traits>
+
 #include "ConcurrentContainers.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
-
-#include <type_traits>
-#include <unordered_map>
-#include <unordered_set>
-
-#include <boost/functional/hash.hpp>
-
-using MethodSet = std::unordered_set<DexMethod*>;
 
 /**
  * Type of search to perform.
@@ -72,7 +68,7 @@ struct MethodRefCacheKeyHash {
 };
 
 using MethodRefCache =
-    std::unordered_map<MethodRefCacheKey, DexMethod*, MethodRefCacheKeyHash>;
+    UnorderedMap<MethodRefCacheKey, DexMethod*, MethodRefCacheKeyHash>;
 
 using ConcurrentMethodRefCache = InsertOnlyConcurrentMap<MethodRefCacheKey,
                                                          DexMethod*,

@@ -11,11 +11,10 @@
 #include <cinttypes>
 #include <map>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include "ConfigFiles.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
@@ -29,12 +28,12 @@ namespace {
 
 const std::string CLASS_DEPENDENCY_FILENAME = "redex-class-dependencies.txt";
 
-using refs_t = std::unordered_map<
-    const DexStore*,
-    ConcurrentMap<const DexClass*, std::unordered_set<DexClass*>>>;
-using class_to_store_map_t = std::unordered_map<const DexClass*, DexStore*>;
+using refs_t =
+    UnorderedMap<const DexStore*,
+                 ConcurrentMap<const DexClass*, UnorderedSet<DexClass*>>>;
+using class_to_store_map_t = UnorderedMap<const DexClass*, DexStore*>;
 using allowed_store_map_t =
-    std::unordered_map<std::string, std::unordered_set<std::string>>;
+    UnorderedMap<std::string, UnorderedSet<std::string>>;
 
 /**
  * Helper function that scans all the opcodes in the application and produces a
@@ -103,7 +102,7 @@ const DexStore& findStore(std::string& name, const DexStoresVector& stores) {
   return stores[0];
 }
 
-const std::unordered_set<std::string>& getAllowedStores(
+const UnorderedSet<std::string>& getAllowedStores(
     const DexStoresVector& stores,
     const DexStore& store,
     allowed_store_map_t& store_map) {
@@ -112,15 +111,13 @@ const std::unordered_set<std::string>& getAllowedStores(
   if (search != store_map.end()) {
     return search->second;
   }
-  std::unordered_set<std::string> map;
+  UnorderedSet<std::string> map;
   map.emplace(name);
   map.emplace(stores[0].get_name());
   for (auto parent : store.get_dependencies()) {
     map.emplace(parent);
-    for (const auto& grandparent :
-         getAllowedStores(stores, findStore(parent, stores), store_map)) {
-      map.emplace(grandparent);
-    }
+    insert_unordered_iterable(
+        map, getAllowedStores(stores, findStore(parent, stores), store_map));
   }
   auto [it, emplaced] = store_map.emplace(name, std::move(map));
   always_assert(emplaced);
@@ -135,7 +132,7 @@ uint64_t verifyStore(const DexStoresVector& stores,
                      FILE* fd) {
   const auto& allowed_stores = getAllowedStores(stores, store, store_map);
   uint64_t dependencies{0};
-  for (auto& [target, sources] : class_refs.at(&store)) {
+  for (auto& [target, sources] : UnorderedIterable(class_refs.at(&store))) {
     always_assert(!sources.empty());
     auto find = map.find(target);
     static const std::string external_store_name = "external";
@@ -143,7 +140,7 @@ uint64_t verifyStore(const DexStoresVector& stores,
         find != map.end() ? find->second->get_name() : external_store_name;
 
     if (!allowed_stores.count(target_store_name)) {
-      for (const auto& source : sources) {
+      for (const auto& source : UnorderedIterable(sources)) {
         TRACE(VERIFY, 5, "BAD REFERENCE from %s %s to %s %s",
               store.get_name().c_str(), show_deobfuscated(source).c_str(),
               target_store_name.c_str(), show_deobfuscated(target).c_str());
@@ -151,7 +148,7 @@ uint64_t verifyStore(const DexStoresVector& stores,
     }
     if (fd != nullptr) {
       std::string target_deobfuscated = show_deobfuscated(target);
-      for (const auto& source : sources) {
+      for (const auto& source : UnorderedIterable(sources)) {
         fprintf(fd, "%s:%s->%s:%s\n", store.get_name().c_str(),
                 show_deobfuscated(source).c_str(), target_store_name.c_str(),
                 target_deobfuscated.c_str());

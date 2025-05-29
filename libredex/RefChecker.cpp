@@ -7,6 +7,7 @@
 
 #include "RefChecker.h"
 
+#include "DeterministicContainers.h"
 #include "EditableCfgAdapter.h"
 #include "Resolver.h"
 #include "Show.h"
@@ -20,9 +21,9 @@ CodeRefs::CodeRefs(const DexMethod* method,
   }
   always_assert(method->get_code()->editable_cfg_built());
   auto& cfg = reduced_cfg ? *reduced_cfg : method->get_code()->cfg();
-  std::unordered_set<const DexType*> types_set;
-  std::unordered_set<const DexMethod*> methods_set;
-  std::unordered_set<const DexField*> fields_set;
+  UnorderedSet<const DexType*> types_set;
+  UnorderedSet<const DexMethod*> methods_set;
+  UnorderedSet<const DexField*> fields_set;
   for (auto& mie : InstructionIterable(cfg)) {
     auto insn = mie.insn;
     if (insn->has_type()) {
@@ -65,13 +66,13 @@ CodeRefs::CodeRefs(const DexMethod* method,
   }
 
   types.reserve(types_set.size());
-  types.insert(types.end(), types_set.begin(), types_set.end());
+  insert_unordered_iterable(types, types.end(), types_set);
 
   methods.reserve(methods_set.size());
-  methods.insert(methods.end(), methods_set.begin(), methods_set.end());
+  insert_unordered_iterable(methods, methods.end(), methods_set);
 
   fields.reserve(fields_set.size());
-  fields.insert(fields.end(), fields_set.begin(), fields_set.end());
+  insert_unordered_iterable(fields, fields.end(), fields_set);
 }
 
 bool RefChecker::check_type(const DexType* type) const {

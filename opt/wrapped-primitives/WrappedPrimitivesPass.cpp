@@ -128,6 +128,10 @@ void WrappedPrimitivesPass::bind_config() {
       if (wrapped_api == nullptr) {
         continue;
       }
+      always_assert_log(wrapped_api->as_def(),
+                        "Allowed invoke %s must be defined on the type and not "
+                        "referenced from a sub type",
+                        api.c_str());
       std::string unwrapped_api_desc;
       JsonWrapper jobj = JsonWrapper(obj);
       jobj.get(api.c_str(), "", unwrapped_api_desc);
@@ -177,8 +181,7 @@ void WrappedPrimitivesPass::run_pass(DexStoresVector& stores,
 }
 
 namespace {
-using PreceedingSourceBlockMap =
-    std::unordered_map<IRInstruction*, SourceBlock*>;
+using PreceedingSourceBlockMap = UnorderedMap<IRInstruction*, SourceBlock*>;
 
 PreceedingSourceBlockMap build_preceeding_source_block_map(
     cfg::ControlFlowGraph& cfg) {
@@ -226,7 +229,7 @@ void ValidateWrappedPrimitivesPass::run_pass(DexStoresVector& stores,
   // Look up types that were processed previously by name, in case of rename or
   // complete deletion.
   std::map<std::string, DexType*> wrapper_types_post;
-  std::unordered_map<DexType*, std::string> wrapper_types_post_inverse;
+  UnorderedMap<DexType*, std::string> wrapper_types_post_inverse;
   auto find_impl = [&](DexClass* cls, const std::string& name) {
     auto search = wrapped_primitives_pass->m_wrapper_type_names.find(name);
     if (search != wrapped_primitives_pass->m_wrapper_type_names.end()) {
@@ -296,7 +299,7 @@ void ValidateWrappedPrimitivesPass::run_pass(DexStoresVector& stores,
                 // effort to give some information that could point the reader
                 // to the original location of the usage before optimizations.
                 auto field_name = show_deobfuscated(def);
-                for (auto& use : search->second) {
+                for (auto& use : UnorderedIterable(search->second)) {
                   SourceBlock* preceeding_source_block{nullptr};
                   auto sb = sb_lookup->find(use.insn);
                   if (sb != sb_lookup->end() && sb->second != nullptr) {

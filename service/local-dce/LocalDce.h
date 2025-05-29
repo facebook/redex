@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "IRCode.h"
 #include "InitClassPruner.h"
 #include "InitClassesWithSideEffects.h"
@@ -75,7 +76,7 @@ class LocalDce {
   explicit LocalDce(
       const init_classes::InitClassesWithSideEffects*
           init_classes_with_side_effects,
-      const std::unordered_set<DexMethodRef*>& pure_methods,
+      const UnorderedSet<DexMethodRef*>& pure_methods,
       const method_override_graph::Graph* method_override_graph = nullptr,
       bool may_allocate_registers = false,
       bool ignore_pure_method_init_classes = false,
@@ -103,7 +104,7 @@ class LocalDce {
  private:
   const init_classes::InitClassesWithSideEffects*
       m_init_classes_with_side_effects;
-  const std::unordered_set<DexMethodRef*>& m_pure_methods;
+  const UnorderedSet<DexMethodRef*>& m_pure_methods;
   const method_override_graph::Graph* m_method_override_graph;
   const bool m_may_allocate_registers;
   const bool m_ignore_pure_method_init_classes;

@@ -22,7 +22,7 @@ BuilderTransform::BuilderTransform(
     : m_type_system(type_system),
       m_root(root),
       m_inliner_config(inliner_config) {
-  std::unordered_set<DexMethod*> no_default_inlinables;
+  UnorderedSet<DexMethod*> no_default_inlinables;
   // customize shrinking options
   m_inliner_config.shrinker = shrinker::ShrinkerConfig();
   m_inliner_config.shrinker.run_const_prop = true;
@@ -37,13 +37,11 @@ BuilderTransform::BuilderTransform(
       MultiMethodInlinerMode::None));
 }
 
-std::unordered_set<IRInstruction*> BuilderTransform::try_inline_calls(
-    DexMethod* caller,
-    const std::unordered_set<IRInstruction*>& insns,
-    std::vector<IRInstruction*>* deleted_insns) {
+UnorderedSet<IRInstruction*> BuilderTransform::try_inline_calls(
+    DexMethod* caller, const UnorderedSet<IRInstruction*>& insns) {
   always_assert(caller && caller->get_code());
-  m_inliner->inline_callees(caller, insns, deleted_insns);
-  std::unordered_set<IRInstruction*> not_inlined_insns;
+  m_inliner->inline_callees(caller, insns);
+  UnorderedSet<IRInstruction*> not_inlined_insns;
   // Check if everything was inlined.
   auto* code = caller->get_code();
   auto& cfg = code->cfg();
@@ -70,15 +68,15 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
 
   const std::vector<DexMethod*>& super_ctors_list =
       type_class(m_root)->get_ctors();
-  std::unordered_set<DexMethod*> super_ctors(super_ctors_list.begin(),
-                                             super_ctors_list.end());
+  UnorderedSet<DexMethod*> super_ctors(super_ctors_list.begin(),
+                                       super_ctors_list.end());
 
   for (DexMethod* method : methods) {
     if (!method->get_code()) {
       continue;
     }
     auto& cfg = method->get_code()->cfg();
-    std::unordered_set<IRInstruction*> inlinable_insns;
+    UnorderedSet<IRInstruction*> inlinable_insns;
     for (const auto& mie : InstructionIterable(cfg)) {
       auto insn = mie.insn;
       if (insn->opcode() == OPCODE_INVOKE_SUPER) {
@@ -102,7 +100,7 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
       m_method_copy[method] = method_copy;
 
       size_t num_insns_not_inlined =
-          try_inline_calls(method, inlinable_insns, nullptr).size();
+          try_inline_calls(method, inlinable_insns).size();
       if (num_insns_not_inlined > 0) {
         return false;
       }
@@ -116,9 +114,9 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
  * Bind virtual calls to the actual implementation.
  */
 void BuilderTransform::update_virtual_calls(
-    const std::unordered_map<IRInstruction*, DexType*>& insn_to_type) {
+    const UnorderedMap<IRInstruction*, DexType*>& insn_to_type) {
 
-  for (const auto& pair : insn_to_type) {
+  for (const auto& pair : UnorderedIterable(insn_to_type)) {
     auto insn = pair.first;
     auto current_instance = pair.second;
 
@@ -276,7 +274,7 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
 }
 
 void BuilderTransform::cleanup() {
-  for (const auto& pair : m_method_copy) {
+  for (const auto& pair : UnorderedIterable(m_method_copy)) {
     auto method = pair.first;
     auto copy = pair.second;
 
@@ -285,7 +283,6 @@ void BuilderTransform::cleanup() {
           "Replacing method with its original version %s",
           SHOW(method));
     method->set_code(copy->release_code());
-    DexMethod::erase_method(copy);
     DexMethod::delete_method_DO_NOT_USE(copy);
   }
   m_inliner->flush();

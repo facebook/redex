@@ -214,6 +214,6 @@ TEST_F(ConstructorAnalysisTest, can_detect_relaxed_inlined_init) {
   }
   auto result = constructor_analysis::find_complex_init_inlined_types(scope);
   EXPECT_EQ(result.size(), 1);
-  EXPECT_EQ(*result.begin(), baz_cls->get_type())
-      << "GOT " << show(*result.begin());
+  EXPECT_EQ(*unordered_any(result), baz_cls->get_type())
+      << "GOT " << show(*unordered_any(result));
 }

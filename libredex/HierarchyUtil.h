@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <unordered_set>
-
 #include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "MethodOverrideGraph.h"

@@ -5,6 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <algorithm>
+#include <map>
+#include <string>
+#include <vector>
+
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
@@ -12,18 +18,10 @@
 #include "Tool.h"
 #include "Walkers.h"
 
-#include <algorithm>
-#include <map>
-#include <string>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
-
-using refs_t = std::unordered_map<const DexClass*,
-                                  std::set<DexClass*, dexclasses_comparator>>;
-using class_to_store_map_t = std::unordered_map<const DexClass*, DexStore*>;
-using allowed_store_map_t =
-    std::unordered_map<std::string, std::set<std::string>>;
+using refs_t =
+    UnorderedMap<const DexClass*, std::set<DexClass*, dexclasses_comparator>>;
+using class_to_store_map_t = UnorderedMap<const DexClass*, DexStore*>;
+using allowed_store_map_t = UnorderedMap<std::string, std::set<std::string>>;
 
 namespace {
 
@@ -135,7 +133,7 @@ void verify(DexStoresVector& stores) {
   // Verify references
   for (const auto& store : stores) {
     // Validate that it's legal for each referer to see each reference.
-    for (auto& ref : class_refs) {
+    for (auto& ref : UnorderedIterable(class_refs)) {
       const auto reference = ref.first;
       for (const auto& referer : ref.second) {
         auto reference_store_it = cls_store_map.find(reference);

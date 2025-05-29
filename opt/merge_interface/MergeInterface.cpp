@@ -154,7 +154,7 @@ void strip_out_collision(const Scope& scope,
                          std::vector<DexClassSet>* candidates) {
   UnorderedTypeSet mergeables;
 
-  std::unordered_map<const DexType*, DexType*> intf_merge_map;
+  UnorderedMap<const DexType*, DexType*> intf_merge_map;
   for (auto it = candidates->begin(); it != candidates->end(); ++it) {
     const DexClassSet& intf_set = *it;
     if (intf_set.size() <= 1) {
@@ -169,7 +169,7 @@ void strip_out_collision(const Scope& scope,
     }
   }
 
-  for (const auto& i : intf_merge_map) {
+  for (const auto& i : UnorderedIterable(intf_merge_map)) {
     mergeables.insert(i.first);
   }
 
@@ -305,7 +305,7 @@ void strip_out_dmethod_relo_problem_intf(const Scope& scope,
 void move_methods_to_interface(
     DexClass* from_interface,
     DexClass* target_interface,
-    std::unordered_map<DexMethodRef*, DexMethodRef*>* old_to_new_method) {
+    UnorderedMap<DexMethodRef*, DexMethodRef*>* old_to_new_method) {
   DexType* target_intf_type = target_interface->get_type();
   auto dmethods = from_interface->get_dmethods();
   auto vmethods = from_interface->get_vmethods();
@@ -349,10 +349,7 @@ void move_methods_to_interface(
                               method_to_move->get_name(),
                               method_to_move->get_proto());
     if (methodref_in_context != nullptr) {
-      DexMethodRef::erase_method(methodref_in_context);
-      if (methodref_in_context->is_def()) {
-        DexMethod::delete_method(methodref_in_context->as_def());
-      }
+      DexMethod::delete_method(methodref_in_context);
 
       // Even resolve_method returns nullptr, get_method might still return
       // some DexMethodRef, that means some where in code this DexMethodRef
@@ -384,11 +381,11 @@ void move_fields_to_interface(DexClass* from_interface,
   }
 }
 
-std::unordered_map<const DexType*, DexType*> merge_interfaces(
+UnorderedMap<const DexType*, DexType*> merge_interfaces(
     const std::vector<DexClassSet>& to_merge,
     MergeInterfacePass::Metric* metric,
-    std::unordered_map<DexMethodRef*, DexMethodRef*>* old_to_new_method) {
-  std::unordered_map<const DexType*, DexType*> intf_merge_map;
+    UnorderedMap<DexMethodRef*, DexMethodRef*>* old_to_new_method) {
+  UnorderedMap<const DexType*, DexType*> intf_merge_map;
   for (auto it = to_merge.begin(); it != to_merge.end(); ++it) {
     const DexClassSet& intf_set = *it;
     if (intf_set.size() <= 1) {
@@ -443,8 +440,8 @@ std::unordered_map<const DexType*, DexType*> merge_interfaces(
 
 void update_reference_for_code(
     const Scope& scope,
-    const std::unordered_map<const DexType*, DexType*>& intf_merge_map,
-    const std::unordered_map<DexMethodRef*, DexMethodRef*>& old_to_new_method) {
+    const UnorderedMap<const DexType*, DexType*>& intf_merge_map,
+    const UnorderedMap<DexMethodRef*, DexMethodRef*>& old_to_new_method) {
   auto patcher = [&old_to_new_method, &intf_merge_map](DexMethod*,
                                                        IRCode& code) {
     auto ii = InstructionIterable(code);
@@ -511,7 +508,7 @@ void update_reference_for_code(
 
 void remove_implements(
     const Scope& scope,
-    const std::unordered_map<const DexType*, DexType*>& intf_merge_map) {
+    const UnorderedMap<const DexType*, DexType*>& intf_merge_map) {
   // TODO(suree404): possible speed optimization, use type system to get
   // implementors and interface children and only update those.
   for (const auto& cls : scope) {
@@ -555,8 +552,8 @@ void remove_implements(
 
 void update_after_merge(
     const Scope& scope,
-    const std::unordered_map<const DexType*, DexType*>& intf_merge_map,
-    const std::unordered_map<DexMethodRef*, DexMethodRef*>& old_to_new_method,
+    const UnorderedMap<const DexType*, DexType*>& intf_merge_map,
+    const UnorderedMap<DexMethodRef*, DexMethodRef*>& old_to_new_method,
     const ClassHierarchy& ch) {
   type_reference::update_method_signature_type_references(scope, intf_merge_map,
                                                           ch);
@@ -568,7 +565,7 @@ void update_after_merge(
 // TODO(suree404): Remove this part and rely on RMU for cleaning up.
 void remove_merged_interfaces(
     Scope& scope,
-    const std::unordered_map<const DexType*, DexType*>& intf_merge_map) {
+    const UnorderedMap<const DexType*, DexType*>& intf_merge_map) {
   if (intf_merge_map.empty()) return;
   Scope tscope(scope);
   scope.clear();
@@ -582,7 +579,7 @@ void remove_merged_interfaces(
 }
 
 void write_interface_merging_mapping_file(
-    const std::unordered_map<const DexType*, DexType*>& intf_merge_map,
+    const UnorderedMap<const DexType*, DexType*>& intf_merge_map,
     const std::string& mapping_file) {
   if (mapping_file.empty()) {
     TRACE(MEINT, 1, "Interface merging mapping file not provided");
@@ -590,7 +587,7 @@ void write_interface_merging_mapping_file(
   }
   FILE* fd = fopen(mapping_file.c_str(), "w");
   std::stringstream out;
-  for (const auto& pair : intf_merge_map) {
+  for (const auto& pair : UnorderedIterable(intf_merge_map)) {
     out << SHOW(pair.first) << " -> " << SHOW(pair.second) << "\n";
   }
   fprintf(fd, "%s", out.str().c_str());
@@ -645,7 +642,7 @@ void MergeInterfacePass::run_pass(DexStoresVector& stores,
   // Remove interfaces that if merged could cause virtual method collision
   strip_out_collision(scope, &can_merge);
   strip_out_dmethod_relo_problem_intf(scope, &can_merge);
-  std::unordered_map<DexMethodRef*, DexMethodRef*> old_to_new_method;
+  UnorderedMap<DexMethodRef*, DexMethodRef*> old_to_new_method;
   auto intf_merge_map =
       merge_interfaces(can_merge, &m_metric, &old_to_new_method);
   auto& ch = type_system.get_class_scopes().get_parent_to_children();

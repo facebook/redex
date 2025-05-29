@@ -9,6 +9,7 @@
 
 #include "CFGMutation.h"
 #include "Creators.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "LiveRange.h"
@@ -268,7 +269,7 @@ RemoveNullcheckStringArg::Stats RemoveNullcheckStringArg::change_in_cfg(
   Stats stats{};
   cfg::CFGMutation m(cfg);
   auto params = cfg.get_param_instructions();
-  std::unordered_map<size_t, int> param_index;
+  UnorderedMap<size_t, int> param_index;
   int arg_index = is_virtual ? -1 : 0;
 
   reaching_defs::MoveAwareFixpointIterator reaching_defs_iter(cfg);
@@ -331,7 +332,7 @@ RemoveNullcheckStringArg::Stats RemoveNullcheckStringArg::change_in_cfg(
 
         auto use_set = du_chains[param_load_insn];
         if (use_set.size() == 1) {
-          for (const auto& p : use_set) {
+          for (const auto& p : UnorderedIterable(use_set)) {
             always_assert(p.insn == insn);
           }
           // If we have single use which is null check, remove null check.

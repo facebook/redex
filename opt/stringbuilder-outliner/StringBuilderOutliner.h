@@ -10,6 +10,7 @@
 #include <sparta/AbstractDomain.h>
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
 
+#include "DeterministicContainers.h"
 #include "LocalPointersAnalysis.h"
 #include "Pass.h"
 
@@ -128,13 +129,13 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
   bool is_eligible_append(const DexMethodRef*) const;
 
   const DexType* m_stringbuilder;
-  std::unordered_set<DexType*> m_immutable_types;
+  UnorderedSet<DexType*> m_immutable_types;
   const DexMethodRef* m_stringbuilder_no_param_init;
   const DexMethodRef* m_stringbuilder_init_with_string;
   const DexString* m_append_str;
 };
 
-using InstructionSet = std::unordered_set<const IRInstruction*>;
+using InstructionSet = UnorderedSet<const IRInstruction*>;
 
 using BuilderStateMap =
     std::vector<std::pair<const IRInstruction*, BuilderState>>;
@@ -180,9 +181,8 @@ class Outliner {
   std::unique_ptr<IRCode> create_outline_helper_code(DexMethod*) const;
 
   static void apply_changes(
-      const std::unordered_map<const IRInstruction*, IRInstruction*>&
-          insns_to_insert,
-      const std::unordered_map<const IRInstruction*, IRInstruction*>&
+      const UnorderedMap<const IRInstruction*, IRInstruction*>& insns_to_insert,
+      const UnorderedMap<const IRInstruction*, IRInstruction*>&
           insns_to_replace,
       IRCode* code);
 
@@ -200,7 +200,7 @@ class Outliner {
   AtomicMap<const DexTypeList*, size_t> m_outline_typelists;
   // Typelists of call sequences we have chosen to outline -> generated outline
   // helper method.
-  std::unordered_map<const DexTypeList*, DexMethod*> m_outline_helpers;
+  UnorderedMap<const DexTypeList*, DexMethod*> m_outline_helpers;
 
   InsertOnlyConcurrentMap<const IRCode*, BuilderStateMap> m_builder_state_maps;
 };

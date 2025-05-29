@@ -122,7 +122,7 @@ ConfigFiles::~ConfigFiles() {
 /**
  * This function relies on the g_redex.
  */
-const std::unordered_set<DexType*>& ConfigFiles::get_no_optimizations_annos() {
+const UnorderedSet<DexType*>& ConfigFiles::get_no_optimizations_annos() {
   if (m_no_optimizations_annos.empty()) {
     Json::Value no_optimizations_anno;
     m_json.get("no_optimizations_annotations", Json::nullValue,
@@ -138,8 +138,7 @@ const std::unordered_set<DexType*>& ConfigFiles::get_no_optimizations_annos() {
   return m_no_optimizations_annos;
 }
 
-const std::unordered_set<std::string>&
-ConfigFiles::get_no_optimizations_blocklist() {
+const UnorderedSet<std::string>& ConfigFiles::get_no_optimizations_blocklist() {
   if (m_no_optimizations_blocklist.empty()) {
     Json::Value no_optimizations_blocklist;
     m_json.get("no_optimizations_blocklist", Json::nullValue,
@@ -156,7 +155,7 @@ ConfigFiles::get_no_optimizations_blocklist() {
 /**
  * This function relies on the g_redex.
  */
-const std::unordered_set<DexMethodRef*>& ConfigFiles::get_pure_methods() {
+const UnorderedSet<DexMethodRef*>& ConfigFiles::get_pure_methods() {
   if (m_pure_methods.empty()) {
     Json::Value pure_methods;
     m_json.get("pure_methods", Json::nullValue, pure_methods);
@@ -174,8 +173,7 @@ const std::unordered_set<DexMethodRef*>& ConfigFiles::get_pure_methods() {
 /**
  * This function relies on the g_redex.
  */
-const std::unordered_set<const DexString*>&
-ConfigFiles::get_finalish_field_names() {
+const UnorderedSet<const DexString*>& ConfigFiles::get_finalish_field_names() {
   if (m_finalish_field_names.empty()) {
     Json::Value finalish_field_names;
     m_json.get("finalish_field_names", Json::nullValue, finalish_field_names);
@@ -194,7 +192,7 @@ ConfigFiles::get_finalish_field_names() {
  * This function relies on the g_redex.
  */
 
-const std::unordered_set<DexType*>& ConfigFiles::get_do_not_devirt_anon() {
+const UnorderedSet<DexType*>& ConfigFiles::get_do_not_devirt_anon() {
   if (m_no_devirtualize_annos.empty()) {
     std::vector<std::string> no_devirtualize_anno_names;
     m_json.get("no_devirtualize_annos", {}, no_devirtualize_anno_names);
@@ -210,7 +208,7 @@ const std::unordered_set<DexType*>& ConfigFiles::get_do_not_devirt_anon() {
   return m_no_devirtualize_annos;
 }
 
-std::unordered_map<const DexString*, std::vector<uint8_t>>
+UnorderedMap<const DexString*, std::vector<uint8_t>>
 ConfigFiles::load_class_frequencies() {
   if (m_class_frequency_filename.empty()) {
     return {};
@@ -218,7 +216,7 @@ ConfigFiles::load_class_frequencies() {
   Timer t("loading class frequencies");
   std::ifstream input(m_class_frequency_filename, std::ios_base::in);
 
-  std::unordered_map<const DexString*, std::vector<uint8_t>> class_freq_map;
+  UnorderedMap<const DexString*, std::vector<uint8_t>> class_freq_map;
 
   std::string line;
   std::getline(input, line);
@@ -332,9 +330,9 @@ std::string ConfigFiles::get_preprocessed_baseline_profile_file(
 /**
  * Read a map of {list_name : class_list} from json
  */
-std::unordered_map<std::string, std::vector<std::string>>
+UnorderedMap<std::string, std::vector<std::string>>
 ConfigFiles::load_class_lists() {
-  std::unordered_map<std::string, std::vector<std::string>> lists;
+  UnorderedMap<std::string, std::vector<std::string>> lists;
   std::string class_lists_filename;
   this->m_json.get("class_lists", "", class_lists_filename);
 
@@ -365,7 +363,7 @@ ConfigFiles::load_class_lists() {
   return lists;
 }
 
-const std::unordered_map<std::string, ConfigFiles::DeadClassLoadCounts>&
+const UnorderedMap<std::string, ConfigFiles::DeadClassLoadCounts>&
 ConfigFiles::get_dead_class_list() {
   build_dead_class_and_live_class_split_lists();
   return m_dead_classes;
@@ -376,8 +374,7 @@ const std::vector<std::string>& ConfigFiles::get_halfnosis_block_list() {
   return m_halfnosis_block_list;
 }
 
-const std::unordered_set<std::string>&
-ConfigFiles::get_live_class_split_list() {
+const UnorderedSet<std::string>& ConfigFiles::get_live_class_split_list() {
   build_dead_class_and_live_class_split_lists();
   return m_live_relocated_classes;
 }
@@ -586,7 +583,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
     }
   }
 
-  const static std::unordered_map<std::string, inliner::UnfinalizePerfMode>
+  const static UnorderedMap<std::string, inliner::UnfinalizePerfMode>
       unfinalize_perf_mode_mapping = {
           {"none", inliner::UnfinalizePerfMode::NONE},
           {"not-cold", inliner::UnfinalizePerfMode::NOT_COLD},
@@ -805,7 +802,7 @@ void ConfigFiles::set_outdir(const std::string& new_outdir) {
 }
 
 void ConfigFiles::set_class_lists(
-    std::unordered_map<std::string, std::vector<std::string>> l) {
+    UnorderedMap<std::string, std::vector<std::string>> l) {
   m_class_lists = std::move(l);
   m_load_class_lists_attempted = true;
 }

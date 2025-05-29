@@ -11,6 +11,7 @@
 #include <random>
 
 #include "ConfigFiles.h"
+#include "DeterministicContainers.h"
 #include "DexStoreUtil.h"
 #include "DexStructure.h"
 #include "DexUtil.h"
@@ -70,9 +71,8 @@ void NopperPass::run_pass(DexStoresVector& stores,
 
   auto scope = build_class_scope(stores);
 
-  std::unordered_map<DexMethod*, const DexClasses*> method_to_dexes;
-  std::unordered_map<const DexClasses*, nopper_impl::AuxiliaryDefs>
-      auxiliary_defs;
+  UnorderedMap<DexMethod*, const DexClasses*> method_to_dexes;
+  UnorderedMap<const DexClasses*, nopper_impl::AuxiliaryDefs> auxiliary_defs;
   if (m_complex) {
     for (auto& store : stores) {
       const auto& dexen = store.get_dexen();
@@ -110,7 +110,7 @@ void NopperPass::run_pass(DexStoresVector& stores,
   });
 
   std::vector<std::pair<DexMethod*, cfg::Block*>> noppable_blocks_vec;
-  for (auto&& [method, blocks] : gathered_noppable_blocks) {
+  for (auto&& [method, blocks] : UnorderedIterable(gathered_noppable_blocks)) {
     for (auto* block : blocks) {
       noppable_blocks_vec.emplace_back(method, block);
     }
@@ -123,8 +123,7 @@ void NopperPass::run_pass(DexStoresVector& stores,
   auto end = (size_t)std::lround(noppable_blocks_vec.size() * m_probability);
   noppable_blocks_vec.resize(end);
 
-  std::unordered_map<DexMethod*, std::unordered_set<cfg::Block*>>
-      noppable_blocks;
+  UnorderedMap<DexMethod*, std::unordered_set<cfg::Block*>> noppable_blocks;
   for (auto&& [method, block] : noppable_blocks_vec) {
     noppable_blocks[method].insert(block);
   }

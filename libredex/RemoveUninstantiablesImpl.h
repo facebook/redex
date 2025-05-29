@@ -8,6 +8,7 @@
 #pragma once
 
 #include "ConcurrentContainers.h"
+#include "DeterministicContainers.h"
 #include "DexStore.h"
 #include "Pass.h"
 
@@ -48,7 +49,7 @@ struct Stats {
 /// Look for mentions of uninstantiable classes in \p cfg and modify them
 /// in-place.
 Stats replace_uninstantiable_refs(
-    const std::unordered_set<DexType*>& scoped_uninstantiable_types,
+    const UnorderedSet<DexType*>& scoped_uninstantiable_types,
     cfg::ControlFlowGraph& cfg);
 
 /// Replace the instructions in \p cfg with `throw unreachable;`.  Preserves the

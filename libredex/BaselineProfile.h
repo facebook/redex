@@ -8,10 +8,9 @@
 #pragma once
 
 #include <stdint.h>
-#include <unordered_map>
-#include <unordered_set>
 
 #include "BaselineProfileConfig.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "MethodProfiles.h"
 
@@ -24,24 +23,24 @@ struct MethodFlags {
 };
 
 struct BaselineProfile {
-  std::unordered_map<const DexMethod*, MethodFlags> methods;
-  std::unordered_set<const DexClass*> classes;
+  UnorderedMap<const DexMethod*, MethodFlags> methods;
+  UnorderedSet<const DexClass*> classes;
 };
 
-// Returns a tuple of BaselineProfile and std::unordered_map<std::string,
+// Returns a tuple of BaselineProfile and UnorderedMap<std::string,
 // BaselineProfile> The first is the default profile that will be fed into the
 // baseline profile driver as a manual input. The second is a mapping of config
 // name to final baseline profile for every baseline profile that redex is
 // generating.
-std::tuple<BaselineProfile, std::unordered_map<std::string, BaselineProfile>>
+std::tuple<BaselineProfile, UnorderedMap<std::string, BaselineProfile>>
 get_baseline_profiles(
-    const std::unordered_map<std::string, BaselineProfileConfig>& configs,
+    const UnorderedMap<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
-    std::unordered_set<const DexMethodRef*>* method_refs_without_def = nullptr);
+    UnorderedSet<const DexMethodRef*>* method_refs_without_def = nullptr);
 
 BaselineProfile get_default_baseline_profile(
-    const std::unordered_map<std::string, BaselineProfileConfig>& configs,
+    const UnorderedMap<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
-    std::unordered_set<const DexMethodRef*>* method_refs_without_def = nullptr);
+    UnorderedSet<const DexMethodRef*>* method_refs_without_def = nullptr);
 
 } // namespace baseline_profiles

@@ -18,11 +18,11 @@ DexType* get_type(const std::string& type_s);
 std::vector<DexType*> get_types(const std::vector<std::string>& target_types);
 
 void load_types(const std::vector<std::string>& type_names,
-                std::unordered_set<const DexType*>& types);
+                UnorderedSet<const DexType*>& types);
 
 void load_types_and_prefixes(const std::vector<std::string>& type_names,
-                             std::unordered_set<const DexType*>& types,
-                             std::unordered_set<std::string>& prefixes);
+                             UnorderedSet<const DexType*>& types,
+                             UnorderedSet<std::string>& prefixes);
 
 } // namespace utils
 

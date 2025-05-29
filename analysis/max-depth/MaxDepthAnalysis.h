@@ -7,8 +7,7 @@
 
 #pragma once
 
-#include <unordered_map>
-
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "Pass.h"
 
@@ -27,7 +26,7 @@ class MaxDepthAnalysisPass : public Pass {
   bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  using Result = std::unordered_map<const DexMethod*, int>;
+  using Result = UnorderedMap<const DexMethod*, int>;
 
   std::shared_ptr<Result> get_result() { return m_result; }
 

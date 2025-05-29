@@ -7,6 +7,14 @@
 
 #include "Instrument.h"
 
+#include <boost/algorithm/string.hpp>
+#include <cmath>
+#include <fstream>
+#include <iostream>
+#include <mutex>
+#include <string>
+#include <vector>
+
 #include "BlockInstrument.h"
 #include "CFGMutation.h"
 #include "DexAnnotation.h"
@@ -27,16 +35,6 @@
 #include "Timer.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
-
-#include <boost/algorithm/string.hpp>
-#include <cmath>
-#include <fstream>
-#include <iostream>
-#include <mutex>
-#include <string>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
 
 using namespace instrument;
 
@@ -60,7 +58,7 @@ constexpr const char* METHOD_REPLACEMENT = "methods_replacement";
 // For example, say that "Lcom/facebook/debug/" is in the set. We match either
 // "^Lcom/facebook/debug/*" or "^Lcom/facebook/debug;".
 bool match_class_name(std::string cls_name,
-                      const std::unordered_set<std::string>& set) {
+                      const UnorderedSet<std::string>& set) {
   always_assert(cls_name.back() == ';');
   // We also support exact class name (e.g., "Lcom/facebook/Debug;")
   if (set.count(cls_name)) {
@@ -149,7 +147,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
 
   size_t method_id = 0;
   size_t excluded = 0;
-  std::unordered_set<std::string> method_names;
+  UnorderedSet<std::string> method_names;
   std::vector<DexMethod*> to_instrument;
 
   auto worker = [&](DexMethod* method, size_t& total_size) -> int {
@@ -338,10 +336,9 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   pm.incr_metric("Excluded", excluded);
 }
 
-std::unordered_set<std::string> load_blocklist_file(
-    const std::string& file_name) {
+UnorderedSet<std::string> load_blocklist_file(const std::string& file_name) {
   // Assume the file simply enumerates blocklisted names.
-  std::unordered_set<std::string> ret;
+  UnorderedSet<std::string> ret;
   std::ifstream ifs(file_name);
   assert_log(ifs, "Can't open blocklist file: %s\n", SHOW(file_name));
 
@@ -550,7 +547,7 @@ void InstrumentPass::bind_config() {
 
   after_configuration([this] {
     // Currently we only support instance call to static call.
-    for (auto& pair : m_options.methods_replacement) {
+    for (auto& pair : UnorderedIterable(m_options.methods_replacement)) {
       always_assert(!is_static(pair.first));
       always_assert(is_static(pair.second));
     }
@@ -780,7 +777,7 @@ void InstrumentPass::eval_pass(DexStoresVector& stores,
 // - "Lcom/fb/foo;.bar()V" matches exact full method names.
 // - "Lcom/fb/foo;.bar*" matches method name prefixes.
 bool InstrumentPass::is_included(const DexMethod* method,
-                                 const std::unordered_set<std::string>& set) {
+                                 const UnorderedSet<std::string>& set) {
   if (set.empty()) {
     return false;
   }
@@ -792,7 +789,7 @@ bool InstrumentPass::is_included(const DexMethod* method,
   }
 
   // Prefix method name matching.
-  for (const auto& pattern : set) {
+  for (const auto& pattern : UnorderedIterable(set)) {
     if (pattern.back() == '*') {
       if (full_method_name.find(pattern.substr(0, pattern.length() - 1)) !=
           std::string::npos) {
@@ -804,12 +801,12 @@ bool InstrumentPass::is_included(const DexMethod* method,
   return match_class_name(show_deobfuscated(method->get_class()), set);
 }
 
-std::pair<std::unordered_map<int /*shard_num*/, DexMethod*>,
-          std::unordered_set<std::string>>
+std::pair<UnorderedMap<int /*shard_num*/, DexMethod*>,
+          UnorderedSet<std::string>>
 InstrumentPass::generate_sharded_analysis_methods(
     DexClass* cls,
     const std::string& template_method_full_name,
-    const std::unordered_map<int /*shard_num*/, DexFieldRef*>& array_fields,
+    const UnorderedMap<int /*shard_num*/, DexFieldRef*>& array_fields,
     const size_t num_shards) {
   DexMethod* template_method =
       cls->find_method_from_simple_deobfuscated_name(template_method_full_name);
@@ -826,8 +823,8 @@ InstrumentPass::generate_sharded_analysis_methods(
 
   const auto template_method_name = template_method->get_name()->str();
 
-  std::unordered_map<int /*shard_num*/, DexMethod*> new_analysis_methods;
-  std::unordered_set<std::string> method_names;
+  UnorderedMap<int /*shard_num*/, DexMethod*> new_analysis_methods;
+  UnorderedSet<std::string> method_names;
 
   // Even if one shard, we create a new method from the template method.
   for (size_t i = 1; i <= num_shards; ++i) {
@@ -875,7 +872,7 @@ InstrumentPass::generate_sharded_analysis_methods(
   return std::make_pair(new_analysis_methods, method_names);
 }
 
-std::unordered_map<int /*shard_num*/, DexFieldRef*>
+UnorderedMap<int /*shard_num*/, DexFieldRef*>
 InstrumentPass::patch_sharded_arrays(
     DexClass* cls,
     const size_t num_shards,
@@ -899,7 +896,7 @@ InstrumentPass::patch_sharded_arrays(
   IRCode* code = clinit->get_code();
   always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
-  std::unordered_map<int /*shard_num*/, DexFieldRef*> fields;
+  UnorderedMap<int /*shard_num*/, DexFieldRef*> fields;
   bool patched = false;
   walk::matching_opcodes_in_block(
       *clinit,
@@ -1064,9 +1061,9 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
 
   // Append block listed classes from the file, if exists.
   if (!m_options.blocklist_file_name.empty()) {
-    for (const auto& e : load_blocklist_file(m_options.blocklist_file_name)) {
-      m_options.blocklist.insert(e);
-    }
+    insert_unordered_iterable(
+        m_options.blocklist,
+        load_blocklist_file(m_options.blocklist_file_name));
   }
   pm.set_metric("blocklist_size", m_options.blocklist.size());
 
@@ -1139,7 +1136,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     shrinker_config.run_copy_prop = true;
   }
 
-  std::unordered_set<const DexField*> finalish_fields;
+  UnorderedSet<const DexField*> finalish_fields;
   if (m_options.apply_CSE_CopyProp) {
     auto* field =
         analysis_cls->find_field_from_simple_deobfuscated_name("sHitStats");

@@ -17,14 +17,15 @@
 #include <list>
 #include <map>
 #include <mutex>
+#include <queue>
 #include <set>
 #include <sstream>
 #include <string_view>
-#include <unordered_map>
 #include <vector>
 
 #include "ConcurrentContainers.h"
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexMemberRefs.h"
 #include "FrequentlyUsedPointersCache.h"
 
@@ -117,8 +118,7 @@ struct RedexContext {
   DexMethodRef* get_method(const DexType* type,
                            const DexString* name,
                            const DexProto* proto);
-  std::unordered_map<std::string,
-                     std::unordered_map<std::string, DexMethodRef*>>
+  UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>
   get_baseline_profile_method_map();
 
   /**
@@ -138,6 +138,15 @@ struct RedexContext {
                      const DexMethodSpec& new_spec,
                      bool rename_on_collision);
 
+  // Registers a method as leaked. This is because
+  // `DexMethod::delete_method(DexMethodRef)` does not currently delete a given
+  // method, as there may still be references. Until that is addressed, we store
+  // a reference to the method here to make sure that lsan doesn't find any
+  // actual leak.
+  void leak_method(DexMethodRef*);
+
+  size_t leaked_methods();
+
   DexLocation* make_location(std::string_view store_name,
                              std::string_view file_name);
   DexLocation* get_location(std::string_view store_name,
@@ -156,7 +165,7 @@ struct RedexContext {
   DexType* class_type(const DexClass* cls) const;
   template <class TypeClassWalkerFn = void(const DexType*, const DexClass*)>
   void walk_type_class(TypeClassWalkerFn walker) {
-    for (auto* cls : m_classes) {
+    for (auto* cls : UnorderedIterable(m_classes)) {
       walker(class_type(cls), cls);
     }
   }
@@ -206,15 +215,14 @@ struct RedexContext {
     }
     return it->second;
   }
-  const std::unordered_map<std::string, size_t>& get_sb_interaction_indices()
-      const {
+  const UnorderedMap<std::string, size_t>& get_sb_interaction_indices() const {
     return m_sb_interaction_indices;
   }
-  void set_sb_interaction_index(
-      const std::unordered_map<std::string, size_t>& input);
+  void set_sb_interaction_index(const UnorderedMap<std::string, size_t>& input);
 
   // This is for convenience.
   bool instrument_mode{false};
+  bool slow_invariants_debug{false};
 
   bool ordering_changes_allowed() const { return m_ordering_changes_allowed; }
   void set_ordering_changes_allowed(bool new_val) {
@@ -308,7 +316,7 @@ struct RedexContext {
   };
 
   // Hashing is expensive on large strings (long Java type names, string
-  // literals), so we avoid using `std::unordered_map` directly.
+  // literals), so we avoid using `UnorderedMap` directly.
   //
   // For leaf-level storage we use `std::set` (i.e., a tree). In a sparse
   // string keyset with large keys this performs better as only the suffix
@@ -493,7 +501,7 @@ struct RedexContext {
   std::mutex m_destruction_tasks_lock;
   std::vector<Task> m_destruction_tasks;
 
-  std::unordered_map<std::string, size_t> m_sb_interaction_indices;
+  UnorderedMap<std::string, size_t> m_sb_interaction_indices;
 
   bool m_allow_class_duplicates;
 
@@ -509,4 +517,7 @@ struct RedexContext {
       method_return_values;
 
   bool m_ordering_changes_allowed{true};
+
+  std::queue<DexMethodRef*> m_leaked_methods;
+  std::mutex m_leaked_methods_mutex;
 };

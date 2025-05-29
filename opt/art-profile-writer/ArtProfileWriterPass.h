@@ -52,7 +52,6 @@ class ArtProfileWriterPass : public Pass {
   int64_t m_never_compile_callcount_threshold;
   int64_t m_never_compile_perf_threshold;
   int64_t m_never_compile_called_coverage_threshold;
-  bool m_legacy_mode;
   std::string m_never_compile_excluded_interaction_pattern;
   int64_t m_never_compile_excluded_appear100_threshold;
   int64_t m_never_compile_excluded_call_count_threshold;

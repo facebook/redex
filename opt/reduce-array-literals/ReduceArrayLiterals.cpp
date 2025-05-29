@@ -19,6 +19,7 @@
 #include "BaseIRAnalyzer.h"
 #include "CFGMutation.h"
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "InterDexPass.h"
@@ -331,11 +332,11 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
     }
   }
 
-  std::unordered_map<const IRInstruction*, std::vector<const IRInstruction*>>
+  UnorderedMap<const IRInstruction*, std::vector<const IRInstruction*>>
   get_array_literals() {
-    std::unordered_map<const IRInstruction*, std::vector<const IRInstruction*>>
+    UnorderedMap<const IRInstruction*, std::vector<const IRInstruction*>>
         result;
-    for (auto& p : m_escaped_arrays) {
+    for (auto& p : UnorderedIterable(m_escaped_arrays)) {
       auto constant = p.second.get_constant();
       if (constant) {
         result.emplace(p.first, *constant);
@@ -345,7 +346,7 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
   }
 
  private:
-  mutable std::unordered_map<const IRInstruction*, EscapedArrayDomain>
+  mutable UnorderedMap<const IRInstruction*, EscapedArrayDomain>
       m_escaped_arrays;
 };
 
@@ -592,9 +593,9 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
   mutation.insert_after(it, new_insns);
 
   // find iterators corresponding to the aput instructions
-  std::unordered_set<const IRInstruction*> aput_insns_set(aput_insns.begin(),
-                                                          aput_insns.end());
-  std::unordered_map<const IRInstruction*, cfg::InstructionIterator>
+  UnorderedSet<const IRInstruction*> aput_insns_set(aput_insns.begin(),
+                                                    aput_insns.end());
+  UnorderedMap<const IRInstruction*, cfg::InstructionIterator>
       aput_insns_iterators;
   auto iterable = cfg::InstructionIterable(m_cfg);
   for (auto insn_it = iterable.begin(); insn_it != iterable.end(); ++insn_it) {

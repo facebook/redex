@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "Shrinker.h"
 
 using CallSiteArguments = constant_propagation::interprocedural::ArgumentDomain;
@@ -55,7 +56,7 @@ struct InvokeCallSiteSummariesAndDeadBlocks {
 using CallSiteSummaryOccurrences = std::pair<const CallSiteSummary*, size_t>;
 
 using ConcurrentMethodToMethodOccurrences =
-    ConcurrentMap<const DexMethod*, std::unordered_map<DexMethod*, size_t>>;
+    ConcurrentMap<const DexMethod*, UnorderedMap<DexMethod*, size_t>>;
 
 namespace inliner {
 
@@ -79,7 +80,7 @@ class CallSiteSummarizer {
   CallSiteSummaryStats* m_stats;
 
   struct CalleeInfo {
-    std::unordered_map<const CallSiteSummary*, size_t> indices;
+    UnorderedMap<const CallSiteSummary*, size_t> indices;
     std::vector<CallSiteSummaryOccurrences> occurrences;
     std::vector<const IRInstruction*> invokes;
   };
@@ -108,7 +109,7 @@ class CallSiteSummarizer {
    */
   InvokeCallSiteSummariesAndDeadBlocks get_invoke_call_site_summaries(
       DexMethod* caller,
-      const std::unordered_map<DexMethod*, size_t>& callees,
+      const UnorderedMap<DexMethod*, size_t>& callees,
       const ConstantEnvironment& initial_env);
 
  public:

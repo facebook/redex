@@ -10,7 +10,6 @@
 #include "DexTypeEnvironment.h"
 #include "Macros.h"
 #include "Show.h"
-#include "StlUtil.h"
 
 namespace outliner_impl {
 
@@ -55,7 +54,9 @@ OutlinerTypeAnalysis::OutlinerTypeAnalysis(DexMethod* method)
         auto& cfg = method->get_code()->cfg();
         type_inference::TypeInference type_inference(cfg);
         type_inference.run(method);
-        return type_inference.get_type_environments();
+        TypeEnvironments res;
+        insert_unordered_iterable(res, type_inference.get_type_environments());
+        return res;
       }),
       m_constant_uses([method]() {
         auto& cfg = method->get_code()->cfg();
@@ -64,7 +65,7 @@ OutlinerTypeAnalysis::OutlinerTypeAnalysis(DexMethod* method)
 
 const DexType* OutlinerTypeAnalysis::get_result_type(
     const CandidateAdapter* ca,
-    const std::unordered_set<const IRInstruction*>& insns,
+    const UnorderedSet<const IRInstruction*>& insns,
     const DexType* optional_extra_type) {
   auto defs = get_defs(insns);
   return defs ? get_type_of_defs(ca, *defs, optional_extra_type)
@@ -73,8 +74,8 @@ const DexType* OutlinerTypeAnalysis::get_result_type(
 
 const DexType* OutlinerTypeAnalysis::get_type_demand(const CandidateAdapter& ca,
                                                      reg_t reg) {
-  std::unordered_set<reg_t> regs_to_track{reg};
-  std::unordered_set<const DexType*> type_demands;
+  UnorderedSet<reg_t> regs_to_track{reg};
+  UnorderedSet<const DexType*> type_demands;
   get_type_demand_helper(ca, std::move(regs_to_track), &type_demands);
   auto type_demand = narrow_type_demands(std::move(type_demands));
   if (type_demand == nullptr) {
@@ -120,7 +121,7 @@ const DexType* OutlinerTypeAnalysis::get_inferred_type(
 }
 
 const DexType* OutlinerTypeAnalysis::narrow_type_demands(
-    std::unordered_set<const DexType*> type_demands) {
+    UnorderedSet<const DexType*> type_demands) {
   if (type_demands.empty() || type_demands.count(nullptr)) {
     return nullptr;
   }
@@ -150,13 +151,11 @@ const DexType* OutlinerTypeAnalysis::narrow_type_demands(
     }
 
     // remove less specific object types
-    std20::erase_if(type_demands, [&type_demands](auto* u) {
+    unordered_erase_if(type_demands, [&type_demands](auto* u) {
       return type::is_object(u) &&
-             std::find_if(type_demands.begin(), type_demands.end(),
-                          [u](const DexType* t) {
-                            return t != u && type::is_object(t) &&
-                                   type::check_cast(t, u);
-                          }) != type_demands.end();
+             unordered_any_of(type_demands, [u](const DexType* t) {
+               return t != u && type::is_object(t) && type::check_cast(t, u);
+             });
     });
 
     // TODO: I saw that most often, when multiple object type demands
@@ -166,14 +165,13 @@ const DexType* OutlinerTypeAnalysis::narrow_type_demands(
     // occurrence overall.
   }
 
-  return type_demands.size() == 1 ? *type_demands.begin() : nullptr;
+  return type_demands.size() == 1 ? *unordered_any(type_demands) : nullptr;
 }
 
-static bool any_outside_range(
-    const std::unordered_set<const IRInstruction*>& insns,
-    int64_t min,
-    int64_t max) {
-  for (auto insn : insns) {
+static bool any_outside_range(const UnorderedSet<const IRInstruction*>& insns,
+                              int64_t min,
+                              int64_t max) {
+  for (auto insn : UnorderedIterable(insns)) {
     if (insn->get_literal() < min || insn->get_literal() > max) {
       return true;
     }
@@ -182,7 +180,7 @@ static bool any_outside_range(
 }
 
 template <class T>
-static bool any_outside(const std::unordered_set<const IRInstruction*>& insns) {
+static bool any_outside(const UnorderedSet<const IRInstruction*>& insns) {
   return any_outside_range(insns, std::numeric_limits<T>::min(),
                            std::numeric_limits<T>::max());
 }
@@ -436,7 +434,7 @@ const DexType* OutlinerTypeAnalysis::get_type_of_reaching_defs(
     return nullptr;
   }
   return get_type_of_defs(nullptr,
-                          std::vector<const IRInstruction*>(
+                          UnorderedSet<const IRInstruction*>(
                               defs.elements().begin(), defs.elements().end()),
                           /* optional_extra_type */ nullptr);
 }
@@ -758,11 +756,11 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(IRInstruction* insn,
   }
 }
 
-boost::optional<std::vector<const IRInstruction*>>
+boost::optional<UnorderedSet<const IRInstruction*>>
 OutlinerTypeAnalysis::get_defs(
-    const std::unordered_set<const IRInstruction*>& insns) {
-  std::unordered_set<const IRInstruction*> res;
-  for (auto insn : insns) {
+    const UnorderedSet<const IRInstruction*>& insns) {
+  UnorderedSet<const IRInstruction*> res;
+  for (auto insn : UnorderedIterable(insns)) {
     always_assert(insn->has_dest());
     if (opcode::is_a_move(insn->opcode()) ||
         opcode::is_move_result_any(insn->opcode())) {
@@ -776,7 +774,7 @@ OutlinerTypeAnalysis::get_defs(
     }
     res.insert(insn);
   }
-  return std::vector<const IRInstruction*>(res.begin(), res.end());
+  return res;
 }
 
 // Infer type demand imposed on an incoming register across all instructions
@@ -784,8 +782,8 @@ OutlinerTypeAnalysis::get_defs(
 // The return value nullptr indicates that the demand could not be determined.
 void OutlinerTypeAnalysis::get_type_demand_helper(
     const CandidateAdapter& ca,
-    std::unordered_set<reg_t> regs_to_track,
-    std::unordered_set<const DexType*>* type_demands) {
+    UnorderedSet<reg_t> regs_to_track,
+    UnorderedSet<const DexType*>* type_demands) {
   auto follow = [](IRInstruction* insn, src_index_t) {
     switch (insn->opcode()) {
     case OPCODE_AND_INT:
@@ -805,11 +803,11 @@ void OutlinerTypeAnalysis::get_type_demand_helper(
 
 const DexType* OutlinerTypeAnalysis::get_const_insns_type_demand(
     const CandidateAdapter* ca,
-    const std::unordered_set<const IRInstruction*>& const_insns) {
+    const UnorderedSet<const IRInstruction*>& const_insns) {
   always_assert(!const_insns.empty());
   // 1. Let's see if we can get something out of the constant-uses analysis.
   constant_uses::TypeDemand type_demand{constant_uses::TypeDemand::None};
-  for (auto insn : const_insns) {
+  for (auto insn : UnorderedIterable(const_insns)) {
     type_demand = (constant_uses::TypeDemand)(
         type_demand & m_constant_uses->get_constant_type_demand(
                           const_cast<IRInstruction*>(insn)));
@@ -818,10 +816,9 @@ const DexType* OutlinerTypeAnalysis::get_const_insns_type_demand(
     }
   }
   if (type_demand & constant_uses::TypeDemand::Object) {
-    always_assert(std::find_if(const_insns.begin(), const_insns.end(),
-                               [](const IRInstruction* insn) {
-                                 return insn->get_literal() != 0;
-                               }) == const_insns.end());
+    always_assert(unordered_none_of(const_insns, [](const IRInstruction* insn) {
+      return insn->get_literal() != 0;
+    }));
   } else if (type_demand & constant_uses::TypeDemand::Long) {
     return type::_long();
   } else if (type_demand & constant_uses::TypeDemand::Float) {
@@ -847,9 +844,9 @@ const DexType* OutlinerTypeAnalysis::get_const_insns_type_demand(
 
   // No, so...
   // 2. Let's go over all constant-uses, and use our own judgement.
-  std::unordered_set<const DexType*> type_demands;
+  UnorderedSet<const DexType*> type_demands;
   bool not_object{false};
-  for (auto insn : const_insns) {
+  for (auto insn : UnorderedIterable(const_insns)) {
     for (auto& p :
          m_constant_uses->get_constant_uses(const_cast<IRInstruction*>(insn))) {
       if (ca && ca->contains(p.first)) {
@@ -898,8 +895,8 @@ const DexType* OutlinerTypeAnalysis::get_const_insns_type_demand(
   }
   if (type_demands.empty()) {
     // A constant without (meaningful) use? Oh well. Dead code!
-    return (*const_insns.begin())->dest_is_wide() ? type::_long()
-                                                  : type::_int();
+    return (*unordered_any(const_insns))->dest_is_wide() ? type::_long()
+                                                         : type::_int();
   }
   auto narrowed_type_demand = narrow_type_demands(type_demands);
   if (narrowed_type_demand && type::is_object(narrowed_type_demand) &&
@@ -910,9 +907,9 @@ const DexType* OutlinerTypeAnalysis::get_const_insns_type_demand(
 }
 
 static const DexType* compute_joined_type(
-    const std::unordered_set<const DexType*>& types) {
+    const UnorderedSet<const DexType*>& types) {
   boost::optional<dtv_impl::DexTypeValue> joined_type_value;
-  for (auto t : types) {
+  for (auto t : UnorderedIterable(types)) {
     if (!type::is_object(t)) {
       return nullptr;
     }
@@ -933,18 +930,18 @@ static const DexType* compute_joined_type(
 // Compute the (widened) type of all given definitions.
 const DexType* OutlinerTypeAnalysis::get_type_of_defs(
     const CandidateAdapter* ca,
-    const std::vector<const IRInstruction*>& defs,
+    const UnorderedSet<const IRInstruction*>& defs,
     const DexType* optional_extra_type) {
-  std::unordered_set<const DexType*> types;
+  UnorderedSet<const DexType*> types;
   if (optional_extra_type != nullptr) {
     types.insert(optional_extra_type);
   }
-  std::unordered_set<const IRInstruction*> const_insns;
-  for (auto def : defs) {
+  UnorderedSet<const IRInstruction*> const_insns;
+  for (auto def : UnorderedIterable(defs)) {
     always_assert(!opcode::is_a_move(def->opcode()) &&
                   !opcode::is_move_result_any(def->opcode()));
-    std::unordered_set<const IRInstruction*> expanded_defs;
-    std::unordered_set<const IRInstruction*> visited;
+    UnorderedSet<const IRInstruction*> expanded_defs;
+    UnorderedSet<const IRInstruction*> visited;
     // Helper function that expands bitwise operations that can preserve
     // booleanness. Returns true when we know result is type::_int()
     std::function<bool(const IRInstruction*)> expand;
@@ -987,7 +984,7 @@ const DexType* OutlinerTypeAnalysis::get_type_of_defs(
     if (expand(def)) {
       return type::_int();
     }
-    for (auto inner_def : expanded_defs) {
+    for (auto inner_def : UnorderedIterable(expanded_defs)) {
       const DexType* t = get_result_type_helper(inner_def);
       types.insert(t);
     }
@@ -1029,11 +1026,10 @@ const DexType* OutlinerTypeAnalysis::get_type_of_defs(
   }
 
   // remove more specific object types
-  std20::erase_if(types, [&types](auto* u) {
-    return type::is_object(u) &&
-           std::find_if(types.begin(), types.end(), [u](const DexType* t) {
+  unordered_erase_if(types, [&types](auto* u) {
+    return type::is_object(u) && unordered_any_of(types, [u](const DexType* t) {
              return t != u && type::is_object(t) && type::check_cast(u, t);
-           }) != types.end();
+           });
   });
 
   if (types.size() > 1) {
@@ -1048,7 +1044,7 @@ const DexType* OutlinerTypeAnalysis::get_type_of_defs(
 
   // Give up when we have an incompatible constant.
   // TODO: Do some careful widening.
-  auto defs_type = *types.begin();
+  auto defs_type = *unordered_any(types);
   if ((defs_type == type::_short() && any_outside<int16_t>(const_insns)) ||
       (defs_type == type::_byte() && any_outside<int8_t>(const_insns)) ||
       (defs_type == type::_char() && any_outside<uint16_t>(const_insns)) ||

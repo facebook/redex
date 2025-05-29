@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "DexUtil.h"
 #include "HierarchyUtil.h"
 #include "InitClassPruner.h"
@@ -17,12 +18,10 @@
 #include "SideEffectSummary.h"
 #include "SummarySerialization.h"
 
-#include <unordered_map>
-
 class ObjectSensitiveDce {
  public:
   struct Stats {
-    std::unordered_map<uint16_t, size_t> invokes_with_summaries;
+    UnorderedMap<uint16_t, size_t> invokes_with_summaries;
     init_classes::Stats init_class_stats;
     size_t external_escape_summaries{0};
     size_t external_side_effect_summaries{0};
@@ -57,7 +56,7 @@ class ObjectSensitiveDce {
       const Scope& scope,
       const init_classes::InitClassesWithSideEffects*
           init_classes_with_side_effects,
-      const std::unordered_set<DexMethodRef*>& pure_methods,
+      const UnorderedSet<DexMethodRef*>& pure_methods,
       const method_override_graph::Graph& method_override_graph,
       const uint32_t big_override_threshold,
       local_pointers::SummaryMap* escape_summaries,
@@ -78,7 +77,7 @@ class ObjectSensitiveDce {
   const Scope& m_scope;
   const init_classes::InitClassesWithSideEffects*
       m_init_classes_with_side_effects;
-  const std::unordered_set<DexMethodRef*>& m_pure_methods;
+  const UnorderedSet<DexMethodRef*>& m_pure_methods;
   const method_override_graph::Graph& m_method_override_graph;
   uint32_t m_big_override_threshold;
   // The following are mutated internally.

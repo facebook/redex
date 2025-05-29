@@ -7,9 +7,6 @@
 
 #include "Reachability.h"
 
-#include <boost/bimap/bimap.hpp>
-#include <boost/bimap/unordered_set_of.hpp>
-#include <boost/range/adaptor/map.hpp>
 #include <cinttypes>
 
 #include "AnnotationSignatureParser.h"
@@ -295,15 +292,15 @@ void RootSetMarker::record_is_seed(Seed* seed) {
  * Mark as seeds all methods that override or implement an external method.
  */
 void RootSetMarker::mark_external_method_overriders() {
-  std::unordered_set<const DexMethod*> visited;
-  for (auto& pair : m_method_override_graph.nodes()) {
+  UnorderedSet<const DexMethod*> visited;
+  for (auto& pair : UnorderedIterable(m_method_override_graph.nodes())) {
     auto method = pair.first;
     if (!method->is_external() || visited.count(method)) {
       continue;
     }
     const auto& overriding_methods =
         mog::get_overriding_methods(m_method_override_graph, method);
-    for (auto* overriding : overriding_methods) {
+    for (auto* overriding : UnorderedIterable(overriding_methods)) {
       // Avoid re-visiting methods found in overriding sets since we would
       // already have conditionally marked all their children.
       visited.emplace(overriding);
@@ -771,7 +768,7 @@ MethodReferencesGatherer::get_returning_dependency(
   } else if (opcode::is_invoke_super(op) &&
              !refs->invoke_super_targets.empty()) {
     always_assert(refs->invoke_super_targets.size() == 1);
-    auto super_method = *refs->invoke_super_targets.begin();
+    auto super_method = *unordered_any(refs->invoke_super_targets);
     always_assert(super_method->is_virtual());
     always_assert(!super_method->is_external());
     if (!is_abstract(super_method) && !is_method_returning(super_method)) {
@@ -794,7 +791,7 @@ MethodReferencesGatherer::get_returning_dependency(
     // First, we check whether we already know that any eligible virtual target
     // returns.
     auto any = [&](auto& f) {
-      std::unordered_set<const DexMethod*> unique_methods;
+      UnorderedSet<const DexMethod*> unique_methods;
       auto identity = [](const auto* x) { return x; };
       auto select_first = [](const auto& p) { return p.first; };
       auto is = [&](const auto& item, const auto& p) {
@@ -809,7 +806,7 @@ MethodReferencesGatherer::get_returning_dependency(
         return f(m);
       };
       auto any_of = [&](const auto& collection, const auto& p) {
-        for (auto&& item : collection) {
+        for (auto&& item : UnorderedIterable(collection)) {
           if (is(item, p)) {
             return true;
           }
@@ -822,9 +819,9 @@ MethodReferencesGatherer::get_returning_dependency(
                  select_first)) {
         return true;
       }
-      for (auto&& [base_method, base_types] :
-           refs->base_invoke_virtual_targets_if_class_instantiable) {
-        for (auto* base_type : base_types) {
+      for (auto&& [base_method, base_types] : UnorderedIterable(
+               refs->base_invoke_virtual_targets_if_class_instantiable)) {
+        for (auto* base_type : UnorderedIterable(base_types)) {
           always_assert(!type_class(base_type)->is_external());
           if (mog::any_overriding_methods(
                   *m_shared_state->method_override_graph, base_method,
@@ -842,7 +839,7 @@ MethodReferencesGatherer::get_returning_dependency(
       return std::nullopt;
     }
     // Second, we build the list of virtual targets we need to wait for.
-    std::unordered_set<const DexMethod*> target_methods;
+    UnorderedSet<const DexMethod*> target_methods;
     auto add = [&](const auto* method) {
       target_methods.insert(method);
       return false;
@@ -993,14 +990,14 @@ void MethodReferencesGatherer::advance(const Advance& advance,
     if (it == m_returning_dependencies.end()) {
       return;
     }
-    std::unordered_set<const MethodItemEntry*> mies;
+    UnorderedSet<const MethodItemEntry*> mies;
     mies.reserve(it->second.size());
     for (auto& cfg_needle : it->second) {
       mies.insert(&*cfg_needle.it);
       queue.push(cfg_needle);
     }
     m_returning_dependencies.erase(it);
-    std20::erase_if(m_returning_dependencies, [&mies](auto& p) {
+    unordered_erase_if(m_returning_dependencies, [&mies](auto& p) {
       auto& cfg_needles = p.second;
       std20::erase_if(cfg_needles, [&mies](const auto& cfg_needle) {
         return mies.count(&*cfg_needle.it);
@@ -1035,19 +1032,21 @@ void MethodReferencesGatherer::advance(const Advance& advance,
           refs->methods.insert(refs->methods.end(), methods.begin(),
                                methods.end());
           std::swap(invoke_super_targets, refs->invoke_super_targets);
-          refs->invoke_super_targets.insert(invoke_super_targets.begin(),
-                                            invoke_super_targets.end());
+          insert_unordered_iterable(refs->invoke_super_targets,
+                                    invoke_super_targets);
           std::swap(exact_invoke_virtual_targets_if_class_instantiable,
                     refs->exact_invoke_virtual_targets_if_class_instantiable);
-          refs->exact_invoke_virtual_targets_if_class_instantiable.insert(
-              exact_invoke_virtual_targets_if_class_instantiable.begin(),
-              exact_invoke_virtual_targets_if_class_instantiable.end());
+          insert_unordered_iterable(
+              refs->exact_invoke_virtual_targets_if_class_instantiable,
+              exact_invoke_virtual_targets_if_class_instantiable);
           std::swap(base_invoke_virtual_targets_if_class_instantiable,
                     refs->base_invoke_virtual_targets_if_class_instantiable);
-          for (auto&& [base_method, base_types] :
-               base_invoke_virtual_targets_if_class_instantiable) {
-            refs->base_invoke_virtual_targets_if_class_instantiable[base_method]
-                .insert(base_types.begin(), base_types.end());
+          for (auto&& [base_method, base_types] : UnorderedIterable(
+                   base_invoke_virtual_targets_if_class_instantiable)) {
+            insert_unordered_iterable(
+                refs->base_invoke_virtual_targets_if_class_instantiable
+                    [base_method],
+                base_types);
           }
           if (unknown_invoke_virtual_targets) {
             refs->unknown_invoke_virtual_targets = true;
@@ -1113,7 +1112,7 @@ void MethodReferencesGatherer::advance(const Advance& advance,
       continue;
     }
     auto& returning_dep = std::get<ReturningDependency>(*dep);
-    for (auto* m : returning_dep.methods) {
+    for (auto* m : UnorderedIterable(returning_dep.methods)) {
       auto [deps_it, emplaced] =
           m_returning_dependencies.emplace(m, std::vector<CFGNeedle>());
       if (emplaced) {
@@ -1126,10 +1125,10 @@ void MethodReferencesGatherer::advance(const Advance& advance,
   }
 }
 
-std::unordered_set<const IRInstruction*>
+UnorderedSet<const IRInstruction*>
 MethodReferencesGatherer::get_non_returning_insns() const {
-  std::unordered_set<const IRInstruction*> set;
-  for (auto&& [_, needles] : m_returning_dependencies) {
+  UnorderedSet<const IRInstruction*> set;
+  for (auto&& [_, needles] : UnorderedIterable(m_returning_dependencies)) {
     for (auto& needle : needles) {
       set.insert(std::prev(needle.it)->insn);
     }
@@ -1220,7 +1219,7 @@ void TransitiveClosureMarkerWorker::gather_and_push(
   }
   if (cls && check_strings) {
     for (const auto& ignore_anno_type :
-         m_shared_state->ignore_sets->string_literal_annos) {
+         UnorderedIterable(m_shared_state->ignore_sets->string_literal_annos)) {
       if (has_anno(cls, ignore_anno_type)) {
         ++m_shared_state->stats->num_ignore_check_strings;
         check_strings = false;
@@ -1441,7 +1440,7 @@ void TransitiveClosureMarkerWorker::
   m_shared_state->cond_marked->method_references_gatherers_if_class_instantiable
       .update(cls, [&](auto*, auto& map, bool) {
         if (!map.empty()) {
-          auto it = map.begin();
+          auto it = unordered_any(map);
           mrefs_gatherer = std::move(it->second);
           map.erase(it);
         }
@@ -1475,7 +1474,7 @@ void TransitiveClosureMarkerWorker::visit_method_references_gatherer_returning(
   m_shared_state->cond_marked->method_references_gatherers_if_method_returning
       .update(method, [&](auto*, auto& map, bool) {
         if (!map.empty()) {
-          auto it = map.begin();
+          auto it = unordered_any(map);
           mrefs_gatherer = std::move(it->second);
           map.erase(it);
         }
@@ -1542,7 +1541,7 @@ void TransitiveClosureMarkerWorker::directly_instantiable(DexType* type) {
     return;
   }
   instantiable(type);
-  std::unordered_set<const DexMethod*> overridden_methods;
+  UnorderedSet<const DexMethod*> overridden_methods;
   for (auto cls = type_class(type); cls && !cls->is_external();
        cls = type_class(cls->get_super_class())) {
     for (auto* m : cls->get_dmethods()) {
@@ -1587,12 +1586,11 @@ void TransitiveClosureMarkerWorker::instance_callable(const DexMethod* method) {
 
 void TransitiveClosureMarkerWorker::implementation_method(
     const DexMethod* method,
-    std::unordered_set<const DexMethod*>* overridden_methods) {
+    UnorderedSet<const DexMethod*>* overridden_methods) {
   auto newly_overridden_methods =
       mog::get_overridden_methods(*m_shared_state->method_override_graph,
                                   method, /* include_interfaces */ true);
-  overridden_methods->insert(newly_overridden_methods.begin(),
-                             newly_overridden_methods.end());
+  insert_unordered_iterable(*overridden_methods, newly_overridden_methods);
 
   if (!m_shared_state->reachable_aspects->implementation_methods.insert(
           method)) {
@@ -1606,7 +1604,7 @@ void TransitiveClosureMarkerWorker::implementation_method(
   };
   bool unconditionally_instance_callable{
       is_unconditionally_instance_callable(method)};
-  for (auto* overridden_method : newly_overridden_methods) {
+  for (auto* overridden_method : UnorderedIterable(newly_overridden_methods)) {
     if (is_unconditionally_instance_callable(overridden_method)) {
       unconditionally_instance_callable = true;
     }
@@ -1618,11 +1616,10 @@ void TransitiveClosureMarkerWorker::implementation_method(
   }
 
   if (!m_shared_state->reachable_objects->marked(method) &&
-      std::any_of(newly_overridden_methods.begin(),
-                  newly_overridden_methods.end(), [](auto* overridden_method) {
-                    return is_abstract(overridden_method) ||
-                           overridden_method->is_external();
-                  })) {
+      unordered_any_of(newly_overridden_methods, [](auto* overridden_method) {
+        return is_abstract(overridden_method) ||
+               overridden_method->is_external();
+      })) {
     m_shared_state->reachable_aspects->zombie_implementation_methods.insert(
         method);
   }
@@ -1674,7 +1671,7 @@ void TransitiveClosureMarkerWorker::base_invoke_virtual_target(
       (!is_child || !base_type || node.overrides(method, base_type))) {
     exact_invoke_virtual_target(method);
   }
-  for (auto* child : node.children) {
+  for (auto* child : UnorderedIterable(node.children)) {
     base_invoke_virtual_target(child->method, base_type, /* is_child */ true);
   }
 }
@@ -1777,7 +1774,7 @@ void compute_zombie_methods(
   // marked. Simply removing those methods might leave behind the class with
   // unimplemented inherited abstract methods. Here, we find if that's the case,
   // and pick the first non-abstract override to add as an additional root.
-  ConcurrentMap<DexMethod*, std::unordered_set<const DexClass*>> zombies;
+  ConcurrentMap<DexMethod*, UnorderedSet<const DexClass*>> zombies;
   workqueue_run<const DexMethod*>(
       [&](const DexMethod* m) {
         bool any_abstract_methods = false;
@@ -1788,7 +1785,8 @@ void compute_zombie_methods(
           if (reachable_objects.marked_unsafe(elder) || elder->is_external()) {
             any_abstract_methods = true;
           }
-          for (auto* parent : method_override_graph.get_node(elder).parents) {
+          for (auto* parent : UnorderedIterable(
+                   method_override_graph.get_node(elder).parents)) {
             if (is_abstract(parent->method)) {
               visit_abstract_method(parent->method);
             }
@@ -1801,8 +1799,8 @@ void compute_zombie_methods(
             return;
           }
           unmarked_elder = elder_parent;
-          for (auto* parent :
-               method_override_graph.get_node(unmarked_elder).parents) {
+          for (auto* parent : UnorderedIterable(
+                   method_override_graph.get_node(unmarked_elder).parents)) {
             if (is_abstract(parent->method)) {
               visit_abstract_method(parent->method);
             } else {
@@ -1821,8 +1819,10 @@ void compute_zombie_methods(
                        [&](auto*, auto& set, bool) { set.insert(cls); });
       },
       reachable_aspects.zombie_implementation_methods);
-  for (auto&& [m, unmarked_implementation_methods_classes] : zombies) {
-    for (auto* cls : unmarked_implementation_methods_classes) {
+  for (auto&& [m, unmarked_implementation_methods_classes] :
+       UnorderedIterable(zombies)) {
+    for (auto* cls :
+         UnorderedIterable(unmarked_implementation_methods_classes)) {
       reachable_objects.record_reachability(cls, m);
     }
     auto marked = reachable_objects.mark(m);
@@ -1837,15 +1837,15 @@ void compute_zombie_methods(
 void ReachableAspects::finish(const ConditionallyMarked& cond_marked,
                               const ReachableObjects& reachable_objects) {
   Timer t("finish");
-  std::unordered_map<const DexMethod*, const MethodReferencesGatherer*>
+  UnorderedMap<const DexMethod*, const MethodReferencesGatherer*>
       remaining_mrefs_gatherers;
   auto add = [&](auto& map) {
-    for (auto&& [method, mrefs_gatherer] : map) {
+    for (auto&& [method, mrefs_gatherer] : UnorderedIterable(map)) {
       remaining_mrefs_gatherers.emplace(method, mrefs_gatherer.get());
     }
   };
-  for (auto&& [cls, map] :
-       cond_marked.method_references_gatherers_if_class_instantiable) {
+  for (auto&& [cls, map] : UnorderedIterable(
+           cond_marked.method_references_gatherers_if_class_instantiable)) {
     if (map.empty()) {
       always_assert(instantiable_types.count(cls));
       continue;
@@ -1854,8 +1854,8 @@ void ReachableAspects::finish(const ConditionallyMarked& cond_marked,
     uninstantiable_dependencies.insert(cls);
     add(map);
   }
-  for (auto&& [method, map] :
-       cond_marked.method_references_gatherers_if_method_returning) {
+  for (auto&& [method, map] : UnorderedIterable(
+           cond_marked.method_references_gatherers_if_method_returning)) {
     if (map.empty()) {
       always_assert(returning_methods.count(method));
       continue;
@@ -1864,7 +1864,8 @@ void ReachableAspects::finish(const ConditionallyMarked& cond_marked,
     non_returning_dependencies.insert(method);
     add(map);
   }
-  for (auto&& [method, mrefs_gatherer] : remaining_mrefs_gatherers) {
+  for (auto&& [method, mrefs_gatherer] :
+       UnorderedIterable(remaining_mrefs_gatherers)) {
     auto set = mrefs_gatherer->get_non_returning_insns();
     if (!set.empty()) {
       non_returning_insns.emplace(method, std::move(set));
@@ -1891,7 +1892,7 @@ void ReachableAspects::finish(const ConditionallyMarked& cond_marked,
 
   // Prune all unmarked methods from callable_instance_methods
   std::vector<const DexMethod*> to_erase;
-  for (auto* m : callable_instance_methods) {
+  for (auto* m : UnorderedIterable(callable_instance_methods)) {
     if (!reachable_objects.marked_unsafe(m)) {
       to_erase.push_back(m);
     }
@@ -1916,7 +1917,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     bool should_mark_all_as_seed,
     bool remove_no_argument_constructors) {
   Timer t("Marking");
-  std::unordered_set<const DexClass*> scope_set(scope.begin(), scope.end());
+  UnorderedSet<const DexClass*> scope_set(scope.begin(), scope.end());
   auto reachable_objects = std::make_unique<ReachableObjects>();
   ConditionallyMarked cond_marked;
 
@@ -2016,7 +2017,7 @@ void ReachableObjects::record_is_seed(Seed* seed) {
   m_retainers_of.update(
       ReachableObject(seed),
       [&](const ReachableObject&, ReachableObjectSet& set, bool /* exists */) {
-        for (const auto& reason : keep_reasons) {
+        for (const auto& reason : UnorderedIterable(keep_reasons)) {
           // -keepnames rules are irrelevant when analyzing reachability
           if (reason->type == keep_reason::KEEP_RULE &&
               reason->keep_rule->allowshrinking) {
@@ -2058,7 +2059,7 @@ static void sweep_if_unmarked(const ReachableObjects& reachables,
 }
 
 void sweep_interfaces(const ReachableObjects& reachables, DexClass* cls) {
-  std::unordered_set<DexType*> new_interfaces_set;
+  UnorderedSet<DexType*> new_interfaces_set;
   std::vector<DexType*> new_interfaces_vec;
   std::function<void(DexTypeList*)> visit;
   visit = [&](auto* interfaces) {
@@ -2114,19 +2115,12 @@ void sweep(DexStoresVector& stores,
   Timer t("Sweep");
   auto scope = build_class_scope(stores);
 
-  std::unordered_set<DexClass*> sweeped_classes;
+  UnorderedSet<DexClass*> sweeped_classes;
   for (auto& dex : DexStoreClassesIterator(stores)) {
     sweep_if_unmarked(
         reachables, [&](auto cls) { sweeped_classes.insert(cls); }, &dex,
         removed_symbols);
   }
-
-  auto sweep_method = [&](DexMethodRef* m) {
-    DexMethod::erase_method(m);
-    if (m->is_def()) {
-      DexMethod::delete_method(m->as_def());
-    }
-  };
 
   walk::parallel::classes(scope, [&](DexClass* cls) {
     if (sweeped_classes.count(cls)) {
@@ -2139,7 +2133,7 @@ void sweep(DexStoresVector& stores,
         if (removed_symbols && output_full_removed_symbols) {
           removed_symbols->insert(show_deobfuscated(method));
         }
-        sweep_method(method);
+        DexMethod::delete_method(method);
       }
       cls->get_dmethods().clear();
       cls->get_vmethods().clear();
@@ -2153,10 +2147,10 @@ void sweep(DexStoresVector& stores,
                       &cls->get_ifields(), removed_symbols);
     sweep_if_unmarked(reachables, DexField::delete_field_DO_NOT_USE,
                       &cls->get_sfields(), removed_symbols);
-    sweep_if_unmarked(reachables, sweep_method, &cls->get_dmethods(),
-                      removed_symbols);
-    sweep_if_unmarked(reachables, sweep_method, &cls->get_vmethods(),
-                      removed_symbols);
+    sweep_if_unmarked(reachables, DexMethod::delete_method,
+                      &cls->get_dmethods(), removed_symbols);
+    sweep_if_unmarked(reachables, DexMethod::delete_method,
+                      &cls->get_vmethods(), removed_symbols);
     sweep_interfaces(reachables, cls);
   });
 }
@@ -2180,8 +2174,8 @@ void sweep_code(
     InsertOnlyConcurrentSet<DexMethod*>* affected_methods) {
   Timer t("Sweep Code");
   auto scope = build_class_scope(stores);
-  std::unordered_set<DexType*> uninstantiable_types;
-  std::unordered_set<DexMethod*> uncallable_instance_methods;
+  UnorderedSet<DexType*> uninstantiable_types;
+  UnorderedSet<DexMethod*> uncallable_instance_methods;
   for (auto* cls : scope) {
     if (!reachable_aspects.instantiable_types.count_unsafe(cls)) {
       uninstantiable_types.insert(cls->get_type());
@@ -2257,8 +2251,7 @@ remove_uninstantiables_impl::Stats sweep_uncallable_virtual_methods(
   ConcurrentSet<const DexMethod*> implementation_methods;
   workqueue_run<DexType*>(
       [&](DexType* type) {
-        std::unordered_map<const DexString*,
-                           std::unordered_set<const DexProto*>>
+        UnorderedMap<const DexString*, UnorderedSet<const DexProto*>>
             implemented;
         for (auto cls = type_class(type);
              cls && !is_interface(cls) && !cls->is_external();
@@ -2404,16 +2397,12 @@ void dump_graph(std::ostream& os, const ReachableObjectGraph& retainers_of) {
           return {};
         }
         const auto& preds = retainers_of.at_unsafe(obj);
-        std::vector<ReachableObject> preds_vec(preds.begin(), preds.end());
-        // Gotta sort the reachables or the output is nondeterministic.
-        std::sort(preds_vec.begin(), preds_vec.end(), compare);
+        auto preds_vec = unordered_to_ordered(preds, compare);
         return preds_vec;
       });
 
   // Gotta sort the keys or the output is nondeterministic.
-  auto key_adaptor = boost::adaptors::keys(retainers_of);
-  std::vector<ReachableObject> keys(key_adaptor.begin(), key_adaptor.end());
-  std::sort(keys.begin(), keys.end(), compare);
+  auto keys = unordered_to_ordered_keys(retainers_of, compare);
   gw.write(os, keys);
 }
 

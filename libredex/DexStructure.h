@@ -7,9 +7,9 @@
 
 #pragma once
 
-#include <unordered_set>
 #include <vector>
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexStoreUtil.h"
 #include "InitClassesWithSideEffects.h"
@@ -37,9 +37,9 @@ struct ReserveRefsInfo {
   }
 };
 
-using MethodRefs = std::unordered_set<DexMethodRef*>;
-using FieldRefs = std::unordered_set<DexFieldRef*>;
-using TypeRefs = std::unordered_set<DexType*>;
+using MethodRefs = UnorderedSet<DexMethodRef*>;
+using FieldRefs = UnorderedSet<DexFieldRef*>;
+using TypeRefs = UnorderedSet<DexType*>;
 using MergerIndex = size_t;
 using MethodGroup = size_t;
 
@@ -183,17 +183,15 @@ also reject some legal cases.
   size_t get_num_classes() const { return m_classes.size(); }
 
   size_t get_num_trefs() const { return m_trefs.size(); }
-  const std::unordered_map<DexType*, size_t>& get_trefs() const {
-    return m_trefs;
-  }
+  const UnorderedMap<DexType*, size_t>& get_trefs() const { return m_trefs; }
 
   size_t get_num_mrefs() const { return m_mrefs.size(); }
-  const std::unordered_map<DexMethodRef*, size_t>& get_mrefs() const {
+  const UnorderedMap<DexMethodRef*, size_t>& get_mrefs() const {
     return m_mrefs;
   }
 
   size_t get_num_frefs() const { return m_frefs.size(); }
-  const std::unordered_map<DexFieldRef*, size_t>& get_frefs() const {
+  const UnorderedMap<DexFieldRef*, size_t>& get_frefs() const {
     return m_frefs;
   }
 
@@ -208,7 +206,7 @@ also reject some legal cases.
   const OverflowStats& get_overflow_stats() const { return m_overflow_stats; }
 
   void set_merging_type_usage(
-      std::unordered_map<MergerIndex, size_t>& merging_type_usage) {
+      UnorderedMap<MergerIndex, size_t>& merging_type_usage) {
     m_merging_type_usage = merging_type_usage;
   }
 
@@ -227,7 +225,7 @@ also reject some legal cases.
   }
 
   void set_merging_type_method_usage(
-      std::unordered_map<MergerIndex, std::unordered_map<MethodGroup, size_t>>&
+      UnorderedMap<MergerIndex, UnorderedMap<MethodGroup, size_t>>&
           merging_type_method_usage) {
     m_merging_type_method_usage = merging_type_method_usage;
   }
@@ -277,20 +275,19 @@ also reject some legal cases.
 
  private:
   size_t m_linear_alloc_size;
-  std::unordered_map<DexType*, size_t> m_trefs;
-  std::unordered_map<DexMethodRef*, size_t> m_mrefs;
-  std::unordered_map<DexFieldRef*, size_t> m_frefs;
+  UnorderedMap<DexType*, size_t> m_trefs;
+  UnorderedMap<DexMethodRef*, size_t> m_mrefs;
+  UnorderedMap<DexFieldRef*, size_t> m_frefs;
   TypeRefs m_pending_init_class_fields;
   TypeRefs m_pending_init_class_types;
   std::list<DexClass*> m_classes;
-  std::unordered_map<DexClass*, std::list<DexClass*>::iterator>
-      m_classes_iterators;
+  UnorderedMap<DexClass*, std::list<DexClass*>::iterator> m_classes_iterators;
 
   OverflowStats m_overflow_stats{};
 
   // The following are used to track (hypothetical) class merging stats.
-  std::unordered_map<MergerIndex, size_t> m_merging_type_usage;
-  std::unordered_map<MergerIndex, std::unordered_map<MethodGroup, size_t>>
+  UnorderedMap<MergerIndex, size_t> m_merging_type_usage;
+  UnorderedMap<MergerIndex, UnorderedMap<MethodGroup, size_t>>
       m_merging_type_method_usage;
   int m_num_new_methods;
   int m_num_deduped_methods;
@@ -412,7 +409,7 @@ class DexesStructure {
   DexStructure m_current_dex;
 
   // All the classes that end up added in the dexes.
-  std::unordered_set<DexClass*> m_classes;
+  UnorderedSet<DexClass*> m_classes;
 
   int64_t m_linear_alloc_limit;
   ReserveRefsInfo m_reserve_refs;

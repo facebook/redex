@@ -9,14 +9,13 @@
 
 #include "IRCode.h"
 
-#include <unordered_set>
-
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "IRInstruction.h"
 
 namespace transform {
 
-using RegMap = std::unordered_map<reg_t, reg_t>;
+using RegMap = UnorderedMap<reg_t, reg_t>;
 
 void remap_registers(IRCode*, const RegMap&);
 void remap_registers(cfg::ControlFlowGraph&, const RegMap&);

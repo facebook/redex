@@ -56,15 +56,14 @@ bool matches_penalty(const char* str, unsigned* penalty) {
  * Returns the count of elements present in a but not in b.
  */
 template <typename T>
-size_t set_difference_size(const std::unordered_set<T>& a,
-                           const std::unordered_set<T>& b) {
+size_t set_difference_size(const UnorderedSet<T>& a, const UnorderedSet<T>& b) {
   size_t result = a.size();
   if (a.size() <= b.size()) {
-    for (const auto& v : a) {
+    for (const auto& v : UnorderedIterable(a)) {
       result -= b.count(v);
     }
   } else {
-    for (const auto& v : b) {
+    for (const auto& v : UnorderedIterable(b)) {
       result -= a.count(v);
     }
   }
@@ -105,15 +104,15 @@ unsigned estimate_linear_alloc(const DexClass* clazz) {
  * Returns the count of elements present in a but not in b.
  */
 template <typename T>
-size_t set_difference_size(const std::unordered_set<T>& a,
-                           const std::unordered_map<T, size_t>& b) {
+size_t set_difference_size(const UnorderedSet<T>& a,
+                           const UnorderedMap<T, size_t>& b) {
   size_t result = a.size();
   if (a.size() <= b.size()) {
-    for (const auto& v : a) {
+    for (const auto& v : UnorderedIterable(a)) {
       result -= b.count(v);
     }
   } else {
-    for (const auto& [v, c] : b) {
+    for (const auto& [v, c] : UnorderedIterable(b)) {
       result -= a.count(v);
     }
   }
@@ -253,14 +252,14 @@ void DexStructure::resolve_init_classes(
   if (!init_classes_with_side_effects || itrefs.empty()) {
     return;
   }
-  std::unordered_set<DexType*> refined_types;
-  for (auto type : itrefs) {
+  UnorderedSet<DexType*> refined_types;
+  for (auto type : UnorderedIterable(itrefs)) {
     auto refined_type = init_classes_with_side_effects->refine(type);
     if (refined_type) {
       refined_types.insert(const_cast<DexType*>(refined_type));
     }
   }
-  for (auto type : refined_types) {
+  for (auto type : UnorderedIterable(refined_types)) {
     auto cls = type_class(type);
     always_assert(cls);
     if (m_pending_init_class_fields.count(type)) {
@@ -399,10 +398,10 @@ void DexStructure::add_refs_no_checks(
     const TypeRefs& clazz_trefs,
     const TypeRefs& pending_init_class_fields,
     const TypeRefs& pending_init_class_types) {
-  for (auto mref : clazz_mrefs) {
+  for (auto mref : UnorderedIterable(clazz_mrefs)) {
     m_mrefs[mref]++;
   }
-  for (auto fref : clazz_frefs) {
+  for (auto fref : UnorderedIterable(clazz_frefs)) {
     if (++m_frefs[fref] > 1) {
       continue;
     }
@@ -418,17 +417,17 @@ void DexStructure::add_refs_no_checks(
       m_pending_init_class_fields.erase(it);
     }
   }
-  for (auto type : clazz_trefs) {
+  for (auto type : UnorderedIterable(clazz_trefs)) {
     if (++m_trefs[type] > 1) {
       continue;
     }
     m_pending_init_class_types.erase(type);
   }
-  for (auto type : pending_init_class_fields) {
+  for (auto type : UnorderedIterable(pending_init_class_fields)) {
     auto inserted = m_pending_init_class_fields.insert(type).second;
     always_assert(inserted);
   }
-  for (auto type : pending_init_class_types) {
+  for (auto type : UnorderedIterable(pending_init_class_types)) {
     auto inserted = m_pending_init_class_types.insert(type).second;
     always_assert(inserted);
     always_assert(!m_trefs.count(type));
@@ -444,13 +443,13 @@ void DexStructure::remove_class(const init_classes::InitClassesWithSideEffects*
                                 const TypeRefs& pending_init_class_types,
                                 unsigned laclazz,
                                 DexClass* clazz) {
-  for (auto mref : clazz_mrefs) {
+  for (auto mref : UnorderedIterable(clazz_mrefs)) {
     auto it = m_mrefs.find(mref);
     if (--it->second == 0) {
       m_mrefs.erase(it);
     }
   }
-  for (auto fref : clazz_frefs) {
+  for (auto fref : UnorderedIterable(clazz_frefs)) {
     auto it = m_frefs.find(fref);
     if (--it->second > 0) {
       continue;
@@ -482,7 +481,7 @@ void DexStructure::remove_class(const init_classes::InitClassesWithSideEffects*
       m_pending_init_class_types.insert(fref->get_class());
     }
   }
-  for (auto type : clazz_trefs) {
+  for (auto type : UnorderedIterable(clazz_trefs)) {
     auto it = m_trefs.find(type);
     if (--it->second > 0) {
       continue;
@@ -515,10 +514,9 @@ void DexStructure::check_refs_count() {
   for (DexClass* cls : m_classes) {
     cls->gather_methods(mrefs);
   }
-  std::unordered_set<DexMethodRef*> mrefs_set(mrefs.begin(), mrefs.end());
+  UnorderedSet<DexMethodRef*> mrefs_set(mrefs.begin(), mrefs.end());
   if (mrefs_set.size() > m_mrefs.size()) {
-    std::vector<DexMethodRef*> mrefs_vec(mrefs_set.begin(), mrefs_set.end());
-    std::sort(mrefs_vec.begin(), mrefs_vec.end(), compare_dexmethods);
+    auto mrefs_vec = unordered_to_ordered(mrefs_set, compare_dexmethods);
     for (DexMethodRef* mr : mrefs_vec) {
       if (!m_mrefs.count(mr)) {
         TRACE(IDEX, 4, "WARNING: Could not find %s in predicted mrefs set",
@@ -531,10 +529,9 @@ void DexStructure::check_refs_count() {
   for (DexClass* cls : m_classes) {
     cls->gather_fields(frefs);
   }
-  std::unordered_set<DexFieldRef*> frefs_set(frefs.begin(), frefs.end());
+  UnorderedSet<DexFieldRef*> frefs_set(frefs.begin(), frefs.end());
   if (frefs_set.size() > m_frefs.size()) {
-    std::vector<DexFieldRef*> frefs_vec(frefs_set.begin(), frefs_set.end());
-    std::sort(frefs_vec.begin(), frefs_vec.end(), compare_dexfields);
+    auto frefs_vec = unordered_to_ordered(frefs_set, compare_dexfields);
     for (auto* fr : frefs_vec) {
       if (!m_frefs.count(fr)) {
         TRACE(IDEX, 4, "WARNING: Could not find %s in predicted frefs set",

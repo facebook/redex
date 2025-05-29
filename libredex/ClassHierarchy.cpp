@@ -126,7 +126,7 @@ ClassHierarchy build_type_hierarchy(const Scope& scope) {
 InterfaceMap build_interface_map(const ClassHierarchy& hierarchy) {
   InterfaceMap interfaces;
   // build the type hierarchy
-  for (const auto& cls_it : hierarchy) {
+  for (const auto& cls_it : UnorderedIterable(hierarchy)) {
     const auto cls = type_class(cls_it.first);
     if (cls == nullptr) continue;
     if (is_interface(cls)) continue;

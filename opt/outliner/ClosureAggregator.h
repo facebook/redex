@@ -8,9 +8,8 @@
 #pragma once
 
 #include <array>
-#include <unordered_map>
-#include <unordered_set>
 
+#include "DeterministicContainers.h"
 #include "MethodClosures.h"
 #include "MutablePriorityQueue.h"
 #include "ReducedControlFlow.h"
@@ -25,11 +24,11 @@ constexpr uint64_t INFREQUENT_COUNT = 11;
 // closures, in the sense that they share many components, while not using other
 // components. (Inspired by CrossDexRefMinimizer)
 class ClosureAggregator {
-  std::unordered_set<const ReducedBlock*> m_critical_components;
+  UnorderedSet<const ReducedBlock*> m_critical_components;
   MutablePriorityQueue<const Closure*, uint64_t> m_prioritized_closures;
-  std::unordered_set<const ReducedBlock*> m_applied_components;
+  UnorderedSet<const ReducedBlock*> m_applied_components;
   struct ClosureInfo {
-    std::unordered_set<const ReducedBlock*> components;
+    UnorderedSet<const ReducedBlock*> components;
     uint32_t index;
     uint32_t code_size{0};
     uint32_t applied_code_size{0};
@@ -37,22 +36,22 @@ class ClosureAggregator {
     uint64_t get_primary_priority_denominator() const;
     uint64_t get_priority() const;
   };
-  std::unordered_map<const Closure*, ClosureInfo> m_closure_infos;
+  UnorderedMap<const Closure*, ClosureInfo> m_closure_infos;
   uint32_t m_next_index{0};
-  std::unordered_map<const ReducedBlock*, std::unordered_set<const Closure*>>
+  UnorderedMap<const ReducedBlock*, UnorderedSet<const Closure*>>
       m_component_closures;
 
   struct ClosureInfoDelta {
     std::array<int32_t, INFREQUENT_COUNT> infrequent_code_sizes{};
     int32_t applied_code_size{0};
   };
-  using AffectedClosures = std::unordered_map<const Closure*, ClosureInfoDelta>;
+  using AffectedClosures = UnorderedMap<const Closure*, ClosureInfoDelta>;
 
   void reprioritize(const AffectedClosures& affected_closures);
 
  public:
   explicit ClosureAggregator(
-      std::unordered_set<const ReducedBlock*> critical_components);
+      UnorderedSet<const ReducedBlock*> critical_components);
   void insert(const Closure* c);
   bool empty() const { return m_prioritized_closures.empty(); }
   const Closure* front() const { return m_prioritized_closures.front(); }

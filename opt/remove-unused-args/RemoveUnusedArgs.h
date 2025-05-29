@@ -45,7 +45,7 @@ class RemoveArgs {
              const init_classes::InitClassesWithSideEffects&
                  init_classes_with_side_effects,
              const std::vector<std::string>& blocklist,
-             const std::unordered_set<DexMethodRef*>& pure_methods,
+             const UnorderedSet<DexMethodRef*>& pure_methods,
              size_t iteration = 0)
       : m_scope(scope),
         m_init_classes_with_side_effects(init_classes_with_side_effects),
@@ -58,8 +58,7 @@ class RemoveArgs {
   const Scope& m_scope;
   InsertOnlyConcurrentMap<const DexMethod*, const DexMethod*>
       m_method_representative_map;
-  InsertOnlyConcurrentMap<const DexMethod*,
-                          std::unordered_set<const DexMethod*>>
+  InsertOnlyConcurrentMap<const DexMethod*, UnorderedSet<const DexMethod*>>
       m_related_method_groups;
   const init_classes::InitClassesWithSideEffects&
       m_init_classes_with_side_effects;
@@ -71,15 +70,15 @@ class RemoveArgs {
   struct NamedRenameMap {
     size_t next_reordering_uniquifiers{0};
     size_t next_removal_uniquifiers{0};
-    std::unordered_map<DexTypeList*, size_t> reordering_uniquifiers;
-    std::unordered_map<const DexMethod*, size_t> removal_uniquifiers;
+    UnorderedMap<DexTypeList*, size_t> reordering_uniquifiers;
+    UnorderedMap<const DexMethod*, size_t> removal_uniquifiers;
   };
-  std::unordered_map<const DexString*, NamedRenameMap> m_rename_maps;
+  UnorderedMap<const DexString*, NamedRenameMap> m_rename_maps;
   ConcurrentSet<const DexMethod*> m_result_used;
-  std::unordered_map<DexProto*, DexProto*> m_reordered_protos;
+  UnorderedMap<DexProto*, DexProto*> m_reordered_protos;
   const std::vector<std::string>& m_blocklist;
   size_t m_iteration;
-  const std::unordered_set<DexMethodRef*>& m_pure_methods;
+  const UnorderedSet<DexMethodRef*>& m_pure_methods;
 
   DexTypeList::ContainerType get_live_arg_type_list(
       const DexMethod* method, const std::deque<uint16_t>& live_arg_idxs);
@@ -88,14 +87,14 @@ class RemoveArgs {
                                bool is_reordered);
   MethodStats update_method_protos(
       const mog::Graph& override_graph,
-      const std::unordered_set<DexType*>& no_devirtualize_anno);
+      const UnorderedSet<DexType*>& no_devirtualize_anno);
   size_t update_callsite(IRInstruction* instr);
   std::pair<size_t, LocalDce::Stats> update_callsites();
   void gather_results_used();
   void compute_reordered_protos(const mog::Graph& override_graph);
   void populate_representative_ids(
       const mog::Graph& override_graph,
-      const std::unordered_set<DexType*>& no_devirtualize_annos);
+      const UnorderedSet<DexType*>& no_devirtualize_annos);
   bool compute_remove_result(const DexMethod* method);
 
   struct Entry {
@@ -108,7 +107,7 @@ class RemoveArgs {
   };
 
   void gather_updated_entries(
-      const std::unordered_set<DexType*>& no_devirtualize_annos,
+      const UnorderedSet<DexType*>& no_devirtualize_annos,
       InsertOnlyConcurrentMap<DexMethod*, Entry>* updated_entries);
 };
 

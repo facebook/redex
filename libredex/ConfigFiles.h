@@ -10,11 +10,10 @@
 #include <map>
 #include <memory>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include "BaselineProfileConfig.h"
+#include "DeterministicContainers.h"
 #include "GlobalConfig.h"
 #include "JsonWrapper.h"
 
@@ -50,7 +49,7 @@ struct ConfigFiles {
   ConfigFiles(const Json::Value& config, const std::string& outdir);
   ~ConfigFiles();
 
-  const std::unordered_map<const DexString*, std::vector<uint8_t>>&
+  const UnorderedMap<const DexString*, std::vector<uint8_t>>&
   get_class_frequencies() {
     if (m_class_freq_map.empty()) {
       m_class_freq_map = load_class_frequencies();
@@ -94,7 +93,7 @@ struct ConfigFiles {
     }
   }
 
-  const std::unordered_map<std::string, std::vector<std::string>>&
+  const UnorderedMap<std::string, std::vector<std::string>>&
   get_all_class_lists() {
     ensure_class_lists_loaded();
     return m_class_lists;
@@ -126,10 +125,9 @@ struct ConfigFiles {
     int64_t seconds_since_last_modified{0};
   };
 
-  const std::unordered_map<std::string, DeadClassLoadCounts>&
-  get_dead_class_list();
+  const UnorderedMap<std::string, DeadClassLoadCounts>& get_dead_class_list();
   const std::vector<std::string>& get_halfnosis_block_list();
-  const std::unordered_set<std::string>& get_live_class_split_list();
+  const UnorderedSet<std::string>& get_live_class_split_list();
 
   void clear_dead_class_and_live_relocated_sets() {
     m_dead_class_list_attempted = false;
@@ -146,11 +144,11 @@ struct ConfigFiles {
 
   void process_unresolved_method_profile_lines();
 
-  const std::unordered_set<DexType*>& get_no_optimizations_annos();
-  const std::unordered_set<std::string>& get_no_optimizations_blocklist();
-  const std::unordered_set<DexMethodRef*>& get_pure_methods();
-  const std::unordered_set<const DexString*>& get_finalish_field_names();
-  const std::unordered_set<DexType*>& get_do_not_devirt_anon();
+  const UnorderedSet<DexType*>& get_no_optimizations_annos();
+  const UnorderedSet<std::string>& get_no_optimizations_blocklist();
+  const UnorderedSet<DexMethodRef*>& get_pure_methods();
+  const UnorderedSet<const DexString*>& get_finalish_field_names();
+  const UnorderedSet<DexType*>& get_do_not_devirt_anon();
 
   std::string metafile(const std::string& basename) const {
     if (basename.empty()) {
@@ -211,7 +209,7 @@ struct ConfigFiles {
 
   const api::AndroidSDK& get_android_sdk_api(int32_t min_sdk_api);
 
-  std::unordered_map<DexType*, size_t>& get_cls_interdex_groups() {
+  UnorderedMap<DexType*, size_t>& get_cls_interdex_groups() {
     if (m_cls_to_interdex_group.empty()) {
       build_cls_interdex_groups();
     }
@@ -257,9 +255,8 @@ struct ConfigFiles {
 
   std::vector<std::string> load_coldstart_methods();
   std::vector<std::string> load_coldstart_classes();
-  std::unordered_map<const DexString*, std::vector<uint8_t>>
-  load_class_frequencies();
-  std::unordered_map<std::string, std::vector<std::string>> load_class_lists();
+  UnorderedMap<const DexString*, std::vector<uint8_t>> load_class_frequencies();
+  UnorderedMap<std::string, std::vector<std::string>> load_class_lists();
   void ensure_agg_method_stats_loaded();
   void ensure_secondary_method_stats_loaded() const;
   void load_inliner_config(inliner::InlinerConfig*);
@@ -270,45 +267,44 @@ struct ConfigFiles {
   void build_cls_interdex_groups();
 
   // For testing.
-  void set_class_lists(
-      std::unordered_map<std::string, std::vector<std::string>> l);
+  void set_class_lists(UnorderedMap<std::string, std::vector<std::string>> l);
 
   bool m_load_class_lists_attempted{false};
   std::unique_ptr<ProguardMap> m_proguard_map;
   std::string m_class_frequency_filename;
-  std::unordered_map<std::string, baseline_profiles::BaselineProfileConfig>
+  UnorderedMap<std::string, baseline_profiles::BaselineProfileConfig>
       m_baseline_profile_config_list;
   std::string m_coldstart_class_filename;
   std::string m_coldstart_methods_filename;
   std::string m_baseline_profile_config_file_name;
   std::string m_preprocessed_baseline_profile_directory;
   std::vector<std::string> m_interactions;
-  std::unordered_map<const DexString*, std::vector<uint8_t>> m_class_freq_map;
+  UnorderedMap<const DexString*, std::vector<uint8_t>> m_class_freq_map;
   std::vector<std::string> m_coldstart_classes;
   std::vector<std::string> m_coldstart_methods;
   std::vector<std::string> m_halfnosis_block_list;
-  std::unordered_map<std::string, std::vector<std::string>> m_class_lists;
+  UnorderedMap<std::string, std::vector<std::string>> m_class_lists;
   bool m_dead_class_list_attempted{false};
   bool m_halfnosis_block_list_attempted{false};
   std::string m_printseeds; // Filename to dump computed seeds.
   mutable std::unique_ptr<method_profiles::MethodProfiles> m_method_profiles;
-  std::unordered_map<std::string, DeadClassLoadCounts> m_dead_classes;
-  std::unordered_set<std::string> m_live_relocated_classes;
+  UnorderedMap<std::string, DeadClassLoadCounts> m_dead_classes;
+  UnorderedSet<std::string> m_live_relocated_classes;
 
   // limits the output instruction size of any DexMethod to 2^n
   // 0 when limit is not present
   uint32_t m_instruction_size_bitwidth_limit;
 
-  std::unordered_set<DexType*> m_no_devirtualize_annos;
+  UnorderedSet<DexType*> m_no_devirtualize_annos;
   // global no optimizations annotations
-  std::unordered_set<DexType*> m_no_optimizations_annos;
+  UnorderedSet<DexType*> m_no_optimizations_annos;
   // global no optimizations blocklist (type prefixes)
-  std::unordered_set<std::string> m_no_optimizations_blocklist;
+  UnorderedSet<std::string> m_no_optimizations_blocklist;
   // global pure methods
-  std::unordered_set<DexMethodRef*> m_pure_methods;
+  UnorderedSet<DexMethodRef*> m_pure_methods;
   // names of fields that behave similar to final fields, i.e. written once
   // before use
-  std::unordered_set<const DexString*> m_finalish_field_names;
+  UnorderedSet<const DexString*> m_finalish_field_names;
   // Global inliner config.
   std::unique_ptr<inliner::InlinerConfig> m_inliner_config;
   // min_sdk AndroidAPI
@@ -317,7 +313,7 @@ struct ConfigFiles {
   // interdex class group based on betamap
   // 0 when no interdex grouping.
   size_t m_num_interdex_groups = 0;
-  std::unordered_map<DexType*, size_t> m_cls_to_interdex_group;
+  UnorderedMap<DexType*, size_t> m_cls_to_interdex_group;
 
   bool m_recognize_coldstart_pct_marker{false};
 

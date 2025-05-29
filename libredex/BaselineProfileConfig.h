@@ -9,9 +9,10 @@
 
 #include <stdint.h>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
+
+#include "DeterministicContainers.h"
 
 namespace baseline_profiles {
 
@@ -53,7 +54,7 @@ struct BaselineProfileOptions {
 };
 
 struct BaselineProfileConfig {
-  std::unordered_map<std::string, BaselineProfileInteractionConfig>
+  UnorderedMap<std::string, BaselineProfileInteractionConfig>
       interaction_configs;
   std::vector<std::pair<std::string, std::string>> interactions;
   BaselineProfileOptions options;
@@ -61,6 +62,6 @@ struct BaselineProfileConfig {
 };
 
 using BaselineProfileConfigMap =
-    std::unordered_map<std::string, BaselineProfileConfig>;
+    UnorderedMap<std::string, BaselineProfileConfig>;
 
 } // namespace baseline_profiles

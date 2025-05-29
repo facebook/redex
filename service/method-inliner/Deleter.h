@@ -7,11 +7,12 @@
 
 #pragma once
 
+#include <functional>
+#include <vector>
+
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "Resolver.h"
-#include <functional>
-#include <set>
-#include <vector>
 
 /**
  * Attempt to delete all removable candidates if there are no reference to
@@ -22,6 +23,6 @@
  */
 std::vector<DexMethod*> delete_methods(
     std::vector<DexClass*>& scope,
-    std::unordered_set<DexMethod*>& removable,
+    UnorderedSet<DexMethod*>& removable,
     std::function<DexMethod*(DexMethodRef*, MethodSearch, const DexMethod*)>
         concurrent_resolver);

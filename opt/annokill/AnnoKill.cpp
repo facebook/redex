@@ -34,17 +34,16 @@ constexpr const char* METRIC_FIELD_ASETS_CLEARED = "num_field_cleared";
 constexpr const char* METRIC_FIELD_ASETS_TOTAL = "num_field_total";
 constexpr const char* METRIC_SIGNATURES_KILLED = "num_signatures_killed";
 
-AnnoKill::AnnoKill(
-    Scope& scope,
-    bool only_force_kill,
-    bool kill_bad_signatures,
-    const AnnoNames& keep,
-    const AnnoNames& kill,
-    const AnnoNames& force_kill,
-    const std::unordered_map<std::string, std::vector<std::string>>&
-        class_hierarchy_keep_annos,
-    const std::unordered_map<std::string, std::vector<std::string>>&
-        annotated_keep_annos)
+AnnoKill::AnnoKill(Scope& scope,
+                   bool only_force_kill,
+                   bool kill_bad_signatures,
+                   const AnnoNames& keep,
+                   const AnnoNames& kill,
+                   const AnnoNames& force_kill,
+                   const UnorderedMap<std::string, std::vector<std::string>>&
+                       class_hierarchy_keep_annos,
+                   const UnorderedMap<std::string, std::vector<std::string>>&
+                       annotated_keep_annos)
     : m_scope(scope),
       m_scope_set(scope.begin(), scope.end()),
       m_only_force_kill(only_force_kill),
@@ -93,7 +92,7 @@ AnnoKill::AnnoKill(
 
   // Populate class hierarchy keep map
   auto ch = build_type_hierarchy(m_scope);
-  for (const auto& it : class_hierarchy_keep_annos) {
+  for (const auto& it : UnorderedIterable(class_hierarchy_keep_annos)) {
     auto* type = DexType::get_type(it.first);
     auto* type_cls = type ? type_class(type) : nullptr;
     if (type_cls == nullptr) {
@@ -110,8 +109,8 @@ AnnoKill::AnnoKill(
       }
     }
   }
-  for (const auto& it : m_anno_class_hierarchy_keep) {
-    for (auto type : it.second) {
+  for (const auto& it : UnorderedIterable(m_anno_class_hierarchy_keep)) {
+    for (auto type : UnorderedIterable(it.second)) {
       TRACE(ANNO,
             4,
             "anno_class_hier_keep: %s -> %s",
@@ -120,7 +119,7 @@ AnnoKill::AnnoKill(
     }
   }
   // Populate anno keep map
-  for (const auto& it : annotated_keep_annos) {
+  for (const auto& it : UnorderedIterable(annotated_keep_annos)) {
     auto* type = DexType::get_type(it.first);
     for (auto& anno : it.second) {
       auto* anno_type = DexType::get_type(anno);
@@ -366,21 +365,20 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
           }
         }
       });
-  referenced_annos.insert(concurrent_referenced_annos.begin(),
-                          concurrent_referenced_annos.end());
+  insert_unordered_iterable(referenced_annos, concurrent_referenced_annos);
   // For each referenced annotation, make sure any annotations it references are
   // also tracked as referenced, so we don't end up with a dangling ref.
   AnnoKill::AnnoSet gathered;
-  for (auto referenced : referenced_annos) {
+  for (auto referenced : UnorderedIterable(referenced_annos)) {
     gather_complete_referenced_annos(referenced_annos, referenced, &gathered);
   }
-  referenced_annos.insert(gathered.begin(), gathered.end());
+  insert_unordered_iterable(referenced_annos, gathered);
   return referenced_annos;
 }
 
 AnnoKill::AnnoSet AnnoKill::get_removable_annotation_instances() {
   // Determine which annotation classes are removable.
-  std::unordered_set<DexType*> bannotations;
+  UnorderedSet<DexType*> bannotations;
   for (auto clazz : m_scope) {
     if (!(clazz->get_access() & DexAccessFlags::ACC_ANNOTATION)) {
       continue;
@@ -427,7 +425,7 @@ void AnnoKill::cleanup_aset(
     DexAnnotationSet* aset,
     const AnnoKill::AnnoSet& referenced_annos,
     AnnoKillStats& stats,
-    const std::unordered_set<const DexType*>& keep_annos) const {
+    const UnorderedSet<const DexType*>& keep_annos) const {
   stats.annotations += aset->size();
   auto& annos = aset->get_annotations();
   auto fn = [&](const auto& da) {
@@ -518,13 +516,13 @@ bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) const {
   return res;
 }
 
-std::unordered_set<const DexType*> AnnoKill::build_anno_keep(
+UnorderedSet<const DexType*> AnnoKill::build_anno_keep(
     DexAnnotationSet* aset) const {
-  std::unordered_set<const DexType*> keep_list;
+  UnorderedSet<const DexType*> keep_list;
   for (const auto& anno : aset->get_annotations()) {
     auto it = m_annotated_keep_annos.find(anno->type());
     if (it != m_annotated_keep_annos.end()) {
-      keep_list.insert(it->second.begin(), it->second.end());
+      insert_unordered_iterable(keep_list, it->second);
     }
   }
   return keep_list;
@@ -549,7 +547,7 @@ bool AnnoKill::kill_annotations() {
           {
             auto it = m_anno_class_hierarchy_keep.find(clazz->get_type());
             if (it != m_anno_class_hierarchy_keep.end()) {
-              keep_list.insert(it->second.begin(), it->second.end());
+              insert_unordered_iterable(keep_list, it->second);
             }
           }
 
@@ -677,7 +675,7 @@ bool AnnoKill::kill_annotations() {
                 m_scope.end());
 
   if (traceEnabled(ANNO, 3)) {
-    for (const auto& p : m_build_anno_map) {
+    for (const auto& p : UnorderedIterable(m_build_anno_map)) {
       TRACE(ANNO,
             3,
             "Build anno: %zu, %s",
@@ -685,7 +683,7 @@ bool AnnoKill::kill_annotations() {
             str_copy(p.first).c_str());
     }
 
-    for (const auto& p : m_runtime_anno_map) {
+    for (const auto& p : UnorderedIterable(m_runtime_anno_map)) {
       TRACE(ANNO,
             3,
             "Runtime anno: %zu, %s",
@@ -693,7 +691,7 @@ bool AnnoKill::kill_annotations() {
             str_copy(p.first).c_str());
     }
 
-    for (const auto& p : m_system_anno_map) {
+    for (const auto& p : UnorderedIterable(m_system_anno_map)) {
       TRACE(ANNO,
             3,
             "System anno: %zu, %s",

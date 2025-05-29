@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 
 /**
@@ -18,12 +19,12 @@
 namespace rewriter {
 
 class TypeStringMap {
-  std::unordered_map<const DexString*, const DexString*> m_type_name_map;
+  UnorderedMap<const DexString*, const DexString*> m_type_name_map;
 
  public:
   TypeStringMap() {}
   explicit TypeStringMap(
-      const std::unordered_map<const DexType*, DexType*>& type_mapping);
+      const UnorderedMap<const DexType*, DexType*>& type_mapping);
   /**
    * Add type mapping from old_name to new_name.
    */
@@ -33,7 +34,7 @@ class TypeStringMap {
    * does not exist in the mapping. Array types are supported properly.
    */
   const DexString* get_new_type_name(const DexString* old_name) const;
-  const std::unordered_map<const DexString*, const DexString*>& get_class_map()
+  const UnorderedMap<const DexString*, const DexString*>& get_class_map()
       const {
     return m_type_name_map;
   }

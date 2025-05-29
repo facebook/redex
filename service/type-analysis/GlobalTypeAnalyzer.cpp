@@ -85,8 +85,8 @@ void scan_any_init_reachables(
             SHOW(method));
       continue;
     }
-    auto callees = resolve_callees_in_graph(cg, insn);
-    for (const DexMethod* callee : callees) {
+    const auto& callees = resolve_callees_in_graph(cg, insn);
+    for (const DexMethod* callee : UnorderedIterable(callees)) {
       scan_any_init_reachables(cg, method_override_graph, callee, false,
                                reachables);
     }
@@ -103,7 +103,7 @@ void scan_any_init_reachables(
     bool overrides_external = false;
     const auto& overridens =
         mog::get_overridden_methods(method_override_graph, vmethod);
-    for (auto overriden : overridens) {
+    for (auto overriden : UnorderedIterable(overridens)) {
       if (overriden->is_external()) {
         overrides_external = true;
       }
@@ -411,8 +411,8 @@ void GlobalTypeAnalysis::find_any_init_reachables(
               SHOW(method));
         continue;
       }
-      auto callees = resolve_callees_in_graph(*cg, insn);
-      for (const DexMethod* callee : callees) {
+      const auto& callees = resolve_callees_in_graph(*cg, insn);
+      for (const DexMethod* callee : UnorderedIterable(callees)) {
         bool trace_callbacks_in_callee_cls =
             is_leaking_this_in_ctor(method, callee);
         scan_any_init_reachables(*cg,
@@ -433,7 +433,7 @@ void GlobalTypeAnalysis::find_any_init_reachables(
       bool overrides_external = false;
       const auto& overridens =
           mog::get_overridden_methods(method_override_graph, vmethod);
-      for (auto overriden : overridens) {
+      for (auto overriden : UnorderedIterable(overridens)) {
         if (overriden->is_external()) {
           overrides_external = true;
         }

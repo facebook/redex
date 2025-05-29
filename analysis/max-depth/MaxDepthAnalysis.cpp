@@ -189,9 +189,9 @@ void MaxDepthAnalysisPass::run_pass(DexStoresVector& stores,
                                     PassManager& /* pm */) {
   auto analysis = Analysis(build_class_scope(stores), m_max_iteration);
   analysis.run();
-  m_result = std::make_shared<std::unordered_map<const DexMethod*, int>>();
+  m_result = std::make_shared<UnorderedMap<const DexMethod*, int>>();
 
-  for (const auto& entry : analysis.registry.get_map()) {
+  for (const auto& entry : UnorderedIterable(analysis.registry.get_map())) {
     if (entry.second.is_value()) {
       (*m_result)[entry.first] = entry.second.depth();
     }

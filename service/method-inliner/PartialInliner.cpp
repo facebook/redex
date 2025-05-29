@@ -19,9 +19,8 @@ const uint32_t MAX_PARTIALLY_INLINED_CODE_UNITS = 10;
 
 // Computes all blocks backwards-reachable from return instructions. (All other
 // blocks must eventually throw.)
-std::unordered_set<cfg::Block*> get_normal_blocks(
-    const cfg::ControlFlowGraph& cfg) {
-  std::unordered_set<cfg::Block*> res;
+UnorderedSet<cfg::Block*> get_normal_blocks(const cfg::ControlFlowGraph& cfg) {
+  UnorderedSet<cfg::Block*> res;
   std::queue<cfg::Block*> work_queue;
   for (auto* block : cfg.blocks()) {
     if (block->branchingness() == opcode::BRANCH_RETURN) {
@@ -99,9 +98,9 @@ PartialCode get_partially_inlined_code(const DexMethod* method,
 
   std::queue<cfg::Block*> work_queue;
   work_queue.push(cfg.entry_block());
-  std::unordered_set<cfg::Block*> inline_blocks;
+  UnorderedSet<cfg::Block*> inline_blocks;
   uint32_t code_units{0};
-  std::unordered_set<cfg::Block*> visited;
+  UnorderedSet<cfg::Block*> visited;
   while (!work_queue.empty()) {
     auto* block = work_queue.front();
     work_queue.pop();
@@ -131,11 +130,10 @@ PartialCode get_partially_inlined_code(const DexMethod* method,
     }
   }
   always_assert(!inline_blocks.empty());
-  if (!std::any_of(inline_blocks.begin(), inline_blocks.end(),
-                   [&](cfg::Block* block) {
-                     auto b = block->branchingness();
-                     return b == opcode::BRANCH_RETURN;
-                   })) {
+  if (!unordered_any_of(inline_blocks, [&](cfg::Block* block) {
+        auto b = block->branchingness();
+        return b == opcode::BRANCH_RETURN;
+      })) {
     // We didn't find any normal-return path. Partial inlining is unlikely to be
     // beneficial.
     return PartialCode();
@@ -234,9 +232,9 @@ PartialCode get_partially_inlined_code(const DexMethod* method,
                                                   SourceBlock::Val(0, 0));
   fallback_block->insert_before(fallback_block->begin(), std::move(new_sb));
 
-  std::unordered_set<size_t> retained_block_ids{fallback_block->id()};
+  UnorderedSet<size_t> retained_block_ids{fallback_block->id()};
   retained_block_ids.reserve(inline_blocks.size());
-  for (auto* block : inline_blocks) {
+  for (auto* block : UnorderedIterable(inline_blocks)) {
     retained_block_ids.insert(block->id());
   }
   for (auto* block : partial_cfg.blocks()) {

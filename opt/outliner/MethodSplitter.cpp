@@ -23,7 +23,7 @@ using namespace method_splitting_impl;
 
 class DexState {
  private:
-  std::unordered_set<const DexType*> m_type_refs;
+  UnorderedSet<const DexType*> m_type_refs;
   size_t m_method_refs_count;
   size_t max_type_refs;
 
@@ -37,7 +37,7 @@ class DexState {
            DexClasses& dex,
            size_t reserved_trefs,
            size_t reserved_mrefs) {
-    std::unordered_set<DexMethodRef*> method_refs;
+    UnorderedSet<DexMethodRef*> method_refs;
     std::vector<DexType*> init_classes;
     for (auto cls : dex) {
       cls->gather_methods(method_refs);
@@ -46,7 +46,7 @@ class DexState {
     }
     m_method_refs_count = method_refs.size() + reserved_mrefs;
 
-    std::unordered_set<DexType*> refined_types;
+    UnorderedSet<DexType*> refined_types;
     for (auto type : init_classes) {
       auto refined_type = init_classes_with_side_effects.refine(type);
       if (refined_type) {
@@ -56,9 +56,9 @@ class DexState {
     max_type_refs = get_max_type_refs(min_sdk) - reserved_trefs;
   }
 
-  bool can_insert_type_refs(const std::unordered_set<const DexType*>& types) {
+  bool can_insert_type_refs(const UnorderedSet<const DexType*>& types) {
     size_t inserted_count{0};
-    for (auto t : types) {
+    for (auto t : UnorderedIterable(types)) {
       if (!m_type_refs.count(t)) {
         inserted_count++;
       }
@@ -73,9 +73,9 @@ class DexState {
     return true;
   }
 
-  void insert_type_refs(const std::unordered_set<const DexType*>& types) {
+  void insert_type_refs(const UnorderedSet<const DexType*>& types) {
     always_assert(can_insert_type_refs(types));
-    m_type_refs.insert(types.begin(), types.end());
+    insert_unordered_iterable(m_type_refs, types);
     always_assert(m_type_refs.size() < max_type_refs);
   }
 
@@ -100,8 +100,8 @@ bool account_for_added_split_method(const std::vector<DexType*>& arg_types,
     return false;
   }
 
-  std::unordered_set<const DexType*> arg_types_set(arg_types.begin(),
-                                                   arg_types.end());
+  UnorderedSet<const DexType*> arg_types_set(arg_types.begin(),
+                                             arg_types.end());
   if (!dex_state->can_insert_type_refs(arg_types_set)) {
     return false;
   }
@@ -136,7 +136,7 @@ ConcurrentSet<DexMethod*> split_splittable_closures(
     const std::string& name_infix,
     AtomicMap<std::string, size_t>* uniquifiers,
     Stats* stats,
-    std::unordered_map<DexClasses*, std::unique_ptr<DexState>>* dex_states,
+    UnorderedMap<DexClasses*, std::unique_ptr<DexState>>* dex_states,
     ConcurrentSet<DexMethod*>* concurrent_added_methods,
     InsertOnlyConcurrentSet<const DexMethod*>* concurrent_hot_methods,
     InsertOnlyConcurrentMap<DexMethod*, DexMethod*>*
@@ -180,7 +180,7 @@ ConcurrentSet<DexMethod*> split_splittable_closures(
                 }
                 return c->id() > d->id();
               });
-    std::unordered_set<DexMethod*> affected_methods;
+    UnorderedSet<DexMethod*> affected_methods;
     for (auto* splittable_closure : ranked_splittable_closures) {
       auto method = splittable_closure->method_closures->method;
       std::string id =
@@ -189,7 +189,7 @@ ConcurrentSet<DexMethod*> split_splittable_closures(
       auto arg_types = splittable_closure->get_arg_types();
       if (!account_for_added_split_method(arg_types, dex_state.get())) {
         stats->dex_limits_hit++;
-        for (auto* m : affected_methods) {
+        for (auto* m : UnorderedIterable(affected_methods)) {
           m->get_code()->cfg().remove_unreachable_blocks();
         }
         affected_methods.clear();
@@ -258,8 +258,7 @@ ConcurrentSet<DexMethod*> split_splittable_closures(
       affected_methods.insert(new_method);
       concurrent_added_methods->insert(new_method);
     }
-    concurrent_affected_methods.insert(affected_methods.begin(),
-                                       affected_methods.end());
+    insert_unordered_iterable(concurrent_affected_methods, affected_methods);
   };
   workqueue_run<DexClasses*>(process_dex, dexen);
   return concurrent_affected_methods;
@@ -325,7 +324,7 @@ SplitMethod SplitMethod::create(const SplittableClosure& splittable_closure,
         it++;
       }
     }
-    std::unordered_set<cfg::BlockId> split_target_ids;
+    UnorderedSet<cfg::BlockId> split_target_ids;
     always_assert(!splittable_closure.closures.empty());
     launchpad_template = splittable_closure.closures.front()->target;
     for (auto* closure : splittable_closure.closures) {
@@ -456,7 +455,7 @@ void split_methods_in_stores(
 
   ConcurrentSet<DexMethod*> methods;
   std::vector<DexClasses*> dexen;
-  std::unordered_map<DexClasses*, std::unique_ptr<DexState>> dex_states;
+  UnorderedMap<DexClasses*, std::unique_ptr<DexState>> dex_states;
   for (auto& store : stores) {
     for (auto& dex : store.get_dexen()) {
       dexen.push_back(&dex);
@@ -498,8 +497,7 @@ void split_methods_in_stores(
         reserved_mrefs, splittable_closures, name_infix, &uniquifiers, stats,
         &dex_states, &concurrent_added_methods, concurrent_hot_methods,
         concurrent_new_hot_split_methods);
-    stats->added_methods.insert(concurrent_added_methods.begin(),
-                                concurrent_added_methods.end());
+    insert_unordered_iterable(stats->added_methods, concurrent_added_methods);
     TRACE(MS, 1, "[%zu] Split out %zu methods", iteration,
           concurrent_added_methods.size());
   }

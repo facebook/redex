@@ -11,13 +11,14 @@
 
 #include "CallGraph.h"
 #include "ConstantEnvironment.h"
+#include "DeterministicContainers.h"
 #include "InstructionAnalyzer.h"
 
 namespace constant_propagation {
 
 enum class FieldType { INSTANCE, STATIC };
 
-using EligibleIfields = std::unordered_set<DexField*>;
+using EligibleIfields = UnorderedSet<DexField*>;
 
 namespace interprocedural {
 
@@ -47,7 +48,7 @@ class WholeProgramState {
 
   // By default, the field and method partitions are initialized to Bottom.
   explicit WholeProgramState(
-      const std::unordered_set<const DexType*>& field_blocklist)
+      const UnorderedSet<const DexType*>& field_blocklist)
       : m_field_blocklist(field_blocklist) {}
 
   // By default, the field and method partitions are initialized to Bottom.
@@ -58,8 +59,8 @@ class WholeProgramState {
   WholeProgramState(const Scope&,
                     const interprocedural::FixpointIterator&,
                     const InsertOnlyConcurrentSet<DexMethod*>&,
-                    const std::unordered_set<const DexType*>&,
-                    const std::unordered_set<const DexField*>&,
+                    const UnorderedSet<const DexType*>&,
+                    const UnorderedSet<const DexField*>&,
                     std::shared_ptr<const call_graph::Graph> call_graph);
 
   /*
@@ -130,7 +131,7 @@ class WholeProgramState {
   void collect(
       const Scope& scope,
       const interprocedural::FixpointIterator& fp_iter,
-      const std::unordered_set<const DexField*>& definitely_assigned_ifields);
+      const UnorderedSet<const DexField*>& definitely_assigned_ifields);
 
   void collect_field_values(
       const IRInstruction* insn,
@@ -147,10 +148,10 @@ class WholeProgramState {
   std::shared_ptr<const call_graph::Graph> m_call_graph;
 
   // Unknown fields and methods will be treated as containing / returning Top.
-  std::unordered_set<const DexField*> m_known_fields;
-  std::unordered_set<const DexMethod*> m_known_methods;
+  UnorderedSet<const DexField*> m_known_fields;
+  UnorderedSet<const DexMethod*> m_known_methods;
 
-  std::unordered_set<const DexType*> m_field_blocklist;
+  UnorderedSet<const DexType*> m_field_blocklist;
 
   // A partition represents a set of execution paths that reach certain control
   // points (like invoke/return statements). The abstract information
@@ -176,8 +177,8 @@ class WholeProgramState {
 };
 
 struct WholeProgramStateAccessorRecord {
-  std::unordered_map<const DexField*, ConstantValue> field_dependencies;
-  std::unordered_map<const DexMethod*, ConstantValue> method_dependencies;
+  UnorderedMap<const DexField*, ConstantValue> field_dependencies;
+  UnorderedMap<const DexMethod*, ConstantValue> method_dependencies;
 };
 
 class WholeProgramStateAccessor {
@@ -206,14 +207,14 @@ class WholeProgramStateAccessor {
     if (callees.empty()) {
       return ConstantValue::top();
     }
-    for (const DexMethod* callee : callees) {
+    for (const DexMethod* callee : UnorderedIterable(callees)) {
       if (!callee->get_code()) {
         always_assert(is_abstract(callee) || is_native(callee));
         return ConstantValue::top();
       }
     }
     ConstantValue ret = ConstantValue::bottom();
-    for (const DexMethod* callee : callees) {
+    for (const DexMethod* callee : UnorderedIterable(callees)) {
       const auto& val = m_wps.get_method_partition().get(callee);
       if (m_record) {
         m_record->method_dependencies.emplace(callee, val);

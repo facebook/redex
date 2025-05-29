@@ -12,7 +12,6 @@
 #include <boost/optional.hpp>
 #include <fstream>
 #include <map>
-#include <unordered_set>
 
 #include "ApkResources.h"
 #include "ConfigFiles.h"
@@ -58,7 +57,7 @@ void print_duplicates(
 
 template <typename ItemType>
 void get_duplicates_impl(
-    const std::unordered_set<ItemType>& disallowed,
+    const UnorderedSet<ItemType>& disallowed,
     const std::map<size_t, std::vector<ItemType>>& item_by_hash,
     std::function<bool(const ItemType&, const ItemType&)> are_identical_fn,
     std::vector<std::vector<ItemType>>* duplicates) {
@@ -66,7 +65,7 @@ void get_duplicates_impl(
   for (const auto& p : item_by_hash) {
     std::vector<ItemType> bucket = p.second;
     std::sort(bucket.begin(), bucket.end());
-    std::unordered_set<ItemType> already_duped;
+    UnorderedSet<ItemType> already_duped;
     for (size_t i = 0; i < bucket.size() - 1; ++i) {
       ItemType primary_item = bucket[i];
       if (already_duped.count(primary_item)) {
@@ -94,7 +93,7 @@ void get_duplicates_impl(
 std::vector<std::vector<uint32_t>> get_duplicates_from_rows(
     ResourceTableFile* res_table,
     const std::vector<uint32_t>& ids,
-    const std::unordered_set<uint32_t>& disallowed_ids) {
+    const UnorderedSet<uint32_t>& disallowed_ids) {
   std::vector<std::vector<uint32_t>> duplicates;
   std::map<size_t, std::vector<uint32_t>> res_by_hash;
   // Strategy:
@@ -119,8 +118,8 @@ std::vector<std::vector<uint32_t>> get_duplicates_from_rows(
 std::map<uint32_t, uint32_t> find_duplicate_resources(
     ResourceTableFile* res_table,
     const std::vector<uint32_t>& sorted_res_ids,
-    const std::unordered_set<uint32_t>& disallowed_types,
-    const std::unordered_set<uint32_t>& disallowed_ids,
+    const UnorderedSet<uint32_t>& disallowed_types,
+    const UnorderedSet<uint32_t>& disallowed_ids,
     PassManager& mgr) {
   always_assert(!sorted_res_ids.empty());
   std::map<uint32_t, uint32_t> dupe_to_canon;
@@ -166,8 +165,8 @@ std::map<uint32_t, uint32_t> find_duplicate_resources(
 std::map<uint32_t, uint32_t> deduplicate_restable_rows(
     ResourceTableFile* res_table,
     const std::vector<uint32_t>& sorted_res_ids,
-    const std::unordered_set<uint32_t>& disallowed_types,
-    const std::unordered_set<uint32_t>& disallowed_ids,
+    const UnorderedSet<uint32_t>& disallowed_types,
+    const UnorderedSet<uint32_t>& disallowed_ids,
     PassManager& mgr) {
   auto dupe_to_canon = find_duplicate_resources(
       res_table, sorted_res_ids, disallowed_types, disallowed_ids, mgr);
@@ -242,12 +241,11 @@ void compute_res_file_hashes(
     const std::function<HashType(const void* data, size_t size, HashType seed)>&
         hash_fn,
     std::map<size_t, std::vector<std::string>>* hash_to_absolute_paths,
-    std::unordered_map<std::string, std::string>*
-        absolute_path_to_device_path) {
+    UnorderedMap<std::string, std::string>* absolute_path_to_device_path) {
   Timer t("compute_res_file_hashes");
   auto base_path = boost::filesystem::path(zip_dir);
   std::vector<std::string> tasks;
-  std::unordered_set<std::string> seen_paths;
+  UnorderedSet<std::string> seen_paths;
   for (size_t i = 0; i < sorted_res_ids.size(); ++i) {
     uint32_t id = sorted_res_ids[i];
     // We need to hash and check for equality files as they appear in the zip
@@ -309,12 +307,12 @@ void deduplicate_resource_files(PassManager& mgr, const std::string& zip_dir) {
   auto res_table = resources->load_res_table();
 
   std::map<size_t, std::vector<std::string>> hash_to_absolute_paths;
-  std::unordered_map<std::string, std::string> absolute_path_to_device_path;
+  UnorderedMap<std::string, std::string> absolute_path_to_device_path;
   compute_res_file_hashes<uint32_t>(
       zip_dir, res_table.get(), res_table->sorted_res_ids, murmur_hash3,
       &hash_to_absolute_paths, &absolute_path_to_device_path);
 
-  std::unordered_set<std::string> do_not_deduplicate;
+  UnorderedSet<std::string> do_not_deduplicate;
   std::vector<std::vector<std::string>> duplicates;
   get_duplicates_impl<std::string>(do_not_deduplicate, hash_to_absolute_paths,
                                    compare_files, &duplicates);
@@ -322,8 +320,8 @@ void deduplicate_resource_files(PassManager& mgr, const std::string& zip_dir) {
                                 [](const std::string& s) { return s; });
 
   // Build remapping, this must be done in terms of device paths.
-  std::unordered_map<std::string, std::string> file_mapping;
-  std::unordered_set<std::string> files_to_delete;
+  UnorderedMap<std::string, std::string> file_mapping;
+  UnorderedSet<std::string> files_to_delete;
   for (const auto& vec : duplicates) {
     auto size = vec.size();
     always_assert(size > 1);
@@ -349,14 +347,14 @@ void deduplicate_resource_files(PassManager& mgr, const std::string& zip_dir) {
 // and not references to other files). This is just an observation base on real
 // world examples, so that we can perform a lightweight dedup step initially on
 // a subset of data. This is probably not something that needs a per-app config.
-const std::unordered_set<std::string> SIMPLE_REFERENCE_TYPES = {
-    "bool", "color", "dimen", "integer"};
+const UnorderedSet<std::string> SIMPLE_REFERENCE_TYPES = {"bool", "color",
+                                                          "dimen", "integer"};
 
 void deduplicate_resource_file_references(
     PassManager& mgr,
     const std::string& zip_dir,
-    const std::unordered_set<std::string>& disallowed_type_names,
-    const std::unordered_set<uint32_t>& disallowed_ids) {
+    const UnorderedSet<std::string>& disallowed_type_names,
+    const UnorderedSet<uint32_t>& disallowed_ids) {
   auto resources = create_resource_reader(zip_dir);
   auto res_table = resources->load_res_table();
 
@@ -388,7 +386,7 @@ void deduplicate_resource_file_references(
           dupe_to_canon.size());
     if (!dupe_to_canon.empty()) {
       const auto& relevant_xml_files = resources->find_all_xml_files();
-      for (const std::string& path : relevant_xml_files) {
+      for (const std::string& path : UnorderedIterable(relevant_xml_files)) {
         resources->remap_xml_reference_attributes(path, dupe_to_canon);
       }
     }
@@ -398,21 +396,21 @@ void deduplicate_resource_file_references(
 
 void DedupResourcesPass::prepare_disallowed_ids(
     const std::string& zip_dir,
-    std::unordered_set<uint32_t>* disallowed_types,
-    std::unordered_set<uint32_t>* disallowed_ids) {
+    UnorderedSet<uint32_t>* disallowed_types,
+    UnorderedSet<uint32_t>* disallowed_ids) {
   auto resources = create_resource_reader(zip_dir);
   auto res_table = resources->load_res_table();
 
   auto types = res_table->get_types_by_name(m_disallowed_types);
-  disallowed_types->insert(types.begin(), types.end());
+  insert_unordered_iterable(*disallowed_types, types);
 
-  for (const std::string& n : m_disallowed_resources) {
+  for (const std::string& n : UnorderedIterable(m_disallowed_resources)) {
     const auto& v = res_table->get_res_ids_by_name(n);
     disallowed_ids->insert(v.begin(), v.end());
   }
   // Overlayable ids, keep as-is.
   auto overlayable_ids = res_table->get_overlayable_id_roots();
-  disallowed_ids->insert(overlayable_ids.begin(), overlayable_ids.end());
+  insert_unordered_iterable(*disallowed_ids, overlayable_ids);
 }
 
 void DedupResourcesPass::run_pass(DexStoresVector& stores,
@@ -423,8 +421,8 @@ void DedupResourcesPass::run_pass(DexStoresVector& stores,
   always_assert(!apk_dir.empty());
 
   // 1. Basic information about what shoudln't be operate on.
-  std::unordered_set<uint32_t> disallowed_types;
-  std::unordered_set<uint32_t> disallowed_ids;
+  UnorderedSet<uint32_t> disallowed_types;
+  UnorderedSet<uint32_t> disallowed_ids;
   prepare_disallowed_ids(apk_dir, &disallowed_types, &disallowed_ids);
 
   // 2. Compute duplicates/canonical resource identifiers for some types which
@@ -461,7 +459,7 @@ void DedupResourcesPass::run_pass(DexStoresVector& stores,
   r_class_writer.remap_resource_class_scalars(stores, old_to_new);
 
   const auto& relevant_xml_files = resources->find_all_xml_files();
-  for (const std::string& path : relevant_xml_files) {
+  for (const std::string& path : UnorderedIterable(relevant_xml_files)) {
     resources->remap_xml_reference_attributes(path, old_to_new);
   }
 

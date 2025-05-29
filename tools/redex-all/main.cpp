@@ -91,6 +91,7 @@ constexpr const char* DEBUG_LINE_MAP = "redex-debug-line-map-v2";
 constexpr const char* IODI_METADATA = "iodi-metadata";
 constexpr const char* OPT_DECISIONS = "redex-opt-decisions.json";
 constexpr const char* CLASS_METHOD_INFO_MAP = "redex-class-method-info-map.txt";
+constexpr const char* STRING_LOCALE_DUMP = "redex-string-locales.txt";
 
 const std::string k_usage_header = "usage: redex-all [options...] dex-files...";
 
@@ -381,6 +382,10 @@ Arguments parse_args(int argc, char* argv[]) {
   od.add_options()(
       "used-js-assets", po::value<std::vector<std::string>>(),
       "A JSON file (or files) containing a list of resources used by JS");
+  od.add_options()(
+      "dump-string-locales",
+      po::value<bool>(),
+      "Writes out the locales of all string resources into a file");
   od.add_options()("warn,w",
                    po::value<std::vector<int>>(),
                    "warning level:\n"
@@ -593,6 +598,10 @@ Arguments parse_args(int argc, char* argv[]) {
     args.config["used-js-assets"] = array;
   }
 
+  if (vm.count("dump-string-locales")) {
+    args.config["dump-string-locales"] = vm["dump-string-locales"].as<bool>();
+  }
+
   if (vm.count("arch")) {
     std::string arch = take_last(vm["arch"]);
     args.redex_options.arch = parse_architecture(arch);
@@ -770,7 +779,7 @@ Json::Value get_pass_stats(const PassManager& mgr) {
       continue;
     }
     Json::Value pass;
-    for (const auto& pass_metric : pass_info.metrics) {
+    for (const auto& pass_metric : UnorderedIterable(pass_info.metrics)) {
       pass[pass_metric.first] = (Json::Int64)pass_metric.second;
     }
     all[pass_info.name] = pass;
@@ -958,9 +967,8 @@ Json::Value get_threads_stats() {
 
 void write_debug_line_mapping(
     const std::string& debug_line_map_filename,
-    const std::unordered_map<DexMethod*, uint64_t>& method_to_id,
-    const std::unordered_map<DexCode*, std::vector<DebugLineItem>>&
-        code_debug_lines,
+    const UnorderedMap<DexMethod*, uint64_t>& method_to_id,
+    const UnorderedMap<DexCode*, std::vector<DebugLineItem>>& code_debug_lines,
     DexStoresVector& stores,
     const std::vector<DexMethod*>& needs_debug_line_mapping) {
   /*
@@ -1069,7 +1077,7 @@ void dump_keep_reasons(const ConfigFiles& conf,
       continue;
     }
     auto print_keep_reasons = [&ofs](const auto& reasons, const char* indent) {
-      for (const auto* r : reasons) {
+      for (const auto* r : UnorderedIterable(reasons)) {
         ofs << indent << "* " << *r << "\n";
       }
     };
@@ -1116,7 +1124,7 @@ void process_proguard_rules(ConfigFiles& conf,
   if (unused_rule_abort) {
     std::vector<std::string> unused_out;
     for (const keep_rules::KeepSpec* keep_rule :
-         proguard_rule_recorder.unused_keep_rules) {
+         UnorderedIterable(proguard_rule_recorder.unused_keep_rules)) {
       unused_out.push_back(keep_rules::show_keep(*keep_rule));
     }
     // Make output deterministic
@@ -1497,8 +1505,8 @@ void redex_backend(ConfigFiles& conf,
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(
       dik == DebugInfoKind::NoCustomSymbolication ? ""
                                                   : line_number_map_filename));
-  std::unordered_map<DexMethod*, uint64_t> method_to_id;
-  std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
+  UnorderedMap<DexMethod*, uint64_t> method_to_id;
+  UnorderedMap<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
 
   auto iodi_metadata = [&]() {
     auto val = conf.get_json_config().get("iodi_layer_mode", Json::Value());
@@ -1640,11 +1648,8 @@ void redex_backend(ConfigFiles& conf,
     if (dex_output_config.write_class_sizes) {
       Timer t2("Writing class sizes");
       // Sort for stability.
-      std::vector<const DexClass*> keys;
-      std::transform(output_totals.class_size.begin(),
-                     output_totals.class_size.end(), std::back_inserter(keys),
-                     [](const auto& p) { return p.first; });
-      std::sort(keys.begin(), keys.end(), compare_dexclasses);
+      auto keys = unordered_to_ordered_keys(output_totals.class_size,
+                                            compare_dexclasses);
       std::ofstream ofs{conf.metafile("redex-class-sizes.csv")};
       for (auto* c : keys) {
         ofs << c->get_deobfuscated_name_or_empty() << ","
@@ -1716,6 +1721,14 @@ void dump_class_method_info_map(const std::string& file_path,
       print(cls_idx, vmethod);
     }
   });
+}
+
+void dump_string_locales(const std::string& file_path,
+                         const std::vector<android::ResTable_config>& configs) {
+  std::ofstream ofs(file_path, std::ofstream::out | std::ofstream::trunc);
+  ofs << configs_to_string(
+      std::set<android::ResTable_config>(configs.begin(), configs.end()));
+  ofs.close();
 }
 
 void maybe_dump_jemalloc_profile(const char* env_name) {
@@ -1900,6 +1913,7 @@ int main(int argc, char* argv[]) {
 
     slow_invariants_debug =
         args.config.get("slow_invariants_debug", false).asBool();
+    g_redex->slow_invariants_debug = slow_invariants_debug;
     cfg::ControlFlowGraph::DEBUG =
         cfg::ControlFlowGraph::DEBUG || slow_invariants_debug;
     if (slow_invariants_debug) {
@@ -1981,6 +1995,17 @@ int main(int argc, char* argv[]) {
 
     stats_output_path = conf.metafile(
         args.config.get("stats_output", "redex-stats.txt").asString());
+
+    const bool dump_strings =
+        args.config.get("dump-string-locales", false).asBool();
+    if (dump_strings) {
+      auto post_resources = create_resource_reader(apk_dir);
+      auto post_res_table = post_resources->load_res_table();
+      std::vector<android::ResTable_config> configs;
+      post_res_table->get_configurations(APPLICATION_PACKAGE, "string",
+                                         &configs);
+      dump_string_locales(STRING_LOCALE_DUMP, configs);
+    }
 
     {
       Timer t("Freeing global memory");

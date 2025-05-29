@@ -17,7 +17,7 @@
 namespace {
 // Record critical registers that will be clobbered by the hoisted insns.
 void setup_side_effect_on_vregs(const IRInstruction* insn,
-                                std::unordered_map<reg_t, bool>& vregs) {
+                                UnorderedMap<reg_t, bool>& vregs) {
   if (!insn->has_dest()) {
     // insn has no destination, can not have a side effect
     return; // we need to return here, otherwise dest() will throw
@@ -111,7 +111,7 @@ void skip_handled_method_item_entries(IRList::iterator& it,
 
 std::vector<IRInstruction> get_insns_to_hoist(
     const std::vector<cfg::Block*>& succ_blocks,
-    Lazy<std::unordered_map<reg_t, bool>>& crit_regs,
+    Lazy<UnorderedMap<reg_t, bool>>& crit_regs,
     Lazy<const constant_uses::ConstantUses>& constant_uses) {
   // get iterators that points to the beginning of each block
   std::vector<IRList::iterator> block_iters;
@@ -236,10 +236,10 @@ bool create_move_and_fix_clobbered(
     std::vector<IRInstruction*>& heap_insn_objs,
     cfg::Block* block,
     cfg::ControlFlowGraph& cfg,
-    const std::unordered_map<reg_t, bool>& crit_regs,
+    const UnorderedMap<reg_t, bool>& crit_regs,
     Lazy<const constant_uses::ConstantUses>& constant_uses,
     bool can_allocate_regs) {
-  std::unordered_map<reg_t, reg_t> reg_map;
+  UnorderedMap<reg_t, reg_t> reg_map;
   auto it = block->to_cfg_instruction_iterator(pos);
   auto cond_insn = it->insn;
 
@@ -296,7 +296,7 @@ size_t hoist_insns_for_block(
     const std::vector<cfg::Block*>& succ_blocks,
     cfg::ControlFlowGraph& cfg,
     const std::vector<IRInstruction>& insns_to_hoist,
-    const std::unordered_map<reg_t, bool>& crit_regs,
+    const UnorderedMap<reg_t, bool>& crit_regs,
     Lazy<const constant_uses::ConstantUses>& constant_uses,
     bool can_allocate_regs) {
   auto insert_it = block->to_cfg_instruction_iterator(pos);
@@ -316,13 +316,12 @@ size_t hoist_insns_for_block(
   // Hoist and delete instructions.
 
   auto succs = [&]() {
-    std::unordered_set<cfg::Block*> succ_blocks_set{succ_blocks.begin(),
-                                                    succ_blocks.end()};
+    UnorderedSet<cfg::Block*> succ_blocks_set{succ_blocks.begin(),
+                                              succ_blocks.end()};
     std::vector<std::pair<cfg::Block*, IRList::iterator>> ret;
     ret.reserve(succ_blocks_set.size());
-    std::transform(succ_blocks_set.begin(), succ_blocks_set.end(),
-                   std::back_inserter(ret),
-                   [](auto* b) { return std::make_pair(b, b->begin()); });
+    unordered_transform(succ_blocks_set, std::back_inserter(ret),
+                        [](auto* b) { return std::make_pair(b, b->begin()); });
 
     // Need to order in some way for stable insertion of source blocks.
     std::sort(ret.begin(), ret.end(), [](const auto& lhs, const auto& rhs) {
@@ -506,8 +505,8 @@ size_t process_hoisting_for_block(
   // critical registers for hoisting and if they are clobbered.
   // they all start as non-clobbered but if any hoisted insn clobbers it, it
   // will be changed to true.
-  Lazy<std::unordered_map<reg_t, bool>> crit_regs([last_insn]() {
-    auto res = std::make_unique<std::unordered_map<reg_t, bool>>();
+  Lazy<UnorderedMap<reg_t, bool>> crit_regs([last_insn]() {
+    auto res = std::make_unique<UnorderedMap<reg_t, bool>>();
     for (size_t i = 0; i < last_insn->srcs_size(); i++) {
       res->emplace(last_insn->src(i), false);
       if (last_insn->src_is_wide(i)) {

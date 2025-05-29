@@ -109,7 +109,7 @@ bool not_eligible_ifield(DexField* field) {
 void initialize_ifields(
     const Scope& scope,
     ConstantFieldPartition* field_partition,
-    const std::unordered_set<const DexField*>& definitely_assigned_ifields) {
+    const UnorderedSet<const DexField*>& definitely_assigned_ifields) {
   walk::fields(scope, [&](DexField* field) {
     if (not_eligible_ifield(field)) {
       return;
@@ -139,8 +139,8 @@ WholeProgramState::WholeProgramState(
     const Scope& scope,
     const interprocedural::FixpointIterator& fp_iter,
     const InsertOnlyConcurrentSet<DexMethod*>& non_true_virtuals,
-    const std::unordered_set<const DexType*>& field_blocklist,
-    const std::unordered_set<const DexField*>& definitely_assigned_ifields,
+    const UnorderedSet<const DexType*>& field_blocklist,
+    const UnorderedSet<const DexField*>& definitely_assigned_ifields,
     std::shared_ptr<const call_graph::Graph> call_graph)
     : m_call_graph(std::move(call_graph)), m_field_blocklist(field_blocklist) {
 
@@ -160,7 +160,7 @@ WholeProgramState::WholeProgramState(
     m_known_fields.emplace(field);
   });
   // Put non-root non true virtual methods in known methods.
-  for (const auto& non_true_virtual : non_true_virtuals) {
+  for (const auto& non_true_virtual : UnorderedIterable(non_true_virtuals)) {
     if (!root(non_true_virtual) && non_true_virtual->get_code()) {
       m_known_methods.emplace(non_true_virtual);
     }
@@ -182,7 +182,7 @@ WholeProgramState::WholeProgramState(
 void WholeProgramState::collect(
     const Scope& scope,
     const interprocedural::FixpointIterator& fp_iter,
-    const std::unordered_set<const DexField*>& definitely_assigned_ifields) {
+    const UnorderedSet<const DexField*>& definitely_assigned_ifields) {
   initialize_ifields(scope, &m_field_partition, definitely_assigned_ifields);
   ConcurrentMap<const DexField*, ConstantValue> fields_value_tmp;
   ConcurrentMap<const DexMethod*, ConstantValue> methods_value_tmp;
@@ -208,12 +208,12 @@ void WholeProgramState::collect(
       }
     }
   });
-  for (const auto& pair : fields_value_tmp) {
+  for (const auto& pair : UnorderedIterable(fields_value_tmp)) {
     m_field_partition.update(pair.first, [&pair](auto* current_value) {
       current_value->join_with(pair.second);
     });
   }
-  for (const auto& pair : methods_value_tmp) {
+  for (const auto& pair : UnorderedIterable(methods_value_tmp)) {
     m_method_partition.update(pair.first, [&pair](auto* current_value) {
       current_value->join_with(pair.second);
     });

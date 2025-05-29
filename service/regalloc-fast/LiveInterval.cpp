@@ -7,12 +7,7 @@
 
 #include "LiveInterval.h"
 
-#include <unordered_map>
-#include <unordered_set>
-#include <utility>
-
 #include "DexUtil.h"
-#include "LinearScan.h"
 
 namespace fastregalloc {
 
@@ -22,20 +17,21 @@ LiveIntervals init_live_intervals(
   LiveIntervals live_intervals;
   VRegAliveInsns vreg_alive_insns;
   auto add_live_range = [&vreg_alive_insns](const auto& vreg_block_range) {
-    for (auto& [vreg, range] : vreg_block_range) {
+    for (auto& [vreg, range] : UnorderedIterable(vreg_block_range)) {
       vreg_alive_insns[vreg].push_back(range);
     }
   };
 
   LivenessFixpointIterator liveness_fixpoint_iter(cfg);
   liveness_fixpoint_iter.run({});
-  std::unordered_map<cfg::Block*, std::unordered_set<vreg_t>>
+  UnorderedMap<cfg::Block*, UnorderedSet<vreg_t>>
       check_cast_throw_targets_vregs;
   for (cfg::Block* block : cfg.blocks()) {
     add_live_range(get_live_range_in_block(
         liveness_fixpoint_iter, block, &check_cast_throw_targets_vregs));
   }
-  for (auto& [block, vregs] : check_cast_throw_targets_vregs) {
+  for (auto& [block, vregs] :
+       UnorderedIterable(check_cast_throw_targets_vregs)) {
     add_live_range(get_check_cast_throw_targets_live_range(
         liveness_fixpoint_iter, block, vregs));
   }
@@ -60,7 +56,7 @@ LiveIntervals init_live_intervals(
     }
   }
 
-  for (const auto& [vreg, ranges] : vreg_alive_insns) {
+  for (const auto& [vreg, ranges] : UnorderedIterable(vreg_alive_insns)) {
     auto [start_point, end_point] = calculate_live_interval(ranges, indices);
     live_intervals.push_back(VRegLiveInterval{start_point, end_point, vreg});
   }
@@ -96,7 +92,7 @@ IntervalEndPoints calculate_live_interval(
 VRegAliveRangeInBlock get_live_range_in_block(
     const LivenessFixpointIterator& fixpoint_iter,
     cfg::Block* block,
-    std::unordered_map<cfg::Block*, std::unordered_set<vreg_t>>*
+    UnorderedMap<cfg::Block*, UnorderedSet<vreg_t>>*
         check_cast_throw_targets_vregs) {
   VRegAliveRangeInBlock vreg_block_range;
   const LivenessDomain& live_in = fixpoint_iter.get_live_in_vars_at(block);
@@ -161,11 +157,11 @@ VRegAliveRangeInBlock get_live_range_in_block(
 VRegAliveRangeInBlock get_check_cast_throw_targets_live_range(
     const LivenessFixpointIterator& fixpoint_iter,
     cfg::Block* block,
-    const std::unordered_set<vreg_t>& vregs) {
+    const UnorderedSet<vreg_t>& vregs) {
   VRegAliveRangeInBlock vreg_block_range;
   const LivenessDomain& live_in = fixpoint_iter.get_live_in_vars_at(block);
   const auto& elements = live_in.elements();
-  for (auto vreg : vregs) {
+  for (auto vreg : UnorderedIterable(vregs)) {
     if (!elements.contains(vreg)) {
       LiveIntervalPoint first = LiveIntervalPoint::get_block_begin(block);
       auto range = std::make_pair(first, first);
@@ -180,7 +176,7 @@ std::vector<cfg::Block*> get_ordered_blocks(
     cfg::ControlFlowGraph& cfg,
     const LivenessFixpointIterator& liveness_fixpoint_iter) {
   // For each block, compute distance (in number of blocks) from exit-block.
-  std::unordered_map<cfg::Block*, size_t> block_depths;
+  UnorderedMap<cfg::Block*, size_t> block_depths;
   std::queue<std::pair<cfg::Block*, size_t>> work_queue;
   work_queue.emplace(cfg.exit_block(), 1);
   while (!work_queue.empty()) {
@@ -196,7 +192,7 @@ std::vector<cfg::Block*> get_ordered_blocks(
 
   // Compute (maximum) depth (in number of blocks, from exit-block) of each
   // assigned register
-  std::unordered_map<vreg_t, size_t> vreg_defs_depths;
+  UnorderedMap<vreg_t, size_t> vreg_defs_depths;
   for (auto block : cfg.blocks()) {
     for (auto& mie : InstructionIterable(block)) {
       if (mie.insn->has_dest()) {
@@ -208,7 +204,7 @@ std::vector<cfg::Block*> get_ordered_blocks(
 
   // For each block, compute the maximum distance (in number of blocks, from
   // exit-block) over all live-in registers
-  std::unordered_map<cfg::Block*, size_t> live_in_def_depths;
+  UnorderedMap<cfg::Block*, size_t> live_in_def_depths;
   for (cfg::Block* block : cfg.blocks()) {
     const auto& live_in = liveness_fixpoint_iter.get_live_in_vars_at(block);
     size_t depth = 0;
@@ -221,7 +217,7 @@ std::vector<cfg::Block*> get_ordered_blocks(
 
   // Collect blocks by doing a post-order traversal, processing predecessors in
   // their live-in-def-depths order, smallest depths goes last
-  std::unordered_set<cfg::Block*> visited;
+  UnorderedSet<cfg::Block*> visited;
   std::vector<cfg::Block*> ordered_blocks;
   std::function<void(cfg::Block*)> visit;
   visit = [&](cfg::Block* block) {

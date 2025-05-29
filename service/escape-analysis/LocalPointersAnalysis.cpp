@@ -238,7 +238,7 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
 void analyze_invoke_with_summary(const EscapeSummary& summary,
                                  const IRInstruction* insn,
                                  Environment* env) {
-  for (auto src_idx : summary.escaping_parameters) {
+  for (auto src_idx : UnorderedIterable(summary.escaping_parameters)) {
     env->set_may_escape(insn->src(src_idx), insn);
   }
 
@@ -377,8 +377,8 @@ std::pair<std::unique_ptr<FixpointIterator>, EscapeSummary> analyze_method(
     const DexMethod* method,
     const call_graph::Graph& call_graph,
     const SummaryMap& summary_map,
-    const std::unordered_set<DexClass*>* excluded_classes) {
-  std::unordered_map<const IRInstruction*, EscapeSummary> invoke_to_summary_map;
+    const UnorderedSet<DexClass*>* excluded_classes) {
+  UnorderedMap<const IRInstruction*, EscapeSummary> invoke_to_summary_map;
   if (call_graph.has_node(method)) {
     const auto& callee_edges = call_graph.node(method)->callees();
     for (const auto& edge : callee_edges) {
@@ -417,7 +417,7 @@ FixpointIteratorMap analyze_scope(
     const Scope& scope,
     const call_graph::Graph& call_graph,
     SummaryMap* summary_map_ptr,
-    const std::unordered_set<DexClass*>* excluded_classes) {
+    const UnorderedSet<DexClass*>* excluded_classes) {
   FixpointIteratorMap fp_iter_map;
   SummaryMap summary_map;
   if (summary_map_ptr == nullptr) {
@@ -451,10 +451,11 @@ FixpointIteratorMap analyze_scope(
           }
           changed_effect_summaries.emplace(method, std::move(new_summary));
           const auto& callers = call_graph.get_callers(method);
-          next_affected_methods->insert(callers.begin(), callers.end());
+          insert_unordered_iterable(*next_affected_methods, callers);
         },
         *affected_methods);
-    for (auto&& [method, summary] : changed_effect_summaries) {
+    for (auto&& [method, summary] :
+         UnorderedIterable(changed_effect_summaries)) {
       (*summary_map_ptr)[method] = std::move(summary);
     }
     std::swap(next_affected_methods, affected_methods);
@@ -500,7 +501,7 @@ EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
   const auto& exit_state =
       fp_iter.get_exit_state_at(const_cast<cfg::Block*>(cfg.exit_block()));
   uint16_t idx{0};
-  std::unordered_map<const IRInstruction*, uint16_t> param_indexes;
+  UnorderedMap<const IRInstruction*, uint16_t> param_indexes;
   boost::sub_range<IRList> param_instruction =
       code.editable_cfg_built() ? cfg.get_param_instructions()
                                 : code.get_param_instructions();
@@ -551,7 +552,7 @@ EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
 std::ostream& operator<<(std::ostream& o, const EscapeSummary& summary) {
   o << "Escaping parameters: ";
   bool first{true};
-  for (auto p_idx : summary.escaping_parameters) {
+  for (auto p_idx : UnorderedIterable(summary.escaping_parameters)) {
     if (!first) {
       o << ", ";
     }
@@ -564,10 +565,7 @@ std::ostream& operator<<(std::ostream& o, const EscapeSummary& summary) {
 
 sparta::s_expr to_s_expr(const EscapeSummary& summary) {
   std::vector<sparta::s_expr> escaping_params_s_exprs;
-  std::vector<uint16_t> escaping_parameters(summary.escaping_parameters.begin(),
-                                            summary.escaping_parameters.end());
-  // Sort in order that the output is deterministic.
-  std::sort(escaping_parameters.begin(), escaping_parameters.end());
+  auto escaping_parameters = unordered_to_ordered(summary.escaping_parameters);
   escaping_params_s_exprs.reserve(escaping_parameters.size());
   for (auto idx : escaping_parameters) {
     escaping_params_s_exprs.emplace_back(idx);
@@ -625,8 +623,7 @@ EscapeSummary EscapeSummary::from_s_expr(const sparta::s_expr& expr) {
 }
 
 void EscapeSummary::join_with(const EscapeSummary& other) {
-  escaping_parameters.insert(other.escaping_parameters.begin(),
-                             other.escaping_parameters.end());
+  insert_unordered_iterable(escaping_parameters, other.escaping_parameters);
   returned_parameters.join_with(other.returned_parameters);
 }
 

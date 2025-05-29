@@ -23,7 +23,7 @@
 struct RemoveUnusedArgsTest : public RedexTest {
   remove_unused_args::RemoveArgs* m_remove_args;
   std::vector<std::string> m_blocklist;
-  std::unordered_set<DexMethodRef*> m_pure_methods;
+  UnorderedSet<DexMethodRef*> m_pure_methods;
 
   RemoveUnusedArgsTest() {
     Scope dummy_scope;

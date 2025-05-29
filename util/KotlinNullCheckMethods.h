@@ -6,6 +6,8 @@
  */
 
 #pragma once
+
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "MethodUtil.h"
 
@@ -124,8 +126,8 @@ inline DexMethod* kotlin_jvm_internal_Intrinsics_WrCheckExpression_V1_4(
 // These null assertions will take the object that they are checking for
 // nullness as first argument and returns void. The value of the object will
 // not be null beyond this program point in the execution path.
-inline std::unordered_set<DexMethodRef*> get_kotlin_null_assertions() {
-  std::unordered_set<DexMethodRef*> null_check_methods;
+inline UnorderedSet<DexMethodRef*> get_kotlin_null_assertions() {
+  UnorderedSet<DexMethodRef*> null_check_methods;
   DexMethodRef* method;
   method = method::kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull();
   if (method) {

@@ -9,13 +9,12 @@
 
 #include <cstdlib>
 #include <cstring>
-#include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include "ConcurrentContainers.h"
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 
 namespace cfg {
@@ -25,9 +24,9 @@ class ControlFlowGraph;
 class DexStore;
 using DexStoresVector = std::vector<DexStore>;
 
-using DexStoreDependencies = std::unordered_set<const DexStore*>;
+using DexStoreDependencies = UnorderedSet<const DexStore*>;
 using DexStoresDependencies =
-    std::unordered_map<const DexStore*, DexStoreDependencies>;
+    UnorderedMap<const DexStore*, DexStoreDependencies>;
 
 class DexMetadata {
   std::string id;
@@ -161,7 +160,7 @@ class DexStoreClassesIterator {
  * Return all the root store types if `include_primary_dex` is true, otherwise
  * return all the types from secondary dexes.
  */
-std::unordered_set<const DexType*> get_root_store_types(
+UnorderedSet<const DexType*> get_root_store_types(
     const DexStoresVector& stores, bool include_primary_dex = true);
 
 /**
@@ -339,7 +338,7 @@ class XStoreRefs {
       if (is_store_shared_module(caller_store)) {
         auto& inbound_deps = m_reverse_dependencies.at(caller_store);
         bool all_stores_depend_on_callee = true;
-        for (auto& dep_store : inbound_deps) {
+        for (auto& dep_store : UnorderedIterable(inbound_deps)) {
           if (!get_transitive_resolved_dependencies(dep_store).count(
                   callee_store)) {
             all_stores_depend_on_callee = false;
@@ -367,7 +366,7 @@ class XStoreRefs {
  * is used for quick validation for crossing-dex references.
  */
 class XDexRefs {
-  std::unordered_map<const DexType*, size_t> m_dexes;
+  UnorderedMap<const DexType*, size_t> m_dexes;
   size_t m_num_dexes;
 
  public:
@@ -409,15 +408,14 @@ class XDexMethodRefs : public XDexRefs {
   ~XDexMethodRefs() = default;
 
   struct Refs {
-    std::unordered_set<DexMethodRef*> methods;
-    std::unordered_set<DexFieldRef*> fields;
-    std::unordered_set<DexType*> types;
-    std::unordered_set<DexType*> refined_init_class_types;
+    UnorderedSet<DexMethodRef*> methods;
+    UnorderedSet<DexFieldRef*> fields;
+    UnorderedSet<DexType*> types;
+    UnorderedSet<DexType*> refined_init_class_types;
   };
 
-  Refs get_for_callee(
-      const cfg::ControlFlowGraph& callee_cfg,
-      std::unordered_set<DexType*> refined_init_class_types) const;
+  Refs get_for_callee(const cfg::ControlFlowGraph& callee_cfg,
+                      UnorderedSet<DexType*> refined_init_class_types) const;
 
   bool has_cross_dex_refs(const Refs& callee_refs, DexType* caller_class) const;
 

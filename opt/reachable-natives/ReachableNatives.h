@@ -7,10 +7,10 @@
 
 #pragma once
 
-#include <unordered_set>
 #include <vector>
 
 #include "ConstantUses.h"
+#include "DeterministicContainers.h"
 #include "IRList.h"
 #include "Pass.h"
 #include "TypeInference.h"
@@ -78,8 +78,8 @@ class ReachableNativesPass : public Pass {
   std::string m_live_load_library_file_name;
   std::string m_dead_load_library_file_name;
   std::vector<std::string> m_additional_load_library_names;
-  std::unordered_set<DexMethod*> m_load_library_unsafe_methods;
-  std::unordered_set<DexMethod*> m_load_library_methods;
+  UnorderedSet<DexMethod*> m_load_library_unsafe_methods;
+  UnorderedSet<DexMethod*> m_load_library_methods;
   bool m_sweep;
   bool m_sweep_native_methods;
 };

@@ -8,10 +8,9 @@
 #pragma once
 
 #include <memory>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
+#include "DeterministicContainers.h"
 #include "MethodSplittingConfig.h"
 #include "ReducedControlFlow.h"
 
@@ -21,8 +20,8 @@ namespace method_splitting_impl {
 // from a given reduced block.
 struct Closure {
   const ReducedBlock* reduced_block;
-  std::unordered_set<const ReducedBlock*> reduced_components;
-  std::unordered_set<cfg::Block*> srcs;
+  UnorderedSet<const ReducedBlock*> reduced_components;
+  UnorderedSet<cfg::Block*> srcs;
   cfg::Block* target;
 };
 

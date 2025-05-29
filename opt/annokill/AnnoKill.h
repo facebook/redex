@@ -11,17 +11,17 @@
 
 #include <map>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 #include "ConcurrentContainers.h"
+#include "DeterministicContainers.h"
 
 class DexAnnotation;
 class DexAnnotationSet;
 
 class AnnoKill {
  public:
-  using AnnoSet = std::unordered_set<DexType*>;
+  using AnnoSet = UnorderedSet<DexType*>;
   using AnnoNames = std::vector<std::string>;
 
   struct AnnoKillStats {
@@ -67,14 +67,13 @@ class AnnoKill {
            const AnnoNames& keep,
            const AnnoNames& kill,
            const AnnoNames& force_kill,
-           const std::unordered_map<std::string, std::vector<std::string>>&
+           const UnorderedMap<std::string, std::vector<std::string>>&
                class_hierarchy_keep_annos,
-           const std::unordered_map<std::string, std::vector<std::string>>&
+           const UnorderedMap<std::string, std::vector<std::string>>&
                annotated_keep_annos);
 
   bool kill_annotations();
-  std::unordered_set<const DexType*> build_anno_keep(
-      DexAnnotationSet* aset) const;
+  UnorderedSet<const DexType*> build_anno_keep(DexAnnotationSet* aset) const;
   bool should_kill_bad_signature(DexAnnotation* da) const;
   AnnoKillStats get_stats() const { return m_stats; }
 
@@ -91,12 +90,12 @@ class AnnoKill {
   void cleanup_aset(DexAnnotationSet* aset,
                     const AnnoSet& referenced_annos,
                     AnnoKillStats& stats,
-                    const std::unordered_set<const DexType*>& keep_annos =
-                        std::unordered_set<const DexType*>{}) const;
+                    const UnorderedSet<const DexType*>& keep_annos =
+                        UnorderedSet<const DexType*>{}) const;
   void count_annotation(const DexAnnotation* da, AnnoKillStats& stats) const;
 
   Scope& m_scope;
-  std::unordered_set<DexClass*> m_scope_set;
+  UnorderedSet<DexClass*> m_scope_set;
   const bool m_only_force_kill;
   const bool m_kill_bad_signatures;
   AnnoSet m_kill;
@@ -107,9 +106,9 @@ class AnnoKill {
   mutable AtomicMap<std::string_view, size_t> m_build_anno_map;
   mutable AtomicMap<std::string_view, size_t> m_runtime_anno_map;
   mutable AtomicMap<std::string_view, size_t> m_system_anno_map;
-  std::unordered_map<const DexType*, std::unordered_set<const DexType*>>
+  UnorderedMap<const DexType*, UnorderedSet<const DexType*>>
       m_anno_class_hierarchy_keep;
-  std::unordered_map<const DexType*, std::unordered_set<const DexType*>>
+  UnorderedMap<const DexType*, UnorderedSet<const DexType*>>
       m_annotated_keep_annos;
 };
 
@@ -151,10 +150,9 @@ class AnnoKillPass : public Pass {
   std::vector<std::string> m_keep_annos;
   std::vector<std::string> m_kill_annos;
   std::vector<std::string> m_force_kill_annos;
-  std::unordered_map<std::string, std::vector<std::string>>
+  UnorderedMap<std::string, std::vector<std::string>>
       m_class_hierarchy_keep_annos;
-  std::unordered_map<std::string, std::vector<std::string>>
-      m_annotated_keep_annos;
+  UnorderedMap<std::string, std::vector<std::string>> m_annotated_keep_annos;
   bool m_kill_bad_signatures;
 
  protected:

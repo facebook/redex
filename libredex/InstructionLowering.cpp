@@ -9,6 +9,7 @@
 
 #include "ConfigFiles.h"
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexInstruction.h"
 #include "DexOpcodeDefs.h"
 #include "DexStore.h"
@@ -440,7 +441,7 @@ Stats lower(DexMethod* method, bool lower_with_cfg, ConfigFiles* conf) {
   // Check the load-param opcodes make sense before removing them
   check_load_params(method);
 
-  std::unordered_map<MethodItemEntry*, std::vector<int32_t>> case_keys;
+  UnorderedMap<MethodItemEntry*, std::vector<int32_t>> case_keys;
   for (const MethodItemEntry& it : *code) {
     if (it.type == MFLOW_TARGET) {
       BranchTarget* bt = it.target;
@@ -449,7 +450,7 @@ Stats lower(DexMethod* method, bool lower_with_cfg, ConfigFiles* conf) {
       }
     }
   }
-  for (auto& entry : case_keys) {
+  for (auto& entry : UnorderedIterable(case_keys)) {
     std::sort(entry.second.begin(), entry.second.end());
   }
 

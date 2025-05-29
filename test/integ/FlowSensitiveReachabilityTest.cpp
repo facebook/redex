@@ -43,9 +43,8 @@ TEST_F(FlowSensitiveReachabilityTest,
   //// instantiable_types
   EXPECT_EQ(reachable_aspects.instantiable_types.size(), 5);
   auto is_instantiable = [&](const std::string_view& s) {
-    return std::any_of(reachable_aspects.instantiable_types.begin(),
-                       reachable_aspects.instantiable_types.end(),
-                       [s](const auto* cls) { return cls->str() == s; });
+    return unordered_any_of(reachable_aspects.instantiable_types,
+                            [s](const auto* cls) { return cls->str() == s; });
   };
   EXPECT_TRUE(is_instantiable("LFlowSensitiveReachabilityTest;"));
   EXPECT_FALSE(is_instantiable("LData;"));
@@ -59,9 +58,8 @@ TEST_F(FlowSensitiveReachabilityTest,
   //// dynamically_referenced_classes
   EXPECT_EQ(reachable_aspects.dynamically_referenced_classes.size(), 2);
   auto is_dynamically_referenced = [&](const std::string_view& s) {
-    return std::any_of(reachable_aspects.dynamically_referenced_classes.begin(),
-                       reachable_aspects.dynamically_referenced_classes.end(),
-                       [s](const auto* cls) { return cls->str() == s; });
+    return unordered_any_of(reachable_aspects.dynamically_referenced_classes,
+                            [s](const auto* cls) { return cls->str() == s; });
   };
   EXPECT_FALSE(is_dynamically_referenced("LFlowSensitiveReachabilityTest;"));
   EXPECT_FALSE(is_dynamically_referenced("LData;"));
@@ -76,9 +74,8 @@ TEST_F(FlowSensitiveReachabilityTest,
   //// uninstantiable_dependencies
   EXPECT_EQ(reachable_aspects.uninstantiable_dependencies.size(), 1);
   auto is_uninstantiable_dependency = [&](const std::string_view& s) {
-    return std::any_of(reachable_aspects.uninstantiable_dependencies.begin(),
-                       reachable_aspects.uninstantiable_dependencies.end(),
-                       [s](const auto* cls) { return cls->str() == s; });
+    return unordered_any_of(reachable_aspects.uninstantiable_dependencies,
+                            [s](const auto* cls) { return cls->str() == s; });
   };
   EXPECT_TRUE(is_uninstantiable_dependency("LDataHolder;"));
 
@@ -127,9 +124,8 @@ TEST_F(FlowSensitiveReachabilityTest, cfg_gathering_check_instance_callable) {
   //// instantiable_types
   EXPECT_EQ(reachable_aspects.instantiable_types.size(), 5);
   auto is_instantiable = [&](const std::string_view& s) {
-    return std::any_of(reachable_aspects.instantiable_types.begin(),
-                       reachable_aspects.instantiable_types.end(),
-                       [s](const auto* cls) { return cls->str() == s; });
+    return unordered_any_of(reachable_aspects.instantiable_types,
+                            [s](const auto* cls) { return cls->str() == s; });
   };
   EXPECT_TRUE(is_instantiable("LFlowSensitiveReachabilityTest;"));
   EXPECT_FALSE(is_instantiable("LData;"));
@@ -143,9 +139,8 @@ TEST_F(FlowSensitiveReachabilityTest, cfg_gathering_check_instance_callable) {
   //// dynamically_referenced_classes
   EXPECT_EQ(reachable_aspects.dynamically_referenced_classes.size(), 2);
   auto is_dynamically_referenced = [&](const std::string_view& s) {
-    return std::any_of(reachable_aspects.dynamically_referenced_classes.begin(),
-                       reachable_aspects.dynamically_referenced_classes.end(),
-                       [s](const auto* cls) { return cls->str() == s; });
+    return unordered_any_of(reachable_aspects.dynamically_referenced_classes,
+                            [s](const auto* cls) { return cls->str() == s; });
   };
   EXPECT_FALSE(is_dynamically_referenced("LFlowSensitiveReachabilityTest;"));
   EXPECT_FALSE(is_dynamically_referenced("LData;"));
@@ -160,9 +155,8 @@ TEST_F(FlowSensitiveReachabilityTest, cfg_gathering_check_instance_callable) {
   //// uninstantiable_dependencies
   EXPECT_EQ(reachable_aspects.uninstantiable_dependencies.size(), 1);
   auto is_uninstantiable_dependency = [&](const std::string_view& s) {
-    return std::any_of(reachable_aspects.uninstantiable_dependencies.begin(),
-                       reachable_aspects.uninstantiable_dependencies.end(),
-                       [s](const auto* cls) { return cls->str() == s; });
+    return unordered_any_of(reachable_aspects.uninstantiable_dependencies,
+                            [s](const auto* cls) { return cls->str() == s; });
   };
   EXPECT_TRUE(is_uninstantiable_dependency("LDataHolder;"));
 
@@ -212,9 +206,8 @@ TEST_F(FlowSensitiveReachabilityTest, sweep_uncallable_virtual_methods) {
   //// instantiable_types
   EXPECT_EQ(reachable_aspects.instantiable_types.size(), 5);
   auto is_instantiable = [&](const std::string_view& s) {
-    return std::any_of(reachable_aspects.instantiable_types.begin(),
-                       reachable_aspects.instantiable_types.end(),
-                       [s](const auto* cls) { return cls->str() == s; });
+    return unordered_any_of(reachable_aspects.instantiable_types,
+                            [s](const auto* cls) { return cls->str() == s; });
   };
   EXPECT_TRUE(is_instantiable("LFlowSensitiveReachabilityTest;"));
   EXPECT_FALSE(is_instantiable("LData;"));
@@ -228,9 +221,8 @@ TEST_F(FlowSensitiveReachabilityTest, sweep_uncallable_virtual_methods) {
   //// dynamically_referenced_classes
   EXPECT_EQ(reachable_aspects.dynamically_referenced_classes.size(), 2);
   auto is_dynamically_referenced = [&](const std::string_view& s) {
-    return std::any_of(reachable_aspects.dynamically_referenced_classes.begin(),
-                       reachable_aspects.dynamically_referenced_classes.end(),
-                       [s](const auto* cls) { return cls->str() == s; });
+    return unordered_any_of(reachable_aspects.dynamically_referenced_classes,
+                            [s](const auto* cls) { return cls->str() == s; });
   };
   EXPECT_FALSE(is_dynamically_referenced("LFlowSensitiveReachabilityTest;"));
   EXPECT_FALSE(is_dynamically_referenced("LData;"));
@@ -245,9 +237,8 @@ TEST_F(FlowSensitiveReachabilityTest, sweep_uncallable_virtual_methods) {
   //// uninstantiable_dependencies
   EXPECT_EQ(reachable_aspects.uninstantiable_dependencies.size(), 1);
   auto is_uninstantiable_dependency = [&](const std::string_view& s) {
-    return std::any_of(reachable_aspects.uninstantiable_dependencies.begin(),
-                       reachable_aspects.uninstantiable_dependencies.end(),
-                       [s](const auto* cls) { return cls->str() == s; });
+    return unordered_any_of(reachable_aspects.uninstantiable_dependencies,
+                            [s](const auto* cls) { return cls->str() == s; });
   };
   EXPECT_TRUE(is_uninstantiable_dependency("LDataHolder;"));
 
@@ -306,9 +297,8 @@ TEST_F(FlowSensitiveReachabilityTest, abstract_overrides_non_abstract) {
   //// instantiable_types
   EXPECT_EQ(reachable_aspects.instantiable_types.size(), 4);
   auto is_instantiable = [&](const std::string_view& s) {
-    return std::any_of(reachable_aspects.instantiable_types.begin(),
-                       reachable_aspects.instantiable_types.end(),
-                       [s](const auto* cls) { return cls->str() == s; });
+    return unordered_any_of(reachable_aspects.instantiable_types,
+                            [s](const auto* cls) { return cls->str() == s; });
   };
   EXPECT_TRUE(is_instantiable("LFlowSensitiveReachabilityTest;"));
   EXPECT_TRUE(is_instantiable("LSurpriseBase;"));
@@ -353,7 +343,7 @@ TEST_F(FlowSensitiveReachabilityTest, throw_propagation) {
       /* cfg_gathering_check_returning */ true);
 
   //// returning_methods
-  for (auto* m : reachable_aspects.returning_methods) {
+  for (auto* m : UnorderedIterable(reachable_aspects.returning_methods)) {
     EXPECT_TRUE(method::is_init(m)); // only the FlowSensitiveReachabilityTest
                                      // contructor returns
   }

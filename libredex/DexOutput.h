@@ -8,11 +8,11 @@
 #pragma once
 
 #include <memory>
-#include <unordered_map>
 
 #include <boost/optional/optional.hpp>
 
 #include "ConfigFiles.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexMethodHandle.h"
 #include "DexStats.h"
@@ -30,13 +30,13 @@ class DexCallSite;
 
 enum class DebugInfoKind : uint32_t;
 
-using dexstring_to_idx = std::unordered_map<const DexString*, uint32_t>;
-using dextype_to_idx = std::unordered_map<DexType*, uint16_t>;
-using dexproto_to_idx = std::unordered_map<DexProto*, uint32_t>;
-using dexfield_to_idx = std::unordered_map<DexFieldRef*, uint32_t>;
-using dexmethod_to_idx = std::unordered_map<DexMethodRef*, uint32_t>;
-using dexcallsite_to_idx = std::unordered_map<DexCallSite*, uint32_t>;
-using dexmethodhandle_to_idx = std::unordered_map<DexMethodHandle*, uint32_t>;
+using dexstring_to_idx = UnorderedMap<const DexString*, uint32_t>;
+using dextype_to_idx = UnorderedMap<DexType*, uint16_t>;
+using dexproto_to_idx = UnorderedMap<DexProto*, uint32_t>;
+using dexfield_to_idx = UnorderedMap<DexFieldRef*, uint32_t>;
+using dexmethod_to_idx = UnorderedMap<DexMethodRef*, uint32_t>;
+using dexcallsite_to_idx = UnorderedMap<DexCallSite*, uint32_t>;
+using dexmethodhandle_to_idx = UnorderedMap<DexMethodHandle*, uint32_t>;
 
 enum class SortMode {
   CLASS_ORDER,
@@ -124,11 +124,11 @@ class IODIMetadata;
 class GatheredTypes;
 
 struct enhanced_dex_stats_t : public dex_stats_t {
-  std::unordered_map<const DexClass*, size_t> class_size;
+  UnorderedMap<const DexClass*, size_t> class_size;
 
   enhanced_dex_stats_t& operator+=(const enhanced_dex_stats_t& rhs) {
     dex_stats_t::operator+=(rhs);
-    class_size.insert(rhs.class_size.begin(), rhs.class_size.end());
+    insert_unordered_iterable(class_size, rhs.class_size);
     return *this;
   }
 };
@@ -147,8 +147,8 @@ enhanced_dex_stats_t write_classes_to_dex(
     ConfigFiles& conf,
     PositionMapper* pos_mapper,
     DebugInfoKind debug_info_kind,
-    std::unordered_map<DexMethod*, uint64_t>* method_to_id,
-    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
+    UnorderedMap<DexMethod*, uint64_t>* method_to_id,
+    UnorderedMap<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
     const DexOutputConfig& dex_output_config = DexOutputConfig{},
@@ -231,9 +231,9 @@ class GatheredTypes {
   std::vector<DexCallSite*> m_lcallsite;
   std::vector<DexMethodHandle*> m_lmethodhandle;
   DexClasses* m_classes;
-  std::unordered_map<const DexString*, unsigned int> m_cls_load_strings;
-  std::unordered_map<const DexString*, unsigned int> m_cls_strings;
-  std::unordered_map<const DexMethod*, unsigned int> m_methods_in_cls_order;
+  UnorderedMap<const DexString*, unsigned int> m_cls_load_strings;
+  UnorderedMap<const DexString*, unsigned int> m_cls_strings;
+  UnorderedMap<const DexMethod*, unsigned int> m_methods_in_cls_order;
   ConfigFiles* m_config{nullptr};
 
   dexstring_to_idx get_string_index(cmp_dstring cmp = compare_dexstrings);
@@ -276,7 +276,7 @@ class GatheredTypes {
   void sort_dexmethod_emitlist_profiled_order(std::vector<DexMethod*>& lmeth);
   void set_config(ConfigFiles* config);
 
-  std::unordered_set<const DexString*> index_type_names();
+  UnorderedSet<const DexString*> index_type_names();
 };
 
 template <class T>
@@ -334,13 +334,13 @@ class DexOutput {
   std::string m_pg_mapping_filename;
   std::string m_full_mapping_filename;
   std::string m_bytecode_offset_filename;
-  std::unordered_map<DexTypeList*, uint32_t> m_tl_emit_offsets;
+  UnorderedMap<DexTypeList*, uint32_t> m_tl_emit_offsets;
   std::vector<CodeItemEmit> m_code_item_emits;
-  std::unordered_map<DexMethod*, uint64_t>* m_method_to_id;
-  std::unordered_map<DexCode*, std::vector<DebugLineItem>>* m_code_debug_lines;
+  UnorderedMap<DexMethod*, uint64_t>* m_method_to_id;
+  UnorderedMap<DexCode*, std::vector<DebugLineItem>>* m_code_debug_lines;
   std::vector<std::pair<std::string, uint32_t>> m_method_bytecode_offsets;
-  std::unordered_map<DexClass*, uint32_t> m_static_values;
-  std::unordered_map<DexCallSite*, uint32_t> m_call_site_items;
+  UnorderedMap<DexClass*, uint32_t> m_static_values;
+  UnorderedMap<DexCallSite*, uint32_t> m_call_site_items;
   dex_header hdr;
   std::vector<dex_map_item> m_map_items;
   bool m_normal_primary_dex;
@@ -395,22 +395,22 @@ class DexOutput {
   friend struct DexOutputTestHelper;
 
  public:
-  DexOutput(const char* path,
-            DexClasses* classes,
-            std::shared_ptr<GatheredTypes> gtypes,
-            bool normal_primary_dex,
-            size_t store_number,
-            const std::string* store_name,
-            size_t dex_number,
-            DebugInfoKind debug_info_kind,
-            IODIMetadata* iodi_metadata,
-            const ConfigFiles& config_files,
-            PositionMapper* pos_mapper,
-            std::unordered_map<DexMethod*, uint64_t>* method_to_id,
-            std::unordered_map<DexCode*, std::vector<DebugLineItem>>*
-                code_debug_lines,
-            const DexOutputConfig& dex_output_config = DexOutputConfig{},
-            int min_sdk = 0);
+  DexOutput(
+      const char* path,
+      DexClasses* classes,
+      std::shared_ptr<GatheredTypes> gtypes,
+      bool normal_primary_dex,
+      size_t store_number,
+      const std::string* store_name,
+      size_t dex_number,
+      DebugInfoKind debug_info_kind,
+      IODIMetadata* iodi_metadata,
+      const ConfigFiles& config_files,
+      PositionMapper* pos_mapper,
+      UnorderedMap<DexMethod*, uint64_t>* method_to_id,
+      UnorderedMap<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
+      const DexOutputConfig& dex_output_config = DexOutputConfig{},
+      int min_sdk = 0);
   void prepare(SortMode string_mode,
                const std::vector<SortMode>& code_mode,
                ConfigFiles& conf,

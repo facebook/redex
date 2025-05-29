@@ -54,6 +54,7 @@
 
 #include <cinttypes>
 
+#include "DeterministicContainers.h"
 #include "IROpcode.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
@@ -95,7 +96,7 @@ size_t hash_type(DexType* type) {
 const DexMethod* get_parent(const mog::Graph& graph, const DexMethod* method) {
   always_assert(!is_interface(type_class(method->get_class())));
   auto& node = graph.get_node(method);
-  for (auto* parent : node.parents) {
+  for (auto* parent : UnorderedIterable(node.parents)) {
     if (parent->is_interface) {
       continue;
     }
@@ -128,15 +129,15 @@ const DexMethod* get_true_parent(const mog::Graph& graph,
 // each root spawns a virtual scope. This takes into account visibility, in
 // particular package-private visibility. Note that a protected or public
 // overriding method may have multiple package-private roots.
-std::unordered_set<const DexMethod*> get_true_roots(const mog::Graph& graph,
-                                                    const DexMethod* method) {
+UnorderedSet<const DexMethod*> get_true_roots(const mog::Graph& graph,
+                                              const DexMethod* method) {
   std::stack<const DexMethod*> stack;
   for (const auto* m = method; m != nullptr; m = get_parent(graph, m)) {
     stack.push(m);
   }
-  std::unordered_map<std::string_view, const DexMethod*> package_private_roots;
+  UnorderedMap<std::string_view, const DexMethod*> package_private_roots;
   const DexMethod* public_or_protected_root{nullptr};
-  std::unordered_set<const DexMethod*> res;
+  UnorderedSet<const DexMethod*> res;
   while (!stack.empty()) {
     auto* m = stack.top();
     stack.pop();
@@ -348,7 +349,7 @@ PackagePrivatePreprocessorPass::Stats analyze_class(
 // filter out all interactions with interface methods, which we don't support at
 // this time.
 struct TrueVirtualScope {
-  std::unordered_set<DexMethod*> methods;
+  UnorderedSet<DexMethod*> methods;
   bool unsupported{false};
 };
 
@@ -372,7 +373,7 @@ PackagePrivatePreprocessorPass::Stats analyze_graph(
       auto true_roots = get_true_roots(graph, method);
       always_assert(!true_roots.empty());
       bool unsupported = true_roots.size() > 1;
-      for (auto* true_root : true_roots) {
+      for (auto* true_root : UnorderedIterable(true_roots)) {
         true_virtual_scopes->update(true_root, [&](auto*, auto& vs, auto) {
           vs.methods.insert(method);
           if (unsupported) vs.unsupported = true;
@@ -384,10 +385,9 @@ PackagePrivatePreprocessorPass::Stats analyze_graph(
         *unsupported_stream << "  Semantics will change! Cannot handle "
                                "overriding multiple package-private roots. "
                             << show(method) << " overrides ";
-        std::vector<const DexMethod*> ordered(true_roots.begin(),
-                                              true_roots.end());
-        std::sort(ordered.begin(), ordered.end(), compare_dexmethods);
-        for (auto* root : ordered) {
+        auto ordered_true_roots =
+            unordered_to_ordered(true_roots, compare_dexmethods);
+        for (auto* root : ordered_true_roots) {
           *unsupported_stream << show(root) << ", ";
         }
         *unsupported_stream << "\n";
@@ -433,7 +433,7 @@ PackagePrivatePreprocessorPass::Stats transform(
 
   // Make public all classes that are accessed via package-private accessibility
   // so that we can rename the packages.
-  for (auto* cls : package_private_accessed_classes) {
+  for (auto* cls : UnorderedIterable(package_private_accessed_classes)) {
     set_public(cls);
     stats.publicized_classes++;
   }
@@ -446,8 +446,8 @@ PackagePrivatePreprocessorPass::Stats transform(
       stats.publicized_methods++;
     }
   };
-  std::unordered_set<const DexMethod*> roots_to_publicize;
-  for (auto* method : package_private_accessed_methods) {
+  UnorderedSet<const DexMethod*> roots_to_publicize;
+  for (auto* method : UnorderedIterable(package_private_accessed_methods)) {
     auto it = true_virtual_roots.find(method);
     if (it != true_virtual_roots.end()) {
       roots_to_publicize.insert(it->second);
@@ -455,22 +455,23 @@ PackagePrivatePreprocessorPass::Stats transform(
       publicize_method(method);
     }
   }
-  for (auto* root : roots_to_publicize) {
-    for (auto* method : true_virtual_scopes.at(root).methods) {
+  for (auto* root : UnorderedIterable(roots_to_publicize)) {
+    const auto& methods = true_virtual_scopes.at(root).methods;
+    for (auto* method : UnorderedIterable(methods)) {
       publicize_method(method);
     }
   }
 
   // Make public all fields that are accessed via package-private accessibility
   // so that we can rename the packages.
-  for (auto* field : package_private_accessed_fields) {
+  for (auto* field : UnorderedIterable(package_private_accessed_fields)) {
     set_public(field);
     stats.publicized_fields++;
   }
 
-  std::unordered_set<const DexMethod*> new_true_virtual_scopes;
-  std::unordered_set<const DexMethod*> new_true_virtual_scopes_methods;
-  for (auto&& [root, vs] : true_virtual_scopes) {
+  UnorderedSet<const DexMethod*> new_true_virtual_scopes;
+  UnorderedSet<const DexMethod*> new_true_virtual_scopes_methods;
+  for (auto&& [root, vs] : UnorderedIterable(true_virtual_scopes)) {
     if (get_parent(graph, root) == nullptr) {
       // not a new root
       continue;
@@ -479,8 +480,7 @@ PackagePrivatePreprocessorPass::Stats transform(
       continue;
     }
     new_true_virtual_scopes.insert(root);
-    new_true_virtual_scopes_methods.insert(vs.methods.begin(),
-                                           vs.methods.end());
+    insert_unordered_iterable(new_true_virtual_scopes_methods, vs.methods);
   }
   stats.new_virtual_scope_roots = new_true_virtual_scopes.size();
 
@@ -500,19 +500,19 @@ PackagePrivatePreprocessorPass::Stats transform(
       },
       new_true_virtual_scopes_methods);
 
-  std::vector<DexMethod*> ordered_methods_to_rename;
-  std::unordered_map<DexMethod*, const DexString*> new_names;
+  UnorderedBag<DexMethod*> methods_to_rename;
+  UnorderedMap<DexMethod*, const DexString*> new_names;
   // Give unique names to all virtual scopes that apparently override
   // package-private methods, but truely don't. There might be cases where this
   // isn't possible; we can only report those.
-  for (auto root : new_true_virtual_scopes) {
-    auto& methods = true_virtual_scopes.at_unsafe(root).methods;
+  for (auto root : UnorderedIterable(new_true_virtual_scopes)) {
+    const auto& methods = true_virtual_scopes.at_unsafe(root).methods;
     auto new_name =
         gen_new_name(root->get_name()->str(), hash_type(root->get_class()));
     TRACE(PPP, 1, "New virtual scope of size %zu with root %s for: %s",
           methods.size(), new_name->c_str(), SHOW(root));
     bool cannot_rename = false;
-    for (auto* method : methods) {
+    for (auto* method : UnorderedIterable(methods)) {
       always_assert(!method->is_external());
       always_assert(!is_interface(type_class(method->get_class())));
       if (!can_rename(method)) {
@@ -541,8 +541,8 @@ PackagePrivatePreprocessorPass::Stats transform(
       stats.publicized_methods++;
     }
 
-    for (auto* method : methods) {
-      ordered_methods_to_rename.push_back(method);
+    for (auto* method : UnorderedIterable(methods)) {
+      methods_to_rename.insert(method);
       new_names.emplace(method, new_name);
     }
   }
@@ -561,8 +561,8 @@ PackagePrivatePreprocessorPass::Stats transform(
     insns_to_update.emplace(insn, resolved);
   });
 
-  std::sort(ordered_methods_to_rename.begin(), ordered_methods_to_rename.end(),
-            compare_dexmethods);
+  auto ordered_methods_to_rename =
+      unordered_to_ordered(methods_to_rename, compare_dexmethods);
   for (auto* method : ordered_methods_to_rename) {
     auto* new_name = new_names.at(method);
     always_assert(is_public(method));

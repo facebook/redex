@@ -22,8 +22,10 @@ constexpr const char* DEFAULT_SUFFIX = "$default";
 
 namespace {
 bool is_null_check(const DexMethod* m) {
+  auto null_check_methods =
+      kotlin_nullcheck_wrapper::get_kotlin_null_assertions();
   for (DexMethodRef* kotlin_null_method :
-       kotlin_nullcheck_wrapper::get_kotlin_null_assertions()) {
+       UnorderedIterable(null_check_methods)) {
     if (kotlin_null_method->get_name() == m->get_name()) {
       return true;
     }
@@ -100,7 +102,7 @@ bool is_generated(const DexMethod* m) {
   if (!cls->get_anno_set()) {
     return false;
   }
-  std::unordered_set<DexType*> generated_annos = {
+  UnorderedSet<DexType*> generated_annos = {
       DexType::make_type(
           "Lcom/facebook/xapp/messaging/composer/annotation/Generated;"),
       DexType::make_type("Lcom/facebook/litho/annotations/Generated;")};
@@ -224,7 +226,7 @@ void TypedefAnnoChecker::run(DexMethod* m) {
 
   always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
-  std::unordered_set<DexType*> anno_set;
+  UnorderedSet<DexType*> anno_set;
   anno_set.emplace(m_config.int_typedef);
   anno_set.emplace(m_config.str_typedef);
   type_inference::TypeInference inference(cfg, false, anno_set,
@@ -291,14 +293,14 @@ void TypedefAnnoChecker::check_instruction(
     if (!callee_def) {
       return;
     }
-    std::vector<const DexMethod*> callees;
+    UnorderedBag<const DexMethod*> callees;
     if (mog::is_true_virtual(m_method_override_graph, callee_def) &&
         !callee_def->get_code()) {
       callees =
           mog::get_overriding_methods(m_method_override_graph, callee_def);
     }
-    callees.push_back(callee_def);
-    for (const DexMethod* callee : callees) {
+    callees.insert(callee_def);
+    for (const DexMethod* callee : UnorderedIterable(callees)) {
       if (!callee->get_param_anno()) {
         // Callee does not expect any Typedef value. Nothing to do.
         return;
@@ -600,14 +602,14 @@ bool TypedefAnnoChecker::check_typedef_value(
         check_typedef_value(m, annotation, ud_chains, def, 0, inference, envs);
         break;
       }
-      std::vector<const DexMethod*> callees;
+      UnorderedBag<const DexMethod*> callees;
       if (mog::is_true_virtual(m_method_override_graph, def_method) &&
           !def_method->get_code()) {
         callees =
             mog::get_overriding_methods(m_method_override_graph, def_method);
       }
-      callees.push_back(def_method);
-      for (const DexMethod* callee : callees) {
+      callees.insert(def_method);
+      for (const DexMethod* callee : UnorderedIterable(callees)) {
         boost::optional<const DexType*> anno =
             type_inference::get_typedef_anno_from_member(
                 callee, inference->get_annotations());
@@ -673,8 +675,8 @@ bool TypedefAnnoChecker::check_typedef_value(
       live_range::MoveAwareChains chains(m->get_code()->cfg());
       live_range::DefUseChains du_chains = chains.get_def_use_chains();
       auto duchains_it = du_chains.find(def);
-      auto uses_set = duchains_it->second;
-      for (live_range::Use use : uses_set) {
+      const auto& uses_set = duchains_it->second;
+      for (live_range::Use use : UnorderedIterable(uses_set)) {
         IRInstruction* use_insn = use.insn;
         if (opcode::is_an_iput(use_insn->opcode()) ||
             opcode::is_an_sput(use_insn->opcode())) {

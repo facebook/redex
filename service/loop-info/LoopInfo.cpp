@@ -6,6 +6,7 @@
  */
 
 #include "LoopInfo.h"
+#include "DeterministicContainers.h"
 
 using namespace loop_impl;
 
@@ -149,7 +150,7 @@ void LoopInfo::init(T& cfg, Fn preheader_fn) {
 
   // Mapping from all blocks that are loop headers and their respective Loop
   // object
-  std::unordered_map<const cfg::Block*, Loop*> loop_heads;
+  UnorderedMap<const cfg::Block*, Loop*> loop_heads;
 
   // Iterates through all of the SCCs found by WTO and
   //

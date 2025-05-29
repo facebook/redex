@@ -10,6 +10,7 @@
 #include "CFGMutation.h"
 #include "ConcurrentContainers.h"
 #include "Creators.h"
+#include "DeterministicContainers.h"
 #include "IRCode.h"
 #include "LiveRange.h"
 #include "Mutators.h"
@@ -84,7 +85,7 @@ bool uses_this(const DexMethod* method, bool strict = false) {
     return false;
   }
 
-  for (auto use : first_load_param_uses) {
+  for (auto use : UnorderedIterable(first_load_param_uses)) {
     if (!strict &&
         (use.insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
          use.insn->opcode() == OPCODE_INVOKE_DIRECT) &&
@@ -319,7 +320,7 @@ bool is_def_trackable(IRInstruction* insn,
     return true;
   }
   const auto& use_set = du_chains_move_aware.at(insn);
-  for (const auto& p : use_set) {
+  for (const auto& p : UnorderedIterable(use_set)) {
     auto use_insn = p.insn;
     auto use_index = p.src_index;
     switch (use_insn->opcode()) {
@@ -359,7 +360,7 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
 
   InsertOnlyConcurrentMap<DexClass*, DexClass*> map;
   ConcurrentSet<DexClass*> bad;
-  std::unordered_map<DexClass*, unsigned> outer_cls_count;
+  UnorderedMap<DexClass*, unsigned> outer_cls_count;
   std::unordered_set<DexType*> do_not_inline_set;
   Stats stats;
   for (auto& p : m_do_not_inline_list) {
@@ -387,11 +388,11 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
   });
   stats.kotlin_candidate_companion_objects = map.size();
 
-  for (auto& iter : map) {
+  for (auto& iter : UnorderedIterable(map)) {
     outer_cls_count[iter.second]++;
   }
 
-  for (auto iter : map) {
+  for (auto iter : UnorderedIterable(map)) {
     // We have multiple companion objects. But in each class, there is at most 1
     // companion object.
     if (outer_cls_count.find(iter.second)->second != 1) {
@@ -548,7 +549,7 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
 
   // Inline objects in candidate to maped class
   std::unordered_set<DexMethodRef*> relocated_methods;
-  for (auto& p : map) {
+  for (auto& p : UnorderedIterable(map)) {
     auto* comp_cls = p.first;
     auto* outer_cls = p.second;
     if (bad.count(comp_cls)) {

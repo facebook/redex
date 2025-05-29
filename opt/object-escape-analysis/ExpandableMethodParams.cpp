@@ -8,6 +8,7 @@
 #include "ExpandableMethodParams.h"
 #include "ApiLevelChecker.h"
 #include "CFGMutation.h"
+#include "DeterministicContainers.h"
 #include "LiveRange.h"
 #include "Resolver.h"
 #include "Show.h"
@@ -109,7 +110,7 @@ ExpandableMethodParams::MethodInfo ExpandableMethodParams::create_method_info(
       }
       bool expandable{true};
       std::vector<DexField*> fields;
-      for (auto& use : du_chains[it->insn]) {
+      for (auto& use : UnorderedIterable(du_chains[it->insn])) {
         if (opcode::is_an_iget(use.insn->opcode())) {
           auto* field =
               resolve_field(use.insn->get_field(), FieldSearch::Instance);
@@ -190,7 +191,7 @@ DexMethod* ExpandableMethodParams::make_expanded_method_concrete(
   mutation.insert_after(last_load_params_it, {null_insn});
 
   std::vector<IRInstruction*> new_load_param_insns;
-  std::unordered_map<DexField*, reg_t> field_regs;
+  UnorderedMap<DexField*, reg_t> field_regs;
   auto& fields = m_method_infos.at_unsafe(MethodKey::from_method(method))
                      .at(method)
                      .at(param_index);
@@ -213,8 +214,8 @@ DexMethod* ExpandableMethodParams::make_expanded_method_concrete(
       cfg, /* ignore_unreachable */ false,
       [](auto* insn) { return opcode::is_a_load_param(insn->opcode()); });
   auto du_chains = chains.get_def_use_chains();
-  std::unordered_set<IRInstruction*> use_insns;
-  for (auto& use : du_chains[load_param_it->insn]) {
+  UnorderedSet<IRInstruction*> use_insns;
+  for (auto& use : UnorderedIterable(du_chains[load_param_it->insn])) {
     use_insns.insert(use.insn);
   }
   auto ii = InstructionIterable(cfg);
@@ -344,20 +345,17 @@ size_t ExpandableMethodParams::flush(
       used_expanded_method_refs);
 
   // Add the newly concretized methods to their classes.
-  std::vector<DexMethod*> ordered(expanded_methods.begin(),
-                                  expanded_methods.end());
-  std::sort(ordered.begin(), ordered.end(), compare_dexmethods);
+  auto ordered = unordered_to_ordered(expanded_methods, compare_dexmethods);
   for (auto expanded_method : ordered) {
     type_class(expanded_method->get_class())->add_method(expanded_method);
   }
 
   // Finally, derived method-profiles for used candidates, and erase the unused
   // method refs.
-  for (auto&& [method, p] : m_candidates) {
+  for (auto&& [method, p] : UnorderedIterable(m_candidates)) {
     if (used_expanded_method_refs.count(method)) {
       method_profiles->derive_stats(method->as_def(), {p.first});
     } else {
-      DexMethod::erase_method(method);
       DexMethod::delete_method_DO_NOT_USE(static_cast<DexMethod*>(method));
     }
   }

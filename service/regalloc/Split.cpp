@@ -69,11 +69,10 @@ void calc_split_costs(const LivenessFixpointIterator& fixpoint_iter,
   }
 }
 
-IRInstruction* gen_load_for_split(
-    const Graph& ig,
-    vreg_t l,
-    std::unordered_map<vreg_t, vreg_t>* load_store_reg,
-    cfg::ControlFlowGraph& cfg) {
+IRInstruction* gen_load_for_split(const Graph& ig,
+                                  vreg_t l,
+                                  UnorderedMap<vreg_t, vreg_t>* load_store_reg,
+                                  cfg::ControlFlowGraph& cfg) {
   auto load_reg_it = load_store_reg->find(l);
   if (load_reg_it == load_store_reg->end()) {
     auto temp = cfg.allocate_temp();
@@ -84,11 +83,10 @@ IRInstruction* gen_load_for_split(
   }
 }
 
-IRInstruction* gen_store_for_split(
-    const Graph& ig,
-    vreg_t l,
-    std::unordered_map<vreg_t, vreg_t>* load_store_reg,
-    cfg::ControlFlowGraph& cfg) {
+IRInstruction* gen_store_for_split(const Graph& ig,
+                                   vreg_t l,
+                                   UnorderedMap<vreg_t, vreg_t>* load_store_reg,
+                                   cfg::ControlFlowGraph& cfg) {
   auto store_reg_it = load_store_reg->find(l);
   if (store_reg_it == load_store_reg->end()) {
     auto temp = cfg.allocate_temp();
@@ -122,7 +120,7 @@ size_t split_for_block(const SplitPlan& split_plan,
                        const LivenessFixpointIterator& fixpoint_iter,
                        const Graph& ig,
                        cfg::Block* block,
-                       std::unordered_map<vreg_t, vreg_t>* load_store_reg,
+                       UnorderedMap<vreg_t, vreg_t>* load_store_reg,
                        cfg::ControlFlowGraph& cfg,
                        BlockLoadInfo* block_load_info) {
   size_t split_move = 0;
@@ -138,7 +136,7 @@ size_t split_for_block(const SplitPlan& split_plan,
         continue;
       }
       // For each live range l split around reg.
-      for (auto l : split_it->second) {
+      for (auto l : UnorderedIterable(split_it->second)) {
         if (!live_in.contains(l)) {
           continue;
         }
@@ -211,7 +209,7 @@ size_t split_for_define(const SplitPlan& split_plan,
                         const IRInstruction* insn,
                         const LivenessDomain& live_out,
                         cfg::ControlFlowGraph& cfg,
-                        std::unordered_map<vreg_t, vreg_t>* load_store_reg,
+                        UnorderedMap<vreg_t, vreg_t>* load_store_reg,
                         cfg::InstructionIterator it) {
   size_t split_move = 0;
   if (insn->has_dest()) {
@@ -235,7 +233,7 @@ size_t split_for_define(const SplitPlan& split_plan,
         it = cfg.primary_instruction_of_move_result(it);
         always_assert(!it.is_end());
       }
-      for (auto l : split_it->second) {
+      for (auto l : UnorderedIterable(split_it->second)) {
         if (!live_out.contains(l)) {
           continue;
         }
@@ -257,7 +255,7 @@ size_t split_for_last_use(const SplitPlan& split_plan,
                           const LivenessDomain& live_out,
                           cfg::Block* block,
                           cfg::ControlFlowGraph& cfg,
-                          std::unordered_map<vreg_t, vreg_t>* load_store_reg,
+                          UnorderedMap<vreg_t, vreg_t>* load_store_reg,
                           IRList::reverse_iterator& it,
                           BlockLoadInfo* block_load_info) {
   size_t split_move = 0;
@@ -268,7 +266,7 @@ size_t split_for_last_use(const SplitPlan& split_plan,
     }
     auto split_it = split_plan.split_around.find(src);
     if (split_it != split_plan.split_around.end()) {
-      for (auto l : split_it->second) {
+      for (auto l : UnorderedIterable(split_it->second)) {
         if (!live_out.contains(l)) {
           continue;
         }
@@ -341,7 +339,7 @@ size_t insert_insn_between_blocks(const BlockLoadInfo& block_load_info,
         cfg_pos_it.move_next_in_block();
       }
 
-      for (auto insn : pair.second.block_insns) {
+      for (auto insn : UnorderedIterable(pair.second.block_insns)) {
         cfg.insert_before(cfg_pos_it, insn);
         ++split_move;
       }
@@ -354,7 +352,7 @@ size_t insert_insn_between_blocks(const BlockLoadInfo& block_load_info,
 
       // Create a new block containing all the load instructions.
       cfg::Block* new_block = cfg.create_block();
-      for (auto insn : pair.second.block_insns) {
+      for (auto insn : UnorderedIterable(pair.second.block_insns)) {
         new_block->push_back(insn);
         ++split_move;
       }
@@ -375,7 +373,7 @@ size_t split(const LivenessFixpointIterator& fixpoint_iter,
              cfg::ControlFlowGraph& cfg) {
   // Keep track of which reg is stored or loaded to which temp
   // so that we can get the right reg loaded or stored.
-  std::unordered_map<vreg_t, vreg_t> load_store_reg;
+  UnorderedMap<vreg_t, vreg_t> load_store_reg;
   BlockLoadInfo block_load_info;
   size_t split_move = 0;
 

@@ -24,7 +24,7 @@ namespace class_merging {
 
 struct MergerType;
 class ModelMethodMerger;
-using MergerFields = std::unordered_map<const DexType*, std::vector<DexField*>>;
+using MergerFields = UnorderedMap<const DexType*, std::vector<DexField*>>;
 
 class ModelMerger {
 
@@ -44,11 +44,10 @@ class ModelMerger {
   const ModelStats& get_model_stats() const { return m_stats; }
 
  protected:
-  virtual void post_process(
-      Model& model,
-      TypeTags& type_tags,
-      std::unordered_map<const DexType*, const DexMethod*>&
-          mergeable_to_merger_ctor) {
+  virtual void post_process(Model& model,
+                            TypeTags& type_tags,
+                            UnorderedMap<const DexType*, const DexMethod*>&
+                                mergeable_to_merger_ctor) {
     TRACE(CLMG, 5, "[ClassMerging] default post process");
   }
 

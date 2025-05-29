@@ -41,7 +41,7 @@ void MethodSimilarityGreedyOrderer::gather_code_hash_ids(
     const std::vector<DexInstruction*>& instructions,
     std::vector<CodeHashId>& code_hash_ids) {
 
-  std::unordered_set<StableHash> stable_hashes;
+  UnorderedSet<StableHash> stable_hashes;
 
   // For any instruction, we can compute a (stable) hash representing it.
   for (size_t i = 0; i < instructions.size(); i++) {
@@ -69,7 +69,7 @@ void MethodSimilarityGreedyOrderer::gather_code_hash_ids(
   // Initialize the vector for code hash.
   // Publish code hash ids from stable hashes.
   code_hash_ids.reserve(stable_hashes.size());
-  for (StableHash stable_hash : stable_hashes) {
+  for (StableHash stable_hash : UnorderedIterable(stable_hashes)) {
     if (m_stable_hash_to_code_hash_id.count(stable_hash) == 0) {
       // Assign a unique code hash id if it appears for the first time.
       auto code_hash_id = m_stable_hash_to_code_hash_id.size();
@@ -116,7 +116,7 @@ void MethodSimilarityGreedyOrderer::compute_score() {
   workqueue_run<MethodId>(
       [&](MethodId i_id) {
         const auto& code_hash_ids_i = m_method_id_to_code_hash_ids[i_id];
-        std::unordered_map<ScoreValue, boost::dynamic_bitset<>> score_map;
+        UnorderedMap<ScoreValue, boost::dynamic_bitset<>> score_map;
 
         for (uint32_t j_id = 0; j_id < (uint32_t)m_id_to_method.size();
              j_id++) {
@@ -142,7 +142,8 @@ void MethodSimilarityGreedyOrderer::compute_score() {
           // Mapping from score value (key) to Method Ids. The key is in a
           // decreasing score order. Becuase it iterates Method Id in order,
           // the vector is already sorted by Method index (source order).
-          for (auto&& [score_value, method_ids] : score_map) {
+          for (auto&& [score_value, method_ids] :
+               UnorderedIterable(score_map)) {
             map[score_value] = std::move(method_ids);
           }
           m_score_map[i_id] = std::move(map);

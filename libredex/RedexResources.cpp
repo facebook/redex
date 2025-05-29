@@ -18,7 +18,6 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include "ApkResources.h"
@@ -70,9 +69,9 @@ std::unique_ptr<AndroidResources> create_resource_reader(
 #endif // HAS_PROTOBUF
 }
 
-std::unordered_set<std::string> get_service_loader_classes_helper(
+UnorderedSet<std::string> get_service_loader_classes_helper(
     const std::string& path_dir) {
-  std::unordered_set<std::string> classes_set;
+  UnorderedSet<std::string> classes_set;
 
   if (boost::filesystem::exists(path_dir) &&
       boost::filesystem::is_directory(path_dir)) {
@@ -109,9 +108,9 @@ namespace {
  *   "Ljava/lang/String;"
  *
  */
-std::unordered_set<std::string> extract_classes_from_native_lib(
-    const char* data, size_t size) {
-  std::unordered_set<std::string> classes;
+UnorderedSet<std::string> extract_classes_from_native_lib(const char* data,
+                                                          size_t size) {
+  UnorderedSet<std::string> classes;
   char buffer[MAX_CLASSNAME_LENGTH + 2]; // +2 for the trailing ";\0"
   const char* inptr = data;
   const char* end = inptr + size;
@@ -151,7 +150,7 @@ std::unordered_set<std::string> extract_classes_from_native_lib(
 } // namespace
 
 void parse_authorities(const std::string& text,
-                       std::unordered_set<std::string>* authority_classes) {
+                       UnorderedSet<std::string>* authority_classes) {
   size_t start = 0;
   size_t end = 0;
   while ((end = text.find(';', start)) != std::string::npos) {
@@ -164,15 +163,15 @@ void parse_authorities(const std::string& text,
 }
 
 // For external testing.
-std::unordered_set<std::string> extract_classes_from_native_lib(
+UnorderedSet<std::string> extract_classes_from_native_lib(
     const std::string& lib_contents) {
   return extract_classes_from_native_lib(lib_contents.data(),
                                          lib_contents.size());
 }
 
-std::unordered_set<std::string> get_files_by_suffix(
-    const std::string& directory, const std::string& suffix) {
-  std::unordered_set<std::string> files;
+UnorderedSet<std::string> get_files_by_suffix(const std::string& directory,
+                                              const std::string& suffix) {
+  UnorderedSet<std::string> files;
   path_t dir(directory);
 
   if (exists(dir) && is_directory(dir)) {
@@ -186,23 +185,38 @@ std::unordered_set<std::string> get_files_by_suffix(
       }
 
       if (is_directory(entry_path)) {
-        std::unordered_set<std::string> sub_files =
+        UnorderedSet<std::string> sub_files =
             get_files_by_suffix(entry_path.string(), suffix);
 
-        files.insert(sub_files.begin(), sub_files.end());
+        insert_unordered_iterable(files, sub_files);
       }
     }
   }
   return files;
 }
 
-std::unordered_set<std::string> get_xml_files(const std::string& directory) {
+UnorderedSet<std::string> get_xml_files(const std::string& directory) {
   return get_files_by_suffix(directory, ".xml");
 }
 
 bool is_raw_resource(const std::string& filename) {
   return filename.find("/res/raw/") != std::string::npos ||
          filename.find("/res/raw-") != std::string::npos;
+}
+
+std::string configs_to_string(
+    const std::set<android::ResTable_config>& configs) {
+  std::ostringstream s;
+  bool empty = true;
+  for (const auto& c : configs) {
+    if (!empty) {
+      s << ", ";
+    }
+    empty = false;
+    auto desc = c.toString();
+    s << (desc.length() > 0 ? desc.string() : "default");
+  }
+  return s.str();
 }
 
 namespace {
@@ -255,8 +269,8 @@ void find_resource_xml_files(const std::string& dir,
 } // namespace
 
 void AndroidResources::collect_layout_classes_and_attributes(
-    const std::unordered_set<std::string>& attributes_to_read,
-    std::unordered_set<std::string>* out_classes,
+    const UnorderedSet<std::string>& attributes_to_read,
+    UnorderedSet<std::string>* out_classes,
     std::unordered_multimap<std::string, std::string>* out_attributes) {
   auto res_table = load_res_table();
   auto collect_fn = [&](const std::vector<std::string>& skip_dirs_prefixes) {
@@ -291,7 +305,7 @@ void AndroidResources::collect_layout_classes_and_attributes(
           if (!local_classes.empty() || !local_attributes.empty()) {
             std::unique_lock<std::mutex> lock(out_mutex);
             // C++17: use merge to avoid copies.
-            classes.insert(local_classes.begin(), local_classes.end());
+            insert_unordered_iterable(classes, local_classes);
             attributes.insert(local_attributes.begin(), local_attributes.end());
           }
         },
@@ -300,7 +314,7 @@ void AndroidResources::collect_layout_classes_and_attributes(
         /*push_tasks_while_running=*/true);
 
     // Resolve references that were encountered while reading xml files
-    for (const auto& val : classes) {
+    for (const auto& val : UnorderedIterable(classes)) {
       if (val.is_reference()) {
         std::vector<std::string> all_values;
         res_table->resolve_string_values_for_resource_reference(val.ref,
@@ -337,7 +351,7 @@ void AndroidResources::collect_layout_classes_and_attributes(
 }
 
 void AndroidResources::collect_xml_attribute_string_values(
-    std::unordered_set<std::string>* out) {
+    UnorderedSet<std::string>* out) {
   std::mutex out_mutex;
   workqueue_run<std::string>(
       [&](sparta::WorkerState<std::string>* worker_state,
@@ -356,12 +370,12 @@ void AndroidResources::collect_xml_attribute_string_values(
           return;
         }
 
-        std::unordered_set<std::string> local_out_values;
+        UnorderedSet<std::string> local_out_values;
         collect_xml_attribute_string_values_for_file(input, &local_out_values);
         if (!local_out_values.empty()) {
           std::unique_lock<std::mutex> lock(out_mutex);
           // C++17: use merge to avoid copies.
-          out->insert(local_out_values.begin(), local_out_values.end());
+          insert_unordered_iterable(*out, local_out_values);
         }
       },
       std::vector<std::string>{""},
@@ -379,7 +393,7 @@ void AndroidResources::rename_classes_in_layouts(
           auto directories = find_res_directories();
           for (const auto& dir : directories) {
             auto xml_files = get_xml_files(dir);
-            for (const auto& path : xml_files) {
+            for (const auto& path : UnorderedIterable(xml_files)) {
               if (!is_raw_resource(path)) {
                 worker_state->push_task(path);
               }
@@ -427,9 +441,9 @@ void find_native_library_files(const std::string& lib_root, Fn handler) {
 /**
  * Return all potential java class names located in native libraries.
  */
-std::unordered_set<std::string> AndroidResources::get_native_classes() {
+UnorderedSet<std::string> AndroidResources::get_native_classes() {
   std::mutex out_mutex;
-  std::unordered_set<std::string> all_classes;
+  UnorderedSet<std::string> all_classes;
   workqueue_run<std::string>(
       [&](sparta::WorkerState<std::string>* worker_state,
           const std::string& input) {
@@ -449,13 +463,12 @@ std::unordered_set<std::string> AndroidResources::get_native_classes() {
         redex::read_file_with_contents(
             input,
             [&](const char* data, size_t size) {
-              std::unordered_set<std::string> classes_from_native =
+              UnorderedSet<std::string> classes_from_native =
                   extract_classes_from_native_lib(data, size);
               if (!classes_from_native.empty()) {
                 std::unique_lock<std::mutex> lock(out_mutex);
                 // C++17: use merge to avoid copies.
-                all_classes.insert(classes_from_native.begin(),
-                                   classes_from_native.end());
+                insert_unordered_iterable(all_classes, classes_from_native);
               }
             },
             64 * 1024);
@@ -467,9 +480,9 @@ std::unordered_set<std::string> AndroidResources::get_native_classes() {
 }
 
 bool AndroidResources::can_obfuscate_xml_file(
-    const std::unordered_set<std::string>& allowed_types,
+    const UnorderedSet<std::string>& allowed_types,
     const std::string& dirname) {
-  for (const auto& type : allowed_types) {
+  for (const auto& type : UnorderedIterable(allowed_types)) {
     auto path = RES_DIRECTORY + std::string("/") + type;
     if (dirname.find(path) != std::string::npos) {
       return true;
@@ -532,14 +545,13 @@ std::string convert_utf8_to_mutf8(const std::string& input) {
 }
 
 void resources_inlining_find_refs(
-    const std::unordered_map<uint32_t, uint32_t>& past_refs,
-    std::unordered_map<uint32_t, resources::InlinableValue>*
-        inlinable_resources) {
-  for (auto& ref : past_refs) {
+    const UnorderedMap<uint32_t, uint32_t>& past_refs,
+    UnorderedMap<uint32_t, resources::InlinableValue>* inlinable_resources) {
+  for (auto& ref : UnorderedIterable(past_refs)) {
     uint32_t id = ref.first;
     uint32_t ref_id = ref.second;
     uint32_t current_ref_id = ref_id;
-    std::unordered_set<uint32_t> visited_refs; // To detect cycles
+    UnorderedSet<uint32_t> visited_refs; // To detect cycles
     while (true) {
       if (!visited_refs.insert(current_ref_id).second) {
         break; // Cycle detected, break the loop

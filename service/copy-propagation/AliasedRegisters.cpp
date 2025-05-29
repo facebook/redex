@@ -6,6 +6,7 @@
  */
 
 #include "AliasedRegisters.h"
+#include "DeterministicContainers.h"
 
 #include <algorithm>
 #ifdef __GNUC__
@@ -22,7 +23,6 @@
 #include <boost/range/iterator_range.hpp>
 #include <limits>
 #include <numeric>
-#include <unordered_set>
 
 using namespace sparta;
 
@@ -352,8 +352,8 @@ bool AliasedRegisters::leq(const AliasedRegisters& other) const {
   // for all edges in `other` (the potential subset), make sure `this` has that
   // alias relationship
   auto inv_vertex_mapping = other.get_vertex_mapping(*this);
-  for (auto& [other_v, other_v_ins] :
-       other.m_graph.get_vertices_with_inv_adjacent_vertices()) {
+  for (auto& [other_v, other_v_ins] : UnorderedIterable(
+           other.m_graph.get_vertices_with_inv_adjacent_vertices())) {
     auto v = inv_vertex_mapping(other_v);
     auto v_root = find_root(v);
     for (auto other_u : other_v_ins) {
@@ -402,7 +402,7 @@ AbstractValueKind AliasedRegisters::join_with(const AliasedRegisters& other) {
   // only the same size or smaller.
   static_assert(sizeof(vertex_t) == sizeof(uint32_t));
   using vertex_pair_t = uint64_t;
-  std::unordered_map<vertex_pair_t, std::vector<vertex_t>> new_groups;
+  UnorderedMap<vertex_pair_t, std::vector<vertex_t>> new_groups;
   for (auto& group : this_before_groups) {
     always_assert(!group.empty());
     // Note that group's first element is always its root.
@@ -414,7 +414,7 @@ AbstractValueKind AliasedRegisters::join_with(const AliasedRegisters& other) {
       new_groups[shifted_this_root | other_root].push_back(v);
     }
   }
-  for (auto& [combined_root, new_group] : new_groups) {
+  for (auto& [combined_root, new_group] : UnorderedIterable(new_groups)) {
     auto new_root =
         *boost::range::min_element(new_group, [this](vertex_t v1, vertex_t v2) {
           return m_graph[v1] < m_graph[v2];
@@ -436,7 +436,7 @@ void AliasedRegisters::handle_edge_intersection_insert_order(
   // Clear out stale values in `m_insert_order` for vertices removed from
   // groups.
   auto groups = all_groups();
-  std::unordered_set<vertex_t> non_singletons;
+  UnorderedSet<vertex_t> non_singletons;
   for (const auto& group : groups) {
     non_singletons.insert(group.begin(), group.end());
   }
@@ -458,7 +458,7 @@ void AliasedRegisters::handle_insert_order_at_merge(
     const std::vector<vertex_t>& group,
     const InsertionOrder& other_insert_order,
     const VertexMapping& vertex_mapping) {
-  std::unordered_map<vertex_t, uint32_t> insert_order_sums;
+  UnorderedMap<vertex_t, uint32_t> insert_order_sums;
   std::vector<vertex_t> registers;
   for (auto v : group) {
     const Value& value = this->m_graph[v];
@@ -519,8 +519,8 @@ void AliasedRegisters::renumber_insert_order(
 std::vector<std::vector<vertex_t>> AliasedRegisters::all_groups() {
   std::vector<std::vector<vertex_t>> result;
 
-  for (auto& [root, in_adj] :
-       this->m_graph.get_vertices_with_inv_adjacent_vertices()) {
+  for (auto& [root, in_adj] : UnorderedIterable(
+           this->m_graph.get_vertices_with_inv_adjacent_vertices())) {
     std::vector<vertex_t> group;
     group.reserve(in_adj.size() + 1);
     group.push_back(root);
@@ -548,7 +548,7 @@ std::string AliasedRegisters::dump() const {
   std::ostringstream oss;
   const auto& edges = this->m_graph.get_vertices_with_adjacent_vertex();
   oss << "Graph [" << std::endl;
-  for (auto [source, target] : edges) {
+  for (auto [source, target] : UnorderedIterable(edges)) {
     const Value& r1 = m_graph[source];
     const Value& r2 = m_graph[target];
     oss << "(" << r1.str().c_str() << " -> " << r2.str().c_str() << ") "

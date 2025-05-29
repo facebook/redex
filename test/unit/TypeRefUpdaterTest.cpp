@@ -68,7 +68,7 @@ TEST_F(TypeRefUpdaterTest, init_collision) {
 
   Scope scope{cls_foo};
 
-  std::unordered_map<DexType*, DexType*> mapping{{foo, bar}};
+  UnorderedMap<DexType*, DexType*> mapping{{foo, bar}};
   TypeRefUpdater updater(mapping);
   updater.update_methods_fields(scope);
 

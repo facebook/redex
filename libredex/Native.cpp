@@ -127,9 +127,10 @@ NativeContext NativeContext::build(const std::string& path_to_native_results,
   ret.so_libraries = get_so_libraries(path);
   for (auto& so_library : ret.so_libraries) {
     so_library.populate_functions();
-    for (auto& [fn_name, function] : so_library.get_functions()) {
+    for (auto& [fn_name, function] :
+         UnorderedIterable(so_library.get_functions())) {
       const auto& java_declarations = function.get_java_declarations();
-      for (DexMethod* java_declaration : java_declarations) {
+      for (DexMethod* java_declaration : UnorderedIterable(java_declarations)) {
         if (ret.java_declaration_to_function.count(java_declaration) == 0) {
           ret.java_declaration_to_function[java_declaration] = &function;
         }

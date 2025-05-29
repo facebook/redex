@@ -8,14 +8,14 @@
 #pragma once
 
 #include "ConcurrentContainers.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexStore.h"
 
 // The definition of TypeSet is defined differently in ClassHierarchy, so we
 // need to manually define ClassHierarchy here.
 using ClassHierarchy =
-    std::unordered_map<const DexType*,
-                       std::set<const DexType*, dextypes_comparator>>;
+    UnorderedMap<const DexType*, std::set<const DexType*, dextypes_comparator>>;
 
 /*
  * This module builds a DAG that enables us to quickly answer the following
@@ -34,9 +34,8 @@ std::unique_ptr<const Graph> build_graph(const Scope&);
 /*
  * Returns all the methods that override :method. The set does *not* include
  * :method itself.
- * While represented as a vector, the result is conceptually an unordered sets.
  */
-std::vector<const DexMethod*> get_overriding_methods(
+UnorderedBag<const DexMethod*> get_overriding_methods(
     const Graph& graph,
     const DexMethod* method,
     bool include_interfaces = false,
@@ -45,9 +44,8 @@ std::vector<const DexMethod*> get_overriding_methods(
 /*
  * Returns all the methods that are overridden by :method. The set does *not*
  * include the :method itself.
- * While represented as a vector, the result is conceptually an unordered sets.
  */
-std::vector<const DexMethod*> get_overridden_methods(
+UnorderedBag<const DexMethod*> get_overridden_methods(
     const Graph& graph,
     const DexMethod* method,
     bool include_interfaces = false);
@@ -72,10 +70,10 @@ InsertOnlyConcurrentSet<DexMethod*> get_non_true_virtuals(const Graph& graph,
  */
 struct OtherInterfaceImplementations {
   // The set of immediately implemented interface methods.
-  std::unordered_set<const DexMethod*> parents;
+  UnorderedSet<const DexMethod*> parents;
   // The set of the classes for which the current method implements those
   // interface methods for the first time.
-  std::vector<const DexClass*> classes;
+  UnorderedBag<const DexClass*> classes;
 };
 
 /*
@@ -85,9 +83,9 @@ struct OtherInterfaceImplementations {
 struct Node {
   const DexMethod* method{nullptr};
   // The set of immediately overridden / implemented methods.
-  std::vector<Node*> parents;
+  UnorderedBag<Node*> parents;
   // The set of immediately overriding / implementing methods.
-  std::vector<Node*> children;
+  UnorderedBag<Node*> children;
   // The set of parents and classes where this node implements a previously
   // unimplemented method. (This is usually absent.)
   std::unique_ptr<OtherInterfaceImplementations>
@@ -99,8 +97,7 @@ struct Node {
   // class, can be cast to the given base type.
   bool overrides(const DexMethod* current, const DexType* base_type) const;
 
-  void gather_connected_methods(
-      std::unordered_set<const DexMethod*>* visited) const;
+  void gather_connected_methods(UnorderedSet<const DexMethod*>* visited) const;
 };
 
 class Graph {
@@ -151,7 +148,7 @@ bool any_overridden_methods(
     const std::function<bool(const DexMethod*)>& f = [](auto*) { return true; },
     bool include_interfaces = false);
 
-std::unordered_set<DexClass*> get_classes_with_overridden_finalize(
+UnorderedSet<DexClass*> get_classes_with_overridden_finalize(
     const Graph& method_override_graph, const ClassHierarchy& class_hierarchy);
 
 } // namespace method_override_graph

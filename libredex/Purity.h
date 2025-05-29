@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "MethodOverrideGraph.h"
 #include "MethodUtil.h"
@@ -71,8 +72,7 @@ struct CseLocationHasher {
   size_t operator()(const CseLocation& l) const { return (size_t)l.field; }
 };
 
-using CseUnorderedLocationSet =
-    std::unordered_set<CseLocation, CseLocationHasher>;
+using CseUnorderedLocationSet = UnorderedSet<CseLocation, CseLocationHasher>;
 
 std::ostream& operator<<(std::ostream&, const CseLocation&);
 std::ostream& operator<<(std::ostream&, const CseUnorderedLocationSet&);
@@ -104,13 +104,13 @@ CseLocation get_read_location(const IRInstruction* insn);
  * TODO: Derive this list with static analysis rather than hard-coding
  * it.
  */
-std::unordered_set<DexMethodRef*> get_pure_methods();
+UnorderedSet<DexMethodRef*> get_pure_methods();
 
-std::unordered_set<DexMethod*> get_immutable_getters(const Scope& scope);
+UnorderedSet<DexMethod*> get_immutable_getters(const Scope& scope);
 
 struct LocationsAndDependencies {
   CseUnorderedLocationSet locations;
-  std::unordered_set<const DexMethod*> dependencies;
+  UnorderedSet<const DexMethod*> dependencies;
 };
 
 // Values indicating what action should be taken for a method
@@ -127,7 +127,7 @@ enum class MethodOverrideAction {
 // and its overriding methods.
 MethodOverrideAction get_base_or_overriding_method_action(
     const DexMethod* method,
-    const std::unordered_set<const DexMethod*>* methods_to_ignore,
+    const UnorderedSet<const DexMethod*>* methods_to_ignore,
     bool ignore_methods_with_assumenosideeffects);
 
 // Given a (base) method, iterate over all relevant (base + overriding)
@@ -138,7 +138,7 @@ MethodOverrideAction get_base_or_overriding_method_action(
 bool process_base_and_overriding_methods(
     const method_override_graph::Graph* method_override_graph,
     const DexMethod* method,
-    const std::unordered_set<const DexMethod*>* methods_to_ignore,
+    const UnorderedSet<const DexMethod*>* methods_to_ignore,
     bool ignore_methods_with_assumenosideeffects,
     const std::function<bool(DexMethod*)>& handler_func);
 
@@ -154,7 +154,7 @@ size_t compute_locations_closure(
     const method_override_graph::Graph* method_override_graph,
     const std::function<boost::optional<LocationsAndDependencies>(DexMethod*)>&
         init_func,
-    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result);
+    UnorderedMap<const DexMethod*, CseUnorderedLocationSet>* result);
 
 // Compute all "conditionally pure" methods, i.e. methods which are pure except
 // that they may read from a set of well-known locations (not including
@@ -166,8 +166,8 @@ size_t compute_conditionally_pure_methods(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
     const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
-    const std::unordered_set<DexMethodRef*>& pure_methods,
-    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result);
+    const UnorderedSet<DexMethodRef*>& pure_methods,
+    UnorderedMap<const DexMethod*, CseUnorderedLocationSet>* result);
 
 // Compute all methods with no side effects, i.e. methods which do not mutate
 // state and only call other methods which do not have side effects.
@@ -179,8 +179,8 @@ size_t compute_no_side_effects_methods(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
     const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
-    const std::unordered_set<DexMethodRef*>& pure_methods,
-    std::unordered_set<const DexMethod*>* result);
+    const UnorderedSet<DexMethodRef*>& pure_methods,
+    UnorderedSet<const DexMethod*>* result);
 
 // Determines whether for a given (possibly abstract) method, there may be a
 // method that effectively implements it. (If not, then that implies that no

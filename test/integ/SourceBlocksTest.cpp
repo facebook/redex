@@ -8,10 +8,10 @@
 #include "InsertSourceBlocks.h"
 
 #include <algorithm>
-#include <unordered_set>
 
 #include <gtest/gtest.h>
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexLoader.h"
@@ -166,7 +166,7 @@ TEST_F(SourceBlocksTest, source_blocks) {
         continue;
       }
       cfg::ScopedCFG cfg{m->get_code()};
-      std::unordered_set<uint32_t> seen_ids;
+      UnorderedSet<uint32_t> seen_ids;
       for (const auto* b : cfg->blocks()) {
         bool seen_source_block_in_b{false};
         for (const auto& mie : *b) {
@@ -208,7 +208,7 @@ TEST_F(SourceBlocksTest, source_blocks) {
     ASSERT_NE(baz_ref, nullptr);
     auto baz = baz_ref->as_def();
     ASSERT_NE(baz, nullptr);
-    std::unordered_set<DexMethod*> def_inlinables{baz};
+    UnorderedSet<DexMethod*> def_inlinables{baz};
 
     int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
@@ -226,7 +226,7 @@ TEST_F(SourceBlocksTest, source_blocks) {
     auto bar = bar_ref->as_def();
     ASSERT_NE(bar, nullptr);
 
-    std::unordered_set<DexMethodRef*> seen_methods;
+    UnorderedSet<DexMethodRef*> seen_methods;
     {
       cfg::ScopedCFG cfg{bar->get_code()};
       for (const auto* b : cfg->blocks()) {
@@ -296,7 +296,7 @@ TEST_F(SourceBlocksTest, source_blocks_insert_after_exc) {
     });
   }
 
-  const std::unordered_map<std::string, size_t> kMaxSeen = {
+  const UnorderedMap<std::string, size_t> kMaxSeen = {
       {"Lcom/facebook/redextest/SourceBlocksTest;.bar:()V", 3},
       {"Lcom/facebook/redextest/SourceBlocksTest;.foo:()V", 4},
       {"Lcom/facebook/redextest/SourceBlocksTest;.<init>:()V", 3},
@@ -315,7 +315,7 @@ TEST_F(SourceBlocksTest, source_blocks_insert_after_exc) {
       continue;
     }
     cfg::ScopedCFG cfg{m->get_code()};
-    std::unordered_set<uint32_t> seen_ids;
+    UnorderedSet<uint32_t> seen_ids;
     size_t max_seen{0};
     for (const auto* b : cfg->blocks()) {
       size_t b_seen{0};
@@ -438,8 +438,7 @@ TEST_F(SourceBlocksTest, scaling) {
 
     ConcurrentMethodResolver concurrent_method_resolver;
 
-    std::unordered_set<DexMethod*> def_inlinables{
-        hot_source_blocks_inlined_method};
+    UnorderedSet<DexMethod*> def_inlinables{hot_source_blocks_inlined_method};
 
     int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
@@ -490,7 +489,7 @@ TEST_F(SourceBlocksTest, source_blocks_profile) {
     set_force_serialize(isbp);
   });
 
-  std::unordered_map<std::string, std::string> kExpectations = {
+  UnorderedMap<std::string, std::string> kExpectations = {
       {"Lcom/facebook/redextest/SourceBlocksTest;.bar:()V", "B0: 0(0.1:0.2)"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.foo:()V", "B0: 0(0.2:0.3)"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.<init>:()V",
@@ -551,7 +550,7 @@ TEST_F(SourceBlocksTest, source_blocks_profile_no_always_inject) {
     set_profile(isbp, profile_path);
   });
 
-  std::unordered_map<std::string, std::string> kExpectations = {
+  UnorderedMap<std::string, std::string> kExpectations = {
       {"Lcom/facebook/redextest/SourceBlocksTest;.bar:()V", "B0: 0(0.1:0.2)"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.foo:()V", "B0: 0(0.2:0.3)"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.<init>:()V",
@@ -611,7 +610,7 @@ TEST_F(SourceBlocksTest, source_blocks_profile_exc) {
     set_force_serialize(isbp);
   });
 
-  std::unordered_map<std::string, std::string> kExpectations = {
+  UnorderedMap<std::string, std::string> kExpectations = {
       {"Lcom/facebook/redextest/SourceBlocksTest;.bar:()V",
        "B0: 0(0.4:0.6) 1(0.5:0.5) 2(0.6:0.4)"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.foo:()V",
@@ -676,7 +675,7 @@ TEST_F(SourceBlocksTest, source_blocks_profile_exc_no_always_inject) {
     set_profile(isbp, profile_path);
   });
 
-  std::unordered_map<std::string, std::string> kExpectations = {
+  UnorderedMap<std::string, std::string> kExpectations = {
       {"Lcom/facebook/redextest/SourceBlocksTest;.bar:()V",
        "B0: 0(0.4:0.6) 1(0.5:0.5) 2(0.6:0.4)"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.foo:()V",
@@ -748,7 +747,7 @@ TEST_F(SourceBlocksTest, source_blocks_profile_always_inject_method_profiles) {
     set_profile(isbp, profile_path);
   });
 
-  std::unordered_map<std::string, std::string> kExpectations = {
+  UnorderedMap<std::string, std::string> kExpectations = {
       {"Lcom/facebook/redextest/SourceBlocksTest;.bar:()V", "B0: 0(0.1:0.2)"},
       // This comes from method profiles.
       {"Lcom/facebook/redextest/SourceBlocksTest;.foo:()V", "B0: 0(1:99)"},
@@ -807,7 +806,7 @@ TEST_F(SourceBlocksTest, source_blocks_access_methods) {
     set_insert_after_excs(isbp, false);
   });
 
-  std::unordered_map<std::string, std::string> kExpectations = {
+  UnorderedMap<std::string, std::string> kExpectations = {
       {"Lcom/facebook/redextest/SourceBlocksTest;.access$002:(Ljava/lang/"
        "String;)Ljava/lang/String;",
        "B0: "
@@ -886,7 +885,7 @@ TEST_P(SourceBlocksAccessMethodsTest, profile) {
     set_profile(isbp, profile_path);
   });
 
-  std::unordered_map<std::string, std::string> kExpectations = {
+  UnorderedMap<std::string, std::string> kExpectations = {
       {"Lcom/facebook/redextest/SourceBlocksTest;.access$002:(Ljava/lang/"
        "String;)Ljava/lang/String;",
        param.field_access},

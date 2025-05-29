@@ -107,7 +107,8 @@ DexClass* create_class(const DexType* type,
 std::vector<DexField*> create_merger_fields(const DexType* owner,
                                             const FieldsMap& fields_map) {
   std::vector<DexField*> res;
-  const std::vector<DexField*>& mergeable_fields = fields_map.begin()->second;
+  const std::vector<DexField*>& mergeable_fields =
+      unordered_any(fields_map)->second;
   size_t cnt = 0;
   for (const DexField* f : mergeable_fields) {
     auto type = f->get_type();
@@ -149,7 +150,7 @@ std::vector<DexField*> create_merger_fields(const DexType* owner,
   }
 
   std::vector<bool> acc_final_map(mergeable_fields.size(), true);
-  for (const auto& fmap : fields_map) {
+  for (const auto& fmap : UnorderedIterable(fields_map)) {
     const auto& fields = fmap.second;
     for (size_t i = 0; i < fields.size(); i++) {
       redex_assert(acc_final_map.size() > i);
@@ -174,8 +175,8 @@ std::vector<DexField*> create_merger_fields(const DexType* owner,
 void cook_merger_fields_lookup(
     const std::vector<DexField*>& new_fields,
     const FieldsMap& fields_map,
-    std::unordered_map<DexField*, DexField*>& merger_fields_lookup) {
-  for (const auto& fmap : fields_map) {
+    UnorderedMap<DexField*, DexField*>& merger_fields_lookup) {
+  for (const auto& fmap : UnorderedIterable(fields_map)) {
     const auto& old_fields = fmap.second;
     always_assert(new_fields.size() == old_fields.size());
     for (size_t i = 0; i < new_fields.size(); i++) {

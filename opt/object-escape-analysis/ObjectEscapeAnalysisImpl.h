@@ -17,6 +17,7 @@
 
 #include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "IRCode.h"
 #include "IROpcode.h"
@@ -67,7 +68,7 @@ void analyze_scope(
     ConcurrentMap<DexType*, Locations>* new_instances,
     ConcurrentMap<DexMethod*, Locations>* single_callee_invokes,
     InsertOnlyConcurrentSet<DexMethod*>* multi_callee_invokes,
-    ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>* dependencies,
+    ConcurrentMap<DexMethod*, UnorderedSet<DexMethod*>>* dependencies,
     CalleesCache* callees_cache);
 
 // A benign method invocation can be ignored during the escape analysis.
@@ -75,7 +76,7 @@ bool is_benign(const DexMethodRef* method_ref);
 
 // For each allocating instruction that escapes (not including returns), all
 // uses by which it escapes.
-using Escapes = std::unordered_map<const IRInstruction*, live_range::Uses>;
+using Escapes = UnorderedMap<const IRInstruction*, live_range::Uses>;
 
 // For each object, we track which instruction might have allocated it:
 // - new-instance, invoke-, and load-param-object instructions might represent
@@ -89,7 +90,7 @@ using Environment = sparta::PatriciaTreeMapAbstractEnvironment<reg_t, Domain>;
 
 struct MethodSummary {
   // A parameter is "benign" if a provided argument does not escape
-  std::unordered_set<src_index_t> benign_params;
+  UnorderedSet<src_index_t> benign_params;
 
   // Whether the method returns nothing of interest, or only the result of a
   // unique instruction which allocates an object, or only a particular
@@ -119,7 +120,7 @@ struct MethodSummary {
   }
 };
 
-using MethodSummaries = std::unordered_map<DexMethod*, MethodSummary>;
+using MethodSummaries = UnorderedMap<DexMethod*, MethodSummary>;
 
 using MethodSummaryCache =
     InsertOnlyConcurrentMap<const Callees*, MethodSummary>;
@@ -139,7 +140,7 @@ const MethodSummary* resolve_invoke_method_summary(
 class Analyzer final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
   explicit Analyzer(const method_override_graph::Graph& method_override_graph,
-                    const std::unordered_set<DexClass*>& excluded_classes,
+                    const UnorderedSet<DexClass*>& excluded_classes,
                     const MethodSummaries& method_summaries,
                     DexMethodRef* incomplete_marker_method,
                     DexMethod* method,
@@ -151,22 +152,22 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<Environment> {
 
   const Escapes& get_escapes() const { return m_escapes; }
 
-  const std::unordered_set<const IRInstruction*>& get_returns() const {
+  const UnorderedSet<const IRInstruction*>& get_returns() const {
     return m_returns;
   }
 
   // Returns set of new-instance and invoke- allocating instructions that do not
   // escape (or return).
-  std::unordered_set<IRInstruction*> get_inlinables() const;
+  UnorderedSet<IRInstruction*> get_inlinables() const;
 
  private:
   const method_override_graph::Graph& m_method_override_graph;
-  const std::unordered_set<DexClass*>& m_excluded_classes;
+  const UnorderedSet<DexClass*>& m_excluded_classes;
   const MethodSummaries& m_method_summaries;
   DexMethodRef* m_incomplete_marker_method;
   DexMethod* m_method;
   mutable Escapes m_escapes;
-  mutable std::unordered_set<const IRInstruction*> m_returns;
+  mutable UnorderedSet<const IRInstruction*> m_returns;
   mutable CalleesCache* m_callees_cache;
   mutable MethodSummaryCache* m_method_summary_cache;
 
@@ -178,10 +179,9 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<Environment> {
 
 MethodSummaries compute_method_summaries(
     const Scope& scope,
-    const ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>&
-        dependencies,
+    const ConcurrentMap<DexMethod*, UnorderedSet<DexMethod*>>& dependencies,
     const method_override_graph::Graph& method_override_graph,
-    const std::unordered_set<DexClass*>& excluded_classes,
+    const UnorderedSet<DexClass*>& excluded_classes,
     size_t* analysis_iterations,
     CalleesCache* callees_cache,
     MethodSummaryCache* method_summary_cache);

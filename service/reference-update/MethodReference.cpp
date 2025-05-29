@@ -105,7 +105,7 @@ void patch_callsite(const CallSite& callsite, const NewCallee& new_callee) {
 
 void update_call_refs_simple(
     const Scope& scope,
-    const std::unordered_map<DexMethod*, DexMethod*>& old_to_new_callee) {
+    const UnorderedMap<DexMethod*, DexMethod*>& old_to_new_callee) {
   if (old_to_new_callee.empty()) {
     return;
   }
@@ -239,12 +239,12 @@ CallSites collect_call_refs(const Scope& scope, const T& callees) {
 using MethodOrderedSet = std::set<DexMethod*, dexmethods_comparator>;
 template CallSites collect_call_refs<MethodOrderedSet>(
     const Scope& scope, const MethodOrderedSet& callees);
-template CallSites collect_call_refs<std::unordered_set<DexMethod*>>(
-    const Scope& scope, const std::unordered_set<DexMethod*>& callees);
+template CallSites collect_call_refs<UnorderedSet<DexMethod*>>(
+    const Scope& scope, const UnorderedSet<DexMethod*>& callees);
 
 int wrap_instance_call_with_static(
     DexStoresVector& stores,
-    const std::unordered_map<DexMethod*, DexMethod*>& methods_replacement,
+    const UnorderedMap<DexMethod*, DexMethod*>& methods_replacement,
     bool exclude_primary_dex) {
   Scope classes;
   if (!exclude_primary_dex) {
@@ -252,8 +252,8 @@ int wrap_instance_call_with_static(
   } else {
     classes = build_class_scope_excluding_primary_dex(stores);
   }
-  std::unordered_set<DexType*> excluded_types;
-  for (const auto& pair : methods_replacement) {
+  UnorderedSet<DexType*> excluded_types;
+  for (const auto& pair : UnorderedIterable(methods_replacement)) {
     always_assert(!is_static(pair.first));
     always_assert(is_static(pair.second));
     excluded_types.insert(pair.second->get_class());

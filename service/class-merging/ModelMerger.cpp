@@ -15,7 +15,6 @@
 #include "PassManager.h"
 #include "Resolver.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "TypeReference.h"
 #include "TypeStringRewriter.h"
 #include "TypeTagUtils.h"
@@ -109,11 +108,11 @@ bool is_simple_type_ref(IRInstruction* insn) {
 
 void update_code_type_refs(
     const Scope& scope,
-    const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger) {
+    const UnorderedMap<const DexType*, DexType*>& mergeable_to_merger) {
   TRACE(
       CLMG, 8, "  Updating NEW_INSTANCE, NEW_ARRAY, CHECK_CAST & CONST_CLASS");
   UnorderedTypeSet mergeables;
-  for (const auto& pair : mergeable_to_merger) {
+  for (const auto& pair : UnorderedIterable(mergeable_to_merger)) {
     mergeables.insert(pair.first);
   }
   auto patcher = [&](DexMethod* meth, IRCode& code) {
@@ -192,9 +191,9 @@ void update_code_type_refs(
 void update_refs_to_mergeable_fields(
     const Scope& scope,
     const std::vector<const MergerType*>& mergers,
-    const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger,
+    const UnorderedMap<const DexType*, DexType*>& mergeable_to_merger,
     MergerFields& merger_fields) {
-  std::unordered_map<DexField*, DexField*> fields_lookup;
+  UnorderedMap<DexField*, DexField*> fields_lookup;
   for (auto& merger : mergers) {
     cook_merger_fields_lookup(
         merger_fields.at(merger->type), merger->field_map, fields_lookup);
@@ -283,9 +282,8 @@ DexMethod* create_instanceof_method(const DexType* merger_type,
 
 void update_instance_of(
     const Scope& scope,
-    const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger,
-    const std::unordered_map<const DexType*, DexMethod*>&
-        merger_to_instance_of_meth,
+    const UnorderedMap<const DexType*, DexType*>& mergeable_to_merger,
+    const UnorderedMap<const DexType*, DexMethod*>& merger_to_instance_of_meth,
     const TypeTags& type_tags) {
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
     always_assert(code.editable_cfg_built());
@@ -334,7 +332,7 @@ void update_instance_of(
 
 void update_instance_of_no_type_tag(
     const Scope& scope,
-    const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger) {
+    const UnorderedMap<const DexType*, DexType*>& mergeable_to_merger) {
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
     always_assert(code.editable_cfg_built());
     auto& cfg = code.cfg();
@@ -361,10 +359,10 @@ void update_refs_to_mergeable_types(
     const Scope& scope,
     const ClassHierarchy& parent_to_children,
     const std::vector<const MergerType*>& mergers,
-    const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger,
+    const UnorderedMap<const DexType*, DexType*>& mergeable_to_merger,
     const TypeTags& type_tags,
     const MergerToField& type_tag_fields,
-    std::unordered_map<DexMethod*, std::string>& method_debug_map,
+    UnorderedMap<DexMethod*, std::string>& method_debug_map,
     bool has_type_tags) {
   // Update simple type referencing instructions to instantiate merger type.
   update_code_type_refs(scope, mergeable_to_merger);
@@ -372,7 +370,7 @@ void update_refs_to_mergeable_types(
       scope,
       mergeable_to_merger,
       parent_to_children,
-      boost::optional<std::unordered_map<DexMethod*, std::string>&>(
+      boost::optional<UnorderedMap<DexMethod*, std::string>&>(
           method_debug_map));
   type_reference::update_field_type_references(scope, mergeable_to_merger);
   // Fix INSTANCE_OF
@@ -381,7 +379,7 @@ void update_refs_to_mergeable_types(
     update_instance_of_no_type_tag(scope, mergeable_to_merger);
     return;
   }
-  std::unordered_map<const DexType*, DexMethod*> merger_to_instance_of_meth;
+  UnorderedMap<const DexType*, DexMethod*> merger_to_instance_of_meth;
   for (auto merger : mergers) {
     auto type = merger->type;
     auto type_tag_field = type_tag_fields.at(merger);
@@ -404,7 +402,7 @@ std::string merger_info(const MergerType& merger) {
     ss << "  interface methods " << imeths.methods.size() << "\n";
   }
   ss << " Field maps \n";
-  for (const auto& fmap : merger.field_map) {
+  for (const auto& fmap : UnorderedIterable(merger.field_map)) {
     ss << "  type " << SHOW(fmap.first) << "\n";
     size_t num_empty_fields = 0;
     for (const auto field : fmap.second) {
@@ -452,11 +450,11 @@ void fix_existing_merger_cls(const Model& model,
 
 // Trim the debug map to only contain mergeable methods.
 void trim_method_debug_map(
-    const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger,
-    std::unordered_map<DexMethod*, std::string>& method_debug_map) {
+    const UnorderedMap<const DexType*, DexType*>& mergeable_to_merger,
+    UnorderedMap<DexMethod*, std::string>& method_debug_map) {
   TRACE(CLMG, 5, "Method debug map un-trimmed %zu", method_debug_map.size());
   size_t trimmed_cnt = 0;
-  std20::erase_if(method_debug_map, [&](auto& p) {
+  unordered_erase_if(method_debug_map, [&](auto& p) {
     if (mergeable_to_merger.count(p.first->get_class())) {
       ++trimmed_cnt;
       return true;
@@ -607,7 +605,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
   });
 
   // Merging transformations.
-  std::unordered_map<const DexType*, DexType*> mergeable_to_merger;
+  UnorderedMap<const DexType*, DexType*> mergeable_to_merger;
   for (auto merger : to_materialize) {
     auto type = const_cast<DexType*>(merger->type);
     for (auto mergeable : merger->mergeables) {
@@ -620,7 +618,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
                                           : gen_type_tags(to_materialize);
   auto type_tag_fields = get_type_tag_fields(
       to_materialize, input_has_type_tag, model_spec.generate_type_tag());
-  std::unordered_map<DexMethod*, std::string> method_debug_map;
+  UnorderedMap<DexMethod*, std::string> method_debug_map;
   auto parent_to_children =
       model.get_type_system().get_class_scopes().get_parent_to_children();
   update_refs_to_mergeable_types(scope,
@@ -694,7 +692,6 @@ std::vector<DexClass*> ModelMerger::merge_model(
                            for (auto* m : dmethods) {
                              if (!method::is_clinit(m)) {
                                cls->remove_method(m);
-                               DexMethod::erase_method(m);
                                DexMethod::delete_method(m);
                              }
                            }

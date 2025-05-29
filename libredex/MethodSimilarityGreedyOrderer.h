@@ -8,11 +8,10 @@
 #pragma once
 
 #include <set>
-#include <unordered_map>
-#include <unordered_set>
 
 #include <boost/dynamic_bitset.hpp>
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 
 class DexInstruction;
@@ -50,11 +49,10 @@ class MethodSimilarityGreedyOrderer {
   std::map<MethodId, DexMethod*> m_id_to_method;
 
   // The inverse of m_methods
-  std::unordered_map<DexMethod*, MethodId> m_method_to_id;
+  UnorderedMap<DexMethod*, MethodId> m_method_to_id;
 
   // Mapping from each method to a vector of hash ids
-  std::unordered_map<MethodId, std::vector<CodeHashId>>
-      m_method_id_to_code_hash_ids;
+  UnorderedMap<MethodId, std::vector<CodeHashId>> m_method_id_to_code_hash_ids;
 
   // Vector to contain similarity score among all Methods for the given
   // buffer indexed Method. WorkQueue accesses this vector concurrently.
@@ -67,7 +65,7 @@ class MethodSimilarityGreedyOrderer {
 
   // Mapping from stable hash (64 bit) to code hash id (32 bit). This saves
   // space.
-  std::unordered_map<StableHash, CodeHashId> m_stable_hash_to_code_hash_id;
+  UnorderedMap<StableHash, CodeHashId> m_stable_hash_to_code_hash_id;
 
   void insert(DexMethod* method);
 

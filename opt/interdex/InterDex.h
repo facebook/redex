@@ -7,11 +7,10 @@
 
 #pragma once
 
-#include <unordered_set>
-
 #include "AssetManager.h"
 #include "BaselineProfileConfig.h"
 #include "CrossDexRefMinimizer.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexStoreUtil.h"
 #include "DexStructure.h"
@@ -183,14 +182,13 @@ class InterDex {
                         DexClass** canary_cls,
                         std::optional<FlushOutDexResult>* opt_fodr = nullptr,
                         bool skip_dynamically_dead = false) const;
-  void emit_primary_dex(
-      const DexClasses& primary_dex,
-      const std::vector<DexType*>& interdex_order,
-      const std::unordered_set<DexClass*>& unreferenced_classes);
+  void emit_primary_dex(const DexClasses& primary_dex,
+                        const std::vector<DexType*>& interdex_order,
+                        const UnorderedSet<DexClass*>& unreferenced_classes);
   void emit_interdex_classes(
       DexInfo& dex_info,
       const std::vector<DexType*>& interdex_types,
-      const std::unordered_set<DexClass*>& unreferenced_classes,
+      const UnorderedSet<DexClass*>& unreferenced_classes,
       DexClass** canary_cls);
   void init_cross_dex_ref_minimizer();
   std::vector<DexClasses> get_stable_partitions();
@@ -238,7 +236,7 @@ class InterDex {
 
   void get_movable_coldstart_classes(
       const std::vector<DexType*>& interdex_types,
-      std::unordered_map<const DexClass*, std::string>& move_coldstart_classes);
+      UnorderedMap<const DexClass*, std::string>& move_coldstart_classes);
 
   EmittingState m_emitting_state;
 
@@ -259,7 +257,7 @@ class InterDex {
   // True if dynamically_dead_classes are emitting.
   bool m_emitting_dynamically_dead_dex;
 
-  std::unordered_map<const DexClass*, size_t> m_interdex_order;
+  UnorderedMap<const DexClass*, size_t> m_interdex_order;
   bool m_emitting_scroll_set;
   bool m_emitting_bg_set;
   bool m_emitted_bg_set;
@@ -284,7 +282,7 @@ class InterDex {
 
   bool m_exclude_baseline_profile_classes;
   const baseline_profiles::BaselineProfileConfig& m_baseline_profile_config;
-  std::optional<std::unordered_set<DexType*>> m_baseline_profile_classes;
+  std::optional<UnorderedSet<DexType*>> m_baseline_profile_classes;
   bool m_move_coldstart_classes;
   size_t m_min_betamap_move_threshold;
   size_t m_max_betamap_move_threshold;

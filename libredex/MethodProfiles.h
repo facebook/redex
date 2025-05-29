@@ -11,6 +11,7 @@
 #include <string_view>
 
 #include "BaselineProfileConfig.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "Timer.h"
 #include "Trace.h"
@@ -62,7 +63,7 @@ struct Stats {
   }
 };
 
-using StatsMap = std::unordered_map<const DexMethodRef*, Stats>;
+using StatsMap = UnorderedMap<const DexMethodRef*, Stats>;
 using AllInteractions = std::map<std::string, StatsMap>;
 const std::string COLD_START = "ColdStart";
 
@@ -73,8 +74,7 @@ class MethodProfiles {
   void initialize(
       const std::vector<std::string>& csv_filenames,
       const std::vector<std::string>& baseline_profile_csv_filenames,
-      const std::unordered_map<std::string,
-                               baseline_profiles::BaselineProfileConfig>&
+      const UnorderedMap<std::string, baseline_profiles::BaselineProfileConfig>&
           baseline_profile_configs) {
     m_initialized = true;
     Timer t("Parsing agg_method_stats_files");
@@ -104,12 +104,12 @@ class MethodProfiles {
                         csv_filename.c_str());
     }
     // Parse manual interactions
-    std::unordered_map<std::string, std::vector<std::string>>
+    UnorderedMap<std::string, std::vector<std::string>>
         manual_file_to_config_names;
     // Create a mapping of manual_file to config names
     // this way we can only parse each manual_file exactly once
     for (const auto& [baseline_config_name, baseline_profile_config] :
-         baseline_profile_configs) {
+         UnorderedIterable(baseline_profile_configs)) {
       for (const auto& manual_file : baseline_profile_config.manual_files) {
         manual_file_to_config_names[manual_file].emplace_back(
             baseline_config_name);
@@ -121,7 +121,7 @@ class MethodProfiles {
   // For testing purposes.
   static MethodProfiles initialize(
       const std::string& interaction_id,
-      std::unordered_map<const DexMethodRef*, Stats> data) {
+      UnorderedMap<const DexMethodRef*, Stats> data) {
     MethodProfiles ret{};
     ret.m_initialized = true;
     ret.m_method_stats[interaction_id] = std::move(data);
@@ -172,12 +172,12 @@ class MethodProfiles {
   // Try to resolve previously unresolved lines
   void process_unresolved_lines();
 
-  std::unordered_set<dex_member_refs::MethodDescriptorTokens>
+  UnorderedSet<dex_member_refs::MethodDescriptorTokens>
   get_unresolved_method_descriptor_tokens() const;
 
   void resolve_method_descriptor_tokens(
-      const std::unordered_map<dex_member_refs::MethodDescriptorTokens,
-                               std::vector<DexMethodRef*>>& map);
+      const UnorderedMap<dex_member_refs::MethodDescriptorTokens,
+                         std::vector<DexMethodRef*>>& map);
 
   // If there are not observed stats for the target, derive it from the given
   // sources.
@@ -210,9 +210,9 @@ class MethodProfiles {
   // A map from interaction ID to the number of times that interaction was
   // triggered. This can be used to compare relative prevalence of different
   // interactions.
-  std::unordered_map<std::string, uint32_t> m_interaction_counts;
+  UnorderedMap<std::string, uint32_t> m_interaction_counts;
   // A map from column index to column header
-  std::unordered_map<uint32_t, std::string> m_optional_columns;
+  UnorderedMap<uint32_t, std::string> m_optional_columns;
   // The interaction id from the metadata at the top of the file
   std::string m_interaction_id;
   bool m_initialized{false};
@@ -224,12 +224,11 @@ class MethodProfiles {
 
   // Read a list of manual profiles and populate m_baseline_manual_interactions
   void parse_manual_files(
-      const std::unordered_map<std::string, std::vector<std::string>>&
+      const UnorderedMap<std::string, std::vector<std::string>>&
           manual_file_to_config_names);
   void parse_manual_file(
       const std::string& manual_filename,
-      const std::unordered_map<std::string,
-                               std::unordered_map<std::string, DexMethodRef*>>&
+      const UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>&
           baseline_profile_method_map,
       const std::vector<std::string>& config_names);
 
@@ -256,8 +255,8 @@ class MethodProfiles {
 
   void process_unresolved_lines(bool baseline_profile_variant);
   void resolve_method_descriptor_tokens(
-      const std::unordered_map<dex_member_refs::MethodDescriptorTokens,
-                               std::vector<DexMethodRef*>>& map,
+      const UnorderedMap<dex_member_refs::MethodDescriptorTokens,
+                         std::vector<DexMethodRef*>>& map,
       bool baseline_profile_variant);
 };
 
@@ -266,8 +265,8 @@ class MethodProfiles {
 // `std::ref` of a local instance.
 class dexmethods_profiled_comparator {
   const MethodProfiles* m_method_profiles;
-  const std::unordered_set<std::string>* m_allowlisted_substrings;
-  std::unordered_map<DexMethod*, double> m_cache;
+  const UnorderedSet<std::string>* m_allowlisted_substrings;
+  UnorderedMap<DexMethod*, double> m_cache;
   double m_min_appear_percent;
   double m_second_min_appear_percent;
   std::vector<std::string> m_interactions;
@@ -275,7 +274,7 @@ class dexmethods_profiled_comparator {
   const DexMethod* m_coldstart_start_marker;
   const DexMethod* m_coldstart_end_marker;
 
-  std::unordered_map<DexMethod*, size_t> m_initial_order;
+  UnorderedMap<DexMethod*, size_t> m_initial_order;
 
   // The profiled method order is broken into sections, one section for each
   // interaction. Each section has a range of floating point numbers assigned to

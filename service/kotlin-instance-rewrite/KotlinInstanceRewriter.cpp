@@ -111,7 +111,7 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::remove_escaping_instance(
             }
             return stats;
           });
-  for (auto* field : remove_list) {
+  for (auto* field : UnorderedIterable(remove_list)) {
     concurrent_instance_map.erase(field);
   }
   return total_stats;
@@ -126,7 +126,7 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::transform(
   // in <clinit> and replace the SGET INSTANCE with a new INSTANCE.
   std::vector<DexFieldRef*> fields_to_rewrite;
   KotlinInstanceRewriter::Stats stats = {};
-  for (const auto& it : concurrent_instance_map) {
+  for (const auto& it : UnorderedIterable(concurrent_instance_map)) {
     if (it.second.size() > max_no_of_instance) {
       continue;
     }

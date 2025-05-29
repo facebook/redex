@@ -27,16 +27,15 @@ class CommonSubexpressionEliminationTest : public RedexTest {
   }
 };
 
-void test(
-    const Scope& scope,
-    const std::string& code_str,
-    const std::string& expected_str,
-    size_t expected_instructions_eliminated,
-    bool is_static = true,
-    bool is_init_or_clinit = false,
-    DexType* declaring_type = nullptr,
-    DexTypeList* args = DexTypeList::make_type_list({}),
-    const std::unordered_set<const DexString*>& finalish_field_names = {}) {
+void test(const Scope& scope,
+          const std::string& code_str,
+          const std::string& expected_str,
+          size_t expected_instructions_eliminated,
+          bool is_static = true,
+          bool is_init_or_clinit = false,
+          DexType* declaring_type = nullptr,
+          DexTypeList* args = DexTypeList::make_type_list({}),
+          const UnorderedSet<const DexString*>& finalish_field_names = {}) {
   [[maybe_unused]] auto field_a =
       DexField::make_field("LFoo;.a:I")->make_concrete(ACC_PUBLIC);
 
@@ -63,7 +62,7 @@ void test(
   walk::code(scope, [&](DexMethod*, IRCode& code) { code.build_cfg(); });
 
   auto pure_methods = get_pure_methods();
-  std::unordered_set<const DexField*> finalish_fields;
+  UnorderedSet<const DexField*> finalish_fields;
   cse_impl::SharedState shared_state(pure_methods, finalish_field_names,
                                      finalish_fields);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(

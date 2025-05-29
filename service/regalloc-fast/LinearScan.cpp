@@ -7,6 +7,12 @@
 
 #include "LinearScan.h"
 
+#include <algorithm>
+#include <cmath>
+#include <optional>
+#include <utility>
+#include <vector>
+
 #include "ControlFlow.h"
 #include "CppUtil.h"
 #include "IRCode.h"
@@ -15,12 +21,6 @@
 #include "LiveInterval.h"
 #include "Show.h"
 #include "Trace.h"
-#include <algorithm>
-#include <cmath>
-#include <optional>
-#include <unordered_set>
-#include <utility>
-#include <vector>
 
 namespace fastregalloc {
 

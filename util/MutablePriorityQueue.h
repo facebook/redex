@@ -9,9 +9,9 @@
 
 #include <functional>
 #include <map>
-#include <unordered_map>
 
 #include "Debug.h"
+#include "DeterministicContainers.h"
 
 /*
  * Collection type that maintains a set of elements with associated
@@ -30,7 +30,7 @@ template <class Value,
 class MutablePriorityQueue {
  private:
   std::map<Priority, Value, PriorityCompare> m_values;
-  std::unordered_map<Value, Priority, ValueHash> m_priorities;
+  UnorderedMap<Value, Priority, ValueHash> m_priorities;
 
  public:
   // Inserts a value with a priority; neither value or priority can already be

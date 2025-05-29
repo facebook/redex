@@ -124,12 +124,11 @@ const DexString* get_name(int seed) {
 }
 
 struct VirtualRenamer {
-  VirtualRenamer(
-      const ClassScopes& class_scopes,
-      const RefsMap& def_refs,
-      std::unordered_map<std::string, uint32_t>* elms,
-      std::unordered_map<const DexType*, std::string>* cache,
-      const std::unordered_map<const DexClass*, int>& next_dmethod_seeds)
+  VirtualRenamer(const ClassScopes& class_scopes,
+                 const RefsMap& def_refs,
+                 UnorderedMap<std::string, uint32_t>* elms,
+                 UnorderedMap<const DexType*, std::string>* cache,
+                 const UnorderedMap<const DexClass*, int>& next_dmethod_seeds)
       : class_scopes(class_scopes),
         def_refs(def_refs),
         stack_trace_elements(elms),
@@ -149,12 +148,12 @@ struct VirtualRenamer {
   // their ref counts get updated, and if the ref count drops to 0 then its
   // entry is erased. When avoid_stack_trace_collision is false then this is
   // null and collision avoidance is disabled.
-  std::unordered_map<std::string, uint32_t>* stack_trace_elements;
+  UnorderedMap<std::string, uint32_t>* stack_trace_elements;
   // Note these entries contain trailing periods
-  std::unordered_map<const DexType*, std::string>* external_name_cache;
-  const std::unordered_map<const DexClass*, int>& next_dmethod_seeds;
-  mutable std::unordered_map<const VirtualScope*, int> next_virtualscope_seeds;
-  mutable std::unordered_map<const DexType*, TypeSet> hier_cache;
+  UnorderedMap<const DexType*, std::string>* external_name_cache;
+  const UnorderedMap<const DexClass*, int>& next_dmethod_seeds;
+  mutable UnorderedMap<const VirtualScope*, int> next_virtualscope_seeds;
+  mutable UnorderedMap<const DexType*, TypeSet> hier_cache;
 
   const std::string& get_prefix(const DexType* type) const {
     always_assert(external_name_cache != nullptr);
@@ -521,14 +520,14 @@ void collect_refs(Scope& scope, RefsMap& def_refs) {
 size_t rename_virtuals(
     Scope& scope,
     bool avoid_stack_trace_collision,
-    const std::unordered_map<const DexClass*, int>& next_dmethod_seeds) {
+    const UnorderedMap<const DexClass*, int>& next_dmethod_seeds) {
   // build a ClassScope a RefsMap and a VirtualRenamer
   ClassScopes class_scopes(scope);
   scope_info(class_scopes);
   RefsMap def_refs;
   collect_refs(scope, def_refs);
-  std::unordered_map<std::string, uint32_t> stack_trace_elements;
-  std::unordered_map<const DexType*, std::string> external_cache;
+  UnorderedMap<std::string, uint32_t> stack_trace_elements;
+  UnorderedMap<const DexType*, std::string> external_cache;
   if (avoid_stack_trace_collision) {
     for (const auto& cls : scope) {
       std::string pref = java_names::internal_to_external(cls->str()) + ".";

@@ -7,6 +7,7 @@
 
 #include "LegacyInliner.h"
 
+#include "DeterministicContainers.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
@@ -78,7 +79,7 @@ class MethodSplicer {
   const RegMap& m_callee_reg_map;
   DexPosition* m_invoke_position;
   MethodItemEntry* m_active_catch;
-  std::unordered_set<reg_t> m_valid_dbg_regs;
+  UnorderedSet<reg_t> m_valid_dbg_regs;
 
  public:
   MethodSplicer(IRCode* mtcaller,

@@ -7,9 +7,8 @@
 
 #pragma once
 
-#include <unordered_map>
-
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 
 namespace optimize_enums {
@@ -27,11 +26,9 @@ class OptimizeEnumsAnalysis final {
 
   explicit OptimizeEnumsAnalysis(
       const DexClass* enum_cls,
-      const std::unordered_map<const DexMethod*, uint32_t>&
-          ctor_to_arg_ordinal);
+      const UnorderedMap<const DexMethod*, uint32_t>& ctor_to_arg_ordinal);
 
-  void collect_ordinals(
-      std::unordered_map<DexField*, size_t>& enum_field_to_ordinal);
+  void collect_ordinals(UnorderedMap<DexField*, size_t>& enum_field_to_ordinal);
 
  private:
   std::unique_ptr<impl::Analyzer> m_analyzer;

@@ -13,6 +13,7 @@
 
 #include "BaseIRAnalyzer.h"
 #include "ConstantPropagationAnalysis.h"
+#include "DeterministicContainers.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IRList.h"
@@ -171,7 +172,7 @@ class InitFixpointIterator final
 std::vector<std::pair<ImmutableAttr::Attr, size_t>> analyze_initializer(
     const DexMethod* method,
     const constant_propagation::ImmutableAttributeAnalyzerState& state,
-    const std::unordered_set<DexField*>& final_fields) {
+    const UnorderedSet<DexField*>& final_fields) {
   std::vector<std::pair<ImmutableAttr::Attr, size_t>> usage;
   Environment init_env;
   size_t param_id = 0;
@@ -243,7 +244,7 @@ void analyze_constructors(const Scope& scope,
       .set_src_id_of_attr(2);
   auto java_lang_String = type::java_lang_String();
   walk::parallel::classes(scope, [state, java_lang_String](DexClass* cls) {
-    std::unordered_set<DexField*> fields;
+    UnorderedSet<DexField*> fields;
     for (auto ifield : cls->get_ifields()) {
       if (is_final(ifield) && !root(ifield) &&
           (type::is_primitive(ifield->get_type()) ||

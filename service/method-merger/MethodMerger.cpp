@@ -18,9 +18,9 @@
 
 namespace {
 
-std::unordered_set<DexMethod*> methodgroups_to_methodset(
+UnorderedSet<DexMethod*> methodgroups_to_methodset(
     const method_merger::MethodGroups& method_groups) {
-  std::unordered_set<DexMethod*> method_set;
+  UnorderedSet<DexMethod*> method_set;
   for (auto& methods : method_groups) {
     method_set.insert(methods.begin(), methods.end());
   }
@@ -45,13 +45,13 @@ class RefCounter {
   }
 
  private:
-  std::unordered_map<DexMethod*, uint32_t> m_counter;
+  UnorderedMap<DexMethod*, uint32_t> m_counter;
 };
 
 void create_one_dispatch(
     const std::map<SwitchIndices, DexMethod*>& indices_to_callee,
     uint32_t min_size,
-    std::unordered_map<DexMethod*, method_reference::NewCallee>* old_to_new,
+    UnorderedMap<DexMethod*, method_reference::NewCallee>* old_to_new,
     method_merger::Stats* stats) {
   if (indices_to_callee.size() < min_size) {
     return;
@@ -85,11 +85,11 @@ void create_one_dispatch(
 void generate_dispatches(
     const std::vector<DexMethod*>& methods,
     const RefCounter& ref_counter,
-    std::unordered_map<DexMethod*, method_reference::NewCallee>* old_to_new,
+    UnorderedMap<DexMethod*, method_reference::NewCallee>* old_to_new,
     method_merger::Stats* stats) {
   constexpr uint64_t HARD_MAX_INSTRUCTION_SIZE = 1L << 16;
   constexpr uint32_t min_method_group_size = 3;
-  std::unordered_map<DexProto*, std::set<DexMethod*, dexmethods_comparator>>
+  UnorderedMap<DexProto*, std::set<DexMethod*, dexmethods_comparator>>
       proto_to_methods;
   for (auto method : methods) {
     // Use dispatch::may_be_dispatch(method) to heuristically exclude large
@@ -100,7 +100,7 @@ void generate_dispatches(
       proto_to_methods[method->get_proto()].insert(method);
     }
   }
-  for (auto& p : proto_to_methods) {
+  for (auto& p : UnorderedIterable(proto_to_methods)) {
     if (p.second.size() < min_method_group_size) {
       continue;
     }
@@ -139,7 +139,7 @@ Stats merge_methods(const MethodGroups& method_groups,
   method_reference::CallSites callsites =
       method_reference::collect_call_refs(scope, all_methods);
   RefCounter ref_counter(callsites);
-  std::unordered_map<DexMethod*, method_reference::NewCallee> old_to_new;
+  UnorderedMap<DexMethod*, method_reference::NewCallee> old_to_new;
   for (auto& methods : method_groups) {
     generate_dispatches(methods, ref_counter, &old_to_new, &stats);
   }

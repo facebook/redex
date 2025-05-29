@@ -65,7 +65,7 @@ void DedupBlocksPass::report_stats(PassManager& mgr,
   mgr.incr_metric(METRIC_POSITIONS_INSERTED, positions_inserted);
   TRACE(DEDUP_BLOCKS, 2, "%d eligible_blocks", eligible_blocks);
 
-  for (const auto& entry : stats.dup_sizes) {
+  for (const auto& entry : UnorderedIterable(stats.dup_sizes)) {
     TRACE(DEDUP_BLOCKS,
           2,
           "found %zu duplicate blocks with %zu instructions",

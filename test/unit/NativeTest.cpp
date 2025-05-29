@@ -62,7 +62,7 @@ TEST_F(NativeTest, testBuildingContext) {
     ASSERT_EQ(2, context.so_libraries.size());
 
     auto java_decl_of =
-        [&](const std::string& native_func) -> std::unordered_set<DexMethod*> {
+        [&](const std::string& native_func) -> UnorderedSet<DexMethod*> {
       for (auto& lib : context.so_libraries) {
         auto f = lib.get_function(native_func);
         if (f) {
@@ -72,8 +72,8 @@ TEST_F(NativeTest, testBuildingContext) {
       return {};
     };
 
-    EXPECT_EQ(init_hybrid, *java_decl_of("init_hybrid_impl").begin());
-    EXPECT_EQ(foo, *java_decl_of("foo_impl").begin());
+    EXPECT_EQ(init_hybrid, *unordered_any(java_decl_of("init_hybrid_impl")));
+    EXPECT_EQ(foo, *unordered_any(java_decl_of("foo_impl")));
   }
 
   {

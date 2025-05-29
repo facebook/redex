@@ -21,8 +21,8 @@ namespace {
  * method.
  */
 void assert_old_types_have_definitions(
-    const std::unordered_map<DexType*, DexType*>& old_to_new) {
-  for (auto& pair : old_to_new) {
+    const UnorderedMap<DexType*, DexType*>& old_to_new) {
+  for (auto& pair : UnorderedIterable(old_to_new)) {
     auto cls = type_class(pair.first);
     always_assert_log(
         cls && cls->is_def(),
@@ -76,7 +76,7 @@ struct VMethodGroup {
   const DexString* possible_new_name{nullptr};
   DexType* old_type_ref{nullptr};
   DexType* new_type_ref{nullptr};
-  std::unordered_set<DexMethod*> methods;
+  UnorderedSet<DexMethod*> methods;
 };
 
 /**
@@ -115,7 +115,7 @@ void add_vmethod_to_group(DexType* old_type_ref,
  * Key of groups is hash result of old type ref and original signature hash.
  */
 void add_vmethod_to_groups(
-    const std::unordered_map<const DexType*, DexType*>& old_to_new,
+    const UnorderedMap<const DexType*, DexType*>& old_to_new,
     DexMethod* method,
     VMethodsGroups* groups) {
   size_t org_signature_hash = hash_signature(method);
@@ -162,10 +162,10 @@ DexProto* get_new_proto(const DexProto* proto,
  */
 void update_vmethods_group_one_type_ref(const VMethodGroup& group,
                                         const ClassHierarchy& ch) {
-  auto proto = (*group.methods.begin())->get_proto();
+  auto proto = (*unordered_any(group.methods))->get_proto();
   auto new_proto = get_new_proto(proto, group.old_type_ref, group.new_type_ref);
   bool need_rename = false;
-  for (auto method : group.methods) {
+  for (auto method : UnorderedIterable(group.methods)) {
     // if collision in the same container or in the hierarchy.
     auto collision = DexMethod::get_method(
                          method->get_class(), method->get_name(), new_proto) ||
@@ -181,14 +181,14 @@ void update_vmethods_group_one_type_ref(const VMethodGroup& group,
   }
   DexMethodSpec spec;
   if (need_rename) {
-    for (auto method : group.methods) {
+    for (auto method : UnorderedIterable(group.methods)) {
       always_assert_log(
           can_rename(method), "Can not rename %s\n", SHOW(method));
     }
     spec.name = group.possible_new_name;
   }
   spec.proto = new_proto;
-  for (auto method : group.methods) {
+  for (auto method : UnorderedIterable(group.methods)) {
     TRACE(REFU,
           8,
           "sig: updating virtual method %s to %s:%s",
@@ -246,8 +246,8 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
   workqueue_run<DexMethodRef*>(
       [this](DexMethodRef* method) { mangling(method); }, methods);
 
-  std::map<DexMethod*, DexProto*, dexmethods_comparator> inits(m_inits.begin(),
-                                                               m_inits.end());
+  std::map<DexMethod*, DexProto*, dexmethods_comparator> inits;
+  insert_unordered_iterable(inits, m_inits);
   std::vector<std::pair<DexMethod*, DexProto*>> colliding_inits;
   for (auto& pair : inits) {
     auto* method = pair.first;
@@ -353,7 +353,7 @@ bool TypeRefUpdater::mangling(DexMethodRef* method) {
 }
 
 TypeRefUpdater::TypeRefUpdater(
-    const std::unordered_map<DexType*, DexType*>& old_to_new)
+    const UnorderedMap<DexType*, DexType*>& old_to_new)
     : m_old_to_new(old_to_new) {
   assert_old_types_have_definitions(old_to_new);
 }
@@ -404,7 +404,7 @@ bool proto_has_reference_to(const DexProto* proto,
 
 DexProto* get_new_proto(
     const DexProto* proto,
-    const std::unordered_map<const DexType*, DexType*>& old_to_new) {
+    const UnorderedMap<const DexType*, DexType*>& old_to_new) {
   auto rtype = type::get_element_type_if_array(proto->get_rtype());
   if (old_to_new.count(rtype) > 0) {
     auto merger_type = old_to_new.at(rtype);
@@ -432,10 +432,9 @@ DexProto* get_new_proto(
 
 void update_method_signature_type_references(
     const Scope& scope,
-    const std::unordered_map<const DexType*, DexType*>& old_to_new,
+    const UnorderedMap<const DexType*, DexType*>& old_to_new,
     const ClassHierarchy& ch,
-    boost::optional<std::unordered_map<DexMethod*, std::string>&>
-        method_debug_map) {
+    boost::optional<UnorderedMap<DexMethod*, std::string>&> method_debug_map) {
   // Virtual methods.
   // The key is the hash of signature and an old type reference. Group the
   // methods by key.
@@ -452,7 +451,7 @@ void update_method_signature_type_references(
   }
 
   UnorderedTypeSet old_types;
-  for (auto& pair : old_to_new) {
+  for (auto& pair : UnorderedIterable(old_to_new)) {
     old_types.insert(pair.first);
   }
 
@@ -529,7 +528,7 @@ void update_method_signature_type_references(
 
 void update_field_type_references(
     const Scope& scope,
-    const std::unordered_map<const DexType*, DexType*>& old_to_new) {
+    const UnorderedMap<const DexType*, DexType*>& old_to_new) {
   TRACE(REFU, 4, " updating field refs");
   const auto update_field = [&](DexFieldRef* field) {
     const auto ref_type = field->get_type();
@@ -587,7 +586,7 @@ void fix_colliding_dmethods(
   }
   // Fix colliding methods by appending an additional param.
   TRACE(REFU, 9, "sig: colliding_methods %zu", colliding_methods.size());
-  std::unordered_map<DexMethod*, size_t> num_additional_args;
+  UnorderedMap<DexMethod*, size_t> num_additional_args;
   for (auto it : colliding_methods) {
     auto meth = it.first;
     auto new_proto = it.second;

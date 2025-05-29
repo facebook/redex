@@ -20,7 +20,6 @@
 #include <memory>
 #include <stdlib.h>
 #include <sys/stat.h>
-#include <unordered_set>
 
 #ifdef _MSC_VER
 // TODO: Rewrite open/write/close with C/C++ standards. But it works for now.
@@ -55,7 +54,6 @@
 #include "Resolver.h"
 #include "Sha1.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
@@ -68,11 +66,11 @@
 template <class T, class U>
 class CustomSort {
  private:
-  const std::unordered_map<const T*, unsigned int>& m_map;
+  const UnorderedMap<const T*, unsigned int>& m_map;
   U m_cmp;
 
  public:
-  CustomSort(const std::unordered_map<const T*, unsigned int>& input_map, U cmp)
+  CustomSort(const UnorderedMap<const T*, unsigned int>& input_map, U cmp)
       : m_map(input_map) {
     m_cmp = cmp;
   }
@@ -113,8 +111,8 @@ GatheredTypes::GatheredTypes(DexClasses* classes) : m_classes(classes) {
                     m_lmethodhandle, *m_classes);
 }
 
-std::unordered_set<const DexString*> GatheredTypes::index_type_names() {
-  std::unordered_set<const DexString*> type_names;
+UnorderedSet<const DexString*> GatheredTypes::index_type_names() {
+  UnorderedSet<const DexString*> type_names;
   for (auto it = m_ltype.begin(); it != m_ltype.end(); ++it) {
     type_names.insert((*it)->get_name());
   }
@@ -143,7 +141,7 @@ std::vector<DexCallSite*> GatheredTypes::get_dexcallsite_emitlist() {
 
 std::vector<DexMethod*> GatheredTypes::get_dexmethod_emitlist() {
   std::vector<DexMethod*> methlist;
-  for (auto cls : *m_classes) {
+  for (auto cls : UnorderedIterable(*m_classes)) {
     TRACE(OPUT, 3, "[dexmethod_emitlist][class] %s", cls->c_str());
     auto const& dmethods = cls->get_dmethods();
     auto const& vmethods = cls->get_vmethods();
@@ -180,7 +178,7 @@ void GatheredTypes::sort_dexmethod_emitlist_method_similarity_order(
   // This is similar to the exclusions that the InterDex pass applies when
   // sorting remaining classes for better compression.
   redex_assert(m_config != nullptr);
-  std::unordered_set<DexType*> perf_sensitive_classes;
+  UnorderedSet<DexType*> perf_sensitive_classes;
 
   auto& global_config = m_config->get_global_config();
   MethodProfileOrderingConfig* profiles_config{nullptr};
@@ -280,7 +278,7 @@ void GatheredTypes::sort_dexmethod_emitlist_coldstart_order(
     return;
   }
 
-  std::unordered_map<const DexMethod*, unsigned int> coldstart_method_ordering;
+  UnorderedMap<const DexMethod*, unsigned int> coldstart_method_ordering;
   for (auto& method : coldstart_methods) {
     DexMethodRef* method_ref = DexMethod::get_method(method);
     if (method_ref == nullptr || !method_ref->is_def()) {
@@ -293,7 +291,7 @@ void GatheredTypes::sort_dexmethod_emitlist_coldstart_order(
     coldstart_method_ordering[meth] = coldstart_method_ordering.size();
   }
 
-  std::unordered_map<const DexMethodRef*, size_t> initial_ordering;
+  UnorderedMap<const DexMethodRef*, size_t> initial_ordering;
   for (auto* m : lmeth) {
     initial_ordering[m] = initial_ordering.size();
   }
@@ -436,7 +434,7 @@ std::vector<DexTypeList*> GatheredTypes::get_typelist_list(
   auto class_defs_size = (uint32_t)m_classes->size();
   typel.reserve(protos->size() + class_defs_size);
 
-  for (auto& it : *protos) {
+  for (auto& it : UnorderedIterable(*protos)) {
     auto proto = it.first;
     typel.push_back(proto->get_args());
   }
@@ -583,8 +581,8 @@ DexOutput::DexOutput(
     IODIMetadata* iodi_metadata,
     const ConfigFiles& config_files,
     PositionMapper* pos_mapper,
-    std::unordered_map<DexMethod*, uint64_t>* method_to_id,
-    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
+    UnorderedMap<DexMethod*, uint64_t>* method_to_id,
+    UnorderedMap<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     const DexOutputConfig& dex_output_config,
     int min_sdk)
     : m_classes(classes),
@@ -754,8 +752,7 @@ void DexOutput::generate_string_data(SortMode mode) {
   dex_string_id* stringids =
       (dex_string_id*)(m_output.get() + hdr.string_ids_off);
 
-  std::unordered_set<const DexString*> type_names =
-      m_gtypes->index_type_names();
+  UnorderedSet<const DexString*> type_names = m_gtypes->index_type_names();
 
   size_t nrstr = string_order.size();
   const uint32_t str_data_start = m_offset;
@@ -785,7 +782,7 @@ void DexOutput::generate_type_data() {
       m_dodx.type_to_idx().size() - get_max_type_refs(m_min_sdk));
 
   dex_type_id* typeids = (dex_type_id*)(m_output.get() + hdr.type_ids_off);
-  for (auto& p : m_dodx.type_to_idx()) {
+  for (auto& p : UnorderedIterable(m_dodx.type_to_idx())) {
     auto t = p.first;
     auto idx = p.second;
     typeids[idx].string_idx = m_dodx.stringidx(t->get_name());
@@ -816,7 +813,7 @@ void DexOutput::generate_typelist_data() {
 
 void DexOutput::generate_proto_data() {
   auto protoids = (dex_proto_id*)(m_output.get() + hdr.proto_ids_off);
-  for (auto& it : m_dodx.proto_to_idx()) {
+  for (auto& it : UnorderedIterable(m_dodx.proto_to_idx())) {
     auto proto = it.first;
     auto idx = it.second;
     protoids[idx].shortyidx = m_dodx.stringidx(proto->get_shorty());
@@ -828,7 +825,7 @@ void DexOutput::generate_proto_data() {
 
 void DexOutput::generate_field_data() {
   auto fieldids = (dex_field_id*)(m_output.get() + hdr.field_ids_off);
-  for (auto& it : m_dodx.field_to_idx()) {
+  for (auto& it : UnorderedIterable(m_dodx.field_to_idx())) {
     auto field = it.first;
     auto idx = it.second;
     fieldids[idx].classidx = m_dodx.typeidx(field->get_class());
@@ -840,7 +837,7 @@ void DexOutput::generate_field_data() {
 
 void DexOutput::generate_method_data() {
   auto methodids = (dex_method_id*)(m_output.get() + hdr.method_ids_off);
-  for (auto& it : m_dodx.method_to_idx()) {
+  for (auto& it : UnorderedIterable(m_dodx.method_to_idx())) {
     auto method = it.first;
     auto idx = it.second;
     methodids[idx].classidx = m_dodx.typeidx(method->get_class());
@@ -1020,7 +1017,7 @@ void DexOutput::generate_methodhandle_data() {
                     total_callsite_size;
   dex_methodhandle_id* dexmethodhandles =
       (dex_methodhandle_id*)(m_output.get() + offset);
-  for (auto it : m_dodx.methodhandle_to_idx()) {
+  for (auto it : UnorderedIterable(m_dodx.methodhandle_to_idx())) {
     m_stats.num_methodhandles++;
     DexMethodHandle* methodhandle = it.first;
     uint32_t idx = it.second;
@@ -1058,8 +1055,8 @@ void DexOutput::check_method_instruction_size_limit(const ConfigFiles& conf,
 void DexOutput::generate_static_values() {
   constexpr size_t initial_buffer_reserve = 32 * 1024;
   uint32_t sv_start = m_offset;
-  std::unordered_map<DexEncodedValueArray, uint32_t,
-                     boost::hash<DexEncodedValueArray>>
+  UnorderedMap<DexEncodedValueArray, uint32_t,
+               boost::hash<DexEncodedValueArray>>
       enc_arrays;
   for (uint32_t i = 0; i < hdr.class_defs_size; i++) {
     DexClass* clz = m_classes->at(i);
@@ -1309,7 +1306,7 @@ DebugMetadata calculate_debug_metadata(
     dex_code_item* dci,
     PositionMapper* pos_mapper,
     uint32_t num_params,
-    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* dbg_lines,
+    UnorderedMap<DexCode*, std::vector<DebugLineItem>>* dbg_lines,
     uint32_t line_addin) {
   std::vector<DebugLineItem> debug_line_info;
   DebugMetadata metadata;
@@ -1347,7 +1344,7 @@ int emit_debug_info(
     uint8_t* output,
     uint32_t offset,
     uint32_t num_params,
-    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* dbg_lines) {
+    UnorderedMap<DexCode*, std::vector<DebugLineItem>>* dbg_lines) {
   // No align requirement for debug items.
   DebugMetadata metadata = calculate_debug_metadata(
       dbg, dc, dci, pos_mapper, num_params, dbg_lines, /*line_addin=*/0);
@@ -1381,16 +1378,16 @@ struct ParamSizeOrder {
   // This is OK. Java methods are limited to 256 parameters.
   std::bitset<257> param_size_done;
 
-  const std::unordered_map<const DexMethod*, DebugMetadata>& method_data;
+  const UnorderedMap<const DexMethod*, DebugMetadata>& method_data;
 
   std::vector<const DexMethod*>::const_iterator method_cur;
   std::vector<const DexMethod*>::const_iterator method_end;
-  std::unordered_set<const DexMethod*> skip_methods;
+  UnorderedSet<const DexMethod*> skip_methods;
 
   std::map<uint32_t, DebugMethodMap>::const_iterator map_cur, map_end;
 
   ParamSizeOrder(
-      const std::unordered_map<const DexMethod*, DebugMetadata>& method_data,
+      const UnorderedMap<const DexMethod*, DebugMetadata>& method_data,
       const std::vector<const DexMethod*>& methods,
       std::map<uint32_t, DebugMethodMap>::const_iterator begin,
       std::map<uint32_t, DebugMethodMap>::const_iterator end)
@@ -1451,7 +1448,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
     uint8_t* output,
     uint32_t offset,
     int* dbgcount,
-    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_map) {
+    UnorderedMap<DexCode*, std::vector<DebugLineItem>>* code_debug_map) {
   // Algo is as follows:
   // 1) Collect method sizes for each method of N params
   // 2) For each arity:
@@ -1464,14 +1461,14 @@ uint32_t emit_instruction_offset_debug_info_helper(
 
   // 1)
   std::map<uint32_t, DebugMethodMap> param_to_sizes;
-  std::unordered_map<const DexMethod*, DebugMetadata> method_to_debug_meta;
+  UnorderedMap<const DexMethod*, DebugMetadata> method_to_debug_meta;
   // We need this to calculate the size of normal debug programs for each
   // method. Hopefully no debug program is > 128k. Its ok to increase this
   // in the future.
   constexpr int TMP_SIZE = 128 * 1024;
   auto temporary_buffer = std::make_unique<uint8_t[]>(TMP_SIZE);
   uint8_t* tmp = temporary_buffer.get();
-  std::unordered_map<const DexMethod*, std::vector<const DexMethod*>>
+  UnorderedMap<const DexMethod*, std::vector<const DexMethod*>>
       clustered_methods;
 
   for (auto& it : code_items) {
@@ -1509,11 +1506,11 @@ uint32_t emit_instruction_offset_debug_info_helper(
   }
   temporary_buffer = nullptr;
 
-  std20::erase_if(clustered_methods,
-                  [](auto& p) { return p.second.size() <= 1; });
+  unordered_erase_if(clustered_methods,
+                     [](auto& p) { return p.second.size() <= 1; });
 
   std::vector<const DexMethod*> cluster_induced_order;
-  for (const auto& p : clustered_methods) {
+  for (const auto& p : UnorderedIterable(clustered_methods)) {
     cluster_induced_order.insert(cluster_induced_order.end(), p.second.begin(),
                                  p.second.end());
   }
@@ -1553,7 +1550,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
       (iodi_metadata.layer_mode ==
            IODIMetadata::IODILayerMode::kAlwaysSkipLayer0ExceptPrimary &&
        store_number == 0 && dex_number == 0);
-  std::unordered_map<uint32_t, std::map<uint32_t, uint32_t>> param_size_to_oset;
+  UnorderedMap<uint32_t, std::map<uint32_t, uint32_t>> param_size_to_oset;
   uint32_t initial_offset = offset;
   for (int32_t size = pso.next(); size != -1; size = pso.next()) {
     auto param_size = size;
@@ -1565,16 +1562,15 @@ uint32_t emit_instruction_offset_debug_info_helper(
     }
 
     // Find clustered methods in this param size.
-    std::unordered_map<const DexMethod*, std::vector<MethodKey>>
-        clusters_in_sizes;
+    UnorderedMap<const DexMethod*, std::vector<MethodKey>> clusters_in_sizes;
     for (const auto& p : dbg_sizes) {
       clusters_in_sizes[iodi_metadata.get_canonical_method(p.first.method)]
           .push_back(p.first);
     }
-    std20::erase_if(clusters_in_sizes,
-                    [](auto& p) { return p.second.size() == 1; });
+    unordered_erase_if(clusters_in_sizes,
+                       [](auto& p) { return p.second.size() == 1; });
     size_t combinations = 1;
-    for (const auto& p : clusters_in_sizes) {
+    for (const auto& p : UnorderedIterable(clusters_in_sizes)) {
       combinations *= p.second.size();
     }
     TRACE(IODI, 4, "Cluster combinations=%zu size=%zu", combinations,
@@ -1973,7 +1969,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
       auto sizes_wo_clusters = dbg_sizes;
       size_t max_cluster_len{0};
       size_t sum_cluster_sizes{0};
-      for (auto& p : clusters_in_sizes) {
+      for (auto& p : UnorderedIterable(clusters_in_sizes)) {
         for (const auto& k : p.second) {
           sizes_wo_clusters.erase(k);
         }
@@ -1994,7 +1990,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
       auto add_iteration = [&dbg_sizes, &clusters_in_sizes,
                             max_cluster_len](auto& cur_sizes, size_t iter) {
         size_t added_sizes{0};
-        for (const auto& p : clusters_in_sizes) {
+        for (const auto& p : UnorderedIterable(clusters_in_sizes)) {
           size_t p_idx = p.second.size() -
                          std::min(p.second.size(), max_cluster_len - iter);
           const auto& k = p.second[p_idx];
@@ -2029,7 +2025,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
       mark_clusters_as_skip(cur_sizes);
 
       // Mark other cluster methods as skips.
-      for (const auto& p : clusters_in_sizes) {
+      for (const auto& p : UnorderedIterable(clusters_in_sizes)) {
         size_t p_idx = p.second.size() -
                        std::min(p.second.size(), max_cluster_len - best_iter);
         for (size_t i = 0; i != p.second.size(); ++i) {
@@ -2047,7 +2043,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
         post_iodi_offset - initial_offset);
   // 3)
   auto size_offset_end = param_size_to_oset.end();
-  std::unordered_set<const DexMethod*> to_remove;
+  UnorderedSet<const DexMethod*> to_remove;
   for (auto& it : code_items) {
     if (pso.skip_methods.count(it->method)) {
       continue;
@@ -2126,7 +2122,7 @@ uint32_t emit_instruction_offset_debug_info(
     uint8_t* output,
     uint32_t offset,
     int* dbgcount,
-    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_map) {
+    UnorderedMap<DexCode*, std::vector<DebugLineItem>>* code_debug_map) {
   // IODI only supports non-ambiguous methods, i.e., an overload cluster is
   // only a single method. Layered IODI supports as many overloads as can
   // be encoded.
@@ -2412,13 +2408,13 @@ void compute_method_to_id_map(
     DexOutputIdx* dodx,
     const DexClasses* classes,
     uint8_t* dex_signature,
-    std::unordered_map<DexMethod*, uint64_t>* method_to_id) {
+    UnorderedMap<DexMethod*, uint64_t>* method_to_id) {
   if (!method_to_id) {
     return;
   }
 
-  std::unordered_set<DexClass*> dex_classes(classes->begin(), classes->end());
-  for (auto& it : dodx->method_to_idx()) {
+  UnorderedSet<DexClass*> dex_classes(classes->begin(), classes->end());
+  for (auto& it : UnorderedIterable(dodx->method_to_idx())) {
     auto method = it.first;
     auto idx = it.second;
 
@@ -2460,9 +2456,8 @@ void write_method_mapping(const std::string& filename,
   FILE* fd = fopen(filename.c_str(), "a");
   assert_log(fd, "Can't open method mapping file %s: %s\n", filename.c_str(),
              strerror(errno));
-  std::unordered_set<DexClass*> classes_in_dex(classes->begin(),
-                                               classes->end());
-  for (auto& it : dodx->method_to_idx()) {
+  UnorderedSet<DexClass*> classes_in_dex(classes->begin(), classes->end());
+  for (auto& it : UnorderedIterable(dodx->method_to_idx())) {
     auto method = it.first;
     auto idx = it.second;
 
@@ -2765,7 +2760,7 @@ void write_bytecode_offset_mapping(
 
 int check_class_order(DexClasses* dex) {
   auto valid_ordering =
-      [](const std::unordered_map<DexType*, uint32_t>& dexes_class_order,
+      [](const UnorderedMap<DexType*, uint32_t>& dexes_class_order,
          DexType* cls_to_check,
          uint32_t cur_index) -> bool {
     auto find = dexes_class_order.find(cls_to_check);
@@ -2777,7 +2772,7 @@ int check_class_order(DexClasses* dex) {
     // otherwise, invalid.
     return find->second < cur_index;
   };
-  std::unordered_map<DexType*, uint32_t> dexes_class_order;
+  UnorderedMap<DexType*, uint32_t> dexes_class_order;
   int violation_count = 0;
   for (uint32_t index = 0; index < dex->size(); ++index) {
     dexes_class_order[dex->at(index)->get_type()] = index;
@@ -2859,11 +2854,11 @@ void DexOutput::write() {
 
 class UniqueReferences {
  public:
-  std::unordered_set<const DexString*> strings;
-  std::unordered_set<const DexType*> types;
-  std::unordered_set<const DexProto*> protos;
-  std::unordered_set<const DexFieldRef*> fields;
-  std::unordered_set<const DexMethodRef*> methods;
+  UnorderedSet<const DexString*> strings;
+  UnorderedSet<const DexType*> types;
+  UnorderedSet<const DexProto*> protos;
+  UnorderedSet<const DexFieldRef*> fields;
+  UnorderedSet<const DexMethodRef*> methods;
   int total_strings_size{0};
   int total_types_size{0};
   int total_protos_size{0};
@@ -2889,35 +2884,35 @@ void DexOutput::metrics() {
   }
   memcpy(m_stats.signature, hdr.signature, 20);
 
-  for (auto& p : m_dodx.string_to_idx()) {
+  for (auto& p : UnorderedIterable(m_dodx.string_to_idx())) {
     s_unique_references.strings.insert(p.first);
   }
   m_stats.num_unique_strings = s_unique_references.strings.size();
   s_unique_references.total_strings_size += m_dodx.string_to_idx().size();
   m_stats.strings_total_size = s_unique_references.total_strings_size;
 
-  for (auto& p : m_dodx.type_to_idx()) {
+  for (auto& p : UnorderedIterable(m_dodx.type_to_idx())) {
     s_unique_references.types.insert(p.first);
   }
   m_stats.num_unique_types = s_unique_references.types.size();
   s_unique_references.total_types_size += m_dodx.type_to_idx().size();
   m_stats.types_total_size = s_unique_references.total_types_size;
 
-  for (auto& p : m_dodx.proto_to_idx()) {
+  for (auto& p : UnorderedIterable(m_dodx.proto_to_idx())) {
     s_unique_references.protos.insert(p.first);
   }
   m_stats.num_unique_protos = s_unique_references.protos.size();
   s_unique_references.total_protos_size += m_dodx.proto_to_idx().size();
   m_stats.protos_total_size = s_unique_references.total_protos_size;
 
-  for (auto& p : m_dodx.field_to_idx()) {
+  for (auto& p : UnorderedIterable(m_dodx.field_to_idx())) {
     s_unique_references.fields.insert(p.first);
   }
   m_stats.num_unique_field_refs = s_unique_references.fields.size();
   s_unique_references.total_fields_size += m_dodx.field_to_idx().size();
   m_stats.field_refs_total_size = s_unique_references.total_fields_size;
 
-  for (auto& p : m_dodx.method_to_idx()) {
+  for (auto& p : UnorderedIterable(m_dodx.method_to_idx())) {
     s_unique_references.methods.insert(p.first);
   }
   m_stats.num_unique_method_refs = s_unique_references.methods.size();
@@ -3000,8 +2995,8 @@ enhanced_dex_stats_t write_classes_to_dex(
     ConfigFiles& conf,
     PositionMapper* pos_mapper,
     DebugInfoKind debug_info_kind,
-    std::unordered_map<DexMethod*, uint64_t>* method_to_id,
-    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
+    UnorderedMap<DexMethod*, uint64_t>* method_to_id,
+    UnorderedMap<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
     const DexOutputConfig& dex_output_config,

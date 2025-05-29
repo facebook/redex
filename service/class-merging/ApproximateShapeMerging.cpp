@@ -74,9 +74,9 @@ void merge_shapes(const Shape& from_shape,
  */
 void build_DAG(MergerType::ShapeCollector& shapes,
                size_t max_distance,
-               std::unordered_map<Shape, std::unordered_set<Shape>>& pred_map,
-               std::unordered_map<Shape, std::unordered_set<Shape>>& succ_map,
-               std::unordered_map<Shape, size_t>& mergeable_count) {
+               UnorderedMap<Shape, UnorderedSet<Shape>>& pred_map,
+               UnorderedMap<Shape, UnorderedSet<Shape>>& succ_map,
+               UnorderedMap<Shape, size_t>& mergeable_count) {
   TRACE(CLMG, 5, "[approx] Building Shape DAG");
   for (const auto& lhs : shapes) {
     for (const auto& rhs : shapes) {
@@ -108,13 +108,12 @@ void build_DAG(MergerType::ShapeCollector& shapes,
 /**
  * Remove a node from DAG
  */
-void remove_from_DAG(
-    const Shape& shape,
-    std::unordered_map<Shape, std::unordered_set<Shape>>& pred_map,
-    std::unordered_map<Shape, std::unordered_set<Shape>>& succ_map) {
+void remove_from_DAG(const Shape& shape,
+                     UnorderedMap<Shape, UnorderedSet<Shape>>& pred_map,
+                     UnorderedMap<Shape, UnorderedSet<Shape>>& succ_map) {
   // remove this node from the predecessor lists of its successors
   if (succ_map.find(shape) != succ_map.end()) {
-    for (const auto& succ : succ_map[shape]) {
+    for (const auto& succ : UnorderedIterable(succ_map[shape])) {
       always_assert(pred_map.find(succ) != pred_map.end());
       always_assert(pred_map[succ].find(shape) != pred_map[succ].end());
       pred_map[succ].erase(shape);
@@ -123,7 +122,7 @@ void remove_from_DAG(
   }
   // remove this node from successor lists of its predecessors
   if (pred_map.find(shape) != pred_map.end()) {
-    for (const auto& pred : pred_map[shape]) {
+    for (const auto& pred : UnorderedIterable(pred_map[shape])) {
       always_assert(succ_map.find(pred) != succ_map.end());
       always_assert(succ_map[pred].find(shape) != succ_map[pred].end());
       succ_map[pred].erase(shape);
@@ -139,8 +138,8 @@ enum DFSStatus { Unvisited = 0, Partial, Visited };
  */
 void topological_sort_visit(
     const Shape& shape,
-    const std::unordered_map<Shape, std::unordered_set<Shape>>& succ_map,
-    std::unordered_map<Shape, DFSStatus>& visited,
+    const UnorderedMap<Shape, UnorderedSet<Shape>>& succ_map,
+    UnorderedMap<Shape, DFSStatus>& visited,
     std::vector<Shape>& sorted) {
   // assert that there is no cycle
   always_assert(visited[shape] != Partial);
@@ -150,7 +149,7 @@ void topological_sort_visit(
   // mark this shape temporarily
   visited[shape] = Partial;
   if (succ_map.find(shape) != succ_map.end()) {
-    for (const auto& succ : succ_map.at(shape)) {
+    for (const auto& succ : UnorderedIterable(succ_map.at(shape))) {
       topological_sort_visit(succ, succ_map, visited, sorted);
     }
   }
@@ -161,9 +160,9 @@ void topological_sort_visit(
 
 std::vector<Shape> topological_sort(
     const std::vector<Shape>& shape_list,
-    const std::unordered_map<Shape, std::unordered_set<Shape>>& succ_map) {
+    const UnorderedMap<Shape, UnorderedSet<Shape>>& succ_map) {
   std::vector<Shape> sorted;
-  std::unordered_map<Shape, DFSStatus> visited;
+  UnorderedMap<Shape, DFSStatus> visited;
   for (const auto& shape : shape_list) {
     visited[shape] = Unvisited;
   }
@@ -186,8 +185,8 @@ std::vector<Shape> topological_sort(
 void drop_shape_with_many_mergeables(
     const size_t threshold,
     const MergerType::ShapeCollector& shapes,
-    std::unordered_map<Shape, std::unordered_set<Shape>>& pred_map,
-    std::unordered_map<Shape, std::unordered_set<Shape>>& succ_map) {
+    UnorderedMap<Shape, UnorderedSet<Shape>>& pred_map,
+    UnorderedMap<Shape, UnorderedSet<Shape>>& succ_map) {
   for (const auto& shape_it : shapes) {
     if (shape_it.second.types.size() > threshold &&
         succ_map.find(shape_it.first) != succ_map.end()) {
@@ -197,7 +196,7 @@ void drop_shape_with_many_mergeables(
             shape_it.first.to_string().c_str(), shape_it.second.types.size(),
             threshold);
       // Remove its outgoing edges
-      for (const auto& succ : succ_map.at(shape_it.first)) {
+      for (const auto& succ : UnorderedIterable(succ_map.at(shape_it.first))) {
         // Remove this node from its successors' predecessor lists
         always_assert(pred_map.find(succ) != pred_map.end());
         always_assert(pred_map.at(succ).find(shape_it.first) !=
@@ -217,7 +216,7 @@ void drop_shape_with_many_mergeables(
  **/
 void print_edge(const Shape& from_shape,
                 const Shape& to_shape,
-                const std::unordered_map<Shape, size_t>& num_mergeables,
+                const UnorderedMap<Shape, size_t>& num_mergeables,
                 std::ostream& os) {
   always_assert(num_mergeables.find(from_shape) != num_mergeables.end() &&
                 num_mergeables.find(to_shape) != num_mergeables.end());
@@ -230,11 +229,10 @@ void print_edge(const Shape& from_shape,
      << std::endl;
 }
 
-void write_shape_graph(
-    const ConfigFiles& conf,
-    const std::string& graph_file_name,
-    const std::unordered_map<Shape, std::unordered_set<Shape>>& pred_map,
-    const std::unordered_map<Shape, size_t>& num_mergeables) {
+void write_shape_graph(const ConfigFiles& conf,
+                       const std::string& graph_file_name,
+                       const UnorderedMap<Shape, UnorderedSet<Shape>>& pred_map,
+                       const UnorderedMap<Shape, size_t>& num_mergeables) {
   std::string file_name = conf.metafile(graph_file_name);
   std::ofstream os(file_name, std::ios::app);
   if (!os.is_open()) {
@@ -242,8 +240,8 @@ void write_shape_graph(
     return;
   }
   os << "digraph G {" << std::endl;
-  for (const auto& it : pred_map) {
-    for (const auto& from_shape : it.second) {
+  for (const auto& it : UnorderedIterable(pred_map)) {
+    for (const auto& from_shape : UnorderedIterable(it.second)) {
       print_edge(from_shape, it.first, num_mergeables, os);
     }
   }
@@ -325,16 +323,16 @@ void max_mergeable_greedy(const JsonWrapper& specs,
   specs.get("max_mergeable_threshold", 0, max_mergeable_threshold);
 
   TRACE(CLMG, 3, "[approx] Using max-mergeable greedy algorithm.");
-  std::unordered_map<Shape, std::unordered_set<Shape>> succ_map;
-  std::unordered_map<Shape, std::unordered_set<Shape>> pred_map;
+  UnorderedMap<Shape, UnorderedSet<Shape>> succ_map;
+  UnorderedMap<Shape, UnorderedSet<Shape>> pred_map;
   // mergealbe_count[A] = mergeables in shape A + the sum of mergeables in all
   //                      predecessors of A
 
   // The difference is mergeable_count contains the sum of number of mergeables
   // from the shape itself and all its predecessors. whereas num_mergeables
   // contains the number of mergeables only from the shape itself.
-  std::unordered_map<Shape, size_t> mergeable_count;
-  std::unordered_map<Shape, size_t> num_mergeables;
+  UnorderedMap<Shape, size_t> mergeable_count;
+  UnorderedMap<Shape, size_t> num_mergeables;
 
   for (const auto& shape_it : shapes) {
     num_mergeables[shape_it.first] = shape_it.second.types.size();
@@ -351,11 +349,11 @@ void max_mergeable_greedy(const JsonWrapper& specs,
   // Get a list of target shapes that has predecessors
   std::vector<Shape> target_list;
   target_list.reserve(pred_map.size());
-  for (const auto& s_pair : pred_map) {
+  for (const auto& s_pair : UnorderedIterable(pred_map)) {
     target_list.push_back(s_pair.first);
   }
 
-  std::unordered_map<Shape, std::unordered_set<Shape>> merge_map;
+  UnorderedMap<Shape, UnorderedSet<Shape>> merge_map;
 
   // Greedily select a group of shapes that can be merged into one
   // (target_shape) in terms of total mergeable count in that group. target_list
@@ -381,18 +379,18 @@ void max_mergeable_greedy(const JsonWrapper& specs,
 
     // Update mergeable_count of to_shape's successors
     if (succ_map.find(to_shape) != succ_map.end()) {
-      for (const auto& succ : succ_map[to_shape]) {
+      for (const auto& succ : UnorderedIterable(succ_map[to_shape])) {
         mergeable_count[succ] -= shapes[to_shape].types.size();
       }
     }
 
     // Merge all its predecessors into it
     while (!pred_map[to_shape].empty()) {
-      Shape from_shape = *pred_map[to_shape].begin();
+      Shape from_shape = *unordered_any(pred_map[to_shape]);
       // Before merging from_shape into to_shape, remove from_shape from the
       // DAG.
       always_assert(succ_map.find(from_shape) != succ_map.end());
-      for (const auto& succ : succ_map[from_shape]) {
+      for (const auto& succ : UnorderedIterable(succ_map[from_shape])) {
         mergeable_count[succ] -= shapes[from_shape].types.size();
       }
       remove_from_DAG(from_shape, pred_map, succ_map);
@@ -429,10 +427,10 @@ void max_shape_merged_greedy(const JsonWrapper& specs,
   specs.get("max_mergeable_threshold", 0, max_mergeable_threshold);
 
   TRACE(CLMG, 3, "[approx] Using max-shape-merged greedy algorithm.");
-  std::unordered_map<Shape, std::unordered_set<Shape>> succ_map;
-  std::unordered_map<Shape, std::unordered_set<Shape>> pred_map;
-  std::unordered_map<Shape, size_t> mergeable_count;
-  std::unordered_map<Shape, size_t> num_mergeables;
+  UnorderedMap<Shape, UnorderedSet<Shape>> succ_map;
+  UnorderedMap<Shape, UnorderedSet<Shape>> pred_map;
+  UnorderedMap<Shape, size_t> mergeable_count;
+  UnorderedMap<Shape, size_t> num_mergeables;
 
   for (const auto& shape_it : shapes) {
     num_mergeables[shape_it.first] = shape_it.second.types.size();
@@ -457,8 +455,8 @@ void max_shape_merged_greedy(const JsonWrapper& specs,
   std::vector<Shape> sorted_list = topological_sort(shapes_list, pred_map);
 
   // Indicates a shape has been merged into.
-  std::unordered_set<Shape> merged;
-  std::unordered_map<Shape, std::unordered_set<Shape>> merge_map;
+  UnorderedSet<Shape> merged;
+  UnorderedMap<Shape, UnorderedSet<Shape>> merge_map;
 
   // Process shapes in the topological order.
   for (auto it = sorted_list.begin(); it != sorted_list.end(); ++it) {
@@ -480,9 +478,8 @@ void max_shape_merged_greedy(const JsonWrapper& specs,
      * since D has more predecessors.
      */
     if (succ_map.find(*it) != succ_map.end()) {
-      auto max = std::max_element(
-          succ_map.at(*it).begin(), succ_map.at(*it).end(),
-          [&](const Shape& a, const Shape& b) {
+      auto max = unordered_max_element(
+          succ_map.at(*it), [&](const Shape& a, const Shape& b) {
             size_t l =
                 pred_map.find(a) == pred_map.end() ? 0 : pred_map.at(a).size();
             size_t r =

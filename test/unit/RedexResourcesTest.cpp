@@ -19,7 +19,7 @@
 #include "androidfw/ResourceTypes.h"
 
 TEST(RedexResources, ReadXmlTagsAndAttributes) {
-  std::unordered_set<std::string> attributes_to_find;
+  UnorderedSet<std::string> attributes_to_find;
   attributes_to_find.emplace("android:onClick");
   attributes_to_find.emplace("onClick");
   attributes_to_find.emplace("android:text");

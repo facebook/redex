@@ -11,8 +11,6 @@
 #include <memory>
 #include <stdio.h>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 
 #include "ClassHierarchy.h"
 #include "Debug.h"
@@ -102,7 +100,7 @@ bool implements_all_intf_methods(const DexClass* impl_cls,
 
 void collect_single_impl(const TypeToTypes& intfs_to_classes,
                          TypeMap& single_impl) {
-  for (const auto& intf_it : intfs_to_classes) {
+  for (const auto& intf_it : UnorderedIterable(intfs_to_classes)) {
     if (intf_it.second.size() != 1) continue;
     auto intf = intf_it.first;
     auto intf_cls = type_class(intf);

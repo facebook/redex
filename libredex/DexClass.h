@@ -15,10 +15,10 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <unordered_map>
 #include <utility>
 
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexAccess.h"
 #include "DexDefs.h"
 #include "DexEncoding.h"
@@ -281,7 +281,7 @@ class DexFieldRef {
   bool m_concrete;
   bool m_external;
 
-  virtual ~DexFieldRef() {}
+  ~DexFieldRef() {}
   DexFieldRef(DexType* container, const DexString* name, DexType* type) {
     m_spec.cls = container;
     m_spec.name = name;
@@ -311,8 +311,7 @@ class DexFieldRef {
   template <typename C>
   void gather_types_shallow(C& ltype) const;
   void gather_strings_shallow(std::vector<const DexString*>& lstring) const;
-  void gather_strings_shallow(
-      std::unordered_set<const DexString*>& lstring) const;
+  void gather_strings_shallow(UnorderedSet<const DexString*>& lstring) const;
 
   void change(const DexFieldSpec& ref, bool rename_on_collision = false);
 
@@ -325,14 +324,11 @@ class DexFieldRef {
   dex_member_refs::FieldDescriptorTokens get_descriptor_tokens() const;
 
   // This method frees the given `DexFieldRed` - different from `erase_field`,
-  // which removes the field from the `RedexContext`.
+  // which only removes the field from the `RedexContext`.
   //
   // BE SURE YOU REALLY WANT TO DO THIS! Many Redex passes and structures
   // currently cache references and do not clean up, including global ones.
-  static void delete_field_DO_NOT_USE(DexFieldRef* f) {
-    erase_field(f);
-    delete f;
-  }
+  static void delete_field_DO_NOT_USE(DexFieldRef* field);
 };
 
 class DexField : public DexFieldRef {
@@ -355,6 +351,11 @@ class DexField : public DexFieldRef {
   DexField(DexField&&) = delete;
   DexField(const DexField&) = delete;
   ~DexField();
+
+  // For friend classes to use with smart pointers.
+  struct Deleter {
+    void operator()(DexField* f) { delete f; }
+  };
 
   ReferencedState rstate =
       ReferencedState(RefStateType::FieldState); // Tracks whether this field
@@ -434,7 +435,7 @@ class DexField : public DexFieldRef {
   template <typename C>
   void gather_types(C& ltype) const;
   void gather_strings(std::vector<const DexString*>& lstring) const;
-  void gather_strings(std::unordered_set<const DexString*>& lstring) const;
+  void gather_strings(UnorderedSet<const DexString*>& lstring) const;
   template <typename C>
   void gather_fields(C& lfield) const;
   template <typename C>
@@ -595,7 +596,7 @@ class DexProto {
   template <typename C>
   void gather_types(C& ltype) const;
   void gather_strings(std::vector<const DexString*>& lstring) const;
-  void gather_strings(std::unordered_set<const DexString*>& lstring) const;
+  void gather_strings(UnorderedSet<const DexString*>& lstring) const;
 };
 
 /* Non-optimizing DexSpec compliant ordering */
@@ -850,8 +851,7 @@ class DexMethodRef {
   template <typename C>
   void gather_types_shallow(C& ltype) const;
   void gather_strings_shallow(std::vector<const DexString*>& lstring) const;
-  void gather_strings_shallow(
-      std::unordered_set<const DexString*>& lstring) const;
+  void gather_strings_shallow(UnorderedSet<const DexString*>& lstring) const;
 
   void change(const DexMethodSpec& ref, bool rename_on_collision);
 
@@ -868,6 +868,20 @@ class DexMethodRef {
   // This only removes the given method reference from the `RedexContext`, but
   // does not free the method.
   static void erase_method(DexMethodRef* mref);
+
+  // This method frees the given `DexMethod` - different from `erase_method`,
+  // which only removes the method from the `RedexContext`.
+  //
+  // BE SURE YOU REALLY WANT TO DO THIS! Many Redex passes and structures
+  // currently cache references and do not clean up, including global ones like
+  // `MethodProfiles` which maps `DexMethodRef`s to data.
+  static void delete_method_DO_NOT_USE(DexMethodRef* method);
+
+  // This method currently does *NOT* free the `DexMethod`, as there may still
+  // be references. This will free most resources associated with the
+  // DexMethod, though. Eventually this will become a full delete. For now, the
+  // leaked methods are registered with the RedexContext for tracking.
+  static void delete_method(DexMethodRef* method);
 
   dex_member_refs::MethodDescriptorTokens get_descriptor_tokens() const;
 };
@@ -1084,7 +1098,7 @@ class DexMethod : public DexMethodRef {
   void gather_methods_from_annos(C& lmethod) const;
   void gather_strings(std::vector<const DexString*>& lstring,
                       bool exclude_loads = false) const;
-  void gather_strings(std::unordered_set<const DexString*>& lstring,
+  void gather_strings(UnorderedSet<const DexString*>& lstring,
                       bool exclude_loads = false) const;
   template <typename C>
   void gather_callsites(C& lcallsite) const;
@@ -1105,25 +1119,12 @@ class DexMethod : public DexMethodRef {
   void balloon();
   void sync();
 
-  // This method frees the given `DexMethod` - different from `erase_method`,
-  // which removes the method from the `RedexContext`.
-  //
-  // BE SURE YOU REALLY WANT TO DO THIS! Many Redex passes and structures
-  // currently cache references and do not clean up, including global ones like
-  // `MethodProfiles` which maps `DexMethodRef`s to data.
-  static void delete_method_DO_NOT_USE(DexMethod* method) { delete method; }
-
-  // This method currently does *NOT* free the `DexMethod`, as there may still
-  // be references. This may will free most resources associated with the
-  // DexMethod, though. Eventually this will become a full delete.
-  static void delete_method(DexMethod* method);
-
  private:
   template <typename C>
   void gather_strings_internal(C& lstring, bool exclude_loads) const;
 };
 
-using dexcode_to_offset = std::unordered_map<DexCode*, uint32_t>;
+using dexcode_to_offset = UnorderedMap<DexCode*, uint32_t>;
 
 class DexLocation {
   friend struct RedexContext;
@@ -1345,7 +1346,7 @@ class DexClass {
   void gather_types(C& ltype) const;
   void gather_strings(std::vector<const DexString*>& lstring,
                       bool exclude_loads = false) const;
-  void gather_strings(std::unordered_set<const DexString*>& lstring,
+  void gather_strings(UnorderedSet<const DexString*>& lstring,
                       bool exclude_loads = false) const;
   template <typename C>
   void gather_fields(C& lfield) const;
@@ -1356,7 +1357,7 @@ class DexClass {
   template <typename C>
   void gather_methodhandles(C& lmethodhandle) const;
 
-  void gather_load_types(std::unordered_set<DexType*>& ltype) const;
+  void gather_load_types(UnorderedSet<DexType*>& ltype) const;
   void gather_init_classes(std::vector<DexType*>& ltype) const;
 
   // Whether to optimize for perf, instead of space.

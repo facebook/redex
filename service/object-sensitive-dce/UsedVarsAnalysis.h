@@ -93,7 +93,7 @@ class FixpointIterator final
 
  private:
   const DexMethod* m_method;
-  std::unordered_map<const IRInstruction*, local_pointers::Environment>
+  UnorderedMap<const IRInstruction*, local_pointers::Environment>
       m_insn_env_map;
   side_effects::InvokeToSummaryMap m_invoke_to_summary_map;
 };

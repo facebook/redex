@@ -69,8 +69,6 @@
 #include <map>
 #include <memory>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include <boost/format.hpp>
@@ -81,6 +79,7 @@
 #include "ConfigFiles.h"
 #include "Creators.h"
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexLimits.h"
@@ -336,8 +335,7 @@ using CandidateInstructionCores =
     std::array<CandidateInstructionCore, MIN_INSNS_SIZE>;
 using CandidateInstructionCoresHasher = boost::hash<CandidateInstructionCores>;
 using CandidateInstructionCoresSet =
-    std::unordered_set<CandidateInstructionCores,
-                       CandidateInstructionCoresHasher>;
+    UnorderedSet<CandidateInstructionCores, CandidateInstructionCoresHasher>;
 
 // The cores builder efficiently keeps track of the last MIN_INSNS_SIZE many
 // instructions.
@@ -407,7 +405,7 @@ static Candidate normalize(
     OutlinerTypeAnalysis& type_analysis,
     const PartialCandidate& pc,
     const boost::optional<std::pair<reg_t, bool>>& out_reg) {
-  std::unordered_map<reg_t, reg_t> map;
+  UnorderedMap<reg_t, reg_t> map;
   reg_t next_arg{pc.temp_regs};
   reg_t next_temp{0};
   Candidate c;
@@ -427,7 +425,7 @@ static Candidate normalize(
   };
   // We keep track of temp registers only needed along some
   // (conditional) control-flow paths.
-  using UndoMap = std::unordered_map<reg_t, boost::optional<reg_t>>;
+  using UndoMap = UnorderedMap<reg_t, boost::optional<reg_t>>;
   auto normalize_def = [&map, &next_temp](reg_t reg, bool wide,
                                           UndoMap* undo_map) {
     if (!undo_map->count(reg)) {
@@ -444,7 +442,7 @@ static Candidate normalize(
   std::function<void(const PartialCandidateNode&, CandidateNode* cn,
                      IRInstruction* last_out_reg_assignment_insn)>
       walk;
-  std::unordered_set<const IRInstruction*> out_reg_assignment_insns;
+  UnorderedSet<const IRInstruction*> out_reg_assignment_insns;
   walk = [&map, &normalize_use, &normalize_def, &out_reg,
           &out_reg_assignment_insns,
           &walk](const PartialCandidateNode& pcn, CandidateNode* cn,
@@ -474,7 +472,7 @@ static Candidate normalize(
       cn->succs.emplace_back(normalize(p.first), succ_cn);
       walk(*p.second, succ_cn.get(), last_out_reg_assignment_insn);
     }
-    for (auto& p : undo_map) {
+    for (auto& p : UnorderedIterable(undo_map)) {
       if (p.second) {
         map[p.first] = *p.second;
       } else {
@@ -722,17 +720,16 @@ static bool is_uniquely_reached_via_pred(cfg::Block* block) {
 // Check if starting from the given iterator, we have a tree-shaped
 // branching structure, and gather a common eventual target block where
 // the leaf blocks would unconditionally go to.
-static std::unordered_set<cfg::Block*> get_eventual_targets_after_outlining(
+static UnorderedSet<cfg::Block*> get_eventual_targets_after_outlining(
     cfg::Block* first_block, const cfg::InstructionIterator& it) {
   always_assert(opcode::is_a_conditional_branch(it->insn->opcode()) ||
                 opcode::is_switch(it->insn->opcode()));
   auto get_targets =
-      [first_block](
-          cfg::Block* start_block) -> std::unordered_set<cfg::Block*> {
+      [first_block](cfg::Block* start_block) -> UnorderedSet<cfg::Block*> {
     // The target could be the start block itself, if we don't find any other
     // eligible targets, or the target(s) we find at the end of further
     // conditional control-flow.
-    std::unordered_set<cfg::Block*> targets{start_block};
+    UnorderedSet<cfg::Block*> targets{start_block};
     if (is_uniquely_reached_via_pred(start_block)) {
       auto big_block = big_blocks::get_big_block(start_block);
       if (big_block && big_block->same_try(first_block)) {
@@ -745,7 +742,7 @@ static std::unordered_set<cfg::Block*> get_eventual_targets_after_outlining(
               last_block->to_cfg_instruction_iterator(last_insn_it);
           auto more_targets = get_eventual_targets_after_outlining(
               start_block, last_insn_cfg_it);
-          targets.insert(more_targets.begin(), more_targets.end());
+          insert_unordered_iterable(targets, more_targets);
         } else {
           auto goes_to = last_block->goes_to();
           if (goes_to) {
@@ -759,7 +756,7 @@ static std::unordered_set<cfg::Block*> get_eventual_targets_after_outlining(
   auto block = it.block();
   auto succs = get_ordered_goto_and_branch_succs(block);
   if (succs.empty()) {
-    return std::unordered_set<cfg::Block*>();
+    return UnorderedSet<cfg::Block*>();
   }
   // We start with the targets of the first successor, and narrow them down
   // with all other successor targets.
@@ -767,15 +764,15 @@ static std::unordered_set<cfg::Block*> get_eventual_targets_after_outlining(
   auto targets = get_targets((*succs_it)->target());
   for (succs_it++; succs_it != succs.end() && !targets.empty(); succs_it++) {
     auto other_targets = get_targets((*succs_it)->target());
-    std20::erase_if(targets, [&](auto* b) { return !other_targets.count(b); });
+    unordered_erase_if(targets,
+                       [&](auto* b) { return !other_targets.count(b); });
   }
   return targets;
 }
 
-using MethodCandidates =
-    std::unordered_map<Candidate,
-                       std::vector<CandidateMethodLocation>,
-                       CandidateHasher>;
+using MethodCandidates = UnorderedMap<Candidate,
+                                      std::vector<CandidateMethodLocation>,
+                                      CandidateHasher>;
 
 // Callback invoked when either...
 // - one more instruction was successfully appended to the partial candidate,
@@ -847,7 +844,7 @@ static bool explore_candidates_from(
       auto succs = get_ordered_goto_and_branch_succs(block);
       auto defined_regs_copy = pcn->defined_regs;
       pcn->defined_regs.clear();
-      auto next_block = *targets.begin();
+      auto next_block = *unordered_any(targets);
       for (auto succ_edge : succs) {
         auto succ_pcn = std::make_shared<PartialCandidateNode>();
         pcn->succs.emplace_back(succ_edge, succ_pcn);
@@ -867,7 +864,7 @@ static bool explore_candidates_from(
             return false;
           }
         }
-        for (auto& q : succ_pcn->defined_regs) {
+        for (auto& q : UnorderedIterable(succ_pcn->defined_regs)) {
           auto defined_regs_it = pcn->defined_regs.find(q.first);
           if (defined_regs_it == pcn->defined_regs.end()) {
             pcn->defined_regs.insert(q);
@@ -947,10 +944,9 @@ static MethodCandidates find_method_candidates(
     res->run({});
     return res;
   });
-  LazyUnorderedMap<cfg::Block*,
-                   std::unordered_map<IRInstruction*, LivenessDomain>>
+  LazyUnorderedMap<cfg::Block*, UnorderedMap<IRInstruction*, LivenessDomain>>
       live_outs([&liveness_fp_iter](cfg::Block* block) {
-        std::unordered_map<IRInstruction*, LivenessDomain> res;
+        UnorderedMap<IRInstruction*, LivenessDomain> res;
         auto live_out = liveness_fp_iter->get_live_out_vars_at(block);
         for (auto it = block->rbegin(); it != block->rend(); ++it) {
           if (it->type != MFLOW_OPCODE) {
@@ -987,16 +983,15 @@ static MethodCandidates find_method_candidates(
   // Along big blocks, we are assigning consecutive indices to instructions.
   // We'll use this to manage ranges of instructions that need to get
   // invalidated when overlapping ranges of insturctions are outlined.
-  Lazy<std::unordered_map<const IRInstruction*, size_t>> insn_idxes(
-      [&big_blocks]() {
-        std::unordered_map<const IRInstruction*, size_t> res;
-        for (auto& big_block : big_blocks) {
-          for (const auto& mie : big_blocks::InstructionIterable(big_block)) {
-            res.emplace(mie.insn, res.size());
-          }
-        }
-        return res;
-      });
+  Lazy<UnorderedMap<const IRInstruction*, size_t>> insn_idxes([&big_blocks]() {
+    UnorderedMap<const IRInstruction*, size_t> res;
+    for (auto& big_block : big_blocks) {
+      for (const auto& mie : big_blocks::InstructionIterable(big_block)) {
+        res.emplace(mie.insn, res.size());
+      }
+    }
+    return res;
+  });
 
   struct {
 #define FOR_EACH(name) size_t name{0};
@@ -1034,7 +1029,7 @@ static MethodCandidates find_method_candidates(
                 next_block ? liveness_fp_iter->get_live_in_vars_at(next_block)
                            : live_outs[it.block()].at(it->insn);
             auto first_block_throw_live_out = throw_live_out[first_block];
-            for (auto& p : pc.root.defined_regs) {
+            for (auto& p : UnorderedIterable(pc.root.defined_regs)) {
               if (first_block_throw_live_out.contains(p.first)) {
                 TRACE(ISO, 4,
                       "[invoke sequence outliner] [bail out] Cannot return "
@@ -1204,10 +1199,10 @@ static void get_recurring_cores(
     const Config& config,
     PassManager& mgr,
     const Scope& scope,
-    const std::unordered_set<size_t>& throughput_interaction_indices,
-    const std::unordered_set<DexMethod*>& throughput_methods,
-    const std::unordered_set<DexMethod*>& sufficiently_warm_methods,
-    const std::unordered_set<DexMethod*>& sufficiently_hot_methods,
+    const UnorderedSet<size_t>& throughput_interaction_indices,
+    const UnorderedSet<DexMethod*>& throughput_methods,
+    const UnorderedSet<DexMethod*>& sufficiently_warm_methods,
+    const UnorderedSet<DexMethod*>& sufficiently_hot_methods,
     const RefChecker& ref_checker,
     CandidateInstructionCoresSet* recurring_cores,
     InsertOnlyConcurrentMap<DexMethod*, CanOutlineBlockDecider>*
@@ -1261,7 +1256,7 @@ static void get_recurring_cores(
         block_deciders->emplace(method, std::move(block_decider));
       });
   size_t singleton_cores{0};
-  for (auto& p : concurrent_cores) {
+  for (auto& p : UnorderedIterable(concurrent_cores)) {
     auto count = p.second.load();
     always_assert(count > 0);
     if (count > 1) {
@@ -1283,7 +1278,7 @@ static void get_recurring_cores(
 ////////////////////////////////////////////////////////////////////////////////
 
 struct CandidateInfo {
-  std::unordered_map<DexMethod*, std::vector<CandidateMethodLocation>> methods;
+  UnorderedMap<DexMethod*, std::vector<CandidateMethodLocation>> methods;
   size_t count{0};
 };
 
@@ -1296,15 +1291,13 @@ struct ReusableOutlinedMethods {
     DexMethod* method;
     std::set<uint32_t> pattern_ids;
   };
-  std::unordered_map<Candidate, std::deque<OutlinedMethod>, CandidateHasher>
-      map;
+  UnorderedMap<Candidate, std::deque<OutlinedMethod>, CandidateHasher> map;
   std::vector<Candidate> order;
 };
 
-std::unordered_set<const DexType*> get_declaring_types(
-    const CandidateInfo& ci) {
-  std::unordered_set<const DexType*> types;
-  for (auto& p : ci.methods) {
+UnorderedSet<const DexType*> get_declaring_types(const CandidateInfo& ci) {
+  UnorderedSet<const DexType*> types;
+  for (auto& p : UnorderedIterable(ci.methods)) {
     types.insert(p.first->get_class());
   }
   return types;
@@ -1315,11 +1308,11 @@ std::unordered_set<const DexType*> get_declaring_types(
 // includes all transitive super classes associated with a count of how many of
 // the original types share this ancestor. If the count is equal to the number
 // of the original types, then it must be a common base class.
-std::unordered_set<const DexType*> get_common_super_classes(
-    const std::unordered_set<const DexType*>& types) {
-  std::unordered_map<const DexType*, size_t> counted_super_classes;
-  std::unordered_set<const DexType*> common_super_classes;
-  for (auto t : types) {
+UnorderedSet<const DexType*> get_common_super_classes(
+    const UnorderedSet<const DexType*>& types) {
+  UnorderedMap<const DexType*, size_t> counted_super_classes;
+  UnorderedSet<const DexType*> common_super_classes;
+  for (auto t : UnorderedIterable(types)) {
     do {
       if (++counted_super_classes[t] == types.size()) {
         common_super_classes.insert(t);
@@ -1334,10 +1327,10 @@ std::unordered_set<const DexType*> get_common_super_classes(
   return common_super_classes;
 }
 
-std::unordered_set<const DexType*> get_super_classes(
-    const std::unordered_set<const DexType*>& types) {
-  std::unordered_set<const DexType*> super_classes;
-  for (auto t : types) {
+UnorderedSet<const DexType*> get_super_classes(
+    const UnorderedSet<const DexType*>& types) {
+  UnorderedSet<const DexType*> super_classes;
+  for (auto t : UnorderedIterable(types)) {
     do {
       if (!super_classes.insert(t).second) {
         break;
@@ -1356,11 +1349,11 @@ std::unordered_set<const DexType*> get_super_classes(
 // unconditionally initialized when the instructions run. In case of multiple
 // successors, only types in common by all successors are considered. The result
 // may include super types.
-std::unordered_set<const DexType*> get_referenced_types(const Candidate& c) {
-  std::function<std::unordered_set<const DexType*>(const CandidateNode& cn)>
+UnorderedSet<const DexType*> get_referenced_types(const Candidate& c) {
+  std::function<UnorderedSet<const DexType*>(const CandidateNode& cn)>
       gather_types;
   gather_types = [&gather_types](const CandidateNode& cn) {
-    std::unordered_set<const DexType*> types;
+    UnorderedSet<const DexType*> types;
     auto insert_internal_type = [&types](const DexType* t) {
       auto cls = type_class(t);
       if (cls && !cls->is_external()) {
@@ -1389,9 +1382,10 @@ std::unordered_set<const DexType*> get_referenced_types(const Candidate& c) {
       }
     }
     if (!cn.succs.empty()) {
-      std::unordered_map<const DexType*, size_t> successor_types;
+      UnorderedMap<const DexType*, size_t> successor_types;
       for (auto& p : cn.succs) {
-        for (auto type : get_super_classes(gather_types(*p.second))) {
+        auto super_classes = get_super_classes(gather_types(*p.second));
+        for (auto type : UnorderedIterable(super_classes)) {
           if (++successor_types[type] == cn.succs.size()) {
             types.insert(type);
           }
@@ -1499,7 +1493,7 @@ static void get_beneficial_candidates(
         block_deciders,
     const ReusableOutlinedMethods* outlined_methods,
     std::vector<CandidateWithInfo>* candidates_with_infos,
-    std::unordered_map<DexMethod*, std::unordered_set<CandidateId>>*
+    UnorderedMap<DexMethod*, UnorderedSet<CandidateId>>*
         candidate_ids_by_methods) {
   ConcurrentMap<Candidate, CandidateInfo, CandidateHasher>
       concurrent_candidates;
@@ -1510,9 +1504,10 @@ static void get_beneficial_candidates(
     if (!can_outline_from_method(method)) {
       return;
     }
-    for (auto& p : find_method_candidates(
-             config, ref_checker, block_deciders.at_unsafe(method), method,
-             code.cfg(), recurring_cores, &stats)) {
+    auto method_candidates = find_method_candidates(
+        config, ref_checker, block_deciders.at_unsafe(method), method,
+        code.cfg(), recurring_cores, &stats);
+    for (auto& p : UnorderedIterable(method_candidates)) {
       std::vector<CandidateMethodLocation>& cmls = p.second;
       concurrent_candidates.update(p.first,
                                    [method, &cmls](const Candidate&,
@@ -1526,15 +1521,15 @@ static void get_beneficial_candidates(
 #define FOR_EACH(name) mgr.incr_metric("num_candidate_" #name, stats.name);
   STATS
 #undef FOR_EACH
-  using CandidateSet = std::unordered_set<Candidate, CandidateHasher>;
+  using CandidateSet = UnorderedSet<Candidate, CandidateHasher>;
   std::map<DexMethod*, CandidateSet, dexmethods_comparator>
       candidates_by_methods;
   size_t beneficial_count{0}, maleficial_count{0};
-  for (auto& p : concurrent_candidates) {
+  for (auto& p : UnorderedIterable(concurrent_candidates)) {
     if (get_savings(config, store, store_dependencies, p.first, p.second,
                     *outlined_methods) > 0) {
       beneficial_count += p.second.count;
-      for (auto& q : p.second.methods) {
+      for (auto& q : UnorderedIterable(p.second.methods)) {
         candidates_by_methods[q.first].insert(p.first);
       }
     } else {
@@ -1548,12 +1543,15 @@ static void get_beneficial_candidates(
   mgr.incr_metric("num_beneficial_candidates", beneficial_count);
   mgr.incr_metric("num_maleficial_candidates", maleficial_count);
   // Deterministically compute unique candidate ids
-  std::unordered_map<Candidate, CandidateId, CandidateHasher> candidate_ids;
+  UnorderedMap<Candidate, CandidateId, CandidateHasher> candidate_ids;
   for (auto& p : candidates_by_methods) {
     auto& method_candidate_ids = (*candidate_ids_by_methods)[p.first];
-    std::vector<std::pair<CandidateMethodLocation, CandidateSet::iterator>>
+    auto&& ui = UnorderedIterable(p.second);
+    using CandidateSetIterator =
+        std::remove_reference_t<decltype(ui)>::iterator;
+    std::vector<std::pair<CandidateMethodLocation, CandidateSetIterator>>
         ordered;
-    for (auto it = p.second.begin(); it != p.second.end(); it++) {
+    for (auto it = ui.begin(); it != ui.end(); it++) {
       auto& c = *it;
       auto id_it = candidate_ids.find(c);
       if (id_it != candidate_ids.end()) {
@@ -1567,9 +1565,8 @@ static void get_beneficial_candidates(
     }
     std::sort(
         ordered.begin(), ordered.end(),
-        [](const std::pair<CandidateMethodLocation, CandidateSet::iterator>& a,
-           const std::pair<CandidateMethodLocation, CandidateSet::iterator>&
-               b) {
+        [](const std::pair<CandidateMethodLocation, CandidateSetIterator>& a,
+           const std::pair<CandidateMethodLocation, CandidateSetIterator>& b) {
           auto& a_ranges = a.first.ranges;
           auto& b_ranges = b.first.ranges;
           if (a_ranges.size() != b_ranges.size()) {
@@ -1630,7 +1627,7 @@ static bool has_non_init_invoke_directs(const Candidate& c) {
 class MethodNameGenerator {
  private:
   PassManager& m_mgr;
-  std::unordered_map<StableHash, size_t> m_unique_method_ids;
+  UnorderedMap<StableHash, size_t> m_unique_method_ids;
   size_t m_max_unique_method_id{0};
   size_t m_iteration;
   size_t short_id_counter{0};
@@ -1685,7 +1682,7 @@ static DexPosition* skip_fileless(DexPosition* pos) {
   return pos;
 }
 
-using CallSitePatternIds = std::unordered_map<IRInstruction*, uint32_t>;
+using CallSitePatternIds = UnorderedMap<IRInstruction*, uint32_t>;
 
 class OutlinedMethodCreator {
  private:
@@ -1694,7 +1691,7 @@ class OutlinedMethodCreator {
   MethodNameGenerator& m_method_name_generator;
   size_t m_outlined_methods{0};
   CallSitePatternIds m_call_site_pattern_ids;
-  std::unordered_map<DexMethod*, std::unique_ptr<DexPosition>>
+  UnorderedMap<DexMethod*, std::unique_ptr<DexPosition>>
       m_unique_entry_positions;
 
   // Gets the set of unique dbg-position patterns.
@@ -1712,7 +1709,7 @@ class OutlinedMethodCreator {
       auto manager = g_redex->get_position_pattern_switch_manager();
       const auto& all_managed_patterns = manager->get_patterns();
       for (auto pattern_id : pattern_ids) {
-        std::unordered_set<DexPosition*> unique_positions;
+        UnorderedSet<DexPosition*> unique_positions;
         for (auto pos : all_managed_patterns.at(pattern_id)) {
           unique_positions.insert(pos);
         }
@@ -1743,13 +1740,8 @@ class OutlinedMethodCreator {
                                           std::set<uint32_t>* pattern_ids) {
     auto manager = g_redex->get_position_pattern_switch_manager();
     // Order methods to make sure we get deterministic pattern-ids.
-    std::vector<DexMethod*> ordered_methods;
-    ordered_methods.reserve(ci.methods.size());
-    for (auto& p : ci.methods) {
-      ordered_methods.push_back(p.first);
-    }
-    std::sort(ordered_methods.begin(), ordered_methods.end(),
-              compare_dexmethods);
+    auto ordered_methods =
+        unordered_to_ordered_keys(ci.methods, compare_dexmethods);
     for (auto method : ordered_methods) {
       auto& cmls = ci.methods.at(method);
       for (auto& cml : cmls) {
@@ -2030,9 +2022,9 @@ class DexState {
   PassManager& m_mgr;
   DexClasses& m_dex;
   size_t m_dex_id;
-  std::unordered_set<const DexType*> m_type_refs;
+  UnorderedSet<const DexType*> m_type_refs;
   size_t m_method_refs_count;
-  std::unordered_map<const DexType*, size_t> m_class_ids;
+  UnorderedMap<const DexType*, size_t> m_class_ids;
   size_t max_type_refs;
 
  public:
@@ -2047,7 +2039,7 @@ class DexState {
            size_t reserved_trefs,
            size_t reserved_mrefs)
       : m_mgr(mgr), m_dex(dex), m_dex_id(dex_id) {
-    std::unordered_set<DexMethodRef*> method_refs;
+    UnorderedSet<DexMethodRef*> method_refs;
     std::vector<DexType*> init_classes;
     for (auto cls : dex) {
       cls->gather_methods(method_refs);
@@ -2060,7 +2052,7 @@ class DexState {
       class_ids.emplace(cls->get_type(), class_ids.size());
     });
 
-    std::unordered_set<DexType*> refined_types;
+    UnorderedSet<DexType*> refined_types;
     for (auto type : init_classes) {
       auto refined_type = init_classes_with_side_effects.refine(type);
       if (refined_type) {
@@ -2073,9 +2065,9 @@ class DexState {
 
   size_t get_dex_id() { return m_dex_id; }
 
-  bool can_insert_type_refs(const std::unordered_set<const DexType*>& types) {
+  bool can_insert_type_refs(const UnorderedSet<const DexType*>& types) {
     size_t inserted_count{0};
-    for (auto t : types) {
+    for (auto t : UnorderedIterable(types)) {
       if (!m_type_refs.count(t)) {
         inserted_count++;
       }
@@ -2091,9 +2083,9 @@ class DexState {
     return true;
   }
 
-  void insert_type_refs(const std::unordered_set<const DexType*>& types) {
+  void insert_type_refs(const UnorderedSet<const DexType*>& types) {
     always_assert(can_insert_type_refs(types));
-    m_type_refs.insert(types.begin(), types.end());
+    insert_unordered_iterable(m_type_refs, types);
     always_assert(m_type_refs.size() < max_type_refs);
   }
 
@@ -2213,14 +2205,14 @@ class HostClassSelector {
   }
 
   const DexType* get_direct_or_base_class(
-      std::unordered_set<const DexType*> types,
-      const std::function<std::unordered_set<const DexType*>(
-          const std::unordered_set<const DexType*>&)>& get_super_classes,
+      UnorderedSet<const DexType*> types,
+      const std::function<UnorderedSet<const DexType*>(
+          const UnorderedSet<const DexType*>&)>& get_super_classes,
       const std::function<bool(const DexType*)>& predicate =
           [](const DexType*) { return true; }) {
     // When there's only one type, try to use that
     if (types.size() == 1) {
-      auto direct_type = *types.begin();
+      auto direct_type = *unordered_any(types);
       if (m_dex_state.get_class_id(direct_type) && predicate(direct_type)) {
         auto direct_cls = type_class(direct_type);
         always_assert(direct_cls);
@@ -2233,7 +2225,8 @@ class HostClassSelector {
     // Try to find the first allowable base types
     const DexType* host_class{nullptr};
     boost::optional<size_t> host_class_id;
-    for (auto type : get_super_classes(types)) {
+    auto super_classes = get_super_classes(types);
+    for (auto type : UnorderedIterable(super_classes)) {
       auto class_id = m_dex_state.get_class_id(type);
       if (!class_id || !predicate(type)) {
         continue;
@@ -2286,7 +2279,7 @@ class HostClassSelector {
     auto host_class =
         get_direct_or_base_class(declaring_types, get_common_super_classes);
     if (declaring_types.size() == 1) {
-      auto direct_type = *declaring_types.begin();
+      auto direct_type = *unordered_any(declaring_types);
       if (host_class == direct_type && can_be_host_class(host_class)) {
         m_hosted_direct_count++;
         return host_class;
@@ -2311,7 +2304,8 @@ class HostClassSelector {
     auto referenced_types = get_referenced_types(c);
     // Let's see if we can reduce the set to a most specific sub-type
     if (referenced_types.size() > 1) {
-      for (auto t : get_common_super_classes(referenced_types)) {
+      auto common_super_classes = get_common_super_classes(referenced_types);
+      for (auto t : UnorderedIterable(common_super_classes)) {
         referenced_types.erase(t);
       }
     }
@@ -2331,8 +2325,7 @@ class HostClassSelector {
   }
 };
 
-using NewlyOutlinedMethods =
-    std::unordered_map<DexMethod*, std::vector<DexMethod*>>;
+using NewlyOutlinedMethods = UnorderedMap<DexMethod*, std::vector<DexMethod*>>;
 
 // Outlining all occurrences of a particular candidate.
 bool outline_candidate(const Config& config,
@@ -2350,7 +2343,7 @@ bool outline_candidate(const Config& config,
   // Before attempting to create or reuse an outlined method that hasn't been
   // referenced in this dex before, we'll make sure that all the involved
   // type refs can be added to the dex. We collect those type refs.
-  std::unordered_set<const DexType*> type_refs_to_insert;
+  UnorderedSet<const DexType*> type_refs_to_insert;
   for (auto t : c.arg_types) {
     type_refs_to_insert.insert(const_cast<DexType*>(t));
   }
@@ -2409,7 +2402,7 @@ bool outline_candidate(const Config& config,
     outlined_methods->map[c].push_back(
         {store, outlined_method, position_pattern_ids});
     auto& methods = (*newly_outlined_methods)[outlined_method];
-    for (auto& p : ci.methods) {
+    for (auto& p : UnorderedIterable(ci.methods)) {
       methods.push_back(p.first);
     }
   }
@@ -2418,7 +2411,7 @@ bool outline_candidate(const Config& config,
   dex_state->insert_type_refs(type_refs_to_insert);
   auto call_site_pattern_ids =
       outlined_method_creator->get_call_site_pattern_ids();
-  for (auto& p : ci.methods) {
+  for (auto& p : UnorderedIterable(ci.methods)) {
     auto method = p.first;
     // If any outlined method comes from BETAMAP class, its host class should
     // also marked as BETAMAP_ORDERED.
@@ -2455,7 +2448,7 @@ static NewlyOutlinedMethods outline(
     DexState& dex_state,
     int min_sdk,
     std::vector<CandidateWithInfo>* candidates_with_infos,
-    std::unordered_map<DexMethod*, std::unordered_set<CandidateId>>*
+    UnorderedMap<DexMethod*, UnorderedSet<CandidateId>>*
         candidate_ids_by_methods,
     ReusableOutlinedMethods* outlined_methods,
     size_t iteration,
@@ -2491,7 +2484,7 @@ static NewlyOutlinedMethods outline(
   auto erase = [&pq, candidate_ids_by_methods](CandidateId id,
                                                CandidateWithInfo& cwi) {
     pq.erase(id);
-    for (auto& p : cwi.info.methods) {
+    for (auto& p : UnorderedIterable(cwi.info.methods)) {
       (*candidate_ids_by_methods)[p.first].erase(id);
     }
     cwi.info.methods.clear();
@@ -2536,11 +2529,12 @@ static NewlyOutlinedMethods outline(
     }
 
     // Remove overlapping occurrences
-    std::unordered_set<CandidateId> other_candidate_ids_with_changes;
-    for (auto& p : cwi.info.methods) {
+    UnorderedSet<CandidateId> other_candidate_ids_with_changes;
+    for (auto& p : UnorderedIterable(cwi.info.methods)) {
       auto method = p.first;
       auto& cmls = p.second;
-      for (auto other_id : candidate_ids_by_methods->at(method)) {
+      for (auto other_id :
+           UnorderedIterable(candidate_ids_by_methods->at(method))) {
         if (other_id == id) {
           continue;
         }
@@ -2562,7 +2556,7 @@ static NewlyOutlinedMethods outline(
     }
     erase(id, cwi);
     // Update priorities of affected candidates
-    for (auto other_id : other_candidate_ids_with_changes) {
+    for (auto other_id : UnorderedIterable(other_candidate_ids_with_changes)) {
       auto& other_cwi = candidates_with_infos->at(other_id);
       auto other_savings =
           get_savings(config, store, store_dependencies, other_cwi.candidate,
@@ -2591,8 +2585,8 @@ static NewlyOutlinedMethods outline(
 
 size_t count_affected_methods(
     const NewlyOutlinedMethods& newly_outlined_methods) {
-  std::unordered_set<DexMethod*> methods;
-  for (auto& p : newly_outlined_methods) {
+  UnorderedSet<DexMethod*> methods;
+  for (auto& p : UnorderedIterable(newly_outlined_methods)) {
     methods.insert(p.second.begin(), p.second.end());
   }
   return methods.size();
@@ -2602,7 +2596,7 @@ size_t count_affected_methods(
 // reorder_with_method_profiles
 ////////////////////////////////////////////////////////////////////////////////
 
-std::unordered_map<const DexMethodRef*, double> get_methods_global_order(
+UnorderedMap<const DexMethodRef*, double> get_methods_global_order(
     ConfigFiles& config_files, const Config& config) {
   if (!config.reorder_with_method_profiles) {
     return {};
@@ -2612,7 +2606,7 @@ std::unordered_map<const DexMethodRef*, double> get_methods_global_order(
     return {};
   }
 
-  std::unordered_map<std::string, size_t> interaction_indices;
+  UnorderedMap<std::string, size_t> interaction_indices;
   auto register_interaction = [&](const std::string& interaction_id) {
     return interaction_indices
         .emplace(interaction_id, interaction_indices.size())
@@ -2620,7 +2614,7 @@ std::unordered_map<const DexMethodRef*, double> get_methods_global_order(
   };
   // Make sure that the "ColdStart" interaction comes before everything else
   register_interaction("ColdStart");
-  std::unordered_map<const DexMethodRef*, double> methods_global_order;
+  UnorderedMap<const DexMethodRef*, double> methods_global_order;
   for (auto& p : method_profiles.all_interactions()) {
     auto& interaction_id = p.first;
     auto& method_stats = p.second;
@@ -2628,26 +2622,21 @@ std::unordered_map<const DexMethodRef*, double> get_methods_global_order(
     TRACE(ISO, 3,
           "[instruction sequence outliner] Interaction [%s] gets index %zu",
           interaction_id.c_str(), index);
-    for (auto& q : method_stats) {
+    for (auto& q : UnorderedIterable(method_stats)) {
       auto& global_order = methods_global_order[q.first];
       global_order =
           std::min(global_order, index * 100 + q.second.order_percent);
     }
   }
-  std::vector<const DexMethodRef*> ordered_methods;
-  ordered_methods.reserve(methods_global_order.size());
-  for (auto& p : methods_global_order) {
-    ordered_methods.push_back(p.first);
-  }
-  std::sort(ordered_methods.begin(), ordered_methods.end(),
-            [&](const DexMethodRef* a, const DexMethodRef* b) {
-              auto a_order = methods_global_order.at(a);
-              auto b_order = methods_global_order.at(b);
-              if (a_order != b_order) {
-                return a_order < b_order;
-              }
-              return compare_dexmethods(a, b);
-            });
+  auto ordered_methods = unordered_to_ordered_keys(
+      methods_global_order, [&](const DexMethodRef* a, const DexMethodRef* b) {
+        auto a_order = methods_global_order.at(a);
+        auto b_order = methods_global_order.at(b);
+        if (a_order != b_order) {
+          return a_order < b_order;
+        }
+        return compare_dexmethods(a, b);
+      });
   TRACE(ISO, 4, "[instruction sequence outliner] %zu globally ordered methods",
         ordered_methods.size());
   for (auto method : ordered_methods) {
@@ -2661,16 +2650,16 @@ void reorder_with_method_profiles(
     const Config& config,
     PassManager& mgr,
     const Scope& dex,
-    const std::unordered_map<const DexMethodRef*, double>& methods_global_order,
+    const UnorderedMap<const DexMethodRef*, double>& methods_global_order,
     const NewlyOutlinedMethods& newly_outlined_methods) {
   if (methods_global_order.empty()) {
     return;
   }
 
-  std::unordered_map<const DexMethod*, double> outlined_methods_global_order;
+  UnorderedMap<const DexMethod*, double> outlined_methods_global_order;
   std::vector<DexMethod*> ordered_outlined_methods;
-  std::unordered_set<DexClass*> outlined_classes;
-  for (auto& p : newly_outlined_methods) {
+  UnorderedSet<DexClass*> outlined_classes;
+  for (auto& p : UnorderedIterable(newly_outlined_methods)) {
     auto cls = type_class(p.first->get_class());
     if (!cls->rstate.outlined()) {
       continue;
@@ -2789,7 +2778,7 @@ using OutlinedMethodsToReorder =
 void reorder_all_methods(
     const Config& config,
     PassManager& mgr,
-    const std::unordered_map<const DexMethodRef*, double>& methods_global_order,
+    const UnorderedMap<const DexMethodRef*, double>& methods_global_order,
     const OutlinedMethodsToReorder& outlined_methods_to_reorder) {
   for (auto& dex_methods_pair : outlined_methods_to_reorder) {
     auto& dex = dex_methods_pair.first;
@@ -2808,7 +2797,7 @@ size_t derive_method_profiles_stats(
   auto& method_profiles = config.get_method_profiles();
   size_t res = 0;
   for (auto& [dex, outlined_methods] : outlined_methods_by_dex) {
-    for (auto& [target, sources] : outlined_methods) {
+    for (auto& [target, sources] : UnorderedIterable(outlined_methods)) {
       res += method_profiles.derive_stats(target, sources);
     }
   }
@@ -2868,7 +2857,7 @@ class OutlinedMethodBodySetter {
       code->set_debug_item(std::make_unique<DexDebugItem>());
     }
     std::function<void(const CandidateNode& cn)> walk;
-    std::unordered_map<DexPosition*, DexPosition*> cloned_dbg_positions;
+    UnorderedMap<DexPosition*, DexPosition*> cloned_dbg_positions;
     std::function<DexPosition*(DexPosition*)> get_or_add_cloned_dbg_position;
     get_or_add_cloned_dbg_position =
         [this, &code, &get_or_add_cloned_dbg_position,
@@ -2894,7 +2883,7 @@ class OutlinedMethodBodySetter {
             &get_or_add_cloned_dbg_position,
             &dbg_positions_idx](const CandidateNode& cn) {
       m_outlined_method_nodes++;
-      std::unordered_map<uint32_t, DexPosition*> last_dbg_poses;
+      UnorderedMap<uint32_t, DexPosition*> last_dbg_poses;
       for (auto& p : current_patterns) {
         last_dbg_poses.emplace(p.first, nullptr);
       }
@@ -3034,18 +3023,20 @@ size_t update_method_profiles(
   // names.
 
   auto& method_profiles = config.get_method_profiles();
-  std::unordered_map<std::string_view,
-                     std::vector<dex_member_refs::MethodDescriptorTokens>>
+  UnorderedMap<std::string_view,
+               std::vector<dex_member_refs::MethodDescriptorTokens>>
       unresolved_names;
-  for (auto& mdt : method_profiles.get_unresolved_method_descriptor_tokens()) {
+  auto mdts = method_profiles.get_unresolved_method_descriptor_tokens();
+  for (auto& mdt : UnorderedIterable(mdts)) {
     unresolved_names[mdt.name].push_back(mdt);
   }
-  std::unordered_map<dex_member_refs::MethodDescriptorTokens,
-                     std::vector<DexMethodRef*>>
+  UnorderedMap<dex_member_refs::MethodDescriptorTokens,
+               std::vector<DexMethodRef*>>
       map;
   size_t count{0};
   for (auto& [dex, outlined_methods] : outlined_methods_to_reorder) {
-    for (auto&& [outlined_method, methods] : outlined_methods) {
+    for (auto&& [outlined_method, methods] :
+         UnorderedIterable(outlined_methods)) {
       auto name = outlined_method->get_name();
       auto it = unresolved_names.find(name->str());
       if (it == unresolved_names.end()) {
@@ -3209,17 +3200,17 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, config.create_init_class_insns());
 
-  std::unordered_set<size_t> throughput_interaction_indices;
-  std::unordered_set<std::string> throughput_interaction_ids;
+  UnorderedSet<size_t> throughput_interaction_indices;
+  UnorderedSet<std::string> throughput_interaction_ids;
   get_throughput_interactions(config, m_config.profile_guidance,
                               &throughput_interaction_indices,
                               &throughput_interaction_ids);
   mgr.incr_metric("num_throughput_interactions",
                   throughput_interaction_ids.size());
 
-  std::unordered_set<DexMethod*> throughput_methods;
-  std::unordered_set<DexMethod*> sufficiently_warm_methods;
-  std::unordered_set<DexMethod*> sufficiently_hot_methods;
+  UnorderedSet<DexMethod*> throughput_methods;
+  UnorderedSet<DexMethod*> sufficiently_warm_methods;
+  UnorderedSet<DexMethod*> sufficiently_hot_methods;
   gather_sufficiently_warm_and_hot_methods(
       scope, config, mgr, m_config.profile_guidance, throughput_interaction_ids,
       &throughput_methods, &sufficiently_warm_methods,
@@ -3278,7 +3269,7 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
                           sufficiently_hot_methods, ref_checker,
                           &recurring_cores, &block_deciders);
       std::vector<CandidateWithInfo> candidates_with_infos;
-      std::unordered_map<DexMethod*, std::unordered_set<CandidateId>>
+      UnorderedMap<DexMethod*, UnorderedSet<CandidateId>>
           candidate_ids_by_methods;
       get_beneficial_candidates(m_config, mgr, store, store_dependencies, dex,
                                 ref_checker, recurring_cores, block_deciders,

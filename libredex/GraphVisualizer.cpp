@@ -15,6 +15,7 @@
 
 #include "ControlFlow.h"
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexPosition.h"
 #include "IRCode.h"
 #include "Show.h"
@@ -485,8 +486,8 @@ class CFGVisualizer : public CodeVisualizer<CFGVisualizer> {
 
  private:
   ControlFlowGraph* m_cfg;
-  std::unordered_map<const MethodItemEntry*, size_t> m_mie_id_map;
-  std::unordered_map<const IRInstruction*, size_t> m_insn_id_map;
+  UnorderedMap<const MethodItemEntry*, size_t> m_mie_id_map;
+  UnorderedMap<const IRInstruction*, size_t> m_insn_id_map;
   std::unordered_set<Block*> m_exc_blocks;
 };
 
@@ -562,7 +563,7 @@ class IRCodeVisualizer : public CodeVisualizer<IRCodeVisualizer> {
 
  private:
   IRCode* m_code;
-  std::unordered_map<const MethodItemEntry*, size_t> m_mie_id_map;
+  UnorderedMap<const MethodItemEntry*, size_t> m_mie_id_map;
 };
 
 } // namespace

@@ -8,12 +8,10 @@
 #pragma once
 
 #include <boost/functional/hash.hpp>
-#include <boost/range/adaptor/filtered.hpp>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "Liveness.h"
 #include "RegisterType.h"
 
@@ -64,7 +62,7 @@ class RangeSet {
 
  private:
   std::vector<IRInstruction*> m_range_vec;
-  std::unordered_set<IRInstruction*> m_range_set;
+  UnorderedSet<IRInstruction*> m_range_set;
 };
 
 namespace interference {
@@ -172,23 +170,12 @@ class Node {
 };
 
 class Graph {
-  struct ActiveFilter {
-    bool operator()(const std::pair<reg_t, Node>& pair) {
-      return pair.second.is_active();
-    }
-  };
-
  public:
   const Node& get_node(reg_t) const;
 
-  const std::unordered_map<reg_t, Node>& nodes() const { return m_nodes; }
+  const UnorderedMap<reg_t, Node>& nodes() const { return m_nodes; }
 
-  std::unordered_map<reg_t, Node>& nodes() { return m_nodes; }
-
-  boost::filtered_range<ActiveFilter, const std::unordered_map<reg_t, Node>>
-  active_nodes() const {
-    return boost::adaptors::filter(m_nodes, ActiveFilter());
-  }
+  UnorderedMap<reg_t, Node>& nodes() { return m_nodes; }
 
   bool is_adjacent(reg_t u, reg_t v) const {
     return m_adj_matrix.find(impl::build_edge(u, v)) != m_adj_matrix.end();
@@ -228,9 +215,9 @@ class Graph {
   }
 
  private:
-  std::unordered_map<reg_t, Node> m_nodes;
-  std::unordered_map<reg_pair_t, bool> m_adj_matrix;
-  std::unordered_set<reg_pair_t> m_containment_graph;
+  UnorderedMap<reg_t, Node> m_nodes;
+  UnorderedMap<reg_pair_t, bool> m_adj_matrix;
+  UnorderedSet<reg_pair_t> m_containment_graph;
 
   friend class impl::GraphBuilder;
 };

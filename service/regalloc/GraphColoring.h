@@ -29,10 +29,10 @@ struct SpillPlan {
   // coloring. Since different opcodes can address different maximum operand
   // sizes, we don't have to spill at every instruction -- just the ones that
   // have a maximum lower than our mapping.
-  std::unordered_map<reg_t, vreg_t> global_spills;
+  UnorderedMap<reg_t, vreg_t> global_spills;
 
   // Spills for param-related symbolic registers
-  std::unordered_set<reg_t> param_spills;
+  UnorderedSet<reg_t> param_spills;
 
   // Spills for range-instruction-related symbolic registers. The map's values
   // indicate the src indices that need to be spilled. We want to use the
@@ -45,7 +45,7 @@ struct SpillPlan {
   // We may want to spill just the first occurrence of v0 or v1. If we used a
   // set of registers here (which we did previously), we would not be able to
   // represent that.
-  std::unordered_map<const IRInstruction*, std::vector<size_t>> range_spills;
+  UnorderedMap<const IRInstruction*, std::vector<size_t>> range_spills;
 
   bool empty() const {
     return global_spills.empty() && param_spills.empty() &&
@@ -134,11 +134,11 @@ class Allocator {
                   SpillPlan*,
                   SplitPlan*);
 
-  std::unordered_map<reg_t, cfg::InstructionIterator> find_param_splits(
-      const std::unordered_set<reg_t>&, cfg::ControlFlowGraph&);
+  UnorderedMap<reg_t, cfg::InstructionIterator> find_param_splits(
+      const UnorderedSet<reg_t>&, cfg::ControlFlowGraph&);
 
   void split_params(const interference::Graph&,
-                    const std::unordered_set<reg_t>& param_spills,
+                    const UnorderedSet<reg_t>& param_spills,
                     cfg::ControlFlowGraph&);
 
   void spill(const interference::Graph&,

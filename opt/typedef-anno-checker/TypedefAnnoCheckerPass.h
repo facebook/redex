@@ -9,13 +9,14 @@
 
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "LiveRange.h"
 #include "MethodOverrideGraph.h"
 #include "Pass.h"
 #include "TypeInference.h"
 
 using TypeEnvironments =
-    std::unordered_map<const IRInstruction*, type_inference::TypeEnvironment>;
+    UnorderedMap<const IRInstruction*, type_inference::TypeEnvironment>;
 
 namespace mog = method_override_graph;
 

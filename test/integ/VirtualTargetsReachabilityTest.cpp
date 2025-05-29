@@ -44,9 +44,9 @@ TEST_F(VirtualTargetsReachabilityTest, invoke_super_subtlety) {
   //// callable_instance_methods
   EXPECT_EQ(reachable_aspects.callable_instance_methods.size(), 5);
   auto is_callable_instance_method = [&](const std::string_view& s) {
-    return std::any_of(reachable_aspects.callable_instance_methods.begin(),
-                       reachable_aspects.callable_instance_methods.end(),
-                       [s](const auto* method) { return show(method) == s; });
+    return unordered_any_of(
+        reachable_aspects.callable_instance_methods,
+        [s](const auto* method) { return show(method) == s; });
   };
   EXPECT_TRUE(is_callable_instance_method("LBase;.<init>:()V"));
   EXPECT_TRUE(is_callable_instance_method("LBase;.foo:()Ljava/lang/Object;"));

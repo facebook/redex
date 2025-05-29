@@ -7,9 +7,9 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include <set>
-#include <unordered_map>
 
 using TypeSet = std::set<const DexType*, dextypes_comparator>;
 
@@ -17,7 +17,7 @@ using TypeSet = std::set<const DexType*, dextypes_comparator>;
  * DexType parent to children relationship
  * (child to parent is in DexClass)
  */
-using ClassHierarchy = std::unordered_map<const DexType*, TypeSet>;
+using ClassHierarchy = UnorderedMap<const DexType*, TypeSet>;
 
 /**
  * Given a scope it builds all the parent-children relationships known. Excludes
@@ -54,7 +54,7 @@ TypeSet get_all_children(const ClassHierarchy& hierarchy, const DexType* type);
  * Interfaces are "flattened" so that a super interface maps to every
  * class implementing a deriving interface.
  */
-using InterfaceMap = std::unordered_map<const DexType*, TypeSet>;
+using InterfaceMap = UnorderedMap<const DexType*, TypeSet>;
 
 /**
  * Build an InterfaceMap given a class hierarchy.

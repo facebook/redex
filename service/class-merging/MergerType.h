@@ -16,7 +16,7 @@ namespace class_merging {
 
 std::string get_type_name_tag(const DexType* root_type);
 
-using FieldsMap = std::unordered_map<const DexType*, std::vector<DexField*>>;
+using FieldsMap = UnorderedMap<const DexType*, std::vector<DexField*>>;
 using ConstTypeVector = std::vector<const DexType*>;
 
 /**
@@ -112,7 +112,7 @@ struct MergerType {
         size_t group_count,
         const boost::optional<size_t>& opt_dex_id,
         const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
-        std::unordered_set<size_t>& hash_cache) const;
+        UnorderedSet<size_t>& hash_cache) const;
 
     std::string build_type_name_legacy(
         const std::string& prefix,
@@ -359,7 +359,7 @@ struct MergerType {
 } // namespace class_merging
 
 /**
- * Hash funtion for using Shape as a key in std::unordered_map
+ * Hash funtion for using Shape as a key in UnorderedMap
  */
 namespace std {
 

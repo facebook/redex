@@ -16,11 +16,11 @@
 #include <iostream>
 #include <mutex>
 #include <string>
-#include <unordered_map>
 #include <utility>
 
 #include "ControlFlow.h"
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "IRCode.h"
 #include "Macros.h"
@@ -34,7 +34,7 @@ struct Tracer {
   bool m_show_timestamps{false};
   bool m_show_tracemodule{false};
   const char* m_method_filter;
-  std::unordered_map<int /*TraceModule*/, std::string> m_module_id_name_map;
+  UnorderedMap<int /*TraceModule*/, std::string> m_module_id_name_map;
 
   Tracer() {
     const char* traceenv = getenv("TRACE");
@@ -140,7 +140,7 @@ struct Tracer {
 
  private:
   void init_trace_modules(const char* traceenv) {
-    std::unordered_map<std::string, int> module_id_map{{
+    UnorderedMap<std::string, int> module_id_map{{
 #define TM(x) {std::string(#x), x},
         TMS
 #undef TM

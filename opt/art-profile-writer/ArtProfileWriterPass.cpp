@@ -21,6 +21,7 @@
 #include "BaselineProfile.h"
 #include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
+#include "DeterministicContainers.h"
 #include "DexAssessments.h"
 #include "DexStructure.h"
 #include "IRCode.h"
@@ -140,7 +141,7 @@ void never_inline(bool attach_annotations,
     return true;
   };
 
-  using ReceiverMap = std::unordered_map<const IRInstruction*, const DexType*>;
+  using ReceiverMap = UnorderedMap<const IRInstruction*, const DexType*>;
   InsertOnlyConcurrentMap<DexMethod*, ReceiverMap> receiver_types;
   auto get_callee = [&](DexMethod* caller,
                         IRInstruction* invoke_insn) -> DexMethod* {
@@ -489,11 +490,11 @@ void never_compile(
     int64_t excluded_call_count_threshold,
     bool never_compile_strings_lookup_methods,
     baseline_profiles::BaselineProfile* baseline_profile) {
-  std::unordered_set<std::string> excluded_interaction_ids;
+  UnorderedSet<std::string> excluded_interaction_ids;
   if (!excluded_interaction_pattern.empty()) {
     boost::regex rx(excluded_interaction_pattern);
     for (auto&& [interaction_id, interaction_name] :
-          baseline_profile_config.interactions) {
+         baseline_profile_config.interactions) {
       if (boost::regex_match(interaction_name, rx)) {
         excluded_interaction_ids.insert(interaction_id);
       }
@@ -575,14 +576,14 @@ void never_compile(
       return;
     }
 
-    never_compile_methods.emplace(method, method->get_code()->estimate_code_units());
+    never_compile_methods.emplace(method,
+                                  method->get_code()->estimate_code_units());
 
     if (it != baseline_profile->methods.end()) {
       baseline_profile->methods.erase(it);
     }
 
-    if (has_anno(method,
-                  type::dalvik_annotation_optimization_NeverCompile())) {
+    if (has_anno(method, type::dalvik_annotation_optimization_NeverCompile())) {
       methods_already_never_compile.fetch_add(1);
       return;
     }
@@ -615,23 +616,20 @@ void never_compile(
                   never_compile_called_coverage_threshold_mets.load());
   mgr.incr_metric("never_compile_strings_lookup_methods_matches",
                   never_compile_strings_lookup_methods_matches.load());
-  std::vector<std::pair<DexMethod*, uint32_t>> ordered_never_compile_methods(
-    never_compile_methods.begin(), never_compile_methods.end());
-  std::sort(
-    ordered_never_compile_methods.begin(),
-    ordered_never_compile_methods.end(),
-    [](const auto& a, const auto& b) {
-      if (a.second != b.second) {
-        return a.second > b.second;
-      }
-      return compare_dexmethods(a.first, b.first);
-    });
+  auto ordered_never_compile_methods = unordered_to_ordered(
+      never_compile_methods, [](const auto& a, const auto& b) {
+        if (a.second != b.second) {
+          return a.second > b.second;
+        }
+        return compare_dexmethods(a.first, b.first);
+      });
   ordered_never_compile_methods.resize(
-    std::min(ordered_never_compile_methods.size(), size_t(10)));
+      std::min(ordered_never_compile_methods.size(), size_t(10)));
   for (size_t i = 0; i < ordered_never_compile_methods.size(); ++i) {
     auto& [method, code_units] = ordered_never_compile_methods[i];
-    mgr.incr_metric("never_compile_methods_" + std::to_string(i) +
-                    "_" + show_deobfuscated(method), code_units);
+    mgr.incr_metric("never_compile_methods_" + std::to_string(i) + "_" +
+                        show_deobfuscated(method),
+                    code_units);
   }
 }
 
@@ -667,7 +665,6 @@ void ArtProfileWriterPass::bind_config() {
   bind("never_inline_estimate", false, m_never_inline_estimate);
   bind("never_inline_attach_annotations", false,
        m_never_inline_attach_annotations);
-  bind("legacy_mode", false, m_legacy_mode);
   bind("never_compile_callcount_threshold", -1,
        m_never_compile_callcount_threshold);
   bind("never_compile_perf_threshold", -1, m_never_compile_perf_threshold);
@@ -720,7 +717,7 @@ void write_methods(const Scope& scope,
     if (baseline_profile.classes.count(cls) && !strip_classes) {
       ofs << show_deobfuscated(cls) << "\n";
     }
-});
+  });
 }
 
 void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
@@ -732,92 +729,17 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     m_reserved_refs_handle = std::nullopt;
   }
 
-  std::unordered_set<const DexMethodRef*> method_refs_without_def;
+  UnorderedSet<const DexMethodRef*> method_refs_without_def;
   const auto& method_profiles = conf.get_method_profiles();
-  auto get_legacy_baseline_profile = [&]()
-      -> std::tuple<
-          baseline_profiles::BaselineProfile,
-          std::unordered_map<std::string, baseline_profiles::BaselineProfile>> {
-    std::unordered_map<std::string, baseline_profiles::BaselineProfile>
-        baseline_profiles;
-    baseline_profiles::BaselineProfile res;
-    for (auto& interaction_id : m_perf_config.interactions) {
-      bool startup = interaction_id == "ColdStart";
-      const auto& method_stats = method_profiles.method_stats(interaction_id);
-      for (auto&& [method_ref, stat] : method_stats) {
-        auto method = method_ref->as_def();
-        if (method == nullptr) {
-          method_refs_without_def.insert(method_ref);
-          continue;
-        }
-        // for startup interaction, we can include it into baseline profile
-        // as non hot method if the method appear100 is above nonhot_threshold
-        if (stat.appear_percent >=
-                (startup ? m_perf_config.coldstart_appear100_nonhot_threshold
-                         : m_perf_config.appear100_threshold) &&
-            stat.call_count >= m_perf_config.call_count_threshold) {
-          auto& mf = res.methods[method];
-          mf.hot = startup ? stat.appear_percent >=
-                                 m_perf_config.coldstart_appear100_threshold
-                           : true;
-          if (startup) {
-            // consistent with buck python config in the post-process baseline
-            // profile generator, which is set both flags true for ColdStart
-            // methods
-            mf.startup = true;
-            // if startup method is not hot, we do not set its post_startup flag
-            // the method still has a change to get it set if it appears in
-            // other interactions' hot list. Remember, ART only uses this flag
-            // to guide dexlayout decision, so we don't have to be pedantic to
-            // assume it never gets exectued post startup
-            mf.post_startup = mf.hot;
-          } else {
-            mf.post_startup = true;
-          }
-        }
-      }
-    }
-    auto& dexen = stores.front().get_dexen();
-    int32_t min_sdk = mgr.get_redex_options().min_sdk;
-    mgr.incr_metric("min_sdk", min_sdk);
-    auto end = min_sdk >= 21 ? dexen.size() : 1;
-    for (size_t dex_idx = 0; dex_idx < end; dex_idx++) {
-      auto& dex = dexen.at(dex_idx);
-      for (auto* cls : dex) {
-        bool should_include_class = false;
-        for (auto* method : cls->get_all_methods()) {
-          auto it = res.methods.find(method);
-          if (it == res.methods.end()) {
-            continue;
-          }
-          // hot method's class should be included.
-          // In addition, if we include non-hot startup method, we also need to
-          // include its class.
-          if (it->second.hot ||
-              (it->second.startup && !it->second.post_startup)) {
-            should_include_class = true;
-          }
-        }
-        if (should_include_class) {
-          res.classes.insert(cls);
-        }
-      }
-    }
-    baseline_profiles[baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME] =
-        res;
-    return {res, baseline_profiles};
-  };
 
-  auto baseline_profiles_tuple = m_legacy_mode
-                                     ? get_legacy_baseline_profile()
-                                     : baseline_profiles::get_baseline_profiles(
-                                           conf.get_baseline_profile_configs(),
-                                           method_profiles,
-                                           &method_refs_without_def);
+  auto baseline_profiles_tuple = baseline_profiles::get_baseline_profiles(
+      conf.get_baseline_profile_configs(),
+      method_profiles,
+      &method_refs_without_def);
   auto& baseline_profiles = std::get<1>(baseline_profiles_tuple);
   auto& manual_profile = std::get<0>(baseline_profiles_tuple);
   for (const auto& [config_name, baseline_profile_config] :
-       conf.get_baseline_profile_configs()) {
+       UnorderedIterable(conf.get_baseline_profile_configs())) {
 
     if (baseline_profile_config.options.include_all_startup_classes) {
       const std::vector<std::string>& interdexorder =
@@ -855,16 +777,16 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       m_never_compile_perf_threshold > -1 ||
       m_never_compile_called_coverage_threshold > -1 ||
       m_never_compile_strings_lookup_methods) {
-    never_compile(
-        scope, conf.get_default_baseline_profile_config(), method_profiles, mgr,
-        m_never_compile_ignore_hot,
-        m_never_compile_callcount_threshold, m_never_compile_perf_threshold,
-        m_never_compile_called_coverage_threshold,
-        m_never_compile_excluded_interaction_pattern,
-        m_never_compile_excluded_appear100_threshold,
-        m_never_compile_excluded_call_count_threshold,
-        m_never_compile_strings_lookup_methods, &manual_profile);
-}
+    never_compile(scope, conf.get_default_baseline_profile_config(),
+                  method_profiles, mgr, m_never_compile_ignore_hot,
+                  m_never_compile_callcount_threshold,
+                  m_never_compile_perf_threshold,
+                  m_never_compile_called_coverage_threshold,
+                  m_never_compile_excluded_interaction_pattern,
+                  m_never_compile_excluded_appear100_threshold,
+                  m_never_compile_excluded_call_count_threshold,
+                  m_never_compile_strings_lookup_methods, &manual_profile);
+  }
   auto store_fence_helper_type = DexType::get_type(STORE_FENCE_HELPER_NAME);
   if (store_fence_helper_type) {
     // helper class existing means we materialized IOPCODE_WRITE_BARRIER
@@ -882,7 +804,7 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     });
   }
 
-  for (const auto& entry : baseline_profiles) {
+  for (const auto& entry : UnorderedIterable(baseline_profiles)) {
     const auto& bp_name = entry.first;
     const auto& bp = entry.second;
     const auto strip_classes =
@@ -937,7 +859,6 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     for (auto&& [interaction_id, interaction_name] : bp_config.interactions) {
       mgr.incr_metric(prefix + "interaction_" + interaction_id, 1);
     }
-
     const auto& bp_options = bp_config.options;
     if (bp_options.oxygen_modules) {
       mgr.incr_metric(prefix + "oxygen_modules", 1);
@@ -957,7 +878,7 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   };
   gather_metrics(baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME,
                  manual_profile);
-  for (auto&& [name, profile] : baseline_profiles) {
+  for (auto&& [name, profile] : UnorderedIterable(baseline_profiles)) {
     gather_metrics(name, profile);
   }
 
@@ -974,7 +895,7 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       huge_methods.emplace(method, code_units);
     }
   });
-  for (auto [method, code_units] : huge_methods) {
+  for (auto [method, code_units] : UnorderedIterable(huge_methods)) {
     mgr.incr_metric("huge_methods_" + show_deobfuscated(method), code_units);
   }
 

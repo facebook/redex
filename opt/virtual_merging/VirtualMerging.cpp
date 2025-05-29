@@ -110,7 +110,7 @@ VirtualMerging::VirtualMerging(DexStoresVector& stores,
       m_init_classes_with_side_effects(m_scope,
                                        /* create_init_class_insns */ false),
       m_perf_config(std::move(perf_config)) {
-  std::unordered_set<DexMethod*> no_default_inlinables;
+  UnorderedSet<DexMethod*> no_default_inlinables;
   // disable shrinking options, minimizing initialization time
   m_inliner_config.shrinker = shrinker::ShrinkerConfig();
   int min_sdk = 0;
@@ -121,7 +121,7 @@ VirtualMerging::VirtualMerging(DexStoresVector& stores,
       /* true_virtual_callers */ {},
       /* inline_for_speed */ nullptr,
       /* bool analyze_and_prune_inits */ false,
-      /* const std::unordered_set<DexMethodRef*>& configured_pure_methods */ {},
+      /* const UnorderedSet<DexMethodRef*>& configured_pure_methods */ {},
       min_sdk_api));
 }
 
@@ -155,12 +155,12 @@ void VirtualMerging::find_unsupported_virtual_scopes() {
   m_stats.invoke_super_unresolved_method_refs =
       invoke_super_unresolved_method_refs.size();
 
-  for (auto method : invoke_super_methods) {
+  for (auto method : UnorderedIterable(invoke_super_methods)) {
     m_unsupported_virtual_scopes.insert(
         m_type_system.find_virtual_scope(method));
   }
 
-  for (auto method : invoke_super_unresolved_method_refs) {
+  for (auto method : UnorderedIterable(invoke_super_unresolved_method_refs)) {
     m_unsupported_named_protos[method->get_name()].insert(method->get_proto());
   }
 }
@@ -208,12 +208,12 @@ void VirtualMerging::compute_mergeable_scope_methods() {
     m_mergeable_scope_methods.update(
         virtual_scope,
         [&](const VirtualScope*,
-            std::unordered_set<const DexMethod*>& s,
+            UnorderedSet<const DexMethod*>& s,
             bool /* exists */) { s.emplace(overriding_method); });
   });
 
   m_stats.mergeable_scope_methods = m_mergeable_scope_methods.size();
-  for (auto& p : m_mergeable_scope_methods) {
+  for (auto& p : UnorderedIterable(m_mergeable_scope_methods)) {
     m_stats.mergeable_virtual_methods += p.second.size();
   }
 }
@@ -229,7 +229,7 @@ struct LocalStats {
 };
 
 struct SimpleOrdering {
-  using Map = std::unordered_map<const DexMethodRef*, double>;
+  using Map = UnorderedMap<const DexMethodRef*, double>;
   Map map;
   SimpleOrdering() = default;
   explicit SimpleOrdering(const method_profiles::MethodProfiles& profiles)
@@ -245,15 +245,15 @@ struct SimpleOrdering {
 
   static Map create_call_count_ordering(
       const method_profiles::MethodProfiles& profiles) {
-    std::unordered_map<const DexMethodRef*, std::pair<double, double>>
-        call_counts;
+    UnorderedMap<const DexMethodRef*, std::pair<double, double>> call_counts;
     // Fill first part with cold-start.
-    for (auto& p : profiles.method_stats(method_profiles::COLD_START)) {
+    for (auto& p : UnorderedIterable(
+             profiles.method_stats(method_profiles::COLD_START))) {
       call_counts.emplace(p.first, std::make_pair(p.second.call_count, 0.0));
     }
     // Second part with maximum of other interactions.
     for (auto& p : profiles.all_interactions()) {
-      for (auto& q : p.second) {
+      for (auto& q : UnorderedIterable(p.second)) {
         auto& cc = call_counts[q.first].second;
         cc = std::max(cc, q.second.call_count);
       }
@@ -261,7 +261,7 @@ struct SimpleOrdering {
 
     std::vector<const DexMethodRef*> profile_methods;
     profile_methods.reserve(call_counts.size());
-    for (auto& p : call_counts) {
+    for (auto& p : UnorderedIterable(call_counts)) {
       profile_methods.push_back(p.first);
     }
 
@@ -309,7 +309,7 @@ struct SimpleOrderingProvider {
 
 template <typename OrderingProvider>
 class MergePairsBuilder {
-  using MergablesMap = std::unordered_map<const DexMethod*, const DexMethod*>;
+  using MergablesMap = UnorderedMap<const DexMethod*, const DexMethod*>;
 
  public:
   using PairSeq = std::vector<std::pair<const DexMethod*, const DexMethod*>>;
@@ -322,7 +322,7 @@ class MergePairsBuilder {
         m_perf_config(perf_config) {}
 
   boost::optional<std::pair<LocalStats, PairSeq>> build(
-      const std::unordered_set<const DexMethod*>& mergeable_methods,
+      const UnorderedSet<const DexMethod*>& mergeable_methods,
       const XStoreRefs& xstores,
       const XDexRefs& xdexes,
       const method_profiles::MethodProfiles& profiles,
@@ -363,7 +363,7 @@ class MergePairsBuilder {
   }
 
   MergablesMap find_overrides(
-      const std::unordered_set<const DexMethod*>& mergeable_methods,
+      const UnorderedSet<const DexMethod*>& mergeable_methods,
       const XStoreRefs& xstores,
       const XDexRefs& xdexes) {
     MergablesMap mergeable_pairs_map;
@@ -445,9 +445,9 @@ class MergePairsBuilder {
     // can later be processed sequentially --- first inlining pairs that
     // appear in deeper portions of the type hierarchy
     PairSeq mergeable_pairs;
-    std::unordered_set<const DexType*> visited;
-    std::unordered_map<const DexMethod*,
-                       std::vector<std::pair<const DexMethod*, double>>>
+    UnorderedSet<const DexType*> visited;
+    UnorderedMap<const DexMethod*,
+                 std::vector<std::pair<const DexMethod*, double>>>
         override_map;
 
     size_t perf_skipped{0};
@@ -622,7 +622,7 @@ class MergePairsBuilder {
           }
         },
         virtual_scope->type);
-    for (const auto& p : override_map) {
+    for (const auto& p : UnorderedIterable(override_map)) {
       redex_assert(p.second.empty());
     }
     always_assert_log(mergeable_pairs_map.size() ==
@@ -641,8 +641,8 @@ class MergePairsBuilder {
   const VirtualScope* virtual_scope;
   const OrderingProvider& m_ordering_provider;
   std::vector<DexMethod*> methods;
-  std::unordered_map<const DexType*, DexMethod*> types_to_methods;
-  std::unordered_map<const DexType*, std::vector<DexType*>> subtypes;
+  UnorderedMap<const DexType*, DexMethod*> types_to_methods;
+  UnorderedMap<const DexType*, std::vector<DexType*>> subtypes;
   LocalStats stats;
   const VirtualMerging::PerfConfig& m_perf_config;
 };
@@ -659,7 +659,7 @@ VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
     VirtualMergingStats& stats) const {
   InsertOnlyConcurrentMap<const VirtualScope*, LocalStats> local_stats;
   std::vector<const VirtualScope*> virtual_scopes;
-  for (auto& p : m_mergeable_scope_methods) {
+  for (auto& p : UnorderedIterable(m_mergeable_scope_methods)) {
     virtual_scopes.push_back(p.first);
   }
   InsertOnlyConcurrentMap<
@@ -686,7 +686,7 @@ VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
       mergeable_pairs_by_virtual_scopes.size();
 
   size_t overriding_methods = 0;
-  for (auto& p : local_stats) {
+  for (auto& p : UnorderedIterable(local_stats)) {
     overriding_methods += p.second.overriding_methods;
     stats.cross_store_refs += p.second.cross_store_refs;
     stats.cross_dex_refs += p.second.cross_dex_refs;
@@ -700,7 +700,7 @@ VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
       stats.mergeable_virtual_methods - overriding_methods;
 
   MergablePairsByVirtualScope out;
-  for (auto& p : mergeable_pairs_by_virtual_scopes) {
+  for (auto& p : UnorderedIterable(mergeable_pairs_by_virtual_scopes)) {
     const auto& mergeable_pairs = p.second;
     stats.mergeable_pairs += mergeable_pairs.size();
     out.insert(p);
@@ -729,7 +729,7 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
 
   // Fill the ordering.
   {
-    std::unordered_map<const DexMethod*, size_t> method_idx;
+    UnorderedMap<const DexMethod*, size_t> method_idx;
 
     for (auto& p : mergable_pairs) {
       auto virtual_scope = p.first;
@@ -765,7 +765,7 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
     }
 
     for (const auto& p : ordering) {
-      std::unordered_set<const VirtualScope*> scopes_seen;
+      UnorderedSet<const VirtualScope*> scopes_seen;
       for (const auto& q : p.second) {
         redex_assert(scopes_seen.count(q.first) == 0);
         scopes_seen.insert(q.first);
@@ -852,7 +852,7 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
         // any-order-deterministic when removing candidates. It would probably
         // be good to do this well, e.g., work towards being able to remove
         // the most methods. But let's be simple for now.
-        std::unordered_map<const VirtualScope*, std::vector<const DexMethod*>*>
+        UnorderedMap<const VirtualScope*, std::vector<const DexMethod*>*>
             data_map;
         data_map.reserve(p.second.size());
         std::vector<const VirtualScope*> scopes;
@@ -880,7 +880,7 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
           std::sort(m_tmp.begin(), m_tmp.end(), compare_dexmethods);
 
           // Fetch methods to get under limit.
-          std::unordered_set<const DexMethod*> to_remove;
+          UnorderedSet<const DexMethod*> to_remove;
           for (auto* m : m_tmp) {
             sum -= method_inline_estimate(m);
             to_remove.insert(m);
@@ -1070,9 +1070,9 @@ struct SBHelper {
 VirtualMergingStats apply_ordering(
     MultiMethodInliner& inliner,
     std::vector<MethodData>& ordering,
-    std::unordered_map<DexClass*, std::vector<const DexMethod*>>&
+    UnorderedMap<DexClass*, std::vector<const DexMethod*>>&
         virtual_methods_to_remove,
-    std::unordered_map<DexMethod*, DexMethod*>& virtual_methods_to_remap,
+    UnorderedMap<DexMethod*, DexMethod*>& virtual_methods_to_remap,
     VirtualMerging::InsertionStrategy insertion_strategy) {
   VirtualMergingStats stats;
   for (auto& p : ordering) {
@@ -1190,7 +1190,7 @@ VirtualMergingStats apply_ordering(
           }
 
           // Scan load-param instructions
-          std::unordered_set<uint32_t> param_regs_set;
+          UnorderedSet<uint32_t> param_regs_set;
           auto last_it = block->end();
           for (auto it = block->begin(); it != block->end(); it++) {
             auto& mie = *it;
@@ -1378,7 +1378,7 @@ void VirtualMerging::remove_methods() {
   std::vector<DexClass*> classes_with_virtual_methods_to_remove;
   classes_with_virtual_methods_to_remove.reserve(
       m_virtual_methods_to_remove.size());
-  for (auto& p : m_virtual_methods_to_remove) {
+  for (auto& p : UnorderedIterable(m_virtual_methods_to_remove)) {
     classes_with_virtual_methods_to_remove.push_back(p.first);
   }
 

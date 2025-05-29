@@ -149,13 +149,13 @@ void write_out_removed_symbols_references(
     }
   };
   std::set<const std::string*, StringPtrComparator> sorted;
-  std::transform(removed_symbols.begin(), removed_symbols.end(),
-                 std::inserter(sorted, sorted.end()),
-                 [](const std::string& s) { return &s; });
+  unordered_transform(removed_symbols,
+                      std::inserter(sorted, sorted.end()),
+                      [](const std::string& s) { return &s; });
 
   std::unordered_map<std::string, std::unordered_set<std::string>>
       referenced_to_references;
-  for (const auto& pair : references) {
+  for (const auto& pair : UnorderedIterable(references)) {
     for (const auto& elem : pair.second) {
       referenced_to_references[elem].emplace(pair.first);
     }
@@ -296,7 +296,7 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
     remove_uninstantiables_stats.report(pm);
     pm.incr_metric("throws_inserted", (size_t)throws_inserted);
     pm.incr_metric("methods_with_code_changes", affected_methods.size());
-    std::unordered_set<DexMethodRef*> pure_methods;
+    UnorderedSet<DexMethodRef*> pure_methods;
     LocalDce::Stats dce_stats;
     std::mutex dce_stats_mutex;
     workqueue_run<DexMethod*>(
@@ -377,9 +377,9 @@ void RemoveUnreachablePassBase::write_out_removed_symbols(
     }
   };
   std::set<const std::string*, StringPtrComparator> sorted;
-  std::transform(removed_symbols.begin(), removed_symbols.end(),
-                 std::inserter(sorted, sorted.end()),
-                 [](const std::string& s) { return &s; });
+  unordered_transform(removed_symbols,
+                      std::inserter(sorted, sorted.end()),
+                      [](const std::string& s) { return &s; });
   for (auto s_ptr : sorted) {
     out << *s_ptr << std::endl;
   }

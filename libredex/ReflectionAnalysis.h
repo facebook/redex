@@ -18,6 +18,7 @@
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
 #include <sparta/PatriciaTreeMapAbstractPartition.h>
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
@@ -85,7 +86,7 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
   const DexString* dex_string;
   boost::optional<int64_t> dex_int = boost::none;
   // Attaching a set of potential dex types.
-  std::unordered_set<DexType*> potential_dex_types;
+  UnorderedSet<DexType*> potential_dex_types;
 
   // for objects of Class[] type, we model the heap stored array with a
   // HeapClassArrayEnvironment
@@ -115,9 +116,7 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
     always_assert(k == OBJECT || k == CLASS);
   }
 
-  AbstractObject(AbstractObjectKind k,
-                 DexType* t,
-                 std::unordered_set<DexType*> p)
+  AbstractObject(AbstractObjectKind k, DexType* t, UnorderedSet<DexType*> p)
       : obj_kind(k),
         dex_type(t),
         dex_string(nullptr),
@@ -133,7 +132,7 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
   AbstractObject(AbstractObjectKind k,
                  DexType* t,
                  const DexString* s,
-                 std::unordered_set<DexType*> p)
+                 UnorderedSet<DexType*> p)
       : obj_kind(k),
         dex_type(t),
         dex_string(s),

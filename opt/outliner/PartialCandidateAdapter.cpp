@@ -12,7 +12,7 @@ namespace outliner_impl {
 PartialCandidateAdapter::PartialCandidateAdapter(OutlinerTypeAnalysis& ota,
                                                  PartialCandidate pc)
     : m_ota(ota), m_pc(std::move(pc)), m_insns([this]() {
-        auto res = std::make_unique<std::unordered_set<IRInstruction*>>();
+        auto res = std::make_unique<UnorderedSet<IRInstruction*>>();
         std::function<void(const PartialCandidateNode&)> gather_insns;
         gather_insns = [&](const PartialCandidateNode& pcn) {
           res->insert(pcn.insns.begin(), pcn.insns.end());
@@ -44,9 +44,9 @@ const reaching_defs::Environment& PartialCandidateAdapter::get_rdef_env()
 
 void PartialCandidateAdapter::gather_type_demands(
     const PartialCandidateNode& pcn,
-    std::unordered_set<reg_t> regs_to_track,
+    UnorderedSet<reg_t> regs_to_track,
     const std::function<bool(IRInstruction*, src_index_t)>& follow,
-    std::unordered_set<const DexType*>* type_demands) const {
+    UnorderedSet<const DexType*>* type_demands) const {
   for (size_t insn_idx = 0;
        insn_idx < pcn.insns.size() && !regs_to_track.empty();
        insn_idx++) {

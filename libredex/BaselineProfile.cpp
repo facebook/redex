@@ -6,42 +6,41 @@
  */
 
 #include "BaselineProfile.h"
-#include "StlUtil.h"
 
 namespace baseline_profiles {
 
 BaselineProfile get_default_baseline_profile(
-    const std::unordered_map<std::string, BaselineProfileConfig>& configs,
+    const UnorderedMap<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
-    std::unordered_set<const DexMethodRef*>* method_refs_without_def) {
+    UnorderedSet<const DexMethodRef*>* method_refs_without_def) {
   auto [baseline_profile, _] =
       get_baseline_profiles(configs, method_profiles, method_refs_without_def);
   return baseline_profile;
 }
 
-std::tuple<BaselineProfile, std::unordered_map<std::string, BaselineProfile>>
+std::tuple<BaselineProfile, UnorderedMap<std::string, BaselineProfile>>
 get_baseline_profiles(
-    const std::unordered_map<std::string, BaselineProfileConfig>& configs,
+    const UnorderedMap<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
-    std::unordered_set<const DexMethodRef*>* method_refs_without_def) {
-  std::unordered_map<std::string, BaselineProfile> baseline_profiles;
+    UnorderedSet<const DexMethodRef*>* method_refs_without_def) {
+  UnorderedMap<std::string, BaselineProfile> baseline_profiles;
   BaselineProfile manual_baseline_profile;
-  for (const auto& [config_name, config] : configs) {
+  for (const auto& [config_name, config] : UnorderedIterable(configs)) {
     // If we're not using this as the final pass of baseline profiles, just
     // continue on all configs that aren't the default
     if (!config.options.use_final_redex_generated_profile &&
         config_name != DEFAULT_BASELINE_PROFILE_CONFIG_NAME) {
       continue;
     }
-    std::unordered_set<const DexType*> classes;
-    std::unordered_set<const DexMethod*> startup_methods;
-    std::unordered_set<const DexMethod*> post_startup_methods;
+    UnorderedSet<const DexType*> classes;
+    UnorderedSet<const DexMethod*> startup_methods;
+    UnorderedSet<const DexMethod*> post_startup_methods;
     for (auto&& [interaction_id, interaction_config] :
-         config.interaction_configs) {
+         UnorderedIterable(config.interaction_configs)) {
       const auto& method_stats =
           method_profiles.method_stats_for_baseline_config(interaction_id,
                                                            config_name);
-      for (auto&& [method_ref, stat] : method_stats) {
+      for (auto&& [method_ref, stat] : UnorderedIterable(method_stats)) {
         auto method = method_ref->as_def();
         if (method == nullptr) {
           if (method_refs_without_def != nullptr) {
@@ -72,7 +71,7 @@ get_baseline_profiles(
       const auto& method_stats =
           method_profiles.method_stats_for_baseline_config(interaction_id,
                                                            config_name);
-      for (auto&& [method_ref, stat] : method_stats) {
+      for (auto&& [method_ref, stat] : UnorderedIterable(method_stats)) {
         auto method = method_ref->as_def();
         if (method == nullptr) {
           if (method_refs_without_def != nullptr) {
@@ -89,29 +88,29 @@ get_baseline_profiles(
       }
     }
     // methods = startup_methods | post_startup_methods
-    std::unordered_set<const DexMethod*> methods(startup_methods.begin(),
-                                                 startup_methods.end());
-    methods.insert(post_startup_methods.begin(), post_startup_methods.end());
+    UnorderedSet<const DexMethod*> methods;
+    insert_unordered_iterable(methods, startup_methods);
+    insert_unordered_iterable(methods, post_startup_methods);
 
     // startup_post_startup_methods = startup_methods & post_startup_methods
-    std::unordered_set<const DexMethod*> startup_post_startup_methods(
-        startup_methods.begin(), startup_methods.end());
-    std20::erase_if(startup_post_startup_methods, [&](const DexMethod* m) {
+    UnorderedSet<const DexMethod*> startup_post_startup_methods;
+    insert_unordered_iterable(startup_post_startup_methods, startup_methods);
+    unordered_erase_if(startup_post_startup_methods, [&](const DexMethod* m) {
       return !post_startup_methods.count(m);
     });
 
     // startup_methods -= startup_post_startup_methods
-    std20::erase_if(startup_methods, [&](const DexMethod* m) {
+    unordered_erase_if(startup_methods, [&](const DexMethod* m) {
       return startup_post_startup_methods.count(m);
     });
 
     // post_startup_methods -= startup_post_startup_methods
-    std20::erase_if(post_startup_methods, [&](const DexMethod* m) {
+    unordered_erase_if(post_startup_methods, [&](const DexMethod* m) {
       return startup_post_startup_methods.count(m);
     });
 
     baseline_profiles::BaselineProfile res;
-    for (auto* method : methods) {
+    for (auto* method : UnorderedIterable(methods)) {
       auto& flags = res.methods[method];
       if (startup_post_startup_methods.count(method)) {
         flags.hot = true;
@@ -125,7 +124,7 @@ get_baseline_profiles(
         flags.post_startup = true;
       }
     }
-    for (auto* type : classes) {
+    for (auto* type : UnorderedIterable(classes)) {
       res.classes.insert(type_class(type));
     }
     if (config_name != DEFAULT_BASELINE_PROFILE_CONFIG_NAME ||

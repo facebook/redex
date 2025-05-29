@@ -14,9 +14,10 @@
 #include <memory>
 #include <queue>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
+
+#include "DeterministicContainers.h"
 
 class DexClass;
 class DexMethod;
@@ -130,15 +131,13 @@ class PositionPatternSwitchManager {
  private:
   DexPosition* internalize(DexPosition* pos);
 
-  std::unordered_map<const DexPosition*,
-                     std::unique_ptr<DexPosition>,
-                     ConstDexPositionPtrHasher>
+  UnorderedMap<const DexPosition*,
+               std::unique_ptr<DexPosition>,
+               ConstDexPositionPtrHasher>
       m_positions;
-  std::unordered_map<PositionPattern, uint32_t, PositionPatternHasher>
-      m_patterns_map;
+  UnorderedMap<PositionPattern, uint32_t, PositionPatternHasher> m_patterns_map;
   std::vector<PositionPattern> m_patterns;
-  std::unordered_map<PositionSwitch, uint32_t, PositionSwitchHasher>
-      m_switches_map;
+  UnorderedMap<PositionSwitch, uint32_t, PositionSwitchHasher> m_switches_map;
   std::vector<PositionSwitch> m_switches;
 
   const DexString* m_pattern_string;
@@ -167,7 +166,7 @@ class PositionMapper {
 class RealPositionMapper : public PositionMapper {
   std::string m_filename_v2;
   std::vector<DexPosition*> m_positions;
-  std::unordered_map<DexPosition*, int64_t> m_pos_line_map;
+  UnorderedMap<DexPosition*, int64_t> m_pos_line_map;
   std::queue<DexPosition*> m_possibly_incomplete_positions;
   std::vector<std::unique_ptr<DexPosition>> m_owned_auxiliary_positions;
 

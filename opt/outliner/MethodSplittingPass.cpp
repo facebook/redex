@@ -80,7 +80,7 @@ void MethodSplittingPass::run_pass(DexStoresVector& stores,
   auto baseline_profile = baseline_profiles::get_default_baseline_profile(
       conf.get_baseline_profile_configs(), conf.get_method_profiles());
   InsertOnlyConcurrentSet<const DexMethod*> concurrent_hot_methods;
-  for (auto&& [method, flags] : baseline_profile.methods) {
+  for (auto&& [method, flags] : UnorderedIterable(baseline_profile.methods)) {
     if (flags.hot) {
       concurrent_hot_methods.insert_unsafe(method);
     }
@@ -100,7 +100,8 @@ void MethodSplittingPass::run_pass(DexStoresVector& stores,
 
   auto& method_profiles = conf.get_method_profiles();
   size_t derived_method_profile_stats{0};
-  for (auto [new_method, root_method] : concurrent_new_hot_split_methods) {
+  for (auto [new_method, root_method] :
+       UnorderedIterable(concurrent_new_hot_split_methods)) {
     derived_method_profile_stats +=
         method_profiles.derive_stats(new_method, {root_method});
   }
@@ -129,7 +130,8 @@ void MethodSplittingPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("iterations", stats.iterations);
   TRACE(MS, 1, "Split out %zu methods", stats.added_methods.size());
 
-  for (auto [method, size] : concurrent_splittable_no_optimizations_methods) {
+  for (auto [method, size] :
+       UnorderedIterable(concurrent_splittable_no_optimizations_methods)) {
     mgr.set_metric("no_optimizations_" + show_deobfuscated(method), size);
   }
   m_iteration++;

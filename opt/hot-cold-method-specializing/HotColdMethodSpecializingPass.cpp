@@ -23,11 +23,11 @@ namespace {
 // excluding those successor blocks (unless they are also backwards reachable
 // otherwise).
 template <typename Collection>
-std::unordered_set<cfg::Block*> get_backwards_reachable_blocks_from(
+UnorderedSet<cfg::Block*> get_backwards_reachable_blocks_from(
     const cfg::ControlFlowGraph& cfg,
     const Collection& succ_blocks,
-    const std::unordered_set<cfg::Block*>* filter_blocks = nullptr) {
-  std::unordered_set<cfg::Block*> res;
+    const UnorderedSet<cfg::Block*>* filter_blocks = nullptr) {
+  UnorderedSet<cfg::Block*> res;
   std::queue<cfg::Block*> work_queue;
   auto push_preds_srcs = [&](auto* block) {
     for (auto* edge : block->preds()) {
@@ -36,7 +36,7 @@ std::unordered_set<cfg::Block*> get_backwards_reachable_blocks_from(
       }
     }
   };
-  for (auto* block : succ_blocks) {
+  for (auto* block : UnorderedIterable(succ_blocks)) {
     push_preds_srcs(block);
   }
   while (!work_queue.empty()) {
@@ -50,13 +50,13 @@ std::unordered_set<cfg::Block*> get_backwards_reachable_blocks_from(
 }
 
 template <typename Collection>
-std::unordered_set<cfg::Block*> get_forward_reachable_blocks(
+UnorderedSet<cfg::Block*> get_forward_reachable_blocks(
     const cfg::ControlFlowGraph& cfg,
     const Collection& entry_blocks,
-    const std::unordered_set<cfg::Block*>& frontier = {}) {
-  std::unordered_set<cfg::Block*> res;
+    const UnorderedSet<cfg::Block*>& frontier = {}) {
+  UnorderedSet<cfg::Block*> res;
   std::queue<cfg::Block*> work_queue;
-  for (auto* entry_block : entry_blocks) {
+  for (auto* entry_block : UnorderedIterable(entry_blocks)) {
     always_assert(!frontier.count(entry_block));
     work_queue.push(entry_block);
   }
@@ -122,11 +122,11 @@ bool is_pure(cfg::Block* block) {
 }
 
 // Find cold blocks that are reachable from a pure hot prefix.
-std::unordered_set<cfg::Block*> propose_cold_frontier(
+UnorderedSet<cfg::Block*> propose_cold_frontier(
     const cfg::ControlFlowGraph& cfg) {
   auto return_blocks = cfg.return_blocks();
   auto normal_blocks = get_backwards_reachable_blocks_from(cfg, return_blocks);
-  normal_blocks.insert(return_blocks.begin(), return_blocks.end());
+  insert_unordered_iterable(normal_blocks, return_blocks);
   if (!normal_blocks.count(cfg.entry_block())) {
     // We are not interested in methods that always throw. Those certainly
     // exist.
@@ -135,8 +135,8 @@ std::unordered_set<cfg::Block*> propose_cold_frontier(
 
   std::queue<cfg::Block*> work_queue;
   work_queue.push(cfg.entry_block());
-  std::unordered_set<cfg::Block*> cold_frontier;
-  std::unordered_set<cfg::Block*> visited_blocks;
+  UnorderedSet<cfg::Block*> cold_frontier;
+  UnorderedSet<cfg::Block*> visited_blocks;
   while (!work_queue.empty()) {
     auto* block = work_queue.front();
     work_queue.pop();
@@ -164,7 +164,7 @@ std::unordered_set<cfg::Block*> propose_cold_frontier(
 // prefix. Remove any blocks that are also reachable through an impure path in
 // the residual blocks.
 void prune_cold_frontier(const cfg::ControlFlowGraph& cfg,
-                         std::unordered_set<cfg::Block*>* cold_frontier) {
+                         UnorderedSet<cfg::Block*>* cold_frontier) {
   while (true) {
     if (cold_frontier->empty()) {
       return;
@@ -186,11 +186,11 @@ void prune_cold_frontier(const cfg::ControlFlowGraph& cfg,
       auto closure = get_backwards_reachable_blocks_from(
           cfg, std::initializer_list<cfg::Block*>{cold_frontier_block},
           &residual_blocks);
-      if (std::all_of(closure.begin(), closure.end(), is_pure)) {
+      if (unordered_all_of(closure, is_pure)) {
         continue;
       }
       uint32_t closure_code_units = 0;
-      for (auto* block : closure) {
+      for (auto* block : UnorderedIterable(closure)) {
         closure_code_units += block->estimate_code_units();
       }
       if (!to_remove || closure_code_units > to_remove->second) {
@@ -218,7 +218,7 @@ bool starts_with_required_insn(cfg::Block* block) {
 
 void specialize_hot_code(DexMethod* method,
                          IRCode& code,
-                         const std::unordered_set<cfg::Block*>& cold_frontier,
+                         const UnorderedSet<cfg::Block*>& cold_frontier,
                          DexMethodRef* cold_copy_ref) {
   auto& cfg = code.cfg();
   std::vector<IRInstruction*> arg_copy_insns;
@@ -308,7 +308,7 @@ void specialize_hot_code(DexMethod* method,
 void specialize_cold_code(
     DexMethod* method,
     cfg::ControlFlowGraph& cfg,
-    const std::unordered_set<cfg::Block*>& cold_closure_blocks) {
+    const UnorderedSet<cfg::Block*>& cold_closure_blocks) {
   std::vector<cfg::Edge*> to_redirect;
   for (auto* block : cfg.blocks()) {
     if (!cold_closure_blocks.count(block)) {
@@ -338,11 +338,11 @@ void specialize_cold_code(
   cfg.remove_unreachable_blocks();
 }
 
-std::unordered_set<cfg::Block*> map(cfg::ControlFlowGraph& target,
-                              const std::unordered_set<cfg::Block*>& source) {
-  std::unordered_set<cfg::Block*> res;
+UnorderedSet<cfg::Block*> map(cfg::ControlFlowGraph& target,
+                              const UnorderedSet<cfg::Block*>& source) {
+  UnorderedSet<cfg::Block*> res;
   res.reserve(source.size());
-  for (auto* block : source) {
+  for (auto* block : UnorderedIterable(source)) {
     res.insert(target.get_block(block->id()));
   }
   return res;
@@ -396,7 +396,7 @@ HotColdMethodSpecializingPass::analyze_and_specialize(
       cold_frontier);
   auto hot_prefix_blocks =
       get_backwards_reachable_blocks_from(cfg, cold_frontier, &residual_blocks);
-  always_assert(std::all_of(hot_prefix_blocks.begin(), hot_prefix_blocks.end(), is_pure));
+  always_assert(unordered_all_of(hot_prefix_blocks, is_pure));
   auto cold_code =
       std::make_unique<IRCode>(std::make_unique<cfg::ControlFlowGraph>());
   cfg.deep_copy(&cold_code->cfg());
@@ -408,9 +408,9 @@ HotColdMethodSpecializingPass::analyze_and_specialize(
   // TODO: More closely inspect which paths through the prefix do not in fact
   // read mutable heap memory, and insert unreachable instructions (only) for
   // those paths.
-  if (std::all_of(hot_prefix_blocks.begin(), hot_prefix_blocks.end(), does_not_read_mutable_heap)) {
+  if (unordered_all_of(hot_prefix_blocks, does_not_read_mutable_heap)) {
     auto cold_closure_blocks = get_forward_reachable_blocks(cfg, cold_frontier);
-    cold_closure_blocks.insert(hot_prefix_blocks.begin(), hot_prefix_blocks.end());
+    insert_unordered_iterable(cold_closure_blocks, hot_prefix_blocks);
     specialize_cold_code(method, cold_code->cfg(),
                          map(cold_code->cfg(), cold_closure_blocks));
   } else {
@@ -557,9 +557,9 @@ void HotColdMethodSpecializingPass::run_pass(DexStoresVector& stores,
   });
 
   // Add specialized methods to their owning classes
-  std::vector<DexClass*> classes;
-  for (auto& p : specialized_methods_by_class) {
-    classes.push_back(p.first);
+  UnorderedBag<DexClass*> classes;
+  for (auto& p : UnorderedIterable(specialized_methods_by_class)) {
+    classes.insert(p.first);
   }
   workqueue_run<DexClass*>(
       [&](DexClass* cls) {

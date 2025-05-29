@@ -7,13 +7,11 @@
 
 #pragma once
 
-#include <unordered_map>
-#include <unordered_set>
-
 #include <WorkQueue.h>
 
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "KeepReason.h"
 #include "MethodOverrideGraph.h"
@@ -96,17 +94,16 @@ struct ReachableObjectHash {
 
 struct IgnoreSets {
   IgnoreSets() = default;
-  std::unordered_set<const DexType*> string_literals;
-  std::unordered_set<const DexType*> string_literal_annos;
+  UnorderedSet<const DexType*> string_literals;
+  UnorderedSet<const DexType*> string_literal_annos;
   bool keep_class_in_string{true};
 };
 
 // The ReachableObjectSet does not need to be a ConcurrentSet since it is nested
 // within the ReachableObjectGraph's ConcurrentMap, which ensures that all
-// updates to it are thread-safe. Using a plain unordered_set here is a
+// updates to it are thread-safe. Using a plain UnorderedSet here is a
 // significant performance improvement.
-using ReachableObjectSet =
-    std::unordered_set<ReachableObject, ReachableObjectHash>;
+using ReachableObjectSet = UnorderedSet<ReachableObject, ReachableObjectHash>;
 using ReachableObjectGraph =
     ConcurrentMap<ReachableObject, ReachableObjectSet, ReachableObjectHash>;
 
@@ -266,7 +263,7 @@ class MethodReferencesGatherer {
 
   uint32_t get_instructions_visited() const { return m_instructions_visited; }
 
-  std::unordered_set<const IRInstruction*> get_non_returning_insns() const;
+  UnorderedSet<const IRInstruction*> get_non_returning_insns() const;
 
   void default_gather_mie(const MethodItemEntry& mie,
                           References* refs,
@@ -281,7 +278,7 @@ class MethodReferencesGatherer {
   std::optional<InstantiableDependency> get_instantiable_dependency(
       const IRInstruction* insn, References* refs) const;
   struct ReturningDependency {
-    std::unordered_set<const DexMethod*> methods;
+    UnorderedSet<const DexMethod*> methods;
   };
   std::optional<ReturningDependency> get_returning_dependency(
       const IRInstruction* insn, const References* refs) const;
@@ -291,11 +288,11 @@ class MethodReferencesGatherer {
   bool m_consider_code;
   GatherMieFunction m_gather_mie;
   std::mutex m_mutex;
-  std::unordered_set<cfg::Block*> m_pushed_blocks;
-  std::unordered_set<DexType*> m_covered_catch_types;
-  std::unordered_map<const DexClass*, std::vector<CFGNeedle>>
+  UnorderedSet<cfg::Block*> m_pushed_blocks;
+  UnorderedSet<DexType*> m_covered_catch_types;
+  UnorderedMap<const DexClass*, std::vector<CFGNeedle>>
       m_instantiable_dependencies;
-  std::unordered_map<const DexMethod*, std::vector<CFGNeedle>>
+  UnorderedMap<const DexMethod*, std::vector<CFGNeedle>>
       m_returning_dependencies;
   uint32_t m_instructions_visited{0};
   AdvanceKind m_next_advance_kinds{AdvanceKind::Initial};
@@ -314,8 +311,7 @@ inline MethodReferencesGatherer::AdvanceKind operator|(
 }
 
 using MethodReferencesGatherers =
-    std::unordered_map<const DexMethod*,
-                       std::shared_ptr<MethodReferencesGatherer>>;
+    UnorderedMap<const DexMethod*, std::shared_ptr<MethodReferencesGatherer>>;
 
 struct ConditionallyMarked {
   struct MarkedItems {
@@ -356,12 +352,12 @@ struct ReachableAspects {
   DynamicallyReferencedClasses dynamically_referenced_classes;
   CallableInstanceMethods callable_instance_methods;
   CallableInstanceMethods exact_invoke_virtual_targets;
-  ConcurrentMap<const DexMethod*, std::unordered_set<const DexType*>>
+  ConcurrentMap<const DexMethod*, UnorderedSet<const DexType*>>
       base_invoke_virtual_targets;
   InstantiableTypes instantiable_types;
-  std::unordered_set<const DexClass*> uninstantiable_dependencies;
-  std::unordered_set<const DexMethod*> non_returning_dependencies;
-  std::unordered_map<const DexMethod*, std::unordered_set<const IRInstruction*>>
+  UnorderedSet<const DexClass*> uninstantiable_dependencies;
+  UnorderedSet<const DexMethod*> non_returning_dependencies;
+  UnorderedMap<const DexMethod*, UnorderedSet<const IRInstruction*>>
       non_returning_insns;
   ConcurrentSet<const DexMethod*> returning_methods;
   ConcurrentSet<DexType*> directly_instantiable_types;
@@ -369,7 +365,7 @@ struct ReachableAspects {
   InstantiableTypes incomplete_directly_instantiable_types;
   CallableInstanceMethods zombie_implementation_methods;
   std::vector<DexMethod*> zombie_methods;
-  std::unordered_set<const DexClass*> deserializable_types{};
+  UnorderedSet<const DexClass*> deserializable_types{};
   uint64_t instructions_unvisited{0};
   const DexType* parcelable_type = DexType::get_type("Landroid/os/Parcelable;");
   void finish(const ConditionallyMarked& cond_marked,
@@ -384,23 +380,23 @@ struct References {
   // Conditional virtual method references. They are already resolved DexMethods
   // conditionally reachable at virtual call sites.
   // Exact invoke-virtual targets must be non-external.
-  std::unordered_set<const DexMethod*>
+  UnorderedSet<const DexMethod*>
       exact_invoke_virtual_targets_if_class_instantiable;
   // Base invoke-virtual targets may include external virtual methods, and they
   // imply that all overriding methods may be targets as well.
-  std::unordered_map<const DexMethod*, std::unordered_set<const DexType*>>
+  UnorderedMap<const DexMethod*, UnorderedSet<const DexType*>>
       base_invoke_virtual_targets_if_class_instantiable;
   // Whether there are may have been any unresolved or external invoke virtual
   // targets.
   bool unknown_invoke_virtual_targets{false};
-  std::unordered_set<const DexClass*> classes_dynamically_referenced;
+  UnorderedSet<const DexClass*> classes_dynamically_referenced;
   std::vector<const DexClass*>
       method_references_gatherer_dependencies_if_class_instantiable;
   std::vector<const DexMethod*>
       method_references_gatherer_dependencies_if_method_returning;
   bool method_references_gatherer_dependency_if_instance_method_callable{false};
   std::vector<DexType*> new_instances;
-  std::unordered_set<const DexMethod*> invoke_super_targets;
+  UnorderedSet<const DexMethod*> invoke_super_targets;
   std::vector<const DexClass*> classes_if_instantiable;
   bool returns{false};
 
@@ -503,7 +499,7 @@ class RootSetMarker {
 class TransitiveClosureMarkerWorker;
 
 struct TransitiveClosureMarkerSharedState {
-  std::unordered_set<const DexClass*> scope_set;
+  UnorderedSet<const DexClass*> scope_set;
   const IgnoreSets* ignore_sets;
   const method_override_graph::Graph* method_override_graph;
   bool record_reachability;
@@ -639,23 +635,23 @@ class TransitiveClosureMarkerWorker {
   }
 
   void instance_callable(const DexMethod* method);
-  void instance_callable(const std::unordered_set<const DexMethod*>& methods) {
-    for (auto* m : methods) {
+  void instance_callable(const UnorderedSet<const DexMethod*>& methods) {
+    for (auto* m : UnorderedIterable(methods)) {
       instance_callable(m);
     }
   }
 
   void implementation_method(
       const DexMethod* method,
-      std::unordered_set<const DexMethod*>* overridden_methods);
+      UnorderedSet<const DexMethod*>* overridden_methods);
 
   void instance_callable_if_exact_invoke_virtual_target(
       const DexMethod* method);
 
   void exact_invoke_virtual_target(const DexMethod* method);
   void exact_invoke_virtual_target(
-      const std::unordered_set<const DexMethod*>& methods) {
-    for (auto* m : methods) {
+      const UnorderedSet<const DexMethod*>& methods) {
+    for (auto* m : UnorderedIterable(methods)) {
       exact_invoke_virtual_target(m);
     }
   }
@@ -663,20 +659,19 @@ class TransitiveClosureMarkerWorker {
                                   const DexType* base_type,
                                   bool is_child = false);
   void base_invoke_virtual_target(
-      const std::unordered_map<const DexMethod*,
-                               std::unordered_set<const DexType*>>&
+      const UnorderedMap<const DexMethod*, UnorderedSet<const DexType*>>&
           base_invoke_virtual_targets) {
-    for (auto&& [method, base_types] : base_invoke_virtual_targets) {
-      for (auto* base_type : base_types) {
+    for (auto&& [method, base_types] :
+         UnorderedIterable(base_invoke_virtual_targets)) {
+      for (auto* base_type : UnorderedIterable(base_types)) {
         base_invoke_virtual_target(method, base_type);
       }
     }
   }
 
   void dynamically_referenced(const DexClass* cls);
-  void dynamically_referenced(
-      const std::unordered_set<const DexClass*>& classes) {
-    for (auto* cls : classes) {
+  void dynamically_referenced(const UnorderedSet<const DexClass*>& classes) {
+    for (auto* cls : UnorderedIterable(classes)) {
       dynamically_referenced(cls);
     }
   }

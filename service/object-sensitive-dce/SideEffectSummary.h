@@ -7,12 +7,10 @@
 
 #pragma once
 
-#include <unordered_map>
-#include <unordered_set>
-
 #include <sparta/S_Expression.h>
 
 #include "ConcurrentContainers.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "InitClassesWithSideEffects.h"
 #include "LocalPointersAnalysis.h"
@@ -41,8 +39,7 @@ using param_idx_t = uint16_t;
 
 namespace side_effects {
 
-using ParamInstructionMap =
-    std::unordered_map<const IRInstruction*, param_idx_t>;
+using ParamInstructionMap = UnorderedMap<const IRInstruction*, param_idx_t>;
 
 enum Effects : size_t {
   EFF_NONE = 0,
@@ -61,7 +58,7 @@ struct Summary {
   // never removable. It doesn't dig into the specific reasons for the side
   // effects.
   size_t effects{EFF_NONE};
-  std::unordered_set<param_idx_t> modified_params;
+  UnorderedSet<param_idx_t> modified_params;
   bool may_read_external{false};
 
   Summary() = default;
@@ -102,9 +99,9 @@ sparta::s_expr to_s_expr(const Summary&);
 
 std::ostream& operator<<(std::ostream& o, const Summary& summary);
 
-using SummaryMap = std::unordered_map<const DexMethodRef*, Summary>;
+using SummaryMap = UnorderedMap<const DexMethodRef*, Summary>;
 
-using InvokeToSummaryMap = std::unordered_map<const IRInstruction*, Summary>;
+using InvokeToSummaryMap = UnorderedMap<const IRInstruction*, Summary>;
 
 class SummaryBuilder final {
  public:

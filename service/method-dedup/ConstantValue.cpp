@@ -163,7 +163,7 @@ ConstantValues::ConstantValues(const TypeTags* type_tags,
 std::vector<ConstantValues::ConstantValueLoad>
 ConstantValues::collect_constant_loads(cfg::ControlFlowGraph& cfg) {
   std::vector<ConstantValueLoad> const_val_loads;
-  std::unordered_set<IRInstruction*> matched_loads;
+  UnorderedSet<IRInstruction*> matched_loads;
   for (auto& const_val : m_const_vals) {
     if (const_val.is_invalid()) {
       continue;

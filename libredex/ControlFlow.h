@@ -8,7 +8,6 @@
 #pragma once
 
 #include <type_traits>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -18,6 +17,7 @@
 
 #include <sparta/WeakTopologicalOrdering.h>
 
+#include "DeterministicContainers.h"
 #include "DexPosition.h"
 #include "IRCode.h"
 #include "SingletonIterable.h"
@@ -75,7 +75,7 @@ using ParamIndex = uint32_t;
  * A helper function that computes the mapping of load param instructions
  * to their respective indices.
  */
-std::unordered_map<const IRInstruction*, ParamIndex> get_load_param_map(
+UnorderedMap<const IRInstruction*, ParamIndex> get_load_param_map(
     const cfg::ControlFlowGraph& cfg);
 
 namespace source_blocks {
@@ -326,7 +326,7 @@ class Block final {
   // information of the CFG. That is, if a block is an ancestor of another,
   // then the valid registers that the ancestor block defines should be
   // acknowledged by the descendant block.
-  void cleanup_debug(std::unordered_set<reg_t>& valid_regs);
+  void cleanup_debug(UnorderedSet<reg_t>& valid_regs);
 
   opcode::Branchingness branchingness() const;
 
@@ -582,7 +582,7 @@ class ControlFlowGraph {
   template <typename EdgePredicate>
   void copy_succ_edges_if(Block* from, Block* to, EdgePredicate edge_predicate);
 
-  using EdgeSet = std::unordered_set<Edge*>;
+  using EdgeSet = UnorderedSet<Edge*>;
 
   // Make `e` point to a new target block.
   // The source block is unchanged.
@@ -662,14 +662,15 @@ class ControlFlowGraph {
 
   template <class ForwardIt>
   void delete_edges(const ForwardIt& begin, const ForwardIt& end) {
-    std::unordered_set<cfg::Edge*> edges;
-    std::unordered_set<cfg::Block*> srcs;
+    UnorderedSet<cfg::Edge*> edges;
+    UnorderedSet<cfg::Block*> srcs;
     for (auto it = begin; it != end; it++) {
       auto e = *it;
       edges.insert(e);
       srcs.insert(e->src());
     }
-    delete_succ_edge_if(srcs.begin(), srcs.end(),
+    auto&& srcs_ui = UnorderedIterable(srcs);
+    delete_succ_edge_if(srcs_ui.begin(), srcs_ui.end(),
                         [&](Edge* e) { return edges.count(e); });
   }
 
@@ -1057,10 +1058,10 @@ class ControlFlowGraph {
   friend class Block;
 
   using BranchToTargets =
-      std::unordered_map<MethodItemEntry*,
-                         std::vector<std::pair<Block*, MethodItemEntry*>>>;
+      UnorderedMap<MethodItemEntry*,
+                   std::vector<std::pair<Block*, MethodItemEntry*>>>;
   using TryEnds = std::vector<std::pair<TryEntry*, Block*>>;
-  using TryCatches = std::unordered_map<CatchEntry*, Block*>;
+  using TryCatches = UnorderedMap<CatchEntry*, Block*>;
   using Blocks = std::map<BlockId, Block*>;
   friend class InstructionIteratorImpl<false>;
   friend class InstructionIteratorImpl<true>;
@@ -1095,9 +1096,9 @@ class ControlFlowGraph {
 
   // helper functions
   void build_chains(std::vector<std::unique_ptr<BlockChain>>* chains,
-                    std::unordered_map<Block*, BlockChain*>* block_to_chain);
+                    UnorderedMap<Block*, BlockChain*>* block_to_chain);
   sparta::WeakTopologicalOrdering<BlockChain*> build_wto(
-      const std::unordered_map<Block*, BlockChain*>& block_to_chain);
+      const UnorderedMap<Block*, BlockChain*>& block_to_chain);
   std::vector<Block*> wto_chains(
       sparta::WeakTopologicalOrdering<BlockChain*> wto);
 
@@ -1123,7 +1124,7 @@ class ControlFlowGraph {
   //     CatchEntry(BazException)
   MethodItemEntry* create_catch(
       Block* block,
-      std::unordered_map<MethodItemEntry*, Block*>* catch_to_containing_block);
+      UnorderedMap<MethodItemEntry*, Block*>* catch_to_containing_block);
 
   // Materialize TRY_STARTs, TRY_ENDs, and MFLOW_CATCHes
   // Used while turning back into a linear representation.
@@ -1204,7 +1205,7 @@ class ControlFlowGraph {
                               const ForwardIt& end,
                               EdgePredicate predicate,
                               bool cleanup = true) {
-    std::unordered_set<Block*> source_blocks;
+    UnorderedSet<Block*> source_blocks;
     EdgeSet to_remove;
     for (auto it = begin; it != end; it++) {
       auto& reverse_edges = (*it)->m_preds;
@@ -1222,7 +1223,7 @@ class ControlFlowGraph {
           reverse_edges.end());
     }
 
-    for (Block* source_block : source_blocks) {
+    for (Block* source_block : UnorderedIterable(source_blocks)) {
       auto& forward_edges = source_block->m_succs;
       forward_edges.erase(
           std::remove_if(
@@ -1242,8 +1243,8 @@ class ControlFlowGraph {
                               const ForwardIt& end,
                               EdgePredicate predicate,
                               bool cleanup = true) {
-    std::unordered_set<Block*> target_blocks;
-    std::unordered_set<Edge*> to_remove;
+    UnorderedSet<Block*> target_blocks;
+    UnorderedSet<Edge*> to_remove;
     for (auto it = begin; it != end; it++) {
       auto& forward_edges = (*it)->m_succs;
       forward_edges.erase(
@@ -1260,7 +1261,7 @@ class ControlFlowGraph {
           forward_edges.end());
     }
 
-    for (Block* target_block : target_blocks) {
+    for (Block* target_block : UnorderedIterable(target_blocks)) {
       auto& reverse_edges = target_block->m_preds;
       reverse_edges.erase(
           std::remove_if(

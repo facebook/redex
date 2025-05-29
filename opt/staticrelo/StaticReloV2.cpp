@@ -9,6 +9,7 @@
 
 #include "ApiLevelChecker.h"
 #include "ClassHierarchy.h"
+#include "DeterministicContainers.h"
 #include "PassManager.h"
 #include "Resolver.h"
 #include "Show.h"
@@ -67,7 +68,7 @@ struct StaticCallGraph {
       return true;
     }
   };
-  std::unordered_map<DexMethod*, int> method_id_map;
+  UnorderedMap<DexMethod*, int> method_id_map;
   std::vector<Vertex> vertices;
   // The direction of the edge points from the caller to callee. For example,
   // callees[0] = {1,2} means vertex 0 has two callees and they are 1 and 2
@@ -99,7 +100,7 @@ void build_call_graph(const std::vector<DexClass*>& candidate_classes,
   graph.callers.resize(graph.vertices.size());
   graph.callees.resize(graph.vertices.size());
 
-  for (auto& meth_id : graph.method_id_map) {
+  for (auto& meth_id : UnorderedIterable(graph.method_id_map)) {
     DexMethod* caller = meth_id.first;
     int caller_id = meth_id.second;
     if (!caller->get_code()) {

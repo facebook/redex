@@ -7,8 +7,9 @@
 
 #pragma once
 
-#include <unordered_set>
 #include <vector>
+
+#include "DeterministicContainers.h"
 
 class DexField;
 class DexMethod;
@@ -26,9 +27,9 @@ namespace constructor_analysis {
 // Under these conditions, a constructor is universally inlinable.
 bool can_inline_init(
     const DexMethod* init_method,
-    const std::unordered_set<const DexField*>* finalizable_fields = nullptr,
+    const UnorderedSet<const DexField*>* finalizable_fields = nullptr,
     bool relaxed = false,
-    std::unordered_set<DexField*>* written_final_fields = nullptr);
+    UnorderedSet<DexField*>* written_final_fields = nullptr);
 
 // Checks that the invocation of one constructor within another constructor
 // of the same class can be inlined, either for a particular or for all
@@ -44,6 +45,6 @@ bool can_inline_inits_in_same_class(DexMethod* caller_method,
 // Complex is defined such that the called <init> method on a new-instance is
 // defined on some other type in the hierarchy, aside from java.lang.Object's
 // default constructor.
-std::unordered_set<const DexType*> find_complex_init_inlined_types(
+UnorderedSet<const DexType*> find_complex_init_inlined_types(
     const std::vector<DexClass*>& scope);
 } // namespace constructor_analysis

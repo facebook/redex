@@ -349,7 +349,7 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
       }
     }
   }
-  for (auto& pair : graph.nodes()) {
+  for (auto& pair : UnorderedIterable(graph.nodes())) {
     auto reg = pair.first;
     auto& node = pair.second;
     if (reg >= initial_regs) {
@@ -365,7 +365,7 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
 
 std::ostream& Graph::write_dot_format(std::ostream& o) const {
   o << "graph {\n";
-  for (const auto& pair : nodes()) {
+  for (const auto& pair : UnorderedIterable(nodes())) {
     auto reg = pair.first;
     auto& node = pair.second;
     o << reg << "[label=\"" << reg << " (" << node.weight() << ")\"]" << "\n";
@@ -378,7 +378,7 @@ std::ostream& Graph::write_dot_format(std::ostream& o) const {
   o << "}\n";
 
   o << "containment graph {\n";
-  for (const auto& pair : m_containment_graph) {
+  for (const auto& pair : UnorderedIterable(m_containment_graph)) {
     reg_t reg1 = static_cast<reg_t>((pair & 0xFFFFFFFF00000000) >> 32);
     reg_t reg2 = static_cast<reg_t>(pair & 0x00000000FFFFFFFF);
     o << reg1 << " -- " << reg2 << "\n";

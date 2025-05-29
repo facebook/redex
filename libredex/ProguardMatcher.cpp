@@ -12,11 +12,9 @@
 #include <mutex>
 #include <sstream>
 #include <thread>
-#include <unordered_map>
-#include <unordered_set>
 
 #include "ClassHierarchy.h"
-#include "ConcurrentContainers.h"
+#include "DeterministicContainers.h"
 #include "DexAnnotation.h"
 #include "DexUtil.h"
 #include "IRCode.h"
@@ -36,7 +34,7 @@ using namespace keep_rules;
 
 namespace {
 
-using RegexMap = std::unordered_map<std::string, boost::regex>;
+using RegexMap = UnorderedMap<std::string, boost::regex>;
 
 using MatchingStringsCache =
     ConcurrentMap<std::string, InsertOnlyConcurrentMap<const DexString*, bool>>;
@@ -228,7 +226,7 @@ struct ClassMatcher {
   RegexWithCache m_extends;
   RegexWithCache m_extends_anno;
 
-  std::unordered_map<const DexClass*, bool> m_extends_result_cache;
+  UnorderedMap<const DexClass*, bool> m_extends_result_cache;
 };
 
 enum class RuleType {
@@ -390,7 +388,7 @@ class KeepRuleMatcher {
   RegexMap& m_regex_map;
 
   std::mutex m_warn_mutex;
-  std::unordered_set<std::string> m_already_warned;
+  UnorderedSet<std::string> m_already_warned;
 };
 
 class ProguardMatcher {
@@ -1076,7 +1074,8 @@ void ProguardRuleRecorder::record_accessed_rules(
     const std::string& used_rule_path, const std::string& unused_rule_path) {
   {
     std::vector<std::string> used_out;
-    for (const keep_rules::KeepSpec* keep_rule : used_keep_rules) {
+    for (const keep_rules::KeepSpec* keep_rule :
+         UnorderedIterable(used_keep_rules)) {
       used_out.push_back(keep_rules::show_keep(*keep_rule));
     }
     for (auto& [keep_rules, command] : std::array<
@@ -1084,7 +1083,7 @@ void ProguardRuleRecorder::record_accessed_rules(
              {&used_assumenosideeffect_rules, "-assumenosideeffects"},
              {&used_assumevalues_rules, "-assumevalues"},
          }}) {
-      for (auto* keep_rule : *keep_rules) {
+      for (auto* keep_rule : UnorderedIterable(*keep_rules)) {
         used_out.push_back(
             keep_rules::show_simple_keep_rule(*keep_rule, command));
       }
@@ -1098,7 +1097,8 @@ void ProguardRuleRecorder::record_accessed_rules(
   }
   {
     std::vector<std::string> unused_out;
-    for (const keep_rules::KeepSpec* keep_rule : unused_keep_rules) {
+    for (const keep_rules::KeepSpec* keep_rule :
+         UnorderedIterable(unused_keep_rules)) {
       unused_out.push_back(keep_rules::show_keep(*keep_rule));
     }
     for (auto& [keep_rules, command] : std::array<
@@ -1106,7 +1106,7 @@ void ProguardRuleRecorder::record_accessed_rules(
              {&unused_assumenosideeffect_rules, "-assumenosideeffects"},
              {&unused_assumevalues_rules, "-assumevalues"},
          }}) {
-      for (auto* keep_rule : *keep_rules) {
+      for (auto* keep_rule : UnorderedIterable(*keep_rules)) {
         unused_out.push_back(
             keep_rules::show_simple_keep_rule(*keep_rule, command));
       }

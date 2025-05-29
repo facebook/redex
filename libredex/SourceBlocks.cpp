@@ -13,7 +13,6 @@
 #include <optional>
 #include <sstream>
 #include <string>
-#include <unordered_map>
 
 #include <sparta/S_Expression.h>
 
@@ -1127,7 +1126,7 @@ void track_source_block_coverage(ScopedMetrics& sm,
 
 struct ViolationsHelper::ViolationsHelperImpl {
   size_t top_n;
-  std::unordered_map<DexMethod*, size_t> violations_start;
+  UnorderedMap<DexMethod*, size_t> violations_start;
   std::vector<std::string> print;
   bool processed{false};
 

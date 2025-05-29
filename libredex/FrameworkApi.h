@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 
 namespace api {
@@ -60,8 +61,8 @@ class AndroidSDK {
 
   static AndroidSDK from_string(const std::string& input);
 
-  const std::unordered_map<const DexType*, FrameworkAPI>&
-  get_framework_classes() const {
+  const UnorderedMap<const DexType*, FrameworkAPI>& get_framework_classes()
+      const {
     return m_framework_classes;
   }
 
@@ -99,7 +100,7 @@ class AndroidSDK {
   void load_framework_classes();
 
   std::string m_sdk_api_file;
-  std::unordered_map<const DexType*, FrameworkAPI> m_framework_classes;
+  UnorderedMap<const DexType*, FrameworkAPI> m_framework_classes;
 };
 
 } // namespace api

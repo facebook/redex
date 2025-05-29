@@ -49,6 +49,7 @@
 #include "DedupBlockValueNumbering.h"
 
 #include <algorithm>
+#include <optional>
 
 #include "DexPosition.h"
 #include "Lazy.h"
@@ -102,7 +103,7 @@ static bool same_branch_and_goto_successors(const cfg::Block* b1,
     return false;
   }
   using Key = std::pair<cfg::EdgeType, cfg::Edge::CaseKey>;
-  std::unordered_map<Key, cfg::Block*, boost::hash<Key>> b2_succs_map;
+  UnorderedMap<Key, cfg::Block*, boost::hash<Key>> b2_succs_map;
   for (auto b2_succ : b2_succs) {
     b2_succs_map.emplace(
         std::make_pair(b2_succ->type(), b2_succ->case_key().value_or(0)),
@@ -202,7 +203,7 @@ template <class UnorderedMap,
 std::vector<Entry*> get_id_order(UnorderedMap& umap) {
   std::vector<Entry*> order;
   order.reserve(umap.size());
-  for (Entry& entry : umap) {
+  for (Entry& entry : UnorderedIterable(umap)) {
     order.push_back(&entry);
   }
   std::sort(order.begin(), order.end(),
@@ -347,10 +348,10 @@ class DedupBlocksImpl {
   // Because `BlocksInSameGroup` depends on the CFG, modifications to the CFG
   // invalidate this map.
   using BlockSet = std::set<cfg::Block*, BlockCompare>;
-  using Duplicates = std::unordered_map<BlockAndBlockValuePair,
-                                        BlockSet,
-                                        BlockAndBlockValuePairHasher,
-                                        BlockAndBlockValuePairInSameGroup>;
+  using Duplicates = UnorderedMap<BlockAndBlockValuePair,
+                                  BlockSet,
+                                  BlockAndBlockValuePairHasher,
+                                  BlockAndBlockValuePairInSameGroup>;
   struct PostfixSplitGroup {
     BlockSet postfix_blocks;
     std::map<cfg::Block*, IRList::reverse_iterator, BlockCompare>
@@ -359,10 +360,10 @@ class DedupBlocksImpl {
   };
 
   // Be careful using `.at()` on this map for the same reason as on `Duplicates`
-  using PostfixSplitGroupMap = std::unordered_map<cfg::Block*,
-                                                  PostfixSplitGroup,
-                                                  BlockSuccHasher,
-                                                  SuccBlocksInSameGroup>;
+  using PostfixSplitGroupMap = UnorderedMap<cfg::Block*,
+                                            PostfixSplitGroup,
+                                            BlockSuccHasher,
+                                            SuccBlocksInSameGroup>;
   const Config* m_config;
   Stats& m_stats;
 
@@ -715,7 +716,7 @@ class DedupBlocksImpl {
         // @TODO - Instead of only keeping one group and calculate best savings
         // based on just one group, maintain multiple groups at the same time
         // and split/dedup those groups.
-        std::unordered_map<MethodItemEntry*, CountGroup, MIEHasher, MIEEquals>
+        UnorderedMap<MethodItemEntry*, CountGroup, MIEHasher, MIEEquals>
             mie_count;
 
         for (auto& block_iterator_pair : block_iterator_map) {
@@ -1040,11 +1041,11 @@ class DedupBlocksImpl {
   //
   // We avoid this situation by skipping blocks that contain an init
   // invocation to an object that didn't come from a unique instruction.
-  static boost::optional<std::vector<IRInstruction*>>
+  static std::optional<std::vector<IRInstruction*>>
   get_init_receiver_instructions_defined_outside_of_block(
       cfg::Block* block, Lazy<live_range::LazyLiveRanges>& live_ranges) {
     std::vector<IRInstruction*> res;
-    std::unordered_set<IRInstruction*> block_insns;
+    UnorderedSet<IRInstruction*> block_insns;
     for (auto& mie : InstructionIterable(block)) {
       auto insn = mie.insn;
       if (opcode::is_invoke_direct(insn->opcode()) &&
@@ -1057,7 +1058,7 @@ class DedupBlocksImpl {
           // should never happen, but we are not going to fight that here
           TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] defs.size() = %zu",
                 defs.size());
-          return boost::none;
+          return std::nullopt;
         }
         auto def = *defs.begin();
         auto def_opcode = def->opcode();
@@ -1097,7 +1098,7 @@ class DedupBlocksImpl {
   void record_stats(const Duplicates& duplicates) {
     // avoid the expensive lock if we won't actually print the information
     if (traceEnabled(DEDUP_BLOCKS, 2)) {
-      for (const auto& entry : duplicates) {
+      for (const auto& entry : UnorderedIterable(duplicates)) {
         const auto& blocks = entry.second;
         // all blocks have the same number of opcodes
         cfg::Block* block = *blocks.begin();
@@ -1112,11 +1113,10 @@ class DedupBlocksImpl {
             typename THash,
             typename TPred,
             typename NeedToRemove>
-  static void remove_if(
-      std::unordered_map<TKey, TValue, THash, TPred>& duplicates,
-      NeedToRemove need_to_remove) {
-    std20::erase_if(duplicates,
-                    [&](auto& p) { return need_to_remove(p.second); });
+  static void remove_if(UnorderedMap<TKey, TValue, THash, TPred>& duplicates,
+                        NeedToRemove need_to_remove) {
+    unordered_erase_if(duplicates,
+                       [&](auto& p) { return need_to_remove(p.second); });
   }
 
   static bool is_singleton_or_inconsistent(
@@ -1131,7 +1131,7 @@ class DedupBlocksImpl {
     // Next we check if there are disagreeing init-receiver instructions.
     // TODO: Instead of just dropping all blocks in this case, do
     // finer-grained partitioning.
-    boost::optional<std::vector<IRInstruction*>> insns;
+    std::optional<std::vector<IRInstruction*>> insns;
     for (cfg::Block* block : blocks) {
       auto other_insns =
           get_init_receiver_instructions_defined_outside_of_block(block,
@@ -1140,13 +1140,9 @@ class DedupBlocksImpl {
         return true;
       } else if (!insns) {
         insns = std::move(other_insns);
-      } else {
+      } else if (*insns != *other_insns) {
         always_assert(insns->size() == other_insns->size());
-        for (size_t i = 0; i < insns->size(); i++) {
-          if (insns->at(i) != other_insns->at(i)) {
-            return true;
-          }
-        }
+        return true;
       }
     }
 
@@ -1235,7 +1231,8 @@ class DedupBlocksImpl {
         // an array of an interface type.
         init_reaching_defs();
         for (auto reaching_def : reaching_defs.elements()) {
-          for (const auto& use : (*live_ranges->def_use_chains)[reaching_def]) {
+          for (const auto& use : UnorderedIterable(
+                   (*live_ranges->def_use_chains)[reaching_def])) {
             auto op = use.insn->opcode();
             if (opcode::is_an_aget(op) || opcode::is_an_iput(op) ||
                 opcode::is_an_sput(op) || opcode::is_an_invoke(op) ||
@@ -1256,7 +1253,8 @@ class DedupBlocksImpl {
       // instruction that expects *some* array type.
       init_reaching_defs();
       for (auto reaching_def : reaching_defs.elements()) {
-        for (const auto& use : (*live_ranges->def_use_chains)[reaching_def]) {
+        for (const auto& use :
+             UnorderedIterable((*live_ranges->def_use_chains)[reaching_def])) {
           auto op = use.insn->opcode();
           if (opcode::is_array_length(op) || opcode::is_an_aget(op) ||
               opcode::is_an_aput(op) || opcode::is_fill_array_data(op)) {
@@ -1268,15 +1266,6 @@ class DedupBlocksImpl {
     return false;
   }
 
-  static boost::optional<MethodItemEntry&> last_opcode(cfg::Block* block) {
-    for (auto it = block->rbegin(); it != block->rend(); it++) {
-      if (it->type == MFLOW_OPCODE) {
-        return *it;
-      }
-    }
-    return boost::none;
-  }
-
   static size_t num_opcodes(cfg::Block* block) {
     const auto& iterable = InstructionIterable(block);
     return std::distance(iterable.begin(), iterable.end());
@@ -1284,7 +1273,7 @@ class DedupBlocksImpl {
 
   static void print_dups(const Duplicates& dups) {
     TRACE(DEDUP_BLOCKS, 4, "duplicate blocks set: {");
-    for (const auto& entry : dups) {
+    for (const auto& entry : UnorderedIterable(dups)) {
       TRACE(
           DEDUP_BLOCKS, 4, "  hash = %zu",
           DedupBlkValueNumbering::BlockValueHasher{}(*entry.first.block_value));
@@ -1338,7 +1327,7 @@ Stats& Stats::operator+=(const Stats& that) {
   insns_removed += that.insns_removed;
   blocks_split += that.blocks_split;
   positions_inserted += that.positions_inserted;
-  for (auto& p : that.dup_sizes) {
+  for (auto& p : UnorderedIterable(that.dup_sizes)) {
     dup_sizes[p.first] += p.second;
   }
   return *this;

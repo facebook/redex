@@ -62,8 +62,7 @@ class ConstantUses {
   TypeDemand get_type_demand(IRInstruction* insn, size_t src_index) const;
 
   mutable std::unique_ptr<type_inference::TypeInference> m_type_inference;
-  std::unordered_map<IRInstruction*,
-                     std::vector<std::pair<IRInstruction*, size_t>>>
+  UnorderedMap<IRInstruction*, std::vector<std::pair<IRInstruction*, size_t>>>
       m_constant_uses;
   std::vector<std::pair<IRInstruction*, size_t>> m_no_uses;
   DexType* m_rtype;

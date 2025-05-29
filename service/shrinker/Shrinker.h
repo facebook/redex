@@ -30,19 +30,18 @@ namespace shrinker {
 
 class Shrinker {
  public:
-  Shrinker(
-      DexStoresVector& stores,
-      const Scope& scope,
-      const init_classes::InitClassesWithSideEffects&
-          init_classes_with_side_effects,
-      const ShrinkerConfig& config,
-      int min_sdk,
-      const std::unordered_set<DexMethodRef*>& configured_pure_methods = {},
-      const std::unordered_set<const DexString*>&
-          configured_finalish_field_names = {},
-      const std::unordered_set<const DexField*>& configured_finalish_fields =
-          {},
-      const boost::optional<std::string>& package_name = boost::none);
+  Shrinker(DexStoresVector& stores,
+           const Scope& scope,
+           const init_classes::InitClassesWithSideEffects&
+               init_classes_with_side_effects,
+           const ShrinkerConfig& config,
+           int min_sdk,
+           const UnorderedSet<DexMethodRef*>& configured_pure_methods = {},
+           const UnorderedSet<const DexString*>&
+               configured_finalish_field_names = {},
+           const UnorderedSet<const DexField*>& configured_finalish_fields = {},
+           const boost::optional<std::string>& package_name = boost::none,
+           const method_override_graph::Graph* method_override_graph = nullptr);
 
   constant_propagation::Transform::Stats constant_propagation(
       bool is_static,
@@ -91,7 +90,7 @@ class Shrinker {
 
   bool enabled() const { return m_enabled; }
 
-  const std::unordered_set<const DexField*>* get_finalizable_fields() const {
+  const UnorderedSet<const DexField*>* get_finalizable_fields() const {
     return m_cse_shared_state ? &m_cse_shared_state->get_finalizable_fields()
                               : nullptr;
   }
@@ -127,7 +126,7 @@ class Shrinker {
 
   using ShrinkerForest = ::random_forest::Forest<const MethodContext&>;
 
-  const std::unordered_set<DexMethodRef*>& get_pure_methods() const {
+  const UnorderedSet<DexMethodRef*>& get_pure_methods() const {
     return m_pure_methods;
   }
 
@@ -164,9 +163,9 @@ class Shrinker {
 
   const init_classes::InitClassesWithSideEffects&
       m_init_classes_with_side_effects;
-  std::unordered_set<DexMethodRef*> m_pure_methods;
-  std::unordered_set<const DexString*> m_finalish_field_names;
-  std::unordered_set<const DexField*> m_finalish_fields;
+  UnorderedSet<DexMethodRef*> m_pure_methods;
+  UnorderedSet<const DexString*> m_finalish_field_names;
+  UnorderedSet<const DexField*> m_finalish_fields;
 
   constant_propagation::ImmutableAttributeAnalyzerState m_immut_analyzer_state;
   constant_propagation::StringAnalyzerState m_string_analyzer_state;

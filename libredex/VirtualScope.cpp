@@ -818,7 +818,7 @@ bool can_rename_scope(const VirtualScope* scope) {
 std::vector<const DexMethod*> select_from(const VirtualScope* scope,
                                           const DexType* type) {
   std::vector<const DexMethod*> refined_scope;
-  std::unordered_map<const DexType*, DexMethod*> non_child_methods;
+  UnorderedMap<const DexType*, DexMethod*> non_child_methods;
   bool found_root_method = false;
   for (const auto& method : scope->methods) {
     if (type::check_cast(method.first->get_class(), type)) {
@@ -881,7 +881,7 @@ void ClassScopes::build_class_scopes(const DexType* type) {
 }
 
 void ClassScopes::build_interface_scopes() {
-  for (const auto& intf_it : m_interface_map) {
+  for (const auto& intf_it : UnorderedIterable(m_interface_map)) {
     const DexClass* intf_cls = type_class(intf_it.first);
     if (intf_cls == nullptr) {
       TRACE_NO_LINE(VIRT, 9, "missing DexClass for %s", SHOW(intf_it.first));

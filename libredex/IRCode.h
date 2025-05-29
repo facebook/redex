@@ -10,8 +10,6 @@
 #include <atomic>
 #include <mutex>
 #include <set>
-#include <unordered_map>
-#include <unordered_set>
 
 #include "DexClass.h"
 #include "DexDebugInstruction.h"

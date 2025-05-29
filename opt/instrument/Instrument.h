@@ -8,9 +8,8 @@
 #pragma once
 
 #include <memory>
-#include <unordered_map>
-#include <unordered_set>
 
+#include "DeterministicContainers.h"
 #include "Pass.h"
 #include "PassManager.h"
 
@@ -69,34 +68,33 @@ class InstrumentPass : public Pass {
                                  const std::string_view field_name,
                                  const int new_number);
   static bool is_included(const DexMethod* method,
-                          const std::unordered_set<std::string>& set);
+                          const UnorderedSet<std::string>& set);
 
-  static std::unordered_map<int /*shard_num*/, DexFieldRef*>
-  patch_sharded_arrays(
+  static UnorderedMap<int /*shard_num*/, DexFieldRef*> patch_sharded_arrays(
       DexClass* cls,
       const size_t num_shards,
       const std::map<int /*shard_num*/, std::string>& suggested_names = {});
 
-  static std::pair<std::unordered_map<int /*shard_num*/, DexMethod*>,
-                   std::unordered_set<std::string>>
+  static std::pair<UnorderedMap<int /*shard_num*/, DexMethod*>,
+                   UnorderedSet<std::string>>
   generate_sharded_analysis_methods(
       DexClass* cls,
       const std::string& template_method_full_name,
-      const std::unordered_map<int /*shard_num*/, DexFieldRef*>& array_fields,
+      const UnorderedMap<int /*shard_num*/, DexFieldRef*>& array_fields,
       const size_t num_shards);
 
   struct Options {
     std::string instrumentation_strategy;
     std::string analysis_class_name;
     std::string analysis_method_name;
-    std::unordered_set<std::string> blocklist;
-    std::unordered_set<std::string> allowlist;
+    UnorderedSet<std::string> blocklist;
+    UnorderedSet<std::string> allowlist;
     std::string blocklist_file_name;
     std::string metadata_file_name;
     int64_t num_stats_per_method;
     int64_t num_shards;
     bool only_cold_start_class;
-    std::unordered_map<DexMethod*, DexMethod*> methods_replacement;
+    UnorderedMap<DexMethod*, DexMethod*> methods_replacement;
     std::vector<std::string> analysis_method_names;
     int64_t max_num_blocks;
     bool instrument_catches;

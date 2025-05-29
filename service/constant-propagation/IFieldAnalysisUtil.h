@@ -13,6 +13,6 @@ namespace constant_propagation {
 
 EligibleIfields gather_safely_inferable_ifield_candidates(
     const Scope& scope,
-    const std::unordered_set<std::string>& allowlist_method_names);
+    const UnorderedSet<std::string>& allowlist_method_names);
 
 } // namespace constant_propagation

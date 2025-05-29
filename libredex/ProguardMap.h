@@ -10,9 +10,8 @@
 #include <cstddef>
 #include <iosfwd>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "ProguardLineRange.h"
 
@@ -126,27 +125,27 @@ struct ProguardMap {
 
  private:
   // Unobfuscated to obfuscated maps
-  std::unordered_map<std::string, std::string> m_classMap;
-  std::unordered_map<std::string, std::string> m_fieldMap;
-  std::unordered_map<std::string, std::string> m_methodMap;
+  UnorderedMap<std::string, std::string> m_classMap;
+  UnorderedMap<std::string, std::string> m_fieldMap;
+  UnorderedMap<std::string, std::string> m_methodMap;
 
   // Obfuscated to unobfuscated maps from proguard
-  std::unordered_map<std::string, std::string> m_obfClassMap;
-  std::unordered_map<std::string, std::string> m_obfFieldMap;
-  std::unordered_map<std::string, std::string> m_obfMethodMap;
+  UnorderedMap<std::string, std::string> m_obfClassMap;
+  UnorderedMap<std::string, std::string> m_obfFieldMap;
+  UnorderedMap<std::string, std::string> m_obfMethodMap;
 
   // Field map for reflection analysis when type is unknown
   // Stores Lcom/facebook/Class;.field -> original name without class name
-  std::unordered_map<std::string, std::string> m_obfUntypedFieldMap;
+  UnorderedMap<std::string, std::string> m_obfUntypedFieldMap;
 
   // Method map for reflection analysis when return type is unknown
   // Stores Lcom/facebook/Class;.method(II) -> original name without class name
-  std::unordered_map<std::string, std::string> m_obfUntypedMethodMap;
+  UnorderedMap<std::string, std::string> m_obfUntypedMethodMap;
 
-  std::unordered_map<std::string, ProguardLineRangeVector> m_obfMethodLinesMap;
+  UnorderedMap<std::string, ProguardLineRangeVector> m_obfMethodLinesMap;
 
   // Interfaces that are (most likely) coalesced by Proguard.
-  std::unordered_set<std::string> m_pg_coalesced_interfaces;
+  UnorderedSet<std::string> m_pg_coalesced_interfaces;
 
   std::string m_currClass;
   std::string m_currNewClass;

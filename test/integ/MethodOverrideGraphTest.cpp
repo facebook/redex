@@ -27,8 +27,9 @@ std::vector<std::string> get_overriding_methods(
   std::vector<std::string> overriding;
   always_assert(mref->is_def());
   auto method = static_cast<const DexMethod*>(mref);
-  for (auto* overriding_method : mog::get_overriding_methods(
-           graph, method, include_interface, parent_class)) {
+  auto overriding_methods = mog::get_overriding_methods(
+      graph, method, include_interface, parent_class);
+  for (auto* overriding_method : UnorderedIterable(overriding_methods)) {
     overriding.emplace_back(show(overriding_method));
   }
   return overriding;
@@ -40,8 +41,9 @@ std::vector<std::string> get_overridden_methods(const mog::Graph& graph,
   std::vector<std::string> overridden;
   always_assert(mref->is_def());
   auto method = static_cast<const DexMethod*>(mref);
-  for (auto* overridden_method :
-       mog::get_overridden_methods(graph, method, include_interface)) {
+  auto overridden_methods =
+      mog::get_overridden_methods(graph, method, include_interface);
+  for (auto* overridden_method : UnorderedIterable(overridden_methods)) {
     overridden.emplace_back(show(overridden_method));
   }
   return overridden;
@@ -108,12 +110,12 @@ TEST_F(MethodOverrideGraphTest, verify) {
               ::testing::UnorderedElementsAre(A_M, IA_M, IB_M, IC_M));
 
   // Check that parents and children do not contain duplicates
-  for (auto&& [method, node] : graph->nodes()) {
-    std::unordered_set<const mog::Node*> children(node.children.begin(),
-                                                  node.children.end());
+  for (auto&& [method, node] : UnorderedIterable(graph->nodes())) {
+    std::unordered_set<const mog::Node*> children;
+    insert_unordered_iterable(children, node.children);
     EXPECT_EQ(node.children.size(), children.size());
-    std::unordered_set<const mog::Node*> parents(node.parents.begin(),
-                                                 node.parents.end());
+    std::unordered_set<const mog::Node*> parents;
+    insert_unordered_iterable(parents, node.parents);
     EXPECT_EQ(node.parents.size(), parents.size());
   }
 }

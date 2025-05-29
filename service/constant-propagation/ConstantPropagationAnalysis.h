@@ -8,7 +8,6 @@
 #pragma once
 
 #include <limits>
-#include <unordered_set>
 #include <utility>
 
 #include <boost/optional.hpp>
@@ -18,6 +17,7 @@
 #include "ConcurrentContainers.h"
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationState.h"
+#include "DeterministicContainers.h"
 #include "IRCode.h"
 #include "InstructionAnalyzer.h"
 #include "KotlinNullCheckMethods.h"
@@ -62,8 +62,8 @@ class FixpointIterator final
                         ConstantEnvironment* env) const override;
 
  private:
-  using SwitchSuccs = std::unordered_map<int32_t, uint32_t>;
-  mutable std::unordered_map<cfg::Block*, SwitchSuccs> m_switch_succs;
+  using SwitchSuccs = UnorderedMap<int32_t, uint32_t>;
+  mutable UnorderedMap<cfg::Block*, SwitchSuccs> m_switch_succs;
   InstructionAnalyzer<ConstantEnvironment> m_insn_analyzer;
   const State* m_state;
   const bool m_imprecise_switches;
@@ -332,7 +332,7 @@ struct ImmutableAttributeAnalyzerState {
       method_initializers;
   ConcurrentSet<DexMethod*> attribute_methods;
   ConcurrentSet<DexField*> attribute_fields;
-  std::unordered_map<DexMethod*, CachedBoxedObjects> cached_boxed_objects;
+  UnorderedMap<DexMethod*, CachedBoxedObjects> cached_boxed_objects;
   ConcurrentSet<DexType*> initialized_types;
   mutable InsertOnlyConcurrentMap<DexType*, bool> may_be_initialized_types;
 
@@ -412,10 +412,10 @@ class BoxedBooleanAnalyzer final
 
 struct StringAnalyzerState {
   static StringAnalyzerState get();
-  explicit StringAnalyzerState(const std::unordered_set<DexMethod*>& methods)
+  explicit StringAnalyzerState(const UnorderedSet<DexMethod*>& methods)
       : string_equality_methods(methods) {}
   void set_methods_as_root();
-  std::unordered_set<DexMethod*> string_equality_methods;
+  UnorderedSet<DexMethod*> string_equality_methods;
 };
 
 class StringAnalyzer : public InstructionAnalyzerBase<StringAnalyzer,
@@ -468,7 +468,7 @@ struct PackageNameState {
   static PackageNameState get(const std::string& package_name);
   static PackageNameState get(const boost::optional<std::string>& package_name);
 
-  const std::unordered_set<DexMethodRef*> getter_methods;
+  const UnorderedSet<DexMethodRef*> getter_methods;
   const DexString* package_name;
 };
 

@@ -12,6 +12,7 @@
 
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "IROpcode.h"
 #include "WellKnownTypes.h"
@@ -148,9 +149,12 @@ DexMethod* kotlin_jvm_internal_Intrinsics_checkNotNullExpressionValue();
 
 DexMethod* redex_internal_checkObjectNotNull();
 
-inline unsigned count_opcode_of_types(
-    const cfg::ControlFlowGraph& cfg,
-    const std::unordered_set<IROpcode>& opcodes) {
+DexMethod* java_lang_invoke_MethodHandle_invoke();
+
+DexMethod* java_lang_invoke_MethodHandle_invokeExact();
+
+inline unsigned count_opcode_of_types(const cfg::ControlFlowGraph& cfg,
+                                      const UnorderedSet<IROpcode>& opcodes) {
   unsigned ret = 0;
   for (auto&& mie : cfg::ConstInstructionIterable(cfg)) {
     auto op = mie.insn->opcode();
@@ -162,8 +166,8 @@ inline unsigned count_opcode_of_types(
 }
 
 template <typename IRCodeContainer>
-inline unsigned count_opcode_of_types(
-    const IRCodeContainer& code, const std::unordered_set<IROpcode>& opcodes) {
+inline unsigned count_opcode_of_types(const IRCodeContainer& code,
+                                      const UnorderedSet<IROpcode>& opcodes) {
   unsigned ret = 0;
   for (auto&& mie : ::InstructionIterable(code)) {
     auto op = mie.insn->opcode();

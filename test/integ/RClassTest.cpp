@@ -77,13 +77,16 @@ IRInstruction* find_new_array_size_insn(live_range::UseDefChains* use_defs,
 }
 
 IRInstruction* find_fill_array_data_use(
-    const std::unordered_set<live_range::Use>& uses) {
-  for (const auto& u : uses) {
+    const UnorderedSet<live_range::Use>& uses) {
+  std::vector<IRInstruction*> matched;
+  for (const auto& u : UnorderedIterable(uses)) {
     if (u.insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
-      return u.insn;
+      matched.push_back(u.insn);
     }
   }
-  not_reached_log("Did not find expected use");
+  always_assert_log(matched.size() == 1,
+                    "Did not find exactly one expected use");
+  return matched.front();
 }
 
 // Build editable cfg, set rstate as we expect to simulate outlined methods
@@ -126,27 +129,27 @@ TEST_F(RClassTest, extractStaticArrayValues) {
   resources::RClassReader r_class_reader(global_resources_config);
   // Basic check on returning only IDs related to given fields.
   {
-    std::unordered_set<uint32_t> values;
+    UnorderedSet<uint32_t> values;
     r_class_reader.extract_resource_ids_from_static_arrays({base_r_class}, {},
                                                            &values);
     EXPECT_EQ(values.size(), 0);
   }
   {
     DexFieldRef* ref = DexField::get_field("Lcom/redextest/R;.one:[I");
-    std::unordered_set<uint32_t> values;
+    UnorderedSet<uint32_t> values;
     r_class_reader.extract_resource_ids_from_static_arrays(
         {base_r_class}, {ref->as_def()}, &values);
-    EXPECT_THAT(values,
+    EXPECT_THAT(unordered_unsafe_unwrap(values),
                 testing::UnorderedElementsAre(0x7f010000, 0x7f010001,
                                               0x7f010002, 0x7f010003));
   }
   {
     DexFieldRef* ref_a = DexField::get_field("Lcom/redextest/R;.two:[I");
     DexFieldRef* ref_b = DexField::get_field("Lcom/redextest/R;.three:[I");
-    std::unordered_set<uint32_t> values;
+    UnorderedSet<uint32_t> values;
     r_class_reader.extract_resource_ids_from_static_arrays(
         {base_r_class}, {ref_a->as_def(), ref_b->as_def()}, &values);
-    EXPECT_THAT(values,
+    EXPECT_THAT(unordered_unsafe_unwrap(values),
                 testing::UnorderedElementsAre(0x7f020000, 0x7f020001,
                                               0x7f020002, 0x7f020003,
                                               0x7f030000, 0x7f030001));
@@ -157,10 +160,10 @@ TEST_F(RClassTest, extractStaticArrayValues) {
   {
     DexFieldRef* ref =
         DexField::get_field("Lcom/redextest/R$styleable2;.five:[I");
-    std::unordered_set<uint32_t> values;
+    UnorderedSet<uint32_t> values;
     r_class_reader.extract_resource_ids_from_static_arrays(
         {another_styleable_r_class}, {ref->as_def()}, &values);
-    EXPECT_THAT(values,
+    EXPECT_THAT(unordered_unsafe_unwrap(values),
                 testing::UnorderedElementsAre(0x7f050000,
                                               0x7f050001,
                                               0x7f050002,
@@ -176,10 +179,11 @@ TEST_F(RClassTest, extractStaticArrayValues) {
   {
     DexFieldRef* ref =
         DexField::get_field("Lcom/redextest/R$styleable_sgets;.seven:[I");
-    std::unordered_set<uint32_t> values;
+    UnorderedSet<uint32_t> values;
     r_class_reader.extract_resource_ids_from_static_arrays(
         *classes, {ref->as_def()}, &values);
-    EXPECT_THAT(values, testing::UnorderedElementsAre(0x7f040000, 0x7f040001))
+    EXPECT_THAT(unordered_unsafe_unwrap(values),
+                testing::UnorderedElementsAre(0x7f040000, 0x7f040001))
         << "seven is incorrect";
   }
 }

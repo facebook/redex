@@ -241,8 +241,7 @@ void MethodProfiles::apply_manual_profile(
 
 void MethodProfiles::parse_manual_file(
     const std::string& manual_filename,
-    const std::unordered_map<std::string,
-                             std::unordered_map<std::string, DexMethodRef*>>&
+    const UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>&
         baseline_profile_method_map,
     const std::vector<std::string>& config_names) {
   std::ifstream manual_file(manual_filename);
@@ -295,21 +294,17 @@ void MethodProfiles::parse_manual_file(
       // Otherwise, just do a map lookup
       auto classregex = boost::regex(wildcard_to_regex(method_and_class[0]));
       auto methodregex = boost::regex(wildcard_to_regex(method_and_class[1]));
-      for (auto class_it = baseline_profile_method_map.begin();
-           class_it != baseline_profile_method_map.end();
-           class_it++) {
-        auto classname = class_it->first;
+      for (const auto& [classname, method_name_to_method] :
+           UnorderedIterable(baseline_profile_method_map)) {
         boost::smatch class_matches;
         if (!boost::regex_search(classname, class_matches, classregex)) {
           continue;
         }
-        for (auto method_it = class_it->second.begin();
-             method_it != class_it->second.end();
-             method_it++) {
-          auto methodname = method_it->first;
+        for (const auto& [method_name, method_ref] :
+             UnorderedIterable(method_name_to_method)) {
           boost::smatch method_matches;
-          if (boost::regex_search(methodname, method_matches, methodregex)) {
-            apply_manual_profile(method_it->second, flags, manual_filename,
+          if (boost::regex_search(method_name, method_matches, methodregex)) {
+            apply_manual_profile(method_ref, flags, manual_filename,
                                  config_names);
           }
         }
@@ -319,11 +314,12 @@ void MethodProfiles::parse_manual_file(
 }
 
 void MethodProfiles::parse_manual_files(
-    const std::unordered_map<std::string, std::vector<std::string>>&
+    const UnorderedMap<std::string, std::vector<std::string>>&
         manual_file_to_config_names) {
   Timer t("parse_manual_files");
   auto baseline_profile_method_map = g_redex->get_baseline_profile_method_map();
-  for (const auto& [manual_file, config_name] : manual_file_to_config_names) {
+  for (const auto& [manual_file, config_name] :
+       UnorderedIterable(manual_file_to_config_names)) {
     parse_manual_file(manual_file, baseline_profile_method_map, config_name);
   }
 }
@@ -721,9 +717,9 @@ void MethodProfiles::process_unresolved_lines(bool baseline_profile_variant) {
         total_rows, unresolved_size());
 }
 
-std::unordered_set<dex_member_refs::MethodDescriptorTokens>
+UnorderedSet<dex_member_refs::MethodDescriptorTokens>
 MethodProfiles::get_unresolved_method_descriptor_tokens() const {
-  std::unordered_set<dex_member_refs::MethodDescriptorTokens> result;
+  UnorderedSet<dex_member_refs::MethodDescriptorTokens> result;
   for (auto& parsed_main : m_unresolved_lines) {
     always_assert(parsed_main.mdt);
     result.insert(*parsed_main.mdt);
@@ -736,21 +732,21 @@ MethodProfiles::get_unresolved_method_descriptor_tokens() const {
 }
 
 void MethodProfiles::resolve_method_descriptor_tokens(
-    const std::unordered_map<dex_member_refs::MethodDescriptorTokens,
-                             std::vector<DexMethodRef*>>& map) {
+    const UnorderedMap<dex_member_refs::MethodDescriptorTokens,
+                       std::vector<DexMethodRef*>>& map) {
   resolve_method_descriptor_tokens(map, true);
   resolve_method_descriptor_tokens(map, false);
 }
 
 void MethodProfiles::resolve_method_descriptor_tokens(
-    const std::unordered_map<dex_member_refs::MethodDescriptorTokens,
-                             std::vector<DexMethodRef*>>& map,
+    const UnorderedMap<dex_member_refs::MethodDescriptorTokens,
+                       std::vector<DexMethodRef*>>& map,
     bool baseline_profile_variant) {
   size_t removed{0};
   size_t added{0};
   // Note that we don't remove unresolved_lines_ref as we go, as the given map
   // might reference its mdts.
-  std::unordered_set<std::string*> to_remove;
+  UnorderedSet<std::string*> to_remove;
   auto& unresolved_lines_ref = baseline_profile_variant
                                    ? m_baseline_profile_unresolved_lines
                                    : m_unresolved_lines;
@@ -973,7 +969,8 @@ double dexmethods_profiled_comparator::get_method_sort_num(
 double dexmethods_profiled_comparator::get_method_sort_num_override(
     const DexMethod* method) {
   const auto deobfname = method->get_deobfuscated_name_or_empty();
-  for (const std::string& substr : *m_allowlisted_substrings) {
+  for (const std::string& substr :
+       UnorderedIterable(*m_allowlisted_substrings)) {
     if (deobfname.find(substr) != std::string::npos) {
       return COLD_START_RANGE_BEGIN + RANGE_SIZE / 2;
     }

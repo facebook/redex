@@ -40,10 +40,9 @@ namespace impl {
 class Analyzer final : public ir_analyzer::BaseIRAnalyzer<ConstantEnvironment> {
 
  public:
-  Analyzer(
-      const cfg::ControlFlowGraph& cfg,
-      const std::unordered_map<const DexMethod*, uint32_t>& ctor_to_arg_ordinal,
-      const DexClass* cls)
+  Analyzer(const cfg::ControlFlowGraph& cfg,
+           const UnorderedMap<const DexMethod*, uint32_t>& ctor_to_arg_ordinal,
+           const DexClass* cls)
       : ir_analyzer::BaseIRAnalyzer<ConstantEnvironment>(cfg),
         m_ctor_to_arg_ordinal(ctor_to_arg_ordinal),
         m_current_enum(cls) {
@@ -137,7 +136,7 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<ConstantEnvironment> {
   }
 
  private:
-  const std::unordered_map<const DexMethod*, uint32_t> m_ctor_to_arg_ordinal;
+  const UnorderedMap<const DexMethod*, uint32_t> m_ctor_to_arg_ordinal;
   const DexClass* m_current_enum;
 };
 
@@ -147,7 +146,7 @@ OptimizeEnumsAnalysis::~OptimizeEnumsAnalysis() {}
 
 OptimizeEnumsAnalysis::OptimizeEnumsAnalysis(
     const DexClass* enum_cls,
-    const std::unordered_map<const DexMethod*, uint32_t>& ctor_to_arg_ordinal)
+    const UnorderedMap<const DexMethod*, uint32_t>& ctor_to_arg_ordinal)
     : m_cls(enum_cls) {
   auto clinit = m_cls->get_clinit();
   always_assert(clinit && clinit->get_code());
@@ -164,7 +163,7 @@ OptimizeEnumsAnalysis::OptimizeEnumsAnalysis(
  * statically determined. Otherwise, none.
  */
 void OptimizeEnumsAnalysis::collect_ordinals(
-    std::unordered_map<DexField*, size_t>& enum_field_to_ordinal) {
+    UnorderedMap<DexField*, size_t>& enum_field_to_ordinal) {
   auto& clinit_cfg = m_cls->get_clinit()->get_code()->cfg();
   const auto& env = m_analyzer->get_exit_state_at(clinit_cfg.exit_block());
 

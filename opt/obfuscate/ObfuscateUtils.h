@@ -8,6 +8,7 @@
 #pragma once
 
 #include "ClassHierarchy.h"
+#include "DeterministicContainers.h"
 #include "DexAccess.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
@@ -242,9 +243,9 @@ class NameGenerator {
 
   // Set of ids to avoid (these ids were marked as do not rename and we cannot
   // conflict with)
-  const std::unordered_set<std::string>& ids_to_avoid;
+  const UnorderedSet<std::string>& ids_to_avoid;
   // Set of ids we used while assigning names
-  std::unordered_set<std::string>& used_ids;
+  UnorderedSet<std::string>& used_ids;
   // Gets the next name that is not in the used_ids set
   std::string next_name() {
     std::string res;
@@ -258,8 +259,8 @@ class NameGenerator {
   }
 
  public:
-  NameGenerator(const std::unordered_set<std::string>& ids_to_avoid,
-                std::unordered_set<std::string>& used_ids)
+  NameGenerator(const UnorderedSet<std::string>& ids_to_avoid,
+                UnorderedSet<std::string>& used_ids)
       : ids_to_avoid(ids_to_avoid), used_ids(used_ids) {}
   virtual ~NameGenerator() = default;
 
@@ -304,8 +305,8 @@ class MethodNameGenerator : public NameGenerator<DexMethod*> {
       methods;
 
  public:
-  MethodNameGenerator(const std::unordered_set<std::string>& ids_to_avoid,
-                      std::unordered_set<std::string>& used_ids)
+  MethodNameGenerator(const UnorderedSet<std::string>& ids_to_avoid,
+                      UnorderedSet<std::string>& used_ids)
       : NameGenerator<DexMethod*>(ids_to_avoid, used_ids) {}
 
   void find_new_name(DexMethodWrapper* wrap) override {
@@ -445,8 +446,8 @@ class FieldNameGenerator : public NameGenerator<DexField*> {
           fields;
 
  public:
-  FieldNameGenerator(const std::unordered_set<std::string>& ids_to_avoid,
-                     std::unordered_set<std::string>& used_ids)
+  FieldNameGenerator(const UnorderedSet<std::string>& ids_to_avoid,
+                     UnorderedSet<std::string>& used_ids)
       : NameGenerator<DexField*>(ids_to_avoid, used_ids) {}
 
   void find_new_name(DexFieldWrapper* wrap) override {
@@ -489,12 +490,10 @@ class DexElemManager {
   // Map from class_name -> type -> old_name ->
   //   DexNameWrapper (contains new name)
   // Note: unique_ptr necessary here to avoid object slicing
-  std::unordered_map<
-      DexType*,
-      std::unordered_map<
-          K,
-          std::unordered_map<const DexString*,
-                             std::unique_ptr<DexNameWrapper<T>>>>>
+  UnorderedMap<DexType*,
+               UnorderedMap<K,
+                            UnorderedMap<const DexString*,
+                                         std::unique_ptr<DexNameWrapper<T>>>>>
       elements;
   using RefCtrFn = std::function<S(std::string_view)>;
   using SigGetFn = std::function<K(R)>;
@@ -526,11 +525,11 @@ class DexElemManager {
   // underlying DexFields. Does in-place modification. Returns the number
   // of elements renamed
   int commit_renamings_to_dex() {
-    std::unordered_set<T> renamed_elems;
+    UnorderedSet<T> renamed_elems;
     int renamings = 0;
-    for (auto& class_itr : this->elements) {
-      for (auto& type_itr : class_itr.second) {
-        for (auto& name_wrap : type_itr.second) {
+    for (auto& class_itr : UnorderedIterable(this->elements)) {
+      for (auto& type_itr : UnorderedIterable(class_itr.second)) {
+        for (auto& name_wrap : UnorderedIterable(type_itr.second)) {
           auto& wrap = name_wrap.second;
           // need both because of methods ??
           if (!wrap->is_modified() || !should_rename_elem(wrap->get()) ||
@@ -620,9 +619,9 @@ class DexElemManager {
   // Debug print of the mapping
   virtual void print_elements() {
     TRACE(OBFUSCATE, 4, "Elem Ptr: (type/proto) class:old name -> new name");
-    for (auto& class_itr : elements) {
-      for (auto& type_itr : class_itr.second) {
-        for (auto& name_wrap : type_itr.second) {
+    for (auto& class_itr : UnorderedIterable(elements)) {
+      for (auto& type_itr : UnorderedIterable(class_itr.second)) {
+        for (auto& name_wrap : UnorderedIterable(type_itr.second)) {
           TRACE(OBFUSCATE, 2, " (%s) %s", SHOW(type_itr.first),
                 name_wrap.second->get_printable().c_str());
         }
@@ -692,9 +691,9 @@ template <class T, class R, class S, class K>
 class ObfuscationState {
  public:
   // Ids that we've used in renaming
-  std::unordered_set<std::string> used_ids;
+  UnorderedSet<std::string> used_ids;
   // Ids to avoid in renaming
-  std::unordered_set<std::string> ids_to_avoid;
+  UnorderedSet<std::string> ids_to_avoid;
 
   virtual ~ObfuscationState() = default;
 

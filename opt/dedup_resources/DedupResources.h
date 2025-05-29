@@ -7,9 +7,9 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "Pass.h"
 #include "androidfw/ResourceTypes.h"
-
 /**
  * Finds resource identifiers whose metadata values are identical in all
  * configurations. Of a set of duplicates, the smallest resource identifier will
@@ -70,9 +70,9 @@ class DedupResourcesPass : public Pass {
 
  private:
   void prepare_disallowed_ids(const std::string&,
-                              std::unordered_set<uint32_t>* disallowed_types,
-                              std::unordered_set<uint32_t>* disallowed_ids);
+                              UnorderedSet<uint32_t>* disallowed_types,
+                              UnorderedSet<uint32_t>* disallowed_ids);
 
-  std::unordered_set<std::string> m_disallowed_types;
-  std::unordered_set<std::string> m_disallowed_resources;
+  UnorderedSet<std::string> m_disallowed_types;
+  UnorderedSet<std::string> m_disallowed_resources;
 };

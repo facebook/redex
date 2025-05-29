@@ -656,7 +656,7 @@ void Transform::remove_dead_switch(
   // Prune infeasible or unnecessary branches
   cfg::Edge* goto_edge = cfg.get_succ_edge_of_type(block, cfg::EDGE_GOTO);
   cfg::Block* goto_target = goto_edge->target();
-  std::unordered_map<cfg::Block*, uint32_t> remaining_branch_targets;
+  UnorderedMap<cfg::Block*, uint32_t> remaining_branch_targets;
   std::vector<cfg::Edge*> remaining_branch_edges;
   for (auto branch_edge : cfg.get_succ_edges_of_type(block, cfg::EDGE_BRANCH)) {
     auto branch_is_feasible =
@@ -675,7 +675,7 @@ void Transform::remove_dead_switch(
     boost::optional<int32_t> most_common_case_key;
     cfg::Block* most_common_target{nullptr};
     uint32_t most_common_target_count{0};
-    std::unordered_set<cfg::Block*> visited;
+    UnorderedSet<cfg::Block*> visited;
     for (cfg::Edge* e : remaining_branch_edges) {
       auto case_key = *e->case_key();
       auto target = e->target();
@@ -919,7 +919,7 @@ void Transform::forward_targets(
   // registers that would have been assigned along the way to the target block.
   struct TargetAndAssignedRegs {
     cfg::Block* target;
-    std::unordered_set<reg_t> assigned_regs;
+    UnorderedSet<reg_t> assigned_regs;
   };
 
   // Helper function that computs (ordered) list of unconditional target blocks,
@@ -933,7 +933,7 @@ void Transform::forward_targets(
 
     std::vector<TargetAndAssignedRegs> unconditional_targets{
         (TargetAndAssignedRegs){succ_edge->target(), {}}};
-    std::unordered_set<cfg::Block*> visited;
+    UnorderedSet<cfg::Block*> visited;
     while (true) {
       auto& last_unconditional_target = unconditional_targets.back();
       auto succ = last_unconditional_target.target;
@@ -1008,10 +1008,9 @@ void Transform::forward_targets(
         }
         always_assert(!live_in_vars.is_top());
         auto& elements = live_in_vars.elements();
-        return std::find_if(assigned_regs.begin(), assigned_regs.end(),
-                            [&elements](reg_t reg) {
-                              return elements.contains(reg);
-                            }) != assigned_regs.end();
+        return unordered_any_of(assigned_regs, [&elements](reg_t reg) {
+          return elements.contains(reg);
+        });
       };
 
   // Helper function to find furthest feasible target block for which no

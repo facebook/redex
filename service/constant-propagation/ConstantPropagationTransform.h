@@ -12,6 +12,7 @@
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationState.h"
 #include "ConstantPropagationWholeProgramState.h"
+#include "DeterministicContainers.h"
 #include "IRCode.h"
 #include "Liveness.h"
 #include "NullPointerExceptionUtil.h"
@@ -40,7 +41,7 @@ class Transform final {
     // value.
     const ConcurrentSet<DexMethod*>* getter_methods_for_immutable_fields{
         nullptr};
-    const std::unordered_set<DexMethodRef*>* pure_methods{nullptr};
+    const UnorderedSet<DexMethodRef*>* pure_methods{nullptr};
     Config() {}
   };
 
@@ -168,7 +169,7 @@ class Transform final {
   const Config m_config;
   std::unique_ptr<cfg::CFGMutation> m_mutation;
   std::vector<IRInstruction*> m_added_param_values;
-  std::unordered_set<IRInstruction*> m_redundant_move_results;
+  UnorderedSet<IRInstruction*> m_redundant_move_results;
   std::vector<cfg::Edge*> m_edge_deletes;
   std::vector<std::tuple<cfg::Block*, cfg::Block*, cfg::EdgeType>> m_edge_adds;
   Stats m_stats;

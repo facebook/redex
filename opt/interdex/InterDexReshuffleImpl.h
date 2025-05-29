@@ -8,6 +8,7 @@
 #pragma once
 
 #include "ConfigFiles.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexStructure.h"
 #include "PassManager.h"
@@ -26,7 +27,7 @@ struct Refs {
   FieldRefs frefs;
   TypeRefs trefs;
   TypeRefs itrefs;
-  std::unordered_set<const DexString*> srefs;
+  UnorderedSet<const DexString*> srefs;
 };
 
 using gain_t = int64_t;
@@ -47,7 +48,7 @@ struct ReshuffleConfig {
 
 struct MergingInfo {
   MergerIndex merging_type;
-  std::unordered_map<const DexMethod*, MethodGroup> dedupable_mrefs;
+  UnorderedMap<const DexMethod*, MethodGroup> dedupable_mrefs;
 };
 
 // Compute gain powers by reference occurrences. We don't use the upper 20 (19,
@@ -87,20 +88,19 @@ class MoveGains {
   }
 
  public:
-  MoveGains(size_t first_dex_index,
-            const std::vector<DexClass*>& movable_classes,
-            const std::unordered_map<DexClass*, size_t>& class_dex_indices,
-            const std::unordered_map<DexClass*, Refs>& class_refs,
-            const std::vector<DexStructure>& dexen,
-            const std::vector<std::unordered_map<const DexString*, size_t>>&
-                dexen_strings,
-            const std::unordered_set<size_t>& dynamically_dead_dexes,
-            const std::unordered_map<DexClass*, struct MergingInfo>&
-                class_to_merging_info,
-            const std::unordered_map<MergerIndex, size_t>& num_field_defs,
-            const bool mergeability_aware,
-            const gain_t deduped_weight,
-            const gain_t other_weight)
+  MoveGains(
+      size_t first_dex_index,
+      const std::vector<DexClass*>& movable_classes,
+      const UnorderedMap<DexClass*, size_t>& class_dex_indices,
+      const UnorderedMap<DexClass*, Refs>& class_refs,
+      const std::vector<DexStructure>& dexen,
+      const std::vector<UnorderedMap<const DexString*, size_t>>& dexen_strings,
+      const UnorderedSet<size_t>& dynamically_dead_dexes,
+      const UnorderedMap<DexClass*, struct MergingInfo>& class_to_merging_info,
+      const UnorderedMap<MergerIndex, size_t>& num_field_defs,
+      const bool mergeability_aware,
+      const gain_t deduped_weight,
+      const gain_t other_weight)
       : m_first_dex_index(first_dex_index),
         m_movable_classes(movable_classes),
         m_class_dex_indices(class_dex_indices),
@@ -230,19 +230,19 @@ class MoveGains {
       const auto& refs = m_class_refs.at(cls);
       auto& source = m_dexen.at(source_index);
       auto& target = m_dexen.at(target_index);
-      for (auto* fref : refs.frefs) {
+      for (auto* fref : UnorderedIterable(refs.frefs)) {
         auto source_occurrences = source.get_fref_occurrences(fref);
         auto target_occurrences = target.get_fref_occurrences(fref);
         gain +=
             compute_gain(source_occurrences, target_occurrences, for_removal);
       }
-      for (auto* mref : refs.mrefs) {
+      for (auto* mref : UnorderedIterable(refs.mrefs)) {
         auto source_occurrences = source.get_mref_occurrences(mref);
         auto target_occurrences = target.get_mref_occurrences(mref);
         gain +=
             compute_gain(source_occurrences, target_occurrences, for_removal);
       }
-      for (auto* tref : refs.trefs) {
+      for (auto* tref : UnorderedIterable(refs.trefs)) {
         auto source_occurrences = source.get_tref_occurrences(tref);
         auto target_occurrences = target.get_tref_occurrences(tref);
         gain +=
@@ -250,7 +250,7 @@ class MoveGains {
       }
       auto& source_strings = m_dexen_strings.at(source_index);
       auto& target_strings = m_dexen_strings.at(target_index);
-      for (auto* sref : refs.srefs) {
+      for (auto* sref : UnorderedIterable(refs.srefs)) {
         auto it = source_strings.find(sref);
         auto source_occurrences = it == source_strings.end() ? 0 : it->second;
         it = target_strings.find(sref);
@@ -287,7 +287,7 @@ class MoveGains {
           source.get_merging_type_usage(merging_type);
       int target_merging_type_usage =
           target.get_merging_type_usage(merging_type);
-      for (auto* fref : refs.frefs) {
+      for (auto* fref : UnorderedIterable(refs.frefs)) {
         // If fref is not defined in cls, then we compute its corresponding gain
         // using the original formula.
         const auto ref_cls = type_class(fref->get_class());
@@ -305,9 +305,9 @@ class MoveGains {
               compute_gain(source_merging_type_usage, target_merging_type_usage,
                            for_removal);
 
-      const std::unordered_map<const DexMethod*, MethodGroup>& dedupable_mrefs =
+      const UnorderedMap<const DexMethod*, MethodGroup>& dedupable_mrefs =
           m_class_to_merging_info.at(cls).dedupable_mrefs;
-      for (auto* mref : refs.mrefs) {
+      for (auto* mref : UnorderedIterable(refs.mrefs)) {
         auto source_occurrences = source.get_mref_occurrences(mref);
         auto target_occurrences = target.get_mref_occurrences(mref);
         // If mref is defined in cls, then we use its corresponding merging type
@@ -329,7 +329,7 @@ class MoveGains {
               compute_gain(source_occurrences, target_occurrences, for_removal);
         }
       }
-      for (auto* tref : refs.trefs) {
+      for (auto* tref : UnorderedIterable(refs.trefs)) {
         auto source_occurrences = source.get_tref_occurrences(tref);
         auto target_occurrences = target.get_tref_occurrences(tref);
         const auto ref_cls = type_class(tref);
@@ -342,7 +342,7 @@ class MoveGains {
       }
       auto& source_strings = m_dexen_strings.at(source_index);
       auto& target_strings = m_dexen_strings.at(target_index);
-      for (auto* sref : refs.srefs) {
+      for (auto* sref : UnorderedIterable(refs.srefs)) {
         auto it = source_strings.find(sref);
         auto source_occurrences = it == source_strings.end() ? 0 : it->second;
         it = target_strings.find(sref);
@@ -382,7 +382,7 @@ class MoveGains {
   // are in a state as if every class was moved in epoch 0, and none were
   // moved in epoch 1. Then the first recomputation moves us to epoch 2,
   // so that the stopping criteria doesn't think every class was moved.
-  std::unordered_map<DexClass*, size_t> m_move_epoch;
+  UnorderedMap<DexClass*, size_t> m_move_epoch;
   size_t m_epoch{1};
 
   // Tracks epoch move counts and inter-epoch move differences.
@@ -392,37 +392,34 @@ class MoveGains {
 
   const size_t m_first_dex_index;
   const std::vector<DexClass*>& m_movable_classes;
-  const std::unordered_map<DexClass*, size_t>& m_class_dex_indices;
-  const std::unordered_map<DexClass*, Refs>& m_class_refs;
+  const UnorderedMap<DexClass*, size_t>& m_class_dex_indices;
+  const UnorderedMap<DexClass*, Refs>& m_class_refs;
   const std::vector<DexStructure>& m_dexen;
-  const std::vector<std::unordered_map<const DexString*, size_t>>&
-      m_dexen_strings;
-  const std::unordered_set<size_t>& m_dynamically_dead_dexes;
+  const std::vector<UnorderedMap<const DexString*, size_t>>& m_dexen_strings;
+  const UnorderedSet<size_t>& m_dynamically_dead_dexes;
 
   // Class merging related data.
-  const std::unordered_map<DexClass*, struct MergingInfo>&
-      m_class_to_merging_info;
-  const std::unordered_map<MergerIndex, size_t>& m_num_field_defs;
+  const UnorderedMap<DexClass*, struct MergingInfo>& m_class_to_merging_info;
+  const UnorderedMap<MergerIndex, size_t>& m_num_field_defs;
   const bool m_mergeability_aware;
   const gain_t m_deduped_weight{1};
   const gain_t m_other_weight{1};
 
   // Classes that are already moved once, and should not be moved again. It is
   // used in DexRemovalPass only.
-  std::unordered_set<DexClass*> m_moved_classes;
+  UnorderedSet<DexClass*> m_moved_classes;
 };
 
 class InterDexReshuffleImpl {
  public:
-  InterDexReshuffleImpl(
-      ConfigFiles& conf,
-      PassManager& mgr,
-      ReshuffleConfig& config,
-      DexClasses& original_scope,
-      DexClassesVector& dexen,
-      const std::unordered_set<size_t>& dynamically_dead_dexes,
-      const boost::optional<class_merging::Model&>& merging_model =
-          boost::none);
+  InterDexReshuffleImpl(ConfigFiles& conf,
+                        PassManager& mgr,
+                        ReshuffleConfig& config,
+                        DexClasses& original_scope,
+                        DexClassesVector& dexen,
+                        const UnorderedSet<size_t>& dynamically_dead_dexes,
+                        const boost::optional<class_merging::Model&>&
+                            merging_model = boost::none);
 
   void compute_plan();
 
@@ -439,27 +436,25 @@ class InterDexReshuffleImpl {
 
   bool can_move(DexClass* cls);
 
-  size_t get_eliminate_dex(
-      const std::unordered_map<size_t, bool>& dex_eliminate);
+  size_t get_eliminate_dex(const UnorderedMap<size_t, bool>& dex_eliminate);
   ConfigFiles& m_conf;
   PassManager& m_mgr;
   ReshuffleConfig& m_config;
   init_classes::InitClassesWithSideEffects m_init_classes_with_side_effects;
   DexClassesVector& m_dexen;
-  const std::unordered_set<size_t>& m_dynamically_dead_dexes;
+  const UnorderedSet<size_t>& m_dynamically_dead_dexes;
   boost::optional<class_merging::Model&> m_merging_model;
   size_t m_linear_alloc_limit;
   DexesStructure m_dexes_structure;
   std::vector<DexClass*> m_movable_classes;
-  std::unordered_map<DexClass*, size_t> m_class_dex_indices;
-  std::unordered_map<DexClass*, Refs> m_class_refs;
+  UnorderedMap<DexClass*, size_t> m_class_dex_indices;
+  UnorderedMap<DexClass*, Refs> m_class_refs;
   std::vector<DexStructure> m_mutable_dexen;
-  std::vector<std::unordered_map<const DexString*, size_t>>
-      m_mutable_dexen_strings;
+  std::vector<UnorderedMap<const DexString*, size_t>> m_mutable_dexen_strings;
   size_t m_first_dex_index{1}; // skip primary dex
   bool m_order_interdex;
   // Class merging related data.
-  std::unordered_map<DexClass*, struct MergingInfo> m_class_to_merging_info;
-  std::unordered_map<MergerIndex, size_t> m_num_field_defs;
+  UnorderedMap<DexClass*, struct MergingInfo> m_class_to_merging_info;
+  UnorderedMap<MergerIndex, size_t> m_num_field_defs;
   bool m_mergeability_aware{false};
 };

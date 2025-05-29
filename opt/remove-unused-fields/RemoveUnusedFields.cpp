@@ -59,19 +59,19 @@ class RemoveUnusedFields final {
     transform();
   }
 
-  const std::unordered_set<const DexField*>& unread_fields() const {
+  const UnorderedSet<const DexField*>& unread_fields() const {
     return m_unread_fields;
   }
 
-  const std::unordered_set<const DexField*>& unwritten_fields() const {
+  const UnorderedSet<const DexField*>& unwritten_fields() const {
     return m_unwritten_fields;
   }
 
-  const std::unordered_set<const DexField*>& zero_written_fields() const {
+  const UnorderedSet<const DexField*>& zero_written_fields() const {
     return m_zero_written_fields;
   }
 
-  const std::unordered_set<const DexField*>& vestigial_objects_written_fields()
+  const UnorderedSet<const DexField*>& vestigial_objects_written_fields()
       const {
     return m_vestigial_objects_written_fields;
   }
@@ -129,7 +129,7 @@ class RemoveUnusedFields final {
           field_writes.get());
     }
 
-    for (auto& pair : field_stats) {
+    for (auto& pair : UnorderedIterable(field_stats)) {
       auto* field = pair.first;
       auto& stats = pair.second;
       TRACE(RMUF,
@@ -255,10 +255,10 @@ class RemoveUnusedFields final {
       m_init_classes_with_side_effects;
   Shrinker m_shrinker;
 
-  std::unordered_set<const DexField*> m_unread_fields;
-  std::unordered_set<const DexField*> m_unwritten_fields;
-  std::unordered_set<const DexField*> m_zero_written_fields;
-  std::unordered_set<const DexField*> m_vestigial_objects_written_fields;
+  UnorderedSet<const DexField*> m_unread_fields;
+  UnorderedSet<const DexField*> m_unwritten_fields;
+  UnorderedSet<const DexField*> m_zero_written_fields;
+  UnorderedSet<const DexField*> m_vestigial_objects_written_fields;
   field_op_tracker::TypeLifetimes m_type_lifetimes;
   std::atomic<size_t> m_unremovable_unread_field_puts{0};
   std::atomic<size_t> m_init_classes{0};
@@ -297,11 +297,11 @@ void PassImpl::run_pass(DexStoresVector& stores,
   mgr.set_metric("init_classes", rmuf.init_classes());
 
   if (m_export_removed) {
-    std::vector<const DexField*> removed_fields(rmuf.unread_fields().begin(),
-                                                rmuf.unread_fields().end());
-    removed_fields.insert(removed_fields.end(),
-                          rmuf.unwritten_fields().begin(),
-                          rmuf.unwritten_fields().end());
+    std::vector<const DexField*> removed_fields;
+    insert_unordered_iterable(removed_fields, removed_fields.end(),
+                              rmuf.unread_fields());
+    insert_unordered_iterable(removed_fields, removed_fields.end(),
+                              rmuf.unwritten_fields());
     sort_unique(removed_fields, compare_dexfields);
     auto path = conf.metafile(REMOVED_FIELDS_FILENAME);
     std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);

@@ -17,8 +17,8 @@ class RecursionPruner {
   ConcurrentMethodToMethodOccurrences& m_caller_callee;
   size_t m_recursive_call_sites{0};
   size_t m_max_call_stack_depth{0};
-  std::unordered_set<const DexMethod*> m_recursive_callees;
-  std::unordered_set<const DexMethod*> m_excluded_callees;
+  UnorderedSet<const DexMethod*> m_recursive_callees;
+  UnorderedSet<const DexMethod*> m_excluded_callees;
   std::function<bool(DexMethod*, DexMethod*)> m_exclude_fn;
 
  public:
@@ -31,17 +31,16 @@ class RecursionPruner {
   size_t recursive_call_sites() const { return m_recursive_call_sites; }
   size_t max_call_stack_depth() const { return m_max_call_stack_depth; }
 
-  std::unordered_set<const DexMethod*>& recursive_callees() {
+  UnorderedSet<const DexMethod*>& recursive_callees() {
     return m_recursive_callees;
   }
 
-  std::unordered_set<const DexMethod*>& excluded_callees() {
+  UnorderedSet<const DexMethod*>& excluded_callees() {
     return m_excluded_callees;
   }
 
  private:
-  size_t recurse(DexMethod* caller,
-                 std::unordered_map<DexMethod*, size_t>* visited);
+  size_t recurse(DexMethod* caller, UnorderedMap<DexMethod*, size_t>* visited);
 };
 
 } // namespace inliner

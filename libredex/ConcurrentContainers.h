@@ -20,6 +20,7 @@
 #include <utility>
 
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "Timer.h"
 
 namespace cc_impl {
@@ -985,6 +986,12 @@ class ConcurrentContainer {
   using const_iterator =
       cc_impl::ConcurrentContainerIterator<const ConcurrentHashtable, n_slots>;
 
+  using key_type = typename Container::key_type;
+  using value_type = typename iterator::value_type;
+  using hasher = typename Container::hasher;
+  using key_equal = typename Container::key_equal;
+  using difference_type = typename Container::difference_type;
+
   virtual ~ConcurrentContainer() {
     auto timer_scope = cc_impl::s_destructor.scope();
     if (!cc_impl::is_thread_pool_active() ||
@@ -998,41 +1005,180 @@ class ConcurrentContainer {
         0, n_slots, [this](size_t slot) { m_slots[slot].destroy(); });
   }
 
+  class FixedIterator;
+
+  class ConstFixedIterator {
+    const_iterator m_entry;
+    friend class FixedIterator;
+
+   public:
+    const value_type* operator->() const { return &*m_entry; }
+
+    const value_type& operator*() const { return *m_entry; }
+
+    bool operator==(const FixedIterator& other) const {
+      return m_entry == other.m_entry;
+    }
+
+    bool operator!=(const FixedIterator& other) const {
+      return m_entry != other.m_entry;
+    }
+
+    bool operator==(const ConstFixedIterator& other) const {
+      return m_entry == other.m_entry;
+    }
+
+    bool operator!=(const ConstFixedIterator& other) const {
+      return m_entry != other.m_entry;
+    }
+
+    explicit ConstFixedIterator(const_iterator entry) : m_entry(entry) {}
+
+    const_iterator _internal_unsafe_unwrap() { return m_entry; }
+  };
+
+  class FixedIterator {
+    iterator m_entry;
+    friend class ConstFixedIterator;
+
+   public:
+    value_type* operator->() { return &*m_entry; }
+
+    value_type& operator*() { return *m_entry; }
+
+    bool operator==(const FixedIterator& other) const {
+      return m_entry == other.m_entry;
+    }
+
+    bool operator!=(const FixedIterator& other) const {
+      return m_entry != other.m_entry;
+    }
+
+    bool operator==(const ConstFixedIterator& other) const {
+      return m_entry == other.m_entry;
+    }
+
+    bool operator!=(const ConstFixedIterator& other) const {
+      return m_entry != other.m_entry;
+    }
+
+    explicit FixedIterator(iterator entry) : m_entry(entry) {}
+
+    iterator _internal_unsafe_unwrap() { return m_entry; }
+  };
+
+  // TODO: Make extra non-deterministic in debug builds
+  class UnorderedIterable {
+    ConcurrentHashtable* m_slots;
+
+   public:
+    explicit UnorderedIterable(ConcurrentHashtable* slots) : m_slots(slots) {}
+
+    iterator begin() { return iterator(&m_slots[0], 0, m_slots[0].begin()); }
+
+    iterator end() { return iterator(&m_slots[0]); }
+
+    const_iterator begin() const {
+      const auto* cslots = m_slots;
+      return const_iterator(&cslots[0], 0, cslots[0].begin());
+    }
+
+    const_iterator end() const {
+      const auto* cslots = m_slots;
+      return const_iterator(&cslots[0]);
+    }
+
+    const_iterator cbegin() const { return begin(); }
+
+    const_iterator cend() const { return end(); }
+
+    iterator find(const Key& key) {
+      size_t slot = Hash()(key) % n_slots;
+      const auto& it = m_slots[slot].find(key);
+      if (it == m_slots[slot].end()) {
+        return end();
+      }
+      return iterator(&m_slots[0], slot, it);
+    }
+
+    const_iterator find(const Key& key) const {
+      size_t slot = Hash()(key) % n_slots;
+      const auto* cslots = m_slots;
+      const auto& it = cslots[slot].find(key);
+      if (it == cslots[slot].end()) {
+        return end();
+      }
+      return const_iterator(&cslots[0], slot, it);
+    }
+  };
+
+  // TODO: Make extra non-deterministic in debug builds
+  class ConstUnorderedIterable {
+    const ConcurrentHashtable* m_slots;
+
+   public:
+    explicit ConstUnorderedIterable(const ConcurrentHashtable* slots)
+        : m_slots(slots) {}
+
+    const_iterator begin() const {
+      return const_iterator(&m_slots[0], 0, m_slots[0].begin());
+    }
+
+    const_iterator end() const { return const_iterator(&m_slots[0]); }
+
+    const_iterator cbegin() const { return begin(); }
+
+    const_iterator cend() const { return end(); }
+
+    const_iterator find(const Key& key) const {
+      size_t slot = Hash()(key) % n_slots;
+      const auto& it = m_slots[slot].find(key);
+      if (it == m_slots[slot].end()) {
+        return end();
+      }
+      return const_iterator(&m_slots[0], slot, it);
+    }
+  };
+
   /*
    * Using iterators or accessor functions while the container is concurrently
    * modified will result in undefined behavior.
    */
 
-  iterator begin() { return iterator(&m_slots[0], 0, m_slots[0].begin()); }
-
-  iterator end() { return iterator(&m_slots[0]); }
-
-  const_iterator begin() const {
-    return const_iterator(&m_slots[0], 0, m_slots[0].begin());
+  UnorderedIterable _internal_unordered_iterable() {
+    return UnorderedIterable(m_slots);
   }
 
-  const_iterator end() const { return const_iterator(&m_slots[0]); }
-
-  const_iterator cbegin() const { return begin(); }
-
-  const_iterator cend() const { return end(); }
-
-  iterator find(const Key& key) {
-    size_t slot = Hash()(key) % n_slots;
-    const auto& it = m_slots[slot].find(key);
-    if (it == m_slots[slot].end()) {
-      return end();
-    }
-    return iterator(&m_slots[0], slot, it);
+  ConstUnorderedIterable _internal_unordered_iterable() const {
+    return ConstUnorderedIterable(m_slots);
   }
 
-  const_iterator find(const Key& key) const {
-    size_t slot = Hash()(key) % n_slots;
-    const auto& it = m_slots[slot].find(key);
-    if (it == m_slots[slot].end()) {
-      return end();
-    }
-    return const_iterator(&m_slots[0], slot, it);
+  FixedIterator _internal_unordered_any() {
+    return FixedIterator(_internal_unordered_iterable().begin());
+  }
+
+  ConstFixedIterator _internal_unordered_any() const {
+    return ConstFixedIterator(_internal_unordered_iterable().begin());
+  }
+
+  FixedIterator find(const Key& key) {
+    return FixedIterator(_internal_unordered_iterable().find(key));
+  }
+
+  ConstFixedIterator find(const Key& key) const {
+    return ConstFixedIterator(_internal_unordered_iterable().find(key));
+  }
+
+  ConstFixedIterator end() const {
+    return ConstFixedIterator(_internal_unordered_iterable().cend());
+  }
+
+  FixedIterator end() {
+    return FixedIterator(_internal_unordered_iterable().end());
+  }
+
+  ConstFixedIterator cend() const {
+    return ConstFixedIterator(_internal_unordered_iterable().cend());
   }
 
   /*
@@ -1102,6 +1248,15 @@ class ConcurrentContainer {
 
   size_t erase_unsafe(const Key& key) { return erase(key); }
 
+  template <typename possibly_const_iterator>
+  auto _internal_to_fixed_iterator(possibly_const_iterator it) const {
+    if constexpr (std::is_same_v<possibly_const_iterator, const_iterator>) {
+      return ConstFixedIterator(it);
+    } else {
+      return FixedIterator(it);
+    }
+  }
+
  protected:
   // Only derived classes may be instantiated or copied.
   ConcurrentContainer() = default;
@@ -1167,7 +1322,8 @@ template <typename Key,
           size_t n_slots = cc_impl::kDefaultSlots>
 class ConcurrentMap final
     : public ConcurrentContainer<std::unordered_map<Key, Value, Hash, KeyEqual>,
-                                 n_slots> {
+                                 n_slots>,
+      public UnorderedBase<ConcurrentMap<Key, Value, Hash, KeyEqual, n_slots>> {
  public:
   using Base =
       ConcurrentContainer<std::unordered_map<Key, Value, Hash, KeyEqual>,
@@ -1180,6 +1336,8 @@ class ConcurrentMap final
   using Base::m_slots;
 
   using KeyValuePair = typename Base::Value;
+
+  using mapped_type = Value;
 
   ConcurrentMap() = default;
 
@@ -1482,7 +1640,9 @@ template <typename Key,
           size_t n_slots = cc_impl::kDefaultSlots>
 class InsertOnlyConcurrentMap final
     : public ConcurrentContainer<std::unordered_map<Key, Value, Hash, KeyEqual>,
-                                 n_slots> {
+                                 n_slots>,
+      public UnorderedBase<
+          InsertOnlyConcurrentMap<Key, Value, Hash, KeyEqual, n_slots>> {
  public:
   using Base =
       ConcurrentContainer<std::unordered_map<Key, Value, Hash, KeyEqual>,
@@ -1494,6 +1654,8 @@ class InsertOnlyConcurrentMap final
   using Base::m_slots;
 
   using KeyValuePair = typename Base::Value;
+
+  using mapped_type = Value;
 
   InsertOnlyConcurrentMap() = default;
 
@@ -1782,7 +1944,8 @@ template <typename Key,
 class AtomicMap final
     : public ConcurrentContainer<
           std::unordered_map<Key, std::atomic<Value>, Hash, KeyEqual>,
-          n_slots> {
+          n_slots>,
+      public UnorderedBase<AtomicMap<Key, Value, Hash, KeyEqual, n_slots>> {
  public:
   using Base = ConcurrentContainer<
       std::unordered_map<Key, std::atomic<Value>, Hash, KeyEqual>,
@@ -1975,7 +2138,8 @@ template <typename Key,
           size_t n_slots = cc_impl::kDefaultSlots>
 class ConcurrentSet final
     : public ConcurrentContainer<std::unordered_set<Key, Hash, KeyEqual>,
-                                 n_slots> {
+                                 n_slots>,
+      public UnorderedBase<ConcurrentSet<Key, Hash, KeyEqual, n_slots>> {
  public:
   using Base =
       ConcurrentContainer<std::unordered_set<Key, Hash, KeyEqual>, n_slots>;
@@ -2056,7 +2220,9 @@ template <typename Key,
           size_t n_slots = cc_impl::kDefaultSlots>
 class InsertOnlyConcurrentSet final
     : public ConcurrentContainer<std::unordered_set<Key, Hash, KeyEqual>,
-                                 n_slots> {
+                                 n_slots>,
+      public UnorderedBase<
+          InsertOnlyConcurrentSet<Key, Hash, KeyEqual, n_slots>> {
  public:
   using Base =
       ConcurrentContainer<std::unordered_set<Key, Hash, KeyEqual>, n_slots>;

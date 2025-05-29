@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DeterministicContainers.h"
 #include "Obfuscate.h"
 
 // Renames virtual methods avoiding conflicts up the class hierarchy and
@@ -15,4 +16,4 @@
 size_t rename_virtuals(
     Scope& scope,
     bool avoid_stack_trace_collision = false,
-    const std::unordered_map<const DexClass*, int>& next_dmethod_seeds = {});
+    const UnorderedMap<const DexClass*, int>& next_dmethod_seeds = {});

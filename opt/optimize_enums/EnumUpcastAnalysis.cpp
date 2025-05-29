@@ -40,8 +40,8 @@ bool need_analyze(const DexMethod* method,
   return false;
 }
 
-std::unordered_set<DexType*> discard_primitives(const EnumTypes& types) {
-  std::unordered_set<DexType*> res;
+UnorderedSet<DexType*> discard_primitives(const EnumTypes& types) {
+  UnorderedSet<DexType*> res;
   for (auto type : types.elements()) {
     if (!type::is_primitive(type)) {
       res.insert(type);
@@ -193,7 +193,7 @@ class EnumUpcastDetector {
     // array of primitives. Just ignore them.
     EnumTypes array_types = env->get(insn->src(1));
     EnumTypes elem_types = env->get(insn->src(0));
-    std::unordered_set<DexType*> acceptable_elem_types;
+    UnorderedSet<DexType*> acceptable_elem_types;
     for (DexType* type : array_types.elements()) {
       DexType* elem = type::get_array_element_type(type);
       if (elem && !type::is_primitive(elem)) {
@@ -206,7 +206,7 @@ class EnumUpcastDetector {
       reject(insn, elem_types, UnsafeType::kUsageCastAputObject);
       reject(insn, acceptable_elem_types, UnsafeType::kUsageCastAputObject);
     } else if (acceptable_elem_types.size() == 1) {
-      DexType* acceptable = *acceptable_elem_types.begin();
+      DexType* acceptable = *unordered_any(acceptable_elem_types);
       reject_if_inconsistent(insn, elem_types, acceptable,
                              UnsafeType::kUsageCastAputObject);
     }
@@ -259,7 +259,7 @@ class EnumUpcastDetector {
       return;
     }
     auto summary_it = m_config->param_summary_map.find(method);
-    boost::optional<std::unordered_set<uint16_t>&> safe_params;
+    boost::optional<UnorderedSet<uint16_t>&> safe_params;
     if (summary_it != m_config->param_summary_map.end()) {
       auto& summary = summary_it->second;
       safe_params = summary.safe_params;
@@ -316,8 +316,10 @@ class EnumUpcastDetector {
           method::signatures_match(method, ENUM_COMPARETO_METHOD)) {
         EnumTypes b_types = env->get(insn->src(1));
         auto that_types = discard_primitives(b_types);
-        DexType* this_type = this_types.empty() ? nullptr : *this_types.begin();
-        DexType* that_type = that_types.empty() ? nullptr : *that_types.begin();
+        DexType* this_type =
+            this_types.empty() ? nullptr : *unordered_any(this_types);
+        DexType* that_type =
+            that_types.empty() ? nullptr : *unordered_any(that_types);
         // Reject multiple types in the registers.
         if (this_types.size() > 1 || that_types.size() > 1 ||
             (this_type && that_type && this_type != that_type)) {
@@ -385,7 +387,8 @@ class EnumUpcastDetector {
     auto that_types = discard_primitives(types);
     if (that_types.size() > 1) {
       reject(insn, that_types, UnsafeType::kUsageMultiEnumTypes);
-    } else if (that_types.size() == 1 && type::is_array(*that_types.begin())) {
+    } else if (that_types.size() == 1 &&
+               type::is_array(*unordered_any(that_types))) {
       reject(insn, that_types, UnsafeType::kUsageCastEnumArrayToObject);
     }
   }
@@ -431,9 +434,9 @@ class EnumUpcastDetector {
   }
 
   void reject(const IRInstruction* insn,
-              const std::unordered_set<DexType*>& types,
+              const UnorderedSet<DexType*>& types,
               UnsafeType reason = UnsafeType::kUsage) const {
-    for (DexType* type : types) {
+    for (DexType* type : UnorderedIterable(types)) {
       reject(insn, type, reason);
     }
   }
@@ -642,9 +645,9 @@ void reject_enums_for_colliding_constructors(
     if (ctors.size() <= 1) {
       return;
     }
-    std::unordered_set<DexTypeList*> modified_params_lists;
+    UnorderedSet<DexTypeList*> modified_params_lists;
     for (auto ctor : ctors) {
-      std::unordered_set<DexType*> transforming_enums;
+      UnorderedSet<DexType*> transforming_enums;
       DexTypeList::ContainerType param_types{
           ctor->get_proto()->get_args()->begin(),
           ctor->get_proto()->get_args()->end()};
@@ -659,7 +662,7 @@ void reject_enums_for_colliding_constructors(
       }
       auto new_params = DexTypeList::make_type_list(std::move(param_types));
       if (modified_params_lists.count(new_params)) {
-        for (auto enum_type : transforming_enums) {
+        for (auto enum_type : UnorderedIterable(transforming_enums)) {
           TRACE(ENUM, 4,
                 "Reject %s because it would create a method prototype "
                 "collision for %s",
@@ -670,7 +673,7 @@ void reject_enums_for_colliding_constructors(
         auto new_proto = DexProto::make_proto(type::_void(), new_params);
         if (DexMethod::get_method(ctor->get_class(), ctor->get_name(),
                                   new_proto) != nullptr) {
-          for (auto enum_type : transforming_enums) {
+          for (auto enum_type : UnorderedIterable(transforming_enums)) {
             TRACE(ENUM, 4,
                   "Reject %s because it would create a method prototype "
                   "collision for %s",
@@ -684,7 +687,7 @@ void reject_enums_for_colliding_constructors(
     }
   });
 
-  for (DexType* type : rejected_enums) {
+  for (DexType* type : UnorderedIterable(rejected_enums)) {
     candidate_enums->erase(type);
   }
 }
@@ -694,7 +697,7 @@ void reject_enums_for_relaxed_inits(const std::vector<DexClass*>& classes,
   ConcurrentSet<DexType*> rejected_enums;
   walk::parallel::code(classes, [&](DexMethod* method, IRCode& code) {
     auto& cfg = code.cfg();
-    std::unordered_set<const IRInstruction*> new_instances_to_verify;
+    UnorderedSet<const IRInstruction*> new_instances_to_verify;
     for (auto& mie : InstructionIterable(cfg)) {
       auto insn = mie.insn;
       if (insn->opcode() != OPCODE_NEW_INSTANCE ||
@@ -710,10 +713,11 @@ void reject_enums_for_relaxed_inits(const std::vector<DexClass*>& classes,
         cfg, /* ignore_unreachable */ false,
         [&](auto* insn) { return new_instances_to_verify.count(insn); });
     live_range::DefUseChains du_chains = chains.get_def_use_chains();
-    for (auto* new_instance_insn : new_instances_to_verify) {
+    for (auto* new_instance_insn : UnorderedIterable(new_instances_to_verify)) {
       auto* enum_type = new_instance_insn->get_type();
-      auto use_set = du_chains[const_cast<IRInstruction*>(new_instance_insn)];
-      for (const auto use : use_set) {
+      const auto& use_set =
+          du_chains[const_cast<IRInstruction*>(new_instance_insn)];
+      for (const auto& use : UnorderedIterable(use_set)) {
         if (use.src_index != 0) {
           continue;
         }
@@ -743,7 +747,7 @@ void reject_enums_for_relaxed_inits(const std::vector<DexClass*>& classes,
       }
     }
   });
-  for (DexType* type : rejected_enums) {
+  for (DexType* type : UnorderedIterable(rejected_enums)) {
     candidate_enums->erase(type);
   }
 }
@@ -832,7 +836,7 @@ void reject_unsafe_enums(
     detector.run(engine, cfg);
   });
 
-  for (DexType* type : rejected_enums) {
+  for (DexType* type : UnorderedIterable(rejected_enums)) {
     candidate_enums->erase(type);
   }
 

@@ -13,7 +13,6 @@
 #include <mutex>
 #include <regex>
 #include <sstream>
-#include <unordered_set>
 
 #include "Debug.h"
 #include "DexCallSite.h"
@@ -69,8 +68,8 @@ RedexContext::~RedexContext() {
                   // NB: This table intentionally contains aliases (multiple
                   // DexStrings map to the same DexType), so we have to dedup
                   // the set of types before deleting to avoid double-frees.
-                  std::unordered_set<DexType*> delete_types;
-                  for (auto const& p : s_type_map) {
+                  UnorderedSet<DexType*> delete_types;
+                  for (auto const& p : UnorderedIterable(s_type_map)) {
                     if (delete_types.emplace(p.second).second) {
                       delete p.second;
                     }
@@ -79,28 +78,28 @@ RedexContext::~RedexContext() {
                 },
                 [&] {
                   Timer timer("Delete DexTypeLists", /* indent */ false);
-                  for (auto const& p : s_typelist_map) {
+                  for (auto const& p : UnorderedIterable(s_typelist_map)) {
                     delete p.second;
                   }
                   s_typelist_map.clear();
                 },
                 [&] {
                   Timer timer("Delete DexProtos", /* indent */ false);
-                  for (auto* proto : s_proto_set) {
+                  for (auto* proto : UnorderedIterable(s_proto_set)) {
                     delete proto;
                   }
                   s_proto_set.clear();
                 },
                 [&] {
                   Timer timer("Delete DexClasses", /* indent */ false);
-                  for (auto* cls : m_classes) {
+                  for (auto* cls : UnorderedIterable(m_classes)) {
                     delete cls;
                   }
                   m_classes.clear();
                 },
                 [&] {
                   Timer timer("Delete DexLocations", /* indent */ false);
-                  for (auto const& p : s_location_map) {
+                  for (auto const& p : UnorderedIterable(s_location_map)) {
                     delete p.second;
                   }
                   s_location_map.clear();
@@ -140,8 +139,8 @@ RedexContext::~RedexContext() {
         for (size_t bucket = 0; bucket < method_buckets_count; bucket++) {
           fns.push_back([bucket, this]() {
             // Delete DexMethods. Use set to prevent double freeing aliases
-            std::unordered_set<DexMethod*> delete_methods;
-            for (auto&& [_, loc] : s_method_map) {
+            UnorderedSet<DexMethod*> delete_methods;
+            for (auto&& [_, loc] : UnorderedIterable(s_method_map)) {
               auto method = static_cast<DexMethod*>(loc.load());
               if ((reinterpret_cast<size_t>(method) >> 16) %
                           method_buckets_count ==
@@ -164,9 +163,9 @@ RedexContext::~RedexContext() {
         for (size_t bucket = 0; bucket < field_buckets_count; bucket++) {
           fns.push_back([bucket, this]() {
             // Delete DexFields. Use set to prevent double freeing aliases
-            std::unordered_set<DexFieldRef*> delete_fields;
-            for (auto&& [_, loc] : s_field_map) {
-              auto field = static_cast<DexFieldRef*>(loc.load());
+            UnorderedSet<DexField*> delete_fields;
+            for (auto&& [_, loc] : UnorderedIterable(s_field_map)) {
+              auto field = static_cast<DexField*>(loc.load());
               if ((reinterpret_cast<size_t>(field) >> 16) %
                           field_buckets_count ==
                       bucket &&
@@ -548,7 +547,7 @@ DexFieldRef* RedexContext::make_field(const DexType* container,
   if (rv != nullptr) {
     return rv;
   }
-  std::unique_ptr<DexField> field(new DexField(
+  std::unique_ptr<DexField, DexField::Deleter> field(new DexField(
       const_cast<DexType*>(container), name, const_cast<DexType*>(type)));
   return try_insert<DexField, DexFieldRef>(r, std::move(field), &s_field_map);
 }
@@ -701,21 +700,17 @@ DexMethodRef* RedexContext::get_method(const DexType* type,
   return s_method_map.load(r, nullptr);
 }
 
-std::unordered_map<std::string, std::unordered_map<std::string, DexMethodRef*>>
+UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>
 RedexContext::get_baseline_profile_method_map() {
   auto baseline_profile_method_map =
-      std::unordered_map<std::string,
-                         std::unordered_map<std::string, DexMethodRef*>>();
-  for (auto it = s_method_map.begin(); it != s_method_map.end(); it++) {
-    auto method_spec = it->first;
-    auto method = s_method_map.load(method_spec, nullptr);
+      UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>();
+  for (auto&& [method_spec, method] : UnorderedIterable(s_method_map)) {
     std::string descriptor = show_deobfuscated(method);
     boost::replace_all(descriptor, ":(", "(");
     std::vector<std::string> class_and_method;
     boost::split(class_and_method, descriptor, boost::is_any_of("."));
     always_assert(class_and_method.size() == 2);
-    auto method_name_to_method =
-        std::unordered_map<std::string, DexMethodRef*>();
+    auto method_name_to_method = UnorderedMap<std::string, DexMethodRef*>();
     method_name_to_method.emplace(class_and_method[1], method);
     baseline_profile_method_map.emplace(class_and_method[0],
                                         method_name_to_method);
@@ -758,6 +753,16 @@ void RedexContext::erase_method(const DexType* type,
   if (m != nullptr && m->is_def()) {
     unset_return_value(m->as_def());
   }
+}
+
+void RedexContext::leak_method(DexMethodRef* method) {
+  std::lock_guard<std::mutex> l(m_leaked_methods_mutex);
+  m_leaked_methods.push(method);
+}
+
+size_t RedexContext::leaked_methods() {
+  std::lock_guard<std::mutex> l(m_leaked_methods_mutex);
+  return m_leaked_methods.size();
 }
 
 // TODO: Need a better interface.
@@ -975,7 +980,7 @@ void RedexContext::add_destruction_task(const Task& t) {
 }
 
 void RedexContext::set_sb_interaction_index(
-    const std::unordered_map<std::string, size_t>& input) {
+    const UnorderedMap<std::string, size_t>& input) {
   m_sb_interaction_indices = input;
 }
 

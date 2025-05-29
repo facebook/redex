@@ -16,6 +16,7 @@
 #include <string>
 
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 
 namespace assessments {
@@ -24,7 +25,7 @@ namespace assessments {
 // start splitting.
 constexpr const uint32_t HUGE_METHOD_THRESHOLD = 9000;
 
-using DexAssessment = std::unordered_map<std::string, uint64_t>;
+using DexAssessment = UnorderedMap<std::string, uint64_t>;
 using DexAssessmentItem = std::pair<std::string, uint64_t>;
 
 std::vector<DexAssessmentItem> order(const DexAssessment&);

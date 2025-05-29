@@ -8,9 +8,9 @@
 #pragma once
 
 #include <functional>
-#include <unordered_set>
 #include <vector>
 
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "PassManager.h"
@@ -20,7 +20,7 @@ namespace class_splitting {
 void update_coldstart_classes_order(
     ConfigFiles& conf,
     PassManager& mgr,
-    const std::unordered_set<DexType*>& coldstart_types,
+    const UnorderedSet<DexType*>& coldstart_types,
     const std::vector<std::string>& previously_relocated_types,
     bool log = true);
 
@@ -87,8 +87,8 @@ class ClassSplitter final {
   explicit ClassSplitter(
       const ClassSplittingConfig& config,
       PassManager& mgr,
-      const std::unordered_set<DexMethod*>& sufficiently_popular_methods,
-      const std::unordered_set<DexMethod*>& insufficiently_popular_methods);
+      const UnorderedSet<DexMethod*>& sufficiently_popular_methods,
+      const UnorderedSet<DexMethod*>& insufficiently_popular_methods);
   ClassSplitter() = delete;
   ClassSplitter(const ClassSplitter&) = delete;
   ClassSplitter(ClassSplitter&&) = delete;
@@ -113,7 +113,7 @@ class ClassSplitter final {
   };
 
   struct SplitClass {
-    std::unordered_map<DexMethod*, RelocatableMethodInfo> relocatable_methods;
+    UnorderedMap<DexMethod*, RelocatableMethodInfo> relocatable_methods;
   };
 
   struct TargetClassInfo {
@@ -137,24 +137,24 @@ class ClassSplitter final {
   bool has_source_block_positive_val(DexMethod* method);
   void materialize_trampoline_code(DexMethod* source, DexMethod* target);
 
-  std::unordered_map<int32_t, TargetClassInfo> m_target_classes_by_api_level;
+  UnorderedMap<int32_t, TargetClassInfo> m_target_classes_by_api_level;
   size_t m_next_target_class_index{0};
-  std::unordered_map<DexType*, DexClass*> m_target_classes_by_source_classes;
-  std::unordered_map<const DexClass*, SplitClass> m_split_classes;
+  UnorderedMap<DexType*, DexClass*> m_target_classes_by_source_classes;
+  UnorderedMap<const DexClass*, SplitClass> m_split_classes;
   std::vector<std::pair<DexMethod*, DexClass*>> m_methods_to_relocate;
   std::vector<std::pair<DexMethod*, DexMethod*>> m_methods_to_trampoline;
   ClassSplittingStats m_stats;
   InsertOnlyConcurrentSet<DexMethod*> m_non_true_virtual_methods;
   ClassSplittingConfig m_config;
   PassManager& m_mgr;
-  const std::unordered_set<DexMethod*>& m_sufficiently_popular_methods;
+  const UnorderedSet<DexMethod*>& m_sufficiently_popular_methods;
   // Methods that appear in the profiles and whose frequency does not exceed
   // the threashold.
-  const std::unordered_set<DexMethod*>& m_insufficiently_popular_methods;
+  const UnorderedSet<DexMethod*>& m_insufficiently_popular_methods;
 
   // Set of methods that need to be made static eventually. The destructor
   // of this class will do the necessary delayed work.
-  std::unordered_set<DexMethod*> m_delayed_make_static;
+  UnorderedSet<DexMethod*> m_delayed_make_static;
 
   // Accumulated visibility changes that must be applied eventually.
   // This happens locally within prepare().

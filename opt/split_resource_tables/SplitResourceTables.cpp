@@ -63,9 +63,9 @@ struct TypeSplit {
 };
 
 void signatures_to_methods(
-    const std::unordered_map<std::string, std::string>& signatures,
-    std::unordered_map<DexMethod*, DexMethod*>* methods) {
-  for (const auto& pair : signatures) {
+    const UnorderedMap<std::string, std::string>& signatures,
+    UnorderedMap<DexMethod*, DexMethod*>* methods) {
+  for (const auto& pair : UnorderedIterable(signatures)) {
     auto first = DexMethod::get_method(pair.first);
     always_assert_log(first != nullptr, "Did not find method %s",
                       pair.first.c_str());
@@ -83,21 +83,6 @@ void signatures_to_methods(
                       pair.second.c_str());
     (*methods)[static_cast<DexMethod*>(first)] = resolved_second;
   }
-}
-
-std::string configs_to_string(
-    const std::set<android::ResTable_config>& configs) {
-  std::ostringstream s;
-  bool empty = true;
-  for (const auto& c : configs) {
-    if (!empty) {
-      s << ", ";
-    }
-    empty = false;
-    auto desc = c.toString();
-    s << (desc.length() > 0 ? desc.string() : "default");
-  }
-  return s.str();
 }
 
 TypeSplit make_split_struct(
@@ -223,7 +208,7 @@ size_t maybe_split_type(
 void compact_resource_ids(
     const std::vector<uint32_t>& sorted_res_ids,
     const std::map<uint8_t, uint32_t>& type_to_movable_entries,
-    const std::unordered_set<uint32_t>& deleted_resources,
+    const UnorderedSet<uint32_t>& deleted_resources,
     std::map<uint32_t, uint32_t>* old_to_remapped_ids) {
   auto keep_id = [&](uint32_t id) {
     // Ensure that ids that don't get reassigned get considered for having their
@@ -300,7 +285,7 @@ std::map<uint8_t, uint32_t> build_movable_id_ranges(
     ResourceTableFile& res_table,
     const std::string& our_package_name,
     const std::string& static_ids_file_path) {
-  std::unordered_map<uint8_t, uint32_t> type_to_max_static_id;
+  UnorderedMap<uint8_t, uint32_t> type_to_max_static_id;
   auto callback = [&](const std::string& package_name,
                       const std::string& /* unused */,
                       const std::string& /* unused */,
@@ -337,7 +322,7 @@ size_t get_arsc_file_size(const std::string& unpack_dir) {
 } // namespace
 
 bool SplitResourceTablesPass::is_type_allowed(const std::string& type_name) {
-  if (m_allowed_types.size() == 1 && *m_allowed_types.begin() == "*") {
+  if (m_allowed_types.size() == 1 && *unordered_any(m_allowed_types) == "*") {
     // magic token to enable all types
     return true;
   }
@@ -416,7 +401,7 @@ void SplitResourceTablesPass::run_pass(DexStoresVector& stores,
   // Relocating ids to a new type requires appending to the ResStringPool of
   // type names, and defining a new ResTable_typeSpec and ResTable_type.
   std::map<uint32_t, uint32_t> old_to_remapped_ids;
-  std::unordered_set<uint32_t> deleted_resources;
+  UnorderedSet<uint32_t> deleted_resources;
   for (const auto& t : new_types) {
     auto num_ids = t.relocate_ids.size();
     mgr.incr_metric(METRIC_EMPTY_CELLS_ELIMINATED,
@@ -434,7 +419,7 @@ void SplitResourceTablesPass::run_pass(DexStoresVector& stores,
   }
   // Mark old ids as removed in the resource table. This has the side effect of
   // compacting the remaining ids, which means those in turn must be remapped.
-  for (const auto& id : deleted_resources) {
+  for (const auto& id : UnorderedIterable(deleted_resources)) {
     res_table->delete_resource(id);
   }
 
@@ -448,7 +433,7 @@ void SplitResourceTablesPass::run_pass(DexStoresVector& stores,
 
   // Fix xml files
   auto all_xml_files = resources->find_all_xml_files();
-  for (const auto& f : all_xml_files) {
+  for (const auto& f : UnorderedIterable(all_xml_files)) {
     TRACE(SPLIT_RES, 4, "Remapping XML: %s", f.c_str());
     resources->remap_xml_reference_attributes(f, old_to_remapped_ids);
   }
@@ -478,7 +463,7 @@ void SplitResourceTablesPass::run_pass(DexStoresVector& stores,
 
   // Make sure we don't break android.content.res.Resources calls, such as
   // getIdentifier().
-  std::unordered_map<std::string, std::string> framework_to_compat_signatures;
+  UnorderedMap<std::string, std::string> framework_to_compat_signatures;
   if (!m_getidentifier_compat_method.empty()) {
     framework_to_compat_signatures.emplace(RES_GET_IDENTIFIER_SIGNATURE,
                                            m_getidentifier_compat_method);
@@ -487,7 +472,7 @@ void SplitResourceTablesPass::run_pass(DexStoresVector& stores,
     framework_to_compat_signatures.emplace(RES_GET_TYPENAME_SIGNATURE,
                                            m_typename_compat_method);
   }
-  std::unordered_map<DexMethod*, DexMethod*> methods;
+  UnorderedMap<DexMethod*, DexMethod*> methods;
   signatures_to_methods(framework_to_compat_signatures, &methods);
   int replaced =
       method_reference::wrap_instance_call_with_static(stores, methods);

@@ -90,7 +90,7 @@ class MethodSplitterTest : public RedexTest {
         /* create_init_class_insns */ false,
         /* reserved_mrefs */ 0, /* reserved_trefs */ 0, &stats);
     m->get_code()->cfg().simplify();
-    for (auto* out : stats.added_methods) {
+    for (auto* out : UnorderedIterable(stats.added_methods)) {
       out->get_code()->cfg().simplify();
     }
     std::unordered_map<std::string, std::string> expected_map;
@@ -125,9 +125,8 @@ class MethodSplitterTest : public RedexTest {
     if (!main_error.empty()) {
       return ::testing::AssertionFailure() << show(m) << ": " << main_error;
     }
-    std::vector<DexMethod*> ordered(stats.added_methods.begin(),
-                                    stats.added_methods.end());
-    std::sort(ordered.begin(), ordered.end(), compare_dexmethods);
+    auto ordered =
+        unordered_to_ordered(stats.added_methods, compare_dexmethods);
     for (auto out : ordered) {
       auto out_error = compare(out);
       if (!out_error.empty()) {

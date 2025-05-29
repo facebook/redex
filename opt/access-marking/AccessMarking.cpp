@@ -7,8 +7,6 @@
 
 #include "AccessMarking.h"
 
-#include <unordered_map>
-
 #include "ClassHierarchy.h"
 #include "DexUtil.h"
 #include "FieldOpTracker.h"
@@ -69,7 +67,7 @@ size_t mark_fields_final(const Scope& scope,
       field_op_tracker::analyze(scope);
 
   size_t n_fields_finalized = 0;
-  for (auto& pair : field_stats) {
+  for (auto& pair : UnorderedIterable(field_stats)) {
     auto* field = pair.first;
     auto& stats = pair.second;
     if (stats.init_writes == stats.writes && can_rename(field) &&
@@ -170,9 +168,7 @@ void mark_methods_private(const ConcurrentSet<DexMethod*>& privates) {
   // a best-effort of inserting in an ordered matter.
   // But when dmethods and vmethods are not ordered to begin with, then the
   // order in which we attempt to add matters.
-  std::vector<DexMethod*> ordered_privates(privates.begin(), privates.end());
-  std::sort(
-      ordered_privates.begin(), ordered_privates.end(), compare_dexmethods);
+  auto ordered_privates = unordered_to_ordered(privates, compare_dexmethods);
 
   for (auto method : ordered_privates) {
     TRACE(ACCESS, 2, "Privatized method: %s", SHOW(method));

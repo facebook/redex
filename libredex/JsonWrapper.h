@@ -9,9 +9,9 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
+
+#include "DeterministicContainers.h"
 
 namespace Json {
 class Value;
@@ -45,16 +45,15 @@ class JsonWrapper {
 
   void get(const char* name,
            const std::vector<std::string>& dflt,
-           std::unordered_set<std::string>& param) const;
-
-  void get(
-      const char* name,
-      const std::unordered_map<std::string, std::vector<std::string>>& dflt,
-      std::unordered_map<std::string, std::vector<std::string>>& param) const;
+           UnorderedSet<std::string>& param) const;
 
   void get(const char* name,
-           const std::unordered_map<std::string, std::string>& dflt,
-           std::unordered_map<std::string, std::string>& param) const;
+           const UnorderedMap<std::string, std::vector<std::string>>& dflt,
+           UnorderedMap<std::string, std::vector<std::string>>& param) const;
+
+  void get(const char* name,
+           const UnorderedMap<std::string, std::string>& dflt,
+           UnorderedMap<std::string, std::string>& param) const;
 
   void get(const char* name, const Json::Value& dflt, Json::Value& param) const;
 

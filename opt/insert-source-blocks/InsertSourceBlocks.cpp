@@ -114,7 +114,7 @@ uint64_t stable_hash(ControlFlowGraph& cfg) {
   uint64_t hash = 0;
 
   std::deque<Block*> queue;
-  std::unordered_set<Block*> seen;
+  UnorderedSet<Block*> seen;
 
   auto push = [&queue, &seen](auto* b) {
     if (seen.insert(b).second) {
@@ -253,16 +253,16 @@ struct ProfileFile {
 
   using StringPos = std::pair<size_t, size_t>;
 
-  using MethodMeta = std::unordered_map<const DexMethodRef*, StringPos>;
+  using MethodMeta = UnorderedMap<const DexMethodRef*, StringPos>;
   MethodMeta method_meta;
 
-  using UnresolvedMethods = std::unordered_set<std::string_view>;
+  using UnresolvedMethods = UnorderedSet<std::string_view>;
 
   UnresolvedMethods unresolved_methods;
 
-  using ClassAccessMethods = std::unordered_map<std::string_view, StringPos>;
+  using ClassAccessMethods = UnorderedMap<std::string_view, StringPos>;
 
-  using AccessMethods = std::unordered_map<const DexType*, ClassAccessMethods>;
+  using AccessMethods = UnorderedMap<const DexType*, ClassAccessMethods>;
 
   AccessMethods access_methods;
 
@@ -498,7 +498,7 @@ struct Injector {
                   SHOW(access_method_type_or_null),
                   [&]() {
                     std::string res;
-                    for (auto& p : map) {
+                    for (auto& p : UnorderedIterable(map)) {
                       res.append(p.first);
                       res.append(", ");
                     }
@@ -772,7 +772,7 @@ struct Injector {
                 return pred(lhs, rhs);
               });
 
-    std::unordered_map<std::string, size_t> interaction_indices;
+    UnorderedMap<std::string, size_t> interaction_indices;
     for (size_t i = 0; i != container.size(); ++i) {
       interaction_indices[fn(container[i])] = i;
     }
@@ -792,7 +792,7 @@ struct Injector {
   void prepare_profile_files_and_interactions(
       const std::string& profile_files_str,
       const std::vector<std::string>& ordered_interactions) {
-    std::unordered_map<std::string, size_t> ordered_interactions_indices;
+    UnorderedMap<std::string, size_t> ordered_interactions_indices;
     for (auto& s : ordered_interactions) {
       ordered_interactions_indices.emplace(s,
                                            ordered_interactions_indices.size());
@@ -862,9 +862,7 @@ struct Injector {
     // Assumption is set is small overall. Also helps for sorting strings.
     std::set<std::string_view> unresolved_uniqued;
     for (auto& p : profile_files) {
-      for (auto& sv : p->unresolved_methods) {
-        unresolved_uniqued.insert(sv);
-      }
+      insert_unordered_iterable(unresolved_uniqued, p->unresolved_methods);
     }
     std::ofstream ofs{fname};
     for (auto& sv : unresolved_uniqued) {
@@ -915,7 +913,8 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
                         /* serialize= */ m_force_serialize || is_instr_mode,
                         m_insert_after_excs);
 
-  for (auto&& [interaction_id, index] : g_redex->get_sb_interaction_indices()) {
+  for (auto&& [interaction_id, index] :
+       UnorderedIterable(g_redex->get_sb_interaction_indices())) {
     mgr.set_metric("interaction_" + interaction_id, index);
   }
 }

@@ -93,9 +93,9 @@ bool can_update_rtype_for(DexMethod* meth, const DexType* new_rtype) {
   return can_update_rtype_for(meth, updated_proto);
 }
 
-bool can_update_rtype_for_list(const std::vector<const DexMethod*>& meths,
+bool can_update_rtype_for_list(const UnorderedBag<const DexMethod*>& meths,
                                const DexProto* new_proto) {
-  for (auto* m : meths) {
+  for (auto* m : UnorderedIterable(meths)) {
     auto* meth = const_cast<DexMethod*>(m);
     if (!can_update_rtype_for(meth, new_proto)) {
       return false;
@@ -111,15 +111,14 @@ bool can_update_rtype_for_list(const std::vector<const DexMethod*>& meths,
  */
 bool share_common_overriddens_size(
     const method_override_graph::Graph& override_graph,
-    const std::vector<const DexMethod*>& meths) {
-  size_t num_overriddens = 0;
-  for (size_t i = 0; i < meths.size(); i++) {
-    const auto* meth = meths[i];
+    const UnorderedBag<const DexMethod*>& meths) {
+  std::optional<size_t> num_overriddens;
+  for (auto* meth : UnorderedIterable(meths)) {
     auto overriddens = method_override_graph::get_overridden_methods(
         override_graph, meth, true);
-    if (i == 0) {
+    if (!num_overriddens) {
       num_overriddens = overriddens.size();
-    } else if (num_overriddens != overriddens.size()) {
+    } else if (*num_overriddens != overriddens.size()) {
       return false;
     }
   }
@@ -153,23 +152,23 @@ void update_rtype_unsafe_for(DexMethod* meth,
   stats.num_rtype_specialized++;
 }
 
-bool update_rtype_for_list(const std::vector<const DexMethod*>& meths,
+bool update_rtype_for_list(const UnorderedBag<const DexMethod*>& meths,
                            const DexType* new_rtype,
                            RtypeStats& stats) {
   if (meths.empty()) {
     return true;
   }
-  DexProto* updated_proto =
-      DexProto::make_proto(new_rtype, meths.front()->get_proto()->get_args());
+  DexProto* updated_proto = DexProto::make_proto(
+      new_rtype, (*unordered_any(meths))->get_proto()->get_args());
 
-  for (auto* m : meths) {
+  for (auto* m : UnorderedIterable(meths)) {
     auto* meth = const_cast<DexMethod*>(m);
     if (!can_update_rtype_for(meth, updated_proto)) {
       return false;
     }
   }
 
-  for (auto* m : meths) {
+  for (auto* m : UnorderedIterable(meths)) {
     auto* meth = const_cast<DexMethod*>(m);
     update_rtype_unsafe_for(meth, new_rtype, stats);
   }
@@ -256,9 +255,9 @@ bool RtypeSpecialization::shares_identical_rtype_candidate(
 
 bool RtypeSpecialization::share_common_rtype_candidate(
     const MethodToInferredReturnType& rtype_candidates,
-    const std::vector<const DexMethod*>& meths,
+    const UnorderedBag<const DexMethod*>& meths,
     const DexType* better_rtype) const {
-  for (auto* m : meths) {
+  for (auto* m : UnorderedIterable(meths)) {
     if (type_class_internal(m->get_class()) == nullptr) {
       // Cannot modify external method.
       return false;
@@ -322,7 +321,7 @@ void RtypeSpecialization::specialize_true_virtuals(
   }
   if (overriddens.size() == 1) {
     // For now, we only focus on methods with one abstract overriden here.
-    DexMethod* overridden = const_cast<DexMethod*>(*overriddens.begin());
+    DexMethod* overridden = const_cast<DexMethod*>(*unordered_any(overriddens));
     if (!is_safe_to_specialize(overridden) || overridden->is_external()) {
       // Overridden has code or is external. Give up
       TRACE(RESO, 4, "specialize bail on more complex overridden %s",
@@ -424,7 +423,7 @@ void RtypeSpecialization::specialize_rtypes(const Scope& scope) {
   // Sort and update virtual targets.
   m_stats.num_virtual_candidates = virtual_roots.size();
   std::vector<DexMethod*> virtuals_lst;
-  for (auto& pair : virtual_roots) {
+  for (auto& pair : UnorderedIterable(virtual_roots)) {
     virtuals_lst.push_back(pair.first);
   }
   std::sort(virtuals_lst.begin(), virtuals_lst.end(), compare_dexmethods);

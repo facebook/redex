@@ -29,7 +29,7 @@ class GlobalTypeAnalyzer;
 
 } // namespace global
 
-using EligibleIfields = std::unordered_set<DexField*>;
+using EligibleIfields = UnorderedSet<DexField*>;
 
 using DexTypeFieldPartition =
     sparta::HashedAbstractPartition<const DexField*, DexTypeDomain>;
@@ -146,12 +146,13 @@ class WholeProgramState {
   bool has_call_graph() const { return !!m_call_graph; }
 
   DexTypeDomain get_return_type_from_cg(const IRInstruction* insn) const {
-    auto callees = call_graph::resolve_callees_in_graph(*m_call_graph, insn);
+    const auto& callees =
+        call_graph::resolve_callees_in_graph(*m_call_graph, insn);
     if (callees.empty()) {
       return DexTypeDomain::top();
     }
     DexTypeDomain ret = DexTypeDomain::bottom();
-    for (const DexMethod* callee : callees) {
+    for (const DexMethod* callee : UnorderedIterable(callees)) {
       if (!callee->get_code()) {
         always_assert(is_abstract(callee) || is_native(callee));
         return DexTypeDomain::top();

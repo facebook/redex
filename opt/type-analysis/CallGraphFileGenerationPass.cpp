@@ -23,9 +23,8 @@ namespace {
 void gather_cg_information(
     const call_graph::Graph& cg,
     std::vector<call_graph::NodeId>* nodes,
-    std::unordered_map<call_graph::NodeId, uint32_t>* nodes_to_ids,
-    std::unordered_map<call_graph::NodeId, std::set<uint32_t>>*
-        nodes_to_succs) {
+    UnorderedMap<call_graph::NodeId, uint32_t>* nodes_to_ids,
+    UnorderedMap<call_graph::NodeId, std::set<uint32_t>>* nodes_to_succs) {
   uint32_t method_num = 0;
   std::queue<call_graph::NodeId> node_queue;
   node_queue.push(cg.entry());
@@ -95,8 +94,8 @@ void write_out_callgraph(const Scope& scope,
                          const call_graph::Graph& cg,
                          const std::string& callgraph_filename) {
   std::vector<call_graph::NodeId> nodes;
-  std::unordered_map<call_graph::NodeId, uint32_t> nodes_to_ids;
-  std::unordered_map<call_graph::NodeId, std::set<uint32_t>> nodes_to_succs;
+  UnorderedMap<call_graph::NodeId, uint32_t> nodes_to_ids;
+  UnorderedMap<call_graph::NodeId, std::set<uint32_t>> nodes_to_succs;
   gather_cg_information(cg, &nodes, &nodes_to_ids, &nodes_to_succs);
   InsertOnlyConcurrentMap<DexMethod*, std::string> method_to_first_position;
   gather_method_positions(scope, &method_to_first_position);

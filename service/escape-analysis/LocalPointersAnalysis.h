@@ -186,7 +186,7 @@ constexpr uint16_t FRESH_RETURN = std::numeric_limits<uint16_t>::max();
 struct EscapeSummary {
   // The elements of this set represent the indexes of the src registers that
   // escape.
-  std::unordered_set<uint16_t> escaping_parameters;
+  UnorderedSet<uint16_t> escaping_parameters;
 
   // The indices of the src registers that are returned. This is useful for
   // modeling methods that return `this`, though it is also able to model the
@@ -219,8 +219,7 @@ std::ostream& operator<<(std::ostream& o, const EscapeSummary& summary);
 
 sparta::s_expr to_s_expr(const EscapeSummary&);
 
-using InvokeToSummaryMap =
-    std::unordered_map<const IRInstruction*, EscapeSummary>;
+using InvokeToSummaryMap = UnorderedMap<const IRInstruction*, EscapeSummary>;
 
 /*
  * A basic model of the heap, only tracking whether an object has escaped.
@@ -262,7 +261,7 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
       const cfg::ControlFlowGraph& cfg,
       InvokeToSummaryMap invoke_to_summary_map = InvokeToSummaryMap(),
       bool escape_check_cast = false,
-      const std::unordered_set<DexClass*>* excluded_classes = nullptr)
+      const UnorderedSet<DexClass*>* excluded_classes = nullptr)
       : ir_analyzer::BaseIRAnalyzer<Environment>(cfg),
         m_invoke_to_summary_map(std::move(invoke_to_summary_map)),
         m_escape_check_cast(escape_check_cast),
@@ -282,7 +281,7 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
   // construction strategies.
   InvokeToSummaryMap m_invoke_to_summary_map;
   const bool m_escape_check_cast;
-  const std::unordered_set<DexClass*>* m_excluded_classes;
+  const UnorderedSet<DexClass*>* m_excluded_classes;
 };
 
 /*
@@ -305,7 +304,7 @@ void default_instruction_handler(const IRInstruction* insn,
 using FixpointIteratorMap =
     ConcurrentMap<const DexMethod*, std::unique_ptr<FixpointIterator>>;
 
-using SummaryMap = std::unordered_map<const DexMethodRef*, EscapeSummary>;
+using SummaryMap = UnorderedMap<const DexMethodRef*, EscapeSummary>;
 
 /*
  * Analyze all methods in scope, making sure to analyze the callees before
@@ -318,7 +317,7 @@ FixpointIteratorMap analyze_scope(
     const Scope&,
     const call_graph::Graph&,
     SummaryMap* = nullptr,
-    const std::unordered_set<DexClass*>* excluded_classes = nullptr);
+    const UnorderedSet<DexClass*>* excluded_classes = nullptr);
 
 /*
  * Join over all possible returned and thrown values.

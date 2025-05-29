@@ -9,9 +9,9 @@
 
 #include <string>
 #include <typeinfo>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
+
+#include "DeterministicContainers.h"
 
 class Pass;
 
@@ -53,7 +53,7 @@ class AnalysisUsage {
   }
 
   // Returns a set of passes used by (thus should precede) this current pass.
-  const std::unordered_set<AnalysisID>& get_required_passes() {
+  const UnorderedSet<AnalysisID>& get_required_passes() {
     return m_required_passes;
   }
 
@@ -61,7 +61,7 @@ class AnalysisUsage {
   // invalidation policy set up by the pass in which the AnalysisUsage is
   // defined.
   void do_pass_invalidation(
-      std::unordered_map<AnalysisID, Pass*>* preserved_analysis_passes) const;
+      UnorderedMap<AnalysisID, Pass*>* preserved_analysis_passes) const;
 
   // Called from PassManager. Performs checks on analysis pass dependencies
   // without running any pass.
@@ -69,6 +69,6 @@ class AnalysisUsage {
 
  private:
   bool m_preserve_all = false;
-  std::unordered_set<AnalysisID> m_required_passes;
-  std::unordered_set<AnalysisID> m_preserve_specific;
+  UnorderedSet<AnalysisID> m_required_passes;
+  UnorderedSet<AnalysisID> m_preserve_specific;
 };

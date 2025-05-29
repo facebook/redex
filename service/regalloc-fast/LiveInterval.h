@@ -7,22 +7,23 @@
 
 #pragma once
 
+#include <utility>
+#include <vector>
+
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "IRInstruction.h"
 #include "LinearScan.h"
 #include "Liveness.h"
-#include <unordered_map>
-#include <utility>
-#include <vector>
 
 namespace fastregalloc {
 
 using LiveIntervalPointIndices =
-    std::unordered_map<LiveIntervalPoint, uint32_t, LiveIntervalPoint::Hasher>;
+    UnorderedMap<LiveIntervalPoint, uint32_t, LiveIntervalPoint::Hasher>;
 
 using RangeInBlock = std::pair<LiveIntervalPoint, LiveIntervalPoint>;
-using VRegAliveRangeInBlock = std::unordered_map<vreg_t, RangeInBlock>;
-using VRegAliveInsns = std::unordered_map<vreg_t, std::vector<RangeInBlock>>;
+using VRegAliveRangeInBlock = UnorderedMap<vreg_t, RangeInBlock>;
+using VRegAliveInsns = UnorderedMap<vreg_t, std::vector<RangeInBlock>>;
 
 using IntervalEndPoints = std::pair<uint32_t, uint32_t>;
 using VRegBlockRanges = std::vector<IntervalEndPoints>;
@@ -41,7 +42,7 @@ using VRegBlockRanges = std::vector<IntervalEndPoints>;
 VRegAliveRangeInBlock get_live_range_in_block(
     const LivenessFixpointIterator& fixpoint_iter,
     cfg::Block* block,
-    std::unordered_map<cfg::Block*, std::unordered_set<vreg_t>>*
+    UnorderedMap<cfg::Block*, UnorderedSet<vreg_t>>*
         check_cast_throw_targets_vregs);
 
 /*
@@ -56,7 +57,7 @@ VRegAliveRangeInBlock get_live_range_in_block(
 VRegAliveRangeInBlock get_check_cast_throw_targets_live_range(
     const LivenessFixpointIterator& fixpoint_iter,
     cfg::Block* block,
-    const std::unordered_set<vreg_t>& vregs);
+    const UnorderedSet<vreg_t>& vregs);
 
 /*
  * Order the instruction list. Then for each vreg, turn each instruction range

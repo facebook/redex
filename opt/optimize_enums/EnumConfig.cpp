@@ -22,7 +22,7 @@ namespace {
 struct ExternalMethodData {
   std::string method_name;
   boost::optional<uint16_t> returned_param;
-  std::unordered_set<uint16_t> safe_params;
+  UnorderedSet<uint16_t> safe_params;
   ExternalMethodData(std::string name,
                      boost::optional<uint16_t> returned,
                      std::initializer_list<uint16_t> params)
@@ -35,7 +35,7 @@ void sanity_check_method_summary(const DexMethodRef* method,
                                  const optimize_enums::ParamSummary& summary,
                                  const DexType* object_type) {
   auto args = method->get_proto()->get_args();
-  for (auto param : summary.safe_params) {
+  for (auto param : UnorderedIterable(summary.safe_params)) {
     always_assert_log(param < args->size() &&
                           *(args->begin() + param) == object_type,
                       "%u is not Object;\n", param);
@@ -79,7 +79,9 @@ void load_external_method_summaries(
     param_summary_map->emplace(method, summary);
   }
   // Load summaries for kotlin null assertion methods.
-  for (auto method : kotlin_nullcheck_wrapper::get_kotlin_null_assertions()) {
+  auto null_check_methods =
+      kotlin_nullcheck_wrapper::get_kotlin_null_assertions();
+  for (auto method : UnorderedIterable(null_check_methods)) {
     if (param_summary_map->count(method)) {
       // The method is defined in the apk and their summaries are analyzed from
       // the method code.
@@ -102,7 +104,7 @@ void ParamSummary::print(const DexMethodRef* method) const {
   }
   TRACE(ENUM, 9, "summary of %s", SHOW(method));
   TRACE_NO_LINE(ENUM, 9, "safe_params: ");
-  for (auto param : safe_params) {
+  for (auto param : UnorderedIterable(safe_params)) {
     TRACE_NO_LINE(ENUM, 9, "%d ", param);
   }
   if (returned_param) {

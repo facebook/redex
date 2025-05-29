@@ -144,8 +144,8 @@ class Assessor {
   Assessment analyze_method(DexMethod* method, cfg::ControlFlowGraph& cfg) {
     Assessment assessment;
     auto is_outlined_method = method->rstate.outlined();
-    std::unordered_set<DexPosition*> positions;
-    std::unordered_set<DexPosition*> parents;
+    UnorderedSet<DexPosition*> positions;
+    UnorderedSet<DexPosition*> parents;
     bool any_unknown_source_position = false;
     for (auto block : cfg.blocks()) {
       bool block_without_position_reported = false;
@@ -189,7 +189,7 @@ class Assessor {
         }
       }
     }
-    std::unordered_map<DexPosition*, uint32_t> parent_depths;
+    UnorderedMap<DexPosition*, uint32_t> parent_depths;
     std::function<uint32_t(DexPosition*)> get_parent_depth;
     get_parent_depth = [&](DexPosition* pos) -> uint32_t {
       if (pos == nullptr) {
@@ -214,7 +214,7 @@ class Assessor {
           std::max(assessment.max_parent_depth, depth);
       return depth;
     };
-    for (auto pos : positions) {
+    for (auto pos : UnorderedIterable(positions)) {
       get_parent_depth(pos->parent);
       if (m_manager->is_pattern_position(pos)) {
         assessment.pattern_positions++;
@@ -251,13 +251,10 @@ class Assessor {
 namespace assessments {
 
 std::vector<DexAssessmentItem> order(const DexAssessment& assessment) {
-  std::vector<DexAssessmentItem> res(assessment.begin(), assessment.end());
-  std::sort(res.begin(),
-            res.end(),
-            [](const DexAssessmentItem& a, const DexAssessmentItem& b) {
-              return a.first < b.first;
-            });
-  return res;
+  return unordered_to_ordered(
+      assessment, [](const DexAssessmentItem& a, const DexAssessmentItem& b) {
+        return a.first < b.first;
+      });
 }
 
 std::string to_string(const DexAssessment& assessment) {

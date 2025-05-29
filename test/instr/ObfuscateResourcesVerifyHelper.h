@@ -87,10 +87,10 @@ inline void obfuscateresource_postverify(ResourceTableFile* res_table) {
   EXPECT_EQ(name_removed_ids.size(), 36);
 
   auto string_id = res_table->get_res_ids_by_name("welcome")[0];
-  std::unordered_set<std::string> types = {"string"};
+  UnorderedSet<std::string> types = {"string"};
   auto string_type = res_table->get_types_by_name(types);
   ASSERT_EQ(string_type.size(), 1);
-  EXPECT_EQ(string_id & TYPE_MASK_BIT, *(string_type.begin()));
+  EXPECT_EQ(string_id & TYPE_MASK_BIT, *unordered_any(string_type));
 
   auto x_prickly_ids = res_table->get_res_ids_by_name("x_prickly");
   EXPECT_EQ(x_prickly_ids.size(), 1);

@@ -46,12 +46,12 @@ uint64_t ClosureAggregator::ClosureInfo::get_priority() const {
 }
 
 ClosureAggregator::ClosureAggregator(
-    std::unordered_set<const ReducedBlock*> critical_components)
+    UnorderedSet<const ReducedBlock*> critical_components)
     : m_critical_components(std::move(critical_components)) {}
 
 void ClosureAggregator::reprioritize(
     const AffectedClosures& affected_closures) {
-  for (auto& [affected_closure, delta] : affected_closures) {
+  for (auto& [affected_closure, delta] : UnorderedIterable(affected_closures)) {
     auto& affected_closure_info = m_closure_infos.at(affected_closure);
     affected_closure_info.applied_code_size += delta.applied_code_size;
     for (size_t i = 0; i < INFREQUENT_COUNT; ++i) {
@@ -65,8 +65,8 @@ void ClosureAggregator::reprioritize(
 }
 
 void ClosureAggregator::insert(const Closure* c) {
-  std::unordered_set<const ReducedBlock*> components;
-  for (auto* component : c->reduced_components) {
+  UnorderedSet<const ReducedBlock*> components;
+  for (auto* component : UnorderedIterable(c->reduced_components)) {
     if (m_critical_components.count(component)) {
       components.insert(component);
     }
@@ -77,12 +77,12 @@ void ClosureAggregator::insert(const Closure* c) {
   auto& closure_info = it->second;
 
   AffectedClosures affected_closures;
-  for (const auto* component : closure_info.components) {
+  for (const auto* component : UnorderedIterable(closure_info.components)) {
     closure_info.code_size += component->code_size;
     auto& closures = m_component_closures[component];
     size_t frequency = closures.size();
     if (frequency > 0 && frequency <= INFREQUENT_COUNT) {
-      for (const Closure* affected_closure : closures) {
+      for (const Closure* affected_closure : UnorderedIterable(closures)) {
         always_assert(affected_closure != c);
         affected_closures[affected_closure]
             .infrequent_code_sizes[frequency - 1] -=
@@ -91,7 +91,7 @@ void ClosureAggregator::insert(const Closure* c) {
     }
     ++frequency;
     if (frequency <= INFREQUENT_COUNT) {
-      for (const Closure* affected_closure : closures) {
+      for (const Closure* affected_closure : UnorderedIterable(closures)) {
         always_assert(affected_closure != c);
         affected_closures[affected_closure]
             .infrequent_code_sizes[frequency - 1] += component->code_size;
@@ -112,7 +112,7 @@ void ClosureAggregator::erase(const Closure* c) {
   auto closure_info_it = m_closure_infos.find(c);
   always_assert(closure_info_it != m_closure_infos.end());
   const auto& closure_info = closure_info_it->second;
-  for (const auto* component : closure_info.components) {
+  for (const auto* component : UnorderedIterable(closure_info.components)) {
     auto closures_it = m_component_closures.find(component);
     always_assert(closures_it != m_component_closures.end());
     auto& closures = closures_it->second;
@@ -121,7 +121,7 @@ void ClosureAggregator::erase(const Closure* c) {
     const auto erased = closures.erase(c);
     always_assert(erased);
     if (frequency <= INFREQUENT_COUNT) {
-      for (const Closure* affected_closure : closures) {
+      for (const Closure* affected_closure : UnorderedIterable(closures)) {
         affected_closures[affected_closure]
             .infrequent_code_sizes[frequency - 1] -=
             static_cast<int32_t>(component->code_size);
@@ -131,14 +131,14 @@ void ClosureAggregator::erase(const Closure* c) {
     if (frequency == 0) {
       m_component_closures.erase(closures_it);
     } else if (frequency <= INFREQUENT_COUNT) {
-      for (const Closure* affected_closure : closures) {
+      for (const Closure* affected_closure : UnorderedIterable(closures)) {
         affected_closures[affected_closure]
             .infrequent_code_sizes[frequency - 1] += component->code_size;
       }
     }
 
     if (m_applied_components.insert(component).second && frequency > 0) {
-      for (const Closure* affected_closure : closures) {
+      for (const Closure* affected_closure : UnorderedIterable(closures)) {
         affected_closures[affected_closure].applied_code_size +=
             component->code_size;
       }

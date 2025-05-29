@@ -56,16 +56,15 @@ bool operator==(const VirtualScopeId& a, const VirtualScopeId& b) {
   return a.name == b.name && a.proto == b.proto;
 }
 
-using VirtualScopeIdSet =
-    std::unordered_set<VirtualScopeId, VirtualScopeIdHasher>;
+using VirtualScopeIdSet = UnorderedSet<VirtualScopeId, VirtualScopeIdHasher>;
 
 // Helper analysis that determines if we need to keep the code of a method (or
 // if it can never run)
 class OverriddenVirtualScopesAnalysis {
  private:
-  const std::unordered_set<DexType*>& m_scoped_uninstantiable_types;
+  const UnorderedSet<DexType*>& m_scoped_uninstantiable_types;
 
-  std::unordered_map<DexType*, VirtualScopeIdSet>
+  UnorderedMap<DexType*, VirtualScopeIdSet>
       m_transitively_defined_virtual_scopes;
 
   ConcurrentSet<DexType*> m_instantiated_types;
@@ -78,7 +77,7 @@ class OverriddenVirtualScopesAnalysis {
   // finding all virtual scopes which are defined by itself, if actually
   // instantiated, or all instantiable children of the given type.
   void compute_transitively_defined_virtual_scope(
-      const std::unordered_map<DexType*, std::unordered_set<DexType*>>&
+      const UnorderedMap<DexType*, UnorderedSet<DexType*>>&
           instantiable_children,
       const InsertOnlyConcurrentMap<const DexType*, VirtualScopeIdSet>&
           defined_virtual_scopes,
@@ -91,31 +90,31 @@ class OverriddenVirtualScopesAnalysis {
     if (is_instantiated(t)) {
       const auto& own_defined_virtual_scopes =
           defined_virtual_scopes.at_unsafe(t);
-      res.insert(own_defined_virtual_scopes.begin(),
-                 own_defined_virtual_scopes.end());
+      insert_unordered_iterable(res, own_defined_virtual_scopes);
       return;
     }
-    std::unordered_map<VirtualScopeId, size_t, VirtualScopeIdHasher> counted;
+    UnorderedMap<VirtualScopeId, size_t, VirtualScopeIdHasher> counted;
     auto children_it = instantiable_children.find(t);
     if (children_it != instantiable_children.end()) {
       const auto& children = children_it->second;
-      for (auto child : children) {
+      for (auto child : UnorderedIterable(children)) {
         const auto& defined_virtual_scopes_of_child =
             defined_virtual_scopes.at_unsafe(child);
-        for (const auto& virtual_scope : defined_virtual_scopes_of_child) {
+        for (const auto& virtual_scope :
+             UnorderedIterable(defined_virtual_scopes_of_child)) {
           counted[virtual_scope]++;
         }
         compute_transitively_defined_virtual_scope(
             instantiable_children, defined_virtual_scopes, child);
-        for (auto& virtual_scope :
-             m_transitively_defined_virtual_scopes.at(child)) {
+        for (auto& virtual_scope : UnorderedIterable(
+                 m_transitively_defined_virtual_scopes.at(child))) {
           if (!defined_virtual_scopes_of_child.count(virtual_scope)) {
             counted[virtual_scope]++;
           }
         }
       }
       auto children_size = children.size();
-      for (auto& p : counted) {
+      for (auto& p : UnorderedIterable(counted)) {
         if (p.second == children_size) {
           res.insert(p.first);
         }
@@ -161,8 +160,8 @@ class OverriddenVirtualScopesAnalysis {
  public:
   OverriddenVirtualScopesAnalysis(
       const Scope& scope,
-      const std::unordered_set<DexType*>& scoped_uninstantiable_types,
-      const std::unordered_map<DexType*, std::unordered_set<DexType*>>&
+      const UnorderedSet<DexType*>& scoped_uninstantiable_types,
+      const UnorderedMap<DexType*, UnorderedSet<DexType*>>&
           instantiable_children)
       : m_scoped_uninstantiable_types(scoped_uninstantiable_types) {
     scan_code(scope);
@@ -216,14 +215,14 @@ class OverriddenVirtualScopesAnalysis {
 //   classes implementing them, and
 // - abstract (non-interface) classes that are not extended by any non-abstract
 //   class
-std::unordered_set<DexType*> compute_scoped_uninstantiable_types(
+UnorderedSet<DexType*> compute_scoped_uninstantiable_types(
     const Scope& scope,
-    std::unordered_map<DexType*, std::unordered_set<DexType*>>*
-        instantiable_children = nullptr) {
+    UnorderedMap<DexType*, UnorderedSet<DexType*>>* instantiable_children =
+        nullptr) {
   // First, we compute types that might possibly be uninstantiable, and classes
   // that we consider instantiable.
-  std::unordered_set<DexType*> uninstantiable_types;
-  std::unordered_set<const DexClass*> instantiable_classes;
+  UnorderedSet<DexType*> uninstantiable_types;
+  UnorderedSet<const DexClass*> instantiable_classes;
   auto is_interface_instantiable = [](const DexClass* interface) {
     if (is_annotation(interface) || interface->is_external() ||
         root(interface) || !can_rename(interface)) {
@@ -246,7 +245,7 @@ std::unordered_set<DexType*> compute_scoped_uninstantiable_types(
   });
   // Next, we prune the list of possibly uninstantiable types by looking at
   // what instantiable classes implement and extend.
-  std::unordered_set<const DexClass*> visited;
+  UnorderedSet<const DexClass*> visited;
   std::function<bool(const DexClass*)> visit;
   visit = [&](const DexClass* cls) {
     if (cls == nullptr || !visited.insert(cls).second) {
@@ -261,7 +260,7 @@ std::unordered_set<DexType*> compute_scoped_uninstantiable_types(
     }
     return true;
   };
-  for (auto cls : instantiable_classes) {
+  for (auto cls : UnorderedIterable(instantiable_classes)) {
     while (visit(cls)) {
       cls = type_class(cls->get_super_class());
     }
@@ -276,9 +275,8 @@ remove_uninstantiables_impl::Stats run_remove_uninstantiables(
   walk::parallel::code(scope,
                        [&](DexMethod*, IRCode& code) { code.build_cfg(); });
 
-  std::unordered_map<DexType*, std::unordered_set<DexType*>>
-      instantiable_children;
-  std::unordered_set<DexType*> scoped_uninstantiable_types =
+  UnorderedMap<DexType*, UnorderedSet<DexType*>> instantiable_children;
+  UnorderedSet<DexType*> scoped_uninstantiable_types =
       compute_scoped_uninstantiable_types(scope, &instantiable_children);
   OverriddenVirtualScopesAnalysis overridden_virtual_scopes_analysis(
       scope, scoped_uninstantiable_types, instantiable_children);
@@ -324,7 +322,7 @@ struct RemoveUninstantiablesTest : public RedexTest {
   }
 };
 
-std::unordered_set<DexType*> compute_uninstantiable_types() {
+UnorderedSet<DexType*> compute_uninstantiable_types() {
   Scope scope;
   g_redex->walk_type_class([&](const DexType*, const DexClass* cls) {
     scope.push_back(const_cast<DexClass*>(cls));

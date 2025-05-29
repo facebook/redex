@@ -18,8 +18,6 @@
 #include <ostream>
 #include <sstream>
 #include <tuple>
-#include <unordered_map>
-#include <unordered_set>
 #include <utility>
 
 #include <boost/container/flat_set.hpp>
@@ -114,12 +112,12 @@ namespace pts_impl {
   }                                     \
 
 #define OP_STRING(X) {X, #X}
-std::unordered_map<PointsToOperationKind, std::string, std::hash<int>>
+UnorderedMap<PointsToOperationKind, std::string, std::hash<int>>
     op_to_string_table = OP_STRING_TABLE;
 #undef OP_STRING
 
 #define OP_STRING(X) {#X, X}
-std::unordered_map<std::string, PointsToOperationKind> string_to_op_table =
+UnorderedMap<std::string, PointsToOperationKind> string_to_op_table =
     OP_STRING_TABLE;
 #undef OP_STRING
 
@@ -1271,13 +1269,13 @@ class PointsToActionGenerator final {
   std::unique_ptr<AnchorPropagation> m_analysis;
   // We assign each anchor a points-to variable. This map keeps track of the
   // naming.
-  std::unordered_map<const IRInstruction*, PointsToVariable> m_anchors;
+  UnorderedMap<const IRInstruction*, PointsToVariable> m_anchors;
   // A table that keeps track of all disjunctions already created, so that we
   // only generate one disjuction per anchor set.
-  std::unordered_map<PointsToVariableSet,
-                     PointsToVariable,
-                     PointsToVariableSet::Hash,
-                     PointsToVariableSet::EqualTo>
+  UnorderedMap<PointsToVariableSet,
+               PointsToVariable,
+               PointsToVariableSet::Hash,
+               PointsToVariableSet::EqualTo>
       m_anchor_sets;
 };
 
@@ -1308,7 +1306,7 @@ class Shrinker final {
 
  private:
   using VariableSet =
-      std::unordered_set<PointsToVariable, boost::hash<PointsToVariable>>;
+      UnorderedSet<PointsToVariable, boost::hash<PointsToVariable>>;
 
   // We keep all `put`, `invoke` and `return` operations, since they presumably
   // have an effect on the analysis.
@@ -1373,7 +1371,8 @@ class Shrinker final {
   // analysis. All other variables can safely be discarded. We compute the set
   // of reachable variables using a simple breadth-first traversal of the graph.
   void collect_reachable_vars() {
-    std::deque<PointsToVariable> queue(m_root_vars.begin(), m_root_vars.end());
+    std::deque<PointsToVariable> queue;
+    insert_unordered_iterable(queue, queue.end(), m_root_vars);
     while (!queue.empty()) {
       PointsToVariable v = queue.back();
       queue.pop_back();
@@ -1384,7 +1383,7 @@ class Shrinker final {
       }
       m_vars_to_keep.insert(v);
       const auto& deps = m_dependency_graph[v];
-      queue.insert(queue.begin(), deps.begin(), deps.end());
+      insert_unordered_iterable(queue, queue.end(), deps);
     }
   }
 
@@ -1418,9 +1417,7 @@ class Shrinker final {
   }
 
   std::vector<PointsToAction>* m_pt_actions;
-  std::unordered_map<PointsToVariable,
-                     VariableSet,
-                     boost::hash<PointsToVariable>>
+  UnorderedMap<PointsToVariable, VariableSet, boost::hash<PointsToVariable>>
       m_dependency_graph;
   VariableSet m_root_vars;
   VariableSet m_vars_to_keep;
@@ -1437,12 +1434,12 @@ class Shrinker final {
   }                               \
 
 #define KIND_STRING(X) {X, #X}
-std::unordered_map<MethodKind, std::string, std::hash<int>>
+UnorderedMap<MethodKind, std::string, std::hash<int>>
     method_kind_to_string_table = KIND_STRING_TABLE;
 #undef KIND_STRING
 
 #define KIND_STRING(X) {#X, X}
-std::unordered_map<std::string, MethodKind> string_to_method_kind_table =
+UnorderedMap<std::string, MethodKind> string_to_method_kind_table =
     KIND_STRING_TABLE;
 #undef KIND_STRING
 
@@ -1560,7 +1557,7 @@ PointsToSemantics::PointsToSemantics(const Scope& scope, bool generate_stubs)
 
   // We initialize all entries in the hash table, which can then be concurrently
   // accessed by the workers using the thread-safe find() operation of
-  // std::unordered_map.
+  // UnorderedMap.
   for (DexClass* dex_class : scope) {
     for (DexMethod* dmethod : dex_class->get_dmethods()) {
       initialize_entry(dmethod);
@@ -1638,7 +1635,7 @@ void PointsToSemantics::initialize_entry(DexMethod* dex_method) {
 
 void PointsToSemantics::generate_points_to_actions(DexMethod* dex_method) {
   // According to section [container.requirements.dataraces] of the C++ standard
-  // definition document, the find() method of std::unordered_map is
+  // definition document, the find() method of UnorderedMap is
   // thread-safe. Since this function operates on a single Dex method and the
   // hash table m_method_semantics is indexed by Dex methods, the following code
   // is not subject to data races.
@@ -1654,7 +1651,7 @@ void PointsToSemantics::generate_points_to_actions(DexMethod* dex_method) {
 }
 
 std::ostream& operator<<(std::ostream& o, const PointsToSemantics& s) {
-  for (const auto& entry : s.m_method_semantics) {
+  for (const auto& entry : UnorderedIterable(s.m_method_semantics)) {
     o << entry.second;
   }
   return o;

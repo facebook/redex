@@ -69,7 +69,7 @@ std::ostream& operator<<(std::ostream& o, const CseLocation& l) {
 std::ostream& operator<<(std::ostream& o, const CseUnorderedLocationSet& ls) {
   o << "{";
   bool first = true;
-  for (const auto& l : ls) {
+  for (const auto& l : UnorderedIterable(ls)) {
     if (first) {
       first = false;
     } else {
@@ -316,8 +316,8 @@ static const std::string_view pure_method_names[] = {
     "Ljava/lang/Thread;.currentThread:()Ljava/lang/Thread;",
 };
 
-std::unordered_set<DexMethodRef*> get_pure_methods() {
-  std::unordered_set<DexMethodRef*> pure_methods;
+UnorderedSet<DexMethodRef*> get_pure_methods() {
+  UnorderedSet<DexMethodRef*> pure_methods;
   for (auto const pure_method_name : pure_method_names) {
     auto method_ref = DexMethod::get_method(pure_method_name);
     if (method_ref == nullptr) {
@@ -331,8 +331,8 @@ std::unordered_set<DexMethodRef*> get_pure_methods() {
   return pure_methods;
 }
 
-std::unordered_set<DexMethod*> get_immutable_getters(const Scope& scope) {
-  std::unordered_set<DexMethod*> pure_methods;
+UnorderedSet<DexMethod*> get_immutable_getters(const Scope& scope) {
+  UnorderedSet<DexMethod*> pure_methods;
   walk::methods(scope, [&](DexMethod* method) {
     if (method->rstate.immutable_getter()) {
       pure_methods.insert(method);
@@ -345,7 +345,7 @@ namespace {
 
 MethodOverrideAction get_base_or_overriding_method_action_impl(
     const DexMethod* method,
-    const std::unordered_set<const DexMethod*>* methods_to_ignore,
+    const UnorderedSet<const DexMethod*>* methods_to_ignore,
     bool ignore_methods_with_assumenosideeffects) {
   if (method == nullptr || method::is_clinit(method) ||
       method->rstate.no_optimizations()) {
@@ -383,7 +383,7 @@ MethodOverrideAction get_base_or_overriding_method_action_impl(
 
 MethodOverrideAction get_base_or_overriding_method_action(
     const DexMethod* method,
-    const std::unordered_set<const DexMethod*>* methods_to_ignore,
+    const UnorderedSet<const DexMethod*>* methods_to_ignore,
     bool ignore_methods_with_assumenosideeffects) {
   return get_base_or_overriding_method_action_impl(
       method, methods_to_ignore, ignore_methods_with_assumenosideeffects);
@@ -395,7 +395,7 @@ template <typename HandlerFunc>
 bool process_base_and_overriding_methods_impl(
     const method_override_graph::Graph* method_override_graph,
     const DexMethod* method,
-    const std::unordered_set<const DexMethod*>* methods_to_ignore,
+    const UnorderedSet<const DexMethod*>* methods_to_ignore,
     bool ignore_methods_with_assumenosideeffects,
     const HandlerFunc& handler_func) {
   auto action = get_base_or_overriding_method_action_impl(
@@ -445,7 +445,7 @@ bool process_base_and_overriding_methods_impl(
 bool process_base_and_overriding_methods(
     const method_override_graph::Graph* method_override_graph,
     const DexMethod* method,
-    const std::unordered_set<const DexMethod*>* methods_to_ignore,
+    const UnorderedSet<const DexMethod*>* methods_to_ignore,
     bool ignore_methods_with_assumenosideeffects,
     const std::function<bool(DexMethod*)>& handler_func) {
   return process_base_and_overriding_methods_impl(
@@ -465,7 +465,7 @@ class WtoOrdering {
 
   struct FirstIterationData {
     std::vector<const DexMethod*> root_cache;
-    std::unordered_map<const DexMethod*, std::vector<const DexMethod*>>&
+    UnorderedMap<const DexMethod*, std::vector<const DexMethod*>>&
         inverse_dependencies;
     const std::vector<const DexMethod*> empty{};
 
@@ -484,13 +484,12 @@ class WtoOrdering {
   };
 
   static FirstIterationData create_first_iteration_data(
-      std::unordered_map<const DexMethod*, std::vector<const DexMethod*>>&
+      UnorderedMap<const DexMethod*, std::vector<const DexMethod*>>&
           inverse_dependencies,
-      const std::unordered_set<const DexMethod*>& impacted_methods) {
+      const UnorderedSet<const DexMethod*>& impacted_methods) {
     std::vector<const DexMethod*> wto_nodes{WTO_ROOT};
     wto_nodes.reserve(wto_nodes.size() + impacted_methods.size());
-    wto_nodes.insert(wto_nodes.end(), impacted_methods.begin(),
-                     impacted_methods.end());
+    insert_unordered_iterable(wto_nodes, wto_nodes.end(), impacted_methods);
 
     // In the first iteration, besides computing the sorted root successors, we
     // also sort all inverse_dependencies entries in-place. They represent the
@@ -525,13 +524,12 @@ class WtoOrdering {
   };
 
   static OtherIterationData create_other_iteration_data(
-      std::unordered_map<const DexMethod*, std::vector<const DexMethod*>>&
+      UnorderedMap<const DexMethod*, std::vector<const DexMethod*>>&
           inverse_dependencies,
-      const std::unordered_set<const DexMethod*>& impacted_methods) {
+      const UnorderedSet<const DexMethod*>& impacted_methods) {
     std::vector<const DexMethod*> wto_nodes{WTO_ROOT};
     wto_nodes.reserve(wto_nodes.size() + impacted_methods.size());
-    wto_nodes.insert(wto_nodes.end(), impacted_methods.begin(),
-                     impacted_methods.end());
+    insert_unordered_iterable(wto_nodes, wto_nodes.end(), impacted_methods);
 
     // In subsequent iteration, besides computing the sorted root successors
     // again, we also filter all previously sorted inverse_dependencies entries.
@@ -564,30 +562,24 @@ class WtoOrdering {
   }
 
   static std::vector<const DexMethod*> get_sorted_impacted_methods(
-      const std::unordered_set<const DexMethod*>& impacted_methods) {
-    std::vector<const DexMethod*> successors;
-    successors.reserve(impacted_methods.size());
-    successors.insert(successors.end(), impacted_methods.begin(),
-                      impacted_methods.end());
-    std::sort(successors.begin(), successors.end(), compare_dexmethods);
-    return successors;
+      const UnorderedSet<const DexMethod*>& impacted_methods) {
+    return unordered_to_ordered(impacted_methods, compare_dexmethods);
   }
 
   static std::vector<const DexMethod*> sort_by_inverse_deps(
-      const std::unordered_set<const DexMethod*>& impacted_methods,
-      const std::unordered_map<const DexMethod*, std::vector<const DexMethod*>>&
+      const UnorderedSet<const DexMethod*>& impacted_methods,
+      const UnorderedMap<const DexMethod*, std::vector<const DexMethod*>>&
           inverse_dependencies) {
     // First translate to pair to avoid repeated map lookups.
     std::vector<std::pair<const DexMethod*, size_t>> sorted_by_inv_deps;
     sorted_by_inv_deps.reserve(impacted_methods.size());
-    std::transform(impacted_methods.begin(), impacted_methods.end(),
-                   std::back_inserter(sorted_by_inv_deps),
-                   [&inverse_dependencies](auto* m) {
-                     auto it = inverse_dependencies.find(m);
-                     return std::make_pair(m, it != inverse_dependencies.end()
-                                                  ? it->second.size()
-                                                  : 0);
-                   });
+    unordered_transform(
+        impacted_methods, std::back_inserter(sorted_by_inv_deps),
+        [&inverse_dependencies](auto* m) {
+          auto it = inverse_dependencies.find(m);
+          return std::make_pair(
+              m, it != inverse_dependencies.end() ? it->second.size() : 0);
+        });
     std::sort(sorted_by_inv_deps.begin(), sorted_by_inv_deps.end(),
               [](const std::pair<const DexMethod*, size_t>& lhs,
                  const std::pair<const DexMethod*, size_t>& rhs) {
@@ -618,12 +610,12 @@ class WtoOrdering {
   }
 
   static bool should_use_wto(
-      const std::unordered_set<const DexMethod*>& impacted_methods,
-      const std::unordered_map<const DexMethod*, std::vector<const DexMethod*>>&
+      const UnorderedSet<const DexMethod*>& impacted_methods,
+      const UnorderedMap<const DexMethod*, std::vector<const DexMethod*>>&
           inverse_dependencies) {
     size_t impacted_methods_size = impacted_methods.size();
     size_t inv_dep_sum{0}, inv_dep_max{0};
-    for (auto& entry : inverse_dependencies) {
+    for (auto& entry : UnorderedIterable(inverse_dependencies)) {
       inv_dep_sum += entry.second.size();
       inv_dep_max = std::max(inv_dep_max, entry.second.size());
     }
@@ -639,8 +631,8 @@ class WtoOrdering {
 
  public:
   static std::vector<const DexMethod*> order_impacted_methods(
-      const std::unordered_set<const DexMethod*>& impacted_methods,
-      std::unordered_map<const DexMethod*, std::vector<const DexMethod*>>&
+      const UnorderedSet<const DexMethod*>& impacted_methods,
+      UnorderedMap<const DexMethod*, std::vector<const DexMethod*>>&
           inverse_dependencies,
       size_t iterations) {
     Timer prepare_wto{"Prepare Ordering"};
@@ -683,7 +675,7 @@ size_t compute_locations_closure_impl(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
     const InitFuncT& init_func,
-    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result) {
+    UnorderedMap<const DexMethod*, CseUnorderedLocationSet>* result) {
   // 1. Let's initialize known method read locations and dependencies by
   //    scanning method bodies
   InsertOnlyConcurrentMap<const DexMethod*, LocationsAndDependencies>
@@ -701,14 +693,14 @@ size_t compute_locations_closure_impl(
   // 2. Compute inverse dependencies so that we know what needs to be recomputed
   // during the fixpoint computation, and determine set of methods that are
   // initially "impacted" in the sense that they have dependencies.
-  std::unordered_map<const DexMethod*, std::vector<const DexMethod*>>
+  UnorderedMap<const DexMethod*, std::vector<const DexMethod*>>
       inverse_dependencies;
-  std::unordered_set<const DexMethod*> impacted_methods;
+  UnorderedSet<const DexMethod*> impacted_methods;
   {
     Timer t{"Compute inverse dependencies"};
-    for (auto&& [method, lads] : method_lads) {
+    for (auto&& [method, lads] : UnorderedIterable(method_lads)) {
       if (!lads.dependencies.empty()) {
-        for (auto d : lads.dependencies) {
+        for (auto d : UnorderedIterable(lads.dependencies)) {
           inverse_dependencies[d].push_back(method);
         }
         impacted_methods.insert(method);
@@ -741,7 +733,7 @@ size_t compute_locations_closure_impl(
       auto& lads = method_lads.at_unsafe(method);
       bool unknown = false;
       size_t lads_locations_size = lads.locations.size();
-      for (const DexMethod* d : lads.dependencies) {
+      for (const DexMethod* d : UnorderedIterable(lads.dependencies)) {
         if (d == method) {
           continue;
         }
@@ -751,7 +743,7 @@ size_t compute_locations_closure_impl(
           break;
         }
         const auto& other_locations = it->second.locations;
-        lads.locations.insert(other_locations.begin(), other_locations.end());
+        insert_unordered_iterable(lads.locations, other_locations);
       }
       if (unknown || lads_locations_size < lads.locations.size()) {
         // something changed
@@ -787,7 +779,7 @@ size_t compute_locations_closure_impl(
 
   // For all methods which have a known set of locations at this point,
   // persist that information
-  for (auto&& [method, lads] : method_lads) {
+  for (auto&& [method, lads] : UnorderedIterable(method_lads)) {
     result->emplace(method, std::move(lads.locations));
   }
 
@@ -801,7 +793,7 @@ size_t compute_locations_closure(
     const method_override_graph::Graph* method_override_graph,
     const std::function<boost::optional<LocationsAndDependencies>(DexMethod*)>&
         init_func,
-    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result) {
+    UnorderedMap<const DexMethod*, CseUnorderedLocationSet>* result) {
   return compute_locations_closure_impl(scope, method_override_graph, init_func,
                                         result);
 }
@@ -823,15 +815,15 @@ static size_t analyze_read_locations(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
     const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
-    const std::unordered_set<DexMethodRef*>& pure_methods,
+    const UnorderedSet<DexMethodRef*>& pure_methods,
     bool ignore_methods_with_assumenosideeffects,
     bool for_conditional_purity,
     bool compute_locations,
-    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result) {
-  std::unordered_set<const DexMethod*> pure_methods_closure;
+    UnorderedMap<const DexMethod*, CseUnorderedLocationSet>* result) {
+  UnorderedSet<const DexMethod*> pure_methods_closure;
   {
     Timer t{"Pure methods closure"};
-    for (auto pure_method_ref : pure_methods) {
+    for (auto pure_method_ref : UnorderedIterable(pure_methods)) {
       auto pure_method = pure_method_ref->as_def();
       if (pure_method == nullptr) {
         continue;
@@ -841,8 +833,7 @@ static size_t analyze_read_locations(
         const auto overriding_methods =
             method_override_graph::get_overriding_methods(
                 *method_override_graph, pure_method);
-        pure_methods_closure.insert(overriding_methods.begin(),
-                                    overriding_methods.end());
+        insert_unordered_iterable(pure_methods_closure, overriding_methods);
       }
     }
   }
@@ -969,15 +960,15 @@ size_t compute_conditionally_pure_methods(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
     const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
-    const std::unordered_set<DexMethodRef*>& pure_methods,
-    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result) {
+    const UnorderedSet<DexMethodRef*>& pure_methods,
+    UnorderedMap<const DexMethod*, CseUnorderedLocationSet>* result) {
   Timer t("compute_conditionally_pure_methods");
   auto iterations = analyze_read_locations(
       scope, method_override_graph, clinit_has_no_side_effects, pure_methods,
       /* ignore_methods_with_assumenosideeffects */ false,
       /* for_conditional_purity */ true,
       /* compute_locations */ true, result);
-  for (auto& p : *result) {
+  for (auto& p : UnorderedIterable(*result)) {
     TRACE(CSE, 4, "[CSE] conditionally pure method %s: %s", SHOW(p.first),
           SHOW(&p.second));
   }
@@ -988,17 +979,16 @@ size_t compute_no_side_effects_methods(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
     const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
-    const std::unordered_set<DexMethodRef*>& pure_methods,
-    std::unordered_set<const DexMethod*>* result) {
+    const UnorderedSet<DexMethodRef*>& pure_methods,
+    UnorderedSet<const DexMethod*>* result) {
   Timer t("compute_no_side_effects_methods");
-  std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
-      method_locations;
+  UnorderedMap<const DexMethod*, CseUnorderedLocationSet> method_locations;
   auto iterations = analyze_read_locations(
       scope, method_override_graph, clinit_has_no_side_effects, pure_methods,
       /* ignore_methods_with_assumenosideeffects */ true,
       /* for_conditional_purity */ false,
       /* compute_locations */ false, &method_locations);
-  for (auto& p : method_locations) {
+  for (auto& p : UnorderedIterable(method_locations)) {
     TRACE(CSE, 4, "[CSE] no side effects method %s", SHOW(p.first));
     result->insert(p.first);
   }

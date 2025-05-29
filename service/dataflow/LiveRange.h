@@ -8,14 +8,13 @@
 #pragma once
 
 #include <cstdint>
-#include <unordered_map>
-#include <unordered_set>
 
 #include <boost/functional/hash.hpp>
 
 #include <sparta/PatriciaTreeSet.h>
 
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "IRInstruction.h"
 #include "Lazy.h"
 #include "ReachingDefinitions.h"
@@ -58,9 +57,9 @@ struct hash<live_range::Use> {
 
 namespace live_range {
 
-using UseDefChains = std::unordered_map<Use, sparta::PatriciaTreeSet<Def>>;
-using Uses = std::unordered_set<Use>;
-using DefUseChains = std::unordered_map<Def, std::unordered_set<Use>>;
+using UseDefChains = UnorderedMap<Use, sparta::PatriciaTreeSet<Def>>;
+using Uses = UnorderedSet<Use>;
+using DefUseChains = UnorderedMap<Def, UnorderedSet<Use>>;
 
 class Chains {
  public:

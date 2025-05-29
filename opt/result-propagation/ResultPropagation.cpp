@@ -83,7 +83,7 @@ class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
  public:
   Analyzer(const cfg::ControlFlowGraph& cfg,
            const ReturnParamResolver& resolver,
-           const std::unordered_map<const DexMethod*, ParamIndex>&
+           const UnorderedMap<const DexMethod*, ParamIndex>&
                methods_which_return_parameter)
       : BaseIRAnalyzer(cfg),
         m_resolver(resolver),
@@ -224,9 +224,9 @@ class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
 
  private:
   const ReturnParamResolver& m_resolver;
-  const std::unordered_map<const DexMethod*, ParamIndex>&
+  const UnorderedMap<const DexMethod*, ParamIndex>&
       m_methods_which_return_parameter;
-  const std::unordered_map<const IRInstruction*, ParamIndex> m_load_param_map;
+  const UnorderedMap<const IRInstruction*, ParamIndex> m_load_param_map;
   mutable MethodRefCache m_resolved_refs;
 };
 } // namespace
@@ -235,7 +235,7 @@ class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
 
 boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
     const IRInstruction* insn,
-    const std::unordered_map<const DexMethod*, ParamIndex>&
+    const UnorderedMap<const DexMethod*, ParamIndex>&
         methods_which_return_parameter,
     MethodRefCache& resolved_refs) const {
   always_assert(opcode::is_an_invoke(insn->opcode()));
@@ -289,7 +289,7 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
     const auto overriding_methods =
         method_override_graph::get_overriding_methods(
             m_graph, callee, /* include_interfaces */ false, static_base_type);
-    for (auto* overriding : overriding_methods) {
+    for (auto* overriding : UnorderedIterable(overriding_methods)) {
       if (!method::may_be_invoke_target(overriding)) {
         continue;
       }
@@ -406,7 +406,7 @@ bool ReturnParamResolver::returns_receiver(const DexMethodRef* method) const {
 
 boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
     const cfg::ControlFlowGraph& cfg,
-    const std::unordered_map<const DexMethod*, ParamIndex>&
+    const UnorderedMap<const DexMethod*, ParamIndex>&
         methods_which_return_parameter) const {
   Analyzer analyzer(cfg, *this, methods_which_return_parameter);
   auto return_param_index = ParamDomain::bottom();
@@ -536,13 +536,12 @@ void ResultPropagationPass::run_pass(DexStoresVector& stores,
         stats.patched_move_results, stats.unverifiable_move_results);
 }
 
-using ParamIndexMap = std::unordered_map<const DexMethod*, ParamIndex>;
+using ParamIndexMap = UnorderedMap<const DexMethod*, ParamIndex>;
 
-std::unordered_map<const DexMethod*, ParamIndex>
+UnorderedMap<const DexMethod*, ParamIndex>
 ResultPropagationPass::find_methods_which_return_parameter(
     PassManager& mgr, const Scope& scope, const ReturnParamResolver& resolver) {
-  std::unordered_map<const DexMethod*, ParamIndex>
-      methods_which_return_parameter;
+  UnorderedMap<const DexMethod*, ParamIndex> methods_which_return_parameter;
   // We iterate a few times to capture chains of method calls that all
   // eventually return `this`.
   // TODO(perf): Add flag to limit number of iterations
@@ -552,9 +551,10 @@ ResultPropagationPass::find_methods_which_return_parameter(
   while (true) {
     mgr.incr_metric(METRIC_METHODS_WHICH_RETURN_PARAMETER_ITERATIONS, 1);
     const auto next_methods_which_return_parameter =
-        walk::parallel::methods<ParamIndexMap, MergeContainers<ParamIndexMap>>(
+        walk::parallel::methods<ParamIndexMap,
+                                UnorderedMergeContainers<ParamIndexMap>>(
             scope, [&](DexMethod* method) {
-              std::unordered_map<const DexMethod*, ParamIndex> res;
+              UnorderedMap<const DexMethod*, ParamIndex> res;
 
               const auto* code = method->get_code();
               if (code == nullptr) {

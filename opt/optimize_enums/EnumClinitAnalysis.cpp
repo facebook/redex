@@ -73,7 +73,7 @@ struct EnumOrdinalAnalyzerState {
       : clinit_class(clinit_class) {
     auto& fields = type_class(clinit_class)->get_ifields();
     enum_instance_fields =
-        std::unordered_set<DexField*>(fields.begin(), fields.end());
+        UnorderedSet<DexField*>(fields.begin(), fields.end());
   }
 
   const DexMethod* enum_ordinal_init{get_enum_ctor()};
@@ -88,7 +88,7 @@ struct EnumOrdinalAnalyzerState {
   const DexType* clinit_class;
 
   // The instance fields of the enum whose <clinit> we are analyzing.
-  std::unordered_set<DexField*> enum_instance_fields;
+  UnorderedSet<DexField*> enum_instance_fields;
 };
 
 class EnumOrdinalAnalyzer;

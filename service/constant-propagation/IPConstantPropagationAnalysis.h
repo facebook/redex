@@ -13,6 +13,7 @@
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationWholeProgramState.h"
+#include "DeterministicContainers.h"
 
 namespace constant_propagation {
 
@@ -126,7 +127,7 @@ class FixpointIterator : public sparta::ParallelMonotonicFixpointIterator<
   struct MethodCacheEntry {
     ArgumentDomain args;
     WholeProgramStateAccessorRecord wps_accessor_record;
-    std::unordered_map<const IRInstruction*, ArgumentDomain> result;
+    UnorderedMap<const IRInstruction*, ArgumentDomain> result;
   };
   using MethodCache = std::list<std::shared_ptr<const MethodCacheEntry>>;
   mutable ConcurrentMap<const DexMethod*, MethodCache> m_cache;

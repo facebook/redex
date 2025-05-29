@@ -21,7 +21,7 @@ using namespace object_inliner_plugin;
 
 ObjectInlinePlugin::ObjectInlinePlugin(
     const FieldSetMap& field_sets,
-    const std::unordered_map<DexFieldRef*, DexFieldRef*>& field_swaps,
+    const UnorderedMap<DexFieldRef*, DexFieldRef*>& field_swaps,
     const std::vector<reg_t>& srcs,
     boost::optional<reg_t> value_register,
     boost::optional<reg_t> caller_this,
@@ -57,13 +57,8 @@ bool ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
   cfg::CFGMutation m(*caller);
 
   // Order fields by names
-  std::vector<DexFieldRef*> ordered_fields;
-  ordered_fields.reserve(m_initial_field_sets.size());
-  for (auto& it : m_initial_field_sets) {
-    auto* field = it.first;
-    ordered_fields.push_back(field);
-  }
-  std::sort(ordered_fields.begin(), ordered_fields.end(), compare_dexfields);
+  auto ordered_fields =
+      unordered_to_ordered_keys(m_initial_field_sets, compare_dexfields);
   // Allocate registers for all the fields sets that are not field swap.
   // These fields will be removed and the new rgisters will take their place.
   for (auto* field : ordered_fields) {
@@ -129,7 +124,7 @@ bool ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
       assert(final_field != m_set_field_sets.end());
       // There will be only one, so the loop is just to pull out the first
       assert(final_field->second.size() == 1);
-      const auto& assign_reg = *final_field->second.begin();
+      const auto& assign_reg = *unordered_any(final_field->second);
       move->set_dest(assign_reg.first);
       m.replace(insn_it, {move});
       continue;
@@ -152,8 +147,8 @@ bool ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph*,
   // load params have been changed to moves
   IRInstruction* original_load_this = callee->entry_block()->begin()->insn;
   reg_t callee_this = original_load_this->dest();
-  std::unordered_set<DexFieldRef*> used_fields;
-  std::unordered_set<reg_t> this_refs = {callee_this};
+  UnorderedSet<DexFieldRef*> used_fields;
+  UnorderedSet<reg_t> this_refs = {callee_this};
 
   cfg::CFGMutation m(*callee);
   auto iterable = cfg::InstructionIterable(*callee);
@@ -182,7 +177,7 @@ bool ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph*,
         auto move = new IRInstruction(opcode::iput_to_move(opcode));
         assert(no_field_needed->second.size() == 1);
         // Extract the solo reg, and set as src.
-        move->set_dest(no_field_needed->second.begin()->first);
+        move->set_dest(unordered_any(no_field_needed->second)->first);
         move->set_src(0, insn->src(0));
         used_fields.emplace(field);
         m.replace(insn_it, {move});
@@ -223,7 +218,7 @@ bool ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph*,
           assert(no_field_needed->second.size() == 1);
           // Extract the solo reg, and set as src.
           auto move_result = callee->move_result_of(callee->find_insn(insn));
-          move->set_src(0, no_field_needed->second.begin()->first);
+          move->set_src(0, unordered_any(no_field_needed->second)->first);
           move->set_dest(move_result->insn->dest());
           m.remove(move_result);
           used_fields.emplace(field);

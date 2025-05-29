@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "CallSiteSummaries.h"
+#include "DeterministicContainers.h"
 #include "PriorityThreadPoolDAGScheduler.h"
 #include "RefChecker.h"
 #include "Resolver.h"
@@ -139,10 +140,9 @@ inline const struct InlinerCostConfig DEFAULT_COST_CONFIG = {
 // All call-sites of a callee.
 struct CallerInsns {
   // Invoke instructions per caller
-  std::unordered_map<const DexMethod*, std::unordered_set<IRInstruction*>>
-      caller_insns;
+  UnorderedMap<const DexMethod*, UnorderedSet<IRInstruction*>> caller_insns;
   // Invoke instructions that need a cast
-  std::unordered_map<IRInstruction*, DexType*> inlined_invokes_need_cast;
+  UnorderedMap<IRInstruction*, DexType*> inlined_invokes_need_cast;
   // Whether there may be any other unknown call-sites.
   bool other_call_sites{false};
   bool other_call_sites_overriding_methods_added{false};
@@ -154,7 +154,7 @@ struct Callee {
   bool true_virtual;
 };
 
-using CalleeCallerInsns = std::unordered_map<DexMethod*, CallerInsns>;
+using CalleeCallerInsns = UnorderedMap<DexMethod*, CallerInsns>;
 
 class ReducedCode {
  public:
@@ -256,7 +256,7 @@ class MultiMethodInliner {
       const init_classes::InitClassesWithSideEffects&
           init_classes_with_side_effects,
       DexStoresVector& stores,
-      const std::unordered_set<DexMethod*>& candidates,
+      const UnorderedSet<DexMethod*>& candidates,
       std::function<DexMethod*(DexMethodRef*, MethodSearch, const DexMethod*)>
           concurrent_resolve_fn,
       const inliner::InlinerConfig& config,
@@ -265,18 +265,17 @@ class MultiMethodInliner {
       const CalleeCallerInsns& true_virtual_callers = {},
       InlineForSpeed* inline_for_speed = nullptr,
       bool analyze_and_prune_inits = false,
-      const std::unordered_set<DexMethodRef*>& configured_pure_methods = {},
+      const UnorderedSet<DexMethodRef*>& configured_pure_methods = {},
       const api::AndroidSDK* min_sdk_api = nullptr,
       bool cross_dex_penalty = false,
-      const std::unordered_set<const DexString*>&
-          configured_finalish_field_names = {},
+      const UnorderedSet<const DexString*>& configured_finalish_field_names =
+          {},
       bool local_only = false,
       bool consider_hot_cold = false,
       InlinerCostConfig inliner_cost_config = DEFAULT_COST_CONFIG,
-      const std::unordered_set<const DexMethod*>* unfinalized_init_methods =
-          nullptr,
-      InsertOnlyConcurrentSet<DexMethod*>* methods_with_write_barrier =
-          nullptr);
+      const UnorderedSet<const DexMethod*>* unfinalized_init_methods = nullptr,
+      InsertOnlyConcurrentSet<DexMethod*>* methods_with_write_barrier = nullptr,
+      const method_override_graph::Graph* method_override_graph = nullptr);
 
   /*
    * Applies certain delayed scope-wide changes, including in particular
@@ -295,13 +294,18 @@ class MultiMethodInliner {
   /**
    * Return the set of unique inlined methods.
    */
-  std::unordered_set<DexMethod*> get_inlined() const {
-    return std::unordered_set<DexMethod*>(m_inlined.begin(), m_inlined.end());
+  UnorderedSet<DexMethod*> get_inlined() const {
+    UnorderedSet<DexMethod*> res;
+    res.reserve(m_inlined.size());
+    insert_unordered_iterable(res, m_inlined);
+    return res;
   }
 
-  std::unordered_set<const DexMethod*> get_inlined_with_fence() const {
-    return std::unordered_set<const DexMethod*>(m_inlined_with_fence.begin(),
-                                                m_inlined_with_fence.end());
+  UnorderedSet<const DexMethod*> get_inlined_with_fence() const {
+    UnorderedSet<const DexMethod*> res;
+    res.reserve(m_inlined_with_fence.size());
+    insert_unordered_iterable(res, m_inlined_with_fence);
+    return res;
   }
 
   size_t get_not_cold_methods() const { return m_not_cold_methods.size(); }
@@ -312,7 +316,7 @@ class MultiMethodInliner {
    * Inline callees in the caller if is_inlinable below returns true.
    */
   void inline_callees(DexMethod* caller,
-                      const std::unordered_set<DexMethod*>& callees,
+                      const UnorderedSet<DexMethod*>& callees,
                       bool filter_via_should_inline = false);
 
   /**
@@ -320,16 +324,14 @@ class MultiMethodInliner {
    * below returns true.
    */
   size_t inline_callees(DexMethod* caller,
-                        const std::unordered_set<IRInstruction*>& insns,
-                        std::vector<IRInstruction*>* deleted_insns = nullptr);
+                        const UnorderedSet<IRInstruction*>& insns);
 
   /**
    * Inline callees in the given instructions in the caller, if is_inlinable
    * below returns true.
    */
-  size_t inline_callees(
-      DexMethod* caller,
-      const std::unordered_map<IRInstruction*, DexMethod*>& insns);
+  size_t inline_callees(DexMethod* caller,
+                        const UnorderedMap<IRInstruction*, DexMethod*>& insns);
 
   struct InlinableDecision {
     enum class Decision : uint8_t {
@@ -384,10 +386,8 @@ class MultiMethodInliner {
 
   std::optional<Callee> get_callee(DexMethod* caller, IRInstruction* insn);
 
-  size_t inline_inlinables(
-      DexMethod* caller,
-      const std::vector<Inlinable>& inlinables,
-      std::vector<IRInstruction*>* deleted_insns = nullptr);
+  size_t inline_inlinables(DexMethod* caller,
+                           const std::vector<Inlinable>& inlinables);
 
   /**
    * Return true if the method is related to enum (java.lang.Enum and derived).
@@ -558,7 +558,7 @@ class MultiMethodInliner {
   /**
    * Gets the set of referenced types in a callee.
    */
-  std::shared_ptr<std::vector<DexType*>> get_callee_type_refs(
+  std::shared_ptr<UnorderedBag<DexType*>> get_callee_type_refs(
       const DexMethod* callee, const cfg::ControlFlowGraph* reduced_cfg);
 
   /**
@@ -697,21 +697,19 @@ class MultiMethodInliner {
   // Auxiliary data for a caller that contains true virtual callees
   struct CallerVirtualCallees {
     // Mapping of instructions to representative
-    std::unordered_map<IRInstruction*, DexMethod*> insns;
+    UnorderedMap<IRInstruction*, DexMethod*> insns;
     // Set of callees which must only be inlined via above insns
-    std::unordered_set<DexMethod*> exclusive_callees;
+    UnorderedSet<DexMethod*> exclusive_callees;
   };
   // Mapping from callers to auxiliary data for contained true virtual callees
-  std::unordered_map<const DexMethod*, CallerVirtualCallees>
-      m_caller_virtual_callees;
+  UnorderedMap<const DexMethod*, CallerVirtualCallees> m_caller_virtual_callees;
 
-  std::unordered_map<IRInstruction*, DexType*> m_inlined_invokes_need_cast;
+  UnorderedMap<IRInstruction*, DexType*> m_inlined_invokes_need_cast;
 
-  std::unordered_set<const DexMethod*>
-      m_true_virtual_callees_with_other_call_sites;
+  UnorderedSet<const DexMethod*> m_true_virtual_callees_with_other_call_sites;
 
-  std::unordered_set<const DexMethod*> m_recursive_callees;
-  std::unordered_set<const DexMethod*> m_speed_excluded_callees;
+  UnorderedSet<const DexMethod*> m_recursive_callees;
+  UnorderedSet<const DexMethod*> m_speed_excluded_callees;
 
   // If mode == IntraDex, then we maintaing information about x-dex method
   // references.
@@ -767,7 +765,7 @@ class MultiMethodInliner {
   // Optional cache for get_callee_type_refs function
   std::unique_ptr<
       InsertOnlyConcurrentMap<const DexMethod*,
-                              std::shared_ptr<std::vector<DexType*>>>>
+                              std::shared_ptr<UnorderedBag<DexType*>>>>
       m_callee_type_refs;
 
   // Optional cache for get_callee_code_refs function
@@ -872,7 +870,7 @@ class MultiMethodInliner {
 
   InlinerCostConfig m_inliner_cost_config;
 
-  const std::unordered_set<const DexMethod*>* m_unfinalized_init_methods;
+  const UnorderedSet<const DexMethod*>* m_unfinalized_init_methods;
   InsertOnlyConcurrentMap<const DexMethod*, const DexMethod*>
       m_unfinalized_overloads;
 

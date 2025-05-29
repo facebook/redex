@@ -14,10 +14,10 @@
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <unordered_set>
 
 #include "ClassHierarchy.h"
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "FbjniMarker.h"
 #include "Match.h"
@@ -145,8 +145,8 @@ void analyze_reflection(const Scope& scope) {
   const auto ATOMIC_REF_FIELD_UPDATER =
       "Ljava/util/concurrent/atomic/AtomicReferenceFieldUpdater;";
 
-  const std::unordered_map<std::string_view,
-                           std::unordered_map<std::string_view, ReflectionType>>
+  const UnorderedMap<std::string_view,
+                     UnorderedMap<std::string_view, ReflectionType>>
       refls = {
           {JAVA_LANG_CLASS,
            {
@@ -339,7 +339,7 @@ void mark_reachable_by_classname(DexType* dtype) {
 // attribute values.
 bool matches_onclick_method(
     const DexMethod* dmethod,
-    const std::unordered_set<std::string_view>& names_to_keep) {
+    const UnorderedSet<std::string_view>& names_to_keep) {
   auto prototype = dmethod->get_proto();
   auto args_list = prototype->get_args();
   if (args_list->size() == 1) {
@@ -361,7 +361,7 @@ bool matches_onclick_method(
 // android.content.Context that accept 1 argument (an android.view.View).
 void mark_onclick_attributes_reachable(
     const Scope& scope,
-    const std::unordered_set<std::string_view>& onclick_attribute_values) {
+    const UnorderedSet<std::string_view>& onclick_attribute_values) {
   if (onclick_attribute_values.empty()) {
     return;
   }
@@ -440,12 +440,12 @@ void mark_manifest_root(const std::string& classname) {
  */
 void analyze_reachable_from_manifest(
     const std::string& apk_dir,
-    const std::unordered_set<std::string>& prune_unexported_components_str) {
-  std::unordered_map<std::string, ComponentTag> string_to_tag{
+    const UnorderedSet<std::string>& prune_unexported_components_str) {
+  UnorderedMap<std::string, ComponentTag> string_to_tag{
       {"activity", ComponentTag::Activity},
       {"activity-alias", ComponentTag::ActivityAlias}};
-  std::unordered_set<ComponentTag, EnumClassHash> prune_unexported_components;
-  for (const auto& s : prune_unexported_components_str) {
+  UnorderedSet<ComponentTag, EnumClassHash> prune_unexported_components;
+  for (const auto& s : UnorderedIterable(prune_unexported_components_str)) {
     prune_unexported_components.emplace(string_to_tag.at(s));
   }
 
@@ -459,11 +459,13 @@ void analyze_reachable_from_manifest(
     }
   }();
 
-  for (const auto& classname : manifest_class_info.application_classes) {
+  for (const auto& classname :
+       UnorderedIterable(manifest_class_info.application_classes)) {
     mark_manifest_root(classname);
   }
 
-  for (const auto& classname : manifest_class_info.instrumentation_classes) {
+  for (const auto& classname :
+       UnorderedIterable(manifest_class_info.instrumentation_classes)) {
     mark_manifest_root(classname);
   }
 
@@ -491,7 +493,8 @@ void analyze_reachable_from_manifest(
     }
     case ComponentTag::Provider: {
       mark_manifest_root(tag_info.classname);
-      for (const auto& classname : tag_info.authority_classes) {
+      for (const auto& classname :
+           UnorderedIterable(tag_info.authority_classes)) {
         mark_manifest_root(classname);
       }
       break;
@@ -517,10 +520,10 @@ void mark_reachable_by_xml(const std::string& external_classname) {
   }
 }
 
-std::unordered_set<std::string_view> multimap_values_to_set(
+UnorderedSet<std::string_view> multimap_values_to_set(
     const std::unordered_multimap<std::string, std::string>& map,
     const std::string& key) {
-  std::unordered_set<std::string_view> result;
+  UnorderedSet<std::string_view> result;
   auto range = map.equal_range(key);
   for (auto it = range.first; it != range.second; ++it) {
     result.emplace(it->second);
@@ -534,15 +537,15 @@ std::unordered_set<std::string_view> multimap_values_to_set(
 // attributes.
 void analyze_reachable_from_xml_layouts(const Scope& scope,
                                         const std::string& apk_dir) {
-  std::unordered_set<std::string> layout_classes;
-  std::unordered_set<std::string> attrs_to_read;
+  UnorderedSet<std::string> layout_classes;
+  UnorderedSet<std::string> attrs_to_read;
   // Method names used by reflection
   attrs_to_read.emplace(ONCLICK_ATTRIBUTE);
   std::unordered_multimap<std::string, std::string> attribute_values;
   auto resources = create_resource_reader(apk_dir);
   resources->collect_layout_classes_and_attributes(
       attrs_to_read, &layout_classes, &attribute_values);
-  for (const std::string& classname : layout_classes) {
+  for (const std::string& classname : UnorderedIterable(layout_classes)) {
     TRACE(PGR, 4, "xml_layout candidate: %s", classname.c_str());
     mark_reachable_by_xml(classname);
   }
@@ -555,7 +558,7 @@ void analyze_reachable_from_xml_layouts(const Scope& scope,
 // that extend any one of supercls_names.
 void initialize_reachable_for_json_serde(
     const Scope& scope, const std::vector<std::string>& supercls_names) {
-  std::unordered_set<const DexType*> serde_superclses;
+  UnorderedSet<const DexType*> serde_superclses;
   for (auto& cls_name : supercls_names) {
     const DexType* supercls = DexType::get_type(cls_name);
     if (supercls) {
@@ -566,7 +569,7 @@ void initialize_reachable_for_json_serde(
     return;
   }
   ClassHierarchy ch = build_type_hierarchy(scope);
-  for (auto* serde_supercls : serde_superclses) {
+  for (auto* serde_supercls : UnorderedIterable(serde_superclses)) {
     for (auto* child : get_all_children(ch, serde_supercls)) {
       type_class(child)->rstate.set_is_serde();
     }
@@ -578,7 +581,7 @@ void initialize_reachable_for_json_serde(
  * classes banned due to use of complex reflection.
  */
 bool in_reflected_pkg(DexClass* dclass,
-                      std::unordered_set<DexClass*>& reflected_pkg_classes) {
+                      UnorderedSet<DexClass*>& reflected_pkg_classes) {
   if (dclass == nullptr) {
     // Not in our dex files
     return false;
@@ -665,14 +668,16 @@ void init_reachable_classes(const Scope& scope,
       analyze_reachable_from_xml_layouts(scope, config.apk_dir);
     }
     auto resources = create_resource_reader(config.apk_dir);
-    for (const auto& classname : resources->get_service_loader_classes()) {
+    auto service_loader_classes = resources->get_service_loader_classes();
+    for (const auto& classname : UnorderedIterable(service_loader_classes)) {
       mark_meta_inf_root(classname);
     }
 
     if (config.analyze_native_lib_reachability) {
       Timer t{"Computing native reachability"};
       // Classnames present in native libraries (lib/*/*.so)
-      for (const std::string& classname : resources->get_native_classes()) {
+      auto native_classes = resources->get_native_classes();
+      for (const std::string& classname : UnorderedIterable(native_classes)) {
         auto type = DexType::get_type(classname);
         if (type == nullptr) continue;
         TRACE(PGR, 3, "native_lib: %s", classname.c_str());
@@ -698,7 +703,7 @@ void init_reachable_classes(const Scope& scope,
   {
     Timer t{"Analyzing reflection"};
     analyze_reflection(scope);
-    std::unordered_set<DexClass*> reflected_package_classes;
+    UnorderedSet<DexClass*> reflected_package_classes;
     for (auto clazz : scope) {
       const auto name = clazz->get_type()->get_name()->str();
       for (const auto& pkg : config.reflected_package_names) {

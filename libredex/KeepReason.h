@@ -9,9 +9,9 @@
 
 #include <boost/functional/hash.hpp>
 #include <iosfwd>
-#include <unordered_set>
 
 #include "Debug.h"
+#include "DeterministicContainers.h"
 
 class DexMethod;
 
@@ -97,7 +97,6 @@ struct ReasonPtrEqual {
   }
 };
 
-using ReasonPtrSet =
-    std::unordered_set<const Reason*, ReasonPtrHash, ReasonPtrEqual>;
+using ReasonPtrSet = UnorderedSet<const Reason*, ReasonPtrHash, ReasonPtrEqual>;
 
 } // namespace keep_reason

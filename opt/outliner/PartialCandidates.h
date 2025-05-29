@@ -7,11 +7,11 @@
 
 #pragma once
 
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "IRInstruction.h"
 
 namespace outliner_impl {
@@ -33,7 +33,7 @@ struct DefinedReg {
 
 struct PartialCandidateNode {
   std::vector<IRInstruction*> insns;
-  std::unordered_map<reg_t, DefinedReg> defined_regs;
+  UnorderedMap<reg_t, DefinedReg> defined_regs;
   std::vector<std::pair<cfg::Edge*, std::shared_ptr<PartialCandidateNode>>>
       succs;
 };
@@ -41,7 +41,7 @@ struct PartialCandidateNode {
 // A partial candidate is still evolving, and defined against actual
 // instructions that have not been normalized yet.
 struct PartialCandidate {
-  std::unordered_set<reg_t> in_regs;
+  UnorderedSet<reg_t> in_regs;
   PartialCandidateNode root;
   // Total number of all instructions
   size_t insns_size{0};

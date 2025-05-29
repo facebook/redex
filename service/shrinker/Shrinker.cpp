@@ -78,10 +78,11 @@ Shrinker::Shrinker(
         init_classes_with_side_effects,
     const ShrinkerConfig& config,
     int min_sdk,
-    const std::unordered_set<DexMethodRef*>& configured_pure_methods,
-    const std::unordered_set<const DexString*>& configured_finalish_field_names,
-    const std::unordered_set<const DexField*>& configured_finalish_fields,
-    const boost::optional<std::string>& package_name)
+    const UnorderedSet<DexMethodRef*>& configured_pure_methods,
+    const UnorderedSet<const DexString*>& configured_finalish_field_names,
+    const UnorderedSet<const DexField*>& configured_finalish_fields,
+    const boost::optional<std::string>& package_name,
+    const method_override_graph::Graph* method_override_graph)
     : m_forest(load(config.reg_alloc_random_forest)),
       m_xstores(stores),
       m_config(config),
@@ -106,33 +107,35 @@ Shrinker::Shrinker(
   if (config.run_cse || config.run_local_dce) {
     if (config.compute_pure_methods) {
       const auto& pure_methods = ::get_pure_methods();
-      m_pure_methods.insert(pure_methods.begin(), pure_methods.end());
+      insert_unordered_iterable(m_pure_methods, pure_methods);
       auto immutable_getters = get_immutable_getters(scope);
-      m_pure_methods.insert(immutable_getters.begin(), immutable_getters.end());
+      insert_unordered_iterable(m_pure_methods, immutable_getters);
     }
     if (config.run_cse) {
       m_cse_shared_state = std::make_unique<cse_impl::SharedState>(
           m_pure_methods, m_finalish_field_names, m_finalish_fields);
     }
     if (config.run_local_dce && config.compute_pure_methods) {
-      std::unique_ptr<const method_override_graph::Graph> owned_override_graph;
-      const method_override_graph::Graph* override_graph;
-      if (config.run_cse) {
-        override_graph = m_cse_shared_state->get_method_override_graph();
-      } else {
-        owned_override_graph = method_override_graph::build_graph(scope);
-        override_graph = owned_override_graph.get();
+      // Note that because we are not invoking m_cse_shared_state->init_scope(),
+      // we don't already have a method-override-graph.
+      always_assert(!config.run_cse ||
+                    m_cse_shared_state->get_method_override_graph() == nullptr);
+      std::unique_ptr<const method_override_graph::Graph>
+          owned_method_override_graph;
+      if (!method_override_graph) {
+        owned_method_override_graph = method_override_graph::build_graph(scope);
+        method_override_graph = owned_method_override_graph.get();
       }
-      std::unordered_set<const DexMethod*> computed_no_side_effects_methods;
+      UnorderedSet<const DexMethod*> computed_no_side_effects_methods;
       /* Returns computed_no_side_effects_methods_iterations */
       method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =
           [&](const DexType* type) {
             return !init_classes_with_side_effects.refine(type);
           };
       compute_no_side_effects_methods(
-          scope, override_graph, clinit_has_no_side_effects, m_pure_methods,
-          &computed_no_side_effects_methods);
-      for (auto m : computed_no_side_effects_methods) {
+          scope, method_override_graph, clinit_has_no_side_effects,
+          m_pure_methods, &computed_no_side_effects_methods);
+      for (auto m : UnorderedIterable(computed_no_side_effects_methods)) {
         m_pure_methods.insert(const_cast<DexMethod*>(m));
       }
     }

@@ -7,7 +7,6 @@
 
 #include <boost/filesystem.hpp>
 #include <gtest/gtest.h>
-#include <unordered_set>
 
 #include "ApkResources.h"
 #include "Debug.h"
@@ -17,6 +16,9 @@
 #include "RedexTestUtils.h"
 #include "ResourcesTestDefs.h"
 #include "Trace.h"
+#include "androidfw/ResourceTypes.h"
+#include "arsc/TestStructures.h"
+#include "utils/Serialize.h"
 
 using namespace boost::filesystem;
 
@@ -68,8 +70,8 @@ TEST(ApkResources, TestReadManifest) {
 TEST(ApkResources, ReadLayoutResolveRefs) {
   setup_resources_and_run(
       [&](const std::string& /* unused */, ApkResources* resources) {
-        std::unordered_set<std::string> layout_classes;
-        std::unordered_set<std::string> attrs_to_read;
+        UnorderedSet<std::string> layout_classes;
+        UnorderedSet<std::string> attrs_to_read;
         attrs_to_read.emplace(ONCLICK_ATTRIBUTE);
         std::unordered_multimap<std::string, std::string> attribute_values;
         resources->collect_layout_classes_and_attributes(
@@ -140,4 +142,174 @@ TEST(ApkResources, TestRemappingOverlays) {
         (uint32_t*)(mapped_file.const_data() + arsc_size - sizeof(uint32_t));
     EXPECT_EQ(*id_ptr, expected_value) << "Last ID was not remapped!";
   });
+}
+
+TEST(ApkResources, TestDeleteOverlayableIds) {
+  // Make a hypothetical .arsc file with 3 dimensions, two of which are
+  // overlayable. In a few steps the overlayable ids will be deleted, to verify
+  // the overlayable header and policy shrinks, and is removed entirely.
+  //
+  // According to aapt2, it looks like the following:
+  //
+  // Binary APK
+  // Package name=foo id=7f
+  //   type dimen id=01 entryCount=3
+  //     resource 0x7f010000 dimen/one
+  //       () 10.000000dp
+  //     resource 0x7f010001 dimen/two OVERLAYABLE
+  //       () 20.000000dp
+  //     resource 0x7f010002 dimen/three OVERLAYABLE
+  //       () 30.000000dp
+  auto global_strings_builder = std::make_shared<arsc::ResStringPoolBuilder>(
+      android::ResStringPool_header::UTF8_FLAG);
+  auto key_strings_builder = std::make_shared<arsc::ResStringPoolBuilder>(
+      android::ResStringPool_header::UTF8_FLAG);
+  key_strings_builder->add_string("one");
+  key_strings_builder->add_string("two");
+  key_strings_builder->add_string("three");
+  auto type_strings_builder = std::make_shared<arsc::ResStringPoolBuilder>(0);
+  type_strings_builder->add_string("dimen");
+
+  auto package_builder =
+      std::make_shared<arsc::ResPackageBuilder>(&foo_package);
+  package_builder->set_key_strings(key_strings_builder);
+  package_builder->set_type_strings(type_strings_builder);
+
+  auto table_builder = std::make_shared<arsc::ResTableBuilder>();
+  table_builder->set_global_strings(global_strings_builder);
+  table_builder->add_package(package_builder);
+
+  // dimen
+  std::vector<android::ResTable_config*> dimen_configs{&default_config};
+  std::vector<uint32_t> dimen_flags{0, 0, 0};
+  auto dimen_type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
+      foo_package.id,
+      1,
+      dimen_configs,
+      dimen_flags,
+      false /* enable_canonical_entries */,
+      false /* enable_sparse_encoding */);
+  package_builder->add_type(dimen_type_definer);
+
+  // Add the three entries
+  EntryAndValue one(0, android::Res_value::TYPE_DIMENSION, 0xa01 /* 10dp */);
+  EntryAndValue two(1, android::Res_value::TYPE_DIMENSION, 0x1401 /* 20dp */);
+  EntryAndValue three(2, android::Res_value::TYPE_DIMENSION, 0x1e01 /* 30dp */);
+  dimen_type_definer->add(&default_config, &one);
+  dimen_type_definer->add(&default_config, &two);
+  dimen_type_definer->add(&default_config, &three);
+
+  // Basic info to describe two overlayable ids.
+  uint32_t initial_ids[2] = {0x7f010001, 0x7f010002};
+  uint32_t policy_size =
+      sizeof(android::ResTable_overlayable_policy_header) + sizeof(initial_ids);
+
+  android::ResTable_overlayable_policy_header policy{};
+  policy.header.type = android::RES_TABLE_OVERLAYABLE_POLICY_TYPE;
+  policy.header.headerSize =
+      sizeof(android::ResTable_overlayable_policy_header);
+  policy.header.size = policy_size;
+  policy.entry_count = 2;
+  policy.policy_flags = android::ResTable_overlayable_policy_header::SIGNATURE;
+
+  android::ResTable_overlayable_header overlayable{};
+  overlayable.header.type = android::RES_TABLE_OVERLAYABLE_TYPE;
+  overlayable.header.headerSize = sizeof(android::ResTable_overlayable_header);
+  overlayable.header.size =
+      sizeof(android::ResTable_overlayable_header) + policy_size;
+  overlayable.name[0] = 'y';
+  overlayable.name[1] = 'o';
+
+  arsc::OverlayInfo overlay_info(&overlayable);
+  overlay_info.policies.emplace(&policy, initial_ids);
+  package_builder->add_overlay(overlay_info);
+
+  android::Vector<char> table_data;
+  table_builder->serialize(&table_data);
+
+  // Simple function to assert the number of overlayable related headers parsed.
+  auto run_verify = [](ResourceTableFile* res_table,
+                       size_t overlayable_count,
+                       size_t policy_count,
+                       const std::vector<uint32_t>& expected_ids) {
+    auto arsc_table = (ResourcesArscFile*)res_table;
+    auto& parsed_table = arsc_table->get_table_snapshot().get_parsed_table();
+    auto& parsed_overlays_map =
+        parsed_table.m_package_overlayables.begin()->second;
+    EXPECT_EQ(parsed_overlays_map.size(), overlayable_count)
+        << "Incorrect size of overlayable headers";
+    if (overlayable_count > 0) {
+      auto header = parsed_overlays_map.begin()->first;
+      auto& parsed_info = parsed_overlays_map.begin()->second;
+      EXPECT_EQ(parsed_info.policies.size(), policy_count)
+          << "Incorrect size of policy headers";
+      auto policy_header = parsed_info.policies.begin()->first;
+      EXPECT_EQ(policy_header->entry_count, expected_ids.size())
+          << "Incorrect number of overlayable ids!";
+      EXPECT_EQ(policy_header->header.size,
+                sizeof(android::ResTable_overlayable_policy_header) +
+                    expected_ids.size() * sizeof(uint32_t))
+          << "Policy header size is incorrect.";
+      EXPECT_EQ(header->header.size,
+                sizeof(android::ResTable_overlayable_header) +
+                    policy_header->header.size)
+          << "Overlayable header size is incorrect.";
+      auto parsed_ids = parsed_info.policies.begin()->second;
+      for (size_t i = 0; i < expected_ids.size(); i++) {
+        EXPECT_EQ(parsed_ids[i], expected_ids[i])
+            << "Incorrect ID at index " << i;
+      }
+    }
+  };
+
+  // Parse the above file and start deleting from it.
+  auto tmp_dir = redex::make_tmp_dir("ApkResourcesTest%%%%%%%%");
+  boost::filesystem::path tmp_path(tmp_dir.path);
+  arsc::write_bytes_to_file(table_data, (tmp_path / "resources.arsc").string());
+
+  // Base state
+  {
+    ApkResources resources(tmp_dir.path);
+    auto res_table = resources.load_res_table();
+    run_verify(res_table.get(), 1, 1, {0x7f010001, 0x7f010002});
+
+    // Delete 0x7f010002
+    res_table->delete_resource(0x7f010002);
+    std::map<uint32_t, uint32_t> remapping{{0x7f010000, 0x7f010000},
+                                           {0x7f010001, 0x7f010001}};
+    res_table->remap_res_ids_and_serialize({}, remapping);
+  }
+
+  // After first deletion, file should look like this:
+  //
+  // Binary APK
+  // Package name=foo id=7f
+  //   type dimen id=01 entryCount=2
+  //     resource 0x7f010000 dimen/one
+  //       () 10.000000dp
+  //     resource 0x7f010001 dimen/two OVERLAYABLE
+  //       () 20.000000dp
+  {
+    ApkResources resources(tmp_dir.path);
+    auto res_table = resources.load_res_table();
+    run_verify(res_table.get(), 1, 1, {0x7f010001});
+
+    // Delete 0x7f010001
+    res_table->delete_resource(0x7f010001);
+    std::map<uint32_t, uint32_t> remapping{{0x7f010000, 0x7f010000}};
+    res_table->remap_res_ids_and_serialize({}, remapping);
+  }
+
+  // After second deletion, file should look like this:
+  //
+  // Binary APK
+  // Package name=foo id=7f
+  //   type dimen id=01 entryCount=1
+  //     resource 0x7f010000 dimen/one
+  //       () 10.000000dp
+  {
+    ApkResources resources(tmp_dir.path);
+    auto res_table = resources.load_res_table();
+    run_verify(res_table.get(), 0, 0, {});
+  }
 }

@@ -20,6 +20,7 @@
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "IRInstruction.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
@@ -126,7 +127,7 @@ bool is_valid(const LockEnvironment& env, size_t expected_count) {
 }
 
 // Map a lock operation to the instruction defining the object to be locked on.
-using RDefs = std::unordered_map<const IRInstruction*, const IRInstruction*>;
+using RDefs = UnorderedMap<const IRInstruction*, const IRInstruction*>;
 
 struct LocksIterator : public ir_analyzer::BaseIRAnalyzer<LockEnvironment> {
   LocksIterator(const cfg::ControlFlowGraph& cfg, const RDefs& rdefs)
@@ -291,7 +292,7 @@ ComputeRDefsResult compute_rdefs(ControlFlowGraph& cfg) {
     return *defs0.elements().begin();
   };
 
-  std::unordered_map<const IRInstruction*, Block*> block_map;
+  UnorderedMap<const IRInstruction*, Block*> block_map;
   auto get_rdef = [&](IRInstruction* insn, reg_t reg) -> IRInstruction* {
     auto it = block_map.find(insn);
     redex_assert(it != block_map.cend());
@@ -398,7 +399,7 @@ ComputeRDefsResult compute_rdefs(ControlFlowGraph& cfg) {
 LockEnvironment create_start(const RDefs& rdefs) {
   redex_assert(!rdefs.empty());
   LockEnvironment env;
-  for (const auto& p : rdefs) {
+  for (const auto& p : UnorderedIterable(rdefs)) {
     env.set(p.second, LockDepths(0));
   }
   return env;
@@ -435,7 +436,7 @@ void print(std::ostream& os,
            analysis::LocksIterator& iter,
            ControlFlowGraph& cfg) {
   os << show(cfg) << std::endl;
-  for (const auto& p : rdefs) {
+  for (const auto& p : UnorderedIterable(rdefs)) {
     os << " # " << p.first << " -> " << p.second << std::endl;
   }
   os << std::endl;

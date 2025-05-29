@@ -31,12 +31,12 @@ const int TRAMPOLINE_THRESHOLD_SIZE = 32;
 void update_coldstart_classes_order(
     ConfigFiles& conf,
     PassManager& mgr,
-    const std::unordered_set<DexType*>& coldstart_types,
+    const UnorderedSet<DexType*>& coldstart_types,
     const std::vector<std::string>& previously_relocated_types,
     bool log /* = true */) {
   const auto& coldstart_classes = conf.get_coldstart_classes();
 
-  std::unordered_map<std::string, std::string> replacement;
+  UnorderedMap<std::string, std::string> replacement;
   for (const auto& str : previously_relocated_types) {
     auto initial_type = str.substr(0, str.size() - 11) + ";";
 
@@ -77,8 +77,8 @@ void update_coldstart_classes_order(
 ClassSplitter::ClassSplitter(
     const ClassSplittingConfig& config,
     PassManager& mgr,
-    const std::unordered_set<DexMethod*>& sufficiently_popular_methods,
-    const std::unordered_set<DexMethod*>& insufficiently_popular_methods)
+    const UnorderedSet<DexMethod*>& sufficiently_popular_methods,
+    const UnorderedSet<DexMethod*>& insufficiently_popular_methods)
     : m_config(config),
       m_mgr(mgr),
       m_sufficiently_popular_methods(sufficiently_popular_methods),
@@ -267,7 +267,7 @@ DexClasses ClassSplitter::additional_classes(const DexClasses& classes) {
   // original places.
 
   DexClasses target_classes;
-  std::unordered_set<const DexClass*> target_classes_set;
+  UnorderedSet<const DexClass*> target_classes_set;
   size_t relocated_methods = 0;
   // We iterate over the actually added set of classes.
   for (DexClass* cls : classes) {
@@ -458,7 +458,7 @@ void ClassSplitter::cleanup(const Scope& final_scope) {
   // Here we do the actual relocation.
 
   // Part 1: Upgrade non-static invokes to static invokes
-  std::unordered_set<DexMethod*> methods_to_staticize;
+  UnorderedSet<DexMethod*> methods_to_staticize;
   for (auto& p : m_methods_to_relocate) {
     DexMethod* method = p.first;
     if (!is_static(method)) {
@@ -468,7 +468,7 @@ void ClassSplitter::cleanup(const Scope& final_scope) {
 
   // We now rewrite all invoke-instructions as needed to reflect the fact that
   // we made some methods static as part of the relocation effort.
-  std::unordered_map<IROpcode, std::atomic<size_t>, boost::hash<IROpcode>>
+  UnorderedMap<IROpcode, std::atomic<size_t>, boost::hash<IROpcode>>
       rewritten_invokes;
   for (IROpcode op :
        {OPCODE_INVOKE_DIRECT, OPCODE_INVOKE_VIRTUAL, OPCODE_INVOKE_SUPER}) {
@@ -511,7 +511,7 @@ void ClassSplitter::cleanup(const Scope& final_scope) {
         (size_t)rewritten_invokes.at(OPCODE_INVOKE_SUPER));
 
   m_mgr.incr_metric(METRIC_STATICIZED_METHODS, methods_to_staticize.size());
-  for (auto& p : rewritten_invokes) {
+  for (auto& p : UnorderedIterable(rewritten_invokes)) {
     m_mgr.incr_metric(std::string(METRIC_REWRITTEN_INVOKES) + SHOW(p.first),
                       (size_t)p.second);
   }
@@ -728,7 +728,7 @@ void ClassSplitter::delayed_visibility_changes_apply() {
   m_delayed_visibility_changes->apply();
   // any method that was just made public and isn't virtual or a constructor or
   // static must be made static
-  for (auto method : m_delayed_visibility_changes->methods) {
+  for (auto method : UnorderedIterable(m_delayed_visibility_changes->methods)) {
     always_assert(is_public(method));
     if (!method->is_virtual() && !method::is_init(method) &&
         !is_static(method)) {
@@ -759,9 +759,8 @@ void ClassSplitter::delayed_invoke_direct_to_static(const Scope& final_scope) {
   // Also, we didn't use an std::set keyed by method signature here because
   // make_static is mutating the signatures. The tree that implements the set
   // would have to be rebalanced after the mutations.
-  std::vector<DexMethod*> methods(m_delayed_make_static.begin(),
-                                  m_delayed_make_static.end());
-  std::sort(methods.begin(), methods.end(), compare_dexmethods);
+  auto methods =
+      unordered_to_ordered(m_delayed_make_static, compare_dexmethods);
   for (auto method : methods) {
     TRACE(MMINL, 6, "making %s static", method->get_name()->c_str());
     mutators::make_static(method);

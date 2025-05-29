@@ -47,9 +47,9 @@ void load_generated_types(const ModelSpec& spec,
                           const ConstTypeHashSet& models,
                           TypeSet& generated) {
   if (spec.is_generated_code) {
-    generated.insert(models.begin(), models.end());
+    insert_unordered_iterable(generated, models);
   }
-  for (const auto& type : spec.gen_types) {
+  for (const auto& type : UnorderedIterable(spec.gen_types)) {
     const auto& cls = type_class(type);
     redex_assert(cls != nullptr);
     generated.insert(type);
@@ -83,15 +83,11 @@ bool is_subset(const Set& left, const Set& right) {
 
 void print_interface_maps(const TypeToTypeSet& intf_to_classes,
                           const ConstTypeHashSet& types) {
-  std::vector<const DexType*> intfs;
-  for (const auto& intf_to_classes_it : intf_to_classes) {
-    intfs.emplace_back(intf_to_classes_it.first);
-  }
-  std::sort(intfs.begin(), intfs.end(),
-            [&](const DexType* first, const DexType* second) {
-              return intf_to_classes.at(first).size() <
-                     intf_to_classes.at(second).size();
-            });
+  auto intfs = unordered_to_ordered_keys(
+      intf_to_classes, [&](const DexType* first, const DexType* second) {
+        return intf_to_classes.at(first).size() <
+               intf_to_classes.at(second).size();
+      });
   for (const auto& intf : intfs) {
     const auto& classes = intf_to_classes.at(intf);
     TRACE(CLMG, 8, "- interface %s -> %zu", SHOW(intf), classes.size());
@@ -204,7 +200,7 @@ void Model::init(const Scope& scope,
 }
 
 void Model::build_hierarchy(const TypeSet& roots) {
-  for (const auto& type : m_spec.merging_targets) {
+  for (const auto& type : UnorderedIterable(m_spec.merging_targets)) {
     if (roots.count(type) > 0) {
       continue;
     }
@@ -332,7 +328,7 @@ MergerType& Model::create_merger_helper(
     const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
     const InterdexSubgroupIdx subgroup_idx) {
   size_t group_count = m_shape_to_count[shape]++;
-  std::unordered_set<size_t>& hash_cache = m_shape_hash_cache[shape];
+  UnorderedSet<size_t>& hash_cache = m_shape_hash_cache[shape];
   std::string name;
   // If the interdex grouping option is disbled, we assume that the model can
   // collapse nicely into a small set of merged shape classes. In this case, the
@@ -386,7 +382,7 @@ void Model::create_mergers_helper(
  * from the merging transformation.
  */
 void Model::exclude_types(const ConstTypeHashSet& exclude_types) {
-  for (const auto& type : exclude_types) {
+  for (const auto& type : UnorderedIterable(exclude_types)) {
     const auto& cls = type_class(type);
     if (cls == nullptr) {
       continue;
@@ -406,7 +402,7 @@ bool Model::is_excluded(const DexType* type) const {
   if (m_excluded.count(type)) {
     return true;
   }
-  for (const auto& prefix : m_spec.exclude_prefixes) {
+  for (const auto& prefix : UnorderedIterable(m_spec.exclude_prefixes)) {
     if (boost::starts_with(type->get_name()->str(), prefix)) {
       return true;
     }
@@ -418,7 +414,7 @@ bool Model::is_ordered_set_excluded(const DexType* type) const {
   if (m_excluded.count(type)) {
     return true;
   }
-  for (const auto& root : m_spec.exclude_ordered_set_types) {
+  for (const auto& root : UnorderedIterable(m_spec.exclude_ordered_set_types)) {
     auto* cls = type_class(root);
     if (is_interface(cls)) {
       if (m_type_system.implements(type, root)) {
@@ -448,7 +444,7 @@ void Model::shape_model() {
   // sort mergers before creating the shapes.
   std::vector<MergerType*> mergers;
   mergers.reserve(m_mergers.size());
-  for (auto& merger_it : m_mergers) {
+  for (auto& merger_it : UnorderedIterable(m_mergers)) {
     mergers.emplace_back(&merger_it.second);
   }
   std::sort(mergers.begin(), mergers.end(),
@@ -752,7 +748,7 @@ void Model::map_fields(MergerType& merger,
  */
 void Model::collect_methods() {
   // collect all vmethods and dmethods of mergeable types into the merger
-  for (auto& merger_it : m_mergers) {
+  for (auto& merger_it : UnorderedIterable(m_mergers)) {
     auto& merger = merger_it.second;
     if (merger.mergeables.empty()) {
       continue;
@@ -1115,7 +1111,7 @@ std::string Model::show_type(const DexType* type) { return show(type); }
 
 std::string Model::print() const {
   size_t count{0};
-  for (const auto& merger : m_mergers) {
+  for (const auto& merger : UnorderedIterable(m_mergers)) {
     count += merger.second.mergeables.size();
   }
   std::ostringstream ss;

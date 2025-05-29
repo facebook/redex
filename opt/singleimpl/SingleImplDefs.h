@@ -8,14 +8,13 @@
 #pragma once
 
 #include <memory>
-#include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include "CheckCastTransform.h"
 #include "ClassHierarchy.h"
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "SingleImpl.h"
 
@@ -33,15 +32,15 @@ struct ProguardMap;
 using Scope = std::vector<DexClass*>;
 
 using TypeList = std::vector<DexType*>;
-using TypeMap = std::unordered_map<DexType*, DexType*>;
-using TypeToTypes = std::unordered_map<DexType*, TypeList>;
+using TypeMap = UnorderedMap<DexType*, DexType*>;
+using TypeToTypes = UnorderedMap<DexType*, TypeList>;
 using FieldList = std::vector<DexField*>;
 using OrderedMethodSet = std::set<DexMethod*, dexmethods_comparator>;
 using OpcodeList = std::vector<IRInstruction*>;
-using OpcodeSet = std::unordered_set<IRInstruction*>;
-using FieldRefToOpcodes = std::unordered_map<DexFieldRef*, OpcodeList>;
-using MethodToOpcodes = std::unordered_map<DexMethodRef*, OpcodeSet>;
-using NewMethods = std::unordered_map<DexMethodRef*, DexMethodRef*>;
+using OpcodeSet = UnorderedSet<IRInstruction*>;
+using FieldRefToOpcodes = UnorderedMap<DexFieldRef*, OpcodeList>;
+using MethodToOpcodes = UnorderedMap<DexMethodRef*, OpcodeSet>;
+using NewMethods = UnorderedMap<DexMethodRef*, DexMethodRef*>;
 using NewVTable = std::vector<std::pair<DexMethod*, DexMethod*>>;
 
 /**
@@ -127,9 +126,8 @@ struct SingleImplData {
   // opcodes to a methodref with the single impl interface in the signature
   MethodToOpcodes methodrefs;
 
-  std::unordered_map<
-      DexMethod*,
-      std::unordered_map<IRInstruction*, cfg::InstructionIterator>>
+  UnorderedMap<DexMethod*,
+               UnorderedMap<IRInstruction*, cfg::InstructionIterator>>
       referencing_methods;
 
   std::mutex mutex;
@@ -138,7 +136,7 @@ struct SingleImplData {
 };
 
 // map from single implemented interfaces to the data related to that interface
-using SingleImpls = std::unordered_map<DexType*, SingleImplData>;
+using SingleImpls = UnorderedMap<DexType*, SingleImplData>;
 
 struct SingleImplAnalysis {
   virtual ~SingleImplAnalysis() = default;

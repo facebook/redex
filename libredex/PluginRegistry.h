@@ -6,11 +6,13 @@
  */
 
 #pragma once
+
+#include <functional>
+#include <vector>
+
+#include "DeterministicContainers.h"
 #include "Trace.h"
 #include "Util.h"
-#include <functional>
-#include <unordered_map>
-#include <vector>
 
 struct Plugin {
   virtual ~Plugin() = default;
@@ -55,7 +57,7 @@ class PluginEntry : public Plugin {
   }
 
  private:
-  std::unordered_map<std::string, Creator> m_creators;
+  UnorderedMap<std::string, Creator> m_creators;
   std::vector<std::string> m_ordered_creator_names;
 };
 
@@ -84,5 +86,5 @@ class PluginRegistry {
   PluginRegistry() {}
   PluginRegistry(const PluginRegistry&) = delete;
 
-  std::unordered_map<std::string, std::unique_ptr<Plugin>> m_registered_passes;
+  UnorderedMap<std::string, std::unique_ptr<Plugin>> m_registered_passes;
 };

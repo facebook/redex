@@ -15,7 +15,6 @@
 #include <json/value.h>
 #include <mutex>
 #include <string>
-#include <unordered_map>
 #include <utility>
 
 #include "DexClass.h"
@@ -288,17 +287,19 @@ Json::Value OptDataMapper::serialize_sql() {
   Json::Value insn_opt_arr;
   Json::Value insn_nopt_arr;
 
-  for (const auto& cls_pair : m_cls_opt_map) {
+  for (const auto& cls_pair : UnorderedIterable(m_cls_opt_map)) {
     auto cls_opt_data = cls_pair.second;
     serialize_class(cls_opt_data, cls_id, &cls_arr, &cls_opt_arr,
                     &cls_nopt_arr);
 
-    for (const auto& meth_pair : cls_opt_data->m_meth_opt_map) {
+    for (const auto& meth_pair :
+         UnorderedIterable(cls_opt_data->m_meth_opt_map)) {
       auto meth_opt_data = meth_pair.second;
       serialize_method(meth_opt_data, cls_id, meth_id, &meth_arr, &meth_opt_arr,
                        &meth_nopt_arr);
 
-      for (const auto& insn_pair : meth_opt_data->m_insn_opt_map) {
+      for (const auto& insn_pair :
+           UnorderedIterable(meth_opt_data->m_insn_opt_map)) {
         auto insn_opt_data = insn_pair.second;
         serialize_insn(insn_opt_data, meth_id, insn_id, &insn_arr,
                        &insn_opt_arr, &insn_nopt_arr);
@@ -322,8 +323,8 @@ Json::Value OptDataMapper::serialize_sql() {
 }
 
 void OptDataMapper::serialize_messages_helper(
-    const std::unordered_map<int, std::string>& msg_map, Json::Value* arr) {
-  for (const auto& reason_msg_pair : msg_map) {
+    const UnorderedMap<int, std::string>& msg_map, Json::Value* arr) {
+  for (const auto& reason_msg_pair : UnorderedIterable(msg_map)) {
     auto reason = reason_msg_pair.first;
     const auto& message = reason_msg_pair.second;
     Json::Value msg_pair;
@@ -422,7 +423,7 @@ void OptDataMapper::serialize_insn(
  * NOTE: Double up on single quotes for escaping in sql strings.
  */
 void OptDataMapper::init_opt_messages() {
-  std::unordered_map<int, std::string> opt_msg_map = {
+  UnorderedMap<int, std::string> opt_msg_map = {
       {INLINED, "Inlined method"},
       {CALLSITE_ARGS_REMOVED,
        "Updated callsite args for invoking updated method"},
@@ -433,7 +434,7 @@ void OptDataMapper::init_opt_messages() {
 }
 
 void OptDataMapper::init_nopt_messages() {
-  std::unordered_map<int, std::string> nopt_msg_map = {
+  UnorderedMap<int, std::string> nopt_msg_map = {
       {INL_CROSS_STORE_REFS,
        "Didn''t inline: callee references a DexMember in a dex store different "
        "from the caller''s"},

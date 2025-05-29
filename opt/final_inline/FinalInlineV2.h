@@ -13,6 +13,7 @@
 
 #include "ConstantPropagationState.h"
 #include "ConstantPropagationWholeProgramState.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "IRCode.h"
 #include "InitClassesWithSideEffects.h"
@@ -21,8 +22,8 @@
 class FinalInlinePassV2 : public Pass {
  public:
   struct Config {
-    std::unordered_set<const DexType*> blocklist_types;
-    std::unordered_set<std::string> allowlist_method_names;
+    UnorderedSet<const DexType*> blocklist_types;
+    UnorderedSet<std::string> allowlist_method_names;
     bool inline_instance_field;
     Config() : inline_instance_field(false) {}
   };
@@ -89,8 +90,8 @@ constant_propagation::WholeProgramState analyze_and_simplify_clinits(
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
     const XStoreRefs* xstores,
-    const std::unordered_set<const DexType*>& blocklist_types,
-    const std::unordered_set<std::string>& allowed_opaque_callee_names,
+    const UnorderedSet<const DexType*>& blocklist_types,
+    const UnorderedSet<std::string>& allowed_opaque_callee_names,
     const constant_propagation::State& cp_state,
     size_t& clinit_cycles);
 
@@ -100,18 +101,18 @@ class StaticFieldReadAnalysis {
 
   StaticFieldReadAnalysis(
       const call_graph::Graph& call_graph,
-      const std::unordered_set<std::string>& allowed_opaque_callee_names);
+      const UnorderedSet<std::string>& allowed_opaque_callee_names);
 
   Result analyze(const DexMethod* method);
 
  private:
   const call_graph::Graph& m_graph;
   std::unordered_map<const DexMethod*, Result> m_summaries;
-  std::unordered_set<const DexMethod*> m_finalized;
-  std::unordered_set<const DexMethodRef*> m_allowed_opaque_callees;
+  UnorderedSet<const DexMethod*> m_finalized;
+  UnorderedSet<const DexMethodRef*> m_allowed_opaque_callees;
 
   Result analyze(const DexMethod* method,
-                 std::unordered_set<const DexMethod*>& pending_methods);
+                 UnorderedSet<const DexMethod*>& pending_methods);
 };
 
 call_graph::Graph build_class_init_graph(const Scope& scope);

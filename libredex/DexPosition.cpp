@@ -222,7 +222,7 @@ void RealPositionMapper::process_pattern_switch_positions() {
   // 101: method Lredex/$Position;.count:()V, line 2 (no parent)
   // 102: method Lredex/$Position;.case:()V, line 12345, parent 23
   // 103: method Lredex/$Position;.case:()V, line 54321, parent 42
-  std::unordered_map<uint32_t, uint32_t> switch_line_map;
+  UnorderedMap<uint32_t, uint32_t> switch_line_map;
   for (uint32_t switch_id = 0; switch_id < switches.size(); ++switch_id) {
     if (!reachable_switches.count(switch_id)) {
       continue;

@@ -19,7 +19,7 @@
 #undef IS_REDEX_TEST_LIBRARY
 
 using ResourceFiles = std::unordered_map<std::string, std::string>;
-ResourceFiles decode_resource_paths(const char* location, const char* suffix);
+ResourceFiles decode_resource_paths(const char* location);
 
 struct PreVerify : public RedexTest {
   DexClasses classes;
@@ -30,7 +30,7 @@ struct PreVerify : public RedexTest {
             /*stats=*/nullptr,
             /* balloon */ false)),
         resources(
-            decode_resource_paths(std::getenv("extracted_resources"), "pre")) {}
+            decode_resource_paths(std::getenv("extracted_resources_pre"))) {}
 };
 
 struct PostVerify : public RedexTest {
@@ -41,8 +41,8 @@ struct PostVerify : public RedexTest {
             DexLocation::make_location("", std::getenv("dex_post")),
             /*stats=*/nullptr,
             /* balloon */ false)),
-        resources(decode_resource_paths(std::getenv("extracted_resources"),
-                                        "post")) {}
+        resources(
+            decode_resource_paths(std::getenv("extracted_resources_post"))) {}
 };
 
 // \returns -1 if no class with \name is found. Otherwise, \returns the the

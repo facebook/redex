@@ -13,14 +13,13 @@
 #include <optional>
 #include <string>
 #include <type_traits>
-#include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include <json/value.h>
 
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "JsonWrapper.h"
 
 class DexClass;
@@ -225,9 +224,9 @@ class Configurable {
 
   // Type aliases for convenience
   using MapOfVectorOfStrings =
-      std::unordered_map<std::string, std::vector<std::string>>;
-  using MapOfMethods = std::unordered_map<DexMethod*, DexMethod*>;
-  using MapOfStrings = std::unordered_map<std::string, std::string>;
+      UnorderedMap<std::string, std::vector<std::string>>;
+  using MapOfMethods = UnorderedMap<DexMethod*, DexMethod*>;
+  using MapOfStrings = UnorderedMap<std::string, std::string>;
 
   static constexpr const char* default_doc() { return "TODO: Document this"; }
 
@@ -430,22 +429,21 @@ DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<Json::Value>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::optional<std::string>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<std::string>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<unsigned int>)
-DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<std::string>)
+DEFINE_CONFIGURABLE_PRIMITIVE(UnorderedSet<std::string>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<DexType*>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<DexMethod*>)
-DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<DexType*>)
-DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<const DexType*>)
-DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<DexClass*>)
-DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<DexMethod*>)
+DEFINE_CONFIGURABLE_PRIMITIVE(UnorderedSet<DexType*>)
+DEFINE_CONFIGURABLE_PRIMITIVE(UnorderedSet<const DexType*>)
+DEFINE_CONFIGURABLE_PRIMITIVE(UnorderedSet<DexClass*>)
+DEFINE_CONFIGURABLE_PRIMITIVE(UnorderedSet<DexMethod*>)
 DEFINE_CONFIGURABLE_PRIMITIVE(Configurable::MapOfMethods)
 DEFINE_CONFIGURABLE_PRIMITIVE(Configurable::MapOfVectorOfStrings)
 DEFINE_CONFIGURABLE_PRIMITIVE(Configurable::MapOfStrings)
 DEFINE_CONFIGURABLE_PRIMITIVE(
-    SINGLE_ARG(std::unordered_map<DexMethodRef*, DexMethodRef*>))
+    SINGLE_ARG(UnorderedMap<DexMethodRef*, DexMethodRef*>))
+DEFINE_CONFIGURABLE_PRIMITIVE(SINGLE_ARG(UnorderedMap<DexType*, DexType*>))
 DEFINE_CONFIGURABLE_PRIMITIVE(
-    SINGLE_ARG(std::unordered_map<DexType*, DexType*>))
-DEFINE_CONFIGURABLE_PRIMITIVE(
-    SINGLE_ARG(std::unordered_map<std::string, std::string>))
+    SINGLE_ARG(UnorderedMap<std::string, std::string>))
 #undef SINGLE_ARG
 
 #undef DEFINE_CONFIGURABLE_PRIMITIVE

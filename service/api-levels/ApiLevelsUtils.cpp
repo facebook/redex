@@ -47,14 +47,12 @@ std::string get_simple_deobfuscated_name(const DexType* type) {
  * - filtering of types with the same simple name
  * - creation of mapping from simple_name to type
  */
-std::unordered_map<std::string, const DexType*>
-get_simple_cls_name_to_accepted_types(
-    const std::unordered_map<const DexType*, FrameworkAPI>&
-        framework_cls_to_api) {
+UnorderedMap<std::string, const DexType*> get_simple_cls_name_to_accepted_types(
+    const UnorderedMap<const DexType*, FrameworkAPI>& framework_cls_to_api) {
 
   std::vector<std::string> filter;
-  std::unordered_map<std::string, const DexType*> simple_cls_name_to_type;
-  for (const auto& pair : framework_cls_to_api) {
+  UnorderedMap<std::string, const DexType*> simple_cls_name_to_type;
+  for (const auto& pair : UnorderedIterable(framework_cls_to_api)) {
     auto simple_name = get_simple_deobfuscated_name(pair.first);
 
     // For now, excluding types that have the same simple name.
@@ -89,7 +87,7 @@ namespace {
 bool check_methods(
     const std::vector<DexMethod*>& methods,
     const api::FrameworkAPI& framework_api,
-    const std::unordered_map<const DexType*, DexType*>& release_to_framework,
+    const UnorderedMap<const DexType*, DexType*>& release_to_framework,
     const std::unordered_set<DexMethodRef*>& methods_non_private) {
   if (methods.empty()) {
     return true;
@@ -140,7 +138,7 @@ bool find_field(const std::string& simple_deobfuscated_name,
 bool check_fields(
     const std::vector<DexField*>& fields,
     const api::FrameworkAPI& framework_api,
-    const std::unordered_map<const DexType*, DexType*>& release_to_framework,
+    const UnorderedMap<const DexType*, DexType*>& release_to_framework,
     const std::unordered_set<DexFieldRef*>& fields_non_private) {
   if (fields.empty()) {
     return true;
@@ -179,7 +177,7 @@ bool check_fields(
 bool check_members(
     DexClass* cls,
     const api::FrameworkAPI& framework_api,
-    const std::unordered_map<const DexType*, DexType*>& release_to_framework,
+    const UnorderedMap<const DexType*, DexType*>& release_to_framework,
     const std::unordered_set<DexMethodRef*>& methods_non_private,
     const std::unordered_set<DexFieldRef*>& fields_non_private) {
   if (!check_methods(cls->get_dmethods(), framework_api, release_to_framework,
@@ -205,7 +203,7 @@ bool check_members(
 
 bool check_if_present(
     const TypeSet& types,
-    const std::unordered_map<const DexType*, DexType*>& release_to_framework) {
+    const UnorderedMap<const DexType*, DexType*>& release_to_framework) {
   for (const DexType* type : types) {
     DexClass* cls = type_class(type);
     if (!cls || cls->is_external()) {
@@ -224,7 +222,7 @@ bool check_if_present(
 bool check_hierarchy(
     DexClass* cls,
     const api::FrameworkAPI& framework_api,
-    const std::unordered_map<const DexType*, DexType*>& release_to_framework,
+    const UnorderedMap<const DexType*, DexType*>& release_to_framework,
     const TypeSystem& type_system,
     const std::unordered_set<const DexType*>& framework_classes) {
   DexType* type = cls->get_type();
@@ -299,7 +297,7 @@ void ApiLevelsUtils::check_and_update_release_to_framework(const Scope& scope) {
 
     // We need an up to date pairing from release library to framework classes,
     // for later use. So computing this on the fly, once.
-    std::unordered_map<const DexType*, DexType*> release_to_framework;
+    UnorderedMap<const DexType*, DexType*> release_to_framework;
     for (const auto& pair : m_types_to_framework_api) {
       release_to_framework[pair.first] = pair.second.cls;
     }
@@ -386,9 +384,8 @@ void ApiLevelsUtils::gather_non_private_members(const Scope& scope) {
 
 void ApiLevelsUtils::load_framework_api(const Scope& scope) {
   auto framework_cls_to_api = get_framework_classes();
-  for (auto it = framework_cls_to_api.begin();
-       it != framework_cls_to_api.end();) {
-    auto* framework_cls = it->first;
+  unordered_erase_if(framework_cls_to_api, [&](const auto& pair) {
+    auto* framework_cls = pair.first;
     m_framework_classes.emplace(framework_cls);
 
     // NOTE: We are currently excluding classes outside of
@@ -397,13 +394,12 @@ void ApiLevelsUtils::load_framework_api(const Scope& scope) {
     if (!boost::starts_with(framework_cls_str, "Landroid")) {
       TRACE(API_UTILS, 5, "Excluding %s from possible replacement.",
             str_copy(framework_cls_str).c_str());
-      it = framework_cls_to_api.erase(it);
-    } else {
-      ++it;
+      return true;
     }
-  }
+    return false;
+  });
 
-  std::unordered_map<std::string, const DexType*> simple_cls_name_to_type =
+  auto simple_cls_name_to_type =
       get_simple_cls_name_to_accepted_types(framework_cls_to_api);
   if (simple_cls_name_to_type.empty()) {
     // Nothing to do here :|

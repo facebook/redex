@@ -77,7 +77,7 @@ optional<DexMethodRef*> parse_method_ref(const Json::Value& str,
                                          Configurable::bindflags_t bindflags) {
   always_assert_log(!(bindflags & ~Configurable::bindflags::methods::mask),
                     "Only method bindflags may be specified for a "
-                    "std::unordered_map<DexMethod*, DexMethod*>");
+                    "UnorderedMap<DexMethod*, DexMethod*>");
   if (!str.isString()) {
     throw std::runtime_error("Expected string, got:" + str.asString());
   }
@@ -135,11 +135,11 @@ optional<std::vector<parse_result<ParseFn>>> parse_vec(
 }
 
 template <typename ParseFn>
-optional<std::unordered_set<parse_result<ParseFn>>> parse_set(
+optional<UnorderedSet<parse_result<ParseFn>>> parse_set(
     const Json::Value& value,
     ParseFn parse_fn,
     Configurable::bindflags_t bindflags) {
-  std::unordered_set<parse_result<ParseFn>> result;
+  UnorderedSet<parse_result<ParseFn>> result;
   for (auto& v : value) {
     if (auto parsed = parse_fn(v, bindflags)) {
       result.emplace(std::move(*parsed));
@@ -149,7 +149,7 @@ optional<std::unordered_set<parse_result<ParseFn>>> parse_set(
 }
 
 template <typename KFn, typename VFn>
-std::unordered_map<parse_result<KFn>, parse_result<VFn>> parse_map(
+UnorderedMap<parse_result<KFn>, parse_result<VFn>> parse_map(
     const Json::Value& value,
     KFn k_parse,
     Configurable::bindflags_t k_bindflags,
@@ -158,7 +158,7 @@ std::unordered_map<parse_result<KFn>, parse_result<VFn>> parse_map(
   if (!value.isObject()) {
     throw std::runtime_error("Expected object, got:" + value.asString());
   }
-  std::unordered_map<parse_result<KFn>, parse_result<VFn>> result;
+  UnorderedMap<parse_result<KFn>, parse_result<VFn>> result;
   for (auto it = value.begin(); it != value.end(); ++it) {
     auto k = k_parse(it.key(), k_bindflags);
     auto v = v_parse(*it, v_bindflags);
@@ -388,9 +388,8 @@ std::vector<unsigned int> Configurable::as<std::vector<unsigned int>>(
 }
 
 template <>
-std::unordered_set<std::string>
-Configurable::as<std::unordered_set<std::string>>(const Json::Value& value,
-                                                  bindflags_t bindflags) {
+UnorderedSet<std::string> Configurable::as<UnorderedSet<std::string>>(
+    const Json::Value& value, bindflags_t bindflags) {
   return std::move(*parse_set(value, parse_str<false>, bindflags));
 }
 
@@ -416,15 +415,14 @@ std::vector<DexMethod*> Configurable::as<std::vector<DexMethod*>>(
 }
 
 template <>
-std::unordered_set<DexType*> Configurable::as<std::unordered_set<DexType*>>(
+UnorderedSet<DexType*> Configurable::as<UnorderedSet<DexType*>>(
     const Json::Value& value, bindflags_t bindflags) {
   return std::move(*parse_set(value, parse_type, bindflags));
 }
 
 template <>
-std::unordered_set<const DexType*>
-Configurable::as<std::unordered_set<const DexType*>>(const Json::Value& value,
-                                                     bindflags_t bindflags) {
+UnorderedSet<const DexType*> Configurable::as<UnorderedSet<const DexType*>>(
+    const Json::Value& value, bindflags_t bindflags) {
   return std::move(*parse_set(
       value,
       [](const Json::Value& v, bindflags_t b) {
@@ -433,7 +431,7 @@ Configurable::as<std::unordered_set<const DexType*>>(const Json::Value& value,
       bindflags));
 }
 
-using TypeMap = std::unordered_map<DexType*, DexType*>;
+using TypeMap = UnorderedMap<DexType*, DexType*>;
 
 template <>
 TypeMap Configurable::as<TypeMap>(const Json::Value& value,
@@ -442,18 +440,18 @@ TypeMap Configurable::as<TypeMap>(const Json::Value& value,
 }
 
 template <>
-std::unordered_set<DexClass*> Configurable::as<std::unordered_set<DexClass*>>(
+UnorderedSet<DexClass*> Configurable::as<UnorderedSet<DexClass*>>(
     const Json::Value& value, bindflags_t bindflags) {
   return std::move(*parse_set(value, parse_class, bindflags));
 }
 
 template <>
-std::unordered_set<DexMethod*> Configurable::as<std::unordered_set<DexMethod*>>(
+UnorderedSet<DexMethod*> Configurable::as<UnorderedSet<DexMethod*>>(
     const Json::Value& value, bindflags_t bindflags) {
   return std::move(*parse_set(value, parse_method, bindflags));
 }
 
-using MethRefMap = std::unordered_map<DexMethodRef*, DexMethodRef*>;
+using MethRefMap = UnorderedMap<DexMethodRef*, DexMethodRef*>;
 
 template <>
 MethRefMap Configurable::as<MethRefMap>(const Json::Value& value,
@@ -560,13 +558,13 @@ IMPLEMENT_REFLECTOR_EX(std::vector<Json::Value>, "list")
 IMPLEMENT_REFLECTOR_EX(std::optional<std::string>, "string")
 IMPLEMENT_REFLECTOR_EX(std::vector<std::string>, "list")
 IMPLEMENT_REFLECTOR_EX(std::vector<unsigned int>, "list")
-IMPLEMENT_REFLECTOR_EX(std::unordered_set<std::string>, "set")
+IMPLEMENT_REFLECTOR_EX(UnorderedSet<std::string>, "set")
 IMPLEMENT_REFLECTOR_EX(std::vector<DexType*>, "list")
 IMPLEMENT_REFLECTOR_EX(std::vector<DexMethod*>, "list")
-IMPLEMENT_REFLECTOR_EX(std::unordered_set<const DexType*>, "set")
-IMPLEMENT_REFLECTOR_EX(std::unordered_set<DexType*>, "set")
-IMPLEMENT_REFLECTOR_EX(std::unordered_set<DexClass*>, "set")
-IMPLEMENT_REFLECTOR_EX(std::unordered_set<DexMethod*>, "set")
+IMPLEMENT_REFLECTOR_EX(UnorderedSet<const DexType*>, "set")
+IMPLEMENT_REFLECTOR_EX(UnorderedSet<DexType*>, "set")
+IMPLEMENT_REFLECTOR_EX(UnorderedSet<DexClass*>, "set")
+IMPLEMENT_REFLECTOR_EX(UnorderedSet<DexMethod*>, "set")
 IMPLEMENT_REFLECTOR_EX(Configurable::MapOfVectorOfStrings, "dict")
 IMPLEMENT_REFLECTOR_EX(Configurable::MapOfMethods, "dict")
 IMPLEMENT_REFLECTOR_EX(Configurable::MapOfStrings, "dict")

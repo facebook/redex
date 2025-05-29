@@ -6,7 +6,7 @@
  */
 
 #include "Deleter.h"
-#include "DexClass.h"
+
 #include "DexUtil.h"
 #include "ReachableClasses.h"
 #include "Show.h"
@@ -15,7 +15,7 @@
 
 std::vector<DexMethod*> delete_methods(
     std::vector<DexClass*>& scope,
-    std::unordered_set<DexMethod*>& removable,
+    UnorderedSet<DexMethod*>& removable,
     std::function<DexMethod*(DexMethodRef*,
                              MethodSearch search,
                              const DexMethod*)> concurrent_resolver) {
@@ -33,7 +33,7 @@ std::vector<DexMethod*> delete_methods(
           }
         }
       });
-  for (auto method : removable_to_erase) {
+  for (auto method : UnorderedIterable(removable_to_erase)) {
     removable.erase(method);
   }
 
@@ -52,7 +52,7 @@ std::vector<DexMethod*> delete_methods(
   });
 
   std::vector<DexMethod*> deleted;
-  for (auto callee : removable) {
+  for (auto callee : UnorderedIterable(removable)) {
     if (!callee->is_concrete()) continue;
     if (!can_delete(callee)) continue;
     if (method::is_argless_init(callee)) continue;
@@ -61,7 +61,6 @@ std::vector<DexMethod*> delete_methods(
                       "%s is concrete but does not have a DexClass\n",
                       SHOW(callee));
     cls->remove_method(callee);
-    DexMethod::erase_method(callee);
     DexMethod::delete_method(callee);
     deleted.push_back(callee);
     TRACE(DELMET, 4, "removing %s", SHOW(callee));

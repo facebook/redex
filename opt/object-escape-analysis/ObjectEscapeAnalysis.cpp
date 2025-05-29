@@ -48,6 +48,7 @@
 #include "ApiLevelChecker.h"
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
+#include "DeterministicContainers.h"
 #include "ExpandableMethodParams.h"
 #include "IRInstruction.h"
 #include "Inliner.h"
@@ -55,7 +56,7 @@
 #include "ObjectEscapeAnalysisImpl.h"
 #include "ObjectEscapeAnalysisPlugin.h"
 #include "PassManager.h"
-#include "StlUtil.h"
+#include "RedexContext.h"
 #include "StringBuilder.h"
 #include "Walkers.h"
 
@@ -96,12 +97,12 @@ constexpr int64_t COST_NEW_INSTANCE = 20;
 constexpr int64_t SAVINGS_THRESHOLD = 0;
 
 using InlineAnchorsOfType =
-    std::unordered_map<DexMethod*, std::unordered_set<IRInstruction*>>;
+    UnorderedMap<DexMethod*, UnorderedSet<IRInstruction*>>;
 ConcurrentMap<DexType*, InlineAnchorsOfType> compute_inline_anchors(
     const Scope& scope,
     const method_override_graph::Graph& method_override_graph,
     const MethodSummaries& method_summaries,
-    const std::unordered_set<DexClass*>& excluded_classes,
+    const UnorderedSet<DexClass*>& excluded_classes,
     CalleesCache* callees_cache,
     MethodSummaryCache* method_summary_cache) {
   Timer t("compute_inline_anchors");
@@ -111,7 +112,7 @@ ConcurrentMap<DexType*, InlineAnchorsOfType> compute_inline_anchors(
                       /* incomplete_marker_method */ nullptr, method,
                       callees_cache, method_summary_cache);
     auto inlinables = analyzer.get_inlinables();
-    for (auto insn : inlinables) {
+    for (auto insn : UnorderedIterable(inlinables)) {
       auto [callee, type] = resolve_inlinable(method_summaries, method, insn);
       TRACE(OEA, 3, "[object escape analysis] inline anchor [%s] %s",
             SHOW(method), SHOW(insn));
@@ -166,7 +167,7 @@ live_range::DefUseChains get_augmented_du_chains(
       });
   const auto du_chains = chains.get_def_use_chains();
   live_range::DefUseChains res;
-  for (auto&& [def, def_uses] : du_chains) {
+  for (auto&& [def, def_uses] : UnorderedIterable(du_chains)) {
     auto* inline_anchor_type = selector(def);
     if (!inline_anchor_type) {
       continue;
@@ -174,7 +175,7 @@ live_range::DefUseChains get_augmented_du_chains(
     auto& augmented_uses = res[def];
     std::stack<live_range::Use> stack;
     auto process_uses = [&](auto& uses) {
-      for (auto& use : uses) {
+      for (auto& use : UnorderedIterable(uses)) {
         if (opcode::is_check_cast(use.insn->opcode())) {
           if (throwing_check_cast &&
               !type::is_subclass(use.insn->get_type(), inline_anchor_type)) {
@@ -218,7 +219,7 @@ class InlinedEstimator {
       DexMethod* method,
       const IRInstruction* allocation_insn,
       bool* recursive,
-      std::unordered_map<Key, bool, boost::hash<Key>>* visiting) {
+      UnorderedMap<Key, bool, boost::hash<Key>>* visiting) {
     auto [it, emplaced] =
         visiting->emplace((Key){method, allocation_insn}, false);
     auto& visited = it->second;
@@ -240,7 +241,7 @@ class InlinedEstimator {
       gather_inlinable_methods(callee, callee_allocation_insn, recursive,
                                visiting);
     }
-    for (auto& use : m_uses[{method, allocation_insn}]) {
+    for (auto& use : UnorderedIterable(m_uses[{method, allocation_insn}])) {
       if (opcode::is_an_invoke(use.insn->opcode())) {
         if (is_benign(use.insn->get_method())) {
           continue;
@@ -328,7 +329,7 @@ class InlinedEstimator {
           } else if (allocation_insn->opcode() == OPCODE_NEW_INSTANCE) {
             delta -= config.cost_new_instance;
           }
-          for (auto& use : m_uses[key]) {
+          for (auto& use : UnorderedIterable(m_uses[key])) {
             if (opcode::is_an_invoke(use.insn->opcode())) {
               delta -= config.cost_invoke;
               if (is_benign(use.insn->get_method())) {
@@ -374,16 +375,16 @@ class InlinedEstimator {
     return m_deltas[std::make_pair(method, allocation_insn)];
   }
 
-  std::unordered_set<DexMethod*> get_inlinable_methods(
+  UnorderedSet<DexMethod*> get_inlinable_methods(
       DexMethod* method,
-      const std::unordered_set<IRInstruction*>& allocation_insns,
+      const UnorderedSet<IRInstruction*>& allocation_insns,
       bool* recursive) {
-    std::unordered_map<Key, bool, boost::hash<Key>> visiting;
-    for (auto* allocation_insn : allocation_insns) {
+    UnorderedMap<Key, bool, boost::hash<Key>> visiting;
+    for (auto* allocation_insn : UnorderedIterable(allocation_insns)) {
       gather_inlinable_methods(method, allocation_insn, recursive, &visiting);
     }
-    std::unordered_set<DexMethod*> inlinable_methods;
-    for (auto&& [key, _0] : visiting) {
+    UnorderedSet<DexMethod*> inlinable_methods;
+    for (auto&& [key, _0] : UnorderedIterable(visiting)) {
       auto [inlinable_method, _1] = key;
       inlinable_methods.insert(inlinable_method);
     }
@@ -407,10 +408,10 @@ enum class InlinableTypeKind {
 };
 struct InlinableInfo {
   InlinableTypeKind kind;
-  std::unordered_set<DexMethod*> inlinable_methods;
+  UnorderedSet<DexMethod*> inlinable_methods;
 };
 
-using InlinableTypes = std::unordered_map<DexType*, InlinableInfo>;
+using InlinableTypes = UnorderedMap<DexType*, InlinableInfo>;
 
 class CodeSizeCache {
  private:
@@ -430,7 +431,7 @@ class CodeSizeCache {
   }
 };
 
-std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
+UnorderedMap<DexMethod*, InlinableTypes> compute_root_methods(
     const ObjectEscapeConfig& config,
     PassManager& mgr,
     const method_override_graph::Graph& method_override_graph,
@@ -439,14 +440,14 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
     const InsertOnlyConcurrentSet<DexMethod*>& multi_callee_invokes,
     const MethodSummaries& method_summaries,
     const ConcurrentMap<DexType*, InlineAnchorsOfType>& inline_anchors,
-    std::unordered_set<DexMethod*>* inlinable_methods_kept,
+    UnorderedSet<DexMethod*>* inlinable_methods_kept,
     CalleesCache* callees_cache,
     MethodSummaryCache* method_summary_cache) {
   Timer t("compute_root_methods");
   std::array<size_t, (size_t)(InlinableTypeKind::Last) + 1> candidate_types{
       0, 0, 0};
-  std::unordered_map<DexMethod*, InlinableTypes> root_methods;
-  std::unordered_set<DexType*> inline_anchor_types;
+  UnorderedMap<DexMethod*, InlinableTypes> root_methods;
+  UnorderedSet<DexType*> inline_anchor_types;
 
   std::mutex mutex; // protects candidate_types and root_methods
   std::atomic<size_t> num_incomplete_estimated_delta_threshold_exceeded{0};
@@ -462,13 +463,14 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
                                        method_summaries, callees_cache,
                                        method_summary_cache);
     auto keep = [&](const auto& inlinable_methods) {
-      for (auto* inlinable_method : inlinable_methods) {
+      for (auto* inlinable_method : UnorderedIterable(inlinable_methods)) {
         concurrent_inlinable_methods_kept.insert(inlinable_method);
       }
       complete = false;
     };
-    std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>> methods;
-    for (auto&& [method, allocation_insns] : inline_anchors_of_type) {
+    UnorderedMap<DexMethod*, UnorderedSet<DexMethod*>> methods;
+    for (auto&& [method, allocation_insns] :
+         UnorderedIterable(inline_anchors_of_type)) {
       bool recursive{false};
       auto inlinable_methods = inlined_estimator.get_inlinable_methods(
           method, allocation_insns, &recursive);
@@ -494,11 +496,11 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
       methods.emplace(method, std::move(inlinable_methods));
     }
     if (!complete) {
-      std20::erase_if(methods, [&](const auto& p) {
+      unordered_erase_if(methods, [&](const auto& p) {
         auto [method, inlinable_methods] = p;
         int64_t delta = 0;
         const auto& allocation_insns = inline_anchors_of_type.at(method);
-        for (auto allocation_insn : allocation_insns) {
+        for (auto allocation_insn : UnorderedIterable(allocation_insns)) {
           auto method_delta =
               inlined_estimator.get_delta(method, allocation_insn);
           if (method_delta == InlinedEstimator::THROWING_CHECK_CAST) {
@@ -533,7 +535,7 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
 
     std::lock_guard<std::mutex> lock_guard(mutex);
     candidate_types[(size_t)kind]++;
-    for (auto&& [method, inlinable_methods] : methods) {
+    for (auto&& [method, inlinable_methods] : UnorderedIterable(methods)) {
       TRACE(OEA, 3, "[object escape analysis] root method %s with %s%s",
             SHOW(method), SHOW(type),
             kind == InlinableTypeKind::CompleteMultipleRoots
@@ -546,7 +548,7 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
     }
   };
 
-  for (auto& [type, method_insn_pairs] : new_instances) {
+  for (auto& [type, method_insn_pairs] : UnorderedIterable(new_instances)) {
     auto it = inline_anchors.find(type);
     if (it == inline_anchors.end()) {
       continue;
@@ -588,19 +590,18 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
 
         // Check whether all uses of this type have inline anchors optimizable
         // root methods.
-        bool complete =
-            std::all_of(method_insn_pairs.begin(), method_insn_pairs.end(),
-                        is_anchored) &&
-            std::all_of(
-                inline_anchors_of_type.begin(), inline_anchors_of_type.end(),
-                [](auto& p) { return !p.first->rstate.no_optimizations(); });
+        bool complete = std::all_of(method_insn_pairs.begin(),
+                                    method_insn_pairs.end(), is_anchored) &&
+                        unordered_all_of(inline_anchors_of_type, [](auto& p) {
+                          return !p.first->rstate.no_optimizations();
+                        });
 
         concurrent_add_root_methods(type, complete);
       },
       inline_anchor_types);
 
-  inlinable_methods_kept->insert(concurrent_inlinable_methods_kept.begin(),
-                                 concurrent_inlinable_methods_kept.end());
+  insert_unordered_iterable(*inlinable_methods_kept,
+                            concurrent_inlinable_methods_kept);
   TRACE(OEA,
         1,
         "[object escape analysis] candidate types: %zu",
@@ -627,9 +628,8 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
 size_t shrink_root_methods(
     const std::function<void(DexMethod*)>& apply_shrinking_plugins,
     MultiMethodInliner& inliner,
-    const ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>>&
-        dependencies,
-    const std::unordered_map<DexMethod*, InlinableTypes>& root_methods,
+    const ConcurrentMap<DexMethod*, UnorderedSet<DexMethod*>>& dependencies,
+    const UnorderedMap<DexMethod*, InlinableTypes>& root_methods,
     MethodSummaries* method_summaries,
     MethodSummaryCache* method_summary_cache) {
   InsertOnlyConcurrentSet<DexMethod*> methods_that_lost_allocation_insns;
@@ -642,7 +642,7 @@ size_t shrink_root_methods(
     if (it == dependencies.end()) {
       return;
     }
-    for (auto* caller : it->second) {
+    for (auto* caller : UnorderedIterable(it->second)) {
       auto it2 = method_summaries->find(caller);
       if (it2 == method_summaries->end()) {
         continue;
@@ -674,7 +674,7 @@ size_t shrink_root_methods(
         }
       },
       root_methods);
-  for (auto* method : methods_that_lost_allocation_insns) {
+  for (auto* method : UnorderedIterable(methods_that_lost_allocation_insns)) {
     auto& ms = method_summaries->at(method);
     always_assert(ms.allocation_insn() != nullptr);
     ms.returns = std::monostate();
@@ -752,16 +752,16 @@ namespace {
 // auxiliary information that allows to derive net savings.
 struct ReducedMethod {
   DexMethod* method;
-  std::unordered_map<DexMethod*, std::unordered_set<DexType*>> inlined_methods;
+  UnorderedMap<DexMethod*, UnorderedSet<DexType*>> inlined_methods;
   InlinableTypes types;
   size_t calls_inlined;
   size_t new_instances_eliminated;
 
   void gather_references(const ObjectEscapeConfig& config,
                          const CodeSizeCache& code_size_cache,
-                         const std::unordered_set<DexType*>& irreducible_types,
-                         const std::unordered_set<DexMethod*>& methods_kept,
-                         std::unordered_set<Ref>* refs,
+                         const UnorderedSet<DexType*>& irreducible_types,
+                         const UnorderedSet<DexMethod*>& methods_kept,
+                         UnorderedSet<Ref>* refs,
                          InsertOnlyConcurrentMap<Ref, int>* ref_sizes) const {
     code_size_cache[method];
     auto is_type_kept = [&](auto* type) {
@@ -771,9 +771,9 @@ struct ReducedMethod {
              types.at(type).kind == InlinableTypeKind::Incomplete ||
              irreducible_types.count(type);
     };
-    for (auto& [inlined_method, inlined_types] : inlined_methods) {
-      if (std::any_of(inlined_types.begin(), inlined_types.end(),
-                      is_type_kept)) {
+    for (auto& [inlined_method, inlined_types] :
+         UnorderedIterable(inlined_methods)) {
+      if (unordered_any_of(inlined_types, is_type_kept)) {
         continue;
       }
       if (root(inlined_method) || method::is_argless_init(inlined_method) ||
@@ -788,7 +788,7 @@ struct ReducedMethod {
           });
     }
 
-    for (auto [inlined_type, kind] : types) {
+    for (auto [inlined_type, kind] : UnorderedIterable(types)) {
       if (is_type_kept(inlined_type)) {
         continue;
       }
@@ -826,7 +826,7 @@ class RootMethodReducer {
   DexMethodRef* m_incomplete_marker_method;
   MultiMethodInliner& m_inliner;
   const MethodSummaries& m_method_summaries;
-  const std::unordered_set<DexClass*>& m_excluded_classes;
+  const UnorderedSet<DexClass*>& m_excluded_classes;
   Stats* m_stats;
   bool m_is_init_or_clinit;
   DexMethod* m_method;
@@ -847,7 +847,7 @@ class RootMethodReducer {
       DexMethodRef* incomplete_marker_method,
       MultiMethodInliner& inliner,
       const MethodSummaries& method_summaries,
-      const std::unordered_set<DexClass*>& excluded_classes,
+      const UnorderedSet<DexClass*>& excluded_classes,
       Stats* stats,
       bool is_init_or_clinit,
       DexMethod* method,
@@ -870,7 +870,7 @@ class RootMethodReducer {
         m_callees_cache(callees_cache),
         m_method_summary_cache(method_summary_cache) {
     m_types_vec.reserve(m_types.size());
-    for (auto&& [type, _] : m_types) {
+    for (auto&& [type, _] : UnorderedIterable(m_types)) {
       m_types_vec.push_back(type);
     }
   }
@@ -895,7 +895,7 @@ class RootMethodReducer {
     insn = find_incomplete_marker_methods();
     auto describe = [&]() {
       std::ostringstream oss;
-      for (auto [type, inlinable_info] : m_types) {
+      for (auto [type, inlinable_info] : UnorderedIterable(m_types)) {
         oss << show(type) << ":"
             << (inlinable_info.kind == InlinableTypeKind::Incomplete
                     ? "incomplete"
@@ -926,8 +926,7 @@ class RootMethodReducer {
     m_apply_shrinking_plugins(m_method);
   }
 
-  bool inline_insns(
-      const std::unordered_map<IRInstruction*, DexMethod*>& insns) {
+  bool inline_insns(const UnorderedMap<IRInstruction*, DexMethod*>& insns) {
     auto inlined = m_inliner.inline_callees(m_method, insns);
     m_calls_inlined += inlined;
     return inlined == insns.size();
@@ -987,10 +986,9 @@ class RootMethodReducer {
   }
 
   bool expand_invokes(
-      const std::unordered_map<IRInstruction*,
-                               std::pair<param_index_t, DexType*>>&
+      const UnorderedMap<IRInstruction*, std::pair<param_index_t, DexType*>>&
           invokes_to_expand,
-      std::unordered_set<DexMethodRef*>* expanded_method_refs) {
+      UnorderedSet<DexMethodRef*>* expanded_method_refs) {
     if (invokes_to_expand.empty()) {
       return true;
     }
@@ -1024,8 +1022,9 @@ class RootMethodReducer {
                         m_method_summaries, m_incomplete_marker_method,
                         m_method, m_callees_cache, m_method_summary_cache);
       using Inlinable = std::tuple<DexMethod*, DexType*, const InlinableInfo*>;
-      std::unordered_map<IRInstruction*, Inlinable> inlinables;
-      for (auto* insn : analyzer.get_inlinables()) {
+      UnorderedMap<IRInstruction*, Inlinable> inlinables;
+      auto inlinable_insns = analyzer.get_inlinables();
+      for (auto* insn : UnorderedIterable(inlinable_insns)) {
         auto [callee, type] =
             resolve_inlinable(m_method_summaries, m_method, insn);
         auto it = m_types.find(type);
@@ -1044,10 +1043,10 @@ class RootMethodReducer {
             auto it = inlinables.find(const_cast<IRInstruction*>(insn));
             return it != inlinables.end() ? std::get<1>(it->second) : nullptr;
           });
-      std::unordered_map<IRInstruction*, DexMethod*> invokes_to_inline;
+      UnorderedMap<IRInstruction*, DexMethod*> invokes_to_inline;
       auto& cfg = m_method->get_code()->cfg();
       cfg::CFGMutation mutation(cfg);
-      for (auto&& [insn, inlinable] : inlinables) {
+      for (auto&& [insn, inlinable] : UnorderedIterable(inlinables)) {
         auto [callee, type, inlinable_info] = inlinable;
         if (inlinable_info->kind == InlinableTypeKind::Incomplete) {
           // We are only going to consider incompletely inlinable types when we
@@ -1104,9 +1103,8 @@ class RootMethodReducer {
   }
 
   bool has_incomplete_marker(const live_range::Uses& uses) const {
-    return std::any_of(uses.begin(), uses.end(), [&](auto& use) {
-      return is_incomplete_marker(use.insn);
-    });
+    return unordered_any_of(
+        uses, [&](auto& use) { return is_incomplete_marker(use.insn); });
   }
 
   IRInstruction* find_incomplete_marker_methods() const {
@@ -1157,9 +1155,8 @@ class RootMethodReducer {
     return std::nullopt;
   }
 
-  bool should_expand(
-      DexMethod* callee,
-      const std::unordered_map<src_index_t, DexType*>& src_indices) {
+  bool should_expand(DexMethod* callee,
+                     const UnorderedMap<src_index_t, DexType*>& src_indices) {
     always_assert(!src_indices.empty());
     if (method::is_init(callee) && !src_indices.count(0)) {
       return true;
@@ -1167,7 +1164,7 @@ class RootMethodReducer {
     if (src_indices.size() > 1) {
       return false;
     }
-    auto [param_index, type] = *src_indices.begin();
+    auto [param_index, type] = *unordered_any(src_indices);
     auto kind = m_types.at(type).kind;
     bool multiples = kind == InlinableTypeKind::CompleteMultipleRoots;
     if (multiples && m_code_size_cache[callee] > m_config.max_inline_size &&
@@ -1192,11 +1189,11 @@ class RootMethodReducer {
   // Expand or inline all uses of all relevant new-instance instructions that
   // involve invoke- instructions, until there are no more such uses.
   bool expand_or_inline_invokes() {
-    std::unordered_set<DexMethodRef*> expanded_method_refs;
+    UnorderedSet<DexMethodRef*> expanded_method_refs;
     for (int iteration = 0; iteration < m_config.max_inline_invokes_iterations;
          iteration++) {
-      std::unordered_map<IRInstruction*, DexMethod*> invokes_to_inline;
-      std::unordered_map<IRInstruction*, std::pair<param_index_t, DexType*>>
+      UnorderedMap<IRInstruction*, DexMethod*> invokes_to_inline;
+      UnorderedMap<IRInstruction*, std::pair<param_index_t, DexType*>>
           invokes_to_expand;
 
       bool throwing_check_cast = false;
@@ -1217,10 +1214,9 @@ class RootMethodReducer {
           return false;
         }
       }
-      std::unordered_map<IRInstruction*,
-                         std::unordered_map<src_index_t, DexType*>>
+      UnorderedMap<IRInstruction*, UnorderedMap<src_index_t, DexType*>>
           aggregated_uses;
-      for (auto& [insn, uses] : du_chains) {
+      for (auto& [insn, uses] : UnorderedIterable(du_chains)) {
         always_assert(is_inlinable_new_instance(insn));
         auto type = insn->get_type();
         auto kind = m_types.at(type).kind;
@@ -1228,13 +1224,14 @@ class RootMethodReducer {
             !has_incomplete_marker(uses)) {
           continue;
         }
-        for (auto& use : uses) {
+        for (auto& use : UnorderedIterable(uses)) {
           auto emplaced =
               aggregated_uses[use.insn].emplace(use.src_index, type).second;
           always_assert(emplaced);
         }
       }
-      for (auto&& [uses_insn, src_indices] : aggregated_uses) {
+      for (auto&& [uses_insn, src_indices] :
+           UnorderedIterable(aggregated_uses)) {
         if (!opcode::is_an_invoke(uses_insn->opcode()) ||
             is_benign(uses_insn->get_method()) ||
             is_incomplete_marker(uses_insn)) {
@@ -1248,8 +1245,8 @@ class RootMethodReducer {
             m_method_override_graph, uses_insn, m_method, m_callees_cache,
             [&_src_indices = src_indices]() {
               always_assert(_src_indices.size() == 1);
-              always_assert(_src_indices.begin()->first == 0);
-              return _src_indices.begin()->second;
+              always_assert(unordered_any(_src_indices)->first == 0);
+              return unordered_any(_src_indices)->second;
             });
         always_assert(callee);
         always_assert(callee->is_concrete());
@@ -1267,12 +1264,12 @@ class RootMethodReducer {
             return false;
           }
           always_assert(src_indices.size() == 1);
-          invokes_to_expand.emplace(uses_insn, *src_indices.begin());
+          invokes_to_expand.emplace(uses_insn, *unordered_any(src_indices));
           continue;
         }
 
         invokes_to_inline.emplace(uses_insn, callee);
-        for (auto [src_index, type] : src_indices) {
+        for (auto [src_index, type] : UnorderedIterable(src_indices)) {
           m_inlined_methods[callee].insert(type);
         }
       }
@@ -1305,8 +1302,8 @@ class RootMethodReducer {
   bool stackify(IRInstruction* new_instance_insn,
                 const live_range::Uses& new_instance_insn_uses) {
     auto& cfg = m_method->get_code()->cfg();
-    std::unordered_map<DexField*, reg_t> field_regs;
-    std::unordered_map<reg_t, reg_t> created_regs;
+    UnorderedMap<DexField*, reg_t> field_regs;
+    UnorderedMap<reg_t, reg_t> created_regs;
     auto get_created_reg = [&](auto reg_t) {
       auto it = created_regs.find(reg_t);
       if (it == created_regs.end()) {
@@ -1328,8 +1325,8 @@ class RootMethodReducer {
       return it->second;
     };
 
-    std::unordered_set<IRInstruction*> used_insns;
-    for (auto& use : new_instance_insn_uses) {
+    UnorderedSet<IRInstruction*> used_insns;
+    for (auto& use : UnorderedIterable(new_instance_insn_uses)) {
       auto opcode = use.insn->opcode();
       if (opcode::is_an_iput(opcode)) {
         always_assert(use.src_index == 1);
@@ -1450,12 +1447,7 @@ class RootMethodReducer {
             (new IRInstruction(opcode))->set_literal(0)->set_dest(reg);
         insns.push_back(new_insn);
       }
-      std::vector<reg_t> ordered_created_regs;
-      ordered_created_regs.reserve(created_regs.size());
-      for (auto& [reg, _] : created_regs) {
-        ordered_created_regs.push_back(reg);
-      }
-      std::sort(ordered_created_regs.begin(), ordered_created_regs.end());
+      auto ordered_created_regs = unordered_to_ordered_keys(created_regs);
       for (auto reg : ordered_created_regs) {
         auto created_reg = created_regs.at(reg);
         auto new_insn =
@@ -1484,23 +1476,22 @@ class RootMethodReducer {
     return true;
   }
 
-  std::unordered_map<DexMethod*, std::unordered_set<DexType*>>
-      m_inlined_methods;
+  UnorderedMap<DexMethod*, UnorderedSet<DexType*>> m_inlined_methods;
 };
 
 // This order implies the sequence of inlinable type subsets
 // we'll consider. We'll structure the sequence such that often occurring
 // types with multiple uses will be chopped off the type set first.
 std::vector<DexType*> order_inlinable_types(
-    const std::unordered_map<DexMethod*, InlinableTypes>& root_methods) {
+    const UnorderedMap<DexMethod*, InlinableTypes>& root_methods) {
   struct Occurrences {
     InlinableTypeKind kind;
     size_t count{0};
   };
-  std::unordered_map<DexType*, Occurrences> occurrences;
+  UnorderedMap<DexType*, Occurrences> occurrences;
   std::vector<DexType*> res;
-  for (auto&& [method, types] : root_methods) {
-    for (auto&& [type, inlinable_info] : types) {
+  for (auto&& [method, types] : UnorderedIterable(root_methods)) {
+    for (auto&& [type, inlinable_info] : UnorderedIterable(types)) {
       auto kind = inlinable_info.kind;
       auto [it, emplaced] = occurrences.emplace(type, (Occurrences){kind});
       it->second.count++;
@@ -1533,19 +1524,18 @@ std::vector<DexType*> order_inlinable_types(
 // Reduce all root methods to a set of variants. The reduced methods are ordered
 // by how many types where inlined, with the largest number of inlined types
 // going first.
-std::unordered_map<DexMethod*, std::vector<ReducedMethod>>
-compute_reduced_methods(
+UnorderedMap<DexMethod*, std::vector<ReducedMethod>> compute_reduced_methods(
     const ObjectEscapeConfig& config,
     const std::function<void(DexMethod*)>& apply_shrinking_plugins,
     const method_override_graph::Graph& method_override_graph,
     ExpandableMethodParams& expandable_method_params,
     MultiMethodInliner& inliner,
     const MethodSummaries& method_summaries,
-    const std::unordered_set<DexClass*>& excluded_classes,
-    const std::unordered_map<DexMethod*, InlinableTypes>& root_methods,
-    const std::unordered_map<DexType*, size_t>& inlinable_type_index,
-    std::unordered_set<DexType*>* irreducible_types,
-    std::unordered_set<DexMethod*>* inlinable_methods_kept,
+    const UnorderedSet<DexClass*>& excluded_classes,
+    const UnorderedMap<DexMethod*, InlinableTypes>& root_methods,
+    const UnorderedMap<DexType*, size_t>& inlinable_type_index,
+    UnorderedSet<DexType*>* irreducible_types,
+    UnorderedSet<DexMethod*>* inlinable_methods_kept,
     Stats* stats,
     CalleesCache* callees_cache,
     MethodSummaryCache* method_summary_cache) {
@@ -1555,14 +1545,11 @@ compute_reduced_methods(
   // with N inlinable types, there will be N variants.
   std::vector<std::pair<DexMethod*, InlinableTypes>>
       ordered_root_methods_variants;
-  for (auto&& [method, types] : root_methods) {
-    std::vector<std::pair<DexType*, InlinableInfo>> ordered_types(types.begin(),
-                                                                  types.end());
-    std::sort(ordered_types.begin(), ordered_types.end(),
-              [&](auto& p, auto& q) {
-                return inlinable_type_index.at(p.first) <
-                       inlinable_type_index.at(q.first);
-              });
+  for (auto&& [method, types] : UnorderedIterable(root_methods)) {
+    auto ordered_types = unordered_to_ordered(types, [&](auto& p, auto& q) {
+      return inlinable_type_index.at(p.first) <
+             inlinable_type_index.at(q.first);
+    });
     for (auto it = ordered_types.begin(); it != ordered_types.end(); it++) {
       ordered_root_methods_variants.emplace_back(
           method, InlinableTypes(it, ordered_types.end()));
@@ -1585,6 +1572,12 @@ compute_reduced_methods(
   ConcurrentMap<DexMethod*, std::vector<ReducedMethod>>
       concurrent_reduced_methods;
   CodeSizeCache code_size_cache;
+  // Computing root methods is very memory intensive, and "instrumented" builds
+  // are doubly so. We limit parallelism to limit maximum memory usage.
+  unsigned int num_threads = redex_parallel::default_num_threads();
+  if (g_redex->instrument_mode && g_redex->slow_invariants_debug) {
+    num_threads = std::min(num_threads, 16u);
+  }
   workqueue_run<std::pair<DexMethod*, InlinableTypes>>(
       [&](const std::pair<DexMethod*, InlinableTypes>& p) {
         auto* method = p.first;
@@ -1619,15 +1612,15 @@ compute_reduced_methods(
               });
           return;
         }
-        DexMethod::erase_method(copy);
         DexMethod::delete_method_DO_NOT_USE(copy);
       },
-      ordered_root_methods_variants);
+      ordered_root_methods_variants, num_threads);
 
   // For each root method, we order the reduced methods (if any) by how many
   // types were inlined, with the largest number of inlined types going first.
-  std::unordered_map<DexMethod*, std::vector<ReducedMethod>> reduced_methods;
-  for (auto& [method, reduced_methods_variants] : concurrent_reduced_methods) {
+  UnorderedMap<DexMethod*, std::vector<ReducedMethod>> reduced_methods;
+  for (auto& [method, reduced_methods_variants] :
+       UnorderedIterable(concurrent_reduced_methods)) {
     std::sort(
         reduced_methods_variants.begin(), reduced_methods_variants.end(),
         [&](auto& a, auto& b) { return a.types.size() > b.types.size(); });
@@ -1638,19 +1631,18 @@ compute_reduced_methods(
   // marked as "irreducible", which is later used when doing a global cost
   // analysis.
   static const InlinableTypes no_types;
-  for (auto&& [method, types] : root_methods) {
+  for (auto&& [method, types] : UnorderedIterable(root_methods)) {
     auto it = reduced_methods.find(method);
     const auto& largest_types =
         it == reduced_methods.end() ? no_types : it->second.front().types;
-    for (auto&& [type, inlinable_info] : types) {
+    for (auto&& [type, inlinable_info] : UnorderedIterable(types)) {
       if (!largest_types.count(type)) {
         for (auto* cls = type_class(type); cls && !cls->is_external();
              cls = type_class(cls->get_super_class())) {
           irreducible_types->insert(cls->get_type());
         }
-        for (auto* inlinable_method : inlinable_info.inlinable_methods) {
-          inlinable_methods_kept->insert(inlinable_method);
-        }
+        insert_unordered_iterable(*inlinable_methods_kept,
+                                  inlinable_info.inlinable_methods);
       }
     }
   }
@@ -1658,31 +1650,30 @@ compute_reduced_methods(
 }
 
 void gather_references(
-    const std::unordered_map<DexMethod*, std::vector<ReducedMethod>>&
-        reduced_methods,
+    const UnorderedMap<DexMethod*, std::vector<ReducedMethod>>& reduced_methods,
     const ObjectEscapeConfig& config,
     const CodeSizeCache& code_size_cache,
-    const std::unordered_set<DexType*>& irreducible_types,
-    const std::unordered_set<DexMethod*>& methods_kept,
-    InsertOnlyConcurrentMap<ReducedMethodVariant, std::unordered_set<Ref>>*
-        rmv_refs,
+    const UnorderedSet<DexType*>& irreducible_types,
+    const UnorderedSet<DexMethod*>& methods_kept,
+    InsertOnlyConcurrentMap<ReducedMethodVariant, UnorderedSet<Ref>>* rmv_refs,
     InsertOnlyConcurrentMap<Ref, int>* ref_sizes) {
   workqueue_run<std::pair<DexMethod*, std::vector<ReducedMethod>>>(
       [&](const std::pair<DexMethod*, std::vector<ReducedMethod>>& p) {
         auto method = p.first;
         const auto& reduced_methods_variants = p.second;
-        std::unordered_set<Ref> dom_refs;
+        UnorderedSet<Ref> dom_refs;
         for (size_t i = reduced_methods_variants.size(); i > 0; i--) {
           const auto& reduced_method = reduced_methods_variants.at(i - 1);
-          std::unordered_set<Ref> refs;
+          UnorderedSet<Ref> refs;
           ReducedMethodVariant rmv{method, i - 1};
           refs.insert(rmv);
           ref_sizes->emplace(rmv, 0);
           reduced_method.gather_references(config, code_size_cache,
                                            irreducible_types, methods_kept,
                                            &refs, ref_sizes);
-          std20::erase_if(refs, [&](auto ref) { return dom_refs.count(ref); });
-          dom_refs.insert(refs.begin(), refs.end());
+          unordered_erase_if(refs,
+                             [&](auto ref) { return dom_refs.count(ref); });
+          insert_unordered_iterable(dom_refs, refs);
           rmv_refs->emplace(rmv, std::move(refs));
         }
       },
@@ -1691,19 +1682,17 @@ void gather_references(
 
 int get_savings(
     const CodeSizeCache& code_size_cache,
-    const std::unordered_map<DexMethod*, std::vector<ReducedMethod>>&
-        reduced_methods,
-    const std::unordered_map<DexMethod*, size_t>& selected_reduced_methods,
-    const InsertOnlyConcurrentMap<ReducedMethodVariant,
-                                  std::unordered_set<Ref>>& rmv_refs,
-    const std::unordered_map<Ref, std::unordered_set<ReducedMethodVariant>>&
-        ref_rmvs,
+    const UnorderedMap<DexMethod*, std::vector<ReducedMethod>>& reduced_methods,
+    const UnorderedMap<DexMethod*, size_t>& selected_reduced_methods,
+    const InsertOnlyConcurrentMap<ReducedMethodVariant, UnorderedSet<Ref>>&
+        rmv_refs,
+    const UnorderedMap<Ref, UnorderedSet<ReducedMethodVariant>>& ref_rmvs,
     const InsertOnlyConcurrentMap<Ref, int>& ref_sizes,
     Ref seed_ref) {
   int savings = 0;
 
-  std::unordered_map<Ref, size_t> ref_counts;
-  for (auto& rmv : ref_rmvs.at(seed_ref)) {
+  UnorderedMap<Ref, size_t> ref_counts;
+  for (auto& rmv : UnorderedIterable(ref_rmvs.at(seed_ref))) {
     auto& reduced_methods_variants = reduced_methods.at(rmv.root_method);
     auto it = selected_reduced_methods.find(rmv.root_method);
     size_t end;
@@ -1719,13 +1708,14 @@ int get_savings(
     auto& reduced_method = reduced_methods_variants.at(rmv.variant_index);
     savings -= (int)code_size_cache[reduced_method.method];
     for (size_t vi = rmv.variant_index; vi < end; vi++) {
-      for (auto ref : rmv_refs.at_unsafe({rmv.root_method, vi})) {
+      for (auto ref :
+           UnorderedIterable(rmv_refs.at_unsafe({rmv.root_method, vi}))) {
         ref_counts[ref]++;
       }
     }
   }
 
-  for (auto [ref, count] : ref_counts) {
+  for (auto [ref, count] : UnorderedIterable(ref_counts)) {
     auto size = ref_rmvs.at(ref).size();
     always_assert(count <= size);
     if (count == size) {
@@ -1742,27 +1732,25 @@ int get_savings(
 // particular inlined method.
 void select_reduced_methods(
     const ObjectEscapeConfig& config,
-    const std::unordered_map<DexMethod*, std::vector<ReducedMethod>>&
-        reduced_methods,
-    std::unordered_set<DexType*>* irreducible_types,
-    std::unordered_set<DexMethod*>* inlinable_methods_kept,
+    const UnorderedMap<DexMethod*, std::vector<ReducedMethod>>& reduced_methods,
+    UnorderedSet<DexType*>* irreducible_types,
+    UnorderedSet<DexMethod*>* inlinable_methods_kept,
     Stats* stats,
-    std::unordered_map<DexMethod*, size_t>* selected_reduced_methods) {
+    UnorderedMap<DexMethod*, size_t>* selected_reduced_methods) {
   Timer t("select_reduced_methods");
 
   // Gather references
 
   CodeSizeCache code_size_cache;
-  InsertOnlyConcurrentMap<ReducedMethodVariant, std::unordered_set<Ref>>
-      rmv_refs;
+  InsertOnlyConcurrentMap<ReducedMethodVariant, UnorderedSet<Ref>> rmv_refs;
   InsertOnlyConcurrentMap<Ref, int> ref_sizes;
   gather_references(reduced_methods, config, code_size_cache,
                     *irreducible_types, *inlinable_methods_kept, &rmv_refs,
                     &ref_sizes);
 
-  std::unordered_map<Ref, std::unordered_set<ReducedMethodVariant>> ref_rmvs;
-  for (auto&& [rmv, refs] : rmv_refs) {
-    for (auto ref : refs) {
+  UnorderedMap<Ref, UnorderedSet<ReducedMethodVariant>> ref_rmvs;
+  for (auto&& [rmv, refs] : UnorderedIterable(rmv_refs)) {
+    for (auto ref : UnorderedIterable(refs)) {
       ref_rmvs[ref].insert(rmv);
     }
   }
@@ -1773,12 +1761,8 @@ void select_reduced_methods(
   // priority is simply the savings that would be achieved by selecting the
   // associated reduced method variants. For determinism, we incorporate a
   // deterministic reference order in the reference priorities.
-  std::unordered_map<Ref, size_t> ref_indices;
-  std::vector<Ref> ordered_refs(ref_sizes.size());
-  for (auto [ref, _] : ref_sizes) {
-    ordered_refs.push_back(ref);
-  }
-  std::sort(ordered_refs.begin(), ordered_refs.end(), [&](Ref a, Ref b) {
+  UnorderedMap<Ref, size_t> ref_indices;
+  auto ordered_refs = unordered_to_ordered_keys(ref_sizes, [&](Ref a, Ref b) {
     if (a.index() != b.index()) {
       return a.index() < b.index();
     }
@@ -1807,7 +1791,7 @@ void select_reduced_methods(
   };
 
   MutablePriorityQueue<Ref, int64_t> pq;
-  for (auto [ref, _] : ref_sizes) {
+  for (auto [ref, _] : UnorderedIterable(ref_sizes)) {
     pq.insert(ref, get_priority(ref));
   }
 
@@ -1826,10 +1810,9 @@ void select_reduced_methods(
     //   reflect the eliminated references
     // - figure out which references are affected, in the sense that their
     //   priority (savings) might have changed
-    std::unordered_map<Ref, std::unordered_set<ReducedMethodVariant>>
-        delta_ref_rmvs;
-    std::unordered_set<ReducedMethodVariant> affected_rmvs;
-    for (auto& rmv : ref_rmvs.at(seed_ref)) {
+    UnorderedMap<Ref, UnorderedSet<ReducedMethodVariant>> delta_ref_rmvs;
+    UnorderedSet<ReducedMethodVariant> affected_rmvs;
+    for (auto& rmv : UnorderedIterable(ref_rmvs.at(seed_ref))) {
       auto& reduced_methods_variants = reduced_methods.at(rmv.root_method);
       size_t end;
       auto [it, emplaced] =
@@ -1844,26 +1827,26 @@ void select_reduced_methods(
 
       for (size_t vi = rmv.variant_index; vi < end; vi++) {
         auto& refs = rmv_refs.at_unsafe({rmv.root_method, vi});
-        for (auto ref : refs) {
+        for (auto ref : UnorderedIterable(refs)) {
           delta_ref_rmvs[ref].insert({rmv.root_method, vi});
           auto& rmvs = ref_rmvs.at(ref);
-          affected_rmvs.insert(rmvs.begin(), rmvs.end());
+          insert_unordered_iterable(affected_rmvs, rmvs);
         }
       }
     }
 
-    std::unordered_set<Ref> affected_refs;
-    for (auto& rmv : affected_rmvs) {
+    UnorderedSet<Ref> affected_refs;
+    for (auto& rmv : UnorderedIterable(affected_rmvs)) {
       for (size_t vi = 0; vi <= rmv.variant_index; vi++) {
         auto& refs = rmv_refs.at_unsafe({rmv.root_method, vi});
-        affected_refs.insert(refs.begin(), refs.end());
+        insert_unordered_iterable(affected_refs, refs);
       }
     }
 
     // We apply the determined delta to our refs/rmvs state.
-    for (auto&& [ref, delta_rmvs] : delta_ref_rmvs) {
+    for (auto&& [ref, delta_rmvs] : UnorderedIterable(delta_ref_rmvs)) {
       auto it = ref_rmvs.find(ref);
-      for (auto& rmv : delta_rmvs) {
+      for (auto& rmv : UnorderedIterable(delta_rmvs)) {
         auto erased = it->second.erase(rmv);
         always_assert(erased);
         auto& refs = rmv_refs.at_unsafe(rmv);
@@ -1883,7 +1866,7 @@ void select_reduced_methods(
     }
 
     // Finally, we reprioritize as needed.
-    for (auto ref : affected_refs) {
+    for (auto ref : UnorderedIterable(affected_refs)) {
       auto it = ref_rmvs.find(ref);
       if (it != ref_rmvs.end()) {
         always_assert(!it->second.empty());
@@ -1899,13 +1882,13 @@ void select_reduced_methods(
   }
 
   stats->inlinable_methods_kept = inlinable_methods_kept->size();
-  for (auto&& [ref, _] : ref_rmvs) {
+  for (auto&& [ref, _] : UnorderedIterable(ref_rmvs)) {
     if (std::holds_alternative<DexMethod*>(ref)) {
       stats->inlinable_methods_kept++;
     }
   }
 
-  for (auto&& [root_method, _] : reduced_methods) {
+  for (auto&& [root_method, _] : UnorderedIterable(reduced_methods)) {
     if (!selected_reduced_methods->count(root_method)) {
       stats->too_costly_globally++;
     }
@@ -1918,10 +1901,10 @@ void reduce(const Scope& scope,
             const method_override_graph::Graph& method_override_graph,
             MultiMethodInliner& inliner,
             const MethodSummaries& method_summaries,
-            const std::unordered_set<DexClass*>& excluded_classes,
-            const std::unordered_map<DexMethod*, InlinableTypes>& root_methods,
+            const UnorderedSet<DexClass*>& excluded_classes,
+            const UnorderedMap<DexMethod*, InlinableTypes>& root_methods,
             Stats* stats,
-            std::unordered_set<DexMethod*>* inlinable_methods_kept,
+            UnorderedSet<DexMethod*>* inlinable_methods_kept,
             CalleesCache* callees_cache,
             MethodSummaryCache* method_summary_cache,
             method_profiles::MethodProfiles* method_profiles) {
@@ -1933,13 +1916,13 @@ void reduce(const Scope& scope,
   // We are not exploring all possible subsets of types, but only single chain
   // of subsets, guided by the inlinable kind, and by how often
   // they appear as inlinable types in root methods.
-  std::unordered_map<DexType*, size_t> inlinable_type_index;
+  UnorderedMap<DexType*, size_t> inlinable_type_index;
   for (auto* type : ordered_inlinable_types) {
     inlinable_type_index.emplace(type, inlinable_type_index.size());
   }
 
   ExpandableMethodParams expandable_method_params(scope);
-  std::unordered_set<DexType*> irreducible_types;
+  UnorderedSet<DexType*> irreducible_types;
   auto reduced_methods = compute_reduced_methods(
       config, apply_shrinking_plugins, method_override_graph,
       expandable_method_params, inliner, method_summaries, excluded_classes,
@@ -1948,7 +1931,7 @@ void reduce(const Scope& scope,
   stats->reduced_methods = reduced_methods.size();
 
   // Second, we select reduced methods that will result in net savings
-  std::unordered_map<DexMethod*, size_t> selected_reduced_methods;
+  UnorderedMap<DexMethod*, size_t> selected_reduced_methods;
   select_reduced_methods(config, reduced_methods, &irreducible_types,
                          inlinable_methods_kept, stats,
                          &selected_reduced_methods);
@@ -1969,7 +1952,6 @@ void reduce(const Scope& scope,
         }
         stats->reduced_methods_variants += reduced_methods_variants.size();
         for (auto& reduced_method : reduced_methods_variants) {
-          DexMethod::erase_method(reduced_method.method);
           DexMethod::delete_method_DO_NOT_USE(reduced_method.method);
         }
       },
@@ -2035,7 +2017,7 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   ConcurrentMap<DexType*, Locations> new_instances;
   ConcurrentMap<DexMethod*, Locations> single_callee_invokes;
   InsertOnlyConcurrentSet<DexMethod*> multi_callee_invokes;
-  ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>> dependencies;
+  ConcurrentMap<DexMethod*, UnorderedSet<DexMethod*>> dependencies;
   CalleesCache callees_cache;
   analyze_scope(scope, *method_override_graph, &new_instances,
                 &single_callee_invokes, &multi_callee_invokes, &dependencies,
@@ -2052,7 +2034,7 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
       scope, *method_override_graph, method_summaries, excluded_classes,
       &callees_cache, &method_summary_cache);
 
-  std::unordered_set<DexMethod*> inlinable_methods_kept;
+  UnorderedSet<DexMethod*> inlinable_methods_kept;
   auto root_methods = compute_root_methods(
       m_config, mgr, *method_override_graph, new_instances,
       single_callee_invokes, multi_callee_invokes, method_summaries,
@@ -2060,7 +2042,7 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
       &method_summary_cache);
 
   ConcurrentMethodResolver concurrent_method_resolver;
-  std::unordered_set<DexMethod*> no_default_inlinables;
+  UnorderedSet<DexMethod*> no_default_inlinables;
   // customize shrinking options
   auto inliner_config = conf.get_inliner_config();
   inliner_config.shrinker = shrinker::ShrinkerConfig();

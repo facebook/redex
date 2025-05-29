@@ -34,7 +34,6 @@
 #pragma once
 
 #include <cstddef>
-#include <unordered_set>
 
 class DexMethod;
 

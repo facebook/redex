@@ -51,6 +51,6 @@ class TypedefAnnoOptPass : public Pass {
   friend struct TypedefAnnoOptTest;
 
   Config m_config;
-  std::unordered_map<DexMethod*, DexMethod*> old_to_new_callee;
+  UnorderedMap<DexMethod*, DexMethod*> old_to_new_callee;
   std::mutex m_old_to_new_mtx;
 };

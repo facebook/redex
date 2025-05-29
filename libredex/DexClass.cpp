@@ -8,6 +8,7 @@
 #include "DexClass.h"
 
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexAccess.h"
 #include "DexAnnotation.h"
 #include "DexDebugInstruction.h"
@@ -33,20 +34,23 @@
 #include <boost/optional.hpp>
 #include <memory>
 #include <mutex>
-#include <unordered_map>
 #include <unordered_set>
 
-#define INSTANTIATE(METHOD, TYPE)                        \
-  template void METHOD(std::vector<TYPE>&) const;        \
-  template void METHOD(std::unordered_set<TYPE>&) const; \
-  template void METHOD(std::vector<const TYPE>&) const;  \
-  template void METHOD(std::unordered_set<const TYPE>&) const;
+#define INSTANTIATE(METHOD, TYPE)                              \
+  template void METHOD(std::vector<TYPE>&) const;              \
+  template void METHOD(std::unordered_set<TYPE>&) const;       \
+  template void METHOD(UnorderedSet<TYPE>&) const;             \
+  template void METHOD(std::vector<const TYPE>&) const;        \
+  template void METHOD(std::unordered_set<const TYPE>&) const; \
+  template void METHOD(UnorderedSet<const TYPE>&) const;
 
-#define INSTANTIATE2(METHOD, TYPE, OTYPE)                       \
-  template void METHOD(std::vector<TYPE>&, OTYPE) const;        \
-  template void METHOD(std::unordered_set<TYPE>&, OTYPE) const; \
-  template void METHOD(std::vector<const TYPE>&, OTYPE) const;  \
-  template void METHOD(std::unordered_set<const TYPE>&, OTYPE) const;
+#define INSTANTIATE2(METHOD, TYPE, OTYPE)                             \
+  template void METHOD(std::vector<TYPE>&, OTYPE) const;              \
+  template void METHOD(std::unordered_set<TYPE>&, OTYPE) const;       \
+  template void METHOD(UnorderedSet<TYPE>&, OTYPE) const;             \
+  template void METHOD(std::vector<const TYPE>&, OTYPE) const;        \
+  template void METHOD(std::unordered_set<const TYPE>&, OTYPE) const; \
+  template void METHOD(UnorderedSet<const TYPE>&, OTYPE) const;
 
 namespace {
 
@@ -67,6 +71,15 @@ struct InsertionHelper<std::unordered_set<T>, T> {
   void append(std::unordered_set<T>& c, T t) { c.emplace(std::move(t)); }
   template <typename It>
   void append_all(std::unordered_set<T>& c, It first, It last) {
+    c.insert(first, last);
+  }
+};
+
+template <typename T>
+struct InsertionHelper<UnorderedSet<T>, T> {
+  void append(UnorderedSet<T>& c, T t) { c.emplace(std::move(t)); }
+  template <typename It>
+  void append_all(UnorderedSet<T>& c, It first, It last) {
     c.insert(first, last);
   }
 };
@@ -236,6 +249,11 @@ dex_member_refs::FieldDescriptorTokens DexFieldRef::get_descriptor_tokens()
   res.name = get_name()->str();
   res.type = get_type()->str();
   return res;
+}
+
+void DexFieldRef::delete_field_DO_NOT_USE(DexFieldRef* field) {
+  erase_field(field);
+  delete static_cast<DexField*>(field);
 }
 
 DexFieldRef* DexField::get_field(
@@ -443,7 +461,7 @@ uint32_t DexDebugItem::get_line_start() const {
 }
 
 DexDebugItem::DexDebugItem(const DexDebugItem& that) {
-  std::unordered_map<DexPosition*, DexPosition*> pos_map;
+  UnorderedMap<DexPosition*, DexPosition*> pos_map;
   m_dbg_entries.reserve(that.m_dbg_entries.size());
   for (auto& entry : that.m_dbg_entries) {
     switch (entry.type) {
@@ -734,7 +752,7 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
   }
   hemit = write_uleb128(hemit, catches_set.size());
   int tryno = 0;
-  std::unordered_map<DexCatches, uint32_t, boost::hash<DexCatches>> catches_map;
+  UnorderedMap<DexCatches, uint32_t, boost::hash<DexCatches>> catches_map;
   for (auto it = m_tries.begin(); it != m_tries.end(); ++it, ++tryno) {
     auto& dextry = *it;
     always_assert(dextry->m_start_addr < code->insns_size);
@@ -778,7 +796,13 @@ DexMethod::DexMethod(DexType* type, const DexString* name, DexProto* proto)
 
 DexMethod::~DexMethod() = default;
 
-void DexMethod::delete_method(DexMethod* m) { m->make_non_concrete(); }
+void DexMethodRef::delete_method(DexMethodRef* m) {
+  erase_method(m);
+  if (m->is_def()) {
+    m->as_def()->make_non_concrete();
+  }
+  g_redex->leak_method(m);
+}
 
 std::string DexMethod::get_fully_deobfuscated_name() const {
   if (m_deobfuscated_name != nullptr &&
@@ -1737,8 +1761,7 @@ void DexProto::gather_strings(std::vector<const DexString*>& lstring) const {
     c_append(lstring, m_shorty);
   }
 }
-void DexProto::gather_strings(
-    std::unordered_set<const DexString*>& lstring) const {
+void DexProto::gather_strings(UnorderedSet<const DexString*>& lstring) const {
   if (m_shorty) {
     c_append(lstring, m_shorty);
   }
@@ -1797,7 +1820,7 @@ void DexClass::gather_types(C& ltype) const {
 }
 INSTANTIATE(DexClass::gather_types, DexType*)
 
-void DexClass::gather_load_types(std::unordered_set<DexType*>& ltype) const {
+void DexClass::gather_load_types(UnorderedSet<DexType*>& ltype) const {
   if (is_external()) {
     return;
   }
@@ -1855,7 +1878,7 @@ void DexClass::gather_strings(std::vector<const DexString*>& lstring,
                               bool exclude_loads) const {
   gather_strings_internal(lstring, exclude_loads);
 }
-void DexClass::gather_strings(std::unordered_set<const DexString*>& lstring,
+void DexClass::gather_strings(UnorderedSet<const DexString*>& lstring,
                               bool exclude_loads) const {
   gather_strings_internal(lstring, exclude_loads);
 }
@@ -1989,7 +2012,7 @@ void DexFieldRef::gather_strings_shallow(
   c_append(lstring, m_spec.name);
 }
 void DexFieldRef::gather_strings_shallow(
-    std::unordered_set<const DexString*>& lstring) const {
+    UnorderedSet<const DexString*>& lstring) const {
   c_append(lstring, m_spec.name);
 }
 
@@ -2012,8 +2035,7 @@ void DexField::gather_strings_internal(C& lstring) const {
 void DexField::gather_strings(std::vector<const DexString*>& lstring) const {
   gather_strings_internal(lstring);
 }
-void DexField::gather_strings(
-    std::unordered_set<const DexString*>& lstring) const {
+void DexField::gather_strings(UnorderedSet<const DexString*>& lstring) const {
   gather_strings_internal(lstring);
 }
 
@@ -2105,7 +2127,7 @@ void DexMethod::gather_strings(std::vector<const DexString*>& lstring,
                                bool exclude_loads) const {
   gather_strings_internal(lstring, exclude_loads);
 }
-void DexMethod::gather_strings(std::unordered_set<const DexString*>& lstring,
+void DexMethod::gather_strings(UnorderedSet<const DexString*>& lstring,
                                bool exclude_loads) const {
   gather_strings_internal(lstring, exclude_loads);
 }
@@ -2181,7 +2203,7 @@ void DexMethodRef::gather_strings_shallow(
   m_spec.proto->gather_strings(lstring);
 }
 void DexMethodRef::gather_strings_shallow(
-    std::unordered_set<const DexString*>& lstring) const {
+    UnorderedSet<const DexString*>& lstring) const {
   lstring.insert(lstring.end(), m_spec.name);
   m_spec.proto->gather_strings(lstring);
 }
@@ -2270,12 +2292,12 @@ void gather_components(std::vector<const DexString*>& lstring,
                        const DexClasses& classes,
                        bool exclude_loads) {
   // Gather references reachable from each class.
-  std::unordered_set<const DexString*> strings;
-  std::unordered_set<DexType*> types;
-  std::unordered_set<DexFieldRef*> fields;
-  std::unordered_set<DexMethodRef*> methods;
-  std::unordered_set<DexCallSite*> callsites;
-  std::unordered_set<DexMethodHandle*> methodhandles;
+  UnorderedSet<const DexString*> strings;
+  UnorderedSet<DexType*> types;
+  UnorderedSet<DexFieldRef*> fields;
+  UnorderedSet<DexMethodRef*> methods;
+  UnorderedSet<DexCallSite*> callsites;
+  UnorderedSet<DexMethodHandle*> methodhandles;
   // Inside a lambda to ensure only visibility of the sets.
   [&classes, &exclude_loads, &strings, &types, &fields, &methods, &callsites,
    &methodhandles]() {
@@ -2289,29 +2311,28 @@ void gather_components(std::vector<const DexString*>& lstring,
     }
 
     // Gather types and strings needed for field and method refs.
-    for (auto meth : methods) {
+    for (auto meth : UnorderedIterable(methods)) {
       meth->gather_types_shallow(types);
       meth->gather_strings_shallow(strings);
     }
 
-    for (auto field : fields) {
+    for (auto field : UnorderedIterable(fields)) {
       field->gather_types_shallow(types);
       field->gather_strings_shallow(strings);
     }
 
     // Gather strings needed for each type.
-    for (auto type : types) {
+    for (auto type : UnorderedIterable(types)) {
       if (type) strings.insert(type->get_name());
     }
   }();
 
-  lstring.insert(lstring.end(), strings.begin(), strings.end());
-  ltype.insert(ltype.end(), types.begin(), types.end());
-  lfield.insert(lfield.end(), fields.begin(), fields.end());
-  lmethod.insert(lmethod.end(), methods.begin(), methods.end());
-  lcallsite.insert(lcallsite.end(), callsites.begin(), callsites.end());
-  lmethodhandle.insert(lmethodhandle.end(), methodhandles.begin(),
-                       methodhandles.end());
+  insert_unordered_iterable(lstring, lstring.end(), strings);
+  insert_unordered_iterable(ltype, ltype.end(), types);
+  insert_unordered_iterable(lfield, lfield.end(), fields);
+  insert_unordered_iterable(lmethod, lmethod.end(), methods);
+  insert_unordered_iterable(lcallsite, lcallsite.end(), callsites);
+  insert_unordered_iterable(lmethodhandle, lmethodhandle.end(), methodhandles);
 
   // This retains pre-set computation behavior.
   sort_unique(lstring);
@@ -2380,6 +2401,11 @@ void DexMethodRef::erase_method(DexMethodRef* mref) {
                             m->get_proto());
     }
   }
+}
+
+void DexMethodRef::delete_method_DO_NOT_USE(DexMethodRef* method) {
+  erase_method(method);
+  delete static_cast<DexMethod*>(method);
 }
 
 dex_member_refs::MethodDescriptorTokens DexMethodRef::get_descriptor_tokens()

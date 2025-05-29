@@ -21,8 +21,8 @@ class ClInitSideEffectsAnalysis {
   bool m_allow_benign_method_invocations;
   const method::ClInitHasNoSideEffectsPredicate* m_clinit_has_no_side_effects;
   const InsertOnlyConcurrentSet<DexMethod*>* m_non_true_virtuals;
-  std::unordered_set<DexMethodRef*> m_active;
-  std::unordered_set<DexType*> m_initialized;
+  UnorderedSet<DexMethodRef*> m_active;
+  UnorderedSet<DexType*> m_initialized;
 
  public:
   explicit ClInitSideEffectsAnalysis(
@@ -206,7 +206,7 @@ bool is_clinit_invoked_method_benign(const DexMethodRef* method_ref) {
     return true;
   }
 
-  static const std::unordered_set<std::string_view> methods = {
+  static const UnorderedSet<std::string_view> methods = {
       // clang-format off
       "Landroid/content/Context;.getApplicationContext:()Landroid/content/Context;",
       "Landroid/content/Context;.getApplicationInfo:()Landroid/content/pm/ApplicationInfo;",
@@ -563,6 +563,18 @@ DexMethod* kotlin_jvm_internal_Intrinsics_checkNotNullExpressionValue() {
 DexMethod* redex_internal_checkObjectNotNull() {
   return static_cast<DexMethod*>(DexMethod::get_method(
       "Lredex/$NullCheck;.null_check:(Ljava/lang/Object;)V"));
+}
+
+DexMethod* java_lang_invoke_MethodHandle_invoke() {
+  return static_cast<DexMethod*>(
+      DexMethod::get_method("Ljava/lang/invoke/MethodHandle;.invoke:([Ljava/"
+                            "lang/Object;)Ljava/lang/Object;"));
+}
+
+DexMethod* java_lang_invoke_MethodHandle_invokeExact() {
+  return static_cast<DexMethod*>(DexMethod::get_method(
+      "Ljava/lang/invoke/MethodHandle;.invokeExact:([Ljava/"
+      "lang/Object;)Ljava/lang/Object;"));
 }
 
 std::optional<std::string_view> get_param_name(const DexMethod* m, size_t idx) {

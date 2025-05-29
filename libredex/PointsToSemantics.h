@@ -511,9 +511,6 @@ std::ostream& operator<<(std::ostream& o, const PointsToMethodSemantics& s);
  */
 class PointsToSemantics final {
  public:
-  using iterator = std::unordered_map<DexMethodRef*,
-                                      PointsToMethodSemantics>::const_iterator;
-
   PointsToSemantics() = delete;
 
   PointsToSemantics(const PointsToSemantics& other) = delete;
@@ -535,9 +532,10 @@ class PointsToSemantics final {
    */
   void load_stubs(const std::string& file_name);
 
-  iterator begin() { return m_method_semantics.begin(); }
-
-  iterator end() { return m_method_semantics.end(); }
+  const UnorderedMap<DexMethodRef*, PointsToMethodSemantics>& method_semantics()
+      const {
+    return m_method_semantics;
+  }
 
   const TypeSystem& get_type_system() { return m_type_system; }
 
@@ -554,7 +552,7 @@ class PointsToSemantics final {
   bool m_generate_stubs;
   TypeSystem m_type_system;
   PointsToSemanticsUtils m_utils;
-  std::unordered_map<DexMethodRef*, PointsToMethodSemantics> m_method_semantics;
+  UnorderedMap<DexMethodRef*, PointsToMethodSemantics> m_method_semantics;
 
   friend std::ostream& operator<<(std::ostream&, const PointsToSemantics&);
 };

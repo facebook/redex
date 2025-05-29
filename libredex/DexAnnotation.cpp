@@ -10,6 +10,7 @@
 #include <sstream>
 
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexIdx.h"
 #include "DexOutput.h"
@@ -136,6 +137,19 @@ void DexAnnotation::gather_fields(std::vector<DexFieldRef*>& lfield) const {
 void DexAnnotation::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
   for (auto const& anno : m_anno_elems) {
     anno.encoded_value->gather_methods(lmethod);
+  }
+}
+
+void DexAnnotationSet::combine_with(const DexAnnotationSet& other) {
+  UnorderedSet<DexType*> existing_annos_type;
+  for (const auto& existing_anno : m_annotations) {
+    existing_annos_type.emplace(existing_anno->type());
+  }
+  auto const& other_annos = other.m_annotations;
+  for (auto const& anno : other_annos) {
+    if (existing_annos_type.count(anno->type()) == 0) {
+      m_annotations.emplace_back(new DexAnnotation(anno->clone()));
+    }
   }
 }
 

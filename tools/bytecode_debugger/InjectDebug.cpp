@@ -79,7 +79,7 @@ void InjectDebug::inject_method(DexMethod* dex_method, int* line_start) {
   type_inference::TypeInference type_inf(ir_code->cfg());
   type_inf.run(dex_method);
 
-  std::unordered_map<const IRInstruction*, type_inference::TypeEnvironment>&
+  UnorderedMap<const IRInstruction*, type_inference::TypeEnvironment>&
       type_envs = type_inf.get_type_environments();
 
   boost::sub_range<IRList> param_instructions =

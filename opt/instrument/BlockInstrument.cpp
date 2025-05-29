@@ -7,7 +7,18 @@
 
 #include "BlockInstrument.h"
 
+#include <boost/algorithm/string/join.hpp>
+#include <fstream>
+#include <limits>
+#include <map>
+#include <optional>
+#include <set>
+#include <string>
+#include <tuple>
+#include <vector>
+
 #include "ConfigFiles.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "GraphUtil.h"
@@ -21,18 +32,6 @@
 #include "TypeSystem.h"
 #include "TypeUtil.h"
 #include "Walkers.h"
-
-#include <boost/algorithm/string/join.hpp>
-#include <fstream>
-#include <limits>
-#include <map>
-#include <optional>
-#include <set>
-#include <string>
-#include <tuple>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
 
 using namespace instrument;
 
@@ -1344,7 +1343,7 @@ MethodInfo instrument_basic_blocks(
                                      num_instrument_loop_blocks);
     if (options.inline_onBlockHit) {
       TRACE(INSTRUMENT, 4, "Inline onBlockHits\n");
-      std::unordered_set<IRInstruction*> insns(invokes.begin(), invokes.end());
+      UnorderedSet<IRInstruction*> insns(invokes.begin(), invokes.end());
       inliner.inline_callees(method, insns);
     }
 
@@ -1354,7 +1353,7 @@ MethodInfo instrument_basic_blocks(
         loop_shorts, options);
     if (options.inline_onNonLoopBlockHit) {
       TRACE(INSTRUMENT, 4, "Inline onNonLoopBlockHit\n");
-      std::unordered_set<IRInstruction*> insns(invokes.begin(), invokes.end());
+      UnorderedSet<IRInstruction*> insns(invokes.begin(), invokes.end());
       inliner.inline_callees(method, insns);
     }
   } else {
@@ -1460,9 +1459,9 @@ MethodInfo instrument_basic_blocks(
   return info;
 }
 
-std::unordered_set<std::string> get_cold_start_classes(ConfigFiles& cfg) {
+UnorderedSet<std::string> get_cold_start_classes(ConfigFiles& cfg) {
   auto interdex_list = cfg.get_coldstart_classes();
-  std::unordered_set<std::string> cold_start_classes;
+  UnorderedSet<std::string> cold_start_classes;
   std::string dex_end_marker0("LDexEndMarker0;");
   for (auto class_string : interdex_list) {
     if (class_string == dex_end_marker0) {
@@ -1936,7 +1935,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
 
   ConcurrentMethodResolver concurrent_method_resolver;
 
-  std::unordered_set<DexMethod*> no_default_inlinables;
+  UnorderedSet<DexMethod*> no_default_inlinables;
   auto inliner_config = cfg.get_inliner_config();
   int min_sdk = pm.get_redex_options().min_sdk;
   MultiMethodInliner inliner(
@@ -1945,7 +1944,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
       MultiMethodInlinerMode::None);
 
   for (auto& en : onNonLoopBlockHit_map) {
-    std::unordered_set<DexMethod*> insns;
+    UnorderedSet<DexMethod*> insns;
     insns.insert(binaryIncrementer);
     inliner.inline_callees(en.second, insns);
   }

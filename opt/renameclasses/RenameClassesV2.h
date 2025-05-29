@@ -12,6 +12,7 @@
 #include "Pass.h"
 
 #include "ClassHierarchy.h"
+#include "DeterministicContainers.h"
 
 struct ProguardMap;
 
@@ -98,29 +99,28 @@ class RenameClassesPassV2 : public Pass {
                 ConfigFiles& conf,
                 PassManager& mgr) override;
 
-  std::unordered_set<DexClass*> get_renamable_classes(Scope& scope,
-                                                      ConfigFiles& conf,
-                                                      PassManager& mgr);
+  UnorderedSet<DexClass*> get_renamable_classes(Scope& scope,
+                                                ConfigFiles& conf,
+                                                PassManager& mgr);
 
   void eval_classes_post(Scope& scope,
                          const ClassHierarchy& class_hierarchy,
                          PassManager& mgr);
 
  private:
-  std::unordered_set<const DexType*> build_force_rename_hierarchies(
+  UnorderedSet<const DexType*> build_force_rename_hierarchies(
       PassManager&, Scope&, const ClassHierarchy&);
 
-  std::unordered_set<std::string> build_dont_rename_class_name_literals(Scope&);
-  std::unordered_set<const DexString*>
-  build_dont_rename_for_types_with_reflection(Scope&, const ProguardMap&);
-  std::unordered_set<const DexString*> build_dont_rename_canaries(Scope&);
-  std::unordered_map<const DexType*, const DexString*>
-  build_dont_rename_hierarchies(PassManager&, Scope&, const ClassHierarchy&);
-  std::unordered_set<const DexType*> build_dont_rename_native_bindings(
+  UnorderedSet<std::string> build_dont_rename_class_name_literals(Scope&);
+  UnorderedSet<const DexString*> build_dont_rename_for_types_with_reflection(
+      Scope&, const ProguardMap&);
+  UnorderedSet<const DexString*> build_dont_rename_canaries(Scope&);
+  UnorderedMap<const DexType*, const DexString*> build_dont_rename_hierarchies(
+      PassManager&, Scope&, const ClassHierarchy&);
+  UnorderedSet<const DexType*> build_dont_rename_native_bindings(Scope& scope);
+  UnorderedSet<const DexType*> build_dont_rename_serde_relationships(
       Scope& scope);
-  std::unordered_set<const DexType*> build_dont_rename_serde_relationships(
-      Scope& scope);
-  std::unordered_set<const DexType*> build_dont_rename_annotated();
+  UnorderedSet<const DexType*> build_dont_rename_annotated();
 
   void eval_classes(Scope& scope,
                     const ClassHierarchy& class_hierarchy,
@@ -128,34 +128,33 @@ class RenameClassesPassV2 : public Pass {
                     bool rename_annotations,
                     PassManager& mgr);
 
-  std::unordered_set<DexClass*> get_renamable_classes(Scope& scope);
+  UnorderedSet<DexClass*> get_renamable_classes(Scope& scope);
 
-  std::unordered_set<DexClass*> get_unrenamable_classes(
+  UnorderedSet<DexClass*> get_unrenamable_classes(
       Scope& scope,
-      const std::unordered_set<DexClass*>& renamable_classes,
+      const UnorderedSet<DexClass*>& renamable_classes,
       PassManager& mgr);
 
   rewriter::TypeStringMap get_name_mapping(
       const DexStoresVector& stores,
       size_t digits,
-      const std::unordered_set<DexClass*>& unrenamable_classes);
-  void evolve_name_mapping(
-      size_t digits,
-      const DexClasses& dex,
-      const std::unordered_set<DexClass*>& unrenamable_classes,
-      rewriter::TypeStringMap* name_mapping,
-      uint32_t* nextGlobalClassIndex);
+      const UnorderedSet<DexClass*>& unrenamable_classes);
+  void evolve_name_mapping(size_t digits,
+                           const DexClasses& dex,
+                           const UnorderedSet<DexClass*>& unrenamable_classes,
+                           rewriter::TypeStringMap* name_mapping,
+                           uint32_t* nextGlobalClassIndex);
 
   rewriter::TypeStringMap get_name_mapping_avoiding_collisions(
       const DexStoresVector& stores,
-      const std::unordered_set<DexClass*>& unrenamable_classes,
+      const UnorderedSet<DexClass*>& unrenamable_classes,
       size_t* digits,
       size_t* avoided_collisions,
       size_t* skipped_indices_count);
   bool evolve_name_mapping_avoiding_collisions(
       size_t digits,
       const DexClasses& dex,
-      const std::unordered_set<DexClass*>& unrenamable_classes,
+      const UnorderedSet<DexClass*>& unrenamable_classes,
       uint32_t index_end,
       rewriter::TypeStringMap* name_mapping,
       uint32_t* next_index,
@@ -181,14 +180,14 @@ class RenameClassesPassV2 : public Pass {
   std::vector<std::string> m_dont_rename_annotated;
   std::vector<std::string> m_dont_rename_types_with_reflection;
   std::vector<std::string> m_dont_rename_packages;
-  std::unordered_set<std::string> m_dont_rename_specific;
+  UnorderedSet<std::string> m_dont_rename_specific;
   std::string m_package_prefix;
 
   // Decisions we made in the eval_classes pass
-  std::unordered_map<const DexClass*, DontRenameReason> m_dont_rename_reasons;
+  UnorderedMap<const DexClass*, DontRenameReason> m_dont_rename_reasons;
 
   // State for ensuring xml files are rewritten properly.
-  std::unordered_set<const DexString*> m_renamable_layout_classes;
+  UnorderedSet<const DexString*> m_renamable_layout_classes;
 
   std::string m_apk_dir;
 

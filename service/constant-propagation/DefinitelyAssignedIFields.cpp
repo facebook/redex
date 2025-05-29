@@ -67,7 +67,7 @@ class WrittenUnreadFieldDomainEnvironment final
 //   i.e. not read before written to
 // - whether the 'this' parameter escaped
 struct AnalysisResult {
-  std::unordered_set<const DexField*> definitely_assigned_ifields;
+  UnorderedSet<const DexField*> definitely_assigned_ifields;
   bool may_this_have_escaped{false};
   bool operator==(const AnalysisResult& other) const {
     return definitely_assigned_ifields == other.definitely_assigned_ifields &&
@@ -292,7 +292,7 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
 
 namespace constant_propagation {
 namespace definitely_assigned_ifields {
-std::unordered_set<const DexField*> get_definitely_assigned_ifields(
+UnorderedSet<const DexField*> get_definitely_assigned_ifields(
     const Scope& scope) {
   Timer t("get_definitely_assigned_ifields");
   InsertOnlyConcurrentMap<DexMethod*, AnalysisResult> analysis_results;
@@ -334,9 +334,10 @@ std::unordered_set<const DexField*> get_definitely_assigned_ifields(
     live_range::MoveAwareChains chains(
         code.cfg(), /* ignore_unreachable */ false,
         [&](auto* insn) { return opcode::is_new_instance(insn->opcode()); });
-    for (auto& [def, uses] : chains.get_def_use_chains()) {
+    auto def_use_chains = chains.get_def_use_chains();
+    for (auto& [def, uses] : UnorderedIterable(def_use_chains)) {
       always_assert(opcode::is_new_instance(def->opcode()));
-      for (auto& use : uses) {
+      for (auto& use : UnorderedIterable(uses)) {
         if (opcode::is_invoke_direct(use.insn->opcode()) &&
             use.src_index == 0 && method::is_init(use.insn->get_method())) {
           auto resolved =
@@ -376,7 +377,9 @@ std::unordered_set<const DexField*> get_definitely_assigned_ifields(
     res.insert(definitely_assigned_ifields.begin(),
                definitely_assigned_ifields.end());
   });
-  return std::unordered_set<const DexField*>(res.begin(), res.end());
+  UnorderedSet<const DexField*> set;
+  insert_unordered_iterable(set, res);
+  return set;
 }
 } // namespace definitely_assigned_ifields
 } // namespace constant_propagation

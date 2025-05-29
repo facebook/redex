@@ -36,7 +36,7 @@ void setup() {
 }
 
 void print_extra_loads(const SwitchEquivFinder::ExtraLoads& extra_loads) {
-  for (const auto& [b, loads] : extra_loads) {
+  for (const auto& [b, loads] : UnorderedIterable(extra_loads)) {
     std::cerr << "B" << b->id() << "{";
     bool first = true;
     for (const auto& [r, i] : loads) {
@@ -694,7 +694,7 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_with_extra_loads) {
     EXPECT_TRUE(finder.success());
     auto& extra_loads = finder.extra_loads();
     EXPECT_EQ(extra_loads.size(), 2);
-    for (const auto& [b, loads] : extra_loads) {
+    for (const auto& [b, loads] : UnorderedIterable(extra_loads)) {
       auto id = b->id();
       EXPECT_TRUE(id == 2 || id == 4);
       EXPECT_EQ(loads.size(), 1);
@@ -756,7 +756,7 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_with_extra_loads) {
     EXPECT_TRUE(finder.success());
     auto& extra_loads = finder.extra_loads();
     EXPECT_EQ(extra_loads.size(), 2);
-    for (const auto& [b, loads] : extra_loads) {
+    for (const auto& [b, loads] : UnorderedIterable(extra_loads)) {
       auto id = b->id();
       EXPECT_TRUE(id == 2 || id == 4);
       EXPECT_EQ(loads.size(), 1);

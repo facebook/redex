@@ -28,7 +28,7 @@ size_t EnumAnalyzeGeneratedMethods::transform_code(const Scope& scope) {
   });
 
   size_t num_removed_methods = 0;
-  for (auto candidate_method : m_candidate_methods) {
+  for (auto candidate_method : UnorderedIterable(m_candidate_methods)) {
     const DexType* candidate_type = candidate_method->get_class();
     if (m_candidate_types.count_unsafe(candidate_type)) {
       DexClass* candidate_class = type_class(candidate_type);

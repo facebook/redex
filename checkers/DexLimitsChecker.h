@@ -12,6 +12,8 @@
 #include <string>
 #include <vector>
 
+#include "DeterministicContainers.h"
+
 class DexFieldRef;
 class DexMethodRef;
 class DexType;
@@ -25,14 +27,14 @@ class DexLimitsChecker : public PropertyChecker {
   void run_checker(DexStoresVector&, ConfigFiles&, PassManager&, bool) override;
 
   struct DexData {
-    std::unordered_set<DexFieldRef*> fields;
-    std::unordered_set<DexMethodRef*> methods;
-    std::unordered_set<DexType*> types;
-    std::unordered_set<DexType*> pending_init_class_fields;
-    std::unordered_set<DexType*> pending_init_class_types;
+    UnorderedSet<DexFieldRef*> fields;
+    UnorderedSet<DexMethodRef*> methods;
+    UnorderedSet<DexType*> types;
+    UnorderedSet<DexType*> pending_init_class_fields;
+    UnorderedSet<DexType*> pending_init_class_types;
   };
 
-  std::unordered_map<std::string, std::vector<DexData>> m_data;
+  UnorderedMap<std::string, std::vector<DexData>> m_data;
 };
 
 } // namespace redex_properties

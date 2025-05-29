@@ -221,7 +221,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
 }
 
 void CFGInliner::cleanup_callee_debug(ControlFlowGraph* cfg) {
-  std::unordered_set<reg_t> valid_regs;
+  UnorderedSet<reg_t> valid_regs;
   for (auto* block_it : cfg->order()) {
     block_it->cleanup_debug(valid_regs);
   }
@@ -333,7 +333,7 @@ void CFGInliner::steal_contents(ControlFlowGraph* caller,
 
   // transfer ownership of the edges
   caller->m_edges.reserve(caller->m_edges.size() + callee->m_edges.size());
-  caller->m_edges.insert(callee->m_edges.begin(), callee->m_edges.end());
+  insert_unordered_iterable(caller->m_edges, callee->m_edges);
   callee->m_edges.clear();
 }
 

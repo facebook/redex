@@ -9,11 +9,11 @@
 
 #include <json/value.h>
 #include <string>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include "ClassReferencesCache.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "MutablePriorityQueue.h"
 
@@ -86,7 +86,7 @@ struct CrossDexRefMinimizerConfig {
 // be the end of the world if an overflow ever happens.
 class CrossDexRefMinimizer {
   PrioritizedDexClasses m_prioritized_classes;
-  std::unordered_set<const void*> m_applied_refs;
+  UnorderedSet<const void*> m_applied_refs;
   struct ClassInfo {
     uint32_t index;
     // This array stores (the weights of) how many of the *refs of this class
@@ -178,9 +178,9 @@ class CrossDexRefMinimizer {
     Repr m_diff;
   };
 
-  std::unordered_map<DexClass*, ClassInfo> m_class_infos;
+  UnorderedMap<DexClass*, ClassInfo> m_class_infos;
   uint32_t m_next_index{0};
-  std::unordered_map<const void*, ClassDiffSet> m_ref_classes;
+  UnorderedMap<const void*, ClassDiffSet> m_ref_classes;
   CrossDexRefMinimizerStats m_stats;
   CrossDexRefMinimizerConfig m_config;
   ClassReferencesCache* m_cache;
@@ -191,9 +191,9 @@ class CrossDexRefMinimizer {
   };
 
   void reprioritize(
-      const std::unordered_map<DexClass*, ClassInfoDelta>& affected_classes);
+      const UnorderedMap<DexClass*, ClassInfoDelta>& affected_classes);
 
-  std::unordered_map<const void*, size_t> m_ref_counts;
+  UnorderedMap<const void*, size_t> m_ref_counts;
   size_t m_max_ref_count{0};
 
   std::optional<Json::Value> m_json_classes;
@@ -201,7 +201,7 @@ class CrossDexRefMinimizer {
   class JsonRefIndices {
    private:
     std::string m_prefix;
-    std::unordered_map<Ref, uint64_t> m_indices;
+    UnorderedMap<Ref, uint64_t> m_indices;
     std::string format(uint64_t index) const {
       return m_prefix + std::to_string(index);
     }
@@ -225,13 +225,13 @@ class CrossDexRefMinimizer {
     }
 
     void get_mapping(Json::Value* res) const {
-      for (const auto& [ref, index] : m_indices) {
+      for (const auto& [ref, index] : UnorderedIterable(m_indices)) {
         (*res)[format(index)] = show(ref);
       }
     }
 
     void get_method_mapping(Json::Value* res) const {
-      for (const auto& [ref, index] : m_indices) {
+      for (const auto& [ref, index] : UnorderedIterable(m_indices)) {
         Json::Value method_info;
         method_info["name"] = show(ref);
         const DexMethod* meth = ref->as_def();

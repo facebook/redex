@@ -7,12 +7,12 @@
 
 #pragma once
 
+#include <vector>
+
 #include "ControlFlow.h"
+#include "DeterministicContainers.h"
 #include "DexPosition.h"
 #include "IRInstruction.h"
-
-#include <unordered_map>
-#include <vector>
 
 struct SourceBlock;
 
@@ -249,8 +249,7 @@ class CFGMutation {
     std::vector<cfg::ControlFlowGraph::InsertVariant> m_insert_after_var;
   };
 
-  using Changes =
-      std::unordered_map<IRInstruction*, std::unique_ptr<ChangeSet>>;
+  using Changes = UnorderedMap<IRInstruction*, std::unique_ptr<ChangeSet>>;
 
   ChangeSet* get_change_set(const cfg::InstructionIterator& anchor) {
     auto& change_set = m_changes[anchor.block()][anchor->insn];
@@ -277,7 +276,7 @@ class CFGMutation {
   void process_block_changes(cfg::Block* block, Changes& changes);
 
   cfg::ControlFlowGraph& m_cfg;
-  std::unordered_map<cfg::Block*, Changes> m_changes;
+  UnorderedMap<cfg::Block*, Changes> m_changes;
 };
 
 inline CFGMutation::CFGMutation(cfg::ControlFlowGraph& cfg) : m_cfg(cfg) {}

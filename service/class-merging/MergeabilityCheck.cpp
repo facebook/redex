@@ -32,7 +32,7 @@ MergeabilityChecker::MergeabilityChecker(const Scope& scope,
 
 void MergeabilityChecker::exclude_unsupported_cls_property(
     TypeSet& non_mergeables) {
-  for (const auto& type : m_spec.merging_targets) {
+  for (const auto& type : UnorderedIterable(m_spec.merging_targets)) {
     const auto& cls = type_class(type);
     if (!can_delete(cls)) {
       non_mergeables.insert(type);
@@ -75,9 +75,9 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
   bool has_type_tag = m_spec.has_type_tag();
   std::vector<std::pair<IRInstruction*, const DexType*>>
       const_classes_to_verify;
-  std::unordered_set<const IRInstruction*> const_classes_to_verify_set;
+  UnorderedSet<const IRInstruction*> const_classes_to_verify_set;
   std::vector<IRInstruction*> new_instances_to_verify;
-  std::unordered_set<const IRInstruction*> new_instances_to_verify_set;
+  UnorderedSet<const IRInstruction*> new_instances_to_verify_set;
   auto& cfg = code->cfg();
   for (const auto& mie : InstructionIterable(cfg)) {
     auto insn = mie.insn;
@@ -193,8 +193,8 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
   for (const auto& pair : const_classes_to_verify) {
     auto const_class_insn = pair.first;
     auto referenced_type = pair.second;
-    auto use_set = du_chains[const_class_insn];
-    for (const auto use : use_set) {
+    const auto& use_set = du_chains[const_class_insn];
+    for (const auto& use : UnorderedIterable(use_set)) {
       auto use_insn = use.insn;
       if (opcode::is_a_move(use_insn->opcode())) {
         // Ignore moves
@@ -222,10 +222,10 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
   // constructor of a super type, and not the exact instantiated type.
   // TODO T184662680: Fully support such scenario, e.g. by synthesizing a
   // corresponding constructor on the instantiated class, and not just exclude.
-  for (auto* new_instance_insn : new_instances_to_verify) {
+  for (auto* new_instance_insn : UnorderedIterable(new_instances_to_verify)) {
     auto* type = new_instance_insn->get_type();
-    auto use_set = du_chains[new_instance_insn];
-    for (const auto use : use_set) {
+    const auto& use_set = du_chains[new_instance_insn];
+    for (const auto& use : UnorderedIterable(use_set)) {
       if (use.src_index != 0) {
         continue;
       }
@@ -299,7 +299,7 @@ void MergeabilityChecker::exclude_static_fields(TypeSet& non_mergeables) {
 void MergeabilityChecker::exclude_unsafe_sdk_and_store_refs(
     TypeSet& non_mergeables) {
   const auto mog = method_override_graph::build_graph(m_scope);
-  for (auto type : m_spec.merging_targets) {
+  for (auto type : UnorderedIterable(m_spec.merging_targets)) {
     if (non_mergeables.count(type)) {
       continue;
     }
@@ -343,7 +343,7 @@ TypeSet MergeabilityChecker::get_non_mergeables() {
   prev_size = non_mergeables.size();
 
   if (m_spec.skip_anonymous_classes) {
-    for (const auto& type : m_spec.merging_targets) {
+    for (const auto& type : UnorderedIterable(m_spec.merging_targets)) {
       const auto* cls = type_class(type);
       if (klass::maybe_anonymous_class(cls)) {
         non_mergeables.insert(type);

@@ -12,10 +12,10 @@
 #include <ostream>
 #include <set>
 #include <sstream>
-#include <unordered_set>
 
 #include "ClassAssemblingUtils.h"
 #include "ConfigFiles.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "EnumAnalyzeGeneratedMethods.h"
 #include "EnumClinitAnalysis.h"
@@ -52,11 +52,11 @@ namespace {
 using namespace optimize_enums;
 
 // Map the field holding the lookup table to its associated enum type.
-using LookupTableToEnum = std::unordered_map<DexField*, DexType*>;
+using LookupTableToEnum = UnorderedMap<DexField*, DexType*>;
 
 // Sets of types.  Intended to be sub-classes of Ljava/lang/Enum; but not
 // guaranteed by the type.
-using EnumTypes = std::unordered_set<DexType*>;
+using EnumTypes = UnorderedSet<DexType*>;
 
 using GeneratedSwitchCases = optimize_enums::GeneratedSwitchCases;
 using EnumFieldToOrdinal = optimize_enums::EnumFieldToOrdinal;
@@ -88,7 +88,7 @@ constexpr const char* METRIC_NUM_REMOVED_GENERATED_METHODS =
 bool analyze_enum_ctors(
     const DexClass* cls,
     const DexMethod* java_enum_ctor,
-    std::unordered_map<const DexMethod*, uint32_t>& ctor_to_arg_ordinal) {
+    UnorderedMap<const DexMethod*, uint32_t>& ctor_to_arg_ordinal) {
 
   struct DelegatingCall {
     DexMethod* ctor;
@@ -238,7 +238,7 @@ void collect_generated_switch_cases(
 
   auto res = f.find(clinit_cfg, aput);
 
-  std::unordered_map<IRInstruction*, IRInstruction*> new_array_to_sput;
+  UnorderedMap<IRInstruction*, IRInstruction*> new_array_to_sput;
   for (auto* insn_look : res.matching(look)) {
     if (opcode::is_new_array(insn_look->opcode())) {
       new_array_to_sput.emplace(insn_look, nullptr);
@@ -329,7 +329,7 @@ class OptimizeEnums {
     auto enum_field_to_ordinal = collect_enum_field_ordinals();
 
     EnumTypes collected_enums;
-    for (const auto& pair : enum_field_to_ordinal) {
+    for (const auto& pair : UnorderedIterable(enum_field_to_ordinal)) {
       collected_enums.emplace(pair.first->get_class());
     }
 
@@ -377,14 +377,13 @@ class OptimizeEnums {
   /**
    * Replace enum with Boxed Integer object
    */
-  void replace_enum_with_int(
-      PassManager& mgr,
-      int max_enum_size,
-      bool skip_sanity_check,
-      const bool support_kt_19_enum_entries,
-      const std::vector<DexType*>& allowlist,
-      ConfigFiles& conf,
-      std::unordered_map<UnsafeType, size_t>& unsafe_counts) {
+  void replace_enum_with_int(PassManager& mgr,
+                             int max_enum_size,
+                             bool skip_sanity_check,
+                             const bool support_kt_19_enum_entries,
+                             const std::vector<DexType*>& allowlist,
+                             ConfigFiles& conf,
+                             UnorderedMap<UnsafeType, size_t>& unsafe_counts) {
     if (max_enum_size <= 0) {
       return;
     }
@@ -482,8 +481,8 @@ class OptimizeEnums {
     });
 
     // Need to remember to understand what was rejected.
-    std::unordered_set<DexType*> orig_candidates{config.candidate_enums.begin(),
-                                                 config.candidate_enums.end()};
+    UnorderedSet<DexType*> orig_candidates;
+    insert_unordered_iterable(orig_candidates, config.candidate_enums);
 
     auto add_unsafe_usage = [&](const DexType* type, UnsafeType u) {
       // May be called in parallel.
@@ -493,12 +492,12 @@ class OptimizeEnums {
 
     optimize_enums::reject_unsafe_enums(m_scope, &config, add_unsafe_usage);
     if (traceEnabled(ENUM, 4)) {
-      for (auto cls : config.candidate_enums) {
+      for (auto cls : UnorderedIterable(config.candidate_enums)) {
         TRACE(ENUM, 4, "candidate_enum %s", SHOW(cls));
       }
     }
 
-    for (auto* t : orig_candidates) {
+    for (auto* t : UnorderedIterable(orig_candidates)) {
       if (config.candidate_enums.count_unsafe(t) == 0) {
         unsafe_enums.emplace_unsafe(t, UnsafeTypes{UnsafeType::kUsage});
       }
@@ -508,12 +507,8 @@ class OptimizeEnums {
     {
       std::ofstream ofs(conf.metafile("redex-unsafe-enums.txt"),
                         std::ofstream::out | std::ofstream::app);
-      std::vector<const DexType*> unsafe_types;
-      unsafe_types.reserve(unsafe_enums.size());
-      std::transform(unsafe_enums.begin(), unsafe_enums.end(),
-                     std::back_inserter(unsafe_types),
-                     [](const auto& p) { return p.first; });
-      std::sort(unsafe_types.begin(), unsafe_types.end(), compare_dextypes);
+      auto unsafe_types =
+          unordered_to_ordered_keys(unsafe_enums, compare_dextypes);
       for (auto* t : unsafe_types) {
         const auto& unsafe_enums_at_t = unsafe_enums.at_unsafe(t);
         ofs << show(t) << ":" << unsafe_enums_at_t << "\n";
@@ -778,7 +773,7 @@ class OptimizeEnums {
       return;
     }
 
-    std::unordered_map<const DexMethod*, uint32_t> ctor_to_arg_ordinal;
+    UnorderedMap<const DexMethod*, uint32_t> ctor_to_arg_ordinal;
     if (!analyze_enum_ctors(cls, m_java_enum_ctor, ctor_to_arg_ordinal)) {
       return;
     }
@@ -940,13 +935,13 @@ void OptimizeEnumsPass::run_pass(DexStoresVector& stores,
                                  PassManager& mgr) {
   OptimizeEnums opt_enums(stores, conf);
   opt_enums.remove_redundant_generated_classes();
-  std::unordered_map<UnsafeType, size_t> unsafe_counts;
+  UnorderedMap<UnsafeType, size_t> unsafe_counts;
   opt_enums.replace_enum_with_int(
       mgr, m_max_enum_size, m_skip_sanity_check, m_support_kt_19_enum_entries,
       m_enum_to_integer_allowlist, conf, unsafe_counts);
   opt_enums.remove_enum_generated_methods();
   opt_enums.stats(mgr);
-  for (auto& p : unsafe_counts) {
+  for (auto& p : UnorderedIterable(unsafe_counts)) {
     std::ostringstream oss;
     oss << "reason." << p.first;
     mgr.set_metric(oss.str(), p.second);

@@ -92,7 +92,7 @@ class RtypeSpecialization final {
                                         const DexType* better_rtype) const;
   bool share_common_rtype_candidate(
       const MethodToInferredReturnType& rtype_candidates,
-      const std::vector<const DexMethod*>& meths,
+      const UnorderedBag<const DexMethod*>& meths,
       const DexType* better_rtype) const;
 };
 

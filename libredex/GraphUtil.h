@@ -7,10 +7,10 @@
 
 #pragma once
 
-#include <unordered_map>
 #include <vector>
 
 #include "Debug.h"
+#include "DeterministicContainers.h"
 
 namespace graph {
 
@@ -24,7 +24,7 @@ std::vector<typename GraphInterface::NodeId> postorder_sort(
   enum State { UNVISITED, VISITING, VISITED };
   NodeId entry = GraphInterface::entry(graph);
   std::vector<NodeId> stack{entry};
-  std::unordered_map<NodeId, State> states{{entry, UNVISITED}};
+  UnorderedMap<NodeId, State> states{{entry, UNVISITED}};
   std::vector<NodeId> postorder;
 
   while (!stack.empty()) {

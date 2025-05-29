@@ -9,10 +9,10 @@
 
 #include <algorithm>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 #include "Configurable.h"
+#include "DeterministicContainers.h"
 #include "DexStore.h"
 #include "RedexProperties.h"
 #include "Traits.h"
@@ -110,5 +110,5 @@ class PartialPass : public Pass {
   Scope build_class_scope_with_packages_config(const DexStoresVector& stores);
 
  private:
-  std::unordered_set<std::string> m_select_packages;
+  UnorderedSet<std::string> m_select_packages;
 };

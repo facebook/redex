@@ -338,8 +338,8 @@ TEST(Dex038Test, ReadWriteDex038) {
   std::cout << "Loaded classes: " << classes.size() << std::endl;
 
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
-  std::unordered_map<DexMethod*, uint64_t> method_to_id;
-  std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
+  UnorderedMap<DexMethod*, uint64_t> method_to_id;
+  UnorderedMap<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
 
   Json::Value conf_obj = Json::nullValue;
   auto tmpdir = redex::make_tmp_dir("dex038_test_%%%%%%%%");
