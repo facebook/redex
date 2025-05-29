@@ -735,6 +735,10 @@ size_t hot_no_hot_pred(
     return 0;
   }
 
+  if (block->preds().empty()) {
+    return 0;
+  }
+
   for (auto predecessor : block->preds()) {
     auto* first_sb_pred =
         source_blocks::get_first_source_block(predecessor->src());
@@ -1166,6 +1170,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
       return uncovered_source_blocks_violations_cfg(cfg);
     case Violation::kHotMethodColdEntry:
       return hot_method_cold_entry_violations_cfg(cfg);
+    case Violation::kHotNoHotPred:
+      return hot_no_hot_pred_cfg(cfg);
     }
     not_reached();
   }
@@ -1342,6 +1348,18 @@ struct ViolationsHelper::ViolationsHelperImpl {
         sum++;
       }
     });
+    return sum;
+  }
+
+  static size_t hot_no_hot_pred_cfg(cfg::ControlFlowGraph& cfg) {
+    size_t sum{0};
+
+    cfg.remove_unreachable_blocks();
+    dominators::SimpleFastDominators<cfg::GraphInterface> dom{cfg};
+
+    for (auto* b : cfg.blocks()) {
+      sum += hot_no_hot_pred(b, dom);
+    }
     return sum;
   }
 
@@ -1563,6 +1581,52 @@ struct ViolationsHelper::ViolationsHelperImpl {
         void end_block(std::ostream&, cfg::Block*) {}
       };
       print_cfg_with_violations<HotMethodColdEntry>(m);
+      return;
+    }
+    case Violation::kHotNoHotPred: {
+      struct HotNoHotPred {
+        cfg::Block* cur{nullptr};
+
+        dominators::SimpleFastDominators<cfg::GraphInterface> dom;
+
+        explicit HotNoHotPred(cfg::ControlFlowGraph& cfg) : dom(cfg) {}
+
+        void mie_before(std::ostream&, const MethodItemEntry&) {}
+        void mie_after(std::ostream& os, const MethodItemEntry& mie) {
+          if (mie.type != MFLOW_SOURCE_BLOCK) {
+            return;
+          }
+
+          if (!source_blocks::has_source_block_positive_val(
+                  mie.src_block.get())) {
+            os << " NOT HOT\n";
+            return;
+          }
+
+          bool violation_found = true;
+
+          if (cur->preds().empty()) {
+            violation_found = false;
+          }
+
+          for (auto predecessor : cur->preds()) {
+            auto* first_sb_pred =
+                source_blocks::get_first_source_block(predecessor->src());
+            if (source_blocks::has_source_block_positive_val(first_sb_pred)) {
+              violation_found = false;
+              break;
+            }
+          }
+
+          if (violation_found) {
+            os << " !!! HOT BLOCK NO HOT PRED\n";
+          }
+        }
+
+        void start_block(std::ostream&, cfg::Block* b) { cur = b; }
+        void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
+      };
+      print_cfg_with_violations<HotNoHotPred>(m);
       return;
     }
     }
