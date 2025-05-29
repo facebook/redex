@@ -42,7 +42,10 @@ class TypedefAnnoCheckerPass : public Pass {
   void bind_config() override {
     bind("int_typedef", {}, m_config.int_typedef);
     bind("str_typedef", {}, m_config.str_typedef);
-    bind("max_patcher_iteration", 10, m_config.max_patcher_iteration);
+    bind("max_patcher_iteration",
+         10,
+         m_config.max_patcher_iteration,
+         "Maximum number of Typedef annotation patcher iterations");
   }
 
   explicit TypedefAnnoCheckerPass(Config config)
