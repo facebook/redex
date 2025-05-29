@@ -757,6 +757,8 @@ bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
 
 } // namespace
 
+using StyleResource = resources::StyleResource;
+
 boost::optional<int32_t> BundleResources::get_min_sdk() {
   std::string base_manifest = (boost::filesystem::path(m_directory) /
                                "base/manifest/AndroidManifest.xml")
@@ -2542,9 +2544,131 @@ UnorderedSet<uint32_t> ResourcesPbFile::get_overlayable_id_roots() {
   return overlayable_ids;
 }
 
+bool has_style_value(const aapt::pb::ConfigValue& config_value) {
+  return config_value.has_value() &&
+         config_value.value().has_compound_value() &&
+         config_value.value().compound_value().has_style();
+}
+
+std::vector<StyleResource::Value::Span> create_styled_string(
+    const ::aapt::pb::Item& item) {
+  std::vector<StyleResource::Value::Span> spans;
+  for (const auto& span : item.styled_str().span()) {
+    spans.push_back(StyleResource::Value::Span{span.tag(), span.first_char(),
+                                               span.last_char()});
+  }
+  return spans;
+}
+
+std::pair<uint8_t, uint32_t> convert_primitive_to_res_value_data(
+    const aapt::pb::Primitive& prim) {
+  uint8_t data_type = android::Res_value::TYPE_NULL;
+  uint32_t value = 0;
+
+  if (prim.has_float_value()) {
+    data_type = android::Res_value::TYPE_FLOAT;
+    value = prim.float_value();
+  } else if (prim.has_dimension_value()) {
+    data_type = android::Res_value::TYPE_DIMENSION;
+    value = prim.dimension_value();
+  } else if (prim.has_fraction_value()) {
+    data_type = android::Res_value::TYPE_FRACTION;
+    value = prim.fraction_value();
+  } else if (prim.has_int_decimal_value()) {
+    data_type = android::Res_value::TYPE_INT_DEC;
+    value = prim.int_decimal_value();
+  } else if (prim.has_int_hexadecimal_value()) {
+    data_type = android::Res_value::TYPE_INT_HEX;
+    value = prim.int_hexadecimal_value();
+  } else if (prim.has_boolean_value()) {
+    data_type = android::Res_value::TYPE_INT_BOOLEAN;
+    value = prim.boolean_value();
+  } else if (prim.has_color_argb8_value()) {
+    data_type = android::Res_value::TYPE_INT_COLOR_ARGB8;
+    value = prim.color_argb8_value();
+  } else if (prim.has_color_rgb8_value()) {
+    data_type = android::Res_value::TYPE_INT_COLOR_RGB8;
+    value = prim.color_rgb8_value();
+  } else if (prim.has_color_argb4_value()) {
+    data_type = android::Res_value::TYPE_INT_COLOR_ARGB4;
+    value = prim.color_argb4_value();
+  } else if (prim.has_color_rgb4_value()) {
+    data_type = android::Res_value::TYPE_INT_COLOR_RGB4;
+    value = prim.color_rgb4_value();
+  }
+
+  return {data_type, value};
+}
+
+void process_style_entry_item(uint32_t attr_id,
+                              const aapt::pb::Item& item,
+                              StyleResource& style_entry) {
+  auto add_attribute = [&attr_id, &style_entry](uint8_t type, auto value) {
+    style_entry.attributes.insert({attr_id, StyleResource::Value(type, value)});
+  };
+
+  if (item.has_ref()) {
+    add_attribute(android::Res_value::TYPE_REFERENCE, item.ref().id());
+  } else if (item.has_str()) {
+    add_attribute(android::Res_value::TYPE_STRING, item.str().value());
+  } else if (item.has_raw_str()) {
+    add_attribute(android::Res_value::TYPE_STRING, item.raw_str().value());
+  } else if (item.has_styled_str()) {
+    const auto& styled_string = create_styled_string(item);
+    add_attribute(android::Res_value::TYPE_STRING, styled_string);
+  } else if (item.has_prim()) {
+    const auto [data_type, value] =
+        convert_primitive_to_res_value_data(item.prim());
+    add_attribute(data_type, value);
+  }
+}
+
 resources::StyleMap ResourcesPbFile::get_style_map() {
-  // TODO
-  return {};
+  resources::StyleMap style_map;
+
+  UnorderedSet<uint8_t> style_type_ids;
+  for (const auto& [type_id, name] :
+       UnorderedIterable(m_application_type_ids_to_names)) {
+    if (name == "style") {
+      style_type_ids.emplace(type_id);
+    }
+  }
+
+  for (const auto& [res_id, config_values] : m_res_id_to_configvalue) {
+    uint8_t type_id = (res_id >> TYPE_INDEX_BIT_SHIFT) & 0xFF;
+
+    if (style_type_ids.find(type_id) == style_type_ids.end()) {
+      continue;
+    }
+
+    for (const auto& config_value : config_values) {
+      if (!has_style_value(config_value)) {
+        continue;
+      }
+
+      const auto& style = config_value.value().compound_value().style();
+      StyleResource style_entry;
+
+      style_entry.id = res_id;
+      style_entry.config =
+          convert_to_arsc_config(res_id, config_value.config());
+
+      if (style.has_parent()) {
+        style_entry.parent = style.parent().id();
+      }
+
+      for (const auto& entry : style.entry()) {
+        if (entry.has_key() && entry.has_item()) {
+          uint32_t attr_id = entry.key().id();
+          process_style_entry_item(attr_id, entry.item(), style_entry);
+        }
+      }
+
+      style_map[res_id].push_back(std::move(style_entry));
+    }
+  }
+
+  return style_map;
 }
 
 ResourcesPbFile::~ResourcesPbFile() {}
