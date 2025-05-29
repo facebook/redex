@@ -195,12 +195,19 @@ def maybe_addr2line(crash_file: str) -> typing.Optional[typing.List[str]]:
     return reduced
 
 
+_LINUX_TERMINATE: str = "terminate called"
+_MAC_TERMINATE: str = (
+    "libc++abi: terminating due to uncaught exception of type boost::exception_detail::error_info_injector<RedexException>"
+)
+
+
 def find_abort_error(lines: typing.Iterable[str]) -> typing.Optional[str]:
+    global _LINUX_TERMINATE, _MAC_TERMINATE
     terminate_lines = []
     for line in lines:
         stripped_line = line.rstrip()
 
-        if stripped_line.startswith("terminate called"):
+        if stripped_line.startswith((_LINUX_TERMINATE, _MAC_TERMINATE)):
             terminate_lines.append(stripped_line)
             continue
 
