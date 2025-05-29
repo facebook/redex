@@ -144,6 +144,8 @@ UnorderedSet<std::string> parse_keep_xml_file(const std::string& xml_file_path);
 struct StyleResource {
   struct Value {
     struct Span {
+      Span(std::string tag, uint32_t first_char, uint32_t last_char)
+          : tag(std::move(tag)), first_char(first_char), last_char(last_char) {}
       std::string tag;
       uint32_t first_char;
       uint32_t last_char;
@@ -175,19 +177,7 @@ struct StyleResource {
       if (value_string != other.value_string) {
         return false;
       }
-      if (styled_string != other.styled_string) {
-        return false;
-      }
-
-      if (styled_string.size() != other.styled_string.size()) {
-        return false;
-      }
-      if (!std::equal(styled_string.begin(),
-                      styled_string.end(),
-                      other.styled_string.begin())) {
-        return false;
-      }
-      return true;
+      return styled_string == other.styled_string;
     }
 
    private:
