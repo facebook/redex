@@ -12,6 +12,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 // TODO (fengliu): We may make the test tool to generate the PRECHECK directive
 // automatically.
+// PRECHECK: class: com.facebook.redextest.I_2
+// POSTCHECK-NOT: class: com.facebook.redextest.I_2
+interface I_2 {
+  public int get();
+}
+
+// PRECHECK: class: com.facebook.redextest.I_3
+// POSTCHECK-NOT: class: com.facebook.redextest.I_3
+interface I_3 {
+  public int get_3(I_2 obj);
+}
+
 // PRECHECK: class: com.facebook.redextest.I_0
 // POSTCHECK-NOT: class: com.facebook.redextest.I_0
 interface I_0 {
@@ -30,18 +42,6 @@ interface I_1 {
 
 class Impl_1 implements I_1 {
   public Impl_1 get() { return this; }
-}
-
-// PRECHECK: class: com.facebook.redextest.I_2
-// POSTCHECK-NOT: class: com.facebook.redextest.I_2
-interface I_2 {
-  public int get();
-}
-
-// PRECHECK: class: com.facebook.redextest.I_3
-// POSTCHECK-NOT: class: com.facebook.redextest.I_3
-interface I_3 {
-  public int get_3(I_2 obj);
 }
 
 class Parent {
