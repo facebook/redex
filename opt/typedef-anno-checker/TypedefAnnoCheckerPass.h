@@ -37,6 +37,7 @@ class TypedefAnnoCheckerPass : public Pass {
     DexType* int_typedef{nullptr};
     DexType* str_typedef{nullptr};
     size_t max_patcher_iteration{10};
+    UnorderedSet<DexType*> generated_type_annos;
   };
 
   void bind_config() override {
@@ -46,10 +47,14 @@ class TypedefAnnoCheckerPass : public Pass {
          10,
          m_config.max_patcher_iteration,
          "Maximum number of Typedef annotation patcher iterations");
+    bind("generated_type_annos",
+         {},
+         m_config.generated_type_annos,
+         "Denote annotation types that are flagging generated methods.");
   }
 
   explicit TypedefAnnoCheckerPass(Config config)
-      : Pass("TypedefAnnoCheckerPass"), m_config(config) {}
+      : Pass("TypedefAnnoCheckerPass"), m_config(std::move(config)) {}
 
   void run_pass(DexStoresVector& stores,
                 ConfigFiles& conf,
@@ -106,6 +111,7 @@ class TypedefAnnoChecker {
 
   bool is_value_of_opt(const DexMethod* m);
   bool is_delegate(const DexMethod* m);
+  bool is_generated(const DexMethod* m) const;
 
   void run(DexMethod* m);
 

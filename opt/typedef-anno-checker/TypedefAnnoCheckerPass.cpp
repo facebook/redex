@@ -96,22 +96,6 @@ bool is_model_gen(const DexMethod* m) {
   return false;
 }
 
-bool is_generated(const DexMethod* m) {
-  DexType* type = m->get_class();
-  DexClass* cls = type_class(type);
-  if (!cls->get_anno_set()) {
-    return false;
-  }
-  UnorderedSet<DexType*> generated_annos = {
-      DexType::make_type(
-          "Lcom/facebook/xapp/messaging/composer/annotation/Generated;"),
-      DexType::make_type("Lcom/facebook/litho/annotations/Generated;")};
-  if (has_any_annotation(cls, generated_annos)) {
-    return true;
-  }
-  return false;
-}
-
 struct MaybeParamName {
   std::optional<std::string_view> name;
   MaybeParamName(const DexMethod* method, size_t param_index)
@@ -163,6 +147,21 @@ bool TypedefAnnoChecker::is_value_of_opt(const DexMethod* m) {
     return false;
   }
   return true;
+}
+
+bool TypedefAnnoChecker::is_generated(const DexMethod* m) const {
+  if (m_config.generated_type_annos.empty()) {
+    return false;
+  }
+  DexType* type = m->get_class();
+  DexClass* cls = type_class(type);
+  if (!cls->get_anno_set()) {
+    return false;
+  }
+  if (has_any_annotation(cls, m_config.generated_type_annos)) {
+    return true;
+  }
+  return false;
 }
 
 bool TypedefAnnoChecker::is_delegate(const DexMethod* m) {
