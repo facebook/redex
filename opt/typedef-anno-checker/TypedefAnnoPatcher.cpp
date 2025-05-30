@@ -995,7 +995,6 @@ void TypedefAnnoPatcher::collect_return_candidates(
 
   TypeEnvironments& envs = inference.get_type_environments();
   boost::optional<const TypedefAnnoType*> anno = boost::none;
-  std::vector<ParamCandidate> param_candidates_local;
   bool patch_return = true;
   for (cfg::Block* b : cfg.blocks()) {
     for (auto& mie : InstructionIterable(b)) {
@@ -1017,9 +1016,7 @@ void TypedefAnnoPatcher::collect_return_candidates(
     candidates.add_method_candidate(m, *anno);
     auto class_name = type_class(m->get_class())->str();
     auto class_name_prefix = class_name.substr(0, class_name.size() - 1);
-    if (!m_patched_returns.count(class_name_prefix)) {
-      m_patched_returns.insert(class_name_prefix);
-    }
+    m_patched_returns.insert(class_name_prefix);
   }
 }
 
