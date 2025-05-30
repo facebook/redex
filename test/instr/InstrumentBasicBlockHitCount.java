@@ -1146,7 +1146,7 @@ public class InstrumentBasicBlockHitCount {
     // Assert that TestFunc11 and TestFunc15's hit counts are the same
     // because they are equivalent codes
     assertThat(MetadataParser.getBlockHits("testFunc11", stats, hitStats)).isEqualTo(
-      MetadataParser.getBlockHits("testFunc15", stats, hitStats)      
+      MetadataParser.getBlockHits("testFunc15", stats, hitStats)
     );
   }
 
@@ -1174,7 +1174,7 @@ public class InstrumentBasicBlockHitCount {
     // Assert that TestFunc18 and TestFunc14's hit counts are the same
     // because they are equivalent codes
     assertThat(MetadataParser.getBlockHits("testFunc18", stats, hitStats)).isEqualTo(
-      MetadataParser.getBlockHits("testFunc14", stats, hitStats)      
+      MetadataParser.getBlockHits("testFunc14", stats, hitStats)
     );
   }
 
@@ -1384,7 +1384,7 @@ public class InstrumentBasicBlockHitCount {
 
     assertThat(MetadataParser.getOffset("testFunc22")).isEqualTo(76);
     assertThat(MetadataParser.getHitOffset("testFunc22")).isEqualTo(236);
-    assertThat(MetadataParser.getBlockHits("testFunc22", stats, hitStats)).isEqualTo("13[1:1,2:1,3:1,4:1,5:1,6:11,7:11,8:10,9:10,10:10,11:10,13:1,14:0]");
+    assertThat(MetadataParser.getBlockHits("testFunc22", stats, hitStats)).isEqualTo("15[1:1,2:1,3:1,4:1,5:1,6:11,7:11,8:10,9:10,10:10,11:10,13:1,14:0,15:0,17:0]");
   }
 
   @Test
@@ -1414,6 +1414,6 @@ public class InstrumentBasicBlockHitCount {
 
     assertThat(MetadataParser.getOffset("testFunc22")).isEqualTo(76);
     assertThat(MetadataParser.getHitOffset("testFunc22")).isEqualTo(236);
-    assertThat(MetadataParser.getBlockHits("testFunc22", stats, hitStats)).isEqualTo("13[1:1,2:1,3:1,4:0,5:0,6:0,7:0,8:0,9:0,10:0,11:0,13:1,14:0]");
+    assertThat(MetadataParser.getBlockHits("testFunc22", stats, hitStats)).isEqualTo("15[1:1,2:1,3:1,4:0,5:0,6:0,7:0,8:0,9:0,10:0,11:0,13:1,14:0,15:0,17:0]");
   }
 }
