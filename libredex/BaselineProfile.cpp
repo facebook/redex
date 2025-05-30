@@ -7,22 +7,32 @@
 
 #include "BaselineProfile.h"
 
+#include "Walkers.h"
+
 namespace baseline_profiles {
 
 BaselineProfile get_default_baseline_profile(
+    const Scope& scope,
     const UnorderedMap<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
     UnorderedSet<const DexMethodRef*>* method_refs_without_def) {
-  auto [baseline_profile, _] =
-      get_baseline_profiles(configs, method_profiles, method_refs_without_def);
+  auto [baseline_profile, _] = get_baseline_profiles(
+      scope, configs, method_profiles, method_refs_without_def);
   return baseline_profile;
 }
 
 std::tuple<BaselineProfile, UnorderedMap<std::string, BaselineProfile>>
 get_baseline_profiles(
+    const Scope& scope,
     const UnorderedMap<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
     UnorderedSet<const DexMethodRef*>* method_refs_without_def) {
+  UnorderedSet<const DexMethodRef*> method_candidates;
+  UnorderedSet<DexClass*> class_candidates;
+  walk::classes(scope, [&](DexClass* cls) { class_candidates.insert(cls); });
+  walk::code(scope, [&](DexMethod* method, const IRCode&) {
+    method_candidates.insert(method);
+  });
   UnorderedMap<std::string, BaselineProfile> baseline_profiles;
   BaselineProfile manual_baseline_profile;
   for (const auto& [config_name, config] : UnorderedIterable(configs)) {
@@ -41,6 +51,9 @@ get_baseline_profiles(
           method_profiles.method_stats_for_baseline_config(interaction_id,
                                                            config_name);
       for (auto&& [method_ref, stat] : UnorderedIterable(method_stats)) {
+        if (!method_candidates.count(method_ref)) {
+          continue;
+        }
         auto method = method_ref->as_def();
         if (method == nullptr) {
           if (method_refs_without_def != nullptr) {
@@ -72,6 +85,9 @@ get_baseline_profiles(
           method_profiles.method_stats_for_baseline_config(interaction_id,
                                                            config_name);
       for (auto&& [method_ref, stat] : UnorderedIterable(method_stats)) {
+        if (!method_candidates.count(method_ref)) {
+          continue;
+        }
         auto method = method_ref->as_def();
         if (method == nullptr) {
           if (method_refs_without_def != nullptr) {
@@ -125,7 +141,10 @@ get_baseline_profiles(
       }
     }
     for (auto* type : UnorderedIterable(classes)) {
-      res.classes.insert(type_class(type));
+      auto* cls = type_class(type);
+      if (class_candidates.count(cls)) {
+        res.classes.insert(type_class(type));
+      }
     }
     if (config_name != DEFAULT_BASELINE_PROFILE_CONFIG_NAME ||
         config.options.use_final_redex_generated_profile) {

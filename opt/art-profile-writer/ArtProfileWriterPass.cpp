@@ -716,7 +716,10 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   UnorderedSet<const DexMethodRef*> method_refs_without_def;
   const auto& method_profiles = conf.get_method_profiles();
 
+  auto scope = build_class_scope(stores);
+
   auto baseline_profiles_tuple = baseline_profiles::get_baseline_profiles(
+      scope,
       conf.get_baseline_profile_configs(),
       method_profiles,
       &method_refs_without_def);
@@ -756,7 +759,6 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     }
   }
 
-  auto scope = build_class_scope(stores);
   if (m_never_compile_callcount_threshold > -1 ||
       m_never_compile_perf_threshold > -1 ||
       m_never_compile_called_coverage_threshold > -1 ||
