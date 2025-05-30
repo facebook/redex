@@ -92,6 +92,14 @@ class InvalidJavaException : public RedexException {
       : RedexException(RedexError::INVALID_JAVA, message, extra_info) {}
 };
 
+class DuplicateClassesException : public RedexException {
+ public:
+  explicit DuplicateClassesException(
+      const std::string& message,
+      const std::map<std::string, std::string>& extra_info = {})
+      : RedexException(RedexError::DUPLICATE_CLASSES, message, extra_info) {}
+};
+
 } // namespace redex
 
 void assert_or_throw(bool cond,

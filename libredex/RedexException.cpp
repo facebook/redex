@@ -38,6 +38,8 @@ void assert_or_throw(bool cond,
   if (!cond) {
     if (redex::throw_typed_exception()) {
       switch (type) {
+      case RedexError::DUPLICATE_CLASSES:
+        throw redex::DuplicateClassesException(message, extra_info);
       case RedexError::DUPLICATE_METHODS:
         throw redex::DuplicateMethodsException(message, extra_info);
       case RedexError::BAD_ANNOTATION:

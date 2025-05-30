@@ -517,13 +517,12 @@ bool parse_class(uint8_t* buffer,
             SHOW(self), jar_location->get_file_name().c_str(),
             cls->get_location()->get_file_name().c_str());
 
-      if (!is_allowed(cls, jar_location->get_file_name())) {
-        throw RedexException(RedexError::DUPLICATE_CLASSES,
-                             "Found duplicate class in two different files.",
-                             {{"class", SHOW(self)},
-                              {"jar", jar_location->get_file_name()},
-                              {"dex", cls->get_location()->get_file_name()}});
-      }
+      assert_or_throw(is_allowed(cls, jar_location->get_file_name()),
+                      RedexError::DUPLICATE_CLASSES,
+                      "Found duplicate class in two different files.",
+                      {{"class", SHOW(self)},
+                       {"jar", jar_location->get_file_name()},
+                       {"dex", cls->get_location()->get_file_name()}});
     }
     return true;
   }
