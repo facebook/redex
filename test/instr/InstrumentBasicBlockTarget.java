@@ -858,7 +858,7 @@ public class InstrumentBasicBlockTarget {
     // Assert that TestFunc09 excuted only some BasicBlocks skipping
     // everything else because it didn't have to go into the initial if condition
     // because test-flag > 0 and the switch statement made it jump to exact basicblock
-    // of 16 and returning immediately. 
+    // of 16 and returning immediately.
     assertThat(MetadataParser.getBlockHits("testFunc09", stats)).isEqualTo("55[1:0,2:1,3:0,4:0,5:0,6:0,7:0,8:0,9:0,10:0,11:0,12:0,13:0,14:0,15:0,16:0,17:0,18:0,19:0,20:0,21:0,22:0,23:0,24:0,25:0,26:0,27:0,28:0,29:0,30:0,31:0,32:0,33:0,34:0,35:0,36:0,37:0,38:0,39:0,40:1,41:0,42:0,43:0,44:0,45:0,46:0,47:0,48:0,49:0,50:0,51:0,52:0,53:0,54:0,55:0]");
   }
 
@@ -1035,7 +1035,7 @@ public class InstrumentBasicBlockTarget {
     // TestFunc15's bit-vector should be the same as testFunc11
     // because they are equivalent codes
     assertThat(MetadataParser.getBlockHits("testFunc15", stats)).isEqualTo(
-      MetadataParser.getBlockHits("testFunc11", stats)      
+      MetadataParser.getBlockHits("testFunc11", stats)
     );
   }
 
@@ -1062,7 +1062,7 @@ public class InstrumentBasicBlockTarget {
     // TestFunc18's bit-vector should be the same as testFunc14
     // because they are equivalent codes
     assertThat(MetadataParser.getBlockHits("testFunc18", stats)).isEqualTo(
-      MetadataParser.getBlockHits("testFunc14", stats)      
+      MetadataParser.getBlockHits("testFunc14", stats)
     );
   }
 
@@ -1324,7 +1324,7 @@ public class InstrumentBasicBlockTarget {
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
 
     assertThat(MetadataParser.getOffset("testFunc22")).isEqualTo(76);
-    assertThat(MetadataParser.getBlockHits("testFunc22", stats)).isEqualTo("13[1:1,2:1,3:1,4:1,5:1,6:1,7:1,8:1,9:1,10:1,11:1,13:1,14:0]");
+    assertThat(MetadataParser.getBlockHits("testFunc22", stats)).isEqualTo("15[1:1,2:1,3:1,4:1,5:1,6:1,7:1,8:1,9:1,10:1,11:1,13:1,14:0,15:0,17:0]");
   }
 
   @Test
@@ -1352,7 +1352,7 @@ public class InstrumentBasicBlockTarget {
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
 
     assertThat(MetadataParser.getOffset("testFunc22")).isEqualTo(76);
-    assertThat(MetadataParser.getBlockHits("testFunc22", stats)).isEqualTo("13[1:1,2:1,3:1,4:0,5:0,6:0,7:0,8:0,9:0,10:0,11:0,13:1,14:0]");
+    assertThat(MetadataParser.getBlockHits("testFunc22", stats)).isEqualTo("15[1:1,2:1,3:1,4:0,5:0,6:0,7:0,8:0,9:0,10:0,11:0,13:1,14:0,15:0,17:0]");
   }
 
   @Test
