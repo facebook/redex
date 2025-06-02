@@ -207,7 +207,7 @@ def find_abort_error(lines: typing.Iterable[str]) -> typing.Optional[str]:
     for line in lines:
         stripped_line = line.rstrip()
 
-        if stripped_line.startswith((_LINUX_TERMINATE, _MAC_TERMINATE)):
+        if line.lstrip().startswith((_LINUX_TERMINATE, _MAC_TERMINATE)):
             terminate_lines.append(stripped_line)
             continue
 
