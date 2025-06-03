@@ -41,7 +41,9 @@ namespace interdex {
 void InterDexPass::bind_config() {
   bind("static_prune", false, m_static_prune);
   bind("emit_canaries", true, m_emit_canaries);
-  bind("normal_primary_dex", false, m_normal_primary_dex);
+  bind("normal_primary_dex", true, m_normal_primary_dex,
+       "Whether or not classes.dex is \"normal\" and treated like any other "
+       "dex file. Set this to false when supporting Android 4.");
   bind("order_interdex", true, m_order_interdex);
   bind("keep_primary_order", true, m_keep_primary_order);
   always_assert_log(m_keep_primary_order || m_normal_primary_dex,
