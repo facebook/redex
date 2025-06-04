@@ -61,6 +61,7 @@ if RUN_KOTLIN_TESTS
 check_PROGRAMS += \
     bitwise_ops_constant_propagation_test \
     kotlin_default_args_test \
+    recursive_bitset_constant_propagation_test \
     remove_redundant_nullcheck
 endif
 
@@ -110,6 +111,7 @@ if RUN_KOTLIN_TESTS
 TESTS += \
     bitwise_ops_constant_propagation_test \
     kotlin_default_args_test \
+    recursive_bitset_constant_propagation_test \
     remove_redundant_nullcheck
 endif
 
@@ -350,6 +352,8 @@ kotlin_default_args_test_SOURCES = KotlinDefaultArgsTest.cpp
 EXTRA_kotlin_default_args_test_DEPENDENCIES = kotlin_default_args_test-class.dex
 bitwise_ops_constant_propagation_test_SOURCES = BitwiseOpsConstantPropagationTest.cpp
 EXTRA_bitwise_ops_constant_propagation_test_DEPENDENCIES = bitwise_ops_constant_propagation_test-class.dex
+recursive_bitset_constant_propagation_test_SOURCES = RecursiveBitsetConstantPropagationTest.cpp
+EXTRA_recursive_bitset_constant_propagation_test_DEPENDENCIES = recursive_bitset_constant_propagation_test-class.dex
 remove_redundant_nullcheck_SOURCES = TypeAnalysisRemoveRedundantNullCheck.cpp
 EXTRA_remove_redundant_nullcheck_DEPENDENCIES = remove_redundant_nullcheck-class.dex
 
@@ -363,6 +367,9 @@ kotlin_default_args_test-class.jar: KotlinDefaultArgs.kt
 	$(create_jar_from_kotlin)
 
 bitwise_ops_constant_propagation_test-class.jar: BitwiseOpsConstantPropagationTest.kt
+	$(create_jar_from_kotlin)
+
+recursive_bitset_constant_propagation_test-class.jar: RecursiveBitsetConstantPropagation.kt
 	$(create_jar_from_kotlin)
 
 remove_redundant_nullcheck-class.jar: TypeAnalysisRemoveRedundantNullCheck.kt
