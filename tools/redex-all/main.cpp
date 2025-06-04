@@ -10,6 +10,7 @@
 #include <cinttypes>
 #include <cstring>
 #include <ctime>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -20,6 +21,7 @@
 #include <string>
 #include <vector>
 
+#include <fcntl.h>
 #include <signal.h>
 #include <sstream>
 #include <stdio.h>
@@ -114,6 +116,7 @@ struct Arguments {
   bool properties_check{false};
   bool properties_check_allow_disabled{false};
   std::optional<std::string> assert_abort{};
+  std::optional<std::string> crash_file{};
 };
 
 UNUSED void dump_args(const Arguments& args) {
@@ -342,6 +345,35 @@ void __attribute__((noinline)) asan_abort() {
 }
 #pragma GCC diagnostic pop
 
+struct CrashFile {
+  bool ok_exit{false};
+  std::string path;
+  int fd{-1};
+
+  CrashFile() = default;
+
+  CrashFile(const CrashFile&) = delete;
+  CrashFile& operator=(const CrashFile&) = delete;
+
+  ~CrashFile() {
+    // We leave the fd dangling on error cases so we do not have to think
+    // about all the error paths and RAII.
+    if (fd != -1 && ok_exit) {
+      close(fd);
+      std::filesystem::remove(path);
+    }
+  }
+
+  int open(std::string crash_file_path) {
+    path = std::move(crash_file_path);
+    fd = ::open(path.c_str(), O_CREAT | O_WRONLY,
+                S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    return fd;
+  }
+
+  void set_ok() { ok_exit = true; }
+};
+
 Arguments parse_args(int argc, char* argv[]) {
   Arguments args;
   args.out_dir = ".";
@@ -453,6 +485,9 @@ Arguments parse_args(int argc, char* argv[]) {
                    po::value<std::string>(),
                    "Path to JNI summary directory of json files.");
 
+  od.add_options()("crash-file", po::value<std::string>(),
+                   "Path to a file crash data should be written to.");
+
   // For testing purposes.
   od.add_options()("assert-abort", po::value<std::string>(),
                    "Assert on startup with the given message.");
@@ -479,7 +514,15 @@ Arguments parse_args(int argc, char* argv[]) {
     exit(EXIT_SUCCESS);
   }
 
+  if (vm.count("crash-file")) {
+    args.crash_file = vm["crash-file"].as<std::string>();
+  }
+
   if (vm.count("assert-abort")) {
+    CrashFile crash_file;
+    if (args.crash_file) {
+      set_crash_fd(crash_file.open(*args.crash_file));
+    }
     assert_abort(vm["assert-abort"].as<std::string>(), 0);
   }
   if (vm.count("asan-abort")) {
@@ -1860,6 +1903,8 @@ int main(int argc, char* argv[]) {
   std::string stats_output_path;
   Json::Value stats;
   double cpu_time_s;
+
+  CrashFile crash_file;
   {
     Timer redex_all_main_timer("redex-all main()");
 
@@ -1877,8 +1922,14 @@ int main(int argc, char* argv[]) {
     //       list of library JARS.
     Arguments args = parse_args(argc, argv);
 
+    if (args.crash_file) {
+      set_crash_fd(crash_file.open(*args.crash_file));
+    }
+
     if (args.properties_check) {
-      return check_pass_properties(args);
+      int ret = check_pass_properties(args);
+      crash_file.set_ok();
+      return ret;
     }
 
     keep_reason::Reason::set_record_keep_reasons(
@@ -2042,6 +2093,8 @@ int main(int argc, char* argv[]) {
   redex_thread_pool::ThreadPool::destroy();
 
   malloc_debug::set_shutdown();
+
+  crash_file.set_ok();
 
   return 0;
 }

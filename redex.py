@@ -22,7 +22,7 @@ import timeit
 import typing
 import zipfile
 from dataclasses import dataclass
-from os.path import abspath, dirname, getsize, isdir, isfile, join
+from os.path import abspath, dirname, exists, getsize, isdir, isfile, join
 from pipes import quote
 
 import pyredex.bintools as bintools
@@ -365,23 +365,32 @@ def run_redex_binary(
             trace_fp = logger.get_trace_file()
             pass_fds = [trace_fp.fileno()] if trace_fp is not sys.stderr else []
 
-            proc, handler = bintools.run_and_stream_stderr(prefix + args, env, pass_fds)
-            sigint_handler.set_started(proc)
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                crash_file = join(tmp_dir, "crash.txt")
+                crash_args = ["--crash-file", crash_file]
 
-            returncode, err_out = handler(output_line_handler)
+                proc, handler = bintools.run_and_stream_stderr(
+                    prefix + args + crash_args, env, pass_fds
+                )
+                sigint_handler.set_started(proc)
 
-            sigint_handler.set_postprocessing()
+                returncode, err_out = handler(output_line_handler)
 
-            if returncode == 0:
-                return
+                sigint_handler.set_postprocessing()
 
-            # Check for crash traces.
-            symbolized = bintools.maybe_addr2line(err_out)
-            if symbolized:
-                sys.stderr.write("\n")
-                sys.stderr.write("\n".join(symbolized))
-                sys.stderr.write("\n")
+                if returncode == 0:
+                    return
+
+                # Check for crash traces.
                 # Note: no need for store-logs, as this has failed anyways.
+                symbolized = bintools.maybe_addr2line(crash_file)
+                if symbolized:
+                    sys.stderr.write("\n")
+                    sys.stderr.write("\n".join(symbolized))
+                    sys.stderr.write("\n")
+                elif exists(crash_file) and getsize(crash_file) > 0:
+                    with open(crash_file) as f:
+                        sys.stderr.write(f.read())
 
             abort_error = None
             if returncode == -6:  # SIGABRT

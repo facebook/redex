@@ -34,6 +34,8 @@ void block_multi_asserts(bool block);
 // Note: this is a workaround for libstdc++ from GCC < 8.
 void set_abort_if_not_this_thread();
 
+void set_crash_fd(int fd);
+
 // Stats from /proc. See http://man7.org/linux/man-pages/man5/proc.5.html.
 struct VmStats {
   uint64_t vm_peak = 0; // "Peak virtual memory size."

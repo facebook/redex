@@ -60,14 +60,17 @@ bool slow_invariants_debug{debug};
 
 namespace {
 
+int g_crash_fd = -1;
+
 // This is a macro to avoid extra frames for symbolization.
 #if !IS_WINDOWS
-#define CRASH_BACKTRACE()                             \
-  do {                                                \
-    constexpr int max_bt_frames = 256;                \
-    void* buf[max_bt_frames];                         \
-    auto frames = backtrace(buf, max_bt_frames);      \
-    backtrace_symbols_fd(buf, frames, STDERR_FILENO); \
+#define CRASH_BACKTRACE()                                                \
+  do {                                                                   \
+    constexpr int max_bt_frames = 256;                                   \
+    void* buf[max_bt_frames];                                            \
+    auto frames = backtrace(buf, max_bt_frames);                         \
+    backtrace_symbols_fd(buf, frames,                                    \
+                         g_crash_fd != -1 ? g_crash_fd : STDERR_FILENO); \
   } while (0)
 #else
 #define CRASH_BACKTRACE()
@@ -76,6 +79,8 @@ namespace {
 std::atomic<size_t> g_crashing{0};
 
 }; // namespace
+
+void set_crash_fd(int fd) { g_crash_fd = fd; }
 
 namespace redex_debug {
 
