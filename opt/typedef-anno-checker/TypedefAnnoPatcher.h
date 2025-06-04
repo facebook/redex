@@ -95,18 +95,18 @@ class PatchingCandidates {
 
  public:
   void add_field_candidate(DexField* field, const TypedefAnnoType* anno) {
-    m_field_candidates.insert_or_assign(
-        std::make_pair(field, const_cast<TypedefAnnoType*>(anno)));
+    m_field_candidates.get_or_emplace_and_assert_equal(
+        field, const_cast<TypedefAnnoType*>(anno));
   }
   void add_method_candidate(DexMethod* method, const TypedefAnnoType* anno) {
-    m_method_candidates.insert_or_assign(
-        std::make_pair(method, const_cast<TypedefAnnoType*>(anno)));
+    m_method_candidates.get_or_emplace_and_assert_equal(
+        method, const_cast<TypedefAnnoType*>(anno));
   }
   void add_param_candidate(DexMethod* method,
                            const TypedefAnnoType* anno,
                            src_index_t index) {
-    m_param_candidates.insert_or_assign(std::make_pair(
-        ParamCandidate(method, index), const_cast<TypedefAnnoType*>(anno)));
+    m_param_candidates.get_or_emplace_and_assert_equal(
+        ParamCandidate(method, index), const_cast<TypedefAnnoType*>(anno));
   }
   size_t candidates_size() const {
     return m_field_candidates.size() + m_method_candidates.size() +
@@ -115,9 +115,11 @@ class PatchingCandidates {
   void apply_patching(std::mutex& mutex, Stats& class_stats);
 
  private:
-  ConcurrentMap<DexField*, TypedefAnnoType*> m_field_candidates;
-  ConcurrentMap<DexMethod*, TypedefAnnoType*> m_method_candidates;
-  ConcurrentMap<ParamCandidate, TypedefAnnoType*, boost::hash<ParamCandidate>>
+  InsertOnlyConcurrentMap<DexField*, TypedefAnnoType*> m_field_candidates;
+  InsertOnlyConcurrentMap<DexMethod*, TypedefAnnoType*> m_method_candidates;
+  InsertOnlyConcurrentMap<ParamCandidate,
+                          TypedefAnnoType*,
+                          boost::hash<ParamCandidate>>
       m_param_candidates;
 };
 
