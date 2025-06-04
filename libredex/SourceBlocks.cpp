@@ -615,7 +615,7 @@ void fix_hot_method_cold_entry_violations(ControlFlowGraph* cfg) {
   uint32_t vals_size = sb->vals_size;
   for (uint32_t i = 0; i < vals_size; i++) {
     if (sb->get_val(i).value_or(0) <= 0 &&
-        sb->get_appear100(i).value_or(0) >= 0) {
+        sb->get_appear100(i).value_or(0) > 0) {
       sb->vals[i] = SourceBlock::Val(1, sb->get_appear100(i).value_or(1));
     }
   };
