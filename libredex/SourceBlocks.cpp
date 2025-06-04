@@ -749,25 +749,6 @@ size_t hot_no_hot_pred(
   return 1;
 }
 
-// TODO: Isn't that the same as before, just this time correct w/ counting?
-size_t hot_all_pred_cold(
-    Block* block,
-    const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
-  auto* first_sb_current_b = source_blocks::get_first_source_block(block);
-  if (!has_source_block_positive_val(first_sb_current_b)) {
-    return 0;
-  }
-
-  for (auto predecessor : block->preds()) {
-    auto* first_sb_pred =
-        source_blocks::get_first_source_block(predecessor->src());
-    if (has_source_block_positive_val(first_sb_pred)) {
-      return 0;
-    }
-  }
-  return 1;
-}
-
 template <typename Fn>
 size_t chain_hot_violations_tmpl(Block* block, const Fn& fn) {
   size_t sum{0};
@@ -965,11 +946,10 @@ constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 10> gCounters =
       {"~flow~violation~seen~method~cold~entry~blocks",
        &hot_method_cold_entry_block_violations}}};
 
-constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 3>
+constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 2>
     gCountersNonEntry = {{
         {"~flow~violation~idom", &hot_immediate_dom_not_hot},
         {"~flow~violation~direct~predecessors", &hot_no_hot_pred},
-        {"~flow~violation~cold~direct~predecessors", &hot_all_pred_cold},
     }};
 
 struct SourceBlocksStats {
