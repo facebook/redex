@@ -67,4 +67,25 @@ public class SourceBlocksTest {
       SourceBlocksTest.bazzz();
     }
   }
+
+  static class ViolationsFixTest {
+
+    public void idom_branch() {
+      int x = 0;
+      if (x == 1) {
+        branch_1();
+      } else {
+        branch_2();
+      }
+    };
+
+    public void branch_1() {
+      System.out.println("x = 0");
+    }
+
+    public void branch_2() {
+      System.out.println("x = 1");
+    }
+
+  }
 }
