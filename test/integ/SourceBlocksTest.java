@@ -87,5 +87,18 @@ public class SourceBlocksTest {
       System.out.println("x = 1");
     }
 
+     public void hot_method() {
+      System.out.print("Cold Entry");
+    }
+
+    public void cold_method() {
+      System.out.print("Cold Entry");
+    }
+
+    public void hot_method_2() {
+      System.out.print("Hot Entry");
+    }
+
+
   }
 }

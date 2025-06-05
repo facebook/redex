@@ -840,6 +840,78 @@ TEST_F(SourceBlocksTest, source_blocks_access_methods) {
   }
 }
 
+TEST_F(SourceBlocksTest, fix_hot_method_cold_entry_violations_test) {
+  auto profile_path = std::getenv("hot-method-cold-entry");
+  ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
+
+  auto type = DexType::get_type(
+      "Lcom/facebook/redextest/SourceBlocksTest$ViolationsFixTest;");
+  ASSERT_NE(type, nullptr);
+  auto cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  // Check that no code has source blocks so far.
+  {
+    for (const auto* m : cls->get_all_methods()) {
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      for (const auto& mie : *m->get_code()) {
+        ASSERT_NE(mie.type, MFLOW_SOURCE_BLOCK);
+      }
+    }
+  }
+
+  // Run the pass, check that each block has a SourceBlock.
+  InsertSourceBlocksPass isbp{};
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    set_insert_after_excs(isbp, false);
+    set_profile(isbp, profile_path);
+    set_force_serialize(isbp);
+    set_fix_violations(isbp);
+  });
+
+  UnorderedMap<std::string, std::string> kExpectations = {
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.hot_method:()V",
+       "B0: 0(1:0.5)"},
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.cold_method:()V",
+       "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.hot_method_2:()V",
+       "B0: 0(1:0.5)"},
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.idom_branch:()V",
+       "B0: 0(0:0)\nB1: 1(0:0)\nB2: 2(0:0)\nB3: 3(0:0)"},
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.branch_1:()V",
+       "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.branch_2:()V",
+       "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/"
+       "SourceBlocksTest$ViolationsFixTest;.<init>:()V",
+       "B0: 0(0:0)"},
+
+  };
+
+  for (auto* m : cls->get_all_methods()) {
+    if (m->get_code() == nullptr) {
+      continue;
+    }
+    cfg::ScopedCFG cfg{m->get_code()};
+    auto actual = get_blocks_as_txt(*cfg);
+    auto it = kExpectations.find(show(m));
+    if (it == kExpectations.end()) {
+      EXPECT_TRUE(false) << "No expectation for " << show(m) << ": " << actual;
+      continue;
+    }
+    EXPECT_EQ(actual, it->second) << show(m);
+  }
+}
+
 TEST_F(SourceBlocksTest, fix_idom_test) {
   auto profile_path = std::getenv("idom");
   ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
