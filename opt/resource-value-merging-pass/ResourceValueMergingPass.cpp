@@ -11,6 +11,7 @@
 #include "Pass.h"
 #include "PassManager.h"
 #include "RedexResources.h"
+#include "Styles.h"
 #include "Trace.h"
 
 void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
@@ -29,10 +30,11 @@ void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
   auto resources = create_resource_reader(apk_dir);
   auto res_table = resources->load_res_table();
   auto style_info = res_table->load_style_info();
-  auto dot_graph = style_info.print_as_dot(false);
-
-  TRACE(RES, 1, "Style graph in DOT format:\n%s", dot_graph.c_str());
-  TRACE(RES, 1, "Style count: %zu", style_info.styles.size());
+  resources::ReachabilityOptions options;
+  StyleAnalysis style_analysis(apk_dir, conf.get_global_config(), options,
+                               UnorderedSet<uint32_t>());
+  std::string style_dot = style_analysis.dot(false, true);
+  TRACE(RES, 1, "StyleAnalysis dot output:\n%s", style_dot.c_str());
 }
 
 static ResourceValueMergingPass s_pass;

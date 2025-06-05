@@ -38,7 +38,8 @@ class StyleAnalysis {
 
   UnorderedSet<uint32_t> directly_reachable_styles();
   UnorderedSet<uint32_t> ambiguous_styles();
-  std::string dot(bool exclude_nodes_with_no_edges = false);
+  std::string dot(bool exclude_nodes_with_no_edges = false,
+                  bool display_attributes = false);
 
  private:
   resources::ReachabilityOptions m_options;

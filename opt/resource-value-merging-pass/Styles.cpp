@@ -52,7 +52,19 @@ UnorderedSet<uint32_t> StyleAnalysis::ambiguous_styles() {
   }
   return ambiguous;
 }
-std::string StyleAnalysis::dot(bool exclude_nodes_with_no_edges) {
+
+void print_attributes(std::ostringstream& oss,
+                      const resources::StyleResource& style) {
+  if (!style.attributes.empty()) {
+    oss << "\\nAttributes:";
+    for (const auto& [attr_id, _] : style.attributes) {
+      oss << "\\n 0x" << std::hex << attr_id << " ";
+    }
+  }
+}
+
+std::string StyleAnalysis::dot(bool exclude_nodes_with_no_edges,
+                               bool display_attributes) {
   auto directly_reachable = directly_reachable_styles();
   auto ambiguous = ambiguous_styles();
   auto& id_to_name = m_reachable_resources->get_res_table()->id_to_name;
@@ -74,9 +86,17 @@ std::string StyleAnalysis::dot(bool exclude_nodes_with_no_edges) {
     auto implementations = vec.size();
     if (implementations > 1) {
       oss << "\\nAMBIGUOUS (implementations = " << implementations << ")";
+      if (display_attributes) {
+        for (auto& style : vec) {
+          print_attributes(oss, style);
+        }
+      }
     } else if (implementations == 1) {
       auto& style = vec.at(0);
       oss << "\\n(attr count = " << style.attributes.size() << ")";
+      if (display_attributes) {
+        print_attributes(oss, style);
+      }
     } else {
       oss << "\\nEMPTY";
     }
