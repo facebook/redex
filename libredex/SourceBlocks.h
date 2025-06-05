@@ -234,6 +234,14 @@ InsertResult insert_source_blocks(DexMethod* method,
                                   bool serialize = true,
                                   bool insert_after_excs = false);
 
+InsertResult insert_custom_source_blocks(
+    const DexString* method,
+    ControlFlowGraph* cfg,
+    const std::vector<ProfileData>& profiles = {},
+    bool serialize = true,
+    bool insert_after_excs = false,
+    bool enable_fuzzing = false);
+
 void fix_chain_violations(ControlFlowGraph* cfg);
 
 void fix_idom_violations(ControlFlowGraph* cfg);

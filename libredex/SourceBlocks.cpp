@@ -48,6 +48,21 @@ static SourceBlockConsistencyCheck s_sbcc;
 
 const SourceBlock::Val global_default_val = SourceBlock::Val(1, 1);
 
+static char get_edge_char(const Edge* e) {
+  switch (e->type()) {
+  case EDGE_BRANCH:
+    return 'b';
+  case EDGE_GOTO:
+    return 'g';
+  case EDGE_THROW:
+    return 't';
+  case EDGE_GHOST:
+  case EDGE_TYPE_SIZE:
+    not_reached();
+  }
+  not_reached(); // For GCC.
+}
+
 struct InsertHelper {
   std::ostringstream oss;
   const DexString* method;
@@ -284,21 +299,6 @@ struct InsertHelper {
     return val;
   }
 
-  static char get_edge_char(const Edge* e) {
-    switch (e->type()) {
-    case EDGE_BRANCH:
-      return 'b';
-    case EDGE_GOTO:
-      return 'g';
-    case EDGE_THROW:
-      return 't';
-    case EDGE_GHOST:
-    case EDGE_TYPE_SIZE:
-      not_reached();
-    }
-    not_reached(); // For GCC.
-  }
-
   void edge(Block* cur, const Edge* e) {
     if (serialize) {
       oss << " " << get_edge_char(e);
@@ -416,6 +416,96 @@ struct InsertHelper {
   }
 };
 
+struct CustomValueInsertHelper {
+
+  enum class CustomInsertionType { DEFAULT_VALUES = 0, FUZZING_VALUES = 1 };
+
+  std::ostringstream oss;
+  const DexString* method;
+  uint32_t id{0};
+  bool serialize;
+  bool insert_after_excs;
+  CustomInsertionType insertion_type;
+  size_t interaction_size;
+
+  CustomValueInsertHelper(const DexString* method,
+                          const std::vector<ProfileData>& profiles,
+                          bool serialize,
+                          bool insert_after_excs,
+                          CustomInsertionType insertion_type)
+      : method(method),
+        serialize(serialize),
+        insert_after_excs(insert_after_excs),
+        insertion_type(insertion_type),
+        interaction_size(profiles.size()) {}
+
+  std::vector<SourceBlock::Val> generate_fuzzing_data_for_block(Block* /*b*/) {
+    // for now, this will generate random values, in the future these values
+    // will be generated to perform fuzzing
+
+    std::random_device dev;
+    std::mt19937 random_number_generator(dev());
+
+    std::uniform_int_distribution<> vector_size_distribution(0, 10);
+    std::uniform_int_distribution<> block_hit_distribution(0, 1);
+    std::uniform_real_distribution<> appear100_distribution(0.0, 1.0);
+
+    std::vector<SourceBlock::Val> rand_interaction_pairs;
+    rand_interaction_pairs.reserve(interaction_size);
+
+    for (size_t i = 0; i < interaction_size; ++i) {
+      float hit = block_hit_distribution(random_number_generator);
+      float appear100 = appear100_distribution(random_number_generator);
+      rand_interaction_pairs.emplace_back(SourceBlock::Val{hit, appear100});
+    }
+
+    return rand_interaction_pairs;
+  }
+
+  std::vector<SourceBlock::Val> start_profile(Block* cur) {
+    std::vector<SourceBlock::Val> ret;
+    bool use_fuzzing = (insertion_type == CustomInsertionType::FUZZING_VALUES);
+    std::vector<SourceBlock::Val> fuzzing_values;
+    if (use_fuzzing) {
+      fuzzing_values = generate_fuzzing_data_for_block(cur);
+    }
+    ret.reserve(interaction_size);
+
+    for (size_t i = 0; i < interaction_size; ++i) {
+      auto& value_to_insert =
+          use_fuzzing ? fuzzing_values.at(i) : global_default_val;
+      ret.emplace_back(value_to_insert);
+    }
+    return ret;
+  }
+
+  void start(Block* cur) {
+    if (serialize) {
+      oss << "(" << id;
+    }
+
+    auto val = start_profile(cur);
+
+    source_blocks::impl::BlockAccessor::push_source_block(
+        cur, std::make_unique<SourceBlock>(method, id, val));
+    ++id;
+  }
+
+  void edge(Block* /*cur*/, const Edge* e) {
+    if (serialize) {
+      oss << " " << get_edge_char(e);
+    }
+  }
+
+  void end(Block* /*cur*/) {
+    if (serialize) {
+      oss << ")";
+    }
+  }
+};
+
+using InsertionType = CustomValueInsertHelper::CustomInsertionType;
+
 } // namespace
 
 SourceBlockConsistencyCheck& get_sbcc() { return s_sbcc; }
@@ -489,7 +579,8 @@ InsertResult insert_source_blocks(const DexString* method,
   InsertHelper helper(method, profiles, serialize, insert_after_excs);
 
   impl::visit_in_order(
-      cfg, [&](Block* cur) { helper.start(cur, use_global_default_value); },
+      cfg,
+      [&](Block* cur) { helper.start(cur, use_global_default_value); },
       [&](Block* cur, const Edge* e) { helper.edge(cur, e); },
       [&](Block* cur) { helper.end(cur); });
 
@@ -498,6 +589,31 @@ InsertResult insert_source_blocks(const DexString* method,
   auto idom_map = get_serialized_idom_map(cfg);
 
   return {helper.id, helper.oss.str(), std::move(idom_map), !had_failures};
+}
+
+InsertResult insert_custom_source_blocks(
+    const DexString* method,
+    ControlFlowGraph* cfg,
+    const std::vector<ProfileData>& profiles,
+    bool serialize,
+    bool insert_after_excs,
+    bool enable_fuzzing) {
+
+  InsertionType insertion_type = InsertionType::DEFAULT_VALUES;
+  if (enable_fuzzing) {
+    insertion_type = InsertionType::FUZZING_VALUES;
+  }
+  CustomValueInsertHelper helper(method, profiles, serialize, insert_after_excs,
+                                 insertion_type);
+  impl::visit_in_order(
+      cfg,
+      [&](Block* cur) { helper.start(cur); },
+      [&](Block* cur, const Edge* e) { helper.edge(cur, e); },
+      [&](Block* cur) { helper.end(cur); });
+
+  auto idom_map = get_serialized_idom_map(cfg);
+
+  return {helper.id, helper.oss.str(), std::move(idom_map), true};
 }
 
 void fix_chain_violations(ControlFlowGraph* cfg) {
