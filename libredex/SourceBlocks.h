@@ -222,14 +222,12 @@ using ProfileData =
 
 InsertResult insert_source_blocks(const DexString* method,
                                   ControlFlowGraph* cfg,
-                                  bool use_global_default_value,
                                   const std::vector<ProfileData>& profiles = {},
                                   bool serialize = true,
                                   bool insert_after_excs = false);
 
 InsertResult insert_source_blocks(DexMethod* method,
                                   ControlFlowGraph* cfg,
-                                  bool use_global_default_value,
                                   const std::vector<ProfileData>& profiles = {},
                                   bool serialize = true,
                                   bool insert_after_excs = false);

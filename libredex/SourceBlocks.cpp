@@ -179,12 +179,12 @@ struct InsertHelper {
     return SourceBlock::Val{nested_val, appear100};
   }
 
-  void start(Block* cur, bool use_global_default_value) {
+  void start(Block* cur) {
     if (serialize) {
       oss << "(" << id;
     }
 
-    auto val = start_profile(cur, use_global_default_value, false);
+    auto val = start_profile(cur, false);
 
     source_blocks::impl::BlockAccessor::push_source_block(
         cur, std::make_unique<SourceBlock>(method, id, val));
@@ -227,7 +227,7 @@ struct InsertHelper {
           oss << "(" << id << ")";
         }
 
-        auto nested_val = start_profile(cur, use_global_default_value,
+        auto nested_val = start_profile(cur,
                                         /*empty_inner_tail=*/true);
         it = source_blocks::impl::BlockAccessor::insert_source_block_after(
             cur, insert_after,
@@ -239,21 +239,18 @@ struct InsertHelper {
   }
 
   std::vector<SourceBlock::Val> start_profile(Block* cur,
-                                              bool use_global_default_value,
                                               bool empty_inner_tail = false) {
     std::vector<SourceBlock::Val> ret;
     ret.reserve(parser_state.size());
     for (auto& p_state : parser_state) {
-      ret.emplace_back(start_profile_one(cur, empty_inner_tail, p_state,
-                                         use_global_default_value));
+      ret.emplace_back(start_profile_one(cur, empty_inner_tail, p_state));
     }
     return ret;
   }
 
   SourceBlock::Val start_profile_one(Block* cur,
                                      bool empty_inner_tail,
-                                     ProfileParserState& p_state,
-                                     bool use_global_default_value) {
+                                     ProfileParserState& p_state) {
     if (p_state.had_profile_failure) {
       return kFailVal;
     }
@@ -281,9 +278,7 @@ struct InsertHelper {
     if (empty_inner_tail) {
       redex_assert(matcher_state.inner_tail.is_nil());
     }
-    auto val = (use_global_default_value)
-                   ? global_default_val
-                   : parse_val(*matcher_state.val_str_ptr);
+    auto val = parse_val(*matcher_state.val_str_ptr);
     TRACE(MMINL,
           5,
           "Started block with val=%f/%f. Popping %s, pushing %s + %s",
@@ -512,13 +507,11 @@ SourceBlockConsistencyCheck& get_sbcc() { return s_sbcc; }
 
 InsertResult insert_source_blocks(DexMethod* method,
                                   ControlFlowGraph* cfg,
-                                  bool use_global_default_value,
                                   const std::vector<ProfileData>& profiles,
                                   bool serialize,
                                   bool insert_after_excs) {
-  return insert_source_blocks(&method->get_deobfuscated_name(), cfg,
-                              use_global_default_value, profiles, serialize,
-                              insert_after_excs);
+  return insert_source_blocks(&method->get_deobfuscated_name(), cfg, profiles,
+                              serialize, insert_after_excs);
 }
 
 static std::string get_serialized_idom_map(ControlFlowGraph* cfg) {
@@ -572,7 +565,6 @@ static std::string get_serialized_idom_map(ControlFlowGraph* cfg) {
 
 InsertResult insert_source_blocks(const DexString* method,
                                   ControlFlowGraph* cfg,
-                                  bool use_global_default_value,
                                   const std::vector<ProfileData>& profiles,
                                   bool serialize,
                                   bool insert_after_excs) {
@@ -580,7 +572,7 @@ InsertResult insert_source_blocks(const DexString* method,
 
   impl::visit_in_order(
       cfg,
-      [&](Block* cur) { helper.start(cur, use_global_default_value); },
+      [&](Block* cur) { helper.start(cur); },
       [&](Block* cur, const Edge* e) { helper.edge(cur, e); },
       [&](Block* cur) { helper.end(cur); });
 

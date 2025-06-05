@@ -665,8 +665,7 @@ struct Injector {
                   use_fuzzing_values);
             } else {
               res = source_blocks::insert_source_blocks(
-                  sb_name, &cfg, use_default_value, profiles.first, serialize,
-                  exc_inject);
+                  sb_name, &cfg, profiles.first, serialize, exc_inject);
             }
 
             if (fix_violations) {
