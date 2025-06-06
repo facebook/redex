@@ -551,7 +551,7 @@ resources::StyleInfo ResourceTableFile::load_style_info() {
       if (style.parent != 0) {
         auto search = added_nodes.find(style.parent);
         if (search != added_nodes.end()) {
-          boost::add_edge(added_nodes.at(id), search->second, style_info.graph);
+          boost::add_edge(search->second, added_nodes.at(id), style_info.graph);
         }
       }
     }
