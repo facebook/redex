@@ -49,7 +49,7 @@ class ComposeUITest : public RedexIntegrationTest {
  protected:
   void SetUp() override {
     static constexpr std::string_view main_method_sig =
-        "LComposeUITestKt;.HelloWorldText:(Landroidx/compose/runtime/"
+        "Lredex/ComposeUITestKt;.HelloWorldText:(Landroidx/compose/runtime/"
         "Composer;I)V";
     RedexIntegrationTest::SetUp();
 
@@ -60,7 +60,7 @@ class ComposeUITest : public RedexIntegrationTest {
   }
 
   static constexpr std::string_view super_text_printer_method_signature =
-      "LComposeUITestKt;.SuperTextPrinter:(Ljava/lang/String;Ljava/lang/"
+      "Lredex/ComposeUITestKt;.SuperTextPrinter:(Ljava/lang/String;Ljava/lang/"
       "String;Landroidx/compose/runtime/Composer;II)V";
 };
 
