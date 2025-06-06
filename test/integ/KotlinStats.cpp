@@ -48,6 +48,7 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   // LKotlinLayzyKt;
   // LCompanionClass$Companion;
   // LKotlinLambdaInline;
+  // LKotlinDefaultArgs;
   // LCompanionClass;
   // LDelegateTest;
   // LExample;
@@ -57,7 +58,7 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   // LKotlinCompanionObjKt;
   // Lfoo;
   // LAnotherCompanionClass;
-  EXPECT_EQ(stats.kotlin_class, 14);
+  EXPECT_EQ(stats.kotlin_class, 15);
 
   // Named companion object is not counted yet
   // LCompanionClass$Companion;
@@ -66,5 +67,10 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   // LKotlinLambdaInline$foo$1;
   // LFooDelagates$lazyValue$2;
   EXPECT_EQ(stats.kotlin_anonymous_class, 2);
+
+  // LKotlinDefaultArgs.greet$default, with 2 default args
+  EXPECT_EQ(stats.kotlin_default_arg_method, 1);
+  EXPECT_EQ(stats.kotlin_default_arg_check_insns, 2);
+  EXPECT_EQ(stats.kotlin_and_lit_insns, 2);
 }
 } // namespace

@@ -18,6 +18,8 @@ class PrintKotlinStats : public Pass {
   struct Stats {
     size_t unknown_null_check_insns{0};
     size_t kotlin_null_check_insns{0};
+    size_t kotlin_default_arg_check_insns{0};
+    size_t kotlin_and_lit_insns{0};
     size_t java_public_param_objects{0};
     size_t kotlin_public_param_objects{0};
     size_t kotlin_delegates{0};
@@ -36,6 +38,8 @@ class PrintKotlinStats : public Pass {
     Stats& operator+=(const Stats& that) {
       unknown_null_check_insns += that.unknown_null_check_insns;
       kotlin_null_check_insns += that.kotlin_null_check_insns;
+      kotlin_default_arg_check_insns += that.kotlin_default_arg_check_insns;
+      kotlin_and_lit_insns += that.kotlin_and_lit_insns;
       java_public_param_objects += that.java_public_param_objects;
       kotlin_public_param_objects += that.kotlin_public_param_objects;
       kotlin_delegates += that.kotlin_delegates;

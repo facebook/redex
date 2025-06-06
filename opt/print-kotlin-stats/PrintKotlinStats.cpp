@@ -50,6 +50,10 @@ bool is_anonymous(std::string_view name) {
   return true;
 }
 
+bool is_kotlin_default_arg_method(const DexMethod& method) {
+  return boost::algorithm::ends_with(method.get_name()->str(), "$default");
+}
+
 } // namespace
 
 // Setup types/strings needed for the pass
@@ -142,7 +146,7 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(DexClass* cls) {
   if (cls->rstate.is_cls_kotlin()) {
     stats.kotlin_class++;
     for (auto* method : cls->get_all_methods()) {
-      if (boost::algorithm::ends_with(method->get_name()->str(), "$default")) {
+      if (is_kotlin_default_arg_method(*method)) {
         stats.kotlin_default_arg_method++;
       }
     }
@@ -192,6 +196,12 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
         stats.kotlin_null_check_insns++;
       }
     } break;
+    case OPCODE_AND_INT_LIT: {
+      if (is_kotlin_default_arg_method(*method)) {
+        stats.kotlin_default_arg_check_insns++;
+      }
+      stats.kotlin_and_lit_insns++;
+    } break;
     default:
       break;
     }
@@ -201,6 +211,9 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
 
 void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("kotlin_null_check_insns", kotlin_null_check_insns);
+  mgr.incr_metric("kotlin_default_arg_check_insns",
+                  kotlin_default_arg_check_insns);
+  mgr.incr_metric("kotlin_and_lit_insns", kotlin_and_lit_insns);
   mgr.incr_metric("java_public_param_objects", java_public_param_objects);
   mgr.incr_metric("kotlin_public_param_objects", kotlin_public_param_objects);
   mgr.incr_metric("no_of_delegates", kotlin_delegates);
