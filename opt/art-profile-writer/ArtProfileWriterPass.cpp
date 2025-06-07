@@ -579,10 +579,6 @@ void never_compile(
     never_compile_methods.emplace(method,
                                   method->get_code()->estimate_code_units());
 
-    if (it != baseline_profile->methods.end()) {
-      baseline_profile->methods.erase(it);
-    }
-
     if (has_anno(method, type::dalvik_annotation_optimization_NeverCompile())) {
       methods_already_never_compile.fetch_add(1);
       return;
@@ -603,6 +599,9 @@ void never_compile(
     always_assert(res);
     method->set_access(access);
   });
+  for (auto&& [method, _] : UnorderedIterable(never_compile_methods)) {
+    baseline_profile->methods.erase(method);
+  }
   mgr.incr_metric("never_compile_methods", never_compile_methods.size());
   mgr.incr_metric("methods_already_never_compile",
                   methods_already_never_compile.load());
