@@ -489,6 +489,7 @@ void never_compile(
     int64_t excluded_appear100_threshold,
     int64_t excluded_call_count_threshold,
     bool never_compile_strings_lookup_methods,
+    bool never_compile_no_attach,
     baseline_profiles::BaselineProfile* manual_profile,
     UnorderedMap<std::string, baseline_profiles::BaselineProfile>*
         baseline_profiles) {
@@ -511,6 +512,7 @@ void never_compile(
   InsertOnlyConcurrentMap<DexMethod*, uint32_t> never_compile_methods;
   std::atomic<size_t> methods_already_never_compile = 0;
   std::atomic<size_t> methods_annotation_attached = 0;
+  std::atomic<size_t> methods_annotation_not_attached = 0;
   std::atomic<size_t> never_compile_callcount_threshold_mets{0};
   std::atomic<size_t> never_compile_perf_threshold_mets{0};
   std::atomic<size_t> never_compile_called_coverage_threshold_mets{0};
@@ -586,6 +588,11 @@ void never_compile(
       return;
     }
 
+    if (never_compile_no_attach) {
+      methods_annotation_not_attached.fetch_add(1);
+      return;
+    }
+
     methods_annotation_attached.fetch_add(1);
     if (method->get_anno_set()) {
       method->get_anno_set()->combine_with(anno_set);
@@ -612,6 +619,8 @@ void never_compile(
                   methods_already_never_compile.load());
   mgr.incr_metric("methods_annotation_attached",
                   methods_annotation_attached.load());
+  mgr.incr_metric("methods_annotation_not_attached",
+                  methods_annotation_not_attached.load());
   mgr.incr_metric("never_compile_callcount",
                   never_compile_callcount_threshold_mets.load());
   mgr.incr_metric("never_compile_perf",
@@ -672,6 +681,7 @@ void ArtProfileWriterPass::bind_config() {
   bind("never_compile_ignore_hot", false, m_never_compile_ignore_hot);
   bind("never_compile_strings_lookup_methods", false,
        m_never_compile_strings_lookup_methods);
+  bind("never_compile_no_attach", false, m_never_compile_no_attach);
 }
 
 void ArtProfileWriterPass::eval_pass(DexStoresVector& stores,
@@ -778,16 +788,16 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       m_never_compile_perf_threshold > -1 ||
       m_never_compile_called_coverage_threshold > -1 ||
       m_never_compile_strings_lookup_methods) {
-    never_compile(scope, conf.get_default_baseline_profile_config(),
-                  method_profiles, mgr, m_never_compile_ignore_hot,
-                  m_never_compile_callcount_threshold,
-                  m_never_compile_perf_threshold,
-                  m_never_compile_called_coverage_threshold,
-                  m_never_compile_excluded_interaction_pattern,
-                  m_never_compile_excluded_appear100_threshold,
-                  m_never_compile_excluded_call_count_threshold,
-                  m_never_compile_strings_lookup_methods, &manual_profile,
-                  &baseline_profiles);
+    never_compile(
+        scope, conf.get_default_baseline_profile_config(), method_profiles, mgr,
+        m_never_compile_ignore_hot, m_never_compile_callcount_threshold,
+        m_never_compile_perf_threshold,
+        m_never_compile_called_coverage_threshold,
+        m_never_compile_excluded_interaction_pattern,
+        m_never_compile_excluded_appear100_threshold,
+        m_never_compile_excluded_call_count_threshold,
+        m_never_compile_strings_lookup_methods, m_never_compile_no_attach,
+        &manual_profile, &baseline_profiles);
   }
   auto store_fence_helper_type = DexType::get_type(STORE_FENCE_HELPER_NAME);
   if (store_fence_helper_type) {
