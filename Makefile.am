@@ -61,6 +61,9 @@ AM_CPPFLAGS = $(COMMON_INCLUDES)
 AM_CPPFLAGS += $(BOOST_CPPFLAGS)
 AM_LDFLAGS = $(BOOST_LDFLAGS)
 
+# GCC <= 8 requires linking to stdc++fs to use std::filesystem
+AM_LDFLAGS += -lstdc++fs
+
 noinst_LTLIBRARIES = libredex.la libopt.la
 
 BUILT_SOURCES =
