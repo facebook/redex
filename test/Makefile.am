@@ -4,8 +4,9 @@ check_LTLIBRARIES = libgtest.la libgtest_main.la libgmock_main.la
 
 # Note: Use at least 1.10 as we need googlemock, too.
 GOOGLETEST_MIN_VERSION = 1.10.0
-GOOGLETEST_DIR = googletest-release-$(GOOGLETEST_MIN_VERSION)/googletest
-GOOGLEMOCK_DIR = googletest-release-$(GOOGLETEST_MIN_VERSION)/googlemock
+GOOGLETEST_RELEASE_DIR = googletest-release-$(GOOGLETEST_MIN_VERSION)
+GOOGLETEST_DIR = $(GOOGLETEST_RELEASE_DIR)/googletest
+GOOGLEMOCK_DIR = $(GOOGLETEST_RELEASE_DIR)/googlemock
 
 libgtest_la_CPPFLAGS = -I$(GOOGLETEST_DIR) -I$(GOOGLETEST_DIR)/include
 libgtest_la_SOURCES = $(GOOGLETEST_DIR)/src/gtest-all.cc
@@ -30,12 +31,14 @@ GOOGLE_TEST_SOURCES = \
 
 BUILT_SOURCES = $(GOOGLE_TEST_SOURCES)
 
-$(GOOGLE_TEST_SOURCES): setup_gtest
+$(GOOGLE_TEST_SOURCES): $(GOOGLETEST_RELEASE_DIR)/setup_gtest
 
-setup_gtest:
-	curl https://codeload.github.com/google/googletest/zip/release-$(GOOGLETEST_MIN_VERSION) -o gtest-$(GOOGLETEST_MIN_VERSION).zip
-	unzip -o gtest-$(GOOGLETEST_MIN_VERSION).zip
-	touch setup_gtest
+$(GOOGLETEST_RELEASE_DIR)/setup_gtest:
+	curl https://codeload.github.com/google/googletest/tar.gz/release-$(GOOGLETEST_MIN_VERSION) -o gtest.tar.gz
+	rm -rf googletest-release-*
+	mkdir $(GOOGLETEST_RELEASE_DIR)
+	tar xvf gtest.tar.gz --strip-components=1 -C $(GOOGLETEST_RELEASE_DIR)
+	touch $(GOOGLETEST_RELEASE_DIR)/setup_gtest
 
 check_SCRIPTS = check_num_passes.sh
 # _DEPENDENCIES does not seem to work for SCRIPTS
