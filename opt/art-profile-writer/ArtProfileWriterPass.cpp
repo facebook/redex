@@ -724,6 +724,17 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       &method_refs_without_def);
   auto& baseline_profiles = std::get<1>(baseline_profiles_tuple);
   auto& manual_profile = std::get<0>(baseline_profiles_tuple);
+  auto add_class = [&](DexClass* cls) {
+    manual_profile.classes.insert(cls);
+    for (const auto& [config_name, baseline_profile_config] :
+         UnorderedIterable(conf.get_baseline_profile_configs())) {
+      if (baseline_profile_config.options.use_final_redex_generated_profile) {
+        auto& baseline_profile = baseline_profiles[config_name];
+        baseline_profile.classes.insert(cls);
+      }
+    }
+  };
+
   for (const auto& [config_name, baseline_profile_config] :
        UnorderedIterable(conf.get_baseline_profile_configs())) {
 
@@ -778,13 +789,13 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     // Add it in for it to be compiled.
     auto store_fence_helper_cls = type_class(store_fence_helper_type);
     always_assert(store_fence_helper_cls);
-    manual_profile.classes.insert(store_fence_helper_cls);
+    add_class(store_fence_helper_cls);
   }
   if (m_include_strings_lookup_class) {
     walk::classes(scope, [&](DexClass* cls) {
       if (cls->rstate.is_generated() &&
           cls->get_perf_sensitive() == PerfSensitiveGroup::STRINGS_LOOKUP) {
-        manual_profile.classes.insert(cls);
+        add_class(cls);
       }
     });
   }
