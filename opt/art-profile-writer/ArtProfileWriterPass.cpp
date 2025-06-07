@@ -815,7 +815,8 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       conf.get_default_baseline_profile_config().options.strip_classes;
   write_methods(scope, manual_profile, strip_classes, ofs);
 
-  auto gather_metrics = [&](const auto& bp_name, const auto& profile) {
+  auto gather_metrics = [&](const auto& bp_name, const auto& bp_config_name,
+                            const auto& profile) {
     std::atomic<size_t> code_units{0};
     std::atomic<size_t> compiled_methods{0};
     std::atomic<size_t> compiled_code_units{0};
@@ -840,7 +841,8 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     mgr.incr_metric(prefix + "compiled_code_units",
                     (size_t)compiled_code_units);
 
-    const auto& bp_config = conf.get_baseline_profile_configs().at(bp_name);
+    const auto& bp_config =
+        conf.get_baseline_profile_configs().at(bp_config_name);
     for (auto&& [interaction_id, interaction_name] : bp_config.interactions) {
       mgr.incr_metric(prefix + "interaction_" + interaction_id, 1);
     }
@@ -861,10 +863,12 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       mgr.incr_metric(prefix + "use_final_redex_generated_profile", 1);
     }
   };
-  gather_metrics(baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME,
+  gather_metrics("manual",
+                 baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME,
                  manual_profile);
   for (auto&& [name, profile] : UnorderedIterable(baseline_profiles)) {
-    gather_metrics(name, profile);
+    always_assert(name != "manual");
+    gather_metrics(name, name, profile);
   }
 
   mgr.incr_metric("method_refs_without_def", method_refs_without_def.size());
