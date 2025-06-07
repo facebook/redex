@@ -1,5 +1,5 @@
 # TODO: Unify with Makefile.am (or maybe autodetect)
-GOOGLETEST_MIN_VERSION = 1.10.0
+GOOGLETEST_MIN_VERSION = 1.14.0
 GOOGLETEST_DIR = googletest-release-$(GOOGLETEST_MIN_VERSION)/googletest
 GOOGLEMOCK_DIR = googletest-release-$(GOOGLETEST_MIN_VERSION)/googlemock
 
