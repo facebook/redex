@@ -57,6 +57,7 @@ class ArtProfileWriterPass : public Pass {
   int64_t m_never_compile_excluded_call_count_threshold;
   bool m_never_compile_ignore_hot;
   bool m_never_compile_strings_lookup_methods;
+  bool m_never_compile_no_attach;
   bool m_include_strings_lookup_class;
   std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
 };
