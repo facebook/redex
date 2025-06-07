@@ -489,7 +489,9 @@ void never_compile(
     int64_t excluded_appear100_threshold,
     int64_t excluded_call_count_threshold,
     bool never_compile_strings_lookup_methods,
-    baseline_profiles::BaselineProfile* baseline_profile) {
+    baseline_profiles::BaselineProfile* manual_profile,
+    UnorderedMap<std::string, baseline_profiles::BaselineProfile>*
+        baseline_profiles) {
   UnorderedSet<std::string> excluded_interaction_ids;
   if (!excluded_interaction_pattern.empty()) {
     boost::regex rx(excluded_interaction_pattern);
@@ -517,9 +519,9 @@ void never_compile(
     if (method::is_clinit(method)) {
       return;
     }
-    auto it = baseline_profile->methods.find(method);
+    auto it = manual_profile->methods.find(method);
     if (!never_compile_ignore_hot) {
-      if (it == baseline_profile->methods.end()) {
+      if (it == manual_profile->methods.end()) {
         return;
       }
       auto& mf = it->second;
@@ -599,8 +601,11 @@ void never_compile(
     always_assert(res);
     method->set_access(access);
   });
-  for (auto&& [method, _] : UnorderedIterable(never_compile_methods)) {
-    baseline_profile->methods.erase(method);
+  for (auto&& [method, _0] : UnorderedIterable(never_compile_methods)) {
+    manual_profile->methods.erase(method);
+    for (auto& [_1, profile] : UnorderedIterable(*baseline_profiles)) {
+      profile.methods.erase(method);
+    }
   }
   mgr.incr_metric("never_compile_methods", never_compile_methods.size());
   mgr.incr_metric("methods_already_never_compile",
@@ -781,7 +786,8 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
                   m_never_compile_excluded_interaction_pattern,
                   m_never_compile_excluded_appear100_threshold,
                   m_never_compile_excluded_call_count_threshold,
-                  m_never_compile_strings_lookup_methods, &manual_profile);
+                  m_never_compile_strings_lookup_methods, &manual_profile,
+                  &baseline_profiles);
   }
   auto store_fence_helper_type = DexType::get_type(STORE_FENCE_HELPER_NAME);
   if (store_fence_helper_type) {
