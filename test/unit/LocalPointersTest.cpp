@@ -216,20 +216,22 @@ TEST_F(LocalPointersTest, generateEscapeSummary2) {
   fp_iter.run(ptrs::Environment());
 
   auto summary = ptrs::get_escape_summary(fp_iter, *code);
-  EXPECT_EQ(summary.returned_parameters, ptrs::ParamSet::top());
+  EXPECT_EQ(summary.returned_parameters,
+            ptrs::ParamSet({ptrs::UNREPRESENTABLE_RETURN}));
   EXPECT_THAT(unordered_unsafe_unwrap(summary.escaping_parameters),
               UnorderedElementsAre());
 
   // Test (de)serialization.
   std::stringstream ss;
   ss << to_s_expr(summary);
-  EXPECT_EQ(ss.str(), "(() Top)");
+  EXPECT_EQ(ss.str(), "(() (#65534))");
 
   sparta::s_expr_istream s_expr_in(ss);
   sparta::s_expr summary_s_expr;
   s_expr_in >> summary_s_expr;
   auto summary_copy = ptrs::EscapeSummary::from_s_expr(summary_s_expr);
-  EXPECT_EQ(summary_copy.returned_parameters, ptrs::ParamSet::top());
+  EXPECT_EQ(summary.returned_parameters,
+            ptrs::ParamSet({ptrs::UNREPRESENTABLE_RETURN}));
   EXPECT_THAT(unordered_unsafe_unwrap(summary_copy.escaping_parameters),
               UnorderedElementsAre());
 }
@@ -366,7 +368,8 @@ TEST_F(LocalPointersTest, returnEscapedValue) {
     fp_iter.run(ptrs::Environment());
 
     fresh_return_summary = ptrs::get_escape_summary(fp_iter, *code);
-    EXPECT_EQ(fresh_return_summary.returned_parameters, ptrs::ParamSet::top());
+    EXPECT_EQ(fresh_return_summary.returned_parameters,
+              ptrs::ParamSet({ptrs::UNREPRESENTABLE_RETURN}));
     EXPECT_THAT(
         unordered_unsafe_unwrap(fresh_return_summary.escaping_parameters),
         UnorderedElementsAre());

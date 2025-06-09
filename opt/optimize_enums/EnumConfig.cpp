@@ -148,7 +148,9 @@ ParamSummary calculate_param_summary(DexMethod* method,
   auto args = method->get_proto()->get_args();
   auto& escaping_params = escape_summary.escaping_parameters;
   if (escape_summary.returned_parameters.kind() ==
-      sparta::AbstractValueKind::Value) {
+          sparta::AbstractValueKind::Value &&
+      !escape_summary.returned_parameters.contains(
+          ptrs::UNREPRESENTABLE_RETURN)) {
     auto& returned_elements = escape_summary.returned_parameters.elements();
     if (returned_elements.size() == 1) {
       auto returned = *returned_elements.begin();

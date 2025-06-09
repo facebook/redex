@@ -244,15 +244,24 @@ void analyze_invoke_with_summary(const EscapeSummary& summary,
 
   switch (summary.returned_parameters.kind()) {
   case sparta::AbstractValueKind::Value: {
-    PointerSet returned_ptrs;
-    for (auto src_idx : summary.returned_parameters.elements()) {
-      if (src_idx == FRESH_RETURN) {
-        returned_ptrs.add(insn);
-      } else {
-        returned_ptrs.join_with(env->get_pointers(insn->src(src_idx)));
+    if (dest_may_be_pointer(insn)) {
+      PointerSet returned_ptrs;
+      for (auto src_idx : summary.returned_parameters.elements()) {
+        if (src_idx == FRESH_RETURN) {
+          returned_ptrs.add(insn);
+        } else if (src_idx == UNREPRESENTABLE_RETURN) {
+          returned_ptrs.add(insn);
+          // escape just insn right here; we are going to override
+          // RESULT_REGISTER in a moment with a more precise pointer set.
+          escape_dest(insn, RESULT_REGISTER, env);
+        } else {
+          returned_ptrs.join_with(env->get_pointers(insn->src(src_idx)));
+        }
       }
+      env->set_pointers(RESULT_REGISTER, returned_ptrs);
+    } else {
+      env->set_pointers(RESULT_REGISTER, PointerSet::top());
     }
-    env->set_pointers(RESULT_REGISTER, returned_ptrs);
     break;
   }
   case sparta::AbstractValueKind::Top:
@@ -531,10 +540,8 @@ EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
         summary.returned_parameters.add(FRESH_RETURN);
       } else {
         // We are returning a pointer that did not originate from an input
-        // parameter. We have no way of representing these values in our
-        // summary, hence we set the return value to Top.
-        summary.returned_parameters.set_to_top();
-        break;
+        // parameter.
+        summary.returned_parameters.add(UNREPRESENTABLE_RETURN);
       }
     }
     break;
