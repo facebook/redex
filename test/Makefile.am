@@ -2,8 +2,7 @@ SUBDIRS = . samples integ unit
 
 check_LTLIBRARIES = libgtest.la libgtest_main.la libgmock_main.la
 
-# Note: Use at least 1.10 as we need googlemock, too.
-GOOGLETEST_MIN_VERSION = 1.10.0
+GOOGLETEST_MIN_VERSION = 1.14.0
 GOOGLETEST_RELEASE_DIR = googletest-release-$(GOOGLETEST_MIN_VERSION)
 GOOGLETEST_DIR = $(GOOGLETEST_RELEASE_DIR)/googletest
 GOOGLEMOCK_DIR = $(GOOGLETEST_RELEASE_DIR)/googlemock
@@ -34,7 +33,7 @@ BUILT_SOURCES = $(GOOGLE_TEST_SOURCES)
 $(GOOGLE_TEST_SOURCES): $(GOOGLETEST_RELEASE_DIR)/setup_gtest
 
 $(GOOGLETEST_RELEASE_DIR)/setup_gtest:
-	curl https://codeload.github.com/google/googletest/tar.gz/release-$(GOOGLETEST_MIN_VERSION) -o gtest.tar.gz
+	curl https://codeload.github.com/google/googletest/tar.gz/v$(GOOGLETEST_MIN_VERSION) -o gtest.tar.gz
 	rm -rf googletest-release-*
 	mkdir $(GOOGLETEST_RELEASE_DIR)
 	tar xvf gtest.tar.gz --strip-components=1 -C $(GOOGLETEST_RELEASE_DIR)
