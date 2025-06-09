@@ -90,6 +90,7 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
                  invokes_with_summaries[OPCODE_INVOKE_VIRTUAL]);
   mgr.set_metric("invoke_super_with_summaries",
                  invokes_with_summaries[OPCODE_INVOKE_SUPER]);
+  mgr.set_metric("lpa_iterations", stats.lpa_iterations);
 }
 
 static ObjectSensitiveDcePass s_pass;

@@ -413,7 +413,7 @@ std::pair<std::unique_ptr<FixpointIterator>, EscapeSummary> analyze_method(
   return std::make_pair(std::move(fp_iter), std::move(summary));
 }
 
-FixpointIteratorMap analyze_scope(
+AnalyzeScopeResult analyze_scope(
     const Scope& scope,
     const call_graph::Graph& call_graph,
     SummaryMap* summary_map_ptr,
@@ -430,7 +430,9 @@ FixpointIteratorMap analyze_scope(
     affected_methods->insert(method);
   });
 
+  size_t iterations = 0;
   while (!affected_methods->empty()) {
+    ++iterations;
     InsertOnlyConcurrentMap<const DexMethod*, EscapeSummary>
         changed_effect_summaries;
     auto next_affected_methods =
@@ -461,7 +463,7 @@ FixpointIteratorMap analyze_scope(
     std::swap(next_affected_methods, affected_methods);
   }
 
-  return fp_iter_map;
+  return AnalyzeScopeResult{std::move(fp_iter_map), iterations};
 }
 
 void collect_exiting_pointers(const FixpointIterator& fp_iter,

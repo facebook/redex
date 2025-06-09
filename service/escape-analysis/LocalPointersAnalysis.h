@@ -306,6 +306,11 @@ using FixpointIteratorMap =
 
 using SummaryMap = UnorderedMap<const DexMethodRef*, EscapeSummary>;
 
+struct AnalyzeScopeResult {
+  FixpointIteratorMap data;
+  size_t iterations;
+};
+
 /*
  * Analyze all methods in scope, making sure to analyze the callees before
  * their callers.
@@ -313,7 +318,7 @@ using SummaryMap = UnorderedMap<const DexMethodRef*, EscapeSummary>;
  * If a non-null SummaryMap pointer is passed in, it will get populated
  * with the escape summaries of the methods in scope.
  */
-FixpointIteratorMap analyze_scope(
+AnalyzeScopeResult analyze_scope(
     const Scope&,
     const call_graph::Graph&,
     SummaryMap* = nullptr,
