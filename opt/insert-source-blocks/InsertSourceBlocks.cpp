@@ -185,10 +185,19 @@ uint64_t stable_hash(ControlFlowGraph& cfg) {
 // Kotlin generates it.
 std::string hashed_name(uint64_t hash_value,
                         const std::string_view& access_method_name) {
+  // The modern javac way encodes access flags in the last two digits of the
+  // numerical suffix. Unfortunately we may also see older implementations (or
+  // maybe written by hand or bytecode frameworks).
+  // In that case, hope that it is single- or double-digit. Do not cross-check
+  // a class, that adds complexity and is not worth it (just detect at most 0-99).
+  // Then just use `00` for flags, relying solely on the body hash.
+
   return std::string("redex") + (boost::format("%016x") % hash_value).str() +
          "$" +
-         std::string(
-             access_method_name.substr(access_method_name.length() - 2, 2));
+         (access_method_name.size() >= 3
+              ? std::string(access_method_name.substr(
+                    access_method_name.length() - 2, 2))
+              : std::string("00"));
 }
 
 bool maybe_hashed_name(const std::string_view& access_part) {
