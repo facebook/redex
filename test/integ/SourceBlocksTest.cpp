@@ -983,6 +983,114 @@ TEST_F(SourceBlocksTest, fix_idom_test) {
   }
 }
 
+TEST_F(SourceBlocksTest, chain_and_dom_fix_chain_test) {
+  auto profile_path = std::getenv("chain-and-dom");
+  ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
+
+  auto type = DexType::get_type(
+      "Lcom/facebook/redextest/SourceBlocksTest$ChainAndDomClass;");
+  ASSERT_NE(type, nullptr);
+  auto cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  // Check that no code has source blocks so far.
+  {
+    for (const auto* m : cls->get_all_methods()) {
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      for (const auto& mie : *m->get_code()) {
+        ASSERT_NE(mie.type, MFLOW_SOURCE_BLOCK);
+      }
+    }
+  }
+
+  // Run the pass, check that each block has a SourceBlock.
+  InsertSourceBlocksPass isbp{};
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    set_insert_after_excs(isbp, true);
+    set_profile(isbp, profile_path);
+    set_force_serialize(isbp);
+    set_fix_violations(isbp);
+  });
+
+  for (auto* m : cls->get_all_methods()) {
+    if (m->get_code() == nullptr) {
+      continue;
+    }
+    if (m->get_name()->str().substr(0, 6) == "chains") {
+      cfg::ScopedCFG cfg{m->get_code()};
+      // After fix_chain_violations, check if all source blocks now have values
+      // of (1:0)
+      for (auto* b : cfg->blocks()) {
+        for (const auto& mie : *b) {
+          if (mie.type == MFLOW_SOURCE_BLOCK) {
+            auto* sb = mie.src_block.get();
+            ASSERT_EQ(sb->vals[0]->val, 1.0f);
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST_F(SourceBlocksTest, chain_and_dom_fix_thrower_test) {
+  auto profile_path = std::getenv("chain-and-dom");
+  ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
+
+  auto type = DexType::get_type(
+      "Lcom/facebook/redextest/SourceBlocksTest$ChainAndDomClass;");
+  ASSERT_NE(type, nullptr);
+  auto cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  // Check that no code has source blocks so far.
+  {
+    for (const auto* m : cls->get_all_methods()) {
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      for (const auto& mie : *m->get_code()) {
+        ASSERT_NE(mie.type, MFLOW_SOURCE_BLOCK);
+      }
+    }
+  }
+
+  // Run the pass, check that each block has a SourceBlock.
+  InsertSourceBlocksPass isbp{};
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    set_insert_after_excs(isbp, true);
+    set_profile(isbp, profile_path);
+    set_force_serialize(isbp);
+    set_fix_violations(isbp);
+  });
+
+  for (auto* m : cls->get_all_methods()) {
+    if (m->get_code() == nullptr) {
+      continue;
+    }
+    if (m->get_name()->str().substr(0, 7) == "thrower") {
+      cfg::ScopedCFG cfg{m->get_code()};
+
+      // should expect the (0:0) blocks to be converted into (1:1) unless
+      // there is a throw exception
+      std::vector<int> expected_vals{1, 0};
+      int idx = 0;
+      for (auto* b : cfg->blocks()) {
+        for (const auto& mie : *b) {
+          if (mie.type == MFLOW_SOURCE_BLOCK) {
+            auto* sb = mie.src_block.get();
+            ASSERT_EQ(sb->vals[0]->val, expected_vals[idx]);
+            idx++;
+          }
+        }
+      }
+    }
+  }
+}
+
 namespace {
 namespace access_methods {
 
@@ -1068,7 +1176,8 @@ INSTANTIATE_TEST_SUITE_P(
          "String;)Ljava/lang/String;@0(0.1:0.2)",
          "B0: "
          "Lcom/facebook/redextest/"
-         "SourceBlocksTest;.access$redex1bc24000ccc37110$00:()V@0(0.3:0.4)"},
+         "SourceBlocksTest;.access$redex1bc24000ccc37110$00:()V@0(0.3:0."
+         "4)"},
         {"profile_access_hash",
          "B0: "
          "Lcom/facebook/redextest/"
@@ -1076,7 +1185,8 @@ INSTANTIATE_TEST_SUITE_P(
          "String;)Ljava/lang/String;@0(0.6:0.7)",
          "B0: "
          "Lcom/facebook/redextest/"
-         "SourceBlocksTest;.access$redex1bc24000ccc37110$00:()V@0(0.8:0.9)"},
+         "SourceBlocksTest;.access$redex1bc24000ccc37110$00:()V@0(0.8:0."
+         "9)"},
         {"profile_access_both",
          // When both are available prefer hash.
          "B0: "

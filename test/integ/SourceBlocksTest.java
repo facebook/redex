@@ -99,6 +99,23 @@ public class SourceBlocksTest {
       System.out.print("Hot Entry");
     }
 
+  }
 
+  static class ChainAndDomClass {
+
+    public void chains() {
+      int i = 0;
+      System.out.println(i);
+    }
+
+    public void throwable() throws RuntimeException {
+      throw new RuntimeException();
+    }
+
+    public void thrower(int j) {
+      j = 1;
+      throwable();
+      j++;
+    }
   }
 }
