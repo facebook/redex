@@ -54,6 +54,18 @@ bool is_kotlin_default_arg_method(const DexMethod& method) {
   return boost::algorithm::ends_with(method.get_name()->str(), "$default");
 }
 
+bool is_composable_method(const DexMethod* method) {
+  const auto* anno_set = method->get_anno_set();
+  if (anno_set == nullptr) {
+    return false;
+  }
+  std::vector<DexType*> types;
+  anno_set->gather_types(types);
+  return std::find(types.begin(), types.end(),
+                   DexType::get_type(
+                       "Landroidx/compose/runtime/Composable;")) != types.end();
+}
+
 } // namespace
 
 // Setup types/strings needed for the pass
@@ -200,6 +212,9 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
       if (is_kotlin_default_arg_method(*method)) {
         stats.kotlin_default_arg_check_insns++;
       }
+      if (is_composable_method(method)) {
+        stats.kotlin_composable_and_lit_insns++;
+      }
       stats.kotlin_and_lit_insns++;
     } break;
     default:
@@ -213,6 +228,8 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("kotlin_null_check_insns", kotlin_null_check_insns);
   mgr.incr_metric("kotlin_default_arg_check_insns",
                   kotlin_default_arg_check_insns);
+  mgr.incr_metric("kotlin_composable_and_lit_insns",
+                  kotlin_composable_and_lit_insns);
   mgr.incr_metric("kotlin_and_lit_insns", kotlin_and_lit_insns);
   mgr.incr_metric("java_public_param_objects", java_public_param_objects);
   mgr.incr_metric("kotlin_public_param_objects", kotlin_public_param_objects);
