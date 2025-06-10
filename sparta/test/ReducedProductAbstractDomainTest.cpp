@@ -78,9 +78,9 @@ class D0xD1xD2 final
   }
 };
 
-INSTANTIATE_TYPED_TEST_CASE_P(ReducedProductAbstractDomain,
-                              AbstractDomainPropertyTest,
-                              D0xD1xD2);
+INSTANTIATE_TYPED_TEST_SUITE_P(ReducedProductAbstractDomain,
+                               AbstractDomainPropertyTest,
+                               D0xD1xD2);
 
 template <>
 std::vector<D0xD1xD2>

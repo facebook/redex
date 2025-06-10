@@ -21,9 +21,9 @@ using Domain = HashedSetAbstractDomain<std::string>;
 
 using Partition = PatriciaTreeMapAbstractPartition<uint32_t, Domain>;
 
-INSTANTIATE_TYPED_TEST_CASE_P(PatriciaTreeMapAbstractPartition,
-                              AbstractDomainPropertyTest,
-                              Partition);
+INSTANTIATE_TYPED_TEST_SUITE_P(PatriciaTreeMapAbstractPartition,
+                               AbstractDomainPropertyTest,
+                               Partition);
 
 template <>
 std::vector<Partition>
