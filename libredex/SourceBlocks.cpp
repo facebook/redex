@@ -582,8 +582,9 @@ void fix_idom_violation(
           SourceBlock::Val(1, sb->get_appear100(vals_index).value_or(1));
     }
   });
-  if (first_source_block_changed) {
-    fix_idom_violation(dom.get_idom(cur), vals_index, dom);
+  auto idom = dom.get_idom(cur);
+  if (first_source_block_changed && idom != cur) {
+    fix_idom_violation(idom, vals_index, dom);
   }
 }
 
@@ -593,10 +594,13 @@ void fix_idom_violations(ControlFlowGraph* cfg) {
       cfg,
       [&](Block* cur) {
         auto first_sb = source_blocks::get_first_source_block(cur);
-        uint32_t vals_size = first_sb->vals_size;
-        for (uint32_t i = 0; i < vals_size; i++) {
-          if (first_sb->get_val(i).value_or(0) > 0) {
-            fix_idom_violation(dom.get_idom(cur), i, dom);
+        auto idom = dom.get_idom(cur);
+        if (idom != cur) {
+          uint32_t vals_size = first_sb->vals_size;
+          for (uint32_t i = 0; i < vals_size; i++) {
+            if (first_sb->get_val(i).value_or(0) > 0) {
+              fix_idom_violation(idom, i, dom);
+            }
           }
         }
       },
