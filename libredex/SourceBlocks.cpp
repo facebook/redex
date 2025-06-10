@@ -434,6 +434,28 @@ struct CustomValueInsertHelper {
         insertion_type(insertion_type),
         interaction_size(profiles.size()) {}
 
+  struct FuzzingMetadata {
+    uint32_t indegrees{0};
+    uint32_t insertion_id{0};
+
+    // NOLINTNEXTLINE
+    FuzzingMetadata() = default;
+
+    FuzzingMetadata(uint32_t indegrees, uint32_t insertion_id)
+        : indegrees(indegrees), insertion_id(insertion_id) {}
+
+    // NOLINTBEGIN
+    bool operator<(const FuzzingMetadata& r) const {
+      if (indegrees == r.indegrees) {
+        return insertion_id < r.insertion_id;
+      }
+      return indegrees < r.indegrees;
+    }
+    // NOLINTEND
+  };
+
+  UnorderedMap<Block*, FuzzingMetadata> fuzzing_metadata_map;
+
   std::vector<SourceBlock::Val> generate_fuzzing_data_for_block(Block* /*b*/) {
     // for now, this will generate random values, in the future these values
     // will be generated to perform fuzzing
@@ -484,12 +506,18 @@ struct CustomValueInsertHelper {
     source_blocks::impl::BlockAccessor::push_source_block(
         cur, std::make_unique<SourceBlock>(method, id, val));
     ++id;
+
+    if (fuzzing_metadata_map.find(cur) == fuzzing_metadata_map.end()) {
+      fuzzing_metadata_map.insert({cur, FuzzingMetadata(0, 0)});
+    }
   }
 
   void edge(Block* /*cur*/, const Edge* e) {
     if (serialize) {
       oss << " " << get_edge_char(e);
     }
+    Block* target = e->target();
+    fuzzing_metadata_map.try_emplace(target, 0, 0).first->second.indegrees++;
   }
 
   void end(Block* /*cur*/) {
