@@ -636,6 +636,35 @@ InsertResult insert_custom_source_blocks(
   return {helper.id, helper.oss.str(), std::move(idom_map), true};
 }
 
+UnorderedMap<Block*, uint32_t> insert_custom_source_blocks_get_indegrees(
+    const DexString* method,
+    ControlFlowGraph* cfg,
+    const std::vector<ProfileData>& profiles,
+    bool serialize,
+    bool insert_after_excs,
+    bool enable_fuzzing) {
+
+  InsertionType insertion_type = InsertionType::DEFAULT_VALUES;
+  if (enable_fuzzing) {
+    insertion_type = InsertionType::FUZZING_VALUES;
+  }
+  CustomValueInsertHelper helper(method, profiles, serialize, insert_after_excs,
+                                 insertion_type);
+  impl::visit_in_order(
+      cfg,
+      [&](Block* cur) { helper.start(cur); },
+      [&](Block* cur, const Edge* e) { helper.edge(cur, e); },
+      [&](Block* cur) { helper.end(cur); });
+
+  UnorderedMap<Block*, uint32_t> indegrees;
+  for (auto& entry : UnorderedIterable(helper.fuzzing_metadata_map)) {
+    Block* cur = entry.first;
+    CustomValueInsertHelper::FuzzingMetadata& metadata = entry.second;
+    indegrees.emplace(cur, metadata.indegrees);
+  }
+  return indegrees;
+}
+
 void fix_chain_violations(ControlFlowGraph* cfg) {
   impl::visit_in_order(
       cfg,

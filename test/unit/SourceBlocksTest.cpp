@@ -1199,3 +1199,44 @@ TEST_F(SourceBlocksTest, create_synth_sb_from_val_list) {
   EXPECT_EQ(get_blocks_as_txt(bar_method->get_code()->cfg().blocks()),
             R"(B0: LFoo;.bar:()V@4294967295(1:1|0:1|1:0.4))");
 }
+
+TEST_F(SourceBlocksTest, metadata_indegrees_test) {
+  auto method = create_method();
+  method->get_code()->build_cfg();
+  auto& cfg = method->get_code()->cfg();
+
+  ASSERT_EQ(cfg.num_blocks(), 1u);
+  auto b = cfg.blocks()[0];
+
+  auto b1 = cfg.create_block();
+  auto b2 = cfg.create_block();
+  auto b3 = cfg.create_block();
+  auto b4 = cfg.create_block();
+
+  cfg.add_edge(b, b1, EDGE_GOTO);
+  cfg.add_edge(b, b2, EDGE_BRANCH);
+  cfg.add_edge(b1, b3, EDGE_GOTO);
+  cfg.add_edge(b2, b3, EDGE_GOTO);
+  cfg.add_edge(b1, b4, method->get_class(), 0);
+  cfg.add_edge(b4, b3, EDGE_GOTO);
+
+  auto profile = single_profile(
+      "(0.1:0.5 g(0.2:0.4 g(0.3:0.3) t(0.4:0.2 g)) b(0.5:0.1 g))");
+
+  auto res = insert_custom_source_blocks_get_indegrees(
+      &method->get_deobfuscated_name(), &cfg, profile,
+      /*serialize=*/true);
+
+  UnorderedMap<Block*, uint32_t> expected_indegrees;
+  expected_indegrees.emplace(b, 0);
+  expected_indegrees.emplace(b1, 1);
+  expected_indegrees.emplace(b2, 1);
+  expected_indegrees.emplace(b3, 3);
+  expected_indegrees.emplace(b4, 1);
+
+  for (auto& entry : UnorderedIterable(expected_indegrees)) {
+    Block* block = entry.first;
+    uint32_t expected = entry.second;
+    EXPECT_EQ(res.at(block), expected);
+  }
+}
