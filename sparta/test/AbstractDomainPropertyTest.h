@@ -54,7 +54,7 @@ class AbstractDomainPropertyTest : public ::testing::Test {
   }
 };
 
-TYPED_TEST_CASE_P(AbstractDomainPropertyTest);
+TYPED_TEST_SUITE_P(AbstractDomainPropertyTest);
 
 TYPED_TEST_P(AbstractDomainPropertyTest, Basics) {
   using Domain = TypeParam;
@@ -204,11 +204,11 @@ TYPED_TEST_P(AbstractDomainPropertyTest, Relations) {
   }
 }
 
-REGISTER_TYPED_TEST_CASE_P(AbstractDomainPropertyTest,
-                           Basics,
-                           JoinMeetBounds,
-                           Idempotence,
-                           Reflexivity,
-                           Commutativity,
-                           Absorption,
-                           Relations);
+REGISTER_TYPED_TEST_SUITE_P(AbstractDomainPropertyTest,
+                            Basics,
+                            JoinMeetBounds,
+                            Idempotence,
+                            Reflexivity,
+                            Commutativity,
+                            Absorption,
+                            Relations);

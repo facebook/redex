@@ -18,9 +18,9 @@ using namespace sparta;
 
 using Domain = HashedSetAbstractDomain<std::string>;
 
-INSTANTIATE_TYPED_TEST_CASE_P(HashedSetAbstractDomain,
-                              AbstractDomainPropertyTest,
-                              Domain);
+INSTANTIATE_TYPED_TEST_SUITE_P(HashedSetAbstractDomain,
+                               AbstractDomainPropertyTest,
+                               Domain);
 
 template <>
 std::vector<Domain> AbstractDomainPropertyTest<Domain>::non_extremal_values() {

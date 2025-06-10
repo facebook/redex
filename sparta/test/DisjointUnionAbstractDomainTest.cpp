@@ -23,9 +23,9 @@ using IntDomain = ConstantAbstractDomain<int>;
 using StringDomain = ConstantAbstractDomain<std::string>;
 using IntStringDomain = DisjointUnionAbstractDomain<IntDomain, StringDomain>;
 
-INSTANTIATE_TYPED_TEST_CASE_P(DisjointUnionAbstractDomain,
-                              AbstractDomainPropertyTest,
-                              IntStringDomain);
+INSTANTIATE_TYPED_TEST_SUITE_P(DisjointUnionAbstractDomain,
+                               AbstractDomainPropertyTest,
+                               IntStringDomain);
 
 template <>
 std::vector<IntStringDomain>

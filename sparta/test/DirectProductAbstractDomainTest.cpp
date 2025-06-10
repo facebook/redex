@@ -70,9 +70,9 @@ class D0xD1xD2 final
   using DirectProductAbstractDomain::DirectProductAbstractDomain;
 };
 
-INSTANTIATE_TYPED_TEST_CASE_P(DirectProductAbstractDomain,
-                              AbstractDomainPropertyTest,
-                              D0xD1xD2);
+INSTANTIATE_TYPED_TEST_SUITE_P(DirectProductAbstractDomain,
+                               AbstractDomainPropertyTest,
+                               D0xD1xD2);
 
 template <>
 std::vector<D0xD1xD2>
