@@ -26,6 +26,8 @@ TEST_F(ComposeUIKotlinStatsTest, test) {
 
   PrintKotlinStats::Stats stats = klr->get_stats();
 
+  // HelloWorldText, SuperTextPrinter, SubTextPrinter, getTestDefault
+  EXPECT_EQ(stats.kotlin_composable_method, 4u);
   // Compose generates very messy dex code, this is a best-effort analysis based
   // on what I see:
   //

@@ -161,6 +161,9 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(DexClass* cls) {
       if (is_kotlin_default_arg_method(*method)) {
         stats.kotlin_default_arg_method++;
       }
+      if (is_composable_method(method)) {
+        stats.kotlin_composable_method++;
+      }
     }
     if (is_anonymous(cls->get_name()->str())) {
       stats.kotlin_anonymous_class++;
