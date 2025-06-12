@@ -12,7 +12,7 @@ import java.util.Random;
 class CopyPropagationTest {
 
   public static final Object a = new Object();
-  void remove(int _) {
+  void remove(int p) {
     Object i = a;
     i = a;
   }
@@ -24,13 +24,13 @@ class CopyPropagationTest {
   }
 
   public static final long c = new Random().nextLong();
-  void remove(long _) {
+  void remove(long p) {
     long l = c;
     l = c;
   }
 
   public static final double d = new Random().nextDouble();
-  void remove(double _) {
+  void remove(double p) {
     double n = d;
     int i = 0;
     if (new Random().nextInt() == 1) {
@@ -42,7 +42,7 @@ class CopyPropagationTest {
   }
 
   public static volatile int e = new Random().nextInt();
-  void no_remove(int _) {
+  void no_remove(int p) {
     int i = e;
     i = e;
   }
