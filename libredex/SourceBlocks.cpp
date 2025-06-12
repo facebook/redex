@@ -422,6 +422,7 @@ struct CustomValueInsertHelper {
   bool insert_after_excs;
   CustomInsertionType insertion_type;
   size_t interaction_size;
+  float cold_to_hot_generation_ratio{0.1f};
 
   CustomValueInsertHelper(const DexString* method,
                           const std::vector<ProfileData>& profiles,
@@ -437,6 +438,7 @@ struct CustomValueInsertHelper {
   struct FuzzingMetadata {
     uint32_t indegrees{0};
     uint32_t insertion_id{0};
+    bool has_values{false}; // to check if a block has had it's values filled in
 
     // NOLINTNEXTLINE
     FuzzingMetadata() = default;
@@ -456,27 +458,19 @@ struct CustomValueInsertHelper {
 
   UnorderedMap<Block*, FuzzingMetadata> fuzzing_metadata_map;
 
-  std::vector<SourceBlock::Val> generate_fuzzing_data_for_block(Block* /*b*/) {
-    // for now, this will generate random values, in the future these values
-    // will be generated to perform fuzzing
-
-    std::random_device dev;
-    std::mt19937 random_number_generator(dev());
-
-    std::uniform_int_distribution<> vector_size_distribution(0, 10);
-    std::uniform_int_distribution<> block_hit_distribution(0, 1);
-    std::uniform_real_distribution<> appear100_distribution(0.0, 1.0);
-
-    std::vector<SourceBlock::Val> rand_interaction_pairs;
-    rand_interaction_pairs.reserve(interaction_size);
+  std::vector<SourceBlock::Val> generate_default_data_for_fuzzing(
+      Block* /*b*/) {
+    // sets all blocks' values to (-1|-1)
+    std::vector<SourceBlock::Val> interaction_pairs;
+    interaction_pairs.reserve(interaction_size);
 
     for (size_t i = 0; i < interaction_size; ++i) {
-      float hit = block_hit_distribution(random_number_generator);
-      float appear100 = appear100_distribution(random_number_generator);
-      rand_interaction_pairs.emplace_back(SourceBlock::Val{hit, appear100});
+      float hit = -1;
+      float appear100 = -1;
+      interaction_pairs.emplace_back(SourceBlock::Val{hit, appear100});
     }
 
-    return rand_interaction_pairs;
+    return interaction_pairs;
   }
 
   std::vector<SourceBlock::Val> start_profile(Block* cur) {
@@ -484,7 +478,7 @@ struct CustomValueInsertHelper {
     bool use_fuzzing = (insertion_type == CustomInsertionType::FUZZING_VALUES);
     std::vector<SourceBlock::Val> fuzzing_values;
     if (use_fuzzing) {
-      fuzzing_values = generate_fuzzing_data_for_block(cur);
+      fuzzing_values = generate_default_data_for_fuzzing(cur);
     }
     ret.reserve(interaction_size);
 
@@ -523,6 +517,33 @@ struct CustomValueInsertHelper {
   void end(Block* /*cur*/) {
     if (serialize) {
       oss << ")";
+    }
+  }
+};
+
+struct RandomGenerator {
+  std::random_device dev;
+  std::mt19937 random_number_generator;
+  std::uniform_real_distribution<> uniform_distribution;
+  float cold_to_hot_generation_ratio{0.5f};
+
+  RandomGenerator() = delete;
+
+  explicit RandomGenerator(float cold_to_hot_generation_ratio)
+      : random_number_generator(dev()),
+        uniform_distribution(0.0, 1.0),
+        cold_to_hot_generation_ratio(cold_to_hot_generation_ratio) {}
+
+  float generate_appear100() {
+    return uniform_distribution(random_number_generator);
+  }
+
+  float generate_block_hit() {
+    float hit_percent = uniform_distribution(random_number_generator);
+    if (hit_percent <= cold_to_hot_generation_ratio) {
+      return 0.0;
+    } else {
+      return 1.0;
     }
   }
 };
@@ -611,6 +632,153 @@ InsertResult insert_source_blocks(const DexString* method,
   return {helper.id, helper.oss.str(), std::move(idom_map), !had_failures};
 }
 
+bool is_hot_block(const Block* block) {
+  return has_source_block_positive_val(get_first_source_block(block));
+}
+
+void set_block_appear100(Block* block, float appear100) {
+  std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
+  for (auto* source_block : source_blocks) {
+    for (size_t i = 0; i < source_block->vals_size; i++) {
+      if (source_block->vals[i]) {
+        source_block->vals[i]->appear100 = appear100;
+      }
+    }
+  }
+}
+
+void set_block_value(Block* block, float hit) {
+  std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
+  for (auto* source_block : source_blocks) {
+    for (size_t i = 0; i < source_block->vals_size; i++) {
+      if (source_block->vals[i]) {
+        source_block->vals[i]->val = hit;
+      }
+    }
+  }
+}
+
+/*
+The follow method runs a topo-traversal of the method's CFG, filling out source
+blocks as it goes.
+
+Starting from the entry block, each block gets processed based on the number of
+indegrees it has. The lower the number of indegrees, the more priority a block
+has. Therefore, a multiset is used as the processing queue because it allows
+easy retrieval of the block with the lowest indegrees (stored in the metadata),
+and allows updating current blocks and modifying their processing order inside
+the processing queue. There might be ties in indegrees, if so, the block that
+was first inserted among the tied ones is processed first.
+
+There are a few helpers generated, including a dominator tree to find the
+immediate dominator quickly, and a Random Generator to generate fuzzing data.
+
+There are in general a few cases while filling out source block values during
+the traversal:
+
+1) In order to determine a source block's values, its predecessor and immediate
+dominator values must be known, therefore the traversal must visit and fill
+their values out first. This is also why the traversal uses indegrees to
+traverse, as it will traverse both the predecessors and immediate dominator of a
+block before getting to it.
+
+2) if the immediate dominator is cold OR if all predecessors are cold OR if the
+entry block is cold, then the block must be cold, otherwise can be either hot or
+cold.
+
+3) all source blocks should have the same appear100 value in the method.
+*/
+void run_topotraversal_fuzzing(ControlFlowGraph* cfg,
+                               CustomValueInsertHelper& helper) {
+  auto& metadata = helper.fuzzing_metadata_map;
+  auto topo_comparator = [&metadata](Block* l, Block* r) {
+    return metadata.at(l) < metadata.at(r);
+  };
+
+  auto all_preds_are_cold = [&metadata](const Block* block) {
+    for (const auto& edge : block->preds()) {
+      auto* pred = edge->src();
+      if (!metadata.at(pred).has_values) {
+        // If there are no values in this predecessor (cause of cycles) then
+        // ignore it
+        continue;
+      }
+      if (is_hot_block(pred)) {
+        return false;
+      }
+    }
+    return true;
+  };
+  auto generator = RandomGenerator(helper.cold_to_hot_generation_ratio);
+  auto doms = dominators::SimpleFastDominators<cfg::GraphInterface>(*cfg);
+
+  // The traversal uses a multiset to be able to process the block with the
+  // lowest number of indegrees, and allows updating the position of other nodes
+  // in the multiset if their indegrees change during the traversal.
+  std::multiset<Block*, decltype(topo_comparator)> process_queue(
+      topo_comparator);
+  UnorderedSet<Block*> visited;
+  uint32_t insertion_order_id = 0;
+
+  auto* entry = cfg->entry_block();
+  float entry_hit = generator.generate_block_hit();
+  float appear100 = 0.0;
+  if (entry_hit > 0) { // entry_hit is HOT.
+    appear100 = generator.generate_appear100();
+  }
+  set_block_appear100(entry, appear100);
+  set_block_value(entry, entry_hit);
+  metadata.at(entry).has_values = true;
+  metadata.at(entry).insertion_id = insertion_order_id;
+  ++insertion_order_id;
+
+  visited.insert(entry);
+  process_queue.insert(entry);
+
+  while (!process_queue.empty()) {
+    auto current = process_queue.begin();
+    process_queue.erase(process_queue.begin());
+    if (!metadata.at(*current).has_values) {
+      // if a block has values, don't need to deal with it again
+      // (for example, the entry block).
+      if (entry_hit == 0.0f || !is_hot_block(doms.get_idom(*current)) ||
+          all_preds_are_cold(*current)) {
+        // This block must be listed as COLD now.
+        set_block_value(*current, 0);
+      } else {
+        // This block can be either HOT or COLD.
+        int next_hit = generator.generate_block_hit();
+        set_block_value(*current, next_hit);
+      }
+      set_block_appear100(*current, appear100);
+      metadata.at(*current).has_values = true;
+    }
+
+    for (const auto& edge : (*current)->succs()) {
+      auto* neighbor = edge->target();
+      bool re_add_neighbor = false;
+
+      if (process_queue.count(neighbor)) {
+        // Erasing from the queue and readding allows reordering and updating of
+        // the queue if the neighbor's new indegrees gives it more priority now
+        process_queue.erase(neighbor);
+        re_add_neighbor = true;
+      }
+      metadata.at(neighbor).indegrees--;
+      if (re_add_neighbor) {
+        process_queue.insert(neighbor);
+      }
+
+      if (!visited.count(neighbor)) {
+        metadata.at(neighbor).insertion_id = insertion_order_id;
+        ++insertion_order_id;
+        visited.insert(neighbor);
+        process_queue.insert(neighbor);
+      }
+    }
+  }
+}
+
 InsertResult insert_custom_source_blocks(
     const DexString* method,
     ControlFlowGraph* cfg,
@@ -630,6 +798,10 @@ InsertResult insert_custom_source_blocks(
       [&](Block* cur) { helper.start(cur); },
       [&](Block* cur, const Edge* e) { helper.edge(cur, e); },
       [&](Block* cur) { helper.end(cur); });
+
+  if (insertion_type == InsertionType::FUZZING_VALUES) {
+    run_topotraversal_fuzzing(cfg, helper);
+  }
 
   auto idom_map = get_serialized_idom_map(cfg);
 
