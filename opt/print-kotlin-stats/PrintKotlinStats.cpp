@@ -246,6 +246,7 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("kotlin_companion_class", kotlin_companion_class);
   mgr.incr_metric("di_generated_class", di_generated_class);
   mgr.incr_metric("kotlin_default_arg_method", kotlin_default_arg_method);
+  mgr.incr_metric("kotlin_composable_method", kotlin_composable_method);
   mgr.incr_metric("kotlin_coroutine_continuation_base",
                   kotlin_coroutine_continuation_base);
   mgr.incr_metric("kotlin_enum_class", kotlin_enum_class);
