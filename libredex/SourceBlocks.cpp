@@ -862,6 +862,10 @@ void chain_and_dom_update(
     state.last = nullptr;
     for (auto* b = dom.get_idom(block); state.last == nullptr && b != nullptr;
          b = dom.get_idom(b)) {
+      if (b == block) {
+        state.dom_block = nullptr;
+        break;
+      }
       state.last = get_last_source_block(b);
       if (b == b->cfg().entry_block()) {
         state.dom_block = b;
