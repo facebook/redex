@@ -18,20 +18,27 @@ class StyleAnalysis {
   StyleAnalysis(const std::string& zip_dir,
                 const GlobalConfig& global_config,
                 const resources::ReachabilityOptions& options,
-                const UnorderedSet<uint32_t>& roots)
+                DexStoresVector& stores,
+                const UnorderedSet<uint32_t>& additional_roots)
       : StyleAnalysis(
             zip_dir,
             *global_config.get_config_by_name<ResourceConfig>("resources"),
             options,
-            roots) {}
+            stores,
+            additional_roots) {}
   StyleAnalysis(const std::string& zip_dir,
                 const ResourceConfig& global_resources_config,
                 const resources::ReachabilityOptions& options,
-                const UnorderedSet<uint32_t>& roots)
-      : m_options(options), m_roots(roots) {
+                DexStoresVector& stores,
+                const UnorderedSet<uint32_t>& additional_roots)
+      : m_options(options), m_roots(additional_roots) {
     m_options.granular_style_reachability = true;
     m_reachable_resources = std::make_unique<resources::ReachableResources>(
         zip_dir, global_resources_config, m_options);
+    auto code_roots = m_reachable_resources->get_resource_roots(stores);
+    for (auto root : UnorderedIterable(code_roots)) {
+      m_roots.insert(root);
+    }
     auto res_table = m_reachable_resources->get_res_table();
     m_style_info = res_table->load_style_info();
   }

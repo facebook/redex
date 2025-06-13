@@ -32,7 +32,7 @@ void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
   auto style_info = res_table->load_style_info();
   resources::ReachabilityOptions options;
   StyleAnalysis style_analysis(apk_dir, conf.get_global_config(), options,
-                               UnorderedSet<uint32_t>());
+                               stores, UnorderedSet<uint32_t>());
   std::string style_dot = style_analysis.dot(false, true);
   TRACE(RES, 1, "StyleAnalysis dot output:\n%s", style_dot.c_str());
 }

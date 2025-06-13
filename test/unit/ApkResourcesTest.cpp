@@ -59,6 +59,14 @@ void setup_resources_and_run(
   callback(tmp_dir.path, &resources);
 }
 
+DexStoresVector make_empty_stores() {
+  DexStoresVector stores;
+  DexStore store("classes");
+  store.add_classes({});
+  stores.emplace_back(store);
+  return stores;
+}
+
 // Asserts that the given loaded resources.arsc file has an overlayable entry
 // with two policies.
 #define ASSERT_OVERLAYABLES(res_table)                                         \
@@ -345,10 +353,7 @@ TEST(ApkResources, TestReachableRoots) {
         resources::ReachableResources reachable_resources(
             temp_dir_path, global_resources_config, options);
         // For this test, no roots from code are applicable.
-        DexStoresVector stores;
-        DexStore store("classes");
-        store.add_classes({});
-        stores.emplace_back(store);
+        DexStoresVector stores = make_empty_stores();
         auto roots = reachable_resources.get_resource_roots(stores);
         for (auto& name : expected_resource_roots) {
           auto expected_id = res_table->name_to_ids.at(name).at(0);
@@ -397,11 +402,15 @@ TEST(ApkResources, StyleAnalysis) {
             "AmbiguousBig", "AmbiguousParent", "AmbiguousSmall", "Confusing",
             "DupTheme1",    "DupTheme2",       "NightParent",    "Unclear"};
 
+        DexStoresVector stores = make_empty_stores();
         resources::ReachabilityOptions options;
-        UnorderedSet<uint32_t> roots;
+        UnorderedSet<uint32_t> additional_roots;
         ResourceConfig global_resource_config;
-        StyleAnalysis style_analysis(
-            temp_dir_path, global_resource_config, options, roots);
+        StyleAnalysis style_analysis(temp_dir_path,
+                                     global_resource_config,
+                                     options,
+                                     stores,
+                                     additional_roots);
         auto ambiguous = style_analysis.ambiguous_styles();
         EXPECT_EQ(ambiguous.size(), ambiguous_style_names.size());
         for (auto& name : ambiguous_style_names) {
