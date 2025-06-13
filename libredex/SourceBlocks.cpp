@@ -534,6 +534,13 @@ struct RandomGenerator {
         uniform_distribution(0.0, 1.0),
         cold_to_hot_generation_ratio(cold_to_hot_generation_ratio) {}
 
+  explicit RandomGenerator(int seed,
+                           const std::string& method_name,
+                           float cold_to_hot_generation_ratio)
+      : random_number_generator(seed ^ std::hash<std::string>{}(method_name)),
+        uniform_distribution(0.0, 1.0),
+        cold_to_hot_generation_ratio(cold_to_hot_generation_ratio) {}
+
   float generate_appear100() {
     return uniform_distribution(random_number_generator);
   }
@@ -712,7 +719,10 @@ cold.
 3) all source blocks should have the same appear100 value in the method.
 */
 void run_topotraversal_fuzzing(ControlFlowGraph* cfg,
-                               CustomValueInsertHelper& helper) {
+                               CustomValueInsertHelper& helper,
+                               const std::string& method_name,
+                               bool use_seed,
+                               int seed) {
   auto& metadata = helper.fuzzing_metadata_map;
   auto topo_comparator = [&metadata](Block* l, Block* r) {
     return metadata.at(l) < metadata.at(r);
@@ -732,7 +742,10 @@ void run_topotraversal_fuzzing(ControlFlowGraph* cfg,
     }
     return true;
   };
-  auto generator = RandomGenerator(helper.cold_to_hot_generation_ratio);
+  RandomGenerator generator =
+      use_seed ? RandomGenerator(seed, method_name,
+                                 helper.cold_to_hot_generation_ratio)
+               : RandomGenerator(helper.cold_to_hot_generation_ratio);
   auto doms = dominators::SimpleFastDominators<cfg::GraphInterface>(*cfg);
 
   // The traversal uses a multiset to be able to process the block with the
@@ -814,6 +827,8 @@ InsertResult insert_custom_source_blocks(
   if (enable_fuzzing) {
     insertion_type = InsertionType::FUZZING_VALUES;
   }
+  int seed = 5000;
+  bool use_seed = true;
   CustomValueInsertHelper helper(method, profiles, serialize, insert_after_excs,
                                  insertion_type);
   impl::visit_in_order(
@@ -823,7 +838,8 @@ InsertResult insert_custom_source_blocks(
       [&](Block* cur) { helper.end(cur); });
 
   if (insertion_type == InsertionType::FUZZING_VALUES) {
-    run_topotraversal_fuzzing(cfg, helper);
+    run_topotraversal_fuzzing(cfg, helper, std::string(method->str()), use_seed,
+                              seed);
   }
 
   auto idom_map = get_serialized_idom_map(cfg);
