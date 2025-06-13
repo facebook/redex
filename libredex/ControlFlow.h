@@ -123,7 +123,7 @@ struct ThrowInfo {
   ThrowInfo(DexType* catch_type, uint32_t index)
       : catch_type(catch_type), index(index) {}
 
-  bool operator==(const ThrowInfo& other) {
+  bool operator==(const ThrowInfo& other) const {
     return catch_type == other.catch_type && index == other.index;
   }
 };
