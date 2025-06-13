@@ -632,6 +632,29 @@ InsertResult insert_source_blocks(const DexString* method,
   return {helper.id, helper.oss.str(), std::move(idom_map), !had_failures};
 }
 
+void update_source_block_metric(Block* cur, SourceBlockMetric& metrics) {
+  auto source_blocks = gather_source_blocks(cur);
+  for (const auto& source_block : source_blocks) {
+    if (has_source_block_positive_val(source_block)) {
+      metrics.first++;
+    } else {
+      metrics.second++;
+    }
+  }
+}
+
+SourceBlockMetric gather_source_block_metrics(ControlFlowGraph* cfg) {
+  SourceBlockMetric metrics = {0, 0};
+
+  impl::visit_in_order(
+      cfg,
+      [&](Block* cur) { update_source_block_metric(cur, metrics); },
+      [&](Block* /*cur*/, const Edge* /*e*/) {},
+      [&](Block* /*cur*/) {});
+
+  return metrics;
+}
+
 bool is_hot_block(const Block* block) {
   return has_source_block_positive_val(get_first_source_block(block));
 }
