@@ -232,6 +232,38 @@ struct StyleInfo {
       bool exclude_nodes_with_no_edges = false);
 };
 
+// Modification specification for styles in APK and App Bundle containers.
+// This structure defines operations that can be performed on styles during
+// serialization.
+struct StyleModificationSpec {
+  enum class ModificationType { ADD_ATTRIBUTE, REMOVE_ATTRIBUTE, DELETE_STYLE };
+
+  struct Modification {
+    ModificationType type;
+
+    uint32_t resource_id{0};
+    std::optional<uint32_t> attribute_id{std::nullopt};
+    std::optional<StyleResource::Value> value{std::nullopt};
+    std::optional<uint32_t> parent_id{std::nullopt};
+
+    explicit Modification(uint32_t resource_id)
+        : type(ModificationType::DELETE_STYLE), resource_id{resource_id} {}
+    Modification(uint32_t resource_id, uint32_t attr_id)
+        : type(ModificationType::REMOVE_ATTRIBUTE),
+          resource_id{resource_id},
+          attribute_id(attr_id) {}
+    Modification(uint32_t resource_id,
+                 uint32_t attr_id,
+                 const StyleResource::Value& val)
+        : type(ModificationType::ADD_ATTRIBUTE),
+          resource_id{resource_id},
+          attribute_id(attr_id),
+          value(val) {}
+  };
+
+  std::vector<Modification> modifications;
+};
+
 // Helper for dealing with differences in character encoding between .arsc and
 // .pb files.
 std::string convert_utf8_to_mutf8(const std::string& input);
