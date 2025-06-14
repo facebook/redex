@@ -56,7 +56,7 @@ runs:
     shell: bash
   - name: Configure
     run: |-
-      ../repo/configure --enable-protobuf --with-android-sdk="$(pwd)/../sdk" ${{ inputs.configure_extra }}
+      ../repo/configure --enable-protobuf --with-android-sdk="$(pwd)/../sdk" --with-googletest=/usr/local ${{ inputs.configure_extra }}
     working-directory: build
     shell: bash
   - name: Build
