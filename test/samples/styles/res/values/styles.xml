@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Base text styles with common attributes -->
+  <style name="BaseTextStyle">
+    <item name="android:textColor">#333333</item>
+    <item name="android:fontFamily">sans-serif</item>
+    <item name="android:layout_margin">0dp</item>
+    <item name="android:padding">0dp</item>
+  </style>
+
+  <!-- Text style variations -->
+  <style name="TextStyle.Heading" parent="BaseTextStyle">
+    <item name="android:textSize">24sp</item>
+    <item name="android:textStyle">bold</item>
+    <item name="android:textColor">#000000</item>
+    <item name="android:layout_marginBottom">16dp</item>
+  </style>
+
+  <style name="TextStyle.Subheading" parent="BaseTextStyle">
+    <item name="android:textSize">24sp</item>
+    <item name="android:textStyle">bold</item>
+    <item name="android:textColor">#222222</item>
+    <item name="android:layout_marginBottom">8dp</item>
+  </style>
+
+  <style name="TextStyle.Body" parent="BaseTextStyle">
+    <item name="android:textSize">24sp</item>
+    <item name="android:lineSpacingMultiplier">1.2</item>
+  </style>
+
+  <style name="TextStyle.Caption" parent="BaseTextStyle">
+    <item name="android:textSize">24sp</item>
+    <item name="android:textColor">#666666</item>
+    <item name="android:textStyle">italic</item>
+  </style>
+
+  <!-- Button styles with inheritance -->
+  <style name="ButtonBase">
+    <item name="android:textSize">16sp</item>
+    <item name="android:textColor">#FFFFFF</item>
+    <item name="android:padding">12dp</item>
+    <item name="android:background">#2196F3</item>
+    <item name="android:layout_margin">4dp</item>
+    <item name="android:textAllCaps">true</item>
+  </style>
+
+  <style name="ButtonPrimary" parent="ButtonBase">
+    <item name="android:background">#2196F3</item>
+    <item name="android:textStyle">bold</item>
+  </style>
+
+  <style name="ButtonSecondary" parent="ButtonBase">
+    <item name="android:background">#FF9800</item>
+    <item name="android:textSize">14sp</item>
+  </style>
+
+  <style name="ButtonDanger" parent="ButtonBase">
+    <item name="android:background">#F44336</item>
+    <item name="android:textStyle">bold</item>
+  </style>
+
+  <style name="ButtonOutline" parent="ButtonBase">
+    <item name="android:background">#FFFFFF</item>
+    <item name="android:textColor">#2196F3</item>
+    <item name="android:padding">11dp</item>
+  </style>
+
+  <!-- Card styles with inheritance -->
+  <style name="CardBase">
+    <item name="android:background">#FFFFFF</item>
+    <item name="android:layout_margin">8dp</item>
+  </style>
+
+  <style name="CardElevated" parent="CardBase">
+    <item name="android:elevation">4dp</item>
+    <item name="android:background">#FFFFFF</item>
+    <item name="android:padding">8dp</item>
+  </style>
+
+  <style name="CardHighlight1" parent="CardElevated">
+    <item name="android:background">#E3F2FD</item>
+    <item name="android:padding">24dp</item>
+  </style>
+  <style name="CardHighlight2" parent="CardElevated">
+    <item name="android:background">#E3F2FD</item>
+    <item name="android:layout_margin">8dp</item>
+  </style>
+
+  <style name="CardCompact" parent="CardBase">
+    <item name="android:padding">8dp</item>
+    <item name="android:layout_margin">4dp</item>
+    <item name="android:background">#E3F2FD</item>
+  </style>
+
+  <!-- Input field styles -->
+  <style name="InputBase">
+    <item name="android:textSize">16sp</item>
+    <item name="android:padding">12dp</item>
+    <item name="android:textColor">#212121</item>
+    <item name="android:layout_marginBottom">16dp</item>
+  </style>
+
+  <style name="InputRounded" parent="InputBase">
+    <item name="android:background">#EEEEEE</item>
+  </style>
+
+  <style name="InputBordered" parent="InputBase">
+    <item name="android:background">#EEEEEE</item>
+    <item name="android:padding">11dp</item>
+  </style>
+
+  <!-- Complex multi-level inheritance -->
+  <style name="AppTheme">
+    <item name="android:textSize">16sp</item>
+    <item name="android:textColor">#212121</item>
+    <item name="android:background">#FFFFFF</item>
+  </style>
+
+  <style name="AppTheme.Light" parent="AppTheme">
+    <item name="android:textColor">#212121</item>
+    <item name="android:background">#FAFAFA</item>
+  </style>
+
+  <style name="AppTheme.Light.Blue" parent="AppTheme.Light">
+    <item name="android:colorPrimary">#2196F3</item>
+    <item name="android:colorAccent">#03A9F4</item>
+  </style>
+
+  <style name="AppTheme.Light.Blue.NoActionBar" parent="AppTheme.Light.Blue">
+    <item name="android:windowActionBar">false</item>
+    <item name="android:windowNoTitle">true</item>
+  </style>
+
+  <!-- Add ThemeA style to ensure it exists in the styles sample as well -->
+  <style name="ThemeParent">
+    <item name="android:background">#CECECE</item>
+  </style>
+
+  <style name="ThemeA" parent="ThemeParent">
+    <item name="android:background">#CECECE</item>
+    <item name="android:textSize">20sp</item>
+    <item name="android:textColor">#00FF00</item>
+  </style>
+  <style name="ThemeB" parent="ThemeParent">
+    <item name="android:textColor">#00FF00</item>
+  </style>
+
+  <style name="BaseStyle1">
+    <item name="android:textSize">16sp</item>
+    <item name="android:textColor">#CCCCCC</item>
+    <item name="android:padding">8dp</item>
+  </style>
+
+  <style name="ChildStyle1" parent="BaseStyle1">
+    <item name="android:background">#333333</item>
+    <item name="android:layout_width">match_parent</item>
+    <item name="android:layout_height">wrap_content</item>
+  </style>
+
+  <style name="ChildStyle2" parent="BaseStyle1">
+    <item name="android:background">#333333</item>
+    <item name="android:layout_width">match_parent</item>
+    <item name="android:layout_height">wrap_content</item>
+  </style>
+</resources>

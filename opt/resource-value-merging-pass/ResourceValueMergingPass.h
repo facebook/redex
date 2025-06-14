@@ -7,6 +7,7 @@
 
 #pragma once
 #include "Pass.h"
+#include "RedexResources.h"
 
 /**
  * The Resource Value Merging optimization pass analyzes dex code and resource
@@ -28,6 +29,14 @@
  *   optimization
  */
 
+using ResourceAttributeInformation = UnorderedSet<uint32_t>;
+struct OptimizableResources {
+  UnorderedMap<uint32_t, ResourceAttributeInformation> deletion;
+  UnorderedMap<uint32_t,
+               UnorderedMap<uint32_t, resources::StyleResource::Value>>
+      merging;
+};
+
 class ResourceValueMergingPass : public Pass {
  public:
   ResourceValueMergingPass() : Pass("ResourceValueMergingPass") {}
@@ -38,6 +47,32 @@ class ResourceValueMergingPass : public Pass {
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
+  ResourceAttributeInformation get_resource_attributes(
+      uint32_t resource_id, const resources::StyleMap& style_map);
+
+  OptimizableResources get_resource_optimization(
+      const resources::StyleInfo& style_info,
+      const UnorderedSet<uint32_t>& ambiguous_styles,
+      const UnorderedSet<uint32_t>& directly_reachable_styles);
+
+  std::optional<resources::StyleResource::Value>
+  get_common_attribute_among_children(
+      const UnorderedSet<uint32_t>& resource_ids,
+      uint32_t attribute_id,
+      const resources::StyleMap& style_map);
+
+  OptimizableResources remove_unoptimizable_resources(
+      const OptimizableResources& optimizable_candidates,
+      const UnorderedSet<uint32_t>& directly_reachable_styles);
+
+  std::optional<const resources::StyleResource> find_style_resource(
+      uint32_t resource_id, const resources::StyleMap& style_map);
+
  private:
+  ResourceAttributeInformation find_resource_optimization_candidates(
+      resources::StyleInfo::vertex_t vertex,
+      const resources::StyleInfo& style_info,
+      OptimizableResources& optimizable_candidates,
+      const UnorderedSet<uint32_t>& ambiguous_styles);
   UnorderedSet<std::string> m_excluded_resources;
 };

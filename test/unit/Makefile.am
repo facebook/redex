@@ -153,6 +153,7 @@ check_PROGRAMS = \
     resolver_test \
     resolve_proguard_value_test \
     resource_inlining_test \
+    resource_value_merging \
     resources_test \
     result_propagation_test \
     side_effects_summary_test \
@@ -459,6 +460,8 @@ resolver_test_SOURCES = ResolverTest.cpp
 resolve_proguard_value_test_SOURCES = ResolveProguardAssumeValuesTest.cpp ScopeHelper.cpp
 
 resource_inlining_test_SOURCES = ResourceInliningTest.cpp ScopeHelper.cpp
+
+resource_value_merging_SOURCES = ResourceValueMergingPassTest.cpp
 
 result_propagation_test_SOURCES = ResultPropagationTest.cpp
 result_propagation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
