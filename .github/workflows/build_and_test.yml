@@ -4,18 +4,8 @@ on:
 env:
   CACHE_VERSION: xxxxx1
 jobs:
-  build-20_04:
-    runs-on: 4-core-ubuntu-20.04
-    steps:
-    - uses: actions/checkout@v4.1.1
-    - uses: "./.github/actions/prepare_debian"
-    - uses: ./.github/actions/setup-build-and-test-w-make
-      with:
-        save_boost_cache: false
-        mode_32: false
-        job_name: ubuntu_20.04
   build-22_04:
-    runs-on: 4-core-ubuntu
+    runs-on: 4-core-ubuntu-22.04
     steps:
     - uses: actions/checkout@v4.1.1
     - uses: "./.github/actions/prepare_debian"
@@ -24,8 +14,18 @@ jobs:
         save_boost_cache: false
         mode_32: false
         job_name: ubuntu_22.04
-
+  build-24_04:
+    runs-on: 4-core-ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4.1.1
+    - uses: "./.github/actions/prepare_debian"
+    - uses: ./.github/actions/setup-build-and-test-w-make
+      with:
+        save_boost_cache: false
+        mode_32: false
+        job_name: ubuntu_24.04
   # No supported Github runners:
+  # * ubuntu 20.04
   # * debian 10
   # * debian 12
   # * debian unstable
