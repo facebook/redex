@@ -150,6 +150,37 @@ AS_IF([test "x$NO_ANDROID_HOME" = "xno"],
     ]
 )
 
+# check whether user enabled tests
+AC_ARG_ENABLE([tests],
+    [AS_HELP_STRING([--disable-tests],
+        [Disable running tests])]
+)
+AS_IF([test "x$enable_tests" != "xno"], [
+    # user enabled tests
+    # check if googletest is installed
+
+    # allow users to specify the path to googletest
+    # --with-googletest
+
+    AC_ARG_WITH([googletest],
+        [AS_HELP_STRING([--with-googletest=/path/to/googletest],
+            [Location to googletest installation dir.])],
+        [GOOGLETEST_DIR="$withval"],
+        # TODO(T227009978): Auto detect googletest installation directory
+        [GOOGLETEST_DIR="/usr/"]
+    )
+    AC_CHECK_FILES(
+        ["$GOOGLETEST_DIR/include/gtest/gtest.h" "$GOOGLETEST_DIR/lib/libgmock_main.a"],
+        [
+            AC_SUBST(GOOGLETEST_INCLUDE_DIR,"$GOOGLETEST_DIR/include")
+            GOOGLETEST_LIB_DIR="$GOOGLETEST_DIR/lib"
+            AC_SUBST(GOOGLETEST_TEST_LIBS,"$GOOGLETEST_LIB_DIR/libgtest_main.a $GOOGLETEST_LIB_DIR/libgtest.a")
+            AC_SUBST(GOOGLETEST_MOCK_LIBS,"$GOOGLETEST_LIB_DIR/libgmock_main.a $GOOGLETEST_LIB_DIR/libgmock.a $GOOGLETEST_LIB_DIR/libgtest.a")
+        ],
+        [AC_MSG_ERROR([--with-googletest does not seem to point at a valid GoogleTest installation])]
+    )
+])
+
 # check whether user enabled kotlin tests
 AC_ARG_ENABLE([kotlin-tests],
     [AS_HELP_STRING([--disable-kotlin-tests],

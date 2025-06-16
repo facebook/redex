@@ -34,9 +34,6 @@
 /redexdump
 /stamp-h1
 /test/.libs/
-/test/googletest-release-*/
-/test/gtest-*.zip
-/test/**/setup_gtest
 /test/**/*.log
 /test/**/*.trs
 /test/**/*_test
