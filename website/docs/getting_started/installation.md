@@ -23,14 +23,14 @@ brew install boost jsoncpp
 For App Bundle support `brew install protobuf` is also required.
 
 ### Ubuntu/Debian (64-bit)
-Base requirements are automake & libtool, GCC >= 7, Python >= 3.6 and Boost >= 1.71.0, as well as
+Base requirements are automake & libtool, GCC >= 8, Python >= 3.7 and Boost >= 1.71.0, as well as
 development versions of `iberty`, `jemalloc`, `jsoncpp`, `lz4`, `lzma`, and `zlib`. `Protobuf` >= 3.0 is required if optimizing an App Bundle.
-#### Ubuntu 18.04+, Debian 10(Buster)+
-The minimum supported Ubuntu version is 18.04. The minimum supported Debian version is 10.
+#### Ubuntu 20.04+, Debian 10(Buster)+
+The minimum supported Ubuntu version is 20.04. The minimum supported Debian version is 10.
 
 A [convenience script](https://github.com/facebook/redex/blob/master/setup_oss_toolchain.sh)
-will set up the build environment. This may include downloading Python 3.6 and Boost 1.71.0
-on older OS versions.
+will set up the build environment. This may include downloading Boost 1.71.0 and
+googletest 1.14.0 on older OS versions.
 ```
 sudo ./setup_oss_toolchain.sh
 ```
@@ -38,7 +38,7 @@ After the script, please run `sudo ldconfig` if it throws an error about loading
 
 ### Experimental: Windows (64-bit) with MSYS2
 
-You need [MSYS2](https://www.msys2.org/#installation) to build `redex-all` (only MingW-w64 is supported) and [Python 3.6+](https://www.python.org/downloads/windows/) to run `redex.py`.
+You need [MSYS2](https://www.msys2.org/#installation) to build `redex-all` (only MingW-w64 is supported) and [Python 3.7+](https://www.python.org/downloads/windows/) to run `redex.py`.
 
 Install the build requirements in an MSYS or MingW64 shell:
 ```
