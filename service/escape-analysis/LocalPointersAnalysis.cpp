@@ -247,12 +247,6 @@ void analyze_invoke_with_summary(const EscapeSummary& summary,
     env->set_pointers(RESULT_REGISTER, PointerSet::top());
   }
 
-  if (summary.returned_parameters.empty()) {
-    // We are intentionally handling the initial state by escaping the result.
-    escape_dest(insn, RESULT_REGISTER, env);
-    return;
-  }
-
   PointerSet returned_ptrs;
   for (auto src_idx : UnorderedIterable(summary.returned_parameters)) {
     if (src_idx == FRESH_RETURN) {
@@ -266,6 +260,7 @@ void analyze_invoke_with_summary(const EscapeSummary& summary,
       returned_ptrs.join_with(env->get_pointers(insn->src(src_idx)));
     }
   }
+  // Note that returned_ptrs is empty initially
   env->set_pointers(RESULT_REGISTER, returned_ptrs);
 }
 
