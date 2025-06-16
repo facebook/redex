@@ -215,6 +215,8 @@ struct EscapeSummary {
            returned_parameters == other.returned_parameters;
   }
 
+  bool operator<=(const EscapeSummary& other) const;
+
   void join_with(const EscapeSummary& other);
 };
 

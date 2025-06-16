@@ -448,8 +448,15 @@ AnalyzeScopeResult analyze_scope(
             std::swap(new_fp_iter, v);
           });
           auto it = summary_map_ptr->find(method);
-          if (it != summary_map_ptr->end() && it->second == new_summary) {
-            return;
+          if (it != summary_map_ptr->end()) {
+            always_assert_log(it->second <= new_summary,
+                              "Illegal summary transition for %s:\n  %s\nis "
+                              "not less or equal to\n  %s\n",
+                              SHOW(method), SHOW(it->second),
+                              SHOW(new_summary));
+            if (it->second == new_summary) {
+              return;
+            }
           }
           changed_effect_summaries.emplace(method, std::move(new_summary));
           const auto& callers = call_graph.get_callers(method);
@@ -605,6 +612,21 @@ EscapeSummary EscapeSummary::from_s_expr(const sparta::s_expr& expr) {
     summary.returned_parameters.emplace(returned_params_s_expr[i].get_int32());
   }
   return summary;
+}
+
+bool EscapeSummary::operator<=(const EscapeSummary& other) const {
+  return unordered_all_of(
+             escaping_parameters,
+             [&](auto idx) { return other.escaping_parameters.count(idx); }) &&
+         unordered_all_of(returned_parameters, [&](size_t idx) -> bool {
+           if (idx == FRESH_RETURN &&
+               other.returned_parameters.count(ESCAPED_FRESH_RETURN)) {
+             // As more escaping parameters are discovered, previously apparent
+             // unescaped fresh returns can become unrepresentable.
+             return true;
+           }
+           return other.returned_parameters.count(idx);
+         });
 }
 
 void EscapeSummary::join_with(const EscapeSummary& other) {
