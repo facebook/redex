@@ -27,6 +27,16 @@ import androidx.compose.runtime.Composable
 @Composable
 private fun SuperTextPrinter(supertext: String, subtext: String = getTestDefault()) {
   println("Super Text: $supertext")
+  // Verify optimization of the changed parameter.
+  // PRECHECK: and-int/lit{{.*}}
+  // PRECHECK: if-nez {{.*}}
+  // PRECHECK: invoke-interface {{.*}} androidx.compose.runtime.Composer.changed{{.*}}
+  // Some bits of the changed parameter are known to be 1 and thus unequals zero.
+  // Don't run POSTCHECK-NOT: and-int/lit{{.*}} and if-nez {{.*}} here, because
+  // there are other appeareances of them that should not be optimized out.
+  // POSTCHECK-NOT: invoke-interface {{.*}} androidx.compose.runtime.Composer.changed{{.*}}
+
+  // Verify optimization of the default parameter.
   // PRECHECK: and-int/lit{{.*}}
   // PRECHECK: if-eqz {{.*}}
   // PRECHECK: invoke-static {{.*}} redex.ComposeUITestKt.getTestDefault{{.*}}
