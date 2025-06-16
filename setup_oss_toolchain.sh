@@ -50,6 +50,21 @@ BOOST_DEB_UBUNTU_PKGS="libboost-filesystem-dev$BITNESS_SUFFIX
 PROTOBUF_DEB_UBUNTU_PKGS="libprotobuf-dev$BITNESS_SUFFIX
                           protobuf-compiler"
 
+function install_googletest_from_source {
+    pushd "$TOOLCHAIN_TMP"
+    mkdir -p dl_cache/gtest
+    GOOGLETEST_MIN_VERSION=1.14.0
+    if [ ! -f "dl_cache/gtest/googletest-${GOOGLETEST_MIN_VERSION}.tar.gz" ] ; then
+        wget  "https://codeload.github.com/google/googletest/tar.gz/v${GOOGLETEST_MIN_VERSION}" -O "dl_cache/gtest/googletest-${GOOGLETEST_MIN_VERSION}.tar.gz"
+    fi
+    mkdir -p toolchain_install/gtest
+    pushd toolchain_install/gtest
+    tar xf "../../dl_cache/gtest/googletest-${GOOGLETEST_MIN_VERSION}.tar.gz" --no-same-owner --strip-components=1
+    cmake .
+    cmake --build . --target install
+    popd
+}
+
 function install_boost_from_source {
     pushd "$TOOLCHAIN_TMP"
     "$ROOT"/get_boost.sh
@@ -78,6 +93,7 @@ function install_from_apt {
         binutils-dev
         bzip2
         ca-certificates
+        cmake
         g++
         libiberty-dev$BITNESS_SUFFIX
         libjemalloc-dev$BITNESS_SUFFIX
@@ -110,6 +126,8 @@ function handle_debian {
             install_from_apt  python3 ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
             ;;
     esac
+    # TODO(T227009978): Install googletest from apt for some Debian versions after enabling autodetecting googletest installation dir.
+    install_googletest_from_source
 }
 
 function handle_ubuntu {
@@ -131,6 +149,8 @@ function handle_ubuntu {
             exit 1
             ;;
     esac
+    # TODO(T227009978): Install googletest from apt for some Ubuntu versions after enabling autodetecting googletest installation dir.
+    install_googletest_from_source
 }
 
 # Read ID and VERSION_ID from /etc/os-release.
