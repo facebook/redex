@@ -629,6 +629,9 @@ void ConfigFiles::init_baseline_profile_configs() {
                           baseline_profile_config_list_json);
   }
 
+  UnorderedMap<std::string, baseline_profiles::BaselineProfileConfig>
+      baseline_profile_config_list;
+
   // Make sure that if list is not empty, it has a default config
   always_assert(baseline_profile_config_list_json.empty() ||
                 baseline_profile_config_list_json.isMember(std::string(
@@ -706,35 +709,41 @@ void ConfigFiles::init_baseline_profile_configs() {
       }
     }
 
-    m_baseline_profile_config_list.emplace(std::move(config_name),
-                                           current_baseline_profile_config);
+    baseline_profile_config_list.emplace(std::move(config_name),
+                                         current_baseline_profile_config);
   }
 
   // Insert a default-constructed config with default values if
   // no "default" key was found.  Otherwise, this looks up the existing
   // value for "default".
-  m_baseline_profile_config_list.emplace(
+  baseline_profile_config_list.emplace(
       std::string(baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME),
       baseline_profiles::BaselineProfileConfig());
+
+  m_baseline_profile_config_list = std::make_unique<
+      UnorderedMap<std::string, baseline_profiles::BaselineProfileConfig>>(
+      std::move(baseline_profile_config_list));
 }
 
 const baseline_profiles::BaselineProfileConfigMap&
 ConfigFiles::get_baseline_profile_configs() {
-  if (m_baseline_profile_config_list.empty()) {
+  if (m_baseline_profile_config_list == nullptr) {
     init_baseline_profile_configs();
+    redex_assert(m_baseline_profile_config_list != nullptr);
   }
 
-  always_assert(m_baseline_profile_config_list.count(
+  always_assert(m_baseline_profile_config_list->count(
       baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME));
-  return m_baseline_profile_config_list;
+  return *m_baseline_profile_config_list;
 }
 
 const baseline_profiles::BaselineProfileConfig&
 ConfigFiles::get_default_baseline_profile_config() {
-  if (m_baseline_profile_config_list.empty()) {
+  if (m_baseline_profile_config_list == nullptr) {
     init_baseline_profile_configs();
+    redex_assert(m_baseline_profile_config_list != nullptr);
   }
-  return m_baseline_profile_config_list.at(
+  return m_baseline_profile_config_list->at(
       std::string(baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME));
 }
 
