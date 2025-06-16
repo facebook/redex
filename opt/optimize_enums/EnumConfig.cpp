@@ -139,21 +139,17 @@ ParamSummary calculate_param_summary(DexMethod* method,
   ptrs::FixpointIterator fp_iter(cfg, ptrs::InvokeToSummaryMap(),
                                  /*escape_check_cast*/ true);
   fp_iter.run(ptrs::Environment());
-  auto escape_summary = ptrs::get_escape_summary(fp_iter, code);
-  if (escape_summary.returned_parameters.kind() ==
-      sparta::AbstractValueKind::Top) {
-    return summary;
-  }
+  bool result_may_be_pointer =
+      !type::is_primitive(method->get_proto()->get_rtype());
+  auto escape_summary =
+      ptrs::get_escape_summary(fp_iter, code, result_may_be_pointer);
 
   auto args = method->get_proto()->get_args();
   auto& escaping_params = escape_summary.escaping_parameters;
-  if (escape_summary.returned_parameters.kind() ==
-          sparta::AbstractValueKind::Value &&
-      !escape_summary.returned_parameters.contains(
-          ptrs::UNREPRESENTABLE_RETURN)) {
-    auto& returned_elements = escape_summary.returned_parameters.elements();
+  auto& returned_elements = escape_summary.returned_parameters;
+  if (!returned_elements.count(ptrs::UNREPRESENTABLE_RETURN)) {
     if (returned_elements.size() == 1) {
-      auto returned = *returned_elements.begin();
+      auto returned = *unordered_any(returned_elements);
       if (returned != ptrs::FRESH_RETURN && !escaping_params.count(returned)) {
         DexType* cmp = is_static(method) ? *(args->begin() + returned)
                        : returned == 0 ? method->get_class() // Implicit `this`
@@ -167,9 +163,7 @@ ParamSummary calculate_param_summary(DexMethod* method,
       }
     } else {
       // Treat as escaping if there are multiple returns.
-      for (auto param : returned_elements) {
-        escaping_params.insert(param);
-      }
+      insert_unordered_iterable(escaping_params, returned_elements);
     }
   }
   // Non-escaping java.lang.Object params are stored in safe_params.

@@ -53,7 +53,13 @@ ptrs::InvokeToSummaryMap mark_all_invokes_as_non_escaping(const IRCode& code) {
   ptrs::InvokeToSummaryMap invoke_to_summary_map;
   for (const auto& mie : InstructionIterable(code.cfg())) {
     if (opcode::is_an_invoke(mie.insn->opcode())) {
-      invoke_to_summary_map.emplace(mie.insn, ptrs::EscapeSummary({}));
+      ptrs::ParamSet returned_params;
+      if (!type::is_primitive(
+              mie.insn->get_method()->get_proto()->get_rtype())) {
+        returned_params.emplace(ptrs::FRESH_RETURN);
+      }
+      invoke_to_summary_map.emplace(mie.insn,
+                                    ptrs::EscapeSummary(returned_params, {}));
     }
   }
   return invoke_to_summary_map;
@@ -181,7 +187,9 @@ TEST_F(LocalPointersTest, generateEscapeSummary) {
   ptrs::FixpointIterator fp_iter(cfg);
   fp_iter.run(ptrs::Environment());
 
-  auto summary = ptrs::get_escape_summary(fp_iter, *code);
+  bool result_may_be_pointer = true;
+  auto summary =
+      ptrs::get_escape_summary(fp_iter, *code, result_may_be_pointer);
   EXPECT_EQ(summary.returned_parameters, ptrs::ParamSet({0}));
   EXPECT_THAT(unordered_unsafe_unwrap(summary.escaping_parameters),
               UnorderedElementsAre(1));
@@ -195,7 +203,8 @@ TEST_F(LocalPointersTest, generateEscapeSummary) {
   sparta::s_expr summary_s_expr;
   s_expr_in >> summary_s_expr;
   auto summary_copy = ptrs::EscapeSummary::from_s_expr(summary_s_expr);
-  EXPECT_EQ(summary_copy.returned_parameters, ptrs::ParamSet({0}));
+  EXPECT_THAT(unordered_unsafe_unwrap(summary_copy.returned_parameters),
+              UnorderedElementsAre(0));
   EXPECT_THAT(unordered_unsafe_unwrap(summary_copy.escaping_parameters),
               UnorderedElementsAre(1));
 }
@@ -205,7 +214,7 @@ TEST_F(LocalPointersTest, generateEscapeSummary2) {
     (
      (sget-object "LFoo;.bar:LFoo;")
      (move-result-pseudo-object v0)
-     (return v0)
+     (return-object v0)
     )
   )");
 
@@ -215,7 +224,9 @@ TEST_F(LocalPointersTest, generateEscapeSummary2) {
   ptrs::FixpointIterator fp_iter(cfg);
   fp_iter.run(ptrs::Environment());
 
-  auto summary = ptrs::get_escape_summary(fp_iter, *code);
+  bool result_may_be_pointer = true;
+  auto summary =
+      ptrs::get_escape_summary(fp_iter, *code, result_may_be_pointer);
   EXPECT_EQ(summary.returned_parameters,
             ptrs::ParamSet({ptrs::UNREPRESENTABLE_RETURN}));
   EXPECT_THAT(unordered_unsafe_unwrap(summary.escaping_parameters),
@@ -258,8 +269,10 @@ TEST_F(LocalPointersTest, collectExitingPointersWithThrow) {
               UnorderedElementsAre(Pointee(
                   *(IRInstruction(IOPCODE_LOAD_PARAM_OBJECT)).set_dest(0))));
 
-  auto summary = ptrs::get_escape_summary(fp_iter, *code);
-  EXPECT_EQ(summary.returned_parameters, ptrs::ParamSet::bottom());
+  bool result_may_be_pointer = true;
+  auto summary =
+      ptrs::get_escape_summary(fp_iter, *code, result_may_be_pointer);
+  EXPECT_EQ(summary.returned_parameters, ptrs::ParamSet());
   EXPECT_THAT(unordered_unsafe_unwrap(summary.escaping_parameters),
               UnorderedElementsAre(0));
 }
@@ -287,7 +300,7 @@ TEST_F(LocalPointersTest, returnFreshValue) {
        (new-instance "LFoo;")
        (move-result-pseudo-object v0)
        (invoke-direct (v0) "LFoo;.<init>:()V")
-       (return v0)
+       (return-object v0)
       )
     )");
 
@@ -299,9 +312,12 @@ TEST_F(LocalPointersTest, returnFreshValue) {
     ptrs::FixpointIterator fp_iter(cfg, invoke_to_summary_map);
     fp_iter.run(ptrs::Environment());
 
-    fresh_return_summary = ptrs::get_escape_summary(fp_iter, *code);
-    EXPECT_EQ(fresh_return_summary.returned_parameters,
-              ptrs::ParamSet(ptrs::FRESH_RETURN));
+    bool result_may_be_pointer = true;
+    fresh_return_summary =
+        ptrs::get_escape_summary(fp_iter, *code, result_may_be_pointer);
+    EXPECT_THAT(
+        unordered_unsafe_unwrap(fresh_return_summary.returned_parameters),
+        UnorderedElementsAre(ptrs::FRESH_RETURN));
     EXPECT_THAT(
         unordered_unsafe_unwrap(fresh_return_summary.escaping_parameters),
         UnorderedElementsAre());
@@ -355,7 +371,7 @@ TEST_F(LocalPointersTest, returnEscapedValue) {
        (move-result-pseudo-object v0)
        (invoke-direct (v0) "LFoo;.<init>:()V")
        (sput-object v0 "LFoo;.a:LFoo;") ; v0 escapes here
-       (return v0)
+       (return-object v0)
       )
     )");
 
@@ -367,7 +383,9 @@ TEST_F(LocalPointersTest, returnEscapedValue) {
     ptrs::FixpointIterator fp_iter(cfg, invoke_to_summary_map);
     fp_iter.run(ptrs::Environment());
 
-    fresh_return_summary = ptrs::get_escape_summary(fp_iter, *code);
+    bool result_may_be_pointer = true;
+    fresh_return_summary =
+        ptrs::get_escape_summary(fp_iter, *code, result_may_be_pointer);
     EXPECT_EQ(fresh_return_summary.returned_parameters,
               ptrs::ParamSet({ptrs::UNREPRESENTABLE_RETURN}));
     EXPECT_THAT(
@@ -381,7 +399,7 @@ TEST_F(LocalPointersTest, returnEscapedValue) {
       (
        (invoke-static () "LFoo;.newEscapedInstance:()LFoo;")
        (move-result-object v0)
-       (return v0)
+       (return-object v0)
       )
     )");
 

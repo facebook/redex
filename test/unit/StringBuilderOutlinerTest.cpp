@@ -314,8 +314,9 @@ TEST_F(StringBuilderOutlinerTest, outlineThree) {
   ptrs::FixpointIterator ptrs_fp_iter(outline_helper_cfg,
                                       invoke_to_esc_summary_map);
   ptrs_fp_iter.run(ptrs::Environment());
-  auto esc_summary =
-      ptrs::get_escape_summary(ptrs_fp_iter, *outline_helper_code);
+  bool result_may_be_pointer = true;
+  auto esc_summary = ptrs::get_escape_summary(
+      ptrs_fp_iter, *outline_helper_code, result_may_be_pointer);
   EXPECT_EQ(esc_summary.returned_parameters,
             ptrs::ParamSet{ptrs::FRESH_RETURN});
   EXPECT_EQ(esc_summary.escaping_parameters.size(), 0);
