@@ -5,7 +5,7 @@ env:
   CACHE_VERSION: xxxxx1
 jobs:
   build-20_04:
-    runs-on: 4-core-ubuntu-20.04
+    runs-on: ubuntu-24.04-4core
     steps:
     - uses: actions/checkout@v4.1.1
     - uses: "./.github/actions/prepare_debian"
