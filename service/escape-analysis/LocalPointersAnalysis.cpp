@@ -251,7 +251,7 @@ void analyze_invoke_with_summary(const EscapeSummary& summary,
   for (auto src_idx : UnorderedIterable(summary.returned_parameters)) {
     if (src_idx == FRESH_RETURN) {
       returned_ptrs.add(insn);
-    } else if (src_idx == UNREPRESENTABLE_RETURN) {
+    } else if (src_idx == ESCAPED_FRESH_RETURN) {
       returned_ptrs.add(insn);
       // escape just insn right here; we are going to override
       // RESULT_REGISTER in a moment with a more precise pointer set.
@@ -532,9 +532,9 @@ EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
       } else if (!exit_state.may_have_escaped(insn)) {
         summary.returned_parameters.insert(FRESH_RETURN);
       } else {
-        // We are returning a pointer that did not originate from an input
-        // parameter.
-        summary.returned_parameters.insert(UNREPRESENTABLE_RETURN);
+        // We are returning a possibly escaped pointer that did not originate
+        // from an input parameter.
+        summary.returned_parameters.insert(ESCAPED_FRESH_RETURN);
       }
     }
     break;

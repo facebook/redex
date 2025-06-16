@@ -183,8 +183,8 @@ using ParamSet = UnorderedSet<uint16_t>;
 // method and only escaped at the return opcode(s).
 constexpr uint16_t FRESH_RETURN = std::numeric_limits<uint16_t>::max();
 
-// For denoting a returned value that we cannot represent.
-constexpr uint16_t UNREPRESENTABLE_RETURN = FRESH_RETURN - 1;
+// For denoting a returned value that escaped.
+constexpr uint16_t ESCAPED_FRESH_RETURN = FRESH_RETURN - 1;
 
 struct EscapeSummary {
   // The elements of this set represent the indexes of the src registers that

@@ -228,7 +228,7 @@ TEST_F(LocalPointersTest, generateEscapeSummary2) {
   auto summary =
       ptrs::get_escape_summary(fp_iter, *code, result_may_be_pointer);
   EXPECT_EQ(summary.returned_parameters,
-            ptrs::ParamSet({ptrs::UNREPRESENTABLE_RETURN}));
+            ptrs::ParamSet({ptrs::ESCAPED_FRESH_RETURN}));
   EXPECT_THAT(unordered_unsafe_unwrap(summary.escaping_parameters),
               UnorderedElementsAre());
 
@@ -242,7 +242,7 @@ TEST_F(LocalPointersTest, generateEscapeSummary2) {
   s_expr_in >> summary_s_expr;
   auto summary_copy = ptrs::EscapeSummary::from_s_expr(summary_s_expr);
   EXPECT_EQ(summary.returned_parameters,
-            ptrs::ParamSet({ptrs::UNREPRESENTABLE_RETURN}));
+            ptrs::ParamSet({ptrs::ESCAPED_FRESH_RETURN}));
   EXPECT_THAT(unordered_unsafe_unwrap(summary_copy.escaping_parameters),
               UnorderedElementsAre());
 }
@@ -387,7 +387,7 @@ TEST_F(LocalPointersTest, returnEscapedValue) {
     fresh_return_summary =
         ptrs::get_escape_summary(fp_iter, *code, result_may_be_pointer);
     EXPECT_EQ(fresh_return_summary.returned_parameters,
-              ptrs::ParamSet({ptrs::UNREPRESENTABLE_RETURN}));
+              ptrs::ParamSet({ptrs::ESCAPED_FRESH_RETURN}));
     EXPECT_THAT(
         unordered_unsafe_unwrap(fresh_return_summary.escaping_parameters),
         UnorderedElementsAre());
