@@ -7,18 +7,22 @@
 
 #pragma once
 
-#include <map>
+#include <boost/optional.hpp>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "DeterministicContainers.h"
-#include "GlobalConfig.h"
 #include "JsonWrapper.h"
 
+class DexClass;
 class DexMethodRef;
+class DexString;
 class DexType;
+class GlobalConfig;
 struct ProguardMap;
+
+using Scope = std::vector<DexClass*>;
 
 constexpr const char* CLASS_SPLITTING_RELOCATED_SUFFIX = "$relocated";
 constexpr const size_t CLASS_SPLITTING_RELOCATED_SUFFIX_LEN = 10;
@@ -176,7 +180,7 @@ struct ConfigFiles {
   }
 
   const JsonWrapper& get_json_config() const { return m_json; }
-  const GlobalConfig& get_global_config() const { return m_global_config; }
+  const GlobalConfig& get_global_config() const;
 
   /**
    * Get the global inliner config from the "inliner" section. If there is not
@@ -256,7 +260,7 @@ struct ConfigFiles {
  private:
   JsonWrapper m_json;
   std::string outdir;
-  GlobalConfig m_global_config;
+  std::unique_ptr<GlobalConfig> m_global_config;
 
   std::vector<std::string> load_coldstart_methods();
   std::vector<std::string> load_coldstart_classes();

@@ -15,6 +15,7 @@
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "GlobalConfig.h"
 #include "InterDex.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"

@@ -23,6 +23,7 @@
 #include "DexUtil.h"
 #include "GraphUtil.h"
 #include "Inliner.h"
+#include "InlinerConfig.h"
 #include "LoopInfo.h"
 #include "MethodReference.h"
 #include "RedexContext.h"

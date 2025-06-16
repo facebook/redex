@@ -12,6 +12,8 @@
 #include <sstream>
 #include <string_view>
 
+#include <json/value.h>
+
 #include "ConfigFiles.h"
 #include "RedexProperties.h"
 #include "RedexPropertyChecker.h"

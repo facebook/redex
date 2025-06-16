@@ -18,6 +18,7 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "FrameworkApi.h"
+#include "GlobalConfig.h"
 #include "InlinerConfig.h"
 #include "MethodProfiles.h"
 #include "ProguardMap.h"
@@ -72,7 +73,8 @@ void from_chars(std::string_view s, int64_t* res) {
 ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
     : m_json(config),
       outdir(outdir),
-      m_global_config(GlobalConfig::default_registry()),
+      m_global_config(
+          std::make_unique<GlobalConfig>(GlobalConfig::default_registry())),
       m_proguard_map(
           new ProguardMap(config.get("proguard_map", "").asString(),
                           config.get("use_new_rename_map", 0).asBool())),
@@ -748,7 +750,8 @@ ConfigFiles::get_default_baseline_profile_config() {
 }
 
 void ConfigFiles::parse_global_config() {
-  m_global_config.parse_config(m_json);
+  redex_assert(m_global_config != nullptr);
+  m_global_config->parse_config(m_json);
 }
 
 void ConfigFiles::load(const Scope& scope) {
@@ -857,4 +860,9 @@ void ConfigFiles::build_cls_interdex_groups() {
   // group_id + 1 represents the number of groups (considering the classes
   // outside of the interdex order as a group on its own).
   m_num_interdex_groups = group_id + 1;
+}
+
+const GlobalConfig& ConfigFiles::get_global_config() const {
+  redex_assert(m_global_config != nullptr);
+  return *m_global_config;
 }
