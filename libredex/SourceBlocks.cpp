@@ -555,6 +555,99 @@ struct RandomGenerator {
   }
 };
 
+bool is_hot_block(const Block* block) {
+  return has_source_block_positive_val(get_first_source_block(block));
+}
+
+void set_block_appear100(Block* block, float appear100) {
+  std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
+  for (auto* source_block : source_blocks) {
+    for (size_t i = 0; i < source_block->vals_size; i++) {
+      if (source_block->vals[i]) {
+        source_block->vals[i]->appear100 = appear100;
+      }
+    }
+  }
+}
+
+void set_block_value(Block* block, float hit) {
+  std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
+  for (auto* source_block : source_blocks) {
+    for (size_t i = 0; i < source_block->vals_size; i++) {
+      if (source_block->vals[i]) {
+        source_block->vals[i]->val = hit;
+      }
+    }
+  }
+}
+
+struct TopoTraversalHelper {
+
+  CustomValueInsertHelper* value_insert_helper;
+  RandomGenerator* generator;
+  dominators::SimpleFastDominators<cfg::GraphInterface>* doms;
+  ControlFlowGraph* cfg;
+
+  float appear100{0.0f};
+  float entry_hit{0.0f};
+
+  explicit TopoTraversalHelper(
+      CustomValueInsertHelper* value_insert_helper,
+      RandomGenerator* generator,
+      dominators::SimpleFastDominators<cfg::GraphInterface>* doms,
+      ControlFlowGraph* cfg)
+      : value_insert_helper(value_insert_helper),
+        generator(generator),
+        doms(doms),
+        cfg(cfg) {}
+
+  bool all_preds_are_cold(const Block* block) {
+    auto& metadata = value_insert_helper->fuzzing_metadata_map;
+    for (const auto& edge : block->preds()) {
+      auto* pred = edge->src();
+      if (!metadata.at(pred).has_values) {
+        // If there are no values in this predecessor (cause of cycles) then
+        // ignore it
+        continue;
+      }
+      if (is_hot_block(pred)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void process_block(Block* cur) {
+    auto& metadata = value_insert_helper->fuzzing_metadata_map;
+    if (cur == cfg->entry_block()) {
+      entry_hit = generator->generate_block_hit();
+      appear100 = 0.0;
+      if (entry_hit > 0) { // entry_hit is HOT.
+        appear100 = generator->generate_appear100();
+      }
+      set_block_appear100(cur, appear100);
+      set_block_value(cur, entry_hit);
+      metadata.at(cur).has_values = true;
+    } else {
+      if (!metadata.at(cur).has_values) {
+        // if a block has values, don't need to deal with it again
+        // (for example, the entry block).
+        if (entry_hit == 0.0f || !is_hot_block(doms->get_idom(cur)) ||
+            all_preds_are_cold(cur)) {
+          // This block must be listed as COLD now.
+          set_block_value(cur, 0);
+        } else {
+          // This block can be either HOT or COLD.
+          int next_hit = generator->generate_block_hit();
+          set_block_value(cur, next_hit);
+        }
+        set_block_appear100(cur, appear100);
+        metadata.at(cur).has_values = true;
+      }
+    }
+  }
+};
+
 using InsertionType = CustomValueInsertHelper::CustomInsertionType;
 
 } // namespace
@@ -662,27 +755,58 @@ SourceBlockMetric gather_source_block_metrics(ControlFlowGraph* cfg) {
   return metrics;
 }
 
-bool is_hot_block(const Block* block) {
-  return has_source_block_positive_val(get_first_source_block(block));
-}
+// CustomValueInsertHelper must have the correct indegrees initialized to have
+// this work as intended. Running this traversal will also modify the state of
+// the CustomValueInsertHelper to have different indegrees
+template <typename BlockFn>
+void topo_traverse(CustomValueInsertHelper& helper,
+                   Block* start_block,
+                   const BlockFn& block_fn) {
+  auto& metadata = helper.fuzzing_metadata_map;
+  auto topo_comparator = [&metadata](Block* l, Block* r) {
+    return metadata.at(l) < metadata.at(r);
+  };
 
-void set_block_appear100(Block* block, float appear100) {
-  std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
-  for (auto* source_block : source_blocks) {
-    for (size_t i = 0; i < source_block->vals_size; i++) {
-      if (source_block->vals[i]) {
-        source_block->vals[i]->appear100 = appear100;
+  // The traversal uses a multiset to be able to process the block with the
+  // lowest number of indegrees, and allows updating the position of other nodes
+  // in the multiset if their indegrees change during the traversal.
+  std::multiset<Block*, decltype(topo_comparator)> process_queue(
+      topo_comparator);
+  UnorderedSet<Block*> visited;
+  uint32_t insertion_order_id = 0;
+
+  block_fn(start_block);
+  metadata.at(start_block).insertion_id = insertion_order_id;
+  visited.insert(start_block);
+  process_queue.insert(start_block);
+  ++insertion_order_id;
+
+  while (!process_queue.empty()) {
+    auto current = process_queue.begin();
+    process_queue.erase(process_queue.begin());
+
+    block_fn(*current);
+
+    for (const auto& edge : (*current)->succs()) {
+      auto* neighbor = edge->target();
+      bool re_add_neighbor = false;
+
+      if (process_queue.count(neighbor)) {
+        // Erasing from the queue and readding allows reordering and updating of
+        // the queue if the neighbor's new indegrees gives it more priority now
+        process_queue.erase(neighbor);
+        re_add_neighbor = true;
       }
-    }
-  }
-}
+      metadata.at(neighbor).indegrees--;
+      if (re_add_neighbor) {
+        process_queue.insert(neighbor);
+      }
 
-void set_block_value(Block* block, float hit) {
-  std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
-  for (auto* source_block : source_blocks) {
-    for (size_t i = 0; i < source_block->vals_size; i++) {
-      if (source_block->vals[i]) {
-        source_block->vals[i]->val = hit;
+      if (!visited.count(neighbor)) {
+        metadata.at(neighbor).insertion_id = insertion_order_id;
+        ++insertion_order_id;
+        visited.insert(neighbor);
+        process_queue.insert(neighbor);
       }
     }
   }
@@ -723,96 +847,16 @@ void run_topotraversal_fuzzing(ControlFlowGraph* cfg,
                                const std::string& method_name,
                                bool use_seed,
                                int seed) {
-  auto& metadata = helper.fuzzing_metadata_map;
-  auto topo_comparator = [&metadata](Block* l, Block* r) {
-    return metadata.at(l) < metadata.at(r);
-  };
 
-  auto all_preds_are_cold = [&metadata](const Block* block) {
-    for (const auto& edge : block->preds()) {
-      auto* pred = edge->src();
-      if (!metadata.at(pred).has_values) {
-        // If there are no values in this predecessor (cause of cycles) then
-        // ignore it
-        continue;
-      }
-      if (is_hot_block(pred)) {
-        return false;
-      }
-    }
-    return true;
-  };
   RandomGenerator generator =
       use_seed ? RandomGenerator(seed, method_name,
                                  helper.cold_to_hot_generation_ratio)
                : RandomGenerator(helper.cold_to_hot_generation_ratio);
   auto doms = dominators::SimpleFastDominators<cfg::GraphInterface>(*cfg);
+  TopoTraversalHelper traversal_helper(&helper, &generator, &doms, cfg);
 
-  // The traversal uses a multiset to be able to process the block with the
-  // lowest number of indegrees, and allows updating the position of other nodes
-  // in the multiset if their indegrees change during the traversal.
-  std::multiset<Block*, decltype(topo_comparator)> process_queue(
-      topo_comparator);
-  UnorderedSet<Block*> visited;
-  uint32_t insertion_order_id = 0;
-
-  auto* entry = cfg->entry_block();
-  float entry_hit = generator.generate_block_hit();
-  float appear100 = 0.0;
-  if (entry_hit > 0) { // entry_hit is HOT.
-    appear100 = generator.generate_appear100();
-  }
-  set_block_appear100(entry, appear100);
-  set_block_value(entry, entry_hit);
-  metadata.at(entry).has_values = true;
-  metadata.at(entry).insertion_id = insertion_order_id;
-  ++insertion_order_id;
-
-  visited.insert(entry);
-  process_queue.insert(entry);
-
-  while (!process_queue.empty()) {
-    auto current = process_queue.begin();
-    process_queue.erase(process_queue.begin());
-    if (!metadata.at(*current).has_values) {
-      // if a block has values, don't need to deal with it again
-      // (for example, the entry block).
-      if (entry_hit == 0.0f || !is_hot_block(doms.get_idom(*current)) ||
-          all_preds_are_cold(*current)) {
-        // This block must be listed as COLD now.
-        set_block_value(*current, 0);
-      } else {
-        // This block can be either HOT or COLD.
-        int next_hit = generator.generate_block_hit();
-        set_block_value(*current, next_hit);
-      }
-      set_block_appear100(*current, appear100);
-      metadata.at(*current).has_values = true;
-    }
-
-    for (const auto& edge : (*current)->succs()) {
-      auto* neighbor = edge->target();
-      bool re_add_neighbor = false;
-
-      if (process_queue.count(neighbor)) {
-        // Erasing from the queue and readding allows reordering and updating of
-        // the queue if the neighbor's new indegrees gives it more priority now
-        process_queue.erase(neighbor);
-        re_add_neighbor = true;
-      }
-      metadata.at(neighbor).indegrees--;
-      if (re_add_neighbor) {
-        process_queue.insert(neighbor);
-      }
-
-      if (!visited.count(neighbor)) {
-        metadata.at(neighbor).insertion_id = insertion_order_id;
-        ++insertion_order_id;
-        visited.insert(neighbor);
-        process_queue.insert(neighbor);
-      }
-    }
-  }
+  topo_traverse(helper, cfg->entry_block(),
+                [&](Block* cur) { traversal_helper.process_block(cur); });
 }
 
 InsertResult insert_custom_source_blocks(
