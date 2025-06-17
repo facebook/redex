@@ -9,9 +9,11 @@
 
 #include "CFGMutation.h"
 #include "ConcurrentContainers.h"
+#include "ConfigFiles.h"
 #include "Creators.h"
 #include "DexAsm.h"
 #include "DexClass.h"
+#include "MethodProfiles.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"
@@ -356,7 +358,7 @@ static IROpcode invoke_for_method(const DexMethod* method) {
  * move instructions created here will be eliminated as part of move coalescing
  * during register allocation.
  */
-void Outliner::transform(IRCode* code) {
+void Outliner::transform(const DexMethod* source_method, IRCode* code) {
   if (m_builder_state_maps.count(code) == 0) {
     return;
   }
@@ -376,6 +378,15 @@ void Outliner::transform(IRCode* code) {
     auto invoke_outlined = new IRInstruction(invoke_for_method(outline_helper));
     invoke_outlined->set_method(outline_helper);
     invoke_outlined->set_srcs_size(typelist->size());
+
+    if (source_method != nullptr) {
+      m_target_to_source_map.update(
+          outline_helper,
+          [source_method](const DexMethod*, std::vector<DexMethod*>& sources,
+                          bool /*exists*/) {
+            sources.push_back(const_cast<DexMethod*>(source_method));
+          });
+    }
 
     size_t idx{0};
     for (auto* insn : state) {
@@ -442,8 +453,21 @@ void Outliner::apply_changes(
   }
 }
 
+size_t derive_method_profiles_stats(
+    ConfigFiles& config, const Outliner::OutlinedMethods& outlined_methods) {
+  auto& method_profiles = config.get_method_profiles();
+  size_t res = 0;
+  for (auto& [target, sources] : UnorderedIterable(outlined_methods)) {
+    std::vector<DexMethod*> sorted_sources = sources;
+    std::sort(sorted_sources.begin(), sorted_sources.end(),
+              dexmethods_comparator());
+    res += method_profiles.derive_stats(target, sorted_sources);
+  }
+  return res;
+}
+
 void StringBuilderOutlinerPass::run_pass(DexStoresVector& stores,
-                                         ConfigFiles&,
+                                         ConfigFiles& config,
                                          PassManager& mgr) {
   auto scope = build_class_scope(stores);
   Outliner outliner(m_config);
@@ -459,9 +483,16 @@ void StringBuilderOutlinerPass::run_pass(DexStoresVector& stores,
   // 3) Actually do the outlining.
   walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
     if (!method->rstate.no_optimizations()) {
-      outliner.transform(&code);
+      outliner.transform(method, &code);
     }
   });
+
+  if (m_config.derive_method_profiles_stats) {
+    size_t derived_method_profile_stats =
+        derive_method_profiles_stats(config, outliner.get_outlined_methods());
+    mgr.incr_metric("num_derived_method_profile_stats",
+                    derived_method_profile_stats);
+  }
 
   mgr.incr_metric("stringbuilders_removed",
                   outliner.get_stats().stringbuilders_removed);

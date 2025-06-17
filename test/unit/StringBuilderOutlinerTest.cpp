@@ -78,7 +78,7 @@ class StringBuilderOutlinerTest : public RedexTest {
     Outliner outliner(m_config);
     outliner.analyze(*code);
     outliner.create_outline_helpers(&m_stores);
-    outliner.transform(code);
+    outliner.transform(nullptr, code);
 
     // Use OSDCE to remove any unused new-instance StringBuilder opcodes. When
     // running this pass against an app, the app's redex config should always
