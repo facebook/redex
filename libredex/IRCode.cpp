@@ -1084,6 +1084,50 @@ bool IRCode::try_sync(DexCode* code) {
 
   // Step 4, emit debug entries
   TRACE(MTRANS, 5, "Emitting debug entries");
+
+  auto& invoke_ids = code->get_invoke_ids();
+  always_assert(invoke_ids.empty());
+  DexPosition* last_position{nullptr};
+  SourceBlock* last_src_block{nullptr};
+  std::vector<IRList::iterator> src_blocks;
+  for (auto miter = m_ir_list->begin(); miter != m_ir_list->end(); ++miter) {
+    MethodItemEntry* mentry = &*miter;
+    if (mentry->type == MFLOW_POSITION) {
+      last_position = mentry->pos.get();
+      continue;
+    }
+    if (mentry->type == MFLOW_SOURCE_BLOCK) {
+      last_src_block = mentry->src_block.get();
+      src_blocks.push_back(miter);
+      continue;
+    }
+    if (mentry->type != MFLOW_DEX_OPCODE) {
+      continue;
+    }
+    auto* dex_insn = mentry->dex_insn;
+    auto opcode = dex_insn->opcode();
+    if (!dex_opcode::is_invoke(opcode)) {
+      continue;
+    }
+    if (opcode != DOPCODE_INVOKE_VIRTUAL &&
+        opcode != DOPCODE_INVOKE_VIRTUAL_RANGE &&
+        opcode != DOPCODE_INVOKE_INTERFACE &&
+        opcode != DOPCODE_INVOKE_INTERFACE_RANGE) {
+      continue;
+    }
+    addr = entry_to_addr.at(mentry);
+    bool invoke_interface = opcode == DOPCODE_INVOKE_INTERFACE ||
+                            opcode == DOPCODE_INVOKE_INTERFACE_RANGE;
+    auto* method = static_cast<const DexOpcodeMethod*>(dex_insn)->get_method();
+    invoke_ids.emplace_back(addr, DexInvokeId(invoke_interface, method,
+                                              last_position, last_src_block));
+  }
+
+  // Remove any source blocks. They are no longer necessary.
+  for (const auto& miter : src_blocks) {
+    m_ir_list->erase_and_dispose(miter);
+  }
+
   auto debugitem = code->get_debug_item();
   if (debugitem) {
     gather_debug_entries(m_ir_list, entry_to_addr, &debugitem->get_entries());

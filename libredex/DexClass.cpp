@@ -618,6 +618,18 @@ void DexDebugItem::gather_strings(
   }
 }
 
+DexInvokeId::DexInvokeId(bool invoke_interface,
+                         DexMethodRef* method,
+                         DexPosition* position,
+                         SourceBlock* src_block)
+    : invoke_interface(invoke_interface),
+      method(method),
+      position(position ? std::make_unique<DexPosition>(*position) : nullptr),
+      src_block(src_block ? std::make_unique<SourceBlock>(*src_block)
+                          : nullptr) {}
+
+DexInvokeId::~DexInvokeId() {}
+
 DexCode::DexCode(const DexCode& that)
     : m_registers_size(that.m_registers_size),
       m_ins_size(that.m_ins_size),
