@@ -166,6 +166,11 @@ class Outliner {
 
   void transform(const DexMethod* source_method, IRCode* code);
 
+  void set_hot_method_from_callsite();
+
+  std::vector<SourceBlock*> get_hot_source_blocks(
+      const std::vector<DexMethod*>& sources) const;
+
   using OutlinedMethods = ConcurrentMap<DexMethod*, std::vector<DexMethod*>>;
 
   const OutlinedMethods& get_outlined_methods() const {

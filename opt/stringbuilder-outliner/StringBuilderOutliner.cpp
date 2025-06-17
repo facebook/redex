@@ -16,6 +16,7 @@
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -453,6 +454,38 @@ void Outliner::apply_changes(
   }
 }
 
+void Outliner::set_hot_method_from_callsite() {
+  for (const auto& pair : UnorderedIterable(m_target_to_source_map)) {
+    DexMethod* target = pair.first;
+    const std::vector<DexMethod*>& sources = pair.second;
+    std::vector<SourceBlock*> source_blocks_callsites =
+        get_hot_source_blocks(sources);
+
+    if (!source_blocks_callsites.empty()) {
+      always_assert(target->get_code());
+      auto* template_sb = source_blocks_callsites[0];
+      source_blocks::insert_synthetic_source_blocks_in_method(
+          target, [target, template_sb, &source_blocks_callsites]() {
+            return source_blocks::clone_as_synthetic(template_sb, target,
+                                                     source_blocks_callsites);
+          });
+    }
+  }
+}
+
+std::vector<SourceBlock*> Outliner::get_hot_source_blocks(
+    const std::vector<DexMethod*>& sources) const {
+  std::vector<SourceBlock*> source_blocks_callsites;
+  for (const auto& source : sources) {
+    always_assert(source->get_code());
+    if (source_blocks::method_is_hot(source)) {
+      source_blocks_callsites.push_back(source_blocks::get_first_source_block(
+          source->get_code()->cfg().entry_block()));
+    }
+  }
+  return source_blocks_callsites;
+}
+
 size_t derive_method_profiles_stats(
     ConfigFiles& config, const Outliner::OutlinedMethods& outlined_methods) {
   auto& method_profiles = config.get_method_profiles();
@@ -486,6 +519,8 @@ void StringBuilderOutlinerPass::run_pass(DexStoresVector& stores,
       outliner.transform(method, &code);
     }
   });
+  // 4) mark the new outlined string methods as hot if the call site was hot
+  outliner.set_hot_method_from_callsite();
 
   if (m_config.derive_method_profiles_stats) {
     size_t derived_method_profile_stats =
