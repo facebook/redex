@@ -1667,6 +1667,11 @@ void ResourcesArscFile::remap_res_ids_and_serialize(
   serialize();
 }
 
+void ResourcesArscFile::apply_attribute_removals(
+    const std::vector<resources::StyleModificationSpec::Modification>&
+    /* modifications */,
+    const std::vector<std::string>& /* resources_paths */) {}
+
 void ResourcesArscFile::nullify_res_ids_and_serialize(
     const std::vector<std::string>& /* resource_files */) {
   m_nullify_removed = true;

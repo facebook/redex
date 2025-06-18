@@ -80,6 +80,10 @@ class ResourcesPbFile : public ResourceTableFile {
   get_inlinable_resource_values() override;
   UnorderedSet<uint32_t> get_overlayable_id_roots() override;
   resources::StyleMap get_style_map() override;
+  void apply_attribute_removals(
+      const std::vector<resources::StyleModificationSpec::Modification>&
+          modifications,
+      const std::vector<std::string>& resources_pb_paths) override;
 
   const std::map<uint32_t, const ConfigValues>& get_res_id_to_configvalue()
       const {

@@ -455,8 +455,15 @@ class ResourceTableFile {
   // Builds a map of resource ID -> information about style resources in all
   // configurations.
   virtual resources::StyleMap get_style_map() = 0;
-  // Builds a graph of all styles in the application, with outgoing edges to the
-  // parent of each style.
+
+  // Deletes referenced attribute/value in android app
+  virtual void apply_attribute_removals(
+      const std::vector<resources::StyleModificationSpec::Modification>&
+          modifications,
+      const std::vector<std::string>& resources_pb_paths) = 0;
+
+  // Builds a graph of all styles in the application, with outgoing edges to
+  // the parent of each style.
   resources::StyleInfo load_style_info();
 
   // Takes effect during serialization. Appends a new type with the given

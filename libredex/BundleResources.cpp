@@ -2671,6 +2671,11 @@ resources::StyleMap ResourcesPbFile::get_style_map() {
   return style_map;
 }
 
+void ResourcesPbFile::apply_attribute_removals(
+    const std::vector<resources::StyleModificationSpec::Modification>&
+        modifications,
+    const std::vector<std::string>& resources_pb_paths) {}
+
 ResourcesPbFile::~ResourcesPbFile() {}
 
 #endif // HAS_PROTOBUF
