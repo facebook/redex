@@ -143,7 +143,7 @@ using BuilderStateMap =
 struct Config {
   size_t max_outline_length{9};
   size_t min_outline_count{10};
-  bool derive_method_profiles_stats{false};
+  bool derive_method_profiles_stats{true};
 };
 
 struct Stats {
