@@ -1357,6 +1357,34 @@ size_t hot_method_cold_entry_violations_tmpl(Block* block, const Fn& fn) {
   return sum;
 }
 
+template <typename Fn>
+size_t hot_all_children_cold_violations_tmpl(Block* block, const Fn& fn) {
+  size_t sum{0};
+
+  auto* last_sb_before_throw =
+      source_blocks::get_last_source_block_if_after_throw(block);
+
+  if (last_sb_before_throw &&
+      has_source_block_positive_val(last_sb_before_throw)) {
+    bool has_successor = false;
+    bool has_cold_child = true;
+    for (auto successor : block->succs()) {
+      auto* first_sb_succ =
+          source_blocks::get_first_source_block(successor->src());
+      has_successor = true;
+      if (has_source_block_positive_val(first_sb_succ)) {
+        has_cold_child = false;
+        break;
+      }
+    }
+    if (has_successor && has_cold_child) {
+      sum++;
+    }
+  }
+  sum = fn(sum);
+  return sum;
+}
+
 size_t chain_hot_violations(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
@@ -1383,6 +1411,13 @@ size_t hot_method_cold_entry_block_violations(
   return hot_method_cold_entry_violations_tmpl(
       block, [](auto val) { return val > 0 ? 1 : 0; });
 }
+
+size_t hot_all_children_cold_violations(
+    Block* block,
+    const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
+  return hot_all_children_cold_violations_tmpl(block,
+                                               [](auto val) { return val; });
+};
 
 struct ChainAndDomState {
   const SourceBlock* last{nullptr};
@@ -1493,7 +1528,7 @@ size_t chain_and_dom_violations_coldstart(
 using CounterFnPtr = size_t (*)(
     Block*, const dominators::SimpleFastDominators<cfg::GraphInterface>&);
 
-constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 10> gCounters =
+constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 11> gCounters =
     {{{"~blocks~count", &count_blocks},
       {"~blocks~with~source~blocks", &count_block_has_sbs},
       {"~blocks~with~incomplete-source~blocks",
@@ -1507,7 +1542,9 @@ constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 10> gCounters =
       {"~flow~violation~seen~method~cold~entry",
        &hot_method_cold_entry_violations},
       {"~flow~violation~seen~method~cold~entry~blocks",
-       &hot_method_cold_entry_block_violations}}};
+       &hot_method_cold_entry_block_violations},
+      {"~flow~violation~hot~all~children~cold",
+       &hot_all_children_cold_violations}}};
 
 constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 2>
     gCountersNonEntry = {{
