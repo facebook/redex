@@ -585,10 +585,12 @@ void EnumFixpointIterator::analyze_instruction(const IRInstruction* insn,
       }
       env->set(dest, types);
     } break;
+    case OPCODE_CONST_STRING: {
+      env->set(dest, EnumTypes(type::java_lang_String()));
+    } break;
     case OPCODE_NEW_ARRAY:
     case OPCODE_NEW_INSTANCE:
     case OPCODE_FILLED_NEW_ARRAY:
-    case OPCODE_CONST_STRING: // We don't care about string object
     default:
       if (insn->has_type()) {
         env->set(dest, EnumTypes(insn->get_type()));
