@@ -495,14 +495,59 @@ struct CustomValueInsertHelper {
       oss << "(" << id;
     }
 
+    if (fuzzing_metadata_map.find(cur) == fuzzing_metadata_map.end()) {
+      fuzzing_metadata_map.insert({cur, FuzzingMetadata(0, 0)});
+    }
+
     auto val = start_profile(cur);
 
     source_blocks::impl::BlockAccessor::push_source_block(
         cur, std::make_unique<SourceBlock>(method, id, val));
     ++id;
 
-    if (fuzzing_metadata_map.find(cur) == fuzzing_metadata_map.end()) {
-      fuzzing_metadata_map.insert({cur, FuzzingMetadata(0, 0)});
+    if (insert_after_excs) {
+      if (cur->cfg().get_succ_edge_of_type(cur, EdgeType::EDGE_THROW) !=
+          nullptr) {
+        // Nothing to do.
+        return;
+      }
+      for (auto it = cur->begin(); it != cur->end(); ++it) {
+        if (it->type != MFLOW_OPCODE) {
+          continue;
+        }
+        if (!opcode::can_throw(it->insn->opcode())) {
+          continue;
+        }
+        // Exclude throws (explicitly).
+        if (it->insn->opcode() == OPCODE_THROW) {
+          continue;
+        }
+        // Get to the next instruction.
+        auto next_it = std::next(it);
+        while (next_it != cur->end() && next_it->type != MFLOW_OPCODE) {
+          ++next_it;
+        }
+        if (next_it == cur->end()) {
+          break;
+        }
+
+        auto insert_after =
+            opcode::is_move_result_any(next_it->insn->opcode()) ? next_it : it;
+
+        // This is not really what the structure looks like, but easy to
+        // parse and write. Otherwise, we would need to remember that
+        // we had a nesting.
+
+        if (serialize) {
+          oss << "(" << id << ")";
+        }
+
+        auto nested_val = start_profile(cur);
+        it = source_blocks::impl::BlockAccessor::insert_source_block_after(
+            cur, insert_after,
+            std::make_unique<SourceBlock>(method, id, nested_val));
+        ++id;
+      }
     }
   }
 
