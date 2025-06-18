@@ -450,6 +450,19 @@ inline const SourceBlock* get_last_source_block(const cfg::Block* b) {
   return const_cast<SourceBlock*>(
       get_last_source_block(const_cast<cfg::Block*>(b)));
 }
+// This helper gets the last source block in a block if it is after a throw,
+// otherwise returns a nullptr
+inline SourceBlock* get_last_source_block_if_after_throw(cfg::Block* b) {
+  for (auto it = b->rbegin(); it != b->rend(); it++) {
+    if (it->type == MFLOW_OPCODE && opcode::is_throw(it->insn->opcode())) {
+      return nullptr;
+    }
+    if (it->type == MFLOW_SOURCE_BLOCK) {
+      return it->src_block.get();
+    }
+  }
+  return nullptr;
+}
 
 IRList::iterator find_first_block_insert_point(cfg::Block* b);
 
@@ -560,7 +573,8 @@ struct ViolationsHelper {
     kChainAndDom,
     kUncoveredSourceBlocks,
     kHotMethodColdEntry,
-    kHotNoHotPred
+    kHotNoHotPred,
+    KHotAllChildrenCold,
   };
 
   ViolationsHelper(Violation v,

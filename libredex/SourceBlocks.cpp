@@ -1283,6 +1283,31 @@ size_t hot_no_hot_pred(
   return 1;
 }
 
+size_t hot_all_children_cold(Block* block) {
+  auto* last_sb_before_throw =
+      source_blocks::get_last_source_block_if_after_throw(block);
+
+  if (!last_sb_before_throw ||
+      !has_source_block_positive_val(last_sb_before_throw)) {
+    return 0;
+  }
+
+  bool has_successor = false;
+  for (auto successor : block->succs()) {
+    auto* first_sb_succ =
+        source_blocks::get_first_source_block(successor->src());
+    has_successor = true;
+    // This means that for this current hot block (with respect to the last
+    // source block of the hot block), there exists at least one successor that
+    // is hot, therefore this not a violation
+    if (has_source_block_positive_val(first_sb_succ)) {
+      return 0;
+    }
+  }
+  // Only blocks with successors should have this count as a violation
+  return has_successor ? 1 : 0;
+}
+
 template <typename Fn>
 size_t chain_hot_violations_tmpl(Block* block, const Fn& fn) {
   size_t sum{0};
@@ -1690,6 +1715,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
       return hot_method_cold_entry_violations_cfg(cfg);
     case Violation::kHotNoHotPred:
       return hot_no_hot_pred_cfg(cfg);
+    case Violation::KHotAllChildrenCold:
+      return hot_all_children_cold_cfg(cfg);
     }
     not_reached();
   }
@@ -1877,6 +1904,17 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
     for (auto* b : cfg.blocks()) {
       sum += hot_no_hot_pred(b, dom);
+    }
+    return sum;
+  }
+
+  static size_t hot_all_children_cold_cfg(cfg::ControlFlowGraph& cfg) {
+    size_t sum{0};
+
+    cfg.remove_unreachable_blocks();
+
+    for (auto* b : cfg.blocks()) {
+      sum += hot_all_children_cold(b);
     }
     return sum;
   }
@@ -2145,6 +2183,52 @@ struct ViolationsHelper::ViolationsHelperImpl {
         void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
       };
       print_cfg_with_violations<HotNoHotPred>(m);
+      return;
+    }
+    case Violation::KHotAllChildrenCold: {
+      struct HotAllChildrenCold {
+        cfg::Block* cur{nullptr};
+
+        explicit HotAllChildrenCold(cfg::ControlFlowGraph&) {}
+
+        void mie_before(std::ostream&, const MethodItemEntry&) {}
+        void mie_after(std::ostream& os, const MethodItemEntry& mie) {
+          if (mie.type != MFLOW_SOURCE_BLOCK) {
+            return;
+          }
+
+          auto* last_sb_before_throw =
+              source_blocks::get_last_source_block_if_after_throw(cur);
+
+          if (mie.src_block.get() != last_sb_before_throw) {
+            return;
+          }
+
+          if (!last_sb_before_throw ||
+              !has_source_block_positive_val(last_sb_before_throw)) {
+            return;
+          }
+
+          os << " HOT\n";
+
+          bool has_successor = false;
+          for (auto successor : cur->succs()) {
+            auto* first_sb_succ =
+                source_blocks::get_first_source_block(successor->src());
+            has_successor = true;
+            if (has_source_block_positive_val(first_sb_succ)) {
+              return;
+            }
+          }
+          if (has_successor) {
+            os << " !!! HOT ALL CHILDREN COLD\n";
+          }
+        }
+
+        void start_block(std::ostream&, cfg::Block* b) { cur = b; }
+        void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
+      };
+      print_cfg_with_violations<HotAllChildrenCold>(m);
       return;
     }
     }
