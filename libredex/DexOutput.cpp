@@ -16,6 +16,7 @@
 #include <fstream>
 #include <functional>
 #include <inttypes.h>
+#include <json/json.h>
 #include <list>
 #include <memory>
 #include <stdlib.h>
@@ -34,6 +35,7 @@
 #define O_WRONLY _O_WRONLY
 #endif
 
+#include "CppUtil.h"
 #include "Debug.h"
 #include "DexCallSite.h"
 #include "DexClass.h"
@@ -566,6 +568,7 @@ constexpr const char* METHOD_MAPPING = "redex-method-id-map.txt";
 constexpr const char* CLASS_MAPPING = "redex-class-id-map.txt";
 constexpr const char* BYTECODE_OFFSET_MAPPING = "redex-bytecode-offset-map.txt";
 constexpr const char* REDEX_PG_MAPPING = "redex-class-rename-map.txt";
+constexpr const char* REDEX_INVOKE_MAPPING = "redex-invoke-map.jsonl";
 constexpr const char* REDEX_FULL_MAPPING = "redex-full-rename-map.txt";
 } // namespace
 
@@ -625,6 +628,7 @@ DexOutput::DexOutput(
   m_method_mapping_filename = config_files.metafile(METHOD_MAPPING);
   m_class_mapping_filename = config_files.metafile(CLASS_MAPPING);
   m_pg_mapping_filename = config_files.metafile(REDEX_PG_MAPPING);
+  m_invoke_mapping_filename = config_files.metafile(REDEX_INVOKE_MAPPING);
   m_full_mapping_filename = config_files.metafile(REDEX_FULL_MAPPING);
   m_bytecode_offset_filename = config_files.metafile(BYTECODE_OFFSET_MAPPING);
   m_store_number = store_number;
@@ -2574,6 +2578,74 @@ const char* deobf_primitive(char type) {
   }
 }
 
+void write_invoke_mapping(const std::string& filename, DexClasses* classes) {
+  if (filename.empty()) return;
+
+  std::ofstream ofs(filename.c_str(), std::ofstream::out | std::ofstream::app);
+  Json::FastWriter writer; // minimal formatting and no intermittent new-lines
+
+  auto position_manager = g_redex->get_position_pattern_switch_manager();
+  auto is_outlined_position = [&](DexPosition* pos) {
+    return position_manager->is_pattern_position(pos) ||
+           position_manager->is_switch_position(pos);
+  };
+  auto position_to_json = [&](DexPosition* pos) {
+    Json::Value position_entry;
+    if (pos->file) {
+      position_entry["file"] = show(pos->file);
+    }
+    if (pos->method) {
+      position_entry["method"] = show(pos->method);
+    }
+    position_entry["line"] = show(pos->line);
+    return position_entry;
+  };
+  auto src_block_to_json = [&](const SourceBlock* src_block) {
+    Json::Value src_block_entry;
+    src_block_entry["src"] = show(src_block->src);
+    src_block_entry["id"] = show(src_block->id);
+    return src_block_entry;
+  };
+
+  walk::methods(*classes, [&](DexMethod* m) {
+    auto dex_code = m->get_dex_code();
+    if (!dex_code) {
+      return;
+    }
+    auto& invoke_ids = dex_code->get_invoke_ids();
+    if (invoke_ids.empty()) {
+      return;
+    }
+    Json::Value method_entry;
+    method_entry["caller"] = show(m);
+    Json::Value invoke_array{Json::ValueType::arrayValue};
+    for (auto&& [addr, id] : invoke_ids) {
+      Json::Value invoke_entry;
+      invoke_entry["offset"] = addr;
+      invoke_entry["kind"] = id.invoke_interface ? "interface" : "virtual";
+      invoke_entry["callee"] = show(id.method);
+      if (id.position && !is_outlined_position(id.position.get())) {
+        invoke_entry["position"] = position_to_json(id.position.get());
+      }
+      if (id.src_block) {
+        if (id.src_block->next == nullptr) {
+          invoke_entry["src_block"] = src_block_to_json(id.src_block.get());
+        } else {
+          Json::Value src_block_array{Json::ValueType::arrayValue};
+          for (const auto* cur = id.src_block.get(); cur != nullptr;
+               cur = cur->next.get()) {
+            src_block_array.append(src_block_to_json(cur));
+          }
+          invoke_entry["src_block"] = std::move(src_block_array);
+        }
+      }
+      invoke_array.append(std::move(invoke_entry));
+    }
+    method_entry["invokes"] = std::move(invoke_array);
+    ofs << writer.write(method_entry); // the writer ends with a new-line
+  });
+}
+
 void write_pg_mapping(const std::string& filename, DexClasses* classes) {
   if (filename.empty()) return;
 
@@ -2802,6 +2874,7 @@ void DexOutput::write_symbol_files() {
     // XXX: should write_bytecode_offset_mapping be included here too?
   }
   write_pg_mapping(m_pg_mapping_filename, m_classes);
+  write_invoke_mapping(m_invoke_mapping_filename, m_classes);
   write_full_mapping(m_full_mapping_filename, m_classes, m_store_name);
   write_bytecode_offset_mapping(m_bytecode_offset_filename,
                                 m_method_bytecode_offsets);

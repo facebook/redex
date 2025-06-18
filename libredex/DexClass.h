@@ -66,12 +66,14 @@ class DexField;
 class DexIdx;
 class DexInstruction;
 class DexMethodHandle;
+class DexMethodRef;
 class DexOutputIdx;
 struct DexPosition;
 class DexProto;
 class DexString;
 class DexType;
 class PositionMapper;
+struct SourceBlock;
 
 // Must be same as in DexAnnotations.h!
 using ParamAnnotations = std::map<int, std::unique_ptr<DexAnnotationSet>>;
@@ -716,6 +718,24 @@ struct DexTryItem {
 
 class IRCode;
 
+struct DexInvokeId {
+  bool invoke_interface;
+  DexMethodRef* method;
+  std::unique_ptr<DexPosition> position;
+  std::unique_ptr<SourceBlock> src_block;
+
+  DexInvokeId(bool invoke_interface,
+              DexMethodRef* method,
+              DexPosition* position,
+              SourceBlock* src_block);
+  DexInvokeId(DexInvokeId&&) = default;
+  DexInvokeId& operator=(DexInvokeId&&) = default;
+  DexInvokeId(const DexInvokeId&) = delete;
+  DexInvokeId& operator=(const DexInvokeId&) = delete;
+
+  ~DexInvokeId();
+};
+
 class DexCode {
   friend class DexMethod;
 
@@ -724,6 +744,7 @@ class DexCode {
   uint16_t m_outs_size;
   std::optional<std::vector<DexInstruction*>> m_insns{std::nullopt};
   std::vector<std::unique_ptr<DexTryItem>> m_tries;
+  std::vector<std::pair<uint32_t, DexInvokeId>> m_invoke_ids;
   std::unique_ptr<DexDebugItem> m_dbg;
 
  public:
@@ -782,6 +803,7 @@ class DexCode {
   void set_ins_size(uint16_t sz) { m_ins_size = sz; }
   void set_outs_size(uint16_t sz) { m_outs_size = sz; }
 
+  auto& get_invoke_ids() { return m_invoke_ids; }
   /*
    * Returns number of bytes in encoded output, passed in
    * pointer must be aligned.  Does not encode debugitem,
