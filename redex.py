@@ -1520,6 +1520,16 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             CompressionLevel.BETTER,  # Usually small enough.
         ),
         CompressionEntry(
+            "Redex Invoke Offset Map",
+            lambda args: not _is_preserve_input_dexes(args),
+            True,
+            ["redex-invoke-map.jsonl"],
+            [],
+            "redex-invoke-map.jsonl.zst",
+            None,
+            CompressionLevel.BETTER,  # Usually small enough.
+        ),
+        CompressionEntry(
             "Redex Full Rename Map",
             lambda args: not _is_preserve_input_dexes(args),
             False,
