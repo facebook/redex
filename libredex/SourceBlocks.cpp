@@ -617,6 +617,39 @@ struct TopoTraversalHelper {
     return true;
   }
 
+  // This will check if exists at least one hot predecessor has only cold
+  // children (currently filled out), if so, this block should be listed as hot
+  // if possible
+  bool has_hot_pred_with_only_cold_children(const Block* block) {
+    auto& metadata = value_insert_helper->fuzzing_metadata_map;
+    bool has_hot_pred = false;
+    for (const auto& edge : block->preds()) {
+      auto* pred = edge->src();
+
+      if (!metadata.at(pred).has_values || !is_hot_block(block)) {
+        // If the predecessor has not been filled out, or if it is cold, then
+        // ignore it
+        continue;
+      }
+
+      has_hot_pred = true;
+
+      for (const auto& pred_edge : pred->succs()) {
+        auto* child = pred_edge->target();
+
+        if (child == block || !metadata.at(child).has_values) {
+          continue;
+        }
+
+        if (is_hot_block(child)) {
+          return false;
+        }
+      }
+    }
+
+    return has_hot_pred;
+  }
+
   void process_block(Block* cur) {
     auto& metadata = value_insert_helper->fuzzing_metadata_map;
     if (cur == cfg->entry_block()) {
@@ -637,9 +670,15 @@ struct TopoTraversalHelper {
           // This block must be listed as COLD now.
           set_block_value(cur, 0);
         } else {
-          // This block can be either HOT or COLD.
-          int next_hit = generator->generate_block_hit();
-          set_block_value(cur, next_hit);
+          if (has_hot_pred_with_only_cold_children(cur)) {
+            // If there is a hot predecessor with only cold children (except
+            // this), this has to be HOT
+            set_block_value(cur, 1);
+          } else {
+            // This block can be either HOT or COLD.
+            int next_hit = generator->generate_block_hit();
+            set_block_value(cur, next_hit);
+          }
         }
         set_block_appear100(cur, appear100);
         metadata.at(cur).has_values = true;
@@ -807,6 +846,32 @@ void topo_traverse(CustomValueInsertHelper& helper,
         ++insertion_order_id;
         visited.insert(neighbor);
         process_queue.insert(neighbor);
+      }
+    }
+  }
+}
+
+bool is_hot_block(const Block* block) {
+  return has_source_block_positive_val(get_first_source_block(block));
+}
+
+void set_block_appear100(Block* block, float appear100) {
+  std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
+  for (auto* source_block : source_blocks) {
+    for (size_t i = 0; i < source_block->vals_size; i++) {
+      if (source_block->vals[i]) {
+        source_block->vals[i]->appear100 = appear100;
+      }
+    }
+  }
+}
+
+void set_block_value(Block* block, float hit) {
+  std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
+  for (auto* source_block : source_blocks) {
+    for (size_t i = 0; i < source_block->vals_size; i++) {
+      if (source_block->vals[i]) {
+        source_block->vals[i]->val = hit;
       }
     }
   }
