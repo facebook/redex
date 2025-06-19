@@ -423,6 +423,7 @@ struct CustomValueInsertHelper {
   CustomInsertionType insertion_type;
   size_t interaction_size;
   float cold_to_hot_generation_ratio{0.1f};
+  float hot_throw_cold_generation_ratio{0.01f};
 
   CustomValueInsertHelper(const DexString* method,
                           const std::vector<ProfileData>& profiles,
@@ -571,20 +572,25 @@ struct RandomGenerator {
   std::mt19937 random_number_generator;
   std::uniform_real_distribution<> uniform_distribution;
   float cold_to_hot_generation_ratio{0.5f};
+  float hot_throw_cold_generation_ratio{0.01f};
 
   RandomGenerator() = delete;
 
-  explicit RandomGenerator(float cold_to_hot_generation_ratio)
+  explicit RandomGenerator(float cold_to_hot_generation_ratio,
+                           float hot_throw_cold_generation_ratio = 0.05f)
       : random_number_generator(dev()),
         uniform_distribution(0.0, 1.0),
-        cold_to_hot_generation_ratio(cold_to_hot_generation_ratio) {}
+        cold_to_hot_generation_ratio(cold_to_hot_generation_ratio),
+        hot_throw_cold_generation_ratio(hot_throw_cold_generation_ratio) {}
 
   explicit RandomGenerator(int seed,
                            const std::string& method_name,
-                           float cold_to_hot_generation_ratio)
+                           float cold_to_hot_generation_ratio,
+                           float hot_throw_cold_generation_ratio = 0.05f)
       : random_number_generator(seed ^ std::hash<std::string>{}(method_name)),
         uniform_distribution(0.0, 1.0),
-        cold_to_hot_generation_ratio(cold_to_hot_generation_ratio) {}
+        cold_to_hot_generation_ratio(cold_to_hot_generation_ratio),
+        hot_throw_cold_generation_ratio(hot_throw_cold_generation_ratio) {}
 
   float generate_appear100() {
     return uniform_distribution(random_number_generator);
@@ -598,10 +604,23 @@ struct RandomGenerator {
       return 1.0;
     }
   }
+
+  // This generates if a block should be converted from hot -> throw -> hot to
+  // hot -> throw -> cold
+  bool generate_if_convert_hot_throw_cold() {
+    float convert_percent = uniform_distribution(random_number_generator);
+    return (convert_percent <= hot_throw_cold_generation_ratio);
+  }
+
+  // generates a random int between [start, end] inclusive
+  int generate_random_number_in_range(int start, int end) {
+    return start + (int)((uniform_distribution(random_number_generator)) *
+                         ((end - start) + 1));
+  }
 };
 
 bool is_hot_block(const Block* block) {
-  return has_source_block_positive_val(get_first_source_block(block));
+  return has_source_block_positive_val(get_last_source_block(block));
 }
 
 void set_block_appear100(Block* block, float appear100) {
@@ -621,6 +640,26 @@ void set_block_value(Block* block, float hit) {
     for (size_t i = 0; i < source_block->vals_size; i++) {
       if (source_block->vals[i]) {
         source_block->vals[i]->val = hit;
+      }
+    }
+  }
+}
+
+int get_number_of_throws_in_block(Block* curr) {
+  int count{0};
+  for (auto& mie : *curr) {
+    if (mie.type == MFLOW_OPCODE && opcode::can_throw(mie.insn->opcode())) {
+      count++;
+    }
+  }
+  return count;
+}
+
+void set_source_block_value(SourceBlock* source_block, float hit) {
+  for (auto* sb = source_block; sb != nullptr; sb = sb->next.get()) {
+    for (size_t i = 0; i < sb->vals_size; i++) {
+      if (sb->vals[i]) {
+        sb->vals[i]->val = hit;
       }
     }
   }
@@ -695,6 +734,51 @@ struct TopoTraversalHelper {
     return has_hot_pred;
   }
 
+  // This function takes a block that has already been chosen to be set as hot
+  // -> throw -> cold. Since there may be more than 1 throw instruction in a
+  // block, this will chose a random throw, and all source blocks from that
+  // throw onwards will be cold
+  void set_block_as_hot_throw_cold(Block* block, int throw_count) {
+    int throw_to_convert =
+        generator->generate_random_number_in_range(0, throw_count - 1);
+    int current_throw = 0;
+    bool set_hot = true;
+
+    for (auto& mie : *block) {
+      if (mie.type == MFLOW_OPCODE && opcode::can_throw(mie.insn->opcode())) {
+        if (current_throw >= throw_to_convert) {
+          set_hot = false;
+        }
+        current_throw++;
+      }
+
+      if (mie.type == MFLOW_SOURCE_BLOCK) {
+        if (set_hot) {
+          set_source_block_value(mie.src_block.get(), 1);
+        } else {
+          set_source_block_value(mie.src_block.get(), 0);
+        }
+      }
+    }
+  }
+
+  void set_block_random_value(Block* block) {
+    int next_hit = generator->generate_block_hit();
+    int throw_count = get_number_of_throws_in_block(block);
+
+    if (next_hit == 0 || throw_count == 0) {
+      set_block_value(block, next_hit);
+    } else {
+      bool should_convert_to_hot_throw_cold =
+          generator->generate_if_convert_hot_throw_cold();
+      if (should_convert_to_hot_throw_cold) {
+        set_block_as_hot_throw_cold(block, throw_count);
+      } else {
+        set_block_value(block, next_hit);
+      }
+    }
+  }
+
   void process_block(Block* cur) {
     auto& metadata = value_insert_helper->fuzzing_metadata_map;
     if (cur == cfg->entry_block()) {
@@ -721,8 +805,7 @@ struct TopoTraversalHelper {
             set_block_value(cur, 1);
           } else {
             // This block can be either HOT or COLD.
-            int next_hit = generator->generate_block_hit();
-            set_block_value(cur, next_hit);
+            set_block_random_value(cur);
           }
         }
         set_block_appear100(cur, appear100);
@@ -1001,8 +1084,10 @@ void run_topotraversal_fuzzing(ControlFlowGraph* cfg,
 
   RandomGenerator generator =
       use_seed ? RandomGenerator(seed, method_name,
-                                 helper.cold_to_hot_generation_ratio)
-               : RandomGenerator(helper.cold_to_hot_generation_ratio);
+                                 helper.cold_to_hot_generation_ratio,
+                                 helper.hot_throw_cold_generation_ratio)
+               : RandomGenerator(helper.cold_to_hot_generation_ratio,
+                                 helper.hot_throw_cold_generation_ratio);
   auto doms = dominators::SimpleFastDominators<cfg::GraphInterface>(*cfg);
   TopoTraversalHelper traversal_helper(&helper, &generator, &doms, cfg);
 
