@@ -600,6 +600,7 @@ struct Injector {
       size_t access_methods{0};
       size_t hot_src_block_count{0};
       size_t cold_src_block_count{0};
+      size_t hot_throw_cold_block_count{0};
 
       InsertResult() = default;
       InsertResult(size_t skipped, size_t access_methods)
@@ -609,13 +610,15 @@ struct Injector {
                    size_t profile_count,
                    size_t profile_failed,
                    size_t hot_src_block_count,
-                   size_t cold_src_block_count)
+                   size_t cold_src_block_count,
+                   size_t hot_throw_cold_block_count)
           : blocks(blocks),
             profile_count(profile_count),
             profile_failed(profile_failed),
             access_methods(access_methods),
             hot_src_block_count(hot_src_block_count),
-            cold_src_block_count(cold_src_block_count) {}
+            cold_src_block_count(cold_src_block_count),
+            hot_throw_cold_block_count(hot_throw_cold_block_count) {}
 
       InsertResult& operator+=(const InsertResult& other) {
         skipped += other.skipped;
@@ -625,6 +628,7 @@ struct Injector {
         access_methods += other.access_methods;
         hot_src_block_count += other.hot_src_block_count;
         cold_src_block_count += other.cold_src_block_count;
+        hot_throw_cold_block_count += other.hot_throw_cold_block_count;
         return *this;
       }
     };
@@ -701,13 +705,17 @@ struct Injector {
 
             auto source_block_metrics =
                 source_blocks::gather_source_block_metrics(&cfg);
-            size_t hot_src_block_current_count = source_block_metrics.first;
-            size_t cold_src_block_current_count = source_block_metrics.second;
+            size_t hot_src_block_current_count =
+                source_block_metrics.hot_block_count;
+            size_t cold_src_block_current_count =
+                source_block_metrics.cold_block_count;
+            size_t hot_throw_cold_block_count =
+                source_block_metrics.hot_throw_cold_count;
 
             return InsertResult(
                 access_method ? 1 : 0, res.block_count, profiles.second ? 1 : 0,
                 res.profile_success ? 0 : 1, hot_src_block_current_count,
-                cold_src_block_current_count);
+                cold_src_block_current_count, hot_throw_cold_block_count);
           }
           return InsertResult();
         });
@@ -726,6 +734,8 @@ struct Injector {
     mgr.set_metric("access_methods", res.access_methods);
     mgr.set_metric("hot_source_block_count", res.hot_src_block_count);
     mgr.set_metric("cold_source_block_count", res.cold_src_block_count);
+    mgr.set_metric("hot_throw_cold_block_count",
+                   res.hot_throw_cold_block_count);
     {
       size_t unresolved = 0;
       for (const auto& p_file : profile_files) {

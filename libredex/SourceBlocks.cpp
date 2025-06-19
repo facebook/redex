@@ -816,19 +816,60 @@ InsertResult insert_source_blocks(const DexString* method,
   return {helper.id, helper.oss.str(), std::move(idom_map), !had_failures};
 }
 
+// This metric checks if there exists a block such that it starts out with hot
+// source blocks, encounters a throw instruction somewhere, and then has cold
+// source blocks. It does this by first checking the first source block is hot,
+// and then checking if there has been a throw, then seeing if any subsequent
+// source block is cold.
+bool block_is_hot_throw_cold(Block* cur) {
+  bool seen_src_block = false;
+  bool seen_throw = false;
+  for (auto& mie : *cur) {
+    if (mie.type == MFLOW_OPCODE && opcode::can_throw(mie.insn->opcode())) {
+      seen_throw = true;
+    }
+
+    if (mie.type == MFLOW_SOURCE_BLOCK) {
+      if (!seen_src_block) {
+        // Cold initial source blocks do not count here
+        if (!has_source_block_positive_val(mie.src_block.get())) {
+          return false;
+        }
+        // If a throw has been seen before the initial source block, this also
+        // does not count
+        if (seen_throw) {
+          return false;
+        }
+        seen_src_block = true;
+      } else {
+        // This means a throw has been seen, and the current source block is
+        // cold while the initial one is hot
+        if (seen_throw && !has_source_block_positive_val(mie.src_block.get())) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 void update_source_block_metric(Block* cur, SourceBlockMetric& metrics) {
   auto source_blocks = gather_source_blocks(cur);
   for (const auto& source_block : source_blocks) {
     if (has_source_block_positive_val(source_block)) {
-      metrics.first++;
+      metrics.hot_block_count++;
     } else {
-      metrics.second++;
+      metrics.cold_block_count++;
     }
+  }
+
+  if (block_is_hot_throw_cold(cur)) {
+    metrics.hot_throw_cold_count++;
   }
 }
 
 SourceBlockMetric gather_source_block_metrics(ControlFlowGraph* cfg) {
-  SourceBlockMetric metrics = {0, 0};
+  SourceBlockMetric metrics = {0, 0, 0};
 
   impl::visit_in_order(
       cfg,

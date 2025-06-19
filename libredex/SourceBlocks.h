@@ -248,7 +248,12 @@ UnorderedMap<Block*, uint32_t> insert_custom_source_blocks_get_indegrees(
     bool insert_after_excs = false,
     bool enable_fuzzing = false);
 
-using SourceBlockMetric = std::pair<size_t, size_t>;
+struct SourceBlockMetric {
+  size_t hot_block_count{0};
+  size_t cold_block_count{0};
+  size_t hot_throw_cold_count{0};
+};
+
 SourceBlockMetric gather_source_block_metrics(ControlFlowGraph* cfg);
 
 void fix_chain_violations(ControlFlowGraph* cfg);
