@@ -43,18 +43,14 @@ bool edge_type_structural_equals(std::vector<cfg::Edge*> e1,
   if (e1.size() != e2.size()) {
     return false;
   }
-  UnorderedMap<cfg::EdgeType, int> edge_types;
+  std::array<ssize_t, cfg::EDGE_TYPE_SIZE> edge_types{};
   for (size_t i = 0; i < e1.size(); i++) {
     edge_types[e1[i]->type()] += 1;
     edge_types[e2[i]->type()] -= 1;
   }
 
-  for (auto pair : UnorderedIterable(edge_types)) {
-    if (pair.second != 0) {
-      return false;
-    }
-  }
-  return true;
+  return std::all_of(edge_types.begin(), edge_types.end(),
+                     [](const size_t& count) { return count == 0; });
 }
 
 // return true if `it` should be the last instruction of this block

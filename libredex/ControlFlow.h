@@ -89,14 +89,14 @@ namespace cfg {
 enum EdgeType : uint8_t {
   // The false branch of an if statement, default of a switch, or unconditional
   // goto
-  EDGE_GOTO,
+  EDGE_GOTO = 0,
   // The true branch of an if statement or non-default case of a switch
-  EDGE_BRANCH,
+  EDGE_BRANCH = 1,
   // The edges to a catch block
-  EDGE_THROW,
+  EDGE_THROW = 2,
   // A "fake" edge so that we can have a single exit block
-  EDGE_GHOST,
-  EDGE_TYPE_SIZE
+  EDGE_GHOST = 3,
+  EDGE_TYPE_SIZE = 4
 };
 
 class Block;
