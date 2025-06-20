@@ -55,12 +55,7 @@ using bit_width_t = uint8_t;
 namespace opcode {
 
 // clang-format off
-// GCC <= 8 doesn't seem to be able to infer that not_reached_log is
-// unreachable, which calls a non-constexpr function assert_fail.
-#if !defined(__GNUC__) || __GNUC__ > 8
-constexpr
-#endif // !defined(__GNUC__) || __GNUC__ > 8
-inline Ref ref(IROpcode opcode) {
+constexpr inline Ref ref(IROpcode opcode) {
   switch (opcode) {
 #define OP(uc, lc, ref, ...) \
   case OPCODE_##uc:          \
