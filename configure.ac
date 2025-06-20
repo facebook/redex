@@ -17,12 +17,12 @@ LT_INIT
 
 AC_CONFIG_MACRO_DIR([m4])
 
-AM_PATH_PYTHON([3.0], [], [AC_MSG_ERROR([Redex requires python3])])
+AM_PATH_PYTHON([3.9], [], [AC_MSG_ERROR([Redex requires python >= 3.9])])
 
 # Checks for libraries.
 AX_PTHREAD
-AX_BOOST_BASE([1.71.0], [], [AC_MSG_ERROR(
-              [Please install boost >= 1.71 (including filesystem)])])
+AX_BOOST_BASE([1.74.0], [], [AC_MSG_ERROR(
+              [Please install boost >= 1.74 (including filesystem)])])
 AX_BOOST_FILESYSTEM
 AX_BOOST_REGEX
 AX_BOOST_PROGRAM_OPTIONS

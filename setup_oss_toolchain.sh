@@ -103,7 +103,7 @@ function handle_debian {
 
 function handle_ubuntu {
     case $1 in
-        2*)
+        2[2-9]*)
             install_from_apt python3 ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
             ;;
         *)
