@@ -588,6 +588,9 @@ void EnumFixpointIterator::analyze_instruction(const IRInstruction* insn,
     case OPCODE_CONST_STRING: {
       env->set(dest, EnumTypes(type::java_lang_String()));
     } break;
+    case OPCODE_MOVE_EXCEPTION: {
+      env->set(dest, EnumTypes(type::java_lang_Throwable()));
+    } break;
     case OPCODE_NEW_ARRAY:
     case OPCODE_NEW_INSTANCE:
     case OPCODE_FILLED_NEW_ARRAY:

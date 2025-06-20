@@ -12,3 +12,9 @@ enum class D(val bname: String) {
   D1("e"),
   D2("f")
 }
+
+enum class F(val bname: String) {
+  F0("f"),
+  F1("g"),
+  F2("h")
+}
