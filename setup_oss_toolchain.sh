@@ -63,6 +63,7 @@ function install_googletest_from_source {
     cmake .
     cmake --build . --target install
     popd
+    popd
 }
 
 function install_from_apt {
