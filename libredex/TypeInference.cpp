@@ -1231,7 +1231,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
       size_t expected_args =
           (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types->size();
       always_assert_log(insn->srcs_size() == expected_args,
-                        "instruction: %s\nexpected: %lu\nactual: %lu",
+                        "instruction: %s\nexpected: %zu\nactual: %zu",
                         SHOW(insn), expected_args, insn->srcs_size());
       size_t src_idx{0};
       if (insn->opcode() != OPCODE_INVOKE_STATIC) {

@@ -25,6 +25,8 @@ else
 fi
 
 if [ "$1" = "32" ] ; then
+  dpkg --add-architecture i386
+
   BITNESS="32"
   BITNESS_SUFFIX=":i386"
   BITNESS_CONFIGURE="--host=i686-linux-gnu CFLAGS=-m32 CXXFLAGS=-m32 LDFLAGS=-m32"
@@ -61,8 +63,12 @@ function install_googletest_from_source {
     pushd toolchain_install/gtest
     tar xf "../../dl_cache/gtest/googletest-${GOOGLETEST_MIN_VERSION}.tar.gz" --no-same-owner --strip-components=1
     # GoogleTest's string_view matcher requires compiler to support C++17. Older
-    # GCC versions need to be told to use C++17.
-    CXXFLAGS=-std=gnu++17 cmake .
+    # GCC versions need to be told to use C++17 with -std=gnu++17.
+    if [ "$BITNESS" = "32" ] ; then
+        CFLAGS=-m32 CXXFLAGS="-m32 -std=gnu++17" LDFLAGS=-m32 cmake .
+    else
+        CXXFLAGS="-std=gnu++17" cmake .
+    fi
     cmake --build . --target install
     popd
     popd
