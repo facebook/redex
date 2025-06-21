@@ -399,7 +399,7 @@ void TypedefAnnoPatcher::fix_kt_enum_ctor_param(const DexClass* cls,
       }
       if (add_param_annotation(ctor, *annotation, patch_idx, class_stats)) {
         TRACE(TAC, 2,
-              "[patcher] Fixed Kotlin enum ctor param w/ %s at %ld on %s",
+              "[patcher] Fixed Kotlin enum ctor param w/ %s at %zu on %s",
               SHOW(panno.second), patch_idx, SHOW(ctor));
       }
     }
