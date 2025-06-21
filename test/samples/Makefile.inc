@@ -8,7 +8,7 @@ endef
 
 define compile_java_source
 build/$(2): src/$(1) build/com/facebook/R.class
-	$$(JAVAC) -source 1.7 -target 1.7 -cp build:$$(ANDROID_JAR) -d build -sourcepath $$(src_dir)/src $$<
+	$$(JAVAC) -source 8 -target 8 -cp build:$$(ANDROID_JAR) -d build -sourcepath $$(src_dir)/src $$<
 
 endef
 
@@ -35,7 +35,7 @@ linked.apk java/com/facebook/R.java: $(foreach res,$(1),compiled/$(subst .xml,,$
 
 build/com/facebook/R.class: java/com/facebook/R.java
 	mkdir -p build
-	$$(JAVAC) -source 1.7 -target 1.7 -cp build -d build -sourcepath java $$^
+	$$(JAVAC) -source 8 -target 8 -cp build -d build -sourcepath java $$^
 
 $(foreach jsrc,$(4),$(call compile_java_source,$(jsrc),$(5)/$(subst .java,.class,$(jsrc))))
 
