@@ -441,6 +441,9 @@ void AnalysisImpl::analyze_opcodes() {
       case OPCODE_FILLED_NEW_ARRAY: {
         auto intf = get_and_check_single_impl(insn->get_type());
         if (intf) {
+          if (op == OPCODE_CONST_CLASS) {
+            escape_interface(intf, CONST_CLS);
+          }
           auto& si = single_impls.at(intf);
           std::lock_guard<std::mutex> lock(si.mutex);
           register_reference(si, method, insn, it);

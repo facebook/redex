@@ -54,6 +54,15 @@ class Child extends Parent implements I_2, I_3 {
   public int get_3(I_2 obj) { return 3; }
 }
 
+interface A {
+  public int get();
+}
+
+class B implements A {
+  @Override
+  public int get() { return 1; }
+}
+
 public class SingleImplTest {
   @Test
   public void test_bridge() {
@@ -67,5 +76,10 @@ public class SingleImplTest {
     Child obj = new Child();
     assertThat(obj.get()).isEqualTo(9);
     assertThat(obj.get_3(obj)).isEqualTo(3);
+  }
+
+  @Test
+  public void test_const_class() {
+    assertThat(A.class).isNotEqualTo(B.class);
   }
 }
