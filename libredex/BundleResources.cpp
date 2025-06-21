@@ -758,6 +758,10 @@ bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
 } // namespace
 
 using StyleResource = resources::StyleResource;
+using StyleModificationSpec = resources::StyleModificationSpec;
+using ResourceAttributeMap =
+    UnorderedMap<uint32_t,
+                 UnorderedMap<uint32_t, StyleModificationSpec::Modification>>;
 
 boost::optional<int32_t> BundleResources::get_min_sdk() {
   std::string base_manifest = (boost::filesystem::path(m_directory) /
@@ -2671,11 +2675,182 @@ resources::StyleMap ResourcesPbFile::get_style_map() {
   return style_map;
 }
 
-void ResourcesPbFile::apply_attribute_removals(
-    const std::vector<resources::StyleModificationSpec::Modification>&
-        modifications,
-    const std::vector<std::string>& resources_pb_paths) {}
+// Finds a resource in a protocol buffer table and applies a modification to it
+// The modification is applied using the user-provided callback function
+// Returns true if the resource was found and modified, false otherwise
+bool modify_attribute_from_style_resource(
+    const ResourceAttributeMap& modifications,
+    aapt::pb::ResourceTable& resource_table,
+    const std::function<
+        bool(aapt::pb::Style*,
+             const UnorderedMap<uint32_t, StyleModificationSpec::Modification>&,
+             UnorderedMap<uint32_t, StyleModificationSpec::Modification>&)>&
+        modifier_function,
+    ResourceAttributeMap& modified_resources) {
 
+  constexpr const char* STYLE_TYPE_NAME = "style";
+  bool is_file_modified = false;
+
+  if (traceEnabled(RES, 9)) {
+    std::string serialized;
+    resource_table.SerializeToString(&serialized);
+    TRACE(RES, 9, "Package count: %d", resource_table.package_size());
+  }
+
+  for (int package_idx = 0; package_idx < resource_table.package_size();
+       package_idx++) {
+    auto* package = resource_table.mutable_package(package_idx);
+    TRACE(RES, 9, "  Package[%d]: id=0x%x name=%s", package_idx,
+          package->package_id().id(), package->package_name().c_str());
+
+    TRACE(RES, 9, "  Type count: %d", package->type_size());
+    for (int type_idx = 0; type_idx < package->type_size(); type_idx++) {
+      auto* resource_type = package->mutable_type(type_idx);
+      if (resource_type->name() != STYLE_TYPE_NAME) {
+        continue;
+      }
+
+      TRACE(RES, 9, "    Type[%d]: id=0x%x name=%s entry_count=%d", type_idx,
+            resource_type->type_id().id(), resource_type->name().c_str(),
+            resource_type->entry_size());
+
+      for (int entry_idx = 0; entry_idx < resource_type->entry_size();
+           entry_idx++) {
+        auto* resource_entry = resource_type->mutable_entry(entry_idx);
+        auto resource_id = MAKE_RES_ID(package->package_id().id(),
+                                       resource_type->type_id().id(),
+                                       resource_entry->entry_id().id());
+
+        TRACE(RES, 9,
+              "      Entry[%d]: id=0x%x name=%s "
+              "config_value_count=%d",
+              entry_idx, resource_id, resource_entry->name().c_str(),
+              resource_entry->config_value_size());
+
+        const auto& modification_pair = modifications.find(resource_id);
+        if (modification_pair == modifications.end()) {
+          continue;
+        }
+
+        for (int config_idx = 0;
+             config_idx < resource_entry->config_value_size();
+             config_idx++) {
+          auto* config_value = resource_entry->mutable_config_value(config_idx);
+
+          if (!config_value->has_value() ||
+              !config_value->value().has_compound_value() ||
+              !config_value->value().compound_value().has_style()) {
+            continue;
+          }
+
+          auto* style = config_value->mutable_value()
+                            ->mutable_compound_value()
+                            ->mutable_style();
+          TRACE(RES, 9, "        Style has %d attributes", style->entry_size());
+
+          UnorderedMap<uint32_t, StyleModificationSpec::Modification>
+              modified_attributes;
+          is_file_modified |= modifier_function(
+              style, modification_pair->second, modified_attributes);
+
+          if (!modified_attributes.empty()) {
+            modified_resources.insert({resource_id, modified_attributes});
+          }
+        }
+      }
+    }
+  }
+
+  return is_file_modified;
+}
+
+void apply_attribute_removals_for_file(
+    const ResourceAttributeMap& modifications,
+    const std::string& resource_path,
+    const std::function<
+        bool(aapt::pb::Style*,
+             const UnorderedMap<uint32_t, StyleModificationSpec::Modification>&,
+             UnorderedMap<uint32_t, StyleModificationSpec::Modification>&)>&
+        modifier_function,
+    ResourceAttributeMap& modified_resources) {
+  read_protobuf_file_contents(
+      resource_path,
+      [&](google::protobuf::io::CodedInputStream& input, size_t /* unused */) {
+        aapt::pb::ResourceTable resource_table;
+        if (!resource_table.ParseFromCodedStream(&input)) {
+          TRACE(RES, 9, "Failed to read resource file: %s",
+                resource_path.c_str());
+          return;
+        }
+
+        // Apply modifications to the resource file
+        bool is_file_modified = modify_attribute_from_style_resource(
+            modifications, resource_table, modifier_function,
+            modified_resources);
+
+        if (is_file_modified) {
+          std::ofstream output_file(resource_path, std::ofstream::binary);
+          if (!resource_table.SerializeToOstream(&output_file)) {
+            TRACE(RES, 9, "Failed to write modified resource file: %s",
+                  resource_path.c_str());
+          }
+        }
+      });
+}
+
+// Assumes all modifications are being done on unambiguous resources
+void ResourcesPbFile::apply_attribute_removals(
+    const std::vector<StyleModificationSpec::Modification>& modifications,
+    const std::vector<std::string>& resources_pb_paths) {
+  ResourceAttributeMap modified_resources;
+
+  const auto& attribute_removal_function =
+      [](aapt::pb::Style* style,
+         const UnorderedMap<uint32_t, StyleModificationSpec::Modification>&
+             attribute_map,
+         UnorderedMap<uint32_t, StyleModificationSpec::Modification>&
+             modified_attributes) -> bool {
+    bool removed_any = false;
+    for (int attr = style->entry_size() - 1; attr >= 0; attr--) {
+      auto* style_entry = style->mutable_entry(attr);
+      if (style_entry->has_key()) {
+        uint32_t attr_id = style_entry->key().id();
+        TRACE(RES, 9, "        Attribute[%d]: id=0x%x", attr, attr_id);
+
+        auto it = attribute_map.find(attr_id);
+        if (it != attribute_map.end()) {
+          style->mutable_entry()->DeleteSubrange(attr, 1);
+          modified_attributes.insert({attr_id, it->second});
+          removed_any = true;
+        }
+      }
+    }
+    return removed_any;
+  };
+
+  ResourceAttributeMap removals;
+  for (const auto& mod : modifications) {
+    if (mod.type == StyleModificationSpec::ModificationType::REMOVE_ATTRIBUTE) {
+
+      removals[mod.resource_id].insert({mod.attribute_id.value(), mod});
+    }
+  }
+
+  for (const auto& resource_path : resources_pb_paths) {
+    TRACE(RES, 9, "Examining resource file: %s", resource_path.c_str());
+    apply_attribute_removals_for_file(removals, resource_path,
+                                      attribute_removal_function,
+                                      modified_resources);
+  }
+
+  for (const auto& [resource_id, attr_map] :
+       UnorderedIterable(modified_resources)) {
+    for (const auto& [attr_id, mod] : UnorderedIterable(attr_map)) {
+      TRACE(RES, 8, "Successfully removed attribute 0x%x from resource 0x%x",
+            attr_id, resource_id);
+    }
+  }
+}
 ResourcesPbFile::~ResourcesPbFile() {}
 
 #endif // HAS_PROTOBUF

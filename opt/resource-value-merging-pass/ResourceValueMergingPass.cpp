@@ -14,6 +14,7 @@
 #include "Styles.h"
 #include "Trace.h"
 
+using namespace resources;
 void print_resources(const UnorderedMap<uint32_t, ResourceAttributeInformation>&
                          optimized_resources) {
   if (!traceEnabled(RES, 3)) {
@@ -67,11 +68,6 @@ void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
 
   auto resources = create_resource_reader(apk_dir);
   auto res_table = resources->load_res_table();
-
-  const auto& paths = resources->find_resources_files();
-  std::vector<resources::StyleModificationSpec::Modification> modifications;
-  res_table->apply_attribute_removals(modifications, paths);
-
   auto style_info = res_table->load_style_info();
   resources::ReachabilityOptions options;
   StyleAnalysis style_analysis(apk_dir, conf.get_global_config(), options,
