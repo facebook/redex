@@ -24,30 +24,16 @@ else
   mkdir -p "$TOOLCHAIN_TMP"
 fi
 
-if [ "$1" = "32" ] ; then
-  BITNESS="32"
-  BITNESS_SUFFIX=":i386"
-  BITNESS_CONFIGURE="--host=i686-linux-gnu CFLAGS=-m32 CXXFLAGS=-m32 LDFLAGS=-m32"
-  BITNESS_PKGS="gcc-multilib g++-multilib"
-
-  echo "Use --host=i686-linux-gnu CFLAGS=-m32 CXXFLAGS=-m32 LDFLAGS=-m32 for ./configure"
-else
-  BITNESS="64"  # Assumption here, really means host-preferred arch.
-  BITNESS_SUFFIX=":"
-  BITNESS_CONFIGURE=""
-  BITNESS_PKGS=""
-fi
-
 DEB_UBUNTU_PKGS="unzip"
 
-BOOST_DEB_UBUNTU_PKGS="libboost-filesystem-dev$BITNESS_SUFFIX
-                       libboost-iostreams-dev$BITNESS_SUFFIX
-                       libboost-program-options-dev$BITNESS_SUFFIX
-                       libboost-regex-dev$BITNESS_SUFFIX
-                       libboost-system-dev$BITNESS_SUFFIX
-                       libboost-thread-dev$BITNESS_SUFFIX"
+BOOST_DEB_UBUNTU_PKGS="libboost-filesystem-dev
+                       libboost-iostreams-dev
+                       libboost-program-options-dev
+                       libboost-regex-dev
+                       libboost-system-dev
+                       libboost-thread-dev
 
-PROTOBUF_DEB_UBUNTU_PKGS="libprotobuf-dev$BITNESS_SUFFIX
+PROTOBUF_DEB_UBUNTU_PKGS="libprotobuf-dev
                           protobuf-compiler"
 
 function install_googletest_from_source {
@@ -91,15 +77,15 @@ function install_from_apt {
         ca-certificates
         cmake
         g++
-        libiberty-dev$BITNESS_SUFFIX
-        libjemalloc-dev$BITNESS_SUFFIX
-        libjsoncpp-dev$BITNESS_SUFFIX
-        liblz4-dev$BITNESS_SUFFIX
-        liblzma-dev$BITNESS_SUFFIX
+        libiberty-dev
+        libjemalloc-dev
+        libjsoncpp-dev
+        liblz4-dev
+        liblzma-dev
         libtool
         make
         wget
-        zlib1g-dev$BITNESS_SUFFIX $BITNESS_PKGS $*"
+        zlib1g-dev $*"
   apt-get update -q
   apt-get install -q --no-install-recommends -y ${PKGS}
 }
