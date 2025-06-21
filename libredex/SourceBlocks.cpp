@@ -440,6 +440,10 @@ struct CustomValueInsertHelper {
     uint32_t indegrees{0};
     uint32_t insertion_id{0};
     bool has_values{false}; // to check if a block has had it's values filled in
+    bool should_be_hot{false}; // to check if a block should be set as hot, used
+                               // if a pred is hot and wants to set at least one
+                               // succ to hot. If this false, the source block
+                               // can be either hot or cold
 
     // NOLINTNEXTLINE
     FuzzingMetadata() = default;
@@ -612,10 +616,10 @@ struct RandomGenerator {
     return (convert_percent <= hot_throw_cold_generation_ratio);
   }
 
-  // generates a random int between [start, end] inclusive
-  int generate_random_number_in_range(int start, int end) {
-    return start + (int)((uniform_distribution(random_number_generator)) *
-                         ((end - start) + 1));
+  // generates a random size_t between [start, end] inclusive
+  size_t generate_random_number_in_range(int start, int end) {
+    return start + (size_t)((uniform_distribution(random_number_generator)) *
+                            ((end - start) + 1));
   }
 };
 
@@ -701,47 +705,14 @@ struct TopoTraversalHelper {
     return true;
   }
 
-  // This will check if exists at least one hot predecessor has only cold
-  // children (currently filled out), if so, this block should be listed as hot
-  // if possible
-  bool has_hot_pred_with_only_cold_children(const Block* block) {
-    auto& metadata = value_insert_helper->fuzzing_metadata_map;
-    bool has_hot_pred = false;
-    for (const auto& edge : block->preds()) {
-      auto* pred = edge->src();
-
-      if (!metadata.at(pred).has_values || !is_hot_block(block)) {
-        // If the predecessor has not been filled out, or if it is cold, then
-        // ignore it
-        continue;
-      }
-
-      has_hot_pred = true;
-
-      for (const auto& pred_edge : pred->succs()) {
-        auto* child = pred_edge->target();
-
-        if (child == block || !metadata.at(child).has_values) {
-          continue;
-        }
-
-        if (is_hot_block(child)) {
-          return false;
-        }
-      }
-    }
-
-    return has_hot_pred;
-  }
-
   // This function takes a block that has already been chosen to be set as hot
   // -> throw -> cold. Since there may be more than 1 throw instruction in a
   // block, this will chose a random throw, and all source blocks from that
   // throw onwards will be cold
   void set_block_as_hot_throw_cold(Block* block, int throw_count) {
-    int throw_to_convert =
+    size_t throw_to_convert =
         generator->generate_random_number_in_range(0, throw_count - 1);
-    int current_throw = 0;
+    size_t current_throw = 0;
     bool set_hot = true;
 
     for (auto& mie : *block) {
@@ -779,6 +750,24 @@ struct TopoTraversalHelper {
     }
   }
 
+  // This assumes the last source block is HOT (and has no throws after it), and
+  // sets a random child to be HOT
+  void set_succ_randomly_hot(Block* block) {
+    auto& metadata = value_insert_helper->fuzzing_metadata_map;
+    auto& successors = block->succs();
+    size_t successor_size = successors.size();
+    size_t next_hot_block_idx =
+        generator->generate_random_number_in_range(0, successor_size - 1);
+
+    for (size_t i = 0; i < successor_size; ++i) {
+      auto succ_block = successors.at(i)->target();
+
+      if (next_hot_block_idx == i) {
+        metadata.at(succ_block).should_be_hot = true;
+      }
+    }
+  }
+
   void process_block(Block* cur) {
     auto& metadata = value_insert_helper->fuzzing_metadata_map;
     if (cur == cfg->entry_block()) {
@@ -799,9 +788,8 @@ struct TopoTraversalHelper {
           // This block must be listed as COLD now.
           set_block_value(cur, 0);
         } else {
-          if (has_hot_pred_with_only_cold_children(cur)) {
-            // If there is a hot predecessor with only cold children (except
-            // this), this has to be HOT
+          if (metadata.at(cur).should_be_hot) {
+            // This block must be set to HOT now
             set_block_value(cur, 1);
           } else {
             // This block can be either HOT or COLD.
@@ -811,6 +799,17 @@ struct TopoTraversalHelper {
         set_block_appear100(cur, appear100);
         metadata.at(cur).has_values = true;
       }
+    }
+
+    auto last_source_block_or_throw = get_last_source_block_if_after_throw(cur);
+    // This is to check if there is a throw after a source block, if there is a
+    // throw, last_source_block_or_throw is null, and therefore the successors
+    // can be COLD. Otherwise, if there exists a source block at the end of this
+    // block and it is hot, then the hot path must continue into at least one
+    // successor
+    if (last_source_block_or_throw &&
+        has_source_block_positive_val(last_source_block_or_throw)) {
+      set_succ_randomly_hot(cur);
     }
   }
 };
