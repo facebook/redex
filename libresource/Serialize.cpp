@@ -151,7 +151,7 @@ void push_header_with_updated_size(android::ResChunk_header* header,
   auto bytes_written = out->size() - start_pos;
   LOG_ALWAYS_FATAL_IF(
       bytes_written < sizeof(android::ResChunk_header),
-      "Expected at least %ld header bytes. Actual %ld.",
+      "Expected at least %zu header bytes. Actual %zu.",
       sizeof(android::ResChunk_header), bytes_written);
   write_long_at_pos(start_pos + 2 * sizeof(uint16_t), new_size, out);
 }
