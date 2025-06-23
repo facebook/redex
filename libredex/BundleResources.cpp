@@ -2569,36 +2569,52 @@ std::pair<uint8_t, uint32_t> convert_primitive_to_res_value_data(
   uint8_t data_type = android::Res_value::TYPE_NULL;
   uint32_t value = 0;
 
-  if (prim.has_float_value()) {
+  // Use oneof_value_case() instead of has_*() for better compatibility with
+  // older versions of protobuf.
+  switch (prim.oneof_value_case()) {
+  case aapt::pb::Primitive::kFloatValue:
     data_type = android::Res_value::TYPE_FLOAT;
     value = prim.float_value();
-  } else if (prim.has_dimension_value()) {
+    break;
+  case aapt::pb::Primitive::kDimensionValue:
     data_type = android::Res_value::TYPE_DIMENSION;
     value = prim.dimension_value();
-  } else if (prim.has_fraction_value()) {
+    break;
+  case aapt::pb::Primitive::kFractionValue:
     data_type = android::Res_value::TYPE_FRACTION;
     value = prim.fraction_value();
-  } else if (prim.has_int_decimal_value()) {
+    break;
+  case aapt::pb::Primitive::kIntDecimalValue:
     data_type = android::Res_value::TYPE_INT_DEC;
     value = prim.int_decimal_value();
-  } else if (prim.has_int_hexadecimal_value()) {
+    break;
+  case aapt::pb::Primitive::kIntHexadecimalValue:
     data_type = android::Res_value::TYPE_INT_HEX;
     value = prim.int_hexadecimal_value();
-  } else if (prim.has_boolean_value()) {
+    break;
+  case aapt::pb::Primitive::kBooleanValue:
     data_type = android::Res_value::TYPE_INT_BOOLEAN;
     value = prim.boolean_value();
-  } else if (prim.has_color_argb8_value()) {
-    data_type = android::Res_value::TYPE_INT_COLOR_ARGB8;
-    value = prim.color_argb8_value();
-  } else if (prim.has_color_rgb8_value()) {
-    data_type = android::Res_value::TYPE_INT_COLOR_RGB8;
-    value = prim.color_rgb8_value();
-  } else if (prim.has_color_argb4_value()) {
+    break;
+  case aapt::pb::Primitive::kColorArgb4Value:
     data_type = android::Res_value::TYPE_INT_COLOR_ARGB4;
     value = prim.color_argb4_value();
-  } else if (prim.has_color_rgb4_value()) {
+    break;
+  case aapt::pb::Primitive::kColorArgb8Value:
+    data_type = android::Res_value::TYPE_INT_COLOR_ARGB8;
+    value = prim.color_argb8_value();
+    break;
+  case aapt::pb::Primitive::kColorRgb4Value:
     data_type = android::Res_value::TYPE_INT_COLOR_RGB4;
     value = prim.color_rgb4_value();
+    break;
+  case aapt::pb::Primitive::kColorRgb8Value:
+    data_type = android::Res_value::TYPE_INT_COLOR_RGB8;
+    value = prim.color_rgb8_value();
+    break;
+  default:
+    // Empty, null and deprecated values.
+    break;
   }
 
   return {data_type, value};
