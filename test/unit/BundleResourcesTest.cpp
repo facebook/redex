@@ -6,6 +6,7 @@
  */
 
 #include <boost/filesystem.hpp>
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <unordered_set>
 
@@ -21,6 +22,12 @@
 #include "androidfw/ResourceTypes.h"
 
 using namespace boost::filesystem;
+using ::testing::Contains;
+using ::testing::Eq;
+using ::testing::IsEmpty;
+using ::testing::Key;
+using ::testing::Not;
+using ::testing::SizeIs;
 
 namespace {
 
@@ -648,4 +655,83 @@ TEST(BundleResources, WalkReferences) {
         auto res_table = resources->load_res_table();
         validate_walk_references_for_resource(res_table.get());
       });
+}
+
+TEST(BundleResources, TestRemoveStyleAttribute) {
+  setup_resources_and_run([&](const std::string& /* unused */,
+                              BundleResources* resources) {
+    auto res_table = resources->load_res_table();
+    const auto& paths = resources->find_resources_files();
+    auto style_map = res_table->get_style_map();
+
+    std::vector<std::string> theme_names = {"CustomText.Prickly",
+                                            "CustomText.Unused", "CustomText",
+                                            "ChooseMe", "ChildWithParentAttr"};
+    std::vector<resources::StyleModificationSpec::Modification> modifications;
+    UnorderedMap<uint32_t, UnorderedSet<uint32_t>> original_attributes;
+    UnorderedMap<uint32_t, uint32_t> style_id_to_remove_attr;
+
+    for (const auto& theme_name : theme_names) {
+      auto style_ids = res_table->get_res_ids_by_name(theme_name);
+      EXPECT_THAT(style_ids, SizeIs(1));
+      uint32_t style_id = style_ids[0];
+
+      EXPECT_THAT(style_map, Contains(Key(style_id)))
+          << "Style ID 0x" << std::hex << style_id << std::dec
+          << " not found in style map";
+
+      const std::vector<resources::StyleResource>& style_resources =
+          style_map[style_id];
+      EXPECT_THAT(style_resources, Not(IsEmpty()))
+          << "No style resources found for " << theme_name;
+
+      for (const auto& attr_pair : style_resources[0].attributes) {
+        original_attributes[style_id].insert(attr_pair.first);
+      }
+
+      uint32_t attr_id = style_resources[0].attributes.begin()->first;
+      EXPECT_THAT(attr_id, Not(Eq(0)))
+          << "No attributes found in the style " << theme_name;
+
+      style_id_to_remove_attr[style_id] = attr_id;
+      modifications.push_back(
+          resources::StyleModificationSpec::Modification(style_id, attr_id));
+    }
+
+    res_table->apply_attribute_removals(modifications, paths);
+
+    auto new_res_table = resources->load_res_table();
+    resources::StyleMap updated_style_map = new_res_table->get_style_map();
+
+    for (const auto& mod : modifications) {
+      uint32_t resource_id = mod.resource_id;
+      uint32_t attr_id = mod.attribute_id.value();
+
+      EXPECT_THAT(updated_style_map, Contains(Key(resource_id)))
+          << "Style ID 0x" << std::hex << resource_id << std::dec
+          << " not found in style map";
+
+      const std::vector<resources::StyleResource>& new_style_resources =
+          updated_style_map[resource_id];
+      EXPECT_THAT(new_style_resources, SizeIs(1));
+
+      EXPECT_THAT(new_style_resources[0].attributes,
+                  Not(Contains(Key(attr_id))))
+          << "Attribute 0x" << std::hex << attr_id << std::dec
+          << " was not removed from style 0x" << std::hex << resource_id;
+
+      UnorderedSet<uint32_t> expected_attributes =
+          original_attributes[resource_id];
+      expected_attributes.erase(attr_id);
+
+      UnorderedSet<uint32_t> actual_attributes;
+      for (const auto& attr_pair : new_style_resources[0].attributes) {
+        actual_attributes.insert(attr_pair.first);
+      }
+
+      EXPECT_THAT(actual_attributes, Eq(expected_attributes))
+          << "Attributes after removal don't match expected set for style 0x"
+          << std::hex << resource_id << std::dec;
+    }
+  });
 }
