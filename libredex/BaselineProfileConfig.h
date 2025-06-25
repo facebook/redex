@@ -36,6 +36,7 @@ struct BaselineProfileInteractionConfig {
 struct BaselineProfileOptions {
   bool oxygen_modules;
   bool strip_classes;
+  bool transitively_close_classes;
   bool use_redex_generated_profile;
   // This field isn't used currently by the driver. We currently pass a
   // `--betamap` flag to the driver to enable betamap 20% set inclusion, which
