@@ -682,6 +682,8 @@ void ArtProfileWriterPass::bind_config() {
   bind("never_compile_strings_lookup_methods", false,
        m_never_compile_strings_lookup_methods);
   bind("never_compile_no_attach", false, m_never_compile_no_attach);
+  bind("override_strip_classes", std::nullopt, m_override_strip_classes,
+       "Override the strip_classes flag to the one given.");
 }
 
 void ArtProfileWriterPass::eval_pass(DexStoresVector& stores,
@@ -816,18 +818,23 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     });
   }
 
+  auto resolve_strip_classes = [&](const auto& bp) {
+    return m_override_strip_classes ? *m_override_strip_classes
+                                    : bp.options.strip_classes;
+  };
+
   for (const auto& entry : UnorderedIterable(baseline_profiles)) {
     const auto& bp_name = entry.first;
     const auto& bp = entry.second;
     const auto strip_classes =
-        conf.get_baseline_profile_configs().at(bp_name).options.strip_classes;
+        resolve_strip_classes(conf.get_baseline_profile_configs().at(bp_name));
     auto preprocessed_profile_name =
         conf.get_preprocessed_baseline_profile_file(bp_name);
     auto output_name = conf.metafile(bp_name + "-baseline-profile.txt");
     std::ofstream ofs{output_name.c_str()};
-    std::ifstream preprocessed_profile(preprocessed_profile_name);
-    std::string current_line;
     if (!strip_classes) {
+      std::ifstream preprocessed_profile(preprocessed_profile_name);
+      std::string current_line;
       while (std::getline(preprocessed_profile, current_line)) {
         if (current_line.empty() || current_line[0] != 'L') {
           continue;
@@ -838,9 +845,9 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     write_methods(scope, bp, strip_classes, ofs);
   }
   std::ofstream ofs{conf.metafile(BASELINE_PROFILES_FILE)};
-  const auto strip_classes =
-      conf.get_default_baseline_profile_config().options.strip_classes;
-  write_methods(scope, manual_profile, strip_classes, ofs);
+  write_methods(
+      scope, manual_profile,
+      resolve_strip_classes(conf.get_default_baseline_profile_config()), ofs);
 
   auto gather_metrics = [&](const auto& bp_name, const auto& bp_config_name,
                             const auto& profile) {
@@ -877,7 +884,8 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     if (bp_options.oxygen_modules) {
       mgr.incr_metric(prefix + "oxygen_modules", 1);
     }
-    if (bp_options.strip_classes) {
+    if (bp_options.strip_classes &&
+        (!m_override_strip_classes || !m_override_strip_classes)) {
       mgr.incr_metric(prefix + "strip_classes", 1);
     }
     if (bp_options.use_redex_generated_profile) {
