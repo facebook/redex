@@ -373,6 +373,38 @@ class ResTableTypeDefiner : public ResTableTypeBuilder {
   const std::vector<uint32_t> m_flags;
 };
 
+/**
+ * Builder for creating a complex entry (ResTable_map_entry) which is used to
+ * represent styles in the resource table.
+ */
+class ResComplexEntryBuilder {
+ public:
+  ResComplexEntryBuilder() : m_key_string_index(0), m_parent_id(0) {}
+
+  void set_key_string_index(uint32_t index) { m_key_string_index = index; }
+  void set_parent_id(uint32_t id) { m_parent_id = id; }
+  void add(uint32_t attr_id, const android::Res_value& value) {
+    m_attributes.emplace_back(attr_id, value);
+  }
+  void add(const android::ResTable_map* map) {
+    m_attributes.emplace_back(map->name.ident, map->value);
+  }
+  void add(uint32_t attr_id, uint8_t data_type, uint32_t data) {
+    android::Res_value value;
+    value.size = sizeof(android::Res_value);
+    value.dataType = data_type;
+    value.data = data;
+    m_attributes.emplace_back(attr_id, value);
+  }
+
+  void serialize(android::Vector<char>* out);
+
+ private:
+  uint32_t m_key_string_index;
+  uint32_t m_parent_id;
+  std::vector<std::pair<uint32_t, android::Res_value>> m_attributes;
+};
+
 // Struct for defining an existing type and the collection of entries in all
 // configs.
 struct TypeInfo {

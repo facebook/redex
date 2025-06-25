@@ -925,15 +925,27 @@ void build_arsc_file_and_validate(
       foo_package.id, 2, style_configs, style_flags);
   package_builder->add_type(style_type_definer);
 
-  style.item0.name.ident = 0x01010098; // android:textColor
-  style.item0.value.dataType = android::Res_value::TYPE_INT_COLOR_RGB8;
-  style.item0.value.data = 0xFF0000FF;
+  arsc::ResComplexEntryBuilder complex_entry_builder;
+  complex_entry_builder.set_key_string_index(3);
+  complex_entry_builder.set_parent_id(0);
 
-  style.item1.name.ident = 0x010100d4; // android:background
-  style.item1.value.dataType = android::Res_value::TYPE_INT_COLOR_RGB8;
-  style.item1.value.data = 0xFF00FF00;
+  std::vector<std::tuple<uint8_t, uint32_t, uint32_t>> attributes = {
+      {android::Res_value::TYPE_INT_COLOR_RGB8, 0xFF0000FF, 0x01010098},
+      {android::Res_value::TYPE_INT_COLOR_RGB8, 0xFF00FF00, 0x010100d4}};
 
-  style_type_definer->add(&xxhdpi_config, &style);
+  for (const auto& [data_type, data_value, attr_id] : attributes) {
+    android::Res_value value;
+    value.size = sizeof(android::Res_value);
+    value.dataType = data_type;
+    value.data = data_value;
+    complex_entry_builder.add(attr_id, value);
+  }
+
+  android::Vector<char> complex_entry_data;
+  complex_entry_builder.serialize(&complex_entry_data);
+
+  style_type_definer->add(&xxhdpi_config, {(uint8_t*)complex_entry_data.array(),
+                                           complex_entry_data.size()});
 
   // Write to a file, give the callback the temp dir and file to validate
   // against.
@@ -1005,7 +1017,7 @@ std::vector<arsc::TypeInfo> load_types(const RedexMappedFile& arsc_file) {
     EXPECT_EQ((expected).value.data, __actual_value.data);          \
   })
 // Assert values in the table match the two items expecrted in the
-// "MapEntryAndValues"
+// "MapEntryAndTwoValues"
 #define ASSERT_MAP_ENTRY_VALUES(table, config_str, entry_str, expected) \
   ({                                                                    \
     uint32_t __id = (table).get_identifier(entry_str);                  \
@@ -1081,9 +1093,21 @@ TEST(ResTable, ComputeSizes) {
   EntryAndValue simple(0, android::Res_value::TYPE_DIMENSION, 1000);
   EXPECT_EQ(arsc::compute_entry_value_length(&simple.entry),
             sizeof(EntryAndValue));
-  MapEntryAndValues complex(1, 0);
-  EXPECT_EQ(arsc::compute_entry_value_length(&complex.entry),
-            sizeof(MapEntryAndValues));
+
+  arsc::ResComplexEntryBuilder complex_builder;
+  complex_builder.set_key_string_index(1);
+  complex_builder.add(0x01010098, android::Res_value::TYPE_INT_COLOR_RGB8,
+                      0xff0000ff);
+
+  android::Vector<char> complex_entry_data;
+  complex_builder.serialize(&complex_entry_data);
+
+  android::ResTable_entry* complex_entry_ptr =
+      (android::ResTable_entry*)complex_entry_data.array();
+
+  size_t expected_size =
+      sizeof(android::ResTable_map_entry) + sizeof(android::ResTable_map);
+  EXPECT_EQ(arsc::compute_entry_value_length(complex_entry_ptr), expected_size);
 }
 
 TEST(ResTable, DeleteAllEntriesInType) {

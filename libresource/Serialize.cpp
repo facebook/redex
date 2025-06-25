@@ -149,10 +149,9 @@ void push_header_with_updated_size(android::ResChunk_header* header,
   auto start_pos = out->size();
   push_header(header, out);
   auto bytes_written = out->size() - start_pos;
-  LOG_ALWAYS_FATAL_IF(
-      bytes_written < sizeof(android::ResChunk_header),
-      "Expected at least %zu header bytes. Actual %zu.",
-      sizeof(android::ResChunk_header), bytes_written);
+  LOG_ALWAYS_FATAL_IF(bytes_written < sizeof(android::ResChunk_header),
+                      "Expected at least %zu header bytes. Actual %zu.",
+                      sizeof(android::ResChunk_header), bytes_written);
   write_long_at_pos(start_pos + 2 * sizeof(uint16_t), new_size, out);
 }
 
@@ -664,6 +663,24 @@ void ResTableTypeDefiner::serialize(android::Vector<char>* out) {
     push_vec(entry_data, out);
   }
   write_short_at_pos(type_count_pos, type_count, out);
+}
+
+void ResComplexEntryBuilder::serialize(android::Vector<char>* out) {
+  android::ResTable_map_entry entry;
+  entry.size = sizeof(android::ResTable_map_entry);
+  entry.flags = android::ResTable_entry::FLAG_COMPLEX;
+  entry.key.index = m_key_string_index;
+  entry.parent.ident = m_parent_id;
+  entry.count = m_attributes.size();
+
+  push_struct(entry, out);
+
+  for (const auto& attr : m_attributes) {
+    android::ResTable_map map;
+    map.name.ident = attr.first;
+    map.value = attr.second;
+    push_struct(map, out);
+  }
 }
 
 void ResStringPoolBuilder::add_string(const char* s, size_t len) {
