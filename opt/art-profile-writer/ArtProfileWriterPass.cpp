@@ -647,13 +647,18 @@ void never_compile(
 }
 
 void write_classes(const Scope& scope,
+                   const baseline_profiles::BaselineProfile& bp,
                    bool transitively_close,
                    const std::string& preprocessed_profile_name,
                    std::ostream& os) {
   auto classes_str_vec = [&]() {
+    std::vector<std::string> tmp;
+    if (preprocessed_profile_name.empty()) {
+      return tmp;
+    }
+
     std::ifstream preprocessed_profile(preprocessed_profile_name);
     std::string current_line;
-    std::vector<std::string> tmp;
     while (std::getline(preprocessed_profile, current_line)) {
       if (current_line.empty() || current_line[0] != 'L') {
         continue;
@@ -663,11 +668,38 @@ void write_classes(const Scope& scope,
     return tmp;
   }();
 
+  std::vector<const DexClass*> classes_from_bp;
+  classes_from_bp.reserve(bp.classes.size());
+  walk::classes(scope, [&](DexClass* cls) {
+    if (bp.classes.count(cls)) {
+      classes_from_bp.push_back(cls);
+    }
+  });
+
   if (!transitively_close) {
+    std::transform(classes_from_bp.begin(), classes_from_bp.end(),
+                   std::back_inserter(classes_str_vec),
+                   [](const auto* cls) { return show_deobfuscated(cls); });
     if (!classes_str_vec.empty()) {
-      os << "# " << classes_str_vec.size()
-         << " classes from write_classes().\n";
+      std::sort(classes_str_vec.begin(), classes_str_vec.end());
+      // Count duplicates for comment.
+      struct Acc {
+        const std::string* last{nullptr};
+        size_t count{0};
+      };
+      auto res = std::accumulate(
+          classes_str_vec.begin() + 1, classes_str_vec.end(),
+          Acc{classes_str_vec.data(), 1}, [](const Acc& acc, const auto& str) {
+            return Acc{&str, acc.count + (*acc.last == str ? 0 : 1)};
+          });
+
+      os << "# " << res.count << " classes from write_classes().\n";
+      const std::string* last = nullptr;
       for (auto& cls : classes_str_vec) {
+        if (last != nullptr && *last == cls) {
+          continue;
+        }
+        last = &cls;
         os << cls << "\n";
       }
     }
@@ -701,6 +733,17 @@ void write_classes(const Scope& scope,
     auto* cls_def = cls_def_it->second;
     if (cls_def->is_external()) {
       classes_without_types.emplace(cls);
+      continue;
+    }
+
+    cls_def->gather_load_types(classes_with_types);
+  }
+
+  std::deque<std::string> string_view_storage;
+  for (auto* cls_def : classes_from_bp) {
+    if (cls_def->is_external()) {
+      classes_without_types.emplace(
+          string_view_storage.emplace_back(show_deobfuscated(cls_def)));
       continue;
     }
 
@@ -786,26 +829,7 @@ void ArtProfileWriterPass::eval_pass(DexStoresVector& stores,
 
 void write_methods(const Scope& scope,
                    const baseline_profiles::BaselineProfile& baseline_profile,
-                   bool strip_classes,
                    std::ofstream& ofs) {
-  // Two loops for separation.
-  if (!strip_classes) {
-    std::vector<std::string> classes;
-    classes.reserve(baseline_profile.classes.size());
-    walk::classes(scope, [&](DexClass* cls) {
-      if (baseline_profile.classes.count(cls)) {
-        classes.push_back(show_deobfuscated(cls));
-      }
-    });
-    if (!classes.empty()) {
-      ofs << "# " << classes.size() << " classes from write_methods().\n";
-      std::sort(classes.begin(), classes.end());
-      for (auto& str : classes) {
-        ofs << str << "\n";
-      }
-    }
-  }
-
   // We order H before not-H. In each category, we order SP -> S -> P -> none.
   struct MethodFlagsLess {
     bool operator()(const baseline_profiles::MethodFlags& lhs,
@@ -963,15 +987,16 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     auto output_name = conf.metafile(bp_name + "-baseline-profile.txt");
     std::ofstream ofs{output_name.c_str()};
     if (!strip_classes) {
-      write_classes(scope, /*transitively_close=*/false,
+      write_classes(scope, bp, /*transitively_close=*/false,
                     preprocessed_profile_name, ofs);
     }
-    write_methods(scope, bp, strip_classes, ofs);
+    write_methods(scope, bp, ofs);
   }
   std::ofstream ofs{conf.metafile(BASELINE_PROFILES_FILE)};
-  write_methods(
-      scope, manual_profile,
-      resolve_strip_classes(conf.get_default_baseline_profile_config()), ofs);
+  if (!resolve_strip_classes(conf.get_default_baseline_profile_config())) {
+    write_classes(scope, manual_profile, /*transitively_close=*/true, "", ofs);
+  }
+  write_methods(scope, manual_profile, ofs);
 
   auto gather_metrics = [&](const auto& bp_name, const auto& bp_config_name,
                             const auto& profile) {
