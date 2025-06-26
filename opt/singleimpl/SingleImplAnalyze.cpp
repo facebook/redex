@@ -424,6 +424,24 @@ void AnalysisImpl::analyze_opcodes() {
     }
   };
 
+  InsertOnlyConcurrentSet<DexType*> const_class_types;
+  walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
+    if (insn->opcode() == OPCODE_CONST_CLASS) {
+      const_class_types.insert(insn->get_type());
+    }
+  });
+  // A coarse safety check: if intf is a single impl, and both it and its
+  // implementor are involved in const-class instructions, this should be
+  // considered unsafe (equality checks could be disrupted).
+  auto implementor_used_as_const_class = [&](DexType* intf) {
+    auto search = single_impls.find(intf);
+    if (search == single_impls.end()) {
+      return false;
+    }
+    auto implementor = search->second.cls;
+    return const_class_types.find(implementor) != const_class_types.end();
+  };
+
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     redex_assert(code.editable_cfg_built());
     auto ii = InstructionIterable(code.cfg());
@@ -441,13 +459,15 @@ void AnalysisImpl::analyze_opcodes() {
       case OPCODE_FILLED_NEW_ARRAY: {
         auto intf = get_and_check_single_impl(insn->get_type());
         if (intf) {
-          if (op == OPCODE_CONST_CLASS) {
+          if (op == OPCODE_CONST_CLASS &&
+              implementor_used_as_const_class(intf)) {
             escape_interface(intf, CONST_CLS);
+          } else {
+            auto& si = single_impls.at(intf);
+            std::lock_guard<std::mutex> lock(si.mutex);
+            register_reference(si, method, insn, it);
+            si.typerefs.push_back(insn);
           }
-          auto& si = single_impls.at(intf);
-          std::lock_guard<std::mutex> lock(si.mutex);
-          register_reference(si, method, insn, it);
-          si.typerefs.push_back(insn);
         }
         break;
       }
