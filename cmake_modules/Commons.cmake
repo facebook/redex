@@ -29,7 +29,7 @@ macro(set_common_cxx_flags_for_redex)
 
         # TODO: WTemplate-body is a new feature in GCC 15: https://developers.redhat.com/articles/2025/04/24/new-c-features-gcc-15#new_and_improved_warnings
         # It results in compilation error in at least one Boost header. Remove the following line when it's fixed.
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=template-body")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-template-body")
         set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -Wall -pthread")
         set(COMMON_CXX_FLAGS_NODBG "-O3 -UNDEBUG")
         set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${COMMON_CXX_FLAGS_NODBG} -pthread")
