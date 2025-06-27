@@ -23,10 +23,10 @@ brew install boost jsoncpp
 For App Bundle support `brew install protobuf` is also required.
 
 ### Ubuntu/Debian (64-bit)
-Base requirements are automake & libtool, GCC >= 9, Python >= 3.8 and Boost >= 1.71.0, as well as
-development versions of `iberty`, `jemalloc`, `jsoncpp`, `lz4`, `lzma`, and `zlib`. `Protobuf` >= 3.0 is required if optimizing an App Bundle.
-#### Ubuntu 20.04+, Debian 11(Bullseye)+
-The minimum supported Ubuntu version is 20.04. The minimum supported Debian version is 11.
+Base requirements are automake & libtool, GCC >= 10, Python >= 3.9 and Boost >= 1.74.0, as well as
+development versions of `iberty`, `jemalloc`, `jsoncpp`, `lz4`, `lzma`, and `zlib`. `Protobuf` >= 3.12.4 is required if optimizing an App Bundle.
+#### Ubuntu 22.04+, Debian 11(Bullseye)+
+The minimum supported Ubuntu version is 22.04. The minimum supported Debian version is 11.
 
 A [convenience script](https://github.com/facebook/redex/blob/master/setup_oss_toolchain.sh)
 will set up the build environment. This may include downloading googletest 1.14.0 on older OS versions.

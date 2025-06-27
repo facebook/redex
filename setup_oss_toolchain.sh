@@ -137,7 +137,7 @@ function handle_ubuntu {
             # We don't support JDK 21 yet. Replace this with default-jdk-headless once we support it.
             install_from_apt openjdk-17-jdk-headless kotlin ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
             ;;
-        2*)
+        2[2-3]*)
             install_from_apt default-jdk-headless kotlin ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
             ;;
         *)
