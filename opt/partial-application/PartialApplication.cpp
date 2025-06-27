@@ -538,7 +538,7 @@ class CalleeInvocationSelector {
     uint64_t b = m_running_index++;
     always_assert(positive < 2);
     always_assert(a < (1UL << 31));
-    always_assert(b < (1UL << 32));
+    always_assert(b < (static_cast<uint64_t>(1u) << 32));
     return (positive << 63) | (a << 32) | b;
   }
 

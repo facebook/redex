@@ -2475,8 +2475,8 @@ static NewlyOutlinedMethods outline(
     auto count = cwi.info.count;
     Priority primary_priority = (savings + 1) * 100000 / (size * count);
     // clip primary_priority to 32-bit
-    if (primary_priority >= (1UL << 32)) {
-      primary_priority = (1UL << 32) - 1;
+    if (primary_priority >= (static_cast<uint64_t>(1u) << 32)) {
+      primary_priority = (static_cast<uint64_t>(1u) << 32) - 1;
     }
     // make unique via candidate id
     return (primary_priority << 32) | id;
