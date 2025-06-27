@@ -1142,7 +1142,7 @@ def _handle_profiles(
 
         # Create input for variant method profiles.
         variant_method_profiles_str = ", ".join(variant_method_profiles_paths)
-        if method_profiles_str:
+        if variant_method_profiles_str:
             LOGGER.debug(
                 "Found variant method profiles: %s", variant_method_profiles_str
             )
