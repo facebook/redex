@@ -106,6 +106,7 @@ function install_from_apt {
         liblzma-dev$BITNESS_SUFFIX
         libtool
         make
+        python3
         wget
         zlib1g-dev$BITNESS_SUFFIX $BITNESS_PKGS $*"
   apt-get update -q
@@ -119,11 +120,11 @@ function handle_debian {
             exit 1
             ;;
         11)
-            install_from_apt python3 default-jdk-headless ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
+            install_from_apt default-jdk-headless ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
             install_kotlin_from_source
             ;;
         *)
-            install_from_apt python3 default-jdk-headless kotlin ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
+            install_from_apt default-jdk-headless kotlin ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
             ;;
     esac
     # TODO(T227009978): Install googletest from apt for some Debian versions after enabling autodetecting googletest installation dir.
@@ -134,10 +135,10 @@ function handle_ubuntu {
     case $1 in
         2[4-9]*)
             # We don't support JDK 21 yet. Replace this with default-jdk-headless once we support it.
-            install_from_apt python3 openjdk-17-jdk-headless kotlin ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
+            install_from_apt openjdk-17-jdk-headless kotlin ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
             ;;
         2*)
-            install_from_apt python3 default-jdk-headless kotlin ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
+            install_from_apt default-jdk-headless kotlin ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
             ;;
         *)
             echo "Unsupported Ubuntu version $1"
