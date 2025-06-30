@@ -1433,6 +1433,66 @@ size_t hot_all_children_cold(Block* block) {
   return has_successor ? 1 : 0;
 }
 
+using SourceBlockInvokeMap =
+    ConcurrentMap<const DexMethod*,
+                  UnorderedMap<IRInstruction*, std::vector<bool>>>;
+
+size_t hot_callee_all_cold_callers(call_graph::NodeId node,
+                                   SourceBlockInvokeMap& src_block_invoke_map) {
+  // Ignore Ghost Nodes
+  if (node->is_entry() || node->is_exit()) {
+    return 0;
+  }
+
+  auto callee_method = const_cast<DexMethod*>(node->method());
+
+  if (callee_method == nullptr || callee_method->get_code() == nullptr) {
+    return 0;
+  }
+
+  ScopedCFG callee_cfg(callee_method->get_code());
+
+  // Cold Callees do not count
+  auto callee_entry_block = get_first_source_block(callee_cfg->entry_block());
+  if (!callee_entry_block || callee_entry_block->get_val(0).value_or(0) == 0) {
+    return 0;
+  }
+
+  bool seen_caller = false;
+
+  for (auto caller_edge : node->callers()) {
+    auto caller = caller_edge->caller();
+    // Ignore Ghost Nodes
+    if (caller->is_entry()) {
+      continue;
+    }
+
+    auto caller_method = const_cast<DexMethod*>(caller->method());
+    if (caller_method == nullptr || caller_method->get_code() == nullptr) {
+      continue;
+    }
+
+    auto invoke_insn = caller_edge->invoke_insn();
+    // TODO(T229471397): With multiple-callee graphs, there might be more
+    // accurate way to check which specific method is calling the callee (method
+    // override check)
+
+    if (src_block_invoke_map.count(caller_method) == 0) {
+      continue;
+    }
+    const auto& source_block_bools_before_invoke =
+        src_block_invoke_map.at_unsafe(caller_method)[invoke_insn];
+    for (auto b : source_block_bools_before_invoke) {
+      seen_caller = true;
+      if (b) {
+        return 0;
+      }
+    }
+  }
+  // if all the callers had cold entry blocks, this counts as a violations
+  return seen_caller ? 1 : 0;
+}
+
 template <typename Fn>
 size_t chain_hot_violations_tmpl(Block* block, const Fn& fn) {
   size_t sum{0};
@@ -1836,7 +1896,9 @@ void track_source_block_coverage(ScopedMetrics& sm,
 struct ViolationsHelper::ViolationsHelperImpl {
   size_t top_n;
   UnorderedMap<DexMethod*, size_t> violations_start;
+  size_t method_violations{0};
   std::vector<std::string> print;
+  Scope scope;
   bool processed{false};
 
   using Violation = ViolationsHelper::Violation;
@@ -1846,7 +1908,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
                        const Scope& scope,
                        size_t top_n,
                        std::vector<std::string> to_vis)
-      : top_n(top_n), print(std::move(to_vis)), v(v) {
+      : top_n(top_n), print(std::move(to_vis)), scope(scope), v(v) {
     {
       std::mutex lock;
       walk::parallel::methods(scope, [this, &lock, v](DexMethod* m) {
@@ -1862,7 +1924,63 @@ struct ViolationsHelper::ViolationsHelperImpl {
       });
     }
 
+    {
+      auto method_override_graph = method_override_graph::build_graph(scope);
+      auto call_graph = std::make_unique<call_graph::Graph>(
+          call_graph::single_callee_graph(*method_override_graph, scope));
+
+      auto val = compute_method_violations(*call_graph, scope);
+      method_violations = val;
+    }
+
     print_all();
+  }
+
+  static size_t compute_method_violations(const call_graph::Graph& call_graph,
+                                          const Scope& scope) {
+    size_t count{0};
+
+    SourceBlockInvokeMap src_block_invoke_map;
+    // Builds a graph of method -> invoke insn -> vector<bool> each bool
+    // representing if the coldstart interaction of the source block right
+    // before that invoke is hot or not
+    walk::parallel::methods(scope, [&](DexMethod* current_method) {
+      if (current_method == nullptr || current_method->get_code() == nullptr) {
+        return;
+      }
+
+      ScopedCFG cfg(current_method->get_code());
+      cfg->remove_unreachable_blocks();
+
+      IRInstruction* current_invoke_insn = nullptr;
+      for (auto block : cfg->blocks()) {
+        for (auto it = block->rbegin(); it != block->rend(); ++it) {
+          if (it->type == MFLOW_OPCODE) {
+            auto instruction = it->insn;
+            if (opcode::is_an_invoke(instruction->opcode())) {
+              current_invoke_insn = instruction;
+            }
+          } else if (it->type == MFLOW_SOURCE_BLOCK) {
+            if (current_invoke_insn) {
+              auto* sb = it->src_block.get();
+              bool is_hot = sb && sb->get_val(0).value_or(0) > 0;
+              src_block_invoke_map.update(
+                  current_method,
+                  [&](const DexMethod*, auto& method_map, bool) {
+                    method_map[current_invoke_insn].push_back(is_hot);
+                  });
+              current_invoke_insn = nullptr;
+            }
+          }
+        }
+      }
+    });
+
+    impl::visit_by_levels(&call_graph, [&](call_graph::NodeId node) {
+      count += hot_callee_all_cold_callers(node, src_block_invoke_map);
+    });
+
+    return count;
   }
 
   static size_t compute(Violation v, cfg::ControlFlowGraph& cfg) {
@@ -1894,6 +2012,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
     processed = true;
 
     std::atomic<size_t> change_sum{0};
+    long long method_violation_change_sum{0};
 
     {
       std::mutex lock;
@@ -1955,6 +2074,12 @@ struct ViolationsHelper::ViolationsHelperImpl {
           },
           violations_start);
 
+      auto method_override_graph = method_override_graph::build_graph(scope);
+      auto call_graph = std::make_unique<call_graph::Graph>(
+          call_graph::single_callee_graph(*method_override_graph, scope));
+      auto val = compute_method_violations(*call_graph, scope);
+      method_violation_change_sum = val - method_violations;
+
       struct MaybeMetrics {
         ScopedMetrics* root{nullptr};
         std::optional<ScopedMetrics::Scope> scope;
@@ -1994,8 +2119,11 @@ struct ViolationsHelper::ViolationsHelperImpl {
     print_all();
 
     TRACE(MMINL, 0, "Introduced %zu violations.", change_sum.load());
+    TRACE(MMINL, 0, "Introduced %lld inter-method violations.",
+          method_violation_change_sum);
     if (sm != nullptr) {
       sm->set_metric("new_violations", change_sum.load());
+      sm->set_metric("new_method_violations", method_violation_change_sum);
     }
   }
 
