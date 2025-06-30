@@ -282,6 +282,10 @@ struct SourceBlockMetric {
   size_t hot_throw_cold_count{0};
 };
 
+using SourceBlockInvokeMap =
+    ConcurrentMap<const DexMethod*,
+                  UnorderedMap<IRInstruction*, std::vector<bool>>>;
+
 SourceBlockMetric gather_source_block_metrics(ControlFlowGraph* cfg);
 
 void fix_chain_violations(ControlFlowGraph* cfg);
@@ -291,6 +295,9 @@ void fix_idom_violations(ControlFlowGraph* cfg);
 void fix_hot_method_cold_entry_violations(ControlFlowGraph* cfg);
 
 bool has_source_block_positive_val(const SourceBlock* sb);
+
+size_t compute_method_violations(const call_graph::Graph& call_graph,
+                                 const Scope& scope);
 
 inline bool has_source_blocks(const cfg::Block* b) {
   for (const auto& mie : *b) {

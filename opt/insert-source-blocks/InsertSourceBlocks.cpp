@@ -962,6 +962,17 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
        UnorderedIterable(g_redex->get_sb_interaction_indices())) {
     mgr.set_metric("interaction_" + interaction_id, index);
   }
+
+  {
+    Timer timer("Compute method violations");
+    auto scope = build_class_scope(stores);
+    auto method_override_graph = method_override_graph::build_graph(scope);
+    auto call_graph = std::make_unique<call_graph::Graph>(
+        call_graph::single_callee_graph(*method_override_graph, scope));
+
+    auto val = source_blocks::compute_method_violations(*call_graph, scope);
+    mgr.set_metric("method~violation~hot~callee~cold~callers", val);
+  }
 }
 
 static InsertSourceBlocksPass s_pass;

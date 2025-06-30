@@ -1433,10 +1433,6 @@ size_t hot_all_children_cold(Block* block) {
   return has_successor ? 1 : 0;
 }
 
-using SourceBlockInvokeMap =
-    ConcurrentMap<const DexMethod*,
-                  UnorderedMap<IRInstruction*, std::vector<bool>>>;
-
 size_t hot_callee_all_cold_callers(call_graph::NodeId node,
                                    SourceBlockInvokeMap& src_block_invoke_map) {
   // Ignore Ghost Nodes
@@ -1454,7 +1450,8 @@ size_t hot_callee_all_cold_callers(call_graph::NodeId node,
 
   // Cold Callees do not count
   auto callee_entry_block = get_first_source_block(callee_cfg->entry_block());
-  if (!callee_entry_block || callee_entry_block->get_val(0).value_or(0) == 0) {
+  if (!callee_entry_block || callee_entry_block->vals_size == 0 ||
+      callee_entry_block->get_val(0).value_or(0) == 0) {
     return 0;
   }
 
@@ -1893,6 +1890,55 @@ void track_source_block_coverage(ScopedMetrics& sm,
   }
 }
 
+size_t compute_method_violations(const call_graph::Graph& call_graph,
+                                 const Scope& scope) {
+  size_t count{0};
+
+  SourceBlockInvokeMap src_block_invoke_map;
+  // Builds a graph of method -> invoke insn -> vector<bool> each bool
+  // representing if the coldstart interaction of the source block right
+  // before that invoke is hot or not
+  walk::parallel::methods(scope, [&](DexMethod* current_method) {
+    if (current_method == nullptr || current_method->get_code() == nullptr) {
+      return;
+    }
+
+    ScopedCFG cfg(current_method->get_code());
+    cfg->remove_unreachable_blocks();
+
+    IRInstruction* current_invoke_insn = nullptr;
+    for (auto block : cfg->blocks()) {
+      for (auto it = block->rbegin(); it != block->rend(); ++it) {
+        if (it->type == MFLOW_OPCODE) {
+          auto instruction = it->insn;
+          if (opcode::is_an_invoke(instruction->opcode())) {
+            current_invoke_insn = instruction;
+          }
+        } else if (it->type == MFLOW_SOURCE_BLOCK) {
+          if (current_invoke_insn) {
+            SourceBlock* sb = it->src_block.get();
+            if (sb && sb->vals_size == 0) {
+              continue;
+            }
+            bool is_hot = sb && sb->get_val(0).value_or(0) > 0;
+            src_block_invoke_map.update(
+                current_method, [&](const DexMethod*, auto& method_map, bool) {
+                  method_map[current_invoke_insn].push_back(is_hot);
+                });
+            current_invoke_insn = nullptr;
+          }
+        }
+      }
+    }
+  });
+
+  impl::visit_by_levels(&call_graph, [&](call_graph::NodeId node) {
+    count += hot_callee_all_cold_callers(node, src_block_invoke_map);
+  });
+
+  return count;
+}
+
 struct ViolationsHelper::ViolationsHelperImpl {
   size_t top_n;
   UnorderedMap<DexMethod*, size_t> violations_start;
@@ -1934,53 +1980,6 @@ struct ViolationsHelper::ViolationsHelperImpl {
     }
 
     print_all();
-  }
-
-  static size_t compute_method_violations(const call_graph::Graph& call_graph,
-                                          const Scope& scope) {
-    size_t count{0};
-
-    SourceBlockInvokeMap src_block_invoke_map;
-    // Builds a graph of method -> invoke insn -> vector<bool> each bool
-    // representing if the coldstart interaction of the source block right
-    // before that invoke is hot or not
-    walk::parallel::methods(scope, [&](DexMethod* current_method) {
-      if (current_method == nullptr || current_method->get_code() == nullptr) {
-        return;
-      }
-
-      ScopedCFG cfg(current_method->get_code());
-      cfg->remove_unreachable_blocks();
-
-      IRInstruction* current_invoke_insn = nullptr;
-      for (auto block : cfg->blocks()) {
-        for (auto it = block->rbegin(); it != block->rend(); ++it) {
-          if (it->type == MFLOW_OPCODE) {
-            auto instruction = it->insn;
-            if (opcode::is_an_invoke(instruction->opcode())) {
-              current_invoke_insn = instruction;
-            }
-          } else if (it->type == MFLOW_SOURCE_BLOCK) {
-            if (current_invoke_insn) {
-              auto* sb = it->src_block.get();
-              bool is_hot = sb && sb->get_val(0).value_or(0) > 0;
-              src_block_invoke_map.update(
-                  current_method,
-                  [&](const DexMethod*, auto& method_map, bool) {
-                    method_map[current_invoke_insn].push_back(is_hot);
-                  });
-              current_invoke_insn = nullptr;
-            }
-          }
-        }
-      }
-    });
-
-    impl::visit_by_levels(&call_graph, [&](call_graph::NodeId node) {
-      count += hot_callee_all_cold_callers(node, src_block_invoke_map);
-    });
-
-    return count;
   }
 
   static size_t compute(Violation v, cfg::ControlFlowGraph& cfg) {
