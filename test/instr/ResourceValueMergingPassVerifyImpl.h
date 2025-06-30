@@ -9,8 +9,9 @@
 
 #include <gtest/gtest.h>
 
+#include "RedexResources.h"
 #include "verify/VerifyUtil.h"
 
-inline void resource_value_merging_PreVerify() {}
+void resource_value_merging_PreVerify(ResourceTableFile* res_table);
 
-inline void resource_value_merging_PostVerify() {}
+void resource_value_merging_PostVerify(ResourceTableFile* res_table);

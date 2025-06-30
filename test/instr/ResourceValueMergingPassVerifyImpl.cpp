@@ -5,15 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <gtest/gtest.h>
-
 #include "ResourceValueMergingPassVerifyImpl.h"
 #include "verify/VerifyUtil.h"
 
-TEST_F(PreVerify, ResourceValueMergingPassTest) {
-  resource_value_merging_PreVerify();
-}
+void resource_value_merging_PreVerify(ResourceTableFile* /* unused */) {}
 
-TEST_F(PostVerify, ResourceValueMergingPassTest) {
-  resource_value_merging_PostVerify();
-}
+void resource_value_merging_PostVerify(ResourceTableFile* /* unused */) {}
