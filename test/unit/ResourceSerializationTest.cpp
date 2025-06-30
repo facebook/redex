@@ -1496,7 +1496,7 @@ TEST(ResTable, GetStringsByName) {
   // cyclic.
   EntryAndValue third(2, android::Res_value::TYPE_STRING, 3);
   EntryAndValue third_land(2, android::Res_value::TYPE_REFERENCE, 0x7f010003);
-  type_definer->add(&default_config, {(uint8_t*)&third, sizeof(EntryAndValue)});
+  type_definer->add(&default_config, &third);
   type_definer->add(&land_config, &third_land);
 
   EntryAndValue fourth(3, android::Res_value::TYPE_REFERENCE, 0x7f010002);
@@ -1975,4 +1975,79 @@ TEST(Xml, AttributeSorting) {
                                            ATTR_ID_COUNT, pool_lookup),
               4);
   }
+}
+
+TEST(ResTableTypeDefiner, AddComplexEntryBuilder) {
+  auto pool_flags = android::ResStringPool_header::UTF8_FLAG;
+  auto global_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  auto key_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  auto type_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+
+  key_strings_builder->add_string("test_entry");
+  type_strings_builder->add_string("style");
+
+  auto package_builder =
+      std::make_shared<arsc::ResPackageBuilder>(&foo_package);
+  package_builder->set_key_strings(key_strings_builder);
+  package_builder->set_type_strings(type_strings_builder);
+
+  auto table_builder = std::make_shared<arsc::ResTableBuilder>();
+  table_builder->set_global_strings(global_strings_builder);
+  table_builder->add_package(package_builder);
+
+  std::vector<android::ResTable_config*> configs = {&default_config,
+                                                    &land_config};
+  std::vector<uint32_t> flags = {android::ResTable_config::CONFIG_ORIENTATION};
+
+  auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
+      foo_package.id, 1, configs, flags);
+  package_builder->add_type(type_definer);
+
+  arsc::ResComplexEntryBuilder default_builder;
+  default_builder.set_key_string_index(0);
+  default_builder.set_parent_id(0);
+  default_builder.add(0x01010098, android::Res_value::TYPE_INT_COLOR_RGB8,
+                      0xFF0000FF);
+  default_builder.add(0x010100d4, android::Res_value::TYPE_INT_COLOR_RGB8,
+                      0xFF00FF00);
+
+  arsc::ResComplexEntryBuilder land_builder;
+  land_builder.set_key_string_index(0);
+  land_builder.set_parent_id(0);
+  land_builder.add(0x01010098, android::Res_value::TYPE_INT_COLOR_RGB8,
+                   0xFFFF0000);
+  land_builder.add(0x010100d4, android::Res_value::TYPE_INT_COLOR_RGB8,
+                   0xFF000000);
+
+  type_definer->add(&default_config, default_builder);
+  type_definer->add(&land_config, land_builder);
+
+  android::Vector<char> serialized;
+  table_builder->serialize(&serialized);
+
+  auto tmp_dir =
+      redex::make_tmp_dir("ResTableTypeDefiner_AddComplexEntryBuilder%%%%%%%%");
+  auto arsc_path = tmp_dir.path + "/resources.arsc";
+  write_to_file(arsc_path, serialized);
+
+  auto table_dump = aapt_dump_and_parse(arsc_path);
+
+  uint32_t resource_id = 0x7f010000;
+
+  auto default_values = table_dump.get_complex_values("default", resource_id);
+  ASSERT_EQ(default_values.size(), 2);
+  EXPECT_EQ(default_values[0].key, 0x01010098);
+  EXPECT_EQ(default_values[0].data, 0xFF0000FF);
+  EXPECT_EQ(default_values[1].key, 0x010100d4);
+  EXPECT_EQ(default_values[1].data, 0xFF00FF00);
+
+  auto land_values = table_dump.get_complex_values("land", resource_id);
+  ASSERT_EQ(land_values.size(), 2);
+  EXPECT_EQ(land_values[0].key, 0x01010098);
+  EXPECT_EQ(land_values[0].data, 0xFFFF0000);
+  EXPECT_EQ(land_values[1].key, 0x010100d4);
+  EXPECT_EQ(land_values[1].data, 0xFF000000);
 }

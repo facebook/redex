@@ -559,6 +559,20 @@ void ResTableTypeProjector::serialize(android::Vector<char>* out) {
   write_short_at_pos(type_count_pos, type_count, out);
 }
 
+void ResTableTypeDefiner::add(android::ResTable_config* config,
+                              ResComplexEntryBuilder& builder) {
+  android::Vector<char> serialized_entry;
+  builder.serialize(&serialized_entry);
+  LOG_ALWAYS_FATAL_IF(serialized_entry.empty(), "Serialized entry is empty");
+
+  m_serialized_entries.emplace_back(std::move(serialized_entry));
+
+  const auto& stored_data = m_serialized_entries.back();
+  EntryValueData new_entry_data((uint8_t*)stored_data.array(),
+                                stored_data.size());
+  add(config, new_entry_data);
+}
+
 void ResTableTypeDefiner::serialize(android::Vector<char>* out) {
   // Validation
   LOG_ALWAYS_FATAL_IF(m_configs.size() != m_data.size(),

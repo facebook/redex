@@ -328,6 +328,9 @@ class ResTableTypeProjector : public ResTableTypeBuilder {
 // Builder for defining a new ResTable_typeSpec along with its ResTable_type
 // structures, entries, values. In all cases, given data should be in device
 // order.
+// Forward declaration
+class ResComplexEntryBuilder;
+
 class ResTableTypeDefiner : public ResTableTypeBuilder {
  public:
   ResTableTypeDefiner(uint32_t package_id,
@@ -350,6 +353,7 @@ class ResTableTypeDefiner : public ResTableTypeBuilder {
     auto& vec = m_data.at(config);
     vec.emplace_back(data);
   }
+  void add(android::ResTable_config* config, ResComplexEntryBuilder& builder);
   // Convenience method for above.
   template <typename T>
   void add(android::ResTable_config* config, T* ptr) {
@@ -371,6 +375,7 @@ class ResTableTypeDefiner : public ResTableTypeBuilder {
       m_data;
   const std::vector<android::ResTable_config*> m_configs;
   const std::vector<uint32_t> m_flags;
+  std::vector<android::Vector<char>> m_serialized_entries;
 };
 
 /**
