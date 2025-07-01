@@ -6,6 +6,7 @@
  */
 
 #include "json/value.h"
+#include "json/writer.h"
 #include <boost/thread/thread.hpp>
 #include <cinttypes>
 #include <cstring>
@@ -1465,15 +1466,21 @@ void finalize_resource_table(ConfigFiles& conf) {
   res_table->finalize_resource_table(*global_resources_config);
 }
 
-void collect_classes_for_full_json(const DexStore& store,
-                                   Json::Value* full_map_root) {
-  Json::Value store_entry;
+void collect_classes_for_full_jsonl(const DexStore& store,
+                                    std::vector<Json::Value>* full_map_root) {
+  full_map_root->reserve(full_map_root->size() +
+                         std::accumulate(store.get_dexen().begin(),
+                                         store.get_dexen().end(), 0,
+                                         [](size_t acc, const auto& classes) {
+                                           return acc + classes.size();
+                                         }));
 
-  Json::Value classes_entry;
   for (const auto& classes : store.get_dexen()) {
     for (const auto& cls : classes) {
       Json::Value class_entry;
+      class_entry["name"] = std::string(cls->get_deobfuscated_name_or_empty());
       class_entry["obfuscated"] = show(cls);
+      class_entry["store"] = store.get_name();
       class_entry["original_store"] = cls->get_location()->get_store_name();
 
       auto collect_members = [](const auto& members) {
@@ -1489,22 +1496,9 @@ void collect_classes_for_full_json(const DexStore& store,
       class_entry["dmethods"] = collect_members(cls->get_dmethods());
       class_entry["vmethods"] = collect_members(cls->get_vmethods());
 
-      classes_entry[std::string(cls->get_deobfuscated_name_or_empty())] =
-          std::move(class_entry);
+      full_map_root->emplace_back(std::move(class_entry));
     }
   }
-  store_entry["classes"] = std::move(classes_entry);
-  store_entry["root"] = store.is_root_store();
-  store_entry["generated"] = store.is_generated();
-  store_entry["num_dexes"] = (Json::UInt64)store.num_dexes();
-
-  Json::Value deps_entry{Json::ValueType::arrayValue};
-  for (const auto& dep : store.get_dependencies()) {
-    deps_entry.append(dep);
-  }
-  store_entry["dependencies"] = std::move(deps_entry);
-
-  (*full_map_root)[store.get_name()] = std::move(store_entry);
 }
 
 /**
@@ -1588,7 +1582,7 @@ void redex_backend(ConfigFiles& conf,
     const auto& dex_magic = stores[0].get_dex_magic();
     auto min_sdk = manager.get_redex_options().min_sdk;
     ScopedMemStats wod_mem_stats{mem_stats_enabled, reset_hwm};
-    Json::Value full_json_root{Json::ValueType::objectValue};
+    std::vector<Json::Value> full_jsonl;
     constexpr const char* kJsonTimerName =
         "Collecting full-rename-map-json data";
     AccumulatingTimer json_timer{kJsonTimerName};
@@ -1631,7 +1625,7 @@ void redex_backend(ConfigFiles& conf,
       }
       {
         auto timer_scope = json_timer.scope();
-        collect_classes_for_full_json(store, &full_json_root);
+        collect_classes_for_full_jsonl(store, &full_jsonl);
       }
     }
     Timer::add_timer(kJsonTimerName, json_timer.get_seconds());
@@ -1639,8 +1633,17 @@ void redex_backend(ConfigFiles& conf,
 
     {
       Timer t("Writing full rename map JSON");
-      std::ofstream ofs(conf.metafile("redex-full-rename-map.json"));
-      ofs << full_json_root;
+      std::ofstream ofs(conf.metafile("redex-full-rename-map.jsonl"));
+      // We want this to be JSONL. Unclear why `<<` does this for redex-stats
+      // but need extra here.
+      Json::StreamWriterBuilder builder;
+      builder["indentation"] = "";
+      auto writer =
+          std::unique_ptr<Json::StreamWriter>(builder.newStreamWriter());
+      for (const auto& json : full_jsonl) {
+        writer->write(json, &ofs);
+        ofs << "\n";
+      }
     }
   }
 

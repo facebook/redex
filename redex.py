@@ -1543,9 +1543,9 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             "Redex Full Rename Map (JSON)",
             lambda args: not _is_preserve_input_dexes(args),
             True,
-            ["redex-full-rename-map.json"],
+            ["redex-full-rename-map.jsonl"],
             [],
-            "redex-full-rename-map.json.zst",
+            "redex-full-rename-map.jsonl.zst",
             None,
             CompressionLevel.DEFAULT,  # Bit larger.
         ),
