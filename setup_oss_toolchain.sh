@@ -115,38 +115,40 @@ function install_from_apt {
 
 function handle_debian {
     case $1 in
-        [1-9]|10)
-            echo "Unsupported Debian version $1"
-            exit 1
+        1[3-9])
+            install_from_apt default-jdk-headless kotlin googletest ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
+            ;;
+        12)
+            install_from_apt default-jdk-headless kotlin ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
+            install_googletest_from_source
             ;;
         11)
             install_from_apt default-jdk-headless ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
             install_kotlin_from_source
+            install_googletest_from_source
             ;;
         *)
-            install_from_apt default-jdk-headless kotlin ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
+            echo "Unsupported Debian version $1"
+            exit 1
             ;;
     esac
-    # TODO(T227009978): Install googletest from apt for some Debian versions after enabling autodetecting googletest installation dir.
-    install_googletest_from_source
 }
 
 function handle_ubuntu {
     case $1 in
         2[4-9]*)
             # We don't support JDK 21 yet. Replace this with default-jdk-headless once we support it.
-            install_from_apt openjdk-17-jdk-headless kotlin ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
+            install_from_apt openjdk-17-jdk-headless kotlin googletest ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
             ;;
         2[2-3]*)
             install_from_apt default-jdk-headless kotlin ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
+            install_googletest_from_source
             ;;
         *)
             echo "Unsupported Ubuntu version $1"
             exit 1
             ;;
     esac
-    # TODO(T227009978): Install googletest from apt for some Ubuntu versions after enabling autodetecting googletest installation dir.
-    install_googletest_from_source
 }
 
 # Read ID and VERSION_ID from /etc/os-release.
