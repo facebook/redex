@@ -862,6 +862,7 @@ Given an APK, produce a better APK!
     parser.add_argument(
         "--deep-data-enabled-interactions",
         default=None,
+        action="extend",
         nargs="+",
         help="Override deep data enabled interactions",
     )
