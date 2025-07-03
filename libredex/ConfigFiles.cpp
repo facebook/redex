@@ -667,7 +667,6 @@ void ConfigFiles::init_baseline_profile_configs() {
         current_baseline_profile_config.options.include_all_startup_classes);
     baseline_profile_config_jw.get("deep_data_interaction_config", {},
                                    deepdata_interactions_json);
-    always_assert(!deepdata_interactions_json.empty());
     for (auto interaction_it = deepdata_interactions_json.begin();
          interaction_it != deepdata_interactions_json.end();
          ++interaction_it) {
