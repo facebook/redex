@@ -165,20 +165,57 @@ AS_IF([test "x$enable_tests" != "xno"], [
     AC_ARG_WITH([googletest],
         [AS_HELP_STRING([--with-googletest=/path/to/googletest],
             [Location to googletest installation dir.])],
-        [GOOGLETEST_DIR="$withval"],
-        # TODO(T227009978): Auto detect googletest installation directory
-        [GOOGLETEST_DIR="/usr/"]
-    )
-    AC_CHECK_FILES(
-        ["$GOOGLETEST_DIR/include/gtest/gtest.h" "$GOOGLETEST_DIR/lib/libgmock_main.a"],
         [
-            AC_SUBST(GOOGLETEST_INCLUDE_DIR,"$GOOGLETEST_DIR/include")
+            GOOGLETEST_DIR="$withval"
+            GOOGLETEST_INCLUDE_DIR="$GOOGLETEST_DIR/include"
             GOOGLETEST_LIB_DIR="$GOOGLETEST_DIR/lib"
-            AC_SUBST(GOOGLETEST_TEST_LIBS,"$GOOGLETEST_LIB_DIR/libgtest_main.a $GOOGLETEST_LIB_DIR/libgtest.a")
-            AC_SUBST(GOOGLETEST_MOCK_LIBS,"$GOOGLETEST_LIB_DIR/libgmock_main.a $GOOGLETEST_LIB_DIR/libgmock.a $GOOGLETEST_LIB_DIR/libgtest.a")
-        ],
-        [AC_MSG_ERROR([--with-googletest does not seem to point at a valid GoogleTest installation])]
+        ]
     )
+    AC_LANG_PUSH([C++])
+    save_CXXFLAGS="$CXXFLAGS"
+    CXXFLAGS=
+    if test "x$GOOGLETEST_INCLUDE_DIR" != x ; then
+        CXXFLAGS="-I$GOOGLETEST_INCLUDE_DIR"
+    fi
+    save_CPPFLAGS="$CPPFLAGS"
+    CPPFLAGS="$CXXFLAGS"
+    AC_CHECK_HEADERS(
+        [gtest/gtest.h gmock/gmock.h],
+        [AC_SUBST(GOOGLETEST_INCLUDE_DIR,"$GOOGLETEST_INCLUDE_DIR")],
+        [AC_MSG_ERROR([googletest not detected or --with-googletest does not seem to point at a valid GoogleTest installation with the header files.])])
+    CXXFLAGS="$save_CXXFLAGS"
+    CPPFLAGS="$save_CPPFLAGS"
+
+    save_LDFLAGS="$LDFLAGS"
+    LDFLAGS=
+    if test "x$GOOGLETEST_LIB_DIR" != x ; then
+        LDFLAGS="-L$GOOGLETEST_LIB_DIR"
+    fi
+    save_LIBS="$LIBS"
+    LIBS=
+    AC_CHECK_LIB(gtest_main, main,
+        [AC_SUBST(GOOGLETEST_TEST_LIBS,"$LDFLAGS -lgtest_main -lgtest")],
+        [AC_MSG_ERROR([googletest not detected or --with-googletest does not seem to point at a valid GoogleTest installation with gtest_main.])])
+    AC_CHECK_LIB(gmock_main, main,
+        [AC_SUBST(GOOGLETEST_MOCK_LIBS,"$LDFLAGS -lgmock_main -lgmock -lgtest")],
+        [AC_MSG_ERROR([googletest not detected or --with-googletest does not seem to point at a valid GoogleTest installation with gmock_main.])])
+    LDFLAGS="$save_LDFLAGS"
+    LIBS="$save_LIBS"
+    AC_LANG_POP([C++])
+
+    # Test above may lead to a false negative because the headers may be present
+    # in a standard directory but not the specified googletest path.
+    if test "x$GOOGLETEST_DIR" != x ; then
+        AC_CHECK_FILES(
+            [$GOOGLETEST_INCLUDE_DIR/gtest/gtest.h
+             $GOOGLETEST_INCLUDE_DIR/gmock/gmock.h
+             $GOOGLETEST_LIB_DIR/libgtest_main.a
+             $GOOGLETEST_LIB_DIR/libgtest.a
+             $GOOGLETEST_LIB_DIR/libgmock_main.a
+             $GOOGLETEST_LIB_DIR/libgmock.a],
+            [],
+            [AC_MSG_ERROR([--with-googletest is specified but does not seem to point at a valid GoogleTest installation with necessary header and library files])])
+    fi
 ])
 
 # Checks for header files.
