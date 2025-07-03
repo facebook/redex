@@ -1528,7 +1528,7 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             [],
             "redex-invoke-map.jsonl.zst",
             None,
-            CompressionLevel.BETTER,  # Usually small enough.
+            CompressionLevel.DEFAULT,  # Bit larger.
         ),
         CompressionEntry(
             "Redex Full Rename Map",
