@@ -3,7 +3,7 @@ runs:
   using: composite
   steps:
   - name: Setup for tests
-    run: sudo apt-get install -qq -y --no-install-recommends default-jdk-headless zip unzip
+    run: sudo apt-get install -qq -y --no-install-recommends zip unzip
     shell: bash
   - name: Set cache version
     id: cache_version
