@@ -5,7 +5,7 @@ env:
   CACHE_VERSION: xxxxx1
 jobs:
   linux-gcc:
-    name: Linux GCC - ${{ matrix.os }} - ${{ matrix.bit32 && 'x86' || 'x86_64' }}
+    name: Linux GCC - ${{ matrix.os }} - ${{ matrix.build_arch }}
     runs-on: 4-core-ubuntu
     container: ${{ matrix.os }}
     strategy:
@@ -15,10 +15,10 @@ jobs:
         - "debian:12"
         - "ubuntu:22.04"
         - "ubuntu:24.04"
-        bit32: [false]
+        build_arch: ["x86_64"]
         include:
         - os: debian:12
-          bit32: true
+          build_arch: "x86"
     steps:
     - name: Show OS info
       run: cat /etc/os-release
@@ -29,8 +29,8 @@ jobs:
     - uses: ./.github/actions/setup-build-and-test-w-make
       with:
         save_boost_cache: false
-        mode_32: ${{ matrix.bit32 }}
-        job_name: ${{ github.job.name }}
+        mode_32: ${{ matrix.build_arch == 'x86' }}
+        job_name: Linux GCC - ${{ matrix.os }} - ${{ matrix.build_arch }}
 
   build-deb_stable-w-clang-llvm-org:
     runs-on: 4-core-ubuntu
