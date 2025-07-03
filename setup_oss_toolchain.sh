@@ -60,8 +60,26 @@ function install_googletest_from_source {
     mkdir -p toolchain_install/gtest
     pushd toolchain_install/gtest
     tar xf "../../dl_cache/gtest/googletest-${GOOGLETEST_MIN_VERSION}.tar.gz" --no-same-owner --strip-components=1
-    cmake .
+    # GoogleTest's string_view matcher requires compiler to support C++17. Older
+    # GCC versions need to be told to use C++17.
+    CXXFLAGS=-std=gnu++17 cmake .
     cmake --build . --target install
+    popd
+    popd
+}
+
+function install_kotlin_from_source {
+    pushd "$TOOLCHAIN_TMP"
+    mkdir -p dl_cache/kotlin
+    KOTLIN_VERSION=1.3.31
+    if [ ! -f "dl_cache/kotlin/kotlin-compiler-${KOTLIN_VERSION}.zip" ] ; then
+        wget "https://github.com/JetBrains/kotlin/releases/download/v${KOTLIN_VERSION}/kotlin-compiler-${KOTLIN_VERSION}.zip" -O "dl_cache/kotlin/kotlin-compiler-${KOTLIN_VERSION}.zip"
+    fi
+    mkdir -p toolchain_install/kotlin
+    pushd toolchain_install/kotlin
+    unzip "../../dl_cache/kotlin/kotlin-compiler-${KOTLIN_VERSION}.zip"
+    cp -v kotlinc/bin/* /usr/local/bin
+    cp -v kotlinc/lib/* /usr/local/lib
     popd
     popd
 }
@@ -94,8 +112,12 @@ function handle_debian {
             echo "Unsupported Debian version $1"
             exit 1
             ;;
+        11)
+            install_from_apt python3 default-jdk-headless ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
+            install_kotlin_from_source
+            ;;
         *)
-            install_from_apt  python3 ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
+            install_from_apt python3 default-jdk-headless kotlin ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
             ;;
     esac
     # TODO(T227009978): Install googletest from apt for some Debian versions after enabling autodetecting googletest installation dir.
@@ -104,8 +126,12 @@ function handle_debian {
 
 function handle_ubuntu {
     case $1 in
+        2[4-9]*)
+            # We don't support JDK 21 yet. Replace this with default-jdk-headless once we support it.
+            install_from_apt python3 openjdk-17-jdk-headless kotlin ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
+            ;;
         2*)
-            install_from_apt python3 ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
+            install_from_apt python3 default-jdk-headless kotlin ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
             ;;
         *)
             echo "Unsupported Ubuntu version $1"
