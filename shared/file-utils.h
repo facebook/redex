@@ -9,6 +9,7 @@
 
 #include "Util.h"
 
+#include <cstdint>
 #include <cstdio>
 #include <memory>
 #include <string>
