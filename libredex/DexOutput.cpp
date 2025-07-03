@@ -1079,7 +1079,7 @@ void DexOutput::generate_static_values() {
       deva->encode(&m_dodx, encdata);
       size_t encdatasize = encdata.size();
       always_assert_log((((uint64_t)encdatasize) >> 32) == 0,
-                        "buffer size (%lu) is too big", encdatasize);
+                        "buffer size (%zu) is too big", encdatasize);
       /* No alignment requirements */
       memcpy(m_output.get() + m_offset, encdata.data(), encdatasize);
       enc_arrays.emplace(std::move(*deva), m_offset);
@@ -1101,7 +1101,7 @@ void DexOutput::generate_static_values() {
         eva.encode(&m_dodx, encdata);
         size_t encdatasize = encdata.size();
         always_assert_log((((uint64_t)encdatasize) >> 32) == 0,
-                          "buffer size (%lu) is too big", encdatasize);
+                          "buffer size (%zu) is too big", encdatasize);
         memcpy(m_output.get() + m_offset, encdata.data(), encdatasize);
         enc_arrays.emplace(std::move(eva), m_offset);
         m_call_site_items[callsite] = m_offset;
@@ -3092,7 +3092,7 @@ enhanced_dex_stats_t write_classes_to_dex(
     // If enforce_class_order was enabled we fail the program if there exist any
     // violations, otherwise we just record the number of violation.
     always_assert_log(!conf.enforce_class_order(),
-                      "Dex %s - %lu has %d class order violations",
+                      "Dex %s - %zu has %d class order violations",
                       store_name->c_str(), dex_number,
                       this_class_order_violations);
   }

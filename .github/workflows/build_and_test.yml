@@ -5,7 +5,7 @@ env:
   CACHE_VERSION: xxxxx1
 jobs:
   linux-gcc:
-    name: Linux GCC ${{ matrix.os }}
+    name: Linux GCC - ${{ matrix.os }} - ${{ matrix.bit32 && 'x86' || 'x86_64' }}
     runs-on: 4-core-ubuntu
     container: ${{ matrix.os }}
     strategy:
@@ -15,6 +15,10 @@ jobs:
         - "debian:12"
         - "ubuntu:22.04"
         - "ubuntu:24.04"
+        bit32: [false]
+        include:
+        - os: debian:12
+          bit32: true
     steps:
     - name: Show OS info
       run: cat /etc/os-release
@@ -25,26 +29,9 @@ jobs:
     - uses: ./.github/actions/setup-build-and-test-w-make
       with:
         save_boost_cache: false
-        mode_32: false
+        mode_32: ${{ matrix.bit32 }}
         job_name: ${{ github.job.name }}
 
-  # No supported Github runners:
-  # * debian unstable
-# `mode_32` failed on boost lib
-#  build-deb_stable-32:
-#    runs-on: 4-core-ubuntu
-#    steps:
-#    - uses: actions/checkout@v4.1.1
-#    - uses: "./.github/actions/build_debian"
-#      with:
-#        mode_32: true
-#        job_name: debian_12_32
-#
-# For new-style config we'd need:
-#   setup_toolchain_extra: '32'
-#   configure_extra: "--host=i686-linux-gnu CFLAGS=-m32 CXXFLAGS=-m32 LDFLAGS=-m32"
-#
-#
   build-deb_stable-w-clang-llvm-org:
     runs-on: 4-core-ubuntu
     env:
