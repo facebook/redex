@@ -4,8 +4,8 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-# Set-up the dependencies necessary to build and run Redex on Ubuntu 16.04
-# Xenial, using APT for software management.
+# Set-up the dependencies necessary to build and run Redex on Ubuntu and Debian,
+# using APT for software management.
 
 # Exit on any command failing
 set -e
@@ -70,22 +70,6 @@ function install_boost_from_source {
     "$ROOT"/get_boost.sh
 }
 
-function install_protobuf3_from_source {
-    pushd "$TOOLCHAIN_TMP"
-    mkdir -p dl_cache/protobuf
-    if [ ! -f dl_cache/protobuf/protobuf-cpp-3.17.3.tar.gz ] ; then
-      wget https://github.com/protocolbuffers/protobuf/releases/download/v3.17.3/protobuf-cpp-3.17.3.tar.gz -O dl_cache/protobuf/protobuf-cpp-3.17.3.tar.gz
-    fi
-
-    mkdir -p toolchain_install/protobuf
-    pushd toolchain_install/protobuf
-    tar -xf ../../dl_cache/protobuf/protobuf-cpp-3.17.3.tar.gz --no-same-owner
-
-    pushd protobuf-3.17.3
-    ./configure $BITNESS_CONFIGURE
-    make -j 4 V=0 && make install V=0
-}
-
 function install_from_apt {
   PKGS="autoconf
         autoconf-archive
@@ -132,15 +116,6 @@ function handle_debian {
 
 function handle_ubuntu {
     case $1 in
-        1[7-9]*)
-            if [ "$BITNESS" == "32" ] ; then
-                echo "32-bit compile unsupported because of boost"
-                exit 1
-            fi
-            install_from_apt python3 ${DEB_UBUNTU_PKGS}
-            install_boost_from_source
-            install_protobuf3_from_source
-            ;;
         2*)
             install_from_apt python3 ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
             ;;
