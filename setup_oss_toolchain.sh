@@ -65,11 +65,6 @@ function install_googletest_from_source {
     popd
 }
 
-function install_boost_from_source {
-    pushd "$TOOLCHAIN_TMP"
-    "$ROOT"/get_boost.sh
-}
-
 function install_from_apt {
   PKGS="autoconf
         autoconf-archive
@@ -94,17 +89,9 @@ function install_from_apt {
 
 function handle_debian {
     case $1 in
-        [1-9])
+        [1-9]|10)
             echo "Unsupported Debian version $1"
             exit 1
-            ;;
-        10)
-            if [ "$BITNESS" == "32" ] ; then
-                echo "32-bit compile unsupported because of boost"
-                exit 1
-            fi
-            install_from_apt python3 ${DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
-            install_boost_from_source
             ;;
         *)
             install_from_apt  python3 ${DEB_UBUNTU_PKGS} ${BOOST_DEB_UBUNTU_PKGS} ${PROTOBUF_DEB_UBUNTU_PKGS}
