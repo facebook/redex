@@ -1,15 +1,13 @@
-# TODO: Unify with Makefile.am (or maybe autodetect)
-GOOGLETEST_MIN_VERSION = 1.10.0
-GOOGLETEST_DIR = googletest-release-$(GOOGLETEST_MIN_VERSION)/googletest
-GOOGLEMOCK_DIR = googletest-release-$(GOOGLETEST_MIN_VERSION)/googlemock
-
 #
 # Include paths
 #
+GOOGLETEST_INCLUDE_DIR = @GOOGLETEST_INCLUDE_DIR@
+GOOGLETEST_TEST_LIBS = @GOOGLETEST_TEST_LIBS@
+GOOGLETEST_MOCK_LIBS = @GOOGLETEST_MOCK_LIBS@
+
 COMMON_TEST_INCLUDES = \
     -I$(top_srcdir)/test/common \
-    -I$(top_builddir)/test/$(GOOGLEMOCK_DIR)/include \
-    -I$(top_builddir)/test/$(GOOGLETEST_DIR)/include
+    -I$(GOOGLETEST_INCLUDE_DIR)
 
 COMMON_BASE_TEST_LIBS = \
 	$(top_builddir)/libredex.la \
@@ -25,12 +23,11 @@ COMMON_BASE_TEST_LIBS = \
 # Libs.
 COMMON_TEST_LIBS = \
     $(COMMON_BASE_TEST_LIBS) \
-	$(top_builddir)/test/libgtest_main.la
+    $(GOOGLETEST_TEST_LIBS)
 
 COMMON_MOCK_TEST_LIBS = \
     $(COMMON_BASE_TEST_LIBS) \
-	$(top_builddir)/test/libgtest.la \
-	$(top_builddir)/test/libgmock_main.la
+    $(GOOGLETEST_MOCK_LIBS)
 
 # By default use PATH to find tools.
 JAVAC = javac
