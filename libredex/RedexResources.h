@@ -271,6 +271,10 @@ struct StyleModificationSpec {
   std::vector<Modification> modifications;
 };
 
+using ResourceAttributeMap =
+    UnorderedMap<uint32_t,
+                 UnorderedMap<uint32_t, StyleModificationSpec::Modification>>;
+
 // Helper for dealing with differences in character encoding between .arsc and
 // .pb files.
 std::string convert_utf8_to_mutf8(const std::string& input);

@@ -380,6 +380,14 @@ class ResourcesArscFile : public ResourceTableFile {
 
  private:
   void mark_file_closed();
+  void modify_attributes(
+      const resources::ResourceAttributeMap& resource_id_to_mod_attribute,
+      const std::function<void(
+          android::ResTable_entry* entry_ptr,
+          const UnorderedMap<uint32_t,
+                             resources::StyleModificationSpec::Modification>&
+              attrs_to_modify,
+          arsc::ResComplexEntryBuilder& builder)>& get_attributes);
 
   std::string m_path;
   RedexMappedFile m_f;

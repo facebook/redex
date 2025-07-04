@@ -1667,11 +1667,6 @@ void ResourcesArscFile::remap_res_ids_and_serialize(
   serialize();
 }
 
-void ResourcesArscFile::apply_attribute_removals(
-    const std::vector<resources::StyleModificationSpec::Modification>&
-    /* modifications */,
-    const std::vector<std::string>& /* resources_paths */) {}
-
 void ResourcesArscFile::nullify_res_ids_and_serialize(
     const std::vector<std::string>& /* resource_files */) {
   m_nullify_removed = true;
@@ -3053,6 +3048,181 @@ resources::StyleMap ResourcesArscFile::get_style_map() {
     }
   }
   return result;
+}
+
+UnorderedSet<uint8_t> extract_types_to_process(
+    const resources::ResourceAttributeMap& resource_id_to_mod_attribute) {
+  UnorderedSet<uint8_t> types_to_process;
+  for (const auto& [res_id, _] :
+       UnorderedIterable(resource_id_to_mod_attribute)) {
+    uint8_t res_type_id = (res_id & TYPE_MASK_BIT) >> TYPE_INDEX_BIT_SHIFT;
+    types_to_process.insert(res_type_id);
+  }
+  return types_to_process;
+}
+
+void ResourcesArscFile::modify_attributes(
+    const resources::ResourceAttributeMap& resource_id_to_mod_attribute,
+    const std::function<
+        void(android::ResTable_entry* entry_ptr,
+             const UnorderedMap<uint32_t,
+                                resources::StyleModificationSpec::Modification>&
+                 attrs_to_modify,
+             arsc::ResComplexEntryBuilder& builder)>& get_attributes) {
+  auto& table_snapshot = get_table_snapshot();
+  auto& parsed_table = table_snapshot.get_parsed_table();
+
+  if (resource_id_to_mod_attribute.empty()) {
+    return;
+  }
+
+  arsc::ResTableBuilder table_builder;
+  table_builder.set_global_strings(parsed_table.m_global_pool_header);
+
+  const auto& types_to_process =
+      extract_types_to_process(resource_id_to_mod_attribute);
+
+  for (auto& package : parsed_table.m_packages) {
+    auto package_id = package->id;
+    auto package_builder = std::make_shared<arsc::ResPackageBuilder>(package);
+
+    package_builder->set_key_strings(
+        parsed_table.m_package_key_string_headers.at(package));
+    package_builder->set_type_strings(
+        parsed_table.m_package_type_string_headers.at(package));
+
+    auto& type_infos = parsed_table.m_package_types.at(package);
+    for (auto& type_info : type_infos) {
+      uint8_t type_id = type_info.spec->id;
+
+      if (types_to_process.count(type_id) == 0) {
+        package_builder->add_type(type_info);
+        continue;
+      }
+
+      std::vector<android::ResTable_config*> configs;
+      configs.reserve(type_info.configs.size());
+      for (auto& type : type_info.configs) {
+        configs.push_back(&type->config);
+      }
+
+      auto entry_count = dtohl(type_info.spec->entryCount);
+      std::vector<uint32_t> flags;
+      flags.reserve(entry_count);
+
+      for (uint32_t entry_id = 0; entry_id < entry_count; entry_id++) {
+        uint32_t res_id = MAKE_RES_ID(package_id, type_id, entry_id);
+        auto flag_search = parsed_table.m_res_id_to_flags.find(res_id);
+        if (flag_search != parsed_table.m_res_id_to_flags.end()) {
+          flags.push_back(flag_search->second);
+        } else {
+          flags.push_back(0);
+        }
+      }
+
+      auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
+          package_id, type_id, configs, flags, false,
+          arsc::any_sparse_types(type_info.configs));
+
+      for (auto& config : configs) {
+        for (uint32_t entry_id = 0; entry_id < entry_count; entry_id++) {
+          uint32_t res_id = MAKE_RES_ID(package_id, type_id, entry_id);
+          auto entry_search = parsed_table.m_res_id_to_entries.find(res_id);
+
+          if (entry_search == parsed_table.m_res_id_to_entries.end()) {
+            continue;
+          }
+
+          auto& config_entries = entry_search->second;
+          auto config_entry = config_entries.find(config);
+
+          if (config_entry == config_entries.end()) {
+            continue;
+          }
+
+          auto entry_data = config_entry->second;
+          auto attrs_to_modify_search =
+              resource_id_to_mod_attribute.find(res_id);
+
+          if (attrs_to_modify_search == resource_id_to_mod_attribute.end() ||
+              arsc::is_empty(entry_data)) {
+            type_definer->add(config, entry_data);
+            continue;
+          }
+          auto entry = (android::ResTable_entry*)entry_data.getKey();
+          const auto& attributes_to_modify = attrs_to_modify_search->second;
+
+          if (entry == nullptr ||
+              !(dtohs(entry->flags) & android::ResTable_entry::FLAG_COMPLEX)) {
+            type_definer->add(config, entry_data);
+            continue;
+          }
+
+          arsc::ResComplexEntryBuilder complex_builder;
+          complex_builder.set_key_string_index(dtohl(entry->key.index));
+          complex_builder.set_parent_id(
+              dtohl(((android::ResTable_map_entry*)entry)->parent.ident));
+
+          get_attributes(entry, attributes_to_modify, complex_builder);
+
+          type_definer->add(config, complex_builder);
+        }
+      }
+
+      package_builder->add_type(type_definer);
+    }
+
+    auto& overlayables = parsed_table.m_package_overlayables.at(package);
+    package_builder->add_overlays(overlayables);
+
+    auto& unknown_chunks = parsed_table.m_package_unknown_chunks.at(package);
+    for (auto& header : unknown_chunks) {
+      package_builder->add_chunk(header);
+    }
+
+    table_builder.add_package(package_builder);
+  }
+
+  android::Vector<char> serialized;
+  table_builder.serialize(&serialized);
+
+  m_arsc_len = write_serialized_data_with_expansion(serialized, std::move(m_f));
+  mark_file_closed();
+}
+
+void ResourcesArscFile::apply_attribute_removals(
+    const std::vector<resources::StyleModificationSpec::Modification>&
+        modifications,
+    const std::vector<std::string>& /* unused */) {
+  resources::ResourceAttributeMap res_id_to_attrs_to_remove;
+  for (const auto& mod : modifications) {
+    if (mod.type ==
+        resources::StyleModificationSpec::ModificationType::REMOVE_ATTRIBUTE) {
+      res_id_to_attrs_to_remove[mod.resource_id].insert(
+          {mod.attribute_id.value(), mod});
+    }
+  }
+
+  auto remove_attribute =
+      [](android::ResTable_entry* entry_ptr,
+         const UnorderedMap<uint32_t,
+                            resources::StyleModificationSpec::Modification>&
+             attrs_to_modify,
+         arsc::ResComplexEntryBuilder& builder) {
+        apk::StyleCollector collector;
+        collector.begin_visit_entry(nullptr, nullptr, nullptr, entry_ptr);
+
+        for (const auto& [attr_id, attr_value] : collector.m_attributes) {
+          if (attrs_to_modify.count(attr_id) == 0) {
+            builder.add(attr_id, attr_value.get_data_type(),
+                        attr_value.get_value_bytes());
+          } else {
+            TRACE(RES, 9, "Removing attribute %u", attr_id);
+          }
+        }
+      };
+
+  modify_attributes(res_id_to_attrs_to_remove, remove_attribute);
 }
 
 ResourcesArscFile::~ResourcesArscFile() {}
