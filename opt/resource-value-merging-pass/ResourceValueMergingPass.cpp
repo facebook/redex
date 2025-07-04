@@ -68,12 +68,12 @@ void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
 
   auto resources = create_resource_reader(apk_dir);
   auto res_table = resources->load_res_table();
+  auto resource_files = resources->find_resources_files();
   auto style_info = res_table->load_style_info();
+
   resources::ReachabilityOptions options;
   StyleAnalysis style_analysis(apk_dir, conf.get_global_config(), options,
                                stores, UnorderedSet<uint32_t>());
-  std::string style_dot = style_analysis.dot(false, true);
-  TRACE(RES, 1, "StyleAnalysis dot output:\n%s", style_dot.c_str());
 
   const auto& ambiguous_styles = style_analysis.ambiguous_styles();
   const auto& directly_reachable_styles =
@@ -82,7 +82,16 @@ void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
       style_info, ambiguous_styles, directly_reachable_styles);
 
   print_resources(optimized_resources.deletion);
-  print_resources(optimized_resources.merging);
+
+  std::vector<resources::StyleModificationSpec::Modification> modifications;
+  for (const auto& [resource_id, attributes] :
+       UnorderedIterable(optimized_resources.deletion)) {
+    for (const auto& attribute_id : UnorderedIterable(attributes)) {
+      modifications.push_back(resources::StyleModificationSpec::Modification(
+          resource_id, attribute_id));
+    }
+  }
+  res_table->apply_attribute_removals(modifications, resource_files);
 }
 
 /**
