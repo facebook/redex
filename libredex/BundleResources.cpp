@@ -2867,6 +2867,11 @@ void ResourcesPbFile::apply_attribute_removals(
     }
   }
 }
+
+void ResourcesPbFile::apply_attribute_additions(
+    const std::vector<StyleModificationSpec::Modification>& /* modifications */,
+    const std::vector<std::string>& /* resources_pb_paths */) {}
+
 ResourcesPbFile::~ResourcesPbFile() {}
 
 #endif // HAS_PROTOBUF

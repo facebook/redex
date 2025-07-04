@@ -3225,4 +3225,9 @@ void ResourcesArscFile::apply_attribute_removals(
   modify_attributes(res_id_to_attrs_to_remove, remove_attribute);
 }
 
+void ResourcesArscFile::apply_attribute_additions(
+    const std::vector<
+        resources::StyleModificationSpec::Modification>& /* modifications */,
+    const std::vector<std::string>& /* resources_pb_paths */) {}
+
 ResourcesArscFile::~ResourcesArscFile() {}
