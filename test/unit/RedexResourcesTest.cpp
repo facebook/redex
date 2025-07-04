@@ -236,3 +236,35 @@ TEST(RedexResources, StyleResourceValueMixedComparisons) {
   resources::StyleResource::Value bytes_as_string_type(string_type, 12345);
   EXPECT_FALSE(bytes_value == bytes_as_string_type);
 }
+
+TEST(RedexResources, StyleResourceValueGetters) {
+  const uint8_t bytes_type = 1;
+  const uint32_t bytes_value = 0x12345678;
+  resources::StyleResource::Value bytes_val(bytes_type, bytes_value);
+  EXPECT_EQ(bytes_val.get_data_type(), bytes_type);
+  EXPECT_EQ(bytes_val.get_value_bytes(), bytes_value);
+  EXPECT_FALSE(bytes_val.get_value_string().has_value());
+  EXPECT_TRUE(bytes_val.get_styled_string().empty());
+  const uint8_t string_type = 2;
+  const std::string str_value = "test string";
+  resources::StyleResource::Value string_val(string_type, str_value);
+  EXPECT_EQ(string_val.get_data_type(), string_type);
+  EXPECT_EQ(string_val.get_value_bytes(), 0);
+  EXPECT_TRUE(string_val.get_value_string().has_value());
+  EXPECT_EQ(string_val.get_value_string().get(), str_value);
+  EXPECT_TRUE(string_val.get_styled_string().empty());
+  const uint8_t styled_type = 3;
+  std::vector<resources::StyleResource::Value::Span> spans = {
+      {"bold", 0, 5}, {"italic", 6, 10}};
+  resources::StyleResource::Value styled_val(styled_type, spans);
+  EXPECT_EQ(styled_val.get_data_type(), styled_type);
+  EXPECT_EQ(styled_val.get_value_bytes(), 0);
+  EXPECT_FALSE(styled_val.get_value_string().has_value());
+  EXPECT_EQ(styled_val.get_styled_string().size(), 2);
+  EXPECT_EQ(styled_val.get_styled_string()[0].tag, "bold");
+  EXPECT_EQ(styled_val.get_styled_string()[0].first_char, 0);
+  EXPECT_EQ(styled_val.get_styled_string()[0].last_char, 5);
+  EXPECT_EQ(styled_val.get_styled_string()[1].tag, "italic");
+  EXPECT_EQ(styled_val.get_styled_string()[1].first_char, 6);
+  EXPECT_EQ(styled_val.get_styled_string()[1].last_char, 10);
+}

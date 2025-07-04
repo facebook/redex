@@ -180,6 +180,13 @@ struct StyleResource {
       return styled_string == other.styled_string;
     }
 
+    uint8_t get_data_type() const { return data_type; }
+    uint32_t get_value_bytes() const { return value_bytes; }
+    const boost::optional<std::string>& get_value_string() const {
+      return value_string;
+    }
+    const std::vector<Span>& get_styled_string() const { return styled_string; }
+
    private:
     uint8_t data_type{0};
     uint32_t value_bytes{0};
