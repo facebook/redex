@@ -2051,3 +2051,86 @@ TEST(ResTableTypeDefiner, AddComplexEntryBuilder) {
   EXPECT_EQ(land_values[1].key, 0x010100d4);
   EXPECT_EQ(land_values[1].data, 0xFF000000);
 }
+
+TEST(ResourcesArscFile, ApplyAttributeRemovals) {
+  build_arsc_file_and_validate([&](const std::string& /* unused */,
+                                   const std::string& arsc_path) {
+    auto initial_dump = aapt_dump_and_parse(arsc_path);
+    uint32_t resource_id = 0x7f020000;
+    auto initial_values =
+        initial_dump.get_complex_values("xxhdpi", resource_id);
+    ASSERT_EQ(initial_values.size(), 2);
+    EXPECT_EQ(initial_values[0].key, 0x01010098);
+    EXPECT_EQ(initial_values[1].key, 0x010100d4);
+
+    {
+      ResourcesArscFile arsc_file(arsc_path);
+      std::vector<resources::StyleModificationSpec::Modification> modifications;
+      resources::StyleModificationSpec::Modification mod{resource_id,
+                                                         0x010100d4};
+      modifications.push_back(mod);
+
+      arsc_file.apply_attribute_removals(modifications, {});
+    }
+    {
+      auto modified_dump = aapt_dump_and_parse(arsc_path);
+      auto modified_values =
+          modified_dump.get_complex_values("xxhdpi", resource_id);
+      ASSERT_EQ(modified_values.size(), 1);
+      EXPECT_EQ(modified_values[0].key, 0x01010098);
+    }
+
+    {
+      ResourcesArscFile arsc_file(arsc_path);
+      std::vector<resources::StyleModificationSpec::Modification> modifications;
+      resources::StyleModificationSpec::Modification mod{resource_id,
+                                                         0x01010000};
+      modifications.push_back(mod);
+
+      arsc_file.apply_attribute_removals(modifications, {});
+    }
+    {
+      auto modified_dump = aapt_dump_and_parse(arsc_path);
+      auto modified_values =
+          modified_dump.get_complex_values("xxhdpi", resource_id);
+      ASSERT_EQ(modified_values.size(), 1);
+      EXPECT_EQ(modified_values[0].key, 0x01010098);
+    }
+
+    {
+      ResourcesArscFile arsc_file(arsc_path);
+      std::vector<resources::StyleModificationSpec::Modification> modifications;
+      resources::StyleModificationSpec::Modification mod{0x7f030000,
+                                                         0x01010098};
+      modifications.push_back(mod);
+
+      arsc_file.apply_attribute_removals(modifications, {});
+    }
+    {
+      auto modified_dump = aapt_dump_and_parse(arsc_path);
+      auto modified_values =
+          modified_dump.get_complex_values("xxhdpi", resource_id);
+      ASSERT_EQ(modified_values.size(), 1);
+      EXPECT_EQ(modified_values[0].key, 0x01010098);
+    }
+
+    {
+      ResourcesArscFile arsc_file(arsc_path);
+      std::vector<resources::StyleModificationSpec::Modification> modifications;
+
+      resources::StyleModificationSpec::Modification mod1{resource_id,
+                                                          0x01010098};
+      resources::StyleModificationSpec::Modification mod2{resource_id,
+                                                          0x01010099};
+      modifications.push_back(mod1);
+      modifications.push_back(mod2);
+
+      arsc_file.apply_attribute_removals(modifications, {});
+    }
+    {
+      auto final_dump = aapt_dump_and_parse(arsc_path);
+      auto final_values = final_dump.get_complex_values("xxhdpi", resource_id);
+      ASSERT_EQ(final_values.size(), 0);
+    }
+  });
+}
