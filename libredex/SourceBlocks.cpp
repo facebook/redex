@@ -1441,7 +1441,6 @@ size_t hot_callee_all_cold_callers(call_graph::NodeId node,
   }
 
   auto callee_method = const_cast<DexMethod*>(node->method());
-
   if (callee_method == nullptr || callee_method->get_code() == nullptr) {
     return 0;
   }
@@ -1455,13 +1454,13 @@ size_t hot_callee_all_cold_callers(call_graph::NodeId node,
     return 0;
   }
 
-  bool seen_caller = false;
-
   for (auto caller_edge : node->callers()) {
     auto caller = caller_edge->caller();
-    // Ignore Ghost Nodes
+    // If a node is connected to the ghost entry node, we should not count it as
+    // a violation because we can treat a ghost node's transition to its
+    // successors as hot
     if (caller->is_entry()) {
-      continue;
+      return 0;
     }
 
     auto caller_method = const_cast<DexMethod*>(caller->method());
@@ -1480,14 +1479,12 @@ size_t hot_callee_all_cold_callers(call_graph::NodeId node,
     const auto& source_block_bools_before_invoke =
         src_block_invoke_map.at_unsafe(caller_method)[invoke_insn];
     for (auto b : source_block_bools_before_invoke) {
-      seen_caller = true;
       if (b) {
         return 0;
       }
     }
   }
-  // if all the callers had cold entry blocks, this counts as a violations
-  return seen_caller ? 1 : 0;
+  return 1;
 }
 
 template <typename Fn>
