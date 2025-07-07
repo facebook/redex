@@ -3226,8 +3226,40 @@ void ResourcesArscFile::apply_attribute_removals(
 }
 
 void ResourcesArscFile::apply_attribute_additions(
-    const std::vector<
-        resources::StyleModificationSpec::Modification>& /* modifications */,
-    const std::vector<std::string>& /* resources_pb_paths */) {}
+    const std::vector<resources::StyleModificationSpec::Modification>&
+        modifications,
+    const std::vector<std::string>& /* resources_pb_paths */) {
+  resources::ResourceAttributeMap res_id_to_attrs_to_add;
+  for (const auto& mod : modifications) {
+    if (mod.type ==
+        resources::StyleModificationSpec::ModificationType::ADD_ATTRIBUTE) {
+      res_id_to_attrs_to_add[mod.resource_id].insert(
+          {mod.attribute_id.value(), mod});
+    }
+  }
+
+  auto add_attributes =
+      [](android::ResTable_entry* entry_ptr,
+         const UnorderedMap<uint32_t,
+                            resources::StyleModificationSpec::Modification>&
+             attrs_to_modify,
+         arsc::ResComplexEntryBuilder& builder) {
+        apk::StyleCollector collector;
+        collector.begin_visit_entry(nullptr, nullptr, nullptr, entry_ptr);
+
+        for (const auto& [attr_id, attr_value] : collector.m_attributes) {
+          builder.add(attr_id, attr_value.get_data_type(),
+                      attr_value.get_value_bytes());
+        }
+
+        for (const auto& [attr_id, mod] : UnorderedIterable(attrs_to_modify)) {
+          const auto& styled_value = mod.value.value();
+          builder.add(attr_id, styled_value.get_data_type(),
+                      styled_value.get_value_bytes());
+          TRACE(RES, 9, "Adding attribute %u", attr_id);
+        }
+      };
+  modify_attributes(res_id_to_attrs_to_add, add_attributes);
+}
 
 ResourcesArscFile::~ResourcesArscFile() {}
