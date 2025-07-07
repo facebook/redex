@@ -2134,3 +2134,36 @@ TEST(ResourcesArscFile, ApplyAttributeRemovals) {
     }
   });
 }
+TEST(ResComplexEntryBuilder, AttributeSorting) {
+  arsc::ResComplexEntryBuilder builder;
+  builder.set_key_string_index(0);
+  builder.set_parent_id(0);
+
+  uint32_t high_attr_id = 0x01010200;
+  uint32_t mid_attr_id = 0x01010150;
+  uint32_t low_attr_id = 0x01010100;
+
+  builder.add(high_attr_id, android::Res_value::TYPE_INT_COLOR_RGB8,
+              0xFF0000FF);
+  builder.add(mid_attr_id, android::Res_value::TYPE_INT_COLOR_RGB8, 0xFF00FF00);
+  builder.add(low_attr_id, android::Res_value::TYPE_INT_COLOR_RGB8, 0xFFFF0000);
+
+  android::Vector<char> serialized;
+  builder.serialize(&serialized);
+
+  ASSERT_GT(serialized.size(), 0);
+
+  android::ResTable_map_entry map_entry;
+  std::memcpy(&map_entry, serialized.array(),
+              sizeof(android::ResTable_map_entry));
+  ASSERT_EQ(map_entry.count, 3);
+
+  std::vector<android::ResTable_map> maps(3);
+  std::memcpy(maps.data(),
+              serialized.array() + sizeof(android::ResTable_map_entry),
+              3 * sizeof(android::ResTable_map));
+
+  EXPECT_EQ(maps[0].name.ident, low_attr_id);
+  EXPECT_EQ(maps[1].name.ident, mid_attr_id);
+  EXPECT_EQ(maps[2].name.ident, high_attr_id);
+}

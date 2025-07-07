@@ -680,6 +680,8 @@ void ResTableTypeDefiner::serialize(android::Vector<char>* out) {
 }
 
 void ResComplexEntryBuilder::serialize(android::Vector<char>* out) {
+  std::sort(m_attributes.begin(), m_attributes.end(),
+            [](const auto& a, const auto& b) { return a.first < b.first; });
   android::ResTable_map_entry entry;
   entry.size = sizeof(android::ResTable_map_entry);
   entry.flags = android::ResTable_entry::FLAG_COMPLEX;
