@@ -710,10 +710,8 @@ RedexContext::get_baseline_profile_method_map() {
     std::vector<std::string> class_and_method;
     boost::split(class_and_method, descriptor, boost::is_any_of("."));
     always_assert(class_and_method.size() == 2);
-    auto method_name_to_method = UnorderedMap<std::string, DexMethodRef*>();
-    method_name_to_method.emplace(class_and_method[1], method);
-    baseline_profile_method_map.emplace(class_and_method[0],
-                                        method_name_to_method);
+    baseline_profile_method_map[class_and_method[0]][class_and_method[1]] =
+        method;
   }
   return baseline_profile_method_map;
 }

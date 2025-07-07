@@ -172,6 +172,15 @@ class MethodProfiles {
   // Try to resolve previously unresolved lines
   void process_unresolved_lines();
 
+  struct ManualProfileLine {
+    std::string raw_line;
+    std::vector<std::string> config_names;
+    std::string manual_filename;
+  };
+
+  const std::vector<ManualProfileLine>& get_unresolved_manual_profile_lines()
+      const;
+
   UnorderedSet<dex_member_refs::MethodDescriptorTokens>
   get_unresolved_method_descriptor_tokens() const;
 
@@ -206,6 +215,9 @@ class MethodProfiles {
   };
   std::vector<ParsedMain> m_unresolved_lines;
   std::vector<ParsedMain> m_baseline_profile_unresolved_lines;
+  std::vector<ManualProfileLine> m_unresolved_manual_lines;
+  UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>
+      m_baseline_profile_method_map;
   ParsingMode m_mode{NONE};
   // A map from interaction ID to the number of times that interaction was
   // triggered. This can be used to compare relative prevalence of different
@@ -226,11 +238,11 @@ class MethodProfiles {
   void parse_manual_files(
       const UnorderedMap<std::string, std::vector<std::string>>&
           manual_file_to_config_names);
-  void parse_manual_file(
-      const std::string& manual_filename,
-      const UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>&
-          baseline_profile_method_map,
-      const std::vector<std::string>& config_names);
+  void parse_manual_file(const std::string& manual_filename,
+                         const std::vector<std::string>& config_names);
+  const UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>&
+  get_baseline_profile_method_map(bool recompute);
+  bool parse_manual_file_line(const ManualProfileLine& manual_profile_line);
 
   // Read a line of data (not a header)
   bool parse_line(const std::string& line, bool baseline_profile_variant);
