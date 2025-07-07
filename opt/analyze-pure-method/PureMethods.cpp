@@ -54,10 +54,10 @@ AnalyzePureMethodsPass::analyze_and_set_pure_methods(Scope& scope) {
       scope, /* create_init_class_insns */ false, method_override_graph.get());
 
   Stats stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
-    Stats stats;
+    Stats method_stats;
     if (!method->get_code() || method->rstate.no_optimizations() ||
         method->rstate.immutable_getter()) {
-      return stats;
+      return method_stats;
     }
     auto code = method->get_code();
     bool is_method_pure = false;
@@ -77,18 +77,18 @@ AnalyzePureMethodsPass::analyze_and_set_pure_methods(Scope& scope) {
 
     if (!is_method_pure && method->rstate.pure_method()) {
       method->rstate.reset_pure_method();
-      stats.number_of_pure_methods_invalidated++;
+      method_stats.number_of_pure_methods_invalidated++;
     }
 
     if (!is_method_pure) {
-      return stats;
+      return method_stats;
     }
 
     TRACE(CSE, 5, "[analyze_and_get_pure_methods] adding method %s\n",
           SHOW(method));
-    stats.number_of_pure_methods_detected++;
+    method_stats.number_of_pure_methods_detected++;
     method->rstate.set_pure_method();
-    return stats;
+    return method_stats;
   });
 
   return stats;
