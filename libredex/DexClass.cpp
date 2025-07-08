@@ -1231,6 +1231,8 @@ void DexClass::load_class_data_item(
     always_assert_type_log(is_static(access_flags), INVALID_DEX,
                            "Static field not marked static");
     DexField* df = static_cast<DexField*>(idx->get_fieldidx(ndex));
+    always_assert_type_log(df->get_class() == get_type(), INVALID_DEX,
+                           "Referenced field does not belong to class");
     std::unique_ptr<DexEncodedValue> ev = nullptr;
     if (it != used.end()) {
       ev = std::move(*it);
@@ -1250,6 +1252,8 @@ void DexClass::load_class_data_item(
     always_assert_type_log(!is_static(access_flags), INVALID_DEX,
                            "Non-Static field marked static");
     DexField* df = static_cast<DexField*>(idx->get_fieldidx(ndex));
+    always_assert_type_log(df->get_class() == get_type(), INVALID_DEX,
+                           "Referenced field does not belong to class");
     df->make_concrete(access_flags);
     m_ifields.push_back(df);
   }
@@ -1267,6 +1271,8 @@ void DexClass::load_class_data_item(
     uint32_t code_off = read_uleb128(&encd);
     // Find method in method index, returns same pointer for same method.
     DexMethod* dm = static_cast<DexMethod*>(idx->get_methodidx(ndex));
+    always_assert_type_log(dm->get_class() == get_type(), INVALID_DEX,
+                           "Referenced method does not belong to class");
     std::unique_ptr<DexCode> dc = DexCode::get_dex_code(idx, code_off);
     if (dc && dc->get_debug_item()) {
       dc->get_debug_item()->bind_positions(dm, m_source_file);
