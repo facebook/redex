@@ -13,6 +13,8 @@
 #include <map>
 #include <vector>
 
+using ::testing::ElementsAre;
+using ::testing::ElementsAreArray;
 using ::testing::SizeIs;
 using ::testing::UnorderedElementsAre;
 using ::testing::UnorderedElementsAreArray;
@@ -45,90 +47,75 @@ TEST_F(DeterministicContainersTest, unordered_any_set_empty) {
 }
 
 TEST_F(DeterministicContainersTest, UnorderedIterable_map) {
-  UnorderedMap<int, int> map{{1, 42}, {2, 23}};
+  constexpr std::array<std::pair<int, int>, 2u> map_values{{{1, 42}, {2, 23}}};
+  UnorderedMap<int, int> map{map_values[0], map_values[1]};
   std::vector<std::pair<int, int>> vec;
   for (auto& p : UnorderedIterable(map)) {
     vec.push_back(p);
   }
-  std::sort(vec.begin(), vec.end(),
-            [](const auto& a, const auto& b) { return a.first < b.first; });
-  ASSERT_THAT(vec, SizeIs(2u));
-  EXPECT_EQ(1, vec[0].first);
-  EXPECT_EQ(2, vec[1].first);
+  EXPECT_THAT(vec, UnorderedElementsAreArray(map_values));
 }
 
 TEST_F(DeterministicContainersTest, UnorderedIterable_multimap) {
-  UnorderedMultiMap<int, int> map{{1, 42}, {1, 45}, {2, 23}};
+  constexpr std::array<std::pair<int, int>, 3u> map_values{
+      {{1, 42}, {1, 45}, {2, 23}}};
+  UnorderedMultiMap<int, int> map{map_values[0], map_values[1], map_values[2]};
   std::vector<std::pair<int, int>> vec;
   for (auto& p : UnorderedIterable(map)) {
     vec.push_back(p);
   }
-  std::sort(vec.begin(), vec.end(), [](const auto& a, const auto& b) {
-    return a.first == b.first ? a.second < b.second : a.first < b.first;
-  });
-  ASSERT_THAT(vec, SizeIs(3));
-  EXPECT_EQ(1, vec[0].first);
-  EXPECT_EQ(42, vec[0].second);
-  EXPECT_EQ(1, vec[1].first);
-  EXPECT_EQ(45, vec[1].second);
-  EXPECT_EQ(2, vec[2].first);
-  EXPECT_EQ(23, vec[2].second);
+  EXPECT_THAT(vec, UnorderedElementsAreArray(map_values));
 }
 
 TEST_F(DeterministicContainersTest, UnorderedIterable_set) {
-  UnorderedSet<int> set({23, 42});
+  constexpr std::array<int, 2u> set_values{23, 42};
+  UnorderedSet<int> set({set_values[0], set_values[1]});
   std::vector<int> vec;
   for (int a : UnorderedIterable(set)) {
     vec.push_back(a);
   }
-  ASSERT_THAT(vec, SizeIs(2u));
-  EXPECT_EQ(23 + 42,
-            unordered_accumulate(set, 0, [](int a, int b) { return a + b; }));
+  EXPECT_THAT(vec, UnorderedElementsAreArray(set_values));
 }
 
 TEST_F(DeterministicContainersTest, unordered_to_ordered_map) {
-  UnorderedMap<int, int> map{{1, 42}, {2, 23}};
+  constexpr std::array<std::pair<int, int>, 2u> map_values{{{1, 42}, {2, 23}}};
+  UnorderedMap<int, int> map{map_values[0], map_values[1]};
   auto ordered = unordered_to_ordered(
       map, [](const auto& p, const auto& q) { return p.first < q.first; });
-  ASSERT_THAT(ordered, SizeIs(2u));
-  EXPECT_EQ(1, ordered[0].first);
-  EXPECT_EQ(2, ordered[1].first);
+  EXPECT_THAT(ordered, ElementsAreArray(map_values));
 }
 
 TEST_F(DeterministicContainersTest, unordered_to_ordered_multimap) {
-  UnorderedMultiMap<int, int> map{{1, 42}, {1, 45}, {2, 23}};
+  constexpr std::array<std::pair<int, int>, 3u> map_values{
+      {{1, 42}, {1, 45}, {2, 23}}};
+  UnorderedMultiMap<int, int> map{map_values[0], map_values[1], map_values[2]};
   auto ordered = unordered_to_ordered(map, [](const auto& a, const auto& b) {
     return a.first == b.first ? a.second < b.second : a.first < b.first;
   });
-  ASSERT_THAT(ordered, SizeIs(3u));
-  EXPECT_EQ(1, ordered[0].first);
-  EXPECT_EQ(42, ordered[0].second);
-  EXPECT_EQ(1, ordered[1].first);
-  EXPECT_EQ(45, ordered[1].second);
-  EXPECT_EQ(2, ordered[2].first);
+  EXPECT_THAT(ordered, ElementsAreArray(map_values));
 }
 
 TEST_F(DeterministicContainersTest, unordered_to_ordered_set) {
-  UnorderedSet<int> set{1, 11, 7, 3, 5};
+  constexpr std::array<int, 5u> set_values{1, 3, 5, 7, 11};
+  UnorderedSet<int> set{set_values[0], set_values[1], set_values[2],
+                        set_values[3], set_values[4]};
   auto ordered = unordered_to_ordered(set, [](int a, int b) { return a < b; });
-  EXPECT_EQ(std::vector<int>({1, 3, 5, 7, 11}), ordered);
+  EXPECT_THAT(ordered, ElementsAreArray(set_values));
 }
 
 TEST_F(DeterministicContainersTest, unordered_to_ordered_keys) {
-  UnorderedMap<int, int> map{{1, 42}, {2, 23}};
+  constexpr std::array<int, 2u> key_values{1, 2};
+  UnorderedMap<int, int> map{{key_values[0], 42}, {key_values[1], 23}};
   auto keys = unordered_to_ordered_keys(map);
-  ASSERT_THAT(keys, SizeIs(2u));
-  EXPECT_EQ(1, keys[0]);
-  EXPECT_EQ(2, keys[1]);
+  EXPECT_THAT(keys, ElementsAreArray(key_values));
 }
 
 TEST_F(DeterministicContainersTest, unordered_to_ordered_keys_multimap) {
-  UnorderedMultiMap<int, int> map{{1, 42}, {1, 45}, {2, 23}};
+  constexpr std::array<int, 3u> key_values{1, 1, 2};
+  UnorderedMultiMap<int, int> map{
+      {key_values[0], 42}, {key_values[1], 45}, {key_values[2], 23}};
   auto keys = unordered_to_ordered_keys(map);
-  ASSERT_THAT(keys, SizeIs(3u));
-  EXPECT_EQ(1, keys[0]);
-  EXPECT_EQ(1, keys[1]);
-  EXPECT_EQ(2, keys[2]);
+  EXPECT_THAT(keys, ElementsAreArray(key_values));
 }
 
 TEST_F(DeterministicContainersTest, unordered_accumulate) {
@@ -186,56 +173,60 @@ TEST_F(DeterministicContainersTest, unordered_none_of_multimap) {
 }
 
 TEST_F(DeterministicContainersTest, unordered_for_each) {
-  UnorderedMap<int, int> map{{1, 42}, {2, 23}};
+  constexpr std::array<std::pair<int, int>, 2u> map_values{{{1, 42}, {2, 23}}};
+  UnorderedMap<int, int> map{map_values[0], map_values[1]};
   UnorderedMap<int, int> copy;
   unordered_for_each(map, [&](auto& p) { copy.insert(p); });
   ASSERT_THAT(copy, SizeIs(2u));
-  EXPECT_EQ(1 + 2, unordered_accumulate(copy, 0, [](int a, const auto& p) {
-              return a + p.first;
-            }));
-  EXPECT_EQ(42 + 23, unordered_accumulate(copy, 0, [](int a, const auto& p) {
-              return a + p.second;
-            }));
+  EXPECT_EQ(copy.at(map_values[0].first), map_values[0].second);
+  EXPECT_EQ(copy.at(map_values[1].first), map_values[1].second);
 }
 
 TEST_F(DeterministicContainersTest, unordered_for_each_multimap) {
-  UnorderedMultiMap<int, int> map{{1, 42}, {1, 45}, {2, 23}, {2, 25}};
+  constexpr std::array<std::pair<int, int>, 4u> map_values{
+      {{1, 42}, {1, 45}, {2, 23}, {2, 25}}};
+  UnorderedMultiMap<int, int> map{map_values[0], map_values[1], map_values[2],
+                                  map_values[3]};
   UnorderedMultiMap<int, int> copy;
   unordered_for_each(map, [&](auto& p) { copy.insert(p); });
   ASSERT_THAT(copy, SizeIs(4u));
-  EXPECT_EQ(1 + 1 + 2 + 2,
-            unordered_accumulate(
-                copy, 0, [](int a, const auto& p) { return a + p.first; }));
-  EXPECT_EQ(42 + 45 + 23 + 25,
-            unordered_accumulate(
-                copy, 0, [](int a, const auto& p) { return a + p.second; }));
+  auto iterator_key_1 = copy.unordered_equal_range(1);
+  const std::vector<std::pair<int, int>> key_1{iterator_key_1.first,
+                                               iterator_key_1.second};
+  EXPECT_THAT(key_1, UnorderedElementsAreArray({map_values[0], map_values[1]}));
+  auto iterator_key_2 = copy.unordered_equal_range(2);
+  const std::vector<std::pair<int, int>> key_2{iterator_key_2.first,
+                                               iterator_key_2.second};
+  EXPECT_THAT(key_2, UnorderedElementsAreArray({map_values[2], map_values[3]}));
 }
 
 TEST_F(DeterministicContainersTest, unordered_copy) {
-  UnorderedMap<int, int> map{{1, 42}, {2, 23}};
+  constexpr std::array<std::pair<int, int>, 2u> map_values{{{1, 42}, {2, 23}}};
+  UnorderedMap<int, int> map{map_values[0], map_values[1]};
   std::vector<std::pair<int, int>> copy(2);
   unordered_copy(map, copy.begin());
-  ASSERT_THAT(copy, SizeIs(2u));
-  EXPECT_EQ(1 + 2, copy[0].first + copy[1].first);
+  EXPECT_THAT(copy, UnorderedElementsAreArray(map_values));
 }
 
 TEST_F(DeterministicContainersTest, unordered_copy_multimap) {
-  UnorderedMultiMap<int, int> map{{1, 42}, {1, 45}, {2, 23}, {2, 25}};
   constexpr std::array<std::pair<int, int>, 4u> map_values{
       {{1, 42}, {1, 45}, {2, 23}, {2, 25}}};
+  UnorderedMultiMap<int, int> map{map_values[0], map_values[1], map_values[2],
+                                  map_values[3]};
   std::vector<std::pair<int, int>> copy(4);
   unordered_copy(map, copy.begin());
-  ASSERT_THAT(copy, SizeIs(4u));
   EXPECT_THAT(copy, UnorderedElementsAreArray(map_values));
 }
 
 TEST_F(DeterministicContainersTest, unordered_copy_if) {
-  UnorderedMap<int, int> map{{1, 42}, {2, 23}};
+  constexpr int threshold = 42;
+  constexpr std::array<std::pair<int, int>, 1u> int_over_equal_threshold{
+      {{1, 42}}};
+  UnorderedMap<int, int> map{int_over_equal_threshold[0], {2, 23}};
   std::vector<std::pair<int, int>> copy(1);
-  unordered_copy_if(map, copy.begin(), [](auto& p) { return p.second >= 42; });
-  ASSERT_THAT(copy, SizeIs(1u));
-  EXPECT_EQ(1, copy[0].first);
-  EXPECT_EQ(42, copy[0].second);
+  unordered_copy_if(map, copy.begin(),
+                    [](auto& p) { return p.second >= threshold; });
+  EXPECT_THAT(copy, UnorderedElementsAreArray(int_over_equal_threshold));
 }
 
 TEST_F(DeterministicContainersTest, unordered_copy_if_multimap) {
@@ -250,23 +241,27 @@ TEST_F(DeterministicContainersTest, unordered_copy_if_multimap) {
   std::vector<std::pair<int, int>> copy(3);
   unordered_copy_if(map, copy.begin(),
                     [](auto& p) { return p.second >= threshold; });
-  ASSERT_THAT(copy, SizeIs(3u));
   EXPECT_THAT(copy, UnorderedElementsAreArray(int_over_equal_threshold));
 }
 
 TEST_F(DeterministicContainersTest, unordered_erase_if) {
+  constexpr int threshold = 42;
   UnorderedMap<int, int> map{{1, 42}, {2, 23}};
-  unordered_erase_if(map, [](auto& p) { return p.second >= 42; });
+  unordered_erase_if(map, [](auto& p) { return p.second >= threshold; });
   ASSERT_THAT(map, SizeIs(1u));
   EXPECT_EQ(2, unordered_any(map)->first);
   EXPECT_EQ(23, unordered_any(map)->second);
 }
 
 TEST_F(DeterministicContainersTest, unordered_erase_if_multimap) {
-  UnorderedMultiMap<int, int> map{{1, 42}, {1, 45}, {2, 23}, {2, 25}};
-  unordered_erase_if(map, [](auto& p) { return p.second == 45; });
-  unordered_erase_if(map, [](auto& p) { return p.second == 42; });
-  unordered_erase_if(map, [](auto& p) { return p.second == 25; });
+  std::array<int, 3u> removed_values{42, 45, 25};
+  UnorderedMultiMap<int, int> map{{1, removed_values[0]},
+                                  {1, removed_values[1]},
+                                  {2, 23},
+                                  {2, removed_values[2]}};
+  for (const int& value : removed_values) {
+    unordered_erase_if(map, [&](auto& p) { return p.second == value; });
+  }
   ASSERT_THAT(map, SizeIs(1u));
   EXPECT_EQ(2, unordered_any(map)->first);
   EXPECT_EQ(23, unordered_any(map)->second);
@@ -274,13 +269,13 @@ TEST_F(DeterministicContainersTest, unordered_erase_if_multimap) {
 
 TEST_F(DeterministicContainersTest, unordered_transform) {
   UnorderedMap<int, int> map{{1, 42}, {2, 23}};
+  constexpr std::array<std::pair<int, int>, 2u> transformed_values{
+      {{1 + 1, 42 + 1}, {2 + 1, 23 + 1}}};
   std::vector<std::pair<int, int>> copy(2);
   unordered_transform(map, copy.begin(), [](auto& p) {
     return std::make_pair(p.first + 1, p.second + 1);
   });
-  ASSERT_THAT(copy, SizeIs(2u));
-  EXPECT_EQ(1 + 1 + 2 + 1, copy[0].first + copy[1].first);
-  EXPECT_EQ(42 + 1 + 23 + 1, copy[0].second + copy[1].second);
+  EXPECT_THAT(copy, UnorderedElementsAreArray(transformed_values));
 }
 
 TEST_F(DeterministicContainersTest, unordered_transform_multimap) {
@@ -291,43 +286,40 @@ TEST_F(DeterministicContainersTest, unordered_transform_multimap) {
   unordered_transform(map, copy.begin(), [](auto& p) {
     return std::make_pair(p.first + 1, p.second + 1);
   });
-  ASSERT_THAT(copy, SizeIs(4u));
   EXPECT_THAT(copy, UnorderedElementsAreArray(transformed_values));
 }
 
 TEST_F(DeterministicContainersTest, insert_unordered_iterable) {
-  UnorderedMap<int, int> map{{1, 42}, {2, 23}};
+  constexpr std::array<std::pair<int, int>, 2u> map_values{{{1, 42}, {2, 23}}};
+  UnorderedMap<int, int> map{map_values[0], map_values[1]};
   UnorderedMap<int, int> copy;
   insert_unordered_iterable(copy, map);
+  std::vector<std::pair<int, int>> copied_values;
+  unordered_for_each(copy, [&](auto& p) { copied_values.push_back(p); });
   ASSERT_THAT(copy, SizeIs(2u));
-  EXPECT_EQ(1 + 2, unordered_accumulate(copy, 0, [](int a, const auto& p) {
-              return a + p.first;
-            }));
-  EXPECT_EQ(42 + 23, unordered_accumulate(copy, 0, [](int a, const auto& p) {
-              return a + p.second;
-            }));
+  EXPECT_THAT(copied_values, UnorderedElementsAreArray(map_values));
 }
 
 TEST_F(DeterministicContainersTest, insert_unordered_iterable_multimap) {
-  UnorderedMultiMap<int, int> map{{1, 42}, {1, 45}, {2, 23}, {2, 25}};
+  constexpr std::array<std::pair<int, int>, 4u> map_values{
+      {{1, 42}, {1, 45}, {2, 23}, {2, 25}}};
+  UnorderedMultiMap<int, int> map{map_values[0], map_values[1], map_values[2],
+                                  map_values[3]};
   UnorderedMultiMap<int, int> copy;
   insert_unordered_iterable(copy, map);
+  std::vector<std::pair<int, int>> copied_values;
+  unordered_for_each(copy, [&](auto& p) { copied_values.push_back(p); });
   ASSERT_THAT(copy, SizeIs(4u));
-  EXPECT_EQ(1 + 1 + 2 + 2,
-            unordered_accumulate(
-                copy, 0, [](int a, const auto& p) { return a + p.first; }));
-  EXPECT_EQ(42 + 45 + 23 + 25,
-            unordered_accumulate(
-                copy, 0, [](int a, const auto& p) { return a + p.second; }));
+  EXPECT_THAT(copied_values, UnorderedElementsAreArray(map_values));
 }
 
 TEST_F(DeterministicContainersTest, insert_unordered_iterable_vector) {
-  UnorderedSet<int> set{1, 11, 7, 3, 5};
+  constexpr std::array<int, 5u> set_values{{1, 11, 7, 3, 5}};
+  UnorderedSet<int> set{set_values[0], set_values[1], set_values[2],
+                        set_values[3], set_values[4]};
   std::vector<int> copy;
   insert_unordered_iterable(copy, copy.end(), set);
-  ASSERT_THAT(copy, SizeIs(5u));
-  EXPECT_EQ(1 + 11 + 7 + 3 + 5,
-            unordered_accumulate(set, 0, [](int a, int b) { return a + b; }));
+  EXPECT_THAT(copy, UnorderedElementsAreArray(set_values));
 }
 
 TEST_F(DeterministicContainersTest, unordered_min_element_set) {
@@ -515,19 +507,19 @@ TEST_F(DeterministicContainersTest, UnorderedBag_unordered_accumulate) {
 
 TEST_F(DeterministicContainersTest, UnorderedBag_unordered_transform) {
   UnorderedBag<int> bag{1, 2, 3};
+  constexpr std::array<int, 3u> transformed_values{1 * 2, 2 * 2, 3 * 2};
   std::vector<int> result(3);
   unordered_transform(bag, result.begin(), [](int val) { return val * 2; });
-  EXPECT_EQ(12, unordered_accumulate(
-                    result, 0, [](int acc, int val) { return acc + val; }));
+  EXPECT_THAT(result, UnorderedElementsAreArray(transformed_values));
 }
 
 TEST_F(DeterministicContainersTest, UnorderedBag_unordered_copy) {
-  UnorderedBag<int> bag{1, 2, 3, 4};
+  constexpr std::array<int, 4u> bag_values{1, 2, 3, 4};
+  UnorderedBag<int> bag{bag_values[0], bag_values[1], bag_values[2],
+                        bag_values[3]};
   std::vector<int> copy(4);
   unordered_copy(bag, copy.begin());
-  ASSERT_THAT(copy, SizeIs(4u));
-  EXPECT_EQ(10, unordered_accumulate(
-                    copy, 0, [](int acc, int val) { return acc + val; }));
+  EXPECT_THAT(copy, UnorderedElementsAreArray(bag_values));
 }
 
 TEST_F(DeterministicContainersTest, UnorderedBag_unordered_min_element) {
@@ -543,11 +535,16 @@ TEST_F(DeterministicContainersTest, UnorderedBag_unordered_max_element) {
 }
 
 TEST_F(DeterministicContainersTest, UnorderedBag_unordered_erase_if) {
-  UnorderedBag<int> bag{42, 23, 7, 11, 5};
-  unordered_erase_if(bag, [](int x) { return x > 20; });
+  constexpr int threshold = 20;
+  constexpr std::array<int, 3u> int_below_equal_threshold{5, 7, 11};
+  UnorderedBag<int> bag{int_below_equal_threshold[0],
+                        int_below_equal_threshold[1],
+                        int_below_equal_threshold[2], 42, 23};
+  std::vector<int> bag_values;
+  unordered_erase_if(bag, [](int x) { return x > threshold; });
+  unordered_for_each(bag, [&](auto& x) { bag_values.push_back(x); });
   ASSERT_THAT(bag, SizeIs(3u));
-  EXPECT_EQ(23, unordered_accumulate(
-                    bag, 0, [](int acc, int val) { return acc + val; }));
+  EXPECT_THAT(bag_values, UnorderedElementsAreArray(int_below_equal_threshold));
 }
 
 TEST_F(DeterministicContainersTest, UnorderedBag_unordered_min_element_custom) {
@@ -576,7 +573,10 @@ TEST_F(DeterministicContainersTest,
   unordered_erase_if(bag, [](int x) { return x % 3 == 0; });
   ASSERT_THAT(bag, SizeIs(7u));
   auto ordered = unordered_to_ordered(bag, [](int a, int b) { return a < b; });
-  EXPECT_EQ(std::vector<int>({1, 2, 4, 5, 7, 8, 10}), ordered);
+  EXPECT_THAT(ordered, ElementsAre(1, 2, 4, 5, 7, 8, 10))
+      << "Output of unordered_to_ordered is expected to contain only integers "
+         "that are within the range of 1 to 10 and not divisible by 3 in "
+         "ascending order";
 }
 
 TEST_F(DeterministicContainersTest, unordered_find_map) {
