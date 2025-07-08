@@ -268,3 +268,85 @@ TEST(RedexResources, StyleResourceValueGetters) {
   EXPECT_EQ(styled_val.get_styled_string()[1].first_char, 6);
   EXPECT_EQ(styled_val.get_styled_string()[1].last_char, 10);
 }
+
+TEST(RedexResources, StyleInfoGetRoots) {
+  auto add_vertex = [](resources::StyleInfo& style_info, uint32_t id) {
+    return boost::add_vertex(resources::StyleInfo::Node{id}, style_info.graph);
+  };
+
+  auto add_edge = [](resources::StyleInfo& style_info,
+                     resources::StyleInfo::vertex_t parent,
+                     resources::StyleInfo::vertex_t child) {
+    boost::add_edge(parent, child, style_info.graph);
+  };
+
+  {
+    resources::StyleInfo style_info;
+    auto roots = style_info.get_roots();
+    EXPECT_TRUE(roots.empty());
+  }
+
+  {
+    resources::StyleInfo style_info;
+    auto vertex = add_vertex(style_info, 0x7f010001);
+    auto roots = style_info.get_roots();
+    EXPECT_EQ(roots.size(), 1);
+    EXPECT_TRUE(roots.find(vertex) != roots.end());
+  }
+
+  {
+    resources::StyleInfo style_info;
+    auto parent = add_vertex(style_info, 0x7f010001);
+    auto child1 = add_vertex(style_info, 0x7f010002);
+    auto child2 = add_vertex(style_info, 0x7f010003);
+
+    add_edge(style_info, parent, child1);
+    add_edge(style_info, parent, child2);
+
+    auto roots = style_info.get_roots();
+
+    EXPECT_EQ(roots.size(), 1);
+    EXPECT_TRUE(roots.find(parent) != roots.end());
+    EXPECT_TRUE(roots.find(child1) == roots.end());
+    EXPECT_TRUE(roots.find(child2) == roots.end());
+  }
+
+  {
+    resources::StyleInfo style_info;
+    auto parent1 = add_vertex(style_info, 0x7f010001);
+    auto parent2 = add_vertex(style_info, 0x7f010002);
+    auto child1 = add_vertex(style_info, 0x7f010003);
+    auto child2 = add_vertex(style_info, 0x7f010004);
+
+    add_edge(style_info, parent1, child1);
+    add_edge(style_info, parent2, child2);
+
+    auto roots = style_info.get_roots();
+
+    std::cout << "Test 4 roots size: " << roots.size() << std::endl;
+    for (auto v : UnorderedIterable(roots)) {
+      std::cout << "Root vertex: " << v
+                << " with ID: " << style_info.graph[v].id << std::endl;
+    }
+
+    EXPECT_EQ(roots.size(), 2);
+    EXPECT_TRUE(roots.find(parent1) != roots.end());
+    EXPECT_TRUE(roots.find(parent2) != roots.end());
+    EXPECT_TRUE(roots.find(child1) == roots.end());
+    EXPECT_TRUE(roots.find(child2) == roots.end());
+  }
+
+  {
+    resources::StyleInfo style_info;
+    auto vertex1 = add_vertex(style_info, 0x7f010001);
+    auto vertex2 = add_vertex(style_info, 0x7f010002);
+    auto vertex3 = add_vertex(style_info, 0x7f010003);
+
+    add_edge(style_info, vertex1, vertex2);
+    add_edge(style_info, vertex2, vertex3);
+    add_edge(style_info, vertex3, vertex1);
+
+    auto roots = style_info.get_roots();
+    EXPECT_TRUE(roots.empty());
+  }
+}

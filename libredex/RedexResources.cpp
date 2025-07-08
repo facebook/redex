@@ -747,4 +747,30 @@ std::string StyleInfo::print_as_dot(
   oss << "}" << std::endl;
   return oss.str();
 }
-} // namespace resources
+
+UnorderedSet<StyleInfo::vertex_t> StyleInfo::get_roots() const {
+  auto vertices = boost::vertices(graph);
+  UnorderedSet<vertex_t> vertices_with_incoming;
+  UnorderedSet<vertex_t> root_vertices;
+
+  for (auto vertex_iter = vertices.first; vertex_iter != vertices.second;
+       ++vertex_iter) {
+    auto out_edges = boost::out_edges(*vertex_iter, graph);
+    for (auto edge_iter = out_edges.first; edge_iter != out_edges.second;
+         ++edge_iter) {
+      vertices_with_incoming.insert(boost::target(*edge_iter, graph));
+    }
+  }
+
+  // Vertices that don't have incoming edges are roots
+  for (auto vertex_iter = vertices.first; vertex_iter != vertices.second;
+       ++vertex_iter) {
+    if (vertices_with_incoming.find(*vertex_iter) ==
+        vertices_with_incoming.end()) {
+      root_vertices.insert(*vertex_iter);
+    }
+  }
+
+  return root_vertices;
+}
+}; // namespace resources

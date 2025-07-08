@@ -161,27 +161,11 @@ OptimizableResources ResourceValueMergingPass::get_resource_optimization(
     const UnorderedSet<uint32_t>& ambiguous_styles,
     const UnorderedSet<uint32_t>& directly_reachable_styles) {
   OptimizableResources optimizable_candidates;
+  auto root_vertices = style_info.get_roots();
 
-  auto vertices = boost::vertices(style_info.graph);
-  UnorderedSet<resources::StyleInfo::vertex_t> vertices_with_incoming;
-
-  for (auto vertex_iter = vertices.first; vertex_iter != vertices.second;
-       ++vertex_iter) {
-    auto out_edges = boost::out_edges(*vertex_iter, style_info.graph);
-    for (auto edge_iter = out_edges.first; edge_iter != out_edges.second;
-         ++edge_iter) {
-      vertices_with_incoming.insert(
-          boost::target(*edge_iter, style_info.graph));
-    }
-  }
-
-  for (auto vertex_iter = vertices.first; vertex_iter != vertices.second;
-       ++vertex_iter) {
-    if (vertices_with_incoming.find(*vertex_iter) ==
-        vertices_with_incoming.end()) {
-      find_resource_optimization_candidates(
-          *vertex_iter, style_info, optimizable_candidates, ambiguous_styles);
-    }
+  for (const auto& vertex : UnorderedIterable(root_vertices)) {
+    find_resource_optimization_candidates(
+        vertex, style_info, optimizable_candidates, ambiguous_styles);
   }
   return remove_unoptimizable_resources(optimizable_candidates,
                                         directly_reachable_styles);

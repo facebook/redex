@@ -237,6 +237,10 @@ struct StyleInfo {
       const UnorderedMap<uint32_t, UnorderedMap<std::string, std::string>>&
           node_options,
       bool exclude_nodes_with_no_edges = false);
+
+  // Returns the set of root vertices in the graph. These are typically the
+  // top-level styles in the style hierarchy.
+  UnorderedSet<vertex_t> get_roots() const;
 };
 
 // Modification specification for styles in APK and App Bundle containers.
