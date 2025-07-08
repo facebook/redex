@@ -549,10 +549,13 @@ class EntryFlattener : public arsc::ResourceTableVisitor {
   std::vector<android::Res_value> m_values;
 };
 
-// Reads complex entries and their attributes/values into convenient form.
+// Reads a single entry; complex entries and their attributes/values will be
+// organized into a convenient form.
 class StyleCollector : public arsc::ResourceTableVisitor {
  public:
-  StyleCollector() {}
+  explicit StyleCollector(android::ResTable_entry* entry) {
+    begin_visit_entry(nullptr, nullptr, nullptr, entry);
+  }
   ~StyleCollector() override {}
 
   bool visit_map_entry(android::ResTable_package* /* unused */,
@@ -640,8 +643,7 @@ void TableSnapshot::union_style_and_parent_attribute_values_impl(
     auto& ev = pair.second;
     if (!arsc::is_empty(ev)) {
       auto entry = (android::ResTable_entry*)ev.getKey();
-      StyleCollector collector;
-      collector.begin_visit_entry(nullptr, nullptr, nullptr, entry);
+      StyleCollector collector(entry);
       for (auto parent_id : collector.m_parents) {
         union_style_and_parent_attribute_values_impl(parent_id, options, seen,
                                                      out);
@@ -672,8 +674,7 @@ resources::StyleResource read_style_resource(
     uint32_t id,
     android::ResTable_config* config,
     android::ResTable_map_entry* entry) {
-  StyleCollector collector;
-  collector.begin_visit_entry(nullptr, nullptr, nullptr, entry);
+  StyleCollector collector(entry);
   auto parent_id dtohl(entry->parent.ident);
   return {id, *config, parent_id, std::move(collector.m_attributes)};
 }
@@ -3209,8 +3210,7 @@ void ResourcesArscFile::apply_attribute_removals(
                             resources::StyleModificationSpec::Modification>&
              attrs_to_modify,
          arsc::ResComplexEntryBuilder& builder) {
-        apk::StyleCollector collector;
-        collector.begin_visit_entry(nullptr, nullptr, nullptr, entry_ptr);
+        apk::StyleCollector collector(entry_ptr);
 
         for (const auto& [attr_id, attr_value] : collector.m_attributes) {
           if (attrs_to_modify.count(attr_id) == 0) {
@@ -3244,8 +3244,7 @@ void ResourcesArscFile::apply_attribute_additions(
                             resources::StyleModificationSpec::Modification>&
              attrs_to_modify,
          arsc::ResComplexEntryBuilder& builder) {
-        apk::StyleCollector collector;
-        collector.begin_visit_entry(nullptr, nullptr, nullptr, entry_ptr);
+        apk::StyleCollector collector(entry_ptr);
 
         for (const auto& [attr_id, attr_value] : collector.m_attributes) {
           builder.add(attr_id, attr_value.get_data_type(),
