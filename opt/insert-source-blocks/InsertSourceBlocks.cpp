@@ -593,23 +593,6 @@ struct Injector {
       const NodeIdFn& nodeid_fn) {
 
     auto topo_comparator = [&](call_graph::NodeId l, call_graph::NodeId r) {
-      if (l->is_entry() || r->is_exit()) {
-        return true;
-      }
-      if (r->is_entry() || l->is_exit()) {
-        return false;
-      }
-
-      auto method_l = l->method();
-      auto method_r = r->method();
-
-      if (!method_l) {
-        return true;
-      }
-      if (!method_r) {
-        return false;
-      }
-
       return metadata.at(l) < metadata.at(r);
     };
 
@@ -619,7 +602,6 @@ struct Injector {
     size_t insertion_order_id = 0;
     auto start_node = call_graph.entry();
 
-    nodeid_fn(start_node);
     visited.insert(start_node);
     process_queue.insert(start_node);
 
@@ -716,7 +698,8 @@ struct Injector {
       SimpleSMIStore& smi,
       std::mutex& failed_methods_mutex,
       bool serialize,
-      bool exc_inject) {
+      bool exc_inject,
+      bool must_be_cold = false) {
     auto code = method->get_code();
     if (code != nullptr) {
       auto access_method = is_traditional_access_method(method);
@@ -764,7 +747,7 @@ struct Injector {
 
         res = source_blocks::insert_custom_source_blocks(
             sb_name, &cfg, profiles.first, serialize, exc_inject,
-            use_fuzzing_values);
+            use_fuzzing_values, must_be_cold);
       } else {
         res = source_blocks::insert_source_blocks(sb_name, &cfg, profiles.first,
                                                   serialize, exc_inject);
@@ -812,7 +795,7 @@ struct Injector {
         call_graph::single_callee_graph(*method_override_graph, scope));
 
     UnorderedMap<call_graph::NodeId, MethodFuzzingMetadata> method_metadata;
-
+    UnorderedMap<IRInstruction*, bool> caller_hit_lookup;
     // Set up and count indegrees
     source_blocks::impl::visit_by_levels(
         &*call_graph, [&](call_graph::NodeId node) {
@@ -824,24 +807,73 @@ struct Injector {
 
     InsertOnlyConcurrentSet<DexMethod*> seen_methods;
     InsertResult res;
-
     topo_traverse_callgraph(
         method_metadata, *call_graph, [&](call_graph::NodeId node) {
           if (node->is_entry() || node->is_exit() || !node->method()) {
             return;
           }
+          bool must_be_cold = false;
+          bool all_cold_callers = true;
+          bool seen_caller = false;
+          // Checks all the callers to see if there is at least one hot source
+          // block before the invoke instruction, if there is, then the callee
+          // is hot
+          for (const auto& edge : node->callers()) {
+            auto* caller = edge->caller();
+            if (caller->is_entry() || caller->is_exit() || !caller->method()) {
+              continue;
+            }
+            auto caller_invoke_insn = edge->invoke_insn();
+            if (caller_hit_lookup.find(caller_invoke_insn) ==
+                caller_hit_lookup.end()) {
+              continue;
+            }
+            seen_caller = true;
+            if (caller_hit_lookup.at(caller_invoke_insn)) {
+              // At least one caller has a hot source block before the invoke
+              all_cold_callers = false;
+            }
+          }
+
+          must_be_cold = (seen_caller && all_cold_callers);
           auto method = const_cast<DexMethod*>(node->method());
-          res += insert_source_blocks_into_method(method, failed_methods, smi,
-                                                  failed_methods_mutex,
-                                                  serialize, exc_inject);
+          res += insert_source_blocks_into_method(
+              method, failed_methods, smi, failed_methods_mutex, serialize,
+              exc_inject, must_be_cold);
           seen_methods.insert(method);
+
+          // Update the caller_hit_lookup map with the hit status of the
+          // block with new source blocks
+          auto code = method->get_code();
+          if (code != nullptr) {
+            auto& cfg = code->cfg();
+            for (auto block : cfg.blocks()) {
+              SourceBlock* prev_sb = nullptr;
+              for (auto it = block->begin(); it != block->end(); it++) {
+                if (it->type == MFLOW_OPCODE) {
+                  if (opcode::is_an_invoke(it->insn->opcode())) {
+                    if (prev_sb && prev_sb->vals_size > 0) {
+                      auto* invoke_insn = it->insn;
+                      bool hit = prev_sb->get_val(0).value_or(0) > 0;
+                      caller_hit_lookup[invoke_insn] =
+                          std::max(caller_hit_lookup[invoke_insn], hit);
+                    }
+                  }
+                }
+
+                if (it->type == MFLOW_SOURCE_BLOCK) {
+                  prev_sb = it->src_block.get();
+                }
+              }
+            }
+          }
         });
 
     // The call graph may not contain every single method possible, therefore
     // a loop over all methods in the scope is needed again to fill in the
     // source blocks of methods that were not seen in the call graph
     res += walk::parallel::methods<InsertResult>(scope, [&](DexMethod* method) {
-      if (seen_methods.get(method) == nullptr) {
+      if (seen_methods.count(method) == 0) {
         return insert_source_blocks_into_method(method, failed_methods, smi,
                                                 failed_methods_mutex, serialize,
                                                 exc_inject);

@@ -266,7 +266,8 @@ InsertResult insert_custom_source_blocks(
     const std::vector<ProfileData>& profiles = {},
     bool serialize = true,
     bool insert_after_excs = false,
-    bool enable_fuzzing = false);
+    bool enable_fuzzing = false,
+    bool must_be_cold = false);
 
 UnorderedMap<Block*, uint32_t> insert_custom_source_blocks_get_indegrees(
     const DexString* method,
