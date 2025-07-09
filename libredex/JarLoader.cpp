@@ -935,14 +935,11 @@ bool decompress_class(jar_entry& file,
 
 constexpr size_t kStartBufferSize = 128 * 1024;
 
-bool process_jar_entries(
-    const DexLocation* location,
-    std::vector<jar_entry>& files,
-    const uint8_t* mapping,
-    const size_t map_size,
-    Scope* classes,
-    const attribute_hook_t& attr_hook,
-    const jar_loader::duplicate_allowed_hook_t& is_allowed) {
+template <typename Fn>
+bool process_jar_entries(std::vector<jar_entry>& files,
+                         const uint8_t* mapping,
+                         const size_t map_size,
+                         const Fn& fn) {
   ssize_t bufsize = kStartBufferSize;
   std::unique_ptr<uint8_t[]> outbuffer = std::make_unique<uint8_t[]>(bufsize);
   constexpr std::string_view kClassEndString = ".class";
@@ -968,10 +965,28 @@ bool process_jar_entries(
       return false;
     }
 
-    if (!parse_class(outbuffer.get(), bufsize, classes, attr_hook, is_allowed,
-                     location)) {
+    if (!fn(outbuffer.get(), bufsize)) {
       return false;
     }
+  }
+  return true;
+}
+
+template <typename Fn>
+bool process_jar_impl(const uint8_t* mapping, size_t size, const Fn& fn) {
+  pk_cdir_end pce;
+  std::vector<jar_entry> files;
+  if (!find_central_directory(mapping, size, pce)) {
+    return false;
+  }
+  if (!validate_pce(pce, size)) {
+    return false;
+  }
+  if (!get_jar_entries(mapping, size, pce, files)) {
+    return false;
+  }
+  if (!process_jar_entries(files, mapping, size, fn)) {
+    return false;
   }
   return true;
 }
@@ -986,28 +1001,10 @@ bool default_duplicate_allow_fn(const DexClass* c, const std::string&) {
 
 } // namespace jar_loader
 
-bool process_jar(const DexLocation* location,
-                 const uint8_t* mapping,
+bool process_jar(const uint8_t* mapping,
                  size_t size,
-                 Scope* classes,
-                 const attribute_hook_t& attr_hook,
-                 const jar_loader::duplicate_allowed_hook_t& is_allowed) {
-  pk_cdir_end pce;
-  std::vector<jar_entry> files;
-  if (!find_central_directory(mapping, size, pce)) {
-    return false;
-  }
-  if (!validate_pce(pce, size)) {
-    return false;
-  }
-  if (!get_jar_entries(mapping, size, pce, files)) {
-    return false;
-  }
-  if (!process_jar_entries(location, files, mapping, size, classes, attr_hook,
-                           is_allowed)) {
-    return false;
-  }
-  return true;
+                 const std::function<bool(uint8_t*, size_t)>& on_class) {
+  return process_jar_impl(mapping, size, on_class);
 }
 
 bool load_jar_file(const DexLocation* location,
@@ -1025,8 +1022,11 @@ bool load_jar_file(const DexLocation* location,
   }
 
   auto mapping = reinterpret_cast<const uint8_t*>(file.const_data());
-  if (!process_jar(location, mapping, file.size(), classes, attr_hook,
-                   is_allowed)) {
+  auto on_class = [classes, &attr_hook, &is_allowed, location](uint8_t* buffer,
+                                                               size_t size) {
+    return parse_class(buffer, size, classes, attr_hook, is_allowed, location);
+  };
+  if (!process_jar_impl(mapping, file.size(), on_class)) {
     std::cerr << "error: cannot process jar: " << location->get_file_name()
               << "\n";
     return false;
