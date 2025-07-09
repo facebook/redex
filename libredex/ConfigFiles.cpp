@@ -492,8 +492,7 @@ void ConfigFiles::ensure_agg_method_stats_loaded() {
   std::vector<std::string> baseline_profile_csv_filenames;
   get_json_config().get("baseline_profile_agg_method_stats_files", {},
                         baseline_profile_csv_filenames);
-  if (csv_filenames.empty() && baseline_profile_csv_filenames.empty() &&
-      !baseline_profiles_has_manual_profiles()) {
+  if (csv_filenames.empty() && baseline_profile_csv_filenames.empty()) {
     return;
   }
   m_method_profiles->initialize(csv_filenames, baseline_profile_csv_filenames,
@@ -735,14 +734,6 @@ ConfigFiles::get_baseline_profile_configs() {
   always_assert(m_baseline_profile_config_list->count(
       baseline_profiles::DEFAULT_BASELINE_PROFILE_CONFIG_NAME));
   return *m_baseline_profile_config_list;
-}
-
-bool ConfigFiles::baseline_profiles_has_manual_profiles() {
-  const auto& baseline_profile_configs =
-      UnorderedIterable(get_baseline_profile_configs());
-  return std::any_of(
-      baseline_profile_configs.begin(), baseline_profile_configs.end(),
-      [](const auto& p) { return !p.second.manual_files.empty(); });
 }
 
 const baseline_profiles::BaselineProfileConfig&

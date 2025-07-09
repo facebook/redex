@@ -239,70 +239,10 @@ void MethodProfiles::apply_manual_profile(
   }
 }
 
-// Returns true if the line was unresolved
-bool MethodProfiles::parse_manual_file_line(
-    const ManualProfileLine& manual_profile_line) {
-  const auto& raw_current_line = manual_profile_line.raw_line;
-  const auto& config_names = manual_profile_line.config_names;
-  const auto& manual_filename = manual_profile_line.manual_filename;
-  // Extract flags
-  boost::smatch flag_matches;
-  boost::regex flag_expression("^([HSP]{0,3})(L.+)");
-  always_assert_log(
-      boost::regex_search(raw_current_line, flag_matches, flag_expression,
-                          boost::match_default),
-      "Line %s did not match the regular expression \"^([HSP]*)L.+\"",
-      raw_current_line.c_str());
-  auto flags = flag_matches[1].str();
-  auto current_line = flag_matches[2].str();
-  std::vector<std::string> method_and_class;
-  boost::split_regex(method_and_class, current_line, boost::regex("->"));
-  always_assert(method_and_class.size() == 1 || method_and_class.size() == 2);
-  // This is not a method, so do nothing
-  if (method_and_class.size() != 2) {
-    return false;
-  }
-  const auto& baseline_profile_method_map =
-      get_baseline_profile_method_map(false);
-  // If the line does not contains wildcard characters, do a map look up
-  if (current_line.find('*') == std::string::npos &&
-      current_line.find('?') == std::string::npos) {
-    auto class_it = baseline_profile_method_map.find(method_and_class[0]);
-    if (class_it != baseline_profile_method_map.end()) {
-      auto method_it = class_it->second.find(method_and_class[1]);
-      if (method_it != class_it->second.end()) {
-        apply_manual_profile(method_it->second, flags, manual_filename,
-                             config_names);
-        return false;
-      }
-    }
-    return true;
-  } else {
-    // Otherwise, do a regex search
-    auto classregex = boost::regex(wildcard_to_regex(method_and_class[0]));
-    auto methodregex = boost::regex(wildcard_to_regex(method_and_class[1]));
-    for (const auto& [classname, method_name_to_method] :
-         UnorderedIterable(baseline_profile_method_map)) {
-      boost::smatch class_matches;
-      if (!boost::regex_search(classname, class_matches, classregex)) {
-        continue;
-      }
-      for (const auto& [method_name, method_ref] :
-           UnorderedIterable(method_name_to_method)) {
-        boost::smatch method_matches;
-        if (boost::regex_search(method_name, method_matches, methodregex)) {
-          apply_manual_profile(method_ref, flags, manual_filename,
-                               config_names);
-        }
-      }
-    }
-    // We need to add wildcard lines regardless
-    return true;
-  }
-}
-
 void MethodProfiles::parse_manual_file(
     const std::string& manual_filename,
+    const UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>&
+        baseline_profile_method_map,
     const std::vector<std::string>& config_names) {
   std::ifstream manual_file(manual_filename);
   always_assert_log(manual_file.good(),
@@ -312,7 +252,7 @@ void MethodProfiles::parse_manual_file(
   m_manual_profile_interactions[manual_filename] = AllInteractions();
   for (const auto& config_name : config_names) {
     m_baseline_manual_interactions[config_name] =
-        &(m_manual_profile_interactions.at(manual_filename));
+        &(m_manual_profile_interactions[manual_filename]);
   }
   while (std::getline(manual_file, current_line)) {
     if (current_line.empty() || current_line[0] == '#') {
@@ -322,29 +262,65 @@ void MethodProfiles::parse_manual_file(
     if (hash_pos != std::string::npos) {
       current_line = current_line.substr(0, hash_pos);
     }
-    ManualProfileLine manual_profile_line = {current_line, config_names,
-                                             manual_filename};
-    if (parse_manual_file_line(manual_profile_line)) {
-      m_unresolved_manual_lines.emplace_back(std::move(manual_profile_line));
+    // Extract flags
+    boost::smatch flag_matches;
+    boost::regex flag_expression("^([HSP]{0,3})(L.+)");
+    always_assert_log(
+        boost::regex_search(current_line, flag_matches, flag_expression,
+                            boost::match_default),
+        "Line %s did not match the regular expression \"^([HSP]*)L.+\"",
+        current_line.c_str());
+    auto flags = flag_matches[1].str();
+    current_line = flag_matches[2].str();
+    std::vector<std::string> method_and_class;
+    boost::split_regex(method_and_class, current_line, boost::regex("->"));
+    always_assert(method_and_class.size() == 1 || method_and_class.size() == 2);
+    // This is not a method, so do nothing
+    if (method_and_class.size() != 2) {
+      continue;
+    }
+    // If the line contains wildcard characters, do a regex search
+    if (current_line.find('*') == std::string::npos &&
+        current_line.find('?') == std::string::npos) {
+      auto class_it = baseline_profile_method_map.find(method_and_class[0]);
+      if (class_it != baseline_profile_method_map.end()) {
+        auto method_it = class_it->second.find(method_and_class[1]);
+        if (method_it != class_it->second.end()) {
+          apply_manual_profile(method_it->second, flags, manual_filename,
+                               config_names);
+        }
+      }
+    } else {
+      // Otherwise, just do a map lookup
+      auto classregex = boost::regex(wildcard_to_regex(method_and_class[0]));
+      auto methodregex = boost::regex(wildcard_to_regex(method_and_class[1]));
+      for (const auto& [classname, method_name_to_method] :
+           UnorderedIterable(baseline_profile_method_map)) {
+        boost::smatch class_matches;
+        if (!boost::regex_search(classname, class_matches, classregex)) {
+          continue;
+        }
+        for (const auto& [method_name, method_ref] :
+             UnorderedIterable(method_name_to_method)) {
+          boost::smatch method_matches;
+          if (boost::regex_search(method_name, method_matches, methodregex)) {
+            apply_manual_profile(method_ref, flags, manual_filename,
+                                 config_names);
+          }
+        }
+      }
     }
   }
-}
-
-const UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>&
-MethodProfiles::get_baseline_profile_method_map(bool recompute) {
-  if (m_baseline_profile_method_map.empty() || recompute) {
-    m_baseline_profile_method_map = g_redex->get_baseline_profile_method_map();
-  }
-  return m_baseline_profile_method_map;
 }
 
 void MethodProfiles::parse_manual_files(
     const UnorderedMap<std::string, std::vector<std::string>>&
         manual_file_to_config_names) {
   Timer t("parse_manual_files");
+  auto baseline_profile_method_map = g_redex->get_baseline_profile_method_map();
   for (const auto& [manual_file, config_name] :
        UnorderedIterable(manual_file_to_config_names)) {
-    parse_manual_file(manual_file, config_name);
+    parse_manual_file(manual_file, baseline_profile_method_map, config_name);
   }
 }
 
@@ -684,26 +660,9 @@ boost::optional<uint32_t> MethodProfiles::get_interaction_count(
   }
 }
 
-const std::vector<MethodProfiles::ManualProfileLine>&
-MethodProfiles::get_unresolved_manual_profile_lines() const {
-  return m_unresolved_manual_lines;
-}
-
 void MethodProfiles::process_unresolved_lines() {
   process_unresolved_lines(false);
   process_unresolved_lines(true);
-  if (!m_unresolved_manual_lines.empty()) {
-    get_baseline_profile_method_map(true);
-    for (auto it = m_unresolved_manual_lines.begin();
-         it < m_unresolved_manual_lines.end();) {
-      const auto& manual_profile_line = *it;
-      if (parse_manual_file_line(manual_profile_line)) {
-        ++it;
-      } else {
-        it = m_unresolved_manual_lines.erase(it);
-      }
-    }
-  }
 }
 
 void MethodProfiles::process_unresolved_lines(bool baseline_profile_variant) {

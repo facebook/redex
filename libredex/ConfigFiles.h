@@ -200,8 +200,6 @@ struct ConfigFiles {
   const baseline_profiles::BaselineProfileConfig&
   get_default_baseline_profile_config();
 
-  bool baseline_profiles_has_manual_profiles();
-
   bool get_did_use_bzl_baseline_profile_config();
 
   std::string get_preprocessed_baseline_profile_file(
