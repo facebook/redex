@@ -164,8 +164,8 @@ struct StyleResource {
     Value(uint8_t dt, uint32_t bytes) : data_type(dt), value_bytes(bytes) {}
     Value(uint8_t dt, const std::string& str)
         : data_type(dt), value_string(str) {}
-    Value(uint8_t dt, std::vector<Span> styled)
-        : data_type(dt), styled_string(std::move(styled)) {}
+    Value(uint8_t dt, const std::string& str, std::vector<Span> styled)
+        : data_type(dt), value_string(str), styled_string(std::move(styled)) {}
 
     bool operator==(const Value& other) const {
       if (data_type != other.data_type) {

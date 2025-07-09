@@ -2635,7 +2635,10 @@ void process_style_entry_item(uint32_t attr_id,
     add_attribute(android::Res_value::TYPE_STRING, item.raw_str().value());
   } else if (item.has_styled_str()) {
     const auto& styled_string = create_styled_string(item);
-    add_attribute(android::Res_value::TYPE_STRING, styled_string);
+    style_entry.attributes.insert(
+        {attr_id,
+         StyleResource::Value(android::Res_value::TYPE_STRING,
+                              item.styled_str().value(), styled_string)});
   } else if (item.has_prim()) {
     const auto [data_type, value] =
         convert_primitive_to_res_value_data(item.prim());
