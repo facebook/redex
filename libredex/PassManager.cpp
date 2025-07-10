@@ -1355,9 +1355,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   check_unique_deobfuscated.run_initially(scope);
 
   VisualizerHelper graph_visualizer(conf);
-  ViolationsTracking violatios_tracking(
-      pm_config->violations_tracking ||
-      (assessor_config->run_after_each_pass && g_redex->instrument_mode));
+  ViolationsTracking violatios_tracking(pm_config->violations_tracking);
 
   sanitizers::lsan_do_recoverable_leak_check();
 
