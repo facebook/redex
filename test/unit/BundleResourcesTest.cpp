@@ -735,3 +735,122 @@ TEST(BundleResources, TestRemoveStyleAttribute) {
     }
   });
 }
+
+TEST(BundleResources, TestAddStyleAttribute) {
+  setup_resources_and_run([&](const std::string&, BundleResources* resources) {
+    using Value = resources::StyleResource::Value;
+    auto res_table = resources->load_res_table();
+    const auto& paths = resources->find_resources_files();
+    auto style_map = res_table->get_style_map();
+
+    std::vector<resources::StyleModificationSpec::Modification> modifications;
+    UnorderedMap<uint32_t, UnorderedSet<uint32_t>> original_attributes;
+
+    struct StyleModData {
+      std::string theme_name;
+      uint32_t attr_id;
+      Value attr_value;
+
+      StyleModData(const std::string& name, uint32_t id, Value&& value)
+          : theme_name(name), attr_id(id), attr_value(std::move(value)) {}
+    };
+
+    const std::vector<StyleModData> style_modifications = {
+        {"CustomText.Prickly", kEnabledAttrId,
+         Value(android::Res_value::TYPE_INT_BOOLEAN, true)},
+        {"CustomText.Unused", kTextStyleAttrId,
+         Value(android::Res_value::TYPE_STRING,
+               std::string("Test String Value"))},
+        {"CustomText", kTextColorAttrId,
+         Value(android::Res_value::TYPE_REFERENCE, 0x7f030001)},
+        {"ChooseMe", kBackgroundAttrId,
+         Value(android::Res_value::TYPE_INT_COLOR_ARGB8, 0xFF0000FF)},
+        {"ChildWithParentAttr", kTextSizeAttrId,
+         Value(android::Res_value::TYPE_INT_COLOR_ARGB8, 0xFFFF0000)},
+        {"CustomText.Prickly", kFloatAttrId,
+         Value(android::Res_value::TYPE_FLOAT, 0x3F800000)},
+        {"CustomText.Unused", kDimensionAttrId,
+         Value(android::Res_value::TYPE_DIMENSION, 0x00000064)},
+        {"CustomText", kFractionAttrId,
+         Value(android::Res_value::TYPE_FRACTION, 0x00000032)}};
+
+    for (const auto& mod : style_modifications) {
+      auto style_ids = res_table->get_res_ids_by_name(mod.theme_name);
+      EXPECT_THAT(style_ids, SizeIs(1));
+      uint32_t style_id = style_ids[0];
+
+      modifications.push_back(resources::StyleModificationSpec::Modification(
+          style_id, mod.attr_id, mod.attr_value));
+    }
+
+    res_table->apply_attribute_additions(modifications, paths);
+
+    auto new_res_table = resources->load_res_table();
+    resources::StyleMap updated_style_map = new_res_table->get_style_map();
+
+    for (const auto& mod : modifications) {
+      uint32_t resource_id = mod.resource_id;
+      uint32_t attr_id = mod.attribute_id.value();
+
+      EXPECT_THAT(updated_style_map, Contains(Key(resource_id)))
+          << "Style ID 0x" << std::hex << resource_id << std::dec
+          << " not found in style map";
+
+      const std::vector<resources::StyleResource>& new_style_resources =
+          updated_style_map[resource_id];
+      EXPECT_THAT(new_style_resources, Not(IsEmpty()))
+          << "No style resources found for resource ID 0x" << std::hex
+          << resource_id;
+
+      EXPECT_THAT(new_style_resources[0].attributes, Contains(Key(attr_id)))
+          << "Attribute 0x" << std::hex << attr_id << std::dec
+          << " was not added to style 0x" << std::hex << resource_id;
+
+      const auto& added_attr = new_style_resources[0].attributes.at(attr_id);
+
+      if (attr_id == kEnabledAttrId) {
+        EXPECT_EQ(added_attr.get_data_type(),
+                  android::Res_value::TYPE_INT_BOOLEAN);
+        EXPECT_TRUE(added_attr.get_value_bytes() != 0);
+      }
+
+      if (attr_id == kTextStyleAttrId) {
+        EXPECT_EQ(added_attr.get_data_type(), android::Res_value::TYPE_STRING);
+        EXPECT_TRUE(added_attr.get_value_string().has_value());
+        EXPECT_EQ(added_attr.get_value_string().value(), "Test String Value");
+      } else if (attr_id == kTextColorAttrId) {
+        EXPECT_EQ(added_attr.get_data_type(),
+                  android::Res_value::TYPE_REFERENCE);
+        EXPECT_EQ(added_attr.get_value_bytes(), 0x7f030001);
+      } else if (attr_id == kBackgroundAttrId) {
+        EXPECT_EQ(added_attr.get_data_type(),
+                  android::Res_value::TYPE_INT_COLOR_ARGB8);
+        EXPECT_EQ(added_attr.get_value_bytes(), 0xFF0000FF);
+      } else if (attr_id == kTextSizeAttrId) {
+        EXPECT_EQ(added_attr.get_data_type(),
+                  android::Res_value::TYPE_INT_COLOR_ARGB8);
+        EXPECT_EQ(added_attr.get_value_bytes(), 0xFFFF0000);
+      } else if (attr_id == kFloatAttrId) {
+        EXPECT_EQ(added_attr.get_data_type(), android::Res_value::TYPE_FLOAT);
+        EXPECT_EQ(added_attr.get_value_bytes(), 0x3F800000);
+      } else if (attr_id == kDimensionAttrId) {
+        EXPECT_EQ(added_attr.get_data_type(),
+                  android::Res_value::TYPE_DIMENSION);
+        EXPECT_EQ(added_attr.get_value_bytes(), 0x00000064);
+      } else if (attr_id == kFractionAttrId) {
+        EXPECT_EQ(added_attr.get_data_type(),
+                  android::Res_value::TYPE_FRACTION);
+        EXPECT_EQ(added_attr.get_value_bytes(), 0x00000032);
+      }
+
+      for (uint32_t original_attr_id :
+           UnorderedIterable(original_attributes[resource_id])) {
+        EXPECT_THAT(new_style_resources[0].attributes,
+                    Contains(Key(original_attr_id)))
+            << "Original attribute 0x" << std::hex << original_attr_id
+            << std::dec << " is missing from style 0x" << std::hex
+            << resource_id;
+      }
+    }
+  });
+}

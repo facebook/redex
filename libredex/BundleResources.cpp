@@ -2783,7 +2783,7 @@ bool modify_attribute_from_style_resource(
   return is_file_modified;
 }
 
-void apply_attribute_removals_for_file(
+void apply_attribute_modification_for_file(
     const ResourceAttributeMap& modifications,
     const std::string& resource_path,
     const std::function<
@@ -2857,9 +2857,9 @@ void ResourcesPbFile::apply_attribute_removals(
 
   for (const auto& resource_path : resources_pb_paths) {
     TRACE(RES, 9, "Examining resource file: %s", resource_path.c_str());
-    apply_attribute_removals_for_file(removals, resource_path,
-                                      attribute_removal_function,
-                                      modified_resources);
+    apply_attribute_modification_for_file(removals, resource_path,
+                                          attribute_removal_function,
+                                          modified_resources);
   }
 
   for (const auto& [resource_id, attr_map] :
@@ -2871,9 +2871,138 @@ void ResourcesPbFile::apply_attribute_removals(
   }
 }
 
+void add_attribute_to_style(aapt::pb::Item* item,
+                            const StyleResource::Value& value) {
+  item->clear_prim();
+  item->clear_str();
+  item->clear_raw_str();
+  item->clear_styled_str();
+  item->clear_file();
+
+  if (value.get_data_type() == android::Res_value::TYPE_REFERENCE) {
+    auto* ref = item->mutable_ref();
+    ref->set_id(value.get_value_bytes());
+    ref->set_type(aapt::pb::Reference_Type::Reference_Type_REFERENCE);
+    return;
+  }
+
+  if (value.get_data_type() == android::Res_value::TYPE_STRING &&
+      value.get_value_string()) {
+    if (!value.get_styled_string().empty()) {
+      auto* styled_str = item->mutable_styled_str();
+      styled_str->set_value(value.get_value_string().value());
+
+      for (const auto& span : value.get_styled_string()) {
+        auto* pb_span = styled_str->add_span();
+        pb_span->set_tag(span.tag);
+        pb_span->set_first_char(span.first_char);
+        pb_span->set_last_char(span.last_char);
+      }
+    } else {
+      auto* str = item->mutable_str();
+      str->set_value(value.get_value_string().value());
+    }
+    return;
+  }
+
+  auto value_bytes = value.get_value_bytes();
+  auto* prim = item->mutable_prim();
+
+  switch (value.get_data_type()) {
+  case android::Res_value::TYPE_INT_BOOLEAN:
+    prim->set_boolean_value(value_bytes != 0);
+    break;
+  case android::Res_value::TYPE_INT_COLOR_ARGB8:
+    prim->set_color_argb8_value(value_bytes);
+    break;
+  case android::Res_value::TYPE_INT_COLOR_RGB8:
+    prim->set_color_rgb8_value(value_bytes);
+    break;
+  case android::Res_value::TYPE_INT_COLOR_ARGB4:
+    prim->set_color_argb4_value(value_bytes);
+    break;
+  case android::Res_value::TYPE_INT_COLOR_RGB4:
+    prim->set_color_rgb4_value(value_bytes);
+    break;
+  case android::Res_value::TYPE_INT_DEC:
+    prim->set_int_decimal_value(value_bytes);
+    break;
+  case android::Res_value::TYPE_INT_HEX:
+    prim->set_int_hexadecimal_value(value_bytes);
+    break;
+  case android::Res_value::TYPE_FLOAT:
+    prim->set_float_value(value_bytes);
+    break;
+  case android::Res_value::TYPE_DIMENSION:
+    prim->set_dimension_value(value_bytes);
+    break;
+  case android::Res_value::TYPE_FRACTION:
+    prim->set_fraction_value(value_bytes);
+    break;
+  default:
+    TRACE(RES, 9, "Unsupported primitive type: %d", value.get_data_type());
+    break;
+  }
+}
+
+bool attribute_addition_function(
+    aapt::pb::Style* style,
+    const UnorderedMap<uint32_t, StyleModificationSpec::Modification>&
+        attributes_to_add,
+    UnorderedMap<uint32_t, StyleModificationSpec::Modification>&
+        modified_attributes) {
+  if (attributes_to_add.empty()) {
+    return false;
+  }
+
+  for (const auto& [attr_id, mod] : UnorderedIterable(attributes_to_add)) {
+
+    auto* new_entry = style->add_entry();
+    auto* key = new_entry->mutable_key();
+    key->set_id(attr_id);
+    key->set_type(aapt::pb::Reference_Type::Reference_Type_REFERENCE);
+
+    add_attribute_to_style(new_entry->mutable_item(), mod.value.value());
+
+    modified_attributes.insert({attr_id, mod});
+    TRACE(RES, 9, "        Added new attribute: id=0x%x", attr_id);
+  }
+
+  reorder_style(style);
+
+  return true;
+}
+
 void ResourcesPbFile::apply_attribute_additions(
-    const std::vector<StyleModificationSpec::Modification>& /* modifications */,
-    const std::vector<std::string>& /* resources_pb_paths */) {}
+    const std::vector<StyleModificationSpec::Modification>& modifications,
+    const std::vector<std::string>& resources_pb_paths) {
+  ResourceAttributeMap modified_resources;
+
+  ResourceAttributeMap additions;
+  for (const auto& mod : modifications) {
+    if (mod.type == StyleModificationSpec::ModificationType::ADD_ATTRIBUTE) {
+      additions[mod.resource_id].insert({mod.attribute_id.value(), mod});
+    }
+  }
+
+  for (const auto& resource_path : resources_pb_paths) {
+    TRACE(RES, 9, "Examining resource file for additions: %s",
+          resource_path.c_str());
+    apply_attribute_modification_for_file(additions, resource_path,
+                                          attribute_addition_function,
+                                          modified_resources);
+  }
+
+  if (traceEnabled(RES, 8)) {
+    for (const auto& [resource_id, attr_map] :
+         UnorderedIterable(modified_resources)) {
+      for (const auto& [attr_id, mod] : UnorderedIterable(attr_map)) {
+        TRACE(RES, 8, "Successfully added attribute 0x%x to resource 0x%x",
+              attr_id, resource_id);
+      }
+    }
+  }
+}
 
 ResourcesPbFile::~ResourcesPbFile() {}
 
