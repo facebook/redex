@@ -304,6 +304,7 @@ bool MethodProfiles::parse_manual_file_line(
 void MethodProfiles::parse_manual_file(
     const std::string& manual_filename,
     const std::vector<std::string>& config_names) {
+  Timer t("Parsing Manual File " + manual_filename);
   std::ifstream manual_file(manual_filename);
   always_assert_log(manual_file.good(),
                     "Could not open manual profile at %s",
@@ -333,6 +334,7 @@ void MethodProfiles::parse_manual_file(
 const UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>&
 MethodProfiles::get_baseline_profile_method_map(bool recompute) {
   if (m_baseline_profile_method_map.empty() || recompute) {
+    Timer t("Recomputing baseline profile method map");
     m_baseline_profile_method_map = g_redex->get_baseline_profile_method_map();
   }
   return m_baseline_profile_method_map;
@@ -690,9 +692,13 @@ MethodProfiles::get_unresolved_manual_profile_lines() const {
 }
 
 void MethodProfiles::process_unresolved_lines() {
-  process_unresolved_lines(false);
-  process_unresolved_lines(true);
+  {
+    Timer t("Processing unresolved profile lines");
+    process_unresolved_lines(false);
+    process_unresolved_lines(true);
+  }
   if (!m_unresolved_manual_lines.empty()) {
+    Timer t("Processing unresolved manual lines");
     get_baseline_profile_method_map(true);
     for (auto it = m_unresolved_manual_lines.begin();
          it < m_unresolved_manual_lines.end();) {
