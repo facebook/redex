@@ -199,6 +199,7 @@ static void shard_multi_target(IRList* ir,
   uint16_t entries = *data++;
   auto ftype = fopcode->opcode();
   uint32_t base = bm.by<Entry>().at(src);
+
   if (ftype == FOPCODE_PACKED_SWITCH) {
     int32_t case_key = read_int32(data);
     for (int i = 0; i < entries; i++) {
@@ -206,7 +207,10 @@ static void shard_multi_target(IRList* ir,
       insert_multi_branch_target(ir, case_key + i,
                                  get_bm_target_checked(bm, targetaddr), src);
     }
-  } else if (ftype == FOPCODE_SPARSE_SWITCH) {
+    return;
+  }
+
+  if (ftype == FOPCODE_SPARSE_SWITCH) {
     const uint16_t* tdata = data + 2 * entries; // entries are 32b
     for (int i = 0; i < entries; i++) {
       int32_t case_key = read_int32(data);
@@ -214,9 +218,12 @@ static void shard_multi_target(IRList* ir,
       insert_multi_branch_target(ir, case_key,
                                  get_bm_target_checked(bm, targetaddr), src);
     }
-  } else {
-    not_reached_log("Bad fopcode 0x%04x in shard_multi_target", ftype);
+    return;
   }
+
+  always_assert_type_log(
+      ftype == FOPCODE_PACKED_SWITCH || ftype == FOPCODE_SPARSE_SWITCH,
+      INVALID_DEX, "Bad fopcode 0x%04x in shard_multi_target", ftype);
 }
 
 static void generate_branch_targets(
