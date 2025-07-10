@@ -702,10 +702,14 @@ DexMethodRef* RedexContext::get_method(const DexType* type,
 }
 
 UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>
-RedexContext::get_baseline_profile_method_map() {
+RedexContext::get_baseline_profile_method_map(
+    std::unordered_set<DexMethodRef*>& parsed_methods) {
   auto baseline_profile_method_map =
       UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>();
   for (auto&& [method_spec, method] : UnorderedIterable(s_method_map)) {
+    if (parsed_methods.count(method)) {
+      continue;
+    }
     std::string descriptor = show_deobfuscated(method);
     boost::replace_all(descriptor, ":(", "(");
     std::vector<std::string> class_and_method;
@@ -713,6 +717,7 @@ RedexContext::get_baseline_profile_method_map() {
     always_assert(class_and_method.size() == 2);
     baseline_profile_method_map[class_and_method[0]][class_and_method[1]] =
         method;
+    parsed_methods.emplace(method);
   }
   return baseline_profile_method_map;
 }

@@ -173,7 +173,9 @@ class MethodProfiles {
   void process_unresolved_lines();
 
   struct ManualProfileLine {
-    std::string raw_line;
+    std::string current_line;
+    std::string flags;
+    std::vector<std::string> method_and_class;
     std::vector<std::string> config_names;
     std::string manual_filename;
   };
@@ -218,6 +220,7 @@ class MethodProfiles {
   std::vector<ManualProfileLine> m_unresolved_manual_lines;
   UnorderedMap<std::string, UnorderedMap<std::string, DexMethodRef*>>
       m_baseline_profile_method_map;
+  std::unordered_set<DexMethodRef*> m_parsed_manual_methods;
   ParsingMode m_mode{NONE};
   // A map from interaction ID to the number of times that interaction was
   // triggered. This can be used to compare relative prevalence of different
