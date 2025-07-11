@@ -934,6 +934,7 @@ bool decompress_class(jar_entry& file,
 }
 
 constexpr size_t kStartBufferSize = 128 * 1024;
+constexpr size_t kMaxBufferSize = 8 * 1024 * 1024;
 
 template <typename Fn>
 bool process_jar_entries(std::vector<jar_entry>& files,
@@ -953,6 +954,11 @@ bool process_jar_entries(std::vector<jar_entry>& files,
     auto endcomp =
         filename.substr(filename.length() - kClassEndString.length());
     if (endcomp != kClassEndString) continue;
+
+    // Reject uncharacteristically large files.
+    always_assert_type_log(file.cd_entry.ucomp_size <= kMaxBufferSize,
+                           INVALID_JAVA, "Entry %s with size %u is too large",
+                           file.filename.c_str(), file.cd_entry.ucomp_size);
 
     // Resize output if necessary.
     if (bufsize < file.cd_entry.ucomp_size) {
