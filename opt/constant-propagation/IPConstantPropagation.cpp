@@ -191,6 +191,7 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
     // the stack and registers.
     fp_iter->set_whole_program_state(std::move(wps));
     fp_iter->run(Domain{{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
+    m_stats.heap_analysis_iterations++;
   }
   compute_analysis_stats(fp_iter->get_whole_program_state(),
                          definitely_assigned_ifields);
@@ -345,6 +346,7 @@ void PassImpl::run_pass(DexStoresVector& stores,
   mgr.incr_metric("callgraph_edges", m_stats.callgraph_edges);
   mgr.incr_metric("callgraph_nodes", m_stats.callgraph_nodes);
   mgr.incr_metric("callgraph_callsites", m_stats.callgraph_callsites);
+  mgr.incr_metric("heap_analysis_iterations", m_stats.heap_analysis_iterations);
   mgr.incr_metric("fp_iter.method_cache_hits",
                   m_stats.fp_iter.method_cache_hits);
   mgr.incr_metric("fp_iter.method_cache_misses",
