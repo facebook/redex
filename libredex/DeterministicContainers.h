@@ -681,11 +681,6 @@ class UnorderedMultiMap
     return std::make_pair(ConstFixedIterator(first), ConstFixedIterator(last));
   }
 
-  std::pair<typename Type::iterator, typename Type::iterator>
-  unordered_equal_range(const Key& key) {
-    return m_data.equal_range(key);
-  }
-
   ConstFixedIterator end() const { return ConstFixedIterator(m_data.end()); }
 
   FixedIterator end() { return FixedIterator(m_data.end()); }
@@ -715,6 +710,11 @@ class UnorderedMultiMap
   size_t size() const { return m_data.size(); }
 
   bool empty() const { return m_data.empty(); }
+
+  std::pair<typename Type::const_iterator, typename Type::const_iterator>
+  _internal_unordered_equal_range(const Key& key) const {
+    return m_data.equal_range(key);
+  }
 
   UnorderedIterable _internal_unordered_iterable() {
     return UnorderedIterable(m_data);
@@ -1329,6 +1329,25 @@ template <
                      bool> = true>
 const Collection& UnorderedIterable(const Collection& collection) {
   return collection;
+}
+
+template <class UnorderedCollection,
+          class Key,
+          std::enable_if_t<std::is_base_of_v<UnorderedBase<UnorderedCollection>,
+                                             UnorderedCollection>,
+                           bool> = true>
+auto unordered_equal_range(const UnorderedCollection& collection,
+                           const Key& key) {
+  return collection._internal_unordered_equal_range(key);
+}
+
+template <
+    class Collection,
+    class Key,
+    std::enable_if_t<!std::is_base_of_v<UnorderedBase<Collection>, Collection>,
+                     bool> = true>
+auto unordered_equal_range(const Collection& collection, const Key& key) {
+  return collection.equal_range(key);
 }
 
 template <class UnorderedCollection,

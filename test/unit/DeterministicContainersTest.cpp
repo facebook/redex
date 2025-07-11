@@ -190,11 +190,11 @@ TEST_F(DeterministicContainersTest, unordered_for_each_multimap) {
   UnorderedMultiMap<int, int> copy;
   unordered_for_each(map, [&](auto& p) { copy.insert(p); });
   ASSERT_THAT(copy, SizeIs(4u));
-  auto iterator_key_1 = copy.unordered_equal_range(1);
+  auto iterator_key_1 = unordered_equal_range(copy, 1);
   const std::vector<std::pair<int, int>> key_1{iterator_key_1.first,
                                                iterator_key_1.second};
   EXPECT_THAT(key_1, UnorderedElementsAreArray({map_values[0], map_values[1]}));
-  auto iterator_key_2 = copy.unordered_equal_range(2);
+  auto iterator_key_2 = unordered_equal_range(copy, 2);
   const std::vector<std::pair<int, int>> key_2{iterator_key_2.first,
                                                iterator_key_2.second};
   EXPECT_THAT(key_2, UnorderedElementsAreArray({map_values[2], map_values[3]}));
@@ -713,13 +713,13 @@ TEST_F(DeterministicContainersTest, unordered_multimap_equal_range) {
 TEST_F(DeterministicContainersTest, unordered_multimap_unordered_equal_range) {
   UnorderedMultiMap<int, std::string> map{
       {1, "one"}, {1, "uno"}, {1, "une"}, {2, "two"}};
-  auto range = map.unordered_equal_range(1);
+  auto range = unordered_equal_range(map, 1);
   std::vector<std::string> values;
   for (auto it = range.first; it != range.second; ++it) {
     values.push_back(it->second);
   }
   ASSERT_THAT(values, UnorderedElementsAre("one", "une", "uno"));
 
-  auto empty_range = map.unordered_equal_range(3);
+  auto empty_range = unordered_equal_range(map, 3);
   EXPECT_EQ(empty_range.first, empty_range.second);
 }
