@@ -196,7 +196,6 @@ class WholeProgramStateAccessor {
     auto val = m_wps.get_field_value(field);
     if (m_record) {
       m_record->field_dependencies.emplace(field, val);
-      return val;
     }
     return val;
   }

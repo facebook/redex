@@ -128,7 +128,7 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
   auto& dynamic_methods = root_and_dynamic.dynamic_methods;
   // Gather clinits and root methods, and the methods that override or
   // overriden by the root methods.
-  auto add_root_method_overrides = [&](const DexMethod* method) {
+  auto add_root_method_overrides = [&roots](const DexMethod* method) {
     if (!method->get_code() || root(method) || method->is_external()) {
       // No need to add root methods, they will be added anyway.
       return;
@@ -140,17 +140,17 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
       roots.insert(method);
       return;
     }
+    const bool is_method_dynamic =
+        method->is_virtual() && is_interface(type_class(method->get_class())) &&
+        !can_rename(method);
     if (!root(method) && !method::is_argless_init(method) &&
-        !(method->is_virtual() &&
-          is_interface(type_class(method->get_class())) &&
-          !can_rename(method))) {
+        !is_method_dynamic) {
       // For root methods and dynamically added classes, created via
       // Proxy.newProxyInstance, we need to add them and their overrides and
       // overriden to roots.
       return;
     }
-    if (method->is_virtual() && is_interface(type_class(method->get_class())) &&
-        !can_rename(method)) {
+    if (is_method_dynamic) {
       dynamic_methods.emplace(method);
     }
     if (method->get_code()) {
@@ -158,14 +158,15 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
     }
     const auto& overriding_methods =
         mog::get_overriding_methods(m_method_override_graph, method);
-    for (auto overriding_method : UnorderedIterable(overriding_methods)) {
+    for (const auto* overriding_method :
+         UnorderedIterable(overriding_methods)) {
       add_root_method_overrides(overriding_method);
     }
   });
   // Gather methods that override or implement external or native methods
   // as well.
-  for (auto& pair : UnorderedIterable(m_method_override_graph.nodes())) {
-    auto method = pair.first;
+  for (const auto& pair : UnorderedIterable(m_method_override_graph.nodes())) {
+    const auto* method = pair.first;
     if (method->is_external()) {
       dynamic_methods.emplace(method);
       const auto& overriding_methods =
@@ -182,7 +183,7 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
       // by external methods as well.
       const auto& overridden_methods =
           mog::get_overridden_methods(m_method_override_graph, method, true);
-      for (auto m : UnorderedIterable(overridden_methods)) {
+      for (const auto* m : UnorderedIterable(overridden_methods)) {
         if (!m->is_external()) {
           dynamic_methods.emplace(m);
         }

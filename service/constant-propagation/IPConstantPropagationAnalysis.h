@@ -97,6 +97,7 @@ class FixpointIterator : public sparta::ParallelMonotonicFixpointIterator<
     m_wps.reset(wps);
   }
 
+  // NOLINTNEXTLINE(bugprone-exception-escape)
   virtual ~FixpointIterator();
 
   void analyze_node(const call_graph::NodeId& node,
