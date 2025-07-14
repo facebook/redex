@@ -35,6 +35,7 @@ get_baseline_profiles(
     UnorderedSet<const DexType*> classes;
     UnorderedSet<const DexMethod*> startup_methods;
     UnorderedSet<const DexMethod*> post_startup_methods;
+    UnorderedSet<const DexMethod*> hot_methods;
     for (auto&& [interaction_id, interaction_config] :
          UnorderedIterable(config.interaction_configs)) {
       const auto& method_stats =
@@ -56,17 +57,19 @@ get_baseline_profiles(
 
         if (interaction_config.startup) {
           startup_methods.insert(method);
+          hot_methods.insert(method);
         }
         if (interaction_config.post_startup) {
           post_startup_methods.insert(method);
+          hot_methods.insert(method);
         }
         if (interaction_config.classes) {
           classes.insert(method->get_class());
         }
       }
     }
-    static const std::array<std::string, 2> manual_interaction_ids = {
-        "manual_startup", "manual_post_startup"};
+    static const std::array<std::string, 3> manual_interaction_ids = {
+        "manual_startup", "manual_post_startup", "manual_hot"};
     for (const auto& interaction_id : manual_interaction_ids) {
       const auto& method_stats =
           method_profiles.method_stats_for_baseline_config(interaction_id,
@@ -85,43 +88,28 @@ get_baseline_profiles(
         if (interaction_id == "manual_post_startup") {
           post_startup_methods.insert(method);
         }
+        if (interaction_id == "manual_hot") {
+          hot_methods.insert(method);
+        }
       }
     }
-    // methods = startup_methods | post_startup_methods
+    // methods = startup_methods | post_startup_methods | hot_methods
     UnorderedSet<const DexMethod*> methods;
     insert_unordered_iterable(methods, startup_methods);
     insert_unordered_iterable(methods, post_startup_methods);
-
-    // startup_post_startup_methods = startup_methods & post_startup_methods
-    UnorderedSet<const DexMethod*> startup_post_startup_methods;
-    insert_unordered_iterable(startup_post_startup_methods, startup_methods);
-    unordered_erase_if(startup_post_startup_methods, [&](const DexMethod* m) {
-      return !post_startup_methods.count(m);
-    });
-
-    // startup_methods -= startup_post_startup_methods
-    unordered_erase_if(startup_methods, [&](const DexMethod* m) {
-      return startup_post_startup_methods.count(m);
-    });
-
-    // post_startup_methods -= startup_post_startup_methods
-    unordered_erase_if(post_startup_methods, [&](const DexMethod* m) {
-      return startup_post_startup_methods.count(m);
-    });
+    insert_unordered_iterable(methods, hot_methods);
 
     baseline_profiles::BaselineProfile res;
     for (auto* method : UnorderedIterable(methods)) {
       auto& flags = res.methods[method];
-      if (startup_post_startup_methods.count(method)) {
-        flags.hot = true;
+      if (startup_methods.count(method)) {
         flags.startup = true;
+      }
+      if (post_startup_methods.count(method)) {
         flags.post_startup = true;
-      } else if (startup_methods.count(method)) {
+      }
+      if (hot_methods.count(method)) {
         flags.hot = true;
-        flags.startup = true;
-      } else if (post_startup_methods.count(method)) {
-        flags.hot = true;
-        flags.post_startup = true;
       }
     }
     for (auto* type : UnorderedIterable(classes)) {
