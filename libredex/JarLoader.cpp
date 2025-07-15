@@ -936,15 +936,16 @@ bool decompress_class(jar_entry& file,
 constexpr size_t kStartBufferSize = 128 * 1024;
 constexpr size_t kMaxBufferSize = 8 * 1024 * 1024;
 
-template <typename Fn>
+template <typename Fn, typename InitFn>
 bool process_jar_entries(std::vector<jar_entry>& files,
                          const uint8_t* mapping,
                          const size_t map_size,
-                         const Fn& fn) {
+                         const Fn& fn,
+                         const InitFn& init_fn) {
   ssize_t bufsize = kStartBufferSize;
   std::unique_ptr<uint8_t[]> outbuffer = std::make_unique<uint8_t[]>(bufsize);
   constexpr std::string_view kClassEndString = ".class";
-  init_basic_types();
+  init_fn();
   for (auto& file : files) {
     if (file.cd_entry.ucomp_size == 0) continue;
 
@@ -978,8 +979,11 @@ bool process_jar_entries(std::vector<jar_entry>& files,
   return true;
 }
 
-template <typename Fn>
-bool process_jar_impl(const uint8_t* mapping, size_t size, const Fn& fn) {
+template <typename Fn, typename InitFn>
+bool process_jar_impl(const uint8_t* mapping,
+                      size_t size,
+                      const Fn& fn,
+                      const InitFn& init_fn) {
   pk_cdir_end pce;
   std::vector<jar_entry> files;
   if (!find_central_directory(mapping, size, pce)) {
@@ -991,7 +995,7 @@ bool process_jar_impl(const uint8_t* mapping, size_t size, const Fn& fn) {
   if (!get_jar_entries(mapping, size, pce, files)) {
     return false;
   }
-  if (!process_jar_entries(files, mapping, size, fn)) {
+  if (!process_jar_entries(files, mapping, size, fn, init_fn)) {
     return false;
   }
   return true;
@@ -1010,7 +1014,7 @@ bool default_duplicate_allow_fn(const DexClass* c, const std::string&) {
 bool process_jar(const uint8_t* mapping,
                  size_t size,
                  const std::function<bool(uint8_t*, size_t)>& on_class) {
-  return process_jar_impl(mapping, size, on_class);
+  return process_jar_impl(mapping, size, on_class, []() {});
 }
 
 bool load_jar_file(const DexLocation* location,
@@ -1028,11 +1032,12 @@ bool load_jar_file(const DexLocation* location,
   }
 
   auto mapping = reinterpret_cast<const uint8_t*>(file.const_data());
+  auto init_fn = []() { init_basic_types(); };
   auto on_class = [classes, &attr_hook, &is_allowed, location](uint8_t* buffer,
                                                                size_t size) {
     return parse_class(buffer, size, classes, attr_hook, is_allowed, location);
   };
-  if (!process_jar_impl(mapping, file.size(), on_class)) {
+  if (!process_jar_impl(mapping, file.size(), on_class, init_fn)) {
     std::cerr << "error: cannot process jar: " << location->get_file_name()
               << "\n";
     return false;
