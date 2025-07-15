@@ -43,7 +43,7 @@
 #include "CommandProfiling.h"
 #include "CommentFilter.h"
 #include "ConfigFiles.h"
-#include "ControlFlow.h" // To set DEBUG.
+#include "ControlFlow.h" // To set s_DEBUG.
 #include "Debug.h"
 #include "DebugUtils.h"
 #include "DexClass.h"
@@ -1965,8 +1965,8 @@ int main(int argc, char* argv[]) {
     slow_invariants_debug =
         args.config.get("slow_invariants_debug", false).asBool();
     g_redex->slow_invariants_debug = slow_invariants_debug;
-    cfg::ControlFlowGraph::DEBUG =
-        cfg::ControlFlowGraph::DEBUG || slow_invariants_debug;
+    cfg::ControlFlowGraph::s_DEBUG =
+        cfg::ControlFlowGraph::s_DEBUG || slow_invariants_debug;
     if (slow_invariants_debug) {
       std::cerr << "Slow invariants enabled." << std::endl;
     }

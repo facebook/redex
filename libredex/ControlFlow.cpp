@@ -654,7 +654,7 @@ std::vector<Edge*> Block::get_outgoing_branches_in_order() const {
 // These assume that the iterator is inside this block
 cfg::InstructionIterator Block::to_cfg_instruction_iterator(
     const ir_list::InstructionIterator& list_it, bool next_on_end) {
-  if (ControlFlowGraph::DEBUG && list_it.unwrap() != end()) {
+  if (ControlFlowGraph::s_DEBUG && list_it.unwrap() != end()) {
     bool inside = false;
     auto needle = list_it.unwrap();
     for (auto it = begin(); it != end(); ++it) {
@@ -780,7 +780,7 @@ std::ostream& operator<<(std::ostream& os, const Edge& e) {
   not_reached();
 }
 
-bool ControlFlowGraph::DEBUG = false;
+bool ControlFlowGraph::s_DEBUG = false;
 
 ControlFlowGraph::ControlFlowGraph(IRList* ir,
                                    reg_t registers_size,
@@ -1319,7 +1319,7 @@ void ControlFlowGraph::sanity_check() const {
   if (m_editable) {
     for (const auto& entry : m_blocks) {
       Block* b = entry.second;
-      if (DEBUG) {
+      if (ControlFlowGraph::s_DEBUG) {
         // No targets or gotos
         for (const auto& mie : *b) {
           always_assert_log(mie.type != MFLOW_TARGET,
@@ -1453,7 +1453,7 @@ void ControlFlowGraph::sanity_check() const {
                       m_registers_size, SHOW(*this));
   }
   no_dangling_dex_positions();
-  if (DEBUG) {
+  if (ControlFlowGraph::s_DEBUG) {
     no_unreferenced_edges();
   }
 }
@@ -1892,7 +1892,8 @@ void ControlFlowGraph::build_chains(
       return;
     }
 
-    always_assert_log(!DEBUG || !b->starts_with_move_result(),
+    always_assert_log(!ControlFlowGraph::s_DEBUG ||
+                          !b->starts_with_move_result(),
                       "%zu is wrong %s", b->id(), SHOW(*this));
     auto unique = std::make_unique<BlockChain>();
     BlockChain* chain = unique.get();
@@ -1905,7 +1906,8 @@ void ControlFlowGraph::build_chains(
     while (goto_edge != nullptr) {
       // make sure we handle a chain of blocks that all start with move-results
       auto goto_block = goto_edge->target();
-      always_assert_log(!DEBUG || m_blocks.count(goto_block->id()) > 0,
+      always_assert_log(!ControlFlowGraph::s_DEBUG ||
+                            m_blocks.count(goto_block->id()) > 0,
                         "bogus block reference %zu -> %zu in %s",
                         goto_edge->src()->id(), goto_block->id(), SHOW(*this));
       if (goto_block->starts_with_move_result() || goto_block->same_try(b)) {
@@ -1951,7 +1953,7 @@ void ControlFlowGraph::build_chains(
   // It is important to always start with the entry block. Otherwise it may
   // be incorrectly merged into a chain.
   redex_assert(m_entry_block != nullptr);
-  if (DEBUG) {
+  if (ControlFlowGraph::s_DEBUG) {
     auto it = m_blocks.find(m_entry_block->id());
     redex_assert(it != m_blocks.cend());
     redex_assert(it->second == m_entry_block);
@@ -1964,7 +1966,7 @@ void ControlFlowGraph::build_chains(
     // Must not handle blocks that start with a move-result. These need to go
     // into the same chain as the owner.
     if (entry.second->starts_with_move_result()) {
-      if (DEBUG) {
+      if (ControlFlowGraph::s_DEBUG) {
         move_result_blocks_out_of_order.push_back(entry.second);
       }
       continue;
@@ -1975,7 +1977,7 @@ void ControlFlowGraph::build_chains(
 
   // All postponed move-result blocks should be in a chain now, or they were
   // dangling and should have been removed.
-  if (DEBUG) {
+  if (ControlFlowGraph::s_DEBUG) {
     for (auto* b : move_result_blocks_out_of_order) {
       always_assert_log(block_to_chain->count(b) > 0,
                         "Did not find B%zu in chains of\n%s", b->id(),

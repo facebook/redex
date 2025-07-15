@@ -484,7 +484,7 @@ struct LinearizationStrategy {
 class ControlFlowGraph {
 
  public:
-  static bool DEBUG;
+  static bool s_DEBUG;
 
   ControlFlowGraph() = default;
   ControlFlowGraph(const ControlFlowGraph&) = delete;
@@ -1479,7 +1479,7 @@ class InstructionIteratorImpl {
   }
 
   void assert_not_begin() const {
-    if (!ControlFlowGraph::DEBUG) {
+    if (!ControlFlowGraph::s_DEBUG) {
       return;
     }
     auto begin = InstructionIteratorImpl<is_const>(*m_cfg, true);
@@ -1487,7 +1487,7 @@ class InstructionIteratorImpl {
   }
 
   void assert_not_end() const {
-    if (!ControlFlowGraph::DEBUG) {
+    if (!ControlFlowGraph::s_DEBUG) {
       return;
     }
     always_assert_log(m_block != m_cfg->m_blocks.end(), "%s",
