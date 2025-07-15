@@ -1952,6 +1952,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
   std::vector<std::string> print;
   Scope scope;
   bool processed{false};
+  bool track_intermethod_violations{false};
 
   using Violation = ViolationsHelper::Violation;
   const Violation v;
@@ -1959,8 +1960,13 @@ struct ViolationsHelper::ViolationsHelperImpl {
   ViolationsHelperImpl(Violation v,
                        const Scope& scope,
                        size_t top_n,
-                       std::vector<std::string> to_vis)
-      : top_n(top_n), print(std::move(to_vis)), scope(scope), v(v) {
+                       std::vector<std::string> to_vis,
+                       bool track_intermethod_violations)
+      : top_n(top_n),
+        print(std::move(to_vis)),
+        scope(scope),
+        track_intermethod_violations(track_intermethod_violations),
+        v(v) {
     {
       std::mutex lock;
       walk::parallel::methods(scope, [this, &lock, v](DexMethod* m) {
@@ -1976,7 +1982,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
       });
     }
 
-    {
+    if (track_intermethod_violations) {
       auto method_override_graph = method_override_graph::build_graph(scope);
       auto call_graph = std::make_unique<call_graph::Graph>(
           call_graph::single_callee_graph(*method_override_graph, scope));
@@ -2079,12 +2085,6 @@ struct ViolationsHelper::ViolationsHelperImpl {
           },
           violations_start);
 
-      auto method_override_graph = method_override_graph::build_graph(scope);
-      auto call_graph = std::make_unique<call_graph::Graph>(
-          call_graph::single_callee_graph(*method_override_graph, scope));
-      auto val = compute_method_violations(*call_graph, scope);
-      method_violation_change_sum = val - method_violations;
-
       struct MaybeMetrics {
         ScopedMetrics* root{nullptr};
         std::optional<ScopedMetrics::Scope> scope;
@@ -2124,8 +2124,15 @@ struct ViolationsHelper::ViolationsHelperImpl {
     print_all();
 
     TRACE(MMINL, 0, "Introduced %zu violations.", change_sum.load());
-    TRACE(MMINL, 0, "Introduced %lld inter-method violations.",
-          method_violation_change_sum);
+    if (track_intermethod_violations) {
+      auto method_override_graph = method_override_graph::build_graph(scope);
+      auto call_graph = std::make_unique<call_graph::Graph>(
+          call_graph::single_callee_graph(*method_override_graph, scope));
+      auto val = compute_method_violations(*call_graph, scope);
+      method_violation_change_sum = val - method_violations;
+      TRACE(MMINL, 0, "Introduced %lld inter-method violations.",
+            method_violation_change_sum);
+    }
     if (sm != nullptr) {
       sm->set_metric("new_violations", change_sum.load());
       sm->set_metric("new_method_violations", method_violation_change_sum);
@@ -2534,9 +2541,10 @@ struct ViolationsHelper::ViolationsHelperImpl {
 ViolationsHelper::ViolationsHelper(Violation v,
                                    const Scope& scope,
                                    size_t top_n,
-                                   std::vector<std::string> to_vis)
+                                   std::vector<std::string> to_vis,
+                                   bool track_intermethod_violations)
     : impl(std::make_unique<ViolationsHelperImpl>(
-          v, scope, top_n, std::move(to_vis))) {}
+          v, scope, top_n, std::move(to_vis), track_intermethod_violations)) {}
 ViolationsHelper::~ViolationsHelper() {}
 
 void ViolationsHelper::process(ScopedMetrics* sm) {

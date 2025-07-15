@@ -608,6 +608,7 @@ SourceBlockConsistencyCheck& get_sbcc();
 struct ViolationsHelper {
   struct ViolationsHelperImpl;
   std::unique_ptr<ViolationsHelperImpl> impl;
+  bool track_intermethod_violations{false};
 
   enum class Violation {
     kHotImmediateDomNotHot,
@@ -621,7 +622,8 @@ struct ViolationsHelper {
   ViolationsHelper(Violation v,
                    const Scope& scope,
                    size_t top_n,
-                   std::vector<std::string> to_vis);
+                   std::vector<std::string> to_vis,
+                   bool track_intermethod_violations = false);
   ~ViolationsHelper();
 
   void process(ScopedMetrics* sm);
