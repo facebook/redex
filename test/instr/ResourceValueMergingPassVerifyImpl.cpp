@@ -26,8 +26,8 @@ StyleAnalysis create_style_analysis(const boost::filesystem::path& tmp_path,
   dex_stores.emplace_back(store);
   resources::ReachabilityOptions options;
   ResourceConfig global_resource_config;
-  return StyleAnalysis(tmp_path, global_resource_config, options, dex_stores,
-                       UnorderedSet<uint32_t>());
+  return StyleAnalysis{tmp_path.string(), global_resource_config, options,
+                       dex_stores, UnorderedSet<uint32_t>()};
 }
 
 const UnorderedMap<std::string, UnorderedSet<uint32_t>> STYLE_ATTRIBUTES_MAP = {

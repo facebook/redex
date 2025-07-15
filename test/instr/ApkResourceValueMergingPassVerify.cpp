@@ -26,7 +26,7 @@ TEST_F(PreVerify, ApkResourceValueMergingPassTest) {
   redex::copy_file(source_resource_arsc, local_resources_apk.string());
   redex::copy_file(source_andriod_xml, local_andriod_xml.string());
 
-  auto res_table = ResourcesArscFile(local_resources_apk);
+  ResourcesArscFile res_table{local_resources_apk.string()};
 
   StyleAnalysis style_analysis = create_style_analysis(tmp_path, classes);
   resource_value_merging_PreVerify(&res_table, &style_analysis);
@@ -41,7 +41,7 @@ TEST_F(PostVerify, ApkResourceValueMergingPassTest) {
   const auto& source_resource_arsc = resources.at("resources.arsc");
   redex::copy_file(source_resource_arsc, local_resources_pb.string());
 
-  auto res_table = ResourcesArscFile(local_resources_pb);
+  ResourcesArscFile res_table{local_resources_pb.string()};
 
   resource_value_merging_PostVerify(&res_table);
 }
