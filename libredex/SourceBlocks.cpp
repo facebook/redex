@@ -2061,6 +2061,17 @@ struct ViolationsHelper::ViolationsHelperImpl {
             }
             MethodDelta m_t{m, m_delta, s};
             auto cmp = [](const auto& t1, const auto& t2) {
+              double t1_proportional_violations =
+                  (double)t1.violations_delta / (double)t1.method_size;
+              double t2_proportional_violations =
+                  (double)t2.violations_delta / (double)t2.method_size;
+              if (t1_proportional_violations > t2_proportional_violations) {
+                return true;
+              }
+              if (t1_proportional_violations < t2_proportional_violations) {
+                return false;
+              }
+
               if (t1.violations_delta > t2.violations_delta) {
                 return true;
               }
