@@ -651,6 +651,9 @@ void ConfigFiles::init_baseline_profile_configs() {
         "strip_classes", false,
         current_baseline_profile_config.options.strip_classes);
     baseline_profile_config_jw.get(
+        "transitively_close_classes", false,
+        current_baseline_profile_config.options.transitively_close_classes);
+    baseline_profile_config_jw.get(
         "use_redex_generated_profile", false,
         current_baseline_profile_config.options.use_redex_generated_profile);
     baseline_profile_config_jw.get("use_final_redex_generated_profile", true,

@@ -681,25 +681,24 @@ void write_classes(const Scope& scope,
                    std::back_inserter(classes_str_vec),
                    [](const auto* cls) { return show_deobfuscated(cls); });
     if (!classes_str_vec.empty()) {
-      std::sort(classes_str_vec.begin(), classes_str_vec.end());
-      // Count duplicates for comment.
-      struct Acc {
-        const std::string* last{nullptr};
-        size_t count{0};
-      };
-      auto res = std::accumulate(
-          classes_str_vec.begin() + 1, classes_str_vec.end(),
-          Acc{classes_str_vec.data(), 1}, [](const Acc& acc, const auto& str) {
-            return Acc{&str, acc.count + (*acc.last == str ? 0 : 1)};
-          });
-
-      os << "# " << res.count << " classes from write_classes().\n";
-      const std::string* last = nullptr;
-      for (auto& cls : classes_str_vec) {
-        if (last != nullptr && *last == cls) {
-          continue;
+      // Deduplicate.
+      if (!classes_from_bp.empty()) {
+        std::unordered_set<std::string> classes_str_set;
+        classes_str_set.reserve(classes_str_vec.size());
+        for (auto& s : classes_str_vec) {
+          classes_str_set.emplace(std::move(s));
         }
-        last = &cls;
+        classes_str_vec.clear();
+        for (auto it = classes_str_set.begin(); it != classes_str_set.end();) {
+          classes_str_vec.emplace_back(
+              std::move(classes_str_set.extract(it++).value()));
+        }
+      }
+      std::sort(classes_str_vec.begin(), classes_str_vec.end());
+
+      os << "# " << classes_str_vec.size()
+         << " classes from write_classes().\n";
+      for (auto& cls : classes_str_vec) {
         os << cls << "\n";
       }
     }
@@ -996,19 +995,26 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     const auto& bp = entry.second;
     const auto strip_classes =
         resolve_strip_classes(conf.get_baseline_profile_configs().at(bp_name));
+    const auto transitively_close_classes =
+        conf.get_baseline_profile_configs()
+            .at(bp_name)
+            .options.transitively_close_classes;
     auto preprocessed_profile_name =
         conf.get_preprocessed_baseline_profile_file(bp_name);
     auto output_name = conf.metafile(bp_name + "-baseline-profile.txt");
     std::ofstream ofs{output_name.c_str()};
     if (!strip_classes) {
-      write_classes(scope, bp, /*transitively_close=*/false,
+      write_classes(scope, bp, transitively_close_classes,
                     preprocessed_profile_name, ofs);
     }
     write_methods(scope, bp, ofs);
   }
   std::ofstream ofs{conf.metafile(BASELINE_PROFILES_FILE)};
   if (!resolve_strip_classes(conf.get_default_baseline_profile_config())) {
-    write_classes(scope, manual_profile, /*transitively_close=*/true, "", ofs);
+    write_classes(scope, manual_profile,
+                  conf.get_default_baseline_profile_config()
+                      .options.transitively_close_classes,
+                  "", ofs);
   }
   write_methods(scope, manual_profile, ofs);
 
