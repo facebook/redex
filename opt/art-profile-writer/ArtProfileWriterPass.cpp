@@ -794,6 +794,38 @@ void write_methods(const Scope& scope,
                    const baseline_profiles::BaselineProfile& baseline_profile,
                    bool strip_classes,
                    std::ofstream& ofs) {
+  // Two loops for separation.
+  if (!strip_classes) {
+    std::vector<std::string> classes;
+    classes.reserve(baseline_profile.classes.size());
+    walk::classes(scope, [&](DexClass* cls) {
+      if (baseline_profile.classes.count(cls)) {
+        classes.push_back(show_deobfuscated(cls));
+      }
+    });
+    std::sort(classes.begin(), classes.end());
+    for (auto& str : classes) {
+      ofs << str << "\n";
+    }
+  }
+
+  // We order H before not-H. In each category, we order SP -> S -> P -> none.
+  struct MethodFlagsLess {
+    bool operator()(const baseline_profiles::MethodFlags& lhs,
+                    const baseline_profiles::MethodFlags& rhs) const {
+      if (lhs.hot != rhs.hot) {
+        return lhs.hot;
+      }
+      auto idx = [](const baseline_profiles::MethodFlags& flags) {
+        return (flags.startup ? 2 : 0) + (flags.post_startup ? 1 : 0);
+      };
+      return idx(lhs) > idx(rhs);
+    }
+  };
+  std::map<baseline_profiles::MethodFlags, std::vector<std::string>,
+           MethodFlagsLess>
+      methods;
+
   walk::classes(scope, [&](DexClass* cls) {
     for (auto* method : cls->get_all_methods()) {
       auto it = baseline_profile.methods.find(method);
@@ -805,12 +837,16 @@ void write_methods(const Scope& scope,
       // generator in post-process can recognize the method
       boost::replace_all(descriptor, ".", "->");
       boost::replace_all(descriptor, ":(", "(");
-      ofs << it->second << descriptor << "\n";
-    }
-    if (baseline_profile.classes.count(cls) && !strip_classes) {
-      ofs << show_deobfuscated(cls) << "\n";
+      methods[it->second].emplace_back(std::move(descriptor));
     }
   });
+
+  for (auto& p : methods) {
+    std::sort(p.second.begin(), p.second.end());
+    for (auto& str : p.second) {
+      ofs << p.first << str << "\n";
+    }
+  }
 }
 
 void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
