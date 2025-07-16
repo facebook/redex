@@ -336,6 +336,12 @@ bool Configurable::as<bool>(const Json::Value& value, bindflags_t bindflags) {
   ASSERT_NO_BINDFLAGS(bool);
   return value.asBool();
 }
+template <>
+std::optional<bool> Configurable::as<std::optional<bool>>(
+    const Json::Value& value, bindflags_t bindflags) {
+  ASSERT_NO_BINDFLAGS(unsigned int);
+  return value.asBool();
+}
 
 template <>
 std::string Configurable::as<std::string>(const Json::Value& value,
@@ -543,6 +549,7 @@ Json::Value Configurable::as<Json::Value>(const Json::Value& value,
 
 IMPLEMENT_REFLECTOR(float)
 IMPLEMENT_REFLECTOR_WITH_DFLT_VALUE(bool)
+IMPLEMENT_REFLECTOR_EX(std::optional<bool>, "bool")
 IMPLEMENT_REFLECTOR_EX(int, "int")
 IMPLEMENT_REFLECTOR_EX(unsigned int, "int")
 IMPLEMENT_REFLECTOR_EX(std::optional<int>, "int")

@@ -60,4 +60,5 @@ class ArtProfileWriterPass : public Pass {
   bool m_never_compile_no_attach;
   bool m_include_strings_lookup_class;
   std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
+  std::optional<bool> m_override_strip_classes;
 };
