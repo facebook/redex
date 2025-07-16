@@ -664,8 +664,12 @@ void write_classes(const Scope& scope,
   }();
 
   if (!transitively_close) {
-    for (auto& cls : classes_str_vec) {
-      os << cls << "\n";
+    if (!classes_str_vec.empty()) {
+      os << "# " << classes_str_vec.size()
+         << " classes from write_classes().\n";
+      for (auto& cls : classes_str_vec) {
+        os << cls << "\n";
+      }
     }
     return;
   }
@@ -716,10 +720,16 @@ void write_classes(const Scope& scope,
                               : nullptr;
         return deobf_str != nullptr ? deobf_str->str() : dex_type->str();
       });
-  std::sort(classes.begin(), classes.end());
 
-  for (auto& cls : classes) {
-    os << cls << "\n";
+  if (!classes.empty()) {
+    os << "# " << classes.size() << " classes from write_classes() ("
+       << (classes.size() - classes_str_vec.size())
+       << " from transitive closure, " << classes_without_types.size()
+       << " classes w/o types).\n";
+    std::sort(classes.begin(), classes.end());
+    for (auto& cls : classes) {
+      os << cls << "\n";
+    }
   }
 }
 
@@ -803,9 +813,12 @@ void write_methods(const Scope& scope,
         classes.push_back(show_deobfuscated(cls));
       }
     });
-    std::sort(classes.begin(), classes.end());
-    for (auto& str : classes) {
-      ofs << str << "\n";
+    if (!classes.empty()) {
+      ofs << "# " << classes.size() << " classes from write_methods().\n";
+      std::sort(classes.begin(), classes.end());
+      for (auto& str : classes) {
+        ofs << str << "\n";
+      }
     }
   }
 
@@ -842,9 +855,13 @@ void write_methods(const Scope& scope,
   });
 
   for (auto& p : methods) {
-    std::sort(p.second.begin(), p.second.end());
-    for (auto& str : p.second) {
-      ofs << p.first << str << "\n";
+    if (!p.second.empty()) {
+      ofs << "# " << p.second.size() << " " << p.first
+          << " methods from write_methods().\n";
+      std::sort(p.second.begin(), p.second.end());
+      for (auto& str : p.second) {
+        ofs << p.first << str << "\n";
+      }
     }
   }
 }
