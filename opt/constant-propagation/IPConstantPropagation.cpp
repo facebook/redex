@@ -351,6 +351,9 @@ void PassImpl::run_pass(DexStoresVector& stores,
                   m_stats.fp_iter.method_cache_hits);
   mgr.incr_metric("fp_iter.method_cache_misses",
                   m_stats.fp_iter.method_cache_misses);
+
+  mgr.set_metric("config.max_heap_analysis_iterations",
+                 m_config.max_heap_analysis_iterations);
 }
 
 static PassImpl s_pass;
