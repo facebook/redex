@@ -76,8 +76,7 @@ void FixpointIterator::analyze_node(call_graph::NodeId const& node,
          UnorderedIterable(method_cache_entry->result)) {
       current_state->set(insn, out_args);
     }
-    std::lock_guard<std::mutex> lock_guard(m_stats_mutex);
-    m_stats.method_cache_hits++;
+    m_stats.method_cache_hits.fetch_add(1, std::memory_order_relaxed);
     return;
   }
 
@@ -124,8 +123,7 @@ void FixpointIterator::analyze_node(call_graph::NodeId const& node,
   }
   method_cache.push_front(std::make_shared<MethodCacheEntry>((MethodCacheEntry){
       std::move(args), std::move(record), std::move(result)}));
-  std::lock_guard<std::mutex> lock_guard(m_stats_mutex);
-  m_stats.method_cache_misses++;
+  m_stats.method_cache_misses.fetch_add(1, std::memory_order_relaxed);
 }
 
 Domain FixpointIterator::analyze_edge(

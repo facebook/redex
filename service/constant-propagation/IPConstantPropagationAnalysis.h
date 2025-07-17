@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <sparta/HashedAbstractPartition.h>
 
 #include "CallGraph.h"
@@ -82,8 +83,34 @@ class FixpointIterator : public sparta::ParallelMonotonicFixpointIterator<
                              Domain> {
  public:
   struct Stats {
-    size_t method_cache_hits{0};
-    size_t method_cache_misses{0};
+    inline Stats() = default;
+    inline Stats(const Stats& other) noexcept
+        : method_cache_hits(
+              other.method_cache_hits.load(std::memory_order_relaxed)),
+          method_cache_misses(
+              other.method_cache_misses.load(std::memory_order_relaxed)) {}
+    inline Stats(Stats&& other) noexcept
+        // There's no more efficient way to move an atomic than to copy it.
+        // NOLINTNEXTLINE(performance-move-constructor-init)
+        : Stats(other) // invoke the copy constructor
+    {}
+
+    inline Stats& operator=(const Stats& other) noexcept {
+      method_cache_hits.store(
+          other.method_cache_hits.load(std::memory_order_relaxed),
+          std::memory_order_relaxed);
+      method_cache_misses.store(
+          other.method_cache_misses.load(std::memory_order_relaxed),
+          std::memory_order_relaxed);
+      return *this;
+    }
+    inline Stats& operator=(Stats&& other) noexcept {
+      *this = other; // invoke the copy assignment operator
+      return *this;
+    }
+
+    std::atomic<size_t> method_cache_hits{0};
+    std::atomic<size_t> method_cache_misses{0};
   };
   FixpointIterator(
       std::shared_ptr<const call_graph::Graph> call_graph,
@@ -142,7 +169,6 @@ class FixpointIterator : public sparta::ParallelMonotonicFixpointIterator<
       MethodCache& method_cache, const ArgumentDomain& args) const;
 
   mutable Stats m_stats;
-  mutable std::mutex m_stats_mutex;
 };
 
 } // namespace interprocedural
