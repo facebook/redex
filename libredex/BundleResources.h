@@ -153,4 +153,7 @@ class BundleResources : public AndroidResources {
       size_t* out_num_renamed) override;
 };
 
+bool does_resource_exists_in_file(uint32_t resource_id,
+                                  const std::string& file_path);
+
 #endif // HAS_PROTOBUF

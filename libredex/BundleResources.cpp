@@ -2694,8 +2694,51 @@ resources::StyleMap ResourcesPbFile::get_style_map() {
   return style_map;
 }
 
-// Finds a resource in a protocol buffer table and applies a modification to it
-// The modification is applied using the user-provided callback function
+bool does_resource_exists_in_file(uint32_t resource_id,
+                                  const std::string& file_path) {
+  bool resource_found = false;
+  read_protobuf_file_contents(
+      file_path,
+      [&](google::protobuf::io::CodedInputStream& input, size_t /* unused */) {
+        aapt::pb::ResourceTable pb_restable;
+        if (!pb_restable.ParseFromCodedStream(&input)) {
+          return;
+        }
+
+        for (const auto& pb_package : pb_restable.package()) {
+          auto package_id = pb_package.package_id().id();
+          for (const auto& pb_type : pb_package.type()) {
+            auto type_id = pb_type.type_id().id();
+            for (const auto& pb_entry : pb_type.entry()) {
+              auto entry_id = pb_entry.entry_id().id();
+              auto current_resource_id =
+                  MAKE_RES_ID(package_id, type_id, entry_id);
+              if (current_resource_id == resource_id) {
+                resource_found = true;
+                return;
+              }
+            }
+          }
+        }
+      });
+  return resource_found;
+}
+
+void assert_resource_in_one_files(
+    uint32_t resource_id, const std::vector<std::string>& resources_pb_paths) {
+  std::unordered_set<std::string> files;
+  for (const auto& path : resources_pb_paths) {
+    if (does_resource_exists_in_file(resource_id, path)) {
+      files.insert(path);
+    }
+  }
+
+  always_assert_log(files.size() <= 1, "Resource 0x%x is in %zu files",
+                    resource_id, files.size());
+}
+
+// Finds a resource in a protocol buffer table and applies a modification to
+// it The modification is applied using the user-provided callback function
 // Returns true if the resource was found and modified, false otherwise
 bool modify_attribute_from_style_resource(
     const ResourceAttributeMap& modifications,
