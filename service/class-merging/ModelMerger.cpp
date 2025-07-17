@@ -11,6 +11,7 @@
 #include "ClassAssemblingUtils.h"
 #include "ConfigFiles.h"
 #include "DexUtil.h"
+#include "Inliner.h"
 #include "MethodReference.h"
 #include "PassManager.h"
 #include "Resolver.h"
@@ -291,6 +292,7 @@ void update_instance_of(
     auto& cfg = code.cfg();
     cfg::CFGMutation mutation(cfg);
     auto ii = cfg::InstructionIterable(cfg);
+    std::vector<IRInstruction*> instance_of_invokes;
     for (auto it = ii.begin(); it != ii.end(); ++it) {
       auto insn = it->insn;
       if (!insn->has_type() || insn->opcode() != OPCODE_INSTANCE_OF) {
@@ -324,10 +326,23 @@ void update_instance_of(
           it, std::vector<IRInstruction*>{load_type_tag, invoke, move_res});
       // remove original INSTANCE_OF.
       mutation.remove(it);
+      instance_of_invokes.push_back(invoke);
 
       TRACE(CLMG, 9, " patched INSTANCE_OF in \n%s", SHOW(cfg));
     }
     mutation.flush();
+
+    if (!is_intra_dex) {
+      return;
+    }
+    for (auto* invoke : instance_of_invokes) {
+      // Inline the invoke to INSTANCE_OF method.
+      auto callee = resolve_invoke_method(invoke, caller);
+      bool is_inlined = inliner::inline_with_cfg(
+          caller, callee, invoke, nullptr, nullptr, cfg.get_registers_size());
+      TRACE(CLMG, 9, " inlined (%d) INSTANCE_OF in \n%s", is_inlined,
+            SHOW(cfg));
+    }
   });
 }
 
