@@ -2241,6 +2241,26 @@ struct ViolationsHelper::ViolationsHelperImpl {
         print_cfg_with_violations(v, m_def);
       }
     }
+    walk::methods(scope, [this](DexMethod* m) {
+      auto* code = m->get_code();
+      if (code == nullptr) {
+        return;
+      }
+      cfg::ScopedCFG cfg(code);
+      const auto& cur_method_name = show(m);
+      for (auto* block : cfg->blocks()) {
+        auto vec = gather_source_blocks(block);
+        for (auto* sb : vec) {
+          auto it = std::find(print.begin(), print.end(), sb->src->str());
+          if (it != std::end(print) && *it != cur_method_name) {
+            TRACE(MMINL, 0, "### METHOD %s HAS SOURCE BLOCKS FROM %s ###",
+                  cur_method_name.c_str(), (*it).c_str());
+            print_cfg_with_violations(v, m->as_def());
+            return;
+          }
+        }
+      }
+    });
   }
 
   template <typename SpecialT>
