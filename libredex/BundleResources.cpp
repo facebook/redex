@@ -2893,8 +2893,9 @@ void ResourcesPbFile::apply_attribute_removals(
   ResourceAttributeMap removals;
   for (const auto& mod : modifications) {
     if (mod.type == StyleModificationSpec::ModificationType::REMOVE_ATTRIBUTE) {
-
-      removals[mod.resource_id].insert({mod.attribute_id.value(), mod});
+      uint32_t resource_id = mod.resource_id;
+      assert_resource_in_one_files(resource_id, resources_pb_paths);
+      removals[resource_id].insert({mod.attribute_id.value(), mod});
     }
   }
 
@@ -3024,7 +3025,9 @@ void ResourcesPbFile::apply_attribute_additions(
   ResourceAttributeMap additions;
   for (const auto& mod : modifications) {
     if (mod.type == StyleModificationSpec::ModificationType::ADD_ATTRIBUTE) {
-      additions[mod.resource_id].insert({mod.attribute_id.value(), mod});
+      int32_t resource_id = mod.resource_id;
+      assert_resource_in_one_files(resource_id, resources_pb_paths);
+      additions[resource_id].insert({mod.attribute_id.value(), mod});
     }
   }
 
