@@ -47,8 +47,8 @@ TypeTags collect_type_tags(const std::vector<const MergerType*>& mergers) {
   for (auto merger : mergers) {
     for (const auto type : merger->mergeables) {
       auto type_tag = type_tag_utils::parse_model_type_tag(type_class(type));
-      always_assert_log(
-          type_tag != boost::none, "Type tag is missing from %s\n", SHOW(type));
+      always_assert_log(type_tag != boost::none,
+                        "Type tag is missing from %s\n", SHOW(type));
       type_tags.set_type_tag(type, *type_tag);
     }
   }
@@ -109,8 +109,8 @@ bool is_simple_type_ref(IRInstruction* insn) {
 void update_code_type_refs(
     const Scope& scope,
     const UnorderedMap<const DexType*, DexType*>& mergeable_to_merger) {
-  TRACE(
-      CLMG, 8, "  Updating NEW_INSTANCE, NEW_ARRAY, CHECK_CAST & CONST_CLASS");
+  TRACE(CLMG, 8,
+        "  Updating NEW_INSTANCE, NEW_ARRAY, CHECK_CAST & CONST_CLASS");
   UnorderedTypeSet mergeables;
   for (const auto& pair : UnorderedIterable(mergeable_to_merger)) {
     mergeables.insert(pair.first);
@@ -195,8 +195,8 @@ void update_refs_to_mergeable_fields(
     MergerFields& merger_fields) {
   UnorderedMap<DexField*, DexField*> fields_lookup;
   for (auto& merger : mergers) {
-    cook_merger_fields_lookup(
-        merger_fields.at(merger->type), merger->field_map, fields_lookup);
+    cook_merger_fields_lookup(merger_fields.at(merger->type), merger->field_map,
+                              fields_lookup);
   }
   TRACE(CLMG, 8, "  Updating field refs");
   walk::parallel::code(scope, [&](DexMethod* meth, IRCode& code) {
@@ -284,7 +284,8 @@ void update_instance_of(
     const Scope& scope,
     const UnorderedMap<const DexType*, DexType*>& mergeable_to_merger,
     const UnorderedMap<const DexType*, DexMethod*>& merger_to_instance_of_meth,
-    const TypeTags& type_tags) {
+    const TypeTags& type_tags,
+    const bool is_intra_dex) {
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
     always_assert(code.editable_cfg_built());
     auto& cfg = code.cfg();
@@ -301,8 +302,8 @@ void update_instance_of(
       }
 
       always_assert(type_class(type));
-      TRACE(
-          CLMG, 9, " patching INSTANCE_OF at %s %s", SHOW(insn), SHOW(caller));
+      TRACE(CLMG, 9, " patching INSTANCE_OF at %s %s", SHOW(insn),
+            SHOW(caller));
       // Load type_tag.
       auto type_tag = type_tags.get_type_tag(type);
       auto type_tag_reg = cfg.allocate_temp();
@@ -314,8 +315,8 @@ void update_instance_of(
       std::vector<reg_t> args;
       args.push_back(insn->src(0));
       args.push_back(type_tag_reg);
-      auto invoke = method_reference::make_invoke(
-          instance_of_meth, OPCODE_INVOKE_STATIC, args);
+      auto invoke = method_reference::make_invoke(instance_of_meth,
+                                                  OPCODE_INVOKE_STATIC, args);
       // MOVE_RESULT to dst of INSTANCE_OF.
       auto move_res = new IRInstruction(OPCODE_MOVE_RESULT);
       move_res->set_dest(std::next(it)->insn->dest());
@@ -363,7 +364,8 @@ void update_refs_to_mergeable_types(
     const TypeTags& type_tags,
     const MergerToField& type_tag_fields,
     UnorderedMap<DexMethod*, std::string>& method_debug_map,
-    bool has_type_tags) {
+    bool has_type_tags,
+    const bool is_intra_dex) {
   // Update simple type referencing instructions to instantiate merger type.
   update_code_type_refs(scope, mergeable_to_merger);
   type_reference::update_method_signature_type_references(
@@ -388,8 +390,11 @@ void update_refs_to_mergeable_types(
     merger_to_instance_of_meth[type] = instance_of_meth;
     type_class(type)->add_method(instance_of_meth);
   }
-  update_instance_of(
-      scope, mergeable_to_merger, merger_to_instance_of_meth, type_tags);
+  update_instance_of(scope,
+                     mergeable_to_merger,
+                     merger_to_instance_of_meth,
+                     type_tags,
+                     is_intra_dex);
 }
 
 std::string merger_info(const MergerType& merger) {
@@ -434,8 +439,8 @@ void fix_existing_merger_cls(const Model& model,
                              const MergerType& merger,
                              DexClass* cls,
                              DexType* type) {
-  always_assert_log(
-      !cls->is_external(), "%s and must be an internal DexClass", SHOW(type));
+  always_assert_log(!cls->is_external(), "%s and must be an internal DexClass",
+                    SHOW(type));
   always_assert_log(merger.mergeables.empty(),
                     "%s cannot have mergeables",
                     merger_info(merger).c_str());
@@ -616,22 +621,18 @@ std::vector<DexClass*> ModelMerger::merge_model(
 
   TypeTags type_tags = input_has_type_tag ? collect_type_tags(to_materialize)
                                           : gen_type_tags(to_materialize);
-  auto type_tag_fields = get_type_tag_fields(
-      to_materialize, input_has_type_tag, model_spec.generate_type_tag());
+  auto type_tag_fields = get_type_tag_fields(to_materialize, input_has_type_tag,
+                                             model_spec.generate_type_tag());
   UnorderedMap<DexMethod*, std::string> method_debug_map;
   auto parent_to_children =
       model.get_type_system().get_class_scopes().get_parent_to_children();
-  update_refs_to_mergeable_types(scope,
-                                 parent_to_children,
-                                 to_materialize,
-                                 mergeable_to_merger,
-                                 type_tags,
-                                 type_tag_fields,
-                                 method_debug_map,
-                                 model_spec.has_type_tag());
+  update_refs_to_mergeable_types(
+      scope, parent_to_children, to_materialize, mergeable_to_merger, type_tags,
+      type_tag_fields, method_debug_map, model_spec.has_type_tag(),
+      m_is_intra_dex_merging);
   trim_method_debug_map(mergeable_to_merger, method_debug_map);
-  update_refs_to_mergeable_fields(
-      scope, to_materialize, mergeable_to_merger, m_merger_fields);
+  update_refs_to_mergeable_fields(scope, to_materialize, mergeable_to_merger,
+                                  m_merger_fields);
 
   // Merge methods
   method_profiles::MethodProfiles& method_profile = conf.get_method_profiles();

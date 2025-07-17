@@ -165,7 +165,7 @@ void IntraDexClassMergingPass::run_pass(DexStoresVector& stores,
   }
 
   class_merging::merge_model(type_system, scope, conf, mgr, stores,
-                             m_merging_spec);
+                             m_merging_spec, true /* is_intra_dex */);
 
   post_dexen_changes(scope, stores);
 
