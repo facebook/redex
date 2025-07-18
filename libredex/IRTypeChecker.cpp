@@ -660,7 +660,7 @@ Result check_structure(const DexMethod* method,
 }
 
 /*
- * Sanity-check the structure of the positions for editable cfg format.
+ * Sanity-check the structure of the positions for cfg format.
  */
 Result check_positions_cfg(cfg::ControlFlowGraph& cfg) {
   UnorderedSet<DexPosition*> positions;

@@ -1515,19 +1515,19 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       auto wall_time_start = std::chrono::steady_clock::now();
       if (pass->is_cfg_legacy()) {
         // if this pass hasn't been updated to cfg yet, clear_cfg. In
-        // the future, once all editable cfg updates are done, this branch will
+        // the future, once all cfg updates are done, this branch will
         // be removed.
         auto temp_scope = build_class_scope(stores);
         walk::parallel::code(
             temp_scope, [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
-        TRACE(PM, 2, "%s Pass has not been updated to editable cfg.\n",
+        TRACE(PM, 2, "%s Pass has not been updated to cfg.\n",
               SHOW(pass->name()));
       } else {
         // Run build_cfg() in case any newly added methods by previous passes
-        // are not built as editable cfg. But if editable cfg is already built,
+        // are not built as cfg. But if cfg is already built,
         // no need to rebuild it.
         ensure_cfg(stores);
-        TRACE(PM, 2, "%s Pass uses editable cfg.\n", SHOW(pass->name()));
+        TRACE(PM, 2, "%s Pass uses cfg.\n", SHOW(pass->name()));
       }
       pass->run_pass(stores, conf, *this);
       auto wall_time_end = std::chrono::steady_clock::now();
@@ -1576,7 +1576,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
         auto temp_scope = build_class_scope(stores);
         walk::parallel::code(temp_scope, [&](DexMethod* method, IRCode& code) {
           always_assert_log(code.cfg_built(),
-                            "%s has no editable cfg after cfg-friendly pass %s",
+                            "%s has no cfg after cfg-friendly pass %s",
                             SHOW(method), pass->name().c_str());
           code.cfg().simplify();
         });

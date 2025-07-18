@@ -841,7 +841,7 @@ void ControlFlowGraph::find_block_boundaries(IRList* ir,
   TRACE(CFG, 5, "  build: boundaries found");
 }
 
-// Link the blocks together with edges. If the CFG is editable, also insert
+// Link the blocks together with edges. Also insert
 // fallthrough goto instructions and delete MFLOW_TARGETs.
 void ControlFlowGraph::connect_blocks(BranchToTargets& branch_to_targets) {
   for (auto it = m_blocks.begin(); it != m_blocks.end(); ++it) {
@@ -884,7 +884,7 @@ void ControlFlowGraph::connect_blocks(BranchToTargets& branch_to_targets) {
         }
 
         if (opcode::is_goto(last_op)) {
-          // We don't need the gotos in editable mode because the edges
+          // We don't need the gotos because the edges
           // fully encode that information
           delete last_mie->insn;
           b->m_entries.erase_and_dispose(b->m_entries.iterator_to(*last_mie));
@@ -2874,7 +2874,7 @@ void ControlFlowGraph::create_branch(
   always_assert_log(opcode::is_branch(op), "%s is not a branch instruction",
                     SHOW(op));
   always_assert_log(!opcode::is_goto(op),
-                    "There are no gotos in the editable CFG. Use add_edge()");
+                    "There are no gotos in the CFG. Use add_edge()");
 
   auto existing_last = b->get_last_insn();
   if (existing_last != b->end()) {
@@ -3221,7 +3221,7 @@ DexPosition* ControlFlowGraph::get_dbg_pos(const cfg::InstructionIterator& it) {
   // TODO: Positions should be connected to instructions rather than preceding
   // them in the flow of instructions. Having the positions depend on the order
   // of instructions is a very linear way to encode the information which isn't
-  // very amenable to the editable CFG.
+  // very amenable to the CFG.
 
   // while there's a single predecessor, follow that edge
   UnorderedSet<Block*> visited;

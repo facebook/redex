@@ -24,7 +24,7 @@ namespace inliner {
 struct InlinerConfig;
 
 /*
- * Use the editable CFG instead of IRCode to do the inlining. Return true on
+ * Use the CFG instead of IRCode to do the inlining. Return true on
  * success. Registers starting with next_caller_reg must be available
  */
 bool inline_with_cfg(DexMethod* caller_method,

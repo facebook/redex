@@ -16,11 +16,11 @@ namespace cfg_adapter {
 /**
  * Given an IRCode object and a function to apply to each element, these
  * functions will iterate through whichever data structure actually holds the
- * code (because the editable CFG "steals" the code out of the IRCode). See the
- * comment at the top of ControlFlow.h for more details about the editable CFG.
+ * code (because the CFG "steals" the code out of the IRCode). See the
+ * comment at the top of ControlFlow.h for more details about the CFG.
  *
  * These methods are here to bridge the gap between the list backed IRCode
- * implementation and the editable graph based representation.
+ * implementation and the graph based representation.
  */
 
 enum LoopExit {

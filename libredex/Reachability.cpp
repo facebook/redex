@@ -961,7 +961,7 @@ void MethodReferencesGatherer::advance(const Advance& advance,
     auto code = m_method->get_code();
     if (code) {
       if (m_consider_code) {
-        always_assert_log(code->cfg_built(), "%s does not have editable cfg",
+        always_assert_log(code->cfg_built(), "%s does not have cfg",
                           SHOW(m_method));
         auto& cfg = code->cfg();
         auto b = cfg.entry_block();

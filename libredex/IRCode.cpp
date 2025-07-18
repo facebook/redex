@@ -685,11 +685,11 @@ reg_t IRCode::allocate_wide_temp() {
 void IRCode::build_cfg(bool rebuild_even_if_already_built) {
   always_assert_log(
       !m_cfg_serialized_with_custom_strategy,
-      "Cannot build editable CFG after being serialized with custom strategy. "
+      "Cannot build CFG after being serialized with custom strategy. "
       "Rebuilding CFG will cause problems with basic block ordering.");
   if (!rebuild_even_if_already_built && cfg_built()) {
     // If current code already has cfg, and no need to rebuild a fresh
-    // editable cfg, just keep current cfg and return.
+    // cfg, just keep current cfg and return.
     return;
   }
   clear_cfg();

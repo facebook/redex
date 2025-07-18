@@ -30,19 +30,19 @@
  * connected to their predecessors and successors by `Edge`s that specify
  * the type of connection.
  *
- * An editable CFG's blocks each own a small IRList (with MethodItemEntries
+ * An CFG's blocks each own a small IRList (with MethodItemEntries
  * taken from IRCode)
  *
  * In the future, CFGs will replace
- * IRCode entirely as the primary code representation. To build an editable CFG,
+ * IRCode entirely as the primary code representation. To build an CFG,
  * call
  *
  * `code->build_cfg()`
  *
- * The editable CFG takes the MethodItemEntries from the IRCode object and moves
- * them into the blocks. The editable CFG steals the code out of the IRCode
- * object. After you've built the CFG in editable mode, you should use the CFG,
- * not the IRCode. The IRCode is empty while the editable CFG exists.
+ * The CFG takes the MethodItemEntries from the IRCode object and moves
+ * them into the blocks. The CFG steals the code out of the IRCode
+ * object. After you've built the CFG, you should use the CFG,
+ * not the IRCode. The IRCode is empty while the CFG exists.
  *
  * You can make all sorts of changes to the CFG and when
  * you're done, move it all back into an IRCode object with
@@ -55,8 +55,8 @@
  * the CFG.
  *
  * TODO: Add useful CFG editing methods
- * TODO: phase out edits to the IRCode and move them all to the editable CFG
- * TODO: remove non-editable CFG option
+ * TODO: phase out edits to the IRCode and move them all to the CFG
+ * TODO: remove non-CFG option
  *
  * TODO?: make MethodItemEntry's fields private?
  */
@@ -479,10 +479,6 @@ class ControlFlowGraph {
   ControlFlowGraph() = default;
   ControlFlowGraph(const ControlFlowGraph&) = delete;
 
-  /*
-   * if editable is false, changes to the CFG aren't reflected in the output dex
-   * instructions.
-   */
   ControlFlowGraph(IRList* ir, reg_t registers_size);
   ~ControlFlowGraph();
 
@@ -544,7 +540,7 @@ class ControlFlowGraph {
    *
    * The exit blocks are not computed upon creation. It is left up to the user
    * to call this method if they plan to use the exit block. If you make
-   * significant changes to this CFG in editable mode that effect the exit
+   * significant changes to this CFG that effect the exit
    * points of the method, you need to call this method again.
    * TODO: detect changes and recompute when necessary.
    */
@@ -932,7 +928,7 @@ class ControlFlowGraph {
   // similar to sum_opcode_sizes, but takes into account non-opcode payloads
   uint32_t estimate_code_units() const;
 
-  // The editable cfg is missing plain OPCODE_GOTOs; this function computes a
+  // The cfg is missing plain OPCODE_GOTOs; this function computes a
   // size adjustment to account for that.
   uint32_t get_size_adjustment(bool assume_no_unreachable_blocks = false);
 
@@ -955,7 +951,7 @@ class ControlFlowGraph {
   // the instructions.
   void recompute_registers_size();
 
-  // Only used in editable cfg. \returns the first block that has instructions
+  // Only used in cfg. \returns the first block that has instructions
   // if there is any. Otherwise, \returns null.
   Block* get_first_block_with_insns() const;
 
@@ -1715,7 +1711,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
         insert_source_block = true;
         invalidated_its = true;
         // FIXME: Copying the outgoing throw edges isn't enough.
-        // When the editable CFG is constructed, we transform the try regions
+        // When the CFG is constructed, we transform the try regions
         // into throw edges. We only add these edges to blocks that may throw,
         // thus losing the knowledge of which blocks were originally inside a
         // try region. If we add a new throwing instruction here. It may be

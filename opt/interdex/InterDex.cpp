@@ -1543,7 +1543,7 @@ void InterDex::post_process_dex(EmittingState& emitting_state,
       TRACE(IDEX, 4, "IDEX: Emitting %s-plugin-generated class :: %s",
             plugin->name().c_str(), SHOW(cls));
       classes.push_back(cls);
-      // For the plugin cls, make sure all methods are editable cfg built.
+      // For the plugin cls, make sure all methods are cfg built.
       for (auto* m : cls->get_all_methods()) {
         if (m->get_code() == nullptr) {
           continue;

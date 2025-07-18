@@ -596,7 +596,7 @@ class CodeTransformer final {
       }
     }
 
-    // We could not insert invoke-kind instructions to editable cfg when we
+    // We could not insert invoke-kind instructions to cfg when we
     // iterate the cfg. If we're inside a try region, inserting invoke-kind will
     // split the block and insert a move-result in the new goto successor block,
     // thus invalidating iterators into the CFG. See the comment on the

@@ -159,13 +159,13 @@ class IRCode {
   // Build a Control Flow Graph
   //  * A CFG's blocks each own a small IRList (with
   //    MethodItemEntries taken from IRCode)
-  // Changes to an editable CFG are reflected in IRCode after `clear_cfg` is
-  // called. For editable cfg, it is only rebuilt when the flag
+  // Changes to an CFG are reflected in IRCode after `clear_cfg` is
+  // called. For cfg, it is only rebuilt when the flag
   // rebuild_even_if_already_built is true. Otherwise, the current
-  // editable cfg will be kept.
+  // cfg will be kept.
   void build_cfg(bool rebuild_even_if_already_built = true);
 
-  // if the cfg was editable, linearize it back into m_ir_list
+  // Linearize CFG back into m_ir_list
   // custom_strategy controls the linearization of the CFG.
   //
   // The CFG may have stored instructions that were removed. If deleted_insns is

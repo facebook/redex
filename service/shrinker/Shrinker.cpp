@@ -218,7 +218,7 @@ void Shrinker::shrink_code(
     DexProto* proto,
     const std::function<std::string()>& method_describer) {
   always_assert(code->cfg_built());
-  // force simplification/linearization of any existing editable cfg once, and
+  // force simplification/linearization of any existing cfg once, and
   // forget existing cfg for a clean start
   code->cfg().recompute_registers_size();
   code->clear_cfg();
@@ -284,7 +284,7 @@ void Shrinker::shrink_code(
         traceEnabled(MMINL, kMMINLDataCollectionLevel)) {
       auto timer = m_reg_alloc_timer.scope();
 
-      // It's OK to ensure we have an editable CFG, the allocator would build
+      // It's OK to ensure we have an CFG, the allocator would build
       // it, too.
       auto before_features = get_features(4);
 

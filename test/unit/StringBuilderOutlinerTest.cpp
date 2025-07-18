@@ -296,7 +296,7 @@ TEST_F(StringBuilderOutlinerTest, outlineThree) {
   // ensures that running StringBuilderOutlinerPass before OSDCE won't
   // inadvertently cause dead code to be retained.
   auto outline_helper_code = outline_helper_method->get_code();
-  // When outline_helper_method was created, it generated editable cfg.
+  // When outline_helper_method was created, it generated cfg.
   // Therefore, need to be cleared before comparing code.
   outline_helper_code->clear_cfg();
   EXPECT_CODE_EQ(expected_outlined_code.get(), outline_helper_code);
