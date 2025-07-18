@@ -33,7 +33,7 @@ std::set<std::string> method_semantics = {
     " Lcom/facebook/redextest/PointsToSemantics;#a2 = V1\n"
     "}\n",
     // PointsToSemantics' constructor
-    "Lcom/facebook/redextest/PointsToSemantics;#<init>: ()V {\n"
+    "Lcom/facebook/redextest/PointsToSemantics;#<init>: ()V {\n" // NOLINT(bugprone-suspicious-missing-comma)
     " THIS.{D}Ljava/lang/Object;#<init>()\n"
     "}\n",
     // I#f()
