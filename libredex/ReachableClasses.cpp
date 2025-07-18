@@ -194,7 +194,7 @@ void analyze_reflection(const Scope& scope) {
   std::mutex mutation_mutex;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     std::unique_ptr<ReflectionAnalysis> analysis = nullptr;
-    code.build_cfg(cfg::CFGMode::EDITABLE, false);
+    code.build_cfg(/* rebuild_even_if_already_built */ false);
     auto& cfg = code.cfg();
     for (auto& mie : InstructionIterable(cfg)) {
       IRInstruction* insn = mie.insn;

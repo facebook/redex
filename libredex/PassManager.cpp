@@ -622,7 +622,7 @@ bool is_run_hasher_after_each_pass(const ConfigFiles& conf,
 void ensure_editable_cfg(DexStoresVector& stores) {
   auto temp_scope = build_class_scope(stores);
   walk::parallel::code(temp_scope, [&](DexMethod*, IRCode& code) {
-    code.build_cfg(cfg::CFGMode::EDITABLE, /*fresh_editable_build*/ false);
+    code.build_cfg(/*rebuild_even_if_already_built*/ false);
   });
 }
 

@@ -397,7 +397,7 @@ DexAssessment DexScopeAssessor::run() {
           return assessment;
         }
 
-        code->build_cfg(cfg::CFGMode::EDITABLE, /*fresh_editable_build*/ false);
+        code->build_cfg(/*rebuild_even_if_already_built*/ false);
 
         assessment.dex_position_assessment =
             dex_position_assessor.analyze_method(method, code->cfg());

@@ -662,22 +662,18 @@ IRCode::IRCode(std::unique_ptr<cfg::ControlFlowGraph> cfg) {
 
 void IRCode::cleanup_debug() { m_ir_list->cleanup_debug(); }
 
-void IRCode::build_cfg(cfg::CFGMode mode,
-                       bool rebuild_editable_even_if_already_built) {
+void IRCode::build_cfg(bool rebuild_even_if_already_built) {
   always_assert_log(
-      mode == cfg::CFGMode::NON_EDITABLE ||
-          !m_cfg_serialized_with_custom_strategy,
+      !m_cfg_serialized_with_custom_strategy,
       "Cannot build editable CFG after being serialized with custom strategy. "
       "Rebuilding CFG will cause problems with basic block ordering.");
-  if (mode == cfg::CFGMode::EDITABLE &&
-      !rebuild_editable_even_if_already_built && editable_cfg_built()) {
+  if (!rebuild_even_if_already_built && editable_cfg_built()) {
     // If current code already has editable_cfg, and no need to rebuild a fresh
     // editable cfg, just keep current cfg and return.
     return;
   }
   clear_cfg();
-  m_cfg = std::make_unique<cfg::ControlFlowGraph>(m_ir_list, m_registers_size,
-                                                  mode);
+  m_cfg = std::make_unique<cfg::ControlFlowGraph>(m_ir_list, m_registers_size);
 }
 
 void IRCode::clear_cfg(
