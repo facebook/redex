@@ -134,9 +134,7 @@ class IRCode {
    * Find the subrange of load-param instructions. These instructions should
    * always be at the beginning of the method.
    */
-  boost::sub_range<IRList> get_param_instructions() const {
-    return m_ir_list->get_param_instructions();
-  }
+  boost::sub_range<IRList> get_param_instructions() const;
 
   void set_debug_item(std::unique_ptr<DexDebugItem> dbg) {
     m_dbg = std::move(dbg);
@@ -181,7 +179,7 @@ class IRCode {
                      custom_strategy = nullptr,
                  std::vector<IRInstruction*>* deleted_insns = nullptr);
 
-  bool cfg_built() const;
+  bool cfg_built() const { return m_cfg != nullptr; }
 
   /* Generate DexCode from IRCode */
   std::unique_ptr<DexCode> sync(const DexMethod*);

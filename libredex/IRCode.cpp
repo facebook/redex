@@ -707,8 +707,6 @@ void IRCode::clear_cfg(
   }
 }
 
-bool IRCode::cfg_built() const { return m_cfg != nullptr; }
-
 namespace {
 
 using RegMap = transform::RegMap;
@@ -1178,6 +1176,14 @@ bool IRCode::try_sync(DexCode* code) {
               return a->m_start_addr < b->m_start_addr;
             });
   return true;
+}
+
+boost::sub_range<IRList> IRCode::get_param_instructions() const {
+  if (cfg_built()) {
+    return m_cfg->get_param_instructions();
+  } else {
+    return m_ir_list->get_param_instructions();
+  }
 }
 
 void IRCode::gather_catch_types(std::vector<DexType*>& ltype) const {
