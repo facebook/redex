@@ -909,22 +909,23 @@ void ControlFlowGraph::connect_blocks(BranchToTargets& branch_to_targets) {
   for (auto it = m_blocks.begin(); it != m_blocks.end(); ++it) {
     // Set outgoing edge if last MIE falls through
     Block* b = it->second;
-    auto& last_mie = *b->rbegin();
+    auto rit = b->rbegin();
+    auto* last_mie = rit == b->rend() ? nullptr : &*rit;
     bool fallthrough = true;
-    if (last_mie.type == MFLOW_OPCODE) {
-      auto last_op = last_mie.insn->opcode();
+    if (last_mie && last_mie->type == MFLOW_OPCODE) {
+      auto last_op = last_mie->insn->opcode();
       if (opcode::is_branch(last_op)) {
         fallthrough = !opcode::is_goto(last_op);
-        auto const& target_blocks = branch_to_targets[&last_mie];
+        auto const& target_blocks = branch_to_targets[last_mie];
 
         for (auto& p : target_blocks) {
           auto target_block = p.first;
           auto& target_mie = *p.second;
           always_assert(target_mie.type == MFLOW_TARGET);
-          always_assert(target_mie.target->src == &last_mie);
+          always_assert(target_mie.target->src == last_mie);
           Edge::MaybeCaseKey case_key;
           if (target_mie.target->type == BRANCH_MULTI) {
-            always_assert_log(opcode::is_switch(last_mie.insn->opcode()),
+            always_assert_log(opcode::is_switch(last_mie->insn->opcode()),
                               "block %zu in %s\n", target_block->id(),
                               SHOW(*this));
             case_key = target_mie.target->case_key;
@@ -949,8 +950,8 @@ void ControlFlowGraph::connect_blocks(BranchToTargets& branch_to_targets) {
         if (m_editable && opcode::is_goto(last_op)) {
           // We don't need the gotos in editable mode because the edges
           // fully encode that information
-          delete last_mie.insn;
-          b->m_entries.erase_and_dispose(b->m_entries.iterator_to(last_mie));
+          delete last_mie->insn;
+          b->m_entries.erase_and_dispose(b->m_entries.iterator_to(*last_mie));
         }
 
       } else if (opcode::is_a_return(last_op) || last_op == OPCODE_THROW) {
