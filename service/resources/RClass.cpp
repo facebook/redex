@@ -272,7 +272,7 @@ FieldArrayValues RClassReader::analyze_clinit(
   if (clinit == nullptr || clinit->get_code() == nullptr) {
     return values;
   }
-  always_assert(clinit->get_code()->editable_cfg_built());
+  always_assert(clinit->get_code()->cfg_built());
   auto& cfg = clinit->get_code()->cfg();
   cfg.calculate_exit_block();
 
@@ -485,7 +485,7 @@ size_t RClassWriter::remap_resource_class_clinit(
     const FieldArrayValues& field_values,
     const std::map<uint32_t, uint32_t>& old_to_remapped_ids) const {
   IRCode* ir_code = cls->get_clinit()->get_code();
-  always_assert(ir_code->editable_cfg_built());
+  always_assert(ir_code->cfg_built());
 
   // For styleable, we avoid actually deleting entries since there are offsets
   // that will point to the wrong positions in the array. Instead, zero out the

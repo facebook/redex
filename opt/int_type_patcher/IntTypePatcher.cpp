@@ -50,7 +50,7 @@ void IntTypePatcherPass::run(DexMethod* m) {
   if (!code || m->rstate.no_optimizations()) {
     return;
   }
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   type_inference::TypeInference inference(cfg);
   inference.run(m);

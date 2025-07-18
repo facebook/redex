@@ -96,7 +96,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     auto vals_str = parse_str_anno_value(method, s_method_meta_anno,
                                          CONST_VALUE_ANNO_ATTR_NAME);
 
-    always_assert(method->get_code()->editable_cfg_built());
+    always_assert(method->get_code()->cfg_built());
     auto& cfg = method->get_code()->cfg();
     ConstantValues const_vals(type_tags, kinds_str, vals_str,
                               stud_method_threshold, cfg);

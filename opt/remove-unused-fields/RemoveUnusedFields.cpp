@@ -173,7 +173,7 @@ class RemoveUnusedFields final {
       if (method->rstate.no_optimizations()) {
         return;
       }
-      always_assert(code.editable_cfg_built());
+      always_assert(code.cfg_built());
       auto& cfg = code.cfg();
       cfg::CFGMutation m(cfg);
       auto iterable = cfg::InstructionIterable(cfg);

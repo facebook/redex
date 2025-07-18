@@ -232,7 +232,7 @@ bool can_inline_init(const DexMethod* init_method,
   if (!code) {
     return false;
   }
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   DexType* declaring_type = init_method->get_class();
   Analyzer analyzer(cfg, declaring_type, relaxed);
@@ -288,7 +288,7 @@ bool can_inline_inits_in_same_class(DexMethod* caller_method,
   always_assert(method::is_init(caller_method));
   always_assert(caller_method->get_class() == callee_method->get_class());
   auto code = caller_method->get_code();
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   reaching_defs::MoveAwareFixpointIterator reaching_definitions(cfg);
   reaching_definitions.run(reaching_defs::Environment());
@@ -349,7 +349,7 @@ UnorderedSet<const DexType*> find_complex_init_inlined_types(
     if (code == nullptr) {
       return;
     }
-    always_assert(code->editable_cfg_built());
+    always_assert(code->cfg_built());
     auto& cfg = code->cfg();
     Lazy<live_range::LazyLiveRanges> live_ranges(
         [&]() { return std::make_unique<live_range::LazyLiveRanges>(cfg); });

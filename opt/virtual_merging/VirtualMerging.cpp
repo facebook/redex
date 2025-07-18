@@ -1319,8 +1319,8 @@ VirtualMergingStats apply_ordering(
         cleanup();
 
         // overriding_method->get_code()->build_cfg();
-        always_assert(overriding_method->get_code()->editable_cfg_built());
-        always_assert(overridden_method->get_code()->editable_cfg_built());
+        always_assert(overriding_method->get_code()->cfg_built());
+        always_assert(overridden_method->get_code()->cfg_built());
         inliner::inline_with_cfg(
             overridden_method, overriding_method, invoke_virtual_insn,
             /* needs_receiver_cast */ nullptr, /* needs_init_class */ nullptr,

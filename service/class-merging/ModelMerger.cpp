@@ -288,7 +288,7 @@ void update_instance_of(
     const TypeTags& type_tags,
     const bool is_intra_dex) {
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
-    always_assert(code.editable_cfg_built());
+    always_assert(code.cfg_built());
     auto& cfg = code.cfg();
     cfg::CFGMutation mutation(cfg);
     auto ii = cfg::InstructionIterable(cfg);
@@ -350,7 +350,7 @@ void update_instance_of_no_type_tag(
     const Scope& scope,
     const UnorderedMap<const DexType*, DexType*>& mergeable_to_merger) {
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
-    always_assert(code.editable_cfg_built());
+    always_assert(code.cfg_built());
     auto& cfg = code.cfg();
     auto ii = cfg::InstructionIterable(cfg);
     for (auto it = ii.begin(); it != ii.end(); ++it) {

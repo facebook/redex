@@ -747,7 +747,7 @@ DexMethod* create_fields_constr(DexMethod* method, DexClass* cls) {
   UnorderedMap<DexField*, uint32_t> field_to_reg;
 
   std::unique_ptr<IRCode> new_code = std::make_unique<IRCode>(*code);
-  always_assert(new_code->editable_cfg_built());
+  always_assert(new_code->cfg_built());
   auto& new_cfg = new_code->cfg();
 
   // Non-input registers for the method are all registers except the

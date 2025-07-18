@@ -40,7 +40,7 @@ void RemoveNullcheckStringArg::run_pass(DexStoresVector& stores,
         new_methods.count(method)) {
       return Stats();
     }
-    always_assert(code->editable_cfg_built());
+    always_assert(code->cfg_built());
     auto local_stats = change_in_cfg(code->cfg(), transfer_map_param,
                                      transfer_map_expr, method->is_virtual());
     return local_stats;

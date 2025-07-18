@@ -196,7 +196,7 @@ void Outliner::gather_outline_candidate_typelists(
 }
 
 void Outliner::analyze(IRCode& code) {
-  always_assert(code.editable_cfg_built());
+  always_assert(code.cfg_built());
   auto& cfg = code.cfg();
   cfg.calculate_exit_block();
 
@@ -364,7 +364,7 @@ void Outliner::transform(const DexMethod* source_method, IRCode* code) {
     return;
   }
   const auto& tostring_instruction_to_state = m_builder_state_maps.at(code);
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   UnorderedMap<const IRInstruction*, IRInstruction*> insns_to_insert;
   UnorderedMap<const IRInstruction*, IRInstruction*> insns_to_replace;

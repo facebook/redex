@@ -19,7 +19,7 @@ CodeRefs::CodeRefs(const DexMethod* method,
   if (!method->get_code()) {
     return;
   }
-  always_assert(method->get_code()->editable_cfg_built());
+  always_assert(method->get_code()->cfg_built());
   auto& cfg = reduced_cfg ? *reduced_cfg : method->get_code()->cfg();
   UnorderedSet<const DexType*> types_set;
   UnorderedSet<const DexMethod*> methods_set;

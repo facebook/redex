@@ -79,7 +79,7 @@ bool is_compiled(const baseline_profiles::BaselineProfile& baseline_profile,
 
 bool is_simple(DexMethod* method, IRInstruction** invoke_insn = nullptr) {
   auto* code = method->get_code();
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   if (cfg.blocks().size() != 1) {
     return false;

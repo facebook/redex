@@ -306,7 +306,7 @@ DedupStrings::get_occurrences(
         const auto dexnr = methods_to_dex.at(method);
         const auto perf_sensitive_method =
             perf_sensitive_methods.count(method) != 0;
-        always_assert(code.editable_cfg_built());
+        always_assert(code.cfg_built());
         auto& cfg = code.cfg();
         const auto check_for_hot_blocks =
             m_perf_mode == DedupStringsPerfMode::
@@ -619,7 +619,7 @@ void DedupStrings::rewrite_const_string_instructions(
 
         // First, we collect all const-string instructions that we want to
         // rewrite
-        always_assert(code.editable_cfg_built());
+        always_assert(code.cfg_built());
         auto& cfg = code.cfg();
         std::vector<std::pair<cfg::InstructionIterator, const DedupStringInfo*>>
             const_strings;

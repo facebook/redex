@@ -83,7 +83,7 @@ UnorderedSet<DexClass*> find_unrefenced_coldstart_classes(
         },
         [&](DexMethod* meth, const IRCode& code) {
           auto base_cls = meth->get_class();
-          always_assert(meth->get_code()->editable_cfg_built());
+          always_assert(meth->get_code()->cfg_built());
           for (auto& mie : cfg::InstructionIterable(meth->get_code()->cfg())) {
             auto inst = mie.insn;
             DexType* called_cls = nullptr;

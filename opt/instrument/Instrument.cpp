@@ -80,7 +80,7 @@ void instrument_onMethodBegin(DexMethod* method,
                               DexMethod* method_onMethodBegin) {
   IRCode* code = method->get_code();
   assert(code != nullptr);
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
 
   IRInstruction* const_inst = new IRInstruction(OPCODE_CONST);
@@ -362,7 +362,7 @@ void count_source_block_chain_length(DexStoresVector& stores, PassManager& pm) {
       return;
     }
     boost::optional<size_t> last_known = boost::none;
-    always_assert(code->editable_cfg_built());
+    always_assert(code->cfg_built());
     auto& cfg = code->cfg();
     for (const auto* b : cfg.blocks()) {
       for (const auto& mie : *b) {
@@ -411,7 +411,7 @@ void InstrumentPass::patch_array_size(DexClass* analysis_cls,
   always_assert(clinit != nullptr);
 
   auto* code = clinit->get_code();
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   bool patched = false;
   walk::matching_opcodes_in_block(
@@ -466,7 +466,7 @@ void InstrumentPass::patch_static_field(DexClass* analysis_cls,
 
   // Find the sput with the given field name.
   auto code = clinit->get_code();
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
@@ -894,7 +894,7 @@ InstrumentPass::patch_sharded_arrays(
   always_assert(num_shards > 0);
   DexMethod* clinit = cls->get_clinit();
   IRCode* code = clinit->get_code();
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   UnorderedMap<int /*shard_num*/, DexFieldRef*> fields;
   bool patched = false;

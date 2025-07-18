@@ -182,7 +182,7 @@ void collect_string_values_from_code(
         // Checking things like proto / type names is probably unnecessary. Just
         // look at instructions.
         if (code != nullptr) {
-          always_assert(code->editable_cfg_built());
+          always_assert(code->cfg_built());
           auto& cfg = code->cfg();
           cfg.gather_strings(strings);
         }

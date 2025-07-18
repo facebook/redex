@@ -181,7 +181,7 @@ bool is_argless_init(const DexMethodRef* method) {
 }
 
 bool is_trivial_clinit(const IRCode& code) {
-  if (!code.editable_cfg_built()) {
+  if (!code.cfg_built()) {
     auto ii = InstructionIterable(code);
     return std::none_of(ii.begin(), ii.end(), [](const MethodItemEntry& mie) {
       return mie.insn->opcode() != OPCODE_RETURN_VOID;

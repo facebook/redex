@@ -764,8 +764,7 @@ void TypedefAnnoPatcher::patch_lambdas(
     return;
   }
 
-  always_assert_log(code->editable_cfg_built(), "%s has no cfg built",
-                    SHOW(method));
+  always_assert_log(code->cfg_built(), "%s has no cfg built", SHOW(method));
   auto& cfg = code->cfg();
 
   type_inference::TypeInference inference(cfg, false, m_typedef_annos,
@@ -833,8 +832,7 @@ void TypedefAnnoPatcher::patch_synth_cls_fields_from_ctor_param(
   if (!code) {
     return;
   }
-  always_assert_log(code->editable_cfg_built(), "%s has no cfg built",
-                    SHOW(ctor));
+  always_assert_log(code->cfg_built(), "%s has no cfg built", SHOW(ctor));
   auto& cfg = code->cfg();
 
   type_inference::TypeInference inference(cfg, false, m_typedef_annos,
@@ -955,7 +953,7 @@ void TypedefAnnoPatcher::collect_param_candidates(
     return;
   }
 
-  always_assert_log(code->editable_cfg_built(), "%s has no cfg built", SHOW(m));
+  always_assert_log(code->cfg_built(), "%s has no cfg built", SHOW(m));
   auto& cfg = code->cfg();
   type_inference::TypeInference inference(cfg, false, m_typedef_annos,
                                           &m_method_override_graph);
@@ -987,7 +985,7 @@ void TypedefAnnoPatcher::collect_return_candidates(
     return;
   }
 
-  always_assert_log(code->editable_cfg_built(), "%s has no cfg built", SHOW(m));
+  always_assert_log(code->cfg_built(), "%s has no cfg built", SHOW(m));
   auto& cfg = code->cfg();
   type_inference::TypeInference inference(cfg, false, m_typedef_annos,
                                           &m_method_override_graph);

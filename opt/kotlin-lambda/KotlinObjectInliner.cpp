@@ -67,7 +67,7 @@ DexClass* get_outer_class(const DexClass* cls) {
 // methods from the same class, this will not be considered a use.
 bool uses_this(const DexMethod* method, bool strict = false) {
   auto code = method->get_code();
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   auto iterable = InstructionIterable(cfg.get_param_instructions());
   if (iterable.empty() && is_static(method)) {
@@ -418,7 +418,7 @@ void KotlinObjectInliner::run_pass(DexStoresVector& stores,
             SHOW(rtype));
     }
 
-    always_assert(code->editable_cfg_built());
+    always_assert(code->cfg_built());
     auto& cfg = code->cfg();
     auto iterable = cfg::InstructionIterable(cfg);
     live_range::MoveAwareChains move_aware_chains(cfg);

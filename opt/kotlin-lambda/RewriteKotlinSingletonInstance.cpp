@@ -21,7 +21,7 @@ bool check_inits_has_side_effects(
         init_classes_with_side_effects,
     IRCode* code,
     const UnorderedSet<DexMethodRef*>& safe_base_invoke) {
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   auto iterable = cfg::InstructionIterable(cfg);
   side_effects::Summary summary(side_effects::EFF_NONE, {});

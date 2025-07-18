@@ -106,7 +106,7 @@ void build_call_graph(const std::vector<DexClass*>& candidate_classes,
     if (!caller->get_code()) {
       continue;
     }
-    always_assert(caller->get_code()->editable_cfg_built());
+    always_assert(caller->get_code()->cfg_built());
     for (const auto& mie :
          cfg::InstructionIterable(caller->get_code()->cfg())) {
       if (mie.insn->has_method()) {
@@ -165,7 +165,7 @@ void color_from_a_class(StaticCallGraph& graph, DexClass* cls, int color) {
     if (code == nullptr) {
       return;
     }
-    always_assert(code->editable_cfg_built());
+    always_assert(code->cfg_built());
     auto& cfg = code->cfg();
     for (const auto& mie : cfg::InstructionIterable(cfg)) {
       if (mie.insn->has_method()) {

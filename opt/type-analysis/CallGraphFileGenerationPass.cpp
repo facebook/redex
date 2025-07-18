@@ -63,7 +63,7 @@ void gather_method_positions(const Scope& scope,
                                  method_to_first_position) {
   walk::parallel::code(
       scope, [&method_to_first_position](DexMethod* method, IRCode& code) {
-        always_assert(code.editable_cfg_built());
+        always_assert(code.cfg_built());
         auto& cfg = code.cfg();
         for (const MethodItemEntry& mie : cfg::InstructionIterable(cfg)) {
           if (mie.type == MFLOW_POSITION) {

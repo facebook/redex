@@ -271,7 +271,7 @@ void gather_caller_callees(
         caller->rstate.should_not_outline()) {
       return;
     }
-    always_assert(code.editable_cfg_built());
+    always_assert(code.cfg_built());
     CanOutlineBlockDecider block_decider(
         profile_guidance_config, throughput_interaction_indices,
         throughput_methods.count(caller),

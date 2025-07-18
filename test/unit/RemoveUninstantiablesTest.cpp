@@ -289,7 +289,7 @@ remove_uninstantiables_impl::Stats run_remove_uninstantiables(
         if (code == nullptr) {
           return remove_uninstantiables_impl::Stats();
         }
-        always_assert(code->editable_cfg_built());
+        always_assert(code->cfg_built());
         if (overridden_virtual_scopes_analysis.keep_code(method)) {
           auto& cfg = code->cfg();
           return remove_uninstantiables_impl::replace_uninstantiable_refs(

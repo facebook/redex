@@ -1680,7 +1680,7 @@ void semantically_inline_method(
     const IRInstruction* insn,
     const InstructionAnalyzer<ConstantEnvironment>& analyzer,
     ConstantEnvironment* env) {
-  always_assert(callee_code->editable_cfg_built());
+  always_assert(callee_code->cfg_built());
   auto& cfg = callee_code->cfg();
 
   // Set up the environment at entry into the callee.
@@ -1708,7 +1708,7 @@ void semantically_inline_method(
 
 ReturnState collect_return_state(
     IRCode* code, const intraprocedural::FixpointIterator& fp_iter) {
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   auto return_state = ReturnState::bottom();
   for (cfg::Block* b : cfg.blocks()) {

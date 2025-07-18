@@ -415,7 +415,7 @@ DexType* ModelMethodMerger::get_merger_type(DexType* mergeable) {
  */
 void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
   auto dispatch_code = dispatch->get_code();
-  always_assert(dispatch_code->editable_cfg_built());
+  always_assert(dispatch_code->cfg_built());
   auto& cfg = dispatch_code->cfg();
   if (cfg.return_blocks().size() != 1) {
     return;
@@ -506,7 +506,7 @@ void ModelMethodMerger::inline_dispatch_entries(
     DexMethod* dispatch,
     std::vector<std::pair<DexType*, DexMethod*>>&
         not_inlined_dispatch_entries) {
-  always_assert(dispatch->get_code()->editable_cfg_built());
+  always_assert(dispatch->get_code()->cfg_built());
   auto& dispatch_cfg = dispatch->get_code()->cfg();
   std::vector<std::pair<DexMethod*, IRInstruction*>> callsites;
   auto insns = InstructionIterable(dispatch_cfg);
@@ -522,7 +522,7 @@ void ModelMethodMerger::inline_dispatch_entries(
   }
 
   for (auto&& [callee, callsite] : callsites) {
-    always_assert(callee->get_code()->editable_cfg_built());
+    always_assert(callee->get_code()->cfg_built());
     bool inlined = inliner::inline_with_cfg(dispatch, callee, callsite,
                                             /* needs_receiver_cast */ nullptr,
                                             /* needs_init_class */ nullptr,

@@ -961,8 +961,8 @@ void MethodReferencesGatherer::advance(const Advance& advance,
     auto code = m_method->get_code();
     if (code) {
       if (m_consider_code) {
-        always_assert_log(code->editable_cfg_built(),
-                          "%s does not have editable cfg", SHOW(m_method));
+        always_assert_log(code->cfg_built(), "%s does not have editable cfg",
+                          SHOW(m_method));
         auto& cfg = code->cfg();
         auto b = cfg.entry_block();
         queue.push((CFGNeedle){b, b->begin()});
@@ -1174,7 +1174,7 @@ bool TransitiveClosureMarkerWorker::has_class_forName(const DexMethod* meth) {
   if (!code || !class_forName) {
     return false;
   }
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   for (auto& mie : InstructionIterable(cfg)) {
     auto insn = mie.insn;
@@ -2201,7 +2201,7 @@ void sweep_code(
     if (!code || method->rstate.no_optimizations()) {
       return remove_uninstantiables_impl::Stats();
     }
-    always_assert(code->editable_cfg_built());
+    always_assert(code->cfg_built());
     auto& cfg = code->cfg();
     auto non_returning_it = reachable_aspects.non_returning_insns.find(method);
     if (non_returning_it != reachable_aspects.non_returning_insns.end()) {

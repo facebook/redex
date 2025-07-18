@@ -402,7 +402,7 @@ bool gather_invoked_methods_that_prevent_relocation(
     UnorderedSet<DexMethodRef*>* methods_preventing_relocation) {
   auto code = method->get_code();
   always_assert(code);
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   bool can_relocate = true;
   for (auto& mie : InstructionIterable(cfg)) {

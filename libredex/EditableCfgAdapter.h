@@ -34,7 +34,7 @@ enum LoopExit {
  */
 template <typename Function>
 void iterate(IRCode* code, Function func) {
-  if (code->editable_cfg_built()) {
+  if (code->cfg_built()) {
     for (MethodItemEntry& mie : cfg::InstructionIterable(code->cfg())) {
       if (func(mie) == LOOP_BREAK) {
         break;
@@ -57,7 +57,7 @@ void iterate(IRCode* code, Function func) {
  */
 template <typename Function>
 void iterate_all(IRCode* code, Function func) {
-  if (code->editable_cfg_built()) {
+  if (code->cfg_built()) {
     for (cfg::Block* b : code->cfg().blocks()) {
       for (auto& mie : *b) {
         if (func(mie) == LOOP_BREAK) {
@@ -80,7 +80,7 @@ void iterate_all(IRCode* code, Function func) {
  */
 template <typename Function>
 void iterate_with_iterator(IRCode* code, Function func) {
-  if (code->editable_cfg_built()) {
+  if (code->cfg_built()) {
     auto ii = cfg::InstructionIterable(code->cfg());
     const auto& end = ii.end();
     for (auto it = ii.begin(); it != end; ++it) {

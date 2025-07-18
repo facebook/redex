@@ -223,7 +223,7 @@ void TypedefAnnoChecker::run(DexMethod* m) {
     return;
   }
 
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   redex_assert(m_config.int_typedef != nullptr);
   redex_assert(m_config.str_typedef != nullptr);

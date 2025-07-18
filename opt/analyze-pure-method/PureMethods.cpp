@@ -18,7 +18,7 @@ bool AnalyzePureMethodsPass::analyze_and_check_pure_method_helper(
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
     IRCode* code) {
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
 
   // MoveAwareFixpointIterator to see if any object accessed is parameter (OK)

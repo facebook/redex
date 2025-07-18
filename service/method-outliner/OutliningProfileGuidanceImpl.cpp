@@ -229,7 +229,7 @@ std::vector<DexMethod*> get_possibly_warm_or_hot_methods(
             // next method on success/failure, as there's no point
             // checking the same fixed condition for other
             // interactions.
-            always_assert(code->editable_cfg_built());
+            always_assert(code->cfg_built());
             auto& cfg = code->cfg();
             auto entry_block = cfg.entry_block();
             auto entry_sb = source_blocks::get_first_source_block(entry_block);

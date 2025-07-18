@@ -49,7 +49,7 @@ Allocator::Stats allocate(
   try {
     live_range::renumber_registers(code, /* width_aware */ true);
     // The transformations below all require a CFG.
-    always_assert_log(code->editable_cfg_built(), "Need editable cfg here\n");
+    always_assert_log(code->cfg_built(), "Need editable cfg here\n");
     auto& cfg = code->cfg();
     Allocator allocator(allocator_config);
     allocator.allocate(cfg, is_static);

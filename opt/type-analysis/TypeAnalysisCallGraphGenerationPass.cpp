@@ -53,7 +53,7 @@ class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
       : MultipleCalleeBaseStrategy(method_override_graph, scope),
         m_gta(std::move(gta)) {
     walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
-      always_assert(code.editable_cfg_built());
+      always_assert(code.cfg_built());
       code.cfg().calculate_exit_block();
     });
   }

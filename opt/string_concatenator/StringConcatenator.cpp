@@ -389,7 +389,7 @@ void StringConcatenatorPass::run_pass(DexStoresVector& stores,
           return Stats{};
         }
 
-        always_assert(code->editable_cfg_built());
+        always_assert(code->cfg_built());
         // This legacy pass cannot deal with goto-chains. Force-linearize the
         // cfg.
         code->clear_cfg();

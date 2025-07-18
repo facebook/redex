@@ -701,7 +701,7 @@ bool has_monitor_ops(cfg::ControlFlowGraph& cfg) {
 
 Stats run_locks_removal(DexMethod* m, IRCode* code) {
   // 1) Check whether there are MONITOR_ENTER instructions.
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   if (!has_monitor_ops(cfg)) {
     return Stats{};

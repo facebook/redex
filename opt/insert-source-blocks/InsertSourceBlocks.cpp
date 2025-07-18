@@ -707,7 +707,7 @@ struct Injector {
       std::string_view access_method_name;
       std::string access_method_hash_name;
 
-      always_assert(code->editable_cfg_built());
+      always_assert(code->cfg_built());
       auto& cfg = code->cfg();
       if (access_method) {
         access_method_type = access_method->first;

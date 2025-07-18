@@ -1218,7 +1218,7 @@ static void get_recurring_cores(
         if (!can_outline_from_method(method)) {
           return;
         }
-        always_assert(code.editable_cfg_built());
+        always_assert(code.cfg_built());
         code.cfg().calculate_exit_block();
         CanOutlineBlockDecider block_decider(
             config.profile_guidance, throughput_interaction_indices,

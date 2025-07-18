@@ -77,7 +77,7 @@ class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
     if (code == nullptr) {
       return callsites;
     }
-    always_assert(code->editable_cfg_built());
+    always_assert(code->cfg_built());
     for (auto& mie : InstructionIterable(code->cfg())) {
       auto insn = mie.insn;
       if (!opcode::is_an_invoke(insn->opcode())) {
@@ -167,7 +167,7 @@ class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
 
 void ObjectSensitiveDce::dce() {
   walk::parallel::code(m_scope, [&](const DexMethod* method, IRCode& code) {
-    always_assert(code.editable_cfg_built());
+    always_assert(code.cfg_built());
     // The backwards used_vars::FixpointIterator analysis will need it later.
     code.cfg().calculate_exit_block();
   });

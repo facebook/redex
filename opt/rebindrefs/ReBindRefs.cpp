@@ -102,7 +102,7 @@ struct Rebinder {
           }
           bool is_support_lib = api::is_support_lib_type(method->get_class());
           RebinderRefs rebinder_refs;
-          always_assert(method->get_code()->editable_cfg_built());
+          always_assert(method->get_code()->cfg_built());
           auto& cfg = method->get_code()->cfg();
           for (auto& mie : cfg::InstructionIterable(cfg)) {
             auto insn = mie.insn;

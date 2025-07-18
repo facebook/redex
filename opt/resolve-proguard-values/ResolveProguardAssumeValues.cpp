@@ -26,7 +26,7 @@ void ResolveProguardAssumeValuesPass::run_pass(DexStoresVector& stores,
     if (!method || !method->get_code()) {
       return Stats{};
     }
-    always_assert(method->get_code()->editable_cfg_built());
+    always_assert(method->get_code()->cfg_built());
     auto& cfg = method->get_code()->cfg();
     return process_for_code(cfg);
   });

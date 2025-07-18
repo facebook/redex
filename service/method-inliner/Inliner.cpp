@@ -143,7 +143,7 @@ MultiMethodInliner::MultiMethodInliner(
           [this](DexMethod* method) {
             auto it = m_caller_callee.find(method);
             if (it != m_caller_callee.end()) {
-              always_assert(method->get_code()->editable_cfg_built());
+              always_assert(method->get_code()->cfg_built());
               UnorderedSet<DexMethod*> callees;
               callees.reserve(it->second.size());
               for (auto& p : UnorderedIterable(it->second)) {
@@ -270,7 +270,7 @@ MultiMethodInliner::MultiMethodInliner(
     workqueue_run<const DexMethod*>(
         [&](const DexMethod* method) {
           auto* code = method->get_code();
-          if (code == nullptr || !code->editable_cfg_built()) {
+          if (code == nullptr || !code->cfg_built()) {
             return;
           }
           auto& cfg = code->cfg();
@@ -421,7 +421,7 @@ void MultiMethodInliner::inline_callees(DexMethod* caller,
   {
     auto timer = m_inline_callees_timer.scope();
 
-    always_assert(caller->get_code()->editable_cfg_built());
+    always_assert(caller->get_code()->cfg_built());
     auto& cfg = caller->get_code()->cfg();
     for (auto* block : cfg.blocks()) {
       auto ii = InstructionIterable(block);
@@ -475,13 +475,13 @@ void MultiMethodInliner::inline_callees(DexMethod* caller,
         if (m_analyze_and_prune_inits && method::is_init(callee) &&
             !no_return) {
           auto timer2 = m_inline_callees_init_timer.scope();
-          if (!callee->get_code()->editable_cfg_built()) {
+          if (!callee->get_code()->cfg_built()) {
             continue;
           }
           if (!can_inline_init(callee)) {
             if (!method::is_init(caller) ||
                 caller->get_class() != callee->get_class() ||
-                !caller->get_code()->editable_cfg_built() ||
+                !caller->get_code()->cfg_built() ||
                 !constructor_analysis::can_inline_inits_in_same_class(
                     caller, callee, insn)) {
               continue;
@@ -507,7 +507,7 @@ size_t MultiMethodInliner::inline_callees(
     DexMethod* caller, const UnorderedSet<IRInstruction*>& insns) {
   TraceContext context{caller};
   std::vector<Inlinable> inlinables;
-  always_assert(caller->get_code()->editable_cfg_built());
+  always_assert(caller->get_code()->cfg_built());
   for (auto& mie : InstructionIterable(caller->get_code()->cfg())) {
     auto insn = mie.insn;
     if (insns.count(insn)) {
@@ -533,7 +533,7 @@ size_t MultiMethodInliner::inline_callees(
     DexMethod* caller, const UnorderedMap<IRInstruction*, DexMethod*>& insns) {
   TraceContext context{caller};
   std::vector<Inlinable> inlinables;
-  always_assert(caller->get_code()->editable_cfg_built());
+  always_assert(caller->get_code()->cfg_built());
   for (auto& mie : InstructionIterable(caller->get_code()->cfg())) {
     auto insn = mie.insn;
     auto it = insns.find(insn);
@@ -654,7 +654,7 @@ size_t MultiMethodInliner::inline_inlinables(
     DexMethod* caller_method, const std::vector<Inlinable>& inlinables) {
   auto timer = m_inline_inlinables_timer.scope();
   auto caller = caller_method->get_code();
-  always_assert(caller->editable_cfg_built());
+  always_assert(caller->cfg_built());
 
   // attempt to inline all inlinable candidates
   size_t estimated_caller_size = caller->cfg().estimate_code_units();
@@ -1570,7 +1570,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
   };
   size_t insn_size;
   float unused_args{0};
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   reduced_code = apply_call_site_summary(is_static, declaring_type, proto,
                                          code->cfg(), call_site_summary);
   auto cfg = &(reduced_code ? &reduced_code->code() : code)->cfg();
@@ -1893,11 +1893,11 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   // If not, then we can give up, as there's no point in making the case that
   // we can eliminate the callee method based on pervasive inlining.
   if (m_analyze_and_prune_inits && method::is_init(callee)) {
-    always_assert(callee->get_code()->editable_cfg_built());
+    always_assert(callee->get_code()->cfg_built());
     if (!can_inline_init(callee)) {
       for (auto& p : UnorderedIterable(callers)) {
         auto caller = p.first;
-        always_assert(caller->get_code()->editable_cfg_built());
+        always_assert(caller->get_code()->cfg_built());
         if (!method::is_init(caller) ||
             caller->get_class() != callee->get_class() ||
             !constructor_analysis::can_inline_inits_in_same_class(
@@ -2098,7 +2098,7 @@ bool MultiMethodInliner::caller_is_blocklisted(const DexMethod* caller) {
  */
 bool MultiMethodInliner::has_external_catch(
     const DexMethod* callee, const cfg::ControlFlowGraph* reduced_cfg) {
-  always_assert(callee->get_code()->editable_cfg_built());
+  always_assert(callee->get_code()->cfg_built());
   auto& callee_cfg = reduced_cfg ? *reduced_cfg : callee->get_code()->cfg();
   std::vector<DexType*> types;
   callee_cfg.gather_catch_types(types);
@@ -2120,7 +2120,7 @@ bool MultiMethodInliner::cannot_inline_opcodes(
     const cfg::ControlFlowGraph* reduced_cfg,
     const IRInstruction* invk_insn) {
   bool can_inline = true;
-  always_assert(callee->get_code()->editable_cfg_built());
+  always_assert(callee->get_code()->cfg_built());
   auto& callee_cfg = reduced_cfg ? *reduced_cfg : callee->get_code()->cfg();
   for (auto& mie : InstructionIterable(callee_cfg)) {
     auto insn = mie.insn;
@@ -2371,7 +2371,7 @@ std::shared_ptr<XDexMethodRefs::Refs> MultiMethodInliner::get_callee_x_dex_refs(
   }
 
   auto callee_code = callee->get_code();
-  always_assert(callee_code->editable_cfg_built());
+  always_assert(callee_code->cfg_built());
   auto& callee_cfg = reduced_cfg ? *reduced_cfg : callee_code->cfg();
   auto x_dex_refs =
       std::make_shared<XDexMethodRefs::Refs>(m_x_dex->get_for_callee(
@@ -2396,7 +2396,7 @@ MultiMethodInliner::get_callee_type_refs(
   }
 
   UnorderedSet<DexType*> type_refs_set;
-  always_assert(callee->get_code()->editable_cfg_built());
+  always_assert(callee->get_code()->cfg_built());
   auto& callee_cfg = reduced_cfg ? *reduced_cfg : callee->get_code()->cfg();
   for (auto& mie : InstructionIterable(callee_cfg)) {
     auto insn = mie.insn;
@@ -2631,7 +2631,7 @@ bool inline_with_cfg(DexMethod* caller_method,
                      bool needs_constructor_fence) {
 
   auto caller_code = caller_method->get_code();
-  always_assert(caller_code->editable_cfg_built());
+  always_assert(caller_code->cfg_built());
   auto& caller_cfg = caller_code->cfg();
   const cfg::InstructionIterator& callsite_it = caller_cfg.find_insn(callsite);
   if (callsite_it.is_end()) {
@@ -2645,7 +2645,7 @@ bool inline_with_cfg(DexMethod* caller_method,
   }
 
   auto callee_code = callee_method->get_code();
-  always_assert(callee_code->editable_cfg_built());
+  always_assert(callee_code->cfg_built());
   auto& callee_cfg = reduced_cfg ? *reduced_cfg : callee_code->cfg();
 
   bool is_trivial = true;

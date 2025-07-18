@@ -67,7 +67,7 @@ void remap_registers(MethodItemEntry& mei, const RegMap& reg_map) {
 }
 
 void remap_registers(IRCode* code, const RegMap& reg_map) {
-  if (!code->editable_cfg_built()) {
+  if (!code->cfg_built()) {
     for (auto& mei : *code) {
       remap_registers(mei, reg_map);
     }

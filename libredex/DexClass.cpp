@@ -2280,8 +2280,7 @@ DexProto* DexType::get_non_overlapping_proto(const DexString* method_name,
 void DexMethod::add_load_params(size_t num_add_loads) {
   IRCode* code = this->get_code();
   always_assert_log(code, "Method don't have IRCode\n");
-  always_assert_log(code->editable_cfg_built(),
-                    "should be edtiable cfg here\n");
+  always_assert_log(code->cfg_built(), "should be edtiable cfg here\n");
   auto& cfg = code->cfg();
   auto block = cfg.entry_block();
   auto last_loading = block->get_last_param_loading_insn();

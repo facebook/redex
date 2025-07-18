@@ -232,7 +232,7 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(
     IRCode* code,
     bool is_branch_hot_check) {
   Stats stats;
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   std::unique_ptr<type_inference::TypeInference> type_inference;
   UnorderedSet<cfg::Block*> blocks_to_remove_set;

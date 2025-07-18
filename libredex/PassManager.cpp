@@ -244,7 +244,7 @@ class CheckerConfig {
         });
       }
       auto* code = dex_method->get_code();
-      return code->editable_cfg_built() ? show(code->cfg()) : show(code);
+      return code->cfg_built() ? show(code->cfg()) : show(code);
     };
 
     auto res =
@@ -911,7 +911,7 @@ class TraceClassAfterEachPass {
     fprintf(m_fd, "Method %s\n", SHOW(m));
     auto code = m->get_code();
     if (code != nullptr) {
-      if (code->editable_cfg_built()) {
+      if (code->cfg_built()) {
         auto& cfg = code->cfg();
         // Note: would be nice to make the special printers from ShowCFG
         // configurable/callable from here.
@@ -946,7 +946,7 @@ class TraceClassAfterEachPass {
     if (code == nullptr) {
       return boost::none;
     }
-    if (code->editable_cfg_built()) {
+    if (code->cfg_built()) {
       auto& cfg = code->cfg();
       for (auto b : cfg.blocks()) {
         auto sbs = source_blocks::gather_source_blocks(b);
@@ -1398,30 +1398,30 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     ConcurrentSet<const DexMethodRef*> all_code_referenced_methods;
     ConcurrentSet<DexMethod*> unique_methods;
     bool is_editable_cfg_friendly = !pass->is_cfg_legacy();
-    walk::parallel::code(build_class_scope(stores), [&](DexMethod* m,
-                                                        IRCode& code) {
-      if (is_editable_cfg_friendly) {
-        always_assert_log(code.editable_cfg_built(), "%s has a cfg!", SHOW(m));
-        code.cfg().reset_exit_block();
-      }
-      if (slow_invariants_debug) {
-        std::vector<DexMethodRef*> methods;
-        methods.reserve(1000);
-        methods.push_back(m);
-        code.gather_methods(methods);
-        for (auto* mref : methods) {
-          always_assert_log(
-              DexMethod::get_method(mref->get_class(), mref->get_name(),
-                                    mref->get_proto()) != nullptr,
-              "Did not find %s in the context, referenced from %s!", SHOW(mref),
-              SHOW(m));
-          all_code_referenced_methods.insert(mref);
-        }
-        if (!unique_methods.insert(m)) {
-          not_reached_log("Duplicate method: %s", SHOW(m));
-        }
-      }
-    });
+    walk::parallel::code(
+        build_class_scope(stores), [&](DexMethod* m, IRCode& code) {
+          if (is_editable_cfg_friendly) {
+            always_assert_log(code.cfg_built(), "%s has a cfg!", SHOW(m));
+            code.cfg().reset_exit_block();
+          }
+          if (slow_invariants_debug) {
+            std::vector<DexMethodRef*> methods;
+            methods.reserve(1000);
+            methods.push_back(m);
+            code.gather_methods(methods);
+            for (auto* mref : methods) {
+              always_assert_log(
+                  DexMethod::get_method(mref->get_class(), mref->get_name(),
+                                        mref->get_proto()) != nullptr,
+                  "Did not find %s in the context, referenced from %s!",
+                  SHOW(mref), SHOW(m));
+              all_code_referenced_methods.insert(mref);
+            }
+            if (!unique_methods.insert(m)) {
+              not_reached_log("Duplicate method: %s", SHOW(m));
+            }
+          }
+        });
     if (slow_invariants_debug) {
       ScopedMetrics sm(*this);
       sm.set_metric("num_code_referenced_methods",
@@ -1514,7 +1514,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       double cpu_time_start = ((double)std::clock()) / CLOCKS_PER_SEC;
       auto wall_time_start = std::chrono::steady_clock::now();
       if (pass->is_cfg_legacy()) {
-        // if this pass hasn't been updated to editable_cfg yet, clear_cfg. In
+        // if this pass hasn't been updated to cfg yet, clear_cfg. In
         // the future, once all editable cfg updates are done, this branch will
         // be removed.
         auto temp_scope = build_class_scope(stores);
@@ -1575,7 +1575,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       if (!pass->is_cfg_legacy()) {
         auto temp_scope = build_class_scope(stores);
         walk::parallel::code(temp_scope, [&](DexMethod* method, IRCode& code) {
-          always_assert_log(code.editable_cfg_built(),
+          always_assert_log(code.cfg_built(),
                             "%s has no editable cfg after cfg-friendly pass %s",
                             SHOW(method), pass->name().c_str());
           code.cfg().simplify();

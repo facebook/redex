@@ -179,7 +179,7 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
 
   std::vector<std::pair<cfg::InstructionIterator, IRInstruction*>> to_replace;
 
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
 
   for (const auto& mie : InstructionIterable(cfg)) {

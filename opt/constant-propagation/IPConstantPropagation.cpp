@@ -295,7 +295,7 @@ void PassImpl::run(const DexStoresVector& stores,
   XStoreRefs xstores(stores);
 
   walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
-    always_assert(code.editable_cfg_built());
+    always_assert(code.cfg_built());
     code.cfg().calculate_exit_block();
   });
 

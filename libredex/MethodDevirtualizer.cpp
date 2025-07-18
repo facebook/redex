@@ -65,7 +65,7 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
       return call_counter;
     }
 
-    always_assert(code->editable_cfg_built());
+    always_assert(code->cfg_built());
     auto& cfg = code->cfg();
     for (const MethodItemEntry& mie : InstructionIterable(cfg)) {
       IRInstruction* insn = mie.insn;
@@ -121,7 +121,7 @@ bool uses_this(const DexMethod* method) {
   auto code = (const_cast<DexMethod*>(method))->get_code();
   always_assert_log(!is_static(method) && code != nullptr, "%s", SHOW(method));
 
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   auto& cfg = code->cfg();
   auto first = cfg.entry_block()->get_first_insn();
   always_assert(first != cfg.entry_block()->end());

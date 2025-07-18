@@ -199,7 +199,7 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
     }
   }
 
-  always_assert(method->get_code()->editable_cfg_built());
+  always_assert(method->get_code()->cfg_built());
   auto& cfg = method->get_code()->cfg();
 
   for (const auto& it : cfg::InstructionIterable(cfg)) {

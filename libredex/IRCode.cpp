@@ -638,7 +638,7 @@ IRCode::IRCode(DexMethod* method, size_t temp_regs) : m_ir_list(new IRList()) {
 }
 
 IRCode::IRCode(const IRCode& code) {
-  if (code.editable_cfg_built()) {
+  if (code.cfg_built()) {
     m_ir_list = new IRList(); // Empty.
     m_cfg = std::make_unique<cfg::ControlFlowGraph>();
     code.m_cfg->deep_copy(m_cfg.get());
@@ -666,8 +666,8 @@ void IRCode::build_cfg(bool rebuild_even_if_already_built) {
       !m_cfg_serialized_with_custom_strategy,
       "Cannot build editable CFG after being serialized with custom strategy. "
       "Rebuilding CFG will cause problems with basic block ordering.");
-  if (!rebuild_even_if_already_built && editable_cfg_built()) {
-    // If current code already has editable_cfg, and no need to rebuild a fresh
+  if (!rebuild_even_if_already_built && cfg_built()) {
+    // If current code already has cfg, and no need to rebuild a fresh
     // editable cfg, just keep current cfg and return.
     return;
   }
@@ -708,8 +708,6 @@ void IRCode::clear_cfg(
 }
 
 bool IRCode::cfg_built() const { return m_cfg != nullptr; }
-
-bool IRCode::editable_cfg_built() const { return m_cfg != nullptr; }
 
 namespace {
 
@@ -1183,7 +1181,7 @@ bool IRCode::try_sync(DexCode* code) {
 }
 
 void IRCode::gather_catch_types(std::vector<DexType*>& ltype) const {
-  if (editable_cfg_built()) {
+  if (cfg_built()) {
     m_cfg->gather_catch_types(ltype);
   } else {
     m_ir_list->gather_catch_types(ltype);
@@ -1192,7 +1190,7 @@ void IRCode::gather_catch_types(std::vector<DexType*>& ltype) const {
 }
 
 void IRCode::gather_strings(std::vector<const DexString*>& lstring) const {
-  if (editable_cfg_built()) {
+  if (cfg_built()) {
     m_cfg->gather_strings(lstring);
   } else {
     m_ir_list->gather_strings(lstring);
@@ -1201,7 +1199,7 @@ void IRCode::gather_strings(std::vector<const DexString*>& lstring) const {
 }
 
 void IRCode::gather_types(std::vector<DexType*>& ltype) const {
-  if (editable_cfg_built()) {
+  if (cfg_built()) {
     m_cfg->gather_types(ltype);
   } else {
     m_ir_list->gather_types(ltype);
@@ -1209,7 +1207,7 @@ void IRCode::gather_types(std::vector<DexType*>& ltype) const {
 }
 
 void IRCode::gather_init_classes(std::vector<DexType*>& ltype) const {
-  if (editable_cfg_built()) {
+  if (cfg_built()) {
     m_cfg->gather_init_classes(ltype);
   } else {
     m_ir_list->gather_init_classes(ltype);
@@ -1217,7 +1215,7 @@ void IRCode::gather_init_classes(std::vector<DexType*>& ltype) const {
 }
 
 void IRCode::gather_fields(std::vector<DexFieldRef*>& lfield) const {
-  if (editable_cfg_built()) {
+  if (cfg_built()) {
     m_cfg->gather_fields(lfield);
   } else {
     m_ir_list->gather_fields(lfield);
@@ -1225,7 +1223,7 @@ void IRCode::gather_fields(std::vector<DexFieldRef*>& lfield) const {
 }
 
 void IRCode::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
-  if (editable_cfg_built()) {
+  if (cfg_built()) {
     m_cfg->gather_methods(lmethod);
   } else {
     m_ir_list->gather_methods(lmethod);
@@ -1233,7 +1231,7 @@ void IRCode::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
 }
 
 void IRCode::gather_callsites(std::vector<DexCallSite*>& lcallsite) const {
-  if (editable_cfg_built()) {
+  if (cfg_built()) {
     m_cfg->gather_callsites(lcallsite);
   } else {
     m_ir_list->gather_callsites(lcallsite);
@@ -1242,7 +1240,7 @@ void IRCode::gather_callsites(std::vector<DexCallSite*>& lcallsite) const {
 
 void IRCode::gather_methodhandles(
     std::vector<DexMethodHandle*>& lmethodhandle) const {
-  if (editable_cfg_built()) {
+  if (cfg_built()) {
     m_cfg->gather_methodhandles(lmethodhandle);
   } else {
     m_ir_list->gather_methodhandles(lmethodhandle);
@@ -1254,7 +1252,7 @@ void IRCode::gather_methodhandles(
  * all the instructions.
  */
 size_t IRCode::sum_opcode_sizes() const {
-  if (editable_cfg_built()) {
+  if (cfg_built()) {
     return m_cfg->sum_opcode_sizes();
   }
   return m_ir_list->sum_opcode_sizes();
@@ -1262,7 +1260,7 @@ size_t IRCode::sum_opcode_sizes() const {
 
 // similar to sum_opcode_sizes, but takes into account non-opcode payloads
 uint32_t IRCode::estimate_code_units() const {
-  if (editable_cfg_built()) {
+  if (cfg_built()) {
     return m_cfg->estimate_code_units();
   }
   uint32_t code_units = m_ir_list->estimate_code_units();
@@ -1283,14 +1281,14 @@ uint32_t IRCode::estimate_code_units() const {
  * Returns the number of instructions.
  */
 size_t IRCode::count_opcodes() const {
-  if (editable_cfg_built()) {
+  if (cfg_built()) {
     return m_cfg->num_opcodes();
   }
   return m_ir_list->count_opcodes();
 }
 
 bool IRCode::has_try_blocks() const {
-  if (editable_cfg_built()) {
+  if (cfg_built()) {
     auto b = this->cfg().blocks();
     return std::any_of(b.begin(), b.end(),
                        [](auto* block) { return block->is_catch(); });
@@ -1301,7 +1299,7 @@ bool IRCode::has_try_blocks() const {
 }
 
 bool IRCode::is_unreachable() const {
-  if (editable_cfg_built()) {
+  if (cfg_built()) {
     return this->cfg().entry_block()->is_unreachable();
   }
   auto it = InstructionIterable(this).begin();

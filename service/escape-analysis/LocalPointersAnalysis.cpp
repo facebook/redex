@@ -513,8 +513,8 @@ EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
   uint16_t idx{0};
   UnorderedMap<const IRInstruction*, uint16_t> param_indexes;
   boost::sub_range<IRList> param_instruction =
-      code.editable_cfg_built() ? cfg.get_param_instructions()
-                                : code.get_param_instructions();
+      code.cfg_built() ? cfg.get_param_instructions()
+                       : code.get_param_instructions();
   for (auto& mie : InstructionIterable(param_instruction)) {
     auto* insn = mie.insn;
     if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {

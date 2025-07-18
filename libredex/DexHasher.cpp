@@ -220,7 +220,7 @@ void Impl::hash(const IRCode* c) {
   auto old_hash = m_hash;
   m_hash = 0;
 
-  if (c->editable_cfg_built()) {
+  if (c->cfg_built()) {
     hash(c->cfg());
   } else {
     hash(c->get_registers_size());

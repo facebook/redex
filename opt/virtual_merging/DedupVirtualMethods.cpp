@@ -47,7 +47,7 @@ void find_duplications(const method_override_graph::Graph* graph,
     return;
   }
 
-  always_assert(root_code->editable_cfg_built());
+  always_assert(root_code->cfg_built());
   auto& root_cfg = root_code->cfg();
 
   for (auto* child_node :
@@ -62,7 +62,7 @@ void find_duplications(const method_override_graph::Graph* graph,
     if (!child_code) {
       continue;
     }
-    always_assert(child_code->editable_cfg_built());
+    always_assert(child_code->cfg_built());
     auto& child_cfg = child_code->cfg();
     if (eligible_code(child_cfg)) {
       if (root_cfg.structural_equals(child_cfg)) {
@@ -112,7 +112,7 @@ uint32_t remove_duplicated_vmethods(
         // names when change the accessibility of them.
         continue;
       }
-      always_assert(method->get_code()->editable_cfg_built());
+      always_assert(method->get_code()->cfg_built());
       if (!eligible_code(method->get_code()->cfg())) {
         continue;
       }

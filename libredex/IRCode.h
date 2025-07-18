@@ -182,7 +182,6 @@ class IRCode {
                  std::vector<IRInstruction*>* deleted_insns = nullptr);
 
   bool cfg_built() const;
-  bool editable_cfg_built() const;
 
   /* Generate DexCode from IRCode */
   std::unique_ptr<DexCode> sync(const DexMethod*);

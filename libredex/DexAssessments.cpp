@@ -371,13 +371,13 @@ DexAssessment DexScopeAssessor::run() {
     method_stats.num_instructions.fetch_add(code->count_opcodes(),
                                             std::memory_order_relaxed);
     auto sum_opcode_sizes = code->sum_opcode_sizes();
-    if (code->editable_cfg_built()) {
+    if (code->cfg_built()) {
       sum_opcode_sizes += code->cfg().get_size_adjustment();
     }
     method_stats.sum_opcodes.fetch_add(sum_opcode_sizes,
                                        std::memory_order_relaxed);
     auto code_units = code->estimate_code_units();
-    if (code->editable_cfg_built()) {
+    if (code->cfg_built()) {
       code_units += code->cfg().get_size_adjustment();
     }
     method_stats.code_units.fetch_add(code_units, std::memory_order_relaxed);

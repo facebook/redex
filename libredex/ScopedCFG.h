@@ -52,7 +52,7 @@ class ScopedCFG {
 };
 
 ScopedCFG::ScopedCFG(IRCode* code)
-    : m_code(code), m_owns_cfg(!code->editable_cfg_built()) {
+    : m_code(code), m_owns_cfg(!code->cfg_built()) {
   if (m_owns_cfg) {
     m_code->build_cfg();
   }

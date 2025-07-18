@@ -480,7 +480,7 @@ void ReduceGotosPass::process_code_ifs(cfg::ControlFlowGraph& cfg,
 
 ReduceGotosPass::Stats ReduceGotosPass::process_code(IRCode* code) {
   Stats stats;
-  always_assert(code->editable_cfg_built());
+  always_assert(code->cfg_built());
   code->cfg().calculate_exit_block();
   auto& cfg = code->cfg();
   process_code_switches(cfg, stats);

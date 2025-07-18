@@ -362,7 +362,7 @@ class walk {
                                             const WalkerFn& walker) {
     std::vector<std::pair<cfg::Block*, std::vector<IRInstruction*>>>
         block_matches;
-    always_assert(ir_code.editable_cfg_built());
+    always_assert(ir_code.cfg_built());
     for (cfg::Block* block : ir_code.cfg().blocks()) {
       std::vector<std::vector<IRInstruction*>> method_matches;
       std::vector<IRInstruction*> insns;

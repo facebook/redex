@@ -517,7 +517,7 @@ void ResultPropagationPass::run_pass(DexStoresVector& stores,
 
         ResultPropagation rp(methods_which_return_parameter, resolver,
                              m_callee_blocklist);
-        always_assert(code->editable_cfg_built());
+        always_assert(code->cfg_built());
         auto& cfg = code->cfg();
         rp.patch(mgr, cfg);
         return rp.get_stats();
@@ -574,7 +574,7 @@ ResultPropagationPass::find_methods_which_return_parameter(
                 return res;
               }
 
-              always_assert(code->editable_cfg_built());
+              always_assert(code->cfg_built());
               auto& cfg = code->cfg();
               const auto return_param_index = resolver.get_return_param_index(
                   cfg, methods_which_return_parameter);

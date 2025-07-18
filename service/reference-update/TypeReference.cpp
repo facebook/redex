@@ -221,7 +221,7 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
   ConcurrentSet<DexMethodRef*> methods;
   ConcurrentSet<DexFieldRef*> fields;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    if (code.editable_cfg_built()) {
+    if (code.cfg_built()) {
       for (auto& mie : InstructionIterable(code.cfg())) {
         auto insn = mie.insn;
         if (insn->has_field()) {
@@ -497,7 +497,7 @@ void update_method_signature_type_references(
 
   // Ensure that no method references left that still refer old types.
   walk::parallel::code(scope, [&old_types](DexMethod*, IRCode& code) {
-    if (code.editable_cfg_built()) {
+    if (code.cfg_built()) {
       auto& cfg = code.cfg();
       for (auto& mie : InstructionIterable(cfg)) {
         auto insn = mie.insn;
@@ -547,7 +547,7 @@ void update_field_type_references(
   walk::parallel::fields(scope, update_field);
 
   walk::parallel::code(scope, [&old_to_new](DexMethod*, IRCode& code) {
-    if (code.editable_cfg_built()) {
+    if (code.cfg_built()) {
       auto& cfg = code.cfg();
       for (auto& mie : InstructionIterable(cfg)) {
         auto insn = mie.insn;
@@ -606,7 +606,7 @@ void fix_colliding_dmethods(
     num_additional_args[meth] = arg_count;
 
     auto code = meth->get_code();
-    if (code->editable_cfg_built()) {
+    if (code->cfg_built()) {
       auto& cfg = code->cfg();
       auto block = cfg.entry_block();
       auto last_loading = block->get_last_param_loading_insn();
@@ -642,7 +642,7 @@ void fix_colliding_dmethods(
 
   walk::parallel::code(scope, [&](DexMethod* meth, IRCode& code) {
     method_reference::CallSites callsites;
-    if (code.editable_cfg_built()) {
+    if (code.cfg_built()) {
       auto& cfg = code.cfg();
       for (auto& mie : InstructionIterable(cfg)) {
         auto insn = mie.insn;
