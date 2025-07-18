@@ -619,7 +619,7 @@ bool is_run_hasher_after_each_pass(const ConfigFiles& conf,
   return hasher_args.get("run_after_each_pass", false).asBool();
 }
 
-void ensure_editable_cfg(DexStoresVector& stores) {
+void ensure_cfg(DexStoresVector& stores) {
   auto temp_scope = build_class_scope(stores);
   walk::parallel::code(temp_scope, [&](DexMethod*, IRCode& code) {
     code.build_cfg(/*rebuild_even_if_already_built*/ false);
@@ -797,7 +797,7 @@ class AfterPassSizes {
           std::cerr << "Running " << pass_name << std::endl;
         }
         if (!pass->is_cfg_legacy()) {
-          ensure_editable_cfg(*stores);
+          ensure_cfg(*stores);
         }
         pass->run_pass(*stores, *conf, *m_mgr);
       }
@@ -1397,10 +1397,10 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   auto post_pass_verifiers = [&](Pass* pass, size_t i, size_t size) {
     ConcurrentSet<const DexMethodRef*> all_code_referenced_methods;
     ConcurrentSet<DexMethod*> unique_methods;
-    bool is_editable_cfg_friendly = !pass->is_cfg_legacy();
+    bool is_cfg_friendly = !pass->is_cfg_legacy();
     walk::parallel::code(
         build_class_scope(stores), [&](DexMethod* m, IRCode& code) {
-          if (is_editable_cfg_friendly) {
+          if (is_cfg_friendly) {
             always_assert_log(code.cfg_built(), "%s has a cfg!", SHOW(m));
             code.cfg().reset_exit_block();
           }
@@ -1526,7 +1526,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
         // Run build_cfg() in case any newly added methods by previous passes
         // are not built as editable cfg. But if editable cfg is already built,
         // no need to rebuild it.
-        ensure_editable_cfg(stores);
+        ensure_cfg(stores);
         TRACE(PM, 2, "%s Pass uses editable cfg.\n", SHOW(pass->name()));
       }
       pass->run_pass(stores, conf, *this);

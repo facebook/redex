@@ -2739,7 +2739,7 @@ OPCODE: GOTO
 )");
 }
 
-TEST_F(ControlFlowTest, non_editable_cfg_case_keys) {
+TEST_F(ControlFlowTest, non_cfg_case_keys) {
   auto code = assembler::ircode_from_string(R"(
     (
       (switch v0 (:a :b))
