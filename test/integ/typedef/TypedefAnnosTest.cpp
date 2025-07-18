@@ -15,7 +15,7 @@
 struct TypedefAnnosTest : public RedexIntegrationTest {
   cfg::ControlFlowGraph& get_cfg(DexMethod* method) {
     auto code = method->get_code();
-    code->build_cfg(/* editable */ false);
+    code->build_cfg(cfg::CFGMode::NON_EDITABLE);
     auto& cfg = code->cfg();
     cfg.calculate_exit_block();
     return cfg;

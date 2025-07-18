@@ -1531,7 +1531,7 @@ std::shared_ptr<ReducedCode> MultiMethodInliner::apply_call_site_summary(
 
   // Re-build cfg once more to get linearized representation, good for
   // predicting fallthrough branches
-  reduced_code->code().build_cfg(/* editable */ true);
+  reduced_code->code().build_cfg();
 
   return reduced_code;
 }

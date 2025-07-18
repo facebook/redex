@@ -43,7 +43,7 @@ TEST_F(DedupBlocksTest, useSwitch) {
       if (strcmp(m->get_name()->c_str(), "useSwitch") == 0) {
         code_checked_before = true;
         IRCode* code = m->get_code();
-        code->build_cfg(/* editable */ true);
+        code->build_cfg();
         EXPECT_EQ(count_someFunc_calls(code->cfg()), 3);
         code->clear_cfg();
       }
@@ -64,7 +64,7 @@ TEST_F(DedupBlocksTest, useSwitch) {
       if (strcmp(m->get_name()->c_str(), "useSwitch") == 0) {
         code_checked_after = true;
         IRCode* code = m->get_code();
-        code->build_cfg(/* editable */ true);
+        code->build_cfg();
         EXPECT_EQ(count_someFunc_calls(code->cfg()), 1);
         code->clear_cfg();
       }

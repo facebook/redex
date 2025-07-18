@@ -265,7 +265,7 @@ DexMethod* DedupStrings::make_const_string_loader_method(
   }
   auto method = method_creator.create();
   host_cls->add_method(method);
-  method->get_code()->build_cfg(/* editable */ true);
+  method->get_code()->build_cfg();
   return method;
 }
 

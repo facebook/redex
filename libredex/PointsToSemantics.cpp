@@ -877,7 +877,7 @@ class PointsToActionGenerator final {
   void run() {
     IRCode* code = m_dex_method->get_code();
     always_assert(code != nullptr);
-    code->build_cfg(/* editable */ false);
+    code->build_cfg(cfg::CFGMode::NON_EDITABLE);
     cfg::ControlFlowGraph& cfg = code->cfg();
     cfg.calculate_exit_block();
 

@@ -416,7 +416,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
     return false;
   }
 
-  code->build_cfg(/* editable */ false);
+  code->build_cfg(cfg::CFGMode::NON_EDITABLE);
   const auto& blocks = code->cfg().blocks_reverse_post_deprecated();
 
   auto fields_in = fields_setters(blocks, builder);
@@ -599,7 +599,7 @@ bool params_change_regs(DexMethod* method) {
   auto* args = proto->get_args();
 
   auto code = method->get_code();
-  code->build_cfg(/* editable */ false);
+  code->build_cfg(cfg::CFGMode::NON_EDITABLE);
   const auto& blocks = code->cfg().blocks_reverse_post_deprecated();
   reg_t regs_size = code->get_registers_size();
   const auto& param_insns = InstructionIterable(code->get_param_instructions());

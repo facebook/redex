@@ -23,7 +23,7 @@ void dump_viz(const Scope& scope,
   walk::code(scope, [&](DexMethod* meth, IRCode& code) {
     if (cls_filter && !strstr(meth->get_class()->c_str(), cls_filter)) return;
     if (meth_filter && !strstr(meth->c_str(), meth_filter)) return;
-    code.build_cfg(/* editable */ false);
+    code.build_cfg(cfg::CFGMode::NON_EDITABLE);
     const auto& blocks = code.cfg().blocks();
     fprintf(stderr, "digraph \"%s\" {\n", SHOW(meth));
     for (const auto& block : blocks) {

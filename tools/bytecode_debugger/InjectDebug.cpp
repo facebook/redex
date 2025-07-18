@@ -75,7 +75,7 @@ void InjectDebug::inject_method(DexMethod* dex_method, int* line_start) {
   DexDebugItem* dbg = ir_code->get_debug_item();
   if (dbg != nullptr) dbg->get_entries().clear();
 
-  ir_code->build_cfg(false);
+  ir_code->build_cfg(cfg::CFGMode::NON_EDITABLE);
   type_inference::TypeInference type_inf(ir_code->cfg());
   type_inf.run(dex_method);
 

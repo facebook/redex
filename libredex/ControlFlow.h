@@ -41,7 +41,7 @@
  * IRCode entirely as the primary code representation. To build an editable CFG,
  * call
  *
- * `code->build_cfg(true)`
+ * `code->build_cfg(CFGMode::EDITABLE)`
  *
  * The editable CFG takes the MethodItemEntries from the IRCode object and moves
  * them into the blocks. The editable CFG steals the code out of the IRCode
@@ -493,7 +493,9 @@ class ControlFlowGraph {
    * if editable is false, changes to the CFG aren't reflected in the output dex
    * instructions.
    */
-  ControlFlowGraph(IRList* ir, reg_t registers_size, bool editable = true);
+  ControlFlowGraph(IRList* ir,
+                   reg_t registers_size,
+                   CFGMode mode = CFGMode::EDITABLE);
   ~ControlFlowGraph();
 
   /*

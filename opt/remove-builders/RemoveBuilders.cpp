@@ -48,7 +48,7 @@ bool this_arg_escapes(DexMethod* method, bool enable_buildee_constr_change) {
   always_assert(this_insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT);
   auto regs_size = code->get_registers_size();
   auto this_cls = method->get_class();
-  code->build_cfg(/* editable */ false);
+  code->build_cfg(cfg::CFGMode::NON_EDITABLE);
   const auto& blocks = code->cfg().blocks_reverse_post_deprecated();
   std::function<void(IRList::iterator, TaintedRegs*)> trans =
       [&](const IRList::iterator& it, TaintedRegs* tregs) {
@@ -215,7 +215,7 @@ bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
   always_assert(method != nullptr);
 
   auto code = method->get_code();
-  code->build_cfg(/* editable */ false);
+  code->build_cfg(cfg::CFGMode::NON_EDITABLE);
   const auto& blocks = code->cfg().blocks_reverse_post_deprecated();
   auto regs_size = method->get_code()->get_registers_size();
   auto taint_map = get_tainted_regs(regs_size, blocks, builder);

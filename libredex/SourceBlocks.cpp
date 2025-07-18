@@ -1840,7 +1840,7 @@ void track_source_block_coverage(ScopedMetrics& sm,
         if (!code) {
           return ret;
         }
-        code->build_cfg(/* editable */ true);
+        code->build_cfg();
         auto& cfg = code->cfg();
         auto dominators =
             dominators::SimpleFastDominators<cfg::GraphInterface>(cfg);

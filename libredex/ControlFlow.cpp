@@ -784,10 +784,10 @@ bool ControlFlowGraph::s_DEBUG = false;
 
 ControlFlowGraph::ControlFlowGraph(IRList* ir,
                                    reg_t registers_size,
-                                   bool editable)
-    : m_orig_list(editable ? nullptr : ir),
+                                   CFGMode mode)
+    : m_orig_list(mode == CFGMode::EDITABLE ? nullptr : ir),
       m_registers_size(registers_size),
-      m_editable(editable) {
+      m_editable(mode == CFGMode::EDITABLE) {
   always_assert_log(!ir->empty(), "IRList contains no instructions");
   build_cfg_counter++;
 

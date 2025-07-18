@@ -17,6 +17,11 @@
 #include "IRList.h"
 
 namespace cfg {
+enum CFGMode {
+  NON_EDITABLE,
+  EDITABLE,
+};
+
 class ControlFlowGraph;
 struct LinearizationStrategy;
 } // namespace cfg
@@ -171,7 +176,7 @@ class IRCode {
   // called. For editable cfg, it is only rebuilt when the flag
   // rebuild_editable_even_if_already_built is true. Otherwise, the current
   // editable cfg will be kept.
-  void build_cfg(bool editable = true,
+  void build_cfg(cfg::CFGMode mode = cfg::CFGMode::EDITABLE,
                  bool rebuild_editable_even_if_already_built = true);
 
   // if the cfg was editable, linearize it back into m_ir_list
