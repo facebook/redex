@@ -97,15 +97,15 @@ bool valid_r_class_clinit(const DexMethod* clinit,
     return true;
   }
   bool is_valid{true};
-  editable_cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
+  cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
     if (mie.type == MFLOW_OPCODE) {
       if (mie.insn->has_method() && !is_tolerable_instrumentation_invoke(
                                         mie.insn, global_resources_config)) {
         is_valid = false;
-        return editable_cfg_adapter::LoopExit::LOOP_BREAK;
+        return cfg_adapter::LoopExit::LOOP_BREAK;
       }
     }
-    return editable_cfg_adapter::LoopExit::LOOP_CONTINUE;
+    return cfg_adapter::LoopExit::LOOP_CONTINUE;
   });
   return is_valid;
 }
@@ -122,7 +122,7 @@ bool valid_r_class_init(const DexMethod* init,
     return true;
   }
   bool is_valid{true};
-  editable_cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
+  cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
     if (mie.type == MFLOW_OPCODE) {
       auto op = mie.insn->opcode();
       if (mie.insn->has_method()) {
@@ -130,15 +130,15 @@ bool valid_r_class_init(const DexMethod* init,
             !is_tolerable_instrumentation_invoke(mie.insn,
                                                  global_resources_config)) {
           is_valid = false;
-          return editable_cfg_adapter::LoopExit::LOOP_BREAK;
+          return cfg_adapter::LoopExit::LOOP_BREAK;
         }
       } else if (!opcode::is_a_load_param(op) && !opcode::is_a_return(op) &&
                  !opcode::is_a_const(op)) {
         is_valid = false;
-        return editable_cfg_adapter::LoopExit::LOOP_BREAK;
+        return cfg_adapter::LoopExit::LOOP_BREAK;
       }
     }
-    return editable_cfg_adapter::LoopExit::LOOP_CONTINUE;
+    return cfg_adapter::LoopExit::LOOP_CONTINUE;
   });
   return is_valid;
 }

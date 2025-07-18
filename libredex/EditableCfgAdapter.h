@@ -11,7 +11,7 @@
 #include "IRCode.h"
 #include "IRList.h"
 
-namespace editable_cfg_adapter {
+namespace cfg_adapter {
 
 /**
  * Given an IRCode object and a function to apply to each element, these
@@ -111,4 +111,4 @@ void iterate_all(const IRCode* code,
 void iterate_with_iterator(
     const IRCode* code, std::function<LoopExit(IRList::const_iterator)> func);
 
-}; // namespace editable_cfg_adapter
+}; // namespace cfg_adapter

@@ -38,13 +38,13 @@ bool is_no_return_method(DexMethod* method) {
     return false;
   }
   bool can_return{false};
-  editable_cfg_adapter::iterate_with_iterator(
+  cfg_adapter::iterate_with_iterator(
       method->get_code(), [&can_return](const IRList::iterator& it) {
         if (opcode::is_a_return(it->insn->opcode())) {
           can_return = true;
-          return editable_cfg_adapter::LOOP_BREAK;
+          return cfg_adapter::LOOP_BREAK;
         }
-        return editable_cfg_adapter::LOOP_CONTINUE;
+        return cfg_adapter::LOOP_CONTINUE;
       });
   return !can_return;
 }

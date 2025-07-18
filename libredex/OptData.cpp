@@ -50,22 +50,22 @@ bool get_line_num(const DexMethod* method,
   bool find_first_pos = insn == nullptr;
   size_t cur_line = 0;
   bool success{false};
-  editable_cfg_adapter::iterate_all(code, [&](const MethodItemEntry& mie) {
+  cfg_adapter::iterate_all(code, [&](const MethodItemEntry& mie) {
     if (mie.type == MFLOW_POSITION) {
       cur_line = mie.pos->line;
       if (find_first_pos) {
         *line_num = cur_line;
         success = true;
-        return editable_cfg_adapter::LOOP_BREAK;
+        return cfg_adapter::LOOP_BREAK;
       }
     }
     if (mie.type == MFLOW_OPCODE && mie.insn == insn) {
       // We want to get the last position found before the insn we care about.
       *line_num = cur_line;
       success = true;
-      return editable_cfg_adapter::LOOP_BREAK;
+      return cfg_adapter::LOOP_BREAK;
     }
-    return editable_cfg_adapter::LOOP_CONTINUE;
+    return cfg_adapter::LOOP_CONTINUE;
   });
   return success;
 }

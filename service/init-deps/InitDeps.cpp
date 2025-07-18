@@ -70,7 +70,7 @@ auto compute_deps(const Scope& scope,
 
     auto clinit = cls->get_clinit();
     if (clinit != nullptr && clinit->get_code() != nullptr) {
-      editable_cfg_adapter::iterate_with_iterator(
+      cfg_adapter::iterate_with_iterator(
           clinit->get_code(), [&](const IRList::iterator& it) {
             auto insn = it->insn;
             if (opcode::is_an_sfield_op(insn->opcode())) {
@@ -80,7 +80,7 @@ auto compute_deps(const Scope& scope,
             } else if (opcode::is_new_instance(insn->opcode())) {
               add_dep(type_class(insn->get_type()));
             }
-            return editable_cfg_adapter::LOOP_CONTINUE;
+            return cfg_adapter::LOOP_CONTINUE;
           });
     }
 
@@ -210,17 +210,17 @@ Scope reverse_tsort_by_init_deps(const Scope& scope, size_t& possible_cycles) {
     if (ctors.size() == 1) {
       auto ctor = ctors[0];
       if (ctor != nullptr && ctor->get_code() != nullptr) {
-        editable_cfg_adapter::iterate_with_iterator(
+        cfg_adapter::iterate_with_iterator(
             ctor->get_code(), [&](const IRList::iterator& it) {
               auto insn = it->insn;
               if (opcode::is_an_iget(insn->opcode())) {
                 auto dependee_cls = type_class(insn->get_field()->get_class());
                 if (dependee_cls == nullptr || dependee_cls == cls) {
-                  return editable_cfg_adapter::LOOP_CONTINUE;
+                  return cfg_adapter::LOOP_CONTINUE;
                 }
                 visit(dependee_cls);
               }
-              return editable_cfg_adapter::LOOP_CONTINUE;
+              return cfg_adapter::LOOP_CONTINUE;
             });
       }
     }

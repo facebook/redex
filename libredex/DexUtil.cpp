@@ -367,11 +367,11 @@ VisibilityChanges get_visibility_changes(
   always_assert(code != nullptr);
   VisibilityChanges changes;
   VisibilityChangeGetter getter{changes, scope, effective_caller_resolved_from};
-  editable_cfg_adapter::iterate(const_cast<IRCode*>(code),
-                                [&getter](MethodItemEntry& mie) {
-                                  getter.process_insn(mie.insn);
-                                  return editable_cfg_adapter::LOOP_CONTINUE;
-                                });
+  cfg_adapter::iterate(const_cast<IRCode*>(code),
+                       [&getter](MethodItemEntry& mie) {
+                         getter.process_insn(mie.insn);
+                         return cfg_adapter::LOOP_CONTINUE;
+                       });
 
   std::vector<DexType*> types;
   code->gather_catch_types(types);

@@ -656,13 +656,13 @@ void resolve_virtual_calls_to_merger(const Scope& scope,
   ConcurrentSet<DexClass*> excluded_mergeables;
   InsertOnlyConcurrentMap<IRInstruction*, DexMethodRef*> resolved_virtual_calls;
   walk::parallel::code(scope, [&](DexMethod* /* method */, IRCode& code) {
-    editable_cfg_adapter::iterate(&code, [&](MethodItemEntry& mie) {
+    cfg_adapter::iterate(&code, [&](MethodItemEntry& mie) {
       auto insn = mie.insn;
       if (opcode::is_invoke_virtual(insn->opcode())) {
         auto mergeable_method_ref = insn->get_method();
         auto container = type_class(mergeable_method_ref->get_class());
         if (!container) {
-          return editable_cfg_adapter::LOOP_CONTINUE;
+          return cfg_adapter::LOOP_CONTINUE;
         }
         auto find_merger = mergeable_to_merger.find(container);
         if (find_merger != mergeable_to_merger.end() &&
@@ -702,7 +702,7 @@ void resolve_virtual_calls_to_merger(const Scope& scope,
           }
         }
       }
-      return editable_cfg_adapter::LOOP_CONTINUE;
+      return cfg_adapter::LOOP_CONTINUE;
     });
   });
   for (auto cls : UnorderedIterable(excluded_mergeables)) {

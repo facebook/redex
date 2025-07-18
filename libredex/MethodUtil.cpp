@@ -135,28 +135,28 @@ class ClInitSideEffectsAnalysis {
       return true;
     }
     bool non_trivial = false;
-    editable_cfg_adapter::iterate_with_iterator(
+    cfg_adapter::iterate_with_iterator(
         method->get_code(), [&](const IRList::iterator& it) {
           auto insn = it->insn;
           if (opcode::is_an_invoke(insn->opcode())) {
             if (invoke_may_have_side_effects(effective_caller, insn)) {
               non_trivial = true;
-              return editable_cfg_adapter::LOOP_BREAK;
+              return cfg_adapter::LOOP_BREAK;
             }
           } else if (insn->opcode() == IOPCODE_INIT_CLASS ||
                      insn->opcode() == OPCODE_NEW_INSTANCE) {
             if (init_class_or_new_instance_may_have_side_effects(
                     insn->get_type())) {
               non_trivial = true;
-              return editable_cfg_adapter::LOOP_BREAK;
+              return cfg_adapter::LOOP_BREAK;
             }
           } else if (insn->has_field()) {
             if (field_op_may_have_side_effects(effective_caller, insn)) {
               non_trivial = true;
-              return editable_cfg_adapter::LOOP_BREAK;
+              return cfg_adapter::LOOP_BREAK;
             }
           }
-          return editable_cfg_adapter::LOOP_CONTINUE;
+          return cfg_adapter::LOOP_CONTINUE;
         });
     auto erased = m_active.erase(method);
     always_assert(erased);
@@ -508,13 +508,13 @@ const DexClass* clinit_may_have_side_effects(
 
 bool no_invoke_super(const IRCode& code) {
   bool has_invoke_super{false};
-  editable_cfg_adapter::iterate(&code, [&](const MethodItemEntry& mie) {
+  cfg_adapter::iterate(&code, [&](const MethodItemEntry& mie) {
     auto insn = mie.insn;
     if (insn->opcode() == OPCODE_INVOKE_SUPER) {
       has_invoke_super = true;
-      return editable_cfg_adapter::LOOP_BREAK;
+      return cfg_adapter::LOOP_BREAK;
     }
-    return editable_cfg_adapter::LOOP_CONTINUE;
+    return cfg_adapter::LOOP_CONTINUE;
   });
   return !has_invoke_super;
 }

@@ -153,13 +153,13 @@ uint32_t remove_duplicated_vmethods(
 void collect_all_invoke_super_called(
     const Scope& scope, ConcurrentSet<DexMethodRef*>* super_invoked_methods) {
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    editable_cfg_adapter::iterate(&code, [&](MethodItemEntry& mie) {
+    cfg_adapter::iterate(&code, [&](MethodItemEntry& mie) {
       auto insn = mie.insn;
       if (insn->opcode() == OPCODE_INVOKE_SUPER) {
         auto callee_ref = insn->get_method();
         super_invoked_methods->insert(callee_ref);
       }
-      return editable_cfg_adapter::LOOP_CONTINUE;
+      return cfg_adapter::LOOP_CONTINUE;
     });
   });
 }

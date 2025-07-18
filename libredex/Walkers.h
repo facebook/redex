@@ -282,9 +282,9 @@ class walk {
                               const FilterFn& filter,
                               const WalkerFn& walker) {
     iterate_code(cls, filter, [&walker](DexMethod* m, IRCode& code) {
-      editable_cfg_adapter::iterate(&code, [&walker, &m](MethodItemEntry& mie) {
+      cfg_adapter::iterate(&code, [&walker, &m](MethodItemEntry& mie) {
         walker(m, mie.insn);
-        return editable_cfg_adapter::LOOP_CONTINUE;
+        return cfg_adapter::LOOP_CONTINUE;
       });
     });
   }
