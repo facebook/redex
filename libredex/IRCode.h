@@ -118,17 +118,13 @@ class IRCode {
 
   void cleanup_debug();
 
-  reg_t get_registers_size() const { return m_registers_size; }
+  reg_t get_registers_size() const;
 
-  void set_registers_size(reg_t sz) { m_registers_size = sz; }
+  void set_registers_size(reg_t sz);
 
-  reg_t allocate_temp() { return m_registers_size++; }
+  reg_t allocate_temp();
 
-  reg_t allocate_wide_temp() {
-    reg_t new_reg = m_registers_size;
-    m_registers_size += 2;
-    return new_reg;
-  }
+  reg_t allocate_wide_temp();
 
   /*
    * Find the subrange of load-param instructions. These instructions should

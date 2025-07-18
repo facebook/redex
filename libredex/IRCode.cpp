@@ -661,6 +661,28 @@ IRCode::IRCode(std::unique_ptr<cfg::ControlFlowGraph> cfg) {
 
 void IRCode::cleanup_debug() { m_ir_list->cleanup_debug(); }
 
+reg_t IRCode::get_registers_size() const {
+  always_assert(!cfg_built());
+  return m_registers_size;
+}
+
+void IRCode::set_registers_size(reg_t sz) {
+  always_assert(!cfg_built());
+  m_registers_size = sz;
+}
+
+reg_t IRCode::allocate_temp() {
+  always_assert(!cfg_built());
+  return m_registers_size++;
+}
+
+reg_t IRCode::allocate_wide_temp() {
+  always_assert(!cfg_built());
+  reg_t new_reg = m_registers_size;
+  m_registers_size += 2;
+  return new_reg;
+}
+
 void IRCode::build_cfg(bool rebuild_even_if_already_built) {
   always_assert_log(
       !m_cfg_serialized_with_custom_strategy,

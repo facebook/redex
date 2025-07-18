@@ -170,7 +170,7 @@ TEST_F(RegAllocTest, BuildInterferenceGraph) {
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, cfg, code->get_registers_size(), range_set);
+      fixpoint_iter, cfg, cfg.get_registers_size(), range_set);
   // +---+
   // | 1 |
   // +---+
@@ -278,7 +278,7 @@ TEST_F(RegAllocTest, Coalesce) {
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, cfg, code->get_registers_size(), range_set);
+      fixpoint_iter, cfg, cfg.get_registers_size(), range_set);
   graph_coloring::Allocator allocator;
   allocator.coalesce(&ig, cfg);
 
@@ -310,7 +310,7 @@ TEST_F(RegAllocTest, MoveWideCoalesce) {
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, cfg, code->get_registers_size(), range_set);
+      fixpoint_iter, cfg, cfg.get_registers_size(), range_set);
 
   EXPECT_TRUE(ig.is_coalesceable(0, 1));
   EXPECT_TRUE(ig.is_adjacent(0, 1));
@@ -349,7 +349,7 @@ TEST_F(RegAllocTest, NoCoalesceWide) {
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, cfg, code->get_registers_size(), range_set);
+      fixpoint_iter, cfg, cfg.get_registers_size(), range_set);
 
   EXPECT_FALSE(ig.is_coalesceable(0, 1));
   EXPECT_TRUE(ig.is_adjacent(0, 1));
@@ -478,7 +478,7 @@ TEST_F(RegAllocTest, SelectRange) {
   RangeSet range_set = init_range_set(cfg);
   EXPECT_EQ(range_set.size(), 1);
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, cfg, code->get_registers_size(), range_set);
+      fixpoint_iter, cfg, cfg.get_registers_size(), range_set);
   for (size_t i = 0; i < 6; ++i) {
     auto& node = ig.get_node(i);
     EXPECT_TRUE(node.is_range() && node.is_param());
@@ -517,7 +517,7 @@ TEST_F(RegAllocTest, SelectAliasedRange) {
   LivenessFixpointIterator fixpoint_iter(cfg);
   fixpoint_iter.run(LivenessDomain());
 
-  auto ii = InstructionIterable(code->cfg());
+  auto ii = InstructionIterable(cfg);
   auto invoke_it =
       std::find_if(ii.begin(), ii.end(), [](const MethodItemEntry& mie) {
         return mie.type == MFLOW_OPCODE &&
@@ -528,7 +528,7 @@ TEST_F(RegAllocTest, SelectAliasedRange) {
   RangeSet range_set;
   range_set.emplace(invoke);
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, cfg, code->get_registers_size(), range_set);
+      fixpoint_iter, cfg, cfg.get_registers_size(), range_set);
   graph_coloring::SpillPlan spill_plan;
   graph_coloring::RegisterTransform reg_transform;
   graph_coloring::Allocator allocator;
@@ -571,13 +571,13 @@ TEST_F(RegAllocTest, AlignRanges) {
   fixpoint_iter.run(LivenessDomain());
 
   RangeSet range_set;
-  for (auto& mie : InstructionIterable(code->cfg())) {
+  for (auto& mie : InstructionIterable(cfg)) {
     if (mie.insn->opcode() == OPCODE_INVOKE_STATIC) {
       range_set.emplace(mie.insn);
     }
   }
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, cfg, code->get_registers_size(), range_set);
+      fixpoint_iter, cfg, cfg.get_registers_size(), range_set);
   graph_coloring::SpillPlan spill_plan;
   graph_coloring::RegisterTransform reg_transform;
   graph_coloring::Allocator allocator;
@@ -609,7 +609,7 @@ TEST_F(RegAllocTest, Spill) {
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, cfg, code->get_registers_size(), range_set);
+      fixpoint_iter, cfg, cfg.get_registers_size(), range_set);
 
   SplitPlan split_plan;
   graph_coloring::SpillPlan spill_plan;
@@ -662,7 +662,7 @@ TEST_F(RegAllocTest, NoSpillSingleArgInvokes) {
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, cfg, code->get_registers_size(), range_set);
+      fixpoint_iter, cfg, cfg.get_registers_size(), range_set);
 
   SplitPlan split_plan;
   graph_coloring::SpillPlan spill_plan;
@@ -707,7 +707,7 @@ TEST_F(RegAllocTest, ContainmentGraph) {
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, cfg, code->get_registers_size(), range_set);
+      fixpoint_iter, cfg, cfg.get_registers_size(), range_set);
   EXPECT_TRUE(ig.has_containment_edge(0, 1));
   EXPECT_TRUE(ig.has_containment_edge(1, 0));
   EXPECT_TRUE(ig.has_containment_edge(1, 2));
@@ -763,7 +763,7 @@ TEST_F(RegAllocTest, FindSplit) {
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, cfg, code->get_registers_size(), range_set);
+      fixpoint_iter, cfg, cfg.get_registers_size(), range_set);
 
   SplitCosts split_costs;
   SplitPlan split_plan;
@@ -798,7 +798,7 @@ TEST_F(RegAllocTest, Split) {
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, cfg, code->get_registers_size(), range_set);
+      fixpoint_iter, cfg, cfg.get_registers_size(), range_set);
 
   SplitCosts split_costs;
   SplitPlan split_plan;
@@ -848,7 +848,7 @@ TEST_F(RegAllocTest, ParamFirstUse) {
 
   RangeSet range_set;
   interference::Graph ig = interference::build_graph(
-      fixpoint_iter, cfg, code->get_registers_size(), range_set);
+      fixpoint_iter, cfg, cfg.get_registers_size(), range_set);
 
   graph_coloring::SpillPlan spill_plan;
   spill_plan.param_spills = UnorderedSet<reg_t>{0, 1};
