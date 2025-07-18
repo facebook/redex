@@ -18,6 +18,7 @@
 #include "IRAssembler.h"
 #include "JarLoader.h"
 #include "RedexTest.h"
+#include "Walkers.h"
 
 using namespace sparta;
 
@@ -314,6 +315,8 @@ TEST_F(PointsToSemanticsTest, semanticActionGeneration) {
   // used and seems hard to predict. We patch the method body in order to get
   // the code we want.
   patch_filled_new_array_test(scope);
+
+  walk::code(scope, [&](DexMethod*, IRCode& code) { code.build_cfg(); });
 
   PointsToSemantics pt_semantics(scope);
 
