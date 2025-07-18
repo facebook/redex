@@ -38,7 +38,7 @@ class IRCode {
       const DexCatches& catches,
       std::vector<std::unique_ptr<DexTryItem>>* tries);
 
-  IRList* m_ir_list;
+  std::unique_ptr<IRList> m_ir_list;
   std::unique_ptr<cfg::ControlFlowGraph> m_cfg;
 
   reg_t m_registers_size{0};

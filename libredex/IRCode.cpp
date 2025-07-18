@@ -532,8 +532,8 @@ get_old_to_new_position_copies(IRList* ir_list) {
 }
 
 // TODO: merge this and MethodSplicer.
-IRList* deep_copy_ir_list(IRList* old_ir_list) {
-  IRList* ir_list = new IRList();
+std::unique_ptr<IRList> deep_copy_ir_list(IRList* old_ir_list) {
+  auto ir_list = std::make_unique<IRList>();
 
   UnorderedMap<DexPosition*, std::unique_ptr<DexPosition>> old_position_to_new =
       get_old_to_new_position_copies(old_ir_list);
@@ -612,8 +612,6 @@ IRCode::~IRCode() {
     } else {
       m_ir_list->clear_and_dispose();
     }
-
-    delete m_ir_list;
   }
 }
 
@@ -621,7 +619,7 @@ IRCode::IRCode(DexMethod* method) : m_ir_list(new IRList()) {
   auto* dc = method->get_dex_code();
   generate_load_params(method, dc->get_registers_size() - dc->get_ins_size(),
                        this);
-  balloon(const_cast<DexMethod*>(method), m_ir_list);
+  balloon(const_cast<DexMethod*>(method), m_ir_list.get());
   m_dbg = dc->release_debug_item();
 }
 
@@ -630,7 +628,7 @@ std::unique_ptr<IRCode> IRCode::for_method(DexMethod* method) {
   auto* dc = method->get_dex_code();
   generate_load_params(method, dc->get_registers_size() - dc->get_ins_size(),
                        code.get());
-  balloon(const_cast<DexMethod*>(method), code->m_ir_list);
+  balloon(const_cast<DexMethod*>(method), code->m_ir_list.get());
   code->m_dbg = dc->release_debug_item();
   return code;
 }
@@ -642,11 +640,10 @@ IRCode::IRCode(DexMethod* method, size_t temp_regs) : m_ir_list(new IRList()) {
 
 IRCode::IRCode(const IRCode& code) {
   if (code.cfg_built()) {
-    m_ir_list = nullptr;
     m_cfg = std::make_unique<cfg::ControlFlowGraph>();
     code.m_cfg->deep_copy(m_cfg.get());
   } else {
-    IRList* old_ir_list = code.m_ir_list;
+    auto old_ir_list = code.m_ir_list.get();
     m_ir_list = deep_copy_ir_list(old_ir_list);
   }
   m_registers_size = code.m_registers_size;
@@ -657,7 +654,6 @@ IRCode::IRCode(const IRCode& code) {
 
 IRCode::IRCode(std::unique_ptr<cfg::ControlFlowGraph> cfg) {
   always_assert(cfg);
-  m_ir_list = nullptr;
   m_cfg = std::move(cfg);
   m_registers_size = m_cfg->get_registers_size();
 }
@@ -697,10 +693,10 @@ void IRCode::build_cfg(bool rebuild_even_if_already_built) {
     return;
   }
   clear_cfg();
-  m_cfg = std::make_unique<cfg::ControlFlowGraph>(m_ir_list, m_registers_size);
+  m_cfg = std::make_unique<cfg::ControlFlowGraph>(m_ir_list.get(),
+                                                  m_registers_size);
   m_ir_list->clear_and_dispose();
-  delete m_ir_list;
-  m_ir_list = nullptr;
+  m_ir_list.reset();
 }
 
 void IRCode::clear_cfg(
@@ -966,7 +962,7 @@ bool IRCode::try_sync(DexCode* code) {
                           "%s refers to nonexistent branch instruction",
                           SHOW(*mentry));
         int32_t branch_offset = entry_to_addr.at(mentry) - branch_addr->second;
-        needs_resync |= !encode_offset(m_ir_list, mentry, branch_offset);
+        needs_resync |= !encode_offset(m_ir_list.get(), mentry, branch_offset);
       }
     }
   }
@@ -1148,7 +1144,8 @@ bool IRCode::try_sync(DexCode* code) {
 
   auto debugitem = code->get_debug_item();
   if (debugitem) {
-    gather_debug_entries(m_ir_list, entry_to_addr, &debugitem->get_entries());
+    gather_debug_entries(m_ir_list.get(), entry_to_addr,
+                         &debugitem->get_entries());
   }
   // Step 5, try/catch blocks
   TRACE(MTRANS, 5, "Emitting try items & catch handlers");

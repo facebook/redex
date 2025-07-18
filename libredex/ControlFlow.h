@@ -490,7 +490,7 @@ class ControlFlowGraph {
    * convert from the graph representation to a list of MethodItemEntries
    * Using custom_strategy allows custom order linearization of the CFG.
    */
-  IRList* linearize(
+  std::unique_ptr<IRList> linearize(
       const std::unique_ptr<LinearizationStrategy>& custom_strategy = nullptr);
 
   // Return the blocks of this CFG in an arbitrary order.

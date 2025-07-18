@@ -2012,10 +2012,10 @@ void ControlFlowGraph::remove_try_catch_markers() {
   }
 }
 
-IRList* ControlFlowGraph::linearize(
+std::unique_ptr<IRList> ControlFlowGraph::linearize(
     const std::unique_ptr<LinearizationStrategy>& custom_strategy) {
   sanity_check();
-  IRList* result = new IRList;
+  auto result = std::make_unique<IRList>();
 
   TRACE_NO_LINE(CFG, 5, "before linearize:\n%s", SHOW(*this));
 
@@ -2027,7 +2027,7 @@ IRList* ControlFlowGraph::linearize(
   for (Block* b : ordering) {
     result->splice(result->end(), b->m_entries);
   }
-  remove_redundant_positions(result);
+  remove_redundant_positions(result.get());
 
   return result;
 }

@@ -1599,7 +1599,7 @@ std::string show(DexIdx* p) {
 
 std::string show(const IRCode* mt, bool code_only) {
   return mt->cfg_built() ? show(mt->cfg(), code_only)
-                         : show(mt->m_ir_list, code_only);
+                         : show(mt->m_ir_list.get(), code_only);
 }
 
 std::string show(const ir_list::InstructionIterable& it) {

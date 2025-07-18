@@ -1044,8 +1044,8 @@ TEST_F(ControlFlowTest, deep_copy1) {
   cfg::ControlFlowGraph copy;
   orig.deep_copy(&copy);
   EXPECT_TRUE(orig.structural_equals(copy));
-  IRList* orig_list = orig.linearize();
-  IRList* copy_list = copy.linearize();
+  auto orig_list = orig.linearize();
+  auto copy_list = copy.linearize();
 
   EXPECT_TRUE(orig_list->structural_equals(*copy_list, m_equal));
 }
@@ -1074,8 +1074,8 @@ TEST_F(ControlFlowTest, deep_copy2) {
   cfg::ControlFlowGraph copy;
   orig.deep_copy(&copy);
   EXPECT_TRUE(orig.structural_equals(copy));
-  IRList* orig_list = orig.linearize();
-  IRList* copy_list = copy.linearize();
+  auto orig_list = orig.linearize();
+  auto copy_list = copy.linearize();
 
   EXPECT_TRUE(orig_list->structural_equals(*copy_list, m_equal));
 }
@@ -1113,8 +1113,8 @@ TEST_F(ControlFlowTest, deep_copy3) {
   cfg::ControlFlowGraph copy;
   orig.deep_copy(&copy);
   EXPECT_TRUE(orig.structural_equals(copy));
-  IRList* orig_list = orig.linearize();
-  IRList* copy_list = copy.linearize();
+  auto orig_list = orig.linearize();
+  auto copy_list = copy.linearize();
 
   EXPECT_TRUE(orig_list->structural_equals(*copy_list, m_equal));
 }
