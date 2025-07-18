@@ -21,6 +21,7 @@ using RegSet = boost::dynamic_bitset<>;
 struct TaintedRegs {
   RegSet m_reg_set;
 
+  TaintedRegs() : m_reg_set(0) {}
   explicit TaintedRegs(int nregs) : m_reg_set(nregs) {}
   explicit TaintedRegs(RegSet&& reg_set) noexcept
       : m_reg_set(std::move(reg_set)) {}
@@ -57,6 +58,7 @@ struct FieldsRegs {
   UnorderedMap<DexField*, UnorderedSet<const IRInstruction*>>
       field_to_iput_insns;
 
+  FieldsRegs() {}
   explicit FieldsRegs(DexClass* builder) {
     const auto& ifields = builder->get_ifields();
     for (const auto& ifield : ifields) {
@@ -84,7 +86,10 @@ void transfer_object_reach(DexType* object,
                            RegSet& regs);
 
 std::unique_ptr<UnorderedMap<IRInstruction*, TaintedRegs>> get_tainted_regs(
-    uint32_t regs_size, const std::vector<cfg::Block*>& blocks, DexType* type);
+    const cfg::ControlFlowGraph& cfg,
+    uint32_t regs_size,
+    const std::vector<cfg::Block*>& blocks,
+    DexType* type);
 
 class BuilderTransform {
  public:

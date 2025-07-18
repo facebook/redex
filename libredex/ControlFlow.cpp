@@ -1686,7 +1686,7 @@ ControlFlowGraph::primary_instruction_of_move_result_for_type_check(
 }
 
 cfg::InstructionIterator ControlFlowGraph::primary_instruction_of_move_result(
-    const cfg::InstructionIterator& it) {
+    const cfg::InstructionIterator& it) const {
   auto move_result_insn = it->insn;
   always_assert(opcode::is_move_result_any(move_result_insn->opcode()));
   auto block = const_cast<Block*>(it.block());
@@ -1709,7 +1709,7 @@ cfg::InstructionIterator ControlFlowGraph::primary_instruction_of_move_result(
 }
 
 cfg::InstructionIterator ControlFlowGraph::next_following_gotos(
-    const cfg::InstructionIterator& it) {
+    const cfg::InstructionIterator& it) const {
   auto next_it = std::next(it);
   if (!next_it.is_end() && next_it.block() == it.block()) {
     return next_it;
@@ -1718,7 +1718,7 @@ cfg::InstructionIterator ControlFlowGraph::next_following_gotos(
   // goto-target.
   auto block = it.block()->goes_to();
   if (!block) {
-    return InstructionIterable(*this).end();
+    return InstructionIterable(it.cfg()).end();
   }
   auto first_insn_it = block->get_first_insn();
   if (first_insn_it != block->end()) {
@@ -1731,7 +1731,7 @@ cfg::InstructionIterator ControlFlowGraph::next_following_gotos(
     block = block->goes_to();
     if (!block || !visited.insert(block).second) {
       // non-terminating empty self-loop
-      return InstructionIterable(*this).end();
+      return InstructionIterable(it.cfg()).end();
     }
     first_insn_it = block->get_first_insn();
     if (first_insn_it != block->end()) {
@@ -1741,7 +1741,7 @@ cfg::InstructionIterator ControlFlowGraph::next_following_gotos(
 }
 
 cfg::InstructionIterator ControlFlowGraph::move_result_of(
-    const cfg::InstructionIterator& it) {
+    const cfg::InstructionIterator& it) const {
   auto next_it = next_following_gotos(it);
   if (next_it.is_end()) {
     return next_it;
@@ -1750,7 +1750,7 @@ cfg::InstructionIterator ControlFlowGraph::move_result_of(
     always_assert(primary_instruction_of_move_result(next_it) == it);
     return next_it;
   }
-  return cfg::InstructionIterable(*this).end();
+  return InstructionIterable(it.cfg()).end();
 }
 
 /*

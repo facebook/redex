@@ -993,9 +993,10 @@ class ControlFlowGraph {
       const cfg::InstructionIterator& it);
 
   cfg::InstructionIterator primary_instruction_of_move_result(
-      const cfg::InstructionIterator& it);
+      const cfg::InstructionIterator& it) const;
 
-  cfg::InstructionIterator move_result_of(const cfg::InstructionIterator& it);
+  cfg::InstructionIterator move_result_of(
+      const cfg::InstructionIterator& it) const;
 
   /*
    * Gets the next instruction, following gotos if the end of blocks are
@@ -1003,7 +1004,7 @@ class ControlFlowGraph {
    * returned.
    */
   cfg::InstructionIterator next_following_gotos(
-      const cfg::InstructionIterator& it);
+      const cfg::InstructionIterator& it) const;
 
   /*
    * clear and fill `new_cfg` with a copy of `this`. Copies of all instructions
