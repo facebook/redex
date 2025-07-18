@@ -601,17 +601,20 @@ IRCode::IRCode() : m_ir_list(new IRList()) {}
 
 IRCode::~IRCode() {
   // Let the CFG clean itself up.
-  if (m_cfg != nullptr && m_owns_insns) {
-    m_cfg->set_insn_ownership(true);
-  }
-
-  if (m_owns_insns) {
-    m_ir_list->insn_clear_and_dispose();
+  if (m_cfg != nullptr) {
+    if (m_owns_insns) {
+      m_cfg->set_insn_ownership(true);
+    }
   } else {
-    m_ir_list->clear_and_dispose();
-  }
+    always_assert(m_ir_list != nullptr);
+    if (m_owns_insns) {
+      m_ir_list->insn_clear_and_dispose();
+    } else {
+      m_ir_list->clear_and_dispose();
+    }
 
-  delete m_ir_list;
+    delete m_ir_list;
+  }
 }
 
 IRCode::IRCode(DexMethod* method) : m_ir_list(new IRList()) {
@@ -639,7 +642,7 @@ IRCode::IRCode(DexMethod* method, size_t temp_regs) : m_ir_list(new IRList()) {
 
 IRCode::IRCode(const IRCode& code) {
   if (code.cfg_built()) {
-    m_ir_list = new IRList(); // Empty.
+    m_ir_list = nullptr;
     m_cfg = std::make_unique<cfg::ControlFlowGraph>();
     code.m_cfg->deep_copy(m_cfg.get());
   } else {
@@ -654,7 +657,7 @@ IRCode::IRCode(const IRCode& code) {
 
 IRCode::IRCode(std::unique_ptr<cfg::ControlFlowGraph> cfg) {
   always_assert(cfg);
-  m_ir_list = new IRList(); // Empty.
+  m_ir_list = nullptr;
   m_cfg = std::move(cfg);
   m_registers_size = m_cfg->get_registers_size();
 }
@@ -695,12 +698,16 @@ void IRCode::build_cfg(bool rebuild_even_if_already_built) {
   }
   clear_cfg();
   m_cfg = std::make_unique<cfg::ControlFlowGraph>(m_ir_list, m_registers_size);
+  m_ir_list->clear_and_dispose();
+  delete m_ir_list;
+  m_ir_list = nullptr;
 }
 
 void IRCode::clear_cfg(
     const std::unique_ptr<cfg::LinearizationStrategy>& custom_strategy,
     std::vector<IRInstruction*>* deleted_insns) {
   if (!m_cfg) {
+    always_assert(m_ir_list != nullptr);
     return;
   }
 
@@ -709,10 +716,7 @@ void IRCode::clear_cfg(
   }
 
   m_registers_size = m_cfg->get_registers_size();
-  if (m_ir_list != nullptr) {
-    m_ir_list->clear_and_dispose();
-    delete m_ir_list;
-  }
+  always_assert(m_ir_list == nullptr);
   m_ir_list = m_cfg->linearize(custom_strategy);
 
   if (deleted_insns != nullptr) {

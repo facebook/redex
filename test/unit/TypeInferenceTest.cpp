@@ -34,7 +34,7 @@ TEST_F(TypeInferenceTest, const0) {
   type_inference::TypeInference inference(cfg);
   inference.run(method);
   auto& envs = inference.get_type_environments();
-  for (auto& mie : InstructionIterable(*code)) {
+  for (auto& mie : InstructionIterable(cfg)) {
     auto insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode())) {
       auto& env = envs.at(insn);
