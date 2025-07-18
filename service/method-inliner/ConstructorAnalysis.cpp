@@ -75,8 +75,8 @@ class ConstructorAnalysisEnvironment final
   }
 
   ConstructorAnalysisEnvironment& mutate_params(
-      std::function<void(ParamDomainEnvironment*)> f) {
-    apply<0>(std::move(f));
+      const std::function<void(ParamDomainEnvironment*)>& f) {
+    apply<0>(f);
     return *this;
   }
 

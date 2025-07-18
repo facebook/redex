@@ -370,7 +370,7 @@ void OptDataMapper::serialize_class(
   cls_data["package"] = str_copy(cls_opt_data->m_package);
   cls_data["source_file"] =
       cls_opt_data->m_has_srcfile ? str_copy(cls_opt_data->m_filename) : "";
-  cls_data["name"] = std::move(name);
+  cls_data["name"] = name;
   arr->append(cls_data);
   serialize_opt_nopt_helper(cls_opt_data->m_opts, cls_opt_data->m_nopts, cls_id,
                             opt_arr, nopt_arr);
