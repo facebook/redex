@@ -30,18 +30,14 @@
  * connected to their predecessors and successors by `Edge`s that specify
  * the type of connection.
  *
- * EDITABLE MODE:
- * Right now there are two types of CFGs. Editable and non-editable:
- * A non editable CFG's blocks have begin and end pointers into the big linear
- * IRList inside IRCode.
  * An editable CFG's blocks each own a small IRList (with MethodItemEntries
  * taken from IRCode)
  *
- * Editable mode is the new version of the CFG. In the future, it will replace
+ * In the future, CFGs will replace
  * IRCode entirely as the primary code representation. To build an editable CFG,
  * call
  *
- * `code->build_cfg(CFGMode::EDITABLE)`
+ * `code->build_cfg()`
  *
  * The editable CFG takes the MethodItemEntries from the IRCode object and moves
  * them into the blocks. The editable CFG steals the code out of the IRCode
@@ -450,15 +446,9 @@ class Block final {
 
   BlockId m_id;
 
-  // MethodItemEntries get moved from IRCode into here (if m_editable)
+  // MethodItemEntries get moved from IRCode into here
   // otherwise, this is empty.
   IRList m_entries;
-
-  // TODO delete these
-  // These refer into the IRCode IRList
-  // These are only used in non-editable mode.
-  IRList::iterator m_begin;
-  IRList::iterator m_end;
 
   std::vector<Edge*> m_preds;
   std::vector<Edge*> m_succs;
@@ -493,9 +483,7 @@ class ControlFlowGraph {
    * if editable is false, changes to the CFG aren't reflected in the output dex
    * instructions.
    */
-  ControlFlowGraph(IRList* ir,
-                   reg_t registers_size,
-                   CFGMode mode = CFGMode::EDITABLE);
+  ControlFlowGraph(IRList* ir, reg_t registers_size);
   ~ControlFlowGraph();
 
   /*
@@ -903,9 +891,6 @@ class ControlFlowGraph {
    */
   std::ostream& write_dot_format(std::ostream&) const;
 
-  // Do writes to this CFG propagate back to IR and Dex code?
-  bool editable() const { return m_editable; }
-
   size_t num_blocks() const { return m_blocks.size(); }
   size_t num_edges() const { return m_edges.size(); }
 
@@ -931,7 +916,6 @@ class ControlFlowGraph {
   std::pair<uint32_t, bool> remove_unreachable_blocks();
 
   // transform the CFG to an equivalent but more canonical state
-  // Assumes m_editable is true
   // returns the number of instructions removed
   uint32_t simplify();
 
@@ -1094,7 +1078,6 @@ class ControlFlowGraph {
 
   // remove all MFLOW_TRY and MFLOW_CATCH markers because that information is
   // moved into the edges.
-  // Assumes m_editable is true
   void remove_try_catch_markers();
 
   // helper functions
@@ -1312,11 +1295,9 @@ class ControlFlowGraph {
   Blocks m_blocks;
   EdgeSet m_edges;
 
-  IRList* m_orig_list{nullptr}; // Only set when !m_editable.
   Block* m_entry_block{nullptr};
   Block* m_exit_block{nullptr};
   reg_t m_registers_size{0};
-  bool m_editable{true};
   bool m_owns_insns{false};
   bool m_owns_removed_insns{true};
   std::vector<IRInstruction*> m_removed_insns;
@@ -1409,7 +1390,6 @@ class InstructionIteratorImpl {
   InstructionIteratorImpl() = delete;
 
   explicit InstructionIteratorImpl(Cfg& cfg, bool is_begin) : m_cfg(&cfg) {
-    always_assert(m_cfg->editable());
     if (is_begin) {
       m_block = m_cfg->m_blocks.begin();
       if (m_block != m_cfg->m_blocks.end()) {
@@ -1566,8 +1546,6 @@ template <class ForwardIt>
 bool ControlFlowGraph::replace_insns(const InstructionIterator& it,
                                      const ForwardIt& begin,
                                      const ForwardIt& end) {
-  always_assert(m_editable);
-
   // Save these values before we insert in case the insertion causes iterator
   // invalidation.
   auto insn_to_del = it->insn;

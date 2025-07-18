@@ -1181,9 +1181,6 @@ class EnumTransformer final {
       if (method->get_code() == nullptr) {
         return;
       }
-      if (!code.cfg().editable()) {
-        code.build_cfg();
-      }
       for (auto& mie : InstructionIterable(code.cfg())) {
         auto insn = mie.insn;
         if (insn->has_method()) {

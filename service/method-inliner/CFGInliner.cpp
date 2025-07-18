@@ -256,7 +256,6 @@ void CFGInliner::rewrite_invoke_supers(ControlFlowGraph* cfg,
  */
 std::pair<Block*, Block*> CFGInliner::maybe_split_block(
     ControlFlowGraph* caller, const InstructionIterator& it) {
-  always_assert(caller->editable());
   always_assert(!it.block()->empty());
 
   const IRList::iterator& raw_it = it.unwrap();
@@ -277,7 +276,6 @@ std::pair<Block*, Block*> CFGInliner::maybe_split_block(
 // should contain the callsite as a pair.
 std::pair<Block*, Block*> CFGInliner::maybe_split_block_before(
     ControlFlowGraph* caller, InstructionIterator& it) {
-  always_assert(caller->editable());
   always_assert(!it.block()->empty());
 
   const IRList::iterator& raw_it = it.unwrap();

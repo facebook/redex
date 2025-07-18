@@ -17,11 +17,6 @@
 #include "IRList.h"
 
 namespace cfg {
-enum CFGMode {
-  NON_EDITABLE,
-  EDITABLE,
-};
-
 class ControlFlowGraph;
 struct LinearizationStrategy;
 } // namespace cfg

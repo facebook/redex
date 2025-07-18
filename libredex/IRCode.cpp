@@ -601,7 +601,7 @@ IRCode::IRCode() : m_ir_list(new IRList()) {}
 
 IRCode::~IRCode() {
   // Let the CFG clean itself up.
-  if (m_cfg != nullptr && m_cfg->editable() && m_owns_insns) {
+  if (m_cfg != nullptr && m_owns_insns) {
     m_cfg->set_insn_ownership(true);
   }
 
@@ -654,7 +654,6 @@ IRCode::IRCode(const IRCode& code) {
 
 IRCode::IRCode(std::unique_ptr<cfg::ControlFlowGraph> cfg) {
   always_assert(cfg);
-  always_assert(cfg->editable());
   m_ir_list = new IRList(); // Empty.
   m_cfg = std::move(cfg);
   m_registers_size = m_cfg->get_registers_size();
@@ -684,20 +683,15 @@ void IRCode::clear_cfg(
   }
 
   if (custom_strategy) {
-    always_assert_log(
-        m_cfg->editable(),
-        "Cannot linearize non-editable CFG with custom strategy!");
     m_cfg_serialized_with_custom_strategy = true;
   }
 
-  if (m_cfg->editable()) {
-    m_registers_size = m_cfg->get_registers_size();
-    if (m_ir_list != nullptr) {
-      m_ir_list->clear_and_dispose();
-      delete m_ir_list;
-    }
-    m_ir_list = m_cfg->linearize(custom_strategy);
+  m_registers_size = m_cfg->get_registers_size();
+  if (m_ir_list != nullptr) {
+    m_ir_list->clear_and_dispose();
+    delete m_ir_list;
   }
+  m_ir_list = m_cfg->linearize(custom_strategy);
 
   if (deleted_insns != nullptr) {
     auto removed = m_cfg->release_removed_instructions();
@@ -715,9 +709,7 @@ void IRCode::clear_cfg(
 
 bool IRCode::cfg_built() const { return m_cfg != nullptr; }
 
-bool IRCode::editable_cfg_built() const {
-  return m_cfg != nullptr && m_cfg->editable();
-}
+bool IRCode::editable_cfg_built() const { return m_cfg != nullptr; }
 
 namespace {
 
