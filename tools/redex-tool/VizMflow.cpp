@@ -11,6 +11,7 @@
 
 #include "ControlFlow.h"
 #include "IRCode.h"
+#include "ScopedCFG.h"
 #include "Show.h"
 #include "Tool.h"
 #include "Walkers.h"
@@ -23,8 +24,8 @@ void dump_viz(const Scope& scope,
   walk::code(scope, [&](DexMethod* meth, IRCode& code) {
     if (cls_filter && !strstr(meth->get_class()->c_str(), cls_filter)) return;
     if (meth_filter && !strstr(meth->c_str(), meth_filter)) return;
-    code.build_cfg(cfg::CFGMode::NON_EDITABLE);
-    const auto& blocks = code.cfg().blocks();
+    cfg::ScopedCFG cfg(&code);
+    const auto& blocks = cfg->blocks();
     fprintf(stderr, "digraph \"%s\" {\n", SHOW(meth));
     for (const auto& block : blocks) {
       fprintf(stderr, " \"%p\" [label=\"", block);
