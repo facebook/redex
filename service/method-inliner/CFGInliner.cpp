@@ -59,7 +59,7 @@ void normalize_source_blocks(const InstructionIterator& inline_site,
 } // namespace
 
 void CFGInliner::inline_cfg(ControlFlowGraph* caller,
-                            const InstructionIterator& inline_site,
+                            InstructionIterator inline_site,
                             DexType* needs_receiver_cast,
                             DexType* needs_init_class,
                             const ControlFlowGraph& callee_orig,
@@ -276,7 +276,7 @@ std::pair<Block*, Block*> CFGInliner::maybe_split_block(
 // return the block that should be run before the callee and the block that
 // should contain the callsite as a pair.
 std::pair<Block*, Block*> CFGInliner::maybe_split_block_before(
-    ControlFlowGraph* caller, const InstructionIterator& it) {
+    ControlFlowGraph* caller, InstructionIterator& it) {
   always_assert(caller->editable());
   always_assert(!it.block()->empty());
 
@@ -291,11 +291,15 @@ std::pair<Block*, Block*> CFGInliner::maybe_split_block_before(
     }
   }
 
+  auto* insn = it->insn;
   // Inject an instruction and then split so 'it' is first of block
   auto dummy_end_instruction = new IRInstruction(OPCODE_NOP);
   caller->insert_before(it, dummy_end_instruction);
   auto new_blk = caller->split_block(
       old_block, caller->find_insn(dummy_end_instruction).unwrap());
+  auto new_it = new_blk->to_cfg_instruction_iterator(new_blk->get_first_insn());
+  always_assert(insn == new_it->insn);
+  it = new_it;
   return std::make_pair(old_block, new_blk);
 }
 
