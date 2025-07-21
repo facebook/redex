@@ -564,19 +564,24 @@ class ResFileManipulator {
       : m_data(data), m_length(length) {}
 
   void delete_at(void* pos, size_t size) {
+    LOG_ALWAYS_FATAL_IF(pos == nullptr, "bad position given to delete_at()");
     m_deletions.emplace((char*)pos, size);
   }
   void add_at(void* pos, Block block) {
+    LOG_ALWAYS_FATAL_IF(pos == nullptr, "bad position given to add_at()");
     m_additions.emplace((char*)pos, std::move(block));
   }
   template <typename T>
   void add_at(void* pos, const T& item) {
+    LOG_ALWAYS_FATAL_IF(pos == nullptr, "bad position given to add_at()");
     Block block(sizeof(T));
     block.write(item);
     m_additions.emplace((char*)pos, std::move(block));
   }
   template <typename T>
   void add_serializable_at(void* pos, T& builder) {
+    LOG_ALWAYS_FATAL_IF(pos == nullptr,
+                        "bad position given to add_serializable_at()");
     android::Vector<char> vec;
     builder.serialize(&vec);
     Block block(vec.size());

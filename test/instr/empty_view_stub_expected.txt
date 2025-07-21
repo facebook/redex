@@ -1,0 +1,3 @@
+E: merge (line=3)
+  E: view (line=4)
+    A: class="android.view.ViewStub" (Raw: "android.view.ViewStub")

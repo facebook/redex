@@ -188,10 +188,6 @@ void collect_spans(android::ResStringPool_span* ptr,
 
 android::ResXMLTree_attribute* get_attribute_pointer(
     android::ResXMLTree_attrExt* extension) {
-  auto count = dtohl(extension->attributeCount);
-  if (count == 0) {
-    return nullptr;
-  }
   auto start = dtohs(extension->attributeStart);
   return (android::ResXMLTree_attribute*)((uint8_t*)extension + start);
 }
