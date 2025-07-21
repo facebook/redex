@@ -22,8 +22,8 @@ namespace arsc {
 // Helper methods regarding the serialization format.
 void collect_spans(android::ResStringPool_span* ptr,
                    std::vector<android::ResStringPool_span*>* out);
-// Advance the pointer past the extension to where the attributes start, unless
-// there are no attributes (null pointer is returned in that case).
+// Advance the pointer past the extension to where the attributes may start.
+// Before operating on the returned, caller should be checking the count first.
 android::ResXMLTree_attribute* get_attribute_pointer(
     android::ResXMLTree_attrExt* extension);
 // Helper methods for traversing attributes

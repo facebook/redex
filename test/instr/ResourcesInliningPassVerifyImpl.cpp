@@ -39,6 +39,7 @@ void resource_inlining_PreVerify(ResourceTableFile* res_table) {
                   0x7f060000,
                   0x7f060001,
                   0x7f060002,
+                  0x7f060003,
                   /* string */
                   0x7f070000,
                   0x7f070001,
@@ -73,6 +74,7 @@ void resource_inlining_PreVerify(ResourceTableFile* res_table) {
   EXPECT_TRUE(inlinable.find(0x7f060000) == inlinable.end());
   EXPECT_TRUE(inlinable.find(0x7f060001) == inlinable.end());
   EXPECT_TRUE(inlinable.find(0x7f060002) == inlinable.end());
+  EXPECT_TRUE(inlinable.find(0x7f060003) == inlinable.end());
 
   EXPECT_TRUE(inlinable.find(0x7f070000) != inlinable.end());
   EXPECT_TRUE(inlinable.find(0x7f070001) == inlinable.end());
