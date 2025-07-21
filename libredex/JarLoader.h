@@ -50,9 +50,9 @@ bool load_class_file(const std::string& filename, Scope* classes = nullptr);
 
 void init_basic_types();
 // For testing purposes. Must call init_basic_types() if loading a class file.
-bool process_jar(const uint8_t* mapping,
+void process_jar(const uint8_t* mapping,
                  size_t size,
-                 const std::function<bool(uint8_t*, size_t)>& on_class);
+                 const std::function<void(uint8_t*, size_t)>& on_class);
 
 bool parse_class(uint8_t* buffer,
                  size_t buffer_size,
