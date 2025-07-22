@@ -1008,11 +1008,13 @@ struct SBHelper {
         if (overriding_sb != nullptr && first_sb != nullptr) {
           for (size_t i = 0; i != new_sb->vals_size; ++i) {
             if (!new_sb->get_val(i)) {
-              new_sb->vals[i] = first_sb->vals[i];
+              new_sb->set_at(i, first_sb->get_at(i));
             } else if (first_sb->get_val(i)) {
-              new_sb->vals[i]->val += first_sb->vals[i]->val;
-              new_sb->vals[i]->appear100 =
-                  std::max(new_sb->vals[i]->appear100, first_sb->vals[i]->val);
+              new_sb->apply_at(i, [&](auto& val) {
+                val->val += first_sb->get_at(i)->val;
+                val->appear100 =
+                    std::max(val->appear100, first_sb->get_at(i)->val);
+              });
             }
           }
         }

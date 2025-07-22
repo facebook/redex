@@ -68,7 +68,7 @@ class SourceBlocksTest : public RedexTest {
           oss << "(";
           bool first_val = true;
           for (size_t i = 0; i < sb->vals_size; i++) {
-            auto& val = sb->vals[i];
+            const auto& val = sb->get_at(i);
             if (!first_val) {
               oss << "|";
             }

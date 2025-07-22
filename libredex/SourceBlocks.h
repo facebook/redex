@@ -236,6 +236,7 @@ struct InsertResult {
   std::string serialized;
   std::string serialized_idom_map;
   bool profile_success;
+  size_t normalized_count;
 };
 
 // Source data for a profile = interaction. Three options per interactions:
@@ -553,9 +554,11 @@ inline float get_factor(SourceBlock* dominating,
 }
 
 inline void normalize(SourceBlock* sb, size_t idx, float factor) {
-  if (sb->vals[idx]) {
-    sb->vals[idx]->val *= factor;
-  }
+  sb->apply_at(idx, [&](auto& val) {
+    if (val) {
+      val->val *= factor;
+    }
+  });
 }
 
 inline void normalize(SourceBlock* dominating,

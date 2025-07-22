@@ -448,7 +448,7 @@ CanOutlineBlockDecider::can_outline_from_big_block(
                 }
                 for (auto index :
                      UnorderedIterable(m_throughput_interaction_indices)) {
-                  auto& val_pair = sb->vals[index];
+                  const auto& val_pair = sb->get_at(index);
                   if (!val_pair &&
                       val_pair->val > m_config.block_profiles_hits) {
                     return true;

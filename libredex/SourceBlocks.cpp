@@ -403,7 +403,7 @@ struct InsertHelper {
       for (auto* b : cfg.blocks()) {
         auto vec = gather_source_blocks(b);
         for (auto* sb : vec) {
-          const_cast<SourceBlock*>(sb)->vals[i] = val;
+          const_cast<SourceBlock*>(sb)->set_at(i, val);
         }
       }
     }
@@ -631,8 +631,9 @@ void set_block_appear100(Block* block, float appear100) {
   std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
   for (auto* source_block : source_blocks) {
     for (size_t i = 0; i < source_block->vals_size; i++) {
-      if (source_block->vals[i]) {
-        source_block->vals[i]->appear100 = appear100;
+      if (source_block->get_at(i)) {
+        source_block->apply_at(i,
+                               [&](auto& val) { val->appear100 = appear100; });
       }
     }
   }
@@ -642,8 +643,8 @@ void set_block_value(Block* block, float hit) {
   std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
   for (auto* source_block : source_blocks) {
     for (size_t i = 0; i < source_block->vals_size; i++) {
-      if (source_block->vals[i]) {
-        source_block->vals[i]->val = hit;
+      if (source_block->get_at(i)) {
+        source_block->apply_at(i, [&](auto& val) { val->val = hit; });
       }
     }
   }
@@ -662,8 +663,8 @@ int get_number_of_throws_in_block(Block* curr) {
 void set_source_block_value(SourceBlock* source_block, float hit) {
   for (auto* sb = source_block; sb != nullptr; sb = sb->next.get()) {
     for (size_t i = 0; i < sb->vals_size; i++) {
-      if (sb->vals[i]) {
-        sb->vals[i]->val = hit;
+      if (sb->get_at(i)) {
+        source_block->apply_at(i, [&](auto& val) { val->val = hit; });
       }
     }
   }
@@ -881,6 +882,18 @@ static std::string get_serialized_idom_map(ControlFlowGraph* cfg) {
   return ss_idom_map.str();
 }
 
+size_t normalize_blocks(ControlFlowGraph* cfg) {
+  size_t normalized_blocks = 0;
+  for (auto* block : cfg->blocks()) {
+    source_blocks::foreach_source_block(block, [&](const auto& sb) {
+      if (sb->normalize()) {
+        normalized_blocks++;
+      }
+    });
+  }
+  return normalized_blocks;
+}
+
 InsertResult insert_source_blocks(const DexString* method,
                                   ControlFlowGraph* cfg,
                                   const std::vector<ProfileData>& profiles,
@@ -898,7 +911,8 @@ InsertResult insert_source_blocks(const DexString* method,
 
   auto idom_map = get_serialized_idom_map(cfg);
 
-  return {helper.id, helper.oss.str(), std::move(idom_map), !had_failures};
+  return {helper.id, helper.oss.str(), std::move(idom_map), !had_failures,
+          normalize_blocks(cfg)};
 }
 
 // This metric checks if there exists a block such that it starts out with hot
@@ -1030,8 +1044,9 @@ void set_block_appear100(Block* block, float appear100) {
   std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
   for (auto* source_block : source_blocks) {
     for (size_t i = 0; i < source_block->vals_size; i++) {
-      if (source_block->vals[i]) {
-        source_block->vals[i]->appear100 = appear100;
+      if (source_block->get_at(i)) {
+        source_block->apply_at(i,
+                               [&](auto& val) { val->appear100 = appear100; });
       }
     }
   }
@@ -1041,8 +1056,8 @@ void set_block_value(Block* block, float hit) {
   std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
   for (auto* source_block : source_blocks) {
     for (size_t i = 0; i < source_block->vals_size; i++) {
-      if (source_block->vals[i]) {
-        source_block->vals[i]->val = hit;
+      if (source_block->get_at(i)) {
+        source_block->apply_at(i, [&](auto& val) { val->val = hit; });
       }
     }
   }
@@ -1132,7 +1147,8 @@ InsertResult insert_custom_source_blocks(
 
   auto idom_map = get_serialized_idom_map(cfg);
 
-  return {helper.id, helper.oss.str(), std::move(idom_map), true};
+  return {helper.id, helper.oss.str(), std::move(idom_map), true,
+          normalize_blocks(cfg)};
 }
 
 UnorderedMap<Block*, uint32_t> insert_custom_source_blocks_get_indegrees(
@@ -1187,8 +1203,8 @@ void fix_chain_violations(ControlFlowGraph* cfg) {
               }
               for (size_t i = 0; i < sb->vals_size; i++) {
                 if (any_hit_rev[i] && sb->get_val(i).value_or(0) <= 0) {
-                  sb->vals[i] =
-                      SourceBlock::Val(1, sb->get_appear100(i).value_or(1));
+                  sb->set_at(
+                      i, SourceBlock::Val(1, sb->get_appear100(i).value_or(1)));
                 }
               }
             }
@@ -1216,8 +1232,8 @@ void fix_chain_violations(ControlFlowGraph* cfg) {
                 if (sb->get_val(i).value_or(0) > 0) {
                   any_hit_for[i] = true;
                 } else if (any_hit_for[i]) {
-                  sb->vals[i] =
-                      SourceBlock::Val(1, sb->get_appear100(i).value_or(1));
+                  sb->set_at(
+                      i, SourceBlock::Val(1, sb->get_appear100(i).value_or(1)));
                 }
               }
             }
@@ -1242,8 +1258,9 @@ void fix_idom_violation(
   }
   foreach_source_block(cur, [&](auto& sb) {
     if (sb->get_val(vals_index).value_or(0) <= 0) {
-      sb->vals[vals_index] =
-          SourceBlock::Val(1, sb->get_appear100(vals_index).value_or(1));
+      sb->set_at(
+          vals_index,
+          SourceBlock::Val(1, sb->get_appear100(vals_index).value_or(1)));
     }
   });
   auto idom = dom.get_idom(cur);
@@ -1284,7 +1301,7 @@ void fix_hot_method_cold_entry_violations(ControlFlowGraph* cfg) {
   for (uint32_t i = 0; i < vals_size; i++) {
     if (sb->get_val(i).value_or(0) <= 0 &&
         sb->get_appear100(i).value_or(0) > 0) {
-      sb->vals[i] = SourceBlock::Val(1, sb->get_appear100(i).value_or(1));
+      sb->set_at(i, SourceBlock::Val(1, sb->get_appear100(i).value_or(1)));
     }
   };
 }
@@ -1359,7 +1376,7 @@ size_t count_block_has_incomplete_sbs(
     return 0;
   }
   for (uint32_t idx = 0; idx < sb->vals_size; idx++) {
-    if (!sb->vals[idx]) {
+    if (!sb->get_at(idx)) {
       return 1;
     }
   }
@@ -2318,7 +2335,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
           auto sb = first_sb_immediate_dominator;
           os << " \"" << show(sb->src) << "\"@" << sb->id;
           for (size_t i = 0; i < sb->vals_size; i++) {
-            auto& val = sb->vals[i];
+            const auto& val = sb->get_at(i);
             os << " ";
             if (val) {
               os << val->val << "/" << val->appear100;
@@ -2657,9 +2674,7 @@ std::unique_ptr<SourceBlock> clone_as_synthetic(SourceBlock* sb,
   if (ref) {
     new_sb->src = ref->get_deobfuscated_name_or_null();
   }
-  for (size_t i = 0; i < new_sb->vals_size; i++) {
-    new_sb->vals[i] = val;
-  }
+  new_sb->fill(val);
   return new_sb;
 }
 
@@ -2674,9 +2689,7 @@ std::unique_ptr<SourceBlock> clone_as_synthetic(
     new_sb->src = ref->get_deobfuscated_name_or_null();
   }
   if (opt_val) {
-    for (size_t i = 0; i < new_sb->vals_size; i++) {
-      new_sb->vals[i] = *opt_val;
-    }
+    new_sb->fill(*opt_val);
   }
   return new_sb;
 }
@@ -2691,9 +2704,7 @@ std::unique_ptr<SourceBlock> clone_as_synthetic(
   if (ref) {
     new_sb->src = ref->get_deobfuscated_name_or_null();
   }
-  for (size_t i = 0; i < new_sb->vals_size; i++) {
-    new_sb->vals[i] = SourceBlock::Val::none();
-  }
+  new_sb->fill(SourceBlock::Val::none());
   for (auto& other : many) {
     new_sb->max(*other);
   }

@@ -77,7 +77,7 @@ class SourceBlocksTest : public RedexIntegrationTest {
           oss << "(";
           bool first_val = true;
           for (size_t i = 0; i < sb->vals_size; i++) {
-            auto& val = sb->vals[i];
+            const auto& val = sb->get_at(i);
             if (!first_val) {
               oss << "|";
             }
@@ -1027,7 +1027,7 @@ TEST_F(SourceBlocksTest, chain_and_dom_fix_chain_test) {
         for (const auto& mie : *b) {
           if (mie.type == MFLOW_SOURCE_BLOCK) {
             auto* sb = mie.src_block.get();
-            ASSERT_EQ(sb->vals[0]->val, 1.0f);
+            ASSERT_EQ(sb->get_at(0)->val, 1.0f);
           }
         }
       }
@@ -1082,7 +1082,7 @@ TEST_F(SourceBlocksTest, chain_and_dom_fix_thrower_test) {
         for (const auto& mie : *b) {
           if (mie.type == MFLOW_SOURCE_BLOCK) {
             auto* sb = mie.src_block.get();
-            ASSERT_EQ(sb->vals[0]->val, expected_vals[idx]);
+            ASSERT_EQ(sb->get_at(0)->val, expected_vals[idx]);
             idx++;
           }
         }
