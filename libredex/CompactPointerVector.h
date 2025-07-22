@@ -17,8 +17,6 @@
  * - When size() == 2, a std::array<Ptr, 2> is allocated
  * - When size() > 2, a std::vector is allocated to hold the elements. (We don't
  *   actively shrink that vector, except when it reaches size 0, 1, or 2.)
- *
- * For efficiency, storing nullptr is not allowed.
  */
 
 #pragma once
@@ -56,7 +54,7 @@ class CompactPointerVector {
 
   CompactPointerVector(CompactPointerVector&& other) noexcept {
     m_data = other.m_data;
-    other.m_data = nullptr; // Reset the source to empty state
+    other.m_data = make_data_none();
   }
 
   CompactPointerVector& operator=(CompactPointerVector&& other) noexcept {
@@ -65,12 +63,11 @@ class CompactPointerVector {
     }
     clear(); // Release current resources
     m_data = other.m_data;
-    other.m_data = nullptr; // Reset the source to empty state
+    other.m_data = make_data_none();
     return *this;
   }
 
   void push_back(Ptr ptr) {
-    always_assert(ptr != nullptr);
     if (empty()) {
       // Transition from zero to one
       m_data = ptr;
@@ -95,8 +92,7 @@ class CompactPointerVector {
   void pop_back() {
     always_assert(!empty());
     if (one()) {
-      m_data = nullptr;
-      // no bits to set
+      m_data = make_data_none();
       return;
     }
     if (two()) {
@@ -180,8 +176,7 @@ class CompactPointerVector {
       // Transition to small state if size is 0, 1, or 2
       size_t sz = vec->size();
       if (sz == 0) {
-        m_data = nullptr;
-        // no bits to set
+        m_data = make_data_none();
         delete vec;
       } else if (sz == 1) {
         m_data = vec->front();
@@ -196,8 +191,7 @@ class CompactPointerVector {
     } else if (two()) {
       auto arr2 = as_arr2();
       if (last - first == 2) {
-        m_data = nullptr;
-        // no bits to set
+        m_data = make_data_none();
       } else {
         always_assert(last - first == 1);
         m_data = (*arr2)[1 - idx];
@@ -208,8 +202,7 @@ class CompactPointerVector {
       always_assert(one());
       always_assert(first == b);
       always_assert(last == e);
-      m_data = nullptr;
-      // no bits to set
+      m_data = make_data_none();
     }
     return begin() + idx;
   }
@@ -228,11 +221,16 @@ class CompactPointerVector {
     } else if (many()) {
       delete as_vec();
     }
-    m_data = nullptr;
-    // no bits to set
+    m_data = make_data_none();
   }
 
-  bool empty() const { return m_data == nullptr; }
+  bool empty() const { return Accessor::get_bits(m_data) == kNone; }
+
+  bool one() const { return Accessor::get_bits(m_data) == kOne; }
+
+  bool two() const { return Accessor::get_bits(m_data) == kTwo; }
+
+  bool many() const { return Accessor::get_bits(m_data) == kMany; }
 
   ~CompactPointerVector() { clear(); }
 
@@ -305,20 +303,13 @@ class CompactPointerVector {
   }
 
  private:
-  static const size_t kEmptyOrOne = 0;
-  static const size_t kTwo = 1;
-  static const size_t kMany = 2;
+  static const size_t kOne = 0;
+  static const size_t kNone = 1;
+  static const size_t kTwo = 2;
+  static const size_t kMany = 3;
   using Vec = std::vector<Ptr>;
   using Arr2 = std::array<Ptr, 2>;
   using Accessor = boost::intrusive::pointer_plus_bits<void*, 2>;
-
-  bool one() const {
-    return m_data != nullptr && Accessor::get_bits(m_data) == kEmptyOrOne;
-  }
-
-  bool two() const { return Accessor::get_bits(m_data) == kTwo; }
-
-  bool many() const { return Accessor::get_bits(m_data) == kMany; }
 
   const Vec* as_vec() const {
     always_assert(many());
@@ -354,6 +345,12 @@ class CompactPointerVector {
     return new_data;
   }
 
+  constexpr static void* make_data_none() {
+    void* new_data = nullptr;
+    Accessor::set_bits(new_data, kNone);
+    return new_data;
+  }
+
   void* clone_data() const {
     if (many()) {
       return make_data_vec(*as_vec());
@@ -364,5 +361,5 @@ class CompactPointerVector {
     return m_data;
   }
 
-  void* m_data{nullptr};
+  void* m_data{make_data_none()};
 };

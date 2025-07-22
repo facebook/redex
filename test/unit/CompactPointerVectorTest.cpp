@@ -385,3 +385,27 @@ TEST_F(CompactPointerVectorTest, ShrinkToFitAndCapacityAfterRemove) {
   vec.shrink_to_fit();
   EXPECT_GE(vec.capacity(), 2u);
 }
+
+// Test adding nullptr to the vector
+TEST_F(CompactPointerVectorTest, AddNullptr) {
+  vec.push_back(nullptr);
+  EXPECT_EQ(vec.size(), 1u);
+  EXPECT_EQ(vec[0], nullptr);
+}
+
+// Test transition from 1 to 0 element with nullptr
+TEST_F(CompactPointerVectorTest, TransitionOneToZeroWithNullptr) {
+  vec.push_back(nullptr);
+  vec.pop_back();
+  EXPECT_TRUE(vec.empty());
+  EXPECT_EQ(vec.size(), 0u);
+}
+
+// Test transition from 2 to 1 element with nullptr
+TEST_F(CompactPointerVectorTest, TransitionTwoToOneWithNullptr) {
+  vec.push_back(&a);
+  vec.push_back(nullptr);
+  vec.pop_back();
+  EXPECT_EQ(vec.size(), 1u);
+  EXPECT_EQ(vec[0], &a);
+}
