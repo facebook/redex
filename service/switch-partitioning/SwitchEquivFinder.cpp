@@ -270,7 +270,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves(
   recurse = [&](cfg::Block* b, const InstructionSet& loads,
                 const std::vector<SourceBlock*>& source_blocks_in) {
     // `loads` represents the state of the registers after evaluating `b`.
-    std::vector<cfg::Edge*> ordered_edges(b->succs());
+    std::vector<cfg::Edge*> ordered_edges(b->succs().to_vector());
     // NOTE: To maintain proper order of duplicated cases, non leafs successors
     // will be encountered first.
     std::stable_sort(ordered_edges.begin(), ordered_edges.end(),

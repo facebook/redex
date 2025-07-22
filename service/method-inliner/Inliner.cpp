@@ -1449,7 +1449,7 @@ static size_t get_inlined_cost(IRInstruction* insn,
  */
 static size_t get_inlined_cost(const std::vector<cfg::Block*>& blocks,
                                size_t index,
-                               const std::vector<cfg::Edge*>& succs,
+                               const cfg::CompactEdgeVector& succs,
                                const InlinerCostConfig& cost_config) {
   auto block = blocks.at(index);
   switch (block->branchingness()) {

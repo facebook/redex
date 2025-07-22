@@ -60,7 +60,7 @@ struct BlockAccessor {
 };
 
 inline std::vector<Edge*> get_sorted_edges(Block* b) {
-  auto succs = b->succs();
+  auto succs = b->succs().to_vector();
   std::sort(succs.begin(), succs.end(), [](const Edge* lhs, const Edge* rhs) {
     if (lhs->type() != rhs->type()) {
       return lhs->type() < rhs->type();

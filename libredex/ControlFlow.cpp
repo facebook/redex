@@ -30,8 +30,8 @@
 std::atomic<size_t> build_cfg_counter{0};
 namespace {
 
-bool edge_type_structural_equals(std::vector<cfg::Edge*> e1,
-                                 std::vector<cfg::Edge*> e2) {
+bool edge_type_structural_equals(const cfg::CompactEdgeVector& e1,
+                                 const cfg::CompactEdgeVector& e2) {
   if (e1.empty() && e2.empty()) {
     return true;
   }
@@ -2299,7 +2299,7 @@ void ControlFlowGraph::calculate_exit_block() {
     // algorithm iteratively.
     struct State {
       const Block* b{nullptr};
-      const std::vector<Edge*>& succs;
+      const CompactEdgeVector& succs;
       uint32_t element{0};
       uint32_t head{0};
       bool has_exit{false};
@@ -3021,7 +3021,7 @@ uint32_t ControlFlowGraph::replace_blocks(
   for (auto& p : old_new_blocks) {
     auto old_block = p.first;
     auto new_block = p.second;
-    std::vector<Edge*> to_redirect = old_block->preds();
+    auto to_redirect = old_block->preds();
     for (auto e : to_redirect) {
       set_edge_target(e, new_block);
     }

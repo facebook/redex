@@ -477,7 +477,7 @@ class CFGVisualizer : public CodeVisualizer<CFGVisualizer> {
                               : *m_cfg->blocks().begin();
         Edge fake_edge(&fake_block, first_real ? first_real : &fake_block,
                        EDGE_GOTO);
-        const_cast<std::vector<Edge*>&>(fake_block.succs())
+        const_cast<cfg::CompactEdgeVector&>(fake_block.succs())
             .push_back(&fake_edge);
         prefix_block(&fake_block, *prefix);
       }
