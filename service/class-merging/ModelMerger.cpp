@@ -486,6 +486,7 @@ void trim_method_debug_map(
 }
 
 void write_out_type_mapping(const ConfigFiles& conf,
+                            const TypeTags& type_tags,
                             const std::vector<const MergerType*>& mergers,
                             const TypeToMethodMap& method_dedup_map) {
   std::string mapping_file = conf.metafile(CM_MAP_FILE_NAME);
@@ -497,7 +498,8 @@ void write_out_type_mapping(const ConfigFiles& conf,
   std::ostringstream out;
   for (auto merger : mergers) {
     for (auto mergeable : merger->mergeables) {
-      out << SHOW(mergeable) << " -> " << SHOW(merger->type) << std::endl;
+      out << SHOW(mergeable) << " -> " << SHOW(merger->type) << " "
+          << type_tags.get_type_tag(mergeable) << std::endl;
 
       if (method_dedup_map.count(mergeable)) {
         for (auto& symbol_map : method_dedup_map.at(mergeable)) {
@@ -675,7 +677,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
 
   // Write out mapping files
   auto method_dedup_map = mm.get_method_dedup_map();
-  write_out_type_mapping(conf, to_materialize, method_dedup_map);
+  write_out_type_mapping(conf, type_tags, to_materialize, method_dedup_map);
   if (!to_materialize.empty()) {
     post_process(model, type_tags, mergeable_to_merger_ctor);
   }
