@@ -187,7 +187,13 @@ class TaggedBase {
     }
 
     // See copy constructor. Assignment operators for lint.
-    ValueStream& operator=(const ValueStream&) { not_reached(); }
+    ValueStream& operator=(const ValueStream& other) {
+      if (this == &other) {
+        return *this;
+      }
+      not_reached();
+    }
+
     ValueStream& operator=(ValueStream&& rhs) noexcept {
       oss = std::move(rhs.oss);
       trg = rhs.trg;
