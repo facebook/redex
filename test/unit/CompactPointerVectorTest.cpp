@@ -23,6 +23,7 @@ class CompactPointerVectorTest : public RedexTest {
   int a = 1;
   int b = 2;
   int c = 3;
+  int d = 4;
 
   CompactPointerVector<int*> vec;
 };
@@ -45,6 +46,16 @@ TEST_F(CompactPointerVectorTest, SingleElement) {
   EXPECT_EQ(*(vec.end() - 1), &a);
 }
 
+TEST_F(CompactPointerVectorTest, TwoElements) {
+  vec.push_back(&a);
+  vec.push_back(&b);
+  EXPECT_EQ(vec.size(), 2u);
+  EXPECT_EQ(vec[0], &a);
+  EXPECT_EQ(vec[1], &b);
+  EXPECT_EQ(vec.front(), &a);
+  EXPECT_EQ(vec.back(), &b);
+}
+
 TEST_F(CompactPointerVectorTest, MultipleElements) {
   vec.push_back(&a);
   vec.push_back(&b);
@@ -57,7 +68,50 @@ TEST_F(CompactPointerVectorTest, MultipleElements) {
   EXPECT_EQ(vec.back(), &c);
 }
 
-TEST_F(CompactPointerVectorTest, IteratorRange) {
+TEST_F(CompactPointerVectorTest, PopBackFromThreeElements) {
+  vec.push_back(&a);
+  vec.push_back(&b);
+  vec.push_back(&c);
+  vec.pop_back();
+  EXPECT_EQ(vec.size(), 2u);
+  EXPECT_EQ(vec[0], &a);
+  EXPECT_EQ(vec[1], &b);
+}
+
+TEST_F(CompactPointerVectorTest, PopBackFromTwoElements) {
+  vec.push_back(&a);
+  vec.push_back(&b);
+  vec.pop_back();
+  EXPECT_EQ(vec.size(), 1u);
+  EXPECT_EQ(vec[0], &a);
+}
+
+TEST_F(CompactPointerVectorTest, PopBackFromOneElement) {
+  vec.push_back(&a);
+  vec.pop_back();
+  EXPECT_TRUE(vec.empty());
+  EXPECT_EQ(vec.size(), 0u);
+}
+
+TEST_F(CompactPointerVectorTest, IteratorRangeNoElements) {
+  std::vector<int*> expected = {};
+  EXPECT_TRUE(std::equal(vec.begin(), vec.end(), expected.begin()));
+}
+
+TEST_F(CompactPointerVectorTest, IteratorRangeOneElement) {
+  vec.push_back(&a);
+  std::vector<int*> expected = {&a};
+  EXPECT_TRUE(std::equal(vec.begin(), vec.end(), expected.begin()));
+}
+
+TEST_F(CompactPointerVectorTest, IteratorRangeTwoElements) {
+  vec.push_back(&a);
+  vec.push_back(&b);
+  std::vector<int*> expected = {&a, &b};
+  EXPECT_TRUE(std::equal(vec.begin(), vec.end(), expected.begin()));
+}
+
+TEST_F(CompactPointerVectorTest, IteratorRangeThreeElements) {
   vec.push_back(&a);
   vec.push_back(&b);
   vec.push_back(&c);
@@ -65,13 +119,31 @@ TEST_F(CompactPointerVectorTest, IteratorRange) {
   EXPECT_TRUE(std::equal(vec.begin(), vec.end(), expected.begin()));
 }
 
-TEST_F(CompactPointerVectorTest, CopyConstructor) {
+TEST_F(CompactPointerVectorTest, CopyConstructorOneElement) {
+  vec.push_back(&a);
+  CompactPointerVector<int*> copy(vec);
+  EXPECT_EQ(copy.size(), 1u);
+  EXPECT_EQ(copy[0], &a);
+}
+
+TEST_F(CompactPointerVectorTest, CopyConstructorTwoElements) {
   vec.push_back(&a);
   vec.push_back(&b);
   CompactPointerVector<int*> copy(vec);
   EXPECT_EQ(copy.size(), 2u);
   EXPECT_EQ(copy[0], &a);
   EXPECT_EQ(copy[1], &b);
+}
+
+TEST_F(CompactPointerVectorTest, CopyConstructorThreeElements) {
+  vec.push_back(&a);
+  vec.push_back(&b);
+  vec.push_back(&c);
+  CompactPointerVector<int*> copy(vec);
+  EXPECT_EQ(copy.size(), 3u);
+  EXPECT_EQ(copy[0], &a);
+  EXPECT_EQ(copy[1], &b);
+  EXPECT_EQ(copy[2], &c);
 }
 
 TEST_F(CompactPointerVectorTest, CopyAssignment) {
@@ -92,13 +164,31 @@ TEST_F(CompactPointerVectorTest, CopyAssignmentSelf) {
   EXPECT_EQ(vec[0], &a);
 }
 
-TEST_F(CompactPointerVectorTest, MoveConstructor) {
+TEST_F(CompactPointerVectorTest, MoveConstructorOneElement) {
+  vec.push_back(&a);
+  CompactPointerVector<int*> moved(std::move(vec));
+  EXPECT_EQ(moved.size(), 1u);
+  EXPECT_EQ(moved[0], &a);
+}
+
+TEST_F(CompactPointerVectorTest, MoveConstructorTwoElements) {
   vec.push_back(&a);
   vec.push_back(&b);
   CompactPointerVector<int*> moved(std::move(vec));
   EXPECT_EQ(moved.size(), 2u);
   EXPECT_EQ(moved[0], &a);
   EXPECT_EQ(moved[1], &b);
+}
+
+TEST_F(CompactPointerVectorTest, MoveConstructorThreeElements) {
+  vec.push_back(&a);
+  vec.push_back(&b);
+  vec.push_back(&c);
+  CompactPointerVector<int*> moved(std::move(vec));
+  EXPECT_EQ(moved.size(), 3u);
+  EXPECT_EQ(moved[0], &a);
+  EXPECT_EQ(moved[1], &b);
+  EXPECT_EQ(moved[2], &c);
 }
 
 // Test move assignment self-assignment does not corrupt state
@@ -108,6 +198,7 @@ TEST_F(CompactPointerVectorTest, MoveAssignmentSelf) {
   EXPECT_EQ(vec.size(), 1u);
   EXPECT_EQ(vec[0], &a);
 }
+
 TEST_F(CompactPointerVectorTest, MoveAssignment) {
   vec.push_back(&a);
   vec.push_back(&b);
@@ -133,12 +224,32 @@ TEST_F(CompactPointerVectorTest, EraseSingleElement) {
   EXPECT_EQ(it, vec.end());
 }
 
-TEST_F(CompactPointerVectorTest, EraseFromManyToOne) {
+TEST_F(CompactPointerVectorTest, EraseFirstOfTwoElements) {
+  vec.push_back(&a);
+  vec.push_back(&b);
+  auto it = vec.erase(vec.begin(), vec.begin() + 1);
+  EXPECT_EQ(vec.size(), 1u);
+  EXPECT_EQ(vec[0], &b);
+  EXPECT_EQ(it, vec.begin());
+}
+
+TEST_F(CompactPointerVectorTest, EraseSecondOfTwoElements) {
   vec.push_back(&a);
   vec.push_back(&b);
   auto it = vec.erase(vec.begin() + 1, vec.end());
   EXPECT_EQ(vec.size(), 1u);
   EXPECT_EQ(vec[0], &a);
+  EXPECT_EQ(it, vec.end());
+}
+
+TEST_F(CompactPointerVectorTest, EraseFromManyToTwoElements) {
+  vec.push_back(&a);
+  vec.push_back(&b);
+  vec.push_back(&c);
+  auto it = vec.erase(vec.begin() + 2, vec.end());
+  EXPECT_EQ(vec.size(), 2u);
+  EXPECT_EQ(vec[0], &a);
+  EXPECT_EQ(vec[1], &b);
   EXPECT_EQ(it, vec.end());
 }
 
@@ -161,9 +272,31 @@ TEST_F(CompactPointerVectorTest, EraseMiddle) {
   EXPECT_EQ(*it, &c);
 }
 
-TEST_F(CompactPointerVectorTest, Clear) {
+TEST_F(CompactPointerVectorTest, ClearEmpty) {
+  vec.clear();
+  EXPECT_TRUE(vec.empty());
+  EXPECT_EQ(vec.size(), 0u);
+}
+
+TEST_F(CompactPointerVectorTest, ClearSingleElement) {
+  vec.push_back(&a);
+  vec.clear();
+  EXPECT_TRUE(vec.empty());
+  EXPECT_EQ(vec.size(), 0u);
+}
+
+TEST_F(CompactPointerVectorTest, ClearTwoElements) {
   vec.push_back(&a);
   vec.push_back(&b);
+  vec.clear();
+  EXPECT_TRUE(vec.empty());
+  EXPECT_EQ(vec.size(), 0u);
+}
+
+TEST_F(CompactPointerVectorTest, ClearMany) {
+  vec.push_back(&a);
+  vec.push_back(&b);
+  vec.push_back(&c);
   vec.clear();
   EXPECT_TRUE(vec.empty());
   EXPECT_EQ(vec.size(), 0u);
@@ -183,11 +316,72 @@ TEST_F(CompactPointerVectorTest, ToVectorSingleElement) {
   EXPECT_EQ(v[0], &a);
 }
 
-TEST_F(CompactPointerVectorTest, ToVectorMany) {
+TEST_F(CompactPointerVectorTest, ToVectorTwoElements) {
   vec.push_back(&a);
   vec.push_back(&b);
   auto v = vec.to_vector();
   ASSERT_EQ(v.size(), 2u);
   EXPECT_EQ(v[0], &a);
   EXPECT_EQ(v[1], &b);
+}
+
+TEST_F(CompactPointerVectorTest, ToVectorMany) {
+  vec.push_back(&a);
+  vec.push_back(&b);
+  vec.push_back(&c);
+  auto v = vec.to_vector();
+  ASSERT_EQ(v.size(), 3u);
+  EXPECT_EQ(v[0], &a);
+  EXPECT_EQ(v[1], &b);
+  EXPECT_EQ(v[2], &c);
+}
+
+// Test shrink_to_fit and capacity for empty vector
+TEST_F(CompactPointerVectorTest, ShrinkToFitAndCapacityEmpty) {
+  vec.shrink_to_fit();
+  EXPECT_EQ(vec.capacity(), 0u);
+}
+
+// Test shrink_to_fit and capacity for single element vector
+TEST_F(CompactPointerVectorTest, ShrinkToFitAndCapacitySingleElement) {
+  vec.push_back(&a);
+  vec.shrink_to_fit();
+  EXPECT_GE(vec.capacity(), 1u);
+}
+
+// Test shrink_to_fit and capacity for two elements vector
+TEST_F(CompactPointerVectorTest, ShrinkToFitAndCapacityTwoElements) {
+  vec.push_back(&a);
+  vec.push_back(&b);
+  vec.shrink_to_fit();
+  EXPECT_GE(vec.capacity(), 2u);
+}
+
+// Test shrink_to_fit and capacity for three elements vector
+TEST_F(CompactPointerVectorTest, ShrinkToFitAndCapacityThreeElements) {
+  vec.push_back(&a);
+  vec.push_back(&b);
+  vec.push_back(&c);
+  vec.shrink_to_fit();
+  EXPECT_GE(vec.capacity(), 3u);
+}
+
+// Test shrink_to_fit and capacity for four elements vector
+TEST_F(CompactPointerVectorTest, ShrinkToFitAndCapacityFourElements) {
+  vec.push_back(&a);
+  vec.push_back(&b);
+  vec.push_back(&c);
+  vec.push_back(&d);
+  vec.shrink_to_fit();
+  EXPECT_GE(vec.capacity(), 4u);
+}
+
+// Test shrink_to_fit and capacity after removing one element
+TEST_F(CompactPointerVectorTest, ShrinkToFitAndCapacityAfterRemove) {
+  vec.push_back(&a);
+  vec.push_back(&b);
+  vec.push_back(&c);
+  vec.pop_back();
+  vec.shrink_to_fit();
+  EXPECT_GE(vec.capacity(), 2u);
 }

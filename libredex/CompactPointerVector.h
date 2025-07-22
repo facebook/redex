@@ -8,21 +8,22 @@
 /*
  * A CompactPointerVector<> implements an expandable collection type similar to
  * std::vector<>, but specialized to hold only pointer values with pointed-to
- * value type alignment greater than 1, and optimized for storing 0 or 1
+ * value type alignment greater than 2, and optimized for storing 0, 1, or 2
  * elements:
  * - sizeof(CompactPointerVector<>) is sizeof(void*)
  * - When empty, no additional space is allocated.
  * - When size() == 1, no additional space is allocated. The pointer value is
  *   stored inline.
- * - When size() > 1, a std::vector is allocated to hold the elements (a pointer
- *   to the vector stored with a tag). (We don't actively shrink that vector,
- *   except when it reaches size 0 or 1.)
+ * - When size() == 2, a std::array<Ptr, 2> is allocated
+ * - When size() > 2, a std::vector is allocated to hold the elements. (We don't
+ *   actively shrink that vector, except when it reaches size 0, 1, or 2.)
  *
  * For efficiency, storing nullptr is not allowed.
  */
 
 #pragma once
 
+#include <array>
 #include <boost/intrusive/pointer_plus_bits.hpp>
 #include <type_traits>
 #include <vector>
@@ -32,7 +33,7 @@
 template <typename Ptr,
           typename =
               std::enable_if_t<std::is_pointer_v<Ptr> &&
-                               (alignof(std::remove_pointer_t<Ptr>) > 1)>>
+                               (alignof(std::remove_pointer_t<Ptr>) > 2)>>
 class CompactPointerVector {
  public:
   using iterator = Ptr*;
@@ -41,12 +42,7 @@ class CompactPointerVector {
   CompactPointerVector() = default;
 
   CompactPointerVector(const CompactPointerVector& other) {
-    if (other.many()) {
-      m_data = make_data_vec(*other.as_vec());
-      return;
-    }
-    m_data = other.m_data;
-    // no bits to set
+    m_data = other.clone_data();
   }
 
   CompactPointerVector& operator=(const CompactPointerVector& other) {
@@ -54,12 +50,7 @@ class CompactPointerVector {
       return *this;
     }
     clear(); // Release current resources
-    if (other.many()) {
-      m_data = make_data_vec(*other.as_vec());
-      return *this;
-    }
-    m_data = other.m_data;
-    // no bits to set
+    m_data = other.clone_data();
     return *this;
   }
 
@@ -87,8 +78,15 @@ class CompactPointerVector {
       return;
     }
     if (one()) {
-      // Transition from one to many
-      m_data = make_data_vec(static_cast<Ptr>(m_data), ptr);
+      // Transition from one to two
+      m_data = make_data_arr2(static_cast<Ptr>(m_data), ptr);
+      return;
+    }
+    if (two()) {
+      // Transition from two to many
+      auto* arr2 = as_arr2();
+      m_data = make_data_vec((*arr2)[0], (*arr2)[1], ptr);
+      delete arr2;
       return;
     }
     as_vec()->push_back(ptr);
@@ -101,11 +99,21 @@ class CompactPointerVector {
       // no bits to set
       return;
     }
+    if (two()) {
+      auto* arr2 = as_arr2();
+      m_data = (*arr2)[0];
+      delete arr2;
+      return;
+    }
     Vec* vec = as_vec();
     vec->pop_back();
+    if (vec->size() == 2) {
+      m_data = make_data_arr2(vec->front(), vec->back());
+      delete vec;
+      return;
+    }
     if (vec->size() == 1) {
       m_data = vec->front();
-      // no bits to set
       delete vec;
     }
   }
@@ -118,68 +126,42 @@ class CompactPointerVector {
 
   Ptr& operator[](size_t idx) {
     // No bounds checking!
-    if (one()) {
-      // Only valid index is 0
-      return reinterpret_cast<Ptr&>(m_data);
-    }
-    return (*as_vec())[idx];
+    return *(begin() + idx);
   }
 
   const Ptr& operator[](size_t idx) const {
     // No bounds checking!
-    if (one()) {
-      // Only valid index is 0
-      return reinterpret_cast<const Ptr&>(m_data);
-    }
-    return (*as_vec())[idx];
+    return *(begin() + idx);
   }
 
   Ptr& at(size_t idx) {
-    if (one()) {
-      always_assert(idx == 0);
-      return reinterpret_cast<Ptr&>(m_data);
-    }
-    return (*as_vec())[idx];
+    always_assert(idx < size());
+    return *(begin() + idx);
   }
 
   const Ptr& at(size_t idx) const {
-    if (one()) {
-      always_assert(idx == 0);
-      return reinterpret_cast<const Ptr&>(m_data);
-    }
-    return as_vec()->at(idx);
+    always_assert(idx < size());
+    return *(begin() + idx);
   }
 
   Ptr& front() {
     always_assert(!empty());
-    if (one()) {
-      return reinterpret_cast<Ptr&>(m_data);
-    }
-    return as_vec()->front();
+    return *begin();
   }
 
   const Ptr& front() const {
     always_assert(!empty());
-    if (one()) {
-      return reinterpret_cast<const Ptr&>(m_data);
-    }
-    return as_vec()->front();
+    return *begin();
   }
 
   Ptr& back() {
     always_assert(!empty());
-    if (one()) {
-      return reinterpret_cast<Ptr&>(m_data);
-    }
-    return as_vec()->back();
+    return *(end() - 1);
   }
 
   const Ptr& back() const {
     always_assert(!empty());
-    if (one()) {
-      return reinterpret_cast<const Ptr&>(m_data);
-    }
-    return as_vec()->back();
+    return *(end() - 1);
   }
 
   iterator erase(iterator first, iterator last) {
@@ -191,50 +173,59 @@ class CompactPointerVector {
     if (first == last) {
       return first;
     }
+    auto idx = first - b;
     if (many()) {
       auto* vec = as_vec();
-      auto it =
-          vec->erase(vec->begin() + (first - b), vec->begin() + (last - b));
-      // Transition to small state if size is 0 or 1
+      (void)vec->erase(vec->begin() + idx, vec->begin() + (last - b));
+      // Transition to small state if size is 0, 1, or 2
       size_t sz = vec->size();
       if (sz == 0) {
         m_data = nullptr;
         // no bits to set
         delete vec;
-        return end();
-      }
-      if (sz == 1) {
-        bool erased_to_end = it == vec->end();
-        always_assert(erased_to_end || it == vec->begin());
+      } else if (sz == 1) {
         m_data = vec->front();
         // no bits to set
         delete vec;
-        return erased_to_end ? end() : begin();
+      } else if (sz == 2) {
+        m_data = make_data_arr2(vec->front(), vec->back());
+        delete vec;
       }
       // Note that we don't bother shrinking the (many) vector, to keep
       // amortized costs in line with expectations
-      return &*it;
+    } else if (two()) {
+      auto arr2 = as_arr2();
+      if (last - first == 2) {
+        m_data = nullptr;
+        // no bits to set
+      } else {
+        always_assert(last - first == 1);
+        m_data = (*arr2)[1 - idx];
+        // no bits to set
+      }
+      delete arr2;
+    } else {
+      always_assert(one());
+      always_assert(first == b);
+      always_assert(last == e);
+      m_data = nullptr;
+      // no bits to set
     }
-    always_assert(one());
-    always_assert(first == b);
-    always_assert(last == e);
-    m_data = nullptr;
-    // no bits to set
-    return end();
+    return begin() + idx;
   }
 
   size_t size() const {
-    if (one()) {
-      return 1;
-    }
-    if (empty()) {
-      return 0;
-    }
-    return as_vec()->size();
+    return empty() ? 0 : one() ? 1 : two() ? 2 : as_vec()->size();
+  }
+
+  size_t capacity() const {
+    return empty() ? 0 : one() ? 1 : two() ? 2 : as_vec()->capacity();
   }
 
   void clear() {
-    if (many()) {
+    if (two()) {
+      delete as_arr2();
+    } else if (many()) {
       delete as_vec();
     }
     m_data = nullptr;
@@ -249,6 +240,9 @@ class CompactPointerVector {
     if (many()) {
       return as_vec()->data();
     }
+    if (two()) {
+      return as_arr2()->data();
+    }
     if (one()) {
       return reinterpret_cast<iterator>(&m_data);
     }
@@ -260,6 +254,9 @@ class CompactPointerVector {
       Vec* vec = as_vec();
       return vec->data() + vec->size();
     }
+    if (two()) {
+      return as_arr2()->data() + 2;
+    }
     if (one()) {
       return reinterpret_cast<iterator>(&m_data) + 1;
     }
@@ -269,6 +266,9 @@ class CompactPointerVector {
   const_iterator begin() const {
     if (many()) {
       return as_vec()->data();
+    }
+    if (two()) {
+      return as_arr2()->data();
     }
     if (one()) {
       return reinterpret_cast<const_iterator>(&m_data);
@@ -281,6 +281,9 @@ class CompactPointerVector {
       const Vec* vec = as_vec();
       return vec->data() + vec->size();
     }
+    if (two()) {
+      return as_arr2()->data() + 2;
+    }
     if (one()) {
       return reinterpret_cast<const_iterator>(&m_data) + 1;
     }
@@ -291,6 +294,10 @@ class CompactPointerVector {
     if (many()) {
       return *as_vec();
     }
+    if (two()) {
+      auto* arr2 = as_arr2();
+      return Vec{(*arr2)[0], (*arr2)[1]};
+    }
     if (one()) {
       return Vec{reinterpret_cast<Ptr>(m_data)};
     }
@@ -299,17 +306,19 @@ class CompactPointerVector {
 
  private:
   static const size_t kEmptyOrOne = 0;
-  static const size_t kMany = 1;
+  static const size_t kTwo = 1;
+  static const size_t kMany = 2;
   using Vec = std::vector<Ptr>;
-  using Accessor = boost::intrusive::pointer_plus_bits<void*, 1>;
+  using Arr2 = std::array<Ptr, 2>;
+  using Accessor = boost::intrusive::pointer_plus_bits<void*, 2>;
 
   bool one() const {
     return m_data != nullptr && Accessor::get_bits(m_data) == kEmptyOrOne;
   }
 
-  bool many() const {
-    return m_data != nullptr && Accessor::get_bits(m_data) == kMany;
-  }
+  bool two() const { return Accessor::get_bits(m_data) == kTwo; }
+
+  bool many() const { return Accessor::get_bits(m_data) == kMany; }
 
   const Vec* as_vec() const {
     always_assert(many());
@@ -321,11 +330,38 @@ class CompactPointerVector {
     return static_cast<Vec*>(Accessor::get_pointer(m_data));
   }
 
+  const Arr2* as_arr2() const {
+    always_assert(two());
+    return static_cast<Arr2*>(Accessor::get_pointer(m_data));
+  }
+
+  Arr2* as_arr2() {
+    always_assert(two());
+    return static_cast<Arr2*>(Accessor::get_pointer(m_data));
+  }
+
   template <typename... Args>
   static void* make_data_vec(Args&&... args) {
     void* new_data = new Vec{std::forward<Args>(args)...};
     Accessor::set_bits(new_data, kMany);
     return new_data;
+  }
+
+  template <typename... Args>
+  static void* make_data_arr2(Args&&... args) {
+    void* new_data = new Arr2{std::forward<Args>(args)...};
+    Accessor::set_bits(new_data, kTwo);
+    return new_data;
+  }
+
+  void* clone_data() const {
+    if (many()) {
+      return make_data_vec(*as_vec());
+    }
+    if (two()) {
+      return make_data_arr2(*as_arr2());
+    }
+    return m_data;
   }
 
   void* m_data{nullptr};
