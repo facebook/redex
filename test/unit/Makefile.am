@@ -158,6 +158,7 @@ check_PROGRAMS = \
     result_propagation_test \
     side_effects_summary_test \
     signed_constant_propagation_test \
+    compact_pointer_vector_test \
     source_blocks_test \
     split_huge_switch_test \
     static_relo_v2_test \
@@ -471,6 +472,8 @@ side_effects_summary_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 signed_constant_propagation_test_SOURCES = constant-propagation/SignedConstantPropagationTest.cpp
 signed_constant_propagation_test_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/sparta/test
+
+compact_pointer_vector_test_SOURCES = CompactPointerVectorTest.cpp
 
 source_blocks_test_SOURCES = SourceBlocksTest.cpp
 
