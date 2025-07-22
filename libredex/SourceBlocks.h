@@ -612,21 +612,24 @@ struct ViolationsHelper {
   struct ViolationsHelperImpl;
   std::unique_ptr<ViolationsHelperImpl> impl;
   bool track_intermethod_violations{false};
+  bool print_all_violations{false};
 
   enum class Violation {
-    kHotImmediateDomNotHot,
-    kChainAndDom,
-    kUncoveredSourceBlocks,
-    kHotMethodColdEntry,
-    kHotNoHotPred,
-    KHotAllChildrenCold,
+    kHotImmediateDomNotHot = 0,
+    kChainAndDom = 1,
+    kUncoveredSourceBlocks = 2,
+    kHotMethodColdEntry = 3,
+    kHotNoHotPred = 4,
+    KHotAllChildrenCold = 5,
+    ViolationSize = 6,
   };
 
   ViolationsHelper(Violation v,
                    const Scope& scope,
                    size_t top_n,
                    std::vector<std::string> to_vis,
-                   bool track_intermethod_violations = false);
+                   bool track_intermethod_violations,
+                   bool print_all_violations);
   ~ViolationsHelper();
 
   void process(ScopedMetrics* sm);

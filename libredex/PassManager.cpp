@@ -1101,8 +1101,11 @@ struct ViolationsTracking {
           vh(std::make_unique<source_blocks::ViolationsHelper>(
               source_blocks::ViolationsHelper::Violation::kChainAndDom,
               build_class_scope(stores),
-              10,
-              std::vector<std::string>{})) {}
+              /*top_n=*/10,
+              /*to_vis=*/
+              std::vector<std::string>{},
+              /*track_intermethod_violations=*/false,
+              /*print_all_violations=*/false)) {}
     ~Handler() {
       if (vh != nullptr) {
         ScopedMetrics sm(*pm);

@@ -1970,6 +1970,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
   Scope scope;
   bool processed{false};
   bool track_intermethod_violations{false};
+  bool print_all_violations{false};
 
   using Violation = ViolationsHelper::Violation;
   const Violation v;
@@ -1978,11 +1979,13 @@ struct ViolationsHelper::ViolationsHelperImpl {
                        const Scope& scope,
                        size_t top_n,
                        std::vector<std::string> to_vis,
-                       bool track_intermethod_violations)
+                       bool track_intermethod_violations,
+                       bool print_all_violations)
       : top_n(top_n),
         print(std::move(to_vis)),
         scope(scope),
         track_intermethod_violations(track_intermethod_violations),
+        print_all_violations(print_all_violations),
         v(v) {
     {
       std::mutex lock;
@@ -2025,6 +2028,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
       return hot_no_hot_pred_cfg(cfg);
     case Violation::KHotAllChildrenCold:
       return hot_all_children_cold_cfg(cfg);
+    case Violation::ViolationSize:
+      not_reached();
     }
     not_reached();
   }
@@ -2255,9 +2260,13 @@ struct ViolationsHelper::ViolationsHelperImpl {
       if (m != nullptr) {
         redex_assert(m != nullptr && m->is_def());
         auto* m_def = m->as_def();
-        print_cfg_with_violations(v, m_def);
+        log_cfg_violations(v, m_def);
+        if (print_all_violations) {
+          print_cfg_with_all_violating_blocks(m_def);
+        }
       }
     }
+
     walk::methods(scope, [this](DexMethod* m) {
       auto* code = m->get_code();
       if (code == nullptr) {
@@ -2272,7 +2281,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
           if (it != std::end(print) && *it != cur_method_name) {
             TRACE(MMINL, 0, "### METHOD %s HAS SOURCE BLOCKS FROM %s ###",
                   cur_method_name.c_str(), (*it).c_str());
-            print_cfg_with_violations(v, m->as_def());
+            log_cfg_violations(v, m->as_def());
             return;
           }
         }
@@ -2288,15 +2297,140 @@ struct ViolationsHelper::ViolationsHelperImpl {
           show<SpecialT>(*cfg, special).c_str());
   }
 
-  static void print_cfg_with_violations(Violation v, DexMethod* m) {
+  // This map stores SourceBlock -> Violation Type -> Vector of Strings of Block
+  // Names where the violation is happening. Nullptr entry stores all uncovered
+  // source blocks.
+  using ViolationBlockMap =
+      UnorderedMap<SourceBlock*,
+                   UnorderedMap<Violation, std::vector<std::string>>>;
+
+  template <typename SpecialT>
+  static void gather_cfg_violating_blocks(DexMethod* m,
+                                          ViolationBlockMap* violating_blocks) {
+    cfg::ScopedCFG cfg(m->get_code());
+    SpecialT special{*cfg, violating_blocks};
+
+    const auto& blocks = cfg->blocks();
+    // This needs a no-op stringstream to pass into the functions below
+    std::ostringstream ss;
+    for (auto* b : blocks) {
+      special.start_block(ss, b);
+      for (const auto& mie : *b) {
+        special.mie_before(ss, mie);
+        special.mie_after(ss, mie);
+      }
+      special.end_block(ss, b);
+    }
+  }
+
+  static std::string_view get_violation_name(Violation v) {
+    switch (v) {
+    case Violation::kChainAndDom: {
+      return "ChainAndDom";
+    }
+    case Violation::kHotImmediateDomNotHot: {
+      return "HotImmediateDomNotHot";
+    }
+    case Violation::KHotAllChildrenCold: {
+      return "HotAllChildrenCold";
+    }
+    case Violation::kHotMethodColdEntry: {
+      return "HotMethodColdEntry";
+    }
+    case Violation::kUncoveredSourceBlocks: {
+      return "UncoveredSourceBlocks";
+    }
+    case Violation::kHotNoHotPred: {
+      return "HotNoHotPred";
+    }
+    case Violation::ViolationSize: {
+      not_reached();
+    }
+    }
+    not_reached();
+  }
+
+  static void print_cfg_with_all_violating_blocks(DexMethod* m) {
+    cfg::ScopedCFG cfg(m->get_code());
+    ViolationBlockMap violation_blocks;
+    for (Violation v = Violation::kHotImmediateDomNotHot;
+         v < Violation::ViolationSize;
+         v = static_cast<Violation>(static_cast<int>(v) + 1)) {
+      // This is set so it does not actually print and clutter the output, this
+      // is just used to call gather_cfg_violating_blocks
+
+      log_cfg_violations(v, m, false, &violation_blocks);
+    }
+
+    std::stringstream ss;
+    ss << "=== Violations ===\n";
+    for (auto block : cfg->blocks()) {
+      auto source_block_vector = gather_source_blocks(block);
+      bool block_has_violations = false;
+      std::stringstream block_ss;
+      block_ss << "B" << std::to_string(block->id()) << ":\n";
+      for (auto source_block : source_block_vector) {
+        block_ss << " Source Block[" << source_block
+                 << "]: " << source_block->src->c_str() << "@"
+                 << source_block->id << ":\n";
+        for (Violation v = Violation::kHotImmediateDomNotHot;
+             v < Violation::ViolationSize;
+             v = static_cast<Violation>(static_cast<int>(v) + 1)) {
+          if (v != Violation::kUncoveredSourceBlocks) {
+            block_ss << "  " << get_violation_name(v) << ": ";
+            if (violation_blocks.count(source_block)) {
+              block_has_violations = true;
+              auto& violation_map = violation_blocks.at(source_block);
+              if (violation_map.count(v)) {
+                for (const auto& str : violation_map[v]) {
+                  block_ss << str << ", ";
+                }
+              }
+            }
+            block_ss << '\n';
+          }
+        }
+      }
+      if (block_has_violations) {
+        ss << block_ss.str() << '\n';
+      }
+    }
+    // Add uncovered source blocks into the string
+    if (violation_blocks.count(nullptr)) {
+      auto& violation_map = violation_blocks.at(nullptr);
+      Violation uncovered = Violation::kUncoveredSourceBlocks;
+      if (violation_map.count(uncovered)) {
+        ss << "  " << get_violation_name(uncovered) << ": ";
+        for (const auto& str : violation_map[uncovered]) {
+          ss << str << ", ";
+        }
+      }
+    }
+    TRACE(MMINL, 0, "%s\n", ss.str().c_str());
+  }
+
+  // This function can gather information on violating blocks (for all types of
+  // violations) for each source block, as well as print out a violation-labeled
+  // CFG (only for one violation at a time).
+  static void log_cfg_violations(
+      Violation v,
+      DexMethod* m,
+      bool print_violations = true,
+      ViolationBlockMap* violation_blocks = nullptr) {
     switch (v) {
     case Violation::kHotImmediateDomNotHot: {
       struct HotImmediateSpecial {
         cfg::Block* cur{nullptr};
         dominators::SimpleFastDominators<cfg::GraphInterface> dom;
+        ViolationBlockMap* violating_blocks = nullptr;
 
         explicit HotImmediateSpecial(cfg::ControlFlowGraph& cfg)
             : dom(dominators::SimpleFastDominators<cfg::GraphInterface>(cfg)) {}
+
+        explicit HotImmediateSpecial(cfg::ControlFlowGraph& cfg,
+                                     ViolationBlockMap* violating_blocks)
+            : dom(dominators::SimpleFastDominators<cfg::GraphInterface>(cfg)),
+              violating_blocks(violating_blocks) {}
 
         void mie_before(std::ostream&, const MethodItemEntry&) {}
         void mie_after(std::ostream& os, const MethodItemEntry& mie) {
@@ -2331,6 +2465,11 @@ struct ViolationsHelper::ViolationsHelperImpl {
             return;
           }
 
+          if (violating_blocks != nullptr) {
+            auto& map = (*violating_blocks)[mie.src_block.get()];
+            map[Violation::kHotImmediateDomNotHot].emplace_back(
+                "B" + std::to_string(immediate_dominator->id()));
+          }
           os << " !!! B" << immediate_dominator->id() << ": ";
           auto sb = first_sb_immediate_dominator;
           os << " \"" << show(sb->src) << "\"@" << sb->id;
@@ -2349,7 +2488,12 @@ struct ViolationsHelper::ViolationsHelperImpl {
         void start_block(std::ostream&, cfg::Block* b) { cur = b; }
         void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
       };
-      print_cfg_with_violations<HotImmediateSpecial>(m);
+      if (print_violations) {
+        print_cfg_with_violations<HotImmediateSpecial>(m);
+      }
+      if (violation_blocks != nullptr) {
+        gather_cfg_violating_blocks<HotImmediateSpecial>(m, violation_blocks);
+      }
       return;
     }
     case Violation::kChainAndDom: {
@@ -2360,9 +2504,15 @@ struct ViolationsHelper::ViolationsHelperImpl {
         bool prev_insn_can_throw{false};
 
         dominators::SimpleFastDominators<cfg::GraphInterface> dom;
+        ViolationBlockMap* violating_blocks = nullptr;
 
         explicit ChainAndDom(cfg::ControlFlowGraph& cfg)
             : dom(dominators::SimpleFastDominators<cfg::GraphInterface>(cfg)) {}
+
+        explicit ChainAndDom(cfg::ControlFlowGraph& cfg,
+                             ViolationBlockMap* violating_blocks)
+            : dom(dominators::SimpleFastDominators<cfg::GraphInterface>(cfg)),
+              violating_blocks(violating_blocks) {}
 
         void mie_before(std::ostream&, const MethodItemEntry&) {}
         void mie_after(std::ostream& os, const MethodItemEntry& mie) {
@@ -2398,6 +2548,11 @@ struct ViolationsHelper::ViolationsHelperImpl {
             if (head_error) {
               os << " HEAD";
               if (dom_block != nullptr) {
+                if (violating_blocks != nullptr) {
+                  auto& map = (*violating_blocks)[sb];
+                  map[Violation::kChainAndDom].emplace_back(
+                      "B" + std::to_string(dom_block->id()));
+                }
                 os << " (B" << dom_block->id() << ")";
               }
             }
@@ -2415,32 +2570,55 @@ struct ViolationsHelper::ViolationsHelperImpl {
         }
         void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
       };
-      print_cfg_with_violations<ChainAndDom>(m);
+      if (print_violations) {
+        print_cfg_with_violations<ChainAndDom>(m);
+      }
+      if (violation_blocks != nullptr) {
+        gather_cfg_violating_blocks<ChainAndDom>(m, violation_blocks);
+      }
       return;
     }
     case Violation::kUncoveredSourceBlocks: {
       struct UncoveredSourceBlocks {
+        ViolationBlockMap* violating_blocks = nullptr;
+        ;
         explicit UncoveredSourceBlocks(cfg::ControlFlowGraph&) {}
+
+        explicit UncoveredSourceBlocks(cfg::ControlFlowGraph&,
+                                       ViolationBlockMap* violating_blocks)
+            : violating_blocks(violating_blocks) {}
 
         void mie_before(std::ostream&, const MethodItemEntry&) {}
         void mie_after(std::ostream&, const MethodItemEntry&) {}
 
         void start_block(std::ostream& os, cfg::Block* b) {
           if (get_first_source_block(b) == nullptr) {
+            if (violating_blocks != nullptr) {
+              auto& map = (*violating_blocks)[nullptr];
+              map[Violation::kUncoveredSourceBlocks].emplace_back(
+                  "B" + std::to_string(b->id()));
+            }
             os << "!!!MISSING SOURCE BLOCK\n";
           }
         }
         void end_block(std::ostream&, cfg::Block*) {}
       };
-      print_cfg_with_violations<UncoveredSourceBlocks>(m);
+      if (print_violations) {
+        print_cfg_with_violations<UncoveredSourceBlocks>(m);
+      }
       return;
     }
     case Violation::kHotMethodColdEntry: {
       struct HotMethodColdEntry {
         bool is_entry_block{false};
         bool first_in_block{false};
+        ViolationBlockMap* violating_blocks = nullptr;
 
         explicit HotMethodColdEntry(cfg::ControlFlowGraph&) {}
+
+        explicit HotMethodColdEntry(cfg::ControlFlowGraph&,
+                                    ViolationBlockMap* violating_blocks)
+            : violating_blocks(violating_blocks) {}
 
         void mie_before(std::ostream&, const MethodItemEntry&) {}
         void mie_after(std::ostream& os, const MethodItemEntry& mie) {
@@ -2458,6 +2636,10 @@ struct ViolationsHelper::ViolationsHelperImpl {
             }
           });
           if (violation_found_in_head) {
+            if (violating_blocks != nullptr) {
+              auto& map = (*violating_blocks)[sb];
+              map[Violation::kHotMethodColdEntry].emplace_back("HEAD");
+            }
             os << " !!! HEAD SB: METHOD IS HOT BUT ENTRY IS COLD";
           }
 
@@ -2471,6 +2653,10 @@ struct ViolationsHelper::ViolationsHelperImpl {
             });
           }
           if (violation_found_in_chain) {
+            if (violating_blocks != nullptr) {
+              auto& map = (*violating_blocks)[sb];
+              map[Violation::kHotMethodColdEntry].emplace_back("CHAIN");
+            }
             os << " !!! CHAIN SB: METHOD IS HOT BUT ENTRY IS COLD";
           }
           os << "\n";
@@ -2486,7 +2672,12 @@ struct ViolationsHelper::ViolationsHelperImpl {
         }
         void end_block(std::ostream&, cfg::Block*) {}
       };
-      print_cfg_with_violations<HotMethodColdEntry>(m);
+      if (print_violations) {
+        print_cfg_with_violations<HotMethodColdEntry>(m);
+      }
+      if (violation_blocks != nullptr) {
+        gather_cfg_violating_blocks<HotMethodColdEntry>(m, violation_blocks);
+      }
       return;
     }
     case Violation::kHotNoHotPred: {
@@ -2494,8 +2685,14 @@ struct ViolationsHelper::ViolationsHelperImpl {
         cfg::Block* cur{nullptr};
 
         dominators::SimpleFastDominators<cfg::GraphInterface> dom;
+        ViolationBlockMap* violating_blocks = nullptr;
+        ;
 
         explicit HotNoHotPred(cfg::ControlFlowGraph& cfg) : dom(cfg) {}
+
+        explicit HotNoHotPred(cfg::ControlFlowGraph& cfg,
+                              ViolationBlockMap* violating_blocks)
+            : dom(cfg), violating_blocks(violating_blocks) {}
 
         void mie_before(std::ostream&, const MethodItemEntry&) {}
         void mie_after(std::ostream& os, const MethodItemEntry& mie) {
@@ -2515,16 +2712,27 @@ struct ViolationsHelper::ViolationsHelperImpl {
             violation_found = false;
           }
 
+          std::vector<std::string> cold_preds;
           for (auto predecessor : cur->preds()) {
             auto* first_sb_pred =
                 source_blocks::get_first_source_block(predecessor->src());
             if (source_blocks::has_source_block_positive_val(first_sb_pred)) {
               violation_found = false;
               break;
+            } else {
+              if (predecessor->src() != nullptr &&
+                  violating_blocks != nullptr) {
+                cold_preds.emplace_back(
+                    "B" + std::to_string(predecessor->src()->id()));
+              }
             }
           }
 
           if (violation_found) {
+            if (violating_blocks != nullptr) {
+              auto& map = (*violating_blocks)[mie.src_block.get()];
+              map[Violation::kHotNoHotPred] = cold_preds;
+            }
             os << " !!! HOT BLOCK NO HOT PRED\n";
           }
         }
@@ -2532,14 +2740,25 @@ struct ViolationsHelper::ViolationsHelperImpl {
         void start_block(std::ostream&, cfg::Block* b) { cur = b; }
         void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
       };
-      print_cfg_with_violations<HotNoHotPred>(m);
+      if (print_violations) {
+        print_cfg_with_violations<HotNoHotPred>(m);
+      }
+      if (violation_blocks != nullptr) {
+        gather_cfg_violating_blocks<HotNoHotPred>(m, violation_blocks);
+      }
       return;
     }
     case Violation::KHotAllChildrenCold: {
       struct HotAllChildrenCold {
         cfg::Block* cur{nullptr};
+        ViolationBlockMap* violating_blocks = nullptr;
+        ;
 
         explicit HotAllChildrenCold(cfg::ControlFlowGraph&) {}
+
+        explicit HotAllChildrenCold(cfg::ControlFlowGraph&,
+                                    ViolationBlockMap* violating_blocks)
+            : violating_blocks(violating_blocks) {}
 
         void mie_before(std::ostream&, const MethodItemEntry&) {}
         void mie_after(std::ostream& os, const MethodItemEntry& mie) {
@@ -2562,6 +2781,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
           os << " HOT\n";
 
           bool has_successor = false;
+          std::vector<std::string> cold_succs;
           for (auto successor : cur->succs()) {
             auto* first_sb_succ =
                 source_blocks::get_first_source_block(successor->src());
@@ -2569,8 +2789,16 @@ struct ViolationsHelper::ViolationsHelperImpl {
             if (has_source_block_positive_val(first_sb_succ)) {
               return;
             }
+            if (violating_blocks != nullptr) {
+              cold_succs.emplace_back("B" +
+                                      std::to_string(successor->src()->id()));
+            }
           }
           if (has_successor) {
+            if (violating_blocks != nullptr) {
+              auto& map = (*violating_blocks)[last_sb_before_throw];
+              map[Violation::KHotAllChildrenCold] = cold_succs;
+            }
             os << " !!! HOT ALL CHILDREN COLD\n";
           }
         }
@@ -2578,9 +2806,16 @@ struct ViolationsHelper::ViolationsHelperImpl {
         void start_block(std::ostream&, cfg::Block* b) { cur = b; }
         void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
       };
-      print_cfg_with_violations<HotAllChildrenCold>(m);
+      if (print_violations) {
+        print_cfg_with_violations<HotAllChildrenCold>(m);
+      }
+      if (violation_blocks != nullptr) {
+        gather_cfg_violating_blocks<HotAllChildrenCold>(m, violation_blocks);
+      }
       return;
     }
+    case Violation::ViolationSize:
+      not_reached();
     }
     not_reached();
   }
@@ -2590,9 +2825,14 @@ ViolationsHelper::ViolationsHelper(Violation v,
                                    const Scope& scope,
                                    size_t top_n,
                                    std::vector<std::string> to_vis,
-                                   bool track_intermethod_violations)
-    : impl(std::make_unique<ViolationsHelperImpl>(
-          v, scope, top_n, std::move(to_vis), track_intermethod_violations)) {}
+                                   bool track_intermethod_violations,
+                                   bool print_all_violations)
+    : impl(std::make_unique<ViolationsHelperImpl>(v,
+                                                  scope,
+                                                  top_n,
+                                                  std::move(to_vis),
+                                                  track_intermethod_violations,
+                                                  print_all_violations)) {}
 ViolationsHelper::~ViolationsHelper() {}
 
 void ViolationsHelper::process(ScopedMetrics* sm) {
