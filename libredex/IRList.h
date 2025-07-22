@@ -668,6 +668,7 @@ class InstructionIteratorImpl {
     to_next_instruction();
   }
 
+  // NOLINTNEXTLINE(google-explicit-constructor)
   InstructionIteratorImpl(const InstructionIteratorImpl<false>& rhs)
       : m_it(rhs.m_it), m_end(rhs.m_end) {}
 
