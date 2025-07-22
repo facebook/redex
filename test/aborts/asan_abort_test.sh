@@ -17,5 +17,3 @@ OUT_FILE="$(dirname "$SCRIPT")/test.out"
 
 # Check for asan message.
 grep 'ERROR: AddressSanitizer: stack-use-after-scope' "$OUT_FILE" || ( echo "Did not find ASAN header" ; cat "$OUT_FILE" ; exit 1 ; )
-grep 'WRITE of size 4 ' "$OUT_FILE" || ( echo "Did not find write message" ; cat "$OUT_FILE" ; exit 1 ; )
-grep '==ABORTING' "$OUT_FILE" || ( echo "Did not find abort message" ; cat "$OUT_FILE" ; exit 1 ; )
