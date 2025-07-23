@@ -17,18 +17,21 @@
     "preinstall": "true"
   },
   "dependencies": {
-    "@docusaurus/core": "3.7.0",
-    "@docusaurus/preset-classic": "3.7.0",
+    "@docusaurus/core": "3.8.1",
+    "@docusaurus/preset-classic": "3.8.1",
     "@mdx-js/react": "^3.1.0",
     "clsx": "^2.1.1",
     "docusaurus-plugin-internaldocs-fb": "1.19.1",
-    "image-size": "1.2.1",
-    "on-headers": "1.1.0",
     "prism-react-renderer": "^2.4.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router": "7.5.2",
     "ws": "^8.18.0"
+  },
+  "resolutions": {
+    "on-headers": "^1.1.0",
+    "brace-expansion": "^1.1.12",
+    "webpack-dev-server": "^5.2.1"
   },
   "browserslist": {
     "production": [
