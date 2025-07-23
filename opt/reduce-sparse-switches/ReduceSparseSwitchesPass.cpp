@@ -250,12 +250,36 @@ static void expand_switch(
     cfg::Block* default_target) {
   auto selector_reg = switch_insn_it->insn->src(0);
   cfg.remove_insn(block->to_cfg_instruction_iterator(switch_insn_it));
+  auto* switch_sb = source_blocks::get_last_source_block(block);
+  auto* default_sb = source_blocks::get_first_source_block(default_target);
 
   std::optional<int32_t> prev_case_key;
   for (size_t i = 0; i < cases.size(); i++) {
     auto [case_key, target] = cases[i];
-    cfg::Block* next_block =
-        i == cases.size() - 1 ? default_target : cfg.create_block();
+    cfg::Block* next_block;
+    if (i == cases.size() - 1) {
+      next_block = default_target;
+    } else {
+      next_block = cfg.create_block();
+      if (switch_sb) {
+        auto next_sb = source_blocks::clone_as_synthetic(
+            switch_sb, nullptr, SourceBlock::Val(0, 0));
+        // While quadratic, we'll only ever going to "expand" relatively small
+        // switches
+        for (size_t j = i + 1; j < cases.size(); j++) {
+          auto* later_target_sb =
+              source_blocks::get_first_source_block(cases[j].second);
+          if (later_target_sb) {
+            next_sb->max(*later_target_sb);
+          }
+        }
+        if (default_sb) {
+          next_sb->max(*default_sb);
+        }
+        source_blocks::impl::BlockAccessor::push_source_block(
+            next_block, std::move(next_sb));
+      }
+    }
     IRInstruction* if_insn;
     if (case_key == 0) {
       if_insn = new IRInstruction(OPCODE_IF_EQZ);
