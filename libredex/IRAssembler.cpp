@@ -706,8 +706,7 @@ s_expr create_source_block_expr(const MethodItemEntry* mie) {
   result.emplace_back(std::to_string(src->id));
 
   std::vector<s_expr> vals;
-  for (size_t i = 0; i != src->vals_size; ++i) {
-    const auto& val = src->get_at(i);
+  src->foreach_val([&](const auto& val) {
     if (val) {
       vals.emplace_back(
           std::vector<s_expr>{s_expr(std::to_string(val->val)),
@@ -715,7 +714,7 @@ s_expr create_source_block_expr(const MethodItemEntry* mie) {
     } else {
       vals.emplace_back(s_expr());
     }
-  }
+  });
   result.emplace_back(std::move(vals));
 
   return s_expr(result);

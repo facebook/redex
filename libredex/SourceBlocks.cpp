@@ -630,23 +630,23 @@ bool is_hot_block(const Block* block) {
 void set_block_appear100(Block* block, float appear100) {
   std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
   for (auto* source_block : source_blocks) {
-    for (size_t i = 0; i < source_block->vals_size; i++) {
-      if (source_block->get_at(i)) {
-        source_block->apply_at(i,
-                               [&](auto& val) { val->appear100 = appear100; });
+    source_block->foreach_val([&](auto& val) {
+      if (val) {
+        val->appear100 = appear100;
       }
-    }
+    });
   }
 }
 
 void set_block_value(Block* block, float hit) {
   std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
   for (auto* source_block : source_blocks) {
-    for (size_t i = 0; i < source_block->vals_size; i++) {
-      if (source_block->get_at(i)) {
-        source_block->apply_at(i, [&](auto& val) { val->val = hit; });
+
+    source_block->foreach_val([&](auto& val) {
+      if (val) {
+        val->val = hit;
       }
-    }
+    });
   }
 }
 
@@ -662,11 +662,11 @@ int get_number_of_throws_in_block(Block* curr) {
 
 void set_source_block_value(SourceBlock* source_block, float hit) {
   for (auto* sb = source_block; sb != nullptr; sb = sb->next.get()) {
-    for (size_t i = 0; i < sb->vals_size; i++) {
-      if (sb->get_at(i)) {
-        source_block->apply_at(i, [&](auto& val) { val->val = hit; });
+    sb->foreach_val([&](auto& val) {
+      if (val) {
+        val->val = hit;
       }
-    }
+    });
   }
 }
 
@@ -1043,23 +1043,22 @@ bool is_hot_block(const Block* block) {
 void set_block_appear100(Block* block, float appear100) {
   std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
   for (auto* source_block : source_blocks) {
-    for (size_t i = 0; i < source_block->vals_size; i++) {
-      if (source_block->get_at(i)) {
-        source_block->apply_at(i,
-                               [&](auto& val) { val->appear100 = appear100; });
+    source_block->foreach_val([&](auto& val) {
+      if (val) {
+        val->appear100 = appear100;
       }
-    }
+    });
   }
 }
 
 void set_block_value(Block* block, float hit) {
   std::vector<SourceBlock*> source_blocks = gather_source_blocks(block);
   for (auto* source_block : source_blocks) {
-    for (size_t i = 0; i < source_block->vals_size; i++) {
-      if (source_block->get_at(i)) {
-        source_block->apply_at(i, [&](auto& val) { val->val = hit; });
+    source_block->foreach_val([&](auto& val) {
+      if (val) {
+        val->val = hit;
       }
-    }
+    });
   }
 }
 
@@ -1375,12 +1374,7 @@ size_t count_block_has_incomplete_sbs(
   if (sb == nullptr) {
     return 0;
   }
-  for (uint32_t idx = 0; idx < sb->vals_size; idx++) {
-    if (!sb->get_at(idx)) {
-      return 1;
-    }
-  }
-  return 0;
+  return sb->foreach_val_early([&](const auto& val) { return !val; });
 }
 size_t count_all_sbs(
     Block* b, const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
@@ -2473,15 +2467,14 @@ struct ViolationsHelper::ViolationsHelperImpl {
           os << " !!! B" << immediate_dominator->id() << ": ";
           auto sb = first_sb_immediate_dominator;
           os << " \"" << show(sb->src) << "\"@" << sb->id;
-          for (size_t i = 0; i < sb->vals_size; i++) {
-            const auto& val = sb->get_at(i);
+          sb->foreach_val([&](const auto& val) {
             os << " ";
             if (val) {
               os << val->val << "/" << val->appear100;
             } else {
               os << "N/A";
             }
-          }
+          });
           os << "\n";
         }
 

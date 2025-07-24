@@ -1039,15 +1039,14 @@ std::string SourceBlock::show(bool quoted_src) const {
     }
     o << "@" << cur->id;
     o << "(";
-    for (size_t i = 0; i != cur->vals_size; ++i) {
-      const auto& val = cur->get_at(i);
+    cur->foreach_val([&o](const auto& val) {
       if (val) {
         o << val->val << ":" << val->appear100;
       } else {
         o << "x";
       }
       o << "|";
-    }
+    });
     o << ")";
   }
   return o.str();

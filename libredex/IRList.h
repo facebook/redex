@@ -250,13 +250,13 @@ struct SourceBlock {
     if (vals_ == nullptr) {
       for (size_t i = 0; i < vals_size; i++) {
         const Val val = Val::default_value();
-        fn(val);
+        invoke_fn(fn, i, val);
       }
       return;
     }
     for (size_t i = 0; i < vals_size; i++) {
       const Val& val = vals_[i];
-      fn(val);
+      invoke_fn(fn, i, val);
     }
   }
 
@@ -265,7 +265,7 @@ struct SourceBlock {
     if (vals_ == nullptr) {
       for (size_t i = 0; i < vals_size; i++) {
         Val val = Val::default_value();
-        fn(val);
+        invoke_fn(fn, i, val);
         if (!val.is_default_value()) {
           denormalize();
           vals_[i] = val;
@@ -274,7 +274,7 @@ struct SourceBlock {
       return;
     }
     for (size_t i = 0; i < vals_size; i++) {
-      fn(vals_[i]);
+      invoke_fn(fn, i, vals_[i]);
     }
   }
 
@@ -283,7 +283,7 @@ struct SourceBlock {
     if (vals_ == nullptr) {
       for (size_t i = 0; i < vals_size; i++) {
         const Val val = Val::default_value();
-        if (fn(val)) {
+        if (invoke_fn(fn, i, val)) {
           return true;
         }
       }
@@ -291,7 +291,7 @@ struct SourceBlock {
     }
     for (size_t i = 0; i < vals_size; i++) {
       const Val& val = vals_[i];
-      if (fn(val)) {
+      if (invoke_fn(fn, i, val)) {
         return true;
       }
     }
@@ -303,7 +303,7 @@ struct SourceBlock {
     if (vals_ == nullptr) {
       for (size_t i = 0; i < vals_size; i++) {
         Val val = Val::default_value();
-        auto res = fn(val);
+        auto res = invoke_fn(fn, i, val);
         if (!val.is_default_value()) {
           denormalize();
           vals_[i] = val;
@@ -315,11 +315,31 @@ struct SourceBlock {
       return false;
     }
     for (size_t i = 0; i < vals_size; i++) {
-      if (fn(vals_[i])) {
+      if (invoke_fn(fn, i, vals_[i])) {
         return true;
       }
     }
     return false;
+  }
+
+  template <typename Fn>
+  boost::optional<size_t> find_val(const Fn& pred) const {
+    if (vals_ == nullptr) {
+      for (size_t i = 0; i < vals_size; i++) {
+        const Val val = Val::default_value();
+        if (invoke_fn(pred, i, val)) {
+          return i;
+        }
+      }
+      return boost::none;
+    }
+    for (size_t i = 0; i < vals_size; i++) {
+      const Val& val = vals_[i];
+      if (invoke_fn(pred, i, val)) {
+        return i;
+      }
+    }
+    return boost::none;
   }
 
   bool operator==(const SourceBlock& other) const;
@@ -378,6 +398,15 @@ struct SourceBlock {
       }
     }
     return true;
+  }
+
+  template <typename Fn, typename ValType>
+  static auto invoke_fn(const Fn& fn, size_t i, ValType& val) {
+    if constexpr (std::is_invocable_v<Fn, size_t, ValType&>) {
+      return fn(i, val);
+    } else {
+      return fn(val);
+    }
   }
 
   void denormalize();
