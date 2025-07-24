@@ -90,11 +90,18 @@ class ResourceValueMergingPass : public Pass {
       const resources::StyleInfo& optimized,
       const UnorderedSet<uint32_t>& ambiguous_styles);
 
+  void remove_attribute_from_descendent(
+      uint32_t resource_id,
+      const UnorderedMap<uint32_t, resources::StyleResource::Value>& attr_map,
+      const resources::StyleInfo& optimized,
+      UnorderedMap<uint32_t, ResourceAttributeInformation>& removals);
+
  private:
   ResourceAttributeInformation find_resource_optimization_candidates(
       resources::StyleInfo::vertex_t vertex,
       const resources::StyleInfo& style_info,
       OptimizableResources& optimizable_candidates,
       const UnorderedSet<uint32_t>& ambiguous_styles);
+
   UnorderedSet<std::string> m_excluded_resources;
 };

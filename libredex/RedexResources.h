@@ -226,6 +226,8 @@ struct StyleInfo {
   Graph graph;
   // Actual representation of the parsed style information from the application.
   StyleMap styles;
+  // Maps resource ID to the vertex in the graph.
+  std::unordered_map<uint32_t, resources::StyleInfo::vertex_t> id_to_vertex;
   // Returns information from the graph as a .dot format, for visualization.
   // Optionally this can exclude nodes that have no outgoing/inbound edges which
   // might not be interesting to look at.

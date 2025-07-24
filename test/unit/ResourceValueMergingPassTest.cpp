@@ -15,7 +15,19 @@ ResourceAttributeInformation get_common_attributes(
 class ResourceValueMergingPassTest : public ::testing::Test {
  protected:
   ResourceValueMergingPass m_pass;
+  resources::StyleInfo::vertex_t add_vertex(resources::StyleInfo& style_info,
+                                            uint32_t id) {
+    auto vertex =
+        boost::add_vertex(resources::StyleInfo::Node{id}, style_info.graph);
+    style_info.id_to_vertex[id] = vertex;
+    return vertex;
+  }
 
+  void add_edge(resources::StyleInfo& style_info,
+                resources::StyleInfo::vertex_t parent,
+                resources::StyleInfo::vertex_t child) {
+    boost::add_edge(parent, child, style_info.graph);
+  }
   resources::StyleResource create_style_resource(
       uint32_t parent_id, const std::vector<uint32_t>& attr_ids) {
     resources::StyleResource style;
@@ -1048,4 +1060,158 @@ TEST_F(ResourceValueMergingPassTest,
   EXPECT_TRUE(addition2_it != diffs.additions[resource_id].end());
   EXPECT_EQ(addition1_it->second, new_value1);
   EXPECT_EQ(addition2_it->second, new_value2);
+}
+
+TEST_F(ResourceValueMergingPassTest, RemoveAttributeFromDescendentSingleChild) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  uint32_t attr_id = 0x01010001;
+  resources::StyleResource::Value attr_value(1, 0x12345678);
+  UnorderedMap<uint32_t, resources::StyleResource::Value> attr_map;
+  attr_map.insert({attr_id, attr_value});
+
+  UnorderedMap<uint32_t, ResourceAttributeInformation> removals;
+
+  m_pass.remove_attribute_from_descendent(parent_id, attr_map, style_info,
+                                          removals);
+
+  ASSERT_EQ(removals.size(), 1);
+  ASSERT_TRUE(removals.find(child_id) != removals.end());
+  ASSERT_EQ(removals[child_id].size(), 1);
+  ASSERT_TRUE(removals[child_id].find(attr_id) != removals[child_id].end());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       RemoveAttributeFromDescendentMultipleChildren) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child1_id = 0x7f010002;
+  uint32_t child2_id = 0x7f010003;
+  uint32_t child3_id = 0x7f010004;
+
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child1_vertex = add_vertex(style_info, child1_id);
+  auto child2_vertex = add_vertex(style_info, child2_id);
+  auto child3_vertex = add_vertex(style_info, child3_id);
+
+  add_edge(style_info, parent_vertex, child1_vertex);
+  add_edge(style_info, parent_vertex, child2_vertex);
+  add_edge(style_info, parent_vertex, child3_vertex);
+
+  uint32_t attr_id = 0x01010001;
+  resources::StyleResource::Value attr_value(1, 0x12345678);
+  UnorderedMap<uint32_t, resources::StyleResource::Value> attr_map;
+  attr_map.insert({attr_id, attr_value});
+
+  UnorderedMap<uint32_t, ResourceAttributeInformation> removals;
+
+  m_pass.remove_attribute_from_descendent(parent_id, attr_map, style_info,
+                                          removals);
+
+  ASSERT_EQ(removals.size(), 3);
+  ASSERT_TRUE(removals.find(child1_id) != removals.end());
+  ASSERT_TRUE(removals.find(child2_id) != removals.end());
+  ASSERT_TRUE(removals.find(child3_id) != removals.end());
+  ASSERT_EQ(removals[child1_id].size(), 1);
+  ASSERT_TRUE(removals[child1_id].find(attr_id) != removals[child1_id].end());
+  ASSERT_EQ(removals[child2_id].size(), 1);
+  ASSERT_TRUE(removals[child2_id].find(attr_id) != removals[child2_id].end());
+  ASSERT_EQ(removals[child3_id].size(), 1);
+  ASSERT_TRUE(removals[child3_id].find(attr_id) != removals[child3_id].end());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       RemoveAttributeFromDescendentMultipleAttributes) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  uint32_t attr_id1 = 0x01010001;
+  uint32_t attr_id2 = 0x01010002;
+  uint32_t attr_id3 = 0x01010003;
+  resources::StyleResource::Value attr_value1(1, 0x12345678);
+  resources::StyleResource::Value attr_value2(2, std::string("test_value"));
+  resources::StyleResource::Value attr_value3(1, 0x87654321);
+
+  UnorderedMap<uint32_t, resources::StyleResource::Value> attr_map;
+  attr_map.insert({attr_id1, attr_value1});
+  attr_map.insert({attr_id2, attr_value2});
+  attr_map.insert({attr_id3, attr_value3});
+
+  UnorderedMap<uint32_t, ResourceAttributeInformation> removals;
+
+  m_pass.remove_attribute_from_descendent(parent_id, attr_map, style_info,
+                                          removals);
+
+  ASSERT_EQ(removals.size(), 1);
+  ASSERT_TRUE(removals.find(child_id) != removals.end());
+  ASSERT_EQ(removals[child_id].size(), 3);
+  ASSERT_TRUE(removals[child_id].find(attr_id1) != removals[child_id].end());
+  ASSERT_TRUE(removals[child_id].find(attr_id2) != removals[child_id].end());
+  ASSERT_TRUE(removals[child_id].find(attr_id3) != removals[child_id].end());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       RemoveAttributeFromDescendentMultiLevelHierarchy) {
+  resources::StyleInfo style_info;
+
+  uint32_t grandparent_id = 0x7f010001;
+  uint32_t parent_id = 0x7f010002;
+  uint32_t child_id = 0x7f010003;
+
+  auto grandparent_vertex = add_vertex(style_info, grandparent_id);
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+
+  add_edge(style_info, grandparent_vertex, parent_vertex);
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  uint32_t attr_id = 0x01010001;
+  resources::StyleResource::Value attr_value(1, 0x12345678);
+  UnorderedMap<uint32_t, resources::StyleResource::Value> attr_map;
+  attr_map.insert({attr_id, attr_value});
+
+  UnorderedMap<uint32_t, ResourceAttributeInformation> removals;
+
+  m_pass.remove_attribute_from_descendent(parent_id, attr_map, style_info,
+                                          removals);
+
+  ASSERT_EQ(removals.size(), 1);
+  ASSERT_TRUE(removals.find(child_id) != removals.end());
+  ASSERT_TRUE(removals.find(parent_id) == removals.end());
+  ASSERT_EQ(removals[child_id].size(), 1);
+  ASSERT_TRUE(removals[child_id].find(attr_id) != removals[child_id].end());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       RemoveAttributeFromDescendentEmptyAttributeMap) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  UnorderedMap<uint32_t, resources::StyleResource::Value> attr_map;
+  UnorderedMap<uint32_t, ResourceAttributeInformation> removals;
+  m_pass.remove_attribute_from_descendent(parent_id, attr_map, style_info,
+                                          removals);
+  ASSERT_EQ(removals.size(), 0);
 }

@@ -321,6 +321,25 @@ ResourceValueMergingPass::find_resource_optimization_candidates(
   return resources_common_attributes;
 }
 
+void ResourceValueMergingPass::remove_attribute_from_descendent(
+    uint32_t resource_id,
+    const UnorderedMap<uint32_t, resources::StyleResource::Value>& attr_map,
+    const resources::StyleInfo& optimized,
+    UnorderedMap<uint32_t, ResourceAttributeInformation>& removals) {
+  const auto& vertex_find = optimized.id_to_vertex.find(resource_id);
+  always_assert(vertex_find != optimized.id_to_vertex.end());
+  auto vertex = vertex_find->second;
+
+  for (const auto& edge :
+       boost::make_iterator_range(boost::out_edges(vertex, optimized.graph))) {
+    auto child_vertex = boost::target(edge, optimized.graph);
+    uint32_t child_resource_id = optimized.graph[child_vertex].id;
+    for (const auto& [attr_id, _] : UnorderedIterable(attr_map)) {
+      removals[child_resource_id].insert(attr_id);
+    }
+  }
+}
+
 resources::StyleInfo ResourceValueMergingPass::get_optimized_graph(
     const resources::StyleInfo& initial,
     const UnorderedSet<uint32_t>& ambiguous_styles,

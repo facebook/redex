@@ -556,6 +556,7 @@ resources::StyleInfo ResourceTableFile::load_style_info() {
       }
     }
   }
+  style_info.id_to_vertex = added_nodes;
   return style_info;
 }
 
