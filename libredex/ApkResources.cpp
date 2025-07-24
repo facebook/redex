@@ -3261,4 +3261,9 @@ void ResourcesArscFile::apply_attribute_additions(
   modify_attributes(res_id_to_attrs_to_add, add_attributes);
 }
 
+void ResourcesArscFile::apply_style_merges(
+    const std::vector<resources::StyleModificationSpec::Modification>&
+    /* modifications */,
+    const std::vector<std::string>& /* resources_pb_paths */) {}
+
 ResourcesArscFile::~ResourcesArscFile() {}

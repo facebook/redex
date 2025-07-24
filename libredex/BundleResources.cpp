@@ -3050,6 +3050,10 @@ void ResourcesPbFile::apply_attribute_additions(
   }
 }
 
+void ResourcesPbFile::apply_style_merges(
+    const std::vector<StyleModificationSpec::Modification>& /* modifications */,
+    const std::vector<std::string>& /* resouces_pb_paths */) {}
+
 ResourcesPbFile::~ResourcesPbFile() {}
 
 #endif // HAS_PROTOBUF

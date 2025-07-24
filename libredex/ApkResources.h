@@ -376,6 +376,10 @@ class ResourcesArscFile : public ResourceTableFile {
       const std::vector<resources::StyleModificationSpec::Modification>&
           modifications,
       const std::vector<std::string>& resources_pb_paths) override;
+  void apply_style_merges(
+      const std::vector<resources::StyleModificationSpec::Modification>&
+          modifications,
+      const std::vector<std::string>& resources_pb_paths) override;
   ~ResourcesArscFile() override;
 
   size_t get_length() const;

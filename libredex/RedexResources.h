@@ -504,6 +504,12 @@ class ResourceTableFile {
           modifications,
       const std::vector<std::string>& resources_pb_paths) = 0;
 
+  // Merges parent with child style
+  virtual void apply_style_merges(
+      const std::vector<resources::StyleModificationSpec::Modification>&
+          modifications,
+      const std::vector<std::string>& resources_pb_paths) = 0;
+
   // Builds a graph of all styles in the application, with outgoing edges to
   // the parent of each style.
   resources::StyleInfo load_style_info();
