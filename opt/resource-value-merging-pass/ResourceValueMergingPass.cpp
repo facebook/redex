@@ -531,4 +531,71 @@ OptimizableResources ResourceValueMergingPass::get_graph_diffs(
   return diff;
 }
 
+void ResourceValueMergingPass::find_resources_to_merge(
+    resources::StyleInfo::vertex_t vertex,
+    const resources::StyleInfo& style_info,
+    const UnorderedSet<uint32_t>& ambiguous_styles,
+    const UnorderedSet<uint32_t>& directly_reachable_styles,
+    std::vector<std::vector<uint32_t>>& resources_to_merge) {
+
+  auto children_count = boost::out_degree(vertex, style_info.graph);
+  uint32_t resource_id = style_info.graph[vertex].id;
+
+  if (children_count == 0 ||
+      ambiguous_styles.find(resource_id) != ambiguous_styles.end()) {
+    return;
+  }
+
+  std::vector<uint32_t> merges;
+  resources::StyleInfo::vertex_t current_vertex = vertex;
+
+  // Find chains of single-child resources that can be merged
+  const auto& children_resource_ids = style_info.get_children(resource_id);
+  uint32_t child_resource_id = children_resource_ids[0];
+
+  while (children_count == 1 &&
+         directly_reachable_styles.find(resource_id) ==
+             directly_reachable_styles.end() &&
+         ambiguous_styles.find(resource_id) == ambiguous_styles.end() &&
+         ambiguous_styles.find(child_resource_id) == ambiguous_styles.end()) {
+    merges.push_back(resource_id);
+    auto out_edges = boost::out_edges(current_vertex, style_info.graph);
+    current_vertex = boost::target(*out_edges.first, style_info.graph);
+    resource_id = style_info.graph[current_vertex].id;
+    children_count = boost::out_degree(current_vertex, style_info.graph);
+
+    if (children_count == 0) {
+      break;
+    }
+
+    child_resource_id = style_info.get_children(resource_id)[0];
+  }
+
+  if (!merges.empty()) {
+    resources_to_merge.push_back(std::move(merges));
+  }
+
+  for (uint32_t child_id : style_info.get_children(resource_id)) {
+    auto child_vertex = style_info.id_to_vertex.at(child_id);
+    find_resources_to_merge(child_vertex, style_info, ambiguous_styles,
+                            directly_reachable_styles, resources_to_merge);
+  }
+}
+
+std::vector<std::vector<uint32_t>>
+ResourceValueMergingPass::get_resources_to_merge(
+    const resources::StyleInfo& style_info,
+    const UnorderedSet<uint32_t>& ambiguous_styles,
+    const UnorderedSet<uint32_t>& directly_reachable_styles) {
+  std::vector<std::vector<uint32_t>> merging_resource_pairs;
+  auto root_vertices = style_info.get_roots();
+
+  for (const auto& vertex : UnorderedIterable(root_vertices)) {
+    find_resources_to_merge(vertex, style_info, ambiguous_styles,
+                            directly_reachable_styles, merging_resource_pairs);
+  }
+
+  return merging_resource_pairs;
+}
+
 static ResourceValueMergingPass s_pass;

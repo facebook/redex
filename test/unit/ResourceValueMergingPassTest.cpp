@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "ResourceValueMergingPass.h"
@@ -1120,10 +1121,13 @@ TEST_F(ResourceValueMergingPassTest,
   ASSERT_TRUE(removals.find(child1_id) != removals.end());
   ASSERT_TRUE(removals.find(child2_id) != removals.end());
   ASSERT_TRUE(removals.find(child3_id) != removals.end());
+
   ASSERT_EQ(removals[child1_id].size(), 1);
   ASSERT_TRUE(removals[child1_id].find(attr_id) != removals[child1_id].end());
+
   ASSERT_EQ(removals[child2_id].size(), 1);
   ASSERT_TRUE(removals[child2_id].find(attr_id) != removals[child2_id].end());
+
   ASSERT_EQ(removals[child3_id].size(), 1);
   ASSERT_TRUE(removals[child3_id].find(attr_id) != removals[child3_id].end());
 }
@@ -1134,7 +1138,6 @@ TEST_F(ResourceValueMergingPassTest,
 
   uint32_t parent_id = 0x7f010001;
   uint32_t child_id = 0x7f010002;
-
   auto parent_vertex = add_vertex(style_info, parent_id);
   auto child_vertex = add_vertex(style_info, child_id);
 
@@ -1143,6 +1146,7 @@ TEST_F(ResourceValueMergingPassTest,
   uint32_t attr_id1 = 0x01010001;
   uint32_t attr_id2 = 0x01010002;
   uint32_t attr_id3 = 0x01010003;
+
   resources::StyleResource::Value attr_value1(1, 0x12345678);
   resources::StyleResource::Value attr_value2(2, std::string("test_value"));
   resources::StyleResource::Value attr_value3(1, 0x87654321);
@@ -1159,6 +1163,7 @@ TEST_F(ResourceValueMergingPassTest,
 
   ASSERT_EQ(removals.size(), 1);
   ASSERT_TRUE(removals.find(child_id) != removals.end());
+
   ASSERT_EQ(removals[child_id].size(), 3);
   ASSERT_TRUE(removals[child_id].find(attr_id1) != removals[child_id].end());
   ASSERT_TRUE(removals[child_id].find(attr_id2) != removals[child_id].end());
@@ -1193,6 +1198,7 @@ TEST_F(ResourceValueMergingPassTest,
   ASSERT_EQ(removals.size(), 1);
   ASSERT_TRUE(removals.find(child_id) != removals.end());
   ASSERT_TRUE(removals.find(parent_id) == removals.end());
+
   ASSERT_EQ(removals[child_id].size(), 1);
   ASSERT_TRUE(removals[child_id].find(attr_id) != removals[child_id].end());
 }
@@ -1203,7 +1209,6 @@ TEST_F(ResourceValueMergingPassTest,
 
   uint32_t parent_id = 0x7f010001;
   uint32_t child_id = 0x7f010002;
-
   auto parent_vertex = add_vertex(style_info, parent_id);
   auto child_vertex = add_vertex(style_info, child_id);
 
@@ -1211,7 +1216,490 @@ TEST_F(ResourceValueMergingPassTest,
 
   UnorderedMap<uint32_t, resources::StyleResource::Value> attr_map;
   UnorderedMap<uint32_t, ResourceAttributeInformation> removals;
+
   m_pass.remove_attribute_from_descendent(parent_id, attr_map, style_info,
                                           removals);
+
   ASSERT_EQ(removals.size(), 0);
+}
+
+TEST_F(ResourceValueMergingPassTest, GetResourcesToMergeSimpleParentChild) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles;
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0][0], parent_id);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetResourcesToMergeParentWithMultipleChildren) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child1_id = 0x7f010002;
+  uint32_t child2_id = 0x7f010003;
+
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child1_vertex = add_vertex(style_info, child1_id);
+  auto child2_vertex = add_vertex(style_info, child2_id);
+
+  add_edge(style_info, parent_vertex, child1_vertex);
+  add_edge(style_info, parent_vertex, child2_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles;
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Parent has multiple children, so no merging should occur
+  EXPECT_EQ(result.size(), 0);
+}
+
+TEST_F(ResourceValueMergingPassTest, GetResourcesToMergeWithAmbiguousParent) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles = {parent_id};
+  UnorderedSet<uint32_t> directly_reachable_styles;
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Parent is ambiguous, so no merging should occur
+  EXPECT_EQ(result.size(), 0);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetResourcesToMergeWithDirectlyReachableParent) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles = {parent_id};
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Parent is directly reachable, so no merging should occur
+  EXPECT_EQ(result.size(), 0);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetResourcesToMergeWithDirectlyReachableChild) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles = {child_id};
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Merging can occur even if a child is directly reachable
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0][0], parent_id);
+}
+
+TEST_F(ResourceValueMergingPassTest, GetResourcesToMergeChainedMergesPreOrder) {
+  resources::StyleInfo style_info;
+
+  // Create a chain: grandparent -> parent -> child
+  // where both grandparent and parent have exactly one child
+  uint32_t grandparent_id = 0x7f010001;
+  uint32_t parent_id = 0x7f010002;
+  uint32_t child_id = 0x7f010003;
+
+  auto grandparent_vertex = add_vertex(style_info, grandparent_id);
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+
+  add_edge(style_info, grandparent_vertex, parent_vertex);
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles;
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Should have two merge pairs: (grandparent, parent) and (parent, child)
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0].size(), 2);
+
+  // Verify pre-order traversal: grandparent->parent should come before
+  // parent->child
+  EXPECT_THAT(result[0], ::testing::ElementsAre(grandparent_id, parent_id));
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetResourcesToMergeChainedMergesWithDirectlyReachableParent) {
+  resources::StyleInfo style_info;
+
+  // Create a chain: grandparent -> parent -> child
+  // where both grandparent and parent have exactly one child
+  uint32_t grandparent_id = 0x7f010001;
+  uint32_t parent_id = 0x7f010002;
+  uint32_t child_id = 0x7f010003;
+
+  auto grandparent_vertex = add_vertex(style_info, grandparent_id);
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+
+  add_edge(style_info, grandparent_vertex, parent_vertex);
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles = {parent_id};
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Should have one merge value: grandparent
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0][0], grandparent_id);
+}
+
+TEST_F(ResourceValueMergingPassTest, GetResourcesToMergeComplexHierarchy) {
+  resources::StyleInfo style_info;
+
+  // Create a more complex hierarchy:
+  //     root
+  //    /    \
+  //   A      B (B has 2 children, so no merge)
+  //   |     / \
+  //   C    D   E
+  //   |
+  //   F
+
+  uint32_t root_id = 0x7f010001;
+  uint32_t a_id = 0x7f010002;
+  uint32_t b_id = 0x7f010003;
+  uint32_t c_id = 0x7f010004;
+  uint32_t d_id = 0x7f010005;
+  uint32_t e_id = 0x7f010006;
+  uint32_t f_id = 0x7f010007;
+
+  auto root_vertex = add_vertex(style_info, root_id);
+  auto a_vertex = add_vertex(style_info, a_id);
+  auto b_vertex = add_vertex(style_info, b_id);
+  auto c_vertex = add_vertex(style_info, c_id);
+  auto d_vertex = add_vertex(style_info, d_id);
+  auto e_vertex = add_vertex(style_info, e_id);
+  auto f_vertex = add_vertex(style_info, f_id);
+
+  add_edge(style_info, root_vertex, a_vertex);
+  add_edge(style_info, root_vertex, b_vertex);
+  add_edge(style_info, a_vertex, c_vertex);
+  add_edge(style_info, b_vertex, d_vertex);
+  add_edge(style_info, b_vertex, e_vertex);
+  add_edge(style_info, c_vertex, f_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles;
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Expected merges: (A, C) and (C, F)
+  // Root has 2 children, so no merge
+  // B has 2 children, so no merge
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0].size(), 2);
+
+  EXPECT_THAT(result[0], ::testing::ElementsAre(a_id, c_id));
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetResourcesToMergeComplexHierarchyMultiple) {
+  resources::StyleInfo style_info;
+
+  // Create a more complex hierarchy:
+  //     root
+  //    /    \
+  //   A      B (B has 2 children, so no merge)
+  //   |     / \
+  //   C    D   E
+  //   |        |
+  //   F        G
+  //            |
+  //            H
+
+  uint32_t root_id = 0x7f010001;
+  uint32_t a_id = 0x7f010002;
+  uint32_t b_id = 0x7f010003;
+  uint32_t c_id = 0x7f010004;
+  uint32_t d_id = 0x7f010005;
+  uint32_t e_id = 0x7f010006;
+  uint32_t f_id = 0x7f010007;
+  uint32_t g_id = 0x7f010008;
+  uint32_t h_id = 0x7f010009;
+
+  auto root_vertex = add_vertex(style_info, root_id);
+  auto a_vertex = add_vertex(style_info, a_id);
+  auto b_vertex = add_vertex(style_info, b_id);
+  auto c_vertex = add_vertex(style_info, c_id);
+  auto d_vertex = add_vertex(style_info, d_id);
+  auto e_vertex = add_vertex(style_info, e_id);
+  auto f_vertex = add_vertex(style_info, f_id);
+  auto g_vertex = add_vertex(style_info, g_id);
+  auto h_vertex = add_vertex(style_info, h_id);
+
+  add_edge(style_info, root_vertex, a_vertex);
+  add_edge(style_info, root_vertex, b_vertex);
+  add_edge(style_info, a_vertex, c_vertex);
+  add_edge(style_info, b_vertex, d_vertex);
+  add_edge(style_info, b_vertex, e_vertex);
+  add_edge(style_info, c_vertex, f_vertex);
+  add_edge(style_info, e_vertex, g_vertex);
+  add_edge(style_info, g_vertex, h_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles;
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Expected merges: (A, C), (C, F), (E, G), (G, H)
+  // Root has 2 children, so no merge
+  EXPECT_EQ(result.size(), 2);
+  EXPECT_EQ(result[0].size(), 2);
+  EXPECT_EQ(result[1].size(), 2);
+
+  EXPECT_THAT(result[0], ::testing::ElementsAre(a_id, c_id));
+  EXPECT_THAT(result[1], ::testing::ElementsAre(e_id, g_id));
+}
+
+TEST_F(ResourceValueMergingPassTest, GetResourcesToMergeLeafNodesOnly) {
+  resources::StyleInfo style_info;
+
+  uint32_t node1_id = 0x7f010001;
+  uint32_t node2_id = 0x7f010002;
+  uint32_t node3_id = 0x7f010003;
+
+  add_vertex(style_info, node1_id);
+  add_vertex(style_info, node2_id);
+  add_vertex(style_info, node3_id);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles;
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  EXPECT_EQ(result.size(), 0);
+}
+
+TEST_F(ResourceValueMergingPassTest, GetResourcesToMergeEmptyGraph) {
+  resources::StyleInfo style_info;
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles;
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  EXPECT_EQ(result.size(), 0);
+}
+
+TEST_F(ResourceValueMergingPassTest, GetResourcesToMergeLongChainPreOrder) {
+  resources::StyleInfo style_info;
+
+  // Create a long chain: A -> B -> C -> D -> E
+  // Each node has exactly one child (except E)
+  uint32_t a_id = 0x7f010001;
+  uint32_t b_id = 0x7f010002;
+  uint32_t c_id = 0x7f010003;
+  uint32_t d_id = 0x7f010004;
+  uint32_t e_id = 0x7f010005;
+
+  auto a_vertex = add_vertex(style_info, a_id);
+  auto b_vertex = add_vertex(style_info, b_id);
+  auto c_vertex = add_vertex(style_info, c_id);
+  auto d_vertex = add_vertex(style_info, d_id);
+  auto e_vertex = add_vertex(style_info, e_id);
+
+  add_edge(style_info, a_vertex, b_vertex);
+  add_edge(style_info, b_vertex, c_vertex);
+  add_edge(style_info, c_vertex, d_vertex);
+  add_edge(style_info, d_vertex, e_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles;
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Should have 4 merge pairs: (A,B), (B,C), (C,D), (D,E)
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0].size(), 4);
+
+  EXPECT_THAT(result[0], ::testing::ElementsAre(a_id, b_id, c_id, d_id));
+}
+
+TEST_F(ResourceValueMergingPassTest, GetResourcesToMergeMixedConstraints) {
+  resources::StyleInfo style_info;
+
+  // Create hierarchy with mixed constraints:
+  //     root
+  //    /    \
+  //   A      B (ambiguous)
+  //   |      |
+  //   C      D (directly reachable)
+  //   |      |
+  //   E      F
+
+  uint32_t root_id = 0x7f010001;
+  uint32_t a_id = 0x7f010002;
+  uint32_t b_id = 0x7f010003;
+  uint32_t c_id = 0x7f010004;
+  uint32_t d_id = 0x7f010005;
+  uint32_t e_id = 0x7f010006;
+  uint32_t f_id = 0x7f010007;
+
+  auto root_vertex = add_vertex(style_info, root_id);
+  auto a_vertex = add_vertex(style_info, a_id);
+  auto b_vertex = add_vertex(style_info, b_id);
+  auto c_vertex = add_vertex(style_info, c_id);
+  auto d_vertex = add_vertex(style_info, d_id);
+  auto e_vertex = add_vertex(style_info, e_id);
+  auto f_vertex = add_vertex(style_info, f_id);
+
+  add_edge(style_info, root_vertex, a_vertex);
+  add_edge(style_info, root_vertex, b_vertex);
+  add_edge(style_info, a_vertex, c_vertex);
+  add_edge(style_info, b_vertex, d_vertex);
+  add_edge(style_info, c_vertex, e_vertex);
+  add_edge(style_info, d_vertex, f_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles = {b_id};
+  UnorderedSet<uint32_t> directly_reachable_styles = {d_id};
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Expected merges: (A, C) and (C, E)
+  // Root has 2 children, so no merge
+  // B is ambiguous, so no merge for B->D
+  // D is directly reachable, so no merge for D->F
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0].size(), 2);
+
+  // Verify the correct pairs are present in pre-order
+  EXPECT_THAT(result[0], ::testing::ElementsAre(a_id, c_id));
+}
+
+TEST_F(ResourceValueMergingPassTest, GetResourcesToMergeUnderReachable) {
+  resources::StyleInfo style_info;
+
+  // Create hierarchy with mixed constraints:
+  //     root
+  //    /    \
+  //   A      B (reachable)
+  //   |      |
+  //   C      D
+  //   |      |
+  //   E      F
+
+  uint32_t root_id = 0x7f010001;
+  uint32_t a_id = 0x7f010002;
+  uint32_t b_id = 0x7f010003;
+  uint32_t c_id = 0x7f010004;
+  uint32_t d_id = 0x7f010005;
+  uint32_t e_id = 0x7f010006;
+  uint32_t f_id = 0x7f010007;
+
+  auto root_vertex = add_vertex(style_info, root_id);
+  auto a_vertex = add_vertex(style_info, a_id);
+  auto b_vertex = add_vertex(style_info, b_id);
+  auto c_vertex = add_vertex(style_info, c_id);
+  auto d_vertex = add_vertex(style_info, d_id);
+  auto e_vertex = add_vertex(style_info, e_id);
+  auto f_vertex = add_vertex(style_info, f_id);
+
+  add_edge(style_info, root_vertex, a_vertex);
+  add_edge(style_info, root_vertex, b_vertex);
+  add_edge(style_info, a_vertex, c_vertex);
+  add_edge(style_info, b_vertex, d_vertex);
+  add_edge(style_info, c_vertex, e_vertex);
+  add_edge(style_info, d_vertex, f_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+  UnorderedSet<uint32_t> directly_reachable_styles = {b_id};
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Expected merges: (A, C) and (C, E)
+  // Root has 2 children, so no merge
+  // B is ambiguous, so no merge for B->D
+  // D is directly reachable, so no merge for D->F
+  EXPECT_EQ(result.size(), 2);
+  EXPECT_EQ(result[0].size(), 2);
+  EXPECT_EQ(result[1].size(), 1);
+
+  // Verify the correct pairs are present in pre-order
+  EXPECT_THAT(result[0], ::testing::ElementsAre(a_id, c_id));
+  EXPECT_EQ(result[1][0], d_id);
+}
+
+TEST_F(ResourceValueMergingPassTest, GetResourcesToMergeWithAmbiguousTail) {
+  resources::StyleInfo style_info;
+
+  // Create a chain: grandparent -> parent -> child
+  // where both grandparent and parent have exactly one child
+  uint32_t grandparent_id = 0x7f010001;
+  uint32_t parent_id = 0x7f010002;
+  uint32_t child_id = 0x7f010003;
+
+  auto grandparent_vertex = add_vertex(style_info, grandparent_id);
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+
+  add_edge(style_info, grandparent_vertex, parent_vertex);
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  UnorderedSet<uint32_t> ambiguous_styles = {child_id};
+  UnorderedSet<uint32_t> directly_reachable_styles;
+
+  auto result = m_pass.get_resources_to_merge(style_info, ambiguous_styles,
+                                              directly_reachable_styles);
+
+  // Should have two merge pairs: (grandparent, parent) and (parent, child)
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0].size(), 1);
+
+  // Verify pre-order traversal: grandparent->parent should come before
+  // parent->child
+  EXPECT_THAT(result[0], ::testing::ElementsAre(grandparent_id));
 }
