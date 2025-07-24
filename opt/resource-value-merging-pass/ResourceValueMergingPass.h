@@ -101,6 +101,11 @@ class ResourceValueMergingPass : public Pass {
       const UnorderedSet<uint32_t>& ambiguous_styles,
       const UnorderedSet<uint32_t>& directly_reachable_styles);
 
+  resources::StyleModificationSpec::Modification
+  get_parent_and_attribute_modifications_for_merging(
+      const resources::StyleInfo& style_info,
+      const std::vector<uint32_t>& resources_to_merge);
+
  private:
   ResourceAttributeInformation find_resource_optimization_candidates(
       resources::StyleInfo::vertex_t vertex,
@@ -114,6 +119,11 @@ class ResourceValueMergingPass : public Pass {
       const UnorderedSet<uint32_t>& ambiguous_styles,
       const UnorderedSet<uint32_t>& directly_reachable_styles,
       std::vector<std::vector<uint32_t>>& resources_to_merge);
+
+  std::vector<resources::StyleModificationSpec::Modification>
+  get_style_merging_modifications(
+      const resources::StyleInfo& style_info,
+      const std::vector<std::vector<uint32_t>>& resources_to_merge);
 
   UnorderedSet<std::string> m_excluded_resources;
 };

@@ -598,4 +598,70 @@ ResourceValueMergingPass::get_resources_to_merge(
   return merging_resource_pairs;
 }
 
+resources::StyleModificationSpec::Modification
+ResourceValueMergingPass::get_parent_and_attribute_modifications_for_merging(
+    const resources::StyleInfo& style_info,
+    const std::vector<uint32_t>& resources_to_merge) {
+  UnorderedMap<uint32_t, resources::StyleResource::Value> new_attributes;
+  always_assert(!resources_to_merge.empty());
+
+  auto chain_parent_id_opt =
+      style_info.get_unambiguous_parent(resources_to_merge[0]);
+  always_assert_log(chain_parent_id_opt.has_value(),
+                    "Parent ID not found for resource 0x%x",
+                    resources_to_merge[0]);
+  uint32_t chain_parent_id = chain_parent_id_opt.value();
+
+  // The elements in the chain are ordered from parent to child in the style
+  // hierarchy
+  for (const auto& resource_id : resources_to_merge) {
+    const auto& style_resource_opt =
+        find_style_resource(resource_id, style_info.styles);
+    always_assert_log(style_resource_opt.has_value(), "Resource 0x%x not found",
+                      resource_id);
+
+    const auto& style_resource = style_resource_opt.value();
+    for (const auto& [attr_id, value] : style_resource.attributes) {
+      // Remove any attributes that are already defined then add again because
+      // [] operator does not work since resources::StyleResource::Value does
+      // not have a default constructor
+      auto it = new_attributes.find(attr_id);
+      if (it != new_attributes.end()) {
+        new_attributes.erase(it);
+      }
+      new_attributes.insert({attr_id, value});
+    }
+  }
+
+  auto tail_resource_id = resources_to_merge.back();
+  auto final_resource_ids = style_info.get_children(tail_resource_id);
+  always_assert_log(final_resource_ids.size() == 1,
+                    "Expected exactly one child for resource 0x%x",
+                    tail_resource_id);
+
+  // This is the destination resource ID where all attributes from the chain of
+  // resources will be merged into - it's the final target of the merging
+  // operation
+  auto destination_resource_id = final_resource_ids[0];
+
+  return resources::StyleModificationSpec::Modification(
+      destination_resource_id, chain_parent_id, std::move(new_attributes));
+}
+
+std::vector<resources::StyleModificationSpec::Modification>
+ResourceValueMergingPass::get_style_merging_modifications(
+    const resources::StyleInfo& style_info,
+    const std::vector<std::vector<uint32_t>>& resources_to_merge) {
+  std::vector<resources::StyleModificationSpec::Modification> modifications;
+  modifications.reserve(resources_to_merge.size());
+
+  for (const auto& merging_resource_pair : resources_to_merge) {
+    modifications.emplace_back(
+        get_parent_and_attribute_modifications_for_merging(
+            style_info, merging_resource_pair));
+  }
+
+  return modifications;
+}
+
 static ResourceValueMergingPass s_pass;
