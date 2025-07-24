@@ -85,6 +85,11 @@ class ResourceValueMergingPass : public Pass {
       resources::StyleInfo& style_info,
       UnorderedMap<uint32_t, ResourceAttributeInformation> removals);
 
+  OptimizableResources get_graph_diffs(
+      const resources::StyleInfo& inital,
+      const resources::StyleInfo& optimized,
+      const UnorderedSet<uint32_t>& ambiguous_styles);
+
  private:
   ResourceAttributeInformation find_resource_optimization_candidates(
       resources::StyleInfo::vertex_t vertex,

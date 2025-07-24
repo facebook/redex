@@ -82,7 +82,6 @@ void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
       style_analysis.directly_reachable_styles();
   const auto& optimized_resources = get_resource_optimization(
       style_info, ambiguous_styles, directly_reachable_styles);
-
   print_resources(optimized_resources.removals);
 
   std::vector<resources::StyleModificationSpec::Modification> modifications;
@@ -177,6 +176,7 @@ OptimizableResources ResourceValueMergingPass::remove_unoptimizable_resources(
     const OptimizableResources& optimizable_candidates,
     const UnorderedSet<uint32_t>& directly_reachable_styles) {
   OptimizableResources optimizable_resources;
+
   for (const auto& [resource_id, attr_ids] :
        UnorderedIterable(optimizable_candidates.removals)) {
     if (directly_reachable_styles.find(resource_id) ==
@@ -328,10 +328,10 @@ resources::StyleInfo ResourceValueMergingPass::get_optimized_graph(
   resources::StyleInfo optimized(initial);
   int iteration = 0;
 
-  auto [deletions, additions] = get_resource_optimization(
+  auto [removals, additions] = get_resource_optimization(
       initial, ambiguous_styles, directly_reachable_styles);
 
-  while ((!deletions.empty() || !additions.empty()) &&
+  while ((!removals.empty() || !additions.empty()) &&
          iteration < MAX_ITERATIONS) {
 
     // apply modifications to in-memory style graph
@@ -383,6 +383,80 @@ void ResourceValueMergingPass::apply_removals_to_style_graph(
       style_resource.attributes.erase(attr_it);
     }
   }
+}
+
+// Implements a set difference (A - B) = {x | x ∈ A and x ∉ B}
+UnorderedMap<uint32_t, resources::StyleResource::Value>
+find_attribute_differences(const StyleResource& A, const StyleResource& B) {
+  UnorderedMap<uint32_t, resources::StyleResource::Value> diff_attrs;
+
+  // x ∈ A
+  for (const auto& [attr_id, value] : UnorderedIterable(A.attributes)) {
+    // x ∈ B
+    bool is_in_B = B.attributes.find(attr_id) != B.attributes.end();
+
+    if (!is_in_B) {
+      diff_attrs.insert({attr_id, value});
+    }
+  }
+
+  return diff_attrs;
+}
+
+OptimizableResources ResourceValueMergingPass::get_graph_diffs(
+    const resources::StyleInfo& inital,
+    const resources::StyleInfo& optimized,
+    const UnorderedSet<uint32_t>& ambiguous_styles) {
+  OptimizableResources diff;
+
+  // No resources should have been removed in previous iterations, so the
+  // resources in the initial and optimized graph should be the same
+  UnorderedSet<uint32_t> all_resource_ids;
+  for (const auto& [resource_id, _] : UnorderedIterable(inital.styles)) {
+    if (ambiguous_styles.find(resource_id) != ambiguous_styles.end()) {
+      continue;
+    }
+    all_resource_ids.insert(resource_id);
+  }
+
+  for (const auto& resource_id : UnorderedIterable(all_resource_ids)) {
+    auto initial_style_it = inital.styles.find(resource_id);
+    auto optimized_style_it = optimized.styles.find(resource_id);
+
+    always_assert_log(initial_style_it != inital.styles.end() &&
+                          optimized_style_it != optimized.styles.end(),
+                      "Resource 0x%x not found", resource_id);
+
+    const StyleResource& initial_style = initial_style_it->second[0];
+    const StyleResource& optimized_style = optimized_style_it->second[0];
+
+    auto removal_attrs =
+        find_attribute_differences(initial_style, optimized_style);
+    for (const auto& [attr_id, _] : UnorderedIterable(removal_attrs)) {
+      diff.removals[resource_id].insert(attr_id);
+    }
+
+    auto addition_attrs =
+        find_attribute_differences(optimized_style, initial_style);
+    for (const auto& [attr_id, value] : UnorderedIterable(addition_attrs)) {
+      diff.additions[resource_id].insert({attr_id, value});
+    }
+
+    for (const auto& [attr_id, initial_value] :
+         UnorderedIterable(initial_style.attributes)) {
+      auto optimized_attr_it = optimized_style.attributes.find(attr_id);
+      if (optimized_attr_it == optimized_style.attributes.end()) {
+        continue;
+      }
+      const auto& optimized_value = optimized_attr_it->second;
+      if (!(initial_value == optimized_value)) {
+        diff.removals[resource_id].insert(attr_id);
+        diff.additions[resource_id].insert({attr_id, optimized_value});
+      }
+    }
+  }
+
+  return diff;
 }
 
 static ResourceValueMergingPass s_pass;

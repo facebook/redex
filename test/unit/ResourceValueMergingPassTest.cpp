@@ -7,7 +7,6 @@
 
 #include <gtest/gtest.h>
 
-#include "RedexResources.h"
 #include "ResourceValueMergingPass.h"
 
 ResourceAttributeInformation get_common_attributes(
@@ -837,4 +836,216 @@ TEST_F(ResourceValueMergingPassTest, ApplyRemovalsToStyleGraphMultipleStyles) {
 
   EXPECT_THROW(m_pass.apply_removals_to_style_graph(style_info, removals),
                std::exception);
+}
+
+resources::StyleInfo setup_test_style_info(bool include_grandchildren = false) {
+  resources::StyleInfo style_info;
+
+  auto root = boost::add_vertex(style_info.graph);
+  auto child1 = boost::add_vertex(style_info.graph);
+
+  style_info.graph[root].id = 0x7f010001;
+  style_info.graph[child1].id = 0x7f010002;
+
+  boost::add_edge(root, child1, style_info.graph);
+
+  resources::StyleResource::Value value1(42, 0);
+  resources::StyleResource::Value value2(43, 0);
+
+  resources::StyleResource root_style;
+  root_style.id = 0x7f010001;
+  root_style.parent = 0;
+  root_style.attributes.insert({0x7f020001, value1});
+  root_style.attributes.insert({0x7f020002, value2});
+  style_info.styles[0x7f010001].push_back(root_style);
+
+  resources::StyleResource child1_style;
+  child1_style.id = 0x7f010002;
+  child1_style.parent = 0x7f010001;
+  child1_style.attributes.insert({0x7f020001, value1});
+  child1_style.attributes.insert({0x7f020003, value2});
+  style_info.styles[0x7f010002].push_back(child1_style);
+
+  if (include_grandchildren) {
+    auto child2 = boost::add_vertex(style_info.graph);
+    auto grandchild1 = boost::add_vertex(style_info.graph);
+    auto grandchild2 = boost::add_vertex(style_info.graph);
+
+    style_info.graph[child2].id = 0x7f010003;
+    style_info.graph[grandchild1].id = 0x7f010004;
+    style_info.graph[grandchild2].id = 0x7f010005;
+
+    boost::add_edge(root, child2, style_info.graph);
+    boost::add_edge(child1, grandchild1, style_info.graph);
+    boost::add_edge(child1, grandchild2, style_info.graph);
+
+    resources::StyleResource child2_style;
+    child2_style.id = 0x7f010003;
+    child2_style.parent = 0x7f010001;
+    child2_style.attributes.insert({0x7f020001, value1});
+    child2_style.attributes.insert({0x7f020004, value2});
+    style_info.styles[0x7f010003].push_back(child2_style);
+
+    resources::StyleResource grandchild1_style;
+    grandchild1_style.id = 0x7f010004;
+    grandchild1_style.parent = 0x7f010002;
+    grandchild1_style.attributes.insert({0x7f020001, value1});
+    grandchild1_style.attributes.insert({0x7f020005, value2});
+    style_info.styles[0x7f010004].push_back(grandchild1_style);
+
+    resources::StyleResource grandchild2_style;
+    grandchild2_style.id = 0x7f010005;
+    grandchild2_style.parent = 0x7f010002;
+    grandchild2_style.attributes.insert({0x7f020001, value1});
+    grandchild2_style.attributes.insert({0x7f020006, value2});
+    style_info.styles[0x7f010005].push_back(grandchild2_style);
+  }
+
+  return style_info;
+}
+
+TEST_F(ResourceValueMergingPassTest, GetGraphDiffsSimple) {
+  resources::StyleInfo initial_style_info = setup_test_style_info(true);
+  resources::StyleInfo optimized_style_info = initial_style_info;
+
+  // 1. Remove attribute 0x7f020001 from root (0x7f010001) as it's common in all
+  // children
+  m_pass.apply_removals_to_style_graph(optimized_style_info,
+                                       {{0x7f010001, {0x7f020001}}});
+
+  // 2. Add attribute 0x7f020007 to child1 (0x7f010002) as it's common in all
+  // its children
+  resources::StyleResource::Value value3(44, 0);
+  optimized_style_info.styles[0x7f010002][0].attributes.insert(
+      {0x7f020007, value3});
+
+  auto diffs = m_pass.get_graph_diffs(initial_style_info, optimized_style_info,
+                                      UnorderedSet<uint32_t>());
+
+  // Removals
+  EXPECT_EQ(diffs.removals.size(), 1);
+  EXPECT_TRUE(diffs.removals.find(0x7f010001) != diffs.removals.end());
+  EXPECT_EQ(diffs.removals[0x7f010001].size(), 1);
+  EXPECT_TRUE(diffs.removals[0x7f010001].find(0x7f020001) !=
+              diffs.removals[0x7f010001].end());
+
+  // Additions
+  EXPECT_EQ(diffs.additions.size(), 1);
+  EXPECT_TRUE(diffs.additions.find(0x7f010002) != diffs.additions.end());
+  EXPECT_EQ(diffs.additions[0x7f010002].size(), 1);
+  EXPECT_TRUE(diffs.additions[0x7f010002].find(0x7f020007) !=
+              diffs.additions[0x7f010002].end());
+}
+
+TEST_F(ResourceValueMergingPassTest, GetGraphDiffsWithAmbiguousStyles) {
+  resources::StyleInfo initial_style_info = setup_test_style_info();
+  resources::StyleInfo optimized_style_info = initial_style_info;
+
+  // 1. Remove attribute 0x7f020001 from root (0x7f010001)
+  m_pass.apply_removals_to_style_graph(optimized_style_info,
+                                       {{0x7f010001, {0x7f020001}}});
+
+  // 2. Add attribute 0x7f020007 to child1 (0x7f010002)
+  resources::StyleResource::Value value3(44, 0);
+  optimized_style_info.styles[0x7f010002][0].attributes.insert(
+      {0x7f020007, value3});
+
+  // Mark root as ambiguous
+  UnorderedSet<uint32_t> ambiguous_styles = {0x7f010001};
+
+  auto diffs = m_pass.get_graph_diffs(initial_style_info, optimized_style_info,
+                                      ambiguous_styles);
+
+  // Root is ambiguous, so no removals should be applied to it
+  EXPECT_TRUE(diffs.removals.find(0x7f010001) == diffs.removals.end());
+
+  // Additions to child1 should still be present
+  EXPECT_EQ(diffs.additions.size(), 1);
+  EXPECT_TRUE(diffs.additions.find(0x7f010002) != diffs.additions.end());
+  EXPECT_EQ(diffs.additions[0x7f010002].size(), 1);
+  EXPECT_TRUE(diffs.additions[0x7f010002].find(0x7f020007) !=
+              diffs.additions[0x7f010002].end());
+}
+
+TEST_F(ResourceValueMergingPassTest, GetGraphDiffsWithModifiedAttributeValues) {
+  resources::StyleInfo initial_style_info = setup_test_style_info();
+  resources::StyleInfo optimized_style_info = initial_style_info;
+
+  uint32_t resource_id = 0x7f010001;
+  uint32_t attr_id = 0x7f020001;
+  resources::StyleResource::Value new_value(99, 0);
+
+  optimized_style_info.styles[resource_id][0].attributes.insert_or_assign(
+      attr_id, new_value);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+
+  auto diffs = m_pass.get_graph_diffs(initial_style_info, optimized_style_info,
+                                      ambiguous_styles);
+
+  // The modified attribute should appear in both removals and additions
+  EXPECT_EQ(diffs.removals.size(), 1);
+  EXPECT_TRUE(diffs.removals.find(resource_id) != diffs.removals.end());
+  EXPECT_EQ(diffs.removals[resource_id].size(), 1);
+  EXPECT_TRUE(diffs.removals[resource_id].find(attr_id) !=
+              diffs.removals[resource_id].end());
+
+  EXPECT_EQ(diffs.additions.size(), 1);
+  EXPECT_TRUE(diffs.additions.find(resource_id) != diffs.additions.end());
+  EXPECT_EQ(diffs.additions[resource_id].size(), 1);
+  EXPECT_TRUE(diffs.additions[resource_id].find(attr_id) !=
+              diffs.additions[resource_id].end());
+
+  // Verify the new value is correctly stored in additions
+  auto addition_it = diffs.additions[resource_id].find(attr_id);
+  EXPECT_TRUE(addition_it != diffs.additions[resource_id].end());
+  EXPECT_EQ(addition_it->second, new_value);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetGraphDiffsWithMultipleModifiedAttributes) {
+  resources::StyleInfo initial_style_info = setup_test_style_info();
+  resources::StyleInfo optimized_style_info = initial_style_info;
+
+  uint32_t resource_id = 0x7f010001;
+  uint32_t attr_id1 = 0x7f020001;
+  uint32_t attr_id2 = 0x7f020002;
+
+  resources::StyleResource::Value new_value1(100, 0);
+  resources::StyleResource::Value new_value2(200, 0);
+
+  optimized_style_info.styles[resource_id][0].attributes.insert_or_assign(
+      attr_id1, new_value1);
+  optimized_style_info.styles[resource_id][0].attributes.insert_or_assign(
+      attr_id2, new_value2);
+
+  UnorderedSet<uint32_t> ambiguous_styles;
+
+  auto diffs = m_pass.get_graph_diffs(initial_style_info, optimized_style_info,
+                                      ambiguous_styles);
+
+  // Both modified attributes should appear in removals and additions
+  EXPECT_EQ(diffs.removals.size(), 1);
+  EXPECT_TRUE(diffs.removals.find(resource_id) != diffs.removals.end());
+  EXPECT_EQ(diffs.removals[resource_id].size(), 2);
+  EXPECT_TRUE(diffs.removals[resource_id].find(attr_id1) !=
+              diffs.removals[resource_id].end());
+  EXPECT_TRUE(diffs.removals[resource_id].find(attr_id2) !=
+              diffs.removals[resource_id].end());
+
+  EXPECT_EQ(diffs.additions.size(), 1);
+  EXPECT_TRUE(diffs.additions.find(resource_id) != diffs.additions.end());
+  EXPECT_EQ(diffs.additions[resource_id].size(), 2);
+  EXPECT_TRUE(diffs.additions[resource_id].find(attr_id1) !=
+              diffs.additions[resource_id].end());
+  EXPECT_TRUE(diffs.additions[resource_id].find(attr_id2) !=
+              diffs.additions[resource_id].end());
+
+  // Verify the new values are correctly stored
+  auto addition1_it = diffs.additions[resource_id].find(attr_id1);
+  auto addition2_it = diffs.additions[resource_id].find(attr_id2);
+  EXPECT_TRUE(addition1_it != diffs.additions[resource_id].end());
+  EXPECT_TRUE(addition2_it != diffs.additions[resource_id].end());
+  EXPECT_EQ(addition1_it->second, new_value1);
+  EXPECT_EQ(addition2_it->second, new_value2);
 }
