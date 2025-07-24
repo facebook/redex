@@ -3062,6 +3062,8 @@ UnorderedSet<uint8_t> extract_types_to_process(
   return types_to_process;
 }
 
+using StyleModificationSpec = resources::StyleModificationSpec;
+
 void ResourcesArscFile::modify_attributes(
     const resources::ResourceAttributeMap& resource_id_to_mod_attribute,
     const std::function<
@@ -3262,8 +3264,54 @@ void ResourcesArscFile::apply_attribute_additions(
 }
 
 void ResourcesArscFile::apply_style_merges(
-    const std::vector<resources::StyleModificationSpec::Modification>&
-    /* modifications */,
-    const std::vector<std::string>& /* resources_pb_paths */) {}
+    const std::vector<StyleModificationSpec::Modification>& modifications,
+    const std::vector<std::string>& /* resources_pb_paths */) {
+  resources::ResourceAttributeMap res_id_to_modifications;
+  for (const auto& modification : modifications) {
+    if (modification.type !=
+        StyleModificationSpec::ModificationType::UPDATE_PARENT_ADD_ATTRIBUTES) {
+      continue;
+    }
+    res_id_to_modifications[modification.resource_id].insert(
+        {modification.resource_id, modification});
+  }
+
+  auto update_styles =
+      [](android::ResTable_entry* entry_ptr,
+         const UnorderedMap<uint32_t, StyleModificationSpec::Modification>&
+             attrs_to_modify,
+         arsc::ResComplexEntryBuilder& builder) {
+        apk::StyleCollector collector(entry_ptr);
+
+        always_assert_log(
+            attrs_to_modify.size() == 1,
+            "Only expect one entry when trying to merge attributes "
+            "into child resource");
+        auto modification = unordered_any(attrs_to_modify)->second;
+
+        auto parent_id_opt = modification.parent_id;
+        always_assert(parent_id_opt.has_value());
+        uint32_t parent_id = parent_id_opt.value();
+        uint32_t resource_id = modification.resource_id;
+
+        for (const auto& [attr_id, attr_value] : collector.m_attributes) {
+          builder.add(attr_id, attr_value.get_data_type(),
+                      attr_value.get_value_bytes());
+        }
+
+        for (const auto& [attr_id, styled_value] :
+             UnorderedIterable(modification.values)) {
+          always_assert_log(collector.m_attributes.find(attr_id) ==
+                                collector.m_attributes.end(),
+                            "Attribute 0x%x already exists in style 0x%x",
+                            attr_id, resource_id);
+          builder.add(attr_id, styled_value.get_data_type(),
+                      styled_value.get_value_bytes());
+          TRACE(RES, 9, "Adding attribute %u", attr_id);
+        }
+        builder.set_parent_id(parent_id);
+      };
+  modify_attributes(res_id_to_modifications, update_styles);
+}
 
 ResourcesArscFile::~ResourcesArscFile() {}

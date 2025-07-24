@@ -70,6 +70,12 @@ const uint32_t kEnabledAttrId = 0x0101000e;
 const uint32_t kFloatAttrId = 0x01010099;
 const uint32_t kDimensionAttrId = 0x0101009a;
 const uint32_t kFractionAttrId = 0x0101009b;
+const uint32_t kPaddingAttrId = 0x01010101;
+const uint32_t kTextColorHintAttrId = 0x0101009A;
+
+const uint32_t kColorPurple = 0xFFAA00BB;
+const uint32_t kColorTeal = 0xFF00BBAA;
+const uint32_t kColorBlue = 0xFF123456;
 
 namespace sample_app {
 inline std::vector<std::string> EXPECTED_OVERLAYABLE_RESOURCES{

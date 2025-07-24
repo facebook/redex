@@ -19,6 +19,7 @@
 #include "RedexResources.h"
 #include "RedexTest.h"
 #include "RedexTestUtils.h"
+#include "ResourcesTestDefs.h"
 #include "SanitizersConfig.h"
 #include "Util.h"
 #include "androidfw/ResourceTypes.h"
@@ -2251,6 +2252,115 @@ TEST(ResourcesArscFile, ApplyAttributeAdditions) {
       EXPECT_EQ(unchanged_values[2].key, 0x010100d4);
       EXPECT_EQ(unchanged_values[3].key, 0x01010100);
       EXPECT_EQ(unchanged_values[4].key, 0x01010101);
+    }
+  });
+}
+
+TEST(ResourcesArscFile, ApplyStyleMerges) {
+  uint32_t resource_id = 0x7f020000;
+  uint32_t nonexistent_resource_id = 0x7f030000;
+  uint32_t new_parent_id = 0x01010200;
+  uint32_t alternate_parent_id = 0x01010300;
+
+  auto verify_style_attributes = [&new_parent_id](
+                                     const std::vector<ComplexValue>& values,
+                                     uint32_t expected_parent_id) {
+    UnorderedMap<uint32_t, uint32_t> attr_map;
+    for (const auto& value : values) {
+      attr_map[value.key] = value.data;
+    }
+
+    EXPECT_TRUE(attr_map.find(kTextColorAttrId) != attr_map.end())
+        << "Original attribute kTextColorAttrId not found";
+    EXPECT_TRUE(attr_map.find(kBackgroundAttrId) != attr_map.end())
+        << "Original attribute kBackgroundAttrId not found";
+
+    if (expected_parent_id == new_parent_id) {
+      EXPECT_TRUE(attr_map.find(kFloatAttrId) != attr_map.end())
+          << "New attribute kFloatAttrId not found";
+      EXPECT_TRUE(attr_map.find(kTextColorHintAttrId) != attr_map.end())
+          << "New attribute kTextColorHintAttrId not found";
+
+      EXPECT_EQ(attr_map[kFloatAttrId], kColorPurple);
+      EXPECT_EQ(attr_map[kTextColorHintAttrId], kColorTeal);
+    }
+
+    return attr_map.size();
+  };
+
+  build_arsc_file_and_validate([&](const std::string& /* unused */,
+                                   const std::string& arsc_path) {
+    auto initial_dump = aapt_dump_and_parse(arsc_path);
+    auto initial_values =
+        initial_dump.get_complex_values("xxhdpi", resource_id);
+    ASSERT_EQ(initial_values.size(), 2);
+    EXPECT_EQ(initial_values[0].key, kTextColorAttrId);
+    EXPECT_EQ(initial_values[1].key, kBackgroundAttrId);
+
+    auto initial_parent_id =
+        initial_dump.config_to_complex_values["xxhdpi"][resource_id].parent_id;
+    EXPECT_EQ(initial_parent_id, 0);
+
+    {
+      ResourcesArscFile arsc_file(arsc_path);
+
+      UnorderedMap<uint32_t, resources::StyleResource::Value> attributes;
+      attributes.insert(
+          {kFloatAttrId,
+           resources::StyleResource::Value(
+               android::Res_value::TYPE_INT_COLOR_RGB8, kColorPurple)});
+      attributes.insert(
+          {kTextColorHintAttrId,
+           resources::StyleResource::Value(
+               android::Res_value::TYPE_INT_COLOR_RGB8, kColorTeal)});
+
+      std::vector<resources::StyleModificationSpec::Modification> modifications;
+      modifications.push_back(resources::StyleModificationSpec::Modification(
+          resource_id, new_parent_id, std::move(attributes)));
+
+      arsc_file.apply_style_merges(modifications, {});
+    }
+
+    {
+      auto modified_dump = aapt_dump_and_parse(arsc_path);
+
+      auto modified_parent_id =
+          modified_dump.config_to_complex_values["xxhdpi"][resource_id]
+              .parent_id;
+      EXPECT_EQ(modified_parent_id, new_parent_id);
+
+      auto modified_values =
+          modified_dump.get_complex_values("xxhdpi", resource_id);
+      ASSERT_GE(modified_values.size(), 4);
+      verify_style_attributes(modified_values, new_parent_id);
+    }
+
+    {
+      ResourcesArscFile arsc_file(arsc_path);
+
+      UnorderedMap<uint32_t, resources::StyleResource::Value> attributes;
+      attributes.insert(
+          {kPaddingAttrId,
+           resources::StyleResource::Value(
+               android::Res_value::TYPE_INT_COLOR_RGB8, kColorBlue)});
+
+      std::vector<resources::StyleModificationSpec::Modification> modifications;
+      modifications.push_back(resources::StyleModificationSpec::Modification(
+          nonexistent_resource_id, alternate_parent_id, std::move(attributes)));
+
+      arsc_file.apply_style_merges(modifications, {});
+    }
+
+    {
+      auto final_dump = aapt_dump_and_parse(arsc_path);
+
+      auto final_parent_id =
+          final_dump.config_to_complex_values["xxhdpi"][resource_id].parent_id;
+      EXPECT_EQ(final_parent_id, new_parent_id);
+
+      auto final_values = final_dump.get_complex_values("xxhdpi", resource_id);
+      ASSERT_GE(final_values.size(), 4);
+      verify_style_attributes(final_values, new_parent_id);
     }
   });
 }
