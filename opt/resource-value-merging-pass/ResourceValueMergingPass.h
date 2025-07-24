@@ -32,9 +32,10 @@
 using ResourceAttributeInformation = UnorderedSet<uint32_t>;
 struct OptimizableResources {
   UnorderedMap<uint32_t, ResourceAttributeInformation> deletion;
+  // resource_id -> (attribute_id -> value)
   UnorderedMap<uint32_t,
                UnorderedMap<uint32_t, resources::StyleResource::Value>>
-      merging;
+      additions;
 };
 
 class ResourceValueMergingPass : public Pass {
@@ -72,6 +73,12 @@ class ResourceValueMergingPass : public Pass {
       const resources::StyleInfo& initial,
       const UnorderedSet<uint32_t>& ambiguous_styles,
       const UnorderedSet<uint32_t>& directly_reachable_styles);
+
+  void apply_additions_to_style_graph(
+      resources::StyleInfo& style_info,
+      const UnorderedMap<
+          uint32_t,
+          UnorderedMap<uint32_t, resources::StyleResource::Value>>& additions);
 
  private:
   ResourceAttributeInformation find_resource_optimization_candidates(

@@ -382,8 +382,8 @@ TEST_F(ResourceValueMergingPassTest,
   candidates.deletion[resource_id2].insert(attr_id2);
 
   resources::StyleResource::Value value(42, 0);
-  candidates.merging[resource_id1].insert({attr_id1, value});
-  candidates.merging[resource_id2].insert({attr_id2, value});
+  candidates.additions[resource_id1].insert({attr_id1, value});
+  candidates.additions[resource_id2].insert({attr_id2, value});
 
   auto result = m_pass.remove_unoptimizable_resources(
       candidates, directly_reachable_styles);
@@ -392,9 +392,9 @@ TEST_F(ResourceValueMergingPassTest,
   EXPECT_TRUE(result.deletion.find(resource_id1) != result.deletion.end());
   EXPECT_TRUE(result.deletion.find(resource_id2) != result.deletion.end());
 
-  EXPECT_EQ(result.merging.size(), 2);
-  EXPECT_TRUE(result.merging.find(resource_id1) != result.merging.end());
-  EXPECT_TRUE(result.merging.find(resource_id2) != result.merging.end());
+  EXPECT_EQ(result.additions.size(), 2);
+  EXPECT_TRUE(result.additions.find(resource_id1) != result.additions.end());
+  EXPECT_TRUE(result.additions.find(resource_id2) != result.additions.end());
 }
 
 TEST_F(ResourceValueMergingPassTest,
@@ -411,8 +411,8 @@ TEST_F(ResourceValueMergingPassTest,
   candidates.deletion[resource_id2].insert(attr_id2);
 
   resources::StyleResource::Value value(42, 0);
-  candidates.merging[resource_id1].insert({attr_id1, value});
-  candidates.merging[resource_id2].insert({attr_id2, value});
+  candidates.additions[resource_id1].insert({attr_id1, value});
+  candidates.additions[resource_id2].insert({attr_id2, value});
 
   directly_reachable_styles.insert(resource_id1);
 
@@ -423,9 +423,9 @@ TEST_F(ResourceValueMergingPassTest,
   EXPECT_TRUE(result.deletion.find(resource_id1) == result.deletion.end());
   EXPECT_TRUE(result.deletion.find(resource_id2) != result.deletion.end());
 
-  EXPECT_EQ(result.merging.size(), 1);
-  EXPECT_TRUE(result.merging.find(resource_id1) == result.merging.end());
-  EXPECT_TRUE(result.merging.find(resource_id2) != result.merging.end());
+  EXPECT_EQ(result.additions.size(), 1);
+  EXPECT_TRUE(result.additions.find(resource_id1) == result.additions.end());
+  EXPECT_TRUE(result.additions.find(resource_id2) != result.additions.end());
 }
 
 TEST_F(ResourceValueMergingPassTest, RemoveUnoptimizableResourcesAllReachable) {
@@ -441,8 +441,8 @@ TEST_F(ResourceValueMergingPassTest, RemoveUnoptimizableResourcesAllReachable) {
   candidates.deletion[resource_id2].insert(attr_id2);
 
   resources::StyleResource::Value value(42, 0);
-  candidates.merging[resource_id1].insert({attr_id1, value});
-  candidates.merging[resource_id2].insert({attr_id2, value});
+  candidates.additions[resource_id1].insert({attr_id1, value});
+  candidates.additions[resource_id2].insert({attr_id2, value});
 
   directly_reachable_styles.insert(resource_id1);
   directly_reachable_styles.insert(resource_id2);
@@ -451,7 +451,7 @@ TEST_F(ResourceValueMergingPassTest, RemoveUnoptimizableResourcesAllReachable) {
       candidates, directly_reachable_styles);
 
   EXPECT_TRUE(result.deletion.empty());
-  EXPECT_TRUE(result.merging.empty());
+  EXPECT_TRUE(result.additions.empty());
 }
 
 TEST_F(ResourceValueMergingPassTest,
@@ -466,7 +466,7 @@ TEST_F(ResourceValueMergingPassTest,
       candidates, directly_reachable_styles);
 
   EXPECT_TRUE(result.deletion.empty());
-  EXPECT_TRUE(result.merging.empty());
+  EXPECT_TRUE(result.additions.empty());
 }
 
 TEST_F(ResourceValueMergingPassTest, GetResourceAttributesEmptyStyleMap) {
@@ -621,4 +621,107 @@ TEST_F(ResourceValueMergingPassTest, FindStyleResourceMultipleStyles) {
   auto result = m_pass.find_style_resource(resource_id, style_map);
 
   EXPECT_FALSE(result.has_value());
+}
+
+TEST_F(ResourceValueMergingPassTest, ApplyAdditionsToStyleGraphEmptyAdditions) {
+  resources::StyleInfo style_info;
+  UnorderedMap<uint32_t,
+               UnorderedMap<uint32_t, resources::StyleResource::Value>>
+      additions;
+
+  m_pass.apply_additions_to_style_graph(style_info, additions);
+
+  EXPECT_TRUE(style_info.styles.empty());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       ApplyAdditionsToStyleGraphNonexistentResource) {
+  resources::StyleInfo style_info;
+  UnorderedMap<uint32_t,
+               UnorderedMap<uint32_t, resources::StyleResource::Value>>
+      additions;
+
+  uint32_t resource_id = 0x7f010001;
+  uint32_t attr_id = 0x7f020001;
+
+  resources::StyleResource::Value value(42, 0);
+
+  additions[resource_id].insert({attr_id, value});
+
+  EXPECT_THROW(m_pass.apply_additions_to_style_graph(style_info, additions),
+               RedexException);
+}
+
+TEST_F(ResourceValueMergingPassTest, ApplyAdditionsToStyleGraphSingleStyle) {
+  resources::StyleInfo style_info;
+  UnorderedMap<uint32_t,
+               UnorderedMap<uint32_t, resources::StyleResource::Value>>
+      additions;
+
+  uint32_t resource_id = 0x7f010001;
+  uint32_t attr_id1 = 0x7f020001;
+  uint32_t attr_id2 = 0x7f020002;
+
+  std::vector<resources::StyleResource> styles;
+  resources::StyleResource style;
+  style.id = resource_id;
+  style.parent = 0;
+  styles.push_back(style);
+  style_info.styles[resource_id] = styles;
+
+  resources::StyleResource::Value value1(42, 0);
+  resources::StyleResource::Value value2(43, 0);
+
+  additions[resource_id].insert({attr_id1, value1});
+  additions[resource_id].insert({attr_id2, value2});
+
+  m_pass.apply_additions_to_style_graph(style_info, additions);
+
+  ASSERT_EQ(style_info.styles[resource_id].size(), 1);
+  auto& updated_style = style_info.styles[resource_id][0];
+  EXPECT_EQ(updated_style.attributes.size(), 2);
+  EXPECT_TRUE(updated_style.attributes.find(attr_id1) !=
+              updated_style.attributes.end());
+  EXPECT_TRUE(updated_style.attributes.find(attr_id2) !=
+              updated_style.attributes.end());
+
+  auto attr1_it = updated_style.attributes.find(attr_id1);
+  auto attr2_it = updated_style.attributes.find(attr_id2);
+  EXPECT_EQ(attr1_it->second, value1);
+  EXPECT_EQ(attr2_it->second, value2);
+}
+
+TEST_F(ResourceValueMergingPassTest, ApplyAdditionsToStyleGraphMultipleStyles) {
+  resources::StyleInfo style_info;
+  UnorderedMap<uint32_t,
+               UnorderedMap<uint32_t, resources::StyleResource::Value>>
+      additions;
+
+  uint32_t resource_id = 0x7f010001;
+  uint32_t attr_id = 0x7f020001;
+
+  std::vector<resources::StyleResource> styles;
+
+  resources::StyleResource style1;
+  style1.id = resource_id;
+  style1.parent = 0;
+  styles.push_back(style1);
+
+  resources::StyleResource style2;
+  style2.id = resource_id;
+  style2.parent = 0;
+  styles.push_back(style2);
+
+  style_info.styles[resource_id] = styles;
+
+  resources::StyleResource::Value value(42, 0);
+
+  if (additions.find(resource_id) == additions.end()) {
+    additions.emplace(
+        resource_id, UnorderedMap<uint32_t, resources::StyleResource::Value>());
+  }
+  additions[resource_id].insert({attr_id, value});
+
+  EXPECT_THROW(m_pass.apply_additions_to_style_graph(style_info, additions),
+               std::exception);
 }
