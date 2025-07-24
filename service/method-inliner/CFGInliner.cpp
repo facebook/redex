@@ -214,7 +214,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
     caller->remove_insn(inline_site);
   }
 
-  if (ControlFlowGraph::DEBUG) {
+  if (ControlFlowGraph::s_DEBUG) {
     caller->sanity_check();
   }
   TRACE(CFG, 3, "final %s", SHOW(*caller));
