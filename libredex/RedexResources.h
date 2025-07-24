@@ -243,6 +243,9 @@ struct StyleInfo {
   // Returns the set of root vertices in the graph. These are typically the
   // top-level styles in the style hierarchy.
   UnorderedSet<vertex_t> get_roots() const;
+
+  // Gets all children of the given resource ID.
+  std::vector<uint32_t> get_children(uint32_t resource_id) const;
 };
 
 // Modification specification for styles in APK and App Bundle containers.

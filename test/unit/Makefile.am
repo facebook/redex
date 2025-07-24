@@ -538,6 +538,7 @@ xstorerefs_test_SOURCES = XStoreRefsTest.cpp
 string_tree_test_SOURCES = StringTreeTest.cpp
 
 resources_test_SOURCES = RedexResourcesTest.cpp
+resources_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 EXTRA_resources_test_DEPENDENCIES = resources_test.env more_resources/res/layout/class_names.xml
 $(eval $(call make_env,resources_test,\
   test_layout_path=$(srcdir)/example_layout_with_onclick.xml \

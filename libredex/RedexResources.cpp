@@ -774,4 +774,15 @@ UnorderedSet<StyleInfo::vertex_t> StyleInfo::get_roots() const {
 
   return root_vertices;
 }
+
+std::vector<uint32_t> StyleInfo::get_children(uint32_t resource_id) const {
+  auto vertex = id_to_vertex.at(resource_id);
+  auto children = boost::adjacent_vertices(vertex, graph);
+  std::vector<uint32_t> children_ids;
+  for (auto child = children.first; child != children.second; ++child) {
+    children_ids.push_back(graph[*child].id);
+  }
+  return children_ids;
+}
+
 }; // namespace resources

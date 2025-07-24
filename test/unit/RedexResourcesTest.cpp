@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <map>
 #include <string>
@@ -17,6 +18,8 @@
 #include "RedexTest.h"
 #include "ResourcesTestDefs.h"
 #include "androidfw/ResourceTypes.h"
+
+using ::testing::UnorderedElementsAre;
 
 TEST(RedexResources, ReadXmlTagsAndAttributes) {
   UnorderedSet<std::string> attributes_to_find;
@@ -352,6 +355,156 @@ TEST(RedexResources, StyleInfoGetRoots) {
 
     auto roots = style_info.get_roots();
     EXPECT_TRUE(roots.empty());
+  }
+}
+
+TEST(RedexResources, StyleInfoGetChildren) {
+  const uint32_t SINGLE_NODE_ID = 0x7f010001;
+
+  const uint32_t SIMPLE_PARENT_ID = 0x7f010001;
+  const uint32_t SIMPLE_CHILD1_ID = 0x7f010002;
+  const uint32_t SIMPLE_CHILD2_ID = 0x7f010003;
+
+  const uint32_t MULTI_PARENT1_ID = 0x7f010001;
+  const uint32_t MULTI_PARENT2_ID = 0x7f010002;
+  const uint32_t MULTI_CHILD1_ID = 0x7f010003;
+  const uint32_t MULTI_CHILD2_ID = 0x7f010004;
+  const uint32_t MULTI_CHILD3_ID = 0x7f010005;
+
+  const uint32_t TREE_ROOT_ID = 0x7f010001;
+  const uint32_t TREE_MID1_ID = 0x7f010002;
+  const uint32_t TREE_MID2_ID = 0x7f010003;
+  const uint32_t TREE_LEAF1_ID = 0x7f010004;
+  const uint32_t TREE_LEAF2_ID = 0x7f010005;
+  const uint32_t TREE_LEAF3_ID = 0x7f010006;
+
+  const uint32_t CYCLE_NODE1_ID = 0x7f010001;
+  const uint32_t CYCLE_NODE2_ID = 0x7f010002;
+  const uint32_t CYCLE_NODE3_ID = 0x7f010003;
+
+  auto add_vertex = [](resources::StyleInfo& style_info, uint32_t id) {
+    auto vertex =
+        boost::add_vertex(resources::StyleInfo::Node{id}, style_info.graph);
+    style_info.id_to_vertex[id] = vertex;
+    return vertex;
+  };
+
+  auto add_edge = [](resources::StyleInfo& style_info,
+                     resources::StyleInfo::vertex_t parent,
+                     resources::StyleInfo::vertex_t child) {
+    boost::add_edge(parent, child, style_info.graph);
+  };
+
+  {
+    resources::StyleInfo style_info;
+    EXPECT_THROW(style_info.get_children(SINGLE_NODE_ID), std::out_of_range);
+  }
+
+  {
+    resources::StyleInfo style_info;
+    add_vertex(style_info, SINGLE_NODE_ID);
+
+    auto children = style_info.get_children(SINGLE_NODE_ID);
+    EXPECT_TRUE(children.empty());
+  }
+
+  {
+    resources::StyleInfo style_info;
+    auto parent = add_vertex(style_info, SIMPLE_PARENT_ID);
+    auto child1 = add_vertex(style_info, SIMPLE_CHILD1_ID);
+    auto child2 = add_vertex(style_info, SIMPLE_CHILD2_ID);
+
+    add_edge(style_info, parent, child1);
+    add_edge(style_info, parent, child2);
+
+    auto children = style_info.get_children(SIMPLE_PARENT_ID);
+    EXPECT_EQ(children.size(), 2);
+    EXPECT_THAT(children,
+                UnorderedElementsAre(SIMPLE_CHILD1_ID, SIMPLE_CHILD2_ID));
+
+    auto child1_children = style_info.get_children(SIMPLE_CHILD1_ID);
+    EXPECT_TRUE(child1_children.empty());
+
+    auto child2_children = style_info.get_children(SIMPLE_CHILD2_ID);
+    EXPECT_TRUE(child2_children.empty());
+  }
+
+  {
+    resources::StyleInfo style_info;
+    auto parent1 = add_vertex(style_info, MULTI_PARENT1_ID);
+    auto parent2 = add_vertex(style_info, MULTI_PARENT2_ID);
+    auto child1 = add_vertex(style_info, MULTI_CHILD1_ID);
+    auto child2 = add_vertex(style_info, MULTI_CHILD2_ID);
+    auto child3 = add_vertex(style_info, MULTI_CHILD3_ID);
+
+    add_edge(style_info, parent1, child1);
+    add_edge(style_info, parent1, child2);
+    add_edge(style_info, parent2, child3);
+
+    auto parent1_children = style_info.get_children(MULTI_PARENT1_ID);
+    EXPECT_EQ(parent1_children.size(), 2);
+    EXPECT_THAT(parent1_children,
+                UnorderedElementsAre(MULTI_CHILD1_ID, MULTI_CHILD2_ID));
+
+    auto parent2_children = style_info.get_children(MULTI_PARENT2_ID);
+    EXPECT_EQ(parent2_children.size(), 1);
+    EXPECT_THAT(parent2_children, UnorderedElementsAre(MULTI_CHILD3_ID));
+  }
+
+  {
+    resources::StyleInfo style_info;
+    auto root = add_vertex(style_info, TREE_ROOT_ID);
+    auto mid1 = add_vertex(style_info, TREE_MID1_ID);
+    auto mid2 = add_vertex(style_info, TREE_MID2_ID);
+    auto leaf1 = add_vertex(style_info, TREE_LEAF1_ID);
+    auto leaf2 = add_vertex(style_info, TREE_LEAF2_ID);
+    auto leaf3 = add_vertex(style_info, TREE_LEAF3_ID);
+
+    add_edge(style_info, root, mid1);
+    add_edge(style_info, root, mid2);
+    add_edge(style_info, mid1, leaf1);
+    add_edge(style_info, mid1, leaf2);
+    add_edge(style_info, mid2, leaf3);
+
+    auto root_children = style_info.get_children(TREE_ROOT_ID);
+    EXPECT_EQ(root_children.size(), 2);
+    EXPECT_THAT(root_children,
+                UnorderedElementsAre(TREE_MID1_ID, TREE_MID2_ID));
+
+    auto mid1_children = style_info.get_children(TREE_MID1_ID);
+    EXPECT_EQ(mid1_children.size(), 2);
+    EXPECT_THAT(mid1_children,
+                UnorderedElementsAre(TREE_LEAF1_ID, TREE_LEAF2_ID));
+
+    auto mid2_children = style_info.get_children(TREE_MID2_ID);
+    EXPECT_EQ(mid2_children.size(), 1);
+    EXPECT_THAT(mid2_children, UnorderedElementsAre(TREE_LEAF3_ID));
+
+    auto leaf_children = style_info.get_children(TREE_LEAF1_ID);
+    EXPECT_TRUE(leaf_children.empty());
+  }
+
+  {
+    resources::StyleInfo style_info;
+    auto vertex1 = add_vertex(style_info, CYCLE_NODE1_ID);
+    auto vertex2 = add_vertex(style_info, CYCLE_NODE2_ID);
+    auto vertex3 = add_vertex(style_info, CYCLE_NODE3_ID);
+
+    add_edge(style_info, vertex1, vertex2);
+    add_edge(style_info, vertex2, vertex3);
+    add_edge(style_info, vertex3, vertex1);
+
+    auto children1 = style_info.get_children(CYCLE_NODE1_ID);
+    EXPECT_EQ(children1.size(), 1);
+    EXPECT_THAT(children1, UnorderedElementsAre(CYCLE_NODE2_ID));
+
+    auto children2 = style_info.get_children(CYCLE_NODE2_ID);
+    EXPECT_EQ(children2.size(), 1);
+    EXPECT_THAT(children2, UnorderedElementsAre(CYCLE_NODE3_ID));
+
+    auto children3 = style_info.get_children(CYCLE_NODE3_ID);
+    EXPECT_EQ(children3.size(), 1);
+    EXPECT_THAT(children3, UnorderedElementsAre(CYCLE_NODE1_ID));
   }
 }
 
