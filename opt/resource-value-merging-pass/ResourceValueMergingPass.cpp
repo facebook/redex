@@ -55,6 +55,36 @@ void print_resources(
   }
 }
 
+/**
+ * Operation Ordering Requirements
+ * -------------------------------
+ * The operations in this pass must follow a specific order because the sequence
+ * of modifications affects the final outcome:
+ *
+ * Let A = {set of addition operations}
+ * Let R = {set of removal operations}
+ *
+ * Since A ∩ R ≠ ∅ (the intersection may not be empty), we must carefully order
+ * our operations.
+ *
+ * Consider the following example:
+ *   - A resource r has attribute a with value v1
+ *   - All children of r have attribute a with value v2 (where v1 ≠ v2)
+ *   - Then the attribute is removed from r based on the pass's deletion logic
+ *   - Finally, attribute a hoists value v2 from its children to r
+ *
+ * In scenarios like the example above, to correctly update a resource r, the
+ * following sequence of operations must be applied:
+ * 1. First: Remove existing attribute a with value v1 from r
+ * 2. Then: Add new attribute a with value v2 to r
+ *
+ * This scenario clearly demonstrates that there exists cases where order of
+ * operations matters.
+ *
+ * Thus, Removals must always be applied before additions to ensure the
+ * correct final state.
+ */
+
 void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
                                         ConfigFiles& conf,
                                         PassManager& mgr) {
@@ -76,13 +106,15 @@ void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
   resources::ReachabilityOptions options;
   StyleAnalysis style_analysis(apk_dir, conf.get_global_config(), options,
                                stores, UnorderedSet<uint32_t>());
-
   const auto& ambiguous_styles = style_analysis.ambiguous_styles();
   const auto& directly_reachable_styles =
       style_analysis.directly_reachable_styles();
-  const auto& optimized_resources = get_resource_optimization(
+
+  const auto& optimized_style_graph = get_optimized_graph(
       style_info, ambiguous_styles, directly_reachable_styles);
-  print_resources(optimized_resources.removals);
+
+  OptimizableResources optimized_resources =
+      get_graph_diffs(style_info, optimized_style_graph, ambiguous_styles);
 
   std::vector<resources::StyleModificationSpec::Modification> modifications;
   for (const auto& [resource_id, attributes] :
@@ -92,7 +124,18 @@ void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
           resource_id, attribute_id));
     }
   }
+
+  for (const auto& [resource_id, attr_map] :
+       UnorderedIterable(optimized_resources.additions)) {
+    for (const auto& [attribute_id, value] : UnorderedIterable(attr_map)) {
+      modifications.push_back(resources::StyleModificationSpec::Modification(
+          resource_id, attribute_id, value));
+    }
+  }
+
   res_table->apply_attribute_removals(modifications, resource_files);
+  res_table = resources->load_res_table();
+  res_table->apply_attribute_additions(modifications, resource_files);
 }
 
 /**
@@ -345,17 +388,27 @@ resources::StyleInfo ResourceValueMergingPass::get_optimized_graph(
     const UnorderedSet<uint32_t>& ambiguous_styles,
     const UnorderedSet<uint32_t>& directly_reachable_styles) {
   resources::StyleInfo optimized(initial);
+  OptimizableResources optimized_resources;
   int iteration = 0;
 
-  auto [removals, additions] = get_resource_optimization(
-      initial, ambiguous_styles, directly_reachable_styles);
+  do {
+    optimized_resources = get_resource_optimization(optimized, ambiguous_styles,
+                                                    directly_reachable_styles);
 
-  while ((!removals.empty() || !additions.empty()) &&
-         iteration < MAX_ITERATIONS) {
+    for (const auto& [resource_id, attr_map] :
+         UnorderedIterable(optimized_resources.additions)) {
 
-    // apply modifications to in-memory style graph
+      remove_attribute_from_descendent(resource_id, attr_map, optimized,
+                                       optimized_resources.removals);
+    }
+
+    apply_removals_to_style_graph(optimized, optimized_resources.removals);
+    apply_additions_to_style_graph(optimized, optimized_resources.additions);
+
     iteration++;
-  }
+  } while ((!optimized_resources.removals.empty() ||
+            !optimized_resources.additions.empty()) &&
+           iteration < MAX_ITERATIONS);
 
   return optimized;
 }

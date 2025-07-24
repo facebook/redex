@@ -56,6 +56,14 @@ inline bool is_overlayable(const std::string& name,
 // Android resource attribute IDs
 const uint32_t kBackgroundAttrId = 0x010100d4;
 const uint32_t kTextColorAttrId = 0x01010098;
+const uint32_t kWindowActionBar = 0x010102cd;
+const uint32_t kColorPrimaryAttrId = 0x01010433;
+const uint32_t kColorAccent = 0x01010435;
+const uint32_t kWindowNoTitle = 0x01010056;
+const uint32_t kBackgroundTint = 0x010100d5;
+const uint32_t kDrawableStart = 0x010100f4;
+const uint32_t kDrawableEnd = 0x010100f5;
+const uint32_t kTextSize = 0x01010095;
 const uint32_t kTextStyleAttrId = 0x01010097;
 const uint32_t kTextSizeAttrId = 0x01010095;
 const uint32_t kEnabledAttrId = 0x0101000e;
