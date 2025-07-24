@@ -89,4 +89,20 @@
   <style name="Unclear" parent="NightParent">
     <item name="android:layout_gravity">left</item>
   </style>
+
+  <style name="AppTheme">
+  </style>
+  <style name="AppTheme.Light">
+    <item name="android:textColor">#212121</item>
+    <item name="android:background">#FAFAFA</item>
+  </style>
+  <style name="AppTheme.Light.Blue">
+    <item name="android:colorPrimary">#2196F3</item>
+    <item name="android:colorAccent">#03A9F4</item>
+  </style>
+  <style name="AppTheme.Light.Blue.NoActionBar">
+    <item name="android:windowActionBar">false</item>
+    <item name="android:windowNoTitle">true</item>
+  </style>
+
 </resources>

@@ -16,6 +16,7 @@
 #include "RedexResources.h"
 #include "RedexTest.h"
 #include "RedexTestUtils.h"
+#include "ResourceValueMergingPass.h"
 #include "ResourcesTestDefs.h"
 #include "ResourcesValidationHelper.h"
 #include "Trace.h"
@@ -874,5 +875,143 @@ TEST(BundleResources, TestResourceExists) {
       EXPECT_EQ(does_resource_exists_in_file(style_id, res_pb_file_path),
                 expected);
     }
+  });
+}
+void verify_attributes(const resources::StyleResource::AttrMap& attributes,
+                       const std::vector<uint32_t>& expected) {
+  for (uint32_t attr_id : expected) {
+    EXPECT_THAT(attributes, Contains(Key(attr_id)))
+        << "Attribute 0x" << std::hex << attr_id << std::dec
+        << " was not found in style";
+  }
+  EXPECT_EQ(attributes.size(), expected.size());
+}
+
+TEST(BundleResources, TestApplyStyleMerges) {
+  setup_resources_and_run([&](const std::string& /* unused */,
+                              BundleResources* resources) {
+    ResourceValueMergingPass pass;
+
+    auto res_table = resources->load_res_table();
+    const auto& paths = resources->find_resources_files();
+    auto style_info = res_table->load_style_info();
+
+    auto app_theme_light_id =
+        res_table->get_res_ids_by_name("AppTheme.Light").at(0);
+    auto app_theme_light_blue_id =
+        res_table->get_res_ids_by_name("AppTheme.Light.Blue").at(0);
+    auto app_theme_light_blue_no_action_bar_id =
+        res_table->get_res_ids_by_name("AppTheme.Light.Blue.NoActionBar").at(0);
+
+    const std::vector<uint32_t> light_attributes = {kTextColorAttrId,
+                                                    kBackgroundAttrId};
+    const std::vector<uint32_t> blue_attributes = {kColorPrimaryAttrId,
+                                                   kColorAccent};
+    const std::vector<uint32_t> no_action_bar_attributes = {kWindowNoTitle,
+                                                            kWindowActionBar};
+
+    // First merge: AppTheme.Light into its children
+    std::vector<uint32_t> resources_to_merge = {app_theme_light_id};
+    auto modifications =
+        pass.get_parent_and_attribute_modifications_for_merging(
+            style_info, resources_to_merge);
+
+    res_table->apply_style_merges({modifications}, paths);
+
+    res_table = resources->load_res_table();
+    style_info = res_table->load_style_info();
+
+    // Verify that AppTheme.Light.Blue now contains both its own attributes and
+    // Light's attributes
+    auto blue_style =
+        res_table->get_style_map().at(app_theme_light_blue_id).at(0);
+
+    std::vector<uint32_t> expected_blue_attributes = blue_attributes;
+    expected_blue_attributes.insert(expected_blue_attributes.end(),
+                                    light_attributes.begin(),
+                                    light_attributes.end());
+
+    verify_attributes(blue_style.attributes, expected_blue_attributes);
+
+    // Second merge: AppTheme.Light.Blue into its children
+    resources_to_merge = {app_theme_light_blue_id};
+    modifications = pass.get_parent_and_attribute_modifications_for_merging(
+        style_info, resources_to_merge);
+
+    res_table->apply_style_merges({modifications}, paths);
+
+    // Verify that NoActionBar now contains all attributes from the hierarchy
+    auto no_action_bar_style = resources->load_res_table()
+                                   ->get_style_map()
+                                   .at(app_theme_light_blue_no_action_bar_id)
+                                   .at(0);
+
+    std::vector<uint32_t> expected_no_action_bar_attributes =
+        no_action_bar_attributes;
+    expected_no_action_bar_attributes.insert(
+        expected_no_action_bar_attributes.end(),
+        blue_attributes.begin(),
+        blue_attributes.end());
+    expected_no_action_bar_attributes.insert(
+        expected_no_action_bar_attributes.end(),
+        light_attributes.begin(),
+        light_attributes.end());
+    verify_attributes(no_action_bar_style.attributes,
+                      expected_no_action_bar_attributes);
+  });
+}
+
+TEST(BundleResources, TestApplyStyleChained) {
+  setup_resources_and_run([&](const std::string& /* unused */,
+                              BundleResources* resources) {
+    ResourceValueMergingPass pass;
+
+    auto res_table = resources->load_res_table();
+    const auto& paths = resources->find_resources_files();
+    auto style_info = res_table->load_style_info();
+
+    auto app_theme_light_id =
+        res_table->get_res_ids_by_name("AppTheme.Light").at(0);
+    auto app_theme_light_blue_id =
+        res_table->get_res_ids_by_name("AppTheme.Light.Blue").at(0);
+    auto app_theme_light_blue_no_action_bar_id =
+        res_table->get_res_ids_by_name("AppTheme.Light.Blue.NoActionBar").at(0);
+
+    const std::vector<uint32_t> light_attributes = {kTextColorAttrId,
+                                                    kBackgroundAttrId};
+    const std::vector<uint32_t> blue_attributes = {kColorPrimaryAttrId,
+                                                   kColorAccent};
+    const std::vector<uint32_t> no_action_bar_attributes = {kWindowNoTitle,
+                                                            kWindowActionBar};
+
+    // Merge both Light and Light.Blue in one operation
+    std::vector<uint32_t> resources_to_merge = {app_theme_light_id,
+                                                app_theme_light_blue_id};
+    auto modifications =
+        pass.get_parent_and_attribute_modifications_for_merging(
+            style_info, resources_to_merge);
+
+    res_table->apply_style_merges({modifications}, paths);
+
+    res_table = resources->load_res_table();
+    style_info = res_table->load_style_info();
+
+    // Verify that NoActionBar now contains all attributes from the hierarchy
+    auto no_action_bar_style = res_table->get_style_map()
+                                   .at(app_theme_light_blue_no_action_bar_id)
+                                   .at(0);
+
+    std::vector<uint32_t> expected_no_action_bar_attributes =
+        no_action_bar_attributes;
+    expected_no_action_bar_attributes.insert(
+        expected_no_action_bar_attributes.end(),
+        blue_attributes.begin(),
+        blue_attributes.end());
+    expected_no_action_bar_attributes.insert(
+        expected_no_action_bar_attributes.end(),
+        light_attributes.begin(),
+        light_attributes.end());
+    verify_attributes(no_action_bar_style.attributes,
+                      expected_no_action_bar_attributes);
   });
 }

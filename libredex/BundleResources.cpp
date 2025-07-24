@@ -3050,9 +3050,89 @@ void ResourcesPbFile::apply_attribute_additions(
   }
 }
 
+bool style_merging_function(
+    aapt::pb::Style* style,
+    const UnorderedMap<uint32_t, StyleModificationSpec::Modification>&
+        attrs_to_modify,
+    UnorderedMap<uint32_t, StyleModificationSpec::Modification>&
+        modified_resources) {
+
+  always_assert_log(attrs_to_modify.size() == 1,
+                    "Only expect one entry when trying to merge attributes "
+                    "into child resource");
+  auto modification = unordered_any(attrs_to_modify)->second;
+  uint32_t resource_id = modification.resource_id;
+
+  auto parent_id_opt = modification.parent_id;
+  always_assert(parent_id_opt.has_value());
+  uint32_t parent_id = parent_id_opt.value();
+
+  UnorderedSet<uint32_t> existing_entries;
+  for (const auto& existing_entry : style->entry()) {
+    if (existing_entry.has_key()) {
+      existing_entries.insert(existing_entry.key().id());
+    }
+  }
+
+  for (const auto& [attr_id, value] : UnorderedIterable(modification.values)) {
+    const auto& existing_entry = existing_entries.find(attr_id);
+    always_assert_log(existing_entry == existing_entries.end(),
+                      "Attribute 0x%x already exists in style 0x%x", attr_id,
+                      resource_id);
+
+    auto* new_entry = style->add_entry();
+    auto* key = new_entry->mutable_key();
+    key->set_id(attr_id);
+    key->set_type(aapt::pb::Reference_Type::Reference_Type_REFERENCE);
+
+    add_attribute_to_style(new_entry->mutable_item(), value);
+
+    TRACE(RES, 9, "        Added new attribute: id=0x%x", attr_id);
+  }
+
+  auto* parent = style->mutable_parent();
+  parent->set_id(parent_id);
+  parent->set_type(aapt::pb::Reference_Type::Reference_Type_REFERENCE);
+
+  modified_resources.insert({resource_id, modification});
+
+  reorder_style(style);
+
+  return true;
+}
+
 void ResourcesPbFile::apply_style_merges(
-    const std::vector<StyleModificationSpec::Modification>& /* modifications */,
-    const std::vector<std::string>& /* resouces_pb_paths */) {}
+    const std::vector<StyleModificationSpec::Modification>& modifications,
+    const std::vector<std::string>& resources_pb_paths) {
+
+  ResourceAttributeMap children_updates;
+  for (const auto& modification : modifications) {
+    if (modification.type !=
+        StyleModificationSpec::ModificationType::UPDATE_PARENT_ADD_ATTRIBUTES) {
+      continue;
+    }
+    int resource_id = modification.resource_id;
+    assert_resource_in_one_files(resource_id, resources_pb_paths);
+    // Only need the modification so we can iterate through
+    // modification.values() to get all the new attributes to add
+    children_updates[resource_id].insert({resource_id, modification});
+  }
+
+  ResourceAttributeMap modified_resources;
+  for (const auto& resource_pb_path : resources_pb_paths) {
+    apply_attribute_modification_for_file(children_updates, resource_pb_path,
+                                          style_merging_function,
+                                          modified_resources);
+  }
+
+  if (traceEnabled(RES, 8)) {
+    for (const auto& [resource_id, _] : UnorderedIterable(children_updates)) {
+      if (modified_resources.find(resource_id) == modified_resources.end()) {
+        TRACE(RES, 8, "Child resource 0x%x was not modified", resource_id);
+      }
+    }
+  }
+}
 
 ResourcesPbFile::~ResourcesPbFile() {}
 
