@@ -255,7 +255,12 @@ struct StyleInfo {
 // This structure defines operations that can be performed on styles during
 // serialization.
 struct StyleModificationSpec {
-  enum class ModificationType { ADD_ATTRIBUTE, REMOVE_ATTRIBUTE, DELETE_STYLE };
+  enum class ModificationType {
+    ADD_ATTRIBUTE,
+    REMOVE_ATTRIBUTE,
+    DELETE_STYLE,
+    UPDATE_PARENT_ADD_ATTRIBUTES
+  };
 
   struct Modification {
     ModificationType type;
@@ -264,6 +269,7 @@ struct StyleModificationSpec {
     std::optional<uint32_t> attribute_id{std::nullopt};
     std::optional<StyleResource::Value> value{std::nullopt};
     std::optional<uint32_t> parent_id{std::nullopt};
+    UnorderedMap<uint32_t, StyleResource::Value> values;
 
     explicit Modification(uint32_t resource_id)
         : type(ModificationType::DELETE_STYLE), resource_id{resource_id} {}
@@ -278,6 +284,13 @@ struct StyleModificationSpec {
           resource_id{resource_id},
           attribute_id(attr_id),
           value(val) {}
+    Modification(uint32_t resource_id,
+                 uint32_t parent_id,
+                 UnorderedMap<uint32_t, StyleResource::Value> values)
+        : type(ModificationType::UPDATE_PARENT_ADD_ATTRIBUTES),
+          resource_id(resource_id),
+          parent_id(parent_id),
+          values(std::move(values)) {}
   };
 
   std::vector<Modification> modifications;
