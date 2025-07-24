@@ -14,6 +14,8 @@
 #include "Styles.h"
 #include "Trace.h"
 
+#define MAX_ITERATIONS 20
+
 using namespace resources;
 void print_resources(const UnorderedMap<uint32_t, ResourceAttributeInformation>&
                          optimized_resources) {
@@ -317,6 +319,26 @@ ResourceValueMergingPass::find_resource_optimization_candidates(
   }
 
   return resources_common_attributes;
+}
+
+resources::StyleInfo ResourceValueMergingPass::get_optimized_graph(
+    const resources::StyleInfo& initial,
+    const UnorderedSet<uint32_t>& ambiguous_styles,
+    const UnorderedSet<uint32_t>& directly_reachable_styles) {
+  resources::StyleInfo optimized(initial);
+  int iteration = 0;
+
+  auto [deletions, hoisted_attributes] = get_resource_optimization(
+      initial, ambiguous_styles, directly_reachable_styles);
+
+  while ((!deletions.empty() || !hoisted_attributes.empty()) &&
+         iteration < MAX_ITERATIONS) {
+
+    // apply modifications to in-memory style graph
+    iteration++;
+  }
+
+  return optimized;
 }
 
 static ResourceValueMergingPass s_pass;

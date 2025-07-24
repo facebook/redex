@@ -354,3 +354,100 @@ TEST(RedexResources, StyleInfoGetRoots) {
     EXPECT_TRUE(roots.empty());
   }
 }
+
+TEST(RedexResources, StyleInfoDeepCopy) {
+  auto add_vertex = [](resources::StyleInfo& style_info, uint32_t id) {
+    return boost::add_vertex(resources::StyleInfo::Node{id}, style_info.graph);
+  };
+
+  auto add_edge = [](resources::StyleInfo& style_info,
+                     resources::StyleInfo::vertex_t parent,
+                     resources::StyleInfo::vertex_t child) {
+    boost::add_edge(parent, child, style_info.graph);
+  };
+
+  resources::StyleInfo original;
+  auto vertex1 = add_vertex(original, 0x7f010001);
+  auto vertex2 = add_vertex(original, 0x7f010002);
+  auto vertex3 = add_vertex(original, 0x7f010003);
+
+  add_edge(original, vertex1, vertex2);
+  add_edge(original, vertex1, vertex3);
+
+  resources::StyleResource style_resource1;
+  style_resource1.id = 0x7f010001;
+  style_resource1.parent = 0x01010000;
+  style_resource1.attributes.emplace(
+      0x01010001, resources::StyleResource::Value(1, 0x12345678));
+  style_resource1.attributes.emplace(
+      0x01010002,
+      resources::StyleResource::Value(2, std::string("test_value")));
+
+  resources::StyleResource style_resource2;
+  style_resource2.id = 0x7f010002;
+  style_resource2.parent = 0x7f010001;
+  style_resource2.attributes.emplace(
+      0x01010003, resources::StyleResource::Value(1, 0x87654321));
+
+  original.styles[0x7f010001] = {style_resource1};
+  original.styles[0x7f010002] = {style_resource2};
+
+  resources::StyleInfo copied(original);
+
+  EXPECT_EQ(boost::num_vertices(original.graph),
+            boost::num_vertices(copied.graph));
+  EXPECT_EQ(boost::num_edges(original.graph), boost::num_edges(copied.graph));
+
+  EXPECT_EQ(original.styles.size(), copied.styles.size());
+  EXPECT_EQ(original.styles[0x7f010001].size(),
+            copied.styles[0x7f010001].size());
+  EXPECT_EQ(original.styles[0x7f010002].size(),
+            copied.styles[0x7f010002].size());
+
+  const auto& orig_style1 = original.styles[0x7f010001][0];
+  const auto& copied_style1 = copied.styles[0x7f010001][0];
+  EXPECT_EQ(orig_style1.id, copied_style1.id);
+  EXPECT_EQ(orig_style1.parent, copied_style1.parent);
+  EXPECT_EQ(orig_style1.attributes.size(), copied_style1.attributes.size());
+
+  auto new_vertex = add_vertex(original, 0x7f010004);
+  add_edge(original, vertex2, new_vertex);
+
+  resources::StyleResource new_style_resource;
+  new_style_resource.id = 0x7f010004;
+  new_style_resource.parent = 0x7f010002;
+  new_style_resource.attributes.emplace(
+      0x01010004, resources::StyleResource::Value(1, 0xABCDEF00));
+  original.styles[0x7f010004] = {new_style_resource};
+
+  original.styles[0x7f010001][0].attributes.emplace(
+      0x01010005,
+      resources::StyleResource::Value(2, std::string("modified_value")));
+
+  EXPECT_NE(boost::num_vertices(original.graph),
+            boost::num_vertices(copied.graph));
+  EXPECT_NE(boost::num_edges(original.graph), boost::num_edges(copied.graph));
+  EXPECT_NE(original.styles.size(), copied.styles.size());
+
+  EXPECT_EQ(boost::num_vertices(copied.graph), 3);
+  EXPECT_EQ(boost::num_edges(copied.graph), 2);
+
+  EXPECT_EQ(copied.styles.size(), 2);
+  EXPECT_TRUE(copied.styles.find(0x7f010004) == copied.styles.end());
+  EXPECT_TRUE(copied.styles[0x7f010001][0].attributes.find(0x01010005) ==
+              copied.styles[0x7f010001][0].attributes.end());
+
+  EXPECT_EQ(copied.styles.at(0x7f010001)[0]
+                .attributes.at(0x01010001)
+                .get_value_bytes(),
+            0x12345678);
+  EXPECT_EQ(copied.styles.at(0x7f010001)[0]
+                .attributes.at(0x01010002)
+                .get_value_string()
+                .get(),
+            "test_value");
+  EXPECT_EQ(copied.styles.at(0x7f010002)[0]
+                .attributes.at(0x01010003)
+                .get_value_bytes(),
+            0x87654321);
+}

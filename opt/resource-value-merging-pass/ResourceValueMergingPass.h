@@ -68,6 +68,11 @@ class ResourceValueMergingPass : public Pass {
   std::optional<const resources::StyleResource> find_style_resource(
       uint32_t resource_id, const resources::StyleMap& style_map);
 
+  resources::StyleInfo get_optimized_graph(
+      const resources::StyleInfo& initial,
+      const UnorderedSet<uint32_t>& ambiguous_styles,
+      const UnorderedSet<uint32_t>& directly_reachable_styles);
+
  private:
   ResourceAttributeInformation find_resource_optimization_candidates(
       resources::StyleInfo::vertex_t vertex,
