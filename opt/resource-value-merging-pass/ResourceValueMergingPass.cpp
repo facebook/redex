@@ -83,11 +83,11 @@ void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
   const auto& optimized_resources = get_resource_optimization(
       style_info, ambiguous_styles, directly_reachable_styles);
 
-  print_resources(optimized_resources.deletion);
+  print_resources(optimized_resources.removals);
 
   std::vector<resources::StyleModificationSpec::Modification> modifications;
   for (const auto& [resource_id, attributes] :
-       UnorderedIterable(optimized_resources.deletion)) {
+       UnorderedIterable(optimized_resources.removals)) {
     for (const auto& attribute_id : UnorderedIterable(attributes)) {
       modifications.push_back(resources::StyleModificationSpec::Modification(
           resource_id, attribute_id));
@@ -178,10 +178,10 @@ OptimizableResources ResourceValueMergingPass::remove_unoptimizable_resources(
     const UnorderedSet<uint32_t>& directly_reachable_styles) {
   OptimizableResources optimizable_resources;
   for (const auto& [resource_id, attr_ids] :
-       UnorderedIterable(optimizable_candidates.deletion)) {
+       UnorderedIterable(optimizable_candidates.removals)) {
     if (directly_reachable_styles.find(resource_id) ==
         directly_reachable_styles.end()) {
-      optimizable_resources.deletion[resource_id] = attr_ids;
+      optimizable_resources.removals[resource_id] = attr_ids;
     }
   }
 
@@ -301,7 +301,7 @@ ResourceValueMergingPass::find_resource_optimization_candidates(
   for (const auto& attr_id : UnorderedIterable(resources_common_attributes)) {
     if (common_child_attributes.find(attr_id) !=
         common_child_attributes.end()) {
-      optimizable_candidates.deletion[resource_id].insert(attr_id);
+      optimizable_candidates.removals[resource_id].insert(attr_id);
       optimized_attributes.insert(attr_id);
     }
   }
@@ -359,6 +359,28 @@ void ResourceValueMergingPass::apply_additions_to_style_graph(
     auto& style_resource = style_resources[0];
     for (const auto& [attr_id, value] : UnorderedIterable(attr_map)) {
       style_resource.attributes.insert({attr_id, value});
+    }
+  }
+}
+
+void ResourceValueMergingPass::apply_removals_to_style_graph(
+    resources::StyleInfo& style_info,
+    UnorderedMap<uint32_t, ResourceAttributeInformation> removals) {
+  for (const auto& [resource_id, attr_ids] : UnorderedIterable(removals)) {
+
+    auto style_it = style_info.styles.find(resource_id);
+    always_assert(style_it != style_info.styles.end());
+
+    auto& style_resources = style_it->second;
+
+    always_assert(style_resources.size() == 1);
+
+    auto& style_resource = style_resources[0];
+
+    for (const auto& attr_id : UnorderedIterable(attr_ids)) {
+      auto attr_it = style_resource.attributes.find(attr_id);
+      always_assert(attr_it != style_resource.attributes.end());
+      style_resource.attributes.erase(attr_it);
     }
   }
 }

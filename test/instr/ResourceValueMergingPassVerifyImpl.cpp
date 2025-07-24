@@ -51,7 +51,7 @@ void resource_value_merging_PreVerify(ResourceTableFile* res_table,
     EXPECT_THAT(style_ids, SizeIs(1));
     uint32_t style_id = *style_ids.begin();
     UnorderedMap<uint32_t, ResourceAttributeInformation> deletion =
-        optimized_resources.deletion;
+        optimized_resources.removals;
     EXPECT_TRUE(deletion.count(style_id) > 0)
         << "Style ID 0x" << std::hex << style_id
         << " not found in deletion map";
