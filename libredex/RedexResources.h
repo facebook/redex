@@ -246,6 +246,9 @@ struct StyleInfo {
 
   // Gets all children of the given resource ID.
   std::vector<uint32_t> get_children(uint32_t resource_id) const;
+
+  // Gets parent of the given resource ID.
+  std::optional<uint32_t> get_unambiguous_parent(uint32_t resource_id) const;
 };
 
 // Modification specification for styles in APK and App Bundle containers.

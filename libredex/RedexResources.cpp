@@ -785,4 +785,20 @@ std::vector<uint32_t> StyleInfo::get_children(uint32_t resource_id) const {
   return children_ids;
 }
 
+std::optional<uint32_t> StyleInfo::get_unambiguous_parent(
+    uint32_t resource_id) const {
+  const auto& resource_styles_it = styles.find(resource_id);
+  if (resource_styles_it == styles.end()) {
+    return std::nullopt;
+  }
+
+  const auto& resource_styles = resource_styles_it->second;
+  if (resource_styles.size() != 1) {
+    return std::nullopt;
+  }
+
+  const auto& resource_style = resource_styles[0];
+  return resource_style.parent;
+}
+
 }; // namespace resources

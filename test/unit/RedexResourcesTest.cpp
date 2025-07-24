@@ -604,3 +604,49 @@ TEST(RedexResources, StyleInfoDeepCopy) {
                 .get_value_bytes(),
             0x87654321);
 }
+
+TEST(RedexResources, StyleInfoGetParent) {
+  const uint32_t NONEXISTENT_ID = 0x7f020001;
+  const uint32_t SINGLE_STYLE_ID = 0x7f020002;
+  const uint32_t MULTI_STYLE_ID = 0x7f020003;
+  const uint32_t NO_PARENT_ID = 0x7f020004;
+
+  const uint32_t PARENT_ID = 0x7f010000;
+
+  resources::StyleInfo style_info;
+
+  auto parent1 = style_info.get_unambiguous_parent(NONEXISTENT_ID);
+  EXPECT_FALSE(parent1.has_value());
+
+  resources::StyleResource style_with_parent;
+  style_with_parent.id = SINGLE_STYLE_ID;
+  style_with_parent.parent = PARENT_ID;
+
+  style_info.styles[SINGLE_STYLE_ID] = {style_with_parent};
+
+  auto parent2 = style_info.get_unambiguous_parent(SINGLE_STYLE_ID);
+  EXPECT_TRUE(parent2.has_value());
+  EXPECT_EQ(parent2.value(), PARENT_ID);
+
+  resources::StyleResource style1;
+  style1.id = MULTI_STYLE_ID;
+  style1.parent = 0x7f010001;
+
+  resources::StyleResource style2;
+  style2.id = MULTI_STYLE_ID;
+  style2.parent = 0x7f010002;
+
+  style_info.styles[MULTI_STYLE_ID] = {style1, style2};
+
+  auto parent3 = style_info.get_unambiguous_parent(MULTI_STYLE_ID);
+  EXPECT_FALSE(parent3.has_value());
+
+  resources::StyleResource style_no_parent;
+  style_no_parent.id = NO_PARENT_ID;
+
+  style_info.styles[NO_PARENT_ID] = {style_no_parent};
+
+  auto parent4 = style_info.get_unambiguous_parent(NO_PARENT_ID);
+  EXPECT_TRUE(parent4.has_value());
+  EXPECT_EQ(parent4.value(), 0);
+}
