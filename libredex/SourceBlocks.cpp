@@ -63,6 +63,15 @@ static char get_edge_char(const Edge* e) {
   not_reached(); // For GCC.
 }
 
+bool is_ghost_block(Block* block) {
+  for (auto& edge : block->preds()) {
+    if (edge->type() == cfg::EDGE_GHOST) {
+      return true;
+    }
+  }
+  return false;
+}
+
 struct InsertHelper {
   std::ostringstream oss;
   const DexString* method;
@@ -2198,6 +2207,10 @@ struct ViolationsHelper::ViolationsHelperImpl {
       cfg::ControlFlowGraph& cfg) {
     size_t sum{0};
     for (auto* b : cfg.blocks()) {
+      if (is_ghost_block(b)) {
+        // Do not count ghost blocks in this violation
+        continue;
+      }
       auto* sb = get_first_source_block(b);
       if (sb == nullptr) {
         sum++;
@@ -2585,6 +2598,10 @@ struct ViolationsHelper::ViolationsHelperImpl {
         void mie_after(std::ostream&, const MethodItemEntry&) {}
 
         void start_block(std::ostream& os, cfg::Block* b) {
+          if (is_ghost_block(b)) {
+            return;
+          }
+
           if (get_first_source_block(b) == nullptr) {
             if (violating_blocks != nullptr) {
               auto& map = (*violating_blocks)[nullptr];
