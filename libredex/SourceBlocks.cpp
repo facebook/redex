@@ -891,16 +891,23 @@ static std::string get_serialized_idom_map(ControlFlowGraph* cfg) {
   return ss_idom_map.str();
 }
 
-size_t normalize_blocks(ControlFlowGraph* cfg) {
+std::tuple<size_t, size_t, size_t, size_t> normalize_blocks(
+    ControlFlowGraph* cfg) {
   size_t normalized_blocks = 0;
+  size_t denormalized_blocks = 0;
+  size_t elided_vals = 0;
+  size_t unelided_vals = 0;
   for (auto* block : cfg->blocks()) {
     source_blocks::foreach_source_block(block, [&](const auto& sb) {
-      if (sb->normalize()) {
+      if (sb->normalize(&elided_vals, &unelided_vals)) {
         normalized_blocks++;
+      } else {
+        denormalized_blocks++;
       }
     });
   }
-  return normalized_blocks;
+  return std::make_tuple(normalized_blocks, denormalized_blocks, elided_vals,
+                         unelided_vals);
 }
 
 InsertResult insert_source_blocks(const DexString* method,
@@ -920,8 +927,11 @@ InsertResult insert_source_blocks(const DexString* method,
 
   auto idom_map = get_serialized_idom_map(cfg);
 
-  return {helper.id, helper.oss.str(), std::move(idom_map), !had_failures,
-          normalize_blocks(cfg)};
+  auto [normalized_blocks, denormalized_blocks, elided_vals, unelided_vals] =
+      normalize_blocks(cfg);
+  return {helper.id,     helper.oss.str(),  std::move(idom_map),
+          !had_failures, normalized_blocks, denormalized_blocks,
+          elided_vals,   unelided_vals};
 }
 
 // This metric checks if there exists a block such that it starts out with hot
@@ -1155,8 +1165,12 @@ InsertResult insert_custom_source_blocks(
 
   auto idom_map = get_serialized_idom_map(cfg);
 
-  return {helper.id, helper.oss.str(), std::move(idom_map), true,
-          normalize_blocks(cfg)};
+  auto [normalized_blocks, denormalized_blocks, elided_vals, unelided_vals] =
+      normalize_blocks(cfg);
+
+  return {helper.id,   helper.oss.str(),  std::move(idom_map),
+          true,        normalized_blocks, denormalized_blocks,
+          elided_vals, unelided_vals};
 }
 
 UnorderedMap<Block*, uint32_t> insert_custom_source_blocks_get_indegrees(

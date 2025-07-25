@@ -954,21 +954,141 @@ void IRList::insn_clear_and_dispose() {
   });
 }
 
+std::unique_ptr<SourceBlock::Storage, SourceBlock::FreeDeleter>
+SourceBlock::make_storage(size_t vals_size, const Val& val) {
+  if (vals_size == 0) {
+    return nullptr;
+  }
+
+  always_assert(vals_size <= InteractionBitSet::MAX_SIZE);
+  size_t bytes = sizeof(Storage) + sizeof(Val) * (vals_size - 1);
+  auto* res = (Storage*)malloc(bytes);
+  always_assert(res);
+  res->bits = InteractionBitSet::all(vals_size);
+  std::fill_n(res->data, vals_size, val);
+  return std::unique_ptr<Storage, FreeDeleter>(res);
+}
+
+std::unique_ptr<SourceBlock::Storage, SourceBlock::FreeDeleter>
+SourceBlock::make_storage(const Storage* other) {
+  if (other == nullptr) {
+    return nullptr;
+  }
+  InteractionBitSet bits;
+  auto other_bits = other->bits;
+  for (size_t i = 0; other_bits; other_bits.remove_first(), i++) {
+    if (!other->data[i].is_default_value()) {
+      bits.add(other_bits.first());
+    }
+  }
+  if (!bits) {
+    return nullptr;
+  }
+  size_t bytes = sizeof(Storage) + sizeof(Val) * (bits.count() - 1);
+  auto* res = (Storage*)malloc(bytes);
+  always_assert(res);
+  res->bits = bits;
+  other_bits = other->bits;
+  for (size_t i = 0, j = 0; other_bits; other_bits.remove_first(), i++) {
+    if (bits.contains(other_bits.first())) {
+      res->data[j++] = other->data[i];
+    }
+  }
+  return std::unique_ptr<Storage, FreeDeleter>(res);
+}
+
+std::unique_ptr<SourceBlock::Storage, SourceBlock::FreeDeleter>
+SourceBlock::make_storage(const std::vector<Val>& vals) {
+  InteractionBitSet bits;
+  always_assert(vals.size() <= InteractionBitSet::MAX_SIZE);
+  for (size_t i = 0; i < vals.size(); i++) {
+    if (!vals[i].is_default_value()) {
+      bits.add(InteractionBitSet::from_index(i));
+    }
+  }
+  if (!bits) {
+    return nullptr;
+  }
+  size_t bytes = sizeof(Storage) + sizeof(Val) * (bits.count() - 1);
+  auto* res = (Storage*)malloc(bytes);
+  always_assert(res);
+  res->bits = bits;
+  for (size_t i = 0; bits; bits.remove_first(), i++) {
+    res->data[i] = vals[bits.first_index()];
+  }
+  return std::unique_ptr<Storage, FreeDeleter>(res);
+}
+
+bool SourceBlock::has_all_default_values(const Storage* storage) {
+  if (storage == nullptr) {
+    return true;
+  }
+  size_t count = storage->bits.count();
+  for (size_t i = 0; i < count; i++) {
+    if (!storage->data[i].is_default_value()) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool SourceBlock::has_default_value(const Storage* storage) {
+  if (storage == nullptr) {
+    return false;
+  }
+  size_t count = storage->bits.count();
+  for (size_t i = 0; i < count; i++) {
+    if (storage->data[i].is_default_value()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool SourceBlock::operator==(const SourceBlock& other) const {
   if (src != other.src || id != other.id || vals_size != other.vals_size) {
     return false;
   }
-  if (vals_ == nullptr) {
-    return is_default_values(other.vals_.get(), other.vals_size);
+
+  if (!m_storage || !other.m_storage) {
+    return has_all_default_values(m_storage.get()) &&
+           has_all_default_values(other.m_storage.get());
   }
-  if (other.vals_ == nullptr) {
-    return is_default_values(vals_.get(), vals_size);
-  }
-  for (size_t i = 0; i < vals_size; i++) {
-    if (vals_[i] != other.vals_[i]) {
+
+  // Check whether this has entries the other doesn't have, and whether they are
+  // all the default value
+  auto bits = m_storage->bits;
+  bits.remove(other.m_storage->bits);
+  for (; bits; bits.remove_first()) {
+    size_t idx = m_storage->bits.count_before(bits.first());
+    if (!m_storage->data[idx].is_default_value()) {
       return false;
     }
   }
+
+  // Check whether all common entries are equal
+  bits = m_storage->bits;
+  bits.intersect_with(other.m_storage->bits);
+  for (; bits; bits.remove_first()) {
+    auto bit = bits.first();
+    size_t idx = m_storage->bits.count_before(bit);
+    size_t other_idx = other.m_storage->bits.count_before(bit);
+    if (m_storage->data[idx] != other.m_storage->data[other_idx]) {
+      return false;
+    }
+  }
+
+  // Check whether the other has entries this doesn't have, and whether they are
+  // all the default value
+  bits = other.m_storage->bits;
+  bits.remove(m_storage->bits);
+  for (; bits; bits.remove_first()) {
+    size_t other_idx = other.m_storage->bits.count_before(bits.first());
+    if (!other.m_storage->data[other_idx].is_default_value()) {
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -976,18 +1096,17 @@ const SourceBlock::Val SourceBlock::default_value =
     SourceBlock::Val::default_value();
 
 void SourceBlock::fill(const Val& val) {
-  if (vals_ == nullptr) {
-    if (val.is_default_value()) {
-      return;
-    }
-    denormalize();
-  } else if (val.is_default_value()) {
-    vals_.reset();
+  if (val.is_default_value()) {
+    m_storage.reset();
     return;
   }
-  for (size_t i = 0; i < vals_size; i++) {
-    vals_[i] = val;
+  if (is_storage_expanded()) {
+    if (vals_size > 0) {
+      std::fill_n(m_storage->data, vals_size, val);
+    }
+    return;
   }
+  m_storage = make_storage(vals_size, val);
 }
 
 void SourceBlock::max(const SourceBlock& other) {
@@ -1000,27 +1119,36 @@ void SourceBlock::max(const SourceBlock& other) {
       val->appear100 = std::max(val->appear100, other_val->appear100);
     }
   };
-  if (other.vals_ == nullptr) {
-    if (vals_ == nullptr) {
-      return;
-    }
-    for (size_t i = 0; i != len; ++i) {
-      max_val(vals_[i], Val::default_value());
-    }
-    return;
-  }
-  denormalize();
   for (size_t i = 0; i != len; ++i) {
-    max_val(vals_[i], other.vals_[i]);
+    apply_at(i, [&](auto& val) { max_val(val, other.get_at(i)); });
   }
 }
 
-void SourceBlock::denormalize() {
-  if (vals_size == 0 || vals_ != nullptr) {
+bool SourceBlock::normalize(size_t* elided_vals, size_t* unelided_vals) {
+  if (has_default_value(m_storage.get())) {
+    m_storage = make_storage(m_storage.get());
+  }
+  if (!m_storage) {
+    return true;
+  }
+  size_t count = m_storage->bits.count();
+  *elided_vals += vals_size - count;
+  *unelided_vals += count;
+  return m_storage == nullptr;
+}
+
+void SourceBlock::expand_storage() {
+  if (is_storage_expanded()) {
     return;
   }
-  vals_ = std::make_unique<Val[]>(vals_size);
-  std::fill_n(vals_.get(), vals_size, Val::default_value());
+  auto expanded_storage = make_storage(vals_size);
+  if (m_storage) {
+    auto bits = m_storage->bits;
+    for (size_t i = 0; bits; bits.remove_first(), i++) {
+      expanded_storage->data[bits.first_index()] = m_storage->data[i];
+    }
+  }
+  m_storage = std::move(expanded_storage);
 }
 
 std::string SourceBlock::show(bool quoted_src) const {

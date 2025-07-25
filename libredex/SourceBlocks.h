@@ -237,6 +237,9 @@ struct InsertResult {
   std::string serialized_idom_map;
   bool profile_success;
   size_t normalized_count;
+  size_t denormalized_count;
+  size_t elided_vals;
+  size_t unelided_vals;
 };
 
 // Source data for a profile = interaction. Three options per interactions:
