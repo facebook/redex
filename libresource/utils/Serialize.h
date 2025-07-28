@@ -399,6 +399,7 @@ class ResComplexEntryBuilder {
     value.size = sizeof(android::Res_value);
     value.dataType = data_type;
     value.data = data;
+    value.res0 = 0;
     m_attributes.emplace_back(attr_id, value);
   }
 
