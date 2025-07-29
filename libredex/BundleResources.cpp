@@ -3090,9 +3090,13 @@ bool style_merging_function(
     TRACE(RES, 9, "        Added new attribute: id=0x%x", attr_id);
   }
 
-  auto* parent = style->mutable_parent();
-  parent->set_id(parent_id);
-  parent->set_type(aapt::pb::Reference_Type::Reference_Type_REFERENCE);
+  if (parent_id != 0) {
+    auto* parent = style->mutable_parent();
+    parent->set_id(parent_id);
+    parent->set_type(aapt::pb::Reference_Type::Reference_Type_REFERENCE);
+  } else {
+    style->clear_parent();
+  }
 
   modified_resources.insert({resource_id, modification});
 
