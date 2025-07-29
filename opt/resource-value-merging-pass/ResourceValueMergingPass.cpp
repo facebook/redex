@@ -110,6 +110,7 @@ void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
   const auto& directly_reachable_styles =
       style_analysis.directly_reachable_styles();
 
+  // Removal and Hoisting Operations
   const auto& optimized_style_graph = get_optimized_graph(
       style_info, ambiguous_styles, directly_reachable_styles);
 
@@ -136,6 +137,16 @@ void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
   res_table->apply_attribute_removals(modifications, resource_files);
   res_table = resources->load_res_table();
   res_table->apply_attribute_additions(modifications, resource_files);
+
+  res_table = resources->load_res_table();
+  style_info = res_table->load_style_info();
+
+  // Merging optimization
+  const auto& resources_to_merge = get_resources_to_merge(
+      style_info, ambiguous_styles, directly_reachable_styles);
+  const auto& merging_modifications =
+      get_style_merging_modifications(style_info, resources_to_merge);
+  res_table->apply_style_merges(merging_modifications, resource_files);
 }
 
 /**

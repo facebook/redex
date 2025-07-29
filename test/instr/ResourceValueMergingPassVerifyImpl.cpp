@@ -36,7 +36,6 @@ const UnorderedMap<std::string, UnorderedSet<uint32_t>> INITIAL_OPTIMIZATIONS =
 const UnorderedMap<std::string, UnorderedSet<uint32_t>> REMOVED_ATTRIBUTES = {
     {"AppTheme.Light", {kTextColorAttrId, kBackgroundAttrId}},
     {"AppTheme.Light.Blue", {kColorPrimaryAttrId, kColorAccent}},
-    {"AppTheme.Light.Blue.NoActionBar", {kWindowNoTitle, kWindowActionBar}},
     {"CardCompact", {kBackgroundTint, kBackgroundAttrId}},
     {"CardElevated", {kBackgroundAttrId, kBackgroundTint}},
     {"CardHighlight1", {kBackgroundAttrId}},
@@ -55,6 +54,8 @@ const UnorderedMap<std::string, UnorderedSet<uint32_t>> REMOVED_ATTRIBUTES = {
 const UnorderedMap<std::string, UnorderedSet<uint32_t>> ADDED_ATTRIBUTES = {
     {"AppTheme",
      {kWindowNoTitle, kWindowActionBar, kColorPrimaryAttrId, kColorAccent}},
+    {"AppTheme.Light.Blue.NoActionBar",
+     {kTextSize, kTextColorAttrId, kBackgroundAttrId}},
     {"BaseStyle1", {kBackgroundAttrId, kDrawableStart, kDrawableEnd}},
     {"BaseTextStyle", {kTextSize}},
     {"CardBase", {kBackgroundTint}},
