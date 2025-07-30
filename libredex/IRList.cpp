@@ -24,16 +24,28 @@ bool TryEntry::operator==(const TryEntry& other) const {
 }
 
 bool CatchEntry::operator==(const CatchEntry& other) const {
-  if (catch_type != other.catch_type) return false;
-  if (next == other.next) return true;
-  if (next == nullptr || other.next == nullptr) return false;
+  if (catch_type != other.catch_type) {
+    return false;
+  }
+  if (next == other.next) {
+    return true;
+  }
+  if (next == nullptr || other.next == nullptr) {
+    return false;
+  }
   return *next == *other.next;
 }
 
 bool BranchTarget::operator==(const BranchTarget& other) const {
-  if (type != other.type) return false;
-  if (src == other.src) return true;
-  if (src == nullptr || other.src == nullptr) return false;
+  if (type != other.type) {
+    return false;
+  }
+  if (src == other.src) {
+    return true;
+  }
+  if (src == nullptr || other.src == nullptr) {
+    return false;
+  }
   return *src == *other.src;
 }
 
