@@ -1165,7 +1165,10 @@ def _handle_profiles(
             block_profiles_paths = [
                 bpp
                 for bpp in block_profiles_paths
-                if any([f"_{i}_" in bpp for i in dd_enabled_interactions])
+                if any(
+                    (os.path.basename(bpp) == f"block_profiles_{i}_Whole.csv")
+                    for i in dd_enabled_interactions
+                )
             ]
 
         join_str = ";" if IS_WINDOWS else ":"
