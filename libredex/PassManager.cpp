@@ -75,12 +75,13 @@ constexpr const char* REMOVABLE_NATIVES = "redex-removable-natives.txt";
 const std::string PASS_ORDER_KEY = "pass_order";
 
 const Pass* get_profiled_pass(const PassManager& mgr) {
-  // NOLINTNEXTLINE(bugprone-assert-side-effect)
-  redex_assert(getenv("PROFILE_PASS") != nullptr);
+  const auto* profile_pass_name = getenv("PROFILE_PASS");
+  redex_assert(profile_pass_name != nullptr);
   // Resolve the pass in the constructor so that any typos / references to
   // nonexistent passes are caught as early as possible
-  auto pass = mgr.find_pass(getenv("PROFILE_PASS"));
-  always_assert(pass != nullptr);
+  const auto* pass = mgr.find_pass(profile_pass_name);
+  always_assert_log(pass != nullptr, "Could not find pass named %s",
+                    profile_pass_name);
   std::cerr << "Will run profiler for " << pass->name() << std::endl;
   return pass;
 }
