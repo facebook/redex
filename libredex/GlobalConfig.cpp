@@ -82,6 +82,25 @@ void IRTypeCheckerConfig::bind_config() {
   bind("check_classes", {}, check_classes);
   bind("run_on_input", {}, run_on_input);
   bind("run_after_all_passes", {}, run_after_all_passes);
+  bind("external_check", false, external_check,
+       "ON/OFF switch for dex code validation in external class and internal "
+       "class hierarchy - no external class should be inheriting internal "
+       "class");
+  bind(
+      "definition_check", false, definition_check,
+      "ON/OFF switch for dex code validation in class definition - all classes "
+      "in internal class's hierarchy should be either internal class or "
+      "external class");
+  bind("external_check_allowlist", {}, external_check_allowlist,
+       "Allow certain classes to bypass external_check");
+  bind("definition_check_allowlist", {}, definition_check_allowlist,
+       "Allow certain classes to bypass definition_check");
+  bind("external_check_allowlist_prefixes", {},
+       external_check_allowlist_prefixes,
+       "Allow classes that starts with given prefixes bypass external_check");
+  bind("definition_check_allowlist_prefixes", {},
+       definition_check_allowlist_prefixes,
+       "Allow classes that starts with given prefixes bypass definition_check");
 }
 
 void HasherConfig::bind_config() {

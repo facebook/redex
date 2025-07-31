@@ -36,11 +36,17 @@ struct IRTypeCheckerConfig : public Configurable {
   bool verify_moves;
   bool validate_invoke_super;
   UnorderedSet<std::string> run_after_passes;
+  UnorderedSet<std::string> external_check_allowlist;
+  UnorderedSet<std::string> definition_check_allowlist;
+  UnorderedSet<std::string> external_check_allowlist_prefixes;
+  UnorderedSet<std::string> definition_check_allowlist_prefixes;
   bool check_no_overwrite_this;
   bool annotated_cfg_on_error{false};
   bool check_classes;
   bool run_on_input{true};
   bool run_after_all_passes{true};
+  bool external_check;
+  bool definition_check;
 };
 
 struct HasherConfig : public Configurable {
