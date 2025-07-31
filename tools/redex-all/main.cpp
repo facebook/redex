@@ -1992,6 +1992,16 @@ int main(int argc, char* argv[]) {
       TRACE(MAIN, 2, "parsed minSdkVersion = %d", *maybe_sdk);
       args.redex_options.min_sdk = *maybe_sdk;
     }
+    // Allow overriding min_sdk from config.
+    {
+      int64_t min_sdk_override;
+      conf.get_json_config().get("min_sdk_override", 0, min_sdk_override);
+      if (min_sdk_override > 0) {
+        args.redex_options.min_sdk = (int32_t)min_sdk_override;
+        TRACE(MAIN, 0, "Overriding minSdkVersion = %d",
+              args.redex_options.min_sdk);
+      }
+    }
 
     {
       auto profile_frontend =
