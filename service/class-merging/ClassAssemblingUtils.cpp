@@ -234,7 +234,8 @@ void patch_iput(const cfg::InstructionIterator& it) {
 
 void patch_iget(cfg::ControlFlowGraph& cfg,
                 const cfg::InstructionIterator& it,
-                DexType* original_field_type) {
+                DexType* original_field_type,
+                SourceBlock* prev_sb) {
   auto insn = it->insn;
   const auto op = insn->opcode();
   always_assert(opcode::is_an_iget(op));
@@ -244,6 +245,12 @@ void patch_iget(cfg::ControlFlowGraph& cfg,
     auto dest = move_insn_it->insn->dest();
     auto cast = ModelMethodMerger::make_check_cast(original_field_type, dest);
     cfg.insert_after(move_insn_it, cast);
+    if (prev_sb) {
+      // Duplicate the last seen source block and place it after the iterator
+      // so the block with the CHECK_CAST has a source block
+      auto new_sb = source_blocks::clone_as_synthetic(prev_sb, nullptr);
+      cfg.insert_after(move_insn_it, std::move(new_sb));
+    }
     break;
   }
   case OPCODE_IGET_BYTE: {
