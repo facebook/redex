@@ -2080,7 +2080,8 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
           type_name = arsc::get_string_from_pool(type_strings, type_string_idx);
         }
         if (!type_name.empty() &&
-            config.canonical_entry_types.count(type_name) > 0) {
+            config.canonical_entry_types.count(type_name) > 0 &&
+            !info.configs.empty()) {
           TRACE(RES, 9, "Canonical entries enabled for ID 0x%x (%s)",
                 info.spec->id, type_name.c_str());
           auto type_builder = std::make_shared<arsc::ResTableTypeProjector>(
