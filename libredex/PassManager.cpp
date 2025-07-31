@@ -72,7 +72,7 @@ AccumulatingTimer m_check_unique_deobfuscateds_timer{
 constexpr const char* INCOMING_HASHES = "incoming_hashes.txt";
 constexpr const char* OUTGOING_HASHES = "outgoing_hashes.txt";
 constexpr const char* REMOVABLE_NATIVES = "redex-removable-natives.txt";
-const std::string PASS_ORDER_KEY = "pass_order";
+constexpr std::string_view PASS_ORDER_KEY{"pass_order"};
 
 const Pass* get_profiled_pass(const PassManager& mgr) {
   const auto* profile_pass_name = getenv("PROFILE_PASS");
@@ -1219,7 +1219,7 @@ void PassManager::init(const ConfigFiles& config) {
     m_pass_info[i].repeat = count;
     m_pass_info[i].total_repeat = pass_repeats.at(pass);
     m_pass_info[i].name = pass->name() + "#" + std::to_string(count + 1);
-    m_pass_info[i].metrics[PASS_ORDER_KEY] = i;
+    m_pass_info[i].metrics[std::string(PASS_ORDER_KEY)] = i;
     m_pass_info[i].config =
         JsonWrapper(config.get_json_config()[pass->name().c_str()]);
   }
