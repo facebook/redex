@@ -17,18 +17,67 @@
 #include "Walkers.h"
 
 namespace {
+
+constexpr const size_t MAX_ITEMS_TO_PRINT = 20;
+constexpr const char* INDENTATION = "    ";
+
 template <typename Collection>
-void print_failed_things(const Collection& items,
-                         const size_t print_limit,
-                         std::ostringstream* oss) {
+void print_failed_things(const Collection& items, std::ostringstream* oss) {
   size_t counter = 0;
   for (auto& fail : UnorderedIterable(items)) {
     *oss << show(fail)
          << " (deobfuscated: " << fail->get_deobfuscated_name_or_empty_copy()
          << ")\n";
     counter++;
-    if (counter == print_limit) {
-      if (items.size() > print_limit) {
+    if (counter == MAX_ITEMS_TO_PRINT) {
+      if (items.size() > MAX_ITEMS_TO_PRINT) {
+        *oss << "...truncated...\n";
+      }
+      break;
+    }
+  }
+}
+
+void print_failed_external_check(
+    const ConcurrentMap<const DexClass*,
+                        InsertOnlyConcurrentSet<const DexType*>>&
+        failed_classes_external_check,
+    std::ostringstream* oss) {
+  size_t counter = 0;
+  for (auto& pair : UnorderedIterable(failed_classes_external_check)) {
+    *oss << "Internal class " << show(pair.first) << " (deobfuscated: "
+         << pair.first->get_deobfuscated_name_or_empty_copy() << ")\n"
+         << "  has external children:\n";
+    for (auto type : UnorderedIterable(pair.second)) {
+      *oss << INDENTATION << show(type) << std::endl;
+    }
+    counter++;
+    if (counter == MAX_ITEMS_TO_PRINT) {
+      if (failed_classes_external_check.size() > MAX_ITEMS_TO_PRINT) {
+        *oss << "...truncated...\n";
+      }
+      break;
+    }
+  }
+}
+
+void print_failed_definition_check(
+    const ConcurrentMap<const DexClass*,
+                        InsertOnlyConcurrentSet<const DexType*>>&
+        failed_classes_definition_check,
+    std::ostringstream* oss) {
+  size_t counter = 0;
+  for (auto& pair : UnorderedIterable(failed_classes_definition_check)) {
+    *oss << "Internal class " << show(pair.first) << " (deobfuscated: "
+         << pair.first->get_deobfuscated_name_or_empty_copy() << ")\n"
+         << "  references type not defined internally or externally:\n";
+    for (auto type : UnorderedIterable(pair.second)) {
+      *oss << INDENTATION << show(type) << std::endl;
+    }
+
+    counter++;
+    if (counter == MAX_ITEMS_TO_PRINT) {
+      if (failed_classes_definition_check.size() > MAX_ITEMS_TO_PRINT) {
         *oss << "...truncated...\n";
       }
       break;
@@ -81,9 +130,62 @@ bool has_colliding_methods(const DexClass* cls,
 
 ClassChecker::ClassChecker() : m_good(true) {}
 
+void ClassChecker::init_setting(
+    bool definition_check,
+    const UnorderedSet<std::string>& definition_check_allowlist,
+    const UnorderedSet<std::string>& definition_check_allowlist_prefixes,
+    bool external_check,
+    const UnorderedSet<std::string>& external_check_allowlist,
+    const UnorderedSet<std::string>& external_check_allowlist_prefixes) {
+  m_external_check = external_check;
+  m_external_check_allowlist_prefixes = external_check_allowlist_prefixes;
+  m_definition_check = definition_check;
+  m_definition_check_allowlist_prefixes = definition_check_allowlist_prefixes;
+  for (const auto& cls_string : UnorderedIterable(definition_check_allowlist)) {
+    auto type = DexType::get_type(cls_string);
+    if (type) {
+      m_definition_check_allowlist.emplace(type);
+    }
+  }
+  for (const auto& cls_string : UnorderedIterable(external_check_allowlist)) {
+    auto type = DexType::get_type(cls_string);
+    if (type) {
+      m_external_check_allowlist.emplace(type);
+    }
+  }
+}
+
 void ClassChecker::run(const Scope& scope) {
   std::mutex finals_mutex;
   std::unordered_map<const DexClass*, NamedMethodMap> class_to_final_methods;
+  auto hierarchy = build_type_hierarchy(scope);
+  UnorderedSet<const DexType*> internal_types;
+  walk::classes(scope,
+                [&](DexClass* cls) { internal_types.insert(cls->get_type()); });
+
+  auto match_allowlist_prefix =
+      [&](const UnorderedSet<std::string>& allowlist_prefixes,
+          const DexType* type) -> bool {
+    return unordered_find_if(
+               allowlist_prefixes, [type](const std::string& name) {
+                 return boost::starts_with(type->get_name()->str(), name);
+               }) != allowlist_prefixes.end();
+  };
+
+  auto check_class_defined = [&](DexType* type) -> bool {
+    if (internal_types.count(type) == 0) {
+      auto cls = type_class(type);
+      if ((cls == nullptr || !cls->is_external()) &&
+          m_definition_check_allowlist.find(type) ==
+              m_definition_check_allowlist.end() &&
+          !match_allowlist_prefix(m_definition_check_allowlist_prefixes,
+                                  type)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
   {
     Timer t("ClassChecker_walk");
     walk::parallel::classes(scope, [&](DexClass* cls) {
@@ -91,7 +193,7 @@ void ClassChecker::run(const Scope& scope) {
         for (auto* m : cls->get_all_methods()) {
           if (is_abstract(m)) {
             m_good = false;
-            m_failed_classes.insert(cls);
+            m_failed_classes_abstract_check.insert(cls);
             return;
           }
         }
@@ -105,11 +207,41 @@ void ClassChecker::run(const Scope& scope) {
           }
         }
       }
+      if (m_external_check) {
+        always_assert(!cls->is_external());
+        auto child_types = get_all_children(hierarchy, cls->get_type());
+        for (const auto& child_type : child_types) {
+          if (internal_types.count(child_type) == 0 &&
+              m_external_check_allowlist.find(child_type) ==
+                  m_external_check_allowlist.end() &&
+              !match_allowlist_prefix(m_external_check_allowlist_prefixes,
+                                      child_type)) {
+            m_good = false;
+            m_failed_classes_external_check.update(
+                cls, [&](auto*, auto& set, bool) { set.insert(child_type); });
+          }
+        }
+      }
+
+      if (m_definition_check) {
+        auto super_type = cls->get_super_class();
+        if (!check_class_defined(super_type)) {
+          m_good = false;
+          m_failed_classes_definition_check.update(
+              cls, [&](auto*, auto& set, bool) { set.insert(super_type); });
+        }
+        for (auto& intf : *cls->get_interfaces()) {
+          if (!check_class_defined(intf)) {
+            m_good = false;
+            m_failed_classes_definition_check.update(
+                cls, [&](auto*, auto& set, bool) { set.insert(intf); });
+          }
+        }
+      }
     });
   }
   {
     Timer t("ClassChecker_hierarchy_traverse");
-    auto hierarchy = build_internal_type_hierarchy(scope);
     for (auto&& [cls, final_methods] : class_to_final_methods) {
       auto child_types = get_all_children(hierarchy, cls->get_type());
       for (const auto& child_type : child_types) {
@@ -125,16 +257,31 @@ void ClassChecker::run(const Scope& scope) {
 }
 
 std::ostringstream ClassChecker::print_failed_classes() {
-  constexpr size_t MAX_ITEMS_TO_PRINT = 10;
   std::ostringstream oss;
-  if (!m_failed_classes.empty()) {
+  if (!m_failed_classes_external_check.empty()) {
+    oss << "External classes with internal class hierarchy (likely dependency "
+           "setting issue if fail at input):"
+        << std::endl;
+    print_failed_external_check(m_failed_classes_external_check, &oss);
+    oss << std::endl;
+  }
+  if (!m_failed_classes_definition_check.empty()) {
+    oss << "Class reference type not defined (likely dependency setting issue "
+           "if fail at input):"
+        << std::endl;
+    print_failed_definition_check(m_failed_classes_definition_check, &oss);
+    oss << std::endl;
+  }
+  if (!m_failed_classes_abstract_check.empty()) {
     oss << "Nonabstract classes with abstract methods:" << std::endl;
-    print_failed_things(m_failed_classes, MAX_ITEMS_TO_PRINT, &oss);
+    print_failed_things(m_failed_classes_abstract_check, &oss);
+    oss << std::endl;
   }
   if (!m_failed_methods.empty()) {
     oss << "Methods incorrectly overriding super class final method:"
         << std::endl;
-    print_failed_things(m_failed_methods, MAX_ITEMS_TO_PRINT, &oss);
+    print_failed_things(m_failed_methods, &oss);
+    oss << std::endl;
   }
   return oss;
 }

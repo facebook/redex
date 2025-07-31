@@ -12,12 +12,20 @@
 
 class ClassChecker {
  public:
-  ClassChecker();
+  explicit ClassChecker();
 
   ClassChecker(const ClassChecker&) = delete;
   ClassChecker(ClassChecker&& other) = default;
 
   ClassChecker& operator=(const ClassChecker&) = delete;
+
+  void init_setting(
+      bool definition_check,
+      const UnorderedSet<std::string>& definition_check_allowlist,
+      const UnorderedSet<std::string>& definition_check_allowlist_prefixes,
+      bool external_check,
+      const UnorderedSet<std::string>& external_check_allowlist,
+      const UnorderedSet<std::string>& external_check_allowlist_prefixes);
 
   void run(const Scope& scope);
 
@@ -27,7 +35,17 @@ class ClassChecker {
 
  private:
   bool m_good;
-  ConcurrentSet<const DexClass*> m_failed_classes;
+  bool m_external_check;
+  bool m_definition_check;
+  UnorderedSet<const DexType*> m_external_check_allowlist;
+  UnorderedSet<const DexType*> m_definition_check_allowlist;
+  UnorderedSet<std::string> m_external_check_allowlist_prefixes;
+  UnorderedSet<std::string> m_definition_check_allowlist_prefixes;
+  ConcurrentSet<const DexClass*> m_failed_classes_abstract_check;
+  ConcurrentMap<const DexClass*, InsertOnlyConcurrentSet<const DexType*>>
+      m_failed_classes_external_check;
+  ConcurrentMap<const DexClass*, InsertOnlyConcurrentSet<const DexType*>>
+      m_failed_classes_definition_check;
   // Methods which are incorrectly overriding final methods on a super.
   ConcurrentSet<const DexMethod*> m_failed_methods;
 };

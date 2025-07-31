@@ -120,7 +120,27 @@ class CheckerConfig {
         type_checker_args.get("annotated_cfg_on_error_reduced", true).asBool();
 
     m_check_classes = type_checker_args.get("check_classes", true).asBool();
-
+    m_external_check = type_checker_args.get("external_check", false).asBool();
+    m_definition_check =
+        type_checker_args.get("definition_check", false).asBool();
+    for (auto& external_check_allow :
+         type_checker_args["external_check_allowlist"]) {
+      m_external_check_allowlist.insert(external_check_allow.asString());
+    }
+    for (auto& definition_check_allow :
+         type_checker_args["definition_check_allowlist"]) {
+      m_definition_check_allowlist.insert(definition_check_allow.asString());
+    }
+    for (auto& external_check_allow_prefix :
+         type_checker_args["external_check_allowlist_prefixes"]) {
+      m_external_check_allowlist_prefixes.insert(
+          external_check_allow_prefix.asString());
+    }
+    for (auto& definition_check_allow_prefix :
+         type_checker_args["definition_check_allowlist_prefixes"]) {
+      m_definition_check_allowlist_prefixes.insert(
+          definition_check_allow_prefix.asString());
+    }
     for (auto& trigger_pass : type_checker_args["run_after_passes"]) {
       m_type_checker_trigger_passes.insert(trigger_pass.asString());
     }
@@ -285,6 +305,10 @@ class CheckerConfig {
     Timer t1("NonAbstractClassChecker");
 
     ClassChecker class_checker;
+    class_checker.init_setting(m_definition_check, m_definition_check_allowlist,
+                               m_definition_check_allowlist_prefixes,
+                               m_external_check, m_external_check_allowlist,
+                               m_external_check_allowlist_prefixes);
     class_checker.run(scope);
     if (class_checker.fail()) {
       std::ostringstream oss = class_checker.print_failed_classes();
@@ -307,6 +331,10 @@ class CheckerConfig {
 
  private:
   std::unordered_set<std::string> m_type_checker_trigger_passes;
+  UnorderedSet<std::string> m_external_check_allowlist;
+  UnorderedSet<std::string> m_definition_check_allowlist;
+  UnorderedSet<std::string> m_external_check_allowlist_prefixes;
+  UnorderedSet<std::string> m_definition_check_allowlist_prefixes;
   bool m_run_type_checker_on_input;
   bool m_run_type_checker_after_each_pass;
   bool m_run_type_checker_after_all_passes;
@@ -319,6 +347,8 @@ class CheckerConfig {
   bool m_annotated_cfg_on_error{false};
   bool m_annotated_cfg_on_error_reduced{true};
   bool m_check_classes;
+  bool m_external_check;
+  bool m_definition_check;
   bool m_relaxed_init_check;
   bool m_disabled;
 };
