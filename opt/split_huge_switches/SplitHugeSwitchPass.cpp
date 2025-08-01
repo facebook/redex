@@ -452,6 +452,7 @@ struct AnalysisData {
   bool constructor{false};
   bool not_hot{false};
 
+  AnalysisData() = default;
   AnalysisData(const AnalysisData&) = delete;
   AnalysisData(AnalysisData&&) = default;
 
