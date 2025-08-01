@@ -245,6 +245,7 @@ void GlobalConfig::bind_config() {
   bind("finalize_resource_table", false, bool_param);
   bind("check_required_resources", {}, string_vector_param);
   bind("update_method_profiles_stats", false, bool_param);
+  bind("complement_betamap_with_method_profiles_symbols", false, bool_param);
   bind("recognize_betamap_coldstart_pct_marker", false, bool_param);
   bind("baseline_profile", {}, json_param);
   bind("baseline_profile_config", "", string_param);
