@@ -363,6 +363,8 @@ match_flow_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 method_inline_test_SOURCES = MethodInlineTest.cpp
 
+tail_duplication_test_SOURCES = TailDuplicationTest.cpp
+
 method_splitting_test_SOURCES = MethodSplittingTest.cpp
 
 method_util_test_SOURCES = MethodUtilTest.cpp

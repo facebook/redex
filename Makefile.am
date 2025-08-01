@@ -491,6 +491,7 @@ libopt_la_SOURCES = \
 	opt/resources-inlining-pass/ResourcesInliningPass.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
 	opt/shrinker/ShrinkerPass.cpp \
+	opt/shrinker/TailDuplicationPass.cpp \
 	opt/unreachable/UnreachableLoweringPass.cpp \
 	opt/hot-cold-method-specializing/HotColdMethodSpecializingPass.cpp \
 	opt/make-public/MakePublicPass.cpp \

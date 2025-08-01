@@ -192,6 +192,12 @@ struct SourceBlock {
     return vals[i] ? boost::optional<float>(vals[i]->appear100) : boost::none;
   }
 
+  void fill(const Val& val) {
+    for (size_t i = 0; i < vals_size; i++) {
+      vals[i] = val;
+    }
+  }
+
   static std::unique_ptr<Val[]> clone_vals(const Val* vals, size_t vals_size) {
     auto res = std::make_unique<Val[]>(vals_size);
     for (size_t i = 0; i < vals_size; i++) {
@@ -265,6 +271,19 @@ struct SourceBlock {
         vals[i]->val = std::max(vals[i]->val, other.vals[i]->val);
         vals[i]->appear100 =
             std::max(vals[i]->appear100, other.vals[i]->appear100);
+      }
+    }
+  }
+
+  void min(const SourceBlock& other) {
+    size_t len = std::min(vals_size, other.vals_size);
+    for (size_t i = 0; i != len; ++i) {
+      if (!vals[i]) {
+        vals[i] = other.vals[i];
+      } else if (other.vals[i]) {
+        vals[i]->val = std::min(vals[i]->val, other.vals[i]->val);
+        vals[i]->appear100 =
+            std::min(vals[i]->appear100, other.vals[i]->appear100);
       }
     }
   }
