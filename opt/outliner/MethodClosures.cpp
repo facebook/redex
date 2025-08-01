@@ -146,7 +146,35 @@ std::shared_ptr<const ReducedControlFlowGraph> reduce_cfg(
       continue;
     }
     if (opcode::is_a_return(first_insn_it->insn->opcode())) {
-      block->push_back(new IRInstruction(*first_insn_it->insn));
+      auto last_existing_sb = source_blocks::get_last_source_block(block);
+      auto it = goes_to_block->begin();
+      while (true) {
+        switch (it->type) {
+        case MFLOW_OPCODE:
+          block->push_back(new IRInstruction(*it->insn));
+          break;
+        case MFLOW_SOURCE_BLOCK: {
+          auto sb_copy = std::make_unique<SourceBlock>(*it->src_block);
+          if (last_existing_sb != nullptr) {
+            source_blocks::normalize::normalize(last_existing_sb, sb_copy.get(),
+                                                sb_copy->vals_size);
+          }
+          block->insert_before(block->end(), std::move(sb_copy));
+          break;
+        }
+        default:
+          break;
+        }
+        if (it == first_insn_it) {
+          break;
+        }
+        it++;
+      }
+      auto goes_to_block_sb =
+          source_blocks::gather_source_blocks(goes_to_block);
+      // TODO(T225634378) - When we improve our profiling data to include proper
+      // hit counts, we need to adjust these source blocks in goes_to_block_sb
+      // to be scaled down as well
       cfg.delete_succ_edges(block);
     }
   }
