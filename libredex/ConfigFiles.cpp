@@ -315,8 +315,8 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
       }
     }
 
-    TRACE(CF, 1, "coldstart class: 20 pct %ld", coldstart_20pct_classes.size());
-    TRACE(CF, 1, "coldstart class: 1 pct %ld", coldstart_1pct_classes.size());
+    TRACE(CF, 1, "coldstart class: 20 pct %zu", coldstart_20pct_classes.size());
+    TRACE(CF, 1, "coldstart class: 1 pct %zu", coldstart_1pct_classes.size());
   }
 
   std::string clzname;
@@ -347,8 +347,8 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
   }
 
   if (add_method_profiles_symbols) {
-    TRACE(CF, 1, "coldstart class: 20 pct %ld", coldstart_20pct_classes.size());
-    TRACE(CF, 1, "coldstart class: 1 pct %ld", coldstart_1pct_classes.size());
+    TRACE(CF, 1, "coldstart class: 20 pct %zu", coldstart_20pct_classes.size());
+    TRACE(CF, 1, "coldstart class: 1 pct %zu", coldstart_1pct_classes.size());
 
     std::vector<std::string> coldstart_classes_with_method_profile_symbols;
 
