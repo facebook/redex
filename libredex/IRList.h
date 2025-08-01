@@ -413,6 +413,8 @@ struct SourceBlock {
 
   void max(const SourceBlock& other);
 
+  void min(const SourceBlock& other);
+
   bool normalize(size_t* elided_vals, size_t* unelided_vals);
 
  private:
