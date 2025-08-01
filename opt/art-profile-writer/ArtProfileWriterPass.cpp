@@ -1057,6 +1057,9 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
         (!m_override_strip_classes || *m_override_strip_classes)) {
       mgr.incr_metric(prefix + "strip_classes", 1);
     }
+    if (bp_options.transitively_close_classes) {
+      mgr.incr_metric(prefix + "transitively_close_classes", 1);
+    }
     if (bp_options.use_redex_generated_profile) {
       mgr.incr_metric(prefix + "use_redex_generated_profile", 1);
     }
