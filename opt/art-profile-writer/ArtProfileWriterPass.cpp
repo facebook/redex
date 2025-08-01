@@ -1040,7 +1040,7 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       mgr.incr_metric(prefix + "oxygen_modules", 1);
     }
     if (bp_options.strip_classes &&
-        (!m_override_strip_classes || !m_override_strip_classes)) {
+        (!m_override_strip_classes || *m_override_strip_classes)) {
       mgr.incr_metric(prefix + "strip_classes", 1);
     }
     if (bp_options.use_redex_generated_profile) {
