@@ -7,6 +7,7 @@
 
 #include <vector>
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "DexUtil.h"
@@ -18,6 +19,9 @@
 class ComposeUIKotlinStatsTest : public RedexIntegrationTest {};
 
 namespace {
+
+using ::testing::AnyOf;
+using ::testing::Eq;
 
 TEST_F(ComposeUIKotlinStatsTest, test) {
   auto klr = new PrintKotlinStats();
@@ -35,6 +39,9 @@ TEST_F(ComposeUIKotlinStatsTest, test) {
   // - Each of SuperTextPrinter, SubTextPrinter has 2 for the
   // changed param.
   // - 4 in an inlined updateChangedFlags method.
-  EXPECT_EQ(stats.kotlin_composable_and_lit_insns, 12u);
+  // TODO(T233161282) The number changes depending on whether the Compose
+  // pausable flag is set or not. For now let both cases pass, until the
+  // pausable flag is set to be permanently on.
+  EXPECT_THAT(stats.kotlin_composable_and_lit_insns, AnyOf(Eq(12u), Eq(15u)));
 }
 } // namespace
