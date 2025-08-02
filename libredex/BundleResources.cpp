@@ -2492,9 +2492,7 @@ ResourcesPbFile::get_inlinable_resource_values() {
       continue;
     } else if (item.has_str()) {
       const std::string& og_str = item.str().value();
-      const std::string& mutf8_string =
-          resources::convert_utf8_to_mutf8(og_str);
-      inlinable_val.string_value = mutf8_string;
+      inlinable_val.string_value = resources::convert_utf8_to_mutf8(og_str);
       inlinable_val.type = android::Res_value::TYPE_STRING;
     } else if (item.has_prim()) {
       if (item.prim().oneof_value_case() ==
