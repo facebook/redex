@@ -133,10 +133,10 @@ class DexStoreClassesIterator {
                                    m_stores.back().get_dexen().end());
   };
 
-  bool operator==(const DexStoreClassesIterator& rhs) {
+  bool operator==(const DexStoreClassesIterator& rhs) const {
     return m_current_classes == rhs.m_current_classes;
   }
-  bool operator!=(const DexStoreClassesIterator& rhs) {
+  bool operator!=(const DexStoreClassesIterator& rhs) const {
     return m_current_classes != rhs.m_current_classes;
   }
   DexClasses& operator*() { return *m_current_classes; }
