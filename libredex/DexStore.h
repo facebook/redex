@@ -296,7 +296,9 @@ class XStoreRefs {
    * method/class) needs to be performed by an optimization.
    */
   bool illegal_ref(size_t store_idx, const DexType* type) const {
-    if (type_class_internal(type) == nullptr) return false;
+    if (type_class_internal(type) == nullptr) {
+      return false;
+    }
     // Temporary HACK: optimizations may leave references to dead classes and
     // if we just call get_store_idx() - as we should - the assert will fire...
     if (store_idx >= m_xstores.size()) {
