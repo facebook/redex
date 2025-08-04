@@ -305,7 +305,8 @@ void MethodProfiles::parse_manual_file(
         &(m_manual_profile_interactions.at(manual_filename));
   }
   while (std::getline(manual_file, current_line)) {
-    if (current_line.empty() || current_line[0] == '#') {
+    if (current_line.empty() || current_line[0] == '#' ||
+        current_line[0] == '[') {
       continue;
     }
     auto hash_pos = current_line.find('#');
