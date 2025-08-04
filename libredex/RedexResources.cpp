@@ -605,6 +605,15 @@ std::string convert_utf8_to_mutf8(std::string_view input) {
   return out.str();
 }
 
+#if __cplusplus >= 202002L
+std::string convert_utf8_to_mutf8(std::u8string_view input) {
+  return convert_utf8_to_mutf8(std::string_view(
+      // reinterpret_cast here is safe because the char8_t has the same size and
+      // alignment with char.
+      reinterpret_cast<const char*>(input.data()), input.size()));
+}
+#endif // __cplusplus >= 202002L
+
 void resources_inlining_find_refs(
     const UnorderedMap<uint32_t, uint32_t>& past_refs,
     UnorderedMap<uint32_t, resources::InlinableValue>* inlinable_resources) {
