@@ -302,7 +302,7 @@ using ResourceAttributeMap =
 
 // Helper for dealing with differences in character encoding between .arsc and
 // .pb files.
-std::string convert_utf8_to_mutf8(const std::string& input);
+std::string convert_utf8_to_mutf8(std::string_view input);
 // Given a map of a id which holds a reference value, and the id that the
 // reference points to, along with all the past found inlinable values, for each
 // id in past_refs, if it is inlinable, adds it to inlinable_resources with the

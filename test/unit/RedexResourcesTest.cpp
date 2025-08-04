@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 #include <map>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -19,6 +20,7 @@
 #include "ResourcesTestDefs.h"
 #include "androidfw/ResourceTypes.h"
 
+using std::operator""sv;
 using ::testing::UnorderedElementsAre;
 
 TEST(RedexResources, ReadXmlTagsAndAttributes) {
@@ -77,7 +79,7 @@ inline uint32_t to_uint(char c) {
 
 TEST(RedexResources, Mutf8Conversion) {
   bool be_noisy{false};
-  auto verify = [&](const std::string& input,
+  auto verify = [&](std::string_view input,
                     const std::vector<uint8_t>& expected_bytes) {
     auto converted = resources::convert_utf8_to_mutf8(input);
     EXPECT_EQ(converted.size(), expected_bytes.size());
@@ -104,9 +106,7 @@ TEST(RedexResources, Mutf8Conversion) {
       {0xed, 0xa0, 0xbd, 0xed, 0xb4, 0xa5, 0xed, 0xa0, 0xbd, 0xed, 0xb4, 0xa5});
 
   // Embedded null
-  std::ostringstream embedded_null;
-  embedded_null << "yo" << '\0' << "sup";
-  verify(embedded_null.str(), {0x79, 0x6f, 0xc0, 0x80, 0x73, 0x75, 0x70});
+  verify(u8"yo\0sup"sv, {0x79, 0x6f, 0xc0, 0x80, 0x73, 0x75, 0x70});
 
   // Regular UTF-8 string with one, two, three byte encoded code points that is
   // not changed

@@ -566,7 +566,7 @@ bool valid_xml_element(const std::string& ident) {
          ident.find('.') != std::string::npos;
 }
 
-std::string convert_utf8_to_mutf8(const std::string& input) {
+std::string convert_utf8_to_mutf8(std::string_view input) {
   std::ostringstream out;
   auto pack_to_3_byte_form = [&](char16_t c) {
     uint8_t one = 0xE0 | ((c >> 12) & 0xF);
@@ -575,7 +575,8 @@ std::string convert_utf8_to_mutf8(const std::string& input) {
     out << one << two << three;
   };
 
-  for (boost::u8_to_u32_iterator<std::string::const_iterator> it(input.begin()),
+  for (boost::u8_to_u32_iterator<std::string_view::const_iterator>
+           it(input.begin()),
        end(input.end());
        it != end;
        ++it) {
