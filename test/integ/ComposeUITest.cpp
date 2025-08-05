@@ -76,7 +76,7 @@ TEST_F(ComposeUITest, UnoptimizedHasTestDefault) {
 }
 
 TEST_F(ComposeUITest, OptimizedDoesNotHaveTestDefault) {
-  Pass* constp = new constant_propagation::interprocedural::PassImpl();
+  Pass* constp = new InterproceduralConstantPropagationPass();
   std::vector<Pass*> passes = {constp};
   run_passes(passes);
 

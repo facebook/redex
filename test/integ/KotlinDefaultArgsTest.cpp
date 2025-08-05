@@ -74,7 +74,7 @@ TEST_F(KotlinDefaultArgsTest, OptimizedGreetDoesNotHaveHelloAnd) {
   auto code_default_arg = default_arg_method->as_def()->get_code();
   ASSERT_THAT(code_default_arg, NotNull());
 
-  Pass* constp = new constant_propagation::interprocedural::PassImpl();
+  Pass* constp = new InterproceduralConstantPropagationPass();
   std::vector<Pass*> passes = {constp};
   run_passes(passes);
 
