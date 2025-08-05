@@ -21,7 +21,7 @@
     "@docusaurus/preset-classic": "3.8.1",
     "@mdx-js/react": "^3.1.0",
     "clsx": "^2.1.1",
-    "docusaurus-plugin-internaldocs-fb": "1.19.1",
+    "docusaurus-plugin-internaldocs-fb": "1.19.2",
     "prism-react-renderer": "^2.4.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -31,7 +31,11 @@
   "resolutions": {
     "on-headers": "^1.1.0",
     "brace-expansion": "^1.1.12",
-    "webpack-dev-server": "^5.2.1"
+    "webpack-dev-server": "^5.2.1",
+    "estree-util-value-to-estree": "^3.3.3",
+    "@babel/helpers": "^7.26.10",
+    "@babel/runtime-corejs3": "^7.26.10",
+    "@babel/runtime": "^7.26.10"
   },
   "browserslist": {
     "production": [
