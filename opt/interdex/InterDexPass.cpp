@@ -130,7 +130,7 @@ void InterDexPass::bind_config() {
        "For the unordered classes, how many dexes they should be distributed "
        "over in a stable manner, or 0 if stability is not desired");
 
-  after_configuration([=] {
+  after_configuration([this] {
     always_assert(m_stable_partitions >= 0);
     always_assert(m_stable_partitions < (int64_t)MAX_DEX_NUM);
     always_assert((m_stable_partitions == 0) || !m_minimize_cross_dex_refs);
