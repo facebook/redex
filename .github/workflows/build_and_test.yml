@@ -40,9 +40,14 @@ jobs:
     strategy:
       matrix:
         clang_version:
-        - 0  # At time of edit 18.
-        - 17
+        # Test 3 clang versions, counting back from the default clang version
+        # provided by apt.llvm.org.
+        # We intentionally don't explicitly spell out all versions, so that 0
+        # will always track the default from apt.llvm.org (usually the latest
+        # stable clang).
+        - 0  # At time of edit 20.
         - 19
+        - 18
     steps:
     - uses: actions/checkout@v4.1.1
     - uses: "./.github/actions/prepare_debian"
