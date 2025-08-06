@@ -35,9 +35,6 @@ Whiles D8 desugars stateless lambdas or "non-capturing lambdas", it does not sca
 The rationale is that the singleton pattern was inherited from the old javac behavior which is optimized for JVM server workload aiming for high throughput rather than low latency.
 On Android devices, peak performance throughput is less relevant than initial startup latency. Therefore, the singleton pattern is not no longer desirable.
 
-Internally, our current setup still relies on the old kotlinc option (`-Xlambdas=anon`) when it comes to lambda generation. We still rely on kotlinc to generate the anonymous classes for lambdas.
-When doing that, kotlinc automatically generates a singleton pattern for stateless lambdas. In this context, we should proactively remove the singleton pattern to enjoy the benefits that come with it.
-
 This godbolt [example](https://godbolt.org/z/Mznrzs8T4) shows the singleton pattern produced by our current kotlinc setup. This pass removes the singleton pattern shown in the example.
     )");
   }
