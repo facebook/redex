@@ -1118,7 +1118,7 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx,
     return new DexOpcodeProto(fopcode, proto);
   }
   default:
-    fprintf(stderr, "Unknown opcode %02x\n", opcode);
+    TRACE(ERRORS, 1, "Unknown opcode %02x", opcode);
     return nullptr;
   }
 }

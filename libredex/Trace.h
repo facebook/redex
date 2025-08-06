@@ -60,6 +60,7 @@ class DexType;
   TM(DS)                \
   TM(EMPTY)             \
   TM(ENUM)              \
+  TM(ERRORS)            \
   TM(EVALTC)            \
   TM(FALCO_STATS)       \
   TM(FINALINLINE)       \
