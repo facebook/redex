@@ -1008,7 +1008,9 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
                             const auto& profile) {
     std::atomic<size_t> code_units{0};
     std::atomic<size_t> compiled_methods{0};
-    std::atomic<size_t> compiled_code_units{0};
+    std::atomic<size_t> compiled_code_units_cold{0};
+    std::atomic<size_t> compiled_code_units_hot{0};
+    std::atomic<size_t> compiled_code_units_unknown{0};
     walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
       auto it = profile.methods.find(method);
       if (it == profile.methods.end()) {
@@ -1018,7 +1020,33 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       code_units += ecu;
       if (is_compiled(method, it->second)) {
         compiled_methods++;
-        compiled_code_units += ecu;
+        size_t cold = 0;
+        size_t hot = 0;
+        size_t unknown = 0;
+        for (auto* block : code.cfg().blocks()) {
+          ecu = block->estimate_code_units();
+          auto* sb = source_blocks::get_first_source_block(block);
+          if (sb != nullptr && !sb->foreach_val_early([](const auto& v) {
+                return !v || v->val > 0;
+              })) {
+            cold += ecu;
+          } else if (sb != nullptr && sb->foreach_val_early([](const auto& v) {
+                       return v && v->val > 0;
+                     })) {
+            hot += ecu;
+          } else {
+            unknown += ecu;
+          }
+        }
+        if (cold) {
+          compiled_code_units_cold += cold;
+        }
+        if (hot) {
+          compiled_code_units_hot += hot;
+        }
+        if (unknown) {
+          compiled_code_units_unknown += unknown;
+        }
       }
     });
 
@@ -1028,7 +1056,15 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     mgr.incr_metric(prefix + "code_units", (size_t)code_units);
     mgr.incr_metric(prefix + "compiled", (size_t)compiled_methods);
     mgr.incr_metric(prefix + "compiled_code_units",
-                    (size_t)compiled_code_units);
+                    (size_t)compiled_code_units_cold +
+                        (size_t)compiled_code_units_hot +
+                        (size_t)compiled_code_units_unknown);
+    mgr.incr_metric(prefix + "compiled_code_units_cold",
+                    (size_t)compiled_code_units_cold);
+    mgr.incr_metric(prefix + "compiled_code_units_hot",
+                    (size_t)compiled_code_units_hot);
+    mgr.incr_metric(prefix + "compiled_code_units_unknown",
+                    (size_t)compiled_code_units_unknown);
 
     const auto& bp_config =
         conf.get_baseline_profile_configs().at(bp_config_name);
