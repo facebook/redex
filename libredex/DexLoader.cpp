@@ -677,10 +677,9 @@ void DexLoader::gather_input_stats() {
       // No stats gathered.
       break;
     default:
-      fprintf(
-          stderr,
-          "warning: map_list item at index i=%u is of unknown type T=0x%04hX\n",
-          i,
+      always_assert_type_log(
+          false, INVALID_DEX,
+          "map_list item at index i=%u is of unknown type T=0x%04hX\n", i,
           item.type);
     }
   }
