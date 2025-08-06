@@ -82,10 +82,16 @@ class SignedConstantDomain final
     bool is_bottom() const { return *this == bottom(); }
     void normalize() {
       if (is_nez) {
-        if (l == 0) l++;
-        if (u == 0) u--;
+        if (l == 0) {
+          l++;
+        }
+        if (u == 0) {
+          u--;
+        }
       }
-      if (u < l) this->set_to_bottom();
+      if (u < l) {
+        this->set_to_bottom();
+      }
       always_assert(is_normalized());
     }
     // Is the constant not within the bounds?
@@ -94,9 +100,13 @@ class SignedConstantDomain final
     }
     bool is_normalized() const {
       // bottom has a particular shape
-      if (u < l) return this->is_bottom();
+      if (u < l) {
+        return this->is_bottom();
+      }
       // nez cannot be set if 0 is a lower or upper bound
-      if (l == 0 || u == 0) return !is_nez;
+      if (l == 0 || u == 0) {
+        return !is_nez;
+      }
       // nez must be set if 0 is not in range
       return (l <= 0 && u >= 0) || is_nez;
     }
@@ -216,7 +226,9 @@ class SignedConstantDomain final
     }
 
     bool operator<=(const Bitset& that) const {
-      if (is_bottom()) return true;
+      if (is_bottom()) {
+        return true;
+      }
       return ((one_bit_states | that.one_bit_states) == that.one_bit_states &&
               (zero_bit_states | that.zero_bit_states) == that.zero_bit_states);
     }
@@ -621,15 +633,27 @@ class SignedConstantDomain final
   }
 
   sign_domain::Interval interval() const {
-    if (m_bounds.is_bottom()) return sign_domain::Interval::EMPTY;
-    if (m_bounds.l > 0) return sign_domain::Interval::GTZ;
-    if (m_bounds.u < 0) return sign_domain::Interval::LTZ;
+    if (m_bounds.is_bottom()) {
+      return sign_domain::Interval::EMPTY;
+    }
+    if (m_bounds.l > 0) {
+      return sign_domain::Interval::GTZ;
+    }
+    if (m_bounds.u < 0) {
+      return sign_domain::Interval::LTZ;
+    }
     if (m_bounds.l == 0) {
-      if (m_bounds.u == 0) return sign_domain::Interval::EQZ;
+      if (m_bounds.u == 0) {
+        return sign_domain::Interval::EQZ;
+      }
       return sign_domain::Interval::GEZ;
     }
-    if (m_bounds.u == 0) return sign_domain::Interval::LEZ;
-    if (m_bounds.is_nez) return sign_domain::Interval::NEZ;
+    if (m_bounds.u == 0) {
+      return sign_domain::Interval::LEZ;
+    }
+    if (m_bounds.is_nez) {
+      return sign_domain::Interval::NEZ;
+    }
     return sign_domain::Interval::ALL;
   }
 
@@ -637,18 +661,26 @@ class SignedConstantDomain final
     if (const auto constant = get_constant(); constant.has_value()) {
       return ConstantDomain(*constant);
     }
-    if (is_bottom()) return ConstantDomain::bottom();
+    if (is_bottom()) {
+      return ConstantDomain::bottom();
+    }
     return ConstantDomain::top();
   }
 
   NumericIntervalDomain numeric_interval_domain() const {
-    if (m_bounds.is_bottom()) return NumericIntervalDomain::bottom();
-    if (m_bounds == Bounds::nez()) return NumericIntervalDomain::top();
+    if (m_bounds.is_bottom()) {
+      return NumericIntervalDomain::bottom();
+    }
+    if (m_bounds == Bounds::nez()) {
+      return NumericIntervalDomain::top();
+    }
     return numeric_interval_domain_from_int(m_bounds.l, m_bounds.u);
   }
 
   boost::optional<int64_t> get_constant() const {
-    if (!m_bounds.is_constant()) return boost::none;
+    if (!m_bounds.is_constant()) {
+      return boost::none;
+    }
     if (signed_constant_domain::enable_bitset) {
       always_assert(m_bitset.is_constant() &&
                     *m_bitset.get_constant() == m_bounds.l);
