@@ -15,7 +15,8 @@
  * 1) When a conditional branch would fallthrough to a block that has multiple
  *    sources, and the branch target only one has one, invert condition and
  *    swap branch and goto target. This reduces the need for additional gotos /
- *    maximizes the fallthrough efficiency.
+ *    maximizes the fallthrough efficiency. Optionally, we may also invert
+ *    branches for performance to make the fallthrough target hot.
  * 2) It replaces gotos that eventually simply return by return instructions.
  *    Return instructions tend to have a smaller encoding than goto
  *    instructions, and tend to compress better due to less entropy (no offset).
@@ -26,6 +27,8 @@
 
 #include <vector>
 
+#include "BaselineProfile.h"
+#include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -35,6 +38,7 @@
 #include "Liveness.h"
 #include "PassManager.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -61,6 +65,18 @@ constexpr const char* METRIC_INVERTED_CONDITIONAL_BRANCHES =
     "num_inverted_conditional_branches";
 constexpr const char* METRIC_NUM_GOTOS_REPLACED_WITH_THROWS =
     "num_gotos_replaced_with_throws";
+
+bool is_compiled(DexMethod* method,
+                 const baseline_profiles::MethodFlags& flags) {
+  return flags.hot && !method::is_clinit(method);
+}
+
+bool is_compiled(const baseline_profiles::BaselineProfile& baseline_profile,
+                 DexMethod* method) {
+  auto it = baseline_profile.methods.find(method);
+  return it != baseline_profile.methods.end() &&
+         is_compiled(method, it->second);
+}
 
 } // namespace
 
@@ -406,7 +422,8 @@ std::tuple<bool, size_t, size_t> process_code_ifs_impl(
 } // namespace
 
 void ReduceGotosPass::process_code_ifs(cfg::ControlFlowGraph& cfg,
-                                       Stats& stats) {
+                                       Stats& stats,
+                                       bool for_performance) {
   // Optimization #1: Invert conditional branch conditions and swap goto/branch
   // targets if this may lead to more fallthrough cases where no additional
   // goto instruction is needed
@@ -429,17 +446,37 @@ void ReduceGotosPass::process_code_ifs(cfg::ControlFlowGraph& cfg,
     always_assert(branch_edge != nullptr);
 
     // If beneficial, invert condition and swap targets
-    if (goto_edge->target()->preds().size() > 1 &&
-        branch_edge->target()->preds().size() == 1) {
-      stats.inverted_conditional_branches++;
-      // insert condition
-      insn->set_opcode(opcode::invert_conditional_branch(opcode));
-      // swap goto and branch target
-      cfg::Block* branch_target = branch_edge->target();
-      cfg::Block* goto_target = goto_edge->target();
-      cfg.set_edge_target(branch_edge, goto_target);
-      cfg.set_edge_target(goto_edge, branch_target);
+
+    auto invert = [&]() {
+      // For performance, and if we are coming from a hot block, we'd prefer the
+      // fall-through case to be hot.
+      if (for_performance && source_blocks::is_hot(b) &&
+          source_blocks::is_hot(branch_edge->target()) &&
+          !source_blocks::is_hot(goto_edge->target())) {
+        return true;
+      }
+
+      // For size, we'd prefer a fall-through case that has no other incoming
+      // edge.
+      if (goto_edge->target()->preds().size() > 1 &&
+          branch_edge->target()->preds().size() == 1) {
+        return true;
+      }
+
+      return false;
+    }();
+    if (!invert) {
+      continue;
     }
+
+    stats.inverted_conditional_branches++;
+    // insert condition
+    insn->set_opcode(opcode::invert_conditional_branch(opcode));
+    // swap goto and branch target
+    cfg::Block* branch_target = branch_edge->target();
+    cfg::Block* goto_target = goto_edge->target();
+    cfg.set_edge_target(branch_edge, goto_target);
+    cfg.set_edge_target(goto_edge, branch_target);
   }
 
   // Optimization #2 & #3:
@@ -478,40 +515,57 @@ void ReduceGotosPass::process_code_ifs(cfg::ControlFlowGraph& cfg,
   } while (rerun);
 }
 
-ReduceGotosPass::Stats ReduceGotosPass::process_code(IRCode* code) {
+ReduceGotosPass::Stats ReduceGotosPass::process_code(IRCode* code, bool for_performance) {
   Stats stats;
   always_assert(code->editable_cfg_built());
   code->cfg().calculate_exit_block();
   auto& cfg = code->cfg();
   process_code_switches(cfg, stats);
-  process_code_ifs(cfg, stats);
+  process_code_ifs(cfg, stats, for_performance);
 
   return stats;
 }
 
+void ReduceGotosPass::bind_config() {
+  bind("for_performance", false, m_for_performance,
+       "Whether to invert hot branches for performance, instead for size.");
+}
+
 void ReduceGotosPass::run_pass(DexStoresVector& stores,
-                               ConfigFiles& /* unused */,
+                               ConfigFiles& conf,
                                PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  Stats stats = walk::parallel::methods<Stats>(scope, [](DexMethod* method) {
-    const auto code = method->get_code();
-    if (!code || method->rstate.no_optimizations()) {
-      return Stats{};
-    }
+  auto baseline_profile =
+      m_for_performance
+          ? std::make_optional<baseline_profiles::BaselineProfile>(
+                baseline_profiles::get_default_baseline_profile(
+                    conf.get_baseline_profile_configs(),
+                    conf.get_method_profiles()))
+          : std::nullopt;
 
-    Stats stats = ReduceGotosPass::process_code(code);
-    if (stats.replaced_gotos_with_returns ||
-        stats.inverted_conditional_branches) {
-      TRACE(RG, 3,
-            "[reduce gotos] Replaced %zu gotos with returns, "
-            "removed %zu trailing moves, "
-            "inverted %zu conditional branches in {%s}",
-            stats.replaced_gotos_with_returns, stats.removed_trailing_moves,
-            stats.inverted_conditional_branches, SHOW(method));
-    }
-    return stats;
-  });
+  Stats stats = walk::parallel::methods<Stats>(
+    scope, [&baseline_profile](DexMethod* method) {
+      const auto code = method->get_code();
+      if (!code || method->rstate.no_optimizations()) {
+        return Stats{};
+      }
+
+      auto for_performance =
+            baseline_profile && is_compiled(*baseline_profile, method);
+
+      Stats stats = ReduceGotosPass::process_code(code, for_performance);
+      if (stats.replaced_gotos_with_returns ||
+          stats.inverted_conditional_branches) {
+        TRACE(RG, 3,
+              "[reduce gotos] Replaced %zu gotos with returns, "
+              "removed %zu trailing moves, "
+              "inverted %zu conditional branches in {%s}",
+              stats.replaced_gotos_with_returns, stats.removed_trailing_moves,
+              stats.inverted_conditional_branches, SHOW(method));
+      }
+      return stats;
+    });
 
   mgr.incr_metric(METRIC_REMOVED_SWITCHES, stats.removed_switches);
   mgr.incr_metric(METRIC_REDUCED_SWITCHES, stats.reduced_switches);
