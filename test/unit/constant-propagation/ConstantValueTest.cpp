@@ -31,6 +31,18 @@ struct Constants {
   ConstantValue sd_a{StringDomain(DexString::make_string("A"))};
 
   ConstantValue sd_b{StringDomain(DexString::make_string("B"))};
+
+  ConstantValue scd_not_only_nez =
+      SignedConstantDomain::from_constants({-1, 1});
+
+  Constants() { verifyConstantsSetup(); }
+
+  void verifyConstantsSetup() const {
+    ASSERT_TRUE(scd_not_only_nez.is_nez())
+        << "scd_not_only_nez is intended to be nez";
+    ASSERT_FALSE(scd_not_only_nez.is_nez_only())
+        << "scd_not_only_nez is intended to be not nez only";
+  }
 };
 
 INSTANTIATE_TYPED_TEST_SUITE_P(ConstantValue,
@@ -60,16 +72,17 @@ AbstractDomainPropertyTest<ConstantValue>::non_extremal_values() {
   };
 }
 
-class ConstantValueTest : public RedexTest, public Constants {};
+class ConstantValueTest : public RedexTest, public Constants {
+ protected:
+  static auto meet(const ConstantValue& x, const ConstantValue& y) {
+    return x.meet(y);
+  }
+};
 
 TEST_F(ConstantValueTest, meet) {
   using namespace sign_domain;
 
-  auto meet = [](const auto& x, const auto& y) { return x.meet(y); };
-
   EXPECT_EQ(meet(zero, sod), ConstantValue::bottom());
-  EXPECT_EQ(meet(nez, sod), sod);
-  EXPECT_EQ(meet(sod, nez), sod);
   EXPECT_EQ(meet(ConstantValue::top(), sod), sod);
   EXPECT_EQ(meet(sod, ConstantValue::top()), sod);
 
@@ -84,6 +97,26 @@ TEST_F(ConstantValueTest, meet) {
 
   EXPECT_EQ(meet(sd_a, sd_b), ConstantValue::bottom());
   EXPECT_EQ(meet(sd_b, sd_a), ConstantValue::bottom());
+}
+
+TEST_F(ConstantValueTest, meetNezOnlySCDWithSingletonResultsInSingleton) {
+  EXPECT_EQ(meet(nez, sod), sod);
+  EXPECT_EQ(meet(sod, nez), sod);
+}
+
+TEST_F(ConstantValueTest, meetNotOnlyNezSCDWithSingletonResultsInBottom) {
+  EXPECT_EQ(meet(scd_not_only_nez, sod), ConstantValue::bottom());
+  EXPECT_EQ(meet(sod, scd_not_only_nez), ConstantValue::bottom());
+}
+
+TEST_F(ConstantValueTest, SingletonLeqNezOnlySCD) {
+  EXPECT_FALSE(nez.leq(sod));
+  EXPECT_TRUE(sod.leq(nez));
+}
+
+TEST_F(ConstantValueTest, SingletonNotLeqNotOnlyNezSCD) {
+  EXPECT_FALSE(sod.leq(scd_not_only_nez));
+  EXPECT_FALSE(scd_not_only_nez.leq(sod));
 }
 
 TEST_F(ConstantValueTest, join) {

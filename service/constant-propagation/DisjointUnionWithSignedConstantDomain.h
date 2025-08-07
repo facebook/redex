@@ -71,6 +71,12 @@ class DisjointUnionWithSignedConstantDomain final
     return dom && dom->interval() == sign_domain::Interval::NEZ;
   }
 
+  // Is it nez only and nothing more?
+  bool is_nez_only() const {
+    auto* dom = boost::get<SignedConstantDomain>(&m_variant);
+    return dom && dom->is_nez_only();
+  }
+
   bool is_zero() const {
     auto* dom = boost::get<SignedConstantDomain>(&m_variant);
     return dom && dom->interval() == sign_domain::Interval::EQZ;
@@ -249,11 +255,11 @@ void DisjointUnionWithSignedConstantDomain<IsObject, Domains...>::meet_with(
   }
   // Non-null objects of custom object domains are compatible with NEZ, and
   // more specific.
-  if (this->is_nez() && other.is_object()) {
+  if (this->is_nez_only() && other.is_object()) {
     this->m_variant = other.m_variant;
     return;
   }
-  if (other.is_nez() && this->is_object()) {
+  if (other.is_nez_only() && this->is_object()) {
     return;
   }
   // SingletonObjectDomain and ObjectWithImmutAttrDomain both represent object
@@ -278,7 +284,7 @@ bool DisjointUnionWithSignedConstantDomain<IsObject, Domains...>::leq(
     const {
   // A non-null object represents fewer possible values than the more general
   // NEZ
-  if (other.is_nez() && this->is_object()) {
+  if (other.is_nez_only() && this->is_object()) {
     return true;
   }
   if (other.is_object_with_immutable_attr() && this->is_singleton_object()) {

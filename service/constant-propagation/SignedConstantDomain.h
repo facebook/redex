@@ -111,6 +111,9 @@ class SignedConstantDomain final
       return (l <= 0 && u >= 0) || is_nez;
     }
 
+    // Is the bounds known to be NEZ and nothing more?
+    bool is_nez_only() const { return is_nez && l == MIN && u == MAX; }
+
     Bounds& set_to_top() {
       *this = top();
       return *this;
@@ -589,6 +592,10 @@ class SignedConstantDomain final
   }
   bool is_top() const { return m_bounds.is_top() && m_bitset.is_top(); }
   bool is_nez() const { return m_bounds.is_nez; }
+  // Is this SignedConstantDomain nez only and nothing more?
+  bool is_nez_only() const {
+    return m_bounds.is_nez_only() && m_bitset.is_top();
+  }
 
   bool leq(const SignedConstantDomain& that) const {
     return m_bounds <= that.m_bounds && m_bitset <= that.m_bitset;
