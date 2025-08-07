@@ -1240,3 +1240,27 @@ TEST_F(SourceBlocksTest, metadata_indegrees_test) {
     EXPECT_EQ(res.at(block), expected);
   }
 }
+
+TEST_F(SourceBlocksTest, source_block_val_equality) {
+  auto sb1 =
+      SourceBlock(DexString::make_string("blah"), 10, {SourceBlock::Val(1, 1)});
+  auto sb2 =
+      SourceBlock(DexString::make_string("blah"), 10, {SourceBlock::Val(1, 1)});
+  ASSERT_EQ(sb1, sb2);
+}
+
+TEST_F(SourceBlocksTest, source_block_val_inequality) {
+  auto sb1 = SourceBlock(DexString::make_string("blah"), 10,
+                         {SourceBlock::Val(.1, 1)});
+  auto sb2 =
+      SourceBlock(DexString::make_string("blah"), 10, {SourceBlock::Val(1, 1)});
+  ASSERT_NE(sb1, sb2);
+}
+
+TEST_F(SourceBlocksTest, source_block_appear_100_inequality) {
+  auto sb1 = SourceBlock(DexString::make_string("blah"), 10,
+                         {SourceBlock::Val(1, .1)});
+  auto sb2 =
+      SourceBlock(DexString::make_string("blah"), 10, {SourceBlock::Val(1, 1)});
+  ASSERT_NE(sb1, sb2);
+}

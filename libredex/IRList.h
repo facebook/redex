@@ -148,6 +148,8 @@ struct SourceBlock {
              (m_val.val != m_val.val && other.m_val.val != other.m_val.val);
     }
 
+    bool operator!=(const Val& other) const { return !(*this == other); }
+
     // To access like an `optional`.
 
     struct ValPair {
@@ -385,6 +387,8 @@ struct SourceBlock {
   }
 
   bool operator==(const SourceBlock& other) const;
+
+  bool operator!=(const SourceBlock& other) const { return !(*this == other); }
 
   void append(std::unique_ptr<SourceBlock> sb) {
     SourceBlock* last = this;
