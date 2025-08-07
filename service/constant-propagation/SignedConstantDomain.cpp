@@ -34,7 +34,9 @@ SignedConstantDomain& SignedConstantDomain::left_shift_bits_long(
 
 SignedConstantDomain& SignedConstantDomain::unsigned_right_shift_bits_int(
     int32_t shift) {
-  if (is_bottom()) return *this;
+  if (is_bottom()) {
+    return *this;
+  }
 
   shift &= std23::to_underlying(BitShiftMask::Int);
 
@@ -52,7 +54,9 @@ SignedConstantDomain& SignedConstantDomain::unsigned_right_shift_bits_int(
 }
 SignedConstantDomain& SignedConstantDomain::unsigned_right_shift_bits_long(
     int32_t shift) {
-  if (is_bottom()) return *this;
+  if (is_bottom()) {
+    return *this;
+  }
 
   shift &= std23::to_underlying(BitShiftMask::Long);
 
@@ -78,7 +82,9 @@ SignedConstantDomain& SignedConstantDomain::signed_right_shift_bits_long(
 
 SignedConstantDomain& SignedConstantDomain::left_shift_bits(int32_t shift,
                                                             BitShiftMask mask) {
-  if (is_bottom()) return *this;
+  if (is_bottom()) {
+    return *this;
+  }
 
   shift &= std23::to_underlying(mask);
 
@@ -95,7 +101,9 @@ SignedConstantDomain& SignedConstantDomain::left_shift_bits(int32_t shift,
 
 SignedConstantDomain& SignedConstantDomain::signed_right_shift_bits(
     int32_t shift, BitShiftMask mask) {
-  if (is_bottom()) return *this;
+  if (is_bottom()) {
+    return *this;
+  }
 
   shift &= std23::to_underlying(mask);
 
@@ -115,8 +123,12 @@ SignedConstantDomain& SignedConstantDomain::signed_right_shift_bits(
 }
 
 std::ostream& operator<<(std::ostream& o, const SignedConstantDomain& scd) {
-  if (scd.is_bottom()) return o << "_|_";
-  if (scd.is_top()) return o << "T";
+  if (scd.is_bottom()) {
+    return o << "_|_";
+  }
+  if (scd.is_top()) {
+    return o << "T";
+  }
 
   const auto print_bounds =
       [](std::ostream& o, const SignedConstantDomain& scd) -> std::ostream& {
@@ -128,21 +140,35 @@ std::ostream& operator<<(std::ostream& o, const SignedConstantDomain& scd) {
     }
 
     if (min == std::numeric_limits<int64_t>::min()) {
-      if (max == -1) return o << "LTZ";
-      if (max == 0) return o << "LEZ";
+      if (max == -1) {
+        return o << "LTZ";
+      }
+      if (max == 0) {
+        return o << "LEZ";
+      }
     }
     if (max == std::numeric_limits<int64_t>::max()) {
-      if (min == 1) return o << "GTZ";
-      if (min == 0) return o << "GEZ";
+      if (min == 1) {
+        return o << "GTZ";
+      }
+      if (min == 0) {
+        return o << "GEZ";
+      }
     }
 
     auto append = [&o](int64_t v) -> std::ostream& {
-      if (v == std::numeric_limits<int64_t>::min()) return o << "min";
-      if (v == std::numeric_limits<int64_t>::max()) return o << "max";
+      if (v == std::numeric_limits<int64_t>::min()) {
+        return o << "min";
+      }
+      if (v == std::numeric_limits<int64_t>::max()) {
+        return o << "max";
+      }
       return o << v;
     };
 
-    if (min == max) return append(min);
+    if (min == max) {
+      return append(min);
+    }
     o << "[";
     append(min);
     if (min < 0 && max > 0 && scd.is_nez()) {
