@@ -21,24 +21,6 @@
 constexpr const char* DEFAULT_SUFFIX = "$default";
 
 namespace {
-bool is_null_check(const DexMethod* m) {
-  auto null_check_methods =
-      kotlin_nullcheck_wrapper::get_kotlin_null_assertions();
-  for (DexMethodRef* kotlin_null_method :
-       UnorderedIterable(null_check_methods)) {
-    if (kotlin_null_method->get_name() == m->get_name()) {
-      return true;
-    }
-  }
-  return m->get_deobfuscated_name_or_empty_copy() ==
-         "Lcom/google/common/base/Preconditions;.checkNotNull:(Ljava/lang/"
-         "Object;)Ljava/lang/Object;";
-}
-
-bool is_kotlin_result(const DexMethod* m) {
-  return boost::starts_with(m->get_deobfuscated_name_or_empty_copy(),
-                            "Lkotlin/Result");
-}
 
 DexMethod* resolve_method(DexMethod* caller, IRInstruction* insn) {
   auto def_method =
@@ -48,24 +30,6 @@ DexMethod* resolve_method(DexMethod* caller, IRInstruction* insn) {
         resolve_method(insn->get_method(), MethodSearch::InterfaceVirtual);
   }
   return def_method;
-}
-
-// The patcher cannot annotate these read methods used by ModelGen, so the
-// checker will fail when it expects an annotated returned value. We can skip
-// these reads because all the ModelGen Parcel and Json write methods only write
-// annotated values. Since all values that flow into the writes are annotated,
-// we know that all reads are safe too.
-bool is_parcel_or_json_read(const DexMethod* m) {
-  return m->get_deobfuscated_name_or_empty_copy() ==
-             "Landroid/os/Parcel;.readInt:()I" ||
-         m->get_deobfuscated_name_or_empty_copy() ==
-             "Landroid/os/Parcel;.readString:()Ljava/lang/String;" ||
-         m->get_deobfuscated_name_or_empty_copy() ==
-             "Lcom/facebook/common/json/"
-             "AutoGenJsonHelper;.readStringValue:(Lcom/fasterxml/jackson/core/"
-             "JsonParser;)Ljava/lang/String;" ||
-         m->get_deobfuscated_name_or_empty_copy() ==
-             "Lcom/fasterxml/jackson/core/JsonParser;.getValueAsInt:()I";
 }
 
 // The ModelGen class with the ModelDefinition annotation is the original
@@ -161,6 +125,25 @@ bool TypedefAnnoChecker::is_generated(const DexMethod* m) const {
   if (has_any_annotation(cls, m_config.generated_type_annos)) {
     return true;
   }
+  return false;
+}
+
+bool TypedefAnnoChecker::should_not_check(const DexMethod* m) const {
+  for (const auto& prefix : UnorderedIterable(m_config.do_not_check_list)) {
+    if (boost::starts_with(m->get_deobfuscated_name_or_empty_copy(), prefix)) {
+      return true;
+    }
+  }
+
+  auto null_check_methods =
+      kotlin_nullcheck_wrapper::get_kotlin_null_assertions();
+  for (DexMethodRef* kotlin_null_method :
+       UnorderedIterable(null_check_methods)) {
+    if (kotlin_null_method->get_name() == m->get_name()) {
+      return true;
+    }
+  }
+
   return false;
 }
 
@@ -597,13 +580,7 @@ bool TypedefAnnoChecker::check_typedef_value(
         add_error(out.str());
         return false;
       }
-      if (is_parcel_or_json_read(def_method) && is_model_gen(m)) {
-        break;
-      }
-      // the result of usedef chains on a check cast could resolve to this
-      // look further up for the real source
-      if (is_null_check(def_method) || is_kotlin_result(def_method)) {
-        check_typedef_value(m, annotation, ud_chains, def, 0, inference, envs);
+      if (is_model_gen(m) || should_not_check(def_method)) {
         break;
       }
       UnorderedBag<const DexMethod*> callees;

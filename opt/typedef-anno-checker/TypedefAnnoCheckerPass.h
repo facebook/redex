@@ -38,6 +38,7 @@ class TypedefAnnoCheckerPass : public Pass {
     DexType* str_typedef{nullptr};
     size_t max_patcher_iteration{10};
     UnorderedSet<DexType*> generated_type_annos;
+    UnorderedSet<std::string> do_not_check_list;
   };
 
   void bind_config() override {
@@ -51,6 +52,11 @@ class TypedefAnnoCheckerPass : public Pass {
          {},
          m_config.generated_type_annos,
          "Denote annotation types that are flagging generated methods.");
+    bind("do_not_check_list",
+         {},
+         m_config.do_not_check_list,
+         "A list of known symbol/methods used as generics that we cannot "
+         "enforce safety checks on.");
   }
 
   explicit TypedefAnnoCheckerPass(Config config)
@@ -112,6 +118,7 @@ class TypedefAnnoChecker {
   bool is_value_of_opt(const DexMethod* m);
   bool is_delegate(const DexMethod* m);
   bool is_generated(const DexMethod* m) const;
+  bool should_not_check(const DexMethod* m) const;
 
   void run(DexMethod* m);
 
