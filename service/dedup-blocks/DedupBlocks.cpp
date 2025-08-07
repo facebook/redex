@@ -211,7 +211,8 @@ struct BlockSuccHasher {
 
 struct MIEHasher {
   hash_t operator()(MethodItemEntry* mie) const {
-    return mie->type == MFLOW_OPCODE ? mie->insn->hash() : mie->src_block->id;
+    return mie->type == MFLOW_OPCODE ? mie->insn->hash()
+                                     : mie->src_block->hash_ids();
   }
 };
 struct MIEEquals {

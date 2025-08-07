@@ -1264,3 +1264,85 @@ TEST_F(SourceBlocksTest, source_block_appear_100_inequality) {
       SourceBlock(DexString::make_string("blah"), 10, {SourceBlock::Val(1, 1)});
   ASSERT_NE(sb1, sb2);
 }
+
+TEST_F(SourceBlocksTest,
+       do_not_dedup_block_chained_source_blocks_in_instrumentation) {
+
+  g_redex->instrument_mode = true;
+
+  auto foo_method = create_method("LFoo");
+
+  auto kCode = R"(
+    (
+      ; A
+      (const v0 0)
+      (mul-int v0 v0 v0)
+      (if-eqz v0 :D)
+
+      (:C)
+      (mul-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (invoke-static () "LFooX;.bar:()V")
+      (move-result v1)
+      (goto :E)
+
+      (:D)
+      (const v1 1)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (invoke-static () "LFooX;.bar:()V")
+      (move-result v1)
+      (goto :E)
+
+      (:E)
+      (return-void)
+    )
+  )";
+
+  foo_method->set_code(assembler::ircode_from_string(
+      replace_all(kCode, "LFooX;", show(foo_method->get_class()))));
+
+  foo_method->get_code()->build_cfg();
+
+  auto res = source_blocks::insert_source_blocks(
+      foo_method, &foo_method->get_code()->cfg(), {},
+      /*serialize=*/true, true);
+
+  // Set the source block ids so that two are the same
+  auto blocks = foo_method->get_code()->cfg().blocks();
+  ASSERT_EQ(blocks.size(), 4);
+  auto block1_sbs = source_blocks::gather_source_blocks(blocks[1]);
+  auto block2_sbs = source_blocks::gather_source_blocks(blocks[2]);
+  ASSERT_EQ(block1_sbs.size(), 2);
+  ASSERT_EQ(block2_sbs.size(), 2);
+  auto sb1 = block1_sbs[1];
+  auto sb2 = block2_sbs[1];
+  sb2->id = 2;
+
+  // Add a chained source block
+  sb1->next = std::make_unique<SourceBlock>(
+      SourceBlock(foo_method->get_name(), 10, {}));
+  sb2->next = std::make_unique<SourceBlock>(
+      SourceBlock(foo_method->get_name(), 11, {}));
+
+  dedup_blocks_impl::Config empty_config;
+  dedup_blocks_impl::DedupBlocks db(&empty_config, foo_method);
+  db.run();
+  foo_method->get_code()->clear_cfg();
+
+  foo_method->get_code()->build_cfg();
+
+  std::cout << SHOW(foo_method->get_code()->cfg()) << std::endl;
+
+  auto post_dedup_blocks = foo_method->get_code()->cfg().blocks();
+  ASSERT_EQ(post_dedup_blocks.size(), 4);
+  std::unordered_set<uint32_t> seen_ids;
+  for (auto block : post_dedup_blocks) {
+    auto source_blocks = source_blocks::gather_source_blocks(block);
+    for (auto source_block : source_blocks) {
+      seen_ids.emplace(source_block->id);
+    }
+  }
+  ASSERT_TRUE(seen_ids.count(11));
+  ASSERT_TRUE(seen_ids.count(10));
+}
