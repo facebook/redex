@@ -238,7 +238,9 @@ char type_shorty(const DexType* type) {
 }
 
 bool check_cast(const DexType* type, const DexType* base_type) {
-  if (type == base_type) return true;
+  if (type == base_type) {
+    return true;
+  }
   if (type != nullptr && is_array(type)) {
     if (base_type != nullptr && is_array(base_type)) {
       auto component_type = get_array_component_type(type);
@@ -251,11 +253,17 @@ bool check_cast(const DexType* type, const DexType* base_type) {
     return base_type == java_lang_Object();
   }
   const auto cls = type_class(type);
-  if (cls == nullptr) return false;
-  if (check_cast(cls->get_super_class(), base_type)) return true;
+  if (cls == nullptr) {
+    return false;
+  }
+  if (check_cast(cls->get_super_class(), base_type)) {
+    return true;
+  }
   auto intfs = cls->get_interfaces();
   for (auto intf : *intfs) {
-    if (check_cast(intf, base_type)) return true;
+    if (check_cast(intf, base_type)) {
+      return true;
+    }
   }
   return false;
 }
@@ -283,13 +291,16 @@ std::string get_simple_name(const DexType* type) {
 uint32_t get_array_level(const DexType* type) {
   auto name = type->get_name()->c_str();
   uint32_t level = 0;
-  while (*name++ == '[' && ++level)
+  while (*name++ == '[' && ++level) {
     ;
+  }
   return level;
 }
 
 DexType* get_array_component_type(const DexType* type) {
-  if (!is_array(type)) return nullptr;
+  if (!is_array(type)) {
+    return nullptr;
+  }
   auto name = type->get_name()->c_str();
   name++;
   return DexType::make_type(name);
@@ -461,9 +472,13 @@ DataType to_datatype(const DexType* t) {
 bool is_subclass(const DexType* parent, const DexType* child) {
   auto super = child;
   while (super != nullptr) {
-    if (parent == super) return true;
+    if (parent == super) {
+      return true;
+    }
     const auto cls = type_class(super);
-    if (cls == nullptr) break;
+    if (cls == nullptr) {
+      break;
+    }
     super = cls->get_super_class();
   }
   return false;
