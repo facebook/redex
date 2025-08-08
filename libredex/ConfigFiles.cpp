@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "BaselineProfileConfig.h"
+#include "ClassUtil.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "FrameworkApi.h"
@@ -24,6 +25,7 @@
 #include "ProguardMap.h"
 
 using namespace std::string_literals;
+using TypeSet = std::set<const DexType*, dextypes_comparator>;
 
 namespace {
 
@@ -133,7 +135,9 @@ const UnorderedSet<DexType*>& ConfigFiles::get_no_optimizations_annos() {
       for (auto const& config_anno_name : no_optimizations_anno) {
         std::string anno_name = config_anno_name.asString();
         DexType* anno = DexType::get_type(anno_name);
-        if (anno) m_no_optimizations_annos.insert(anno);
+        if (anno) {
+          m_no_optimizations_annos.insert(anno);
+        }
       }
     }
   }
@@ -165,7 +169,9 @@ const UnorderedSet<DexMethodRef*>& ConfigFiles::get_pure_methods() {
       for (auto const& method_name : pure_methods) {
         std::string name = method_name.asString();
         DexMethodRef* method = DexMethod::get_method(name);
-        if (method) m_pure_methods.insert(method);
+        if (method) {
+          m_pure_methods.insert(method);
+        }
       }
     }
   }
@@ -183,7 +189,9 @@ const UnorderedSet<const DexString*>& ConfigFiles::get_finalish_field_names() {
       for (auto const& field_name : finalish_field_names) {
         std::string name = field_name.asString();
         auto* str = DexString::make_string(name);
-        if (str) m_finalish_field_names.insert(str);
+        if (str) {
+          m_finalish_field_names.insert(str);
+        }
       }
     }
   }
@@ -282,6 +290,35 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
     return {true, pos_tail};
   };
 
+  bool add_method_profiles_symbols = get_json_config().get(
+      "complement_betamap_with_method_profiles_symbols", false);
+  TypeSet coldstart_20pct_classes;
+  TypeSet coldstart_1pct_classes;
+  if (add_method_profiles_symbols) {
+
+    // Inject MethodProfile coldstart classes
+    const auto& coldstart_stats =
+        get_method_profiles().method_stats(method_profiles::COLD_START);
+    always_assert(!coldstart_stats.empty());
+    for (auto& meth_stats : UnorderedIterable(coldstart_stats)) {
+      const DexMethodRef* method = meth_stats.first;
+
+      const auto* clz = type_class(method->get_class());
+      if (!klass::maybe_anonymous_class(clz)) {
+        continue;
+      }
+
+      if (meth_stats.second.appear_percent >= 20.0) {
+        coldstart_20pct_classes.insert(method->get_class());
+      } else if (meth_stats.second.appear_percent >= 1.0) {
+        coldstart_1pct_classes.insert(method->get_class());
+      }
+    }
+
+    TRACE(CF, 1, "coldstart class: 20 pct %zu", coldstart_20pct_classes.size());
+    TRACE(CF, 1, "coldstart class: 1 pct %zu", coldstart_1pct_classes.size());
+  }
+
   std::string clzname;
   while (input >> clzname) {
     auto [valid_class_spec, pos_tail] = validate_class_spec(clzname);
@@ -293,9 +330,48 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
     }
 
     clzname.replace(pos_tail, lentail, ";");
-    coldstart_classes.emplace_back(
-        m_proguard_map->translate_class("L" + clzname));
+    clzname = m_proguard_map->translate_class("L" + clzname);
+    coldstart_classes.emplace_back(clzname);
+
+    if (add_method_profiles_symbols) {
+      // Dedup anonymous classes
+      auto* type = DexType::get_type(clzname);
+      if (type == nullptr) {
+        continue;
+      } else if (coldstart_20pct_classes.count(type)) {
+        coldstart_20pct_classes.erase(type);
+      } else if (coldstart_1pct_classes.count(type)) {
+        coldstart_1pct_classes.erase(type);
+      }
+    }
   }
+
+  if (add_method_profiles_symbols) {
+    TRACE(CF, 1, "coldstart class: 20 pct %zu", coldstart_20pct_classes.size());
+    TRACE(CF, 1, "coldstart class: 1 pct %zu", coldstart_1pct_classes.size());
+
+    std::vector<std::string> coldstart_classes_with_method_profile_symbols;
+
+    for (auto& cls_name : coldstart_classes) {
+      if (cls_name.find(COLD_START_20PCT_END) != std::string::npos) {
+        for (auto* type : coldstart_20pct_classes) {
+          coldstart_classes_with_method_profile_symbols.emplace_back(
+              type->str_copy());
+        }
+      } else if (cls_name.find(COLD_START_1PCT_END) != std::string::npos) {
+        for (auto* type : coldstart_1pct_classes) {
+          coldstart_classes_with_method_profile_symbols.emplace_back(
+              type->str_copy());
+        }
+      }
+
+      coldstart_classes_with_method_profile_symbols.emplace_back(cls_name);
+    }
+
+    // Finally swap the coldstart_classes.
+    coldstart_classes = coldstart_classes_with_method_profile_symbols;
+  }
+
   return coldstart_classes;
 }
 
