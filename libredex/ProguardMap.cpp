@@ -358,7 +358,7 @@ bool ProguardMap::parse_class_full_format(const std::string& line) {
 
 bool ProguardMap::parse_store_full_format(const std::string& line) {
   auto p = line.c_str();
-  if (!literal(p, "store` ")) {
+  if (!literal(p, "store ")) {
     return false;
   }
 
