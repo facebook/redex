@@ -18,6 +18,11 @@ DISABLED_WARNINGS_HARD = \
   -Wno-unknown-warning-option
 
 # TODO: Minimize this list.
+# TODO(T233149341): Narrow -Wno-volatile to problematic early verisons of
+# jsoncpp < 1.9.5 (https://github.com/open-source-parsers/jsoncpp/issues/1193).
+# This is currently only a problem on Debian 11.
+# TODO(T233149341): Narrow -Wno-restrict to problematic verisons of
+# GCC, i.e., 12: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105651
 DISABLED_WARNINGS = \
   $(DISABLED_WARNINGS_HARD) \
   -Wno-array-bounds \
@@ -32,6 +37,7 @@ DISABLED_WARNINGS = \
   -Wno-parentheses \
   -Wno-range-loop-analysis \
   -Wno-redundant-move \
+  -Wno-restrict \
   -Wno-return-type \
   -Wno-shift-count-overflow \
   -Wno-sign-compare \
@@ -46,9 +52,10 @@ DISABLED_WARNINGS = \
   -Wno-unused-private-field \
   -Wno-unused-result \
   -Wno-unused-value \
-  -Wno-unused-variable
+  -Wno-unused-variable \
+  -Wno-volatile
 
-AM_CXXFLAGS = --std=gnu++17 -O3 -Wall -Werror -Wextra $(DISABLED_WARNINGS) -g1
+AM_CXXFLAGS = --std=gnu++20 -O3 -Wall -Werror -Wextra $(DISABLED_WARNINGS) -g1
 
 include $(top_srcdir)/Makefile.inc
 
