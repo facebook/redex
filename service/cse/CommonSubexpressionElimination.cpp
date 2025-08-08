@@ -752,8 +752,16 @@ class Analyzer final : public BaseEdgeAwareIRAnalyzer<CseEnvironment> {
       m_pre_state_value_ids.insert(id);
     } else {
       const auto& abs_map = m_shared_state->get_abstract_map();
+#if __GNUC__ >= 11 && __GNUC__ <= 14 && !defined(__clang__)
+#pragma GCC diagnostic push
+// Work around https://gcc.gnu.org/bugzilla/show_bug.cgi?id=116731
+#pragma GCC diagnostic ignored "-Wrange-loop-construct"
+#endif // __GNUC__ >= 11 && __GNUC__ <= 14 && !defined(__clang__)
       for (const auto [box_method, unbox_method] :
            UnorderedIterable(m_shared_state->get_boxing_map())) {
+#if __GNUC__ >= 11 && __GNUC__ <= 14 && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif // __GNUC__ >= 11 && __GNUC__ <= 14 && !defined(__clang__)
         const DexMethodRef* abs_method = nullptr;
         auto abs_it = abs_map.find(unbox_method);
         if (abs_it != abs_map.end()) {
