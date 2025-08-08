@@ -81,7 +81,22 @@ class BuildStrategy {
   virtual CallSites get_callsites(const DexMethod*) const = 0;
 };
 
-class Edge;
+class Node;
+using NodeId = const Node*;
+
+class Edge {
+ public:
+  Edge(NodeId caller, NodeId callee, IRInstruction* invoke_insn);
+  IRInstruction* invoke_insn() const { return m_invoke_insn; }
+  NodeId caller() const { return m_caller; }
+  NodeId callee() const { return m_callee; }
+
+ private:
+  NodeId m_caller;
+  NodeId m_callee;
+  IRInstruction* m_invoke_insn;
+};
+
 using EdgeId = const Edge*;
 
 // This exposes a `EdgesVector` as a iterable of `const Edge*`.
@@ -160,21 +175,6 @@ class Node final {
   NodeType m_type;
 
   friend class Graph;
-};
-
-using NodeId = const Node*;
-
-class Edge {
- public:
-  Edge(NodeId caller, NodeId callee, IRInstruction* invoke_insn);
-  IRInstruction* invoke_insn() const { return m_invoke_insn; }
-  NodeId caller() const { return m_caller; }
-  NodeId callee() const { return m_callee; }
-
- private:
-  NodeId m_caller;
-  NodeId m_callee;
-  IRInstruction* m_invoke_insn;
 };
 
 inline EdgesAdapter::iterator& EdgesAdapter::iterator::operator++() {
