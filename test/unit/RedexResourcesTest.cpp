@@ -76,8 +76,13 @@ inline uint32_t to_uint(char c) {
 }
 
 TEST(RedexResources, Mutf8Conversion) {
+#if __cplusplus >= 202002L
+  using utf8_string_view = std::u8string_view;
+#else
+  using utf8_string_view = std::string_view;
+#endif // __cplusplus >= 202002L
   bool be_noisy{false};
-  auto verify = [&](std::string_view input,
+  auto verify = [&](utf8_string_view input,
                     const std::vector<uint8_t>& expected_bytes) {
     auto converted = resources::convert_utf8_to_mutf8(input);
     EXPECT_EQ(converted.size(), expected_bytes.size());
@@ -90,7 +95,8 @@ TEST(RedexResources, Mutf8Conversion) {
       }
     }
     if (be_noisy) {
-      std::cout << "Original:  " << input << std::endl
+      std::cout << "Original:  " << std::string(input.begin(), input.end())
+                << std::endl
                 << "Converted: " << converted << std::endl;
     }
   };
