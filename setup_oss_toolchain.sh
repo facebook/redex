@@ -65,12 +65,13 @@ function install_googletest_from_source {
     mkdir -p toolchain_install/gtest
     pushd toolchain_install/gtest
     tar xf "../../dl_cache/gtest/googletest-${GOOGLETEST_MIN_VERSION}.tar.gz" --no-same-owner --strip-components=1
-    # GoogleTest's string_view matcher requires compiler to support C++17. Older
-    # GCC versions need to be told to use C++17 with -std=gnu++17.
+    # GoogleTest's string_view matcher requires compiler to support C++17 or
+    # later. Older GCC versions need to be explicitly told to use a later C++
+    # standard.
     if [ "$BITNESS" = "32" ] ; then
-        CFLAGS=-m32 CXXFLAGS="-m32 -std=gnu++17" LDFLAGS=-m32 cmake .
+        CFLAGS=-m32 CXXFLAGS="-m32 -std=gnu++20" LDFLAGS=-m32 cmake .
     else
-        CXXFLAGS="-std=gnu++17" cmake .
+        CXXFLAGS="-std=gnu++20" cmake .
     fi
     cmake --build . --target install
     popd
