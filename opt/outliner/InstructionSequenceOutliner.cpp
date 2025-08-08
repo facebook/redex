@@ -3165,14 +3165,15 @@ void InstructionSequenceOutliner::bind_config() {
        "Whether to obfuscate generated method names for outlined methods, "
        "instead of encoding a strong hash of their contents. Obfuscated names "
        "tend to be shorter, but are less stable across builds.");
-  after_configuration([=]() {
-    always_assert(m_config.min_insns_size >= MIN_INSNS_SIZE);
-    always_assert(m_config.max_insns_size >= m_config.min_insns_size);
-    always_assert(m_config.max_outlined_methods_per_class > 0);
-    always_assert(!perf_sensitivity_str.empty());
-    m_config.profile_guidance.perf_sensitivity =
-        parse_perf_sensitivity(perf_sensitivity_str);
-  });
+  after_configuration(
+      [this, perf_sensitivity_str = std::move(perf_sensitivity_str)]() {
+        always_assert(m_config.min_insns_size >= MIN_INSNS_SIZE);
+        always_assert(m_config.max_insns_size >= m_config.min_insns_size);
+        always_assert(m_config.max_outlined_methods_per_class > 0);
+        always_assert(!perf_sensitivity_str.empty());
+        m_config.profile_guidance.perf_sensitivity =
+            parse_perf_sensitivity(perf_sensitivity_str);
+      });
 }
 
 void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,

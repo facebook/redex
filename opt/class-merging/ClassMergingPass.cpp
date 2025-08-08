@@ -144,7 +144,12 @@ void ClassMergingPass::bind_config() {
   bind("interdex_grouping_inferring_mode", "class-loads",
        interdex_grouping_inferring_mode);
 
-  after_configuration([=] {
+  after_configuration([this, max_num_dispatch_target,
+                       models = std::move(models),
+                       interdex_grouping_inferring_mode =
+                           std::move(interdex_grouping_inferring_mode),
+                       process_method_meta, skip_anonymous_classes,
+                       use_stable_shape_names, update_method_profiles_stats] {
     if (max_num_dispatch_target > 0) {
       m_max_num_dispatch_target =
           boost::optional<size_t>(static_cast<size_t>(max_num_dispatch_target));

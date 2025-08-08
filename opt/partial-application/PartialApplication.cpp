@@ -1185,11 +1185,12 @@ void PartialApplicationPass::bind_config() {
        pg.block_profiles_hits,
        pg.block_profiles_hits,
        "No code is outlined out of hot blocks in hot methods");
-  after_configuration([=]() {
-    always_assert(!perf_sensitivity_str.empty());
-    m_profile_guidance_config.perf_sensitivity =
-        parse_perf_sensitivity(perf_sensitivity_str);
-  });
+  after_configuration(
+      [this, perf_sensitivity_str = std::move(perf_sensitivity_str)]() {
+        always_assert(!perf_sensitivity_str.empty());
+        m_profile_guidance_config.perf_sensitivity =
+            parse_perf_sensitivity(perf_sensitivity_str);
+      });
 }
 
 void PartialApplicationPass::run_pass(DexStoresVector& stores,
