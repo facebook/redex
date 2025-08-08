@@ -1791,7 +1791,7 @@ int ResTable_config::diff(const ResTable_config& o) const {
     if (orientation != o.orientation) diffs |= CONFIG_ORIENTATION;
     if (density != o.density) diffs |= CONFIG_DENSITY;
     if (touchscreen != o.touchscreen) diffs |= CONFIG_TOUCHSCREEN;
-    if (((inputFlags^o.inputFlags)&(MASK_KEYSHIDDEN|MASK_NAVHIDDEN)) != 0)
+    if (((inputFlags^o.inputFlags)&(static_cast<int>(MASK_KEYSHIDDEN)|static_cast<int>(MASK_NAVHIDDEN))) != 0)
             diffs |= CONFIG_KEYBOARD_HIDDEN;
     if (keyboard != o.keyboard) diffs |= CONFIG_KEYBOARD;
     if (navigation != o.navigation) diffs |= CONFIG_NAVIGATION;
