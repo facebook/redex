@@ -190,18 +190,21 @@ class CseEnvironment final
     return ReducedProductAbstractDomain::get<2>();
   }
 
-  CseEnvironment& mutate_def_env(std::function<void(DefEnvironment*)> f) {
-    apply<0>(std::move(f));
+  CseEnvironment& mutate_def_env(
+      const std::function<void(DefEnvironment*)>& f) {
+    apply<0>(f);
     return *this;
   }
 
-  CseEnvironment& mutate_ref_env(std::function<void(RefEnvironment*)> f) {
-    apply<1>(std::move(f));
+  CseEnvironment& mutate_ref_env(
+      const std::function<void(RefEnvironment*)>& f) {
+    apply<1>(f);
     return *this;
   }
 
-  CseEnvironment& mutate_cond_env(std::function<void(CondEnvironment*)> f) {
-    apply<2>(std::move(f));
+  CseEnvironment& mutate_cond_env(
+      const std::function<void(CondEnvironment*)>& f) {
+    apply<2>(f);
     return *this;
   }
 
