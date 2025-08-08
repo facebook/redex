@@ -40,7 +40,8 @@
   FOR_EACH(dalvik_annotation_optimization_NeverCompile,                  \
            "Ldalvik/annotation/optimization/NeverCompile;")              \
   FOR_EACH(dalvik_annotation_optimization_NeverInline,                   \
-           "Ldalvik/annotation/optimization/NeverInline;")
+           "Ldalvik/annotation/optimization/NeverInline;")               \
+  FOR_EACH(kotlin_jvm_internal_Lambda, "Lkotlin/jvm/internal/Lambda;")
 
 #define PRIMITIVE_PSEUDO_TYPE_FIELDS                                       \
   FOR_EACH(Void_TYPE, "Ljava/lang/Void;.TYPE:Ljava/lang/Class;")           \

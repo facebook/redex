@@ -527,12 +527,40 @@ boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
   return boost::none;
 }
 
-bool is_kotlin_lambda(const DexClass* cls) {
-  DexType* kotlin_type = DexType::make_type("Lkotlin/jvm/internal/Lambda;");
-  if (cls->get_super_class() == kotlin_type) {
-    return true;
+/*
+ * Returns true if the type is a kotlin function interface.
+ * https://github.com/JetBrains/kotlin/blob/master/libraries/stdlib/jvm/runtime/kotlin/jvm/functions/Functions.kt
+ */
+bool is_kotlin_function_interface(const DexType* type) {
+  auto name = type->get_name()->str();
+  std::string_view prefix{"Lkotlin/jvm/functions/Function"};
+  if (!boost::starts_with(name, prefix)) {
+    return false;
   }
-  return false;
+  auto suffix = name.substr(prefix.length());
+  const auto ends_with_semicolon = boost::ends_with(suffix, ";");
+  redex_assert(ends_with_semicolon);
+  suffix = suffix.substr(0, suffix.length() - 1);
+  return std::all_of(suffix.begin(), suffix.end(),
+                     [](unsigned char c) { return std::isdigit(c); });
+}
+
+bool is_kotlin_lambda(const DexClass* cls) {
+  const auto* super_cls = cls->get_super_class();
+  if (super_cls != type::kotlin_jvm_internal_Lambda() &&
+      super_cls != type::java_lang_Object()) {
+    return false;
+  }
+  const auto* intfs = cls->get_interfaces();
+  if (intfs->size() != 1) {
+    return false;
+  }
+  const auto* intf = intfs->at(0);
+  if (!is_kotlin_function_interface(intf)) {
+    return false;
+  }
+
+  return true;
 }
 
 bool is_kotlin_class(DexClass* cls) {
