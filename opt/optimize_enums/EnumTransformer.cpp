@@ -81,7 +81,8 @@ struct EnumUtil {
   // invocations at Code transformation phase, then implement these methods
   // later. Also stores the source block at the callsite to duplicate into these
   // methods.
-  ConcurrentMap<DexMethodRef*, SourceBlock*> m_substitute_methods;
+  ConcurrentMap<DexMethodRef*, std::unique_ptr<SourceBlock>>
+      m_substitute_methods;
 
   // Store virtual and direct methods of candidate enums that will be
   // made static later.
@@ -170,14 +171,14 @@ struct EnumUtil {
   void collect_callsite_source_blocks(DexMethodRef* method,
                                       SourceBlock* prev_sb) {
     m_substitute_methods.update(
-        method, [method, prev_sb](auto&, SourceBlock*& value, bool exists) {
+        method, [method, prev_sb](auto&, auto& value, bool exists) {
           if (!exists || value == nullptr) {
             if (prev_sb == nullptr) {
               value = nullptr;
             } else {
               std::unique_ptr<SourceBlock> synthetic_block =
                   source_blocks::clone_as_synthetic(prev_sb, method->as_def());
-              value = synthetic_block.get();
+              value = std::move(synthetic_block);
             }
           } else if (prev_sb != nullptr) {
             // TODO: When hit counts are introduced, max will no longer be
@@ -1251,11 +1252,12 @@ class EnumTransformer final {
   }
 
   void create_substitute_methods(
-      const ConcurrentMap<DexMethodRef*, SourceBlock*>& methods) {
+      const ConcurrentMap<DexMethodRef*, std::unique_ptr<SourceBlock>>&
+          methods) {
     DexMethod* created_method = nullptr;
     for (auto& entry : UnorderedIterable(methods)) {
       DexMethodRef* ref = entry.first;
-      SourceBlock* source_block = entry.second;
+      SourceBlock* source_block = entry.second.get();
       if (ref->get_name() == m_enum_util->REDEX_NAME) {
         created_method = create_name_method(ref);
       } else if (ref->get_name() == m_enum_util->REDEX_HASHCODE) {
