@@ -7,7 +7,7 @@ AM_INIT_AUTOMAKE([subdir-objects])
 # clear out default cxx flags (was "-O2 -g") so that they don't override
 # the flags defined in AM_CXXFLAGS. add "-std" to work around gtest issue
 # on macos.
-: ${CXXFLAGS="-std=gnu++17"}
+: ${CXXFLAGS="-std=gnu++20"}
 
 # Checks for programs.
 AC_PROG_CXX
@@ -97,7 +97,7 @@ AS_IF([test "x$enable_protobuf" = "xyes"], [
             CXXFLAGS_ORIG=$CXXFLAGS
 
             # test protobuf header
-            CXXFLAGS="-std=gnu++17 ${CXXFLAGS_ORIG} -I${withval}"
+            CXXFLAGS="-std=gnu++20 ${CXXFLAGS_ORIG} -I${withval}"
             AC_LANG_PUSH([C++])
             AC_CHECK_HEADER([google/protobuf/io/coded_stream.h], [
                 # library found
