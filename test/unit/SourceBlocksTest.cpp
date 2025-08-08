@@ -1196,3 +1196,27 @@ TEST_F(SourceBlocksTest, create_synth_sb_from_val_list) {
   EXPECT_EQ(get_blocks_as_txt(bar_method->get_code()->cfg().blocks()),
             R"(B0: LFoo;.bar:()V@4294967295(1:1|0:1|1:0.4))");
 }
+
+TEST_F(SourceBlocksTest, source_block_val_equality) {
+  auto sb1 =
+      SourceBlock(DexString::make_string("blah"), 10, {SourceBlock::Val(1, 1)});
+  auto sb2 =
+      SourceBlock(DexString::make_string("blah"), 10, {SourceBlock::Val(1, 1)});
+  ASSERT_EQ(sb1, sb2);
+}
+
+TEST_F(SourceBlocksTest, source_block_val_inequality) {
+  auto sb1 = SourceBlock(DexString::make_string("blah"), 10,
+                         {SourceBlock::Val(.1, 1)});
+  auto sb2 =
+      SourceBlock(DexString::make_string("blah"), 10, {SourceBlock::Val(1, 1)});
+  ASSERT_NE(sb1, sb2);
+}
+
+TEST_F(SourceBlocksTest, source_block_appear_100_inequality) {
+  auto sb1 = SourceBlock(DexString::make_string("blah"), 10,
+                         {SourceBlock::Val(1, .1)});
+  auto sb2 =
+      SourceBlock(DexString::make_string("blah"), 10, {SourceBlock::Val(1, 1)});
+  ASSERT_NE(sb1, sb2);
+}
