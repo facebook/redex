@@ -7,6 +7,8 @@
 
 #include "SplittableClosures.h"
 
+#include <vector>
+
 #include <sparta/PatriciaTreeSet.h>
 
 #include "ClosureAggregator.h"
@@ -17,7 +19,6 @@
 #include "OutlinerTypeAnalysis.h"
 #include "ReducedCFGClosureAdapter.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Timer.h"
 #include "Trace.h"
 #include "UninitializedObjects.h"
@@ -456,9 +457,9 @@ std::vector<SplittableClosure> to_splittable_closures(
         live_range::Chains(cfg).get_def_use_chains());
   });
   UnorderedSet<const ReducedBlock*> covered;
-  std20::erase_if(scored_closures, [&covered, &ota, &liveness_fp_iter,
-                                    &uninitialized_objects, &insns, &def_uses,
-                                    max_live_in](auto& sc) {
+  std::erase_if(scored_closures, [&covered, &ota, &liveness_fp_iter,
+                                  &uninitialized_objects, &insns, &def_uses,
+                                  max_live_in](auto& sc) {
     for (auto* c : sc.closures) {
       if (covered.count(c->reduced_block)) {
         // We already have this contained closure covered by a valid

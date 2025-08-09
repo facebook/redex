@@ -7,6 +7,8 @@
 
 #include "InitClassLoweringPass.h"
 
+#include <vector>
+
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
@@ -14,7 +16,6 @@
 #include "InitClassesWithSideEffects.h"
 #include "ScopedCFG.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -167,8 +168,8 @@ class InitClassFields {
     const auto& sfields = cls->get_sfields();
 
     auto referenced_sfields = sfields;
-    std20::erase_if(referenced_sfields,
-                    [&](auto* f) { return !dex_referenced_sfields.count(f); });
+    std::erase_if(referenced_sfields,
+                  [&](auto* f) { return !dex_referenced_sfields.count(f); });
     if (!referenced_sfields.empty()) {
       // Ideally, we can pick from the filtered list of referenced sfields
       auto f = get_preferred_field(referenced_sfields);
@@ -177,8 +178,8 @@ class InitClassFields {
     }
 
     auto pre_existing_sfields = sfields;
-    std20::erase_if(pre_existing_sfields,
-                    [&](auto* f) { return f->get_name() == m_field_name; });
+    std::erase_if(pre_existing_sfields,
+                  [&](auto* f) { return f->get_name() == m_field_name; });
     if (!pre_existing_sfields.empty()) {
       // If there is no referenced sfield in this dex, but we have any
       // pre-existing sfields, then we pick one of them. This will effectively

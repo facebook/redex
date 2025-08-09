@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <system_error>
+#include <vector>
 
 #include "ConfigFiles.h"
 #include "DexInstruction.h"
@@ -17,7 +18,6 @@
 #include "ScopedCFG.h"
 #include "Show.h"
 #include "SourceBlocks.h"
-#include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -386,7 +386,7 @@ bool partition(const std::vector<int32_t>& case_keys,
 
   // We now scan all remaining segments and identify which ones are trivial
   // segments, and move those over to the sparse case keys collection.
-  std20::erase_if(*packed_segments, [&](const auto& segment) {
+  std::erase_if(*packed_segments, [&](const auto& segment) {
     if (segment.first != segment.last) {
       return false;
     }

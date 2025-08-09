@@ -6,6 +6,9 @@
  */
 
 #include "OriginalNamePass.h"
+
+#include <vector>
+
 #include "ClassHierarchy.h"
 #include "ConfigFiles.h"
 #include "DexAnnotation.h"
@@ -16,7 +19,6 @@
 #include "DexUtil.h"
 #include "PassManager.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Trace.h"
 #include <boost/algorithm/string.hpp>
 
@@ -143,7 +145,7 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
             dex_id, store_id, dex.size());
       if (!overflow_classes.empty()) {
         // Remove those classes from current dex.
-        size_t removed = std20::erase_if(dex, [&](auto* cls) {
+        size_t removed = std::erase_if(dex, [&](auto* cls) {
           return std::find(overflow_classes.begin(), overflow_classes.end(),
                            cls) != overflow_classes.end();
         });

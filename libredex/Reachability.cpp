@@ -19,7 +19,6 @@
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "ThrowPropagationImpl.h"
 #include "Timer.h"
 #include "Trace.h"
@@ -999,7 +998,7 @@ void MethodReferencesGatherer::advance(const Advance& advance,
     m_returning_dependencies.erase(it);
     unordered_erase_if(m_returning_dependencies, [&mies](auto& p) {
       auto& cfg_needles = p.second;
-      std20::erase_if(cfg_needles, [&mies](const auto& cfg_needle) {
+      std::erase_if(cfg_needles, [&mies](const auto& cfg_needle) {
         return mies.count(&*cfg_needle.it);
       });
       return cfg_needles.empty();

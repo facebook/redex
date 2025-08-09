@@ -7,8 +7,9 @@
 
 #include "DedupBlockValueNumbering.h"
 
+#include <map>
+
 #include "RedexContext.h"
-#include "StlUtil.h"
 
 using namespace DedupBlkValueNumbering;
 
@@ -75,7 +76,7 @@ const BlockValue* BlockValues::get_block_value(cfg::Block* block) const {
       m_liveness_fixpoint_iter.get_live_out_vars_at(block);
   always_assert(!live_out_vars.is_top());
   always_assert(!live_out_vars.is_bottom());
-  std20::erase_if(regs, [&live_out_vars](auto& p) {
+  std::erase_if(regs, [&live_out_vars](auto& p) {
     return !live_out_vars.elements().contains(p.first);
   });
   for (auto reg : live_out_vars.elements()) {

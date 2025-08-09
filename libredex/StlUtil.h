@@ -18,49 +18,8 @@ namespace std20 {
 
 // Functionality that will be in C++20 STL.
 
-template <typename Element, typename Pred>
-size_t erase_if(std::vector<Element>& c, const Pred& pred) {
-  auto it = std::remove_if(c.begin(), c.end(), pred);
-  auto removed = std::distance(it, c.end());
-  c.erase(it, c.end());
-  return removed;
-}
-
-template <typename Element, typename Pred>
-size_t erase_if(std::deque<Element>& c, const Pred& pred) {
-  auto it = std::remove_if(c.begin(), c.end(), pred);
-  auto removed = std::distance(it, c.end());
-  c.erase(it, c.end());
-  return removed;
-}
-
-template <typename Container, typename Pred>
-size_t erase_if(Container& c, const Pred& pred) {
-  size_t removed = 0;
-  for (auto it = c.begin(), end = c.end(); it != end;) {
-    if (pred(*it)) {
-      it = c.erase(it);
-      removed++;
-    } else {
-      ++it;
-    }
-  }
-  return removed;
-}
-
-template <class To, class From>
-constexpr std::enable_if_t<sizeof(To) == sizeof(From) &&
-                               std::is_trivially_copyable_v<From> &&
-                               std::is_trivially_copyable_v<To>,
-                           To>
-bit_cast(const From& src) noexcept {
-  static_assert(std::is_trivially_constructible_v<To>,
-                "This implementation additionally requires destination type to "
-                "be trivially constructible");
-  To dst;
-  std::memcpy(&dst, &src, sizeof(To));
-  return dst;
-}
+// The following still remains here because IRList.h, used by dependents, needs
+// them.
 
 template <class T>
 constexpr int popcount(T x) noexcept {

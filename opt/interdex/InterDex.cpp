@@ -28,7 +28,6 @@
 #include "MethodProfiles.h"
 #include "ReachableClasses.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "StringUtil.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
@@ -977,7 +976,7 @@ void InterDex::init_cross_dex_ref_minimizer() {
 std::vector<DexClasses> InterDex::get_stable_partitions() {
   always_assert(m_stable_partitions > 0);
   auto remaining_classes = m_scope;
-  std20::erase_if(remaining_classes, [&](auto* cls) {
+  std::erase_if(remaining_classes, [&](auto* cls) {
     return is_canary(cls) || m_emitting_state.dexes_structure.has_class(cls) ||
            should_skip_class_due_to_plugin(cls);
   });

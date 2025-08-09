@@ -8,7 +8,9 @@
 #include "RemoveUnusedArgs.h"
 
 #include <deque>
+#include <map>
 #include <mutex>
+#include <set>
 #include <vector>
 
 #include "AnnoUtils.h"
@@ -25,7 +27,6 @@
 #include "Purity.h"
 #include "Resolver.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Walkers.h"
 
 using namespace opt_metadata;
@@ -614,8 +615,8 @@ void RemoveArgs::gather_updated_entries(
         for (auto m : UnorderedIterable(kvp->second)) {
           if (m->get_code()) {
             auto& dead_insn_map = all_dead_insns.at(m);
-            std20::erase_if(running_dead_args,
-                            [&](auto e) { return !dead_insn_map.count(e); });
+            std::erase_if(running_dead_args,
+                          [&](auto e) { return !dead_insn_map.count(e); });
           }
         }
 
@@ -624,7 +625,7 @@ void RemoveArgs::gather_updated_entries(
         for (auto m : UnorderedIterable(kvp->second)) {
           if (m->get_code()) {
             auto& dead_insn_map = all_dead_insns.at_unsafe(m);
-            std20::erase_if(dead_insn_map, [&](auto e) {
+            std::erase_if(dead_insn_map, [&](auto e) {
               return !running_dead_args.count(e.first);
             });
           }

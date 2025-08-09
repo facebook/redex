@@ -7,13 +7,14 @@
 
 #include "InterDexPass.h"
 
+#include <vector>
+
 #include "ConfigFiles.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "JsonWrapper.h"
 #include "PassManager.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "WorkQueue.h"
 
 namespace {
@@ -25,7 +26,7 @@ namespace {
  */
 void treat_generated_stores(DexStoresVector& stores,
                             interdex::InterDex* interdex) {
-  std20::erase_if(stores, [&](auto& s) {
+  std::erase_if(stores, [&](auto& s) {
     if (s.is_generated()) {
       interdex->add_dexes_from_store(s);
       return true;

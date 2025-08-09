@@ -7,10 +7,11 @@
 
 #include "Nopper.h"
 
+#include <vector>
+
 #include "CFGMutation.h"
 #include "Creators.h"
 #include "Show.h"
-#include "StlUtil.h"
 
 namespace {
 bool can_insert_before(IROpcode opcode) {
@@ -98,7 +99,7 @@ AuxiliaryDefs create_auxiliary_defs(DexType* nopper_type) {
 
 std::vector<cfg::Block*> get_noppable_blocks(cfg::ControlFlowGraph& cfg) {
   auto blocks = cfg.blocks();
-  std20::erase_if(blocks, [&cfg](auto* block) {
+  std::erase_if(blocks, [&cfg](auto* block) {
     if (cfg.get_succ_edge_of_type(block, cfg::EDGE_THROW) != nullptr) {
       // We don't want to deal with the complication of inserting throwing
       // instructions into blocks with throw handlers.

@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "ApiLevelChecker.h"
 #include "Creators.h"
@@ -20,7 +21,6 @@
 #include "ScopedCFG.h"
 #include "Show.h"
 #include "SourceBlocks.h"
-#include "StlUtil.h"
 #include "VirtualMerging.h"
 
 class VirtualMergingTest : public RedexTest {
@@ -178,8 +178,7 @@ class VirtualMergingTest : public RedexTest {
         }
       }
       auto missing = all_types;
-      std20::erase_if(missing,
-                      [&found](auto t) { return found.count(t) != 0; });
+      std::erase_if(missing, [&found](auto t) { return found.count(t) != 0; });
       if (!missing.empty()) {
         auto ret = ::testing::AssertionFailure();
         ret << "Did not find type-check(s) for";

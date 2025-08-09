@@ -105,7 +105,6 @@
 #include "RefChecker.h"
 #include "Resolver.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -2541,7 +2540,7 @@ static NewlyOutlinedMethods outline(
         auto& other_c = candidates_with_infos->at(other_id);
         for (auto& cml : cmls) {
           auto& other_cmls = other_c.info.methods.at(method);
-          std20::erase_if(other_cmls, [&](auto& other_cml) {
+          std::erase_if(other_cmls, [&](auto& other_cml) {
             if (ranges_overlap(cml.ranges, other_cml.ranges)) {
               other_c.info.count--;
               if (other_id != id) {

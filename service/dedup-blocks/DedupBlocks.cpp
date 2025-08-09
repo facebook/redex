@@ -49,6 +49,7 @@
 #include "DedupBlockValueNumbering.h"
 
 #include <algorithm>
+#include <map>
 #include <optional>
 
 #include "DexPosition.h"
@@ -60,7 +61,6 @@
 #include "Resolver.h"
 #include "Show.h"
 #include "SourceBlocks.h"
-#include "StlUtil.h"
 #include "Trace.h"
 #include "TypeInference.h"
 #include <boost/functional/hash.hpp>
@@ -808,7 +808,7 @@ class DedupBlocksImpl {
         auto& majority_count_group = mie_count[majority_mie];
 
         // Remove the iterators
-        std20::erase_if(block_iterator_map, [&](auto& p) {
+        std::erase_if(block_iterator_map, [&](auto& p) {
           return majority_count_group.blocks.find(p.first) ==
                  majority_count_group.blocks.end();
         });

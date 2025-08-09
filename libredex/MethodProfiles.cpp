@@ -7,6 +7,8 @@
 
 #include "MethodProfiles.h"
 
+#include <vector>
+
 #include "RedexContext.h"
 
 #include <boost/algorithm/string.hpp>
@@ -19,7 +21,6 @@
 #include "CppUtil.h"
 #include "GlobalConfig.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "WorkQueue.h"
 
 using namespace method_profiles;
@@ -755,7 +756,7 @@ void MethodProfiles::process_unresolved_lines(bool baseline_profile_variant) {
     always_assert(success);
   }
   always_assert(unresolved_lines == unresolved_lines_ref.size());
-  std20::erase_if(unresolved_lines_ref, [&](auto& unresolved_line) {
+  std::erase_if(unresolved_lines_ref, [&](auto& unresolved_line) {
     return resolved.count(&unresolved_line);
   });
   always_assert(unresolved_lines - resolved.size() ==
@@ -826,7 +827,7 @@ void MethodProfiles::resolve_method_descriptor_tokens(
       added++;
     }
   }
-  std20::erase_if(unresolved_lines_ref, [&to_remove](auto& parsed_main) {
+  std::erase_if(unresolved_lines_ref, [&to_remove](auto& parsed_main) {
     return to_remove.count(parsed_main.ref_str.get());
   });
   TRACE(METH_PROF, 1,

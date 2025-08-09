@@ -8,6 +8,7 @@
 #include "SwitchEquivFinder.h"
 
 #include <algorithm>
+#include <map>
 #include <vector>
 
 #include "CFGMutation.h"
@@ -17,7 +18,6 @@
 #include "ReachingDefinitions.h"
 #include "ScopedCFG.h"
 #include "SourceBlocks.h"
-#include "StlUtil.h"
 #include "Trace.h"
 
 namespace {
@@ -544,7 +544,7 @@ void SwitchEquivFinder::normalize_extra_loads(
   // Remove loads that aren't used outside the if-else chain blocks
   for (auto& block_and_insns : UnorderedIterable(m_extra_loads)) {
     InstructionSet& insns = block_and_insns.second;
-    std20::erase_if(insns, [&used_defs](auto& p) {
+    std::erase_if(insns, [&used_defs](auto& p) {
       return used_defs.count(p.second) == 0;
     });
   }

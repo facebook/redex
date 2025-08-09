@@ -7,6 +7,8 @@
 
 #include "DefinitelyAssignedIFields.h"
 
+#include <vector>
+
 #include <sparta/AbstractDomain.h>
 #include <sparta/ConstantAbstractDomain.h>
 #include <sparta/PatriciaTreeMapAbstractEnvironment.h>
@@ -20,7 +22,6 @@
 #include "Lazy.h"
 #include "LiveRange.h"
 #include "Resolver.h"
-#include "StlUtil.h"
 #include "Timer.h"
 #include "TypeUtil.h"
 #include "Walkers.h"
@@ -365,12 +366,12 @@ UnorderedSet<const DexField*> get_definitely_assigned_ifields(
       return;
     }
     auto definitely_assigned_ifields = cls->get_ifields();
-    std20::erase_if(definitely_assigned_ifields, [&](const auto* f) {
+    std::erase_if(definitely_assigned_ifields, [&](const auto* f) {
       return !can_delete(f) || !can_rename(f);
     });
     for (auto ctor : ctors) {
       auto analysis_result = get_analysis_result(ctor);
-      std20::erase_if(definitely_assigned_ifields, [&](auto* f) {
+      std::erase_if(definitely_assigned_ifields, [&](auto* f) {
         return !analysis_result->definitely_assigned_ifields.count(f);
       });
     }

@@ -7,6 +7,8 @@
 
 #include "EnumTransformer.h"
 
+#include <vector>
+
 #include "CFGMutation.h"
 #include "Creators.h"
 #include "DeterministicContainers.h"
@@ -19,7 +21,6 @@
 #include "Resolver.h"
 #include "Show.h"
 #include "SourceBlocks.h"
-#include "StlUtil.h"
 #include "TypeReference.h"
 #include "UsedVarsAnalysis.h"
 #include "Walkers.h"
@@ -1555,7 +1556,7 @@ class EnumTransformer final {
     auto synth_field_access = synth_access();
     UnorderedSet<DexField*> synth_fields;
 
-    std20::erase_if(sfields, [&](auto* field) {
+    std::erase_if(sfields, [&](auto* field) {
       if (enum_constants.count(field)) {
         return true;
       }
@@ -1575,7 +1576,7 @@ class EnumTransformer final {
     always_assert(!synth_fields.empty());
     auto& dmethods = enum_cls->get_dmethods();
     // Delete <init>, values() and valueOf(String) methods, and clean <clinit>.
-    std20::erase_if(dmethods, [&, this](auto* method) {
+    std::erase_if(dmethods, [&, this](auto* method) {
       if (method::is_clinit(method)) {
         clean_clinit(enum_constants, m_enum_util->m_config, enum_cls, method,
                      synth_fields, m_enum_util->KT_ENUM_ENTRIES_FACTORY_METHOD);

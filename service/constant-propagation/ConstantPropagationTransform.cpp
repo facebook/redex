@@ -7,12 +7,13 @@
 
 #include "ConstantPropagationTransform.h"
 
+#include <vector>
+
 #include "ReachableClasses.h"
 #include "ReachingDefinitions.h"
 #include "RedexContext.h"
 #include "ScopedMetrics.h"
 #include "SignedConstantDomain.h"
-#include "StlUtil.h"
 #include "Trace.h"
 #include "Transform.h"
 #include "TypeInference.h"
@@ -696,7 +697,7 @@ void Transform::remove_dead_switch(
       m_edge_adds.emplace_back(block, goto_target, cfg::EDGE_GOTO);
       goto_edge = nullptr;
     }
-    auto removed = std20::erase_if(remaining_branch_edges, [&](auto* e) {
+    auto removed = std::erase_if(remaining_branch_edges, [&](auto* e) {
       if (e->target() == most_common_target) {
         m_edge_deletes.push_back(e);
         return true;
