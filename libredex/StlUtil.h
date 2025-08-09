@@ -55,7 +55,9 @@ template <class T>
 constexpr int countr_zero(T x) noexcept {
   static_assert(std::is_unsigned<T>::value,
                 "countr_zero requires an unsigned integer type");
-  if (x == 0) return sizeof(T) * 8;
+  if (x == 0) {
+    return sizeof(T) * 8;
+  }
 #if defined(_MSC_VER)
 #include <intrin.h>
   if constexpr (sizeof(T) <= sizeof(unsigned long)) {
