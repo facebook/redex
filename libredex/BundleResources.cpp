@@ -2692,9 +2692,9 @@ resources::StyleMap ResourcesPbFile::get_style_map() {
   return style_map;
 }
 
-bool does_resource_exists_in_file(uint32_t resource_id,
-                                  const std::string& file_path) {
-  bool resource_found = false;
+UnorderedMap<uint32_t, int> get_resources_in_file(
+    const std::string& file_path) {
+  UnorderedMap<uint32_t, int> resources_found;
   read_protobuf_file_contents(
       file_path,
       [&](google::protobuf::io::CodedInputStream& input, size_t /* unused */) {
@@ -2709,30 +2709,32 @@ bool does_resource_exists_in_file(uint32_t resource_id,
             auto type_id = pb_type.type_id().id();
             for (const auto& pb_entry : pb_type.entry()) {
               auto entry_id = pb_entry.entry_id().id();
-              auto current_resource_id =
-                  MAKE_RES_ID(package_id, type_id, entry_id);
-              if (current_resource_id == resource_id) {
-                resource_found = true;
-                return;
-              }
+              auto resource_id = MAKE_RES_ID(package_id, type_id, entry_id);
+              resources_found[resource_id]++;
             }
           }
         }
       });
-  return resource_found;
+
+  return resources_found;
 }
 
-void assert_resource_in_one_files(
-    uint32_t resource_id, const std::vector<std::string>& resources_pb_paths) {
-  std::unordered_set<std::string> files;
+void assert_resources_in_one_file(
+    const UnorderedSet<uint32_t>& resource_ids,
+    const std::vector<std::string>& resources_pb_paths) {
+  UnorderedMap<uint32_t, int> resource_occ_count;
   for (const auto& path : resources_pb_paths) {
-    if (does_resource_exists_in_file(resource_id, path)) {
-      files.insert(path);
+    const auto& resources_in_file = get_resources_in_file(path);
+    for (const auto& [resource_id, count] :
+         UnorderedIterable(resources_in_file)) {
+      resource_occ_count[resource_id] += count;
     }
   }
 
-  always_assert_log(files.size() <= 1, "Resource 0x%x is in %zu files",
-                    resource_id, files.size());
+  for (const auto& resource_id : UnorderedIterable(resource_ids)) {
+    always_assert_log(resource_occ_count[resource_id] == 1,
+                      "Resource 0x%x is not in exactly one file", resource_id);
+  }
 }
 
 // Finds a resource in a protocol buffer table and applies a modification to
@@ -2888,14 +2890,16 @@ void ResourcesPbFile::apply_attribute_removals(
     return removed_any;
   };
 
+  UnorderedSet<uint32_t> resource_ids;
   ResourceAttributeMap removals;
   for (const auto& mod : modifications) {
     if (mod.type == StyleModificationSpec::ModificationType::REMOVE_ATTRIBUTE) {
       uint32_t resource_id = mod.resource_id;
-      assert_resource_in_one_files(resource_id, resources_pb_paths);
+      resource_ids.insert(resource_id);
       removals[resource_id].insert({mod.attribute_id.value(), mod});
     }
   }
+  assert_resources_in_one_file(resource_ids, resources_pb_paths);
 
   for (const auto& resource_path : resources_pb_paths) {
     TRACE(RES, 9, "Examining resource file: %s", resource_path.c_str());
@@ -3020,14 +3024,16 @@ void ResourcesPbFile::apply_attribute_additions(
     const std::vector<std::string>& resources_pb_paths) {
   ResourceAttributeMap modified_resources;
 
+  UnorderedSet<uint32_t> resource_ids;
   ResourceAttributeMap additions;
   for (const auto& mod : modifications) {
     if (mod.type == StyleModificationSpec::ModificationType::ADD_ATTRIBUTE) {
       int32_t resource_id = mod.resource_id;
-      assert_resource_in_one_files(resource_id, resources_pb_paths);
+      resource_ids.insert(resource_id);
       additions[resource_id].insert({mod.attribute_id.value(), mod});
     }
   }
+  assert_resources_in_one_file(resource_ids, resources_pb_paths);
 
   for (const auto& resource_path : resources_pb_paths) {
     TRACE(RES, 9, "Examining resource file for additions: %s",
@@ -3107,6 +3113,7 @@ void ResourcesPbFile::apply_style_merges(
     const std::vector<StyleModificationSpec::Modification>& modifications,
     const std::vector<std::string>& resources_pb_paths) {
 
+  UnorderedSet<uint32_t> resource_ids;
   ResourceAttributeMap children_updates;
   for (const auto& modification : modifications) {
     if (modification.type !=
@@ -3114,11 +3121,12 @@ void ResourcesPbFile::apply_style_merges(
       continue;
     }
     int resource_id = modification.resource_id;
-    assert_resource_in_one_files(resource_id, resources_pb_paths);
+    resource_ids.insert(resource_id);
     // Only need the modification so we can iterate through
     // modification.values() to get all the new attributes to add
     children_updates[resource_id].insert({resource_id, modification});
   }
+  assert_resources_in_one_file(resource_ids, resources_pb_paths);
 
   ResourceAttributeMap modified_resources;
   for (const auto& resource_pb_path : resources_pb_paths) {

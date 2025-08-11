@@ -862,18 +862,35 @@ TEST(BundleResources, TestResourceExists) {
     auto res_pb_file_path = directory + "/base/resources.pb";
     auto res_table = resources->load_res_table();
 
-    std::vector<std::pair<std::string, bool>> name_expected_pairs = {
-        {"ChooseMe", true},    {"ParentWithAttr", true},
-        {"CustomText", true},  {"IDontExist", false},
-        {"DoISlipBy?", false}, {"IWillSneakPastYou", false},
-    };
+    {
+      UnorderedSet<uint32_t> resource_ids;
+      std::vector<std::string> names = {"ChooseMe", "ParentWithAttr",
+                                        "IDontExist"};
+      for (const auto& name : names) {
+        auto ids = res_table->get_res_ids_by_name(name);
+        if (ids.empty()) {
+          resource_ids.insert(0x0);
+        } else {
+          resource_ids.insert(ids[0]);
+        }
+      }
+      EXPECT_ANY_THROW(
+          assert_resources_in_one_file(resource_ids, {res_pb_file_path}));
+    }
 
-    for (const auto& [resource_name, expected] : name_expected_pairs) {
-      auto style_ids = res_table->get_res_ids_by_name(resource_name);
-      auto style_id = style_ids.size() == 1 ? style_ids[0] : 0;
+    {
+      UnorderedSet<uint32_t> resource_ids;
+      std::vector<std::string> names = {
+          "ChooseMe",
+          "ParentWithAttr",
+      };
+      for (const auto& name : names) {
+        auto ids = res_table->get_res_ids_by_name(name);
+        EXPECT_THAT(ids, SizeIs(1));
+        resource_ids.insert(ids[0]);
+      }
 
-      EXPECT_EQ(does_resource_exists_in_file(style_id, res_pb_file_path),
-                expected);
+      assert_resources_in_one_file(resource_ids, {res_pb_file_path});
     }
   });
 }

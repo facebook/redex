@@ -157,7 +157,8 @@ class BundleResources : public AndroidResources {
       size_t* out_num_renamed) override;
 };
 
-bool does_resource_exists_in_file(uint32_t resource_id,
-                                  const std::string& file_path);
+void assert_resources_in_one_file(
+    const UnorderedSet<uint32_t>& resource_ids,
+    const std::vector<std::string>& resources_pb_paths);
 
 #endif // HAS_PROTOBUF
