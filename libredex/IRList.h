@@ -241,6 +241,8 @@ struct SourceBlock {
 
   bool operator!=(const SourceBlock& other) const { return !(*this == other); }
 
+  size_t hash_ids() const;
+
   void append(std::unique_ptr<SourceBlock> sb) {
     SourceBlock* last = this;
     while (last->next != nullptr) {

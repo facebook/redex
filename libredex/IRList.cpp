@@ -422,8 +422,26 @@ bool MethodItemEntry::operator==(const MethodItemEntry& that) const {
     return *dbgop == *that.dbgop;
   case MFLOW_POSITION:
     return *pos == *that.pos;
-  case MFLOW_SOURCE_BLOCK:
-    return *src_block == *that.src_block;
+  case MFLOW_SOURCE_BLOCK: {
+    const SourceBlock* cur = src_block.get();
+    const SourceBlock* other_cur = that.src_block.get();
+    while (true) {
+      // If both are null, they are equivalent and we are done
+      if (cur == nullptr && other_cur == nullptr) {
+        return true;
+      }
+      // If only one is null, they are not equivalent
+      if (cur == nullptr || other_cur == nullptr) {
+        return false;
+      }
+      // If they are not equal, return false
+      if (*cur != *other_cur) {
+        return false;
+      }
+      cur = cur->next.get();
+      other_cur = other_cur->next.get();
+    }
+  }
   case MFLOW_FALLTHROUGH:
     return true;
   };
@@ -964,6 +982,20 @@ void IRList::insn_clear_and_dispose() {
     }
     delete mie;
   });
+}
+
+size_t SourceBlock::hash_ids() const {
+  std::size_t hash = id;
+  auto cur = this->next.get();
+  while (true) {
+    if (cur == nullptr) {
+      break;
+    }
+    boost::hash_combine(hash, cur->id);
+    cur = cur->next.get();
+  }
+
+  return hash;
 }
 
 std::string SourceBlock::show(bool quoted_src) const {
