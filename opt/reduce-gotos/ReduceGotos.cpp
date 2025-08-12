@@ -16,7 +16,7 @@
  *    sources, and the branch target only one has one, invert condition and
  *    swap branch and goto target. This reduces the need for additional gotos /
  *    maximizes the fallthrough efficiency. Optionally, we may also invert
- *    branches for performance to make the fallthrough target hot.
+ *    branches for performance to make the branch target hot.
  * 2) It replaces gotos that eventually simply return by return instructions.
  *    Return instructions tend to have a smaller encoding than goto
  *    instructions, and tend to compress better due to less entropy (no offset).
@@ -449,10 +449,10 @@ void ReduceGotosPass::process_code_ifs(cfg::ControlFlowGraph& cfg,
 
     auto invert = [&]() {
       // For performance, and if we are coming from a hot block, we'd prefer the
-      // fall-through case to be hot.
+      // *branch* case to be hot.
       if (for_performance && source_blocks::is_hot(b) &&
-          source_blocks::is_hot(branch_edge->target()) &&
-          !source_blocks::is_hot(goto_edge->target())) {
+          !source_blocks::is_hot(branch_edge->target()) &&
+          source_blocks::is_hot(goto_edge->target())) {
         return true;
       }
 
