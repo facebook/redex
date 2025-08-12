@@ -19,6 +19,7 @@
 #include "IRAssembler.h"
 #include "RedexTest.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -950,6 +951,33 @@ TEST_F(MethodSplitterTest, DontSplitLoadParamChains) {
   method_splitting_impl::discover_closures(
       m, method_splitting_impl::reduce_cfg(m, config.split_block_size));
   ASSERT_EQ(m->get_code()->cfg().blocks().size(), 1);
+  m->get_code()->clear_cfg();
+}
+
+TEST_F(MethodSplitterTest, DuplicateSourceBlocksWithReturn) {
+  auto code_str = R"(
+    (
+      (load-param v0)
+      (load-param v1)
+    (if-eqz v0 :return)
+      (const v1 1)
+      (goto :return)
+    (:return)
+      (return v1)
+    ))";
+  auto [cls, m] = create("(II)I", code_str);
+  m->get_code()->build_cfg();
+  auto profile = std::vector<source_blocks::ProfileData>{
+      std::make_pair("(1:1 g(0:0 g(1:1)) b)", boost::none)};
+  auto res =
+      source_blocks::insert_source_blocks(m, &m->get_code()->cfg(), false, profile,
+                                          /*serialize=*/true);
+  auto config = defaultConfig();
+  method_splitting_impl::reduce_cfg(m, config.split_block_size);
+  auto blocks = m->get_code()->cfg().blocks();
+  ASSERT_TRUE(blocks.size() >= 3);
+  auto source_blocks = source_blocks::gather_source_blocks(blocks[1]);
+  ASSERT_EQ(source_blocks.size(), 2);
   m->get_code()->clear_cfg();
 }
 
