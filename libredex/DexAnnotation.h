@@ -209,6 +209,7 @@ class DexEncodedValueType : public DexEncodedValuePtr {
   DexType* type() const { return (DexType*)m_val.m_value_ptr; }
   void set_type(DexType* type) { m_val.m_value_ptr = type; }
   std::string show() const override;
+  std::string show_deobfuscated() const override;
 
   std::unique_ptr<DexEncodedValue> clone() const override {
     return std::unique_ptr<DexEncodedValue>(new DexEncodedValueType(*this));

@@ -980,6 +980,9 @@ std::string DexEncodedValueArray::show_deobfuscated() const {
 std::string DexEncodedValueString::show() const { return ::show(string()); }
 
 std::string DexEncodedValueType::show() const { return ::show(type()); }
+std::string DexEncodedValueType::show_deobfuscated() const {
+  return ::show_deobfuscated(type());
+}
 
 std::string DexEncodedValueField::show() const { return ::show(field()); }
 std::string DexEncodedValueField::show_deobfuscated() const {
