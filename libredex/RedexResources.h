@@ -249,6 +249,9 @@ struct StyleInfo {
 
   // Gets parent of the given resource ID.
   std::optional<uint32_t> get_unambiguous_parent(uint32_t resource_id) const;
+
+  // Gets the depth of the tree from a given resource ID relative to the leaf.
+  uint32_t get_depth(uint32_t resource_id) const;
 };
 
 // Modification specification for styles in APK and App Bundle containers.

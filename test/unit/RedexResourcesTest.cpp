@@ -651,3 +651,92 @@ TEST(RedexResources, StyleInfoGetParent) {
   EXPECT_TRUE(parent4.has_value());
   EXPECT_EQ(parent4.value(), 0);
 }
+
+TEST(RedexResources, StyleInfoGetDepth) {
+  const uint32_t NONEXISTENT_ID = 0x7f030001;
+  const uint32_t ROOT_ID = 0x7f030002;
+  const uint32_t CHILD1_ID = 0x7f030003;
+  const uint32_t CHILD2_ID = 0x7f030004;
+  const uint32_t GRANDCHILD1_ID = 0x7f030005;
+  const uint32_t GRANDCHILD2_ID = 0x7f030006;
+  const uint32_t ISOLATED_ID = 0x7f030007;
+
+  auto add_vertex = [](resources::StyleInfo& style_info, uint32_t id) {
+    auto vertex =
+        boost::add_vertex(resources::StyleInfo::Node{id}, style_info.graph);
+    style_info.id_to_vertex[id] = vertex;
+    return vertex;
+  };
+
+  auto add_edge = [](resources::StyleInfo& style_info,
+                     resources::StyleInfo::vertex_t parent,
+                     resources::StyleInfo::vertex_t child) {
+    boost::add_edge(parent, child, style_info.graph);
+  };
+
+  {
+    resources::StyleInfo style_info;
+    EXPECT_THROW(style_info.get_depth(NONEXISTENT_ID), std::out_of_range);
+  }
+
+  {
+    resources::StyleInfo style_info;
+    add_vertex(style_info, ISOLATED_ID);
+
+    auto depth = style_info.get_depth(ISOLATED_ID);
+    EXPECT_EQ(depth, 0u);
+  }
+
+  {
+    resources::StyleInfo style_info;
+    auto root = add_vertex(style_info, ROOT_ID);
+    auto child1 = add_vertex(style_info, CHILD1_ID);
+
+    add_edge(style_info, root, child1);
+
+    EXPECT_EQ(style_info.get_depth(ROOT_ID), 1u);
+    EXPECT_EQ(style_info.get_depth(CHILD1_ID), 0u);
+  }
+
+  // ROOT -> CHILD1 -> GRANDCHILD1 (depth 2)
+  //      -> CHILD2 -> GRANDCHILD2 (depth 2)
+  {
+    resources::StyleInfo style_info;
+    auto root = add_vertex(style_info, ROOT_ID);
+    auto child1 = add_vertex(style_info, CHILD1_ID);
+    auto child2 = add_vertex(style_info, CHILD2_ID);
+    auto grandchild1 = add_vertex(style_info, GRANDCHILD1_ID);
+    auto grandchild2 = add_vertex(style_info, GRANDCHILD2_ID);
+
+    add_edge(style_info, root, child1);
+    add_edge(style_info, root, child2);
+    add_edge(style_info, child1, grandchild1);
+    add_edge(style_info, child2, grandchild2);
+
+    EXPECT_EQ(style_info.get_depth(ROOT_ID), 2u);
+    EXPECT_EQ(style_info.get_depth(CHILD1_ID), 1u);
+    EXPECT_EQ(style_info.get_depth(CHILD2_ID), 1u);
+    EXPECT_EQ(style_info.get_depth(GRANDCHILD1_ID), 0u);
+    EXPECT_EQ(style_info.get_depth(GRANDCHILD2_ID), 0u);
+  }
+
+  // Test unbalanced tree
+  // ROOT -> CHILD1 -> GRANDCHILD1 (depth 2)
+  //      -> CHILD2 (depth 1, child2 is leaf)
+  {
+    resources::StyleInfo style_info;
+    auto root = add_vertex(style_info, ROOT_ID);
+    auto child1 = add_vertex(style_info, CHILD1_ID);
+    auto child2 = add_vertex(style_info, CHILD2_ID);
+    auto grandchild1 = add_vertex(style_info, GRANDCHILD1_ID);
+
+    add_edge(style_info, root, child1);
+    add_edge(style_info, root, child2);
+    add_edge(style_info, child1, grandchild1);
+
+    EXPECT_EQ(style_info.get_depth(ROOT_ID), 2u);
+    EXPECT_EQ(style_info.get_depth(CHILD1_ID), 1u);
+    EXPECT_EQ(style_info.get_depth(CHILD2_ID), 0u);
+    EXPECT_EQ(style_info.get_depth(GRANDCHILD1_ID), 0u);
+  }
+}

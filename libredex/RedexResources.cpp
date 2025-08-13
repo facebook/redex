@@ -809,4 +809,25 @@ std::optional<uint32_t> StyleInfo::get_unambiguous_parent(
   return resource_style.parent;
 }
 
+uint32_t StyleInfo::get_depth(uint32_t resource_id) const {
+  std::function<uint32_t(uint32_t)> calculate_depth =
+      [&](uint32_t id) -> uint32_t {
+    auto children = get_children(id);
+
+    if (children.empty()) {
+      return 0;
+    }
+
+    uint32_t max_depth = 0;
+    for (uint32_t child_id : children) {
+      uint32_t child_depth = calculate_depth(child_id);
+      max_depth = std::max(max_depth, child_depth + 1);
+    }
+
+    return max_depth;
+  };
+
+  return calculate_depth(resource_id);
+}
+
 }; // namespace resources
