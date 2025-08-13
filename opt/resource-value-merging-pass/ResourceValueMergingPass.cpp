@@ -14,7 +14,7 @@
 #include "Styles.h"
 #include "Trace.h"
 
-#define MAX_ITERATIONS 20
+#define MAX_STYLES_DEPTH 20
 
 using namespace resources;
 void print_resources(const UnorderedMap<uint32_t, ResourceAttributeInformation>&
@@ -434,7 +434,7 @@ resources::StyleInfo ResourceValueMergingPass::get_optimized_graph(
     iteration++;
   } while ((!optimized_resources.removals.empty() ||
             !optimized_resources.additions.empty()) &&
-           iteration < MAX_ITERATIONS);
+           iteration < MAX_STYLES_DEPTH);
 
   return optimized;
 }
@@ -895,7 +895,7 @@ std::vector<uint32_t> ResourceValueMergingPass::find_inter_graph_hoistings(
                       resource_id);
 
     if (style_resource_opt->parent == 0 &&
-        style_info.get_depth(resource_id) < MAX_ITERATIONS) {
+        style_info.get_depth(resource_id) < MAX_STYLES_DEPTH) {
       valid_roots.push_back(resource_id);
     }
   }
