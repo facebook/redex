@@ -146,6 +146,10 @@ class ResourceValueMergingPass : public Pass {
   uint32_t create_synthetic_resource_node(resources::StyleInfo& style_info,
                                           uint32_t original_parent_id);
 
+  void update_parent(resources::StyleInfo& style_info,
+                     uint32_t resource_id,
+                     uint32_t new_parent_id);
+
  private:
   ResourceAttributeInformation find_resource_optimization_candidates(
       resources::StyleInfo::vertex_t vertex,

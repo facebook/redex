@@ -16,6 +16,20 @@ ResourceAttributeInformation get_common_attributes(
 class ResourceValueMergingPassTest : public ::testing::Test {
  protected:
   ResourceValueMergingPass m_pass;
+
+  void assert_style_parent(uint32_t resource_id,
+                           uint32_t expected_parent_id,
+                           const resources::StyleInfo& style_info) {
+    auto style_opt = m_pass.find_style_resource(resource_id, style_info.styles);
+    ASSERT_TRUE(style_opt.has_value());
+    EXPECT_EQ(style_opt->parent, expected_parent_id);
+
+    auto resource_vertex = style_info.id_to_vertex.at(resource_id);
+    auto parent_vertex = style_info.id_to_vertex.at(expected_parent_id);
+    auto edge = boost::edge(parent_vertex, resource_vertex, style_info.graph);
+    EXPECT_TRUE(edge.second);
+  }
+
   resources::StyleInfo::vertex_t add_vertex(resources::StyleInfo& style_info,
                                             uint32_t id) {
     auto vertex =
@@ -2939,4 +2953,158 @@ TEST_F(ResourceValueMergingPassTest,
 
 TEST_F(ResourceValueMergingPassTest, CreateSyntheticResourceNodeReturnValue) {
   test_synthetic_resource_creation({{0x7f010001, 0}}, 0x7f010001);
+}
+
+TEST_F(ResourceValueMergingPassTest, UpdateParentBasic) {
+  resources::StyleInfo style_info;
+  uint32_t resource_id = 0x7f010001;
+  uint32_t old_parent_id = 0x7f010002;
+  uint32_t new_parent_id = 0x7f010003;
+
+  auto resource_vertex = add_vertex(style_info, resource_id);
+  auto old_parent_vertex = add_vertex(style_info, old_parent_id);
+  add_vertex(style_info, new_parent_id);
+  add_edge(style_info, old_parent_vertex, resource_vertex);
+
+  resources::StyleResource style;
+  style.id = resource_id;
+  style.parent = old_parent_id;
+  style_info.styles[resource_id] = {style};
+
+  auto initial_edge =
+      boost::edge(old_parent_vertex, resource_vertex, style_info.graph);
+  EXPECT_TRUE(initial_edge.second);
+
+  m_pass.update_parent(style_info, resource_id, new_parent_id);
+
+  auto old_edge =
+      boost::edge(old_parent_vertex, resource_vertex, style_info.graph);
+  EXPECT_FALSE(old_edge.second);
+
+  assert_style_parent(resource_id, new_parent_id, style_info);
+}
+
+TEST_F(ResourceValueMergingPassTest, UpdateParentFromZeroToNonZero) {
+  resources::StyleInfo style_info;
+  uint32_t resource_id = 0x7f010001;
+  uint32_t new_parent_id = 0x7f010002;
+
+  add_vertex(style_info, resource_id);
+  add_vertex(style_info, new_parent_id);
+
+  resources::StyleResource style;
+  style.id = resource_id;
+  style.parent = 0;
+  style_info.styles[resource_id] = {style};
+
+  m_pass.update_parent(style_info, resource_id, new_parent_id);
+
+  assert_style_parent(resource_id, new_parent_id, style_info);
+}
+
+TEST_F(ResourceValueMergingPassTest, UpdateParentNonexistentResource) {
+  resources::StyleInfo style_info;
+  uint32_t nonexistent_resource_id = 0x7f010001;
+  uint32_t new_parent_id = 0x7f010002;
+
+  EXPECT_THROW(
+      m_pass.update_parent(style_info, nonexistent_resource_id, new_parent_id),
+      RedexException);
+}
+
+TEST_F(ResourceValueMergingPassTest, UpdateParentMultipleStyles) {
+  resources::StyleInfo style_info;
+  uint32_t resource_id = 0x7f010001;
+  uint32_t new_parent_id = 0x7f010002;
+
+  resources::StyleResource style1;
+  style1.id = resource_id;
+  style1.parent = 0x7f010003;
+
+  resources::StyleResource style2;
+  style2.id = resource_id;
+  style2.parent = 0x7f010004;
+
+  style_info.styles[resource_id] = {style1, style2};
+
+  EXPECT_THROW(m_pass.update_parent(style_info, resource_id, new_parent_id),
+               RedexException);
+}
+
+TEST_F(ResourceValueMergingPassTest, UpdateParentMultipleResources) {
+  resources::StyleInfo style_info;
+  uint32_t resource_id1 = 0x7f010001;
+  uint32_t resource_id2 = 0x7f010002;
+  uint32_t old_parent_id = 0x7f010003;
+  uint32_t new_parent_id = 0x7f010004;
+
+  auto resource1_vertex = add_vertex(style_info, resource_id1);
+  auto resource2_vertex = add_vertex(style_info, resource_id2);
+  auto old_parent_vertex = add_vertex(style_info, old_parent_id);
+  auto new_parent_vertex = add_vertex(style_info, new_parent_id);
+  add_edge(style_info, old_parent_vertex, resource1_vertex);
+  add_edge(style_info, old_parent_vertex, resource2_vertex);
+
+  resources::StyleResource style1;
+  style1.id = resource_id1;
+  style1.parent = old_parent_id;
+  style_info.styles[resource_id1] = {style1};
+
+  resources::StyleResource style2;
+  style2.id = resource_id2;
+  style2.parent = old_parent_id;
+  style_info.styles[resource_id2] = {style2};
+
+  m_pass.update_parent(style_info, resource_id1, new_parent_id);
+  m_pass.update_parent(style_info, resource_id2, new_parent_id);
+
+  auto new_edge1 =
+      boost::edge(new_parent_vertex, resource1_vertex, style_info.graph);
+  auto new_edge2 =
+      boost::edge(new_parent_vertex, resource2_vertex, style_info.graph);
+  EXPECT_TRUE(new_edge1.second);
+  EXPECT_TRUE(new_edge2.second);
+
+  auto updated_style1_opt =
+      m_pass.find_style_resource(resource_id1, style_info.styles);
+  auto updated_style2_opt =
+      m_pass.find_style_resource(resource_id2, style_info.styles);
+
+  ASSERT_TRUE(updated_style1_opt.has_value());
+  ASSERT_TRUE(updated_style2_opt.has_value());
+  EXPECT_EQ(updated_style1_opt->parent, new_parent_id);
+  EXPECT_EQ(updated_style2_opt->parent, new_parent_id);
+}
+
+TEST_F(ResourceValueMergingPassTest, UpdateParentChainOfUpdates) {
+  resources::StyleInfo style_info;
+  uint32_t resource_id = 0x7f010001;
+  uint32_t parent_id1 = 0x7f010002;
+  uint32_t parent_id2 = 0x7f010003;
+  uint32_t parent_id3 = 0x7f010004;
+
+  auto resource_vertex = add_vertex(style_info, resource_id);
+  auto parent1_vertex = add_vertex(style_info, parent_id1);
+  auto parent2_vertex = add_vertex(style_info, parent_id2);
+  auto parent3_vertex = add_vertex(style_info, parent_id3);
+  add_edge(style_info, parent1_vertex, resource_vertex);
+
+  resources::StyleResource style;
+  style.id = resource_id;
+  style.parent = parent_id1;
+  style_info.styles[resource_id] = {style};
+
+  m_pass.update_parent(style_info, resource_id, parent_id2);
+
+  auto edge2 = boost::edge(parent2_vertex, resource_vertex, style_info.graph);
+  EXPECT_TRUE(edge2.second);
+
+  assert_style_parent(resource_id, parent_id2, style_info);
+
+  m_pass.update_parent(style_info, resource_id, parent_id3);
+
+  auto edge3 = boost::edge(parent3_vertex, resource_vertex, style_info.graph);
+  EXPECT_TRUE(edge3.second);
+
+  assert_style_parent(resource_id, parent_id3, style_info);
 }

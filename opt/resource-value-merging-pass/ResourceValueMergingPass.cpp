@@ -958,4 +958,37 @@ uint32_t ResourceValueMergingPass::create_synthetic_resource_node(
   return synthetic_resource_id;
 }
 
+void ResourceValueMergingPass::update_parent(StyleInfo& style_info,
+                                             uint32_t resource_id,
+                                             uint32_t new_parent_id) {
+  auto style_resource_opt = find_style_resource(resource_id, style_info.styles);
+  always_assert_log(style_resource_opt.has_value(), "Resource 0x%x not found",
+                    resource_id);
+
+  auto style_it = style_info.styles.find(resource_id);
+  always_assert(style_it != style_info.styles.end());
+
+  auto& style_resources = style_it->second;
+
+  auto old_parent_id = style_resource_opt->parent;
+  if (old_parent_id != 0) {
+    auto old_parent_vertex = style_info.id_to_vertex.at(old_parent_id);
+    auto current_vertex = style_info.id_to_vertex.at(resource_id);
+
+    if (auto [edge, exists] =
+            boost::edge(old_parent_vertex, current_vertex, style_info.graph);
+        exists) {
+      boost::remove_edge(edge, style_info.graph);
+    }
+  }
+
+  if (new_parent_id != 0) {
+    auto new_parent_vertex = style_info.id_to_vertex.at(new_parent_id);
+    auto current_vertex = style_info.id_to_vertex.at(resource_id);
+    boost::add_edge(new_parent_vertex, current_vertex, style_info.graph);
+  }
+
+  style_resources[0].parent = new_parent_id;
+}
+
 static ResourceValueMergingPass s_pass;
