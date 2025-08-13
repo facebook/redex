@@ -79,6 +79,12 @@ class ResourceValueMergingPass : public Pass {
       const UnorderedSet<uint32_t>& ambiguous_styles,
       const UnorderedSet<uint32_t>& directly_reachable_styles);
 
+  resources::StyleInfo add_synthetic_nodes_to_graph(
+      ResourceTableFile& res_table,
+      const resources::StyleInfo& initial,
+      const UnorderedSet<uint32_t>& directly_reachable_styles,
+      const UnorderedSet<uint32_t>& ambiguous_styles);
+
   void apply_additions_to_style_graph(
       resources::StyleInfo& style_info,
       const UnorderedMap<
@@ -152,6 +158,12 @@ class ResourceValueMergingPass : public Pass {
   void update_parent(resources::StyleInfo& style_info,
                      uint32_t resource_id,
                      uint32_t new_parent_id);
+
+  std::vector<std::vector<uint32_t>>
+  get_cost_effective_synthetic_style_opportunities(
+      const std::vector<std::vector<uint32_t>>& siblings,
+      const resources::StyleInfo& style_info,
+      uint32_t config_count);
 
  private:
   ResourceAttributeInformation find_resource_optimization_candidates(

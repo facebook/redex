@@ -439,6 +439,66 @@ resources::StyleInfo ResourceValueMergingPass::get_optimized_graph(
   return optimized;
 }
 
+std::vector<std::vector<uint32_t>>
+ResourceValueMergingPass::get_cost_effective_synthetic_style_opportunities(
+    const std::vector<std::vector<uint32_t>>& siblings,
+    const resources::StyleInfo& style_info,
+    uint32_t config_count) {
+  std::vector<std::vector<uint32_t>> synthetic_styles;
+
+  for (const auto& sibling : siblings) {
+    auto common_attributes =
+        get_common_attributes_between_resources(sibling, style_info);
+    uint32_t synthetic_style_cost = get_cost_of_synthetic_style(
+        config_count, static_cast<uint32_t>(common_attributes.size()));
+    if (should_create_synthetic_resources(
+            synthetic_style_cost + 24,
+            static_cast<uint32_t>(sibling.size()),
+            static_cast<uint32_t>(common_attributes.size()))) {
+      synthetic_styles.push_back(sibling);
+    }
+  }
+
+  return synthetic_styles;
+}
+
+resources::StyleInfo ResourceValueMergingPass::add_synthetic_nodes_to_graph(
+    ResourceTableFile& res_table,
+    const resources::StyleInfo& initial,
+    const UnorderedSet<uint32_t>& directly_reachable_styles,
+    const UnorderedSet<uint32_t>& ambiguous_styles) {
+  resources::StyleInfo optimized(initial);
+  size_t iteration = 0;
+  size_t iterations = initial.get_roots().size();
+  std::vector<std::vector<uint32_t>> siblings_to_optimize;
+  siblings_to_optimize.reserve(iterations);
+
+  auto config_count = get_config_count(res_table);
+
+  std::vector<std::vector<uint32_t>> intra_graph_opportunities =
+      find_intra_graph_hoistings(optimized, directly_reachable_styles,
+                                 ambiguous_styles);
+
+  siblings_to_optimize = get_cost_effective_synthetic_style_opportunities(
+      intra_graph_opportunities, optimized, config_count);
+  introduce_synthetic_resources(optimized, siblings_to_optimize);
+
+  do {
+    siblings_to_optimize.clear();
+    auto inter_graph_opportunities =
+        find_inter_graph_hoistings(optimized, ambiguous_styles);
+
+    siblings_to_optimize = get_cost_effective_synthetic_style_opportunities(
+        {inter_graph_opportunities}, optimized, config_count);
+
+    introduce_synthetic_resources(optimized, siblings_to_optimize);
+
+    iteration++;
+  } while (!siblings_to_optimize.empty() && iteration < iterations);
+
+  return optimized;
+}
+
 void ResourceValueMergingPass::apply_additions_to_style_graph(
     resources::StyleInfo& style_info,
     const UnorderedMap<uint32_t,
