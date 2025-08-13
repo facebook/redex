@@ -675,4 +675,25 @@ ResourceValueMergingPass::get_style_merging_modifications(
   return modifications;
 }
 
+uint32_t ResourceValueMergingPass::get_cost_of_synthetic_style(
+    uint32_t num_configs, uint32_t num_attributes) {
+  // All sizes in bytes
+  uint32_t res_table_entry_size = sizeof(android::ResTable_map_entry);
+  uint32_t new_flags_size = 4;
+  uint32_t offset_size = sizeof(uint32_t) * num_configs;
+  uint32_t attributes_size = num_attributes * sizeof(android::ResTable_map);
+  return res_table_entry_size + new_flags_size + offset_size + attributes_size;
+}
+
+bool ResourceValueMergingPass::should_create_synthetic_resources(
+    uint32_t synthetic_style_cost,
+    uint32_t num_resources_with_all_attributes,
+    uint32_t num_attributes) {
+  // If creating a synthetic style is more cost-effective than having multiple
+  // copies of each attribute, then proceed with creating the synthetic style
+  return synthetic_style_cost < num_resources_with_all_attributes *
+                                    num_attributes *
+                                    sizeof(android::ResTable_map);
+}
+
 static ResourceValueMergingPass s_pass;

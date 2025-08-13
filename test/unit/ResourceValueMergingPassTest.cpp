@@ -2190,3 +2190,50 @@ TEST_F(ResourceValueMergingPassTest,
 
   EXPECT_EQ(attr_it->second, value_e);
 }
+
+TEST_F(ResourceValueMergingPassTest,
+       ShouldCreateSyntheticResourcesCheaperSynthetic) {
+  uint32_t synthetic_style_cost = 100;
+  uint32_t total_attribute_references = 10;
+  uint32_t attribute_count = 1;
+
+  bool result = m_pass.should_create_synthetic_resources(
+      synthetic_style_cost, total_attribute_references, attribute_count);
+
+  EXPECT_TRUE(result);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       ShouldCreateSyntheticResourcesMultipleAttributes) {
+  uint32_t synthetic_style_cost = 100;
+  uint32_t total_attribute_references = 3;
+  uint32_t attribute_count = 3;
+
+  bool result = m_pass.should_create_synthetic_resources(
+      synthetic_style_cost + 20, total_attribute_references, attribute_count);
+
+  EXPECT_FALSE(result);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       ShouldCreateSyntheticResourcesMoreExpensiveSynthetic) {
+  uint32_t synthetic_style_cost = 200;
+  uint32_t total_attribute_references = 5;
+  uint32_t attribute_count = 3;
+
+  bool result = m_pass.should_create_synthetic_resources(
+      synthetic_style_cost + 20, total_attribute_references, attribute_count);
+
+  EXPECT_FALSE(result);
+}
+
+TEST_F(ResourceValueMergingPassTest, ShouldCreateSyntheticResourcesEqualCost) {
+  uint32_t synthetic_style_cost = 100;
+  uint32_t total_attribute_references = 10;
+  uint32_t attribute_count = 1;
+
+  bool result = m_pass.should_create_synthetic_resources(
+      synthetic_style_cost + 20, total_attribute_references, attribute_count);
+
+  EXPECT_FALSE(result);
+}

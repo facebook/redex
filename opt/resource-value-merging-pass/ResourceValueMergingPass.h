@@ -106,6 +106,14 @@ class ResourceValueMergingPass : public Pass {
       const resources::StyleInfo& style_info,
       const std::vector<uint32_t>& resources_to_merge);
 
+  uint32_t get_cost_of_synthetic_style(uint32_t num_configs,
+                                       uint32_t num_attributes);
+
+  bool should_create_synthetic_resources(
+      uint32_t synthetic_style_cost,
+      uint32_t num_resources_with_all_attributes,
+      uint32_t num_attributes);
+
  private:
   ResourceAttributeInformation find_resource_optimization_candidates(
       resources::StyleInfo::vertex_t vertex,
