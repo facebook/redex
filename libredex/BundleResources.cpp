@@ -3144,6 +3144,11 @@ void ResourcesPbFile::apply_style_merges(
   }
 }
 
+void ResourcesPbFile::add_styles(
+    const std::vector<StyleModificationSpec::Modification>&
+    /* modifications */,
+    const std::vector<std::string>& /* resources_pb_paths */) {}
+
 ResourcesPbFile::~ResourcesPbFile() {}
 
 #endif // HAS_PROTOBUF

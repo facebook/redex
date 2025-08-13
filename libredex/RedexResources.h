@@ -531,6 +531,12 @@ class ResourceTableFile {
           modifications,
       const std::vector<std::string>& resources_pb_paths) = 0;
 
+  // Adds new style to resources apps
+  virtual void add_styles(
+      const std::vector<resources::StyleModificationSpec::Modification>&
+          modifications,
+      const std::vector<std::string>& resources_pb_paths) = 0;
+
   // Builds a graph of all styles in the application, with outgoing edges to
   // the parent of each style.
   resources::StyleInfo load_style_info();
