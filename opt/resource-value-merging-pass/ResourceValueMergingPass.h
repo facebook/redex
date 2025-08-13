@@ -98,8 +98,8 @@ class ResourceValueMergingPass : public Pass {
   uint32_t introduce_synthetic_resource(resources::StyleInfo& style_info,
                                         const std::vector<uint32_t>& children);
 
-  OptimizableResources get_graph_diffs(
-      const resources::StyleInfo& inital,
+  std::vector<resources::StyleModificationSpec::Modification> get_graph_diffs(
+      const resources::StyleInfo& initial,
       const resources::StyleInfo& optimized,
       const UnorderedSet<uint32_t>& ambiguous_styles);
 

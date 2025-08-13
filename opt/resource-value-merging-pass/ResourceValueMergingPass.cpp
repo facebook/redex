@@ -115,25 +115,8 @@ void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
   const auto& optimized_style_graph = get_optimized_graph(
       style_info, ambiguous_styles, directly_reachable_styles);
 
-  OptimizableResources optimized_resources =
+  std::vector<resources::StyleModificationSpec::Modification> modifications =
       get_graph_diffs(style_info, optimized_style_graph, ambiguous_styles);
-
-  std::vector<resources::StyleModificationSpec::Modification> modifications;
-  for (const auto& [resource_id, attributes] :
-       UnorderedIterable(optimized_resources.removals)) {
-    for (const auto& attribute_id : UnorderedIterable(attributes)) {
-      modifications.push_back(resources::StyleModificationSpec::Modification(
-          resource_id, attribute_id));
-    }
-  }
-
-  for (const auto& [resource_id, attr_map] :
-       UnorderedIterable(optimized_resources.additions)) {
-    for (const auto& [attribute_id, value] : UnorderedIterable(attr_map)) {
-      modifications.push_back(resources::StyleModificationSpec::Modification(
-          resource_id, attribute_id, value));
-    }
-  }
 
   res_table->apply_attribute_removals(modifications, resource_files);
   res_table = resources->load_res_table();
@@ -561,60 +544,104 @@ find_attribute_differences(const StyleResource& A, const StyleResource& B) {
   return diff_attrs;
 }
 
-OptimizableResources ResourceValueMergingPass::get_graph_diffs(
-    const resources::StyleInfo& inital,
-    const resources::StyleInfo& optimized,
-    const UnorderedSet<uint32_t>& ambiguous_styles) {
-  OptimizableResources diff;
+void handle_new_resource(
+    uint32_t resource_id,
+    const StyleResource& resource,
+    std::vector<StyleModificationSpec::Modification>& modifications) {
+  modifications.push_back(StyleModificationSpec::Modification(resource_id));
 
-  // No resources should have been removed in previous iterations, so the
-  // resources in the initial and optimized graph should be the same
-  UnorderedSet<uint32_t> all_resource_ids;
-  for (const auto& [resource_id, _] : UnorderedIterable(inital.styles)) {
-    if (ambiguous_styles.find(resource_id) != ambiguous_styles.end()) {
+  UnorderedMap<uint32_t, StyleResource::Value> parent_attrs;
+  for (const auto& [attr_id, value] : UnorderedIterable(resource.attributes)) {
+    parent_attrs.insert({attr_id, value});
+  }
+  modifications.push_back(StyleModificationSpec::Modification(
+      resource_id, resource.parent, std::move(parent_attrs)));
+}
+
+void handle_modified_resource(
+    uint32_t resource_id,
+    const StyleResource& initial_resource,
+    const StyleResource& optimized_resource,
+    std::vector<StyleModificationSpec::Modification>& modifications) {
+
+  const auto removal_attrs =
+      find_attribute_differences(initial_resource, optimized_resource);
+  for (const auto& [attr_id, _] : UnorderedIterable(removal_attrs)) {
+    modifications.push_back(
+        StyleModificationSpec::Modification(resource_id, attr_id));
+  }
+
+  const auto addition_attrs =
+      find_attribute_differences(optimized_resource, initial_resource);
+  for (const auto& [attr_id, value] : UnorderedIterable(addition_attrs)) {
+    modifications.push_back(
+        StyleModificationSpec::Modification(resource_id, attr_id, value));
+  }
+
+  // Values that exist in initial and optimized but have different values.
+  // Changed values are represented as a deletion of the attribute followed by
+  // an addition of the same attribute with the updated value.
+  for (const auto& [attr_id, initial_value] :
+       UnorderedIterable(initial_resource.attributes)) {
+    const auto& optimized_attr_it = optimized_resource.attributes.find(attr_id);
+    if (optimized_attr_it == optimized_resource.attributes.end()) {
       continue;
     }
-    all_resource_ids.insert(resource_id);
+
+    const auto& optimized_value = optimized_attr_it->second;
+    if (!(initial_value == optimized_value)) {
+      modifications.push_back(
+          StyleModificationSpec::Modification(resource_id, attr_id));
+      modifications.push_back(StyleModificationSpec::Modification(
+          resource_id, attr_id, optimized_value));
+    }
+  }
+
+  // Add parent modification
+  if (initial_resource.parent != optimized_resource.parent) {
+    modifications.push_back(StyleModificationSpec::Modification(
+        resource_id, optimized_resource.parent,
+        UnorderedMap<uint32_t, StyleResource::Value>()));
+  }
+}
+
+std::vector<resources::StyleModificationSpec::Modification>
+ResourceValueMergingPass::get_graph_diffs(
+    const StyleInfo& initial,
+    const StyleInfo& optimized,
+    const UnorderedSet<uint32_t>& ambiguous_styles) {
+  std::vector<StyleModificationSpec::Modification> modifications;
+
+  UnorderedSet<uint32_t> all_resource_ids;
+
+  for (const auto& [resource_id, _] : UnorderedIterable(optimized.styles)) {
+    if (ambiguous_styles.find(resource_id) == ambiguous_styles.end()) {
+      all_resource_ids.insert(resource_id);
+    }
   }
 
   for (const auto& resource_id : UnorderedIterable(all_resource_ids)) {
-    auto initial_style_it = inital.styles.find(resource_id);
-    auto optimized_style_it = optimized.styles.find(resource_id);
+    const auto initial_it = initial.styles.find(resource_id);
+    const auto optimized_it = optimized.styles.find(resource_id);
 
-    always_assert_log(initial_style_it != inital.styles.end() &&
-                          optimized_style_it != optimized.styles.end(),
-                      "Resource 0x%x not found", resource_id);
+    const bool exists_in_initial = initial_it != initial.styles.end();
+    const bool exists_in_optimized = optimized_it != optimized.styles.end();
 
-    const StyleResource& initial_style = initial_style_it->second[0];
-    const StyleResource& optimized_style = optimized_style_it->second[0];
+    always_assert_log(
+        !(exists_in_initial && !exists_in_optimized),
+        "Resource 0x%x was deleted in optimized graph but is found in "
+        "initial graph which should not be possible",
+        resource_id);
 
-    auto removal_attrs =
-        find_attribute_differences(initial_style, optimized_style);
-    for (const auto& [attr_id, _] : UnorderedIterable(removal_attrs)) {
-      diff.removals[resource_id].insert(attr_id);
-    }
-
-    auto addition_attrs =
-        find_attribute_differences(optimized_style, initial_style);
-    for (const auto& [attr_id, value] : UnorderedIterable(addition_attrs)) {
-      diff.additions[resource_id].insert({attr_id, value});
-    }
-
-    for (const auto& [attr_id, initial_value] :
-         UnorderedIterable(initial_style.attributes)) {
-      auto optimized_attr_it = optimized_style.attributes.find(attr_id);
-      if (optimized_attr_it == optimized_style.attributes.end()) {
-        continue;
-      }
-      const auto& optimized_value = optimized_attr_it->second;
-      if (!(initial_value == optimized_value)) {
-        diff.removals[resource_id].insert(attr_id);
-        diff.additions[resource_id].insert({attr_id, optimized_value});
-      }
+    if (!exists_in_initial && exists_in_optimized) {
+      handle_new_resource(resource_id, optimized_it->second[0], modifications);
+    } else if (exists_in_initial && exists_in_optimized) {
+      handle_modified_resource(resource_id, initial_it->second[0],
+                               optimized_it->second[0], modifications);
     }
   }
 
-  return diff;
+  return modifications;
 }
 
 void ResourceValueMergingPass::find_resources_to_merge(

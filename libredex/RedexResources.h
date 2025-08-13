@@ -269,13 +269,12 @@ struct StyleModificationSpec {
   enum class ModificationType {
     ADD_ATTRIBUTE,
     REMOVE_ATTRIBUTE,
-    DELETE_STYLE,
-    UPDATE_PARENT_ADD_ATTRIBUTES
+    UPDATE_PARENT_ADD_ATTRIBUTES,
+    NEW_STYLE
   };
 
   struct Modification {
     ModificationType type;
-
     uint32_t resource_id{0};
     std::optional<uint32_t> attribute_id{std::nullopt};
     std::optional<StyleResource::Value> value{std::nullopt};
@@ -283,7 +282,7 @@ struct StyleModificationSpec {
     UnorderedMap<uint32_t, StyleResource::Value> values;
 
     explicit Modification(uint32_t resource_id)
-        : type(ModificationType::DELETE_STYLE), resource_id{resource_id} {}
+        : type(ModificationType::NEW_STYLE), resource_id{resource_id} {}
     Modification(uint32_t resource_id, uint32_t attr_id)
         : type(ModificationType::REMOVE_ATTRIBUTE),
           resource_id{resource_id},
