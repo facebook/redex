@@ -142,6 +142,10 @@ class ResourceValueMergingPass : public Pass {
   uint32_t get_common_parent(const std::vector<uint32_t>& children,
                              const resources::StyleInfo& style_info);
 
+  // Returns the resource ID of the new synthetic resource
+  uint32_t create_synthetic_resource_node(resources::StyleInfo& style_info,
+                                          uint32_t original_parent_id);
+
  private:
   ResourceAttributeInformation find_resource_optimization_candidates(
       resources::StyleInfo::vertex_t vertex,

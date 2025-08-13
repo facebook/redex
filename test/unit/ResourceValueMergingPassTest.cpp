@@ -42,6 +42,58 @@ class ResourceValueMergingPassTest : public ::testing::Test {
 
     return style;
   }
+
+  void setup_style_graph(
+      resources::StyleInfo& style_info,
+      const std::vector<std::pair<uint32_t, uint32_t>>& resource_parent_pairs,
+      std::unordered_map<uint32_t, resources::StyleInfo::vertex_t>&
+          vertex_map) {
+
+    for (const auto& [resource_id, parent_id] : resource_parent_pairs) {
+      if (vertex_map.find(resource_id) == vertex_map.end()) {
+        vertex_map[resource_id] = add_vertex(style_info, resource_id);
+      }
+      if (parent_id != 0 && vertex_map.find(parent_id) == vertex_map.end()) {
+        vertex_map[parent_id] = add_vertex(style_info, parent_id);
+      }
+    }
+
+    for (const auto& [resource_id, parent_id] : resource_parent_pairs) {
+      if (parent_id != 0) {
+        add_edge(style_info, vertex_map[parent_id], vertex_map[resource_id]);
+      }
+    }
+  }
+
+  void test_synthetic_resource_creation(
+      const std::vector<std::pair<uint32_t, uint32_t>>& resource_parent_pairs,
+      uint32_t max_resource_id_before_creation) {
+
+    resources::StyleInfo style_info;
+    style_info.set_max_resource_id(max_resource_id_before_creation);
+
+    std::unordered_map<uint32_t, resources::StyleInfo::vertex_t> vertex_map;
+    setup_style_graph(style_info, resource_parent_pairs, vertex_map);
+
+    for (const auto& [resource_id, parent_id] : resource_parent_pairs) {
+      uint32_t synthetic_id =
+          m_pass.create_synthetic_resource_node(style_info, parent_id);
+
+      EXPECT_TRUE(style_info.id_to_vertex.count(synthetic_id) > 0);
+
+      EXPECT_TRUE(style_info.styles.count(synthetic_id) > 0);
+      EXPECT_EQ(style_info.styles.at(synthetic_id).size(), 1);
+      EXPECT_EQ(style_info.styles.at(synthetic_id)[0].parent, parent_id);
+
+      if (parent_id != 0) {
+        auto parent_vertex = vertex_map.at(parent_id);
+        auto synthetic_vertex = style_info.id_to_vertex.at(synthetic_id);
+        auto edge_exists =
+            boost::edge(parent_vertex, synthetic_vertex, style_info.graph);
+        EXPECT_TRUE(edge_exists.second);
+      }
+    }
+  }
 };
 
 TEST_F(ResourceValueMergingPassTest, FindCommonAttributesEmptyStyleMap) {
@@ -2857,4 +2909,34 @@ TEST_F(ResourceValueMergingPassTest, GetCommonParentEmptyChildren) {
   std::vector<uint32_t> children;
 
   EXPECT_THROW(m_pass.get_common_parent(children, style_info), std::exception);
+}
+
+TEST_F(ResourceValueMergingPassTest, CreateSyntheticResourceNodeBasic) {
+  test_synthetic_resource_creation({{0x7f010001, 0}}, 0x7f01001);
+}
+
+TEST_F(ResourceValueMergingPassTest, CreateSyntheticResourceNodeMultipleCalls) {
+  // Multiple roots
+  test_synthetic_resource_creation(
+      {{0x7f010001, 0}, {0x7f010002, 0}, {0x7f010003, 0}}, 0x7f010003);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       CreateSyntheticResourceNodeGraphStructure) {
+  test_synthetic_resource_creation({{0x7f010002, 0x7f010001}}, 0x7f010040);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       CreateSyntheticResourceNodeWithComplexHierarchy) {
+  test_synthetic_resource_creation(
+      {
+          {0x7f010001, 0}, // grandparent
+          {0x7f010002, 0x7f010001}, // parent
+          {0x7f010003, 0x7f010002} // child
+      },
+      0x7f010003);
+}
+
+TEST_F(ResourceValueMergingPassTest, CreateSyntheticResourceNodeReturnValue) {
+  test_synthetic_resource_creation({{0x7f010001, 0}}, 0x7f010001);
 }

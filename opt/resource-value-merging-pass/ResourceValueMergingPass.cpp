@@ -937,4 +937,25 @@ uint32_t ResourceValueMergingPass::get_common_parent(
   return parent_id;
 }
 
+uint32_t ResourceValueMergingPass::create_synthetic_resource_node(
+    resources::StyleInfo& style_info, uint32_t original_parent_id) {
+  const uint32_t synthetic_resource_id = style_info.get_new_resource_id();
+
+  const auto synthetic_vertex = boost::add_vertex(
+      resources::StyleInfo::Node{synthetic_resource_id}, style_info.graph);
+
+  style_info.id_to_vertex.insert({synthetic_resource_id, synthetic_vertex});
+
+  resources::StyleResource synthetic_style;
+  synthetic_style.id = synthetic_resource_id;
+  synthetic_style.parent = original_parent_id;
+  style_info.styles.insert({synthetic_resource_id, {synthetic_style}});
+
+  if (original_parent_id != 0) {
+    const auto& parent_vertex = style_info.id_to_vertex.at(original_parent_id);
+    boost::add_edge(parent_vertex, synthetic_vertex, style_info.graph);
+  }
+  return synthetic_resource_id;
+}
+
 static ResourceValueMergingPass s_pass;
