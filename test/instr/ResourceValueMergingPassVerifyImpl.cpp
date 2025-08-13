@@ -48,8 +48,8 @@ const UnorderedMap<std::string, UnorderedSet<uint32_t>> REMOVED_ATTRIBUTES = {
     {"TextStyle.Caption", {kTextSize}},
     {"TextStyle.Heading", {kTextSize}},
     {"TextStyle.Subheading", {kTextSize}},
-    {"ThemeA", {kTextColorAttrId}},
-    {"ThemeB", {kTextColorAttrId}}};
+    {"ThemeA", {kTextSize}},
+    {"ThemeB", {kTextSize}}};
 
 const UnorderedMap<std::string, UnorderedSet<uint32_t>> ADDED_ATTRIBUTES = {
     {"AppTheme",
@@ -60,7 +60,7 @@ const UnorderedMap<std::string, UnorderedSet<uint32_t>> ADDED_ATTRIBUTES = {
     {"BaseTextStyle", {kTextSize}},
     {"CardBase", {kBackgroundTint}},
     {"InputBase", {kBackgroundAttrId}},
-    {"ThemeParent", {kTextColorAttrId}}};
+    {"ThemeParent", {kTextSize}}};
 
 void verify_attribute_existance(
     ResourceTableFile* res_table,
@@ -135,6 +135,18 @@ void resource_value_merging_PreVerify(ResourceTableFile* res_table,
       }
     }
   }
+
+  EXPECT_THAT(pass.get_config_count(*res_table), 2);
+  auto app_theme_ids = res_table->get_res_ids_by_name("AppTheme");
+  auto base_style_ids = res_table->get_res_ids_by_name("BaseStyle1");
+  auto input_base_ids = res_table->get_res_ids_by_name("InputBase");
+  EXPECT_THAT(app_theme_ids, SizeIs(1));
+  EXPECT_THAT(base_style_ids, SizeIs(1));
+  EXPECT_THAT(input_base_ids, SizeIs(1));
+  EXPECT_THAT(pass.find_inter_graph_hoistings(style_info, ambiguous_styles),
+              ::testing::UnorderedElementsAre(*app_theme_ids.begin(),
+                                              *base_style_ids.begin(),
+                                              *input_base_ids.begin()));
 }
 
 void resource_value_merging_PostVerify(ResourceTableFile* res_table) {

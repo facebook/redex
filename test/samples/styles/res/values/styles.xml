@@ -2,10 +2,10 @@
 <resources>
   <!-- Base text styles with common attributes -->
   <style name="BaseTextStyle">
-    <item name="android:textColor">#333333</item>
+    <item name="android:textColor">#212121</item>
     <item name="android:fontFamily">sans-serif</item>
     <item name="android:layout_margin">0px</item>
-    <item name="android:padding">0px</item>
+    <item name="android:padding">8px</item>
   </style>
 
   <!-- Text style variations -->
@@ -95,7 +95,7 @@
   <!-- Input field styles -->
   <style name="InputBase">
     <item name="android:textSize">16px</item>
-    <item name="android:padding">12px</item>
+    <item name="android:padding">11px</item>
     <item name="android:textColor">#212121</item>
     <item name="android:layout_marginBottom">16px</item>
   </style>
@@ -133,7 +133,8 @@
 
   <!-- Add ThemeA style to ensure it exists in the styles sample as well -->
   <style name="ThemeParent">
-    <item name="android:background">#CECECE</item>
+    <item name="android:background">#FFFFFF</item>
+    <item name="android:textColor">#212121</item>
   </style>
 
   <style name="ThemeA" parent="ThemeParent">
@@ -142,12 +143,12 @@
     <item name="android:textColor">#00FF00</item>
   </style>
   <style name="ThemeB" parent="ThemeParent">
-    <item name="android:textColor">#00FF00</item>
+    <item name="android:textSize">20px</item>
   </style>
 
   <style name="BaseStyle1">
     <item name="android:textSize">16px</item>
-    <item name="android:textColor">#CCCCCC</item>
+    <item name="android:textColor">#212121</item>
     <item name="android:padding">8px</item>
   </style>
 

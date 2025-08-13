@@ -106,6 +106,7 @@ void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
   resources::ReachabilityOptions options;
   StyleAnalysis style_analysis(apk_dir, conf.get_global_config(), options,
                                stores, UnorderedSet<uint32_t>());
+
   const auto& ambiguous_styles = style_analysis.ambiguous_styles();
   const auto& directly_reachable_styles =
       style_analysis.directly_reachable_styles();
@@ -710,6 +711,34 @@ bool ResourceValueMergingPass::should_create_synthetic_resources(
                                     sizeof(android::ResTable_map);
 }
 
+uint32_t ResourceValueMergingPass::get_config_count(
+    ResourceTableFile& res_table) {
+  uint32_t config_count = 0;
+
+  size_t package_count = res_table.package_count();
+
+  always_assert_log(package_count == 1,
+                    "Expected exactly one package, but found %zu",
+                    package_count);
+
+  uint32_t package_id = APPLICATION_PACKAGE;
+
+  std::vector<std::string> type_names;
+  res_table.get_type_names(&type_names);
+
+  for (const auto& type_name : type_names) {
+    if (type_name != "style") {
+      continue;
+    }
+
+    std::vector<android::ResTable_config> configs;
+    res_table.get_configurations(package_id, type_name, &configs);
+
+    config_count += configs.size();
+  }
+  return config_count;
+}
+
 std::vector<std::vector<uint32_t>>
 ResourceValueMergingPass::find_intra_graph_hoistings(
     const resources::StyleInfo& style_info,
@@ -755,4 +784,122 @@ ResourceValueMergingPass::find_intra_graph_hoistings(
   return valid_hoistings;
 }
 
+UnorderedMap<uint32_t, resources::StyleResource::Value>
+ResourceValueMergingPass::get_hoistable_attributes(
+    const std::vector<uint32_t>& resource_ids,
+    const resources::StyleInfo& style_info) {
+  if (resource_ids.empty()) {
+    return {};
+  }
+
+  auto common_attributes =
+      get_common_attributes_between_resources(resource_ids, style_info);
+  UnorderedMap<uint32_t, resources::StyleResource::Value> hoistable_attributes;
+  UnorderedSet<uint32_t> resource_ids_set(resource_ids.begin(),
+                                          resource_ids.end());
+
+  for (const auto& attr_id : UnorderedIterable(common_attributes)) {
+    auto common_value = get_common_attribute_among_children(
+        resource_ids_set, attr_id, style_info.styles);
+    if (common_value.has_value()) {
+      hoistable_attributes.insert({attr_id, common_value.value()});
+    }
+  }
+  return hoistable_attributes;
+}
+
+std::vector<uint32_t> ResourceValueMergingPass::find_best_hoisting_combination(
+    const std::vector<uint32_t>& valid_roots,
+    const resources::StyleInfo& style_info) {
+  if (valid_roots.size() < 2) {
+    return {};
+  }
+
+  std::vector<uint32_t> best_combination;
+  uint32_t best_savings = 0;
+
+  for (size_t i = 0; i < valid_roots.size(); ++i) {
+    for (size_t j = i + 1; j < valid_roots.size(); ++j) {
+      std::vector<uint32_t> candidate_pair = {valid_roots[i], valid_roots[j]};
+      const auto& hoistable_attributes =
+          get_hoistable_attributes(candidate_pair, style_info);
+      uint32_t savings = static_cast<uint32_t>(hoistable_attributes.size() *
+                                               candidate_pair.size());
+
+      if (savings > best_savings) {
+        best_savings = savings;
+        best_combination = std::move(candidate_pair);
+      }
+    }
+  }
+
+  if (best_combination.empty()) {
+    return {};
+  }
+
+  UnorderedSet<uint32_t> used_resources(best_combination.begin(),
+                                        best_combination.end());
+
+  bool improvement_found;
+  do {
+    improvement_found = false;
+    uint32_t best_candidate_id = 0;
+    uint32_t best_candidate_savings = best_savings;
+
+    for (uint32_t candidate_id : valid_roots) {
+      if (used_resources.find(candidate_id) != used_resources.end()) {
+        continue;
+      }
+
+      best_combination.push_back(candidate_id);
+
+      const auto& hoistable_attributes =
+          get_hoistable_attributes(best_combination, style_info);
+      uint32_t candidate_savings = static_cast<uint32_t>(
+          hoistable_attributes.size() * best_combination.size());
+
+      if (candidate_savings > best_candidate_savings) {
+        best_candidate_id = candidate_id;
+        best_candidate_savings = candidate_savings;
+        improvement_found = true;
+      }
+      best_combination.pop_back();
+    }
+
+    if (improvement_found) {
+      best_combination.push_back(best_candidate_id);
+      used_resources.insert(best_candidate_id);
+      best_savings = best_candidate_savings;
+    }
+  } while (improvement_found);
+
+  return best_combination;
+}
+
+std::vector<uint32_t> ResourceValueMergingPass::find_inter_graph_hoistings(
+    const resources::StyleInfo& style_info,
+    const UnorderedSet<uint32_t>& ambiguous_styles) {
+  auto root_vertices = style_info.get_roots();
+  std::vector<uint32_t> valid_roots;
+  valid_roots.reserve(root_vertices.size());
+
+  for (const auto& vertex : UnorderedIterable(root_vertices)) {
+    auto resource_id = style_info.graph[vertex].id;
+    if (ambiguous_styles.find(resource_id) != ambiguous_styles.end()) {
+      continue;
+    }
+
+    auto style_resource_opt =
+        find_style_resource(resource_id, style_info.styles);
+    always_assert_log(style_resource_opt.has_value(), "Resource 0x%x not found",
+                      resource_id);
+
+    if (style_resource_opt->parent == 0 &&
+        style_info.get_depth(resource_id) < MAX_ITERATIONS) {
+      valid_roots.push_back(resource_id);
+    }
+  }
+
+  return find_best_hoisting_combination(valid_roots, style_info);
+}
 static ResourceValueMergingPass s_pass;
