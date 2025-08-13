@@ -740,3 +740,16 @@ TEST(RedexResources, StyleInfoGetDepth) {
     EXPECT_EQ(style_info.get_depth(GRANDCHILD1_ID), 0u);
   }
 }
+
+TEST(RedexResources, StyleInfoGetNewResourceId) {
+  resources::StyleInfo style_info;
+  style_info.set_max_resource_id(0x7f010000u);
+
+  uint32_t first_id = style_info.get_new_resource_id();
+  uint32_t second_id = style_info.get_new_resource_id();
+  uint32_t third_id = style_info.get_new_resource_id();
+
+  EXPECT_EQ(first_id, 0x7f010001u);
+  EXPECT_EQ(second_id, 0x7f010002u);
+  EXPECT_EQ(third_id, 0x7f010003u);
+}

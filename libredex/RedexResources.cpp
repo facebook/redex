@@ -532,6 +532,7 @@ void ResourceTableFile::finalize_resource_table(const ResourceConfig& config) {
 
 resources::StyleInfo ResourceTableFile::load_style_info() {
   resources::StyleInfo style_info;
+  uint32_t max_resource_id = 0;
   style_info.styles = get_style_map();
   TRACE(RES,
         3,
@@ -539,6 +540,7 @@ resources::StyleInfo ResourceTableFile::load_style_info() {
         style_info.styles.size());
   std::unordered_map<uint32_t, resources::StyleInfo::vertex_t> added_nodes;
   for (auto&& [id, _] : style_info.styles) {
+    max_resource_id = std::max(max_resource_id, id);
     auto v =
         boost::add_vertex(resources::StyleInfo::Node{id}, style_info.graph);
     added_nodes.emplace(id, v);
@@ -556,6 +558,7 @@ resources::StyleInfo ResourceTableFile::load_style_info() {
       }
     }
   }
+  style_info.set_max_resource_id(max_resource_id);
   style_info.id_to_vertex = added_nodes;
   return style_info;
 }
@@ -828,6 +831,16 @@ uint32_t StyleInfo::get_depth(uint32_t resource_id) const {
   };
 
   return calculate_depth(resource_id);
+}
+
+void StyleInfo::set_max_resource_id(uint32_t new_max_resource_id) {
+  max_resource_id = new_max_resource_id;
+}
+
+uint32_t StyleInfo::get_new_resource_id() {
+  uint32_t new_max_resource_id = max_resource_id + 1;
+  set_max_resource_id(new_max_resource_id);
+  return new_max_resource_id;
 }
 
 }; // namespace resources

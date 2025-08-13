@@ -252,6 +252,14 @@ struct StyleInfo {
 
   // Gets the depth of the tree from a given resource ID relative to the leaf.
   uint32_t get_depth(uint32_t resource_id) const;
+
+  void set_max_resource_id(uint32_t max_resource_id);
+
+  // Returns the next available resource ID to use.
+  uint32_t get_new_resource_id();
+
+ private:
+  uint32_t max_resource_id{0};
 };
 
 // Modification specification for styles in APK and App Bundle containers.
