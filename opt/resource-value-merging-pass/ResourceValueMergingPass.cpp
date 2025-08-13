@@ -696,4 +696,49 @@ bool ResourceValueMergingPass::should_create_synthetic_resources(
                                     sizeof(android::ResTable_map);
 }
 
+std::vector<std::vector<uint32_t>>
+ResourceValueMergingPass::find_intra_graph_hoistings(
+    const resources::StyleInfo& style_info,
+    const UnorderedSet<uint32_t>& directly_reachable_styles,
+    const UnorderedSet<uint32_t>& ambiguous_styles) {
+  OptimizableResources optimizable_candidates;
+  const auto& root_vertices = style_info.get_roots();
+
+  for (const auto& vertex : UnorderedIterable(root_vertices)) {
+    find_resource_optimization_candidates(
+        vertex, style_info, optimizable_candidates, ambiguous_styles);
+  }
+
+  UnorderedMap<uint32_t,
+               UnorderedMap<uint32_t, resources::StyleResource::Value>>
+      directly_reachable_hoistings;
+  for (const auto& [resource_id, attr_map] :
+       UnorderedIterable(optimizable_candidates.additions)) {
+    if (directly_reachable_styles.find(resource_id) !=
+        directly_reachable_styles.end()) {
+      directly_reachable_hoistings.insert({resource_id, attr_map});
+    }
+  }
+
+  // Only hoist attributes to the parent from children that are not ambiguous
+  std::vector<std::vector<uint32_t>> valid_hoistings;
+  for (const auto& [resource_id, attr_map] :
+       UnorderedIterable(directly_reachable_hoistings)) {
+    bool all_children_valid = true;
+
+    for (const auto& child_id : style_info.get_children(resource_id)) {
+      if (ambiguous_styles.find(child_id) != ambiguous_styles.end()) {
+        all_children_valid = false;
+        break;
+      }
+    }
+
+    if (all_children_valid) {
+      valid_hoistings.push_back(style_info.get_children(resource_id));
+    }
+  }
+
+  return valid_hoistings;
+}
+
 static ResourceValueMergingPass s_pass;

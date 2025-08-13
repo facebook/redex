@@ -114,6 +114,13 @@ class ResourceValueMergingPass : public Pass {
       uint32_t num_resources_with_all_attributes,
       uint32_t num_attributes);
 
+  // Returns groups of resource IDs that have some identical attributes which
+  // can be extracted and moved to a new a common parent style
+  std::vector<std::vector<uint32_t>> find_intra_graph_hoistings(
+      const resources::StyleInfo& style_info,
+      const UnorderedSet<uint32_t>& directly_reachable_styles,
+      const UnorderedSet<uint32_t>& ambiguous_styles);
+
  private:
   ResourceAttributeInformation find_resource_optimization_candidates(
       resources::StyleInfo::vertex_t vertex,

@@ -465,6 +465,7 @@ resolve_proguard_value_test_SOURCES = ResolveProguardAssumeValuesTest.cpp ScopeH
 resource_inlining_test_SOURCES = ResourceInliningTest.cpp ScopeHelper.cpp
 
 resource_value_merging_SOURCES = ResourceValueMergingPassTest.cpp
+resource_value_merging_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 result_propagation_test_SOURCES = ResultPropagationTest.cpp
 result_propagation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)

@@ -2237,3 +2237,327 @@ TEST_F(ResourceValueMergingPassTest, ShouldCreateSyntheticResourcesEqualCost) {
 
   EXPECT_FALSE(result);
 }
+
+TEST_F(ResourceValueMergingPassTest, FindIntraGraphHoistingsEmptyStyleInfo) {
+  resources::StyleInfo style_info;
+  UnorderedSet<uint32_t> directly_reachable_styles;
+  UnorderedSet<uint32_t> ambiguous_styles;
+
+  auto result = m_pass.find_intra_graph_hoistings(
+      style_info, directly_reachable_styles, ambiguous_styles);
+
+  EXPECT_TRUE(result.empty());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       FindIntraGraphHoistingsEmptyDirectlyReachable) {
+  resources::StyleInfo style_info;
+
+  uint32_t root_id = 0x7f010001;
+  add_vertex(style_info, root_id);
+
+  UnorderedSet<uint32_t> directly_reachable_styles;
+  UnorderedSet<uint32_t> ambiguous_styles;
+
+  auto result = m_pass.find_intra_graph_hoistings(
+      style_info, directly_reachable_styles, ambiguous_styles);
+
+  EXPECT_TRUE(result.empty());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       FindIntraGraphHoistingsSingleDirectlyReachable) {
+  resources::StyleInfo style_info;
+
+  uint32_t root_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+  uint32_t attr_id = 0x7f020001;
+
+  auto root_vertex = add_vertex(style_info, root_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+  add_edge(style_info, root_vertex, child_vertex);
+
+  resources::StyleResource root_style;
+  root_style.id = root_id;
+  root_style.parent = 0;
+  style_info.styles[root_id].push_back(root_style);
+
+  resources::StyleResource child_style;
+  child_style.id = child_id;
+  child_style.parent = root_id;
+  resources::StyleResource::Value value(42, 0);
+  child_style.attributes.insert({attr_id, value});
+  style_info.styles[child_id].push_back(child_style);
+
+  UnorderedSet<uint32_t> directly_reachable_styles = {root_id};
+  UnorderedSet<uint32_t> ambiguous_styles;
+
+  auto result = m_pass.find_intra_graph_hoistings(
+      style_info, directly_reachable_styles, ambiguous_styles);
+
+  EXPECT_THAT(result[0], ::testing::UnorderedElementsAre(child_id));
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       FindIntraGraphHoistingsChildDirectlyReachable) {
+  resources::StyleInfo style_info;
+
+  uint32_t root_id = 0x7f010001;
+  uint32_t child1_id = 0x7f010002;
+  uint32_t child2_id = 0x7f010003;
+  uint32_t attr_id = 0x7f020001;
+
+  auto root_vertex = add_vertex(style_info, root_id);
+  auto child1_vertex = add_vertex(style_info, child1_id);
+  auto child2_vertex = add_vertex(style_info, child2_id);
+  add_edge(style_info, root_vertex, child1_vertex);
+  add_edge(style_info, root_vertex, child2_vertex);
+
+  resources::StyleResource root_style;
+  root_style.id = root_id;
+  root_style.parent = 0;
+  style_info.styles[root_id].push_back(root_style);
+
+  resources::StyleResource::Value value(42, 0);
+
+  resources::StyleResource child1_style;
+  child1_style.id = child1_id;
+  child1_style.parent = root_id;
+  child1_style.attributes.insert({attr_id, value});
+  style_info.styles[child1_id].push_back(child1_style);
+
+  resources::StyleResource child2_style;
+  child2_style.id = child2_id;
+  child2_style.parent = root_id;
+  child2_style.attributes.insert({attr_id, value});
+  style_info.styles[child2_id].push_back(child2_style);
+
+  // Test case 1: Child directly reachable
+  {
+    UnorderedSet<uint32_t> directly_reachable_styles = {root_id, child1_id};
+    UnorderedSet<uint32_t> ambiguous_styles;
+
+    auto result = m_pass.find_intra_graph_hoistings(
+        style_info, directly_reachable_styles, ambiguous_styles);
+
+    EXPECT_THAT(result.size(), 1);
+    EXPECT_THAT(result[0],
+                ::testing::UnorderedElementsAre(child1_id, child2_id));
+  }
+
+  // Test case 2: Ambiguous root
+  {
+    UnorderedSet<uint32_t> directly_reachable_styles = {root_id};
+    UnorderedSet<uint32_t> ambiguous_styles = {root_id};
+
+    auto result = m_pass.find_intra_graph_hoistings(
+        style_info, directly_reachable_styles, ambiguous_styles);
+
+    EXPECT_TRUE(result.empty());
+  }
+}
+
+TEST_F(ResourceValueMergingPassTest, FindIntraGraphHoistingsComplexHierarchy) {
+  resources::StyleInfo style_info;
+
+  uint32_t root_id = 0x7f010001;
+  uint32_t child1_id = 0x7f010002;
+  uint32_t child2_id = 0x7f010003;
+  uint32_t grandchild1_id = 0x7f010004;
+  uint32_t grandchild2_id = 0x7f010005;
+  uint32_t attr_id1 = 0x7f020001;
+  uint32_t attr_id2 = 0x7f020002;
+
+  auto root_vertex = add_vertex(style_info, root_id);
+  auto child1_vertex = add_vertex(style_info, child1_id);
+  auto child2_vertex = add_vertex(style_info, child2_id);
+  auto grandchild1_vertex = add_vertex(style_info, grandchild1_id);
+  auto grandchild2_vertex = add_vertex(style_info, grandchild2_id);
+
+  add_edge(style_info, root_vertex, child1_vertex);
+  add_edge(style_info, root_vertex, child2_vertex);
+  add_edge(style_info, child1_vertex, grandchild1_vertex);
+  add_edge(style_info, child2_vertex, grandchild2_vertex);
+
+  resources::StyleResource root_style;
+  root_style.id = root_id;
+  root_style.parent = 0;
+  style_info.styles[root_id].push_back(root_style);
+
+  resources::StyleResource child1_style;
+  child1_style.id = child1_id;
+  child1_style.parent = root_id;
+  style_info.styles[child1_id].push_back(child1_style);
+
+  resources::StyleResource child2_style;
+  child2_style.id = child2_id;
+  child2_style.parent = root_id;
+  style_info.styles[child2_id].push_back(child2_style);
+
+  // Grandchild1 has attr_id1 that can be hoisted to child1
+  resources::StyleResource grandchild1_style;
+  grandchild1_style.id = grandchild1_id;
+  grandchild1_style.parent = child1_id;
+  resources::StyleResource::Value value1(42, 0);
+  grandchild1_style.attributes.insert({attr_id1, value1});
+  style_info.styles[grandchild1_id].push_back(grandchild1_style);
+
+  // Grandchild2 has attr_id2 that can be hoisted to child2
+  resources::StyleResource grandchild2_style;
+  grandchild2_style.id = grandchild2_id;
+  grandchild2_style.parent = child2_id;
+  resources::StyleResource::Value value2(43, 0);
+  grandchild2_style.attributes.insert({attr_id2, value2});
+  style_info.styles[grandchild2_id].push_back(grandchild2_style);
+
+  UnorderedSet<uint32_t> directly_reachable_styles = {root_id, child1_id,
+                                                      child2_id};
+  UnorderedSet<uint32_t> ambiguous_styles;
+
+  auto result = m_pass.find_intra_graph_hoistings(
+      style_info, directly_reachable_styles, ambiguous_styles);
+
+  EXPECT_THAT(result.size(), 2);
+  EXPECT_THAT(result[0], ::testing::UnorderedElementsAre(grandchild1_id));
+  EXPECT_THAT(result[1], ::testing::UnorderedElementsAre(grandchild2_id));
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       FindIntraGraphHoistingsWithAmbiguousStyles) {
+  resources::StyleInfo style_info;
+
+  uint32_t root_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+  uint32_t attr_id = 0x7f020001;
+
+  auto root_vertex = add_vertex(style_info, root_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+  add_edge(style_info, root_vertex, child_vertex);
+
+  resources::StyleResource root_style;
+  root_style.id = root_id;
+  root_style.parent = 0;
+  style_info.styles[root_id].push_back(root_style);
+
+  resources::StyleResource child_style;
+  child_style.id = child_id;
+  child_style.parent = root_id;
+  resources::StyleResource::Value value(42, 0);
+  child_style.attributes.insert({attr_id, value});
+  style_info.styles[child_id].push_back(child_style);
+
+  UnorderedSet<uint32_t> directly_reachable_styles = {root_id};
+  UnorderedSet<uint32_t> ambiguous_styles = {child_id};
+
+  auto result = m_pass.find_intra_graph_hoistings(
+      style_info, directly_reachable_styles, ambiguous_styles);
+
+  // Since root is ambiguous, no hoisting should occur
+  EXPECT_TRUE(result.empty());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       FindIntraGraphHoistingsMixedChildrenStates) {
+  resources::StyleInfo style_info;
+
+  uint32_t root_id = 0x7f010001;
+  uint32_t child1_id = 0x7f010002;
+  uint32_t child2_id = 0x7f010003;
+  uint32_t child3_id = 0x7f010004;
+  uint32_t attr_id = 0x7f020001;
+
+  auto root_vertex = add_vertex(style_info, root_id);
+  auto child1_vertex = add_vertex(style_info, child1_id);
+  auto child2_vertex = add_vertex(style_info, child2_id);
+  auto child3_vertex = add_vertex(style_info, child3_id);
+
+  add_edge(style_info, root_vertex, child1_vertex);
+  add_edge(style_info, root_vertex, child2_vertex);
+  add_edge(style_info, root_vertex, child3_vertex);
+
+  resources::StyleResource root_style;
+  root_style.id = root_id;
+  root_style.parent = 0;
+  style_info.styles[root_id].push_back(root_style);
+
+  resources::StyleResource::Value value(42, 0);
+
+  resources::StyleResource child1_style;
+  child1_style.id = child1_id;
+  child1_style.parent = root_id;
+  child1_style.attributes.insert({attr_id, value});
+  style_info.styles[child1_id].push_back(child1_style);
+
+  resources::StyleResource child2_style;
+  child2_style.id = child2_id;
+  child2_style.parent = root_id;
+  child2_style.attributes.insert({attr_id, value});
+  style_info.styles[child2_id].push_back(child2_style);
+
+  resources::StyleResource child3_style;
+  child3_style.id = child3_id;
+  child3_style.parent = root_id;
+  child3_style.attributes.insert({attr_id, value});
+  style_info.styles[child3_id].push_back(child3_style);
+
+  UnorderedSet<uint32_t> directly_reachable_styles = {root_id};
+  UnorderedSet<uint32_t> ambiguous_styles = {child2_id};
+
+  auto result = m_pass.find_intra_graph_hoistings(
+      style_info, directly_reachable_styles, ambiguous_styles);
+
+  EXPECT_TRUE(result.empty());
+}
+
+TEST_F(ResourceValueMergingPassTest, FindIntraGraphHoistingsMultipleRoots) {
+  resources::StyleInfo style_info;
+
+  uint32_t root1_id = 0x7f010001;
+  uint32_t root2_id = 0x7f010002;
+  uint32_t child1_id = 0x7f010003;
+  uint32_t child2_id = 0x7f010004;
+  uint32_t attr_id = 0x7f020001;
+
+  auto root1_vertex = add_vertex(style_info, root1_id);
+  auto root2_vertex = add_vertex(style_info, root2_id);
+  auto child1_vertex = add_vertex(style_info, child1_id);
+  auto child2_vertex = add_vertex(style_info, child2_id);
+
+  add_edge(style_info, root1_vertex, child1_vertex);
+  add_edge(style_info, root2_vertex, child2_vertex);
+
+  resources::StyleResource root1_style;
+  root1_style.id = root1_id;
+  root1_style.parent = 0;
+  style_info.styles[root1_id].push_back(root1_style);
+
+  resources::StyleResource root2_style;
+  root2_style.id = root2_id;
+  root2_style.parent = 0;
+  style_info.styles[root2_id].push_back(root2_style);
+
+  // Child1 has attribute that can be hoisted to root1
+  resources::StyleResource child1_style;
+  child1_style.id = child1_id;
+  child1_style.parent = root1_id;
+  resources::StyleResource::Value value(42, 0);
+  child1_style.attributes.insert({attr_id, value});
+  style_info.styles[child1_id].push_back(child1_style);
+
+  // Child2 has attribute that can be hoisted to root2
+  resources::StyleResource child2_style;
+  child2_style.id = child2_id;
+  child2_style.parent = root2_id;
+  child2_style.attributes.insert({attr_id, value});
+  style_info.styles[child2_id].push_back(child2_style);
+
+  UnorderedSet<uint32_t> directly_reachable_styles = {root1_id, root2_id};
+  UnorderedSet<uint32_t> ambiguous_styles;
+
+  auto result = m_pass.find_intra_graph_hoistings(
+      style_info, directly_reachable_styles, ambiguous_styles);
+
+  EXPECT_THAT(result.size(), 2);
+  EXPECT_THAT(result[0], ::testing::UnorderedElementsAre(child2_id));
+  EXPECT_THAT(result[1], ::testing::UnorderedElementsAre(child1_id));
+}
