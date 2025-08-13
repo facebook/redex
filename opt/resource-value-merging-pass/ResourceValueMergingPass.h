@@ -52,6 +52,10 @@ class ResourceValueMergingPass : public Pass {
   ResourceAttributeInformation get_resource_attributes(
       uint32_t resource_id, const resources::StyleMap& style_map);
 
+  ResourceAttributeInformation get_common_attributes_between_resources(
+      const std::vector<uint32_t>& resource_ids,
+      const resources::StyleInfo& style_info);
+
   OptimizableResources get_resource_optimization(
       const resources::StyleInfo& style_info,
       const UnorderedSet<uint32_t>& ambiguous_styles,

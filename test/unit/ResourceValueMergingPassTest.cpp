@@ -29,6 +29,7 @@ class ResourceValueMergingPassTest : public ::testing::Test {
                 resources::StyleInfo::vertex_t child) {
     boost::add_edge(parent, child, style_info.graph);
   }
+
   resources::StyleResource create_style_resource(
       uint32_t parent_id, const std::vector<uint32_t>& attr_ids) {
     resources::StyleResource style;
@@ -2560,4 +2561,199 @@ TEST_F(ResourceValueMergingPassTest, FindIntraGraphHoistingsMultipleRoots) {
   EXPECT_THAT(result.size(), 2);
   EXPECT_THAT(result[0], ::testing::UnorderedElementsAre(child2_id));
   EXPECT_THAT(result[1], ::testing::UnorderedElementsAre(child1_id));
+}
+
+TEST_F(ResourceValueMergingPassTest, FindIntraGraphHoistingsAmbiguousRoot) {
+  resources::StyleInfo style_info;
+
+  uint32_t root_id = 0x7f010001;
+  uint32_t child1_id = 0x7f010003;
+  uint32_t child2_id = 0x7f010004;
+  uint32_t attr_id = 0x7f020001;
+
+  auto root_vertex = add_vertex(style_info, root_id);
+  auto child1_vertex = add_vertex(style_info, child1_id);
+  auto child2_vertex = add_vertex(style_info, child2_id);
+
+  add_edge(style_info, root_vertex, child1_vertex);
+  add_edge(style_info, root_vertex, child2_vertex);
+
+  resources::StyleResource::Value value(42, 0);
+  resources::StyleResource root_style;
+  root_style.id = root_id;
+  root_style.parent = 0;
+  style_info.styles[root_id].push_back(root_style);
+
+  resources::StyleResource child1_style;
+  child1_style.id = child1_id;
+  child1_style.parent = root_id;
+  child1_style.attributes.insert({attr_id, value});
+  style_info.styles[child1_id].push_back(child1_style);
+
+  resources::StyleResource child2_style;
+  child2_style.id = child2_id;
+  child2_style.parent = root_id;
+  child2_style.attributes.insert({attr_id, value});
+  style_info.styles[child2_id].push_back(child2_style);
+
+  UnorderedSet<uint32_t> directly_reachable_styles = {root_id};
+  UnorderedSet<uint32_t> ambiguous_styles = {root_id};
+
+  auto result = m_pass.find_intra_graph_hoistings(
+      style_info, directly_reachable_styles, ambiguous_styles);
+
+  EXPECT_TRUE(result.empty());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetCommonAttributesForResourcesEmptyVector) {
+  resources::StyleInfo style_info;
+  std::vector<uint32_t> resource_ids;
+
+  auto result =
+      m_pass.get_common_attributes_between_resources(resource_ids, style_info);
+
+  EXPECT_TRUE(result.empty());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetCommonAttributesForResourcesSingleResource) {
+  resources::StyleInfo style_info;
+  uint32_t resource_id = 0x7f010001;
+  uint32_t attr_id1 = 0x7f020001;
+  uint32_t attr_id2 = 0x7f020002;
+
+  std::vector<resources::StyleResource> styles;
+  styles.push_back(create_style_resource(0, {attr_id1, attr_id2}));
+  style_info.styles.insert({resource_id, styles});
+
+  std::vector<uint32_t> resource_ids = {resource_id};
+
+  auto result =
+      m_pass.get_common_attributes_between_resources(resource_ids, style_info);
+
+  EXPECT_EQ(result.size(), 2);
+  EXPECT_TRUE(result.find(attr_id1) != result.end());
+  EXPECT_TRUE(result.find(attr_id2) != result.end());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetCommonAttributesForResourcesMultipleResourcesAllCommon) {
+  resources::StyleInfo style_info;
+  uint32_t resource_id1 = 0x7f010001;
+  uint32_t resource_id2 = 0x7f010002;
+  uint32_t resource_id3 = 0x7f010003;
+  uint32_t attr_id1 = 0x7f020001;
+  uint32_t attr_id2 = 0x7f020002;
+
+  std::vector<resources::StyleResource> styles1;
+  styles1.push_back(create_style_resource(0, {attr_id1, attr_id2}));
+  style_info.styles.insert({resource_id1, styles1});
+
+  std::vector<resources::StyleResource> styles2;
+  styles2.push_back(create_style_resource(0, {attr_id1, attr_id2}));
+  style_info.styles.insert({resource_id2, styles2});
+
+  std::vector<resources::StyleResource> styles3;
+  styles3.push_back(create_style_resource(0, {attr_id1, attr_id2}));
+  style_info.styles.insert({resource_id3, styles3});
+
+  std::vector<uint32_t> resource_ids = {resource_id1, resource_id2,
+                                        resource_id3};
+
+  auto result =
+      m_pass.get_common_attributes_between_resources(resource_ids, style_info);
+
+  EXPECT_EQ(result.size(), 2);
+  EXPECT_TRUE(result.find(attr_id1) != result.end());
+  EXPECT_TRUE(result.find(attr_id2) != result.end());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetCommonAttributesForResourcesMultipleResourcesSomeCommon) {
+  resources::StyleInfo style_info;
+  uint32_t resource_id1 = 0x7f010001;
+  uint32_t resource_id2 = 0x7f010002;
+  uint32_t resource_id3 = 0x7f010003;
+  uint32_t attr_id1 = 0x7f020001;
+  uint32_t attr_id2 = 0x7f020002;
+  uint32_t attr_id3 = 0x7f020003;
+
+  std::vector<resources::StyleResource> styles1;
+  styles1.push_back(create_style_resource(0, {attr_id1, attr_id2}));
+  style_info.styles.insert({resource_id1, styles1});
+
+  std::vector<resources::StyleResource> styles2;
+  styles2.push_back(create_style_resource(0, {attr_id1, attr_id3}));
+  style_info.styles.insert({resource_id2, styles2});
+
+  std::vector<resources::StyleResource> styles3;
+  styles3.push_back(create_style_resource(0, {attr_id1}));
+  style_info.styles.insert({resource_id3, styles3});
+
+  std::vector<uint32_t> resource_ids = {resource_id1, resource_id2,
+                                        resource_id3};
+
+  auto result =
+      m_pass.get_common_attributes_between_resources(resource_ids, style_info);
+
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_TRUE(result.find(attr_id1) != result.end());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetCommonAttributesForResourcesMultipleResourcesNoCommon) {
+  resources::StyleInfo style_info;
+  uint32_t resource_id1 = 0x7f010001;
+  uint32_t resource_id2 = 0x7f010002;
+  uint32_t resource_id3 = 0x7f010003;
+  uint32_t attr_id1 = 0x7f020001;
+  uint32_t attr_id2 = 0x7f020002;
+  uint32_t attr_id3 = 0x7f020003;
+
+  std::vector<resources::StyleResource> styles1;
+  styles1.push_back(create_style_resource(0, {attr_id1}));
+  style_info.styles.insert({resource_id1, styles1});
+
+  std::vector<resources::StyleResource> styles2;
+  styles2.push_back(create_style_resource(0, {attr_id2}));
+  style_info.styles.insert({resource_id2, styles2});
+
+  std::vector<resources::StyleResource> styles3;
+  styles3.push_back(create_style_resource(0, {attr_id3}));
+  style_info.styles.insert({resource_id3, styles3});
+
+  std::vector<uint32_t> resource_ids = {resource_id1, resource_id2,
+                                        resource_id3};
+
+  auto result =
+      m_pass.get_common_attributes_between_resources(resource_ids, style_info);
+
+  EXPECT_TRUE(result.empty());
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetCommonAttributesForResourcesWithNonexistentResource) {
+  resources::StyleInfo style_info;
+  uint32_t resource_id1 = 0x7f010001;
+  uint32_t resource_id2 = 0x7f010002;
+  uint32_t nonexistent_resource_id = 0x7f010003;
+  uint32_t attr_id1 = 0x7f020001;
+  uint32_t attr_id2 = 0x7f020002;
+
+  std::vector<resources::StyleResource> styles1;
+  styles1.push_back(create_style_resource(0, {attr_id1, attr_id2}));
+  style_info.styles.insert({resource_id1, styles1});
+
+  std::vector<resources::StyleResource> styles2;
+  styles2.push_back(create_style_resource(0, {attr_id1, attr_id2}));
+  style_info.styles.insert({resource_id2, styles2});
+
+  std::vector<uint32_t> resource_ids = {resource_id1, resource_id2,
+                                        nonexistent_resource_id};
+
+  auto result =
+      m_pass.get_common_attributes_between_resources(resource_ids, style_info);
+
+  EXPECT_TRUE(result.empty());
 }

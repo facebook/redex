@@ -293,10 +293,24 @@ ResourceAttributeInformation ResourceValueMergingPass::get_resource_attributes(
   return attributes;
 }
 
+ResourceAttributeInformation
+ResourceValueMergingPass::get_common_attributes_between_resources(
+    const std::vector<uint32_t>& resource_ids,
+    const resources::StyleInfo& style_info) {
+  std::vector<ResourceAttributeInformation> attr_id_pairs;
+  attr_id_pairs.reserve(resource_ids.size());
+  for (const auto& resource_id : resource_ids) {
+    attr_id_pairs.push_back(
+        get_resource_attributes(resource_id, style_info.styles));
+  }
+
+  return get_common_attributes(attr_id_pairs);
+}
+
 /**
  * Resources are eligible for optimization if they meet specific criteria:
  *
- * For deletion candidates:
+ For deletion candidates:
  * - Attributes that are common across a parent style and all of its children
  * - These attributes can be safely deleted from the parent since they're
  * already defined in all children
