@@ -991,4 +991,42 @@ void ResourceValueMergingPass::update_parent(StyleInfo& style_info,
   style_resources[0].parent = new_parent_id;
 }
 
+uint32_t ResourceValueMergingPass::introduce_synthetic_resource(
+    resources::StyleInfo& style_info, const std::vector<uint32_t>& children) {
+  always_assert_log(!children.empty(),
+                    "Cannot create synthetic resource with no children");
+
+  const uint32_t original_parent_id = get_common_parent(children, style_info);
+
+  const uint32_t synthetic_resource_id =
+      create_synthetic_resource_node(style_info, original_parent_id);
+
+  // Update edges children from the original parent to the synthetic resource
+
+  for (const auto& child_id : children) {
+    update_parent(style_info, child_id, synthetic_resource_id);
+  }
+
+  auto hoistable_attributes = get_hoistable_attributes(children, style_info);
+  UnorderedMap<uint32_t,
+               UnorderedMap<uint32_t, resources::StyleResource::Value>>
+      parent_additions{{synthetic_resource_id, hoistable_attributes}};
+  UnorderedMap<uint32_t, ResourceAttributeInformation> children_removals;
+
+  remove_attribute_from_descendent(synthetic_resource_id, hoistable_attributes,
+                                   style_info, children_removals);
+
+  apply_additions_to_style_graph(style_info, parent_additions);
+  apply_removals_to_style_graph(style_info, children_removals);
+  return synthetic_resource_id;
+}
+
+void ResourceValueMergingPass::introduce_synthetic_resources(
+    resources::StyleInfo& style_info,
+    const std::vector<std::vector<uint32_t>>& synthetic_style_children) {
+  for (const auto& children : synthetic_style_children) {
+    introduce_synthetic_resource(style_info, children);
+  }
+}
+
 static ResourceValueMergingPass s_pass;

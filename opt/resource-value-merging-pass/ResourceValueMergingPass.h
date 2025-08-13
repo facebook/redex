@@ -89,6 +89,9 @@ class ResourceValueMergingPass : public Pass {
       resources::StyleInfo& style_info,
       UnorderedMap<uint32_t, ResourceAttributeInformation> removals);
 
+  uint32_t introduce_synthetic_resource(resources::StyleInfo& style_info,
+                                        const std::vector<uint32_t>& children);
+
   OptimizableResources get_graph_diffs(
       const resources::StyleInfo& inital,
       const resources::StyleInfo& optimized,
@@ -168,6 +171,10 @@ class ResourceValueMergingPass : public Pass {
   get_style_merging_modifications(
       const resources::StyleInfo& style_info,
       const std::vector<std::vector<uint32_t>>& resources_to_merge);
+
+  void introduce_synthetic_resources(
+      resources::StyleInfo& style_info,
+      const std::vector<std::vector<uint32_t>>& synthetic_style_children);
 
   UnorderedSet<std::string> m_excluded_resources;
 };
