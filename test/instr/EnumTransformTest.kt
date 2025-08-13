@@ -29,7 +29,7 @@ import org.junit.Test
 enum class A {
   A0,
   A1,
-  A2
+  A2,
 }
 
 interface I {
@@ -59,7 +59,7 @@ enum class B : I {
 enum class C(val idx: Int) {
   C0(1),
   C1(2),
-  C2(3)
+  C2(3),
 }
 
 // Enum w/ String field is optimized.
@@ -70,7 +70,7 @@ enum class C(val idx: Int) {
 enum class D(val bname: String) {
   D0("Tool"),
   D1("APC"),
-  D2("Puscifer")
+  D2("Puscifer"),
 }
 
 data class User(val name: String)
@@ -83,7 +83,7 @@ data class User(val name: String)
 enum class E(val u: User) {
   E0(User("Hi")),
   E1(User("Yo")),
-  E2(User("There"))
+  E2(User("There")),
 }
 
 // Not optimized if enum constant is declared with anonymous class w/ overriding method.
@@ -127,7 +127,7 @@ enum class F {
 enum class H {
   H0,
   H1,
-  H2
+  H2,
 }
 
 // Not optimized due to the upcast to java.io.Serializable.
@@ -139,7 +139,7 @@ enum class H {
 enum class J {
   J0,
   J1,
-  J2
+  J2,
 }
 
 // Not optimized if referenced by reflection.
@@ -150,7 +150,7 @@ enum class J {
 enum class K {
   K0,
   K1,
-  K2
+  K2,
 }
 
 class Helper {

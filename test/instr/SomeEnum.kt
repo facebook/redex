@@ -10,11 +10,11 @@ package redex
 enum class D(val bname: String) {
   D0("d"),
   D1("e"),
-  D2("f")
+  D2("f"),
 }
 
 enum class F(val bname: String) {
   F0("f"),
   F1("g"),
-  F2("h")
+  F2("h"),
 }

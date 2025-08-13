@@ -23,7 +23,7 @@ enum class A {
 enum class B {
   B0,
   B1,
-  B2
+  B2,
 }
 
 enum class Big {
@@ -46,7 +46,7 @@ enum class Big {
   BIG17,
   BIG18,
   BIG19,
-  BIG20
+  BIG20,
 }
 
 public fun useA(elem: A): Int =
