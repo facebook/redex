@@ -385,7 +385,7 @@ public class TypedefAnnoCheckerKtTest {
   enum class ShareType(
       val error: Error,
       val isPackageName: Boolean = false,
-      @TestStringDef val externalShareOptionType: String? = null
+      @TestStringDef val externalShareOptionType: String? = null,
   ) {
     HAA(error = Mismatch(), isPackageName = false, externalShareOptionType = TestStringDef.ONE),
     HOO(error = Mismatch(), isPackageName = true, externalShareOptionType = TestStringDef.TWO),
