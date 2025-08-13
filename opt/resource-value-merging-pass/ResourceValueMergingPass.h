@@ -139,6 +139,9 @@ class ResourceValueMergingPass : public Pass {
   get_hoistable_attributes(const std::vector<uint32_t>& resource_ids,
                            const resources::StyleInfo& style_info);
 
+  uint32_t get_common_parent(const std::vector<uint32_t>& children,
+                             const resources::StyleInfo& style_info);
+
  private:
   ResourceAttributeInformation find_resource_optimization_candidates(
       resources::StyleInfo::vertex_t vertex,

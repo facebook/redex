@@ -2757,3 +2757,104 @@ TEST_F(ResourceValueMergingPassTest,
 
   EXPECT_TRUE(result.empty());
 }
+
+TEST_F(ResourceValueMergingPassTest, GetCommonParentSingleChild) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child_id = 0x7f010002;
+
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child_vertex = add_vertex(style_info, child_id);
+  add_edge(style_info, parent_vertex, child_vertex);
+
+  resources::StyleResource child_style;
+  child_style.id = child_id;
+  child_style.parent = parent_id;
+  style_info.styles[child_id] = {child_style};
+
+  std::vector<uint32_t> children = {child_id};
+
+  uint32_t result = m_pass.get_common_parent(children, style_info);
+
+  EXPECT_EQ(result, parent_id);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetCommonParentMultipleChildrenSameParent) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent_id = 0x7f010001;
+  uint32_t child1_id = 0x7f010002;
+  uint32_t child2_id = 0x7f010003;
+  uint32_t child3_id = 0x7f010004;
+
+  auto parent_vertex = add_vertex(style_info, parent_id);
+  auto child1_vertex = add_vertex(style_info, child1_id);
+  auto child2_vertex = add_vertex(style_info, child2_id);
+  auto child3_vertex = add_vertex(style_info, child3_id);
+
+  add_edge(style_info, parent_vertex, child1_vertex);
+  add_edge(style_info, parent_vertex, child2_vertex);
+  add_edge(style_info, parent_vertex, child3_vertex);
+
+  resources::StyleResource child1_style;
+  child1_style.id = child1_id;
+  child1_style.parent = parent_id;
+  style_info.styles[child1_id] = {child1_style};
+
+  resources::StyleResource child2_style;
+  child2_style.id = child2_id;
+  child2_style.parent = parent_id;
+  style_info.styles[child2_id] = {child2_style};
+
+  resources::StyleResource child3_style;
+  child3_style.id = child3_id;
+  child3_style.parent = parent_id;
+  style_info.styles[child3_id] = {child3_style};
+
+  std::vector<uint32_t> children = {child1_id, child2_id, child3_id};
+
+  uint32_t result = m_pass.get_common_parent(children, style_info);
+
+  EXPECT_EQ(result, parent_id);
+}
+
+TEST_F(ResourceValueMergingPassTest,
+       GetCommonParentMultipleChildrenDifferentParents) {
+  resources::StyleInfo style_info;
+
+  uint32_t parent1_id = 0x7f010001;
+  uint32_t parent2_id = 0x7f010002;
+  uint32_t child1_id = 0x7f010003;
+  uint32_t child2_id = 0x7f010004;
+
+  auto parent1_vertex = add_vertex(style_info, parent1_id);
+  auto parent2_vertex = add_vertex(style_info, parent2_id);
+  auto child1_vertex = add_vertex(style_info, child1_id);
+  auto child2_vertex = add_vertex(style_info, child2_id);
+
+  add_edge(style_info, parent1_vertex, child1_vertex);
+  add_edge(style_info, parent2_vertex, child2_vertex);
+
+  resources::StyleResource child1_style;
+  child1_style.id = child1_id;
+  child1_style.parent = parent1_id;
+  style_info.styles[child1_id] = {child1_style};
+
+  resources::StyleResource child2_style;
+  child2_style.id = child2_id;
+  child2_style.parent = parent2_id;
+  style_info.styles[child2_id] = {child2_style};
+
+  std::vector<uint32_t> children = {child1_id, child2_id};
+
+  EXPECT_THROW(m_pass.get_common_parent(children, style_info), std::exception);
+}
+
+TEST_F(ResourceValueMergingPassTest, GetCommonParentEmptyChildren) {
+  resources::StyleInfo style_info;
+  std::vector<uint32_t> children;
+
+  EXPECT_THROW(m_pass.get_common_parent(children, style_info), std::exception);
+}

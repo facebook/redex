@@ -902,4 +902,39 @@ std::vector<uint32_t> ResourceValueMergingPass::find_inter_graph_hoistings(
 
   return find_best_hoisting_combination(valid_roots, style_info);
 }
+
+uint32_t ResourceValueMergingPass::get_common_parent(
+    const std::vector<uint32_t>& children,
+    const resources::StyleInfo& style_info) {
+  UnorderedSet<uint32_t> parent_ids;
+
+  for (const auto& child_id : children) {
+    const auto parent_opt = style_info.get_unambiguous_parent(child_id);
+    always_assert_log(parent_opt.has_value(), "Parent not found for child 0x%x",
+                      child_id);
+    parent_ids.insert(parent_opt.value());
+  }
+
+  if (parent_ids.size() != 1) {
+    std::ostringstream children_debug_str;
+    for (const auto& child_id : children) {
+      children_debug_str << "0x" << std::hex << child_id << " ";
+    }
+
+    always_assert_log(
+        parent_ids.size() == 1,
+        "Expected exactly one parent for children %s, received %zu",
+        children_debug_str.str().c_str(), parent_ids.size());
+  }
+
+  const uint32_t parent_id = *unordered_any(parent_ids);
+  if (parent_id != 0) {
+    always_assert_log(style_info.id_to_vertex.find(parent_id) !=
+                          style_info.id_to_vertex.end(),
+                      "Parent vertex not found for parent 0x%x", parent_id);
+  }
+
+  return parent_id;
+}
+
 static ResourceValueMergingPass s_pass;
