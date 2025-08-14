@@ -233,6 +233,20 @@ TEST_F(TypeUtilTest, is_kotlin_lambda) {
   no_interface_creator.set_super(kotlin_jvm_internal_Lambda());
   auto no_interface_class = no_interface_creator.create();
 
+  // Create an otherwise Kotlin lambda class that implements an otherwise Kotlin
+  // function interface without a number.
+  auto unnumbered_function_class_type =
+      DexType::make_type("LUnnumberedFunction;");
+  const auto unnumbered_kotlin_function_type =
+      DexType::make_type("Lkotlin/jvm/functions/Function;");
+  ClassCreator unnumbered_kotlin_function_creator(
+      unnumbered_function_class_type);
+  unnumbered_kotlin_function_creator.set_super(kotlin_jvm_internal_Lambda());
+  unnumbered_kotlin_function_creator.add_interface(
+      unnumbered_kotlin_function_type);
+  auto unnumbered_kotlin_function_class =
+      unnumbered_kotlin_function_creator.create();
+
   // Test the function with our mock classes
   EXPECT_TRUE(is_kotlin_lambda(kotlin_lambda_class));
   EXPECT_TRUE(is_kotlin_lambda(obj_lambda_class));
@@ -240,6 +254,7 @@ TEST_F(TypeUtilTest, is_kotlin_lambda) {
   EXPECT_FALSE(is_kotlin_lambda(multi_interface_class));
   EXPECT_FALSE(is_kotlin_lambda(wrong_super_class));
   EXPECT_FALSE(is_kotlin_lambda(no_interface_class));
+  EXPECT_FALSE(is_kotlin_lambda(unnumbered_kotlin_function_class));
 }
 
 TEST_F(TypeUtilTest, is_kotlin_non_capturing_lambda) {

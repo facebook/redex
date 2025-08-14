@@ -541,7 +541,8 @@ bool is_kotlin_function_interface(const DexType* type) {
   const auto ends_with_semicolon = boost::ends_with(suffix, ";");
   redex_assert(ends_with_semicolon);
   suffix = suffix.substr(0, suffix.length() - 1);
-  return std::all_of(suffix.begin(), suffix.end(),
+  return !suffix.empty() &&
+         std::all_of(suffix.begin(), suffix.end(),
                      [](unsigned char c) { return std::isdigit(c); });
 }
 
