@@ -8,11 +8,12 @@
 #include <gtest/gtest.h>
 
 #include "DexUtil.h"
+#include "KotlinStatelessLambdaSingletonRemovalPass.h"
 #include "RedexTest.h"
 #include "Resolver.h"
-#include "RewriteKotlinSingletonInstance.h"
 #include "Show.h"
 
+namespace {
 class KotlinLambdaOptTest : public RedexIntegrationTest {
  protected:
   void set_root_method(const std::string& full_name) {
@@ -44,7 +45,6 @@ class KotlinLambdaOptTest : public RedexIntegrationTest {
     }
   }
 };
-namespace {
 
 TEST_F(KotlinLambdaOptTest, MethodHasNoEqDefined) {
   auto scope = build_class_scope(stores);
@@ -55,9 +55,10 @@ TEST_F(KotlinLambdaOptTest, MethodHasNoEqDefined) {
   ASSERT_NE(nullptr, codex);
   check_sget_available(codex);
 
-  set_root_method("LKotlinInstanceRemovalEquiv;.bar:()V");
+  set_root_method("LKotlinInstanceRemovalNamedEquiv;.bar:()V");
   auto y_method =
-      DexMethod::get_method("LKotlinInstanceRemovalEquiv;.bar:()V")->as_def();
+      DexMethod::get_method("LKotlinInstanceRemovalNamedEquiv;.bar:()V")
+          ->as_def();
   auto codey = y_method->get_code();
   ASSERT_NE(nullptr, codey);
   check_sget_available(codey);
@@ -86,12 +87,12 @@ TEST_F(KotlinLambdaOptTest, MethodHasNoEqDefined) {
   ASSERT_NE(nullptr, codem);
   check_sget_available(codem);
 
-  auto klr = new RewriteKotlinSingletonInstance();
+  auto klr = new KotlinStatelessLambdaSingletonRemovalPass();
   std::vector<Pass*> passes{klr};
   run_passes(passes);
 
   check_sget_not_available(codex);
-  check_sget_not_available(codey);
+  check_sget_available(codey);
   check_sget_available(codez);
   check_sget_available(codel);
   check_sget_available(codem);
