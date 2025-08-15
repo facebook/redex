@@ -2753,11 +2753,7 @@ bool modify_attribute_from_style_resource(
   constexpr const char* STYLE_TYPE_NAME = "style";
   bool is_file_modified = false;
 
-  if (traceEnabled(RES, 9)) {
-    std::string serialized;
-    resource_table.SerializeToString(&serialized);
-    TRACE(RES, 9, "Package count: %d", resource_table.package_size());
-  }
+  TRACE(RES, 9, "Package count: %d", resource_table.package_size());
 
   for (int package_idx = 0; package_idx < resource_table.package_size();
        package_idx++) {
@@ -3144,10 +3140,102 @@ void ResourcesPbFile::apply_style_merges(
   }
 }
 
+bool add_styles_to_resource_table(
+    const UnorderedMap<uint32_t,
+                       std::vector<StyleModificationSpec::Modification>>&
+        id_to_mods,
+    aapt::pb::ResourceTable& resource_table) {
+  constexpr const char* STYLE_TYPE_NAME = "style";
+  bool is_file_modified = false;
+
+  TRACE(RES, 9, "Package count: %d", resource_table.package_size());
+
+  for (int package_idx = 0; package_idx < resource_table.package_size();
+       package_idx++) {
+    auto* package = resource_table.mutable_package(package_idx);
+    uint32_t package_id = package->package_id().id();
+
+    for (int type_idx = 0; type_idx < package->type_size(); type_idx++) {
+      auto* type = package->mutable_type(type_idx);
+
+      if (type->name() == STYLE_TYPE_NAME) {
+        uint32_t current_type_id = type->type_id().id();
+        for (const auto& [resource_id, mods] : UnorderedIterable(id_to_mods)) {
+          uint32_t package_index =
+              (resource_id >> PACKAGE_INDEX_BIT_SHIFT) & 0xFF;
+          uint32_t type_index = (resource_id >> TYPE_INDEX_BIT_SHIFT) & 0xFF;
+          uint32_t entry_index = resource_id & 0xFFFF;
+
+          if (package_index != package_id || type_index != current_type_id) {
+            continue;
+          }
+
+          auto* new_entry = type->add_entry();
+          new_entry->mutable_entry_id()->set_id(entry_index);
+          new_entry->set_name(SYNTHETIC_PARENT_NAME);
+
+          auto* config_value = new_entry->add_config_value();
+          auto* value = config_value->mutable_value();
+          auto* compound_value = value->mutable_compound_value();
+          compound_value->mutable_style();
+
+          is_file_modified = true;
+        }
+      }
+    }
+  }
+  return is_file_modified;
+}
+
+void add_styles_to_resource_file(
+    const UnorderedMap<uint32_t,
+                       std::vector<StyleModificationSpec::Modification>>&
+        id_to_mods,
+    const std::string& resource_path) {
+  read_protobuf_file_contents(
+      resource_path,
+      [&](google::protobuf::io::CodedInputStream& input, size_t /* unused */) {
+        aapt::pb::ResourceTable resource_table;
+        if (!resource_table.ParseFromCodedStream(&input)) {
+          TRACE(RES, 9, "Failed to read resource file: %s",
+                resource_path.c_str());
+          return;
+        }
+
+        // Apply modifications to the resource file
+        bool is_file_modified =
+            add_styles_to_resource_table(id_to_mods, resource_table);
+
+        if (is_file_modified) {
+          std::ofstream output_file(resource_path, std::ofstream::binary);
+          if (!resource_table.SerializeToOstream(&output_file)) {
+            TRACE(RES, 9, "Failed to write modified resource file: %s",
+                  resource_path.c_str());
+          }
+        }
+      });
+}
+
 void ResourcesPbFile::add_styles(
-    const std::vector<StyleModificationSpec::Modification>&
-    /* modifications */,
-    const std::vector<std::string>& /* resources_pb_paths */) {}
+    const std::vector<StyleModificationSpec::Modification>& modifications,
+    const std::vector<std::string>& resources_pb_paths) {
+  UnorderedMap<uint32_t, std::vector<StyleModificationSpec::Modification>>
+      id_to_mods;
+  for (const auto& mod : modifications) {
+    if (mod.type != StyleModificationSpec::ModificationType::NEW_STYLE) {
+      continue;
+    }
+
+    int32_t resource_id = mod.resource_id;
+    TRACE(RES, 1, "Adding style for resource id: 0x%x", resource_id);
+    id_to_mods[resource_id].push_back(mod);
+  }
+
+  for (const auto& resource_path : resources_pb_paths) {
+    TRACE(RES, 9, "Adding styles to resource file: %s", resource_path.c_str());
+    add_styles_to_resource_file(id_to_mods, resource_path);
+  }
+}
 
 ResourcesPbFile::~ResourcesPbFile() {}
 

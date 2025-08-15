@@ -1032,3 +1032,65 @@ TEST(BundleResources, TestApplyStyleChained) {
                       expected_no_action_bar_attributes);
   });
 }
+
+TEST(BundleResources, TestAddStyles) {
+  setup_resources_and_run([&](const std::string& /* unused */,
+                              BundleResources* resources) {
+    auto res_table = resources->load_res_table();
+    const auto& paths = resources->find_resources_files();
+
+    std::vector<std::string> styles = {"ChooseMe",
+                                       "ParentWithAttr",
+                                       "ChildWithParentAttr",
+                                       "CustomText",
+                                       "CustomText.Prickly",
+                                       "CustomText.Unused",
+                                       "ThemeParent",
+                                       "ThemeA",
+                                       "ThemeB",
+                                       "ThemeUnused",
+                                       "DupTheme1",
+                                       "DupTheme2",
+                                       "StyleNotSorted",
+                                       "StyleSorted",
+                                       "ThemeDifferentA",
+                                       "ThemeDifferentB",
+                                       "AmbiguousParent",
+                                       "AmbiguousSmall",
+                                       "AmbiguousBig",
+                                       "SimpleParent1",
+                                       "SimpleParent2",
+                                       "Confusing",
+                                       "Unclear",
+                                       "AppTheme",
+                                       "AppTheme.Light",
+                                       "AppTheme.Light.Blue",
+                                       "AppTheme.Light.Blue.NoActionBar"};
+
+    uint32_t new_style_id = 0;
+    for (const auto& name : styles) {
+      auto ids = res_table->get_res_ids_by_name(name);
+      for (const auto id : ids) {
+        new_style_id = std::max(new_style_id, id);
+      }
+    }
+    new_style_id++;
+    resources::StyleModificationSpec::Modification new_style_mod(new_style_id);
+
+    res_table->add_styles({new_style_mod}, paths);
+
+    auto new_res_table = resources->load_res_table();
+    auto style_map = new_res_table->get_style_map();
+
+    EXPECT_THAT(style_map, Contains(Key(new_style_id)))
+        << "New style with ID 0x" << std::hex << new_style_id << std::dec
+        << " was not created";
+
+    const auto& style_resources = style_map.at(new_style_id);
+    EXPECT_THAT(style_resources, SizeIs(1));
+    EXPECT_EQ(style_resources[0].parent, 0)
+        << "New style should have no parent (0)";
+    EXPECT_TRUE(style_resources[0].attributes.empty())
+        << "New style should have no attributes";
+  });
+}
