@@ -1039,7 +1039,7 @@ const DexLocation* DexLocation::get_location(std::string_view store_name,
   return g_redex->get_location(store_name, file_name);
 }
 
-void DexClass::set_deobfuscated_name(const std::string& name) {
+void DexClass::set_deobfuscated_name(std::string_view name) {
   // If the class has an old deobfuscated_name which is not equal to
   // `show(self)`, erase the name mapping from the global type map.
   if (kInsertDeobfuscatedNameLinks && m_deobfuscated_name != nullptr) {

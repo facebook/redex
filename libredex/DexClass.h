@@ -1316,7 +1316,7 @@ class DexClass {
    * This also adds `name` as an alias for this DexType in the g_redex global
    * type map.
    */
-  void set_deobfuscated_name(const std::string& name);
+  void set_deobfuscated_name(std::string_view name);
   void set_deobfuscated_name(const DexString* name);
   void set_deobfuscated_name(const DexString& name);
 
