@@ -699,7 +699,7 @@ TEST(BundleResources, TestRemoveStyleAttribute) {
           resources::StyleModificationSpec::Modification(style_id, attr_id));
     }
 
-    res_table->apply_attribute_removals(modifications, paths);
+    res_table->apply_attribute_removals_and_additions(modifications, paths);
 
     auto new_res_table = resources->load_res_table();
     resources::StyleMap updated_style_map = new_res_table->get_style_map();
@@ -784,7 +784,7 @@ TEST(BundleResources, TestAddStyleAttribute) {
           style_id, mod.attr_id, mod.attr_value));
     }
 
-    res_table->apply_attribute_additions(modifications, paths);
+    res_table->apply_attribute_removals_and_additions(modifications, paths);
 
     auto new_res_table = resources->load_res_table();
     resources::StyleMap updated_style_map = new_res_table->get_style_map();
@@ -852,6 +852,105 @@ TEST(BundleResources, TestAddStyleAttribute) {
             << std::dec << " is missing from style 0x" << std::hex
             << resource_id;
       }
+    }
+  });
+}
+
+TEST(BundleResources, TestRemoveAndAddStyleAttributes) {
+  setup_resources_and_run([&](const std::string& /* unused */,
+                              BundleResources* resources) {
+    using Value = resources::StyleResource::Value;
+    auto res_table = resources->load_res_table();
+    const auto& paths = resources->find_resources_files();
+    auto style_map = res_table->get_style_map();
+
+    std::vector<resources::StyleModificationSpec::Modification> modifications;
+    UnorderedMap<uint32_t, UnorderedSet<uint32_t>> original_attributes;
+
+    struct TestData {
+      std::string style_name;
+      uint32_t remove_attr_id;
+      uint32_t add_attr_id;
+      Value add_value;
+    };
+
+    auto get_style_id = [&](const std::string& name) {
+      auto ids = res_table->get_res_ids_by_name(name);
+      EXPECT_THAT(ids, SizeIs(1));
+      return ids[0];
+    };
+
+    auto get_first_attr = [&](uint32_t style_id) {
+      return style_map[style_id][0].attributes.begin()->first;
+    };
+
+    uint32_t prickly_id = get_style_id("CustomText.Prickly");
+    uint32_t unused_id = get_style_id("CustomText.Unused");
+    uint32_t custom_id = get_style_id("CustomText");
+
+    const std::vector<TestData> test_data = {
+        {"CustomText.Prickly", get_first_attr(prickly_id), kEnabledAttrId,
+         Value(android::Res_value::TYPE_INT_BOOLEAN, true)},
+        {"CustomText.Unused", get_first_attr(unused_id), kTextStyleAttrId,
+         Value(android::Res_value::TYPE_STRING, std::string("New String"))},
+        {"CustomText", get_first_attr(custom_id), kTextColorAttrId,
+         Value(android::Res_value::TYPE_REFERENCE, 0x7f030002)}};
+
+    for (const auto& [style_id, style_resources] : style_map) {
+      if (!style_resources.empty()) {
+        for (const auto& [attr_id, _] : style_resources[0].attributes) {
+          original_attributes[style_id].insert(attr_id);
+        }
+      }
+    }
+
+    for (const auto& data : test_data) {
+      uint32_t style_id = get_style_id(data.style_name);
+      modifications.push_back(resources::StyleModificationSpec::Modification(
+          style_id, data.remove_attr_id));
+      modifications.push_back(resources::StyleModificationSpec::Modification(
+          style_id, data.add_attr_id, data.add_value));
+    }
+
+    res_table->apply_attribute_removals_and_additions(modifications, paths);
+
+    auto new_res_table = resources->load_res_table();
+    auto updated_style_map = new_res_table->get_style_map();
+
+    for (const auto& data : test_data) {
+      uint32_t style_id = get_style_id(data.style_name);
+      const auto& attributes = updated_style_map[style_id][0].attributes;
+
+      EXPECT_THAT(attributes, Not(Contains(Key(data.remove_attr_id))))
+          << "Attribute not removed from " << data.style_name;
+      EXPECT_THAT(attributes, Contains(Key(data.add_attr_id)))
+          << "Attribute not added to " << data.style_name;
+
+      const auto& added_attr = attributes.at(data.add_attr_id);
+      if (data.add_attr_id == kEnabledAttrId) {
+        EXPECT_EQ(added_attr.get_data_type(),
+                  android::Res_value::TYPE_INT_BOOLEAN);
+        EXPECT_TRUE(added_attr.get_value_bytes() != 0);
+      } else if (data.add_attr_id == kTextStyleAttrId) {
+        EXPECT_EQ(added_attr.get_data_type(), android::Res_value::TYPE_STRING);
+        EXPECT_EQ(added_attr.get_value_string().value(), "New String");
+      } else if (data.add_attr_id == kTextColorAttrId) {
+        EXPECT_EQ(added_attr.get_data_type(),
+                  android::Res_value::TYPE_REFERENCE);
+        EXPECT_EQ(added_attr.get_value_bytes(), 0x7f030002);
+      }
+
+      UnorderedSet<uint32_t> expected_attrs = original_attributes[style_id];
+      expected_attrs.erase(data.remove_attr_id);
+      expected_attrs.insert(data.add_attr_id);
+
+      UnorderedSet<uint32_t> actual_attrs;
+      for (const auto& [attr_id, _] : attributes) {
+        actual_attrs.insert(attr_id);
+      }
+
+      EXPECT_THAT(actual_attrs, Eq(expected_attrs))
+          << "Attribute set mismatch for " << data.style_name;
     }
   });
 }

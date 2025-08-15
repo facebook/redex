@@ -118,9 +118,8 @@ void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
   std::vector<resources::StyleModificationSpec::Modification> modifications =
       get_graph_diffs(style_info, optimized_style_graph, ambiguous_styles);
 
-  res_table->apply_attribute_removals(modifications, resource_files);
-  res_table = resources->load_res_table();
-  res_table->apply_attribute_additions(modifications, resource_files);
+  res_table->apply_attribute_removals_and_additions(modifications,
+                                                    resource_files);
 
   res_table = resources->load_res_table();
   style_info = res_table->load_style_info();
@@ -752,8 +751,8 @@ ResourceValueMergingPass::get_parent_and_attribute_modifications_for_merging(
                     "Expected exactly one child for resource 0x%x",
                     tail_resource_id);
 
-  // This is the destination resource ID where all attributes from the chain of
-  // resources will be merged into - it's the final target of the merging
+  // This is the destination resource ID where all attributes from the chain
+  // of resources will be merged into - it's the final target of the merging
   // operation
   auto destination_resource_id = final_resource_ids[0];
 

@@ -308,8 +308,7 @@ struct StyleModificationSpec {
 };
 
 using ResourceAttributeMap =
-    UnorderedMap<uint32_t,
-                 UnorderedMap<uint32_t, StyleModificationSpec::Modification>>;
+    UnorderedMap<uint32_t, std::vector<StyleModificationSpec::Modification>>;
 
 // Helper for dealing with differences in character encoding between .arsc and
 // .pb files.
@@ -514,14 +513,9 @@ class ResourceTableFile {
   // configurations.
   virtual resources::StyleMap get_style_map() = 0;
 
-  // Deletes referenced attribute/value in android app
-  virtual void apply_attribute_removals(
-      const std::vector<resources::StyleModificationSpec::Modification>&
-          modifications,
-      const std::vector<std::string>& resources_pb_paths) = 0;
-
-  // Adds referenced attribute/value in android app
-  virtual void apply_attribute_additions(
+  // Removes and adds referenced attribute/value in android app
+  // Does removals first then additions
+  virtual void apply_attribute_removals_and_additions(
       const std::vector<resources::StyleModificationSpec::Modification>&
           modifications,
       const std::vector<std::string>& resources_pb_paths) = 0;
