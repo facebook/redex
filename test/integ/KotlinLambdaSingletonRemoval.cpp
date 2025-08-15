@@ -17,8 +17,7 @@
 namespace {
 using ::testing::NotNull;
 
-class KotlinLambdaOptTest : public RedexIntegrationTest,
-                            public ::testing::WithParamInterface<std::string> {
+class KotlinLambdaOptTest : public RedexIntegrationTest {
  protected:
   void set_root_method(std::string_view full_name) {
     auto method = DexMethod::get_method(full_name)->as_def();
@@ -75,13 +74,15 @@ TEST_F(KotlinLambdaOptTest, LambdaSingletonIsRemoved) {
   check_sget_not_available(codex);
 }
 
-// TODO(T144851518): This test does nothing meaningful because the deobfuscated
-// name of the otherwise Lambda class is always empty. Update the test to do
-// something meaningful.
-TEST_P(KotlinLambdaOptTest, NoEffectOnNonLambda) {
+TEST_F(KotlinLambdaOptTest, NoEffectOnNamedClass) {
   auto scope = build_class_scope(stores);
-  const auto& class_name = GetParam();
-  const std::string root_method = class_name + ";.bar:()V";
+  constexpr std::string_view class_name = "LKotlinInstanceRemovalNamedEquiv;";
+  constexpr std::string_view root_method =
+      "LKotlinInstanceRemovalNamedEquiv;.bar:()V";
+
+  auto* lambda_class = type_class(DexType::make_type(class_name));
+  ASSERT_THAT(lambda_class, NotNull());
+  lambda_class->set_deobfuscated_name(class_name);
 
   set_root_method(root_method);
   auto y_method = DexMethod::get_method(root_method)->as_def();
@@ -95,13 +96,5 @@ TEST_P(KotlinLambdaOptTest, NoEffectOnNonLambda) {
 
   check_sget_available(codey);
 }
-
-INSTANTIATE_TEST_SUITE_P(
-    KotlinLambdaOptTests,
-    KotlinLambdaOptTest,
-    ::testing::Values("LKotlinInstanceRemovalNamedEquiv",
-                      "LKotlinInstanceRemovalEquivNegative",
-                      "LKotlinInstanceRemovalEquivNegative2",
-                      "LKotlinInstanceRemovalEquivNegative3"));
 
 } // namespace
