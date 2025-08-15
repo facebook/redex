@@ -919,7 +919,8 @@ void build_arsc_file_and_validate(
   dimen_type_definer->add_empty(&land_config);
 
   // style
-  std::vector<android::ResTable_config*> style_configs = {&xxhdpi_config};
+  std::vector<android::ResTable_config*> style_configs = {&default_config,
+                                                          &xxhdpi_config};
   std::vector<uint32_t> style_flags = {
       android::ResTable_config::CONFIG_DENSITY};
   auto style_type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
@@ -945,6 +946,9 @@ void build_arsc_file_and_validate(
   android::Vector<char> complex_entry_data;
   complex_entry_builder.serialize(&complex_entry_data);
 
+  style_type_definer->add(
+      &default_config,
+      {(uint8_t*)complex_entry_data.array(), complex_entry_data.size()});
   style_type_definer->add(&xxhdpi_config, {(uint8_t*)complex_entry_data.array(),
                                            complex_entry_data.size()});
 
@@ -1085,8 +1089,8 @@ TEST(ResTable, BuildNewTable) {
     collector.visit(f.data(), f.size());
     ASSERT_EQ(collector.get_reserved_field(0x1), 2)
         << "dimen should have two ResTable_type entries";
-    ASSERT_EQ(collector.get_reserved_field(0x2), 1)
-        << "style should have one ResTable_type entry";
+    ASSERT_EQ(collector.get_reserved_field(0x2), 2)
+        << "style should have two ResTable_type entries";
   });
 }
 
@@ -1187,7 +1191,7 @@ TEST(ResTable, DeleteAllLandscapeEntries) {
     EXPECT_EQ(type_infos.size(), 2);
     EXPECT_EQ(type_infos.at(0).configs.size(), 1)
         << "ResTable_type not cleaned up!";
-    EXPECT_EQ(type_infos.at(1).configs.size(), 1);
+    EXPECT_EQ(type_infos.at(1).configs.size(), 2);
   });
 }
 
@@ -2414,6 +2418,62 @@ TEST(ResourcesArscFile, ApplyStyleMerges) {
       auto final_values = final_dump.get_complex_values("xxhdpi", resource_id);
       ASSERT_GE(final_values.size(), 4);
       verify_style_attributes(final_values, new_parent_id);
+    }
+  });
+}
+
+TEST(ResourcesArscFile, AddStyles) {
+  build_arsc_file_and_validate([&](const std::string& /* unused */,
+                                   const std::string& arsc_path) {
+    auto initial_dump = aapt_dump_and_parse(arsc_path);
+
+    EXPECT_EQ(initial_dump.get_identifier("foo:style/fourth"), 0x7f020000);
+
+    auto initial_values = initial_dump.get_complex_values("xxhdpi", 0x7f020000);
+    ASSERT_EQ(initial_values.size(), 2);
+    EXPECT_EQ(initial_values[0].key, 0x01010098);
+    EXPECT_EQ(initial_values[1].key, 0x010100d4);
+
+    {
+      ResourcesArscFile arsc_file(arsc_path);
+
+      std::vector<resources::StyleModificationSpec::Modification> modifications;
+
+      resources::StyleModificationSpec::Modification new_style1(0x7f020001);
+      modifications.push_back(new_style1);
+
+      resources::StyleModificationSpec::Modification new_style2(0x7f020002);
+      modifications.push_back(new_style2);
+
+      arsc_file.add_styles(modifications, {});
+    }
+
+    {
+      auto modified_dump = aapt_dump_and_parse(arsc_path);
+
+      EXPECT_EQ(modified_dump.get_identifier("foo:style/fourth"), 0x7f020000);
+      auto original_values =
+          modified_dump.get_complex_values("default", 0x7f020000);
+      ASSERT_EQ(original_values.size(), 2);
+      EXPECT_EQ(original_values[0].key, 0x01010098);
+      EXPECT_EQ(original_values[1].key, 0x010100d4);
+
+      auto style_1_values =
+          modified_dump.get_complex_values("default", 0x7f020001);
+      EXPECT_EQ(style_1_values.size(), 0)
+          << "New style 0x7f020001 should be empty";
+
+      auto style_2_values =
+          modified_dump.get_complex_values("default", 0x7f020002);
+      EXPECT_EQ(style_2_values.size(), 0)
+          << "New style 0x7f020002 should be empty";
+
+      EXPECT_EQ(modified_dump.config_to_complex_values["default"][0x7f020001]
+                    .parent_id,
+                0);
+      EXPECT_EQ(modified_dump.config_to_complex_values["default"][0x7f020002]
+                    .parent_id,
+                0);
     }
   });
 }

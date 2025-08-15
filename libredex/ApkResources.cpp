@@ -3313,8 +3313,148 @@ void ResourcesArscFile::apply_style_merges(
 }
 
 void ResourcesArscFile::add_styles(
-    const std::vector<StyleModificationSpec::Modification>&
-    /* modifications */,
-    const std::vector<std::string>& /* resources_pb_paths */) {}
+    const std::vector<StyleModificationSpec::Modification>& modifications,
+    const std::vector<std::string>& /* resources_pb_paths */) {
+  UnorderedMap<uint32_t, StyleModificationSpec::Modification> new_styles;
+
+  for (const auto& mod : modifications) {
+    if (mod.type == StyleModificationSpec::ModificationType::NEW_STYLE) {
+      uint32_t resource_id = mod.resource_id;
+      TRACE(RES, 1, "Adding style for resource id: 0x%x", resource_id);
+      new_styles.emplace(resource_id, mod);
+    }
+  }
+
+  if (new_styles.empty()) {
+    return;
+  }
+
+  auto& table_snapshot = get_table_snapshot();
+  auto& parsed_table = table_snapshot.get_parsed_table();
+
+  arsc::ResTableBuilder table_builder;
+  table_builder.set_global_strings(parsed_table.m_global_pool_header);
+
+  for (auto& package : parsed_table.m_packages) {
+    auto package_id = package->id;
+    auto package_builder = std::make_shared<arsc::ResPackageBuilder>(package);
+
+    const android::ResStringPool& existing_key_pool =
+        table_snapshot.get_key_strings(GET_ID(package));
+
+    auto key_flags = POOL_FLAGS_CLEAR_SORT(&existing_key_pool);
+    std::shared_ptr<arsc::ResStringPoolBuilder> key_strings_builder =
+        std::make_shared<arsc::ResStringPoolBuilder>(key_flags);
+
+    auto no_name_key_index = static_cast<uint32_t>(existing_key_pool.size());
+    std::map<uint32_t, std::string> key_id_to_new_strings;
+    key_id_to_new_strings[no_name_key_index] = SYNTHETIC_PARENT_NAME;
+
+    rebuild_string_pool_with_addition(existing_key_pool, key_id_to_new_strings,
+                                      key_strings_builder.get());
+
+    package_builder->set_key_strings(key_strings_builder);
+    package_builder->set_type_strings(
+        parsed_table.m_package_type_string_headers.at(package));
+
+    auto& type_infos = parsed_table.m_package_types.at(package);
+    for (auto& type_info : type_infos) {
+      uint8_t type_id = type_info.spec->id;
+
+      if (!is_type_named(type_id, "style")) {
+        package_builder->add_type(type_info);
+
+        continue;
+      }
+
+      auto entry_count = dtohl(type_info.spec->entryCount);
+
+      uint32_t total_new_styles =
+          entry_count + static_cast<uint32_t>(new_styles.size());
+
+      std::vector<uint32_t> flags;
+      flags.reserve(total_new_styles);
+
+      for (uint32_t entry_id = 0; entry_id < total_new_styles; entry_id++) {
+        uint32_t res_id = MAKE_RES_ID(package_id, type_id, entry_id);
+        auto flag_search = parsed_table.m_res_id_to_flags.find(res_id);
+        if (flag_search != parsed_table.m_res_id_to_flags.end()) {
+          flags.push_back(flag_search->second);
+        } else {
+          flags.push_back(0);
+        }
+      }
+
+      auto configs = parsed_table.get_configs(package_id, type_id);
+      always_assert_log(std::any_of(configs.begin(), configs.end(),
+                                    [](auto* config) {
+                                      return arsc::is_default_config(config);
+                                    }),
+                        "Style type 0x%x requires a default config for new "
+                        "resource insertion",
+                        type_id);
+
+      auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
+          package_id, type_id, configs, flags, false,
+          arsc::any_sparse_types(type_info.configs));
+
+      for (auto& config : configs) {
+        for (uint32_t entry_id = 0; entry_id < entry_count; entry_id++) {
+          uint32_t res_id = MAKE_RES_ID(package_id, type_id, entry_id);
+          auto entry_search = parsed_table.m_res_id_to_entries.find(res_id);
+
+          if (entry_search != parsed_table.m_res_id_to_entries.end()) {
+            auto& config_entries = entry_search->second;
+            auto config_entry = config_entries.find(config);
+
+            if (config_entry != config_entries.end()) {
+              auto entry_data = config_entry->second;
+              type_definer->add(config, entry_data);
+            } else {
+              type_definer->add_empty(config);
+            }
+          } else {
+            type_definer->add_empty(config);
+          }
+        }
+
+        for (uint32_t entry_id = entry_count; entry_id < total_new_styles;
+             entry_id++) {
+          uint32_t res_id = MAKE_RES_ID(package_id, type_id, entry_id);
+          always_assert_log(
+              new_styles.find(res_id) != new_styles.end(),
+              "Creating a styled resource 0x%x that should not be created",
+              res_id);
+
+          if (arsc::is_default_config(config)) {
+            arsc::ResComplexEntryBuilder style_builder;
+            style_builder.set_key_string_index(no_name_key_index);
+            type_definer->add(config, style_builder);
+          } else {
+            type_definer->add_empty(config);
+          }
+        }
+      }
+
+      package_builder->add_type(type_definer);
+    }
+
+    auto& overlayables = parsed_table.m_package_overlayables.at(package);
+    package_builder->add_overlays(overlayables);
+
+    auto& unknown_chunks = parsed_table.m_package_unknown_chunks.at(package);
+    for (auto& header : unknown_chunks) {
+      package_builder->add_chunk(header);
+    }
+
+    table_builder.add_package(package_builder);
+  }
+
+  android::Vector<char> serialized;
+  table_builder.serialize(&serialized);
+
+  m_arsc_len = write_serialized_data_with_expansion(serialized, std::move(m_f));
+  mark_file_closed();
+}
 
 ResourcesArscFile::~ResourcesArscFile() {}
