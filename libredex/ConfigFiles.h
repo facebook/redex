@@ -259,6 +259,8 @@ struct ConfigFiles {
 
   bool enforce_class_order() const;
 
+  bool disable_violation_fixes() const;
+
  private:
   JsonWrapper m_json;
   std::string outdir;

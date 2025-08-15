@@ -518,7 +518,8 @@ class OptimizeEnums {
       }
     }
 
-    auto stats = optimize_enums::transform_enums(mgr, config, &m_stores);
+    auto stats = optimize_enums::transform_enums(
+        mgr, config, &m_stores, conf.disable_violation_fixes());
     m_stats.num_enum_objs = stats.num_erased_enum_objs;
     m_stats.num_int_objs = stats.num_int_objs;
     m_stats.num_enum_classes = config.candidate_enums.size();

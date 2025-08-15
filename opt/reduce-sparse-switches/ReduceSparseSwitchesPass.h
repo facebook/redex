@@ -135,7 +135,8 @@ expand the remaining small sparse switches to a sequence of if-eq instructions.
   static Stats multiplexing_transformation(size_t min_switch_cases,
                                            cfg::ControlFlowGraph& cfg);
 
-  static Stats expand_transformation(cfg::ControlFlowGraph& cfg);
+  static Stats expand_transformation(cfg::ControlFlowGraph& cfg,
+                                     bool disable_violation_fixes = false);
 
  private:
   Config m_config;

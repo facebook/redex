@@ -193,7 +193,8 @@ void update_refs_to_mergeable_fields(
     const Scope& scope,
     const std::vector<const MergerType*>& mergers,
     const UnorderedMap<const DexType*, DexType*>& mergeable_to_merger,
-    MergerFields& merger_fields) {
+    MergerFields& merger_fields,
+    bool disable_violation_fixes) {
   UnorderedMap<DexField*, DexField*> fields_lookup;
   for (auto& merger : mergers) {
     cook_merger_fields_lookup(merger_fields.at(merger->type), merger->field_map,
@@ -253,7 +254,8 @@ void update_refs_to_mergeable_fields(
                          : field_type;
         auto sb_it = sb_before_igets.find(insn);
         patch_iget(cfg, it, field_type,
-                   sb_it != sb_before_igets.end() ? sb_it->second : nullptr);
+                   sb_it != sb_before_igets.end() ? sb_it->second : nullptr,
+                   disable_violation_fixes);
       } else if (opcode::is_an_iput(insn->opcode())) {
         patch_iput(it);
       }
@@ -668,7 +670,8 @@ std::vector<DexClass*> ModelMerger::merge_model(
       m_is_intra_dex_merging);
   trim_method_debug_map(mergeable_to_merger, method_debug_map);
   update_refs_to_mergeable_fields(scope, to_materialize, mergeable_to_merger,
-                                  m_merger_fields);
+                                  m_merger_fields,
+                                  conf.disable_violation_fixes());
 
   // Merge methods
   method_profiles::MethodProfiles& method_profile = conf.get_method_profiles();
