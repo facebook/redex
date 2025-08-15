@@ -483,7 +483,9 @@ DexDebugItem::DexDebugItem(const DexDebugItem& that)
 
 std::unique_ptr<DexDebugItem> DexDebugItem::get_dex_debug(DexIdx* idx,
                                                           uint32_t offset) {
-  if (offset == 0) return nullptr;
+  if (offset == 0) {
+    return nullptr;
+  }
   return std::unique_ptr<DexDebugItem>(new DexDebugItem(idx, offset));
 }
 
@@ -658,7 +660,9 @@ DexCode::~DexCode() {
 }
 
 std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
-  if (offset == 0) return std::unique_ptr<DexCode>();
+  if (offset == 0) {
+    return std::unique_ptr<DexCode>();
+  }
   always_assert_type_log(offset <= idx->get_file_size() - sizeof(dex_code_item),
                          INVALID_DEX, "Dex overflow");
   always_assert_type_log(offset % 4 == 0, INVALID_DEX, "Alignment violation");
@@ -695,7 +699,9 @@ std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
      * implemented not according to spec.  Just FYI in case
      * something weird happens in the future.
      */
-    if (code->insns_size & 1 && tries) cdata++;
+    if (code->insns_size & 1 && tries) {
+      cdata++;
+    }
   }
 
   if (tries) {
@@ -749,13 +755,16 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
     opc->encode(dodx, insns);
   }
   code->insns_size = (uint32_t)(insns - ((uint16_t*)(code + 1)));
-  if (m_tries.empty())
+  if (m_tries.empty()) {
     return ((code->insns_size * sizeof(uint16_t)) + sizeof(dex_code_item));
+  }
   /*
    * Now the tries..., obscenely messy encoding :(
    * Pad tries to uint32_t
    */
-  if (code->insns_size & 1) insns++;
+  if (code->insns_size & 1) {
+    insns++;
+  }
   int tries = code->tries_size = m_tries.size();
   dex_tries_item* dti = (dex_tries_item*)insns;
   uint8_t* handler_base = (uint8_t*)(dti + tries);
@@ -1203,7 +1212,9 @@ void DexClass::load_class_data_item(
     DexIdx* idx,
     uint32_t cdi_off,
     std::unique_ptr<DexEncodedValueArray> svalues) {
-  if (cdi_off == 0) return;
+  if (cdi_off == 0) {
+    return;
+  }
   const uint8_t* encd = idx->get_uleb_data(cdi_off);
   always_assert(encd < idx->end());
   uint32_t sfield_count = read_uleb128(&encd);
@@ -1476,7 +1487,9 @@ int DexClass::encode(DexOutputIdx* dodx,
 }
 
 void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
-  if (anno_off == 0) return;
+  if (anno_off == 0) {
+    return;
+  }
   const dex_annotations_directory_item* annodir =
       idx->get_data<dex_annotations_directory_item>(anno_off);
   m_anno =
@@ -1559,7 +1572,9 @@ void DexClass::clear_annotations() { m_anno.reset(); }
 
 static std::unique_ptr<DexEncodedValueArray> load_static_values(
     DexIdx* idx, uint32_t sv_off) {
-  if (sv_off == 0) return nullptr;
+  if (sv_off == 0) {
+    return nullptr;
+  }
   const uint8_t* encd = idx->get_uleb_data(sv_off);
   return get_encoded_value_array(idx, encd);
 }
@@ -1815,7 +1830,9 @@ void DexClass::gather_types(C& ltype) const {
 
   ltype.insert(ltype.end(), m_super_class);
   ltype.insert(ltype.end(), m_self);
-  if (m_interfaces) m_interfaces->gather_types(ltype);
+  if (m_interfaces) {
+    m_interfaces->gather_types(ltype);
+  }
   if (m_anno) {
     std::vector<DexType*> type_vec;
     m_anno->gather_types(type_vec);
@@ -1887,7 +1904,9 @@ void DexClass::gather_strings_internal(C& lstring, bool exclude_loads) const {
   for (auto const& f : m_ifields) {
     f->gather_strings(lstring);
   }
-  if (m_source_file) c_append(lstring, m_source_file);
+  if (m_source_file) {
+    c_append(lstring, m_source_file);
+  }
   if (m_anno) {
     std::vector<const DexString*> strings;
     m_anno->gather_strings(strings);
@@ -2039,8 +2058,12 @@ void DexFieldRef::gather_strings_shallow(
 template <typename C>
 void DexField::gather_types(C& ltype) const {
   std::vector<DexType*> type_vec;
-  if (m_value) m_value->gather_types(type_vec);
-  if (m_anno) m_anno->gather_types(type_vec);
+  if (m_value) {
+    m_value->gather_types(type_vec);
+  }
+  if (m_anno) {
+    m_anno->gather_types(type_vec);
+  }
   c_append_all(ltype, type_vec.begin(), type_vec.end());
 }
 INSTANTIATE(DexField::gather_types, DexType*)
@@ -2048,8 +2071,12 @@ INSTANTIATE(DexField::gather_types, DexType*)
 template <typename C>
 void DexField::gather_strings_internal(C& lstring) const {
   std::vector<const DexString*> string_vec;
-  if (m_value) m_value->gather_strings(string_vec);
-  if (m_anno) m_anno->gather_strings(string_vec);
+  if (m_value) {
+    m_value->gather_strings(string_vec);
+  }
+  if (m_anno) {
+    m_anno->gather_strings(string_vec);
+  }
   c_append_all(lstring, string_vec.begin(), string_vec.end());
 }
 void DexField::gather_strings(std::vector<const DexString*>& lstring) const {
@@ -2062,8 +2089,12 @@ void DexField::gather_strings(UnorderedSet<const DexString*>& lstring) const {
 template <typename C>
 void DexField::gather_fields(C& lfield) const {
   std::vector<DexFieldRef*> field_vec;
-  if (m_value) m_value->gather_fields(field_vec);
-  if (m_anno) m_anno->gather_fields(field_vec);
+  if (m_value) {
+    m_value->gather_fields(field_vec);
+  }
+  if (m_anno) {
+    m_anno->gather_fields(field_vec);
+  }
   c_append_all(lfield, field_vec.begin(), field_vec.end());
 }
 INSTANTIATE(DexField::gather_fields, DexFieldRef*)
@@ -2071,8 +2102,12 @@ INSTANTIATE(DexField::gather_fields, DexFieldRef*)
 template <typename C>
 void DexField::gather_methods(C& lmethod) const {
   std::vector<DexMethodRef*> method_vec;
-  if (m_value) m_value->gather_methods(method_vec);
-  if (m_anno) m_anno->gather_methods(method_vec);
+  if (m_value) {
+    m_value->gather_methods(method_vec);
+  }
+  if (m_anno) {
+    m_anno->gather_methods(method_vec);
+  }
   c_append_all(lmethod, method_vec.begin(), method_vec.end());
 }
 INSTANTIATE(DexField::gather_methods, DexMethodRef*)
@@ -2092,8 +2127,12 @@ template <typename C>
 void DexMethod::gather_types(C& ltype) const {
   gather_types_shallow(ltype); // Handle DexMethodRef parts.
   std::vector<DexType*> type_vec; // Simplify refactor.
-  if (m_code) m_code->gather_types(type_vec);
-  if (m_anno) m_anno->gather_types(type_vec);
+  if (m_code) {
+    m_code->gather_types(type_vec);
+  }
+  if (m_anno) {
+    m_anno->gather_types(type_vec);
+  }
   auto param_anno = get_param_anno();
   if (param_anno) {
     for (auto& pair : *param_anno) {
@@ -2106,7 +2145,9 @@ void DexMethod::gather_types(C& ltype) const {
 INSTANTIATE(DexMethod::gather_types, DexType*)
 
 void DexMethod::gather_init_classes(std::vector<DexType*>& ltype) const {
-  if (m_code) m_code->gather_init_classes(ltype);
+  if (m_code) {
+    m_code->gather_init_classes(ltype);
+  }
 }
 
 template <typename C>
@@ -2124,7 +2165,9 @@ template <typename C>
 void DexMethod::gather_methodhandles(C& lmethodhandle) const {
   // We handle m_spec.cls and proto in the first-layer gather.
   std::vector<DexMethodHandle*> mhandles_vec; // Simplify refactor.
-  if (m_code) m_code->gather_methodhandles(mhandles_vec);
+  if (m_code) {
+    m_code->gather_methodhandles(mhandles_vec);
+  }
   c_append_all(lmethodhandle, mhandles_vec.begin(), mhandles_vec.end());
 }
 INSTANTIATE(DexMethod::gather_methodhandles, DexMethodHandle*)
@@ -2132,8 +2175,12 @@ template <typename C>
 void DexMethod::gather_strings_internal(C& lstring, bool exclude_loads) const {
   // We handle m_name and proto in the first-layer gather.
   std::vector<const DexString*> strings_vec; // Simplify refactor.
-  if (m_code && !exclude_loads) m_code->gather_strings(strings_vec);
-  if (m_anno) m_anno->gather_strings(strings_vec);
+  if (m_code && !exclude_loads) {
+    m_code->gather_strings(strings_vec);
+  }
+  if (m_anno) {
+    m_anno->gather_strings(strings_vec);
+  }
   auto param_anno = get_param_anno();
   if (param_anno) {
     for (auto& pair : *param_anno) {
@@ -2155,8 +2202,12 @@ void DexMethod::gather_strings(UnorderedSet<const DexString*>& lstring,
 template <typename C>
 void DexMethod::gather_fields(C& lfield) const {
   std::vector<DexFieldRef*> fields_vec; // Simplify refactor.
-  if (m_code) m_code->gather_fields(fields_vec);
-  if (m_anno) m_anno->gather_fields(fields_vec);
+  if (m_code) {
+    m_code->gather_fields(fields_vec);
+  }
+  if (m_anno) {
+    m_anno->gather_fields(fields_vec);
+  }
   auto param_anno = get_param_anno();
   if (param_anno) {
     for (auto& pair : *param_anno) {
@@ -2182,7 +2233,9 @@ INSTANTIATE(DexMethod::gather_methods, DexMethodRef*)
 template <typename C>
 void DexMethod::gather_methods_from_annos(C& lmethod) const {
   std::vector<DexMethodRef*> method_vec; // Simplify refactor.
-  if (m_anno) m_anno->gather_methods(method_vec);
+  if (m_anno) {
+    m_anno->gather_methods(method_vec);
+  }
   auto param_anno = get_param_anno();
   if (param_anno) {
     for (auto& pair : *param_anno) {
@@ -2342,7 +2395,9 @@ void gather_components(std::vector<const DexString*>& lstring,
 
     // Gather strings needed for each type.
     for (auto type : UnorderedIterable(types)) {
-      if (type) strings.insert(type->get_name());
+      if (type) {
+        strings.insert(type->get_name());
+      }
     }
   }();
 
