@@ -180,7 +180,7 @@ TEST_F(TypeUtilTest, is_kotlin_lambda) {
 
   // Create a Kotlin lambda class with kotlin.jvm.internal.Lambda as super class
   // and implementing a Kotlin function interface
-  auto lambda_type = DexType::make_type("LKotlinLambda;");
+  auto lambda_type = DexType::make_type("LKotlinLambda$1;");
   auto kotlin_function_type =
       DexType::make_type("Lkotlin/jvm/functions/Function1;");
 
@@ -191,16 +191,36 @@ TEST_F(TypeUtilTest, is_kotlin_lambda) {
 
   // Create a class with java.lang.Object as super class and implementing a
   // Kotlin function interface (also valid for Kotlin lambdas)
-  auto obj_lambda_type = DexType::make_type("LObjectLambda;");
+  auto obj_lambda_type =
+      DexType::make_type("LObjectLambda$$ExternalSyntheticLambda;");
 
   ClassCreator obj_lambda_creator(obj_lambda_type);
   obj_lambda_creator.set_super(java_lang_Object());
   obj_lambda_creator.add_interface(kotlin_function_type);
   auto obj_lambda_class = obj_lambda_creator.create();
 
+  // Create a named class that is an otherwise Kotlin lambda.
+  auto named_class_type = DexType::make_type("LNamedClass;");
+
+  ClassCreator named_class_creator(named_class_type);
+  named_class_creator.set_super(kotlin_jvm_internal_Lambda());
+  named_class_creator.add_interface(kotlin_function_type);
+  auto named_class = named_class_creator.create();
+
+  // Create a class with java.lang.Object as super class and implementing a
+  // Kotlin function interface, but not synthetic.
+  auto obj_numbered_anonymous_type = DexType::make_type("LObjectLambda$1;");
+
+  ClassCreator obj_numbered_anonymous_class_creator(
+      obj_numbered_anonymous_type);
+  obj_numbered_anonymous_class_creator.set_super(java_lang_Object());
+  obj_numbered_anonymous_class_creator.add_interface(kotlin_function_type);
+  auto obj_numbered_anonymous_class =
+      obj_numbered_anonymous_class_creator.create();
+
   // Create a class with kotlin.jvm.internal.Lambda as super class but
   // implementing a non-Kotlin function interface
-  auto wrong_interface_type = DexType::make_type("LWrongInterface;");
+  auto wrong_interface_type = DexType::make_type("LWrongInterface$1;");
   auto runnable_type = DexType::make_type("Ljava/lang/Runnable;");
 
   ClassCreator wrong_interface_creator(wrong_interface_type);
@@ -210,7 +230,7 @@ TEST_F(TypeUtilTest, is_kotlin_lambda) {
 
   // Create a class with kotlin.jvm.internal.Lambda as super class but
   // implementing multiple interfaces
-  auto multi_interface_type = DexType::make_type("LMultiInterface;");
+  auto multi_interface_type = DexType::make_type("LMultiInterface$1;");
 
   ClassCreator multi_interface_creator(multi_interface_type);
   multi_interface_creator.set_super(kotlin_jvm_internal_Lambda());
@@ -219,7 +239,7 @@ TEST_F(TypeUtilTest, is_kotlin_lambda) {
   auto multi_interface_class = multi_interface_creator.create();
 
   // Create a class with wrong super class
-  auto wrong_super_type = DexType::make_type("LWrongSuper;");
+  auto wrong_super_type = DexType::make_type("LWrongSuper$1;");
 
   ClassCreator wrong_super_creator(wrong_super_type);
   wrong_super_creator.set_super(java_lang_String());
@@ -227,7 +247,7 @@ TEST_F(TypeUtilTest, is_kotlin_lambda) {
   auto wrong_super_class = wrong_super_creator.create();
 
   // Create a class with no interfaces
-  auto no_interface_type = DexType::make_type("LNoInterface;");
+  auto no_interface_type = DexType::make_type("LNoInterface$1;");
 
   ClassCreator no_interface_creator(no_interface_type);
   no_interface_creator.set_super(kotlin_jvm_internal_Lambda());
@@ -236,7 +256,7 @@ TEST_F(TypeUtilTest, is_kotlin_lambda) {
   // Create an otherwise Kotlin lambda class that implements an otherwise Kotlin
   // function interface without a number.
   auto unnumbered_function_class_type =
-      DexType::make_type("LUnnumberedFunction;");
+      DexType::make_type("LUnnumberedFunction$1;");
   const auto unnumbered_kotlin_function_type =
       DexType::make_type("Lkotlin/jvm/functions/Function;");
   ClassCreator unnumbered_kotlin_function_creator(
@@ -250,6 +270,8 @@ TEST_F(TypeUtilTest, is_kotlin_lambda) {
   // Test the function with our mock classes
   EXPECT_TRUE(is_kotlin_lambda(kotlin_lambda_class));
   EXPECT_TRUE(is_kotlin_lambda(obj_lambda_class));
+  EXPECT_FALSE(is_kotlin_lambda(named_class));
+  EXPECT_FALSE(is_kotlin_lambda(obj_numbered_anonymous_class));
   EXPECT_FALSE(is_kotlin_lambda(wrong_interface_class));
   EXPECT_FALSE(is_kotlin_lambda(multi_interface_class));
   EXPECT_FALSE(is_kotlin_lambda(wrong_super_class));
@@ -261,7 +283,7 @@ TEST_F(TypeUtilTest, is_kotlin_non_capturing_lambda) {
   using namespace type;
 
   // Create a non-capturing Kotlin lambda class (no instance fields)
-  auto non_capturing_lambda_type = DexType::make_type("LNonCapturingLambda;");
+  auto non_capturing_lambda_type = DexType::make_type("LNonCapturingLambda$1;");
   auto kotlin_function_type =
       DexType::make_type("Lkotlin/jvm/functions/Function1;");
 
@@ -273,7 +295,7 @@ TEST_F(TypeUtilTest, is_kotlin_non_capturing_lambda) {
   auto non_capturing_lambda_class = non_capturing_creator.create();
 
   // Create a capturing Kotlin lambda class (with instance fields)
-  auto capturing_lambda_type = DexType::make_type("LCapturingLambda;");
+  auto capturing_lambda_type = DexType::make_type("LCapturingLambda$1;");
   ClassCreator capturing_creator(capturing_lambda_type);
   capturing_creator.set_super(kotlin_jvm_internal_Lambda());
   capturing_creator.add_interface(kotlin_function_type);
@@ -289,7 +311,7 @@ TEST_F(TypeUtilTest, is_kotlin_non_capturing_lambda) {
   auto capturing_lambda_class = capturing_creator.create();
 
   // Create a non-lambda class for comparison
-  auto non_lambda_type = DexType::make_type("LNonLambda;");
+  auto non_lambda_type = DexType::make_type("LNonLambda$1;");
 
   ClassCreator non_lambda_creator(non_lambda_type);
   non_lambda_creator.set_super(java_lang_Object());

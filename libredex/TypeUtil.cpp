@@ -547,9 +547,16 @@ bool is_kotlin_function_interface(const DexType* type) {
 }
 
 bool is_kotlin_lambda(const DexClass* cls) {
-  const auto* super_cls = cls->get_super_class();
-  if (super_cls != type::kotlin_jvm_internal_Lambda() &&
-      super_cls != type::java_lang_Object()) {
+  if (const auto* super_cls = cls->get_super_class();
+      super_cls == type::kotlin_jvm_internal_Lambda()) {
+    if (!klass::maybe_non_d8_desugared_anonymous_class(cls)) {
+      return false;
+    }
+  } else if (super_cls == type::java_lang_Object()) {
+    if (!klass::maybe_d8_desugared_anonymous_class(cls)) {
+      return false;
+    }
+  } else {
     return false;
   }
   const auto* intfs = cls->get_interfaces();
