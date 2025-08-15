@@ -23,10 +23,10 @@ TEST_F(ReduceSparseSwitchesTest, trivial_switch_case) {
         (:L1 50)
         (return-void)
 
-        (:L0 0) 
+        (:L0 0)
         (return-void)
 
-        (:L2 100) 
+        (:L2 100)
         (return-void)
       )
     )
@@ -45,12 +45,12 @@ TEST_F(ReduceSparseSwitchesTest, trivial_switch_case) {
 
   const auto& expected_str = R"(
     (
-      (load-param v0) 
-      (switch v0 (:L0 :L1)) 
-      (return-void) 
+      (load-param v0)
+      (switch v0 (:L0 :L1))
+      (return-void)
       (:L0 0)
-      (return-void) 
-      (:L1 100) 
+      (return-void)
+      (:L1 100)
       (return-void)
     )
   )";
@@ -84,8 +84,8 @@ TEST_F(ReduceSparseSwitchesTest, trivial_switch) {
 
   const auto& expected_str = R"(
     (
-      (load-param v0) 
-      (return-void) 
+      (load-param v0)
+      (return-void)
     )
   )";
   auto expected = assembler::ircode_from_string(expected_str);
@@ -101,14 +101,14 @@ TEST_F(ReduceSparseSwitchesTest, splittingEvenSizeSwitch) {
 
         (return-void)
 
-        (:L0 0) 
+        (:L0 0)
         (return-void)
-        (:L1 50) 
+        (:L1 50)
         (return-void)
 
-        (:L2 100) 
+        (:L2 100)
         (return-void)
-        (:L3 101) 
+        (:L3 101)
         (return-void)
       )
     )
@@ -134,14 +134,14 @@ TEST_F(ReduceSparseSwitchesTest, splittingEvenSizeSwitch) {
       (switch v0 (:L0 :L1))
       (return-void)
 
-      (:L0 0) 
+      (:L0 0)
       (return-void)
-      (:L1 50) 
+      (:L1 50)
       (return-void)
 
-      (:L2 100) 
+      (:L2 100)
       (return-void)
-      (:L3 101) 
+      (:L3 101)
       (return-void)
     )
   )";
@@ -158,14 +158,14 @@ TEST_F(ReduceSparseSwitchesTest, splittingEvenSizeSwitch2) {
 
         (return-void)
 
-        (:L0 0) 
+        (:L0 0)
         (return-void)
-        (:L1 1) 
+        (:L1 1)
         (return-void)
 
-        (:L2 100) 
+        (:L2 100)
         (return-void)
-        (:L3 101) 
+        (:L3 101)
         (return-void)
       )
     )
@@ -191,14 +191,14 @@ TEST_F(ReduceSparseSwitchesTest, splittingEvenSizeSwitch2) {
       (switch v0 (:L0 :L1))
       (return-void)
 
-      (:L0 100) 
+      (:L0 100)
       (return-void)
-      (:L1 101) 
+      (:L1 101)
       (return-void)
 
-      (:L2 0) 
+      (:L2 0)
       (return-void)
-      (:L3 1) 
+      (:L3 1)
       (return-void)
     )
   )";
@@ -218,16 +218,16 @@ TEST_F(ReduceSparseSwitchesTest, splittingOddSizeSwitch) {
 
         (return-void)
 
-        (:L0 0) 
+        (:L0 0)
         (return-void)
-        (:L1 50) 
+        (:L1 50)
         (return-void)
 
-        (:L2 100) 
+        (:L2 100)
         (return-void)
-        (:L3 102) 
+        (:L3 102)
         (return-void)
-        (:L4 104) 
+        (:L4 104)
         (return-void)
       )
     )
@@ -253,16 +253,16 @@ TEST_F(ReduceSparseSwitchesTest, splittingOddSizeSwitch) {
       (switch v0 (:L0 :L1))
       (return-void)
 
-      (:L0 0) 
+      (:L0 0)
       (return-void)
-      (:L1 50) 
+      (:L1 50)
       (return-void)
 
-      (:L2 100) 
+      (:L2 100)
       (return-void)
-      (:L3 102) 
+      (:L3 102)
       (return-void)
-      (:L4 104) 
+      (:L4 104)
       (return-void)
     )
   )";
@@ -279,14 +279,14 @@ TEST_F(ReduceSparseSwitchesTest, splittingPerfectly) {
 
         (return-void)
 
-        (:L0 0) 
+        (:L0 0)
         (return-void)
-        (:L1 1) 
+        (:L1 1)
         (return-void)
 
-        (:L2 100) 
+        (:L2 100)
         (return-void)
-        (:L3 101) 
+        (:L3 101)
         (return-void)
       )
     )
@@ -306,19 +306,19 @@ TEST_F(ReduceSparseSwitchesTest, splittingPerfectly) {
 
   const auto& expected_str = R"(
     (
-      (load-param v0) 
-      (switch v0 (:L2 :L3)) 
-      (switch v0 (:L0 :L1)) 
-      (return-void) 
-      
-      (:L0 100) 
-      (return-void) 
-      (:L1 101) 
-      (return-void) 
-      
-      (:L2 0) 
-      (return-void) 
-      (:L3 1) 
+      (load-param v0)
+      (switch v0 (:L2 :L3))
+      (switch v0 (:L0 :L1))
+      (return-void)
+
+      (:L0 100)
+      (return-void)
+      (:L1 101)
+      (return-void)
+
+      (:L2 0)
+      (return-void)
+      (:L3 1)
       (return-void)
     )
   )";
@@ -334,15 +334,15 @@ TEST_F(ReduceSparseSwitchesTest, multiplexing) {
         (switch v0 (:L0 :L1 :L2 :L3 :L4))
         (return-void)
 
-        (:L0 0) 
+        (:L0 0)
         (return-void)
-        (:L1 3) 
+        (:L1 3)
         (return-void)
-        (:L2 6) 
+        (:L2 6)
         (return-void)
-        (:L3 9) 
+        (:L3 9)
         (return-void)
-        (:L4 12) 
+        (:L4 12)
         (return-void)
       )
     )
@@ -366,29 +366,29 @@ TEST_F(ReduceSparseSwitchesTest, multiplexing) {
 
   const auto& expected_str = R"(
     (
-      (load-param v0) 
-      (and-int/lit v1 v0 3) 
-      (switch v1 (:L1 :L2 :L3 :L4)) 
-    (:L0) 
-      (return-void) 
-    (:L1 0) 
-      (switch v0 (:L5 :L6)) 
-      (goto :L0) 
-    (:L2 1) 
-      (const v1 9) 
+      (load-param v0)
+      (and-int/lit v1 v0 3)
+      (switch v1 (:L1 :L2 :L3 :L4))
+    (:L0)
+      (return-void)
+    (:L1 0)
+      (switch v0 (:L5 :L6))
+      (goto :L0)
+    (:L2 1)
+      (const v1 9)
       (if-ne v0 v1 :L0)
-      (return-void) 
-    (:L3 2) 
-      (const v1 6) 
-      (if-ne v0 v1 :L0) 
-      (return-void) 
-    (:L4 3) 
-      (const v1 3) 
-      (if-ne v0 v1 :L0) 
-      (return-void) 
-    (:L5 0) 
-      (return-void) 
-    (:L6 12) 
+      (return-void)
+    (:L3 2)
+      (const v1 6)
+      (if-ne v0 v1 :L0)
+      (return-void)
+    (:L4 3)
+      (const v1 3)
+      (if-ne v0 v1 :L0)
+      (return-void)
+    (:L5 0)
+      (return-void)
+    (:L6 12)
       (return-void)
     )
   )";
@@ -407,15 +407,15 @@ TEST_F(ReduceSparseSwitchesTest, multiplexing_shr) {
         (switch v0 (:L0 :L1 :L2 :L3 :L4))
         (return-void)
 
-        (:L0 0) 
+        (:L0 0)
         (return-void)
-        (:L1 6) 
+        (:L1 6)
         (return-void)
-        (:L2 12) 
+        (:L2 12)
         (return-void)
-        (:L3 18) 
+        (:L3 18)
         (return-void)
-        (:L4 24) 
+        (:L4 24)
         (return-void)
       )
     )
@@ -439,30 +439,30 @@ TEST_F(ReduceSparseSwitchesTest, multiplexing_shr) {
 
   const auto& expected_str = R"(
     (
-      (load-param v0) 
+      (load-param v0)
       (shr-int/lit v1 v0 1)
-      (and-int/lit v1 v1 3) 
-      (switch v1 (:L1 :L2 :L3 :L4)) 
-    (:L0) 
-      (return-void) 
-    (:L1 0) 
-      (switch v0 (:L5 :L6)) 
-      (goto :L0) 
-    (:L2 1) 
-      (const v1 18) 
+      (and-int/lit v1 v1 3)
+      (switch v1 (:L1 :L2 :L3 :L4))
+    (:L0)
+      (return-void)
+    (:L1 0)
+      (switch v0 (:L5 :L6))
+      (goto :L0)
+    (:L2 1)
+      (const v1 18)
       (if-ne v0 v1 :L0)
-      (return-void) 
-    (:L3 2) 
-      (const v1 12) 
-      (if-ne v0 v1 :L0) 
-      (return-void) 
-    (:L4 3) 
+      (return-void)
+    (:L3 2)
+      (const v1 12)
+      (if-ne v0 v1 :L0)
+      (return-void)
+    (:L4 3)
       (const v1 6)
-      (if-ne v0 v1 :L0) 
-      (return-void) 
-    (:L5 0) 
-      (return-void) 
-    (:L6 24) 
+      (if-ne v0 v1 :L0)
+      (return-void)
+    (:L5 0)
+      (return-void)
+    (:L6 24)
       (return-void)
     )
   )";
@@ -479,40 +479,40 @@ TEST_F(ReduceSparseSwitchesTest, splittingIntoLog2ManyChunks) {
 
         (return-void)
 
-        (:L0 0) 
+        (:L0 0)
         (return-void)
-        (:L1 1) 
+        (:L1 1)
         (return-void)
-        (:L2 2) 
+        (:L2 2)
         (return-void)
-        (:L3 3) 
+        (:L3 3)
         (return-void)
-        (:L4 4) 
+        (:L4 4)
         (return-void)
-        (:L5 5) 
+        (:L5 5)
         (return-void)
-        (:L6 6) 
-        (return-void)
-
-        (:L7 50) 
+        (:L6 6)
         (return-void)
 
-        (:L8 100) 
-        (return-void)
-        (:L9 101) 
-        (return-void)
-        (:L10 102) 
-        (return-void)
-        (:L11 103) 
-        (return-void)
-        (:L12 104) 
-        (return-void)
-        (:L13 105) 
-        (return-void)
-        (:L14 106) 
+        (:L7 50)
         (return-void)
 
-        (:L15 150) 
+        (:L8 100)
+        (return-void)
+        (:L9 101)
+        (return-void)
+        (:L10 102)
+        (return-void)
+        (:L11 103)
+        (return-void)
+        (:L12 104)
+        (return-void)
+        (:L13 105)
+        (return-void)
+        (:L14 106)
+        (return-void)
+
+        (:L15 150)
         (return-void)
       )
     )
@@ -529,45 +529,45 @@ TEST_F(ReduceSparseSwitchesTest, splittingIntoLog2ManyChunks) {
 
   const auto& expected_str = R"(
     (
-      (load-param v0) 
-      (switch v0 (:L9 :L10 :L11 :L12 :L13 :L14 :L15)) 
-      (switch v0 (:L2 :L3 :L4 :L5 :L6 :L7 :L8)) 
-      (switch v0 (:L0 :L1)) 
-      (return-void) 
+      (load-param v0)
+      (switch v0 (:L9 :L10 :L11 :L12 :L13 :L14 :L15))
+      (switch v0 (:L2 :L3 :L4 :L5 :L6 :L7 :L8))
+      (switch v0 (:L0 :L1))
+      (return-void)
 
-      (:L0 150) 
-      (return-void) 
-      (:L1 50) 
-      (return-void) 
-      
-      (:L2 106) 
-      (return-void) 
-      (:L3 105) 
-      (return-void) 
-      (:L4 104) 
-      (return-void) 
-      (:L5 103) 
-      (return-void) 
-      (:L6 102) 
-      (return-void) 
-      (:L7 101) 
-      (return-void) 
-      (:L8 100) 
-      (return-void) 
-      
-      (:L9 6) 
-      (return-void) 
-      (:L10 5) 
-      (return-void) 
-      (:L11 4) 
-      (return-void) 
-      (:L12 3) 
-      (return-void) 
-      (:L13 2) 
-      (return-void) 
-      (:L14 1) 
-      (return-void) 
-      (:L15 0) 
+      (:L0 150)
+      (return-void)
+      (:L1 50)
+      (return-void)
+
+      (:L2 106)
+      (return-void)
+      (:L3 105)
+      (return-void)
+      (:L4 104)
+      (return-void)
+      (:L5 103)
+      (return-void)
+      (:L6 102)
+      (return-void)
+      (:L7 101)
+      (return-void)
+      (:L8 100)
+      (return-void)
+
+      (:L9 6)
+      (return-void)
+      (:L10 5)
+      (return-void)
+      (:L11 4)
+      (return-void)
+      (:L12 3)
+      (return-void)
+      (:L13 2)
+      (return-void)
+      (:L14 1)
+      (return-void)
+      (:L15 0)
       (return-void)
     )
   )";
@@ -584,11 +584,11 @@ TEST_F(ReduceSparseSwitchesTest, expand_sparse) {
         (switch v0 (:L0 :L1 :L2))
         (return-void)
 
-        (:L0 0) 
+        (:L0 0)
         (return-void)
-        (:L1 11) 
+        (:L1 11)
         (return-void)
-        (:L2 222) 
+        (:L2 222)
         (return-void)
       )
     )
@@ -604,18 +604,18 @@ TEST_F(ReduceSparseSwitchesTest, expand_sparse) {
 
   const auto& expected_str = R"(
     (
-      (load-param v0) 
-      (if-eqz v0 :L2) 
-      (const v1 11) 
-      (if-eq v0 v1 :L1) 
-      (const v1 222) 
-      (if-eq v0 v1 :L0) 
-      (return-void) 
-      (:L0) 
-      (return-void) 
-      (:L1) 
-      (return-void) 
-      (:L2) 
+      (load-param v0)
+      (if-eqz v0 :L2)
+      (const v1 11)
+      (if-eq v0 v1 :L1)
+      (const v1 222)
+      (if-eq v0 v1 :L0)
+      (return-void)
+      (:L0)
+      (return-void)
+      (:L1)
+      (return-void)
+      (:L2)
       (return-void)
     )
   )";
@@ -632,11 +632,11 @@ TEST_F(ReduceSparseSwitchesTest, expand_very_small_packed) {
         (switch v0 (:L0 :L1 :L2))
         (return-void)
 
-        (:L0 0) 
+        (:L0 0)
         (return-void)
-        (:L1 1) 
+        (:L1 1)
         (return-void)
-        (:L2 2) 
+        (:L2 2)
         (return-void)
       )
     )
@@ -652,18 +652,18 @@ TEST_F(ReduceSparseSwitchesTest, expand_very_small_packed) {
 
   const auto& expected_str = R"(
     (
-      (load-param v0) 
-      (if-eqz v0 :L2) 
-      (const v1 1) 
-      (if-eq v0 v1 :L1) 
-      (const v1 2) 
-      (if-eq v0 v1 :L0) 
-      (return-void) 
-      (:L0) 
-      (return-void) 
-      (:L1) 
-      (return-void) 
-      (:L2) 
+      (load-param v0)
+      (if-eqz v0 :L2)
+      (const v1 1)
+      (if-eq v0 v1 :L1)
+      (const v1 2)
+      (if-eq v0 v1 :L0)
+      (return-void)
+      (:L0)
+      (return-void)
+      (:L1)
+      (return-void)
+      (:L2)
       (return-void)
     )
   )";
@@ -680,11 +680,11 @@ TEST_F(ReduceSparseSwitchesTest, expand_add) {
         (switch v0 (:L0 :L1 :L2))
         (return-void)
 
-        (:L0 10000000) 
+        (:L0 10000000)
         (return-void)
-        (:L1 10000011) 
+        (:L1 10000011)
         (return-void)
-        (:L2 10000022) 
+        (:L2 10000022)
         (return-void)
       )
     )
@@ -700,19 +700,19 @@ TEST_F(ReduceSparseSwitchesTest, expand_add) {
 
   const auto& expected_str = R"(
     (
-      (load-param v0) 
-      (const v1 10000000) 
-      (if-eq v0 v1 :L2) 
-      (add-int/lit v1 v1 11) 
-      (if-eq v0 v1 :L1) 
-      (add-int/lit v1 v1 11) 
-      (if-eq v0 v1 :L0) 
-      (return-void) 
-      (:L0) 
-      (return-void) 
-      (:L1) 
-      (return-void) 
-      (:L2) 
+      (load-param v0)
+      (const v1 10000000)
+      (if-eq v0 v1 :L2)
+      (add-int/lit v1 v1 11)
+      (if-eq v0 v1 :L1)
+      (add-int/lit v1 v1 11)
+      (if-eq v0 v1 :L0)
+      (return-void)
+      (:L0)
+      (return-void)
+      (:L1)
+      (return-void)
+      (:L2)
       (return-void)
     )
   )";
@@ -778,15 +778,15 @@ TEST_F(ReduceSparseSwitchesTest, expand_not) {
         (switch v0 (:L0 :L1 :L2 :L3 :L4))
         (return-void)
 
-        (:L0 10000000) 
+        (:L0 10000000)
         (return-void)
-        (:L1 10000011) 
+        (:L1 10000011)
         (return-void)
-        (:L2 10000022) 
+        (:L2 10000022)
         (return-void)
-        (:L3 10000023) 
+        (:L3 10000023)
         (return-void)
-        (:L4 10000024) 
+        (:L4 10000024)
         (return-void)
       )
     )
@@ -799,4 +799,194 @@ TEST_F(ReduceSparseSwitchesTest, expand_not) {
 
   EXPECT_EQ(stats.expanded_transformations, 0);
   EXPECT_EQ(stats.expanded_switch_cases, 0);
+}
+
+TEST_F(ReduceSparseSwitchesTest, expand_sparse_hot_source_blocks) {
+  auto* method = assembler::method_from_string(std::string("") + R"(
+    (method (public static) ")LtestClass;.testMethod(:(I)V"
+      (
+        (load-param v0)
+
+        (.src_block "LtestClass;.testMethod(:(I)V" 1 (1.0 1.0))
+        (switch v0 (:L0 :L1 :L2))
+        (return-void)
+
+        (:L0 0)
+        (.src_block "LtestClass;.testMethod(:(I)V" 2 (1.0 1.0))
+        (return-void)
+        (:L1 11)
+        (.src_block "LtestClass;.testMethod(:(I)V" 3 (1.0 1.0))
+        (return-void)
+        (:L2 222)
+        (.src_block "LtestClass;.testMethod(:(I)V" 4 (1.0 1.0))
+        (return-void)
+      )
+    )
+  )");
+  method->get_code()->build_cfg();
+
+  auto stats = ReduceSparseSwitchesPass::expand_transformation(
+      method->get_code()->cfg());
+  method->get_code()->clear_cfg();
+
+  EXPECT_EQ(stats.expanded_transformations, 1);
+  EXPECT_EQ(stats.expanded_switch_cases, 3);
+
+  std::ostringstream oss;
+  oss << R"(
+    (
+      (load-param v0)
+      (.src_block "LtestClass;.testMethod(:(I)V" 1 (1.0 1.0))
+      (if-eqz v0 :L2)
+      (.src_block "LtestClass;.testMethod(:(I)V" )"
+      << SourceBlock::kSyntheticId << R"( (1.0 1.0))
+      (const v1 11)
+      (if-eq v0 v1 :L1)
+      (.src_block "LtestClass;.testMethod(:(I)V" )"
+      << SourceBlock::kSyntheticId << R"( (1.0 1.0))
+      (const v1 222)
+      (if-eq v0 v1 :L0)
+      (return-void)
+      (:L0)
+      (.src_block "LtestClass;.testMethod(:(I)V" 4 (1.0 1.0))
+      (return-void)
+      (:L1)
+      (.src_block "LtestClass;.testMethod(:(I)V" 3 (1.0 1.0))
+      (return-void)
+      (:L2)
+      (.src_block "LtestClass;.testMethod(:(I)V" 2 (1.0 1.0))
+      (return-void)
+    )
+  )";
+  const auto& expected_str = oss.str();
+
+  auto expected = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected.get(), method->get_code());
+}
+
+TEST_F(ReduceSparseSwitchesTest, expand_sparse_mixed_source_blocks) {
+  auto* method = assembler::method_from_string(std::string("") + R"(
+    (method (public static) ")LtestClass;.testMethod(:(I)V"
+      (
+        (load-param v0)
+
+        (.src_block "LtestClass;.testMethod(:(I)V" 1 (1.0 1.0))
+        (switch v0 (:L0 :L1 :L2))
+        (return-void)
+
+        (:L0 0)
+        (.src_block "LtestClass;.testMethod(:(I)V" 2 (1.0 1.0))
+        (return-void)
+        (:L1 11)
+        (.src_block "LtestClass;.testMethod(:(I)V" 3 (0.0 1.0))
+        (return-void)
+        (:L2 222)
+        (.src_block "LtestClass;.testMethod(:(I)V" 4 (0.0 1.0))
+        (return-void)
+      )
+    )
+  )");
+  method->get_code()->build_cfg();
+
+  auto stats = ReduceSparseSwitchesPass::expand_transformation(
+      method->get_code()->cfg());
+  method->get_code()->clear_cfg();
+
+  EXPECT_EQ(stats.expanded_transformations, 1);
+  EXPECT_EQ(stats.expanded_switch_cases, 3);
+
+  std::ostringstream oss;
+  oss << R"(
+    (
+      (load-param v0)
+      (.src_block "LtestClass;.testMethod(:(I)V" 1 (1.0 1.0))
+      (if-eqz v0 :L2)
+      (.src_block "LtestClass;.testMethod(:(I)V" )"
+      << SourceBlock::kSyntheticId << R"( (0.0 1.0))
+      (const v1 11)
+      (if-eq v0 v1 :L1)
+      (.src_block "LtestClass;.testMethod(:(I)V" )"
+      << SourceBlock::kSyntheticId << R"( (0.0 1.0))
+      (const v1 222)
+      (if-eq v0 v1 :L0)
+      (return-void)
+      (:L0)
+      (.src_block "LtestClass;.testMethod(:(I)V" 4 (0.0 1.0))
+      (return-void)
+      (:L1)
+      (.src_block "LtestClass;.testMethod(:(I)V" 3 (0.0 1.0))
+      (return-void)
+      (:L2)
+      (.src_block "LtestClass;.testMethod(:(I)V" 2 (1.0 1.0))
+      (return-void)
+    )
+  )";
+  const auto& expected_str = oss.str();
+
+  auto expected = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected.get(), method->get_code());
+}
+
+TEST_F(ReduceSparseSwitchesTest,
+       expand_sparse_all_cold_except_last_source_block) {
+  auto* method = assembler::method_from_string(std::string("") + R"(
+    (method (public static) ")LtestClass;.testMethod(:(I)V"
+      (
+        (load-param v0)
+
+        (.src_block "LtestClass;.testMethod(:(I)V" 1 (0.0 1.0))
+        (switch v0 (:L0 :L1 :L2))
+        (return-void)
+
+        (:L0 0)
+        (.src_block "LtestClass;.testMethod(:(I)V" 2 (0.0 1.0))
+        (return-void)
+        (:L1 11)
+        (.src_block "LtestClass;.testMethod(:(I)V" 3 (0.0 1.0))
+        (return-void)
+        (:L2 222)
+        (.src_block "LtestClass;.testMethod(:(I)V" 4 (1.0 1.0))
+        (return-void)
+      )
+    )
+  )");
+  method->get_code()->build_cfg();
+
+  auto stats = ReduceSparseSwitchesPass::expand_transformation(
+      method->get_code()->cfg());
+  method->get_code()->clear_cfg();
+
+  EXPECT_EQ(stats.expanded_transformations, 1);
+  EXPECT_EQ(stats.expanded_switch_cases, 3);
+
+  std::ostringstream oss;
+  oss << R"(
+    (
+      (load-param v0)
+      (.src_block "LtestClass;.testMethod(:(I)V" 1 (0.0 1.0))
+      (if-eqz v0 :L2)
+      (.src_block "LtestClass;.testMethod(:(I)V" )"
+      << SourceBlock::kSyntheticId << R"( (1.0 1.0))
+      (const v1 11)
+      (if-eq v0 v1 :L1)
+      (.src_block "LtestClass;.testMethod(:(I)V" )"
+      << SourceBlock::kSyntheticId << R"( (1.0 1.0))
+      (const v1 222)
+      (if-eq v0 v1 :L0)
+      (return-void)
+      (:L0)
+      (.src_block "LtestClass;.testMethod(:(I)V" 4 (1.0 1.0))
+      (return-void)
+      (:L1)
+      (.src_block "LtestClass;.testMethod(:(I)V" 3 (0.0 1.0))
+      (return-void)
+      (:L2)
+      (.src_block "LtestClass;.testMethod(:(I)V" 2 (0.0 1.0))
+      (return-void)
+    )
+  )";
+  const auto& expected_str = oss.str();
+
+  auto expected = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected.get(), method->get_code());
 }
