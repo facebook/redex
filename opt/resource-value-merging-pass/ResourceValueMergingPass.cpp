@@ -111,6 +111,23 @@ void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
   const auto& directly_reachable_styles =
       style_analysis.directly_reachable_styles();
 
+  // Synthetic Parent Optimizations
+  const auto& optimized = add_synthetic_nodes_to_graph(
+      *res_table, style_info, directly_reachable_styles, ambiguous_styles);
+  auto new_styles_modifications =
+      get_graph_diffs(style_info, optimized, ambiguous_styles);
+
+  res_table->add_styles(new_styles_modifications, resource_files);
+  res_table = resources->load_res_table();
+  res_table->apply_attribute_removals_and_additions(new_styles_modifications,
+                                                    resource_files);
+  res_table = resources->load_res_table();
+  // This updates a style's parent and add attributes to the current resource
+  res_table->apply_style_merges(new_styles_modifications, resource_files);
+
+  res_table = resources->load_res_table();
+  style_info = res_table->load_style_info();
+
   // Removal and Hoisting Operations
   const auto& optimized_style_graph = get_optimized_graph(
       style_info, ambiguous_styles, directly_reachable_styles);
@@ -130,6 +147,12 @@ void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
   const auto& merging_modifications =
       get_style_merging_modifications(style_info, resources_to_merge);
   res_table->apply_style_merges(merging_modifications, resource_files);
+
+  if (traceEnabled(RES, 5)) {
+    StyleAnalysis style_analysis_end(apk_dir, conf.get_global_config(), options,
+                                     stores, UnorderedSet<uint32_t>());
+    TRACE(RES, 5, "%s", style_analysis_end.dot(false, true).c_str());
+  }
 }
 
 /**

@@ -4,6 +4,8 @@
   <style name="BaseTextStyle">
     <item name="android:textColor">#212121</item>
     <item name="android:fontFamily">sans-serif</item>
+    <item name="android:paddingStart">5px</item>
+    <item name="android:isGame">false</item>
     <item name="android:layout_margin">0px</item>
     <item name="android:padding">8px</item>
   </style>
@@ -47,28 +49,39 @@
   <style name="ButtonPrimary" parent="ButtonBase">
     <item name="android:background">#2196F3</item>
     <item name="android:textStyle">bold</item>
+    <item name="android:textColor">#2196F3</item>
   </style>
 
   <style name="ButtonSecondary" parent="ButtonBase">
     <item name="android:background">#FF9800</item>
+    <item name="android:textColor">#2196F3</item>
+    <item name="android:padding">11px</item>
     <item name="android:textSize">14px</item>
+    <item name="android:textStyle">bold</item>
   </style>
 
   <style name="ButtonDanger" parent="ButtonBase">
-    <item name="android:background">#F44336</item>
+    <item name="android:background">#FF9800</item>
+    <item name="android:textColor">#2196F3</item>
+    <item name="android:padding">11px</item>
     <item name="android:textStyle">bold</item>
   </style>
 
   <style name="ButtonOutline" parent="ButtonBase">
-    <item name="android:background">#FFFFFF</item>
+    <item name="android:background">#FF9800</item>
     <item name="android:textColor">#2196F3</item>
     <item name="android:padding">11px</item>
+    <item name="android:textStyle">bold</item>
   </style>
 
   <!-- Card styles with inheritance -->
   <style name="CardBase">
+    <item name="android:fontFamily">sans-serif</item>
+    <item name="android:paddingStart">5px</item>
+    <item name="android:isGame">false</item>
     <item name="android:background">#FFFFFF</item>
     <item name="android:layout_margin">8px</item>
+    <item name="android:stackFromBottom">true</item>
   </style>
 
   <style name="CardElevated" parent="CardBase">
@@ -98,6 +111,8 @@
     <item name="android:padding">11px</item>
     <item name="android:textColor">#212121</item>
     <item name="android:layout_marginBottom">16px</item>
+    <item name="android:duplicateParentState">true</item>
+    <item name="android:stackFromBottom">true</item>
   </style>
 
   <style name="InputRounded" parent="InputBase">
@@ -114,6 +129,8 @@
     <item name="android:textSize">16px</item>
     <item name="android:textColor">#212121</item>
     <item name="android:background">#FFFFFF</item>
+    <item name="android:duplicateParentState">true</item>
+    <item name="android:stackFromBottom">true</item>
   </style>
 
   <style name="AppTheme.Light" parent="AppTheme">
@@ -135,6 +152,9 @@
   <style name="ThemeParent">
     <item name="android:background">#FFFFFF</item>
     <item name="android:textColor">#212121</item>
+    <item name="android:fontFamily">sans-serif</item>
+    <item name="android:paddingStart">5px</item>
+    <item name="android:isGame">false</item>
   </style>
 
   <style name="ThemeA" parent="ThemeParent">
@@ -150,6 +170,8 @@
     <item name="android:textSize">16px</item>
     <item name="android:textColor">#212121</item>
     <item name="android:padding">8px</item>
+    <item name="android:duplicateParentState">true</item>
+    <item name="android:stackFromBottom">true</item>
   </style>
 
   <style name="ChildStyle1" parent="BaseStyle1">

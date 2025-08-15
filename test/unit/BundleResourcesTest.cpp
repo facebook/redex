@@ -766,7 +766,7 @@ TEST(BundleResources, TestAddStyleAttribute) {
          Value(android::Res_value::TYPE_REFERENCE, 0x7f030001)},
         {"ChooseMe", kBackgroundAttrId,
          Value(android::Res_value::TYPE_INT_COLOR_ARGB8, 0xFF0000FF)},
-        {"ChildWithParentAttr", kTextSizeAttrId,
+        {"ChildWithParentAttr", kTextSize,
          Value(android::Res_value::TYPE_INT_COLOR_ARGB8, 0xFFFF0000)},
         {"CustomText.Prickly", kFloatAttrId,
          Value(android::Res_value::TYPE_FLOAT, 0x3F800000)},
@@ -827,7 +827,7 @@ TEST(BundleResources, TestAddStyleAttribute) {
         EXPECT_EQ(added_attr.get_data_type(),
                   android::Res_value::TYPE_INT_COLOR_ARGB8);
         EXPECT_EQ(added_attr.get_value_bytes(), 0xFF0000FF);
-      } else if (attr_id == kTextSizeAttrId) {
+      } else if (attr_id == kTextSize) {
         EXPECT_EQ(added_attr.get_data_type(),
                   android::Res_value::TYPE_INT_COLOR_ARGB8);
         EXPECT_EQ(added_attr.get_value_bytes(), 0xFFFF0000);

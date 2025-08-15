@@ -34,14 +34,25 @@ const UnorderedMap<std::string, UnorderedSet<uint32_t>> INITIAL_OPTIMIZATIONS =
      {"CardBase", {kBackgroundAttrId}}};
 
 const UnorderedMap<std::string, UnorderedSet<uint32_t>> REMOVED_ATTRIBUTES = {
+    {"AppTheme", {kTextSize, kDuplicateParentState, kStackFromBottom}},
     {"AppTheme.Light", {kTextColorAttrId, kBackgroundAttrId}},
     {"AppTheme.Light.Blue", {kColorPrimaryAttrId, kColorAccent}},
-    {"CardCompact", {kBackgroundTint, kBackgroundAttrId}},
+    {"BaseStyle1",
+     {kTextSize, kTextColorAttrId, kDuplicateParentState, kStackFromBottom}},
+    {"BaseTextStyle", {kFontFamily, kPaddingStart, kIsGame}},
+    {"ButtonDanger", {kTextStyleAttrId, kTextColorAttrId}},
+    {"ButtonOutline", {kTextStyleAttrId, kTextColorAttrId}},
+    {"ButtonPrimary", {kTextStyleAttrId, kTextColorAttrId}},
+    {"ButtonSecondary", {kTextStyleAttrId, kTextColorAttrId}},
+    {"CardBase", {kFontFamily, kPaddingStart, kIsGame}},
+    {"CardCompact", {kBackgroundAttrId, kBackgroundTint}},
     {"CardElevated", {kBackgroundAttrId, kBackgroundTint}},
     {"CardHighlight1", {kBackgroundAttrId}},
     {"CardHighlight2", {kBackgroundAttrId}},
     {"ChildStyle1", {kBackgroundAttrId, kDrawableStart, kDrawableEnd}},
     {"ChildStyle2", {kBackgroundAttrId, kDrawableStart, kDrawableEnd}},
+    {"InputBase",
+     {kTextSize, kTextColorAttrId, kDuplicateParentState, kStackFromBottom}},
     {"InputBordered", {kBackgroundAttrId}},
     {"InputRounded", {kBackgroundAttrId}},
     {"TextStyle.Body", {kTextSize}},
@@ -49,18 +60,22 @@ const UnorderedMap<std::string, UnorderedSet<uint32_t>> REMOVED_ATTRIBUTES = {
     {"TextStyle.Heading", {kTextSize}},
     {"TextStyle.Subheading", {kTextSize}},
     {"ThemeA", {kTextSize}},
-    {"ThemeB", {kTextSize}}};
+    {"ThemeB", {kTextSize}},
+    {"ThemeParent", {kFontFamily, kPaddingStart, kIsGame}}};
 
 const UnorderedMap<std::string, UnorderedSet<uint32_t>> ADDED_ATTRIBUTES = {
     {"AppTheme",
      {kWindowNoTitle, kWindowActionBar, kColorPrimaryAttrId, kColorAccent}},
     {"AppTheme.Light.Blue.NoActionBar",
-     {kTextSize, kTextColorAttrId, kBackgroundAttrId}},
+     {kTextColorAttrId, kBackgroundAttrId, kColorPrimaryAttrId, kColorAccent}},
     {"BaseStyle1", {kBackgroundAttrId, kDrawableStart, kDrawableEnd}},
-    {"BaseTextStyle", {kTextSize}},
     {"CardBase", {kBackgroundTint}},
-    {"InputBase", {kBackgroundAttrId}},
-    {"ThemeParent", {kTextSize}}};
+    {"InputBase", {kBackgroundAttrId}}};
+
+const std::vector<UnorderedSet<uint32_t>> SYNTHETIC_PARENT_ATTRIBUTE_SETS = {
+    {kTextSize, kTextColorAttrId, kDuplicateParentState, kStackFromBottom},
+    {kFontFamily, kPaddingStart, kIsGame},
+    {kTextStyleAttrId, kTextColorAttrId}};
 
 void verify_attribute_existance(
     ResourceTableFile* res_table,
@@ -149,10 +164,34 @@ void resource_value_merging_PreVerify(ResourceTableFile* res_table,
                                               *input_base_ids.begin()));
 }
 
+void verify_synthetic_parents(ResourceTableFile* res_table,
+                              ResourceValueMergingPass& pass) {
+  const auto& style_map = res_table->get_style_map();
+  auto synthetic_styles = SYNTHETIC_PARENT_ATTRIBUTE_SETS;
+  auto ids = res_table->get_res_ids_by_name(SYNTHETIC_PARENT_NAME);
+  EXPECT_THAT(ids, SizeIs(synthetic_styles.size()));
+
+  for (const auto& id : ids) {
+    UnorderedSet<uint32_t> attributes =
+        pass.get_resource_attributes(id, style_map);
+    for (auto it = synthetic_styles.begin(); it != synthetic_styles.end();) {
+      if (attributes == *it) {
+        it = synthetic_styles.erase(it);
+      } else {
+        ++it;
+      }
+    }
+  }
+  EXPECT_THAT(synthetic_styles, ::testing::IsEmpty());
+}
+
 void resource_value_merging_PostVerify(ResourceTableFile* res_table) {
   verify_attribute_existance(res_table, REMOVED_ATTRIBUTES, false,
                              "after optimization");
 
   verify_attribute_existance(res_table, ADDED_ATTRIBUTES, true,
                              "after optimization");
+
+  ResourceValueMergingPass pass;
+  verify_synthetic_parents(res_table, pass);
 }
