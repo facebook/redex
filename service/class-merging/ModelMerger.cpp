@@ -202,6 +202,23 @@ void update_refs_to_mergeable_fields(
   walk::parallel::code(scope, [&](DexMethod* meth, IRCode& code) {
     auto& cfg = code.cfg();
     auto ii = cfg::InstructionIterable(cfg);
+    UnorderedMap<IRInstruction*, SourceBlock*> sb_before_igets;
+
+    for (auto block : cfg.blocks()) {
+      SourceBlock* prev_sb = nullptr;
+      for (auto& mie : *block) {
+        if (mie.type == MFLOW_SOURCE_BLOCK) {
+          prev_sb = mie.src_block.get();
+        }
+        if (mie.type == MFLOW_OPCODE) {
+          auto insn = mie.insn;
+          if (opcode::is_an_iget(insn->opcode())) {
+            sb_before_igets[insn] = prev_sb;
+          }
+        }
+      }
+    }
+
     for (auto it = ii.begin(); it != ii.end(); ++it) {
       auto insn = it->insn;
       if (!insn->has_field()) {
@@ -233,7 +250,9 @@ void update_refs_to_mergeable_fields(
         field_type = mergeable_to_merger.count(field_type) > 0
                          ? mergeable_to_merger.at(field_type)
                          : field_type;
-        patch_iget(cfg, it, field_type);
+        auto sb_it = sb_before_igets.find(insn);
+        patch_iget(cfg, it, field_type,
+                   sb_it != sb_before_igets.end() ? sb_it->second : nullptr);
       } else if (opcode::is_an_iput(insn->opcode())) {
         patch_iput(it);
       }
