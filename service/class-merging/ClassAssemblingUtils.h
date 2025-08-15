@@ -49,7 +49,8 @@ void patch_iput(const cfg::InstructionIterator& it);
 void patch_iget(cfg::ControlFlowGraph& cfg,
                 const cfg::InstructionIterator& it,
                 DexType* original_field_type,
-                SourceBlock* prev_sb);
+                SourceBlock* prev_sb,
+                bool disable_violation_fixes);
 
 void add_class(DexClass* new_cls,
                Scope& scope,

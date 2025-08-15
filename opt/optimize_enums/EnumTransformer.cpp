@@ -1114,8 +1114,12 @@ class EnumTransformer final {
   /**
    * EnumTransformer constructor. Analyze <clinit> of candidate enums.
    */
-  EnumTransformer(const Config& config, DexStoresVector* stores)
-      : m_stores(*stores), m_int_objs(0) {
+  EnumTransformer(const Config& config,
+                  DexStoresVector* stores,
+                  bool disable_violation_fixes)
+      : m_stores(*stores),
+        m_int_objs(0),
+        m_disable_violation_fixes(disable_violation_fixes) {
     m_enum_util = std::make_unique<EnumUtil>(config);
     for (auto& enum_type : UnorderedIterable(config.candidate_enums)) {
       auto enum_cls = type_class(enum_type);
@@ -1271,7 +1275,7 @@ class EnumTransformer final {
         created_method = create_stringvalueof_method(ref);
       }
 
-      if (created_method) {
+      if (created_method && !m_disable_violation_fixes) {
         if (!source_block) {
           // If the source block is a nullptr, try to insert a hot source block
           // instead
@@ -1711,6 +1715,7 @@ class EnumTransformer final {
   DexStoresVector& m_stores;
   uint32_t m_int_objs{0}; // Generated Integer objects.
   uint32_t m_enum_objs{0}; // Eliminated Enum objects.
+  bool m_disable_violation_fixes{false};
   EnumAttributeMap m_enum_attributes_map;
   std::unique_ptr<EnumUtil> m_enum_util;
   size_t m_kotlin_enum_classes{0};
@@ -1724,14 +1729,15 @@ namespace optimize_enums {
  */
 Stats transform_enums(PassManager& mgr,
                       const Config& config,
-                      DexStoresVector* stores) {
+                      DexStoresVector* stores,
+                      bool disable_violation_fixes) {
 
   Stats stats;
   if (config.candidate_enums.empty()) {
     return stats;
   }
 
-  EnumTransformer transformer(config, stores);
+  EnumTransformer transformer(config, stores, disable_violation_fixes);
   transformer.run();
   stats.num_eliminated_enum_classes =
       transformer.get_enum_attributes_map_size();

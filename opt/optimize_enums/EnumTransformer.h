@@ -24,6 +24,7 @@ struct Stats {
 
 Stats transform_enums(PassManager& mgr,
                       const Config& config,
-                      DexStoresVector* stores);
+                      DexStoresVector* stores,
+                      bool disable_violation_fixes);
 
 } // namespace optimize_enums

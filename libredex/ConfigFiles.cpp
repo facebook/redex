@@ -869,6 +869,10 @@ bool ConfigFiles::force_single_dex() const {
   return m_json.get("force_single_dex", false);
 }
 
+bool ConfigFiles::disable_violation_fixes() const {
+  return m_json.get("disable_violation_fixes", false);
+}
+
 bool ConfigFiles::emit_incoming_hashes() const {
   return m_json.get("emit_incoming_hashes", false);
 }

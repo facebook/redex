@@ -247,7 +247,8 @@ static void expand_switch(
     reg_t tmp_reg,
     const IRList::iterator& switch_insn_it,
     const std::vector<std::pair<int32_t, cfg::Block*>>& cases,
-    cfg::Block* default_target) {
+    cfg::Block* default_target,
+    bool disable_violation_fixes) {
   auto selector_reg = switch_insn_it->insn->src(0);
   cfg.remove_insn(block->to_cfg_instruction_iterator(switch_insn_it));
   auto* switch_sb = source_blocks::get_last_source_block(block);
@@ -257,27 +258,31 @@ static void expand_switch(
   for (size_t i = 0; i < cases.size(); i++) {
     auto [case_key, target] = cases[i];
     cfg::Block* next_block;
-    if (i == cases.size() - 1) {
-      next_block = default_target;
+    if (disable_violation_fixes) {
+      next_block = i == cases.size() - 1 ? default_target : cfg.create_block();
     } else {
-      next_block = cfg.create_block();
-      if (switch_sb) {
-        auto next_sb = source_blocks::clone_as_synthetic(
-            switch_sb, nullptr, SourceBlock::Val(0, 0));
-        // While quadratic, we'll only ever going to "expand" relatively small
-        // switches
-        for (size_t j = i + 1; j < cases.size(); j++) {
-          auto* later_target_sb =
-              source_blocks::get_first_source_block(cases[j].second);
-          if (later_target_sb) {
-            next_sb->max(*later_target_sb);
+      if (i == cases.size() - 1) {
+        next_block = default_target;
+      } else {
+        next_block = cfg.create_block();
+        if (switch_sb) {
+          auto next_sb = source_blocks::clone_as_synthetic(
+              switch_sb, nullptr, SourceBlock::Val(0, 0));
+          // While quadratic, we'll only ever going to "expand" relatively small
+          // switches
+          for (size_t j = i + 1; j < cases.size(); j++) {
+            auto* later_target_sb =
+                source_blocks::get_first_source_block(cases[j].second);
+            if (later_target_sb) {
+              next_sb->max(*later_target_sb);
+            }
           }
+          if (default_sb) {
+            next_sb->max(*default_sb);
+          }
+          source_blocks::impl::BlockAccessor::push_source_block(
+              next_block, std::move(next_sb));
         }
-        if (default_sb) {
-          next_sb->max(*default_sb);
-        }
-        source_blocks::impl::BlockAccessor::push_source_block(
-            next_block, std::move(next_sb));
       }
     }
     IRInstruction* if_insn;
@@ -611,7 +616,7 @@ ReduceSparseSwitchesPass::multiplexing_transformation(
 
 // Expanding remaining sparse switches, and also very small packed switches.
 ReduceSparseSwitchesPass::Stats ReduceSparseSwitchesPass::expand_transformation(
-    cfg::ControlFlowGraph& cfg) {
+    cfg::ControlFlowGraph& cfg, bool disable_violation_fixes) {
   ReduceSparseSwitchesPass::Stats stats;
   std::optional<reg_t> tmp_reg;
   for (auto* block : cfg.blocks()) {
@@ -668,7 +673,8 @@ ReduceSparseSwitchesPass::Stats ReduceSparseSwitchesPass::expand_transformation(
     if (!tmp_reg) {
       tmp_reg = cfg.allocate_temp();
     }
-    expand_switch(cfg, block, *tmp_reg, last_insn_it, cases, default_target);
+    expand_switch(cfg, block, *tmp_reg, last_insn_it, cases, default_target,
+                  disable_violation_fixes);
     stats.expanded_transformations++;
     stats.expanded_switch_cases += switch_cases;
   }
@@ -727,7 +733,7 @@ void ReduceSparseSwitchesPass::run_pass(DexStoresVector& stores,
         m_config.min_multiplexing_switch_cases, cfg);
 
     if (m_config.expand_remaining) {
-      local_stats += expand_transformation(cfg);
+      local_stats += expand_transformation(cfg, conf.disable_violation_fixes());
     }
 
     if (local_stats.removed_trivial_switch_cases == 0 &&
