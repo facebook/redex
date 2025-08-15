@@ -202,6 +202,8 @@ arsc_attribution_test_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/tools/arsc -I$(t
 
 assert_test_SOURCES = AssertTest.cpp
 
+atomic_stat_counter_test_SOURCES = AtomicStatCounterTest.cpp
+
 blaming_escape_test_SOURCES = BlamingEscapeTest.cpp
 blaming_escape_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
