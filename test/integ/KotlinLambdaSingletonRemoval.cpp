@@ -15,6 +15,9 @@
 #include "Show.h"
 
 namespace {
+using ::testing::Contains;
+using ::testing::IsNull;
+using ::testing::Not;
 using ::testing::NotNull;
 
 class KotlinLambdaOptTest : public RedexIntegrationTest {
@@ -100,11 +103,21 @@ TEST_F(KotlinLambdaOptTest, LambdaSingletonIsRemoved) {
       "LKotlinLambdaSingletonRemoval$foo$1;";
   constexpr std::string_view root_method_name =
       "LKotlinLambdaSingletonRemoval;.foo:()V";
+  constexpr std::string_view singleton_field_name =
+      "LKotlinLambdaSingletonRemoval$foo$1;.INSTANCE:"
+      "LKotlinLambdaSingletonRemoval$foo$1;";
   set_root_method(root_method_name);
 
   auto* lambda_class = type_class(DexType::make_type(lambda_class_name));
   ASSERT_THAT(lambda_class, NotNull());
   lambda_class->set_deobfuscated_name(lambda_class_name);
+
+  const auto* singleton_field = DexField::get_field(singleton_field_name);
+  ASSERT_THAT(singleton_field, NotNull())
+      << "Sanity check failed: singleton field not found";
+  ASSERT_THAT(lambda_class->get_sfields(), Contains(singleton_field))
+      << "Sanity check failed: singleton field not found in "
+      << SHOW(lambda_class);
 
   auto root_method = DexMethod::get_method(root_method_name)->as_def();
   auto code_root = root_method->get_code();
@@ -117,6 +130,9 @@ TEST_F(KotlinLambdaOptTest, LambdaSingletonIsRemoved) {
 
   check_sget_not_available(code_root);
   check_removal_result_new_instance(code_root, lambda_class_name);
+  ASSERT_THAT(lambda_class->get_sfields(), Not(Contains(singleton_field)))
+      << "Singleton field " << SHOW(singleton_field)
+      << " is unexpectedly not deleted from " << SHOW(lambda_class);
 }
 
 TEST_F(KotlinLambdaOptTest, NoEffectOnNamedClass) {
@@ -124,10 +140,19 @@ TEST_F(KotlinLambdaOptTest, NoEffectOnNamedClass) {
   constexpr std::string_view class_name = "LKotlinInstanceRemovalNamedEquiv;";
   constexpr std::string_view root_method =
       "LKotlinInstanceRemovalNamedEquiv;.bar:()V";
+  constexpr std::string_view singleton_field_name =
+      "LKotlinInstanceRemovalNamedEquiv;.INSTANCE:"
+      "LKotlinInstanceRemovalNamedEquiv;";
 
   auto* lambda_class = type_class(DexType::make_type(class_name));
   ASSERT_THAT(lambda_class, NotNull());
   lambda_class->set_deobfuscated_name(class_name);
+  const auto* singleton_field = DexField::get_field(singleton_field_name);
+  ASSERT_THAT(singleton_field, NotNull())
+      << "Sanity check: Singleton is unexpectedly not found";
+  ASSERT_THAT(lambda_class->get_sfields(), Contains(singleton_field))
+      << "Sanity check: Singleton is unexpectedly not found in "
+      << SHOW(lambda_class);
 
   set_root_method(root_method);
   auto y_method = DexMethod::get_method(root_method)->as_def();
@@ -140,6 +165,8 @@ TEST_F(KotlinLambdaOptTest, NoEffectOnNamedClass) {
   run_passes(passes);
 
   check_sget_available(codey);
+  EXPECT_THAT(lambda_class->get_sfields(), Contains(singleton_field))
+      << "Singleton field is unexpectedly deleted from " << SHOW(lambda_class);
 }
 
 } // namespace
