@@ -3,25 +3,29 @@ inputs:
   save_boost_cache:
     required: false
     default: false
-  mode_32:
+  setup_32bit_toolchain:
     required: false
     default: false
+  configure_extra:
+    required: false
+    default: ""
   job_name:
     required: false
 runs:
   using: composite
   steps:
   - uses: "./.github/actions/setup-build-and-test-w-make-impl"
-    if: inputs.mode_32 == 'true'
+    if: inputs.setup_32bit_toolchain == 'true'
     with:
       setup_toolchain_extra: '32'
-      configure_extra: "--host=i686-linux-gnu CFLAGS=-m32 CXXFLAGS=-m32 LDFLAGS=-m32"
+      configure_extra: ${{ inputs.configure_extra }}
       save_boost_cache: "${{ inputs.save_boost_cache }}"
       run_tests: false
       job_name: "${{ inputs.job_name }}"
 
   - uses: "./.github/actions/setup-build-and-test-w-make-impl"
-    if: inputs.mode_32 != 'true'
+    if: inputs.setup_32bit_toolchain != 'true'
     with:
+      configure_extra: ${{ inputs.configure_extra }}
       save_boost_cache: "${{ inputs.save_boost_cache }}"
       job_name: "${{ inputs.job_name }}"
