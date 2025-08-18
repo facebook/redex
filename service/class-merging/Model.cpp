@@ -772,6 +772,8 @@ void Model::collect_methods() {
         if (method::is_init(method)) {
           has_ctor = true;
         }
+        always_assert_log(method->get_code(), "dmethod w/o code %s",
+                          SHOW(method));
         merger.dmethods.emplace_back(method);
       }
       always_assert_log(has_ctor,
