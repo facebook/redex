@@ -49,6 +49,11 @@ void MergeabilityChecker::exclude_unsupported_cls_property(
     for (const auto& method : cls->get_dmethods()) {
       if (is_constructor(method) && method::is_init(method)) {
         has_ctor = true;
+        // keep going
+      }
+      if (method->rstate.no_optimizations() || !method->get_code()) {
+        non_mergeables.insert(type);
+        TRACE(CLMG, 5, "Cannot optimize dmethod on %s", SHOW(type));
         break;
       }
     }
