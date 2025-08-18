@@ -247,13 +247,17 @@ UnorderedSet<DexMethod*> gather_non_virtual_methods(
   UnorderedSet<DexMethod*> methods;
   walk::methods(scope, [&](DexMethod* method) {
     all_methods++;
-    if (method->is_virtual()) return;
+    if (method->is_virtual()) {
+      return;
+    }
 
     auto code = method->get_code();
     bool dont_inline = code == nullptr;
 
     direct_methods++;
-    if (code == nullptr) direct_no_code++;
+    if (code == nullptr) {
+      direct_no_code++;
+    }
     if (method::is_constructor(method)) {
       (is_static(method)) ? clinit++ : init++;
       if (method::is_clinit(method)) {
@@ -263,7 +267,9 @@ UnorderedSet<DexMethod*> gather_non_virtual_methods(
       (is_static(method)) ? static_methods++ : private_methods++;
     }
 
-    if (dont_inline) return;
+    if (dont_inline) {
+      return;
+    }
 
     methods.insert(method);
   });
