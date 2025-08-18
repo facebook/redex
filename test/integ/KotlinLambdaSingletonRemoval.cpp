@@ -99,6 +99,8 @@ TEST_F(KotlinLambdaOptTest, LambdaSingletonIsRemoved) {
       "LKotlinLambdaSingletonRemoval$foo$1;";
   constexpr std::string_view root_method_name =
       "LKotlinLambdaSingletonRemoval;.foo:()V";
+  constexpr std::string_view clinit_method_name =
+      "LKotlinLambdaSingletonRemoval$foo$1;.<clinit>:()V";
   constexpr std::string_view singleton_field_name =
       "LKotlinLambdaSingletonRemoval$foo$1;.INSTANCE:"
       "LKotlinLambdaSingletonRemoval$foo$1;";
@@ -120,6 +122,12 @@ TEST_F(KotlinLambdaOptTest, LambdaSingletonIsRemoved) {
   ASSERT_THAT(code_root, NotNull());
   check_opcode_present(code_root, OPCODE_SGET_OBJECT);
 
+  const auto clinit_method =
+      DexMethod::get_method(clinit_method_name)->as_def();
+  auto code_clinit = clinit_method->get_code();
+  ASSERT_THAT(code_clinit, NotNull());
+  check_opcode_present(code_clinit, OPCODE_SPUT_OBJECT);
+
   auto klr = new KotlinStatelessLambdaSingletonRemovalPass();
   std::vector<Pass*> passes{klr};
   run_passes(passes);
@@ -129,6 +137,10 @@ TEST_F(KotlinLambdaOptTest, LambdaSingletonIsRemoved) {
   ASSERT_THAT(lambda_class->get_sfields(), Not(Contains(singleton_field)))
       << "Singleton field " << SHOW(singleton_field)
       << " is unexpectedly not deleted from " << SHOW(lambda_class);
+
+  code_clinit = clinit_method->get_code();
+  ASSERT_THAT(code_clinit, NotNull());
+  check_opcode_absent(code_clinit, OPCODE_SPUT_OBJECT);
 }
 
 TEST_F(KotlinLambdaOptTest, NoEffectOnNamedClass) {
@@ -136,6 +148,8 @@ TEST_F(KotlinLambdaOptTest, NoEffectOnNamedClass) {
   constexpr std::string_view class_name = "LKotlinInstanceRemovalNamedEquiv;";
   constexpr std::string_view root_method =
       "LKotlinInstanceRemovalNamedEquiv;.bar:()V";
+  constexpr std::string_view clinit_method_name =
+      "LKotlinInstanceRemovalNamedEquiv;.<clinit>:()V";
   constexpr std::string_view singleton_field_name =
       "LKotlinInstanceRemovalNamedEquiv;.INSTANCE:"
       "LKotlinInstanceRemovalNamedEquiv;";
@@ -156,6 +170,12 @@ TEST_F(KotlinLambdaOptTest, NoEffectOnNamedClass) {
   ASSERT_THAT(codey, NotNull());
   check_opcode_present(codey, OPCODE_SGET_OBJECT);
 
+  const auto clinit_method =
+      DexMethod::get_method(clinit_method_name)->as_def();
+  auto code_clinit = clinit_method->get_code();
+  ASSERT_THAT(code_clinit, NotNull());
+  check_opcode_present(code_clinit, OPCODE_SPUT_OBJECT);
+
   auto klr = new KotlinStatelessLambdaSingletonRemovalPass();
   std::vector<Pass*> passes{klr};
   run_passes(passes);
@@ -163,6 +183,10 @@ TEST_F(KotlinLambdaOptTest, NoEffectOnNamedClass) {
   check_opcode_present(codey, OPCODE_SGET_OBJECT);
   EXPECT_THAT(lambda_class->get_sfields(), Contains(singleton_field))
       << "Singleton field is unexpectedly deleted from " << SHOW(lambda_class);
+
+  code_clinit = clinit_method->get_code();
+  ASSERT_THAT(code_clinit, NotNull());
+  check_opcode_present(code_clinit, OPCODE_SPUT_OBJECT);
 }
 
 } // namespace
