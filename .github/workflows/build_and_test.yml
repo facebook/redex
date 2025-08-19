@@ -5,19 +5,24 @@ env:
   CACHE_VERSION: xxxxx1
 jobs:
   linux-gcc:
-    name: Linux GCC - ${{ matrix.os }} - ${{ matrix.build_arch }}
+    name: Linux GCC - ${{ matrix.config.os }} - ${{ matrix.build_arch }}
     runs-on: 4-core-ubuntu
-    container: ${{ matrix.os }}
+    container: ${{ matrix.config.os }}
     strategy:
       matrix:
-        os:
-        - "debian:11"
-        - "debian:12"
-        - "ubuntu:22.04"
-        - "ubuntu:24.04"
+        config:
+        # Extra flags for problematic early verisons of # jsoncpp < 1.9.5
+        # (https://github.com/open-source-parsers/jsoncpp/issues/1193).  This
+        # currently only affects Debian 11.
+        - {os: "debian:11", configure_extra: "CXXFLAGS=-Wno-volatile"}
+        # Extra flags for false positives from GCC 12:
+        # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105651
+        - {os: "debian:12", configure_extra: "CXXFLAGS=-Wno-restrict"}
+        - {os: "ubuntu:22.04", configure_extra: ""}
+        - {os: "ubuntu:24.04", configure_extra: ""}
         build_arch: ["x86_64"]
         include:
-        - os: debian:12
+        - config: {os: "debian:12", configure_extra: "--host=i686-linux-gnu CFLAGS=-m32 CXXFLAGS='-m32 -Wno-restrict' LDFLAGS=-m32"}
           build_arch: "x86"
     steps:
     - name: Show OS info
@@ -29,8 +34,9 @@ jobs:
     - uses: ./.github/actions/setup-build-and-test-w-make
       with:
         save_boost_cache: false
-        mode_32: ${{ matrix.build_arch == 'x86' }}
-        job_name: Linux GCC - ${{ matrix.os }} - ${{ matrix.build_arch }}
+        setup_32bit_toolchain: ${{ matrix.build_arch == 'x86' }}
+        configure_extra: ${{ matrix.config.configure_extra }}
+        job_name: Linux GCC - ${{ matrix.config.os }} - ${{ matrix.build_arch }}
 
   build-deb_stable-w-clang-llvm-org:
     runs-on: 4-core-ubuntu
