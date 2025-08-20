@@ -24,6 +24,7 @@ void run_inliner(DexStoresVector& stores,
                  bool consider_hot_cold = false,
                  bool partial_hot_hot = false,
                  bool intra_dex = false,
+                 bool baseline_profile_guided = false,
                  InlineForSpeed* inline_for_speed = nullptr,
                  bool inline_bridge_synth_only = false,
                  bool local_only = false);

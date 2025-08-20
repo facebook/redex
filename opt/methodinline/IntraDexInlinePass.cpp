@@ -12,6 +12,7 @@
 void IntraDexInlinePass::bind_config() {
   bind("consider_hot_cold", false, m_consider_hot_cold);
   bind("partial_hot_hot", false, m_partial_hot_hot);
+  bind("baseline_profile_guided", false, m_baseline_profile_guided);
 }
 
 void IntraDexInlinePass::run_pass(DexStoresVector& stores,
@@ -19,7 +20,7 @@ void IntraDexInlinePass::run_pass(DexStoresVector& stores,
                                   PassManager& mgr) {
   inliner::run_inliner(stores, mgr, conf, DEFAULT_COST_CONFIG,
                        m_consider_hot_cold, m_partial_hot_hot,
-                       /* intra_dex */ true);
+                       /* intra_dex */ true, m_baseline_profile_guided);
   // For partial inlining, we only consider the first time the pass runs, to
   // avoid repeated partial inlining. (This shouldn't be necessary as the
   // partial inlining fallback invocation is marked as cold, but just in case
