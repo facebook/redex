@@ -186,6 +186,8 @@ struct Inlinable {
   bool no_return{false};
   // Whether the reduced-code represent a partial inlining transformation.
   bool partial{false};
+  // Whether the inline is done for speed, even at the cost of code size.
+  bool for_speed{false};
   // For a specific call-site, reduced cfg template after applying call-site
   // summary
   std::shared_ptr<ReducedCode> reduced_code;
@@ -525,6 +527,7 @@ class MultiMethodInliner {
       const IRInstruction* invoke_insn,
       DexMethod* callee,
       bool* no_return = nullptr,
+      bool* for_speed = nullptr,
       std::shared_ptr<ReducedCode>* reduced_code = nullptr,
       size_t* insn_size = nullptr,
       PartialCode* partial_code = nullptr);

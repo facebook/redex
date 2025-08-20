@@ -441,6 +441,7 @@ void MultiMethodInliner::inline_callees(DexMethod* caller,
         std::shared_ptr<ReducedCode> reduced_code;
         bool no_return{false};
         bool partial{false};
+        bool for_speed{false};
         size_t insn_size{0};
         PartialCode partial_code;
         if (filter_via_should_inline) {
@@ -448,7 +449,7 @@ void MultiMethodInliner::inline_callees(DexMethod* caller,
           // Cost model is based on fully inlining callee everywhere; let's
           // see if we can get more detailed call-site specific information
           if (should_inline_at_call_site(caller, insn, callee, &no_return,
-                                         &reduced_code, &insn_size,
+                                         &for_speed, &reduced_code, &insn_size,
                                          &partial_code)) {
             always_assert(!no_return);
             // Yes, we know might have dead_blocks and a refined insn_size
@@ -493,8 +494,8 @@ void MultiMethodInliner::inline_callees(DexMethod* caller,
         auto needs_receiver_cast =
             it2 == m_inlined_invokes_need_cast.end() ? nullptr : it2->second;
         inlinables.push_back((Inlinable){callee, insn, no_return, partial,
-                                         std::move(reduced_code), insn_size,
-                                         needs_receiver_cast});
+                                         for_speed, std::move(reduced_code),
+                                         insn_size, needs_receiver_cast});
       }
     }
   }
@@ -520,8 +521,8 @@ size_t MultiMethodInliner::inline_callees(
       auto it2 = m_inlined_invokes_need_cast.find(insn);
       auto needs_receiver_cast =
           it2 == m_inlined_invokes_need_cast.end() ? nullptr : it2->second;
-      inlinables.push_back((Inlinable){callee, insn, false, false, nullptr,
-                                       get_callee_insn_size(callee),
+      inlinables.push_back((Inlinable){callee, insn, false, false, false,
+                                       nullptr, get_callee_insn_size(callee),
                                        needs_receiver_cast});
     }
   }
@@ -549,7 +550,7 @@ size_t MultiMethodInliner::inline_callees(
                                  callee->get_class())
             ? nullptr
             : callee->get_class();
-    inlinables.push_back((Inlinable){callee, insn, false, false, nullptr,
+    inlinables.push_back((Inlinable){callee, insn, false, false, false, nullptr,
                                      get_callee_insn_size(callee),
                                      needs_receiver_cast});
   }
@@ -675,10 +676,14 @@ size_t MultiMethodInliner::inline_inlinables(
         if (a.no_return != b.no_return) {
           return a.no_return > b.no_return;
         }
-        // Second, prefer inlining non-partial callees to preserve integrity of
-        // the global cost function
+        // Second, prefer inlining callees that preserve integrity of the global
+        // cost function. Partial inlines and inlines for speed may not preserve
+        // this.
         if (a.partial != b.partial) {
           return a.partial < b.partial;
+        }
+        if (a.for_speed != b.for_speed) {
+          return a.for_speed < b.for_speed;
         }
         // Third, if appropriate, prefer inlining not-cold callees
         if (consider_not_cold) {
@@ -2011,6 +2016,7 @@ bool MultiMethodInliner::should_inline_at_call_site(
     const IRInstruction* invoke_insn,
     DexMethod* callee,
     bool* no_return,
+    bool* for_speed,
     std::shared_ptr<ReducedCode>* reduced_code,
     size_t* insn_size,
     PartialCode* partial_code) {
