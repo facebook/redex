@@ -11,6 +11,13 @@
 #include "Show.h"
 #include "TypeUtil.h"
 
+namespace {
+bool contains_digits_only(std::string_view str) {
+  return std::all_of(str.begin(), str.end(),
+                     [](unsigned char c) { return std::isdigit(c); });
+}
+} // namespace
+
 namespace klass {
 
 Serdes get_serdes(const DexClass* cls) {
@@ -82,10 +89,27 @@ bool maybe_d8_desugared_anonymous_class(const DexClass* cls) {
       "$$Lambda$",
   };
   const std::string_view name = cls->get_deobfuscated_name_or_empty();
-  return std::any_of(patterns.begin(), patterns.end(),
-                     [&name](std::string_view pattern) {
-                       return name.find(pattern) != std::string::npos;
-                     });
+  if (name.empty()) {
+    return false;
+  }
+  redex_assert(name.back() == ';');
+  const std::string_view name_without_semicolon =
+      name.substr(0, name.size() - 1);
+  return std::any_of(
+      patterns.begin(), patterns.end(),
+      [&name_without_semicolon](std::string_view pattern) {
+        const auto pattern_begin_pos = name_without_semicolon.rfind(pattern);
+        if (pattern_begin_pos == std::string::npos) {
+          return false;
+        }
+        const auto pattern_end_pos = pattern_begin_pos + pattern.size();
+        if (pattern_end_pos >= name_without_semicolon.size()) {
+          return false;
+        }
+        const auto pattern_suffix =
+            name_without_semicolon.substr(pattern_end_pos);
+        return contains_digits_only(pattern_suffix);
+      });
 }
 
 bool maybe_non_d8_desugared_anonymous_class(const DexClass* cls) {

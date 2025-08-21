@@ -211,12 +211,15 @@ TEST_F(IsKotlinLambdaTest, LambdaBasedFunctionNLambda) {
   EXPECT_TRUE(is_kotlin_lambda(kotlin_lambda_n_class));
 }
 
-TEST_F(IsKotlinLambdaTest, ObjectBasedLambda) {
+class ObjectBasedLambdaTest
+    : public IsKotlinLambdaTest,
+      public ::testing::WithParamInterface<std::string> {};
+
+TEST_P(ObjectBasedLambdaTest, main) {
   using namespace type;
   // Create a class with java.lang.Object as super class and implementing a
   // Kotlin function interface (also valid for Kotlin lambdas)
-  auto obj_lambda_type =
-      DexType::make_type("LObjectLambda$$ExternalSyntheticLambda;");
+  auto obj_lambda_type = DexType::make_type(GetParam());
 
   ClassCreator obj_lambda_creator(obj_lambda_type);
   obj_lambda_creator.set_super(java_lang_Object());
@@ -224,6 +227,44 @@ TEST_F(IsKotlinLambdaTest, ObjectBasedLambda) {
   auto obj_lambda_class = obj_lambda_creator.create();
   EXPECT_TRUE(is_kotlin_lambda(obj_lambda_class));
 }
+
+INSTANTIATE_TEST_SUITE_P(
+    ObjectBasedLambdaTests,
+    ObjectBasedLambdaTest,
+    ::testing::Values("LObjectLambda$$ExternalSyntheticLambda0;",
+                      "LObjectLambda$$ExternalSyntheticLambda1;",
+                      "LObjectLambda$$ExternalSyntheticLambda10;",
+                      "LObjectLambda$$ExternalSyntheticLambda112;",
+                      "LObjectLambda$$Lambda$0;",
+                      "LObjectLambda$$Lambda$1;",
+                      "LObjectLambda$$Lambda$10;",
+                      "LObjectLambda$$Lambda$112;"));
+
+class ObjectBasedNonLambdaTest
+    : public IsKotlinLambdaTest,
+      public ::testing::WithParamInterface<std::string> {};
+
+TEST_P(ObjectBasedNonLambdaTest, main) {
+  using namespace type;
+  // Create a class with java.lang.Object as super class and implementing a
+  // Kotlin function interface (also valid for Kotlin lambdas)
+  auto obj_lambda_type = DexType::make_type(GetParam());
+
+  ClassCreator obj_lambda_creator(obj_lambda_type);
+  obj_lambda_creator.set_super(java_lang_Object());
+  obj_lambda_creator.add_interface(kotlin_function_type);
+  auto obj_lambda_class = obj_lambda_creator.create();
+  EXPECT_FALSE(is_kotlin_lambda(obj_lambda_class));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    ObjectBasedNonLambdaTests,
+    ObjectBasedNonLambdaTest,
+    ::testing::Values("LObjectLambdaWithEmptyEnd$$ExternalSyntheticLambda;",
+                      "LObjectLambdaWithEmptyEnd$$Lambda$;",
+                      "LObjectLambdaWithLetterEnd$$ExternalSyntheticLambdax;",
+                      "LObjectLambdaWithLetterEnd$$Lambda$x;",
+                      "LNonD8DesugaredAnonymous$1;"));
 
 TEST_F(IsKotlinLambdaTest, NamedClass) {
   using namespace type;
@@ -235,21 +276,6 @@ TEST_F(IsKotlinLambdaTest, NamedClass) {
   named_class_creator.add_interface(kotlin_function_type);
   auto named_class = named_class_creator.create();
   EXPECT_FALSE(is_kotlin_lambda(named_class));
-}
-
-TEST_F(IsKotlinLambdaTest, ObjectBasedAnonymousClass) {
-  using namespace type;
-  // Create a class with java.lang.Object as super class and implementing a
-  // Kotlin function interface, but not synthetic.
-  auto obj_numbered_anonymous_type = DexType::make_type("LObjectLambda$1;");
-
-  ClassCreator obj_numbered_anonymous_class_creator(
-      obj_numbered_anonymous_type);
-  obj_numbered_anonymous_class_creator.set_super(java_lang_Object());
-  obj_numbered_anonymous_class_creator.add_interface(kotlin_function_type);
-  auto obj_numbered_anonymous_class =
-      obj_numbered_anonymous_class_creator.create();
-  EXPECT_FALSE(is_kotlin_lambda(obj_numbered_anonymous_class));
 }
 
 TEST_F(IsKotlinLambdaTest, WrongInterface) {
