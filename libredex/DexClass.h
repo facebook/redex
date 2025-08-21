@@ -157,12 +157,13 @@ inline bool compare_dexstrings(const DexString* a, const DexString* b) {
   } else if (b == nullptr) {
     return false;
   }
-  if (a->is_simple() && b->is_simple())
+  if (a->is_simple() && b->is_simple()) {
 #if defined(__SSE4_2__) && defined(__linux__) && defined(__STRCMP_LESS__)
     return strcmp_less(a->c_str(), b->c_str());
 #else
     return (strcmp(a->c_str(), b->c_str()) < 0);
 #endif
+  }
   /*
    * Bother, need to do code-point character-by-character
    * comparison.
@@ -172,7 +173,9 @@ inline bool compare_dexstrings(const DexString* a, const DexString* b) {
   /* Equivalence test first, so we don't worry about walking
    * off the end.
    */
-  if (strcmp(sa, sb) == 0) return false;
+  if (strcmp(sa, sb) == 0) {
+    return false;
+  }
   if (strlen(sa) == 0) {
     return true;
   }
@@ -183,8 +186,12 @@ inline bool compare_dexstrings(const DexString* a, const DexString* b) {
     uint32_t cpa = mutf8_next_code_point(sa);
     uint32_t cpb = mutf8_next_code_point(sb);
     if (cpa == cpb) {
-      if (*sa == '\0') return true;
-      if (*sb == '\0') return false;
+      if (*sa == '\0') {
+        return true;
+      }
+      if (*sb == '\0') {
+        return false;
+      }
       continue;
     }
     return (cpa < cpb);
@@ -505,8 +512,12 @@ class DexTypeList {
     auto ita = a.m_list.begin();
     auto itb = b.m_list.begin();
     while (1) {
-      if (itb == b.m_list.end()) return false;
-      if (ita == a.m_list.end()) return true;
+      if (itb == b.m_list.end()) {
+        return false;
+      }
+      if (ita == a.m_list.end()) {
+        return true;
+      }
       if (*ita != *itb) {
         const DexType* ta = *ita;
         const DexType* tb = *itb;
@@ -1463,7 +1474,9 @@ DexClass* type_class(const DexType* t);
  */
 inline DexClass* type_class_internal(const DexType* t) {
   auto dc = type_class(t);
-  if (dc == nullptr || dc->is_external()) return nullptr;
+  if (dc == nullptr || dc->is_external()) {
+    return nullptr;
+  }
   return dc;
 }
 
