@@ -114,12 +114,19 @@ bool maybe_d8_desugared_anonymous_class(const DexClass* cls) {
 
 bool maybe_non_d8_desugared_anonymous_class(const DexClass* cls) {
   const std::string_view name = cls->get_deobfuscated_name_or_empty();
-  auto pos = name.rfind('$');
+  if (name.empty()) {
+    return false;
+  }
+  redex_assert(name.back() == ';');
+  const std::string_view name_without_semicolon =
+      name.substr(0, name.size() - 1);
+  auto pos = name_without_semicolon.rfind('$');
   if (pos == std::string::npos) {
     return false;
   }
   pos++;
-  return pos < name.size() && std::isdigit(name[pos]);
+  return pos < name_without_semicolon.size() &&
+         contains_digits_only(name_without_semicolon.substr(pos));
 }
 
 bool maybe_anonymous_class(const DexClass* cls) {

@@ -183,11 +183,15 @@ class IsKotlinLambdaTest : public TypeUtilTest {
       DexType::make_type("Ljava/lang/Runnable;")};
 };
 
-TEST_F(IsKotlinLambdaTest, LambdaBasedFunction1Lambda) {
+class LambdaBasedFunction1LambdaTest
+    : public IsKotlinLambdaTest,
+      public ::testing::WithParamInterface<std::string> {};
+
+TEST_P(LambdaBasedFunction1LambdaTest, main) {
   using namespace type;
   // Create a Kotlin lambda class with kotlin.jvm.internal.Lambda as super class
   // and implementing a Kotlin function interface
-  auto lambda_type = DexType::make_type("LKotlinLambda$1;");
+  auto lambda_type = DexType::make_type(GetParam());
 
   ClassCreator lambda_creator(lambda_type);
   lambda_creator.set_super(kotlin_jvm_internal_Lambda());
@@ -195,6 +199,13 @@ TEST_F(IsKotlinLambdaTest, LambdaBasedFunction1Lambda) {
   auto kotlin_lambda_class = lambda_creator.create();
   EXPECT_TRUE(is_kotlin_lambda(kotlin_lambda_class));
 }
+
+INSTANTIATE_TEST_SUITE_P(LambdaBasedFunction1LambdaTests,
+                         LambdaBasedFunction1LambdaTest,
+                         ::testing::Values("LKotlinLambda$0;",
+                                           "LKotlinLambda$1;",
+                                           "LKotlinLambda$12;",
+                                           "LKotlinLambda$123;"));
 
 TEST_F(IsKotlinLambdaTest, LambdaBasedFunctionNLambda) {
   using namespace type;
@@ -211,6 +222,28 @@ TEST_F(IsKotlinLambdaTest, LambdaBasedFunctionNLambda) {
   EXPECT_TRUE(is_kotlin_lambda(kotlin_lambda_n_class));
 }
 
+class LambdaBasedFunction1NotLambdaTest
+    : public IsKotlinLambdaTest,
+      public ::testing::WithParamInterface<std::string> {};
+
+TEST_P(LambdaBasedFunction1NotLambdaTest, main) {
+  using namespace type;
+  // Create a Kotlin lambda class with kotlin.jvm.internal.Lambda as super class
+  // and implementing a Kotlin function interface
+  auto lambda_type = DexType::make_type(GetParam());
+
+  ClassCreator lambda_creator(lambda_type);
+  lambda_creator.set_super(kotlin_jvm_internal_Lambda());
+  lambda_creator.add_interface(kotlin_function_type);
+  auto kotlin_lambda_class = lambda_creator.create();
+  EXPECT_FALSE(is_kotlin_lambda(kotlin_lambda_class));
+}
+
+INSTANTIATE_TEST_SUITE_P(LambdaBasedFunction1NotLambdaTests,
+                         LambdaBasedFunction1NotLambdaTest,
+                         ::testing::Values("LNothingAfterDollar$;",
+                                           "LNodigitAfterDollar$a;",
+                                           "LNamedClass;"));
 class ObjectBasedLambdaTest
     : public IsKotlinLambdaTest,
       public ::testing::WithParamInterface<std::string> {};
@@ -264,19 +297,8 @@ INSTANTIATE_TEST_SUITE_P(
                       "LObjectLambdaWithEmptyEnd$$Lambda$;",
                       "LObjectLambdaWithLetterEnd$$ExternalSyntheticLambdax;",
                       "LObjectLambdaWithLetterEnd$$Lambda$x;",
-                      "LNonD8DesugaredAnonymous$1;"));
-
-TEST_F(IsKotlinLambdaTest, NamedClass) {
-  using namespace type;
-  // Create a named class that is an otherwise Kotlin lambda.
-  auto named_class_type = DexType::make_type("LNamedClass;");
-
-  ClassCreator named_class_creator(named_class_type);
-  named_class_creator.set_super(kotlin_jvm_internal_Lambda());
-  named_class_creator.add_interface(kotlin_function_type);
-  auto named_class = named_class_creator.create();
-  EXPECT_FALSE(is_kotlin_lambda(named_class));
-}
+                      "LNonD8DesugaredAnonymous$1;",
+                      "LNamedClass;"));
 
 TEST_F(IsKotlinLambdaTest, WrongInterface) {
   using namespace type;
