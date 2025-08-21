@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-class KotlinLambdaInline {
+class KotlinLambdaSingletonRemoval {
   var sink: Long = 0
 
   fun doCalc(addfn: (a: Long, b: Long) -> Long): Long {
