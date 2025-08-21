@@ -189,6 +189,17 @@ TEST_F(TypeUtilTest, is_kotlin_lambda) {
   lambda_creator.add_interface(kotlin_function_type);
   auto kotlin_lambda_class = lambda_creator.create();
 
+  // Create a Kotlin lambda class with kotlin.jvm.internal.Lambda as super class
+  // and implementing a Kotlin function interface for more than 22 arguments
+  auto lambda_n_type = DexType::make_type("LKotlinLambda$3;");
+  auto kotlin_function_n_type =
+      DexType::make_type("Lkotlin/jvm/functions/FunctionN;");
+
+  ClassCreator lambda_n_creator(lambda_n_type);
+  lambda_n_creator.set_super(kotlin_jvm_internal_Lambda());
+  lambda_n_creator.add_interface(kotlin_function_n_type);
+  auto kotlin_lambda_n_class = lambda_n_creator.create();
+
   // Create a class with java.lang.Object as super class and implementing a
   // Kotlin function interface (also valid for Kotlin lambdas)
   auto obj_lambda_type =
@@ -269,6 +280,7 @@ TEST_F(TypeUtilTest, is_kotlin_lambda) {
 
   // Test the function with our mock classes
   EXPECT_TRUE(is_kotlin_lambda(kotlin_lambda_class));
+  EXPECT_TRUE(is_kotlin_lambda(kotlin_lambda_n_class));
   EXPECT_TRUE(is_kotlin_lambda(obj_lambda_class));
   EXPECT_FALSE(is_kotlin_lambda(named_class));
   EXPECT_FALSE(is_kotlin_lambda(obj_numbered_anonymous_class));

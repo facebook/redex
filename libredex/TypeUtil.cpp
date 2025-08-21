@@ -13,6 +13,13 @@
 #include "Show.h"
 #include "Trace.h"
 
+namespace {
+bool contains_digits_only(std::string_view str) {
+  return std::all_of(str.begin(), str.end(),
+                     [](unsigned char c) { return std::isdigit(c); });
+}
+} // namespace
+
 namespace type {
 
 #define DEFINE_CACHED_TYPE(func_name, _) \
@@ -529,7 +536,8 @@ boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
 
 /*
  * Returns true if the type is a kotlin function interface.
- * https://github.com/JetBrains/kotlin/blob/master/libraries/stdlib/jvm/runtime/kotlin/jvm/functions/Functions.kt
+ * https://github.com/JetBrains/kotlin/blob/v2.2.0/libraries/stdlib/jvm/runtime/kotlin/jvm/functions/Functions.kt
+ * https://github.com/JetBrains/kotlin/blob/v2.2.0/libraries/stdlib/jvm/runtime/kotlin/jvm/functions/FunctionN.kt
  */
 bool is_kotlin_function_interface(const DexType* type) {
   auto name = type->get_name()->str();
@@ -542,8 +550,11 @@ bool is_kotlin_function_interface(const DexType* type) {
   redex_assert(ends_with_semicolon);
   suffix = suffix.substr(0, suffix.length() - 1);
   return !suffix.empty() &&
-         std::all_of(suffix.begin(), suffix.end(),
-                     [](unsigned char c) { return std::isdigit(c); });
+         // FunctionN, for lambdas with more than 22 arguments
+         (suffix == "N" ||
+          // Check numbers but don't check `Function{0..22}`, to leave some room
+          // for future kotlinc internal changes.
+          contains_digits_only(suffix));
 }
 
 bool is_kotlin_lambda(const DexClass* cls) {
