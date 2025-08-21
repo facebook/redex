@@ -74,7 +74,7 @@ bool has_hierarchy_in_scope(DexClass* cls) {
   return super == type::java_lang_Object();
 }
 
-bool maybe_anonymous_class(const DexClass* cls) {
+bool maybe_d8_desugared_anonymous_class(const DexClass* cls) {
   static constexpr std::array<std::string_view, 2> patterns = {
       // https://r8.googlesource.com/r8/+/refs/tags/3.1.34/src/main/java/com/android/tools/r8/synthesis/SyntheticNaming.java#140
       "$$ExternalSyntheticLambda",
@@ -82,16 +82,24 @@ bool maybe_anonymous_class(const DexClass* cls) {
       "$$Lambda$",
   };
   const std::string_view name = cls->get_deobfuscated_name_or_empty();
+  return std::any_of(patterns.begin(), patterns.end(),
+                     [&name](std::string_view pattern) {
+                       return name.find(pattern) != std::string::npos;
+                     });
+}
+
+bool maybe_non_d8_desugared_anonymous_class(const DexClass* cls) {
+  const std::string_view name = cls->get_deobfuscated_name_or_empty();
   auto pos = name.rfind('$');
   if (pos == std::string::npos) {
     return false;
   }
   pos++;
-  return (pos < name.size() && name[pos] >= '0' && name[pos] <= '9') ||
-         std::any_of(patterns.begin(), patterns.end(),
-                     [&name](const std::string_view& pattern) {
-                       return name.find(pattern) != std::string::npos;
-                     });
+  return pos < name.size() && std::isdigit(name[pos]);
 }
 
+bool maybe_anonymous_class(const DexClass* cls) {
+  return maybe_d8_desugared_anonymous_class(cls) ||
+         maybe_non_d8_desugared_anonymous_class(cls);
+}
 }; // namespace klass

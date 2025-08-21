@@ -48,8 +48,18 @@ DexMethod* get_or_create_clinit(DexClass* cls, bool need_editable_cfg = false);
 bool has_hierarchy_in_scope(DexClass* cls);
 
 /**
- * Return true if the name matches "$$Lambda$", "$$ExternalSyntheticLambda", or
- * "$[0-9]".
+ * Return true if the name matches "$$Lambda$", "$$ExternalSyntheticLambda"
+ */
+bool maybe_d8_desugared_anonymous_class(const DexClass* cls);
+
+/*
+ * Return true if the name matches "$[0-9]".
+ */
+bool maybe_non_d8_desugared_anonymous_class(const DexClass* cls);
+
+/**
+ * Return true if it is either a d8-desugared or non-d8-desugared anonymous
+ * class.
  */
 bool maybe_anonymous_class(const DexClass* cls);
 
