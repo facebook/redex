@@ -28,30 +28,26 @@ class KotlinLambdaOptTest : public RedexIntegrationTest {
     method->rstate.set_root();
   }
 
-  void check_sget_available(IRCode* code) {
-    std::cerr << "BEFORE = " << SHOW(code) << std::endl;
-    auto ii = InstructionIterable(code);
-    auto end = ii.end();
-    fprintf(stderr, "%s\n", SHOW(code));
-    bool found = false;
-    for (auto it = ii.begin(); it != end; ++it) {
-      auto insn = it->insn;
-      if (insn->opcode() == OPCODE_SGET_OBJECT) {
-        found = true;
-      }
-    }
-    EXPECT_TRUE(found) << "SGET not found in " << SHOW(code);
+  auto find_opcode(const ir_list::ConstInstructionIterable& ii,
+                   IROpcode opcode) {
+    return std::find_if(
+        ii.begin(), ii.end(), [opcode](const MethodItemEntry& mie) {
+          return mie.insn->opcode() == opcode;
+        });
   }
-  void check_sget_not_available(IRCode* code) {
-    std::cerr << "AFTER = " << SHOW(code) << std::endl;
-    auto ii = InstructionIterable(code);
-    auto end = ii.end();
-    for (auto it = ii.begin(); it != end; ++it) {
-      auto insn = it->insn;
-      EXPECT_NE(insn->opcode(), OPCODE_SGET_OBJECT)
-          << "SGET found in " << SHOW(code);
-    }
+
+  void check_opcode_present(const IRCode* code, IROpcode opcode) {
+    const auto ii = InstructionIterable(code);
+    EXPECT_NE(find_opcode(ii, opcode), ii.end())
+        << "Opcode " << SHOW(opcode) << " not found in " << SHOW(code);
   }
+
+  void check_opcode_absent(const IRCode* code, IROpcode opcode) {
+    const auto ii = InstructionIterable(code);
+    EXPECT_EQ(find_opcode(ii, opcode), ii.end())
+        << "Opcode " << SHOW(opcode) << " found in " << SHOW(code);
+  }
+
   // Check that instructions for creating a new instance are used.
   void check_removal_result_new_instance(const IRCode* code,
                                          std::string_view lambda_name) {
@@ -122,13 +118,13 @@ TEST_F(KotlinLambdaOptTest, LambdaSingletonIsRemoved) {
   auto root_method = DexMethod::get_method(root_method_name)->as_def();
   auto code_root = root_method->get_code();
   ASSERT_THAT(code_root, NotNull());
-  check_sget_available(code_root);
+  check_opcode_present(code_root, OPCODE_SGET_OBJECT);
 
   auto klr = new KotlinStatelessLambdaSingletonRemovalPass();
   std::vector<Pass*> passes{klr};
   run_passes(passes);
 
-  check_sget_not_available(code_root);
+  check_opcode_absent(code_root, OPCODE_SGET_OBJECT);
   check_removal_result_new_instance(code_root, lambda_class_name);
   ASSERT_THAT(lambda_class->get_sfields(), Not(Contains(singleton_field)))
       << "Singleton field " << SHOW(singleton_field)
@@ -158,13 +154,13 @@ TEST_F(KotlinLambdaOptTest, NoEffectOnNamedClass) {
   auto y_method = DexMethod::get_method(root_method)->as_def();
   auto codey = y_method->get_code();
   ASSERT_THAT(codey, NotNull());
-  check_sget_available(codey);
+  check_opcode_present(codey, OPCODE_SGET_OBJECT);
 
   auto klr = new KotlinStatelessLambdaSingletonRemovalPass();
   std::vector<Pass*> passes{klr};
   run_passes(passes);
 
-  check_sget_available(codey);
+  check_opcode_present(codey, OPCODE_SGET_OBJECT);
   EXPECT_THAT(lambda_class->get_sfields(), Contains(singleton_field))
       << "Singleton field is unexpectedly deleted from " << SHOW(lambda_class);
 }
