@@ -20,7 +20,7 @@ using ::testing::IsNull;
 using ::testing::Not;
 using ::testing::NotNull;
 
-class KotlinLambdaOptTest : public RedexIntegrationTest {
+class KotlinLambdaSingletonRemovalTest : public RedexIntegrationTest {
  protected:
   void set_root_method(std::string_view full_name) {
     auto method = DexMethod::get_method(full_name)->as_def();
@@ -93,7 +93,7 @@ class KotlinLambdaOptTest : public RedexIntegrationTest {
   }
 };
 
-TEST_F(KotlinLambdaOptTest, LambdaSingletonIsRemoved) {
+TEST_F(KotlinLambdaSingletonRemovalTest, LambdaSingletonIsRemoved) {
   auto scope = build_class_scope(stores);
   constexpr std::string_view lambda_class_name =
       "LKotlinLambdaSingletonRemoval$foo$1;";
@@ -143,7 +143,7 @@ TEST_F(KotlinLambdaOptTest, LambdaSingletonIsRemoved) {
   check_opcode_absent(code_clinit, OPCODE_SPUT_OBJECT);
 }
 
-TEST_F(KotlinLambdaOptTest, NoEffectOnNamedClass) {
+TEST_F(KotlinLambdaSingletonRemovalTest, NoEffectOnNamedClass) {
   auto scope = build_class_scope(stores);
   constexpr std::string_view class_name = "LKotlinInstanceRemovalNamedEquiv;";
   constexpr std::string_view root_method =
@@ -188,5 +188,33 @@ TEST_F(KotlinLambdaOptTest, NoEffectOnNamedClass) {
   ASSERT_THAT(code_clinit, NotNull());
   check_opcode_present(code_clinit, OPCODE_SPUT_OBJECT);
 }
+
+class KotlinLambdaSingletonSanityTest
+    : public KotlinLambdaSingletonRemovalTest,
+      public ::testing::WithParamInterface<std::string_view> {};
+
+TEST_P(KotlinLambdaSingletonSanityTest, DontHaveSingleton) {
+  auto scope = build_class_scope(stores);
+  const auto& class_name = GetParam();
+
+  // Ensure that the class exists so there's errors like typo in class name.
+  ASSERT_THAT(type_class(DexType::make_type(class_name)), NotNull())
+      << "Class " << class_name << " not found";
+
+  std::ostringstream singleton_field_name_ss;
+  singleton_field_name_ss << class_name << ".INSTANCE:" << class_name;
+  const auto singleton_field_name = singleton_field_name_ss.str();
+
+  const auto* singleton_field = DexField::get_field(singleton_field_name);
+  EXPECT_THAT(singleton_field, IsNull())
+      << "Sanity check: Singleton is unexpectedly found";
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    KotlinLambdaSingletonSanityTests,
+    KotlinLambdaSingletonSanityTest,
+    ::testing::Values(
+        "LKotlinStatefulLambda;",
+        "LKotlinAnonymousClassImplementingFunction$foo$addfn$1;"));
 
 } // namespace
