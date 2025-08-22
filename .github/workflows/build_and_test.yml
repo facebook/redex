@@ -18,11 +18,13 @@ jobs:
         # Extra flags for false positives from GCC 12:
         # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105651
         - {os: "debian:12", configure_extra: "CXXFLAGS=-Wno-restrict"}
+        - {os: "debian:13", configure_extra: ""}
         - {os: "ubuntu:22.04", configure_extra: ""}
         - {os: "ubuntu:24.04", configure_extra: ""}
+        - {os: "gcc:latest", configure_extra: ""}
         build_arch: ["x86_64"]
         include:
-        - config: {os: "debian:12", configure_extra: "--host=i686-linux-gnu CFLAGS=-m32 CXXFLAGS='-m32 -Wno-restrict' LDFLAGS=-m32"}
+        - config: {os: "debian:13", configure_extra: "--host=i686-linux-gnu CFLAGS=-m32 CXXFLAGS='-m32 -Wno-restrict' LDFLAGS=-m32"}
           build_arch: "x86"
     steps:
     - name: Show OS info
