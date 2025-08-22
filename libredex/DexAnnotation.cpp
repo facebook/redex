@@ -979,6 +979,42 @@ std::string DexEncodedValueArray::show_deobfuscated() const {
 
 std::string DexEncodedValueString::show() const { return ::show(string()); }
 
+std::string DexEncodedValueString::show_deobfuscated() const {
+  auto dex_string = string();
+  auto starts_with_type_name = [](const std::string_view& s) {
+    auto i = s.begin();
+    while (i != s.end() && *i == '[') {
+      i++;
+    }
+    return i != s.end() && *i == 'L';
+  };
+  // Check if this is possibly an obfuscated type name. At least length of LX/0;
+  if (dex_string->is_simple() && dex_string->length() >= 5) {
+    auto s = dex_string->str();
+    auto last_char = s.back();
+    if (starts_with_type_name(s) && (last_char == ';' || last_char == '<')) {
+      // Note that array types should pass above check, which should get handled
+      // gracefully by show_deobfuscated(const DexType*).
+      std::string maybe_type_name(s);
+      if (last_char == '<') {
+        maybe_type_name.pop_back();
+        maybe_type_name.push_back(';');
+      }
+      auto maybe_type = DexType::get_type(maybe_type_name);
+      if (maybe_type != nullptr) {
+        auto result = ::show_deobfuscated(maybe_type);
+        always_assert(!result.empty());
+        if (last_char == '<') {
+          result.pop_back();
+          result.push_back('<');
+        }
+        return result;
+      }
+    }
+  }
+  return show();
+}
+
 std::string DexEncodedValueType::show() const { return ::show(type()); }
 std::string DexEncodedValueType::show_deobfuscated() const {
   return ::show_deobfuscated(type());

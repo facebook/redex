@@ -155,6 +155,7 @@ class DexEncodedValueString : public DexEncodedValue {
   void encode(DexOutputIdx* dodx, std::vector<uint8_t>& encdata) override;
 
   std::string show() const override;
+  std::string show_deobfuscated() const override;
   bool operator==(const DexEncodedValue& that) const override {
     if (m_evtype != that.evtype()) {
       return false;
