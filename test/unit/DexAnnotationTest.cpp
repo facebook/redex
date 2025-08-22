@@ -12,6 +12,7 @@
 #include "DexClass.h"
 #include "RedexContext.h"
 #include "RedexTest.h"
+#include "Show.h"
 
 class DexAnnotationTest : public RedexTest {};
 
@@ -48,5 +49,28 @@ TEST_F(DexAnnotationTest, DeobfuscateStrings) {
     DexEncodedValueString ev(DexString::make_string(value));
     auto shown = ev.show_deobfuscated();
     EXPECT_STREQ(shown.c_str(), expected.c_str());
+  }
+}
+
+TEST_F(DexAnnotationTest, EscapeStrings) {
+  // Android's MUTF-8 encoding of "Hello, U+1F30E" (earth showing Americas).
+  {
+    std::vector<uint8_t> mutf8_bytes{0x48, 0x65, 0x6c, 0x6c, 0x6f,
+                                     0x2c, 0x20, 0xed, 0xa0, 0xbc,
+                                     0xed, 0xbc, 0x8e, 0x21, 0x0};
+    auto dex_string = DexString::make_string((char*)mutf8_bytes.data());
+    auto escaped = show_escaped(dex_string);
+    std::u8string_view expected(u8"Hello, \U0001F30E!");
+    std::string expected_str(expected.begin(), expected.end());
+    EXPECT_STREQ(escaped.c_str(), expected_str.c_str());
+  }
+  // The overlong encoding for null zero inside a string.
+  {
+    std::vector<uint8_t> mutf8_bytes{0x79, 0x6f, 0xc0, 0x80,
+                                     0x73, 0x75, 0x70, 0x0};
+    auto dex_string = DexString::make_string((char*)mutf8_bytes.data());
+    auto escaped = show_escaped(dex_string);
+    std::string expected_str("yo\\u0000sup");
+    EXPECT_STREQ(escaped.c_str(), expected_str.c_str());
   }
 }

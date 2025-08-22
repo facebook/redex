@@ -7,7 +7,9 @@
 
 #include "Show.h"
 
+#include <codecvt>
 #include <iomanip>
+#include <locale>
 
 #include <boost/version.hpp>
 // Quoted was accepted into public components as of 1.73. The `detail`
@@ -25,6 +27,7 @@
 #include "DexCallSite.h"
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
+#include "DexEncoding.h"
 #include "DexIdx.h"
 #include "DexInstruction.h"
 #include "DexMethodHandle.h"
@@ -1715,6 +1718,44 @@ std::string pretty_bytes(uint64_t val) {
   oss << std::setiosflags(std::ios::fixed) << std::setprecision(2) << d_val
       << " " << modifier << "B";
   return oss.str();
+}
+
+namespace {
+static bool is_control_character(const uint32_t c) {
+  return c <= 0x1F || c == 0x7F || (c >= 0x80 && c <= 0x9F);
+}
+
+std::string escape_string(const char* ptr) {
+  std::ostringstream oss;
+  while (*ptr != '\0') {
+    uint32_t unit = mutf8_next_code_point(ptr);
+    if (is_control_character(unit)) {
+      oss << "\\u" << std::setfill('0') << std::setw(4) << std::hex << unit;
+    } else {
+      char32_t code_point = unit;
+      // Despite the name "mutf8_next_code_point" does not return code points,
+      // it return code units. Munge together surrogate pairs if need be.
+      if (unit >= 0xD800 && unit <= 0xDFFF) {
+        code_point = (unit - 0xD800) * 0x400;
+        uint32_t low_unit = mutf8_next_code_point(ptr);
+        always_assert_log(low_unit != '\0', "Unpaired surrogate");
+        code_point += low_unit - 0xDC00;
+        code_point += 0x10000;
+      }
+      std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> convert;
+      std::string result = convert.to_bytes(&code_point, &code_point + 1);
+      oss << result;
+    }
+  }
+  return oss.str();
+}
+} // namespace
+
+std::string show_escaped(const DexString* s) {
+  if (s == nullptr) {
+    return "";
+  }
+  return escape_string(s->c_str());
 }
 
 std::vector<std::string> pretty_array_data_payload(const uint16_t ewidth,

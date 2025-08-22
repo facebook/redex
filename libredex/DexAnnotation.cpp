@@ -977,7 +977,9 @@ std::string DexEncodedValueArray::show_deobfuscated() const {
   return show_helper(this, true);
 }
 
-std::string DexEncodedValueString::show() const { return ::show(string()); }
+std::string DexEncodedValueString::show() const {
+  return ::show_escaped(string());
+}
 
 std::string DexEncodedValueString::show_deobfuscated() const {
   auto dex_string = string();
