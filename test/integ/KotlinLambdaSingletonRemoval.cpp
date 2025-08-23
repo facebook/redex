@@ -5,6 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <algorithm>
+#include <string>
+#include <string_view>
+#include <tuple>
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -30,10 +35,10 @@ class KotlinLambdaSingletonRemovalTest : public RedexIntegrationTest {
 
   auto find_opcode(const ir_list::ConstInstructionIterable& ii,
                    IROpcode opcode) {
-    return std::find_if(
-        ii.begin(), ii.end(), [opcode](const MethodItemEntry& mie) {
-          return mie.insn->opcode() == opcode;
-        });
+    return std::find_if(ii.begin(), ii.end(),
+                        [opcode](const MethodItemEntry& mie) {
+                          return mie.insn->opcode() == opcode;
+                        });
   }
 
   void check_opcode_present(const IRCode* code, IROpcode opcode) {
@@ -189,13 +194,15 @@ TEST_F(KotlinLambdaSingletonRemovalTest, NoEffectOnNamedClass) {
   check_opcode_present(code_clinit, OPCODE_SPUT_OBJECT);
 }
 
-class KotlinLambdaSingletonSanityTest
+class KotlinLambdaSingletonNoopTest
     : public KotlinLambdaSingletonRemovalTest,
-      public ::testing::WithParamInterface<std::string_view> {};
+      public ::testing::WithParamInterface<
+          std::tuple<std::string_view, std::string_view>> {};
 
-TEST_P(KotlinLambdaSingletonSanityTest, DontHaveSingleton) {
+TEST_P(KotlinLambdaSingletonNoopTest, main) {
   auto scope = build_class_scope(stores);
-  const auto& class_name = GetParam();
+  const auto& class_name = std::get<0>(GetParam());
+  const auto& root_method_name = std::get<1>(GetParam());
 
   // Ensure that the class exists so there's errors like typo in class name.
   ASSERT_THAT(type_class(DexType::make_type(class_name)), NotNull())
@@ -208,13 +215,39 @@ TEST_P(KotlinLambdaSingletonSanityTest, DontHaveSingleton) {
   const auto* singleton_field = DexField::get_field(singleton_field_name);
   EXPECT_THAT(singleton_field, IsNull())
       << "Sanity check: Singleton is unexpectedly found";
+
+  const auto root_method = DexMethod::get_method(root_method_name)->as_def();
+  ASSERT_THAT(root_method->get_code(), NotNull());
+  const auto code_root_pre{*root_method->get_code()};
+
+  auto klr = new KotlinStatelessLambdaSingletonRemovalPass();
+  std::vector<Pass*> passes{klr};
+  run_passes(passes);
+
+  ASSERT_THAT(root_method->get_code(), NotNull());
+  const auto code_root_post{*root_method->get_code()};
+
+  const auto pre_iterable = InstructionIterable(code_root_pre);
+  const auto post_iterable = InstructionIterable(code_root_post);
+  const auto equals =
+      std::equal(pre_iterable.begin(), pre_iterable.end(),
+                 post_iterable.begin(), post_iterable.end(),
+                 [](const MethodItemEntry& a, const MethodItemEntry& b) {
+                   EXPECT_EQ(a, b) << "Instructions do not equal";
+                   return a == b;
+                 });
+  EXPECT_TRUE(equals)
+      << "Instructions have unexpctedly changed after the pass.\nPre: "
+      << SHOW(&code_root_pre) << "\nPost: " << SHOW(&code_root_post);
 }
 
 INSTANTIATE_TEST_SUITE_P(
-    KotlinLambdaSingletonSanityTests,
-    KotlinLambdaSingletonSanityTest,
-    ::testing::Values(
-        "LKotlinStatefulLambda;",
-        "LKotlinAnonymousClassImplementingFunction$foo$addfn$1;"));
+    KotlinLambdaSingletonNoopTests,
+    KotlinLambdaSingletonNoopTest,
+    ::testing::ValuesIn(
+        std::initializer_list<std::tuple<std::string_view, std::string_view>>{
+            {"LKotlinStatefulLambda;", "LKotlinStatefulLambda;.foo:()V"},
+            {"LKotlinAnonymousClassImplementingFunction$foo$addfn$1;",
+             "LKotlinAnonymousClassImplementingFunction;.foo:()V"}}));
 
 } // namespace
