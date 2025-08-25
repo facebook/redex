@@ -203,7 +203,7 @@ verifier_artifacts_test_SOURCES = VerifierTest.cpp
 EXTRA_verifier_artifacts_test_DEPENDENCIES = verifier_artifacts_test-class.dex
 
 # Note: Should switch to d8, instead.
-javac_source_target = -source 1.7 -target 1.7
+javac_source_target = -source 8 -target 8
 
 define create_jar
 	mkdir -p $@.tmp
