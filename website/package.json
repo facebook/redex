@@ -31,6 +31,7 @@
   "resolutions": {
     "on-headers": "^1.1.0",
     "brace-expansion": "^1.1.12",
+    "mermaid": "^11.10.0",
     "webpack-dev-server": "^5.2.1",
     "estree-util-value-to-estree": "^3.3.3",
     "@babel/helpers": "^7.26.10",
