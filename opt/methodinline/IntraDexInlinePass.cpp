@@ -13,12 +13,27 @@ void IntraDexInlinePass::bind_config() {
   bind("consider_hot_cold", false, m_consider_hot_cold);
   bind("partial_hot_hot", false, m_partial_hot_hot);
   bind("baseline_profile_guided", false, m_baseline_profile_guided);
+  bind("baseline_profile_heat_threshold", 0.5f,
+       m_baseline_profile_heat_threshold);
+  bind("baseline_profile_heat_discount", 1.0f,
+       m_baseline_profile_heat_discount);
+  bind("baseline_profile_shrink_bias", 0.0f, m_baseline_profile_shrink_bias);
 }
 
 void IntraDexInlinePass::run_pass(DexStoresVector& stores,
                                   ConfigFiles& conf,
                                   PassManager& mgr) {
-  inliner::run_inliner(stores, mgr, conf, DEFAULT_COST_CONFIG,
+  InlinerCostConfig inliner_cost_config = DEFAULT_COST_CONFIG;
+  if (m_baseline_profile_guided) {
+    inliner_cost_config.profile_guided_heat_threshold =
+        m_baseline_profile_heat_threshold;
+    inliner_cost_config.profile_guided_heat_discount =
+        m_baseline_profile_heat_discount;
+    inliner_cost_config.profile_guided_shrink_bias =
+        m_baseline_profile_shrink_bias;
+  }
+
+  inliner::run_inliner(stores, mgr, conf, inliner_cost_config,
                        m_consider_hot_cold, m_partial_hot_hot,
                        /* intra_dex */ true, m_baseline_profile_guided);
   // For partial inlining, we only consider the first time the pass runs, to
