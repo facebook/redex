@@ -39,7 +39,12 @@ bool is_style_ambiguous(uint32_t id,
 }
 
 UnorderedSet<uint32_t> StyleAnalysis::directly_reachable_styles() {
-  return m_reachable_resources->compute_transitive_closure(m_roots);
+  if (!m_directly_reachable_styles.has_value()) {
+    m_directly_reachable_styles =
+        m_reachable_resources->compute_transitive_closure(m_roots);
+  }
+
+  return m_directly_reachable_styles.value();
 }
 
 UnorderedSet<uint32_t> StyleAnalysis::ambiguous_styles() {
@@ -65,7 +70,7 @@ void print_attributes(std::ostringstream& oss,
 
 std::string StyleAnalysis::dot(bool exclude_nodes_with_no_edges,
                                bool display_attributes) {
-  auto directly_reachable = directly_reachable_styles();
+  const auto& directly_reachable = directly_reachable_styles();
   auto ambiguous = ambiguous_styles();
   auto& id_to_name = m_reachable_resources->get_res_table()->id_to_name;
   UnorderedMap<uint32_t, UnorderedMap<std::string, std::string>> node_options;

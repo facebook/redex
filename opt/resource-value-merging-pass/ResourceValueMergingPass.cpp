@@ -111,6 +111,10 @@ void ResourceValueMergingPass::run_pass(DexStoresVector& stores,
   const auto& directly_reachable_styles =
       style_analysis.directly_reachable_styles();
 
+  if (traceEnabled(RES, 5)) {
+    TRACE(RES, 5, "%s", style_analysis.dot(false, true).c_str());
+  }
+
   // Synthetic Parent Optimizations
   const auto& optimized = add_synthetic_nodes_to_graph(
       *res_table, style_info, directly_reachable_styles, ambiguous_styles);
