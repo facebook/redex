@@ -14,6 +14,8 @@
 #include "DexClass.h"
 #include "MethodProfiles.h"
 
+struct ConfigFiles;
+
 namespace baseline_profiles {
 
 struct MethodFlags {
@@ -25,6 +27,16 @@ struct MethodFlags {
 struct BaselineProfile {
   UnorderedMap<const DexMethod*, MethodFlags> methods;
   UnorderedSet<const DexClass*> classes;
+
+  // For output purposes. DO NOT USE DIRECTLY.
+  UnorderedSet<std::string> unmatched_classes;
+  size_t mark{0};
+
+  void load_classes(const Scope& scope,
+                    const ConfigFiles& config,
+                    const std::string& bp_name);
+
+  void transitively_close_classes(const Scope& scope);
 };
 
 // Returns a tuple of BaselineProfile and UnorderedMap<std::string,

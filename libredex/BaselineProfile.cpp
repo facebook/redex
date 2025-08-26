@@ -7,6 +7,11 @@
 
 #include "BaselineProfile.h"
 
+#include <fstream>
+
+#include "ConfigFiles.h"
+#include "Walkers.h"
+
 namespace baseline_profiles {
 
 BaselineProfile get_default_baseline_profile(
@@ -124,6 +129,77 @@ get_baseline_profiles(
     }
   }
   return {std::move(manual_baseline_profile), std::move(baseline_profiles)};
+}
+
+void BaselineProfile::load_classes(const Scope& scope,
+                                   const ConfigFiles& config,
+                                   const std::string& bp_name) {
+  auto preprocessed_profile_name =
+      config.get_preprocessed_baseline_profile_file(bp_name);
+
+  if (preprocessed_profile_name.empty()) {
+    return;
+  }
+
+  // Classes may have been obfuscated. For simplicity create a map
+  // ahead of time. We cannot rely on debofuscated name lookup to be enabled.
+  UnorderedMap<std::string_view, DexClass*> unobf_to_type;
+  walk::classes(scope, [&](DexClass* cls) {
+    auto* deobf = cls->get_deobfuscated_name_or_null();
+    if (deobf != nullptr) {
+      unobf_to_type.emplace(deobf->str(), cls);
+    } else {
+      unobf_to_type.emplace(cls->get_name()->str(), cls);
+    }
+  });
+
+  std::ifstream preprocessed_profile{preprocessed_profile_name};
+  std::string current_line;
+  while (std::getline(preprocessed_profile, current_line)) {
+    if (current_line.empty() || current_line[0] != 'L') {
+      continue;
+    }
+
+    auto it = unobf_to_type.find(current_line);
+    if (it == unobf_to_type.end() || it->second->is_external()) {
+      unmatched_classes.emplace(std::move(current_line));
+    } else {
+      classes.emplace(it->second);
+    }
+  }
+}
+
+void BaselineProfile::transitively_close_classes(const Scope& scope) {
+  // This may not be the most efficient implementation but it is simple and
+  // uses common functionality.
+
+  UnorderedSet<DexType*> closed_types;
+
+  unordered_for_each(classes, [&](auto* cls_def) {
+    if (cls_def->is_external()) {
+      return;
+    }
+
+    cls_def->gather_load_types(closed_types);
+  });
+
+  // Filter out classes that are not in the scope. For speed that requires
+  // temporary storage. Consider removing this.
+
+  UnorderedSet<const DexClass*> class_defs;
+  unordered_for_each(closed_types, [&](auto* type) {
+    auto* cls_def = type_class_internal(type);
+    if (cls_def == nullptr) {
+      return;
+    }
+    class_defs.emplace(cls_def);
+  });
+
+  walk::classes(scope, [&](const auto* cls) {
+    if (class_defs.count(cls)) {
+      classes.emplace(cls);
+    }
+  });
 }
 
 } // namespace baseline_profiles
