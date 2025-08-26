@@ -246,8 +246,16 @@ void compute_res_file_hashes(
   auto base_path = boost::filesystem::path(zip_dir);
   std::vector<std::string> tasks;
   UnorderedSet<std::string> seen_paths;
+  // The following loop should exclude the string type from consideration; it
+  // may not be obvious which strings are user visible vs file paths.
+  auto string_type_ids = res_table->get_types_by_name_prefixes({"string"});
   for (size_t i = 0; i < sorted_res_ids.size(); ++i) {
     uint32_t id = sorted_res_ids[i];
+    uint32_t type_id = id & TYPE_MASK_BIT;
+    if (string_type_ids.count(type_id) > 0) {
+      TRACE(DEDUP_RES, 3, "Will not check ID 0x%x for file paths", id);
+      continue;
+    }
     // We need to hash and check for equality files as they appear in the zip
     // (including the module name in case of .aab input), but when deduplicating
     // and writing the path to canonical file into the resource table we must
