@@ -270,9 +270,15 @@ void ObfuscateResourcesPass::run_pass(DexStoresVector& stores,
   std::map<std::string, std::string> filepath_old_to_new;
   if (m_obfuscate_resource_file) {
     const auto& sorted_res_ids = res_table->sorted_res_ids;
+    auto string_type_ids = res_table->get_types_by_name_prefixes({"string"});
     std::set<std::string> all_files;
     for (size_t index = 0; index < sorted_res_ids.size(); ++index) {
       auto res_id = sorted_res_ids[index];
+      uint32_t type_id = res_id & TYPE_MASK_BIT;
+      if (string_type_ids.count(type_id) > 0) {
+        TRACE(OBFUS_RES, 3, "Will not check ID 0x%x for file paths", res_id);
+        continue;
+      }
       for (const auto& file :
            res_table->get_files_by_rid(res_id, ResourcePathType::ZipPath)) {
         all_files.emplace(file);
