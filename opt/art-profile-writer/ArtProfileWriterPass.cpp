@@ -648,130 +648,44 @@ void never_compile(
 
 void write_classes(const Scope& scope,
                    const baseline_profiles::BaselineProfile& bp,
-                   bool transitively_close,
-                   const std::string& preprocessed_profile_name,
                    std::ostream& os) {
-  auto classes_str_vec = [&]() {
-    std::vector<std::string> tmp;
-    if (preprocessed_profile_name.empty()) {
-      return tmp;
+  std::vector<std::string_view> class_names;
+  size_t deob_issues{0};
+  unordered_for_each(bp.classes, [&](auto* cls) {
+    if (cls->is_external()) {
+      return;
     }
-
-    std::ifstream preprocessed_profile(preprocessed_profile_name);
-    std::string current_line;
-    while (std::getline(preprocessed_profile, current_line)) {
-      if (current_line.empty() || current_line[0] != 'L') {
-        continue;
-      }
-      tmp.emplace_back(std::move(current_line));
+    auto* deobf_str = cls->get_deobfuscated_name_or_null();
+    if (deobf_str == nullptr) {
+      ++deob_issues;
+      TRACE(APW, 1, "Failed to retrieve deobfuscated name for %s", SHOW(cls));
+      deobf_str = cls->get_name();
     }
-    return tmp;
-  }();
-
-  std::vector<const DexClass*> classes_from_bp;
-  classes_from_bp.reserve(bp.classes.size());
-  walk::classes(scope, [&](DexClass* cls) {
-    if (bp.classes.count(cls)) {
-      classes_from_bp.push_back(cls);
-    }
+    redex_assert(deobf_str != nullptr);
+    class_names.emplace_back(deobf_str->str());
   });
-
-  if (!transitively_close) {
-    std::transform(classes_from_bp.begin(), classes_from_bp.end(),
-                   std::back_inserter(classes_str_vec),
-                   [](const auto* cls) { return show_deobfuscated(cls); });
-    if (!classes_str_vec.empty()) {
-      // Deduplicate.
-      if (!classes_from_bp.empty()) {
-        std::unordered_set<std::string> classes_str_set;
-        classes_str_set.reserve(classes_str_vec.size());
-        for (auto& s : classes_str_vec) {
-          classes_str_set.emplace(std::move(s));
-        }
-        classes_str_vec.clear();
-        for (auto it = classes_str_set.begin(); it != classes_str_set.end();) {
-          classes_str_vec.emplace_back(
-              std::move(classes_str_set.extract(it++).value()));
-        }
-      }
-      std::sort(classes_str_vec.begin(), classes_str_vec.end());
-
-      os << "# " << classes_str_vec.size()
-         << " classes from write_classes().\n";
-      for (auto& cls : classes_str_vec) {
-        os << cls << "\n";
-      }
-    }
-    return;
+  if (deob_issues > 0) {
+    TRACE(APW, 0,
+          "Failed to retrieve deobfuscated name for %zu classes, run with "
+          "TRACE=APW:1 to get details.",
+          deob_issues);
   }
 
-  // This may not be the most efficient implementation but it is simple and uses
-  // common functionality.
-
-  UnorderedSet<std::string_view> classes_without_types;
-  UnorderedSet<DexType*> classes_with_types;
-
-  // At this stage types are probably obfuscated. For simplicity create a map
-  // ahead of time. We cannot rely on debofuscated name lookup to be enabled.
-  UnorderedMap<std::string_view, DexClass*> unobf_to_type;
-  walk::classes(scope, [&](DexClass* cls) {
-    auto* deobf = cls->get_deobfuscated_name_or_null();
-    if (deobf != nullptr) {
-      unobf_to_type.emplace(deobf->str(), cls);
-    } else {
-      unobf_to_type.emplace(cls->get_name()->str(), cls);
-    }
-  });
-
-  for (auto& cls : classes_str_vec) {
-    auto cls_def_it = unobf_to_type.find(cls);
-    if (cls_def_it == unobf_to_type.end()) {
-      classes_without_types.emplace(cls);
-      continue;
-    }
-    auto* cls_def = cls_def_it->second;
-    if (cls_def->is_external()) {
-      classes_without_types.emplace(cls);
-      continue;
-    }
-
-    cls_def->gather_load_types(classes_with_types);
+  os << "# " << class_names.size()
+     << " classes from resolved and internal types\n";
+  std::sort(class_names.begin(), class_names.end());
+  for (auto& cls : class_names) {
+    os << cls << "\n";
   }
 
-  std::deque<std::string> string_view_storage;
-  for (auto* cls_def : classes_from_bp) {
-    if (cls_def->is_external()) {
-      classes_without_types.emplace(
-          string_view_storage.emplace_back(show_deobfuscated(cls_def)));
-      continue;
-    }
-
-    cls_def->gather_load_types(classes_with_types);
-  }
-
-  std::vector<std::string_view> classes;
-  classes.reserve(classes_without_types.size() + classes_with_types.size());
-  unordered_transform(classes_without_types, std::back_inserter(classes),
-                      [](const auto& str) { return str; });
-  unordered_transform(
-      classes_with_types, std::back_inserter(classes),
-      [](const auto* dex_type) {
-        auto* dex_cls = type_class(dex_type);
-        auto* deobf_str = dex_cls != nullptr
-                              ? dex_cls->get_deobfuscated_name_or_null()
-                              : nullptr;
-        return deobf_str != nullptr ? deobf_str->str() : dex_type->str();
-      });
-
-  if (!classes.empty()) {
-    os << "# " << classes.size() << " classes from write_classes() ("
-       << (classes.size() - classes_str_vec.size())
-       << " from transitive closure, " << classes_without_types.size()
-       << " classes w/o types).\n";
-    std::sort(classes.begin(), classes.end());
-    for (auto& cls : classes) {
-      os << cls << "\n";
-    }
+  os << "# " << bp.unmatched_classes.size()
+     << " classes from unresolved types\n";
+  std::vector<std::string_view> unmatched;
+  unordered_transform(bp.unmatched_classes, std::back_inserter(unmatched),
+                      [](const auto& str) { return std::string_view(str); });
+  std::sort(unmatched.begin(), unmatched.end());
+  for (auto& cls : unmatched) {
+    os << cls << "\n";
   }
 }
 
@@ -894,6 +808,17 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       &method_refs_without_def);
   auto& baseline_profiles = std::get<1>(baseline_profiles_tuple);
   auto& manual_profile = std::get<0>(baseline_profiles_tuple);
+
+  // Load classes from input.
+  manual_profile.load_classes(scope, conf, "manual");
+  manual_profile.mark = manual_profile.classes.size();
+  for (const auto& [config_name, baseline_profile_config] :
+       UnorderedIterable(conf.get_baseline_profile_configs())) {
+    auto& baseline_profile = baseline_profiles[config_name];
+    baseline_profile.load_classes(scope, conf, config_name);
+    baseline_profile.mark = baseline_profile.classes.size();
+  }
+
   auto add_class = [&](DexClass* cls) {
     manual_profile.classes.insert(cls);
     for (const auto& [config_name, baseline_profile_config] :
@@ -976,31 +901,38 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
                                     : bp.options.strip_classes;
   };
 
+  // Transitively close classes. We always do this for metrics.
+  if (conf.get_default_baseline_profile_config()
+          .options.transitively_close_classes) {
+    manual_profile.transitively_close_classes(scope);
+  }
+  for (auto& entry : UnorderedIterable(baseline_profiles)) {
+    const auto& bp_name = entry.first;
+    auto& bp = entry.second;
+    const auto transitively_close_classes =
+        conf.get_baseline_profile_configs()
+            .at(bp_name)
+            .options.transitively_close_classes;
+    if (transitively_close_classes) {
+      bp.transitively_close_classes(scope);
+    }
+  }
+
   for (const auto& entry : UnorderedIterable(baseline_profiles)) {
     const auto& bp_name = entry.first;
     const auto& bp = entry.second;
     const auto strip_classes =
         resolve_strip_classes(conf.get_baseline_profile_configs().at(bp_name));
-    const auto transitively_close_classes =
-        conf.get_baseline_profile_configs()
-            .at(bp_name)
-            .options.transitively_close_classes;
-    auto preprocessed_profile_name =
-        conf.get_preprocessed_baseline_profile_file(bp_name);
     auto output_name = conf.metafile(bp_name + "-baseline-profile.txt");
     std::ofstream ofs{output_name.c_str()};
     if (!strip_classes) {
-      write_classes(scope, bp, transitively_close_classes,
-                    preprocessed_profile_name, ofs);
+      write_classes(scope, bp, ofs);
     }
     write_methods(scope, bp, ofs);
   }
   std::ofstream ofs{conf.metafile(BASELINE_PROFILES_FILE)};
   if (!resolve_strip_classes(conf.get_default_baseline_profile_config())) {
-    write_classes(scope, manual_profile,
-                  conf.get_default_baseline_profile_config()
-                      .options.transitively_close_classes,
-                  "", ofs);
+    write_classes(scope, manual_profile, ofs);
   }
   write_methods(scope, manual_profile, ofs);
 
@@ -1051,7 +983,10 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     });
 
     auto prefix = std::string("profile_") + bp_name + "_";
+    mgr.incr_metric(prefix + "classes.in", profile.mark);
     mgr.incr_metric(prefix + "classes", profile.classes.size());
+    mgr.incr_metric(prefix + "unmatched_classes",
+                    profile.unmatched_classes.size());
     mgr.incr_metric(prefix + "methods", profile.methods.size());
     mgr.incr_metric(prefix + "code_units", (size_t)code_units);
     mgr.incr_metric(prefix + "compiled", (size_t)compiled_methods);
