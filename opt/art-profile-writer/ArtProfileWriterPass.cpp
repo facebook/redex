@@ -476,26 +476,17 @@ bool never_compile_string_lookup_method_matches(
   return true;
 }
 
-void never_compile(
+void never_compile_impl(
     const Scope& scope,
+    const std::string& baseline_profile_name,
     const baseline_profiles::BaselineProfileConfig& baseline_profile_config,
     const method_profiles::MethodProfiles& method_profiles,
     PassManager& mgr,
-    bool never_compile_ignore_hot,
-    int64_t never_compile_callcount_threshold,
-    int64_t never_compile_perf_threshold,
-    int64_t never_compile_called_coverage_threshold,
-    const std::string& excluded_interaction_pattern,
-    int64_t excluded_appear100_threshold,
-    int64_t excluded_call_count_threshold,
-    bool never_compile_strings_lookup_methods,
-    bool never_compile_no_attach,
-    baseline_profiles::BaselineProfile* manual_profile,
-    UnorderedMap<std::string, baseline_profiles::BaselineProfile>*
-        baseline_profiles) {
+    baseline_profiles::BaselineProfile* baseline_profile) {
   UnorderedSet<std::string> excluded_interaction_ids;
-  if (!excluded_interaction_pattern.empty()) {
-    boost::regex rx(excluded_interaction_pattern);
+  const auto& harvest_config = baseline_profile_config.harvest_config;
+  if (!harvest_config.never_compile_excluded_interaction_pattern.empty()) {
+    boost::regex rx(harvest_config.never_compile_excluded_interaction_pattern);
     for (auto&& [interaction_id, interaction_name] :
          baseline_profile_config.interactions) {
       if (boost::regex_match(interaction_name, rx)) {
@@ -503,11 +494,6 @@ void never_compile(
       }
     }
   }
-
-  DexAnnotationSet anno_set;
-  anno_set.add_annotation(std::make_unique<DexAnnotation>(
-      type::dalvik_annotation_optimization_NeverCompile(),
-      DexAnnotationVisibility::DAV_BUILD));
 
   InsertOnlyConcurrentMap<DexMethod*, uint32_t> never_compile_methods;
   std::atomic<size_t> methods_already_never_compile = 0;
@@ -521,9 +507,9 @@ void never_compile(
     if (method::is_clinit(method)) {
       return;
     }
-    auto it = manual_profile->methods.find(method);
-    if (!never_compile_ignore_hot) {
-      if (it == manual_profile->methods.end()) {
+    auto it = baseline_profile->methods.find(method);
+    if (!harvest_config.never_compile_ignore_hot) {
+      if (it == baseline_profile->methods.end()) {
         return;
       }
       auto& mf = it->second;
@@ -539,8 +525,10 @@ void never_compile(
         continue;
       }
       if (excluded_interaction_ids.count(interaction_id) &&
-          method_stats->appear_percent > excluded_appear100_threshold &&
-          method_stats->call_count > excluded_call_count_threshold) {
+          method_stats->appear_percent >
+              harvest_config.never_compile_excluded_appear100_threshold &&
+          method_stats->call_count >
+              harvest_config.never_compile_excluded_call_count_threshold) {
         return;
       }
       call_count = std::max(call_count, method_stats->call_count);
@@ -553,25 +541,26 @@ void never_compile(
 
     bool selected = false;
     if (never_compile_callcount_threshold_met(
-            call_count, never_compile_callcount_threshold)) {
+            call_count, harvest_config.never_compile_callcount_threshold)) {
       never_compile_callcount_threshold_mets.fetch_add(1);
       selected = true;
     }
 
-    if (never_compile_perf_threshold_met(method,
-                                         never_compile_perf_threshold)) {
+    if (never_compile_perf_threshold_met(
+            method, harvest_config.never_compile_perf_threshold)) {
       never_compile_perf_threshold_mets.fetch_add(1);
       selected = true;
     }
 
     if (never_compile_called_coverage_threshold_met(
-            method, call_count, never_compile_called_coverage_threshold)) {
+            method, call_count,
+            harvest_config.never_compile_called_coverage_threshold)) {
       never_compile_called_coverage_threshold_mets.fetch_add(1);
       selected = true;
     }
 
     if (never_compile_string_lookup_method_matches(
-            method, never_compile_strings_lookup_methods)) {
+            method, harvest_config.never_compile_strings_lookup_methods)) {
       never_compile_strings_lookup_methods_matches.fetch_add(1);
       selected = true;
     }
@@ -588,47 +577,29 @@ void never_compile(
       return;
     }
 
-    if (never_compile_no_attach) {
-      methods_annotation_not_attached.fetch_add(1);
-      return;
-    }
-
-    methods_annotation_attached.fetch_add(1);
-    if (method->get_anno_set()) {
-      method->get_anno_set()->combine_with(anno_set);
-      return;
-    }
-    auto access = method->get_access();
-    // attach_annotation_set requires the method to be synthetic.
-    // A bit bizarre, and suggests that Redex' code to mutate annotations is
-    // ripe for an overhaul. But I won't fight that here.
-    method->set_access(access | ACC_SYNTHETIC);
-    auto res = method->attach_annotation_set(
-        std::make_unique<DexAnnotationSet>(anno_set));
-    always_assert(res);
-    method->set_access(access);
+    methods_annotation_not_attached.fetch_add(1);
+    return;
   });
   for (auto&& [method, _0] : UnorderedIterable(never_compile_methods)) {
-    manual_profile->methods.erase(method);
-    for (auto& [_1, profile] : UnorderedIterable(*baseline_profiles)) {
-      profile.methods.erase(method);
-    }
+    baseline_profile->methods.erase(method);
   }
-  mgr.incr_metric("never_compile_methods", never_compile_methods.size());
-  mgr.incr_metric("methods_already_never_compile",
+  mgr.incr_metric(baseline_profile_name + "_never_compile_methods",
+                  never_compile_methods.size());
+  mgr.incr_metric(baseline_profile_name + "_methods_already_never_compile",
                   methods_already_never_compile.load());
-  mgr.incr_metric("methods_annotation_attached",
+  mgr.incr_metric(baseline_profile_name + "_methods_annotation_attached",
                   methods_annotation_attached.load());
-  mgr.incr_metric("methods_annotation_not_attached",
+  mgr.incr_metric(baseline_profile_name + "_methods_annotation_not_attached",
                   methods_annotation_not_attached.load());
-  mgr.incr_metric("never_compile_callcount",
+  mgr.incr_metric(baseline_profile_name + "_never_compile_callcount",
                   never_compile_callcount_threshold_mets.load());
-  mgr.incr_metric("never_compile_perf",
+  mgr.incr_metric(baseline_profile_name + "_never_compile_perf",
                   never_compile_perf_threshold_mets.load());
-  mgr.incr_metric("never_compile_called_coverage",
+  mgr.incr_metric(baseline_profile_name + "_never_compile_called_coverage",
                   never_compile_called_coverage_threshold_mets.load());
-  mgr.incr_metric("never_compile_strings_lookup_methods_matches",
-                  never_compile_strings_lookup_methods_matches.load());
+  mgr.incr_metric(
+      baseline_profile_name + "_never_compile_strings_lookup_methods_matches",
+      never_compile_strings_lookup_methods_matches.load());
   auto ordered_never_compile_methods = unordered_to_ordered(
       never_compile_methods, [](const auto& a, const auto& b) {
         if (a.second != b.second) {
@@ -640,9 +611,28 @@ void never_compile(
       std::min(ordered_never_compile_methods.size(), size_t(10)));
   for (size_t i = 0; i < ordered_never_compile_methods.size(); ++i) {
     auto& [method, code_units] = ordered_never_compile_methods[i];
-    mgr.incr_metric("never_compile_methods_" + std::to_string(i) + "_" +
-                        show_deobfuscated(method),
+    mgr.incr_metric(baseline_profile_name + "_never_compile_methods_" +
+                        std::to_string(i) + "_" + show_deobfuscated(method),
                     code_units);
+  }
+}
+
+void never_compile(
+    const Scope& scope,
+    const baseline_profiles::BaselineProfileConfigMap& baseline_profile_configs,
+    const method_profiles::MethodProfiles& method_profiles,
+    PassManager& mgr,
+    UnorderedMap<std::string, baseline_profiles::BaselineProfile>&
+        baseline_profiles) {
+  for (auto& entry : UnorderedIterable(baseline_profiles)) {
+    const auto& bp_name = entry.first;
+    const auto& cur_bp_config = baseline_profile_configs.at(bp_name);
+    if (!cur_bp_config.harvest_config.enable_never_compile) {
+      continue;
+    }
+    auto& bp = entry.second;
+    never_compile_impl(scope, bp_name, cur_bp_config, method_profiles, mgr,
+                       &bp);
   }
 }
 
@@ -721,22 +711,7 @@ void ArtProfileWriterPass::bind_config() {
   bind("never_inline_estimate", false, m_never_inline_estimate);
   bind("never_inline_attach_annotations", false,
        m_never_inline_attach_annotations);
-  bind("never_compile_callcount_threshold", -1,
-       m_never_compile_callcount_threshold);
-  bind("never_compile_perf_threshold", -1, m_never_compile_perf_threshold);
-  bind("never_compile_called_coverage_threshold", -1,
-       m_never_compile_called_coverage_threshold);
-  bind("never_compile_excluded_interaction_pattern", "",
-       m_never_compile_excluded_interaction_pattern);
-  bind("never_compile_excluded_appear100_threshold", 20,
-       m_never_compile_excluded_appear100_threshold);
-  bind("never_compile_excluded_call_count_threshold", 0,
-       m_never_compile_excluded_call_count_threshold);
   bind("include_strings_lookup_class", false, m_include_strings_lookup_class);
-  bind("never_compile_ignore_hot", false, m_never_compile_ignore_hot);
-  bind("never_compile_strings_lookup_methods", false,
-       m_never_compile_strings_lookup_methods);
-  bind("never_compile_no_attach", false, m_never_compile_no_attach);
   bind("override_strip_classes", std::nullopt, m_override_strip_classes,
        "Override the strip_classes flag to the one given.");
   after_configuration([this] {
@@ -879,21 +854,8 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     }
   }
 
-  if (m_never_compile_callcount_threshold > -1 ||
-      m_never_compile_perf_threshold > -1 ||
-      m_never_compile_called_coverage_threshold > -1 ||
-      m_never_compile_strings_lookup_methods) {
-    never_compile(
-        scope, conf.get_default_baseline_profile_config(), method_profiles, mgr,
-        m_never_compile_ignore_hot, m_never_compile_callcount_threshold,
-        m_never_compile_perf_threshold,
-        m_never_compile_called_coverage_threshold,
-        m_never_compile_excluded_interaction_pattern,
-        m_never_compile_excluded_appear100_threshold,
-        m_never_compile_excluded_call_count_threshold,
-        m_never_compile_strings_lookup_methods, m_never_compile_no_attach,
-        &manual_profile, &baseline_profiles);
-  }
+  never_compile(scope, conf.get_baseline_profile_configs(), method_profiles,
+                mgr, baseline_profiles);
   auto store_fence_helper_type = DexType::get_type(STORE_FENCE_HELPER_NAME);
   if (store_fence_helper_type) {
     // helper class existing means we materialized IOPCODE_WRITE_BARRIER

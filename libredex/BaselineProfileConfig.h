@@ -7,12 +7,14 @@
 
 #pragma once
 
+#include <json/json.h>
 #include <stdint.h>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "DeterministicContainers.h"
+#include "JsonWrapper.h"
 
 namespace baseline_profiles {
 
@@ -31,6 +33,36 @@ struct BaselineProfileInteractionConfig {
   bool post_startup = true;
   bool startup = false;
   int64_t threshold = 80;
+};
+
+struct BaselineProfileHarvestConfig {
+  bool enable_never_compile = false;
+  int64_t never_compile_callcount_threshold = -1;
+  int64_t never_compile_perf_threshold = -1;
+  int64_t never_compile_called_coverage_threshold = -1;
+  std::string never_compile_excluded_interaction_pattern;
+  int64_t never_compile_excluded_appear100_threshold = 20;
+  int64_t never_compile_excluded_call_count_threshold = 0;
+  bool never_compile_ignore_hot = false;
+  bool never_compile_strings_lookup_methods = false;
+  void load_from_json(const Json::Value& json_input) {
+    const auto& jw = JsonWrapper(json_input);
+    jw.get("enable_never_compile", false, enable_never_compile);
+    jw.get("never_compile_callcount_threshold", -1,
+           never_compile_callcount_threshold);
+    jw.get("never_compile_perf_threshold", -1, never_compile_perf_threshold);
+    jw.get("never_compile_called_coverage_threshold", -1,
+           never_compile_called_coverage_threshold);
+    jw.get("never_compile_excluded_interaction_pattern", "",
+           never_compile_excluded_interaction_pattern);
+    jw.get("never_compile_excluded_appear100_threshold", 20,
+           never_compile_excluded_appear100_threshold);
+    jw.get("never_compile_excluded_call_count_threshold", 0,
+           never_compile_excluded_call_count_threshold);
+    jw.get("never_compile_ignore_hot", false, never_compile_ignore_hot);
+    jw.get("never_compile_strings_lookup_methods", false,
+           never_compile_strings_lookup_methods);
+  }
 };
 
 struct BaselineProfileOptions {
@@ -59,6 +91,7 @@ struct BaselineProfileConfig {
       interaction_configs;
   std::vector<std::pair<std::string, std::string>> interactions;
   BaselineProfileOptions options;
+  BaselineProfileHarvestConfig harvest_config;
   std::vector<std::string> manual_files;
 };
 

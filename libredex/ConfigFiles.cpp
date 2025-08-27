@@ -772,6 +772,10 @@ void ConfigFiles::init_baseline_profile_configs() {
       current_baseline_profile_config.interactions.emplace_back(
           interaction_id, std::move(name));
     }
+    Json::Value harvest_config_json;
+    baseline_profile_config_jw.get("harvest_config", {}, harvest_config_json);
+    current_baseline_profile_config.harvest_config.load_from_json(
+        harvest_config_json);
 
     baseline_profile_config_jw.get(
         "manual_profiles",
