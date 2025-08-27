@@ -411,12 +411,12 @@ bool never_compile_perf_threshold_met(DexMethod* method,
   // to find a case where the cost of the executing sparse switch
   // excessively dominates the cost of code per switch case, which the
   // following achieves.
-  if (interpretation_cost / std::pow(sparse_switch_cases, 2) >
+  if ((interpretation_cost / std::pow(sparse_switch_cases, 2)) * 100 >
       never_compile_perf_threshold) {
     return false;
   }
 
-  TRACE(APW, 5, "[%s] is within perf threshold: %d / sqr(%d) > %d\n%s",
+  TRACE(APW, 5, "[%s] is within perf threshold: (%d / sqr(%d)) * 100 > %d\n%s",
         method->get_fully_deobfuscated_name().c_str(),
         (int32_t)interpretation_cost, (int32_t)sparse_switch_cases,
         (int32_t)never_compile_perf_threshold, SHOW(method->get_code()->cfg()));
