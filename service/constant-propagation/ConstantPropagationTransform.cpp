@@ -14,6 +14,7 @@
 #include "RedexContext.h"
 #include "ScopedMetrics.h"
 #include "SignedConstantDomain.h"
+#include "SourceBlocks.h"
 #include "Trace.h"
 #include "Transform.h"
 #include "TypeInference.h"
@@ -1052,6 +1053,30 @@ void Transform::forward_targets(
     // Found (last) successor where no assigned reg is live -- forward to
     // there
     cfg.set_edge_target(succ_edge, new_target);
+
+    // When we apply this transformation, some blocks might have predecessors
+    // removed In this case, the block's source block values should at most be
+    // the maximum of the other predecessor blocks.
+
+    // This is an optimization, if block wasn't hit, we don't need to fix up
+    // source blocks
+    auto last_source_sb = source_blocks::get_last_source_block(block);
+    bool block_was_hit = false;
+    if (last_source_sb != nullptr) {
+      block_was_hit = last_source_sb->foreach_val_early(
+          [](const auto& v) { return v && v->val > 0; });
+    }
+    if (block_was_hit) {
+      // Iterate over the chain of unconditional targets
+      for (const auto& [target, _] : unconditional_targets) {
+        if (target == new_target) {
+          // If we get to the new_target we're done, just break
+          break;
+        }
+        source_blocks::scale_source_blocks(target);
+      }
+    }
+
     ++m_stats.branches_forwarded;
   }
   // TODO: Forwarding may leave behind trivial conditional branches that can

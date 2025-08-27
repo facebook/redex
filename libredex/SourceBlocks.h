@@ -304,6 +304,8 @@ bool has_source_block_positive_val(const SourceBlock* sb);
 size_t compute_method_violations(const call_graph::Graph& call_graph,
                                  const Scope& scope);
 
+void scale_source_blocks(cfg::Block* block);
+
 inline bool has_source_blocks(const cfg::Block* b) {
   for (const auto& mie : *b) {
     if (mie.type == MFLOW_SOURCE_BLOCK) {

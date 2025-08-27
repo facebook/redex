@@ -131,46 +131,6 @@ bool is_compiled(const baseline_profiles::BaselineProfile& baseline_profile,
          is_compiled(method, it->second);
 }
 
-void scale_source_blocks(cfg::Block* block) {
-  // After duplicating hot successors, some originally hot blocks may no
-  // longer be reachable from hot blocks. We'll mark them as cold here.
-
-  // Note that while the currently implemented "scaling" approach via min/max
-  // works well when we only consider binary hit-count state values (0 = cold,
-  // >0 = hot), and that it doesn't do actual proper scaling yet. A practical
-  // problem for that is that we don't know the hotness of edges, and thus
-  // cannot correctly attribute hit-counts to the original or duplicated blocks
-  // outside of the binary scenario.
-  // TODO: Implement proper numeric scaling. This will be especially important
-  // once we track (non-binary) block hit counts.
-
-  // Note that we don't have to further deal with dependencies as we are
-  // iterating from the front, and have filtered out back-edges.
-  auto* template_sb = source_blocks::get_first_source_block(block);
-  always_assert(template_sb);
-  SourceBlock limit_sb(*template_sb);
-  limit_sb.fill(SourceBlock::Val(0, 0));
-
-  for (auto* pred : block->preds()) {
-    if (pred->src() == nullptr) {
-      continue;
-    }
-
-    auto* pred_sb = source_blocks::get_last_source_block(pred->src());
-    if (!pred_sb) {
-      // Missing information; give up
-      return;
-    }
-
-    // `SourceBlock::max` is a bit dubious, as the appear100 values really
-    // represent a set
-    limit_sb.max(*pred_sb);
-  }
-
-  source_blocks::foreach_source_block(block,
-                                      [&](auto* sb) { sb->min(limit_sb); });
-}
-
 } // namespace
 
 namespace tail_duplication_impl {
@@ -215,9 +175,9 @@ size_t make_hot_tails_unique(cfg::ControlFlowGraph& cfg,
     }
 
     if (!new_targets.empty()) {
-      scale_source_blocks(block);
+      source_blocks::scale_source_blocks(block);
       for (auto* new_target : new_targets) {
-        scale_source_blocks(new_target);
+        source_blocks::scale_source_blocks(new_target);
         new_blocks.emplace(new_target, block);
       }
     }
