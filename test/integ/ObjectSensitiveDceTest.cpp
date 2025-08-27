@@ -251,10 +251,10 @@ TEST_F(ObjectSensitiveDceTest, method_needing_init_class) {
   ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_VIRTUAL}), 1);
 }
 
-TEST_F(ObjectSensitiveDceTest, pure_method) {
+TEST_F(ObjectSensitiveDceTest, pure_method_object) {
   auto method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/"
-      "ObjectSensitiveDceTest;.pure_method:()V");
+      "ObjectSensitiveDceTest;.pure_method_object:()V");
   EXPECT_NE(method_ref, nullptr);
   auto method = method_ref->as_def();
   EXPECT_NE(method, nullptr);
@@ -265,10 +265,13 @@ TEST_F(ObjectSensitiveDceTest, pure_method) {
 
   run_passes(passes);
 
+  // We are verifying that we need to *keep* the object creation, as we are not
+  // treating the pure Object.getClass() are truly pure, as we need to track the
+  // effects on its object result.
   auto ii = InstructionIterable(method->get_code());
   auto it = ii.begin();
   ASSERT_TRUE(it != ii.end());
-  ASSERT_EQ(it->insn->opcode(), OPCODE_RETURN_VOID);
+  ASSERT_EQ(it->insn->opcode(), OPCODE_NEW_INSTANCE);
 }
 
 TEST_F(ObjectSensitiveDceTest, array_clone) {

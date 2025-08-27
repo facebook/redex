@@ -58,7 +58,7 @@ class ObjectSensitiveDceTest {
     useless.foo();
   }
 
-  public static void pure_method() {
+  public static void pure_method_object() {
     Useless useless = new Useless();
     useless.getClass();
   }

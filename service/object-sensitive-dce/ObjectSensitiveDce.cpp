@@ -92,7 +92,7 @@ class CallGraphStrategy final : public call_graph::MultipleCalleeStrategy {
         }
         continue;
       }
-      if (is_pure(insn)) {
+      if (is_pure(insn) && !type::is_object(callee->get_proto()->get_rtype())) {
         // By including this in the call-graph with an empty callee, it will by
         // default get trivial summaries, representing no interactions with
         // objects, and no side effects.
