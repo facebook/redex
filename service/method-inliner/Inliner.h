@@ -103,6 +103,12 @@ struct InlinerCostConfig {
   float unused_arg_new_object_multiplier;
   float unused_arg_other_object_multiplier;
   float unused_arg_not_top_multiplier;
+
+  // These are used to bias the inliner when presented with a method found in a
+  // baseline profile
+  float profile_guided_heat_threshold;
+  float profile_guided_heat_discount;
+  float profile_guided_shrink_bias;
 };
 
 inline const struct InlinerCostConfig DEFAULT_COST_CONFIG = {
@@ -136,6 +142,9 @@ inline const struct InlinerCostConfig DEFAULT_COST_CONFIG = {
     1.0f, // unused_arg_new_object_multiplier
     1.0f, // unused_arg_other_object_multiplier
     1.0f, // unused_arg_not_top_multiplier
+    0.5f, // profile_guided_heat_threshold
+    1.0f, // profile_guided_heat_discount
+    0.0f, // profile_guided_shrink_bias
 };
 
 // All call-sites of a callee.
@@ -526,6 +535,7 @@ class MultiMethodInliner {
    */
   bool should_inline_at_call_site(
       DexMethod* caller,
+      cfg::Block* caller_block,
       const IRInstruction* invoke_insn,
       DexMethod* callee,
       bool* no_return = nullptr,
@@ -670,6 +680,12 @@ class MultiMethodInliner {
   // - there are no assignments to any final fields.
   // Under these conditions, a constructor is universally inlinable.
   bool can_inline_init(const DexMethod* init_method);
+
+  float compute_profile_guided_discount(DexMethod* caller,
+                                        DexMethod* callee,
+                                        float inline_cost,
+                                        cfg::Block* caller_block,
+                                        ReducedCode* reduced_callee);
 
   std::unique_ptr<std::vector<std::unique_ptr<RefChecker>>> m_ref_checkers;
 

@@ -418,10 +418,9 @@ inline SourceBlock* get_first_source_block(IRCode* code) {
   }
 }
 
-inline void get_hot_cold_units(DexMethod* method,
+inline void get_hot_cold_units(cfg::ControlFlowGraph& cfg,
                                uint32_t& hot,
                                uint32_t& cold) {
-  auto& cfg = method->get_code()->cfg();
   hot = 0;
   cold = 0;
   for (auto* block : cfg.blocks()) {

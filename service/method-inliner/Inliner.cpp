@@ -454,9 +454,9 @@ void MultiMethodInliner::inline_callees(DexMethod* caller,
           auto timer2 = m_inline_callees_should_inline_timer.scope();
           // Cost model is based on fully inlining callee everywhere; let's
           // see if we can get more detailed call-site specific information
-          if (should_inline_at_call_site(caller, insn, callee, &no_return,
-                                         &for_speed, &reduced_code, &insn_size,
-                                         &partial_code)) {
+          if (should_inline_at_call_site(caller, block, insn, callee,
+                                         &no_return, &for_speed, &reduced_code,
+                                         &insn_size, &partial_code)) {
             always_assert(!no_return);
             // Yes, we know might have dead_blocks and a refined insn_size
           } else if (should_inline_always(callee)) {
@@ -1067,7 +1067,7 @@ void MultiMethodInliner::compute_callee_costs(DexMethod* method) {
         auto timer = m_call_site_inlined_cost_timer.scope();
         bool keep_reduced_code = false;
         for (auto insn : insns) {
-          if (should_inline_at_call_site(nullptr, insn, method)) {
+          if (should_inline_at_call_site(nullptr, nullptr, insn, method)) {
             keep_reduced_code = true;
           }
         }
@@ -2016,6 +2016,7 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
 
 bool MultiMethodInliner::should_inline_at_call_site(
     DexMethod* caller,
+    cfg::Block* caller_block,
     const IRInstruction* invoke_insn,
     DexMethod* callee,
     bool* no_return,
@@ -2040,11 +2041,17 @@ bool MultiMethodInliner::should_inline_at_call_site(
   float invoke_cost =
       get_invoke_cost(m_inliner_cost_config, callee, inlined_cost->result_used);
   auto fence_cost = get_needs_constructor_fence(caller, callee) ? 3 : 0;
-  if (inlined_cost->code + fence_cost -
-          inlined_cost->unused_args *
-              m_inliner_cost_config.unused_args_discount +
-          cross_dex_penalty >
-      invoke_cost) {
+  float inline_cost =
+      inlined_cost->code + fence_cost -
+      inlined_cost->unused_args * m_inliner_cost_config.unused_args_discount +
+      cross_dex_penalty;
+  bool size_increased = inline_cost > invoke_cost;
+
+  float discount =
+      compute_profile_guided_discount(caller, callee, inline_cost, caller_block,
+                                      inlined_cost->reduced_code.get());
+
+  if (discount * inline_cost > invoke_cost) {
     if (no_return) {
       *no_return = inlined_cost->no_return;
     }
@@ -2059,6 +2066,9 @@ bool MultiMethodInliner::should_inline_at_call_site(
   }
   if (insn_size) {
     *insn_size = inlined_cost->insn_size;
+  }
+  if (for_speed) {
+    *for_speed = size_increased;
   }
   return true;
 }
@@ -2615,6 +2625,68 @@ void MultiMethodInliner::delayed_invoke_direct_to_static() {
         }
       });
   m_delayed_make_static.clear();
+}
+
+float MultiMethodInliner::compute_profile_guided_discount(
+    DexMethod* caller,
+    DexMethod* callee,
+    float inline_cost,
+    cfg::Block* caller_block,
+    ReducedCode* reduced_callee) {
+  if (!m_baseline_profile) {
+    return 1.0f;
+  }
+
+  // Discounts only given to calls found to be hot and in the baseline profile
+  if (!caller_block || !source_blocks::is_hot(caller_block) ||
+      m_baseline_profile->methods.count(caller) == 0 ||
+      !m_baseline_profile->methods.at(caller).hot) {
+    return 1.0;
+  }
+
+  auto full_cost = get_fully_inlined_cost(callee);
+  // Methods smaller than a particular threshold will automatically already be
+  // inlined by the ART compiler, so we do not try to bias Redex into inlining.
+  constexpr size_t size_threshold = 32;
+  if (full_cost->full_code <= size_threshold) {
+    return 1.0f;
+  }
+
+  // Bias toward inlining if the inlined code is smaller than the original.
+  auto shrinkage = std::min(inline_cost / full_cost->full_code, 1.0f);
+  auto shrink_discount =
+      pow(shrinkage, m_inliner_cost_config.profile_guided_shrink_bias);
+
+  uint32_t hot_units = 0;
+  uint32_t cold_units = 0;
+  // Try to get the best estimate of hotness of inlined callee. If available, we
+  // check the reduced code, otherwise we will have to check the full callee.
+  if (reduced_callee) {
+    source_blocks::get_hot_cold_units(reduced_callee->code().cfg(), hot_units,
+                                      cold_units);
+  } else {
+    source_blocks::get_hot_cold_units(callee->get_code()->cfg(), hot_units,
+                                      cold_units);
+  }
+
+  // Bias toward inlining if the inlined code is mainly made of hot code.
+  float heat_discount = 1.0f;
+  if (hot_units || cold_units) {
+    // Heat threshold is the point at which percentage hotness yields a
+    // neutral bias (1.0).
+    // Heat discount is the discount given to a method that is 100% made of hot
+    // units.
+    // If we use a linear mapping from percentage hotness to discount, we would
+    // need one that maps [threshold, 1.0] -> [1.0, discount].
+    float percentage = float(hot_units) / float(hot_units + cold_units);
+    const auto t = m_inliner_cost_config.profile_guided_heat_threshold;
+    const auto d = m_inliner_cost_config.profile_guided_heat_discount;
+    heat_discount = (d - 1.0) / (1.0 - t);
+    heat_discount *= (percentage - t);
+    heat_discount += 1.0;
+  }
+
+  return shrink_discount * heat_discount;
 }
 
 namespace inliner {
