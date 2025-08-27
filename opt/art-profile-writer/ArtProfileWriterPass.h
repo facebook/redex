@@ -26,15 +26,6 @@ class ArtProfileWriterPass : public Pass {
  private:
   bool m_never_inline_estimate;
   bool m_never_inline_attach_annotations;
-  int64_t m_never_compile_callcount_threshold;
-  int64_t m_never_compile_perf_threshold;
-  int64_t m_never_compile_called_coverage_threshold;
-  std::string m_never_compile_excluded_interaction_pattern;
-  int64_t m_never_compile_excluded_appear100_threshold;
-  int64_t m_never_compile_excluded_call_count_threshold;
-  bool m_never_compile_ignore_hot;
-  bool m_never_compile_strings_lookup_methods;
-  bool m_never_compile_no_attach;
   bool m_include_strings_lookup_class;
   std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
   std::optional<bool> m_override_strip_classes;
