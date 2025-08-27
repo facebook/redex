@@ -2692,8 +2692,11 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_relaxed) {
         intra_dex ? IntraDex : InterDex,
         /* true_virtual_callers */ {},
         /* inline_for_speed */ nullptr,
-        /* analyze_and_prune_inits */ true, {}, nullptr, false, {}, false,
-        false, DEFAULT_COST_CONFIG, &unfinalized_init_methods);
+        /* analyze_and_prune_inits */ true, /* configured_pure_methods */ {},
+        /* min_sdk_api */ nullptr, /* cross_dex_penalty */ false,
+        /* configured_finalish_field_names */ {}, /* local_only */ false,
+        /* consider_hot_cold */ false, /* baseline_profile */ {},
+        DEFAULT_COST_CONFIG, &unfinalized_init_methods);
     inliner.inline_methods();
 
     auto inlined = inliner.get_inlined();
@@ -2729,7 +2732,8 @@ TEST_F(MethodInlineTest, inline_init_no_unfinalized_relaxed) {
 
   DexMethod* caller =
       static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
-  caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+  caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */
+                        false);
 
   DexField* field =
       static_cast<DexField*>(DexField::make_field("LFoo;.not_final_field:Z"));
@@ -2807,8 +2811,11 @@ TEST_F(MethodInlineTest, inline_init_no_unfinalized_relaxed) {
         intra_dex ? IntraDex : InterDex,
         /* true_virtual_callers */ {},
         /* inline_for_speed */ nullptr,
-        /* analyze_and_prune_inits */ true, {}, nullptr, false, {}, false,
-        false, DEFAULT_COST_CONFIG, {});
+        /* analyze_and_prune_inits */ true, /* configured_pure_methods */ {},
+        /* min_sdk_api */ nullptr, /* cross_dex_penalty */ false,
+        /* configured_finalish_field_names */ {}, /* local_only */ false,
+        /* consider_hot_cold */ false, /* baseline_profile */ {},
+        DEFAULT_COST_CONFIG, /* unfinalized_init_methods */ {});
     inliner.inline_methods();
 
     auto inlined = inliner.get_inlined();
@@ -2926,8 +2933,11 @@ TEST_F(MethodInlineTest, inline_init_unfinalized_with_finalize_norelax) {
         intra_dex ? IntraDex : InterDex,
         /* true_virtual_callers */ {},
         /* inline_for_speed */ nullptr,
-        /* analyze_and_prune_inits */ true, {}, nullptr, false, {}, false,
-        false, DEFAULT_COST_CONFIG, &unfinalized_init_methods);
+        /* analyze_and_prune_inits */ true, /* configured_pure_methods */ {},
+        /* min_sdk_api */ nullptr, /* cross_dex_penalty */ false,
+        /* configured_finalish_field_names */ {}, /* local_only */ false,
+        /* consider_hot_cold */ false, /* baseline_profile */ {},
+        DEFAULT_COST_CONFIG, &unfinalized_init_methods);
     inliner.inline_methods();
 
     auto inlined = inliner.get_inlined();
@@ -2987,8 +2997,8 @@ TEST_F(MethodInlineTest, partially_inline) {
   caller->set_code(assembler::ircode_from_string(caller_str));
   caller->get_code()->set_debug_item(std::make_unique<DexDebugItem>());
 
-  // We insert a "dummy" instruction into the cold portion of the callee to make
-  // the callee large enough to make the transformation worthwhile.
+  // We insert a "dummy" instruction into the cold portion of the callee to
+  // make the callee large enough to make the transformation worthwhile.
   const auto& callee_str = R"(
     (
       (load-param-object v0)
@@ -3135,8 +3145,8 @@ TEST_F(MethodInlineTest, partially_inline_invoke_super_regression) {
   caller->set_code(assembler::ircode_from_string(caller_str));
   caller->get_code()->set_debug_item(std::make_unique<DexDebugItem>());
 
-  // We insert a "dummy" instruction into the cold portion of the callee to make
-  // the callee large enough to make the transformation worthwhile.
+  // We insert a "dummy" instruction into the cold portion of the callee to
+  // make the callee large enough to make the transformation worthwhile.
   const auto& callee_str = R"(
     (
       (load-param-object v0)
@@ -3266,8 +3276,8 @@ TEST_F(MethodInlineTest,
   caller->set_code(assembler::ircode_from_string(caller_str));
   caller->get_code()->set_debug_item(std::make_unique<DexDebugItem>());
 
-  // We insert a "dummy" instruction into the cold portion of the callee to make
-  // the callee large enough to make the transformation worthwhile.
+  // We insert a "dummy" instruction into the cold portion of the callee to
+  // make the callee large enough to make the transformation worthwhile.
   const auto& callee_str = R"(
     (
       (load-param-object v0)

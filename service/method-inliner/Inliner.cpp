@@ -133,6 +133,7 @@ MultiMethodInliner::MultiMethodInliner(
     const UnorderedSet<const DexString*>& configured_finalish_field_names,
     bool local_only,
     bool consider_hot_cold,
+    std::optional<baseline_profiles::BaselineProfile> baseline_profile,
     InlinerCostConfig inliner_cost_config,
     const UnorderedSet<const DexMethod*>* unfinalized_init_methods,
     InsertOnlyConcurrentSet<DexMethod*>* methods_with_write_barrier,
@@ -177,6 +178,7 @@ MultiMethodInliner::MultiMethodInliner(
                  /* package_name */ method_override_graph),
       m_local_only(local_only),
       m_consider_hot_cold(consider_hot_cold),
+      m_baseline_profile(std::move(baseline_profile)),
       m_inliner_cost_config(inliner_cost_config),
       m_unfinalized_init_methods(unfinalized_init_methods),
       m_methods_with_write_barrier(methods_with_write_barrier) {

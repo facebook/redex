@@ -1133,6 +1133,7 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
                        /* consider_hot_cold */ false,
                        /* partial_hot_hot */ false,
                        /* intra_dex */ true,
+                       /* baseline_profile_guided */ false,
                        /* inline_for_speed= */ ifs.get());
 
   TRACE(METH_PROF, 1, "Accepted %zu out of %zu choices.",

@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "AnnoUtils.h"
+#include "BaselineProfile.h"
 #include "ClassHierarchy.h"
 #include "ConfigFiles.h"
 #include "ConstructorAnalysis.h"
@@ -836,6 +837,7 @@ void run_inliner(
     bool consider_hot_cold /* false */,
     bool partial_hot_hot /* false */,
     bool intra_dex /* false */,
+    bool baseline_profile_guided /* false */,
     InlineForSpeed* inline_for_speed /* nullptr */,
     bool inline_bridge_synth_only /* false */,
     bool local_only /* false */) {
@@ -972,6 +974,13 @@ void run_inliner(
   inliner_config.shrinker.analyze_constructors =
       inliner_config.shrinker.run_const_prop;
 
+  auto baseline_profile =
+      baseline_profile_guided
+          ? std::make_optional(baseline_profiles::get_default_baseline_profile(
+                scope, conf.get_baseline_profile_configs(),
+                conf.get_method_profiles()))
+          : std::nullopt;
+
   ConcurrentMethodResolver concurrent_method_resolver;
   // inline candidates
   MultiMethodInliner inliner(
@@ -981,8 +990,9 @@ void run_inliner(
       analyze_and_prune_inits, conf.get_pure_methods(), min_sdk_api,
       cross_dex_penalty,
       /* configured_finalish_field_names */ {}, local_only, consider_hot_cold,
-      inliner_cost_config, &unfinalized_init_methods,
-      &methods_with_write_barrier, method_override_graph.get());
+      std::move(baseline_profile), inliner_cost_config,
+      &unfinalized_init_methods, &methods_with_write_barrier,
+      method_override_graph.get());
   inliner.inline_methods();
 
   // refinalize where possible

@@ -10,6 +10,7 @@
 #include <functional>
 #include <vector>
 
+#include "BaselineProfile.h"
 #include "CallSiteSummaries.h"
 #include "DeterministicContainers.h"
 #include "PriorityThreadPoolDAGScheduler.h"
@@ -274,6 +275,7 @@ class MultiMethodInliner {
           {},
       bool local_only = false,
       bool consider_hot_cold = false,
+      std::optional<baseline_profiles::BaselineProfile> baseline_profile = {},
       InlinerCostConfig inliner_cost_config = DEFAULT_COST_CONFIG,
       const UnorderedSet<const DexMethod*>* unfinalized_init_methods = nullptr,
       InsertOnlyConcurrentSet<DexMethod*>* methods_with_write_barrier = nullptr,
@@ -870,6 +872,8 @@ class MultiMethodInliner {
 
   bool m_local_only;
   bool m_consider_hot_cold;
+
+  std::optional<baseline_profiles::BaselineProfile> m_baseline_profile;
 
   InlinerCostConfig m_inliner_cost_config;
 

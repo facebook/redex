@@ -34,6 +34,8 @@ class IntraDexInlinePass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
+  bool m_baseline_profile_guided;
+
   bool m_consider_hot_cold;
   bool m_partial_hot_hot;
 };
