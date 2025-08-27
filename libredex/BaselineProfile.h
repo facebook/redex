@@ -46,11 +46,13 @@ struct BaselineProfile {
 // generating.
 std::tuple<BaselineProfile, UnorderedMap<std::string, BaselineProfile>>
 get_baseline_profiles(
+    const Scope& scope,
     const UnorderedMap<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
     UnorderedSet<const DexMethodRef*>* method_refs_without_def = nullptr);
 
 BaselineProfile get_default_baseline_profile(
+    const Scope& scope,
     const UnorderedMap<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
     UnorderedSet<const DexMethodRef*>* method_refs_without_def = nullptr);

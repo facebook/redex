@@ -540,7 +540,7 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
       m_for_performance
           ? std::make_optional<baseline_profiles::BaselineProfile>(
                 baseline_profiles::get_default_baseline_profile(
-                    conf.get_baseline_profile_configs(),
+                    scope, conf.get_baseline_profile_configs(),
                     conf.get_method_profiles()))
           : std::nullopt;
 

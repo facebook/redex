@@ -762,11 +762,12 @@ void DedupStringsPass::run_pass(DexStoresVector& stores,
   mgr.release_reserved_refs(*m_reserved_refs_handle);
   m_reserved_refs_handle = std::nullopt;
 
+  auto scope = build_class_scope(stores);
   const auto& method_profiles = conf.get_method_profiles();
   auto baseline_profile =
       m_use_baseline_profile
           ? baseline_profiles::get_default_baseline_profile(
-                conf.get_baseline_profile_configs(), method_profiles)
+                scope, conf.get_baseline_profile_configs(), method_profiles)
           : baseline_profiles::BaselineProfile();
 
   DedupStrings ds(m_max_factory_methods,
