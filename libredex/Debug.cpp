@@ -197,6 +197,7 @@ void block_multi_asserts(bool block) {
 
 void set_abort_if_not_this_thread() {
 #if defined(__linux__)
+  g_abort_if_not_tid = get_tid();
   g_aborting = 0; // Reset for good measure.
 #endif
 }
