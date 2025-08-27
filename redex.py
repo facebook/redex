@@ -320,6 +320,8 @@ def run_redex_binary(
 
     if state.args.assert_abort:
         args += ["--assert-abort", state.args.assert_abort]
+    if state.args.assert_abort_thread:
+        args += ["--assert-abort-thread", state.args.assert_abort_thread]
 
     if state.args.stub_resource_optimizations:
         args += ["--dump-string-locales", "true"]
@@ -874,6 +876,7 @@ Given an APK, produce a better APK!
     )
 
     parser.add_argument("--assert-abort", type=str, help="For testing only!")
+    parser.add_argument("--assert-abort-thread", type=str, help="For testing only!")
 
     # Manual tool paths.
 

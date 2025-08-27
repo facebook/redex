@@ -492,6 +492,9 @@ Arguments parse_args(int argc, char* argv[]) {
   // For testing purposes.
   od.add_options()("assert-abort", po::value<std::string>(),
                    "Assert on startup with the given message.");
+  od.add_options()(
+      "assert-abort-thread", po::value<std::string>(),
+      "Assert on startup on a non-main thread with the given message.");
   od.add_options()("asan-abort", "Run code that should trigger an ASAN abort.");
 
   po::positional_options_description pod;
@@ -525,6 +528,19 @@ Arguments parse_args(int argc, char* argv[]) {
       set_crash_fd(crash_file.open(*args.crash_file));
     }
     assert_abort(vm["assert-abort"].as<std::string>(), 0);
+  }
+  if (vm.count("assert-abort-thread")) {
+    CrashFile crash_file;
+    if (args.crash_file) {
+      set_crash_fd(crash_file.open(*args.crash_file));
+    }
+    // Some effort to ensure we're on a different thread.
+    workqueue_run_for(0, 100, [&](auto num) {
+      if (num == 99) {
+        assert_abort(vm["assert-abort-thread"].as<std::string>(), 0);
+      }
+    });
+    always_assert_log(false, "Should have failed by now. :-(");
   }
   if (vm.count("asan-abort")) {
     asan_abort();
