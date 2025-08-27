@@ -8,14 +8,7 @@
 #include "ToolsCommon.h"
 
 #include <boost/filesystem.hpp>
-#ifdef __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-#include <boost/iostreams/filtering_stream.hpp> // uses deprecated auto_ptr
-#ifdef __GNUC__
-#pragma GCC diagnostic pop
-#endif
+#include <boost/iostreams/filtering_stream.hpp>
 #include <fstream>
 #include <iostream>
 #include <json/json.h>
