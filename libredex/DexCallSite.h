@@ -37,7 +37,6 @@ class DexCallSite {
         m_linker_method_type(linker_method_type),
         m_linker_method_args(std::move(linker_args)) {}
 
- public:
   DexMethodHandle* method_handle() const { return m_linker_method_handle; }
   const DexString* method_name() const { return m_linker_method_name; }
   DexProto* method_type() const { return m_linker_method_type; }

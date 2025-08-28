@@ -153,7 +153,6 @@ class Forest {
         std::move(lhs), std::move(rhs), feature, fn_it->second, threshold);
   }
 
- public:
   Forest() = default;
   Forest(Forest&&) noexcept = default;
   Forest& operator=(Forest&& other) noexcept = default;
