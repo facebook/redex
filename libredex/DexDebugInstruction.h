@@ -37,7 +37,6 @@ class DexDebugInstruction : public Gatherable {
   DexDebugInstruction(DexDebugItemOpcode op, int32_t v)
       : m_value(v), m_signed(true), m_opcode(op) {}
 
- public:
   virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
   static DexDebugInstruction* make_instruction(DexIdx* idx,
                                                std::string_view& encdata_ptr);

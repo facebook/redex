@@ -123,7 +123,6 @@ struct ProguardMap {
   bool parse_field_full_format(const std::string& line);
   bool parse_method_full_format(const std::string& line);
 
- private:
   // Unobfuscated to obfuscated maps
   UnorderedMap<std::string, std::string> m_classMap;
   UnorderedMap<std::string, std::string> m_fieldMap;

@@ -28,7 +28,6 @@ class HybridJNIExample final : public jni::HybridClass<HybridJNIExample> {
 
   static void registerNatives();
 
- public:
   int i_;
 };
 } // namespace facebook
